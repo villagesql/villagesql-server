@@ -1,0 +1,41 @@
+#
+# Install the auth extension and bind an account to its method.
+#
+INSTALL EXTENSION vsql_auth_test;
+CREATE USER auth_user IDENTIFIED WITH vsql_auth_test;
+CREATE USER vsql_auth_test_user;
+GRANT SELECT ON *.* TO vsql_auth_test_user;
+GRANT PROXY ON vsql_auth_test_user TO auth_user;
+#
+# Correct token -> accepted; session runs AS the mapped account, and the
+# original identity is exposed via @@external_user.
+#
+CURRENT_USER()	@@external_user
+vsql_auth_test_user@%	auth_user
+#
+# Wrong token -> fail closed.
+#
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 1045 (28000): Access denied for user 'auth_user'@'localhost' (using password: NO)
+#
+# Empty token -> fail closed.
+#
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 1045 (28000): Access denied for user 'auth_user'@'localhost' (using password: NO)
+#
+# Without --enable_cleartext_plugin the client refuses to send the token
+# in cleartext -> connection fails (client-side gating).
+#
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 2059 (HY000): Authentication plugin 'mysql_clear_password' cannot be loaded: plugin not enabled
+#
+# Uninstall removes the method; the account can no longer authenticate.
+#
+UNINSTALL EXTENSION vsql_auth_test;
+mysql: [Warning] Using a password on the command line interface can be insecure.
+ERROR 3219 (HY000): authentication method 'vsql_auth_test' is not available (no such plugin or extension auth method)
+#
+# Cleanup.
+#
+DROP USER auth_user;
+DROP USER vsql_auth_test_user;

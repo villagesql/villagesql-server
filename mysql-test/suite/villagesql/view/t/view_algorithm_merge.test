@@ -1,0 +1,29 @@
+# Test if ALGORITHM=MERGE works with GROUP BY on COMPLEX column
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, amount DECIMAL(10,2));
+
+INSERT INTO t1 VALUES
+  (1, '(2,0)', 100.50),
+  (2, '(2,0)', 50.25);
+
+# Try to create view with ALGORITHM=MERGE and GROUP BY
+CREATE ALGORITHM=MERGE VIEW v_merge AS
+SELECT val, SUM(amount) AS total_amount
+FROM t1
+GROUP BY val;
+
+# Check what algorithm was actually used
+SHOW CREATE VIEW v_merge;
+
+# Check the type
+DESCRIBE v_merge;
+
+# Try to query it
+SELECT * FROM v_merge;
+
+DROP VIEW v_merge;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,20 @@
+cmake_minimum_required(VERSION 3.16)
+project(extension_build)
+
+set(EXTENSION_NAME "@EXTENSION_NAME@")
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+find_package(VillageSQL REQUIRED)
+
+include_directories(${VillageSQLExtensionFramework_INCLUDE_DIR})
+
+add_library(ext_lib SHARED src/extension.cc)
+
+target_compile_options(ext_lib PRIVATE -fPIC)
+
+VEF_CREATE_VEB(
+    NAME ${EXTENSION_NAME}
+    LIBRARY_TARGET ext_lib
+    MANIFEST ${CMAKE_CURRENT_SOURCE_DIR}/manifest.json
+)

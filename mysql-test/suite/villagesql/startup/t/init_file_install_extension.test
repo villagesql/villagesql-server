@@ -1,0 +1,51 @@
+# Test that INSTALL EXTENSION works when executed from a --init-file startup script.
+#
+# This validates that the VEF (VillageSQL Extension Framework) is initialized
+# before --init-file SQL is executed during normal server startup, so extensions
+# can be installed as part of server provisioning/automation.
+
+--echo #
+--echo # Setup: prepare VEB directory and init-file
+--echo #
+
+# Get the default veb directory (where vsql_complex.veb was built)
+
+# Create init-file SQL script that installs the extension on startup
+--let $init_file = $MYSQL_TMP_DIR/init_install_extension.sql
+write_file $init_file;
+INSTALL EXTENSION vsql_complex;
+EOF
+
+--echo #
+--echo # Test: install extension via --init-file during server startup
+--echo #
+
+# Restart server with --veb-dir and --init-file
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--let $restart_parameters = restart: --init-file=$init_file
+--source include/restart_mysqld.inc
+
+--echo # Verify extension was installed by the init-file
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Verify extension is functional: create table with COMPLEX type
+CREATE TABLE init_ext_test (id INT, c COMPLEX);
+
+INSERT INTO init_ext_test VALUES (1, '(3.14,2.71)');
+INSERT INTO init_ext_test VALUES (2, '(1,2)');
+
+SELECT id, c FROM init_ext_test ORDER BY id;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE init_ext_test;
+--source include/villagesql/uninstall_complex_extension.inc
+
+# Remove init-file before restarting to avoid re-running it
+--remove_file $init_file
+
+# Restart without init-file to restore normal state
+--let $restart_parameters = restart:
+--source include/restart_mysqld.inc

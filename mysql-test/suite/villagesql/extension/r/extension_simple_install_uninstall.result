@@ -1,0 +1,12 @@
+# Install vsql_simple extension
+INSTALL EXTENSION vsql_simple;
+# Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_simple	0.0.1
+# Uninstall the extension
+UNINSTALL EXTENSION vsql_simple;
+# Verify extension was removed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+include/rpl/deprecated/show_binlog_events.inc

@@ -1,0 +1,58 @@
+# Test that INFORMATION_SCHEMA.COLUMNS shows custom type names
+# Also tests DESCRIBE and SHOW COLUMNS which query I_S.COLUMNS
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo # Create table with both standard and custom type columns
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    name VARCHAR(100),
+    data COMPLEX,
+    score DOUBLE
+);
+
+--echo # DESCRIBE should show custom type name
+DESCRIBE t1;
+
+--echo # SHOW COLUMNS should show custom type name
+SHOW COLUMNS FROM t1;
+
+--echo # Query INFORMATION_SCHEMA.COLUMNS directly
+SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA='test' AND TABLE_NAME='t1'
+ORDER BY ORDINAL_POSITION;
+
+--echo # Create another table with multiple custom type columns
+CREATE TABLE t2 (
+    id INT,
+    vec1 COMPLEX,
+    vec2 COMPLEX2,
+    metadata JSON
+);
+
+DESCRIBE t2;
+
+--echo # Test with different database
+CREATE DATABASE test_db;
+USE test_db;
+
+CREATE TABLE t3 (
+    id INT,
+    value COMPLEX2
+);
+
+DESCRIBE t3;
+
+--echo # Query across databases
+SELECT TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, DATA_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE DATA_TYPE LIKE '%.%'
+ORDER BY TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME;
+
+--echo # Cleanup
+USE test;
+DROP TABLE t1, t2;
+DROP DATABASE test_db;
+
+--source include/villagesql/uninstall_complex_extension.inc

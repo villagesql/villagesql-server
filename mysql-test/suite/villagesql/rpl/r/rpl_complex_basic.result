@@ -1,0 +1,99 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection server_1]
+[connection server_2]
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX
+);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(-5.5,6.7)');
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+3	(-5.5,6.7)
+include/rpl/sync_to_replica.inc
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+3	(-5.5,6.7)
+include/diff_tables.inc [master:t1, slave:t1]
+UPDATE t1 SET val = '(5.0,6.0)' WHERE id = 1;
+UPDATE t1 SET val = '(0.0,0.0)' WHERE id = 3;
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(5,6)
+2	(3,4)
+3	(0,0)
+include/rpl/sync_to_replica.inc
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(5,6)
+2	(3,4)
+3	(0,0)
+include/diff_tables.inc [master:t1, slave:t1]
+DELETE FROM t1 WHERE id = 2;
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(5,6)
+3	(0,0)
+include/rpl/sync_to_replica.inc
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(5,6)
+3	(0,0)
+include/diff_tables.inc [master:t1, slave:t1]
+INSERT INTO t1 VALUES (4, NULL);
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(5,6)
+3	(0,0)
+4	NULL
+include/rpl/sync_to_replica.inc
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(5,6)
+3	(0,0)
+4	NULL
+include/diff_tables.inc [master:t1, slave:t1]
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+c1 COMPLEX,
+c2 COMPLEX
+);
+INSERT INTO t2 VALUES
+(1, '(1.0,1.0)', '(2.0,2.0)'),
+(2, '(4.0,5.0)', '(6.0,7.0)');
+SELECT * FROM t2 ORDER BY id;
+id	c1	c2
+1	(1,1)	(2,2)
+2	(4,5)	(6,7)
+include/rpl/sync_to_replica.inc
+SELECT * FROM t2 ORDER BY id;
+id	c1	c2
+1	(1,1)	(2,2)
+2	(4,5)	(6,7)
+include/diff_tables.inc [master:t2, slave:t2]
+ALTER TABLE t2 ADD COLUMN c3 COMPLEX;
+INSERT INTO t2 VALUES (3, '(8.0,9.0)', '(10.0,11.0)', '(12.0,13.0)');
+SELECT * FROM t2 ORDER BY id;
+id	c1	c2	c3
+1	(1,1)	(2,2)	NULL
+2	(4,5)	(6,7)	NULL
+3	(8,9)	(10,11)	(12,13)
+include/rpl/sync_to_replica.inc
+SELECT * FROM t2 ORDER BY id;
+id	c1	c2	c3
+1	(1,1)	(2,2)	NULL
+2	(4,5)	(6,7)	NULL
+3	(8,9)	(10,11)	(12,13)
+include/diff_tables.inc [master:t2, slave:t2]
+DROP TABLE t1, t2;
+include/rpl/sync_to_replica.inc
+[connection server_1]
+[connection server_2]
+include/rpl/deinit.inc

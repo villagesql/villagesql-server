@@ -1,0 +1,3 @@
+--tls-version=TLSv1.2
+--ssl-cipher=ECDHE-RSA-AES128-GCM-SHA256
+--tls-ciphersuites=""

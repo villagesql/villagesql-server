@@ -1,0 +1,30 @@
+# Test SELECT ... LIMIT with COMPLEX type
+# Grammar: SELECT ... LIMIT ...
+
+--source include/villagesql/install_complex_extension.inc
+
+# Test ORDER BY with LIMIT - comprehensive coverage
+CREATE TABLE t1 (id INT, val COMPLEX);
+INSERT INTO t1 VALUES
+    (1, '(1.0,2.0)'),
+    (2, '(3.0,4.0)'),
+    (3, '(5.0,6.0)'),
+    (4, '(-1.0,0.0)'),    # negative values
+    (5, '(0.0,0.0)'),     # zero
+    (6, '(2.5,3.5)'),     # decimal values
+    (7, '(100.0,200.0)'), # large values
+    (8, '(1.0,1.99)');    # close to existing
+
+# Test various LIMIT scenarios with ASC (which works correctly)
+SELECT val FROM t1 ORDER BY val ASC LIMIT 1;
+SELECT val FROM t1 ORDER BY val ASC LIMIT 2;
+SELECT val FROM t1 ORDER BY val ASC LIMIT 3 OFFSET 1;
+SELECT val FROM t1 ORDER BY val ASC LIMIT 2 OFFSET 2;
+
+# Test ordering by different columns
+SELECT id, val FROM t1 ORDER BY id LIMIT 3;
+SELECT id, val FROM t1 ORDER BY val ASC, id ASC LIMIT 4;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,67 @@
+CREATE TABLE t (
+id INT PRIMARY KEY,
+val_int INT NOT NULL,
+val_double DOUBLE NOT NULL,
+val_complex COMPLEX NOT NULL
+);
+INSERT IGNORE INTO t VALUES (1, NULL, NULL, NULL);
+Warnings:
+Warning	1048	Column 'val_int' cannot be null
+Warning	1048	Column 'val_double' cannot be null
+Warning	1048	Column 'val_complex' cannot be null
+SELECT * FROM t;
+id	val_int	val_double	val_complex
+1	0	0	(0,0)
+INSERT INTO t VALUES (2, 10, 3.14, '(1.0,2.0)');
+SELECT * FROM t ORDER BY id;
+id	val_int	val_double	val_complex
+1	0	0	(0,0)
+2	10	3.14	(1,2)
+UPDATE IGNORE t SET val_int = NULL, val_double = NULL, val_complex = NULL
+WHERE id = 2;
+Warnings:
+Warning	1048	Column 'val_int' cannot be null
+Warning	1048	Column 'val_double' cannot be null
+Warning	1048	Column 'val_complex' cannot be null
+SELECT * FROM t ORDER BY id;
+id	val_int	val_double	val_complex
+1	0	0	(0,0)
+2	0	0	(0,0)
+INSERT INTO t VALUES (3, 5, 2.71, '(3.0,4.0)');
+UPDATE IGNORE t SET val_int = 99, val_double = NULL, val_complex = NULL
+WHERE id = 3;
+Warnings:
+Warning	1048	Column 'val_double' cannot be null
+Warning	1048	Column 'val_complex' cannot be null
+SELECT * FROM t ORDER BY id;
+id	val_int	val_double	val_complex
+1	0	0	(0,0)
+2	0	0	(0,0)
+3	99	0	(0,0)
+INSERT INTO t VALUES (4, 1, 1.0, '(1.0,1.0)');
+INSERT INTO t VALUES (5, 2, 2.0, '(2.0,2.0)');
+UPDATE IGNORE t SET val_int = NULL, val_double = NULL, val_complex = NULL;
+Warnings:
+Warning	1048	Column 'val_int' cannot be null
+Warning	1048	Column 'val_double' cannot be null
+Warning	1048	Column 'val_complex' cannot be null
+Warning	1048	Column 'val_int' cannot be null
+Warning	1048	Column 'val_double' cannot be null
+Warning	1048	Column 'val_complex' cannot be null
+Warning	1048	Column 'val_int' cannot be null
+Warning	1048	Column 'val_double' cannot be null
+Warning	1048	Column 'val_complex' cannot be null
+Warning	1048	Column 'val_int' cannot be null
+Warning	1048	Column 'val_double' cannot be null
+Warning	1048	Column 'val_complex' cannot be null
+Warning	1048	Column 'val_int' cannot be null
+Warning	1048	Column 'val_double' cannot be null
+Warning	1048	Column 'val_complex' cannot be null
+SELECT * FROM t ORDER BY id;
+id	val_int	val_double	val_complex
+1	0	0	(0,0)
+2	0	0	(0,0)
+3	0	0	(0,0)
+4	0	0	(0,0)
+5	0	0	(0,0)
+DROP TABLE t;

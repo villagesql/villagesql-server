@@ -1,0 +1,23 @@
+# Test CREATE TABLE with CHECK constraint and COMPLEX columns
+# Tests CHECK constraint alongside COMPLEX columns
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    magnitude DOUBLE CHECK (magnitude >= 0),
+    complex_signal COMPLEX
+);
+
+SHOW COLUMNS FROM t1;
+
+INSERT INTO t1 VALUES (1, 5.0, '(3.0,4.0)');
+INSERT INTO t1 VALUES (2, 10.0, '(6.0,8.0)');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,94 @@
+# Install vsql-complex extension
+INSTALL EXTENSION vsql_complex;
+
+########################################################################
+#
+# Test: DELETE operations for COMPLEX type
+#
+########################################################################
+#
+# Test 1: Basic DELETE operations
+#
+########################################################################
+
+CREATE TABLE test_delete_basic (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50),
+    complex_val COMPLEX
+);
+
+INSERT INTO test_delete_basic (name, complex_val) VALUES
+    ('test1', '(1,2)'),
+    ('test2', '(3.14,2.71)'),
+    ('test3', '(-5.5,-3.3)'),
+    ('multi1', '(10,20)'),
+    ('multi2', '(30,40)'),
+    ('multi3', '(50,60)');
+
+# Count before delete
+SELECT COUNT(*) as total_records FROM test_delete_basic;
+
+# Delete specific records by complex value
+DELETE FROM test_delete_basic WHERE complex_val = '(1,2)';
+
+SELECT COUNT(*) as remaining_records FROM test_delete_basic;
+SELECT id, name, complex_val FROM test_delete_basic ORDER BY id;
+
+# Delete with pattern matching on name
+DELETE FROM test_delete_basic WHERE name LIKE 'multi%';
+
+SELECT COUNT(*) as remaining_records FROM test_delete_basic;
+SELECT id, name, complex_val FROM test_delete_basic ORDER BY id;
+
+########################################################################
+#
+# Test 2: DELETE with NULL condition
+#
+########################################################################
+
+CREATE TABLE test_delete_nulls (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nullable_complex COMPLEX DEFAULT NULL,
+    not_null_complex COMPLEX NOT NULL DEFAULT '(1,1)'
+);
+
+INSERT INTO test_delete_nulls (nullable_complex, not_null_complex) VALUES
+    (NULL, '(2,2)'),
+    ('(3,3)', '(4,4)'),
+    (NULL, '(5,5)'),
+    ('(6,6)', '(7,7)');
+
+SELECT id, nullable_complex, not_null_complex FROM test_delete_nulls ORDER BY id;
+
+# Delete records where complex value is NULL
+DELETE FROM test_delete_nulls WHERE nullable_complex IS NULL;
+
+SELECT id, nullable_complex, not_null_complex FROM test_delete_nulls ORDER BY id;
+
+########################################################################
+#
+# Test 3: DELETE with IN clause
+#
+########################################################################
+
+INSERT INTO test_delete_basic (name, complex_val) VALUES
+    ('new1', '(100,100)'),
+    ('new2', '(200,200)'),
+    ('new3', '(300,300)');
+
+SELECT id, name, complex_val FROM test_delete_basic ORDER BY id;
+
+DELETE FROM test_delete_basic WHERE complex_val IN ('(100,100)', '(200,200)');
+
+SELECT id, name, complex_val FROM test_delete_basic ORDER BY id;
+
+########################################################################
+#
+# Clean up
+#
+########################################################################
+
+DROP TABLE test_delete_basic, test_delete_nulls;
+
+# Uninstall the extension
+UNINSTALL EXTENSION vsql_complex;

@@ -1,0 +1,50 @@
+# Test LOAD XML INFILE with COMPLEX type
+# Grammar: LOAD XML INFILE ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT, val COMPLEX);
+
+# Test varied complex values including edge cases
+--write_file $MYSQLTEST_VARDIR/tmp/complex_basic.xml
+<rows>
+  <row>
+    <id>1</id>
+    <val>(1.0,2.0)</val>
+  </row>
+  <row>
+    <id>2</id>
+    <val>(0,0)</val>
+  </row>
+  <row>
+    <id>3</id>
+    <val>(3.0,4.0)</val>
+  </row>
+  <row>
+    <id>4</id>
+    <val>(-0,0)</val>
+  </row>
+  <row>
+    <id>5</id>
+    <val>(5.0,6.0)</val>
+  </row>
+  <row>
+    <id>6</id>
+    <val>(0,-0)</val>
+  </row>
+  <row>
+    <id>7</id>
+    <val>(-0,-0)</val>
+  </row>
+</rows>
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD XML INFILE '$MYSQLTEST_VARDIR/tmp/complex_basic.xml' INTO TABLE t1 ROWS IDENTIFIED BY '<row>'
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/complex_basic.xml
+
+--source include/villagesql/uninstall_complex_extension.inc

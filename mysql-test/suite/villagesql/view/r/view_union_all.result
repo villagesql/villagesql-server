@@ -1,0 +1,24 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, source VARCHAR(10));
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX, source VARCHAR(10));
+INSERT INTO t1 VALUES
+(1, '(1,2)', 'table1'),
+(2, '(3,4)', 'table1'),
+(3, '(5,6)', 'table1');
+INSERT INTO t2 VALUES
+(4, '(7,8)', 'table2'),
+(5, '(9,10)', 'table2'),
+(6, '(1,2)', 'table2');
+CREATE VIEW v_union_all AS
+SELECT id, val, source FROM t1
+UNION ALL
+SELECT id, val, source FROM t2;
+SELECT COUNT(*) AS total_rows FROM v_union_all;
+total_rows
+6
+SELECT * FROM v_union_all WHERE val = '(1,2)' ORDER BY id;
+id	val	source
+1	(1,2)	table1
+6	(1,2)	table2
+DROP VIEW v_union_all;
+DROP TABLE t2;
+DROP TABLE t1;

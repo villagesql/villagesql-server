@@ -1,0 +1,63 @@
+#
+# Setup test data
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(5.0,6.0)');
+#
+# Test 1: PREPARE from string literal
+#
+PREPARE stmt1 FROM 'SELECT id, val FROM t1';
+EXECUTE stmt1;
+id	val
+1	(1,2)
+2	(3,4)
+3	(5,6)
+DEALLOCATE PREPARE stmt1;
+#
+# Test 2: PREPARE from user variable
+#
+SET @sql = 'SELECT id, val FROM t1 ORDER BY id';
+PREPARE stmt2 FROM @sql;
+EXECUTE stmt2;
+id	val
+1	(1,2)
+2	(3,4)
+3	(5,6)
+DEALLOCATE PREPARE stmt2;
+#
+# Test 3: Multiple EXECUTE calls on same statement
+#
+PREPARE stmt3 FROM 'SELECT COUNT(*) FROM t1 WHERE id <= ?';
+SET @limit = 1;
+EXECUTE stmt3 USING @limit;
+COUNT(*)
+1
+SET @limit = 2;
+EXECUTE stmt3 USING @limit;
+COUNT(*)
+2
+SET @limit = 3;
+EXECUTE stmt3 USING @limit;
+COUNT(*)
+3
+DEALLOCATE PREPARE stmt3;
+#
+# Test 4: Re-prepare same statement name
+#
+PREPARE stmt4 FROM 'SELECT id FROM t1';
+EXECUTE stmt4;
+id
+1
+2
+3
+PREPARE stmt4 FROM 'SELECT val FROM t1';
+EXECUTE stmt4;
+val
+(1,2)
+(3,4)
+(5,6)
+DEALLOCATE PREPARE stmt4;
+#
+# Cleanup
+#
+DROP TABLE t1;

@@ -1,0 +1,59 @@
+--source include/have_hypergraph.inc
+--source include/elide_costs.inc
+
+# The include statement below is a temp one for tests that are yet to
+# be ported to run with InnoDB,
+# but needs to be kept for tests that would need MyISAM in future.
+--source include/force_myisam_default.inc
+--source include/have_myisam.inc
+
+# This test doesn't support GTID
+--source include/rpl/set_gtid_mode_off.inc
+
+--source include/group_skip_scan_test.inc
+
+CREATE TABLE t(a INT, b INT, c INT, KEY k1 (a,b));
+INSERT INTO t(a,b) VALUES (1,1),(1,2),(1,3),(2,1),(2,2),(2,2),(2,2),(2,3),(2,3),(2,4);
+ANALYZE TABLE t;
+
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT a, COUNT(DISTINCT b) FROM t WHERE a=b GROUP BY a;
+
+DROP TABLE t;
+
+--echo #
+--echo # Bug#36026632 `VAL >= 0.0 || VAL == KUNKNOWNCOST' IN ACCESSPATH::SET_INIT_COST AT JOIN_OPTIMIZER
+--echo #
+
+CREATE TABLE t1 (pk INT AUTO_INCREMENT, int_val INT, int_key INT, PRIMARY KEY(pk));
+CREATE INDEX idx_t1_int_key ON t1(int_key);
+CREATE TABLE t2 (i1 BIGINT NOT NULL PRIMARY KEY);
+INSERT INTO t2 VALUES (8),(4),(6),(7);
+
+SELECT int_key AS field1 FROM t1 WHERE (int_key, NULL) IN
+  (((SELECT i1 FROM t2 WHERE i1 = 7), 4), (ASCII('p'), 4) , (6 , 7))
+GROUP BY field1;
+
+DROP TABLE t1;
+DROP TABLE t2;
+
+--echo #
+--echo # Bug#37014535: Assertion path->type == AccessPath::GROUP_INDEX_SKIP_SCAN
+--echo # || (path->type == AccessPath::FILTER && path->filter().child
+--echo #
+
+CREATE TABLE t (a INT, b INT, KEY k1 (a, b));
+INSERT INTO t VALUES (1,1), (1,2), (1,3), (2,1), (2,2),
+                     (2,2), (2,2), (2,3), (2,3), (2,4);
+ANALYZE TABLE t;
+
+--sorted_result
+SELECT DISTINCT a, b FROM t QUALIFY RANK() OVER (ORDER BY a, b) > 2;
+
+--sorted_result
+SELECT DISTINCT a, b FROM t WHERE b > 0 HAVING b < 10;
+DROP TABLE t;
+
+--source include/disable_hypergraph.inc
+# Restore the default for gtid_mode which is ON
+--source include/rpl/set_gtid_mode_on.inc

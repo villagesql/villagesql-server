@@ -1,0 +1,163 @@
+--character_set sjis
+--disable_warnings
+drop table if exists `‚s‚P`;
+drop table if exists `‚s‚Q`;
+drop table if exists `‚s‚R`;
+drop table if exists `‚s‚S`;
+drop table if exists `‚s‚T`;
+drop table if exists `‚s‚U`;
+drop table if exists `‚s‚V`;
+drop table if exists `‚s‚W`;
+drop table if exists `‚s‚X`;
+--enable_warnings
+
+#
+# Test LEFT() function with Japanese character in sjis encoding
+#
+
+SET NAMES sjis;
+SET character_set_database = sjis;
+
+CREATE TABLE `‚s‚P` (`‚b‚P` char(5), INDEX(`‚b‚P`)) DEFAULT CHARSET = sjis engine = innodb;
+CREATE TABLE `‚s‚Q` (`‚b‚P` char(5), INDEX(`‚b‚P`)) DEFAULT CHARSET = sjis engine = innodb;
+CREATE TABLE `‚s‚R` (`‚b‚P` char(5), INDEX(`‚b‚P`)) DEFAULT CHARSET = sjis engine = innodb;
+CREATE TABLE `‚s‚S` (`‚b‚P` char(5), INDEX(`‚b‚P`)) DEFAULT CHARSET = sjis engine = myisam;
+CREATE TABLE `‚s‚T` (`‚b‚P` char(5), INDEX(`‚b‚P`)) DEFAULT CHARSET = sjis engine = myisam;
+CREATE TABLE `‚s‚U` (`‚b‚P` char(5), INDEX(`‚b‚P`)) DEFAULT CHARSET = sjis engine = myisam;
+CREATE TABLE `‚s‚V` (`‚b‚P` char(5), INDEX(`‚b‚P`)) DEFAULT CHARSET = sjis engine = MEMORY;
+CREATE TABLE `‚s‚W` (`‚b‚P` char(5), INDEX(`‚b‚P`)) DEFAULT CHARSET = sjis engine = MEMORY;
+CREATE TABLE `‚s‚X` (`‚b‚P` char(5), INDEX(`‚b‚P`)) DEFAULT CHARSET = sjis engine = MEMORY;
+
+INSERT INTO `‚s‚P` VALUES ('±²³´µ'),('±²³´'),('±²³'),('±²'),('±'),('');
+INSERT INTO `‚s‚Q` VALUES ('‚ ‚¢‚¤‚¦‚¨'),('‚ ‚¢‚¤‚¦'),('‚ ‚¢‚¤'),('‚ ‚¢'),('‚ '),('');
+INSERT INTO `‚s‚R` VALUES ('ƒ\\•\—\\'),('ƒ\\•\—\'),('ƒ\\•\'),('ƒ\\'),('ƒ\'),('');
+INSERT INTO `‚s‚S` VALUES ('±²³´µ'),('±²³´'),('±²³'),('±²'),('±'),('');
+INSERT INTO `‚s‚T` VALUES ('‚ ‚¢‚¤‚¦‚¨'),('‚ ‚¢‚¤‚¦'),('‚ ‚¢‚¤'),('‚ ‚¢'),('‚ '),('');
+INSERT INTO `‚s‚U` VALUES ('ƒ\\•\—\\'),('ƒ\\•\—\'),('ƒ\\•\'),('ƒ\\'),('ƒ\'),('');
+INSERT INTO `‚s‚V` VALUES ('±²³´µ'),('±²³´'),('±²³'),('±²'),('±'),('');
+INSERT INTO `‚s‚W` VALUES ('‚ ‚¢‚¤‚¦‚¨'),('‚ ‚¢‚¤‚¦'),('‚ ‚¢‚¤'),('‚ ‚¢'),('‚ '),('');
+INSERT INTO `‚s‚X` VALUES ('ƒ\\•\—\\'),('ƒ\\•\—\'),('ƒ\\•\'),('ƒ\\'),('ƒ\'),('');
+
+#InnoDB
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,0) FROM `‚s‚P`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,1) FROM `‚s‚P`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,2) FROM `‚s‚P`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,3) FROM `‚s‚P`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,4) FROM `‚s‚P`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,5) FROM `‚s‚P`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,0) FROM `‚s‚Q`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,1) FROM `‚s‚Q`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,2) FROM `‚s‚Q`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,3) FROM `‚s‚Q`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,4) FROM `‚s‚Q`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,5) FROM `‚s‚Q`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,0) FROM `‚s‚R`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,1) FROM `‚s‚R`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,2) FROM `‚s‚R`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,3) FROM `‚s‚R`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,4) FROM `‚s‚R`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,5) FROM `‚s‚R`;
+
+#MyISAM
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,0) FROM `‚s‚S`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,1) FROM `‚s‚S`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,2) FROM `‚s‚S`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,3) FROM `‚s‚S`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,4) FROM `‚s‚S`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,5) FROM `‚s‚S`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,0) FROM `‚s‚T`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,1) FROM `‚s‚T`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,2) FROM `‚s‚T`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,3) FROM `‚s‚T`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,4) FROM `‚s‚T`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,5) FROM `‚s‚T`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,0) FROM `‚s‚U`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,1) FROM `‚s‚U`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,2) FROM `‚s‚U`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,3) FROM `‚s‚U`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,4) FROM `‚s‚U`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,5) FROM `‚s‚U`;
+
+#MEMORY
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,0) FROM `‚s‚V`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,1) FROM `‚s‚V`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,2) FROM `‚s‚V`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,3) FROM `‚s‚V`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,4) FROM `‚s‚V`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,5) FROM `‚s‚V`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,0) FROM `‚s‚W`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,1) FROM `‚s‚W`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,2) FROM `‚s‚W`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,3) FROM `‚s‚W`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,4) FROM `‚s‚W`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,5) FROM `‚s‚W`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,0) FROM `‚s‚X`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,1) FROM `‚s‚X`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,2) FROM `‚s‚X`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,3) FROM `‚s‚X`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,4) FROM `‚s‚X`;
+--sorted_result
+SELECT `‚b‚P`, LEFT(`‚b‚P`,5) FROM `‚s‚X`;
+
+DROP TABLE `‚s‚P`;
+DROP TABLE `‚s‚Q`;
+DROP TABLE `‚s‚R`;
+DROP TABLE `‚s‚S`;
+DROP TABLE `‚s‚T`;
+DROP TABLE `‚s‚U`;
+DROP TABLE `‚s‚V`;
+DROP TABLE `‚s‚W`;
+DROP TABLE `‚s‚X`;

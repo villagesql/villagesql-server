@@ -1,0 +1,45 @@
+# Test ALTER TABLE ALTER CHECK constraint enforcement on COMPLEX column
+# Grammar: ALTER TABLE table_name ALTER CHECK constraint_name ENFORCED/NOT ENFORCED
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    value COMPLEX,
+    CONSTRAINT chk_complex CHECK (COMPLEX_REAL(value) >= 0)
+);
+
+INSERT INTO t1 VALUES (1, 'test1', '(1.0,2.0)');
+
+# This should fail due to constraint
+--error ER_CHECK_CONSTRAINT_VIOLATED
+INSERT INTO t1 VALUES (2, 'test2', '(-1.0,2.0)');
+
+SHOW CREATE TABLE t1;
+
+# Disable constraint enforcement
+ALTER TABLE t1 ALTER CHECK chk_complex NOT ENFORCED;
+
+SHOW CREATE TABLE t1;
+
+# Now this should succeed
+INSERT INTO t1 VALUES (2, 'test2', '(-1.0,2.0)');
+
+# Re-enabling enforcement fails - existing row violates the constraint
+--error ER_CHECK_CONSTRAINT_VIOLATED
+ALTER TABLE t1 ALTER CHECK chk_complex ENFORCED;
+
+# Remove the violating row and re-enable enforcement
+DELETE FROM t1 WHERE id = 2;
+ALTER TABLE t1 ALTER CHECK chk_complex ENFORCED;
+
+SHOW CREATE TABLE t1;
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,76 @@
+# Verify the per-statement counter fields ported to the statement_event ABI:
+# digest_hash and the handler read_* counters.
+#
+# The important property is that these counters are per-statement DELTAS, not
+# cumulative session totals. on_statement_postexecute derives them by
+# subtracting a status_var snapshot taken at statement start; that snapshot is
+# only taken because statement_event_wants_status_snapshot() forces it (a hook
+# is registered). If that snapshot were missing, stat_delta would fall back to
+# the cumulative session total.
+#
+# Test strategy: run the SAME full-scan query twice. A per-statement delta
+# reports the same read_rnd_next both times; a cumulative total keeps growing.
+# The extension compares consecutive runs of an identical digest_hash and logs
+# a fixed YES/NO token, so the result is stable across plans and machines.
+#
+# digest_hash is checked exactly: the value the hook saw must equal the digest
+# STATEMENT_DIGEST() computes for the same statement text.
+
+--let $slow_log = $MYSQLTEST_VARDIR/tmp/vsql_slow_counters.log
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--error 0,1
+--remove_file $slow_log
+
+INSTALL EXTENSION vsql_slow_query_log;
+
+# threshold_ms = 0 logs every statement regardless of duration.
+SET GLOBAL vsql_slow_query_log.threshold_ms = 0;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval SET GLOBAL vsql_slow_query_log.log_file = '$slow_log';
+
+# A table with no index at all (no PK), so any WHERE must scan every row via
+# ha_rnd_next -- guaranteeing read_rnd_next is non-zero and identical across two
+# identical runs.
+CREATE TABLE vsql_counter_scan (id INT, val INT);
+INSERT INTO vsql_counter_scan VALUES (1, 10), (2, 20), (3, 30), (4, 40),
+                                     (5, 50), (6, 60), (7, 70), (8, 80);
+
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+
+--echo # Run the identical full-scan query twice.
+SELECT COUNT(*) FROM vsql_counter_scan WHERE val > 25;
+SELECT COUNT(*) FROM vsql_counter_scan WHERE val > 25;
+
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+
+# The reference digest for the scan query. Its log lines carry both the
+# read_rnd_next value and the digest_hash, so the checks below target only the
+# scan -- not the SET/admin statements that also get logged at threshold_ms=0
+# (those do no table reads, so they'd show Read_rnd_next: 0).
+--let $ref_digest = `SELECT STATEMENT_DIGEST('SELECT COUNT(*) FROM vsql_counter_scan WHERE val > 25')`
+
+--echo # read_rnd_next is a per-statement delta: the second identical run
+--echo # reports the same value as the first (a cumulative total would grow).
+--echo # Expect exactly one YES and zero NO.
+--exec sh -c "printf 'stable=YES count: '; grep -c 'Read_rnd_next_delta_stable: YES' $slow_log; true"
+--exec sh -c "printf 'stable=NO  count: '; grep -c 'Read_rnd_next_delta_stable: NO' $slow_log; true"
+
+--echo # The scan's counter is actually non-zero, so the stability check above
+--echo # has teeth. Expect 0 scan lines reporting a zero counter.
+--exec sh -c "printf 'zero-counter scan lines: '; grep '# Digest_hash: $ref_digest ' $slow_log | grep -c 'Read_rnd_next: 0$'; true"
+
+--echo # digest_hash the hook saw matches the digest MySQL computes for the
+--echo # same statement text. STATEMENT_DIGEST() gives the reference hash with
+--echo # no dependency on a performance_schema consumer being enabled.
+--echo # Expect 2 (both runs logged the same, reference-matching digest_hash)
+--exec sh -c "printf 'matching digest_hash lines: '; grep -c '# Digest_hash: $ref_digest ' $slow_log; true"
+
+DROP TABLE vsql_counter_scan;
+UNINSTALL EXTENSION vsql_slow_query_log;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+
+--remove_file $slow_log

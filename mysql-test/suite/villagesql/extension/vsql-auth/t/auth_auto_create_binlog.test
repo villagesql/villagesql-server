@@ -1,0 +1,46 @@
+# Auto-create provisioning must not reach the binary log.
+#
+# The account and the roles it is granted belong to an external source of
+# truth -- the identity provider the VEF auth method authenticated against.
+# Auto-create only materializes locally what that source already says, so the
+# CREATE USER and GRANT it issues must not replicate: a replica carrying them
+# would hold accounts and grants that no longer track the IdP and that nothing
+# here revokes. Each server provisions for itself when an account first logs
+# in to it.
+#
+# Binlogging these also breaks the server outright. They run on an internal
+# THD, so the DDL Query_log_event carries XID 0, and after a hard stop crash
+# recovery rejects the log ("Query_log_event containing a DDL holds an invalid
+# XID") and the server does not start.
+
+--source include/have_log_bin.inc
+
+call mtr.add_suppression("routing unknown accounts");
+
+INSTALL EXTENSION vsql_auth_test;
+SET GLOBAL vsql_auth_test.auto_create = ON;
+
+CREATE ROLE vsql_role_granted;
+GRANT SELECT ON *.* TO vsql_role_granted;
+
+--echo # Start from a known point in the log
+RESET BINARY LOGS AND GTIDS;
+
+--echo # Log in as an account that does not exist: auto-create provisions it
+--connect(new_con, localhost, auto_created_user, vsql-auth-test-token, , , , CLEARTEXT)
+SELECT CURRENT_USER() AS who;
+--connection default
+--disconnect new_con
+
+--echo # The account was created
+SELECT user, host FROM mysql.user WHERE user = 'auto_created_user';
+
+--echo # ...but provisioning wrote nothing to the binary log.
+--echo # Any CREATE USER / GRANT row here is the bug.
+--let $binlog_file = query_get_value(SHOW BINARY LOG STATUS, File, 1)
+--replace_regex /\/\* xid=[0-9]+ \*\//{xid}/ /Server ver: [^,]*/Server ver: #/
+--eval SHOW BINLOG EVENTS IN '$binlog_file' FROM 4
+
+DROP USER 'auto_created_user'@'%';
+DROP ROLE vsql_role_granted;
+UNINSTALL EXTENSION vsql_auth_test;

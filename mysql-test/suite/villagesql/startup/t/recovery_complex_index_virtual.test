@@ -1,0 +1,10 @@
+--echo #
+--echo # Test crash recovery with uncommitted transactions on indexed COMPLEX columns
+--echo # with VIRTUAL columns (tests column index mapping)
+--echo #
+
+# Enable virtual columns for this test
+let $virtual = 1;
+
+# Run the base recovery test with virtual columns enabled
+--source suite/villagesql/startup/t/recovery_complex_index.test

@@ -1,0 +1,8 @@
+INSTALL EXTENSION vsql_complex;
+# Fails in InnoDB: temporary tables do not support compression
+CREATE TEMPORARY TABLE t1 (id INT PRIMARY KEY, c COMPLEX)
+COMPRESSION = 'ZLIB' ENGINE = InnoDB;
+ERROR HY000: Table storage engine for 't1' doesn't have this option
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+UNINSTALL EXTENSION vsql_complex;

@@ -1,0 +1,126 @@
+CREATE TABLE parent (
+id INT PRIMARY KEY,
+val COMPLEX INVISIBLE UNIQUE
+);
+CREATE TABLE child (
+id INT PRIMARY KEY,
+parent_val COMPLEX INVISIBLE,
+FOREIGN KEY (parent_val) REFERENCES parent(val)
+);
+SHOW CREATE TABLE parent;
+Table	Create Table
+parent	CREATE TABLE `parent` (
+  `id` int NOT NULL,
+  `val` vsql_complex.COMPLEX DEFAULT NULL /*!80023 INVISIBLE */,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `val` (`val`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE child;
+Table	Create Table
+child	CREATE TABLE `child` (
+  `id` int NOT NULL,
+  `parent_val` vsql_complex.COMPLEX DEFAULT NULL /*!80023 INVISIBLE */,
+  PRIMARY KEY (`id`),
+  KEY `parent_val` (`parent_val`),
+  CONSTRAINT `child_ibfk_1` FOREIGN KEY (`parent_val`) REFERENCES `parent` (`val`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO parent (id, val) VALUES (1, '(1.0,1.0)');
+INSERT INTO parent (id, val) VALUES (2, '(2.0,2.0)');
+INSERT INTO child (id, parent_val) VALUES (1, '(1.0,1.0)');
+INSERT INTO child (id, parent_val) VALUES (2, '(2.0,2.0)');
+INSERT INTO child (id, parent_val) VALUES (3, '(9.9,9.9)');
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`child`, CONSTRAINT `child_ibfk_1` FOREIGN KEY (`parent_val`) REFERENCES `parent` (`val`))
+SELECT * FROM parent ORDER BY id;
+id
+1
+2
+SELECT * FROM child ORDER BY id;
+id
+1
+2
+SELECT id, val FROM parent ORDER BY id;
+id	val
+1	(1,1)
+2	(2,2)
+SELECT id, parent_val FROM child ORDER BY id;
+id	parent_val
+1	(1,1)
+2	(2,2)
+DROP TABLE child;
+CREATE TABLE child (
+id INT PRIMARY KEY,
+parent_val COMPLEX INVISIBLE,
+description VARCHAR(50),
+FOREIGN KEY (parent_val) REFERENCES parent(val) ON DELETE CASCADE
+);
+INSERT INTO child (id, parent_val, description) VALUES (1, '(1.0,1.0)', 'child1');
+INSERT INTO child (id, parent_val, description) VALUES (2, '(1.0,1.0)', 'child2');
+SELECT * FROM child ORDER BY id;
+id	description
+1	child1
+2	child2
+DELETE FROM parent WHERE val = '(1.0,1.0)';
+SELECT * FROM child ORDER BY id;
+id	description
+SELECT id, parent_val, description FROM child ORDER BY id;
+id	parent_val	description
+DROP TABLE child;
+DROP TABLE parent;
+CREATE TABLE composite_parent (
+sensor_id INT,
+frequency COMPLEX INVISIBLE,
+name VARCHAR(50),
+PRIMARY KEY (sensor_id, frequency)
+);
+CREATE TABLE composite_child (
+id INT PRIMARY KEY,
+ref_sensor_id INT,
+ref_frequency COMPLEX INVISIBLE,
+signal_value DOUBLE,
+FOREIGN KEY (ref_sensor_id, ref_frequency)
+REFERENCES composite_parent(sensor_id, frequency)
+);
+SHOW CREATE TABLE composite_parent;
+Table	Create Table
+composite_parent	CREATE TABLE `composite_parent` (
+  `sensor_id` int NOT NULL,
+  `frequency` vsql_complex.COMPLEX NOT NULL /*!80023 INVISIBLE */,
+  `name` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`sensor_id`,`frequency`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SHOW CREATE TABLE composite_child;
+Table	Create Table
+composite_child	CREATE TABLE `composite_child` (
+  `id` int NOT NULL,
+  `ref_sensor_id` int DEFAULT NULL,
+  `ref_frequency` vsql_complex.COMPLEX DEFAULT NULL /*!80023 INVISIBLE */,
+  `signal_value` double DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `ref_sensor_id` (`ref_sensor_id`,`ref_frequency`),
+  CONSTRAINT `composite_child_ibfk_1` FOREIGN KEY (`ref_sensor_id`, `ref_frequency`) REFERENCES `composite_parent` (`sensor_id`, `frequency`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO composite_parent (sensor_id, frequency, name)
+VALUES (1, '(1.0,0.0)', 'fundamental');
+INSERT INTO composite_parent (sensor_id, frequency, name)
+VALUES (1, '(2.0,0.0)', 'harmonic');
+INSERT INTO composite_child (id, ref_sensor_id, ref_frequency, signal_value)
+VALUES (1, 1, '(1.0,0.0)', 5.5);
+INSERT INTO composite_child (id, ref_sensor_id, ref_frequency, signal_value)
+VALUES (2, 1, '(3.0,0.0)', 9.9);
+ERROR 23000: Cannot add or update a child row: a foreign key constraint fails (`test`.`composite_child`, CONSTRAINT `composite_child_ibfk_1` FOREIGN KEY (`ref_sensor_id`, `ref_frequency`) REFERENCES `composite_parent` (`sensor_id`, `frequency`))
+SELECT * FROM composite_parent ORDER BY sensor_id;
+sensor_id	name
+1	fundamental
+1	harmonic
+SELECT * FROM composite_child ORDER BY id;
+id	ref_sensor_id	signal_value
+1	1	5.5
+SELECT sensor_id, frequency, name FROM composite_parent ORDER BY sensor_id, frequency;
+sensor_id	frequency	name
+1	(1,0)	fundamental
+1	(2,0)	harmonic
+SELECT id, ref_sensor_id, ref_frequency, signal_value FROM composite_child ORDER BY id;
+id	ref_sensor_id	ref_frequency	signal_value
+1	1	(1,0)	5.5
+DROP TABLE composite_child;
+DROP TABLE composite_parent;

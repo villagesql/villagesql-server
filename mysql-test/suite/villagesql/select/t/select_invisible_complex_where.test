@@ -1,0 +1,30 @@
+# Test INVISIBLE COMPLEX columns in WHERE clauses
+# Trace code path to understand how type checking works
+
+--source include/villagesql/install_complex_extension.inc
+
+# Test 1: Different custom types (COMPLEX vs COMPLEX2) with INVISIBLE column
+CREATE TABLE t1 (id INT, val1 COMPLEX);
+CREATE TABLE t2 (id INT, val2 COMPLEX2 INVISIBLE);
+
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t1, t2 WHERE t1.val1 = t2.val2;
+
+DROP TABLE t1;
+DROP TABLE t2;
+
+# Test 2: Same custom type (COMPLEX) with INVISIBLE column
+CREATE TABLE t1 (id INT, val1 COMPLEX);
+CREATE TABLE t2 (id INT, val2 COMPLEX INVISIBLE);
+
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+INSERT INTO t2 (id, val2) VALUES (1, '(1.0,2.0)'), (2, '(5.0,6.0)');
+
+SELECT * FROM t1, t2 WHERE t1.val1 = t2.val2;
+
+DROP TABLE t1;
+DROP TABLE t2;
+
+--source include/villagesql/uninstall_complex_extension.inc

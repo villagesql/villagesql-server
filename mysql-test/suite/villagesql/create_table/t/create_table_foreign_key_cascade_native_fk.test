@@ -1,0 +1,8 @@
+# Run create_table_foreign_key_cascade with InnoDB-native foreign keys
+# (innodb_native_foreign_keys=ON, set via the companion -master.opt) instead of
+# MySQL 9.7's SQL-layer FK default. The body is sourced verbatim from the base
+# test so the two FK modes share one set of statements; only the recorded binlog
+# differs (native mode performs cascades inside InnoDB, so no explicit child-row
+# events and no USE_SQL_FOREIGN_KEY_F flag). The point of the matrix is to verify
+# the leak-check holds under both modes -- not to assert one mode's bytes.
+--source suite/villagesql/create_table/t/create_table_foreign_key_cascade.test

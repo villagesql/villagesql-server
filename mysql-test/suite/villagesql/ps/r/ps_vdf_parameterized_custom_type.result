@@ -1,0 +1,82 @@
+#
+# Setup test data
+#
+CREATE TABLE t3 (id INT PRIMARY KEY, vec TVECTOR(3) NOT NULL);
+INSERT INTO t3 VALUES (1, '[1,0,0]'), (2, '[0,2,0]');
+CREATE TABLE t2 (id INT PRIMARY KEY, vec TVECTOR(2) NOT NULL);
+INSERT INTO t2 VALUES (1, '[3,4]');
+#
+# Test 1: a column of the type supplies the dimension
+#
+PREPARE stmt1 FROM 'SELECT id, tvector_dot_product(vec, ?) AS dp FROM t3 ORDER BY id';
+SET @vec = '[1,1,1]';
+EXECUTE stmt1 USING @vec;
+id	dp
+1	1
+2	2
+DEALLOCATE PREPARE stmt1;
+#
+# Test 2: the same statement shape resolves to the other table's
+# dimension
+#
+PREPARE stmt2 FROM 'SELECT id, tvector_dot_product(vec, ?) AS dp FROM t2 ORDER BY id';
+SET @vec = '[1,1]';
+EXECUTE stmt2 USING @vec;
+id	dp
+1	7
+DEALLOCATE PREPARE stmt2;
+#
+# Test 3: a value whose dimension does not match the resolved one
+#
+PREPARE stmt3 FROM 'SELECT id, tvector_dot_product(vec, ?) AS dp FROM t3 ORDER BY id';
+SET @vec = '[1,1]';
+EXECUTE stmt3 USING @vec;
+ERROR HY000: Incorrect vsql_tvector.TVECTOR(3) value: '[1,1]' for parameter '?'
+# A matching value still works after
+SET @vec = '[0,0,3]';
+EXECUTE stmt3 USING @vec;
+id	dp
+1	0
+2	0
+DEALLOCATE PREPARE stmt3;
+#
+# Test 4: an enclosing call's resolved return type supplies it
+#
+PREPARE stmt4 FROM 'SELECT id, tvector_max_element(tvector_add(vec, ?)) AS mx FROM t3 ORDER BY id';
+SET @vec = '[3,0,0]';
+EXECUTE stmt4 USING @vec;
+id	mx
+1	4
+2	3
+DEALLOCATE PREPARE stmt4;
+#
+# Test 5: ORDER BY the parameter's distance from the column, the
+# nearest-neighbour shape. Each value ranks a different row first.
+#
+PREPARE stmt5 FROM 'SELECT id FROM t3 ORDER BY tvector_dot_product(vec, ?) DESC LIMIT 1';
+SET @vec = '[5,0,0]';
+EXECUTE stmt5 USING @vec;
+id
+1
+SET @vec = '[0,5,0]';
+EXECUTE stmt5 USING @vec;
+id
+2
+DEALLOCATE PREPARE stmt5;
+#
+# Test 6: nothing supplies the dimension, so the statement is rejected
+#
+PREPARE stmt6 FROM 'SELECT tvector_dot_product(?, ?)';
+ERROR HY000: Cannot initialize function 'tvector_dot_product': cannot determine type parameters for vsql_tvector.TVECTOR in argument 1
+#
+# Test 7: a string constant does not supply it either, with or
+# without a parameter in the call.
+#
+SELECT tvector_dot_product('[1,2,3]', '[4,5,6]') AS dp;
+ERROR HY000: Cannot initialize function 'tvector_dot_product': cannot determine type parameters for vsql_tvector.TVECTOR in argument 1
+PREPARE stmt7 FROM 'SELECT tvector_dot_product(''[1,2,3]'', ?) AS dp';
+ERROR HY000: Cannot initialize function 'tvector_dot_product': cannot determine type parameters for vsql_tvector.TVECTOR in argument 1
+#
+# Cleanup
+#
+DROP TABLE t2, t3;

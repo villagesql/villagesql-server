@@ -1,0 +1,53 @@
+# Test RENAME TABLE with COMPLEX columns and multiple tables
+# Verifies custom_columns entries are updated with new table name
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE old_table1 (
+    id INT PRIMARY KEY,
+    value COMPLEX,
+    name VARCHAR(50)
+);
+
+CREATE TABLE old_table2 (
+    id INT PRIMARY KEY,
+    value DOUBLE,
+    name VARCHAR(50)
+);
+
+CREATE TABLE old_table3 (
+    id INT PRIMARY KEY,
+    value COMPLEX,
+    name VARCHAR(50)
+);
+
+--source include/villagesql/query_custom_columns.inc
+
+INSERT INTO old_table1 VALUES (1, '(1.0,2.0)', 'test');
+INSERT INTO old_table2 VALUES (1, '1.0', 'test');
+INSERT INTO old_table3 VALUES (1, '(1.0,2.0)', 'test');
+
+RENAME TABLE old_table1 TO new_table1,
+  old_table2 TO new_table2,
+  old_table3 TO new_table3;
+
+--source include/villagesql/query_custom_columns.inc
+
+SHOW CREATE TABLE new_table1;
+SELECT * FROM new_table1;
+SHOW CREATE TABLE new_table2;
+SELECT * FROM new_table2;
+SHOW CREATE TABLE new_table3;
+SELECT * FROM new_table3;
+
+DROP TABLE new_table1;
+
+--source include/villagesql/query_custom_columns.inc
+
+DROP TABLE new_table2, new_table3;
+
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,60 @@
+# Test that VEF UDF registration works correctly
+# This test verifies that UDFs registered via VEF (VillageSQL Extension Framework)
+# can be called using the extension.func_name syntax.
+
+--echo # Test VEF UDF Registration
+
+# Setup VEB directory for testing
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+# Restart server with --veb-dir option
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+--source include/villagesql/binlog_check_begin.inc
+
+# Create test extension 'test_vdf_ext' with VDFs (uses VEF registration)
+--let $extension_name = test_vdf_ext
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/simple_vdf.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--echo # Install extension with VDFs
+INSTALL EXTENSION test_vdf_ext;
+
+--echo # Verify VDFs were NOT registered in mysql.func (VEF functions use in-memory registry)
+--let $query = SELECT name FROM mysql.func WHERE name IN ('simple_int_func', 'simple_string_func', 'simple_test')
+--source include/villagesql/query_hidden_tables.inc
+
+--echo # Call the custom VDFs using qualified name with .
+SELECT test_vdf_ext.simple_int_func() AS result;
+SELECT test_vdf_ext.simple_string_func() AS result;
+SELECT test_vdf_ext.simple_test('hello') AS result;
+
+--echo # Verify VDF returning STRING has UTF8 charset (not BINARY)
+--echo # This catches a bug where resolve_type() ran before m_vdf was set,
+--echo # causing string-returning VDFs to incorrectly use binary charset.
+SELECT CHARSET(test_vdf_ext.simple_string_func()) AS string_charset;
+SELECT COLLATION(test_vdf_ext.simple_string_func()) AS string_collation;
+
+--echo # Try calling non-existent VDF on installed extension (should fail - falls through to stored function lookup)
+--error ER_SP_DOES_NOT_EXIST
+SELECT test_vdf_ext.nonexistent_func() AS result;
+
+--echo # Call VDF without qualified name (should work - unqualified lookup)
+SELECT simple_int_func() AS result;
+
+--echo # Try to drop custom VDF directly (should fail - not in mysql.func)
+--error ER_SP_DOES_NOT_EXIST
+DROP FUNCTION simple_int_func;
+
+--echo # Uninstall extension
+UNINSTALL EXTENSION test_vdf_ext;
+
+--echo # Try to call VDF after extension is uninstalled (should fail - falls through to stored function lookup)
+--error ER_SP_DOES_NOT_EXIST
+SELECT test_vdf_ext.simple_int_func() AS result;
+
+--source include/villagesql/binlog_check_end.inc

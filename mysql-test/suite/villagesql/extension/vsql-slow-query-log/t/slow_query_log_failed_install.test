@@ -1,0 +1,58 @@
+# A failed INSTALL EXTENSION must not disturb another extension's live
+# statement_event hook.
+#
+# When INSTALL fails while populating capabilities, the rollback calls
+# on_depopulate for every capability the extension declared, including the
+# statement_event that never populated. The hook count must only change when a
+# hook is actually removed. If it dropped regardless, it would fall to zero here
+# and the fast path would stop dispatching vsql_slow_query_log's live hook.
+#
+# The hook also runs for statements that fail, like the INSTALL above and the
+# SELECT below. Reading the statement's warning count must not assume it
+# succeeded.
+
+call mtr.add_suppression("Failed to load VEF extension 'reserved_phase'");
+
+--let $slow_log = $MYSQLTEST_VARDIR/tmp/vsql_slow_failed_install.log
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--error 0,1
+--remove_file $slow_log
+
+INSTALL EXTENSION vsql_slow_query_log;
+
+# threshold_ms = 0 logs every statement regardless of duration.
+SET GLOBAL vsql_slow_query_log.threshold_ms = 0;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval SET GLOBAL vsql_slow_query_log.log_file = '$slow_log';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+
+SELECT 'before_failed_install' AS marker;
+
+--let $extension_name = reserved_phase
+--let $extension_version = 1.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/reserved_phase_statement_event.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION reserved_phase;
+
+SELECT 'after_failed_install' AS marker;
+
+--error ER_NO_SUCH_TABLE
+SELECT 'failed_select' AS marker FROM no_such_table;
+
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+
+--echo # Confirm that the live hook kept firing after the failed install
+--exec sh -c "printf 'before: '; grep -c 'before_failed_install' $slow_log; true"
+--exec sh -c "printf 'after: '; grep -c 'after_failed_install' $slow_log; true"
+--exec sh -c "printf 'failed select: '; grep -c 'failed_select' $slow_log; true"
+
+UNINSTALL EXTENSION vsql_slow_query_log;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+
+--remove_file $slow_log

@@ -1,0 +1,31 @@
+# Test CREATE TABLE AS SELECT fails on duplicate keys without IGNORE
+# Tests that duplicate keys cause errors in CREATE TABLE AS SELECT
+
+# Create source table with COMPLEX data including duplicates
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE source_data (
+    id INT,
+    complex_data COMPLEX
+);
+
+INSERT INTO source_data VALUES (1, '(1.0,2.0)');
+INSERT INTO source_data VALUES (2, '(3.0,4.0)');
+INSERT INTO source_data VALUES (1, '(5.0,6.0)');
+
+# Create table without IGNORE - should fail on duplicate key
+--error ER_DUP_ENTRY
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    complex_data COMPLEX
+) AS SELECT * FROM source_data;
+
+# Verify table was not created
+--error ER_NO_SUCH_TABLE
+SHOW COLUMNS FROM t1;
+
+DROP TABLE source_data;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,51 @@
+CREATE DATABASE test_complex_db;
+USE test_complex_db;
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+value COMPLEX
+);
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+data COMPLEX
+);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+INSERT INTO t2 VALUES (1, '(3.0,4.0)');
+SHOW DATABASES LIKE 'test_complex_db';
+Database (test_complex_db)
+test_complex_db
+SHOW TABLES;
+Tables_in_test_complex_db
+t1
+t2
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test_complex_db	t1	value	vsql_complex	0.0.1	COMPLEX	{}
+test_complex_db	t2	data	vsql_complex	0.0.1	COMPLEX	{}
+USE test;
+DROP DATABASE test_complex_db;
+SHOW DATABASES LIKE 'test_complex_db';
+Database (test_complex_db)
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+include/rpl/deprecated/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+#	#	Query	#	#	CREATE DATABASE test_complex_db
+#	#	Query	#	#	use `test_complex_db`; CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `value` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+)
+#	#	Query	#	#	use `test_complex_db`; CREATE TABLE `t2` (
+  `id` int NOT NULL,
+  `data` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+)
+#	#	Query	#	#	BEGIN
+#	#	Table_map	#	#	table_id: # (test_complex_db.t1)
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
+#	#	Xid	#	#	COMMIT /* XID */
+#	#	Query	#	#	BEGIN
+#	#	Table_map	#	#	table_id: # (test_complex_db.t2)
+#	#	Write_rows	#	#	table_id: # flags: STMT_END_F USE_SQL_FOREIGN_KEY_F
+#	#	Xid	#	#	COMMIT /* XID */
+#	#	Query	#	#	DROP DATABASE test_complex_db

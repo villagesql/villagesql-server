@@ -1,0 +1,12 @@
+SET NAMES utf8mb3;
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+#
+# ICU bug #12884: Timeout ignored for ICU regular expression matches
+# reported by us. Fixed in ICU 59.1.
+#
+# Originates from MySQL Bug#24449090 BUFFER OVERFLOW IN FUNCTION DUPL
+# which was fixed in the Henry Spencer library.
+#
+SELECT regexp_like('', "(((((((){120}){11}){11}){11}){80}){11}){4}" );
+ERROR HY000: Timeout exceeded in regular expression match.

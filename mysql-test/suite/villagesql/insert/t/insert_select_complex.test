@@ -1,0 +1,407 @@
+# Test INSERT INTO ... SELECT with COMPLEX type
+# Grammar: INSERT [INTO] tbl_name [(col_name [, col_name] ...)] SELECT ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_source (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Populate source table with 30+ rows, negative values and zero variants in random order
+INSERT INTO t_source VALUES
+    (1, '(15.0,20.0)'),
+    (2, '(-0,0)'),
+    (3, '(-7.5,-8.5)'),
+    (4, '(0,0)'),
+    (5, '(22.0,-13.0)'),
+    (6, '(0,-0)'),
+    (7, '(-18.0,9.0)'),
+    (8, '(3.5,4.2)'),
+    (9, '(-0,-0)'),
+    (10, '(11.5,-12.5)'),
+    (11, '(0,0)'),
+    (12, '(-25.0,-30.0)'),
+    (13, '(19.0,21.0)'),
+    (14, '(-0,0)'),
+    (15, '(7.0,-5.0)'),
+    (16, '(-14.0,16.0)'),
+    (17, '(0,-0)'),
+    (18, '(26.0,28.0)'),
+    (19, '(-9.5,11.5)'),
+    (20, '(-0,-0)'),
+    (21, '(33.0,-35.0)'),
+    (22, '(0,0)'),
+    (23, '(-22.0,24.0)'),
+    (24, '(17.5,19.5)'),
+    (25, '(0,-0)'),
+    (26, '(-31.0,-32.0)'),
+    (27, '(29.0,30.0)'),
+    (28, '(-0,0)'),
+    (29, '(12.0,-14.0)'),
+    (30, '(-27.0,28.0)'),
+    (31, '(0,0)'),
+    (32, '(34.0,-36.0)'),
+    (33, '(-0,-0)');
+
+CREATE TABLE t_target (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Insert from t_source to t_target using various SELECT patterns
+INSERT INTO t_target (id, val)
+SELECT id, val FROM t_source WHERE id <= 3;
+
+INSERT INTO t_target
+SELECT id, val FROM t_source WHERE id BETWEEN 4 AND 6;
+
+# Insert with column reordering
+INSERT INTO t_target (val, id)
+SELECT val, id FROM t_source WHERE id IN (7, 8);
+
+# Insert with expression in SELECT
+INSERT INTO t_target
+SELECT id, val FROM t_source WHERE id > 8 ORDER BY id;
+
+SELECT * FROM t_target ORDER BY id;
+
+# Test ordering by COMPLEX column
+SELECT * FROM t_target ORDER BY val, id;
+
+DROP TABLE t_source;
+DROP TABLE t_target;
+
+CREATE TABLE t_source2 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+INSERT INTO t_source2 VALUES
+    (1, '(1.0,2.0)'),
+    (2, '(0,0)'),
+    (3, '(-3.5,1.2)'),
+    (4, '(0,0)'),
+    (5, '(5.0,-6.0)'),
+    (6, '(1.0,2.0)'),
+    (7, '(-7.5,-8.5)'),
+    (8, '(0,0)'),
+    (9, '(-0,0)'),
+    (10, '(1.0,2.0)'),
+    (11, '(8.0,-9.0)'),
+    (12, '(0,-0)'),
+    (13, '(-11.0,12.0)'),
+    (14, '(1.0,2.0)'),
+    (15, '(-0,-0)'),
+    (16, '(13.5,14.5)'),
+    (17, '(0,0)'),
+    (18, '(-16.0,-17.0)'),
+    (19, '(1.0,2.0)'),
+    (20, '(0,-0)'),
+    (21, '(18.0,19.0)'),
+    (22, '(-0,0)'),
+    (23, '(1.0,2.0)'),
+    (24, '(-21.0,22.0)'),
+    (25, '(0,0)'),
+    (26, '(23.5,-24.5)'),
+    (27, '(-0,-0)'),
+    (28, '(1.0,2.0)'),
+    (29, '(25.0,26.0)'),
+    (30, '(0,0)'),
+    (31, '(-27.0,-28.0)'),
+    (32, '(1.0,2.0)'),
+    (33, '(0,-0)');
+
+CREATE TABLE t_target2 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Insert rows where val equals a specific COMPLEX value
+INSERT INTO t_target2 SELECT * FROM t_source2 WHERE val = '(0,0)';
+
+# Insert rows where val equals another COMPLEX value
+INSERT INTO t_target2 SELECT id + 50, val FROM t_source2 WHERE val = '(1.0,2.0)';
+
+# Insert rows where val is NOT equal to a COMPLEX value
+INSERT INTO t_target2 SELECT id + 100, val FROM t_source2 WHERE val != '(0,0)' AND val != '(1.0,2.0)';
+
+SELECT * FROM t_target2 ORDER BY id;
+
+DROP TABLE t_source2;
+DROP TABLE t_target2;
+
+# Test with multiple COMPLEX columns
+CREATE TABLE t_source_multi (
+    id INT PRIMARY KEY,
+    val_a COMPLEX,
+    val_b COMPLEX,
+    val_c COMPLEX
+);
+
+INSERT INTO t_source_multi VALUES
+    (1, '(1.0,2.0)', '(3.0,4.0)', '(5.0,6.0)'),
+    (2, '(0,0)', '(-0,0)', '(0,-0)'),
+    (3, '(-7.0,8.0)', '(9.0,-10.0)', '(-11.0,-12.0)'),
+    (4, '(13.5,14.5)', '(-15.5,16.5)', '(17.5,-18.5)'),
+    (5, '(-19.0,-20.0)', '(21.0,22.0)', '(-23.0,24.0)'),
+    (6, '(0,-0)', '(24.0,-25.0)', '(-0,0)'),
+    (7, '(26.0,27.0)', '(-0,-0)', '(28.0,29.0)'),
+    (8, '(-30.0,31.0)', '(32.0,33.0)', '(0,0)'),
+    (9, '(34.0,-35.0)', '(0,0)', '(-36.0,-37.0)'),
+    (10, '(-0,0)', '(-38.0,39.0)', '(40.0,-41.0)'),
+    (11, '(42.0,43.0)', '(0,-0)', '(-44.0,45.0)'),
+    (12, '(-46.0,-47.0)', '(48.0,49.0)', '(-0,-0)'),
+    (13, '(0,0)', '(-50.0,-51.0)', '(52.0,53.0)'),
+    (14, '(54.0,-55.0)', '(56.0,57.0)', '(0,-0)'),
+    (15, '(-58.0,59.0)', '(-0,0)', '(-60.0,-61.0)'),
+    (16, '(62.0,63.0)', '(64.0,-65.0)', '(0,0)'),
+    (17, '(-0,-0)', '(66.0,67.0)', '(-68.0,69.0)'),
+    (18, '(70.0,-71.0)', '(-72.0,-73.0)', '(0,-0)'),
+    (19, '(-74.0,75.0)', '(0,0)', '(76.0,77.0)'),
+    (20, '(0,-0)', '(-78.0,79.0)', '(-0,0)'),
+    (21, '(80.0,81.0)', '(82.0,-83.0)', '(-0,-0)'),
+    (22, '(-84.0,-85.0)', '(0,-0)', '(86.0,87.0)'),
+    (23, '(88.0,89.0)', '(-90.0,91.0)', '(0,0)'),
+    (24, '(-0,0)', '(92.0,93.0)', '(-94.0,-95.0)'),
+    (25, '(96.0,-97.0)', '(-0,-0)', '(98.0,99.0)'),
+    (26, '(-100.0,101.0)', '(102.0,103.0)', '(0,-0)'),
+    (27, '(0,0)', '(-104.0,-105.0)', '(-0,0)'),
+    (28, '(106.0,107.0)', '(108.0,-109.0)', '(-0,-0)'),
+    (29, '(-110.0,-111.0)', '(0,0)', '(112.0,113.0)'),
+    (30, '(114.0,115.0)', '(-116.0,117.0)', '(0,0)'),
+    (31, '(-0,-0)', '(0,-0)', '(-118.0,-119.0)'),
+    (32, '(120.0,-121.0)', '(-0,0)', '(122.0,123.0)'),
+    (33, '(-124.0,125.0)', '(126.0,127.0)', '(0,-0)');
+
+CREATE TABLE t_target_multi (
+    id INT PRIMARY KEY,
+    val_a COMPLEX,
+    val_b COMPLEX,
+    val_c COMPLEX
+);
+
+# Insert all columns
+INSERT INTO t_target_multi SELECT * FROM t_source_multi;
+
+SELECT * FROM t_target_multi ORDER BY id;
+
+# Test ordering by multiple COMPLEX columns
+SELECT * FROM t_target_multi ORDER BY val_a, val_b, val_c;
+SELECT * FROM t_target_multi ORDER BY val_b, val_c;
+
+DROP TABLE t_target_multi;
+
+# Test INSERT ... SELECT with WHERE on multiple COMPLEX columns
+CREATE TABLE t_target_multi2 (
+    id INT PRIMARY KEY,
+    val_a COMPLEX,
+    val_b COMPLEX,
+    val_c COMPLEX
+);
+
+# Insert rows where val_a equals a specific value
+INSERT INTO t_target_multi2 SELECT * FROM t_source_multi WHERE val_a = '(0,0)';
+
+# Insert rows where val_b is not equal to a value
+INSERT INTO t_target_multi2 SELECT id + 50, val_a, val_b, val_c FROM t_source_multi WHERE val_b != '(-0,0)';
+
+SELECT * FROM t_target_multi2 ORDER BY id;
+
+DROP TABLE t_source_multi;
+DROP TABLE t_target_multi2;
+
+# Test corner cases
+CREATE TABLE t_corner_source (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Populate with NULL values, scientific notation, and whitespace variations
+INSERT INTO t_corner_source VALUES
+    (1, NULL),
+    (2, '(1.0,2.0)'),
+    (3, NULL),
+    (4, '(1e10,2e10)'),
+    (5, '(1.5e-10,-2.5e-10)'),
+    (6, '(1e100,-1e100)'),
+    (7, '( 1.0 , 2.0 )'),
+    (8, '(  -3.5  ,  4.5  )'),
+    (9, '(-7.5,-8.5)'),
+    (10, '(0,0)'),
+    (11, '(-0,0)'),
+    (12, '(0,-0)'),
+    (13, '(-0,-0)'),
+    (14, '(5.0,6.0)'),
+    (15, '(-9.0,10.0)'),
+    (16, '(11.0,-12.0)'),
+    (17, '(-13.0,-14.0)'),
+    (18, '(15.0,16.0)'),
+    (19, '(17.0,18.0)'),
+    (20, '(-19.0,20.0)'),
+    (21, '(21.0,-22.0)'),
+    (22, '(-23.0,-24.0)'),
+    (23, '(25.0,26.0)'),
+    (24, '(27.0,28.0)'),
+    (25, '(-29.0,30.0)'),
+    (26, '(31.0,-32.0)'),
+    (27, '(-33.0,-34.0)'),
+    (28, '(35.0,36.0)'),
+    (29, '(37.0,38.0)'),
+    (30, '(-39.0,40.0)');
+
+CREATE TABLE t_corner_target (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Test NULL handling
+INSERT INTO t_corner_target SELECT * FROM t_corner_source WHERE val IS NULL;
+INSERT INTO t_corner_target SELECT id + 100, val FROM t_corner_source WHERE val IS NOT NULL ORDER BY id LIMIT 5;
+
+SELECT * FROM t_corner_target ORDER BY id;
+
+DROP TABLE t_corner_target;
+
+# Test comparison operators
+CREATE TABLE t_corner_target2 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+INSERT INTO t_corner_target2 SELECT * FROM t_corner_source WHERE val < '(1e10,2e10)' ORDER BY id;
+INSERT INTO t_corner_target2 SELECT id + 50, val FROM t_corner_source WHERE val > '(0,0)' ORDER BY id;
+INSERT INTO t_corner_target2 SELECT id + 100, val FROM t_corner_source WHERE val <= '(1.0,2.0)' ORDER BY id;
+INSERT INTO t_corner_target2 SELECT id + 150, val FROM t_corner_source WHERE val >= '(-3.5,4.5)' ORDER BY id;
+INSERT INTO t_corner_target2 SELECT id + 200, val FROM t_corner_source WHERE val BETWEEN '(-10,-10)' AND '(10,10)' ORDER BY id;
+
+SELECT * FROM t_corner_target2 ORDER BY id;
+
+DROP TABLE t_corner_target2;
+
+# Test DISTINCT
+CREATE TABLE t_corner_target3 (
+    id INT PRIMARY KEY AUTO_INCREMENT,
+    val COMPLEX
+);
+
+# Insert duplicate source data
+CREATE TABLE t_dup_source (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+INSERT INTO t_dup_source VALUES
+    (1, '(1.0,2.0)'),
+    (2, '(1.0,2.0)'),
+    (3, '(3.0,4.0)'),
+    (4, '(3.0,4.0)'),
+    (5, '(5.0,6.0)'),
+    (6, '(1.0,2.0)'),
+    (7, '(0,0)'),
+    (8, '(0,0)'),
+    (9, '(-0,0)'),
+    (10, '(0,-0)'),
+    (11, '(-0,-0)'),
+    (12, '(7.0,8.0)'),
+    (13, '(7.0,8.0)'),
+    (14, '(-9.0,10.0)'),
+    (15, '(-9.0,10.0)'),
+    (16, '(11.0,12.0)'),
+    (17, '(11.0,12.0)'),
+    (18, '(-13.0,-14.0)'),
+    (19, '(-13.0,-14.0)'),
+    (20, '(15.0,16.0)'),
+    (21, '(15.0,16.0)'),
+    (22, '(17.0,18.0)'),
+    (23, '(17.0,18.0)'),
+    (24, '(-19.0,20.0)'),
+    (25, '(-19.0,20.0)'),
+    (26, '(21.0,22.0)'),
+    (27, '(21.0,22.0)'),
+    (28, '(-23.0,-24.0)'),
+    (29, '(-23.0,-24.0)'),
+    (30, '(25.0,26.0)');
+
+INSERT INTO t_corner_target3 (val) SELECT DISTINCT val FROM t_dup_source ORDER BY val;
+
+SELECT * FROM t_corner_target3 ORDER BY val, id;
+
+DROP TABLE t_dup_source;
+DROP TABLE t_corner_target3;
+
+# Test LIMIT and OFFSET
+CREATE TABLE t_corner_target4 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Insert first 5 rows
+INSERT INTO t_corner_target4 SELECT * FROM t_corner_source WHERE val IS NOT NULL ORDER BY id LIMIT 5;
+
+# Insert next 5 rows with OFFSET
+INSERT INTO t_corner_target4 SELECT id + 100, val FROM t_corner_source WHERE val IS NOT NULL ORDER BY id LIMIT 5 OFFSET 5;
+
+# Insert rows with larger offset
+INSERT INTO t_corner_target4 SELECT id + 200, val FROM t_corner_source WHERE val IS NOT NULL ORDER BY id LIMIT 5 OFFSET 10;
+
+SELECT * FROM t_corner_target4 ORDER BY id;
+
+DROP TABLE t_corner_target4;
+
+# Test ORDER BY with explicit ASC/DESC
+CREATE TABLE t_corner_target5 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+INSERT INTO t_corner_target5 SELECT * FROM t_corner_source WHERE val IS NOT NULL ORDER BY val ASC, id ASC LIMIT 10;
+
+SELECT * FROM t_corner_target5 ORDER BY val ASC, id ASC;
+SELECT * FROM t_corner_target5 ORDER BY val DESC, id DESC;
+
+DROP TABLE t_corner_target5;
+
+DROP TABLE t_corner_source;
+
+# Test INSERT IGNORE ... SELECT with duplicate keys
+CREATE TABLE t_ignore_source (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+INSERT INTO t_ignore_source VALUES
+    (1, '(1.0,2.0)'),
+    (2, '(0,0)'),
+    (3, '(-3.5,1.2)'),
+    (4, '(-0,0)'),
+    (5, '(5.0,-6.0)'),
+    (6, '(0,-0)'),
+    (7, '(-7.5,-8.5)'),
+    (8, '(-0,-0)'),
+    (9, '(9.0,10.0)'),
+    (10, '(11.5,-12.5)');
+
+CREATE TABLE t_ignore_target (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Insert initial rows
+INSERT INTO t_ignore_target SELECT * FROM t_ignore_source WHERE id <= 5;
+
+SELECT * FROM t_ignore_target ORDER BY id;
+
+# Attempt to insert duplicate keys using INSERT IGNORE - should be silently ignored
+INSERT IGNORE INTO t_ignore_target SELECT * FROM t_ignore_source WHERE id IN (1, 3, 5);
+
+# Insert new rows (no duplicates) using INSERT IGNORE
+INSERT IGNORE INTO t_ignore_target SELECT * FROM t_ignore_source WHERE id > 5;
+
+# Verify only 10 rows (5 initial + 5 new), duplicates were ignored
+SELECT * FROM t_ignore_target ORDER BY id;
+
+DROP TABLE t_ignore_source;
+DROP TABLE t_ignore_target;
+
+--source include/villagesql/uninstall_complex_extension.inc

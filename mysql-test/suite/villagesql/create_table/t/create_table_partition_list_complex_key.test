@@ -1,0 +1,24 @@
+# Test CREATE TABLE with LIST partitioning using COMPLEX expression as partition key
+# Tests that COMPLEX custom type gives proper error when used in LIST partition expression
+# NOTE: COMPLEX functions like IMAG() haven't been implemented yet.
+# Currently gives ERROR 1064 incorrectly treating IMAG() as "constant, random or timezone-dependent expression"
+
+--source include/villagesql/not_implemented_complex_type.inc
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT,
+    value COMPLEX
+) PARTITION BY LIST(IMAG(value)) (
+    PARTITION p0 VALUES IN (1.0, 2.0),
+    PARTITION p1 VALUES IN (3.0, 4.0)
+);
+
+SHOW CREATE TABLE t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

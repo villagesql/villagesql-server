@@ -1,0 +1,4 @@
+# Test ALTER TABLE ADD COLUMN with COMPLEX type using ALGORITHM = INSTANT
+
+let $algo = INSTANT;
+--source alter_table_add_column_complex.test

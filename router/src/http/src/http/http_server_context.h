@@ -1,0 +1,101 @@
+/*
+  Copyright (c) 2021, 2026, Oracle and/or its affiliates.
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is designed to work with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have either included with
+  the program or referenced in the documentation.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#ifndef MYSQLROUTER_SERVER_CONTEXT_INCLUDED
+#define MYSQLROUTER_SERVER_CONTEXT_INCLUDED
+
+#include <cassert>
+#include <cstdint>
+#include <list>
+#include <memory>
+#include <optional>
+#include <thread>
+#include <type_traits>
+#include <vector>
+
+#include "mysql/harness/net_ts/io_context.h"
+
+#include "http/base/uri_path_matcher.h"
+#include "http/server/bind.h"
+#include "http/server/server.h"
+#include "http_request_router.h"
+#include "mysqlrouter/http_server_lib_export.h"
+
+namespace http {
+
+class HTTP_SERVER_LIB_EXPORT HttpServerContext {
+ public:
+  using IoThreads = std::list<IoThread>;
+
+ public:
+  HttpServerContext(net::io_context *context, IoThreads *io_threads,
+                    TlsServerContext &&tls_context, const std::string &host,
+                    const uint16_t port, uint64_t max_http_connections,
+                    uint64_t max_request_body_size,
+                    uint64_t max_response_body_size);
+
+  HttpServerContext(net::io_context *context, IoThreads *io_threads,
+                    const std::string &host, const uint16_t port,
+                    uint64_t max_http_connections,
+                    uint64_t max_request_body_size,
+                    uint64_t max_response_body_size);
+
+  void start();
+  void stop();
+  void join_all();
+
+  void add_regex_route(const std::string &url_host,
+                       const std::string &url_regex,
+                       std::unique_ptr<http::base::RequestHandler> cb);
+  void add_direct_match_route(const std::string &url_host,
+                              const base::UriPathMatcher &url_path,
+                              std::unique_ptr<http::base::RequestHandler> cb);
+  void remove_route(const void *handler_id);
+
+  bool is_ssl_configured();
+  void set_max_http_connections(std::optional<uint64_t> value);
+  uint64_t get_effective_max_http_connections() const;
+  void set_max_request_body_size(std::optional<uint64_t> value);
+  uint64_t get_effective_max_request_body_size() const;
+  void set_max_response_body_size(std::optional<uint64_t> value);
+  uint64_t get_effective_max_response_body_size() const;
+  void clear_overrides();
+
+  HttpRequestRouter &request_router();
+
+ private:
+  net::io_context *context_;
+  TlsServerContext tls_context_;
+  std::string host_;
+  uint16_t port_;
+  bool ssl_{false};
+  server::Bind bind_{context_, host_, port_};
+  HttpRequestRouter request_router_;
+  server::Server http_;
+};
+
+}  // namespace http
+
+#endif  // MYSQLROUTER_SERVER_CONTEXT_INCLUDED

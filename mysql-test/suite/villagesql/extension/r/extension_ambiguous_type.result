@@ -1,0 +1,40 @@
+Creating extension test_type_a using SDK...
+Created test_type_a.veb
+Creating extension test_type_b using SDK...
+Created test_type_b.veb
+INSTALL EXTENSION test_type_a;
+# Unqualified name resolves while only one extension provides it.
+CREATE TABLE t1 (id INT PRIMARY KEY, v TESTTYPE NOT NULL);
+DROP TABLE t1;
+INSTALL EXTENSION test_type_b;
+# Unqualified name is ambiguous once both extensions provide it.
+CREATE TABLE t1 (id INT PRIMARY KEY, v TESTTYPE NOT NULL);
+ERROR HY000: Ambiguous type 'TESTTYPE' - provided by multiple extensions: test_type_a, test_type_b. Use qualified name (extension.type).
+# Qualified names still resolve.
+CREATE TABLE t1 (id INT PRIMARY KEY, a test_type_a.TESTTYPE NOT NULL,
+b test_type_b.TESTTYPE NOT NULL);
+INSERT INTO t1 VALUES (1, '(3.141592653589793,2.718281828459045)',
+'(3.141592653589793,2.718281828459045)');
+SELECT id, a, b FROM t1;
+id	a	b
+1	(3.14159,2.71828)	(3.1415926535897931,2.7182818284590451)
+# ADD COLUMN with an unqualified name is ambiguous too.
+ALTER TABLE t1 ADD COLUMN c TESTTYPE;
+ERROR HY000: Ambiguous type 'TESTTYPE' - provided by multiple extensions: test_type_a, test_type_b. Use qualified name (extension.type).
+# ADD COLUMN with a qualified name resolves to the named extension.
+ALTER TABLE t1 ADD COLUMN c test_type_b.TESTTYPE;
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `a` test_type_a.TESTTYPE NOT NULL,
+  `b` test_type_b.TESTTYPE NOT NULL,
+  `c` test_type_b.TESTTYPE DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+DROP TABLE t1;
+UNINSTALL EXTENSION test_type_b;
+# Unqualified name resolves again with one provider left.
+CREATE TABLE t1 (id INT PRIMARY KEY, v TESTTYPE NOT NULL);
+DROP TABLE t1;
+UNINSTALL EXTENSION test_type_a;

@@ -1,0 +1,9 @@
+INSTALL EXTENSION update_schema_test VERSION '2.0.0';
+CREATE TABLE u (id INT PRIMARY KEY, val update_schema_test.MYTYPE);
+INSERT INTO u VALUES (1, '10'), (2, '20');
+ALTER TABLE u
+ADD COLUMN val_v2 update_schema_test.MYTYPE_V2
+AS (update_schema_test.mytype_to_v2(val)) STORED;
+# restart
+DROP TABLE u;
+UNINSTALL EXTENSION update_schema_test;

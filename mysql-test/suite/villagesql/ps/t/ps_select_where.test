@@ -1,0 +1,62 @@
+# Test SELECT with WHERE clause parameters and custom types
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Setup test data
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(5.0,6.0)'), (4, '(1.0,2.0)');
+
+--echo #
+--echo # Test 1: SELECT with WHERE on INT column using parameter
+--echo #
+
+PREPARE stmt1 FROM 'SELECT id, val FROM t1 WHERE id = ?';
+SET @param1 = 2;
+EXECUTE stmt1 USING @param1;
+SET @param1 = 3;
+EXECUTE stmt1 USING @param1;
+DEALLOCATE PREPARE stmt1;
+
+--echo #
+--echo # Test 2: SELECT with WHERE on COMPLEX column using parameter
+--echo #
+
+PREPARE stmt2 FROM 'SELECT id FROM t1 WHERE val = ?';
+SET @complex_param = '(3.0,4.0)';
+EXECUTE stmt2 USING @complex_param;
+SET @complex_param = '(1.0,2.0)';
+EXECUTE stmt2 USING @complex_param;
+DEALLOCATE PREPARE stmt2;
+
+--echo #
+--echo # Test 3: SELECT with multiple WHERE conditions
+--echo #
+
+PREPARE stmt3 FROM 'SELECT id, val FROM t1 WHERE id > ? AND val = ?';
+SET @id_min = 0;
+SET @val_cond = '(1.0,2.0)';
+EXECUTE stmt3 USING @id_min, @val_cond;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Test 4: SELECT with IN clause on COMPLEX column
+--echo #
+
+PREPARE stmt4 FROM 'SELECT id FROM t1 WHERE val IN (?, ?)';
+SET @val1 = '(1.0,2.0)';
+SET @val2 = '(5.0,6.0)';
+EXECUTE stmt4 USING @val1, @val2;
+SET @val1 = '(3.0,4.0)';
+EXECUTE stmt4 USING @val1, @val2;
+DEALLOCATE PREPARE stmt4;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,25 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+==== Setup table on master but not on slave ====
+[on master]
+CREATE TABLE t1 (a INT);
+[on slave]
+include/rpl/sync_to_replica.inc
+DROP TABLE t1;
+==== Modify table on master ====
+[on master]
+INSERT INTO t1 VALUES (1);
+==== Verify error on slave ====
+[on slave]
+call mtr.add_suppression("Replica SQL.*Error executing row event: .Table .test.t1. doesn.t exist., Error_code: MY-001146");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped, possibly leaving data in inconsistent state");
+include/rpl/wait_for_applier_error.inc [errno=1146]
+==== Clean up ====
+include/rpl/stop_receiver.inc
+RESET REPLICA;
+[on master]
+DROP TABLE t1;
+include/rpl/deinit.inc

@@ -1,0 +1,29 @@
+# Test CREATE TABLE with COMPLEX columns in different positions
+# Tests column ordering with COMPLEX type in various positions
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE column_ordering_table (
+    complex_first COMPLEX,
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    complex_middle COMPLEX,
+    score DOUBLE,
+    complex_last COMPLEX
+);
+
+SHOW COLUMNS FROM column_ordering_table;
+
+INSERT INTO column_ordering_table VALUES
+    ('(95.0,96.0)', 1, 'first test', '(97.0,98.0)', 85.5, '(99.0,100.0)');
+
+SELECT * FROM column_ordering_table;
+
+# Test column access by position
+SELECT complex_first, complex_middle, complex_last FROM column_ordering_table;
+
+DROP TABLE column_ordering_table;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,5 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+SET @bad_val = 'not_a_complex';
+INSERT INTO t_complex VALUES (1, @bad_val);
+ERROR HY000: Incorrect COMPLEX value: 'not_a_complex' for column 'val' at row 1
+DROP TABLE t_complex;

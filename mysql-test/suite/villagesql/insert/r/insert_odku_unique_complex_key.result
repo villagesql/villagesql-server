@@ -1,0 +1,72 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX,
+cnt INT NOT NULL DEFAULT 1,
+UNIQUE KEY uk_val (val)
+);
+INSERT INTO t1 (id, val) VALUES (1, '(1,2)'), (2, '(3,-4)'), (3, '(0,0)');
+INSERT INTO t1 (id, val) VALUES (10, '(1,2)') ON DUPLICATE KEY UPDATE cnt = cnt + 1;
+SELECT ROW_COUNT();
+ROW_COUNT()
+2
+INSERT INTO t1 (id, val) VALUES (11, '(3.0, -4.00)') ON DUPLICATE KEY UPDATE cnt = cnt + 10;
+SELECT ROW_COUNT();
+ROW_COUNT()
+2
+INSERT INTO t1 (id, val) VALUES (12, '(-0,-0)') ON DUPLICATE KEY UPDATE cnt = cnt + 100;
+SELECT ROW_COUNT();
+ROW_COUNT()
+2
+INSERT INTO t1 (id, val) VALUES (13, '(5,6)') ON DUPLICATE KEY UPDATE cnt = cnt + 1000;
+SELECT ROW_COUNT();
+ROW_COUNT()
+1
+INSERT INTO t1 (id, val) VALUES (14, NULL), (15, NULL) ON DUPLICATE KEY UPDATE cnt = -1;
+INSERT INTO t1 (id, val) VALUES (16, '(7,7)'), (17, '(7,7)') ON DUPLICATE KEY UPDATE cnt = cnt + VALUES(id);
+Warnings:
+Warning	1287	'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+SELECT * FROM t1 ORDER BY id;
+id	val	cnt
+1	(1,2)	2
+2	(3,-4)	11
+3	(0,0)	101
+13	(5,6)	1
+14	NULL	1
+15	NULL	1
+16	(7,7)	18
+INSERT INTO t1 (id, val) VALUES (1, '(9,9)') ON DUPLICATE KEY UPDATE val = VALUES(val);
+Warnings:
+Warning	1287	'VALUES function' is deprecated and will be removed in a future release. Please use an alias (INSERT INTO ... VALUES (...) AS alias) and replace VALUES(col) in the ON DUPLICATE KEY UPDATE clause with alias.col instead
+SELECT * FROM t1 WHERE id = 1;
+id	val	cnt
+1	(9,9)	2
+INSERT INTO t1 (id, val) VALUES (1, '(1,1)') ON DUPLICATE KEY UPDATE val = '(5,6)';
+ERROR 23000: Duplicate entry '(5,6)' for key 't1.uk_val'
+SELECT * FROM t1 ORDER BY id;
+id	val	cnt
+1	(9,9)	2
+2	(3,-4)	11
+3	(0,0)	101
+13	(5,6)	1
+14	NULL	1
+15	NULL	1
+16	(7,7)	18
+DROP TABLE t1;
+CREATE TABLE t2 (
+id INT AUTO_INCREMENT PRIMARY KEY,
+grp INT NOT NULL,
+val COMPLEX NOT NULL,
+cnt INT NOT NULL DEFAULT 1,
+UNIQUE KEY uk_grp_val (grp, val)
+);
+INSERT INTO t2 (grp, val) VALUES (1, '(1,1)'), (2, '(1,1)');
+INSERT INTO t2 (grp, val) VALUES (1, '(1,1)') ON DUPLICATE KEY UPDATE cnt = cnt + 1;
+INSERT INTO t2 (grp, val) VALUES (1, '(1,-1)') ON DUPLICATE KEY UPDATE cnt = cnt + 1;
+INSERT INTO t2 (grp, val) VALUES (3, '(1,1)') ON DUPLICATE KEY UPDATE cnt = cnt + 1;
+SELECT grp, val, cnt FROM t2 ORDER BY grp, val;
+grp	val	cnt
+1	(1,-1)	1
+1	(1,1)	2
+2	(1,1)	1
+3	(1,1)	1
+DROP TABLE t2;

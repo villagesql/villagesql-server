@@ -1,0 +1,10 @@
+CREATE VIEW v AS SELECT vsql_complex.complex_real('(1,2)') AS r;
+SELECT * FROM v;
+r
+1
+# Nothing holds the VDF after the SELECT completes; UNINSTALL succeeds.
+UNINSTALL EXTENSION vsql_complex;
+# View body still references the now-removed VDF; SELECT errors at runtime.
+SELECT * FROM v;
+ERROR HY000: View 'test.v' references invalid table(s) or column(s) or function(s) or definer/invoker of view lack rights to use them
+DROP VIEW v;

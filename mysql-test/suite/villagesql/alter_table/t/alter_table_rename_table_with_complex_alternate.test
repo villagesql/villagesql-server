@@ -1,0 +1,29 @@
+# Test RENAME TABLE with COMPLEX columns
+# Verifies custom_columns entries are updated with new table name
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE old_table (
+    id INT PRIMARY KEY,
+    value COMPLEX,
+    name VARCHAR(50)
+);
+
+--source include/villagesql/query_custom_columns.inc
+
+INSERT INTO old_table VALUES (1, '(1.0,2.0)', 'test');
+
+RENAME TABLE old_table TO new_table;
+
+--source include/villagesql/query_custom_columns.inc
+
+SHOW CREATE TABLE new_table;
+SELECT * FROM new_table;
+
+DROP TABLE new_table;
+
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,2 @@
+--source include/rpl/init_source_replica.inc
+--source include/rpl/deinit.inc

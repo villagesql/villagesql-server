@@ -1,0 +1,6 @@
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)'), ('(1.0,2.0)'), ('(3.0,4.0)');
+SELECT val, COUNT(*) as c FROM t1 GROUP BY val HAVING c > 1;
+val	c
+(1,2)	2
+DROP TABLE t1;

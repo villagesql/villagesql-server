@@ -1,0 +1,14 @@
+CREATE TABLE t1 (val COMPLEX);
+CREATE TABLE t2 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1,2)'), ('(3,4)'), ('(1,2)');
+INSERT INTO t2 VALUES ('(1,2)'), ('(5,6)');
+CREATE VIEW v_union AS
+SELECT val FROM t1
+UNION
+SELECT val FROM t2;
+SELECT COUNT(*) AS unique_values FROM v_union;
+unique_values
+3
+DROP VIEW v_union;
+DROP TABLE t2;
+DROP TABLE t1;

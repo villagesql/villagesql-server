@@ -1,0 +1,62 @@
+# Victionary reload must fail startup when two system-table rows share a
+# canonical key.
+
+--source include/have_debug.inc
+
+# The failed startup logs these on purpose.
+call mtr.add_suppression("Duplicate canonical key");
+call mtr.add_suppression("Failed to load all villagesql tables");
+call mtr.add_suppression("Failed to initialize");
+call mtr.add_suppression("Failed to initialize/load VictionaryClient");
+call mtr.add_suppression("Aborting");
+
+--let $DUP_DATADIR= $MYSQL_TMP_DIR/dup_datadir
+--let $MYSQLD_DATADIR= `SELECT @@datadir`
+
+# Work on a copy of the datadir; the planted rows make it unbootable.
+--source include/shutdown_mysqld.inc
+--force-cpdir $MYSQLD_DATADIR $DUP_DATADIR
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--let $restart_parameters = restart: --datadir=$DUP_DATADIR
+--source include/start_mysqld.inc
+
+# Plant two pairs of rows whose column names differ only in case. The
+# binary index accepts all of them; the canonical keys collide pairwise.
+--source include/villagesql/internal_schema_test.inc
+INSERT INTO villagesql.custom_columns
+    (db_name, table_name, column_name, extension_name, extension_version,
+     type_name, type_parameters)
+    VALUES ('db1', 't1', 'MyCol', 'test_ext', '1.0.0', 'COMPLEX', '{}');
+INSERT INTO villagesql.custom_columns
+    (db_name, table_name, column_name, extension_name, extension_version,
+     type_name, type_parameters)
+    VALUES ('db1', 't1', 'MYCOL', 'test_ext', '1.0.0', 'COMPLEX', '{}');
+INSERT INTO villagesql.custom_columns
+    (db_name, table_name, column_name, extension_name, extension_version,
+     type_name, type_parameters)
+    VALUES ('db1', 't2', 'Other', 'test_ext', '1.0.0', 'COMPLEX', '{}');
+INSERT INTO villagesql.custom_columns
+    (db_name, table_name, column_name, extension_name, extension_version,
+     type_name, type_parameters)
+    VALUES ('db1', 't2', 'OTHER', 'test_ext', '1.0.0', 'COMPLEX', '{}');
+
+# Restarting onto the datadir with the conflicting rows must fail.
+--source include/shutdown_mysqld.inc
+--replace_result $MYSQL_TMP_DIR MYSQL_TMP_DIR
+--let $restart_parameters = --datadir=$DUP_DATADIR
+--source include/start_mysqld_expecting_crash.inc
+
+# Wait for the messages; the failing startup may still be in progress.
+# One failed startup must report every conflict, not just the first.
+--let $grep_file = $MYSQLTEST_VARDIR/log/mysqld.1.err
+--let $grep_pattern = Duplicate canonical key 'db1.t1.mycol'
+--source include/wait_for_pattern_in_file.inc
+--let $grep_pattern = Duplicate canonical key 'db1.t2.other'
+--source include/wait_for_pattern_in_file.inc
+--echo # Error log reports both duplicate canonical keys
+
+# The original datadir starts cleanly.
+--let $restart_parameters = restart
+--source include/start_mysqld.inc
+
+--force-rmdir $DUP_DATADIR

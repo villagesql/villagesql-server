@@ -1,0 +1,9 @@
+# Test that a TypeBuilder extension fails to compile when a non-parameterized
+# operation is registered after .params<P>() has been called. The declared
+# ParamsType is FakeParams2 but the operation's function signature is plain
+# (no CustomArgWith<P>), so the static_assert fires at .from_string().
+
+--let $extension_name = type_builder_plain_fn_after_params
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/type_builder_plain_fn_after_params.cc
+--let $build_failure_grep = TypeBuilder::from_string
+--source include/villagesql/create_extension_sdk_expect_build_failure.inc

@@ -1,0 +1,84 @@
+#
+# Bug#35616015: SUM_ROWS_EXAMINED does not count rows correctly
+#               for Index Merge (PS.events_statements_summary_by_digest)
+#
+CREATE TABLE t1 (f1 INT, f2 INT, f3 INT, key(f1), key(f2, f3), key(f2));
+INSERT INTO t1 VALUES (0,1,2),(1,2,3),(2,3,4);
+INSERT INTO t1 SELECT f1,f2+1,f3+2 FROM t1;
+INSERT INTO t1 SELECT f1,f2+1,f3+2 FROM t1;
+INSERT INTO t1 SELECT f1,f2+1,f3+2 FROM t1;
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+SET explain_json_format_version = 2;
+CREATE PROCEDURE extract_range_scans(plan TEXT)
+SELECT description FROM
+JSON_TABLE(plan, '$**.operation' COLUMNS (o FOR ORDINALITY,
+description TEXT PATH '$')) AS jt
+WHERE description NOT LIKE 'Filter:%'
+ORDER BY o;
+EXPLAIN FORMAT=JSON INTO @plan SELECT /*+ INDEX_MERGE(t1) */ * FROM t1 WHERE f1 = 0 OR f2 = 2;
+CALL extract_range_scans(@plan);
+description
+Deduplicate rows sorted by row ID
+Index range scan on t1 using f1 over (f1 = 0)
+Index range scan on t1 using f2_2 over (f2 = 2)
+TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;
+SELECT /*+ INDEX_MERGE(t1) */ * FROM t1 WHERE f1 = 0 OR f2 = 2;
+f1	f2	f3
+0	1	2
+1	2	3
+0	2	4
+0	2	4
+0	3	6
+0	2	4
+0	3	6
+0	3	6
+0	4	8
+SELECT SUM_ROWS_EXAMINED, SUM_ROWS_SENT
+FROM performance_schema.events_statements_summary_by_digest
+WHERE schema_name = 'test' AND NOT DIGEST_TEXT LIKE '%TRUNCATE%';
+SUM_ROWS_EXAMINED	SUM_ROWS_SENT
+12	9
+EXPLAIN FORMAT=JSON INTO @plan SELECT /*+ INDEX_MERGE(t1 f1, f2_2) */ * FROM t1 WHERE f1 > 1 OR f2 < 0;
+CALL extract_range_scans(@plan);
+description
+Sort-deduplicate by row ID
+Index range scan on t1 using f1 over (1 < f1)
+Index range scan on t1 using f2_2 over (NULL < f2 < 0)
+TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;
+SELECT /*+ INDEX_MERGE(t1 f1, f2_2) */ * FROM t1 WHERE f1 > 1 OR f2 < 0;
+f1	f2	f3
+2	3	4
+2	4	6
+2	4	6
+2	5	8
+2	4	6
+2	5	8
+2	5	8
+2	6	10
+SELECT SUM_ROWS_EXAMINED, SUM_ROWS_SENT
+FROM performance_schema.events_statements_summary_by_digest
+WHERE schema_name = 'test' AND NOT DIGEST_TEXT LIKE '%TRUNCATE%';
+SUM_ROWS_EXAMINED	SUM_ROWS_SENT
+8	8
+EXPLAIN FORMAT=JSON INTO @plan SELECT /*+ INDEX_MERGE(t1) */ * FROM t1 WHERE f1 = 0 AND f2 = 2;
+CALL extract_range_scans(@plan);
+description
+Intersect rows sorted by row ID
+Index range scan on t1 using f2_2 over (f2 = 2)
+Index range scan on t1 using f1 over (f1 = 0)
+TRUNCATE TABLE performance_schema.events_statements_summary_by_digest;
+SELECT /*+ INDEX_MERGE(t1) */ * FROM t1 WHERE f1 = 0 AND f2 = 2;
+f1	f2	f3
+0	2	4
+0	2	4
+0	2	4
+SELECT SUM_ROWS_EXAMINED, SUM_ROWS_SENT
+FROM performance_schema.events_statements_summary_by_digest
+WHERE schema_name = 'test' AND NOT DIGEST_TEXT LIKE '%TRUNCATE%';
+SUM_ROWS_EXAMINED	SUM_ROWS_SENT
+9	3
+SET explain_json_format_version = DEFAULT;
+DROP PROCEDURE extract_range_scans;
+DROP TABLE t1;

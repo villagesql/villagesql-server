@@ -1,0 +1,74 @@
+# Test set operations (UNION/INTERSECT/EXCEPT) with different column types.
+# Mixing a custom type with a non-custom type, or with a different custom type,
+# must be rejected for every set operation, not just UNION. (MySQL 9.7's
+# query_term refactor routes all of them through the batched
+# Item_aggregate_type::unify_types(), which must run the custom-type
+# compatibility check.)
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT, val COMPLEX);
+CREATE TABLE t_numeric (id INT, val DECIMAL(10,2));
+CREATE TABLE t_string (id INT, val VARCHAR(100));
+CREATE TABLE t_complex_same (id INT, val COMPLEX);
+CREATE TABLE t_complex2_type (id INT, val COMPLEX2);
+
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+INSERT INTO t_numeric VALUES (1, 10.50), (2, 20.75);
+INSERT INTO t_string VALUES (1, '(9.0,10.0)'), (2, '(11.0,12.0)');
+INSERT INTO t_complex_same VALUES (1, '(5.0,6.0)'), (2, '(7.0,8.0)');
+INSERT INTO t_complex2_type VALUES (1, '(9.0,10.0)'), (2, '(11.0,12.0)');
+
+# UNION between COMPLEX and DECIMAL
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT val FROM t_complex UNION SELECT val FROM t_numeric;
+
+# UNION between COMPLEX and VARCHAR
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT val FROM t_complex UNION SELECT val FROM t_string;
+
+# UNION between same COMPLEX types
+SELECT val FROM t_complex UNION SELECT val FROM t_complex_same ORDER BY val;
+
+# UNION between COMPLEX and COMPLEX2 (different custom types)
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT val FROM t_complex UNION SELECT val FROM t_complex2_type;
+
+# UNION ALL between COMPLEX and DECIMAL
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT val FROM t_complex UNION ALL SELECT val FROM t_numeric;
+
+# Multiple UNION with mixed types
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT val FROM t_complex UNION SELECT val FROM t_complex_same UNION SELECT val FROM t_numeric;
+
+# UNION with VDF function converting string to COMPLEX (same type as column)
+SELECT val FROM t_complex UNION SELECT vsql_complex.COMPLEX::from_string(val) FROM t_string ORDER BY val;
+
+# INTERSECT between COMPLEX and DECIMAL
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT val FROM t_complex INTERSECT SELECT val FROM t_numeric;
+
+# INTERSECT between COMPLEX and COMPLEX2 (different custom types)
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT val FROM t_complex INTERSECT SELECT val FROM t_complex2_type;
+
+# EXCEPT between COMPLEX and DECIMAL
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT val FROM t_complex EXCEPT SELECT val FROM t_numeric;
+
+# EXCEPT between COMPLEX and COMPLEX2 (different custom types)
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT val FROM t_complex EXCEPT SELECT val FROM t_complex2_type;
+
+# INTERSECT/EXCEPT between same COMPLEX types must be allowed
+SELECT val FROM t_complex INTERSECT SELECT val FROM t_complex_same ORDER BY val;
+SELECT val FROM t_complex EXCEPT SELECT val FROM t_complex_same ORDER BY val;
+
+DROP TABLE t_complex;
+DROP TABLE t_numeric;
+DROP TABLE t_string;
+DROP TABLE t_complex_same;
+DROP TABLE t_complex2_type;
+
+--source include/villagesql/uninstall_complex_extension.inc

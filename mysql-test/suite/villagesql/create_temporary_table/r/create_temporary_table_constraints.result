@@ -1,0 +1,52 @@
+CREATE TEMPORARY TABLE t_not_null (
+id INT PRIMARY KEY,
+val COMPLEX NOT NULL
+);
+INSERT INTO t_not_null VALUES (1, '(2,0)');
+SELECT * FROM t_not_null;
+id	val
+1	(2,0)
+INSERT INTO t_not_null VALUES (2, NULL);
+ERROR 23000: Column 'val' cannot be null
+SELECT * FROM t_not_null;
+id	val
+1	(2,0)
+DROP TABLE t_not_null;
+CREATE TEMPORARY TABLE t_check (
+id INT PRIMARY KEY,
+val COMPLEX,
+CHECK (val IS NOT NULL)
+);
+INSERT INTO t_check VALUES (1, '(3.0,4.0)');
+SELECT * FROM t_check;
+id	val
+1	(3,4)
+INSERT INTO t_check VALUES (2, NULL);
+ERROR HY000: Check constraint 't_check_chk_1' is violated.
+DROP TABLE t_check;
+CREATE TEMPORARY TABLE t_combined (
+id INT PRIMARY KEY,
+val COMPLEX NOT NULL,
+amount DECIMAL(10,2) CHECK (amount > 0)
+);
+INSERT INTO t_combined VALUES (1, '(5.0,5.0)', 100.50);
+INSERT INTO t_combined VALUES (2, NULL, 50.00);
+ERROR 23000: Column 'val' cannot be null
+INSERT INTO t_combined VALUES (3, '(1.0,1.0)', -10.00);
+ERROR HY000: Check constraint 't_combined_chk_1' is violated.
+SELECT * FROM t_combined;
+id	val	amount
+1	(5,5)	100.50
+DROP TABLE t_combined;
+CREATE TEMPORARY TABLE t_default (
+id INT PRIMARY KEY,
+val COMPLEX NOT NULL DEFAULT '(0.0,0.0)',
+description VARCHAR(50)
+);
+INSERT INTO t_default (id, description) VALUES (1, 'uses default');
+INSERT INTO t_default VALUES (2, '(1.0,2.0)', 'explicit value');
+SELECT * FROM t_default ORDER BY id;
+id	val	description
+1	(0,0)	uses default
+2	(1,2)	explicit value
+DROP TABLE t_default;

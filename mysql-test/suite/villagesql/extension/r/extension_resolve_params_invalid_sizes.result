@@ -1,0 +1,22 @@
+INSTALL EXTENSION vsql_test_only;
+# Fixed-length, TYPE(N) shorthand: int_to_params succeeds, then
+# resolve_params returns persisted_length = -1, rejected for a fixed type.
+CREATE TABLE t (id INT PRIMARY KEY, v BAD_LEN_PARAM_TYPE(4));
+ERROR 42000: Type 'vsql_test_only.BAD_LEN_PARAM_TYPE' resolved an invalid persisted_length (-1); fixed-length types must resolve to a concrete footprint, so persisted_length should be > 0 near 'BAD_LEN_PARAM_TYPE(4))' at line 1
+# Explicit parameter string: same resolve_params rejection.
+CREATE TABLE t (id INT PRIMARY KEY, v BAD_LEN_PARAM_TYPE('length=4'));
+ERROR 42000: Type 'vsql_test_only.BAD_LEN_PARAM_TYPE' resolved an invalid persisted_length (-1); fixed-length types must resolve to a concrete footprint, so persisted_length should be > 0 near 'BAD_LEN_PARAM_TYPE('length=4'))' at line 1
+# Variable-length: resolve_params reports a positive persisted_length,
+# which is rejected (variable-length types must leave it unset).
+CREATE TABLE t (id INT PRIMARY KEY, v VAR_SETS_PERSISTED(4));
+ERROR 42000: Variable-length type 'vsql_test_only.VAR_SETS_PERSISTED' resolved an unexpected fixed persisted_length (4); variable-length types size storage per value, so persisted_length should be <= 0 (stay unset) near 'VAR_SETS_PERSISTED(4))' at line 1
+# resolve_params resolves a non-positive max_decode_buffer_length, which
+# is rejected (it sizes the decode scratch buffer and must be > 0).
+CREATE TABLE t (id INT PRIMARY KEY, v BAD_DECODE_BUF(4));
+ERROR 42000: resolve_params resolved a non-positive max_decode_buffer_length (0); it must be > 0 near 'BAD_DECODE_BUF(4))' at line 1
+# No table was created.
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't';
+COUNT(*)
+0
+UNINSTALL EXTENSION vsql_test_only;

@@ -1,0 +1,18 @@
+# Test simple CASE with invalid COMPLEX literal in WHEN clause
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT, val COMPLEX);
+
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+
+# Simple CASE with invalid COMPLEX literal in WHEN - should fail
+--error ER_WRONG_VALUE
+SELECT CASE val WHEN 'invalid' THEN 'Found' ELSE 'Not Found' END FROM t_complex;
+
+--error ER_WRONG_VALUE
+SELECT CASE val WHEN '(0,0)' THEN 'OK' WHEN 'still invalid' THEN 'Found' ELSE 'Not Found' END FROM t_complex;
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,145 @@
+#
+# Setup test data
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX, ref_id INT);
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)'),
+(3, '(5.0,6.0)'),
+(4, '(7.0,8.0)');
+INSERT INTO t2 VALUES
+(10, '(10.0,11.0)', 1),
+(11, '(12.0,13.0)', 1),
+(12, '(14.0,15.0)', 2),
+(13, '(16.0,17.0)', 3);
+#
+# Test 1: Subquery in SELECT clause
+#
+PREPARE stmt1 FROM 'SELECT id, (SELECT COUNT(*) FROM t2 WHERE ref_id = t1.id) AS cnt FROM t1 WHERE id = ?';
+SET @id = 1;
+EXECUTE stmt1 USING @id;
+id	cnt
+1	2
+DEALLOCATE PREPARE stmt1;
+#
+# Test 2: Subquery in WHERE clause (scalar subquery)
+#
+PREPARE stmt2 FROM 'SELECT id, val FROM t1 WHERE id = (SELECT ref_id FROM t2 WHERE id = ?)';
+SET @t2_id = 10;
+EXECUTE stmt2 USING @t2_id;
+id	val
+1	(1,2)
+DEALLOCATE PREPARE stmt2;
+#
+# Test 3: Subquery with IN clause
+#
+PREPARE stmt3 FROM 'SELECT id, val FROM t1 WHERE id IN (SELECT ref_id FROM t2 WHERE id > ?)';
+SET @min_id = 11;
+EXECUTE stmt3 USING @min_id;
+id	val
+2	(3,4)
+3	(5,6)
+DEALLOCATE PREPARE stmt3;
+#
+# Test 4: Subquery with COMPLEX value comparison
+#
+PREPARE stmt4 FROM 'SELECT id FROM t2 WHERE val = (SELECT val FROM t1 WHERE id = ?)';
+SET @t1_id = 1;
+EXECUTE stmt4 USING @t1_id;
+id
+DEALLOCATE PREPARE stmt4;
+#
+# Test 5: Correlated subquery with COMPLEX column
+#
+PREPARE stmt5 FROM 'SELECT t1.id, (SELECT COUNT(*) FROM t2 WHERE t2.ref_id = t1.id AND t2.val <> ?) AS cnt FROM t1 ORDER BY t1.id';
+SET @exclude_val = '(10.0,11.0)';
+EXECUTE stmt5 USING @exclude_val;
+id	cnt
+1	1
+2	1
+3	1
+4	0
+DEALLOCATE PREPARE stmt5;
+#
+# Test 6: Subquery in FROM clause (derived table)
+#
+PREPARE stmt6 FROM 'SELECT * FROM (SELECT id, val FROM t1 WHERE id > ?) AS derived WHERE val = ?';
+SET @min_id = 1;
+SET @val = '(3.0,4.0)';
+EXECUTE stmt6 USING @min_id, @val;
+id	val
+2	(3,4)
+DEALLOCATE PREPARE stmt6;
+#
+# Test 7: Nested subqueries
+#
+PREPARE stmt7 FROM 'SELECT id, val FROM t1 WHERE id IN (SELECT ref_id FROM t2 WHERE id IN (SELECT id FROM t2 WHERE id > ?))';
+SET @min_id = 11;
+EXECUTE stmt7 USING @min_id;
+id	val
+2	(3,4)
+3	(5,6)
+DEALLOCATE PREPARE stmt7;
+#
+# Test 8: EXISTS with COMPLEX comparison
+#
+PREPARE stmt8 FROM 'SELECT id, val FROM t1 WHERE EXISTS (SELECT 1 FROM t2 WHERE t2.ref_id = t1.id AND t2.val = ?)';
+SET @val = '(10.0,11.0)';
+EXECUTE stmt8 USING @val;
+id	val
+1	(1,2)
+DEALLOCATE PREPARE stmt8;
+#
+# Test 9: NOT EXISTS
+#
+PREPARE stmt9 FROM 'SELECT id, val FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t2 WHERE t2.ref_id = t1.id) ORDER BY id';
+EXECUTE stmt9;
+id	val
+4	(7,8)
+DEALLOCATE PREPARE stmt9;
+#
+# Test 10: Subquery with GROUP BY
+#
+PREPARE stmt10 FROM 'SELECT ref_id, COUNT(*) FROM t2 WHERE ref_id IN (SELECT id FROM t1 WHERE id > ?) GROUP BY ref_id';
+SET @min_id = 0;
+EXECUTE stmt10 USING @min_id;
+ref_id	COUNT(*)
+1	2
+2	1
+3	1
+DEALLOCATE PREPARE stmt10;
+#
+# Test 11: Subquery with VDF
+#
+PREPARE stmt11 FROM 'SELECT id FROM t1 WHERE val = (SELECT vsql_complex.complex_conjugate(val) FROM t1 WHERE id = ?)';
+SET @id = 1;
+EXECUTE stmt11 USING @id;
+id
+DEALLOCATE PREPARE stmt11;
+#
+# Test 12: ALL/ANY subquery operators
+#
+PREPARE stmt12 FROM 'SELECT id, val FROM t1 WHERE id > ALL (SELECT ref_id FROM t2 WHERE ref_id > ?)';
+SET @min_ref = 1;
+EXECUTE stmt12 USING @min_ref;
+id	val
+4	(7,8)
+DEALLOCATE PREPARE stmt12;
+#
+# Test 13: Subquery in HAVING clause
+#
+PREPARE stmt13 FROM 'SELECT val, COUNT(*) AS cnt FROM t1 WHERE id > ? GROUP BY val HAVING cnt > (SELECT COUNT(*) FROM t2 WHERE ref_id = ?)';
+SET @min_id = 0;
+SET @ref = 99;
+EXECUTE stmt13 USING @min_id, @ref;
+val	cnt
+(1,2)	1
+(3,4)	1
+(5,6)	1
+(7,8)	1
+DEALLOCATE PREPARE stmt13;
+#
+# Cleanup
+#
+DROP TABLE t1, t2;

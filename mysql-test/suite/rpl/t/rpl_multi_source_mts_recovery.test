@@ -1,0 +1,20 @@
+#
+# The test aims at verifying MTS info table based recovery in
+# specific cases of Multi-source replication.
+# This is a top level file sourcing a common test file
+# containing the verification algorithm.
+#
+
+# Row format is chosen to ease the logged transaction size control in
+# the sourced file.
+--source include/have_binlog_format_row.inc
+
+--let $rpl_topology= 1->2
+--let $rpl_multi_source= 1
+--source include/rpl/init.inc
+--source include/rpl/default_connections.inc
+
+--source common/rpl/rpl_parallel_recovery_core.test
+
+--let $rpl_skip_sync= 1
+--source include/rpl/deinit.inc

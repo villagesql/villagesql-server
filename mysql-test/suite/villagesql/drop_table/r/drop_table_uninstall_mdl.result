@@ -1,0 +1,48 @@
+#
+# Test Case 1: UNINSTALL fails during DROP TABLE at multiple sync points
+# Verify no extension MDL locks are held by DROP TABLE
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX) ENGINE=InnoDB;
+# Verify table and column exist
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	val	vsql_complex	0.0.1	COMPLEX	{}
+# Connection con1: Skip refcount to test pure MDL and dependency protection
+SET SESSION debug = '+d,skip_victionary_refcount';
+# Connection con1: Set up two debug sync points for DROP TABLE
+SET DEBUG_SYNC= 'metadata_before_extension_lock SIGNAL before_lock WAIT_FOR continue_drop_1';
+SET DEBUG_SYNC= 'metadata_after_extension_lock SIGNAL after_lock WAIT_FOR continue_drop_2';
+DROP TABLE t1;
+# Connection default: Wait for DROP TABLE to reach first sync point (before lock)
+SET DEBUG_SYNC= 'now WAIT_FOR before_lock';
+# Connection default: Check MDL queue - should have NO extension locks
+SELECT OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS
+FROM performance_schema.metadata_locks
+WHERE OBJECT_TYPE = 'EXTENSION' AND OBJECT_NAME = 'vsql_complex';
+OBJECT_TYPE	OBJECT_SCHEMA	OBJECT_NAME	LOCK_TYPE	LOCK_STATUS
+# Connection default: Try UNINSTALL at stage 1 (should fail - table exists)
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot drop extension `vsql_complex` as 1 column(s) depend on it, e.g. test.t1.val has type COMPLEX
+# Connection default: Signal DROP TABLE to continue to second sync point
+SET DEBUG_SYNC= 'now SIGNAL continue_drop_1';
+SET DEBUG_SYNC= 'now WAIT_FOR after_lock';
+# Connection default: Check MDL queue again - should still have NO extension locks
+SELECT OBJECT_TYPE, OBJECT_SCHEMA, OBJECT_NAME, LOCK_TYPE, LOCK_STATUS
+FROM performance_schema.metadata_locks
+WHERE OBJECT_TYPE = 'EXTENSION' AND OBJECT_NAME = 'vsql_complex';
+OBJECT_TYPE	OBJECT_SCHEMA	OBJECT_NAME	LOCK_TYPE	LOCK_STATUS
+# Connection con2: Try UNINSTALL at stage 2 (should still fail - table not dropped yet)
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot drop extension `vsql_complex` as 1 column(s) depend on it, e.g. test.t1.val has type COMPLEX
+# Connection default: Signal DROP TABLE to complete
+SET DEBUG_SYNC= 'now SIGNAL continue_drop_2';
+# Connection con1: Reaping DROP TABLE (should succeed)
+SET SESSION debug = '-d,skip_victionary_refcount';
+# Connection con1: Verify table is dropped
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+# Connection con2: Now UNINSTALL should succeed (table dropped)
+UNINSTALL EXTENSION vsql_complex;
+SET DEBUG_SYNC= 'RESET';

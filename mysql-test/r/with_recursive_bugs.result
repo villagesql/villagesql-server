@@ -1,0 +1,467 @@
+#
+# Bug#23495283 WL3634:ASSERTION `0' FAILED IN FIELD* ITEM::TMP_TABLE_FIELD_FROM_FIELD_TYPE
+#
+CREATE TABLE t1(c1 DATETIME, c2 INT, KEY(c1));
+WITH RECURSIVE cte AS ( SELECT a.c1 AS field1, 0 AS cycle FROM (t1 AS a)
+UNION ALL SELECT b.c2 FROM cte AS a JOIN t1 AS b) SELECT * FROM cte;
+ERROR 21000: The used SELECT statements have a different number of columns
+DROP TABLE t1;
+#
+# Bug#23645090 WL3634: INVALID WRITE AND READ VALGRIND ERRORS
+#
+CREATE TABLE A (
+col_date date DEFAULT NULL,
+col_datetime_key datetime DEFAULT NULL,
+col_time_key time DEFAULT NULL,
+col_varchar_key varchar(1) DEFAULT NULL,
+col_int_key int(11) DEFAULT NULL,
+col_blob_key blob,
+col_varchar varchar(1) DEFAULT NULL,
+col_date_key date DEFAULT NULL,
+col_time time DEFAULT NULL,
+col_blob blob,
+pk int(11) NOT NULL AUTO_INCREMENT,
+col_int int(11) DEFAULT NULL,
+col_datetime datetime DEFAULT NULL,
+PRIMARY KEY (pk),
+KEY col_datetime_key (col_datetime_key),
+KEY col_time_key (col_time_key),
+KEY col_varchar_key (col_varchar_key),
+KEY col_int_key (col_int_key),
+KEY col_blob_key (col_blob_key(255)),
+KEY col_date_key (col_date_key)
+) DEFAULT CHARSET=latin1;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+CREATE TABLE AA (
+col_varchar varchar(1) DEFAULT NULL,
+col_date date DEFAULT NULL,
+col_varchar_key varchar(1) DEFAULT NULL,
+col_date_key date DEFAULT NULL,
+col_datetime_key datetime DEFAULT NULL,
+col_time_key time DEFAULT NULL,
+pk int(11) NOT NULL AUTO_INCREMENT,
+col_time time DEFAULT NULL,
+col_int_key int(11) DEFAULT NULL,
+col_datetime datetime DEFAULT NULL,
+col_int int(11) DEFAULT NULL,
+col_blob blob,
+col_blob_key blob,
+PRIMARY KEY (pk),
+KEY col_varchar_key (col_varchar_key),
+KEY col_date_key (col_date_key),
+KEY col_datetime_key (col_datetime_key),
+KEY col_time_key (col_time_key),
+KEY col_int_key (col_int_key),
+KEY col_blob_key (col_blob_key(255))
+) DEFAULT CHARSET=latin1;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+CREATE TABLE BB (
+col_date date DEFAULT NULL,
+col_blob_key blob,
+col_time time DEFAULT NULL,
+col_varchar_key varchar(1) DEFAULT NULL,
+col_varchar varchar(1) DEFAULT NULL,
+col_blob blob,
+pk int(11) NOT NULL AUTO_INCREMENT,
+col_int_key int(11) DEFAULT NULL,
+col_datetime datetime DEFAULT NULL,
+col_time_key time DEFAULT NULL,
+col_datetime_key datetime DEFAULT NULL,
+col_date_key date DEFAULT NULL,
+col_int int(11) DEFAULT NULL,
+PRIMARY KEY (pk),
+KEY col_blob_key (col_blob_key(255)),
+KEY col_varchar_key (col_varchar_key),
+KEY col_int_key (col_int_key),
+KEY col_time_key (col_time_key),
+KEY col_datetime_key (col_datetime_key),
+KEY col_date_key (col_date_key)
+) AUTO_INCREMENT=11 DEFAULT CHARSET=latin1;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+CREATE TABLE D (
+col_varchar_key varchar(1) DEFAULT NULL,
+col_datetime datetime DEFAULT NULL,
+col_date_key date DEFAULT NULL,
+col_int int(11) DEFAULT NULL,
+col_time time DEFAULT NULL,
+col_blob blob,
+col_int_key int(11) DEFAULT NULL,
+col_blob_key blob,
+col_varchar varchar(1) DEFAULT NULL,
+col_datetime_key datetime DEFAULT NULL,
+col_date date DEFAULT NULL,
+col_time_key time DEFAULT NULL,
+pk int(11) NOT NULL AUTO_INCREMENT,
+PRIMARY KEY (pk),
+KEY col_varchar_key (col_varchar_key),
+KEY col_date_key (col_date_key),
+KEY col_int_key (col_int_key),
+KEY col_blob_key (col_blob_key(255)),
+KEY col_datetime_key (col_datetime_key),
+KEY col_time_key (col_time_key)
+) DEFAULT CHARSET=latin1;
+Warnings:
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+Warning	1681	Integer display width is deprecated and will be removed in a future release.
+WITH RECURSIVE cte AS (
+SELECT    alias1 . `col_blob_key` AS field1, 0 AS cycle
+FROM ( BB AS alias1 , ( D AS alias2 , AA AS alias3 ) )
+WHERE (
+alias1 . pk = 225
+OR ( alias1 . col_int_key = 69 AND alias1 . col_blob_key = 'p' )
+)
+UNION ALL
+SELECT t1.pk, t2.cycle
+FROM cte AS t2 JOIN A AS t1
+WHERE t2.field1 = t1.`col_int_key`
+AND t2.cycle =1 ) SELECT  * FROM cte;
+field1	cycle
+DROP TABLE IF EXISTS A, AA, BB, D;
+#
+# Bug#24962600 WL3634: SIG 11 IN HEAP_RRND AT STORAGE/HEAP/HP_RRND.C
+#
+create table t1(a int);
+with recursive cte as (select * from t1 union select * from cte)
+select * from cte;
+a
+insert into t1 values(1),(2);
+with recursive cte as (select * from t1 where 0 union select * from cte)
+select * from cte;
+a
+with recursive cte as (select * from t1 where a>3 union select * from cte)
+select * from cte;
+a
+drop table t1;
+#
+# Bug#26501463 WL10792: ASSERTION `!TABLE->HAS_NULL_ROW()' FAILED
+#
+CREATE TABLE D (col_int INT);
+CREATE TABLE C (
+col_int2 INT,
+pk INT NOT NULL,
+col_int INT,
+PRIMARY KEY (pk)
+);
+INSERT INTO C VALUES
+(7,1,3),(7,2,3),(5,3,4),(1,4,6),(5,5,2),
+(5,6,9),(4,7,9),(7,8,3),(3,9,0),(5,10,3);
+CREATE TABLE BB (
+pk INT NOT NULL,
+col_int INT,
+PRIMARY KEY (pk)
+);
+INSERT INTO BB VALUES (1,0),(2,6),(3,2),(4,5),(5,0);
+WITH RECURSIVE cte AS (
+SELECT alias2 . col_int2 AS field1 FROM
+D AS alias1 RIGHT  JOIN
+( ( C AS alias2 LEFT  JOIN BB AS alias3
+ON (( alias3 . pk = alias2 . col_int ) AND ( alias3 . pk = alias2 . pk ) ) ) )
+ON (alias3 . col_int <> alias2 . col_int2 )
+HAVING field1 <= 0
+UNION
+SELECT cte.field1 FROM cte
+)
+SELECT * FROM cte;
+field1
+DROP TABLE BB,C,D;
+#
+# Bug#26556025 ASSERTION `!SELECT_LEX->IS_RECURSIVE() || !TMP_TABLES' FAILED.
+#
+SET SQL_BUFFER_RESULT = 1;
+WITH RECURSIVE cte AS
+(SELECT 1 AS n UNION SELECT n+1 FROM cte WHERE n<3)
+SELECT * FROM cte;
+n
+1
+2
+3
+WITH RECURSIVE cte AS
+(SELECT 1 AS n UNION ALL SELECT n+1 FROM cte WHERE n<3)
+SELECT * FROM cte;
+n
+1
+2
+3
+SET SQL_BUFFER_RESULT = DEFAULT;
+#
+# Bug #30509580: SERVER CRASHED DURING EXPLAIN ANALYZE WITH RECURSIVE ...
+#
+EXPLAIN ANALYZE WITH RECURSIVE cte (n) AS
+(
+SELECT 1
+UNION ALL
+SELECT n + 1 FROM cte WHERE n < 5
+)
+SELECT * FROM cte;
+EXPLAIN
+-> Table scan on cte  (...) (actual rows=5 loops=1)
+    -> Materialize recursive CTE cte  (...) (actual rows=5 loops=1)
+        -> Rows fetched before execution  (...) (actual rows=1 loops=1)
+        -> Repeat until convergence
+            -> Filter: (cte.n < 5)  (...) (actual rows=2 loops=2)
+                -> Scan new records on cte  (...) (actual rows=2.5 loops=2)
+
+#
+# Bug#31066001 INCORRECT RESULT FROM CTE SUBQUERY WITH OUTER REFERENCE
+#
+SELECT *
+FROM
+(VALUES ROW(1),ROW(1)) AS dt(a)
+WHERE
+EXISTS(
+WITH RECURSIVE qn AS (SELECT a*0 AS b UNION ALL SELECT b+1 FROM qn WHERE b=0)
+SELECT * FROM qn WHERE b=a
+);
+a
+1
+1
+SELECT *
+FROM
+(VALUES ROW(1),ROW(1)) AS dt(a)
+WHERE
+NOT EXISTS(
+WITH RECURSIVE qn AS (SELECT a*0 AS b UNION ALL SELECT b+1 FROM qn WHERE b=0)
+SELECT * FROM qn WHERE b=a
+);
+a
+#
+# Bug #31603195: REGRESSION: CTE CRASHING IN FINDSINGLEITERATOROFTYPE
+#
+CREATE TABLE t1 (a INTEGER);
+WITH RECURSIVE cte1 AS
+(
+SELECT 1 FROM t1
+UNION ALL
+SELECT 2 FROM cte1 WHERE FALSE
+)
+SELECT * FROM cte1;
+1
+DROP TABLE t1;
+#
+# Bug#37074489 stored procedure is producing different results in different attempts
+#              The error also reproduces with prepared statement in 2..n executions
+PREPARE p FROM "WITH RECURSIVE
+tran(batch_uid, guid, type, trantime, refguid) AS (
+SELECT 549285, 'W5PT9A5F3D2WF57', 13, '2023-04-07 09:19:04', NULL
+UNION ALL
+SELECT 549286, 'W5PTVYU84715VJ7', 13, '2023-04-07 09:31:20', 'W5PT9A5F3D2WF57'
+        )
+,t(init_dataset, batch_uid, guid, type, trantime) AS (
+SELECT TRUE AS init_dataset,
+batch_uid,
+guid,
+type,
+trantime
+FROM tran
+WHERE batch_uid = 549285
+UNION ALL
+SELECT FALSE,
+wt.batch_uid,
+wt.guid,
+wt.type,
+wt.trantime
+FROM tran wt
+JOIN
+t ts
+ON wt.refguid = ts.guid
+WHERE wt.batch_uid != 549285 AND init_dataset
+)
+SELECT t2.count
+FROM t
+LEFT JOIN
+( SELECT type,
+COUNT(*) AS count
+FROM t /* t2 */
+WHERE batch_uid = 549285
+GROUP BY type
+) t2 ON t2.type = t.type
+";
+EXECUTE p;
+count
+1
+1
+# This used to yield two NULL rows
+EXECUTE p;
+count
+1
+1
+DROP PREPARE p;
+# Original repro
+CREATE PROCEDURE cte_bug() BEGIN WITH RECURSIVE
+tran(batch_uid, guid, type, trantime, refguid) AS (
+SELECT 549285, 'W5PT9A5F3D2WF57', 13, '2023-04-07 09:19:04', NULL
+UNION ALL
+SELECT 549286, 'W5PTVYU84715VJ7', 13, '2023-04-07 09:31:20', 'W5PT9A5F3D2WF57'
+        )
+,t(init_dataset, batch_uid, guid, type, trantime) AS (
+SELECT TRUE AS init_dataset,
+batch_uid,
+guid,
+type,
+trantime
+FROM tran
+WHERE batch_uid = 549285
+UNION ALL
+SELECT FALSE,
+wt.batch_uid,
+wt.guid,
+wt.type,
+wt.trantime
+FROM tran wt
+JOIN
+t ts
+ON wt.refguid = ts.guid
+WHERE wt.batch_uid != 549285 AND init_dataset
+)
+SELECT t2.count
+FROM t
+LEFT JOIN
+( SELECT type,
+COUNT(*) AS count
+FROM t /* t2 */
+WHERE batch_uid = 549285
+GROUP BY type
+) t2 ON t2.type = t.type
+; END $$
+CALL cte_bug();
+count
+1
+1
+DROP PROCEDURE cte_bug;
+#
+# Bug#35536775: CTE view serialization trailing comma
+#
+# When a view references a WITH clause and some CTEs are unused
+# (merged away), PT_with_clause::print must not produce a trailing
+# comma or omit separators between the remaining CTEs.
+#
+CREATE TABLE t1 (a INT PRIMARY KEY);
+INSERT INTO t1 VALUES (1), (2), (3);
+#
+# Case 1: Single unused CTE at the end - no trailing comma
+#
+CREATE VIEW v1 AS
+WITH cte1 AS (SELECT a FROM t1),
+cte2 AS (SELECT 1)
+SELECT * FROM cte1;
+SHOW CREATE VIEW v1;
+View	Create View	character_set_client	collation_connection
+v1	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v1` AS with `cte1` as (select `t1`.`a` AS `a` from `t1`) select `cte1`.`a` AS `a` from `cte1`	utf8mb4	utf8mb4_0900_ai_ci
+SELECT VIEW_DEFINITION FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = 'v1';
+VIEW_DEFINITION
+with `cte1` as (select `test`.`t1`.`a` AS `a` from `test`.`t1`) select `cte1`.`a` AS `a` from `cte1`
+# The view definition must parse back without errors
+DROP VIEW v1;
+CREATE VIEW v1 AS
+WITH cte1 AS (SELECT a FROM t1),
+cte2 AS (SELECT 1)
+SELECT * FROM cte1;
+SELECT * FROM v1;
+a
+1
+2
+3
+DROP VIEW v1;
+#
+# Case 2: Unused CTE in the middle - separator between printed CTEs
+#
+CREATE VIEW v2 AS
+WITH cte1 AS (SELECT a FROM t1),
+cte2 AS (SELECT 999),
+cte3 AS (SELECT a + 10 AS b FROM t1)
+SELECT * FROM cte1, cte3;
+SHOW CREATE VIEW v2;
+View	Create View	character_set_client	collation_connection
+v2	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v2` AS with `cte1` as (select `t1`.`a` AS `a` from `t1`), `cte3` as (select (`t1`.`a` + 10) AS `b` from `t1`) select `cte1`.`a` AS `a`,`cte3`.`b` AS `b` from (`cte1` join `cte3`)	utf8mb4	utf8mb4_0900_ai_ci
+SELECT VIEW_DEFINITION FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = 'v2';
+VIEW_DEFINITION
+with `cte1` as (select `test`.`t1`.`a` AS `a` from `test`.`t1`), `cte3` as (select (`test`.`t1`.`a` + 10) AS `b` from `test`.`t1`) select `cte1`.`a` AS `a`,`cte3`.`b` AS `b` from `cte1` join `cte3`
+# The view definition must parse back without errors
+SELECT * FROM v2;
+a	b
+1	11
+1	12
+1	13
+2	11
+2	12
+2	13
+3	11
+3	12
+3	13
+DROP VIEW v2;
+#
+# Case 3: Multiple unused CTEs in a row
+#
+CREATE VIEW v3 AS
+WITH cte1 AS (SELECT a FROM t1),
+cte2 AS (SELECT 100),
+cte3 AS (SELECT 200),
+cte4 AS (SELECT a * 2 AS c FROM t1)
+SELECT * FROM cte1, cte4;
+SHOW CREATE VIEW v3;
+View	Create View	character_set_client	collation_connection
+v3	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v3` AS with `cte1` as (select `t1`.`a` AS `a` from `t1`), `cte4` as (select (`t1`.`a` * 2) AS `c` from `t1`) select `cte1`.`a` AS `a`,`cte4`.`c` AS `c` from (`cte1` join `cte4`)	utf8mb4	utf8mb4_0900_ai_ci
+SELECT VIEW_DEFINITION FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = 'v3';
+VIEW_DEFINITION
+with `cte1` as (select `test`.`t1`.`a` AS `a` from `test`.`t1`), `cte4` as (select (`test`.`t1`.`a` * 2) AS `c` from `test`.`t1`) select `cte1`.`a` AS `a`,`cte4`.`c` AS `c` from `cte1` join `cte4`
+SELECT * FROM v3;
+a	c
+1	2
+1	4
+1	6
+2	2
+2	4
+2	6
+3	2
+3	4
+3	6
+DROP VIEW v3;
+#
+# Case 4: All CTEs unused - WITH clause should be stripped entirely
+#
+CREATE VIEW v4 AS
+WITH cte1 AS (SELECT 1),
+cte2 AS (SELECT 2)
+SELECT a FROM t1;
+SHOW CREATE VIEW v4;
+View	Create View	character_set_client	collation_connection
+v4	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v4` AS select `t1`.`a` AS `a` from `t1`	utf8mb4	utf8mb4_0900_ai_ci
+SELECT VIEW_DEFINITION FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = 'v4';
+VIEW_DEFINITION
+select `test`.`t1`.`a` AS `a` from `test`.`t1`
+SELECT * FROM v4;
+a
+1
+2
+3
+DROP VIEW v4;
+#
+# Case 5: First CTE unused, rest used
+#
+CREATE VIEW v5 AS
+WITH cte1 AS (SELECT 999),
+cte2 AS (SELECT a FROM t1)
+SELECT * FROM cte2;
+SHOW CREATE VIEW v5;
+View	Create View	character_set_client	collation_connection
+v5	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v5` AS with `cte2` as (select `t1`.`a` AS `a` from `t1`) select `cte2`.`a` AS `a` from `cte2`	utf8mb4	utf8mb4_0900_ai_ci
+SELECT VIEW_DEFINITION FROM INFORMATION_SCHEMA.VIEWS WHERE TABLE_NAME = 'v5';
+VIEW_DEFINITION
+with `cte2` as (select `test`.`t1`.`a` AS `a` from `test`.`t1`) select `cte2`.`a` AS `a` from `cte2`
+SELECT * FROM v5;
+a
+1
+2
+3
+DROP VIEW v5;
+DROP TABLE t1;

@@ -1,0 +1,23 @@
+CREATE TEMPORARY TABLE temp1 (
+id INT PRIMARY KEY,
+value COMPLEX
+);
+INSERT INTO temp1 VALUES (1, '(1.0,2.0)');
+INSERT INTO temp1 VALUES (2, '(3.5,-1.2)');
+SHOW CREATE TABLE temp1;
+Table	Create Table
+temp1	CREATE TEMPORARY TABLE `temp1` (
+  `id` int NOT NULL,
+  `value` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM temp1;
+id	value
+1	(1,2)
+2	(3.5,-1.2)
+SHOW TABLES LIKE 'temp1';
+Tables_in_test (temp1)
+DROP TEMPORARY TABLE temp1;
+SELECT * FROM temp1;
+ERROR 42S02: Table 'test.temp1' doesn't exist
+include/rpl/deprecated/show_binlog_events.inc

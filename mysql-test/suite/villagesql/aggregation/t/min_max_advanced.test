@@ -1,0 +1,53 @@
+# Test MIN() and MAX() with advanced SQL features
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE complex_test (
+  id INT PRIMARY KEY,
+  value vsql_complex.COMPLEX,
+  category VARCHAR(20)
+);
+
+INSERT INTO complex_test VALUES
+  (1, '(3.0, 4.0)', 'A'),
+  (2, '(1.0, 2.0)', 'A'),
+  (3, '(5.0, 1.0)', 'B'),
+  (4, '(2.0, 3.0)', 'B'),
+  (5, '(4.0, 5.0)', 'A'),
+  (6, '(6.0, 2.0)', 'B');
+
+--echo # Test MIN/MAX with UNION
+SELECT 'A_max' as label, MAX(value) as result FROM complex_test WHERE category = 'A'
+UNION ALL
+SELECT 'A_min' as label, MIN(value) as result FROM complex_test WHERE category = 'A'
+UNION ALL
+SELECT 'B_max' as label, MAX(value) as result FROM complex_test WHERE category = 'B'
+UNION ALL
+SELECT 'B_min' as label, MIN(value) as result FROM complex_test WHERE category = 'B'
+ORDER BY label;
+
+--echo # Test MIN/MAX with derived table
+SELECT derived.category, derived.max_val, derived.min_val
+FROM (
+  SELECT category, MAX(value) as max_val, MIN(value) as min_val
+  FROM complex_test
+  GROUP BY category
+) AS derived
+WHERE derived.max_val > derived.min_val
+ORDER BY category;
+
+--echo # Test MIN/MAX with CTE (Common Table Expression)
+WITH category_stats AS (
+  SELECT category, MAX(value) as max_val, MIN(value) as min_val
+  FROM complex_test
+  GROUP BY category
+)
+SELECT t.id, t.value, t.category
+FROM complex_test t
+JOIN category_stats cs ON t.category = cs.category
+WHERE t.value = cs.max_val OR t.value = cs.min_val
+ORDER BY t.id;
+
+DROP TABLE complex_test;
+
+--source include/villagesql/uninstall_complex_extension.inc

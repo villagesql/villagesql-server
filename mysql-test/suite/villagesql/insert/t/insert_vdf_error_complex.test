@@ -1,0 +1,29 @@
+# A VDF that fails at run time (complex_divide by zero) while computing an
+# inserted value, under INSERT IGNORE and non-strict mode. Strict mode is
+# covered by insert_vdf_error_strict_complex.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+
+# INSERT IGNORE: NULL into the nullable column, the intrinsic default into
+# the NOT NULL one.
+INSERT IGNORE INTO t1 VALUES (1, vsql_complex.complex_divide('(1,1)', '(0,0)'));
+INSERT IGNORE INTO t2 VALUES (1, vsql_complex.complex_divide('(1,1)', '(0,0)'));
+
+# Non-strict mode: NULL with a warning. For the NOT NULL column a single-row
+# INSERT still rejects the NULL, a multi-row INSERT stores the default.
+SET @saved_sql_mode = @@sql_mode;
+SET sql_mode = '';
+INSERT INTO t1 VALUES (2, vsql_complex.complex_divide('(1,1)', '(-0,0)'));
+--error ER_BAD_NULL_ERROR
+INSERT INTO t2 VALUES (2, vsql_complex.complex_divide('(1,1)', '(0,0)'));
+INSERT INTO t2 VALUES (3, vsql_complex.complex_divide('(1,1)', '(0,0)')), (4, '(2,2)');
+SET sql_mode = @saved_sql_mode;
+
+SELECT * FROM t1 ORDER BY id;
+SELECT * FROM t2 ORDER BY id;
+DROP TABLE t1, t2;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,10 @@
+INSTALL EXTENSION vsql_test_only;
+# Parameterized type resolving beyond max_persisted_length -> DDL error.
+CREATE TABLE t (id INT PRIMARY KEY, v OVERSIZED_PARAM_TYPE(4));
+ERROR 42000: Type 'vsql_test_only.OVERSIZED_PARAM_TYPE' resolved a persisted_length (8) that exceeds its declared max_persisted_length (4) near 'OVERSIZED_PARAM_TYPE(4))' at line 1
+# No table was created.
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLES
+WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 't';
+COUNT(*)
+0
+UNINSTALL EXTENSION vsql_test_only;

@@ -1,0 +1,68 @@
+call mtr.add_suppression("Incorrect collation for column");
+call mtr.add_suppression("table structure is incorrect");
+call mtr.add_suppression("Failed to validate system schema");
+call mtr.add_suppression("Failed to initialize");
+call mtr.add_suppression("Aborting");
+# restart: --datadir=MYSQL_TMP_DIR/vsql_005_datadir
+# Collations on the copy as created by this build
+SELECT DISTINCT c.name AS collation FROM mysql.columns col JOIN mysql.tables t ON col.table_id = t.id JOIN mysql.schemata s ON t.schema_id = s.id JOIN mysql.collations c ON col.collation_id = c.id WHERE s.name = 'villagesql' ORDER BY c.name;
+collation
+binary
+utf8mb4_bin
+# Turn the copy into a 0.0.5 datadir: pre-0.0.6 collation, stored version
+SET SESSION debug='+d,skip_dd_table_access_check';
+ALTER TABLE villagesql.extensions
+CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ALTER TABLE villagesql.custom_columns
+CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ALTER TABLE villagesql.custom_sp_params
+CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ALTER TABLE villagesql.custom_indexes
+CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ALTER TABLE villagesql.custom_index_columns
+CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+ALTER TABLE villagesql.properties
+CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+UPDATE villagesql.properties SET value = 'mysql-9.7_0.0.5' WHERE name = 'version';
+# Collations before the upgrade
+SELECT DISTINCT c.name AS collation FROM mysql.columns col JOIN mysql.tables t ON col.table_id = t.id JOIN mysql.schemata s ON t.schema_id = s.id JOIN mysql.collations c ON col.collation_id = c.id WHERE s.name = 'villagesql' ORDER BY c.name;
+collation
+binary
+utf8mb4_0900_ai_ci
+SELECT value = 'mysql-9.7_0.0.5' AS still_at_0_0_5 FROM villagesql.properties WHERE name = 'version';
+still_at_0_0_5
+1
+# Restart: the 0.0.5 stored version must trigger the upgrade
+# restart: --datadir=MYSQL_TMP_DIR/vsql_005_datadir
+# Collations after the upgrade
+SELECT DISTINCT c.name AS collation FROM mysql.columns col JOIN mysql.tables t ON col.table_id = t.id JOIN mysql.schemata s ON t.schema_id = s.id JOIN mysql.collations c ON col.collation_id = c.id WHERE s.name = 'villagesql' ORDER BY c.name;
+collation
+binary
+utf8mb4_bin
+SELECT value = 'mysql-9.7_0.0.5' AS still_at_0_0_5 FROM villagesql.properties WHERE name = 'version';
+still_at_0_0_5
+0
+# A custom-type column still resolves through the converted tables
+CREATE DATABASE upgraded_db;
+USE upgraded_db;
+CREATE TABLE t1 (c vsql_complex.COMPLEX);
+SHOW FIELDS FROM t1;
+Field	Type	Null	Key	Default	Extra
+c	vsql_complex.COMPLEX	YES		NULL	
+SELECT COLUMN_NAME, DATA_TYPE, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'upgraded_db' AND TABLE_NAME = 't1';
+COLUMN_NAME	DATA_TYPE	COLUMN_TYPE
+c	vsql_complex.COMPLEX	vsql_complex.COMPLEX
+DROP DATABASE upgraded_db;
+# The collation check is what makes the upgrade mandatory. Revert the
+# collation without rewinding the stored version, so no upgrade runs,
+# and startup must fail rather than accept the old collation.
+SET SESSION debug='+d,skip_dd_table_access_check';
+ALTER TABLE villagesql.custom_columns
+CONVERT TO CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+# restart_abort: --datadir=MYSQL_TMP_DIR/vsql_005_datadir
+include/wait_for_pattern_in_file.inc [Incorrect collation for column villagesql.custom_columns]
+# Error log reports the rejected collation
+# Back to the original datadir
+# restart

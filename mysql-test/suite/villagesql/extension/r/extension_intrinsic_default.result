@@ -1,0 +1,64 @@
+INSTALL EXTENSION vsql_test_only;
+# intrinsic_default_str: NULL under IGNORE becomes the literal default.
+CREATE TABLE t_str (id INT PRIMARY KEY, v DEFAULT_STR_TYPE NOT NULL);
+INSERT IGNORE INTO t_str VALUES (1, NULL);
+Warnings:
+Warning	1048	Column 'v' cannot be null
+INSERT INTO t_str VALUES (2, '(42)');
+SELECT id, v FROM t_str ORDER BY id;
+id	v
+1	(7)
+2	(42)
+DROP TABLE t_str;
+# intrinsic_default VDF: NULL under IGNORE becomes the VDF-computed default.
+CREATE TABLE t_vdf (id INT PRIMARY KEY, v DEFAULT_VDF_TYPE NOT NULL);
+INSERT IGNORE INTO t_vdf VALUES (1, NULL);
+Warnings:
+Warning	1048	Column 'v' cannot be null
+INSERT INTO t_vdf VALUES (2, '(42)');
+SELECT id, v FROM t_vdf ORDER BY id;
+id	v
+1	(9)
+2	(42)
+DROP TABLE t_vdf;
+# Parameterized type
+CREATE TABLE t_param (id INT PRIMARY KEY, v DEFAULT_PARAM_TYPE(3) NOT NULL);
+INSERT IGNORE INTO t_param VALUES (1, NULL);
+Warnings:
+Warning	1048	Column 'v' cannot be null
+INSERT INTO t_param VALUES (2, '(42)');
+SELECT id, v FROM t_param ORDER BY id;
+id	v
+1	(5)
+2	(42)
+DROP TABLE t_param;
+#
+# The VDF that supplies the default is not callable from SQL.
+#
+# It has to be registered under a name for the type to refer to it,
+# which puts it in the SQL namespace. However, it should not be
+# callable. For the parameterized types the parameters are needed to
+# resolve the default value. The type parameters are unknown during
+# SQL call. Thus, SQL call is blocked.
+#
+# Qualified.
+SELECT vsql_test_only.default_vdf_type_default();
+ERROR HY000: Function 'vsql_test_only.default_vdf_type_default' supplies the intrinsic default for a custom type and cannot be called directly
+# Unqualified, which resolves by a different path.
+SELECT default_vdf_type_default();
+ERROR HY000: Function 'vsql_test_only.default_vdf_type_default' supplies the intrinsic default for a custom type and cannot be called directly
+# The default itself is unaffected: the type machinery reaches the VDF
+# without going through function resolution at all.
+CREATE TABLE t_again (id INT PRIMARY KEY, v DEFAULT_VDF_TYPE NOT NULL);
+INSERT IGNORE INTO t_again VALUES (1, NULL);
+Warnings:
+Warning	1048	Column 'v' cannot be null
+SELECT id, v FROM t_again;
+id	v
+1	(9)
+DROP TABLE t_again;
+# An ordinary VDF in the same extension is still callable.
+SELECT vsql_test_only.test_result_kind('ok') AS k;
+k
+42
+UNINSTALL EXTENSION vsql_test_only;

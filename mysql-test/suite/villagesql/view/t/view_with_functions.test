@@ -1,0 +1,33 @@
+# Test VIEW with VDF functions on COMPLEX columns
+# This test verifies that qualified VDF names work correctly in views
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+
+INSERT INTO t1 VALUES
+  (1, '(3,4)'),
+  (2, '(5,12)'),
+  (3, '(8,15)');
+
+# Test 1: Direct query without view (baseline)
+SELECT id, val, vsql_complex.complex_real(val) AS real_part FROM t1 ORDER BY id;
+
+# Test 2: Temporary table with VDF function
+CREATE TEMPORARY TABLE temp_real AS
+SELECT id, val, vsql_complex.complex_real(val) AS real_part FROM t1;
+
+SELECT * FROM temp_real ORDER BY id;
+
+DROP TEMPORARY TABLE temp_real;
+
+# Test 3: View with VDF function
+CREATE VIEW v_real AS
+SELECT id, val, vsql_complex.complex_real(val) AS real_part FROM t1;
+
+SELECT * FROM v_real ORDER BY id;
+
+DROP VIEW v_real;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,26 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, amount DECIMAL(10,2));
+INSERT INTO t1 VALUES
+(1, '(2,0)', 100.50),
+(2, '(2,0)', 50.25),
+(3, '(10,0)', 200.75);
+CREATE VIEW v_base AS
+SELECT id, val, amount FROM t1;
+CREATE VIEW v_aggregated AS
+SELECT val, SUM(amount) AS total_amount
+FROM v_base
+GROUP BY val;
+SELECT * FROM v_aggregated;
+val	total_amount
+(2,0)	150.75
+(10,0)	200.75
+SELECT * FROM v_aggregated ORDER BY total_amount;
+val	total_amount
+(2,0)	150.75
+(10,0)	200.75
+SELECT * FROM v_aggregated ORDER BY val;
+val	total_amount
+(2,0)	150.75
+(10,0)	200.75
+DROP VIEW v_aggregated;
+DROP VIEW v_base;
+DROP TABLE t1;

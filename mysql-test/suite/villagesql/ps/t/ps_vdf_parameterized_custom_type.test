@@ -1,0 +1,97 @@
+# Test where a parameter's type parameters come from when a VDF expects a
+# parameterized custom type.
+#
+# TVECTOR is parameterized by dimension, so unlike COMPLEX the parameter needs
+# a typed argument to take it from: a column of the type, or the resolved
+# return type of an enclosing call.
+
+--source include/villagesql/install_tvector_extension.inc
+
+--echo #
+--echo # Setup test data
+--echo #
+
+CREATE TABLE t3 (id INT PRIMARY KEY, vec TVECTOR(3) NOT NULL);
+INSERT INTO t3 VALUES (1, '[1,0,0]'), (2, '[0,2,0]');
+
+CREATE TABLE t2 (id INT PRIMARY KEY, vec TVECTOR(2) NOT NULL);
+INSERT INTO t2 VALUES (1, '[3,4]');
+
+--echo #
+--echo # Test 1: a column of the type supplies the dimension
+--echo #
+
+PREPARE stmt1 FROM 'SELECT id, tvector_dot_product(vec, ?) AS dp FROM t3 ORDER BY id';
+SET @vec = '[1,1,1]';
+EXECUTE stmt1 USING @vec;
+DEALLOCATE PREPARE stmt1;
+
+--echo #
+--echo # Test 2: the same statement shape resolves to the other table's
+--echo # dimension
+--echo #
+
+PREPARE stmt2 FROM 'SELECT id, tvector_dot_product(vec, ?) AS dp FROM t2 ORDER BY id';
+SET @vec = '[1,1]';
+EXECUTE stmt2 USING @vec;
+DEALLOCATE PREPARE stmt2;
+
+--echo #
+--echo # Test 3: a value whose dimension does not match the resolved one
+--echo #
+
+PREPARE stmt3 FROM 'SELECT id, tvector_dot_product(vec, ?) AS dp FROM t3 ORDER BY id';
+SET @vec = '[1,1]';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE stmt3 USING @vec;
+
+--echo # A matching value still works after
+SET @vec = '[0,0,3]';
+EXECUTE stmt3 USING @vec;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Test 4: an enclosing call's resolved return type supplies it
+--echo #
+
+PREPARE stmt4 FROM 'SELECT id, tvector_max_element(tvector_add(vec, ?)) AS mx FROM t3 ORDER BY id';
+SET @vec = '[3,0,0]';
+EXECUTE stmt4 USING @vec;
+DEALLOCATE PREPARE stmt4;
+
+--echo #
+--echo # Test 5: ORDER BY the parameter's distance from the column, the
+--echo # nearest-neighbour shape. Each value ranks a different row first.
+--echo #
+
+PREPARE stmt5 FROM 'SELECT id FROM t3 ORDER BY tvector_dot_product(vec, ?) DESC LIMIT 1';
+SET @vec = '[5,0,0]';
+EXECUTE stmt5 USING @vec;
+SET @vec = '[0,5,0]';
+EXECUTE stmt5 USING @vec;
+DEALLOCATE PREPARE stmt5;
+
+--echo #
+--echo # Test 6: nothing supplies the dimension, so the statement is rejected
+--echo #
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+PREPARE stmt6 FROM 'SELECT tvector_dot_product(?, ?)';
+
+--echo #
+--echo # Test 7: a string constant does not supply it either, with or
+--echo # without a parameter in the call.
+--echo #
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT tvector_dot_product('[1,2,3]', '[4,5,6]') AS dp;
+--error ER_VILLAGESQL_GENERIC_ERROR
+PREPARE stmt7 FROM 'SELECT tvector_dot_product(''[1,2,3]'', ?) AS dp';
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t2, t3;
+
+--source include/villagesql/uninstall_tvector_extension.inc

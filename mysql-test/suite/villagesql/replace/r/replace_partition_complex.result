@@ -1,0 +1,121 @@
+CREATE TABLE t1 (
+id INT,
+val COMPLEX,
+PRIMARY KEY (id)
+)
+PARTITION BY RANGE (id) (
+PARTITION p0 VALUES LESS THAN (10),
+PARTITION p1 VALUES LESS THAN (20)
+);
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)'),
+(2, '(0,0)'),
+(3, '(-3.5,4.5)'),
+(4, '(-0,0)'),
+(5, '(5.0,-6.0)'),
+(11, '(11.0,12.0)'),
+(12, '(0,-0)'),
+(13, '(13.0,14.0)'),
+(14, '(-0,-0)'),
+(15, '(15.0,16.0)');
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	(0,0)
+3	(-3.5,4.5)
+4	(0,0)
+5	(5,-6)
+11	(11,12)
+12	(0,0)
+13	(13,14)
+14	(0,0)
+15	(15,16)
+SELECT * FROM t1 PARTITION (p0) ORDER BY id;
+id	val
+1	(1,2)
+2	(0,0)
+3	(-3.5,4.5)
+4	(0,0)
+5	(5,-6)
+SELECT * FROM t1 PARTITION (p1) ORDER BY id;
+id	val
+11	(11,12)
+12	(0,0)
+13	(13,14)
+14	(0,0)
+15	(15,16)
+REPLACE INTO t1 PARTITION (p0) VALUES (1, '(21.0,22.0)');
+REPLACE INTO t1 PARTITION (p0) VALUES (2, '(23.0,24.0)');
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(21,22)
+2	(23,24)
+3	(-3.5,4.5)
+4	(0,0)
+5	(5,-6)
+11	(11,12)
+12	(0,0)
+13	(13,14)
+14	(0,0)
+15	(15,16)
+SELECT * FROM t1 PARTITION (p0) ORDER BY id;
+id	val
+1	(21,22)
+2	(23,24)
+3	(-3.5,4.5)
+4	(0,0)
+5	(5,-6)
+REPLACE INTO t1 PARTITION (p1) VALUES (11, '(25.0,26.0)');
+REPLACE INTO t1 PARTITION (p1) VALUES (12, '(27.0,28.0)');
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(21,22)
+2	(23,24)
+3	(-3.5,4.5)
+4	(0,0)
+5	(5,-6)
+11	(25,26)
+12	(27,28)
+13	(13,14)
+14	(0,0)
+15	(15,16)
+SELECT * FROM t1 PARTITION (p1) ORDER BY id;
+id	val
+11	(25,26)
+12	(27,28)
+13	(13,14)
+14	(0,0)
+15	(15,16)
+REPLACE INTO t1 PARTITION (p0) VALUES (3, '(31.0,32.0)'), (6, '(33.0,34.0)');
+REPLACE INTO t1 PARTITION (p1) VALUES (13, '(35.0,36.0)'), (16, '(37.0,38.0)');
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(21,22)
+2	(23,24)
+3	(31,32)
+4	(0,0)
+5	(5,-6)
+6	(33,34)
+11	(25,26)
+12	(27,28)
+13	(35,36)
+14	(0,0)
+15	(15,16)
+16	(37,38)
+SELECT * FROM t1 PARTITION (p0) ORDER BY id;
+id	val
+1	(21,22)
+2	(23,24)
+3	(31,32)
+4	(0,0)
+5	(5,-6)
+6	(33,34)
+SELECT * FROM t1 PARTITION (p1) ORDER BY id;
+id	val
+11	(25,26)
+12	(27,28)
+13	(35,36)
+14	(0,0)
+15	(15,16)
+16	(37,38)
+DROP TABLE t1;

@@ -1,0 +1,17 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_preview_ping_test;
+INSTALL EXTENSION vsql_preview_ping_alt_test;
+# Both extensions can call the same server-side ping capability.
+SELECT vsql_preview_ping_test.ping() < vsql_preview_ping_alt_test.ping()
+AS cross_extension_ping_increases;
+cross_extension_ping_increases
+1
+UNINSTALL EXTENSION vsql_preview_ping_alt_test;
+# The first extension still works after the second is uninstalled.
+SELECT vsql_preview_ping_test.ping() < vsql_preview_ping_test.ping()
+AS first_extension_still_works;
+first_extension_still_works
+1
+UNINSTALL EXTENSION vsql_preview_ping_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

@@ -1,0 +1,23 @@
+# Test INSERT INTO ... VALUES with DEFAULT and COMPLEX type
+# Grammar: INSERT [INTO] tbl_name VALUES (..., DEFAULT, ...)
+#
+# Case: Mix of custom and regular columns with DEFAULT
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    name VARCHAR(50) DEFAULT 'unnamed',
+    val COMPLEX DEFAULT '(0.0,0.0)',
+    count INT DEFAULT 0
+);
+
+INSERT INTO t1 VALUES (1, DEFAULT, DEFAULT, DEFAULT);
+INSERT INTO t1 VALUES (2, 'test', '(1.0,2.0)', 5);
+INSERT INTO t1 VALUES (3, DEFAULT, '(3.0,3.0)', DEFAULT);
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

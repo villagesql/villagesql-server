@@ -1,0 +1,24 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, name VARCHAR(50));
+INSERT INTO t1 VALUES
+(1, '(10,0)', 'ten'),
+(2, '(2,0)', 'two'),
+(3, '(-1,0)', 'minus_one'),
+(4, '(-10,0)', 'minus_ten'),
+(5, '(0,0)', 'zero'),
+(6, '(2,-5)', 'two_minus_five'),
+(7, '(0,-1)', 'zero_minus_one'),
+(8, '(0,-10)', 'zero_minus_ten');
+CREATE VIEW v_ordered AS
+SELECT id, val, name FROM t1 ORDER BY val;
+SELECT * FROM v_ordered;
+id	val	name
+4	(-10,0)	minus_ten
+3	(-1,0)	minus_one
+8	(0,-10)	zero_minus_ten
+7	(0,-1)	zero_minus_one
+5	(0,0)	zero
+6	(2,-5)	two_minus_five
+2	(2,0)	two
+1	(10,0)	ten
+DROP VIEW v_ordered;
+DROP TABLE t1;

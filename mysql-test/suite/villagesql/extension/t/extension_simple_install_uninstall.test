@@ -1,0 +1,19 @@
+# Test installing and uninstalling vsql_simple extension
+# Verifies the full install/uninstall cycle works for the new-style
+# extension registration API (extension.h / VEF_GENERATE_ENTRY_POINTS)
+
+--source include/villagesql/binlog_check_begin.inc
+
+--echo # Install vsql_simple extension
+INSTALL EXTENSION vsql_simple;
+
+--echo # Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Uninstall the extension
+UNINSTALL EXTENSION vsql_simple;
+
+--echo # Verify extension was removed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--source include/villagesql/binlog_check_end.inc

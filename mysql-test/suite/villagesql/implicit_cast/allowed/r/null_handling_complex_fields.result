@@ -1,0 +1,21 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t_complex VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)'),
+(3, '(5.0,6.0)');
+INSERT INTO t_complex VALUES (27, NULL);
+SELECT * FROM t_complex;
+id	val
+1	(1,2)
+2	(3,4)
+3	(5,6)
+27	NULL
+SELECT * FROM t_complex WHERE val IS NOT NULL;
+id	val
+1	(1,2)
+2	(3,4)
+3	(5,6)
+SELECT * FROM t_complex WHERE val IS NULL;
+id	val
+27	NULL
+DROP TABLE t_complex;

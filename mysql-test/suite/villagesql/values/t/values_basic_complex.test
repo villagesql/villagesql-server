@@ -1,0 +1,16 @@
+# Test Basic VALUES statement with COMPLEX type
+# Grammar: VALUES ROW(val1), ROW(val2) ...
+
+--source include/villagesql/install_complex_extension.inc
+
+# Standalone VALUES statement returning COMPLEX types with zero variants interleaved
+VALUES
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(0,0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(3.0,4.0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(-0,0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(5.0,6.0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(0,-0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(-0,-0)'));
+
+--source include/villagesql/uninstall_complex_extension.inc

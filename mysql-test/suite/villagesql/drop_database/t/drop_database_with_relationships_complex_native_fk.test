@@ -1,0 +1,6 @@
+# Run drop_database_with_relationships_complex with InnoDB-native foreign keys
+# (innodb_native_foreign_keys=ON, set via the companion -master.opt) instead of
+# MySQL 9.7's SQL-layer FK default. Body sourced verbatim from the base test so
+# both FK modes share one set of statements; only the recorded binlog differs.
+# Verifies the leak-check holds under both FK modes. (Debug-only, like its base.)
+--source suite/villagesql/drop_database/t/drop_database_with_relationships_complex.test

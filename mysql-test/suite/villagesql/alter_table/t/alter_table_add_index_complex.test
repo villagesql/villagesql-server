@@ -1,0 +1,33 @@
+# Test ALTER TABLE ADD INDEX on COMPLEX column (via VARBINARY backing)
+# Grammar: ALTER TABLE table_name ADD INDEX index_name (complex_col)
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    name VARCHAR(50),
+    value COMPLEX
+);
+
+INSERT INTO t1 VALUES (1, 'test1', '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, 'test2', '(3.5,-1.2)');
+INSERT INTO t1 VALUES (3, 'test3', '(1.0,2.0)');
+
+SHOW CREATE TABLE t1;
+
+# Add index on COMPLEX column (should work via VARBINARY backing storage)
+ALTER TABLE t1 ADD INDEX idx_complex (value);
+
+SHOW CREATE TABLE t1;
+
+# Test index usage
+SELECT * FROM t1 WHERE value = '(1.0,2.0)';
+
+--replace_column 7 #
+SHOW INDEX FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

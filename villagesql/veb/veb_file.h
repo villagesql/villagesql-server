@@ -1,0 +1,283 @@
+/* Copyright (c) 2026 VillageSQL Contributors
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses/>.
+ */
+
+#ifndef VILLAGESQL_VEB_VEB_FILE_H_
+#define VILLAGESQL_VEB_VEB_FILE_H_
+
+#include <set>
+#include <string>
+#include <string_view>
+
+#include "villagesql/sdk/include/villagesql/abi/types.h"
+
+class THD;
+namespace villagesql::services {
+struct PopulateContext;
+struct DepopulateContext;
+}  // namespace villagesql::services
+
+namespace villagesql {
+namespace veb {
+
+// Get full path to a file/directory within veb_dir
+// e.g., get_veb_path("foo.veb") → "/usr/local/mysql/lib/veb/foo.veb"
+// Returns empty string on error
+std::string get_veb_path(const std::string &filename);
+
+// Resolve the VEB filename version selector for an extension.
+//
+// Returns false on success. On success, version is:
+//   empty       -> use {name}.veb
+//   non-empty   -> use {name}-{version}.veb
+//
+// If multiple versioned VEBs are present and no unversioned VEB is present,
+// returns true and reports that INSTALL EXTENSION ... VERSION is required.
+bool find_veb_version(const std::string &name, std::string &version);
+
+// True if {name}.veb (veb_version empty) or {name}-{veb_version}.veb exists.
+bool veb_file_exists(const std::string &name, const std::string &veb_version);
+
+// Calculate SHA256 hash of a file, return as 64-character hex string
+// Uses SHA_EVP256() from MySQL's sha2.h
+// Returns false on success, true on error
+bool calculate_file_sha256(const std::string &filepath, std::string &hash_hex);
+
+// Load manifest.json from a VEB file and extract the "version" field.
+// `version` is in/out:
+//   empty input    -> opens {name}.veb and writes the manifest version
+//   non-empty input -> opens {name}-{version}.veb and asserts the manifest
+//                      version matches; on mismatch returns true with a
+//                      diagnostic error.
+// Opens the tar archive using libarchive and parses manifest.json using
+// RapidJSON. Returns false on success, true on error.
+bool load_veb_manifest(const std::string &name, std::string &version);
+
+// Expand VEB archive to directory:
+//   {datadir}/.veb_expansion_cache/{name}/{sha256}/
+//
+// Opens {name}.veb when veb_version is empty, else {name}-{veb_version}.veb.
+//
+// Directory structure created:
+//   .veb_expansion_cache/
+//     my_extension/
+//       abc123def.../        (SHA256 of my_extension.veb)
+//         manifest.json
+//         lib/
+//           my_extension.so
+//
+// Extraction goes to .veb_expansion_cache/{name}/.tmp.{sha256}/ and is renamed
+// to {sha256}/ once the tree is on stable storage, so a {sha256} directory is
+// never half-written and an expansion that fails partway leaves any previous
+// one intact. If {sha256}/ already exists and holds a loadable .so, extraction
+// is skipped.
+//
+// Returns false on success, true on error
+// On success, expanded_path contains full path, sha256_hash contains hash, and
+// the expansion holds a non-empty lib/{name}.so.
+//
+// A VEB carrying no such file is rejected here rather than on the load step,
+// because here the tree has just been extracted and the absence can be reported
+// against the package. open_vef_extension() is given only a path, so it cannot
+// tell a bad package from a damaged cache; it asserts on this guarantee
+// instead.
+bool expand_veb_to_directory(const std::string &name,
+                             const std::string &veb_version,
+                             std::string &expanded_path,
+                             std::string &sha256_hash);
+
+// The structural version of the clone extension payload (see
+// serialize_installed_extensions). Bump if the JSON envelope changes shape.
+const int CLONE_EXTENSION_PAYLOAD_FORMAT = 1;
+
+// Serialize the currently installed extensions into an opaque, self-describing
+// payload for transport. Used by the clone donor: the clone plugin carries this
+// payload verbatim to the recipient without interpreting it. The encoding is
+// private to villagesql/veb. The envelope carries:
+//   - format: CLONE_EXTENSION_PAYLOAD_FORMAT (envelope structure version)
+//   - server_version: donor VillageSQL build version (GetBuildVersion())
+//   - schema_version: donor villagesql.* schema version
+//   - extensions: array of {name, version, veb_sha256}
+// Returns the empty string when nothing is installed. Taken under the
+// victionary read lock.
+std::string serialize_installed_extensions();
+
+// Validate that every extension described by a payload produced by
+// serialize_installed_extensions() is available on THIS server, applying the
+// same existence/version/sha256 bar as load_installed_extensions() at startup
+// (so "validation passes" <=> "startup will succeed"). Used by the clone
+// recipient during the handshake, before any data is transferred.
+//
+// Returns false on success (all extensions available). On the first failure
+// returns true and, if error_message is non-null, writes a human-readable
+// diagnostic to it. Any diagnostic-area error raised by the underlying VEB
+// helpers is suppressed so the caller can surface a single error of its own;
+// the reason is still reported via error_message. `thd` is used only for that
+// suppression. An empty payload is valid and returns false.
+bool validate_cloned_extensions(THD *thd, const std::string &payload,
+                                std::string *error_message);
+
+// Load all installed extensions from villagesql.extensions table
+// Called during server startup after VictionaryClient initialization
+// For each extension:
+//   - Validates the .veb file exists
+//   - Validates manifest.json version matches database
+//   - Re-expands archive if .so is missing from expansion cache
+//   - Does NOT execute SQL
+// After loading all extensions, calls cleanup_orphaned_expansion_directories()
+// Returns false on success, true on error
+bool load_installed_extensions(THD *thd);
+
+// Remove orphaned expansion directories
+// Scans .veb_expansion_cache/{name}/ subdirectories for each extension
+// Removes SHA256 subdirectories if the extension is not in installed_extensions
+// set
+// Called during startup loading
+void cleanup_orphaned_expansion_directories(
+    const std::set<std::string> &installed_extensions);
+
+// The highest VEF protocol version this server build supports.
+// Exposed as the @@villagesql_vef_server_protocol system variable.
+extern const vef_protocol_t vef_server_protocol_version;
+
+struct ExtensionRegistration {
+  vef_registration_t *registration;
+
+  // Negotiated protocol: min(server_protocol, extension_protocol).
+  // Set during load_vef_extension; used for all VDF calls and unregistration.
+  vef_protocol_t negotiated_protocol{VEF_PROTOCOL_1};
+
+  std::string so_path;
+  void *dlhandle;
+  vef_unregister_func_t unregister_func;
+};
+
+// Load a VEF extension from a .so file and get the registration.
+//
+// The caller is responsible for calling unload_vef_extension() when done.
+//
+// Returns false on success, true on error.
+// On success, all fields in registration are populated.
+// On error, a message is written to error_message so that it can be logged,
+// and/or returned to the client.
+bool load_vef_extension(const villagesql::services::PopulateContext &ctx,
+                        const std::string &so_path, vef_protocol_t max_protocol,
+                        ExtensionRegistration &registration,
+                        std::string &error_message);
+
+// Unload a VEF extension .so file.
+// ctx is passed through to on_depopulate for each capability.
+// After this call, the ExtensionRegistration should not be used.
+void unload_vef_extension(const villagesql::services::DepopulateContext &ctx,
+                          const ExtensionRegistration &registration);
+
+// Call the extension's own load / unload hooks (the builder's on_init() and
+// on_deinit()). Both are no-ops for an extension that declares no hook or was
+// built before the hooks existed.
+//
+// on_init runs after the extension's capabilities are populated and on_deinit
+// before they are depopulated, so an extension sees the same live capabilities
+// in both. load_vef_extension and unload_vef_extension already call these; the
+// shutdown path calls run_extension_on_deinit directly because it depopulates
+// capabilities and unloads the .so in two separate phases.
+//
+// The pair is symmetric: the unload hook runs only for a registration that
+// reached the load hook, and each call runs at most once per load.
+void run_extension_on_init(const vef_registration_t *reg);
+void run_extension_on_deinit(const vef_registration_t *reg);
+
+// Open the .so and call vef_register: dlopen, look up the entry-point
+// symbols, invoke vef_register, validate the returned protocol. Does NOT
+// run any capability populate hooks. The caller observes only what the
+// target's vef_register declares; nothing in the live server is mutated by
+// the open beyond whatever the target's own static initializers do.
+//
+// Used by the version-update pre-check path so it can inspect a target
+// package without populating capabilities into the running server (which
+// would touch process-global state for the wrong reasons).
+//
+// The full load_vef_extension above is composed from this open plus a
+// populate_capabilities step; use that for the install/startup paths.
+//
+// Returns false on success, true on error (error_message populated).
+bool open_vef_extension(const std::string &so_path, vef_protocol_t max_protocol,
+                        ExtensionRegistration &registration,
+                        std::string &error_message);
+
+// Checks the registration returned by vef_register against the invariants
+// every consumer of it relies on, so that each one is stated and enforced
+// once here rather than rediscovered (or forgotten) downstream:
+//
+//   - funcs[] and types[] hold exactly func_count/type_count non-NULL
+//     descriptors. Consumers walk these arrays on the count alone --
+//     parse_extension_registration(), RunUpdatePreCheck() and the
+//     extension_registration system view.
+//   - every function descriptor is callable and describable: it has a name,
+//     a vdf pointer, a signature, a params array matching its param_count,
+//     and a named type wherever it declares VEF_TYPE_CUSTOM. validate.cc
+//     dereferences signature unconditionally, vdf_handler calls vdf with no
+//     NULL check, and the CUSTOM type name is otherwise only guarded by a
+//     debug assert in types/util.cc.
+//   - every type descriptor has a name and a positive
+//     max_decode_buffer_length. RunUpdatePreCheck reads the name to decide
+//     which types a target version keeps, and TypeDecoder allocates the
+//     buffer size.
+//
+// Only protocol-1 fields are read, so this applies to every extension
+// regardless of the protocol it declares.
+//
+// This is what a registration must *be*, not what a server will accept from
+// it: semantic rules (identifier legality, aggregate callback pairing,
+// duplicate names, buffer lengths) stay in parse_extension_registration(),
+// which has the extension name and protocol context to report them well.
+//
+// Called by open_vef_extension(); exposed for unit testing.
+//
+// Returns false when the registration is well formed, true on error (a
+// message is written to error_message).
+bool check_vef_registration(const vef_registration_t *registration,
+                            std::string &error_message);
+
+// Symmetric counterpart to open_vef_extension: vef_unregister + dlclose, no
+// capability depopulate. Pair with open_vef_extension. Calling this on a
+// registration obtained from the full load_vef_extension would leak
+// capability state.
+void close_vef_extension(const ExtensionRegistration &registration);
+
+// Get the path to the .so file for an extension
+// Uses the convention:
+// {datadir}/.veb_expansion_cache/{name}/{sha256}/lib/{name}.so Returns empty
+// string if path cannot be constructed
+std::string get_extension_so_path(const std::string &extension_name,
+                                  const std::string &sha256);
+
+// Resolve the target VEB on disk and construct the dlopen-ready path to its
+// .so. On success returns false and populates *resolved_sha with the target
+// VEB's on-disk sha256 and *so_path with the .so path. On failure returns
+// true; *error_message is populated with a human-readable reason.
+//
+// Note: expand_veb_to_directory (called inside) may also emit villagesql_error
+// as a side effect on some failure paths. Callers in a SQL context can rely
+// on that; callers in a non-SQL context (e.g. bootstrap load) should use
+// *error_message and ignore whatever villagesql_error emitted.
+bool ResolveTargetSoPath(const std::string &extension_name,
+                         const std::string &target_version,
+                         std::string *resolved_sha, std::string *so_path,
+                         std::string *error_message);
+
+}  // namespace veb
+}  // namespace villagesql
+
+#endif  // VILLAGESQL_VEB_VEB_FILE_H_

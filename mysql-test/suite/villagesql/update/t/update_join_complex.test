@@ -1,0 +1,53 @@
+# Test UPDATE t1 JOIN t2 ... SET ... with COMPLEX type
+# Grammar: UPDATE table_references SET ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+CREATE TABLE t2 (
+    id INT PRIMARY KEY
+);
+
+CREATE TABLE t3 (
+    val COMPLEX
+);
+
+INSERT INTO t1 VALUES
+  (1, '(0,0)'),
+  (2, '(-0,0)'),
+  (3, '(-0,-0)'),
+  (4, '(0,-0)'),
+  (5, '(-1.0,-4.0)'),
+  (6, '(1.0,4.0)'),
+  (7, '(-1.0,4.0)'),
+  (8, '(1.0,-4.0)'),
+  (9, '(-0.01,7.0)'),
+  (10, '(0.01,-7.0)'),
+  (11, '(1,2)');
+
+INSERT INTO t2 VALUES (9), (10), (11);
+
+INSERT INTO t3 VALUES
+  ('(-0,-0)'),
+  ('(-1.0,-4.0)'),
+  ('(-0.01,7.0)');
+
+
+# JOIN update
+UPDATE t1 JOIN t2 ON t1.id = t2.id SET t1.val = '(5.0,5.0)';
+
+SELECT * FROM t1 ORDER BY id;
+
+UPDATE t1 JOIN t3 ON t1.val = t3.val SET t1.val = '(7.0,7.0)';
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+DROP TABLE t2;
+DROP TABLE t3;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,3 @@
+--source include/not_hypergraph.inc
+--let $using_hypergraph_optimizer = 0
+--source include/opt_hints.inc

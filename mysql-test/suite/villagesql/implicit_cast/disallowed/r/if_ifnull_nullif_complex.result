@@ -1,0 +1,9 @@
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)'), (NULL);
+SELECT IF(val IS NOT NULL, val, '(0.0,0.0)') FROM t1;
+ERROR HY000: Incorrect usage of if and COMPLEX
+SELECT IFNULL(val, '(0.0,0.0)') FROM t1;
+ERROR HY000: Incorrect usage of ifnull and COMPLEX
+SELECT NULLIF(val, '(1.0,2.0)') FROM t1;
+ERROR HY000: Incorrect usage of nullif and COMPLEX
+DROP TABLE t1;

@@ -1,0 +1,7 @@
+# This test builds a fulltext index over ~1M rows. It runs in about 130s
+# locally (macbook M5), but these tests run 7 - 10 times slower on GitHub and
+# it consistently blows through the default 15 minute testcase timeout.
+#
+# Estimate is that workflow runners will take about 20 minutes, and give it
+# %50 percent headroom so allow 30 minutes.
+--testcase-timeout=30

@@ -1,0 +1,63 @@
+## Tests detecting presence of xplugin objects in PERFORMANCE_SCHEMA.
+
+## Preamble
+--source ../include/have_performance_schema_threads.inc
+--source include/xplugin_preamble.inc
+--source include/xplugin_create_user.inc
+
+# Tests
+
+--write_file $MYSQL_TMP_DIR/verify_process_data_in_thread_table.xpl
+-->macro Verify_column_in_thread_table	%COLUMN%	%EXPECTED_VALUE%
+-->echo Verify [Current process needs to have %EXPECTED_VALUE% in %COLUMN% column]
+-->quiet
+-->stmtsql SELECT %COLUMN% FROM performance_schema.threads WHERE processlist_id = connection_id();;
+-->noquiet
+-->recvtovar %VALUE%
+-->assert_eq %EXPECTED_VALUE%	%VALUE%
+-->endmacro
+
+-->callmacro Verify_column_in_thread_table	PROCESSLIST_USER	%OPTION_CLIENT_USER%
+-->callmacro Verify_column_in_thread_table	PROCESSLIST_HOST	%OPTION_CLIENT_HOST%
+-->callmacro Verify_column_in_thread_table	PROCESSLIST_DB	%OPTION_CLIENT_SCHEMA%
+-->callmacro Verify_column_in_thread_table	PROCESSLIST_DB	%OPTION_CLIENT_SCHEMA%
+-->callmacro Verify_column_in_thread_table	CONNECTION_TYPE	%EXPECTED_CONN%
+-->callmacro Verify_column_in_thread_table	CONNECTION_TYPE	%EXPECTED_CONN%
+-->callmacro Verify_column_in_thread_table	PROCESSLIST_COMMAND	Query
+
+EOF
+
+CREATE USER 'user_on_localhost'@localhost;
+CREATE USER 'user_on_127_0_0_1'@127.0.0.1;
+
+GRANT SELECT ON *.* TO 'user_on_localhost'@localhost;
+GRANT SELECT ON *.* TO 'user_on_127_0_0_1'@127.0.0.1;
+
+--source ../include/performance_schema_assert_empty_worker_threads.inc
+
+exec $MYSQLXTEST --file=$MYSQL_TMP_DIR/verify_process_data_in_thread_table.xpl
+                 -ux_root --password= --host=localhost --schema=performance_schema
+                 -v%EXPECTED_CONN%=SSL/TLS
+                 2>&1;
+
+exec $MYSQLXTEST --file=$MYSQL_TMP_DIR/verify_process_data_in_thread_table.xpl
+                 -uuser_on_127_0_0_1 --password= --host=localhost --schema=mysql
+                 -v%EXPECTED_CONN%=SSL/TLS
+                 2>&1;
+
+exec $MYSQLXTEST --file=$MYSQL_TMP_DIR/verify_process_data_in_thread_table.xpl
+                 -uuser_on_localhost --password= --host=localhost --schema=sys
+                 -v%EXPECTED_CONN%=SSL/TLS
+                 2>&1;
+
+exec $MYSQLXTEST --file=$MYSQL_TMP_DIR/verify_process_data_in_thread_table.xpl
+                 -uuser_on_localhost --password= --host=localhost --schema=sys
+                 --ssl-mode=DISABLED -v%EXPECTED_CONN%=TCP/IP
+                 2>&1;
+
+--source ../include/performance_schema_assert_empty_worker_threads.inc
+
+## Cleanup
+DROP USER 'user_on_localhost'@localhost;
+DROP USER 'user_on_127_0_0_1'@127.0.0.1;
+--source ../include/xplugin_cleanup.inc

@@ -1,0 +1,67 @@
+CREATE TABLE parents (
+id INT PRIMARY KEY,
+val COMPLEX UNIQUE
+);
+INSERT INTO parents VALUES (1, '(1.0,1.0)');
+INSERT INTO parents VALUES (2, '(2.0,2.0)');
+INSERT INTO parents VALUES (3, '(3.0,3.0)');
+CREATE TABLE children (
+id INT PRIMARY KEY,
+parent_val COMPLEX,
+description VARCHAR(50),
+FOREIGN KEY (parent_val) REFERENCES parents(val)
+ON DELETE SET NULL
+ON UPDATE SET NULL
+);
+SHOW CREATE TABLE children;
+Table	Create Table
+children	CREATE TABLE `children` (
+  `id` int NOT NULL,
+  `parent_val` vsql_complex.COMPLEX DEFAULT NULL,
+  `description` varchar(50) DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `parent_val` (`parent_val`),
+  CONSTRAINT `children_ibfk_1` FOREIGN KEY (`parent_val`) REFERENCES `parents` (`val`) ON DELETE SET NULL ON UPDATE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO children VALUES (10, '(1.0,1.0)', 'child_of_parent_1');
+INSERT INTO children VALUES (11, '(1.0,1.0)', 'another_child_of_parent_1');
+INSERT INTO children VALUES (20, '(2.0,2.0)', 'child_of_parent_2');
+INSERT INTO children VALUES (30, '(3.0,3.0)', 'child_of_parent_3');
+SELECT * FROM children ORDER BY id;
+id	parent_val	description
+10	(1,1)	child_of_parent_1
+11	(1,1)	another_child_of_parent_1
+20	(2,2)	child_of_parent_2
+30	(3,3)	child_of_parent_3
+DELETE FROM parents WHERE id = 1;
+SELECT * FROM children ORDER BY id;
+id	parent_val	description
+10	NULL	child_of_parent_1
+11	NULL	another_child_of_parent_1
+20	(2,2)	child_of_parent_2
+30	(3,3)	child_of_parent_3
+SELECT COUNT(*) AS null_count FROM children WHERE parent_val IS NULL;
+null_count
+2
+UPDATE parents SET val = '(2.5,2.5)' WHERE id = 2;
+SELECT * FROM children ORDER BY id;
+id	parent_val	description
+10	NULL	child_of_parent_1
+11	NULL	another_child_of_parent_1
+20	NULL	child_of_parent_2
+30	(3,3)	child_of_parent_3
+SELECT COUNT(*) AS null_count FROM children WHERE parent_val IS NULL;
+null_count
+3
+DELETE FROM parents WHERE val = '(2.5,2.5)';
+SELECT * FROM parents ORDER BY id;
+id	val
+3	(3,3)
+SELECT * FROM children ORDER BY id;
+id	parent_val	description
+10	NULL	child_of_parent_1
+11	NULL	another_child_of_parent_1
+20	NULL	child_of_parent_2
+30	(3,3)	child_of_parent_3
+DROP TABLE children;
+DROP TABLE parents;

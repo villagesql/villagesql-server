@@ -1,0 +1,38 @@
+# Test CREATE TABLE LIKE with database-qualified table name
+# Grammar: CREATE TABLE table_name LIKE database.table_name
+
+# Create database and source table
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE DATABASE IF NOT EXISTS test_db;
+CREATE TABLE test_db.source_complex (
+    id INT PRIMARY KEY,
+    complex_field COMPLEX,
+    name VARCHAR(100)
+);
+
+--source include/villagesql/query_custom_columns.inc
+
+INSERT INTO test_db.source_complex VALUES (1, '(17.0,18.0)', 'qualified');
+
+# Create table using database-qualified LIKE
+CREATE TABLE t1 LIKE test_db.source_complex;
+
+--source include/villagesql/query_custom_columns.inc
+
+SHOW CREATE TABLE t1;
+
+INSERT INTO t1 VALUES (2, '(19.0,20.0)', 'copied from qualified');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+--source include/villagesql/query_custom_columns.inc
+DROP TABLE test_db.source_complex;
+--source include/villagesql/query_custom_columns.inc
+DROP DATABASE test_db;
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

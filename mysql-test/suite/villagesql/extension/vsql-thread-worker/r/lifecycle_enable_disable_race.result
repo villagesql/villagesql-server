@@ -1,0 +1,9 @@
+INSTALL EXTENSION vsql_lifecycle_test;
+# 20 ON/OFF cycles with no wait between them, so an OFF lands while the
+# worker is still starting up.
+# Worker is stopped and the server still answers queries
+SELECT COUNT(*) FROM performance_schema.processlist
+WHERE info = 'vsql_lifecycle_test/monitor';
+COUNT(*)
+0
+UNINSTALL EXTENSION vsql_lifecycle_test;

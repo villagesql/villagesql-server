@@ -1,0 +1,69 @@
+# Test token-driven role activation via the vsql::preview::auth set_active_roles
+# op. The vsql_auth_test extension, on the "-token-roles" token, stages two
+# roles: vsql_role_granted (which this test grants to the account) and
+# vsql_role_denied (which it does NOT grant). Verifies:
+#   - the granted role is activated on the session (CURRENT_ROLE shows it)
+#   - the ungranted requested role is silently skipped -- a token cannot
+#     activate a role the DBA never granted (the no-escalation guarantee)
+#   - the plain token stages no roles, so the account's default-role behavior is
+#     preserved: with no default role CURRENT_ROLE() is NONE, and after
+#     SET DEFAULT ROLE the default activates as usual (the token doesn't disturb
+#     the normal default-role path)
+#   - a staged role name containing a quoted '@' is parsed whole (like SET ROLE),
+#     not split at the '@' -- the "-token-quoted-role" token stages
+#     `vsql_role@weird`, which activates only because the '@' stays part of the
+#     name (a naive name@host split would look up the wrong role and fail)
+#
+# The token arrives in the password slot via mysql_clear_password, so each login
+# connects with the CLEARTEXT option.
+
+# The "-token-roles" login intentionally requests an ungranted role, which the
+# server refuses and logs as a warning -- that warning is the behavior under
+# test, so suppress it in the error-log check.
+call mtr.add_suppression("VEF auth: role .* is not granted; skipping");
+
+INSTALL EXTENSION vsql_auth_test;
+
+CREATE USER auth_user IDENTIFIED WITH vsql_auth_test;
+CREATE USER vsql_auth_test_user;
+GRANT SELECT ON *.* TO vsql_auth_test_user;
+GRANT PROXY ON vsql_auth_test_user TO auth_user;
+
+CREATE ROLE vsql_role_granted;
+CREATE ROLE vsql_role_denied;
+GRANT vsql_role_granted TO vsql_auth_test_user;
+
+# A role whose name literally contains '@' (quoted), granted to the account.
+CREATE ROLE `vsql_role@weird`;
+GRANT `vsql_role@weird` TO vsql_auth_test_user;
+
+--connect(roles_con, localhost, auth_user, vsql-auth-test-token-roles, , , , CLEARTEXT)
+SELECT CURRENT_USER(), CURRENT_ROLE();
+--connection default
+--disconnect roles_con
+
+# The quoted-'@' role activates: its name was parsed whole, not split at the '@'.
+--connect(quoted_con, localhost, auth_user, vsql-auth-test-token-quoted-role, , , , CLEARTEXT)
+SELECT CURRENT_ROLE();
+--connection default
+--disconnect quoted_con
+
+--connect(plain_con, localhost, auth_user, vsql-auth-test-token, , , , CLEARTEXT)
+SELECT CURRENT_ROLE();
+--connection default
+--disconnect plain_con
+
+# With a default role set, the plain token (which stages nothing) must leave the
+# normal default-role activation intact -- CURRENT_ROLE() is the default.
+SET DEFAULT ROLE vsql_role_granted TO vsql_auth_test_user;
+--connect(default_con, localhost, auth_user, vsql-auth-test-token, , , , CLEARTEXT)
+SELECT CURRENT_ROLE();
+--connection default
+--disconnect default_con
+
+UNINSTALL EXTENSION vsql_auth_test;
+DROP USER auth_user;
+DROP USER vsql_auth_test_user;
+DROP ROLE vsql_role_granted;
+DROP ROLE vsql_role_denied;
+DROP ROLE `vsql_role@weird`;

@@ -1,0 +1,56 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection master]
+# Case 1: Uninstallation of semi-sync plugins should be allowed when it is
+# not in use i.e., when asynchronous replication is active.
+INSTALL PLUGIN rpl_semi_sync_source SONAME 'SEMISYNC_SOURCE_PLUGIN';
+[connection slave]
+INSTALL PLUGIN rpl_semi_sync_replica SONAME 'SEMISYNC_REPLICA_PLUGIN';
+UNINSTALL PLUGIN rpl_semi_sync_replica;
+[connection master]
+UNINSTALL PLUGIN rpl_semi_sync_source;
+CREATE TABLE t1(i int);
+INSERT INTO t1 values (1);
+DROP TABLE t1;
+# Case 2: Uninstallation of semi-sync plugins should be disallowed
+# when it is in use i.e., when semi-sync replication is active
+include/rpl/install_semisync.inc
+[connection slave]
+call mtr.add_suppression("Plugin 'rpl_semi_sync_replica' cannot be uninstalled now");
+UNINSTALL PLUGIN rpl_semi_sync_replica;
+ERROR HY000: Plugin 'rpl_semi_sync_replica' cannot be uninstalled now. Stop any active semisynchronous I/O threads on this replica first.
+[connection master]
+call mtr.add_suppression("Plugin 'rpl_semi_sync_source' cannot be uninstalled now");
+UNINSTALL PLUGIN rpl_semi_sync_source;
+ERROR HY000: Plugin 'rpl_semi_sync_source' cannot be uninstalled now. Stop any active semisynchronous replicas of this source first.
+CREATE TABLE t1(i int);
+INSERT INTO t1 values (2);
+DROP TABLE t1;
+include/assert.inc [semi sync replica status should be ON.]
+[connection master]
+include/assert.inc [semi sync source status should be ON.]
+include/assert.inc [semi sync source clients should be 1.]
+# Case 3: Uninstallation of semi-sync plugin should be disallowed when there
+# are semi-sync replicas even though rpl_semi_sync_source_enabled= OFF;.
+[connection master]
+SET GLOBAL rpl_semi_sync_source_enabled = OFF;
+include/assert.inc [semi sync source clients should be 1.]
+UNINSTALL PLUGIN rpl_semi_sync_source;
+ERROR HY000: Plugin 'rpl_semi_sync_source' cannot be uninstalled now. Stop any active semisynchronous replicas of this source first.
+# Case 4: Uninstallation of semi-sync plugin should be allowed when it is not
+# in use. Same as Case 1 but this case is to check the case after enabling and
+# disabling semi-sync replication.
+[connection slave]
+include/rpl/stop_replica.inc
+SET GLOBAL rpl_semi_sync_replica_enabled = OFF;
+include/rpl/start_replica.inc
+UNINSTALL PLUGIN rpl_semi_sync_replica;
+[connection master]
+UNINSTALL PLUGIN rpl_semi_sync_source;
+CREATE TABLE t1(i int);
+INSERT INTO t1 values (3);
+DROP TABLE t1;
+include/rpl/deinit.inc

@@ -1,0 +1,19 @@
+# Test VillageSQL schema version system variable
+
+--echo # Test VillageSQL Schema Version System Variable
+--echo # This test verifies that the villagesql_schema_version system variable works correctly
+
+--echo # Test 1: Check that the variable exists and is readable
+# Strip optional pre-release suffix (e.g., -dev, -alpha) so test works for both dev and release builds
+--replace_regex /-[a-zA-Z0-9]+$//
+SHOW VARIABLES LIKE 'villagesql_schema_version';
+
+--replace_regex /-[a-zA-Z0-9]+$//
+SELECT @@GLOBAL.villagesql_schema_version AS current_version;
+
+--echo # Test 2: Verify the variable is READ_ONLY
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET GLOBAL villagesql_schema_version = 999;
+
+--error ER_INCORRECT_GLOBAL_LOCAL_VAR
+SET SESSION villagesql_schema_version = 999;

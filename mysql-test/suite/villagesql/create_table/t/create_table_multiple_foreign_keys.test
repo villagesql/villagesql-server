@@ -1,0 +1,65 @@
+# Test CREATE TABLE with multiple FOREIGN KEY constraints and COMPLEX columns
+# Tests multiple foreign key relationships with COMPLEX data
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE devices (
+    device_id INT PRIMARY KEY,
+    device_name VARCHAR(50)
+);
+
+CREATE TABLE locations (
+    location_id INT PRIMARY KEY,
+    location_name VARCHAR(50)
+);
+
+CREATE TABLE complex_names (
+    complex_value COMPLEX PRIMARY KEY,
+    name VARCHAR(50)
+);
+
+SHOW COLUMNS FROM complex_names;
+
+INSERT INTO devices VALUES (1, 'sensor_alpha'), (2, 'sensor_beta');
+INSERT INTO locations VALUES (1, 'room_101'), (2, 'room_102');
+INSERT INTO complex_names VALUES ('(0,0)', 'zero'), ('(1,0)', 'one'), ('(0,1)', 'i');
+
+# Create child table with multiple foreign keys
+CREATE TABLE measurements (
+    measurement_id INT PRIMARY KEY,
+    device_id INT,
+    location_id INT,
+    complex_reading COMPLEX,
+    string_val VARCHAR(50),
+    FOREIGN KEY fk_device (device_id) REFERENCES devices(device_id),
+    FOREIGN KEY fk_location (location_id) REFERENCES locations(location_id),
+    FOREIGN KEY fk_names (complex_reading) REFERENCES complex_names(complex_value)
+);
+
+SHOW COLUMNS FROM measurements;
+
+INSERT INTO measurements VALUES (1, 1, 1, '(0.0,0.0)', 'foo');
+INSERT INTO measurements VALUES (2, 2, 2, '(0,1)', 'bar');
+
+SELECT * FROM measurements;
+
+# Test foreign key constraint violations
+--error ER_NO_REFERENCED_ROW_2
+INSERT INTO measurements VALUES (3, 999, 1, '(107.0,108.0)', 'foo');
+
+--error ER_NO_REFERENCED_ROW_2
+INSERT INTO measurements VALUES (4, 1, 999, '(109.0,110.0)', 'foo');
+
+--error ER_NO_REFERENCED_ROW_2
+INSERT INTO measurements VALUES (5, 2, 2, '(0,-1)', 'foo');
+
+SELECT * FROM measurements;
+
+DROP TABLE measurements;
+DROP TABLE complex_names;
+DROP TABLE devices;
+DROP TABLE locations;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

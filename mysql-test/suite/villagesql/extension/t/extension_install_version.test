@@ -1,0 +1,22 @@
+# Test INSTALL EXTENSION ... VERSION 'x.y.z' manifest-match clause.
+# When VERSION is specified, the VEB manifest version must match or install
+# fails. When omitted, install behaves as before.
+
+--source include/villagesql/binlog_check_begin.inc
+
+--echo # INSTALL with wrong VERSION fails and installs nothing
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_simple VERSION '9.9.9';
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # INSTALL with matching VERSION succeeds
+INSTALL EXTENSION vsql_simple VERSION '0.0.1';
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+UNINSTALL EXTENSION vsql_simple;
+
+--echo # INSTALL without VERSION still works (backward compat)
+INSTALL EXTENSION vsql_simple;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+UNINSTALL EXTENSION vsql_simple;
+
+--source include/villagesql/binlog_check_end.inc

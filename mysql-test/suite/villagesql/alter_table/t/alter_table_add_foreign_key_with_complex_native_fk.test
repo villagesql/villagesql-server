@@ -1,0 +1,7 @@
+# Run alter_table_add_foreign_key_with_complex with InnoDB-native foreign keys
+# (innodb_native_foreign_keys=ON, set via the companion -master.opt) instead of
+# MySQL 9.7's SQL-layer FK default. The body is sourced verbatim from the base
+# test so both FK modes share one set of statements; only the recorded binlog
+# differs (native mode handles FKs inside InnoDB, so row events carry no
+# USE_SQL_FOREIGN_KEY_F flag). The matrix verifies the leak-check holds in both modes.
+--source suite/villagesql/alter_table/t/alter_table_add_foreign_key_with_complex.test

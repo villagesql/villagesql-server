@@ -1,0 +1,10 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t_complex VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)'),
+(3, '(5.0,6.0)');
+INSERT INTO t_complex VALUES (4, '(7.0,8.0)');
+SELECT val FROM t_complex WHERE id = 4;
+val
+(7,8)
+DROP TABLE t_complex;

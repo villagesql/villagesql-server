@@ -1,0 +1,29 @@
+# Test ALTER TABLE ADD COLUMN AFTER COMPLEX column
+# Grammar: ALTER TABLE table_name ADD COLUMN col_name type AFTER complex_col
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    complex_val COMPLEX,
+    name VARCHAR(50)
+);
+
+INSERT INTO t1 VALUES (1, '(1.0,2.0)', 'test1');
+
+SHOW CREATE TABLE t1;
+
+ALTER TABLE t1 ADD COLUMN score DOUBLE AFTER complex_val;
+
+SHOW CREATE TABLE t1;
+
+INSERT INTO t1 VALUES (2, '(3.5,-1.2)', 95.5, 'test2');
+UPDATE t1 SET score = 87.3 WHERE id = 1;
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,13 @@
+# Test INSERT with TVECTOR(2) value into TVECTOR(3) field
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE t_mixed (id INT, vec2 TVECTOR(2), vec3 TVECTOR(3), int_val INT);
+
+INSERT INTO t_mixed VALUES (1, '[1.0,1.0]', '[2.0,2.0,2.0]', 100);
+--error ER_VILLAGESQL_GENERIC_ERROR
+UPDATE t_mixed SET vec3 = vec2 WHERE id = 1;
+
+DROP TABLE t_mixed;
+
+UNINSTALL EXTENSION vsql_tvector;

@@ -1,0 +1,35 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (4, '(0,0)'), (1, '(1.0,2.0)'), (3, '(1,-2)'), (2, '(3.0,4.0)');
+CREATE TABLE t2 (id INT, val COMPLEX);
+INSERT INTO t2 VALUES (1, '(1.0,-2.0)'), (2, '(-1.0,-2.0)'), (3, '(-0,-0)');
+SELECT * FROM t1 WHERE EXISTS (SELECT 1 FROM t2 WHERE t1.id = t2.id) ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+3	(1,-2)
+SELECT * FROM t1 WHERE EXISTS (SELECT 1 FROM t2 WHERE t1.val = t2.val) ORDER BY val DESC, id DESC;
+id	val
+3	(1,-2)
+4	(0,0)
+SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t2 WHERE t1.id = t2.id AND t2.val = '(9.0,9.0)') ORDER BY id;
+id	val
+1	(1,2)
+2	(3,4)
+3	(1,-2)
+4	(0,0)
+SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t2 WHERE t1.id = t2.id AND t2.val = '(-0,-0)') ORDER BY id DESC;
+id	val
+4	(0,0)
+2	(3,4)
+1	(1,2)
+SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t2 WHERE t1.val = t2.val) ORDER BY id DESC;
+id	val
+2	(3,4)
+1	(1,2)
+SELECT * FROM t1 WHERE NOT EXISTS (SELECT 1 FROM t2 WHERE t1.id = t2.id AND t2.val < '(0,0)') ORDER BY val;
+id	val
+4	(0,0)
+3	(1,-2)
+1	(1,2)
+DROP TABLE t1;
+DROP TABLE t2;

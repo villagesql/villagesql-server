@@ -1,0 +1,23 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, description VARCHAR(100));
+INSERT INTO t1 VALUES
+(1, '(1,2)', 'First'),
+(2, '(3,4)', 'Second'),
+(3, '(5,6)', 'Third');
+CREATE VIEW v_filtered AS
+SELECT id, val, description FROM t1 WHERE id <= 2;
+SELECT COUNT(*) AS filtered_count FROM v_filtered;
+filtered_count
+2
+INSERT INTO v_filtered VALUES (4, '(7,8)', 'Fourth');
+SELECT COUNT(*) AS in_base FROM t1 WHERE id = 4;
+in_base
+1
+SELECT COUNT(*) AS in_view FROM v_filtered WHERE id = 4;
+in_view
+0
+UPDATE v_filtered SET description = 'Updated First' WHERE id = 1;
+SELECT description FROM t1 WHERE id = 1;
+description
+Updated First
+DROP VIEW v_filtered;
+DROP TABLE t1;

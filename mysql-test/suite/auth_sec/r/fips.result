@@ -1,0 +1,37 @@
+#
+# fips support.
+#
+##Test: Default server fips mode.
+Variable_name	Value
+ssl_fips_mode	OFF
+##Test: Restart server and provide ssl-fips-mode at server startup:
+Server fips mode:
+Variable_name	Value
+ssl_fips_mode	OFF
+##Test: Restart server and provide ssl-fips-mode at server startup: ON
+Server fips mode:
+Variable_name	Value
+ssl_fips_mode	ON
+##Test: Restart server and provide ssl-fips-mode at server startup: ON with skip ssl
+Server fips mode:
+Variable_name	Value
+ssl_fips_mode	ON
+##Test: Restart server and provide ssl-fips-mode at server startup: STRICT
+Server fips mode:
+Variable_name	Value
+ssl_fips_mode	STRICT
+# restart server using restart default values
+Restart server.
+##Test: MySQL client, Set fips mode: Default
+Variable_name	Value
+ssl_fips_mode	OFF
+##Test: MySQL client, Set fips mode: OFF
+Variable_name	Value
+ssl_fips_mode	OFF
+##Test: MySQL client, Set fips mode: ON
+Variable_name	Value
+ssl_fips_mode	OFF
+##Test: MySQL client, Set fips mode: STRICT
+Variable_name	Value
+ssl_fips_mode	OFF
+##Test: MySQL client, Set fips mode: INVALID

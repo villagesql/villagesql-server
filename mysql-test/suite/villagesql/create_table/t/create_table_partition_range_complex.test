@@ -1,0 +1,28 @@
+# Test CREATE TABLE with RANGE partitioning and COMPLEX columns
+# Tests RANGE partitioning with COMPLEX type columns
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT,
+    complex_data COMPLEX,
+    partition_key INT,
+    PRIMARY KEY(id, partition_key)
+) PARTITION BY RANGE (partition_key) (
+    PARTITION p0 VALUES LESS THAN (10),
+    PARTITION p1 VALUES LESS THAN (20),
+    PARTITION p2 VALUES LESS THAN MAXVALUE
+);
+
+SHOW COLUMNS FROM t1;
+
+INSERT INTO t1 VALUES (1, '(1.0,2.0)', 5);
+INSERT INTO t1 VALUES (2, '(3.0,4.0)', 15);
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,19 @@
+# Regression test: encoding a string literal into a UNION result tmp table's
+# COMPLEX field must not allocate the TypeEncoder on TABLE::mem_root.
+#
+# A UNION where one arm is a string literal and the other is a COMPLEX column
+# forces GetTypeEncoderFor() to run on the UNION result tmp table's Field.
+# With the bug, close_tmp_table() asserts table->mem_root.allocated_size() == 0
+# in debug builds because the encoder was allocated there.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (val vsql_complex.COMPLEX);
+INSERT INTO t1 VALUES ('(1.0, 2.0)'), ('(3.0, 4.0)');
+
+--echo # String literal unioned with COMPLEX column: encoder runs on tmp table field
+SELECT '(5.0, 6.0)' AS val UNION SELECT val FROM t1 ORDER BY val;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

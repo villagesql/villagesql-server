@@ -1,0 +1,167 @@
+************************************
+*Blob table handing with pk changes*
+************************************
+No changes to Blobs
+create table test.t1 (a varchar(20) not null, 
+b varchar(20) not null, 
+c varchar(20) not null, 
+d text(3000),
+primary key(a,b)) engine=ndb;
+insert into test.t1 values 
+("1a","1b","1c",repeat("1d", 1000)), 
+("2a","2b","2c",repeat("2d", 1000)), 
+("3a","3b","3c",repeat("3d", 1000)), 
+("4a","4b","4c",repeat("4d", 1000)), 
+("5a","5b","5c",repeat("5d", 1000)), 
+("6a","6b","6c",repeat("6d", 1000));
+create table test.t2 (a varchar(20) not null,
+b varchar(20) not null,
+c text not null,
+d text not null,
+primary key (a,b)) engine=ndb;
+insert into test.t2 values
+("Ein", "Ein", repeat("Ein", 1000), repeat("Ein", 1000)),
+("Zwei", "Zwei", repeat("Zwei", 1000), repeat("Zwei", 1000)),
+("Drei", "Drei", repeat("Drei", 1000), repeat("Drei", 1000)),
+("Vier", "Vier", repeat("Vier", 1000), repeat("Vier", 1000)),
+("Funf", "Funf", repeat("Funf", 1000), repeat("Funf", 1000)),
+("Sechs", "Sechs", repeat("Sechs", 1000), repeat("Sechs", 1000)),
+("Sieben", "Sieben", repeat("Sieben", 1000), repeat("Sieben", 1000));
+Stall backup completion
+Run backup
+Starting backup
+Backup started
+Make some changes which will be logged...
+insert into test.t1 values 
+("7a","7b","7c",repeat("7d",1000)), 
+("8a","8b","8c",repeat("8d",1000)), 
+("9a","9b","9c",repeat("9d",1000));
+update test.t1 set c=c, d=concat(d, "-modified");
+delete from test.t1 where a in ("5a","8a");
+insert into test.t2 values
+("Acht", "Acht", repeat("Acht", 10), repeat("Acht", 2000)),
+("Neun", "Neun", repeat("Neun", 200), repeat("Neun", 5));
+update test.t2 set b=concat(b, "-jah") where a like "%ei";
+delete from test.t2 where a like "S%";
+Allow backup to complete...
+Waiting for backup to complete
+Backup completed
+drop table test.t1;
+truncate table test.t2;
+********************************************
+* Tests with column change from pk <-> !pk *
+********************************************
+Extend pk (a,b) -> (a,b,c)
+**************************
+create table test.t1 (a varchar(20) not null, 
+b varchar(20) not null, 
+c varchar(20) not null, 
+d text(3000),
+primary key(a,b,c)) engine=ndb;
+Restore will require use of a staging table due to the blobs
+drop table test.t1;
+truncate table test.t2;
+Extend pk (a,b) -> (a,b,c) with pk type promotion
+*************************************************
+create table test.t1 (a varchar(40) not null, 
+b varchar(20) not null, 
+c varchar(20) not null, 
+d text(3000),
+primary key(a,b,c)) engine=ndb;
+Restore will require use of a staging table due to the blobs
+drop table test.t1;
+truncate table test.t2;
+Extend pk (a,b) -> (a,b,c) with pk type demotion
+************************************************
+create table test.t1 (a varchar(15) not null, 
+b varchar(20) not null, 
+c varchar(20) not null, 
+d text(3000),
+primary key(a,b,c)) engine=ndb;
+Restore will require use of a staging table due to the blobs
+drop table test.t1;
+truncate table test.t2;
+Extend pk (a,b) -> (a,b,c) with pk and blob type changes
+********************************************************
+create table test.t1 (a varchar(40) not null, 
+b varchar(20) not null, 
+c varchar(20) not null, 
+d varchar(2500),
+primary key(a,b,c)) engine=ndb;
+Restore will require use of a staging table due to the blobs
+drop table test.t1;
+truncate table test.t2;
+Contract pk (a,b) -> (b)
+**************************
+create table test.t1 (a varchar(20) not null, 
+b varchar(20) not null, 
+c varchar(20) not null, 
+d text(3000),
+primary key(b)) engine=ndb;
+Run restore
+drop table test.t1;
+truncate table test.t2;
+Contract pk (a,b) -> (b), dropping a
+************************************
+create table test.t1 (b varchar(20) not null, 
+c varchar(20) not null, 
+d text(3000),
+primary key(b)) engine=ndb;
+Run restore
+drop table test.t1;
+truncate table test.t2;
+Contract pk (a,b) -> (b)
+Also add type changes
+**************************
+create table test.t1 (a varchar(200) not null, 
+b varchar(15) not null, 
+c varchar(200) not null, 
+d text(3000),
+primary key(b)) engine=ndb;
+Run restore
+drop table test.t1;
+truncate table test.t2;
+Contract pk (a,b) -> (b)
+Also blob changes requiring staging
+**************************
+create table test.t1 (a varchar(200) not null, 
+b varchar(15) not null, 
+c varchar(200) not null, 
+d varchar(2500),
+primary key(b)) engine=ndb;
+Run restore
+drop table test.t1;
+truncate table test.t2;
+Contract pk (a,b) -> (b)
+Also blob changes requiring staging
+Also drop column
+**************************
+create table test.t1 (b varchar(15) not null, 
+c varchar(200) not null, 
+d varchar(2500),
+primary key(b)) engine=ndb;
+Run restore
+drop table test.t1;
+truncate table test.t2;
+Test with multiple table requiring changes
+------------------------------------------
+drop table test.t2;
+Contract pk (a,b) -> (b)
+Also blob changes requiring staging
+**************************
+create table test.t1 (a varchar(200) not null, 
+b varchar(15) not null, 
+c varchar(200) not null, 
+d varchar(2500),
+primary key(b)) engine=ndb;
+Contract pk (a,b) -> (a)
+Also blob changes requiring staging
+**************************
+create table test.t2 (a varchar(20) not null,
+b varchar(20) not null,
+c varchar(4000) not null,
+d text(2000) not null,
+primary key (a)) engine=ndb;
+Run restore
+drop table test.t1;
+drop table test.t2;
