@@ -1,0 +1,47 @@
+# Test UPDATE ... SET col1=val1, col2=val2 ... with COMPLEX type
+# Grammar: UPDATE ... SET assignment_list ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX,
+    name VARCHAR(50)
+);
+
+# Insert 10 rows with varied values including zero variants
+INSERT INTO t1 VALUES
+    (1, '(1.0,2.0)', 'one'),
+    (2, '(0,0)', 'two'),
+    (3, '(-3.5,4.5)', 'three'),
+    (4, '(-0,0)', 'four'),
+    (5, '(5.0,-6.0)', 'five'),
+    (6, '(0,-0)', 'six'),
+    (7, '(-7.5,-8.5)', 'seven'),
+    (8, '(-0,-0)', 'eight'),
+    (9, '(9.0,10.0)', 'nine'),
+    (10, '(0,0)', 'ten');
+
+# Update both COMPLEX and VARCHAR columns
+UPDATE t1 SET val = '(100.0,200.0)', name = 'updated' WHERE id = 1;
+
+SELECT * FROM t1 ORDER BY id;
+
+# Update multiple rows with both columns
+UPDATE t1 SET val = '(50.0,60.0)', name = 'changed' WHERE id IN (2, 4, 6);
+
+SELECT * FROM t1 ORDER BY id;
+
+# Update where COMPLEX has zero variant
+UPDATE t1 SET name = 'zero-variant' WHERE val = '(0,0)';
+
+SELECT * FROM t1 ORDER BY id;
+
+# Update both columns to NULL
+UPDATE t1 SET val = NULL, name = NULL WHERE id = 9;
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

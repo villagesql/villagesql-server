@@ -1,0 +1,20 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, amount DECIMAL(10,2));
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)', 100.50),
+(2, '(1.0,2.0)', 50.25),
+(3, '(3.0,4.0)', 200.75),
+(4, '(3.0,4.0)', 150.00);
+CREATE VIEW v_aggregated AS
+SELECT val, SUM(amount) AS total_amount
+FROM t1
+GROUP BY val;
+SELECT * FROM v_aggregated ORDER BY val;
+val	total_amount
+(1,2)	150.75
+(3,4)	350.75
+SELECT * FROM v_aggregated ORDER BY total_amount;
+val	total_amount
+(1,2)	150.75
+(3,4)	350.75
+DROP VIEW v_aggregated;
+DROP TABLE t1;

@@ -1,0 +1,145 @@
+--source include/rpl/init_source_replica.inc
+
+# Each deprecated option specified on the command line, produces an
+# extra warning during server restart. So when the test executes with
+# extra options, it causes a failure of the the test assertion that
+# checks warnings after a server restart.  mtr can't help passing
+# binlog_format, so allow that (but run only in row format to avoid
+# unnecessary repetition). The other options are not passed by
+# default, so skip the test if they are set on the command line while
+# invoking mtr.
+--source include/have_binlog_format_row.inc
+let $variable_names = 'replica_parallel_workers', 'replica_preserve_commit_order', 'replica_parallel_type', 'replica_transaction_retries';
+--source include/skip_by_command_line_option.inc
+
+#####################################################################
+# WL#13968 : Deprecate sync_relay_log_info                          #
+#####################################################################
+
+--source include/rpl/connection_replica.inc
+--source include/rpl/stop_replica.inc
+
+--let $rpl_server_number= 2
+--let $rpl_omit_print_server_parameters=1
+
+--let $MYSQLD_DATADIR= `SELECT @@datadir`
+
+# check reading deprecated system variables
+--replace_regex /INDEX_SCAN,HASH_SCAN/SCAN_METHOD,SCAN_METHOD/ /TABLE_SCAN,INDEX_SCAN/SCAN_METHOD,SCAN_METHOD/
+
+# assert deprecation warning replica_parallel_type
+SET GLOBAL replica_parallel_type='LOGICAL_CLOCK';
+SET GLOBAL replica_parallel_type='DATABASE';
+
+# assert deprecation warning replica_parallel_workers 0
+SET GLOBAL replica_parallel_workers=0;
+SET GLOBAL replica_parallel_workers=1;
+
+--let $suppress_mode = IGNORE_GLOBAL_SUPPRESSIONS
+let $messages =
+.* is deprecated and will be removed in a future release.*
+;
+--source include/suppress_messages.inc
+
+--let $suppress_mode = IGNORE_GLOBAL_SUPPRESSIONS
+let $messages =
+The syntax '--replica-parallel-workers=0' is deprecated and will be removed in a future release. Please use '--replica-parallel-workers=1' instead.
+;
+--source include/suppress_messages.inc
+
+--let $suppress_mode = ADD_SUPPRESSIONS
+let $messages =
+The syntax '--master-retry-count' is deprecated and will be removed in a future release.*
+;
+--source include/suppress_messages.inc
+
+--let $suppress_mode = ADD_SUPPRESSIONS
+let $messages =
+The syntax 'log_slave_updates' is deprecated and will be removed in a future release. Please use log_replica_updates instead.
+;
+--source include/suppress_messages.inc
+
+--let $i = 2
+
+while($i > 0) {
+  if ($i == 2) {
+    --let $rpl_server_parameters = --binlog_format=ROW --sync-relay-log-info=10005 --skip-replica-start  --replica-parallel-type=LOGICAL_CLOCK --replica-parallel-workers=0
+  }
+
+  if ($i == 1)
+  {
+    # check that warnings are emited when setting persist_only as well
+    SET PERSIST_ONLY replica_parallel_type='DATABASE';
+    SET PERSIST_ONLY replica_parallel_type='LOGICAL_CLOCK';
+
+    # Warning is not emitted when setting a deprecated value to
+    # a variable with persist_only
+    SET PERSIST_ONLY replica_parallel_workers=0;
+
+    # check that warnings are emited when setting persist as well
+    SET PERSIST replica_parallel_type='DATABASE';
+    SET PERSIST replica_parallel_type='LOGICAL_CLOCK';
+    SET PERSIST replica_parallel_workers=0;
+    SET PERSIST binlog_format=ROW;
+    SET PERSIST sync_relay_log_info=10005;
+
+    --let $rpl_server_parameters= --binlog_format=ROW
+  }
+
+  --let $rpl_omit_print_server_parameters = 2
+  --let $rpl_server_number = 2
+  --source include/save_error_log_position.inc
+  --source include/rpl/restart_server.inc
+
+  if($i==2)
+  {
+    # Check that the warnings are logged in the Error log if the deprecated variables were passed on the command line.
+    let $error_pattern = 'binlog_format' is deprecated and will be removed in a future release.
+    '--sync-relay-log-info' is deprecated and will be removed in a future release.
+    The syntax '--replica-parallel-type' is deprecated and will be removed in a future release.
+    The syntax '--replica-parallel-workers=0' is deprecated and will be removed in a future release. Please use '--replica-parallel-workers=1' instead.
+    ;
+    --source include/assert_error_log.inc
+  }
+
+  if ($i==1)
+  {
+    # Check that the warnings are logged in the Error log if the deprecated variables were persisted before server restart.
+    let $error_pattern = 'binlog_format' is deprecated and will be removed in a future release.
+    The syntax '--replica-parallel-type' is deprecated and will be removed in a future release.
+    The syntax '--replica-parallel-type' is deprecated and will be removed in a future release.
+    The syntax '--replica-parallel-workers=0' is deprecated and will be removed in a future release. Please use '--replica-parallel-workers=1' instead.
+    The syntax '--replica-parallel-workers=0' is deprecated and will be removed in a future release. Please use '--replica-parallel-workers=1' instead.
+    '@@binlog_format' is deprecated and will be removed in a future release.
+    '@@sync_relay_log_info' is deprecated and will be removed in a future release.
+    ;
+    --source include/assert_error_log.inc
+  }
+  --dec $i
+}
+# #############################################################
+
+--let $suppress_mode = ADD_SUPPRESSIONS
+let $messages =
+'binlog_format' is deprecated and will be removed in a future release.
+The syntax '--replica-parallel-type' is deprecated and will be removed in a future release.
+;
+--source include/suppress_messages.inc
+
+--let $suppress_mode = ADD_SUPPRESSIONS
+let $messages =
+The syntax '--replica-parallel-workers=0' is deprecated and will be removed in a future release. Please use '--replica-parallel-workers=1' instead.
+;
+--source include/suppress_messages.inc
+
+# revert to vanilla options
+RESET PERSIST;
+--let $rpl_server_parameters=
+--let $rpl_omit_print_server_parameters=0
+--source include/rpl/restart_server.inc
+--source include/rpl/start_replica.inc
+
+--source include/rpl/connection_source.inc
+--source include/rpl/reset.inc
+
+--source include/rpl/deinit.inc

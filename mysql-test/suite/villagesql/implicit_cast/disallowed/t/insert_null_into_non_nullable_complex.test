@@ -1,0 +1,12 @@
+# Test INSERT with NULL into non-nullable COMPLEX field
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+
+--error ER_BAD_NULL_ERROR
+INSERT INTO t_complex VALUES (6, NULL);
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

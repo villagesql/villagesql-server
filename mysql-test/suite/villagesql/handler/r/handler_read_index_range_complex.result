@@ -1,0 +1,39 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (15, '(15.0,16.0)'), (3, '(3.0,4.0)'), (11, '(-0,0)'), (7, '(7.0,8.0)');
+INSERT INTO t1 VALUES (18, '(0,0)'), (1, '(1.0,2.0)'), (13, '(13.0,14.0)'), (9, '(9.0,10.0)');
+INSERT INTO t1 VALUES (5, '(5.0,6.0)'), (19, '(0,-0)'), (2, '(19.0,20.0)'), (14, '(21.0,22.0)');
+INSERT INTO t1 VALUES (8, '(-0,-0)'), (16, '(23.0,24.0)'), (4, '(25.0,26.0)'), (12, '(27.0,28.0)');
+INSERT INTO t1 VALUES (20, '(29.0,30.0)'), (6, '(31.0,32.0)'), (17, '(33.0,34.0)'), (10, '(35.0,36.0)');
+HANDLER t1 OPEN;
+HANDLER t1 READ `PRIMARY` FIRST;
+id	val
+1	(1,2)
+HANDLER t1 READ `PRIMARY` NEXT;
+id	val
+2	(19,20)
+HANDLER t1 READ `PRIMARY` NEXT;
+id	val
+3	(3,4)
+HANDLER t1 READ `PRIMARY` NEXT;
+id	val
+4	(25,26)
+HANDLER t1 READ `PRIMARY` NEXT;
+id	val
+5	(5,6)
+HANDLER t1 READ `PRIMARY` LAST;
+id	val
+20	(29,30)
+HANDLER t1 READ `PRIMARY` PREV;
+id	val
+19	(0,0)
+HANDLER t1 READ `PRIMARY` PREV;
+id	val
+18	(0,0)
+HANDLER t1 READ `PRIMARY` PREV;
+id	val
+17	(33,34)
+HANDLER t1 READ `PRIMARY` PREV;
+id	val
+16	(23,24)
+HANDLER t1 CLOSE;
+DROP TABLE t1;

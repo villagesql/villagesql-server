@@ -1,0 +1,78 @@
+#
+# Setup test data
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX, ref_id INT);
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)'),
+(3, '(5.0,6.0)'),
+(4, '(7.0,8.0)');
+INSERT INTO t2 VALUES
+(10, '(10.0,11.0)', 1),
+(11, '(12.0,13.0)', 1),
+(12, '(14.0,15.0)', 2),
+(13, '(16.0,17.0)', 3);
+#
+# Test 1: Basic CTE with parameters
+#
+PREPARE stmt1 FROM 'WITH cte AS (SELECT id, val FROM t1 WHERE id > ?) SELECT * FROM cte WHERE val = ?';
+SET @min_id = 1;
+SET @val = '(3.0,4.0)';
+EXECUTE stmt1 USING @min_id, @val;
+id	val
+2	(3,4)
+DEALLOCATE PREPARE stmt1;
+#
+# Test 2: CTE with COMPLEX column and GROUP BY
+#
+PREPARE stmt2 FROM 'WITH cte AS (SELECT val, COUNT(*) AS cnt FROM t1 WHERE id > ? GROUP BY val) SELECT * FROM cte WHERE val = ?';
+SET @min_id = 0;
+SET @val = '(1.0,2.0)';
+EXECUTE stmt2 USING @min_id, @val;
+val	cnt
+(1,2)	1
+DEALLOCATE PREPARE stmt2;
+#
+# Test 3: CTE with JOIN
+#
+PREPARE stmt3 FROM 'WITH cte AS (SELECT id, val FROM t1 WHERE id > ?) SELECT cte.id, cte.val FROM cte JOIN t2 ON cte.id = t2.ref_id WHERE t2.id = ?';
+SET @min_id = 0;
+SET @t2_id = 10;
+EXECUTE stmt3 USING @min_id, @t2_id;
+id	val
+1	(1,2)
+DEALLOCATE PREPARE stmt3;
+#
+# Test 4: Recursive CTE
+#
+CREATE TABLE t3 (id INT PRIMARY KEY, parent_id INT, val COMPLEX);
+INSERT INTO t3 VALUES
+(1, NULL, '(1.0,1.0)'),
+(2, 1, '(2.0,2.0)'),
+(3, 2, '(3.0,3.0)'),
+(4, 2, '(4.0,4.0)');
+PREPARE stmt4 FROM 'WITH RECURSIVE cte AS (SELECT id, parent_id, val FROM t3 WHERE id = ? UNION ALL SELECT t3.id, t3.parent_id, t3.val FROM t3 JOIN cte ON t3.parent_id = cte.id) SELECT * FROM cte ORDER BY id';
+SET @start_id = 1;
+EXECUTE stmt4 USING @start_id;
+id	parent_id	val
+1	NULL	(1,1)
+2	1	(2,2)
+3	2	(3,3)
+4	2	(4,4)
+DEALLOCATE PREPARE stmt4;
+#
+# Test 5: Multiple CTEs
+#
+PREPARE stmt5 FROM 'WITH cte1 AS (SELECT id, val FROM t1 WHERE id > ?), cte2 AS (SELECT ref_id, val FROM t2 WHERE ref_id > ?) SELECT cte1.val FROM cte1 JOIN cte2 ON cte1.id = cte2.ref_id';
+SET @t1_min = 1;
+SET @t2_min = 1;
+EXECUTE stmt5 USING @t1_min, @t2_min;
+val
+(3,4)
+(5,6)
+DEALLOCATE PREPARE stmt5;
+#
+# Cleanup
+#
+DROP TABLE t1, t2, t3;

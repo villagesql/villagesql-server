@@ -1,0 +1,5 @@
+CREATE TABLE t_complex (id INT, val COMPLEX);
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+SELECT CASE WHEN id = 1 THEN val ELSE 'default' END FROM t_complex;
+ERROR HY000: Incorrect COMPLEX value: 'default'
+DROP TABLE t_complex;

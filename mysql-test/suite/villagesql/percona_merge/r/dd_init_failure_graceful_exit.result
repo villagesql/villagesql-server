@@ -1,0 +1,8 @@
+# Stop the server, then start it with a forced bootstrap failure.
+# Kill the server
+# Expect a clean abort (exit 1), not a crash (exit 2).
+# The server still starts normally afterwards.
+# restart:
+SELECT 1 AS server_started;
+server_started
+1

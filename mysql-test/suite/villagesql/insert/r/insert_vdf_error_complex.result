@@ -1,0 +1,31 @@
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+INSERT IGNORE INTO t1 VALUES (1, vsql_complex.complex_divide('(1,1)', '(0,0)'));
+Warnings:
+Warning	3200	VDF error in function 'complex_divide': division by 0
+INSERT IGNORE INTO t2 VALUES (1, vsql_complex.complex_divide('(1,1)', '(0,0)'));
+Warnings:
+Warning	3200	VDF error in function 'complex_divide': division by 0
+Warning	1048	Column 'val' cannot be null
+SET @saved_sql_mode = @@sql_mode;
+SET sql_mode = '';
+INSERT INTO t1 VALUES (2, vsql_complex.complex_divide('(1,1)', '(-0,0)'));
+Warnings:
+Warning	3200	VDF error in function 'complex_divide': division by 0
+INSERT INTO t2 VALUES (2, vsql_complex.complex_divide('(1,1)', '(0,0)'));
+ERROR 23000: Column 'val' cannot be null
+INSERT INTO t2 VALUES (3, vsql_complex.complex_divide('(1,1)', '(0,0)')), (4, '(2,2)');
+Warnings:
+Warning	3200	VDF error in function 'complex_divide': division by 0
+Warning	1048	Column 'val' cannot be null
+SET sql_mode = @saved_sql_mode;
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	NULL
+2	NULL
+SELECT * FROM t2 ORDER BY id;
+id	val
+1	(0,0)
+3	(0,0)
+4	(2,2)
+DROP TABLE t1, t2;

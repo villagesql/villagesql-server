@@ -1,0 +1,35 @@
+# Test ALTER TABLE REMOVE PARTITIONING from table with COMPLEX columns
+# Grammar: ALTER TABLE table_name REMOVE PARTITIONING
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT,
+    name VARCHAR(50),
+    value COMPLEX
+) PARTITION BY HASH (id) PARTITIONS 3;
+
+INSERT INTO t1 VALUES (1, 'test1', '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, 'test2', '(3.5,-1.2)');
+INSERT INTO t1 VALUES (3, 'test3', '(2.5,1.5)');
+
+SHOW CREATE TABLE t1;
+SELECT * FROM t1;
+
+# Remove partitioning (COMPLEX data should be preserved)
+ALTER TABLE t1 REMOVE PARTITIONING;
+
+SHOW CREATE TABLE t1;
+
+# Verify data is preserved after removing partitioning
+SELECT * FROM t1;
+
+# Insert more data to verify table still works
+INSERT INTO t1 VALUES (4, 'test4', '(4.0,5.0)');
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,59 @@
+# Test error cases with prepared statements and custom types
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Setup test data
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+
+--echo #
+--echo # Test 1: Error case - Non-existent prepared statement
+--echo #
+
+--error ER_UNKNOWN_STMT_HANDLER
+EXECUTE nonexistent_stmt;
+
+--echo #
+--echo # Test 2: Error case - Syntax error in PREPARE
+--echo #
+
+--error ER_PARSE_ERROR
+PREPARE bad_stmt FROM 'SELECT * FROM t1 WHERE';
+
+--echo #
+--echo # Test 3: Error case - Invalid COMPLEX value in WHERE clause
+--echo #
+
+PREPARE stmt3 FROM 'SELECT id FROM t1 WHERE val = ?';
+SET @bad_val = 'invalid_complex';
+--error ER_VILLAGESQL_GENERIC_ERROR
+EXECUTE stmt3 USING @bad_val;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Test 4: Error case - Wrong number of parameters
+--echo #
+
+PREPARE stmt4 FROM 'SELECT * FROM t1 WHERE id = ? AND val = ?';
+SET @only_one = 1;
+--error ER_WRONG_ARGUMENTS
+EXECUTE stmt4 USING @only_one;
+DEALLOCATE PREPARE stmt4;
+
+--echo #
+--echo # Test 5: Error case - DEALLOCATE non-existent statement
+--echo #
+
+--error ER_UNKNOWN_STMT_HANDLER
+DEALLOCATE PREPARE nonexistent_stmt;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,20 @@
+# Test TABLE with ORDER BY and LIMIT with COMPLEX type
+# Grammar: TABLE tbl_name ORDER BY ... LIMIT ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (val COMPLEX);
+# Use values where string ordering differs from COMPLEX ordering
+# String order: (10,1), (2,5), (5,2)
+# COMPLEX order: (2,5), (5,2), (10,1)
+INSERT INTO t1 VALUES ('(10,1)'), ('(2,5)'), ('(5,2)');
+
+# Order by COMPLEX (DESC): (10,1), (5,2), limit 2
+TABLE t1 ORDER BY val DESC LIMIT 2;
+
+# Validate values are COMPLEX by calling a COMPLEX function
+SELECT val, vsql_complex.complex_conjugate(val) as conjugate FROM t1 ORDER BY val;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

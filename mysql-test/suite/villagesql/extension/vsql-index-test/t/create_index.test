@@ -1,0 +1,104 @@
+# Test CREATE INDEX ... USING EXTENDED ... syntax paths
+# All cases must parse without error and then fail with "not yet implemented".
+# TODO(villagesql-indexing): Remove --error directives and replace with functional tests once custom index execution is implemented.
+# Covers:
+#   - USING EXTENDED(type_name)             -- unqualified type
+#   - USING EXTENDED(extension.type_name)   -- qualified extension.type
+#   - WITH (key = ulong_num)                -- numeric parameter
+#   - WITH (key = 'string')                 -- quoted string parameter
+#   - WITH (key = ident)                    -- unquoted identifier parameter
+#   - WITH (k1 = v1, k2 = v2, ...)         -- multiple parameters
+#   - WITH (...) without USING EXTENDED     -- standalone WITH (PT_index_with_options path)
+#   - (col profile)                         -- unqualified per-column index profile
+#   - (col extension.profile)               -- qualified per-column index profile
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+INSTALL EXTENSION vsql_index_test;
+
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# USING EXTENDED -- unqualified type name
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# USING EXTENDED -- qualified extension.type_name
+CREATE INDEX idx ON t (a) USING EXTENDED(vsql_index_test.dummy_index_hnsw);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# USING EXTENDED + WITH -- numeric parameter (ulong_num path)
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw) WITH (M = 16);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# USING EXTENDED + WITH -- quoted string parameter (TEXT_STRING_sys path)
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw) WITH (label = 'l2');
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# USING EXTENDED + WITH -- unquoted identifier parameter (ident path)
+CREATE INDEX idx ON t (a) USING EXTENDED(dummy_index_hnsw) WITH (mode = l2);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# USING EXTENDED + WITH -- multiple parameters covering all value kinds
+CREATE INDEX idx ON t (a) USING EXTENDED(vsql_index_test.dummy_index_hnsw) WITH (M = 16, ef_construction = 200, label = 'l2', mode = fast);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# WITH standalone without USING EXTENDED -- exercises PT_index_with_options path directly
+CREATE INDEX idx ON t (a) WITH (M = 16);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# Column with index profile (opt_index_profile) + USING EXTENDED
+CREATE INDEX idx ON t (a dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# Column with index profile + qualified extension.type + WITH params
+CREATE INDEX idx ON t (a dummy_profile_hnsw_l2) USING EXTENDED(vsql_index_test.dummy_index_hnsw) WITH (M = 16, label = 'l2');
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# Column with qualified extension.profile (extension.profile_name syntax)
+CREATE INDEX idx ON t (a vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(dummy_index_hnsw);
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# Qualified profile + qualified extension type + WITH params
+CREATE INDEX idx ON t (a vsql_index_test.dummy_profile_hnsw_l2) USING EXTENDED(vsql_index_test.dummy_index_hnsw) WITH (M = 16, label = 'l2');
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+CREATE TABLE t (id INT PRIMARY KEY, a dummy_type_vector);
+
+# Table must be unaffected by all the failed CREATE INDEX statements above
+SHOW CREATE TABLE t;
+
+DROP TABLE t;
+
+UNINSTALL EXTENSION vsql_index_test;
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

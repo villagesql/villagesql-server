@@ -1,0 +1,7 @@
+CREATE TABLE t_complex (id INT, val COMPLEX);
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+SELECT CASE val WHEN 'invalid' THEN 'Found' ELSE 'Not Found' END FROM t_complex;
+ERROR HY000: Incorrect COMPLEX value: 'invalid'
+SELECT CASE val WHEN '(0,0)' THEN 'OK' WHEN 'still invalid' THEN 'Found' ELSE 'Not Found' END FROM t_complex;
+ERROR HY000: Incorrect COMPLEX value: 'still invalid'
+DROP TABLE t_complex;

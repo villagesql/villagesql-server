@@ -1,0 +1,45 @@
+# Test DROP TABLE with mixed column types including COMPLEX
+# Grammar: DROP TABLE table_name
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE mixed_table (
+    id INT PRIMARY KEY,
+    val COMPLEX,
+    name VARCHAR(100),
+    score DECIMAL(5,2),
+    complex_data COMPLEX,
+    json_data JSON,
+    is_active BOOLEAN DEFAULT TRUE
+);
+
+--source include/villagesql/query_custom_columns.inc
+
+# Create a second table so that we can see it is unaffected by
+# dropping the mixed_table
+CREATE TABLE second_table (
+    id INT PRIMARY KEY,
+    complex_data COMPLEX
+);
+
+--source include/villagesql/query_custom_columns.inc
+
+INSERT INTO mixed_table (id, val, name, score, complex_data, json_data) VALUES
+    (1, '(0,1)', 'Test Record 1', 95.50, '(1.0,2.0)', '{"type": "test"}'),
+    (2, '(1,1)', 'Test Record 2', 87.25, '(3.5,-1.2)', '{"type": "sample"}');
+
+SHOW CREATE TABLE mixed_table;
+SELECT id, val, name, score, complex_data FROM mixed_table;
+
+DROP TABLE mixed_table;
+--source include/villagesql/query_custom_columns.inc
+
+# Verify table no longer exists
+SHOW TABLES LIKE 'mixed_table';
+
+DROP TABLE second_table;
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

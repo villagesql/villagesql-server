@@ -1,0 +1,107 @@
+# Install vsql-complex extension
+INSTALL EXTENSION vsql_complex;
+
+########################################################################
+#
+# Test: SELECT operations and filtering for COMPLEX type
+#
+########################################################################
+#
+# Setup test data
+#
+########################################################################
+
+CREATE TABLE test_read_basic (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50),
+    complex_val COMPLEX
+);
+
+INSERT INTO test_read_basic (name, complex_val) VALUES
+    ('test1', '(1,2)'),
+    ('test2', '(3.14,2.71)'),
+    ('test3', '(-5.5,-3.3)'),
+    ('test4', '(0,1)'),
+    ('test5', '(1,0)'),
+    ('scientific', '(1.5e-10,2.3e+15)');
+
+CREATE TABLE test_read_nulls (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nullable_complex COMPLEX DEFAULT NULL,
+    not_null_complex COMPLEX NOT NULL DEFAULT '(1,1)'
+);
+
+INSERT INTO test_read_nulls (nullable_complex, not_null_complex) VALUES
+    ('(1,1)', '(2,2)'),
+    (NULL, '(3,3)'),
+    ('(4,4)', '(5,5)'),
+    (NULL, '(6,6)');
+
+########################################################################
+#
+# Test 1: SELECT with equality comparison
+#
+########################################################################
+
+SELECT id, name, complex_val FROM test_read_basic WHERE complex_val = '(1,2)';
+
+########################################################################
+#
+# Test 2: SELECT with inequality comparison
+#
+########################################################################
+
+SELECT id, name, complex_val FROM test_read_basic WHERE complex_val != '(1,2)' ORDER BY id LIMIT 3;
+
+########################################################################
+#
+# Test 3: SELECT with IS NULL
+#
+########################################################################
+
+SELECT id, nullable_complex, not_null_complex FROM test_read_nulls WHERE nullable_complex IS NULL;
+
+########################################################################
+#
+# Test 4: SELECT with IS NOT NULL
+#
+########################################################################
+
+SELECT id, nullable_complex, not_null_complex FROM test_read_nulls WHERE nullable_complex IS NOT NULL ORDER BY id;
+
+########################################################################
+#
+# Test 5: SELECT with ORDER BY
+#
+########################################################################
+
+SELECT id, name, complex_val FROM test_read_basic ORDER BY id;
+
+########################################################################
+#
+# Test 6: SELECT with LIMIT
+#
+########################################################################
+
+SELECT id, name, complex_val FROM test_read_basic ORDER BY id LIMIT 3;
+
+########################################################################
+#
+# Test 7: SELECT with DISTINCT
+#
+########################################################################
+
+INSERT INTO test_read_basic (name, complex_val) VALUES ('duplicate', '(1,2)');
+
+SELECT DISTINCT complex_val FROM test_read_basic WHERE complex_val = '(1,2)' ORDER BY complex_val;
+
+########################################################################
+#
+# Clean up
+#
+########################################################################
+
+DROP TABLE test_read_basic, test_read_nulls;
+
+# Uninstall the extension
+UNINSTALL EXTENSION vsql_complex;

@@ -1,0 +1,67 @@
+# Test name shadowing: temporary table shadows permanent table
+# Verifies metadata system handles shadowing correctly without corrupting permanent table
+
+--source include/villagesql/install_complex_extension.inc
+
+# Create permanent table
+CREATE TABLE t_shadow (
+  id INT PRIMARY KEY,
+  val COMPLEX,
+  perm_data VARCHAR(50)
+);
+
+INSERT INTO t_shadow VALUES (1, '(10.0,10.0)', 'permanent');
+
+# Verify permanent table metadata
+SELECT COLUMN_NAME, DATA_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA='test' AND TABLE_NAME='t_shadow'
+ORDER BY ORDINAL_POSITION;
+
+# Query permanent table
+SELECT * FROM t_shadow;
+
+# Create temporary table with same name
+CREATE TEMPORARY TABLE t_shadow (
+  id INT PRIMARY KEY,
+  val COMPLEX,
+  temp_data VARCHAR(50)
+);
+
+INSERT INTO t_shadow VALUES (99, '(20.0,20.0)', 'temporary');
+
+# Now t_shadow refers to temporary table
+SELECT * FROM t_shadow;
+
+# Check metadata - should show temporary table
+# Note: MySQL handles temporary table metadata differently
+SHOW COLUMNS FROM t_shadow;
+
+# Verify we can insert into temporary table
+INSERT INTO t_shadow VALUES (100, '(30.0,30.0)', 'temp_data_2');
+SELECT * FROM t_shadow ORDER BY id;
+
+# Drop temporary table
+DROP TABLE t_shadow;
+
+# Now t_shadow should refer to permanent table again
+SELECT * FROM t_shadow;
+
+# Verify permanent table metadata is still intact
+SELECT COLUMN_NAME, DATA_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA='test' AND TABLE_NAME='t_shadow'
+ORDER BY ORDINAL_POSITION;
+
+# Verify permanent table data is unchanged
+SELECT * FROM t_shadow;
+
+# Clean up permanent table
+DROP TABLE t_shadow;
+
+# Verify metadata is removed
+SELECT COLUMN_NAME, DATA_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA='test' AND TABLE_NAME='t_shadow';
+
+--source include/villagesql/uninstall_complex_extension.inc

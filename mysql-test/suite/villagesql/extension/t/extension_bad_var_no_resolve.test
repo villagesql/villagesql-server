@@ -1,0 +1,39 @@
+# Test that INSTALL EXTENSION fails when a variable-length type
+# (persisted_length = -1) provides no resolve_params, as rejected by the v3
+# type register (build_type_descriptor_v3).
+#
+# The fixture vsql_bad_var_no_resolve_test is built against the frozen stable
+# v3 SDK (the "v3" ABI selector in test-extensions/CMakeLists.txt), so the type
+# registers at VEF_PROTOCOL_3 and is dispatched to the v3 builder. The current
+# dev SDK raises variable-length types to VEF_PROTOCOL_4, so it can no longer
+# produce a type that reaches this v3 rejection -- this fixture stands in for a
+# real v3-compiled extension.
+
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("resolve_params_vdf_name");
+
+--echo # Attempt to install (should fail: v3 variable-length type without resolve_params)
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION vsql_bad_var_no_resolve_test;
+
+--echo # Verify extension was NOT installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name = 'vsql_bad_var_no_resolve_test';
+
+--echo # Verify the error log names the specific reason (missing resolve_params)
+--perl
+use strict;
+my $error_log = $ENV{'MYSQLTEST_VARDIR'} . "/log/mysqld.1.err";
+open(FILE, "$error_log") or die("Unable to open error log: $error_log");
+my $found = 0;
+while (<FILE>) {
+  if (/has persisted_length=-1 .*does not set resolve_params_vdf_name/) {
+    $found = 1;
+  }
+}
+close(FILE);
+if (!$found) {
+  die "Expected resolve_params rejection message in error log";
+}
+print "Found resolve_params rejection message in error log\n";
+EOF

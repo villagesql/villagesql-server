@@ -1,0 +1,4 @@
+# Test ALTER TABLE DROP COLUMN with COMPLEX type using ALGORITHM = COPY
+
+let $algo = COPY;
+--source alter_table_drop_column_complex.test

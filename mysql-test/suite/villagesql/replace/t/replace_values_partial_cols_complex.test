@@ -1,0 +1,23 @@
+# Test REPLACE INTO ... (partial columns) with COMPLEX type
+# Grammar: REPLACE [INTO] tbl_name (col_name) VALUES (value)
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX DEFAULT '(1.0,1.0)'
+);
+
+INSERT INTO t1 VALUES (1, '(2.0,2.0)');
+
+# Replace implicitly using default for 'val'
+REPLACE INTO t1 (id) VALUES (1);
+
+# Insert new implicitly
+REPLACE INTO t1 (id) VALUES (2);
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

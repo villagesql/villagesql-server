@@ -1,0 +1,29 @@
+# Test that UNINSTALL EXTENSION fails when a stored procedure has a parameter
+# or DECLARE variable of a custom type from that extension. The extension
+# should only be uninstallable after the stored procedure is dropped.
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo # Create a stored procedure with a COMPLEX IN parameter
+delimiter //;
+CREATE PROCEDURE p1(IN val COMPLEX)
+BEGIN
+  SELECT val;
+END//
+delimiter ;//
+
+--echo # Try to uninstall the extension - should fail because p1 uses COMPLEX type
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # Verify the extension is still installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex';
+
+--echo # Drop the stored procedure
+DROP PROCEDURE p1;
+
+--echo # Now uninstall should succeed
+UNINSTALL EXTENSION vsql_complex;
+
+--echo # Verify the extension was removed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'vsql_complex';

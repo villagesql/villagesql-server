@@ -1,0 +1,60 @@
+# Scenario: intrinsic default values work end-to-end. A NOT NULL custom-type
+# column receiving NULL under INSERT IGNORE is filled with the type's intrinsic
+# default.
+#
+# Fixture: vsql_test_only exposes DEFAULT_STR_TYPE (intrinsic_default_str "(7)"),
+# DEFAULT_VDF_TYPE (intrinsic_default VDF returning "(9)"), and
+# DEFAULT_PARAM_TYPE (parameterized, intrinsic_default_str "(5)").
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # intrinsic_default_str: NULL under IGNORE becomes the literal default.
+CREATE TABLE t_str (id INT PRIMARY KEY, v DEFAULT_STR_TYPE NOT NULL);
+INSERT IGNORE INTO t_str VALUES (1, NULL);
+INSERT INTO t_str VALUES (2, '(42)');
+SELECT id, v FROM t_str ORDER BY id;
+DROP TABLE t_str;
+
+--echo # intrinsic_default VDF: NULL under IGNORE becomes the VDF-computed default.
+CREATE TABLE t_vdf (id INT PRIMARY KEY, v DEFAULT_VDF_TYPE NOT NULL);
+INSERT IGNORE INTO t_vdf VALUES (1, NULL);
+INSERT INTO t_vdf VALUES (2, '(42)');
+SELECT id, v FROM t_vdf ORDER BY id;
+DROP TABLE t_vdf;
+
+--echo # Parameterized type
+CREATE TABLE t_param (id INT PRIMARY KEY, v DEFAULT_PARAM_TYPE(3) NOT NULL);
+INSERT IGNORE INTO t_param VALUES (1, NULL);
+INSERT INTO t_param VALUES (2, '(42)');
+SELECT id, v FROM t_param ORDER BY id;
+DROP TABLE t_param;
+
+--echo #
+--echo # The VDF that supplies the default is not callable from SQL.
+--echo #
+--echo # It has to be registered under a name for the type to refer to it,
+--echo # which puts it in the SQL namespace. However, it should not be
+--echo # callable. For the parameterized types the parameters are needed to
+--echo # resolve the default value. The type parameters are unknown during
+--echo # SQL call. Thus, SQL call is blocked.
+--echo #
+
+--echo # Qualified.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT vsql_test_only.default_vdf_type_default();
+
+--echo # Unqualified, which resolves by a different path.
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT default_vdf_type_default();
+
+--echo # The default itself is unaffected: the type machinery reaches the VDF
+--echo # without going through function resolution at all.
+CREATE TABLE t_again (id INT PRIMARY KEY, v DEFAULT_VDF_TYPE NOT NULL);
+INSERT IGNORE INTO t_again VALUES (1, NULL);
+SELECT id, v FROM t_again;
+DROP TABLE t_again;
+
+--echo # An ordinary VDF in the same extension is still callable.
+SELECT vsql_test_only.test_result_kind('ok') AS k;
+
+UNINSTALL EXTENSION vsql_test_only;

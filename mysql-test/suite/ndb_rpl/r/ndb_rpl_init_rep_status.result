@@ -1,0 +1,63 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+reset binary logs and gtids;
+STOP REPLICA;
+Generate something in the Masters Binlog
+use test;
+create table t1 (a int primary key, b int) engine=ndb;
+insert into t1 values (1,1);
+Initial state
+select * from mysql.ndb_apply_status;
+server_id	epoch	log_name	start_pos	end_pos
+Ndb_slave_max_replicated_epoch: 0
+set @slave_server_id:= @@server_id;
+select @slave_server_id;
+@slave_server_id
+2
+Default, no data, max replicated epoch will be 0.
+RESET REPLICA;
+START REPLICA;
+select server_id from mysql.ndb_apply_status order by server_id;
+server_id
+1
+Ndb_slave_max_replicated_epoch: 0
+Default, load of own serverid from ndb_apply_status, should be 111
+drop table test.t1;
+STOP REPLICA;
+RESET REPLICA;
+insert into mysql.ndb_apply_status values (@slave_server_id, 111, 'Fictional log', 222, 333);
+START REPLICA;
+select server_id from mysql.ndb_apply_status order by server_id;
+server_id
+1
+2
+Ndb_slave_max_replicated_epoch: 111
+drop table test.t1;
+Check that reset replica resets Ndb_slave_max_replicated_epoch to zero
+STOP REPLICA;
+Ndb_slave_max_replicated_epoch: 111
+RESET REPLICA;
+Ndb_slave_max_replicated_epoch: 0
+Multiple-channel, load highest of configured serverids, should be 222
+set @other_local_server_id=@slave_server_id+1;
+set @other_remote_server_id=@slave_server_id+2;
+insert into mysql.ndb_apply_status values (@slave_server_id, 111, 'Fictional log', 222, 333);
+insert into mysql.ndb_apply_status values (@other_local_server_id, 222, 'Fictional log', 222, 333);
+insert into mysql.ndb_apply_status values (@other_remote_server_id, 444, 'Fictional log', 222, 333);
+CHANGE REPLICATION SOURCE TO IGNORE_SERVER_IDS=(3);;
+START REPLICA;
+select server_id from mysql.ndb_apply_status order by server_id;
+server_id
+1
+2
+3
+4
+Ndb_slave_max_replicated_epoch: 222
+STOP REPLICA;
+CHANGE REPLICATION SOURCE TO IGNORE_SERVER_IDS= ();
+START REPLICA;
+drop table test.t1;
+include/rpl/deinit.inc

@@ -1,0 +1,222 @@
+# Test Error Handling for Invalid VEB Files
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+#
+# VEB FILE ISSUES
+#
+# Missing VEB file
+INSTALL EXTENSION nonexistent;
+ERROR HY000: VEB file not found: nonexistent.veb
+# Invalid archive format (not a tar file)
+INSTALL EXTENSION bad_archive;
+ERROR HY000: Cannot open VEB file 'bad_archive.veb': Unrecognized archive format
+# Empty VEB file
+INSTALL EXTENSION `empty`;
+ERROR HY000: Cannot open VEB file 'empty.veb': Unrecognized archive format
+#
+# MANIFEST ISSUES
+#
+# Missing manifest.json
+Creating test extension: no_manifest.veb
+Created no_manifest.veb with contents:
+  other.txt
+INSTALL EXTENSION no_manifest;
+ERROR HY000: manifest.json not found in VEB file 'no_manifest.veb'
+# Invalid JSON syntax
+Creating test extension: bad_json.veb
+Created bad_json.veb with contents:
+  manifest.json
+INSTALL EXTENSION bad_json;
+ERROR HY000: Failed to parse manifest.json in 'bad_json.veb': Missing a name for object member. at offset 1
+# manifest.json is an array
+Creating test extension: json_array.veb
+Created json_array.veb with contents:
+  manifest.json
+INSTALL EXTENSION json_array;
+ERROR HY000: manifest.json in 'json_array.veb' missing 'version' field
+# manifest.json is a string
+Creating test extension: json_string.veb
+Created json_string.veb with contents:
+  manifest.json
+INSTALL EXTENSION json_string;
+ERROR HY000: manifest.json in 'json_string.veb' missing 'version' field
+# Missing version field
+Creating test extension: no_version.veb
+Created no_version.veb with contents:
+  manifest.json
+INSTALL EXTENSION no_version;
+ERROR HY000: manifest.json in 'no_version.veb' missing 'version' field
+# version field is a number
+Creating test extension: version_number.veb
+Created version_number.veb with contents:
+  manifest.json
+INSTALL EXTENSION version_number;
+ERROR HY000: 'version' field in manifest.json must be a string
+# version field is an array
+Creating test extension: version_array.veb
+Created version_array.veb with contents:
+  manifest.json
+INSTALL EXTENSION version_array;
+ERROR HY000: 'version' field in manifest.json must be a string
+# version field is an object
+Creating test extension: version_object.veb
+Created version_object.veb with contents:
+  manifest.json
+INSTALL EXTENSION version_object;
+ERROR HY000: 'version' field in manifest.json must be a string
+# version field is null
+Creating test extension: version_null.veb
+Created version_null.veb with contents:
+  manifest.json
+INSTALL EXTENSION version_null;
+ERROR HY000: 'version' field in manifest.json must be a string
+# Empty version string
+Creating extension version_empty using SDK...
+Created version_empty.veb
+INSTALL EXTENSION version_empty;
+UNINSTALL EXTENSION version_empty;
+#
+# EXTENSION NAME VALIDATION
+#
+# Name starting with number
+INSTALL EXTENSION 1test;
+ERROR HY000: Extension name '1test' must start with a letter
+# Name starting with hyphen
+INSTALL EXTENSION `-test`;
+ERROR HY000: Extension name '-test' must start with a letter
+# Name starting with underscore
+INSTALL EXTENSION `_test`;
+ERROR HY000: Extension name '_test' must start with a letter
+# Name ending with underscore
+INSTALL EXTENSION `test_`;
+ERROR HY000: Extension name 'test_' must end with a letter or digit
+# Name ending with hyphen
+INSTALL EXTENSION `test-`;
+ERROR HY000: Extension name 'test-' must end with a letter or digit
+# Name starting with dot
+INSTALL EXTENSION `.test`;
+ERROR HY000: Extension name '.test' must start with a letter
+# Name containing slash
+INSTALL EXTENSION `foo/bar`;
+ERROR HY000: Extension name 'foo/bar' contains invalid character '/' (only letters, digits, underscore, and hyphen allowed)
+# Name containing double-dot
+INSTALL EXTENSION `foo..bar`;
+ERROR HY000: Extension name 'foo..bar' contains invalid character '.' (only letters, digits, underscore, and hyphen allowed)
+# Name with space
+INSTALL EXTENSION `foo bar`;
+ERROR HY000: Extension name 'foo bar' contains invalid character ' ' (only letters, digits, underscore, and hyphen allowed)
+# Name with special characters
+INSTALL EXTENSION `foo@bar`;
+ERROR HY000: Extension name 'foo@bar' contains invalid character '@' (only letters, digits, underscore, and hyphen allowed)
+INSTALL EXTENSION `foo!bar`;
+ERROR HY000: Extension name 'foo!bar' contains invalid character '!' (only letters, digits, underscore, and hyphen allowed)
+INSTALL EXTENSION `foo$bar`;
+ERROR HY000: Extension name 'foo$bar' contains invalid character '$' (only letters, digits, underscore, and hyphen allowed)
+# Reserved name _expanded
+INSTALL EXTENSION _expanded;
+ERROR HY000: Extension name '_expanded' must start with a letter
+# Name too long (>64 characters)
+INSTALL EXTENSION this_is_a_very_long_extension_name_that_exceeds_sixty_four_characters_limit;
+ERROR HY000: Extension name 'this_is_a_very_long_extension_name_that_exceeds_sixty_four_characters_limit' exceeds maximum length of 64 characters
+# Valid names with hyphens and underscores should work
+Creating extension test_underscore using SDK...
+Created test_underscore.veb
+Creating extension test-hyphen using SDK...
+Created test-hyphen.veb
+Creating extension test_mix-123 using SDK...
+Created test_mix-123.veb
+INSTALL EXTENSION test_underscore;
+UNINSTALL EXTENSION test_underscore;
+INSTALL EXTENSION `test-hyphen`;
+UNINSTALL EXTENSION `test-hyphen`;
+INSTALL EXTENSION `test_mix-123`;
+UNINSTALL EXTENSION `test_mix-123`;
+# name field is missing
+Creating test extension: empty_name.veb
+Created empty_name.veb with contents:
+  manifest.json
+INSTALL EXTENSION `empty_name`;
+ERROR HY000: manifest.json in 'empty_name.veb' missing 'name' field
+# name mismatch
+Creating test extension: wrong_name.veb
+Created wrong_name.veb with contents:
+  manifest.json
+INSTALL EXTENSION `wrong_name`;
+ERROR HY000: Manifest name 'wrong' does not match VEB basename 'wrong_name'
+#
+# CASE SENSITIVITY (normalization should make these conflict)
+#
+Creating extension CaseSensitive using SDK...
+Created CaseSensitive.veb
+INSTALL EXTENSION CaseSensitive;
+# Try to install lowercase version (should fail - already exists after normalization)
+Creating extension casesensitive using SDK...
+Created casesensitive.veb
+INSTALL EXTENSION casesensitive;
+ERROR HY000: Extension 'casesensitive' is already installed
+# Clean up
+UNINSTALL EXTENSION CaseSensitive;
+#
+# DIRECTORY TRAVERSAL TESTS
+#
+# Test: File path with ../ (directory traversal attempt)
+INSTALL EXTENSION path_traversal;
+ERROR HY000: Suspicious file path in VEB: '../escape.txt'
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+#
+# SYMLINK SECURITY TESTS
+#
+# Test 1: Symlink with relative path pointing outside extraction directory
+Creating test extension: symlink_relative.veb
+Created symlink_relative.veb with contents:
+  evil_link
+  manifest.json
+INSTALL EXTENSION symlink_relative;
+ERROR HY000: VEB contains symlink 'evil_link' pointing outside extraction directory (target: '../outside_target.txt', resolves to: '../outside_target.txt')
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+# Test 2: Symlink with absolute path pointing outside
+Creating test extension: symlink_absolute.veb
+Created symlink_absolute.veb with contents:
+  evil_absolute_link
+  manifest.json
+INSTALL EXTENSION symlink_absolute;
+ERROR HY000: VEB contains symlink 'evil_absolute_link' with absolute target: '/etc/passwd'
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+# Test 3: Deep directory traversal with many ../
+Creating test extension: deep_traversal.veb
+Created deep_traversal.veb with contents:
+  deep_link
+  manifest.json
+INSTALL EXTENSION deep_traversal;
+ERROR HY000: VEB contains symlink 'deep_link' pointing outside extraction directory (target: '../../../../../../etc/passwd', resolves to: '../../../../../../etc/passwd')
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+# Test 4: Symlink in subdirectory pointing outside
+Creating test extension: nested_symlink.veb
+Created nested_symlink.veb with contents:
+  manifest.json
+  subdir/
+  subdir/evil
+  subdir/file.txt
+INSTALL EXTENSION nested_symlink;
+ERROR HY000: VEB contains symlink 'subdir/evil' pointing outside extraction directory (target: '../../outside.txt', resolves to: '../../outside.txt')
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+# MISSING SHARED LIBRARY
+# Manifest is valid but the VEB carries no lib/{name}.so
+Creating test extension: no_shared_library.veb
+Created no_shared_library.veb with contents:
+  manifest.json
+INSTALL EXTENSION no_shared_library;
+ERROR HY000: VEB for 'no_shared_library' contains no usable 'lib/no_shared_library.so'
+# TRUNCATED VEB
+# The manifest is intact but the archive ends inside lib/{name}.so
+INSTALL EXTENSION truncated_veb;
+ERROR HY000: Failed to read data for 'lib/truncated_veb.so': Truncated tar archive detected while reading data
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+# No expansion or staging directory was left behind
+include/rpl/deprecated/show_binlog_events.inc

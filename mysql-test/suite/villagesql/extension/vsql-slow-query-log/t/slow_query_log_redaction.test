@@ -1,0 +1,50 @@
+# Verify that credential-bearing statements reach a statement_event sink with
+# their secret REDACTED, not in cleartext. The service populates args.query
+# from the server's rewritten (obfuscated) query when one exists -- the same
+# text the general/slow/binary logs use -- so SET PASSWORD, CREATE/ALTER USER
+# ... IDENTIFIED BY, etc. must never expose the literal password to a sink.
+#
+# The vsql_slow_query_log test extension writes args.query to its log file, so
+# we assert the cleartext secret is absent from that file while the statement
+# itself is still logged (obfuscated).
+
+--let $slow_log = $MYSQLTEST_VARDIR/tmp/vsql_slow_redaction.log
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+--error 0,1
+--remove_file $slow_log
+
+INSTALL EXTENSION vsql_slow_query_log;
+
+SET GLOBAL vsql_slow_query_log.threshold_ms = 0;
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+eval SET GLOBAL vsql_slow_query_log.log_file = '$slow_log';
+SET GLOBAL vsql_slow_query_log.enabled = ON;
+
+--echo # A distinctive cleartext secret that must never appear in the log.
+CREATE USER 'vsql_redact_user'@'localhost' IDENTIFIED BY 'sup3rs3cr3t_create';
+ALTER USER 'vsql_redact_user'@'localhost' IDENTIFIED BY 'sup3rs3cr3t_alter';
+SET PASSWORD FOR 'vsql_redact_user'@'localhost' = 'sup3rs3cr3t_setpw';
+
+SET GLOBAL vsql_slow_query_log.enabled = OFF;
+
+--echo # No cleartext secret leaked to the sink (0 = none, as required).
+--exec sh -c "grep -c 'sup3rs3cr3t_create' $slow_log; true"
+--exec sh -c "grep -c 'sup3rs3cr3t_alter' $slow_log; true"
+--exec sh -c "grep -c 'sup3rs3cr3t_setpw' $slow_log; true"
+
+--echo # The statements were still logged (obfuscated) -- the sink saw the
+--echo # rewritten form, so the statement is observable without the secret.
+--exec sh -c "grep -c 'CREATE USER' $slow_log; true"
+--exec sh -c "grep -c 'ALTER USER' $slow_log; true"
+--exec sh -c "grep -c 'SET PASSWORD' $slow_log; true"
+
+DROP USER 'vsql_redact_user'@'localhost';
+
+UNINSTALL EXTENSION vsql_slow_query_log;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;
+
+--remove_file $slow_log

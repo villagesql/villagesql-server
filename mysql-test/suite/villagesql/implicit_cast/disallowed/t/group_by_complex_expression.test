@@ -1,0 +1,14 @@
+# Test GROUP BY with *expression* involving COMPLEX
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT, val COMPLEX);
+
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT COUNT(*) FROM t_complex GROUP BY val || 'test';
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

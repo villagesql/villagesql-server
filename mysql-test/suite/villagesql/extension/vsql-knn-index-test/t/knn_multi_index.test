@@ -1,0 +1,82 @@
+# Two custom indexes on the SAME column, with different metrics (L2 and cosine),
+# coexisting and operating at the same time. Each is maintained on every write,
+# and a KNN query is served by the index whose metric matches the ORDER BY
+# distance function -- returning that metric's ordering, which differs from the
+# other's.
+
+INSTALL EXTENSION vsql_knn_index_test;
+
+--disable_query_log
+--disable_result_log
+SELECT vsql_knn_index_test.kvec_reset_counters();
+--enable_result_log
+--enable_query_log
+
+CREATE TABLE t (
+  id INT PRIMARY KEY,
+  v  KVECTOR
+);
+
+--echo # Two indexes on the same column: one L2 (the default profile), one cosine
+--echo # (a non-default profile, named in the column parens).
+CREATE INDEX idx_l2  ON t (v) USING EXTENDED(vsql_knn_index_test.kvec_l2);
+CREATE INDEX idx_cos ON t (v kvec_profile_cos)
+  USING EXTENDED(vsql_knn_index_test.kvec_cos);
+
+--echo # Data chosen so L2 and cosine rank differently. Relative to [1,0,0,0]:
+--echo #   id 1 [1,0,0,0]  : both metrics distance 0
+--echo #   id 2 [10,0,0,0] : same direction -> cosine 0 (nearest), but L2 far
+--echo #   id 3 [1,1,0,0]  : L2 ~1.41, cosine ~0.29
+--echo #   id 4 [0,1,0,0]  : L2 ~1.41, cosine 1 (orthogonal)
+INSERT INTO t VALUES
+  (1, '[1,0,0,0]'),
+  (2, '[10,0,0,0]'),
+  (3, '[1,1,0,0]'),
+  (4, '[0,1,0,0]');
+
+--echo # Every row was inserted into BOTH indexes: 4 rows x 2 indexes = 8 inserts.
+SELECT vsql_knn_index_test.kvec_insert_count() AS inserts;
+
+--echo # L2 query is served by the L2 index; nearest-first by Euclidean distance.
+--echo # id 2 ([10,0,0,0]) is FARTHEST here.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
+
+--echo # Cosine query is served by the cosine index; nearest-first by cosine
+--echo # distance. id 2 ([10,0,0,0]) is now among the NEAREST (same direction),
+--echo # the opposite of its L2 rank -- proving the cosine index, not the L2 one,
+--echo # answered this query.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4;
+
+--echo # Dropping one index leaves the other working.
+DROP INDEX idx_cos ON t;
+
+--echo # L2 query still served by the surviving L2 index.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 4;
+
+--echo # The cosine ordering no longer has an index: it falls back to a plain
+--echo # scan + sort (no distance scan), and must NOT be answered by the surviving
+--echo # L2 index. It still returns the correct cosine order.
+--replace_regex /cost=[0-9.e+-]+/cost=COST/ /rows=[0-9.e+-]+/rows=ROWS/
+EXPLAIN FORMAT=tree
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4;
+SELECT id FROM t
+ORDER BY vsql_knn_index_test.kvec_cos_distance(v, '[1,0,0,0]') LIMIT 4;
+
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

@@ -1,0 +1,55 @@
+# Prow for this repository: /commands on issues and pull requests,
+# needs-* labels, reviewers from OWNERS files, automatic merging
+# on lgtm, and labels created from prow.yaml.
+# Docs: https://github.com/cncf/prow-github-actions/blob/main/docs/installing.md
+name: Prow
+on:
+  issues:
+    types: [opened, reopened, labeled, unlabeled]
+  issue_comment:
+    types: [created]
+  # pull_request_target, not pull_request: fork pull requests get a
+  # write token, so they can be labeled and merged too. This is
+  # safe because nothing here checks out or runs pull request code;
+  # the reusable workflow only checks out cncf/prow-github-actions itself.
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, labeled, unlabeled]
+  pull_request_review:
+    types: [submitted, dismissed]
+  check_suite:
+    types: [completed]
+  # backstop for merges missed by the events above
+  schedule:
+    - cron: '0 * * * *'
+  # label-sync: run once after installing, then whenever .github/prow.yaml changes
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/prow.yaml]
+
+# the reusable workflow can use at most what is granted here
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  statuses: write
+  actions: write
+
+# One run per comment (commands are never collapsed); per event+action
+# for everything else, so a pending `synchronize` run can only be
+# superseded by a newer `synchronize` run.
+# Never cancel a run that may be merging.
+concurrency:
+  group: prow-${{ github.event_name }}-${{ github.event.action }}-${{ github.event.comment.id || github.event.pull_request.number || github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  prow:
+    if: github.event_name != 'workflow_dispatch' && github.event_name != 'push'
+    uses: cncf/prow-github-actions/.github/workflows/prow.yml@110e1bfb921393902cc15cb2925f50662c581e4d
+
+  label-sync:
+    if: github.event_name == 'workflow_dispatch' || github.event_name == 'push'
+    uses: cncf/prow-github-actions/.github/workflows/prow.yml@110e1bfb921393902cc15cb2925f50662c581e4d
+    with:
+      jobs: label-sync

@@ -1,0 +1,41 @@
+# Test that server can restart with vsql_complex extension installed
+# This verifies that schema validation on startup properly loads COMPLEX type functions
+
+# Get the default veb directory before restarting
+--let $default_veb_dir = `SELECT @@veb_dir`
+
+# Set up test-specific veb directory
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+# Copy vsql_complex.veb from default location to test-specific directory
+--exec cp $default_veb_dir/vsql_complex.veb $veb_dir/
+
+# Restart server with --veb-dir option
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE test_restart (id INT, c COMPLEX);
+
+INSERT INTO test_restart VALUES (1, '(1.5,2.5)');
+INSERT INTO test_restart VALUES (2, '(3.0,4.0)');
+
+SELECT id, c FROM test_restart ORDER BY id;
+
+# Restart with extension installed - tests that schema validation loads COMPLEX type
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+SELECT id, c FROM test_restart ORDER BY id;
+
+INSERT INTO test_restart VALUES (3, '(5.5,6.5)');
+
+SELECT id, c FROM test_restart ORDER BY id;
+
+DROP TABLE test_restart;
+
+--source include/villagesql/uninstall_complex_extension.inc

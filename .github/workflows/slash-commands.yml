@@ -1,0 +1,219 @@
+name: Slash Commands
+
+# Single front door for slash-commands posted as PR comments. Parses the
+# command, resolves the PR head SHA, reacts, refuses duplicate runs, and routes
+# to a reusable workflow.
+#
+# NOTE: issue_comment workflows always run from the DEFAULT BRANCH version of
+# this file. Changes here only take effect once merged to main; a /command on a
+# PR runs the dispatcher as it exists on main, not on the PR branch.
+#
+# To add a command:
+#   1. Ensure a reusable workflow exists (uses: ./.github/workflows/<x>.yml).
+#   2. Add it to COMMANDS in the parse step (for validation + /help).
+#   3. Add a contains(...) clause for it to the parse job's `if:` gate, so the
+#      comment provisions a runner (the gate can't read COMMANDS).
+#   4. Add a `run-<command>` caller job below, gated on the command name.
+
+on:
+  issue_comment:
+    types: [created]
+
+# run-name embeds the PR number so the parse job's already-running check can
+# associate in-flight runs with a PR (issue_comment runs all report the default
+# branch, so branch filtering is not usable).
+run-name: "${{ github.event.issue.pull_request && 'PR' || 'issue' }} #${{ github.event.issue.number }}: ${{ github.event.comment.body }}"
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+  actions: read
+
+jobs:
+  parse:
+    name: Parse command
+    runs-on: ubuntu-latest
+    # Only provision a runner for PR comments mentioning a configured command
+    # (or /help) anywhere in the body. Other comments still create a (free,
+    # skipped) run row — inherent to issue_comment — but no longer spin up a
+    # job. We use contains() rather than startsWith() so leading whitespace
+    # before the slash still matches; the trade-off is that a comment merely
+    # name-dropping a command also spins up the runner, which then no-ops
+    # because classify() keys on the first token. Keep this list in sync with
+    # COMMANDS in the parse step.
+    if: >
+      github.event.issue.pull_request && (
+        contains(github.event.comment.body, '/testall') ||
+        contains(github.event.comment.body, '/testextensions') ||
+        contains(github.event.comment.body, '/help')
+      )
+    outputs:
+      command: ${{ steps.parse.outputs.command }}
+      ref: ${{ steps.parse.outputs.ref }}
+      pr_number: ${{ steps.parse.outputs.pr_number }}
+      should_run: ${{ steps.parse.outputs.should_run }}
+    steps:
+      - name: Checkout scripts
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          sparse-checkout: scripts/
+
+      # Pure parsing/auth/dup-guard logic lives in scripts tested by
+      # scripts/ci_helpers/regtest_workflow_scripts.sh; this step is just the GitHub-API
+      # wiring (comments, reaction, run lookup) via gh. The untrusted comment
+      # body is passed through an env var (never interpolated into the script).
+      - name: Parse and validate
+        id: parse
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+          BODY: ${{ github.event.comment.body }}
+          AUTHOR_ASSOCIATION: ${{ github.event.comment.author_association }}
+          RUN_ID: ${{ github.run_id }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Registry of supported commands. Add new commands here and add a
+          # matching run-<command> caller job below.
+          COMMANDS: "testall testextensions"
+        run: |
+          set -euo pipefail
+
+          # Post a comment on the PR. PR comments require pull-requests:write —
+          # they're governed by the Pull requests permission regardless of
+          # whether you use gh pr comment or the REST /issues/{n}/comments
+          # endpoint (a PR is an issue, but the resource is still a PR).
+          post() { gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$1"; }
+          stop() { echo "should_run=false" >> "$GITHUB_OUTPUT"; exit 0; }
+          help_text() {
+            printf '**Slash commands**\n\n'
+            for c in $COMMANDS; do printf -- '- `/%s`\n' "$c"; done
+            printf -- '- `/help`\n'
+          }
+
+          # Classify (pure, tested). Read key=value lines without eval.
+          classout="$(./scripts/ci_helpers/villagesql_slash_classify.sh)"
+          kind="$(printf '%s\n' "$classout" | sed -n 's/^kind=//p')"
+          command="$(printf '%s\n' "$classout" | sed -n 's/^command=//p')"
+
+          case "$kind" in
+            ignore) stop ;;
+            help)   post "$(help_text)"; stop ;;
+            unauthorized)
+              post "🔒 \`/$command\` is restricted to organization members. (Your association: \`$AUTHOR_ASSOCIATION\`.)"
+              stop ;;
+          esac
+
+          # kind == run. Best-effort duplicate guard: if a previous Slash
+          # Commands run for THIS PR is still in flight, point at it and stop.
+          runs_json="$(gh api "repos/$REPO/actions/workflows/slash-commands.yml/runs?per_page=50")"
+          dup="$(printf '%s' "$runs_json" \
+            | ./scripts/ci_helpers/villagesql_slash_find_running.sh "PR #$PR_NUMBER:" "$RUN_ID")"
+          if [ -n "$dup" ]; then
+            num="${dup%%$'\t'*}"; url="${dup#*$'\t'}"
+            post "⏳ A Slash Commands run is already in progress for this PR: [run #$num]($url). Waiting for it to finish — re-comment once it completes."
+            stop
+          fi
+
+          # Resolve PR head SHA.
+          ref="$(gh pr view "$PR_NUMBER" --repo "$REPO" --json headRefOid -q .headRefOid)"
+
+          # Acknowledge receipt (best-effort).
+          gh api -X POST "repos/$REPO/issues/comments/$COMMENT_ID/reactions" \
+            -f content=rocket >/dev/null 2>&1 || true
+
+          # "Started" comment; the result job posts a separate finish comment.
+          post "$(printf '## 🚀 \`/%s\` started\n\nRunning against \`%s\`. [View run](%s)' \
+            "$command" "${ref:0:12}" "$RUN_URL")"
+
+          {
+            echo "command=$command"
+            echo "ref=$ref"
+            echo "pr_number=$PR_NUMBER"
+            echo "should_run=true"
+          } >> "$GITHUB_OUTPUT"
+          echo "/$command on PR #$PR_NUMBER: testing $ref"
+
+  run-testall:
+    needs: parse
+    if: needs.parse.outputs.should_run == 'true' && needs.parse.outputs.command == 'testall'
+    uses: ./.github/workflows/full-test-suite.yml
+    with:
+      ref: ${{ needs.parse.outputs.ref }}
+      build-type: debug
+      artifact-prefix: testall
+    secrets: inherit
+
+  # "Finished" comment for /testall. Lives in the caller (not full-test-suite.yml)
+  # so the reusable workflow doesn't need pull-requests:write — only this
+  # workflow, which already holds it, does the commenting.
+  report-testall:
+    needs: [parse, run-testall]
+    if: always() && needs.parse.outputs.command == 'testall' && needs.parse.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Post comment
+      env:
+        GH_TOKEN: ${{ github.token }}
+        PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+        RESULT: ${{ needs.run-testall.result }}
+      run: |
+        case "$RESULT" in
+          success)   ICON="✅" ;;
+          cancelled) ICON="⚠️" ;;
+          *)         ICON="❌" ;;
+        esac
+        RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        BODY="$(printf '## %s \`/testall\` %s\n\nFull test suite (unit + big + all suites) finished with result \`%s\`.\n\n[View run](%s)' \
+          "$ICON" "$RESULT" "$RESULT" "$RUN_URL")"
+        gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "$BODY"
+
+  run-testextensions:
+    needs: parse
+    if: needs.parse.outputs.should_run == 'true' && needs.parse.outputs.command == 'testextensions'
+    uses: ./.github/workflows/extension-compat-suite.yml
+    with:
+      ref: ${{ needs.parse.outputs.ref }}
+      platform_filter: linux-x86_64
+      # abi_filter omitted => both ABIs, per-extension declared
+      slack_notify: 'false'
+    secrets: inherit
+
+  # "Finished" comment for /testextensions. Lives in the caller (not
+  # extension-compat-suite.yml) so the reusable workflow doesn't need
+  # pull-requests:write — only this workflow, which already holds it, comments.
+  comment-testextensions:
+    needs: [parse, run-testextensions]
+    if: always() && needs.parse.outputs.command == 'testextensions' && needs.parse.outputs.should_run == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout scripts
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 1
+          sparse-checkout: scripts/
+
+      - name: Download results
+        # Don't fail the comment if no results exist (e.g. server build failed
+        # so no test-extension jobs ran) — the script reports that case.
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: extresult-*
+          path: extresults/
+          merge-multiple: true
+
+      # Summary markdown is built by a script tested by
+      # scripts/ci_helpers/regtest_workflow_scripts.sh, then posted with gh.
+      - name: Post comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ needs.parse.outputs.pr_number }}
+          BUILD_RESULT: ${{ needs.run-testextensions.outputs.build-server-result }}
+        run: |
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BODY="$(./scripts/ci_helpers/villagesql_ext_compat_summary.sh \
+            extresults "$BUILD_RESULT" "$RUN_URL")"
+          gh pr comment "$PR_NUMBER" --repo "${{ github.repository }}" --body "$BODY"

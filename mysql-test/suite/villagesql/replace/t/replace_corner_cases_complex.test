@@ -1,0 +1,96 @@
+# Test REPLACE corner cases with COMPLEX type
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX,
+    description VARCHAR(100)
+);
+
+# Test scientific notation
+INSERT INTO t1 VALUES (1, '(1.0,2.0)', 'original');
+REPLACE INTO t1 VALUES (1, '(1e10,1e-10)', 'scientific1');
+REPLACE INTO t1 VALUES (2, '(1e100,1e-100)', 'scientific2');
+REPLACE INTO t1 VALUES (3, '(1e-50,1e50)', 'scientific3');
+
+SELECT id, val, description FROM t1 WHERE id <= 3 ORDER BY id;
+
+# Test whitespace variations
+REPLACE INTO t1 VALUES (4, '( 3.0 , 4.0 )', 'whitespace1');
+REPLACE INTO t1 VALUES (5, '(5.0, 6.0)', 'whitespace2');
+REPLACE INTO t1 VALUES (6, '( 7.0, 8.0 )', 'whitespace3');
+REPLACE INTO t1 VALUES (7, '(9.0 ,10.0)', 'whitespace4');
+
+SELECT id, val, description FROM t1 WHERE id BETWEEN 4 AND 7 ORDER BY id;
+
+# Test very large and very small values
+REPLACE INTO t1 VALUES (8, '(999999999.123456789,-999999999.987654321)', 'large');
+REPLACE INTO t1 VALUES (9, '(0.000000001,0.000000002)', 'small_positive');
+REPLACE INTO t1 VALUES (10, '(-0.000000001,-0.000000002)', 'small_negative');
+
+SELECT id, val, description FROM t1 WHERE id BETWEEN 8 AND 10 ORDER BY id;
+
+# Test NULL handling patterns
+REPLACE INTO t1 VALUES (11, NULL, 'null1');
+REPLACE INTO t1 VALUES (12, '(1.0,2.0)', 'value1');
+REPLACE INTO t1 VALUES (11, '(3.0,4.0)', 'replace_null_with_value');
+REPLACE INTO t1 VALUES (12, NULL, 'replace_value_with_null');
+
+SELECT id, val, description FROM t1 WHERE id BETWEEN 11 AND 12 ORDER BY id;
+
+# Test zero variant canonicalization
+REPLACE INTO t1 VALUES (13, '(0,0)', 'zero1');
+REPLACE INTO t1 VALUES (14, '(-0,0)', 'zero2');
+REPLACE INTO t1 VALUES (15, '(0,-0)', 'zero3');
+REPLACE INTO t1 VALUES (16, '(-0,-0)', 'zero4');
+
+SELECT id, val, description FROM t1 WHERE id BETWEEN 13 AND 16 ORDER BY id;
+
+# Test batch REPLACE with mix of new and existing
+REPLACE INTO t1 VALUES
+    (13, '(100,100)', 'batch1'),
+    (14, '(200,200)', 'batch2'),
+    (17, '(300,300)', 'batch3'),
+    (18, '(400,400)', 'batch4');
+
+SELECT id, val, description FROM t1 WHERE id BETWEEN 13 AND 18 ORDER BY id;
+
+# Test repeated REPLACE on same key
+REPLACE INTO t1 VALUES (20, '(1.0,1.0)', 'repeat1');
+REPLACE INTO t1 VALUES (20, '(2.0,2.0)', 'repeat2');
+REPLACE INTO t1 VALUES (20, '(3.0,3.0)', 'repeat3');
+REPLACE INTO t1 VALUES (20, '(4.0,4.0)', 'repeat4');
+
+SELECT id, val, description FROM t1 WHERE id = 20 ORDER BY id;
+
+# Test batch with same key appearing multiple times (last wins)
+REPLACE INTO t1 VALUES
+    (21, '(10,10)', 'multi1'),
+    (21, '(20,20)', 'multi2'),
+    (21, '(30,30)', 'multi3');
+
+SELECT id, val, description FROM t1 WHERE id = 21 ORDER BY id;
+
+# Test large batch (30+ rows)
+REPLACE INTO t1 VALUES
+    (30, '(30,30)', 'batch'), (31, '(31,31)', 'batch'), (32, '(32,32)', 'batch'),
+    (33, '(33,33)', 'batch'), (34, '(34,34)', 'batch'), (35, '(35,35)', 'batch'),
+    (36, '(36,36)', 'batch'), (37, '(37,37)', 'batch'), (38, '(38,38)', 'batch'),
+    (39, '(39,39)', 'batch'), (40, '(40,40)', 'batch'), (41, '(41,41)', 'batch'),
+    (42, '(42,42)', 'batch'), (43, '(43,43)', 'batch'), (44, '(44,44)', 'batch'),
+    (45, '(45,45)', 'batch'), (46, '(46,46)', 'batch'), (47, '(47,47)', 'batch'),
+    (48, '(48,48)', 'batch'), (49, '(49,49)', 'batch'), (50, '(50,50)', 'batch'),
+    (51, '(51,51)', 'batch'), (52, '(52,52)', 'batch'), (53, '(53,53)', 'batch'),
+    (54, '(54,54)', 'batch'), (55, '(55,55)', 'batch'), (56, '(56,56)', 'batch'),
+    (57, '(57,57)', 'batch'), (58, '(58,58)', 'batch'), (59, '(59,59)', 'batch');
+
+SELECT COUNT(*) as large_batch_count FROM t1 WHERE id BETWEEN 30 AND 59;
+SELECT id, val FROM t1 WHERE id IN (30, 45, 59) ORDER BY id;
+
+# Final verification - show all data
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

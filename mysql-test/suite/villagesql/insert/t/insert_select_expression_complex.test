@@ -1,0 +1,112 @@
+# Test INSERT INTO ... SELECT expression with COMPLEX type
+# Grammar: INSERT [INTO] tbl_name [(col_name [, col_name] ...)] SELECT expr ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_source (
+    id INT PRIMARY KEY,
+    real_part DOUBLE,
+    imag_part DOUBLE
+);
+
+# Insert 30+ rows with various real and imaginary parts including zero variants
+INSERT INTO t_source VALUES
+    (1, 15.0, 20.0),
+    (2, -0.0, 0.0),
+    (3, -7.5, -8.5),
+    (4, 0.0, 0.0),
+    (5, 22.0, -13.0),
+    (6, 0.0, -0.0),
+    (7, -18.0, 9.0),
+    (8, 3.5, 4.2),
+    (9, -0.0, -0.0),
+    (10, 11.5, -12.5),
+    (11, 0.0, 0.0),
+    (12, -25.0, -30.0),
+    (13, 19.0, 21.0),
+    (14, -0.0, 0.0),
+    (15, 7.0, -5.0),
+    (16, -14.0, 16.0),
+    (17, 0.0, -0.0),
+    (18, 26.0, 28.0),
+    (19, -9.5, 11.5),
+    (20, -0.0, -0.0),
+    (21, 33.0, -35.0),
+    (22, 0.0, 0.0),
+    (23, -22.0, 24.0),
+    (24, 17.5, 19.5),
+    (25, 0.0, -0.0),
+    (26, -31.0, -32.0),
+    (27, 29.0, 30.0),
+    (28, -0.0, 0.0),
+    (29, 12.0, -14.0),
+    (30, -27.0, 28.0),
+    (31, 0.0, 0.0),
+    (32, 34.0, -36.0),
+    (33, -0.0, -0.0);
+
+CREATE TABLE t_target (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Insert complex values with explicit conversion of string expression
+INSERT INTO t_target (id, val)
+SELECT id, VSQL_COMPLEX.COMPLEX::from_string(CONCAT('(', real_part, ',', imag_part, ')')) FROM t_source;
+
+SELECT * FROM t_target ORDER BY id;
+
+# Test ordering by COMPLEX column
+SELECT * FROM t_target ORDER BY val, id;
+
+DROP TABLE t_target;
+
+# Test with multiple COMPLEX columns constructed from expressions
+CREATE TABLE t_source_multi (
+    id INT PRIMARY KEY,
+    real_a DOUBLE,
+    imag_a DOUBLE,
+    real_b DOUBLE,
+    imag_b DOUBLE,
+    real_c DOUBLE,
+    imag_c DOUBLE
+);
+
+INSERT INTO t_source_multi VALUES
+    (1, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0),
+    (2, 0.0, 0.0, -0.0, 0.0, 0.0, -0.0),
+    (3, -7.0, 8.0, 9.0, -10.0, -11.0, -12.0),
+    (4, 13.5, 14.5, -15.5, 16.5, 17.5, -18.5),
+    (5, -19.0, -20.0, 21.0, 22.0, -23.0, 24.0),
+    (6, 0.0, -0.0, 24.0, -25.0, -0.0, 0.0),
+    (7, 26.0, 27.0, -0.0, -0.0, 28.0, 29.0),
+    (8, -30.0, 31.0, 32.0, 33.0, 0.0, 0.0),
+    (9, 34.0, -35.0, 0.0, 0.0, -36.0, -37.0),
+    (10, -0.0, 0.0, -38.0, 39.0, 40.0, -41.0);
+
+CREATE TABLE t_target_multi (
+    id INT PRIMARY KEY,
+    val_a COMPLEX,
+    val_b COMPLEX,
+    val_c COMPLEX
+);
+
+# Insert multiple COMPLEX columns with explicit conversion of string expressions
+INSERT INTO t_target_multi (id, val_a, val_b, val_c)
+SELECT id,
+       VSQL_COMPLEX.COMPLEX::from_string(CONCAT('(', real_a, ',', imag_a, ')')),
+       VSQL_COMPLEX.COMPLEX::from_string(CONCAT('(', real_b, ',', imag_b, ')')),
+       VSQL_COMPLEX.COMPLEX::from_string(CONCAT('(', real_c, ',', imag_c, ')'))
+FROM t_source_multi;
+
+SELECT * FROM t_target_multi ORDER BY id;
+
+# Test ordering by multiple COMPLEX columns
+SELECT * FROM t_target_multi ORDER BY val_a, val_b;
+SELECT * FROM t_target_multi ORDER BY val_b, val_c;
+
+DROP TABLE t_source;
+DROP TABLE t_source_multi;
+DROP TABLE t_target_multi;
+
+--source include/villagesql/uninstall_complex_extension.inc

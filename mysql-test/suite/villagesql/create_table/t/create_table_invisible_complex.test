@@ -1,0 +1,110 @@
+# Test CREATE TABLE with INVISIBLE COMPLEX columns
+
+--source include/villagesql/install_complex_extension.inc
+
+# Test basic INVISIBLE COMPLEX column
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX INVISIBLE,
+    name VARCHAR(50)
+);
+
+SHOW CREATE TABLE t1;
+
+# Test INSERT - must explicitly name INVISIBLE columns
+INSERT INTO t1 (id, val, name) VALUES (1, '(1.0,2.0)', 'test1');
+INSERT INTO t1 (id, val, name) VALUES (2, '(3.0,4.0)', 'test2');
+
+# SELECT * should NOT include INVISIBLE column
+SELECT * FROM t1 ORDER BY id;
+
+# Explicit SELECT should include INVISIBLE column
+SELECT id, val, name FROM t1 ORDER BY id;
+
+# Test UPDATE on INVISIBLE column
+UPDATE t1 SET val = '(5.0,6.0)' WHERE id = 1;
+SELECT id, val, name FROM t1 WHERE id = 1;
+
+# Test DELETE with WHERE on INVISIBLE column
+DELETE FROM t1 WHERE val = '(3.0,4.0)';
+SELECT id, val, name FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+# Test multiple COMPLEX columns with mixed visibility
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    visible_val COMPLEX,
+    invisible_val COMPLEX INVISIBLE,
+    description VARCHAR(100)
+);
+
+SHOW CREATE TABLE t2;
+
+INSERT INTO t2 (id, visible_val, invisible_val, description)
+VALUES (1, '(1.0,1.0)', '(2.0,2.0)', 'mixed visibility');
+
+# SELECT * should only show visible COMPLEX column
+SELECT * FROM t2;
+
+# Explicit SELECT shows both
+SELECT id, visible_val, invisible_val, description FROM t2;
+
+DROP TABLE t2;
+
+# Test INVISIBLE COMPLEX column with INDEX
+CREATE TABLE t3 (
+    id INT PRIMARY KEY,
+    val COMPLEX INVISIBLE,
+    INDEX idx_val (val)
+);
+
+SHOW CREATE TABLE t3;
+
+INSERT INTO t3 (id, val) VALUES (1, '(1.0,2.0)');
+INSERT INTO t3 (id, val) VALUES (2, '(3.0,4.0)');
+INSERT INTO t3 (id, val) VALUES (3, '(1.0,2.0)');
+
+# Query using indexed INVISIBLE column
+SELECT id, val FROM t3 WHERE val = '(1.0,2.0)' ORDER BY id;
+
+# EXPLAIN should show index usage
+EXPLAIN SELECT id, val FROM t3 WHERE val = '(1.0,2.0)';
+
+DROP TABLE t3;
+
+# Test INVISIBLE COMPLEX column as UNIQUE key
+CREATE TABLE t4 (
+    id INT PRIMARY KEY,
+    unique_val COMPLEX INVISIBLE UNIQUE,
+    name VARCHAR(50)
+);
+
+SHOW CREATE TABLE t4;
+
+INSERT INTO t4 (id, unique_val, name) VALUES (1, '(1.0,1.0)', 'first');
+INSERT INTO t4 (id, unique_val, name) VALUES (2, '(2.0,2.0)', 'second');
+
+--error ER_DUP_ENTRY
+INSERT INTO t4 (id, unique_val, name) VALUES (3, '(1.0,1.0)', 'duplicate');
+
+SELECT * FROM t4 ORDER BY id;
+SELECT id, unique_val, name FROM t4 ORDER BY id;
+
+DROP TABLE t4;
+
+# Test INVISIBLE COMPLEX column with NULL
+CREATE TABLE t5 (
+    id INT PRIMARY KEY,
+    nullable_val COMPLEX INVISIBLE,
+    name VARCHAR(50)
+);
+
+INSERT INTO t5 (id, nullable_val, name) VALUES (1, '(1.0,2.0)', 'with value');
+INSERT INTO t5 (id, nullable_val, name) VALUES (2, NULL, 'with null');
+
+SELECT id, nullable_val, name FROM t5 ORDER BY id;
+
+DROP TABLE t5;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,18 @@
+# Test INSERT into COMPLEX column from user variable containing valid string
+# This tests implicit casting from @var (string) to COMPLEX type
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+
+SET @complex_val = '(1.0,2.0)';
+INSERT INTO t_complex VALUES (1, @complex_val);
+
+SET @complex_val2 = '(3.5,-4.5)';
+INSERT INTO t_complex VALUES (2, @complex_val2);
+
+SELECT id, val FROM t_complex ORDER BY id;
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

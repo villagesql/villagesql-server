@@ -1,0 +1,15 @@
+# Test INSERT into COMPLEX column from user variable containing invalid string
+# This tests that implicit casting from @var fails with an invalid COMPLEX value
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+
+SET @bad_val = 'not_a_complex';
+
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t_complex VALUES (1, @bad_val);
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

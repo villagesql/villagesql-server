@@ -1,0 +1,23 @@
+# Test CREATE TABLE with COMPLEX DEFAULT values
+# Tests DEFAULT value constraints on COMPLEX columns
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    signal_complex COMPLEX DEFAULT '(0.0,0.0)',
+    impedance COMPLEX DEFAULT '(1.0,0.0)'
+);
+
+SHOW COLUMNS FROM t1;
+
+INSERT INTO t1 (id) VALUES (1);
+INSERT INTO t1 VALUES (2, '(2.5,3.5)', '(0.5,1.5)');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

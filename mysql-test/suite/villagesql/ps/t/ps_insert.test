@@ -1,0 +1,121 @@
+# Test INSERT operations with prepared statements and COMPLEX custom types
+# Covers: Simple INSERT, INSERT with parameters, multi-row INSERT, ON DUPLICATE KEY UPDATE
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Setup test table
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+
+--echo #
+--echo # Test 1: INSERT with literal COMPLEX values
+--echo #
+
+PREPARE stmt1 FROM 'INSERT INTO t1 VALUES (1, \'(1.0,2.0)\')';
+EXECUTE stmt1;
+SELECT * FROM t1;
+DEALLOCATE PREPARE stmt1;
+
+--echo #
+--echo # Test 2: INSERT with parameters (both columns)
+--echo #
+
+PREPARE stmt2 FROM 'INSERT INTO t1 VALUES (?, ?)';
+SET @id = 2;
+SET @val = '(3.0,4.0)';
+EXECUTE stmt2 USING @id, @val;
+SELECT * FROM t1 WHERE id = 2;
+DEALLOCATE PREPARE stmt2;
+
+--echo #
+--echo # Test 3: INSERT with multiple parameter sets
+--echo #
+
+PREPARE stmt3 FROM 'INSERT INTO t1 VALUES (?, ?)';
+SET @id = 3;
+SET @val = '(5.0,6.0)';
+EXECUTE stmt3 USING @id, @val;
+SET @id = 4;
+SET @val = '(7.0,8.0)';
+EXECUTE stmt3 USING @id, @val;
+SELECT * FROM t1 WHERE id IN (3, 4) ORDER BY id;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Test 4: INSERT with column list
+--echo #
+
+PREPARE stmt4 FROM 'INSERT INTO t1 (id, val) VALUES (?, ?)';
+SET @id = 5;
+SET @val = '(9.0,10.0)';
+EXECUTE stmt4 USING @id, @val;
+SELECT * FROM t1 WHERE id = 5;
+DEALLOCATE PREPARE stmt4;
+
+--echo #
+--echo # Test 5: INSERT with NULL COMPLEX value
+--echo #
+
+PREPARE stmt5 FROM 'INSERT INTO t1 VALUES (?, ?)';
+SET @id = 6;
+SET @val = NULL;
+EXECUTE stmt5 USING @id, @val;
+SELECT * FROM t1 WHERE id = 6;
+DEALLOCATE PREPARE stmt5;
+
+--echo #
+--echo # Test 6: INSERT with ON DUPLICATE KEY UPDATE
+--echo #
+
+PREPARE stmt6 FROM 'INSERT INTO t1 VALUES (?, ?) ON DUPLICATE KEY UPDATE val = ?';
+SET @id = 1;
+SET @val_insert = '(99.0,99.0)';
+SET @val_update = '(100.0,100.0)';
+EXECUTE stmt6 USING @id, @val_insert, @val_update;
+SELECT * FROM t1 WHERE id = 1;
+DEALLOCATE PREPARE stmt6;
+
+--echo #
+--echo # Test 7: Multi-row INSERT with parameters
+--echo #
+
+PREPARE stmt7 FROM 'INSERT INTO t1 VALUES (?, ?), (?, ?)';
+SET @id1 = 20;
+SET @val1 = '(20.0,21.0)';
+SET @id2 = 21;
+SET @val2 = '(22.0,23.0)';
+EXECUTE stmt7 USING @id1, @val1, @id2, @val2;
+SELECT * FROM t1 WHERE id IN (20, 21) ORDER BY id;
+DEALLOCATE PREPARE stmt7;
+
+--echo #
+--echo # Test 8: Error case - Type mismatch (invalid COMPLEX format)
+--echo #
+
+PREPARE stmt8 FROM 'INSERT INTO t1 VALUES (?, ?)';
+SET @id = 50;
+SET @bad_val = 'not_a_complex_number';
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+EXECUTE stmt8 USING @id, @bad_val;
+DEALLOCATE PREPARE stmt8;
+
+--echo #
+--echo # Test 9: Error case - Duplicate key
+--echo #
+
+PREPARE stmt9 FROM 'INSERT INTO t1 VALUES (?, ?)';
+SET @dup_id = 1;
+SET @val = '(50.0,50.0)';
+--error ER_DUP_ENTRY
+EXECUTE stmt9 USING @dup_id, @val;
+DEALLOCATE PREPARE stmt9;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

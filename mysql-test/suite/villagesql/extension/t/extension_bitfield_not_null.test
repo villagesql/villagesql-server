@@ -1,0 +1,68 @@
+# End-to-end test for issue #535 follow-up: intrinsic default for a
+# variable-length, non-parameterized custom column.
+#
+# Before this fix, init_intrinsic_default() skipped any type whose
+# persisted_length was <= 0, so variable-length types (persisted_length = -1)
+# never pre-encoded a default. They now encode a default into the field's max
+# capacity and store whatever non-empty result the encoder produces. For
+# BITFIELD, from_string("") yields a valid empty bit field (a 2-byte
+# little-endian bit-count header with count 0), so BITFIELD now has a usable
+# intrinsic default: an empty (zero-bit) value.
+#
+# The intrinsic default is consumed when a bad value is stored under
+# INSERT IGNORE / non-strict mode (mirroring MySQL storing 0/'' for bad values),
+# and as the reset value for a NOT NULL column.
+#
+# Note: this is an integration test confirming the feature works end to end.
+# BITFIELD's decode tolerates a zero-byte value (it reads bit count 0), so the
+# defaulted value renders identically whether stored as 2 bytes or 0 bytes; the
+# byte-level distinction (a valid encoded default vs. an empty buffer) is
+# asserted directly in the type_context-t unit test
+# (TypeContextTest.VariableLengthTypeEncodesIntrinsicDefault).
+
+--echo # Install the variable-length, non-parameterized bit field extension.
+INSTALL EXTENSION vsql_bitfield_test;
+
+CREATE TABLE bits (
+  id INT PRIMARY KEY,
+  b vsql_bitfield_test.BITFIELD NOT NULL,
+  b_optional vsql_bitfield_test.BITFIELD
+);
+
+--echo # Providing the NOT NULL column explicitly works.
+INSERT INTO bits (id, b) VALUES (1, '101');
+INSERT INTO bits (id, b, b_optional) VALUES (2, '1111', '00');
+
+--echo # Omitting the NOT NULL column in strict mode is rejected. DEFAULT values
+--echo # do not apply to custom types, so the error is "no default for field".
+--error ER_NO_DEFAULT_FOR_FIELD
+INSERT INTO bits (id, b_optional) VALUES (3, '1');
+
+--echo # Explicitly storing NULL into the NOT NULL column is rejected.
+--error ER_BAD_NULL_ERROR
+INSERT INTO bits (id, b) VALUES (4, NULL);
+
+--echo # A bad value under INSERT IGNORE falls back to the intrinsic default
+--echo # rather than failing. ('1021' has a non-bit character.) The bad value is
+--echo # replaced by the empty bit field, and the omitted NOT NULL column 'b'
+--echo # also gets the empty default.
+INSERT IGNORE INTO bits (id, b_optional) VALUES (5, '1021');
+
+--echo # Same fallback for a bad value in the NOT NULL column itself.
+INSERT IGNORE INTO bits (id, b) VALUES (6, '2');
+
+--echo # The defaulted values are valid, zero-length bit fields (not garbage and
+--echo # not NULL): bitfield_length is 0 and they round-trip to the empty string.
+SELECT id, b, b_optional,
+       vsql_bitfield_test.bitfield_length(b) AS nbits,
+       b IS NULL AS b_is_null,
+       b_optional IS NULL AS opt_is_null
+FROM bits ORDER BY id;
+
+--echo # The intrinsic default round-trips: re-encoding an explicit '' matches
+--echo # the defaulted value under the type's compare.
+SELECT id FROM bits WHERE b = '' ORDER BY id;
+
+--echo # Clean up.
+DROP TABLE bits;
+UNINSTALL EXTENSION vsql_bitfield_test;

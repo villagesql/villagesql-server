@@ -1,0 +1,6 @@
+CREATE TABLE t1 (id INT, val COMPLEX);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/complex_set.dat' INTO TABLE t1 (id, @v) SET val = @v;
+ERROR HY000: Incorrect COMPLEX value: 'not_a_complex_value' for column 'val' at row 6
+SELECT * FROM t1 ORDER BY id;
+id	val
+DROP TABLE t1;

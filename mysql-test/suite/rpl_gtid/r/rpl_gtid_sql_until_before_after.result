@@ -1,0 +1,72 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+CREATE TABLE t1(c1 INTEGER) ENGINE= Innodb;
+include/rpl/sync_to_replica.inc
+[connection slave]
+include/rpl/stop_replica.inc
+[connection master]
+INSERT INTO t1 VALUES(2);
+INSERT INTO t1 VALUES(3);
+INSERT INTO t1 VALUES(4);
+INSERT INTO t1 VALUES(5);
+INSERT INTO t1 VALUES(6);
+INSERT INTO t1 VALUES(7);
+INSERT INTO t1 VALUES(8);
+INSERT INTO t1 VALUES(9);
+INSERT INTO t1 VALUES(10);
+[connection slave]
+START REPLICA UNTIL SQL_BEFORE_GTIDS= "MASTER_UUID:4-5", SOURCE_LOG_FILE= 'foo.bin', SOURCE_LOG_POS= 100;
+ERROR HY000: Incorrect parameter or combination of parameters for START REPLICA UNTIL
+START REPLICA SQL_THREAD UNTIL SQL_BEFORE_GTIDS= "MASTER_UUID:4-5", SOURCE_LOG_FILE= 'foo.bin', SOURCE_LOG_POS= 100;
+ERROR HY000: Incorrect parameter or combination of parameters for START REPLICA UNTIL
+START REPLICA IO_THREAD UNTIL SQL_BEFORE_GTIDS= "MASTER_UUID:4-5", SOURCE_LOG_FILE= 'foo.bin', SOURCE_LOG_POS= 100;
+ERROR HY000: Incorrect parameter or combination of parameters for START REPLICA UNTIL
+START REPLICA FOO UNTIL SQL_BEFORE_GTIDS= "MASTER_UUID:4-5";
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'FOO UNTIL SQL_BEFORE_GTIDS= "MASTER_UUID:4-5"' at line 1
+Check that START REPLICA IO_THREAD UNTIL ... maintains old behaviour, condition is ignored.
+START REPLICA IO_THREAD UNTIL SQL_BEFORE_GTIDS= "MASTER_UUID:4-5";
+Warnings:
+Note	1279	SQL thread is not to be started so UNTIL options are ignored
+Wait until IO Thread reads all master binlog and stop replica.
+include/rpl/wait_for_replica_status.inc [Retrieved_Gtid_Set]
+include/rpl/stop_receiver.inc
+SQL thread must stop *before* INSERT 4
+START REPLICA SQL_THREAD UNTIL SQL_BEFORE_GTIDS= "MASTER_UUID:4-5";
+include/rpl/wait_for_applier_to_stop.inc
+include/assert.inc [Rows until 3 in t1 must be replicated now]
+SQL thread must stop *after* INSERT 5
+START REPLICA SQL_THREAD UNTIL SQL_AFTER_GTIDS= "MASTER_UUID:4-5";
+include/rpl/wait_for_applier_to_stop.inc
+include/assert.inc [Rows until 5 in t1 must be replicated now]
+SQL thread must stop *before* INSERT 6
+START REPLICA SQL_THREAD, IO_THREAD UNTIL SQL_BEFORE_GTIDS= "MASTER_UUID:2-7";
+include/rpl/wait_for_applier_to_stop.inc
+include/assert.inc [Rows until 5 in t1 must be replicated now]
+SQL thread must stop *after* INSERT 5
+1-5 are already applied so it will stop immediately
+START REPLICA SQL_THREAD, IO_THREAD UNTIL SQL_AFTER_GTIDS= "MASTER_UUID:1-5";
+include/rpl/wait_for_applier_to_stop.inc
+include/assert.inc [Rows until 5 in t1 must be replicated now]
+SQL thread must stop *before* INSERT 10
+START REPLICA UNTIL SQL_BEFORE_GTIDS= "MASTER_UUID:10";
+include/rpl/wait_for_applier_to_stop.inc
+include/assert.inc [Rows until 9 in t1 must be replicated now]
+SQL thread must stop *before* INSERT 3-6
+3-6 is already applied so it will stop immediately
+START REPLICA UNTIL SQL_BEFORE_GTIDS= "MASTER_UUID:3-6";
+include/rpl/wait_for_applier_to_stop.inc
+include/assert.inc [Rows until 9 in t1 must be replicated now]
+SQL thread must stop *before* INSERT 9
+9 is already applied so it will stop immediately
+START REPLICA UNTIL SQL_BEFORE_GTIDS= "MASTER_UUID:9";
+include/rpl/wait_for_applier_to_stop.inc
+include/assert.inc [Rows until 9 in t1 must be replicated now]
+Sync slave with master
+include/rpl/start_replica.inc
+SELECT WAIT_FOR_EXECUTED_GTID_SET('MASTER_UUID:10');
+include/assert.inc [Rows until 10 in t1 must be replicated now]
+DROP TABLE t1;
+include/rpl/deinit.inc

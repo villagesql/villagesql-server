@@ -1,0 +1,8 @@
+--source include/have_mecab.inc
+
+--source suite/innodb_fts/include/percona_install_mecab_plugin.inc
+
+--let $PARSER=WITH PARSER MECAB
+--source suite/innodb_fts/include/percona_null_character.inc
+
+--source suite/innodb_fts/include/percona_uninstall_mecab_plugin.inc

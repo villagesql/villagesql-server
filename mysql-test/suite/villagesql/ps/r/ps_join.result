@@ -1,0 +1,212 @@
+#
+# Setup test data
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX, t1_id INT);
+CREATE TABLE t3 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)'),
+(3, '(5.0,6.0)'),
+(4, '(7.0,8.0)');
+INSERT INTO t2 VALUES
+(10, '(10.0,11.0)', 1),
+(11, '(12.0,13.0)', 1),
+(12, '(14.0,15.0)', 2),
+(13, '(16.0,17.0)', 99);
+INSERT INTO t3 VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)'),
+(5, '(9.0,10.0)');
+#
+# Test 1: INNER JOIN on INT column
+#
+PREPARE stmt1 FROM 'SELECT t1.id, t1.val, t2.val FROM t1 JOIN t2 ON t1.id = t2.t1_id WHERE t1.id = ?';
+SET @id = 1;
+EXECUTE stmt1 USING @id;
+id	val	val
+1	(1,2)	(10,11)
+1	(1,2)	(12,13)
+DEALLOCATE PREPARE stmt1;
+#
+# Test 2: INNER JOIN on COMPLEX column
+#
+PREPARE stmt2 FROM 'SELECT t1.id, t3.id FROM t1 JOIN t3 ON t1.val = t3.val WHERE t1.id = ?';
+SET @id = 1;
+EXECUTE stmt2 USING @id;
+id	id
+1	1
+DEALLOCATE PREPARE stmt2;
+#
+# Test 3: LEFT JOIN with COMPLEX column
+#
+PREPARE stmt3 FROM 'SELECT t1.id, t1.val, t3.id FROM t1 LEFT JOIN t3 ON t1.val = t3.val WHERE t1.id > ? ORDER BY t1.id';
+SET @min_id = 0;
+EXECUTE stmt3 USING @min_id;
+id	val	id
+1	(1,2)	1
+2	(3,4)	2
+3	(5,6)	NULL
+4	(7,8)	NULL
+DEALLOCATE PREPARE stmt3;
+#
+# Test 4: LEFT JOIN with parameter in WHERE on joined table
+#
+PREPARE stmt4 FROM 'SELECT t1.id, t1.val, t2.val FROM t1 LEFT JOIN t2 ON t1.id = t2.t1_id WHERE t2.id = ? OR t2.id IS NULL ORDER BY t1.id';
+SET @t2_id = 10;
+EXECUTE stmt4 USING @t2_id;
+id	val	val
+1	(1,2)	(10,11)
+3	(5,6)	NULL
+4	(7,8)	NULL
+DEALLOCATE PREPARE stmt4;
+#
+# Test 5: RIGHT JOIN
+#
+PREPARE stmt5 FROM 'SELECT t1.id, t2.id, t2.val FROM t1 RIGHT JOIN t2 ON t1.id = t2.t1_id WHERE t2.t1_id > ?';
+SET @min_id = 0;
+EXECUTE stmt5 USING @min_id;
+id	id	val
+1	10	(10,11)
+1	11	(12,13)
+2	12	(14,15)
+NULL	13	(16,17)
+DEALLOCATE PREPARE stmt5;
+#
+# Test 6: Self-join on COMPLEX column
+#
+PREPARE stmt6 FROM 'SELECT a.id, b.id FROM t1 a JOIN t1 b ON a.val = b.val WHERE a.id < b.id AND a.val = ?';
+SET @val = '(1.0,2.0)';
+EXECUTE stmt6 USING @val;
+id	id
+DEALLOCATE PREPARE stmt6;
+#
+# Test 7: Multi-table join (3 tables)
+#
+PREPARE stmt7 FROM 'SELECT t1.id, t1.val, t2.val, t3.val FROM t1 JOIN t2 ON t1.id = t2.t1_id JOIN t3 ON t1.val = t3.val WHERE t1.id = ?';
+SET @id = 1;
+EXECUTE stmt7 USING @id;
+id	val	val	val
+1	(1,2)	(10,11)	(1,2)
+1	(1,2)	(12,13)	(1,2)
+DEALLOCATE PREPARE stmt7;
+#
+# Test 8: CROSS JOIN with WHERE on COMPLEX
+#
+PREPARE stmt8 FROM 'SELECT t1.id, t3.id FROM t1 CROSS JOIN t3 WHERE t1.val = t3.val AND t1.id = ?';
+SET @id = 2;
+EXECUTE stmt8 USING @id;
+id	id
+2	2
+DEALLOCATE PREPARE stmt8;
+#
+# Test 9: JOIN with GROUP BY on COMPLEX column
+#
+PREPARE stmt9 FROM 'SELECT t1.val, COUNT(*) FROM t1 JOIN t2 ON t1.id = t2.t1_id WHERE t2.t1_id > ? GROUP BY t1.val';
+SET @min_id = 0;
+EXECUTE stmt9 USING @min_id;
+val	COUNT(*)
+(1,2)	2
+(3,4)	1
+DEALLOCATE PREPARE stmt9;
+#
+# Test 10: JOIN with ORDER BY on COMPLEX column
+#
+PREPARE stmt10 FROM 'SELECT t1.id, t1.val, t2.val FROM t1 JOIN t2 ON t1.id = t2.t1_id WHERE t1.id > ? ORDER BY t1.val';
+SET @min_id = 0;
+EXECUTE stmt10 USING @min_id;
+id	val	val
+1	(1,2)	(10,11)
+1	(1,2)	(12,13)
+2	(3,4)	(14,15)
+DEALLOCATE PREPARE stmt10;
+#
+# Test 11: JOIN with multiple WHERE conditions on COMPLEX
+#
+PREPARE stmt11 FROM 'SELECT t1.id FROM t1 JOIN t3 ON t1.val = t3.val WHERE t1.val = ? AND t3.val = ?';
+SET @val1 = '(1.0,2.0)';
+SET @val2 = '(1.0,2.0)';
+EXECUTE stmt11 USING @val1, @val2;
+id
+1
+DEALLOCATE PREPARE stmt11;
+#
+# Test 12: JOIN with HAVING clause
+#
+PREPARE stmt12 FROM 'SELECT t1.val, COUNT(*) AS cnt FROM t1 JOIN t2 ON t1.id = t2.t1_id GROUP BY t1.val HAVING cnt > ?';
+SET @min_cnt = 1;
+EXECUTE stmt12 USING @min_cnt;
+val	cnt
+(1,2)	2
+DEALLOCATE PREPARE stmt12;
+#
+# Test 13: JOIN with DISTINCT on COMPLEX column
+#
+INSERT INTO t2 VALUES (14, '(1.0,2.0)', 1);
+PREPARE stmt13 FROM 'SELECT DISTINCT t1.val FROM t1 JOIN t2 ON t1.id = t2.t1_id WHERE t1.id = ? ORDER BY t1.val';
+SET @id = 1;
+EXECUTE stmt13 USING @id;
+val
+(1,2)
+DEALLOCATE PREPARE stmt13;
+#
+# Test 14: JOIN with VDF on COMPLEX column
+#
+PREPARE stmt14 FROM 'SELECT t1.id, vsql_complex.complex_conjugate(t1.val) FROM t1 JOIN t2 ON t1.id = t2.t1_id WHERE t1.id = ?';
+SET @id = 1;
+EXECUTE stmt14 USING @id;
+id	vsql_complex.complex_conjugate(t1.val)
+1	(1,-2)
+1	(1,-2)
+1	(1,-2)
+DEALLOCATE PREPARE stmt14;
+#
+# Test 15: Multiple JOINs with mixed join types
+#
+CREATE TABLE t4 (id INT PRIMARY KEY, t1_id INT, val COMPLEX);
+INSERT INTO t4 VALUES (100, 1, '(20.0,21.0)'), (101, 2, '(22.0,23.0)');
+PREPARE stmt15 FROM 'SELECT t1.id, t1.val, t2.val, t4.val FROM t1 INNER JOIN t2 ON t1.id = t2.t1_id LEFT JOIN t4 ON t1.id = t4.t1_id WHERE t1.id = ?';
+SET @id = 1;
+EXECUTE stmt15 USING @id;
+id	val	val	val
+1	(1,2)	(10,11)	(20,21)
+1	(1,2)	(12,13)	(20,21)
+1	(1,2)	(1,2)	(20,21)
+DEALLOCATE PREPARE stmt15;
+#
+# Test 16: NATURAL JOIN
+#
+CREATE TABLE t5 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t5 VALUES (1, '(30.0,31.0)'), (2, '(32.0,33.0)'), (4, '(7.0,8.0)');
+PREPARE stmt16 FROM 'SELECT * FROM t1 NATURAL JOIN t5 WHERE t1.id = ?';
+SET @id = 4;
+EXECUTE stmt16 USING @id;
+id	val
+4	(7,8)
+DEALLOCATE PREPARE stmt16;
+#
+# Test 17: JOIN with UNION
+#
+PREPARE stmt17 FROM 'SELECT t1.id, t1.val FROM t1 JOIN t2 ON t1.id = t2.t1_id WHERE t1.id = ? UNION SELECT t1.id, t1.val FROM t1 WHERE t1.id = ?';
+SET @id1 = 1;
+SET @id2 = 3;
+EXECUTE stmt17 USING @id1, @id2;
+id	val
+1	(1,2)
+3	(5,6)
+DEALLOCATE PREPARE stmt17;
+#
+# Test 18: JOIN with subquery
+#
+PREPARE stmt18 FROM 'SELECT t1.id, t1.val FROM t1 JOIN (SELECT t1_id FROM t2 WHERE id > ?) AS sub ON t1.id = sub.t1_id';
+SET @min_id = 10;
+EXECUTE stmt18 USING @min_id;
+id	val
+1	(1,2)
+2	(3,4)
+1	(1,2)
+DEALLOCATE PREPARE stmt18;
+#
+# Cleanup
+#
+DROP TABLE t1, t2, t3, t4, t5;

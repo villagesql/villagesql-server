@@ -1,0 +1,2 @@
+--let $keyring_restart_param=restart: $PLUGIN_DIR_OPT
+--source include/table_encrypt_1.inc

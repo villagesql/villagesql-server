@@ -1,0 +1,9 @@
+# A prepared-statement parameter passed to a function with a
+# bind_and_check_types hook.
+
+INSTALL EXTENSION vsql_tvector;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+PREPARE s FROM 'SELECT vsql_tvector.tvector_dim(?)';
+
+UNINSTALL EXTENSION vsql_tvector;

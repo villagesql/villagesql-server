@@ -1,0 +1,64 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX
+);
+CREATE TRIGGER tr_before_insert BEFORE INSERT ON t1
+FOR EACH ROW
+BEGIN
+SET @inserted_val = NEW.val;
+SET @inserted_is_null = (NEW.val IS NULL);
+END//
+CREATE TRIGGER tr_before_update BEFORE UPDATE ON t1
+FOR EACH ROW
+BEGIN
+SET @old_val = OLD.val;
+SET @new_val = NEW.val;
+SET @old_is_null = (OLD.val IS NULL);
+SET @new_is_null = (NEW.val IS NULL);
+END//
+INSERT INTO t1 VALUES (1, NULL);
+SELECT @inserted_val, @inserted_is_null;
+@inserted_val	@inserted_is_null
+NULL	1
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 1;
+id	val	is_null
+1	NULL	1
+INSERT INTO t1 VALUES (2, '(1.0,2.0)');
+SELECT * FROM t1 WHERE id = 2;
+id	val
+2	(1,2)
+UPDATE t1 SET val = NULL WHERE id = 2;
+SELECT @old_val, @old_is_null, @new_val, @new_is_null;
+@old_val	@old_is_null	@new_val	@new_is_null
+(1,2)	0	NULL	1
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 2;
+id	val	is_null
+2	NULL	1
+UPDATE t1 SET val = '(3.0,4.0)' WHERE id = 1;
+SELECT @old_val, @old_is_null, @new_val, @new_is_null;
+@old_val	@old_is_null	@new_val	@new_is_null
+NULL	1	(3,4)	0
+SELECT * FROM t1 WHERE id = 1;
+id	val
+1	(3,4)
+CREATE TRIGGER tr_set_null BEFORE INSERT ON t1
+FOR EACH ROW
+BEGIN
+IF NEW.id = 99 THEN
+SET NEW.val = NULL;
+END IF;
+END//
+INSERT INTO t1 VALUES (99, '(5.0,6.0)');
+SELECT id, val, val IS NULL AS is_null FROM t1 WHERE id = 99;
+id	val	is_null
+99	NULL	1
+DROP TRIGGER tr_before_insert;
+DROP TRIGGER tr_before_update;
+DROP TRIGGER tr_set_null;
+DROP TABLE t1;
+SET @inserted_val = NULL;
+SET @inserted_is_null = NULL;
+SET @old_val = NULL;
+SET @new_val = NULL;
+SET @old_is_null = NULL;
+SET @new_is_null = NULL;

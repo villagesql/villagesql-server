@@ -1,0 +1,87 @@
+# Test what happens when COMPLEX type is used on source but extension
+# is not installed on replica, and then recovery by installing the extension.
+#
+# Test flow:
+# 1. Install COMPLEX extension only on source (not replica)
+# 2. CREATE TABLE and INSERT data on source - replication fails on replica
+# 3. Show the error on replica
+# 4. Install COMPLEX extension on replica
+# 5. Restart replication - the failed statements should now succeed
+# 6. Verify subsequent operations replicate correctly
+
+--source include/rpl/init_source_replica.inc
+
+# Install COMPLEX extension only on source (not on replica)
+--let $rpl_server_number= 1
+--source include/villagesql/install_complex_extension.inc
+
+connection master;
+
+# Create table with COMPLEX type
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX
+);
+
+# Insert some data
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+
+# Wait for replica to stop due to SQL error on CREATE TABLE
+# Expected error 1064: COMPLEX type is not recognized
+connection slave;
+
+# Suppress the expected replication error
+call mtr.add_suppression("Worker .* failed executing transaction .* at source log .* Error 'Expected a type or a custom type instead of \"COMPLEX\"");
+call mtr.add_suppression("The replica coordinator and worker threads are stopped");
+
+--let $slave_sql_errno= 1064
+--source include/rpl/wait_for_applier_error.inc
+
+# Show the replication error
+# Filter out binlog file name and position to make test less sensitive to changes
+--echo Replication error occurred (expected):
+--disable_query_log
+--replace_regex /master-bin\.[0-9]+/master-bin.NNNNNN/ /end_log_pos [0-9]+/end_log_pos POSITION/
+SELECT Last_Error_Message FROM performance_schema.replication_applier_status_by_worker;
+--enable_query_log
+
+# Now install COMPLEX extension on replica to allow recovery
+--let $rpl_server_number= 2
+--source include/villagesql/install_complex_extension.inc
+
+# The SQL thread is still stopped due to the error
+# Start the SQL thread to retry the failed transaction (which should now succeed)
+connection slave;
+START REPLICA SQL_THREAD;
+
+# Wait for replica to catch up
+connection master;
+--source include/rpl/sync_to_replica.inc
+
+# Verify the data replicated correctly
+connection slave;
+SELECT * FROM t1 ORDER BY id;
+
+# Verify that subsequent replication works correctly
+connection master;
+INSERT INTO t1 VALUES (3, '(5.0,6.0)');
+SELECT * FROM t1 ORDER BY id;
+
+--source include/rpl/sync_to_replica.inc
+
+connection slave;
+SELECT * FROM t1 ORDER BY id;
+
+# Cleanup
+connection master;
+DROP TABLE t1;
+--source include/rpl/sync_to_replica.inc
+
+# Uninstall extension from both servers
+--let $rpl_server_number= 1
+--source include/villagesql/uninstall_complex_extension.inc
+
+--let $rpl_server_number= 2
+--source include/villagesql/uninstall_complex_extension.inc
+
+--source include/rpl/deinit.inc

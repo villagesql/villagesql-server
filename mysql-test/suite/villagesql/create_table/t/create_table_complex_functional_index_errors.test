@@ -1,0 +1,42 @@
+# Test CREATE TABLE functional index errors with COMPLEX type functions
+# Verifies that invalid column types in functional indexes are rejected
+
+--source include/villagesql/install_complex_extension.inc
+
+# Test 1: Functional index on a wrong custom type column (COMPLEX2 instead of COMPLEX)
+# COMPLEX_REAL expects a COMPLEX argument, not COMPLEX2 - caught at CREATE TABLE time
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    sig COMPLEX2,
+    INDEX idx_real ((COMPLEX_REAL(sig)))
+);
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t1;
+
+# Test 2: Functional index on a plain VARCHAR column
+# COMPLEX_REAL expects a COMPLEX argument, not a plain string column
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    sig VARCHAR(100),
+    INDEX idx_real ((COMPLEX_REAL(sig)))
+);
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t2;
+
+# Test 3: Functional index on a plain INT column
+# COMPLEX_REAL expects a COMPLEX argument, not an integer column
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t3 (
+    id INT PRIMARY KEY,
+    sig INT,
+    INDEX idx_real ((COMPLEX_REAL(sig)))
+);
+
+--error ER_NO_SUCH_TABLE
+SHOW CREATE TABLE t3;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,8 @@
+SET @@session.sql_mode = 'NO_ENGINE_SUBSTITUTION';
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+
+NOT YET IMPLEMENTED: bitdata tests
+--------------------------------------------------------------------------------
+Warnings:
+Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead

@@ -1,0 +1,56 @@
+CREATE TABLE signal_types (
+type_id COMPLEX PRIMARY KEY,
+type_name VARCHAR(100)
+);
+INSERT INTO signal_types VALUES ('(1.0,0.0)', 'unit_real');
+INSERT INTO signal_types VALUES ('(0.0,1.0)', 'unit_imaginary');
+INSERT INTO signal_types VALUES ('(1.0,1.0)', 'diagonal');
+CREATE TABLE measurements (
+measurement_id INT PRIMARY KEY,
+signal_type COMPLEX,
+amplitude DOUBLE,
+FOREIGN KEY (signal_type) REFERENCES signal_types(type_id)
+);
+SHOW CREATE TABLE measurements;
+Table	Create Table
+measurements	CREATE TABLE `measurements` (
+  `measurement_id` int NOT NULL,
+  `signal_type` vsql_complex.COMPLEX DEFAULT NULL,
+  `amplitude` double DEFAULT NULL,
+  PRIMARY KEY (`measurement_id`),
+  KEY `signal_type` (`signal_type`),
+  CONSTRAINT `measurements_ibfk_1` FOREIGN KEY (`signal_type`) REFERENCES `signal_types` (`type_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO measurements VALUES (1, '(1.0,0.0)', 15.6);
+INSERT INTO measurements VALUES (2, '(0.0,1.0)', 18.2);
+INSERT INTO measurements VALUES (3, '(1.0,1.0)', 22.1);
+SELECT * FROM measurements ORDER BY measurement_id;
+measurement_id	signal_type	amplitude
+1	(1,0)	15.6
+2	(0,1)	18.2
+3	(1,1)	22.1
+DELETE FROM signal_types WHERE type_id = '(1.0,0.0)';
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`measurements`, CONSTRAINT `measurements_ibfk_1` FOREIGN KEY (`signal_type`) REFERENCES `signal_types` (`type_id`))
+SELECT * FROM signal_types WHERE type_id = '(1.0,0.0)';
+type_id	type_name
+(1,0)	unit_real
+UPDATE signal_types SET type_id = '(2.0,0.0)' WHERE type_id = '(1.0,0.0)';
+ERROR 23000: Cannot delete or update a parent row: a foreign key constraint fails (`test`.`measurements`, CONSTRAINT `measurements_ibfk_1` FOREIGN KEY (`signal_type`) REFERENCES `signal_types` (`type_id`))
+SELECT * FROM signal_types WHERE type_id = '(1.0,0.0)';
+type_id	type_name
+(1,0)	unit_real
+DELETE FROM measurements WHERE signal_type = '(1.0,0.0)';
+DELETE FROM signal_types WHERE type_id = '(1.0,0.0)';
+SELECT COUNT(*) FROM signal_types WHERE type_id = '(1.0,0.0)';
+COUNT(*)
+0
+DELETE FROM measurements WHERE signal_type = '(0.0,1.0)';
+DELETE FROM signal_types WHERE type_id = '(0.0,1.0)';
+SELECT * FROM measurements ORDER BY measurement_id;
+measurement_id	signal_type	amplitude
+3	(1,1)	22.1
+SELECT * FROM signal_types ORDER BY type_id;
+type_id	type_name
+(1,1)	diagonal
+DROP TABLE measurements;
+DROP TABLE signal_types;

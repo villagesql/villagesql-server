@@ -1,0 +1,63 @@
+INSTALL EXTENSION vsql_knn_index_test;
+CREATE TABLE t (
+id INT PRIMARY KEY,
+v  KVECTOR
+);
+CREATE INDEX idx_v ON t (v)
+USING EXTENDED(vsql_knn_index_test.kvec_l2);
+INSERT INTO t VALUES
+(1, '[1,0,0,0]'),
+(2, '[0,1,0,0]'),
+(3, '[0,0,1,0]'),
+(4, '[1,1,0,0]'),
+(5, '[2,0,0,0]');
+# FORCE INDEX on the KNN index: routes to the distance scan (as it does
+# without the hint). Nearest 3 to [1,0,0,0]: 1, 4, 5.
+EXPLAIN FORMAT=tree
+SELECT id FROM t FORCE INDEX (idx_v)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=COST rows=ROWS)
+    -> Custom index distance scan on idx_v  (cost=COST rows=ROWS)
+
+SELECT id FROM t FORCE INDEX (idx_v)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+5
+# IGNORE INDEX on the KNN index. Records whether the ordering still routes
+# to the distance scan or falls back to a sort; either way the rows must be
+# correct.
+EXPLAIN FORMAT=tree
+SELECT id FROM t IGNORE INDEX (idx_v)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=COST rows=ROWS)
+    -> Sort: vsql_knn_index_test.kvec_l2_distance(t.v,'[1,0,0,0]'), limit input to 3 row(s) per chunk  (cost=COST rows=ROWS)
+        -> Table scan on t  (cost=COST rows=ROWS)
+
+SELECT id FROM t IGNORE INDEX (idx_v)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+5
+# FORCE INDEX on the PRIMARY key (not the KNN index): the KNN ordering
+# cannot be served by PRIMARY.
+EXPLAIN FORMAT=tree
+SELECT id FROM t FORCE INDEX (PRIMARY)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+EXPLAIN
+-> Limit: 3 row(s)  (cost=COST rows=ROWS)
+    -> Sort: vsql_knn_index_test.kvec_l2_distance(t.v,'[1,0,0,0]'), limit input to 3 row(s) per chunk  (cost=COST rows=ROWS)
+        -> Table scan on t  (cost=COST rows=ROWS)
+
+SELECT id FROM t FORCE INDEX (PRIMARY)
+ORDER BY vsql_knn_index_test.kvec_l2_distance(v, '[1,0,0,0]') LIMIT 3;
+id
+1
+4
+5
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_knn_index_test;

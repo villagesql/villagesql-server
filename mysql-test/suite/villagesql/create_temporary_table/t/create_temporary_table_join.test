@@ -1,0 +1,74 @@
+# Test joins between temporary and permanent tables on COMPLEX columns
+# Verifies that join optimizer handles custom type comparison correctly
+
+--source include/villagesql/install_complex_extension.inc
+
+# Create permanent table
+CREATE TABLE t_perm (
+  id INT PRIMARY KEY,
+  val COMPLEX,
+  category VARCHAR(50)
+);
+
+INSERT INTO t_perm VALUES
+  (1, '(2,0)', 'Category A'),
+  (2, '(10,0)', 'Category B'),
+  (3, '(-1,0)', 'Category C'),
+  (4, '(5,5)', 'Category D');
+
+# Create temporary table
+CREATE TEMPORARY TABLE t_temp (
+  id INT PRIMARY KEY,
+  val COMPLEX,
+  amount DECIMAL(10,2)
+);
+
+INSERT INTO t_temp VALUES
+  (10, '(2,0)', 100.50),
+  (20, '(10,0)', 200.75),
+  (30, '(10,0)', 150.00),
+  (40, '(7,7)', 75.25);
+
+# Test 1: INNER JOIN on COMPLEX column
+SELECT t_perm.id AS perm_id, t_temp.id AS temp_id, t_perm.val, t_perm.category, t_temp.amount
+FROM t_perm
+INNER JOIN t_temp ON t_perm.val = t_temp.val
+ORDER BY t_perm.id, t_temp.id;
+
+# Test 2: LEFT JOIN (temp to perm)
+SELECT t_temp.id AS temp_id, t_temp.val, t_perm.category
+FROM t_temp
+LEFT JOIN t_perm ON t_temp.val = t_perm.val
+ORDER BY t_temp.id;
+
+# Test 3: RIGHT JOIN (perm to temp)
+SELECT t_perm.id AS perm_id, t_perm.val, t_temp.amount
+FROM t_temp
+RIGHT JOIN t_perm ON t_temp.val = t_perm.val
+ORDER BY t_perm.id;
+
+# Test 4: Join with aggregation
+SELECT t_perm.val, t_perm.category, SUM(t_temp.amount) AS total_amount
+FROM t_perm
+INNER JOIN t_temp ON t_perm.val = t_temp.val
+GROUP BY t_perm.val, t_perm.category
+ORDER BY t_perm.val;
+
+# Test 5: Multiple joins with WHERE clause
+SELECT t_perm.id, t_perm.val, t_perm.category, t_temp.amount
+FROM t_perm
+INNER JOIN t_temp ON t_perm.val = t_temp.val
+WHERE t_temp.amount > 100
+ORDER BY t_temp.amount;
+
+# Test 6: Verify EXPLAIN shows join plan
+# STRAIGHT_JOIN pins the join order: the row-count estimates for these tiny
+# tables vary between runs, which otherwise flips which table is scanned first.
+# rows and filtered are optimizer estimates that vary by platform/run
+--replace_column 10 # 11 #
+EXPLAIN SELECT * FROM t_perm STRAIGHT_JOIN t_temp ON t_perm.val = t_temp.val;
+
+DROP TABLE t_temp;
+DROP TABLE t_perm;
+
+--source include/villagesql/uninstall_complex_extension.inc

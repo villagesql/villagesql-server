@@ -1,0 +1,8 @@
+--source include/have_rocksdb.inc
+set global rocksdb_enable_delete_range_for_drop_index=0;
+--source bulk_load_drop_table.inc
+
+set global rocksdb_enable_delete_range_for_drop_index=1;
+--source bulk_load_drop_table.inc
+
+set @@global.rocksdb_enable_delete_range_for_drop_index = default;

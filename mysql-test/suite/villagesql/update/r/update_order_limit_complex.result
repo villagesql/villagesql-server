@@ -1,0 +1,55 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val COMPLEX
+);
+INSERT INTO t1 VALUES
+(1, '(1.0,2.0)'),
+(2, '(0,0)'),
+(3, '(-3.5,4.5)'),
+(4, '(-0,0)'),
+(5, '(5.0,-6.0)'),
+(6, '(0,-0)'),
+(7, '(-7.5,-8.5)'),
+(8, '(-0,-0)'),
+(9, '(9.0,10.0)'),
+(10, '(0,0)');
+UPDATE t1 SET val = '(100.0,100.0)' ORDER BY id ASC LIMIT 3;
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(100,100)
+2	(100,100)
+3	(100,100)
+4	(0,0)
+5	(5,-6)
+6	(0,0)
+7	(-7.5,-8.5)
+8	(0,0)
+9	(9,10)
+10	(0,0)
+UPDATE t1 SET val = '(200.0,200.0)' ORDER BY id DESC LIMIT 2;
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(100,100)
+2	(100,100)
+3	(100,100)
+4	(0,0)
+5	(5,-6)
+6	(0,0)
+7	(-7.5,-8.5)
+8	(0,0)
+9	(200,200)
+10	(200,200)
+UPDATE t1 SET val = '(50.0,50.0)' WHERE id >= 4 ORDER BY id ASC LIMIT 4;
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(100,100)
+2	(100,100)
+3	(100,100)
+4	(50,50)
+5	(50,50)
+6	(50,50)
+7	(50,50)
+8	(0,0)
+9	(200,200)
+10	(200,200)
+DROP TABLE t1;

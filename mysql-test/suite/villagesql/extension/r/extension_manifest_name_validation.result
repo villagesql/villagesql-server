@@ -1,0 +1,2 @@
+INSTALL EXTENSION my_vebname;
+ERROR HY000: Manifest name 'vsql_complex' does not match VEB basename 'my_vebname'

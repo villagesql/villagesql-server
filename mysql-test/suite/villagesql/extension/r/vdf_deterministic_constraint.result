@@ -1,0 +1,12 @@
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+Creating extension vdf_determinism_test using SDK...
+Created vdf_determinism_test.veb
+INSTALL EXTENSION vdf_determinism_test;
+# Deterministic VDF is allowed in a CHECK constraint
+CREATE TABLE t1 (id INT PRIMARY KEY, val INT, CHECK (vdf_determinism_test.deterministic_inc(val) > 0));
+DROP TABLE t1;
+# Non-deterministic VDF is rejected in a CHECK constraint
+CREATE TABLE t1 (id INT PRIMARY KEY, val INT, CHECK (vdf_determinism_test.nondeterministic_func(val) > 0));
+ERROR HY000: An expression of a check constraint 't1_chk_1' contains disallowed function: nondeterministic_func.
+UNINSTALL EXTENSION vdf_determinism_test;

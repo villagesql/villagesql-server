@@ -1,0 +1,37 @@
+# Test CASE expression with COMPLEX type
+# Grammar: CASE WHEN ... THEN ... END; CASE expr WHEN ... THEN ... END
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)'), ('(3.0,4.0)'), ('(0,0)'), ('(0,-0)');
+
+# 1. Returning COMPLEX
+SELECT
+  CASE
+    WHEN val = '(0,0)' THEN '(9.0,9.0)'
+    ELSE val
+  END as res
+FROM t1;
+
+# 2. Switch on COMPLEX
+SELECT
+  CASE val
+    WHEN '(1.0,2.0)' THEN 'Found One'
+    WHEN '(3.0,4.0)' THEN 'Found Two'
+    ELSE 'Unknown'
+  END as res
+FROM t1;
+
+# 3. Both combined
+SELECT
+  CASE val
+    WHEN '(1.0,2.0)' THEN '(2,1)'
+    WHEN '(3.0,4.0)' THEN '(4,3)'
+    ELSE '(0,0)'
+  END as res
+FROM t1;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

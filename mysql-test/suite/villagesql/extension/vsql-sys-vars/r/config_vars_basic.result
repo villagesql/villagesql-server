@@ -1,0 +1,147 @@
+SET PERSIST vsql_allow_preview_extensions = ON;
+# Install extension
+INSTALL EXTENSION vsql_config_vars_test;
+# Verify defaults
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+100
+SELECT @@global.vsql_config_vars_test.label;
+@@global.vsql_config_vars_test.label
+default_label
+# Enum default is 'grant' (index 1), shown by name
+SELECT @@global.vsql_config_vars_test.mode;
+@@global.vsql_config_vars_test.mode
+grant
+SHOW GLOBAL VARIABLES LIKE 'vsql_config_vars_test.%';
+Variable_name	Value
+vsql_config_vars_test.label	default_label
+vsql_config_vars_test.max_items	100
+vsql_config_vars_test.mode	grant
+# Change both variables
+SET GLOBAL vsql_config_vars_test.max_items = 42;
+SET GLOBAL vsql_config_vars_test.label = 'hello';
+# Verify changes took effect
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+42
+SELECT @@global.vsql_config_vars_test.label;
+@@global.vsql_config_vars_test.label
+hello
+SHOW GLOBAL VARIABLES LIKE 'vsql_config_vars_test.%';
+Variable_name	Value
+vsql_config_vars_test.label	hello
+vsql_config_vars_test.max_items	42
+vsql_config_vars_test.mode	grant
+# Persist one variable so it survives restart
+SET PERSIST vsql_config_vars_test.max_items = 99;
+# Persist the enum too, so we exercise a persisted enum being re-applied
+# at registration on restart (stored by name in mysqld-auto.cnf)
+SET PERSIST vsql_config_vars_test.mode = 'sync';
+# Restart server (extension is reinstated from villagesql.extensions)
+# restart: --veb-dir=MYSQLTEST_VARDIR/mysqld.1/veb/
+# Persisted variable should have survived restart
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+99
+# Non-persisted variable should be back to default
+SELECT @@global.vsql_config_vars_test.label;
+@@global.vsql_config_vars_test.label
+default_label
+# Persisted enum should have survived restart (still 'sync')
+SELECT @@global.vsql_config_vars_test.mode;
+@@global.vsql_config_vars_test.mode
+sync
+# Clean up persisted values
+RESET PERSIST vsql_config_vars_test.max_items;
+RESET PERSIST vsql_config_vars_test.mode;
+# Read max_items via VDF (reads storage global directly)
+SELECT vsql_config_vars_test.read_max_items();
+vsql_config_vars_test.read_max_items()
+99
+# Write max_items via VDF (goes through set_variable for locking/validation)
+SELECT vsql_config_vars_test.write_max_items(42);
+vsql_config_vars_test.write_max_items(42)
+0
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+42
+# write_max_items clamps to the declared range (0..1000000) with a warning
+SELECT vsql_config_vars_test.write_max_items(9999999);
+vsql_config_vars_test.write_max_items(9999999)
+0
+Warnings:
+Warning	1292	Truncated incorrect vsql_config_vars_test.max_items value: '9999999'
+SELECT @@global.vsql_config_vars_test.max_items;
+@@global.vsql_config_vars_test.max_items
+1000000
+# Read label via VDF (goes through get() vtable)
+SELECT vsql_config_vars_test.read_label();
+vsql_config_vars_test.read_label()
+default_label
+SET GLOBAL vsql_config_vars_test.label = 'via_get';
+SELECT vsql_config_vars_test.read_label();
+vsql_config_vars_test.read_label()
+via_get
+#
+# Enum variable (mode): set by name, validated at SET time, stored as an
+# index. read_mode() returns the stored index; last_mode_change() returns
+# the index the on_change callback last saw.
+#
+# Set by name; SELECT returns the name, read_mode() returns the index,
+# and the on_change callback fires with the same index (1 = grant)
+SET GLOBAL vsql_config_vars_test.mode = 'grant';
+SELECT @@global.vsql_config_vars_test.mode;
+@@global.vsql_config_vars_test.mode
+grant
+SELECT vsql_config_vars_test.read_mode();
+vsql_config_vars_test.read_mode()
+1
+SELECT vsql_config_vars_test.last_mode_change();
+vsql_config_vars_test.last_mode_change()
+1
+# Set by index; the server maps it back to the name, on_change sees 2
+SET GLOBAL vsql_config_vars_test.mode = 2;
+SELECT @@global.vsql_config_vars_test.mode;
+@@global.vsql_config_vars_test.mode
+sync
+SELECT vsql_config_vars_test.read_mode();
+vsql_config_vars_test.read_mode()
+2
+SELECT vsql_config_vars_test.last_mode_change();
+vsql_config_vars_test.last_mode_change()
+2
+# Set back to index 0 (activate)
+SET GLOBAL vsql_config_vars_test.mode = 0;
+SELECT @@global.vsql_config_vars_test.mode;
+@@global.vsql_config_vars_test.mode
+activate
+SELECT vsql_config_vars_test.read_mode();
+vsql_config_vars_test.read_mode()
+0
+# An unlisted value is rejected at SET time (the point of enum vs string)
+SET GLOBAL vsql_config_vars_test.mode = 'bogus';
+ERROR 42000: Variable 'vsql_config_vars_test.mode' can't be set to the value of 'bogus'
+# The rejected SET left the value unchanged (still activate / index 0)
+SELECT @@global.vsql_config_vars_test.mode;
+@@global.vsql_config_vars_test.mode
+activate
+SELECT vsql_config_vars_test.read_mode();
+vsql_config_vars_test.read_mode()
+0
+# An out-of-range index is rejected too
+SET GLOBAL vsql_config_vars_test.mode = 99;
+ERROR 42000: Variable 'vsql_config_vars_test.mode' can't be set to the value of '99'
+SELECT @@global.vsql_config_vars_test.mode;
+@@global.vsql_config_vars_test.mode
+activate
+# Uninstall extension
+UNINSTALL EXTENSION vsql_config_vars_test;
+# Variables should no longer exist
+SELECT @@global.vsql_config_vars_test.max_items;
+ERROR HY000: Unknown system variable 'vsql_config_vars_test.max_items'
+SELECT @@global.vsql_config_vars_test.label;
+ERROR HY000: Unknown system variable 'vsql_config_vars_test.label'
+SELECT @@global.vsql_config_vars_test.mode;
+ERROR HY000: Unknown system variable 'vsql_config_vars_test.mode'
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

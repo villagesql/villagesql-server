@@ -1,0 +1,21 @@
+# Test that direct from_string calls and CREATE TABLE with a NOT NULL column
+# both fail when a type has no valid intrinsic default.
+
+INSTALL EXTENSION vsql_test_only;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT NO_DEFAULT_TYPE::from_string('whatever');
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_TYPE NOT NULL);
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_PARAM_TYPE(4) NOT NULL);
+
+# NO_DEFAULT_VAR_PARAM_TYPE is declared .variable_length_type() and its from_string
+# rejects the empty string, so it has no intrinsic default. A type that cannot encode
+# a default is unusable, so any reference fails at initialization.
+--error ER_VILLAGESQL_GENERIC_ERROR
+CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_VAR_PARAM_TYPE(4) NOT NULL);
+
+UNINSTALL EXTENSION vsql_test_only;

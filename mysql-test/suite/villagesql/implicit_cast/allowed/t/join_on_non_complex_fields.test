@@ -1,0 +1,19 @@
+# Test JOIN on non-COMPLEX fields
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX);
+
+INSERT INTO t_complex VALUES
+  (1, '(1.0,2.0)'),
+  (2, '(3.0,4.0)'),
+  (3, '(5.0,6.0)');
+
+SELECT c1.id, c1.val, c2.val
+FROM t_complex c1
+JOIN t_complex c2 ON c1.id = c2.id
+WHERE c1.id = 1;
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

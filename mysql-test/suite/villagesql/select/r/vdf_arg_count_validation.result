@@ -1,0 +1,22 @@
+#
+# Argument count validation
+#
+# complex_real expects 1 argument (COMPLEX), try calling with 0
+SELECT vsql_complex.complex_real();
+ERROR HY000: Cannot initialize function 'complex_real': wrong number of arguments (expected 1, got 0)
+# complex_real expects 1 argument (COMPLEX), try calling with 2
+SELECT vsql_complex.complex_real('(1,2)', '(3,4)');
+ERROR HY000: Cannot initialize function 'complex_real': wrong number of arguments (expected 1, got 2)
+# complex_add expects 2 arguments (COMPLEX, COMPLEX), try calling with 1
+SELECT vsql_complex.complex_add('(1,2)');
+ERROR HY000: Cannot initialize function 'complex_add': wrong number of arguments (expected 2, got 1)
+# complex_add expects 2 arguments, try calling with 3
+SELECT vsql_complex.complex_add('(1,2)', '(3,4)', '(5,6)');
+ERROR HY000: Cannot initialize function 'complex_add': wrong number of arguments (expected 2, got 3)
+# Correct usage should still work
+SELECT vsql_complex.complex_real('(1,2)') AS real_part;
+real_part
+1
+SELECT vsql_complex.complex_add('(1,2)', '(3,4)') AS sum;
+sum
+(4,6)

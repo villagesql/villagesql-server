@@ -1,0 +1,41 @@
+# Test that mysqldump preserves COMPLEX column type and values through dump/restore
+
+--source include/villagesql/install_complex_extension.inc
+
+let $mysqldumpfile = $MYSQLTEST_VARDIR/tmp/mysqldump_complex.sql;
+
+CREATE TABLE t1 (id INT, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0, 2.0)'), (2, '(3.0, 4.0)'), (3, NULL);
+
+--echo # Verify column type and values before dump
+SELECT COLUMN_NAME, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1'
+ORDER BY ORDINAL_POSITION;
+
+SELECT * FROM t1 ORDER BY id;
+
+--echo # Dump the table
+--exec $MYSQL_DUMP --compact test t1 > $mysqldumpfile
+
+--echo # Rename original and restore from dump
+ALTER TABLE t1 RENAME TO t1_orig;
+--exec $MYSQL test < $mysqldumpfile
+
+--echo # Verify column type is preserved after restore
+SELECT COLUMN_NAME, COLUMN_TYPE
+FROM INFORMATION_SCHEMA.COLUMNS
+WHERE TABLE_SCHEMA = 'test' AND TABLE_NAME = 't1'
+ORDER BY ORDINAL_POSITION;
+
+SELECT * FROM t1 ORDER BY id;
+
+--echo # Verify values are identical
+let $diff_tables = test.t1, test.t1_orig;
+--source include/diff_tables.inc
+
+--echo # Cleanup
+--remove_file $mysqldumpfile
+DROP TABLE t1, t1_orig;
+
+--source include/villagesql/uninstall_complex_extension.inc

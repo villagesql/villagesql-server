@@ -1,0 +1,54 @@
+CREATE TABLE t1 (id INT, val COMPLEX);
+INSERT INTO t1 VALUES
+(1, '(0.0,0.0)'),
+(2, '(1.0,2.0)'),
+(3, '(3.0,4.0)'),
+(4, '(-1.0,-2.0)'),
+(5, '(1.5e100,2.3e100)'),   # Very large positive
+(6, '(4.22e-10,3.14e-15)'), # Very small positive
+(7, '(-5.0,3.0)'),          # Mixed signs
+(8, '(-0,0)');
+CREATE TABLE t2 (id INT, val COMPLEX);
+INSERT INTO t2 VALUES
+(1, '(1.0,2.0)'),
+(2, '(3.0,4.0)'),
+(3, '(-1.0,-2.0)'),
+(4, '(5.0,6.0)'),
+(5, '(-0.0,-0.0)'),
+(6, '(4.22e-10,3.14e-15)'), # Very small (matches t1.id=6)
+(7, '(-1.5e100,-2.3e100)');
+SELECT t1.id, t1.val, t2.val FROM t1 JOIN t2 ON t1.id = t2.id ORDER BY t1.id;
+id	val	val
+1	(0,0)	(1,2)
+2	(1,2)	(3,4)
+3	(3,4)	(-1,-2)
+4	(-1,-2)	(5,6)
+5	(1.5e+100,2.3e+100)	(0,0)
+6	(4.22e-10,3.14e-15)	(4.22e-10,3.14e-15)
+7	(-5,3)	(-1.5e+100,-2.3e+100)
+SELECT t1.id, t1.val, t2.val FROM t1 JOIN t2 ON t1.val = t2.val ORDER BY t1.val, t1.id, t2.id;
+id	val	val
+4	(-1,-2)	(-1,-2)
+1	(0,0)	(0,0)
+8	(0,0)	(0,0)
+6	(4.22e-10,3.14e-15)	(4.22e-10,3.14e-15)
+2	(1,2)	(1,2)
+3	(3,4)	(3,4)
+SELECT t1.id, t1.val, t2.val FROM t1 JOIN t2 ON t1.val < t2.val ORDER BY t1.id, t2.id LIMIT 5;
+id	val	val
+1	(0,0)	(1,2)
+1	(0,0)	(3,4)
+1	(0,0)	(5,6)
+1	(0,0)	(4.22e-10,3.14e-15)
+2	(1,2)	(3,4)
+CREATE TABLE t3 (id INT, val COMPLEX);
+INSERT INTO t3 VALUES (1, '(2.0,3.0)'), (2, '(2.0,3.0)'), (3, '(4.0,5.0)');
+SELECT a.id, b.id FROM t3 a JOIN t3 b ON a.val = b.val WHERE a.id < b.id;
+id	id
+1	2
+INSERT INTO t1 VALUES (6, NULL);
+INSERT INTO t2 VALUES (6, NULL);
+SELECT t1.id FROM t1 JOIN t2 ON t1.val = t2.val WHERE t1.id = 6;
+id
+6
+DROP TABLE t1, t2, t3;

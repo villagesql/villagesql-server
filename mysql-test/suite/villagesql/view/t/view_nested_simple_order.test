@@ -1,0 +1,28 @@
+# Test nested VIEW with COMPLEX column and ORDER BY (no aggregation)
+# This checks if type information is lost in nested views without GROUP BY
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX, name VARCHAR(50));
+
+INSERT INTO t1 VALUES
+  (1, '(10,0)', 'ten'),
+  (2, '(2,0)', 'two'),
+  (3, '(-1,0)', 'minus_one');
+
+# Create first level view
+CREATE VIEW v1 AS
+SELECT id, val, name FROM t1;
+
+# Create second level view (nested - view on view)
+CREATE VIEW v2 AS
+SELECT id, val, name FROM v1;
+
+# Test: ORDER BY COMPLEX column in nested view
+SELECT * FROM v2 ORDER BY val;
+
+DROP VIEW v2;
+DROP VIEW v1;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

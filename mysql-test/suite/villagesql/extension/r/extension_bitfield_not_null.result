@@ -1,0 +1,50 @@
+# Install the variable-length, non-parameterized bit field extension.
+INSTALL EXTENSION vsql_bitfield_test;
+CREATE TABLE bits (
+id INT PRIMARY KEY,
+b vsql_bitfield_test.BITFIELD NOT NULL,
+b_optional vsql_bitfield_test.BITFIELD
+);
+# Providing the NOT NULL column explicitly works.
+INSERT INTO bits (id, b) VALUES (1, '101');
+INSERT INTO bits (id, b, b_optional) VALUES (2, '1111', '00');
+# Omitting the NOT NULL column in strict mode is rejected. DEFAULT values
+# do not apply to custom types, so the error is "no default for field".
+INSERT INTO bits (id, b_optional) VALUES (3, '1');
+ERROR HY000: Field 'b' doesn't have a default value
+# Explicitly storing NULL into the NOT NULL column is rejected.
+INSERT INTO bits (id, b) VALUES (4, NULL);
+ERROR 23000: Column 'b' cannot be null
+# A bad value under INSERT IGNORE falls back to the intrinsic default
+# rather than failing. ('1021' has a non-bit character.) The bad value is
+# replaced by the empty bit field, and the omitted NOT NULL column 'b'
+# also gets the empty default.
+INSERT IGNORE INTO bits (id, b_optional) VALUES (5, '1021');
+Warnings:
+Warning	1366	Incorrect BITFIELD value: '1021' for column 'b_optional' at row 1
+Warning	1364	Field 'b' doesn't have a default value
+# Same fallback for a bad value in the NOT NULL column itself.
+INSERT IGNORE INTO bits (id, b) VALUES (6, '2');
+Warnings:
+Warning	1366	Incorrect BITFIELD value: '2' for column 'b' at row 1
+# The defaulted values are valid, zero-length bit fields (not garbage and
+# not NULL): bitfield_length is 0 and they round-trip to the empty string.
+SELECT id, b, b_optional,
+vsql_bitfield_test.bitfield_length(b) AS nbits,
+b IS NULL AS b_is_null,
+b_optional IS NULL AS opt_is_null
+FROM bits ORDER BY id;
+id	b	b_optional	nbits	b_is_null	opt_is_null
+1	101	NULL	3	0	1
+2	1111	00	4	0	0
+5		NULL	0	0	1
+6		NULL	0	0	1
+# The intrinsic default round-trips: re-encoding an explicit '' matches
+# the defaulted value under the type's compare.
+SELECT id FROM bits WHERE b = '' ORDER BY id;
+id
+5
+6
+# Clean up.
+DROP TABLE bits;
+UNINSTALL EXTENSION vsql_bitfield_test;

@@ -1,0 +1,64 @@
+#
+# Setup test data
+#
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)'), (3, '(5.0,6.0)'), (4, '(1.0,2.0)');
+#
+# Test 1: SELECT with WHERE on INT column using parameter
+#
+PREPARE stmt1 FROM 'SELECT id, val FROM t1 WHERE id = ?';
+SET @param1 = 2;
+EXECUTE stmt1 USING @param1;
+id	val
+2	(3,4)
+SET @param1 = 3;
+EXECUTE stmt1 USING @param1;
+id	val
+3	(5,6)
+DEALLOCATE PREPARE stmt1;
+#
+# Test 2: SELECT with WHERE on COMPLEX column using parameter
+#
+PREPARE stmt2 FROM 'SELECT id FROM t1 WHERE val = ?';
+SET @complex_param = '(3.0,4.0)';
+EXECUTE stmt2 USING @complex_param;
+id
+2
+SET @complex_param = '(1.0,2.0)';
+EXECUTE stmt2 USING @complex_param;
+id
+1
+4
+DEALLOCATE PREPARE stmt2;
+#
+# Test 3: SELECT with multiple WHERE conditions
+#
+PREPARE stmt3 FROM 'SELECT id, val FROM t1 WHERE id > ? AND val = ?';
+SET @id_min = 0;
+SET @val_cond = '(1.0,2.0)';
+EXECUTE stmt3 USING @id_min, @val_cond;
+id	val
+1	(1,2)
+4	(1,2)
+DEALLOCATE PREPARE stmt3;
+#
+# Test 4: SELECT with IN clause on COMPLEX column
+#
+PREPARE stmt4 FROM 'SELECT id FROM t1 WHERE val IN (?, ?)';
+SET @val1 = '(1.0,2.0)';
+SET @val2 = '(5.0,6.0)';
+EXECUTE stmt4 USING @val1, @val2;
+id
+1
+3
+4
+SET @val1 = '(3.0,4.0)';
+EXECUTE stmt4 USING @val1, @val2;
+id
+2
+3
+DEALLOCATE PREPARE stmt4;
+#
+# Cleanup
+#
+DROP TABLE t1;

@@ -1,0 +1,23 @@
+# Test thread_worker sql_query capability error and warning propagation.
+#
+# Verifies:
+# - A failed query via SQL_EXECUTE returns ERROR: <errno>:<message>.
+# - A failed query via SQL_FOR_EACH does the same.
+# - A successful query that produces a warning returns the row value in RESULT
+#   and "<errno>:<message>; ..." in WARNING.
+
+INSTALL EXTENSION vsql_thread_worker_test;
+
+SET GLOBAL vsql_thread_worker_test.listener_enabled = ON;
+
+--source init_thread_worker_test.inc
+
+--exec $tw_pl "SQL_EXECUTE SELECT * FROM test.no_such_table_xyz"
+
+--exec $tw_pl "SQL_EXECUTE SELECT CAST('abc' AS UNSIGNED)"
+
+--exec $tw_pl "SQL_FOR_EACH SELECT * FROM test.no_such_table_xyz"
+
+SET GLOBAL vsql_thread_worker_test.listener_enabled = OFF;
+
+UNINSTALL EXTENSION vsql_thread_worker_test;

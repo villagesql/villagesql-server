@@ -1,0 +1,35 @@
+# Test CREATE TEMPORARY TABLE LIKE with COMPLEX type
+# Grammar: CREATE TEMPORARY TABLE table_name LIKE other_table
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE source_table (
+    id INT PRIMARY KEY,
+    complex_data COMPLEX,
+    description TEXT
+);
+
+--source include/villagesql/query_custom_columns.inc
+
+INSERT INTO source_table VALUES (1, '(5.0,6.0)', 'temp source');
+
+# Create temporary table using LIKE
+CREATE TEMPORARY TABLE temp_like LIKE source_table;
+
+# Should not be present
+--source include/villagesql/query_custom_columns.inc
+
+SHOW COLUMNS FROM temp_like;
+
+INSERT INTO temp_like VALUES (1, '(7.0,8.0)', 'temp copy');
+
+SELECT * FROM temp_like;
+
+DROP TABLE temp_like;
+--source include/villagesql/query_custom_columns.inc
+DROP TABLE source_table;
+--source include/villagesql/query_custom_columns.inc
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

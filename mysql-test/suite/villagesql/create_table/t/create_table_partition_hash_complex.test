@@ -1,0 +1,33 @@
+# Test CREATE TABLE with HASH partitioning and COMPLEX columns
+# Tests HASH partitioning with COMPLEX type columns
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    complex_measurement COMPLEX
+) PARTITION BY HASH(id) PARTITIONS 4;
+
+SHOW COLUMNS FROM t1;
+
+INSERT INTO t1 VALUES (1, '(2.3,4.5)');
+INSERT INTO t1 VALUES (12, '(0.0,0.0)');
+INSERT INTO t1 VALUES (17, '(7.7,8.9)');
+INSERT INTO t1 VALUES (22, '(-0,0)');
+INSERT INTO t1 VALUES (3, '(9.7,8.9)');
+INSERT INTO t1 VALUES (88, '(10.7,8.9)');
+INSERT INTO t1 VALUES (7, '(11.7,8.9)');
+INSERT INTO t1 VALUES (876, '(12.7,8.9)');
+INSERT INTO t1 VALUES (5, '(13.7,8.9)');
+INSERT INTO t1 VALUES (1022, '(-6.7,8.9)');
+
+SELECT * FROM t1 order by id ASC;
+SELECT * FROM t1 order by id DESC;
+SELECT * FROM t1 order by complex_measurement ASC;
+SELECT * FROM t1 order by complex_measurement DESC;
+
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

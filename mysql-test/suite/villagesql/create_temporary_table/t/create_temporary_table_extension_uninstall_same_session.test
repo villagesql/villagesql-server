@@ -1,0 +1,16 @@
+# Test that uninstalling an extension is blocked while the same session holds a
+# temporary table that uses a type from that extension, and succeeds once the
+# temporary table is dropped.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TEMPORARY TABLE t1 (id INT, val COMPLEX);
+
+--echo # UNINSTALL should fail - t1 holds a reference
+--error ER_VILLAGESQL_GENERIC_ERROR
+UNINSTALL EXTENSION vsql_complex;
+
+DROP TEMPORARY TABLE t1;
+
+--echo # UNINSTALL should now succeed
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,9 @@
+#####################################
+# Wrapper for rpl_insert_ignore.test#
+#####################################
+-- source include/have_ndb.inc
+-- source include/have_binlog_format_row.inc
+-- source suite/ndb_rpl/ndb_rpl_init_source_replica.inc
+let $engine_type=NDB;
+-- source common/rpl/rpl_insert_ignore.test
+--source include/rpl/deinit.inc

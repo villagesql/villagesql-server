@@ -1,0 +1,55 @@
+# ==== Purpose ====
+# The test considers scenarios of OLD -> NEW replication, where NEW stands
+# for WL9175-based slave server, and OLD is of a prior version master.
+# This file consists of cases that need GTID=ON.
+#
+# ==== References ====
+# WL#9175  Correct recovery of DDL statements/transactions by binary log
+# Bug #25665464   CROSS VERSION RPL BEHAVES DIFFERENTLY VARYING RELAY LOG INFO REPOSITORY CONF
+#
+
+--source include/have_debug.inc
+--source include/have_binlog_format_row.inc
+
+#
+# It's proved that the slave applier stops with an expected error
+# of mismatch between one that is recorded on master and the actual.
+# The slave applier does not update the execution coordinates so
+# at retry when the error simulation is withdrawn the event must
+# complete to good.
+#
+
+--source include/rpl/init_source_replica.inc
+
+--source include/rpl/connection_source.inc
+--disable_warnings
+DROP TABLE IF EXISTS t1;
+--enable_warnings
+
+--source include/rpl/sync_to_replica.inc
+# --source include/rpl/connection_replica.inc
+call mtr.add_suppression("The replica coordinator and worker threads are stopped");
+call mtr.add_suppression("Query caused different errors on source and replica");
+
+SET @@global.debug="+d,simulate_error_in_ddl";
+
+--source include/rpl/connection_source.inc
+CREATE TABLE t1 (a int);
+
+--source include/rpl/connection_replica.inc
+
+--let $slave_sql_errno= convert_error(ER_INCONSISTENT_ERROR)
+--source include/rpl/wait_for_applier_error.inc
+
+# Slave should not be able to start the SQL thread
+START REPLICA SQL_THREAD;
+--let $slave_sql_errno= convert_error(ER_INCONSISTENT_ERROR)
+--source include/rpl/wait_for_applier_error.inc
+
+# Removing the debug instrumentation should make slave to proceed
+SET @@global.debug="-d,simulate_error_in_ddl";
+--source include/rpl/start_applier.inc
+
+--source include/rpl/connection_source.inc
+DROP TABLE t1;
+--source include/rpl/deinit.inc

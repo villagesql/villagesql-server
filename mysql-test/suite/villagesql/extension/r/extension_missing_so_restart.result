@@ -1,0 +1,36 @@
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+call mtr.add_suppression("Failed to load extension");
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("Extension loading failed");
+call mtr.add_suppression("Failed to initialize");
+call mtr.add_suppression("dlopen");
+call mtr.add_suppression("no such file");
+call mtr.add_suppression("Aborting");
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+INSTALL EXTENSION vsql_complex;
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+vsql_complex	0.0.1	NULL	NULL	NULL	NULL
+CREATE TABLE test_missing_so (id INT PRIMARY KEY, c COMPLEX);
+INSERT INTO test_missing_so VALUES (1, '(1.5,2.5)');
+SELECT id, c FROM test_missing_so ORDER BY id;
+id	c
+1	(1.5,2.5)
+Moved .so file away from expansion cache
+Moved .veb file away to prevent re-expansion
+# Restarting server - should fail due to missing .so
+# Server correctly refused to start
+Pattern "Extension loading failed" found
+Restored .so file to expansion cache
+Restored .veb file
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+# Server started after restoring .so file
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION	PENDING_VERSION	PENDING_REQUESTED_AT	PENDING_LAST_ERROR	PENDING_LAST_ERROR_AT
+vsql_complex	0.0.1	NULL	NULL	NULL	NULL
+SELECT id, c FROM test_missing_so ORDER BY id;
+id	c
+1	(1.5,2.5)
+# Data intact after recovery
+DROP TABLE test_missing_so;
+UNINSTALL EXTENSION vsql_complex;

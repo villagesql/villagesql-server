@@ -1,0 +1,36 @@
+# Test LOAD XML INFILE with COMPLEX type - error handling for bad values
+# Grammar: LOAD XML INFILE ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT, val COMPLEX);
+
+# Create a file with an invalid COMPLEX value
+--write_file $MYSQLTEST_VARDIR/tmp/complex_bad.xml
+<rows>
+  <row>
+    <id>1</id>
+    <val>(1.0,2.0)</val>
+  </row>
+  <row>
+    <id>2</id>
+    <val>not_a_complex_value</val>
+  </row>
+  <row>
+    <id>3</id>
+    <val>(3.0,4.0)</val>
+  </row>
+</rows>
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+--eval LOAD XML INFILE '$MYSQLTEST_VARDIR/tmp/complex_bad.xml' INTO TABLE t1 ROWS IDENTIFIED BY '<row>'
+
+# Table should be empty since the load failed
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/complex_bad.xml
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,32 @@
+# Regression test: INSTALL EXTENSION called my_ok() before committing the
+# transaction, so a failed commit raised an error on top of an already-set
+# OK status and aborted debug builds. A failed commit also leaked the loaded
+# .so: the rollback discarded the extension metadata but nothing unloaded
+# the library. The OK status must be set only after a successful commit, and
+# a failed install must unload the .so it loaded.
+
+--source include/have_debug.inc
+--source include/villagesql/binlog_check_begin.inc
+
+--echo # Force the transaction commit inside INSTALL EXTENSION to fail
+SET SESSION DEBUG="+d,pre_commit_error";
+--error ER_UNKNOWN_ERROR
+INSTALL EXTENSION vsql_simple;
+SET SESSION DEBUG="-d,pre_commit_error";
+
+--echo # The failed install rolled back: extension must not be installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # A normal install must now succeed and be fully functional
+INSTALL EXTENSION vsql_simple;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+CREATE TABLE t1 (id INT PRIMARY KEY, data BYTEARRAY);
+INSERT INTO t1 VALUES (1, 'hello');
+SELECT id, CONCAT("'", vsql_simple.bytearray::to_string(vsql_simple.rot13(data)), "'") AS rotated FROM t1;
+DROP TABLE t1;
+
+--echo # Clean up
+UNINSTALL EXTENSION vsql_simple;
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--source include/villagesql/binlog_check_end.inc

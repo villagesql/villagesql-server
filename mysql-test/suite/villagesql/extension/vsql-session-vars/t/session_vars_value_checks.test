@@ -1,0 +1,29 @@
+# Constraint enforcement when setting a session variable: integer range
+# clamping and type checking. Per-session semantics and access paths are
+# covered by session_vars_basic.
+
+SET PERSIST vsql_allow_preview_extensions = ON;
+
+INSTALL EXTENSION vsql_session_var_test;
+
+# Reset this connection's session values to their defaults so the reads below
+# are independent of any earlier test in the same server.
+--disable_query_log
+SET SESSION vsql_session_var_test.session_int_var = DEFAULT;
+--enable_query_log
+
+--echo # Range clamping: max is 4096
+SET SESSION vsql_session_var_test.session_int_var = 999999;
+SELECT @@session.vsql_session_var_test.session_int_var;
+--echo # Range clamping: min is 1
+SET SESSION vsql_session_var_test.session_int_var = -1;
+SELECT @@session.vsql_session_var_test.session_int_var;
+
+--echo # Wrong-type assignments are rejected
+--error ER_WRONG_TYPE_FOR_VAR
+SET SESSION vsql_session_var_test.session_int_var = "hello";
+
+UNINSTALL EXTENSION vsql_session_var_test;
+
+SET PERSIST vsql_allow_preview_extensions = OFF;
+RESET PERSIST vsql_allow_preview_extensions;

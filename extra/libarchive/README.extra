@@ -1,0 +1,19 @@
+libarchive - Multi-format archive and compression library
+=========================================================
+
+This directory contains libarchive release 3.8.1
+
+Source: https://github.com/libarchive/libarchive
+Release: v3.8.1
+Downloaded: August 2025
+
+libarchive is a programming library that can create and read several different
+streaming archive formats, including most popular tar variants, several cpio
+formats, and both BSD and GNU ar variants. It can also write shar archives and
+read ISO9660 CDROM images and ZIP archives.
+
+License: Multiple licenses - see libarchive-3.8.1/COPYING for details
+The library includes code under various BSD-style licenses.
+
+This library is used by VillageSQL to read extension packages distributed as
+tar archives.

@@ -1,0 +1,90 @@
+# Test INSERT INTO ... SET ... ON DUPLICATE KEY UPDATE with COMPLEX type
+# Grammar: INSERT [INTO] tbl_name SET assignment_list ON DUPLICATE KEY UPDATE assignment_list
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val COMPLEX,
+    name VARCHAR(50)
+);
+
+# Insert initial 20 rows with zero variants and negative values using SET syntax
+INSERT INTO t1 SET id = 1, val = '(15.0,20.0)', name = 'row1';
+INSERT INTO t1 SET id = 2, val = '(-0,0)', name = 'row2';
+INSERT INTO t1 SET id = 3, val = '(-7.5,-8.5)', name = 'row3';
+INSERT INTO t1 SET id = 4, val = '(0,0)', name = 'row4';
+INSERT INTO t1 SET id = 5, val = '(22.0,-13.0)', name = 'row5';
+INSERT INTO t1 SET id = 6, val = '(0,-0)', name = 'row6';
+INSERT INTO t1 SET id = 7, val = '(-18.0,9.0)', name = 'row7';
+INSERT INTO t1 SET id = 8, val = '(3.5,4.2)', name = 'row8';
+INSERT INTO t1 SET id = 9, val = '(-0,-0)', name = 'row9';
+INSERT INTO t1 SET id = 10, val = '(11.5,-12.5)', name = 'row10';
+INSERT INTO t1 SET id = 11, val = '(0,0)', name = 'row11';
+INSERT INTO t1 SET id = 12, val = '(-25.0,-30.0)', name = 'row12';
+INSERT INTO t1 SET id = 13, val = '(19.0,21.0)', name = 'row13';
+INSERT INTO t1 SET id = 14, val = '(-0,0)', name = 'row14';
+INSERT INTO t1 SET id = 15, val = '(7.0,-5.0)', name = 'row15';
+INSERT INTO t1 SET id = 16, val = '(-14.0,16.0)', name = 'row16';
+INSERT INTO t1 SET id = 17, val = '(0,-0)', name = 'row17';
+INSERT INTO t1 SET id = 18, val = '(26.0,28.0)', name = 'row18';
+INSERT INTO t1 SET id = 19, val = '(-9.5,11.5)', name = 'row19';
+INSERT INTO t1 SET id = 20, val = '(-0,-0)', name = 'row20';
+
+# Insert new rows using SET with ON DUPLICATE KEY UPDATE (no duplicates)
+INSERT INTO t1 SET id = 21, val = '(33.0,-35.0)', name = 'row21'
+ON DUPLICATE KEY UPDATE val = '(999.0,999.0)', name = 'updated';
+
+INSERT INTO t1 SET id = 22, val = '(0,0)', name = 'row22'
+ON DUPLICATE KEY UPDATE val = '(888.0,888.0)', name = 'updated';
+
+# Update existing rows using SET with ON DUPLICATE KEY UPDATE
+INSERT INTO t1 SET id = 1, val = '(100.0,100.0)', name = 'duplicate'
+ON DUPLICATE KEY UPDATE val = '(1.1,2.1)', name = 'updated1';
+
+INSERT INTO t1 SET id = 5, val = '(200.0,200.0)', name = 'duplicate'
+ON DUPLICATE KEY UPDATE val = '(5.5,-6.5)', name = 'updated5';
+
+INSERT INTO t1 SET id = 10, val = '(300.0,300.0)', name = 'duplicate'
+ON DUPLICATE KEY UPDATE val = '(10.1,-11.1)', name = 'updated10';
+
+# Update with zero variants
+INSERT INTO t1 SET id = 2, val = '(500.0,500.0)', name = 'duplicate'
+ON DUPLICATE KEY UPDATE val = '(0,0)', name = 'updated_zero';
+
+INSERT INTO t1 SET id = 9, val = '(600.0,600.0)', name = 'duplicate'
+ON DUPLICATE KEY UPDATE val = '(-0,-0)', name = 'updated_zero';
+
+# Insert more new rows to reach 30+
+INSERT INTO t1 SET id = 23, val = '(-22.0,24.0)', name = 'row23'
+ON DUPLICATE KEY UPDATE val = '(777.0,777.0)', name = 'updated';
+
+INSERT INTO t1 SET id = 24, val = '(17.5,19.5)', name = 'row24'
+ON DUPLICATE KEY UPDATE val = '(666.0,666.0)', name = 'updated';
+
+INSERT INTO t1 SET id = 25, val = '(0,-0)', name = 'row25'
+ON DUPLICATE KEY UPDATE val = '(555.0,555.0)', name = 'updated';
+
+INSERT INTO t1 SET id = 26, val = '(-31.0,-32.0)', name = 'row26'
+ON DUPLICATE KEY UPDATE val = '(444.0,444.0)', name = 'updated';
+
+INSERT INTO t1 SET id = 27, val = '(29.0,30.0)', name = 'row27'
+ON DUPLICATE KEY UPDATE val = '(333.0,333.0)', name = 'updated';
+
+INSERT INTO t1 SET id = 28, val = '(-0,0)', name = 'row28'
+ON DUPLICATE KEY UPDATE val = '(222.0,222.0)', name = 'updated';
+
+INSERT INTO t1 SET id = 29, val = '(12.0,-14.0)', name = 'row29'
+ON DUPLICATE KEY UPDATE val = '(111.0,111.0)', name = 'updated';
+
+INSERT INTO t1 SET id = 30, val = '(-27.0,28.0)', name = 'row30'
+ON DUPLICATE KEY UPDATE val = '(000.0,000.0)', name = 'updated';
+
+SELECT * FROM t1 ORDER BY id;
+
+# Test ordering by COMPLEX column
+SELECT * FROM t1 ORDER BY val, id;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

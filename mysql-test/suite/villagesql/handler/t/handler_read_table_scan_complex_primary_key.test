@@ -1,0 +1,38 @@
+# Test HANDLER READ (Table Scan) with COMPLEX type
+# Grammar: HANDLER tbl_name READ FIRST/NEXT ...
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (
+    val COMPLEX PRIMARY KEY);
+# Insert data in random order with zero variants interleaved (~22 rows)
+INSERT INTO t1 VALUES ('(15.0,16.0)'), ('(3.0,4.0)'), ('(-0,0)'), ('(21.0,22.0)');
+
+# Test error when a duplicate key is inserted
+--error 1062
+INSERT INTO t1 VALUES ('(0,0)');
+
+INSERT INTO t1 VALUES ('(5.0,8.0)'), ('(2.0,5.0)'), ('(11.0,12.0)'), ('(19.0,20.0)');
+INSERT INTO t1 VALUES ('(2.0,1.0)'), ('(4.0,3.0)'), ('(25.0,26.0)'), ('(15.0,6.0)');
+INSERT INTO t1 VALUES ('(7.0,8.0)'), ('(5.0,6.0)'), ('(1.0,12.0)'), ('(2.0,20.0)');
+INSERT INTO t1 VALUES ('(1.0,2.0)'), ('(4.0,8.0)'), ('(15.0,26.0)'), ('(5.0,7.0)');
+INSERT INTO t1 VALUES ('(33.0,34.0)'), ('(35.0,36.0)');
+
+# Test HANDLER table scan
+HANDLER t1 OPEN;
+HANDLER t1 READ FIRST;
+HANDLER t1 READ NEXT;
+HANDLER t1 READ NEXT;
+HANDLER t1 READ NEXT;
+HANDLER t1 READ NEXT;
+HANDLER t1 READ NEXT;
+HANDLER t1 READ NEXT;
+HANDLER t1 READ NEXT;
+HANDLER t1 READ NEXT;
+HANDLER t1 READ NEXT;
+HANDLER t1 READ NEXT;
+HANDLER t1 CLOSE;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

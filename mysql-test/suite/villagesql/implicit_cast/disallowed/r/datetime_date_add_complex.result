@@ -1,0 +1,5 @@
+CREATE TABLE t_complex (id INT, val COMPLEX);
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+SELECT DATE_ADD(val, INTERVAL 1 DAY) FROM t_complex WHERE id = 1;
+ERROR HY000: Incorrect usage of date_add_interval and COMPLEX
+DROP TABLE t_complex;

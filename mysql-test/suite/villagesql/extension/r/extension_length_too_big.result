@@ -1,0 +1,49 @@
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("bytes of storage per value");
+# A fixed-length type over the cap: INSTALL is rejected, naming the type and
+# the supported maximum.
+INSTALL EXTENSION vsql_huge_fixed_test;
+ERROR HY000: Failed to install extension 'vsql_huge_fixed_test': type 'HUGE_FIELD' declares 70000 bytes of storage per value, which exceeds the maximum of 65532 bytes supported for custom-type columns today
+# A variable-length type over the cap is rejected the same way. This declares
+# max_persisted_length rather than persisted_length.
+INSTALL EXTENSION vsql_huge_var_test;
+ERROR HY000: Failed to install extension 'vsql_huge_var_test': type 'HUGE_VAR' declares 70000 bytes of storage per value, which exceeds the maximum of 65532 bytes supported for custom-type columns today
+# Neither extension was installed.
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS
+WHERE extension_name IN ('vsql_huge_fixed_test', 'vsql_huge_var_test')
+ORDER BY extension_name;
+EXTENSION_NAME	EXTENSION_VERSION
+# Neither type is available, so neither can be used in a column.
+CREATE TABLE t (id INT PRIMARY KEY, v HUGE_FIELD);
+ERROR 42000: Expected a type or a custom type instead of "HUGE_FIELD" near 'HUGE_FIELD)' at line 1
+CREATE TABLE t (id INT PRIMARY KEY, v HUGE_VAR);
+ERROR 42000: Expected a type or a custom type instead of "HUGE_VAR" near 'HUGE_VAR)' at line 1
+# The error log names the specific reason for each.
+Found storage-size rejection message for HUGE_FIELD in error log
+Found storage-size rejection message for HUGE_VAR in error log
+#
+# A type sitting exactly on the cap installs and is usable.
+#
+INSTALL EXTENSION vsql_test_only;
+# As the only column it fits the row, nullable, and round-trips a value.
+CREATE TABLE t_max (v MAX_WIDTH_FIELD);
+SHOW CREATE TABLE t_max;
+Table	Create Table
+t_max	CREATE TABLE `t_max` (
+  `v` vsql_test_only.MAX_WIDTH_FIELD DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+INSERT INTO t_max VALUES ('');
+SELECT v FROM t_max;
+v
+(0)
+DROP TABLE t_max;
+# Adding a second column pushes the row over MySQL's budget. This is the
+# below-the-cap case install-time validation deliberately does not predict.
+CREATE TABLE t_max (id INT PRIMARY KEY, v MAX_WIDTH_FIELD);
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+# A plain VARBINARY of the same width behaves identically, both ways round.
+CREATE TABLE t_vb (v VARBINARY(65532));
+DROP TABLE t_vb;
+CREATE TABLE t_vb (id INT PRIMARY KEY, v VARBINARY(65532));
+ERROR 42000: Row size too large. The maximum row size for the used table type, not counting BLOBs, is 65535. This includes storage overhead, check the manual. You have to change some columns to TEXT or BLOBs
+UNINSTALL EXTENSION vsql_test_only;

@@ -1,0 +1,149 @@
+# Test UPDATE operations with prepared statements and COMPLEX custom types
+# Covers: UPDATE with parameters, UPDATE with WHERE, multi-table operations, UPDATE with VDF
+
+--source include/villagesql/install_complex_extension.inc
+
+--echo #
+--echo # Setup test data
+--echo #
+
+CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t1 VALUES
+  (1, '(1.0,2.0)'),
+  (2, '(3.0,4.0)'),
+  (3, '(5.0,6.0)'),
+  (4, '(7.0,8.0)'),
+  (5, '(1.0,2.0)');
+
+--echo #
+--echo # Test 1: UPDATE with COMPLEX value parameter
+--echo #
+
+PREPARE stmt1 FROM 'UPDATE t1 SET val = ? WHERE id = ?';
+SET @new_val = '(10.0,11.0)';
+SET @update_id = 1;
+EXECUTE stmt1 USING @new_val, @update_id;
+SELECT * FROM t1 WHERE id = 1;
+DEALLOCATE PREPARE stmt1;
+
+--echo #
+--echo # Test 2: UPDATE multiple rows with same COMPLEX value
+--echo #
+
+PREPARE stmt2 FROM 'UPDATE t1 SET val = ? WHERE id IN (?, ?)';
+SET @new_val = '(20.0,21.0)';
+SET @id1 = 2;
+SET @id2 = 3;
+EXECUTE stmt2 USING @new_val, @id1, @id2;
+SELECT * FROM t1 WHERE id IN (2, 3) ORDER BY id;
+DEALLOCATE PREPARE stmt2;
+
+--echo #
+--echo # Test 3: UPDATE with COMPLEX value in WHERE clause
+--echo #
+
+PREPARE stmt3 FROM 'UPDATE t1 SET id = ? WHERE val = ?';
+SET @new_id = 100;
+SET @old_val = '(1.0,2.0)';
+EXECUTE stmt3 USING @new_id, @old_val;
+SELECT * FROM t1 WHERE val = '(1.0,2.0)';
+SELECT * FROM t1 WHERE id = 100;
+DEALLOCATE PREPARE stmt3;
+
+--echo #
+--echo # Reset data for next tests
+--echo #
+
+UPDATE t1 SET id = 5 WHERE id = 100;
+
+--echo #
+--echo # Test 4: UPDATE with multiple executions
+--echo #
+
+PREPARE stmt4 FROM 'UPDATE t1 SET val = ? WHERE id = ?';
+SET @val = '(30.0,31.0)';
+SET @id = 1;
+EXECUTE stmt4 USING @val, @id;
+SET @val = '(32.0,33.0)';
+SET @id = 2;
+EXECUTE stmt4 USING @val, @id;
+SELECT * FROM t1 WHERE id IN (1, 2) ORDER BY id;
+DEALLOCATE PREPARE stmt4;
+
+--echo #
+--echo # Test 5: UPDATE to NULL
+--echo #
+
+PREPARE stmt5 FROM 'UPDATE t1 SET val = ? WHERE id = ?';
+SET @null_val = NULL;
+SET @id = 3;
+EXECUTE stmt5 USING @null_val, @id;
+SELECT * FROM t1 WHERE id = 3;
+DEALLOCATE PREPARE stmt5;
+
+--echo #
+--echo # Test 6: UPDATE with VDF
+--echo #
+
+PREPARE stmt6 FROM 'UPDATE t1 SET val = vsql_complex.complex_conjugate(val) WHERE id = ?';
+SET @id = 1;
+EXECUTE stmt6 USING @id;
+SELECT * FROM t1 WHERE id = 1;
+DEALLOCATE PREPARE stmt6;
+
+--echo #
+--echo # Test 7: Multi-table UPDATE
+--echo #
+
+CREATE TABLE t2 (id INT PRIMARY KEY, val COMPLEX);
+INSERT INTO t2 VALUES (1, '(60.0,61.0)'), (2, '(62.0,63.0)');
+
+PREPARE stmt7 FROM 'UPDATE t1, t2 SET t1.val = t2.val WHERE t1.id = t2.id AND t1.id = ?';
+SET @id = 1;
+EXECUTE stmt7 USING @id;
+SELECT * FROM t1 WHERE id = 1;
+DEALLOCATE PREPARE stmt7;
+
+--echo #
+--echo # Test 8: UPDATE with ORDER BY and LIMIT
+--echo #
+
+INSERT INTO t1 VALUES (40, '(80.0,81.0)'), (41, '(80.0,81.0)'), (42, '(80.0,81.0)');
+
+PREPARE stmt8 FROM 'UPDATE t1 SET val = ? WHERE val = ? ORDER BY id LIMIT ?';
+SET @new_val = '(90.0,91.0)';
+SET @old_val = '(80.0,81.0)';
+SET @lim = 2;
+EXECUTE stmt8 USING @new_val, @old_val, @lim;
+SELECT * FROM t1 WHERE id >= 40 ORDER BY id;
+DEALLOCATE PREPARE stmt8;
+
+--echo #
+--echo # Test 9: Error case - UPDATE non-existent row
+--echo #
+
+PREPARE stmt9 FROM 'UPDATE t1 SET val = ? WHERE id = ?';
+SET @val = '(100.0,100.0)';
+SET @id = 9999;
+EXECUTE stmt9 USING @val, @id;
+SELECT COUNT(*) FROM t1 WHERE id = 9999;
+DEALLOCATE PREPARE stmt9;
+
+--echo #
+--echo # Test 10: Error case - Invalid COMPLEX format in UPDATE
+--echo #
+
+PREPARE stmt10 FROM 'UPDATE t1 SET val = ? WHERE id = ?';
+SET @bad_val = 'invalid_complex';
+SET @id = 1;
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+EXECUTE stmt10 USING @bad_val, @id;
+DEALLOCATE PREPARE stmt10;
+
+--echo #
+--echo # Cleanup
+--echo #
+
+DROP TABLE t1, t2;
+
+--source include/villagesql/uninstall_complex_extension.inc
