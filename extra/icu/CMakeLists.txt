@@ -63,6 +63,7 @@ ENDIF()
 # Xcode >= 14 makes noise about sprintf, so silence:
 IF(APPLE)
   LIST(APPEND ICU_LINUX_COMPILE_OPTIONS "-Wno-deprecated-declarations")
+  LIST(APPEND ICU_LINUX_COMPILE_OPTIONS "-Wno-shorten-64-to-32")
 ENDIF()
 
 MY_CHECK_CXX_COMPILER_WARNING("-Warray-bounds" HAS_WARN_FLAG)
