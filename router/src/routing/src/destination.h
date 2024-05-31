@@ -37,6 +37,7 @@
 
 #include "my_compiler.h"  // MY_ATTRIBUTE
 #include "mysql/harness/net_ts/io_context.h"
+#include "mysqlrouter/datatypes.h"
 #include "mysqlrouter/destination.h"
 #include "mysqlrouter/destination_nodes_state_notifier.h"
 #include "mysqlrouter/routing.h"
@@ -165,6 +166,10 @@ class RouteDestination : public DestinationNodesStateNotifier {
    * destinations are in order of preference.
    */
   virtual Destinations destinations() = 0;
+
+  virtual mysqlrouter::ServerMode purpose() const {
+    return mysqlrouter::ServerMode::Unavailable;
+  }
 
   /**
    * refresh destinations.
