@@ -7642,9 +7642,9 @@ const String *Load_query_generator::generate(size_t *fn_start, size_t *fn_end) {
   str.append(" TABLE ");
   str.append(table_name);
 
-  if (sql_ex->cs != nullptr) {
+  if (sql_ex->file_info.cs != nullptr) {
     str.append(" CHARACTER SET ");
-    str.append(sql_ex->cs->csname);
+    str.append(sql_ex->file_info.cs->csname);
   }
 
   /* We have to create all optional fields as the default is not empty */

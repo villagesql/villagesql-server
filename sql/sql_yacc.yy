@@ -1455,12 +1455,14 @@ void warn_on_deprecated_user_defined_collation(
 %token<lexer.keyword> BERNOULLI_SYM              1213  /* SQL-2016-N */
 %token<lexer.keyword> TABLESAMPLE_SYM            1214  /* SQL-2016-R */
 
-%token<lexer.keyword> VECTOR_SYM 1215
-
+%token<lexer.keyword> VECTOR_SYM      1215     /* MYSQL */
+%token<lexer.keyword> PARAMETERS_SYM  1216     /* MYSQL */
+%token<lexer.keyword> HEADER_SYM      1217     /* MYSQL */
 /*
   NOTE! When adding new non-standard keywords, make sure they are added to the
   list ident_keywords_unambiguous lest they become reserved keywords.
 */
+
 
 /*
   Precedence rules used to resolve the ambiguity when using keywords as idents
@@ -1919,6 +1921,11 @@ void warn_on_deprecated_user_defined_collation(
 %type <line_separators> line_term line_term_list opt_line_term
 
 %type <field_separators> field_term field_term_list opt_field_term
+
+%type <outfile_uri> outfile_uri
+
+%type <outfile_file_info> opt_outfile_file_info outfile_file_info_list
+        outfile_file_info_elem
 
 %type <into_destination> into_destination into_clause
 
@@ -12693,12 +12700,77 @@ into_clause:
           }
         ;
 
-into_destination:
-          OUTFILE TEXT_STRING_filesystem
-          opt_load_data_charset
-          opt_field_term opt_line_term
+outfile_uri:
+          URL_SYM text_string
           {
-            $$= NEW_PTN PT_into_destination_outfile(@$, $2, $3, $4, $5);
+            $$= NEW_PTN URI_information();
+            $$->uri= $2;
+          }
+          ;
+
+opt_outfile_file_info:
+          %empty { $$= nullptr; }
+        | outfile_file_info_list
+          {
+            $$= $1;
+          }
+        ;
+
+outfile_file_info_list:
+          outfile_file_info_list outfile_file_info_elem
+          {
+            $$= $1;
+            $$->merge_file_information($2);
+          }
+        | outfile_file_info_elem
+          {
+            $$=$1;
+          }
+        ;
+
+outfile_file_info_elem:
+          FORMAT_SYM ident
+          {
+            $$= NEW_PTN File_information();
+            $$->filetype_str= $2.str;
+          }
+        | COMPRESSION_SYM text_string
+          {
+            $$= NEW_PTN File_information();
+            $$->compression= $2;
+          }
+        | HEADER_SYM ON_SYM
+          {
+            $$= NEW_PTN File_information();
+            $$->with_header= enum_with_header::WITH_HEADER;
+          }
+        | HEADER_SYM OFF_SYM
+          {
+            $$= NEW_PTN File_information();
+            $$->with_header= enum_with_header::WITHOUT_HEADER;
+          }
+        | character_set charset_name
+          {
+            $$= NEW_PTN File_information();
+            $$->cs = $2;
+          }
+        ;
+
+into_destination:
+          OUTFILE outfile_uri opt_outfile_file_info  opt_field_term opt_line_term
+          {
+            $$= NEW_PTN
+        PT_into_destination_outfile(@$, $2, $3, $4, $5, OBJECT_STORE_DEST);
+          }
+        | OUTFILE WITH PARAMETERS_SYM json_attribute
+          {
+            $$= NEW_PTN PT_into_destination_outfile(@$, $4, OBJECT_STORE_DEST);
+          }
+        | OUTFILE TEXT_STRING_filesystem
+          opt_outfile_file_info opt_field_term opt_line_term
+          {
+            $$= NEW_PTN
+            PT_into_destination_outfile(@$, $2, $3, $4, $5, OUTFILE_DEST);
           }
         | DUMPFILE TEXT_STRING_filesystem
           {
@@ -14447,7 +14519,7 @@ load_stmt:
         ;
 
 data_or_xml:
-          DATA_SYM{ $$= FILETYPE_CSV; }
+          DATA_SYM{ $$= FILETYPE_TEXT; }
         | XML_SYM { $$= FILETYPE_XML; }
         ;
 
@@ -14507,7 +14579,7 @@ duplicate:
         ;
 
 opt_field_term:
-          %empty { $$.cleanup(); }
+          %empty { $$= nullptr; }
         | COLUMNS field_term_list { $$= $2; }
         ;
 
@@ -14515,7 +14587,7 @@ field_term_list:
           field_term_list field_term
           {
             $$= $1;
-            $$.merge_field_separators($2);
+            $$->merge_field_separators($2);
           }
         | field_term
         ;
@@ -14523,29 +14595,53 @@ field_term_list:
 field_term:
           TERMINATED BY text_string
           {
-            $$.cleanup();
-            $$.field_term= $3;
+            $$= NEW_PTN Field_separators();
+            $$->field_term= $3;
           }
         | OPTIONALLY ENCLOSED BY text_string
           {
-            $$.cleanup();
-            $$.enclosed= $4;
-            $$.opt_enclosed= 1;
+            $$= NEW_PTN Field_separators();
+            $$->enclosed= $4;
+            $$->opt_enclosed= 1;
           }
         | ENCLOSED BY text_string
           {
-            $$.cleanup();
-            $$.enclosed= $3;
+            $$= NEW_PTN Field_separators();
+            $$->enclosed= $3;
+          }
+        | NOT_SYM ENCLOSED
+          {
+            $$= NEW_PTN Field_separators();
+            $$->not_enclosed=1;
           }
         | ESCAPED BY text_string
           {
-            $$.cleanup();
-            $$.escaped= $3;
+            $$= NEW_PTN Field_separators();
+            $$->escaped= $3;
+          }
+        | DATE_SYM FORMAT_SYM text_string
+          {
+            $$= NEW_PTN Field_separators();
+            $$->date_format= $3;
+          }
+        | TIME_SYM FORMAT_SYM text_string
+          {
+            $$= NEW_PTN Field_separators();
+            $$->time_format= $3;
+          }
+        | NULL_SYM AS text_string
+          {
+            $$= NEW_PTN Field_separators();
+            $$->null_value= $3;
+          }
+        | EMPTY_SYM VALUE_SYM text_string {
+            $$= NEW_PTN Field_separators();
+            $$->empty_value= $3;
           }
         ;
 
 opt_line_term:
-          %empty { $$.cleanup(); }
+          %empty { $$= nullptr; }
         | LINES line_term_list { $$= $2; }
         ;
 
@@ -14553,7 +14649,7 @@ line_term_list:
           line_term_list line_term
           {
             $$= $1;
-            $$.merge_line_separators($2);
+            $$->merge_line_separators($2);
           }
         | line_term
         ;
@@ -14561,13 +14657,13 @@ line_term_list:
 line_term:
           TERMINATED BY text_string
           {
-            $$.cleanup();
-            $$.line_term= $3;
+            $$= NEW_PTN Line_separators();
+            $$->line_term= $3;
           }
         | STARTING BY text_string
           {
-            $$.cleanup();
-            $$.line_start= $3;
+            $$= NEW_PTN Line_separators();
+            $$->line_start= $3;
           }
         ;
 
@@ -15452,6 +15548,7 @@ ident_keywords_unambiguous:
         | GTIDS_SYM
         | GTID_ONLY_SYM
         | HASH_SYM
+        | HEADER_SYM
         | HISTOGRAM_SYM
         | HISTORY_SYM
         | HOSTS_SYM
@@ -15557,6 +15654,7 @@ ident_keywords_unambiguous:
         | POINT_SYM
         | POLYGON_SYM
         | PORT_SYM
+        | PARAMETERS_SYM
         | PRECEDING_SYM
         | PRESERVE_SYM
         | PREV_SYM

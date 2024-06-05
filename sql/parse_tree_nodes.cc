@@ -84,7 +84,9 @@
 #include "sql/sql_delete.h"  // Sql_cmd_delete...
 #include "sql/sql_do.h"      // Sql_cmd_do...
 #include "sql/sql_error.h"
+#include "sql/sql_exchange.h"
 #include "sql/sql_insert.h"  // Sql_cmd_insert...
+#include "sql/sql_lex.h"
 #include "sql/sql_parse.h"
 #include "sql/sql_select.h"  // Sql_cmd_select...
 #include "sql/sql_show.h"    // Sql_cmd_show...
@@ -3774,9 +3776,9 @@ Sql_cmd *PT_load_table::make_cmd(THD *thd) {
   Query_block *const select = lex->current_query_block();
 
   if (lex->sphead) {
-    my_error(
-        ER_SP_BADSTATEMENT, MYF(0),
-        m_cmd.m_exchange.filetype == FILETYPE_CSV ? "LOAD DATA" : "LOAD XML");
+    my_error(ER_SP_BADSTATEMENT, MYF(0),
+             m_cmd.m_exchange.file_info.filetype == FILETYPE_TEXT ? "LOAD DATA"
+                                                                  : "LOAD XML");
     return nullptr;
   }
 
@@ -4243,17 +4245,26 @@ bool PT_into_destination::do_contextualize(Parse_context *pc) {
 }
 
 bool PT_into_destination_outfile::do_contextualize(Parse_context *pc) {
-  if (super::do_contextualize(pc)) return true;
+  if (super::do_contextualize(pc) || m_exchange.do_contextualize(pc))
+    return true;
 
+  m_exchange.assign_default_values();
   LEX *lex = pc->thd->lex;
   lex->set_uncacheable(pc->select, UNCACHEABLE_SIDEEFFECT);
-  lex->result = new (pc->mem_root) Query_result_export(&m_exchange);
+  if (dumpfile_dest == OBJECT_STORE_DEST) {
+    lex->set_execute_only_in_secondary_engine(true, OUTFILE_OBJECT_STORE);
+    lex->result = new (pc->mem_root) Query_result_to_object_store(&m_exchange);
+  } else {
+    lex->result = new (pc->mem_root) Query_result_export(&m_exchange);
+  }
   return lex->result == nullptr;
 }
 
 bool PT_into_destination_dumpfile::do_contextualize(Parse_context *pc) {
-  if (super::do_contextualize(pc)) return true;
+  if (super::do_contextualize(pc) || m_exchange.do_contextualize(pc))
+    return true;
 
+  m_exchange.assign_default_values();
   LEX *lex = pc->thd->lex;
   lex->set_uncacheable(pc->select, UNCACHEABLE_SIDEEFFECT);
   lex->result = new (pc->mem_root) Query_result_dump(&m_exchange);

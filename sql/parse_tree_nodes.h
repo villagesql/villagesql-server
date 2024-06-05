@@ -1291,19 +1291,45 @@ class PT_into_destination_outfile final : public PT_into_destination {
 
  public:
   PT_into_destination_outfile(const POS &pos, const LEX_STRING &file_name_arg,
-                              const CHARSET_INFO *charset_arg,
-                              const Field_separators &field_term_arg,
-                              const Line_separators &line_term_arg)
-      : PT_into_destination(pos), m_exchange(file_name_arg.str, false) {
-    m_exchange.cs = charset_arg;
+                              File_information *file_info,
+                              const Field_separators *field_term_arg,
+                              const Line_separators *line_term_arg,
+                              enum_destination dumpfile_flag)
+      : PT_into_destination(pos),
+        m_exchange(file_name_arg.str, dumpfile_flag),
+        dumpfile_dest(dumpfile_flag) {
+    m_exchange.file_info.merge_file_information(file_info);
     m_exchange.field.merge_field_separators(field_term_arg);
     m_exchange.line.merge_line_separators(line_term_arg);
+  }
+
+  PT_into_destination_outfile(const POS &pos, LEX_CSTRING attr,
+                              enum_destination dumpfile_flag)
+      : PT_into_destination(pos),
+        m_exchange(dumpfile_flag),
+        dumpfile_dest(dumpfile_flag) {
+    m_exchange.outfile_json = attr;
+  }
+
+  PT_into_destination_outfile(const POS &pos, URI_information *outfile_uri_arg,
+                              File_information *file_info,
+                              const Field_separators *field_term_arg,
+                              const Line_separators *line_term_arg,
+                              enum_destination dumpfile_flag)
+      : PT_into_destination(pos),
+        m_exchange(dumpfile_flag),
+        dumpfile_dest(dumpfile_flag) {
+    m_exchange.file_info.merge_file_information(file_info);
+    m_exchange.field.merge_field_separators(field_term_arg);
+    m_exchange.line.merge_line_separators(line_term_arg);
+    m_exchange.uri_info.merge_uri_info_separators(outfile_uri_arg);
   }
 
   bool do_contextualize(Parse_context *pc) override;
 
  private:
   sql_exchange m_exchange;
+  enum_destination dumpfile_dest;
 };
 
 class PT_into_destination_dumpfile final : public PT_into_destination {
@@ -1311,7 +1337,8 @@ class PT_into_destination_dumpfile final : public PT_into_destination {
 
  public:
   PT_into_destination_dumpfile(const POS &pos, const LEX_STRING &file_name_arg)
-      : PT_into_destination(pos), m_exchange(file_name_arg.str, true) {}
+      : PT_into_destination(pos),
+        m_exchange(file_name_arg.str, DUMPFILE_DEST) {}
 
   bool do_contextualize(Parse_context *pc) override;
 
@@ -5498,8 +5525,8 @@ class PT_load_table final : public Parse_tree_root {
                 List<String> *opt_partitions, const CHARSET_INFO *opt_charset,
                 LEX_CSTRING compression_algorithm,
                 String *opt_xml_rows_identified_by,
-                const Field_separators &opt_field_separators,
-                const Line_separators &opt_line_separators,
+                const Field_separators *opt_field_separators,
+                const Line_separators *opt_line_separators,
                 ulong opt_ignore_lines, PT_item_list *opt_fields_or_vars,
                 PT_item_list *opt_set_fields, PT_item_list *opt_set_exprs,
                 List<String> *opt_set_expr_strings, ulong parallel,

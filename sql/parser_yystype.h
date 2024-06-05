@@ -462,8 +462,10 @@ union MY_SQL_PARSER_STYPE {
   PT_start_option_value_list_following_option_type
       *start_option_value_list_following_option_type;
   PT_set *set;
-  Line_separators line_separators;
-  Field_separators field_separators;
+  Line_separators *line_separators;
+  Field_separators *field_separators;
+  URI_information *outfile_uri;
+  File_information *outfile_file_info;
   PT_into_destination *into_destination;
   PT_select_var *select_var_ident;
   PT_select_var_list *select_var_list;
@@ -489,12 +491,12 @@ union MY_SQL_PARSER_STYPE {
   } column_value_pair;
   struct {
     PT_item_list *column_list;
-    PT_item_list *value_list;
-  } column_value_list_pair;
-  struct {
-    PT_item_list *column_list;
     PT_insert_values_list *row_value_list;
   } column_row_value_list_pair;
+  struct {
+    PT_item_list *column_list;
+    PT_item_list *value_list;
+  } column_value_list_pair;
   struct {
     PT_item_list *column_list;
     PT_query_expression_body *insert_query_expression;

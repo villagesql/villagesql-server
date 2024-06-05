@@ -7084,8 +7084,8 @@ bool Item_user_var_as_out_param::fix_fields(THD *thd, Item **ref) {
   assert(!fixed);
 
   assert(thd->lex->sql_command == SQLCOM_LOAD);
-  auto exchange_cs =
-      down_cast<Sql_cmd_load_table *>(thd->lex->m_sql_cmd)->m_exchange.cs;
+  const auto *exchange_cs = down_cast<Sql_cmd_load_table *>(thd->lex->m_sql_cmd)
+                                ->m_exchange.file_info.cs;
   /*
     Let us set the same collation which is used for loading
     of fields in LOAD DATA INFILE.
