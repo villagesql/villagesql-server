@@ -1122,7 +1122,7 @@ int HashJoinIterator::ReadNextJoinedRowFromHashTable() {
   return 0;
 }
 
-int HashJoinIterator::Read() {
+int HashJoinIterator::DoRead() {
   /*
     We do lazy initialization here instead of calling Reset() from Init().
     Reset() may read a probe-row, and a parent iterator may overwrite the

@@ -1704,7 +1704,7 @@ static inline uint get_field_keypart(KEY *index, const Field *field) {
      - When both min and max are present, LIS will make two reads per group
        instead of one. Similarly when min and max functions are not present,
        rows retrieved are different. Cost model should reflect what happens
-       in GroupIndexSkipScanIterator::Read()
+       in GroupIndexSkipScanIterator::DoRead()
 
   RETURN
     None
