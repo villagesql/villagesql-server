@@ -337,13 +337,6 @@ class HashJoinIterator final : public RowIterator {
                    HashJoinInput first_input, bool probe_input_batch_mode,
                    uint64_t *hash_table_generation);
 
-  bool Init() override {
-    m_needs_reset = true;
-    return false;
-  }
-
-  int Read() override;
-
   void SetNullRowFlag(bool is_null_row) override {
     assert(!m_probe_row_read || m_state == State::END_OF_ROWS);
     m_build_input->SetNullRowFlag(is_null_row);
@@ -363,6 +356,13 @@ class HashJoinIterator final : public RowIterator {
   int ChunkCount() { return m_chunk_files_on_disk.size(); }
 
  private:
+  bool DoInit() override {
+    m_needs_reset = true;
+    return false;
+  }
+
+  int DoRead() override;
+
   /// Read all rows from the build input and store the rows into the in-memory
   /// hash table. If the hash table goes full, the rest of the rows are written
   /// out to chunk files on disk. See the class comment for more details.
@@ -686,7 +686,7 @@ class HashJoinIterator final : public RowIterator {
   // because the hash table was full). So when reading a probe row from a chunk
   // file, this variable holds the match flag. This flag must be a class member,
   // since one probe row may match multiple rows from the hash table; the
-  // execution will go out of HashJoinIterator::Read() between each matching
+  // execution will go out of HashJoinIterator::DoRead() between each matching
   // row, causing any local match flag to lose the match flag info from the last
   // probe row read.
   bool m_probe_row_match_flag{false};
