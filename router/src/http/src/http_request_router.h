@@ -26,20 +26,22 @@
 #ifndef ROUTER_SRC_HTTP_SRC_HTTP_REQUEST_ROUTER_H_
 #define ROUTER_SRC_HTTP_SRC_HTTP_REQUEST_ROUTER_H_
 
+#include <unicode/regex.h>
+
+#include <map>
 #include <memory>
-#include <mutex>
-#include <regex>
+#include <shared_mutex>
 #include <string>
-#include <thread>
 #include <vector>
 
 #include "http/base/request.h"
 #include "http/base/request_handler.h"
 #include "http/server/request_handler_interface.h"
-#include "mysql/harness/net_ts/impl/socket_constants.h"
-#include "mysql/harness/stdx/monitor.h"
+#include "mysql/harness/stdx/expected.h"
+#include "mysqlrouter/http_server_lib_export.h"
 
-class HttpRequestRouter : public http::server::RequestHandlerInterface {
+class HTTP_SERVER_LIB_EXPORT HttpRequestRouter
+    : public http::server::RequestHandlerInterface {
  public:
   using RequestHandler = http::base::RequestHandler;
   using BaseRequestHandlerPtr = std::shared_ptr<http::base::RequestHandler>;
@@ -57,27 +59,42 @@ class HttpRequestRouter : public http::server::RequestHandlerInterface {
   void require_realm(const std::string &realm) { require_realm_ = realm; }
 
  private:
-  struct RouterData {
-    std::string url_host;
-    std::string url_regex_str;
-    std::regex url_regex;
-    BaseRequestHandlerPtr handler;
+  class RouteMatcher {
+   public:
+    RouteMatcher(std::string url_pattern, BaseRequestHandlerPtr handler)
+        : url_pattern_(std::move(url_pattern)), handler_(std::move(handler)) {}
+
+    stdx::expected<void, UErrorCode> compile();
+
+    stdx::expected<void, UErrorCode> matches(std::string_view input) const;
+
+    stdx::expected<void, UErrorCode> matches(
+        const icu::UnicodeString &input) const;
+
+    BaseRequestHandlerPtr handler() const { return handler_; }
+
+    const std::string &url_pattern() const { return url_pattern_; }
+
+   private:
+    std::string url_pattern_;
+    BaseRequestHandlerPtr handler_;
+
+    std::unique_ptr<icu::RegexPattern> regex_pattern_;
   };
 
   // if no routes are specified, return 404
   void handler_not_found(http::base::Request &req);
-  BaseRequestHandlerPtr find_route_handler(const std::string &url_host,
-                                           const std::string &path);
 
-  // handlers for request for the specific url_host
-  std::vector<RouterData> request_handlers_;
-  // handlers for request with empty url_host
-  std::vector<RouterData> request_handlers_url_host_empty_;
+  BaseRequestHandlerPtr find_route_handler(std::string_view url_host,
+                                           std::string_view path);
+
+  std::map<std::string, std::vector<RouteMatcher>, std::less<>>
+      request_handlers_;
 
   BaseRequestHandlerPtr default_route_;
   std::string require_realm_;
 
-  std::mutex route_mtx_;
+  std::shared_mutex route_mtx_;
 };
 
 #endif  // ROUTER_SRC_HTTP_SRC_HTTP_REQUEST_ROUTER_H_
