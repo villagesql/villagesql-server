@@ -65,16 +65,10 @@ class Tty_init {
 
 static void init_DIM() {
   mysql_harness::DIM &dim = mysql_harness::DIM::instance();
+  static mysql_harness::RandomGenerator static_rg;
 
   // RandomGenerator
-  dim.set_RandomGenerator(
-      []() {
-        static mysql_harness::RandomGenerator rg;
-        return &rg;
-      },
-      [](mysql_harness::RandomGeneratorInterface *) {}
-      // don't delete our static!
-  );
+  dim.set_static_RandomGenerator(&static_rg);
 
   //  // MySQLSession
   //  dim.set_MySQLSession(
@@ -88,17 +82,12 @@ static void init_DIM() {
 
 static void preconfig_log_init() noexcept {
   using namespace mysql_harness;
+
+  static mysql_harness::logging::Registry static_registry;
+
   // setup registry object in DIM
-  {
-    DIM &dim = DIM::instance();
-    dim.set_LoggingRegistry(
-        []() {
-          static logging::Registry registry;
-          return &registry;
-        },
-        [](logging::Registry *) {}  // don't delete our static!
-    );
-  }
+
+  mysql_harness::DIM::instance().set_static_LoggingRegistry(&static_registry);
 
   // initialize logger to log to stderr or OS logger. After reading
   // configuration inside of MySQLRouter::start(), it will be re-initialized

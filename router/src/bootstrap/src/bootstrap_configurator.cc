@@ -198,8 +198,7 @@ void BootstrapConfigurator::init_main_logger(
     //           with the new one at the very end.
 
     // our new logger registry, it will replace the current one if all goes well
-    std::unique_ptr<mysql_harness::logging::Registry> registry(
-        new mysql_harness::logging::Registry());
+    auto registry = std::make_unique<mysql_harness::logging::Registry>();
 
     const auto level = mysql_harness::logging::get_default_log_level(
         config, raw_mode);  // throws std::invalid_argument
@@ -219,9 +218,8 @@ void BootstrapConfigurator::init_main_logger(
     // nothing threw - we're good. Now let's replace the new registry with the
     // old one
     DIM::instance().set_LoggingRegistry(
-        [&registry]() { return registry.release(); },
+        registry.release(),
         std::default_delete<mysql_harness::logging::Registry>());
-    DIM::instance().reset_LoggingRegistry();
 
     // flag that the new loggers are ready for use
     DIM::instance().get_LoggingRegistry().set_ready();
@@ -256,12 +254,9 @@ void BootstrapConfigurator::init(int argc, char **argv) {
     config_files = std::move(config_files_res.value());
   }
 
-  DIM::instance().reset_Config();  // simplifies unit tests
   const auto config_overwrites = arg_handler_.get_config_overwrites();
   DIM::instance().set_Config(
-      [&config_files, &config_overwrites]() {
-        return make_config({}, config_files, config_overwrites);
-      },
+      make_config({}, config_files, config_overwrites),
       std::default_delete<mysql_harness::LoaderConfig>());
   auto &config = DIM::instance().get_Config();
   try {
