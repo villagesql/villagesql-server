@@ -33,6 +33,7 @@
 #include "http/server/http_counters.h"
 #include "http/server/request.h"
 #include "http/server/request_handler_interface.h"
+#include "mysqlrouter/uri.h"
 
 namespace http {
 namespace server {
