@@ -84,6 +84,7 @@
 #include "sql/mdl.h"  // MDL_SHARED_READ
 #include "sql/mem_root_array.h"
 #include "sql/nested_join.h"
+#include "sql/olap.h"
 #include "sql/opt_hints.h"
 #include "sql/opt_trace.h"  // Opt_trace_object
 #include "sql/opt_trace_context.h"
@@ -315,9 +316,6 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
     for (Item *item : fields) {
       mark_item_as_maybe_null_if_non_primitive_grouped(item);
       item->update_used_tables();
-    }
-    if (populate_grouping_sets(thd)) {
-      return true;
     }
   }
 
@@ -659,21 +657,41 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
   // If CUBE is present in the query, all expressions that include
   // any GROUP BY expression need to be marked as dependent on
   // grouping set.
-  if (olap == CUBE_TYPE) {
+  if (olap == CUBE_TYPE || olap == GROUPING_SETS_TYPE) {
     for (Item *item : fields) {
       bool is_updated = false;
-      WalkItem(item, enum_walk::POSTFIX, [this, &is_updated](Item *inner_item) {
-        if (find_in_group_list(inner_item, /*rollup_level=*/nullptr) !=
+
+      /* The argument of GROUPING function should be part of the Group By list
+       */
+      auto update_gby_modifier = [this, &is_updated](Item *walk_item) {
+        if (walk_item->type() == Item::FUNC_ITEM) {
+          auto *item_func = down_cast<Item_func *>(walk_item);
+          if (item_func->functype() == Item_func::GROUPING_FUNC) {
+            for (uint idx = 0; idx < item_func->argument_count(); idx++) {
+              if (!find_in_group_list(item_func->arguments()[idx],
+                                      /*rollup_level=*/nullptr)) {
+                my_error(ER_FIELD_IN_GROUPING_NOT_GROUP_BY, MYF(0), (idx + 1));
+                return true;
+              }
+            }
+          }
+        }
+
+        if (find_in_group_list(walk_item, /*rollup_level=*/nullptr) !=
             nullptr) {
-          inner_item->set_group_by_modifier();
+          walk_item->set_group_by_modifier();
           is_updated = true;
         }
+
         return false;
-      });
+      };
+
+      if (WalkItem(item, enum_walk::POSTFIX, update_gby_modifier)) {
+        return true;
+      }
       if (is_updated) item->update_used_tables();
     }
   }
-
   assert(!thd->is_error());
   return false;
 }
@@ -2659,75 +2677,6 @@ bool Query_block::decorrelate_condition(Semijoin_decorrelation &sj_decor,
   return false;
 }
 
-bool Query_block::allocate_grouping_sets(THD *thd) {
-  auto max_group_by_elements = GetMaximumNumGrpByColsSupported(olap);
-
-  if (group_list.elements > static_cast<uint>(max_group_by_elements)) {
-    /* The number of Grouping sets cannot be greater than INT_MAX as IsBitSet
-     * take integer as the input bit*/
-    my_error(ER_TOO_MANY_GROUP_BY_MODIFIER_BRANCHES, MYF(0),
-             GroupByModifierString(olap), max_group_by_elements);
-    return true;
-  }
-  m_num_grouping_sets = (olap == ROLLUP_TYPE)
-                            ? group_list.elements + 1
-                            : pow(static_cast<double>(2),
-                                  static_cast<double>(group_list.elements));
-
-  assert(m_num_grouping_sets != 0);
-
-  /*  Allocate bitmap for grouping sets. */
-  for (ORDER *grp = group_list.first; grp != nullptr; grp = grp->next) {
-    grp->grouping_set_info =
-        pointer_cast<MY_BITMAP *>(thd->alloc(sizeof(MY_BITMAP)));
-    if (grp->grouping_set_info == nullptr) {
-      return true;
-    }
-    my_bitmap_map *bitbuf = pointer_cast<my_bitmap_map *>(
-        thd->alloc(bitmap_buffer_size(m_num_grouping_sets)));
-    bitmap_init(grp->grouping_set_info, bitbuf, m_num_grouping_sets);
-  }
-  return false;
-}
-
-/**
-  Populate the grouping set bitvector if the query block has non-primitive
-  grouping. If the non-primitive grouping is ROLLUP or CUBE, the grouping sets
-  have to be computed. The representation of the grouping set is done using a
-  bitfield in the ORDER object.
-  case ROLLUP : Say the query has GROUP BY ROLLUP (a,b) then the grouping sets
-  will be (a,b) (a) () where () represents single group aggregate without any
-  grouping. Here there are 3 grouping sets ranging from 0 to 2 and 0 is the
-  single group aggregate. The bitfield associated with GROUP BY element 'a'
-  will be 3 (i,e. 2+1) The bitfield associated with Group by element 'b' will
-  be 2 as it is part of only set number 2.
-  case CUBE: Say the query has GROUP BY CUBE (a,b) then the grouping sets
-  will be (a,b) (a) (b) (). The number of grouping sets will be (2^n)
-  where n is the number of elements in the GROUP BY list. The bitfield
-  associated with Group by element 'a' will be 6 (i.e. 4+2).
-  The bitfield associated with Group by element 'b' will be 1.
-*/
-bool Query_block::populate_grouping_sets(THD *thd) {
-  assert(group_list.elements != 0 && olap != UNSPECIFIED_OLAP_TYPE);
-
-  if (allocate_grouping_sets(thd)) {
-    return true;
-  }
-
-  bool rollup = (olap == ROLLUP_TYPE);
-  int gby_idx = 0;
-  for (ORDER *grp = group_list.first; grp != nullptr;
-       grp = grp->next, gby_idx++) {
-    for (int gs = 1; gs < m_num_grouping_sets; gs++) {
-      if ((rollup && gby_idx < gs) || (!rollup && IsBitSet(gby_idx, gs))) {
-        bitmap_set_bit(grp->grouping_set_info, gs);
-      }
-    }
-  }
-
-  return false;
-}
-
 bool walk_join_list(mem_root_deque<Table_ref *> &list,
                     std::function<bool(Table_ref *)> action) {
   for (Table_ref *tl : list) {
@@ -4690,6 +4639,22 @@ bool Query_block::setup_group(THD *thd) {
     if (item->data_type() == MYSQL_TYPE_INVALID &&
         item->propagate_type(thd, MYSQL_TYPE_VARCHAR))
       return true;
+  }
+
+  if (olap == GROUPING_SETS_TYPE && get_number_of_grouping_sets() == 1) {
+    /*
+      A GROUPING SETS specification with a single grouping set can be
+      transformed to a simple GROUP BY operation with the same grouping set
+      expressions.
+    */
+    set_olap_type(UNSPECIFIED_OLAP_TYPE);
+    set_number_of_grouping_sets(0);
+    if (group_list_size() == 1) {
+      Item *group_item = group_list.first->item[0];
+      if (group_item->const_item() && group_item->is_null()) {
+        group_list.clear();
+      }
+    }
   }
 
   return false;

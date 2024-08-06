@@ -707,7 +707,7 @@ class PT_tablesample : public Parse_tree_node {
 class PT_group : public Parse_tree_node {
   typedef Parse_tree_node super;
 
-  PT_order_list *group_list;
+  Mem_root_array_YY<PT_order_list *> group_list;
   olap_type olap;
 
  protected:
@@ -718,10 +718,42 @@ class PT_group : public Parse_tree_node {
   }
 
  public:
-  PT_group(const POS &pos, PT_order_list *group_list_arg, olap_type olap_arg)
+  PT_group(const POS &pos, Mem_root_array_YY<PT_order_list *> group_list_arg,
+           olap_type olap_arg)
       : super(pos), group_list(group_list_arg), olap(olap_arg) {}
 
   bool do_contextualize(Parse_context *pc) override;
+
+  bool set_olap_type(Parse_context *pc);
+
+  bool set_num_grouping_sets(Parse_context *pc, int &num_grouping_sets);
+
+  void check_if_execute_only_in_secondary_engine(Parse_context *pc,
+                                                 int num_grouping_sets);
+
+  /**
+   Initializes the grouping set if the query block includes GROUP BY
+   modifiers.
+ */
+  bool allocate_grouping_sets(Parse_context *pc, int &num_grouping_sets);
+
+  /**
+    Populates the grouping sets if the query block includes non-primitive
+    grouping.
+  */
+  bool populate_grouping_sets(Parse_context *pc);
+
+  /**
+    Populate the grouping set bitvector if the query block has non-primitive
+    ROLLUP and CUBE grouping.
+  */
+  void populate_grouping_sets_rollup_cube(Parse_context *pc);
+
+  /**
+    Populate the grouping set bitvector if the query block has GROUPING SETS
+    group by modifier.
+  */
+  bool populate_grouping_sets_fornon_primitive_grouping(Parse_context *pc);
 };
 
 class PT_order : public Parse_tree_node {

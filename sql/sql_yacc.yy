@@ -1485,6 +1485,7 @@ CHARSET_INFO *warn_on_deprecated_user_defined_collation(
 %token<lexer.keyword> MATERIALIZED_SYM      1236     /* MYSQL */
 
 %token<lexer.keyword> GUIDED_SYM      1237     /* MYSQL */
+%token<lexer.keyword> SETS_SYM        1238   /* SQL-1999-N */
 
 /*
   NOTE! When adding new non-standard keywords, make sure they are added to the
@@ -1861,6 +1862,9 @@ CHARSET_INFO *warn_on_deprecated_user_defined_collation(
 
 %type <order_list> order_list group_list gorder_list opt_gorder_clause
       alter_order_list opt_partition_clause opt_window_order_by_clause
+      empty_grouping_set
+
+%type<group_list_array> simple_grouping_expr_list grouping_set_list
 
 %type<tablesample> opt_tablesample_clause
 
@@ -12804,17 +12808,21 @@ window_definition:
 
 opt_group_clause:
           %empty { $$= nullptr; }
-        | GROUP_SYM BY group_list olap_opt
+        | GROUP_SYM BY simple_grouping_expr_list olap_opt
           {
             $$= NEW_PTN PT_group(@$, $3, $4);
           }
-        | GROUP_SYM BY ROLLUP_SYM '(' group_list ')'
+        | GROUP_SYM BY ROLLUP_SYM '(' simple_grouping_expr_list ')'
           {
             $$= NEW_PTN PT_group(@$, $5, ROLLUP_TYPE);
           }
-        | GROUP_SYM BY CUBE_SYM '(' group_list ')'
+        | GROUP_SYM BY CUBE_SYM '(' simple_grouping_expr_list ')'
           {
             $$= NEW_PTN PT_group(@$, $5, CUBE_TYPE);
+          }
+        | GROUP_SYM BY GROUPING_SYM SETS_SYM '(' grouping_set_list ')'
+          {
+            $$= NEW_PTN PT_group(@$, $6, GROUPING_SETS_TYPE);
           }
         ;
 
@@ -12834,6 +12842,48 @@ group_list:
           }
         ;
 
+simple_grouping_expr_list:
+        group_list
+        {
+          $$.init(YYMEM_ROOT);
+          if ($$.push_back($1))
+            MYSQL_YYABORT; // OOM
+        };
+
+empty_grouping_set:
+        '(' ')'
+        {
+          PT_order_expr *empty_item = NEW_PTN PT_order_expr(@$, NEW_PTN Item_null(@$), ORDER_NOT_RELEVANT);
+          if (empty_item == nullptr)
+            MYSQL_YYABORT;
+
+          $$=NEW_PTN PT_order_list(@$);
+          if ($$ == nullptr)
+            MYSQL_YYABORT;
+          $$->push_back(empty_item);
+        };
+
+grouping_set_list:
+          grouping_set_list ',' '(' group_list ')'
+          {
+            if ($$.push_back($4))
+              MYSQL_YYABORT; // OOM
+          }
+        | grouping_set_list ',' empty_grouping_set
+          {
+            if ($$.push_back($3))
+              MYSQL_YYABORT; // OOM
+          }
+        | '(' simple_grouping_expr_list ')'
+          {
+            $$=$2;
+          }
+        | empty_grouping_set
+          {
+            $$.init(YYMEM_ROOT);
+            if ($$.push_back($1))
+              MYSQL_YYABORT; // OOM
+          };
 
 olap_opt:
           %empty { $$= UNSPECIFIED_OLAP_TYPE; }
