@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
   if (nullptr == getenv(kEnvLiveServer)) {
     auto &filter = testing::GTEST_FLAG(filter);
     if (filter.empty() || filter == "*") {
-      filter = "-DatabaseQuery*.*";
+      filter = "-DatabaseQuery*.*:DualityView*.*";
     }
     std::cerr << filter << std::endl;
     std::cerr << "Filtering out tests that run on live database. To run those "
