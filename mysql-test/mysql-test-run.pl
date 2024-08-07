@@ -3154,6 +3154,7 @@ sub find_router_plugin_in_package($) {
   }
 
   return mtr_file_exists("$basedir/lib64/mysqlrouter/" . $plugin_filename,
+                         "$basedir/lib/mysqlrouter/" . $plugin_filename,
                          "$basedir/lib/" . $plugin_filename);
 }
 
