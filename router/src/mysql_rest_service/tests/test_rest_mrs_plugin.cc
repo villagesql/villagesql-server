@@ -24,6 +24,7 @@
 
 #include <gtest/gtest.h>
 
+#include "helpers/process_manager.h"
 #include "mysql/harness/logging/registry.h"
 #include "test/helpers.h"
 
@@ -48,6 +49,8 @@ int main(int argc, char *argv[]) {
     mysql_harness::logging::set_log_level_for_all_loggers(
         mysql_harness::logging::LogLevel::kFatal);
   }
+
+  ProcessManager::set_origin(Path(argv[0]).dirname());
 
   return RUN_ALL_TESTS();
 }

@@ -567,9 +567,30 @@ constexpr const char *k_test_ddl[] = {
 
 };
 
+std::unique_ptr<TcpPortPool> DatabaseRestTableTest::tcp_pool_;
+std::unique_ptr<SharedServer> DatabaseRestTableTest::server_;
+
+void DatabaseRestTableTest::SetUpTestSuite() {
+  tcp_pool_.reset(new TcpPortPool());
+  server_.reset(new SharedServer(*tcp_pool_));
+
+  server_->prepare_datadir();
+  server_->spawn_server();
+}
+
+void DatabaseRestTableTest::TearDownTestSuite() {
+  server_.reset();
+  tcp_pool_.reset();
+}
+
 void DatabaseRestTableTest::SetUp() {
+  if (!server_ && server_->mysqld_failed_to_start()) {
+    GTEST_SKIP() << "mysql-server failed to start.";
+    return;
+  }
+
   m_ = std::make_unique<mysqlrouter::MySQLSession>();
-  m_->connect("localhost", 3306, "root", "", "", "",
+  m_->connect("localhost", server_->server_port(), "root", "", "", "",
               mysqlrouter::MySQLSession::kDefaultConnectTimeout,
               mysqlrouter::MySQLSession::kDefaultReadTimeout,
               CLIENT_FOUND_ROWS);

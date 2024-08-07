@@ -29,8 +29,13 @@
 #include <map>
 #include <memory>
 #include <string>
+
+// Must be included before shared_mysql_server.h
+#include "helpers/tcp_port_pool.h"
+
 #include "helper/json/rapid_json_to_text.h"
 #include "helper/json/to_sqlstring.h"
+#include "helpers/shared_server.h"
 #include "mrs/database/duality_view/select.h"
 #include "mrs/database/query_rest_table.h"
 #include "mrs/database/query_rest_table_single_row.h"
@@ -46,8 +51,18 @@ class DatabaseRestTableTest : public testing::Test {
   std::string initial_binlog_file_;
   uint64_t initial_binlog_position_ = 0;
   bool select_include_links_ = false;
+  // Variables below, may be moved to `Environment` class,
+  // initialized in setup and teardown methods when
+  // tests that depend on `DatabaseRestTableTest` would be
+  // moved to its own executable.
+  static std::unique_ptr<SharedServer> server_;
+  static std::unique_ptr<TcpPortPool> tcp_pool_;
+
   void SetUp() override;
   void TearDown() override;
+
+  static void SetUpTestSuite();
+  static void TearDownTestSuite();
 
   virtual void reset_test();
   void snapshot();
