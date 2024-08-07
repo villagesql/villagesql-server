@@ -7,6 +7,7 @@ if ($ROUTER_MRS_SCHEMA == 2)
     --skip This tests the functionality added in metadata-schema 3.x
 }
 
+--let $extra_mrs_router_id=1
 --source ../include/predefined_setup/configure_router_mrs_root.inc
 --source ../include/schema/basic_schema.sql
 
