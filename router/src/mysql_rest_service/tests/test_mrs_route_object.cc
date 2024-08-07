@@ -114,6 +114,7 @@ class RouteObjectTests : public Test {
     auto first_field = std::make_shared<mrs::database::entry::Column>();
     first_field->id = mrs::UniversalId{kFirstColumnId};
     first_field->name = "name";
+    first_field->column_name = "name";
     first_field_ = first_field;
     obj.object_description->fields.push_back(first_field_);
 

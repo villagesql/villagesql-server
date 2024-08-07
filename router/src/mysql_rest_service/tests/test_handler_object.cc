@@ -179,10 +179,11 @@ TEST_F(HandleObjectTests, fetch_object_feed) {
 
   EXPECT_CALL(
       mock_session,
-      query(StartsWith("SELECT "
-                       "JSON_OBJECT('column1', `t`.`column1`, 'column2', `t`.`"
-                       "column2`, 'column3', `t`.`column3`,'links'"),
-            _, _));
+      query(
+          StartsWith("SELECT "
+                     "JSON_OBJECT('column1', `t0`.`column1`, 'column2', `t0`.`"
+                     "column2`, 'column3', `t0`.`column3`,'links'"),
+          _, _));
 
   object.handle_get(&ctxt);
 }
@@ -209,10 +210,11 @@ TEST_F(HandleObjectTests, fetch_object_single) {
 
   EXPECT_CALL(
       mock_session,
-      query(StartsWith("SELECT "
-                       "JSON_OBJECT('column1', `t`.`column1`, 'column2', `t`.`"
-                       "column2`, 'column3', `t`.`column3`,'links'"),
-            _, _));
+      query(
+          StartsWith("SELECT "
+                     "JSON_OBJECT('column1', `t0`.`column1`, 'column2', `t0`.`"
+                     "column2`, 'column3', `t0`.`column3`,'links'"),
+          _, _));
 
   object.handle_get(&ctxt);
 }
