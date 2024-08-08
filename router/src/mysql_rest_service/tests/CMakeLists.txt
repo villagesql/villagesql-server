@@ -27,7 +27,7 @@ IF(MY_COMPILER_IS_GNU_OR_CLANG)
   ADD_COMPILE_OPTIONS("-Wno-deprecated-declarations")
 ENDIF()
 
-ADD_TEST_FILE(test_rest_mrs_plugin.cc
+ADD_TEST_FILE(test_plugin.cc
   MODULE mrs
   EXTRA_SOURCES
     ./helper/set_http_component.cc
