@@ -2,12 +2,7 @@
 --source include/have_group_replication_plugin.inc
 
 --source ../include/predefined_setup/configure_innodb_cluster_gr.inc
-
---echo # Wait for the Router to update the metadata after we created the Cluster
---let $grep_pattern = .*Ready, signaling notify socket.*
---let $grep_file = $MYSQLROUTER_LOGFILE
---let $wait_timeout = 20
---source include/wait_for_pattern_in_file.inc
+--source ../include/innodb_cluster/wait_for_update_of_metadata.inc
 
 --let $extra_mrs_router_id=1
 --source ../include/predefined_setup/configure_router_mrs_root.inc
