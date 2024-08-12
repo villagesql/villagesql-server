@@ -647,7 +647,9 @@ void MySQLSession::prepare_execute(uint64_t ps_id,
     std::unique_ptr<bool[]> is_null{new bool[nfields]};
     memset(my_bind.get(), 0, sizeof(MYSQL_BIND) * nfields);
 
+    log_debug("prepare_execute before validator %d", (int)nfields);
     validator(nfields, fields);
+    log_debug("prepare_execute after validator %d", (int)nfields);
     for (unsigned int i = 0; i < nfields; ++i) {
       size_t max_length =
           std::max<unsigned long>(fields[i].max_length + 1, 1000);
@@ -658,6 +660,7 @@ void MySQLSession::prepare_execute(uint64_t ps_id,
       my_bind[i].length = &length[i];
     }
 
+    log_debug("prepare_execute before mysql_stmt_bind_result");
     mysql_stmt_bind_result(stmt, my_bind.get());
 
     std::vector<const char *> outrow;
@@ -679,6 +682,8 @@ void MySQLSession::prepare_execute(uint64_t ps_id,
     }
     status = mysql_stmt_next_result(stmt);
   } while (status == 0);
+
+  log_debug("prepare_execute before exit %d", status);
 
   if (status == MYSQL_NO_DATA) return;
   if (status == CR_NO_RESULT_SET) return;

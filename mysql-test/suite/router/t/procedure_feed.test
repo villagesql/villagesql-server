@@ -167,6 +167,11 @@
 --let $mrs_add_db_object_path=/nothing
 --source ../include/mrs/db_object/add.inc
 
+--let $mrs_add_db_object_type=PROCEDURE
+--let $mrs_add_db_object=hello_proc
+--let $mrs_add_db_object_path=/hello_proc
+--source ../include/mrs/db_object/add.inc
+
 --source ../include/mrs/end_object_definition.inc
 
 # Wait until MySQLRouter fetches db-object.
@@ -444,6 +449,16 @@ exec $MRS_CLIENT_ARGS
 --let $mrs_client_arg_path='/svc/proc/move_double'
 --let $mrs_client_arg_payload='{"a":10}'
 --source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/svc/proc/hello_proc'
+--let $mrs_client_arg_payload='{"name": "Andresz"}'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # III.6
+exec $MRS_CLIENT_ARGS
+  --path /svc/proc/hello_proc?name=Andresz;
 
 # Cleanup
 --source ../include/mrs/cleanup.inc

@@ -174,6 +174,11 @@ BEGIN
     ELSE
         SELECT 2;
     END IF;
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`hello_proc` (IN name CHAR(20))
+BEGIN
+    SELECT CONCAT('Hello ',name,'!') as result;
 END$$
 
 --enable_query_log

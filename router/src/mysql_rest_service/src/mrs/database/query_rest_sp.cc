@@ -122,7 +122,9 @@ void QueryRestSP::columns_set(unsigned number, MYSQL_FIELD *fields) {
   using namespace std::string_literals;
   log_debug("No match");
   columns_items_type_ = "items"s + std::to_string(resultset_);
+  log_debug("before impl_columns_set %d", (int)number);
   impl_columns_set(columns_, number, fields);
+  log_debug("after impl_columns_set");
 }
 
 std::shared_ptr<JsonTemplate> QueryRestSP::create_template() {

@@ -81,6 +81,7 @@
 # Registred DB_OBJECT at path: /svc/proc/move_float
 # Registred DB_OBJECT at path: /svc/proc/move_double
 # Registred DB_OBJECT at path: /svc/proc/nothing
+# Registred DB_OBJECT at path: /svc/proc/hello_proc
 GET /svc/proc/nothing
 {
     "items": []
@@ -773,6 +774,53 @@ PUT /svc/proc/move_double (payload-size:8)
                     {
                         "name": "result",
                         "type": "DOUBLE(0,31)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+PUT /svc/proc/hello_proc (payload-size:19)
+{
+    "items": [
+        {
+            "type": "items0",
+            "items": [
+                {
+                    "result": "Hello Andresz!"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "VARCHAR(27)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.6
+GET /svc/proc/hello_proc?name=Andresz
+{
+    "items": [
+        {
+            "type": "items0",
+            "items": [
+                {
+                    "result": "Hello Andresz!"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "VARCHAR(27)"
                     }
                 ]
             }
