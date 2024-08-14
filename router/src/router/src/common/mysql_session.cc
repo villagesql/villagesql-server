@@ -642,6 +642,10 @@ void MySQLSession::prepare_execute(uint64_t ps_id,
     MYSQL_RES *rs_metadata = mysql_stmt_result_metadata(stmt);
     MYSQL_FIELD *fields =
         rs_metadata ? mysql_fetch_fields(rs_metadata) : nullptr;
+    if (nfields > 0 && !fields) {
+      throw std::runtime_error("No metadata for result field(s) stmt id:"s +
+                               std::to_string(ps_id));
+    }
     std::unique_ptr<MYSQL_BIND[]> my_bind{new MYSQL_BIND[nfields]};
     std::unique_ptr<unsigned long[]> length{new unsigned long[nfields]};
     std::unique_ptr<bool[]> is_null{new bool[nfields]};
