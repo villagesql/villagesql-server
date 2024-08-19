@@ -72,11 +72,21 @@ static void impl_columns_set(std::vector<helper::Column> &c,
 
 static void impl_columns_set(std::vector<helper::Column> &c, unsigned number,
                              MYSQL_FIELD *fields) {
+  log_debug("impl_columns_set %u %p", number, fields);
   c.resize(number);
+  log_debug("impl_columns_set after resize");
   int idx = 0;
   for (auto &i : c) {
+    log_debug("impl_columns_set %u:", idx);
+    log_debug("  type %d", (int)fields[idx].type);
+    log_debug("  length %u", (int)fields[idx].length);
+    log_debug("  flags %u", (int)fields[idx].flags);
+    log_debug("  name_length %u", fields[idx].name_length);
+    log_debug("  name %s", fields[idx].name);
+
     i = helper::Column(&fields[idx++]);
   }
+  log_debug("impl_columns_set end");
 }
 
 static const Field *columns_match(const std::vector<Field> &columns,
@@ -122,7 +132,7 @@ void QueryRestSP::columns_set(unsigned number, MYSQL_FIELD *fields) {
   using namespace std::string_literals;
   log_debug("No match");
   columns_items_type_ = "items"s + std::to_string(resultset_);
-  log_debug("before impl_columns_set %d", (int)number);
+  log_debug("before impl_columns_set %d %p", (int)number, fields);
   impl_columns_set(columns_, number, fields);
   log_debug("after impl_columns_set");
 }
