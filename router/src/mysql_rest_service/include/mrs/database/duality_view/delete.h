@@ -66,9 +66,7 @@ class RowDeleteBase : public RowChangeOperation {
   void process_to_many(const ForeignKeyReference &ref,
                        JSONInputArray input) override;
 
-  void process_to_one(const ForeignKeyReference &, JSONInputObject) override {
-    // no-op
-  }
+  void process_to_one(const ForeignKeyReference &, JSONInputObject) override;
 
  protected:
   virtual void do_delete(MySQLSession *session);

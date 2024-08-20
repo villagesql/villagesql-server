@@ -72,7 +72,7 @@ class DatabaseRestTableTest : public testing::Test {
 
   void drop_schema();
 
-  enum class TestSchema { PLAIN, AUTO_INC, UUID, MULTI };
+  enum class TestSchema { PLAIN, AUTO_INC, UUID, CYCLE, COMPOSITE };
 
   void prepare(TestSchema test_schema);
   void prepare_user_metadata();
@@ -85,6 +85,12 @@ class DatabaseRestTableTest : public testing::Test {
         m_->query_one("SHOW TABLE STATUS FROM mrstestdb LIKE '" + table + "'");
     auto id = (*row)[10];
     return id ? id : "1";
+  }
+
+  int64_t run_select_int(const std::string &select, int field = 0) {
+    auto row = m_->query_one(select);
+    if (!row) throw std::logic_error("no result");
+    return std::stoll((*row)[field]);
   }
 
   bool binlog_changed() const;

@@ -811,4 +811,70 @@ TEST_F(DualityViewUpdate, deep_nested) {}
 
 TEST_F(DualityViewUpdate, deep_nested_delete) {}
 
-TEST_F(DualityViewUpdate, cycle) {}
+TEST_F(DualityViewUpdate, cycle) {
+  prepare(TestSchema::CYCLE);
+
+  auto root =
+      DualityViewBuilder("mrstestdb", "person", TableFlag::WITH_UPDATE)
+          .field("id")
+          .field("name")
+          .field_to_one("parent", ViewBuilder("person", TableFlag::WITH_UPDATE)
+                                      .field("id")
+                                      .field("name"))
+          .field_to_many("children",
+                         ViewBuilder("person", TableFlag::WITH_INSERT |
+                                                   TableFlag::WITH_UPDATE)
+                             .field("id")
+                             .field("name"))
+          .resolve(m_.get(), true);
+
+  std::vector<int> ids;
+
+  // not referenced by any other rows
+  {
+    EXPECT_UPDATE(root, R"*({
+    "id": 4,
+    "name": "GrandChild2",
+    "parent": {
+        "id": 2,
+        "name": "Child1"
+    },
+    "children": []
+})*",
+                  parse_pk(R"*({"id":4})*"), ids);
+  }
+  // referenced by children
+  {
+    EXPECT_UPDATE(root, R"*({
+    "id": 1,
+    "name": "Root",
+    "parent": {},
+    "children": [
+      {
+        "id": 2,
+        "name": "Child"
+      }
+    ]
+})*",
+                  parse_pk(R"*({"id":1})*"), ids);
+  }
+  // referenced by grandchild and references root
+  {
+    EXPECT_UPDATE(root, R"*({
+    "id": 2,
+    "name": "Child1",
+    "parent": {
+        "id": 1,
+        "name": "Root"
+    },
+    "children": [
+      {
+        "id": 5,
+        "name": "New"
+      }
+    ]
+}
+)*",
+                  parse_pk(R"*({"id":2})*"), ids);
+  }
+}

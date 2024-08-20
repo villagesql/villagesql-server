@@ -755,7 +755,9 @@ void DatabaseRestTableTest::prepare(TestSchema schema) {
         (3, 'ref1n-3', 4),
         (10, 'test child1', 10), (11, 'test child2', 10))*",
 
-        R"*(INSERT INTO child_nm VALUES (1, 'one'), (2, 'two'), (3, 'three'))*"}},
+        R"*(INSERT INTO child_nm VALUES (1, 'one'), (2, 'two'), (3, 'three'))*",
+
+        R"*(INSERT INTO child_nm_join VALUES (3, 1), (3, 3), (5, 2))*"}},
 
       {TestSchema::AUTO_INC,
        {// AUTO_INC PKs
@@ -906,7 +908,18 @@ void DatabaseRestTableTest::prepare(TestSchema schema) {
 
         R"*(INSERT INTO child_nm_join VALUES (0x1, 0x2), (0x5, 0x1), (0x5, 0x3))*"}},
 
-      {TestSchema::MULTI, {R"*(CREATE TABLE root (
+      {TestSchema::CYCLE,
+       {R"*(CREATE TABLE mrstestdb.person (
+    id int primary key,
+    parent_id int,
+    name varchar(40),
+    foreign key (parent_id) references person(id)
+))*",
+        R"*(insert into mrstestdb.person values (1, NULL, 'root'),
+            (2, 1, 'child1'), (3, 1, 'child2'), (4, 2, 'grandchild1')
+  )*"}},
+
+      {TestSchema::COMPOSITE, {R"*(CREATE TABLE root (
       id1 INT AUTO_INCREMENT,
       id2 BINARY(16),
       data1 TEXT,

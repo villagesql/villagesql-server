@@ -1033,3 +1033,87 @@ TEST_F(DualityViewInsert, regular_fields_are_optional_on_insert) {
 }
 
 // TEST_F(DualityViewGet, no_etag_if_no_check) {}
+
+TEST_F(DualityViewInsert, cycle) {
+  prepare(TestSchema::CYCLE);
+
+  auto root =
+      DualityViewBuilder("mrstestdb", "person", TableFlag::WITH_INSERT)
+          .field("id")
+          .field("name")
+          .field_to_one("parent", ViewBuilder("person", TableFlag::WITH_UPDATE)
+                                      .field("id")
+                                      .field("name"))
+          .field_to_many("children",
+                         ViewBuilder("person", TableFlag::WITH_INSERT)
+                             .field("id")
+                             .field("name"))
+          .resolve(m_.get(), true);
+
+  std::vector<int> ids;
+
+  // referenced by children
+  {
+    EXPECT_INSERT(root, R"*({
+    "id": 10,
+    "name": "root2",
+    "parent": {},
+    "children": [
+
+    ]
+})*",
+                  ids);
+  }
+  // referenced by grandchild and references root
+  {
+    EXPECT_INSERT(root, R"*({
+    "id": 20,
+    "name": "child10",
+    "parent": {
+        "id": 10,
+        "name": "root2"
+    },
+    "children": [
+    ]
+}
+)*",
+                  ids);
+  }
+  // not referenced by any other rows
+  {
+    EXPECT_INSERT(root, R"*({
+    "id": 40,
+    "name": "grandchild2",
+    "parent": {
+        "id": 20,
+        "name": "child10"
+    },
+    "children": []
+})*",
+                  ids);
+  }
+
+  // include children
+  {
+    EXPECT_INSERT(root, R"*({
+    "id": 100,
+    "name": "child100",
+    "parent": {
+        "id": 1<<o:,
+        "name": "root">>
+    },
+    "children": [
+        {
+            "id": 400,
+            "name": "grandchildA"
+        },
+        {
+            "id": 401,
+            "name": "grandchildB"
+        }
+    ]
+}
+)*",
+                  ids);
+  }
+}

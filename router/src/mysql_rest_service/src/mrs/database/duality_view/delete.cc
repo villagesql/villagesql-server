@@ -85,6 +85,11 @@ void RowDeleteBase::process_to_many(const ForeignKeyReference &ref,
   }
 }
 
+void RowDeleteBase::process_to_one(const ForeignKeyReference &,
+                                   JSONInputObject) {
+  // no-op
+}
+
 void RowDeleteBase::run(MySQLSession *session) {
   for (const auto &ch : before_) {
     ch->run(session);

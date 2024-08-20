@@ -87,6 +87,21 @@ class DualityViewDelete : public DatabaseRestTableTest {
     EXPECT_EQ(response, "");
   }
 
+  void test_delete(std::shared_ptr<DualityView> view,
+                   const std::string &filter) {
+    DualityViewUpdater dvu(view);
+    FilterObjectGenerator fog(view, true);
+
+    fog.parse(make_json(filter));
+
+    dvu.delete_(m_.get(), fog);
+  }
+
+  void expect_delete(std::shared_ptr<DualityView> view,
+                     const std::string &filter) {
+    EXPECT_NO_THROW(test_delete(view, filter));
+  }
+
   void insert_rows() {
     std::vector<const char *> k_rows_autoinc = {
         R"*(INSERT INTO mrstestdb.child_11 VALUES
@@ -131,6 +146,12 @@ class DualityViewDelete : public DatabaseRestTableTest {
   do {                        \
     SCOPED_TRACE("");         \
     expect_delete(f, pks);    \
+  } while (0)
+
+#define EXPECT_DELETE_F(f, filter) \
+  do {                             \
+    SCOPED_TRACE("");              \
+    expect_delete(f, filter);      \
   } while (0)
 
 TEST_F(DualityViewDelete, key_nodelete) {
@@ -541,11 +562,12 @@ TEST_F(DualityViewDelete, key_delete) {
   }
 }
 
-TEST_F(DualityViewDelete, key_update_pkfk) {
+TEST_F(DualityViewDelete, undeletable_child_pkfk) {
   // a reference that's also the PK (like in a n:m table) can't be UPDATE only
 }
 
-TEST_F(DualityViewDelete, key_update) {
+TEST_F(DualityViewDelete, undeletable_child) {
+  // update reference to NULL instead of deleting the row
   auto reset = [&]() {
     drop_schema();
     prepare(TestSchema::AUTO_INC);
@@ -823,23 +845,170 @@ TEST_F(DualityViewDelete, key_update) {
 TEST_F(DualityViewDelete, filter_nodelete) {
   prepare(TestSchema::PLAIN);
 
-  auto root = DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
+  auto root = DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_NODELETE)
                   .field("id")
                   .field("data", "data1")
                   .resolve(m_.get(), true);
 
   SCOPED_TRACE(root->as_graphql());
+
+  auto filter = R"*({
+    "id": 103
+  })*";
+  EXPECT_DUALITY_ERROR(test_delete(root, filter),
+                       "Duality View does not allow DELETE for table `root`");
 }
 
 TEST_F(DualityViewDelete, filter_delete) {
-  prepare(TestSchema::PLAIN);
+  auto reset = [&]() {
+    drop_schema();
+    prepare(TestSchema::PLAIN);
+    snapshot();
+  };
+  reset();
 
-  auto root = DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
-                  .field("id")
-                  .field("data", "data1")
-                  .resolve(m_.get(), true);
-
+  auto root =
+      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+          .field("id", FieldFlag::AUTO_INC)
+          .field("data", "data1")
+          .field_to_one("child11", ViewBuilder("child_11", 0).field("id"))
+          .field_to_many(
+              "child1n",
+              ViewBuilder("child_1n", TableFlag::WITH_UPDATE).field("id"))
+          .field_to_many(
+              "childnm",
+              ViewBuilder("child_nm_join", TableFlag::WITH_DELETE)
+                  .field("root_id", 0)
+                  .field("child_id", 0)
+                  .field_to_one("child",
+                                ViewBuilder("child_nm", 0).field("id")))
+          .resolve(m_.get(), true);
   SCOPED_TRACE(root->as_graphql());
+  {
+    // child_1n rows should have ref updated to NULL instead of deleted
+    EXPECT_EQ(2,
+              run_select_int(
+                  "select count(*) from mrstestdb.child_1n where root_id=1"));
+
+    auto filter = R"*({
+    "id": 1
+  })*";
+    EXPECT_DELETE_F(root, filter);
+
+    expect_rows_added({{"root", -1},
+                       {"child_11", 0},
+                       {"child_1n", 0},
+                       {"child_1n_1n", 0},
+                       {"child_nm_join", 0},
+                       {"child_nm", 0}});
+
+    EXPECT_EQ(0,
+              run_select_int(
+                  "select count(*) from mrstestdb.child_1n where root_id=1"));
+  }
+  {
+    snapshot();
+    auto filter = R"*({
+    "id": 3
+  })*";
+    EXPECT_DELETE_F(root, filter);
+
+    expect_rows_added({{"root", -1},
+                       {"child_11", 0},
+                       {"child_1n", 0},
+                       {"child_1n_1n", 0},
+                       {"child_nm_join", -2},
+                       {"child_nm", 0}});
+  }
 }
 
-TEST_F(DualityViewDelete, cycle) {}
+TEST_F(DualityViewDelete, cycle) {
+  prepare(TestSchema::CYCLE);
+  snapshot();
+
+  auto root =
+      DualityViewBuilder("mrstestdb", "person", TableFlag::WITH_DELETE)
+          .field("id")
+          .field("name")
+          .field_to_one("parent", ViewBuilder("person", TableFlag::WITH_UPDATE)
+                                      .field("id")
+                                      .field("name"))
+          .field_to_many("children",
+                         ViewBuilder("person", TableFlag::WITH_DELETE)
+                             .field("id")
+                             .field("name"))
+          .resolve(m_.get(), true);
+
+  // not referenced by any other rows
+  {
+    EXPECT_DELETE(root, parse_pk(R"*({"id": 4})*"));
+
+    expect_rows_added({{"person", -1}});
+  }
+  // referenced by grandchild and references root
+  {
+    drop_schema();
+    prepare(TestSchema::CYCLE);
+    snapshot();
+
+    EXPECT_DELETE(root, parse_pk(R"*({"id": 2})*"));
+    expect_rows_added({{"person", -2}});
+  }
+  // referenced by children
+  // this will fail because child of child is not marked with WITH DELETE
+  // (or included in the view structure at all), but the FK constraint will
+  // still block the delete of the child referenced by row 4
+  {
+    drop_schema();
+    prepare(TestSchema::CYCLE);
+    snapshot();
+
+    EXPECT_MYSQL_ERROR(
+        test_delete(root, parse_pk(R"*({"id": 1})*")),
+        "Cannot delete or update a parent row: a foreign key constraint fails");
+  }
+}
+
+TEST_F(DualityViewDelete, cycle_undeletable) {
+  prepare(TestSchema::CYCLE);
+  snapshot();
+
+  auto root =
+      DualityViewBuilder("mrstestdb", "person", TableFlag::WITH_DELETE)
+          .field("id")
+          .field("name")
+          .field_to_one("parent", ViewBuilder("person", TableFlag::WITH_UPDATE)
+                                      .field("id")
+                                      .field("name"))
+          .field_to_many("children",
+                         ViewBuilder("person", TableFlag::WITH_UPDATE)
+                             .field("id")
+                             .field("name"))
+          .resolve(m_.get(), true);
+
+  // not referenced by any other rows
+  {
+    EXPECT_DELETE(root, parse_pk(R"*({"id": 4})*"));
+
+    expect_rows_added({{"person", -1}});
+  }
+  // referenced by grandchild and references root
+  {
+    drop_schema();
+    prepare(TestSchema::CYCLE);
+    snapshot();
+
+    EXPECT_DELETE(root, parse_pk(R"*({"id": 2})*"));
+    expect_rows_added({{"person", -1}});
+  }
+  // referenced by childs
+  {
+    drop_schema();
+    prepare(TestSchema::CYCLE);
+    snapshot();
+
+    EXPECT_DELETE(root, parse_pk(R"*({"id": 1})*"));
+
+    expect_rows_added({{"person", -1}});
+  }
+}

@@ -638,3 +638,93 @@ TEST_F(DualityViewSelect, unnest_nm) {
 })*");
   }
 }
+
+TEST_F(DualityViewSelect, cycle) {
+  prepare(TestSchema::CYCLE);
+
+  auto root =
+      DualityViewBuilder("mrstestdb", "person", 0)
+          .field("id")
+          .field("name")
+          .field_to_one("parent",
+                        ViewBuilder("person", 0).field("id").field("name"))
+          .field_to_many("children",
+                         ViewBuilder("person", 0).field("id").field("name"))
+          .resolve(m_.get(), true);
+
+  // not referenced by any other rows
+  {
+    EXPECT_SELECT_ONE(root, parse_pk(R"*({"id": 4})*"), R"*({
+    "id": 4,
+    "name": "grandchild1",
+    "links": [
+        {
+            "rel": "self",
+            "href": "localhost/4"
+        }
+    ],
+    "parent": {
+        "id": 2,
+        "name": "child1"
+    },
+    "children": [],
+    "_metadata": {
+        "etag": "A1F25ED4070E2324A24D83C593394909C2702674C3B0824C8C9D11547F65733C"
+    }
+})*");
+  }
+  // referenced by grandchild and references root
+  {
+    EXPECT_SELECT_ONE(root, parse_pk(R"*({"id": 2})*"), R"*({
+    "id": 2,
+    "name": "child1",
+    "links": [
+        {
+            "rel": "self",
+            "href": "localhost/2"
+        }
+    ],
+    "parent": {
+        "id": 1,
+        "name": "root"
+    },
+    "children": [
+        {
+            "id": 4,
+            "name": "grandchild1"
+        }
+    ],
+    "_metadata": {
+        "etag": "166C008701F8265F58F764824EFA8CDC361006F69E23CCAE9B176557EFA00BE1"
+    }
+}
+)*");
+  }
+  // referenced by children
+  {
+    EXPECT_SELECT_ONE(root, parse_pk(R"*({"id": 1})*"), R"*({
+    "id": 1,
+    "name": "root",
+    "links": [
+        {
+            "rel": "self",
+            "href": "localhost/1"
+        }
+    ],
+    "parent": {},
+    "children": [
+        {
+            "id": 2,
+            "name": "child1"
+        },
+        {
+            "id": 3,
+            "name": "child2"
+        }
+    ],
+    "_metadata": {
+        "etag": "B7ADF14EAC88424CC21039B3491B31E772E7AE4A5ED9BD4CC5EA4499775D3AB4"
+    }
+})*");
+  }
+}

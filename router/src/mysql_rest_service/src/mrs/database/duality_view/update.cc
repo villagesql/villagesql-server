@@ -250,7 +250,8 @@ bool RowUpdate::feed_columns(mysqlrouter::sqlstring &sql, bool is_null,
         tmp.append_preformatted(separator);
       }
       first = false;
-      tmp.append_preformatted(*cit);
+      tmp.append_preformatted(mysqlrouter::sqlstring("!.!")
+                              << table_->table_alias << *cit);
       if (is_null && vit->str() == "NULL") {
         tmp.append_preformatted(" IS NULL");
       } else {
