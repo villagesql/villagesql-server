@@ -162,10 +162,13 @@ class UniqueId {
  **/
 class TcpPortPool {
  public:
+  explicit TcpPortPool(uint64_t reuse_port = 0) : reuse_port_(reuse_port) {}
+
   uint16_t get_next_available();
 
  private:
   std::vector<UniqueId> unique_ids_;
+  uint16_t reuse_port_ = 0;
   unsigned number_of_ids_used_{0};
   static const constexpr unsigned kPortsPerFile{10};
   static const constexpr unsigned kPortsStartFrom{100};

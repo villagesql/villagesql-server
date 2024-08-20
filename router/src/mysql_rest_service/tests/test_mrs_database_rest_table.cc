@@ -571,11 +571,14 @@ std::unique_ptr<TcpPortPool> DatabaseRestTableTest::tcp_pool_;
 std::unique_ptr<SharedServer> DatabaseRestTableTest::server_;
 
 void DatabaseRestTableTest::SetUpTestSuite() {
-  tcp_pool_.reset(new TcpPortPool());
+  auto server_port = getenv("REUSE_MYSQLD_PORT");
+  tcp_pool_.reset(new TcpPortPool(server_port ? std::atoi(server_port) : 0));
   server_.reset(new SharedServer(*tcp_pool_));
 
-  server_->prepare_datadir();
-  server_->spawn_server();
+  if (!server_port) {
+    server_->prepare_datadir();
+    server_->spawn_server();
+  }
 }
 
 void DatabaseRestTableTest::TearDownTestSuite() {
@@ -584,7 +587,7 @@ void DatabaseRestTableTest::TearDownTestSuite() {
 }
 
 void DatabaseRestTableTest::SetUp() {
-  if (!server_ && server_->mysqld_failed_to_start()) {
+  if (server_ && server_->mysqld_failed_to_start()) {
     GTEST_SKIP() << "mysql-server failed to start.";
     return;
   }

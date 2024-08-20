@@ -56,8 +56,10 @@ static void copy_tree(const mysql_harness::Directory &from_dir,
 
 SharedServer::~SharedServer() {
   // shutdown via API to get a clean exit-code on windows.
-  shutdown();
-  process_manager().wait_for_exit();
+  if (starts_) {
+    shutdown();
+    process_manager().wait_for_exit();
+  }
 }
 
 stdx::expected<void, MysqlError> SharedServer::shutdown() {
