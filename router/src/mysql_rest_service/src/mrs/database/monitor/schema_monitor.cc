@@ -399,8 +399,7 @@ void SchemaMonitor::run() {
 
         fetcher.update_access_factory_if_needed();
 
-        if (fetcher.state->get_state() == mrs::stateOn &&
-            configuration_.router_id_.has_value()) {
+        if (fetcher.state->get_state() == mrs::stateOn) {
           auto socket_ops = mysql_harness::SocketOperations::instance();
 
           mysqlrouter::sqlstring update{
@@ -410,8 +409,7 @@ void SchemaMonitor::run() {
               " VALUES (?,?,?,?,?,'{}','{}') ON DUPLICATE KEY UPDATE "
               "version=?, last_check_in=NOW()"};
 
-          update << configuration_.router_id_.value()
-                 << configuration_.router_name_
+          update << configuration_.router_id_ << configuration_.router_name_
                  << socket_ops->get_local_hostname()
                  << MYSQL_ROUTER_PACKAGE_NAME << MYSQL_ROUTER_VERSION
                  << MYSQL_ROUTER_VERSION;
@@ -420,7 +418,7 @@ void SchemaMonitor::run() {
           try {
             QueryStatistics store_stats;
             store_stats.update_statistics(
-                session.get(), configuration_.router_id_.value(),
+                session.get(), configuration_.router_id_,
                 configuration_.metadata_refresh_interval_.count(),
                 entities_manager_->fetch_counters());
           } catch (const std::exception &exc) {

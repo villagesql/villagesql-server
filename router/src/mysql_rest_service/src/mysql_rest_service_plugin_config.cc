@@ -281,8 +281,7 @@ PluginConfig::PluginConfig(const ConfigSection *section,
       get_option(section, "mysql_user_data_access", StringOption{});
   routing_rw_ = get_option(section, "mysql_read_write_route", StringOption{});
   routing_ro_ = get_option(section, "mysql_read_only_route", StringOption{});
-  router_id_ =
-      get_option_no_default(section, "router_id", IntOption<uint64_t>{});
+  router_id_ = get_option(section, "router_id", IntOption<uint64_t>{});
   metadata_refresh_interval_ =
       get_option(section, k_option_metadata_refresh, SecondsOption{});
   router_name_ = router_name;
@@ -364,6 +363,7 @@ bool PluginConfig::is_required(std::string_view option) const {
   if (option == "mysql_user") return true;
   if (option == "mysql_read_write_route") return true;
   if (option == "authentication") return true;
+  if (option == "router_id") return true;
 
   return false;
 }

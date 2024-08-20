@@ -52,7 +52,7 @@ class Configuration {
 
   std::string routing_ro_;
   std::string routing_rw_;
-  std::optional<uint64_t> router_id_;
+  uint64_t router_id_;
   std::optional<uint64_t> host_autentication_rate_rps_;
   std::optional<uint64_t> account_autentication_rate_rps_;
   uint64_t authentication_rate_exceeded_block_for_;
