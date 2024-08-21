@@ -24,11 +24,14 @@
  */
 
 #include "router/src/mysql_rest_service/src/mrs/database/duality_view/common.h"
+#include "mrs/interface/rest_error.h"
 #include "mysqlrouter/base64.h"
 
 namespace mrs {
 namespace database {
 namespace dv {
+
+using interface::RestError;
 
 mysqlrouter::sqlstring join_sqlstrings(
     const std::vector<mysqlrouter::sqlstring> &strings,
@@ -73,6 +76,31 @@ PrimaryKeyColumnValues ref_primary_key(const ForeignKeyReference &ref,
   }
 
   return pk;
+}
+
+void validate_primary_key_values(const entry::DualityView &view,
+                                 const ObjectRowOwnership &row_ownership,
+                                 PrimaryKeyColumnValues &pk_values) {
+  auto pk_cols = view.primary_key();
+
+  for (const auto &col : pk_cols) {
+    if (pk_values.find(col->column_name) == pk_values.end()) {
+      if (!row_ownership.is_owner_id(view, *col))
+        throw RestError("Missing primary key column value for " +
+                        col->column_name);
+      else
+        pk_values[col->column_name] = row_ownership.owner_user_id();
+    }
+  }
+
+  if (std::any_of(pk_values.begin(), pk_values.end(), [pk_cols](const auto &c) {
+        return std::find_if(pk_cols.begin(), pk_cols.end(),
+                            [c](const auto &col) {
+                              return c.first == col->column_name;
+                            }) == pk_cols.end();
+      })) {
+    throw RestError("Invalid primary key column");
+  }
 }
 
 }  // namespace dv

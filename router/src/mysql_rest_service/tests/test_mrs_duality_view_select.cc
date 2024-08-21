@@ -697,7 +697,7 @@ TEST_F(DualityViewSelect, cycle) {
     "_metadata": {
         "etag": "166C008701F8265F58F764824EFA8CDC361006F69E23CCAE9B176557EFA00BE1"
     }
-}
+}O
 )*");
   }
   // referenced by children
@@ -727,4 +727,75 @@ TEST_F(DualityViewSelect, cycle) {
     }
 })*");
   }
+}
+
+TEST_F(DualityViewSelect, composite_key) {
+  prepare(TestSchema::COMPOSITE);
+
+  auto root =
+      DualityViewBuilder("mrstestdb", "root", 0)
+          .field("id1")
+          .field("id2")
+          .field("data1")
+          .field_to_one(
+              "child_11",
+              ViewBuilder("child_11").field("id1").field("id2").field("data"))
+          .field_to_many("child_1n", ViewBuilder("child_1n", 0)
+                                         .field("id1")
+                                         .field("id2")
+                                         .field("data"))
+          .field_to_many("child_nm_join",
+                         ViewBuilder("child_nm_join", 0)
+                             .field("child_id1")
+                             .field("child_id2")
+                             .field("root_id1")
+                             .field("root_id2")
+                             .field_to_one("child", ViewBuilder("child_nm", 0)
+                                                        .field("id1")
+                                                        .field("id2")
+                                                        .field("data")))
+          .resolve(m_.get(), true);
+
+  EXPECT_SELECT_ONE(root, parse_pk(R"*({"id1": 101, "id2":1001})*"), R"*({
+    "id1": 101,
+    "id2": 1001,
+    "data1": "root2",
+    "links": [
+        {
+            "rel": "self",
+            "href": "localhost/101,1001"
+        }
+    ],
+    "child_11": {
+        "id1": 112,
+        "id2": 1112,
+        "data": "child3"
+    },
+    "child_1n": [
+        {
+            "id1": 122,
+            "id2": 1200,
+            "data": "data3"
+        }
+    ],
+    "child_nm_join": [
+        {
+            "child": {
+                "id1": 201,
+                "id2": 2000,
+                "data": "nm2"
+            },
+            "root_id1": 101,
+            "root_id2": 1001,
+            "child_id1": 201,
+            "child_id2": 2000
+        }
+    ],
+    "_metadata": {
+        "etag": "D90E1A4803FA989D4C95888CF3BE3DC2AB3A29B0191137A2893653EC6197C483"
+    }
+})*");
+
+  EXPECT_REST_ERROR(select_one(root, parse_pk(R"*({"id1": 101})*")),
+                    "Missing primary key column value for id2");
 }

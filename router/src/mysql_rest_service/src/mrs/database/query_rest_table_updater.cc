@@ -169,7 +169,7 @@ PrimaryKeyColumnValues DualityViewUpdater::update(
 
   if (view_->is_read_only()) throw_read_only();
 
-  check_primary_key(pk_values);
+  validate_primary_key_values(*view_, row_ownership_info(), pk_values);
 
   check(doc, true);
 
@@ -211,7 +211,7 @@ uint64_t DualityViewUpdater::delete_(
 
   const bool is_consistent_snapshot = true;
 
-  check_primary_key(pk_values);
+  validate_primary_key_values(*view_, row_ownership_info(), pk_values);
 
   MySQLSession::Transaction transaction{session, is_consistent_snapshot};
 
@@ -262,42 +262,6 @@ void DualityViewUpdater::check(const rapidjson::Document &doc,
   Check checker(view_, m_row_ownership_info, for_update);
 
   checker.process(JSONInputObject(doc.GetObject()));
-}
-
-void DualityViewUpdater::check_primary_key(PrimaryKeyColumnValues &pk_values) {
-  auto pk_cols = view_->primary_key();
-
-  for (const auto &col : pk_cols) {
-    if (pk_values.find(col->column_name) == pk_values.end()) {
-      if (!m_row_ownership_info.is_owner_id(*view_, *col))
-        throw RestError("Missing primary key column value for " +
-                        col->column_name);
-      else
-        pk_values[col->column_name] = m_row_ownership_info.owner_user_id();
-    }
-  }
-
-  if (std::any_of(pk_values.begin(), pk_values.end(), [pk_cols](const auto &c) {
-        return std::find_if(pk_cols.begin(), pk_cols.end(),
-                            [c](const auto &col) {
-                              return c.first == col->column_name;
-                            }) == pk_cols.end();
-      })) {
-    throw RestError("Invalid primary key column");
-  }
-}
-
-std::string DualityViewUpdater::compute_etag_and_lock_rows(
-    [[maybe_unused]] MySQLSession *session,
-    [[maybe_unused]] const PrimaryKeyColumnValues &pk_values) const {
-  // JsonQueryBuilder qb({}, true, true);
-  // qb.process_object(m_object);
-
-  // auto query = qb.query_one(pk_values);
-  // auto row = session->query_one(query);
-
-  // return compute_checksum(m_object, std::string_view((*row)[0]));
-  return {};
 }
 
 void DualityViewUpdater::check_etag_and_lock_rows(

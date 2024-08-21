@@ -1117,3 +1117,66 @@ TEST_F(DualityViewInsert, cycle) {
                   ids);
   }
 }
+
+TEST_F(DualityViewInsert, composite_key) {
+  prepare(TestSchema::COMPOSITE);
+
+  auto root =
+      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
+          .field("id1")
+          .field("id2")
+          .field("data1")
+          .field_to_one("child_11", ViewBuilder("child_11", 0)
+                                        .field("id1")
+                                        .field("id2")
+                                        .field("data"))
+          .field_to_many("child_1n",
+                         ViewBuilder("child_1n", TableFlag::WITH_INSERT)
+                             .field("id1")
+                             .field("id2")
+                             .field("data"))
+          .field_to_many("child_nm_join",
+                         ViewBuilder("child_nm_join", TableFlag::WITH_INSERT)
+                             .field("child_id1")
+                             .field("child_id2")
+                             .field("root_id1")
+                             .field("root_id2")
+                             .field_to_one("child", ViewBuilder("child_nm", 0)
+                                                        .field("id1")
+                                                        .field("id2")
+                                                        .field("data")))
+          .resolve(m_.get(), true);
+
+  std::vector<int> ids;
+  EXPECT_INSERT(root, R"*({
+    "id1": 501,
+    "id2": 1001,
+    "data1": "new root2",
+    "child_11": {
+        "id1": 112,
+        "id2": 1112,
+        "data": "child3"
+    },
+    "child_1n": [
+        {
+            "id1": 522,
+            "id2": 1200,
+            "data": "data3"
+        }
+    ],
+    "child_nm_join": [
+        {
+            "child": {
+                "id1": 201,
+                "id2": 2000,
+                "data": "nm2"
+            },
+            "root_id1": 501,
+            "root_id2": 1001,
+            "child_id1": 201,
+            "child_id2": 2000
+        }
+    ]
+})*",
+                ids);
+}

@@ -919,13 +919,68 @@ void DatabaseRestTableTest::prepare(TestSchema schema) {
             (2, 1, 'child1'), (3, 1, 'child2'), (4, 2, 'grandchild1')
   )*"}},
 
-      {TestSchema::COMPOSITE, {R"*(CREATE TABLE root (
+      {TestSchema::COMPOSITE,
+       {
+           R"*(CREATE TABLE child_11 (
       id1 INT AUTO_INCREMENT,
-      id2 BINARY(16),
+      id2 INT,
+      data VARCHAR(30),
+      PRIMARY KEY (id1, id2)
+    ))*",
+
+           R"*(CREATE TABLE root (
+      id1 INT AUTO_INCREMENT,
+      id2 INT,
+      child_11_id1 INT,
+      child_11_id2 INT,
       data1 TEXT,
       data2 INT,
-      PRIMARY KEY(id1, id2)
-  ))*"}}};
+      PRIMARY KEY (id1, id2),
+      FOREIGN KEY (child_11_id1, child_11_id2) REFERENCES child_11 (id1, id2)
+  ))*",
+
+           R"*(CREATE TABLE child_1n (
+      id1 INT AUTO_INCREMENT,
+      id2 INT,
+      data VARCHAR(30),
+      root_id1 INT,
+      root_id2 INT,
+      PRIMARY KEY (id1, id2),
+      FOREIGN KEY (root_id1, root_id2) REFERENCES root (id1, id2)
+    ))*",
+
+           R"*(CREATE TABLE child_nm (
+      id1 INT AUTO_INCREMENT,
+      id2 INT,
+      data VARCHAR(30),
+      PRIMARY KEY (id1, id2)
+    ))*",
+
+           R"*(CREATE TABLE child_nm_join (
+      root_id1 INT,
+      root_id2 INT,
+      child_id1 INT,
+      child_id2 INT,
+
+      PRIMARY KEY (root_id1, root_id2, child_id1, child_id2),
+      FOREIGN KEY (root_id1, root_id2) REFERENCES root (id1, id2),
+      FOREIGN KEY (child_id1, child_id2) REFERENCES child_nm (id1, id2)
+    ))*",
+
+           R"*(INSERT INTO child_11 
+              VALUES (110, 1110, 'child1'), (111, 1111, 'child2'),
+                     (112, 1112, 'child3'))*",
+           R"*(INSERT INTO root
+              VALUES (100, 1000, 110, 1110, 'root1', 0),
+                     (101, 1001, 112, 1112, 'root2', null))*",
+           R"*(INSERT INTO child_1n
+              VALUES (120, 1200, 'data1', 100, 1000),
+                     (121, 1201, 'data2', 100, 1000),
+                     (122, 1200, 'data3', 101, 1001))*",
+           R"*(INSERT INTO child_nm
+              VALUES (200, 2000, 'nm1'), (201, 2000, 'nm2'), (200, 3000, 'nm3'))*",
+           R"*(INSERT INTO child_nm_join VALUES (100, 1000, 200, 2000),
+                  (100, 1000, 200, 3000), (101, 1001, 201, 2000))*"}}};
 
   m_->execute("create schema if not exists mrstestdb");
   m_->execute("use mrstestdb");

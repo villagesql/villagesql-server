@@ -60,6 +60,10 @@ PrimaryKeyColumnValues ref_primary_key(const ForeignKeyReference &ref,
                                        const rapidjson::Value &value,
                                        bool throw_if_missing_or_null);
 
+void validate_primary_key_values(const entry::DualityView &view,
+                                 const ObjectRowOwnership &row_ownership,
+                                 PrimaryKeyColumnValues &pk_values);
+
 }  // namespace dv
 }  // namespace database
 }  // namespace mrs

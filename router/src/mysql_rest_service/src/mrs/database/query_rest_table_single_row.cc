@@ -25,6 +25,7 @@
 #include "mrs/database/query_rest_table_single_row.h"
 #include <stdexcept>
 #include "helper/json/to_string.h"
+#include "mrs/database/duality_view/common.h"
 #include "mrs/database/duality_view/select.h"
 #include "mrs/database/helper/object_checksum.h"
 
@@ -55,6 +56,12 @@ void QueryRestTableSingleRow::query_entry(
     const std::string &url_route, const ObjectRowOwnership &row_ownership,
     const bool compute_etag, const std::string &metadata_gtid,
     const bool fetch_any_owner) {
+  PrimaryKeyColumnValues complete_pk(pk);
+
+  dv::validate_primary_key_values(
+      *object, fetch_any_owner ? ObjectRowOwnership() : row_ownership,
+      complete_pk);
+
   object_ = object;
   compute_etag_ = compute_etag;
   metadata_received_ = false;
@@ -63,7 +70,8 @@ void QueryRestTableSingleRow::query_entry(
   config_ = {0, 0, false, url_route};
   field_filter_ = &field_filter;
 
-  build_query(field_filter, url_route, row_ownership, pk, fetch_any_owner);
+  build_query(field_filter, url_route, row_ownership, complete_pk,
+              fetch_any_owner);
 
   execute(session);
 }

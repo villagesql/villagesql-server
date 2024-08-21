@@ -878,3 +878,71 @@ TEST_F(DualityViewUpdate, cycle) {
                   parse_pk(R"*({"id":2})*"), ids);
   }
 }
+
+TEST_F(DualityViewUpdate, composite_key) {
+  prepare(TestSchema::COMPOSITE);
+
+  auto root =
+      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
+          .field("id1")
+          .field("id2")
+          .field("data1")
+          .field_to_one("child_11",
+                        ViewBuilder("child_11", TableFlag::WITH_UPDATE)
+                            .field("id1")
+                            .field("id2")
+                            .field("data"))
+          .field_to_many("child_1n",
+                         ViewBuilder("child_1n", TableFlag::WITH_INSERT |
+                                                     TableFlag::WITH_UPDATE)
+                             .field("id1")
+                             .field("id2")
+                             .field("data"))
+          .field_to_many(
+              "child_nm_join",
+              ViewBuilder("child_nm_join",
+                          TableFlag::WITH_INSERT | TableFlag::WITH_UPDATE)
+                  .field("child_id1")
+                  .field("child_id2")
+                  .field("root_id1")
+                  .field("root_id2")
+                  .field_to_one("child",
+                                ViewBuilder("child_nm", TableFlag::WITH_UPDATE)
+                                    .field("id1")
+                                    .field("id2")
+                                    .field("data")))
+          .resolve(m_.get(), true);
+
+  std::vector<int> ids;
+  EXPECT_UPDATE(root, R"*({
+    "id1": 101,
+    "id2": 1001,
+    "data1": "new root2",
+    "child_11": {
+        "id1": 112,
+        "id2": 1112,
+        "data": "child3"
+    },
+    "child_1n": [
+        {
+            "id1": 522,
+            "id2": 1200,
+            "data": "data3"
+        }
+    ],
+    "child_nm_join": [
+        {
+            "child": {
+                "id1": 201,
+                "id2": 2000,
+                "data": "nm2"
+            },
+            "root_id1": 101,
+            "root_id2": 1001,
+            "child_id1": 201,
+            "child_id2": 2000
+        }
+    ]
+})*",
+                parse_pk(R"*({"id1":101, "id2":1001})*"), ids);
+}

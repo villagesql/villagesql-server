@@ -39,7 +39,6 @@
 #include <tuple>
 #include <utility>
 #include <vector>
-#include "helper/json/rapid_json_to_text.h"  // XXX delme
 
 namespace mrs {
 namespace database {
