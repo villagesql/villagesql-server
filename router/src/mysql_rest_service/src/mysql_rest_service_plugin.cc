@@ -32,6 +32,7 @@
 #include <thread>
 #include <vector>
 
+#include "my_sys.h"
 #include "my_thread.h"     // NOLINT(build/include_subdir)
 #include "mysqld_error.h"  // NOLINT(build/include_subdir)
 
@@ -96,6 +97,9 @@ struct MrdsModule {
 
   bool init(bool fail_on_no_role_granted) {
     using namespace mysqlrouter;
+    // TODO(areliga): remove that when rebased to the Router version that fixes
+    // ODR issues
+    my_init();
     try {
       auto conn1 = mysql_connection_cache.get_instance(
           collector::kMySQLConnectionMetadataRO, true);
