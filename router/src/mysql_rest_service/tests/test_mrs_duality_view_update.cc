@@ -946,3 +946,135 @@ TEST_F(DualityViewUpdate, composite_key) {
 })*",
                 parse_pk(R"*({"id1":101, "id2":1001})*"), ids);
 }
+
+TEST_F(DualityViewUpdate, column_no_update) {
+  prepare(TestSchema::AUTO_INC);
+
+  auto root =
+      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
+          .field("_id", "id", FieldFlag::AUTO_INC)
+          .field("data", "data1", FieldFlag::WITH_NOUPDATE)
+          .field_to_one(
+              "child11",
+              ViewBuilder("child_11", TableFlag::WITH_UPDATE)
+                  .field("child11Id", "id", FieldFlag::AUTO_INC)
+                  .field("child11Data", "data", FieldFlag::WITH_NOUPDATE)
+                  .field_to_one(
+                      "child1111",
+                      ViewBuilder("child_11_11", TableFlag::WITH_UPDATE)
+                          .field("child1111Id", "id", FieldFlag::AUTO_INC)
+                          .field("child1111Data", "data",
+                                 FieldFlag::WITH_NOUPDATE)))
+          .field_to_many(
+              "child1n",
+              ViewBuilder("child_1n", TableFlag::WITH_UPDATE)
+                  .field("chld1nId", "id", FieldFlag::AUTO_INC)
+                  .field("child1nData", "data", FieldFlag::WITH_NOUPDATE)
+                  .field_to_many(
+                      "child1n1n",
+                      ViewBuilder("child_1n_1n", TableFlag::WITH_UPDATE)
+                          .field("child1n1nId", "id", FieldFlag::AUTO_INC)
+                          .field("child1n1nData", "data",
+                                 FieldFlag::WITH_NOUPDATE)))
+          .field_to_many(
+              "childnm",
+              ViewBuilder("child_nm_join", 0)
+                  .field("nmRootId", "root_id")
+                  .field("nmChildId", "child_id")
+                  .field_to_one(
+                      "child",
+                      ViewBuilder("child_nm", TableFlag::WITH_UPDATE)
+                          .field("childnmId", "id", FieldFlag::AUTO_INC)
+                          .field("data", FieldFlag::WITH_NOUPDATE)))
+          .resolve(m_.get());
+  SCOPED_TRACE(root->as_graphql());
+
+  std::vector<int> ids;
+  const auto doc = R"*({
+  "_id": 9,
+  "data": "hello",
+  "child11": {
+    "child1111": {
+      "child1111Id": 10,
+      "child1111Data": "abc-1"
+    },
+    "child11Id": 21,
+    "child11Data": "ref11-2"
+  },
+  "child1n": [
+    {
+      "chld1nId": 4,
+      "child1n1n": [
+        {
+          "child1n1nId": 30,
+          "child1n1nData": "1n1n-1"
+        },
+        {
+          "child1n1nId": 31,
+          "child1n1nData": "1n1n-2"
+        }
+      ],
+      "child1nData": "ref1n-4"
+    },
+    {
+      "chld1nId": 5,
+      "child1n1n": [],
+      "child1nData": "ref1n-5"
+    },
+    {
+      "chld1nId": 6,
+      "child1n1n": [
+        {
+          "child1n1nId": 32,
+          "child1n1nData": "1n1n-3"
+        }
+      ],
+      "child1nData": "ref1n-6"
+    }
+  ],
+  "childnm": [
+    {
+      "child": {
+        "data": "DATA2",
+        "childnmId": 2
+      },
+      "nmRootId": 9,
+      "nmChildId": 2
+    },
+    {
+      "child": {
+        "data": "DATA3",
+        "childnmId": 3
+      },
+      "nmRootId": 9,
+      "nmChildId": 3
+    }
+  ]
+}
+)*";
+
+  // no changes should succeed
+  EXPECT_UPDATE(root, doc, parse_pk(R"*({"id":9})*"), ids);
+
+  // changes on NOUPDATE columns should fail
+  const auto paths = {
+      "/data",
+      "/child11/child11Data",
+      "/child11/child1111/child1111Data",
+      "/child1n/0/child1nData",
+      "/child1n/0/child1n1n/0/child1n1nData",
+      "/childnm/0/child/data",
+      "/childnm/1/child/data",
+  };
+
+  for (const auto path : paths) {
+    SCOPED_TRACE(path);
+    auto test_doc = make_json(doc);
+
+    rapidjson::Pointer(path).Set(test_doc, "CHANGED DATA");
+
+    EXPECT_DUALITY_ERROR(test_update(root, pprint_json(test_doc),
+                                     parse_pk(R"*({"id":9})*"), ids),
+                         "does not allow UPDATE for field");
+  }
+}

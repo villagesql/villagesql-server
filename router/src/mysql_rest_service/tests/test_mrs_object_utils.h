@@ -60,15 +60,14 @@ using mrs::database::JSONInputError;
 using MySQLError = mysqlrouter::MySQLSession::Error;
 
 namespace FieldFlag {
-constexpr const int PRIMARY = 1 << 4;
-constexpr const int UNIQUE = 1 << 5;
+constexpr const int PRIMARY = 1 << 5;
+constexpr const int UNIQUE = 1 << 6;
 
 constexpr const int DISABLED = 1 << 10;
 
-constexpr const int AUTO_INC = 1 << 6;
-constexpr const int REV_UUID = 1 << 7;
-constexpr const int NOFILTER = 1 << 8;
-constexpr const int SORTABLE = 1 << 9;
+constexpr const int AUTO_INC = 1 << 7;
+constexpr const int REV_UUID = 1 << 8;
+constexpr const int NOFILTER = 1 << 9;
 
 constexpr const int OWNER = 1 << 11;
 
