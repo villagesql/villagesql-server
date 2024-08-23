@@ -70,8 +70,8 @@ class DualityViewUpdate : public DatabaseRestTableTest {
     } catch (const JSONInputError &e) {
       ADD_FAILURE() << "UPDATE threw JSONInputError: " << e.what();
       throw;
-    } catch (const DualityViewError &e) {
-      ADD_FAILURE() << "UPDATE threw DualityViewError: " << e.what();
+    } catch (const DataMappingViewError &e) {
+      ADD_FAILURE() << "UPDATE threw DataMappingViewError: " << e.what();
       throw;
     } catch (const MySQLError &e) {
       ADD_FAILURE() << "UPDATE threw MySQLError: " << e.what();
@@ -237,14 +237,14 @@ TEST_F(DualityViewUpdate, root_noupdate) {
     "country": "AUSTRALIA"
 })*",
                   parse_pk("{\"country_id\":8}"), ids),
-      "Duality View does not allow UPDATE for table `country`");
+      "Data Mapping View does not allow UPDATE for table `country`");
 
   EXPECT_DUALITY_ERROR(test_update(root_field, R"*({
     "id": 8,
     "country": "AUSTRALIA"
 })*",
                                    parse_pk("{\"country_id\":8}"), ids),
-                       "Duality View does not allow UPDATE for field "
+                       "Data Mapping View does not allow UPDATE for field "
                        "\"country\" of table `country`");
 
   // noupdate field omitted (omit = no changes)
@@ -327,16 +327,16 @@ TEST_F(DualityViewUpdate, child11_parent_noupdate) {
   // being updatable
   EXPECT_DUALITY_ERROR(
       test_update(root, test_empty, parse_pk("{\"film_id\":6}"), ids),
-      "Duality View does not allow UPDATE for table `film`");
+      "Data Mapping View does not allow UPDATE for table `film`");
   EXPECT_DUALITY_ERROR(
       test_update(root, test_duppk_nochanges, parse_pk("{\"film_id\":6}"), ids),
-      "Duality View does not allow UPDATE for table `film`");
+      "Data Mapping View does not allow UPDATE for table `film`");
   EXPECT_DUALITY_ERROR(
       test_update(root, test_duppk_changes, parse_pk("{\"film_id\":6}"), ids),
-      "Duality View does not allow UPDATE for table `film`");
+      "Data Mapping View does not allow UPDATE for table `film`");
   EXPECT_DUALITY_ERROR(
       test_update(root, test_newpk, parse_pk("{\"film_id\":6}"), ids),
-      "Duality View does not allow UPDATE for table `film`");
+      "Data Mapping View does not allow UPDATE for table `film`");
   EXPECT_UPDATE(root, test_nochanges, parse_pk("{\"film_id\":6}"), ids);
   EXPECT_UPDATE(root, test_changes_in_nested, parse_pk("{\"film_id\":6}"), ids);
 }
@@ -571,19 +571,19 @@ TEST_F(DualityViewUpdate, child1n_none) {
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root, test_1n_add_duppk, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow INSERT for table `child_1n`");
+      "Data Mapping View does not allow INSERT for table `child_1n`");
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root, test_1n_add_newpk, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow INSERT for table `child_1n`");
+      "Data Mapping View does not allow INSERT for table `child_1n`");
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root, test_1n_del, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow DELETE for table `child_1n`");
+      "Data Mapping View does not allow DELETE for table `child_1n`");
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root, test_1n_upd, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow UPDATE for table `child_1n`");
+      "Data Mapping View does not allow UPDATE for table `child_1n`");
   reset();
   EXPECT_UPDATE(root, test_1n_upd_nop, parse_pk("{\"id\":10}"), ids);
 }
@@ -644,11 +644,11 @@ TEST_F(DualityViewUpdate, child1n) {
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root_i, test_1n_del, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow DELETE for table `child_1n`");
+      "Data Mapping View does not allow DELETE for table `child_1n`");
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root_i, test_1n_upd, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow UPDATE for table `child_1n`");
+      "Data Mapping View does not allow UPDATE for table `child_1n`");
   reset();
   EXPECT_UPDATE(root_i, test_1n_upd_nop, parse_pk("{\"id\":10}"), ids);
   reset();
@@ -659,17 +659,17 @@ TEST_F(DualityViewUpdate, child1n) {
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root_d, test_1n_add_duppk, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow INSERT for table `child_1n`");
+      "Data Mapping View does not allow INSERT for table `child_1n`");
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root_d, test_1n_add_newpk, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow INSERT for table `child_1n`");
+      "Data Mapping View does not allow INSERT for table `child_1n`");
   reset();
   EXPECT_UPDATE(root_d, test_1n_del, parse_pk("{\"id\":10}"), ids);
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root_d, test_1n_upd, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow UPDATE for table `child_1n`");
+      "Data Mapping View does not allow UPDATE for table `child_1n`");
   reset();
   EXPECT_UPDATE(root_d, test_1n_upd_nop, parse_pk("{\"id\":10}"), ids);
   reset();
@@ -683,7 +683,7 @@ TEST_F(DualityViewUpdate, child1n) {
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root_u, test_1n_add_newpk, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow INSERT for table `child_1n`");
+      "Data Mapping View does not allow INSERT for table `child_1n`");
   reset();
   EXPECT_UPDATE(root_u, test_1n_del, parse_pk("{\"id\":10}"), ids);
   // XXX check abandoned
@@ -718,7 +718,7 @@ TEST_F(DualityViewUpdate, child1n_noupdate) {
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root_di, test_1n_upd, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow UPDATE for table `child_1n`");
+      "Data Mapping View does not allow UPDATE for table `child_1n`");
   reset();
   EXPECT_UPDATE(root_di, test_1n_upd_nop, parse_pk("{\"id\":10}"), ids);
 }
@@ -741,7 +741,7 @@ TEST_F(DualityViewUpdate, child1n_noinsert) {
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root_du, test_1n_add_newpk, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow INSERT for table `child_1n`");
+      "Data Mapping View does not allow INSERT for table `child_1n`");
   reset();
   EXPECT_UPDATE(root_du, test_1n_del, parse_pk("{\"id\":10}"), ids);
   reset();
@@ -797,11 +797,11 @@ TEST_F(DualityViewUpdate, child1n_autoinc) {
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root_i, test_1n_del, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow DELETE for table `child_1n`");
+      "Data Mapping View does not allow DELETE for table `child_1n`");
   reset();
   EXPECT_DUALITY_ERROR(
       test_update(root_i, test_1n_upd, parse_pk("{\"id\":10}"), ids),
-      "Duality View does not allow UPDATE for table `child_1n`");
+      "Data Mapping View does not allow UPDATE for table `child_1n`");
   reset();
   EXPECT_UPDATE(root_i, test_1n_upd_nop, parse_pk("{\"id\":10}"), ids);
   reset();

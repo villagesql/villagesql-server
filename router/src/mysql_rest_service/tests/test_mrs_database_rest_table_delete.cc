@@ -146,8 +146,9 @@ TEST_F(DatabaseQueryDelete, plain_nodelete) {
                   .field("lastName", "last_name", "text")
                   .resolve(m_.get(), true);
 
-  EXPECT_DUALITY_ERROR(test_delete(root, {{"actor_id", "111"}}),
-                       "Duality View does not allow DELETE for table `actor`");
+  EXPECT_DUALITY_ERROR(
+      test_delete(root, {{"actor_id", "111"}}),
+      "Data Mapping View does not allow DELETE for table `actor`");
 
   EXPECT_ROWS_ADDED("actor", 0);
 }

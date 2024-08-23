@@ -55,8 +55,8 @@ class DualityViewCheck : public DatabaseRestTableTest {
     } catch (const JSONInputError &e) {
       ADD_FAILURE() << "check() threw JSONInputError: " << e.what();
       throw;
-    } catch (const DualityViewError &e) {
-      ADD_FAILURE() << "check() threw DualityViewError: " << e.what();
+    } catch (const DataMappingViewError &e) {
+      ADD_FAILURE() << "check() threw DataMappingViewError: " << e.what();
       throw;
     } catch (const MySQLError &e) {
       ADD_FAILURE() << "check() threw MySQLError: " << e.what();

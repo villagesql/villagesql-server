@@ -54,7 +54,7 @@ using mrs::database::entry::Operation;
 
 using mrs::database::entry::DualityView;
 
-using mrs::database::DualityViewError;
+using mrs::database::DataMappingViewError;
 using mrs::database::JSONInputError;
 
 using MySQLError = mysqlrouter::MySQLSession::Error;

@@ -52,8 +52,8 @@ class DualityViewInsert : public DatabaseRestTableTest {
     } catch (const JSONInputError &e) {
       ADD_FAILURE() << "INSERT threw JSONInputError: " << e.what();
       throw;
-    } catch (const DualityViewError &e) {
-      ADD_FAILURE() << "INSERT threw DualityViewError: " << e.what();
+    } catch (const DataMappingViewError &e) {
+      ADD_FAILURE() << "INSERT threw DataMappingViewError: " << e.what();
       throw;
     } catch (const MySQLError &e) {
       ADD_FAILURE() << "INSERT threw MySQLError: " << e.what();
@@ -120,11 +120,12 @@ TEST_F(DualityViewInsert, root_noinsert) {
   SCOPED_TRACE(root->as_graphql());
 
   // new pk
-  EXPECT_DUALITY_ERROR(insert(root, R"*({
+  EXPECT_DUALITY_ERROR(
+      insert(root, R"*({
     "id": 123,
     "data": "Test"
   })*"),
-                       "Duality View does not allow INSERT for table `root`");
+      "Data Mapping View does not allow INSERT for table `root`");
 
   // omitted pk
   EXPECT_JSON_ERROR(insert(root, R"*({
@@ -133,18 +134,20 @@ TEST_F(DualityViewInsert, root_noinsert) {
                     "ID for table `root` missing in JSON input");
 
   // null pk
-  EXPECT_DUALITY_ERROR(insert(root, R"*({
+  EXPECT_DUALITY_ERROR(
+      insert(root, R"*({
     "id": null,
     "data": "Test"
   })*"),
-                       "Duality View does not allow INSERT for table `root`");
+      "Data Mapping View does not allow INSERT for table `root`");
 
   // existing pk
-  EXPECT_DUALITY_ERROR(insert(root, R"*({
+  EXPECT_DUALITY_ERROR(
+      insert(root, R"*({
     "id": 1,
     "data": "Test"
   })*"),
-                       "Duality View does not allow INSERT for table `root`");
+      "Data Mapping View does not allow INSERT for table `root`");
 }
 
 TEST_F(DualityViewInsert, root_insert) {
@@ -318,10 +321,10 @@ TEST_F(DualityViewInsert, root_autoinc) {
   EXPECT_INSERT(root_1n_update, test_nested_newpk1, ids);
   EXPECT_DUALITY_ERROR(
       test_insert(root_1n_update, test_nested_newpk2, ids),
-      "Duality View does not allow INSERT for table `child_1n`");
+      "Data Mapping View does not allow INSERT for table `child_1n`");
   EXPECT_DUALITY_ERROR(
       test_insert(root_1n_update, test_nested_nopk, ids),
-      "Duality View does not allow INSERT for table `child_1n`");
+      "Data Mapping View does not allow INSERT for table `child_1n`");
 }
 
 TEST_F(DualityViewInsert, root_uuid) {
@@ -668,9 +671,9 @@ TEST_F(DualityViewInsert, child1n) {
   EXPECT_JSON_ERROR(test_insert(root, test_nopk, ids),
                     "ID for table `child_1n` missing in JSON input");
   EXPECT_DUALITY_ERROR(test_insert(root, test_newpk, ids),
-                       "Duality View does not allow INSERT");
+                       "Data Mapping View does not allow INSERT");
   EXPECT_DUALITY_ERROR(test_insert(root, test_duppk, ids),
-                       "Duality View does not allow INSERT");
+                       "Data Mapping View does not allow INSERT");
 
   EXPECT_JSON_ERROR(test_insert(root_insert, test_nopk, ids),
                     "ID for table `child_1n` missing in JSON input");
@@ -682,7 +685,7 @@ TEST_F(DualityViewInsert, child1n) {
                     "ID for table `child_1n` missing in JSON input");
   EXPECT_DUALITY_ERROR(
       test_insert(root_update, test_newpk, ids),
-      "Duality View does not allow INSERT for table `child_1n`");
+      "Data Mapping View does not allow INSERT for table `child_1n`");
   EXPECT_INSERT(root_update, test_duppk, ids);
 
   EXPECT_JSON_ERROR(test_insert(root_upsert, test_nopk, ids),
@@ -789,7 +792,7 @@ TEST_F(DualityViewInsert, child1n_autoinc) {
 
   EXPECT_DUALITY_ERROR(
       test_insert(root_insert_update, test_newpk, ids),
-      "Duality View does not allow INSERT for table `child_1n`");
+      "Data Mapping View does not allow INSERT for table `child_1n`");
   EXPECT_INSERT(root_insert_update, test_duppk, ids);
 
   EXPECT_INSERT(root_insert_upsert, test_newpk, ids);  // child inserted
@@ -928,7 +931,7 @@ TEST_F(DualityViewInsert, unnest_1n) {
   "child1n": ["Test"]
 })*",
                                    ids),
-                       "Duality View is read-only");
+                       "Data Mapping View is read-only");
 }
 
 TEST_F(DualityViewInsert, inconsistent_input) {

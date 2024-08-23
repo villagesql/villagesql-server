@@ -53,8 +53,8 @@ class DualityViewDelete : public DatabaseRestTableTest {
     } catch (const JSONInputError &e) {
       ADD_FAILURE() << "DELETE threw JSONInputError: " << e.what();
       throw;
-    } catch (const DualityViewError &e) {
-      ADD_FAILURE() << "DELETE threw DualityViewError: " << e.what();
+    } catch (const DataMappingViewError &e) {
+      ADD_FAILURE() << "DELETE threw DataMappingViewError: " << e.what();
       throw;
     } catch (const MySQLError &e) {
       ADD_FAILURE() << "DELETE threw MySQLError: " << e.what();
@@ -186,8 +186,9 @@ TEST_F(DualityViewDelete, key_nodelete) {
           .resolve(m_.get(), true);
   SCOPED_TRACE(root1->as_graphql());
 
-  EXPECT_DUALITY_ERROR(test_delete(root1, parse_pk(R"*({"id": 100})*")),
-                       "Duality View does not allow DELETE for table `root`");
+  EXPECT_DUALITY_ERROR(
+      test_delete(root1, parse_pk(R"*({"id": 100})*")),
+      "Data Mapping View does not allow DELETE for table `root`");
   expect_rows_added({{"root", 0},
                      {"child_1n", 0},
                      {"child_1n_1n", 0},
@@ -221,8 +222,9 @@ TEST_F(DualityViewDelete, key_nodelete) {
           .resolve(m_.get(), true);
   SCOPED_TRACE(root2->as_graphql());
 
-  EXPECT_DUALITY_ERROR(test_delete(root2, parse_pk(R"*({"id": 100})*")),
-                       "Duality View does not allow DELETE for table `root`");
+  EXPECT_DUALITY_ERROR(
+      test_delete(root2, parse_pk(R"*({"id": 100})*")),
+      "Data Mapping View does not allow DELETE for table `root`");
   expect_rows_added({{"root", 0},
                      {"child_1n", 0},
                      {"child_1n_1n", 0},
@@ -332,7 +334,7 @@ TEST_F(DualityViewDelete, key_delete) {
 
     EXPECT_DUALITY_ERROR(
         test_delete(root_none, parse_pk(R"*({"id": 100})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
     expect_rows_added({{"root", 0},
                        {"child_11", 0},
                        {"child_1n", 0},
@@ -343,7 +345,7 @@ TEST_F(DualityViewDelete, key_delete) {
     reset();
     EXPECT_DUALITY_ERROR(
         test_delete(root_none, parse_pk(R"*({"id": 101})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
     expect_rows_added({{"root", 0},
                        {"child_11", 0},
                        {"child_1n", 0},
@@ -364,7 +366,7 @@ TEST_F(DualityViewDelete, key_delete) {
     reset();
     EXPECT_DUALITY_ERROR(
         test_delete(root_none, parse_pk(R"*({"id": 103})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
   }
   {
     reset();
@@ -396,7 +398,7 @@ TEST_F(DualityViewDelete, key_delete) {
 
     EXPECT_DUALITY_ERROR(
         test_delete(root_1n, parse_pk(R"*({"id": 100})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
     expect_rows_added({{"root", 0},
                        {"child_11", 0},
                        {"child_1n", 0},
@@ -407,7 +409,7 @@ TEST_F(DualityViewDelete, key_delete) {
     reset();
     EXPECT_DUALITY_ERROR(
         test_delete(root_1n, parse_pk(R"*({"id": 101})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
     expect_rows_added({{"root", 0},
                        {"child_11", 0},
                        {"child_1n", 0},
@@ -427,7 +429,7 @@ TEST_F(DualityViewDelete, key_delete) {
     reset();
     EXPECT_DUALITY_ERROR(
         test_delete(root_1n, parse_pk(R"*({"id": 103})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
   }
   {
     reset();
@@ -460,7 +462,7 @@ TEST_F(DualityViewDelete, key_delete) {
 
     EXPECT_DUALITY_ERROR(
         test_delete(root_1n_1n, parse_pk(R"*({"id": 100})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
     expect_rows_added({{"root", 0},
                        {"child_11", 0},
                        {"child_1n", 0},
@@ -471,7 +473,7 @@ TEST_F(DualityViewDelete, key_delete) {
     reset();
     EXPECT_DUALITY_ERROR(
         test_delete(root_1n_1n, parse_pk(R"*({"id": 101})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
     expect_rows_added({{"root", 0},
                        {"child_11", 0},
                        {"child_1n", 0},
@@ -491,7 +493,7 @@ TEST_F(DualityViewDelete, key_delete) {
     reset();
     EXPECT_DUALITY_ERROR(
         test_delete(root_1n_1n, parse_pk(R"*({"id": 103})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
   }
   {
     reset();
@@ -523,7 +525,7 @@ TEST_F(DualityViewDelete, key_delete) {
 
     EXPECT_DUALITY_ERROR(
         test_delete(root_nm, parse_pk(R"*({"id": 100})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
     expect_rows_added({{"root", 0},
                        {"child_11", 0},
                        {"child_1n", 0},
@@ -534,7 +536,7 @@ TEST_F(DualityViewDelete, key_delete) {
     reset();
     EXPECT_DUALITY_ERROR(
         test_delete(root_nm, parse_pk(R"*({"id": 101})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
     expect_rows_added({{"root", 0},
                        {"child_11", 0},
                        {"child_1n", 0},
@@ -669,7 +671,7 @@ TEST_F(DualityViewDelete, undeletable_child) {
 
     EXPECT_DUALITY_ERROR(
         test_delete(root_none, parse_pk(R"*({"id": 100})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
     expect_rows_added({{"root", 0},
                        {"child_11", 0},
                        {"child_1n", 0},
@@ -680,7 +682,7 @@ TEST_F(DualityViewDelete, undeletable_child) {
     reset();
     EXPECT_DUALITY_ERROR(
         test_delete(root_none, parse_pk(R"*({"id": 101})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
     expect_rows_added({{"root", 0},
                        {"child_11", 0},
                        {"child_1n", 0},
@@ -803,7 +805,7 @@ TEST_F(DualityViewDelete, undeletable_child) {
 
     EXPECT_DUALITY_ERROR(
         test_delete(root_1n_1n, parse_pk(R"*({"id": 100})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
     expect_rows_added({{"root", 0},
                        {"child_11", 0},
                        {"child_1n", 0},
@@ -814,7 +816,7 @@ TEST_F(DualityViewDelete, undeletable_child) {
     reset();
     EXPECT_DUALITY_ERROR(
         test_delete(root_1n_1n, parse_pk(R"*({"id": 101})*")),
-        "Duality View does not allow DELETE for a referenced table");
+        "Data Mapping View does not allow DELETE for a referenced table");
     expect_rows_added({{"root", 0},
                        {"child_11", 0},
                        {"child_1n", 0},
@@ -855,8 +857,9 @@ TEST_F(DualityViewDelete, filter_nodelete) {
   auto filter = R"*({
     "id": 103
   })*";
-  EXPECT_DUALITY_ERROR(test_delete(root, filter),
-                       "Duality View does not allow DELETE for table `root`");
+  EXPECT_DUALITY_ERROR(
+      test_delete(root, filter),
+      "Data Mapping View does not allow DELETE for table `root`");
 }
 
 TEST_F(DualityViewDelete, filter_delete) {

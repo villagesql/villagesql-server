@@ -121,7 +121,7 @@ struct String_msg {
   EXPECT_THROW_LIKE(statement, mysqlrouter::MySQLSession::Error, msg)
 
 #define EXPECT_DUALITY_ERROR(statement, msg) \
-  EXPECT_THROW_LIKE(statement, mrs::database::DualityViewError, msg)
+  EXPECT_THROW_LIKE(statement, mrs::database::DataMappingViewError, msg)
 
 #define EXPECT_JSON_ERROR(statement, msg) \
   EXPECT_THROW_LIKE(statement, mrs::database::JSONInputError, msg)

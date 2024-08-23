@@ -697,8 +697,7 @@ TEST_F(DualityViewSelect, cycle) {
     "_metadata": {
         "etag": "166C008701F8265F58F764824EFA8CDC361006F69E23CCAE9B176557EFA00BE1"
     }
-}O
-)*");
+})*");
   }
   // referenced by children
   {

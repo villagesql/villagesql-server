@@ -80,37 +80,39 @@ inline void throw_duplicate_key(const std::string &table,
                        table + "` in JSON input");
 }
 
-class DualityViewError : public std::runtime_error {
+class DataMappingViewError : public std::runtime_error {
  public:
-  explicit DualityViewError(const std::string &msg) : std::runtime_error(msg) {}
+  explicit DataMappingViewError(const std::string &msg)
+      : std::runtime_error(msg) {}
 };
 
 inline void throw_ENOINSERT(const std::string &table) {
-  throw DualityViewError("Duality View does not allow INSERT for table `" +
-                         table + "`");
+  throw DataMappingViewError(
+      "Data Mapping View does not allow INSERT for table `" + table + "`");
 }
 
 inline void throw_ENOUPDATE(const std::string &table,
                             const std::string &field = "") {
   if (field.empty())
-    throw DualityViewError("Duality View does not allow UPDATE for table `" +
-                           table + "`");
+    throw DataMappingViewError(
+        "Data Mapping View does not allow UPDATE for table `" + table + "`");
   else
-    throw DualityViewError("Duality View does not allow UPDATE for field \"" +
-                           field + "\" of table `" + table + "`");
+    throw DataMappingViewError(
+        "Data Mapping View does not allow UPDATE for field \"" + field +
+        "\" of table `" + table + "`");
 }
 
 inline void throw_ENODELETE(const std::string &table = "") {
   if (table.empty())
-    throw DualityViewError(
-        "Duality View does not allow DELETE for a referenced table");
+    throw DataMappingViewError(
+        "Data Mapping View does not allow DELETE for a referenced table");
   else
-    throw DualityViewError("Duality View does not allow DELETE for table `" +
-                           table + "`");
+    throw DataMappingViewError(
+        "Data Mapping View does not allow DELETE for table `" + table + "`");
 }
 
 inline void throw_read_only() {
-  throw DualityViewError("Duality View is read-only");
+  throw DataMappingViewError("Data Mapping View is read-only");
 }
 
 }  // namespace database
