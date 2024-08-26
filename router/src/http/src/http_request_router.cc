@@ -45,33 +45,46 @@ using BaseRequestHandlerPtr = HttpRequestRouter::BaseRequestHandlerPtr;
  *
  * if no handler is found, reply with 404 not found
  */
-void HttpRequestRouter::append(const std::string &url_regex_str,
+void HttpRequestRouter::append(const std::string &url_host,
+                               const std::string &url_regex_str,
                                std::unique_ptr<http::base::RequestHandler> cb) {
-  log_debug("adding route for regex: %s", url_regex_str.c_str());
+  log_debug("adding route for regex: %s, url_host: '%s'", url_regex_str.c_str(),
+            url_host.c_str());
   std::lock_guard<std::mutex> lock(route_mtx_);
-  request_handlers_.emplace_back(RouterData{
-      url_regex_str, std::regex{url_regex_str, std::regex_constants::extended},
-      std::move(cb)});
+  auto &request_handlers =
+      url_host.empty() ? request_handlers_url_host_empty_ : request_handlers_;
+  request_handlers.emplace_back(
+      RouterData{url_host, url_regex_str,
+                 std::regex{url_regex_str, std::regex_constants::extended},
+                 std::move(cb)});
 }
 
 void HttpRequestRouter::remove(const void *handler_id) {
   std::lock_guard<std::mutex> lock(route_mtx_);
-
-  for (auto it = request_handlers_.begin(); it != request_handlers_.end();) {
-    if (it->handler.get() == handler_id) {
-      log_debug("removing route for regex: %s", it->url_regex_str.c_str());
-      it = request_handlers_.erase(it);
-    } else {
-      ++it;
+  for (auto &request_handlers : {std::ref(request_handlers_),
+                                 std::ref(request_handlers_url_host_empty_)}) {
+    for (auto it = request_handlers.get().begin();
+         it != request_handlers.get().end();) {
+      if (it->handler.get() == handler_id) {
+        log_debug("removing route for regex: %s, url_host: '%s'",
+                  it->url_regex_str.c_str(), it->url_host.c_str());
+        it = request_handlers.get().erase(it);
+      } else {
+        ++it;
+      }
     }
   }
 }
 
-void HttpRequestRouter::remove(const std::string &url_regex_str) {
-  log_debug("removing route for regex: %s", url_regex_str.c_str());
+void HttpRequestRouter::remove(const std::string &url_host,
+                               const std::string &url_regex_str) {
+  log_debug("removing route for regex: %s, url_host: '%s'",
+            url_regex_str.c_str(), url_host.c_str());
   std::lock_guard<std::mutex> lock(route_mtx_);
+  auto &request_handlers =
+      url_host.empty() ? request_handlers_url_host_empty_ : request_handlers_;
   for (auto it = request_handlers_.begin(); it != request_handlers_.end();) {
-    if (it->url_regex_str == url_regex_str) {
+    if (it->url_host == url_host && it->url_regex_str == url_regex_str) {
       it = request_handlers_.erase(it);
     } else {
       it++;
@@ -135,7 +148,13 @@ void HttpRequestRouter::route(http::base::Request &req) {
     return;
   }
 
-  auto handler = find_route_handler(uri.get_path());
+  std::string url_host;
+  auto hdr_host = req.get_input_headers().find(":authority");
+  if (hdr_host) {
+    url_host = *hdr_host;
+  }
+
+  auto handler = find_route_handler(url_host, uri.get_path());
 
   if (handler) {
     handler->handle_request(req);
@@ -146,10 +165,20 @@ void HttpRequestRouter::route(http::base::Request &req) {
 }
 
 BaseRequestHandlerPtr HttpRequestRouter::find_route_handler(
-    const std::string &path) {
+    const std::string &url_host, const std::string &path) {
   std::lock_guard<std::mutex> lock(route_mtx_);
 
   for (auto &request_handler : request_handlers_) {
+    // TODO(areliga): should we do simple == here or some regex matching is
+    // needed?
+    if (url_host == request_handler.url_host &&
+        std::regex_search(path, request_handler.url_regex)) {
+      return request_handler.handler;
+    }
+  }
+
+  // no hanlder with matching host found, try the one with empty host
+  for (auto &request_handler : request_handlers_url_host_empty_) {
     if (std::regex_search(path, request_handler.url_regex)) {
       return request_handler.handler;
     }

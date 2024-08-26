@@ -108,6 +108,8 @@ bool ObjectSchema::requires_authentication() const {
   return requires_authentication_;
 }
 
+const std::string &ObjectSchema::get_url_host() const { return url_host_; }
+
 UniversalId ObjectSchema::get_service_id() const { return service_id_; }
 
 UniversalId ObjectSchema::get_id() const { return schema_id_; }

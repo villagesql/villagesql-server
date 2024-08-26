@@ -170,6 +170,8 @@ ObjectStaticFile::EntryKey ObjectStaticFile::get_key() const {
 
 UniversalId ObjectStaticFile::get_id() const { return cse_.id; }
 
+const std::string &ObjectStaticFile::get_url_host() const { return cse_.host; }
+
 UniversalId ObjectStaticFile::get_service_id() const { return cse_.service_id; }
 
 bool ObjectStaticFile::has_access(const Access access) const {

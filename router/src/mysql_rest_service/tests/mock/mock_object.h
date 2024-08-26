@@ -49,6 +49,7 @@ class MockRoute : public mrs::interface::Object {
   MOCK_METHOD(const Fields &, get_parameters, (), (override));
   MOCK_METHOD(uint32_t, get_on_page, (), (override));
   MOCK_METHOD(bool, requires_authentication, (), (override, const));
+  MOCK_METHOD(const std::string &, get_url_host, (), (override, const));
   MOCK_METHOD(mrs::UniversalId, get_service_id, (), (override, const));
   MOCK_METHOD(EntryKey, get_key, (), (override, const));
   MOCK_METHOD(mrs::UniversalId, get_id, (), (override, const));

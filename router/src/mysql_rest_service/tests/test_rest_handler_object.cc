@@ -62,10 +62,10 @@ class RestHandlerObjectTests : public Test {
     EXPECT_CALL(mock_route_, get_rest_url()).WillOnce(ReturnRef(rest_url));
     EXPECT_CALL(mock_route_, get_rest_path())
         .WillOnce(Return(Strings{rest_path}));
-    EXPECT_CALL(mock_http_component_, add_route(rest_path, _))
+    EXPECT_CALL(mock_http_component_, add_route(_, rest_path, _))
         .WillOnce(Invoke(
             [this](
-                const ::std::string &,
+                const ::std::string &, const ::std::string &,
                 std::unique_ptr<http::base::RequestHandler> handler) -> void * {
               request_handler_ = std::move(handler);
               return request_handler_.get();

@@ -87,7 +87,7 @@ static std::string as_string(const std::vector<T> &v) {
 HandlerString::HandlerString(const std::string &path,
                              const std::string &content,
                              mrs::interface::AuthorizeManager *auth_manager)
-    : Handler("url-not-set", {"^"s + path + "$"}, {}, auth_manager),
+    : Handler("", "url-not-set", {"^"s + path + "$"}, {}, auth_manager),
       path_{path},
       content_{content} {
   mysql_harness::Path p{path_};

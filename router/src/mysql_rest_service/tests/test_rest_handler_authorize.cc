@@ -67,16 +67,16 @@ class HandlerAuthorizeTests : public Test {
 
   void make_sut(const mrs::UniversalId service_id, const std::string &rest_url,
                 const std::string &rest_path) {
-    EXPECT_CALL(mock_http_component_, add_route(rest_path, _))
+    EXPECT_CALL(mock_http_component_, add_route(_, rest_path, _))
         .WillOnce(Invoke(
             [this](
-                const ::std::string &,
+                const ::std::string &, const ::std::string &,
                 std::unique_ptr<http::base::RequestHandler> handler) -> void * {
               request_handler_ = std::move(handler);
               return request_handler_.get();
             }));
-    sut_ = std::make_unique<HandlerAuthorize>(service_id, rest_url, rest_path,
-                                              "", "", &mock_auth_);
+    sut_ = std::make_unique<HandlerAuthorize>("", service_id, rest_url,
+                                              rest_path, "", "", &mock_auth_);
     ASSERT_NE(nullptr, request_handler_.get());
   }
 

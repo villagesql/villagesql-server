@@ -132,6 +132,7 @@ class RestHandler {
   virtual bool may_check_access() const = 0;
   virtual Authorization requires_authentication() const = 0;
 
+  virtual const std::string &get_url_host() const = 0;
   virtual UniversalId get_service_id() const = 0;
   virtual UniversalId get_db_object_id() const = 0;
   virtual UniversalId get_schema_id() const = 0;

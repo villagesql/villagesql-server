@@ -42,6 +42,7 @@ class HandlerSchemaMetadata : public Handler {
                         mrs::interface::AuthorizeManager *auth_manager);
 
   Authorization requires_authentication() const override;
+  const std::string &get_url_host() const override;
   UniversalId get_service_id() const override;
   UniversalId get_db_object_id() const override;
   UniversalId get_schema_id() const override;

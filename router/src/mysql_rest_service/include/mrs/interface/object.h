@@ -94,6 +94,7 @@ class Object {
   virtual uint32_t get_on_page() = 0;
 
   virtual bool requires_authentication() const = 0;
+  virtual const std::string &get_url_host() const = 0;
   virtual UniversalId get_service_id() const = 0;
   virtual EntryKey get_key() const = 0;
   virtual UniversalId get_id() const = 0;

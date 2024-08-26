@@ -221,7 +221,7 @@ void Client::async_send_request(http::client::Request *request) {
       throw make_error_code(FailureCode::kInvalidHostname);
 
     auto &headers = request->get_output_headers();
-    headers.add("Host", std::string(endpoint.host));
+    impl::headers_add_if_not_present(&headers, "Host", endpoint.host.c_str());
     impl::headers_add_if_not_present(
         &headers, "User-Agent", "router-http-client/" MYSQL_ROUTER_VERSION);
     impl::headers_add_if_not_present(&headers, "Accept", "*/*");

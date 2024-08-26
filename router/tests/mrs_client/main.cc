@@ -359,6 +359,13 @@ std::vector<CmdOption> g_options{
      [](const std::string &value) { g_configuration.accept = value; },
      [](const std::string &) {}},
 
+    {{"--host"},
+     "Set the value in the 'Host' header of the request.",
+     CmdOptionValueReq::required,
+     "host",
+     [](const std::string &value) { g_configuration.host = value; },
+     [](const std::string &) {}},
+
     {{"--payload"},
      "Set the request body for POST, PUT requests.",
      CmdOptionValueReq::required,
@@ -844,6 +851,10 @@ int main_app(int argc, char *argv[]) {
 
     if (!g_configuration.accept.empty()) {
       request.add_header("Accept", g_configuration.accept.c_str());
+    }
+
+    if (!g_configuration.host.empty()) {
+      request.add_header("Host", g_configuration.host.c_str());
     }
 
     auto result = execute_http_flow(&request, g_configuration.path);

@@ -42,6 +42,7 @@ QueryEntriesAuthApp::QueryEntriesAuthApp() {
       "a.name as app_name,  "
       "  a.enabled and "
       "    v.enabled, a.url, v.validation_url,  a.access_token, a.app_id, "
+      "   h.name as url_host, "
       "  CONCAT(IF(s.url_protocol=\"HTTPS\",\"https://\",\"http://\"),h.name) "
       "    as host, "
       "  CONCAT(IF(s.url_protocol=\"HTTPS\",\"https://\",\"http://\"),(select "
@@ -87,6 +88,7 @@ void QueryEntriesAuthApp::on_row(const ResultRow &row) {
   mysql_row.unserialize(&entry.url_validation);
   mysql_row.unserialize(&entry.app_token);
   mysql_row.unserialize(&entry.app_id);
+  mysql_row.unserialize(&entry.url_host);
   // TODO(lkotula): Take the host from SERVICE instance! (Shouldn't be in
   // review)
   mysql_row.unserialize(&entry.host);
@@ -121,6 +123,7 @@ QueryEntriesAuthApp::QueryEntriesAuthApp() {
       "a.name as app_name,  "
       "  a.enabled and "
       "    v.enabled, a.url, v.validation_url,  a.access_token, a.app_id, "
+      "    h.name as url_host, "
       "  CONCAT(IF(s.url_protocol=\"HTTPS\",\"https://\",\"http://\"),h.name) "
       "    as host, "
       "  CONCAT(IF(s.url_protocol=\"HTTPS\",\"https://\",\"http://\"),(select "

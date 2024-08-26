@@ -85,8 +85,8 @@ static CachedObject get_session(::mysqlrouter::MySQLSession *,
 
 HandlerFunction::HandlerFunction(Route *r,
                                  mrs::interface::AuthorizeManager *auth_manager)
-    : Handler{r->get_rest_url(), r->get_rest_path(), r->get_options(),
-              auth_manager},
+    : Handler{r->get_url_host(), r->get_rest_url(), r->get_rest_path(),
+              r->get_options(), auth_manager},
       route_{r},
       auth_manager_{auth_manager} {}
 

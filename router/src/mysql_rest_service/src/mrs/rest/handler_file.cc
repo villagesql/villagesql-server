@@ -71,8 +71,8 @@ namespace rest {
 HandlerFile::HandlerFile(Route *route,
                          mrs::interface::AuthorizeManager *auth_manager,
                          QueryFactory *factory)
-    : Handler(route->get_rest_url(), route->get_rest_path(),
-              route->get_options(), auth_manager),
+    : Handler(route->get_url_host(), route->get_rest_url(),
+              route->get_rest_path(), route->get_options(), auth_manager),
       route_{route},
       factory_{factory} {}
 

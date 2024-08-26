@@ -34,9 +34,9 @@ SetHttpComponent::HttpWrapperHttpServerComponent::
     : other_{other} {}
 
 void *SetHttpComponent::HttpWrapperHttpServerComponent::add_route(
-    const std::string &url_regex,
+    const std::string &url_host, const std::string &url_regex,
     std::unique_ptr<http::base::RequestHandler> cb) {
-  return other_->add_route(url_regex, std::move(cb));
+  return other_->add_route(url_host, url_regex, std::move(cb));
 }
 
 void SetHttpComponent::HttpWrapperHttpServerComponent::remove_route(
@@ -45,8 +45,8 @@ void SetHttpComponent::HttpWrapperHttpServerComponent::remove_route(
 }
 
 void SetHttpComponent::HttpWrapperHttpServerComponent::remove_route(
-    const std::string &url_regex) {
-  other_->remove_route(url_regex);
+    const std::string &url_host, const std::string &url_regex) {
+  other_->remove_route(url_host, url_regex);
 }
 
 void SetHttpComponent::HttpWrapperHttpServerComponent::init(

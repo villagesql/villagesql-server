@@ -41,12 +41,13 @@ using HttpUri = ::http::base::Uri;
 
 class Handler : public interface::RestHandler {
  public:
-  Handler(const std::string &url,
+  Handler(const std::string &url_host, const std::string &url,
           const std::vector<std::string> &rest_path_matcher,
           const std::string &options,
           interface::AuthorizeManager *auth_manager);
   ~Handler() override;
 
+  const std::string &get_url_host() const override;
   bool may_check_access() const override;
   void authorization(RequestContext *ctxt) override;
   bool request_begin(RequestContext *ctxt) override;
@@ -68,6 +69,7 @@ class Handler : public interface::RestHandler {
 
  protected:
   interface::Options options_;
+  const std::string url_host_;
   const std::string url_;
   const std::vector<std::string> rest_path_matcher_;
   std::vector<void *> handler_id_;

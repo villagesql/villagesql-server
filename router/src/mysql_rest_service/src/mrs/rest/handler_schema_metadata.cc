@@ -43,8 +43,8 @@ using Url = helper::http::Url;
 
 HandlerSchemaMetadata::HandlerSchemaMetadata(
     RouteSchema *schema, mrs::interface::AuthorizeManager *auth_manager)
-    : Handler(schema->get_url(), {schema->get_path()}, schema->get_options(),
-              auth_manager),
+    : Handler(schema->get_url_host(), schema->get_url(), {schema->get_path()},
+              schema->get_options(), auth_manager),
       schema_{schema} {}
 
 void HandlerSchemaMetadata::authorization(rest::RequestContext *ctxt) {
@@ -95,6 +95,10 @@ HttpResult HandlerSchemaMetadata::handle_put(rest::RequestContext *) {
 Handler::Authorization HandlerSchemaMetadata::requires_authentication() const {
   return schema_->requires_authentication() ? Authorization::kCheck
                                             : Authorization::kNotNeeded;
+}
+
+const std::string &HandlerSchemaMetadata::get_url_host() const {
+  return schema_->get_url_host();
 }
 
 UniversalId HandlerSchemaMetadata::get_service_id() const {

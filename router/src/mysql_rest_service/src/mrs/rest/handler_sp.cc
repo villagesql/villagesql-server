@@ -205,8 +205,8 @@ static HttpResult handler_mysqlerror(const mysqlrouter::MySQLSession::Error &e,
 }
 
 HandlerSP::HandlerSP(Route *r, mrs::interface::AuthorizeManager *auth_manager)
-    : Handler{r->get_rest_url(), r->get_rest_path(), r->get_options(),
-              auth_manager},
+    : Handler{r->get_url_host(), r->get_rest_url(), r->get_rest_path(),
+              r->get_options(), auth_manager},
       route_{r},
       auth_manager_{auth_manager} {}
 

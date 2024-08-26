@@ -34,6 +34,7 @@ class MockRestHandler : public mrs::interface::RestHandler {
 
   MOCK_METHOD(bool, may_check_access, (), (const, override));
   MOCK_METHOD(Authorization, requires_authentication, (), (const, override));
+  MOCK_METHOD(const std::string &, get_url_host, (), (const, override));
   MOCK_METHOD(mrs::UniversalId, get_service_id, (), (const, override));
   MOCK_METHOD(mrs::UniversalId, get_db_object_id, (), (const, override));
   MOCK_METHOD(mrs::UniversalId, get_schema_id, (), (const, override));

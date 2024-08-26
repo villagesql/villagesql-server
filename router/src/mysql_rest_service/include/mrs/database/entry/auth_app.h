@@ -50,6 +50,8 @@ class AuthApp {
   std::string url_validation;
   std::string app_id;
   std::string app_token;
+  std::string url_host;  // direct value from the table, without a protocol
+                         // prefix as stored in .host field
   // TODO(lkotula): Remove ? (Shouldn't be in review)
   std::string host;
   std::string host_alias;

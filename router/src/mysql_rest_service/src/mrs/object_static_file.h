@@ -75,6 +75,7 @@ class ObjectStaticFile : public mrs::interface::Object {
   Media get_media_type() const override;
 
   bool requires_authentication() const override;
+  const std::string &get_url_host() const override;
   UniversalId get_service_id() const override;
   EntryKey get_key() const override;
   UniversalId get_id() const override;

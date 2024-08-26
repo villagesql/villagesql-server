@@ -226,6 +226,8 @@ Object::EntryKey Object::get_key() const { return pe_.get_key(); }
 
 UniversalId Object::get_id() const { return pe_.id; }
 
+const std::string &Object::get_url_host() const { return pe_.host; }
+
 UniversalId Object::get_service_id() const { return pe_.service_id; }
 
 bool Object::has_access(const Access access) const {

@@ -83,10 +83,10 @@ class RestHandlerFileTests : public Test {
         .WillRepeatedly(ReturnRef(mock_input_headers));
     EXPECT_CALL(mock_query_factory_, create_query_content_file())
         .WillRepeatedly(Return(mock_query_file_.copy_base()));
-    EXPECT_CALL(mock_http_component_, add_route(path, _))
+    EXPECT_CALL(mock_http_component_, add_route(_, path, _))
         .WillOnce(Invoke(
             [this](
-                const ::std::string &,
+                const ::std::string &, const ::std::string &,
                 std::unique_ptr<http::base::RequestHandler> handler) -> void * {
               request_handler_ = std::move(handler);
               return request_handler_.get();

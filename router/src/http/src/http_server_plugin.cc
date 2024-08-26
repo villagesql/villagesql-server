@@ -271,8 +271,9 @@ static void init(mysql_harness::PluginFuncEnv *env) {
       HttpServerComponent::get_instance().init(srv);
 
       if (!config.static_basedir.empty()) {
-        srv->add_route("", std::make_unique<HttpStaticFolderHandler>(
-                               config.static_basedir, config.require_realm));
+        srv->add_route("", "",
+                       std::make_unique<HttpStaticFolderHandler>(
+                           config.static_basedir, config.require_realm));
       }
     }
   } catch (const std::invalid_argument &exc) {

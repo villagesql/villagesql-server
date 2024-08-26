@@ -56,10 +56,10 @@ std::string get_json_response_ok() {
 }
 
 HandlerUnauthorize::HandlerUnauthorize(
-    const UniversalId service_id, const std::string &url,
-    const std::string &rest_path_matcher, const std::string &options,
-    interface::AuthorizeManager *auth_manager)
-    : Handler(url, {rest_path_matcher}, options, auth_manager),
+    const std::string &url_host, const UniversalId service_id,
+    const std::string &url, const std::string &rest_path_matcher,
+    const std::string &options, interface::AuthorizeManager *auth_manager)
+    : Handler(url_host, url, {rest_path_matcher}, options, auth_manager),
       service_id_{service_id},
       auth_manager_{auth_manager} {}
 

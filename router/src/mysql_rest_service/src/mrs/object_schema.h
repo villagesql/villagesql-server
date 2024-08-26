@@ -71,12 +71,14 @@ class ObjectSchema : public std::enable_shared_from_this<ObjectSchema>,
   const std::string &get_options() const override;
   const VectorOfRoutes &get_routes() const override;
   bool requires_authentication() const override;
+  const std::string &get_url_host() const override;
   UniversalId get_service_id() const override;
   UniversalId get_id() const override;
 
  private:
   State state_{stateOff};
   DbObjectManager *manager_;
+  std::string url_host_;
   std::string service_;
   std::string name_;
   std::string url_;

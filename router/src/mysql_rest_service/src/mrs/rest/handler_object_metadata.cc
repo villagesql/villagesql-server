@@ -44,7 +44,7 @@ using HttpResult = Handler::HttpResult;
 // TODO(alfredo) - update this
 HandlerMetadata::HandlerMetadata(Route *route,
                                  mrs::interface::AuthorizeManager *auth_manager)
-    : Handler(route->get_rest_canonical_url(),
+    : Handler(route->get_url_host(), route->get_rest_canonical_url(),
               {route->get_rest_canonical_path()}, route->get_options(),
               auth_manager),
       route_{route} {}

@@ -177,8 +177,8 @@ using HttpResult = Handler::HttpResult;
 HandlerTable::HandlerTable(Route *route,
                            mrs::interface::AuthorizeManager *auth_manager,
                            mrs::GtidManager *gtid_manager)
-    : Handler(route->get_rest_url(), route->get_rest_path(),
-              route->get_options(), auth_manager),
+    : Handler(route->get_url_host(), route->get_rest_url(),
+              route->get_rest_path(), route->get_options(), auth_manager),
       gtid_manager_{gtid_manager},
       route_{route} {}
 

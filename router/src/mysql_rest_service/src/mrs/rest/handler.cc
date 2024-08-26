@@ -725,15 +725,17 @@ mrs::interface::Options parse_json_options(const std::string &options) {
   return helper::json::text_to_handler<ParseOptions>(options);
 }
 
-Handler::Handler(const std::string &url,
+Handler::Handler(const std::string &url_host, const std::string &url,
                  const std::vector<std::string> &rest_path_matcher,
                  const std::string &options,
                  mrs::interface::AuthorizeManager *auth_manager)
     : options_{parse_json_options(options)},
+      url_host_{url_host},
       url_{url},
       rest_path_matcher_{rest_path_matcher},
       authorization_manager_{auth_manager} {
-  log_debug("Handling new URL: '%s'", url_.c_str());
+  log_debug("Handling new URL: '%s' on host '%s'", url_.c_str(),
+            url_host_.c_str());
 
   for (const auto &kv : options_.parameters_) {
     log_debug("headers: '%s':'%s'", kv.first.c_str(), kv.second.c_str());
@@ -754,7 +756,7 @@ Handler::Handler(const std::string &url,
     auto handler = std::make_unique<RestRequestHandler>(this, auth_manager);
     log_debug("adding_route: '%s'", path.c_str());
     handler_id_.emplace_back(HttpServerComponent::get_instance().add_route(
-        path, std::move(handler)));
+        url_host, path, std::move(handler)));
   }
 }
 
@@ -783,6 +785,8 @@ void Handler::throw_unauthorize_when_check_auth_fails(RequestContext *ctxt) {
 }
 
 void Handler::authorization(RequestContext *) {}
+
+const std::string &Handler::get_url_host() const { return url_host_; }
 
 bool Handler::may_check_access() const { return true; }
 

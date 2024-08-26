@@ -82,6 +82,7 @@ class Object : public std::enable_shared_from_this<Object>,
   /* same as get_id but with type-flags */
   EntryKey get_key() const override;
   UniversalId get_id() const override;
+  const std::string &get_url_host() const override;
   UniversalId get_service_id() const override;
   bool has_access(const Access access) const override;
   uint32_t get_access() const override;

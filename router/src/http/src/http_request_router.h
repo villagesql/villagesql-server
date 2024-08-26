@@ -45,10 +45,10 @@ class HttpRequestRouter : public http::server::RequestHandlerInterface {
   using BaseRequestHandlerPtr = std::shared_ptr<http::base::RequestHandler>;
 
  public:
-  void append(const std::string &url_regex_str,
+  void append(const std::string &url_host, const std::string &url_regex_str,
               std::unique_ptr<RequestHandler> cb);
   void remove(const void *handler_id);
-  void remove(const std::string &url_regex_str);
+  void remove(const std::string &url_host, const std::string &url_regex_str);
 
   void set_default_route(std::unique_ptr<RequestHandler> cb);
   void clear_default_route();
@@ -58,6 +58,7 @@ class HttpRequestRouter : public http::server::RequestHandlerInterface {
 
  private:
   struct RouterData {
+    std::string url_host;
     std::string url_regex_str;
     std::regex url_regex;
     BaseRequestHandlerPtr handler;
@@ -65,9 +66,13 @@ class HttpRequestRouter : public http::server::RequestHandlerInterface {
 
   // if no routes are specified, return 404
   void handler_not_found(http::base::Request &req);
-  BaseRequestHandlerPtr find_route_handler(const std::string &path);
+  BaseRequestHandlerPtr find_route_handler(const std::string &url_host,
+                                           const std::string &path);
 
+  // handlers for request for the specific url_host
   std::vector<RouterData> request_handlers_;
+  // handlers for request with empty url_host
+  std::vector<RouterData> request_handlers_url_host_empty_;
 
   BaseRequestHandlerPtr default_route_;
   std::string require_realm_;

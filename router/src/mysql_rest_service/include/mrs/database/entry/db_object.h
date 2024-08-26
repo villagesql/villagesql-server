@@ -52,7 +52,7 @@ class DbObject {
   UniversalId service_id;
   UniversalId schema_id;
   std::string host;
-  std::string host_alias;
+  std::string host_alias;  // TODO(areliga): we ignore this for now
   bool active_service;
   bool active_schema;
   bool active_object;
