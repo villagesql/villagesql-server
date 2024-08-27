@@ -53,8 +53,8 @@ class Sha256Digest : public IDigester {
 void digest_object(std::shared_ptr<entry::Object> object, std::string_view doc,
                    IDigester *digest);
 
-// std::string compute_checksum(std::shared_ptr<entry::Object> object,
-//                              std::string_view doc);
+std::string compute_checksum(std::shared_ptr<entry::Object> object,
+                             std::string_view doc);
 
 std::string post_process_json(
     std::shared_ptr<entry::Object> view, const dv::ObjectFieldFilter &filter,

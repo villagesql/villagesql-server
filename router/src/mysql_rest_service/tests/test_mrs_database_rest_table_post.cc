@@ -738,7 +738,7 @@ TEST_F(DatabaseQueryPost, DISABLED_nested_nm_row_owner) {
 }
 
 TEST_F(DatabaseQueryPost, nested_nm_multi_row_owner) {
-  prepare(TestSchema::COMPOSITE);
+  prepare(TestSchema::COMPOSITE_OWNER);
 
   auto root = DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
                   .field("id1", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)

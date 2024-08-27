@@ -919,20 +919,18 @@ void digest_object(std::shared_ptr<entry::Object> object, std::string_view doc,
   reader.Parse(ms, handler);
 }
 
-// std::string compute_checksum(std::shared_ptr<Table> object,
-//                              std::string_view doc) {
-//   // note: checksum is calculated by following fields in order of appearance
-//   in
-//   // the JSON document, thus it is only suitable for use in documents
-//   generated
-//   // by JsonQueryBuilder, which builds JSON in Table order
+std::string compute_checksum(std::shared_ptr<entry::Object> object,
+                             std::string_view doc) {
+  // note: checksum is calculated by following fields in order of appearance in
+  // the JSON document, thus it is only suitable for use in documents generated
+  // by JsonQueryBuilder, which builds JSON in Table order
 
-//   Sha256Digest digest;
+  Sha256Digest digest;
 
-//   digest_object(object, doc, &digest);
+  digest_object(object, doc, &digest);
 
-//   return string_to_hex(digest.finalize());
-// }
+  return string_to_hex(digest.finalize());
+}
 
 /**
  * @brief Performs various post-processing tasks on a JSON document produced for

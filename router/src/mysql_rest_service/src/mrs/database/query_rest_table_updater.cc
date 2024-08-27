@@ -147,6 +147,7 @@ void safe_run(MySQLSession *session,
 
 PrimaryKeyColumnValues DualityViewUpdater::insert(
     MySQLSession *session, const rapidjson::Document &doc) {
+  const bool is_consistent_snapshot = true;
   if (view_->is_read_only()) throw_read_only();
 
   check(doc);
@@ -154,7 +155,9 @@ PrimaryKeyColumnValues DualityViewUpdater::insert(
 
   root_insert->process(JSONInputObject(doc.GetObject()));
 
-  safe_run(session, root_insert);
+  MySQLSession::Transaction transaction{session, is_consistent_snapshot};
+
+  safe_run(session, root_insert, &transaction);
 
   m_affected += root_insert->affected();
 
@@ -176,9 +179,30 @@ PrimaryKeyColumnValues DualityViewUpdater::update(
   MySQLSession::Transaction transaction{session, is_consistent_snapshot};
 
   bool is_owned;
-  const auto current_doc = select_one(session, pk_values, is_owned);
-  if (!current_doc.IsObject()) {
-    if (upsert && view_->with_insert()) return insert(session, doc);
+  std::string current_doc;
+
+  try {
+    current_doc =
+        select_one(session, pk_values, is_owned, RowLockType::FOR_UPDATE);
+  } catch (const MySQLSession::Error &e) {
+    // ER_LOCK_NOWAIT happens when SELECT ... FOR UPDATE NOWAIT fails because
+    // someone else locked the row (e.g. another user updating the same row
+    // at the same time via MRS)
+    if (e.code() == ER_LOCK_NOWAIT) throw interface::ETagMismatch();
+  }
+
+  if (current_doc.empty()) {
+    if (upsert && view_->with_insert()) {
+      auto root_insert = make_row_insert({}, view_, m_row_ownership_info);
+
+      root_insert->process(JSONInputObject(doc.GetObject()));
+
+      safe_run(session, root_insert, &transaction);
+
+      m_affected += root_insert->affected();
+
+      return root_insert->primary_key();
+    }
 
     throw std::runtime_error("Row not found");
   } else {
@@ -187,14 +211,18 @@ PrimaryKeyColumnValues DualityViewUpdater::update(
 
   std::shared_ptr<RowUpdate> root_update;
 
-  check_etag_and_lock_rows(session, doc, pk_values);
+  check_etag(current_doc, doc);
 
   root_update =
       make_row_update(std::shared_ptr<DualityViewUpdater::Operation>{}, view_,
                       pk_values, row_ownership_info());
 
-  root_update->process(
-      JSONInputObject(doc.GetObject(), current_doc.GetObject()));
+  {
+    rapidjson::Document old_doc;
+    old_doc.Parse(current_doc.data(), current_doc.size());
+
+    root_update->process(JSONInputObject(doc.GetObject(), old_doc.GetObject()));
+  }
 
   // On success it commits.
   safe_run(session, root_update, &transaction);
@@ -214,8 +242,6 @@ uint64_t DualityViewUpdater::delete_(
   validate_primary_key_values(*view_, row_ownership_info(), pk_values);
 
   MySQLSession::Transaction transaction{session, is_consistent_snapshot};
-
-  // check_etag_and_lock_rows(session, doc, pk_values);
 
   auto del =
       std::make_shared<RowDelete>(view_, pk_values, row_ownership_info());
@@ -264,44 +290,38 @@ void DualityViewUpdater::check(const rapidjson::Document &doc,
   checker.process(JSONInputObject(doc.GetObject()));
 }
 
-void DualityViewUpdater::check_etag_and_lock_rows(
-    [[maybe_unused]] MySQLSession *session,
-    [[maybe_unused]] const rapidjson::Value &doc,
-    [[maybe_unused]] const PrimaryKeyColumnValues &pk_values) const {
-  // if (doc.HasMember("_metadata")) {
-  //   const auto &metadata = doc["_metadata"];
-  //   if (metadata.IsObject() && metadata.HasMember("etag")) {
-  //     const auto &etag = metadata["etag"];
-  //     if (etag.IsString()) {
-  //       auto checksum = compute_etag_and_lock_rows(session, pk_values);
-
-  //       if (etag.GetString() == checksum) {
-  //         return;
-  //       } else {
-  //         throw interface::ETagMismatch();
-  //       }
-  //     }
-  //     throw RestError("Invalid etag");
-  //   }
-  // }
+void DualityViewUpdater::check_etag(const std::string &original_doc,
+                                    const rapidjson::Document &new_doc) const {
+  if (new_doc.HasMember("_metadata")) {
+    const auto &metadata = new_doc["_metadata"];
+    if (metadata.IsObject() && metadata.HasMember("etag")) {
+      const auto &etag = metadata["etag"];
+      if (etag.IsString()) {
+        auto checksum = compute_checksum(view_, original_doc);
+        if (etag.GetString() == checksum) {
+          return;
+        } else {
+          throw interface::ETagMismatch();
+        }
+      }
+      throw RestError("Invalid etag");
+    }
+  }
   // if etag is missing, then just don't validate
 }
 
-rapidjson::Document DualityViewUpdater::select_one(
+std::string DualityViewUpdater::select_one(
     MySQLSession *session, const PrimaryKeyColumnValues &pk_values,
-    bool &is_owned) const {
-  QueryRestTableSingleRow q(nullptr, false, false);
+    bool &is_owned, RowLockType lock_rows) const {
+  QueryRestTableSingleRow q(nullptr, false, false, lock_rows);
 
   q.query_entry(session, view_, pk_values, {}, "url", m_row_ownership_info,
                 false, {}, true);
   if (q.response.empty()) return {};
 
-  rapidjson::Document doc;
-  doc.Parse(q.response.data(), q.response.size());
-
   is_owned = q.is_owned();
 
-  return doc;
+  return q.response;
 }
 
 }  // namespace dv

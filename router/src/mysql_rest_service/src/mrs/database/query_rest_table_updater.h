@@ -86,13 +86,12 @@ class DualityViewUpdater : public QueryLog {
   size_t m_affected = 0;
 
  private:
-  rapidjson::Document select_one(MySQLSession *session,
-                                 const PrimaryKeyColumnValues &pk_values,
-                                 bool &is_owned) const;
+  std::string select_one(MySQLSession *session,
+                         const PrimaryKeyColumnValues &pk_values,
+                         bool &is_owned, RowLockType lock_rows) const;
 
-  void check_etag_and_lock_rows(MySQLSession *session,
-                                const rapidjson::Value &doc,
-                                const PrimaryKeyColumnValues &pk_values) const;
+  void check_etag(const std::string &original_doc,
+                  const rapidjson::Document &new_doc) const;
 };
 
 }  // namespace dv

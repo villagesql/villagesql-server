@@ -43,6 +43,8 @@ using PrimaryKeyColumnValues = std::map<std::string, mysqlrouter::sqlstring>;
 
 using ColumnValues = std::vector<mysqlrouter::sqlstring>;
 
+enum class RowLockType { NONE, FOR_UPDATE };
+
 namespace dv {
 
 using Table = entry::Table;

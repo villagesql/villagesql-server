@@ -39,7 +39,6 @@
 #include <vector>
 #include "mrs/database/duality_view/change.h"
 #include "mrs/database/duality_view/common.h"
-// #include "mrs/database/duality_view/delete.h"
 #include "mrs/database/duality_view/errors.h"
 #include "mrs/database/duality_view/insert.h"
 #include "mrs/database/duality_view/select.h"

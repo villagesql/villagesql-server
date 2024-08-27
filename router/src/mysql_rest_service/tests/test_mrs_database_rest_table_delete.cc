@@ -303,6 +303,10 @@ TEST_F(DatabaseQueryDelete, filter_plain_row_owner_notpk) {
           .field("data2", FieldFlag::WITH_FILTERING)
           .field_to_many(
               "1n", ViewBuilder("child_1n", TableFlag::WITH_DELETE).field("id"))
+          .field_to_many("nm",
+                         ViewBuilder("child_nm_join", TableFlag::WITH_DELETE)
+                             .field("child_id")
+                             .field("root_id"))
           .resolve(m_.get(), true);
 
   {
@@ -315,6 +319,7 @@ TEST_F(DatabaseQueryDelete, filter_plain_row_owner_notpk) {
 
     EXPECT_ROWS_ADDED("root", -1);
     EXPECT_ROWS_ADDED("child_1n", 0);
+    EXPECT_ROWS_ADDED("child_nm_join", 0);
   }
   // try to delete someone else's row
   {
@@ -347,6 +352,7 @@ TEST_F(DatabaseQueryDelete, filter_plain_row_owner_notpk) {
 
     test_delete_f(root, R"*({"owner_id": "IiIAAAAAAAAAAAAAAAAAAA=="})*", owner);
     EXPECT_ROWS_ADDED("root", -2);
+    EXPECT_ROWS_ADDED("child_nm_join", -2);
   }
 }
 
@@ -427,7 +433,7 @@ TEST_F(DatabaseQueryDelete, filter_nested_nm_row_owner_notpk) {
   prepare(TestSchema::PLAIN);
 
   m_->execute(
-      R"*(INSERT INTO mrstestdb.child_nm_join VALUES (1, 1), (2, 2), (1, 3), (5,1), (5,2))*");
+      R"*(INSERT INTO mrstestdb.child_nm_join VALUES (1, 1), (2, 2), (1, 3), (5,1))*");
 
   auto root =
       DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)

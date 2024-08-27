@@ -72,7 +72,14 @@ class DatabaseRestTableTest : public testing::Test {
 
   void drop_schema();
 
-  enum class TestSchema { PLAIN, AUTO_INC, UUID, CYCLE, COMPOSITE };
+  enum class TestSchema {
+    PLAIN,
+    AUTO_INC,
+    UUID,
+    CYCLE,
+    COMPOSITE,
+    COMPOSITE_OWNER
+  };
 
   void prepare(TestSchema test_schema);
   void prepare_user_metadata();

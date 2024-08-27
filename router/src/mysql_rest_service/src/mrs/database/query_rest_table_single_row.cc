@@ -47,8 +47,9 @@ static void json_object_fast_append(std::string &jo, const std::string &key,
 
 QueryRestTableSingleRow::QueryRestTableSingleRow(
     const JsonTemplateFactory *factory, bool encode_bigints_as_string,
-    const bool include_links)
-    : QueryRestTable(factory, encode_bigints_as_string, include_links) {}
+    const bool include_links, const RowLockType lock_rows)
+    : QueryRestTable(factory, encode_bigints_as_string, include_links),
+      lock_rows_(lock_rows) {}
 
 void QueryRestTableSingleRow::query_entry(
     MySQLSession *session, std::shared_ptr<database::entry::Object> object,
@@ -108,8 +109,8 @@ void QueryRestTableSingleRow::build_query(
   auto where =
       build_where(fetch_any_owner ? ObjectRowOwnership() : row_ownership);
 
-  dv::JsonQueryBuilder qb(field_filter, row_ownership, false,
-                          // compute_etag_,
+  dv::JsonQueryBuilder qb(field_filter, row_ownership,
+                          lock_rows_ == RowLockType::FOR_UPDATE,
                           encode_bigints_as_strings_);
   qb.process_view(object_);
 
@@ -136,8 +137,11 @@ void QueryRestTableSingleRow::build_query(
     row_owner_check = mysqlrouter::sqlstring("1");
   }
 
-  query_ = "SELECT JSON_OBJECT(?), ? as is_owned FROM ? ?;";
+  query_ = "SELECT JSON_OBJECT(?), ? as is_owned FROM ? ?";
   query_ << fields << row_owner_check << qb.from_clause() << where;
+
+  if (lock_rows_ == RowLockType::FOR_UPDATE)
+    query_.append_preformatted(" FOR UPDATE NOWAIT");
 }
 
 }  // namespace database

@@ -437,6 +437,12 @@ inline std::string pprint_json(const std::string &json) {
   return pprint_json(doc);
 }
 
+inline std::string strip_metadata(const std::string &json) {
+  auto tmp = make_json(json);
+  tmp.RemoveMember("_metadata");
+  return pprint_json(tmp);
+}
+
 inline std::string str_replace(std::string_view s, std::string_view from,
                                std::string_view to, bool all = true) {
   std::string str;

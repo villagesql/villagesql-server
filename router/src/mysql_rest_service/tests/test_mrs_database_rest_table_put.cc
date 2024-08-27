@@ -52,7 +52,6 @@ class DatabaseQueryPut : public DatabaseRestTableTest {
                                   const PrimaryKeyColumnValues &pk,
                                   const ObjectRowOwnership &row_owner = {}) {
     mrs::database::dv::DualityViewUpdater rest(root, row_owner);
-
     return rest.update(m_.get(), pk, make_json(doc), true);
   }
 
@@ -66,8 +65,8 @@ class DatabaseQueryPut : public DatabaseRestTableTest {
     auto out_pk = test_put(root, input, pk, row_owner);
 
     auto res = select_one(root, out_pk, {}, row_owner);
-    EXPECT_EQ(pprint_json(expected_output),
-              res.empty() ? res : pprint_json(res))
+    EXPECT_EQ(pprint_json(strip_metadata(expected_output)),
+              res.empty() ? res : pprint_json(strip_metadata(res)))
         << "RESULT:" << res;
   }
 };
@@ -84,7 +83,84 @@ class DatabaseQueryPut : public DatabaseRestTableTest {
     expect_put(f, input, pk, owner);     \
   } while (0)
 
-TEST_F(DatabaseQueryPut, etag_check) {}
+TEST_F(DatabaseQueryPut, etag_check) {
+  prepare(TestSchema::PLAIN);
+
+  auto root =
+      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
+          .field("id")
+          .field("data1")
+          .field("data2")
+          .field_to_one("11", ViewBuilder("child_11", TableFlag::WITH_UPDATE)
+                                  .field("id")
+                                  .field("data"))
+          .field_to_many("1n",
+                         ViewBuilder("child_1n", TableFlag::WITH_INSERT |
+                                                     TableFlag::WITH_UPDATE |
+                                                     TableFlag::WITH_DELETE)
+                             .field("id")
+                             .field("data"))
+          .field_to_many(
+              "nm", ViewBuilder("child_nm_join",
+                                TableFlag::WITH_INSERT | TableFlag::WITH_DELETE)
+                        .field("root_id")
+                        .field("child_id")
+                        .field_to_one(
+                            "child",
+                            ViewBuilder("child_nm").field("id").field("data")))
+          .resolve(m_.get(), true);
+
+  {
+    auto item = select_one(root, parse_pk(R"*({"id": 9})*"));
+    auto doc = make_json(item);
+    doc["11"]["data"] = "CHANGED";
+
+    // first try should succeed
+    EXPECT_PUT(root, pprint_json(doc), parse_pk(R"*({"id": 9})*"));
+
+    // second should fail because the etag will be different
+    EXPECT_THROW(test_put(root, pprint_json(doc), parse_pk(R"*({"id": 9})*")),
+                 mrs::interface::ETagMismatch);
+  }
+
+  auto m = std::make_unique<mysqlrouter::MySQLSession>();
+  m->connect("localhost", server_->server_port(), "root", "", "", "",
+             mysqlrouter::MySQLSession::kDefaultConnectTimeout,
+             mysqlrouter::MySQLSession::kDefaultReadTimeout, CLIENT_FOUND_ROWS);
+
+  auto test_fail = [this, root, &m](const std::string &doc,
+                                    const std::string &table,
+                                    const std::string &where) {
+    m->execute("start transaction");
+    try {
+      mysqlrouter::sqlstring sql("select * from mrstestdb.! where ", 0);
+      sql << table;
+      m->execute(sql.str() + where + " for update");
+
+      EXPECT_THROW(test_put(root, doc, parse_pk(R"*({"id": 9})*")),
+                   mrs::interface::ETagMismatch);
+
+      m->execute("rollback");
+    } catch (...) {
+      m->execute("rollback");
+      throw;
+    }
+  };
+
+  // ensure that updatable rows are locked
+  // from a 2nd connection manually lock rows, then update and expect error
+  {
+    auto item = select_one(root, parse_pk(R"*({"id": 9})*"));
+    auto doc = make_json(item);
+    doc["11"]["data"] = "CHANGED";
+
+    auto jdoc = pprint_json(doc);
+
+    test_fail(jdoc, "root", "id=9");
+
+    test_fail(jdoc, "child_11", "id=21");
+  }
+}
 
 TEST_F(DatabaseQueryPut, special_types) {
   auto root =
@@ -165,7 +241,7 @@ TEST_F(DatabaseQueryPut, update_plain_fields) {
     "lastName": "Smith",
     "firstName": "Arnold",
     "_metadata": {
-      "etag": "2C6A57F4528178F85FA4EE33E2F15E5F20A4CED718F403A732D4A9CA26BEE14B"
+      "etag": "B3D4CE579C9FB5F85D91CED7821C670AB6DCBDC0F8DCA7C3C4ABDDE888165B2D"
     }
   })*");
 
@@ -365,7 +441,7 @@ TEST_F(DatabaseQueryPut, plain_owner_pk) {
       "id":"EREAAAAAAAAAAAAAAAAAAA==", 
       "data1": "AAA",
       "_metadata": {
-        "etag": "4097C48083B100F77EC95EAEE6A565CB873F1B2DFD118928F87D2A00565A7D91"
+        "etag": "385FFCAFEFD6115D3CF349CE6A7F8534B759DC4F138A35E4109FCA43710DDBC0"
       }
   })*",
                 pk, owner);

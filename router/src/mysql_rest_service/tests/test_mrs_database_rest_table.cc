@@ -980,7 +980,21 @@ void DatabaseRestTableTest::prepare(TestSchema schema) {
            R"*(INSERT INTO child_nm
               VALUES (200, 2000, 'nm1'), (201, 2000, 'nm2'), (200, 3000, 'nm3'))*",
            R"*(INSERT INTO child_nm_join VALUES (100, 1000, 200, 2000),
-                  (100, 1000, 200, 3000), (101, 1001, 201, 2000))*"}}};
+                  (100, 1000, 200, 3000), (101, 1001, 201, 2000))*"}},
+
+      {TestSchema::COMPOSITE_OWNER,
+       {
+           R"*(CREATE TABLE root (
+      id1 INT AUTO_INCREMENT,
+      id2 BINARY(16),
+      data1 TEXT,
+      data2 INT,
+      PRIMARY KEY (id1, id2)
+  ))*",
+
+           R"*(INSERT INTO root
+              VALUES (100, 0x11110000000000000000000000000000, 'root1', 0),
+                     (101, 0x22220000000000000000000000000000, 'root2', null))*"}}};
 
   m_->execute("create schema if not exists mrstestdb");
   m_->execute("use mrstestdb");
