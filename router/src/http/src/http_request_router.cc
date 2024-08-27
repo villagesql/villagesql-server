@@ -83,9 +83,9 @@ void HttpRequestRouter::remove(const std::string &url_host,
   std::lock_guard<std::mutex> lock(route_mtx_);
   auto &request_handlers =
       url_host.empty() ? request_handlers_url_host_empty_ : request_handlers_;
-  for (auto it = request_handlers_.begin(); it != request_handlers_.end();) {
+  for (auto it = request_handlers.begin(); it != request_handlers.end();) {
     if (it->url_host == url_host && it->url_regex_str == url_regex_str) {
-      it = request_handlers_.erase(it);
+      it = request_handlers.erase(it);
     } else {
       it++;
     }
