@@ -10526,6 +10526,17 @@ ER_LH_UNSTRUCTURED_INVALID_LANGUAGE
 
 ER_LH_VECTOR_TOO_MANY_ENTRIES
   eng "Column %d in %s: Vector has more entries than its dimension: %s"
+
+
+ER_CLAUSE_IGNORED
+  eng "%s is ignored in %s."
+
+ER_INVALID_CLAUSE_IN_CONTEXT
+  eng "Clause %s is not valid with %s."
+
+ER_INVALID_CLAUSE_COMBINATION
+  eng "Clauses %s and %s cannot be combined."
+
 #
 #  End of 9.x error messages (server-to-client).
 #
