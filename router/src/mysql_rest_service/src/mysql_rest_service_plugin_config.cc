@@ -66,6 +66,8 @@ class DestinationStatic : public collector::DestinationProvider {
 
   const SslConfiguration &get_ssl_configuration() override { return ssl_; }
 
+  bool is_dynamic() const override { return false; }
+
  protected:
   std::vector<Node> nodes_;
   uint32_t nodes_idx_{0};
@@ -155,6 +157,8 @@ class DestinationDynamic : public DestinationStatic {
   }
 
   ~DestinationDynamic() override { stop(); }
+
+  bool is_dynamic() const override { return true; }
 
   class CopyNodes {
    public:

@@ -33,6 +33,7 @@
 #include "mrs/observability/entity.h"
 #include "mrs/router_observation_entities.h"
 
+#include "mysqld_error.h"
 #include "router_config.h"
 #include "socket_operations.h"
 
@@ -145,6 +146,18 @@ std::set<UniversalId> query_allowed_services(
   session->query(q, result_processor);
 
   return result;
+}
+
+bool query_is_node_read_only(mysqlrouter::MySQLSession *session) {
+  mysqlrouter::sqlstring q = "select @@super_read_only, @@read_only";
+
+  auto result{session->query_one(q)};
+
+  if (nullptr == result.get()) return false;
+  if (!(*result)[0] || (!(*result)[1])) return false;
+
+  return std::stoul(std::string((*result)[0])) == 1 ||
+         std::stoul(std::string((*result)[1])) == 1;
 }
 
 class AccessDatabase {
@@ -263,11 +276,32 @@ void SchemaMonitor::run() {
   log_system("Starting MySQL REST Metadata monitor");
 
   bool force_clear{true};
+  bool was_node_read_only{false},
+      is_node_read_only{
+          true};  // set to true to force the query on the first run
+  const bool is_destination_dynamic = configuration_.provider_rw_->is_dynamic();
   mrs::State state{stateOff};
   do {
     try {
       auto session_check_version =
           cache_->get_instance(collector::kMySQLConnectionMetadataRW, true);
+      if (!is_destination_dynamic && is_node_read_only) {
+        is_node_read_only =
+            query_is_node_read_only(session_check_version.get());
+        if (was_node_read_only != is_node_read_only) {
+          if (is_node_read_only) {
+            log_warning("Node %s is read-only, stopping the REST service",
+                        session_check_version.get()->get_address().c_str());
+          } else {
+            log_info("Node %s is not read-only",
+                     session_check_version.get()->get_address().c_str());
+          }
+          was_node_read_only = is_node_read_only;
+        }
+        if (is_node_read_only) {
+          continue;
+        }
+      }
       auto supported_schema_version =
           query_supported_mrs_version(session_check_version.get());
 
@@ -435,8 +469,13 @@ void SchemaMonitor::run() {
     } catch (const mysqlrouter::MySQLSession::Error &exc) {
       log_error("Can't refresh MRDS layout, because of the following error:%s.",
                 exc.what());
-      if (exc.code() == 1049 /*unknown database*/ ||
-          exc.code() == 1146 /*table does not exist*/) {
+      if (exc.code() == ER_BAD_DB_ERROR || exc.code() == ER_NO_SUCH_TABLE) {
+        force_clear = true;
+      }
+
+      if (!is_destination_dynamic &&
+          exc.code() == ER_OPTION_PREVENTS_STATEMENT) {
+        is_node_read_only = true;
         force_clear = true;
       }
     } catch (const ServiceDisabled &) {

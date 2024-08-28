@@ -46,6 +46,7 @@ class DestinationProvider {
   virtual std::optional<Node> get_node(const WaitingOp) = 0;
   virtual bool is_node_supported(const Node &node) = 0;
   virtual const SslConfiguration &get_ssl_configuration() = 0;
+  virtual bool is_dynamic() const = 0;
 };
 
 }  // namespace collector
