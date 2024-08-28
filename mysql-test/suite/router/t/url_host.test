@@ -34,7 +34,7 @@ CREATE FUNCTION host_tests.function2() RETURNS VARCHAR(20) BEGIN RETURN "functio
 CREATE FUNCTION host_tests.function3() RETURNS VARCHAR(20) BEGIN RETURN "FUNCTION3"; END;$$
 DELIMITER ;$$
 
---let $mrs_host_and_port=localhost:$HTTP_SERVER_PORT
+--let $mrs_host_and_port=127.0.0.1:$HTTP_SERVER_PORT
 --let MRS_CLIENT_ARGS=$MRS_CLIENT --url https://$mrs_host_and_port --display REQUEST,BODY,RESULT
 
 
