@@ -181,7 +181,6 @@ static void init(mysql_harness::PluginFuncEnv *env) {
   log_debug("init");
   const mysql_harness::AppInfo *info = get_app_info(env);
   std::vector<std::string> routing_instances;
-  std::vector<std::string> meta_instances;
 
   if (info == nullptr || nullptr == info->config) {
     return;
@@ -193,8 +192,6 @@ static void init(mysql_harness::PluginFuncEnv *env) {
          info->config->sections()) {
       if (section->name == "routing") {
         routing_instances.push_back(section->key);
-      } else if (section->name == "metadata_cache") {
-        meta_instances.push_back(section->key);
       }
     }
 
