@@ -28,7 +28,7 @@
 
 #include "mysql/harness/logging/logging.h"
 
-#include <helper/container/generic.h>
+#include "helper/container/generic.h"
 #include "helper/http/url.h"
 #include "helper/json/jvalue.h"
 #include "helper/json/rapid_json_interator.h"
@@ -37,6 +37,7 @@
 #include "helper/json/to_string.h"
 #include "helper/media_detector.h"
 #include "helper/mysql_numeric_value.h"
+#include "mrs/database/helper/bind.h"
 #include "mrs/database/query_rest_sp.h"
 #include "mrs/database/query_rest_sp_media.h"
 #include "mrs/http/error.h"
@@ -70,34 +71,6 @@ using HttpResult = mrs::rest::Handler::HttpResult;
 using CachedObject = collector::MysqlCacheManager::CachedObject;
 using Url = helper::http::Url;
 
-// static std::string to_string(
-//    const std::string &value,
-//    mrs::database::entry::Parameter::ParameterDataType dt) {
-//  switch (dt) {
-//    case mrs::database::entry::Parameter::parameterString: {
-//      rapidjson::Document d;
-//      d.SetString(value.c_str(), value.length());
-//      return helper::json::to_string(&d);
-//    }
-//    case mrs::database::entry::Parameter::parameterInt:
-//      return value;
-//    case mrs::database::entry::Parameter::parameterDouble:
-//      return value;
-//    case mrs::database::entry::Parameter::parameterBoolean:
-//      return value;
-//    case mrs::database::entry::Parameter::parameterLong:
-//      return value;
-//    case mrs::database::entry::Parameter::parameterTimestamp: {
-//      rapidjson::Document d;
-//      d.SetString(value.c_str(), value.length());
-//      return helper::json::to_string(&d);
-//    }
-//    default:
-//      return "";
-//  }
-//
-//  return "";
-//}
 static CachedObject get_session(::mysqlrouter::MySQLSession *,
                                 collector::MysqlCacheManager *cache_manager) {
   //  if (session) return CachedObject(nullptr, session);
@@ -109,27 +82,6 @@ static CachedObject get_session(::mysqlrouter::MySQLSession *,
 HttpResult HandlerSP::handle_delete(
     [[maybe_unused]] rest::RequestContext *ctxt) {
   throw http::Error(HttpStatusCode::NotImplemented);
-}
-
-enum_field_types to_mysql_type(mrs::database::entry::Field::DataType pdt) {
-  using Pdt = mrs::database::entry::Field::DataType;
-  switch (pdt) {
-    case Pdt::typeString:
-      return MYSQL_TYPE_STRING;
-    case Pdt::typeInt:
-      return MYSQL_TYPE_LONG;
-    case Pdt::typeDouble:
-      return MYSQL_TYPE_DOUBLE;
-    case Pdt::typeBoolean:
-      return MYSQL_TYPE_BOOL;
-    case Pdt::typeLong:
-      return MYSQL_TYPE_LONGLONG;
-    case Pdt::typeTimestamp:
-      return MYSQL_TYPE_TIMESTAMP;
-
-    default:
-      return MYSQL_TYPE_NULL;
-  }
 }
 
 std::string to_string(rapidjson::Value *v) {
@@ -161,6 +113,9 @@ mysqlrouter::sqlstring to_sqlstring(const std::string &value, DataType type) {
     case DataType::typeLong:
       if (kDataString == v) return mysqlrouter::sqlstring("?") << value;
       return mysqlrouter::sqlstring{value.c_str()};
+
+    case DataType::typeBinary:
+      return mysqlrouter::sqlstring("FROM_BASE64(?)") << value;
 
     case DataType::typeString:
       return mysqlrouter::sqlstring("?") << value;
@@ -217,7 +172,6 @@ HttpResult HandlerSP::handle_put([[maybe_unused]] rest::RequestContext *ctxt) {
   auto session =
       get_session(ctxt->sql_session_cache.get(), route_->get_cache());
   auto &input_buffer = ctxt->request->get_input_buffer();
-  // TODO(lkotula): The API doesn't have input buffer. (Shouldn't be in review)
   auto size = input_buffer.length();
   auto request_body = input_buffer.pop_front(size);
   rapidjson::Document doc;
@@ -238,8 +192,8 @@ HttpResult HandlerSP::handle_put([[maybe_unused]] rest::RequestContext *ctxt) {
     }
   }
 
+  mrs::database::MysqlBind binds;
   std::string result;
-  std::vector<enum_field_types> variables;
   auto &ownership = route_->get_user_row_ownership();
   for (auto &el : p) {
     if (!result.empty()) result += ",";
@@ -255,9 +209,17 @@ HttpResult HandlerSP::handle_put([[maybe_unused]] rest::RequestContext *ctxt) {
       mysqlrouter::sqlstring sql("?");
       sql << it->value;
       result += sql.str();
-    } else {
+    } else if (el.mode == mrs::database::entry::Field::Mode::modeOut) {
+      binds.fill_mysql_bind_for_out(el.data_type);
       result += "?";
-      variables.push_back(to_mysql_type(el.data_type));
+    } else {
+      auto it = doc.FindMember(el.name.c_str());
+      if (it == doc.MemberEnd())
+        throw http::Error(HttpStatusCode::BadRequest,
+                          "Parameter not set:"s + el.name);
+
+      result += "?";
+      binds.fill_mysql_bind_for_inout(it->value, el.data_type);
     }
   }
 
@@ -271,7 +233,7 @@ HttpResult HandlerSP::handle_put([[maybe_unused]] rest::RequestContext *ctxt) {
     db.query_entries(session.get(), route_->get_schema_name(),
                      route_->get_object_name(), route_->get_rest_url(),
                      route_->get_user_row_ownership().user_ownership_column,
-                     result.c_str(), variables, rs);
+                     result.c_str(), binds.parameters, rs);
 
     Counter<kEntityCounterRestReturnedItems>::increment(db.items);
     Counter<kEntityCounterRestAffectedItems>::increment(
@@ -313,16 +275,10 @@ HttpResult HandlerSP::handle_get([[maybe_unused]] rest::RequestContext *ctxt) {
     }
   }
 
-  //  for (auto &el : pf) {
-  //    if (el.mode != mrs::database::entry::Field::modeIn)
-  //      throw http::Error(
-  //          HttpStatusCode::BadRequest,
-  //          "Only 'in' parameters allowed, '"s + el.name + "' is output.");
-  //  }
-
   std::string result;
-  std::vector<enum_field_types> variables;
+  mrs::database::MysqlBind binds;
   auto &ownership = route_->get_user_row_ownership();
+
   for (auto &el : pf) {
     if (!result.empty()) result += ",";
 
@@ -335,9 +291,18 @@ HttpResult HandlerSP::handle_get([[maybe_unused]] rest::RequestContext *ctxt) {
         throw http::Error(HttpStatusCode::BadRequest,
                           "Parameter not set:"s + el.name);
       result += to_sqlstring(it->second, el.data_type).str();
-    } else {
+    } else if (el.mode == mrs::database::entry::Field::Mode::modeOut) {
+      binds.fill_mysql_bind_for_out(el.data_type);
       result += "?";
-      variables.push_back(to_mysql_type(el.data_type));
+    } else {
+      auto it = query_kv.find(el.name);
+      if (query_kv.end() == it)
+        throw http::Error(HttpStatusCode::BadRequest,
+                          "Parameter not set:"s + el.name);
+      result += "?";
+      log_debug("Bind param el.data_type:%i %s", (int)el.data_type,
+                el.raw_data_type.c_str());
+      binds.fill_mysql_bind_for_inout(it->second, el.data_type);
     }
   }
 
@@ -358,7 +323,7 @@ HttpResult HandlerSP::handle_get([[maybe_unused]] rest::RequestContext *ctxt) {
       db.query_entries(session.get(), route_->get_schema_name(),
                        route_->get_object_name(), route_->get_rest_url(),
                        route_->get_user_row_ownership().user_ownership_column,
-                       result.c_str(), variables, p);
+                       result.c_str(), binds.parameters, p);
 
       Counter<kEntityCounterRestReturnedItems>::increment(db.items);
       Counter<kEntityCounterRestAffectedItems>::increment(

@@ -27,6 +27,7 @@
 #include <iostream>
 #include <map>
 #include <sstream>
+#include <streambuf>
 #include <thread>
 #include <vector>
 
@@ -79,6 +80,14 @@ class CustomHex {
 
   int operator()(const char &v) { return (int)static_cast<uint8_t>(v); }
 };
+
+static void check_payload() {
+  if (g_configuration.request != HttpMethod::Post &&
+      g_configuration.request != HttpMethod::Put) {
+    throw std::invalid_argument(
+        "'Payload' may only be used with POST and PUT request type.");
+  }
+}
 
 static bool display_type_convert(const std::string &value,
                                  http_client::ApplicationDisplay &d) {
@@ -365,19 +374,28 @@ std::vector<CmdOption> g_options{
      "host",
      [](const std::string &value) { g_configuration.host = value; },
      [](const std::string &) {}},
+    {{"--payload-file"},
+     "Set the request body for POST, PUT requests.",
+     CmdOptionValueReq::required,
+     "meta_payload",
+     [](const std::string &value) {
+       std::ifstream file{value};
+       if (!file.is_open()) {
+         std::runtime_error("File with `payload`, cannot be opened.");
+       }
+
+       g_configuration.payload =
+           std::string((std::istreambuf_iterator<char>(file)),
+                       std::istreambuf_iterator<char>());
+     },
+     [](const std::string &) { check_payload(); }},
 
     {{"--payload"},
      "Set the request body for POST, PUT requests.",
      CmdOptionValueReq::required,
      "meta_payload",
      [](const std::string &value) { g_configuration.payload = value; },
-     [](const std::string &) {
-       if (g_configuration.request != HttpMethod::Post &&
-           g_configuration.request != HttpMethod::Put) {
-         throw std::invalid_argument(
-             "'Payload' may only be used with POST and PUT request type.");
-       }
-     }},
+     [](const std::string &) { check_payload(); }},
 
     {{"--encoded-payload"},
      "Set the request body for POST, PUT requests (provided as an URL-encoded "
@@ -398,13 +416,7 @@ std::vector<CmdOption> g_options{
        }
        g_configuration.payload = decoded;
      },
-     [](const std::string &) {
-       if (g_configuration.request != HttpMethod::Post &&
-           g_configuration.request != HttpMethod::Put) {
-         throw std::invalid_argument(
-             "'Payload' may only be used with POST and PUT request type.");
-       }
-     }},
+     [](const std::string &) { check_payload(); }},
 
     {{"--write-format", "-f"},
      "Write format.",

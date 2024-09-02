@@ -64,6 +64,10 @@ static void impl_columns_set(std::vector<helper::Column> &c,
   int idx = 0;
   for (auto &i : c) {
     auto &f = fields[idx++];
+
+    log_debug("impl_columns_set idx=%i, charser=%i, flags=%x", (int)idx,
+              (int)f.charsetnr, f.flags);
+
     i = helper::Column(&f);
     auto column_def = columns_find(f.name, rs);
     i.name = column_def->name;
@@ -97,15 +101,18 @@ QueryRestSP::QueryRestSP(JsonTemplateFactory *factory) : factory_{factory} {}
 
 void QueryRestSP::columns_set(unsigned number, MYSQL_FIELD *fields) {
   {
-    std::vector<Field> selected{};
+    std::vector<Field> in_out_parameters{};
     for (auto &c : rs_->input_parameters.fields) {
       if (c.mode == Field::modeIn) continue;
-      selected.push_back(c);
+      in_out_parameters.push_back(c);
     }
-    if (columns_match(selected, number, fields)) {
+    if (columns_match(in_out_parameters, number, fields)) {
       log_debug("Matched out-params");
       columns_items_type_ = rs_->input_parameters.name + "Out";
-      impl_columns_set(columns_, selected, number, fields);
+      impl_columns_set(columns_, in_out_parameters, number, fields);
+      for (auto &c : columns_) {
+        c.is_bound = true;
+      }
       return;
     }
   }
@@ -143,7 +150,7 @@ const char *QueryRestSP::get_sql_state() {
 void QueryRestSP::query_entries(
     MySQLSession *session, const std::string &schema, const std::string &object,
     const std::string &url, const std::string &ignore_column,
-    const mysqlrouter::sqlstring &values, std::vector<enum_field_types> pt,
+    const mysqlrouter::sqlstring &values, std::vector<MYSQL_BIND> pt,
     const ResultSets &rs) {
   rs_ = &rs;
   items_started_ = false;
@@ -172,6 +179,13 @@ void QueryRestSP::on_row(const ResultRow &r) {
 }
 
 void QueryRestSP::on_metadata(unsigned int number, MYSQL_FIELD *fields) {
+  for (unsigned int n = 0; n < number; ++n) {
+    log_debug("on_metadata name:%s", fields[n].name);
+    log_debug("on_metadata length:%i", (int)fields[n].length);
+    log_debug("on_metadata type:%i", (int)fields[n].type);
+    log_debug("on_metadata flags:%i", (int)fields[n].flags);
+  }
+
   log_debug("rs_->input_parameters.fields.size()=%i",
             (int)rs_->input_parameters.fields.size());
 

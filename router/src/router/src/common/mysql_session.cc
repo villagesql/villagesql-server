@@ -551,39 +551,6 @@ uint64_t MySQLSession::prepare(const std::string &query) {
   return current;
 }
 
-char *allocate_buffer(MYSQL_BIND *bind) {
-  const int k_string_size = 1000;
-  char *buffer = nullptr;
-  switch (bind->buffer_type) {
-    case MYSQL_TYPE_STRING:
-      bind->buffer = buffer = new char[bind->buffer_length = 2 * k_string_size];
-      break;
-
-    case MYSQL_TYPE_LONGLONG:
-      bind->buffer = buffer =
-          new char[bind->buffer_length = 2 * sizeof(long long)];
-      break;
-
-    case MYSQL_TYPE_DOUBLE:
-      bind->buffer = buffer =
-          new char[bind->buffer_length = 2 * sizeof(double)];
-      break;
-    case MYSQL_TYPE_BOOL:
-      bind->buffer = buffer = new char[bind->buffer_length = 2 * sizeof(int)];
-      break;
-    case MYSQL_TYPE_LONG:
-      bind->buffer = buffer = new char[bind->buffer_length = 2 * sizeof(long)];
-      break;
-    case MYSQL_TYPE_TIMESTAMP:
-      bind->buffer = buffer = new char[bind->buffer_length = 2 * k_string_size];
-      break;
-
-    default:
-      assert(nullptr && "should not happen");
-  }
-  return buffer;
-}
-
 class StmtResultRow : public MySQLSession::ResultRow {
  public:
   StmtResultRow(MySQLSession::Row row, unsigned long *sizes)
@@ -604,24 +571,13 @@ void MySQLSession::throw_mysqlerror(MYSQL_STMT *stmt, uint64_t ps_id) {
   throw Error(ss.str(), err_no, err_msg);
 }
 
-void MySQLSession::prepare_execute(uint64_t ps_id,
-                                   std::vector<enum_field_types> pt,
-                                   const ResultRowProcessor &processor,
-                                   const FieldValidator &validator) {
-  std::vector<std::unique_ptr<char[]>> buffers;
-  std::unique_ptr<MYSQL_BIND[]> ps_params{new MYSQL_BIND[pt.size() + 1]};
-  auto bind = ps_params.get();
+void MySQLSession::prepare_execute_with_bind_parameters(
+    uint64_t ps_id, std::vector<MYSQL_BIND> bind_parameters,
+    const ResultRowProcessor &processor,
+    const FieldValidator &validator /*= null_field_validator*/) {
   auto stmt = stmts_[ps_id];
 
-  memset(ps_params.get(), 0, sizeof(MYSQL_BIND) * pt.size());
-
-  for (auto type : pt) {
-    bind->buffer_type = type;
-    buffers.emplace_back(allocate_buffer(bind));
-    ++bind;
-  }
-
-  if (mysql_stmt_bind_param(stmt, ps_params.get())) {
+  if (mysql_stmt_bind_param(stmt, bind_parameters.data())) {
     // non zero is an error.
     auto err_no = mysql_stmt_errno(stmt);
     auto err_msg = mysql_stmt_error(stmt);

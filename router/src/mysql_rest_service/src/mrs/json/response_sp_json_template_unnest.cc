@@ -26,10 +26,19 @@
 
 #include <limits>
 
+#include "mysql/harness/logging/logging.h"
 #include "mysqlrouter/base64.h"
+
+IMPORT_LOG_FUNCTIONS()
 
 namespace mrs {
 namespace json {
+
+ResponseSpJsonTemplateUnnest::ResponseSpJsonTemplateUnnest(
+    bool encode_bigints_as_string)
+    : encode_bigints_as_string_{encode_bigints_as_string} {
+  log_debug("ResponseSpJsonTemplateUnnest");
+}
 
 std::string ResponseSpJsonTemplateUnnest::get_result() {
   return serializer_.get_result();

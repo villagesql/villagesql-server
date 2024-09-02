@@ -138,14 +138,10 @@ void QueryEntryFields::on_row_params(const ResultRow &row) {
       const static std::map<std::string, DataType> converter{
           {"STRING", DataType::typeString},
           {"TEXT", DataType::typeString},
-          {"VARCHAR", DataType::typeString},
-          {"CHAR", DataType::typeString},
-          {"VARBINARY", DataType::typeString},
-          {"BINARY", DataType::typeString},
-          {"TINYBLOB", DataType::typeString},
-          {"MEDIUMBLOB", DataType::typeString},
-          {"BLOB", DataType::typeString},
-          {"LONGBLOB", DataType::typeString},
+          {"TINYBLOB", DataType::typeBinary},
+          {"MEDIUMBLOB", DataType::typeBinary},
+          {"BLOB", DataType::typeBinary},
+          {"LONGBLOB", DataType::typeBinary},
           {"INT", DataType::typeInt},
           {"TINYINT", DataType::typeInt},
           {"SMALLINT", DataType::typeInt},
@@ -160,16 +156,11 @@ void QueryEntryFields::on_row_params(const ResultRow &row) {
           {"NCHAR", DataType::typeString},
           {"VARCHAR", DataType::typeString},
           {"NVARCHAR", DataType::typeString},
-          {"BINARY", DataType::typeString},
-          {"VARBINARY", DataType::typeString},
+          {"BINARY", DataType::typeBinary},
+          {"VARBINARY", DataType::typeBinary},
           {"TINYTEXT", DataType::typeString},
-          {"TEXT", DataType::typeString},
           {"MEDIUMTEXT", DataType::typeString},
           {"LONGTEXT", DataType::typeString},
-          {"TINYBLOB", DataType::typeString},
-          {"BLOB", DataType::typeString},
-          {"MEDIUMBLOB", DataType::typeString},
-          {"LONGBLOB", DataType::typeString},
           {"JSON", DataType::typeString},
           {"DATETIME", DataType::typeTimestamp},
           {"DATE", DataType::typeTimestamp},
@@ -185,15 +176,19 @@ void QueryEntryFields::on_row_params(const ResultRow &row) {
           {"MULTIPOINT", DataType::typeString},
           {"MULTILINESTRING", DataType::typeString},
           {"MULTIPOLYGON", DataType::typeString},
-          {"BIT", DataType::typeInt},
+          {"BIT", DataType::typeBinary},
           {"BOOLEAN", DataType::typeInt},
           {"ENUM", DataType::typeString},
           {"SET", DataType::typeString}};
 
       if (!value) return;
-      result_ = mysql_harness::make_upper(value);
+      std::string upper_result = result_ = mysql_harness::make_upper(value);
       auto p = std::min(result_.find('('), result_.find(' '));
       if (p != std::string::npos) result_ = result_.substr(0, p);
+      if ("BIT(1)" == upper_result) {
+        *out = DataType::typeBoolean;
+        return;
+      }
       try {
         *out = converter.at(result_);
       } catch (const std::exception &e) {

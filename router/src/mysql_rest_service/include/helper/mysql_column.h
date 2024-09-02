@@ -65,6 +65,8 @@ struct Column {
   JsonType type_json{JsonType::kNull};
   bool is_primary{false};
   bool is_auto_increment{false};
+  // Column was generated for output parameters, configured with MYSQL_BIND
+  bool is_bound{false};
 };
 
 }  // namespace helper

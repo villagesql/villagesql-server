@@ -44,7 +44,8 @@ struct Field {
     typeDouble,
     typeBoolean,
     typeLong,
-    typeTimestamp
+    typeTimestamp,
+    typeBinary
   };
   enum Mode {
     modeIn,

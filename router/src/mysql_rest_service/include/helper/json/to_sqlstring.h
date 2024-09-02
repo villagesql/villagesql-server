@@ -26,6 +26,7 @@
 
 #include <my_rapidjson_size_t.h>
 #include <rapidjson/document.h>
+#include <string>
 
 #include "mrs/database/entry/field.h"
 #include "mrs/database/entry/object.h"
@@ -34,6 +35,38 @@
 
 namespace helper {
 namespace json {
+
+template <typename Stream, typename Value>
+Stream &to_stream(Stream &stream, const rapidjson::Value &v,
+                  const Value &k_true, const Value &k_false) {
+  if (v.IsNull()) {
+    stream << nullptr;
+  } else if (v.IsBool()) {
+    stream << (v.GetBool() ? k_true : k_false);
+  } else if (v.IsString()) {
+    stream << v.GetString();
+  } else if (v.IsUint()) {
+    stream << v.GetUint();
+  } else if (v.IsInt()) {
+    stream << v.GetInt();
+  } else if (v.IsUint64()) {
+    stream << v.GetUint64();
+  } else if (v.IsInt64()) {
+    stream << v.GetInt64();
+  } else if (v.IsFloat()) {
+    stream << v.GetFloat();
+  } else if (v.IsDouble()) {
+    stream << v.GetDouble();
+  } else {
+    using namespace std::string_literals;
+    throw std::runtime_error(
+        "JSON value to SQLString, received unsupported type:"s +
+        std::to_string(v.GetType()) + ".");
+  }
+
+  return stream;
+}
+
 namespace sql {
 
 // To not keep this function in the same namespace as to_string

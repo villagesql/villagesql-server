@@ -460,8 +460,8 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
                        const std::string &password);
 
   virtual uint64_t prepare(const std::string &query);
-  virtual void prepare_execute(
-      uint64_t ps_id, std::vector<enum_field_types> pt,
+  virtual void prepare_execute_with_bind_parameters(
+      uint64_t ps_id, std::vector<MYSQL_BIND> bind_parameters,
       const ResultRowProcessor &processor,
       const FieldValidator &validator /*= null_field_validator*/);
   virtual void prepare_remove(uint64_t ps_id);

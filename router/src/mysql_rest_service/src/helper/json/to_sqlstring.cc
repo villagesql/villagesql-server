@@ -30,6 +30,7 @@ IMPORT_LOG_FUNCTIONS()
 
 namespace helper {
 namespace json {
+
 namespace sql {
 
 using DataType = mrs::database::entry::Field::DataType;
@@ -40,30 +41,7 @@ mysqlrouter::sqlstring &operator<<(mysqlrouter::sqlstring &sql,
   const static mysqlrouter::sqlstring k_true{"TRUE"};
   const static mysqlrouter::sqlstring k_false{"FALSE"};
 
-  if (v.IsNull()) {
-    sql << nullptr;
-  } else if (v.IsBool()) {
-    sql << (v.GetBool() ? k_true : k_false);
-  } else if (v.IsString()) {
-    sql << v.GetString();
-  } else if (v.IsUint()) {
-    sql << v.GetUint();
-  } else if (v.IsInt()) {
-    sql << v.GetInt();
-  } else if (v.IsUint64()) {
-    sql << v.GetUint64();
-  } else if (v.IsInt64()) {
-    sql << v.GetInt64();
-  } else if (v.IsFloat()) {
-    sql << v.GetFloat();
-  } else if (v.IsDouble()) {
-    sql << v.GetDouble();
-  } else {
-    throw std::runtime_error(
-        "JSON value to SQLString, received unsupported type.");
-  }
-
-  return sql;
+  return helper::json::to_stream(sql, v, k_true, k_false);
 }
 
 static bool is_matching_type(rapidjson::Type json_type, DataType field_type) {

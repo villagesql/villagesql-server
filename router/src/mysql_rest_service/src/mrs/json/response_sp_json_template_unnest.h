@@ -42,8 +42,7 @@ class ResponseSpJsonTemplateUnnest : public database::JsonTemplate {
   using ResultRow = mysqlrouter::MySQLSession::ResultRow;
 
  public:
-  explicit ResponseSpJsonTemplateUnnest(bool encode_bigints_as_string = false)
-      : encode_bigints_as_string_{encode_bigints_as_string} {}
+  explicit ResponseSpJsonTemplateUnnest(bool encode_bigints_as_string = false);
 
   void begin_resultset(const std::string &url, const std::string &items_name,
                        const std::vector<helper::Column> &columns) override;

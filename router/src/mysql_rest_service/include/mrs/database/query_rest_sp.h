@@ -50,7 +50,7 @@ class QueryRestSP : private QueryLog {
                              const std::string &object, const std::string &url,
                              const std::string &ignore_column,
                              const mysqlrouter::sqlstring &values = {},
-                             std::vector<enum_field_types> pt = {},
+                             std::vector<MYSQL_BIND> pt = {},
                              const ResultSets &rs = {});
 
   const char *get_sql_state();

@@ -92,6 +92,7 @@ ADD_LIBRARY(mysql_rest_service_db
   mrs/database/query_version.cc
   mrs/database/query_warnings.cc
   mrs/database/helper/query.cc
+  mrs/database/helper/bind.cc
   mrs/database/helper/query_table_columns.cc
   mrs/database/helper/query_audit_log_maxid.cc
   mrs/database/helper/query_retry_on_ro.cc

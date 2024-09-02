@@ -26,10 +26,19 @@
 
 #include <limits>
 
+#include "mysql/harness/logging/logging.h"
 #include "mysqlrouter/base64.h"
+
+IMPORT_LOG_FUNCTIONS()
 
 namespace mrs {
 namespace json {
+
+ResponseSpJsonTemplateNest::ResponseSpJsonTemplateNest(
+    const bool encode_bigints_as_string)
+    : encode_bigints_as_string_{encode_bigints_as_string} {
+  log_debug("ResponseSpJsonTemplateNest");
+}
 
 std::string ResponseSpJsonTemplateNest::get_result() {
   return serializer_.get_result();
@@ -108,13 +117,15 @@ bool ResponseSpJsonTemplateNest::push_json_document(const ResultRow &values,
     }
 
     switch (type_json) {
-      case helper::JsonType::kBool:
-        serializer_.member_add_value(
-            columns[idx].name,
-            (*reinterpret_cast<const uint8_t *>(values[idx]) != 0) ? "true"
-                                                                   : "false",
-            type_json);
-        break;
+      case helper::JsonType::kBool: {
+        const char *value = values[idx];
+        if (!columns[idx].is_bound) {
+          value = ((*value != 0) ? "true" : "false");
+        } else {
+          value = atoi(value) ? "true" : "false";
+        }
+        serializer_.member_add_value(columns[idx].name, value, type_json);
+      } break;
       case helper::JsonType::kBlob:
         serializer_.member_add_value(
             columns[idx].name,

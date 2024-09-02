@@ -39,7 +39,7 @@ void QueryLog::query(MySQLSession *session, const std::string &q) {
 }
 
 void QueryLog::prepare_and_execute(MySQLSession *session, const std::string &q,
-                                   std::vector<enum_field_types> pt) {
+                                   std::vector<MYSQL_BIND> pt) {
   log_debug("Prepare: %s", q.c_str());
   Query::prepare_and_execute(session, q, pt);
 }
@@ -88,11 +88,11 @@ std::unique_ptr<MySQLSession::ResultRow> Query::query_one(
 
 void Query::execute(MySQLSession *session) { query(session, query_); }
 void Query::prepare_and_execute(MySQLSession *session, const std::string &q,
-                                std::vector<enum_field_types> pt) {
+                                std::vector<MYSQL_BIND> pt) {
   auto id = session->prepare(q);
 
   try {
-    session->prepare_execute(
+    session->prepare_execute_with_bind_parameters(
         id, pt,
         [this](const auto &r) {
           on_row(r);

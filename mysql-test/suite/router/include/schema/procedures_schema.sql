@@ -156,6 +156,90 @@ BEGIN
 END;$$
 
 
+
+
+CREATE PROCEDURE `proc_schema`.`inc_enum` (INOUT result enum('one','two','three'))
+BEGIN
+  SELECT result + 1 into result;
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_set` (INOUT result SET('one','two'))
+BEGIN
+  SELECT result | 2 into result;
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_char` (INOUT result CHAR(20) CHARACTER SET utf8 COLLATE utf8_general_ci)
+BEGIN
+  SET result = CONCAT(result," a");
+END;$$
+
+
+CREATE PROCEDURE `proc_schema`.`inc_text` (INOUT result TEXT CHARACTER SET utf8 COLLATE utf8_general_ci)
+BEGIN
+  SELECT CONCAT(result,"B") into result;
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_ttext` (INOUT result TINYTEXT CHARACTER SET utf8 COLLATE utf8_general_ci)
+BEGIN
+  SELECT CONCAT(result,"B") into result;
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_int` (INOUT result integer)
+BEGIN
+  SET result = (SELECT  result + 1);
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_varchar` (INOUT result VARCHAR(20))
+BEGIN
+  SET result = CONCAT(result," a");
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_date` (INOUT result DATE)
+BEGIN
+  SET result = DATE_ADD(result, INTERVAL 10 DAY);
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_year` (INOUT result YEAR)
+BEGIN
+  SET result = result +  10;
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_time` (INOUT result TIME)
+BEGIN
+  SET result = DATE_ADD(result, INTERVAL 10 HOUR);
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_bit` (INOUT result BIT(1))
+BEGIN
+  SET result = IF(result,0,1);
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_tinyint1` (INOUT result TINYINT(1))
+BEGIN
+  SET result = result+1;
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_tinyint8` (INOUT result TINYINT(8))
+BEGIN
+  SET result = result+1;
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_decimal` (INOUT result DECIMAL)
+BEGIN
+  SET result = result+1;
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_float` (INOUT result FLOAT)
+BEGIN
+  SET result = result+1;
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`inc_double` (INOUT result DOUBLE)
+BEGIN
+  SET result = result+1;
+END;$$
+
+
 CREATE PROCEDURE `proc_schema`.`report_back_mysql_error1` (mysql_error INTEGER)
 BEGIN
   SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'This stored procedure signaled an error.', MYSQL_ERRNO = mysql_error;

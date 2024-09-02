@@ -85,9 +85,10 @@ class CountedMySQLSession : public mysqlrouter::MySQLSession {
                    const std::string &db) override;
   void reset() override;
   uint64_t prepare(const std::string &query) override;
-  void prepare_execute(uint64_t ps_id, std::vector<enum_field_types> pt,
-                       const ResultRowProcessor &processor,
-                       const FieldValidator &validator) override;
+  void prepare_execute_with_bind_parameters(
+      uint64_t ps_id, std::vector<MYSQL_BIND> bind_parameters,
+      const ResultRowProcessor &processor,
+      const FieldValidator &validator) override;
   void prepare_remove(uint64_t ps_id) override;
 
   void execute(

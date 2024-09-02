@@ -43,8 +43,7 @@ class ResponseSpJsonTemplateNest : public database::JsonTemplate {
 
  public:
   explicit ResponseSpJsonTemplateNest(
-      const bool encode_bigints_as_string = false)
-      : encode_bigints_as_string_{encode_bigints_as_string} {}
+      const bool encode_bigints_as_string = false);
 
   void begin_resultset(const std::string &url, const std::string &items_name,
                        const std::vector<helper::Column> &columns) override;

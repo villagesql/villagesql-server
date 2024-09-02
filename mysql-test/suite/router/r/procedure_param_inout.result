@@ -1,0 +1,974 @@
+# MySQL Rest Service schema created.
+# MySQL Rest Service, server accounts configured.
+# DB `proc_schema` - created
+
+
+## I.  Verify error messages while providing faulty configuration to rest procedure
+#
+# 1. Verify that too long TEXT results in BadRequest (in-out parameter limit is 64Kbytes)
+#
+## II. Verify handling of different MYSQL types used in stored procedure
+##    in-out parameter, when they are transfered in GET requests
+#
+# 1. Verify if input TEXT was concatanated in output of stored procedure
+# 2. Verify if input TINY-TEXT value was concatanated in output of stored procedure
+# 3. Verify if input VARCHAR value was concatanated in output of stored procedure
+# 4. Verify if input DATE value was incremented in output of stored procedure
+# 5. Verify if input YEAR value was incremented in output of stored procedure
+# 6. Verify if input TIME value was incremented in output of stored procedure
+# 7. Verify if input BIT(1) was inverted in output of stored procedure
+# 8. Verify if input INT value was incremented in output of stored procedure
+# 9. Verify if input TINYINT(1) was incremented in output of stored procedure
+# 10. Verify if input TINYINT(8) was incremented in output of stored procedure
+# 11. Verify if input DECIMAL was incremented in output of stored procedure
+# 12. Verify if input FLOAT was incremented in output of stored procedure
+# 13. Verify if input DOUBLE was incremented in output of stored procedure
+# 14. Verify if input SET was concatanated in output of stored procedure
+# 15. Verify if input ENUM changed to next value in output of stored procedure
+#
+#
+## III. Verify handling of different MYSQL types used in stored procedure
+##     in-out parameter, when they are transfered in PUT requests
+#
+# 1. Verify if input TEXT was concatanated in output of stored procedure
+# 2. Verify if input TINY-TEXT value was concatanated in output of stored procedure
+# 3. Verify if input VARCHAR value was concatanated in output of stored procedure
+# 4. Verify if input DATE value was incremented in output of stored procedure
+# 5. Verify if input YEAR value was incremented in output of stored procedure
+# 6. Verify if input TIME value was incremented in output of stored procedure
+# 7. Verify if input BIT(1) was inverted in output of stored procedure
+# 8. Verify if input INT value was incremented in output of stored procedure
+# 9. Verify if input TINYINT(1) was incremented in output of stored procedure
+# 10. Verify if input TINYINT(8) was incremented in output of stored procedure
+# 11. Verify if input DECIMAL was incremented in output of stored procedure
+# 12. Verify if input FLOAT was incremented in output of stored procedure
+# 13. Verify if input DOUBLE was incremented in output of stored procedure
+# 14. Verify if input SET was concatanated in output of stored procedure
+# 15. Verify if input ENUM changed to next value in output of stored procedure
+# Registred SERVICE at path: /svc
+# Registred DB_SCHEMA at path: /svc/proc
+# Registred DB_OBJECT at path: /svc/proc/inc_text
+# Registred DB_OBJECT at path: /svc/proc/inc_ttext
+# Registred DB_OBJECT at path: /svc/proc/inc_enum
+# Registred DB_OBJECT at path: /svc/proc/inc_set
+# Registred DB_OBJECT at path: /svc/proc/inc_char
+# Registred DB_OBJECT at path: /svc/proc/inc_int
+# Registred DB_OBJECT at path: /svc/proc/inc_varchar
+# Registred DB_OBJECT at path: /svc/proc/inc_date
+# Registred DB_OBJECT at path: /svc/proc/inc_year
+# Registred DB_OBJECT at path: /svc/proc/inc_time
+# Registred DB_OBJECT at path: /svc/proc/inc_bit
+# Registred DB_OBJECT at path: /svc/proc/inc_tinyint1
+# Registred DB_OBJECT at path: /svc/proc/inc_tinyint8
+# Registred DB_OBJECT at path: /svc/proc/inc_decimal
+# Registred DB_OBJECT at path: /svc/proc/inc_float
+# Registred DB_OBJECT at path: /svc/proc/inc_double
+# Registred DB_OBJECT at path: /svc/proc/nothing
+GET /svc/proc/nothing
+{
+    "items": []
+}
+OK
+
+#
+# I.1
+/export/mysql/src/mrs-mysql-8.1/buildConfig/build/mysql-test/var/tmp/payload.data
+PUT /svc/proc/inc_text (payload-size:66013)
+{
+    "message": "'in-out' parameter is too long, the internal buffer is 65535 bytes long.",
+    "status": 400
+}
+OK
+
+#
+# II.1
+GET /svc/proc/inc_text?result=10
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_textOut",
+            "items": [
+                {
+                    "result": "MTBC"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "BLOB"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.2
+GET /svc/proc/inc_ttext?result=10
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_ttextOut",
+            "items": [
+                {
+                    "result": "MTBC"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "BLOB"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.3
+GET /svc/proc/inc_varchar?result=10
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_varcharOut",
+            "items": [
+                {
+                    "result": "MTAgYQ=="
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "VARCHAR(80)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.4
+GET /svc/proc/inc_date?result=2010-10-21
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_dateOut",
+            "items": [
+                {
+                    "result": "2010-10-31"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "DATE"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.5
+GET /svc/proc/inc_year?result=2010
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_yearOut",
+            "items": [
+                {
+                    "result": "2020"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "YEAR"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.6
+GET /svc/proc/inc_time?result=10:22
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_timeOut",
+            "items": [
+                {
+                    "result": "20:22:00"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "TIME"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.7
+GET /svc/proc/inc_bit?result=1
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_bitOut",
+            "items": [
+                {
+                    "result": false
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "BIT(1)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+GET /svc/proc/inc_bit?result=0
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_bitOut",
+            "items": [
+                {
+                    "result": true
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "BIT(1)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+GET /svc/proc/inc_bit?result=true
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_bitOut",
+            "items": [
+                {
+                    "result": false
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "BIT(1)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+GET /svc/proc/inc_bit?result=false
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_bitOut",
+            "items": [
+                {
+                    "result": true
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "BIT(1)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.8
+GET /svc/proc/inc_int?result=10
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_intOut",
+            "items": [
+                {
+                    "result": 11
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": " INTEGER"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.9
+GET /svc/proc/inc_tinyint1?result=10
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_tinyint1Out",
+            "items": [
+                {
+                    "result": 11
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "TINYINT"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.10
+GET /svc/proc/inc_tinyint8?result=10
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_tinyint8Out",
+            "items": [
+                {
+                    "result": 11
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "TINYINT"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.11
+GET /svc/proc/inc_decimal?result=10
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_decimalOut",
+            "items": [
+                {
+                    "result": 11
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "DECIMAL(0,0)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.12
+GET /svc/proc/inc_float?result=10
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_floatOut",
+            "items": [
+                {
+                    "result": 11
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "FLOAT(0,31)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.13
+GET /svc/proc/inc_double?result=10
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_doubleOut",
+            "items": [
+                {
+                    "result": 11
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "DOUBLE(0,31)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.14
+# To be fixed, the test generates BASE64 responce
+GET /svc/proc/inc_set?result=one
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_setOut",
+            "items": [
+                {
+                    "result": "b25lLHR3bw=="
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "CHAR(28)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.15
+# To be fixed, the test generates BASE64 responce
+GET /svc/proc/inc_enum?result=one
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_enumOut",
+            "items": [
+                {
+                    "result": "dHdv"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "CHAR(20)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.1
+PUT /svc/proc/inc_text (payload-size:13)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_textOut",
+            "items": [
+                {
+                    "result": "MTBC"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "BLOB"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.2
+PUT /svc/proc/inc_ttext (payload-size:13)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_ttextOut",
+            "items": [
+                {
+                    "result": "MTBC"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "BLOB"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.3
+PUT /svc/proc/inc_varchar (payload-size:13)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_varcharOut",
+            "items": [
+                {
+                    "result": "MTAgYQ=="
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "VARCHAR(80)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.4
+PUT /svc/proc/inc_date (payload-size:23)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_dateOut",
+            "items": [
+                {
+                    "result": "2010-10-31"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "DATE"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.5
+PUT /svc/proc/inc_year (payload-size:15)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_yearOut",
+            "items": [
+                {
+                    "result": "2020"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "YEAR"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.6
+PUT /svc/proc/inc_time (payload-size:18)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_timeOut",
+            "items": [
+                {
+                    "result": "20:22:00"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "TIME"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.7
+PUT /svc/proc/inc_bit (payload-size:12)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_bitOut",
+            "items": [
+                {
+                    "result": false
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "BIT(1)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+PUT /svc/proc/inc_bit (payload-size:12)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_bitOut",
+            "items": [
+                {
+                    "result": true
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "BIT(1)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+PUT /svc/proc/inc_bit (payload-size:15)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_bitOut",
+            "items": [
+                {
+                    "result": false
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "BIT(1)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+PUT /svc/proc/inc_bit (payload-size:16)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_bitOut",
+            "items": [
+                {
+                    "result": true
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "BIT(1)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.8
+PUT /svc/proc/inc_int (payload-size:13)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_intOut",
+            "items": [
+                {
+                    "result": 11
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": " INTEGER"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.9
+PUT /svc/proc/inc_tinyint1 (payload-size:13)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_tinyint1Out",
+            "items": [
+                {
+                    "result": 11
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "TINYINT"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.10
+PUT /svc/proc/inc_tinyint8 (payload-size:13)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_tinyint8Out",
+            "items": [
+                {
+                    "result": 11
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "TINYINT"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.11
+PUT /svc/proc/inc_decimal (payload-size:13)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_decimalOut",
+            "items": [
+                {
+                    "result": 11
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "DECIMAL(0,0)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.12
+PUT /svc/proc/inc_float (payload-size:13)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_floatOut",
+            "items": [
+                {
+                    "result": 11
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "FLOAT(0,31)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.13
+PUT /svc/proc/inc_double (payload-size:13)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_doubleOut",
+            "items": [
+                {
+                    "result": 11
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "DOUBLE(0,31)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.14
+# To be fixed, the test generates BASE64 response
+PUT /svc/proc/inc_set (payload-size:16)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_setOut",
+            "items": [
+                {
+                    "result": "b25lLHR3bw=="
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "CHAR(28)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# III.15
+# To be fixed, the test generates BASE64 response
+PUT /svc/proc/inc_enum (payload-size:16)
+{
+    "items": [
+        {
+            "type": " proc_schema.inc_enumOut",
+            "items": [
+                {
+                    "result": "dHdv"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "CHAR(20)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+DROP SCHEMA proc_schema;
+DROP SCHEMA mysql_rest_service_metadata;
+DROP ROLE mysql_rest_service_admin;
+DROP ROLE mysql_rest_service_schema_admin;
+DROP ROLE mysql_rest_service_meta_provider;
+DROP ROLE mysql_rest_service_data_provider;
+DROP ROLE mysql_rest_service_dev;
