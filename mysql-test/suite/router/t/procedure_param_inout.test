@@ -180,8 +180,6 @@ print FILE "\"}";
 close(FILE);
 EOF
 
-echo $MYSQL_TMP_DIR/payload.data;
-
 exec $MRS_CLIENT_ARGS
   --path /svc/proc/inc_text
   --request-type PUT

@@ -72,7 +72,6 @@ OK
 
 #
 # I.1
-/export/mysql/src/mrs-mysql-8.1/buildConfig/build/mysql-test/var/tmp/payload.data
 PUT /svc/proc/inc_text (payload-size:66013)
 {
     "message": "'in-out' parameter is too long, the internal buffer is 65535 bytes long.",
