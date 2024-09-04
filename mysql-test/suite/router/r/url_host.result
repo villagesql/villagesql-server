@@ -50,7 +50,7 @@ SET @schema_id3=@schema_id;
 # Registred DB_OBJECT at path: /svc/hostTests/func
 GET /svc/hostTests/proc
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -102,7 +102,7 @@ GET /svc/hostTests/tab
 OK
 GET /svc/hostTests/proc
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -159,7 +159,7 @@ GET /svc/hostTests/tab
 OK
 GET /svc/hostTests/proc
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -216,7 +216,7 @@ GET /svc/hostTests/tab
 OK
 GET /svc/hostTests/proc
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -274,7 +274,7 @@ GET /svc/hostTests/tab
 OK
 GET /svc/hostTests/proc
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [

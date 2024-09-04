@@ -68,7 +68,7 @@ struct ResultObject {
 };
 
 struct ResultSets {
-  ResultObject input_parameters;
+  ResultObject parameters;
   std::vector<ResultObject> results;
 };
 

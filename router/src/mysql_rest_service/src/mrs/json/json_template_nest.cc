@@ -22,7 +22,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "mrs/json/response_sp_json_template_nest.h"
+#include "mrs/json/json_template_nest.h"
 
 #include <limits>
 
@@ -34,19 +34,16 @@ IMPORT_LOG_FUNCTIONS()
 namespace mrs {
 namespace json {
 
-ResponseSpJsonTemplateNest::ResponseSpJsonTemplateNest(
-    const bool encode_bigints_as_string)
+JsonTemplateNest::JsonTemplateNest(const bool encode_bigints_as_string)
     : encode_bigints_as_string_{encode_bigints_as_string} {
   log_debug("ResponseSpJsonTemplateNest");
 }
 
-std::string ResponseSpJsonTemplateNest::get_result() {
-  return serializer_.get_result();
-}
+std::string JsonTemplateNest::get_result() { return serializer_.get_result(); }
 
-void ResponseSpJsonTemplateNest::flush() { serializer_.flush(); }
+void JsonTemplateNest::flush() { serializer_.flush(); }
 
-void ResponseSpJsonTemplateNest::begin_resultset(
+void JsonTemplateNest::begin_resultset(
     const std::string &url, const std::string &items_name,
     const std::vector<helper::Column> &columns) {
   end_resultset();
@@ -59,13 +56,13 @@ void ResponseSpJsonTemplateNest::begin_resultset(
   columns_ = columns;
 }
 
-void ResponseSpJsonTemplateNest::begin_resultset(
+void JsonTemplateNest::begin_resultset_with_limits(
     uint64_t, uint64_t, bool, const std::string &,
     const std::vector<helper::Column> &) {
   assert(false && "not implemented in sp");
 }
 
-void ResponseSpJsonTemplateNest::end_resultset() {
+void JsonTemplateNest::end_resultset() {
   json_root_items_object_items_ = JsonSerializer::Array();
   if (json_root_items_object_.is_usable()) {
     auto m = json_root_items_object_->member_add_object("_metadata");
@@ -79,13 +76,13 @@ void ResponseSpJsonTemplateNest::end_resultset() {
   json_root_items_object_ = JsonSerializer::Object();
 }
 
-void ResponseSpJsonTemplateNest::begin() {
+void JsonTemplateNest::begin() {
   json_root_ = serializer_.add_object();
   pushed_documents_ = 0;
   json_root_items_ = serializer_.member_add_array("items");
 }
 
-void ResponseSpJsonTemplateNest::finish() {
+void JsonTemplateNest::finish() {
   end_resultset();
 
   json_root_items_object_items_ = JsonSerializer::Array();
@@ -94,11 +91,16 @@ void ResponseSpJsonTemplateNest::finish() {
   json_root_ = JsonSerializer::Object();
 }
 
-bool ResponseSpJsonTemplateNest::push_json_document(const ResultRow &values,
-                                                    const char *ignore_column) {
+bool JsonTemplateNest::push_row(const ResultRow &values,
+                                const char *ignore_column) {
+  auto obj = json_root_items_object_items_->add_object();
+  return push_row_impl(values, ignore_column);
+}
+
+bool JsonTemplateNest::push_row_impl(const ResultRow &values,
+                                     const char *ignore_column) {
   auto &columns = columns_;
   assert(values.size() == columns.size());
-  auto obj = json_root_items_object_items_->add_object();
 
   for (size_t idx = 0; idx < values.size(); ++idx) {
     if (ignore_column && columns[idx].name == ignore_column) {
@@ -142,7 +144,7 @@ bool ResponseSpJsonTemplateNest::push_json_document(const ResultRow &values,
   return true;
 }
 
-bool ResponseSpJsonTemplateNest::push_json_document(const char *) {
+bool JsonTemplateNest::push_json_document(const char *) {
   assert(false && "not implemented");
   return true;
 }

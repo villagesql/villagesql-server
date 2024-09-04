@@ -49,7 +49,7 @@ class QueryEntryFields : private Query {
   void on_row_output_name(const ResultRow &r);
   void on_row(const ResultRow &r) override;
 
-  enum class Row { k_fields, k_input_name, k_output_name };
+  enum class Row { k_fields, k_parameters_name, k_output_name };
 
   Row processing_;
   ResultObject *output_result_{nullptr};

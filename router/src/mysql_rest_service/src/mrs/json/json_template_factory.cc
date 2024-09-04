@@ -23,9 +23,10 @@
 */
 
 #include "mrs/json/json_template_factory.h"
+#include "mrs/json/json_template_nest.h"
+#include "mrs/json/json_template_nest_without_outparams.h"
+#include "mrs/json/json_template_unnest.h"
 #include "mrs/json/response_json_template.h"
-#include "mrs/json/response_sp_json_template_nest.h"
-#include "mrs/json/response_sp_json_template_unnest.h"
 
 namespace mrs {
 namespace json {
@@ -38,10 +39,16 @@ std::shared_ptr<database::JsonTemplate> JsonTemplateFactory::create_template(
   switch (type) {
     case database::JsonTemplateType::kObjectNested:
       return std::shared_ptr<database::JsonTemplate>{
-          new ResponseSpJsonTemplateNest(encode_bigints_as_strings)};
+          new JsonTemplateNest(encode_bigints_as_strings)};
+
     case database::JsonTemplateType::kObjectUnnested:
       return std::shared_ptr<database::JsonTemplate>{
-          new ResponseSpJsonTemplateUnnest(encode_bigints_as_strings)};
+          new JsonTemplateUnnest(encode_bigints_as_strings)};
+
+    case database::JsonTemplateType::kObjectNestedOutParameters:
+      return std::shared_ptr<database::JsonTemplate>{
+          new JsonTemplateNestWithoutOutParameters(encode_bigints_as_strings)};
+
     case database::JsonTemplateType::kStandard:
     default:
       return std::shared_ptr<database::JsonTemplate>{

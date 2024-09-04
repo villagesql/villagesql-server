@@ -43,12 +43,12 @@ class JsonTemplate {
   virtual void begin_resultset(const std::string &url,
                                const std::string &items_name,
                                const std::vector<helper::Column> &columns) = 0;
-  virtual void begin_resultset(uint64_t offset, uint64_t limit,
-                               bool is_default_limit, const std::string &url,
-                               const std::vector<helper::Column> &columns) = 0;
+  virtual void begin_resultset_with_limits(
+      uint64_t offset, uint64_t limit, bool is_default_limit,
+      const std::string &url, const std::vector<helper::Column> &columns) = 0;
   virtual bool push_json_document(const char *document) = 0;
-  virtual bool push_json_document(const ResultRow &values,
-                                  const char *ignore_column = nullptr) = 0;
+  virtual bool push_row(const ResultRow &values,
+                        const char *ignore_column = nullptr) = 0;
   virtual void end_resultset() = 0;
 
   virtual void begin() = 0;
@@ -73,7 +73,12 @@ class JsonTemplate {
   }
 };
 
-enum class JsonTemplateType { kStandard, kObjectNested, kObjectUnnested };
+enum class JsonTemplateType {
+  kStandard,
+  kObjectNested,
+  kObjectUnnested,
+  kObjectNestedOutParameters
+};
 class JsonTemplateFactory {
  public:
   virtual ~JsonTemplateFactory() = default;

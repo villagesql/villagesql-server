@@ -62,7 +62,7 @@ class RestHandlerObjectTests : public Test {
     EXPECT_CALL(mock_route_, get_rest_url()).WillOnce(ReturnRef(rest_url));
     EXPECT_CALL(mock_route_, get_rest_path())
         .WillOnce(Return(Strings{rest_path}));
-    EXPECT_CALL(mock_route_, get_url_host()).WillRepeatedly(ReturnRef(""));
+    EXPECT_CALL(mock_route_, get_url_host()).WillRepeatedly(ReturnRef(k_empty));
     EXPECT_CALL(mock_http_component_, add_route(_, rest_path, _))
         .WillOnce(Invoke(
             [this](

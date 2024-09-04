@@ -42,7 +42,7 @@
 # I.1
 GET /svc/basic/bit
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -70,7 +70,7 @@ GET /svc/basic/bit
 OK
 GET /svc/basic/bit1
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -101,7 +101,7 @@ OK
 # I.2
 GET /svc/basic/bit10
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -129,7 +129,7 @@ GET /svc/basic/bit10
 OK
 GET /svc/basic/bin
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -157,7 +157,7 @@ GET /svc/basic/bin
 OK
 GET /svc/basic/blob
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -188,7 +188,7 @@ OK
 # I.3
 GET /svc/basic/set
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -216,7 +216,7 @@ GET /svc/basic/set
 OK
 GET /svc/basic/enum
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -244,7 +244,7 @@ GET /svc/basic/enum
 OK
 GET /svc/basic/varchar
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -272,7 +272,7 @@ GET /svc/basic/varchar
 OK
 GET /svc/basic/text
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -303,7 +303,7 @@ OK
 # I.4
 GET /svc/basic/date
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -331,7 +331,7 @@ GET /svc/basic/date
 OK
 GET /svc/basic/time
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -359,7 +359,7 @@ GET /svc/basic/time
 OK
 GET /svc/basic/year
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -387,7 +387,7 @@ GET /svc/basic/year
 OK
 GET /svc/basic/datetime
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -415,7 +415,7 @@ GET /svc/basic/datetime
 OK
 GET /svc/basic/timestamp
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -446,7 +446,7 @@ OK
 # I.5
 GET /svc/basic/float
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -474,7 +474,7 @@ GET /svc/basic/float
 OK
 GET /svc/basic/double
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -502,7 +502,7 @@ GET /svc/basic/double
 OK
 GET /svc/basic/decimal
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -533,7 +533,7 @@ OK
 # I.6
 GET /svc/basic/int
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -561,7 +561,7 @@ GET /svc/basic/int
 OK
 GET /svc/basic/bigint
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -589,7 +589,7 @@ GET /svc/basic/bigint
 OK
 GET /svc/basic/smallint
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -617,7 +617,7 @@ GET /svc/basic/smallint
 OK
 GET /svc/basic/tinyint
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -645,7 +645,7 @@ GET /svc/basic/tinyint
 OK
 GET /svc/basic/mediumint
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [

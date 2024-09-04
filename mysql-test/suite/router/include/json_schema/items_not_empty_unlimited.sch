@@ -1,8 +1,8 @@
 {
   "type":"object",
-  "required":["items"],
+  "required":["resultSets"],
   "properties": {
-     "items" : {
+     "resultSets" : {
         "type" : "array",
         "minItems":1,
         "Items": [

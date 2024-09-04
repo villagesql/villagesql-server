@@ -96,9 +96,10 @@ MATCHER_P2(MatchFields, fields, s, "") {
 TEST_F(QueryRestSpTests, procedure_returns_nothing) {
   mrs::database::entry::ResultSets rs;
 
-  EXPECT_CALL(json_template_.mock_nested_, begin());
-  EXPECT_CALL(json_template_.mock_nested_, finish());
-  EXPECT_CALL(json_template_.mock_nested_, get_result()).WillOnce(Return(""));
+  EXPECT_CALL(json_template_.mock_nested_out_params_, begin());
+  EXPECT_CALL(json_template_.mock_nested_out_params_, finish());
+  EXPECT_CALL(json_template_.mock_nested_out_params_, get_result())
+      .WillOnce(Return(""));
 
   EXPECT_CALL(mock_session_, prepare_execute_with_bind_parameters(1, _, _, _))
       .WillOnce(Invoke([]() {}));
@@ -111,12 +112,13 @@ TEST_F(QueryRestSpTests, procedure_has_one_empty_resultset_unknow_fields) {
   MYSQL_FIELD fields[2] = {create_field("f1", MYSQL_TYPE_LONG),
                            create_field("f2", MYSQL_TYPE_VARCHAR)};
 
-  EXPECT_CALL(json_template_.mock_nested_, begin());
-  EXPECT_CALL(json_template_.mock_nested_,
+  EXPECT_CALL(json_template_.mock_nested_out_params_, begin());
+  EXPECT_CALL(json_template_.mock_nested_out_params_,
               begin_resultset(kUrl, kUnknowResultset0,
                               MatchFields(fields, std::size(fields))));
-  EXPECT_CALL(json_template_.mock_nested_, finish());
-  EXPECT_CALL(json_template_.mock_nested_, get_result()).WillOnce(Return(""));
+  EXPECT_CALL(json_template_.mock_nested_out_params_, finish());
+  EXPECT_CALL(json_template_.mock_nested_out_params_, get_result())
+      .WillOnce(Return(""));
 
   EXPECT_CALL(mock_session_, prepare_execute_with_bind_parameters(1, _, _, _))
       .WillOnce(Invoke(
@@ -139,14 +141,15 @@ TEST_F(QueryRestSpTests,
       create_field("a1", MYSQL_TYPE_LONG),
       create_field("a2", MYSQL_TYPE_VARCHAR)};
 
-  EXPECT_CALL(json_template_.mock_nested_, begin());
+  EXPECT_CALL(json_template_.mock_nested_out_params_, begin());
   EXPECT_CALL(
-      json_template_.mock_nested_,
+      json_template_.mock_nested_out_params_,
       begin_resultset(kUrl, k_resultset_name,
                       MatchFields(fields_reported_to_serializer,
                                   std::size(fields_reported_to_serializer))));
-  EXPECT_CALL(json_template_.mock_nested_, finish());
-  EXPECT_CALL(json_template_.mock_nested_, get_result()).WillOnce(Return(""));
+  EXPECT_CALL(json_template_.mock_nested_out_params_, finish());
+  EXPECT_CALL(json_template_.mock_nested_out_params_, get_result())
+      .WillOnce(Return(""));
 
   EXPECT_CALL(mock_session_, prepare_execute_with_bind_parameters(1, _, _, _))
       .WillOnce(Invoke(
@@ -169,14 +172,15 @@ TEST_F(QueryRestSpTests,
       create_field("a1", MYSQL_TYPE_LONG),
       create_field("a2", MYSQL_TYPE_VARCHAR)};
 
-  EXPECT_CALL(json_template_.mock_nested_, begin());
+  EXPECT_CALL(json_template_.mock_nested_out_params_, begin());
   EXPECT_CALL(
-      json_template_.mock_nested_,
+      json_template_.mock_nested_out_params_,
       begin_resultset(kUrl, k_resultset_name,
                       MatchFields(fields_reported_to_serializer,
                                   std::size(fields_reported_to_serializer))));
-  EXPECT_CALL(json_template_.mock_nested_, finish());
-  EXPECT_CALL(json_template_.mock_nested_, get_result()).WillOnce(Return(""));
+  EXPECT_CALL(json_template_.mock_nested_out_params_, finish());
+  EXPECT_CALL(json_template_.mock_nested_out_params_, get_result())
+      .WillOnce(Return(""));
 
   EXPECT_CALL(mock_session_, prepare_execute_with_bind_parameters(1, _, _, _))
       .WillOnce(Invoke(

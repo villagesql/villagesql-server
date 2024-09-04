@@ -31,7 +31,7 @@
 # I.1
 PUT /svc/proc/one (payload-size:2)
 {
-    "items": [
+    "resultSets": [
         {
             "items": [
                 {
@@ -145,7 +145,7 @@ OK
 # I.2
 GET /svc/proc/two
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -213,7 +213,7 @@ OK
 # I.3
 GET /svc/proc/three
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -285,24 +285,10 @@ OK
 # II.1
 GET /svc/proc/out
 {
-    "items": [
-        {
-            "type": " proc_schema.no_resultset_out_paramOut",
-            "items": [
-                {
-                    "v": 1
-                }
-            ],
-            "_metadata": {
-                "columns": [
-                    {
-                        "name": "v",
-                        "type": " INTEGER"
-                    }
-                ]
-            }
-        }
-    ]
+    "resultSets": [],
+    "outParameters": {
+        "v": 1
+    }
 }
 OK
 
@@ -310,7 +296,7 @@ OK
 # II.2
 GET /svc/proc/one_and_out
 {
-    "items": [
+    "resultSets": [
         {
             "type": "items0",
             "items": [
@@ -341,24 +327,11 @@ GET /svc/proc/one_and_out
                     }
                 ]
             }
-        },
-        {
-            "type": " proc_schema.one_resultset_out_paramOut",
-            "items": [
-                {
-                    "v": 1
-                }
-            ],
-            "_metadata": {
-                "columns": [
-                    {
-                        "name": "v",
-                        "type": " INTEGER"
-                    }
-                ]
-            }
         }
-    ]
+    ],
+    "outParameters": {
+        "v": 1
+    }
 }
 OK
 DROP SCHEMA proc_schema;

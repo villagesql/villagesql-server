@@ -29,7 +29,7 @@
 # I.1
 PUT /svc/proc/one (payload-size:2)
 {
-    "items": [
+    "resultSets": [
         {
             "type": "basicObject",
             "items": [
@@ -225,7 +225,7 @@ OK
 # I.2
 GET /svc/proc/two
 {
-    "items": [
+    "resultSets": [
         {
             "type": "basicObjectSecond",
             "items": [
@@ -293,7 +293,7 @@ OK
 # I.3
 GET /svc/proc/three
 {
-    "items": [
+    "resultSets": [
         {
             "type": "basicObjectSecond",
             "items": [

@@ -59,6 +59,7 @@ using MediaType = helper::MediaType;
 
 const std::string k_url{"https://mysql.com/mrs/schema/table"};
 const std::string k_path{"^/mrs/schema/table/?"};
+const std::string k_empty;
 
 class RestHandlerFileTests : public Test {
  public:
@@ -83,7 +84,7 @@ class RestHandlerFileTests : public Test {
         .WillRepeatedly(ReturnRef(mock_input_headers));
     EXPECT_CALL(mock_query_factory_, create_query_content_file())
         .WillRepeatedly(Return(mock_query_file_.copy_base()));
-    EXPECT_CALL(mock_route_, get_url_host()).WillRepeatedly(ReturnRef(""));
+    EXPECT_CALL(mock_route_, get_url_host()).WillRepeatedly(ReturnRef(k_empty));
     EXPECT_CALL(mock_http_component_, add_route(_, path, _))
         .WillOnce(Invoke(
             [this](

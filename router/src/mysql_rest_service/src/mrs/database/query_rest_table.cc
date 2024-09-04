@@ -91,9 +91,9 @@ void QueryRestTable::on_metadata(unsigned number, MYSQL_FIELD *fields) {
     columns_.emplace_back(&fields[i]);
   }
   if (serializer_)
-    serializer_->begin_resultset(config_.offset, config_.limit,
-                                 config_.is_default_limit, config_.url_route,
-                                 columns_);
+    serializer_->begin_resultset_with_limits(config_.offset, config_.limit,
+                                             config_.is_default_limit,
+                                             config_.url_route, columns_);
 }
 
 void QueryRestTable::on_row(const ResultRow &r) {

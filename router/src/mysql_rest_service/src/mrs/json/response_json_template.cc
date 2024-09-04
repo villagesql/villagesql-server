@@ -77,7 +77,7 @@ void ResponseJsonTemplate::begin_resultset(
   has_more_ = false;
 }
 
-void ResponseJsonTemplate::begin_resultset(
+void ResponseJsonTemplate::begin_resultset_with_limits(
     uint64_t offset, uint64_t limit, bool is_default_limit,
     const std::string &url, const std::vector<helper::Column> &) {
   if (began_) {
@@ -149,8 +149,8 @@ void ResponseJsonTemplate::begin() {}
 
 void ResponseJsonTemplate::finish() { end_resultset(); }
 
-bool ResponseJsonTemplate::push_json_document(const ResultRow &values,
-                                              const char *ignore_column) {
+bool ResponseJsonTemplate::push_row(const ResultRow &values,
+                                    const char *ignore_column) {
   auto &columns = *columns_;
   assert(began_ == true);
   assert(values.size() == columns.size());

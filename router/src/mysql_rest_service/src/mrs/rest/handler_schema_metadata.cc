@@ -61,8 +61,8 @@ HttpResult HandlerSchemaMetadata::handle_get(rest::RequestContext *ctxt) {
 
   Url::parse_offset_limit(requests_uri.get_query_elements(), &offset, &limit);
 
-  response_template.begin_resultset(offset, limit, limit == k_default_limit,
-                                    schema_->get_url(), {});
+  response_template.begin_resultset_with_limits(
+      offset, limit, limit == k_default_limit, schema_->get_url(), {});
 
   auto &routes = schema_->get_routes();
   uint32_t noOfRoute = 0;

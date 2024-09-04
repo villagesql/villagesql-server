@@ -40,8 +40,8 @@ bool QueryEntryFields::query_parameters(MySQLSession *session,
                                         entry::UniversalId db_object_id) {
   result_ = {};
 
-  processing_ = Row::k_input_name;
-  output_result_ = &result_.input_parameters;
+  processing_ = Row::k_parameters_name;
+  output_result_ = &result_.parameters;
 
   query_ = {
       "SELECT o.id, o.name FROM mysql_rest_service_metadata.object as o "
@@ -97,7 +97,7 @@ void QueryEntryFields::on_row(const ResultRow &row) {
     case Row::k_fields:
       on_row_params(row);
       return;
-    case Row::k_input_name:
+    case Row::k_parameters_name:
       on_row_input_name(row);
       return;
     case Row::k_output_name:
@@ -110,7 +110,7 @@ void QueryEntryFields::on_row(const ResultRow &row) {
 }
 
 void QueryEntryFields::on_row_input_name(const ResultRow &row) {
-  auto &item = result_.input_parameters;
+  auto &item = result_.parameters;
   helper::MySQLRow mysql_row(row, metadata_, num_of_metadata_);
 
   mysql_row.unserialize_with_converter(&item.id, entry::UniversalId::from_raw);

@@ -122,8 +122,9 @@ TARGET_INCLUDE_DIRECTORIES(mysql_rest_service_db
 ADD_LIBRARY(mysql_rest_service_json
   mrs/json/response_json_template.cc
   mrs/json/json_template_factory.cc
-  mrs/json/response_sp_json_template_unnest.cc
-  mrs/json/response_sp_json_template_nest.cc
+  mrs/json/json_template_unnest.cc
+  mrs/json/json_template_nest.cc
+  mrs/json/json_template_nest_without_outparams.cc
   )
 
 TARGET_LINK_LIBRARIES(mysql_rest_service_json

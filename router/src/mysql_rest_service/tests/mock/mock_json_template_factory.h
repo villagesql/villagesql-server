@@ -33,13 +33,13 @@ class MockJsonTemplate : public mrs::database::JsonTemplate {
               (const std::string &url, const std::string &items_name,
                const std::vector<helper::Column> &columns),
               (override));
-  MOCK_METHOD(void, begin_resultset,
+  MOCK_METHOD(void, begin_resultset_with_limits,
               (uint64_t offset, uint64_t limit, bool is_default_limit,
                const std::string &url,
                const std::vector<helper::Column> &columns),
               (override));
   MOCK_METHOD(bool, push_json_document, (const char *document), (override));
-  MOCK_METHOD(bool, push_json_document,
+  MOCK_METHOD(bool, push_row,
               (const ResultRow &values, const char *ignore_column), (override));
   MOCK_METHOD(void, end_resultset, (), (override));
   MOCK_METHOD(void, begin, (), (override));
@@ -68,6 +68,9 @@ class InjectMockJsonTemplateFactory
       case JsonTemplateType::kObjectNested:
         ptr = &mock_nested_;
         break;
+      case JsonTemplateType::kObjectNestedOutParameters:
+        ptr = &mock_nested_out_params_;
+        break;
       default:
       case JsonTemplateType::kObjectUnnested:
         ptr = &mock_unnested_;
@@ -79,6 +82,7 @@ class InjectMockJsonTemplateFactory
   mutable testing::StrictMock<MockJsonTemplate> mock_;
   mutable testing::StrictMock<MockJsonTemplate> mock_unnested_;
   mutable testing::StrictMock<MockJsonTemplate> mock_nested_;
+  mutable testing::StrictMock<MockJsonTemplate> mock_nested_out_params_;
 };
 
 #endif  // ROUTER_SRC_REST_MRS_TESTS_MOCK_MOCK_JSON_TEMPLATE_FACTORY_H_

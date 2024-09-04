@@ -181,7 +181,7 @@ HttpResult HandlerSP::handle_put([[maybe_unused]] rest::RequestContext *ctxt) {
   if (!doc.IsObject()) throw http::Error(HttpStatusCode::BadRequest);
 
   auto &rs = route_->get_parameters();
-  auto &p = rs.input_parameters.fields;
+  auto &p = rs.parameters.fields;
   for (auto el : helper::json::member_iterator(doc)) {
     auto key = el.first;
     const database::entry::Field *param;
@@ -265,7 +265,7 @@ HttpResult HandlerSP::handle_get([[maybe_unused]] rest::RequestContext *ctxt) {
   const auto &query_kv = requests_uri.get_query_elements();
 
   auto &p = route_->get_parameters();
-  auto &pf = p.input_parameters.fields;
+  auto &pf = p.parameters.fields;
   for (const auto &[key, _] : query_kv) {
     const database::entry::Field *param;
     CompareFieldName search_for(key);

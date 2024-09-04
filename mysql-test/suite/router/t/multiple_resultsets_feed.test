@@ -78,7 +78,7 @@
 # JSON schema.
 exec $MRS_CLIENT_ARGS
   --wait-until-found 60 -t PUT --payload "{}"
-  --json-pointer /items/*/items/*/name,/items/*/_metadata
+  --json-pointer /resultSets/*/items/*/name,/resultSets/*/_metadata
   --json-schema $SCHEMA_DIR/items_not_empty_unlimited.sch
   --path /svc/proc/one;
 

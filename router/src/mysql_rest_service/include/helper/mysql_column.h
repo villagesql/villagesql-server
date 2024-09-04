@@ -37,10 +37,11 @@ struct Column {
   Column() : type{MYSQL_TYPE_NULL}, type_json{JsonType::kNull} {}
 
   Column(const std::string &column_name, const char *t, bool primary = false,
-         bool auto_increment = false)
+         bool auto_increment = false, const bool p_is_bound = false)
       : name{column_name},
         is_primary{primary},
-        is_auto_increment{auto_increment} {
+        is_auto_increment{auto_increment},
+        is_bound{p_is_bound} {
     auto info = from_mysql_txt_column_type(t);
     type = info.type_mysql;
     type_json = info.type_json;
@@ -48,14 +49,15 @@ struct Column {
     length = info.length;
   }
 
-  explicit Column(const MYSQL_FIELD *field)
+  explicit Column(const MYSQL_FIELD *field, const bool p_is_bound = false)
       : name{field->name, field->name_length},
         type(field->type),
         type_txt(txt_from_mysql_column_type(field)),
         length(field->length),
         type_json{from_mysql_column_type(field)},
         is_primary{IS_PRI_KEY(field->flags) > 0},
-        is_auto_increment{(field->flags & AUTO_INCREMENT_FLAG) > 0} {}
+        is_auto_increment{(field->flags & AUTO_INCREMENT_FLAG) > 0},
+        is_bound{p_is_bound} {}
 
  public:
   std::string name;

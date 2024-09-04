@@ -36,22 +36,23 @@
 namespace mrs {
 namespace json {
 
-class ResponseSpJsonTemplateUnnest : public database::JsonTemplate {
+class JsonTemplateUnnest : public database::JsonTemplate {
  public:
   using JsonSerializer = helper::json::SerializerToText;
   using ResultRow = mysqlrouter::MySQLSession::ResultRow;
 
  public:
-  explicit ResponseSpJsonTemplateUnnest(bool encode_bigints_as_string = false);
+  explicit JsonTemplateUnnest(bool encode_bigints_as_string = false);
 
   void begin_resultset(const std::string &url, const std::string &items_name,
                        const std::vector<helper::Column> &columns) override;
-  void begin_resultset(uint64_t offset, uint64_t limit, bool is_default_limit,
-                       const std::string &url,
-                       const std::vector<helper::Column> &columns) override;
+  void begin_resultset_with_limits(
+      uint64_t offset, uint64_t limit, bool is_default_limit,
+      const std::string &url,
+      const std::vector<helper::Column> &columns) override;
   bool push_json_document(const char *document) override;
-  bool push_json_document(const ResultRow &values,
-                          const char *ignore_column = nullptr) override;
+  bool push_row(const ResultRow &values,
+                const char *ignore_column = nullptr) override;
   void end_resultset() override;
 
   void begin() override;

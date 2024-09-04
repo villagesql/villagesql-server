@@ -22,7 +22,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "mrs/json/response_sp_json_template_unnest.h"
+#include "mrs/json/json_template_unnest.h"
 
 #include <limits>
 
@@ -34,19 +34,18 @@ IMPORT_LOG_FUNCTIONS()
 namespace mrs {
 namespace json {
 
-ResponseSpJsonTemplateUnnest::ResponseSpJsonTemplateUnnest(
-    bool encode_bigints_as_string)
+JsonTemplateUnnest::JsonTemplateUnnest(bool encode_bigints_as_string)
     : encode_bigints_as_string_{encode_bigints_as_string} {
   log_debug("ResponseSpJsonTemplateUnnest");
 }
 
-std::string ResponseSpJsonTemplateUnnest::get_result() {
+std::string JsonTemplateUnnest::get_result() {
   return serializer_.get_result();
 }
 
-void ResponseSpJsonTemplateUnnest::flush() { serializer_.flush(); }
+void JsonTemplateUnnest::flush() { serializer_.flush(); }
 
-void ResponseSpJsonTemplateUnnest::begin_resultset(
+void JsonTemplateUnnest::begin_resultset(
     const std::string &url, const std::string &,
     const std::vector<helper::Column> &columns) {
   if (columns_.size()) {
@@ -57,15 +56,15 @@ void ResponseSpJsonTemplateUnnest::begin_resultset(
   columns_ = columns;
 }
 
-void ResponseSpJsonTemplateUnnest::begin_resultset(
+void JsonTemplateUnnest::begin_resultset_with_limits(
     uint64_t, uint64_t, bool, const std::string &,
     const std::vector<helper::Column> &) {
   assert(false && "not implemented in sp");
 }
 
-void ResponseSpJsonTemplateUnnest::end_resultset() {}
+void JsonTemplateUnnest::end_resultset() {}
 
-void ResponseSpJsonTemplateUnnest::begin() {
+void JsonTemplateUnnest::begin() {
   json_root_ = serializer_.add_object();
   pushed_documents_ = 0;
   json_root_items_ = serializer_.member_add_array("items");
@@ -73,7 +72,7 @@ void ResponseSpJsonTemplateUnnest::begin() {
   full_stop_ = false;
 }
 
-void ResponseSpJsonTemplateUnnest::finish() {
+void JsonTemplateUnnest::finish() {
   end_resultset();
 
   json_root_items_ = JsonSerializer::Array();
@@ -89,8 +88,8 @@ void ResponseSpJsonTemplateUnnest::finish() {
   json_root_ = JsonSerializer::Object();
 }
 
-bool ResponseSpJsonTemplateUnnest::push_json_document(
-    const ResultRow &values, const char *ignore_column) {
+bool JsonTemplateUnnest::push_row(const ResultRow &values,
+                                  const char *ignore_column) {
   auto &columns = columns_;
   assert(values.size() == columns.size());
   if (full_stop_) return false;
@@ -138,7 +137,7 @@ bool ResponseSpJsonTemplateUnnest::push_json_document(
   return true;
 }
 
-bool ResponseSpJsonTemplateUnnest::push_json_document(const char *) {
+bool JsonTemplateUnnest::push_json_document(const char *) {
   assert(false && "not implemented");
   return true;
 }

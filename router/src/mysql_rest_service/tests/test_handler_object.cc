@@ -135,7 +135,7 @@ class HandleObjectTests : public Test {
       EXPECT_CALL(parent_.mock_route, get_object())
           .WillRepeatedly(Return(cached_object_));
       EXPECT_CALL(parent_.mock_route, get_url_host())
-          .WillRepeatedly(ReturnRef(""));
+          .WillRepeatedly(ReturnRef(k_empty_string));
     }
 
     HandleObjectTests &parent_;

@@ -26,8 +26,6 @@
 
 #include "mrs/interface/http_result.h"
 #include "mrs/json/json_template_factory.h"
-#include "mrs/json/response_sp_json_template_nest.h"
-#include "mrs/json/response_sp_json_template_unnest.h"
 
 #include "mysql/harness/logging/logging.h"
 
@@ -59,7 +57,7 @@ static const Field *columns_find(const std::string &look_for,
 
 static void impl_columns_set(std::vector<helper::Column> &c,
                              const std::vector<Field> &rs, unsigned,
-                             MYSQL_FIELD *fields) {
+                             MYSQL_FIELD *fields, const bool is_bound = false) {
   c.resize(rs.size());
   int idx = 0;
   for (auto &i : c) {
@@ -68,7 +66,7 @@ static void impl_columns_set(std::vector<helper::Column> &c,
     log_debug("impl_columns_set idx=%i, charser=%i, flags=%x", (int)idx,
               (int)f.charsetnr, f.flags);
 
-    i = helper::Column(&f);
+    i = helper::Column(&f, is_bound);
     auto column_def = columns_find(f.name, rs);
     i.name = column_def->name;
   }
@@ -97,24 +95,59 @@ static const Field *columns_match(const std::vector<Field> &columns,
   return nullptr;
 }
 
+static void trace_resultset(const mrs::database::entry::ResultSets *rs) {
+  log_debug("rs_->parameters.fields.size()=%i",
+            (int)rs->parameters.fields.size());
+  log_debug("rs_->parameters.name=%s", rs->parameters.name.c_str());
+
+  int i = 0;
+  for (auto &f : rs->parameters.fields) {
+    log_debug("rs_->parameters.fields[%i].bind_name:%s", i,
+              f.bind_name.c_str());
+    log_debug("rs_->parameters.fields[%i].name:%s", i, f.name.c_str());
+    ++i;
+  }
+
+  log_debug("rs_->results.size()=%i", (int)rs->results.size());
+
+  int j = 0;
+  for (auto &r : rs->results) {
+    log_debug("r[%i].name=%s", j, r.name.c_str());
+    log_debug("r[%i].fields.size()=%i", j, (int)r.fields.size());
+
+    i = 0;
+    for (auto &f : r.fields) {
+      log_debug("rs_->results[%i].fields[%i].bind_name:%s", j, i,
+                f.bind_name.c_str());
+      log_debug("rs_->results[%i].fields[%i].name:%s", j, i, f.name.c_str());
+      ++i;
+    }
+    ++j;
+  }
+}
+
+static void trace_metadata(unsigned int number, MYSQL_FIELD *fields) {
+  for (unsigned int n = 0; n < number; ++n) {
+    log_debug("on_metadata name:%s", fields[n].name);
+    log_debug("on_metadata length:%i", (int)fields[n].length);
+    log_debug("on_metadata type:%i", (int)fields[n].type);
+    log_debug("on_metadata flags:%i", (int)fields[n].flags);
+  }
+}
+
 QueryRestSP::QueryRestSP(JsonTemplateFactory *factory) : factory_{factory} {}
 
 void QueryRestSP::columns_set(unsigned number, MYSQL_FIELD *fields) {
-  {
-    std::vector<Field> in_out_parameters{};
-    for (auto &c : rs_->input_parameters.fields) {
-      if (c.mode == Field::modeIn) continue;
-      in_out_parameters.push_back(c);
-    }
-    if (columns_match(in_out_parameters, number, fields)) {
-      log_debug("Matched out-params");
-      columns_items_type_ = rs_->input_parameters.name + "Out";
-      impl_columns_set(columns_, in_out_parameters, number, fields);
-      for (auto &c : columns_) {
-        c.is_bound = true;
-      }
-      return;
-    }
+  std::vector<Field> in_out_parameters{};
+  for (auto &c : rs_->parameters.fields) {
+    if (c.mode == Field::modeIn) continue;
+    in_out_parameters.push_back(c);
+  }
+  if (columns_match(in_out_parameters, number, fields)) {
+    log_debug("Matched out-params");
+    columns_items_type_ = rs_->parameters.name;
+    impl_columns_set(columns_, in_out_parameters, number, fields, true);
+    return;
   }
 
   for (auto &rs : rs_->results) {
@@ -132,14 +165,14 @@ void QueryRestSP::columns_set(unsigned number, MYSQL_FIELD *fields) {
   impl_columns_set(columns_, number, fields);
 }
 
-std::shared_ptr<JsonTemplate> QueryRestSP::create_template() {
+std::shared_ptr<JsonTemplate> QueryRestSP::create_template(
+    JsonTemplateType type) {
   mrs::json::JsonTemplateFactory default_factory;
   mrs::database::JsonTemplateFactory *factory = &default_factory;
-  using JsonTemplateType = mrs::database::JsonTemplateType;
 
   if (factory_) factory = factory_;
 
-  return factory->create_template(JsonTemplateType::kObjectNested);
+  return factory->create_template(type);
 }
 
 const char *QueryRestSP::get_sql_state() {
@@ -151,7 +184,7 @@ void QueryRestSP::query_entries(
     MySQLSession *session, const std::string &schema, const std::string &object,
     const std::string &url, const std::string &ignore_column,
     const mysqlrouter::sqlstring &values, std::vector<MYSQL_BIND> pt,
-    const ResultSets &rs) {
+    const ResultSets &rs, const JsonTemplateType type) {
   rs_ = &rs;
   items_started_ = false;
   items = 0;
@@ -164,7 +197,8 @@ void QueryRestSP::query_entries(
   has_out_params_ = !pt.empty();
   resultset_ = 0;
 
-  response_template_ = create_template();
+  response_template_ = create_template(type);
+  trace_resultset(rs_);
   response_template_->begin();
 
   prepare_and_execute(session, query_, pt);
@@ -175,47 +209,11 @@ void QueryRestSP::query_entries(
 }
 
 void QueryRestSP::on_row(const ResultRow &r) {
-  response_template_->push_json_document(r, ignore_column_);
+  response_template_->push_row(r, ignore_column_);
 }
 
 void QueryRestSP::on_metadata(unsigned int number, MYSQL_FIELD *fields) {
-  for (unsigned int n = 0; n < number; ++n) {
-    log_debug("on_metadata name:%s", fields[n].name);
-    log_debug("on_metadata length:%i", (int)fields[n].length);
-    log_debug("on_metadata type:%i", (int)fields[n].type);
-    log_debug("on_metadata flags:%i", (int)fields[n].flags);
-  }
-
-  log_debug("rs_->input_parameters.fields.size()=%i",
-            (int)rs_->input_parameters.fields.size());
-
-  log_debug("rs_->input_parameters.name=%s",
-            rs_->input_parameters.name.c_str());
-
-  int i = 0;
-  for (auto &f : rs_->input_parameters.fields) {
-    log_debug("rs_->input_parameters.fields[%i].bind_name:%s", i,
-              f.bind_name.c_str());
-    log_debug("rs_->input_parameters.fields[%i].name:%s", i, f.name.c_str());
-    ++i;
-  }
-
-  log_debug("rs_->results.size()=%i", (int)rs_->results.size());
-
-  int j = 0;
-  for (auto &r : rs_->results) {
-    log_debug("r[%i].name=%s", j, r.name.c_str());
-    log_debug("r[%i].fields.size()=%i", j, (int)r.fields.size());
-
-    i = 0;
-    for (auto &f : r.fields) {
-      log_debug("rs_->results[%i].fields[%i].bind_name:%s", j, i,
-                f.bind_name.c_str());
-      log_debug("rs_->results[%i].fields[%i].name:%s", j, i, f.name.c_str());
-      ++i;
-    }
-    ++j;
-  }
+  trace_metadata(number, fields);
   columns_set(number, fields);
 
   if (number) {

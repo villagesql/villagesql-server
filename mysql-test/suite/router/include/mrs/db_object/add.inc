@@ -128,7 +128,7 @@ if (!$mrs_add_db_object_do_not_auto_register_columns)
     --let $_schema_name=`SELECT name FROM mysql_rest_service_metadata.db_schema WHERE id=$mrs_schema_id_sql_variable`
     eval SET @_proc_id=(SELECT mysql_rest_service_metadata.get_sequence_id());
     eval INSERT INTO `mysql_rest_service_metadata`.`object`(id, db_object_id, name, kind)
-      VALUE(@_proc_id, $mrs_sql_id_variable, " $_schema_name.$mrs_add_db_object", "PARAMETERS");
+      VALUE(@_proc_id, $mrs_sql_id_variable, "$_schema_name.$mrs_add_db_object PARAMS", "PARAMETERS");
 
     eval INSERT INTO `mysql_rest_service_metadata`.`object_field` (
        `id`, `object_id`, `position`, `name`, `db_column`)
