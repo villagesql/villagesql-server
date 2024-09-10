@@ -11,6 +11,7 @@
 # 4. Verify generation of JSON string with date from DATE, TIME, YEAR, DATETIME,TIMESTAMP
 # 5. Verify generation of JSON number/float from FLOAT, DOUBLE, DECIMAL
 # 6. Verify generation of JSON number from INTEGER, BIGINT, SMALLINT, TINYINT, MEDIUMINT
+# 7. Verify generation of JSON array of numbers from VECTOR
 #
 #
 # Registred SERVICE at path: /svc
@@ -37,6 +38,7 @@
 # Registred DB_OBJECT at path: /svc/basic/tinyint
 # Registred DB_OBJECT at path: /svc/basic/mediumint
 # Registred DB_OBJECT at path: /svc/basic/blob
+# Registred DB_OBJECT at path: /svc/basic/vector
 
 #
 # I.1
@@ -664,6 +666,45 @@ GET /svc/basic/mediumint
                     {
                         "name": "cmediumint",
                         "type": "MEDIUMINT"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# I.7
+GET /svc/basic/vector
+{
+    "resultSets": [
+        {
+            "type": "items0",
+            "items": [
+                {
+                    "vec": [
+                        0.0
+                    ]
+                },
+                {
+                    "vec": [
+                        1.0,
+                        2.0
+                    ]
+                },
+                {
+                    "vec": [
+                        1.0,
+                        0.0
+                    ]
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "vec",
+                        "type": "VECTOR"
                     }
                 ]
             }

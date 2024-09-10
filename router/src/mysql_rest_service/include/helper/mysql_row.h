@@ -41,10 +41,20 @@ namespace helper {
 class MySQLRow {
  public:
   using ResultRow = mysqlrouter::MySQLSession::ResultRow;
+  enum Verification {
+    /* Always do the assertion. */
+    kCheckAtDestructor,
+    /* Do the assertion only after `end` call. */
+    kEndCallRequired
+  };
 
  public:
-  MySQLRow(const ResultRow &row, MYSQL_FIELD *fields, unsigned number)
-      : row_{row}, fields_{fields}, no_of_fields_{number} {}
+  MySQLRow(const ResultRow &row, MYSQL_FIELD *fields, unsigned number,
+           Verification must_call_end = kCheckAtDestructor)
+      : row_{row},
+        fields_{fields},
+        no_of_fields_{number},
+        unserialize_ended_{kCheckAtDestructor == must_call_end} {}
 
   ~MySQLRow() {
     // At the end of execution "field_index_" contains array index to next
@@ -56,10 +66,13 @@ class MySQLRow {
     // If the user code had finished fetching data, and there are still
     // unserialized fields/data, then the user code should call
     // `skip` to mark that those fields will be not unserialized.
-    assert(field_index_ == no_of_fields_ &&
-           "Number of consumed fields should be equal to number or provided "
-           "fields.");
+    assert(!unserialize_ended_ ||
+           (field_index_ == no_of_fields_ &&
+            "Number of consumed fields should be equal to number or provided "
+            "fields."));
   }
+
+  void end() { unserialize_ended_ = true; }
 
   void skip(uint32_t to_skip = 1) { field_index_ += to_skip; }
 
@@ -232,6 +245,7 @@ class MySQLRow {
   const ResultRow &row_;
   MYSQL_FIELD *fields_;
   unsigned no_of_fields_;
+  bool unserialize_ended_{true};
 };
 
 }  // namespace helper

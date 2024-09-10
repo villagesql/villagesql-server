@@ -151,6 +151,11 @@ class SerializerToText {
     return *this;
   }
 
+  SerializerToText &operator<<(const float value) {
+    writer_.Double(value);
+    return *this;
+  }
+
   SerializerToText &operator<<(const int value) {
     writer_.Int(value);
     return *this;
@@ -216,6 +221,7 @@ class SerializerToText {
 
       case JsonType::kBlob:
       case JsonType::kString:
+      case JsonType::kObject:
         writer_.String(value, length);
         break;
     }

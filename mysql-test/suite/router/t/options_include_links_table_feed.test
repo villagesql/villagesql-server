@@ -74,9 +74,9 @@
 --let MRS_CLIENT_ARGS=$MRS_CLIENT --url https://$mrs_host_and_port
 
 let $MRS_CLIENT_ITEMS=$MRS_CLIENT_ARGS
-     --exclude-json-pointer /limit,/offset,/hasMore,/count --json-schema $SCHEMA_DIR/items_without_links.sch;
+     --exclude-json-pointer /limit,/offset,/hasMore,/count --json-schema-file $SCHEMA_DIR/items_without_links.sch;
      
-let $MRS_CLIENT_OBJECT=$MRS_CLIENT_ARGS --json-schema $SCHEMA_DIR/object_without_links.sch;
+let $MRS_CLIENT_OBJECT=$MRS_CLIENT_ARGS --json-schema-file $SCHEMA_DIR/object_without_links.sch;
 --exec $MRS_CLIENT_ARGS --path /svc/basic/t_disabled/1 --wait-until-found 60 --display none
 
 --echo

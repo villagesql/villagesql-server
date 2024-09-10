@@ -36,6 +36,7 @@
 #include <utility>
 #include <vector>
 #include "helper/json/text_to.h"
+#include "mrs/database/converters/column_datatype_converter.h"
 #include "mrs/database/duality_view/errors.h"
 #include "mrs/database/entry/object.h"
 #include "mrs/database/query_entry_object.h"
@@ -43,6 +44,7 @@
 #include "mysql/harness/string_utils.h"
 #include "mysqlrouter/mysql_session.h"
 
+using mrs::database::ColumnDatatypeConverter;
 using mrs::database::entry::Column;
 using mrs::database::entry::ForeignKeyReference;
 using mrs::database::entry::IdGenerationType;
@@ -152,7 +154,7 @@ class ViewBuilder {
 
     auto column = std::dynamic_pointer_cast<Column>(m_table->fields.back());
     column->datatype = datatype;
-    column->type = mrs::database::column_datatype_to_type(column->datatype);
+    ColumnDatatypeConverter()(&column->type, column->datatype);
 
     return *this;
   }
@@ -258,7 +260,7 @@ class ViewBuilder {
       }
       if (col) {
         col->datatype = type;
-        col->type = mrs::database::column_datatype_to_type(type);
+        ColumnDatatypeConverter()(&col->type, type);
         col->is_primary = is_pk;
         col->is_unique = is_unique;
       }

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -22,50 +22,41 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_FIELD_H_
-#define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_FIELD_H_
+#ifndef ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_DATABASE_CONVERTERS_ID_GENERATION_TYPE_CONVERTER_H_
+#define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_DATABASE_CONVERTERS_ID_GENERATION_TYPE_CONVERTER_H_
 
-#include <optional>
+#include <stdexcept>
 #include <string>
-#include <vector>
 
-#include "mrs/database/entry/column_type.h"
-#include "mrs/database/entry/entry.h"
-#include "mrs/database/entry/set_operation.h"
-#include "mrs/database/entry/universal_id.h"
+#include "mrs/database/converters/generic.h"
+#include "mrs/database/entry/object.h"
 
 namespace mrs {
 namespace database {
-namespace entry {
 
-struct Field {
-  enum Mode {
-    modeIn,
-    modeOut,
-    modeInOut,
-  };
+class IdGenerationTypeConverter {
+ public:
+  void operator()(entry::IdGenerationType *out, const char *value) const {
+    if (nullptr == value) {
+      *out = entry::IdGenerationType::NONE;
+      return;
+    }
 
-  UniversalId id;
-  std::string name;
-  Mode mode;
-  std::string bind_name;
-  ColumnType data_type;
-  std::string raw_data_type;
+    if (mrs_strcasecmp(value, "auto_inc") == 0) {
+      *out = entry::IdGenerationType::AUTO_INCREMENT;
+    } else if (mrs_strcasecmp(value, "rev_uuid") == 0) {
+      *out = entry::IdGenerationType::REVERSE_UUID;
+    } else if (mrs_strcasecmp(value, "null") == 0) {
+      *out = entry::IdGenerationType::NONE;
+    } else {
+      using namespace std::string_literals;
+      throw std::runtime_error("Invalid value for IdGeneration: "s + value);
+    }
+  }
 };
 
-struct ResultObject {
-  std::vector<Field> fields;
-  std::string name;
-  UniversalId id;
-};
-
-struct ResultSets {
-  ResultObject parameters;
-  std::vector<ResultObject> results;
-};
-
-}  // namespace entry
 }  // namespace database
 }  // namespace mrs
 
-#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_FIELD_H_
+#endif /* ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_DATABASE_CONVERTERS_ID_GENERATION_TYPE_CONVERTER_H_ \
+        */

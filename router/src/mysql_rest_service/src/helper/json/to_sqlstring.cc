@@ -33,7 +33,6 @@ namespace json {
 
 namespace sql {
 
-using DataType = mrs::database::entry::Field::DataType;
 using ColumnType = mrs::database::entry::ColumnType;
 
 mysqlrouter::sqlstring &operator<<(mysqlrouter::sqlstring &sql,
@@ -42,30 +41,6 @@ mysqlrouter::sqlstring &operator<<(mysqlrouter::sqlstring &sql,
   const static mysqlrouter::sqlstring k_false{"FALSE"};
 
   return helper::json::to_stream(sql, v, k_true, k_false);
-}
-
-static bool is_matching_type(rapidjson::Type json_type, DataType field_type) {
-  switch (json_type) {
-    case rapidjson::kNullType:
-      return true;
-    case rapidjson::kFalseType:
-      return field_type == DataType::typeBoolean;
-    case rapidjson::kTrueType:
-      return field_type == DataType::typeBoolean;
-    case rapidjson::kObjectType:
-      return false;
-    case rapidjson::kArrayType:
-      return false;
-    case rapidjson::kStringType:
-      return field_type == DataType::typeString ||
-             field_type == DataType::typeTimestamp;
-    case rapidjson::kNumberType:
-      return field_type == DataType::typeInt ||
-             field_type == DataType::typeLong ||
-             field_type == DataType::typeDouble;
-  }
-
-  return false;
 }
 
 static bool is_matching_type(rapidjson::Type json_type, ColumnType field_type) {
@@ -93,22 +68,8 @@ static bool is_matching_type(rapidjson::Type json_type, ColumnType field_type) {
 
 mysqlrouter::sqlstring &operator<<(
     mysqlrouter::sqlstring &sql,
-    const std::pair<rapidjson::Value *, DataType> &pair) {
-  auto [v, type] = pair;
-
-  if (is_matching_type(v->GetType(), type)) {
-    sql << *v;
-    return sql;
-  }
-
-  sql << json::to_string(*v);
-  return sql;
-}
-
-mysqlrouter::sqlstring &operator<<(
-    mysqlrouter::sqlstring &sql,
     const std::pair<rapidjson::Value *, ColumnType> &pair) {
-  log_debug("operator<< (pair valie ct)");
+  log_debug("operator<< (pair<value,column_type>)");
   auto [v, type] = pair;
 
   if (is_matching_type(v->GetType(), type)) {

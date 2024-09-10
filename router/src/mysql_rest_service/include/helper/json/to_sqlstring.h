@@ -28,6 +28,8 @@
 #include <rapidjson/document.h>
 #include <string>
 
+#include "helper/json/rapid_json_iterator.h"
+#include "helper/to_string.h"
 #include "mrs/database/entry/field.h"
 #include "mrs/database/entry/object.h"
 
@@ -39,6 +41,13 @@ namespace json {
 template <typename Stream, typename Value>
 Stream &to_stream(Stream &stream, const rapidjson::Value &v,
                   const Value &k_true, const Value &k_false) {
+  auto isArrayOfNumbers = [](const rapidjson::Value::ConstArray &arr) {
+    for (const auto &el : array_iterator(arr)) {
+      if (!el.IsNumber()) return false;
+    }
+
+    return arr.Size() > 0;
+  };
   if (v.IsNull()) {
     stream << nullptr;
   } else if (v.IsBool()) {
@@ -57,6 +66,16 @@ Stream &to_stream(Stream &stream, const rapidjson::Value &v,
     stream << v.GetFloat();
   } else if (v.IsDouble()) {
     stream << v.GetDouble();
+  } else if (v.IsArray() && isArrayOfNumbers(v.GetArray())) {
+    std::stringstream result;
+    const char *separator = "[";
+    for (const auto &el : array_iterator(v.GetArray())) {
+      result << separator;
+      separator = ",";
+      to_stream(result, el, helper::k_true.c_str(), helper::k_false.c_str());
+    }
+    result << "]";
+    stream << result.str();
   } else {
     using namespace std::string_literals;
     throw std::runtime_error(
@@ -72,11 +91,6 @@ namespace sql {
 // To not keep this function in the same namespace as to_string
 mysqlrouter::sqlstring &operator<<(mysqlrouter::sqlstring &sql,
                                    const rapidjson::Value &v);
-
-mysqlrouter::sqlstring &operator<<(
-    mysqlrouter::sqlstring &sql,
-    const std::pair<rapidjson::Value *, mrs::database::entry::Field::DataType>
-        &v);
 
 mysqlrouter::sqlstring &operator<<(
     mysqlrouter::sqlstring &sql,

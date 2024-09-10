@@ -129,6 +129,11 @@ mysqlrouter::sqlstring rest_param_to_sql_value(
       result << value;
       return result;
     }
+    case mrs::database::entry::ColumnType::VECTOR: {
+      mysqlrouter::sqlstring result{"STRING_TO_VECTOR(?)"};
+      result << value;
+      return result;
+    }
     case mrs::database::entry::ColumnType::STRING: {
       mysqlrouter::sqlstring result{"?"};
       result << value;

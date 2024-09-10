@@ -28,7 +28,7 @@
 
 #include "helper/container/generic.h"
 #include "helper/http/url.h"
-#include "helper/json/rapid_json_interator.h"
+#include "helper/json/rapid_json_iterator.h"
 #include "helper/json/text_to.h"
 #include "helper/json/to_sqlstring.h"
 #include "helper/json/to_string.h"
@@ -149,6 +149,9 @@ static mysqlrouter::sqlstring to_sqlstring(const std::string &value,
       }
       return mysqlrouter::sqlstring("ST_GeomFromText(?, ?)")
              << value << column->srid;
+    }
+    case ColumnType::VECTOR: {
+      return mysqlrouter::sqlstring("STRING_TO_VECTOR(?)") << value;
     }
 
     case ColumnType::BINARY:

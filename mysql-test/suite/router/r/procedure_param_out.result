@@ -45,6 +45,7 @@
 # 8. Verify if intput DECIMAL value is the same at output of stored procedure
 # 9. Verify if intput FLOAT value is the same at output of stored procedure
 # 10. Verify if intput DOUBLE value is the same at output of stored procedure
+# 11. Verify if intput VECTOR value is the same at output of stored procedure
 #
 #
 ## IV. Verify handling of different MYSQL types as input and output of
@@ -60,6 +61,7 @@
 # 8. Verify if intput DECIMAL value is the same at output of stored procedure
 # 9. Verify if intput FLOAT value is the same at output of stored procedure
 # 10. Verify if intput DOUBLE value is the same at output of stored procedure
+# 11. Verify if intput VECTOR value is the same at output of stored procedure
 #
 ## V. Verify handling of resultsets with several columns
 # 1. Verify presentation of resultset with different columns
@@ -80,8 +82,9 @@
 # Registred DB_OBJECT at path: /svc/proc/move_decimal
 # Registred DB_OBJECT at path: /svc/proc/move_float
 # Registred DB_OBJECT at path: /svc/proc/move_double
+# Registred DB_OBJECT at path: /svc/proc/move_vector
+# Registred DB_OBJECT at path: /svc/proc/resultset_vector
 # Registred DB_OBJECT at path: /svc/proc/nothing
-# Registred DB_OBJECT at path: /svc/proc/hello_proc
 GET /svc/proc/nothing
 {
     "resultSets": []
@@ -428,6 +431,47 @@ GET /svc/proc/move_double?a=10
 OK
 
 #
+# III.11
+GET /svc/proc/move_vector?a=%5B0,1,4%5D
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": [
+            0.0,
+            1.0,
+            4.0
+        ]
+    }
+}
+OK
+GET /svc/proc/resultset_vector?a=%5B0,1,4%5D
+{
+    "resultSets": [
+        {
+            "type": "items0",
+            "items": [
+                {
+                    "a": [
+                        0.0,
+                        1.0,
+                        4.0
+                    ]
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "a",
+                        "type": "VECTOR"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
 # IV.1
 PUT /svc/proc/move_char (payload-size:8)
 {
@@ -515,51 +559,19 @@ PUT /svc/proc/move_double (payload-size:8)
     }
 }
 OK
-PUT /svc/proc/hello_proc (payload-size:19)
-{
-    "resultSets": [
-        {
-            "type": "items0",
-            "items": [
-                {
-                    "result": "Hello Andresz!"
-                }
-            ],
-            "_metadata": {
-                "columns": [
-                    {
-                        "name": "result",
-                        "type": "VARCHAR(27)"
-                    }
-                ]
-            }
-        }
-    ]
-}
-OK
 
 #
-# III.6
-GET /svc/proc/hello_proc?name=Andresz
+# IV.11
+PUT /svc/proc/move_vector (payload-size:14)
 {
-    "resultSets": [
-        {
-            "type": "items0",
-            "items": [
-                {
-                    "result": "Hello Andresz!"
-                }
-            ],
-            "_metadata": {
-                "columns": [
-                    {
-                        "name": "result",
-                        "type": "VARCHAR(27)"
-                    }
-                ]
-            }
-        }
-    ]
+    "resultSets": [],
+    "outParameters": {
+        "result": [
+            0.0,
+            2.0,
+            10.0
+        ]
+    }
 }
 OK
 DROP SCHEMA proc_schema;

@@ -91,8 +91,6 @@ class QueryEntryObject : public v2::QueryEntryObject {
 
 }  // namespace v3
 
-entry::ColumnType column_datatype_to_type(const std::string &datatype);
-
 }  // namespace database
 }  // namespace mrs
 

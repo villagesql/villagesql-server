@@ -68,7 +68,7 @@ struct ApplicationConfiguration {
   AuthenticationType authentication{AuthenticationType::kNone};
   Request::Type request{HttpMethod::Get};
   std::string session_file;
-  std::string json_schema_file;
+  std::string json_schema;
   std::string payload;
   std::string accept;
   std::string host;

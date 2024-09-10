@@ -70,11 +70,11 @@ class IterableObject {
 };
 
 template <typename Array = rapidjson::Document::ConstArray,
-          typename Holder = Array *>
+          typename Holder = Array *,
+          typename Iterator = typename Array::ValueIterator>
 class IterableArray {
  public:
   using Value = rapidjson::Document::ValueType;
-  using Iterator = typename Array::ValueIterator;
 
  public:
   IterableArray(Holder a) : arr_{a} {}
@@ -90,9 +90,15 @@ auto member_iterator(Obj &o) {
   return IterableObject<Obj>(&o);
 }
 
-template <typename Array>
-auto array_iterator(Array &o) {
-  return IterableArray<Array>(&o);
+inline auto array_iterator(const rapidjson::Value::ConstArray &o) {
+  return IterableArray<const rapidjson::Value::ConstArray,
+                       const rapidjson::Value::ConstArray *,
+                       rapidjson::Value::ConstArray::ConstValueIterator>(&o);
+}
+
+inline auto array_iterator(rapidjson::Value::Array &o) {
+  return IterableArray<rapidjson::Value::Array, rapidjson::Value::Array *,
+                       rapidjson::Value::Array::ValueIterator>(&o);
 }
 
 }  // namespace json

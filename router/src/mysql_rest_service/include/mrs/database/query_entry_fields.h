@@ -44,14 +44,15 @@ class QueryEntryFields : private Query {
   virtual ResultSets &get_result();
 
  private:
+  enum class OnRow { k_fields, k_parameters_name, k_output_name };
+
   void on_row_params(const ResultRow &r);
   void on_row_input_name(const ResultRow &r);
   void on_row_output_name(const ResultRow &r);
   void on_row(const ResultRow &r) override;
+  static const char *to_cstr(OnRow r);
 
-  enum class Row { k_fields, k_parameters_name, k_output_name };
-
-  Row processing_;
+  OnRow processing_;
   ResultObject *output_result_{nullptr};
   ResultSets result_;
 };

@@ -20,6 +20,11 @@ BEGIN
     SELECT input  AS output5;
 END;//
 
+CREATE PROCEDURE `mrs`.`hello_proc` (IN name CHAR(20))
+BEGIN
+    SELECT CONCAT('Hello ',name,'!') as result;
+END;//
+
 CREATE PROCEDURE `mrs`.`proc_do_nothing` ()
 BEGIN
 END;//
@@ -33,16 +38,15 @@ DELIMITER ;//
 ## Test starts here
 --echo
 --echo
---echo ## I. Verify error messages while providing faulty configuration to rest procedure
+--echo ## I. Verify that mixing feed response and in/out parameters as expected in GET request
 --echo #
---echo # 1. POST request is not supported by object/procedures
---echo # 2. DELETE request is not supported by object/procedures
---echo # 3. PUT request is rejected when there is not payload proveided
---echo # 4. PUT request is rejected when the payload is not JSON object
---echo # 5. PUT request is rejected when the payloads, JSON object field
---echo #    doesn't match registred input parameters.
---echo # 6. GET request is rejected when the URL parameter name doesn'
---echo #    match registred input parameters.
+--echo # 1. Use SP that transforms input parameter into feed response
+--echo # 2. Use SP that transforms input parameter into feed response and output parameters
+--echo #
+--echo ## II. Verify that mixing feed response and in/out parameters as expected in PUT request
+--echo #
+--echo # 1. Use SP that transforms input parameter into feed response
+--echo # 2. Use SP that transforms input parameter into feed response and output parameters
 --echo #
 --echo #
 
@@ -81,6 +85,10 @@ DELIMITER ;//
 --let $mrs_add_db_object_path=/nothing
 --source ../include/mrs/db_object/add.inc
 
+--let $mrs_add_db_object_type=PROCEDURE
+--let $mrs_add_db_object=hello_proc
+--let $mrs_add_db_object_path=/hello_proc
+--source ../include/mrs/db_object/add.inc
 
 --source ../include/mrs/end_object_definition.inc
 
@@ -91,19 +99,31 @@ exec $MRS_CLIENT_ARGS
 
 --echo
 --echo #
---echo # III.6
+--echo # I.1
+exec $MRS_CLIENT_ARGS
+  --path /svc/proc/hello_proc?name=Andresz;
+
+--echo
+--echo #
+--echo # I.2
 exec $MRS_CLIENT_ARGS
   --path /svc/proc/mirror?input=1;
 
 --echo
 --echo #
---echo # IV.1
+--echo # II.1
+--let $mrs_client_arg_path='/svc/proc/hello_proc'
+--let $mrs_client_arg_request_type='PUT'
+--let $mrs_client_arg_payload='{"name": "Andresz"}'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # II.2
 --let $mrs_client_arg_path='/svc/proc/mirror'
 --let $mrs_client_arg_request_type='PUT'
 --let $mrs_client_arg_payload='{"input":10}'
 --source ../include/mrs/mrs_client.inc
-
-
 
 # Cleanup
 DROP SCHEMA mrs;

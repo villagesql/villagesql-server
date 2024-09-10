@@ -105,13 +105,13 @@ OK
 # I.3
 GET /svc/test/boolean?q=%7B%22is_active%22:true%7D
 {
-    "message": "Not supported type.",
+    "message": "Filter object, not supported type.",
     "status": 400
 }
 OK
 GET /svc/test/boolean?q=%7B%22is_active%22:false%7D
 {
-    "message": "Not supported type.",
+    "message": "Filter object, not supported type.",
     "status": 400
 }
 OK
@@ -184,13 +184,13 @@ OK
 # II.3
 GET /svc/test/tinyint1?q=%7B%22is_active%22:true%7D
 {
-    "message": "Not supported type.",
+    "message": "Filter object, not supported type.",
     "status": 400
 }
 OK
 GET /svc/test/tinyint1?q=%7B%22is_active%22:false%7D
 {
-    "message": "Not supported type.",
+    "message": "Filter object, not supported type.",
     "status": 400
 }
 OK

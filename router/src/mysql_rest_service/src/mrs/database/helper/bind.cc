@@ -30,6 +30,8 @@
 
 #include <rapidjson/document.h>
 
+#include "helper/json/rapid_json_iterator.h"
+#include "helper/json/text_to.h"
 #include "helper/json/to_sqlstring.h"
 #include "helper/mysql_numeric_value.h"
 #include "mrs/http/error.h"
@@ -43,9 +45,53 @@ void MysqlBind::fill_mysql_bind_for_out(DataType data_type) {
   allocate_bind_buffer(data_type);
 }
 
+void MysqlBind::fill_mysql_bind_inout_vector(const rapidjson::Value &value) {
+  if (!value.IsArray())
+    throw http::Error(HttpStatusCode::BadRequest,
+                      "Expecting json-array for vector parameter");
+  auto array = value.GetArray();
+  for (const auto &element : helper::json::array_iterator(array)) {
+    if (!element.IsNumber())
+      throw http::Error(HttpStatusCode::BadRequest,
+                        "Expecting that all elements of json-array are numbers "
+                        "for vector parameter");
+  }
+
+  auto bind = allocate_bind_buffer(DataType::VECTOR);
+  auto float_buffer = reinterpret_cast<float *>(bind->buffer);
+  auto float_number_of_elements = bind->buffer_length / sizeof(float);
+
+  if (array.Size() > float_number_of_elements) {
+    using namespace std::string_literals;
+    throw http::Error(
+        HttpStatusCode::BadRequest,
+        "Too many elements for vector parameter, internal buffer allows for "s +
+            std::to_string(float_number_of_elements) + " elements");
+  }
+
+  for (const auto &element : helper::json::array_iterator(array)) {
+    *(float_buffer++) = element.GetFloat();
+  }
+
+  bind->length =
+      lengths_.emplace_back(new unsigned long(array.Size() * sizeof(float)))
+          .get();
+}
+
+void MysqlBind::fill_mysql_bind_inout_vector(const std::string &value) {
+  auto json = helper::json::text_to_document(value);
+
+  if (json.HasParseError()) {
+    throw http::Error(HttpStatusCode::BadRequest,
+                      "Invalid json-value used for vector parameter");
+  }
+
+  fill_mysql_bind_inout_vector(json);
+}
+
 void MysqlBind::fill_mysql_bind_impl(const std::string &value,
                                      DataType data_type) {
-  if (data_type == DataType::typeBoolean) {
+  if (data_type == DataType::BOOLEAN) {
     using namespace std::string_literals;
     bool value_bool = false;
     static const std::string k_false{"\0", 1};
@@ -81,22 +127,30 @@ void MysqlBind::fill_mysql_bind_impl(const std::string &value,
   allocate_for_string(value);
 }
 
-enum_field_types MysqlBind::to_mysql_type(
-    mrs::database::entry::Field::DataType pdt) {
-  using Pdt = mrs::database::entry::Field::DataType;
+enum_field_types MysqlBind::to_mysql_type(DataType pdt) {
   switch (pdt) {
-    case Pdt::typeString:
+    case DataType::UNKNOWN: {
+      assert(false &&
+             "This should not happen, DB object should disable "
+             "fields/parameters that are unknown.");
+      throw std::runtime_error("Unsupported MySQL type.");
+    }
+    case DataType::BINARY:
+      return MYSQL_TYPE_BLOB;
+    case DataType::GEOMETRY:
+      return MYSQL_TYPE_GEOMETRY;
+    case DataType::JSON:
+      [[fallthrough]];
+    case DataType::STRING:
       return MYSQL_TYPE_STRING;
-    case Pdt::typeInt:
-      return MYSQL_TYPE_LONG;
-    case Pdt::typeDouble:
-      return MYSQL_TYPE_DOUBLE;
-    case Pdt::typeBoolean:
-      return MYSQL_TYPE_TINY_BLOB;
-    case Pdt::typeLong:
+    case DataType::INTEGER:
       return MYSQL_TYPE_LONGLONG;
-    case Pdt::typeTimestamp:
-      return MYSQL_TYPE_TIMESTAMP;
+    case DataType::DOUBLE:
+      return MYSQL_TYPE_DOUBLE;
+    case DataType::BOOLEAN:
+      return MYSQL_TYPE_TINY_BLOB;
+    case DataType::VECTOR:
+      return MYSQL_TYPE_VECTOR;
 
     default:
       return MYSQL_TYPE_NULL;
@@ -123,7 +177,7 @@ MYSQL_BIND *MysqlBind::allocate_for_string(const std::string &value) {
 }
 
 MYSQL_BIND *MysqlBind::allocate_for(const std::string &value) {
-  auto bind = allocate_bind_buffer(DataType::typeString);
+  auto bind = allocate_bind_buffer(DataType::STRING);
   if (value.length() + 1 > bind->buffer_length) {
     using namespace std::string_literals;
     throw http::Error(
@@ -140,44 +194,58 @@ MYSQL_BIND *MysqlBind::allocate_for(const std::string &value) {
   return bind;
 }
 
+static std::unique_ptr<char[]> allocate_buffer(MYSQL_BIND *bind, size_t size) {
+  std::unique_ptr<char[]> result;
+  result.reset(new char[bind->buffer_length = size]);
+  return result;
+}
+
 MYSQL_BIND *MysqlBind::allocate_bind_buffer(DataType data_type) {
   auto bind = &parameters.emplace_back();
 
   // Please note that the var-string maximums size is 2^16-1 characters.
   // We are not allowing LARGETEXT, here. It would be too much for the
   // network transfer.
-  const int k_var_string_maximum_size = 0xFFFF;  // 2^16-1
-  const int k_tiny_blob_maximum_size = 255;
+  const size_t k_var_string_maximum_size = 0xFFFF;  // 2^16-1
+  const size_t k_tiny_blob_maximum_size = 255;
+  const size_t k_vector_maximum_size = 16383 * sizeof(float);
 
   std::unique_ptr<char[]> &buffer = buffers_.emplace_back();
   bind->buffer_type = to_mysql_type(data_type);
 
   switch (bind->buffer_type) {
     case MYSQL_TYPE_STRING:
-      buffer.reset(new char[bind->buffer_length = k_var_string_maximum_size]);
+      buffer = allocate_buffer(bind, k_var_string_maximum_size);
       break;
 
     case MYSQL_TYPE_LONGLONG:
-      buffer.reset(new char[bind->buffer_length = sizeof(uint64_t)]);
+      buffer = allocate_buffer(bind, sizeof(uint64_t));
       break;
 
     case MYSQL_TYPE_DOUBLE:
-      buffer.reset(new char[bind->buffer_length = sizeof(double)]);
+      buffer = allocate_buffer(bind, sizeof(double));
       break;
 
     case MYSQL_TYPE_TINY_BLOB:
-      buffer.reset(new char[bind->buffer_length = k_tiny_blob_maximum_size]);
+      buffer = allocate_buffer(bind, k_tiny_blob_maximum_size);
       break;
 
     case MYSQL_TYPE_LONG:
-      buffer.reset(new char[bind->buffer_length = sizeof(uint32_t)]);
+      buffer = allocate_buffer(bind, sizeof(uint32_t));
       break;
 
     case MYSQL_TYPE_TIMESTAMP:
-      buffer.reset(new char[bind->buffer_length = k_var_string_maximum_size]);
+      buffer = allocate_buffer(bind, k_var_string_maximum_size);
+      break;
+
+    case MYSQL_TYPE_VECTOR:
+      buffer = allocate_buffer(bind, k_vector_maximum_size);
+      // Server desn't accept vector type as parameter.
+      bind->buffer_type = MYSQL_TYPE_VAR_STRING;
       break;
 
     default:
+      fprintf(stderr, "bind->buffer_type:%i\n", (int)bind->buffer_type);
       assert(nullptr && "should not happen");
   }
 

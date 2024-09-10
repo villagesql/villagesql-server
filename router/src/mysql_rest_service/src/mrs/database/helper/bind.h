@@ -44,7 +44,7 @@ namespace database {
 class MysqlBind {
  public:
   using Mode = mrs::database::entry::Field::Mode;
-  using DataType = mrs::database::entry::Field::DataType;
+  using DataType = mrs::database::entry::ColumnType;
 
  public:
   void fill_mysql_bind_for_out(DataType data_type);
@@ -52,16 +52,21 @@ class MysqlBind {
   template <typename Value>
   void fill_mysql_bind_for_inout(const Value &value_with_user_type,
                                  DataType data_type) {
+    if (data_type == DataType::VECTOR) {
+      fill_mysql_bind_inout_vector(value_with_user_type);
+      return;
+    }
     fill_mysql_bind_impl(to_string(value_with_user_type), data_type);
   }
 
   std::vector<MYSQL_BIND> parameters;
 
  private:
+  void fill_mysql_bind_inout_vector(const rapidjson::Value &value);
+  void fill_mysql_bind_inout_vector(const std::string &value);
   void fill_mysql_bind_impl(const std::string &value_with_user_type,
                             DataType data_type);
-  static enum_field_types to_mysql_type(
-      mrs::database::entry::Field::DataType pdt);
+  static enum_field_types to_mysql_type(DataType pdt);
   static const std::string &to_string(const std::string &value);
   static std::string to_string(const rapidjson::Value &value);
 

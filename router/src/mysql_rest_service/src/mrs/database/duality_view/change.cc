@@ -283,7 +283,8 @@ void RowChangeOperation::on_value(
   if (value.new_value().IsNull()) {
     tmp << value.new_value();
   } else if (column.type == entry::ColumnType::JSON ||
-             column.type == entry::ColumnType::GEOMETRY) {
+             column.type == entry::ColumnType::GEOMETRY ||
+             column.type == entry::ColumnType::VECTOR) {
     tmp << helper::json::to_string(value.new_value());
   } else if (column.type == entry::ColumnType::BINARY &&
              value.new_value().IsString()) {
@@ -424,6 +425,9 @@ void RowChangeOperation::set_column_value(const Column &column,
     set_column_sql_value(column,
                          mysqlrouter::sqlstring("ST_GeomFromGeoJSON(?, 1, ?)")
                              << value << column.srid);
+  } else if (column.type == entry::ColumnType::VECTOR) {
+    set_column_sql_value(column, mysqlrouter::sqlstring("STRING_TO_VECTOR(?)")
+                                     << value);
   } else {
     set_column_sql_value(column, value);
   }

@@ -59,6 +59,7 @@
 --echo # 8. Verify if intput DECIMAL value is the same at output of stored procedure
 --echo # 9. Verify if intput FLOAT value is the same at output of stored procedure
 --echo # 10. Verify if intput DOUBLE value is the same at output of stored procedure
+--echo # 11. Verify if intput VECTOR value is the same at output of stored procedure
 --echo #
 --echo #
 --echo ## IV. Verify handling of different MYSQL types as input and output of
@@ -74,6 +75,7 @@
 --echo # 8. Verify if intput DECIMAL value is the same at output of stored procedure
 --echo # 9. Verify if intput FLOAT value is the same at output of stored procedure
 --echo # 10. Verify if intput DOUBLE value is the same at output of stored procedure
+--echo # 11. Verify if intput VECTOR value is the same at output of stored procedure
 --echo #
 --echo ## V. Verify handling of resultsets with several columns
 --echo # 1. Verify presentation of resultset with different columns
@@ -163,13 +165,19 @@
 --source ../include/mrs/db_object/add.inc
 
 --let $mrs_add_db_object_type=PROCEDURE
---let $mrs_add_db_object=proc_do_nothing
---let $mrs_add_db_object_path=/nothing
+--let $mrs_add_db_object=move_vector
+--let $mrs_add_db_object_path=/move_vector
 --source ../include/mrs/db_object/add.inc
 
 --let $mrs_add_db_object_type=PROCEDURE
---let $mrs_add_db_object=hello_proc
---let $mrs_add_db_object_path=/hello_proc
+--let $mrs_add_db_object=resultset_vector
+--let $mrs_add_db_object_path=/resultset_vector
+--source ../include/mrs/db_object/add.inc
+
+
+--let $mrs_add_db_object_type=PROCEDURE
+--let $mrs_add_db_object=proc_do_nothing
+--let $mrs_add_db_object_path=/nothing
 --source ../include/mrs/db_object/add.inc
 
 --source ../include/mrs/end_object_definition.inc
@@ -376,12 +384,28 @@ exec $MRS_CLIENT_ARGS
 exec $MRS_CLIENT_ARGS
   --path /svc/proc/move_double?a=10;
 
+--echo
+--echo #
+--echo # III.11
+--let $mrs_client_arg_path='/svc/proc/move_vector?a=[0,1,4]'
+--let $mrs_client_arg_payload=
+--let $mrs_client_arg_request_type='GET'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/svc/proc/resultset_vector?a=[0,1,4]'
+--let $mrs_client_arg_payload=
+--let $mrs_client_arg_request_type='GET'
+--let $mrs_client_arg_expected_status=
+--source ../include/mrs/mrs_client.inc
+
+
 
 --echo
 --echo #
 --echo # IV.1
 --let $mrs_client_arg_path='/svc/proc/move_char'
 --let $mrs_client_arg_payload='{"a":10}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -450,15 +474,13 @@ exec $MRS_CLIENT_ARGS
 --let $mrs_client_arg_payload='{"a":10}'
 --source ../include/mrs/mrs_client.inc
 
---let $mrs_client_arg_path='/svc/proc/hello_proc'
---let $mrs_client_arg_payload='{"name": "Andresz"}'
---source ../include/mrs/mrs_client.inc
-
 --echo
 --echo #
---echo # III.6
-exec $MRS_CLIENT_ARGS
-  --path /svc/proc/hello_proc?name=Andresz;
+--echo # IV.11
+--let $mrs_client_arg_path='/svc/proc/move_vector'
+--let $mrs_client_arg_payload='{"a":[0,2,10]}'
+--source ../include/mrs/mrs_client.inc
+
 
 # Cleanup
 --source ../include/mrs/cleanup.inc

@@ -32,7 +32,7 @@
 
 #include "helper/container/map.h"
 #include "helper/container/to_string.h"
-#include "helper/json/rapid_json_interator.h"
+#include "helper/json/rapid_json_iterator.h"
 #include "helper/json/text_to.h"
 #include "helper/json/to_string.h"
 #include "mrs/interface/rest_error.h"
@@ -67,6 +67,35 @@ std::vector<std::string> get_array_of_string(Value *value) {
 
   return result;
 }
+
+class tosVec {
+ private:
+  static bool is_vec_json(Value *v) {
+    using namespace std::string_literals;
+    if (!v->IsArray()) return false;
+    auto v_as_array = v->GetArray();
+
+    for (auto &el : helper::json::array_iterator(v_as_array)) {
+      if (!el.IsNumber()) return false;
+    }
+
+    return v_as_array.Size() > 0;
+  }
+
+ public:
+  bool acceptable(entry::Column *dfield, Value *v) const {
+    if (!dfield) return false;
+    if (dfield->type != entry::ColumnType::VECTOR) return false;
+    return v->IsString() || is_vec_json(v);
+  }
+  mysqlrouter::sqlstring to_sqlstring(entry::Column *, Value *v) const {
+    if (v->IsString())
+      return mysqlrouter::sqlstring("STRING_TO_VECTOR(?)") << v->GetString();
+
+    return mysqlrouter::sqlstring("STRING_TO_VECTOR(?)")
+           << helper::json::to_string(v);
+  }
+};
 
 class tosGeom {
  private:
@@ -193,7 +222,8 @@ mysqlrouter::sqlstring to_sqlstring(entry::Column *dfield, Value *value) {
   Result r(dfield, value);
   (r << ... << T());
 
-  if (r.result.is_empty()) throw RestError("Not supported type.");
+  if (r.result.is_empty())
+    throw RestError("Filter object, not supported type.");
 
   return r.result;
 }
@@ -314,15 +344,15 @@ bool FilterObjectGenerator::parse_simple_object(Value *object) {
     where_.append_preformatted(db_name)
         .append_preformatted(" = ")
         .append_preformatted(
-            to_sqlstring<tosGeom, tosString, tosBoolean, tosNumber, tosDate>(
-                dfield.get(), value));
+            to_sqlstring<tosVec, tosGeom, tosString, tosBoolean, tosNumber,
+                         tosDate>(dfield.get(), value));
   } else if ("$ne"s == name) {
     log_debug("Parser simple_object $ne");
     where_.append_preformatted(db_name)
         .append_preformatted(" <> ")
         .append_preformatted(
-            to_sqlstring<tosGeom, tosString, tosBoolean, tosNumber, tosDate>(
-                dfield.get(), value));
+            to_sqlstring<tosVec, tosGeom, tosString, tosBoolean, tosNumber,
+                         tosDate>(dfield.get(), value));
   } else if ("$lt"s == name) {
     log_debug("Parser simple_object $lt");
     where_.append_preformatted(db_name)
@@ -525,8 +555,8 @@ void FilterObjectGenerator::parse_wmember(const char *name, Value *value) {
   where_.append_preformatted(
       mysqlrouter::sqlstring(" !=?")
       << dbname
-      << to_sqlstring<tosGeom, tosString, tosBoolean, tosNumber, tosDate>(
-             dfield.get(), value));
+      << to_sqlstring<tosVec, tosGeom, tosString, tosBoolean, tosNumber,
+                      tosDate>(dfield.get(), value));
   argument_.pop_back();
 }
 

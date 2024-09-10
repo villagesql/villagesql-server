@@ -8,27 +8,31 @@ SELECT input  INTO output2;
 SELECT input  AS output3, input  AS output4;
 SELECT input  AS output5;
 END;//
+CREATE PROCEDURE `mrs`.`hello_proc` (IN name CHAR(20))
+BEGIN
+SELECT CONCAT('Hello ',name,'!') as result;
+END;//
 CREATE PROCEDURE `mrs`.`proc_do_nothing` ()
 BEGIN
 END;//
 
 
-## I. Verify error messages while providing faulty configuration to rest procedure
+## I. Verify that mixing feed response and in/out parameters as expected in GET request
 #
-# 1. POST request is not supported by object/procedures
-# 2. DELETE request is not supported by object/procedures
-# 3. PUT request is rejected when there is not payload proveided
-# 4. PUT request is rejected when the payload is not JSON object
-# 5. PUT request is rejected when the payloads, JSON object field
-#    doesn't match registred input parameters.
-# 6. GET request is rejected when the URL parameter name doesn'
-#    match registred input parameters.
+# 1. Use SP that transforms input parameter into feed response
+# 2. Use SP that transforms input parameter into feed response and output parameters
+#
+## II. Verify that mixing feed response and in/out parameters as expected in PUT request
+#
+# 1. Use SP that transforms input parameter into feed response
+# 2. Use SP that transforms input parameter into feed response and output parameters
 #
 #
 # Registred SERVICE at path: /svc
 # Registred DB_SCHEMA at path: /svc/proc
 # Registred DB_OBJECT at path: /svc/proc/mirror
 # Registred DB_OBJECT at path: /svc/proc/nothing
+# Registred DB_OBJECT at path: /svc/proc/hello_proc
 GET /svc/proc/nothing
 {
     "resultSets": []
@@ -36,7 +40,32 @@ GET /svc/proc/nothing
 OK
 
 #
-# III.6
+# I.1
+GET /svc/proc/hello_proc?name=Andresz
+{
+    "resultSets": [
+        {
+            "type": "items0",
+            "items": [
+                {
+                    "result": "Hello Andresz!"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "VARCHAR(27)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# I.2
 GET /svc/proc/mirror?input=1
 {
     "resultSets": [
@@ -86,7 +115,32 @@ GET /svc/proc/mirror?input=1
 OK
 
 #
-# IV.1
+# II.1
+PUT /svc/proc/hello_proc (payload-size:19)
+{
+    "resultSets": [
+        {
+            "type": "items0",
+            "items": [
+                {
+                    "result": "Hello Andresz!"
+                }
+            ],
+            "_metadata": {
+                "columns": [
+                    {
+                        "name": "result",
+                        "type": "VARCHAR(27)"
+                    }
+                ]
+            }
+        }
+    ]
+}
+OK
+
+#
+# II.2
 PUT /svc/proc/mirror (payload-size:12)
 {
     "resultSets": [

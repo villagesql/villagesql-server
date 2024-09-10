@@ -12,6 +12,7 @@
 # 5. Verify generation of JSON number/float from FLOAT, DOUBLE, DECIMAL
 # 6. Verify generation of JSON number from INTEGER, BIGINT, SMALLINT, TINYINT, MEDIUMINT
 # 7. Verify generation of JSON object from sprtial types
+# 8. Verify generation of JSON object from VECTOR type
 #
 ## II. Verify schema metadata catlog
 #
@@ -440,6 +441,32 @@ GET /svc/basic/t3?f=geo4326
 OK
 
 #
+# I.8
+GET /svc/basic/t3?f=vec
+{
+    "items": [
+        {
+            "vec": [
+                0.0
+            ]
+        },
+        {
+            "vec": [
+                1.0,
+                2.0
+            ]
+        },
+        {
+            "vec": [
+                1.0,
+                0.0
+            ]
+        }
+    ]
+}
+OK
+
+#
 # II.1
 GET /svc/basic/metadata-catalog
 {
@@ -570,11 +597,15 @@ GET /svc/basic/metadata-catalog/t3
         },
         {
             "name": "geo0",
-            "type": "string"
+            "type": "object"
         },
         {
             "name": "geo4326",
-            "type": "string"
+            "type": "object"
+        },
+        {
+            "name": "vec",
+            "type": "object"
         }
     ],
     "links": [

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -22,50 +22,40 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_FIELD_H_
-#define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_FIELD_H_
+#ifndef ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_DATABASE_CONVERTERS_KIND_CONVERTER_H_
+#define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_DATABASE_CONVERTERS_KIND_CONVERTER_H_
 
-#include <optional>
+#include <map>
+#include <stdexcept>
 #include <string>
-#include <vector>
 
-#include "mrs/database/entry/column_type.h"
-#include "mrs/database/entry/entry.h"
-#include "mrs/database/entry/set_operation.h"
-#include "mrs/database/entry/universal_id.h"
+#include "mrs/database/entry/object.h"
+#include "mysql/harness/string_utils.h"
 
 namespace mrs {
 namespace database {
-namespace entry {
 
-struct Field {
-  enum Mode {
-    modeIn,
-    modeOut,
-    modeInOut,
-  };
+class KindTypeConverter {
+ public:
+  using KindType = entry::KindType;
 
-  UniversalId id;
-  std::string name;
-  Mode mode;
-  std::string bind_name;
-  ColumnType data_type;
-  std::string raw_data_type;
+  void operator()(entry::KindType *out, const char *value) const {
+    const static std::map<std::string, KindType> converter{
+        {"PARAMETERS", KindType::PARAMETERS}, {"RESULT", KindType::RESULT}};
+
+    if (!value) value = "";
+    auto result = mysql_harness::make_upper(value);
+    try {
+      *out = converter.at(result);
+    } catch (const std::exception &e) {
+      using namespace std::string_literals;
+      throw std::runtime_error("Invalid value for Kind: "s + result);
+    }
+  }
 };
 
-struct ResultObject {
-  std::vector<Field> fields;
-  std::string name;
-  UniversalId id;
-};
-
-struct ResultSets {
-  ResultObject parameters;
-  std::vector<ResultObject> results;
-};
-
-}  // namespace entry
 }  // namespace database
 }  // namespace mrs
 
-#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_FIELD_H_
+#endif /* ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_DATABASE_CONVERTERS_KIND_CONVERTER_H_ \
+        */

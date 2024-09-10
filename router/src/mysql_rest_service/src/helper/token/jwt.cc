@@ -29,7 +29,7 @@
 
 #include "helper/container/generic.h"
 #include "helper/error.h"
-#include "helper/json/rapid_json_interator.h"
+#include "helper/json/rapid_json_iterator.h"
 #include "helper/json/text_to.h"
 #include "helper/json/to_string.h"
 #include "helper/token/jwt.h"

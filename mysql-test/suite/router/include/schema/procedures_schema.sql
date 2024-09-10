@@ -155,6 +155,17 @@ BEGIN
   SET result = a+1;
 END;$$
 
+CREATE PROCEDURE `proc_schema`.`move_vector` (a VECTOR, OUT result VECTOR)
+BEGIN
+  SET result = a;
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`resultset_vector` (a VECTOR)
+BEGIN
+  SELECT a;
+END;$$
+
+
 
 
 
@@ -239,6 +250,11 @@ BEGIN
   SET result = result+1;
 END;$$
 
+CREATE PROCEDURE `proc_schema`.`set_vector` (INOUT result VECTOR)
+BEGIN
+  SET result = STRING_TO_VECTOR(REPLACE(JSON_MERGE(CAST(CONVERT(VECTOR_TO_STRING(result) using utf8) as JSON) , "[1,2,3]")," ",""));
+END;$$
+
 
 CREATE PROCEDURE `proc_schema`.`report_back_mysql_error1` (mysql_error INTEGER)
 BEGIN
@@ -259,11 +275,6 @@ BEGIN
         SELECT 2;
     END IF;
 END;$$
-
-CREATE PROCEDURE `proc_schema`.`hello_proc` (IN name CHAR(20))
-BEGIN
-    SELECT CONCAT('Hello ',name,'!') as result;
-END$$
 
 --enable_query_log
 --enable_result_log

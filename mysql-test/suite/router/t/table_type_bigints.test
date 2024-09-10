@@ -117,11 +117,11 @@ EOF
 
 --exec $MRS_CLIENT_ARGS --path /svc/test/num/1 --wait-until-found 60 --display none
 
---let $MRS_CLIENT_ARGS_LIST=$MRS_CLIENT_ARGS  --json-schema $sch_asojson_file
---let $MRS_CLIENT_ARGS_OBJ=$MRS_CLIENT_ARGS  --json-schema $sch_asjson_file
+--let $MRS_CLIENT_ARGS_LIST=$MRS_CLIENT_ARGS  --json-schema-file $sch_asojson_file
+--let $MRS_CLIENT_ARGS_OBJ=$MRS_CLIENT_ARGS  --json-schema-file $sch_asjson_file
 
---let $MRS_CLIENT_ARGS_JS_LIST=$MRS_CLIENT_ARGS  --json-schema $sch_asojson_js_file
---let $MRS_CLIENT_ARGS_JS_OBJ=$MRS_CLIENT_ARGS  --json-schema $sch_asjson_js_file
+--let $MRS_CLIENT_ARGS_JS_LIST=$MRS_CLIENT_ARGS  --json-schema-file $sch_asojson_js_file
+--let $MRS_CLIENT_ARGS_JS_OBJ=$MRS_CLIENT_ARGS  --json-schema-file $sch_asjson_js_file
 
 --echo
 --echo #

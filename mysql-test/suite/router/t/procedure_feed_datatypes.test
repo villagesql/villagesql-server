@@ -15,6 +15,7 @@
 --echo # 4. Verify generation of JSON string with date from DATE, TIME, YEAR, DATETIME,TIMESTAMP
 --echo # 5. Verify generation of JSON number/float from FLOAT, DOUBLE, DECIMAL
 --echo # 6. Verify generation of JSON number from INTEGER, BIGINT, SMALLINT, TINYINT, MEDIUMINT
+--echo # 7. Verify generation of JSON array of numbers from VECTOR
 --echo #
 --echo #
 
@@ -139,6 +140,11 @@
 --let $mrs_add_db_object_type=PROCEDURE
 --source ../include/mrs/db_object/add.inc
 
+--let $mrs_add_db_object=proc_vector
+--let $mrs_add_db_object_path=/vector
+--let $mrs_add_db_object_type=PROCEDURE
+--source ../include/mrs/db_object/add.inc
+
 --source ../include/mrs/end_object_definition.inc
 
 --let $mrs_host_and_port=127.0.0.1:$HTTP_SERVER_PORT
@@ -193,6 +199,11 @@ let $MRS_CLIENT_EXC=$MRS_CLIENT_ARGS;
 --exec $MRS_CLIENT_EXC --path /svc/basic/smallint
 --exec $MRS_CLIENT_EXC --path /svc/basic/tinyint
 --exec $MRS_CLIENT_EXC --path /svc/basic/mediumint
+
+--echo
+--echo #
+--echo # I.7
+--exec $MRS_CLIENT_EXC --path /svc/basic/vector
 
 # Cleanup
 --source ../include/mrs/cleanup.inc

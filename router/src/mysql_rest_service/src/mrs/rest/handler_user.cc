@@ -27,7 +27,7 @@
 #include <cassert>
 
 #include "helper/container/generic.h"
-#include "helper/json/rapid_json_interator.h"
+#include "helper/json/rapid_json_iterator.h"
 #include "helper/json/serializer_to_text.h"
 #include "helper/json/text_to.h"
 #include "mrs/database/query_entries_auth_role.h"

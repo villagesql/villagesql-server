@@ -118,6 +118,16 @@ bool JsonTemplateNest::push_row_impl(const ResultRow &values,
       }
     }
 
+    if (columns[idx].type == MYSQL_TYPE_VECTOR) {
+      auto arr = serializer_.member_add_array(columns[idx].name.c_str());
+      auto float_ptr = reinterpret_cast<const float *>(values[idx]);
+      auto no_of_elements = values.get_data_size(idx) / sizeof(float);
+      for (uint32_t i = 0; i < no_of_elements; ++i) {
+        (*arr) << float_ptr[i];
+      }
+      continue;
+    }
+
     switch (type_json) {
       case helper::JsonType::kBool: {
         const char *value = values[idx];

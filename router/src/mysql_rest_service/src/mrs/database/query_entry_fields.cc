@@ -28,6 +28,7 @@
 
 #include "helper/mysql_row.h"
 
+#include "mrs/database/converters/column_datatype_converter.h"
 #include "mysql/harness/logging/logging.h"
 #include "mysql/harness/string_utils.h"
 
@@ -36,11 +37,26 @@ IMPORT_LOG_FUNCTIONS()
 namespace mrs {
 namespace database {
 
+using entry::UniversalId;
+
+const char *QueryEntryFields::to_cstr(OnRow r) {
+  switch (r) {
+    case OnRow::k_fields:
+      return "object_field";
+    case OnRow::k_output_name:
+      return "object/kind/result";
+    case OnRow::k_parameters_name:
+      return "object/kind/parameter";
+  }
+
+  return "unknown";
+}
+
 bool QueryEntryFields::query_parameters(MySQLSession *session,
-                                        entry::UniversalId db_object_id) {
+                                        UniversalId db_object_id) {
   result_ = {};
 
-  processing_ = Row::k_parameters_name;
+  processing_ = OnRow::k_parameters_name;
   output_result_ = &result_.parameters;
 
   query_ = {
@@ -50,7 +66,7 @@ bool QueryEntryFields::query_parameters(MySQLSession *session,
   query_ << db_object_id;
   execute(session);
 
-  processing_ = Row::k_fields;
+  processing_ = OnRow::k_fields;
   query_ = {
       "SELECT ofx.id, ofx.name,"
       "       ofx.db_column->>'$.in', ofx.db_column->>'$.out',"
@@ -64,7 +80,7 @@ bool QueryEntryFields::query_parameters(MySQLSession *session,
 
   execute(session);
 
-  processing_ = Row::k_output_name;
+  processing_ = OnRow::k_output_name;
   query_ = {
       "SELECT o.id, o.name FROM mysql_rest_service_metadata.object as o "
       "        WHERE o.kind='RESULT' and o.db_object_id=?"};
@@ -72,7 +88,7 @@ bool QueryEntryFields::query_parameters(MySQLSession *session,
   query_ << db_object_id;
   execute(session);
 
-  processing_ = Row::k_fields;
+  processing_ = OnRow::k_fields;
   for (auto &item : result_.results) {
     output_result_ = &item;
     query_ = {
@@ -93,126 +109,71 @@ bool QueryEntryFields::query_parameters(MySQLSession *session,
 QueryEntryFields::ResultSets &QueryEntryFields::get_result() { return result_; }
 
 void QueryEntryFields::on_row(const ResultRow &row) {
-  switch (processing_) {
-    case Row::k_fields:
-      on_row_params(row);
-      return;
-    case Row::k_parameters_name:
-      on_row_input_name(row);
-      return;
-    case Row::k_output_name:
-      on_row_output_name(row);
-      return;
+  try {
+    switch (processing_) {
+      case OnRow::k_fields:
+        on_row_params(row);
+        return;
+      case OnRow::k_parameters_name:
+        on_row_input_name(row);
+        return;
+      case OnRow::k_output_name:
+        on_row_output_name(row);
+        return;
 
-    default:
-      return;
+      default:
+        return;
+    }
+  } catch (const std::exception &e) {
+    UniversalId id;
+
+    if (row.size() > 0 && row[0]) {
+      id = UniversalId::from_cstr(row[0], row.get_data_size(0));
+    }
+
+    log_error("%s with id:%s, will be disabled because of following error: %s",
+              to_cstr(processing_), id.to_string().c_str(), e.what());
   }
 }
 
 void QueryEntryFields::on_row_input_name(const ResultRow &row) {
-  auto &item = result_.parameters;
   helper::MySQLRow mysql_row(row, metadata_, num_of_metadata_);
+  ResultObject item;
 
   mysql_row.unserialize_with_converter(&item.id, entry::UniversalId::from_raw);
   mysql_row.unserialize(&item.name);
+
+  result_.parameters = item;
 }
 
 void QueryEntryFields::on_row_output_name(const ResultRow &row) {
-  auto &item = result_.results.emplace_back();
   helper::MySQLRow mysql_row(row, metadata_, num_of_metadata_);
+  ResultObject item;
 
   mysql_row.unserialize_with_converter(&item.id, entry::UniversalId::from_raw);
   mysql_row.unserialize(&item.name);
+  result_.results.push_back(item);
 }
 
 void QueryEntryFields::on_row_params(const ResultRow &row) {
   using Field = mrs::database::entry::Field;
-  using DataType = Field::DataType;
   using Mode = Field::Mode;
 
   if (row.size() < 1) return;
 
-  class ParamTypeConverter {
-   public:
-    void operator()(DataType *out, const char *value) const {
-      const static std::map<std::string, DataType> converter{
-          {"STRING", DataType::typeString},
-          {"TEXT", DataType::typeString},
-          {"TINYBLOB", DataType::typeBinary},
-          {"MEDIUMBLOB", DataType::typeBinary},
-          {"BLOB", DataType::typeBinary},
-          {"LONGBLOB", DataType::typeBinary},
-          {"INT", DataType::typeInt},
-          {"TINYINT", DataType::typeInt},
-          {"SMALLINT", DataType::typeInt},
-          {"MEDIUMINT", DataType::typeInt},
-          {"LARGEINT", DataType::typeInt},
-          {"BIGINT", DataType::typeInt},
-          {"DOUBLE", DataType::typeDouble},
-          {"FLOAT", DataType::typeDouble},
-          {"REAL", DataType::typeDouble},
-          {"DECIMAL", DataType::typeDouble},
-          {"CHAR", DataType::typeString},
-          {"NCHAR", DataType::typeString},
-          {"VARCHAR", DataType::typeString},
-          {"NVARCHAR", DataType::typeString},
-          {"BINARY", DataType::typeBinary},
-          {"VARBINARY", DataType::typeBinary},
-          {"TINYTEXT", DataType::typeString},
-          {"MEDIUMTEXT", DataType::typeString},
-          {"LONGTEXT", DataType::typeString},
-          {"JSON", DataType::typeString},
-          {"DATETIME", DataType::typeTimestamp},
-          {"DATE", DataType::typeTimestamp},
-          {"TIME", DataType::typeTimestamp},
-          {"YEAR", DataType::typeTimestamp},
-          {"TIMESTAMP", DataType::typeTimestamp},
-          {"GEOMETRY", DataType::typeString},
-          {"POINT", DataType::typeString},
-          {"LINESTRING", DataType::typeString},
-          {"POLYGON", DataType::typeString},
-          {"GEOMCOLLECTION", DataType::typeString},
-          {"GEOMETRYCOLLECTION", DataType::typeString},
-          {"MULTIPOINT", DataType::typeString},
-          {"MULTILINESTRING", DataType::typeString},
-          {"MULTIPOLYGON", DataType::typeString},
-          {"BIT", DataType::typeBinary},
-          {"BOOLEAN", DataType::typeInt},
-          {"ENUM", DataType::typeString},
-          {"SET", DataType::typeString}};
-
-      if (!value) return;
-      std::string upper_result = result_ = mysql_harness::make_upper(value);
-      auto p = std::min(result_.find('('), result_.find(' '));
-      if (p != std::string::npos) result_ = result_.substr(0, p);
-      if ("BIT(1)" == upper_result) {
-        *out = DataType::typeBoolean;
-        return;
-      }
-      try {
-        *out = converter.at(result_);
-      } catch (const std::exception &e) {
-        log_debug("'ParamTypeConverter 'do not handle value: %s",
-                  result_.c_str());
-        throw;
-      }
-    }
-
-    std::string &result_;
-  };
-
   helper::MySQLRow mysql_row(row, metadata_, num_of_metadata_);
 
-  auto &entry = output_result_->fields.emplace_back();
-  bool param_in{false}, param_out{false};
+  Field entry;
+  bool param_in{false};
+  bool param_out{false};
 
   mysql_row.unserialize_with_converter(&entry.id, entry::UniversalId::from_raw);
   mysql_row.unserialize(&entry.name);
   mysql_row.unserialize(&param_in);
   mysql_row.unserialize(&param_out);
   mysql_row.unserialize(&entry.bind_name);
-  mysql_row.unserialize_with_converter(&entry.data_type,
-                                       ParamTypeConverter{entry.raw_data_type});
+  mysql_row.unserialize(&entry.raw_data_type);
+  ColumnDatatypeConverter()(&entry.data_type, entry.raw_data_type);
 
   if (param_in && param_out) {
     entry.mode = Mode::modeInOut;
@@ -221,6 +182,8 @@ void QueryEntryFields::on_row_params(const ResultRow &row) {
   } else if (param_out) {
     entry.mode = Mode::modeOut;
   }
+
+  output_result_->fields.push_back(entry);
 }
 
 }  // namespace database

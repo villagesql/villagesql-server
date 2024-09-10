@@ -25,6 +25,7 @@
 # 13. Verify if input DOUBLE was incremented in output of stored procedure
 # 14. Verify if input SET was concatanated in output of stored procedure
 # 15. Verify if input ENUM changed to next value in output of stored procedure
+# 16. Verify if input VECTOR changed to next value in output of stored procedure
 #
 #
 ## III. Verify handling of different MYSQL types used in stored procedure
@@ -45,6 +46,7 @@
 # 13. Verify if input DOUBLE was incremented in output of stored procedure
 # 14. Verify if input SET was concatanated in output of stored procedure
 # 15. Verify if input ENUM changed to next value in output of stored procedure
+# 16. Verify if input VECTOR changed to next value in output of stored procedure
 # Registred SERVICE at path: /svc
 # Registred DB_SCHEMA at path: /svc/proc
 # Registred DB_OBJECT at path: /svc/proc/inc_text
@@ -63,6 +65,7 @@
 # Registred DB_OBJECT at path: /svc/proc/inc_decimal
 # Registred DB_OBJECT at path: /svc/proc/inc_float
 # Registred DB_OBJECT at path: /svc/proc/inc_double
+# Registred DB_OBJECT at path: /svc/proc/set_vector
 # Registred DB_OBJECT at path: /svc/proc/nothing
 GET /svc/proc/nothing
 {
@@ -271,6 +274,23 @@ GET /svc/proc/inc_enum?result=one
 OK
 
 #
+# II.16
+GET /svc/proc/set_vector?result=%5B10,20%5D
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": [
+            10.0,
+            20.0,
+            1.0,
+            2.0,
+            3.0
+        ]
+    }
+}
+OK
+
+#
 # III.1
 PUT /svc/proc/inc_text (payload-size:13)
 {
@@ -457,6 +477,23 @@ PUT /svc/proc/inc_enum (payload-size:16)
     "resultSets": [],
     "outParameters": {
         "result": "dHdv"
+    }
+}
+OK
+
+#
+# III.16
+PUT /svc/proc/set_vector (payload-size:18)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": [
+            10.0,
+            20.0,
+            1.0,
+            2.0,
+            3.0
+        ]
     }
 }
 OK

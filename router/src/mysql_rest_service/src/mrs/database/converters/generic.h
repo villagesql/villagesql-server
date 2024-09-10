@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -22,50 +22,16 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_FIELD_H_
-#define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_FIELD_H_
+#ifndef ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_DATABASE_CONVERTERS_GENERIC_H_
+#define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_DATABASE_CONVERTERS_GENERIC_H_
 
-#include <optional>
-#include <string>
-#include <vector>
+#include <strings.h>
 
-#include "mrs/database/entry/column_type.h"
-#include "mrs/database/entry/entry.h"
-#include "mrs/database/entry/set_operation.h"
-#include "mrs/database/entry/universal_id.h"
+#if defined(_WIN32)
+#define mrs_strcasecmp(a, b) _stricmp(a, b)
+#else
+#define mrs_strcasecmp(a, b) strcasecmp(a, b)
+#endif  // defined(_WIN32)
 
-namespace mrs {
-namespace database {
-namespace entry {
-
-struct Field {
-  enum Mode {
-    modeIn,
-    modeOut,
-    modeInOut,
-  };
-
-  UniversalId id;
-  std::string name;
-  Mode mode;
-  std::string bind_name;
-  ColumnType data_type;
-  std::string raw_data_type;
-};
-
-struct ResultObject {
-  std::vector<Field> fields;
-  std::string name;
-  UniversalId id;
-};
-
-struct ResultSets {
-  ResultObject parameters;
-  std::vector<ResultObject> results;
-};
-
-}  // namespace entry
-}  // namespace database
-}  // namespace mrs
-
-#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_FIELD_H_
+#endif /* ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_DATABASE_CONVERTERS_GENERIC_H_ \
+        */

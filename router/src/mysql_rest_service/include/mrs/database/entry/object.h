@@ -33,6 +33,7 @@
 #include <utility>
 #include <vector>
 
+#include "mrs/database/entry/column_type.h"
 #include "mrs/database/entry/entry.h"
 #include "mrs/database/entry/set_operation.h"
 #include "mrs/database/entry/universal_id.h"
@@ -47,17 +48,6 @@ enum class IdGenerationType {
   NONE,            // not auto-generated
   AUTO_INCREMENT,  // auto-increment by mysql
   REVERSE_UUID     // pre-generate as UUID_TO_BIN(UUID(), 1)
-};
-
-enum class ColumnType {
-  UNKNOWN,
-  INTEGER,
-  DOUBLE,
-  BOOLEAN,
-  STRING,
-  BINARY,
-  GEOMETRY,
-  JSON
 };
 
 enum class KindType { PARAMETERS, RESULT };

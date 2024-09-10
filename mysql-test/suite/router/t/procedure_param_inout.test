@@ -39,6 +39,7 @@
 --echo # 13. Verify if input DOUBLE was incremented in output of stored procedure
 --echo # 14. Verify if input SET was concatanated in output of stored procedure
 --echo # 15. Verify if input ENUM changed to next value in output of stored procedure
+--echo # 16. Verify if input VECTOR changed to next value in output of stored procedure
 --echo #
 --echo #
 --echo ## III. Verify handling of different MYSQL types used in stored procedure
@@ -59,6 +60,7 @@
 --echo # 13. Verify if input DOUBLE was incremented in output of stored procedure
 --echo # 14. Verify if input SET was concatanated in output of stored procedure
 --echo # 15. Verify if input ENUM changed to next value in output of stored procedure
+--echo # 16. Verify if input VECTOR changed to next value in output of stored procedure
 
 --source ../include/mrs/start_object_definition.inc
 
@@ -150,6 +152,11 @@
 --let $mrs_add_db_object_type=PROCEDURE
 --let $mrs_add_db_object=inc_double
 --let $mrs_add_db_object_path=/inc_double
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_db_object_type=PROCEDURE
+--let $mrs_add_db_object=set_vector
+--let $mrs_add_db_object_path=/set_vector
 --source ../include/mrs/db_object/add.inc
 
 --let $mrs_add_db_object_type=PROCEDURE
@@ -291,6 +298,13 @@ exec $MRS_CLIENT_ARGS
 
 --echo
 --echo #
+--echo # II.16
+--let $mrs_client_arg_path='/svc/proc/set_vector?result=[10,20]'
+--source ../include/mrs/mrs_client.inc
+
+
+--echo
+--echo #
 --echo # III.1
 --let $mrs_client_arg_path='/svc/proc/inc_text'
 --let $mrs_client_arg_payload='{"result":10}'
@@ -424,6 +438,14 @@ exec $MRS_CLIENT_ARGS
 --echo # To be fixed, the test generates BASE64 response
 --let $mrs_client_arg_path='/svc/proc/inc_enum'
 --let $mrs_client_arg_payload='{"result":"one"}'
+--let $mrs_client_arg_request_type='PUT'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # III.16
+--let $mrs_client_arg_path='/svc/proc/set_vector'
+--let $mrs_client_arg_payload='{"result":[10,20]}'
 --let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 

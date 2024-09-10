@@ -640,12 +640,21 @@ std::vector<CmdOption> g_options{
        }
      }},
 
-    {{"--json-schema"},
+    {{"--json-schema-file"},
      "Specify a file that contains JSON schema, which should be used for "
      "response validation.\n",
      CmdOptionValueReq::required,
-     "json_schema",
-     [](const std::string &value) { g_configuration.json_schema_file = value; },
+     "json_schema_file",
+     [](const std::string &value) {
+       std::ifstream file{value};
+       if (!file.is_open()) {
+         std::runtime_error("File with `json-scheme`, cannot be opened.");
+       }
+
+       g_configuration.json_schema =
+           std::string((std::istreambuf_iterator<char>(file)),
+                       std::istreambuf_iterator<char>());
+     },
      [](const std::string &) {
        if (cnf_should_execute_authentication_flow()) {
          throw std::invalid_argument(
@@ -656,13 +665,25 @@ std::vector<CmdOption> g_options{
          throw std::invalid_argument(
              "Json schema can only be used with JSON responses.");
        }
-
-       mysql_harness::Path path{g_configuration.json_schema_file};
-       if (!path.is_regular()) {
-         throw std::invalid_argument("Json schema file, doesn't exists.");
-       }
      }},
 
+    {{"--json-schema"},
+     "Specify the JSON schema, which should be used for "
+     "response validation.\n",
+     CmdOptionValueReq::required,
+     "json_schema",
+     [](const std::string &value) { g_configuration.json_schema = value; },
+     [](const std::string &) {
+       if (cnf_should_execute_authentication_flow()) {
+         throw std::invalid_argument(
+             "Response type, shoudn't be used with authentication flow.");
+       }
+
+       if (g_configuration.response_type != http_client::ResponseType::kJson) {
+         throw std::invalid_argument(
+             "Json schema can only be used with JSON responses.");
+       }
+     }},
 };
 
 template <typename Duration>
@@ -725,12 +746,8 @@ static Result execute_http_flow(HttpClientRequest *request,
 }
 
 rapidjson::SchemaDocument get_json_schema() {
-  std::ifstream in{g_configuration.json_schema_file};
-  std::ostringstream sstr;
-
-  sstr << in.rdbuf();
   rapidjson::Document doc;
-  if (doc.Parse(sstr.str().c_str()).HasParseError()) {
+  if (doc.Parse(g_configuration.json_schema.c_str()).HasParseError()) {
     throw std::runtime_error("JSON schema is not valid.");
   }
 
@@ -787,7 +804,7 @@ static void validate_result(Result &result) {
     return;
   }
 
-  if (!g_configuration.json_schema_file.empty()) {
+  if (!g_configuration.json_schema.empty()) {
     auto schema = get_json_schema();
     rapidjson::SchemaValidator v(schema);
     if (!doc.Accept(v)) {

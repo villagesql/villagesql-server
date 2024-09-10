@@ -31,7 +31,7 @@
 #include "helper/container/generic.h"
 #include "helper/http/url.h"
 #include "helper/json/jvalue.h"
-#include "helper/json/rapid_json_interator.h"
+#include "helper/json/rapid_json_iterator.h"
 #include "helper/json/text_to.h"
 #include "helper/json/to_sqlstring.h"
 #include "helper/json/to_string.h"
@@ -92,36 +92,63 @@ std::string to_string(rapidjson::Value *v) {
   return helper::json::to_string(v);
 }
 
-using DataType = mrs::database::entry::Field::DataType;
+using DataType = mrs::database::entry::ColumnType;
+
+mysqlrouter::sqlstring get_sql_format(DataType type) {
+  using namespace helper;
+  switch (type) {
+    case DataType::BINARY:
+      return mysqlrouter::sqlstring("FROM_BASE64(?)");
+
+    case DataType::GEOMETRY:
+      return mysqlrouter::sqlstring("ST_GeomFromGeoJSON(?)");
+
+    case DataType::VECTOR:
+      return mysqlrouter::sqlstring("STRING_TO_VECTOR(?)");
+
+    case DataType::JSON:
+      return mysqlrouter::sqlstring("CAST(? as JSON)");
+
+    default: {
+    }
+  }
+
+  return mysqlrouter::sqlstring("?");
+}
 
 mysqlrouter::sqlstring to_sqlstring(const std::string &value, DataType type) {
   using namespace helper;
   auto v = get_type_inside_text(value);
   switch (type) {
-    case DataType::typeBoolean:
+    case DataType::BOOLEAN:
       if (kDataInteger == v) return mysqlrouter::sqlstring{value.c_str()};
       return mysqlrouter::sqlstring("?") << value;
 
-    case DataType::typeDouble:
+    case DataType::DOUBLE:
       if (kDataString == v) return mysqlrouter::sqlstring("?") << value;
       return mysqlrouter::sqlstring{value.c_str()};
 
-    case DataType::typeInt:
+    case DataType::INTEGER:
       if (kDataString == v) return mysqlrouter::sqlstring("?") << value;
       return mysqlrouter::sqlstring{value.c_str()};
 
-    case DataType::typeLong:
-      if (kDataString == v) return mysqlrouter::sqlstring("?") << value;
-      return mysqlrouter::sqlstring{value.c_str()};
-
-    case DataType::typeBinary:
+    case DataType::BINARY:
       return mysqlrouter::sqlstring("FROM_BASE64(?)") << value;
 
-    case DataType::typeString:
+    case DataType::GEOMETRY:
+      return mysqlrouter::sqlstring("ST_GeomFromGeoJSON(?)") << value;
+
+    case DataType::VECTOR:
+      return mysqlrouter::sqlstring("STRING_TO_VECTOR(?)") << value;
+
+    case DataType::JSON:
+      return mysqlrouter::sqlstring("CAST(? as JSON)") << value;
+
+    case DataType::STRING:
       return mysqlrouter::sqlstring("?") << value;
 
-    case DataType::typeTimestamp:
-      return mysqlrouter::sqlstring("?") << value;
+    case DataType::UNKNOWN:
+      // Lets handle it by function return.
       break;
   }
 
@@ -206,7 +233,7 @@ HttpResult HandlerSP::handle_put([[maybe_unused]] rest::RequestContext *ctxt) {
       if (it == doc.MemberEnd())
         throw http::Error(HttpStatusCode::BadRequest,
                           "Parameter not set:"s + el.name);
-      mysqlrouter::sqlstring sql("?");
+      mysqlrouter::sqlstring sql = get_sql_format(el.data_type);
       sql << it->value;
       result += sql.str();
     } else if (el.mode == mrs::database::entry::Field::Mode::modeOut) {

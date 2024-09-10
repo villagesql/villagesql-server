@@ -99,7 +99,7 @@ if ($mrs_client_arg_response_type)
 
 if ($mrs_client_arg_json_schema)
 {
---let $mrs_client_cmd=$mrs_client_cmd --json-schema=$mrs_client_arg_json_schema
+--let $mrs_client_cmd=$mrs_client_cmd --json-schema-file=$mrs_client_arg_json_schema
 }
 
 exec $mrs_client_cmd;

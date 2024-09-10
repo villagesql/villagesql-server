@@ -61,7 +61,8 @@ static const auto &get_txt_type_mapping() {
       {"tinytext", {MYSQL_TYPE_STRING, helper::JsonType::kString}},
       {"varchar", {MYSQL_TYPE_VARCHAR, helper::JsonType::kString}},
 
-      {"geometry", {MYSQL_TYPE_GEOMETRY, helper::JsonType::kString}},
+      {"geometry", {MYSQL_TYPE_GEOMETRY, helper::JsonType::kObject}},
+      {"vector", {MYSQL_TYPE_VECTOR, helper::JsonType::kObject}},
 
       {"timestamp", {MYSQL_TYPE_TIMESTAMP, helper::JsonType::kString}},
       {"date", {MYSQL_TYPE_DATE, helper::JsonType::kString}},
@@ -175,6 +176,8 @@ std::string txt_from_mysql_column_type(const MYSQL_FIELD *field) {
     case MYSQL_TYPE_BLOB:
       if (field->charsetnr == 63) return "BLOB";
       return "TEXT";
+    case MYSQL_TYPE_VECTOR:
+      return "VECTOR";
 
     default:
       return "UNKNOWN";
@@ -289,6 +292,8 @@ std::string to_string(JsonType type) {
       return "json";
     case kBlob:
       return "blob";
+    case kObject:
+      return "object";
   }
   return "null";
 }

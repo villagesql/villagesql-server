@@ -30,6 +30,10 @@
 
 #include "helper/json/text_to.h"
 #include "helper/mysql_row.h"
+#include "mrs/database/converters/column_datatype_converter.h"
+#include "mrs/database/converters/column_mapping_converter.h"
+#include "mrs/database/converters/id_generation_type_converter.h"
+#include "mrs/database/converters/kind_converter.h"
 #include "mrs/database/entry/object.h"
 #include "mrs/interface/rest_error.h"
 
@@ -40,12 +44,7 @@
 
 IMPORT_LOG_FUNCTIONS()
 
-#if defined(_WIN32)
-#define mrs_strcasecmp(a, b) _stricmp(a, b)
-#else
-#define mrs_strcasecmp(a, b) strcasecmp(a, b)
-#endif  // defined(_WIN32)
-
+#if 0
 namespace {
 template <typename T>
 const char *to_str(const char *value, T *) {
@@ -73,6 +72,7 @@ const char *to_str(const char *value, bool *) {
               (row.row_[row.field_index_] == nullptr) ? "yes" : "no"); \
     row.unserialize(OUT);                                              \
   }
+#endif
 
 namespace mrs {
 namespace database {
@@ -80,6 +80,8 @@ namespace database {
 using RestError = mrs::interface::RestError;
 using ForeignKeyReference = entry::ForeignKeyReference;
 using Table = entry::Table;
+using KindType = entry::KindType;
+using ModeType = entry::ModeType;
 
 namespace {
 
@@ -93,57 +95,6 @@ void from_optional_user_ownership_field_id(
   out->emplace();
   entry::UniversalId::from_raw(&(*out)->uid, value);
 }
-
-using KindType = entry::KindType;
-using ModeType = entry::ModeType;
-
-void convert_kind(KindType *out, const char *value) {
-  const static std::map<std::string, KindType> converter{
-      {"PARAMETERS", KindType::PARAMETERS}, {"RESULT", KindType::RESULT}};
-
-  if (!value) value = "";
-  auto result = mysql_harness::make_upper(value);
-  try {
-    *out = converter.at(result);
-  } catch (const std::exception &e) {
-    log_debug("'KindTypeConverter 'do not handle value: %s", result.c_str());
-    throw;
-  }
-}
-
-class ColumnMappingConverter {
- public:
-  ColumnMappingConverter() {}
-
-  void operator()(entry::ForeignKeyReference::ColumnMapping *out,
-                  const char *value) const {
-    if (nullptr == value) {
-      *out = {};
-      return;
-    }
-
-    rapidjson::Document doc = helper::json::text_to_document(value);
-    if (!doc.IsArray()) {
-      throw RestError("Column 'metadata', must be an array");
-    }
-
-    out->clear();
-    for (const auto &col : doc.GetArray()) {
-      if (!col.IsObject())
-        throw RestError("Column 'metadata', element must be an object.");
-      if (!col.HasMember("base") || !col["base"].IsString())
-        throw RestError(
-            "Column 'metadata', element must contain 'base' field with "
-            "string value.");
-      if (!col.HasMember("ref") || !col["ref"].IsString())
-        throw RestError(
-            "Column 'metadata', element must contain 'ref' field with string "
-            "value.");
-
-      out->emplace_back(col["base"].GetString(), col["ref"].GetString());
-    }
-  }
-};
 
 }  // namespace
 
@@ -173,7 +124,7 @@ QueryEntryObject::UniversalId QueryEntryObject::query_object(
 
   from_optional_user_ownership_field_id(&obj->user_ownership_field, (*res)[3]);
 
-  convert_kind(&obj->kind, (*res)[1]);
+  KindTypeConverter()(&obj->kind, (*res)[1]);
 
   return object_id;
 }
@@ -269,10 +220,22 @@ void QueryEntryObject::set_query_object_reference(
 }
 
 void QueryEntryObject::on_row(const ResultRow &r) {
-  if (m_loading_references)
-    on_reference_row(r);
-  else
-    on_field_row(r);
+  try {
+    if (m_loading_references)
+      on_reference_row(r);
+    else
+      on_field_row(r);
+  } catch (const std::exception &e) {
+    UniversalId id;
+
+    if (r.size() > 0 && r[0]) {
+      id = UniversalId::from_cstr(r[0], r.get_data_size(0));
+    }
+
+    log_error("%s with id:%s, will be disabled because of following error: %s",
+              (m_loading_references ? "Reference" : "Field"),
+              id.to_string().c_str(), e.what());
+  }
 }
 
 void QueryEntryObject::on_reference_row(const ResultRow &r) {
@@ -297,29 +260,10 @@ void QueryEntryObject::on_reference_row(const ResultRow &r) {
 }
 
 void QueryEntryObject::on_field_row(const ResultRow &r) {
-  class IdGenerationTypeConverter {
-   public:
-    void operator()(entry::IdGenerationType *out, const char *value) const {
-      if (nullptr == value) {
-        *out = entry::IdGenerationType::NONE;
-        return;
-      }
-
-      if (mrs_strcasecmp(value, "auto_inc") == 0) {
-        *out = entry::IdGenerationType::AUTO_INCREMENT;
-      } else if (mrs_strcasecmp(value, "rev_uuid") == 0) {
-        *out = entry::IdGenerationType::REVERSE_UUID;
-      } else if (mrs_strcasecmp(value, "null") == 0) {
-        *out = entry::IdGenerationType::NONE;
-      } else {
-        throw std::runtime_error("bad metadata");
-      }
-    }
-  };
-
-  helper::MySQLRow row(r, metadata_, num_of_metadata_);
-
+  helper::MySQLRow row(r, metadata_, num_of_metadata_,
+                       helper::MySQLRow::kEndCallRequired);
   entry::UniversalId field_id;
+
   entry::UniversalId parent_reference_id;
   std::optional<entry::UniversalId> represents_reference_id;
 
@@ -334,9 +278,10 @@ void QueryEntryObject::on_field_row(const ResultRow &r) {
   if (parent_reference_id != entry::UniversalId()) {
     auto ref_it = m_references.find(parent_reference_id);
     if (ref_it == m_references.end()) {
-      log_debug("No parent_object found, referenced by parent_reference_id:%s",
-                to_string(parent_reference_id).c_str());
-      return;
+      using namespace std::string_literals;
+      throw std::runtime_error(
+          "No parent_object found, referenced by parent_reference_id:"s +
+          to_string(parent_reference_id));
     }
 
     parent_ref = ref_it->second;
@@ -347,23 +292,26 @@ void QueryEntryObject::on_field_row(const ResultRow &r) {
   }
 
   if (represents_reference_id) {
+    log_debug("Reference");
+
     if (auto it = m_references.find(*represents_reference_id);
         it == m_references.end()) {
-      log_error("reference %s not found",
-                to_string(*represents_reference_id).c_str());
-      assert(0);
+      using namespace std::string_literals;
+      throw std::runtime_error("Reference "s + to_string(parent_reference_id) +
+                               " not found");
     } else {
       auto ofield = it->second;
       ofield->id = field_id;
 
-      log_debug("Reference");
-      CONVERT(&ofield->name);
+      row.unserialize(&ofield->name);
       row.unserialize(&ofield->position);
-      CONVERT(&ofield->enabled);
+      row.unserialize(&ofield->enabled);
       row.skip(10);
       row.unserialize(&ofield->allow_filtering);
       row.unserialize(&ofield->allow_sorting);
       row.skip(2);  // no no_check and no_update in a ref
+
+      log_debug("Using rfield name=%s", ofield->name.c_str());
 
       table->fields.emplace_back(ofield);
     }
@@ -376,21 +324,22 @@ void QueryEntryObject::on_field_row(const ResultRow &r) {
       dfield = std::make_shared<entry::Column>();
 
     dfield->id = field_id;
-    CONVERT(&dfield->name);
+    row.unserialize(&dfield->name);
     row.unserialize(&dfield->position);
-    CONVERT(&dfield->enabled);
+    row.unserialize(&dfield->enabled);
 
-    CONVERT(&dfield->column_name);
+    row.unserialize(&dfield->column_name);
     row.unserialize(&dfield->datatype);
     // disabled fields can come in as NULL
-    if (dfield->enabled || !dfield->datatype.empty())
-      dfield->type = column_datatype_to_type(dfield->datatype);
+    if (dfield->enabled || !dfield->datatype.empty()) {
+      ColumnDatatypeConverter()(&dfield->type, dfield->datatype);
+    }
     row.unserialize_with_converter(&dfield->id_generation,
                                    IdGenerationTypeConverter());
     row.unserialize(&dfield->not_null);
     row.unserialize(&dfield->is_primary);
     row.unserialize(&dfield->is_unique);
-    CONVERT(&dfield->is_generated);
+    row.unserialize(&dfield->is_generated);
     bool parameter_in{false}, parameter_out{false};
     row.unserialize(&parameter_in);
     row.unserialize(&parameter_out);
@@ -406,13 +355,15 @@ void QueryEntryObject::on_field_row(const ResultRow &r) {
       else if (parameter_out)
         parameter_field->mode = ModeType::kOUT;
     }
-    CONVERT_WITH_DEFAULT(&dfield->srid, static_cast<uint32_t>(0));
+    row.unserialize(&dfield->srid, static_cast<uint32_t>(0));
     row.unserialize(&dfield->allow_filtering);
     row.unserialize(&dfield->allow_sorting);
+
     bool no_check, no_update;
     row.unserialize(&no_check);
-    if (no_check) dfield->with_check = false;
     row.unserialize(&no_update);
+
+    if (no_check) dfield->with_check = false;
     if (no_update) dfield->with_update = false;
 
     log_debug("Creating dfield name=%s, table=%s", dfield->name.c_str(),
@@ -420,6 +371,12 @@ void QueryEntryObject::on_field_row(const ResultRow &r) {
 
     table->fields.push_back(dfield);
   }
+
+  // Enable the assertion in destruction.
+  //
+  // Before this point the code may throw an error, we would like
+  // to skip assertion in that case.
+  row.end();
 }
 
 }  // namespace v2
@@ -449,7 +406,7 @@ QueryEntryObject::UniversalId QueryEntryObject::query_object(
 
   helper::MySQLRow row(*res, nullptr, res->size());
   row.unserialize_with_converter(&object_id, entry::UniversalId::from_raw);
-  row.unserialize_with_converter(&obj->kind, convert_kind);
+  row.unserialize_with_converter(&obj->kind, KindTypeConverter());
   row.unserialize_with_converter(&obj->user_ownership_field,
                                  from_optional_user_ownership_field_id);
   bool with_insert = false, with_update = false, with_delete = false,
@@ -535,73 +492,6 @@ void QueryEntryObject::on_reference_row(const ResultRow &r) {
 }
 
 }  // namespace v3
-
-static std::map<std::string, entry::ColumnType> k_datatype_map{
-    {"TINYINT", entry::ColumnType::INTEGER},
-    {"SMALLINT", entry::ColumnType::INTEGER},
-    {"MEDIUMINT", entry::ColumnType::INTEGER},
-    {"INT", entry::ColumnType::INTEGER},
-    {"BIGINT", entry::ColumnType::INTEGER},
-    {"FLOAT", entry::ColumnType::DOUBLE},
-    {"REAL", entry::ColumnType::DOUBLE},
-    {"DOUBLE", entry::ColumnType::DOUBLE},
-    {"DECIMAL", entry::ColumnType::DOUBLE},
-    {"CHAR", entry::ColumnType::STRING},
-    {"NCHAR", entry::ColumnType::STRING},
-    {"VARCHAR", entry::ColumnType::STRING},
-    {"NVARCHAR", entry::ColumnType::STRING},
-    {"BINARY", entry::ColumnType::BINARY},
-    {"VARBINARY", entry::ColumnType::BINARY},
-    {"TINYTEXT", entry::ColumnType::STRING},
-    {"TEXT", entry::ColumnType::STRING},
-    {"MEDIUMTEXT", entry::ColumnType::STRING},
-    {"LONGTEXT", entry::ColumnType::STRING},
-    {"TINYBLOB", entry::ColumnType::BINARY},
-    {"BLOB", entry::ColumnType::BINARY},
-    {"MEDIUMBLOB", entry::ColumnType::BINARY},
-    {"LONGBLOB", entry::ColumnType::BINARY},
-    {"JSON", entry::ColumnType::JSON},
-    {"DATETIME", entry::ColumnType::STRING},
-    {"DATE", entry::ColumnType::STRING},
-    {"TIME", entry::ColumnType::STRING},
-    {"YEAR", entry::ColumnType::INTEGER},
-    {"TIMESTAMP", entry::ColumnType::STRING},
-    {"GEOMETRY", entry::ColumnType::GEOMETRY},
-    {"POINT", entry::ColumnType::GEOMETRY},
-    {"LINESTRING", entry::ColumnType::GEOMETRY},
-    {"POLYGON", entry::ColumnType::GEOMETRY},
-    {"GEOMCOLLECTION", entry::ColumnType::GEOMETRY},
-    {"GEOMETRYCOLLECTION", entry::ColumnType::GEOMETRY},
-    {"MULTIPOINT", entry::ColumnType::GEOMETRY},
-    {"MULTILINESTRING", entry::ColumnType::GEOMETRY},
-    {"MULTIPOLYGON", entry::ColumnType::GEOMETRY},
-    {"BIT", entry::ColumnType::BINARY},
-    {"BOOLEAN", entry::ColumnType::BOOLEAN},
-    {"ENUM", entry::ColumnType::STRING},
-    {"SET", entry::ColumnType::STRING}};
-
-entry::ColumnType column_datatype_to_type(const std::string &datatype) {
-  auto spc = datatype.find(' ');
-  auto p = datatype.find('(');
-
-  p = std::min(spc, p);
-  if (p != std::string::npos) {
-    if (auto it = k_datatype_map.find(
-            mysql_harness::make_upper(datatype.substr(0, p)));
-        it != k_datatype_map.end()) {
-      if (it->second == entry::ColumnType::BINARY) {
-        if (mysql_harness::make_upper(datatype) == "BIT(1)")
-          return entry::ColumnType::BOOLEAN;
-      }
-      return it->second;
-    }
-  } else {
-    if (auto it = k_datatype_map.find(mysql_harness::make_upper(datatype));
-        it != k_datatype_map.end())
-      return it->second;
-  }
-  throw std::runtime_error("Unknown datatype " + datatype);
-}
 
 }  // namespace database
 }  // namespace mrs
