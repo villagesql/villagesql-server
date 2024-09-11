@@ -211,6 +211,8 @@ exec $MRS_CLIENT_ARGS
 
 exec $MRS_CLIENT_ARGS
   --path /svc2
+  --expected-header Location=/svc2/
+  --expected-status PermanentRedirect
   --response-type RAW;
 
 exec $MRS_CLIENT_ARGS
@@ -242,6 +244,8 @@ exec $MRS_CLIENT_ARGS
 
 exec $MRS_CLIENT_ARGS
   --path /svc2
+  --expected-header Location=/svc2/
+  --expected-status PermanentRedirect
   --response-type RAW;
 
 exec $MRS_CLIENT_ARGS

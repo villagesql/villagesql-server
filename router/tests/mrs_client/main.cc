@@ -571,6 +571,21 @@ std::vector<CmdOption> g_options{
        if (g_configuration.excluscive_json_pointer.empty())
          throw std::invalid_argument("There is no valid json-pointer.");
      }},
+    {{"--expected-header"},
+     "Expect header/value in server's response message.",
+     CmdOptionValueReq::required,
+     "meta_header",
+     [](const std::string &value) {
+       auto equal_pos = value.find_first_of("=");
+       if (equal_pos == std::string::npos) {
+         throw std::invalid_argument(
+             "Expected header value must follow this format: "
+             "'--expected-header=HEADER=VALUE'");
+       }
+       std::string key = value.substr(0, equal_pos);
+       std::string keys_value = value.substr(equal_pos + 1);
+       g_configuration.expected_headers[key] = keys_value;
+     }},
     {{"--expected-status"},
      "Specify allowed status code. Default is OK(200).",
      CmdOptionValueReq::required,
@@ -782,6 +797,23 @@ static void validate_result(Result &result) {
                 << g_configuration.content_type << ";.\n";
     }
   }
+
+  for (auto &[k, v] : g_configuration.expected_headers) {
+    auto header_value = mrs_client::try_find_in_headers(result.headers, k);
+    if (!header_value) {
+      result.ok = false;
+      std::cerr << "ERROR: missing expected header: '" << k << "'.\n";
+      continue;
+    }
+    if (header_value.value() != v) {
+      std::cerr << "ERROR: Wrong value for header: '" << k << ", expecting: '";
+
+      std::cerr << v << "', but received: '" << header_value.value() << "'.\n";
+      result.ok = false;
+    }
+  }
+
+  if (!result.ok) return;
 
   if (g_configuration.response_type != http_client::ResponseType::kJson) {
     return;

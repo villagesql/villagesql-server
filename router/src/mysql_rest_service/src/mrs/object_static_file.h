@@ -90,6 +90,7 @@ class ObjectStaticFile : public mrs::interface::Object {
   const VectorOfRowGroupOwnership &get_group_row_ownership() const override;
   const std::string *get_default_content() override;
   const std::string *get_redirection() override;
+  bool is_redirect_permanent() const override;
 
   bool get_service_active() const override;
   void set_service_active(const bool active) override;

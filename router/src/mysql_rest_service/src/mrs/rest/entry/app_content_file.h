@@ -38,6 +38,10 @@ struct AppContentFile : public mrs::database::entry::ContentFile {
   using ContentFile = mrs::database::entry::ContentFile;
   using EntryKey = database::entry::EntryKey;
   using EntryType = database::entry::EntryType;
+  struct Redirect {
+    std::string url;
+    bool permanent{false};
+  };
 
   AppContentFile() {}
   explicit AppContentFile(const ContentFile &cf) : ContentFile(cf) {}
@@ -47,7 +51,7 @@ struct AppContentFile : public mrs::database::entry::ContentFile {
   EntryKey get_key() const { return {key_entry_type, id, key_subtype}; }
 
   std::optional<std::string> content;
-  std::optional<std::string> redirect;
+  std::optional<Redirect> redirect;
   bool default_handling_directory_index{true};
   bool is_index{false};
 };

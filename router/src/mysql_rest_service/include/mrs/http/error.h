@@ -39,7 +39,7 @@ class Error {
 
  public:
   template <typename... T>
-  Error(const Status s, const std::string &m, const T &... t) : status{s} {
+  Error(const Status s, const std::string &m, const T &...t) : status{s} {
     message = (m + ... + t);
   }
 
@@ -82,17 +82,20 @@ class ErrorWithHttpHeaders : public ErrorChangeResponse {
 
 class ErrorRedirect : public ErrorChangeResponse {
  public:
-  ErrorRedirect(const std::string &redirect) : redirect_{redirect} {}
+  ErrorRedirect(const std::string &redirect, const bool permanent = false)
+      : redirect_{redirect}, permanent_{permanent} {}
 
   const char *name() const override { return "ErrorRedirect"; }
   bool retry() const override { return false; }
   Error change_response(::http::base::Request *request) const override {
     request->get_output_headers().add("Location", redirect_.c_str());
-    return Error(HttpStatusCode::TemporaryRedirect);
+    return Error(permanent_ ? HttpStatusCode::PermanentRedirect
+                            : HttpStatusCode::TemporaryRedirect);
   }
 
  private:
   std::string redirect_;
+  bool permanent_;
 };
 
 }  // namespace http

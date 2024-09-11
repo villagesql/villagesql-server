@@ -214,6 +214,8 @@ exec $MRS_CLIENT_ARGS
 --source ../include/mrs/changes/wait_files.inc
 
 exec $MRS_CLIENT_ARGS
+  --expected-header Location=/svc2/sch2/
+  --expected-status PermanentRedirect
   --path /svc2/sch2
   --response-type RAW;
 
@@ -246,6 +248,8 @@ exec $MRS_CLIENT_ARGS
 --source ../include/mrs/changes/wait_files.inc
 
 exec $MRS_CLIENT_ARGS
+  --expected-header Location=/svc2/sch2/
+  --expected-status PermanentRedirect
   --path /svc2/sch2
   --response-type RAW;
 

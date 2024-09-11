@@ -210,6 +210,8 @@ exec $MRS_CLIENT_ARGS
 
 exec $MRS_CLIENT_ARGS
   --path /svc2/sch2
+  --expected-header Location=/svc2/sch2/
+  --expected-status PermanentRedirect
   --response-type RAW;
 
 exec $MRS_CLIENT_ARGS
@@ -241,6 +243,8 @@ exec $MRS_CLIENT_ARGS
 
 exec $MRS_CLIENT_ARGS
   --path /svc2/sch2
+  --expected-header Location=/svc2/sch2/
+  --expected-status PermanentRedirect
   --response-type RAW;
 
 exec $MRS_CLIENT_ARGS
@@ -251,7 +255,7 @@ exec $MRS_CLIENT_ARGS
 exec $MRS_CLIENT_ARGS
   --path /svc2/sch2/redirect.html
   --display REQUEST,STATUS,HEADER
-  --expected-status 307
+  --expected-status TemporaryRedirect
   --response-type RAW  2>&1;
 
 exec $MRS_CLIENT_ARGS

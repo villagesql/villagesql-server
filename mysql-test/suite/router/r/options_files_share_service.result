@@ -80,7 +80,7 @@ OK
 # II.2
 ## Check Directory Index generation
 GET /svc2
-second page
+
 OK
 GET /svc2/
 second page
@@ -98,7 +98,7 @@ OK
 # II.3
 ## Check Redirect generation
 GET /svc2
-second page
+
 OK
 GET /svc2/
 second page

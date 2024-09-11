@@ -26,6 +26,7 @@
 #define ROUTER_TESTS_HTTP_CLIENT_HTTPCLIENT_CONFIGURATION_H_
 
 #include <chrono>
+#include <map>
 #include <optional>
 #include <string>
 
@@ -80,6 +81,7 @@ struct ApplicationConfiguration {
   ResponseType response_type{ResponseType::kJson};
   std::string content_type;
   HttpStatusCode::key_type expected_status{HttpStatusCode::Ok};
+  std::map<std::string, std::string> expected_headers;
   std::optional<Seconds> wait_until_found;
   std::optional<Seconds> wait_until_status;
 };

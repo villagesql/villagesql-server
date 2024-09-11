@@ -47,6 +47,7 @@ using ContentFileEntries = std::vector<entry::ContentFile>;
 class FileFromOptions {
  public:
   using Counters = std::map<UniversalId, uint64_t>;
+  using AppContentFile = rest::entry::AppContentFile;
 
   void analyze_global(bool enabled, const std::string &options) {
     Counters local_global_files;
@@ -54,7 +55,7 @@ class FileFromOptions {
     content_files_.clear();
 
     extract_files(get_global_config(enabled, options), &global_files_,
-                  &local_global_files);
+                  &local_global_files, true);
     assign(&global_files_, local_global_files);
   }
 
@@ -95,7 +96,7 @@ class FileFromOptions {
     assign(&db_objects_files_, local_db_objects_files);
   }
 
-  std::vector<rest::entry::AppContentFile> content_files_;
+  std::vector<AppContentFile> content_files_;
 
  private:
   struct Config {
@@ -175,7 +176,7 @@ class FileFromOptions {
   }
 
   void extract_files(const Config &conf, Counters *global_counters,
-                     Counters *local_counters) {
+                     Counters *local_counters, bool is_global_config = false) {
     auto it = local_counters->find(conf.ids.object);
     auto git = global_counters->find(conf.ids.object);
 
@@ -183,7 +184,7 @@ class FileFromOptions {
 
     if (global_counters->end() != git) {
       for (uint64_t i = 1; i <= git->second; ++i) {
-        rest::entry::AppContentFile cf;
+        AppContentFile cf;
         cf.deleted = true;
         cf.key_entry_type = entry::EntryType::key_static_sub;
         cf.key_subtype = i;
@@ -202,7 +203,7 @@ class FileFromOptions {
         conf.options);
 
     for (const auto &[k, v] : fs.default_static_content_) {
-      rest::entry::AppContentFile cf;
+      AppContentFile cf;
       cf.active_service = cf.active_set = cf.active_file = conf.active;
       cf.deleted = false;
       cf.key_entry_type = entry::EntryType::key_static_sub;
@@ -229,7 +230,7 @@ class FileFromOptions {
     }
 
     for (const auto &[k, v] : fs.default_redirects_) {
-      rest::entry::AppContentFile cf;
+      AppContentFile cf;
       cf.active_service = cf.active_set = cf.active_file = conf.active;
       cf.deleted = false;
       cf.key_entry_type = entry::EntryType::key_static_sub;
@@ -242,7 +243,9 @@ class FileFromOptions {
       cf.service_path = conf.service;
       cf.schema_path = conf.schema;
       cf.file_path = conf.object + "/" + k;
-      cf.redirect = v;
+
+      cf.redirect = AppContentFile::Redirect{v, false};
+
       cf.default_handling_directory_index = false;
       cf.size = v.size();
       cf.schema_requires_authentication = conf.require_auth;
@@ -258,27 +261,42 @@ class FileFromOptions {
     for (const auto &idx : fs.directory_index_directive_) {
       auto it_index = fs.default_static_content_.find(idx);
       if (fs.default_static_content_.end() == it_index) continue;
-      rest::entry::AppContentFile cf;
+      AppContentFile cf;
 
       cf.active_service = cf.active_set = cf.active_file = conf.active;
       cf.deleted = false;
       cf.key_entry_type = entry::EntryType::key_static_sub;
       cf.key_subtype = ++(*local_counters)[conf.ids.object];
+
       cf.service_id = conf.ids.service;
       cf.content_set_id = conf.ids.schema;
       cf.id = conf.ids.object;
+
       cf.service_path = conf.service;
       cf.schema_path = conf.schema;
       cf.file_path = conf.object;
-      cf.content = it_index->second;
+
+      // Empty path is not allowed for global-configs,
+      // thus it needs to be skipped.
+      if (!is_global_config) {
+        cf.redirect = AppContentFile::Redirect{
+            conf.service + conf.schema + conf.object + "/", true};
+      } else {
+        cf.content = it_index->second;
+      }
+
       cf.default_handling_directory_index = false;
       cf.size = it_index->second.size();
       cf.schema_requires_authentication = conf.require_auth;
       cf.requires_authentication = conf.require_auth;
-      cf.options_json_service = conf.options;
+      cf.options_json_schema = conf.options;
 
       content_files_.push_back(cf);
 
+      cf.redirect = {};
+      cf.content = it_index->second;
+      cf.options_json_schema = {};
+      cf.options_json_service = conf.options;
       cf.file_path = conf.object + "/";
       cf.key_subtype = ++(*local_counters)[conf.ids.object];
 

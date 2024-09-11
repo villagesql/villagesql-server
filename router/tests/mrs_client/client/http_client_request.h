@@ -26,6 +26,7 @@
 #define ROUTER_TESTS_HTTP_CLIENT_HTTPCLIENT_REQUEST_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -40,12 +41,21 @@ namespace mrs_client {
 
 using Headers = std::vector<std::pair<std::string, std::string>>;
 
-inline std::string find_in_headers(const Headers &h, const std::string &key) {
+inline std::optional<std::string> try_find_in_headers(const Headers &h,
+                                                      const std::string &key) {
   for (const auto &[k, v] : h) {
-    if (k == key) return v;
+    if (k == key) {
+      return v;
+    }
   }
 
   return {};
+}
+
+inline std::string find_in_headers(const Headers &h, const std::string &key) {
+  auto result = try_find_in_headers(h, key);
+
+  return result.has_value() ? result.value() : std::string{};
 }
 
 struct Result {

@@ -115,8 +115,7 @@ const std::vector<std::string> ObjectStaticFile::get_rest_path() {
     return {rest_path_, rest_path2, rest_path3};
   } else if (cse_.is_index) {
     using namespace std::string_literals;  // NOLINT(build/namespaces)
-    return {rest_path_, "^"s + cse_.service_path + cse_.schema_path + "$",
-            "^"s + cse_.service_path + cse_.schema_path + "/$"};
+    return {rest_path_, "^"s + cse_.service_path + cse_.schema_path + "/$"};
   }
   return {rest_path_};
 }
@@ -226,9 +225,14 @@ const std::string *ObjectStaticFile::get_default_content() {
 }
 
 const std::string *ObjectStaticFile::get_redirection() {
-  if (cse_.redirect) return &cse_.redirect.value();
+  if (cse_.redirect) return &cse_.redirect.value().url;
 
   return nullptr;
+}
+
+bool ObjectStaticFile::is_redirect_permanent() const {
+  if (cse_.redirect) return cse_.redirect.value().permanent;
+  return false;
 }
 
 bool ObjectStaticFile::get_service_active() const {

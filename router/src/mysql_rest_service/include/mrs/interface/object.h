@@ -89,6 +89,7 @@ class Object {
   }
   virtual const std::string *get_default_content() = 0;
   virtual const std::string *get_redirection() = 0;
+  virtual bool is_redirect_permanent() const { return false; }
   virtual const Fields &get_parameters() = 0;
   virtual EntryObjectPtr get_object() = 0;
   virtual uint32_t get_on_page() = 0;

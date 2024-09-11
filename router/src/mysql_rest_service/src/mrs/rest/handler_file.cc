@@ -98,16 +98,19 @@ void HandlerFile::authorization(rest::RequestContext *ctxt) {
 }
 
 HttpResult HandlerFile::handle_get(rest::RequestContext *ctxt) {
-  mysql_harness::Path path{route_->get_object_path()};
   auto if_not_matched =
       ctxt->request->get_input_headers().find_cstr("If-None-Match");
-
-  if (auto redirection = route_->get_redirection())
-    throw http::ErrorRedirect(*redirection);
+  if (auto redirection = route_->get_redirection()) {
+    throw http::ErrorRedirect(*redirection, route_->is_redirect_permanent());
+  }
 
   if (if_not_matched && route_->get_version() == if_not_matched)
     throw http::Error(HttpStatusCode::NotModified);
 
+  // Empty url path is allowed, but mysql_harness::Path
+  // doesn't supports it.
+  mysql_harness::Path path{
+      !route_->get_object_path().empty() ? route_->get_object_path() : "/"};
   auto result_type = get_result_type_from_extension(
       mysql_harness::make_lower(path.extension()));
 

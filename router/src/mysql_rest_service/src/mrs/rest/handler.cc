@@ -513,9 +513,10 @@ class RestRequestHandler : public ::http::base::RequestHandler {
         case HttpStatusCode::Ok:
           [[fallthrough]];
         case HttpStatusCode::NotModified:
-          send_reply(*ctxt->request, e.status, e.message);
-          break;
+          [[fallthrough]];
         case HttpStatusCode::TemporaryRedirect:
+          [[fallthrough]];
+        case HttpStatusCode::PermanentRedirect:
           send_reply(*ctxt->request, e.status, e.message);
           break;
         case HttpStatusCode::Unauthorized:
