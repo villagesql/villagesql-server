@@ -26,7 +26,6 @@
 
 #include "mysql/harness/logging/logging.h"
 
-#include "helper/json/serializer_to_text.h"
 #include "helper/mysql_column_types.h"
 #include "mrs/database/duality_view/select.h"
 
@@ -35,7 +34,6 @@ IMPORT_LOG_FUNCTIONS()
 namespace mrs {
 namespace database {
 
-using namespace helper::json;
 using namespace mrs::database::entry;
 using JsonQueryBuilder = mrs::database::dv::JsonQueryBuilder;
 
@@ -133,24 +131,19 @@ void QueryRestFunction::on_row(const ResultRow &r) {
   assert(1 == r.size() && "Function should return a single value.");
 
   if (!store_raw_) {
-    SerializerToText stt;
-    {
-      auto obj = stt.add_object();
+    json_root_ = serializer_.add_object();
 
-      if (encode_bigints_as_strings_ && needs_bigint_workaround(mysql_type_)) {
-        json_type_ = helper::JsonType::kString;
-      }
-
-      if (MYSQL_TYPE_BIT == mysql_type_ &&
-          json_type_ == helper::JsonType::kBool)
-        obj->member_add_value(
-            "result",
-            *reinterpret_cast<const uint8_t *>(r[0]) ? "true" : "false",
-            json_type_);
-      else
-        obj->member_add_value("result", r[0], r.get_data_size(0), json_type_);
+    if (encode_bigints_as_strings_ && needs_bigint_workaround(mysql_type_)) {
+      json_type_ = helper::JsonType::kString;
     }
-    response = stt.get_result();
+
+    if (MYSQL_TYPE_BIT == mysql_type_ && json_type_ == helper::JsonType::kBool)
+      json_root_->member_add_value(
+          "result", *reinterpret_cast<const uint8_t *>(r[0]) ? "true" : "false",
+          json_type_);
+    else
+      json_root_->member_add_value("result", r[0], r.get_data_size(0),
+                                   json_type_);
     return;
   }
   log_debug("on_row -> size:%i", (int)r.get_data_size(0));
@@ -168,6 +161,25 @@ void QueryRestFunction::on_metadata(unsigned int number, MYSQL_FIELD *fields) {
     mysql_type_ = fields[0].type;
     json_type_ = helper::from_mysql_column_type(&fields[0]);
   }
+}
+
+void QueryRestFunction::serialize_response(
+    const CustomMetadata &custom_metadata) {
+  if (store_raw_) {
+    // nothing to do, the response is ready and it is not json so we do not
+    // append any metadata
+    return;
+  }
+
+  if (!custom_metadata.empty()) {
+    auto m = json_root_->member_add_object("_metadata");
+    for (const auto &md : custom_metadata) {
+      m->member_add_value(md.first, md.second);
+    }
+  }
+
+  json_root_.finalize();
+  response = serializer_.get_result();
 }
 
 }  // namespace database

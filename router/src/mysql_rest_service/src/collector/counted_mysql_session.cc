@@ -183,10 +183,11 @@ uint64_t CountedMySQLSession::prepare(const std::string &query) {
 
 void CountedMySQLSession::prepare_execute_with_bind_parameters(
     uint64_t ps_id, std::vector<MYSQL_BIND> bind_parameters,
-    const ResultRowProcessor &processor, const FieldValidator &validator) {
+    const ResultRowProcessor &processor, const FieldValidator &validator,
+    const OnResultSetEnd &on_resultset_end) {
   mrs::Counter<kEntityCounterMySQLPrepareExecute>::increment();
   CHECK_DISCONNECTION_VOID(MySQLSession::prepare_execute_with_bind_parameters(
-      ps_id, bind_parameters, processor, validator));
+      ps_id, bind_parameters, processor, validator, on_resultset_end));
 }
 
 void CountedMySQLSession::prepare_remove(uint64_t ps_id) {

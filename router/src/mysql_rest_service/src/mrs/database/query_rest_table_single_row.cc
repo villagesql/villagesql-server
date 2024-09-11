@@ -32,19 +32,6 @@
 namespace mrs {
 namespace database {
 
-static void json_object_fast_append(std::string &jo, const std::string &key,
-                                    const std::string &value) {
-  // remove closing }
-  jo.pop_back();
-  // add metadata sub-object
-
-  jo.append(", \"");
-  jo.append(key);
-  jo.append("\":");
-  jo.append(value);
-  jo.push_back('}');
-}
-
 QueryRestTableSingleRow::QueryRestTableSingleRow(
     const JsonTemplateFactory *factory, bool encode_bigints_as_string,
     const bool include_links, const RowLockType lock_rows)
@@ -78,22 +65,17 @@ void QueryRestTableSingleRow::query_entry(
 }
 
 void QueryRestTableSingleRow::on_row(const ResultRow &r) {
-  std::map<std::string, std::string> metadata_;
   if (!response.empty())
     throw std::runtime_error(
         "Querying single row, from a table. Received multiple.");
 
+  std::map<std::string, std::string> metadata;
   if (!metadata_gtid_.empty()) {
-    metadata_.insert({"gtid", metadata_gtid_});
+    metadata.insert({"gtid", metadata_gtid_});
   }
   response = post_process_json(
-      object_, field_filter_ ? *field_filter_ : ObjectFieldFilter{}, {}, r[0],
-      compute_etag_);
-
-  if (!metadata_.empty()) {
-    json_object_fast_append(response, "_metadata",
-                            helper::json::to_string(metadata_));
-  }
+      object_, field_filter_ ? *field_filter_ : ObjectFieldFilter{}, metadata,
+      r[0], compute_etag_);
 
   is_owned_ = r[1] && strcmp(r[1], "1") == 0;
 

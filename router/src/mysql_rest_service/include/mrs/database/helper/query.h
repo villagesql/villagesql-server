@@ -38,6 +38,7 @@ class Query {
   using MySQLSession = mysqlrouter::MySQLSession;
   using Row = MySQLSession::Row;
   using ResultRow = MySQLSession::ResultRow;
+  using OnResultSetEnd = MySQLSession::OnResultSetEnd;
 
  public:
   virtual ~Query() = default;
@@ -45,7 +46,8 @@ class Query {
   virtual void execute(MySQLSession *session);
   virtual void query(MySQLSession *session, const std::string &q);
   virtual void prepare_and_execute(MySQLSession *session, const std::string &q,
-                                   std::vector<MYSQL_BIND> pt);
+                                   std::vector<MYSQL_BIND> pt,
+                                   OnResultSetEnd &on_resultset_end);
 
   std::unique_ptr<MySQLSession::ResultRow> query_one(MySQLSession *session);
   std::unique_ptr<MySQLSession::ResultRow> query_one(MySQLSession *session,
@@ -64,7 +66,8 @@ class QueryLog : public Query {
  public:
   void query(MySQLSession *session, const std::string &q) override;
   void prepare_and_execute(MySQLSession *session, const std::string &q,
-                           std::vector<MYSQL_BIND> pt) override;
+                           std::vector<MYSQL_BIND> pt,
+                           OnResultSetEnd &on_resultset_end) override;
 };
 
 }  // namespace database

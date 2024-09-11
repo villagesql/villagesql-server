@@ -162,6 +162,7 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
   typedef std::function<bool(const ResultRow &)> ResultRowProcessor;
 
   typedef std::function<void(unsigned, MYSQL_FIELD *)> FieldValidator;
+  typedef std::function<void()> OnResultSetEnd;
 
   // text representations of SSL modes
   static const char kSslModeDisabled[];
@@ -463,7 +464,8 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
   virtual void prepare_execute_with_bind_parameters(
       uint64_t ps_id, std::vector<MYSQL_BIND> bind_parameters,
       const ResultRowProcessor &processor,
-      const FieldValidator &validator /*= null_field_validator*/);
+      const FieldValidator &validator /*= null_field_validator*/,
+      const OnResultSetEnd &on_resultset_end);
   virtual void prepare_remove(uint64_t ps_id);
   virtual void execute(
       const std::string &query);  // throws Error, std::logic_error

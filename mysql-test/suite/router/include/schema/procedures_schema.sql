@@ -1,17 +1,17 @@
 # -----------------------------------------------------
-# Schema basic_schema
+# Schema proc_schema
 # -----------------------------------------------------
-# Create schema that contains each basic MRS object type
+# Create schema that contains various stored procedures
 --disable_query_log
 --disable_result_log
 DROP SCHEMA IF EXISTS `proc_schema` ;
 
---let $router_test_schema=proc_schema
+--let $router_test_schemas=proc_schema;$router_test_schemas
 CREATE SCHEMA IF NOT EXISTS `proc_schema`;
 USE `proc_schema`;
 
 
-CREATE TABLE IF NOT EXISTS `proc_schema`.`dummy_data` (
+CREATE TABLE `proc_schema`.`dummy_data` (
   `id` INTEGER NOT NULL AUTO_INCREMENT,
   `name` VARCHAR(255) NOT NULL,
   `comments` VARCHAR(512) NULL,
@@ -274,6 +274,32 @@ BEGIN
     ELSE
         SELECT 2;
     END IF;
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`insert_data`(name VARCHAR(255),
+                                             comments VARCHAR(512),
+                                             date DATETIME)
+BEGIN
+  INSERT INTO `proc_schema`.`dummy_data` (`name`, `comments`, `date`)
+    VALUES(name, comments, date);
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`insert_and_return` (name VARCHAR(255),
+                                             comments VARCHAR(512),
+                                             date DATETIME)
+BEGIN
+  INSERT INTO `proc_schema`.`dummy_data` (`name`, `comments`, `date`)
+    VALUES(name, comments, date);
+
+  select min(id) from `proc_schema`.`dummy_data`;
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`insert_no_param` ()
+BEGIN
+  INSERT INTO `proc_schema`.`dummy_data` (`name`, `comments`, `date`)
+    VALUES("Mike", "comments", NOW());
+
+  select min(id) from `proc_schema`.`dummy_data`;
 END;$$
 
 --enable_query_log

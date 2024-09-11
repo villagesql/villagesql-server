@@ -95,7 +95,8 @@ void Object::handlers_for_table() {
 }
 
 void Object::handlers_for_sp() {
-  auto handler_obj = handler_factory_->create_sp_handler(this, auth_manager_);
+  auto handler_obj =
+      handler_factory_->create_sp_handler(this, auth_manager_, gtid_manager_);
   auto handler_meta =
       handler_factory_->create_object_metadata_handler(this, auth_manager_);
 
@@ -104,8 +105,8 @@ void Object::handlers_for_sp() {
 }
 
 void Object::handlers_for_function() {
-  auto handler_obj =
-      handler_factory_->create_function_handler(this, auth_manager_);
+  auto handler_obj = handler_factory_->create_function_handler(
+      this, auth_manager_, gtid_manager_);
   auto handler_meta =
       handler_factory_->create_object_metadata_handler(this, auth_manager_);
 

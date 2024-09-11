@@ -231,6 +231,7 @@ mysqlrouter::sqlstring JsonQueryBuilder::make_subquery(
 
 static mysqlrouter::sqlstring get_field_format(entry::ColumnType type,
                                                bool value_only) {
+  std::string result;
   if (type == entry::ColumnType::BOOLEAN)
     return {value_only ? "!.! is true" : "?, !.! is true"};
   else if (type == entry::ColumnType::BINARY)

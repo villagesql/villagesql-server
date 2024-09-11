@@ -39,9 +39,10 @@ void QueryLog::query(MySQLSession *session, const std::string &q) {
 }
 
 void QueryLog::prepare_and_execute(MySQLSession *session, const std::string &q,
-                                   std::vector<MYSQL_BIND> pt) {
+                                   std::vector<MYSQL_BIND> pt,
+                                   OnResultSetEnd &on_resultset_end) {
   log_debug("Prepare: %s", q.c_str());
-  Query::prepare_and_execute(session, q, pt);
+  Query::prepare_and_execute(session, q, pt, on_resultset_end);
 }
 
 void Query::query(MySQLSession *session, const std::string &q) {
@@ -88,7 +89,8 @@ std::unique_ptr<MySQLSession::ResultRow> Query::query_one(
 
 void Query::execute(MySQLSession *session) { query(session, query_); }
 void Query::prepare_and_execute(MySQLSession *session, const std::string &q,
-                                std::vector<MYSQL_BIND> pt) {
+                                std::vector<MYSQL_BIND> pt,
+                                OnResultSetEnd &on_resultset_end) {
   auto id = session->prepare(q);
 
   try {
@@ -100,7 +102,8 @@ void Query::prepare_and_execute(MySQLSession *session, const std::string &q,
         },
         [this](unsigned number, MYSQL_FIELD *fields) {
           on_metadata(number, fields);
-        });
+        },
+        on_resultset_end);
     session->prepare_remove(id);
   } catch (mysqlrouter::MySQLSession::Error &e) {
     sqlstate_ = session->last_sqlstate();

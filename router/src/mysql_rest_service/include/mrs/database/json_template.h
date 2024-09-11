@@ -37,6 +37,7 @@ namespace database {
 class JsonTemplate {
  public:
   using ResultRow = mysqlrouter::MySQLSession::ResultRow;
+  using CustomMetadata = std::map<std::string, std::string>;
   virtual ~JsonTemplate() = default;
 
  public:
@@ -52,7 +53,7 @@ class JsonTemplate {
   virtual void end_resultset() = 0;
 
   virtual void begin() = 0;
-  virtual void finish() = 0;
+  virtual void finish(const CustomMetadata &custom_metadata = {}) = 0;
 
   virtual void flush() = 0;
   virtual std::string get_result() = 0;

@@ -64,17 +64,17 @@ class SerializerToText {
       return *this;
     }
 
+    void finalize() {
+      if (!serializer_) return;
+      if (!finalized_) serializer_->writer_.EndObject();
+      finalized_ = true;
+    }
+
    private:
     void initialize() {
       if (!serializer_) return;
       serializer_->writer_.StartObject();
       finalized_ = false;
-    }
-
-    void finalize() {
-      if (!serializer_) return;
-      if (!finalized_) serializer_->writer_.EndObject();
-      finalized_ = true;
     }
 
     SerializerToText *serializer_{nullptr};

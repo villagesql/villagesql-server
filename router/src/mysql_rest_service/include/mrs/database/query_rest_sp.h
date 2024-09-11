@@ -30,10 +30,12 @@
 #include <string>
 #include <vector>
 
+#include "collector/counted_mysql_session.h"
 #include "helper/mysql_column.h"
 #include "mrs/database/entry/field.h"
 #include "mrs/database/helper/query.h"
 #include "mrs/database/json_template.h"
+#include "mrs/gtid_manager.h"
 #include "mysqlrouter/utils_sqlstring.h"
 
 namespace mrs {
@@ -46,14 +48,16 @@ class QueryRestSP : private QueryLog {
  public:
   QueryRestSP(JsonTemplateFactory *factory = nullptr);
 
-  virtual void query_entries(MySQLSession *session, const std::string &schema,
+  virtual void query_entries(collector::CountedMySQLSession *session,
+                             const std::string &schema,
                              const std::string &object, const std::string &url,
                              const std::string &ignore_column,
                              const mysqlrouter::sqlstring &values = {},
                              std::vector<MYSQL_BIND> pt = {},
                              const ResultSets &rs = {},
                              const JsonTemplateType type =
-                                 JsonTemplateType::kObjectNestedOutParameters);
+                                 JsonTemplateType::kObjectNestedOutParameters,
+                             mrs::GtidManager *gtid_manager = nullptr);
 
   const char *get_sql_state();
   std::string response;

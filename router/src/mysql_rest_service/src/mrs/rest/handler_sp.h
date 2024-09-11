@@ -25,6 +25,7 @@
 #ifndef ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_SP_H_
 #define ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_SP_H_
 
+#include "mrs/gtid_manager.h"
 #include "mrs/interface/object.h"
 #include "mrs/rest/handler.h"
 
@@ -36,7 +37,8 @@ class HandlerSP : public rest::Handler {
   using Route = mrs::interface::Object;
 
  public:
-  HandlerSP(Route *r, mrs::interface::AuthorizeManager *auth_manager);
+  HandlerSP(Route *r, mrs::interface::AuthorizeManager *auth_manager,
+            mrs::GtidManager *gtid_manager = nullptr);
 
   HttpResult handle_get(rest::RequestContext *ctxt) override;
   HttpResult handle_delete(rest::RequestContext *ctxt) override;
@@ -54,6 +56,7 @@ class HandlerSP : public rest::Handler {
 
  private:
   bool always_nest_result_sets_{false};
+  mrs::GtidManager *gtid_manager_;
   Route *route_;
   mrs::interface::AuthorizeManager *auth_manager_;
 };

@@ -300,7 +300,8 @@ POST /svc/basic/t2 (payload-size:65)
     ],
     "comments": "",
     "_metadata": {
-        "etag": "F4EF85E41B3356230F70D5EAC209C9005C6855E0AF4A5ADB8DD2A352EEC677EA"
+        "etag": "F4EF85E41B3356230F70D5EAC209C9005C6855E0AF4A5ADB8DD2A352EEC677EA",
+        "gtid": "%GTID%"
     }
 }
 OK

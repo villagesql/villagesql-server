@@ -1,12 +1,12 @@
 # -----------------------------------------------------
-# Schema basic_schema
+# Schema paging_schema
 # -----------------------------------------------------
-# Create schema that contains each basic MRS object type
+# Create schema that contains objects for paging testing
 --disable_query_log
 --disable_result_log
 DROP SCHEMA IF EXISTS `paging_schema` ;
 
---let $router_test_schema=paging_schema
+--let $router_test_schemas=paging_schema;$router_test_schemas
 CREATE SCHEMA IF NOT EXISTS `paging_schema`;
 USE `paging_schema`;
 

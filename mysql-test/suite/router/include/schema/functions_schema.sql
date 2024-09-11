@@ -1,15 +1,21 @@
 # -----------------------------------------------------
-# Schema basic_schema
+# Schema func_schema
 # -----------------------------------------------------
-# Create schema that contains each basic MRS object type
+# Create schema that contains various MySQL functions
 --disable_query_log
 --disable_result_log
 
---let $router_test_schema=func_schema
+--let $router_test_schemas=func_schema;$router_test_schemas
 DROP SCHEMA IF EXISTS `func_schema`;
 
 CREATE SCHEMA IF NOT EXISTS `func_schema`;
 USE `func_schema`;
+
+CREATE TABLE `func_schema`.`dummy_data` (
+  `id` INTEGER NOT NULL AUTO_INCREMENT,
+  `value` VARCHAR(255) NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE INDEX `value_UNIQUE` (`value` ASC) VISIBLE);
 
 DELIMITER $$;
 
@@ -114,6 +120,20 @@ BEGIN
     END IF;
     RETURN 2;
 END$$
+
+CREATE FUNCTION `func_schema`.`insert_and_return`(value VARCHAR(255)) RETURNS INTEGER
+BEGIN
+  INSERT INTO `func_schema`.`dummy_data` (`value`) VALUES(value);
+
+  RETURN 1;
+END;$$
+
+CREATE FUNCTION `func_schema`.`insert_and_return_no_param`() RETURNS INTEGER
+BEGIN
+  INSERT INTO `func_schema`.`dummy_data` (`value`) VALUES("value");
+
+  RETURN 1;
+END;$$
 
 --enable_query_log
 --enable_result_log

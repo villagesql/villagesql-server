@@ -5,7 +5,7 @@
 --disable_query_log
 --disable_result_log
 DROP SCHEMA IF EXISTS `pk_types_schema` ;
---let $router_test_schema=pk_types_schema
+--let $router_test_schemas=pk_types_schema;$router_test_schemas
 CREATE SCHEMA IF NOT EXISTS `pk_types_schema`;
 USE `pk_types_schema`;
 

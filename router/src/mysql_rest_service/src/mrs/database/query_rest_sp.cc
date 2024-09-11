@@ -26,6 +26,7 @@
 
 #include "mrs/interface/http_result.h"
 #include "mrs/json/json_template_factory.h"
+#include "mrs/monitored/gtid_functions.h"
 
 #include "mysql/harness/logging/logging.h"
 
@@ -181,10 +182,11 @@ const char *QueryRestSP::get_sql_state() {
 }
 
 void QueryRestSP::query_entries(
-    MySQLSession *session, const std::string &schema, const std::string &object,
-    const std::string &url, const std::string &ignore_column,
-    const mysqlrouter::sqlstring &values, std::vector<MYSQL_BIND> pt,
-    const ResultSets &rs, const JsonTemplateType type) {
+    collector::CountedMySQLSession *session, const std::string &schema,
+    const std::string &object, const std::string &url,
+    const std::string &ignore_column, const mysqlrouter::sqlstring &values,
+    std::vector<MYSQL_BIND> pt, const ResultSets &rs,
+    const JsonTemplateType type, mrs::GtidManager *gtid_manager) {
   rs_ = &rs;
   items_started_ = false;
   items = 0;
@@ -201,9 +203,25 @@ void QueryRestSP::query_entries(
   trace_resultset(rs_);
   response_template_->begin();
 
-  prepare_and_execute(session, query_, pt);
+  Query::OnResultSetEnd on_resultset_end = []() -> void {};
+  std::string gtid{};
+  if (gtid_manager) {
+    on_resultset_end = [&gtid, &gtid_manager, &session]() -> void {
+      auto last_gtid =
+          mrs::monitored::get_session_tracked_gtids_for_metadata_response(
+              session, gtid_manager);
+      if (!last_gtid.empty()) {
+        gtid = last_gtid;
+      }
+    };
+  }
+  prepare_and_execute(session, query_, pt, on_resultset_end);
 
-  response_template_->finish();
+  JsonTemplate::CustomMetadata custom_metadata;
+  if (!gtid.empty()) {
+    custom_metadata["gtid"] = gtid;
+  }
+  response_template_->finish(custom_metadata);
 
   response = response_template_->get_result();
 }

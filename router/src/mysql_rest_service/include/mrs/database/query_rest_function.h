@@ -29,6 +29,7 @@
 #include <string>
 #include <vector>
 
+#include "helper/json/serializer_to_text.h"
 #include "helper/mysql_column.h"
 #include "mrs/database/entry/object.h"
 #include "mrs/database/helper/query.h"
@@ -43,6 +44,7 @@ class QueryRestFunction : private QueryLog {
   using ParametersValues = std::vector<mysqlrouter::sqlstring>;
 
  public:
+  using CustomMetadata = std::map<std::string, std::string>;
   QueryRestFunction(bool encode_bigints_as_strings = false)
       : encode_bigints_as_strings_{encode_bigints_as_strings} {}
 
@@ -52,6 +54,7 @@ class QueryRestFunction : private QueryLog {
   virtual void query_entries(MySQLSession *session,
                              std::shared_ptr<entry::Object> object,
                              const ParametersValues &values = {});
+  virtual void serialize_response(const CustomMetadata &custom_metadata = {});
 
   const char *get_sql_state();
   std::string response;
@@ -62,6 +65,8 @@ class QueryRestFunction : private QueryLog {
   enum_field_types mysql_type_{MYSQL_TYPE_NULL};
   JsonType json_type_{JsonType::kNull};
   bool encode_bigints_as_strings_;
+  helper::json::SerializerToText serializer_;
+  helper::json::SerializerToText::Object json_root_;
 
   void query_entries_impl(MySQLSession *session,
                           std::shared_ptr<entry::Object> object,

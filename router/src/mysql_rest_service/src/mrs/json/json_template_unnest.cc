@@ -72,7 +72,7 @@ void JsonTemplateUnnest::begin() {
   full_stop_ = false;
 }
 
-void JsonTemplateUnnest::finish() {
+void JsonTemplateUnnest::finish(const CustomMetadata &custom_metadata) {
   end_resultset();
 
   json_root_items_ = JsonSerializer::Array();
@@ -83,6 +83,10 @@ void JsonTemplateUnnest::finish() {
       auto oc = a->add_object();
       oc->member_add_value("name", c.name);
       oc->member_add_value("type", c.type_txt);
+    }
+
+    for (const auto &md : custom_metadata) {
+      m->member_add_value(md.first, md.second);
     }
   }
   json_root_ = JsonSerializer::Object();

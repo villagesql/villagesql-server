@@ -56,7 +56,7 @@ class ResponseJsonTemplate : public database::JsonTemplate {
                 const char *ignore_column = nullptr) override;
   void end_resultset() override;
   void begin() override;
-  void finish() override;
+  void finish(const CustomMetadata &custom_metadata = {}) override;
 
   void flush() override;
   std::string get_result() override;

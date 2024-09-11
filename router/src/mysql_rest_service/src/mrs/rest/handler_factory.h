@@ -38,9 +38,11 @@ class HandlerFactory : public mrs::interface::HandlerFactory {
       Route *r, AuthManager *auth_manager,
       mrs::interface::QueryFactory *query_factory) override;
   std::unique_ptr<Handler> create_function_handler(
-      Route *r, AuthManager *auth_manager) override;
+      Route *r, AuthManager *auth_manager,
+      mrs::GtidManager *gtid_manager) override;
   std::unique_ptr<Handler> create_sp_handler(
-      Route *r, AuthManager *auth_manager) override;
+      Route *r, AuthManager *auth_manager,
+      mrs::GtidManager *gtid_manager) override;
   std::unique_ptr<Handler> create_object_handler(
       Route *r, AuthManager *auth_manager,
       mrs::GtidManager *gtid_manager) override;

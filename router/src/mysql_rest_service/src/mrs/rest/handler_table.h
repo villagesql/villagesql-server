@@ -70,7 +70,6 @@ class HandlerTable : public Handler {
       const HttpUri &requests_uri);
   std::string get_path_after_object_name(const HttpUri &requests_uri);
   std::string get_rest_query_parameter(const HttpUri &requests_uri);
-  std::string get_most_relevant_gtid(const std::vector<std::string> &gtids);
 
   mrs::database::ObjectRowOwnership row_ownership_info(
       rest::RequestContext *ctxt,

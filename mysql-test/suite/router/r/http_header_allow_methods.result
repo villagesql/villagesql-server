@@ -115,8 +115,8 @@ Date -> %DATE%
 Access-Control-Allow-Methods  ->  GET, POST, PUT, DELETE, OPTIONS
 Content-Type  ->  application/json
 Content-Length  ->  13
-DROP SCHEMA basic_schema;
 DROP SCHEMA func_schema;
+DROP SCHEMA basic_schema;
 DROP SCHEMA mysql_rest_service_metadata;
 DROP ROLE mysql_rest_service_admin;
 DROP ROLE mysql_rest_service_schema_admin;

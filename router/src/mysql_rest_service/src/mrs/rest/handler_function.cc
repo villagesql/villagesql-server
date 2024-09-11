@@ -33,6 +33,7 @@
 #include "mrs/database/helper/sp_function_query.h"
 #include "mrs/database/query_rest_function.h"
 #include "mrs/http/error.h"
+#include "mrs/monitored/gtid_functions.h"
 #include "mrs/rest/request_context.h"
 #include "mrs/router_observation_entities.h"
 
@@ -84,9 +85,11 @@ static CachedObject get_session(::mysqlrouter::MySQLSession *,
 }
 
 HandlerFunction::HandlerFunction(Route *r,
-                                 mrs::interface::AuthorizeManager *auth_manager)
+                                 mrs::interface::AuthorizeManager *auth_manager,
+                                 mrs::GtidManager *gtid_manager)
     : Handler{r->get_url_host(), r->get_rest_url(), r->get_rest_path(),
               r->get_options(), auth_manager},
+      gtid_manager_{gtid_manager},
       route_{r},
       auth_manager_{auth_manager} {}
 
@@ -143,7 +146,7 @@ HttpResult HandlerFunction::handle_put(
       ctxt->user.has_user_id ? &ctxt->user.user_id : nullptr);
 
   // Stored procedures may change the state of the SQL session,
-  // we need ensure that its going to be reseted.
+  // we need ensure that its going to be reset.
   // Set as dirty, directly before executing queries.
   session.set_dirty();
 
@@ -158,6 +161,17 @@ HttpResult HandlerFunction::handle_put(
       Counter<kEntityCounterRestReturnedItems>::increment(db.items);
       Counter<kEntityCounterRestAffectedItems>::increment(
           session->affected_rows());
+
+      database::QueryRestFunction::CustomMetadata custom_metadata;
+      if (get_options().metadata.gtid && gtid_manager_) {
+        auto gtid =
+            mrs::monitored::get_session_tracked_gtids_for_metadata_response(
+                session.get(), gtid_manager_);
+        if (!gtid.empty()) {
+          custom_metadata["gtid"] = gtid;
+        }
+      }
+      db.serialize_response(custom_metadata);
 
       return {std::move(db.response)};
     }
@@ -215,7 +229,7 @@ HttpResult HandlerFunction::handle_get(
   auto session =
       get_session(ctxt->sql_session_cache.get(), route_->get_cache());
   // Stored procedures may change the state of the SQL session,
-  // we need ensure that its going to be reseted.
+  // we need ensure that its going to be reset.
   // Set as dirty, directly before executing queries.
   session.set_dirty();
 
@@ -233,6 +247,17 @@ HttpResult HandlerFunction::handle_get(
       Counter<kEntityCounterRestReturnedItems>::increment(db.items);
       Counter<kEntityCounterRestAffectedItems>::increment(
           session->affected_rows());
+
+      database::QueryRestFunction::CustomMetadata custom_metadata;
+      if (get_options().metadata.gtid && gtid_manager_) {
+        auto gtid =
+            mrs::monitored::get_session_tracked_gtids_for_metadata_response(
+                session.get(), gtid_manager_);
+        if (!gtid.empty()) {
+          custom_metadata["gtid"] = gtid;
+        }
+      }
+      db.serialize_response(custom_metadata);
 
       return {std::move(db.response)};
     }

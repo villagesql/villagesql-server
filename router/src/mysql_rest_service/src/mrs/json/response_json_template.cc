@@ -147,7 +147,19 @@ void ResponseJsonTemplate::end_resultset() {
 
 void ResponseJsonTemplate::begin() {}
 
-void ResponseJsonTemplate::finish() { end_resultset(); }
+void ResponseJsonTemplate::finish(const CustomMetadata &custom_metadata) {
+  end_resultset();
+
+  json_root_items_ = JsonSerializer::Array();
+  if (json_root_.is_usable()) {
+    if (!custom_metadata.empty()) {
+      auto m = json_root_->member_add_object("_metadata");
+      for (const auto &md : custom_metadata) {
+        m->member_add_value(md.first, md.second);
+      }
+    }
+  }
+}
 
 bool ResponseJsonTemplate::push_row(const ResultRow &values,
                                     const char *ignore_column) {

@@ -186,9 +186,11 @@ static HttpResult handler_mysqlerror(const mysqlrouter::MySQLSession::Error &e,
   return HttpResult(status, std::move(json), HttpResult::Type::typeJson);
 }
 
-HandlerSP::HandlerSP(Route *r, mrs::interface::AuthorizeManager *auth_manager)
+HandlerSP::HandlerSP(Route *r, mrs::interface::AuthorizeManager *auth_manager,
+                     mrs::GtidManager *gtid_manager)
     : Handler{r->get_url_host(), r->get_rest_url(), r->get_rest_path(),
               r->get_options(), auth_manager},
+      gtid_manager_{gtid_manager},
       route_{r},
       auth_manager_{auth_manager} {}
 
@@ -251,21 +253,23 @@ HttpResult HandlerSP::handle_put([[maybe_unused]] rest::RequestContext *ctxt) {
   }
 
   // Stored procedures may change the state of the SQL session,
-  // we need ensure that its going to be reseted.
+  // we need ensure that its going to be reset.
   // Set as dirty, directly before executing queries.
   session.set_dirty();
 
   database::QueryRestSP db;
   try {
+    auto *gtid_manager = get_options().metadata.gtid ? gtid_manager_ : nullptr;
     db.query_entries(session.get(), route_->get_schema_name(),
                      route_->get_object_name(), route_->get_rest_url(),
                      route_->get_user_row_ownership().user_ownership_column,
-                     result.c_str(), binds.parameters, rs);
+                     result.c_str(), binds.parameters, rs,
+                     database::JsonTemplateType::kObjectNestedOutParameters,
+                     gtid_manager);
 
     Counter<kEntityCounterRestReturnedItems>::increment(db.items);
     Counter<kEntityCounterRestAffectedItems>::increment(
         session->affected_rows());
-
   } catch (const mysqlrouter::MySQLSession::Error &e) {
     return handler_mysqlerror(e, &db);
   }
@@ -336,7 +340,7 @@ HttpResult HandlerSP::handle_get([[maybe_unused]] rest::RequestContext *ctxt) {
   auto session =
       get_session(ctxt->sql_session_cache.get(), route_->get_cache());
   // Stored procedures may change the state of the SQL session,
-  // we need ensure that its going to be reseted.
+  // we need ensure that its going to be reset.
   // Set as dirty, directly before executing queries.
   session.set_dirty();
 
@@ -347,10 +351,14 @@ HttpResult HandlerSP::handle_get([[maybe_unused]] rest::RequestContext *ctxt) {
     log_debug("HandlerSP::handle_get - generating feed response");
     database::QueryRestSP db;
     try {
+      auto *gtid_manager =
+          get_options().metadata.gtid ? gtid_manager_ : nullptr;
       db.query_entries(session.get(), route_->get_schema_name(),
                        route_->get_object_name(), route_->get_rest_url(),
                        route_->get_user_row_ownership().user_ownership_column,
-                       result.c_str(), binds.parameters, p);
+                       result.c_str(), binds.parameters, p,
+                       database::JsonTemplateType::kObjectNestedOutParameters,
+                       gtid_manager);
 
       Counter<kEntityCounterRestReturnedItems>::increment(db.items);
       Counter<kEntityCounterRestAffectedItems>::increment(

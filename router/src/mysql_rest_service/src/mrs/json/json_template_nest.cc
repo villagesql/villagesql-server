@@ -82,12 +82,21 @@ void JsonTemplateNest::begin() {
   json_root_items_ = serializer_.member_add_array("items");
 }
 
-void JsonTemplateNest::finish() {
+void JsonTemplateNest::finish(const CustomMetadata &custom_metadata) {
   end_resultset();
+
+  json_root_items_ = JsonSerializer::Array();
+  if (json_root_.is_usable()) {
+    if (!custom_metadata.empty()) {
+      auto m = json_root_->member_add_object("_metadata");
+      for (const auto &md : custom_metadata) {
+        m->member_add_value(md.first, md.second);
+      }
+    }
+  }
 
   json_root_items_object_items_ = JsonSerializer::Array();
   json_root_items_object_ = JsonSerializer::Object();
-  json_root_items_ = JsonSerializer::Array();
   json_root_ = JsonSerializer::Object();
 }
 

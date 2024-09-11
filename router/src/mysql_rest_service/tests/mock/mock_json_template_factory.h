@@ -43,7 +43,7 @@ class MockJsonTemplate : public mrs::database::JsonTemplate {
               (const ResultRow &values, const char *ignore_column), (override));
   MOCK_METHOD(void, end_resultset, (), (override));
   MOCK_METHOD(void, begin, (), (override));
-  MOCK_METHOD(void, finish, (), (override));
+  MOCK_METHOD(void, finish, (const CustomMetadata &), (override));
   MOCK_METHOD(void, flush, (), (override));
   MOCK_METHOD(std::string, get_result, (), (override));
 };

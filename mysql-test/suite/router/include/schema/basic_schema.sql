@@ -6,7 +6,7 @@
 --disable_result_log
 DROP SCHEMA IF EXISTS `basic_schema` ;
 
---let $router_test_schema=basic_schema
+--let $router_test_schemas=basic_schema;$router_test_schemas
 CREATE SCHEMA IF NOT EXISTS `basic_schema`;
 USE `basic_schema`;
 

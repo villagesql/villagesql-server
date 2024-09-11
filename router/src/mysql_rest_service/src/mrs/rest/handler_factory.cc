@@ -41,14 +41,15 @@ HandlerPtr HandlerFactory::create_file_handler(
   return HandlerPtr{new HandlerFile(r, auth_manager, query_factor)};
 }
 
-HandlerPtr HandlerFactory::create_function_handler(Route *r,
-                                                   AuthManager *auth_manager) {
-  return HandlerPtr{new HandlerFunction(r, auth_manager)};
+HandlerPtr HandlerFactory::create_function_handler(
+    Route *r, AuthManager *auth_manager, mrs::GtidManager *gtid_manager) {
+  return HandlerPtr{new HandlerFunction(r, auth_manager, gtid_manager)};
 }
 
 HandlerPtr HandlerFactory::create_sp_handler(Route *r,
-                                             AuthManager *auth_manager) {
-  return HandlerPtr{new HandlerSP(r, auth_manager)};
+                                             AuthManager *auth_manager,
+                                             mrs::GtidManager *gtid_manager) {
+  return HandlerPtr{new HandlerSP(r, auth_manager, gtid_manager)};
 }
 
 HandlerPtr HandlerFactory::create_object_handler(

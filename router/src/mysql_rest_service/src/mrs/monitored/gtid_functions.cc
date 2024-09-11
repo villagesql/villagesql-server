@@ -29,6 +29,7 @@
 
 #include "mrs/router_observation_entities.h"
 
+#include "helper/json/rapid_json_to_text.h"
 #include "mysql/harness/logging/logging.h"
 
 IMPORT_LOG_FUNCTIONS()

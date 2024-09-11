@@ -47,12 +47,12 @@ class HandlerFactory {
   virtual ~HandlerFactory() = default;
 
   virtual std::unique_ptr<Handler> create_function_handler(
-      Route *r, AuthManager *auth_manager) = 0;
+      Route *r, AuthManager *auth_manager, mrs::GtidManager *gtid_manager) = 0;
   virtual std::unique_ptr<Handler> create_file_handler(
       Route *r, AuthManager *auth_manager,
       mrs::interface::QueryFactory *query_factory) = 0;
   virtual std::unique_ptr<Handler> create_sp_handler(
-      Route *r, AuthManager *auth_manager) = 0;
+      Route *r, AuthManager *auth_manager, mrs::GtidManager *gtid_manager) = 0;
   virtual std::unique_ptr<Handler> create_object_handler(
       Route *r, AuthManager *auth_manager, mrs::GtidManager *gtid_manager) = 0;
   virtual std::unique_ptr<Handler> create_object_metadata_handler(

@@ -596,14 +596,5 @@ mrs::database::ObjectRowOwnership HandlerTable::row_ownership_info(
   return {};
 }
 
-std::string HandlerTable::get_most_relevant_gtid(
-    const std::vector<std::string> &gtids) {
-  for (auto &g : gtids) {
-    log_debug("Received gtid: %s", g.c_str());
-  }
-  if (gtids.size() > 0) return gtids[0];
-  return {};
-}
-
 }  // namespace rest
 }  // namespace mrs

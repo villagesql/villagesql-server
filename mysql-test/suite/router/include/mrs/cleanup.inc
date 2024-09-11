@@ -36,11 +36,15 @@ if ($extra_mrs_router_id)
    }
 }
 
-
-if ($router_test_schema)
+let $schemas_to_remove=$router_test_schemas;
+while($schemas_to_remove)
 {
-   eval DROP SCHEMA $router_test_schema;
+  let $schema=`SELECT TRIM(REPLACE(SUBSTRING_INDEX("$schemas_to_remove", ";", 1),"\n",""))`;
+  let $schemas_to_remove=`SELECT TRIM(SUBSTRING("$schemas_to_remove", LENGTH("$schema") + 2))`;
+
+  eval DROP SCHEMA $schema;
 }
+
 DROP SCHEMA mysql_rest_service_metadata;
 DROP ROLE mysql_rest_service_admin;
 DROP ROLE mysql_rest_service_schema_admin;
@@ -79,9 +83,13 @@ if ($restart_router_id)
 
 if ($KEEP_ROUTER_FILES == 1)
 {
-if ($router_test_schema)
+let $schemas_to_remove=$router_test_schemas;
+while($schemas_to_remove)
 {
-   --echo DROP SCHEMA $router_test_schema;
+  let $schema=`SELECT TRIM(REPLACE(SUBSTRING_INDEX("$schemas_to_remove", ";", 1),"\n",""))`;
+  let $schemas_to_remove=`SELECT TRIM(SUBSTRING("$schemas_to_remove", LENGTH("$schema") + 2))`;
+
+  --echo DROP SCHEMA $schema;
 }
 --echo DROP SCHEMA mysql_rest_service_metadata;
 --echo DROP ROLE mysql_rest_service_admin;

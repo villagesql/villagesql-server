@@ -574,7 +574,8 @@ void MySQLSession::throw_mysqlerror(MYSQL_STMT *stmt, uint64_t ps_id) {
 void MySQLSession::prepare_execute_with_bind_parameters(
     uint64_t ps_id, std::vector<MYSQL_BIND> bind_parameters,
     const ResultRowProcessor &processor,
-    const FieldValidator &validator /*= null_field_validator*/) {
+    const FieldValidator &validator /*= null_field_validator*/,
+    const OnResultSetEnd &on_resultset_end) {
   auto stmt = stmts_[ps_id];
 
   if (mysql_stmt_bind_param(stmt, bind_parameters.data())) {
@@ -637,6 +638,7 @@ void MySQLSession::prepare_execute_with_bind_parameters(
     for (unsigned int i = 0; i < nfields; ++i) {
       delete[] reinterpret_cast<char *>(my_bind[i].buffer);
     }
+    on_resultset_end();
     status = mysql_stmt_next_result(stmt);
   } while (status == 0);
 

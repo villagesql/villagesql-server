@@ -146,5 +146,4 @@
 --source ../include/mrs/mrs_client.inc
 
 # Cleanup
-DROP SCHEMA basic_schema;
 --source ../include/mrs/cleanup.inc
