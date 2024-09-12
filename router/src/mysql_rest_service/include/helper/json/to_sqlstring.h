@@ -69,7 +69,8 @@ Stream &to_stream(Stream &stream, const rapidjson::Value &v,
   } else if (v.IsArray() && isArrayOfNumbers(v.GetArray())) {
     std::stringstream result;
     const char *separator = "[";
-    for (const auto &el : array_iterator(v.GetArray())) {
+    auto arr = v.GetArray();
+    for (const auto &el : array_iterator(arr)) {
       result << separator;
       separator = ",";
       to_stream(result, el, helper::k_true.c_str(), helper::k_false.c_str());

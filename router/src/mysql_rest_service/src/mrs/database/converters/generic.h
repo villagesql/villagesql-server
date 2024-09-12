@@ -25,7 +25,11 @@
 #ifndef ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_DATABASE_CONVERTERS_GENERIC_H_
 #define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_DATABASE_CONVERTERS_GENERIC_H_
 
+#ifndef _WIN32
 #include <strings.h>
+#else
+#include <string.h>
+#endif
 
 #if defined(_WIN32)
 #define mrs_strcasecmp(a, b) _stricmp(a, b)
