@@ -455,16 +455,6 @@ class AccountReuseTestBase : public RouterComponentBootstrapTest {
   // other functions
   ////////////////////////////////////////////////////////////////////////////////
 
-  ProcessWrapper &launch_mock_server(
-      uint16_t server_port, uint16_t server_http_port,
-      const std::string &js = "bootstrap_account_tests.js") {
-    const std::string json_stmts = get_data_dir().join(js).str();
-    constexpr bool debug = true;
-    auto &server_mock = launch_mysql_server_mock(
-        json_stmts, server_port, EXIT_SUCCESS, debug, server_http_port);
-    return server_mock;
-  }
-
   ProcessWrapper &launch_bootstrap(int exp_exit_code, uint16_t server_port,
                                    const std::string &bootstrap_directory,
                                    const std::vector<std::string> &extra_args,
@@ -540,7 +530,7 @@ class AccountReuseTestBase : public RouterComponentBootstrapTest {
   }
 
   void check_bootstrap_success(
-      ProcessWrapper &router, const std::vector<std::string> exp_output,
+      ProcessWrapper &router, const std::vector<std::string> &exp_output,
       const std::vector<std::string> unexp_output = {}) {
     ASSERT_NO_THROW(router.wait_for_exit());
 
@@ -1209,7 +1199,11 @@ TEST_P(AccountReuseTest, simple) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
+
   set_mock_metadata(server_http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port},
                     0, false, "127.0.0.1", "", {2, 2, 0}, "mycluster");
@@ -1259,7 +1253,11 @@ TEST_P(AccountReuseTest, no_host_patterns) {
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
     set_mock_server_sql_statements(server_http_port, cr.stmts);
 
     // run bootstrap
@@ -1318,7 +1316,11 @@ TEST_P(AccountReuseTest, multiple_host_patterns) {
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
     set_mock_server_sql_statements(server_http_port, cr.stmts);
 
     // run bootstrap
@@ -1878,7 +1880,10 @@ TEST_P(AccountReuseCreateComboTestP, config_does_not_exist_yet) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, cr.stmts);
@@ -1967,7 +1972,11 @@ TEST_P(AccountReuseReconfigurationTest, user_exists_then_account) {
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
     set_mock_server_sql_statements(server_http_port, cr.stmts);
 
     // run bootstrap
@@ -2036,7 +2045,11 @@ TEST_P(AccountReuseReconfigurationTest,
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
     set_mock_server_sql_statements(server_http_port,
                                    cr1.stmts + "," + cr2.stmts);
 
@@ -2106,7 +2119,11 @@ TEST_P(AccountReuseReconfigurationTest,
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
     set_mock_server_sql_statements(server_http_port, cr.stmts);
 
     // run bootstrap
@@ -2170,7 +2187,11 @@ TEST_P(AccountReuseReconfigurationTest,
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
     set_mock_server_sql_statements(server_http_port, cr.stmts);
 
     // run bootstrap
@@ -2233,7 +2254,11 @@ TEST_P(AccountReuseReconfigurationTest, noaccount_then_account) {
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
     set_mock_server_sql_statements(server_http_port, cr.stmts);
 
     // run bootstrap
@@ -2298,7 +2323,11 @@ TEST_P(AccountReuseReconfigurationTest, account_then_noaccount) {
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
     set_mock_server_sql_statements(server_http_port, cr.stmts);
 
     // run bootstrap
@@ -2365,7 +2394,11 @@ TEST_P(AccountReuseReconfigurationTest, noaccount_then_noaccount) {
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
     set_mock_server_sql_statements(server_http_port, cr.stmts);
 
     // run bootstrap
@@ -2418,7 +2451,10 @@ TEST_P(AccountReuseReconfigurationTest, account_then_noaccount___no_keyring) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
   set_mock_server_sql_statements(server_http_port, cr.stmts);
 
   // run bootstrap
@@ -2496,7 +2532,10 @@ TEST_P(AccountReuseReconfigurationTest,
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // run bootstrap
   ProcessWrapper &router =
@@ -2583,7 +2622,10 @@ TEST_P(AccountReuseReconfigurationTest,
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
   set_mock_server_sql_statements(
       server_http_port,
       cr.stmts);  // we don't set Router account username here,
@@ -2674,7 +2716,10 @@ TEST_P(ShowWarningsProcessorTest, no_accounts_exist) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, custom_responses);
@@ -2759,7 +2804,10 @@ TEST_P(ShowWarningsProcessorTest, one_account_exists) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, custom_responses);
@@ -2844,7 +2892,10 @@ TEST_P(ShowWarningsProcessorTest, two_accounts_exist) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, custom_responses);
@@ -2919,7 +2970,10 @@ TEST_P(ShowWarningsProcessorTest, all_accounts_exist) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, custom_responses);
@@ -3019,7 +3073,10 @@ TEST_P(ShowWarningsProcessorTest,
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, custom_responses);
@@ -3111,7 +3168,10 @@ TEST_P(ShowWarningsProcessorTest, show_warnings_returns_unrecognised_hostname) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, custom_responses);
@@ -3213,7 +3273,10 @@ TEST_P(ShowWarningsProcessorTest,
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, custom_responses);
@@ -3305,7 +3368,11 @@ TEST_P(ShowWarningsProcessorTest, show_warnings_returns_invalid_column_names) {
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
 
     // add expected creation SQL statements to JS
     set_mock_server_sql_statements(server_http_port, custom_responses);
@@ -3424,7 +3491,10 @@ TEST_P(ShowWarningsProcessorTest,
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, custom_responses);
@@ -3507,7 +3577,10 @@ TEST_P(ShowWarningsProcessorTest, show_warnings_fails_to_execute) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, custom_responses);
@@ -3751,7 +3824,10 @@ TEST_P(UndoCreateUserTestP, grant_fails) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, custom_responses);
 
@@ -3898,7 +3974,10 @@ TEST_P(UndoCreateUserTestP, grant_fails_and_drop_user_also_fails) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, custom_responses);
@@ -4007,7 +4086,10 @@ TEST_P(UndoCreateUserTest, failure_after_account_creation) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, custom_responses);
@@ -4119,7 +4201,10 @@ TEST_P(UndoCreateUserTest,
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
 
   // add expected creation SQL statements to JS
   set_mock_server_sql_statements(server_http_port, custom_responses);
@@ -4200,7 +4285,10 @@ TEST_P(AccountValidationTest, sunny_day_scenario) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
   set_mock_server_sql_statements(server_http_port, cr.stmts, kAccountUser);
 
   // run bootstrap
@@ -4263,7 +4351,10 @@ TEST_P(AccountValidationTest, account_exists_wrong_password) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
   set_mock_server_sql_statements(
       server_http_port,
       cr.stmts);  // we omit setting kAccountUser for 2nd conn
@@ -4331,7 +4422,10 @@ TEST_P(AccountValidationTest, account_exists_wrong_password_strict) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
   set_mock_server_sql_statements(
       server_http_port,
       cr.stmts);  // we omit setting kAccountUser for 2nd conn
@@ -4401,7 +4495,10 @@ TEST_P(AccountValidationTest, warn_on_conn_failure) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
   set_mock_server_sql_statements(
       server_http_port,
       cr.stmts);  // we omit setting kAccountUser for 2nd conn
@@ -4466,7 +4563,10 @@ TEST_P(AccountValidationTest, error_on_conn_failure) {
   const uint16_t server_port = port_pool_.get_next_available();
   const uint16_t server_http_port = port_pool_.get_next_available();
 
-  launch_mock_server(server_port, server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_account_tests.js")
+                                  .port(server_port)
+                                  .http_port(server_http_port)
+                                  .args());
   set_mock_server_sql_statements(
       server_http_port,
       cr.stmts);  // we omit setting kAccountUser for 2nd conn
@@ -4535,7 +4635,11 @@ TEST_P(AccountValidationTest, warn_on_query_failure) {
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
     set_mock_server_sql_statements(server_http_port, cr.stmts, kAccountUser);
 
     // run bootstrap
@@ -4606,7 +4710,11 @@ TEST_P(AccountValidationTest, error_on_query_failure) {
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
     set_mock_server_sql_statements(server_http_port, cr.stmts, kAccountUser);
 
     // run bootstrap
@@ -4679,7 +4787,11 @@ TEST_P(AccountValidationTest, existing_user_missing_grants___no_strict) {
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
     set_mock_server_sql_statements(server_http_port, cr.stmts, kAccountUser);
 
     // run bootstrap
@@ -4753,7 +4865,11 @@ TEST_P(AccountValidationTest, existing_user_missing_grants___strict) {
     const uint16_t server_port = port_pool_.get_next_available();
     const uint16_t server_http_port = port_pool_.get_next_available();
 
-    launch_mock_server(server_port, server_http_port);
+    mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_tests.js")
+            .port(server_port)
+            .http_port(server_http_port)
+            .args());
     set_mock_server_sql_statements(server_http_port, cr.stmts, kAccountUser);
 
     // run bootstrap
@@ -4802,14 +4918,12 @@ TEST_P(RouterAccountHostTest, multiple_host_patterns) {
   const auto http_port = port_pool_.get_next_available();
 
   auto test_it = [&](const std::vector<std::string> &cmdline) -> void {
-    const std::string json_stmts =
-        get_data_dir()
-            .join("bootstrap_account_host_multiple_patterns.js")
-            .str();
-
     // launch mock server that is our metadata server for the bootstrap
-    auto &server_mock = launch_mysql_server_mock(
-        json_stmts, server_port, EXIT_SUCCESS, false, http_port);
+    auto &server_mock = mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_account_host_multiple_patterns.js")
+            .port(server_port)
+            .http_port(http_port)
+            .args());
 
     // launch the router in bootstrap mode
     auto &router = launch_router_for_bootstrap(cmdline, EXIT_SUCCESS, true);
@@ -4909,8 +5023,6 @@ TEST_P(RouterAccountHostTest, without_bootstrap_flag) {
  * handles the error
  */
 TEST_P(RouterAccountHostTest, illegal_hostname) {
-  const std::string json_stmts =
-      get_data_dir().join("bootstrap_account_host_pattern_too_long.js").str();
   TempDirectory bootstrap_directory;
 
   prepare_config_dir_with_default_certs(bootstrap_directory.name());
@@ -4919,8 +5031,12 @@ TEST_P(RouterAccountHostTest, illegal_hostname) {
   const auto http_port = port_pool_.get_next_available();
 
   // launch mock server that is our metadata server for the bootstrap
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_account_host_pattern_too_long.js")
+          .port(server_port)
+          .http_port(http_port)
+          .args());
+
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port},
                     0, false, "127.0.0.1", "", {2, 2, 0}, "mycluster");
@@ -4960,12 +5076,13 @@ TEST_P(RouterReportHostTest, typical_usage) {
   const auto http_port = port_pool_.get_next_available();
 
   auto test_it = [&](const std::vector<std::string> &cmdline) -> void {
-    const std::string json_stmts =
-        get_data_dir().join("bootstrap_report_host.js").str();
-
     // launch mock server that is our metadata server for the bootstrap
-    auto &server_mock = launch_mysql_server_mock(
-        json_stmts, server_port, EXIT_SUCCESS, false, http_port);
+    auto &server_mock = mock_server_spawner().spawn(
+        mock_server_cmdline("bootstrap_report_host.js")
+            .port(server_port)
+            .http_port(http_port)
+            .args());
+
     set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                       classic_ports_to_gr_nodes({server_port}), 0,
                       {server_port}, 0, false, "127.0.0.1", "", {2, 2, 0},

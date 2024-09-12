@@ -118,8 +118,12 @@ TEST_P(CrossExeRouterBootstrapTest, bootstrap_and_run_from_symlinked_dir) {
   const auto bootstrap_x_ro_port = port_pool_.get_next_available();
 
   std::vector<Config> config{
-      {"127.0.0.1", server_port, http_port,
-       get_data_dir().join("bootstrap_gr.js").str()},
+      {
+          "127.0.0.1",
+          server_port,
+          http_port,
+          "bootstrap_gr.js",
+      },
   };
 
   SCOPED_TRACE("// prepare symlinked directory");
@@ -158,12 +162,12 @@ TEST_P(CrossExeRouterBootstrapTest, bootstrap_and_run_from_symlinked_dir) {
                                              router_options));
 
   SCOPED_TRACE("// launch mock-server for router");
-  const std::string runtime_json_stmts =
-      get_data_dir().join("metadata_dynamic_nodes_v2_gr.js").str();
+  mock_server_spawner().spawn(
+      mock_server_cmdline("metadata_dynamic_nodes_v2_gr.js")
+          .port(server_port)
+          .http_port(http_port)
+          .args());
 
-  // launch mock server that is our metadata server
-  launch_mysql_server_mock(runtime_json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
   set_mock_metadata(http_port, "cluster-specific-id",
                     {GRNode{server_port, "uuid-1", "ONLINE", "PRIMARY"}}, 0,
                     {ClusterNode{server_port, "uuid-1", server_x_port}});
@@ -209,11 +213,12 @@ TEST_P(RouterBootstrapOkTest, BootstrapOk) {
 
   const auto server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join(param.trace_file).str();
 
   // launch mock server that is our metadata server for the bootstrap
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(mock_server_cmdline(param.trace_file)
+                                  .port(server_port)
+                                  .http_port(http_port)
+                                  .args());
 
   auto globals = mock_GR_metadata_as_json(
       "cluster-specific-id", classic_ports_to_gr_nodes({server_port}), 0,
@@ -499,11 +504,12 @@ TEST_P(RouterBootstrapExposeDefaults, BootstrapExposeDefaults) {
 
   const auto server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join(param.trace_file).str();
 
   // launch mock server that is our metadata server for the bootstrap
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(mock_server_cmdline(param.trace_file)
+                                  .port(server_port)
+                                  .http_port(http_port)
+                                  .args());
 
   auto globals = mock_GR_metadata_as_json(
       "cluster-specific-id", classic_ports_to_gr_nodes({server_port}), 0,
@@ -648,8 +654,12 @@ TEST_P(RouterBootstrapOkBasePortTest, RouterBootstrapOkBasePort) {
   const std::string tracefile = "bootstrap_gr.js";
 
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), get_data_dir().join(tracefile).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          tracefile,
+      },
   };
 
   std::vector<std::string> cmdline = {
@@ -756,13 +766,18 @@ TEST_P(RouterBootstrapErrorBasePortTest, RouterBootstrapErrorBasePort) {
   const std::string tracefile = "bootstrap_gr.js";
 
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), get_data_dir().join(tracefile).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          tracefile,
+      },
   };
 
   const uint16_t server_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join(tracefile).str();
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false);
+
+  mock_server_spawner().spawn(
+      mock_server_cmdline(tracefile).port(server_port).args());
 
   // launch the router in bootstrap mode
   std::vector<std::string> cmdline = {"--bootstrap=root:"s + kRootPassword +
@@ -848,13 +863,15 @@ class RouterReBootstrapOkBasePortTest
  */
 TEST_P(RouterReBootstrapOkBasePortTest, RouterReBootstrapOkBasePort) {
   const auto param = GetParam();
-  const std::string tracefile = "bootstrap_gr.js";
 
   const uint16_t server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join(tracefile).str();
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(server_port)
+                                  .http_port(http_port)
+                                  .args());
+
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port},
                     0, false, "127.0.0.1", "", {2, 2, 0}, "mycluster");
@@ -1107,9 +1124,12 @@ TEST_P(RouterBootstrapUserIsCurrentUser, BootstrapUserIsCurrentUser) {
     const char *current_username = current_userpw->pw_name;
 
     std::vector<Config> mock_servers{
-        {"127.0.0.1", port_pool_.get_next_available(),
-         port_pool_.get_next_available(),
-         get_data_dir().join(param.trace_file).str()},
+        {
+            "127.0.0.1",
+            port_pool_.get_next_available(),
+            port_pool_.get_next_available(),
+            param.trace_file,
+        },
     };
 
     std::vector<std::string> router_options = {
@@ -1152,13 +1172,22 @@ class RouterBootstrapailoverClusterIdDiffers
 TEST_P(RouterBootstrapailoverClusterIdDiffers,
        BootstrapFailoverClusterIdDiffers) {
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(GetParam().trace_file).str(), false, "cluster-id-1"},
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(GetParam().trace_file2).str(), false,
-       "cluster-id-2"},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          GetParam().trace_file,
+          false,
+          "cluster-id-1",
+      },
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          GetParam().trace_file2,
+          false,
+          "cluster-id-2",
+      },
   };
 
   // check that it failed as expected
@@ -1207,9 +1236,12 @@ TEST_P(RouterBootstrapOnlySockets, BootstrapOnlySockets) {
   const auto param = GetParam();
 
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file,
+      },
   };
 
   std::vector<std::string> router_options = {
@@ -1286,9 +1318,12 @@ TEST_P(BootstrapUnsupportedSchemaVersionTest,
                  "with metadata version 1.x, it MUST fail and log an error");
 
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_unsupported_schema_version.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_unsupported_schema_version.js",
+      },
   };
 
   const auto version = GetParam();
@@ -1330,9 +1365,12 @@ class RouterComponentBootstrapTestOld
  */
 TEST_P(RouterComponentBootstrapTestOld, BootstrapErrorOnFirstQuery) {
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_error_on_first_query.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_error_on_first_query.js",
+      },
   };
 
   // check that it failed as expected
@@ -1349,9 +1387,12 @@ TEST_P(RouterComponentBootstrapTestOld, BootstrapErrorOnFirstQuery) {
 TEST_P(RouterComponentBootstrapTestOld,
        BootstrapWhileMetadataUpgradeInProgress) {
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_unsupported_schema_version.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_unsupported_schema_version.js",
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
@@ -1372,9 +1413,12 @@ TEST_P(RouterComponentBootstrapTestOld, BootstrapPidfileOpt) {
       mysql_harness::Path(get_test_temp_dir_name()).join("test.pid").str();
 
   std::vector<Config> config{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_gr.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_gr.js",
+      },
   };
 
   std::vector<std::string> router_options = {
@@ -1409,9 +1453,12 @@ TEST_P(RouterComponentBootstrapTestOld, BootstrapPidfileCfg) {
 
   {
     std::vector<Config> config{
-        {"127.0.0.1", port_pool_.get_next_available(),
-         port_pool_.get_next_available(),
-         get_data_dir().join("bootstrap_gr.js").str()},
+        {
+            "127.0.0.1",
+            port_pool_.get_next_available(),
+            port_pool_.get_next_available(),
+            "bootstrap_gr.js",
+        },
     };
 
     std::vector<std::string> router_options = {
@@ -1455,9 +1502,12 @@ TEST_P(RouterComponentBootstrapTestOld, BootstrapPidfileEnv) {
 
   {
     std::vector<Config> config{
-        {"127.0.0.1", port_pool_.get_next_available(),
-         port_pool_.get_next_available(),
-         get_data_dir().join("bootstrap_gr.js").str()},
+        {
+            "127.0.0.1",
+            port_pool_.get_next_available(),
+            port_pool_.get_next_available(),
+            "bootstrap_gr.js",
+        },
     };
 
     std::vector<std::string> router_options = {
@@ -1513,14 +1563,24 @@ TEST_P(RouterBootstrapFailoverSuperReadonly, BootstrapFailoverSuperReadonly) {
   const auto param = GetParam();
 
   std::vector<Config> config{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file).str()},
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file2).str()},
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file,
+      },
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file2,
+      },
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(config, param.cluster_type));
@@ -1581,16 +1641,27 @@ TEST_P(RouterBootstrapFailoverSuperReadonly2ndNodeDead,
   const auto dead_port = port_pool_.get_next_available();
   std::vector<Config> config{
       // member-1, PRIMARY, fails at first write
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file,
+      },
       // member-2, unreachable
-      {"127.0.0.1", dead_port, port_pool_.get_next_available(), "",
-       /*unaccessible=*/true},
+      {
+          "127.0.0.1",
+          dead_port,
+          port_pool_.get_next_available(),
+          "",
+          /*unaccessible=*/true,
+      },
       // member-3, succeeds
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file2).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file2,
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
@@ -1646,16 +1717,27 @@ TEST_P(RouterBootstrapFailoverPrimaryUnreachable,
   const auto dead_port = port_pool_.get_next_available();
   std::vector<Config> config{
       // member-1, fails at first write (SEONDARY)
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file,
+      },
       // member-2, fails at first write (SEONDARY)
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file,
+      },
       // member-3, unreachable (potential PRIMARY)
-      {"127.0.0.1", dead_port, port_pool_.get_next_available(), "",
-       /*unaccessible=*/true},
+      {
+          "127.0.0.1",
+          dead_port,
+          port_pool_.get_next_available(),
+          "",
+          /*unaccessible=*/true,
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
@@ -1710,18 +1792,28 @@ TEST_P(RouterBootstrapFailoverSuperReadonlyCreateAccountFails,
 
   std::vector<Config> config{
       // member-1: SECONDARY, fails at DROP USER due to RW request on RO node
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file,
+      },
 
       // member-2: PRIMARY, succeeds
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(param.trace_file2).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          param.trace_file2,
+      },
 
       // member-3: defined, but unused
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(config, param.cluster_type));
@@ -1772,17 +1864,28 @@ TEST_P(RouterBootstrapFailoverSuperReadonlyCreateAccountGrantFails,
        BootstrapFailoverSuperReadonlyCreateAccountGrantFails) {
   std::vector<Config> config{
       // member-1: SECONDARY fails and exits after GRANT
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(GetParam().trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          GetParam().trace_file,
+      },
 
       // member-2: defined, but unused
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
 
       // member-3: defined, but unused
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
@@ -1825,14 +1928,24 @@ INSTANTIATE_TEST_SUITE_P(
 TEST_P(CrossExeRouterBootstrapTest,
        DISABLED_BootstrapFailoverSuperReadonlyFromSocket) {
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_failover_super_read_only_1.js").str()},
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_gr.js").str()},
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_failover_super_read_only_1.js",
+      },
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_gr.js",
+      },
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
   };
 
   std::vector<std::string> router_options = {
@@ -1868,19 +1981,28 @@ TEST_P(RouterBootstrapFailoverSuperReadonlyNewPrimaryCrash,
        BootstrapFailoverSuperReadonlyNewPrimaryCrash) {
   std::vector<Config> mock_servers{
       // member-1: PRIMARY, fails at DROP USER
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(GetParam().trace_file).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          GetParam().trace_file,
+      },
 
       // member-2: PRIMARY, but crashing
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(GetParam().trace_file2).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          GetParam().trace_file2,
+      },
 
       // member-3: newly elected PRIMARY, succeeds
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join(GetParam().trace_file3).str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          GetParam().trace_file3,
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(
@@ -1950,12 +2072,14 @@ TEST_P(CrossExeRouterBootstrapTest,
   // launch mock server that is our metadata server for the bootstrap
   const auto server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts =
-      get_data_dir()
-          .join("bootstrap_report_host.js")
-          .str();  // we piggy back on existing .js to avoid creating a new one
-  auto &server_mock = launch_mysql_server_mock(json_stmts, server_port,
-                                               EXIT_SUCCESS, false, http_port);
+
+  auto &server_mock = mock_server_spawner().spawn(
+      // we piggy back on existing .js to avoid creating a new one
+      mock_server_cmdline("bootstrap_report_host.js")
+          .port(server_port)
+          .http_port(http_port)
+          .args());
+
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port});
 
@@ -1987,9 +2111,12 @@ TEST_P(CrossExeRouterBootstrapTest,
 TEST_P(CrossExeRouterBootstrapTest,
        BootstrapSucceedWhenServerResponseLessThanReadTimeout) {
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_exec_time_2_seconds.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_exec_time_2_seconds.js",
+      },
   };
 
   std::vector<std::string> router_options = {
@@ -2004,17 +2131,28 @@ TEST_P(CrossExeRouterBootstrapTest,
 TEST_P(CrossExeRouterBootstrapTest, BootstrapAccessErrorAtGrantStatement) {
   std::vector<Config> config{
       // member-1: PRIMARY, fails after GRANT
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_access_error_at_grant.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_access_error_at_grant.js",
+      },
 
       // member-2: defined, but unused
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
 
       // member-3: defined, but unused
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), ""},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "",
+      },
   };
 
   ASSERT_NO_FATAL_FAILURE(
@@ -2047,7 +2185,7 @@ TEST_P(RouterBootstrapBootstrapNoGroupReplicationSetup,
           "127.0.0.1",
           port_pool_.get_next_available(),
           port_pool_.get_next_available(),
-          get_data_dir().join(param.trace_file).str(),
+          param.trace_file,
       },
   };
 
@@ -2076,7 +2214,7 @@ TEST_P(CrossExeRouterBootstrapTest, BootstrapNoMetadataSchema) {
           "127.0.0.1",
           port_pool_.get_next_available(),
           port_pool_.get_next_available(),
-          get_data_dir().join("bootstrap_no_schema.js").str(),
+          "bootstrap_no_schema.js",
       },
   };
 
@@ -2092,9 +2230,12 @@ TEST_P(CrossExeRouterBootstrapTest, BootstrapNoMetadataSchema) {
 TEST_P(CrossExeRouterBootstrapTest,
        BootstrapFailWhenServerResponseExceedsReadTimeout) {
   std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_exec_time_2_seconds.js").str()},
+      {
+          "127.0.0.1",
+          port_pool_.get_next_available(),
+          port_pool_.get_next_available(),
+          "bootstrap_exec_time_2_seconds.js",
+      },
   };
 
   std::vector<std::string> router_options = {
@@ -2115,11 +2256,12 @@ TEST_P(CrossExeRouterBootstrapTest,
  */
 TEST_P(CrossExeRouterBootstrapTest,
        NoMasterKeyFileWhenBootstrapPassWithMasterKeyReader) {
-  std::vector<Config> config{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_gr.js").str()},
-  };
+  std::vector<Config> config{{
+      "127.0.0.1",
+      port_pool_.get_next_available(),
+      port_pool_.get_next_available(),
+      "bootstrap_gr.js",
+  }};
 
   ScriptGenerator script_generator(ProcessManager::get_origin(),
                                    get_test_temp_dir_name());
@@ -2174,11 +2316,12 @@ TEST_P(CrossExeRouterBootstrapTest,
   const auto master_key = get_file_output(master_key_path);
 
   SCOPED_TRACE("// bootstrap.");
-  std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(),
-       get_data_dir().join("bootstrap_gr.js").str()},
-  };
+  std::vector<Config> mock_servers{{
+      "127.0.0.1",
+      port_pool_.get_next_available(),
+      port_pool_.get_next_available(),
+      "bootstrap_gr.js",
+  }};
 
   std::vector<std::string> router_options = {
       "--bootstrap=" + mock_servers.at(0).ip + ":" +
@@ -2216,11 +2359,13 @@ TEST_P(ConfUseGrNotificationParamTest, ConfUseGrNotificationParam) {
   const auto server_port = port_pool_.get_next_available();
   const auto server_x_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join("bootstrap_gr.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
-  auto &server_mock = launch_mysql_server_mock(json_stmts, server_port,
-                                               EXIT_SUCCESS, false, http_port);
+  auto &server_mock =
+      mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                      .port(server_port)
+                                      .http_port(http_port)
+                                      .args());
 
   set_mock_metadata(http_port, "cluster-specific-id",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port},
@@ -2269,12 +2414,14 @@ TEST_P(ConfUseGrNotificationParamTest, ConfUseGrNotificationParam) {
               ::testing::IsSupersetOf(GetParam().expected_config_lines));
   server_mock.send_clean_shutdown_event();
   EXPECT_NO_THROW(server_mock.wait_for_exit());
-  const std::string runtime_json_stmts =
-      get_data_dir().join("metadata_dynamic_nodes_v2_gr.js").str();
 
   // launch mock server that is our metadata server
-  launch_mysql_server_mock(runtime_json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("metadata_dynamic_nodes_v2_gr.js")
+          .port(server_port)
+          .http_port(http_port)
+          .args());
+
   set_mock_metadata(http_port, "cluster-specific-id",
                     {GRNode{server_port, "uuid-1", "ONLINE", "PRIMARY"}}, 0,
                     {ClusterNode{server_port, "uuid-1", server_x_port}});
@@ -2577,7 +2724,6 @@ TEST_P(CrossExeErrorReportTest, bootstrap_dir_exists_but_is_inaccessible) {
  */
 TEST_P(CrossExeErrorReportTest,
        bootstrap_dir_does_not_exist_and_is_impossible_to_create) {
-  const std::string json_stmts = get_data_dir().join("bootstrap_gr.js").str();
   const uint16_t server_port = port_pool_.get_next_available();
 
   TempDirectory bootstrap_superdir;
@@ -2622,10 +2768,10 @@ TEST_P(CrossExeErrorReportTest,
 TEST_P(CrossExeErrorReportTest, ConfUseGrNotificationsAsyncReplicaset) {
   TempDirectory bootstrap_directory;
   const auto server_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join("bootstrap_ar.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_ar.js").port(server_port).args());
 
   // launch the router in bootstrap mode
   auto &router = launch_router_for_bootstrap(
@@ -2655,13 +2801,14 @@ TEST_P(CrossExeRouterBootstrapTest, BootstrapRouterDuplicateEntry) {
   const auto bootstrap_server_port = port_pool_.get_next_available();
   // const auto server_http_port = port_pool_.get_next_available();
   const auto bootstrap_server_http_port = port_pool_.get_next_available();
-  const std::string json_stmts =
-      get_data_dir().join("bootstrap_gr_dup_router.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
   // auto &server_mock =
-  launch_mysql_server_mock(json_stmts, bootstrap_server_port, EXIT_SUCCESS,
-                           false, bootstrap_server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr_dup_router.js")
+                                  .port(bootstrap_server_port)
+                                  .http_port(bootstrap_server_http_port)
+                                  .args());
+
   set_mock_metadata(bootstrap_server_http_port, "cluster-specific-id",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port});
 
@@ -2697,12 +2844,13 @@ TEST_P(CrossExeRouterBootstrapTest, BootstrapRouterDuplicateEntryOverwrite) {
   const auto bootstrap_server_port = port_pool_.get_next_available();
   // const auto server_http_port = port_pool_.get_next_available();
   const auto bootstrap_server_http_port = port_pool_.get_next_available();
-  const std::string json_stmts =
-      get_data_dir().join("bootstrap_gr_dup_router.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
-  launch_mysql_server_mock(json_stmts, bootstrap_server_port, EXIT_SUCCESS,
-                           false, bootstrap_server_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr_dup_router.js")
+                                  .port(bootstrap_server_port)
+                                  .http_port(bootstrap_server_http_port)
+                                  .args());
+
   set_mock_metadata(bootstrap_server_http_port, "cluster-specific-id",
                     classic_ports_to_gr_nodes({bootstrap_server_port}), 0,
                     {bootstrap_server_port});
@@ -2726,11 +2874,13 @@ TEST_P(CrossExeRouterBootstrapTest, BootstrapRouterRouterIdMax) {
   const auto server_port = port_pool_.get_next_available();
   // const auto server_http_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join("bootstrap_gr.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(server_port)
+                                  .http_port(http_port)
+                                  .args());
+
   set_mock_metadata(http_port, "cluster-specific-id",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port});
 
@@ -2798,10 +2948,12 @@ TEST_P(ConfSetOptionTest, ErrorIfNotBootstrap) {
 TEST_P(ConfSetOptionTest, MultipleConfOptionsSet) {
   const std::string tracefile = "bootstrap_gr.js";
 
-  std::vector<Config> mock_servers{
-      {"127.0.0.1", port_pool_.get_next_available(),
-       port_pool_.get_next_available(), get_data_dir().join(tracefile).str()},
-  };
+  std::vector<Config> mock_servers{{
+      "127.0.0.1",
+      port_pool_.get_next_available(),
+      port_pool_.get_next_available(),
+      tracefile,
+  }};
 
   // mysqlrouter -B ...
   // --conf-set-option=routing:bootstrap_rw.bind_port=A -
@@ -2899,10 +3051,10 @@ class ConfSetOptionErrorTest
 };
 
 TEST_P(ConfSetOptionErrorTest, ErrorTest) {
-  const std::string tracefile = get_data_dir().join("bootstrap_gr.js").str();
   const auto mock_server_port = port_pool_.get_next_available();
 
-  launch_mysql_server_mock(tracefile, mock_server_port, EXIT_SUCCESS, false);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_gr.js").port(mock_server_port).args());
 
   std::vector<std::string> cmdline = {
       "--bootstrap=127.0.0.1:" + std::to_string(mock_server_port), "-d",
@@ -3111,11 +3263,14 @@ class ConfSetOptionParamTest
 };
 
 TEST_P(ConfSetOptionParamTest, Spec) {
-  const std::string tracefile = get_data_dir().join("bootstrap_gr.js").str();
   const auto mock_server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  launch_mysql_server_mock(tracefile, mock_server_port, EXIT_SUCCESS, false,
-                           http_port);
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(mock_server_port)
+                                  .http_port(http_port)
+                                  .args());
+
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({mock_server_port}), 0,
                     {mock_server_port});
@@ -3397,11 +3552,13 @@ TEST_P(CrossExeRouterBootstrapTest, SSLOptions) {
   const auto server_port = port_pool_.get_next_available();
   const auto server_port2 = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join("bootstrap_gr.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
-  auto &server_mock = launch_mysql_server_mock(json_stmts, server_port,
-                                               EXIT_SUCCESS, false, http_port);
+  auto &server_mock =
+      mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                      .port(server_port)
+                                      .http_port(http_port)
+                                      .args());
 
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({server_port, server_port2}), 0,
@@ -3458,12 +3615,13 @@ TEST_P(CrossExeRouterBootstrapTest, SSLOptions) {
   server_mock.send_clean_shutdown_event();
   EXPECT_NO_THROW(server_mock.wait_for_exit());
 
-  const std::string runtime_json_stmts =
-      get_data_dir().join("metadata_dynamic_nodes_v2_gr.js").str();
-
   // launch mock server that is our metadata server
-  launch_mysql_server_mock(runtime_json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("metadata_dynamic_nodes_v2_gr.js")
+          .port(server_port)
+          .http_port(http_port)
+          .args());
+
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port});
 
@@ -3487,9 +3645,11 @@ TEST_P(RouterComponentBootstrapTestOld, RouterReBootstrapClusterNameChange) {
 
   const auto classic_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join(tracefile).str();
-  launch_mysql_server_mock(json_stmts, classic_port, EXIT_SUCCESS, false,
-                           http_port);
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(classic_port)
+                                  .http_port(http_port)
+                                  .args());
 
   set_mock_metadata(http_port, "gr-uuid",
                     classic_ports_to_gr_nodes({classic_port}), 0,
@@ -3526,9 +3686,11 @@ TEST_P(RouterComponentBootstrapTestOld, ForcePasswordValidation) {
 
   const auto classic_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts = get_data_dir().join(tracefile).str();
-  launch_mysql_server_mock(json_stmts, classic_port, EXIT_SUCCESS, false,
-                           http_port);
+
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(classic_port)
+                                  .http_port(http_port)
+                                  .args());
 
   set_mock_metadata(http_port, "gr-uuid",
                     classic_ports_to_gr_nodes({classic_port}), 0,
@@ -3545,15 +3707,14 @@ TEST_P(RouterComponentBootstrapTestOld, ForcePasswordValidation) {
 }
 
 TEST_P(RouterComponentBootstrapTestOld, ShowCipherInvalidResult) {
-  const std::string tracefile =
-      get_data_dir()
-          .join("bootstrap_show_cipher_status_invalid_result.js")
-          .str();
   const auto mock_server_port = port_pool_.get_next_available();
   const auto mock_http_port = port_pool_.get_next_available();
 
-  launch_mysql_server_mock(tracefile, mock_server_port, EXIT_SUCCESS, false,
-                           mock_http_port);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_show_cipher_status_invalid_result.js")
+          .port(mock_server_port)
+          .http_port(mock_http_port)
+          .args());
 
   set_mock_metadata(mock_http_port, "gr-uuid",
                     classic_ports_to_gr_nodes({mock_server_port}), 0,
@@ -3666,10 +3827,10 @@ class BootstrapErrorTestWithMock
 };
 
 TEST_P(BootstrapErrorTestWithMock, Spec) {
-  const std::string tracefile = get_data_dir().join("bootstrap_gr.js").str();
   const auto mock_server_port = port_pool_.get_next_available();
 
-  launch_mysql_server_mock(tracefile, mock_server_port, EXIT_SUCCESS, false);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_gr.js").port(mock_server_port).args());
 
   std::vector<std::string> cmdline = {"--bootstrap=root:"s + kRootPassword +
                                           "@localhost:"s +
@@ -3772,12 +3933,13 @@ TEST_P(BootstrapChangeAuthPluginTest, Spec) {
   TempDirectory bootstrap_directory;
   const auto server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
-  const std::string json_stmts =
-      get_data_dir().join("bootstrap_change_auth_plugin.js").str();
 
   // launch mock server that is our metadata server for the bootstrap
-  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false,
-                           http_port);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("bootstrap_change_auth_plugin.js")
+          .port(server_port)
+          .http_port(http_port)
+          .args());
 
   set_mock_metadata(http_port, "cluster-specific-id",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port});
@@ -4102,13 +4264,16 @@ TEST_P(CrossExeRouterBootstrapTest, BootstrapRemoveServerAddressesOption) {
       "Verifies that when the Router is bootstrapped over existing "
       "configuration that contains bootstrap_server_addresses, the newly "
       "created configuration file does not contain it any more.");
+
   // launch our Cluster mock
-  const std::string tracefile = get_data_dir().join("bootstrap_gr.js").str();
   const auto mock_server_port = port_pool_.get_next_available();
   const auto mock_http_port = port_pool_.get_next_available();
 
-  launch_mysql_server_mock(tracefile, mock_server_port, EXIT_SUCCESS, false,
-                           mock_http_port);
+  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
+                                  .port(mock_server_port)
+                                  .http_port(mock_http_port)
+                                  .args());
+
   set_mock_metadata(mock_http_port, "gr-uuid",
                     classic_ports_to_gr_nodes({mock_server_port}), 0,
                     {mock_server_port});
@@ -4154,10 +4319,14 @@ class ClusterSetBootstrapMRSTest : public RouterBootstrapTest {
     if (add_report_host) params.push_back("--report-host=dont.query.dns");
     params.push_back("--conf-set-option=DEFAULT.plugin_folder=" +
                      ProcessManager::get_plugin_dir().str());
-    return ProcessManager::launch_router_bootstrap(
-        params, expected_exit_code, /*catch_stderr=*/true, /*with_sudo=*/false,
-        /*wait_for_notify_ready=*/std::chrono::seconds(-1),
-        RouterComponentBootstrapTest::kBootstrapOutputResponder);
+    return ProcessManager::router_bootstrap_spawner()
+        .expected_exit_code(expected_exit_code)
+        .catch_stderr(true)
+        .with_sudo(false)
+        .wait_for_notify_ready(std::chrono::seconds(-1))
+        .output_responder(
+            RouterComponentBootstrapTest::kBootstrapOutputResponder)
+        .spawn(params);
   }
 };
 
@@ -4169,15 +4338,16 @@ class ClusterSetBootstrapMRSTest : public RouterBootstrapTest {
  */
 TEST_F(ClusterSetBootstrapMRSTest,
        EnsureSchemaFailoverReplicaSetSecondaryNode) {
-  const std::string tracefile =
-      get_data_dir().join("bootstrap_ar_mrs.js").str();
   std::vector<uint16_t> classic_ports, http_ports;
 
   for (size_t i = 0; i < 3; ++i) {
     classic_ports.push_back(port_pool_.get_next_available());
     http_ports.push_back(port_pool_.get_next_available());
-    launch_mysql_server_mock(tracefile, classic_ports.back(), EXIT_SUCCESS,
-                             false, http_ports.back());
+
+    mock_server_spawner().spawn(mock_server_cmdline("bootstrap_ar_mrs.js")
+                                    .port(classic_ports.back())
+                                    .http_port(http_ports.back())
+                                    .args());
   }
 
   for (const auto [id, http_port] : stdx::views::enumerate(http_ports)) {

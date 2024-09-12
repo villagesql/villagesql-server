@@ -168,8 +168,8 @@ class RoutingSharingConfig : public RouterComponentTest {
 };
 
 TEST_F(RoutingSharingConfig, connection_sharing_not_set) {
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("sharing.js").port(server_port_).args());
 
   auto writer = config_writer(conf_dir_.name());
 
@@ -237,8 +237,8 @@ TEST_F(RoutingSharingConfig, connection_sharing_not_set) {
  * to satisfy the "can get plaintext password" requirements for sharing.
  */
 TEST_F(RoutingSharingConfig, connection_sharing_no_session_tracker_support) {
-  launch_mysql_server_mock(get_data_dir().join("no_session_tracker.js").str(),
-                           server_port_, EXIT_SUCCESS);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("no_session_tracker.js").port(server_port_).args());
 
   auto writer = config_writer(conf_dir_.name());
 
@@ -297,8 +297,8 @@ TEST_F(RoutingSharingConfig, connection_sharing_no_session_tracker_support) {
 }
 
 TEST_F(RoutingSharingConfig, connection_sharing_is_zero) {
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("sharing.js").port(server_port_).args());
 
   auto writer = config_writer(conf_dir_.name());
 
@@ -356,8 +356,8 @@ TEST_F(RoutingSharingConfig, connection_sharing_is_zero) {
 }
 
 TEST_F(RoutingSharingConfig, warn_connection_sharing_needs_connection_pool) {
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("sharing.js").port(server_port_).args());
 
   auto writer = config_writer(conf_dir_.name());
 
@@ -418,8 +418,8 @@ TEST_F(RoutingSharingConfig, warn_connection_sharing_needs_connection_pool) {
 }
 
 TEST_F(RoutingSharingConfig, warn_connection_sharing_passthrough) {
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("sharing.js").port(server_port_).args());
 
   auto writer = config_writer(conf_dir_.name());
 
@@ -503,8 +503,8 @@ TEST_F(RoutingSharingConfig, warn_xproto_does_not_support_sharing) {
 }
 
 TEST_F(RoutingSharingConfig, connection_sharing_delay_is_default) {
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("sharing.js").port(server_port_).args());
 
   auto userfile = conf_dir_.file("userfile");
   {
@@ -620,8 +620,8 @@ TEST_F(RoutingSharingConfig, connection_sharing_delay_is_default) {
 }
 
 TEST_F(RoutingSharingConfig, connection_sharing_delay_is_zero) {
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("sharing.js").port(server_port_).args());
 
   auto userfile = conf_dir_.file("userfile");
   {
@@ -803,8 +803,8 @@ TEST_F(RoutingSharingConfig, connection_sharing_delay_is_zero) {
 }
 
 TEST_F(RoutingSharingConfig, connection_sharing_delay_is_small) {
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("sharing.js").port(server_port_).args());
 
   auto userfile = conf_dir_.file("userfile");
   {
@@ -974,8 +974,8 @@ TEST_F(RoutingSharingConfig, connection_sharing_delay_is_small) {
 }
 
 TEST_F(RoutingSharingConfig, connection_sharing_delay_is_large) {
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("sharing.js").port(server_port_).args());
 
   auto writer = config_writer(conf_dir_.name());
 
@@ -1083,11 +1083,11 @@ TEST_F(RoutingSharingConfig, connection_sharing_per_route) {
   auto router_without_sharing_port = port_pool_.get_next_available();
   auto server2_port = port_pool_.get_next_available();
 
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("sharing.js").port(server_port_).args());
 
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server2_port, EXIT_SUCCESS);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("sharing.js").port(server2_port).args());
 
   auto userfile = conf_dir_.file("userfile");
   {
@@ -1232,8 +1232,8 @@ TEST_F(RoutingSharingConfig, connection_sharing_pool_before_stash) {
                  "server-side connections without a client-side connection and "
                  "only if it is empty, taken from the stash of server-side "
                  "connections _with_ a client-side connection.");
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("sharing.js").port(server_port_).args());
 
   auto userfile = conf_dir_.file("userfile");
   {
@@ -1348,8 +1348,8 @@ TEST_F(RoutingSharingConfig, stashed_connection_is_moved_to_pool) {
   RecordProperty("Description",
                  "Check that stashed connections get moved to the pool when "
                  "the client disconnections.");
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS);
+  mock_server_spawner().spawn(
+      mock_server_cmdline("sharing.js").port(server_port_).args());
 
   auto userfile = conf_dir_.file("userfile");
   {
@@ -1423,10 +1423,11 @@ TEST_F(RoutingSharingConfig, pooled_ssl_and_non_ssl_dont_mix) {
   RecordProperty(
       "Description",
       "Check that pooled connections SSL and non-SSL don't get shared.");
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS, false, 0, 0, "",
-                           "127.0.0.1", 30s, true  // ssl
-  );
+
+  mock_server_spawner().spawn(mock_server_cmdline("sharing.js")
+                                  .port(server_port_)
+                                  .enable_ssl(true)
+                                  .args());
 
   auto userfile = conf_dir_.file("userfile");
   {
@@ -1560,10 +1561,11 @@ TEST_F(RoutingSharingConfig, stashed_ssl_and_non_ssl_dont_mix) {
   RecordProperty(
       "Description",
       "Check that stashed connections SSL and non-SSL don't get shared.");
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS, false, 0, 0, "",
-                           "127.0.0.1", 30s, true  // ssl
-  );
+
+  mock_server_spawner().spawn(mock_server_cmdline("sharing.js")
+                                  .port(server_port_)
+                                  .enable_ssl(true)
+                                  .args());
 
   auto userfile = conf_dir_.file("userfile");
   {
@@ -1693,10 +1695,11 @@ TEST_F(RoutingSharingConfig, stashed_ssl_and_non_ssl_dont_mix) {
 TEST_F(RoutingSharingConfig, stashed_ssl_and_ssl) {
   RecordProperty("Description",
                  "Check that stashed connections SSL and SSL can share.");
-  launch_mysql_server_mock(get_data_dir().join("sharing.js").str(),
-                           server_port_, EXIT_SUCCESS, false, 0, 0, "",
-                           "127.0.0.1", 30s, true  // ssl
-  );
+
+  mock_server_spawner().spawn(mock_server_cmdline("sharing.js")
+                                  .port(server_port_)
+                                  .enable_ssl(true)
+                                  .args());
 
   auto userfile = conf_dir_.file("userfile");
   {

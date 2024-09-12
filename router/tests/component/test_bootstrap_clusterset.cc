@@ -1180,10 +1180,13 @@ class ClusterSetBootstrapMRSTest : public RouterClusterSetBootstrapTest {
     if (add_report_host) params.push_back("--report-host=dont.query.dns");
     params.push_back("--conf-set-option=DEFAULT.plugin_folder=" +
                      ProcessManager::get_plugin_dir().str());
-    return ProcessManager::launch_router_bootstrap(
-        params, expected_exit_code, /*catch_stderr=*/true, /*with_sudo=*/false,
-        /*wait_for_notify_ready=*/std::chrono::seconds(-1),
-        RouterComponentBootstrapTest::kBootstrapOutputResponder);
+    return ProcessManager::router_bootstrap_spawner()
+        .expected_exit_code(expected_exit_code)
+        .catch_stderr(true)
+        .wait_for_notify_ready(std::chrono::seconds(-1))
+        .output_responder(
+            RouterComponentBootstrapTest::kBootstrapOutputResponder)
+        .spawn(params);
   }
 };
 
