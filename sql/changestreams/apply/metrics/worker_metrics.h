@@ -25,6 +25,7 @@
 #define CS_WORKER_METRICS_H
 
 #include <cstdint>  // int64_t
+#include "time_based_metric_interface.h"
 
 namespace cs::apply::instruments {
 
@@ -71,19 +72,10 @@ class Worker_metrics {
   /// @return the exectuted size of the ongoing transaction
   virtual int64_t get_transaction_ongoing_progress_size() const = 0;
 
-  /// @brief Gets the total time waited on commit order
-  /// @return the sum of the time waited on commit
-  virtual int64_t get_wait_time_on_commit_order() const = 0;
-
-  /// @brief Increments the number of times waited
-  virtual void inc_waited_time_on_commit_order(unsigned long amount) = 0;
-
-  /// @brief Get the number of time waiting on commit order
-  /// @return the counter of waits on commit order
-  virtual int64_t get_number_of_waits_on_commit_order() const = 0;
-
-  /// @brief Increments the number of times waited
-  virtual void inc_number_of_waits_on_commit_order() = 0;
+  /// @brief Return time metric for waits on commit order.
+  /// @return a Time_based_metric_interface object that contains metric
+  /// information on a wait
+  virtual Time_based_metric_interface &get_waits_due_to_commit_order() = 0;
 };
 }  // namespace cs::apply::instruments
 

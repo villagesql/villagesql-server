@@ -37,16 +37,10 @@ class Applier_metrics_interface {
  public:
   virtual ~Applier_metrics_interface() = default;
 
-  /// @brief Starts the timer when the applier metrics collection began.
-  /// Sets the state to running.
-  /// This can be queried later to know for how long time the stats have been
-  /// collected, i.e., the duration.
-  virtual void start_applier_timer() = 0;
+  /// @brief Remember "now" as the last applier start time.
+  virtual void store_last_applier_start() = 0;
 
-  /// @brief Calculates the total time the applier ran.
-  /// Sets the state to not running
-  /// Sums to time since start to the total running time
-  virtual void stop_applier_timer() = 0;
+  virtual Time_based_metric_interface &get_sum_applier_execution_time() = 0;
 
   /// @brief Gets the time point when the metric timer started.
   /// @return The time point since the collection of statistics started.

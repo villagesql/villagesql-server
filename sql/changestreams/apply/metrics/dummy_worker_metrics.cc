@@ -25,7 +25,7 @@
 
 namespace cs::apply::instruments {
 
-void Dummy_worker_metrics::reset() { return; }
+void Dummy_worker_metrics::reset() {}
 
 Worker_metrics::Transaction_type_info
 Dummy_worker_metrics::get_transaction_type() const {
@@ -43,28 +43,17 @@ int64_t Dummy_worker_metrics::get_transaction_ongoing_full_size() const {
   return 0;
 }
 
-void Dummy_worker_metrics::inc_transaction_ongoing_progress_size(int64_t) {
-  return;
-}
+void Dummy_worker_metrics::inc_transaction_ongoing_progress_size(int64_t) {}
 
-void Dummy_worker_metrics::reset_transaction_ongoing_progress_size() { return; }
+void Dummy_worker_metrics::reset_transaction_ongoing_progress_size() {}
 
 int64_t Dummy_worker_metrics::get_transaction_ongoing_progress_size() const {
   return 0;
 }
 
-int64_t Dummy_worker_metrics::get_wait_time_on_commit_order() const {
-  return 0;
+Time_based_metric_interface &
+Dummy_worker_metrics::get_waits_due_to_commit_order() {
+  return m_waits_due_to_commit_order;
 }
-
-void Dummy_worker_metrics::inc_waited_time_on_commit_order(unsigned long) {
-  return;
-}
-
-int64_t Dummy_worker_metrics::get_number_of_waits_on_commit_order() const {
-  return 0;
-}
-
-void Dummy_worker_metrics::inc_number_of_waits_on_commit_order() { return; }
 
 }  // namespace cs::apply::instruments

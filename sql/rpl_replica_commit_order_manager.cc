@@ -104,15 +104,15 @@ bool Commit_order_manager::wait_on_graph(Slave_worker *worker) {
     raii::Sentry<> ticket_guard{
         [&]() -> void { worker_thd->mdl_context.done_waiting_for(); }};
 
-    worker_stats.inc_number_of_waits_on_commit_order();
-    // Time summed is in nanoseconds
-    auto time_increment_func = [&worker_stats](unsigned long value) {
-      worker_stats.inc_waited_time_on_commit_order(value);
-    };
-    unsigned long timeout = LONG_TIMEOUT;  // Wait for a year
-    auto wait_status = worker_thd->mdl_context.m_wait.observable_timed_wait(
-        worker_thd, timeout, true, time_increment_func,
-        &stage_worker_waiting_for_its_turn_to_commit);
+    MDL_wait::enum_wait_status wait_status;
+    {
+      struct timespec abs_timeout;
+      set_timespec(&abs_timeout, LONG_TIMEOUT);  // Wait for a year
+      auto guard = worker_stats.get_waits_due_to_commit_order().time_scope();
+      wait_status = worker_thd->mdl_context.m_wait.timed_wait(
+          worker_thd, &abs_timeout, true,
+          &stage_worker_waiting_for_its_turn_to_commit);
+    }
 
     switch (wait_status) {
       case MDL_wait::GRANTED:

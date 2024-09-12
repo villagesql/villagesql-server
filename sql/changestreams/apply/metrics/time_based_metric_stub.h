@@ -32,17 +32,10 @@ class Time_based_metric_stub : public Time_based_metric_interface {
   /// @brief Resets the counter and summed time to 0
   void reset() override;
 
-  /// @brief Starts counting time we are waiting on something
-  void start_timer() override;
-
-  /// @brief Stops the timer for the wait.
-  ///        Requires start_timer to be called first
-  void stop_timer() override;
-
   /// @brief Returns the time waited across all executions of the start/stop
   /// methods
   /// @return The total time waited, in nanoseconds.
-  int64_t get_sum_time_elapsed() const override;
+  int64_t get_time() const override;
 
   /// @brief Increments the waiting counter
   void increment_counter() override;
@@ -50,6 +43,14 @@ class Time_based_metric_stub : public Time_based_metric_interface {
   /// @brief Returns the number of time we waited on give spot
   /// @return the number of times waited
   int64_t get_count() const override;
+
+ protected:
+  /// @brief Starts counting time we are waiting on something
+  void start_timer() override;
+
+  /// @brief Stops the timer for the wait.
+  ///        Requires start_timer to be called first
+  void stop_timer() override;
 };
 
 #endif /* CS_DUMMY_TIME_BASED_METRIC */

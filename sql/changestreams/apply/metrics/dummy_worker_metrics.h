@@ -25,6 +25,7 @@
 #define CS_DUMMY_WORKER_METRICS_H
 
 #include <cstdint>  // int64_t
+#include "time_based_metric_stub.h"
 #include "worker_metrics.h"
 
 namespace cs::apply::instruments {
@@ -70,17 +71,11 @@ class Dummy_worker_metrics : public Worker_metrics {
 
   /// @brief Gets the total time waited on commit order
   /// @return the sum of the time waited on commit
-  int64_t get_wait_time_on_commit_order() const override;
+  Time_based_metric_interface &get_waits_due_to_commit_order() override;
 
-  /// @brief Increments the number of times waited
-  void inc_waited_time_on_commit_order(unsigned long amount) override;
-
-  /// @brief Get the number of time waiting on commit order
-  /// @return the counter of waits on commit order
-  int64_t get_number_of_waits_on_commit_order() const override;
-
-  /// @brief Increments the number of times waited
-  void inc_number_of_waits_on_commit_order() override;
+ private:
+  /// Stub to return from @c get_waits_due_to_commit_order
+  Time_based_metric_stub m_waits_due_to_commit_order;
 };
 }  // namespace cs::apply::instruments
 

@@ -241,9 +241,11 @@ Log_event *Rpl_applier_reader::read_next_event() {
   }
 
   m_rli->set_event_start_pos(m_relaylog_file_reader.position());
-  applier_metrics.get_time_to_read_from_relay_log_metric().start_timer();
-  ev = m_relaylog_file_reader.read_event_object();
-  applier_metrics.get_time_to_read_from_relay_log_metric().stop_timer();
+  {
+    auto guard =
+        applier_metrics.get_time_to_read_from_relay_log_metric().time_scope();
+    ev = m_relaylog_file_reader.read_event_object();
+  }
   if (ev != nullptr) {
     m_rli->set_future_event_relay_log_pos(m_relaylog_file_reader.position());
     ev->future_event_relay_log_pos = m_rli->get_future_event_relay_log_pos();
@@ -316,22 +318,22 @@ bool Rpl_applier_reader::wait_for_new_event() {
   */
   mysql_mutex_unlock(&m_rli->data_lock);
 
-  auto &applier_metrics = m_rli->get_applier_metrics();
-  applier_metrics.get_work_from_source_wait_metric().start_timer();
-
   int ret = 0;
-  if (m_rli->is_parallel_exec() &&
-      (opt_mta_checkpoint_period != 0 ||
-       DBUG_EVALUATE_IF("check_replica_debug_group", 1, 0))) {
-    std::chrono::nanoseconds timeout =
-        std::chrono::nanoseconds{opt_mta_checkpoint_period * 1000000ULL};
-    DBUG_EXECUTE_IF("check_replica_debug_group",
-                    { timeout = std::chrono::nanoseconds{10000000}; });
-    ret = m_rli->relay_log.wait_for_update(timeout);
-  } else
-    ret = m_rli->relay_log.wait_for_update();
-
-  applier_metrics.get_work_from_source_wait_metric().stop_timer();
+  {
+    auto guard = m_rli->get_applier_metrics()
+                     .get_work_from_source_wait_metric()
+                     .time_scope();
+    if (m_rli->is_parallel_exec() &&
+        (opt_mta_checkpoint_period != 0 ||
+         DBUG_EVALUATE_IF("check_replica_debug_group", 1, 0))) {
+      std::chrono::nanoseconds timeout =
+          std::chrono::nanoseconds{opt_mta_checkpoint_period * 1000000ULL};
+      DBUG_EXECUTE_IF("check_replica_debug_group",
+                      { timeout = std::chrono::nanoseconds{10000000}; });
+      ret = m_rli->relay_log.wait_for_update(timeout);
+    } else
+      ret = m_rli->relay_log.wait_for_update();
+  }
 
   // re-acquire data lock since we released it earlier
   mysql_mutex_lock(&m_rli->data_lock);

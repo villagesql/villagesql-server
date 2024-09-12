@@ -25,13 +25,17 @@
 
 namespace cs::apply::instruments {
 
-void Mta_worker_metrics::reset() {
-  m_transaction_type = Transaction_type_info::UNKNOWN;
-  m_transaction_ongoing_full_size = 0;
-  m_transaction_ongoing_progress_size = 0;
-  m_order_commit_wait_count = 0;
-  m_order_commit_waited_time = 0;
+Mta_worker_metrics &Mta_worker_metrics::operator=(
+    const Mta_worker_metrics &other) {
+  m_transaction_type = other.get_transaction_type();
+  m_transaction_ongoing_full_size = other.get_transaction_ongoing_full_size();
+  m_transaction_ongoing_progress_size =
+      other.get_transaction_ongoing_progress_size();
+  m_waits_due_to_commit_order = other.m_waits_due_to_commit_order;
+  return *this;
 }
+
+void Mta_worker_metrics::reset() { *this = Mta_worker_metrics(); }
 
 Mta_worker_metrics::Transaction_type_info
 Mta_worker_metrics::get_transaction_type() const {
@@ -63,29 +67,9 @@ int64_t Mta_worker_metrics::get_transaction_ongoing_progress_size() const {
   return m_transaction_ongoing_progress_size;
 }
 
-int64_t Mta_worker_metrics::get_wait_time_on_commit_order() const {
-  return m_order_commit_waited_time;
-}
-
-void Mta_worker_metrics::inc_waited_time_on_commit_order(unsigned long amount) {
-  m_order_commit_waited_time += amount;
-}
-
-int64_t Mta_worker_metrics::get_number_of_waits_on_commit_order() const {
-  return m_order_commit_wait_count;
-}
-
-void Mta_worker_metrics::inc_number_of_waits_on_commit_order() {
-  m_order_commit_wait_count++;
-}
-
-void Mta_worker_metrics::copy_stats_from(const Mta_worker_metrics &other) {
-  m_transaction_type = other.get_transaction_type();
-  m_transaction_ongoing_full_size = other.get_transaction_ongoing_full_size();
-  m_transaction_ongoing_progress_size =
-      other.get_transaction_ongoing_progress_size();
-  m_order_commit_waited_time = other.get_wait_time_on_commit_order();
-  m_order_commit_wait_count = other.get_number_of_waits_on_commit_order();
+Time_based_metric_interface &
+Mta_worker_metrics::get_waits_due_to_commit_order() {
+  return m_waits_due_to_commit_order;
 }
 
 }  // namespace cs::apply::instruments

@@ -6682,13 +6682,15 @@ end:
   */
   for (int i = static_cast<int>(rli->workers_copy_pfs.size()) - 1; i >= 0;
        i--) {
-    // Don't loose the stats on commit order waits
+    // Don't lose the stats on commit order waits
     order_commit_wait_count += rli->workers_copy_pfs[i]
                                    ->get_worker_metrics()
-                                   .get_number_of_waits_on_commit_order();
+                                   .get_waits_due_to_commit_order()
+                                   .get_count();
     order_commit_waited_time += rli->workers_copy_pfs[i]
                                     ->get_worker_metrics()
-                                    .get_wait_time_on_commit_order();
+                                    .get_waits_due_to_commit_order()
+                                    .get_time();
     delete rli->workers_copy_pfs[i];
     if (!clear_gtid_monitoring_info) clear_gtid_monitoring_info = true;
   }
@@ -6937,6 +6939,10 @@ extern "C" void *handle_slave_sql(void *arg) {
   {
     DBUG_TRACE;
 
+    auto guard = rli->get_applier_metrics()
+                     .get_sum_applier_execution_time()
+                     .time_scope();
+
     assert(rli->inited);
     mysql_mutex_lock(&rli->run_lock);
     assert(!rli->slave_running);
@@ -7038,7 +7044,7 @@ extern "C" void *handle_slave_sql(void *arg) {
     thd_manager->add_thd(thd);
     thd_added = true;
 
-    rli->get_applier_metrics().start_applier_timer();
+    rli->get_applier_metrics().store_last_applier_start();
 
     if (RUN_HOOK(binlog_relay_io, applier_start, (thd, rli->mi))) {
       mysql_cond_broadcast(&rli->start_cond);
@@ -7317,8 +7323,6 @@ extern "C" void *handle_slave_sql(void *arg) {
     /* When source_pos_wait() wakes up it will check this and terminate */
     rli->slave_running = 0;
     rli->atomic_is_stopping = false;
-
-    rli->get_applier_metrics().stop_applier_timer();
 
     /* Forget the relay log's format */
     if (rli->set_rli_description_event(nullptr)) {

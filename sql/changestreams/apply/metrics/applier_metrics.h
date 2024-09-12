@@ -34,16 +34,13 @@ namespace cs::apply::instruments {
 /// scheduling activities in the replica MTA
 class Applier_metrics : public Applier_metrics_interface {
  public:
-  /// @brief Starts the timer when the applier metrics collection began.
-  /// Sets the state to running.
-  /// This can be queried later to know for how long time the stats have been
-  /// collected, i.e., the duration.
-  void start_applier_timer() override;
+  /// @brief Remember "now" as the last applier start time.
+  void store_last_applier_start() override;
 
-  /// @brief Calculates the total time the applier ran.
-  /// Sets the state to not running
-  /// Sums to time since start to the total running time
-  void stop_applier_timer() override;
+  /// @brief Return time metric for total applier execution time.
+  /// @return a Time_based_metric_interface object that contains metric
+  /// information on a wait
+  Time_based_metric_interface &get_sum_applier_execution_time() override;
 
   /// @brief Gets the time point when the metric timer started.
   /// @return The time point since the collection of statistics started.

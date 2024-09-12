@@ -27,9 +27,12 @@ namespace cs::apply::instruments {
 
 void Applier_metrics_stub::reset() {}
 
-void Applier_metrics_stub::start_applier_timer() {}
+void Applier_metrics_stub::store_last_applier_start() {}
 
-void Applier_metrics_stub::stop_applier_timer() {}
+Time_based_metric_interface &
+Applier_metrics_stub::get_sum_applier_execution_time() {
+  return m_sum_applier_execution_time;
+}
 
 int64_t Applier_metrics_stub::get_last_applier_start_micros() const {
   return 0;

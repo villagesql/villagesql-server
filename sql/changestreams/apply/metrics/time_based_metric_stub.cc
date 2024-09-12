@@ -29,7 +29,7 @@ void Time_based_metric_stub::start_timer() {}
 
 void Time_based_metric_stub::stop_timer() {}
 
-int64_t Time_based_metric_stub::get_sum_time_elapsed() const { return 0; }
+int64_t Time_based_metric_stub::get_time() const { return 0; }
 
 void Time_based_metric_stub::increment_counter() {}
 

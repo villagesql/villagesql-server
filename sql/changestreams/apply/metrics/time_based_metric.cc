@@ -30,8 +30,14 @@ Time_based_metric::Time_based_metric(bool manual_counting)
 
 Time_based_metric &Time_based_metric::operator=(
     const Time_based_metric &other) {
-  m_count.store(other.m_count.load());
-  m_time.store(other.m_count.load());
+  *this = dynamic_cast<const Time_based_metric_interface &>(other);
+  return *this;
+}
+
+Time_based_metric &Time_based_metric::operator=(
+    const Time_based_metric_interface &other) {
+  m_count.store(other.get_count());
+  m_time.store(other.get_time());
   return *this;
 }
 
@@ -53,7 +59,7 @@ void Time_based_metric::stop_timer() {
   assert(previous_value < 0);
 }
 
-int64_t Time_based_metric::get_sum_time_elapsed() const {
+int64_t Time_based_metric::get_time() const {
   auto ret = m_time.load();
   if (ret < 0) ret += now();
   assert(ret >= 0);

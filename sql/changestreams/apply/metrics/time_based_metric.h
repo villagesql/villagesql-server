@@ -35,10 +35,15 @@ class Time_based_metric : public Time_based_metric_interface {
   /// (default false)
   explicit Time_based_metric(bool manual_counting = false);
 
-  /// @brief Assignment operator
+  /// @brief Copy assignment operator
   /// @param other the object that is copied
   /// @return this object
   Time_based_metric &operator=(const Time_based_metric &other);
+
+  /// @brief Assignment operator for the interface
+  /// @param other the object that is copied
+  /// @return this object
+  Time_based_metric &operator=(const Time_based_metric_interface &other);
 
   /// @brief Deleted copy constructor, move constructor, move assignment
   /// operator.
@@ -52,24 +57,27 @@ class Time_based_metric : public Time_based_metric_interface {
   /// @brief Resets the counter and summed time to 0
   void reset() override;
 
-  /// @brief Starts counting time we are waiting on something
-  void start_timer() override;
-
-  /// @brief Stops the timer for the wait.
-  ///        Requires start_timer to be called first
-  void stop_timer() override;
-
   /// @brief Returns the time waited across all executions of the start/stop
   /// methods
   /// @return The total time waited
-  int64_t get_sum_time_elapsed() const override;
+  int64_t get_time() const override;
 
-  /// @brief Increments the waiting counter
+  /// @brief Increment the counter.
+  ///
+  /// This is only allowed if the constructor was called using
+  /// manual_counting=1. Otherwise, an assertion is raised.
   void increment_counter() override;
 
   /// @brief Returns the number of time we waited on give spot
   /// @return the number of times waited
   int64_t get_count() const override;
+
+ protected:
+  /// @brief Starts the timer.
+  void start_timer() override;
+
+  /// @brief Stops the timer.
+  void stop_timer() override;
 
  private:
   /// @brief Helper to get current time.

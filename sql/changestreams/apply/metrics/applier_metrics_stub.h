@@ -32,16 +32,13 @@ namespace cs::apply::instruments {
 /// @brief Class that intends to be a dummy end point for applier metrics
 class Applier_metrics_stub : public Applier_metrics_interface {
  public:
-  /// @brief Starts the timer when the applier metrics collection began.
-  /// Sets the state to running.
-  /// This can be queried later to know for how long time the stats have been
-  /// collected, i.e., the duration.
-  void start_applier_timer() override;
+  /// @brief Remember "now" as the last applier start time.
+  void store_last_applier_start() override;
 
-  /// @brief Calculates the total time the applier ran.
-  /// Sets the state to not running
-  /// Sums to time since start to the total running time
-  void stop_applier_timer() override;
+  /// @brief Return time metric for total applier execution time.
+  /// @return a Time_based_metric_interface object that contains metric
+  /// information on a wait
+  Time_based_metric_interface &get_sum_applier_execution_time() override;
 
   /// @brief Gets the time point when the metric timer started.
   /// @return The time point since the collection of statistics started.
@@ -153,30 +150,23 @@ class Applier_metrics_stub : public Applier_metrics_interface {
   int64_t get_wait_time_on_commit_order() const override;
 
  private:
+  /// @brief Tracks the time the applier has been executing
+  Time_based_metric_stub m_sum_applier_execution_time;
+
   /// @brief Tracks the number and time waited for transactions to apply
   Time_based_metric_stub m_wait_for_work_from_source;
-
-  // wait because no workers available ---
 
   /// @brief Tracks the number and time waited for transactions to apply
   Time_based_metric_stub m_wait_for_worker_available;
 
-  // waits for transaction dependency ---
-
   /// @brief Tracks the number and time waited for transaction dependencies
   Time_based_metric_stub m_wait_for_transaction_dependency;
-
-  // waits because worker queues memory exceeds max ---
 
   /// @brief Tracks the number and time waited for transaction dependencies
   Time_based_metric_stub m_wait_due_to_worker_queues_memory_exceeds_max;
 
-  // wait because worker queues are full ---
-
   /// @brief Tracks the number and time waited for transaction dependencies
   Time_based_metric_stub m_wait_due_to_worker_queue_full;
-
-  // Time spent reading from the relay log ---
 
   /// @brief Tracks the number and time waited for transaction dependencies
   Time_based_metric_stub m_time_to_read_from_relay_log;

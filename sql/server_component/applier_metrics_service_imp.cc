@@ -101,9 +101,9 @@ DEFINE_BOOL_METHOD(Applier_metrics_service_handler::get_applier_metrics,
           worker_metrics.get_transaction_ongoing_progress_size();
 
       waits_due_to_commit_order_count +=
-          worker_metrics.get_number_of_waits_on_commit_order();
+          worker_metrics.get_waits_due_to_commit_order().get_count();
       waits_due_to_commit_order_sum_time +=
-          worker_metrics.get_wait_time_on_commit_order();
+          worker_metrics.get_waits_due_to_commit_order().get_time();
     }
     mysql_mutex_unlock(&mi->rli->data_lock);
 
@@ -192,25 +192,25 @@ DEFINE_BOOL_METHOD(Applier_metrics_service_handler::get_applier_metrics,
         waits_for_work_from_source_count_t,
         coord_metrics.get_work_from_source_wait_metric().get_count());
 
-    builder.push_int(waits_for_work_from_source_sum_time_t,
-                     coord_metrics.get_work_from_source_wait_metric()
-                         .get_sum_time_elapsed());
+    builder.push_int(
+        waits_for_work_from_source_sum_time_t,
+        coord_metrics.get_work_from_source_wait_metric().get_time());
 
     builder.push_int(
         waits_for_available_worker_count_t,
         coord_metrics.get_workers_available_wait_metric().get_count());
 
-    builder.push_int(waits_for_available_worker_sum_time_t,
-                     coord_metrics.get_workers_available_wait_metric()
-                         .get_sum_time_elapsed());
+    builder.push_int(
+        waits_for_available_worker_sum_time_t,
+        coord_metrics.get_workers_available_wait_metric().get_time());
 
     builder.push_int(
         waits_for_commit_dependency_count_t,
         coord_metrics.get_transaction_dependency_wait_metric().get_count());
 
-    builder.push_int(waits_for_commit_dependency_sum_time_t,
-                     coord_metrics.get_transaction_dependency_wait_metric()
-                         .get_sum_time_elapsed());
+    builder.push_int(
+        waits_for_commit_dependency_sum_time_t,
+        coord_metrics.get_transaction_dependency_wait_metric().get_time());
 
     builder.push_int(
         waits_for_queues_memory_count_t,
@@ -220,19 +220,19 @@ DEFINE_BOOL_METHOD(Applier_metrics_service_handler::get_applier_metrics,
     builder.push_int(
         waits_for_queues_memory_sum_time_t,
         coord_metrics.get_worker_queues_memory_exceeds_max_wait_metric()
-            .get_sum_time_elapsed());
+            .get_time());
 
     builder.push_int(
         waits_for_queues_full_count_t,
         coord_metrics.get_worker_queues_full_wait_metric().get_count());
 
-    builder.push_int(waits_for_queues_full_sum_time_t,
-                     coord_metrics.get_worker_queues_full_wait_metric()
-                         .get_sum_time_elapsed());
+    builder.push_int(
+        waits_for_queues_full_sum_time_t,
+        coord_metrics.get_worker_queues_full_wait_metric().get_time());
 
-    builder.push_int(time_to_read_from_relay_log_t,
-                     coord_metrics.get_time_to_read_from_relay_log_metric()
-                         .get_sum_time_elapsed());
+    builder.push_int(
+        time_to_read_from_relay_log_t,
+        coord_metrics.get_time_to_read_from_relay_log_metric().get_time());
 
     assert(builder.get_position() == number_of_applier_metrics);
 
