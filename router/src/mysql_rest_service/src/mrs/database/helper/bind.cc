@@ -42,7 +42,11 @@ namespace database {
 using DataTypeInText = ::helper::DataTypeInText;
 
 void MysqlBind::fill_mysql_bind_for_out(DataType data_type) {
-  allocate_bind_buffer(data_type);
+  auto bind = allocate_bind_buffer(data_type);
+  auto length = new unsigned long;
+  lengths_.emplace_back(length);
+  bind->length = length;
+  *bind->length = 0;
 }
 
 void MysqlBind::fill_mysql_bind_inout_vector(const rapidjson::Value &value) {
