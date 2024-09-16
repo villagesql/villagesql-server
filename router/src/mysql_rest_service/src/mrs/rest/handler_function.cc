@@ -104,7 +104,7 @@ static HttpResult handler_mysqlerror(const mysqlrouter::MySQLSession::Error &e,
   if (!db->get_sql_state()) throw e;
 
   auto sql_state = db->get_sql_state();
-  log_debug("While handling SP, received a mysql-error with state: %s",
+  log_debug("While handling a function, received a mysql-error with state: %s",
             sql_state);
   if (k_state_with_user_defined_error != sql_state) {
     throw e;
@@ -124,7 +124,7 @@ static HttpResult handler_mysqlerror(const mysqlrouter::MySQLSession::Error &e,
     throw e;
   }
   auto json = helper::json::to_string(map);
-  log_debug("SP - generated custom HTTPstats + message:%s", json.c_str());
+  log_debug("Function - generated custom HTTPstats + message:%s", json.c_str());
   return HttpResult(status, std::move(json), HttpResult::Type::typeJson);
 }
 
