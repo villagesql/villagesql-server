@@ -288,6 +288,12 @@ bool rewrite_query(THD *thd, Consumer_type type, const Rewrite_params *params,
     case SQLCOM_ALTER_SERVER:
       rw.reset(new Rewriter_alter_server(thd, type));
       break;
+    case SQLCOM_SELECT: {
+      if (thd->lex->export_result_to_object_storage()) {
+        rw.reset(new Rewriter_select_query(thd, type));
+      }
+      break;
+    }
 
     /*
       PREPARE stmt FROM <string> is rewritten so that <string> is
@@ -1817,5 +1823,52 @@ bool Rewriter_start_group_replication::rewrite(String &rlb) const {
                        " DEFAULT_AUTH =", lex->replica_connection.plugin_auth);
   }
 
+  return true;
+}
+
+Rewriter_select_query::Rewriter_select_query(THD *thd, Consumer_type type)
+    : I_rewriter(thd, type) {}
+
+/**
+  Rewrite the query with the PAR id being redacted if the query exports query
+  result to the object storage.
+  Any pattern like "/p/.*?/n/" is replaced with  "/p/<redacted>/n/"
+  @param[in,out] rlb     Buffer to return the rewritten query in.
+
+  @retval true the query is rewritten
+*/
+bool Rewriter_select_query::rewrite(String &rlb) const {
+  assert(m_thd->lex->export_result_to_object_storage());
+  assert(m_thd->query().length);
+  String original_query_str(m_thd->query().str, m_thd->query().length,
+                            system_charset_info);
+  String pattern_start("/p/", system_charset_info);
+  String pattern_end("/n/", system_charset_info);
+
+  size_t search_offset = 0;
+  while (search_offset <= original_query_str.length()) {
+    auto first_index = original_query_str.strstr(pattern_start, search_offset);
+    if (first_index == -1) {
+      // we could not find any other "/p/"
+      break;
+    }
+
+    // search for the "/n/" after the "/p/" location
+    auto second_index = original_query_str.strstr(pattern_end, first_index);
+    if (second_index == -1) {
+      // we could not find any other "/n/"
+      break;
+    }
+
+    // Copy from the original string from the search_offset till first_index
+    rlb.append(original_query_str.c_ptr() + search_offset,
+               first_index - search_offset);
+    rlb.append(STRING_WITH_LEN("/p/<redacted>"));
+    search_offset = second_index;
+  }
+
+  // Copy the remaining string
+  rlb.append(original_query_str.c_ptr() + search_offset,
+             original_query_str.length() - search_offset);
   return true;
 }

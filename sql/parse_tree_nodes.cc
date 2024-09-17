@@ -4252,6 +4252,12 @@ bool PT_into_destination_outfile::do_contextualize(Parse_context *pc) {
   LEX *lex = pc->thd->lex;
   lex->set_uncacheable(pc->select, UNCACHEABLE_SIDEEFFECT);
   if (dumpfile_dest == OBJECT_STORE_DEST) {
+    /*
+      To ensure SQL queries containing sensitive information like PAR IDs are
+      safely logged without exposing sensitive data, we need to redact the
+      relevant portions of the query.
+    */
+    lex->set_rewrite_required();
     lex->set_execute_only_in_secondary_engine(true, OUTFILE_OBJECT_STORE);
     lex->result = new (pc->mem_root) Query_result_to_object_store(&m_exchange);
   } else {
