@@ -3079,17 +3079,21 @@ INSTANTIATE_TEST_SUITE_P(
         ConfSetOptionErrorTestParam{
             {"--conf-set-option=DEFAULT:aa.option=xx"},
             "Error: conf-set-option: DEFAULT section is not allowed to have "
-            "a "
-            "key: 'DEFAULT:aa'",
+            "a key: 'DEFAULT:aa'",
             true},
 
         ConfSetOptionErrorTestParam{
             {"--conf-set-option=abc"},
             "Error: conf-set-option: invalid option 'abc', should be "
             "section.option_name=value",
-            true}
+            true},
 
-        ));
+        ConfSetOptionErrorTestParam{
+            {"--conf-set-option=DEFAULT.accept_external_connections=hello_"
+             "world"},
+            "Error: option accept_external_connections in \\[default\\] needs "
+            "a value of either 0, 1, false or true, was 'hello_world'",
+            true}));
 
 struct ConfSetOptionTestParam {
   std::vector<std::string> bootstrap_params;
@@ -3232,6 +3236,26 @@ INSTANTIATE_TEST_SUITE_P(
             {"--https-port=10000", "--conf-set-option=http_server.ssl=0"},
             /*expected_conf_entries=*/{"ssl=0"},
             /*unexpected_conf_entries=*/{"ssl=1"},
+            true}));
+
+/**
+ * @test
+ *       verify that the expected entries are in the config file after use of
+ * --conf-set-option parameter
+ */
+INSTANTIATE_TEST_SUITE_P(
+    OverwriteOptionTest, ConfSetOptionParamTest,
+    ::testing::Values(
+        ConfSetOptionTestParam{
+            {"--conf-set-option=routing:bootstrap_rw.accept_external_"
+             "connections=1"},
+            /*expected_conf_entries=*/{"accept_external_connections=1"},
+            /*unexpected_conf_entries=*/{},
+            true},
+        ConfSetOptionTestParam{
+            {"--conf-set-option=DEFAULT.accept_external_connections=0"},
+            /*expected_conf_entries=*/{"accept_external_connections=0"},
+            /*unexpected_conf_entries=*/{},
             true}));
 
 /**
@@ -4164,13 +4188,23 @@ TEST_F(ClusterSetBootstrapMRSTest,
         classic_ports_to_cluster_nodes(classic_ports));
   }
 
-  // use the Seconday node of the ReplicaSet in URI to force the failover
+  // use the Secondary node of the ReplicaSet in URI to force the failover
   auto &router_bs = launch_router_for_bootstrap(
       {"--bootstrap=root:"s + kRootPassword + "@localhost:"s +
            std::to_string(classic_ports[2]),
        "--logger.level=debug", "--mrs-ensure-metadata-schema"});
 
   check_exit_code(router_bs, EXIT_SUCCESS);
+
+  // [WL#16515] check that produced config file does not contain
+  // accept_external_connections option
+  const std::string conf_file = bootstrap_dir.name() + "/mysqlrouter.conf";
+  ASSERT_THAT(conf_file, ::testing::Not(::testing::IsEmpty()));
+  const std::string config_file_str = get_file_output(conf_file);
+
+  EXPECT_THAT(
+      config_file_str,
+      ::testing::Not(::testing::HasSubstr("accept_external_connections")));
 }
 
 int main(int argc, char *argv[]) {

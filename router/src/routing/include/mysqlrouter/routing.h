@@ -242,6 +242,12 @@ constexpr std::string_view kDefaultXRwSectionName{"bootstrap_x_rw"};
 constexpr std::string_view kDefaultXRoSectionName{"bootstrap_x_ro"};
 constexpr std::string_view kDefaultRwSplitSectionName{"bootstrap_rw_split"};
 
+/**
+ * Default for the configuration option determining if the Router opens the
+ * accepting port/socket for a routing instance.
+ */
+constexpr bool kDefaultAcceptConnections{true};
+
 /** @brief Modes supported by Routing plugin */
 enum class RoutingMode {
   kUndefined = 0,

@@ -39,8 +39,9 @@
  */
 class RoutingConfig {
  public:
-  Protocol::Type protocol{};               //!< protocol (classic, x)
-  std::string destinations;                //!< destinations
+  Protocol::Type protocol{};  //!< protocol (classic, x)
+  std::string destinations;   //!< destinations
+  bool accept_connections{true};
   int bind_port{};                         //!< TCP port to bind to
   mysql_harness::TCPAddress bind_address;  //!< IP address to bind to
   mysql_harness::Path named_socket;  //!< unix domain socket path to bind to

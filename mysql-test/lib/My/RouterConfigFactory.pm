@@ -115,9 +115,16 @@ sub fix_host {
 
  sub fix_bind_port {
   my ($self, $config, $group_name, $group, $option) = @_;
+
+  if (defined $group->if_exist('accept_external_connections')) {
+    if ($group->value('accept_external_connections') == 0) {
+      return undef;
+    }
+  }
+
   my $hostname = fix_host(@_);
   my $variable_name = (uc $group_name . "_" . $option) =~ s/:/_/r;
- 
+
   $self->push_env_variable($variable_name, $self->{HOSTS}->{$hostname});
   return $self->{HOSTS}->{$hostname}++;
  }

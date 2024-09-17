@@ -1649,7 +1649,45 @@ const RoutingConfigParam routing_config_param[] = {
                "empty address found in destination list (was "
                "',localhost:13005, ,,localhost:13003,localhost:13004, ,')")));
      }},
-};
+    {"invalid_accept_external_connections_2",
+     {
+         {"destinations", "localhost:13000"},
+         {"routing_strategy", "first-available"},
+         {"accept_external_connections", "2"},
+     },
+     [](const std::vector<std::string> &lines) {
+       EXPECT_THAT(lines,
+                   ::testing::Contains(::testing::HasSubstr(
+                       "Configuration error: option "
+                       "accept_external_connections in [routing] needs a value "
+                       "of either 0, 1, false or true, was '2'")));
+     }},
+    {"invalid_accept_external_connections_foo",
+     {
+         {"destinations", "localhost:13000"},
+         {"routing_strategy", "first-available"},
+         {"accept_external_connections", "foo"},
+     },
+     [](const std::vector<std::string> &lines) {
+       EXPECT_THAT(lines,
+                   ::testing::Contains(::testing::HasSubstr(
+                       "Configuration error: option "
+                       "accept_external_connections in [routing] needs a value "
+                       "of either 0, 1, false or true, was 'foo'")));
+     }},
+    {"invalid_accept_external_connections_special_chars",
+     {
+         {"destinations", "localhost:13000"},
+         {"routing_strategy", "first-available"},
+         {"accept_external_connections", "$%##"},
+     },
+     [](const std::vector<std::string> &lines) {
+       EXPECT_THAT(lines,
+                   ::testing::Contains(::testing::HasSubstr(
+                       "Configuration error: option "
+                       "accept_external_connections in [routing] needs a value "
+                       "of either 0, 1, false or true, was '$%##'")));
+     }}};
 
 INSTANTIATE_TEST_SUITE_P(Spec, RoutingConfigTest,
                          ::testing::ValuesIn(routing_config_param),
@@ -2175,6 +2213,230 @@ TEST_F(RouterRoutingTest, ConnectionDebugLogsSocket) {
   check_conn_debug_logs(classic_socket, server_classic_port);
   check_conn_debug_logs(x_socket, server_x_port);
 }
+#endif
+
+/**
+ * @test Check that the Router accepts a config file where
+ * 'accept_external_connections=0' is configured for a [routing] and
+ * bind_address/bind_port/socket are missing.
+ */
+TEST_F(RouterRoutingTest, NoAcceptExternalConnections) {
+  const auto server_port = port_pool_.get_next_available();
+  const auto routing_section = mysql_harness::ConfigBuilder::build_section(
+      "routing:no_accept_external",
+      {{"routing_strategy", "round-robin"},
+       {"destinations", "127.0.0.1:" + std::to_string(server_port)},
+       {"accept_external_connections", "0"}});
+
+  TempDirectory conf_dir("conf");
+  std::string conf_file = create_config_file(conf_dir.name(), routing_section);
+  auto &router = launch_router({"-c", conf_file});
+}
+
+/**
+ * @test Check that the Router does not open accepting port when
+ * 'accept_external_connections=0' is configured. Also checks that a proper
+ * warning is logged that configured bind_address/bind_port are ignored.
+ */
+TEST_F(RouterRoutingTest, NoAcceptExternalConnectionsBindPort) {
+  const auto bind_port = port_pool_.get_next_available();
+  const auto server_port = port_pool_.get_next_available();
+  const auto routing_section = mysql_harness::ConfigBuilder::build_section(
+      "routing:no_accept_external",
+      {{"routing_strategy", "round-robin"},
+       {"destinations", "127.0.0.1:" + std::to_string(server_port)},
+       {"bind_address", "127.0.0.1"},
+       {"bind_port", std::to_string(bind_port)},
+       {"accept_external_connections", "0"}});
+
+  TempDirectory conf_dir("conf");
+  std::string conf_file = create_config_file(conf_dir.name(), routing_section);
+
+  const std::string json_stmts = get_data_dir().join("my_port.js").str();
+  launch_mysql_server_mock(json_stmts, server_port);
+
+  auto &router = launch_router({"-c", conf_file});
+
+  EXPECT_TRUE(
+      wait_log_contains(router,
+                        "INFO .* routing routing:no_accept_external configured "
+                        "to NOT accept the external connections",
+                        5s));
+
+  EXPECT_TRUE(wait_log_contains(
+      router,
+      "WARNING .* \\[routing:no_accept_external\\] 'bind_address' configured "
+      "when 'accept_external_connections=0', ignoring",
+      5s));
+
+  EXPECT_TRUE(wait_log_contains(
+      router,
+      "WARNING .* \\[routing:no_accept_external\\] 'bind_port' configured when "
+      "'accept_external_connections=0', ignoring",
+      5s));
+
+  mysqlrouter::MySQLSession client;
+  EXPECT_THROW(
+      client.connect("127.0.0.1", bind_port, "username", "password", "", ""),
+      std::runtime_error);
+}
+
+#ifndef _WIN32
+
+/**
+ * @test Check that the Router does not open accepting socket when
+ * 'accept_external_connections=0' is configured. Also checks that a proper
+ * warning is logged that configured socket is ignored.
+ */
+TEST_F(RouterRoutingTest, NoAcceptExternalConnectionsBindSocket) {
+  const auto socket_name = get_test_temp_dir_name() + "/test.sock";
+  const auto server_port = port_pool_.get_next_available();
+
+  const auto routing_section = mysql_harness::ConfigBuilder::build_section(
+      "routing:no_accept_external",
+      {{"routing_strategy", "round-robin"},
+       {"destinations", "127.0.0.1:" + std::to_string(server_port)},
+       {"bind_address", "127.0.0.1"},
+       {"socket", socket_name},
+       {"accept_external_connections", "0"}});
+
+  TempDirectory conf_dir("conf");
+  std::string conf_file = create_config_file(conf_dir.name(), routing_section);
+
+  const std::string json_stmts = get_data_dir().join("my_port.js").str();
+  launch_mysql_server_mock(json_stmts, server_port);
+
+  auto &router = launch_router({"-c", conf_file});
+
+  EXPECT_TRUE(
+      wait_log_contains(router,
+                        "INFO .* routing routing:no_accept_external configured "
+                        "to NOT accept the external connections",
+                        5s));
+
+  EXPECT_TRUE(wait_log_contains(
+      router,
+      "WARNING .* \\[routing:no_accept_external\\] 'socket' configured when "
+      "'accept_external_connections=0', ignoring",
+      5s));
+
+  mysqlrouter::MySQLSession client;
+  EXPECT_THROW(client.connect("", 0, "username", "password", socket_name, ""),
+               std::runtime_error);
+}
+
+/**
+ * @test Check that the Router is still accepting connections when
+ * 'accept_external_connections' is explicitly set to 1.
+ */
+TEST_F(RouterRoutingTest, AcceptExternalConnectionsBindPort) {
+  const auto bind_port = port_pool_.get_next_available();
+  const auto server_port = port_pool_.get_next_available();
+  const auto routing_section = mysql_harness::ConfigBuilder::build_section(
+      "routing:accept_external",
+      {{"routing_strategy", "round-robin"},
+       {"destinations", "127.0.0.1:" + std::to_string(server_port)},
+       {"bind_address", "127.0.0.1"},
+       {"bind_port", std::to_string(bind_port)},
+       {"accept_external_connections", "1"}});
+
+  TempDirectory conf_dir("conf");
+  std::string conf_file = create_config_file(conf_dir.name(), routing_section);
+
+  const std::string json_stmts = get_data_dir().join("my_port.js").str();
+  launch_mysql_server_mock(json_stmts, server_port);
+
+  /*auto &router = */ launch_router({"-c", conf_file});
+
+  mysqlrouter::MySQLSession client;
+  EXPECT_NO_THROW(
+      client.connect("127.0.0.1", bind_port, "username", "password", "", ""));
+}
+
+/**
+ * @test Check that the Router does not open accepting port when
+ * 'accept_external_connections=0' is configured in DEFAULT section. Also checks
+ * that a proper warning is logged that configured bind_address/bind_port are
+ * ignored.
+ */
+TEST_F(RouterRoutingTest, NoAcceptExternalConnectionsDefault) {
+  const auto bind_port = port_pool_.get_next_available();
+  const auto server_port = port_pool_.get_next_available();
+  const auto routing_section = mysql_harness::ConfigBuilder::build_section(
+      "routing:no_accept_external",
+      {{"routing_strategy", "round-robin"},
+       {"destinations", "127.0.0.1:" + std::to_string(server_port)},
+       {"bind_address", "127.0.0.1"},
+       {"bind_port", std::to_string(bind_port)}});
+
+  const std::string extra_defaults = "accept_external_connections=0\n";
+
+  TempDirectory conf_dir("conf");
+  std::string conf_file =
+      create_config_file(conf_dir.name(), routing_section, nullptr,
+                         "mysqlrouter.conf", extra_defaults);
+
+  const std::string json_stmts = get_data_dir().join("my_port.js").str();
+  launch_mysql_server_mock(json_stmts, server_port);
+
+  auto &router = launch_router({"-c", conf_file});
+
+  EXPECT_TRUE(
+      wait_log_contains(router,
+                        "INFO .* routing routing:no_accept_external configured "
+                        "to NOT accept the external connections",
+                        5s));
+
+  EXPECT_TRUE(wait_log_contains(
+      router,
+      "WARNING .* \\[routing:no_accept_external\\] 'bind_address' configured "
+      "when 'accept_external_connections=0', ignoring",
+      5s));
+
+  EXPECT_TRUE(wait_log_contains(
+      router,
+      "WARNING .* \\[routing:no_accept_external\\] 'bind_port' configured when "
+      "'accept_external_connections=0', ignoring",
+      5s));
+
+  mysqlrouter::MySQLSession client;
+  EXPECT_THROW(
+      client.connect("127.0.0.1", bind_port, "username", "password", "", ""),
+      std::runtime_error);
+}
+
+/**
+ * @test Check that the Router does open accepting port when
+ * 'accept_external_connections=0' is configured in DEFAULT section but is is
+ * overwritten in the [routing] section to '1'.
+ */
+TEST_F(RouterRoutingTest, AcceptExternalConnectionsDefaultOverwritten) {
+  const auto bind_port = port_pool_.get_next_available();
+  const auto server_port = port_pool_.get_next_available();
+  const auto routing_section = mysql_harness::ConfigBuilder::build_section(
+      "routing:no_accept_external",
+      {{"routing_strategy", "round-robin"},
+       {"destinations", "127.0.0.1:" + std::to_string(server_port)},
+       {"bind_address", "127.0.0.1"},
+       {"bind_port", std::to_string(bind_port)},
+       {"accept_external_connections", "1"}});
+
+  const std::string extra_defaults = "accept_external_connections=0\n";
+
+  TempDirectory conf_dir("conf");
+  std::string conf_file =
+      create_config_file(conf_dir.name(), routing_section, nullptr,
+                         "mysqlrouter.conf", extra_defaults);
+
+  const std::string json_stmts = get_data_dir().join("my_port.js").str();
+  launch_mysql_server_mock(json_stmts, server_port);
+
+  /*auto &router = */ launch_router({"-c", conf_file});
+  mysqlrouter::MySQLSession client;
+  EXPECT_NO_THROW(
+      client.connect("127.0.0.1", bind_port, "username", "password", "", ""));
+}
+
 #endif
 
 using OptionalStr = std::optional<std::string>;

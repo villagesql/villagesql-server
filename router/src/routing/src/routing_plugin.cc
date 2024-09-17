@@ -167,38 +167,41 @@ static void init(mysql_harness::PluginFuncEnv *env) {
               section->key.empty() ? "" : ":", section->key.c_str());
           // Check the configuration
           RoutingPluginConfig config(section);  // throws std::invalid_argument
-          validate_socket_info(err_prefix, section,
-                               config);  // throws std::invalid_argument
+          if (config.accept_connections) {
+            validate_socket_info(err_prefix, section,
+                                 config);  // throws std::invalid_argument
 
-          // ensure that TCP port is unique
-          if (config.bind_address.port()) {
-            const auto &config_addr = config.bind_address;
+            // ensure that TCP port is unique
+            if (config.bind_address.port()) {
+              const auto &config_addr = config.bind_address;
 
-            // Check uniqueness of bind_address and port, using IP address
-            auto found_addr =
-                std::find(bind_addresses.begin(), bind_addresses.end(),
-                          config.bind_address);
-            if (found_addr != bind_addresses.end()) {
-              throw std::invalid_argument(
-                  err_prefix + "duplicate IP or name found in bind_address '" +
-                  config.bind_address.str() + "'");
-            }
-            // Check ADDR_ANY binding on same port
-            else if (config_addr.address() == "0.0.0.0" ||
-                     config_addr.address() == "::") {
-              found_addr = std::find_if(
-                  bind_addresses.begin(), bind_addresses.end(),
-                  [&config](const mysql_harness::TCPAddress &addr) {
-                    return config.bind_address.port() == addr.port();
-                  });
+              // Check uniqueness of bind_address and port, using IP address
+              auto found_addr =
+                  std::find(bind_addresses.begin(), bind_addresses.end(),
+                            config.bind_address);
               if (found_addr != bind_addresses.end()) {
                 throw std::invalid_argument(
                     err_prefix +
                     "duplicate IP or name found in bind_address '" +
                     config.bind_address.str() + "'");
               }
+              // Check ADDR_ANY binding on same port
+              else if (config_addr.address() == "0.0.0.0" ||
+                       config_addr.address() == "::") {
+                found_addr = std::find_if(
+                    bind_addresses.begin(), bind_addresses.end(),
+                    [&config](const mysql_harness::TCPAddress &addr) {
+                      return config.bind_address.port() == addr.port();
+                    });
+                if (found_addr != bind_addresses.end()) {
+                  throw std::invalid_argument(
+                      err_prefix +
+                      "duplicate IP or name found in bind_address '" +
+                      config.bind_address.str() + "'");
+                }
+              }
+              bind_addresses.push_back(config.bind_address);
             }
-            bind_addresses.push_back(config.bind_address);
           }
 
           // We check if we need special plugins based on URI

@@ -334,12 +334,17 @@ class ROUTING_EXPORT MySQLRouting : public MySQLRoutingBase {
   stdx::expected<void, std::string> run_acceptor(
       mysql_harness::PluginFuncEnv *env);
 
+  stdx::expected<void, std::string> run_with_no_acceptor(
+      mysql_harness::PluginFuncEnv *env);
+
  public:
   MySQLRoutingContext &get_context() override { return context_; }
 
   bool is_running() const override { return is_running_; }
 
  private:
+  bool accept_connections_{true};
+
   /** Monitor for notifying socket acceptor */
   WaitableMonitor<Nothing> acceptor_waitable_{Nothing{}};
 

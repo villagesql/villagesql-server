@@ -537,6 +537,9 @@ RoutingPluginConfig::RoutingPluginConfig(
       wait_for_my_writes_timeout, section, options::kWaitForMyWritesTimeout,
       mysql_harness::DurationOption<std::chrono::seconds>(0, 3600));
 
+  GET_OPTION_CHECKED(accept_connections, section, options::kAcceptConnections,
+                     BoolOption{});
+
   if (access_mode == routing::AccessMode::kAuto) {
     if (!metadata_cache_) {
       throw std::invalid_argument(
@@ -581,9 +584,31 @@ RoutingPluginConfig::RoutingPluginConfig(
   }
 
   using namespace std::string_literals;
+  if (!accept_connections) {
+    if (section->has(options::kBindAddress)) {
+      log_warning(
+          "[routing:%s] 'bind_address' configured when "
+          "'accept_external_connections=0', ignoring'",
+          section->key.c_str());
+    }
+
+    if (named_socket) {
+      log_warning(
+          "[routing:%s] 'socket' configured when "
+          "'accept_external_connections=0', ignoring'",
+          section->key.c_str());
+    }
+
+    if (bind_address.port()) {
+      log_warning(
+          "[routing:%s] 'bind_port' configured when "
+          "'accept_external_connections=0', ignoring'",
+          section->key.c_str());
+    }
+  }
 
   // either bind_address or socket needs to be set, or both
-  if (!bind_address.port() && !named_socket.is_set()) {
+  if (accept_connections && !bind_address.port() && !named_socket.is_set()) {
     throw std::invalid_argument(
         "either bind_address or socket option needs to be supplied, or both");
   }
@@ -792,6 +817,8 @@ std::string RoutingPluginConfig::get_default(std::string_view option) const {
       {options::kWaitForMyWritesTimeout,
        std::to_string(routing::kDefaultWaitForMyWritesTimeout.count())},
       {options::kRouterRequireEnforce, "0"},
+      {options::kAcceptConnections,
+       routing::kDefaultAcceptConnections ? "1" : "0"},
   };
 
   const auto it = defaults.find(option);
@@ -934,6 +961,10 @@ class RoutingConfigExposer : public mysql_harness::SectionConfigExposer {
     expose_option(routing::options::kWaitForMyWritesTimeout,
                   plugin_config_.wait_for_my_writes_timeout.count(),
                   routing::kDefaultWaitForMyWritesTimeout.count(), true);
+
+    expose_option(routing::options::kAcceptConnections,
+                  plugin_config_.accept_connections,
+                  routing::kDefaultAcceptConnections, true);
   }
 
  private:
