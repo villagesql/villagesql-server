@@ -22,7 +22,6 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include <iostream>
 #include <list>
 #include <memory>
 #include <optional>
@@ -37,9 +36,7 @@
 
 #include "helper/json/rapid_json_to_text.h"
 #include "mrs/database/helper/object_checksum.h"
-#include "mysql/harness/logging/logging.h"
-
-IMPORT_LOG_FUNCTIONS()
+#include "mysql/harness/utility/string.h"  // string_format()
 
 namespace mrs {
 namespace database {
@@ -288,7 +285,6 @@ class ChecksumBuilder {
 
   void on_field(const std::string &name, const rapidjson::Value &value,
                 std::string_view data) {
-    log_debug("on-field:%s skip_depth:%i", name.c_str(), (int)skip_depth_);
     if (skip_depth_ > 0) {
       return;
     }
@@ -307,7 +303,6 @@ class ChecksumBuilder {
   }
 
   void on_elem(const rapidjson::Value &value, std::string_view data) {
-    log_debug("on-elem skip_depth:%i", (int)skip_depth_);
     if (skip_depth_ > 0) return;
     if (value.IsString()) {
       digest_->update("\"");
@@ -319,9 +314,6 @@ class ChecksumBuilder {
   }
 
   void on_start_object(const entry::ObjectField *field, bool enabled) {
-    log_debug("%s on-start_obj skip_depth:%i enabled:%s",
-              !field ? nullptr : field->name.c_str(), (int)skip_depth_,
-              (enabled ? "true" : "false"));
     if (skip_depth_ > 0) {
       skip_depth_++;
       return;
@@ -340,8 +332,6 @@ class ChecksumBuilder {
   }
 
   void on_start_array_object() {
-    // array-objects are always enabled if the containing array is enabled
-    log_debug("on-start_arr skip_depth:%i enabled:1", (int)skip_depth_);
     if (skip_depth_ > 0) {
       skip_depth_++;
       return;
@@ -350,8 +340,6 @@ class ChecksumBuilder {
   }
 
   void on_start_literal_object(std::string_view field, bool enabled) {
-    log_debug("on-start_lit_obj skip_depth:%i enabled:%s", (int)skip_depth_,
-              (enabled ? "true" : "false"));
     if (skip_depth_ > 0) {
       skip_depth_++;
       return;
@@ -370,7 +358,6 @@ class ChecksumBuilder {
   }
 
   void on_end_object() {
-    log_debug("on-end_obj skip_depth:%i", (int)skip_depth_);
     if (skip_depth_ > 0) {
       skip_depth_--;
       return;
@@ -379,8 +366,6 @@ class ChecksumBuilder {
   }
 
   void on_start_array(const entry::ObjectField *field, bool enabled) {
-    log_debug("on-start_array skip_depth:%i enabled:%s", (int)skip_depth_,
-              (enabled ? "true" : "false"));
     if (skip_depth_ > 0) {
       skip_depth_++;
       return;
@@ -399,9 +384,6 @@ class ChecksumBuilder {
   }
 
   void on_start_literal_array(std::string_view field, bool enabled) {
-    log_debug("on-start_lit_array skip_depth:%i enabled:%s", (int)skip_depth_,
-              (enabled ? "true" : "false"));
-
     if (skip_depth_ > 0) {
       skip_depth_++;
       return;
@@ -420,7 +402,6 @@ class ChecksumBuilder {
   }
 
   void on_end_array() {
-    log_debug("on-end_array skip_depth:%i", (int)skip_depth_);
     if (skip_depth_ > 0) {
       skip_depth_--;
       return;
@@ -825,28 +806,13 @@ struct ChecksumHandler
       // references are checked if any of the child fields are checked and
       // enabled
       with_check = ref->enabled && ref->ref_table->needs_etag();
-      log_debug("check_field(%s:%s)%s ref => %i", ref->name.c_str(),
-                ref->ref_table->table.c_str(), ref->to_many ? "[]" : "",
-                with_check);
+
       return with_check;
     }
 
     bool result =
         (current_field_ && with_check && json_literal_nesting_ == 0) ||
         (json_literal_nesting_ != 0 && !json_literal_nocheck_);
-    log_debug(
-        "check_field(%s.%s) => %s  table.with_check=%i "
-        "field.with_check=%i with_check=%i json_literal_nesting=%i "
-        "json_literal_nocheck=%i",
-        current_table().table.c_str(),
-        current_field_ ? current_field_->name.c_str() : "",
-        (result ? "true" : "false"), current_table().with_check_,
-        (!std::dynamic_pointer_cast<entry::Column>(current_field_)
-             ? 2
-             : std::dynamic_pointer_cast<entry::Column>(current_field_)
-                   ->with_check.value_or(-1)),
-        with_check, static_cast<int>(json_literal_nesting_),
-        json_literal_nocheck_);
 
     return result;
   }
