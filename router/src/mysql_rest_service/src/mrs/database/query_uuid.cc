@@ -40,7 +40,7 @@ void QueryUuid::generate_uuid(MySQLSession *session) { execute(session); }
 
 UserId QueryUuid::get_result() {
   UserId result;
-  memcpy(result.raw, uuid_.data(), uuid_.size());
+  result.raw = uuid_;
   return result;
 }
 

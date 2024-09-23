@@ -76,18 +76,36 @@ TEST(UniversalID, not_equal) {
   ASSERT_NE(k_id5, k_id4);
 }
 
+TEST(UniversalID, less_equal) {
+  EXPECT_LE(k_id0, k_id1);
+  EXPECT_LE(k_id0, k_id0);
+
+  EXPECT_LE(k_id1, k_id2);
+  EXPECT_LE(k_id2, k_id3);
+  EXPECT_LE(k_id3, k_id4);
+  EXPECT_LE(k_id4, k_id5);
+}
+
 TEST(UniversalID, less) {
-  ASSERT_TRUE(k_id0 < k_id1);
-  ASSERT_TRUE(k_id1 < k_id2);
-  ASSERT_TRUE(k_id2 < k_id3);
-  ASSERT_TRUE(k_id3 < k_id4);
-  ASSERT_TRUE(k_id4 < k_id5);
+  EXPECT_LT(k_id0, k_id1);
+  EXPECT_LT(k_id1, k_id2);
+  EXPECT_LT(k_id2, k_id3);
+  EXPECT_LT(k_id3, k_id4);
+  EXPECT_LT(k_id4, k_id5);
 }
 
 TEST(UniversalID, greater) {
-  ASSERT_FALSE(k_id1 < k_id0);
-  ASSERT_FALSE(k_id2 < k_id1);
-  ASSERT_FALSE(k_id3 < k_id2);
-  ASSERT_FALSE(k_id4 < k_id3);
-  ASSERT_FALSE(k_id5 < k_id4);
+  EXPECT_GT(k_id1, k_id0);
+  EXPECT_GT(k_id2, k_id1);
+  EXPECT_GT(k_id3, k_id2);
+  EXPECT_GT(k_id4, k_id3);
+  EXPECT_GT(k_id5, k_id4);
+}
+
+TEST(UniversalID, greater_equal) {
+  EXPECT_GE(k_id1, k_id0);
+  EXPECT_GE(k_id2, k_id1);
+  EXPECT_GE(k_id3, k_id2);
+  EXPECT_GE(k_id4, k_id3);
+  EXPECT_GE(k_id5, k_id4);
 }

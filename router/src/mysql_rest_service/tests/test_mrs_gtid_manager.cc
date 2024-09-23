@@ -48,7 +48,7 @@ class GtidManagerTest : public testing::Test {
 
   Gtid make_gtid(int uid, std::string range) {
     UID u;
-    memcpy(u.raw, &uid, sizeof(uid));
+    memcpy(u.raw.data(), &uid, sizeof(uid));
     Gtid result{u.to_string() + range};
     return result;
   }
@@ -61,7 +61,7 @@ class GtidManagerTest : public testing::Test {
     std::vector<GtidSet> result;
     for (auto &s : sets) {
       UID u;
-      memcpy(u.raw, &s.uid, sizeof(s.uid));
+      memcpy(u.raw.data(), &s.uid, sizeof(s.uid));
       GtidSet set{u.to_string() + s.range};
       result.push_back(set);
     }

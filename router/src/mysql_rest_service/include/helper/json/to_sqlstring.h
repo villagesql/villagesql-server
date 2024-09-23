@@ -24,9 +24,11 @@
 #ifndef ROUTER_SRC_REST_MRS_SRC_HELPER_TO_SQLSTRING_H_
 #define ROUTER_SRC_REST_MRS_SRC_HELPER_TO_SQLSTRING_H_
 
+#include <sstream>
+#include <string>
+
 #include <my_rapidjson_size_t.h>
 #include <rapidjson/document.h>
-#include <string>
 
 #include "helper/json/rapid_json_iterator.h"
 #include "helper/to_string.h"

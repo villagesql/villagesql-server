@@ -25,13 +25,14 @@
 #ifndef ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_UNIVERSAL_ID_H_
 #define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_UNIVERSAL_ID_H_
 
-#include <string.h>
 #include <algorithm>
+#include <array>
 #include <cassert>
+#include <compare>
+#include <cstring>
 #include <optional>
 #include <utility>
 
-#include "helper/string/hex.h"
 #include "mysqlrouter/utils_sqlstring.h"
 
 namespace mrs {
@@ -41,48 +42,29 @@ namespace entry {
 struct UniversalId {
   constexpr static uint64_t k_size = 16;
 
-  UniversalId() {
-    memset(raw, 0, k_size);
-    //      num.higher_id = 0;
-    //      num.lower_id = 0;
-  }
+  UniversalId() = default;
 
   UniversalId(std::initializer_list<uint8_t> v) {
-    assert(v.size() <= sizeof(raw));
-    memset(raw, 0, sizeof(raw));
-    std::copy_n(v.begin(), std::min(v.size(), sizeof(raw)), std::begin(raw));
+    assert(v.size() <= raw.size());
+    std::copy_n(v.begin(), std::min(v.size(), raw.size()), std::begin(raw));
   }
 
-  UniversalId(const UniversalId &id) { *this = id; }
-
-  uint8_t raw[k_size];
+  std::array<uint8_t, k_size> raw{};
 
   const uint8_t *begin() const { return std::begin(raw); }
   const uint8_t *end() const { return std::end(raw); }
 
-  void operator=(const UniversalId &other) { memcpy(raw, other.raw, k_size); }
+  std::strong_ordering operator<=>(const UniversalId &rhs) const {
+    for (size_t ndx = raw.size() - 1; ndx > 0; --ndx) {
+      auto cmp_res = raw[ndx] <=> rhs.raw[ndx];
 
-  bool operator==(const UniversalId &other) const {
-    return 0 == memcmp(raw, other.raw, k_size);
-  }
-
-  bool operator!=(const UniversalId &other) const { return !(*this == other); }
-
-  bool operator<(const UniversalId &other) const {
-    for (int i = k_size - 1; i >= 0; --i) {
-      if (raw[i] != other.raw[i]) return raw[i] < other.raw[i];
+      if (cmp_res != 0) return cmp_res;
     }
 
-    return false;
+    return raw[0] <=> rhs.raw[0];
   }
 
-  bool operator>(const UniversalId &other) const {
-    for (int i = k_size - 1; i >= 0; --i) {
-      if (raw[i] != other.raw[i]) return raw[i] > other.raw[i];
-    }
-
-    return false;
-  }
+  bool operator==(const UniversalId &rhs) const = default;
 
   static UniversalId from_cstr(const char *p, uint32_t length) {
     if (length != k_size) return {};
@@ -91,17 +73,19 @@ struct UniversalId {
     return result;
   }
 
-  const char *to_raw() const { return reinterpret_cast<const char *>(raw); }
+  const char *to_raw() const {
+    return reinterpret_cast<const char *>(raw.data());
+  }
 
   static void from_raw(UniversalId *uid, const char *binray) {
-    memcpy(uid->raw, binray, k_size);
+    memcpy(uid->raw.data(), binray, k_size);
   }
 
   static void from_raw_zero_on_null(UniversalId *uid, const char *binray) {
     if (binray)
-      memcpy(uid->raw, binray, k_size);
+      memcpy(uid->raw.data(), binray, k_size);
     else
-      memset(uid->raw, 0, k_size);
+      memset(uid->raw.data(), 0, k_size);
   }
 
   static void from_raw_optional(std::optional<UniversalId> *uid,
@@ -115,7 +99,23 @@ struct UniversalId {
     }
   }
 
-  std::string to_string() const { return helper::string::hex(raw); }
+  std::string to_string() const {
+    // lower-case hex
+    constexpr std::array<char, 16> hex_chars = {
+        '0', '1', '2', '3', '4', '5', '6', '7',  //
+        '8', '9', 'a', 'b', 'c', 'd', 'e', 'f',
+    };
+
+    std::string out;
+    out.reserve(raw.size() * 2);
+
+    for (auto ch : raw) {
+      out += hex_chars[ch >> 4];
+      out += hex_chars[ch & 0xf];
+    }
+
+    return out;
+  }
 };
 
 inline mysqlrouter::sqlstring to_sqlstring(const UniversalId &ud) {

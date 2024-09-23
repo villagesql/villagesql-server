@@ -46,8 +46,9 @@ inline std::string to_string(const AuthRole &entry) {
   helper::json::SerializerToText stt;
   {
     auto obj = stt.add_object();
-    stt.member_add_value("id", reinterpret_cast<const char *>(entry.id.raw),
-                         entry.id.k_size);
+    stt.member_add_value("id",
+                         reinterpret_cast<const char *>(entry.id.raw.data()),
+                         entry.id.raw.size());
     stt.member_add_value("caption", entry.caption);
   }
 

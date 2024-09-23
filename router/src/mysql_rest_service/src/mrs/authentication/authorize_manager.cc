@@ -53,6 +53,7 @@
 #include "helper/json/rapid_json_to_struct.h"
 #include "helper/json/text_to.h"
 #include "helper/make_shared_ptr.h"
+#include "helper/string/hex.h"  // unhex
 #include "helper/string/random.h"
 #include "helper/string/replace.h"
 #include "helper/token/jwt.h"
@@ -457,8 +458,8 @@ std::string AuthorizeManager::get_jwt_token(UniversalId service_id,
   doc_set_member(payload, "exp", exp);
   doc_set_member(
       payload, "service_id",
-      std::string_view{reinterpret_cast<const char *>(service_id.raw),
-                       service_id.k_size});
+      std::string_view{reinterpret_cast<const char *>(service_id.raw.data()),
+                       service_id.raw.size()});
 
   auto jwt = helper::Jwt::create("HS256", payload);
 

@@ -25,6 +25,8 @@
 #ifndef ROUTER_SRC_MYSQL_REST_SERVICE_INCLUDE_HELPER_STRING_FROM_H_
 #define ROUTER_SRC_MYSQL_REST_SERVICE_INCLUDE_HELPER_STRING_FROM_H_
 
+#include <cstdint>
+
 #include "helper/string/generic.h"
 
 namespace helper {

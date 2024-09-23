@@ -25,13 +25,14 @@
 #ifndef ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_DATABASE_HELPER_GTID_H_
 #define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_DATABASE_HELPER_GTID_H_
 
-#include <iostream>
+#include <array>
 #include <list>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "helper/string/from.h"
+#include "helper/string/hex.h"  // unhex
 #include "mrs/database/entry/universal_id.h"
 #include "mysql/harness/string_utils.h"
 
@@ -42,31 +43,30 @@ namespace inner {
 
 class GTIDuuid : public entry::UniversalId {
  public:
-  class DefaultHex {
-   public:
-    void operator()(std::ostream &os) {
-      if (insert_separator(index++)) os << "-";
-      os << std::setfill('0') << std::setw(2) << std::hex << std::uppercase;
-    }
+  std::string to_string() const {
+    constexpr std::array<char, 16> hex_chars = {
+        '0', '1', '2', '3', '4', '5', '6', '7',  //
+        '8', '9', 'A', 'B', 'C', 'D', 'E', 'F',
+    };
 
-    int operator()(const uint8_t v) { return v; }
+    std::string out;
+    out.reserve(raw.size() * 2 + 4);
+    size_t pos = 0;
 
-    bool insert_separator(int pos) {
-      switch (pos) {
+    for (uint8_t ch : raw) {
+      switch (pos++) {
         case 4:
         case 6:
         case 8:
         case 10:
-          return true;
-        default:
-          return false;
+          out += '-';
       }
-    }
-    int index{0};
-  };
 
-  std::string to_string() const {
-    return helper::string::hex<decltype(raw), DefaultHex>(raw);
+      out += hex_chars[ch >> 4];
+      out += hex_chars[ch & 0xf];
+    }
+
+    return out;
   }
 };
 
@@ -104,7 +104,7 @@ ValueType max(X &&first) {
 }
 
 template <typename ValueType, typename X, typename... Args>
-ValueType max(X &&first, Args &&... rest) {
+ValueType max(X &&first, Args &&...rest) {
   ValueType rest_value = inner::max<ValueType>(rest...);
   if (!has_value(first)) return rest_value;
   if (rest_value > value(first)) return rest_value;
@@ -348,7 +348,7 @@ template <typename Range>
 class Gtid {
  public:
   template <typename... T>
-  Gtid(const GTIDuuid &uid, T &&... v) : uid_{uid}, range_{v...} {}
+  Gtid(const GTIDuuid &uid, T &&...v) : uid_{uid}, range_{v...} {}
 
   bool operator==(const Gtid &other) const {
     if (uid_ != other.uid_) return false;

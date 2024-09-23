@@ -61,7 +61,7 @@ class UserManagerFixture : public Test {
     AuthUser result;
     result.has_user_id = set_id;
     if (set_id) {
-      memcpy(result.user_id.raw, u[0], 16);
+      memcpy(result.user_id.raw.data(), u[0], 16);
     }
 
     result.app_id = mrs::UniversalId::from_cstr(u[1], 16);
