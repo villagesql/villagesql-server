@@ -228,11 +228,6 @@ not_mac_os_debug.inc
 # This also fails with non-debug
 statement_digest_long_query.test
 
-# 17.0 Reason for inclusion: the extra JSON cause on builds with other
-# storage engines than InnoDB is hard to
-# separate. see innodb.sdi test
-have_only_innodb.inc
-
 # 18.0 Test to be run on local machine
 # This file is used by test scenarios that depend on time and it isn't possible
 # to test it in other way. Time based tests are unstable on PB2.
