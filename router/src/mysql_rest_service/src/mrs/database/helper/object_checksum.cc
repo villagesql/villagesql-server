@@ -36,7 +36,6 @@
 
 #include "helper/json/rapid_json_to_text.h"
 #include "mrs/database/helper/object_checksum.h"
-#include "mysql/harness/utility/string.h"  // string_format()
 
 namespace mrs {
 namespace database {
@@ -912,6 +911,7 @@ std::string post_process_json(
     bool compute_checksum) {
   std::string checksum;
   rapidjson::Document new_doc;
+  auto allocator = new_doc.GetAllocator();
 
   std::unique_ptr<Sha256Digest> digest;
   if (compute_checksum) digest = std::make_unique<Sha256Digest>();
@@ -932,18 +932,14 @@ std::string post_process_json(
     rapidjson::Value metadata_object(rapidjson::kObjectType);
 
     if (compute_checksum) {
-      rapidjson::Value etag;
-      etag.SetString(checksum.c_str(), new_doc.GetAllocator());
-      metadata_object.AddMember("etag", etag, new_doc.GetAllocator());
+      metadata_object.AddMember("etag", rapidjson::Value(checksum, allocator),
+                                allocator);
     }
-    for (const auto &f : metadata) {
-      rapidjson::Value name;
-      rapidjson::Value field;
-      name.SetString(f.first.c_str(), new_doc.GetAllocator());
-      field.SetString(f.second.c_str(), new_doc.GetAllocator());
-      metadata_object.AddMember(name, field, new_doc.GetAllocator());
+    for (const auto &[name, field] : metadata) {
+      metadata_object.AddMember(rapidjson::Value(name, allocator),
+                                rapidjson::Value(field, allocator), allocator);
     }
-    new_doc.AddMember("_metadata", metadata_object, new_doc.GetAllocator());
+    new_doc.AddMember("_metadata", metadata_object, allocator);
   }
 
   return helper::json::to_string(new_doc);

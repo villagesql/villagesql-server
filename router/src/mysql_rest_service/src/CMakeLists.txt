@@ -24,6 +24,9 @@ INCLUDE(GenerateExportHeader)
 
 ADD_LIBRARY(mysql_rest_service_if INTERFACE)
 
+# enable std::string support for rapidjson
+ADD_DEFINITIONS(-DRAPIDJSON_HAS_STDSTRING=1)
+
 TARGET_INCLUDE_DIRECTORIES(mysql_rest_service_if
   INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/../include/
