@@ -65,6 +65,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #include "strmake.h"
 #include "strxmov.h"
 #include "strxnmov.h"
+#include "template_utils.h"
 #include "typelib.h"
 #include "violite.h"
 
@@ -3941,14 +3942,28 @@ static bool is_binary_field(MYSQL_FIELD *field) {
 
 static void print_as_hex(FILE *output_file, const char *str, ulong len,
                          ulong total_bytes_to_send) {
-  const char *ptr = str, *end = ptr + len;
+  const unsigned char *ptr = pointer_cast<const unsigned char *>(str);
+  const unsigned char *end = ptr + len;
   ulong i;
 
   if (str != nullptr) {
     fprintf(output_file, "0x");
-    for (; ptr < end; ptr++)
-      fprintf(output_file, "%02X",
-              *(static_cast<const uchar *>(static_cast<const void *>(ptr))));
+    ulong remaining = len;
+    static const unsigned char hex_digits[] = "0123456789ABCDEF";
+    unsigned char chunk_buf[64];
+    while (ptr < end) {
+      // write up to 32 input bytes at a time for performance
+      // (up to 64 bytes of hex output)
+      const size_t chunk_input_size = std::min((uint)remaining, 32U);
+      for (size_t j = 0; j < chunk_input_size; j++) {
+        const size_t offset = 2 * j;
+        chunk_buf[offset] = hex_digits[(*ptr >> 4) & 0x0F];
+        chunk_buf[offset + 1] = hex_digits[(*ptr) & 0x0F];
+        ptr++;
+      }
+      fwrite(chunk_buf, 1, 2 * chunk_input_size, output_file);
+      remaining -= chunk_input_size;
+    }
     /* Printed string length: two chars "0x" + two chars for each byte. */
     i = 2 + len * 2;
   } else {
@@ -4005,11 +4020,13 @@ static void print_table_data(MYSQL_RES *result) {
     tee_puts(separator.ptr(), PAGER);
   }
 
+  const uint num_fields = mysql_num_fields(result);
+
   while ((cur = mysql_fetch_row(result))) {
     ulong *lengths = mysql_fetch_lengths(result);
     (void)tee_fputs("| ", PAGER);
     mysql_field_seek(result, 0);
-    for (uint off = 0; off < mysql_num_fields(result); off++) {
+    for (uint off = 0; off < num_fields; off++) {
       const char *buffer;
       uint data_length;
       uint field_max_length;
@@ -4029,31 +4046,33 @@ static void print_table_data(MYSQL_RES *result) {
       field = mysql_fetch_field(result);
       field_max_length = field->max_length;
 
-      /*
-       How many text cells on the screen will this string span?  If it
-       contains multibyte characters, then the number of characters we occupy
-       on screen will be fewer than the number of bytes we occupy in memory.
-
-       We need to find how much screen real-estate we will occupy to know how
-       many extra padding-characters we should send with the printing
-       function.
-      */
-      visible_length = charset_info->cset->numcells(charset_info, buffer,
-                                                    buffer + data_length);
-      extra_padding = (uint)(data_length - visible_length);
-
       if (opt_binhex && is_binary_field(field))
         print_as_hex(PAGER, cur[off], lengths[off], field_max_length);
-      else if (field_max_length > MAX_COLUMN_LENGTH)
-        tee_print_sized_data(buffer, data_length,
-                             MAX_COLUMN_LENGTH + extra_padding, false);
       else {
-        if (num_flag[off] != 0) /* if it is numeric, we right-justify it */
+        /*
+          How many text cells on the screen will this string span?  If it
+          contains multibyte characters, then the number of characters we occupy
+          on screen will be fewer than the number of bytes we occupy in memory.
+
+          We need to find how much screen real-estate we will occupy to know how
+          many extra padding-characters we should send with the printing
+          function.
+        */
+        visible_length = charset_info->cset->numcells(charset_info, buffer,
+                                                      buffer + data_length);
+        extra_padding = (uint)(data_length - visible_length);
+
+        if (field_max_length > MAX_COLUMN_LENGTH)
           tee_print_sized_data(buffer, data_length,
-                               field_max_length + extra_padding, true);
-        else
-          tee_print_sized_data(buffer, data_length,
-                               field_max_length + extra_padding, false);
+                               MAX_COLUMN_LENGTH + extra_padding, false);
+        else {
+          if (num_flag[off] != 0) /* if it is numeric, we right-justify it */
+            tee_print_sized_data(buffer, data_length,
+                                 field_max_length + extra_padding, true);
+          else
+            tee_print_sized_data(buffer, data_length,
+                                 field_max_length + extra_padding, false);
+        }
       }
       tee_fputs(" |", PAGER);
     }
@@ -5519,13 +5538,14 @@ void tee_write(FILE *file, const char *s, size_t slen, int flags) {
 #ifdef _WIN32
   const bool is_console = my_win_is_console_cached(file);
 #endif
+  const bool is_mb = use_mb(charset_info);
   const char *se;
   for (se = s + slen; s < se; s++) {
     const char *t;
 
     if (flags & MY_PRINT_MB) {
       int mblen;
-      if (use_mb(charset_info) && (mblen = my_ismbchar(charset_info, s, se))) {
+      if (is_mb && (mblen = my_ismbchar(charset_info, s, se))) {
 #ifdef _WIN32
         if (is_console)
           my_win_console_write(charset_info, s, mblen);
