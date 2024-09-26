@@ -46,8 +46,6 @@ struct MrsSchemaVersion {
       std::initializer_list<MrsSchemaVersion> accepted_versions) const {
     for (const auto &other : accepted_versions) {
       if (major == other.major) {
-        if (other.minor != 0 && (other.minor < minor)) continue;
-
         return true;
       }
     }

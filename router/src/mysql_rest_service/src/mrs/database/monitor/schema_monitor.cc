@@ -60,17 +60,16 @@ mrs::interface::SupportedMrsMetadataVersion query_supported_mrs_version(
   QueryVersion q;
   auto mrs_version = q.query_version(session);
 
-  if (mrs_version.major == 2 && mrs_version.minor <= 2)
+  if (mrs_version.is_compatible({mrs::database::kCurrentMrsMetadataVersion}))
+    return mrs::interface::kSupportedMrsMetadataVersion_3;
+
+  if (mrs_version.is_compatible({{2, 2, 0}}))
     return mrs::interface::kSupportedMrsMetadataVersion_2;
 
-  if (mrs_version.major != 3 || mrs_version.minor != 0) {
-    std::stringstream error_message;
-    error_message << "Unsupported MRS version detected: " << mrs_version.major
-                  << "." << mrs_version.minor << "." << mrs_version.patch;
-    throw std::runtime_error(error_message.str());
-  }
-
-  return mrs::interface::kSupportedMrsMetadataVersion_3;
+  std::stringstream error_message;
+  error_message << "Unsupported MRS version detected: " << mrs_version.major
+                << "." << mrs_version.minor << "." << mrs_version.patch;
+  throw std::runtime_error(error_message.str());
 }
 
 #if 0

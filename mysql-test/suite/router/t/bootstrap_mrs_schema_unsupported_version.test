@@ -18,12 +18,6 @@ FLUSH PRIVILEGES;
 --let $mrs_schema_version=1,1,0
 --source ../include/test/bootstrap_mrs_schema_version.inc
 
---let $mrs_schema_version=2,3,0
---source ../include/test/bootstrap_mrs_schema_version.inc
-
---let $mrs_schema_version=2,3,1
---source ../include/test/bootstrap_mrs_schema_version.inc
-
 # Cleanup
 DROP USER 'admin'@'%';
 --force-rmdir $MYSQL_TMP_DIR/bootstrap_folder
