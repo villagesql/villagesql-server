@@ -51,8 +51,8 @@ struct UniversalId {
 
   std::array<uint8_t, k_size> raw{};
 
-  const uint8_t *begin() const { return std::begin(raw); }
-  const uint8_t *end() const { return std::end(raw); }
+  auto begin() const { return std::begin(raw); }
+  auto end() const { return std::end(raw); }
 
   std::strong_ordering operator<=>(const UniversalId &rhs) const {
     for (size_t ndx = raw.size() - 1; ndx > 0; --ndx) {
