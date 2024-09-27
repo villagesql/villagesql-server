@@ -43,7 +43,7 @@ class HandlerAuthorizeCommon : public Handler {
 
  public:
   HandlerAuthorizeCommon(const std::string &url_host,
-                         const UniversalId service_id, const std::string &url,
+                         const UniversalId service_id,
                          const std::string &rest_path_matcher,
                          const std::string &options,
                          const std::string &redirection,

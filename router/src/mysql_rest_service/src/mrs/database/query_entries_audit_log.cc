@@ -55,8 +55,8 @@ void QueryAuditLogEntries::build_query(
     const std::vector<std::string> &allowed_tables, const uint64_t audit_log_id,
     bool count_entries) {
   static mysqlrouter::sqlstring columns{
-      count_entries ? "id,dml_type,table_name,old_row_id, new_row_id"
-                    : "count(*)"};
+      !count_entries ? "id,dml_type,table_name,old_row_id, new_row_id"
+                     : "count(*)"};
   query_ = {
       "SELECT ! FROM "
       "mysql_rest_service_metadata.audit_log WHERE ID > ? AND table_name in "

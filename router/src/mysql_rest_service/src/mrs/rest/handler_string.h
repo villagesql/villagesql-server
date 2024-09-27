@@ -26,7 +26,6 @@
 #define ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_FILE_H_
 
 #include "mrs/interface/authorize_manager.h"
-#include "mrs/interface/object.h"
 #include "mrs/interface/query_factory.h"
 #include "mrs/rest/handler.h"
 

@@ -27,20 +27,24 @@
 
 #include <string>
 
+#include "mrs/database/entry/db_state.h"
 #include "mrs/database/helper/query.h"
-#include "mrs/interface/state.h"
 
 namespace mrs {
 namespace database {
 
 class QueryState : public Query {
  public:
-  virtual void query_state(MySQLSession *session);
-  virtual uint64_t get_last_update();
-  virtual bool was_changed() const;
+  using DbState = mrs::database::entry::DbState;
 
-  State get_state();
-  std::string get_json_data();
+ public:
+  QueryState(const std::optional<uint64_t> &router_id);
+
+  virtual void query_state(MySQLSession *session);
+  virtual bool was_changed() const;
+  virtual bool was_developer_changed() const;
+
+  const DbState &get_state() const;
 
   class NoRows : public std::runtime_error {
    public:
@@ -50,12 +54,13 @@ class QueryState : public Query {
  protected:
   void query_state_impl(MySQLSession *session,
                         MySQLSession::Transaction *transaction);
-  State state_{stateOff};
+  void on_row(const ResultRow &r) override;
+
+  DbState state_;
+  bool developer_changed_{false};
   bool changed_{true};
   bool has_rows_{false};
-  std::string json_data_;
-  uint64_t audit_log_id_{0};
-  void on_row(const ResultRow &r) override;
+  std::optional<uint64_t> router_id_;
 };
 
 }  // namespace database

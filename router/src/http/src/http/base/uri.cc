@@ -51,12 +51,14 @@ Uri::Uri(const Uri &other) : uri_impl_{} { *this = other; }
 
 Uri::~Uri() = default;
 
-Uri::operator bool() const {
-  return !uri_impl_.scheme.empty() || !uri_impl_.host.empty() ||
-         0 != uri_impl_.port || !uri_impl_.username.empty() ||
-         !uri_impl_.password.empty() || !uri_impl_.path.empty() ||
-         !uri_impl_.query.empty() || !uri_impl_.fragment.empty();
+bool Uri::empty() const {
+  return uri_impl_.scheme.empty() && uri_impl_.host.empty() &&
+         0 == uri_impl_.port && uri_impl_.username.empty() &&
+         uri_impl_.password.empty() && uri_impl_.path.empty() &&
+         uri_impl_.query.empty() && uri_impl_.fragment.empty();
 }
+
+Uri::operator bool() const { return !empty(); }
 
 Uri &Uri::operator=(const Uri &other) {
   uri_impl_ = other.uri_impl_;

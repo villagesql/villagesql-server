@@ -24,20 +24,26 @@
 #define OPENSSL_NO_DEPRECATED_3_0
 #define OPENSSL_NO_DEPRECATED_1_1_0
 #define OSSL_DEPRECATEDIN_3_0 extern
+
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-#include "mrs/rest/handler_table.h"
+#include "helper/make_shared_ptr.h"
+#include "helper/mysql_column.h"
+#include "mrs/endpoint/handler/handler_db_object_table.h"
 #include "mrs/rest/request_context.h"
 
 #include "mock/mock_auth_manager.h"
+#include "mock/mock_endpoint_configuration.h"
+#include "mock/mock_endpoint_factory.h"
+#include "mock/mock_handler_factory.h"
 #include "mock/mock_http_request.h"
 #include "mock/mock_mysqlcachemanager.h"
-#include "mock/mock_object.h"
 #include "mock/mock_session.h"
 #include "test_mrs_object_utils.h"
 
 using testing::_;
+using testing::AtLeast;
 using testing::ByMove;
 using testing::Invoke;
 using testing::Return;
@@ -48,6 +54,15 @@ using testing::StrictMock;
 using testing::Test;
 
 using namespace mrs::rest;
+using namespace mrs::endpoint::handler;
+using namespace mrs::endpoint;
+
+template <typename T>
+using MakeMockPtr = helper::MakeSharedPtr<StrictMock<T>>;
+
+using RowUserOwnership = mrs::database::entry::RowUserOwnership;
+using RowGroupOwnership = mrs::database::entry::RowGroupOwnership;
+using VectorOfRowGroupOwnership = std::vector<RowGroupOwnership>;
 
 class HandleObjectTests : public Test {
  public:
@@ -58,10 +73,8 @@ class HandleObjectTests : public Test {
   class GeneralExpectations {
    public:
     GeneralExpectations(
-        HandleObjectTests &parent,
-        const mrs::interface::Object::RowUserOwnership &user_row_ownership,
-        const mrs::interface::Object::VectorOfRowGroupOwnership
-            &group_row_ownership,
+        HandleObjectTests &parent, const RowUserOwnership &user_row_ownership,
+        const VectorOfRowGroupOwnership &group_row_ownership,
         const std::string &cached_primary, const std::string &schema,
         const std::string &object, const std::string &rest_path,
         const std::string &rest_url,
@@ -85,7 +98,9 @@ class HandleObjectTests : public Test {
       for (auto &a : cached_columns) {
         builder.field(a, a, "text");
       }
-      cached_object_ = builder.root();
+      parent_.db_schema.id = {2, 1};
+      parent_.db_object.id = {1, 1};
+      parent_.db_object.object_description = builder.root();
 
       expectSetup(conn);
     }
@@ -93,9 +108,6 @@ class HandleObjectTests : public Test {
     void expectSetup(collector::MySQLConnection conn =
                          collector::kMySQLConnectionUserdataRO) {
       static std::string k_empty_string;
-      EXPECT_CALL(parent_.mock_route, get_options())
-          .WillRepeatedly(ReturnRef(k_empty_string));
-
       EXPECT_CALL(parent_.mock_input_headers, find_cstr(StrEq("Cookie")))
           .WillRepeatedly(Return(k_empty_string.c_str()));
       EXPECT_CALL(parent_.mock_input_headers, find_cstr(StrEq("Accept")))
@@ -104,43 +116,36 @@ class HandleObjectTests : public Test {
           .WillRepeatedly(ReturnRef(parent_.mock_input_headers));
       EXPECT_CALL(parent_.mock_request_, get_input_headers())
           .WillRepeatedly(ReturnRef(parent_.mock_input_headers));
-      EXPECT_CALL(parent_.mock_route, get_rest_path())
-          .WillRepeatedly(Return(std::vector<std::string>({rest_path_})));
-      EXPECT_CALL(parent_.mock_route, get_rest_url())
-          .WillRepeatedly(ReturnRef(rest_url_));
-      EXPECT_CALL(parent_.mock_route, get_rest_path_raw())
-          .WillRepeatedly(ReturnRef(rest_path_));
-      EXPECT_CALL(parent_.mock_route, get_cache())
-          .WillRepeatedly(Return(&parent_.mysql_cache));
       EXPECT_CALL(parent_.mysql_cache, get_instance(conn, false))
           .WillOnce(Return(ByMove(collector::MysqlCacheManager::CachedObject(
               nullptr, false, &parent_.mock_session))));
 
+      EXPECT_CALL(*parent_.mock_db_object_endpoint, is_enabled())
+          .WillRepeatedly(Return(true));
+      EXPECT_CALL(*parent_.mock_db_object_endpoint, get_url_path())
+          .WillRepeatedly(Return(rest_path_));
+      EXPECT_CALL(*parent_.mock_db_object_endpoint, get_url())
+          .WillRepeatedly(Return(rest_url_));
+      EXPECT_CALL(*parent_.mock_db_object_endpoint, get_id())
+          .WillRepeatedly(Return(parent_.db_object.id));
+      EXPECT_CALL(*parent_.mock_db_object_endpoint, update()).Times(AtLeast(1));
+
+      EXPECT_CALL(*parent_.mock_db_schema_endpoint, is_enabled())
+          .WillRepeatedly(Return(true));
+      EXPECT_CALL(*parent_.mock_db_schema_endpoint, get_id())
+          .WillRepeatedly(Return(parent_.db_schema.id));
+
+      parent_.mock_db_object_endpoint->set(
+          parent_.db_object, parent_.mock_db_schema_endpoint.copy_base());
+
       using ConnParam = collector::CountedMySQLSession::ConnectionParameters;
       EXPECT_CALL(parent_.mock_session, get_connection_parameters())
           .WillRepeatedly(Return(ConnParam{}));
-
-      //      EXPECT_CALL(parent_.mock_route, get_cached_columnes())
-      //          .WillRepeatedly(ReturnRef(cached_columns_));
-
-      EXPECT_CALL(parent_.mock_route, get_on_page()).WillRepeatedly(Return(25));
-      EXPECT_CALL(parent_.mock_route, get_user_row_ownership())
-          .WillRepeatedly(ReturnRef(user_row_ownership_));
-      EXPECT_CALL(parent_.mock_route, get_group_row_ownership())
-          .WillRepeatedly(ReturnRef(group_row_ownership_));
-      EXPECT_CALL(parent_.mock_route, get_object_name())
-          .WillRepeatedly(ReturnRef(object_));
-      EXPECT_CALL(parent_.mock_route, get_schema_name())
-          .WillRepeatedly(ReturnRef(schema_));
-      EXPECT_CALL(parent_.mock_route, get_object())
-          .WillRepeatedly(Return(cached_object_));
-      EXPECT_CALL(parent_.mock_route, get_url_host())
-          .WillRepeatedly(ReturnRef(k_empty_string));
     }
 
     HandleObjectTests &parent_;
-    mrs::interface::Object::RowUserOwnership user_row_ownership_;
-    mrs::interface::Object::VectorOfRowGroupOwnership group_row_ownership_;
+    RowUserOwnership user_row_ownership_;
+    VectorOfRowGroupOwnership group_row_ownership_;
     helper::Column cached_primary_;
     std::string schema_;
     std::string object_;
@@ -151,20 +156,26 @@ class HandleObjectTests : public Test {
   };
 
   http::base::Uri uri_{""};
+  mrs::database::entry::DbSchema db_schema;
+  mrs::database::entry::DbObject db_object;
   StrictMock<MockHttpHeaders> mock_input_headers;
   StrictMock<MockMysqlCacheManager> mysql_cache;
   StrictMock<MockHttpRequest> mock_request_;
-  StrictMock<MockRoute> mock_route;
   StrictMock<MockAuthManager> mock_auth_manager;
   StrictMock<MockMySQLSession> mock_session;
+  MakeMockPtr<MockHandlerFactory> mock_handler_factory;
+  MakeMockPtr<MockEndpointConfiguration> mock_configuratation;
+  MakeMockPtr<MockEndpoint<DbObjectEndpoint>> mock_db_object_endpoint{
+      db_object, mock_configuratation.copy_base(),
+      mock_handler_factory.copy_base()};
+  MakeMockPtr<MockEndpoint<DbSchemaEndpoint>> mock_db_schema_endpoint{
+      db_schema, mock_configuratation.copy_base(),
+      mock_handler_factory.copy_base()};
 };
 
 TEST_F(HandleObjectTests, fetch_object_feed) {
-  const mrs::interface::Object::RowUserOwnership k_user_row_ownership {
-    false, ""
-  };
-  const mrs::interface::Object::VectorOfRowGroupOwnership
-      k_group_row_ownership {};
+  const RowUserOwnership k_user_row_ownership{false, ""};
+  const VectorOfRowGroupOwnership k_group_row_ownership{};
   const std::string k_cached_primary{"column1"};
   GeneralExpectations expectations{*this,
                                    k_user_row_ownership,
@@ -177,7 +188,11 @@ TEST_F(HandleObjectTests, fetch_object_feed) {
                                    {"column2", "column3"}};
 
   RequestContext ctxt{&mock_request_};
-  HandlerTable object{&mock_route, &mock_auth_manager};
+  HandlerDbObjectTable object{std::dynamic_pointer_cast<DbObjectEndpoint>(
+                                  mock_db_object_endpoint.copy_base()),
+                              &mock_auth_manager,
+                              {},
+                              &mysql_cache};
 
   EXPECT_CALL(
       mock_session,
@@ -191,11 +206,8 @@ TEST_F(HandleObjectTests, fetch_object_feed) {
 }
 
 TEST_F(HandleObjectTests, fetch_object_single) {
-  const mrs::interface::Object::RowUserOwnership k_user_row_ownership {
-    false, ""
-  };
-  const mrs::interface::Object::VectorOfRowGroupOwnership
-      k_group_row_ownership {};
+  const RowUserOwnership k_user_row_ownership{false, ""};
+  const VectorOfRowGroupOwnership k_group_row_ownership{};
   const std::string k_cached_primary{"column1"};
   GeneralExpectations expectations{*this,
                                    k_user_row_ownership,
@@ -208,7 +220,11 @@ TEST_F(HandleObjectTests, fetch_object_single) {
                                    {"column2", "column3"}};
 
   RequestContext ctxt{&mock_request_};
-  HandlerTable object{&mock_route, &mock_auth_manager};
+  HandlerDbObjectTable object{std::dynamic_pointer_cast<DbObjectEndpoint>(
+                                  mock_db_object_endpoint.copy_base()),
+                              &mock_auth_manager,
+                              {},
+                              &mysql_cache};
 
   EXPECT_CALL(
       mock_session,
@@ -222,11 +238,8 @@ TEST_F(HandleObjectTests, fetch_object_single) {
 }
 
 TEST_F(HandleObjectTests, delete_single_object_throws_without_filter) {
-  const mrs::interface::Object::RowUserOwnership k_user_row_ownership {
-    false, ""
-  };
-  const mrs::interface::Object::VectorOfRowGroupOwnership
-      k_group_row_ownership {};
+  const RowUserOwnership k_user_row_ownership{false, ""};
+  const VectorOfRowGroupOwnership k_group_row_ownership{};
   const std::string k_cached_primary{"column1"};
   GeneralExpectations expectations{*this,
                                    k_user_row_ownership,
@@ -240,11 +253,15 @@ TEST_F(HandleObjectTests, delete_single_object_throws_without_filter) {
                                    collector::kMySQLConnectionUserdataRW};
 
   RequestContext ctxt{&mock_request_};
-  HandlerTable object{&mock_route, &mock_auth_manager};
+  HandlerDbObjectTable object{std::dynamic_pointer_cast<DbObjectEndpoint>(
+                                  mock_db_object_endpoint.copy_base()),
+                              &mock_auth_manager,
+                              {},
+                              &mysql_cache};
 
   //  EXPECT_CALL(mock_session,
   //              query(StartsWith("SELECT "
-  //                               "JSON_OBJECT('column1',`column1`,'column2',`"
+  // "JSON_OBJECT('column1',`column1`,'column2',`"
   //                               "column2`,'column3',`column3`, 'links'"),
   //                    _, _));
 
@@ -252,11 +269,8 @@ TEST_F(HandleObjectTests, delete_single_object_throws_without_filter) {
 }
 
 TEST_F(HandleObjectTests, delete_single_object) {
-  const mrs::interface::Object::RowUserOwnership k_user_row_ownership {
-    false, ""
-  };
-  const mrs::interface::Object::VectorOfRowGroupOwnership
-      k_group_row_ownership {};
+  const RowUserOwnership k_user_row_ownership{false, ""};
+  const VectorOfRowGroupOwnership k_group_row_ownership{};
   const std::string k_cached_primary{"column1"};
   GeneralExpectations expectations{*this,
                                    k_user_row_ownership,
@@ -265,16 +279,22 @@ TEST_F(HandleObjectTests, delete_single_object) {
                                    "schema",
                                    "object",
                                    "/schema/object/1",
-                                   "https://test.pl/schema/object?q={}",
+                                   // %7B == {
+                                   // %7D == }
+                                   "https://test.pl/schema/object?q=%7B%7D",
                                    {"column2", "column3"},
                                    collector::kMySQLConnectionUserdataRW};
 
   RequestContext ctxt{&mock_request_};
-  HandlerTable object{&mock_route, &mock_auth_manager};
+  HandlerDbObjectTable object{std::dynamic_pointer_cast<DbObjectEndpoint>(
+                                  mock_db_object_endpoint.copy_base()),
+                              &mock_auth_manager,
+                              {},
+                              &mysql_cache};
 
   //  EXPECT_CALL(mock_session,
   //              query(StartsWith("SELECT "
-  //                               "JSON_OBJECT('column1',`column1`,'column2',`"
+  // "JSON_OBJECT('column1',`column1`,'column2',`"
   //                               "column2`,'column3',`column3`, 'links'"),
   //                    _, _));
 

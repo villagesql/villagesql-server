@@ -50,6 +50,7 @@ enum EntitiesCounters {
   kEntityCounterUpdatesHosts,
   kEntityCounterUpdatesServices,
   kEntityCounterUpdatesSchemas,
+  kEntityCounterUpdatesContentSets,
   kEntityCounterUpdatesObjects,
   kEntityCounterUpdatesFiles,
   kEntityCounterUpdatesAuthentications,

@@ -101,7 +101,11 @@ void ResponseJsonTemplate::begin_resultset_with_limits(
   has_more_ = false;
 }
 
-void ResponseJsonTemplate::end_resultset() {
+void ResponseJsonTemplate::end_resultset(const std::optional<bool> &has_more) {
+  if (has_more.has_value()) {
+    has_more_ = has_more.value();
+  }
+
   json_root_items_ = JsonSerializer::Array();
   if (!limit_not_set_) {
     json_root_->member_add_value("limit", limit_);

@@ -30,14 +30,12 @@
 #include "mrs/http/cookie.h"
 #include "mrs/http/error.h"
 #include "mrs/http/utilities.h"
-#include "mrs/interface/object.h"
 #include "mrs/rest/request_context.h"
 
 namespace mrs {
 namespace rest {
 
 using HttpResult = HandlerAuthorizeOk::HttpResult;
-using Route = mrs::interface::Object;
 
 // clang-format off
 const std::string k_page_content_default = R"HEREDOC(
@@ -137,10 +135,10 @@ const std::string k_page_content_default = R"HEREDOC(
 
 HandlerAuthorizeOk::HandlerAuthorizeOk(
     const std::string &url_host, const UniversalId service_id,
-    const std::string &url, const std::string &rest_path_matcher,
-    const std::string &options, const std::string &page_content_custom,
+    const std::string &rest_path_matcher, const std::string &options,
+    const std::string &page_content_custom,
     interface::AuthorizeManager *auth_manager)
-    : Handler(url_host, url, {rest_path_matcher}, options, auth_manager),
+    : Handler(url_host, {rest_path_matcher}, options, auth_manager),
       service_id_{service_id},
       page_content_custom_{page_content_custom} {}
 
@@ -160,7 +158,10 @@ UniversalId HandlerAuthorizeOk::get_schema_id() const {
   return {};
 }
 
-uint32_t HandlerAuthorizeOk::get_access_rights() const { return Route::kRead; }
+uint32_t HandlerAuthorizeOk::get_access_rights() const {
+  using Op = mrs::database::entry::Operation::Values;
+  return Op::valueRead;
+}
 
 HttpResult HandlerAuthorizeOk::handle_get(RequestContext *) {
   if (page_content_custom_.empty())

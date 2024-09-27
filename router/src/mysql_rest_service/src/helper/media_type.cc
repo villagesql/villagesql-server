@@ -24,6 +24,8 @@
 
 #include "helper/media_type.h"
 
+#include <map>
+
 namespace helper {
 
 const char *get_mime_name(MediaType mt) {
@@ -66,5 +68,32 @@ const char *get_mime_name(MediaType mt) {
 }
 
 std::string to_string(MediaType mt) { return get_mime_name(mt); }
+
+MediaType get_media_type_from_extension(const char *extenstion) {
+  static std::map<std::string, MediaType> map{
+      {".gif", typeGif},  {".jpg", typeJpg}, {".png", typePng},
+      {".js", typeJs},    {".mjs", typeJs},  {".html", typeHtml},
+      {".htm", typeHtml}, {".css", typeCss}, {".svg", typeSvg},
+      {".map", typePlain}};
+
+  auto i = map.find(extenstion);
+
+  if (i == map.end()) return typePlain;
+
+  return i->second;
+}
+
+bool is_text_type(const MediaType mt) {
+  static std::map<MediaType, bool> map{
+      {typeGif, false}, {typeJpg, false},  {typePng, false}, {typeJs, true},
+      {typeJs, true},   {typeHtml, true},  {typeHtml, true}, {typeCss, true},
+      {typeSvg, true},  {typePlain, true}, {typeIco, false}};
+
+  auto i = map.find(mt);
+
+  if (i == map.end()) return false;
+
+  return i->second;
+}
 
 }  // namespace helper

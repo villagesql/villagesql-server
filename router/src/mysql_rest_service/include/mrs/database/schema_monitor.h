@@ -37,9 +37,9 @@
 #include "mrs/database/entry/db_object.h"
 #include "mrs/database/monitor/schema_monitor_factory.h"
 #include "mrs/database/query_factory_proxy.h"
+#include "mrs/endpoint_manager.h"
 #include "mrs/gtid_manager.h"
 #include "mrs/interface/query_monitor_factory.h"
-#include "mrs/object_manager.h"
 #include "mrs/observability/entities_manager.h"
 
 namespace mrs {
@@ -49,7 +49,7 @@ class SchemaMonitor {
  public:
   SchemaMonitor(const mrs::Configuration &configuration,
                 collector::MysqlCacheManager *cache,
-                mrs::ObjectManager *dbobject_manager,
+                mrs::EndpointManager *dbobject_manager,
                 authentication::AuthorizeManager *auth_manager,
                 mrs::observability::EntitiesManager *entities_manager,
                 mrs::GtidManager *gtid_manager,
@@ -74,7 +74,7 @@ class SchemaMonitor {
   std::thread monitor_thread_;
   const mrs::Configuration configuration_;
   collector::MysqlCacheManager *cache_;
-  mrs::ObjectManager *dbobject_manager_;
+  mrs::EndpointManager *dbobject_manager_;
   mrs::authentication::AuthorizeManager *auth_manager_;
   mrs::observability::EntitiesManager *entities_manager_;
   mrs::GtidManager *gtid_manager_;

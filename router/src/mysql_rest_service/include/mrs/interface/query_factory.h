@@ -30,7 +30,6 @@
 namespace mrs {
 namespace database {
 
-class QueryChangesDbObject;
 class QueryAuditLogEntries;
 class QueryEntriesAuthPrivileges;
 class QueryEntriesContentFile;
@@ -40,7 +39,6 @@ class QueryEntryGroupRowSecurity;
 class QueryEntryContentFile;
 class QueryEntryAuthUser;
 class QueryEntryObject;
-class QueryEntriesDbObject;
 class QueryChangesContentFile;
 class QueryUserGroups;
 class QueryRestTable;

@@ -26,6 +26,7 @@
 
 #include "mrs/database/query_changes_auth_app.h"
 #include "mrs/database/query_changes_content_file.h"
+#include "mrs/database/query_changes_content_set.h"
 #include "mrs/database/query_changes_db_object.h"
 #include "mrs/database/query_changes_db_schema.h"
 #include "mrs/database/query_changes_db_service.h"
@@ -43,8 +44,9 @@ class SchemaMonitorFactory : public mrs::interface::QueryMonitorFactory {
  public:
   ~SchemaMonitorFactory() override = default;
 
-  std::unique_ptr<database::QueryState> create_turn_state_fetcher() override {
-    return std::make_unique<QueryState>();
+  std::unique_ptr<database::QueryState> create_turn_state_fetcher(
+      const std::optional<uint64_t> &router_id) override {
+    return std::make_unique<QueryState>(router_id);
   }
 
   std::unique_ptr<database::QueryEntriesUrlHost> create_url_host_fetcher()
@@ -52,10 +54,10 @@ class SchemaMonitorFactory : public mrs::interface::QueryMonitorFactory {
     return std::make_unique<QueryEntriesUrlHost>();
   }
 
-  std::unique_ptr<database::QueryEntriesDbService> create_db_service_fetcher()
-      override {
+  std::unique_ptr<database::QueryEntriesDbService> create_db_service_fetcher(
+      const std::optional<uint64_t> &router_id) override {
     return std::make_unique<QueryEntriesDbService>(
-        mrs::interface::kSupportedMrsMetadataVersion_2);
+        mrs::interface::kSupportedMrsMetadataVersion_2, router_id);
   }
 
   std::unique_ptr<database::QueryEntriesDbSchema> create_db_schema_fetcher()
@@ -63,14 +65,8 @@ class SchemaMonitorFactory : public mrs::interface::QueryMonitorFactory {
     return std::make_unique<QueryEntriesDbSchema>();
   }
 
-  std::unique_ptr<database::QueryEntriesDbObjectLite> create_db_object_fetcher(
+  std::unique_ptr<database::QueryEntriesDbObject> create_db_object_fetcher(
       interface::QueryFactory *query_factory) override {
-    return std::make_unique<QueryEntriesDbObjectLite>(
-        mrs::interface::kSupportedMrsMetadataVersion_2, query_factory);
-  }
-
-  std::unique_ptr<database::QueryEntriesDbObject> create_route_fetcher(
-      interface::QueryFactory *query_factory) override {  // TODO: remove
     return std::make_unique<QueryEntriesDbObject>(
         mrs::interface::kSupportedMrsMetadataVersion_2, query_factory);
   }
@@ -82,12 +78,14 @@ class SchemaMonitorFactory : public mrs::interface::QueryMonitorFactory {
 
   std::unique_ptr<database::QueryEntriesContentFile>
   create_content_file_fetcher() override {
-    return std::make_unique<QueryEntriesContentFile>();
+    return std::make_unique<QueryEntriesContentFile>(
+        mrs::interface::kSupportedMrsMetadataVersion_2);
   }
 
-  std::unique_ptr<database::QueryState> create_turn_state_monitor(
-      database::QueryState *state) override {
-    return std::make_unique<QueryChangesState>(state);
+  std::unique_ptr<database::QueryEntriesContentSet> create_content_set_fetcher()
+      override {
+    return std::make_unique<QueryEntriesContentSet>(
+        mrs::interface::kSupportedMrsMetadataVersion_2);
   }
 
   std::unique_ptr<database::QueryEntriesUrlHost> create_url_host_monitor(
@@ -96,9 +94,11 @@ class SchemaMonitorFactory : public mrs::interface::QueryMonitorFactory {
   }
 
   std::unique_ptr<database::QueryEntriesDbService> create_db_service_monitor(
-      const uint64_t last_audit_log_id) override {
+      const uint64_t last_audit_log_id,
+      const std::optional<uint64_t> &router_id) override {
     return std::make_unique<QueryChangesDbService>(
-        mrs::interface::kSupportedMrsMetadataVersion_2, last_audit_log_id);
+        mrs::interface::kSupportedMrsMetadataVersion_2, last_audit_log_id,
+        router_id);
   }
 
   std::unique_ptr<database::QueryEntriesDbSchema> create_db_schema_monitor(
@@ -106,17 +106,9 @@ class SchemaMonitorFactory : public mrs::interface::QueryMonitorFactory {
     return std::make_unique<QueryChangesDbSchema>(last_audit_log_id);
   }
 
-  std::unique_ptr<database::QueryEntriesDbObjectLite> create_db_object_monitor(
+  std::unique_ptr<database::QueryEntriesDbObject> create_db_object_monitor(
       interface::QueryFactory *query_factory,
       const uint64_t last_audit_log_id) override {
-    return std::make_unique<QueryChangesDbObjectLite>(
-        mrs::interface::kSupportedMrsMetadataVersion_2, query_factory,
-        last_audit_log_id);
-  }
-
-  std::unique_ptr<database::QueryEntriesDbObject> create_route_monitor(
-      interface::QueryFactory *query_factory,
-      const uint64_t last_audit_log_id) override {  // TODO: remove
     return std::make_unique<QueryChangesDbObject>(
         mrs::interface::kSupportedMrsMetadataVersion_2, query_factory,
         last_audit_log_id);
@@ -130,7 +122,14 @@ class SchemaMonitorFactory : public mrs::interface::QueryMonitorFactory {
 
   std::unique_ptr<database::QueryEntriesContentFile>
   create_content_file_monitor(const uint64_t last_audit_log_id) override {
-    return std::make_unique<QueryChangesContentFile>(last_audit_log_id);
+    return std::make_unique<QueryChangesContentFile>(
+        last_audit_log_id, mrs::interface::kSupportedMrsMetadataVersion_2);
+  }
+
+  std::unique_ptr<database::QueryEntriesContentSet> create_content_set_monitor(
+      const uint64_t last_audit_log_id) override {
+    return std::make_unique<QueryChangesContentSet>(
+        last_audit_log_id, mrs::interface::kSupportedMrsMetadataVersion_2);
   }
 };
 
@@ -153,44 +152,56 @@ class SchemaMonitorFactory : public v2::SchemaMonitorFactory {
         last_audit_log_id);
   }
 
-  std::unique_ptr<database::QueryEntriesDbService> create_db_service_fetcher()
-      override {
+  std::unique_ptr<database::QueryEntriesDbService> create_db_service_fetcher(
+      const std::optional<uint64_t> &router_id) override {
     return std::make_unique<QueryEntriesDbService>(
-        mrs::interface::kSupportedMrsMetadataVersion_3);
+        mrs::interface::kSupportedMrsMetadataVersion_3, router_id);
   }
 
-  std::unique_ptr<database::QueryEntriesDbObjectLite> create_db_object_fetcher(
+  std::unique_ptr<database::QueryEntriesDbObject> create_db_object_fetcher(
       interface::QueryFactory *query_factory) override {
-    return std::make_unique<QueryEntriesDbObjectLite>(
-        mrs::interface::kSupportedMrsMetadataVersion_3, query_factory);
-  }
-
-  std::unique_ptr<database::QueryEntriesDbObject> create_route_fetcher(
-      interface::QueryFactory *query_factory) override {  // TODO: remove
     return std::make_unique<QueryEntriesDbObject>(
         mrs::interface::kSupportedMrsMetadataVersion_3, query_factory);
   }
 
   std::unique_ptr<database::QueryEntriesDbService> create_db_service_monitor(
-      const uint64_t last_audit_log_id) override {
+      const uint64_t last_audit_log_id,
+      const std::optional<uint64_t> &router_id) override {
     return std::make_unique<QueryChangesDbService>(
-        mrs::interface::kSupportedMrsMetadataVersion_3, last_audit_log_id);
+        mrs::interface::kSupportedMrsMetadataVersion_3, last_audit_log_id,
+        router_id);
   }
 
-  std::unique_ptr<database::QueryEntriesDbObjectLite> create_db_object_monitor(
+  std::unique_ptr<database::QueryEntriesDbObject> create_db_object_monitor(
       interface::QueryFactory *query_factory,
       const uint64_t last_audit_log_id) override {
-    return std::make_unique<QueryChangesDbObjectLite>(
-        mrs::interface::kSupportedMrsMetadataVersion_3, query_factory,
-        last_audit_log_id);
-  }
-
-  std::unique_ptr<database::QueryEntriesDbObject> create_route_monitor(
-      interface::QueryFactory *query_factory,
-      const uint64_t last_audit_log_id) override {  // TODO: remove
     return std::make_unique<QueryChangesDbObject>(
         mrs::interface::kSupportedMrsMetadataVersion_3, query_factory,
         last_audit_log_id);
+  }
+
+  std::unique_ptr<database::QueryEntriesContentSet> create_content_set_fetcher()
+      override {
+    return std::make_unique<QueryEntriesContentSet>(
+        mrs::interface::kSupportedMrsMetadataVersion_3);
+  }
+
+  std::unique_ptr<database::QueryEntriesContentSet> create_content_set_monitor(
+      const uint64_t last_audit_log_id) override {
+    return std::make_unique<QueryChangesContentSet>(
+        last_audit_log_id, mrs::interface::kSupportedMrsMetadataVersion_3);
+  }
+
+  std::unique_ptr<database::QueryEntriesContentFile>
+  create_content_file_monitor(const uint64_t last_audit_log_id) override {
+    return std::make_unique<QueryChangesContentFile>(
+        last_audit_log_id, mrs::interface::kSupportedMrsMetadataVersion_3);
+  }
+
+  std::unique_ptr<database::QueryEntriesContentFile>
+  create_content_file_fetcher() override {
+    return std::make_unique<QueryEntriesContentFile>(
+        mrs::interface::kSupportedMrsMetadataVersion_3);
   }
 };
 

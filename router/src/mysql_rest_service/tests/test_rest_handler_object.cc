@@ -28,17 +28,28 @@
 
 #include "helper/make_shared_ptr.h"
 #include "helper/set_http_component.h"
-#include "mrs/rest/handler_table.h"
+#include "mrs/endpoint/db_object_endpoint.h"
+#include "mrs/endpoint/db_schema_endpoint.h"
+#include "mrs/endpoint/db_service_endpoint.h"
+#include "mrs/endpoint/handler/handler_db_object_table.h"
+#include "mrs/endpoint/url_host_endpoint.h"
 
 #include "mock/mock_auth_manager.h"
+#include "mock/mock_endpoint_configuration.h"
 #include "mock/mock_http_server_component.h"
 #include "mock/mock_mysqlcachemanager.h"
-#include "mock/mock_object.h"
-#include "mock/mock_route_schema.h"
 
 using helper::MakeSharedPtr;
 using helper::SetHttpComponent;
-using mrs::rest::HandlerTable;
+using HandlerDbObjectTable = mrs::endpoint::handler::HandlerDbObjectTable;
+using DbObjectEndpoint = mrs::endpoint::DbObjectEndpoint;
+using DbSchemaEndpoint = mrs::endpoint::DbSchemaEndpoint;
+using DbServiceEndpoint = mrs::endpoint::DbServiceEndpoint;
+using UrlHostEndpoint = mrs::endpoint::UrlHostEndpoint;
+using DbService = mrs::database::entry::DbService;
+using DbSchema = mrs::database::entry::DbSchema;
+using DbObject = mrs::database::entry::DbObject;
+using DbHost = mrs::rest::entry::AppUrlHost;
 using testing::_;
 using testing::Invoke;
 using testing::Mock;
@@ -47,23 +58,39 @@ using testing::ReturnRef;
 using testing::StrictMock;
 using testing::Test;
 
+const std::string k_empty{};
 const std::string k_url{"https://mysql.com/mrs/schema/table"};
-const std::string k_path{"^/mrs/schema/table/?"};
-const std::string k_empty;
+const std::string k_path{
+    "^/mrs/schema/table(/([0-9]|[a-z]|[A-Z]|[-._~!$&'()*+,;=:@%]| )*/?)?$"};
+const int k_access_rights = 5;
+
+struct Endpoints {
+  bool is_https{true};
+  std::string host{"mysql.com"};
+  std::string service{"/mrs"};
+  std::string schema{"/schema"};
+  std::string object{"/table"};
+  std::string url{k_url};
+  std::string path{k_path};
+  mrs::UniversalId host_id{{10, 0}};
+  mrs::UniversalId service_id{{10, 100}};
+  mrs::UniversalId schema_id{{10, 101}};
+  mrs::UniversalId object_id{{10, 102}};
+  int access_rights = k_access_rights;
+  bool requires_auth{true};
+};
+
+const auto k_auth_check = mrs::interface::RestHandler::Authorization::kCheck;
+const auto k_auth_none = mrs::interface::RestHandler::Authorization::kNotNeeded;
 
 using Strings = std::vector<std::string>;
 
 class RestHandlerObjectTests : public Test {
  public:
-  void make_sut(const std::string &rest_url, const std::string &rest_path) {
-    EXPECT_CALL(mock_route_, get_schema())
-        .WillRepeatedly(Return(mock_route_schema_.copy_base()));
-    EXPECT_CALL(mock_route_, get_options()).WillOnce(ReturnRef(k_empty));
-    EXPECT_CALL(mock_route_, get_rest_url()).WillOnce(ReturnRef(rest_url));
-    EXPECT_CALL(mock_route_, get_rest_path())
-        .WillOnce(Return(Strings{rest_path}));
-    EXPECT_CALL(mock_route_, get_url_host()).WillRepeatedly(ReturnRef(k_empty));
-    EXPECT_CALL(mock_http_component_, add_route(_, rest_path, _))
+  void make_sut(const Endpoints &config) {
+    EXPECT_CALL(*mock_endpoint_configuration_, does_server_support_https())
+        .WillRepeatedly(Return(config.is_https));
+    EXPECT_CALL(mock_http_component_, add_route(_, config.path, _))
         .WillOnce(Invoke(
             [this](
                 const ::std::string &, const ::std::string &,
@@ -71,7 +98,44 @@ class RestHandlerObjectTests : public Test {
               request_handler_ = std::move(handler);
               return request_handler_.get();
             }));
-    sut_ = std::make_shared<HandlerTable>(&mock_route_, &mock_auth_manager_);
+
+    DbService db_srv;
+    DbSchema db_sch;
+    DbObject db_obj;
+    DbHost db_host;
+
+    db_host.id = config.host_id;
+
+    db_srv.id = config.service_id;
+    db_srv.url_host_id = config.host_id;
+
+    db_sch.id = config.schema_id;
+    db_sch.service_id = config.service_id;
+
+    db_obj.id = config.object_id;
+    db_obj.schema_id = config.schema_id;
+
+    db_host.name = config.host;
+    db_srv.url_context_root = config.service;
+    db_sch.request_path = config.schema;
+    db_sch.requires_auth = config.requires_auth;
+
+    db_obj.request_path = config.object;
+    db_obj.crud_operation = config.access_rights;
+    db_obj.requires_authentication = config.requires_auth;
+
+    endpoint_host_ = std::make_shared<UrlHostEndpoint>(
+        db_host, mock_endpoint_configuration_, nullptr);
+    endpoint_db_srv_ = std::make_shared<DbServiceEndpoint>(
+        db_srv, mock_endpoint_configuration_, nullptr);
+    endpoint_db_sch_ = std::make_shared<DbSchemaEndpoint>(
+        db_sch, mock_endpoint_configuration_, nullptr);
+    endpoint_db_obj_ = std::make_shared<DbObjectEndpoint>(
+        db_obj, mock_endpoint_configuration_, nullptr);
+    endpoint_db_sch_->change_parent(endpoint_db_srv_);
+    endpoint_db_obj_->change_parent(endpoint_db_sch_);
+    sut_ = std::make_shared<HandlerDbObjectTable>(endpoint_db_obj_,
+                                                  &mock_auth_manager_);
   }
 
   void delete_sut() {
@@ -83,51 +147,47 @@ class RestHandlerObjectTests : public Test {
   StrictMock<MockMysqlCacheManager> mock_cache_manager_;
   StrictMock<MockHttpServerComponent> mock_http_component_;
   SetHttpComponent raii_setter_{&mock_http_component_};
-  StrictMock<MockRoute> mock_route_;
-  MakeSharedPtr<StrictMock<MockRouteSchema>> mock_route_schema_;
+  MakeSharedPtr<MockEndpointConfiguration> mock_endpoint_configuration_;
   StrictMock<MockAuthManager> mock_auth_manager_;
-  std::shared_ptr<HandlerTable> sut_;
+  std::shared_ptr<UrlHostEndpoint> endpoint_host_;
+  std::shared_ptr<DbServiceEndpoint> endpoint_db_srv_;
+  std::shared_ptr<DbSchemaEndpoint> endpoint_db_sch_;
+  std::shared_ptr<DbObjectEndpoint> endpoint_db_obj_;
+  std::shared_ptr<HandlerDbObjectTable> sut_;
 };
 
-TEST_F(RestHandlerObjectTests, forwards_get_service_id) {
-  const mrs::UniversalId k_service_id{{10, 101}};
+TEST_F(RestHandlerObjectTests, forwards_data_from_endpoints_set1) {
+  const Endpoints k_default{};
 
-  make_sut(k_url, k_path);
-  EXPECT_CALL(mock_route_, get_service_id()).WillOnce(Return(k_service_id));
-  ASSERT_EQ(k_service_id, sut_->get_service_id());
+  make_sut(k_default);
+  ASSERT_EQ(k_default.service_id, sut_->get_service_id());
+  ASSERT_EQ(k_default.schema_id, sut_->get_schema_id());
+  ASSERT_EQ(k_default.object_id, sut_->get_db_object_id());
+  ASSERT_EQ(k_auth_check, sut_->requires_authentication());
+  ASSERT_EQ(k_default.access_rights, sut_->get_access_rights());
   delete_sut();
 }
 
-TEST_F(RestHandlerObjectTests, forwards_get_schema_id) {
-  const auto k_schema_id = mrs::UniversalId{{10, 101}};
-
-  make_sut(k_url, k_path);
-  EXPECT_CALL(*mock_route_schema_, get_id()).WillOnce(Return(k_schema_id));
-  ASSERT_EQ(k_schema_id, sut_->get_schema_id());
-  delete_sut();
-}
-
-TEST_F(RestHandlerObjectTests, forwards_get_object_id) {
-  const auto k_object_id = mrs::UniversalId{{10, 101}};
-
-  make_sut(k_url, k_path);
-  EXPECT_CALL(mock_route_, get_id()).WillOnce(Return(k_object_id));
-  ASSERT_EQ(k_object_id, sut_->get_db_object_id());
-  delete_sut();
-}
-
-TEST_F(RestHandlerObjectTests, forwards_requires_authentication_must_be_check) {
-  const auto k_req_auth = mrs::interface::RestHandler::Authorization::kCheck;
-  make_sut(k_url, k_path);
-  EXPECT_CALL(mock_route_, requires_authentication()).WillOnce(Return(true));
-  ASSERT_EQ(k_req_auth, sut_->requires_authentication());
-  delete_sut();
-}
-
-TEST_F(RestHandlerObjectTests, forwards_access_right) {
-  const auto k_access_rights = 5;
-  make_sut(k_url, k_path);
-  EXPECT_CALL(mock_route_, get_access()).WillOnce(Return(k_access_rights));
-  ASSERT_EQ(k_access_rights, sut_->get_access_rights());
+TEST_F(RestHandlerObjectTests, forwards_data_from_endpoints_set2) {
+  const Endpoints k_other_data{
+      false,
+      "oracle.com",
+      "/svc",
+      "/sakila",
+      "/actor",
+      "http://oracle.com/svc/sakila/actor",
+      "^/svc/sakila/actor(/([0-9]|[a-z]|[A-Z]|[-._~!$&'()*+,;=:@%]| )*/?)?$",
+      mrs::UniversalId{{100, 100}},
+      mrs::UniversalId{{200, 100}},
+      mrs::UniversalId{{222, 100}},
+      mrs::UniversalId{{233, 100}},
+      1,
+      false};
+  make_sut(k_other_data);
+  ASSERT_EQ(k_other_data.service_id, sut_->get_service_id());
+  ASSERT_EQ(k_other_data.schema_id, sut_->get_schema_id());
+  ASSERT_EQ(k_other_data.object_id, sut_->get_db_object_id());
+  ASSERT_EQ(k_other_data.access_rights, sut_->get_access_rights());
+  ASSERT_EQ(k_auth_none, sut_->requires_authentication());
   delete_sut();
 }

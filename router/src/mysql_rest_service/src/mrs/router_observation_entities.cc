@@ -135,6 +135,9 @@ void initialize_entities(observability::EntitiesManager *manager) {
       "changesServices");
   reg.register_entity_with_id_not_resetable<kEntityCounterUpdatesSchemas>(
       "changesSchemas");
+  reg.register_entity_with_id_not_resetable<kEntityCounterUpdatesContentSets>(
+      "changesContentSets");
+
   reg.register_entity_with_id_not_resetable<kEntityCounterUpdatesObjects>(
       "changesObjects");
   reg.register_entity_with_id_not_resetable<kEntityCounterUpdatesFiles>(

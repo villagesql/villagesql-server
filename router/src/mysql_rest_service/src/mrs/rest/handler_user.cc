@@ -33,7 +33,6 @@
 #include "mrs/database/query_entries_auth_role.h"
 #include "mrs/http/cookie.h"
 #include "mrs/http/error.h"
-#include "mrs/interface/object.h"
 #include "mrs/rest/request_context.h"
 
 #include "mysql/harness/logging/logging.h"
@@ -44,10 +43,10 @@ namespace mrs {
 namespace rest {
 
 using HttpResult = HandlerUser::HttpResult;
-using Route = mrs::interface::Object;
 
 uint32_t HandlerUser::get_access_rights() const {
-  return Route::kRead | Route::kUpdate;
+  using Op = mrs::database::entry::Operation::Values;
+  return Op::valueRead | Op::valueUpdate;
 }
 
 HttpResult HandlerUser::handle_put(RequestContext *ctxt) {

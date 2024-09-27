@@ -33,8 +33,6 @@ namespace database {
 class QueryChangesState : public QueryState {
  public:
   explicit QueryChangesState(QueryState *state);
-
-  void query_state(MySQLSession *session) override;
 };
 
 }  // namespace database

@@ -53,7 +53,7 @@ class JsonTemplateUnnest : public database::JsonTemplate {
   bool push_json_document(const char *document) override;
   bool push_row(const ResultRow &values,
                 const char *ignore_column = nullptr) override;
-  void end_resultset() override;
+  void end_resultset(const std::optional<bool> &has_more = {}) override;
 
   void begin() override;
   void finish(const CustomMetadata &custom_metadata = {}) override;

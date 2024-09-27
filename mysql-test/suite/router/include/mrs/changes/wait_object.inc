@@ -28,8 +28,7 @@ if (!$mrs_changes_current_is)
 
 if ($DEBUG)
 {
-  --let $new_value=`SELECT $mrs_sql_changes_variable`
-  --echo Wait object - old limit: $old_value, new limit: $new_value
+  SELECT details->>"$.changesObjects" FROM mysql_rest_service_metadata.router_status;
 }
 
 --let $mrs_changes_inc=

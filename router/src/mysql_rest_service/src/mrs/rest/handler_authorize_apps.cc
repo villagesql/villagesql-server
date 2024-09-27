@@ -31,7 +31,6 @@
 #include "mrs/http/cookie.h"
 #include "mrs/http/error.h"
 #include "mrs/http/utilities.h"
-#include "mrs/interface/object.h"
 #include "mrs/rest/request_context.h"
 
 #include "mysql/harness/logging/logging.h"
@@ -42,14 +41,12 @@ namespace mrs {
 namespace rest {
 
 using HttpResult = HandlerAuthorizeApps::HttpResult;
-using Route = mrs::interface::Object;
 
 HandlerAuthorizeApps::HandlerAuthorizeApps(
     const std::string &url_host, const UniversalId service_id,
-    const std::string &url, const std::string &rest_path_matcher,
-    const std::string &options, const std::string &redirection,
-    interface::AuthorizeManager *auth_manager)
-    : Handler(url_host, url, {rest_path_matcher}, options, auth_manager),
+    const std::string &rest_path_matcher, const std::string &options,
+    const std::string &redirection, interface::AuthorizeManager *auth_manager)
+    : Handler(url_host, {rest_path_matcher}, options, auth_manager),
       service_id_{service_id},
       redirection_{redirection} {}
 
@@ -70,7 +67,8 @@ UniversalId HandlerAuthorizeApps::get_schema_id() const {
 }
 
 uint32_t HandlerAuthorizeApps::get_access_rights() const {
-  return Route::kRead;
+  using Op = mrs::database::entry::Operation::Values;
+  return Op::valueRead;
 }
 
 HttpResult HandlerAuthorizeApps::handle_get(RequestContext *) {

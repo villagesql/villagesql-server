@@ -59,13 +59,13 @@ const mrs::UniversalId k_service_id{101};
 
 class HandlerAuthorizeTests : public Test {
  public:
-  void SetUp() override { make_sut(k_service_id, k_url, k_rest_path); }
+  void SetUp() override { make_sut(k_service_id, k_rest_path); }
 
   void TearDown() override {
     EXPECT_CALL(mock_http_component_, remove_route(request_handler_.get()));
   }
 
-  void make_sut(const mrs::UniversalId service_id, const std::string &rest_url,
+  void make_sut(const mrs::UniversalId service_id,
                 const std::string &rest_path) {
     EXPECT_CALL(mock_http_component_, add_route(_, rest_path, _))
         .WillOnce(Invoke(
@@ -75,8 +75,8 @@ class HandlerAuthorizeTests : public Test {
               request_handler_ = std::move(handler);
               return request_handler_.get();
             }));
-    sut_ = std::make_unique<HandlerAuthorize>("", service_id, rest_url,
-                                              rest_path, "", "", &mock_auth_);
+    sut_ = std::make_unique<HandlerAuthorize>("", service_id, rest_path, "", "",
+                                              &mock_auth_);
     ASSERT_NE(nullptr, request_handler_.get());
   }
 

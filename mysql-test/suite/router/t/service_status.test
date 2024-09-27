@@ -23,6 +23,8 @@ if ($ROUTER_MRS_SCHEMA == 2)
 --let $mrs_add_service_path="/svc"
 --let $mrs_add_host_name=""
 --source ../include/mrs/service/add.inc
+--disable_query_log ONCE
+SET @service_id1=@service_id;
 --let $mrs_add_schema=basic_schema
 --let $mrs_add_schema_path=/basic
 --source ../include/mrs/db_schema/add.inc
@@ -34,6 +36,8 @@ if ($ROUTER_MRS_SCHEMA == 2)
 --let $mrs_add_host_name=""
 --let $mrs_add_service_in_development='{"developers": ["mike","jan"]}'
 --source ../include/mrs/service/add.inc
+--disable_query_log ONCE
+SET @service_id2=@service_id;
 --let $mrs_add_schema=basic_schema
 --let $mrs_add_schema_path=/basic
 --source ../include/mrs/db_schema/add.inc
@@ -45,6 +49,8 @@ if ($ROUTER_MRS_SCHEMA == 2)
 --let $mrs_add_host_name=""
 --let $mrs_add_service_in_development='{"developers": ["lukasz"]}'
 --source ../include/mrs/service/add.inc
+--disable_query_log ONCE
+SET @service_id3=@service_id;
 --let $mrs_add_schema=basic_schema
 --let $mrs_add_schema_path=/basic
 --source ../include/mrs/db_schema/add.inc
@@ -56,6 +62,8 @@ if ($ROUTER_MRS_SCHEMA == 2)
 --let $mrs_add_service_path="/svc2"
 --let $mrs_add_host_name=""
 --source ../include/mrs/service/add.inc
+--disable_query_log ONCE
+SET @service_id4=@service_id;
 --let $mrs_add_schema=basic_schema
 --let $mrs_add_schema_path=/basic
 --source ../include/mrs/db_schema/add.inc
@@ -84,13 +92,8 @@ if ($ROUTER_MRS_SCHEMA == 2)
 --echo *******************************************************
 --echo We change the router.options->"$.developer" to "jan"
 --echo *******************************************************
-update mysql_rest_service_metadata.router set options = '{"developer": "jan"}';
-
-# here we artificially make the Router spot the change as it does not monitor the
-# router table changes right now.
 --source ../include/mrs/changes/fetch_object.inc
---let $mrs_add_db_object_op=READ,CREATE
---source ../include/mrs/db_object/modify_op.inc
+update mysql_rest_service_metadata.router set options = '{"developer": "jan"}';
 --source ../include/mrs/changes/wait_object.inc
 
 --exec $MRS_CLIENT_ARGS --path /svc/basic/t1 --response-type RAW --expected-status 404
@@ -102,13 +105,8 @@ update mysql_rest_service_metadata.router set options = '{"developer": "jan"}';
 --echo *******************************************************
 --echo We change the router.options->"$.developer" to "lukasz"
 --echo *******************************************************
-update mysql_rest_service_metadata.router set options = '{"developer": "lukasz"}';
-
-# here we artificially make the Router spot the change as it does not monitor the
-# router table changes right now.
 --source ../include/mrs/changes/fetch_object.inc
---let $mrs_add_db_object_op=READ,CREATE
---source ../include/mrs/db_object/modify_op.inc
+update mysql_rest_service_metadata.router set options = '{"developer": "lukasz"}';
 --source ../include/mrs/changes/wait_object.inc
 
 --exec $MRS_CLIENT_ARGS --path /svc/basic/t1 --response-type RAW --expected-status 404

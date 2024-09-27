@@ -62,7 +62,8 @@ void JsonTemplateNest::begin_resultset_with_limits(
   assert(false && "not implemented in sp");
 }
 
-void JsonTemplateNest::end_resultset() {
+void JsonTemplateNest::end_resultset(
+    [[maybe_unused]] const std::optional<bool> &has_more) {
   json_root_items_object_items_ = JsonSerializer::Array();
   if (json_root_items_object_.is_usable()) {
     auto m = json_root_items_object_->member_add_object("_metadata");

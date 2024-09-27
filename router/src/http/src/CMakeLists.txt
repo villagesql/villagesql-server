@@ -45,6 +45,9 @@ ROUTER_ADD_SHARED_LIBRARY(http_common
 
   OUTPUT_NAME "mysqlrouter_http"
 
+  COMPILE_DEFINITIONS
+  MYSQL_ROUTER_LOG_DOMAIN="http_common"
+
   LINK_LIBRARIES
   PUBLIC
   harness_tls
@@ -136,6 +139,9 @@ ROUTER_ADD_SHARED_LIBRARY(http_server_lib
   http_request_router.cc
 
   OUTPUT_NAME "mysqlrouter_http_server"
+
+  COMPILE_DEFINITIONS
+  MYSQL_ROUTER_LOG_DOMAIN="http_server"
 
   LINK_LIBRARIES
   PUBLIC

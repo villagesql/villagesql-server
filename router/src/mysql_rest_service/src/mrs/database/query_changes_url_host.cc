@@ -24,6 +24,7 @@
 
 #include "mrs/database/query_changes_url_host.h"
 
+#include "helper/to_string.h"
 #include "mrs/database/query_entries_audit_log.h"
 
 namespace mrs {
@@ -39,7 +40,6 @@ void QueryChangesUrlHost::query_entries(MySQLSession *session) {
   uint64_t max_audit_log_id = audit_log_id_;
 
   entries_fetched.clear();
-  MySQLSession::Transaction transaction(session);
 
   audit_entries.query_entries(session, {"url_host"}, audit_log_id_);
 
@@ -56,8 +56,6 @@ void QueryChangesUrlHost::query_entries(MySQLSession *session) {
   }
 
   entries.swap(local_entries);
-
-  transaction.commit();
 
   audit_log_id_ = max_audit_log_id;
 }

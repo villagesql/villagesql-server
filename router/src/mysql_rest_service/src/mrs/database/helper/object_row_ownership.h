@@ -34,7 +34,9 @@
 #include "helper/json/to_sqlstring.h"
 #include "mrs/database/entry/auth_user.h"
 #include "mrs/database/entry/object.h"
-#include "mrs/interface/object.h"
+#include "mrs/database/entry/row_group_ownership.h"
+#include "mrs/database/entry/row_user_ownership.h"
+#include "mrs/database/entry/universal_id.h"
 
 namespace mrs {
 namespace database {
@@ -43,8 +45,9 @@ class ObjectRowOwnership {
  public:
   using UserId = mrs::database::entry::AuthUser::UserId;
   using RowUserOwnership = mrs::database::entry::RowUserOwnership;
+  using UniversalId = mrs::database::entry::UniversalId;
   using VectorOfRowGroupOwnership =
-      interface::Object::VectorOfRowGroupOwnership;
+      std::vector<mrs::database::entry::RowGroupOwnership>;
 
   ObjectRowOwnership(std::shared_ptr<entry::Table> table = {},
                      const RowUserOwnership *user_ownership = nullptr,

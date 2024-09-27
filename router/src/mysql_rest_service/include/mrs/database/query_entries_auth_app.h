@@ -40,7 +40,7 @@ class QueryEntriesAuthApp : protected Query {
   using Entries = std::vector<AuthApp>;
 
  public:
-  virtual Entries &get_entries() = 0;
+  virtual const Entries &get_entries() = 0;
   virtual uint64_t get_last_update() = 0;
   virtual void query_entries(MySQLSession *session) = 0;
 };
@@ -53,7 +53,7 @@ class QueryEntriesAuthApp : public mrs::database::QueryEntriesAuthApp {
 
   uint64_t get_last_update() override;
   void query_entries(MySQLSession *session) override;
-  Entries &get_entries() override;
+  const Entries &get_entries() override;
 
  protected:
   Entries entries_;

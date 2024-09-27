@@ -30,7 +30,6 @@
 #include "mrs/database/entry/universal_id.h"
 
 namespace mrs {
-
 namespace database {
 namespace entry {
 

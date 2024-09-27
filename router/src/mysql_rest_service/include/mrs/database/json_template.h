@@ -25,6 +25,7 @@
 #ifndef ROUTER_SRC_REST_MRS_SRC_MRS_ITEMS_FORMATTER_H_
 #define ROUTER_SRC_REST_MRS_SRC_MRS_ITEMS_FORMATTER_H_
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -50,7 +51,7 @@ class JsonTemplate {
   virtual bool push_json_document(const char *document) = 0;
   virtual bool push_row(const ResultRow &values,
                         const char *ignore_column = nullptr) = 0;
-  virtual void end_resultset() = 0;
+  virtual void end_resultset(const std::optional<bool> &has_more = {}) = 0;
 
   virtual void begin() = 0;
   virtual void finish(const CustomMetadata &custom_metadata = {}) = 0;

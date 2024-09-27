@@ -49,7 +49,7 @@ class JsonTemplateNestWithoutOutParameters : public JsonTemplateNest {
                        const std::vector<helper::Column> &columns) override;
   bool push_row(const ResultRow &values,
                 const char *ignore_column = nullptr) override;
-  void end_resultset() override;
+  void end_resultset(const std::optional<bool> &has_more = {}) override;
   void begin() override;
 
  private:

@@ -36,7 +36,8 @@ namespace database {
 class QueryChangesDbService : public QueryEntriesDbService {
  public:
   QueryChangesDbService(SupportedMrsMetadataVersion v,
-                        const uint64_t last_audit_log_id);
+                        const uint64_t last_audit_log_id,
+                        const std::optional<uint64_t> &router_id);
 
   void query_entries(MySQLSession *session) override;
 
@@ -44,9 +45,22 @@ class QueryChangesDbService : public QueryEntriesDbService {
   void query_service_entries(MySQLSession *session, VectorOfEntries *out,
                              const std::string &table_name,
                              const entry::UniversalId id);
+  /*
+   * Fetch additional service (additionally to those returned by
+   * `query_service_entries`)
+   *
+   * This methods, is required because of "in_developement" feature.
+   * It looks though services returned by query_service_entries, and asks
+   * for similar services (same host and root_context), and refetches those.
+   * The goes it to get a proper "enabled" state of those similar services.
+   */
+  void query_similar_service_entries(MySQLSession *session,
+                                     VectorOfEntries *out,
+                                     const DbService &similar_entry);
 
   std::string build_query(const std::string &table_name,
                           const entry::UniversalId id);
+  std::string build_query(const DbService &similar_entry);
 
   std::set<entry::UniversalId> entries_fetched;
 };

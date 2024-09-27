@@ -30,7 +30,6 @@
 #include "mrs/database/query_entries_auth_role.h"
 #include "mrs/http/cookie.h"
 #include "mrs/http/error.h"
-#include "mrs/interface/object.h"
 #include "mrs/rest/request_context.h"
 
 #include "mysql/harness/logging/logging.h"
@@ -41,13 +40,12 @@ namespace mrs {
 namespace rest {
 
 using HttpResult = HandlerIsAuthorized::HttpResult;
-using Route = mrs::interface::Object;
 
 HandlerIsAuthorized::HandlerIsAuthorized(
     const std::string &url_host, const UniversalId service_id,
-    const std::string &url, const std::string &rest_path_matcher,
-    const std::string &options, interface::AuthorizeManager *auth_manager)
-    : Handler(url_host, url, {rest_path_matcher}, options, auth_manager),
+    const std::string &rest_path_matcher, const std::string &options,
+    interface::AuthorizeManager *auth_manager)
+    : Handler(url_host, {rest_path_matcher}, options, auth_manager),
       service_id_{service_id} {}
 
 Handler::Authorization HandlerIsAuthorized::requires_authentication() const {
@@ -66,7 +64,10 @@ UniversalId HandlerIsAuthorized::get_schema_id() const {
   return {};
 }
 
-uint32_t HandlerIsAuthorized::get_access_rights() const { return Route::kRead; }
+uint32_t HandlerIsAuthorized::get_access_rights() const {
+  using Op = mrs::database::entry::Operation::Values;
+  return Op::valueRead;
+}
 
 void HandlerIsAuthorized::fill_the_user_data(
     Object &ojson, const AuthUser &user, const std::vector<AuthRole> &roles) {

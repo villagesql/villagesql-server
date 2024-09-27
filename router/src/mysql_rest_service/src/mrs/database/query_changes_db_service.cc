@@ -29,19 +29,24 @@
 namespace mrs {
 namespace database {
 
-QueryChangesDbService::QueryChangesDbService(SupportedMrsMetadataVersion v,
-                                             const uint64_t last_audit_log_id)
-    : QueryEntriesDbService(v) {
+QueryChangesDbService::QueryChangesDbService(
+    SupportedMrsMetadataVersion v, const uint64_t last_audit_log_id,
+    const std::optional<uint64_t> &router_id)
+    : QueryEntriesDbService(v, router_id) {
   audit_log_id_ = last_audit_log_id;
 }
 
 void QueryChangesDbService::query_entries(MySQLSession *session) {
+  if (query_all_) {
+    query_all_ = false;
+    QueryEntriesDbService::query_entries(session);
+    return;
+  }
+
   QueryAuditLogEntries audit_entries;
   VectorOfEntries local_entries;
   uint64_t max_audit_log_id = audit_log_id_;
-
   entries_fetched.clear();
-  MySQLSession::Transaction transaction(session);
 
   audit_entries.query_entries(session, {"service"}, audit_log_id_);
 
@@ -57,9 +62,11 @@ void QueryChangesDbService::query_entries(MySQLSession *session) {
     if (max_audit_log_id < audit_entry.id) max_audit_log_id = audit_entry.id;
   }
 
-  entries.swap(local_entries);
+  for (const auto &similar_entry : local_entries) {
+    query_similar_service_entries(session, &local_entries, similar_entry);
+  }
 
-  transaction.commit();
+  entries.swap(local_entries);
 
   audit_log_id_ = max_audit_log_id;
 }
@@ -88,10 +95,31 @@ void QueryChangesDbService::query_service_entries(MySQLSession *session,
   }
 }
 
+void QueryChangesDbService::query_similar_service_entries(
+    MySQLSession *session, VectorOfEntries *out,
+    const DbService &similar_entry) {
+  entries.clear();
+
+  query(session, build_query(similar_entry));
+
+  for (const auto &entry : entries) {
+    if (entries_fetched.count(entry.id)) continue;
+
+    out->push_back(entry);
+    entries_fetched.insert(entry.id);
+  }
+}
+
 std::string QueryChangesDbService::build_query(const std::string &table_name,
                                                const entry::UniversalId id) {
   mysqlrouter::sqlstring where{" WHERE !=?"};
   where << (table_name + "_id") << id;
+  return query_.str() + where.str();
+}
+
+std::string QueryChangesDbService::build_query(const DbService &similar_entry) {
+  mysqlrouter::sqlstring where{" WHERE url_host_id=? and url_context_root=?"};
+  where << similar_entry.url_host_id << similar_entry.url_context_root;
   return query_.str() + where.str();
 }
 

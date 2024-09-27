@@ -111,7 +111,7 @@ void QueryEntriesAuthApp::on_row(const ResultRow &row) {
   entry.deleted = false;
 }
 
-Entries &QueryEntriesAuthApp::get_entries() { return entries_; }
+const Entries &QueryEntriesAuthApp::get_entries() { return entries_; }
 
 }  // namespace v2
 

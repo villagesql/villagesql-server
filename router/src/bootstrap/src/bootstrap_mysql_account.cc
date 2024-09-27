@@ -452,7 +452,7 @@ void BootstrapMySQLAccount::give_grants_to_users(
     const UserOptions &user_options, const std::string &new_accounts) {
   // give GRANTs to new accounts
   if (!new_accounts.empty()) {
-    // run GRANT stantements
+    // run GRANT statements
     std::vector<std::string> statements;
 
     for (auto &role : user_options.grant_role) {

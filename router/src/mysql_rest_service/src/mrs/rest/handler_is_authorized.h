@@ -42,7 +42,6 @@ namespace rest {
 class HandlerIsAuthorized : public Handler {
  public:
   HandlerIsAuthorized(const std::string &url_host, const UniversalId service_id,
-                      const std::string &url,
                       const std::string &rest_path_matcher,
                       const std::string &options,
                       interface::AuthorizeManager *auth_manager);

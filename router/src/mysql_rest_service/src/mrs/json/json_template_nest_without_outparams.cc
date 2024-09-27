@@ -72,7 +72,8 @@ void JsonTemplateNestWithoutOutParameters::begin_resultset(
   json_root_items_ = JsonSerializer::Array();
 }
 
-void JsonTemplateNestWithoutOutParameters::end_resultset() {
+void JsonTemplateNestWithoutOutParameters::end_resultset(
+    [[maybe_unused]] const std::optional<bool> &has_more) {
   if (block_push_json_document_) return;
 
   if (parameter_resultset_) {

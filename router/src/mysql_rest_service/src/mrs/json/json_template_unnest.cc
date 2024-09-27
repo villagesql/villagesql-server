@@ -62,7 +62,8 @@ void JsonTemplateUnnest::begin_resultset_with_limits(
   assert(false && "not implemented in sp");
 }
 
-void JsonTemplateUnnest::end_resultset() {}
+void JsonTemplateUnnest::end_resultset(
+    [[maybe_unused]] const std::optional<bool> &has_more) {}
 
 void JsonTemplateUnnest::begin() {
   json_root_ = serializer_.add_object();

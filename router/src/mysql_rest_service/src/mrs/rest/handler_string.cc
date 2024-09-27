@@ -31,6 +31,7 @@
 #include "mysql/harness/logging/logging.h"
 #include "mysql/harness/string_utils.h"
 
+#include "helper/media_type.h"
 #include "mrs/database/query_entry_content_file.h"
 #include "mrs/database/query_factory.h"
 #include "mrs/http/error.h"
@@ -40,37 +41,6 @@
 IMPORT_LOG_FUNCTIONS()
 
 using Type = mrs::interface::RestHandler::HttpResult::Type;
-
-static Type get_result_type_from_extension(const std::string &ext) {
-  static std::map<std::string, Type> map{
-      {".gif", Type::typeGif},  {".jpg", Type::typeJpg},
-      {".png", Type::typePng},  {".js", Type::typeJs},
-      {".mjs", Type::typeJs},   {".html", Type::typeHtml},
-      {".htm", Type::typeHtml}, {".css", Type::typeCss},
-      {".svg", Type::typeSvg},  {".map", Type::typePlain},
-      {".ico", Type::typeIco}};
-
-  log_debug("ext:'%s'", ext.c_str());
-  auto i = map.find(ext);
-
-  if (i == map.end()) return Type::typeHtml;
-
-  return i->second;
-}
-
-static bool get_is_text_type(Type type) {
-  static std::map<Type, bool> map{
-      {Type::typeGif, false},  {Type::typeJpg, false}, {Type::typePng, false},
-      {Type::typeJs, true},    {Type::typeJs, true},   {Type::typeHtml, true},
-      {Type::typeHtml, true},  {Type::typeCss, true},  {Type::typeSvg, true},
-      {Type::typePlain, true}, {Type::typeIco, false}};
-
-  auto i = map.find(type);
-
-  if (i == map.end()) return false;
-
-  return i->second;
-}
 
 namespace mrs {
 namespace rest {
@@ -87,14 +57,14 @@ static std::string as_string(const std::vector<T> &v) {
 HandlerString::HandlerString(const std::string &path,
                              const std::string &content,
                              mrs::interface::AuthorizeManager *auth_manager)
-    : Handler("", "url-not-set", {"^"s + path + "$"}, {}, auth_manager),
+    : Handler("", {"^"s + path + "$"}, std::string{}, auth_manager),
       path_{path},
       content_{content} {
   mysql_harness::Path p{path_};
-  type_ =
-      get_result_type_from_extension(mysql_harness::make_lower(p.extension()));
+  type_ = helper::get_media_type_from_extension(
+      mysql_harness::make_lower(p.extension()).c_str());
 
-  if (!get_is_text_type(type_)) {
+  if (!helper::is_text_type(type_)) {
     content_ = as_string(Base64::decode(content_));
   }
 }
@@ -108,7 +78,8 @@ Handler::Authorization HandlerString::requires_authentication() const {
 }
 
 uint32_t HandlerString::get_access_rights() const {
-  return mrs::interface::Object::kRead;
+  using Op = mrs::database::entry::Operation::Values;
+  return Op::valueRead;
 }
 
 void HandlerString::authorization(rest::RequestContext *) {}

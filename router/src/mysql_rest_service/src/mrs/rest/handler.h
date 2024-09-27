@@ -37,11 +37,18 @@
 namespace mrs {
 namespace rest {
 
-using HttpUri = ::http::base::Uri;
-
 class Handler : public interface::RestHandler {
  public:
-  Handler(const std::string &url_host, const std::string &url,
+  using HttpUri = ::http::base::Uri;
+
+ public:
+  Handler(const std::string &url_host,
+          const std::vector<std::string> &rest_path_matcher,
+          const std::optional<std::string> &options,
+          interface::AuthorizeManager *auth_manager);
+
+  // TODO(lkotula): remove this after switching to new handlers
+  Handler(const std::string &url_host,
           const std::vector<std::string> &rest_path_matcher,
           const std::string &options,
           interface::AuthorizeManager *auth_manager);
@@ -70,7 +77,6 @@ class Handler : public interface::RestHandler {
  protected:
   interface::Options options_;
   const std::string url_host_;
-  const std::string url_;
   const std::vector<std::string> rest_path_matcher_;
   std::vector<void *> handler_id_;
   interface::AuthorizeManager *authorization_manager_;

@@ -27,25 +27,24 @@
 
 #include <vector>
 
-#include "mrs/interface/object_manager.h"
+#include "mrs/interface/endpoint_manager.h"
 
-class MockRouteManager : public mrs::interface::ObjectManager {
+class MockRouteManager : public mrs::interface::EndpointManager {
  public:
   using UniversalId = mrs::database::entry::UniversalId;
   MOCK_METHOD(void, turn, (const mrs::State state, const std::string &options),
               (override));
-  MOCK_METHOD(void, update,
-              (const std::vector<DbObject> &paths,
-               const std::set<UniversalId> &),
+
+  MOCK_METHOD(void, update, (const std::vector<UrlHost> &paths), (override));
+  MOCK_METHOD(void, update, (const std::vector<DbObjectLite> &paths),
               (override));
-  MOCK_METHOD(void, update,
-              (const std::vector<ContentFile> &contents,
-               const std::set<UniversalId> &),
+  MOCK_METHOD(void, update, (const std::vector<DbSchema> &schemas), (override));
+  MOCK_METHOD(void, update, (const std::vector<DbService> &services),
               (override));
-  MOCK_METHOD(void, update,
-              (const std::vector<AppContentFile> &contents,
-               const std::set<UniversalId> &),
+  MOCK_METHOD(void, update, (const std::vector<ContentFileLite> &files),
               (override));
+  MOCK_METHOD(void, update, (const std::vector<ContentSet> &set), (override));
+
   MOCK_METHOD(void, schema_not_used, (RouteSchema * route), (override));
   MOCK_METHOD(void, clear, (), (override));
 };

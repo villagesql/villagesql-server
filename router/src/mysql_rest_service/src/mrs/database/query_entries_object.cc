@@ -102,6 +102,7 @@ namespace v2 {
 
 QueryEntryObject::UniversalId QueryEntryObject::query_object(
     MySQLSession *session, const UniversalId &db_object_id, Object *obj) {
+  log_debug("Loading Object_v2::query_object");
   entry::UniversalId object_id;
 
   mysqlrouter::sqlstring q{
@@ -133,6 +134,7 @@ void QueryEntryObject::query_entries(MySQLSession *session,
                                      const std::string &schema_name,
                                      const std::string &object_name,
                                      const UniversalId &db_object_id) {
+  log_debug("Loading Object_v2::query_entries");
   // Cleanup
   m_alias_count = 0;
   m_references.clear();
@@ -239,6 +241,7 @@ void QueryEntryObject::on_row(const ResultRow &r) {
 }
 
 void QueryEntryObject::on_reference_row(const ResultRow &r) {
+  log_debug("Loading Object_v2::on_reference_row");
   auto reference = std::make_shared<ForeignKeyReference>();
   reference->ref_table = std::make_shared<Table>();
 
@@ -260,6 +263,7 @@ void QueryEntryObject::on_reference_row(const ResultRow &r) {
 }
 
 void QueryEntryObject::on_field_row(const ResultRow &r) {
+  log_debug("Loading Object_v2::on_field_row");
   helper::MySQLRow row(r, metadata_, num_of_metadata_,
                        helper::MySQLRow::kEndCallRequired);
   entry::UniversalId field_id;
@@ -385,6 +389,7 @@ namespace v3 {
 
 QueryEntryObject::UniversalId QueryEntryObject::query_object(
     MySQLSession *session, const UniversalId &db_object_id, Object *obj) {
+  log_debug("Loading Object_v3::query_object");
   entry::UniversalId object_id;
 
   mysqlrouter::sqlstring q{
@@ -451,6 +456,7 @@ void QueryEntryObject::set_query_object_reference(
 }
 
 void QueryEntryObject::on_reference_row(const ResultRow &r) {
+  log_debug("Loading Object_v3::on_reference_row");
   auto reference = std::make_shared<ForeignKeyReference>();
   reference->ref_table = std::make_shared<Table>();
 

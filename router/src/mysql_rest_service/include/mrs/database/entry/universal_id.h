@@ -50,6 +50,12 @@ struct UniversalId {
   }
 
   std::array<uint8_t, k_size> raw{};
+  bool empty() const {
+    for (uint8_t v : raw) {
+      if (0 != v) return false;
+    }
+    return true;
+  }
 
   auto begin() const { return std::begin(raw); }
   auto end() const { return std::end(raw); }

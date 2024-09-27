@@ -38,7 +38,6 @@ ADD_TEST_FILE(test_plugin.cc
     ./test_database_rest_table.cc
     ./test_database_rest_sp.cc
     ./test_database_entries.cc
-    ./test_database_content_files_options.cc
     ./test_mrs_authentication_rate_control.cc
     ./test_mrs_database_converters.cc
     ./test_mrs_database_rest_table.cc
@@ -71,10 +70,7 @@ ADD_TEST_FILE(test_plugin.cc
     ./test_mrs_json_template.cc
     ./test_mrs_query_entries_db_object.cc
     ./test_mrs_user_cache.cc
-    ./test_mrs_route_object.cc
     ./test_mrs_route_manager.cc
-    ./test_mrs_route_schema_rest.cc
-    ./test_mrs_route_static_file.cc
     ./test_handler_object.cc
     ./test_object_checksum.cc
   LIB_DEPENDS mysql_rest_service test-helpers

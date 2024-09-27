@@ -27,7 +27,6 @@
 #include <memory>
 
 #include "helper/set_http_component.h"
-#include "mrs/interface/object.h"
 
 #include "mock/mock_auth_manager.h"
 #include "mock/mock_http_request.h"
@@ -47,7 +46,7 @@ using testing::Test;
 
 class RestHandlerTests : public Test {
  public:
-  void make_sut(const std::string &rest_url, const std::string &rest_path) {
+  void make_sut(const std::string &rest_path) {
     EXPECT_CALL(mock_http_component_, add_route(_, rest_path, _))
         .WillOnce(Invoke(
             [this](
@@ -57,7 +56,7 @@ class RestHandlerTests : public Test {
               return request_handler_.get();
             }));
     sut_ = std::make_shared<StrictMock<PartialMockRestHandler>>(
-        rest_url, rest_path, &mock_auth_manager_);
+        rest_path, &mock_auth_manager_);
     ASSERT_NE(nullptr, request_handler_.get());
   }
 
@@ -79,16 +78,15 @@ class RestHandlerTests : public Test {
 };
 
 TEST_F(RestHandlerTests, handle_request_calls_handle_get) {
-  make_sut(k_url, k_path);
+  make_sut(k_path);
   StrictMock<MockHttpRequest> mock_request;
   StrictMock<MockHttpHeaders> mock_oheaders;
   StrictMock<MockHttpHeaders> mock_iheaders;
   StrictMock<MockHttpBuffer> mock_obuffer;
   StrictMock<MockHttpBuffer> mock_ibuffer;
   StrictMock<MockHttpUri> mock_uri;
-
-  EXPECT_CALL(*sut_, get_access_rights())
-      .WillRepeatedly(Return(mrs::interface::Object::kRead));
+  using Op = mrs::database::entry::Operation::Values;
+  EXPECT_CALL(*sut_, get_access_rights()).WillRepeatedly(Return(Op::valueRead));
 
   EXPECT_CALL(mock_request, get_method())
       .WillRepeatedly(Return(HttpMethod::Get));

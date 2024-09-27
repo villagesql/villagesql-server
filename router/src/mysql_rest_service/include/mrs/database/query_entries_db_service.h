@@ -25,6 +25,8 @@
 #ifndef ROUTER_SRC_REST_MRS_SRC_MRS_SCHEMA_DB_SERVICE_ENTRIES_H_
 #define ROUTER_SRC_REST_MRS_SRC_MRS_SCHEMA_DB_SERVICE_ENTRIES_H_
 
+#include <optional>
+
 #include "mrs/database/entry/db_service.h"
 #include "mrs/database/helper/query.h"
 #include "mrs/interface/query_factory.h"
@@ -41,8 +43,10 @@ class QueryEntriesDbService : protected Query {
       mrs::interface::SupportedMrsMetadataVersion;
 
  public:
-  QueryEntriesDbService(SupportedMrsMetadataVersion v);
+  QueryEntriesDbService(SupportedMrsMetadataVersion v,
+                        std::optional<uint64_t> router_id);
 
+  void force_query_all();
   virtual uint64_t get_last_update();
   /**
    * Fetch from database the list of all defined object/path entries
@@ -56,6 +60,7 @@ class QueryEntriesDbService : protected Query {
  protected:
   void on_row(const ResultRow &r) override;
 
+  bool query_all_{false};
   SupportedMrsMetadataVersion db_version_;
   uint64_t audit_log_id_{0};
 };

@@ -29,27 +29,22 @@
 
 namespace mrs {
 namespace database {
+const mysqlrouter::sqlstring k_option_field{",f.options "};
+const mysqlrouter::sqlstring k_empty;
 
-QueryEntriesContentFile::QueryEntriesContentFile() {
+QueryEntriesContentFile::QueryEntriesContentFile(const Version version)
+    : version_{version} {
   query_ =
-      "SELECT * FROM (SELECT f.id as content_file_id, content_set_id, f.size, "
-      "   h.name, "
-      "   service.url_context_root as service_path, s.request_path as "
-      "   set_path, f.request_path as file_path,"
-      "   service.enabled as srv_enabled, s.enabled as set_enabled, f.enabled "
-      "as enabled,"
-      "   s.requires_auth as set_requires_auth,f.requires_auth as "
-      "   requires_auth, "
-      "   s.service_id,"
-      "    s.options as db_options, service.options as service_options,"
-      "    h.id as url_host_id"
-      " FROM mysql_rest_service_metadata.content_file as f"
-      " JOIN mysql_rest_service_metadata.content_set as s ON "
-      "f.content_set_id=s.id"
-      " JOIN mysql_rest_service_metadata.service as service ON "
-      "service.id=s.service_id"
-      " JOIN mysql_rest_service_metadata.url_host as h ON "
-      "h.id=service.url_host_id) as parent ";
+      "SELECT * FROM (SELECT "
+      "    f.id as content_file_id,"
+      "    f.content_set_id as content_set_id,"
+      "    f.request_path,"
+      "    f.requires_auth,"
+      "    f.enabled,"
+      "    f.size !"
+      " FROM mysql_rest_service_metadata.content_file as f) as cf";
+  query_ << (version == Version::kSupportedMrsMetadataVersion_3 ? k_option_field
+                                                                : k_empty);
 }
 
 uint64_t QueryEntriesContentFile::get_last_update() { return audit_log_id_; }
@@ -59,10 +54,8 @@ void QueryEntriesContentFile::query_entries(MySQLSession *session) {
 
   entries.clear();
 
-  query(session, "START TRANSACTION");
   auto audit_log_id = query_audit_id.query_max_id(session);
   execute(session);
-  query(session, "COMMIT");
 
   audit_log_id_ = audit_log_id;
 }
@@ -76,22 +69,14 @@ void QueryEntriesContentFile::on_row(const ResultRow &row) {
   mysql_row.unserialize_with_converter(&entry.id, entry::UniversalId::from_raw);
   mysql_row.unserialize_with_converter(&entry.content_set_id,
                                        entry::UniversalId::from_raw);
-  mysql_row.unserialize(&entry.size);
-  mysql_row.unserialize(&entry.host);
-  mysql_row.unserialize(&entry.service_path);
-  mysql_row.unserialize(&entry.schema_path);
-  mysql_row.unserialize(&entry.file_path);
-  mysql_row.unserialize(&entry.active_service);
-  mysql_row.unserialize(&entry.active_set);
-  mysql_row.unserialize(&entry.active_file);
-  mysql_row.unserialize(&entry.schema_requires_authentication);
+  mysql_row.unserialize(&entry.request_path);
   mysql_row.unserialize(&entry.requires_authentication);
-  mysql_row.unserialize_with_converter(&entry.service_id,
-                                       entry::UniversalId::from_raw);
-  mysql_row.unserialize(&entry.options_json_schema);
-  mysql_row.unserialize(&entry.options_json_service);
-  // Skip column, that is used for audit_log filtering
-  mysql_row.skip(/*h.id as url_host_id*/);
+  mysql_row.unserialize(&entry.enabled);
+  mysql_row.unserialize(&entry.size);
+
+  if (version_ == Version::kSupportedMrsMetadataVersion_3) {
+    mysql_row.unserialize(&entry.options);
+  }
 
   entry.deleted = false;
 }

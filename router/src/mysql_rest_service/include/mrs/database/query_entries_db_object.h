@@ -69,42 +69,6 @@ class QueryEntriesDbObject : protected Query {
   std::vector<DbObjectCompatible> entries_;
 };
 
-class QueryEntriesDbObjectLite : protected Query {
- public:
-  using DbObject = entry::DbObjectLite;
-  using VectorOfPathEntries = std::vector<DbObject>;
-  using SupportedMrsMetadataVersion =
-      mrs::interface::SupportedMrsMetadataVersion;
-
- public:
-  QueryEntriesDbObjectLite(SupportedMrsMetadataVersion v,
-                           mrs::interface::QueryFactory *query_factory);
-
-  virtual uint64_t get_last_update();
-  /**
-   * Fetch from database the list of all defined object/path entries
-   *
-   * Except fetching the list, it also tries to fetch matching `audit_log.id`.
-   */
-  virtual void query_entries(MySQLSession *session);
-
-  VectorOfPathEntries get_entries() const;
-
- protected:
-  void on_row(const ResultRow &r) override;
-  static std::string skip_starting_slash(const std::string &value);
-
-  SupportedMrsMetadataVersion db_version_;
-  uint64_t audit_log_id_{0};
-  mrs::interface::QueryFactory *query_factory_;
-
-  struct DbObjectCompatible : DbObject {
-    std::optional<std::string> user_ownership_v2;
-  };
-
-  std::vector<DbObjectCompatible> entries_;
-};
-
 }  // namespace database
 }  // namespace mrs
 

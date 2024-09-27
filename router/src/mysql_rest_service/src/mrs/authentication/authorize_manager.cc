@@ -333,20 +333,18 @@ void AuthorizeManager::fill_service(const AuthApp &e, ServiceAuthorize &sa) {
   }
 
   auto login_handler = std::make_shared<mrs::rest::HandlerAuthorize>(
-      e.url_host, e.service_id, e.service_name, path1, e.options, redirect,
-      this);
+      e.url_host, e.service_id, path1, e.options, redirect, this);
   auto status_handler = std::make_shared<mrs::rest::HandlerIsAuthorized>(
-      e.url_host, e.service_id, e.service_name, path2, e.options, this);
+      e.url_host, e.service_id, path2, e.options, this);
   auto unauth_handler = std::make_shared<mrs::rest::HandlerUnauthorize>(
-      e.url_host, e.service_id, e.service_name, path3, e.options, this);
+      e.url_host, e.service_id, path3, e.options, this);
   auto auth_ok_handler = std::make_shared<mrs::rest::HandlerAuthorizeOk>(
-      e.url_host, e.service_id, e.service_name, path4, e.options,
-      e.redirection_default_page, this);
-  auto user_handler = std::make_shared<mrs::rest::HandlerUser>(
-      e.url_host, e.service_id, e.service_name, path5, e.options, this);
-  auto list_handler = std::make_shared<mrs::rest::HandlerAuthorizeApps>(
-      e.url_host, e.service_id, e.service_name, path6, e.options, redirect,
+      e.url_host, e.service_id, path4, e.options, e.redirection_default_page,
       this);
+  auto user_handler = std::make_shared<mrs::rest::HandlerUser>(
+      e.url_host, e.service_id, path5, e.options, this);
+  auto list_handler = std::make_shared<mrs::rest::HandlerAuthorizeApps>(
+      e.url_host, e.service_id, path6, e.options, redirect, this);
 
   sa.authorize_handler_ = login_handler;
   sa.status_handler_ = status_handler;

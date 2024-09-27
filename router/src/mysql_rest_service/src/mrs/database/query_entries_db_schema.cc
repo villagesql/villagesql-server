@@ -33,10 +33,12 @@ namespace mrs {
 namespace database {
 
 QueryEntriesDbSchema::QueryEntriesDbSchema() {
+  // Alias `db_schema_id`, used in QueryChangesDbSchema.
   query_ =
       "SELECT * FROM (SELECT"
-      "  s.id, s.service_id, s.name, s.request_path, s.requires_auth,"
-      "  s.enabled, s.items_per_page, s.comments, s.options"
+      "  s.id as db_schema_id, s.service_id, s.name, s.request_path, "
+      "s.requires_auth,"
+      "  s.enabled, s.items_per_page,s.options"
       " FROM mysql_rest_service_metadata.`db_schema` as s ) as parent ";
 }
 
@@ -46,12 +48,9 @@ void QueryEntriesDbSchema::query_entries(MySQLSession *session) {
   entries.clear();
 
   QueryAuditLogMaxId query_audit_id;
-  MySQLSession::Transaction transaction(session);
 
   auto audit_log_id = query_audit_id.query_max_id(session);
   execute(session);
-
-  transaction.commit();
 
   audit_log_id_ = audit_log_id;
 }
@@ -70,9 +69,7 @@ void QueryEntriesDbSchema::on_row(const ResultRow &row) {
   mysql_row.unserialize(&entry.request_path);
   mysql_row.unserialize(&entry.requires_auth);
   mysql_row.unserialize(&entry.enabled);
-  mysql_row.unserialize(&entry.requires_auth);
   mysql_row.unserialize(&entry.items_per_page);
-  mysql_row.unserialize(&entry.comment);
   mysql_row.unserialize(&entry.options);
 
   entry.deleted = false;

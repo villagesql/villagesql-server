@@ -284,7 +284,7 @@ void BootstrapConfigurator::run() {
     if (!bootstrap_mrs_) {
       // --mrs-ensure-metadata-schema parameter was used but without --mrs
       // That means we do not do real bootstrap, we only want to create
-      // MRS metadata shcema if needed and leave.
+      // MRS metadata schema if needed and leave.
       return;
     }
   }
@@ -325,7 +325,7 @@ void BootstrapConfigurator::ensure_mrs_schema(
 void BootstrapConfigurator::configure_mrs(mysqlrouter::MySQLSession *session,
                                           const std::string &config_path) {
   if (can_configure_mrs(config_path)) {
-    // XXX move this check to before regular bootstap is done
+    // XXX move this check to before regular bootstrap is done
     check_mrs_metadata(session);
 
     bool accounts_if_not_exists = mrs_metadata_account_.user.empty();

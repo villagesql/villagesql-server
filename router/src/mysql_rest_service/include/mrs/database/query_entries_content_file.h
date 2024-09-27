@@ -22,13 +22,14 @@
  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_CONTENT_SET_H_
-#define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_CONTENT_SET_H_
+#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_ENTRIES_CONTENT_FILE_H_
+#define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_ENTRIES_CONTENT_FILE_H_
 
 #include <vector>
 
 #include "mrs/database/entry/content_file.h"
 #include "mrs/database/helper/query.h"
+#include "mrs/interface/supported_mrs_schema_version.h"
 
 namespace mrs {
 namespace database {
@@ -36,9 +37,10 @@ namespace database {
 class QueryEntriesContentFile : protected Query {
  public:
   using VectorOfPaths = std::vector<database::entry::ContentFile>;
+  using Version = mrs::interface::SupportedMrsMetadataVersion;
 
  public:
-  QueryEntriesContentFile();
+  QueryEntriesContentFile(const Version version);
 
   virtual uint64_t get_last_update();
   virtual void query_entries(MySQLSession *session);
@@ -49,9 +51,10 @@ class QueryEntriesContentFile : protected Query {
   void on_row(const ResultRow &row) override;
 
   uint64_t audit_log_id_;
+  Version version_;
 };
 
 }  // namespace database
 }  // namespace mrs
 
-#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_CONTENT_SET_H_
+#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_ENTRIES_CONTENT_FILE_H_

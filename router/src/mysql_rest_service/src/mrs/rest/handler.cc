@@ -38,7 +38,6 @@
 #include "mrs/authentication/www_authentication_handler.h"
 #include "mrs/database/duality_view/errors.h"
 #include "mrs/http/error.h"
-#include "mrs/interface/object.h"
 #include "mrs/interface/rest_error.h"
 #include "mrs/rest/request_context.h"
 #include "mrs/router_observation_entities.h"
@@ -119,17 +118,17 @@ uint32_t check_privileges(
 }
 
 uint32_t get_access_right_from_http_method(const uint32_t method) {
-  using Route = mrs::interface::Object;
+  using Op = mrs::database::entry::Operation::Values;
 
   switch (method) {
     case HttpMethod::Get:
-      return Route::kRead;
+      return Op::valueRead;
     case HttpMethod::Post:
-      return Route::kCreate;
+      return Op::valueCreate;
     case HttpMethod::Put:
-      return Route::kUpdate;
+      return Op::valueUpdate;
     case HttpMethod::Delete:
-      return Route::kDelete;
+      return Op::valueDelete;
   }
 
   return 0;
@@ -292,12 +291,13 @@ class RestRequestHandler : public ::http::base::RequestHandler {
     // level
     if (!oh.find("Access-Control-Allow-Methods")) {
       std::string access_control_allow_methods;
+
       for (const auto method :
            {HttpMethod::Get, HttpMethod::Post, HttpMethod::Put,
             HttpMethod::Delete, HttpMethod::Options}) {
-        if ((method == HttpMethod::Options) ||
-            (get_access_right_from_http_method(method) &
-             rest_handler_->get_access_rights())) {
+        if ((get_access_right_from_http_method(method) &
+             rest_handler_->get_access_rights()) ||
+            HttpMethod::Options == method) {
           if (!access_control_allow_methods.empty()) {
             access_control_allow_methods += ", ";
           }
@@ -722,22 +722,28 @@ class ParseOptions
   }
 };
 
-mrs::interface::Options parse_json_options(const std::string &options) {
-  return helper::json::text_to_handler<ParseOptions>(options);
+mrs::interface::Options parse_json_options(
+    const std::optional<std::string> &options) {
+  if (!options.has_value()) return {};
+
+  return helper::json::text_to_handler<ParseOptions>(options.value());
 }
 
-Handler::Handler(const std::string &url_host, const std::string &url,
+Handler::Handler(const std::string &url_host,
                  const std::vector<std::string> &rest_path_matcher,
                  const std::string &options,
                  mrs::interface::AuthorizeManager *auth_manager)
+    : Handler(url_host, rest_path_matcher, std::optional<std::string>(options),
+              auth_manager) {}
+
+Handler::Handler(const std::string &url_host,
+                 const std::vector<std::string> &rest_path_matcher,
+                 const std::optional<std::string> &options,
+                 mrs::interface::AuthorizeManager *auth_manager)
     : options_{parse_json_options(options)},
       url_host_{url_host},
-      url_{url},
       rest_path_matcher_{rest_path_matcher},
       authorization_manager_{auth_manager} {
-  log_debug("Handling new URL: '%s' on host '%s'", url_.c_str(),
-            url_host_.c_str());
-
   for (const auto &kv : options_.parameters_) {
     log_debug("headers: '%s':'%s'", kv.first.c_str(), kv.second.c_str());
   }
@@ -755,14 +761,18 @@ Handler::Handler(const std::string &url_host, const std::string &url,
 
   for (auto &path : rest_path_matcher_) {
     auto handler = std::make_unique<RestRequestHandler>(this, auth_manager);
-    log_debug("adding_route: '%s'", path.c_str());
+    log_debug("router-add: '%s' on host '%s'", path.c_str(), url_host_.c_str());
     handler_id_.emplace_back(HttpServerComponent::get_instance().add_route(
         url_host, path, std::move(handler)));
   }
 }
 
 Handler::~Handler() {
-  log_debug("Removing URL handler: '%s'", url_.c_str());
+  for (const auto &path : rest_path_matcher_) {
+    log_debug("route-remove: '%s' on host '%s'", path.c_str(),
+              url_host_.c_str());
+  }
+
   for (auto id : handler_id_) {
     HttpServerComponent::get_instance().remove_route(id);
   }

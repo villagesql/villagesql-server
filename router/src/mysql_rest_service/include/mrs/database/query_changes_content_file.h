@@ -22,8 +22,8 @@
  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_CHANGES_CONTENT_SET_H_
-#define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_CHANGES_CONTENT_SET_H_
+#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_CHANGES_CONTENT_FILE_H_
+#define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_CHANGES_CONTENT_FILE_H_
 
 #include <set>
 
@@ -35,13 +35,14 @@ namespace database {
 
 class QueryChangesContentFile : public QueryEntriesContentFile {
  public:
-  QueryChangesContentFile(const uint64_t last_audit_log_id);
+  QueryChangesContentFile(const uint64_t last_audit_log_id,
+                          const Version version);
   void query_entries(MySQLSession *session) override;
 
  private:
-  void query_auth_entries(MySQLSession *session, VectorOfPaths *out,
-                          const std::string &table_name,
-                          const entry::UniversalId id);
+  void query_content_file_entries(MySQLSession *session, VectorOfPaths *out,
+                                  const std::string &table_name,
+                                  const entry::UniversalId id);
 
   std::string build_query(const std::string &table_name,
                           const entry::UniversalId id);
@@ -52,4 +53,4 @@ class QueryChangesContentFile : public QueryEntriesContentFile {
 }  // namespace database
 }  // namespace mrs
 
-#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_CHANGES_CONTENT_SET_H_
+#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_CHANGES_CONTENT_FILE_H_

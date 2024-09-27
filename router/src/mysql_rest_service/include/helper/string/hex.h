@@ -47,6 +47,15 @@ class DefaultHex {
   }
 };
 
+class CStringHex {
+ public:
+  void operator()(std::ostringstream &os) {
+    os << std::setfill('0') << std::setw(2) << std::hex;
+  }
+
+  int operator()(const char &v) { return (int)static_cast<uint8_t>(v); }
+};
+
 template <typename Container, typename Transform = DefaultHex>
 std::string hex(const Container &c) {
   std::ostringstream os;

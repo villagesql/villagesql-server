@@ -34,12 +34,14 @@ namespace mrs {
 namespace database {
 
 QueryEntriesUrlHost::QueryEntriesUrlHost() {
+  // Alias `url_host_id` used by QueryChangesUrlHost
   query_ =
-      "SELECT * FROM (SELECT h.id, h.name, GROUP_CONCAT(a.alias SEPARATOR ',')"
-      "    FROM mysql_rest_service_metadata.`url_host` as h JOIN"
+      "SELECT * FROM (SELECT h.id as url_host_id, h.name, GROUP_CONCAT(a.alias "
+      "SEPARATOR ',')"
+      "    FROM mysql_rest_service_metadata.`url_host` as h LEFT JOIN"
       "    mysql_rest_service_metadata.`url_host_alias` as a"
       "    on h.id = a.url_host_id"
-      "    GROUP BY h.id, h.name) as parent ";
+      "    GROUP BY h.id) as parent ";
 }
 
 uint64_t QueryEntriesUrlHost::get_last_update() { return audit_log_id_; }
@@ -48,12 +50,9 @@ void QueryEntriesUrlHost::query_entries(MySQLSession *session) {
   entries.clear();
 
   QueryAuditLogMaxId query_audit_id;
-  MySQLSession::Transaction transaction(session);
 
   auto audit_log_id = query_audit_id.query_max_id(session);
   execute(session);
-
-  transaction.commit();
 
   audit_log_id_ = audit_log_id;
 }
@@ -66,6 +65,9 @@ void QueryEntriesUrlHost::on_row(const ResultRow &row) {
 
   auto set_from_string = [](std::set<std::string> *out, const char *in) {
     out->clear();
+
+    if (!in) return;
+
     for (const auto &s : mysql_harness::split_string(in, ',', false)) {
       out->insert(s);
     }

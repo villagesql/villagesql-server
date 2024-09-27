@@ -62,8 +62,6 @@ class QueryEntriesDbObjectTests : public Test {
         .WillRepeatedly(Return(mock_query_entry_object.copy_base()));
 
     InSequence seq;
-    EXPECT_CALL(mock_session, execute(StrEq("START TRANSACTION")))
-        .RetiresOnSaturation();
     EXPECT_CALL(
         mock_session,
         query(
@@ -74,11 +72,11 @@ class QueryEntriesDbObjectTests : public Test {
           row(fields);
         }))
         .RetiresOnSaturation();
-    EXPECT_CALL(mock_session, query(StartsWith("SELECT * FROM (SELECT "
-                                               "  o.id as id, s.id"),
-                                    _, _))
+    EXPECT_CALL(mock_session,
+                query(StartsWith("SELECT * FROM (SELECT   o.id as "
+                                 "db_object_id, db.id as db_schema_id,"),
+                      _, _))
         .RetiresOnSaturation();
-    EXPECT_CALL(mock_session, execute(StrEq("COMMIT"))).RetiresOnSaturation();
   }
 
   helper::MakeSharedPtr<StrictMock<MockQueryEntryObject>>

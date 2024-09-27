@@ -39,7 +39,6 @@ void QueryChangesDbSchema::query_entries(MySQLSession *session) {
   uint64_t max_audit_log_id = audit_log_id_;
 
   entries_fetched.clear();
-  MySQLSession::Transaction transaction(session);
 
   audit_entries.query_entries(session, {"db_schema"}, audit_log_id_);
 
@@ -56,8 +55,6 @@ void QueryChangesDbSchema::query_entries(MySQLSession *session) {
   }
 
   entries.swap(local_entries);
-
-  transaction.commit();
 
   audit_log_id_ = max_audit_log_id;
 }

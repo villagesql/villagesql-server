@@ -42,43 +42,7 @@ namespace mrs {
 namespace database {
 namespace entry {
 
-class DbObject {
- public:
-  enum Format : uint32_t { formatFeed = 1, formatItem = 2, formatMedia = 3 };
-  enum PathType { typeTable, typeProcedure, typeFunction };
-  EntryKey get_key() const { return {key_rest, id}; }
-
-  UniversalId id;
-  UniversalId service_id;
-  UniversalId schema_id;
-  std::string host;
-  std::string host_alias;  // TODO(areliga): we ignore this for now
-  bool active_service;
-  bool active_schema;
-  bool active_object;
-  std::string service_path;
-  std::string schema_path;
-  std::string object_path;
-  uint64_t on_page;
-  std::string db_schema;
-  std::string db_table;
-  bool requires_authentication;
-  bool schema_requires_authentication;
-  Operation::ValueType operation;
-  Format format;
-  std::optional<std::string> media_type;
-  bool autodetect_media_type;
-  bool deleted;
-  PathType type;
-  std::vector<RowGroupOwnership> row_group_security;
-  std::string options_json;
-  std::string options_json_schema;
-  std::string options_json_service;
-  ResultSets fields;
-  std::shared_ptr<Object> object_description;
-};
-
-struct DbObjectLite {
+struct DbObject {
   enum ObjectType {
     k_objectTypeTable,
     k_objectTypeProcedure,

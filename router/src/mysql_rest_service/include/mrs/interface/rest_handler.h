@@ -137,7 +137,6 @@ class RestHandler {
   virtual UniversalId get_db_object_id() const = 0;
   virtual UniversalId get_schema_id() const = 0;
   virtual uint32_t get_access_rights() const = 0;
-  virtual bool is_json_response() const { return true; }
   virtual const Options &get_options() const = 0;
 
   virtual void authorization(RequestContext *ctxt) = 0;

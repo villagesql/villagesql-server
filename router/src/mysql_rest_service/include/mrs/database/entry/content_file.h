@@ -26,6 +26,7 @@
 #define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_CONTENT_FILE_H_
 
 #include <cstdint>
+#include <optional>
 #include <string>
 
 #include "mrs/database/entry/entry.h"
@@ -38,20 +39,13 @@ namespace entry {
 struct ContentFile {
   UniversalId id;
   UniversalId content_set_id;
-  UniversalId service_id;
-  uint64_t size;
-  std::string host;
-  std::string service_path;
-  std::string schema_path;
-  std::string file_path;
-  bool active_service;
-  bool active_set;
-  bool active_file;
-  bool schema_requires_authentication;
+  std::string request_path;
   bool requires_authentication;
-  bool deleted;
-  std::string options_json_schema;
-  std::string options_json_service;
+  bool enabled;
+  uint64_t size;
+  std::optional<std::string> options;
+
+  bool deleted{false};
 };
 
 }  // namespace entry

@@ -25,7 +25,7 @@
 # Registred DB_OBJECT at path: /svc/basic/proc_get
 GET /svc/basic/proc_get
 Date -> %DATE%
-Access-Control-Allow-Methods  ->  GET, PUT, OPTIONS
+Access-Control-Allow-Methods  ->  GET, OPTIONS
 Content-Type  ->  application/json
 Content-Length  ->  129
 GET /svc/basic/t_create
@@ -55,7 +55,7 @@ Content-Type  ->  application/json
 Content-Length  ->  129
 GET /svc/basic/proc_get
 Date -> %DATE%
-Access-Control-Allow-Methods  ->  GET, PUT, OPTIONS
+Access-Control-Allow-Methods  ->  GET, OPTIONS
 Content-Type  ->  application/json
 Content-Length  ->  129
 PUT /svc/functions/func_all (payload-size:15)

@@ -29,14 +29,12 @@
 #include "helper/json/serializer_to_text.h"
 #include "mrs/http/cookie.h"
 #include "mrs/http/error.h"
-#include "mrs/interface/object.h"
 #include "mrs/rest/request_context.h"
 
 namespace mrs {
 namespace rest {
 
 using HttpResult = HandlerUnauthorize::HttpResult;
-using Route = mrs::interface::Object;
 
 std::string impl_get_json_response_ok() {
   helper::json::SerializerToText stt;
@@ -57,9 +55,9 @@ std::string get_json_response_ok() {
 
 HandlerUnauthorize::HandlerUnauthorize(
     const std::string &url_host, const UniversalId service_id,
-    const std::string &url, const std::string &rest_path_matcher,
-    const std::string &options, interface::AuthorizeManager *auth_manager)
-    : Handler(url_host, url, {rest_path_matcher}, options, auth_manager),
+    const std::string &rest_path_matcher, const std::string &options,
+    interface::AuthorizeManager *auth_manager)
+    : Handler(url_host, {rest_path_matcher}, options, auth_manager),
       service_id_{service_id},
       auth_manager_{auth_manager} {}
 
@@ -79,7 +77,10 @@ UniversalId HandlerUnauthorize::get_schema_id() const {
   return {};
 }
 
-uint32_t HandlerUnauthorize::get_access_rights() const { return Route::kRead; }
+uint32_t HandlerUnauthorize::get_access_rights() const {
+  using Op = mrs::database::entry::Operation::Values;
+  return Op::valueRead;
+}
 
 HttpResult HandlerUnauthorize::handle_get(RequestContext *ctxt) {
   auth_manager_->unauthorize(service_id_, &ctxt->cookies);

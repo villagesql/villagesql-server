@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -22,37 +22,36 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_REST_MRS_TESTS_MOCK_MOCK_HANDLER_FACTORY_H_
-#define ROUTER_SRC_REST_MRS_TESTS_MOCK_MOCK_HANDLER_FACTORY_H_
+#ifndef ROUTER_SRC_MYSQL_REST_SERVICE_TESTS_MOCK_MOCK_HANDLER_FACTORY_H_
+#define ROUTER_SRC_MYSQL_REST_SERVICE_TESTS_MOCK_MOCK_HANDLER_FACTORY_H_
 
+#include "mrs/database/entry/universal_id.h"
 #include "mrs/interface/handler_factory.h"
 
 class MockHandlerFactory : public mrs::interface::HandlerFactory {
  public:
-  using RouteSchema = mrs::interface::ObjectSchema;
-  using Route = mrs::interface::Object;
-  using AuthManager = mrs::interface::AuthorizeManager;
+  using UniversalId = mrs::database::entry::UniversalId;
 
-  MOCK_METHOD(std::unique_ptr<Handler>, create_file_handler,
-              (Route * r, AuthManager *auth_manager,
-               mrs::interface::QueryFactory *query_factor),
-              (override));
-  MOCK_METHOD(std::unique_ptr<Handler>, create_function_handler,
-              (Route * r, AuthManager *auth_manager,
-               mrs::GtidManager *gtid_manager),
-              (override));
-  MOCK_METHOD(std::unique_ptr<Handler>, create_sp_handler,
-              (Route * r, AuthManager *auth_manager,
-               mrs::GtidManager *gtid_manager),
-              (override));
-  MOCK_METHOD(std::unique_ptr<Handler>, create_object_handler,
-              (Route * r, AuthManager *auth_manager,
-               mrs::GtidManager *gtid_manager),
-              (override));
-  MOCK_METHOD(std::unique_ptr<Handler>, create_object_metadata_handler,
-              (Route * r, AuthManager *auth_manager), (override));
   MOCK_METHOD(std::unique_ptr<Handler>, create_schema_metadata_handler,
-              (RouteSchema * r, AuthManager *auth_manager), (override));
+              (EndpointBasePtr db_shema_endpoint), (override));
+  MOCK_METHOD(std::unique_ptr<Handler>, create_db_object_handler,
+              (EndpointBasePtr db_object_endpoint), (override));
+  MOCK_METHOD(std::unique_ptr<Handler>, create_db_object_metadata_handler,
+              (EndpointBasePtr db_object_endpoint), (override));
+  MOCK_METHOD(std::unique_ptr<Handler>, create_content_file,
+              (EndpointBasePtr content_file_endpoint), (override));
+  MOCK_METHOD(std::unique_ptr<Handler>, create_string_handler,
+              (const UniversalId &service_id, bool requires_authentication,
+               const Uri &url, const std::string &path,
+               const std::string &file_name, const std::string &file_content,
+               bool is_index),
+              (override));
+  MOCK_METHOD(std::unique_ptr<Handler>, create_redirection_handler,
+              (const UniversalId &service_id, bool requires_authentication,
+               const Uri &url, const std::string &path,
+               const std::string &file_name,
+               const std::string &redirection_path, const bool pernament),
+              (override));
 };
 
-#endif  // ROUTER_SRC_REST_MRS_TESTS_MOCK_MOCK_HANDLER_FACTORY_H_
+#endif /* ROUTER_SRC_MYSQL_REST_SERVICE_TESTS_MOCK_MOCK_HANDLER_FACTORY_H_ */

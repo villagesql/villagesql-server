@@ -27,10 +27,10 @@
 
 #include <memory>
 
+#include "http/base/uri.h"
 #include "mrs/gtid_manager.h"
 #include "mrs/interface/authorize_manager.h"
-#include "mrs/interface/object.h"
-#include "mrs/interface/object_schema.h"
+#include "mrs/interface/endpoint_base.h"
 #include "mrs/interface/query_factory.h"
 #include "mrs/interface/rest_handler.h"
 
@@ -39,26 +39,31 @@ namespace interface {
 
 class HandlerFactory {
  public:
-  using Route = mrs::interface::Object;
-  using RouteSchema = mrs::interface::ObjectSchema;
-  using AuthManager = mrs::interface::AuthorizeManager;
+  using EndpointBase = mrs::interface::EndpointBase;
+  using EndpointBasePtr = std::shared_ptr<EndpointBase>;
   using Handler = mrs::interface::RestHandler;
+  using AuthorizeManager = mrs::interface::AuthorizeManager;
+  using Uri = ::http::base::Uri;
 
   virtual ~HandlerFactory() = default;
 
-  virtual std::unique_ptr<Handler> create_function_handler(
-      Route *r, AuthManager *auth_manager, mrs::GtidManager *gtid_manager) = 0;
-  virtual std::unique_ptr<Handler> create_file_handler(
-      Route *r, AuthManager *auth_manager,
-      mrs::interface::QueryFactory *query_factory) = 0;
-  virtual std::unique_ptr<Handler> create_sp_handler(
-      Route *r, AuthManager *auth_manager, mrs::GtidManager *gtid_manager) = 0;
-  virtual std::unique_ptr<Handler> create_object_handler(
-      Route *r, AuthManager *auth_manager, mrs::GtidManager *gtid_manager) = 0;
-  virtual std::unique_ptr<Handler> create_object_metadata_handler(
-      Route *r, AuthManager *auth_manager) = 0;
   virtual std::unique_ptr<Handler> create_schema_metadata_handler(
-      RouteSchema *r, AuthManager *auth_manager) = 0;
+      EndpointBasePtr db_shema_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_db_object_handler(
+      EndpointBasePtr db_object_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_db_object_metadata_handler(
+      EndpointBasePtr db_object_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_content_file(
+      EndpointBasePtr db_object_endpoint) = 0;
+
+  virtual std::unique_ptr<Handler> create_string_handler(
+      const UniversalId &service_id, bool requires_authentication,
+      const Uri &url, const std::string &path, const std::string &file_name,
+      const std::string &file_content, bool is_index) = 0;
+  virtual std::unique_ptr<Handler> create_redirection_handler(
+      const UniversalId &service_id, bool requires_authentication,
+      const Uri &url, const std::string &path, const std::string &file_name,
+      const std::string &redirection_path, const bool pernament) = 0;
 };
 
 }  // namespace interface

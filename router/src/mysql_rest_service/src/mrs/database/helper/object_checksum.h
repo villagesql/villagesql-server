@@ -25,33 +25,17 @@
 #include <map>
 #include <memory>
 #include <string>
+
+#include "helper/interface/digester.h"
 #include "mrs/database/duality_view/select.h"
 #include "mrs/database/entry/object.h"
-#include "router/src/http/src/digest.h"
+#include "mysqlrouter/digest.h"
 
 namespace mrs {
 namespace database {
 
-class IDigester {
- public:
-  virtual ~IDigester() = default;
-  virtual void update(std::string_view data) = 0;
-  virtual std::string finalize() = 0;
-};
-
-class Sha256Digest : public IDigester {
- public:
-  Sha256Digest();
-  void update(std::string_view data) override;
-  std::string finalize() override;
-
- private:
-  std::string all;
-  Digest digest_;
-};
-
 void digest_object(std::shared_ptr<entry::Object> object, std::string_view doc,
-                   IDigester *digest);
+                   helper::interface::Digester *digest);
 
 std::string compute_checksum(std::shared_ptr<entry::Object> object,
                              std::string_view doc);

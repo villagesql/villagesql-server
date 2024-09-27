@@ -42,7 +42,6 @@ struct DbSchema {
   bool requires_auth;
   bool enabled;
   std::optional<uint64_t> items_per_page;
-  std::optional<std::string> comment;
   std::optional<std::string> options;
 
   bool deleted{false};

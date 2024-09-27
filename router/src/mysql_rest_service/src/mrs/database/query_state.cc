@@ -29,49 +29,59 @@
 namespace mrs {
 namespace database {
 
+using DbState = QueryState::DbState;
+
+QueryState::QueryState(const std::optional<uint64_t> &router_id)
+    : router_id_{router_id} {}
+
 void QueryState::query_state(MySQLSession *session) {
-  MySQLSession::Transaction transaction(session);
   changed_ = false;
-  query_state_impl(session, &transaction);
+  developer_changed_ = false;
+  query_state_impl(session, nullptr);
 }
 
-uint64_t QueryState::get_last_update() { return audit_log_id_; }
-
 void QueryState::on_row(const ResultRow &r) {
+  DbState new_state;
+
   if (r.size() < 2) return;
   has_rows_ = true;
-  auto state_new = atoi(r[0]) ? stateOn : stateOff;
+  new_state.service_enabled = atoi(r[0]) > 0;
 
-  if (r[1])
-    json_data_ = r[1];
-  else
-    json_data_.clear();
+  if (r[1]) new_state.data = r[1];
+  if (r[2]) new_state.developer = r[2];
 
-  if (state_ != state_new) {
+  if (state_ != new_state) {
     changed_ = true;
-    state_ = state_new;
+    if (state_.developer != new_state.developer) developer_changed_ = true;
+    state_ = new_state;
   }
 }
 
+bool QueryState::was_developer_changed() const { return developer_changed_; }
+
 bool QueryState::was_changed() const { return changed_; }
 
-std::string QueryState::get_json_data() { return json_data_; }
-
-State QueryState::get_state() { return state_; }
+const DbState &QueryState::get_state() const { return state_; }
 
 void QueryState::query_state_impl(MySQLSession *session,
-                                  MySQLSession::Transaction *transaction) {
-  QueryAuditLogMaxId query_audit_id;
-  auto audit_log_id = query_audit_id.query_max_id(session);
+                                  MySQLSession::Transaction *) {
   query_ =
-      "SELECT service_enabled,data FROM mysql_rest_service_metadata.config;";
+      "SELECT"
+      " service_enabled,"
+      " data,"
+      " (SELECT options->'$.developer' FROM "
+      "`mysql_rest_service_metadata`.`router`"
+      " WHERE id=?)"
+      "FROM mysql_rest_service_metadata.config;";
+  if (router_id_.has_value())
+    query_ << router_id_.value();
+  else
+    query_ << nullptr;
   has_rows_ = false;
   execute(session);
   if (!has_rows_) {
     throw NoRows("QueryState: the query returned no data");
   }
-  transaction->commit();
-  audit_log_id_ = audit_log_id;
 }
 
 }  // namespace database

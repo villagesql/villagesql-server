@@ -88,12 +88,13 @@ class HTTP_COMMON_EXPORT Uri {
   /**
    * check if URI is valid.
    */
-  operator bool() const;
+  bool empty() const;
 
   Uri &operator=(Uri &&other);
   Uri &operator=(const Uri &other);
 
  private:
+  operator bool() const;
   mysqlrouter::URI uri_impl_;
 };
 

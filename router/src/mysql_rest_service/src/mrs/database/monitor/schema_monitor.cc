@@ -26,10 +26,11 @@
 
 #include "helper/string/contains.h"
 #include "helper/string/generic.h"
-#include "mrs/database/helper/content_file_from_options.h"
+
+#include "mrs/database/monitor/db_access.h"
 #include "mrs/database/query_statistics.h"
 #include "mrs/database/query_version.h"
-#include "mrs/interface/query_monitor_factory.h"
+
 #include "mrs/observability/entity.h"
 #include "mrs/router_observation_entities.h"
 
@@ -45,6 +46,19 @@ namespace mrs {
 namespace database {
 
 namespace {
+
+std::vector<mrs::rest::entry::AppUrlHost> make_app_url_host(
+    const std::vector<mrs::database::entry::UrlHost> &entries,
+    const std::optional<std::string> &data) {
+  std::vector<mrs::rest::entry::AppUrlHost> result;
+  result.reserve(entries.size());
+
+  for (const auto &entry : entries) {
+    result.emplace_back(entry, data);
+  }
+
+  return result;
+}
 
 const std::string &to_string(
     mrs::interface::SupportedMrsMetadataVersion version) {
@@ -72,81 +86,6 @@ mrs::interface::SupportedMrsMetadataVersion query_supported_mrs_version(
   throw std::runtime_error(error_message.str());
 }
 
-#if 0
-std::string query_developer(mysqlrouter::MySQLSession *session,
-                            std::optional<uint64_t> router_id) {
-  if (!router_id.has_value()) {
-    return "";
-  }
-
-  mysqlrouter::sqlstring q{
-      "select json_unquote(json_extract(options, '$.developer')) from "
-      "mysql_rest_service_metadata.router where id = ?"};
-
-  q << router_id.value();
-  auto res = session->query_one(q.str());
-  if (nullptr == res.get()) return {};
-
-  return (*res)[0] ? (*res)[0] : "";
-}
-#endif
-
-bool is_router_in_md(mysqlrouter::MySQLSession *session,
-                     std::optional<uint64_t> router_id) {
-  if (!router_id.has_value()) {
-    return false;
-  }
-
-  mysqlrouter::sqlstring q =
-      "select COUNT(r.id) from mysql_rest_service_metadata.router r where"
-      " r.id=?";
-  q << router_id.value();
-
-  auto result{session->query_one(q)};
-
-  return std::stoul(std::string((*result)[0])) > 0;
-}
-
-std::set<UniversalId> query_allowed_services(
-    mysqlrouter::MySQLSession *session,
-    const mrs::interface::SupportedMrsMetadataVersion &md_version,
-    std::optional<uint64_t> router_id) {
-  mysqlrouter::sqlstring q;
-  std::set<UniversalId> result;
-  if (md_version < mrs::interface::SupportedMrsMetadataVersion::
-                       kSupportedMrsMetadataVersion_3) {
-    q = "select s.id from mysql_rest_service_metadata.service s"
-        " where (enabled = 1)";
-  } else {
-    if (is_router_in_md(session, router_id)) {
-      q = "select rs.service_id "
-          " from mysql_rest_service_metadata.router_services rs"
-          " WHERE rs.router_id = ?";
-      q << router_id.value();
-    } else {
-      q = "select s.id from mysql_rest_service_metadata.service s "
-          "WHERE s.published = 1 AND s.enabled = 1";
-    }
-  }
-
-  auto result_processor =
-      [&result](const mysqlrouter::MySQLSession::Row &row) -> bool {
-    assert(row.size() == 1);
-    assert(row[0]);
-
-    entry::UniversalId session_id;
-    entry::UniversalId::from_raw(&session_id, row[0]);
-
-    result.insert(session_id);
-
-    return true;
-  };
-
-  session->query(q, result_processor);
-
-  return result;
-}
-
 bool query_is_node_read_only(mysqlrouter::MySQLSession *session) {
   mysqlrouter::sqlstring q = "select @@super_read_only, @@read_only";
 
@@ -159,81 +98,11 @@ bool query_is_node_read_only(mysqlrouter::MySQLSession *session) {
          std::stoul(std::string((*result)[1])) == 1;
 }
 
-class AccessDatabase {
- public:
-  using QueryMonitorFactory = mrs::interface::QueryMonitorFactory;
-
- public:
-  AccessDatabase(mrs::interface::QueryFactory *query_factory,
-                 QueryMonitorFactory *query_monitor_factory)
-      : state{query_monitor_factory->create_turn_state_fetcher()},
-        url_host{query_monitor_factory->create_url_host_fetcher()},
-        db_service{query_monitor_factory->create_db_service_fetcher()},
-        db_schema{query_monitor_factory->create_db_schema_fetcher()},
-        db_object{
-            query_monitor_factory->create_db_object_fetcher(query_factory)},
-        object{query_monitor_factory->create_route_fetcher(
-            query_factory)},  // TODO: remove
-        authentication{query_monitor_factory->create_authentication_fetcher()},
-        content_file{query_monitor_factory->create_content_file_fetcher()},
-        query_monitor_factory_{query_monitor_factory},
-        query_factory_{query_factory} {}
-
-  std::unique_ptr<database::QueryState> state;
-  std::unique_ptr<database::QueryEntriesUrlHost> url_host;
-  std::unique_ptr<database::QueryEntriesDbService> db_service;
-  std::unique_ptr<database::QueryEntriesDbSchema> db_schema;
-  std::unique_ptr<database::QueryEntriesDbObjectLite> db_object;
-  std::unique_ptr<database::QueryEntriesDbObject> object;  // TODO: remove
-  std::unique_ptr<database::QueryEntriesAuthApp> authentication;
-  std::unique_ptr<database::QueryEntriesContentFile> content_file;
-
-  void query(mysqlrouter::MySQLSession *session) {
-    mysqlrouter::MySQLSession::Transaction transaction(session);
-    state->query_state(session);
-    object->query_entries(session);  // TODO: remove
-#if 0
-    url_host->query_entries(session);
-    db_service->query_entries(session);
-    db_schema->query_entries(session);
-    db_object->query_entries(session);
-#endif
-    authentication->query_entries(session);
-    content_file->query_entries(session);
-  }
-
-  void update_access_factory_if_needed() {
-    if (!fetcher_updated_) {
-      state = query_monitor_factory_->create_turn_state_monitor(state.get());
-      object = query_monitor_factory_->create_route_monitor(
-          query_factory_, content_file->get_last_update());  // TODO: remove
-      url_host = query_monitor_factory_->create_url_host_monitor(
-          content_file->get_last_update());
-      db_service = query_monitor_factory_->create_db_service_monitor(
-          content_file->get_last_update());
-      db_schema = query_monitor_factory_->create_db_schema_monitor(
-          content_file->get_last_update());
-      db_object = query_monitor_factory_->create_db_object_monitor(
-          query_factory_, content_file->get_last_update());
-      authentication = query_monitor_factory_->create_authentication_monitor(
-          content_file->get_last_update());
-      content_file = query_monitor_factory_->create_content_file_monitor(
-          content_file->get_last_update());
-      fetcher_updated_ = true;
-    }
-  }
-
- private:
-  bool fetcher_updated_{false};
-  QueryMonitorFactory *query_monitor_factory_;
-  mrs::interface::QueryFactory *query_factory_;
-};
-
 }  // namespace
 
 SchemaMonitor::SchemaMonitor(
     const mrs::Configuration &configuration,
-    collector::MysqlCacheManager *cache, mrs::ObjectManager *dbobject_manager,
+    collector::MysqlCacheManager *cache, mrs::EndpointManager *dbobject_manager,
     authentication::AuthorizeManager *auth_manager,
     mrs::observability::EntitiesManager *entities_manager,
     mrs::GtidManager *gtid_manager,
@@ -279,7 +148,7 @@ void SchemaMonitor::run() {
       is_node_read_only{
           true};  // set to true to force the query on the first run
   const bool is_destination_dynamic = configuration_.provider_rw_->is_dynamic();
-  mrs::State state{stateOff};
+  bool state{false};
   do {
     try {
       auto session_check_version =
@@ -304,27 +173,16 @@ void SchemaMonitor::run() {
       auto supported_schema_version =
           query_supported_mrs_version(session_check_version.get());
 
-#if 0
-      const auto developer = query_developer(session_check_version.get(),
-                                             configuration_.router_id_);
-#endif
-
       auto factory{create_schema_monitor_factory(supported_schema_version)};
-      mrs::database::FileFromOptions options_files;
 
       proxy_query_factory_->change_subject(
           create_query_factory(supported_schema_version));
 
-      AccessDatabase fetcher(proxy_query_factory_, factory.get());
+      DbAccess fetcher(proxy_query_factory_, factory.get(),
+                       configuration_.router_id_);
 
       log_system("Monitoring MySQL REST metadata (version: %s)",
                  to_string(supported_schema_version).c_str());
-#if 0
-      if (!developer.empty()) {
-        log_system("Configured to expose the services for developer '%s'",
-                   developer.c_str());
-      }
-#endif
 
       do {
         using namespace observability;
@@ -333,106 +191,63 @@ void SchemaMonitor::run() {
                                  collector::kMySQLConnectionMetadataRW, true)
                            : std::move(session_check_version);
 
-        const auto allowed_services = query_allowed_services(
-            session.get(), supported_schema_version, configuration_.router_id_);
-
         fetcher.query(session.get());
 
-        auto current_state = fetcher.state->get_state();
-        if (current_state != state) {
-          state = current_state;
-          if (current_state == stateOff) {
+        auto service_enabled = fetcher.get_state().service_enabled;
+        if (service_enabled != state) {
+          state = service_enabled;
+          if (!service_enabled) {
             throw ServiceDisabled();
           }
         }
 
-        if (fetcher.state->was_changed()) {
-          auto global_json_config = fetcher.state->get_json_data();
-          auto state = fetcher.state->get_state();
-          dbobject_manager_->turn(state, global_json_config);
+        if (fetcher.get_state_was_changed()) {
+          auto global_json_config = fetcher.get_state().data.value_or("{}");
+          dbobject_manager_->configure(global_json_config);
           auth_manager_->configure(global_json_config);
           gtid_manager_->configure(global_json_config);
           cache_->configure(global_json_config);
 
           log_debug("route turn=%s, changed=%s",
-                    (fetcher.state->get_state() == stateOn ? "on" : "off"),
-                    fetcher.state->was_changed() ? "yes" : "no");
-
-          options_files.analyze_global(state == mrs::stateOn,
-                                       global_json_config);
-          if (options_files.content_files_.size()) {
-            dbobject_manager_->update(options_files.content_files_,
-                                      allowed_services);
-            EntityCounter<kEntityCounterUpdatesFiles>::increment(
-                options_files.content_files_.size());
-          }
+                    (fetcher.get_state().service_enabled ? "on" : "off"),
+                    fetcher.get_state_was_changed() ? "yes" : "no");
         }
 
-        if (!fetcher.authentication->get_entries().empty()) {
-          auth_manager_->update(fetcher.authentication->get_entries());
+        if (!fetcher.get_auth_app_entries().empty()) {
+          auth_manager_->update(fetcher.get_auth_app_entries());
           EntityCounter<kEntityCounterUpdatesAuthentications>::increment(
-              fetcher.authentication->get_entries().size());
+              fetcher.get_auth_app_entries().size());
         }
 
-        const auto db_object_entries = fetcher.object->get_entries();
+        if (!fetcher.get_host_entries().empty()) {
+          dbobject_manager_->update(make_app_url_host(
+              fetcher.get_host_entries(), fetcher.get_state().data));
+        }
+
+        if (!fetcher.get_service_entries().empty()) {
+          dbobject_manager_->update(fetcher.get_service_entries());
+        }
+
+        if (!fetcher.get_schema_entries().empty()) {
+          dbobject_manager_->update(fetcher.get_schema_entries());
+        }
+
+        if (!fetcher.get_content_set_entries().empty()) {
+          dbobject_manager_->update(fetcher.get_content_set_entries());
+        }
+
+        auto db_object_entries = fetcher.get_db_object_entries();
         if (!db_object_entries.empty()) {
-          options_files.analyze(db_object_entries);
-          dbobject_manager_->update(db_object_entries, allowed_services);
-          EntityCounter<kEntityCounterUpdatesObjects>::increment(
-              db_object_entries.size());
-
-          if (options_files.content_files_.size()) {
-            dbobject_manager_->update(options_files.content_files_,
-                                      allowed_services);
-            EntityCounter<kEntityCounterUpdatesFiles>::increment(
-                options_files.content_files_.size());
-          }
+          dbobject_manager_->update(db_object_entries);
         }
 
-#if 0
-        if (!fetcher.url_host->entries.empty()) {
-          // dbobject_manager_->update(fetcher.url_host->entries);
-          EntityCounter<kEntityCounterUpdatesHosts>::increment(
-              fetcher.url_host->entries.size());
-        }
-
-        if (!fetcher.db_service->entries.empty()) {
-          // dbobject_manager_->update(fetcher.db_service->entries);
-          EntityCounter<kEntityCounterUpdatesServices>::increment(
-              fetcher.db_service->entries.size());
-        }
-
-        if (!fetcher.db_schema->entries.empty()) {
-          // dbobject_manager_->update(fetcher.db_schema->entries);
-          EntityCounter<kEntityCounterUpdatesSchemas>::increment(
-              fetcher.db_schema->entries.size());
-        }
-
-        if (!fetcher.db_object->entries.empty()) {
-        // dbobject_manager_->update(fetcher.db_object->entries);
-        EntityCounter<kEntityCounterUpdatesObjects>::increment(
-            fetcher.db_object->entries.size());
-        }
-#endif
-
-        if (!fetcher.content_file->entries.empty()) {
-          dbobject_manager_->update(fetcher.content_file->entries,
-                                    allowed_services);
-          EntityCounter<kEntityCounterUpdatesFiles>::increment(
-              fetcher.content_file->entries.size());
-
-          options_files.analyze(fetcher.content_file->entries);
-          if (options_files.content_files_.size()) {
-            dbobject_manager_->update(options_files.content_files_,
-                                      allowed_services);
-            EntityCounter<kEntityCounterUpdatesFiles>::increment(
-                options_files.content_files_.size());
-          }
+        if (!fetcher.get_content_file_entries().empty()) {
+          dbobject_manager_->update(fetcher.get_content_file_entries());
         }
 
         fetcher.update_access_factory_if_needed();
 
-        if (fetcher.state->get_state() == mrs::stateOn) {
+        if (fetcher.get_state().service_enabled) {
           auto socket_ops = mysql_harness::SocketOperations::instance();
 
           mysqlrouter::sqlstring update{
@@ -480,9 +295,6 @@ void SchemaMonitor::run() {
     } catch (const ServiceDisabled &) {
       force_clear = true;
     } catch (const std::exception &exc) {
-      // TODO(lkotula): For now we ignore those errors (Shouldn't be in
-      // review)
-
       log_error("Can't refresh MRDS layout, because of the following error:%s.",
                 exc.what());
     }

@@ -32,7 +32,7 @@ using namespace mrs::database;
 
 using testing::Test;
 
-class TestDigest : public IDigester {
+class TestDigest : public helper::interface::Digester {
  public:
   void update(std::string_view data) override {
     size_t start = 0, p = data.find('\0');

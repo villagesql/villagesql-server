@@ -33,8 +33,7 @@ TARGET_INCLUDE_DIRECTORIES(mysql_rest_service_if
     ${CMAKE_CURRENT_BINARY_DIR}/../include/
     )
 
-ADD_LIBRARY(mysql_rest_service_helper
-  STATIC
+ADD_STATIC_LIBRARY(mysql_rest_service_helper
   helper/media_detector.cc
   helper/media_type.cc
   helper/json/to_string.cc
@@ -43,36 +42,37 @@ ADD_LIBRARY(mysql_rest_service_helper
   helper/token/jwt.cc
   helper/mysql_column_types.cc
   helper/mysql_numeric_value.cc
-  )
+  helper/digester/sha256_digest.cc
 
-TARGET_LINK_LIBRARIES(mysql_rest_service_helper
+  COMPILE_DEFINITIONS
+  PRIVATE MYSQL_ROUTER_LOG_DOMAIN="mrs_helper"
+
+  LINK_LIBRARIES
   mysql_rest_service_if
   harness-library
   router_lib
   http_common
+
+  INCLUDE_DIRECTORIES
+  PRIVATE ${PROJECT_SOURCE_DIR}/src/router/include/
   )
 
-TARGET_INCLUDE_DIRECTORIES(mysql_rest_service_helper
-  PRIVATE
-    ${PROJECT_SOURCE_DIR}/src/router/include/
-  )
-
-ADD_LIBRARY(mysql_rest_service_db
-  STATIC
+ADD_STATIC_LIBRARY(mysql_rest_service_db
   mrs/database/filter_object_generator.cc
   mrs/database/monitor/schema_monitor.cc
   mrs/database/monitor/schema_monitor_factory.cc
   mrs/database/query_entries_auth_privileges.cc
   mrs/database/query_changes_content_file.cc
+  mrs/database/query_changes_content_set.cc
   mrs/database/query_changes_db_object.cc
   mrs/database/query_changes_db_schema.cc
   mrs/database/query_changes_db_service.cc
-  mrs/database/query_changes_state.cc
   mrs/database/query_changes_url_host.cc
   mrs/database/query_entries_audit_log.cc
   mrs/database/query_entries_auth_app.cc
   mrs/database/query_entries_auth_role.cc
   mrs/database/query_entries_content_file.cc
+  mrs/database/query_entries_content_set.cc
   mrs/database/query_entries_db_object.cc
   mrs/database/query_entries_db_schema.cc
   mrs/database/query_entries_db_service.cc
@@ -111,39 +111,42 @@ ADD_LIBRARY(mysql_rest_service_db
   mrs/database/duality_view/update.cc
   mrs/database/duality_view/select.cc
   mrs/database/duality_view/check.cc
-)
 
-TARGET_LINK_LIBRARIES(mysql_rest_service_db
+  COMPILE_DEFINITIONS
+  PRIVATE MYSQL_ROUTER_LOG_DOMAIN="mrs_db"
+
+  LINK_LIBRARIES
   mysql_rest_service_if
   harness-library
-  router_lib)
+  router_lib
 
-TARGET_INCLUDE_DIRECTORIES(mysql_rest_service_db
+  INCLUDE_DIRECTORIES
   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
-  PRIVATE ${PROJECT_SOURCE_DIR}/src/http/include/)
+  PRIVATE ${PROJECT_SOURCE_DIR}/src/http/include/
+)
 
-ADD_LIBRARY(mysql_rest_service_json
+ADD_STATIC_LIBRARY(mysql_rest_service_json
   mrs/json/response_json_template.cc
   mrs/json/json_template_factory.cc
   mrs/json/json_template_unnest.cc
   mrs/json/json_template_nest.cc
   mrs/json/json_template_nest_without_outparams.cc
-  )
 
-TARGET_LINK_LIBRARIES(mysql_rest_service_json
+  LINK_LIBRARIES
   mysql_rest_service_if
   harness-library
   router_lib
   http_common
+
+  INCLUDE_DIRECTORIES
+  PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}
+
+  COMPILE_DEFINITIONS
+  PRIVATE MYSQL_ROUTER_LOG_DOMAIN="mrs_json"
   )
 
-TARGET_INCLUDE_DIRECTORIES(mysql_rest_service_json
-  PRIVATE
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    )
-
-ADD_LIBRARY(mysql_rest_service_impl
+ADD_STATIC_LIBRARY(mysql_rest_service_impl
   collector/counted_mysql_session.cc
   collector/mysql_cache_manager.cc
   mrs/authentication/helper/crypto.cc
@@ -160,51 +163,58 @@ ADD_LIBRARY(mysql_rest_service_impl
   mrs/authentication/www_authentication_handler.cc
   mrs/authentication/sasl_handler.cc
   mrs/authentication/scram_handler.cc
+  mrs/endpoint/content_file_endpoint.cc
+  mrs/endpoint/content_set_endpoint.cc
+  mrs/endpoint/db_object_endpoint.cc
+  mrs/endpoint/db_schema_endpoint.cc
+  mrs/endpoint/db_service_endpoint.cc
+  mrs/endpoint/endpoint_factory.cc
+  mrs/endpoint/handler_factory.cc
+  mrs/endpoint/option_endpoint.cc
+  mrs/endpoint/handler/handler_content_file.cc
+  mrs/endpoint/handler/handler_db_schema_metadata.cc
+  mrs/endpoint/handler/handler_db_object_table.cc
+  mrs/endpoint/handler/handler_db_object_sp.cc
+  mrs/endpoint/handler/handler_db_object_function.cc
+  mrs/endpoint/handler/handler_db_object_metadata.cc
+  mrs/endpoint/handler/handler_string.cc
+  mrs/endpoint/handler/handler_redirection.cc
+  mrs/endpoint/url_host_endpoint.cc
   mrs/http/cookie.cc
   mrs/http/header_accept.cc
   mrs/http/utilities.cc
   mrs/http/session_manager.cc
   mrs/users/user_manager.cc
-  mrs/object_factory.cc
-  mrs/object_manager.cc
-  mrs/object.cc
-  mrs/object_schema.cc
-  mrs/object_static_file.cc
+  mrs/endpoint_manager.cc
   mrs/router_observation_entities.cc
   mrs/rest/handler.cc
   mrs/rest/handler_authorize.cc
   mrs/rest/handler_authorize_apps.cc
   mrs/rest/handler_authorize_common.cc
   mrs/rest/handler_authorize_ok.cc
-  mrs/rest/handler_factory.cc
-  mrs/rest/handler_file.cc
-  mrs/rest/handler_function.cc
   mrs/rest/handler_user.cc
-  mrs/rest/handler_table.cc
   mrs/rest/handler_string.cc
-  mrs/rest/handler_object_metadata.cc
   mrs/rest/handler_is_authorized.cc
   mrs/rest/handler_unauthorize.cc
-  mrs/rest/handler_schema_metadata.cc
-  mrs/rest/handler_sp.cc
   mrs/monitored/gtid_functions.cc
   mrs/monitored/query_retry_on_ro.cc
-  )
 
-TARGET_INCLUDE_DIRECTORIES(mysql_rest_service_impl
-  PRIVATE
-    ${PROJECT_SOURCE_DIR}/src/harness/include/
-    ${PROJECT_SOURCE_DIR}/src/metadata_cache/include/
-    ${PROJECT_SOURCE_DIR}/src/routing/include/
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    )
+  INCLUDE_DIRECTORIES
+  PRIVATE ${PROJECT_SOURCE_DIR}/src/harness/include/
+  ${PROJECT_SOURCE_DIR}/src/metadata_cache/include/
+  ${PROJECT_SOURCE_DIR}/src/routing/include/
+  ${CMAKE_CURRENT_BINARY_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}
 
-TARGET_LINK_LIBRARIES(mysql_rest_service_impl
+  LINK_LIBRARIES
   http_client
   rest_api
   mysql_rest_service_db
+
+  COMPILE_DEFINITIONS
+  PRIVATE MYSQL_ROUTER_LOG_DOMAIN="mrs_endpoint"
   )
+
 
 ADD_HARNESS_PLUGIN(mysql_rest_service
   SOURCES
@@ -222,8 +232,6 @@ TARGET_INCLUDE_DIRECTORIES(mysql_rest_service
     ${CMAKE_CURRENT_BINARY_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}
     )
-
-
 
 GENERATE_EXPORT_HEADER(mysql_rest_service
   EXPORT_FILE_NAME ${CMAKE_CURRENT_BINARY_DIR}/../include/mysqlrouter/mysql_rest_service_export.h)

@@ -28,6 +28,8 @@
 #include <cassert>
 #include <string>
 
+#include "helper/to_string.h"
+
 namespace helper {
 
 class DummyType {};
@@ -38,8 +40,6 @@ inline std::string to_string(const DummyType &) {
 }
 
 namespace container {
-
-inline std::string to_string(const std::string &result) { return result; }
 
 template <typename PairFirst, typename PairSecond>
 std::string to_string(const std::pair<PairFirst, PairSecond> &pair) {

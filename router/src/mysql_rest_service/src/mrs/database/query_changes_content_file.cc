@@ -30,7 +30,8 @@ namespace mrs {
 namespace database {
 
 QueryChangesContentFile::QueryChangesContentFile(
-    const uint64_t last_audit_log_id) {
+    const uint64_t last_audit_log_id, const Version version)
+    : QueryEntriesContentFile(version) {
   audit_log_id_ = last_audit_log_id;
 }
 
@@ -40,35 +41,29 @@ void QueryChangesContentFile::query_entries(MySQLSession *session) {
   uint64_t max_audit_log_id = audit_log_id_;
 
   entries_fetched.clear();
-  MySQLSession::Transaction transaction(session);
 
-  audit_entries.query_entries(
-      session, {"content_file", "content_set", "service", "url_host"},
-      audit_log_id_);
+  audit_entries.query_entries(session, {"content_file"}, audit_log_id_);
 
   for (const auto &audit_entry : audit_entries.entries) {
     if (audit_entry.old_table_id.has_value())
-      query_auth_entries(session, &local_entries, audit_entry.table,
-                         audit_entry.old_table_id.value());
+      query_content_file_entries(session, &local_entries, audit_entry.table,
+                                 audit_entry.old_table_id.value());
 
     if (audit_entry.new_table_id.has_value())
-      query_auth_entries(session, &local_entries, audit_entry.table,
-                         audit_entry.new_table_id.value());
+      query_content_file_entries(session, &local_entries, audit_entry.table,
+                                 audit_entry.new_table_id.value());
 
     if (max_audit_log_id < audit_entry.id) max_audit_log_id = audit_entry.id;
   }
 
   entries.swap(local_entries);
 
-  transaction.commit();
-
   audit_log_id_ = max_audit_log_id;
 }
 
-void QueryChangesContentFile::query_auth_entries(MySQLSession *session,
-                                                 VectorOfPaths *out,
-                                                 const std::string &table_name,
-                                                 const entry::UniversalId id) {
+void QueryChangesContentFile::query_content_file_entries(
+    MySQLSession *session, VectorOfPaths *out, const std::string &table_name,
+    const entry::UniversalId id) {
   entries.clear();
 
   query(session, build_query(table_name, id));

@@ -252,10 +252,11 @@ TEST_P(UrlParsingTest, uri_join_before_after_overide) {
   const std::string k_fragment{"some_fragment=1"};
   auto p = GetParam();
   auto make_uri_without_path = [](auto &p) {
-    if (p.scheme.empty()) return std::string{"/"};
-    if (p.port >= 0)
-      return p.scheme + "://" + p.host + ":" + std::to_string(p.port);
-    return p.scheme + "://" + p.host;
+    if (p.scheme.empty() && p.host.empty()) return std::string{"/"};
+    std::string result = p.scheme.empty() ? "//" : p.scheme + "://";
+
+    if (p.port >= 0) return result + p.host + ":" + std::to_string(p.port);
+    return result + p.host;
   };
 
   http::base::Uri u{p.uri.uri};
@@ -277,6 +278,10 @@ TEST_P(UrlParsingTest, uri_join_before_after_overide) {
 INSTANTIATE_TEST_SUITE_P(
     InstantiateUriParsing, UrlParsingTest,
     ::testing::Values(
+        UrlParam{{"//HOST1"}, "", "HOST1", -1},
+        UrlParam{{"//HOST2:10"}, "", "HOST2", 10},
+        UrlParam{{"//[::2]"}, "", "[::2]", -1},
+        UrlParam{{"//[::3]:10"}, "", "[::3]", 10},
         UrlParam{{"http://[::1]"}, "http", "[::1]", -1},
         UrlParam{{"http://[1::1]:2100"}, "http", "[1::1]", 2100},
         UrlParam{

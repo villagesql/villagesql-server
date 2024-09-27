@@ -34,6 +34,7 @@
 
 #include <rapidjson/prettywriter.h>
 
+#include "helper/digester/sha256_digest.h"
 #include "helper/json/rapid_json_to_text.h"
 #include "mrs/database/helper/object_checksum.h"
 
@@ -42,20 +43,6 @@ namespace database {
 
 using ForeignKeyReference = entry::ForeignKeyReference;
 using Table = entry::Table;
-
-Sha256Digest::Sha256Digest() : digest_(Digest::Type::Sha256) {}
-
-void Sha256Digest::update(std::string_view data) {
-  digest_.update(data.data(), data.size());
-  all.append(data);
-}
-
-std::string Sha256Digest::finalize() {
-  std::string res;
-  res.resize(digest_.digest_size(Digest::Type::Sha256));
-  digest_.finalize(res);
-  return res;
-}
 
 namespace {
 
@@ -280,7 +267,8 @@ class JsonCopyBuilder {
 
 class ChecksumBuilder {
  public:
-  explicit ChecksumBuilder(IDigester *digest) : digest_(digest) {}
+  explicit ChecksumBuilder(helper::interface::Digester *digest)
+      : digest_(digest) {}
 
   void on_field(const std::string &name, const rapidjson::Value &value,
                 std::string_view data) {
@@ -411,7 +399,7 @@ class ChecksumBuilder {
  private:
   int skip_depth_ = 0;
 
-  IDigester *digest_;
+  helper::interface::Digester *digest_;
 };
 
 class PathTracker {
@@ -485,14 +473,16 @@ struct ChecksumHandler
     : public rapidjson::BaseReaderHandler<rapidjson::UTF8<>, ChecksumHandler> {
   enum class ContainerType { OBJECT, ARRAY };
 
-  ChecksumHandler(std::shared_ptr<Table> object, IDigester *digest)
+  ChecksumHandler(std::shared_ptr<Table> object,
+                  helper::interface::Digester *digest)
       : object_({object}), path_('.', true) {
     if (digest) digest_ = std::make_unique<ChecksumBuilder>(digest);
   }
 
   // creates a filtered copy of the traversed object
   ChecksumHandler(std::shared_ptr<Table> object,
-                  const dv::ObjectFieldFilter *filter, IDigester *digest)
+                  const dv::ObjectFieldFilter *filter,
+                  helper::interface::Digester *digest)
       : object_({object}), path_('.', true), filter_(filter) {
     if (digest) digest_ = std::make_unique<ChecksumBuilder>(digest);
   }
@@ -877,7 +867,7 @@ std::string string_to_hex(std::string_view s) {
 }  // namespace
 
 void digest_object(std::shared_ptr<entry::Object> object, std::string_view doc,
-                   IDigester *digest) {
+                   helper::interface::Digester *digest) {
   ChecksumHandler handler(object, digest);
   rapidjson::Reader reader;
   rapidjson::MemoryStream ms(doc.data(), doc.length());
@@ -890,7 +880,7 @@ std::string compute_checksum(std::shared_ptr<entry::Object> object,
   // the JSON document, thus it is only suitable for use in documents generated
   // by JsonQueryBuilder, which builds JSON in Table order
 
-  Sha256Digest digest;
+  helper::digester::Sha256Digest digest;
 
   digest_object(object, doc, &digest);
 
@@ -913,8 +903,9 @@ std::string post_process_json(
   rapidjson::Document new_doc;
   auto allocator = new_doc.GetAllocator();
 
-  std::unique_ptr<Sha256Digest> digest;
-  if (compute_checksum) digest = std::make_unique<Sha256Digest>();
+  std::unique_ptr<helper::digester::Sha256Digest> digest;
+  if (compute_checksum)
+    digest = std::make_unique<helper::digester::Sha256Digest>();
   ChecksumHandler handler(view, &filter, digest.get());
   {
     rapidjson::Reader reader;
