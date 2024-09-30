@@ -37,15 +37,14 @@
 #include <mysqld_error.h>
 #include <openssl/ssl.h>
 
-#include "duk_logging.h"
+#include "authentication.h"
 #include "duk_module_shim.h"
 #include "duk_node_fs.h"
 #include "duktape.h"
 #include "duktape_statement_reader.h"
-#include "harness_assert.h"
 #include "mysql/harness/logging/logger.h"
-#include "mysql/harness/logging/logging.h"
 #include "mysql/harness/stdx/expected.h"
+#include "mysql_protocol_common.h"
 #include "mysqlrouter/classic_protocol.h"
 #include "mysqlrouter/classic_protocol_constants.h"
 #include "mysqlrouter/classic_protocol_session_track.h"
