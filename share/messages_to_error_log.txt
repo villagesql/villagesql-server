@@ -12788,6 +12788,12 @@ ER_AUTHENTICATION_OPENID_FAILED_TO_UPDATE_CONFIGURATION
 ER_SIMPLE_ERROR_LOG_COMPONENT_STATUS
   eng "%s"
 
+ER_RPL_KILL_OLD_DUMP_THREAD_ENCOUNTERED
+  eng "Upon reconnection with the replica, while initializing the dump thread for %s <%s>, an existing dump thread with the same %s was detected. The source is terminating the previous dump thread (%u), which is normal and expected."
+
+ER_RPL_MTA_ALLOW_COMMIT_OUT_OF_ORDER
+  eng "The transaction '%-.192s' will commit out of order with respect to its source to follow the group global order."
+
 # DO NOT add server-to-client messages here;
 # they go in messages_to_clients.txt
 # in the same directory as this file.
