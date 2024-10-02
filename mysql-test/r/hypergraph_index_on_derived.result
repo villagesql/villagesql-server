@@ -238,3 +238,17 @@ line
 DROP VIEW v1;
 DROP TABLE t1;
 SET SESSION OPTIMIZER_TRACE='enabled=off';
+#
+# Bug#36990353 mysqld crash - Segmentation fault in PopulationCount
+# at sql/join_optimizer/overflow_bitset.h
+#
+SET @optimizer_switch_saved= @@optimizer_switch;
+SET optimizer_switch="subquery_to_derived=on";
+CREATE TABLE t1 (f1 INTEGER);
+SELECT MAX(t1.f1), (SELECT COUNT(f1) FROM t1) FROM
+(t1 JOIN (SELECT * FROM (SELECT DISTINCT * FROM t1) AS dt) AS t2 ON 1)
+WHERE ((SELECT f1 FROM t1) IS NULL);
+MAX(t1.f1)	(SELECT COUNT(f1) FROM t1)
+NULL	0
+DROP TABLE t1;
+SET @@optimizer_switch=@optimizer_switch_saved;
