@@ -10515,7 +10515,7 @@ ER_LH_CP_NO_VECTOR_STORE
 ER_LH_CP_NO_VALIDATION_MODE
   eng "Lakehouse Incremental Load is not supported with validation mode."
 
-ER_LH_CP_MISSING_FILES_MODE
+OBSOLETE_ER_LH_CP_MISSING_FILES_MODE
   eng "Lakehouse Incremental Load is not supported with allow_missing_files disabled."
 
 ER_LH_CP_COMMIT_FAILED
