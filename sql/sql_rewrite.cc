@@ -294,6 +294,13 @@ bool rewrite_query(THD *thd, Consumer_type type, const Rewrite_params *params,
       }
       break;
     }
+    case SQLCOM_CREATE_PROCEDURE:
+    case SQLCOM_CREATE_FUNCTION: {
+      if (type == Consumer_type::TEXTLOG) {
+        rw.reset(new Rewriter_create_procedure(thd, type));
+      }
+      break;
+    }
 
     /*
       PREPARE stmt FROM <string> is rewritten so that <string> is
@@ -325,6 +332,38 @@ bool rewrite_query(THD *thd, Consumer_type type, const Rewrite_params *params,
 
   return rewrite;
 }
+
+void redact_par_url(String original_query_str, String &rlb) {
+  String pattern_start("/p/", system_charset_info);
+  String pattern_end("/n/", system_charset_info);
+
+  size_t search_offset = 0;
+  while (search_offset <= original_query_str.length()) {
+    auto first_index = original_query_str.strstr(pattern_start, search_offset);
+    if (first_index == -1) {
+      // we could not find any other "/p/"
+      break;
+    }
+
+    // search for the "/n/" after the "/p/" location
+    auto second_index = original_query_str.strstr(pattern_end, first_index);
+    if (second_index == -1) {
+      // we could not find any other "/n/"
+      break;
+    }
+
+    // Copy from the original string from the search_offset till first_index
+    rlb.append(original_query_str.c_ptr() + search_offset,
+               first_index - search_offset);
+    rlb.append(STRING_WITH_LEN("/p/<redacted>"));
+    search_offset = second_index;
+  }
+
+  // Copy the remaining string
+  rlb.append(original_query_str.c_ptr() + search_offset,
+             original_query_str.length() - search_offset);
+}
+
 }  // anonymous namespace
 
 /**
@@ -1842,33 +1881,24 @@ bool Rewriter_select_query::rewrite(String &rlb) const {
   assert(m_thd->query().length);
   String original_query_str(m_thd->query().str, m_thd->query().length,
                             system_charset_info);
-  String pattern_start("/p/", system_charset_info);
-  String pattern_end("/n/", system_charset_info);
+  redact_par_url(original_query_str, rlb);
+  return true;
+}
 
-  size_t search_offset = 0;
-  while (search_offset <= original_query_str.length()) {
-    auto first_index = original_query_str.strstr(pattern_start, search_offset);
-    if (first_index == -1) {
-      // we could not find any other "/p/"
-      break;
-    }
+Rewriter_create_procedure::Rewriter_create_procedure(THD *thd,
+                                                     Consumer_type type)
+    : I_rewriter(thd, type) {}
 
-    // search for the "/n/" after the "/p/" location
-    auto second_index = original_query_str.strstr(pattern_end, first_index);
-    if (second_index == -1) {
-      // we could not find any other "/n/"
-      break;
-    }
+/**
+  Rewrite the query for CREATE PROCEDURE or ROUTINES with the PAR id being
+  redacted. Any pattern like "/p/.*?/n/" is replaced with "/p/<redacted>/n/"
+  @param[in,out] rlb     Buffer to return the rewritten query in.
 
-    // Copy from the original string from the search_offset till first_index
-    rlb.append(original_query_str.c_ptr() + search_offset,
-               first_index - search_offset);
-    rlb.append(STRING_WITH_LEN("/p/<redacted>"));
-    search_offset = second_index;
-  }
-
-  // Copy the remaining string
-  rlb.append(original_query_str.c_ptr() + search_offset,
-             original_query_str.length() - search_offset);
+  @retval true the query is rewritten
+*/
+bool Rewriter_create_procedure::rewrite(String &rlb) const {
+  String original_query_str(m_thd->query().str, m_thd->query().length,
+                            system_charset_info);
+  redact_par_url(original_query_str, rlb);
   return true;
 }

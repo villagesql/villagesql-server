@@ -307,6 +307,11 @@ class sp_parser_data {
   */
   void do_cont_backpatch(uint dest);
 
+  /// Returns pointer to the topmost lex object.
+  LEX *get_top_lex() {
+    return m_lex_stack.is_empty() ? nullptr : m_lex_stack.head();
+  }
+
  private:
   /// Start of the current statement's query string.
   const char *m_current_stmt_start_ptr;

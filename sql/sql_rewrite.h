@@ -359,4 +359,11 @@ class Rewriter_select_query final : public I_rewriter {
   bool rewrite(String &rlb) const override;
 };
 
+/** Rewrites the CREATE Procedure or routines statement. */
+class Rewriter_create_procedure final : public I_rewriter {
+ public:
+  Rewriter_create_procedure(THD *thd, Consumer_type type);
+  bool rewrite(String &rlb) const override;
+};
+
 #endif /* SQL_REWRITE_INCLUDED */

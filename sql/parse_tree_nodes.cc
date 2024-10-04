@@ -4257,7 +4257,16 @@ bool PT_into_destination_outfile::do_contextualize(Parse_context *pc) {
       safely logged without exposing sensitive data, we need to redact the
       relevant portions of the query.
     */
-    lex->set_rewrite_required();
+    auto *const sp = lex->sphead;
+    if (sp != nullptr) {
+      /*
+        If the export query is part of a stored procedure/routine, then call
+        rewrite on the topmost lex.
+      */
+      sp->m_parser_data.get_top_lex()->set_rewrite_required();
+    } else {
+      lex->set_rewrite_required();
+    }
     lex->set_execute_only_in_secondary_engine(true, OUTFILE_OBJECT_STORE);
     lex->result = new (pc->mem_root) Query_result_to_object_store(&m_exchange);
   } else {
