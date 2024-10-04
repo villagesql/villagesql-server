@@ -59,7 +59,8 @@ QueryEntriesDbObject::QueryEntriesDbObject(
       "  o.auth_stored_procedure, o.enabled, o.request_path,"
       "  COALESCE(o.items_per_page, db.items_per_page) as `on_page`, "
       "  o.name, db.name as `schema_name`, o.crud_operations + 0, o.format,"
-      "  o.media_type, o.auto_detect_media_type, o.object_type, o.options ! !"
+      "  o.media_type, o.auto_detect_media_type, o.object_type, o.options,"
+      "  o.options->>'$.cache_ttl' * 1000 as cache_ttl ! !"
       " FROM mysql_rest_service_metadata.`db_object` as o"
       "  JOIN mysql_rest_service_metadata.`db_schema` as db on"
       "   o.db_schema_id = db.id"
@@ -153,6 +154,7 @@ void QueryEntriesDbObject::on_row(const ResultRow &row) {
   mysql_row.unserialize(&entry.autodetect_media_type);
   mysql_row.unserialize_with_converter(&entry.type, path_type_converter);
   mysql_row.unserialize(&entry.options);
+  mysql_row.unserialize(&entry.option_cache_ttl_ms);
 
   if (db_version_ == mrs::interface::kSupportedMrsMetadataVersion_2) {
     bool user_ownership_enforced{false};

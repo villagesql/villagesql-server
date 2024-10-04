@@ -46,10 +46,12 @@ using HandlerPtr = std::unique_ptr<HandlerFactory::Handler>;
 
 HandlerFactory::HandlerFactory(AuthorizeManager *auth_manager,
                                GtidManager *gtid_manager,
-                               MysqlCacheManager *cache_manager)
+                               MysqlCacheManager *cache_manager,
+                               ResponseCache *response_cache)
     : auth_manager_{auth_manager},
       gtid_manager_{gtid_manager},
-      cache_manager_{cache_manager} {}
+      cache_manager_{cache_manager},
+      response_cache_{response_cache} {}
 
 HandlerPtr HandlerFactory::create_db_schema_metadata_catalog_handler(
     EndpointBasePtr endpoint) {
@@ -75,13 +77,16 @@ HandlerPtr HandlerFactory::create_db_object_handler(EndpointBasePtr endpoint) {
   switch (entry_->type) {
     case DbObjectLite::k_objectTypeTable:
       return std::make_unique<HandlerDbObjectTable>(
-          db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_);
+          db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_,
+          response_cache_, entry_->option_cache_ttl_ms.value_or(0));
     case DbObjectLite::k_objectTypeProcedure:
       return std::make_unique<HandlerDbObjectSP>(
-          db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_);
+          db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_,
+          response_cache_, entry_->option_cache_ttl_ms.value_or(0));
     case DbObjectLite::k_objectTypeFunction:
       return std::make_unique<HandlerDbObjectFunction>(
-          db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_);
+          db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_,
+          response_cache_, entry_->option_cache_ttl_ms.value_or(0));
   }
 
   assert(false && "all cases must be handled inside the switch.");

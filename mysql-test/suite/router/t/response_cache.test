@@ -1,0 +1,97 @@
+--source include/have_router.inc
+
+--let $extra_mrs_router_id=1
+--source ../include/predefined_setup/configure_router_mrs_root.inc
+--source ../include/schema/basic_schema.sql
+
+--source ../include/mrs/start_object_definition.inc
+
+# The test uses HOST to have only paths in HREF fields.
+--let $mrs_add_service_path="/svc"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_schema=basic_schema
+--let $mrs_add_schema_path=/basic
+--source ../include/mrs/db_schema/add.inc
+
+--let $mrs_add_db_object=table1
+--let $mrs_add_db_object_path=/t1
+--let $mrs_add_db_object_options='{"logging":{"exceptions":true, "request":{"headers":true, "body":true}, "response":{"headers":true, "body":true}}}'
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_db_object=table4
+--let $mrs_add_db_object_path=/t4
+--let $mrs_add_db_object_options='{"logging":{"exceptions":true, "request":{"headers":true, "body":true}, "response":{"headers":true, "body":true}}}'
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_db_object=table2
+--let $mrs_add_db_object_path=/t2
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_db_object_type=PROCEDURE
+--let $mrs_add_db_object=proc_table4
+--let $mrs_add_db_object_path=/proc
+--source ../include/mrs/db_object/add.inc
+
+# Set cache size for files and data
+update mysql_rest_service_metadata.config set data = json_merge_patch(data, '{"responseCache":{"maxCacheSize":200}}');
+
+# Enable caching for t1 and proc
+update mysql_rest_service_metadata.db_object set options='{"cache_ttl":5}' where name='table1';
+update mysql_rest_service_metadata.db_object set options='{"cache_ttl":5}' where name='proc_table4';
+
+--source ../include/mrs/end_object_definition.inc
+
+--let $mrs_host_and_port=127.0.0.1:$HTTP_SERVER_PORT
+--let MRS_CLIENT_ARGS=$MRS_CLIENT --url https://$mrs_host_and_port
+
+--exec $MRS_CLIENT_ARGS --path /svc/basic/t1/1 --wait-until-found=60
+
+update performance_schema.setup_consumers set enabled=1 where name='events_statements_history'; 
+
+#
+# test that cached table is cached
+#
+select count(*) into @before from performance_schema.events_statements_history where sql_text like '%/svc/basic/t1%' and thread_id<>ps_current_thread_id();
+
+--exec $MRS_CLIENT_ARGS --path /svc/basic/t1/20
+
+select count(*), @before+1 from performance_schema.events_statements_history where sql_text like '%/svc/basic/t1%' and thread_id<>ps_current_thread_id();
+
+select IF(count(*)=@before+1,'PASS','FAIL') from performance_schema.events_statements_history where sql_text like '%/svc/basic/t1%' and thread_id<>ps_current_thread_id();
+
+--exec $MRS_CLIENT_ARGS --path /svc/basic/t1/20
+
+select IF(count(*)=@before+1,'PASS','FAIL') from performance_schema.events_statements_history where sql_text like '%/svc/basic/t1%' and thread_id<>ps_current_thread_id();
+
+#
+# test that uncached table is not cached
+#
+select count(*) into @before from performance_schema.events_statements_history where sql_text like '%/svc/basic/t2%' and thread_id<>ps_current_thread_id();
+--exec $MRS_CLIENT_ARGS --path /svc/basic/t2/1
+
+select IF(count(*)=@before+1,'PASS','FAIL') from performance_schema.events_statements_history where sql_text like '%/svc/basic/t2%' and thread_id<>ps_current_thread_id();
+
+--exec $MRS_CLIENT_ARGS --path /svc/basic/t2/1
+
+select IF(count(*)=@before+2,'PASS','FAIL') from performance_schema.events_statements_history where sql_text like '%/svc/basic/t2%' and thread_id<>ps_current_thread_id();
+
+#
+# test that cached SP is cached
+#
+--let $mrs_client_arg_path='/svc/basic/proc'
+--let $mrs_client_arg_request_type='PUT'
+--let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/svc/basic/proc'
+--let $mrs_client_arg_request_type='PUT'
+--let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
+
+# only 1 row is supposed to have been added
+select * from basic_schema.table4;
+
+# Cleanup
+--source ../include/mrs/cleanup.inc

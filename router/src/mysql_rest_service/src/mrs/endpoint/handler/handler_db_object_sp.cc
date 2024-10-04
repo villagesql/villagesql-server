@@ -196,8 +196,10 @@ static HttpResult handler_mysqlerror(const mysqlrouter::MySQLSession::Error &e,
 HandlerDbObjectSP::HandlerDbObjectSP(
     std::weak_ptr<DbObjectEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager,
-    mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache)
-    : HandlerDbObjectTable{endpoint, auth_manager, gtid_manager, cache} {}
+    mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache,
+    mrs::ResponseCache *response_cache, int64_t cache_ttl_ms)
+    : HandlerDbObjectTable{endpoint, auth_manager,   gtid_manager,
+                           cache,    response_cache, cache_ttl_ms} {}
 
 HttpResult HandlerDbObjectSP::handle_put(
     [[maybe_unused]] rest::RequestContext *ctxt) {
@@ -209,6 +211,17 @@ HttpResult HandlerDbObjectSP::handle_put(
   auto &input_buffer = ctxt->request->get_input_buffer();
   auto size = input_buffer.length();
   auto request_body = input_buffer.pop_front(size);
+
+  if (response_cache_) {
+    auto entry = response_cache_->lookup_routine(
+        ctxt->request->get_uri(),
+        {reinterpret_cast<const char *>(request_body.data()),
+         request_body.size()});
+    if (entry) {
+      Counter<kEntityCounterRestReturnedItems>::increment(entry->items);
+      return {std::string{entry->data}};
+    }
+  }
 
   rapidjson::Document doc;
   doc.Parse(reinterpret_cast<const char *>(request_body.data()),
@@ -279,6 +292,15 @@ HttpResult HandlerDbObjectSP::handle_put(
   } catch (const mysqlrouter::MySQLSession::Error &e) {
     return handler_mysqlerror(e, &db);
   }
+
+  if (response_cache_) {
+    auto entry = response_cache_->create_routine_entry(
+        url,
+        {reinterpret_cast<const char *>(request_body.data()),
+         request_body.size()},
+        db.response, db.items);
+  }
+
   return {std::move(db.response)};
 }
 

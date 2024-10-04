@@ -1,0 +1,136 @@
+/*
+  Copyright (c) 2024, Oracle and/or its affiliates.
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#ifndef ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_REST_RESPONSE_CACHE_H_
+#define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_REST_RESPONSE_CACHE_H_
+
+#include <atomic>
+#include <chrono>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <shared_mutex>
+#include <string>
+#include <unordered_map>
+#include "helper/media_type.h"
+#include "http/base/uri.h"
+namespace mrs {
+
+class EndpointResponseCache;
+
+struct CacheEntry {
+  using TimeType = std::chrono::time_point<std::chrono::system_clock>;
+
+  std::string data;
+  int64_t items = 0;
+  std::optional<helper::MediaType> media_type;
+  std::optional<std::string> media_type_str;
+
+  std::string key;
+  TimeType time_created;
+
+  EndpointResponseCache *owner;
+
+  std::shared_ptr<CacheEntry> next_ptr;
+  std::shared_ptr<CacheEntry> prev_ptr;
+};
+
+constexpr const size_t k_default_object_cache_size = 1000000;
+
+class ResponseCache {
+ public:
+  friend class EndpointResponseCache;
+
+  std::shared_ptr<EndpointResponseCache> create_endpoint_cache(int64_t ttl_ms);
+
+  void configure(const std::string &options);
+
+  size_t max_object_cache_size() const { return max_size_; }
+
+ private:
+  void push(std::shared_ptr<CacheEntry> entry);
+  void remove(std::shared_ptr<CacheEntry> entry);
+  void remove_nolock(std::shared_ptr<CacheEntry> entry);
+
+  void remove_all(EndpointResponseCache *cache);
+
+  void shrink_object_cache(size_t extra_size = 0);
+
+  std::shared_ptr<CacheEntry> newest_entry_;
+  std::shared_ptr<CacheEntry> oldest_entry_;
+  std::mutex entries_mutex_;
+  std::atomic<size_t> cache_size_ = 0;
+
+  std::atomic<size_t> max_size_ = k_default_object_cache_size;
+};
+
+class EndpointResponseCache {
+ public:
+  using Uri = ::http::base::Uri;
+
+  std::shared_ptr<CacheEntry> create_table_entry(const Uri &uri,
+                                                 const std::string &user_id,
+                                                 const std::string &data,
+                                                 int64_t items);
+
+  std::shared_ptr<CacheEntry> create_routine_entry(
+      const Uri &uri, std::string_view req_body, const std::string &data,
+      int64_t items, std::optional<helper::MediaType> media_type = {});
+
+  std::shared_ptr<CacheEntry> create_routine_entry(
+      const Uri &uri, std::string_view req_body, const std::string &data,
+      int64_t items, const std::string &media_type_str);
+
+  std::shared_ptr<CacheEntry> lookup_table(const Uri &uri,
+                                           const std::string &user_id);
+
+  std::shared_ptr<CacheEntry> lookup_routine(const Uri &uri,
+                                             std::string_view req_body);
+
+  EndpointResponseCache(ResponseCache *owner, int64_t ttl_ms);
+  ~EndpointResponseCache();
+
+ private:
+  std::shared_ptr<CacheEntry> create_entry(
+      const std::string &key, const std::string &data, int64_t items,
+      std::optional<helper::MediaType> media_type = {},
+      std::optional<std::string> media_type_str = {});
+
+  void remove_entry(std::shared_ptr<CacheEntry> entry);
+
+  std::shared_ptr<CacheEntry> lookup(const std::string &key);
+
+  friend class ResponseCache;
+
+  ResponseCache *owner_;
+
+  int64_t ttl_;
+
+  std::unordered_map<std::string, std::shared_ptr<CacheEntry>> cache_;
+  std::shared_mutex cache_mutex_;
+};
+
+}  // namespace mrs
+
+#endif  // ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_REST_RESPONSE_CACHE_H_

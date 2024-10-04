@@ -41,6 +41,7 @@
 #include "mrs/gtid_manager.h"
 #include "mrs/interface/query_monitor_factory.h"
 #include "mrs/observability/entities_manager.h"
+#include "mrs/rest/response_cache.h"
 
 namespace mrs {
 namespace database {
@@ -53,7 +54,8 @@ class SchemaMonitor {
                 authentication::AuthorizeManager *auth_manager,
                 mrs::observability::EntitiesManager *entities_manager,
                 mrs::GtidManager *gtid_manager,
-                mrs::database::QueryFactoryProxy *query_factory);
+                mrs::database::QueryFactoryProxy *query_factory,
+                mrs::ResponseCache *response_cache);
   ~SchemaMonitor();
 
   void start();
@@ -81,6 +83,7 @@ class SchemaMonitor {
   WaitableVariable<State> state_{k_initializing};
   Waitable waitable_{this};
   mrs::database::QueryFactoryProxy *proxy_query_factory_;
+  mrs::ResponseCache *response_cache_;
 };
 
 }  // namespace database

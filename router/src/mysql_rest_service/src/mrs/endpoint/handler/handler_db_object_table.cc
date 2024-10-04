@@ -250,7 +250,8 @@ using HttpResult = mrs::rest::Handler::HttpResult;
 HandlerDbObjectTable::HandlerDbObjectTable(
     std::weak_ptr<DbObjectEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager,
-    mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache)
+    mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache,
+    mrs::ResponseCache *response_cache, int64_t cache_ttl_ms)
     : Handler(get_endpoint_host(endpoint),
               /*regex-path: ^/service/schema/object(/...)?$*/
               {regex_path_db_object(lock(endpoint)->get_url_path())},
@@ -264,6 +265,10 @@ HandlerDbObjectTable::HandlerDbObjectTable(
   entry_ = ep->get();
   schema_entry_ = ep_parent->get();
   ownership_ = get_user_ownership(entry_->name, entry_->object_description);
+
+  if (cache_ttl_ms > 0 && response_cache) {
+    response_cache_ = response_cache->create_endpoint_cache(cache_ttl_ms);
+  }
 }
 
 void HandlerDbObjectTable::authorization(rest::RequestContext *ctxt) {
@@ -283,6 +288,17 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
   const bool opt_sp_include_links = get_options().result.include_links;
   const bool opt_encode_bigints_as_string =
       accepted_content_type == MediaType::typeXieee754ClientJson;
+  const auto row_ownership = row_ownership_info(ctxt, object);
+
+  if (response_cache_) {
+    auto entry = response_cache_->lookup_table(
+        ctxt->request->get_uri(),
+        row_ownership.enabled() ? row_ownership.owner_user_id() : "");
+    if (entry) {
+      Counter<kEntityCounterRestReturnedItems>::increment(entry->items);
+      return {std::string{entry->data}};
+    }
+  }
 
   Url uri_param(ctxt->request->get_uri());
 
@@ -336,14 +352,20 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
       do {
         query_retry.before_query();
         const bool is_default_limit = get_items_on_page() == limit;
-        rest.query_entries(query_retry.get_session(), object, field_filter,
-                           offset, limit, endpoint->get_url().join(),
-                           is_default_limit, row_ownership_info(ctxt, object),
-                           query_retry.get_fog(),
-                           !field_filter.is_filter_configured());
+        rest.query_entries(
+            query_retry.get_session(), object, field_filter, offset, limit,
+            endpoint->get_url().join(), is_default_limit, row_ownership,
+            query_retry.get_fog(), !field_filter.is_filter_configured());
       } while (query_retry.should_retry(rest.items));
 
       Counter<kEntityCounterRestReturnedItems>::increment(rest.items);
+
+      if (response_cache_) {
+        response_cache_->create_table_entry(
+            ctxt->request->get_uri(),
+            row_ownership.enabled() ? row_ownership.owner_user_id() : "",
+            rest.response, rest.items);
+      }
 
       return std::move(rest.response);
     }
@@ -367,11 +389,17 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
       log_debug("Rest select single row %s",
                 database::dv::format_key(*object, pk).str().c_str());
       rest.query_entry(session.get(), object, pk, field_filter,
-                       endpoint->get_url().join(),
-                       row_ownership_info(ctxt, object), true);
+                       endpoint->get_url().join(), row_ownership, true);
 
       if (rest.response.empty()) throw http::Error(HttpStatusCode::NotFound);
       Counter<kEntityCounterRestReturnedItems>::increment(rest.items);
+
+      if (response_cache_) {
+        response_cache_->create_table_entry(
+            ctxt->request->get_uri(),
+            row_ownership.enabled() ? row_ownership.owner_user_id() : "",
+            rest.response, rest.items);
+      }
 
       return std::move(rest.response);
     }

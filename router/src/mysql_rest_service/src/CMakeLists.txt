@@ -199,6 +199,7 @@ ADD_STATIC_LIBRARY(mysql_rest_service_impl
   mrs/rest/handler_string.cc
   mrs/rest/handler_is_authorized.cc
   mrs/rest/handler_unauthorize.cc
+  mrs/rest/response_cache.cc
   mrs/monitored/gtid_functions.cc
   mrs/monitored/query_retry_on_ro.cc
 

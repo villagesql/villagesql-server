@@ -151,9 +151,13 @@ struct MrdsModule {
   mrs::GtidManager gtid_manager;
   mrs::authentication::AuthorizeManager authentication{
       &mysql_connection_cache, configuration.jwt_secret_};
+  mrs::ResponseCache response_cache;
   mrs::EndpointManager mrds_object_manager{&mysql_connection_cache,
                                            configuration.is_https_,
-                                           &authentication, &gtid_manager};
+                                           &authentication,
+                                           &gtid_manager,
+                                           nullptr,
+                                           &response_cache};
   mrs::observability::EntitiesManager entities_manager;
 
   /**
@@ -165,7 +169,7 @@ struct MrdsModule {
   mrs::database::SchemaMonitor mrds_monitor{
       configuration,   &mysql_connection_cache, &mrds_object_manager,
       &authentication, &entities_manager,       &gtid_manager,
-      &query_factory};
+      &query_factory,  &response_cache};
 };
 
 static std::string get_router_name(const mysql_harness::Config *config) {

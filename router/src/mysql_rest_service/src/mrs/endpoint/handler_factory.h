@@ -30,6 +30,7 @@
 #include "collector/mysql_cache_manager.h"
 #include "mrs/interface/authorize_manager.h"
 #include "mrs/interface/handler_factory.h"
+#include "mrs/rest/response_cache.h"
 
 namespace mrs {
 namespace endpoint {
@@ -40,7 +41,8 @@ class HandlerFactory : public mrs::interface::HandlerFactory {
 
  public:
   HandlerFactory(AuthorizeManager *auth_manager, GtidManager *gtid_manager,
-                 MysqlCacheManager *cache_manager);
+                 MysqlCacheManager *cache_manager,
+                 ResponseCache *response_cache);
 
   std::unique_ptr<Handler> create_db_service_metadata_handler(
       EndpointBasePtr db_service_endpoint) override;
@@ -73,6 +75,7 @@ class HandlerFactory : public mrs::interface::HandlerFactory {
   AuthorizeManager *auth_manager_;
   GtidManager *gtid_manager_;
   MysqlCacheManager *cache_manager_;
+  ResponseCache *response_cache_;
 };
 
 }  // namespace endpoint

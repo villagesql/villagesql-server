@@ -42,6 +42,7 @@
 #include "mrs/interface/authorize_manager.h"
 #include "mrs/interface/endpoint_base.h"
 #include "mrs/interface/endpoint_manager.h"
+#include "mrs/rest/response_cache.h"
 
 namespace mrs {
 
@@ -54,12 +55,14 @@ class EndpointManager : public mrs::interface::EndpointManager {
   using EndpointBasePtr = std::shared_ptr<EndpointBase>;
   using EndpointFactory = mrs::endpoint::EndpointFactory;
   using EndpointFactoryPtr = std::shared_ptr<EndpointFactory>;
+  using ResponseCache = mrs::ResponseCache;
 
  public:
   EndpointManager(collector::MysqlCacheManager *cache, const bool is_ssl,
                   mrs::interface::AuthorizeManager *auth_manager,
                   mrs::GtidManager *gtid_manager,
-                  EndpointFactoryPtr endpoint_factory = {});
+                  EndpointFactoryPtr endpoint_factory = {},
+                  ResponseCache *response_cache = {});
 
   void configure(const std::optional<std::string> &options) override;
 
@@ -88,6 +91,7 @@ class EndpointManager : public mrs::interface::EndpointManager {
   mrs::GtidManager *gtid_manager_;
   std::vector<std::shared_ptr<interface::RestHandler>> custom_paths_;
   std::shared_ptr<EndpointFactory> endpoint_factory_;
+  ResponseCache *response_cache_;
 };
 
 }  // namespace mrs

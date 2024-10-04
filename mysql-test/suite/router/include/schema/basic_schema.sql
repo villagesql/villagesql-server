@@ -105,6 +105,12 @@ BEGIN
    select 3, "ccc","DDD", CONVERT("1977-11-08",DATETIME);
 END;$$
 
+CREATE PROCEDURE `basic_schema`.`proc_table4` ()
+BEGIN
+   INSERT INTO `basic_schema`.`table4` VALUES (DEFAULT, 'NEW ROW', 'NEW ROW', NULL);
+END;$$
+
+
 CREATE PROCEDURE proc_int()
 BEGIN
   SELECT id FROM `basic_schema`.`table3`;

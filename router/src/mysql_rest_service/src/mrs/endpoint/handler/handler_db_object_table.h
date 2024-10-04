@@ -36,6 +36,7 @@
 #include "mrs/endpoint/db_object_endpoint.h"
 #include "mrs/gtid_manager.h"
 #include "mrs/rest/handler.h"
+#include "mrs/rest/response_cache.h"
 
 namespace mrs {
 namespace endpoint {
@@ -48,12 +49,15 @@ class HandlerDbObjectTable : public mrs::rest::Handler {
   using DbObjectPtr = std::shared_ptr<DbObject>;
   using DbSchemaPtr = std::shared_ptr<DbSchema>;
   using DbObjectEndpoint = mrs::endpoint::DbObjectEndpoint;
+  using EndpointResponseCachePtr = std::shared_ptr<mrs::EndpointResponseCache>;
 
  public:
   HandlerDbObjectTable(std::weak_ptr<DbObjectEndpoint> endpoint,
                        mrs::interface::AuthorizeManager *auth_manager,
                        mrs::GtidManager *gtid_manager = nullptr,
-                       collector::MysqlCacheManager *cache = nullptr);
+                       collector::MysqlCacheManager *cache = nullptr,
+                       mrs::ResponseCache *response_cache = nullptr,
+                       int64_t cache_ttl_ms = 0);
 
   Authorization requires_authentication() const override;
   UniversalId get_service_id() const override;
@@ -82,6 +86,7 @@ class HandlerDbObjectTable : public mrs::rest::Handler {
   DbObjectPtr entry_;
   DbSchemaPtr schema_entry_;
   mrs::database::entry::RowUserOwnership ownership_;
+  EndpointResponseCachePtr response_cache_;
 };
 
 }  // namespace handler

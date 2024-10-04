@@ -72,6 +72,8 @@ struct DbObject {
   std::shared_ptr<Object> object_description;
 
   bool deleted{false};
+
+  std::optional<uint64_t> option_cache_ttl_ms;
 };
 
 }  // namespace entry

@@ -89,8 +89,10 @@ static CachedObject get_session(::mysqlrouter::MySQLSession *,
 HandlerDbObjectFunction::HandlerDbObjectFunction(
     std::weak_ptr<DbObjectEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager,
-    mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache)
-    : HandlerDbObjectTable{endpoint, auth_manager, gtid_manager, cache} {}
+    mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache,
+    mrs::ResponseCache *response_cache, int64_t cache_ttl_ms)
+    : HandlerDbObjectTable{endpoint, auth_manager,   gtid_manager,
+                           cache,    response_cache, cache_ttl_ms} {}
 
 HttpResult HandlerDbObjectFunction::handle_delete(
     [[maybe_unused]] rest::RequestContext *ctxt) {
@@ -136,6 +138,22 @@ HttpResult HandlerDbObjectFunction::handle_put(
   // TODO(lkotula): New api doesn't have inputbuffer, it has string (Shouldn't
   // be in review)
   auto data = input_buffer.pop_front(input_buffer.length());
+
+  if (response_cache_) {
+    auto entry = response_cache_->lookup_routine(
+        ctxt->request->get_uri(),
+        {reinterpret_cast<const char *>(data.data()), data.size()});
+    if (entry) {
+      Counter<kEntityCounterRestReturnedItems>::increment(entry->items);
+      if (entry->media_type.has_value())
+        return {std::string{entry->data}, entry->media_type.value()};
+      else if (entry->media_type_str.has_value())
+        return {std::string{entry->data}, entry->media_type_str.value()};
+      else
+        return {std::string{entry->data}};
+    }
+  }
+
   auto obj = entry_->object_description;
   auto values = database::create_function_argument_list(
       obj.get(), data, ownership_,
@@ -169,6 +187,13 @@ HttpResult HandlerDbObjectFunction::handle_put(
       }
       db.serialize_response(custom_metadata);
 
+      if (response_cache_) {
+        auto entry = response_cache_->create_routine_entry(
+            ctxt->request->get_uri(),
+            {reinterpret_cast<const char *>(data.data()), data.size()},
+            db.response, db.items);
+      }
+
       return {std::move(db.response)};
     }
 
@@ -186,11 +211,32 @@ HttpResult HandlerDbObjectFunction::handle_put(
     helper::MediaDetector md;
     auto detected_type = md.detect(db.response);
 
+    if (response_cache_) {
+      auto entry = response_cache_->create_routine_entry(
+          ctxt->request->get_uri(),
+          {reinterpret_cast<const char *>(data.data()), data.size()},
+          db.response, db.items, detected_type);
+    }
+
     return {std::move(db.response), detected_type};
   }
 
   if (entry_->media_type.has_value()) {
+    if (response_cache_) {
+      response_cache_->create_routine_entry(
+          ctxt->request->get_uri(),
+          {reinterpret_cast<const char *>(data.data()), data.size()},
+          db.response, db.items, entry_->media_type.value());
+    }
+
     return {std::move(db.response), entry_->media_type.value()};
+  }
+
+  if (response_cache_) {
+    auto entry = response_cache_->create_routine_entry(
+        ctxt->request->get_uri(),
+        {reinterpret_cast<const char *>(data.data()), data.size()}, db.response,
+        db.items, helper::MediaType::typeUnknownBinary);
   }
 
   return {std::move(db.response), helper::MediaType::typeUnknownBinary};
