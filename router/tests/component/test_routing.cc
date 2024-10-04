@@ -2230,7 +2230,7 @@ TEST_F(RouterRoutingTest, NoAcceptExternalConnections) {
 
   TempDirectory conf_dir("conf");
   std::string conf_file = create_config_file(conf_dir.name(), routing_section);
-  auto &router = launch_router({"-c", conf_file});
+  launch_router({"-c", conf_file});
 }
 
 /**
