@@ -28,13 +28,7 @@
 #include <algorithm>  // remove_if
 #include <mutex>      // lock_guard
 #include <stdexcept>  // out_of_range
-#include <system_error>
-
-#include "destination_error.h"
-#include "mysqlrouter/routing.h"
-#include "tcp_address.h"
-
-using mysql_harness::TCPAddress;
+#include "mysql/harness/destination.h"
 
 // class DestinationNodesStateNotifier
 
@@ -107,41 +101,29 @@ std::string DestinationNodesStateNotifier::get_dynamic_plugin_name() {
 
 // class RouteDestination
 
-void RouteDestination::add(const TCPAddress dest) {
+void RouteDestination::add(const mysql_harness::Destination &dest) {
   auto dest_end = destinations_.end();
 
-  auto compare = [&dest](TCPAddress &other) { return dest == other; };
-
-  if (std::find_if(destinations_.begin(), dest_end, compare) == dest_end) {
+  if (std::find(destinations_.begin(), dest_end, dest) == dest_end) {
     std::lock_guard<std::mutex> lock(mutex_update_);
     destinations_.push_back(dest);
   }
 }
 
-void RouteDestination::add(const std::string &address, uint16_t port) {
-  add(TCPAddress(address, port));
-}
-
-void RouteDestination::remove(const std::string &address, uint16_t port) {
-  TCPAddress to_remove(address, port);
+void RouteDestination::remove(const mysql_harness::Destination &dest) {
   std::lock_guard<std::mutex> lock(mutex_update_);
 
-  auto func_same = [&to_remove](TCPAddress a) {
-    return (a.address() == to_remove.address() && a.port() == to_remove.port());
-  };
   destinations_.erase(
-      std::remove_if(destinations_.begin(), destinations_.end(), func_same),
+      std::remove(destinations_.begin(), destinations_.end(), dest),
       destinations_.end());
 }
 
-TCPAddress RouteDestination::get(const std::string &address, uint16_t port) {
-  TCPAddress needle(address, port);
-  for (auto &it : destinations_) {
-    if (it == needle) {
-      return it;
-    }
+mysql_harness::Destination RouteDestination::get(
+    const mysql_harness::Destination &dest) {
+  for (const auto &it : destinations_) {
+    if (it == dest) return dest;
   }
-  throw std::out_of_range("Destination " + needle.str() + " not found");
+  throw std::out_of_range("Destination " + dest.str() + " not found");
 }
 
 size_t RouteDestination::size() noexcept { return destinations_.size(); }
@@ -154,7 +136,7 @@ void RouteDestination::clear() {
   destinations_.clear();
 }
 
-std::vector<mysql_harness::TCPAddress> RouteDestination::get_destinations()
+std::vector<mysql_harness::Destination> RouteDestination::get_destinations()
     const {
   return destinations_;
 }

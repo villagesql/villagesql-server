@@ -28,19 +28,14 @@
 
 #include "mysqlrouter/metadata_cache_export.h"
 
-#include <algorithm>
 #include <atomic>
 #include <chrono>
 #include <ctime>
-#include <future>
 #include <memory>
 #include <mutex>
 #include <set>
 #include <string>
-#include <thread>
 
-#include "gr_notifications_listener.h"
-#include "mysql/harness/logging/logging.h"
 #include "mysql/harness/stdx/monitor.h"
 #include "mysql_router_thread.h"
 #include "mysqlrouter/metadata.h"
@@ -76,7 +71,7 @@ class METADATA_CACHE_EXPORT MetadataCache
    */
   MetadataCache(
       const unsigned router_id, const std::string &clusterset_id,
-      const std::vector<mysql_harness::TCPAddress> &metadata_servers,
+      const std::vector<mysql_harness::TcpDestination> &metadata_servers,
       std::shared_ptr<MetaData> cluster_metadata,
       const metadata_cache::MetadataCacheTTLConfig &ttl_config,
       const mysqlrouter::SSLOptions &ssl_options,
@@ -213,8 +208,6 @@ class METADATA_CACHE_EXPORT MetadataCache
   mysqlrouter::TargetCluster target_cluster() const { return target_cluster_; }
 
   virtual mysqlrouter::ClusterType cluster_type() const noexcept = 0;
-
-  std::vector<mysql_harness::TCPAddress> metadata_servers();
 
   void enable_fetch_auth_metadata() { auth_metadata_fetch_enabled_ = true; }
 

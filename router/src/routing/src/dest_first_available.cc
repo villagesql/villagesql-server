@@ -32,13 +32,14 @@
 #include <string>
 #include <system_error>  // error_code
 
+#include "mysql/harness/destination.h"
 #include "mysqlrouter/destination.h"
 
 class FirstAvailableDestination : public Destination {
  public:
-  FirstAvailableDestination(std::string id, std::string hostname, uint16_t port,
+  FirstAvailableDestination(std::string id, mysql_harness::Destination dest,
                             DestFirstAvailable *balancer, size_t ndx)
-      : Destination(std::move(id), std::move(hostname), port),
+      : Destination(std::move(id), std::move(dest)),
         balancer_{balancer},
         ndx_{ndx} {}
 
@@ -77,13 +78,13 @@ Destinations DestFirstAvailable::destinations() {
 
     for (size_t ndx{valid_ndx_}; cur != end; ++cur, ++ndx) {
       dests.push_back(std::make_unique<FirstAvailableDestination>(
-          cur->str(), cur->address(), cur->port(), this, ndx));
+          cur->str(), *cur, this, ndx));
     }
 
     cur = begin;
     for (size_t ndx{0}; cur != last; ++cur, ++ndx) {
       dests.push_back(std::make_unique<FirstAvailableDestination>(
-          cur->str(), cur->address(), cur->port(), this, ndx));
+          cur->str(), *cur, this, ndx));
     }
   }
 

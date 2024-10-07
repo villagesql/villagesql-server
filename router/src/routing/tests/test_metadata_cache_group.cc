@@ -32,11 +32,11 @@
 #include <gmock/gmock.h>
 
 #include "destination.h"
+#include "mysql/harness/destination.h"
 #include "mysqlrouter/destination.h"
 #include "mysqlrouter/metadata_cache.h"
 #include "router_test_helpers.h"  // ASSERT_THROW_LIKE
-#include "tcp_address.h"
-#include "test/helpers.h"  // init_test_logger
+#include "test/helpers.h"         // init_test_logger
 
 using metadata_cache::ServerMode;
 using metadata_cache::ServerRole;
@@ -50,11 +50,11 @@ using namespace std::chrono_literals;
 constexpr auto GR = mysqlrouter::InstanceType::GroupMember;
 
 bool operator==(const Destinations::value_type &a, const Destination &b) {
-  return a->hostname() == b.hostname() && a->port() == b.port();
+  return a->destination() == b.destination();
 }
 
 std::ostream &operator<<(std::ostream &os, const Destination &v) {
-  os << "(host: " << v.hostname() << ", port: " << v.port() << ")";
+  os << "(" << v.destination().str() << ")";
   return os;
 }
 
@@ -125,7 +125,7 @@ class MetadataCacheAPIStub : public metadata_cache::MetadataCacheAPIBase {
   void cache_init(
       const mysqlrouter::ClusterType /*cluster_type*/, unsigned /*router_id*/,
       const std::string & /*clusterset_id*/,
-      const std::vector<mysql_harness::TCPAddress> & /*metadata_servers*/,
+      const std::vector<mysql_harness::TcpDestination> & /*metadata_servers*/,
       const metadata_cache::MetadataCacheTTLConfig & /*ttl_config*/,
       const mysqlrouter::SSLOptions & /*ssl_options*/,
       const mysqlrouter::TargetCluster & /*target_cluster*/,
@@ -218,17 +218,21 @@ TEST_F(DestMetadataCacheTest, StrategyFirstAvailableOnPrimaries) {
 
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3306", "3306", 3306),
-                                       Destination("3307", "3307", 3307)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3306", mysql_harness::TcpDestination("3306", 3306)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307))));
   }
 
   // first available should not change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3306", "3306", 3306),
-                                       Destination("3307", "3307", 3307)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3306", mysql_harness::TcpDestination("3306", 3306)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307))));
   }
 }
 
@@ -252,14 +256,16 @@ TEST_F(DestMetadataCacheTest, StrategyFirstAvailableOnSinglePrimary) {
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3306", "3306", 3306)));
+                ::testing::ElementsAre(Destination(
+                    "3306", mysql_harness::TcpDestination("3306", 3306))));
   }
 
   // first available should not change the order.
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3306", "3306", 3306)));
+                ::testing::ElementsAre(Destination(
+                    "3306", mysql_harness::TcpDestination("3306", 3306))));
   }
 }
 
@@ -311,17 +317,21 @@ TEST_F(DestMetadataCacheTest, StrategyFirstAvailableOnSecondaries) {
   // two SECONDARY's
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 
   // first available should not change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 }
 
@@ -345,14 +355,16 @@ TEST_F(DestMetadataCacheTest, StrategyFirstAvailableOnSingleSecondary) {
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3308", "3308", 3308)));
+                ::testing::ElementsAre(Destination(
+                    "3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 
   // first available should not change the order.
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3308", "3308", 3308)));
+                ::testing::ElementsAre(Destination(
+                    "3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 }
 
@@ -405,19 +417,23 @@ TEST_F(DestMetadataCacheTest, StrategyFirstAvailablePrimaryAndSecondary) {
   // all nodes
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3306", "3306", 3306),
-                                       Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3306", mysql_harness::TcpDestination("3306", 3306)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 
   // first available should not change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3306", "3306", 3306),
-                                       Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3306", mysql_harness::TcpDestination("3306", 3306)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 }
 
@@ -440,25 +456,31 @@ TEST_F(DestMetadataCacheTest, StrategyRoundRobinWithFallbackUnavailableServer) {
   // all available nodes
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 
   // round-robin-with-fallback should change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3308", "3308", 3308),
-                                       Destination("3307", "3307", 3307)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307))));
   }
 
   // round-robin-with-fallback should change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 }
 
@@ -486,37 +508,45 @@ TEST_F(DestMetadataCacheTest, StrategyRoundRobinOnPrimaries) {
   // all PRIMARY nodes
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3306", "3306", 3306),
-                                       Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3306", mysql_harness::TcpDestination("3306", 3306)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 
   // round-robin should change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308),
-                                       Destination("3306", "3306", 3306)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308)),
+            Destination("3306", mysql_harness::TcpDestination("3306", 3306))));
   }
 
   // round-robin should change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3308", "3308", 3308),
-                                       Destination("3306", "3306", 3306),
-                                       Destination("3307", "3307", 3307)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308)),
+            Destination("3306", mysql_harness::TcpDestination("3306", 3306)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307))));
   }
 
   // round-robin should change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3306", "3306", 3306),
-                                       Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3306", mysql_harness::TcpDestination("3306", 3306)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 }
 
@@ -540,14 +570,16 @@ TEST_F(DestMetadataCacheTest, StrategyRoundRobinOnSinglePrimary) {
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3306", "3306", 3306)));
+                ::testing::ElementsAre(Destination(
+                    "3306", mysql_harness::TcpDestination("3306", 3306))));
   }
 
   // still the same
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3306", "3306", 3306)));
+                ::testing::ElementsAre(Destination(
+                    "3306", mysql_harness::TcpDestination("3306", 3306))));
   }
 }
 
@@ -599,37 +631,45 @@ TEST_F(DestMetadataCacheTest, StrategyRoundRobinOnSecondaries) {
   // all SECONDARY nodes
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308),
-                                       Destination("3309", "3309", 3309)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308)),
+            Destination("3309", mysql_harness::TcpDestination("3309", 3309))));
   }
 
   // round-robin should change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3308", "3308", 3308),
-                                       Destination("3309", "3309", 3309),
-                                       Destination("3307", "3307", 3307)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308)),
+            Destination("3309", mysql_harness::TcpDestination("3309", 3309)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307))));
   }
 
   // round-robin should change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3309", "3309", 3309),
-                                       Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3309", mysql_harness::TcpDestination("3309", 3309)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 
   // round-robin should change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308),
-                                       Destination("3309", "3309", 3309)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308)),
+            Destination("3309", mysql_harness::TcpDestination("3309", 3309))));
   }
 }
 
@@ -653,14 +693,16 @@ TEST_F(DestMetadataCacheTest, StrategyRoundRobinOnSingleSecondary) {
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3308", "3308", 3308)));
+                ::testing::ElementsAre(Destination(
+                    "3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 
   // still the same
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3308", "3308", 3308)));
+                ::testing::ElementsAre(Destination(
+                    "3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 }
 
@@ -699,17 +741,38 @@ TEST_F(DestMetadataCacheTest, StrategyRoundRobinPrimaryAndSecondary) {
           .query,
       BaseProtocol::Type::kClassicProtocol, &metadata_cache_api_);
 
-  Destination w1("W1", "W1", 3307);
-  Destination r1("R1", "R1", 3308);
-  Destination r2("R2", "R2", 3309);
+  Destination w1("W1", mysql_harness::TcpDestination("W1", 3307));
+  Destination r1("R1", mysql_harness::TcpDestination("R1", 3308));
+  Destination r2("R2", mysql_harness::TcpDestination("R2", 3309));
 
   fill_instance_vector({
-      {GR, "uuid1", ServerMode::ReadWrite, ServerRole::Primary, w1.hostname(),
-       w1.port(), 33061},
-      {GR, "uuid2", ServerMode::ReadOnly, ServerRole::Secondary, r1.hostname(),
-       r1.port(), 33062},
-      {GR, "uuid3", ServerMode::ReadOnly, ServerRole::Secondary, r2.hostname(),
-       r2.port(), 33063},
+      {
+          GR,
+          "uuid1",
+          ServerMode::ReadWrite,
+          ServerRole::Primary,
+          w1.destination().as_tcp().hostname(),
+          w1.destination().as_tcp().port(),
+          33061,
+      },
+      {
+          GR,
+          "uuid2",
+          ServerMode::ReadOnly,
+          ServerRole::Secondary,
+          r1.destination().as_tcp().hostname(),
+          r1.destination().as_tcp().port(),
+          33062,
+      },
+      {
+          GR,
+          "uuid3",
+          ServerMode::ReadOnly,
+          ServerRole::Secondary,
+          r2.destination().as_tcp().hostname(),
+          r2.destination().as_tcp().port(),
+          33063,
+      },
   });
 
   // all nodes
@@ -746,25 +809,31 @@ TEST_F(DestMetadataCacheTest, StrategyRoundRobinWithFallbackBasicScenario) {
   // we have 2 SECONDARIES up so we expect round robin on them
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 
   // round-robin-with-fallback should change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3308", "3308", 3308),
-                                       Destination("3307", "3307", 3307)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307))));
   }
 
   // round-robin-with-fallback should change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 }
 
@@ -789,14 +858,16 @@ TEST_F(DestMetadataCacheTest, StrategyRoundRobinWithFallbackSingleSecondary) {
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3308", "3308", 3308)));
+                ::testing::ElementsAre(Destination(
+                    "3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 
   // round-robin-with-fallback should change the order.
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3308", "3308", 3308)));
+                ::testing::ElementsAre(Destination(
+                    "3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 }
 
@@ -817,17 +888,21 @@ TEST_F(DestMetadataCacheTest, StrategyRoundRobinWithFallbackNoSecondary) {
   // no SECONDARY available so we expect round-robin on PRIAMRIES
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3306", "3306", 3306),
-                                       Destination("3307", "3307", 3307)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3306", mysql_harness::TcpDestination("3306", 3306)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307))));
   }
 
   // round-robin-with-fallback should change the order.
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3307", "3307", 3307),
-                                       Destination("3306", "3306", 3306)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3306", mysql_harness::TcpDestination("3306", 3306))));
   }
 }
 
@@ -866,25 +941,31 @@ TEST_F(DestMetadataCacheTest, PrimaryDefault) {
   // default for PRIMARY should be round-robin on ReadWrite servers
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3306", "3306", 3306),
-                                       Destination("3307", "3307", 3307)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3306", mysql_harness::TcpDestination("3306", 3306)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307))));
   }
 
   // .. rotate
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3307", "3307", 3307),
-                                       Destination("3306", "3306", 3306)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3306", mysql_harness::TcpDestination("3306", 3306))));
   }
 
   // ... and back
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3306", "3306", 3306),
-                                       Destination("3307", "3307", 3307)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3306", mysql_harness::TcpDestination("3306", 3306)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307))));
   }
 }
 
@@ -907,25 +988,31 @@ TEST_F(DestMetadataCacheTest, SecondaryDefault) {
   // default for SECONDARY should be round-robin on ReadOnly servers
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 
   // .. rotate
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3308", "3308", 3308),
-                                       Destination("3307", "3307", 3307)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308)),
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307))));
   }
 
   // ... and back
   {
     auto actual = dest.destinations();
-    EXPECT_THAT(actual,
-                ::testing::ElementsAre(Destination("3307", "3307", 3307),
-                                       Destination("3308", "3308", 3308)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("3307", mysql_harness::TcpDestination("3307", 3307)),
+            Destination("3308", mysql_harness::TcpDestination("3308", 3308))));
   }
 }
 
@@ -937,17 +1024,38 @@ TEST_F(DestMetadataCacheTest, PrimaryAndSecondaryDefault) {
           .query,
       BaseProtocol::Type::kClassicProtocol, &metadata_cache_api_);
 
-  Destination w1("W1", "W1", 3306);
-  Destination r1("R1", "R1", 3307);
-  Destination r2("R2", "R2", 3308);
+  Destination w1("W1", mysql_harness::TcpDestination("W1", 3306));
+  Destination r1("R1", mysql_harness::TcpDestination("R1", 3307));
+  Destination r2("R2", mysql_harness::TcpDestination("R2", 3308));
 
   fill_instance_vector({
-      {GR, "uuid1", ServerMode::ReadWrite, ServerRole::Primary, w1.hostname(),
-       w1.port(), 33060},
-      {GR, "uuid2", ServerMode::ReadOnly, ServerRole::Secondary, r1.hostname(),
-       r1.port(), 33061},
-      {GR, "uuid3", ServerMode::ReadOnly, ServerRole::Secondary, r2.hostname(),
-       r2.port(), 33062},
+      {
+          GR,
+          "uuid1",
+          ServerMode::ReadWrite,
+          ServerRole::Primary,
+          w1.destination().as_tcp().hostname(),
+          w1.destination().as_tcp().port(),
+          33060,
+      },
+      {
+          GR,
+          "uuid2",
+          ServerMode::ReadOnly,
+          ServerRole::Secondary,
+          r1.destination().as_tcp().hostname(),
+          r1.destination().as_tcp().port(),
+          33061,
+      },
+      {
+          GR,
+          "uuid3",
+          ServerMode::ReadOnly,
+          ServerRole::Secondary,
+          r2.destination().as_tcp().hostname(),
+          r2.destination().as_tcp().port(),
+          33062,
+      },
   });
 
   // default for PRIMARY_AND_SECONDARY should be round-robin on ReadOnly and
@@ -1062,12 +1170,12 @@ TEST_F(DestMetadataCacheTest, AllowedNodes2Primaries) {
     ASSERT_THAT(
         nodes,
         ::testing::ElementsAre(
-            ::testing::Field(&AvailableDestination::address,
-                             mysql_harness::TCPAddress{instances[0].host,
-                                                       instances[0].port}),
-            ::testing::Field(&AvailableDestination::address,
-                             mysql_harness::TCPAddress{instances[1].host,
-                                                       instances[1].port})));
+            ::testing::Field(&AvailableDestination::destination,
+                             mysql_harness::TcpDestination{instances[0].host,
+                                                           instances[0].port}),
+            ::testing::Field(&AvailableDestination::destination,
+                             mysql_harness::TcpDestination{
+                                 instances[1].host, instances[1].port})));
 
     ASSERT_TRUE(disconnect);
     ASSERT_STREQ("metadata change", disconnect_reason.c_str());
@@ -1118,11 +1226,10 @@ TEST_F(DestMetadataCacheTest, AllowedNodesNoSecondaries) {
     // no secondaries and we are role=SECONDARY
     // by default we allow existing connections to the primary so it should
     // be in the allowed nodes
-    ASSERT_THAT(
-        nodes,
-        ::testing::ElementsAre(::testing::Field(
-            &AvailableDestination::address,
-            mysql_harness::TCPAddress{instances[0].host, instances[0].port})));
+    ASSERT_THAT(nodes, ::testing::ElementsAre(::testing::Field(
+                           &AvailableDestination::destination,
+                           mysql_harness::TcpDestination{instances[0].host,
+                                                         instances[0].port})));
     ASSERT_TRUE(disconnect);
     ASSERT_STREQ("metadata change", disconnect_reason.c_str());
     callback_called = true;
@@ -1171,11 +1278,10 @@ TEST_F(DestMetadataCacheTest, AllowedNodesSecondaryDisconnectToPromoted) {
     // one secondary and we are role=SECONDARY
     // we have disconnect_on_promoted_to_primary=yes configured so primary is
     // not allowed
-    ASSERT_THAT(
-        nodes,
-        ::testing::ElementsAre(::testing::Field(
-            &AvailableDestination::address,
-            mysql_harness::TCPAddress{instances[1].host, instances[1].port})));
+    ASSERT_THAT(nodes, ::testing::ElementsAre(::testing::Field(
+                           &AvailableDestination::destination,
+                           mysql_harness::TcpDestination{instances[1].host,
+                                                         instances[1].port})));
     ASSERT_TRUE(disconnect);
     ASSERT_STREQ("metadata change", disconnect_reason.c_str());
     callback_called = true;
@@ -1230,11 +1336,10 @@ TEST_F(DestMetadataCacheTest, AllowedNodesSecondaryDisconnectToPromotedTwice) {
     // one secondary and we are role=SECONDARY
     // disconnect_on_promoted_to_primary=yes overrides previous value in
     // configuration so primary is not allowed
-    ASSERT_THAT(
-        nodes,
-        ::testing::ElementsAre(::testing::Field(
-            &AvailableDestination::address,
-            mysql_harness::TCPAddress{instances[1].host, instances[1].port})));
+    ASSERT_THAT(nodes, ::testing::ElementsAre(::testing::Field(
+                           &AvailableDestination::destination,
+                           mysql_harness::TcpDestination{instances[1].host,
+                                                         instances[1].port})));
     ASSERT_TRUE(disconnect);
     ASSERT_STREQ("metadata change", disconnect_reason.c_str());
     callback_called = true;

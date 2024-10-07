@@ -28,6 +28,7 @@
 #include <string>
 #include <system_error>  // error_code
 
+#include "mysql/harness/destination.h"
 #include "mysql/harness/logging/logging.h"
 #include "mysql/harness/stdx/expected.h"
 #include "mysql/harness/tls_error.h"
@@ -41,9 +42,8 @@ stdx::expected<void, std::error_code> ConnectorBase::init_destination() {
   if (destinations_it_ != destinations_.end()) {
     const auto &destination = *destinations_it_;
 
-    return is_destination_good(destination->hostname(), destination->port())
-               ? resolve()
-               : next_destination();
+    return is_destination_good(destination->destination()) ? resolve()
+                                                           : next_destination();
   } else {
     // no backends
     log_warning("%d: no connectable destinations :(", __LINE__);
@@ -58,18 +58,32 @@ stdx::expected<void, std::error_code> ConnectorBase::resolve() {
     return next_destination();
   }
 
-  const auto resolve_res = resolver_.resolve(
-      destination->hostname(), std::to_string(destination->port()));
+  if (destination->destination().is_tcp()) {
+    auto tcp_dest = destination->destination().as_tcp();
 
-  if (!resolve_res) {
-    destination->connect_status(resolve_res.error());
+    const auto resolve_res =
+        resolver_.resolve(tcp_dest.hostname(), std::to_string(tcp_dest.port()));
 
-    log_warning("%d: resolve() failed: %s", __LINE__,
-                resolve_res.error().message().c_str());
-    return next_destination();
+    if (!resolve_res) {
+      destination->connect_status(resolve_res.error());
+
+      log_warning("%d: resolve() failed: %s", __LINE__,
+                  resolve_res.error().message().c_str());
+      return next_destination();
+    }
+
+    endpoints_.clear();
+
+    for (const auto &ep : *resolve_res) {
+      endpoints_.emplace_back(
+          mysql_harness::DestinationEndpoint::TcpType(ep.endpoint()));
+    }
+  } else {
+    endpoints_.clear();
+
+    endpoints_.emplace_back(mysql_harness::DestinationEndpoint::LocalType(
+        destination->destination().as_local().path()));
   }
-
-  endpoints_ = resolve_res.value();
 
 #if 0
   std::cerr << __LINE__ << ": " << destination->hostname() << "\n";
@@ -93,9 +107,7 @@ stdx::expected<void, std::error_code> ConnectorBase::connect_init() {
 
   connect_timed_out(false);
 
-  auto endpoint = *endpoints_it_;
-
-  server_endpoint_ = endpoint.endpoint();
+  server_endpoint_ = *endpoints_it_;
 
   return {};
 }
@@ -115,7 +127,7 @@ stdx::expected<void, std::error_code> ConnectorBase::try_connect() {
 #endif
   };
 
-  auto open_res = server_sock_.open(server_endpoint_.protocol(), socket_flags);
+  auto open_res = server_sock_.open(server_endpoint_, socket_flags);
   if (!open_res) return stdx::unexpected(open_res.error());
 
   const auto non_block_res = server_sock_.native_non_blocking(true);
@@ -216,13 +228,9 @@ stdx::expected<void, std::error_code> ConnectorBase::connect_finish() {
 }
 
 stdx::expected<void, std::error_code> ConnectorBase::connected() {
-  destination_id_ =
-      endpoints_it_->host_name() + ":" + endpoints_it_->service_name();
+  destination_id_ = destinations_it_->get()->destination();
 
-  if (on_connect_success_) {
-    on_connect_success_(endpoints_it_->host_name(),
-                        endpoints_it_->endpoint().port());
-  }
+  if (on_connect_success_) on_connect_success_(*destination_id_);
 
   return {};
 }
@@ -239,8 +247,7 @@ stdx::expected<void, std::error_code> ConnectorBase::next_endpoint() {
     destination->connect_status(last_ec_);
 
     if (last_ec_ && on_connect_failure_) {
-      on_connect_failure_(destination->hostname(), destination->port(),
-                          last_ec_);
+      on_connect_failure_(destination->destination(), last_ec_);
     }
 
     return next_destination();
@@ -254,7 +261,7 @@ stdx::expected<void, std::error_code> ConnectorBase::next_destination() {
     if (destinations_it_ == std::end(destinations_)) break;
 
     const auto &destination = *destinations_it_;
-    if (is_destination_good(destination->hostname(), destination->port())) {
+    if (is_destination_good(destination->destination())) {
       break;
     }
   } while (true);

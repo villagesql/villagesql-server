@@ -31,8 +31,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include "mysql/harness/destination.h"
 #include "mysql/harness/net_ts/io_context.h"
-#include "tcp_address.h"
 #include "test/helpers.h"  // init_test_logger
 
 using ::testing::StrEq;
@@ -43,84 +43,116 @@ class RoundRobinDestinationTest : public ::testing::Test {
 };
 
 TEST_F(RoundRobinDestinationTest, Constructor) {
-  DestRoundRobin d(io_ctx_);
-  size_t exp = 0;
-  ASSERT_EQ(exp, d.size());
+  DestRoundRobin balancer(io_ctx_);
+  ASSERT_EQ(0, balancer.size());
 }
 
-TEST_F(RoundRobinDestinationTest, Add) {
-  size_t exp;
-  DestRoundRobin d(io_ctx_);
-  exp = 1;
-  d.add("addr1", 1);
-  ASSERT_EQ(exp, d.size());
-  exp = 2;
-  d.add("addr2", 2);
-  ASSERT_EQ(exp, d.size());
+TEST_F(RoundRobinDestinationTest, AddTcp) {
+  DestRoundRobin balancer(io_ctx_);
+  balancer.add(mysql_harness::TcpDestination("addr1", 1));
+  ASSERT_EQ(1, balancer.size());
+  balancer.add(mysql_harness::TcpDestination("addr2", 2));
+  ASSERT_EQ(2, balancer.size());
 
   // Already added destination
-  d.add("addr1", 1);
-  exp = 2;
-  ASSERT_EQ(exp, d.size());
+  balancer.add(mysql_harness::TcpDestination("addr1", 1));
+  ASSERT_EQ(2, balancer.size());
+}
+
+TEST_F(RoundRobinDestinationTest, AddLocal) {
+  DestRoundRobin balancer(io_ctx_);
+  balancer.add(mysql_harness::LocalDestination("/foo"));
+  ASSERT_EQ(1, balancer.size());
+  balancer.add(mysql_harness::LocalDestination("/bar"));
+  ASSERT_EQ(2, balancer.size());
+
+  // Already added destination
+  balancer.add(mysql_harness::LocalDestination("/bar"));
+  ASSERT_EQ(2, balancer.size());
 }
 
 TEST_F(RoundRobinDestinationTest, Remove) {
-  size_t exp;
-  DestRoundRobin d(io_ctx_);
-  d.add("addr1", 1);
-  d.add("addr99", 99);
-  d.add("addr2", 2);
-  exp = 3;
-  ASSERT_EQ(exp, d.size());
-  d.remove("addr99", 99);
-  exp = 2;
-  ASSERT_EQ(exp, d.size());
-  d.remove("addr99", 99);
-  exp = 2;
-  ASSERT_EQ(exp, d.size());
+  DestRoundRobin balancer(io_ctx_);
+  balancer.add(mysql_harness::TcpDestination("addr1", 1));
+  balancer.add(mysql_harness::TcpDestination("addr99", 99));
+  balancer.add(mysql_harness::TcpDestination("addr2", 2));
+  ASSERT_EQ(3, balancer.size());
+
+  balancer.remove(mysql_harness::TcpDestination("addr99", 99));
+  ASSERT_EQ(2, balancer.size());
+
+  balancer.remove(mysql_harness::TcpDestination("addr99", 99));
+  ASSERT_EQ(2, balancer.size());
 }
 
-TEST_F(RoundRobinDestinationTest, Get) {
-  DestRoundRobin d(io_ctx_);
-  ASSERT_THROW(d.get("addr1", 1), std::out_of_range);
-  d.add("addr1", 1);
-  ASSERT_NO_THROW(d.get("addr1", 1));
+TEST_F(RoundRobinDestinationTest, GetTcp) {
+  mysql_harness::TcpDestination dest_addr1_1("addr1", 1);
 
-  mysql_harness::TCPAddress addr = d.get("addr1", 1);
-  ASSERT_THAT(addr.address(), StrEq("addr1"));
-  EXPECT_EQ(addr.port(), 1);
+  DestRoundRobin balancer(io_ctx_);
+  ASSERT_THROW(balancer.get(dest_addr1_1), std::out_of_range);
+  balancer.add(dest_addr1_1);
+  ASSERT_NO_THROW(balancer.get(dest_addr1_1));
 
-  d.remove("addr1", 1);
-  ASSERT_THAT(addr.address(), StrEq("addr1"));
-  EXPECT_EQ(addr.port(), 1);
+  mysql_harness::Destination dest = balancer.get(dest_addr1_1);
+  ASSERT_THAT(dest.as_tcp().hostname(), StrEq("addr1"));
+  EXPECT_EQ(dest.as_tcp().port(), 1);
+
+  balancer.remove(dest_addr1_1);
+  ASSERT_THAT(dest.as_tcp().hostname(), StrEq("addr1"));
+  EXPECT_EQ(dest.as_tcp().port(), 1);
 }
 
-TEST_F(RoundRobinDestinationTest, Size) {
-  size_t exp;
-  DestRoundRobin d(io_ctx_);
-  exp = 0;
-  ASSERT_EQ(exp, d.size());
-  d.add("addr1", 1);
-  exp = 1;
-  ASSERT_EQ(exp, d.size());
-  d.remove("addr1", 1);
-  exp = 0;
-  ASSERT_EQ(exp, d.size());
+TEST_F(RoundRobinDestinationTest, GetLocal) {
+  mysql_harness::LocalDestination dest_tmp_foo("/tmp/foo");
+
+  DestRoundRobin balancer(io_ctx_);
+  ASSERT_THROW(balancer.get(dest_tmp_foo), std::out_of_range);
+  balancer.add(dest_tmp_foo);
+  ASSERT_NO_THROW(balancer.get(dest_tmp_foo));
+
+  mysql_harness::Destination dest = balancer.get(dest_tmp_foo);
+  ASSERT_THAT(dest.as_local().path(), StrEq("/tmp/foo"));
+
+  balancer.remove(dest_tmp_foo);
+  ASSERT_THAT(dest.as_local().path(), StrEq("/tmp/foo"));
+}
+
+TEST_F(RoundRobinDestinationTest, SizeTcp) {
+  mysql_harness::TcpDestination dest_addr1_1("addr1", 1);
+
+  DestRoundRobin balancer(io_ctx_);
+  ASSERT_EQ(0, balancer.size());
+
+  balancer.add(dest_addr1_1);
+  ASSERT_EQ(1, balancer.size());
+
+  balancer.remove(dest_addr1_1);
+  ASSERT_EQ(0, balancer.size());
+}
+
+TEST_F(RoundRobinDestinationTest, SizeLocal) {
+  mysql_harness::LocalDestination dest_tmp_foo("/tmp/foo");
+
+  DestRoundRobin balancer(io_ctx_);
+  ASSERT_EQ(0, balancer.size());
+
+  balancer.add(dest_tmp_foo);
+  ASSERT_EQ(1, balancer.size());
+
+  balancer.remove(dest_tmp_foo);
+  ASSERT_EQ(0, balancer.size());
 }
 
 TEST_F(RoundRobinDestinationTest, RemoveAll) {
-  size_t exp;
-  DestRoundRobin d(io_ctx_);
+  DestRoundRobin balancer(io_ctx_);
 
-  d.add("addr1", 1);
-  d.add("addr2", 2);
-  d.add("addr3", 3);
-  exp = 3;
-  ASSERT_EQ(exp, d.size());
+  balancer.add(mysql_harness::TcpDestination("addr1", 1));
+  balancer.add(mysql_harness::TcpDestination("addr2", 2));
+  balancer.add(mysql_harness::TcpDestination("addr3", 3));
+  ASSERT_EQ(3, balancer.size());
 
-  d.clear();
-  exp = 0;
-  ASSERT_EQ(exp, d.size());
+  balancer.clear();
+  ASSERT_EQ(0, balancer.size());
 }
 
 /**
@@ -129,17 +161,16 @@ TEST_F(RoundRobinDestinationTest, RemoveAll) {
  *       does not block/deadlock and forces the thread close (bug#27145261).
  */
 TEST_F(RoundRobinDestinationTest, SpawnAndJoinQuarantineThread) {
-  DestRoundRobin d(io_ctx_);
-  d.start(nullptr);
+  DestRoundRobin balancer(io_ctx_);
+  balancer.start(nullptr);
 }
 
 bool operator==(const Destinations::value_type &a, const Destination &b) {
-  return a->hostname() == b.hostname() && a->port() == b.port();
+  return a->destination() == b.destination();
 }
 
 std::ostream &operator<<(std::ostream &os, const Destination &v) {
-  os << "{ address: " << v.hostname() << ":" << v.port()
-     << ", good: " << v.good() << "}";
+  os << "{ address: " << v.destination().str() << ", good: " << v.good() << "}";
   return os;
 }
 
@@ -157,17 +188,20 @@ MATCHER(IsGoodEq, "") {
 
 TEST_F(RoundRobinDestinationTest, RepeatedFetch) {
   DestRoundRobin dest(io_ctx_, Protocol::Type::kClassicProtocol);
-  dest.add("41", 41);
-  dest.add("42", 42);
-  dest.add("43", 43);
+  dest.add(mysql_harness::TcpDestination("41", 41));
+  dest.add(mysql_harness::TcpDestination("42", 42));
+  dest.add(mysql_harness::TcpDestination("43", 43));
 
   SCOPED_TRACE("// fetch 0, rotate 0");
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("41", "41", 41),
-                                               Destination("42", "42", 42),
-                                               Destination("43", "43", 43)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("41", mysql_harness::TcpDestination("41", 41)),
+            Destination("42", mysql_harness::TcpDestination("42", 42)),
+            Destination("43", mysql_harness::TcpDestination("43", 43))));
     EXPECT_THAT(actual, ::testing::Pointwise(IsGoodEq(), {true, true, true}));
   }
 
@@ -175,9 +209,12 @@ TEST_F(RoundRobinDestinationTest, RepeatedFetch) {
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("42", "42", 42),
-                                               Destination("43", "43", 43),
-                                               Destination("41", "41", 41)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("42", mysql_harness::TcpDestination("42", 42)),
+            Destination("43", mysql_harness::TcpDestination("43", 43)),
+            Destination("41", mysql_harness::TcpDestination("41", 41))));
     EXPECT_THAT(actual, ::testing::Pointwise(IsGoodEq(), {true, true, true}));
   }
 
@@ -185,9 +222,12 @@ TEST_F(RoundRobinDestinationTest, RepeatedFetch) {
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("43", "43", 43),
-                                               Destination("41", "41", 41),
-                                               Destination("42", "42", 42)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("43", mysql_harness::TcpDestination("43", 43)),
+            Destination("41", mysql_harness::TcpDestination("41", 41)),
+            Destination("42", mysql_harness::TcpDestination("42", 42))));
     EXPECT_THAT(actual, ::testing::Pointwise(IsGoodEq(), {true, true, true}));
   }
 
@@ -195,9 +235,12 @@ TEST_F(RoundRobinDestinationTest, RepeatedFetch) {
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("41", "41", 41),
-                                               Destination("42", "42", 42),
-                                               Destination("43", "43", 43)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("41", mysql_harness::TcpDestination("41", 41)),
+            Destination("42", mysql_harness::TcpDestination("42", 42)),
+            Destination("43", mysql_harness::TcpDestination("43", 43))));
     EXPECT_THAT(actual, ::testing::Pointwise(IsGoodEq(), {true, true, true}));
   }
 }

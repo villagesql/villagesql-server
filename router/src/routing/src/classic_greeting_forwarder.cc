@@ -50,6 +50,7 @@
 #include "classic_frame.h"
 #include "classic_lazy_connect.h"
 #include "classic_query_sender.h"
+#include "destination_error.h"
 #include "harness_assert.h"
 #include "hexify.h"
 #include "mysql/harness/logging/logger.h"
@@ -877,12 +878,18 @@ ServerGreetor::client_greeting_full() {
 }
 
 static stdx::expected<TlsClientContext *, std::error_code> get_dest_ssl_ctx(
-    MySQLRoutingContext &ctx, const std::string &id) {
-  return mysql_harness::make_tcp_address(id).and_then(
-      [&ctx, &id](const auto &addr)
-          -> stdx::expected<TlsClientContext *, std::error_code> {
-        return ctx.dest_ssl_ctx(id, addr.address());
-      });
+    MySQLRoutingContext &ctx,
+    const std::optional<mysql_harness::Destination> &opt_dest) {
+  if (!opt_dest) {
+    return stdx::unexpected(make_error_code(std::errc::invalid_argument));
+  }
+
+  const auto &dest = *opt_dest;
+  if (dest.is_local()) {
+    return ctx.dest_ssl_ctx(dest.str(), dest.as_local().path());
+  }
+
+  return ctx.dest_ssl_ctx(dest.str(), dest.as_tcp().hostname());
 }
 
 stdx::expected<Processor::Result, std::error_code>

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2017, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -23,36 +23,45 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTING_DEST_ROUND_ROBIN_INCLUDED
-#define ROUTING_DEST_ROUND_ROBIN_INCLUDED
+#include "mysql/harness/destination_socket.h"
 
-#include "destination.h"
-#include "mysqlrouter/routing.h"
+namespace mysql_harness {
 
-class DestRoundRobin : public RouteDestination {
- public:
-  /** @brief Default constructor
-   *
-   * @param io_ctx context for io operations
-   * @param protocol Protocol for the destination, defaults to value returned
-   *        by Protocol::get_default()
-   */
-  DestRoundRobin(net::io_context &io_ctx,
-                 Protocol::Type protocol = Protocol::get_default())
-      : RouteDestination(io_ctx, protocol) {}
+stdx::expected<void, std::error_code> DestinationSocket::open(
+    const mysql_harness::DestinationEndpoint &ep, int flags) {
+  auto &io_ctx = get_executor().context();
 
-  /** @brief Destructor */
-  ~DestRoundRobin() override = default;
-
-  Destinations destinations() override;
-
-  routing::RoutingStrategy get_strategy() override {
-    return routing::RoutingStrategy::kRoundRobin;
+  if (ep.is_local()) {
+    if (!is_local()) {
+      sock_ = LocalType{io_ctx};
+    }
+    return as_local().open(ep.as_local().protocol(), flags);
   }
 
- protected:
-  // MUST take the RouteDestination Mutex
-  size_t start_pos_{};
-};
+  if (!is_tcp()) {
+    sock_ = TcpType{io_ctx};
+  }
+  return as_tcp().open(ep.as_tcp().protocol(), flags);
+}
 
-#endif  // ROUTING_DEST_ROUND_ROBIN_INCLUDED
+stdx::expected<void, std::error_code> DestinationSocket::connect(
+    const mysql_harness::DestinationEndpoint &ep) {
+  auto &io_ctx = get_executor().context();
+
+  if (ep.is_local()) {
+    if (!is_local()) {
+      // adjust the underlying socket-type as needed.
+      sock_ = LocalType{io_ctx};
+    }
+
+    return as_local().connect(ep.as_local());
+  }
+
+  if (!is_tcp()) {
+    sock_ = TcpType{io_ctx};
+  }
+
+  return as_tcp().connect(ep.as_tcp());
+}
+
+}  // namespace mysql_harness

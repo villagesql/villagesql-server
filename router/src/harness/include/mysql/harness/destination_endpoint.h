@@ -28,7 +28,6 @@
 
 #include "harness_export.h"
 
-#include <sstream>
 #include <variant>
 
 #include "mysql/harness/net_ts/internet.h"
@@ -54,15 +53,7 @@ class HARNESS_EXPORT DestinationEndpoint {
   LocalType &as_local() { return std::get<LocalType>(ep_); }
   const LocalType &as_local() const { return std::get<LocalType>(ep_); }
 
-  std::string str() const {
-    std::ostringstream oss;
-    if (is_local()) {
-      oss << as_local();
-    } else {
-      oss << as_tcp();
-    }
-    return oss.str();
-  }
+  std::string str() const;
 
  private:
   std::variant<TcpType, LocalType> ep_;

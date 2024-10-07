@@ -26,17 +26,13 @@
 #ifndef ROUTING_DEST_METADATA_CACHE_INCLUDED
 #define ROUTING_DEST_METADATA_CACHE_INCLUDED
 
-#include <system_error>
-#include <thread>
-
 #include "destination.h"
-#include "mysql/harness/stdx/expected.h"
+#include "mysql/harness/destination.h"
 #include "mysql_routing.h"
 #include "mysqlrouter/datatypes.h"
 #include "mysqlrouter/metadata_cache.h"
 #include "mysqlrouter/routing_export.h"
 #include "mysqlrouter/uri.h"
-#include "tcp_address.h"
 
 class DestMetadataCacheGroup final
     : public RouteDestination,
@@ -69,8 +65,7 @@ class DestMetadataCacheGroup final
 
   ~DestMetadataCacheGroup() override;
 
-  void add(const std::string &, uint16_t) override {}
-  void add(const mysql_harness::TCPAddress) override {}
+  void add(const mysql_harness::Destination &) override {}
 
   AddrVector get_destinations() const override;
 

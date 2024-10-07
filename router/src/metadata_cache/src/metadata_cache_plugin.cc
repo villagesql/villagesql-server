@@ -136,10 +136,10 @@ class MetadataServersStateListener
 
     // need to convert from ManagedInstance to uri string
     std::vector<std::string> metadata_servers_str;
-    for (auto &md_server : cluster_topology.metadata_servers) {
+    for (const auto &md_server : cluster_topology.metadata_servers) {
       mysqlrouter::URI uri;
       uri.scheme = "mysql";
-      uri.host = md_server.address();
+      uri.host = md_server.hostname();
       uri.port = md_server.port();
       metadata_servers_str.emplace_back(uri.str());
     }

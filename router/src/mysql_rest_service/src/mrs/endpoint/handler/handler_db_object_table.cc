@@ -91,11 +91,6 @@ MediaType validate_content_type_encoding(HeaderAccept *accepts) {
   return allowed_type.value();
 }
 
-mysql_harness::TCPAddress get_tcpaddr(
-    const collector::CountedMySQLSession::ConnectionParameters &c) {
-  return {c.conn_opts.host, static_cast<uint16_t>(c.conn_opts.port)};
-}
-
 mysqlrouter::sqlstring rest_param_to_sql_value(
     const mrs::database::entry::Column &col, const std::string &value) {
   using helper::get_type_inside_text;
@@ -461,7 +456,7 @@ HttpResult HandlerDbObjectTable::handle_delete(rest::RequestContext *ctxt) {
   auto object = entry_->object_description;
   auto session = get_session(ctxt->sql_session_cache.get(), cache_,
                              MySQLConnection::kMySQLConnectionUserdataRW);
-  auto addr = get_tcpaddr(session->get_connection_parameters());
+  auto addr = session->get_connection_parameters().conn_opts.destination;
 
   uint64_t count = 0;
   const auto accepted_content_type =

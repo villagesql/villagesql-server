@@ -25,12 +25,8 @@
 
 #include "cluster_metadata.h"
 
-#include <algorithm>
-#include <chrono>
 #include <cstdio>
 #include <cstdlib>
-#include <cstring>
-#include <sstream>
 #include <stdexcept>
 #include <vector>
 
@@ -38,21 +34,16 @@
 #include <mysql.h>
 
 #include "configuration_update_schema.h"
-#include "dim.h"
 #include "group_replication_metadata.h"
 #include "log_suppressor.h"
 #include "mysql/harness/dynamic_config.h"
 #include "mysql/harness/event_state_tracker.h"
 #include "mysql/harness/logging/logging.h"
 #include "mysql/harness/utility/string.h"  // string_format
-#include "mysqld_error.h"
 #include "mysqlrouter/cluster_metadata_instance_attributes.h"
 #include "mysqlrouter/mysql_session.h"
-#include "mysqlrouter/uri.h"
-#include "mysqlrouter/utils.h"  // string_format
 #include "mysqlrouter/utils_sqlstring.h"
 #include "router_config.h"  // MYSQL_ROUTER_VERSION
-#include "tcp_address.h"
 
 using metadata_cache::LogSuppressor;
 using mysql_harness::EventStateTracker;
@@ -110,7 +101,7 @@ bool ClusterMetadata::do_connect(MySQLSession &connection,
                                ssl_options_.cipher, ssl_options_.ca,
                                ssl_options_.capath, ssl_options_.crl,
                                ssl_options_.crlpath);
-    connection.connect(mi.address(), static_cast<unsigned int>(mi.port()),
+    connection.connect(mi.hostname(), static_cast<unsigned int>(mi.port()),
                        session_config_.user_credentials.username,
                        session_config_.user_credentials.password,
                        "" /* unix-socket */, "" /* default-schema */,
@@ -148,11 +139,11 @@ bool ClusterMetadata::connect_and_setup_session(
           connect_res_changed ? LogLevel::kInfo : LogLevel::kDebug;
 
       log_custom(log_level, "Connected with metadata server running on %s:%i",
-                 metadata_server.address().c_str(), metadata_server.port());
+                 metadata_server.hostname().c_str(), metadata_server.port());
       return true;
     } else {
       log_warning("Failed setting up the session on Metadata Server %s:%d: %s",
-                  metadata_server.address().c_str(), metadata_server.port(),
+                  metadata_server.hostname().c_str(), metadata_server.port(),
                   result.error().c_str());
     }
 
@@ -163,7 +154,7 @@ bool ClusterMetadata::connect_and_setup_session(
 
     log_custom(
         log_level, "Failed connecting with Metadata Server %s:%d: %s (%i)",
-        metadata_server.address().c_str(), metadata_server.port(),
+        metadata_server.hostname().c_str(), metadata_server.port(),
         metadata_connection_->last_error(), metadata_connection_->last_errno());
   }
 
@@ -197,7 +188,7 @@ bool set_instance_ports(metadata_cache::ManagedInstance &instance,
   {
     const std::string classic_port = as_string(row[classic_port_column]);
 
-    auto make_res = mysql_harness::make_tcp_address(classic_port);
+    auto make_res = mysql_harness::make_tcp_destination(classic_port);
     if (!make_res) {
       log_warning(
           "Error parsing host:port in metadata for instance %s: '%s': %s",
@@ -206,14 +197,14 @@ bool set_instance_ports(metadata_cache::ManagedInstance &instance,
       return false;
     }
 
-    instance.host = make_res->address();
+    instance.host = make_res->hostname();
     instance.port = make_res->port() != 0 ? make_res->port() : 3306;
   }
 
   // X protocol support is not mandatory
   if (row[x_port_column] && *row[x_port_column]) {
     const std::string x_port = as_string(row[x_port_column]);
-    auto make_res = mysql_harness::make_tcp_address(x_port);
+    auto make_res = mysql_harness::make_tcp_destination(x_port);
     if (!make_res) {
       // There is a Shell bug (#27677227) that can cause the mysqlx port be
       // invalid in the metadata (>65535). For the backward compatibility we
@@ -419,9 +410,9 @@ ClusterMetadata::auth_credentials_t ClusterMetadata::fetch_auth_credentials(
 std::optional<metadata_cache::metadata_server_t>
 ClusterMetadata::find_rw_server(
     const std::vector<metadata_cache::ManagedInstance> &instances) {
-  for (auto &instance : instances) {
+  for (const auto &instance : instances) {
     if (instance.mode == metadata_cache::ServerMode::ReadWrite) {
-      return metadata_cache::metadata_server_t{instance};
+      return metadata_cache::metadata_server_t{instance.host, instance.port};
     }
   }
 
@@ -431,7 +422,7 @@ ClusterMetadata::find_rw_server(
 std::optional<metadata_cache::metadata_server_t>
 ClusterMetadata::find_rw_server(
     const std::vector<metadata_cache::ManagedCluster> &clusters) {
-  for (auto &cluster : clusters) {
+  for (const auto &cluster : clusters) {
     if (cluster.is_primary && cluster.has_quorum && !cluster.is_invalidated)
       return find_rw_server(cluster.members);
   }

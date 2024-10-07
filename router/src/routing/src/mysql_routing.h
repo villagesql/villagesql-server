@@ -38,14 +38,9 @@
  *
  */
 
-#include <array>
 #include <atomic>
 #include <chrono>
-#include <iostream>
-#include <map>
 #include <memory>
-#include <mutex>
-#include <stdexcept>
 
 #ifndef _WIN32
 #include <arpa/inet.h>
@@ -80,7 +75,6 @@
 #include "mysqlrouter/uri.h"
 #include "plugin_config.h"
 #include "socket_container.h"
-#include "tcp_address.h"
 
 namespace mysql_harness {
 class PluginFuncEnv;
@@ -286,7 +280,7 @@ class ROUTING_EXPORT MySQLRouting : public MySQLRoutingBase {
 
   routing::RoutingStrategy get_routing_strategy() const override;
 
-  std::vector<mysql_harness::TCPAddress> get_destinations() const override;
+  std::vector<mysql_harness::Destination> get_destinations() const override;
 
   std::vector<MySQLRoutingAPI::ConnData> get_connections() override;
 

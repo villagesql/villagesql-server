@@ -37,8 +37,8 @@
 #include "helper/to_string.h"
 #include "mrs/database/helper/gtid.h"
 
+#include "mysql/harness/destination.h"
 #include "mysql/harness/logging/logging.h"
-#include "tcp_address.h"
 
 IMPORT_LOG_FUNCTIONS()
 
@@ -53,7 +53,6 @@ class GtidManager {
   using Uid = database::GTIDuuid;
   using Gtid = database::Gtid;
   using GtidSet = database::GtidSet;
-  using TCPaddress = mysql_harness::TCPAddress;
 
   class AddressContext {
    public:
@@ -100,7 +99,8 @@ class GtidManager {
     //    to_string(refresh_after_).c_str());
   }
 
-  GtidAction is_executed_on_server(const TCPaddress &addr, const Gtid &gtid) {
+  GtidAction is_executed_on_server(const mysql_harness::Destination &addr,
+                                   const Gtid &gtid) {
     if (!enable_) return GtidAction::k_not_found;
     //    log_debug("GtidManager - is_executed_on_server %s - %s",
     //    addr.str().c_str(),
@@ -129,7 +129,7 @@ class GtidManager {
                                : GtidAction::k_not_found;
   }
 
-  void remember(const TCPaddress &addr, const Gtid &gtid) {
+  void remember(const mysql_harness::Destination &addr, const Gtid &gtid) {
     if (!enable_) return;
 
     //    log_debug("GtidManager - remember (%s - %s)", addr.str().c_str(),
@@ -148,14 +148,15 @@ class GtidManager {
     if (!set->try_merge(gtid)) set->insert(gtid);
   }
 
-  bool needs_update(const TCPaddress &addr) {
+  bool needs_update(const mysql_harness::Destination &addr) {
     if (!enable_) return false;
 
     auto ctxt = get_context(addr);
     return needs_update(ctxt.get());
   }
 
-  void reinitialize(const TCPaddress &addr, const std::vector<GtidSet> &sets) {
+  void reinitialize(const mysql_harness::Destination &addr,
+                    const std::vector<GtidSet> &sets) {
     if (!enable_) return;
 
     //    log_debug("GtidManager - reinitialize %s", addr.str().c_str());
@@ -258,7 +259,8 @@ class GtidManager {
     return refresh_timeout_ < (clock::now() - ctxt->last_update);
   }
 
-  std::shared_ptr<AddressContext> get_context(const TCPaddress &addr) {
+  std::shared_ptr<AddressContext> get_context(
+      const mysql_harness::Destination &addr) {
     std::shared_ptr<AddressContext> result;
     auto l = std::unique_lock(mutex_address_container_);
 
@@ -278,7 +280,8 @@ class GtidManager {
   duration refresh_timeout_{};
   std::optional<uint64_t> refresh_after_{};
   std::mutex mutex_address_container_;
-  std::map<TCPaddress, std::shared_ptr<AddressContext>> address_context_;
+  std::map<mysql_harness::Destination, std::shared_ptr<AddressContext>>
+      address_context_;
 };
 
 }  // namespace mrs

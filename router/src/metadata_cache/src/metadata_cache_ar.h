@@ -47,7 +47,7 @@ class METADATA_CACHE_EXPORT ARMetadataCache : public MetadataCache {
    */
   ARMetadataCache(
       const unsigned router_id,
-      const std::vector<mysql_harness::TCPAddress> &metadata_servers,
+      const std::vector<mysql_harness::TcpDestination> &metadata_servers,
       std::shared_ptr<MetaData> cluster_metadata,
       const metadata_cache::MetadataCacheTTLConfig &ttl_config,
       const mysqlrouter::SSLOptions &ssl_options,

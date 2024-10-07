@@ -23,7 +23,6 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include <array>
 #include <thread>
 
 #include <gmock/gmock.h>
@@ -38,10 +37,8 @@
 #include <rapidjson/stringbuffer.h>
 
 #include "config_builder.h"
-#include "dim.h"
 #include "mock_server_rest_client.h"
 #include "mock_server_testutils.h"
-#include "mysql/harness/logging/registry.h"
 #include "mysql/harness/stdx/ranges.h"     // enumerate
 #include "mysql/harness/utility/string.h"  // ::join
 #include "mysqlrouter/mysql_session.h"
@@ -49,7 +46,6 @@
 #include "rest_api_testutils.h"
 #include "router_component_test.h"
 #include "router_component_testutils.h"  // make_bad_connection
-#include "tcp_address.h"
 #include "tcp_port_pool.h"
 #include "test/helpers.h"
 #include "test/temp_directory.h"
@@ -174,7 +170,8 @@ TEST_P(RestRoutingApiTest, ensure_openapi) {
   const auto state_file = create_state_file(
       get_test_temp_dir_name(),
       create_state_file_content(
-          {mysql_harness::TCPAddress("198.51.100.1", 3060)}, "uuid", "", 0));
+          {mysql_harness::TcpDestination("198.51.100.1", 3060)}, "uuid", "",
+          0));
   default_section["dynamic_state"] = state_file;
 
   const std::string conf_file{create_config_file(

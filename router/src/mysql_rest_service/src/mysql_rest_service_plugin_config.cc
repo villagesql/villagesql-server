@@ -55,10 +55,8 @@ class DestinationStatic : public collector::DestinationProvider {
   }
 
   bool is_node_supported(const Node &node) override {
-    for (auto &n : nodes_) {
-      if (node.address() == n.address()) {
-        if (node.port() == n.port()) return true;
-      }
+    for (const auto &n : nodes_) {
+      if (node == n) return true;
     }
 
     return false;
@@ -91,9 +89,9 @@ class DestinationDynamic : public DestinationStatic {
   }
 
   static auto get_address(const AvailableDestination &dest) {
-    return dest.address;
+    return dest.destination;
   }
-  static auto get_address(const mysql_harness::TCPAddress &dest) {
+  static auto get_address(const mysql_harness::Destination &dest) {
     return dest;
   }
 
@@ -121,10 +119,12 @@ class DestinationDynamic : public DestinationStatic {
     if (is_valid) {
       state_.exchange(get_expected_state(apply_only_when_its_first_request),
                       kOk, [this, &nodes_for_new_connections]() {
-                        nodes_.resize(nodes_for_new_connections.size());
-                        int idx{0};
-                        for (auto &node : nodes_for_new_connections) {
-                          nodes_[idx++] = get_address(node);
+                        nodes_.clear();
+
+                        nodes_.reserve(nodes_for_new_connections.size());
+
+                        for (const auto &node : nodes_for_new_connections) {
+                          nodes_.push_back(get_address(node));
                         }
                       });
       return;

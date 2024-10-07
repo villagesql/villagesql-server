@@ -30,6 +30,7 @@
 
 #include <variant>
 
+#include "mysql/harness/destination_endpoint.h"
 #include "mysql/harness/net_ts/buffer.h"
 #include "mysql/harness/net_ts/internet.h"
 #include "mysql/harness/net_ts/local.h"
@@ -53,6 +54,17 @@ class HARNESS_EXPORT DestinationSocket {
   LocalType &as_local() { return std::get<LocalType>(sock_); }
   const LocalType &as_local() const { return std::get<LocalType>(sock_); }
 
+  stdx::expected<void, std::error_code> open(
+      const mysql_harness::DestinationEndpoint &ep, int flags = 0);
+
+  bool is_open() const {
+    if (is_local()) {
+      return as_local().is_open();
+    }
+
+    return as_tcp().is_open();
+  }
+
   stdx::expected<void, std::error_code> native_non_blocking(bool val) {
     if (is_local()) {
       return as_local().native_non_blocking(val);
@@ -69,6 +81,9 @@ class HARNESS_EXPORT DestinationSocket {
     return as_tcp().native_handle();
   }
 
+  stdx::expected<void, std::error_code> connect(
+      const mysql_harness::DestinationEndpoint &ep);
+
   template <typename SettableSocketOption>
   stdx::expected<void, std::error_code> set_option(
       const SettableSocketOption &option) {
@@ -77,6 +92,16 @@ class HARNESS_EXPORT DestinationSocket {
     }
 
     return as_tcp().set_option(option);
+  }
+
+  template <typename GettableSocketOption>
+  stdx::expected<void, std::error_code> get_option(
+      GettableSocketOption &option) const {
+    if (is_local()) {
+      return as_local().get_option(option);
+    }
+
+    return as_tcp().get_option(option);
   }
 
   net::io_context::executor_type get_executor() {
@@ -95,6 +120,14 @@ class HARNESS_EXPORT DestinationSocket {
     }
 
     return as_tcp().cancel();
+  }
+
+  stdx::expected<void, std::error_code> close() {
+    if (is_local()) {
+      return as_local().close();
+    }
+
+    return as_tcp().close();
   }
 
   template <class CompletionToken>

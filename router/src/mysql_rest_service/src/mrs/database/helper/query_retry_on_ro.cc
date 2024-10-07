@@ -33,13 +33,8 @@ namespace database {
 
 using MySQLSession = mysqlrouter::MySQLSession;
 using sqlstring = mysqlrouter::sqlstring;
-using TCPAddress = mysql_harness::TCPAddress;
 using ConnectionParameters =
     collector::CountedMySQLSession::ConnectionParameters;
-
-static TCPAddress get_tcpaddr(const ConnectionParameters &c) {
-  return {c.conn_opts.host, static_cast<uint16_t>(c.conn_opts.port)};
-}
 
 static bool is_rw(collector::MySQLConnection connection) {
   return connection == collector::kMySQLConnectionMetadataRW ||
@@ -98,8 +93,9 @@ void QueryRetryOnRO::before_query() {
     before_query();
     return;
   }
-  auto addr = get_tcpaddr(session_->get_connection_parameters());
-  gtid_manager_->remember(addr, {gtid_.str()});
+  gtid_manager_->remember(
+      session_->get_connection_parameters().conn_opts.destination,
+      {gtid_.str()});
 }
 
 mysqlrouter::MySQLSession *QueryRetryOnRO::get_session() {
@@ -134,7 +130,7 @@ bool QueryRetryOnRO::should_retry(const uint64_t affected) const {
 
 bool QueryRetryOnRO::check_gtid(const std::string &gtid_str) {
   mrs::database::Gtid gtid{gtid_str};
-  auto addr = get_tcpaddr(session_->get_connection_parameters());
+  auto addr = session_->get_connection_parameters().conn_opts.destination;
 
   for (int retry = 0; retry < 2; ++retry) {
     auto result = gtid_manager_->is_executed_on_server(addr, gtid);

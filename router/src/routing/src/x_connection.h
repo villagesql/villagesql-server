@@ -35,6 +35,7 @@
 
 #include "basic_protocol_splicer.h"
 #include "connection.h"  // MySQLRoutingConnectionBase
+#include "mysql/harness/destination.h"
 
 class XProtocolState {
  public:
@@ -744,11 +745,13 @@ class MysqlRoutingXConnection
   ServerSideConnection &server_conn() { return server_conn_; }
   const ServerSideConnection &server_conn() const { return server_conn_; }
 
-  std::string get_destination_id() const override {
+  std::optional<mysql_harness::Destination> get_destination_id()
+      const override {
     return connector().destination_id();
   }
 
-  std::optional<net::ip::tcp::endpoint> destination_endpoint() const override {
+  std::optional<mysql_harness::DestinationEndpoint> destination_endpoint()
+      const override {
     return std::nullopt;
   }
 

@@ -24,10 +24,7 @@
 */
 #include "dest_round_robin.h"
 
-#include "mysql/harness/net_ts/internet.h"
 #include "mysqlrouter/destination.h"
-
-using mysql_harness::TCPAddress;
 
 Destinations DestRoundRobin::destinations() {
   Destinations dests;
@@ -60,8 +57,7 @@ Destinations DestRoundRobin::destinations() {
     for (; cur != end; ++cur, ++n) {
       auto const &dest = *cur;
 
-      dests.push_back(std::make_unique<Destination>(dest.str(), dest.address(),
-                                                    dest.port()));
+      dests.push_back(std::make_unique<Destination>(dest.str(), dest));
     }
 
     // from begin to before-last
@@ -71,8 +67,7 @@ Destinations DestRoundRobin::destinations() {
     for (cur = begin, n = 0; cur != last; ++cur, ++n) {
       auto const &dest = *cur;
 
-      dests.push_back(std::make_unique<Destination>(dest.str(), dest.address(),
-                                                    dest.port()));
+      dests.push_back(std::make_unique<Destination>(dest.str(), dest));
     }
 
     if (++start_pos_ >= sz) start_pos_ = 0;

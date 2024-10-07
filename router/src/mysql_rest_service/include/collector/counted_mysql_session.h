@@ -25,6 +25,7 @@
 #ifndef ROUTER_SRC_MYSQL_REST_SERVICE_SRC_COLLECTOR_MYSQL_SQL_SESSION_H_
 #define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_COLLECTOR_MYSQL_SQL_SESSION_H_
 
+#include "mysql/harness/destination.h"
 #include "mysqlrouter/mysql_session.h"
 
 #include <vector>
@@ -49,11 +50,10 @@ class CountedMySQLSession : public mysqlrouter::MySQLSession {
       std::string key;
     } ssl_cert;
     struct ConnOptions {
-      std::string host;
-      unsigned int port{0};
+      mysql_harness::Destination destination{mysql_harness::TcpDestination{}};
+
       std::string username;
       std::string password;
-      std::string unix_socket;
       std::string default_schema;
       int connect_timeout{kDefaultConnectTimeout};
       int read_timeout{kDefaultReadTimeout};

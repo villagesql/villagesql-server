@@ -38,8 +38,6 @@ using ::testing::ContainerEq;
 using ::testing::Eq;
 using ::testing::StrEq;
 
-using mysql_harness::TCPAddress;
-
 // the Good
 
 struct GoodTestData {
@@ -57,13 +55,6 @@ struct GoodTestData {
 class MetadataCachePluginConfigGoodTest
     : public ::testing::Test,
       public ::testing::WithParamInterface<GoodTestData> {};
-
-namespace mysql_harness {
-// operator needs to be defined in the namespace of the printed type
-std::ostream &operator<<(std::ostream &os, const TCPAddress &addr) {
-  return os << addr.str();
-}
-}  // namespace mysql_harness
 
 std::ostream &operator<<(std::ostream &os, const GoodTestData &test_data) {
   return os << "user=" << test_data.expected.user << ", "

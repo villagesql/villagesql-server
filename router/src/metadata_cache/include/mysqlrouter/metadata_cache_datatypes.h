@@ -28,14 +28,14 @@
 
 #include "mysqlrouter/metadata_cache_export.h"
 
-#include <algorithm>
 #include <optional>
 #include <string>
 #include <system_error>
 #include <vector>
 
-#include "mysqlrouter/datatypes.h"  // UserCredentials
-#include "tcp_address.h"
+#include "mysql/harness/destination.h"
+#include "mysqlrouter/cluster_metadata.h"  // InstanceType
+#include "mysqlrouter/datatypes.h"         // UserCredentials
 
 namespace metadata_cache {
 
@@ -106,11 +106,10 @@ class METADATA_CACHE_EXPORT ManagedInstance {
                   const std::string &p_host, const uint16_t p_port,
                   const uint16_t p_xport);
 
-  using TCPAddress = mysql_harness::TCPAddress;
   explicit ManagedInstance(mysqlrouter::InstanceType p_type);
   explicit ManagedInstance(mysqlrouter::InstanceType p_type,
-                           const TCPAddress &addr);
-  operator TCPAddress() const;
+                           const mysql_harness::TcpDestination &dest);
+  operator mysql_harness::TcpDestination() const;
   bool operator==(const ManagedInstance &other) const;
 
   /** @brief Instance type */
@@ -141,7 +140,7 @@ class METADATA_CACHE_EXPORT ManagedInstance {
 
 using cluster_nodes_list_t = std::vector<ManagedInstance>;
 
-using metadata_server_t = mysql_harness::TCPAddress;
+using metadata_server_t = mysql_harness::TcpDestination;
 
 using metadata_servers_list_t = std::vector<metadata_server_t>;
 

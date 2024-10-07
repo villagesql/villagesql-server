@@ -63,7 +63,7 @@ int MySQLRoutingAPI::get_active_connections() const {
 }
 
 std::string MySQLRoutingAPI::get_bind_address() const {
-  return r_->get_context().get_bind_address().address();
+  return r_->get_context().get_bind_address().hostname();
 }
 
 std::chrono::milliseconds MySQLRoutingAPI::get_destination_connect_timeout()
@@ -71,7 +71,7 @@ std::chrono::milliseconds MySQLRoutingAPI::get_destination_connect_timeout()
   return r_->get_context().get_destination_connect_timeout();
 }
 
-std::vector<mysql_harness::TCPAddress> MySQLRoutingAPI::get_destinations()
+std::vector<mysql_harness::Destination> MySQLRoutingAPI::get_destinations()
     const {
   return r_->get_destinations();
 }
@@ -193,15 +193,15 @@ void MySQLRoutingComponent::register_route(
     const std::string &name, std::shared_ptr<MySQLRoutingBase> srv) {
   auto &quarantine = srv->get_context().shared_quarantine();
 
-  quarantine.on_update([&](const mysql_harness::TCPAddress &addr,
+  quarantine.on_update([&](const mysql_harness::Destination &dest,
                            bool success) -> bool {
     return DestinationStatusComponent::get_instance().report_connection_result(
-        addr, success);
+        dest, success);
   });
 
-  quarantine.on_is_quarantined([&](const mysql_harness::TCPAddress &addr) {
+  quarantine.on_is_quarantined([&](const mysql_harness::Destination &dest) {
     return DestinationStatusComponent::get_instance()
-        .is_destination_quarantined(addr);
+        .is_destination_quarantined(dest);
   });
 
   quarantine.on_stop([&]() {
@@ -316,7 +316,7 @@ void MySQLRoutingComponent::init(const mysql_harness::Config &config) {
 
   QuarantineRoutingCallbacks quarantine_callbacks;
   quarantine_callbacks.on_get_destinations = [&](
-      const std::string &route_name) -> auto {
+      const std::string &route_name) -> auto{
     return this->api(route_name).get_destinations();
   };
 

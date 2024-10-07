@@ -29,6 +29,7 @@
 
 #include <gmock/gmock.h>
 
+#include "mysql/harness/destination.h"
 #include "mysql/harness/net_ts/io_context.h"
 #include "test/helpers.h"  // init_test_logger
 
@@ -38,11 +39,11 @@ class FirstAvailableTest : public ::testing::Test {
 };
 
 bool operator==(const Destinations::value_type &a, const Destination &b) {
-  return a->hostname() == b.hostname() && a->port() == b.port();
+  return a->destination() == b.destination();
 }
 
 std::ostream &operator<<(std::ostream &os, const Destination &v) {
-  os << "(host: " << v.hostname() << ", port: " << v.port() << ")";
+  os << "(dest: " << v.destination().str() << ")";
   return os;
 }
 
@@ -67,42 +68,51 @@ MATCHER(IsGoodEq, "") {
 
 TEST_F(FirstAvailableTest, RepeatedFetch) {
   DestFirstAvailable dest(io_ctx_, Protocol::Type::kClassicProtocol);
-  dest.add("41", 41);
-  dest.add("42", 42);
-  dest.add("43", 43);
+  dest.add(mysql_harness::TcpDestination("41", 41));
+  dest.add(mysql_harness::TcpDestination("42", 42));
+  dest.add(mysql_harness::TcpDestination("43", 43));
 
   SCOPED_TRACE("// destination in order");
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("41", "41", 41),
-                                               Destination("42", "42", 42),
-                                               Destination("43", "43", 43)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("41", mysql_harness::TcpDestination("41", 41)),
+            Destination("42", mysql_harness::TcpDestination("42", 42)),
+            Destination("43", mysql_harness::TcpDestination("43", 43))));
   }
 
   SCOPED_TRACE("// fetching it twice, no change");
   {
     auto actual = dest.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("41", "41", 41),
-                                               Destination("42", "42", 42),
-                                               Destination("43", "43", 43)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("41", mysql_harness::TcpDestination("41", 41)),
+            Destination("42", mysql_harness::TcpDestination("42", 42)),
+            Destination("43", mysql_harness::TcpDestination("43", 43))));
   }
 }
 
 TEST_F(FirstAvailableTest, FailOne) {
   DestFirstAvailable balancer(io_ctx_, Protocol::Type::kClassicProtocol);
-  balancer.add("41", 41);
-  balancer.add("42", 42);
-  balancer.add("43", 43);
+  balancer.add(mysql_harness::TcpDestination("41", 41));
+  balancer.add(mysql_harness::TcpDestination("42", 42));
+  balancer.add(mysql_harness::TcpDestination("43", 43));
 
   {
     SCOPED_TRACE("// destination in order");
     auto actual = balancer.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("41", "41", 41),
-                                               Destination("42", "42", 42),
-                                               Destination("43", "43", 43)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("41", mysql_harness::TcpDestination("41", 41)),
+            Destination("42", mysql_harness::TcpDestination("42", 42)),
+            Destination("43", mysql_harness::TcpDestination("43", 43))));
 
     EXPECT_THAT(actual, ::testing::Pointwise(IsGoodEq(), {true, true, true}));
 
@@ -119,34 +129,44 @@ TEST_F(FirstAvailableTest, FailOne) {
     SCOPED_TRACE("// fetching after first is failed");
     auto actual = balancer.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("42", "42", 42),
-                                               Destination("43", "43", 43),
-                                               Destination("41", "41", 41)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("42", mysql_harness::TcpDestination("42", 42)),
+            Destination("43", mysql_harness::TcpDestination("43", 43)),
+            Destination("41", mysql_harness::TcpDestination("41", 41))));
   }
 
   {
     SCOPED_TRACE("// fetching it twice, no change");
     auto actual = balancer.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("42", "42", 42),
-                                               Destination("43", "43", 43),
-                                               Destination("41", "41", 41)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("42", mysql_harness::TcpDestination("42", 42)),
+            Destination("43", mysql_harness::TcpDestination("43", 43)),
+            Destination("41", mysql_harness::TcpDestination("41", 41))));
   }
 }
 
 TEST_F(FirstAvailableTest, FailTwo) {
   DestFirstAvailable balancer(io_ctx_, Protocol::Type::kClassicProtocol);
-  balancer.add("41", 41);
-  balancer.add("42", 42);
-  balancer.add("43", 43);
+
+  balancer.add(mysql_harness::TcpDestination("41", 41));
+  balancer.add(mysql_harness::TcpDestination("42", 42));
+  balancer.add(mysql_harness::TcpDestination("43", 43));
 
   {
     SCOPED_TRACE("// destination in order");
     auto actual = balancer.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("41", "41", 41),
-                                               Destination("42", "42", 42),
-                                               Destination("43", "43", 43)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("41", mysql_harness::TcpDestination("41", 41)),
+            Destination("42", mysql_harness::TcpDestination("42", 42)),
+            Destination("43", mysql_harness::TcpDestination("43", 43))));
 
     EXPECT_THAT(actual, ::testing::Pointwise(IsGoodEq(), {true, true, true}));
 
@@ -164,9 +184,12 @@ TEST_F(FirstAvailableTest, FailTwo) {
     auto actual = balancer.destinations();
 
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("43", "43", 43),
-                                               Destination("41", "41", 41),
-                                               Destination("42", "42", 42)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("43", mysql_harness::TcpDestination("43", 43)),
+            Destination("41", mysql_harness::TcpDestination("41", 41)),
+            Destination("42", mysql_harness::TcpDestination("42", 42))));
 
     // 'good' state isn't permanent.
     EXPECT_THAT(actual, ::testing::Pointwise(IsGoodEq(), {true, true, true}));
@@ -176,9 +199,12 @@ TEST_F(FirstAvailableTest, FailTwo) {
     SCOPED_TRACE("// fetching it twice, no change");
     auto actual = balancer.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("43", "43", 43),
-                                               Destination("41", "41", 41),
-                                               Destination("42", "42", 42)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("43", mysql_harness::TcpDestination("43", 43)),
+            Destination("41", mysql_harness::TcpDestination("41", 41)),
+            Destination("42", mysql_harness::TcpDestination("42", 42))));
 
     // 'good' state isn't permanent.
     EXPECT_THAT(actual, ::testing::Pointwise(IsGoodEq(), {true, true, true}));
@@ -187,17 +213,20 @@ TEST_F(FirstAvailableTest, FailTwo) {
 
 TEST_F(FirstAvailableTest, FailAll) {
   DestFirstAvailable balancer(io_ctx_, Protocol::Type::kClassicProtocol);
-  balancer.add("41", 41);
-  balancer.add("42", 42);
-  balancer.add("43", 43);
+  balancer.add(mysql_harness::TcpDestination("41", 41));
+  balancer.add(mysql_harness::TcpDestination("42", 42));
+  balancer.add(mysql_harness::TcpDestination("43", 43));
 
   {
     SCOPED_TRACE("// destination in order");
     auto actual = balancer.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("41", "41", 41),
-                                               Destination("42", "42", 42),
-                                               Destination("43", "43", 43)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("41", mysql_harness::TcpDestination("41", 41)),
+            Destination("42", mysql_harness::TcpDestination("42", 42)),
+            Destination("43", mysql_harness::TcpDestination("43", 43))));
 
     EXPECT_THAT(actual, ::testing::Pointwise(IsGoodEq(), {true, true, true}));
 
@@ -211,9 +240,12 @@ TEST_F(FirstAvailableTest, FailAll) {
     SCOPED_TRACE("// fetching after first is failed");
     auto actual = balancer.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("41", "41", 41),
-                                               Destination("42", "42", 42),
-                                               Destination("43", "43", 43)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("41", mysql_harness::TcpDestination("41", 41)),
+            Destination("42", mysql_harness::TcpDestination("42", 42)),
+            Destination("43", mysql_harness::TcpDestination("43", 43))));
     // 'good' state isn't permanent.
     EXPECT_THAT(actual, ::testing::Pointwise(IsGoodEq(), {true, true, true}));
   }
@@ -222,9 +254,12 @@ TEST_F(FirstAvailableTest, FailAll) {
     SCOPED_TRACE("// fetching it twice, no change");
     auto actual = balancer.destinations();
     EXPECT_THAT(actual, ::testing::SizeIs(3));
-    EXPECT_THAT(actual, ::testing::ElementsAre(Destination("41", "41", 41),
-                                               Destination("42", "42", 42),
-                                               Destination("43", "43", 43)));
+    EXPECT_THAT(
+        actual,
+        ::testing::ElementsAre(
+            Destination("41", mysql_harness::TcpDestination("41", 41)),
+            Destination("42", mysql_harness::TcpDestination("42", 42)),
+            Destination("43", mysql_harness::TcpDestination("43", 43))));
     // 'good' state isn't permanent.
     EXPECT_THAT(actual, ::testing::Pointwise(IsGoodEq(), {true, true, true}));
   }

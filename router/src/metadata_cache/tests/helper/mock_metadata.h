@@ -25,11 +25,7 @@
 #ifndef MOCK_METADATA_INCLUDED
 #define MOCK_METADATA_INCLUDED
 
-#include <vector>
-
 #include "cluster_metadata_gr.h"
-
-#include "tcp_address.h"
 
 /** @class MockNG
  *

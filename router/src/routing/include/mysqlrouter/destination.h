@@ -28,14 +28,13 @@
 
 #include "mysqlrouter/routing_export.h"
 
-#include <cstddef>       // uint16_t
 #include <list>          // list
 #include <memory>        // unique_ptr
 #include <string>        // string
 #include <system_error>  // error_code
 
+#include "mysql/harness/destination.h"
 #include "mysqlrouter/datatypes.h"  // ServerMode
-#include "tcp_address.h"
 
 /**
  * Destination to forward client connections to.
@@ -44,8 +43,14 @@
  */
 class ROUTING_EXPORT Destination {
  public:
-  Destination(std::string id, std::string hostname, uint16_t port)
-      : id_{std::move(id)}, hostname_{std::move(hostname)}, port_{port} {}
+  Destination(std::string id, mysql_harness::Destination dest)
+      : id_{std::move(id)}, dest_(std::move(dest)) {}
+
+  Destination(const Destination &) = default;
+  Destination(Destination &&) = default;
+
+  Destination &operator=(const Destination &) = default;
+  Destination &operator=(Destination &&) = default;
 
   virtual ~Destination() = default;
 
@@ -56,15 +61,7 @@ class ROUTING_EXPORT Destination {
    */
   std::string id() const { return id_; }
 
-  /**
-   * hostname to connect to.
-   */
-  std::string hostname() const { return hostname_; }
-
-  /**
-   * TCP port to connect to.
-   */
-  uint16_t port() const noexcept { return port_; }
+  const mysql_harness::Destination &destination() const { return dest_; }
 
   /**
    * check if the destination is "good".
@@ -94,9 +91,9 @@ class ROUTING_EXPORT Destination {
   }
 
  private:
-  const std::string id_;
-  const std::string hostname_;
-  const uint16_t port_;
+  std::string id_;
+
+  mysql_harness::Destination dest_;
 };
 
 /**

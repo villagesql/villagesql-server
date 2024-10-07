@@ -26,9 +26,7 @@
 #include "plugin_config.h"
 
 #include <algorithm>
-#include <array>
 #include <climits>
-#include <exception>
 #include <map>
 #include <stdexcept>
 #include <variant>
@@ -123,20 +121,16 @@ uint64_t MetadataCachePluginConfig::get_view_id() const {
   return 0;
 }
 
-std::vector<mysql_harness::TCPAddress>
+std::vector<mysql_harness::TcpDestination>
 MetadataCachePluginConfig::get_metadata_servers(uint16_t default_port) const {
-  std::vector<mysql_harness::TCPAddress> address_vector;
+  std::vector<mysql_harness::TcpDestination> address_vector;
 
   auto add_metadata_server = [&](const std::string &address) {
     mysqlrouter::URI u(address);
     if (u.port == 0) u.port = default_port;
 
-    // emplace_back calls TCPAddress ctor, which queries DNS in order to
-    // determine IP address family (IPv4 or IPv6)
-    log_debug("Adding metadata server '%s:%u', also querying DNS ...",
-              u.host.c_str(), u.port);
+    log_debug("Adding metadata server '%s:%d'", u.host.c_str(), u.port);
     address_vector.emplace_back(u.host, u.port);
-    log_debug("Done adding metadata server '%s:%u'", u.host.c_str(), u.port);
   };
 
   if (metadata_cache_dynamic_state) {

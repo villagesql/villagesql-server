@@ -27,7 +27,7 @@
 #define ROUTING_MYSQL_ROUTING_BASE_INCLUDED
 
 #include "context.h"
-#include "destination.h"
+#include "mysql/harness/destination.h"
 #include "mysqlrouter/routing_component.h"  // MySQLRoutingAPI
 
 /** @class MySQLRoutingBase
@@ -52,7 +52,7 @@ class ROUTING_EXPORT MySQLRoutingBase {
 
   virtual MySQLRoutingContext &get_context() = 0;
   virtual int get_max_connections() const noexcept = 0;
-  virtual std::vector<mysql_harness::TCPAddress> get_destinations() const = 0;
+  virtual std::vector<mysql_harness::Destination> get_destinations() const = 0;
   virtual RouteDestination *destinations() = 0;
   virtual std::vector<MySQLRoutingAPI::ConnData> get_connections() = 0;
   virtual MySQLRoutingConnectionBase *get_connection(const std::string &) = 0;

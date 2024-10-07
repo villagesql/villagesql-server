@@ -31,17 +31,16 @@
 #include <iterator>  // advance
 #include <memory>
 #include <mutex>
-#include <set>
 #include <stdexcept>
 #include <string>
 #include <string_view>
 #include <system_error>
 
+#include "mysql/harness/destination.h"
 #include "mysql/harness/logging/logging.h"
 #include "mysql/harness/plugin.h"
 #include "mysqlrouter/destination.h"
 #include "mysqlrouter/routing.h"
-#include "tcp_address.h"
 
 using namespace std::chrono_literals;
 using namespace std::string_view_literals;
@@ -210,7 +209,8 @@ DestMetadataCacheGroup::get_available(
           if (for_new_connections && query_quarantined_destinations_callback_) {
             return i.mode == metadata_cache::ServerMode::ReadOnly &&
                    !i.hidden && !i.ignore &&
-                   !query_quarantined_destinations_callback_(i);
+                   !query_quarantined_destinations_callback_(
+                       mysql_harness::Destination(i));
           } else {
             return i.mode == metadata_cache::ServerMode::ReadOnly &&
                    !i.hidden && !i.ignore;
@@ -350,11 +350,11 @@ DestMetadataCacheGroup::~DestMetadataCacheGroup() {
 
 class MetadataCacheDestination : public Destination {
  public:
-  MetadataCacheDestination(std::string id, std::string addr, uint16_t port,
+  MetadataCacheDestination(std::string id, mysql_harness::Destination dest,
                            DestMetadataCacheGroup *balancer,
                            std::string server_uuid,
                            mysqlrouter::ServerMode server_mode)
-      : Destination(std::move(id), std::move(addr), port),
+      : Destination(std::move(id), std::move(dest)),
         balancer_{balancer},
         server_uuid_{std::move(server_uuid)},
         server_mode_{server_mode} {}
@@ -468,13 +468,12 @@ Destinations DestMetadataCacheGroup::balance(
   Destinations dests;
 
   auto from_instance = [this](const auto &dest) {
-    mysql_harness::TCPAddress addr(
+    mysql_harness::TcpDestination addr(
         dest.host,
         (protocol_ == Protocol::Type::kXProtocol) ? dest.xport : dest.port);
 
     return std::make_unique<MetadataCacheDestination>(
-        addr.str(), addr.address(), addr.port(), this, dest.mysql_server_uuid,
-        dest.mode);
+        addr.str(), addr, this, dest.mysql_server_uuid, dest.mode);
   };
 
   std::lock_guard<std::mutex> lk(mutex_update_);
@@ -706,9 +705,9 @@ DestMetadataCacheGroup::AddrVector DestMetadataCacheGroup::get_destinations()
 
   AddrVector addresses;
   for (const auto &dest : available) {
-    addresses.emplace_back(dest.host, protocol_ == Protocol::Type::kXProtocol
-                                          ? dest.xport
-                                          : dest.port);
+    addresses.emplace_back(mysql_harness::TcpDestination(
+        dest.host,
+        protocol_ == Protocol::Type::kXProtocol ? dest.xport : dest.port));
   }
 
   return addresses;
@@ -734,11 +733,11 @@ void DestMetadataCacheGroup::on_instances_change(
     std::vector<AvailableDestination> result;
 
     for (const auto &dest : dests) {
-      mysql_harness::TCPAddress addr(
+      mysql_harness::TcpDestination tcp_dest(
           dest.host,
           (protocol_ == Protocol::Type::kXProtocol) ? dest.xport : dest.port);
 
-      result.emplace_back(addr, dest.mysql_server_uuid, dest.mode);
+      result.emplace_back(tcp_dest, dest.mysql_server_uuid, dest.mode);
     }
 
     return result;
@@ -798,11 +797,11 @@ void DestMetadataCacheGroup::on_md_refresh(
     std::vector<AvailableDestination> result;
 
     for (const auto &dest : dests) {
-      mysql_harness::TCPAddress addr(
+      mysql_harness::TcpDestination tcp_dest(
           dest.host,
           (protocol_ == Protocol::Type::kXProtocol) ? dest.xport : dest.port);
 
-      result.emplace_back(addr, dest.mysql_server_uuid, dest.mode);
+      result.emplace_back(tcp_dest, dest.mysql_server_uuid, dest.mode);
     }
 
     return result;

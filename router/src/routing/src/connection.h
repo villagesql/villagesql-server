@@ -36,6 +36,9 @@
 #include "context.h"
 #include "destination.h"  // RouteDestination
 #include "destination_error.h"
+#include "mysql/harness/destination.h"
+#include "mysql/harness/destination_endpoint.h"
+#include "mysql/harness/destination_socket.h"
 #include "mysql/harness/net_ts/io_context.h"
 #include "mysql/harness/net_ts/timer.h"
 #include "mysql/harness/stdx/expected.h"
@@ -53,25 +56,28 @@ class MySQLRoutingConnectionBase {
   MySQLRoutingContext &context() { return context_; }
   const MySQLRoutingContext &context() const { return context_; }
 
-  virtual std::string get_destination_id() const = 0;
-
-  virtual std::string read_only_destination_id() const {
-    return get_destination_id();
-  }
-
-  virtual std::string read_write_destination_id() const {
-    return get_destination_id();
-  }
-
-  virtual std::optional<net::ip::tcp::endpoint> destination_endpoint()
+  virtual std::optional<mysql_harness::Destination> get_destination_id()
       const = 0;
 
-  virtual std::optional<net::ip::tcp::endpoint> read_only_destination_endpoint()
+  virtual std::optional<mysql_harness::Destination> read_only_destination_id()
       const {
+    return get_destination_id();
+  }
+
+  virtual std::optional<mysql_harness::Destination> read_write_destination_id()
+      const {
+    return get_destination_id();
+  }
+
+  virtual std::optional<mysql_harness::DestinationEndpoint>
+  destination_endpoint() const = 0;
+
+  virtual std::optional<mysql_harness::DestinationEndpoint>
+  read_only_destination_endpoint() const {
     return destination_endpoint();
   }
 
-  virtual std::optional<net::ip::tcp::endpoint>
+  virtual std::optional<mysql_harness::DestinationEndpoint>
   read_write_destination_endpoint() const {
     return destination_endpoint();
   }
@@ -201,8 +207,8 @@ class ConnectorBase {
     kConnectFinish,
   };
 
-  server_protocol_type::socket &socket() { return server_sock_; }
-  server_protocol_type::endpoint &endpoint() { return server_endpoint_; }
+  mysql_harness::DestinationSocket &socket() { return server_sock_; }
+  mysql_harness::DestinationEndpoint &endpoint() { return server_endpoint_; }
 
   net::steady_timer &timer() { return connect_timer_; }
 
@@ -210,24 +216,31 @@ class ConnectorBase {
 
   bool connect_timed_out() const { return connect_timed_out_; }
 
-  void destination_id(std::string id) { destination_id_ = id; }
-  std::string destination_id() const { return destination_id_; }
+  void destination_id(mysql_harness::Destination id) {
+    destination_id_ = std::move(id);
+  }
+  std::optional<mysql_harness::Destination> destination_id() const {
+    return destination_id_;
+  }
 
   void on_connect_failure(
-      std::function<void(std::string, uint16_t, std::error_code)> func) {
+      std::function<void(const mysql_harness::Destination &, std::error_code)>
+          func) {
     on_connect_failure_ = std::move(func);
   }
 
-  void on_connect_success(std::function<void(std::string, uint16_t)> func) {
+  void on_connect_success(
+      std::function<void(const mysql_harness::Destination &)> func) {
     on_connect_success_ = std::move(func);
   }
 
-  void on_is_destination_good(std::function<bool(std::string, uint16_t)> func) {
+  void on_is_destination_good(
+      std::function<bool(const mysql_harness::Destination &dest)> func) {
     on_is_destination_good_ = std::move(func);
   }
 
-  bool is_destination_good(const std::string &hostname, uint16_t port) const {
-    if (on_is_destination_good_) return on_is_destination_good_(hostname, port);
+  bool is_destination_good(const mysql_harness::Destination &dest) const {
+    if (on_is_destination_good_) return on_is_destination_good_(dest);
 
     return true;
   }
@@ -247,14 +260,15 @@ class ConnectorBase {
   net::io_context &io_ctx_;
 
   net::ip::tcp::resolver resolver_{io_ctx_};
-  server_protocol_type::socket server_sock_{io_ctx_};
-  server_protocol_type::endpoint server_endpoint_;
+  mysql_harness::DestinationSocket server_sock_{
+      mysql_harness::DestinationSocket::TcpType{io_ctx_}};
+  mysql_harness::DestinationEndpoint server_endpoint_;
 
   RouteDestination *route_destination_;
   Destinations &destinations_;
   Destinations::iterator destinations_it_;
-  net::ip::tcp::resolver::results_type endpoints_;
-  net::ip::tcp::resolver::results_type::iterator endpoints_it_;
+  std::vector<mysql_harness::DestinationEndpoint> endpoints_;
+  std::vector<mysql_harness::DestinationEndpoint>::iterator endpoints_it_;
 
   std::error_code last_ec_{make_error_code(DestinationsErrc::kNotSet)};
 
@@ -263,12 +277,13 @@ class ConnectorBase {
   net::steady_timer connect_timer_{io_ctx_};
 
   bool connect_timed_out_{false};
-  std::string destination_id_;
+  std::optional<mysql_harness::Destination> destination_id_;
 
-  std::function<void(std::string, uint16_t, std::error_code)>
+  std::function<void(const mysql_harness::Destination &, std::error_code)>
       on_connect_failure_;
-  std::function<void(std::string, uint16_t)> on_connect_success_;
-  std::function<bool(std::string, uint16_t)> on_is_destination_good_;
+  std::function<void(const mysql_harness::Destination &)> on_connect_success_;
+  std::function<bool(const mysql_harness::Destination &)>
+      on_is_destination_good_;
 };
 
 template <class ConnectionType>
@@ -290,7 +305,8 @@ class Connector : public ConnectorBase {
       } break;
     }
 
-    if (destination_id().empty()) {
+    // not connected yet.
+    if (!destination_id().has_value()) {
       // stops at 'connect_init()
       {
         auto connect_res = try_connect();
@@ -299,9 +315,15 @@ class Connector : public ConnectorBase {
     }
     using ret_type = stdx::expected<ConnectionType, std::error_code>;
 
-    return ret_type{std::in_place,
-                    std::make_unique<TcpConnection>(std::move(socket()),
-                                                    std::move(endpoint()))};
+    if (socket().is_tcp()) {
+      return ret_type{std::in_place, std::make_unique<TcpConnection>(
+                                         std::move(socket().as_tcp()),
+                                         std::move(endpoint().as_tcp()))};
+    }
+
+    return ret_type{std::in_place, std::make_unique<UnixDomainConnection>(
+                                       std::move(socket().as_local()),
+                                       std::move(endpoint().as_local()))};
   }
 };
 

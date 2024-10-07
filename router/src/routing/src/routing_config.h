@@ -28,11 +28,11 @@
 
 #include <string>
 
+#include "mysql/harness/destination.h"
 #include "mysql/harness/filesystem.h"  // Path
 #include "mysqlrouter/routing.h"       // RoutingStrategy, Mode
 #include "mysqlrouter/ssl_mode.h"
 #include "protocol/protocol.h"  // Protocol::Type
-#include "tcp_address.h"
 
 /**
  * route specific configuration.
@@ -42,8 +42,8 @@ class RoutingConfig {
   Protocol::Type protocol{};  //!< protocol (classic, x)
   std::string destinations;   //!< destinations
   bool accept_connections{true};
-  int bind_port{};                         //!< TCP port to bind to
-  mysql_harness::TCPAddress bind_address;  //!< IP address to bind to
+  int bind_port{};                             //!< TCP port to bind to
+  mysql_harness::TcpDestination bind_address;  //!< IP address to bind to
   mysql_harness::Path named_socket;  //!< unix domain socket path to bind to
   int connect_timeout{};             //!< connect-timeout in seconds
   routing::RoutingStrategy routing_strategy{

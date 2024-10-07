@@ -124,8 +124,8 @@ TEST_F(DatabaseQueryPut, etag_check) {
   }
 
   auto m = std::make_unique<mysqlrouter::MySQLSession>();
-  m->connect("localhost", server_->server_port(), "root", "", "", "",
-             mysqlrouter::MySQLSession::kDefaultConnectTimeout,
+  m->connect("localhost", server_->classic_tcp_destination().port(), "root", "",
+             "", "", mysqlrouter::MySQLSession::kDefaultConnectTimeout,
              mysqlrouter::MySQLSession::kDefaultReadTimeout, CLIENT_FOUND_ROWS);
 
   auto test_fail = [this, root, &m](const std::string &doc,

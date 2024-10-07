@@ -25,7 +25,6 @@
 #include "mysqlrouter/routing.h"
 
 #include <stdexcept>
-#include <system_error>
 
 #include <gmock/gmock.h>  // EXPECT_THAT
 #include <gtest/gtest.h>
@@ -34,13 +33,11 @@
 #include "mysql/harness/net_ts/impl/socket.h"
 #include "mysql/harness/net_ts/io_context.h"
 #include "mysql/harness/stdx/expected_ostream.h"
-#include "mysql_routing.h"  // Mode
-#include "test/helpers.h"   // init_test_logger
+#include "mysql_routing.h"         // Mode
+#include "mysql_routing_common.h"  // get_routing_thread_name
+#include "test/helpers.h"          // init_test_logger
 
 using namespace std::chrono_literals;
-
-using ::testing::Eq;
-using ::testing::StrEq;
 
 class RoutingTests : public ::testing::Test {
  protected:
@@ -63,7 +60,7 @@ TEST_F(RoutingTests, set_destinations_from_uri) {
 
   RoutingConfig conf;
   conf.routing_strategy = routing::RoutingStrategy::kFirstAvailable;
-  conf.bind_address = mysql_harness::TCPAddress{"0.0.0.0", 7001};
+  conf.bind_address = mysql_harness::TcpDestination{"0.0.0.0", 7001};
   conf.protocol = Protocol::Type::kXProtocol;
   conf.connect_timeout = 1;
   MySQLRouting routing(conf, io_ctx_);
@@ -105,10 +102,10 @@ TEST_F(RoutingTests, set_destinations_from_uri) {
   }
 }
 
-TEST_F(RoutingTests, set_destinations_from_cvs) {
+TEST_F(RoutingTests, set_destinations_from_cvs_1) {
   RoutingConfig conf;
   conf.routing_strategy = routing::RoutingStrategy::kNextAvailable;
-  conf.bind_address = mysql_harness::TCPAddress{"0.0.0.0", 7001};
+  conf.bind_address = mysql_harness::TcpDestination{"0.0.0.0", 7001};
   conf.protocol = Protocol::Type::kXProtocol;
   conf.connect_timeout = 1;
   MySQLRouting routing(conf, io_ctx_);
@@ -121,7 +118,7 @@ TEST_F(RoutingTests, set_destinations_from_cvs) {
 
   // no address
   {
-    const std::string csv = "";
+    const std::string csv;
     EXPECT_THROW(routing.set_destinations_from_csv(csv), std::runtime_error);
   }
 
@@ -130,39 +127,58 @@ TEST_F(RoutingTests, set_destinations_from_cvs) {
     const std::string csv = "127.0.0..2:2222";
     EXPECT_THROW(routing.set_destinations_from_csv(csv), std::runtime_error);
   }
+}
 
+TEST_F(RoutingTests, set_destinations_from_cvs_classic_proto) {
   // let's check if the correct default port gets chosen for
   // the respective protocol
   // we use the trick here setting the expected address also as
   // the binding address for the routing which should make the method throw
   // an exception if these are the same
-  {
-    const std::string address = "127.0.0.1";
-    RoutingConfig conf_classic;
-    conf_classic.routing_strategy = routing::RoutingStrategy::kNextAvailable;
-    conf_classic.bind_address = mysql_harness::TCPAddress{address, 3306};
-    conf_classic.protocol = Protocol::Type::kClassicProtocol;
-    conf_classic.connect_timeout = 1;
-    MySQLRouting routing_classic(conf_classic, io_ctx_);
-    EXPECT_THROW(routing_classic.set_destinations_from_csv("127.0.0.1"),
-                 std::runtime_error);
-    EXPECT_THROW(routing_classic.set_destinations_from_csv("127.0.0.1:3306"),
-                 std::runtime_error);
-    EXPECT_NO_THROW(
-        routing_classic.set_destinations_from_csv("127.0.0.1:33060"));
 
-    RoutingConfig conf_x;
-    conf_x.routing_strategy = routing::RoutingStrategy::kNextAvailable;
-    conf_x.bind_address = mysql_harness::TCPAddress{address, 33060};
-    conf_x.protocol = Protocol::Type::kXProtocol;
-    conf_x.connect_timeout = 1;
-    MySQLRouting routing_x(conf_x, io_ctx_);
-    EXPECT_THROW(routing_x.set_destinations_from_csv("127.0.0.1"),
-                 std::runtime_error);
-    EXPECT_THROW(routing_x.set_destinations_from_csv("127.0.0.1:33060"),
-                 std::runtime_error);
-    EXPECT_NO_THROW(routing_x.set_destinations_from_csv("127.0.0.1:3306"));
-  }
+  const std::string address = "127.0.0.1";
+  RoutingConfig conf_classic;
+  conf_classic.routing_strategy = routing::RoutingStrategy::kNextAvailable;
+  conf_classic.bind_address = mysql_harness::TcpDestination{address, 3306};
+  conf_classic.protocol = Protocol::Type::kClassicProtocol;
+  conf_classic.connect_timeout = 1;
+  MySQLRouting routing_classic(conf_classic, io_ctx_);
+  EXPECT_THROW(routing_classic.set_destinations_from_csv("127.0.0.1"),
+               std::runtime_error);
+  EXPECT_THROW(routing_classic.set_destinations_from_csv("127.0.0.1:3306"),
+               std::runtime_error);
+  EXPECT_NO_THROW(routing_classic.set_destinations_from_csv("127.0.0.1:33060"));
+}
+
+TEST_F(RoutingTests, set_destinations_from_cvs_x_proto) {
+  const std::string address = "127.0.0.1";
+  RoutingConfig conf_x;
+  conf_x.routing_strategy = routing::RoutingStrategy::kNextAvailable;
+  conf_x.bind_address = mysql_harness::TcpDestination{address, 33060};
+  conf_x.protocol = Protocol::Type::kXProtocol;
+  conf_x.connect_timeout = 1;
+  MySQLRouting routing_x(conf_x, io_ctx_);
+
+  // default-port for xproto is 33060
+  EXPECT_THROW(routing_x.set_destinations_from_csv("127.0.0.1"),
+               std::runtime_error);
+  EXPECT_THROW(routing_x.set_destinations_from_csv("127.0.0.1:33060"),
+               std::runtime_error);
+  EXPECT_NO_THROW(routing_x.set_destinations_from_csv("127.0.0.1:3306"));
+}
+
+TEST_F(RoutingTests, set_destinations_from_cvs_unix_socket) {
+  const std::string address = "127.0.0.1";
+
+  RoutingConfig conf;
+  conf.routing_strategy = routing::RoutingStrategy::kNextAvailable;
+  conf.bind_address = mysql_harness::TcpDestination{address, 6644};
+  conf.protocol = Protocol::Type::kClassicProtocol;
+  conf.connect_timeout = 1;
+
+  MySQLRouting routing(conf, io_ctx_);
+  EXPECT_NO_THROW(
+      routing.set_destinations_from_csv("127.0.0.1:3306,local:///tmp/foo"));
 }
 
 TEST_F(RoutingTests, get_routing_thread_name) {

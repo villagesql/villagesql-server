@@ -29,12 +29,13 @@
 #include <mutex>   // lock_guard
 #include <string>
 #include <system_error>  // error_code
+#include "mysql/harness/destination.h"
 
 class StateTrackingDestination : public Destination {
  public:
-  StateTrackingDestination(std::string id, std::string addr, uint16_t port,
+  StateTrackingDestination(std::string id, mysql_harness::Destination dest,
                            DestNextAvailable *balancer, size_t ndx)
-      : Destination(std::move(id), std::move(addr), port),
+      : Destination(std::move(id), std::move(dest)),
         balancer_{balancer},
         ndx_{ndx} {}
 
@@ -63,7 +64,7 @@ Destinations DestNextAvailable::destinations() {
 
     for (size_t ndx{}; cur != end; ++cur, ++ndx) {
       dests.push_back(std::make_unique<StateTrackingDestination>(
-          cur->str(), cur->address(), cur->port(), this, ndx));
+          cur->str(), *cur, this, ndx));
     }
   }
 

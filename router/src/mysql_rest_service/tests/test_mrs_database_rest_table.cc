@@ -593,8 +593,8 @@ void DatabaseRestTableTest::SetUp() {
   }
 
   m_ = std::make_unique<mysqlrouter::MySQLSession>();
-  m_->connect("localhost", server_->server_port(), "root", "", "", "",
-              mysqlrouter::MySQLSession::kDefaultConnectTimeout,
+  m_->connect("localhost", server_->classic_tcp_destination().port(), "root",
+              "", "", "", mysqlrouter::MySQLSession::kDefaultConnectTimeout,
               mysqlrouter::MySQLSession::kDefaultReadTimeout,
               CLIENT_FOUND_ROWS);
 

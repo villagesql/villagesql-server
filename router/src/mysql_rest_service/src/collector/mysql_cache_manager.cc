@@ -171,14 +171,11 @@ bool MysqlCacheManager::MysqlCacheCallbacks::is_default_server(
     Object &obj) const {
   const auto &active_params = obj->get_connection_parameters();
 
-  if (!active_params.conn_opts.unix_socket.empty()) return false;
-
   // Drop the server is its not on the providers list,
   // Some server was either removed from it or the connection was
   // moved from some other cache.
   return connection_configuration_.provider_->is_node_supported(
-      {active_params.conn_opts.host,
-       static_cast<uint16_t>(active_params.conn_opts.port)});
+      active_params.conn_opts.destination);
 }
 
 bool MysqlCacheManager::MysqlCacheCallbacks::is_default_user(
@@ -209,13 +206,14 @@ MysqlCacheManager::MysqlCacheCallbacks::new_connection_params(bool wait) {
     throw std::runtime_error(
         "Connection to MySQL is impossible, there are not destinations "
         "configured.");
-  log_debug("MysqlCacheManager::new_connection_params address:%s, port:%i",
-            node->address().c_str(), static_cast<int>(node->port()));
+  log_debug("MysqlCacheManager::new_connection_params address:%s",
+            node->str().c_str());
   //  result.ssl_opts.ssl_mode = SSL_MODE_PREFERRED;
   result.conn_opts.username = connection_configuration_.mysql_user_;
   result.conn_opts.password = connection_configuration_.mysql_password_;
-  result.conn_opts.host = node->address();
-  result.conn_opts.port = node->port();
+
+  result.conn_opts.destination = *node;
+
   result.conn_opts.extra_client_flags = CLIENT_FOUND_ROWS;
 
   const auto &ssl =

@@ -31,12 +31,12 @@
 #include <memory>
 #include <optional>
 #include <string>
-#include <unordered_map>
-#include <variant>
 #include <vector>
 
 #include "basic_protocol_splicer.h"
 #include "connection.h"  // MySQLRoutingConnectionBase
+#include "mysql/harness/destination.h"
+#include "mysql/harness/destination_endpoint.h"
 #include "mysql/harness/net_ts/executor.h"
 #include "mysql/harness/net_ts/timer.h"
 #include "mysqlrouter/channel.h"
@@ -275,61 +275,69 @@ class MysqlRoutingClassicConnectionBase
 
   virtual void stash_server_conn();
 
-  std::string get_destination_id() const override {
+  std::optional<mysql_harness::Destination> get_destination_id()
+      const override {
     return expected_server_mode() == mysqlrouter::ServerMode::ReadOnly
                ? read_only_destination_id()
                : read_write_destination_id();
   }
 
-  void destination_id(const std::string &id) {
+  void destination_id(const mysql_harness::Destination &id) {
     expected_server_mode() == mysqlrouter::ServerMode::ReadOnly
         ? read_only_destination_id(id)
         : read_write_destination_id(id);
   }
 
-  std::string read_only_destination_id() const override {
+  std::optional<mysql_harness::Destination> read_only_destination_id()
+      const override {
     return ro_destination_id_;
   }
 
-  void read_only_destination_id(const std::string &destination_id) {
+  void read_only_destination_id(
+      const mysql_harness::Destination &destination_id) {
     ro_destination_id_ = destination_id;
   }
 
-  std::string read_write_destination_id() const override {
+  std::optional<mysql_harness::Destination> read_write_destination_id()
+      const override {
     return rw_destination_id_;
   }
-  void read_write_destination_id(const std::string &destination_id) {
+
+  void read_write_destination_id(
+      const mysql_harness::Destination &destination_id) {
     rw_destination_id_ = destination_id;
   }
 
-  std::optional<net::ip::tcp::endpoint> destination_endpoint() const override {
+  std::optional<mysql_harness::DestinationEndpoint> destination_endpoint()
+      const override {
     return expected_server_mode() == mysqlrouter::ServerMode::ReadOnly
                ? read_only_destination_endpoint()
                : read_write_destination_endpoint();
   }
 
-  void destination_endpoint(const std::optional<net::ip::tcp::endpoint> &ep) {
+  void destination_endpoint(
+      const std::optional<mysql_harness::DestinationEndpoint> &ep) {
     expected_server_mode() == mysqlrouter::ServerMode::ReadOnly
         ? read_only_destination_endpoint(ep)
         : read_write_destination_endpoint(ep);
   }
 
-  std::optional<net::ip::tcp::endpoint> read_only_destination_endpoint()
-      const override {
+  std::optional<mysql_harness::DestinationEndpoint>
+  read_only_destination_endpoint() const override {
     return ro_destination_endpoint_;
   }
   void read_only_destination_endpoint(
-      const std::optional<net::ip::tcp::endpoint> &ep) {
+      const std::optional<mysql_harness::DestinationEndpoint> &ep) {
     ro_destination_endpoint_ = ep;
   }
 
-  std::optional<net::ip::tcp::endpoint> read_write_destination_endpoint()
-      const override {
+  std::optional<mysql_harness::DestinationEndpoint>
+  read_write_destination_endpoint() const override {
     return rw_destination_endpoint_;
   }
 
   void read_write_destination_endpoint(
-      const std::optional<net::ip::tcp::endpoint> &ep) {
+      const std::optional<mysql_harness::DestinationEndpoint> &ep) {
     rw_destination_endpoint_ = ep;
   }
 
@@ -470,11 +478,13 @@ class MysqlRoutingClassicConnectionBase
   ClientSideConnection client_conn_;
   ServerSideConnection server_conn_;
 
-  std::string rw_destination_id_;  // read-write destination-id
-  std::string ro_destination_id_;  // read-only destination-id
+  std::optional<mysql_harness::Destination>
+      rw_destination_id_;  // read-write destination-id
+  std::optional<mysql_harness::Destination>
+      ro_destination_id_;  // read-only destination-id
 
-  std::optional<net::ip::tcp::endpoint> rw_destination_endpoint_;
-  std::optional<net::ip::tcp::endpoint> ro_destination_endpoint_;
+  std::optional<mysql_harness::DestinationEndpoint> rw_destination_endpoint_;
+  std::optional<mysql_harness::DestinationEndpoint> ro_destination_endpoint_;
 
   /**
    * client side handshake isn't finished yet.

@@ -26,19 +26,15 @@
 #ifndef ROUTING_CONTEXT_INCLUDED
 #define ROUTING_CONTEXT_INCLUDED
 
-#include <array>
 #include <atomic>
 #include <chrono>
-#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
-#include <vector>
 
 #include "blocked_endpoints.h"
 #include "destination_ssl_context.h"
 #include "mysql/harness/filesystem.h"  // Path
-#include "mysql/harness/tls_context.h"
 #include "mysql/harness/tls_server_context.h"
 #include "mysql_router_thread.h"
 #include "mysqlrouter/base_protocol.h"
@@ -48,7 +44,6 @@
 #include "mysqlrouter/ssl_mode.h"
 #include "routing_config.h"
 #include "shared_quarantine_handler.h"
-#include "tcp_address.h"
 
 /**
  * @brief MySQLRoutingContext holds data used by MySQLRouting (1 per plugin
@@ -116,7 +111,7 @@ class MySQLRoutingContext {
     return routing_config_.connect_retry_timeout;
   }
 
-  const mysql_harness::TCPAddress &get_bind_address() const {
+  const mysql_harness::TcpDestination &get_bind_address() const {
     return routing_config_.bind_address;
   }
 

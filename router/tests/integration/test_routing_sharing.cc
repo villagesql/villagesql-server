@@ -117,6 +117,18 @@ std::ostream &operator<<(std::ostream &os, MysqlError e) {
 }
 
 namespace {
+
+stdx::expected<void, MysqlError> cli_connect(
+    MysqlClient &cli, const mysql_harness::Destination &dest) {
+  if (dest.is_local()) {
+    const auto &local_dest = dest.as_local();
+    return cli.connect(MysqlClient::unix_socket_t{}, local_dest.path());
+  }
+
+  const auto &tcp_dest = dest.as_tcp();
+  return cli.connect(tcp_dest.hostname(), tcp_dest.port());
+}
+
 std::string find_executable_path(const std::string &name) {
   std::string path(getenv("PATH"));
 
@@ -411,18 +423,19 @@ class SharedRouter {
   integration_tests::Procs &process_manager() { return procs_; }
 
   template <size_t N>
-  static std::vector<std::string> destinations_from_shared_servers(
+  static std::vector<mysql_harness::Destination>
+  tcp_destinations_from_shared_servers(
       const std::array<SharedServer *, N> &servers) {
-    std::vector<std::string> dests;
-    for (const auto &s : servers) {
-      dests.push_back(s->server_host() + ":" +
-                      std::to_string(s->server_port()));
+    std::vector<mysql_harness::Destination> dests;
+    for (const auto &srv : servers) {
+      dests.push_back(srv->classic_tcp_destination());
     }
 
     return dests;
   }
 
-  void spawn_router(const std::vector<std::string> &destinations) {
+  void spawn_router(
+      const std::vector<mysql_harness::Destination> &destinations) {
     auto userfile = conf_dir_.file("userfile");
     {
       std::ofstream ofs(userfile);
@@ -458,6 +471,26 @@ class SharedRouter {
         .section("http_server", {{"bind_address", "127.0.0.1"},
                                  {"port", std::to_string(rest_port_)}});
 
+    auto make_destinations =
+        [](const std::vector<mysql_harness::Destination> &destinations) {
+          std::string dests;
+          bool is_first = true;
+          for (const auto &dest : destinations) {
+            if (is_first) {
+              is_first = false;
+            } else {
+              dests += ",";
+            }
+
+            if (dest.is_local()) {
+              dests += "local:";
+            }
+
+            dests += dest.str();
+          }
+          return dests;
+        };
+
     for (const auto &param : share_connection_params) {
       auto port_key =
           std::make_tuple(param.client_ssl_mode, param.server_ssl_mode);
@@ -472,7 +505,7 @@ class SharedRouter {
           "routing:classic_" + param.testname,
           {
               {"bind_port", std::to_string(port)},
-              {"destinations", mysql_harness::join(destinations, ",")},
+              {"destinations", make_destinations(destinations)},
               {"protocol", "classic"},
               {"routing_strategy", "round-robin"},
 
@@ -711,7 +744,7 @@ class TestWithSharedRouter {
 
       SCOPED_TRACE("// spawn router");
       shared_router_->spawn_router(
-          SharedRouter::destinations_from_shared_servers(servers));
+          SharedRouter::tcp_destinations_from_shared_servers(servers));
     }
   }
 
@@ -1042,7 +1075,7 @@ TEST_P(ShareConnectionTest, classic_protocol_purge_after_connect_same_user) {
       for (auto id : ids) {
         ASSERT_NO_ERROR(srv_cli->query("KILL " + std::to_string(id)));
 
-        cli_ids[ndx] = std::make_pair(s->server_port(), id);
+        cli_ids[ndx] = std::make_pair(s->classic_tcp_destination().port(), id);
       }
     }
 
@@ -1130,7 +1163,8 @@ TEST_P(ShareConnectionTest, classic_protocol_pool_after_connect_same_user) {
         auto events_res = changed_event_counters(*srv_cli, id);
         ASSERT_NO_ERROR(events_res);
 
-        auto connection_id = std::make_pair(s->server_port(), id);
+        auto connection_id =
+            std::make_pair(s->classic_tcp_destination().port(), id);
         auto last_it = last_events.find(connection_id);
 
         if (can_share) {
@@ -6394,13 +6428,13 @@ TEST_P(
   }
 
   SCOPED_TRACE("// populate the auth-cache on the server");
-  for (const auto &s : shared_servers()) {
+  for (const auto &srv : shared_servers()) {
     MysqlClient cli;
 
     cli.username(username);
     cli.password(password);
 
-    ASSERT_NO_ERROR(cli.connect(s->server_host(), s->server_port()));
+    ASSERT_NO_ERROR(cli_connect(cli, srv->classic_socket_destination()));
   }
 
   SCOPED_TRACE("// reuse");

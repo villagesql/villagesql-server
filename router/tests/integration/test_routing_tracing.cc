@@ -299,9 +299,8 @@ class SharedRouter {
     std::vector<std::string> dests;
     dests.reserve(servers.size());
 
-    for (const auto &s : servers) {
-      dests.push_back(s->server_host() + ":" +
-                      std::to_string(s->server_port()));
+    for (const auto &srv : servers) {
+      dests.push_back(srv->classic_tcp_destination().str());
     }
 
     return dests;

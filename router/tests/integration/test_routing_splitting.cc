@@ -442,8 +442,7 @@ class TestEnv : public ::testing::Environment {
         GTEST_SKIP() << "mysql-server failed to start.";
       }
 
-      seeds.emplace_back(srv->server_host() + ":"s +
-                         std::to_string(srv->server_port()));
+      seeds.emplace_back(srv->classic_tcp_destination().str());
     }
 
     for (auto [ndx, srv] : stdx::views::enumerate(shared_servers_)) {
@@ -492,8 +491,8 @@ class TestEnv : public ::testing::Environment {
           proc_mgr.spawner(proc_mgr.get_origin().join("mysql").str())
               .wait_for_sync_point(ProcessManager::Spawner::SyncPoint::NONE)
               .spawn({"--host", "127.0.0.1", "--port",
-                      std::to_string(srv->server_port()), "--user", "root",
-                      "--password=", "-e",
+                      std::to_string(srv->classic_tcp_destination().port()),
+                      "--user", "root", "--password=", "-e",
                       "source " + ProcessManager::get_data_dir()
                                       .join("metadata-model-2.1.0.sql")
                                       .str()});
@@ -530,10 +529,8 @@ class TestEnv : public ::testing::Environment {
       auto row = (*query_res)[0];
       auto [server_uuid, server_id] = std::make_pair(row[0], row[1]);
 
-      auto server_classic_address =
-          srv->server_host() + ":"s + std::to_string(srv->server_port());
-      auto server_x_address =
-          srv->server_host() + ":"s + std::to_string(srv->server_mysqlx_port());
+      auto server_classic_address = srv->classic_tcp_destination().str();
+      auto server_x_address = srv->x_tcp_destination().str();
 
       // add this instance to the cluster.
       ASSERT_NO_ERROR(primary_cli.query(
@@ -578,10 +575,10 @@ class TestEnv : public ::testing::Environment {
               return "";
             })
             .spawn({"--bootstrap",
-                    "root@127.0.0.1:" + std::to_string(srv->server_port()),
-                    "--account", "router",         //
-                    "--report-host", "127.0.0.1",  //
-                    "-d", router_dir_.name(),      //
+                    "root@" + srv->classic_tcp_destination().str(),  //
+                    "--account", "router",                           //
+                    "--report-host", "127.0.0.1",                    //
+                    "-d", router_dir_.name(),                        //
                     "--conf-set-option",
                     "DEFAULT.plugin_folder=" +
                         ProcessManager::get_plugin_dir().str()});

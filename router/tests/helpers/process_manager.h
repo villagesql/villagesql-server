@@ -245,6 +245,30 @@ class ProcessManager {
     }
 
     /**
+     * set the socket for the classic protocol.
+     *
+     * @param sock  name of the socket where the mock server will accept
+     * the client connections.
+     */
+    MockServerCmdline &socket(std::string sock) {
+      socket_ = std::move(sock);
+
+      return *this;
+    }
+
+    /**
+     * set the socket for the x protocol.
+     *
+     * @param sock  name of the socket where the mock server will accept
+     * the client connections.
+     */
+    MockServerCmdline &xsocket(std::string sock) {
+      xsocket_ = std::move(sock);
+
+      return *this;
+    }
+
+    /**
      * set the bind-address of the mysql_server_mock.
      *
      * @param addr listen address for the mock server to bind to
@@ -318,6 +342,16 @@ class ProcessManager {
         server_params.emplace_back(std::to_string(x_port_));
       }
 
+      if (!socket_.empty()) {
+        server_params.emplace_back("--socket");
+        server_params.emplace_back(socket_);
+      }
+
+      if (!xsocket_.empty()) {
+        server_params.emplace_back("--xsocket");
+        server_params.emplace_back(xsocket_);
+      }
+
       if (enable_ssl_) {
         server_params.emplace_back("--ssl-mode");
         server_params.emplace_back("PREFERRED");
@@ -347,6 +381,9 @@ class ProcessManager {
     uint16_t port_{};
     uint16_t x_port_{};
     uint16_t http_port_{};
+
+    std::string socket_;
+    std::string xsocket_;
 
     bool enable_ssl_{false};
 

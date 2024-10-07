@@ -36,10 +36,8 @@
 #include <vector>
 
 #include "connection.h"
-#include "mysql.h"
 #include "mysql/harness/config_parser.h"
 #include "mysqlrouter/destination_nodes_state_notifier.h"
-#include "tcp_address.h"
 
 class MySQLRoutingBase;
 class BaseProtocol;
@@ -106,7 +104,7 @@ class ROUTING_EXPORT MySQLRoutingAPI {
   int get_active_connections() const;
   int get_total_connections() const;
 
-  std::vector<mysql_harness::TCPAddress> get_destinations() const;
+  std::vector<mysql_harness::Destination> get_destinations() const;
   SslOptions get_destination_ssl_options() const;
 
   void start_accepting_connections();

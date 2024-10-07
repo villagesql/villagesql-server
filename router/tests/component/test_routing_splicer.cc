@@ -49,6 +49,7 @@
 #include "router/src/routing/tests/mysql_client.h"
 #include "router_component_test.h"  // ProcessManager
 #include "router_component_testutils.h"
+#include "test/temp_directory.h"
 
 using namespace std::string_literals;
 using namespace std::chrono_literals;
@@ -1940,6 +1941,139 @@ TEST_P(SplicerParamTest, classic_protocol) {
 
   const std::string destination(mock_server_host_ + ":" +
                                 std::to_string(server_port));
+  const std::string mock_username = "someuser";
+  const std::string mock_password = "somepass";
+
+  auto config = mysql_harness::join(
+      std::vector<std::string>{mysql_harness::ConfigBuilder::build_section(
+          "routing",
+          {
+              {"bind_port", std::to_string(router_port)},
+              {"destinations", destination},
+              {"routing_strategy", "round-robin"},
+              {"client_ssl_key", valid_ssl_key_},
+              {"client_ssl_cert", valid_ssl_cert_},
+              {"client_ssl_mode",
+               ssl_mode_to_string(GetParam().client_ssl_mode)},
+              {"server_ssl_mode",
+               ssl_mode_to_string(GetParam().server_ssl_mode)},
+          })},
+      "");
+  auto conf_file = create_config_file(conf_dir_.name(), config);
+
+  launch_router({"-c", conf_file});
+  EXPECT_TRUE(wait_for_port_ready(router_port));
+
+  mysqlrouter::MySQLSession sess;
+
+  sess.set_ssl_options(GetParam().my_ssl_mode,
+                       "",  // tls-version
+                       "",  // cipher
+                       "",  // ca
+                       "",  // capath
+                       "",  // crl
+                       ""   // crlpath
+  );
+
+  try {
+    SCOPED_TRACE("// connection to router");
+    sess.connect(router_host_, router_port,
+                 mock_username,  // user
+                 mock_password,  // pass
+                 "",             // socket
+                 ""              // schema
+    );
+
+    EXPECT_THAT(GetParam().expected_success, 0)
+        << "expected connect to fail, but it succeeded.";
+
+    const bool is_encrypted{sess.ssl_cipher() != nullptr};
+
+    SCOPED_TRACE("// checking connection is (not) encrypted");
+    EXPECT_EQ(is_encrypted, GetParam().expect_client_encrypted);
+
+    SCOPED_TRACE("// checking server's ssl_cipher");
+    try {
+      const auto row = sess.query_one("show status like 'ssl_cipher'");
+      ASSERT_TRUE(row) << "<show status like 'ssl_cipher'> returned no row";
+      ASSERT_EQ(row->size(), 2);
+
+      if (GetParam().expect_server_encrypted) {
+        EXPECT_STRNE((*row)[1], "");
+      } else {
+        EXPECT_STREQ((*row)[1], "");
+      }
+    } catch (const mysqlrouter::MySQLSession::Error &e) {
+      FAIL() << e.what();
+    }
+
+    SCOPED_TRACE("// SELECT <- 15Mbyte");
+    try {
+      const auto row =
+          sess.query_one("select repeat('a', 15 * 1024 * 1024) as a");
+      ASSERT_EQ(row->size(), 1);
+
+      EXPECT_EQ((*row)[0], std::string(15L * 1024 * 1024, 'a'));
+    } catch (const mysqlrouter::MySQLSession::Error &e) {
+      FAIL() << e.what();
+    }
+
+    SCOPED_TRACE("// SELECT -> 4k");
+    try {
+      const auto row = sess.query_one("select length(" +
+                                      std::string(4097, 'a') + ") as length");
+      ASSERT_EQ(row->size(), 1);
+
+      EXPECT_STREQ((*row)[0], "4097");
+    } catch (const mysqlrouter::MySQLSession::Error &e) {
+      FAIL() << e.what();
+    }
+
+  } catch (const mysqlrouter::MySQLSession::Error &e) {
+    auto expected_code = GetParam().expected_success;
+
+    // expected_code is in XError coded
+
+    if (expected_code == 5001) {
+      expected_code = 2026;
+    } else if (expected_code == 3159) {
+      expected_code = 2026;
+    }
+
+    EXPECT_EQ(e.code(), expected_code) << e.what();
+  }
+}
+
+/**
+ * classic protocol connections over unix-socket.
+ */
+TEST_P(SplicerParamTest, classic_protocol_unix_socket) {
+  const auto router_port = port_pool_.get_next_available();
+
+  TempDirectory tmp_dir;
+
+  std::string server_socket_path =
+      mysql_harness::Path(tmp_dir.name()).join("mock_server.sock").str();
+
+  auto mock_server_cmdline_args =
+      mock_server_cmdline("tls_endpoint.js").socket(server_socket_path).args();
+
+  // enable SSL support on the mock-server.
+  if (GetParam().mock_ssl_mode != mysql_ssl_mode::SSL_MODE_DISABLED) {
+    std::initializer_list<std::pair<std::string_view, std::string_view>>
+        mock_opts = {{"--ssl-cert", SSL_TEST_DATA_DIR "crl-server-cert.pem"},
+                     {"--ssl-key", SSL_TEST_DATA_DIR "crl-server-key.pem"},
+                     {"--ssl-mode", "PREFERRED"}};
+
+    for (const auto &[key, value] : mock_opts) {
+      mock_server_cmdline_args.emplace_back(key);
+      mock_server_cmdline_args.emplace_back(value);
+    }
+  }
+
+  mock_server_spawner().spawn(mock_server_cmdline_args);
+
+  const std::string destination("local://" + server_socket_path);
   const std::string mock_username = "someuser";
   const std::string mock_password = "somepass";
 

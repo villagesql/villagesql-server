@@ -867,8 +867,8 @@ GRClusterMetadata::fetch_cluster_topology(
         if (!mysqlrouter::check_group_replication_online(
                 metadata_connection_.get())) {
           log_warning(
-              "Metadata server %s:%d is not an online GR member - skipping.",
-              metadata_server.address().c_str(), metadata_server.port());
+              "Metadata server %s is not an online GR member - skipping.",
+              metadata_server.str().c_str());
           continue;
         }
 
@@ -883,9 +883,9 @@ GRClusterMetadata::fetch_cluster_topology(
                 QuorumConnectionLostAllowTraffic::none &&
             !mysqlrouter::check_group_has_quorum(metadata_connection_.get())) {
           log_warning(
-              "Metadata server %s:%d is not a member of quorum group - "
+              "Metadata server %s is not a member of quorum group - "
               "skipping.",
-              metadata_server.address().c_str(), metadata_server.port());
+              metadata_server.str().c_str());
           continue;
         }
 
@@ -900,10 +900,8 @@ GRClusterMetadata::fetch_cluster_topology(
       } catch (const mysqlrouter::MetadataUpgradeInProgressException &) {
         throw;
       } catch (const std::exception &e) {
-        log_warning(
-            "Failed fetching metadata from metadata server on %s:%d - %s",
-            metadata_server.address().c_str(), metadata_server.port(),
-            e.what());
+        log_warning("Failed fetching metadata from metadata server on %s - %s",
+                    metadata_server.str().c_str(), e.what());
       }
 
       if (result_tmp) {
@@ -1311,10 +1309,9 @@ GRClusterSetMetadataBackend::fetch_cluster_topology(
     const auto cluster_id_res = get_clusterset_id(*connection, target_cluster);
     if (!cluster_id_res) {
       log_warning(
-          "Failed fetching clusterset_id from the metadata server on %s:%d - "
+          "Failed fetching clusterset_id from the metadata server on %s - "
           "could not find Cluster '%s' in the metadata",
-          metadata_server.address().c_str(), metadata_server.port(),
-          target_cluster.c_str());
+          metadata_server.str().c_str(), target_cluster.c_str());
 
       return stdx::unexpected(cluster_id_res.error());
     }
@@ -1324,10 +1321,9 @@ GRClusterSetMetadataBackend::fetch_cluster_topology(
   const auto view_id_res = get_member_view_id(*connection, cs_id);
   if (!view_id_res) {
     log_warning(
-        "Failed fetching view_id from the metadata server on %s:%d - "
+        "Failed fetching view_id from the metadata server on %s - "
         "could not find ClusterSet with ID '%s' in the metadata",
-        metadata_server.address().c_str(), metadata_server.port(),
-        cs_id.c_str());
+        metadata_server.str().c_str(), cs_id.c_str());
     return stdx::unexpected(view_id_res.error());
   }
   const uint64_t view_id = view_id_res.value();
@@ -1337,10 +1333,9 @@ GRClusterSetMetadataBackend::fetch_cluster_topology(
             view_id, this->view_id_, metadata_read_ ? "yes" : "no");
 
   if (view_id < this->view_id_) {
-    log_info("Metadata server %s:%d has outdated metadata view_id = %" PRIu64
+    log_info("Metadata server %s has outdated metadata view_id = %" PRIu64
              ", current view_id = %" PRIu64 ", ignoring",
-             metadata_server.address().c_str(), metadata_server.port(), view_id,
-             this->view_id_);
+             metadata_server.str().c_str(), view_id, this->view_id_);
 
     return stdx::unexpected(
         make_error_code(metadata_cache::metadata_errc::outdated_view_id));

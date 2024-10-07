@@ -67,7 +67,7 @@ unsigned ConnectionContainer::disconnect(const AllowedNodes &nodes) {
         is_first = false;
       }
 
-      oss << "(" << allowed_node.address.str() << ", "
+      oss << "(" << allowed_node.destination.str() << ", "
           << to_string(allowed_node.mode) << ")";
     }
     std::cerr << oss.str() << "\n";
@@ -87,11 +87,11 @@ unsigned ConnectionContainer::disconnect(const AllowedNodes &nodes) {
                   << "rw: " << conn_rw_dest_id << "\n";
 #endif
 
-        bool ro_allowed{conn_ro_dest_id.empty()};
-        bool rw_allowed{conn_rw_dest_id.empty()};
+        bool ro_allowed{!conn_ro_dest_id.has_value()};
+        bool rw_allowed{!conn_rw_dest_id.has_value()};
 
         for (const auto &allowed_node : allowed_nodes) {
-          auto allowed_dest_id = allowed_node.address.str();
+          auto allowed_dest_id = allowed_node.destination;
 
           if (allowed_dest_id == conn_ro_dest_id) ro_allowed = true;
           if (allowed_dest_id == conn_rw_dest_id &&

@@ -27,6 +27,10 @@
 
 #include "mysqlrouter/routing_export.h"
 
+#include <list>
+#include <mutex>
+#include <string>
+
 #include "mysqlrouter/destination_status_types.h"
 
 // first argument is the new set of the allowed nodes
@@ -56,7 +60,7 @@ using MetadataRefreshCallback =
 // Callback argument is a destination we want to check, value returned is
 // true if the destination is quarantined, false otherwise.
 using QueryQuarantinedDestinationsCallback =
-    std::function<bool(const mysql_harness::TCPAddress &)>;
+    std::function<bool(const mysql_harness::Destination &)>;
 
 /** @class DestinationNodesStateNotifier
  *

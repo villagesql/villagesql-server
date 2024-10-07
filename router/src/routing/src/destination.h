@@ -26,27 +26,21 @@
 #ifndef ROUTING_DESTINATION_INCLUDED
 #define ROUTING_DESTINATION_INCLUDED
 
-#include <atomic>
-#include <cstdint>
-#include <list>
 #include <mutex>
 #include <optional>
-#include <string>
-#include <system_error>
 #include <vector>
 
-#include "my_compiler.h"  // MY_ATTRIBUTE
+#include "mysql/harness/destination.h"
 #include "mysql/harness/net_ts/io_context.h"
 #include "mysqlrouter/datatypes.h"
 #include "mysqlrouter/destination.h"
 #include "mysqlrouter/destination_nodes_state_notifier.h"
 #include "mysqlrouter/routing.h"
 #include "protocol/protocol.h"
-#include "tcp_address.h"
 
 namespace mysql_harness {
 class PluginFuncEnv;
-}
+}  // namespace mysql_harness
 
 /** @class RouteDestination
  * @brief Manage destinations for a Connection Routing
@@ -62,7 +56,7 @@ class PluginFuncEnv;
  */
 class RouteDestination : public DestinationNodesStateNotifier {
  public:
-  using AddrVector = std::vector<mysql_harness::TCPAddress>;
+  using AddrVector = std::vector<mysql_harness::Destination>;
 
   /** @brief Default constructor
    *
@@ -88,23 +82,19 @@ class RouteDestination : public DestinationNodesStateNotifier {
 
   /** @brief Adds a destination
    *
-   * Adds a destination using the given address and port number.
+   * Adds a destination.
    *
    * @param dest destination address
    */
-  virtual void add(const mysql_harness::TCPAddress dest);
-
-  /** @overload */
-  virtual void add(const std::string &address, uint16_t port);
+  virtual void add(const mysql_harness::Destination &dest);
 
   /** @brief Removes a destination
    *
    * Removes a destination using the given address and port number.
    *
-   * @param address IP or name
-   * @param port Port number
+   * @param dest destinationt to remove
    */
-  virtual void remove(const std::string &address, uint16_t port);
+  virtual void remove(const mysql_harness::Destination &dest);
 
   /** @brief Gets destination based on address and port
    *
@@ -117,12 +107,11 @@ class RouteDestination : public DestinationNodesStateNotifier {
    * This function can be used to check whether given destination is in
    * the list.
    *
-   * @param address IP or name
-   * @param port Port number
-   * @return an instance of mysql_harness::TCPAddress
+   * @param dest destination
+   * @return an instance of mysql_harness::TcpDestination
    */
-  virtual mysql_harness::TCPAddress get(const std::string &address,
-                                        uint16_t port);
+  virtual mysql_harness::Destination get(
+      const mysql_harness::Destination &dest);
 
   /** @brief Removes all destinations
    *

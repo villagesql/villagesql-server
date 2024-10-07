@@ -29,13 +29,13 @@
 #include <vector>
 
 #include "mrs/interface/ssl_configuration.h"
-#include "tcp_address.h"
+#include "mysql/harness/destination.h"
 
 namespace collector {
 
 class DestinationProvider {
  public:
-  using Node = mysql_harness::TCPAddress;
+  using Node = mysql_harness::Destination;
   using SslConfiguration = mrs::SslConfiguration;
 
   enum WaitingOp { kNoWait, kWaitUntilAvaiable, kWaitUntilTimeout };

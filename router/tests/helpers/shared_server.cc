@@ -187,6 +187,10 @@ void SharedServer::spawn_server_with_datadir(
 
   std::string log_file_name = "mysqld-" + std::to_string(starts_) + ".err";
 
+  // set the socket-path's in the datadir.
+  classic_socket_dest_ = {Path(datadir).join("mysql.sock").str()};
+  x_socket_dest_ = {Path(datadir).join("mysqlx.sock").str()};
+
   std::vector<std::string> args{
       "--no-defaults",  //
       "--lc-messages-dir=" + lc_messages_dir.str(),
@@ -194,12 +198,10 @@ void SharedServer::spawn_server_with_datadir(
       "--plugin_dir=" + plugindir.str(),  //
       "--log-error=" + datadir + mysql_harness::Path::directory_separator +
           log_file_name,
-      "--port=" + std::to_string(server_port_),
-      // defaults to {datadir}/mysql.socket
-      "--socket=" + Path(datadir).join("mysql.sock").str(),
-      "--mysqlx-port=" + std::to_string(server_mysqlx_port_),
-      // defaults to {datadir}/mysqlx.socket
-      "--mysqlx-socket=" + Path(datadir).join("mysqlx.sock").str(),
+      "--port=" + std::to_string(classic_tcp_destination().port()),
+      "--socket=" + classic_socket_destination().path(),
+      "--mysqlx-port=" + std::to_string(x_tcp_destination().port()),
+      "--mysqlx-socket=" + x_socket_destination().path(),
       // disable LOAD DATA/SELECT INTO on the server
       "--secure-file-priv=NULL",          //
       "--innodb_redo_log_capacity=8M",    // fast startups
@@ -259,7 +261,9 @@ stdx::expected<MysqlClient, MysqlError> SharedServer::admin_cli() {
   cli.username(account.username);
   cli.password(account.password);
 
-  auto connect_res = cli.connect(server_host(), server_port());
+  auto tcp_dest = classic_tcp_destination();
+
+  auto connect_res = cli.connect(tcp_dest.hostname(), tcp_dest.port());
   if (!connect_res) return stdx::unexpected(connect_res.error());
 
   return cli;

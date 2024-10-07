@@ -25,6 +25,7 @@
 #include "collector/counted_mysql_session.h"
 
 #include "mrs/router_observation_entities.h"
+#include "mysql/harness/destination.h"
 
 namespace collector {
 
@@ -116,10 +117,22 @@ void CountedMySQLSession::connect_and_set_opts(
     const ConnectionParameters &connection_params, const Sqls &initial_sqls) {
   connection_params_ = connection_params;
   initial_sqls_ = initial_sqls;
-  connect(connection_params_.conn_opts.host, connection_params_.conn_opts.port,
-          connection_params_.conn_opts.username,
-          connection_params_.conn_opts.password,
-          connection_params_.conn_opts.unix_socket,
+
+  std::string host;
+  uint16_t port{};
+  std::string unix_socket;
+
+  if (connection_params.conn_opts.destination.is_tcp()) {
+    const auto dest = connection_params.conn_opts.destination.as_tcp();
+    host = dest.hostname();
+    port = dest.port();
+  } else {
+    const auto dest = connection_params.conn_opts.destination.as_local();
+    unix_socket = dest.path();
+  }
+
+  connect(host, port, connection_params_.conn_opts.username,
+          connection_params_.conn_opts.password, unix_socket,
           connection_params_.conn_opts.default_schema,
           connection_params_.conn_opts.connect_timeout,
           connection_params_.conn_opts.read_timeout,
@@ -140,11 +153,15 @@ void CountedMySQLSession::connect(const std::string &host, unsigned int port,
                         extra_client_flags);
   reconnect_at_next_query_ = false;
 
-  connection_params_.conn_opts.host = host;
-  connection_params_.conn_opts.port = port;
+  auto dest = !unix_socket.empty()
+                  ? mysql_harness::Destination(
+                        mysql_harness::LocalDestination(unix_socket))
+                  : mysql_harness::Destination(
+                        mysql_harness::TcpDestination(host, port));
+
+  connection_params_.conn_opts.destination = dest;
   connection_params_.conn_opts.username = username;
   connection_params_.conn_opts.password = password;
-  connection_params_.conn_opts.unix_socket = unix_socket;
   connection_params_.conn_opts.default_schema = default_schema;
   connection_params_.conn_opts.connect_timeout = connect_timeout;
   connection_params_.conn_opts.read_timeout = read_timeout;

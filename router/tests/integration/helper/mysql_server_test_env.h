@@ -69,7 +69,8 @@ class MySQLServerTestEnv : public ::testing::Environment {
       cli->username(account.username);
       cli->password(account.password);
 
-      auto connect_res = cli->connect(s->server_host(), s->server_port());
+      auto connect_res = cli->connect(s->classic_tcp_destination().hostname(),
+                                      s->classic_tcp_destination().port());
       ASSERT_NO_ERROR(connect_res);
 
       admin_clis_.push_back(cli);

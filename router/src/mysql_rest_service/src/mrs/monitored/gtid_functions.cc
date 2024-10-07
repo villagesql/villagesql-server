@@ -37,11 +37,6 @@ IMPORT_LOG_FUNCTIONS()
 namespace mrs {
 namespace monitored {
 
-mysql_harness::TCPAddress get_tcpaddr(
-    const collector::CountedMySQLSession::ConnectionParameters &c) {
-  return {c.conn_opts.host, static_cast<uint16_t>(c.conn_opts.port)};
-}
-
 std::string get_most_relevant_gtid(const std::vector<std::string> &gtids) {
   for (auto &g : gtids) {
     log_debug("Received gtid: %s", g.c_str());
@@ -55,7 +50,7 @@ std::string get_session_tracked_gtids_for_metadata_response(
   auto gtids = session->get_session_tracker_data(SESSION_TRACK_GTIDS);
   if (gtids.size()) {
     Counter<kEntityCounterRestMetadataGtids>::increment();
-    auto addr = get_tcpaddr(session->get_connection_parameters());
+    auto addr = session->get_connection_parameters().conn_opts.destination;
     for (auto &gtid : gtids) {
       gtid_manager->remember(addr, {gtid});
     }

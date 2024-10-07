@@ -68,7 +68,7 @@ std::string create_state_file_content(
     const std::string &clusterset_id,
     const std::vector<uint16_t> &metadata_servers_ports,
     const uint64_t view_id) {
-  std::vector<mysql_harness::TCPAddress> metadata_servers;
+  std::vector<mysql_harness::TcpDestination> metadata_servers;
   for (const auto port : metadata_servers_ports) {
     metadata_servers.emplace_back("127.0.0.1", port);
   }
@@ -77,13 +77,12 @@ std::string create_state_file_content(
 }
 
 std::string create_state_file_content(
-    const std::vector<mysql_harness::TCPAddress> &metadata_servers,
+    const std::vector<mysql_harness::TcpDestination> &metadata_servers,
     const std::string &cluster_type_specific_id,
     const std::string &clusterset_id, const uint64_t view_id /*= 0*/) {
   std::string metadata_servers_str;
   for (auto [i, metadata_server] : stdx::views::enumerate(metadata_servers)) {
-    metadata_servers_str += "\"mysql://" + metadata_server.address() + ":" +
-                            std::to_string(metadata_server.port()) + "\"";
+    metadata_servers_str += "\"mysql://" + metadata_server.str() + "\"";
     if (i < metadata_servers.size() - 1) metadata_servers_str += ",";
   }
   std::string view_id_str;

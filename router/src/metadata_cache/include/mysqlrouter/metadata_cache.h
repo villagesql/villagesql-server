@@ -30,12 +30,8 @@
 
 #include <atomic>
 #include <chrono>
-#include <exception>
-#include <list>
-#include <map>
 #include <stdexcept>
 #include <string>
-#include <vector>
 
 #include "my_rapidjson_size_t.h"
 
@@ -48,7 +44,6 @@
 #include "mysqlrouter/metadata.h"
 #include "mysqlrouter/metadata_cache_datatypes.h"
 #include "mysqlrouter/mysql_session.h"
-#include "tcp_address.h"
 
 namespace metadata_cache {
 constexpr const uint16_t kDefaultMetadataPort{32275};

@@ -33,7 +33,6 @@
 using UID = mrs::database::GTIDuuid;
 using Gtid = mrs::database::Gtid;
 using GtidSet = mrs::database::GtidSet;
-using TCPaddress = mysql_harness::TCPAddress;
 
 const auto k_ok = mrs::GtidAction::k_is_on_server;
 const auto k_none = mrs::GtidAction::k_not_found;
@@ -41,12 +40,12 @@ const auto k_update = mrs::GtidAction::k_needs_update;
 
 class GtidManagerTest : public testing::Test {
  public:
-  TCPaddress make_addr(uint8_t id, uint16_t port) {
+  static mysql_harness::TcpDestination make_addr(uint8_t id, uint16_t port) {
     using namespace std::string_literals;
-    return TCPaddress("127.0.0."s + std::to_string(id), port);
+    return {"127.0.0."s + std::to_string(id), port};
   }
 
-  Gtid make_gtid(int uid, std::string range) {
+  static Gtid make_gtid(int uid, std::string range) {
     UID u;
     memcpy(u.raw.data(), &uid, sizeof(uid));
     Gtid result{u.to_string() + range};

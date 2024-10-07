@@ -86,8 +86,8 @@ ARClusterMetadata::fetch_cluster_topology(
               ? target_cluster.to_string()
               : "";
       if (!get_member_view_id(*metadata_connection_, cluster_id, view_id)) {
-        log_warning("Failed fetching view_id from the metadata server on %s:%d",
-                    metadata_server.address().c_str(), metadata_server.port());
+        log_warning("Failed fetching view_id from the metadata server on %s",
+                    metadata_server.str().c_str());
         continue;
       }
 
@@ -112,9 +112,8 @@ ARClusterMetadata::fetch_cluster_topology(
     } catch (const mysqlrouter::MetadataUpgradeInProgressException &) {
       throw;
     } catch (const std::exception &e) {
-      log_warning("Failed fetching metadata from metadata server on %s:%d - %s",
-                  metadata_server.address().c_str(), metadata_server.port(),
-                  e.what());
+      log_warning("Failed fetching metadata from metadata server on %s - %s",
+                  metadata_server.str().c_str(), e.what());
     }
   }
 

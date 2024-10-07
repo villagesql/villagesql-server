@@ -34,11 +34,7 @@
 #include <vector>
 
 #include "connection.h"
-#include "destination.h"
-#include "mysql_routing_common.h"
-#include "mysqlrouter/datatypes.h"
 #include "mysqlrouter/routing_component.h"
-#include "tcp_address.h"
 
 class MySQLRoutingConnectionBase;
 

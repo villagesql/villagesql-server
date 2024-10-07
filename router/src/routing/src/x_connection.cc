@@ -26,7 +26,6 @@
 #include "x_connection.h"
 
 #include <exception>
-#include <mutex>
 
 #include <google/protobuf/io/coded_stream.h>
 #include <google/protobuf/io/zero_copy_stream.h>
@@ -1183,12 +1182,19 @@ void MysqlRoutingXConnection::forward_tls_init() {
 }
 
 static stdx::expected<TlsClientContext *, std::error_code> get_dest_ssl_ctx(
-    MySQLRoutingContext &ctx, const std::string &id) {
-  return mysql_harness::make_tcp_address(id).and_then(
-      [&ctx, &id](const auto &addr)
-          -> stdx::expected<TlsClientContext *, std::error_code> {
-        return ctx.dest_ssl_ctx(id, addr.address());
-      });
+    MySQLRoutingContext &ctx,
+    const std::optional<mysql_harness::Destination> &opt_dest) {
+  if (!opt_dest) {
+    return stdx::unexpected(make_error_code(std::errc::invalid_argument));
+  }
+
+  const auto &dest = *opt_dest;
+
+  if (dest.is_local()) {
+    return ctx.dest_ssl_ctx(dest.str(), dest.as_local().path());
+  }
+
+  return ctx.dest_ssl_ctx(dest.str(), dest.as_tcp().hostname());
 }
 
 void MysqlRoutingXConnection::tls_connect_init() {

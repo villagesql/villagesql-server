@@ -29,6 +29,8 @@
 #include <chrono>
 #include "classic_connection_base.h"
 #include "destination.h"  // RouteDestination
+#include "mysql/harness/destination.h"
+#include "mysql/harness/destination_endpoint.h"
 #include "mysql/harness/net_ts/io_context.h"
 #include "mysql/harness/net_ts/timer.h"
 #include "mysqlrouter/destination.h"
@@ -71,7 +73,7 @@ class ConnectProcessor : public Processor {
   void stage(Stage stage) { stage_ = stage; }
   [[nodiscard]] Stage stage() const { return stage_; }
 
-  bool is_destination_good(const std::string &hostname, uint16_t port) const;
+  bool is_destination_good(const mysql_harness::Destination &dest) const;
 
  private:
   stdx::expected<Processor::Result, std::error_code> init_destination();
@@ -94,12 +96,13 @@ class ConnectProcessor : public Processor {
   net::io_context &io_ctx_;
 
   net::ip::tcp::resolver resolver_{io_ctx_};
-  server_protocol_type::endpoint server_endpoint_;
+  mysql_harness::DestinationEndpoint server_endpoint_;
 
   Destinations &destinations_;
   Destinations::iterator destinations_it_;
-  net::ip::tcp::resolver::results_type endpoints_;
-  net::ip::tcp::resolver::results_type::iterator endpoints_it_;
+
+  std::vector<mysql_harness::DestinationEndpoint> endpoints_;
+  std::vector<mysql_harness::DestinationEndpoint>::iterator endpoints_it_;
 
   bool all_quarantined_{false};
   std::error_code destination_ec_;

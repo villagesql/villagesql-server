@@ -44,7 +44,6 @@
 #include "mysqlrouter/sys_user_operations.h"
 #include "mysqlrouter/uri.h"
 #include "random_generator.h"
-#include "tcp_address.h"
 #include "unique_ptr.h"
 
 namespace mysql_harness {
