@@ -48,17 +48,25 @@ class HandlerFactory {
   virtual ~HandlerFactory() = default;
 
   virtual std::unique_ptr<Handler> create_db_schema_metadata_catalog_handler(
-      EndpointBasePtr db_object_endpoint) = 0;
+      EndpointBasePtr db_schema_endpoint) = 0;
   virtual std::unique_ptr<Handler> create_db_schema_metadata_handler(
-      EndpointBasePtr db_service_endpoint) = 0;
+      EndpointBasePtr db_schema_endpoint) = 0;
   virtual std::unique_ptr<Handler> create_db_object_metadata_catalog_handler(
       EndpointBasePtr db_object_endpoint) = 0;
   virtual std::unique_ptr<Handler> create_db_object_metadata_handler(
       EndpointBasePtr db_object_endpoint) = 0;
-  virtual std::unique_ptr<Handler> create_db_object_handler(
-      EndpointBasePtr db_object_endpoint) = 0;
   virtual std::unique_ptr<Handler> create_db_service_metadata_handler(
       EndpointBasePtr db_service_endpoint) = 0;
+
+  virtual std::unique_ptr<Handler> create_db_schema_openapi_handler(
+      EndpointBasePtr db_schema_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_db_service_openapi_handler(
+      EndpointBasePtr db_service_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_db_object_openapi_handler(
+      EndpointBasePtr db_object_endpoint) = 0;
+
+  virtual std::unique_ptr<Handler> create_db_object_handler(
+      EndpointBasePtr db_object_endpoint) = 0;
   virtual std::unique_ptr<Handler> create_content_file(
       EndpointBasePtr db_object_endpoint) = 0;
   virtual std::unique_ptr<Handler> create_authentication_login(

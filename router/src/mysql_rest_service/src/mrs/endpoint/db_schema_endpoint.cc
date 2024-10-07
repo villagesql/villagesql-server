@@ -53,6 +53,8 @@ void DbSchemaEndpoint::activate_public() {
       factory_->create_db_schema_metadata_catalog_handler(shared_from_this()));
   url_handlers_.push_back(
       factory_->create_db_schema_metadata_handler(shared_from_this()));
+  url_handlers_.push_back(
+      factory_->create_db_schema_openapi_handler(shared_from_this()));
 }
 
 void DbSchemaEndpoint::update() {

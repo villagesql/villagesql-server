@@ -75,9 +75,10 @@ std::string to_string(const helper::Optional<T> &v) {
   return to_string(v.value());
 }
 
-uint32_t check_privileges(
+uint32_t Handler::check_privileges(
     const std::vector<database::entry::AuthPrivilege> &privileges,
-    UniversalId service_id, UniversalId schema_id, UniversalId db_object_id) {
+    const UniversalId &service_id, const UniversalId &schema_id,
+    const UniversalId &db_object_id) {
   uint32_t aggregated_privileges = 0;
   log_debug("RestRequestHandler: look for service:%s, schema:%s, obj:%s",
             service_id.to_string().c_str(), schema_id.to_string().c_str(),
@@ -358,9 +359,9 @@ class RestRequestHandler : public ::http::base::RequestHandler {
         log_debug("RestRequestHandler(service_id:%s): required_access:%i",
                   service_id.to_string().c_str(), required_access);
         if (!(required_access &
-              check_privileges(ctxt.user.privileges, service_id,
-                               rest_handler_->get_schema_id(),
-                               rest_handler_->get_db_object_id()))) {
+              Handler::check_privileges(ctxt.user.privileges, service_id,
+                                        rest_handler_->get_schema_id(),
+                                        rest_handler_->get_db_object_id()))) {
           throw http::Error{HttpStatusCode::Forbidden};
         }
       }

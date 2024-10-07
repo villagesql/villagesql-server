@@ -1,0 +1,881 @@
+/*
+  Copyright (c) 2024, Oracle and/or its affiliates.
+
+  This program is free software; you can redistribute it and/or modify
+  it under the terms of the GNU General Public License, version 2.0,
+  as published by the Free Software Foundation.
+
+  This program is also distributed with certain software (including
+  but not limited to OpenSSL) that is licensed under separate terms,
+  as designated in a particular file or component or in included license
+  documentation.  The authors of MySQL hereby grant you an additional
+  permission to link the program and your derivative works with the
+  separately licensed software that they have included with MySQL.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+*/
+
+#include "mrs/rest/openapi_object_creator.h"
+
+#include <chrono>
+#include <iomanip>
+#include <sstream>
+
+#include "helper/string/contains.h"      // starts_with
+#include "mysql/harness/string_utils.h"  // split_string
+
+namespace mrs {
+namespace rest {
+
+namespace {
+std::string get_timestamp() {
+  using namespace std::chrono;
+  auto now = system_clock::now();
+  auto now_time_t = system_clock::to_time_t(now);
+
+  // Get the fractional seconds
+  auto now_ms = duration_cast<microseconds>(now.time_since_epoch()) % 1'000'000;
+
+  std::tm now_tm = *std::localtime(&now_time_t);
+
+  std::ostringstream oss;
+  oss << std::put_time(&now_tm, "%Y-%m-%d %H:%M:%S") << '.' << std::setfill('0')
+      << std::setw(6) << now_ms.count();
+
+  return oss.str();
+}
+}  // anonymous namespace
+
+rapidjson::Value get_header_info(
+    std::shared_ptr<DbService> service,
+    rapidjson::Document::AllocatorType &allocator) {
+  if (!service) return {};
+
+  std::string title;
+  if (!service->name.empty()) {
+    title = service->name;
+  } else {
+    title = service->url_context_root.substr(1);  // skip leading '\'
+  }
+  title += " OpenAPI specification";
+
+  rapidjson::Value result(rapidjson::kObjectType);
+
+  result.AddMember("title", rapidjson::Value(title, allocator), allocator)
+      .AddMember("version",
+                 rapidjson::Value(std::string(k_schema_version), allocator),
+                 allocator);
+
+  if (service->comment.has_value()) {
+    result.AddMember("description",
+                     rapidjson::Value(*service->comment, allocator), allocator);
+  }
+
+  return result;
+}
+
+/**
+ * Helper class that facilitates generating OpenAPI swagger for the given
+ * DBobject entry.
+ */
+class OpenApiCreator {
+ public:
+  OpenApiCreator(DbObjectPtr entry,
+                 rapidjson::Document::AllocatorType &allocator)
+      : allocator_{allocator},
+        entry_{std::move(entry)},
+        schema_ref_{"#/components/schemas/" + entry_->name} {
+    for (auto &c : entry_->object_description->fields) {
+      auto column = std::dynamic_pointer_cast<mrs::database::entry::Column>(c);
+      if (!column || !column->enabled) continue;
+
+      if (column->is_primary) {
+        // Add all Primary Keys, even if there are more than one
+        if (!primary_key_)
+          primary_key_ = "{" + c->name + "}";
+        else {
+          if (!primary_key_->empty()) primary_key_.value() += ",";
+
+          primary_key_.value() += "{" + c->name + "}";
+        }
+
+        parameters_.PushBack(
+            create_parameter(c->name, column_type_to_openapi(column->type)),
+            allocator_);
+      }
+    }
+  }
+
+ public:
+  /**
+   * Create HTTP GET method contents for OpenAPI path.
+   */
+  rapidjson::Value create_get_method() const;
+
+  /**
+   * Create HTTP GET method contents for OpenAPI path. Primary key used as a
+   * parameter.
+   */
+  rapidjson::Value create_get_by_key_method() const;
+
+  /**
+   * Create HTTP POST method contents for OpenAPI path.
+   */
+  rapidjson::Value create_post_method() const;
+
+  /**
+   * Create HTTP DELETE method contents for OpenAPI path.
+   */
+  rapidjson::Value create_delete_method() const;
+
+  /**
+   * Create HTTP DELETE method contents for OpenAPI path. Primary key used as a
+   * parameter.
+   */
+  rapidjson::Value create_delete_by_key_method() const;
+
+  /**
+   * Create HTTP PUT method contents for OpenAPI path.
+   */
+  rapidjson::Value create_put_method() const;
+
+  /**
+   * Create OpenAPI components for the current entry.
+   */
+  rapidjson::Value create_components() const;
+
+  /**
+   * Information if the current entry contain Primary Key configured.
+   */
+  bool has_primary_key() const { return primary_key_.has_value(); }
+
+  /**
+   * Get Primary Key value.
+   */
+  std::string primary_key() const { return *primary_key_; }
+
+ private:
+  /**
+   * Add OpenAPI type constraints based on the MySQL datatype for the given
+   * column.
+   */
+  rapidjson::Value add_type_constraints(
+      const std::string &type_name,
+      const mrs::database::entry::ColumnType type) const;
+
+  /**
+   * Add parameter for entries with Primary Key.
+   */
+  rapidjson::Value create_parameter(std::string_view name,
+                                    std::string_view type) const;
+
+  /**
+   * Add filter parameters to GET and DELETE methods.
+   */
+  rapidjson::Value get_filter_parameter(const bool is_required) const;
+
+  /**
+   * Add 'limit' and 'offset' parameters to GET method.
+   */
+  rapidjson::Value get_integer_parameter(const std::string &name) const;
+
+  /**
+   * Create a reference to OpenAPI components section for methods that are
+   * returning multiple records.
+   */
+  rapidjson::Value get_content_schema_array() const;
+
+  /**
+   * Create a reference to OpenAPI components section for methods that are
+   * returning one record.
+   */
+  rapidjson::Value get_content_schema_single() const;
+
+  /**
+   * Add security section if applicable.
+   */
+  void add_security(rapidjson::Value &method) const;
+
+  /**
+   *  Tags that are going to be used to distinguish paths.
+   */
+  rapidjson::Value get_tag() const;
+
+  /**
+   * Map column type to OpenAPI supported types.
+   */
+  std::string column_type_to_openapi(
+      mrs::database::entry::ColumnType type) const;
+
+  /**
+   * Response for successful DELETE operation.
+   */
+  rapidjson::Value get_delete_response() const;
+
+ private:
+  rapidjson::Document::AllocatorType &allocator_;
+  DbObjectPtr entry_;
+  const std::string schema_ref_;
+  std::optional<std::string> primary_key_;
+  rapidjson::Value parameters_{rapidjson::kArrayType};
+};
+
+rapidjson::Value OpenApiCreator::create_components() const {
+  rapidjson::Value schema_properties(rapidjson::kObjectType);
+
+  auto obj = entry_->object_description;
+
+  for (auto &c : obj->fields) {
+    auto column = std::dynamic_pointer_cast<mrs::database::entry::Column>(c);
+    if (!column || !column->enabled) continue;
+
+    auto property_details =
+        add_type_constraints(column->datatype, column->type);
+
+    std::string description = column->datatype;
+    if (column->is_primary) description += ", Primary Key";
+
+    property_details.AddMember(
+        "description", rapidjson::Value(description, allocator_), allocator_);
+
+    schema_properties.AddMember(rapidjson::Value(c->name.c_str(), allocator_),
+                                property_details, allocator_);
+  }
+
+  rapidjson::Value component_info(rapidjson::kObjectType);
+  component_info.AddMember(
+      rapidjson::Value(entry_->name.c_str(), allocator_),
+      rapidjson::Value(rapidjson::kObjectType)
+          .AddMember("type", "object", allocator_)
+          .AddMember("properties", schema_properties, allocator_),
+      allocator_);
+
+  return component_info;
+}
+rapidjson::Value OpenApiCreator::create_parameter(std::string_view name,
+                                                  std::string_view type) const {
+  return std::move(
+      rapidjson::Value(rapidjson::kObjectType)
+          .AddMember("in", "path", allocator_)
+          .AddMember("name", rapidjson::Value(name.data(), allocator_),
+                     allocator_)
+          .AddMember("required", true, allocator_)
+          .AddMember(
+              "schema",
+              rapidjson::Value(rapidjson::kObjectType)
+                  .AddMember("type", rapidjson::Value(type.data(), allocator_),
+                             allocator_),
+              allocator_));
+}
+
+rapidjson::Value OpenApiCreator::get_filter_parameter(
+    const bool is_required) const {
+  return std::move(rapidjson::Value(rapidjson::kObjectType)
+                       .AddMember("in", "query", allocator_)
+                       .AddMember("name", "q", allocator_)
+                       .AddMember("description", "filter object", allocator_)
+                       .AddMember("required", is_required, allocator_)
+                       .AddMember("schema",
+                                  rapidjson::Value(rapidjson::kObjectType)
+                                      .AddMember("type", "object", allocator_),
+                                  allocator_));
+}
+
+rapidjson::Value OpenApiCreator::get_integer_parameter(
+    const std::string &name) const {
+  return std::move(
+      rapidjson::Value(rapidjson::kObjectType)
+          .AddMember("in", "query", allocator_)
+          .AddMember("name", rapidjson::Value(name, allocator_), allocator_)
+          .AddMember("required", false, allocator_)
+          .AddMember("schema",
+                     rapidjson::Value(rapidjson::kObjectType)
+                         .AddMember("type", "integer", allocator_),
+                     allocator_));
+}
+
+rapidjson::Value OpenApiCreator::get_content_schema_array() const {
+  return std::move(
+      rapidjson::Value(rapidjson::kObjectType)
+          .AddMember(
+              "application/json",
+              rapidjson::Value(rapidjson::kObjectType)
+                  .AddMember(
+                      "schema",
+                      rapidjson::Value(rapidjson::kObjectType)
+                          .AddMember("type", "array", allocator_)
+                          .AddMember("items",
+                                     rapidjson::Value(rapidjson::kObjectType)
+                                         .AddMember("$ref",
+                                                    rapidjson::Value(
+                                                        schema_ref_.c_str(),
+                                                        allocator_),
+                                                    allocator_),
+                                     allocator_),
+                      allocator_),
+              allocator_));
+}
+
+rapidjson::Value OpenApiCreator::get_content_schema_single() const {
+  return std::move(
+      rapidjson::Value(rapidjson::kObjectType)
+          .AddMember("application/json",
+                     rapidjson::Value(rapidjson::kObjectType)
+                         .AddMember("schema",
+                                    rapidjson::Value(rapidjson::kObjectType)
+                                        .AddMember("$ref",
+                                                   rapidjson::Value(
+                                                       schema_ref_.c_str(),
+                                                       allocator_),
+                                                   allocator_),
+                                    allocator_),
+                     allocator_));
+}
+
+void OpenApiCreator::add_security(rapidjson::Value &method) const {
+  method.AddMember(
+      "security",
+      rapidjson::Value(rapidjson::kArrayType)
+          .PushBack(
+              rapidjson::Value(rapidjson::kObjectType)
+                  .AddMember(rapidjson::Value(std::string(k_auth_method_name),
+                                              allocator_),
+                             rapidjson::Value(rapidjson::kArrayType),
+                             allocator_),
+              allocator_),
+      allocator_);
+}
+
+rapidjson::Value OpenApiCreator::get_tag() const {
+  return std::move(
+      rapidjson::Value(rapidjson::kArrayType)
+          .PushBack(
+              rapidjson::Value(
+                  std::string{entry_->schema_name + "/" + entry_->name}.c_str(),
+                  allocator_),
+              allocator_));
+}
+
+rapidjson::Value OpenApiCreator::add_type_constraints(
+    const std::string &datatype,
+    const mrs::database::entry::ColumnType type) const {
+  rapidjson::Value property_details(rapidjson::kObjectType);
+
+  // zerofill and/or width is not taken into account as it is deprecated
+
+  if (datatype == "date") {
+    property_details.AddMember("type", "string", allocator_);
+    property_details.AddMember("format", "date", allocator_);
+  } else if (datatype == "datetime" || datatype == "timestamp") {
+    property_details.AddMember("type", "string", allocator_);
+    property_details.AddMember("example", get_timestamp(), allocator_);
+  } else if (datatype == "time") {
+    property_details.AddMember("type", "string", allocator_);
+    property_details.AddMember("format", "time", allocator_);
+    property_details.AddMember("example", "00:00:00", allocator_);
+  } else if (datatype == "year") {
+    property_details.AddMember("type", "integer", allocator_);
+    property_details.AddMember("minimum", 1901, allocator_);
+    property_details.AddMember("maximum", 2155, allocator_)
+        .AddMember("example", 2024, allocator_);
+
+  } else if (helper::starts_with(datatype, "varchar")) {
+    property_details.AddMember("type", "string", allocator_);
+    size_t start_pos = datatype.find('(');
+    size_t end_pos = datatype.find(')');
+    if (start_pos != std::string::npos && end_pos != std::string::npos) {
+      property_details.AddMember(
+          "maxLength",
+          std::stoi(datatype.substr(start_pos + 1, end_pos - start_pos - 1)),
+          allocator_);
+    }
+  } else if (helper::starts_with(datatype, "char")) {
+    property_details.AddMember("type", "string", allocator_);
+    size_t start_pos = datatype.find('(');
+    size_t end_pos = datatype.find(')');
+    if (start_pos != std::string::npos && end_pos != std::string::npos) {
+      const auto len =
+          std::stoi(datatype.substr(start_pos + 1, end_pos - start_pos - 1));
+      property_details.AddMember("minLength", len, allocator_);
+      property_details.AddMember("maxLength", len, allocator_);
+    }
+  } else if (datatype == "tinytext") {
+    property_details.AddMember("type", "string", allocator_);
+    property_details.AddMember("maxLength", 255, allocator_);
+  } else if (datatype == "text") {
+    property_details.AddMember("type", "string", allocator_);
+    property_details.AddMember("maxLength", 65535, allocator_);
+  } else if (datatype == "mediumtext") {
+    property_details.AddMember("type", "string", allocator_);
+    property_details.AddMember("maxLength", 16777215, allocator_);
+  } else if (datatype == "longtext") {
+    property_details.AddMember("type", "string", allocator_);
+    property_details.AddMember<uint64_t>("maxLength", 4294967295, allocator_);
+
+  } else if (datatype == "tinyint unsigned") {
+    property_details.AddMember("type", "integer", allocator_)
+        .AddMember("format", "int32", allocator_)
+        .AddMember("maximum", 255, allocator_)
+        .AddMember("minimum", 0, allocator_)
+        .AddMember("example", 0, allocator_);
+  } else if (datatype == "tinyint") {
+    property_details.AddMember("type", "integer", allocator_)
+        .AddMember("format", "int32", allocator_)
+        .AddMember("maximum", 127, allocator_)
+        .AddMember("minimum", -128, allocator_)
+        .AddMember("example", 0, allocator_);
+  } else if (datatype == "smallint unsigned") {
+    property_details.AddMember("type", "integer", allocator_)
+        .AddMember("format", "int32", allocator_)
+        .AddMember("maximum", 65535, allocator_)
+        .AddMember("minimum", 0, allocator_)
+        .AddMember("example", 0, allocator_);
+  } else if (datatype == "smallint") {
+    property_details.AddMember("type", "integer", allocator_)
+        .AddMember("format", "int32", allocator_)
+        .AddMember("maximum", 32767, allocator_)
+        .AddMember("minimum", -32768, allocator_)
+        .AddMember("example", 0, allocator_);
+  } else if (datatype == "mediumint unsigned") {
+    property_details.AddMember("type", "integer", allocator_)
+        .AddMember("format", "int32", allocator_)
+        .AddMember("maximum", 16777215, allocator_)
+        .AddMember("minimum", 0, allocator_)
+        .AddMember("example", 0, allocator_);
+  } else if (datatype == "mediumint") {
+    property_details.AddMember("type", "integer", allocator_)
+        .AddMember("format", "int32", allocator_)
+        .AddMember("maximum", 8388607, allocator_)
+        .AddMember("minimum", -8388608, allocator_)
+        .AddMember("example", 0, allocator_);
+  } else if (datatype == "int unsigned") {
+    property_details.AddMember("type", "integer", allocator_)
+        .AddMember("format", "int32", allocator_)
+        .AddMember<uint64_t>("maximum", 4294967295, allocator_)
+        .AddMember("minimum", 0, allocator_)
+        .AddMember("example", 0, allocator_);
+  } else if (datatype == "int") {
+    property_details.AddMember("type", "integer", allocator_)
+        .AddMember("format", "int32", allocator_)
+        .AddMember<uint64_t>("maximum", 2147483647, allocator_)
+        .AddMember<int64_t>("minimum", -2147483648, allocator_)
+        .AddMember("example", 0, allocator_);
+  } else if (helper::starts_with(datatype, "bigint")) {
+    property_details.AddMember("type", "integer", allocator_)
+        .AddMember("format", "int64", allocator_)
+        .AddMember("example", 0, allocator_);
+  } else if (helper::starts_with(datatype, "float")) {
+    property_details.AddMember("type", "number", allocator_)
+        .AddMember("format", "float", allocator_)
+        .AddMember("example", 0.0, allocator_);
+  } else if (helper::starts_with(datatype, "double")) {
+    property_details.AddMember("type", "number", allocator_)
+        .AddMember("format", "double", allocator_)
+        .AddMember("example", 0.0, allocator_);
+  } else if (helper::starts_with(datatype, "decimal")) {
+    property_details.AddMember("type", "number", allocator_)
+        .AddMember("format", "decimal", allocator_);
+  } else if (helper::starts_with(datatype, "bit")) {
+    property_details.AddMember("type", "integer", allocator_);
+    size_t start_pos = datatype.find('(');
+    size_t end_pos = datatype.find(')');
+    if (start_pos != std::string::npos && end_pos != std::string::npos) {
+      const auto shift =
+          std::stoi(datatype.substr(start_pos + 1, end_pos - start_pos - 1));
+      property_details.AddMember("format", shift > 32 ? "int64" : "int32",
+                                 allocator_);
+    }
+
+  } else if (datatype == "bool" || datatype == "boolean" ||
+             datatype == "tinyint(1)") {
+    property_details.AddMember("type", "boolean", allocator_);
+
+  } else if (datatype == "json") {
+    property_details.AddMember("type", "object", allocator_);
+
+  } else if (datatype == "binary") {
+    property_details.AddMember("type", "string", allocator_);
+    property_details.AddMember("format", "binary", allocator_);
+    size_t start_pos = datatype.find('(');
+    size_t end_pos = datatype.find(')');
+    if (start_pos != std::string::npos && end_pos != std::string::npos) {
+      const auto len =
+          std::stoi(datatype.substr(start_pos + 1, end_pos - start_pos - 1));
+      property_details.AddMember("minLength", len, allocator_);
+      property_details.AddMember("maxLength", len, allocator_);
+    }
+  } else if (datatype == "varbinary") {
+    property_details.AddMember("type", "string", allocator_);
+    property_details.AddMember("format", "binary", allocator_);
+    size_t start_pos = datatype.find('(');
+    size_t end_pos = datatype.find(')');
+    if (start_pos != std::string::npos && end_pos != std::string::npos) {
+      property_details.AddMember(
+          "maxLength",
+          std::stoi(datatype.substr(start_pos + 1, end_pos - start_pos - 1)),
+          allocator_);
+    }
+  } else if (datatype == "tinyblob") {
+    property_details.AddMember("type", "string", allocator_);
+    property_details.AddMember("format", "binary", allocator_);
+    property_details.AddMember("maxLength", 255, allocator_);
+  } else if (datatype == "blob") {
+    property_details.AddMember("type", "string", allocator_);
+    property_details.AddMember("format", "binary", allocator_);
+    property_details.AddMember("maxLength", 65535, allocator_);
+  } else if (datatype == "mediumblob") {
+    property_details.AddMember("type", "string", allocator_);
+    property_details.AddMember("format", "binary", allocator_);
+    property_details.AddMember("maxLength", 16777215, allocator_);
+  } else if (datatype == "longblob") {
+    property_details.AddMember("type", "string", allocator_);
+    property_details.AddMember("format", "binary", allocator_);
+    property_details.AddMember<uint64_t>("maxLength", 4294967295, allocator_);
+
+  } else if (helper::starts_with(datatype, "enum") ||
+             helper::starts_with(datatype, "set")) {
+    property_details.AddMember("type", "string", allocator_);
+    size_t start_pos = datatype.find('(');
+    size_t end_pos = datatype.find(')');
+    const std::string enum_contents =
+        datatype.substr(start_pos + 1, end_pos - start_pos - 1);
+    const auto values = mysql_harness::split_string(enum_contents, ',');
+
+    rapidjson::Value values_array(rapidjson::kArrayType);
+    for (const auto &value : values) {
+      values_array.PushBack(
+          rapidjson::Value(value.substr(1, value.length() - 2).c_str(),
+                           allocator_),
+          allocator_);
+    }
+    property_details.AddMember("enum", values_array, allocator_);
+
+  } else {
+    property_details.AddMember(
+        "type",
+        rapidjson::Value(column_type_to_openapi(type).c_str(), allocator_),
+        allocator_);
+  }
+
+  return property_details;
+}
+
+rapidjson::Value OpenApiCreator::get_delete_response() const {
+  rapidjson::Value result{rapidjson::kObjectType};
+  result.AddMember("description", "Deleted item(s) count", allocator_)
+      .AddMember(
+          "content",
+          rapidjson::Value(rapidjson::kObjectType)
+              .AddMember(
+                  "application/json",
+                  rapidjson::Value(rapidjson::kObjectType)
+                      .AddMember(
+                          "schema",
+                          rapidjson::Value(rapidjson::kObjectType)
+                              .AddMember("type", "object", allocator_)
+                              .AddMember(
+                                  "properties",
+                                  rapidjson::Value(rapidjson::kObjectType)
+                                      .AddMember(
+                                          "itemsDeleted",
+                                          rapidjson::Value(
+                                              rapidjson::kObjectType)
+                                              .AddMember("type", "integer",
+                                                         allocator_),
+                                          allocator_),
+                                  allocator_),
+                          allocator_),
+                  allocator_),
+          allocator_);
+
+  return result;
+}
+
+std::string OpenApiCreator::column_type_to_openapi(
+    mrs::database::entry::ColumnType type) const {
+  using Column_type = mrs::database::entry::ColumnType;
+  switch (type) {
+    case Column_type::INTEGER:
+    case Column_type::BINARY:
+      return "integer";
+    case Column_type::DOUBLE:
+      return "number";
+    case Column_type::JSON:
+      return "object";
+    case Column_type::BOOLEAN:
+      return "boolean";
+    default:
+      return "string";
+  }
+}
+
+rapidjson::Value get_route_openapi_component(
+    DbObjectPtr entry, rapidjson::Document::AllocatorType &allocator) {
+  OpenApiCreator api_creator{entry, allocator};
+  return api_creator.create_components();
+}
+
+rapidjson::Value OpenApiCreator::create_get_method() const {
+  rapidjson::Value get_method(rapidjson::kObjectType);
+  rapidjson::Value responses(rapidjson::kObjectType);
+
+  rapidjson::Value response(rapidjson::kObjectType);
+  response
+      .AddMember(
+          "description",
+          rapidjson::Value(std::string(entry_->name + " contents").c_str(),
+                           allocator_),
+          allocator_)
+      .AddMember("content", get_content_schema_array(), allocator_);
+  responses.AddMember("200", response, allocator_);
+
+  std::string summary{"Get " + entry_->name + " contents"};
+  get_method
+      .AddMember("summary", rapidjson::Value(summary.c_str(), allocator_),
+                 allocator_)
+      .AddMember("tags", get_tag(), allocator_)
+      .AddMember("responses", responses, allocator_)
+      .AddMember("parameters",
+                 rapidjson::Value(rapidjson::kArrayType)
+                     .PushBack(get_integer_parameter("limit"), allocator_)
+                     .PushBack(get_integer_parameter("offset"), allocator_)
+                     .PushBack(get_filter_parameter(/*is_required*/ false),
+                               allocator_),
+                 allocator_);
+
+  if (entry_->requires_authentication) add_security(get_method);
+
+  return get_method;
+}
+
+rapidjson::Value OpenApiCreator::create_get_by_key_method() const {
+  rapidjson::Value get(rapidjson::kObjectType);
+  rapidjson::Value responses(rapidjson::kObjectType);
+
+  rapidjson::Value result(rapidjson::kObjectType);
+
+  result
+      .AddMember(
+          "description",
+          rapidjson::Value(std::string(entry_->name + " contents").c_str(),
+                           allocator_),
+          allocator_)
+      .AddMember("content", get_content_schema_single(), allocator_);
+
+  responses.AddMember("200", result, allocator_);
+  responses.AddMember("404",
+                      rapidjson::Value(rapidjson::kObjectType)
+                          .AddMember("description", "Not found", allocator_),
+                      allocator_);
+
+  rapidjson::Value get_parameters{parameters_, allocator_};
+  std::string summary{"Get " + entry_->name + " contents"};
+  get.AddMember("summary", rapidjson::Value(summary.c_str(), allocator_),
+                allocator_)
+      .AddMember("parameters", get_parameters, allocator_)
+      .AddMember("tags", get_tag(), allocator_)
+      .AddMember("responses", responses, allocator_);
+
+  if (entry_->requires_authentication) add_security(get);
+
+  return get;
+}
+
+rapidjson::Value OpenApiCreator::create_post_method() const {
+  rapidjson::Value post_method(rapidjson::kObjectType);
+  rapidjson::Value responses(rapidjson::kObjectType);
+  rapidjson::Value request_body(rapidjson::kObjectType);
+
+  request_body.AddMember("description", "Item to create", allocator_)
+      .AddMember("required", true, allocator_)
+      .AddMember("content", get_content_schema_single(), allocator_);
+
+  responses
+      .AddMember("400",
+                 rapidjson::Value(rapidjson::kObjectType)
+                     .AddMember("description", "Invalid input", allocator_),
+                 allocator_)
+      .AddMember(
+          "200",
+          rapidjson::Value(rapidjson::kObjectType)
+              .AddMember("description", "Item successfully created", allocator_)
+              .AddMember("content", get_content_schema_single(), allocator_),
+          allocator_);
+
+  std::string summary{"Create " + entry_->name + " entry"};
+
+  post_method
+      .AddMember("summary", rapidjson::Value(summary.c_str(), allocator_),
+                 allocator_)
+      .AddMember("requestBody", request_body, allocator_)
+      .AddMember("tags", get_tag(), allocator_)
+      .AddMember("responses", responses, allocator_);
+
+  if (entry_->requires_authentication) add_security(post_method);
+
+  return post_method;
+}
+
+rapidjson::Value OpenApiCreator::create_delete_method() const {
+  rapidjson::Value delete_method(rapidjson::kObjectType);
+  rapidjson::Value responses(rapidjson::kObjectType);
+
+  responses
+      .AddMember("404",
+                 rapidjson::Value(rapidjson::kObjectType)
+                     .AddMember("description", "Not found", allocator_),
+                 allocator_)
+      .AddMember("200", get_delete_response(), allocator_);
+
+  std::string summary{"Delete " + entry_->name + " entry"};
+  rapidjson::Value delete_parameters{rapidjson::kArrayType};
+  delete_parameters.PushBack(get_filter_parameter(/*is_required*/ true),
+                             allocator_);
+
+  delete_method
+      .AddMember("summary", rapidjson::Value(summary.c_str(), allocator_),
+                 allocator_)
+      .AddMember("parameters", delete_parameters, allocator_)
+      .AddMember("tags", get_tag(), allocator_)
+      .AddMember("responses", responses, allocator_);
+
+  if (entry_->requires_authentication) add_security(delete_method);
+
+  return delete_method;
+}
+
+rapidjson::Value OpenApiCreator::create_delete_by_key_method() const {
+  rapidjson::Value delete_method(rapidjson::kObjectType);
+  rapidjson::Value responses(rapidjson::kObjectType);
+
+  responses
+      .AddMember("404",
+                 rapidjson::Value(rapidjson::kObjectType)
+                     .AddMember("description", "Not found", allocator_),
+                 allocator_)
+      .AddMember("200", get_delete_response(), allocator_);
+
+  std::string summary{"Delete " + entry_->name + " entry"};
+  rapidjson::Value delete_parameters{parameters_, allocator_};
+
+  delete_method
+      .AddMember("summary", rapidjson::Value(summary.c_str(), allocator_),
+                 allocator_)
+      .AddMember("parameters", delete_parameters, allocator_)
+      .AddMember("tags", get_tag(), allocator_)
+      .AddMember("responses", responses, allocator_);
+
+  if (entry_->requires_authentication) add_security(delete_method);
+
+  return delete_method;
+}
+
+rapidjson::Value OpenApiCreator::create_put_method() const {
+  rapidjson::Value put_method(rapidjson::kObjectType);
+  rapidjson::Value responses(rapidjson::kObjectType);
+  rapidjson::Value request_body(rapidjson::kObjectType);
+
+  request_body.AddMember("description", "Item to create or update", allocator_)
+      .AddMember("required", true, allocator_)
+      .AddMember("content", get_content_schema_single(), allocator_);
+
+  responses
+      .AddMember("400",
+                 rapidjson::Value(rapidjson::kObjectType)
+                     .AddMember("description", "Invalid input", allocator_),
+                 allocator_)
+      .AddMember(
+          "200",
+          rapidjson::Value(rapidjson::kObjectType)
+              .AddMember("description", "Item successfully created or updated",
+                         allocator_)
+              .AddMember("content", get_content_schema_single(), allocator_),
+          allocator_);
+
+  std::string summary{"Update or create " + entry_->name + " entry_"};
+  rapidjson::Value put_parameters{parameters_, allocator_};
+
+  put_method
+      .AddMember("summary", rapidjson::Value(summary.c_str(), allocator_),
+                 allocator_)
+      .AddMember("parameters", put_parameters, allocator_)
+      .AddMember("requestBody", request_body, allocator_)
+      .AddMember("tags", get_tag(), allocator_)
+      .AddMember("responses", responses, allocator_);
+
+  if (entry_->requires_authentication) add_security(put_method);
+
+  return put_method;
+}
+
+rapidjson::Value get_route_openapi_schema_path(
+    DbObjectPtr entry, const std::string &url,
+    rapidjson::Document::AllocatorType &allocator) {
+  OpenApiCreator api_creator{entry, allocator};
+
+  rapidjson::Value items(rapidjson::kObjectType);
+  rapidjson::Value path_methods(rapidjson::kObjectType);
+  rapidjson::Value path_pk_methods(rapidjson::kObjectType);
+
+  if (entry->crud_operation & mrs::database::entry::Operation::valueRead) {
+    path_methods.AddMember("get", api_creator.create_get_method(), allocator);
+  }
+  if (entry->crud_operation & mrs::database::entry::Operation::valueCreate) {
+    path_methods.AddMember("post", api_creator.create_post_method(), allocator);
+  }
+  if (entry->crud_operation & mrs::database::entry::Operation::valueDelete) {
+    path_methods.AddMember("delete", api_creator.create_delete_method(),
+                           allocator);
+  }
+
+  items.AddMember(rapidjson::Value(url, allocator), path_methods, allocator);
+
+  if (api_creator.has_primary_key()) {
+    if (entry->crud_operation & mrs::database::entry::Operation::valueRead) {
+      path_pk_methods.AddMember("get", api_creator.create_get_by_key_method(),
+                                allocator);
+    }
+    if (entry->crud_operation & mrs::database::entry::Operation::valueDelete) {
+      path_pk_methods.AddMember(
+          "delete", api_creator.create_delete_by_key_method(), allocator);
+    }
+    if (entry->crud_operation & mrs::database::entry::Operation::valueUpdate) {
+      path_pk_methods.AddMember("put", api_creator.create_put_method(),
+                                allocator);
+    }
+
+    std::string member_path =
+        std::string{url} + "/" + api_creator.primary_key();
+    items.AddMember(rapidjson::Value(member_path.c_str(), allocator),
+                    rapidjson::Value(path_pk_methods, allocator), allocator);
+  }
+
+  return items;
+}
+
+bool is_supported(
+    const std::shared_ptr<mrs::database::entry::DbObject> &db_obj,
+    const std::shared_ptr<mrs::database::entry::DbSchema> &db_schema) {
+  namespace entry_ns = mrs::database::entry;
+
+  if (db_obj->type == entry_ns::DbObject::ObjectType::k_objectTypeProcedure ||
+      db_obj->type == entry_ns::DbObject::ObjectType::k_objectTypeFunction)
+    return false;
+
+  if (db_schema->enabled != entry_ns::EnabledType::EnabledType_public ||
+      db_obj->enabled != entry_ns::EnabledType::EnabledType_public) {
+    return false;
+  }
+
+  return true;
+}
+
+}  // namespace rest
+}  // namespace mrs

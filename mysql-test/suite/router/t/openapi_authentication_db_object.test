@@ -1,0 +1,76 @@
+--source include/have_router.inc
+
+--let $extra_mrs_router_id=1
+--source ../include/predefined_setup/configure_router_mrs_root.inc
+--source ../include/schema/basic_schema.sql
+--source ../include/schema/pk_types_schema.sql
+
+
+--source ../include/mrs/start_object_definition.inc
+
+--source ../include/test/test_openapi_object_structure.inc
+
+--let $mrs_add_auth_app=default authentication
+--let $mrs_add_auth_vendor=MySQL Internal
+--let $mrs_add_auth_service=/svc
+--source ../include/mrs/add_auth_app.inc
+
+--let $mrs_sql_id_variable=@db_object_id_all_types
+--let $mrs_db_object_requires_auth=1
+--source ../include/mrs/db_object/modify_auth.inc
+
+--source ../include/mrs/end_object_definition.inc
+
+## Test starts here
+--echo
+--echo
+--echo ## I. Verify open-api-catalog for MRS Object with authentication
+--echo #
+--echo # 1. DB Object requires authentication, user is not authenticated -> OpenAPI does not contain description for the DB Object.
+--echo #
+--echo #
+--echo # 2. DB Object requires authentication, user is authenticated -> OpenAPI does contains description for the DB Object.
+--echo #
+--echo #
+
+
+--echo
+--echo #
+--echo # I.1
+--let $mrs_client_arg_path='/svc/open-api-catalog/'
+# Explicity checking if "all_types" DB Object doesn't exist in OpenAPI description
+let $mrs_client_arg_json_schema='{
+  "type":"object",
+  "properties": {
+     "paths" : {"not":{"required":["/svc/different_types/all_types"]}}
+  }
+}';
+--let $mrs_client_arg_exclude_json_pointer=/components/schemas/table2/properties/date/example,/components/schemas/t_timestamp/properties/id/example
+--source ../include/mrs/mrs_client.inc
+
+
+--echo
+--echo #
+--echo # I.2
+
+exec $MRS_CLIENT_ARGS
+  -a BASIC
+  --path /svc/authentication/login
+  -u root
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+--let $mrs_client_arg_path='/svc/open-api-catalog/'
+--let $mrs_client_arg_session_file=$MYSQL_TMP_DIR/user_session.dat
+# Explicity checking if "all_types" DB Object exists in OpenAPI description
+let $mrs_client_arg_json_schema='{
+  "type":"object",
+  "properties": {
+     "paths" : {"required":["/svc/different_types/all_types"]}
+  }
+}';
+--let $mrs_client_arg_exclude_json_pointer=/components/schemas/table2/properties/date/example,/components/schemas/table3/properties/cdatetime/example,/components/schemas/table3/properties/ctimestamp/example,/components/schemas/t_timestamp/properties/id/example
+--source ../include/mrs/mrs_client.inc
+
+# Cleanup
+remove_file $MYSQL_TMP_DIR/user_session.dat;
+--source ../include/mrs/cleanup.inc

@@ -187,6 +187,9 @@ ADD_STATIC_LIBRARY(mysql_rest_service_impl
   mrs/endpoint/handler/handler_db_object_function.cc
   mrs/endpoint/handler/handler_db_object_metadata_catalog.cc
   mrs/endpoint/handler/handler_db_object_metadata.cc
+  mrs/endpoint/handler/handler_db_object_openapi.cc
+  mrs/endpoint/handler/handler_db_schema_openapi.cc
+  mrs/endpoint/handler/handler_db_service_openapi.cc
   mrs/endpoint/handler/handler_string.cc
   mrs/endpoint/handler/handler_redirection.cc
   mrs/endpoint/url_host_endpoint.cc
@@ -200,6 +203,7 @@ ADD_STATIC_LIBRARY(mysql_rest_service_impl
   mrs/rest/handler.cc
   mrs/rest/handler_string.cc
   mrs/rest/response_cache.cc
+  mrs/rest/openapi_object_creator.cc
   mrs/monitored/gtid_functions.cc
   mrs/monitored/query_retry_on_ro.cc
 

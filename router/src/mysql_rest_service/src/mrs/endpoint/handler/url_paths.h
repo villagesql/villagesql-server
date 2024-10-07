@@ -90,6 +90,34 @@ inline std::string regex_path_object_metadata(
   return "^"s + service_schema_path + obj_name + "/"s + k_metadata + "/?$"s;
 }
 
+inline std::string regex_path_obj_openapi_swagger(
+    const std::string &service_schema_path, const std::string &obj_name) {
+  const std::string k_openapi_catalog = "/open-api-catalog";
+  using namespace std::string_literals;
+  return "^"s + service_schema_path + k_openapi_catalog + obj_name + "/?$"s;
+}
+
+inline std::string regex_path_schema_openapi_swagger(
+    const std::string &service_schema_path) {
+  const std::string k_openapi_catalog = "/open-api-catalog";
+  using namespace std::string_literals;
+  return "^"s + service_schema_path + k_openapi_catalog + "/?$"s;
+}
+
+inline std::string regex_path_schema_openapi_swagger_alias(
+    const std::string &service_name, const std::string &schema_name) {
+  const std::string k_openapi_catalog = "/open-api-catalog";
+  using namespace std::string_literals;
+  return "^/"s + service_name + k_openapi_catalog + "/" + schema_name + "/?$"s;
+}
+
+inline std::string regex_path_service_openapi_swagger(
+    const std::string &service_path) {
+  const std::string k_openapi_catalog = "/open-api-catalog";
+  using namespace std::string_literals;
+  return "^"s + service_path + k_openapi_catalog + "/?$"s;
+}
+
 inline std::string regex_path_db_object(const std::string &object_path) {
   using namespace std::string_literals;
   return "^"s + object_path + k_path_id_or_query + "$"s;

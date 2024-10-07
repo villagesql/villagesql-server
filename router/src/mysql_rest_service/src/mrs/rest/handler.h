@@ -74,6 +74,11 @@ class Handler : public interface::RestHandler {
 
   void throw_unauthorize_when_check_auth_fails(RequestContext *);
 
+  static uint32_t check_privileges(
+      const std::vector<database::entry::AuthPrivilege> &privileges,
+      const UniversalId &service_id, const UniversalId &schema_id,
+      const UniversalId &db_object_id);
+
  protected:
   interface::Options options_;
   const std::string url_host_;

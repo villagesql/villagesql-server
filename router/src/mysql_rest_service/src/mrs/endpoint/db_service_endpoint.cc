@@ -116,6 +116,7 @@ void DbServiceEndpoint::activate_public() {
   url_handlers_.push_back(factory_->create_authentication_user(this_ep));
   url_handlers_.push_back(factory_->create_authentication_auth_apps(this_ep));
   url_handlers_.push_back(factory_->create_authentication_status(this_ep));
+  url_handlers_.push_back(factory_->create_db_service_openapi_handler(this_ep));
 }
 
 void DbServiceEndpoint::deactivate() { url_handlers_.clear(); }

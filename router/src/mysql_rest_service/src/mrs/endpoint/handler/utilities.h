@@ -99,6 +99,14 @@ inline std::shared_ptr<DbSchemaEndpoint> lock_parent(
   return std::dynamic_pointer_cast<DbSchemaEndpoint>(parent);
 }
 
+inline std::shared_ptr<DbServiceEndpoint> lock_parent(
+    std::shared_ptr<DbSchemaEndpoint> &endpoint) {
+  auto parent = endpoint->get_parent_ptr();
+  if (!parent) return {};
+
+  return std::dynamic_pointer_cast<DbServiceEndpoint>(parent);
+}
+
 inline std::shared_ptr<ContentSetEndpoint> lock_parent(
     std::shared_ptr<ContentFileEndpoint> &endpoint) {
   auto parent = endpoint->get_parent_ptr();

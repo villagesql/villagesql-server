@@ -63,6 +63,8 @@ void DbObjectEndpoint::activate_public() {
       factory_->create_db_object_handler(shared_from_this()));
   url_handlers_.push_back(
       factory_->create_db_object_metadata_catalog_handler(shared_from_this()));
+  url_handlers_.push_back(
+      factory_->create_db_object_openapi_handler(shared_from_this()));
 }
 
 void DbObjectEndpoint::set(const DbObject &entry, EndpointBasePtr parent) {

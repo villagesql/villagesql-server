@@ -36,6 +36,7 @@ namespace entry {
 
 struct DbService {
   UniversalId id;
+  std::string name;
   UniversalId url_host_id;
   std::string url_context_root;
   std::set<std::string> url_protocols;
