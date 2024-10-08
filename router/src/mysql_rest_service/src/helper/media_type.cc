@@ -25,52 +25,57 @@
 #include "helper/media_type.h"
 
 #include <map>
+#include <string>
 
 namespace helper {
 
 const char *get_mime_name(MediaType mt) {
   switch (mt) {
-    case MediaType::typeXieee754ClientJson:
+    case typeXieee754ClientJson:
       return "application/x.ieee754.client+json";
-    case MediaType::typeJson:
+    case typeJson:
       return "application/json";
-    case MediaType::typeUnknownBinary:
+    case typeUnknownBinary:
       return "application/octet-stream";
-    case MediaType::typeUnknownText:
+    case typeUnknownText:
       return "text/plain";
-    case MediaType::typePlain:
+    case typePlain:
       return "text/plain";
-    case MediaType::typeHtml:
+    case typeHtml:
       return "text/html";
-    case MediaType::typeJs:
+    case typeJs:
       return "text/javascript";
-    case MediaType::typeCss:
+    case typeCss:
       return "text/css";
-    case MediaType::typePng:
+    case typePng:
       return "image/png";
-    case MediaType::typeJpg:
+    case typeJpg:
       return "image/jpeg";
-    case MediaType::typeGif:
+    case typeGif:
       return "image/gif";
-    case MediaType::typeBmp:
+    case typeBmp:
       return "image/bmp";
-    case MediaType::typeAvi:
+    case typeAvi:
       return "image/avi";
-    case MediaType::typeWav:
+    case typeWav:
       return "image/wav";
-    case MediaType::typeSvg:
+    case typeSvg:
       return "image/svg+xml";
-    case MediaType::typeIco:
+    case typeIco:
       return "image/x-icon";
   }
 
   return "";
 }
 
+const char *get_mime_name_from_ext(const std::string &ext) {
+  return get_mime_name(get_media_type_from_extension(ext));
+}
+
 std::string to_string(MediaType mt) { return get_mime_name(mt); }
 
-MediaType get_media_type_from_extension(const char *extenstion) {
-  static std::map<std::string, MediaType> map{
+MediaType get_media_type_from_extension(const std::string &extenstion) {
+  const static std::map<std::string, MediaType> map{
       {".gif", typeGif},  {".jpg", typeJpg}, {".png", typePng},
       {".js", typeJs},    {".mjs", typeJs},  {".html", typeHtml},
       {".htm", typeHtml}, {".css", typeCss}, {".svg", typeSvg},
@@ -84,7 +89,7 @@ MediaType get_media_type_from_extension(const char *extenstion) {
 }
 
 bool is_text_type(const MediaType mt) {
-  static std::map<MediaType, bool> map{
+  const static std::map<MediaType, bool> map{
       {typeGif, false}, {typeJpg, false},  {typePng, false}, {typeJs, true},
       {typeJs, true},   {typeHtml, true},  {typeHtml, true}, {typeCss, true},
       {typeSvg, true},  {typePlain, true}, {typeIco, false}};

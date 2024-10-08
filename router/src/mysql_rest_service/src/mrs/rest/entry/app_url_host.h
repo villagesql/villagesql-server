@@ -43,6 +43,7 @@ class AppUrlHost : public mrs::database::entry::UrlHost {
       : UrlHost(entry), options(data) {}
 
   std::optional<std::string> options;
+  std::optional<std::string> content_type;
 };
 
 }  // namespace entry

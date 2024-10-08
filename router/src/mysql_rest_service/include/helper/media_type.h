@@ -48,10 +48,10 @@ enum MediaType {
   typeSvg,
 };
 
-MediaType get_media_type_from_extension(const char *extenstion);
+const char *get_mime_name_from_ext(const std::string &ext);
+MediaType get_media_type_from_extension(const std::string &extenstion);
 bool is_text_type(const MediaType mt);
 const char *get_mime_name(MediaType mt);
-
 std::string to_string(MediaType mt);
 
 }  // namespace helper

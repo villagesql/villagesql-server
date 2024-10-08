@@ -109,10 +109,12 @@ exec $MRS_CLIENT_ARGS
 
 exec $MRS_CLIENT_ARGS
   --path /index.html
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 exec $MRS_CLIENT_ARGS
   --path /other.html
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 --echo
@@ -129,6 +131,7 @@ UPDATE  `mysql_rest_service_metadata`.`config` SET data='{"defaultStaticContent"
 # The index is not applied in this case 
 exec $MRS_CLIENT_ARGS
   --path /
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 exec $MRS_CLIENT_ARGS
@@ -139,10 +142,12 @@ exec $MRS_CLIENT_ARGS
 
 exec $MRS_CLIENT_ARGS
   --path /index.html
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 exec $MRS_CLIENT_ARGS
   --path /other.html
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 --echo
@@ -169,10 +174,12 @@ exec $MRS_CLIENT_ARGS
 
 exec $MRS_CLIENT_ARGS
   --path /index.html
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 exec $MRS_CLIENT_ARGS
   --path /other.html
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 --echo

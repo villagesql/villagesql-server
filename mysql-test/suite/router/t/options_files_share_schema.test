@@ -192,10 +192,12 @@ exec $MRS_CLIENT_ARGS
 
 exec $MRS_CLIENT_ARGS
   --path /svc2/sch2/index.html
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 exec $MRS_CLIENT_ARGS
   --path /svc2/sch2/other.html
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 --echo
@@ -216,6 +218,7 @@ exec $MRS_CLIENT_ARGS
 
 exec $MRS_CLIENT_ARGS
   --path /svc2/sch2/
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 exec $MRS_CLIENT_ARGS
@@ -226,10 +229,12 @@ exec $MRS_CLIENT_ARGS
 
 exec $MRS_CLIENT_ARGS
   --path /svc2/sch2/index.html
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 exec $MRS_CLIENT_ARGS
   --path /svc2/sch2/other.html
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 --echo
@@ -260,10 +265,12 @@ exec $MRS_CLIENT_ARGS
 
 exec $MRS_CLIENT_ARGS
   --path /svc2/sch2/index.html
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 exec $MRS_CLIENT_ARGS
   --path /svc2/sch2/other.html
+  --expected-header Content-Type=text/html
   --response-type RAW;
 
 --echo

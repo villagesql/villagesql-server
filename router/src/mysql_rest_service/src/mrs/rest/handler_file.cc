@@ -50,19 +50,11 @@ static CachedObject get_session(
   return cache_manager->get_instance(type, false);
 }
 
-static Type get_result_type_from_extension(const std::string &ext) {
-  static std::map<std::string, Type> map{
-      {".gif", Type::typeGif},  {".jpg", Type::typeJpg},
-      {".png", Type::typePng},  {".js", Type::typeJs},
-      {".mjs", Type::typeJs},   {".html", Type::typeHtml},
-      {".htm", Type::typeHtml}, {".css", Type::typeCss},
-      {".svg", Type::typeSvg},  {".map", Type::typePlain}};
+static std::string get_result_type_from_extension(
+    const mrs::interface::Object::Media &mt, const std::string &ext) {
+  if (mt.force_type.has_value()) return mt.force_type.value();
 
-  auto i = map.find(ext);
-
-  if (i == map.end()) return Type::typePlain;
-
-  return i->second;
+  return helper::get_mime_name_from_ext(ext);
 }
 
 namespace mrs {
@@ -111,11 +103,13 @@ HttpResult HandlerFile::handle_get(rest::RequestContext *ctxt) {
   // doesn't supports it.
   mysql_harness::Path path{
       !route_->get_object_path().empty() ? route_->get_object_path() : "/"};
-  auto result_type = get_result_type_from_extension(
-      mysql_harness::make_lower(path.extension()));
+
+  const auto mt = route_->get_media_type();
+  std::string result_type = get_result_type_from_extension(
+      mt, mysql_harness::make_lower(path.extension()));
 
   if (auto content = route_->get_default_content())
-    return {*content, result_type, route_->get_version()};
+    return {std::string(*content), result_type, route_->get_version()};
 
   auto session = get_session(ctxt->sql_session_cache.get(), route_->get_cache(),
                              MySQLConnection::kMySQLConnectionMetadataRO);

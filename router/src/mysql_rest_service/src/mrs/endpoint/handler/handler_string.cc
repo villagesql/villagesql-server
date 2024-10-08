@@ -65,7 +65,7 @@ HandlerString::HandlerString(const UniversalId &service_id,
       path_{path},
       file_name_{file_name},
       file_content_{file_content} {
-  mysql_harness::Path p{path_.empty() ? "/" : path_};
+  mysql_harness::Path p{mysql_harness::Path::directory_separator + file_name_};
   type_ = helper::get_media_type_from_extension(
       mysql_harness::make_lower(p.extension()).c_str());
 
