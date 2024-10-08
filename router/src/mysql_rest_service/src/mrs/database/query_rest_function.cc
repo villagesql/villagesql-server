@@ -137,6 +137,11 @@ void QueryRestFunction::on_row(const ResultRow &r) {
       json_type_ = helper::JsonType::kString;
     }
 
+    if (!r[0]) {
+      json_root_->member_add_value("result", nullptr, 0);
+      return;
+    }
+
     if (MYSQL_TYPE_BIT == mysql_type_ && json_type_ == helper::JsonType::kBool)
       json_root_->member_add_value(
           "result", *reinterpret_cast<const uint8_t *>(r[0]) ? "true" : "false",

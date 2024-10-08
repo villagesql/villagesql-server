@@ -128,6 +128,11 @@ bool JsonTemplateNest::push_row_impl(const ResultRow &values,
       }
     }
 
+    if (!values[idx]) {
+      serializer_.member_add_value(columns[idx].name.c_str(), nullptr, 0);
+      continue;
+    }
+
     if (columns[idx].type == MYSQL_TYPE_VECTOR) {
       auto arr = serializer_.member_add_array(columns[idx].name.c_str());
       auto float_ptr = reinterpret_cast<const float *>(values[idx]);

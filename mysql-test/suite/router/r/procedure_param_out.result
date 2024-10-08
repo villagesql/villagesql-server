@@ -35,37 +35,65 @@
 ## III. Verify handling of different MYSQL types as input and output of
 ##      stored procedures, when they are transfered in GET requests
 #
-# 1. Verify if intput varchar value is the same at output of stored procedure
-# 2. Verify if intput DATE value is the same at output of stored procedure
-# 3. Verify if intput YEAR value is the same at output of stored procedure
-# 4. Verify if intput TIME value is the same at output of stored procedure
-# 5. Verify if intput BIT(1) value is the same at output of stored procedure
-# 6. Verify if intput TINYINT(1) value is the same at output of stored procedure
-# 7. Verify if intput TINYINT(8) value is the same at output of stored procedure
-# 8. Verify if intput DECIMAL value is the same at output of stored procedure
-# 9. Verify if intput FLOAT value is the same at output of stored procedure
-# 10. Verify if intput DOUBLE value is the same at output of stored procedure
-# 11. Verify if intput VECTOR value is the same at output of stored procedure
+# 1. Verify if input varchar value is the same at output of stored procedure
+# 2. Verify if input DATE value is the same at output of stored procedure
+# 3. Verify if input YEAR value is the same at output of stored procedure
+# 4. Verify if input TIME value is the same at output of stored procedure
+# 5. Verify if input BIT(1) value is the same at output of stored procedure
+# 6. Verify if input TINYINT(1) value is the same at output of stored procedure
+# 7. Verify if input TINYINT(8) value is the same at output of stored procedure
+# 8. Verify if input DECIMAL value is the same at output of stored procedure
+# 9. Verify if input FLOAT value is the same at output of stored procedure
+# 10. Verify if input DOUBLE value is the same at output of stored procedure
+# 11. Verify if input VECTOR value is the same at output of stored procedure
 #
 #
 ## IV. Verify handling of different MYSQL types as input and output of
-##      stored procedures, when they are transfered in POST requests
+##      stored procedures, when they are transfered in PUT requests
 #
-# 1. Verify if intput varchar value is the same at output of stored procedure
-# 2. Verify if intput DATE value is the same at output of stored procedure
-# 3. Verify if intput YEAR value is the same at output of stored procedure
-# 4. Verify if intput TIME value is the same at output of stored procedure
-# 5. Verify if intput BIT(1) value is the same at output of stored procedure
-# 6. Verify if intput TINYINT(1) value is the same at output of stored procedure
-# 7. Verify if intput TINYINT(8) value is the same at output of stored procedure
-# 8. Verify if intput DECIMAL value is the same at output of stored procedure
-# 9. Verify if intput FLOAT value is the same at output of stored procedure
-# 10. Verify if intput DOUBLE value is the same at output of stored procedure
-# 11. Verify if intput VECTOR value is the same at output of stored procedure
+# 1. Verify if input varchar value is the same at output of stored procedure
+# 2. Verify if input DATE value is the same at output of stored procedure
+# 3. Verify if input YEAR value is the same at output of stored procedure
+# 4. Verify if input TIME value is the same at output of stored procedure
+# 5. Verify if input BIT(1) value is the same at output of stored procedure
+# 6. Verify if input TINYINT(1) value is the same at output of stored procedure
+# 7. Verify if input TINYINT(8) value is the same at output of stored procedure
+# 8. Verify if input DECIMAL value is the same at output of stored procedure
+# 9. Verify if input FLOAT value is the same at output of stored procedure
+# 10. Verify if input DOUBLE value is the same at output of stored procedure
+# 11. Verify if input VECTOR value is the same at output of stored procedure
 #
-## V. Verify handling of resultsets with several columns
-# 1. Verify presentation of resultset with different columns
-# 2. Verify presentation of resultsets with different columns
+#
+## V. Verify handling of different MYSQL types and NULL value as input and
+##    output of stored procedures, when they are transfered in GET requests
+#
+# 1. Verify if NULL is used for not present varchar parameter and it is the same at output of stored procedure
+# 2. Verify if NULL is used for not present DATE parameter and it is the same at output of stored procedure
+# 3. Verify if NULL is used for not present YEAR parameter and it is the same at output of stored procedure
+# 4. Verify if NULL is used for not present TIME parameter and it is the same at output of stored procedure
+# 5. Verify if NULL is used for not present BIT(1) parameter and it is the same at output of stored procedure
+# 6. Verify if NULL is used for not present TINYINT(1) parameter and it is the same at output of stored procedure
+# 7. Verify if NULL is used for not present TINYINT(8) parameter and itis the same at output of stored procedure
+# 8. Verify if NULL is used for not present DECIMAL parameter and it is the same at output of stored procedure
+# 9. Verify if NULL is used for not present FLOAT parameter and it is the same at output of stored procedure
+# 10. Verify if NULL is used for not present DOUBLE parameter and it is the same at output of stored procedure
+# 11. Verify if NULL is used for not present VECTOR parameter and it is the same at output of stored procedure
+#
+#
+## VI. Verify handling of different MYSQL types and NULL value as input and
+##    output of stored procedures, when they are transfered in PUT requests
+#
+# 1. Verify if NULL is used for not present varchar parameter and it is the same at output of stored procedure
+# 2. Verify if NULL is used for not present DATE parameter and it is the same at output of stored procedure
+# 3. Verify if NULL is used for not present YEAR parameter and it is the same at output of stored procedure
+# 4. Verify if NULL is used for not present TIME parameter and it is the same at output of stored procedure
+# 5. Verify if NULL is used for not present BIT(1) parameter and it is the same at output of stored procedure
+# 6. Verify if NULL is used for not present TINYINT(1) parameter and it is the same at output of stored procedure
+# 7. Verify if NULL is used for not present TINYINT(8) parameter and itis the same at output of stored procedure
+# 8. Verify if NULL is used for not present DECIMAL parameter and it is the same at output of stored procedure
+# 9. Verify if NULL is used for not present FLOAT parameter and it is the same at output of stored procedure
+# 10. Verify if NULL is used for not present DOUBLE parameter and it is the same at output of stored procedure
+# 11. Verify if NULL is used for not present VECTOR parameter and it is the same at output of stored procedure
 # Registred SERVICE at path: /svc
 # Registred DB_SCHEMA at path: /svc/proc
 # Registred DB_OBJECT at path: /svc/proc/sum
@@ -571,6 +599,206 @@ PUT /svc/proc/move_vector (payload-size:14)
             2.0,
             10.0
         ]
+    }
+}
+OK
+
+#
+# V.1
+GET /svc/proc/move_char
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.2
+DISABLED
+
+#
+# V.3
+DISABLED
+
+#
+# V.4
+DISABLED
+
+#
+# V.5
+GET /svc/proc/move_bit
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.6
+GET /svc/proc/move_tinyint1
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.7
+GET /svc/proc/move_tinyint8
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.8
+GET /svc/proc/move_decimal
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.9
+GET /svc/proc/move_float
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.10
+GET /svc/proc/move_double
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.11
+GET /svc/proc/move_vector
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# VI.1
+PUT /svc/proc/move_char (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# VI.2
+DISABLED
+
+#
+# VI.3
+DISABLED
+
+#
+# VI.4
+DISABLED
+
+#
+# VI.5
+PUT /svc/proc/move_bit (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# VI.6
+PUT /svc/proc/move_tinyint1 (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# VI.7
+PUT /svc/proc/move_tinyint8 (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# VI.8
+PUT /svc/proc/move_decimal (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# VI.9
+PUT /svc/proc/move_float (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# VI.10
+PUT /svc/proc/move_double (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# VI.11
+PUT /svc/proc/move_vector (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
     }
 }
 OK

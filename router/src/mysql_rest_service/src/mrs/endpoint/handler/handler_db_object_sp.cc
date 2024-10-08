@@ -239,23 +239,24 @@ HttpResult HandlerDbObjectSP::handle_put(
       result += to_sqlstring(ctxt->user.user_id).str();
     } else if (el.mode == mrs::database::entry::Field::Mode::modeIn) {
       auto it = doc.FindMember(el.name.c_str());
-      if (it == doc.MemberEnd())
-        throw http::Error(HttpStatusCode::BadRequest,
-                          "Parameter not set:"s + el.name);
-      mysqlrouter::sqlstring sql = get_sql_format(el.data_type);
-      sql << it->value;
-      result += sql.str();
+      if (it != doc.MemberEnd()) {
+        mysqlrouter::sqlstring sql = get_sql_format(el.data_type);
+        sql << it->value;
+        result += sql.str();
+      } else {
+        result += "NULL";
+      }
     } else if (el.mode == mrs::database::entry::Field::Mode::modeOut) {
       binds.fill_mysql_bind_for_out(el.data_type);
       result += "?";
     } else {
       auto it = doc.FindMember(el.name.c_str());
-      if (it == doc.MemberEnd())
-        throw http::Error(HttpStatusCode::BadRequest,
-                          "Parameter not set:"s + el.name);
-
       result += "?";
-      binds.fill_mysql_bind_for_inout(it->value, el.data_type);
+      if (it != doc.MemberEnd()) {
+        binds.fill_mysql_bind_for_inout(it->value, el.data_type);
+      } else {
+        binds.fill_null_as_inout(el.data_type);
+      }
     }
   }
 
@@ -320,22 +321,24 @@ HttpResult HandlerDbObjectSP::handle_get(
       result += to_sqlstring(ctxt->user.user_id).str();
     } else if (el.mode == mrs::database::entry::Field::Mode::modeIn) {
       auto it = query_kv.find(el.name);
-      if (query_kv.end() == it)
-        throw http::Error(HttpStatusCode::BadRequest,
-                          "Parameter not set:"s + el.name);
-      result += to_sqlstring(it->second, el.data_type).str();
+      if (query_kv.end() != it) {
+        result += to_sqlstring(it->second, el.data_type).str();
+      } else {
+        result += "NULL";
+      }
     } else if (el.mode == mrs::database::entry::Field::Mode::modeOut) {
       binds.fill_mysql_bind_for_out(el.data_type);
       result += "?";
     } else {
       auto it = query_kv.find(el.name);
-      if (query_kv.end() == it)
-        throw http::Error(HttpStatusCode::BadRequest,
-                          "Parameter not set:"s + el.name);
       result += "?";
-      log_debug("Bind param el.data_type:%i %s", (int)el.data_type,
-                el.raw_data_type.c_str());
-      binds.fill_mysql_bind_for_inout(it->second, el.data_type);
+      if (query_kv.end() != it) {
+        log_debug("Bind param el.data_type:%i %s", (int)el.data_type,
+                  el.raw_data_type.c_str());
+        binds.fill_mysql_bind_for_inout(it->second, el.data_type);
+      } else {
+        binds.fill_null_as_inout(el.data_type);
+      }
     }
   }
 

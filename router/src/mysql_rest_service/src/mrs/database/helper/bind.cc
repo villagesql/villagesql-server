@@ -41,6 +41,17 @@ namespace database {
 
 using DataTypeInText = ::helper::DataTypeInText;
 
+void MysqlBind::fill_null_as_inout(DataType data_type) {
+  auto bind = allocate_bind_buffer(data_type);
+  lengths_.emplace_back(new unsigned long);
+  bind->length = lengths_.back().get();
+  *bind->length = 0;
+
+  nulls_.emplace_back(new bool);
+  bind->is_null = nulls_.back().get();
+  *bind->is_null = true;
+}
+
 void MysqlBind::fill_mysql_bind_for_out(DataType data_type) {
   auto bind = allocate_bind_buffer(data_type);
   auto length = new unsigned long;

@@ -69,6 +69,36 @@
 --echo # 11. Verify if input JSON simple value is the same at output of function
 --echo # 11. Verify if input JSON complex value is the same at output of function
 
+--echo ## V. Verify handling of different MYSQL types as input and result of
+--echo ##    function, when they are not specified in GET requests (MRS sets the to NULL)
+--echo #
+--echo # 1. Verify if ommiting varchar parameter will set it to NULL and its copied to output of function
+--echo # 2. Verify if ommiting DATE  parameter will set it to NULL and its copied to output of function
+--echo # 3. Verify if ommiting YEAR  parameter will set it to NULL and its copied to output of function
+--echo # 4. Verify if ommiting TIME  parameter will set it to NULL and its copied to output of function
+--echo # 5. Verify if ommiting BIT(1)  parameter will set it to NULL and its copied to output of function
+--echo # 6. Verify if ommiting TINYINT(1)  parameter will set it to NULL and its copied to output of function
+--echo # 7. Verify if ommiting TINYINT(8)  parameter will set it to NULL and its copied to output of function
+--echo # 8. Verify if ommiting DECIMAL  parameter will set it to NULL and its copied to output of function
+--echo # 9. Verify if ommiting FLOAT  parameter will set it to NULL and its copied to output of function
+--echo # 10. Verify if ommiting DOUBLE  parameter will set it to NULL and its copied to output of function
+--echo # 11. Verify if ommiting JSON simple  parameter will set it to NULL and its copied to output of function
+
+--echo ## VI. Verify handling of different MYSQL types as input and result of
+--echo ##    function, when they are not specified in PUT requests (MRS sets the to NULL)
+--echo #
+--echo # 1. Verify if ommiting varchar  parameter will set it to NULL and its copied to output of function
+--echo # 2. Verify if ommiting DATE  parameter will set it to NULL and its copied to output of function
+--echo # 3. Verify if ommiting YEAR  parameter will set it to NULL and its copied to output of function
+--echo # 4. Verify if ommiting TIME  parameter will set it to NULL and its copied to output of function
+--echo # 5. Verify if ommiting BIT(1)  parameter will set it to NULL and its copied to output of function
+--echo # 6. Verify if ommiting TINYINT(1)  parameter will set it to NULL and its copied to output of function
+--echo # 7. Verify if ommiting TINYINT(8)  parameter will set it to NULL and its copied to output of function
+--echo # 8. Verify if ommiting DECIMAL  parameter will set it to NULL and its copied to output of function
+--echo # 9. Verify if ommiting FLOAT  parameter will set it to NULL and its copied to output of function
+--echo # 10. Verify if ommiting DOUBLE  parameter will set it to NULL and its copied to output of function
+--echo # 11. Verify if ommiting JSON simple  parameter will set it to NULL and its copied to output of function
+
 --source ../include/mrs/start_object_definition.inc
 
 # The test uses HOST to have only paths in HREF fields.
@@ -407,7 +437,7 @@ exec $MRS_CLIENT_ARGS
 --let $mrs_client_arg_path='/svc/func/move_double'
 --let $mrs_client_arg_payload='{"a":10}'
 --source ../include/mrs/mrs_client.inc
-  
+
 --echo
 --echo #
 --echo # IV.10
@@ -439,6 +469,169 @@ exec $MRS_CLIENT_ARGS
 --let $mrs_client_arg_payload='{"a":{"type":"LineString","coordinates":[[100,0],[0,0]]}}'
 --source ../include/mrs/mrs_client.inc
 
+--echo
+--echo #
+--echo # V.1
+exec $MRS_CLIENT_ARGS
+  --path /svc/func/move_char;
+
+--echo
+--echo #
+--echo # V.2
+--echo DISABLED
+#exec $MRS_CLIENT_ARGS
+#  --path /svc/func/move_date;
+#
+--echo
+--echo #
+--echo # V.3
+--echo DISABLED
+#exec $MRS_CLIENT_ARGS
+#  --path /svc/func/move_year;
+#
+--echo
+--echo #
+--echo # V.4
+--echo DISABLED
+#exec $MRS_CLIENT_ARGS
+#  --path /svc/func/move_time;
+
+--echo
+--echo #
+--echo # V.5
+exec $MRS_CLIENT_ARGS
+  --path /svc/func/move_bit;
+
+--echo
+--echo #
+--echo # V.6
+exec $MRS_CLIENT_ARGS
+  --path /svc/func/move_tinyint1;
+
+--echo
+--echo #
+--echo # V.7
+exec $MRS_CLIENT_ARGS
+  --path /svc/func/move_tinyint8;
+
+--echo
+--echo #
+--echo # V.8
+exec $MRS_CLIENT_ARGS
+  --path /svc/func/move_decimal;
+
+--echo
+--echo #
+--echo # V.9
+exec $MRS_CLIENT_ARGS
+  --path /svc/func/move_float;
+
+--echo
+--echo #
+--echo # V.10
+exec $MRS_CLIENT_ARGS
+  --path /svc/func/move_double;
+
+--echo
+--echo #
+--echo # V.11
+exec $MRS_CLIENT_ARGS
+  --path /svc/func/move_json;
+
+--echo
+--echo #
+--echo # VI.1
+--let $mrs_client_arg_path='/svc/func/move_char'
+--let $mrs_client_arg_request_type='PUT'
+--let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # VI.2
+--echo DISABLED
+#exec $MRS_CLIENT_ARGS
+#  --path /svc/func/move_date
+#  -t PUT --payload '{}';
+#
+--echo
+--echo #
+--echo # VI.3
+--echo DISABLED
+#exec $MRS_CLIENT_ARGS
+#  --path /svc/func/move_year
+#  -t PUT --payload '{}';
+#
+--echo
+--echo #
+--echo # VI.4
+--echo DISABLED
+#exec $MRS_CLIENT_ARGS
+#  --path /svc/func/move_time
+#  -t PUT --payload '{}';
+
+--echo
+--echo #
+--echo # VI.5
+--let $mrs_client_arg_path='/svc/func/move_bit'
+--let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # VI.6
+--let $mrs_client_arg_path='/svc/func/move_tinyint1'
+--let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # VI.7
+--let $mrs_client_arg_path='/svc/func/move_tinyint8'
+--let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # VI.8
+--let $mrs_client_arg_path='/svc/func/move_decimal'
+--let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # VI.9
+--let $mrs_client_arg_path='/svc/func/move_float'
+--let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # VI.10
+--let $mrs_client_arg_path='/svc/func/move_double'
+--let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # VI.10
+--let $mrs_client_arg_path='/svc/func/move_json'
+--let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # VI.11
+--let $mrs_client_arg_path='/svc/func/move_json'
+--let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # VI.12
+--let $mrs_client_arg_path='/svc/func/move_geo'
+--let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
 
 # Cleanup
 --source ../include/mrs/cleanup.inc

@@ -59,6 +59,8 @@ class MysqlBind {
     fill_mysql_bind_impl(to_string(value_with_user_type), data_type);
   }
 
+  void fill_null_as_inout(DataType data_type);
+
   std::vector<MYSQL_BIND> parameters;
 
  private:
@@ -77,6 +79,7 @@ class MysqlBind {
 
   std::vector<std::unique_ptr<char[]>> buffers_;
   std::vector<std::unique_ptr<unsigned long>> lengths_;
+  std::vector<std::unique_ptr<bool>> nulls_;
 };
 
 }  // namespace database

@@ -51,6 +51,34 @@
 # 10. Verify if input DOUBLE value is the same at output of function
 # 11. Verify if input JSON simple value is the same at output of function
 # 11. Verify if input JSON complex value is the same at output of function
+## V. Verify handling of different MYSQL types as input and result of
+##    function, when they are not specified in GET requests (MRS sets the to NULL)
+#
+# 1. Verify if ommiting varchar parameter will set it to NULL and its copied to output of function
+# 2. Verify if ommiting DATE  parameter will set it to NULL and its copied to output of function
+# 3. Verify if ommiting YEAR  parameter will set it to NULL and its copied to output of function
+# 4. Verify if ommiting TIME  parameter will set it to NULL and its copied to output of function
+# 5. Verify if ommiting BIT(1)  parameter will set it to NULL and its copied to output of function
+# 6. Verify if ommiting TINYINT(1)  parameter will set it to NULL and its copied to output of function
+# 7. Verify if ommiting TINYINT(8)  parameter will set it to NULL and its copied to output of function
+# 8. Verify if ommiting DECIMAL  parameter will set it to NULL and its copied to output of function
+# 9. Verify if ommiting FLOAT  parameter will set it to NULL and its copied to output of function
+# 10. Verify if ommiting DOUBLE  parameter will set it to NULL and its copied to output of function
+# 11. Verify if ommiting JSON simple  parameter will set it to NULL and its copied to output of function
+## VI. Verify handling of different MYSQL types as input and result of
+##    function, when they are not specified in PUT requests (MRS sets the to NULL)
+#
+# 1. Verify if ommiting varchar  parameter will set it to NULL and its copied to output of function
+# 2. Verify if ommiting DATE  parameter will set it to NULL and its copied to output of function
+# 3. Verify if ommiting YEAR  parameter will set it to NULL and its copied to output of function
+# 4. Verify if ommiting TIME  parameter will set it to NULL and its copied to output of function
+# 5. Verify if ommiting BIT(1)  parameter will set it to NULL and its copied to output of function
+# 6. Verify if ommiting TINYINT(1)  parameter will set it to NULL and its copied to output of function
+# 7. Verify if ommiting TINYINT(8)  parameter will set it to NULL and its copied to output of function
+# 8. Verify if ommiting DECIMAL  parameter will set it to NULL and its copied to output of function
+# 9. Verify if ommiting FLOAT  parameter will set it to NULL and its copied to output of function
+# 10. Verify if ommiting DOUBLE  parameter will set it to NULL and its copied to output of function
+# 11. Verify if ommiting JSON simple  parameter will set it to NULL and its copied to output of function
 # Registred SERVICE at path: /svc
 # Registred DB_SCHEMA at path: /svc/func
 # Registred DB_OBJECT at path: /svc/func/sum
@@ -349,6 +377,174 @@ OK
 PUT /svc/func/move_geo (payload-size:57)
 {
     "result": "æ\u0010\u0000\u0000\u0001\u0002\u0000\u0000\u0000\u0002\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000Y@\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000\u0000"
+}
+OK
+
+#
+# V.1
+GET /svc/func/move_char
+{
+    "result": null
+}
+OK
+
+#
+# V.2
+DISABLED
+
+#
+# V.3
+DISABLED
+
+#
+# V.4
+DISABLED
+
+#
+# V.5
+GET /svc/func/move_bit
+{
+    "result": null
+}
+OK
+
+#
+# V.6
+GET /svc/func/move_tinyint1
+{
+    "result": null
+}
+OK
+
+#
+# V.7
+GET /svc/func/move_tinyint8
+{
+    "result": null
+}
+OK
+
+#
+# V.8
+GET /svc/func/move_decimal
+{
+    "result": null
+}
+OK
+
+#
+# V.9
+GET /svc/func/move_float
+{
+    "result": null
+}
+OK
+
+#
+# V.10
+GET /svc/func/move_double
+{
+    "result": null
+}
+OK
+
+#
+# V.11
+GET /svc/func/move_json
+{
+    "result": null
+}
+OK
+
+#
+# VI.1
+PUT /svc/func/move_char (payload-size:2)
+{
+    "result": null
+}
+OK
+
+#
+# VI.2
+DISABLED
+
+#
+# VI.3
+DISABLED
+
+#
+# VI.4
+DISABLED
+
+#
+# VI.5
+PUT /svc/func/move_bit (payload-size:2)
+{
+    "result": null
+}
+OK
+
+#
+# VI.6
+PUT /svc/func/move_tinyint1 (payload-size:2)
+{
+    "result": null
+}
+OK
+
+#
+# VI.7
+PUT /svc/func/move_tinyint8 (payload-size:2)
+{
+    "result": null
+}
+OK
+
+#
+# VI.8
+PUT /svc/func/move_decimal (payload-size:2)
+{
+    "result": null
+}
+OK
+
+#
+# VI.9
+PUT /svc/func/move_float (payload-size:2)
+{
+    "result": null
+}
+OK
+
+#
+# VI.10
+PUT /svc/func/move_double (payload-size:2)
+{
+    "result": null
+}
+OK
+
+#
+# VI.10
+PUT /svc/func/move_json (payload-size:2)
+{
+    "result": null
+}
+OK
+
+#
+# VI.11
+PUT /svc/func/move_json (payload-size:2)
+{
+    "result": null
+}
+OK
+
+#
+# VI.12
+PUT /svc/func/move_geo (payload-size:2)
+{
+    "result": null
 }
 OK
 DROP SCHEMA func_schema;

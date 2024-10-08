@@ -47,6 +47,48 @@
 # 14. Verify if input SET was concatanated in output of stored procedure
 # 15. Verify if input ENUM changed to next value in output of stored procedure
 # 16. Verify if input VECTOR changed to next value in output of stored procedure
+#
+#
+## IV. Verify handling of different MYSQL types used in stored procedure
+##     in-out parameter, when they are not set in GET requests
+#
+# 1. Verify if null TEXT in input, generates null in output of stored procedure
+# 2. Verify if null TINY-TEXT in input, generates null in output of stored procedure
+# 3. Verify if null VARCHAR in input, generates null in output of stored procedure
+# 4. Verify if null DATE in input, generates null in output of stored procedure
+# 5. Verify if null YEAR in input, generates null in output of stored procedure
+# 6. Verify if null TIME in input, generates null in output of stored procedure
+# 7. Verify if null BIT(1) in input, generates true in output of stored procedure
+# 8. Verify if null INT in input, generates null in output of stored procedure
+# 9. Verify if null TINYINT(1) in input, generates null in output of stored procedure
+# 10. Verify if null TINYINT(8) in input, generates null in output of stored procedure
+# 11. Verify if null DECIMAL in input, generates null in output of stored procedure
+# 12. Verify if null FLOAT in input, generates null in output of stored procedure
+# 13. Verify if null DOUBLE in input, generates null in output of stored procedure
+# 14. Verify if null SET in input, generates null in output of stored procedure
+# 15. Verify if null ENUM in input, generates null in output of stored procedure
+# 16. Verify if null VECTOR in input, generates null in output of stored procedure
+#
+#
+## V. Verify handling of different MYSQL types used in stored procedure
+##     in-out parameter, when they are not set in PUT requests
+#
+# 1. Verify if null TEXT in input, generates null in output of stored procedure
+# 2. Verify if null TINY-TEXT in input, generates null in output of stored procedure
+# 3. Verify if null VARCHAR in input, generates null in output of stored procedure
+# 4. Verify if null DATE in input, generates null in output of stored procedure
+# 5. Verify if null YEAR in input, generates null in output of stored procedure
+# 6. Verify if null TIME in input, generates null in output of stored procedure
+# 7. Verify if null BIT(1) in input, generates true in output of stored procedure
+# 8. Verify if null INT in input, generates null in output of stored procedure
+# 9. Verify if null TINYINT(1) in input, generates null in output of stored procedure
+# 10. Verify if null TINYINT(8) in input, generates null in output of stored procedure
+# 11. Verify if null DECIMAL in input, generates null in output of stored procedure
+# 12. Verify if null FLOAT in input, generates null in output of stored procedure
+# 13. Verify if null DOUBLE in input, generates null in output of stored procedure
+# 14. Verify if null SET in input, generates null in output of stored procedure
+# 15. Verify if null ENUM in input, generates null in output of stored procedure
+# 16. Verify if null VECTOR in input, generates null in output of stored procedure
 # Registred SERVICE at path: /svc
 # Registred DB_SCHEMA at path: /svc/proc
 # Registred DB_OBJECT at path: /svc/proc/inc_text
@@ -494,6 +536,410 @@ PUT /svc/proc/set_vector (payload-size:18)
             2.0,
             3.0
         ]
+    }
+}
+OK
+
+#
+# IV.1
+GET /svc/proc/inc_text
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.2
+GET /svc/proc/inc_ttext
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.3
+GET /svc/proc/inc_varchar
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.4
+GET /svc/proc/inc_date
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.5
+GET /svc/proc/inc_year
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.6
+GET /svc/proc/inc_time
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.7
+GET /svc/proc/inc_bit
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": true
+    }
+}
+OK
+GET /svc/proc/inc_bit
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": true
+    }
+}
+OK
+GET /svc/proc/inc_bit
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": true
+    }
+}
+OK
+GET /svc/proc/inc_bit
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": true
+    }
+}
+OK
+
+#
+# IV.8
+GET /svc/proc/inc_int
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.9
+GET /svc/proc/inc_tinyint1
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.10
+GET /svc/proc/inc_tinyint8
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.11
+GET /svc/proc/inc_decimal
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.12
+GET /svc/proc/inc_float
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.13
+GET /svc/proc/inc_double
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.14
+# To be fixed, the test generates BASE64 responce
+GET /svc/proc/inc_set
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.15
+# To be fixed, the test generates BASE64 responce
+GET /svc/proc/inc_enum
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# IV.16
+GET /svc/proc/set_vector
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.1
+PUT /svc/proc/inc_text (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.2
+PUT /svc/proc/inc_ttext (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.3
+PUT /svc/proc/inc_varchar (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.4
+PUT /svc/proc/inc_date (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.5
+PUT /svc/proc/inc_year (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.6
+PUT /svc/proc/inc_time (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.7
+PUT /svc/proc/inc_bit (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": true
+    }
+}
+OK
+PUT /svc/proc/inc_bit (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": true
+    }
+}
+OK
+PUT /svc/proc/inc_bit (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": true
+    }
+}
+OK
+PUT /svc/proc/inc_bit (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": true
+    }
+}
+OK
+
+#
+# V.8
+PUT /svc/proc/inc_int (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.9
+PUT /svc/proc/inc_tinyint1 (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.10
+PUT /svc/proc/inc_tinyint8 (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.11
+PUT /svc/proc/inc_decimal (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.12
+PUT /svc/proc/inc_float (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.13
+PUT /svc/proc/inc_double (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.14
+# To be fixed, the test generates BASE64 responce
+PUT /svc/proc/inc_set (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.15
+# To be fixed, the test generates BASE64 responce
+PUT /svc/proc/inc_enum (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# V.16
+PUT /svc/proc/set_vector (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
     }
 }
 OK
