@@ -39,13 +39,14 @@ const std::string k_path_metadata_catalog = "metadata-catalog";
 const std::string k_path_id_or_query =
     "(/([0-9]|[a-z]|[A-Z]|[-._~!$&'()*+,;=:@%]| )*/?)?";
 
-inline std::string regex_path_schema(const std::string &service_schema_path) {
+inline std::string regex_path_schema_catalog(
+    const std::string &service_schema_path) {
   using namespace std::string_literals;
   return "^"s + service_schema_path + "/"s + k_path_metadata_catalog + "/?$"s;
 }
 
-inline std::string url_obj_metadata(const ::http::base::Uri &uri,
-                                    std::string obj_name) {
+inline std::string url_obj_metadata_catalog(const ::http::base::Uri &uri,
+                                            std::string obj_name) {
   using namespace std::string_literals;
   auto result = uri;
 
@@ -57,13 +58,13 @@ inline std::string url_obj_metadata(const ::http::base::Uri &uri,
   return result.join();
 }
 
-inline std::string url_sch_metadata(const ::http::base::Uri &uri) {
+inline std::string url_sch_metadata_catalog(const ::http::base::Uri &uri) {
   auto u = uri;
   u.get_path_elements().push_back(k_path_metadata_catalog);
   return u.join();
 }
 
-inline std::string regex_path_obj_metadata(
+inline std::string regex_path_obj_metadata_catalog(
     const std::string &service_schema_path, const std::string &obj_name) {
   const std::string k_metadata_catalog = "/metadata-catalog";
   using namespace std::string_literals;

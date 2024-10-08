@@ -22,7 +22,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "mrs/endpoint/handler/handler_db_object_metadata.h"
+#include "mrs/endpoint/handler/handler_db_object_metadata_catalog.h"
 
 #ifdef RAPIDJSON_NO_SIZETYPEDEFINE
 #include "my_rapidjson_size_t.h"
@@ -47,7 +47,8 @@ using Authorization = mrs::rest::Handler::Authorization;
 
 namespace {
 
-auto get_regex_path_object_metadata(std::weak_ptr<DbObjectEndpoint> endpoint) {
+auto get_regex_path_object_metadata_catalog(
+    std::weak_ptr<DbObjectEndpoint> endpoint) {
   using namespace std::string_literals;
 
   auto endpoint_obj = lock(endpoint);
@@ -56,18 +57,18 @@ auto get_regex_path_object_metadata(std::weak_ptr<DbObjectEndpoint> endpoint) {
   auto endpoint_sch = endpoint_obj->get_parent_ptr();
   if (!endpoint_sch) return ""s;
 
-  return regex_path_obj_metadata(endpoint_sch->get_url_path(),
-                                 endpoint_obj->get()->request_path);
+  return regex_path_obj_metadata_catalog(endpoint_sch->get_url_path(),
+                                         endpoint_obj->get()->request_path);
 }
 
 }  // namespace
 
-HandlerDbObjectMetadata::HandlerDbObjectMetadata(
+HandlerDbObjectMetadataCatalog::HandlerDbObjectMetadataCatalog(
     std::weak_ptr<DbObjectEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager)
     : Handler(get_endpoint_host(endpoint),
               /*regex-path: ^/service/schema/metadata-catalog/object$*/
-              {get_regex_path_object_metadata(endpoint)},
+              {get_regex_path_object_metadata_catalog(endpoint)},
               get_endpoint_options(lock(endpoint)), auth_manager),
       endpoint_{endpoint} {
   auto ep = lock(endpoint_);
@@ -76,12 +77,12 @@ HandlerDbObjectMetadata::HandlerDbObjectMetadata(
   entry_ = ep->get();
   schema_entry_ = ep_parent->get();
   url_obj_ = ep->get_url().join();
-  url_obj_metadata_ =
-      url_obj_metadata(ep_parent->get_url(), entry_->request_path);
-  url_sch_metadata_ = url_sch_metadata(ep_parent->get_url());
+  url_obj_metadata_catalog_ =
+      url_obj_metadata_catalog(ep_parent->get_url(), entry_->request_path);
+  url_sch_metadata_catalog_ = url_sch_metadata_catalog(ep_parent->get_url());
 }
 
-HttpResult HandlerDbObjectMetadata::handle_get(rest::RequestContext *) {
+HttpResult HandlerDbObjectMetadataCatalog::handle_get(rest::RequestContext *) {
   auto endpoint = lock_or_throw_unavail(endpoint_);
   rapidjson::Document json_doc;
   {
@@ -120,13 +121,13 @@ HttpResult HandlerDbObjectMetadata::handle_get(rest::RequestContext *) {
 
     json_link_coll.AddMember("rel", "collection", allocator);
     json_link_coll.AddMember(
-        "href", rapidjson::Value(url_sch_metadata_.c_str(), allocator),
+        "href", rapidjson::Value(url_sch_metadata_catalog_.c_str(), allocator),
         allocator);
     json_link_coll.AddMember("mediaType", "application/json", allocator);
 
     json_link_can.AddMember("rel", "canonical", allocator);
     json_link_can.AddMember(
-        "href", rapidjson::Value(url_obj_metadata_.c_str(), allocator),
+        "href", rapidjson::Value(url_obj_metadata_catalog_.c_str(), allocator),
         allocator);
 
     json_link_desc.AddMember("rel", "describes", allocator);
@@ -154,50 +155,50 @@ HttpResult HandlerDbObjectMetadata::handle_get(rest::RequestContext *) {
   return std::string(json_buf.GetString(), json_buf.GetLength());
 }
 
-HttpResult HandlerDbObjectMetadata::handle_post(
+HttpResult HandlerDbObjectMetadataCatalog::handle_post(
     [[maybe_unused]] rest::RequestContext *ctxt,
     [[maybe_unused]] const std::vector<uint8_t> &document) {
   assert(false && "Should be never called. Stubbing parent class.");
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerDbObjectMetadata::handle_delete(
+HttpResult HandlerDbObjectMetadataCatalog::handle_delete(
     [[maybe_unused]] rest::RequestContext *ctxt) {
   assert(false && "Should be never called. Stubbing parent class.");
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerDbObjectMetadata::handle_put(
+HttpResult HandlerDbObjectMetadataCatalog::handle_put(
     [[maybe_unused]] rest::RequestContext *ctxt) {
   assert(false && "Should be never called. Stubbing parent class.");
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-uint32_t HandlerDbObjectMetadata::get_access_rights() const {
+uint32_t HandlerDbObjectMetadataCatalog::get_access_rights() const {
   using Operation = mrs::database::entry::Operation;
 
   return Operation::valueRead;
 }
 
-Authorization HandlerDbObjectMetadata::requires_authentication() const {
+Authorization HandlerDbObjectMetadataCatalog::requires_authentication() const {
   bool requires_auth =
       entry_->requires_authentication || schema_entry_->requires_auth;
   return requires_auth ? Authorization::kCheck : Authorization::kNotNeeded;
 }
 
-UniversalId HandlerDbObjectMetadata::get_service_id() const {
+UniversalId HandlerDbObjectMetadataCatalog::get_service_id() const {
   return schema_entry_->service_id;
 }
 
-UniversalId HandlerDbObjectMetadata::get_db_object_id() const {
+UniversalId HandlerDbObjectMetadataCatalog::get_db_object_id() const {
   return entry_->id;
 }
 
-UniversalId HandlerDbObjectMetadata::get_schema_id() const {
+UniversalId HandlerDbObjectMetadataCatalog::get_schema_id() const {
   return schema_entry_->id;
 }
 
-void HandlerDbObjectMetadata::authorization(rest::RequestContext *ctxt) {
+void HandlerDbObjectMetadataCatalog::authorization(rest::RequestContext *ctxt) {
   throw_unauthorize_when_check_auth_fails(ctxt);
 }
 

@@ -22,35 +22,35 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_ENDPOINT_HANDLER_HANDLER_DB_SCHEMA_METADATA_H_
-#define ROUTER_SRC_REST_MRS_SRC_MRS_ENDPOINT_HANDLER_HANDLER_DB_SCHEMA_METADATA_H_
+#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_ENDPOINT_HANDLER_HANDLER_DB_OBJECT_METADATA_CATALOG_H_
+#define ROUTER_SRC_REST_MRS_SRC_MRS_ENDPOINT_HANDLER_HANDLER_DB_OBJECT_METADATA_CATALOG_H_
 
 #include <memory>
 #include <string>
+#include <vector>
 
-#include "mrs/endpoint/db_schema_endpoint.h"
+#include "mrs/database/entry/db_object.h"
+#include "mrs/database/entry/db_schema.h"
+#include "mrs/endpoint/db_object_endpoint.h"
+#include "mrs/gtid_manager.h"
 #include "mrs/rest/handler.h"
 
 namespace mrs {
 namespace endpoint {
 namespace handler {
 
-class HandlerDbSchemaMetadata : public mrs::rest::Handler {
+class HandlerDbObjectMetadataCatalog : public mrs::rest::Handler {
  public:
+  using DbObject = mrs::database::entry::DbObject;
   using DbSchema = mrs::database::entry::DbSchema;
+  using DbObjectPtr = std::shared_ptr<DbObject>;
   using DbSchemaPtr = std::shared_ptr<DbSchema>;
-  using DbSchemaEndpoint = mrs::endpoint::DbSchemaEndpoint;
+  using DbObjectEndpoint = mrs::endpoint::DbObjectEndpoint;
 
  public:
-  HandlerDbSchemaMetadata(std::weak_ptr<DbSchemaEndpoint> endpoint,
-                          mrs::interface::AuthorizeManager *auth_manager);
-
-  Authorization requires_authentication() const override;
-  UniversalId get_service_id() const override;
-  UniversalId get_db_object_id() const override;
-  UniversalId get_schema_id() const override;
-  uint32_t get_access_rights() const override;
-  void authorization(rest::RequestContext *ctxt) override;
+  HandlerDbObjectMetadataCatalog(
+      std::weak_ptr<DbObjectEndpoint> endpoint,
+      mrs::interface::AuthorizeManager *auth_manager);
 
   HttpResult handle_get(rest::RequestContext *ctxt) override;
   HttpResult handle_post(rest::RequestContext *ctxt,
@@ -58,15 +58,25 @@ class HandlerDbSchemaMetadata : public mrs::rest::Handler {
   HttpResult handle_delete(rest::RequestContext *ctxt) override;
   HttpResult handle_put(rest::RequestContext *ctxt) override;
 
- private:
-  std::weak_ptr<DbSchemaEndpoint> endpoint_;
-  DbSchemaPtr entry_;
-  bool required_authnetication_;
-  std::string url_path_;
+ public:
+  uint32_t get_access_rights() const override;
+  Authorization requires_authentication() const override;
+  UniversalId get_service_id() const override;
+  UniversalId get_db_object_id() const override;
+  UniversalId get_schema_id() const override;
+
+  void authorization(rest::RequestContext *ctxt) override;
+
+  std::weak_ptr<DbObjectEndpoint> endpoint_;
+  DbObjectPtr entry_;
+  DbSchemaPtr schema_entry_;
+  std::string url_obj_;
+  std::string url_obj_metadata_catalog_;
+  std::string url_sch_metadata_catalog_;
 };
 
 }  // namespace handler
 }  // namespace endpoint
 }  // namespace mrs
 
-#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_ENDPOINT_HANDLER_HANDLER_DB_SCHEMA_METADATA_H_
+#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_ENDPOINT_HANDLER_HANDLER_DB_OBJECT_METADATA_CATALOG_H_

@@ -172,11 +172,11 @@ ADD_STATIC_LIBRARY(mysql_rest_service_impl
   mrs/endpoint/handler_factory.cc
   mrs/endpoint/option_endpoint.cc
   mrs/endpoint/handler/handler_content_file.cc
-  mrs/endpoint/handler/handler_db_schema_metadata.cc
+  mrs/endpoint/handler/handler_db_schema_metadata_catalog.cc
   mrs/endpoint/handler/handler_db_object_table.cc
   mrs/endpoint/handler/handler_db_object_sp.cc
   mrs/endpoint/handler/handler_db_object_function.cc
-  mrs/endpoint/handler/handler_db_object_metadata.cc
+  mrs/endpoint/handler/handler_db_object_metadata_catalog.cc
   mrs/endpoint/handler/handler_string.cc
   mrs/endpoint/handler/handler_redirection.cc
   mrs/endpoint/url_host_endpoint.cc

@@ -47,7 +47,7 @@ DbSchemaEndpoint::DbSchemaEndpoint(const DbSchema &entry,
 
 void DbSchemaEndpoint::activate() {
   handle_metadata_ =
-      factory_->create_schema_metadata_handler(shared_from_this());
+      factory_->create_schema_metadata_catalog_handler(shared_from_this());
 }
 
 void DbSchemaEndpoint::update() {

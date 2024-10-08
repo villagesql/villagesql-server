@@ -29,7 +29,7 @@
 #include <iterator>
 #include <vector>
 
-#include "endpoint/handler/handler_db_schema_metadata.h"
+#include "endpoint/handler/handler_db_schema_metadata_catalog.h"
 #include "mysql/harness/logging/logging.h"
 
 #include "helper/container/map.h"

@@ -22,7 +22,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "mrs/endpoint/handler/handler_db_schema_metadata.h"
+#include "mrs/endpoint/handler/handler_db_schema_metadata_catalog.h"
 
 #include <ranges>
 
@@ -96,13 +96,14 @@ std::string generate_json_descriptor(mrs::interface::EndpointBase *endpoint,
 
 }  // namespace
 
-HandlerDbSchemaMetadata::HandlerDbSchemaMetadata(
+HandlerDbSchemaMetadataCatalog::HandlerDbSchemaMetadataCatalog(
     std::weak_ptr<DbSchemaEndpoint> schema_endpoint,
     mrs::interface::AuthorizeManager *auth_manager)
-    : Handler(get_endpoint_host(schema_endpoint),
-              /*regex-path: ^/service/schema/metadata-catalog/? $*/
-              {regex_path_schema(lock(schema_endpoint)->get_url_path())},
-              get_endpoint_options(lock(schema_endpoint)), auth_manager),
+    : Handler(
+          get_endpoint_host(schema_endpoint),
+          /*regex-path: ^/service/schema/metadata-catalog/? $*/
+          {regex_path_schema_catalog(lock(schema_endpoint)->get_url_path())},
+          get_endpoint_options(lock(schema_endpoint)), auth_manager),
       endpoint_{schema_endpoint} {
   // Please note that constructor should either, make copy
   //  of shared pointers, or copy the data, because
@@ -120,15 +121,16 @@ HandlerDbSchemaMetadata::HandlerDbSchemaMetadata(
   url_path_ = ep->get_url_path();
 }
 
-void HandlerDbSchemaMetadata::authorization(rest::RequestContext *ctxt) {
+void HandlerDbSchemaMetadataCatalog::authorization(rest::RequestContext *ctxt) {
   throw_unauthorize_when_check_auth_fails(ctxt);
 }
 
-HttpResult HandlerDbSchemaMetadata::handle_get(rest::RequestContext *ctxt) {
+HttpResult HandlerDbSchemaMetadataCatalog::handle_get(
+    rest::RequestContext *ctxt) {
   auto &requests_uri = ctxt->request->get_uri();
   log_debug("Schema::handle_get '%s'", requests_uri.get_path().c_str());
   auto locked_endpoint = lock_or_throw_unavail(endpoint_);
-  auto url = url_sch_metadata(locked_endpoint->get_url());
+  auto url = url_sch_metadata_catalog(locked_endpoint->get_url());
   const uint64_t k_default_limit = 25;
   uint64_t offset = 0;
   uint64_t limit = k_default_limit;
@@ -154,37 +156,40 @@ HttpResult HandlerDbSchemaMetadata::handle_get(rest::RequestContext *ctxt) {
   return response_template.get_result();
 }
 
-HttpResult HandlerDbSchemaMetadata::handle_post(
+HttpResult HandlerDbSchemaMetadataCatalog::handle_post(
     [[maybe_unused]] rest::RequestContext *ctxt,
     [[maybe_unused]] const std::vector<uint8_t> &document) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerDbSchemaMetadata::handle_delete(rest::RequestContext *) {
+HttpResult HandlerDbSchemaMetadataCatalog::handle_delete(
+    rest::RequestContext *) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerDbSchemaMetadata::handle_put(rest::RequestContext *) {
+HttpResult HandlerDbSchemaMetadataCatalog::handle_put(rest::RequestContext *) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HandlerDbSchemaMetadata::Authorization
-HandlerDbSchemaMetadata::requires_authentication() const {
+HandlerDbSchemaMetadataCatalog::Authorization
+HandlerDbSchemaMetadataCatalog::requires_authentication() const {
   return required_authnetication_ ? Authorization::kCheck
                                   : Authorization::kNotNeeded;
 }
 
-UniversalId HandlerDbSchemaMetadata::get_service_id() const {
+UniversalId HandlerDbSchemaMetadataCatalog::get_service_id() const {
   return entry_->service_id;
 }
 
-UniversalId HandlerDbSchemaMetadata::get_db_object_id() const { return {}; }
+UniversalId HandlerDbSchemaMetadataCatalog::get_db_object_id() const {
+  return {};
+}
 
-UniversalId HandlerDbSchemaMetadata::get_schema_id() const {
+UniversalId HandlerDbSchemaMetadataCatalog::get_schema_id() const {
   return entry_->id;
 }
 
-uint32_t HandlerDbSchemaMetadata::get_access_rights() const {
+uint32_t HandlerDbSchemaMetadataCatalog::get_access_rights() const {
   return mrs::database::entry::Operation::valueRead;
 }
 
