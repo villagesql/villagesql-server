@@ -55,6 +55,9 @@ void DbObjectEndpoint::deactivate() { url_handlers_.clear(); }
 
 void DbObjectEndpoint::activate() {
   url_handlers_.clear();
+
+  url_handlers_.push_back(
+      factory_->create_db_object_metadata_handler(shared_from_this()));
   url_handlers_.push_back(
       factory_->create_db_object_handler(shared_from_this()));
   url_handlers_.push_back(

@@ -36,17 +36,36 @@ if (!$mrs_add_schema_options)
   --let $mrs_add_schema_options=DEFAULT
 }
 
+if (!$mrs_add_schema_metadata)
+{
+  --let $mrs_add_schema_metadata=NULL
+}
+
 --disable_query_log
 --disable_result_log
 
 eval SET $mrs_sql_id_variable=mysql_rest_service_metadata.get_sequence_id();
-eval  INSERT INTO mysql_rest_service_metadata.db_schema(
-               id, service_id, name, request_path,
-               requires_auth, items_per_page, options)
-      VALUES($mrs_sql_id_variable, $mrs_service_id_sql_variable,
-             "$mrs_add_schema", "$mrs_add_schema_path",
-             $mrs_add_schema_auth, $mrs_add_schema_items_on_page,
-             $mrs_add_schema_options);
+if ($mrs_schema_version == 2)
+{
+  eval INSERT INTO mysql_rest_service_metadata.db_schema(
+                id, service_id, name, request_path,
+                requires_auth, items_per_page, options)
+        VALUES($mrs_sql_id_variable, $mrs_service_id_sql_variable,
+              "$mrs_add_schema", "$mrs_add_schema_path",
+              $mrs_add_schema_auth, $mrs_add_schema_items_on_page,
+              $mrs_add_schema_options);
+}
+
+if ($mrs_schema_version == 3)
+{
+  eval INSERT INTO mysql_rest_service_metadata.db_schema(
+                id, service_id, name, request_path,
+                requires_auth, items_per_page, options, metadata)
+        VALUES($mrs_sql_id_variable, $mrs_service_id_sql_variable,
+              "$mrs_add_schema", "$mrs_add_schema_path",
+              $mrs_add_schema_auth, $mrs_add_schema_items_on_page,
+              $mrs_add_schema_options, $mrs_add_schema_metadata);
+}
 
 --let $_path=`SELECT CONCAT(s.url_context_root, db.request_path) FROM mysql_rest_service_metadata.db_schema as db JOIN mysql_rest_service_metadata.service as s ON  s.id = db.service_id  WHERE db.id=$mrs_sql_id_variable;`
 --echo # Registred DB_SCHEMA at path: $_path
@@ -58,3 +77,4 @@ eval  INSERT INTO mysql_rest_service_metadata.db_schema(
 --let $mrs_sql_id_variable=
 --let $mrs_service_id_sql_variable=
 --let $mrs_add_schema_auth=
+--let $mrs_add_schema_metadata=

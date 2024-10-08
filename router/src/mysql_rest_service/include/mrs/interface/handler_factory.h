@@ -47,12 +47,18 @@ class HandlerFactory {
 
   virtual ~HandlerFactory() = default;
 
-  virtual std::unique_ptr<Handler> create_schema_metadata_catalog_handler(
-      EndpointBasePtr db_shema_endpoint) = 0;
-  virtual std::unique_ptr<Handler> create_db_object_handler(
+  virtual std::unique_ptr<Handler> create_db_schema_metadata_catalog_handler(
       EndpointBasePtr db_object_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_db_schema_metadata_handler(
+      EndpointBasePtr db_service_endpoint) = 0;
   virtual std::unique_ptr<Handler> create_db_object_metadata_catalog_handler(
       EndpointBasePtr db_object_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_db_object_metadata_handler(
+      EndpointBasePtr db_object_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_db_object_handler(
+      EndpointBasePtr db_object_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_db_service_metadata_handler(
+      EndpointBasePtr db_service_endpoint) = 0;
   virtual std::unique_ptr<Handler> create_content_file(
       EndpointBasePtr db_object_endpoint) = 0;
 

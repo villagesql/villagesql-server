@@ -65,6 +65,7 @@ struct DbObject {
   bool requires_authentication;
   std::optional<std::string> auth_stored_procedure;
   std::optional<std::string> options;
+  std::optional<std::string> metadata;
 
   std::vector<RowGroupOwnership> row_group_security;
   ResultSets fields;

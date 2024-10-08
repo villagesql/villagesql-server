@@ -46,6 +46,11 @@ if (!$mrs_add_db_object_items_on_page)
   --let $mrs_add_db_object_items_on_page=DEFAULT
 }
 
+if (!$mrs_add_db_object_metadata)
+{
+  --let $mrs_add_db_object_metadata=NULL
+}
+
 if (!$mrs_add_db_object_options)
 {
   if($DEBUG_OPTIONS)
@@ -61,6 +66,12 @@ if ($mrs_schema_version == 2)
     --let $_mrs_tmp_columns=$_mrs_tmp_columns ,row_user_ownership_enforced,row_user_ownership_column
     --let $_mrs_tmp_values=$_mrs_tmp_values ,true,$mrs_add_db_object_user_ownership_column
   }
+}
+
+if ($mrs_schema_version == 3)
+{
+  --let $_mrs_tmp_columns=$_mrs_tmp_columns ,metadata
+  --let $_mrs_tmp_values=$_mrs_tmp_values ,$mrs_add_db_object_metadata
 }
 
 if (!$mrs_add_db_object_options)
@@ -166,6 +177,7 @@ if (!$mrs_add_db_object_do_not_auto_register_columns)
 --let $mrs_add_db_object_custom_fields=
 --let $mrs_add_db_object_custom_values=
 --let $mrs_add_db_object_user_ownership_column=
+--let $mrs_add_db_object_metadata=
 --let $_mrs_tmp_columns=
 --let $_mrs_tmp_values=
 

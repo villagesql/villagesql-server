@@ -46,8 +46,12 @@ DbSchemaEndpoint::DbSchemaEndpoint(const DbSchema &entry,
 }
 
 void DbSchemaEndpoint::activate() {
-  handle_metadata_ =
-      factory_->create_schema_metadata_catalog_handler(shared_from_this());
+  url_handlers_.clear();
+
+  url_handlers_.push_back(
+      factory_->create_db_schema_metadata_catalog_handler(shared_from_this()));
+  url_handlers_.push_back(
+      factory_->create_db_schema_metadata_handler(shared_from_this()));
 }
 
 void DbSchemaEndpoint::update() {
@@ -55,7 +59,7 @@ void DbSchemaEndpoint::update() {
   observability::EntityCounter<kEntityCounterUpdatesSchemas>::increment();
 }
 
-void DbSchemaEndpoint::deactivate() { handle_metadata_.reset(); }
+void DbSchemaEndpoint::deactivate() { url_handlers_.clear(); }
 
 UniversalId DbSchemaEndpoint::get_id() const { return entry_->id; }
 

@@ -10,12 +10,7 @@
 --disable_query_log
 --disable_result_log
 
---let $mrs_schema_version=3
-
-if ($ROUTER_MRS_SCHEMA)
-{
-  --let $mrs_schema_version=$ROUTER_MRS_SCHEMA
-}
+--source ./check_mrs_schema_version.inc
 
 if ($mrs_schema_version == 3)
 {

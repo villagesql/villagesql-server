@@ -22,57 +22,52 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_DB_SCHEMA_ENDPOINT_H_
-#define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_DB_SCHEMA_ENDPOINT_H_
+#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_ENDPOINT_HANDLER_HANDLER_DB_SCHEMA_METADATA_H_
+#define ROUTER_SRC_REST_MRS_SRC_MRS_ENDPOINT_HANDLER_HANDLER_DB_SCHEMA_METADATA_H_
 
 #include <memory>
+#include <string>
 
 #include "mrs/database/entry/db_schema.h"
-#include "mrs/endpoint/option_endpoint.h"
-#include "mrs/interface/handler_factory.h"
-#include "mrs/interface/rest_handler.h"
+#include "mrs/endpoint/db_schema_endpoint.h"
+#include "mrs/gtid_manager.h"
+#include "mrs/rest/handler.h"
 
 namespace mrs {
 namespace endpoint {
+namespace handler {
 
-class DbServiceEndpoint;
-
-class DbSchemaEndpoint : public OptionEndpoint {
+class HandlerDbSchemaMetadata : public mrs::rest::Handler {
  public:
-  using Parent = OptionEndpoint;
   using DbSchema = mrs::database::entry::DbSchema;
   using DbSchemaPtr = std::shared_ptr<DbSchema>;
-  using HandlerFactoryPtr = std::shared_ptr<mrs::interface::HandlerFactory>;
-  using DataType = DbSchema;
+  using DbSchemaEndpoint = mrs::endpoint::DbSchemaEndpoint;
 
  public:
-  DbSchemaEndpoint(const DbSchema &entry,
-                   EndpointConfigurationPtr configuration,
-                   HandlerFactoryPtr factory);
+  HandlerDbSchemaMetadata(std::weak_ptr<DbSchemaEndpoint> endpoint,
+                          mrs::interface::AuthorizeManager *auth_manager);
 
-  void activate() override;
-  void deactivate() override;
+  HttpResult handle_get(rest::RequestContext *ctxt) override;
+  HttpResult handle_post(rest::RequestContext *ctxt,
+                         const std::vector<uint8_t> &document) override;
+  HttpResult handle_delete(rest::RequestContext *ctxt) override;
+  HttpResult handle_put(rest::RequestContext *ctxt) override;
 
-  UniversalId get_id() const override;
-  UniversalId get_parent_id() const override;
-  std::optional<std::string> get_options() const override;
+ public:
+  uint32_t get_access_rights() const override;
+  Authorization requires_authentication() const override;
+  UniversalId get_service_id() const override;
+  UniversalId get_db_object_id() const override;
+  UniversalId get_schema_id() const override;
 
-  void set(const DbSchema &schema, EndpointBasePtr parent);
-  const DbSchemaPtr get() const;
+  void authorization(rest::RequestContext *ctxt) override;
 
- private:
-  void update() override;
-  bool is_this_node_enabled() const override;
-  bool does_this_node_require_authentication() const override;
-  std::string get_my_url_path_part() const override;
-  std::string get_my_url_part() const override;
-
+  std::weak_ptr<DbSchemaEndpoint> endpoint_;
   DbSchemaPtr entry_;
-  std::vector<HandlerPtr> url_handlers_;
 };
 
+}  // namespace handler
 }  // namespace endpoint
-
 }  // namespace mrs
 
-#endif  // ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_DB_SCHEMA_ENDPOINT_H_
+#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_ENDPOINT_HANDLER_HANDLER_DB_SCHEMA_METADATA_H_

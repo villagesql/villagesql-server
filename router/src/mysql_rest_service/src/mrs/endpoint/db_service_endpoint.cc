@@ -103,6 +103,15 @@ void DbServiceEndpoint::update() {
   observability::EntityCounter<kEntityCounterUpdatesServices>::increment();
 }
 
+void DbServiceEndpoint::activate() {
+  url_handlers_.clear();
+
+  url_handlers_.push_back(
+      factory_->create_db_service_metadata_handler(shared_from_this()));
+}
+
+void DbServiceEndpoint::deactivate() { url_handlers_.clear(); }
+
 bool DbServiceEndpoint::is_this_node_enabled() const { return entry_->enabled; }
 
 std::string DbServiceEndpoint::get_my_url_path_part() const {

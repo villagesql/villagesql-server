@@ -49,6 +49,7 @@ struct DbService {
   std::optional<std::string> custom_metadata_schema;
   bool enabled;
   bool published{true};
+  std::optional<std::string> metadata;
 
   bool deleted{false};
 };

@@ -32,12 +32,19 @@ class MockHandlerFactory : public mrs::interface::HandlerFactory {
  public:
   using UniversalId = mrs::database::entry::UniversalId;
 
-  MOCK_METHOD(std::unique_ptr<Handler>, create_schema_metadata_catalog_handler,
+  MOCK_METHOD(std::unique_ptr<Handler>, create_db_service_metadata_handler,
+              (EndpointBasePtr db_service_endpoint), (override));
+  MOCK_METHOD(std::unique_ptr<Handler>,
+              create_db_schema_metadata_catalog_handler,
               (EndpointBasePtr db_shema_endpoint), (override));
+  MOCK_METHOD(std::unique_ptr<Handler>, create_db_schema_metadata_handler,
+              (EndpointBasePtr db_schema_endpoint), (override));
   MOCK_METHOD(std::unique_ptr<Handler>, create_db_object_handler,
               (EndpointBasePtr db_object_endpoint), (override));
   MOCK_METHOD(std::unique_ptr<Handler>,
               create_db_object_metadata_catalog_handler,
+              (EndpointBasePtr db_object_endpoint), (override));
+  MOCK_METHOD(std::unique_ptr<Handler>, create_db_object_metadata_handler,
               (EndpointBasePtr db_object_endpoint), (override));
   MOCK_METHOD(std::unique_ptr<Handler>, create_content_file,
               (EndpointBasePtr content_file_endpoint), (override));

@@ -41,7 +41,7 @@ class QueryEntriesDbSchema : protected Query {
       mrs::interface::SupportedMrsMetadataVersion;
 
  public:
-  QueryEntriesDbSchema();
+  QueryEntriesDbSchema(SupportedMrsMetadataVersion v);
 
   virtual uint64_t get_last_update();
   /**
@@ -56,6 +56,7 @@ class QueryEntriesDbSchema : protected Query {
  protected:
   void on_row(const ResultRow &r) override;
 
+  SupportedMrsMetadataVersion db_version_;
   uint64_t audit_log_id_{0};
 };
 

@@ -69,7 +69,7 @@ QueryEntriesDbObject::QueryEntriesDbObject(
     query_ << mysqlrouter::sqlstring{
         ", o.row_user_ownership_enforced, o.row_user_ownership_column "};
   else
-    query_ << mysqlrouter::sqlstring{""};
+    query_ << mysqlrouter::sqlstring{", o.metadata "};
 }
 
 uint64_t QueryEntriesDbObject::get_last_update() { return audit_log_id_; }
@@ -164,6 +164,8 @@ void QueryEntriesDbObject::on_row(const ResultRow &row) {
     if (user_ownership_enforced && !user_ownership_column.empty()) {
       entry.user_ownership_v2 = user_ownership_column;
     }
+  } else {
+    mysql_row.unserialize(&entry.metadata);
   }
 
   entry.deleted = false;

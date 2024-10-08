@@ -43,6 +43,7 @@ struct DbSchema {
   bool enabled;
   std::optional<uint64_t> items_per_page;
   std::optional<std::string> options;
+  std::optional<std::string> metadata;
 
   bool deleted{false};
 };

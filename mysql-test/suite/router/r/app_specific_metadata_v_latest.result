@@ -1,0 +1,185 @@
+# MySQL Rest Service schema created.
+# MySQL Rest Service, server accounts configured.
+# DB `basic_schema` - created
+# DB `func_schema` - created
+Create a service with NO metadata defined on the service level
+# Registred SERVICE at path: /svc_no_md
+Create a service with metadata defined on the service level
+# Registred SERVICE at path: /svc_md
+Create a schema endpoint with NO metadata defined on the schema level
+# Registred DB_SCHEMA at path: /svc_md/func_schema_no_md
+# Create a function endpoint with NO metadata defined on the object level
+# Registred DB_OBJECT at path: /svc_md/func_schema_no_md/func_sum_no_md
+# Create a function endpoint with metadata defined on the object level
+# Registred DB_OBJECT at path: /svc_md/func_schema_no_md/func_sum_md
+Create a schema endpoint with metadata defined on the schema level
+# Registred DB_SCHEMA at path: /svc_md/basic_schema_md
+# Create a table endpoint with NO metadata defined on the object level
+# Registred DB_OBJECT at path: /svc_md/basic_schema_md/tab_no_md
+# Create a table endpoint with metadata defined on the object level
+# Registred DB_OBJECT at path: /svc_md/basic_schema_md/tab_md
+# Create a procedure endpoint with NO metadata defined on the object level
+# Registred DB_OBJECT at path: /svc_md/basic_schema_md/proc_int_no_md
+# Create a procedure endpoint with metadata defined on the object level
+# Registred DB_OBJECT at path: /svc_md/basic_schema_md/proc_int_md
+GET /svc_md/basic_schema_md/proc_int_md
+
+Check the _metadata on service level
+
+Check the _metadata for a service that has it set
+GET /svc_md/_metadata
+Date -> %DATE%
+Access-Control-Allow-Methods  ->  GET, OPTIONS
+Content-Type  ->  application/json
+Content-Length  ->  36
+{
+    "app_specific_md": "service level"
+}
+Check the _metadata for a service that has it NULL
+GET /svc_no_md/_metadata
+Date -> %DATE%
+Access-Control-Allow-Methods  ->  GET, OPTIONS
+Content-Type  ->  application/json
+Content-Length  ->  2
+{}
+Check the forbidden PUT method for service _metadata
+PUT /svc_md/_metadata (payload-size:2)
+{
+    "message": "Forbidden",
+    "status": 403
+}
+OK
+Check the forbidden POST method for service _metadata
+POST /svc_md/_metadata
+{
+    "message": "Forbidden",
+    "status": 403
+}
+OK
+Check the forbidden DELETE method for service _metadata
+DELETE /svc_md/_metadata
+{
+    "message": "Forbidden",
+    "status": 403
+}
+OK
+
+Check the _metadata on schema level
+
+Check the _metadata for a schema that has it set
+GET /svc_md/basic_schema_md/_metadata
+Date -> %DATE%
+Access-Control-Allow-Methods  ->  GET, OPTIONS
+Content-Type  ->  application/json
+Content-Length  ->  35
+{
+    "app_specific_md": "schema level"
+}
+Check the _metadata for a schema that has it NULL
+GET /svc_md/func_schema_no_md/_metadata
+Date -> %DATE%
+Access-Control-Allow-Methods  ->  GET, OPTIONS
+Content-Type  ->  application/json
+Content-Length  ->  2
+{}
+Check the forbidden PUT method for schema _metadata
+PUT /svc_md/basic_schema_md/_metadata (payload-size:2)
+{
+    "message": "Forbidden",
+    "status": 403
+}
+OK
+Check the forbidden POST method for schema _metadata
+POST /svc_md/basic_schema_md/_metadata
+{
+    "message": "Forbidden",
+    "status": 403
+}
+OK
+Check the forbidden DELETE method for schema _metadata
+DELETE /svc_md/basic_schema_md/_metadata
+{
+    "message": "Forbidden",
+    "status": 403
+}
+OK
+
+Check the _metadata on object level
+
+Check the _metadata for a FUNCTION object that has it set
+GET /svc_md/func_schema_no_md/func_sum_md/_metadata
+Date -> %DATE%
+Access-Control-Allow-Methods  ->  GET, OPTIONS
+Content-Type  ->  application/json
+Content-Length  ->  37
+{
+    "app_specific_md": "function level"
+}
+Check the _metadata for a FUNCTION object that has it NULL
+GET /svc_md/func_schema_no_md/func_sum_no_md/_metadata
+Date -> %DATE%
+Access-Control-Allow-Methods  ->  GET, OPTIONS
+Content-Type  ->  application/json
+Content-Length  ->  2
+{}
+Check the _metadata for a TABLE object that has it set
+GET /svc_md/basic_schema_md/tab_md/_metadata
+Date -> %DATE%
+Access-Control-Allow-Methods  ->  GET, OPTIONS
+Content-Type  ->  application/json
+Content-Length  ->  34
+{
+    "app_specific_md": "table level"
+}
+Check the _metadata for a TABLE object that has it NULL
+GET /svc_md/basic_schema_md/tab_no_md/_metadata
+Date -> %DATE%
+Access-Control-Allow-Methods  ->  GET, OPTIONS
+Content-Type  ->  application/json
+Content-Length  ->  2
+{}
+Check the _metadata for a PROCEDURE object that has it set
+GET /svc_md/basic_schema_md/proc_int_md/_metadata
+Date -> %DATE%
+Access-Control-Allow-Methods  ->  GET, OPTIONS
+Content-Type  ->  application/json
+Content-Length  ->  38
+{
+    "app_specific_md": "procedure level"
+}
+Check the _metadata for a PROCEDURE object that has it NULL
+GET /svc_md/basic_schema_md/proc_int_no_md/_metadata
+Date -> %DATE%
+Access-Control-Allow-Methods  ->  GET, OPTIONS
+Content-Type  ->  application/json
+Content-Length  ->  2
+{}
+Check the forbidden PUT method for object _metadata
+PUT /svc_md/basic_schema_md/tab_md/_metadata (payload-size:2)
+{
+    "message": "Forbidden",
+    "status": 403
+}
+OK
+Check the forbidden POST method for object _metadata
+POST /svc_md/basic_schema_md/tab_md/_metadata
+{
+    "message": "Forbidden",
+    "status": 403
+}
+OK
+Check the forbidden DELETE method for object _metadata
+DELETE /svc_md/basic_schema_md/tab_md/_metadata
+{
+    "message": "Forbidden",
+    "status": 403
+}
+OK
+DROP SCHEMA func_schema;
+DROP SCHEMA basic_schema;
+DROP SCHEMA mysql_rest_service_metadata;
+DROP ROLE mysql_rest_service_admin;
+DROP ROLE mysql_rest_service_schema_admin;
+DROP ROLE mysql_rest_service_meta_provider;
+DROP ROLE mysql_rest_service_data_provider;
+DROP ROLE mysql_rest_service_dev;

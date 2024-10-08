@@ -26,10 +26,13 @@
 
 #include "mrs/endpoint/handler/handler_content_file.h"
 #include "mrs/endpoint/handler/handler_db_object_function.h"
+#include "mrs/endpoint/handler/handler_db_object_metadata.h"
 #include "mrs/endpoint/handler/handler_db_object_metadata_catalog.h"
 #include "mrs/endpoint/handler/handler_db_object_sp.h"
 #include "mrs/endpoint/handler/handler_db_object_table.h"
+#include "mrs/endpoint/handler/handler_db_schema_metadata.h"
 #include "mrs/endpoint/handler/handler_db_schema_metadata_catalog.h"
+#include "mrs/endpoint/handler/handler_db_service_metadata.h"
 #include "mrs/endpoint/handler/handler_redirection.h"
 #include "mrs/endpoint/handler/handler_string.h"
 #include "mrs/endpoint/handler/utilities.h"
@@ -48,7 +51,7 @@ HandlerFactory::HandlerFactory(AuthorizeManager *auth_manager,
       gtid_manager_{gtid_manager},
       cache_manager_{cache_manager} {}
 
-HandlerPtr HandlerFactory::create_schema_metadata_catalog_handler(
+HandlerPtr HandlerFactory::create_db_schema_metadata_catalog_handler(
     EndpointBasePtr endpoint) {
   using namespace mrs::endpoint::handler;
 
@@ -93,6 +96,36 @@ HandlerPtr HandlerFactory::create_db_object_metadata_catalog_handler(
 
   return std::make_unique<HandlerDbObjectMetadataCatalog>(db_object_endpoint,
                                                           auth_manager_);
+}
+
+HandlerPtr HandlerFactory::create_db_service_metadata_handler(
+    EndpointBasePtr endpoint) {
+  auto db_service_endpoint =
+      std::dynamic_pointer_cast<DbServiceEndpoint>(endpoint);
+  assert(db_service_endpoint && "Object must be castable.");
+
+  return std::make_unique<HandlerDbServiceMetadata>(db_service_endpoint,
+                                                    auth_manager_);
+}
+
+HandlerPtr HandlerFactory::create_db_schema_metadata_handler(
+    EndpointBasePtr endpoint) {
+  auto db_schema_endpoint =
+      std::dynamic_pointer_cast<DbSchemaEndpoint>(endpoint);
+  assert(db_schema_endpoint && "Object must be castable.");
+
+  return std::make_unique<HandlerDbSchemaMetadata>(db_schema_endpoint,
+                                                   auth_manager_);
+}
+
+HandlerPtr HandlerFactory::create_db_object_metadata_handler(
+    EndpointBasePtr endpoint) {
+  auto db_object_endpoint =
+      std::dynamic_pointer_cast<DbObjectEndpoint>(endpoint);
+  assert(db_object_endpoint && "Object must be castable.");
+
+  return std::make_unique<HandlerDbObjectMetadata>(db_object_endpoint,
+                                                   auth_manager_);
 }
 
 HandlerPtr HandlerFactory::create_content_file(EndpointBasePtr endpoint) {
