@@ -89,6 +89,13 @@
 # 14. Verify if null SET in input, generates null in output of stored procedure
 # 15. Verify if null ENUM in input, generates null in output of stored procedure
 # 16. Verify if null VECTOR in input, generates null in output of stored procedure
+#
+#
+## VI. Verify handling of few MYSQL types used in stored procedure
+##     in-out parameter, when they are set to json-null in PUT requests
+#
+# 1. Verify if null TEXT in input, generates null in output of stored procedure
+# 2. Verify if null INT in input, generates null in output of stored procedure
 # Registred SERVICE at path: /svc
 # Registred DB_SCHEMA at path: /svc/proc
 # Registred DB_OBJECT at path: /svc/proc/inc_text
@@ -936,6 +943,28 @@ OK
 #
 # V.16
 PUT /svc/proc/set_vector (payload-size:2)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# VI.1
+PUT /svc/proc/inc_text (payload-size:15)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
+
+#
+# VI.2
+PUT /svc/proc/inc_int (payload-size:15)
 {
     "resultSets": [],
     "outParameters": {

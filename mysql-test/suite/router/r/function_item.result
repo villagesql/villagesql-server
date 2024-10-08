@@ -79,6 +79,8 @@
 # 9. Verify if ommiting FLOAT  parameter will set it to NULL and its copied to output of function
 # 10. Verify if ommiting DOUBLE  parameter will set it to NULL and its copied to output of function
 # 11. Verify if ommiting JSON simple  parameter will set it to NULL and its copied to output of function
+## VII. Verify passing json-null as procedure parameter (PUT request)
+# 1. Verify setting json-null to varchar parameter will be copied to output of function
 # Registred SERVICE at path: /svc
 # Registred DB_SCHEMA at path: /svc/func
 # Registred DB_OBJECT at path: /svc/func/sum
@@ -543,6 +545,14 @@ OK
 #
 # VI.12
 PUT /svc/func/move_geo (payload-size:2)
+{
+    "result": null
+}
+OK
+
+#
+# VII.1
+PUT /svc/func/move_char (payload-size:10)
 {
     "result": null
 }

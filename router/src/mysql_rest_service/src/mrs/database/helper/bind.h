@@ -52,6 +52,10 @@ class MysqlBind {
   template <typename Value>
   void fill_mysql_bind_for_inout(const Value &value_with_user_type,
                                  DataType data_type) {
+    if (is_null(value_with_user_type)) {
+      fill_null_as_inout(data_type);
+      return;
+    }
     if (data_type == DataType::VECTOR) {
       fill_mysql_bind_inout_vector(value_with_user_type);
       return;
@@ -71,6 +75,8 @@ class MysqlBind {
   static enum_field_types to_mysql_type(DataType pdt);
   static const std::string &to_string(const std::string &value);
   static std::string to_string(const rapidjson::Value &value);
+  static bool is_null(const std::string &value);
+  static bool is_null(const rapidjson::Value &value);
 
   MYSQL_BIND *allocate_for_blob(const std::string &value);
   MYSQL_BIND *allocate_for_string(const std::string &value);

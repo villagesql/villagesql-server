@@ -802,6 +802,17 @@ PUT /svc/proc/move_vector (payload-size:2)
     }
 }
 OK
+
+#
+# VII.1
+PUT /svc/proc/move_char (payload-size:10)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": null
+    }
+}
+OK
 DROP SCHEMA proc_schema;
 DROP SCHEMA mysql_rest_service_metadata;
 DROP ROLE mysql_rest_service_admin;

@@ -103,6 +103,13 @@
 --echo # 14. Verify if null SET in input, generates null in output of stored procedure
 --echo # 15. Verify if null ENUM in input, generates null in output of stored procedure
 --echo # 16. Verify if null VECTOR in input, generates null in output of stored procedure
+--echo #
+--echo #
+--echo ## VI. Verify handling of few MYSQL types used in stored procedure
+--echo ##     in-out parameter, when they are set to json-null in PUT requests
+--echo #
+--echo # 1. Verify if null TEXT in input, generates null in output of stored procedure
+--echo # 2. Verify if null INT in input, generates null in output of stored procedure
 
 
 --source ../include/mrs/start_object_definition.inc
@@ -115,7 +122,6 @@
 --let $mrs_add_schema=proc_schema
 --let $mrs_add_schema_path=/proc
 --source ../include/mrs/db_schema/add.inc
-
 
 --let $mrs_add_db_object_type=PROCEDURE
 --let $mrs_add_db_object=inc_text
@@ -747,6 +753,22 @@ exec $MRS_CLIENT_ARGS
 --echo # V.16
 --let $mrs_client_arg_path='/svc/proc/set_vector'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # VI.1
+--let $mrs_client_arg_path='/svc/proc/inc_text'
+--let $mrs_client_arg_payload='{"result":null}'
+--let $mrs_client_arg_request_type='PUT'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # VI.2
+--let $mrs_client_arg_path='/svc/proc/inc_int'
+--let $mrs_client_arg_payload='{"result":null}'
 --let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 

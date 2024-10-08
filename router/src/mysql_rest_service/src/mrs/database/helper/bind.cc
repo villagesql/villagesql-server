@@ -172,6 +172,12 @@ enum_field_types MysqlBind::to_mysql_type(DataType pdt) {
   }
 }
 
+bool MysqlBind::is_null(const std::string &) { return false; }
+
+bool MysqlBind::is_null(const rapidjson::Value &value) {
+  return value.IsNull();
+}
+
 const std::string &MysqlBind::to_string(const std::string &value) {
   return value;
 }

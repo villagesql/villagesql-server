@@ -661,6 +661,14 @@ exec $MRS_CLIENT_ARGS
 --let $mrs_client_arg_payload='{}'
 --source ../include/mrs/mrs_client.inc
 
+--echo
+--echo #
+--echo # VII.1
+--let $mrs_client_arg_path='/svc/proc/move_char'
+--let $mrs_client_arg_payload='{"a":null}'
+--let $mrs_client_arg_request_type='PUT'
+--source ../include/mrs/mrs_client.inc
+
 
 # Cleanup
 --source ../include/mrs/cleanup.inc

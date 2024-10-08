@@ -99,6 +99,9 @@
 --echo # 10. Verify if ommiting DOUBLE  parameter will set it to NULL and its copied to output of function
 --echo # 11. Verify if ommiting JSON simple  parameter will set it to NULL and its copied to output of function
 
+--echo ## VII. Verify passing json-null as procedure parameter (PUT request)
+--echo # 1. Verify setting json-null to varchar parameter will be copied to output of function
+
 --source ../include/mrs/start_object_definition.inc
 
 # The test uses HOST to have only paths in HREF fields.
@@ -631,6 +634,13 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.12
 --let $mrs_client_arg_path='/svc/func/move_geo'
 --let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # VII.1
+--let $mrs_client_arg_path='/svc/func/move_char'
+--let $mrs_client_arg_payload='{"a":null}'
 --source ../include/mrs/mrs_client.inc
 
 # Cleanup
