@@ -10537,6 +10537,9 @@ ER_INVALID_CLAUSE_IN_CONTEXT
 ER_INVALID_CLAUSE_COMBINATION
   eng "Clauses %s and %s cannot be combined."
 
+ER_WARN_REDACTED_PRIVILEGES
+  eng "Result of SHOW was redacted due to insufficient privileges for table %s."
+
 #
 #  End of 9.x error messages (server-to-client).
 #

@@ -130,7 +130,8 @@
 #include "sql/sql_partition.h"  // HA_USE_AUTO_PARTITION
 #include "sql/sql_plugin.h"     // PLUGIN_IS_DELETED, LOCK_plugin
 #include "sql/sql_plugin_ref.h"
-#include "sql/sql_profile.h"    // query_profile_statistics_info
+#include "sql/sql_profile.h"  // query_profile_statistics_info
+#include "sql/sql_rewrite.h"
 #include "sql/sql_table.h"      // primary_key_name
 #include "sql/sql_tmp_table.h"  // create_ondisk_from_heap
 #include "sql/sql_trigger.h"    // acquire_shared_mdl_for_trigger
@@ -2548,8 +2549,24 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
 
     if (share->engine_attribute.length) {
       packet->append(STRING_WITH_LEN(" /*!80021 ENGINE_ATTRIBUTE="));
-      append_unescaped(packet, share->engine_attribute.str,
-                       share->engine_attribute.length);
+      if (check_table_access(thd, CREATE_ACL, table_list, false, 1, true) &&
+          check_table_access(thd, ALTER_ACL, table_list, false, 1, true)) {
+        String rlb;
+        String original_query_str(share->engine_attribute.str,
+                                  share->engine_attribute.length,
+                                  system_charset_info);
+        redact_par_url(original_query_str, rlb);
+
+        append_unescaped(packet, rlb.ptr(), rlb.length());
+        // inform users without privileges that the result of SHOW CREATE TABLE
+        // is redacted. Useful for the case of redacted mysqldump result.
+        push_warning_printf(
+            thd, Sql_condition::SL_WARNING, ER_WARN_REDACTED_PRIVILEGES,
+            ER_THD(thd, ER_WARN_REDACTED_PRIVILEGES), share->table_name.str);
+      } else {
+        append_unescaped(packet, share->engine_attribute.str,
+                         share->engine_attribute.length);
+      }
       packet->append(STRING_WITH_LEN(" */"));
     }
     if (share->secondary_engine_attribute.length) {

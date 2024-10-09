@@ -301,6 +301,16 @@ bool rewrite_query(THD *thd, Consumer_type type, const Rewrite_params *params,
       }
       break;
     }
+    case SQLCOM_CREATE_TABLE:
+      if (type == Consumer_type::TEXTLOG) {
+        rw.reset(new Rewriter_create_table(thd, type));
+      }
+      break;
+    case SQLCOM_ALTER_TABLE:
+      if (type == Consumer_type::TEXTLOG) {
+        rw.reset(new Rewriter_alter_table(thd, type));
+      }
+      break;
 
     /*
       PREPARE stmt FROM <string> is rewritten so that <string> is
@@ -332,38 +342,6 @@ bool rewrite_query(THD *thd, Consumer_type type, const Rewrite_params *params,
 
   return rewrite;
 }
-
-void redact_par_url(String original_query_str, String &rlb) {
-  String pattern_start("/p/", system_charset_info);
-  String pattern_end("/n/", system_charset_info);
-
-  size_t search_offset = 0;
-  while (search_offset <= original_query_str.length()) {
-    auto first_index = original_query_str.strstr(pattern_start, search_offset);
-    if (first_index == -1) {
-      // we could not find any other "/p/"
-      break;
-    }
-
-    // search for the "/n/" after the "/p/" location
-    auto second_index = original_query_str.strstr(pattern_end, first_index);
-    if (second_index == -1) {
-      // we could not find any other "/n/"
-      break;
-    }
-
-    // Copy from the original string from the search_offset till first_index
-    rlb.append(original_query_str.c_ptr() + search_offset,
-               first_index - search_offset);
-    rlb.append(STRING_WITH_LEN("/p/<redacted>"));
-    search_offset = second_index;
-  }
-
-  // Copy the remaining string
-  rlb.append(original_query_str.c_ptr() + search_offset,
-             original_query_str.length() - search_offset);
-}
-
 }  // anonymous namespace
 
 /**
@@ -1865,13 +1843,45 @@ bool Rewriter_start_group_replication::rewrite(String &rlb) const {
   return true;
 }
 
+void redact_par_url(String original_query_str, String &rlb) {
+  String pattern_start("/p/", system_charset_info);
+  String pattern_end("/n/", system_charset_info);
+
+  size_t search_offset = 0;
+  while (search_offset <= original_query_str.length()) {
+    auto first_index = original_query_str.strstr(pattern_start, search_offset);
+    if (first_index == -1) {
+      // we could not find any other "/p/"
+      break;
+    }
+
+    // search for the "/n/" after the "/p/" location
+    auto second_index = original_query_str.strstr(pattern_end, first_index);
+    if (second_index == -1) {
+      // we could not find any other "/n/"
+      break;
+    }
+
+    // Copy from the original string from the search_offset till first_index
+    rlb.append(original_query_str.c_ptr() + search_offset,
+               first_index - search_offset);
+    rlb.append(STRING_WITH_LEN("/p/<redacted>"));
+    search_offset = second_index;
+  }
+
+  // Copy the remaining string
+  rlb.append(original_query_str.c_ptr() + search_offset,
+             original_query_str.length() - search_offset);
+}
+
 Rewriter_select_query::Rewriter_select_query(THD *thd, Consumer_type type)
     : I_rewriter(thd, type) {}
 
 /**
   Rewrite the query with the PAR id being redacted if the query exports query
   result to the object storage.
-  Any pattern like "/p/.*?/n/" is replaced with  "/p/<redacted>/n/"
+  Any pattern like "/p/.*?/n/" is replaced with "/p/<redacted>/n/"
+
   @param[in,out] rlb     Buffer to return the rewritten query in.
 
   @retval true the query is rewritten
@@ -1897,6 +1907,41 @@ Rewriter_create_procedure::Rewriter_create_procedure(THD *thd,
   @retval true the query is rewritten
 */
 bool Rewriter_create_procedure::rewrite(String &rlb) const {
+  String original_query_str(m_thd->query().str, m_thd->query().length,
+                            system_charset_info);
+  redact_par_url(original_query_str, rlb);
+  return true;
+}
+
+Rewriter_create_table::Rewriter_create_table(THD *thd, Consumer_type type)
+    : I_rewriter(thd, type) {}
+
+/**
+  Rewrite the create table statement with the PAR id being redacted. Any pattern
+  like "/p/.*?/n/" is replaced with  "/p/<redacted>/n/"
+  @param[in,out] rlb     Buffer to return the rewritten query in.
+
+  @retval true the query is rewritten
+*/
+bool Rewriter_create_table::rewrite(String &rlb) const {
+  String original_query_str(m_thd->query().str, m_thd->query().length,
+                            system_charset_info);
+  redact_par_url(original_query_str, rlb);
+  return true;
+}
+
+Rewriter_alter_table::Rewriter_alter_table(THD *thd, Consumer_type type)
+    : I_rewriter(thd, type) {}
+
+/**
+  Rewrite the alter table statement with the PAR id being redacted. Any pattern
+  like "/p/.*?/n/" is replaced with "/p/<redacted>/n/"
+
+  @param[in,out] rlb     Buffer to return the rewritten query in.
+
+  @retval true the query is rewritten
+*/
+bool Rewriter_alter_table::rewrite(String &rlb) const {
   String original_query_str(m_thd->query().str, m_thd->query().length,
                             system_charset_info);
   redact_par_url(original_query_str, rlb);

@@ -352,6 +352,9 @@ class Rewriter_start_group_replication final : public I_rewriter {
   bool rewrite(String &rlb) const override;
 };
 
+/** Rewrites the par URL used in external tables. */
+void redact_par_url(String original_query_str, String &rlb);
+
 /** Rewrites the SELECT statement. */
 class Rewriter_select_query final : public I_rewriter {
  public:
@@ -359,10 +362,24 @@ class Rewriter_select_query final : public I_rewriter {
   bool rewrite(String &rlb) const override;
 };
 
-/** Rewrites the CREATE Procedure or routines statement. */
+/** Rewrites the CREATE PROCEDURE or CREATE FUNCTION statement. */
 class Rewriter_create_procedure final : public I_rewriter {
  public:
   Rewriter_create_procedure(THD *thd, Consumer_type type);
+  bool rewrite(String &rlb) const override;
+};
+
+/** Rewrites the CREATE TABLE statement for external tables. */
+class Rewriter_create_table final : public I_rewriter {
+ public:
+  Rewriter_create_table(THD *thd, Consumer_type type);
+  bool rewrite(String &rlb) const override;
+};
+
+/** Rewrites the ALTER TABLE statement for external tales. */
+class Rewriter_alter_table final : public I_rewriter {
+ public:
+  Rewriter_alter_table(THD *thd, Consumer_type type);
   bool rewrite(String &rlb) const override;
 };
 

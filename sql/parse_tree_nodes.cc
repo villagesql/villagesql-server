@@ -5031,6 +5031,16 @@ PT_create_table_option *make_table_engine_attribute(MEM_ROOT *mem_root,
                                                     LEX_CSTRING attr) {
   return new (mem_root) PT_attribute<LEX_CSTRING, PT_create_table_option>(
       attr, +[](LEX_CSTRING a, Table_ddl_parse_context *pc) {
+        auto *const sp = pc->thd->lex->sphead;
+        if (sp != nullptr && sp->m_parser_data.get_top_lex() != nullptr) {
+          /*
+            If the export query is part of a stored procedure/function, then
+            call rewrite on the topmost lex.
+          */
+          sp->m_parser_data.get_top_lex()->set_rewrite_required();
+        } else {
+          pc->thd->lex->set_rewrite_required();
+        }
         pc->create_info->engine_attribute = a;
         pc->create_info->used_fields |= HA_CREATE_USED_ENGINE_ATTRIBUTE;
         pc->alter_info->flags |=
