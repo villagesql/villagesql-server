@@ -45,17 +45,25 @@ UPDATE `mysql_rest_service_metadata`.`object_field`
 --let $mrs_host_and_port=127.0.0.1:$HTTP_SERVER_PORT
 --let MRS_CLIENT_ARGS=$MRS_CLIENT --url https://$mrs_host_and_port
 
-let $MRS_CLIENT_EXC=$MRS_CLIENT_ARGS;
-#     --exclude-json-pointer /items/*/links,/links,/limit,/offset,/hasMore,/count;
---exec $MRS_CLIENT_ARGS --path /svc/basic/sync_table/1 --wait-until-found 60 --display none
+
+--let $mrs_client_arg_path='/svc/basic/sync_table/1'
+--let $mrs_client_arg_wait_until_found=60
+--let $mrs_client_arg_dispaly=none
+--source ../include/mrs/mrs_client.inc
+--let $mrs_client_arg_wait_until_found=
 
 --echo
 --echo #
 --echo # I.1
---exec $MRS_CLIENT_EXC --path /svc/basic/t3/1 --json-schema '{"not":{"required":["ctinyint"]}}' --display status
---exec $MRS_CLIENT_EXC --path /svc/basic/t3/1 --json-schema '{"not":{"required":["cmediumint"]}}' --display status
+--let $mrs_client_arg_path='/svc/basic/t3/1'
+--let $mrs_client_arg_json_schema='{"not":{"required":["ctinyint"]}}'
+--let $mrs_client_arg_dispaly=status
+--source ../include/mrs/mrs_client.inc
 
-
+--let $mrs_client_arg_path='/svc/basic/t3/1'
+--let $mrs_client_arg_json_schema='{"not":{"required":["cmediumint"]}}'
+--let $mrs_client_arg_dispaly=status
+--source ../include/mrs/mrs_client.inc
 
 # Cleanup
 --source ../include/mrs/cleanup.inc

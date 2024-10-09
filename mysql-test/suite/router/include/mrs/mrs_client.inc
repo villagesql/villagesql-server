@@ -14,32 +14,19 @@ if (!$mrs_client_exe_args)
 
 if ($mrs_client_arg_path)
 {
-  --let $mrs_client_arg_path=`SELECT REPLACE(REPLACE($mrs_client_arg_path, '%', '%25'), '$', '%24')`
-  --let $mrs_client_arg_path=`SELECT REPLACE('$mrs_client_arg_path', '"', '%22')`
-  --let $mrs_client_arg_path=`SELECT REPLACE(REPLACE('$mrs_client_arg_path', '{', '%7B'), '}', '%7D')`
-  --let $mrs_client_arg_path=`SELECT REPLACE(REPLACE('$mrs_client_arg_path', '(', '%28'), ')', '%29')`
-  --let $mrs_client_arg_path=`SELECT REPLACE(REPLACE('$mrs_client_arg_path', '[', '%5B'), ']', '%5D')`
-  --let $mrs_client_arg_path=`SELECT REPLACE('$mrs_client_arg_path', ' ', '%20')`
-  #--let $mrs_client_arg_path=`SELECT REPLACE('$mrs_client_arg_path', '=', '%3D')`
-  #--let $mrs_client_arg_path=`SELECT REPLACE('$mrs_client_arg_path', '?', '%3F')`
-  --let $mrs_client_arg_path=`SELECT REPLACE('$mrs_client_arg_path', '&', '%26')`
+ --let $mrs_escape_query=$mrs_client_arg_path
+ --let $mrs_include_character_and=1
+ --source escape_url_query.inc
 
-  --let $mrs_client_cmd=$mrs_client_cmd --path $mrs_client_arg_path
+  --let $mrs_client_cmd=$mrs_client_cmd --path $mrs_escape_query
 }
 
 if ($mrs_client_arg_payload)
 {
-  --let $mrs_client_arg_payload=`SELECT REPLACE(REPLACE($mrs_client_arg_payload, '%', '%25'), '$', '%24')`
-  --let $mrs_client_arg_payload=`SELECT REPLACE('$mrs_client_arg_payload', '"', '%22')`
-  --let $mrs_client_arg_payload=`SELECT REPLACE(REPLACE('$mrs_client_arg_payload', '{', '%7B'), '}', '%7D')`
-  --let $mrs_client_arg_payload=`SELECT REPLACE(REPLACE('$mrs_client_arg_payload', '(', '%28'), ')', '%29')`
-  --let $mrs_client_arg_payload=`SELECT REPLACE(REPLACE('$mrs_client_arg_payload', '[', '%5B'), ']', '%5D')`
-  --let $mrs_client_arg_payload=`SELECT REPLACE('$mrs_client_arg_payload', ' ', '%20')`
-  #--let $mrs_client_arg_payload=`SELECT REPLACE('$mrs_client_arg_payload', '=', '%3D')`
-  #--let $mrs_client_arg_payload=`SELECT REPLACE('$mrs_client_arg_payload', '?', '%3F')`
-  #--let $mrs_client_arg_payload=`SELECT REPLACE('$mrs_client_arg_payload', '&', '%26')`
+  --let $mrs_escape_query=$mrs_client_arg_payload
+  --source escape_url_query.inc
 
-  --let $mrs_client_cmd=$mrs_client_cmd --encoded-payload $mrs_client_arg_payload
+  --let $mrs_client_cmd=$mrs_client_cmd --encoded-payload $mrs_escape_query
 }
 
 if ($mrs_client_arg_expected_status)
@@ -84,22 +71,29 @@ if ($mrs_client_arg_session_file)
 
 if ($mrs_client_arg_wait_until_found)
 {
---let $mrs_client_cmd=$mrs_client_cmd --wait-until-found=$mrs_client_arg_wait_until_found
+  --let $mrs_client_cmd=$mrs_client_cmd --wait-until-found=$mrs_client_arg_wait_until_found
 }
 
 if ($mrs_client_arg_wait_until_status)
 {
---let $mrs_client_cmd=$mrs_client_cmd --wait-until-status=$mrs_client_arg_wait_until_status
+  --let $mrs_client_cmd=$mrs_client_cmd --wait-until-status=$mrs_client_arg_wait_until_status
 }
 
 if ($mrs_client_arg_response_type)
 {
---let $mrs_client_cmd=$mrs_client_cmd --response-type=$mrs_client_arg_response_type
+  --let $mrs_client_cmd=$mrs_client_cmd --response-type=$mrs_client_arg_response_type
+}
+
+if ($mrs_client_arg_json_schema_file)
+{
+  --let $mrs_client_cmd=$mrs_client_cmd --json-schema-file=$mrs_client_arg_json_schema_file
 }
 
 if ($mrs_client_arg_json_schema)
 {
---let $mrs_client_cmd=$mrs_client_cmd --json-schema-file=$mrs_client_arg_json_schema
+  --let $mrs_escape_query=$mrs_client_arg_json_schema
+  --source escape_url_query.inc
+  --let $mrs_client_cmd=$mrs_client_cmd --encoded-json-schema=$mrs_escape_query
 }
 
 exec $mrs_client_cmd;

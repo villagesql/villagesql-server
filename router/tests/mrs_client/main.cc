@@ -72,6 +72,21 @@ std::string g_executable;
 CmdArgHandler g_cmd_handler{};
 http_client::ApplicationConfiguration g_configuration;
 
+static std::string decode_from_url_query_escaping(const std::string &value) {
+  std::string decoded;
+  int val;
+  for (size_t i = 0; i < value.length(); i++) {
+    if (value[i] == '%') {
+      sscanf(value.substr(i + 1, 2).c_str(), "%x", &val);
+      decoded += static_cast<char>(val);
+      i += 2;
+    } else {
+      decoded += value[i];
+    }
+  }
+  return decoded;
+}
+
 class CustomHex {
  public:
   void operator()(std::ostringstream &os) {
@@ -403,18 +418,7 @@ std::vector<CmdOption> g_options{
      CmdOptionValueReq::required,
      "meta_payload",
      [](const std::string &value) {
-       std::string decoded;
-       int val;
-       for (size_t i = 0; i < value.length(); i++) {
-         if (value[i] == '%') {
-           sscanf(value.substr(i + 1, 2).c_str(), "%x", &val);
-           decoded += static_cast<char>(val);
-           i += 2;
-         } else {
-           decoded += value[i];
-         }
-       }
-       g_configuration.payload = decoded;
+       g_configuration.payload = decode_from_url_query_escaping(value);
      },
      [](const std::string &) { check_payload(); }},
 
@@ -688,6 +692,25 @@ std::vector<CmdOption> g_options{
      CmdOptionValueReq::required,
      "json_schema",
      [](const std::string &value) { g_configuration.json_schema = value; },
+     [](const std::string &) {
+       if (cnf_should_execute_authentication_flow()) {
+         throw std::invalid_argument(
+             "Response type, shoudn't be used with authentication flow.");
+       }
+
+       if (g_configuration.response_type != http_client::ResponseType::kJson) {
+         throw std::invalid_argument(
+             "Json schema can only be used with JSON responses.");
+       }
+     }},
+    {{"--encoded-json-schema"},
+     "Specify the JSON schema, which should be used for "
+     "response validation.\n",
+     CmdOptionValueReq::required,
+     "json_schema",
+     [](const std::string &value) {
+       g_configuration.json_schema = decode_from_url_query_escaping(value);
+     },
      [](const std::string &) {
        if (cnf_should_execute_authentication_flow()) {
          throw std::invalid_argument(
