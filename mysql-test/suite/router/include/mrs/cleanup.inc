@@ -14,19 +14,6 @@ if ($extra_mrs_router_id)
      --let $mrs_modify_enabled=false
      --source config/modify_enable.inc
 
-     # Reset arguments for mrs_client, set by the test run.
-     --let $mrs_client_exe_args=
-     --let $mrs_client_arg_dispaly=
-     --let $mrs_client_arg_exclude_json_pointer=
-     --let $mrs_client_arg_payload=
-     --let $mrs_client_arg_json_pointer=
-     --let $mrs_client_arg_json_schema=
-     --let $mrs_client_arg_json_schema_file=
-     --let $mrs_client_arg_request_type=
-     --let $mrs_client_arg_write_format=
-     --let $mrs_client_arg_write_to_file=
-     --let $mrs_client_arg_session_file=
-
      # The http-plugin responses with HTML, the mrs hook overwrites
      # http reponse from 404 html to 404 json. Thus after stopping
      # MRS we will receive plain html.

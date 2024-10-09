@@ -75,7 +75,6 @@
 --source ../include/mrs/changes/wait_object.inc
 
 --let $mrs_client_arg_path='/svc/basic/t2/1'
---let $mrs_client_arg_expected_status=
 --let $mrs_client_arg_request_type='PUT'
 --let $mrs_client_arg_payload='{"id":1,"comments":"something-new","date":"2017-1-1","name":"new name"}'
 --source ../include/mrs/mrs_client.inc

@@ -90,6 +90,8 @@ let $MRS_CLIENT_OBJECT=$MRS_CLIENT_ARGS --json-schema-file $SCHEMA_DIR/object_wi
 --let $mrs_client_exe_args=$MRS_CLIENT_ITEMS
 --let $mrs_client_arg_path='/svc/basic/t_disabled?offset=1&limit=2'
 --source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_exe_args=$MRS_CLIENT_ITEMS
 --let $mrs_client_arg_path='/svc/basic/t_disabled?offset=3&limit=2'
 --source ../include/mrs/mrs_client.inc
 
@@ -110,6 +112,8 @@ let $MRS_CLIENT_OBJECT=$MRS_CLIENT_ARGS --json-schema-file $SCHEMA_DIR/object_wi
 --let $mrs_client_exe_args=$MRS_CLIENT_ITEMS
 --let $mrs_client_arg_path='/svc/basic_disabled/t?offset=1&limit=2'
 --source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_exe_args=$MRS_CLIENT_ITEMS
 --let $mrs_client_arg_path='/svc/basic_disabled/t?offset=3&limit=2'
 --source ../include/mrs/mrs_client.inc
 
@@ -130,6 +134,8 @@ let $MRS_CLIENT_OBJECT=$MRS_CLIENT_ARGS --json-schema-file $SCHEMA_DIR/object_wi
 --let $mrs_client_exe_args=$MRS_CLIENT_ITEMS
 --let $mrs_client_arg_path='/svc_disabled/basic/t?offset=1&limit=2'
 --source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_exe_args=$MRS_CLIENT_ITEMS
 --let $mrs_client_arg_path='/svc_disabled/basic/t?offset=3&limit=2'
 --source ../include/mrs/mrs_client.inc
 

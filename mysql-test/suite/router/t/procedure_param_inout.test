@@ -504,7 +504,6 @@ exec $MRS_CLIENT_ARGS
 --echo #
 --echo # IV.1
 --let $mrs_client_arg_path='/svc/proc/inc_text'
---let $mrs_client_arg_payload=
 --let $mrs_client_arg_request_type='GET'
 --source ../include/mrs/mrs_client.inc
 

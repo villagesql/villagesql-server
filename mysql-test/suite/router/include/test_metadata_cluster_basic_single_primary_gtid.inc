@@ -128,11 +128,7 @@ exec $MRS_CLIENT_ARGS --path /svc/$test_schema/$test_obj1/20
 # Place GTID in $mrs_result
 --source $MYSQL_TMP_DIR/gtid.inc
 
---let $mrs_client_arg_json_pointer=
---let $mrs_client_arg_write_format=
---let $mrs_client_arg_write_to_file=
---let $mrs_client_arg_request_type=
---let $mrs_client_arg_payload=
+
 --let $mrs_client_arg_dispaly='BODY,RESULT'
 --let $mrs_client_arg_path='/svc/$test_schema/$test_obj2?q={"id":3000,"\\\$asof":$mrs_result}'
 --source ../include/mrs/mrs_client.inc
@@ -151,6 +147,7 @@ exec $MRS_CLIENT_ARGS --path /svc/$test_schema/$test_obj1/20
 
 --let $mrs_client_arg_path='/svc/$test_schema/$test_obj2?q={"id":3001,"\\\$asof":"3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"}'
 --let $mrs_client_arg_expected_status=400
+--let $mrs_client_arg_dispaly='BODY,RESULT'
 --source ../include/mrs/mrs_client.inc
 
  # Verify that using GET with invalid gtid, increments RO counter, RW counter and timeout
@@ -165,9 +162,10 @@ exec $MRS_CLIENT_ARGS --path /svc/$test_schema/$test_obj1/20
 --let $mrs_changes_inc="0"
 --source ../include/mrs/changes/wait_metadata_gtids.inc
 
---let $mrs_client_arg_request_type=
 --let $mrs_client_arg_path='/svc/$test_schema/$test_obj2?q={"id":3001,"\\\$asof":"3E11FA47-71CA-11E1-9E33-C80AA9429561:1-5"}'
 --let $mrs_client_arg_request_type='DELETE'
+--let $mrs_client_arg_dispaly='BODY,RESULT'
+--let $mrs_client_arg_expected_status=400
 --source ../include/mrs/mrs_client.inc
 
 

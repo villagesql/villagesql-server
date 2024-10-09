@@ -69,14 +69,13 @@ INSERT INTO test.vec(v)
 
 --let $mrs_client_arg_path='/svc/test/vec/2'
 --let $mrs_client_arg_payload='{"id":2,"v":[0,3]}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
 --echo #
 --echo # I.4
 --let $mrs_client_arg_path='/svc/test/vec/?q={"v":[0]}'
---let $mrs_client_arg_payload=
---let $mrs_client_arg_request_type=
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/svc/test/vec/?q={"v":[0,3]}'

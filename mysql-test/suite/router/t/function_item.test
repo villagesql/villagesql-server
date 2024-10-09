@@ -268,15 +268,13 @@ exec $MRS_CLIENT_ARGS
 --echo # II.2
 --let $mrs_client_arg_path='/svc/func/nothing'
 --let $mrs_client_arg_payload='{}'
---let $mrs_client_arg_expected_status=
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
 --echo #
 --echo # II.3
 --let $mrs_client_arg_path='/svc/func/sum?a=10&b=20'
---let $mrs_client_arg_request_type=
---let $mrs_client_arg_payload=
 --source ../include/mrs/mrs_client.inc
 
 
@@ -361,8 +359,6 @@ exec $MRS_CLIENT_ARGS
 --echo #
 --echo # III.12
 --let $mrs_client_arg_path='/svc/func/move_json?a=["aaaa",20,30,{"field1":"value1"}]'
---let $mrs_client_arg_request_type=
---let $mrs_client_arg_payload=
 --source ../include/mrs/mrs_client.inc
 
 
@@ -404,6 +400,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.5
 --let $mrs_client_arg_path='/svc/func/move_bit'
 --let $mrs_client_arg_payload='{"a":1}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -411,6 +408,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.6
 --let $mrs_client_arg_path='/svc/func/move_tinyint1'
 --let $mrs_client_arg_payload='{"a":1}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -418,6 +416,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.7
 --let $mrs_client_arg_path='/svc/func/move_tinyint8'
 --let $mrs_client_arg_payload='{"a":10}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -425,6 +424,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.8
 --let $mrs_client_arg_path='/svc/func/move_decimal'
 --let $mrs_client_arg_payload='{"a":10}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -432,6 +432,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.9
 --let $mrs_client_arg_path='/svc/func/move_float'
 --let $mrs_client_arg_payload='{"a":10}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -439,6 +440,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.10
 --let $mrs_client_arg_path='/svc/func/move_double'
 --let $mrs_client_arg_payload='{"a":10}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -446,6 +448,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.10
 --let $mrs_client_arg_path='/svc/func/move_json'
 --let $mrs_client_arg_payload='{"a":100}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -453,6 +456,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.11
 --let $mrs_client_arg_path='/svc/func/move_json'
 --let $mrs_client_arg_payload='{"a":["aaaa",20,30,{"field1":"value1"}]}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -461,6 +465,7 @@ exec $MRS_CLIENT_ARGS
 --echo # TODO(lkotula): wrong data are generated
 --let $mrs_client_arg_path='/svc/func/move_geo'
 --let $mrs_client_arg_payload='{"a":{"type":"Point", "coordinates":[10,0]}}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo # TODO(lkotula): wrong data are generated
@@ -470,6 +475,7 @@ exec $MRS_CLIENT_ARGS
 
 --let $mrs_client_arg_path='/svc/func/move_geo'
 --let $mrs_client_arg_payload='{"a":{"type":"LineString","coordinates":[[100,0],[0,0]]}}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -578,6 +584,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.5
 --let $mrs_client_arg_path='/svc/func/move_bit'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -585,6 +592,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.6
 --let $mrs_client_arg_path='/svc/func/move_tinyint1'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -592,6 +600,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.7
 --let $mrs_client_arg_path='/svc/func/move_tinyint8'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -599,6 +608,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.8
 --let $mrs_client_arg_path='/svc/func/move_decimal'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -606,6 +616,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.9
 --let $mrs_client_arg_path='/svc/func/move_float'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -613,6 +624,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.10
 --let $mrs_client_arg_path='/svc/func/move_double'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -620,6 +632,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.10
 --let $mrs_client_arg_path='/svc/func/move_json'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -627,6 +640,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.11
 --let $mrs_client_arg_path='/svc/func/move_json'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -634,6 +648,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.12
 --let $mrs_client_arg_path='/svc/func/move_geo'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -641,6 +656,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VII.1
 --let $mrs_client_arg_path='/svc/func/move_char'
 --let $mrs_client_arg_payload='{"a":null}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 # Cleanup

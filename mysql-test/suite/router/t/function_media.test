@@ -251,7 +251,7 @@ exec $MRS_CLIENT_ARGS
 --echo # III.1
 --let $mrs_client_arg_path='/svc/func/move_char'
 --let $mrs_client_arg_payload='{"a":10}'
---let $mrs_client_arg_expected_status=
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -283,6 +283,7 @@ exec $MRS_CLIENT_ARGS
 --echo # III.5
 --let $mrs_client_arg_path='/svc/func/move_bit'
 --let $mrs_client_arg_payload='{"a":1}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -290,6 +291,7 @@ exec $MRS_CLIENT_ARGS
 --echo # III.6
 --let $mrs_client_arg_path='/svc/func/move_tinyint1'
 --let $mrs_client_arg_payload='{"a":1}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -297,6 +299,7 @@ exec $MRS_CLIENT_ARGS
 --echo # III.7
 --let $mrs_client_arg_path='/svc/func/move_tinyint8'
 --let $mrs_client_arg_payload='{"a":10}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -304,6 +307,7 @@ exec $MRS_CLIENT_ARGS
 --echo # III.8
 --let $mrs_client_arg_path='/svc/func/move_decimal'
 --let $mrs_client_arg_payload='{"a":10}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -311,6 +315,7 @@ exec $MRS_CLIENT_ARGS
 --echo # III.9
 --let $mrs_client_arg_path='/svc/func/move_float'
 --let $mrs_client_arg_payload='{"a":10}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -318,6 +323,7 @@ exec $MRS_CLIENT_ARGS
 --echo # III.10
 --let $mrs_client_arg_path='/svc/func/move_double'
 --let $mrs_client_arg_payload='{"a":10}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
   
 --echo
@@ -325,12 +331,14 @@ exec $MRS_CLIENT_ARGS
 --echo # III.10
 --let $mrs_client_arg_path='/svc/func/move_json'
 --let $mrs_client_arg_payload='{"a":100}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 --echo
 --echo #
 --echo # III.11
 --let $mrs_client_arg_path='/svc/func/move_json'
 --let $mrs_client_arg_payload='{"a":["aaaa",20,30,{"field1":"value1"}]}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 

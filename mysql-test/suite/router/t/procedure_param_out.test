@@ -273,9 +273,6 @@ exec $MRS_CLIENT_ARGS
 --echo # II.2
 
 --let $mrs_client_arg_path='/svc/proc/sum?a=10&b=20'
---let $mrs_client_arg_payload=
---let $mrs_client_arg_request_type=
---let $mrs_client_arg_expected_status=
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -310,7 +307,6 @@ exec $MRS_CLIENT_ARGS
 --let $mrs_client_arg_path='/svc/proc/sum'
 --let $mrs_client_arg_payload='{"a":10,"b":20}'
 --let $mrs_client_arg_request_type='PUT'
---let $mrs_client_arg_expected_status=
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -318,6 +314,7 @@ exec $MRS_CLIENT_ARGS
 --echo # II.8
 --let $mrs_client_arg_path='/svc/proc/sum_out'
 --let $mrs_client_arg_payload='{"a":10, "b":20}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -325,6 +322,7 @@ exec $MRS_CLIENT_ARGS
 --echo # II.9
 --let $mrs_client_arg_path='/svc/proc/concat'
 --let $mrs_client_arg_payload='{"a":10,"b":20}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -332,6 +330,7 @@ exec $MRS_CLIENT_ARGS
 --echo # II.10
 --let $mrs_client_arg_path='/svc/proc/concat_out'
 --let $mrs_client_arg_payload='{"a":10,"b":20}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -339,6 +338,7 @@ exec $MRS_CLIENT_ARGS
 --echo # II.11
 --let $mrs_client_arg_path='/svc/proc/concat'
 --let $mrs_client_arg_payload='{"a":"10","b":"20"}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -346,6 +346,7 @@ exec $MRS_CLIENT_ARGS
 --echo # II.12
 --let $mrs_client_arg_path='/svc/proc/concat_out'
 --let $mrs_client_arg_payload='{"a":"10","b":"20"}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 
@@ -416,14 +417,11 @@ exec $MRS_CLIENT_ARGS
 --echo #
 --echo # III.11
 --let $mrs_client_arg_path='/svc/proc/move_vector?a=[0,1,4]'
---let $mrs_client_arg_payload=
 --let $mrs_client_arg_request_type='GET'
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/svc/proc/resultset_vector?a=[0,1,4]'
---let $mrs_client_arg_payload=
 --let $mrs_client_arg_request_type='GET'
---let $mrs_client_arg_expected_status=
 --source ../include/mrs/mrs_client.inc
 
 
@@ -465,6 +463,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.5
 --let $mrs_client_arg_path='/svc/proc/move_bit'
 --let $mrs_client_arg_payload='{"a":1}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -472,6 +471,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.6
 --let $mrs_client_arg_path='/svc/proc/move_tinyint1'
 --let $mrs_client_arg_payload='{"a":1}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -479,6 +479,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.7
 --let $mrs_client_arg_path='/svc/proc/move_tinyint8'
 --let $mrs_client_arg_payload='{"a":10}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -486,6 +487,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.8
 --let $mrs_client_arg_path='/svc/proc/move_decimal'
 --let $mrs_client_arg_payload='{"a":10}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -493,6 +495,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.9
 --let $mrs_client_arg_path='/svc/proc/move_float'
 --let $mrs_client_arg_payload='{"a":10}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -500,6 +503,7 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.10
 --let $mrs_client_arg_path='/svc/proc/move_double'
 --let $mrs_client_arg_payload='{"a":10}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -507,15 +511,15 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.11
 --let $mrs_client_arg_path='/svc/proc/move_vector'
 --let $mrs_client_arg_payload='{"a":[0,2,10]}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
 --echo #
 --echo # V.1
---let $mrs_client_arg_payload=
+--let $mrs_client_arg_path='/svc/proc/move_char'
 --let $mrs_client_arg_request_type='GET'
-exec $MRS_CLIENT_ARGS
-  --path /svc/proc/move_char;
+--source ../include/mrs/mrs_client.inc
 
 --echo
 --echo #
@@ -617,6 +621,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.5
 --let $mrs_client_arg_path='/svc/proc/move_bit'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -624,6 +629,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.6
 --let $mrs_client_arg_path='/svc/proc/move_tinyint1'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -631,6 +637,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.7
 --let $mrs_client_arg_path='/svc/proc/move_tinyint8'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -638,6 +645,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.8
 --let $mrs_client_arg_path='/svc/proc/move_decimal'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -645,6 +653,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.9
 --let $mrs_client_arg_path='/svc/proc/move_float'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -652,6 +661,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.10
 --let $mrs_client_arg_path='/svc/proc/move_double'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo
@@ -659,6 +669,7 @@ exec $MRS_CLIENT_ARGS
 --echo # VI.11
 --let $mrs_client_arg_path='/svc/proc/move_vector'
 --let $mrs_client_arg_payload='{}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 --echo

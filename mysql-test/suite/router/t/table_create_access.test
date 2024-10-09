@@ -81,7 +81,6 @@
 --source ../include/mrs/changes/wait_object.inc
 
 --let $mrs_client_arg_path='/svc/basic/t2/'
---let $mrs_client_arg_expected_status=
 --let $mrs_client_arg_request_type='POST'
 --let $mrs_client_arg_payload='{"id":11,"comments":"something-new","date":"2017-1-1","name":"entry-with-all-fields"}'
 --let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/basic_table2_object.sch
@@ -121,7 +120,6 @@ UPDATE mysql_rest_service_metadata.object_field
 --let $mrs_client_arg_path='/svc/basic/t2/1'
 --let $mrs_client_arg_request_type='GET'
 --let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/basic_table2_object.sch
---let $mrs_client_arg_payload=
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/svc/basic/t2'
@@ -137,12 +135,8 @@ UPDATE mysql_rest_service_metadata.object_field
 --let $mrs_client_arg_path='/svc/basic/t2'
 --let $mrs_client_arg_request_type='POST'
 --let $mrs_client_arg_expected_status=BadRequest
---let $mrs_client_arg_json_schema_file=
 --let $mrs_client_arg_payload='{"id":22,"name":"entry-not-existing-filed","date":"2022-2-2","comments":"","non-existing-filed":1}'
 --source ../include/mrs/mrs_client.inc
-
---let $mrs_client_arg_json_schema_file=
---let $mrs_client_arg_expected_status=
 
 # Cleanup
 --source ../include/mrs/cleanup.inc

@@ -66,21 +66,22 @@ exec $MRS_CLIENT_ARGS
 --echo #
 --echo # I.2
 --let $mrs_client_arg_path='/svc/test_between/table?q={"id":{"\\\$between":[]}}'
+--let $mrs_client_arg_expected_status='BadRequest'
 --source ../include/mrs/mrs_client.inc
 
 --echo
 --echo #
 --echo # I.3
 --let $mrs_client_arg_path='/svc/test_between/table?q={"id":{"\\\$between":[1]}}'
+--let $mrs_client_arg_expected_status='BadRequest'
 --source ../include/mrs/mrs_client.inc
 
 --echo
 --echo #
 --echo # I.4
 --let $mrs_client_arg_path='/svc/test_between/table?q={"id":{"\\\$between":[1,2,3]}}'
+--let $mrs_client_arg_expected_status='BadRequest'
 --source ../include/mrs/mrs_client.inc
-
---let $mrs_client_arg_expected_status=
 
 --echo
 --echo #
@@ -93,6 +94,7 @@ exec $MRS_CLIENT_ARGS
 --echo #
 --echo # II.2
 --let $mrs_client_arg_path='/svc/test_between/table?q={"\\\$or":[{"id":{"\\\$between":[1,2]}},{"comment":"ome string"}]}'
+--let $mrs_client_arg_json_pointer='/limit,/offset,/count,/hasMore,/items/*/id,/items/*/comment'
 --source ../include/mrs/mrs_client.inc
 
 # Cleanup

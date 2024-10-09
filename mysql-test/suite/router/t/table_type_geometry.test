@@ -101,6 +101,7 @@ INSERT INTO test.geo4326(g)
 
 --let $mrs_client_arg_path='/svc/test/geo0/2'
 --let $mrs_client_arg_payload='{"id":2,"g":{"type":"Point", "coordinates":[100,0]}}'
+--let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
 
@@ -110,10 +111,12 @@ INSERT INTO test.geo4326(g)
 #
 #--let $mrs_client_arg_path='/svc/test/geo0/2'
 #--let $mrs_client_arg_payload='{"id":2,"g":"POINT(0 0)"}'
+#--let $mrs_client_arg_request_type='PUT'
 #--source ../include/mrs/mrs_client.inc
 #
 #--let $mrs_client_arg_path='/svc/test/geo0/2'
 #--let $mrs_client_arg_payload='{"id":2,"g":"POINT(100 0)"}'
+#--let $mrs_client_arg_request_type='PUT'
 #--source ../include/mrs/mrs_client.inc
 #
 
@@ -121,8 +124,6 @@ INSERT INTO test.geo4326(g)
 --echo #
 --echo # I.4
 --let $mrs_client_arg_path='/svc/test/geo0/?q={"g":"POINT(100 0)"}'
---let $mrs_client_arg_payload=
---let $mrs_client_arg_request_type=
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/svc/test/geo0/?q={"g":"POINT(0 0)"}'
@@ -181,8 +182,6 @@ INSERT INTO test.geo4326(g)
 --echo #
 --echo # II.4
 --let $mrs_client_arg_path='/svc/test/geo4326/?q={"g":"POINT(80 0)"}'
---let $mrs_client_arg_payload=
---let $mrs_client_arg_request_type=
 --source ../include/mrs/mrs_client.inc
 
 

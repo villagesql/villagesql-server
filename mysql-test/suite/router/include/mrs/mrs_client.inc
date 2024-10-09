@@ -97,3 +97,20 @@ if ($mrs_client_arg_json_schema)
 }
 
 exec $mrs_client_cmd;
+
+--let $mrs_client_exe_args=
+--let $mrs_client_arg_path=
+--let $mrs_client_arg_payload=
+--let $mrs_client_arg_expected_status=
+--let $mrs_client_arg_json_pointer=
+--let $mrs_client_arg_exclude_json_pointer=
+--let $mrs_client_arg_request_type=
+--let $mrs_client_arg_dispaly=
+--let $mrs_client_arg_write_format=
+--let $mrs_client_arg_write_to_file=
+--let $mrs_client_arg_session_file=
+--let $mrs_client_arg_wait_until_found=
+--let $mrs_client_arg_wait_until_status=
+--let $mrs_client_arg_response_type=
+--let $mrs_client_arg_json_schema_file=
+--let $mrs_client_arg_json_schema=
