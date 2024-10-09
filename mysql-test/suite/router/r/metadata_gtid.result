@@ -115,7 +115,7 @@ OK
 
 #
 # I.3
-POST /svc/basic/t1 (payload-size:10)
+POST /svc/basic/t1 (payload-size:9)
 {
     "id": 33,
     "links": [
@@ -152,7 +152,7 @@ OK
 
 #
 # II.1
-PUT /svc/proc/insert_data (payload-size:57)
+PUT /svc/proc/insert_data (payload-size:52)
 {
     "resultSets": [],
     "_metadata": {
@@ -163,7 +163,7 @@ OK
 
 #
 # II.2
-PUT /svc/proc/insert_and_return (payload-size:56)
+PUT /svc/proc/insert_and_return (payload-size:51)
 {
     "resultSets": [
         {
@@ -255,7 +255,7 @@ OK
 
 #
 # III.1
-PUT /svc/func/insert_and_return (payload-size:17)
+PUT /svc/func/insert_and_return (payload-size:16)
 {
     "result": 1,
     "_metadata": {

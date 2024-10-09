@@ -144,7 +144,7 @@ exec $MRS_CLIENT_ARGS
 --replace_regex /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
 exec $MRS_CLIENT_ARGS
   --path /svc/basic/t1 -t POST
-  --payload '{"id": 33}';
+  --payload '{"id":33}';
 
 --echo
 --echo #
@@ -165,7 +165,7 @@ exec $MRS_CLIENT_ARGS
 --replace_regex /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
 exec $MRS_CLIENT_ARGS
   --path /svc/proc/insert_data -t PUT
-  --payload '{"name": "Andresz", "comments": "", "date": "2013-12-11"}';
+  --payload '{"name":"Andresz","comments":"","date":"2013-12-11"}';
 
 --echo
 --echo #
@@ -173,7 +173,7 @@ exec $MRS_CLIENT_ARGS
 --replace_regex /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
 exec $MRS_CLIENT_ARGS
   --path /svc/proc/insert_and_return -t PUT
-  --payload '{"name": "Lukash", "comments": "", "date": "2014-11-11"}';
+  --payload '{"name":"Lukash","comments":"","date":"2014-11-11"}';
 
 --echo
 --echo #
@@ -203,7 +203,7 @@ exec $MRS_CLIENT_ARGS
 --replace_regex /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
 exec $MRS_CLIENT_ARGS
   --path /svc/func/insert_and_return -t PUT
-  --payload '{"value": "Test"}';
+  --payload '{"value":"Test"}';
 
 --echo
 --echo #
