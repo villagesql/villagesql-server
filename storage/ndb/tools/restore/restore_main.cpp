@@ -186,7 +186,6 @@ static const char *opt_exclude_databases = NULL;
 static const char *opt_include_databases = NULL;
 static const char *opt_rewrite_database = NULL;
 static const char *opt_one_remap_col_arg = NULL;
-static bool opt_restore_privilege_tables = false;
 
 /**
  * ExtraTableInfo
@@ -409,10 +408,6 @@ static struct my_option my_long_options[] = {
      "Example: db1.t1,db3.t1",
      &opt_exclude_tables, nullptr, nullptr, GET_STR, REQUIRED_ARG, 0, 0, 0, 0,
      0, 0},
-    {"restore-privilege-tables", NDB_OPT_NOSHORT,
-     "Restore privilege tables (after they have been moved to ndb)",
-     &opt_restore_privilege_tables, nullptr, nullptr, GET_BOOL, NO_ARG, 0, 0, 0,
-     0, 0, 0},
     {"include-stored-grants", NDB_OPT_NOSHORT,
      "Restore users and grants to ndb_sql_metadata table",
      &opt_include_stored_grants, nullptr, nullptr, GET_BOOL, OPT_ARG, false, 0,
@@ -632,19 +627,6 @@ BaseString makeExternalTableName(const BaseString &internalName) {
   return externalName;
 }
 
-// Exclude the legacy privilege tables from Cluster 7.x
-void exclude_privilege_tables() {
-  static const char *priv_tables[] = {
-      "mysql.user",         "mysql.db",         "mysql.tables_priv",
-      "mysql.columns_priv", "mysql.procs_priv", "mysql.proxies_priv"};
-
-  for (size_t i = 0; i < array_elements(priv_tables); i++) {
-    g_exclude_tables.push_back(priv_tables[i]);
-    save_include_exclude(OPT_EXCLUDE_TABLES,
-                         const_cast<char *>(priv_tables[i]));
-  }
-}
-
 bool readArguments(Ndb_opts &opts, char ***pargv) {
   Uint32 i;
   BaseString tmp;
@@ -726,9 +708,6 @@ bool readArguments(Ndb_opts &opts, char ***pargv) {
   }
 
   if (ga_restore) {
-    // Exclude privilege tables unless explicitly included
-    if (!opt_restore_privilege_tables) exclude_privilege_tables();
-
     // Move over old style arguments to include/exclude lists
     if (g_databases.size() > 0) {
       BaseString tab_prefix, tab;
