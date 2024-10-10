@@ -96,6 +96,11 @@ if ($mrs_client_arg_json_schema)
   --let $mrs_client_cmd=$mrs_client_cmd --encoded-json-schema=$mrs_escape_query
 }
 
+if ($mrs_client_replace_regexp)
+{
+  --replace_regex $mrs_client_replace_regexp
+}
+
 exec $mrs_client_cmd;
 
 --let $mrs_client_exe_args=
@@ -114,3 +119,4 @@ exec $mrs_client_cmd;
 --let $mrs_client_arg_response_type=
 --let $mrs_client_arg_json_schema_file=
 --let $mrs_client_arg_json_schema=
+--let $mrs_client_replace_regexp=

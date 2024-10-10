@@ -133,18 +133,20 @@ exec $MRS_CLIENT_ARGS
 --echo
 --echo #
 --echo # I.2
---replace_regex /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
-exec $MRS_CLIENT_ARGS
-  --path /svc/basic/t1/101 -t PUT
-  --payload '{}';
+--let $mrs_client_replace_regexp= /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
+--let $mrs_client_arg_path='/svc/basic/t1/101'
+--let $mrs_client_arg_request_type=PUT
+--let $mrs_client_arg_payload='{}'
+--source ../include/mrs/mrs_client.inc
 
 --echo
 --echo #
 --echo # I.3
---replace_regex /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
-exec $MRS_CLIENT_ARGS
-  --path /svc/basic/t1 -t POST
-  --payload '{"id":33}';
+--let $mrs_client_replace_regexp= /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
+--let $mrs_client_arg_path='/svc/basic/t1'
+--let $mrs_client_arg_request_type=POST
+--let $mrs_client_arg_payload='{"id":33}'
+--source ../include/mrs/mrs_client.inc
 
 --echo
 --echo #
@@ -162,55 +164,57 @@ exec $MRS_CLIENT_ARGS
 --echo
 --echo #
 --echo # II.1
---replace_regex /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
-exec $MRS_CLIENT_ARGS
-  --path /svc/proc/insert_data -t PUT
-  --payload '{"name":"Andresz","comments":"","date":"2013-12-11"}';
+--let $mrs_client_replace_regexp= /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
+--let $mrs_client_arg_path='/svc/proc/insert_data'
+--let $mrs_client_arg_request_type=PUT
+--let $mrs_client_arg_payload='{"name":"Andresz","comments":"","date":"2013-12-11"}'
+--source ../include/mrs/mrs_client.inc
 
 --echo
 --echo #
 --echo # II.2
---replace_regex /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
-exec $MRS_CLIENT_ARGS
-  --path /svc/proc/insert_and_return -t PUT
-  --payload '{"name":"Lukash","comments":"","date":"2014-11-11"}';
+--let $mrs_client_replace_regexp= /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
+--let $mrs_client_arg_path='/svc/proc/insert_and_return'
+--let $mrs_client_arg_request_type=PUT
+--let $mrs_client_arg_payload='{"name":"Lukash","comments":"","date":"2014-11-11"}'
+--source ../include/mrs/mrs_client.inc
+
 
 --echo
 --echo #
 --echo # II.3
---replace_regex /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
-exec $MRS_CLIENT_ARGS
-  --path /svc/proc/insert_no_param -t GET;
+--let $mrs_client_replace_regexp= /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
+--let $mrs_client_arg_path='/svc/proc/insert_no_param'
+--source ../include/mrs/mrs_client.inc
 
 
 --echo
 --echo #
 --echo # II.4
 --let $mrs_client_arg_path='/svc/proc/sum?a=10&b=20'
---let $mrs_client_arg_request_type=GET
 --source ../include/mrs/mrs_client.inc
 
 --echo
 --echo #
 --echo # II.5
 --let $mrs_client_arg_path='/svc/proc/sum_out?a=10&b=20'
---let $mrs_client_arg_request_type=GET
 --source ../include/mrs/mrs_client.inc
 
 --echo
 --echo #
 --echo # III.1
---replace_regex /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
-exec $MRS_CLIENT_ARGS
-  --path /svc/func/insert_and_return -t PUT
-  --payload '{"value":"Test"}';
+--let $mrs_client_replace_regexp= /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
+--let $mrs_client_arg_path='/svc/func/insert_and_return'
+--let $mrs_client_arg_request_type=PUT
+--let $mrs_client_arg_payload='{"value":"Test"}'
+--source ../include/mrs/mrs_client.inc
 
 --echo
 --echo #
 --echo # III.2
---replace_regex /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
-exec $MRS_CLIENT_ARGS
-  --path /svc/func/insert_and_return_no_param -t GET;
+--let $mrs_client_replace_regexp= /(.*)"gtid": ".*"/\1"gtid": "%GTID%"/
+--let $mrs_client_arg_path='/svc/func/insert_and_return_no_param'
+--source ../include/mrs/mrs_client.inc
 
 --echo
 --echo #
