@@ -131,8 +131,14 @@ sub fix_host {
 
 sub fix_destinations {
   my ($self, $config, $group_name, $group) = @_;
+
+  if (defined $group->if_exist('use_socket_as_destination')) {
+    my $endpoint_socket = $self->{ARGS}->{endpoint_socket};
+    return "local:$endpoint_socket";
+  }
+
   my $hostname = fix_host(@_);
-  my $endpoint = $self->{ARGS}->{endpoint};
+  my $endpoint = $self->{ARGS}->{endpoint_tcp};
 
   return "$hostname:$endpoint";
 }

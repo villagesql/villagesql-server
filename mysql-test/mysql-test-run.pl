@@ -6819,6 +6819,8 @@ sub router_create_keyring($) {
                       ["root", "password", ""]);
   run_msyqlrouter_keyring_util($keyring_file, $keyring_master_file, "set",
                       ["rest-user", "jwt_secret", "secret12345"]);
+  run_msyqlrouter_keyring_util($keyring_file, $keyring_master_file, "set",
+                      ["account_with_auth_socket", "password", ""]);
 }
 
 sub router_create_dynamic_state_file($) {
@@ -6865,7 +6867,8 @@ sub create_router_config($$) {
                             vardir        =>  $vardir,
                             plugin_folder  => $plugin_dir,
                             baseport       => $router_baseport,
-                            endpoint       => $config->group('mysqld.1')->value('port')
+                            endpoint_tcp   => $config->group('mysqld.1')->value('port'),
+                            endpoint_socket => $config->group('mysqld.1')->value('socket')
                           });
   $factory->push_env_variable('MYSQLROUTER_LOGFILE', $router_config->value("DEFAULT", "#log-error"));
   $factory->push_env_variable('MYSQLROUTER_PIDFILE', $router_config->value("DEFAULT", "pid_file"));

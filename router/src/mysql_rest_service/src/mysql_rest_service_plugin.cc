@@ -104,7 +104,10 @@ struct MrdsModule {
 
       check_version_compatibility(conn1.get());
     } catch (const MySQLSession::Error &e) {
-      if (!fail_on_no_role_granted && e.code() == ER_ROLE_NOT_GRANTED) {
+      if (!fail_on_no_role_granted &&
+          (e.code() == ER_ROLE_NOT_GRANTED ||
+           e.code() == ER_ACCESS_DENIED_ERROR ||
+           e.code() == ER_ACCESS_DENIED_NO_PASSWORD_ERROR)) {
         return false;
       }
       trace_error("mysql_user", "metadata", "mysql_rest_service_meta_provider",
@@ -120,7 +123,10 @@ struct MrdsModule {
 
       check_version_compatibility(conn2.get());
     } catch (const MySQLSession::Error &e) {
-      if (!fail_on_no_role_granted && e.code() == ER_ROLE_NOT_GRANTED) {
+      if (!fail_on_no_role_granted &&
+          (e.code() == ER_ROLE_NOT_GRANTED ||
+           e.code() == ER_ACCESS_DENIED_ERROR ||
+           e.code() == ER_ACCESS_DENIED_NO_PASSWORD_ERROR)) {
         return false;
       }
       trace_error("mysql_user_data_access", "user-data",

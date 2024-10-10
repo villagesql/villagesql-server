@@ -9,8 +9,13 @@
 #
 --source ../mrs/initialize_schema.inc
 
---let $mrs_user_meta=root@localhost
---let $mrs_user_data=root@localhost
+if (!$mrs_user_meta)
+{
+  --let $mrs_user_meta=root@localhost
+}
+if (!$mrs_user_data) {
+  --let $mrs_user_data=root@localhost
+}
 --source ../mrs/user_configure.inc
 
 --let $mrs_host_and_port=127.0.0.1:$HTTP_SERVER_PORT
