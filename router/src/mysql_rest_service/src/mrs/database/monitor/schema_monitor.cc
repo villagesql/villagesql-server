@@ -107,7 +107,7 @@ SchemaMonitor::SchemaMonitor(
     mrs::observability::EntitiesManager *entities_manager,
     mrs::GtidManager *gtid_manager,
     mrs::database::QueryFactoryProxy *query_factory,
-    mrs::ResponseCache *response_cache)
+    mrs::ResponseCache *response_cache, mrs::ResponseCache *file_cache)
     : configuration_{configuration},
       cache_{cache},
       dbobject_manager_{dbobject_manager},
@@ -115,7 +115,8 @@ SchemaMonitor::SchemaMonitor(
       entities_manager_{entities_manager},
       gtid_manager_{gtid_manager},
       proxy_query_factory_{query_factory},
-      response_cache_{response_cache} {}
+      response_cache_{response_cache},
+      file_cache_{file_cache} {}
 
 SchemaMonitor::~SchemaMonitor() { stop(); }
 
@@ -210,6 +211,7 @@ void SchemaMonitor::run() {
           gtid_manager_->configure(global_json_config);
           cache_->configure(global_json_config);
           response_cache_->configure(global_json_config);
+          file_cache_->configure(global_json_config);
 
           log_debug("route turn=%s, changed=%s",
                     (fetcher.get_state().service_enabled ? "on" : "off"),

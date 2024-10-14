@@ -42,7 +42,7 @@ class HandlerFactory : public mrs::interface::HandlerFactory {
  public:
   HandlerFactory(AuthorizeManager *auth_manager, GtidManager *gtid_manager,
                  MysqlCacheManager *cache_manager,
-                 ResponseCache *response_cache);
+                 ResponseCache *response_cache, ResponseCache *file_cache);
 
   std::unique_ptr<Handler> create_db_service_metadata_handler(
       EndpointBasePtr db_service_endpoint) override;
@@ -76,6 +76,7 @@ class HandlerFactory : public mrs::interface::HandlerFactory {
   GtidManager *gtid_manager_;
   MysqlCacheManager *cache_manager_;
   ResponseCache *response_cache_;
+  ResponseCache *file_cache_;
 };
 
 }  // namespace endpoint

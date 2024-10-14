@@ -26,12 +26,15 @@
 #define ROUTER_SRC_REST_MRS_SRC_MRS_ENDPOINT_HANDLER_HANDLER_CONTENT_FILE_H_
 
 #include <memory>
+#include <string>
+#include <vector>
 
 #include "mrs/endpoint/content_file_endpoint.h"
 #include "mrs/endpoint/content_set_endpoint.h"
 #include "mrs/interface/authorize_manager.h"
 #include "mrs/interface/query_factory.h"
 #include "mrs/rest/handler.h"
+#include "mrs/rest/response_cache.h"
 
 namespace mrs {
 namespace endpoint {
@@ -43,11 +46,13 @@ class HandlerContentFile : public mrs::rest::Handler {
   using QueryFactory = mrs::interface::QueryFactory;
   using ContentFilePtr = ContentFileEndpoint::ContentFilePtr;
   using ContentSetPtr = ContentSetEndpoint::ContentSetPtr;
+  using EndpointResponseCachePtr = std::shared_ptr<mrs::EndpointResponseCache>;
 
  public:
   HandlerContentFile(std::weak_ptr<ContentFileEndpoint> endpoint,
                      mrs::interface::AuthorizeManager *auth_manager,
-                     collector::MysqlCacheManager *cache);
+                     collector::MysqlCacheManager *cache,
+                     mrs::ResponseCache *response_cache);
 
   UniversalId get_service_id() const override;
   UniversalId get_db_object_id() const override;
@@ -71,6 +76,8 @@ class HandlerContentFile : public mrs::rest::Handler {
 
   collector::MysqlCacheManager *cache_;
   std::string version_;
+
+  EndpointResponseCachePtr response_cache_;
 };
 
 }  // namespace handler

@@ -75,7 +75,7 @@ std::vector<std::string> get_regex_paths(
 HandlerContentFile::HandlerContentFile(
     std::weak_ptr<ContentFileEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager,
-    collector::MysqlCacheManager *cache)
+    collector::MysqlCacheManager *cache, mrs::ResponseCache *response_cache)
     : Handler(get_endpoint_host(endpoint), get_regex_paths(endpoint),
               get_endpoint_options(lock(endpoint)), auth_manager),
       endpoint_{endpoint},
@@ -91,6 +91,10 @@ HandlerContentFile::HandlerContentFile(
   version_calculation.update(std::to_string(entry_file_->size));
   version_ = helper::string::hex<std::string, helper::string::CStringHex>(
       version_calculation.finalize());
+
+  if (response_cache) {
+    response_cache_ = response_cache->create_endpoint_cache(0);
+  }
 }
 
 UniversalId HandlerContentFile::get_service_id() const {
@@ -123,6 +127,13 @@ HttpResult HandlerContentFile::handle_get(rest::RequestContext *ctxt) {
   if (if_not_matched && version_ == if_not_matched)
     throw http::Error(HttpStatusCode::NotModified);
 
+  if (response_cache_) {
+    auto entry = response_cache_->lookup_file(entry_file_->id);
+    if (entry) {
+      return {entry->data, entry->media_type.value(), version_};
+    }
+  }
+
   auto result_type = helper::get_media_type_from_extension(
       mysql_harness::make_lower(path.extension()).c_str());
 
@@ -134,6 +145,11 @@ HttpResult HandlerContentFile::handle_get(rest::RequestContext *ctxt) {
 
   mrs::database::QueryEntryContentFile query_content_file;
   query_content_file.query_file(session.get(), entry_file_->id);
+
+  if (response_cache_) {
+    response_cache_->create_file_entry(entry_file_->id,
+                                       query_content_file.result, result_type);
+  }
 
   return {std::move(query_content_file.result), result_type, version_};
 }

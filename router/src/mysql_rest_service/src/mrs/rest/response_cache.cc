@@ -35,24 +35,31 @@ IMPORT_LOG_FUNCTIONS()
 namespace mrs {
 
 namespace {
-std::string make_get_key(const http::base::Uri &uri,
-                         const std::string &user_id) {
+std::string make_table_key(const http::base::Uri &uri,
+                           const std::string &user_id) {
   return uri.get_path() + (user_id.empty() ? "" : "\nuser_id=" + user_id);
 }
 
-std::string make_put_key(const http::base::Uri &uri,
-                         std::string_view req_body) {
+std::string make_routine_key(const http::base::Uri &uri,
+                             std::string_view req_body) {
   return std::string(uri.get_path()).append("\n").append(req_body);
+}
+
+std::string make_file_key(const mrs::database::entry::UniversalId &id) {
+  return std::string(id.to_raw(), id.k_size);
 }
 
 class ResponseCacheOptions {
  public:
-  std::optional<uint64_t> max_object_cache_size{};
+  std::optional<uint64_t> max_cache_size{};
 };
 
 class ParseResponseCacheOptions
     : public helper::json::RapidReaderHandlerToStruct<ResponseCacheOptions> {
  public:
+  explicit ParseResponseCacheOptions(const std::string &group_key)
+      : group_key_(group_key) {}
+
   template <typename ValueType>
   uint64_t to_uint(const ValueType &value) {
     return std::stoull(value.c_str());
@@ -60,8 +67,8 @@ class ParseResponseCacheOptions
 
   template <typename ValueType>
   void handle_object_value(const std::string &key, const ValueType &vt) {
-    if (key == "responseCache.maxObjectCacheSize") {
-      result_.max_object_cache_size = to_uint(vt);
+    if (key == group_key_ + ".maxCacheSize") {
+      result_.max_cache_size = to_uint(vt);
     }
   }
 
@@ -77,10 +84,14 @@ class ParseResponseCacheOptions
     handle_value(std::string{v, v_len});
     return true;
   }
+
+  std::string group_key_;
 };
 
-auto parse_json_options(const std::string &options) {
-  return helper::json::text_to_handler<ParseResponseCacheOptions>(options);
+auto parse_json_options(const std::string &config_key,
+                        const std::string &options) {
+  return helper::json::text_to_handler<ParseResponseCacheOptions>(options,
+                                                                  config_key);
 }
 
 }  // namespace
@@ -94,10 +105,10 @@ std::shared_ptr<EndpointResponseCache> ResponseCache::create_endpoint_cache(
 
 void ResponseCache::configure(const std::string &options) {
   log_debug("%s", __FUNCTION__);
-  auto cache_options = parse_json_options(options);
+  auto cache_options = parse_json_options(config_key_, options);
 
   max_size_ =
-      cache_options.max_object_cache_size.value_or(k_default_object_cache_size);
+      cache_options.max_cache_size.value_or(k_default_object_cache_size);
 
   if (cache_size_ > max_size_) {
     std::lock_guard<std::mutex> lock(entries_mutex_);
@@ -203,20 +214,26 @@ EndpointResponseCache::~EndpointResponseCache() {
 std::shared_ptr<CacheEntry> EndpointResponseCache::create_table_entry(
     const Uri &uri, const std::string &user_id, const std::string &data,
     int64_t items) {
-  return create_entry(make_get_key(uri, user_id), data, items);
+  return create_entry(make_table_key(uri, user_id), data, items);
 }
 
 std::shared_ptr<CacheEntry> EndpointResponseCache::create_routine_entry(
     const Uri &uri, std::string_view req_body, const std::string &data,
     int64_t items, std::optional<helper::MediaType> media_type) {
-  return create_entry(make_put_key(uri, req_body), data, items, media_type);
+  return create_entry(make_routine_key(uri, req_body), data, items, media_type);
 }
 
 std::shared_ptr<CacheEntry> EndpointResponseCache::create_routine_entry(
     const Uri &uri, std::string_view req_body, const std::string &data,
     int64_t items, const std::string &media_type_str) {
-  return create_entry(make_put_key(uri, req_body), data, items, {},
+  return create_entry(make_routine_key(uri, req_body), data, items, {},
                       media_type_str);
+}
+
+std::shared_ptr<CacheEntry> EndpointResponseCache::create_file_entry(
+    const UniversalId &id, const std::string &data,
+    helper::MediaType media_type) {
+  return create_entry(make_file_key(id), data, 0, media_type);
 }
 
 std::shared_ptr<CacheEntry> EndpointResponseCache::create_entry(
@@ -225,9 +242,9 @@ std::shared_ptr<CacheEntry> EndpointResponseCache::create_entry(
     std::optional<std::string> media_type_str) {
   log_debug("%s key=%s", __FUNCTION__, key.c_str());
 
-  if (owner_->max_object_cache_size() < data.size()) {
+  if (owner_->max_cache_size() < data.size()) {
     log_debug("%s key=%s data=%zu max_cache=%zu", __FUNCTION__, key.c_str(),
-              data.size(), owner_->max_object_cache_size());
+              data.size(), owner_->max_cache_size());
     return nullptr;
   }
 
@@ -263,12 +280,17 @@ void EndpointResponseCache::remove_entry(std::shared_ptr<CacheEntry> entry) {
 
 std::shared_ptr<CacheEntry> EndpointResponseCache::lookup_table(
     const Uri &uri, const std::string &user_id) {
-  return lookup(make_get_key(uri, user_id));
+  return lookup(make_table_key(uri, user_id));
 }
 
 std::shared_ptr<CacheEntry> EndpointResponseCache::lookup_routine(
     const Uri &uri, std::string_view req_body) {
-  return lookup(make_put_key(uri, req_body));
+  return lookup(make_routine_key(uri, req_body));
+}
+
+std::shared_ptr<CacheEntry> EndpointResponseCache::lookup_file(
+    const UniversalId &id) {
+  return lookup(make_file_key(id));
 }
 
 std::shared_ptr<CacheEntry> EndpointResponseCache::lookup(
@@ -277,17 +299,18 @@ std::shared_ptr<CacheEntry> EndpointResponseCache::lookup(
 
   auto it = cache_.find(key);
   if (it != cache_.end()) {
-    auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(
-        CacheEntry::TimeType::clock::now() - it->second->time_created);
+    if (ttl_ > 0) {
+      auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(
+          CacheEntry::TimeType::clock::now() - it->second->time_created);
 
-    if (diff.count() >= ttl_) {
-      owner_->remove(it->second);
-      cache_.erase(it);
+      if (diff.count() >= ttl_) {
+        owner_->remove(it->second);
+        cache_.erase(it);
 
-      log_debug("%s key=%s -> expired", __FUNCTION__, key.c_str());
-      return {};
+        log_debug("%s key=%s -> expired", __FUNCTION__, key.c_str());
+        return {};
+      }
     }
-
     log_debug("%s key=%s -> hit", __FUNCTION__, key.c_str());
     return it->second;
   }

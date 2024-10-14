@@ -55,7 +55,8 @@ class SchemaMonitor {
                 mrs::observability::EntitiesManager *entities_manager,
                 mrs::GtidManager *gtid_manager,
                 mrs::database::QueryFactoryProxy *query_factory,
-                mrs::ResponseCache *response_cache);
+                mrs::ResponseCache *response_cache,
+                mrs::ResponseCache *file_cache);
   ~SchemaMonitor();
 
   void start();
@@ -84,6 +85,7 @@ class SchemaMonitor {
   Waitable waitable_{this};
   mrs::database::QueryFactoryProxy *proxy_query_factory_;
   mrs::ResponseCache *response_cache_;
+  mrs::ResponseCache *file_cache_;
 };
 
 }  // namespace database

@@ -138,16 +138,16 @@ EndpointManager::EndpointManager(collector::MysqlCacheManager *cache,
                                  mrs::interface::AuthorizeManager *auth_manager,
                                  mrs::GtidManager *gtid_manager,
                                  EndpointFactoryPtr endpoint_factory,
-                                 ResponseCache *response_cache)
+                                 ResponseCache *response_cache,
+                                 ResponseCache *file_cache)
     : cache_{cache},
       is_ssl_{is_ssl},
       auth_manager_{auth_manager},
       gtid_manager_{gtid_manager},
-      endpoint_factory_{endpoint_factory},
-      response_cache_{response_cache} {
+      endpoint_factory_{endpoint_factory} {
   if (!endpoint_factory_) {
     auto handler_factory = std::make_shared<mrs::endpoint::HandlerFactory>(
-        auth_manager_, gtid_manager_, cache_, response_cache_);
+        auth_manager_, gtid_manager_, cache_, response_cache, file_cache);
     auto configuration = std::make_shared<EndpointConfiguration>(is_ssl);
     endpoint_factory_ =
         std::make_shared<EndpointFactory>(handler_factory, configuration);

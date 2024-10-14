@@ -35,6 +35,8 @@
 #include <unordered_map>
 #include "helper/media_type.h"
 #include "http/base/uri.h"
+#include "mrs/database/entry/universal_id.h"
+
 namespace mrs {
 
 class EndpointResponseCache;
@@ -62,11 +64,14 @@ class ResponseCache {
  public:
   friend class EndpointResponseCache;
 
+  explicit ResponseCache(const std::string &config_key)
+      : config_key_(config_key) {}
+
   std::shared_ptr<EndpointResponseCache> create_endpoint_cache(int64_t ttl_ms);
 
   void configure(const std::string &options);
 
-  size_t max_object_cache_size() const { return max_size_; }
+  size_t max_cache_size() const { return max_size_; }
 
  private:
   void push(std::shared_ptr<CacheEntry> entry);
@@ -76,6 +81,8 @@ class ResponseCache {
   void remove_all(EndpointResponseCache *cache);
 
   void shrink_object_cache(size_t extra_size = 0);
+
+  std::string config_key_;
 
   std::shared_ptr<CacheEntry> newest_entry_;
   std::shared_ptr<CacheEntry> oldest_entry_;
@@ -88,6 +95,7 @@ class ResponseCache {
 class EndpointResponseCache {
  public:
   using Uri = ::http::base::Uri;
+  using UniversalId = ::mrs::database::entry::UniversalId;
 
   std::shared_ptr<CacheEntry> create_table_entry(const Uri &uri,
                                                  const std::string &user_id,
@@ -102,18 +110,24 @@ class EndpointResponseCache {
       const Uri &uri, std::string_view req_body, const std::string &data,
       int64_t items, const std::string &media_type_str);
 
+  std::shared_ptr<CacheEntry> create_file_entry(const UniversalId &id,
+                                                const std::string &data,
+                                                helper::MediaType media_type);
+
   std::shared_ptr<CacheEntry> lookup_table(const Uri &uri,
                                            const std::string &user_id);
 
   std::shared_ptr<CacheEntry> lookup_routine(const Uri &uri,
                                              std::string_view req_body);
 
+  std::shared_ptr<CacheEntry> lookup_file(const UniversalId &id);
+
   EndpointResponseCache(ResponseCache *owner, int64_t ttl_ms);
   ~EndpointResponseCache();
 
  private:
   std::shared_ptr<CacheEntry> create_entry(
-      const std::string &key, const std::string &data, int64_t items,
+      const std::string &key, const std::string &data, int64_t items = 0,
       std::optional<helper::MediaType> media_type = {},
       std::optional<std::string> media_type_str = {});
 

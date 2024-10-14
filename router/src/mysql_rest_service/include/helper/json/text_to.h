@@ -121,9 +121,10 @@ inline bool text_to(rapidjson::Value *val, const std::string &str) {
  *         ...
  *      };
  */
-template <typename Handler, typename Container>
-typename Handler::Result text_to_handler(const Container &c) {
-  Handler handler;
+template <typename Handler, typename Container, typename... HandlerArgs>
+typename Handler::Result text_to_handler(const Container &c,
+                                         HandlerArgs &&...args) {
+  Handler handler(std::forward<HandlerArgs>(args)...);
 
   text_to<Handler, Container>(&handler, c);
 

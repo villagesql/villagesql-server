@@ -62,7 +62,8 @@ class EndpointManager : public mrs::interface::EndpointManager {
                   mrs::interface::AuthorizeManager *auth_manager,
                   mrs::GtidManager *gtid_manager,
                   EndpointFactoryPtr endpoint_factory = {},
-                  ResponseCache *response_cache = {});
+                  ResponseCache *response_cache = {},
+                  ResponseCache *file_cache = {});
 
   void configure(const std::optional<std::string> &options) override;
 
@@ -91,7 +92,6 @@ class EndpointManager : public mrs::interface::EndpointManager {
   mrs::GtidManager *gtid_manager_;
   std::vector<std::shared_ptr<interface::RestHandler>> custom_paths_;
   std::shared_ptr<EndpointFactory> endpoint_factory_;
-  ResponseCache *response_cache_;
 };
 
 }  // namespace mrs

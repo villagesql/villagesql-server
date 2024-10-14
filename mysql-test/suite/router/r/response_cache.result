@@ -123,11 +123,14 @@ id	first_name	last_name	table2_id
 2	Haley	White	2
 3	George	Simmons	4
 4	NEW ROW	NEW ROW	NULL
-select count(*) into @before from performance_schema.events_statements_history where sql_text like '%content_file%' and thread_id<>ps_current_thread_id();
-select IF(count(*)=@before+1,'PASS','FAIL') from performance_schema.events_statements_history where sql_text like '%content_file%' and thread_id<>ps_current_thread_id();
+select count(*) into @before from performance_schema.events_statements_history where sql_text like '%content_file WHERE id=%' and thread_id<>ps_current_thread_id();
+select count(*), @before from performance_schema.events_statements_history where sql_text like '%content_file WHERE id=%' and thread_id<>ps_current_thread_id();
+count(*)	@before
+1	0
+select IF(count(*)=@before+1,'PASS','FAIL') from performance_schema.events_statements_history where sql_text like '%content_file WHERE id=%' and thread_id<>ps_current_thread_id();
 IF(count(*)=@before+1,'PASS','FAIL')
 PASS
-select IF(count(*)=@before+1,'PASS','FAIL') from performance_schema.events_statements_history where sql_text like '%content_file%' and thread_id<>ps_current_thread_id();
+select IF(count(*)=@before+1,'PASS','FAIL') from performance_schema.events_statements_history where sql_text like '%content_file WHERE id=%' and thread_id<>ps_current_thread_id();
 IF(count(*)=@before+1,'PASS','FAIL')
 PASS
 DROP SCHEMA basic_schema;

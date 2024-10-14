@@ -34,8 +34,20 @@
 --let $mrs_add_db_object_path=/proc
 --source ../include/mrs/db_object/add.inc
 
+--let $mrs_add_content_set_enabled=1
+--let $mrs_add_content_set_path=/static
+--source ../include/mrs/content_set/add.inc
+
+--let $mrs_add_content='TEST FILE CONTENT\nEND OF FILE\n'
+--let $mrs_add_content_file_path=/file1
+--source ../include/mrs/content_file/add.inc
+
+--let $mrs_add_content='TEST FILE 2 CONTENT\nEND OF FILE 2\n'
+--let $mrs_add_content_file_path=/file2
+--source ../include/mrs/content_file/add.inc
+
 # Set cache size for files and data
-update mysql_rest_service_metadata.config set data = json_merge_patch(data, '{"responseCache":{"maxCacheSize":200}}');
+update mysql_rest_service_metadata.config set data = json_merge_patch(data, '{"responseCache":{"maxCacheSize":200}, "fileCache":{"maxCacheSize":200}}');
 
 # Enable caching for t1 and proc
 update mysql_rest_service_metadata.db_object set options='{"cache_ttl":5}' where name='table1';
@@ -92,6 +104,21 @@ select IF(count(*)=@before+2,'PASS','FAIL') from performance_schema.events_state
 
 # only 1 row is supposed to have been added
 select * from basic_schema.table4;
+
+#
+# test that content_file is cached
+#
+
+select count(*) into @before from performance_schema.events_statements_history where sql_text like '%content_file WHERE id=%' and thread_id<>ps_current_thread_id();
+
+--exec $MRS_CLIENT_ARGS --path /svc/static/file1 --response-type RAW --display none;
+
+select count(*), @before from performance_schema.events_statements_history where sql_text like '%content_file WHERE id=%' and thread_id<>ps_current_thread_id();
+select IF(count(*)=@before+1,'PASS','FAIL') from performance_schema.events_statements_history where sql_text like '%content_file WHERE id=%' and thread_id<>ps_current_thread_id();
+
+--exec $MRS_CLIENT_ARGS --path /svc/static/file1 --response-type RAW --display none;
+
+select IF(count(*)=@before+1,'PASS','FAIL') from performance_schema.events_statements_history where sql_text like '%content_file WHERE id=%' and thread_id<>ps_current_thread_id();
 
 # Cleanup
 --source ../include/mrs/cleanup.inc

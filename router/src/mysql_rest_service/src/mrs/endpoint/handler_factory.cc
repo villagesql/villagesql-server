@@ -47,11 +47,13 @@ using HandlerPtr = std::unique_ptr<HandlerFactory::Handler>;
 HandlerFactory::HandlerFactory(AuthorizeManager *auth_manager,
                                GtidManager *gtid_manager,
                                MysqlCacheManager *cache_manager,
-                               ResponseCache *response_cache)
+                               ResponseCache *response_cache,
+                               ResponseCache *file_cache)
     : auth_manager_{auth_manager},
       gtid_manager_{gtid_manager},
       cache_manager_{cache_manager},
-      response_cache_{response_cache} {}
+      response_cache_{response_cache},
+      file_cache_{file_cache} {}
 
 HandlerPtr HandlerFactory::create_db_schema_metadata_catalog_handler(
     EndpointBasePtr endpoint) {
@@ -138,8 +140,8 @@ HandlerPtr HandlerFactory::create_content_file(EndpointBasePtr endpoint) {
       std::dynamic_pointer_cast<ContentFileEndpoint>(endpoint);
   assert(content_file_endpoint && "Object must be castable.");
 
-  return std::make_unique<HandlerContentFile>(content_file_endpoint,
-                                              auth_manager_, cache_manager_);
+  return std::make_unique<HandlerContentFile>(
+      content_file_endpoint, auth_manager_, cache_manager_, file_cache_);
 }
 
 HandlerPtr HandlerFactory::create_string_handler(
