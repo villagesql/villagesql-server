@@ -147,8 +147,8 @@ class HARNESS_EXPORT Destination {
  * If IPv6 is followed by port, the address port is expected to be wrapped in
  * '[]'
  */
-stdx::expected<TcpDestination, std::error_code> make_tcp_destination(
-    std::string dest);
+stdx::expected<TcpDestination, std::error_code> HARNESS_EXPORT
+make_tcp_destination(std::string dest);
 
 }  // namespace mysql_harness
 

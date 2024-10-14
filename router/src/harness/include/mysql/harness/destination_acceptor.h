@@ -57,17 +57,7 @@ class HARNESS_EXPORT DestinationAcceptor {
   const LocalType &as_local() const { return std::get<LocalType>(acceptor_); }
 
   stdx::expected<void, std::error_code> open(
-      const mysql_harness::DestinationEndpoint &ep) {
-    auto &io_ctx = get_executor().context();
-
-    if (ep.is_local()) {
-      acceptor_ = LocalType{io_ctx};
-      return as_local().open(ep.as_local().protocol());
-    }
-
-    acceptor_ = TcpType{io_ctx};
-    return as_tcp().open(ep.as_tcp().protocol());
-  }
+      const mysql_harness::DestinationEndpoint &ep);
 
   stdx::expected<void, std::error_code> bind(
       const mysql_harness::DestinationEndpoint &ep) {

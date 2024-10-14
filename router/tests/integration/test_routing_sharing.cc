@@ -6434,7 +6434,7 @@ TEST_P(
     cli.username(username);
     cli.password(password);
 
-    ASSERT_NO_ERROR(cli_connect(cli, srv->classic_socket_destination()));
+    ASSERT_NO_ERROR(cli_connect(cli, srv->classic_tcp_destination()));
   }
 
   SCOPED_TRACE("// reuse");

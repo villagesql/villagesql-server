@@ -108,6 +108,7 @@ SET(harness_source
   dynamic_config.cc
   section_config_exposer.cc
   destination.cc
+  destination_acceptor.cc
   destination_endpoint.cc
   destination_socket.cc
   )

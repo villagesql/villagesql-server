@@ -4159,6 +4159,9 @@ TEST_P(Benchmark, classic_protocol) {
 
   SCOPED_TRACE("// connecting to server directly");
   for (bool is_tcp : {false, true}) {
+#ifdef _WIN32
+    if (!is_tcp) continue;
+#endif
     MysqlClient cli;
 
     auto *srv = shared_servers()[0];
@@ -4187,6 +4190,9 @@ TEST_P(Benchmark, classic_protocol) {
       continue;
     }
     for (bool is_tcp : {false, true}) {
+#ifdef _WIN32
+      if (!is_tcp) continue;
+#endif
       MysqlClient cli;
 
       cli.username("root");
@@ -4218,6 +4224,9 @@ TEST_P(Benchmark, classic_protocol) {
   }
 
   for (bool is_tcp : {false, true}) {
+#ifdef _WIN32
+    if (!is_tcp) continue;
+#endif
     MysqlClient cli;
 
     auto *srv = shared_servers()[0];
@@ -4246,6 +4255,9 @@ TEST_P(Benchmark, classic_protocol) {
       continue;
     }
     for (bool is_tcp : {false, true}) {
+#ifdef _WIN32
+      if (!is_tcp) continue;
+#endif
       MysqlClient cli;
 
       cli.username("root");

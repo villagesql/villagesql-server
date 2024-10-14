@@ -232,8 +232,8 @@ void SharedServer::spawn_server_with_datadir(
 
 #ifdef _WIN32
   // on windows, wait until port is ready as there is no notify-socket.
-  if (!(wait_for_port_ready(server_port_, 10s) &&
-        wait_for_port_ready(server_mysqlx_port_, 10s))) {
+  if (!(wait_for_port_ready(classic_tcp_destination().port(), 10s) &&
+        wait_for_port_ready(x_tcp_destination().port(), 10s))) {
     mysqld_failed_to_start_ = true;
   }
 #endif
