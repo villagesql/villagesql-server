@@ -2,6 +2,8 @@
 #
 #
 --source include/not_windows.inc
+# auth_socket that the test uses is not supported on MacOS
+--source include/not_mac_os.inc
 --source include/have_router.inc
 
 --let $extra_mrs_router_id=1
