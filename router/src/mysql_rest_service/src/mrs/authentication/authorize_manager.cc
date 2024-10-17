@@ -80,6 +80,7 @@ const UniversalId k_vendor_mysql{{0x31, 0}};
 const UniversalId k_vendor_facebook{{0x32, 0}};
 const UniversalId k_vendor_twitter{{0x33, 0}};
 const UniversalId k_vendor_google{{0x34, 0}};
+const UniversalId k_vendor_oidc{{0x35, 0}};
 
 namespace {
 
@@ -296,25 +297,36 @@ bool AuthorizeManager::get_handler_by_id(const UniversalId auth_id,
 }
 
 AuthorizeHandlerPtr AuthorizeManager::make_auth(const AuthApp &entry) {
-  // TODO(lkotula): Rework this (Shouldn't be in review)
-  AuthorizeHandlerPtr result;
-
   if (entry.deleted) return {};
 
   if (!entry.active) return {};
 
-  if (entry.vendor_id == k_vendor_mysql)
-    result = factory_->create_basic_auth_handler(this, entry, cache_manager_);
-  else if (entry.vendor_id == k_vendor_facebook)
-    result = factory_->create_facebook_auth_handler(this, entry);
-  else if (entry.vendor_id == k_vendor_twitter)
-    result = factory_->create_twitter_auth_handler(this, entry);
-  else if (entry.vendor_id == k_vendor_google)
-    result = factory_->create_google_auth_handler(this, entry);
-  else if (entry.vendor_id == k_vendor_mrs)
-    result = factory_->create_scram_auth_handler(this, entry, random_data_);
+  if (entry.vendor_id == k_vendor_mysql) {
+    return factory_->create_basic_auth_handler(this, entry, cache_manager_);
+  } else if (entry.vendor_id == k_vendor_facebook) {
+    return factory_->create_facebook_auth_handler(this, entry);
+  } else if (entry.vendor_id == k_vendor_twitter) {
+    return factory_->create_twitter_auth_handler(this, entry);
+  } else if (entry.vendor_id == k_vendor_google) {
+    return factory_->create_google_auth_handler(this, entry);
+  } else if (entry.vendor_id == k_vendor_mrs) {
+    return factory_->create_scram_auth_handler(this, entry, random_data_);
+  } else if (entry.vendor_id == k_vendor_oidc) {
+    if (entry.url.empty()) {
+      log_error(
+          "OIDC Authentication application, requires that main"
+          "app-specific-URL is set.");
+      return {};
+    }
 
-  return result;
+    return factory_->create_oidc_auth_handler(this, entry);
+  }
+
+  log_error(
+      "authentication application with name '%s' not available, because it has "
+      "unsupported vendor-id '%s'",
+      entry.app_name.c_str(), entry.vendor_id.to_string().c_str());
+  return {};
 }
 
 void AuthorizeManager::fill_service(const AuthApp &e, ServiceAuthorize &sa) {

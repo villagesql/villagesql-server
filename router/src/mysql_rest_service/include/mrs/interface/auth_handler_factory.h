@@ -54,6 +54,8 @@ class AuthHandlerFactory {
       AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const = 0;
   virtual AuthHandlerPtr create_google_auth_handler(
       AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const = 0;
+  virtual AuthHandlerPtr create_oidc_auth_handler(
+      AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const = 0;
   virtual AuthHandlerPtr create_scram_auth_handler(
       AuthorizeHandlerCallbakcs *cb, const AuthApp &entry,
       const std::string &rd) const = 0;

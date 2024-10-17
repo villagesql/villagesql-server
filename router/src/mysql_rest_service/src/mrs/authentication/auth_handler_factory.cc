@@ -27,6 +27,7 @@
 #include "mrs/authentication/basic_handler.h"
 #include "mrs/authentication/oauth2_facebook_handler.h"
 #include "mrs/authentication/oauth2_google_handler.h"
+#include "mrs/authentication/oauth2_oidc_handler.h"
 #include "mrs/authentication/oauth2_twitter_handler.h"
 #include "mrs/authentication/scram_handler.h"
 #include "mrs/authentication/track_authorize_handler.h"
@@ -61,6 +62,13 @@ AuthHandlerPtr AuthHandlerFactory::create_google_auth_handler(
     AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const {
   using Obj =
       TrackAuthorizeHandler<AuthorizeHandlerCallbakcs, Oauth2GoogleHandler>;
+  return std::make_shared<Obj>(cb, entry);
+}
+
+AuthHandlerPtr AuthHandlerFactory::create_oidc_auth_handler(
+    AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const {
+  using Obj =
+      TrackAuthorizeHandler<AuthorizeHandlerCallbakcs, Oauth2OidcHandler>;
   return std::make_shared<Obj>(cb, entry);
 }
 

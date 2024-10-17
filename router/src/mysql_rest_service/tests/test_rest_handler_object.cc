@@ -58,7 +58,6 @@ using testing::ReturnRef;
 using testing::StrictMock;
 using testing::Test;
 
-const std::string k_empty{};
 const std::string k_url{"https://mysql.com/mrs/schema/table"};
 const std::string k_path{
     "^/mrs/schema/table(/([0-9]|[a-z]|[A-Z]|[-._~!$&'()*+,;=:@%]| )*/?)?$"};

@@ -42,6 +42,9 @@ class MockAuthHandlerFactory : public mrs::interface::AuthHandlerFactory {
   MOCK_METHOD(AuthHandlerPtr, create_google_auth_handler,
               (AuthorizeHandlerCallbakcs * cb, const AuthApp &entry),
               (const, override));
+  MOCK_METHOD(AuthHandlerPtr, create_oidc_auth_handler,
+              (AuthorizeHandlerCallbakcs * cb, const AuthApp &entry),
+              (const, override));
   MOCK_METHOD(AuthHandlerPtr, create_scram_auth_handler,
               (AuthorizeHandlerCallbakcs * cb, const AuthApp &entry,
                const std::string &rd),

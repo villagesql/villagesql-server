@@ -159,6 +159,7 @@ ADD_STATIC_LIBRARY(mysql_rest_service_impl
   mrs/authentication/oauth2_facebook_handler.cc
   mrs/authentication/oauth2_twitter_handler.cc
   mrs/authentication/oauth2_google_handler.cc
+  mrs/authentication/oauth2_oidc_handler.cc
   mrs/authentication/oauth2_handler.cc
   mrs/authentication/www_authentication_handler.cc
   mrs/authentication/sasl_handler.cc
