@@ -113,7 +113,6 @@ select count(*) into @before from performance_schema.events_statements_history w
 
 --exec $MRS_CLIENT_ARGS --path /svc/static/file1 --response-type RAW --display none;
 
-select count(*), @before from performance_schema.events_statements_history where sql_text like '%content_file WHERE id=%' and thread_id<>ps_current_thread_id();
 select IF(count(*)=@before+1,'PASS','FAIL') from performance_schema.events_statements_history where sql_text like '%content_file WHERE id=%' and thread_id<>ps_current_thread_id();
 
 --exec $MRS_CLIENT_ARGS --path /svc/static/file1 --response-type RAW --display none;
