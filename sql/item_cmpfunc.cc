@@ -378,7 +378,8 @@ static double IndexSelectivityOfUnknownValue(const Field &field) {
   The actual operator @c op is created by the concrete subclass in
   create_scalar_predicate().
 */
-Item_bool_func *Linear_comp_creator::create(Item *a, Item *b) const {
+Item_bool_func *Linear_comp_creator::create(const POS &pos, Item *a,
+                                            Item *b) const {
   /*
     Test if the arguments are row constructors and thus can be flattened into
     a list of ANDs or ORs.
@@ -391,53 +392,61 @@ Item_bool_func *Linear_comp_creator::create(Item *a, Item *b) const {
     assert(a->cols() > 1);
     List<Item> list;
     for (uint i = 0; i < a->cols(); ++i)
-      list.push_back(create(a->element_index(i), b->element_index(i)));
-    return combine(list);
+      list.push_back(create(pos, a->element_index(i), b->element_index(i)));
+    return combine(pos, list);
   }
-  return create_scalar_predicate(a, b);
+  Item_bool_func *item = create_scalar_predicate(pos, a, b);
+  if (item == nullptr) {
+    return nullptr;
+  }
+
+  return item;
 }
 
-Item_bool_func *Eq_creator::create_scalar_predicate(Item *a, Item *b) const {
+Item_bool_func *Eq_creator::create_scalar_predicate(const POS &pos, Item *a,
+                                                    Item *b) const {
   assert(a->type() != Item::ROW_ITEM || b->type() != Item::ROW_ITEM);
-  return new Item_func_eq(a, b);
+  return new Item_func_eq(pos, a, b);
 }
 
-Item_bool_func *Eq_creator::combine(List<Item> list) const {
-  return new Item_cond_and(list);
+Item_bool_func *Eq_creator::combine(const POS &pos, List<Item> list) const {
+  return new Item_cond_and(pos, list);
 }
 
-Item_bool_func *Equal_creator::create_scalar_predicate(Item *a, Item *b) const {
+Item_bool_func *Equal_creator::create_scalar_predicate(const POS &pos, Item *a,
+                                                       Item *b) const {
   assert(a->type() != Item::ROW_ITEM || b->type() != Item::ROW_ITEM);
-  return new Item_func_equal(a, b);
+  return new Item_func_equal(pos, a, b);
 }
 
-Item_bool_func *Equal_creator::combine(List<Item> list) const {
-  return new Item_cond_and(list);
+Item_bool_func *Equal_creator::combine(const POS &pos, List<Item> list) const {
+  return new Item_cond_and(pos, list);
 }
 
-Item_bool_func *Ne_creator::create_scalar_predicate(Item *a, Item *b) const {
+Item_bool_func *Ne_creator::create_scalar_predicate(const POS &pos, Item *a,
+                                                    Item *b) const {
   assert(a->type() != Item::ROW_ITEM || b->type() != Item::ROW_ITEM);
-  return new Item_func_ne(a, b);
+  return new Item_func_ne(pos, a, b);
 }
 
-Item_bool_func *Ne_creator::combine(List<Item> list) const {
-  return new Item_cond_or(list);
+Item_bool_func *Ne_creator::combine(const POS &pos, List<Item> list) const {
+  return new Item_cond_or(pos, list);
 }
 
-Item_bool_func *Gt_creator::create(Item *a, Item *b) const {
-  return new Item_func_gt(a, b);
+Item_bool_func *Gt_creator::create(const POS &pos, Item *a, Item *b) const {
+  return new Item_func_gt(pos, a, b);
 }
 
-Item_bool_func *Lt_creator::create(Item *a, Item *b) const {
-  return new Item_func_lt(a, b);
+Item_bool_func *Lt_creator::create(const POS &pos, Item *a, Item *b) const {
+  return new Item_func_lt(pos, a, b);
 }
 
-Item_bool_func *Ge_creator::create(Item *a, Item *b) const {
-  return new Item_func_ge(a, b);
+Item_bool_func *Ge_creator::create(const POS &pos, Item *a, Item *b) const {
+  return new Item_func_ge(pos, a, b);
 }
 
-Item_bool_func *Le_creator::create(Item *a, Item *b) const {
-  return new Item_func_le(a, b);
+Item_bool_func *Le_creator::create(const POS &pos, Item *a, Item *b) const {
+  return new Item_func_le(pos, a, b);
 }
 
 float Item_func_not::get_filtering_effect(THD *thd, table_map filter_for_table,

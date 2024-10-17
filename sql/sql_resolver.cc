@@ -6153,9 +6153,10 @@ bool Query_block::transform_table_subquery_to_join_with_derived(
         Item_field(thd, &this->context, tr->table->field[0]);
     if (field == nullptr) return true;
 
-    Item_bool_func *const compare =
-        allany_pred->compare_func()->create(left_expr, field);
+    Item_bool_func *const compare = allany_pred->compare_func()->create(
+        allany_pred->m_pos, left_expr, field);
     if (compare == nullptr) return true;
+
     condition = compare;
 
     if (nulls_field_no > 0) {

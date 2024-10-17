@@ -2829,12 +2829,13 @@ bool secondary_engine_unload_table_inner(THD *thd, const char *db_name,
   auto *hton = plugin_data<handlerton *>(plugin);
   if (hton == nullptr) {
     if (error_if_not_loaded) {
-      std::string err_msg{"Table "};
+      String err_msg;
+      err_msg.append("Table ");
       err_msg.append(db_name);
       err_msg.append(".");
       err_msg.append(table_name);
       err_msg.append(" is not loaded in secondary engine.");
-      my_error(ER_SECONDARY_ENGINE_PLUGIN, MYF(0), err_msg.c_str());
+      my_error(ER_SECONDARY_ENGINE_PLUGIN, MYF(0), err_msg.c_ptr());
     }
     return error_if_not_loaded;
   }
@@ -4804,12 +4805,11 @@ bool prepare_create_field(THD *thd, const char *error_schema_name,
         // we don't bother checking those here.
         if ((is_field_for_functional_index(dup_field) !=
              is_field_for_functional_index(sql_field))) {
-          std::string error_description;
+          String error_description;
           error_description.append("The column name '");
           error_description.append(sql_field->field_name);
           error_description.append("' is already in use by a hidden column");
-
-          my_error(ER_INTERNAL_ERROR, MYF(0), error_description.c_str());
+          my_error(ER_INTERNAL_ERROR, MYF(0), error_description.c_ptr());
           return true;
         }
 

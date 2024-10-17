@@ -3569,7 +3569,7 @@ class Item : public Parse_tree_node {
 
     @see Query_arena::free_list
   */
-  Item *next_free;
+  Item *next_free{nullptr};
 
  protected:
   /// str_values's main purpose is to cache the value in save_in_field

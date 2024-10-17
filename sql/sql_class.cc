@@ -2109,6 +2109,7 @@ void THD::rollback_item_tree_changes() {
 }
 
 void Query_arena::add_item(Item *item) {
+  assert(item->next_free == nullptr);
   item->next_free = m_item_list;
   m_item_list = item;
 }

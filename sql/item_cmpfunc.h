@@ -533,7 +533,7 @@ class Item_in_optimizer final : public Item_bool_func {
 class Comp_creator {
  public:
   virtual ~Comp_creator() = default;
-  virtual Item_bool_func *create(Item *a, Item *b) const = 0;
+  virtual Item_bool_func *create(const POS &pos, Item *a, Item *b) const = 0;
 
   /// This interface is only used by Item_allany_subselect.
   virtual const char *symbol(bool invert) const = 0;
@@ -548,7 +548,7 @@ class Comp_creator {
 /// Abstract base class for the comparison operators =, <> and <=>.
 class Linear_comp_creator : public Comp_creator {
  public:
-  Item_bool_func *create(Item *a, Item *b) const override;
+  Item_bool_func *create(const POS &pos, Item *a, Item *b) const override;
   bool eqne_op() const override { return true; }
   bool l_op() const override { return false; }
 
@@ -558,10 +558,12 @@ class Linear_comp_creator : public Comp_creator {
     constructors.
     @see create()
   */
-  virtual Item_bool_func *create_scalar_predicate(Item *a, Item *b) const = 0;
+  virtual Item_bool_func *create_scalar_predicate(const POS &pos, Item *a,
+                                                  Item *b) const = 0;
 
   /// Combines a list of conditions <code>exp op exp</code>.
-  virtual Item_bool_func *combine(List<Item> list) const = 0;
+  [[nodiscard]] virtual Item_bool_func *combine(const POS &pos,
+                                                List<Item> list) const = 0;
 };
 
 class Eq_creator : public Linear_comp_creator {
@@ -569,8 +571,10 @@ class Eq_creator : public Linear_comp_creator {
   const char *symbol(bool invert) const override { return invert ? "<>" : "="; }
 
  protected:
-  Item_bool_func *create_scalar_predicate(Item *a, Item *b) const override;
-  Item_bool_func *combine(List<Item> list) const override;
+  Item_bool_func *create_scalar_predicate(const POS &pos, Item *a,
+                                          Item *b) const override;
+  [[nodiscard]] Item_bool_func *combine(const POS &pos,
+                                        List<Item> list) const override;
 };
 
 class Equal_creator : public Linear_comp_creator {
@@ -582,8 +586,10 @@ class Equal_creator : public Linear_comp_creator {
   }
 
  protected:
-  Item_bool_func *create_scalar_predicate(Item *a, Item *b) const override;
-  Item_bool_func *combine(List<Item> list) const override;
+  Item_bool_func *create_scalar_predicate(const POS &pos, Item *a,
+                                          Item *b) const override;
+  [[nodiscard]] Item_bool_func *combine(const POS &pos,
+                                        List<Item> list) const override;
 };
 
 class Ne_creator : public Linear_comp_creator {
@@ -591,13 +597,15 @@ class Ne_creator : public Linear_comp_creator {
   const char *symbol(bool invert) const override { return invert ? "=" : "<>"; }
 
  protected:
-  Item_bool_func *create_scalar_predicate(Item *a, Item *b) const override;
-  Item_bool_func *combine(List<Item> list) const override;
+  Item_bool_func *create_scalar_predicate(const POS &pos, Item *a,
+                                          Item *b) const override;
+  [[nodiscard]] Item_bool_func *combine(const POS &pos,
+                                        List<Item> list) const override;
 };
 
 class Gt_creator : public Comp_creator {
  public:
-  Item_bool_func *create(Item *a, Item *b) const override;
+  Item_bool_func *create(const POS &pos, Item *a, Item *b) const override;
   const char *symbol(bool invert) const override { return invert ? "<=" : ">"; }
   bool eqne_op() const override { return false; }
   bool l_op() const override { return false; }
@@ -605,7 +613,7 @@ class Gt_creator : public Comp_creator {
 
 class Lt_creator : public Comp_creator {
  public:
-  Item_bool_func *create(Item *a, Item *b) const override;
+  Item_bool_func *create(const POS &pos, Item *a, Item *b) const override;
   const char *symbol(bool invert) const override { return invert ? ">=" : "<"; }
   bool eqne_op() const override { return false; }
   bool l_op() const override { return true; }
@@ -613,7 +621,7 @@ class Lt_creator : public Comp_creator {
 
 class Ge_creator : public Comp_creator {
  public:
-  Item_bool_func *create(Item *a, Item *b) const override;
+  Item_bool_func *create(const POS &pos, Item *a, Item *b) const override;
   const char *symbol(bool invert) const override { return invert ? "<" : ">="; }
   bool eqne_op() const override { return false; }
   bool l_op() const override { return false; }
@@ -621,7 +629,7 @@ class Ge_creator : public Comp_creator {
 
 class Le_creator : public Comp_creator {
  public:
-  Item_bool_func *create(Item *a, Item *b) const override;
+  Item_bool_func *create(const POS &pos, Item *a, Item *b) const override;
   const char *symbol(bool invert) const override { return invert ? ">" : "<="; }
   bool eqne_op() const override { return false; }
   bool l_op() const override { return true; }
@@ -649,10 +657,16 @@ class Item_bool_func2 : public Item_bool_func {
       : Item_bool_func(a, b, c), cmp(args, args + 1) {}
 
   Item_bool_func2(const POS &pos, Item *a, Item *b)
-      : Item_bool_func(pos, a, b), cmp(args, args + 1) {}
-
+      : Item_bool_func(pos, a, b), cmp(args, args + 1) {
+    add_accum_properties(a);
+    add_accum_properties(b);
+  }
   Item_bool_func2(const POS &pos, Item *a, Item *b, Item *c)
-      : Item_bool_func(pos, a, b, c), cmp(args, args + 1) {}
+      : Item_bool_func(pos, a, b, c), cmp(args, args + 1) {
+    add_accum_properties(a);
+    add_accum_properties(b);
+    add_accum_properties(c);
+  }
 
  public:
   bool resolve_type(THD *) override;
@@ -1182,6 +1196,8 @@ class Item_func_equal final : public Item_eq_base {
 class Item_func_ge final : public Item_func_comparison {
  public:
   Item_func_ge(Item *a, Item *b) : Item_func_comparison(a, b) {}
+  Item_func_ge(const POS &pos, Item *a, Item *b)
+      : Item_func_comparison(pos, a, b) {}
   longlong val_int() override;
   enum Functype functype() const override { return GE_FUNC; }
   enum Functype rev_functype() const override { return LE_FUNC; }
@@ -1196,6 +1212,8 @@ class Item_func_ge final : public Item_func_comparison {
 class Item_func_gt final : public Item_func_comparison {
  public:
   Item_func_gt(Item *a, Item *b) : Item_func_comparison(a, b) {}
+  Item_func_gt(const POS &pos, Item *a, Item *b)
+      : Item_func_comparison(pos, a, b) {}
   longlong val_int() override;
   enum Functype functype() const override { return GT_FUNC; }
   enum Functype rev_functype() const override { return LT_FUNC; }
@@ -1210,6 +1228,8 @@ class Item_func_gt final : public Item_func_comparison {
 class Item_func_le final : public Item_func_comparison {
  public:
   Item_func_le(Item *a, Item *b) : Item_func_comparison(a, b) {}
+  Item_func_le(const POS &pos, Item *a, Item *b)
+      : Item_func_comparison(pos, a, b) {}
   longlong val_int() override;
   enum Functype functype() const override { return LE_FUNC; }
   enum Functype rev_functype() const override { return GE_FUNC; }
@@ -1256,6 +1276,8 @@ class Item_func_reject_if : public Item_bool_func {
 class Item_func_lt final : public Item_func_comparison {
  public:
   Item_func_lt(Item *a, Item *b) : Item_func_comparison(a, b) {}
+  Item_func_lt(const POS &pos, Item *a, Item *b)
+      : Item_func_comparison(pos, a, b) {}
   longlong val_int() override;
   enum Functype functype() const override { return LT_FUNC; }
   enum Functype rev_functype() const override { return GT_FUNC; }
@@ -1273,6 +1295,8 @@ class Item_func_ne final : public Item_func_comparison {
   static constexpr double kMinSelectivityForUnknownValue = 0.2;
 
   Item_func_ne(Item *a, Item *b) : Item_func_comparison(a, b) {}
+  Item_func_ne(const POS &pos, Item *a, Item *b)
+      : Item_func_comparison(pos, a, b) {}
   longlong val_int() override;
   enum Functype functype() const override { return NE_FUNC; }
   enum Functype rev_functype() const override { return NE_FUNC; }
@@ -2516,6 +2540,8 @@ class Item_cond : public Item_bool_func {
   Item_cond(THD *thd, Item_cond *item);
   Item_cond(List<Item> &nlist)
       : Item_bool_func(), list(nlist), abort_on_null(false) {}
+  Item_cond(const POS &pos, List<Item> &nlist)
+      : Item_bool_func(pos), list(nlist), abort_on_null(false) {}
   bool add(Item *item) {
     assert(item);
     return list.push_back(item);
@@ -2799,6 +2825,8 @@ class Item_cond_and final : public Item_cond {
 
   Item_cond_and(THD *thd, Item_cond_and *item) : Item_cond(thd, item) {}
   Item_cond_and(List<Item> &list_arg) : Item_cond(list_arg) {}
+  Item_cond_and(const POS &pos, List<Item> &list_arg)
+      : Item_cond(pos, list_arg) {}
   enum Functype functype() const override { return COND_AND_FUNC; }
   longlong val_int() override;
   const char *func_name() const override { return "and"; }
@@ -2828,6 +2856,8 @@ class Item_cond_or final : public Item_cond {
 
   Item_cond_or(THD *thd, Item_cond_or *item) : Item_cond(thd, item) {}
   Item_cond_or(List<Item> &list_arg) : Item_cond(list_arg) {}
+  Item_cond_or(const POS &pos, List<Item> &list_arg)
+      : Item_cond(pos, list_arg) {}
   enum Functype functype() const override { return COND_OR_FUNC; }
   longlong val_int() override;
   const char *func_name() const override { return "or"; }
