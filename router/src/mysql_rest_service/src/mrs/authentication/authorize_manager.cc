@@ -338,10 +338,10 @@ void AuthorizeManager::fill_service(const AuthApp &e, ServiceAuthorize &sa) {
   std::string path4 = "^" + e.service_name + auth_path + "/completed";
   std::string path5 = "^" + e.service_name + auth_path + "/user";
   std::string path6 = "^" + e.service_name + auth_path + "/authApps$";
-  std::string redirect = e.redirect;
+  std::string redirect = e.auth_completed_url;
 
   if (redirect.empty()) {
-    redirect = e.host + e.service_name + auth_path + "/completed";
+    redirect = e.service_name + auth_path + "/completed";
   }
 
   auto login_handler = std::make_shared<mrs::rest::HandlerAuthorize>(

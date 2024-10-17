@@ -123,7 +123,7 @@ class Oauth2Handler : public interface::AuthorizeHandler {
   void set_cookie_session_id(Request *request,
                              SessionManager::Session *session);
 
-  void new_session_start_login(Session *session, Url *url);
+  void new_session_start_login(RequestContext &ctxt, Session *session);
   bool http_acquire_access_token(GenericSessionData *data);
   bool http_verify_account(Session *session, GenericSessionData *data,
                            SqlSessionCached *sql_session);

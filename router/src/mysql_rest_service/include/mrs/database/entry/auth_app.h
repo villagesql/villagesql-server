@@ -60,7 +60,7 @@ class AuthApp {
   helper::Optional<UniversalId> default_role_id;
   std::string auth_path;
   std::string options;
-  std::string redirect;
+  std::string auth_completed_url;
   std::string redirection_default_page;
 };
 

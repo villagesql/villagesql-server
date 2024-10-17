@@ -155,11 +155,22 @@ bool Oauth2Handler::http_acquire_access_token(GenericSessionData *data) {
   return true;
 }
 
-void Oauth2Handler::new_session_start_login(Session *session, Url *url) {
-  std::string uri = entry_.host + url->get_path();
+void Oauth2Handler::new_session_start_login(RequestContext &ctxt,
+                                            Session *session) {
+  // `url_host` and `host` field are almost the same.
+  // The host is extended with protocol prefix, for example "http://"
+  auto url = ctxt.get_http_url();
 
-  if (url->get_query().length()) {
-    uri += "?" + url->get_query();
+  std::string uri;
+  if (!entry_.url_host.empty()) {
+    uri = entry_.host + url.get_path();
+  } else {
+    auto host_cstr = ctxt.get_in_headers().find_cstr(":authority");
+    uri = entry_.host + (host_cstr ? host_cstr : "localhost") + url.get_path();
+  }
+
+  if (url.get_query().length()) {
+    uri += "?" + url.get_query();
   }
 
   auto data = new GenericSessionData();
@@ -172,7 +183,7 @@ void Oauth2Handler::new_session_start_login(Session *session, Url *url) {
   // For now its ok because ID is a number. (Shouldn't be in review)
 
   // Redirect the web-browser to `get_url_location` URL.
-  throw http::ErrorRedirect(get_url_location(data, url));
+  throw http::ErrorRedirect(get_url_location(data, &url));
 }
 
 bool Oauth2Handler::is_authorized(Session *session, AuthUser *user) {
@@ -194,8 +205,7 @@ bool Oauth2Handler::authorize(RequestContext &ctxt, Session *session,
   const static std::string kToken{"token"};
   auto session_data = session->get_data<GenericSessionData>();
 
-  auto url = ctxt.get_http_url();
-  const auto &query_parameters = url.get_query_elements();
+  const auto &query_parameters = ctxt.get_http_url().get_query_elements();
   const bool token_in_parameters = 0 != query_parameters.count(kToken);
   const bool code_in_parameters = 0 != query_parameters.count(kCode);
 
@@ -211,7 +221,7 @@ bool Oauth2Handler::authorize(RequestContext &ctxt, Session *session,
   if (nullptr == session_data) {
     if (!token_in_parameters && !code_in_parameters) {
       log_debug("SessionData doesn't exist in new-session");
-      new_session_start_login(session, &url);
+      new_session_start_login(ctxt, session);
       return false;
     }
 
@@ -240,7 +250,7 @@ bool Oauth2Handler::authorize(RequestContext &ctxt, Session *session,
             "session, and redirecting.");
         // TODO(lkotula): Limit somehow the number of retries (Shouldn't be in
         // review)
-        new_session_start_login(session, &url);
+        new_session_start_login(ctxt, session);
         return false;
       }
 

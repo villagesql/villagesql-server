@@ -99,7 +99,7 @@ void QueryEntriesAuthApp::on_row(const ResultRow &row) {
                                        entry::UniversalId::from_raw);
   mysql_row.unserialize(&entry.auth_path);
   mysql_row.unserialize(&entry.options);
-  mysql_row.unserialize(&entry.redirect);
+  mysql_row.unserialize(&entry.auth_completed_url);
   mysql_row.unserialize(&entry.redirection_default_page);
   // Field used for audit_log matching
   mysql_row.skip(/*a.id as auth_app_id*/);
