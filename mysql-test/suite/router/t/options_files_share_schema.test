@@ -58,6 +58,7 @@ SET @schema_id2=@schema_id;
 --let $mrs_add_db_object_path=/obj2
 --source ../include/mrs/db_object/add.inc
 
+--let $wait_timeout = 90
 --source ../include/mrs/end_object_definition.inc
 
 
