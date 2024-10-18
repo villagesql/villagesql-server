@@ -105,9 +105,16 @@ void DbServiceEndpoint::update() {
 
 void DbServiceEndpoint::activate() {
   url_handlers_.clear();
+  auto this_ep = shared_from_this();
 
   url_handlers_.push_back(
-      factory_->create_db_service_metadata_handler(shared_from_this()));
+      factory_->create_db_service_metadata_handler(this_ep));
+  url_handlers_.push_back(factory_->create_authentication_login(this_ep));
+  url_handlers_.push_back(factory_->create_authentication_logout(this_ep));
+  url_handlers_.push_back(factory_->create_authentication_completed(this_ep));
+  url_handlers_.push_back(factory_->create_authentication_user(this_ep));
+  url_handlers_.push_back(factory_->create_authentication_auth_apps(this_ep));
+  url_handlers_.push_back(factory_->create_authentication_status(this_ep));
 }
 
 void DbServiceEndpoint::deactivate() { url_handlers_.clear(); }

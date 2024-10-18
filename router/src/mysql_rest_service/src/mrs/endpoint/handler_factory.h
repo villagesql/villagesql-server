@@ -71,6 +71,19 @@ class HandlerFactory : public mrs::interface::HandlerFactory {
       const Uri &url, const std::string &path, const std::string &file_name,
       const std::string &redirection_path, const bool pernament) override;
 
+  std::unique_ptr<Handler> create_authentication_login(
+      EndpointBasePtr db_service_endpoint) override;
+  std::unique_ptr<Handler> create_authentication_logout(
+      EndpointBasePtr db_service_endpoint) override;
+  std::unique_ptr<Handler> create_authentication_completed(
+      EndpointBasePtr db_service_endpoint) override;
+  std::unique_ptr<Handler> create_authentication_user(
+      EndpointBasePtr db_service_endpoint) override;
+  std::unique_ptr<Handler> create_authentication_auth_apps(
+      EndpointBasePtr db_service_endpoint) override;
+  std::unique_ptr<Handler> create_authentication_status(
+      EndpointBasePtr db_service_endpoint) override;
+
  private:
   AuthorizeManager *auth_manager_;
   GtidManager *gtid_manager_;

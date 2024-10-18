@@ -22,8 +22,8 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_AUTHORIZE_H_
-#define ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_AUTHORIZE_H_
+#ifndef ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_AUTHENTICATION_AUTHORIZE_LOGIN_H_
+#define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_AUTHENTICATION_AUTHORIZE_LOGIN_H_
 
 #include <optional>
 #include <string>
@@ -34,14 +34,17 @@
 #include "mrs/rest/handler.h"
 
 namespace mrs {
-namespace rest {
+namespace endpoint {
+namespace handler {
 
-class HandlerAuthorize : public Handler {
+class HandlerAuthorizeLogin : public mrs::rest::Handler {
  public:
-  HandlerAuthorize(const std::string &url_host, const UniversalId service_id,
-                   const std::string &rest_path_matcher,
-                   const std::string &options, const std::string &redirection,
-                   interface::AuthorizeManager *auth_manager);
+  HandlerAuthorizeLogin(const std::string &url_host,
+                        const UniversalId service_id,
+                        const std::string &rest_path_matcher,
+                        const std::string &options,
+                        const std::string &redirection,
+                        interface::AuthorizeManager *auth_manager);
 
   Authorization requires_authentication() const override;
   bool may_check_access() const override;
@@ -68,7 +71,8 @@ class HandlerAuthorize : public Handler {
   std::string copy_path_;
 };
 
-}  // namespace rest
+}  // namespace handler
+}  // namespace endpoint
 }  // namespace mrs
 
-#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_AUTHORIZE_H_
+#endif  // ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_AUTHENTICATION_AUTHORIZE_LOGIN_H_

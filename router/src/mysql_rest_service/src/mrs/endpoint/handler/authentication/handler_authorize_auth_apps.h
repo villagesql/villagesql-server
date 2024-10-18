@@ -22,8 +22,8 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_UNAUTHORIZED_H_
-#define ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_UNAUTHORIZED_H_
+#ifndef ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_AUTHENTICATION_AUTHORIZE_AUTH_APPDS_H_
+#define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_AUTHENTICATION_AUTHORIZE_AUTH_APPDS_H_
 
 #include <optional>
 #include <string>
@@ -34,25 +34,24 @@
 #include "mrs/rest/handler.h"
 
 namespace mrs {
-namespace rest {
+namespace endpoint {
+namespace handler {
 
-class HandlerUnauthorize : public Handler {
+class HandlerAuthorizeAuthApps : public mrs::rest::Handler {
  public:
-  HandlerUnauthorize(const std::string &url_host, const UniversalId service_id,
-                     const std::string &rest_path_matcher,
-                     const std::string &options,
-                     interface::AuthorizeManager *auth_manager);
+  HandlerAuthorizeAuthApps(const std::string &url_host,
+                           const UniversalId service_id,
+                           const std::string &rest_path_matcher,
+                           const std::string &options,
+                           const std::string &redirection,
+                           interface::AuthorizeManager *auth_manager);
 
-  bool may_check_access() const override;
   Authorization requires_authentication() const override;
+  bool may_check_access() const override;
   UniversalId get_service_id() const override;
   UniversalId get_db_object_id() const override;
   UniversalId get_schema_id() const override;
   uint32_t get_access_rights() const override;
-
-  bool request_begin(RequestContext *ctxt) override;
-  void request_end(RequestContext *ctxt) override;
-  bool request_error(RequestContext *ctxt, const http::Error &e) override;
 
   HttpResult handle_get(RequestContext *ctxt) override;
   HttpResult handle_post(RequestContext *ctxt,
@@ -61,16 +60,14 @@ class HandlerUnauthorize : public Handler {
   HttpResult handle_put(RequestContext *ctxt) override;
 
  private:
-  std::string append_status_parameters(const std::string &redirection_url,
-                                       const http::Error &error);
-
   UniversalId service_id_;
+  const std::string redirection_;
   std::string copy_url_;
   std::string copy_path_;
-  interface::AuthorizeManager *auth_manager_;
 };
 
-}  // namespace rest
+}  // namespace handler
+}  // namespace endpoint
 }  // namespace mrs
 
-#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_UNAUTHORIZED_H_
+#endif  // ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_AUTHENTICATION_AUTHORIZE_AUTH_APPDS_H_

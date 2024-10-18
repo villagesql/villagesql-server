@@ -22,7 +22,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "mrs/rest/handler_authorize_apps.h"
+#include "mrs/endpoint/handler/authentication/handler_authorize_auth_apps.h"
 
 #include <cassert>
 
@@ -38,11 +38,12 @@
 IMPORT_LOG_FUNCTIONS()
 
 namespace mrs {
-namespace rest {
+namespace endpoint {
+namespace handler {
 
-using HttpResult = HandlerAuthorizeApps::HttpResult;
+using HttpResult = HandlerAuthorizeAuthApps::HttpResult;
 
-HandlerAuthorizeApps::HandlerAuthorizeApps(
+HandlerAuthorizeAuthApps::HandlerAuthorizeAuthApps(
     const std::string &url_host, const UniversalId service_id,
     const std::string &rest_path_matcher, const std::string &options,
     const std::string &redirection, interface::AuthorizeManager *auth_manager)
@@ -50,28 +51,31 @@ HandlerAuthorizeApps::HandlerAuthorizeApps(
       service_id_{service_id},
       redirection_{redirection} {}
 
-Handler::Authorization HandlerAuthorizeApps::requires_authentication() const {
+mrs::rest::Handler::Authorization
+HandlerAuthorizeAuthApps::requires_authentication() const {
   return Authorization::kNotNeeded;
 }
 
-UniversalId HandlerAuthorizeApps::get_service_id() const { return service_id_; }
+UniversalId HandlerAuthorizeAuthApps::get_service_id() const {
+  return service_id_;
+}
 
-UniversalId HandlerAuthorizeApps::get_db_object_id() const {
+UniversalId HandlerAuthorizeAuthApps::get_db_object_id() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
   return {};
 }
 
-UniversalId HandlerAuthorizeApps::get_schema_id() const {
+UniversalId HandlerAuthorizeAuthApps::get_schema_id() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
   return {};
 }
 
-uint32_t HandlerAuthorizeApps::get_access_rights() const {
+uint32_t HandlerAuthorizeAuthApps::get_access_rights() const {
   using Op = mrs::database::entry::Operation::Values;
   return Op::valueRead;
 }
 
-HttpResult HandlerAuthorizeApps::handle_get(RequestContext *) {
+HttpResult HandlerAuthorizeAuthApps::handle_get(RequestContext *) {
   helper::json::SerializerToText serializer;
   using namespace std::string_literals;
   auto auth_apps =
@@ -91,20 +95,21 @@ HttpResult HandlerAuthorizeApps::handle_get(RequestContext *) {
   return {serializer.get_result(), HttpResult::Type::typeJson};
 }
 
-HttpResult HandlerAuthorizeApps::handle_post(RequestContext *,
-                                             const std::vector<uint8_t> &) {
+HttpResult HandlerAuthorizeAuthApps::handle_post(RequestContext *,
+                                                 const std::vector<uint8_t> &) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerAuthorizeApps::handle_delete(RequestContext *) {
+HttpResult HandlerAuthorizeAuthApps::handle_delete(RequestContext *) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerAuthorizeApps::handle_put(RequestContext *) {
+HttpResult HandlerAuthorizeAuthApps::handle_put(RequestContext *) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-bool HandlerAuthorizeApps::may_check_access() const { return false; }
+bool HandlerAuthorizeAuthApps::may_check_access() const { return false; }
 
-}  // namespace rest
+}  // namespace handler
+}  // namespace endpoint
 }  // namespace mrs

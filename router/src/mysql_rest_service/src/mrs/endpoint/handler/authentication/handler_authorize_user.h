@@ -22,21 +22,22 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_USER_H_
-#define ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_USER_H_
+#ifndef ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_AUTHENTICATION_AUTHORIZE_USER_H_
+#define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_AUTHENTICATION_AUTHORIZE_USER_H_
 
 #include <optional>
 #include <string>
 #include <vector>
 
-#include "mrs/rest/handler_is_authorized.h"
+#include "mrs/endpoint/handler/authentication/handler_authorize_status.h"
 
 namespace mrs {
-namespace rest {
+namespace endpoint {
+namespace handler {
 
-class HandlerUser : public HandlerIsAuthorized {
+class HandlerAuthorizeUser : public HandlerAuthorizeStatus {
  public:
-  using HandlerIsAuthorized::HandlerIsAuthorized;
+  using HandlerAuthorizeStatus::HandlerAuthorizeStatus;
 
   HttpResult handle_put(RequestContext *ctxt) override;
   void authorization(RequestContext *ctxt) override;
@@ -48,7 +49,8 @@ class HandlerUser : public HandlerIsAuthorized {
                           const std::vector<AuthRole> &roles) override;
 };
 
-}  // namespace rest
+}  // namespace handler
+}  // namespace endpoint
 }  // namespace mrs
 
-#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_USER_H_
+#endif  // ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_AUTHENTICATION_AUTHORIZE_USER_H_

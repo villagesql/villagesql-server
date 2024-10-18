@@ -22,7 +22,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "mrs/rest/handler_authorize_ok.h"
+#include "mrs/endpoint/handler/authentication/handler_authorize_completed.h"
 
 #include <cassert>
 
@@ -33,9 +33,10 @@
 #include "mrs/rest/request_context.h"
 
 namespace mrs {
-namespace rest {
+namespace endpoint {
+namespace handler {
 
-using HttpResult = HandlerAuthorizeOk::HttpResult;
+using HttpResult = HandlerAuthorizeCompleted::HttpResult;
 
 // clang-format off
 const std::string k_page_content_default = R"HEREDOC(
@@ -133,7 +134,7 @@ const std::string k_page_content_default = R"HEREDOC(
 )HEREDOC";
 // clang-format on
 
-HandlerAuthorizeOk::HandlerAuthorizeOk(
+HandlerAuthorizeCompleted::HandlerAuthorizeCompleted(
     const std::string &url_host, const UniversalId service_id,
     const std::string &rest_path_matcher, const std::string &options,
     const std::string &page_content_custom,
@@ -142,48 +143,52 @@ HandlerAuthorizeOk::HandlerAuthorizeOk(
       service_id_{service_id},
       page_content_custom_{page_content_custom} {}
 
-Handler::Authorization HandlerAuthorizeOk::requires_authentication() const {
+mrs::rest::Handler::Authorization
+HandlerAuthorizeCompleted::requires_authentication() const {
   return Authorization::kCheck;
 }
 
-UniversalId HandlerAuthorizeOk::get_service_id() const { return service_id_; }
+UniversalId HandlerAuthorizeCompleted::get_service_id() const {
+  return service_id_;
+}
 
-UniversalId HandlerAuthorizeOk::get_db_object_id() const {
+UniversalId HandlerAuthorizeCompleted::get_db_object_id() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
   return {};
 }
 
-UniversalId HandlerAuthorizeOk::get_schema_id() const {
+UniversalId HandlerAuthorizeCompleted::get_schema_id() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
   return {};
 }
 
-uint32_t HandlerAuthorizeOk::get_access_rights() const {
+uint32_t HandlerAuthorizeCompleted::get_access_rights() const {
   using Op = mrs::database::entry::Operation::Values;
   return Op::valueRead;
 }
 
-HttpResult HandlerAuthorizeOk::handle_get(RequestContext *) {
+HttpResult HandlerAuthorizeCompleted::handle_get(RequestContext *) {
   if (page_content_custom_.empty())
     return {k_page_content_default, helper::MediaType::typeHtml};
 
   return {page_content_custom_, helper::MediaType::typeHtml};
 }
 
-HttpResult HandlerAuthorizeOk::handle_post(RequestContext *,
-                                           const std::vector<uint8_t> &) {
+HttpResult HandlerAuthorizeCompleted::handle_post(
+    RequestContext *, const std::vector<uint8_t> &) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerAuthorizeOk::handle_delete(RequestContext *) {
+HttpResult HandlerAuthorizeCompleted::handle_delete(RequestContext *) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerAuthorizeOk::handle_put(RequestContext *) {
+HttpResult HandlerAuthorizeCompleted::handle_put(RequestContext *) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-bool HandlerAuthorizeOk::may_check_access() const { return false; }
+bool HandlerAuthorizeCompleted::may_check_access() const { return false; }
 
-}  // namespace rest
+}  // namespace handler
+}  // namespace endpoint
 }  // namespace mrs

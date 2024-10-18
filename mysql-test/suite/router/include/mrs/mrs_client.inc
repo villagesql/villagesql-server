@@ -96,6 +96,17 @@ if ($mrs_client_arg_json_schema)
   --let $mrs_client_cmd=$mrs_client_cmd --encoded-json-schema=$mrs_escape_query
 }
 
+if ($mrs_client_arg_expect_header)
+{
+  if (!$mrs_client_arg_expect_header_value)
+  {
+    --die "mrs_client_arg_expect_header" requires mrs_client_arg_expect_header_value parameter.
+  }
+  --let $mrs_escape_query=$mrs_client_arg_expect_header_value
+  --source escape_url_query.inc
+  --let $mrs_client_cmd=$mrs_client_cmd --encoded-expected-header=$mrs_client_arg_expect_header=$mrs_escape_query
+}
+
 if ($mrs_client_replace_regexp)
 {
   --replace_regex $mrs_client_replace_regexp
@@ -119,4 +130,6 @@ exec $mrs_client_cmd;
 --let $mrs_client_arg_response_type=
 --let $mrs_client_arg_json_schema_file=
 --let $mrs_client_arg_json_schema=
+--let $mrs_client_arg_expect_header=
+--let $mrs_client_arg_expect_header_value=
 --let $mrs_client_replace_regexp=

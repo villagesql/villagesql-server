@@ -722,6 +722,23 @@ std::vector<CmdOption> g_options{
              "Json schema can only be used with JSON responses.");
        }
      }},
+    {{"--encoded-expected-header"},
+     "Expect header/value in server's response message. The value must be "
+     "encoded using url-parameter encoding.",
+     CmdOptionValueReq::required,
+     "meta_header",
+     [](const std::string &value) {
+       auto equal_pos = value.find_first_of("=");
+       if (equal_pos == std::string::npos) {
+         throw std::invalid_argument(
+             "Expected header value must follow this format: "
+             "'--encoded-expected-header=HEADER=VALUE'");
+       }
+       std::string key = value.substr(0, equal_pos);
+       std::string keys_value =
+           decode_from_url_query_escaping(value.substr(equal_pos + 1));
+       g_configuration.expected_headers[key] = keys_value;
+     }},
 };
 
 template <typename Duration>

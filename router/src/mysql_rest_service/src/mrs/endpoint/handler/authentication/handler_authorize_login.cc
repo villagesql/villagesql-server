@@ -22,7 +22,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "mrs/rest/handler_authorize.h"
+#include "mrs/endpoint/handler/authentication/handler_authorize_login.h"
 
 #include <cassert>
 
@@ -38,43 +38,45 @@
 IMPORT_LOG_FUNCTIONS()
 
 namespace mrs {
-namespace rest {
+namespace endpoint {
+namespace handler {
 
-using HttpResult = HandlerAuthorize::HttpResult;
+using HttpResult = HandlerAuthorizeLogin::HttpResult;
 using Url = helper::http::Url;
 
-HandlerAuthorize::HandlerAuthorize(const std::string &url_host,
-                                   const UniversalId service_id,
-                                   const std::string &rest_path_matcher,
-                                   const std::string &options,
-                                   const std::string &redirection,
-                                   interface::AuthorizeManager *auth_manager)
+HandlerAuthorizeLogin::HandlerAuthorizeLogin(
+    const std::string &url_host, const UniversalId service_id,
+    const std::string &rest_path_matcher, const std::string &options,
+    const std::string &redirection, interface::AuthorizeManager *auth_manager)
     : Handler(url_host, {rest_path_matcher}, options, auth_manager),
       service_id_{service_id},
       redirection_{redirection} {}
 
-Handler::Authorization HandlerAuthorize::requires_authentication() const {
+mrs::rest::Handler::Authorization
+HandlerAuthorizeLogin::requires_authentication() const {
   return Authorization::kRequires;
 }
 
-UniversalId HandlerAuthorize::get_service_id() const { return service_id_; }
+UniversalId HandlerAuthorizeLogin::get_service_id() const {
+  return service_id_;
+}
 
-UniversalId HandlerAuthorize::get_db_object_id() const {
+UniversalId HandlerAuthorizeLogin::get_db_object_id() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
   return {};
 }
 
-UniversalId HandlerAuthorize::get_schema_id() const {
+UniversalId HandlerAuthorizeLogin::get_schema_id() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
   return {};
 }
 
-uint32_t HandlerAuthorize::get_access_rights() const {
+uint32_t HandlerAuthorizeLogin::get_access_rights() const {
   using Op = mrs::database::entry::Operation::Values;
   return Op::valueRead | Op::valueCreate;
 }
 
-HttpResult HandlerAuthorize::handle_get(
+HttpResult HandlerAuthorizeLogin::handle_get(
     RequestContext *ctxt) {  // TODO(lkotula): Add status to redirection URL:
                              // (Shouldn't be in review)
   // ?status=ok|failure
@@ -82,16 +84,16 @@ HttpResult HandlerAuthorize::handle_get(
   auto uri = append_status_parameters(ctxt, {HttpStatusCode::Ok});
   // Generate the response by the default handler.
 
-  log_debug("HandlerAuthorize::handle_get - before redirects");
+  log_debug("HandlerAuthorizeLogin::handle_get - before redirects");
   if (ctxt->selected_handler->redirects())
     http::redirect_and_throw(ctxt->request, uri);
-  log_debug("HandlerAuthorize::handle_get - no redirects");
+  log_debug("HandlerAuthorizeLogin::handle_get - no redirects");
 
   auto session = authorization_manager_->get_current_session(
       get_service_id(), ctxt->request->get_input_headers(), &ctxt->cookies);
 
   if (session && session->generate_token) {
-    log_debug("HandlerAuthorize::handle_get - post");
+    log_debug("HandlerAuthorizeLogin::handle_get - post");
     auto jwt_token =
         authorization_manager_->get_jwt_token(get_service_id(), session);
     session->generate_token = false;
@@ -103,18 +105,18 @@ HttpResult HandlerAuthorize::handle_get(
   return {};
 }
 
-HttpResult HandlerAuthorize::handle_post(RequestContext *ctxt,
-                                         const std::vector<uint8_t> &) {
+HttpResult HandlerAuthorizeLogin::handle_post(RequestContext *ctxt,
+                                              const std::vector<uint8_t> &) {
   if (!ctxt->post_authentication) throw http::Error(HttpStatusCode::Forbidden);
 
   return handle_get(ctxt);
 }
 
-HttpResult HandlerAuthorize::handle_delete(RequestContext *) {
+HttpResult HandlerAuthorizeLogin::handle_delete(RequestContext *) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerAuthorize::handle_put(RequestContext *) {
+HttpResult HandlerAuthorizeLogin::handle_put(RequestContext *) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
@@ -129,7 +131,7 @@ static const char *get_authentication_status(HttpStatusCode::key_type code) {
   }
 }
 
-std::string HandlerAuthorize::append_status_parameters(
+std::string HandlerAuthorizeLogin::append_status_parameters(
     RequestContext *ctxt, const http::Error &error) {
   auto session = authorization_manager_->get_current_session(
       get_service_id(), ctxt->request->get_input_headers(), &ctxt->cookies);
@@ -168,8 +170,8 @@ std::string HandlerAuthorize::append_status_parameters(
   return uri.join();
 }
 
-bool HandlerAuthorize::request_error(RequestContext *ctxt,
-                                     const http::Error &error) {
+bool HandlerAuthorizeLogin::request_error(RequestContext *ctxt,
+                                          const http::Error &error) {
   if (HttpMethod::Options == ctxt->request->get_method()) return false;
   // Oauth2 authentication may redirect, allow it.
   Url url(ctxt->request->get_uri());
@@ -196,7 +198,8 @@ bool HandlerAuthorize::request_error(RequestContext *ctxt,
   return true;
 }
 
-bool HandlerAuthorize::may_check_access() const { return false; }
+bool HandlerAuthorizeLogin::may_check_access() const { return false; }
 
-}  // namespace rest
+}  // namespace handler
+}  // namespace endpoint
 }  // namespace mrs

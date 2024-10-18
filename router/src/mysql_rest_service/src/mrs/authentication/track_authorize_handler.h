@@ -42,11 +42,7 @@ class TrackAuthorizeHandler : public Handler {
   using AuthorizeHandler = mrs::interface::AuthorizeHandler;
 
   template <typename... T>
-  TrackAuthorizeHandler(Callback *cb, T... t) : Handler(t...), cb_{cb} {
-    cb_->acquire(this);
-  }
-
-  ~TrackAuthorizeHandler() override { cb_->destroy(this); }
+  TrackAuthorizeHandler(Callback *cb, T... t) : Handler(t...), cb_{cb} {}
 
   UniversalId get_service_id() const override {
     return Handler::get_service_id();

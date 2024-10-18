@@ -22,41 +22,42 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_AUTHORIZE_COMMON_H_
-#define ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_AUTHORIZE_COMMON_H_
+#ifndef ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_AUTHENTICATION_AUTHORIZE_STATUS_H_
+#define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_AUTHENTICATION_AUTHORIZE_STATUS_H_
 
 #include <optional>
 #include <string>
 #include <vector>
 
-#include "helper/http/url.h"
+#include "helper/json/serializer_to_text.h"
 #include "helper/media_type.h"
+#include "mrs/database/entry/auth_role.h"
+#include "mrs/database/entry/auth_user.h"
 #include "mrs/interface/authorize_manager.h"
 #include "mrs/rest/handler.h"
 
 namespace mrs {
-namespace rest {
+namespace endpoint {
+namespace handler {
 
-class HandlerAuthorizeCommon : public Handler {
- private:
-  using Url = helper::http::Url;
-
+class HandlerAuthorizeStatus : public mrs::rest::Handler {
  public:
-  HandlerAuthorizeCommon(const std::string &url_host,
+  HandlerAuthorizeStatus(const std::string &url_host,
                          const UniversalId service_id,
                          const std::string &rest_path_matcher,
                          const std::string &options,
-                         const std::string &redirection,
                          interface::AuthorizeManager *auth_manager);
 
-  void authorization(RequestContext *ctxt) override;
-  bool may_check_access() const override;
   Authorization requires_authentication() const override;
+  bool may_check_access() const override;
+
   UniversalId get_service_id() const override;
   UniversalId get_db_object_id() const override;
   UniversalId get_schema_id() const override;
   uint32_t get_access_rights() const override;
 
+  bool request_begin(RequestContext *ctxt) override;
+  void request_end(RequestContext *ctxt) override;
   bool request_error(RequestContext *ctxt, const http::Error &e) override;
 
   HttpResult handle_get(RequestContext *ctxt) override;
@@ -65,16 +66,25 @@ class HandlerAuthorizeCommon : public Handler {
   HttpResult handle_delete(RequestContext *ctxt) override;
   HttpResult handle_put(RequestContext *ctxt) override;
 
- private:
-  std::string append_status_parameters(RequestContext *ctxt,
-                                       const http::Error &error);
+ protected:
+  using Object = helper::json::SerializerToText::Object;
+  using AuthUser = database::entry::AuthUser;
+  using AuthRole = database::entry::AuthRole;
+
+  virtual void fill_authorization(Object &ojson, const AuthUser &user,
+                                  const std::vector<AuthRole> &roles);
+  static void fill_the_user_data(Object &ojson, const AuthUser &user,
+                                 const std::vector<AuthRole> &roles);
+  static std::string append_status_parameters(
+      const std::string &redirection_url, const http::Error &error);
+
   UniversalId service_id_;
-  const std::string redirection_;
   std::string copy_url_;
   std::string copy_path_;
 };
 
-}  // namespace rest
+}  // namespace handler
+}  // namespace endpoint
 }  // namespace mrs
 
-#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_AUTHORIZE_COMMON_H_
+#endif  // ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_AUTHENTICATION_AUTHORIZE_STATUS_H_

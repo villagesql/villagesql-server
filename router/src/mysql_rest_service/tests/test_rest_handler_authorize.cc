@@ -28,7 +28,7 @@
 
 #include "helper/make_shared_ptr.h"
 #include "helper/set_http_component.h"
-#include "mrs/rest/handler_authorize.h"
+#include "mrs/endpoint/handler/authentication/handler_authorize_login.h"
 #include "mrs/rest/request_context.h"
 
 #include "mock/mock_auth_handler.h"
@@ -39,8 +39,8 @@
 
 using helper::MakeSharedPtr;
 using helper::SetHttpComponent;
+using mrs::endpoint::handler::HandlerAuthorizeLogin;
 using mrs::interface::AuthorizeManager;
-using mrs::rest::HandlerAuthorize;
 using testing::_;
 using testing::AllOf;
 using testing::DoAll;
@@ -75,8 +75,8 @@ class HandlerAuthorizeTests : public Test {
               request_handler_ = std::move(handler);
               return request_handler_.get();
             }));
-    sut_ = std::make_unique<HandlerAuthorize>("", service_id, rest_path, "", "",
-                                              &mock_auth_);
+    sut_ = std::make_unique<HandlerAuthorizeLogin>("", service_id, rest_path,
+                                                   "", "", &mock_auth_);
     ASSERT_NE(nullptr, request_handler_.get());
   }
 
@@ -122,7 +122,7 @@ class HandlerAuthorizeTests : public Test {
   SetHttpComponent raii_setter_{&mock_http_component_};
   MakeSharedPtr<StrictMock<MockAuthHandler>> mock_auth_handler_;
   StrictMock<MockAuthManager> mock_auth_;
-  std::unique_ptr<HandlerAuthorize> sut_;
+  std::unique_ptr<HandlerAuthorizeLogin> sut_;
 };
 
 TEST_F(HandlerAuthorizeTests, unauthorized_access_when_method_delete) {

@@ -99,7 +99,6 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
   bool get_handler_by_id(const UniversalId auth_id,
                          AuthorizeHandlerPtr &out_it);
   void remove_unreferenced_service_authorizators();
-  void fill_service(const AuthApp &e, ServiceAuthorize &sa);
   AuthorizeHandlerPtr choose_authentication_handler(
       ServiceId service_id, const std::string &app_name);
 
@@ -111,13 +110,9 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
   std::string authorize(const UniversalId service_id, const helper::Jwt &jwt);
 
  private:  // AuthorizeHandlerCallbacks
-  void acquire(interface::AuthorizeHandler *) override;
-  void destroy(interface::AuthorizeHandler *) override;
   void pre_authorize_account(interface::AuthorizeHandler *handler,
                              const std::string &account) override;
 
-  std::mutex service_authorize_mutext_;
-  MapOfServices service_authorize_;
   collector::MysqlCacheManager *cache_manager_;
   users::UserManager user_manager_{true, {}};
   http::SessionManager session_manager_;

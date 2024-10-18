@@ -172,6 +172,12 @@ ADD_STATIC_LIBRARY(mysql_rest_service_impl
   mrs/endpoint/endpoint_factory.cc
   mrs/endpoint/handler_factory.cc
   mrs/endpoint/option_endpoint.cc
+  mrs/endpoint/handler/authentication/handler_authorize_auth_apps.cc
+  mrs/endpoint/handler/authentication/handler_authorize_completed.cc
+  mrs/endpoint/handler/authentication/handler_authorize_login.cc
+  mrs/endpoint/handler/authentication/handler_authorize_logout.cc
+  mrs/endpoint/handler/authentication/handler_authorize_status.cc
+  mrs/endpoint/handler/authentication/handler_authorize_user.cc
   mrs/endpoint/handler/handler_content_file.cc
   mrs/endpoint/handler/handler_db_service_metadata.cc
   mrs/endpoint/handler/handler_db_schema_metadata_catalog.cc
@@ -192,14 +198,7 @@ ADD_STATIC_LIBRARY(mysql_rest_service_impl
   mrs/endpoint_manager.cc
   mrs/router_observation_entities.cc
   mrs/rest/handler.cc
-  mrs/rest/handler_authorize.cc
-  mrs/rest/handler_authorize_apps.cc
-  mrs/rest/handler_authorize_common.cc
-  mrs/rest/handler_authorize_ok.cc
-  mrs/rest/handler_user.cc
   mrs/rest/handler_string.cc
-  mrs/rest/handler_is_authorized.cc
-  mrs/rest/handler_unauthorize.cc
   mrs/rest/response_cache.cc
   mrs/monitored/gtid_functions.cc
   mrs/monitored/query_retry_on_ro.cc

@@ -1,0 +1,495 @@
+# Verify that authentication endpoints are created and avaiable
+# despite the number of authentication application assgined to
+# service.
+#
+--source include/have_router.inc
+
+--let $extra_mrs_router_id=1
+--source ../include/predefined_setup/configure_router_mrs_root.inc
+--source ../include/schema/basic_schema.sql
+
+## Test starts here
+--echo
+--echo
+--echo ## I. Create servcices that:
+--echo ## *  service A, that has nothing under it and no authApp assigned
+--echo ## *  service B, that has nothing under it and one authApp assigned
+--echo ## *  service C, that has nothing under it and two authApps assigned
+--echo ## *  service D, that has db_object and no authApp assigned
+--echo ## *  service E, that has db_object and one authApp assigned
+--echo ## *  service F, that has db_object and two authApps assigned
+--echo ## *  service G, that has db_object+requires_auth and no authApp assigned
+--echo ## *  service H, that has db_object+requires_auth and one authApp assigned
+--echo ## *  service I, that has db_object+requires_auth and two authApps assigned
+--echo #
+--echo # 1. Verify that under all services, endpoint /authentication/authApps exists and returns
+--echo #    specific number of authApps in a array.
+--echo # 2. Verify that under all services, endpoint /authentication/completed exists and returns
+--echo #    valid http page.
+--echo # 3. Verify that under all services, endpoint /authentication/login
+--echo # 4. Verify that under all services, endpoint /authentication/logout
+--echo # 5. Verify that under all services, endpoint /authentication/user
+--echo # 6. Verify that under all services, endpoint /authentication/status
+--echo #
+--echo #
+
+
+--echo
+--echo #
+--echo # I.1
+
+--source ../include/mrs/start_object_definition.inc
+
+############ A
+--let $mrs_add_service_path="/a"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+############ B
+--let $mrs_add_service_path="/b"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_auth_app=one
+--let $mrs_add_auth_vendor=MySQL Internal
+--let $mrs_add_auth_service=/b
+--source ../include/mrs/add_auth_app.inc
+
+############ C
+--let $mrs_add_service_path="/c"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_auth_app=one-of-two
+--let $mrs_add_auth_vendor=MySQL Internal
+--let $mrs_add_auth_service=/c
+--source ../include/mrs/add_auth_app.inc
+
+--let $mrs_add_auth_app=two-of-two
+--let $mrs_add_auth_vendor=MRS
+--let $mrs_add_auth_service=/c
+--source ../include/mrs/add_auth_app.inc
+
+############ D
+--let $mrs_add_service_path="/d"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_schema=basic_schema
+--let $mrs_add_schema_path=/sch
+--source ../include/mrs/db_schema/add.inc
+
+--let $mrs_add_db_object=table1
+--let $mrs_add_db_object_path=/t
+--source ../include/mrs/db_object/add.inc
+
+############ E
+--let $mrs_add_service_path="/e"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_schema=basic_schema
+--let $mrs_add_schema_path=/sch
+--source ../include/mrs/db_schema/add.inc
+
+--let $mrs_add_db_object=table1
+--let $mrs_add_db_object_path=/t
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_auth_app=one
+--let $mrs_add_auth_vendor=MySQL Internal
+--let $mrs_add_auth_service=/e
+--source ../include/mrs/add_auth_app.inc
+
+############ F
+--let $mrs_add_service_path="/f"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_schema=basic_schema
+--let $mrs_add_schema_path=/sch
+--source ../include/mrs/db_schema/add.inc
+
+--let $mrs_add_db_object=table1
+--let $mrs_add_db_object_path=/t
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_auth_app=one-of-two
+--let $mrs_add_auth_vendor=MySQL Internal
+--let $mrs_add_auth_service=/f
+--source ../include/mrs/add_auth_app.inc
+
+--let $mrs_add_auth_app=two-of-two
+--let $mrs_add_auth_vendor=MRS
+--let $mrs_add_auth_service=/f
+--source ../include/mrs/add_auth_app.inc
+
+############ G
+--let $mrs_add_service_path="/g"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_schema=basic_schema
+--let $mrs_add_schema_path=/sch
+--source ../include/mrs/db_schema/add.inc
+
+--let $mrs_add_db_object=table1
+--let $mrs_add_db_object_path=/t
+--let $mrs_add_db_object_auth=1
+--source ../include/mrs/db_object/add.inc
+
+############ H
+--let $mrs_add_service_path="/h"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_schema=basic_schema
+--let $mrs_add_schema_path=/sch
+--source ../include/mrs/db_schema/add.inc
+
+--let $mrs_add_db_object=table1
+--let $mrs_add_db_object_path=/h
+--let $mrs_add_db_object_auth=1
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_auth_app=one
+--let $mrs_add_auth_vendor=MySQL Internal
+--let $mrs_add_auth_service=/h
+--source ../include/mrs/add_auth_app.inc
+
+############ I
+--let $mrs_add_service_path="/i"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_schema=basic_schema
+--let $mrs_add_schema_path=/sch
+--source ../include/mrs/db_schema/add.inc
+
+--let $mrs_add_db_object=table1
+--let $mrs_add_db_object_path=/t
+--let $mrs_add_db_object_auth=1
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_auth_app=one-of-two
+--let $mrs_add_auth_vendor=MySQL Internal
+--let $mrs_add_auth_service=/i
+--source ../include/mrs/add_auth_app.inc
+
+--let $mrs_add_auth_app=two-of-two
+--let $mrs_add_auth_vendor=MRS
+--let $mrs_add_auth_service=/i
+--source ../include/mrs/add_auth_app.inc
+
+--source ../include/mrs/end_object_definition.inc
+
+--echo
+--echo #
+--echo # I.1
+--let $mrs_client_arg_path='/a/authentication/authApps'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/b/authentication/authApps'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/c/authentication/authApps'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/d/authentication/authApps'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/e/authentication/authApps'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/f/authentication/authApps'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/g/authentication/authApps'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/h/authentication/authApps'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/i/authentication/authApps'
+--source ../include/mrs/mrs_client.inc
+
+
+--echo
+--echo #
+--echo # I.2
+--let $mrs_client_arg_path='/a/authentication/completed'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expect_header=Content-Type
+--let $mrs_client_arg_expect_header_value="text/html"
+--let $mrs_client_arg_dispaly=request,status
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/b/authentication/completed'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expect_header=Content-Type
+--let $mrs_client_arg_expect_header_value="text/html"
+--let $mrs_client_arg_dispaly=request,status
+--source ../include/mrs/mrs_client.inc
+
+
+--let $mrs_client_arg_path='/c/authentication/completed'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expect_header=Content-Type
+--let $mrs_client_arg_expect_header_value="text/html"
+--let $mrs_client_arg_dispaly=request,status
+--source ../include/mrs/mrs_client.inc
+
+
+--let $mrs_client_arg_path='/d/authentication/completed'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expect_header=Content-Type
+--let $mrs_client_arg_expect_header_value="text/html"
+--let $mrs_client_arg_dispaly=request,status
+--source ../include/mrs/mrs_client.inc
+
+
+--let $mrs_client_arg_path='/e/authentication/completed'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expect_header=Content-Type
+--let mrs_client_arg_expect_header_value="text/html"
+--let $mrs_client_arg_dispaly=request,status
+--source ../include/mrs/mrs_client.inc
+
+
+--let $mrs_client_arg_path='/f/authentication/completed'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expect_header=Content-Type
+--let $mrs_client_arg_expect_header_value="text/html"
+--let $mrs_client_arg_dispaly=request,status
+--source ../include/mrs/mrs_client.inc
+
+
+--let $mrs_client_arg_path='/g/authentication/completed'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expect_header=Content-Type
+--let $mrs_client_arg_expect_header_value="text/html"
+--let $mrs_client_arg_dispaly=request,status
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/h/authentication/completed'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expect_header=Content-Type
+--let $mrs_client_arg_expect_header_value="text/html"
+--let $mrs_client_arg_dispaly=request,status
+--source ../include/mrs/mrs_client.inc
+
+
+--let $mrs_client_arg_path='/i/authentication/completed'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expect_header=Content-Type
+--let $mrs_client_arg_expect_header_value="text/html"
+--let $mrs_client_arg_dispaly=request,status
+--source ../include/mrs/mrs_client.inc
+
+
+--echo
+--echo #
+--echo # I.3
+--let $mrs_client_arg_path='/a/authentication/login'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expected_status=TemporaryRedirect
+--let $mrs_client_arg_expect_header=Location
+--let $mrs_client_arg_expect_header_value="/a/authentication/completed?login=fail"
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/b/authentication/login'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expected_status=Unauthorized
+--let $mrs_client_arg_expect_header=WWW-Authenticate
+--let $mrs_client_arg_expect_header_value="basic"
+--source ../include/mrs/mrs_client.inc
+
+
+--let $mrs_client_arg_path='/c/authentication/login'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expected_status=TemporaryRedirect
+--let $mrs_client_arg_expect_header=Location
+--let $mrs_client_arg_expect_header_value="/c/authentication/completed?login=fail"
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/c/authentication/login?app=one-of-two'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expected_status=Unauthorized
+--let $mrs_client_arg_expect_header=WWW-Authenticate
+--let $mrs_client_arg_expect_header_value="basic"
+--source ../include/mrs/mrs_client.inc
+
+
+--let $mrs_client_arg_path='/d/authentication/login'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expected_status=TemporaryRedirect
+--let $mrs_client_arg_expect_header=Location
+--let $mrs_client_arg_expect_header_value="/d/authentication/completed?login=fail"
+--source ../include/mrs/mrs_client.inc
+
+
+--let $mrs_client_arg_path='/e/authentication/login'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expected_status=Unauthorized
+--let $mrs_client_arg_expect_header=WWW-Authenticate
+--let $mrs_client_arg_expect_header_value="basic"
+--source ../include/mrs/mrs_client.inc
+
+
+--let $mrs_client_arg_path='/f/authentication/login'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expected_status=TemporaryRedirect
+--let $mrs_client_arg_expect_header=Location
+--let $mrs_client_arg_expect_header_value="/f/authentication/completed?login=fail"
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/f/authentication/login?app=one-of-two'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expected_status=Unauthorized
+--let $mrs_client_arg_expect_header=WWW-Authenticate
+--let $mrs_client_arg_expect_header_value="basic"
+--source ../include/mrs/mrs_client.inc
+
+
+--let $mrs_client_arg_path='/g/authentication/login'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expected_status=TemporaryRedirect
+--let $mrs_client_arg_expect_header=Location
+--let $mrs_client_arg_expect_header_value="/g/authentication/completed?login=fail"
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/h/authentication/login'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expected_status=Unauthorized
+--let $mrs_client_arg_expect_header=WWW-Authenticate
+--let $mrs_client_arg_expect_header_value="basic"
+--source ../include/mrs/mrs_client.inc
+
+
+--let $mrs_client_arg_path='/i/authentication/login'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expected_status=TemporaryRedirect
+--let $mrs_client_arg_expect_header=Location
+--let $mrs_client_arg_expect_header_value="/i/authentication/completed?login=fail"
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/i/authentication/login?app=one-of-two'
+--let $mrs_client_arg_response_type=raw
+--let $mrs_client_arg_expected_status=Unauthorized
+--let $mrs_client_arg_expect_header=WWW-Authenticate
+--let $mrs_client_arg_expect_header_value="basic"
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # I.4
+# TODO: The response body points that the logout was successful,
+#       but no valid session was providen to it.
+--let $mrs_client_arg_path='/a/authentication/logout'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/b/authentication/logout'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/c/authentication/logout'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/d/authentication/logout'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/e/authentication/logout'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/f/authentication/logout'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/g/authentication/logout'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/h/authentication/logout'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/i/authentication/logout'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # I.5
+--let $mrs_client_arg_path='/a/authentication/user'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/b/authentication/user'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/c/authentication/user'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/d/authentication/user'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/e/authentication/user'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/f/authentication/user'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/g/authentication/user'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/h/authentication/user'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/i/authentication/user'
+--let $mrs_client_arg_expected_status=Unauthorized
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # I.6
+--let $mrs_client_arg_path='/a/authentication/status'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/b/authentication/status'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/c/authentication/status'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/d/authentication/status'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/e/authentication/status'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/f/authentication/status'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/g/authentication/status'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/h/authentication/status'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/i/authentication/status'
+--source ../include/mrs/mrs_client.inc
+
+
+# Cleanup
+--source ../include/mrs/cleanup.inc

@@ -22,7 +22,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "mrs/rest/handler_unauthorize.h"
+#include "mrs/endpoint/handler/authentication/handler_authorize_logout.h"
 
 #include <cassert>
 
@@ -32,9 +32,10 @@
 #include "mrs/rest/request_context.h"
 
 namespace mrs {
-namespace rest {
+namespace endpoint {
+namespace handler {
 
-using HttpResult = HandlerUnauthorize::HttpResult;
+using HttpResult = HandlerAuthorizeLogout::HttpResult;
 
 std::string impl_get_json_response_ok() {
   helper::json::SerializerToText stt;
@@ -53,7 +54,7 @@ std::string get_json_response_ok() {
   return result;
 }
 
-HandlerUnauthorize::HandlerUnauthorize(
+HandlerAuthorizeLogout::HandlerAuthorizeLogout(
     const std::string &url_host, const UniversalId service_id,
     const std::string &rest_path_matcher, const std::string &options,
     interface::AuthorizeManager *auth_manager)
@@ -61,55 +62,60 @@ HandlerUnauthorize::HandlerUnauthorize(
       service_id_{service_id},
       auth_manager_{auth_manager} {}
 
-Handler::Authorization HandlerUnauthorize::requires_authentication() const {
+mrs::rest::Handler::Authorization
+HandlerAuthorizeLogout::requires_authentication() const {
   return Authorization::kCheck;
 }
 
-UniversalId HandlerUnauthorize::get_service_id() const { return service_id_; }
+UniversalId HandlerAuthorizeLogout::get_service_id() const {
+  return service_id_;
+}
 
-UniversalId HandlerUnauthorize::get_db_object_id() const {
+UniversalId HandlerAuthorizeLogout::get_db_object_id() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
   return {};
 }
 
-UniversalId HandlerUnauthorize::get_schema_id() const {
+UniversalId HandlerAuthorizeLogout::get_schema_id() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
   return {};
 }
 
-uint32_t HandlerUnauthorize::get_access_rights() const {
+uint32_t HandlerAuthorizeLogout::get_access_rights() const {
   using Op = mrs::database::entry::Operation::Values;
   return Op::valueRead;
 }
 
-HttpResult HandlerUnauthorize::handle_get(RequestContext *ctxt) {
+HttpResult HandlerAuthorizeLogout::handle_get(RequestContext *ctxt) {
   auth_manager_->unauthorize(service_id_, &ctxt->cookies);
   return {HttpStatusCode::Unauthorized, get_json_response_ok(),
           HttpResult::Type::typeJson};
 }
 
-HttpResult HandlerUnauthorize::handle_post(RequestContext *,
-                                           const std::vector<uint8_t> &) {
+HttpResult HandlerAuthorizeLogout::handle_post(RequestContext *,
+                                               const std::vector<uint8_t> &) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerUnauthorize::handle_delete(RequestContext *) {
+HttpResult HandlerAuthorizeLogout::handle_delete(RequestContext *) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerUnauthorize::handle_put(RequestContext *) {
+HttpResult HandlerAuthorizeLogout::handle_put(RequestContext *) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-bool HandlerUnauthorize::request_begin(RequestContext *) { return true; }
+bool HandlerAuthorizeLogout::request_begin(RequestContext *) { return true; }
 
-void HandlerUnauthorize::request_end(RequestContext *) {}
+void HandlerAuthorizeLogout::request_end(RequestContext *) {}
 
-bool HandlerUnauthorize::request_error(RequestContext *, const http::Error &) {
+bool HandlerAuthorizeLogout::request_error(RequestContext *,
+                                           const http::Error &) {
   return false;
 }
 
-bool HandlerUnauthorize::may_check_access() const { return false; }
+bool HandlerAuthorizeLogout::may_check_access() const { return false; }
 
-}  // namespace rest
+}  // namespace handler
+}  // namespace endpoint
 }  // namespace mrs

@@ -61,6 +61,18 @@ class HandlerFactory {
       EndpointBasePtr db_service_endpoint) = 0;
   virtual std::unique_ptr<Handler> create_content_file(
       EndpointBasePtr db_object_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_authentication_login(
+      EndpointBasePtr db_service_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_authentication_logout(
+      EndpointBasePtr db_service_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_authentication_completed(
+      EndpointBasePtr db_service_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_authentication_user(
+      EndpointBasePtr db_service_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_authentication_auth_apps(
+      EndpointBasePtr db_service_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_authentication_status(
+      EndpointBasePtr db_service_endpoint) = 0;
 
   virtual std::unique_ptr<Handler> create_string_handler(
       const UniversalId &service_id, bool requires_authentication,

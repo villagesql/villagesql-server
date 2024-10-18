@@ -60,6 +60,19 @@ class MockHandlerFactory : public mrs::interface::HandlerFactory {
                const std::string &file_name,
                const std::string &redirection_path, const bool pernament),
               (override));
+
+  MOCK_METHOD(std::unique_ptr<Handler>, create_authentication_login,
+              (EndpointBasePtr db_service_endpoint), (override));
+  MOCK_METHOD(std::unique_ptr<Handler>, create_authentication_logout,
+              (EndpointBasePtr db_service_endpoint), (override));
+  MOCK_METHOD(std::unique_ptr<Handler>, create_authentication_completed,
+              (EndpointBasePtr db_service_endpoint), (override));
+  MOCK_METHOD(std::unique_ptr<Handler>, create_authentication_user,
+              (EndpointBasePtr db_service_endpoint), (override));
+  MOCK_METHOD(std::unique_ptr<Handler>, create_authentication_auth_apps,
+              (EndpointBasePtr db_service_endpoint), (override));
+  MOCK_METHOD(std::unique_ptr<Handler>, create_authentication_status,
+              (EndpointBasePtr db_service_endpoint), (override));
 };
 
 #endif /* ROUTER_SRC_MYSQL_REST_SERVICE_TESTS_MOCK_MOCK_HANDLER_FACTORY_H_ */

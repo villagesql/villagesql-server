@@ -22,7 +22,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "mrs/rest/handler_is_authorized.h"
+#include "mrs/endpoint/handler/authentication/handler_authorize_status.h"
 
 #include <cassert>
 
@@ -37,39 +37,43 @@
 IMPORT_LOG_FUNCTIONS()
 
 namespace mrs {
-namespace rest {
+namespace endpoint {
+namespace handler {
 
-using HttpResult = HandlerIsAuthorized::HttpResult;
+using HttpResult = HandlerAuthorizeStatus::HttpResult;
 
-HandlerIsAuthorized::HandlerIsAuthorized(
+HandlerAuthorizeStatus::HandlerAuthorizeStatus(
     const std::string &url_host, const UniversalId service_id,
     const std::string &rest_path_matcher, const std::string &options,
     interface::AuthorizeManager *auth_manager)
     : Handler(url_host, {rest_path_matcher}, options, auth_manager),
       service_id_{service_id} {}
 
-Handler::Authorization HandlerIsAuthorized::requires_authentication() const {
+mrs::rest::Handler::Authorization
+HandlerAuthorizeStatus::requires_authentication() const {
   return Authorization::kCheck;
 }
 
-UniversalId HandlerIsAuthorized::get_service_id() const { return service_id_; }
+UniversalId HandlerAuthorizeStatus::get_service_id() const {
+  return service_id_;
+}
 
-UniversalId HandlerIsAuthorized::get_db_object_id() const {
+UniversalId HandlerAuthorizeStatus::get_db_object_id() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
   return {};
 }
 
-UniversalId HandlerIsAuthorized::get_schema_id() const {
+UniversalId HandlerAuthorizeStatus::get_schema_id() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
   return {};
 }
 
-uint32_t HandlerIsAuthorized::get_access_rights() const {
+uint32_t HandlerAuthorizeStatus::get_access_rights() const {
   using Op = mrs::database::entry::Operation::Values;
   return Op::valueRead;
 }
 
-void HandlerIsAuthorized::fill_the_user_data(
+void HandlerAuthorizeStatus::fill_the_user_data(
     Object &ojson, const AuthUser &user, const std::vector<AuthRole> &roles) {
   ojson->member_add_value("name", user.name);
   ojson->member_add_value("id", user.user_id.to_string());
@@ -83,7 +87,7 @@ void HandlerIsAuthorized::fill_the_user_data(
   }
 }
 
-void HandlerIsAuthorized::fill_authorization(
+void HandlerAuthorizeStatus::fill_authorization(
     Object &ojson, const AuthUser &user, const std::vector<AuthRole> &roles) {
   ojson->member_add_value("status",
                           user.has_user_id ? "authorized" : "unauthorized");
@@ -94,8 +98,8 @@ void HandlerIsAuthorized::fill_authorization(
   }
 }
 
-HttpResult HandlerIsAuthorized::handle_get(RequestContext *ctxt) {
-  log_debug("HandlerIsAuthorized::handle_get");
+HttpResult HandlerAuthorizeStatus::handle_get(RequestContext *ctxt) {
+  log_debug("HandlerAuthorizeStatus::handle_get");
   helper::json::SerializerToText serializer;
   {
     database::QueryEntriesAuthRole roles;
@@ -111,28 +115,30 @@ HttpResult HandlerIsAuthorized::handle_get(RequestContext *ctxt) {
   return HttpResult(serializer.get_result(), helper::typeJson);
 }
 
-HttpResult HandlerIsAuthorized::handle_post(RequestContext *,
-                                            const std::vector<uint8_t> &) {
+HttpResult HandlerAuthorizeStatus::handle_post(RequestContext *,
+                                               const std::vector<uint8_t> &) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerIsAuthorized::handle_delete(RequestContext *) {
+HttpResult HandlerAuthorizeStatus::handle_delete(RequestContext *) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerIsAuthorized::handle_put(RequestContext *) {
+HttpResult HandlerAuthorizeStatus::handle_put(RequestContext *) {
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-bool HandlerIsAuthorized::request_begin(RequestContext *) { return true; }
+bool HandlerAuthorizeStatus::request_begin(RequestContext *) { return true; }
 
-void HandlerIsAuthorized::request_end(RequestContext *) {}
+void HandlerAuthorizeStatus::request_end(RequestContext *) {}
 
-bool HandlerIsAuthorized::request_error(RequestContext *, const http::Error &) {
+bool HandlerAuthorizeStatus::request_error(RequestContext *,
+                                           const http::Error &) {
   return false;
 }
 
-bool HandlerIsAuthorized::may_check_access() const { return false; }
+bool HandlerAuthorizeStatus::may_check_access() const { return false; }
 
-}  // namespace rest
+}  // namespace handler
+}  // namespace endpoint
 }  // namespace mrs

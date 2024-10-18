@@ -35,8 +35,6 @@ class AuthorizeHandlerCallbakcs {
  public:
   virtual ~AuthorizeHandlerCallbakcs() = default;
 
-  virtual void acquire(mrs::interface::AuthorizeHandler *) = 0;
-  virtual void destroy(mrs::interface::AuthorizeHandler *) = 0;
   virtual void pre_authorize_account(mrs::interface::AuthorizeHandler *handler,
                                      const std::string &account) = 0;
 };

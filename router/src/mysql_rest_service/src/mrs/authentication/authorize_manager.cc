@@ -40,12 +40,6 @@
 #include "mrs/authentication/track_authorize_handler.h"
 #include "mrs/authentication/www_authentication_handler.h"
 #include "mrs/http/error.h"
-#include "mrs/rest/handler_authorize.h"
-#include "mrs/rest/handler_authorize_apps.h"
-#include "mrs/rest/handler_authorize_ok.h"
-#include "mrs/rest/handler_is_authorized.h"
-#include "mrs/rest/handler_unauthorize.h"
-#include "mrs/rest/handler_user.h"
 #include "mrs/rest/request_context.h"
 
 #include "helper/container/generic.h"
@@ -327,72 +321,6 @@ AuthorizeHandlerPtr AuthorizeManager::make_auth(const AuthApp &entry) {
       "unsupported vendor-id '%s'",
       entry.app_name.c_str(), entry.vendor_id.to_string().c_str());
   return {};
-}
-
-void AuthorizeManager::fill_service(const AuthApp &e, ServiceAuthorize &sa) {
-  std::string auth_path =
-      !e.auth_path.empty() ? e.auth_path : "/authentication";
-  std::string path1 = "^" + e.service_name + auth_path + "/login$";
-  std::string path2 = "^" + e.service_name + auth_path + "/status$";
-  std::string path3 = "^" + e.service_name + auth_path + "/logout$";
-  std::string path4 = "^" + e.service_name + auth_path + "/completed";
-  std::string path5 = "^" + e.service_name + auth_path + "/user";
-  std::string path6 = "^" + e.service_name + auth_path + "/authApps$";
-  std::string redirect = e.auth_completed_url;
-
-  if (redirect.empty()) {
-    redirect = e.service_name + auth_path + "/completed";
-  }
-
-  auto login_handler = std::make_shared<mrs::rest::HandlerAuthorize>(
-      e.url_host, e.service_id, path1, e.options, redirect, this);
-  auto status_handler = std::make_shared<mrs::rest::HandlerIsAuthorized>(
-      e.url_host, e.service_id, path2, e.options, this);
-  auto unauth_handler = std::make_shared<mrs::rest::HandlerUnauthorize>(
-      e.url_host, e.service_id, path3, e.options, this);
-  auto auth_ok_handler = std::make_shared<mrs::rest::HandlerAuthorizeOk>(
-      e.url_host, e.service_id, path4, e.options, e.redirection_default_page,
-      this);
-  auto user_handler = std::make_shared<mrs::rest::HandlerUser>(
-      e.url_host, e.service_id, path5, e.options, this);
-  auto list_handler = std::make_shared<mrs::rest::HandlerAuthorizeApps>(
-      e.url_host, e.service_id, path6, e.options, redirect, this);
-
-  sa.authorize_handler_ = login_handler;
-  sa.status_handler_ = status_handler;
-  sa.unauthorize_handler_ = unauth_handler;
-  sa.authorization_result_handler_ = auth_ok_handler;
-  sa.user_handler_ = user_handler;
-  sa.list_handler_ = list_handler;
-}
-
-void AuthorizeManager::acquire(interface::AuthorizeHandler *handler) {
-  ServiceAuthorizePtr out_service_authorization;
-  auto lock = std::unique_lock(service_authorize_mutext_);
-
-  if (!helper::container::get_value(service_authorize_,
-                                    handler->get_service_id(),
-                                    &out_service_authorization)) {
-    helper::MakeSharedPtr<ServiceAuthorize> service_authorization;
-
-    fill_service(handler->get_entry(), *service_authorization);
-
-    service_authorize_[handler->get_service_id()] =
-        service_authorization.copy_base();
-    return;
-  } else {
-    fill_service(handler->get_entry(), *out_service_authorization);
-  }
-  ++out_service_authorization->references_;
-}
-
-void AuthorizeManager::destroy(interface::AuthorizeHandler *handler) {
-  auto lock = std::unique_lock(service_authorize_mutext_);
-  auto &el = service_authorize_[handler->get_service_id()];
-
-  if (0 == --el->references_) {
-    service_authorize_.erase(handler->get_service_id());
-  }
 }
 
 void AuthorizeManager::pre_authorize_account(

@@ -24,6 +24,13 @@
 
 #include "mrs/endpoint/handler_factory.h"
 
+#include "mrs/endpoint/db_service_endpoint.h"
+#include "mrs/endpoint/handler/authentication/handler_authorize_auth_apps.h"
+#include "mrs/endpoint/handler/authentication/handler_authorize_completed.h"
+#include "mrs/endpoint/handler/authentication/handler_authorize_login.h"
+#include "mrs/endpoint/handler/authentication/handler_authorize_logout.h"
+#include "mrs/endpoint/handler/authentication/handler_authorize_status.h"
+#include "mrs/endpoint/handler/authentication/handler_authorize_user.h"
 #include "mrs/endpoint/handler/handler_content_file.h"
 #include "mrs/endpoint/handler/handler_db_object_function.h"
 #include "mrs/endpoint/handler/handler_db_object_metadata.h"
@@ -36,6 +43,7 @@
 #include "mrs/endpoint/handler/handler_redirection.h"
 #include "mrs/endpoint/handler/handler_string.h"
 #include "mrs/endpoint/handler/utilities.h"
+#include "mrs/endpoint/url_host_endpoint.h"
 
 namespace mrs {
 namespace endpoint {
@@ -43,6 +51,23 @@ namespace endpoint {
 using namespace mrs::endpoint::handler;
 
 using HandlerPtr = std::unique_ptr<HandlerFactory::Handler>;
+
+static std::string get_regex_path_authnetication(
+    const std::shared_ptr<mrs::database::entry::DbService> &service) {
+  std::string auth_path = service->auth_path.has_value()
+                              ? service->auth_path.value()
+                              : "/authentication";
+  return std::string("^") + service->url_context_root + auth_path;
+}
+
+static std::string get_path_redirect(
+    const std::shared_ptr<mrs::database::entry::DbService> &service) {
+  std::string auth_path = service->auth_path.has_value()
+                              ? service->auth_path.value()
+                              : "/authentication";
+
+  return service->url_context_root + auth_path + "/completed";
+}
 
 HandlerFactory::HandlerFactory(AuthorizeManager *auth_manager,
                                GtidManager *gtid_manager,
@@ -164,6 +189,154 @@ HandlerPtr HandlerFactory::create_redirection_handler(
   return std::make_unique<HandlerRedirection>(
       service_id, requires_authentication, get_endpoint_host(url), whole_path,
       file_name, redirection_path, auth_manager_, pernament);
+}
+
+HandlerPtr HandlerFactory::create_authentication_login(
+    EndpointBasePtr endpoint) {
+  auto db_service_endpoint =
+      std::dynamic_pointer_cast<DbServiceEndpoint>(endpoint);
+  assert(db_service_endpoint && "Object must be castable.");
+  if (!db_service_endpoint)  // in case when we add new object type at level of
+    return {};               // db-service.
+
+  auto url_host_endpoint = std::dynamic_pointer_cast<UrlHostEndpoint>(
+      db_service_endpoint->get_parent_ptr());
+  assert(url_host_endpoint && "UrlHost must be castable.");
+  if (!url_host_endpoint)  // in case when we add new object type at level of
+    return {};             // root object (url-host)
+
+  auto entry = db_service_endpoint->get();
+  auto url_host_entry = url_host_endpoint->get();
+
+  auto regex_path = get_regex_path_authnetication(entry) + "/login$$";
+  auto redirect_path = get_path_redirect(entry);
+
+  return std::make_unique<HandlerAuthorizeLogin>(
+      url_host_entry->name, entry->id, regex_path,
+      entry->options.value_or(std::string{}), redirect_path, auth_manager_);
+}
+
+HandlerPtr HandlerFactory::create_authentication_logout(
+    EndpointBasePtr endpoint) {
+  auto db_service_endpoint =
+      std::dynamic_pointer_cast<DbServiceEndpoint>(endpoint);
+  assert(db_service_endpoint && "Object must be castable.");
+  if (!db_service_endpoint)  // in case when we add new object type at level of
+    return {};               // db-service.
+
+  auto url_host_endpoint = std::dynamic_pointer_cast<UrlHostEndpoint>(
+      db_service_endpoint->get_parent_ptr());
+  assert(url_host_endpoint && "UrlHost must be castable.");
+  if (!url_host_endpoint)  // in case when we add new object type at level of
+    return {};             // root object (url-host)
+
+  auto entry = db_service_endpoint->get();
+  auto url_host_entry = url_host_endpoint->get();
+
+  auto regex_path = get_regex_path_authnetication(entry) + "/logout$";
+
+  return std::make_unique<HandlerAuthorizeLogout>(
+      url_host_entry->name, entry->id, regex_path,
+      entry->options.value_or(std::string{}), auth_manager_);
+}
+
+HandlerPtr HandlerFactory::create_authentication_completed(
+    EndpointBasePtr endpoint) {
+  auto db_service_endpoint =
+      std::dynamic_pointer_cast<DbServiceEndpoint>(endpoint);
+  assert(db_service_endpoint && "Object must be castable.");
+  if (!db_service_endpoint)  // in case when we add new object type at level of
+    return {};               // db-service.
+
+  auto url_host_endpoint = std::dynamic_pointer_cast<UrlHostEndpoint>(
+      db_service_endpoint->get_parent_ptr());
+  assert(url_host_endpoint && "UrlHost must be castable.");
+  if (!url_host_endpoint)  // in case when we add new object type at level of
+    return {};             // root object (url-host)
+
+  auto entry = db_service_endpoint->get();
+  auto url_host_entry = url_host_endpoint->get();
+
+  auto regex_path = get_regex_path_authnetication(entry) + "/completed";
+
+  return std::make_unique<HandlerAuthorizeCompleted>(
+      url_host_entry->name, entry->id, regex_path,
+      entry->options.value_or(std::string{}),
+      entry->auth_completed_page_content.value_or(std::string{}),
+      auth_manager_);
+}
+
+HandlerPtr HandlerFactory::create_authentication_user(
+    EndpointBasePtr endpoint) {
+  auto db_service_endpoint =
+      std::dynamic_pointer_cast<DbServiceEndpoint>(endpoint);
+  assert(db_service_endpoint && "Object must be castable.");
+  if (!db_service_endpoint)  // in case when we add new object type at level of
+    return {};               // db-service.
+
+  auto url_host_endpoint = std::dynamic_pointer_cast<UrlHostEndpoint>(
+      db_service_endpoint->get_parent_ptr());
+  assert(url_host_endpoint && "UrlHost must be castable.");
+  if (!url_host_endpoint)  // in case when we add new object type at level of
+    return {};             // root object (url-host)
+
+  auto entry = db_service_endpoint->get();
+  auto url_host_entry = url_host_endpoint->get();
+
+  auto regex_path = get_regex_path_authnetication(entry) + "/user";
+
+  return std::make_unique<HandlerAuthorizeUser>(
+      url_host_entry->name, entry->id, regex_path,
+      entry->options.value_or(std::string{}), auth_manager_);
+}
+
+HandlerPtr HandlerFactory::create_authentication_auth_apps(
+    EndpointBasePtr endpoint) {
+  auto db_service_endpoint =
+      std::dynamic_pointer_cast<DbServiceEndpoint>(endpoint);
+  assert(db_service_endpoint && "Object must be castable.");
+  if (!db_service_endpoint)  // in case when we add new object type at level of
+    return {};               // db-service.
+
+  auto url_host_endpoint = std::dynamic_pointer_cast<UrlHostEndpoint>(
+      db_service_endpoint->get_parent_ptr());
+  assert(url_host_endpoint && "UrlHost must be castable.");
+  if (!url_host_endpoint)  // in case when we add new object type at level of
+    return {};             // root object (url-host)
+
+  auto entry = db_service_endpoint->get();
+  auto url_host_entry = url_host_endpoint->get();
+
+  auto regex_path = get_regex_path_authnetication(entry) + "/authApps$";
+  auto redirect_path = get_path_redirect(entry);
+
+  return std::make_unique<HandlerAuthorizeAuthApps>(
+      url_host_entry->name, entry->id, regex_path,
+      entry->options.value_or(std::string{}), redirect_path, auth_manager_);
+}
+
+HandlerPtr HandlerFactory::create_authentication_status(
+    EndpointBasePtr endpoint) {
+  auto db_service_endpoint =
+      std::dynamic_pointer_cast<DbServiceEndpoint>(endpoint);
+  assert(db_service_endpoint && "Object must be castable.");
+  if (!db_service_endpoint)  // in case when we add new object type at level of
+    return {};               // db-service.
+
+  auto url_host_endpoint = std::dynamic_pointer_cast<UrlHostEndpoint>(
+      db_service_endpoint->get_parent_ptr());
+  assert(url_host_endpoint && "UrlHost must be castable.");
+  if (!url_host_endpoint)  // in case when we add new object type at level of
+    return {};             // root object (url-host)
+
+  auto entry = db_service_endpoint->get();
+  auto url_host_entry = url_host_endpoint->get();
+
+  auto regex_path = get_regex_path_authnetication(entry) + "/status$";
+
+  return std::make_unique<HandlerAuthorizeStatus>(
+      url_host_entry->name, entry->id, regex_path,
+      entry->options.value_or(std::string{}), auth_manager_);
 }
 
 }  // namespace endpoint
