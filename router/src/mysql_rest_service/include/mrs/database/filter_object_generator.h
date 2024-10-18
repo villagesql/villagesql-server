@@ -55,7 +55,7 @@ class FilterObjectGenerator {
   void parse(const std::string &filter_query);
   mysqlrouter::sqlstring get_result() const;
   mysqlrouter::sqlstring get_asof() const;
-  bool has_where() const;
+  bool has_where(bool filter_only = true) const;
   bool has_order() const;
   bool has_asof() const;
 

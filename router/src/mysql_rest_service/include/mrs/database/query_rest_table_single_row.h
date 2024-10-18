@@ -56,6 +56,7 @@ class QueryRestTableSingleRow : public QueryRestTable {
                            const dv::ObjectFieldFilter &field_filter,
                            const std::string &url_route,
                            const ObjectRowOwnership &row_ownership,
+                           const FilterObjectGenerator &fog = {},
                            const bool compute_etag = false,
                            const std::string &metadata_gtid = {},
                            const bool fetch_any_owner = false);
@@ -71,7 +72,8 @@ class QueryRestTableSingleRow : public QueryRestTable {
   void build_query(const dv::ObjectFieldFilter &field_filter,
                    const std::string &url_route,
                    const ObjectRowOwnership &row_ownership,
-                   const PrimaryKeyColumnValues &pk, bool fetch_any_owner);
+                   const PrimaryKeyColumnValues &pk, bool fetch_any_owner,
+                   const FilterObjectGenerator &fog);
 };
 
 }  // namespace database

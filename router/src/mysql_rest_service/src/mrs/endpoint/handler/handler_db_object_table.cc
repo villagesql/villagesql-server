@@ -328,6 +328,10 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
     throw http::Error(HttpStatusCode::BadRequest);
   }
 
+  database::FilterObjectGenerator fog(object, true, get_options().query.wait,
+                                      get_options().query.embed_wait);
+  fog.parse(uri_param.get_query_parameter("q"));
+
   if (pk.empty()) {
     uint64_t offset = 0;
     uint64_t limit = get_items_on_page();
@@ -335,13 +339,8 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
 
     if (raw_value.empty()) {
       static const std::string empty;
-      database::FilterObjectGenerator fog(object, true,
-                                          get_options().query.wait,
-                                          get_options().query.embed_wait);
       database::QueryRestTable rest{opt_encode_bigints_as_string,
                                     opt_sp_include_links};
-
-      fog.parse(uri_param.get_query_parameter("q"));
 
       monitored::QueryRetryOnRO query_retry{cache_,
                                             session,
@@ -384,13 +383,30 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
 
     return {std::move(rest.response), detected_type};
   } else {
+    if (fog.has_where() || fog.has_order()) {
+      throw http::Error(HttpStatusCode::BadRequest,
+                        "Invalid filter object for GET request by id");
+    }
+
     if (raw_value.empty()) {
       database::QueryRestTableSingleRow rest(
           nullptr, opt_encode_bigints_as_string, opt_sp_include_links);
       log_debug("Rest select single row %s",
                 database::dv::format_key(*object, pk).str().c_str());
-      rest.query_entry(session.get(), object, pk, field_filter,
-                       endpoint->get_url().join(), row_ownership, true);
+
+      monitored::QueryRetryOnRO query_retry{cache_,
+                                            session,
+                                            gtid_manager_,
+                                            fog,
+                                            get_options().query.wait,
+                                            get_options().query.embed_wait};
+
+      do {
+        query_retry.before_query();
+        rest.query_entry(session.get(), object, pk, field_filter,
+                         endpoint->get_url().join(), row_ownership,
+                         query_retry.get_fog(), true);
+      } while (query_retry.should_retry(rest.items));
 
       if (rest.response.empty()) throw http::Error(HttpStatusCode::NotFound);
       Counter<kEntityCounterRestReturnedItems>::increment(rest.items);
@@ -468,7 +484,7 @@ HttpResult HandlerDbObjectTable::handle_post(
     fetch_one.query_entry(session.get(), object, pk,
                           database::dv::ObjectFieldFilter::from_object(*object),
                           endpoint->get_url().join(),
-                          row_ownership_info(ctxt, object), true,
+                          row_ownership_info(ctxt, object), {}, true,
                           response_gtid);
     Counter<kEntityCounterRestReturnedItems>::increment(fetch_one.items);
 
@@ -619,7 +635,8 @@ HttpResult HandlerDbObjectTable::handle_put(rest::RequestContext *ctxt) {
   fetch_one.query_entry(session.get(), object, pk,
                         database::dv::ObjectFieldFilter::from_object(*object),
                         endpoint->get_url().join(),
-                        row_ownership_info(ctxt, object), true, response_gtid);
+                        row_ownership_info(ctxt, object), {}, true,
+                        response_gtid);
 
   Counter<kEntityCounterRestReturnedItems>::increment(fetch_one.items);
   return std::move(fetch_one.response);

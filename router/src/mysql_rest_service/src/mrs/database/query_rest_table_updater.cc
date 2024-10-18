@@ -315,7 +315,7 @@ std::string DualityViewUpdater::select_one(
     bool &is_owned, RowLockType lock_rows) const {
   QueryRestTableSingleRow q(nullptr, false, false, lock_rows);
 
-  q.query_entry(session, view_, pk_values, {}, "url", m_row_ownership_info,
+  q.query_entry(session, view_, pk_values, {}, "url", m_row_ownership_info, {},
                 false, {}, true);
   if (q.response.empty()) return {};
 

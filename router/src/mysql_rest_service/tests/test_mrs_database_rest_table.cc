@@ -613,7 +613,7 @@ std::string DatabaseRestTableTest::select_one(
   mrs::database::QueryRestTableSingleRow rest{nullptr, false,
                                               select_include_links_};
 
-  rest.query_entry(m_.get(), view, pk, field_filter, "localhost", row_owner,
+  rest.query_entry(m_.get(), view, pk, field_filter, "localhost", row_owner, {},
                    compute_etag);
 
   return rest.response;

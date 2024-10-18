@@ -42,8 +42,10 @@ void QueryRestTableSingleRow::query_entry(
     MySQLSession *session, std::shared_ptr<database::entry::Object> object,
     const PrimaryKeyColumnValues &pk, const dv::ObjectFieldFilter &field_filter,
     const std::string &url_route, const ObjectRowOwnership &row_ownership,
-    const bool compute_etag, const std::string &metadata_gtid,
-    const bool fetch_any_owner) {
+    const FilterObjectGenerator &fog, const bool compute_etag,
+    const std::string &metadata_gtid, const bool fetch_any_owner) {
+  assert(!fog.has_where() && !fog.has_order());
+
   PrimaryKeyColumnValues complete_pk(pk);
 
   dv::validate_primary_key_values(
@@ -59,7 +61,7 @@ void QueryRestTableSingleRow::query_entry(
   field_filter_ = &field_filter;
 
   build_query(field_filter, url_route, row_ownership, complete_pk,
-              fetch_any_owner);
+              fetch_any_owner, fog);
 
   execute(session);
 }
@@ -85,11 +87,12 @@ void QueryRestTableSingleRow::on_row(const ResultRow &r) {
 void QueryRestTableSingleRow::build_query(
     const ObjectFieldFilter &field_filter, const std::string &url_route,
     const ObjectRowOwnership &row_ownership, const PrimaryKeyColumnValues &pk,
-    bool fetch_any_owner) {
+    bool fetch_any_owner, const FilterObjectGenerator &fog) {
   assert(!pk.empty());
 
   auto where =
       build_where(fetch_any_owner ? ObjectRowOwnership() : row_ownership);
+  extend_where(where, fog);
 
   dv::JsonQueryBuilder qb(field_filter, row_ownership,
                           lock_rows_ == RowLockType::FOR_UPDATE,

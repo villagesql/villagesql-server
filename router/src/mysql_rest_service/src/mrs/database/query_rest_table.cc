@@ -361,13 +361,14 @@ const sqlstring &QueryRestTable::build_where(
   return where_;
 }
 
-void extend_where(sqlstring &where, const FilterObjectGenerator &fog) {
+void QueryRestTable::extend_where(sqlstring &where,
+                                  const FilterObjectGenerator &fog) {
   using namespace std::literals::string_literals;
 
   const auto &result = fog.get_result();
   if (result.is_empty()) return;
 
-  if (fog.has_where()) {
+  if (fog.has_where(false)) {
     bool is_empty = where.is_empty();
 
     sqlstring r{"? ? ?"};

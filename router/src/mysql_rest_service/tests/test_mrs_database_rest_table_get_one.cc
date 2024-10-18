@@ -62,7 +62,7 @@ TEST_F(DatabaseQueryGetOne, plain) {
                   .resolve(m_.get());
 
   rest->query_entry(m_.get(), root, parse_pk(R"*({"actor_id":3})*"), {}, "url",
-                    {}, true);
+                    {}, {}, true);
   EXPECT_EQ(
       R"*({
     "links": [
@@ -133,7 +133,7 @@ TEST_F(DatabaseQueryGetOne, nesting) {
     reset();
 
     rest->query_entry(m_.get(), root, parse_pk(R"*({"actor_id": 3})*"), filter,
-                      "url2", {}, true, {});
+                      "url2", {}, {}, true);
     EXPECT_EQ(pprint_json(R"*({
   "films": [
     {
@@ -223,7 +223,7 @@ TEST_F(DatabaseQueryGetOne, exclude_field_filter) {
     reset();
 
     rest->query_entry(m_.get(), root, parse_pk(R"*({"actor_id": 3})*"), filter,
-                      "url2", {}, true, {});
+                      "url2", {}, {}, true);
     EXPECT_EQ(pprint_json(R"*({
   "films": [
     {
@@ -301,7 +301,7 @@ TEST_F(DatabaseQueryGetOne, include_field_filter) {
     reset();
 
     rest->query_entry(m_.get(), root, parse_pk(R"*({"actor_id": 3})*"), filter,
-                      "url2", {}, true);
+                      "url2", {}, {}, true);
     EXPECT_EQ(
         R"*({
     "films": [
@@ -340,7 +340,7 @@ TEST_F(DatabaseQueryGetOne, include_field_filter) {
     reset();
 
     rest->query_entry(m_.get(), root, parse_pk(R"*({"actor_id": 3})*"), filter,
-                      "url3", {}, true);
+                      "url3", {}, {}, true);
     EXPECT_EQ(
         R"*({
     "films": [
@@ -382,7 +382,7 @@ TEST_F(DatabaseQueryGetOne, include_field_filter) {
     reset();
 
     rest->query_entry(m_.get(), root, parse_pk(R"*({"actor_id": 3})*"), filter,
-                      "url4", {}, true);
+                      "url4", {}, {}, true);
     EXPECT_EQ(
         R"*({
     "films": [
@@ -412,7 +412,7 @@ TEST_F(DatabaseQueryGetOne, include_field_filter) {
     reset();
 
     rest->query_entry(m_.get(), root, parse_pk(R"*({"actor_id": 3})*"), filter,
-                      "url5", {}, true);
+                      "url5", {}, {}, true);
     EXPECT_EQ(
         R"*({
     "films": [
@@ -446,7 +446,7 @@ TEST_F(DatabaseQueryGetOne, include_field_filter) {
     reset();
 
     rest->query_entry(m_.get(), root, parse_pk(R"*({"actor_id": 3})*"), filter,
-                      "url6", {}, true);
+                      "url6", {}, {}, true);
     EXPECT_EQ(
         R"*({
     "films": [
@@ -478,7 +478,7 @@ TEST_F(DatabaseQueryGetOne, include_field_filter) {
     reset();
 
     rest->query_entry(m_.get(), root, parse_pk(R"*({"actor_id": 3})*"), filter,
-                      "url7", {}, true);
+                      "url7", {}, {}, true);
     EXPECT_EQ(
         R"*({
     "films": [

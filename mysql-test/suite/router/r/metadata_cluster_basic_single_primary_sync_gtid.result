@@ -315,6 +315,27 @@ OK
 }
 OK
 {
+    "id": 3000,
+    "date": "1920-12-01 00:00:00.000000",
+    "name": "PUT item",
+    "links": [
+        {
+            "rel": "self",
+            "href": "/svc/basic/t2/3000"
+        }
+    ],
+    "comments": "",
+    "_metadata": {
+        "etag": "F4EF85E41B3356230F70D5EAC209C9005C6855E0AF4A5ADB8DD2A352EEC677EA"
+    }
+}
+OK
+{
+    "message": "'Asof' requirement was not fulfilled, timeout occurred.",
+    "status": 400
+}
+OK
+{
     "message": "'Asof' requirement was not fulfilled, timeout occurred.",
     "status": 400
 }

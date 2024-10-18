@@ -276,7 +276,8 @@ void FilterObjectGenerator::reconfigure(uint64_t wait_timeout,
 
 mysqlrouter::sqlstring FilterObjectGenerator::get_result() const {
   mysqlrouter::sqlstring tmp;
-  tmp.append_preformatted(where_);
+  if (has_where()) tmp.append_preformatted(where_);
+
   if (has_asof() && use_wait_in_where_) {
     if (has_where()) tmp.append_preformatted(" AND ");
 
@@ -696,7 +697,12 @@ mysqlrouter::sqlstring FilterObjectGenerator::get_asof() const {
   return asof_gtid_;
 }
 
-bool FilterObjectGenerator::has_where() const { return !where_.is_empty(); }
+bool FilterObjectGenerator::has_where(bool filter_only) const {
+  if (!filter_only && has_asof() && use_wait_in_where_) {
+    return true;
+  }
+  return !where_.is_empty();
+}
 
 bool FilterObjectGenerator::has_order() const { return !order_.is_empty(); }
 

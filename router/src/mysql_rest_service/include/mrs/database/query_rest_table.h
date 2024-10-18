@@ -107,6 +107,9 @@ class QueryRestTable : protected QueryLog {
                    const uint64_t limit, const std::string &url,
                    const ObjectRowOwnership &row_ownership,
                    const FilterObjectGenerator &fog);
+
+  void extend_where(mysqlrouter::sqlstring &where,
+                    const FilterObjectGenerator &fog);
 };
 
 }  // namespace database

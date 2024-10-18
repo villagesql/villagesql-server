@@ -145,6 +145,26 @@ exec $MRS_CLIENT_ARGS --path /svc/$test_schema/$test_obj1/20
 --let $mrs_changes_inc="0"
 --source ../include/mrs/changes/wait_metadata_gtids.inc
 
+# GET by id
+
+--let $mrs_client_arg_dispaly='BODY,RESULT'
+--let $mrs_client_arg_path='/svc/$test_schema/$test_obj2/3000?q={"\\\$asof":$mrs_result}'
+--source ../include/mrs/mrs_client.inc
+
+ # Verify that using GET with valid gtid, incremented only RO counter
+--let $mrs_changes_inc="1"
+--source ../include/mrs/changes/wait_asof_ro_count.inc
+--let $mrs_changes_inc="0"
+--source ../include/mrs/changes/wait_asof_rw_count.inc
+--let $mrs_changes_inc="0"
+--source ../include/mrs/changes/wait_asof_switches_ro_to_rw_count.inc
+--let $mrs_changes_inc="0"
+--source ../include/mrs/changes/wait_asof_timeouts.inc
+--let $mrs_changes_inc="0"
+--source ../include/mrs/changes/wait_metadata_gtids.inc
+
+#
+
 --let $mrs_client_arg_path='/svc/$test_schema/$test_obj2?q={"id":3001,"\\\$asof":"3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"}'
 --let $mrs_client_arg_expected_status=400
 --let $mrs_client_arg_dispaly='BODY,RESULT'
@@ -161,6 +181,27 @@ exec $MRS_CLIENT_ARGS --path /svc/$test_schema/$test_obj1/20
 --source ../include/mrs/changes/wait_asof_timeouts.inc
 --let $mrs_changes_inc="0"
 --source ../include/mrs/changes/wait_metadata_gtids.inc
+
+# GET by id
+
+--let $mrs_client_arg_path='/svc/$test_schema/$test_obj2/3001?q={"\\\$asof":"3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5"}'
+--let $mrs_client_arg_expected_status=400
+--let $mrs_client_arg_dispaly='BODY,RESULT'
+--source ../include/mrs/mrs_client.inc
+
+ # Verify that using GET with invalid gtid, increments RO counter, RW counter and timeout
+--let $mrs_changes_inc="1"
+--source ../include/mrs/changes/wait_asof_ro_count.inc
+--let $mrs_changes_inc="1"
+--source ../include/mrs/changes/wait_asof_rw_count.inc
+--let $mrs_changes_inc="1"
+--source ../include/mrs/changes/wait_asof_switches_ro_to_rw_count.inc
+--let $mrs_changes_inc="1"
+--source ../include/mrs/changes/wait_asof_timeouts.inc
+--let $mrs_changes_inc="0"
+--source ../include/mrs/changes/wait_metadata_gtids.inc
+
+#
 
 --let $mrs_client_arg_path='/svc/$test_schema/$test_obj2?q={"id":3001,"\\\$asof":"3E11FA47-71CA-11E1-9E33-C80AA9429561:1-5"}'
 --let $mrs_client_arg_request_type='DELETE'
