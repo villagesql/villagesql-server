@@ -233,6 +233,18 @@ void MySQLSession::set_ssl_options(mysql_ssl_mode ssl_mode,
   }
 }
 
+uint64_t MySQLSession::connection_id() {
+  if (connection_id_ == 0) {
+    auto row = query_one("select connection_id()");
+    if (row) {
+      connection_id_ = std::stoull((*row)[0]);
+      return connection_id_;
+    }
+    assert(0 && "could not query connection_id()");
+  }
+  return connection_id_;
+}
+
 mysql_ssl_mode MySQLSession::ssl_mode() const {
   SslMode ssl_mode;
   if (!get_option(ssl_mode)) {

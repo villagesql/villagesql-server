@@ -48,7 +48,8 @@ class QueryRestTableSingleRow : public QueryRestTable {
   explicit QueryRestTableSingleRow(
       const JsonTemplateFactory *factory = nullptr,
       bool encode_bigints_as_string = false, const bool include_links = true,
-      const RowLockType lock_rows = RowLockType::NONE);
+      const RowLockType lock_rows = RowLockType::NONE,
+      uint64_t max_execution_time_ms = 0);
 
   virtual void query_entry(MySQLSession *session,
                            std::shared_ptr<database::entry::Object> object,

@@ -57,8 +57,10 @@ class QueryRestTable : protected QueryLog {
 
   explicit QueryRestTable(const JsonTemplateFactory *factory = nullptr,
                           bool encode_bigints_as_strings = false,
-                          bool include_links = true);
-  explicit QueryRestTable(bool encode_bigints_as_strings, bool include_links);
+                          bool include_links = true,
+                          uint64_t max_execution_time_ms = 0);
+  explicit QueryRestTable(bool encode_bigints_as_strings, bool include_links,
+                          uint64_t max_execution_time_ms = 0);
 
  public:
   virtual void query_entries(
@@ -90,6 +92,7 @@ class QueryRestTable : protected QueryLog {
   const JsonTemplateFactory *factory_;
   bool encode_bigints_as_strings_;
   bool include_links_;
+  uint64_t max_execution_time_ms_;
 
   void create_serializer();
   void on_row(const ResultRow &r) override;

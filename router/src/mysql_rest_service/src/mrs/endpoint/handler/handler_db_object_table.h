@@ -33,6 +33,7 @@
 #include "mrs/database/entry/db_object.h"
 #include "mrs/database/entry/db_schema.h"
 #include "mrs/database/helper/object_row_ownership.h"
+#include "mrs/database/slow_query_monitor.h"
 #include "mrs/endpoint/db_object_endpoint.h"
 #include "mrs/gtid_manager.h"
 #include "mrs/rest/handler.h"
@@ -57,7 +58,8 @@ class HandlerDbObjectTable : public mrs::rest::Handler {
                        mrs::interface::AuthorizeManager *auth_manager,
                        mrs::GtidManager *gtid_manager = nullptr,
                        collector::MysqlCacheManager *cache = nullptr,
-                       mrs::ResponseCache *response_cache = nullptr);
+                       mrs::ResponseCache *response_cache = nullptr,
+                       mrs::database::SlowQueryMonitor *slow_monitor = nullptr);
 
   Authorization requires_authentication() const override;
   UniversalId get_service_id() const override;
@@ -80,6 +82,8 @@ class HandlerDbObjectTable : public mrs::rest::Handler {
       rest::RequestContext *ctxt,
       std::shared_ptr<database::entry::Object> object) const;
 
+  uint64_t slow_query_timeout() const;
+
   mrs::GtidManager *gtid_manager_;
   collector::MysqlCacheManager *cache_;
   std::weak_ptr<DbObjectEndpoint> endpoint_;
@@ -87,6 +91,7 @@ class HandlerDbObjectTable : public mrs::rest::Handler {
   DbSchemaPtr schema_entry_;
   mrs::database::entry::RowUserOwnership ownership_;
   EndpointResponseCachePtr response_cache_;
+  mrs::database::SlowQueryMonitor *slow_monitor_;
 };
 
 }  // namespace handler

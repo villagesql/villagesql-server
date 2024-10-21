@@ -33,11 +33,13 @@ namespace handler {
 
 class HandlerDbObjectFunction : public HandlerDbObjectTable {
  public:
-  HandlerDbObjectFunction(std::weak_ptr<DbObjectEndpoint> endpoint,
-                          mrs::interface::AuthorizeManager *auth_manager,
-                          mrs::GtidManager *gtid_manager = nullptr,
-                          collector::MysqlCacheManager *cache = nullptr,
-                          mrs::ResponseCache *response_cache = nullptr);
+  HandlerDbObjectFunction(
+      std::weak_ptr<DbObjectEndpoint> endpoint,
+      mrs::interface::AuthorizeManager *auth_manager,
+      mrs::GtidManager *gtid_manager = nullptr,
+      collector::MysqlCacheManager *cache = nullptr,
+      mrs::ResponseCache *response_cache = nullptr,
+      mrs::database::SlowQueryMonitor *slow_monitor = nullptr);
 
   HttpResult handle_get(rest::RequestContext *ctxt) override;
   HttpResult handle_delete(rest::RequestContext *ctxt) override;

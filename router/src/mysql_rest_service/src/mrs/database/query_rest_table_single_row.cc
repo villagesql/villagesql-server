@@ -34,8 +34,10 @@ namespace database {
 
 QueryRestTableSingleRow::QueryRestTableSingleRow(
     const JsonTemplateFactory *factory, bool encode_bigints_as_string,
-    const bool include_links, const RowLockType lock_rows)
-    : QueryRestTable(factory, encode_bigints_as_string, include_links),
+    const bool include_links, const RowLockType lock_rows,
+    uint64_t max_execution_time_ms)
+    : QueryRestTable(factory, encode_bigints_as_string, include_links,
+                     max_execution_time_ms),
       lock_rows_(lock_rows) {}
 
 void QueryRestTableSingleRow::query_entry(
@@ -122,7 +124,14 @@ void QueryRestTableSingleRow::build_query(
     row_owner_check = mysqlrouter::sqlstring("1");
   }
 
-  query_ = "SELECT JSON_OBJECT(?), ? as is_owned FROM ? ?";
+  if (max_execution_time_ms_ > 0) {
+    query_ =
+        "SELECT /*+ MAX_EXECUTION_TIME(?) */ JSON_OBJECT(?), ? as is_owned "
+        "FROM ? ?";
+    query_ << max_execution_time_ms_;
+  } else {
+    query_ = "SELECT JSON_OBJECT(?), ? as is_owned FROM ? ?";
+  }
   query_ << fields << row_owner_check << qb.from_clause() << where;
 
   if (lock_rows_ == RowLockType::FOR_UPDATE)

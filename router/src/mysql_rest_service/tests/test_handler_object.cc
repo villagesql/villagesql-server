@@ -201,7 +201,7 @@ TEST_F(HandleObjectTests, fetch_object_feed) {
   EXPECT_CALL(
       mock_session,
       query(
-          StartsWith("SELECT "
+          StartsWith("SELECT /*+ MAX_EXECUTION_TIME(2000) */ "
                      "JSON_OBJECT('column1', `t0`.`column1`, 'column2', `t0`.`"
                      "column2`, 'column3', `t0`.`column3`,'links'"),
           _, _));
@@ -233,7 +233,7 @@ TEST_F(HandleObjectTests, fetch_object_single) {
   EXPECT_CALL(
       mock_session,
       query(
-          StartsWith("SELECT "
+          StartsWith("SELECT /*+ MAX_EXECUTION_TIME(2000) */ "
                      "JSON_OBJECT('column1', `t0`.`column1`, 'column2', `t0`.`"
                      "column2`, 'column3', `t0`.`column3`,'links'"),
           _, _));

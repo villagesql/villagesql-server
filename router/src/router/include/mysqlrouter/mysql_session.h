@@ -353,6 +353,8 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
                                const std::string &crl,
                                const std::string &crlpath);
 
+  uint64_t connection_id();
+
   mysql_ssl_mode ssl_mode() const;
   std::string tls_version() const;
   std::string ssl_cipher() const;
@@ -506,6 +508,7 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
   std::string connection_address_;
   SQLLogFilter log_filter_;
   unsigned long extra_client_flags_{0};
+  uint64_t connection_id_{0};
 
   class MYSQL_RES_Deleter {
    public:

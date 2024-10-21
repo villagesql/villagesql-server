@@ -70,6 +70,7 @@ enum EntitiesCounters {
   kEntityCounterRestAsofSwitchesFromRo2Rw,
   kEntityCounterRestAsofNumberOfTimeouts,
   kEntityCounterRestMetadataGtids,
+  kEntityCounterSqlQueryTimeouts,
   kEntityCounterLast
 };
 
