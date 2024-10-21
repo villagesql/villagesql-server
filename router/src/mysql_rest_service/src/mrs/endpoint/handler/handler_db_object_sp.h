@@ -37,7 +37,8 @@ class HandlerDbObjectSP : public HandlerDbObjectTable {
                     mrs::interface::AuthorizeManager *auth_manager,
                     mrs::GtidManager *gtid_manager = nullptr,
                     collector::MysqlCacheManager *cache = nullptr,
-                    mrs::ResponseCache *response_cache = nullptr);
+                    mrs::ResponseCache *response_cache = nullptr,
+                    mrs::database::SlowQueryMonitor *slow_monitor = nullptr);
 
   HttpResult handle_get(rest::RequestContext *ctxt) override;
   HttpResult handle_delete(rest::RequestContext *ctxt) override;

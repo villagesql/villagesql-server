@@ -34,6 +34,7 @@
 
 #include "mysql/harness/logging/logging.h"
 #include "mysql/harness/string_utils.h"
+#include "mysqld_error.h"
 
 #include "helper/container/generic.h"
 #include "helper/container/to_string.h"
@@ -236,6 +237,22 @@ std::vector<std::string> regex_path_for_db_object(
       object_path, service_schema_path, is_index);
 }
 
+template <typename F>
+void execute_and_handle_timeout(F fn) {
+  try {
+    fn();
+  } catch (const mysqlrouter::MySQLSession::Error &e) {
+    if (e.code() == ER_QUERY_TIMEOUT) {
+      mrs::Counter<kEntityCounterSqlQueryTimeouts>::increment();
+
+      throw mrs::http::Error(HttpStatusCode::GatewayTimeout,
+                             "Database request timed out");
+    } else {
+      throw;
+    }
+  }
+}
+
 }  // namespace
 
 namespace mrs {
@@ -264,14 +281,16 @@ HandlerDbObjectTable::HandlerDbObjectTable(
     std::weak_ptr<DbObjectEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager,
     mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache,
-    mrs::ResponseCache *response_cache)
+    mrs::ResponseCache *response_cache,
+    mrs::database::SlowQueryMonitor *slow_monitor)
     : Handler(get_endpoint_host(endpoint),
               /*regex-path: ^/service/schema/object(/...)?$*/
               regex_path_for_db_object(endpoint),
               get_endpoint_options(lock(endpoint)), auth_manager),
       gtid_manager_{gtid_manager},
       cache_{cache},
-      endpoint_{endpoint} {
+      endpoint_{endpoint},
+      slow_monitor_(slow_monitor) {
   auto ep = lock(endpoint_);
   auto ep_parent = lock_parent(ep);
   assert(ep_parent);
@@ -287,6 +306,13 @@ HandlerDbObjectTable::HandlerDbObjectTable(
 
 void HandlerDbObjectTable::authorization(rest::RequestContext *ctxt) {
   throw_unauthorize_when_check_auth_fails(ctxt);
+}
+
+uint64_t HandlerDbObjectTable::slow_query_timeout() const {
+  return get_options().query.timeout > 0
+             ? get_options().query.timeout
+             : (slow_monitor_ ? slow_monitor_->default_timeout()
+                              : mrs::database::k_default_sql_query_timeout_ms);
 }
 
 HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
@@ -353,7 +379,7 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
     if (raw_value.empty()) {
       static const std::string empty;
       database::QueryRestTable rest{opt_encode_bigints_as_string,
-                                    opt_sp_include_links};
+                                    opt_sp_include_links, slow_query_timeout()};
 
       monitored::QueryRetryOnRO query_retry{cache_,
                                             session,
@@ -365,10 +391,13 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
       do {
         query_retry.before_query();
         const bool is_default_limit = get_items_on_page() == limit;
-        rest.query_entries(
-            query_retry.get_session(), object, field_filter, offset, limit,
-            endpoint->get_url().join(), is_default_limit, row_ownership,
-            query_retry.get_fog(), !field_filter.is_filter_configured());
+
+        execute_and_handle_timeout([&]() {
+          rest.query_entries(
+              query_retry.get_session(), object, field_filter, offset, limit,
+              endpoint->get_url().join(), is_default_limit, row_ownership,
+              query_retry.get_fog(), !field_filter.is_filter_configured());
+        });
       } while (query_retry.should_retry(rest.items));
 
       Counter<kEntityCounterRestReturnedItems>::increment(rest.items);
@@ -386,10 +415,10 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
     if (limit != 1) throw http::Error(HttpStatusCode::BadRequest);
 
     database::QueryRestSPMedia rest;
-
-    rest.query_entries(session.get(), *target_field, schema_entry_->name,
-                       entry_->name, limit, offset);
-
+    execute_and_handle_timeout([&]() {
+      rest.query_entries(session.get(), *target_field, schema_entry_->name,
+                         entry_->name, limit, offset);
+    });
     helper::MediaDetector md;
     auto detected_type = md.detect(rest.response);
     Counter<kEntityCounterRestReturnedItems>::increment(rest.items);
@@ -403,7 +432,8 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
 
     if (raw_value.empty()) {
       database::QueryRestTableSingleRow rest(
-          nullptr, opt_encode_bigints_as_string, opt_sp_include_links);
+          nullptr, opt_encode_bigints_as_string, opt_sp_include_links,
+          mrs::database::RowLockType::NONE, slow_query_timeout());
       log_debug("Rest select single row %s",
                 database::dv::format_key(*object, pk).str().c_str());
 
@@ -416,9 +446,11 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
 
       do {
         query_retry.before_query();
-        rest.query_entry(session.get(), object, pk, field_filter,
-                         endpoint->get_url().join(), row_ownership,
-                         query_retry.get_fog(), true);
+        execute_and_handle_timeout([&]() {
+          rest.query_entry(session.get(), object, pk, field_filter,
+                           endpoint->get_url().join(), row_ownership,
+                           query_retry.get_fog(), true);
+        });
       } while (query_retry.should_retry(rest.items));
 
       if (rest.response.empty()) throw http::Error(HttpStatusCode::NotFound);
@@ -436,8 +468,10 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
 
     database::QueryRestSPMedia rest;
 
-    rest.query_entries(session.get(), *target_field, schema_entry_->name,
-                       entry_->name, pk);
+    execute_and_handle_timeout([&]() {
+      rest.query_entries(session.get(), *target_field, schema_entry_->name,
+                         entry_->name, pk);
+    });
 
     helper::MediaDetector md;
     auto detected_type = md.detect(rest.response);
@@ -483,7 +517,13 @@ HttpResult HandlerDbObjectTable::handle_post(
   database::dv::DualityViewUpdater updater(object,
                                            row_ownership_info(ctxt, object));
 
-  auto pk = updater.insert(session.get(), json_doc);
+  mrs::database::PrimaryKeyColumnValues pk;
+
+  slow_monitor_->execute(
+      [&updater, &session, &pk, &json_doc]() {
+        pk = updater.insert(session.get(), json_doc);
+      },
+      session.get(), get_options().query.timeout);
 
   Counter<kEntityCounterRestAffectedItems>::increment();
 
@@ -491,14 +531,19 @@ HttpResult HandlerDbObjectTable::handle_post(
       session.get(), gtid_manager_);
 
   if (!pk.empty()) {
-    database::QueryRestTableSingleRow fetch_one;
+    database::QueryRestTableSingleRow fetch_one(
+        nullptr, false, true, mrs::database::RowLockType::NONE,
+        get_options().query.timeout > 0 ? get_options().query.timeout
+                                        : slow_monitor_->default_timeout());
     std::string response_gtid{get_options().metadata.gtid ? gtid : ""};
 
-    fetch_one.query_entry(session.get(), object, pk,
-                          database::dv::ObjectFieldFilter::from_object(*object),
-                          endpoint->get_url().join(),
-                          row_ownership_info(ctxt, object), {}, true,
-                          response_gtid);
+    execute_and_handle_timeout([&]() {
+      fetch_one.query_entry(
+          session.get(), object, pk,
+          database::dv::ObjectFieldFilter::from_object(*object),
+          endpoint->get_url().join(), row_ownership_info(ctxt, object), {},
+          true, response_gtid);
+    });
     Counter<kEntityCounterRestReturnedItems>::increment(fetch_one.items);
 
     return std::move(fetch_one.response);
@@ -526,7 +571,9 @@ HttpResult HandlerDbObjectTable::handle_delete(rest::RequestContext *ctxt) {
   if (!last_path.empty()) {
     auto pk = get_rest_pk_parameter(object, endpoint->get_url(), requests_uri);
 
-    count = rest.delete_(session.get(), pk);
+    slow_monitor_->execute([&rest, &count, &session,
+                            pk]() { count = rest.delete_(session.get(), pk); },
+                           session.get(), get_options().query.timeout);
   } else {
     auto query = get_rest_query_parameter(requests_uri);
 
@@ -569,7 +616,11 @@ HttpResult HandlerDbObjectTable::handle_delete(rest::RequestContext *ctxt) {
           "Filter must not contain ordering informations.");
 
     log_debug("rest.handle_delete");
-    count = rest.delete_(session.get(), fog);
+    slow_monitor_->execute(
+        [&count, &rest, &session, fog]() {
+          count = rest.delete_(session.get(), fog);
+        },
+        session.get(), get_options().query.timeout);
 
     if (get_options().query.embed_wait && fog.has_asof() && 0 == count) {
       mrs::monitored::throw_rest_error_asof_timeout_if_not_gtid_executed(
@@ -635,22 +686,27 @@ HttpResult HandlerDbObjectTable::handle_put(rest::RequestContext *ctxt) {
   auto session = get_session(ctxt->sql_session_cache.get(), cache_,
                              MySQLConnection::kMySQLConnectionUserdataRW);
 
-  pk = updater.update(session.get(), pk, json_doc, true);
+  slow_monitor_->execute(
+      [&]() { pk = updater.update(session.get(), pk, json_doc, true); },
+      session.get(), get_options().query.timeout);
 
   Counter<kEntityCounterRestAffectedItems>::increment(updater.affected());
 
   auto gtid = mrs::monitored::get_session_tracked_gtids_for_metadata_response(
       session.get(), gtid_manager_);
 
-  database::QueryRestTableSingleRow fetch_one;
+  database::QueryRestTableSingleRow fetch_one(nullptr, false, true,
+                                              mrs::database::RowLockType::NONE,
+                                              slow_query_timeout());
   std::string response_gtid{get_options().metadata.gtid ? gtid : ""};
 
-  fetch_one.query_entry(session.get(), object, pk,
-                        database::dv::ObjectFieldFilter::from_object(*object),
-                        endpoint->get_url().join(),
-                        row_ownership_info(ctxt, object), {}, true,
-                        response_gtid);
-
+  execute_and_handle_timeout([&]() {
+    fetch_one.query_entry(session.get(), object, pk,
+                          database::dv::ObjectFieldFilter::from_object(*object),
+                          endpoint->get_url().join(),
+                          row_ownership_info(ctxt, object), {}, true,
+                          response_gtid);
+  });
   Counter<kEntityCounterRestReturnedItems>::increment(fetch_one.items);
   return std::move(fetch_one.response);
 }

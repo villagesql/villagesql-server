@@ -113,8 +113,8 @@ class WaitableVariable {
           const Callback &after_is_callback = Callback()) {
     bool result{false};
     monitor_with_value_.serialize_with_cv(
-        [this, &result, &expected_values, &after_is_callback](
-            auto &current_value, auto &) {
+        [&result, &expected_values, &after_is_callback](auto &current_value,
+                                                        auto &) {
           result = helper::container::has(expected_values, current_value);
           if (result) after_is_callback();
         });

@@ -692,10 +692,12 @@ class ParseOptions
       result_.debug.http.response.detailed_errors_ = to_bool(vt);
     } else if (key == "metadata.gtid") {
       result_.metadata.gtid = to_bool(vt);
-    } else if (key == "query.wait") {
+    } else if (key == "sqlQuery.wait") {
       result_.query.wait = to_uint(vt);
-    } else if (key == "query.embedWait") {
+    } else if (key == "sqlQuery.embedWait") {
       result_.query.embed_wait = to_bool(vt);
+    } else if (key == "sqlQuery.timeout") {
+      result_.query.timeout = to_uint(vt);
     } else if (key == "http.allowedOrigin") {
       if (mysql_harness::make_lower(cvt::to_string(vt)) == "auto")
         result_.allowed_origins.type = Result::AllowedOrigins::AllowAll;

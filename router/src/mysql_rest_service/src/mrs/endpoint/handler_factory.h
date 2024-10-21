@@ -28,6 +28,7 @@
 #include <memory>
 
 #include "collector/mysql_cache_manager.h"
+#include "mrs/database/slow_query_monitor.h"
 #include "mrs/interface/authorize_manager.h"
 #include "mrs/interface/handler_factory.h"
 #include "mrs/rest/response_cache.h"
@@ -38,11 +39,13 @@ namespace endpoint {
 class HandlerFactory : public mrs::interface::HandlerFactory {
  public:
   using MysqlCacheManager = collector::MysqlCacheManager;
+  using SlowQueryMonitor = mrs::database::SlowQueryMonitor;
 
  public:
   HandlerFactory(AuthorizeManager *auth_manager, GtidManager *gtid_manager,
                  MysqlCacheManager *cache_manager,
-                 ResponseCache *response_cache, ResponseCache *file_cache);
+                 ResponseCache *response_cache, ResponseCache *file_cache,
+                 SlowQueryMonitor *slow_query_monitor);
 
   std::shared_ptr<handler::PersistentDataContentFile>
   create_persisten_content_file(EndpointBasePtr conent_file_endpoint,
@@ -102,6 +105,7 @@ class HandlerFactory : public mrs::interface::HandlerFactory {
   MysqlCacheManager *cache_manager_;
   ResponseCache *response_cache_;
   ResponseCache *file_cache_;
+  SlowQueryMonitor *slow_query_monitor_;
 };
 
 }  // namespace endpoint
