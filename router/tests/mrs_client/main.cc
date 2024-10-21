@@ -383,12 +383,23 @@ std::vector<CmdOption> g_options{
      [](const std::string &value) { g_configuration.accept = value; },
      [](const std::string &) {}},
 
-    {{"--host"},
+    {{"--request-header-host"},
      "Set the value in the 'Host' header of the request.",
      CmdOptionValueReq::required,
      "host",
      [](const std::string &value) { g_configuration.host = value; },
      [](const std::string &) {}},
+
+    {{"--encoded-request-header-host"},
+     "Set the value in the 'Host' header of the request. The value must be "
+     "encoded using url-parameter encoding.",
+     CmdOptionValueReq::required,
+     "host",
+     [](const std::string &value) {
+       g_configuration.host = decode_from_url_query_escaping(value);
+     },
+     [](const std::string &) {}},
+
     {{"--payload-file"},
      "Set the request body for POST, PUT requests.",
      CmdOptionValueReq::required,

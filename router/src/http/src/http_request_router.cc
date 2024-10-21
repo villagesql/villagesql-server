@@ -235,6 +235,33 @@ void HttpRequestRouter::route(http::base::Request &req) {
   handler_not_found(req);
 }
 
+namespace {
+
+// If the argument sent as a parameter is in "<hostname>:<port>" format
+// (matches "^(.*):[0-9]+$" regex) returns <hostname> part, otherwise returns
+// std::nullopt
+std::optional<std::string_view> get_host_if_host_and_port(
+    const std::string_view &url_host) {
+  auto last_colon = url_host.find_last_of(':');
+
+  // no colon or colon at the end
+  if (last_colon == std::string_view::npos ||
+      last_colon == url_host.size() - 1) {
+    return std::nullopt;
+  }
+
+  // some non-digit after the colon
+  if (std::find_if(url_host.begin() + last_colon + 1, url_host.end(),
+                   [](const auto &c) { return !std::isdigit(c); }) !=
+      url_host.end()) {
+    return std::nullopt;
+  }
+
+  return url_host.substr(0, last_colon);
+}
+
+}  // namespace
+
 BaseRequestHandlerPtr HttpRequestRouter::find_route_handler(
     std::string_view url_host, std::string_view path) {
   // as .matches() is called in a loop on the same string,
@@ -246,7 +273,23 @@ BaseRequestHandlerPtr HttpRequestRouter::find_route_handler(
   std::shared_lock lock(route_mtx_);
 
   if (!url_host.empty()) {
+    // Check if we have a handler with a hostname that exactly matches the one
+    // from the request
     auto req_it = request_handlers_.find(url_host);
+    // No exact match. Check if the url_host in the request is in the
+    // <hostname>:<port> format. If that is the case we still accept it if the
+    // <hostname> part matches the handler.
+    if (req_it == request_handlers_.end()) {
+      auto hostname = get_host_if_host_and_port(url_host);
+      if (hostname) {
+        // Currently the SDK's "CREATE SERVICE" command does not support ipv6 so
+        // it is good enough to do the exact match of the host part here. If
+        // that ever changes we need something smarter to also match the names
+        // with and without enclosing []'s
+        req_it = request_handlers_.find(*hostname);
+      }
+    }
+
     if (req_it != request_handlers_.end()) {
       auto &request_handlers = req_it->second;
 

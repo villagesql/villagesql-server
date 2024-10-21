@@ -3,7 +3,8 @@
 # We create 3 services with the same name "svc". Each has different url_host
 # entry assigned in the metadata. Each exposes the same path "/tab" but there
 # is a different database table/procedure underneath for each, so that we could
-# see if the expected service is handling the request. Using --host parametr to
+# see if the expected service is handling the request. Using 
+# --request-header-host or --encoded-request-header-host parametrs to
 # the mrs_client we test different requests scenarios and check if the url_host
 # is honoured as expected.
 #
@@ -30,7 +31,7 @@ CREATE PROCEDURE host_tests.procedure2() BEGIN select "PROCEDURE2"; END;$$
 CREATE PROCEDURE host_tests.procedure3() BEGIN select "PROCEDURE3"; END;$$
 
 CREATE FUNCTION host_tests.function1() RETURNS VARCHAR(20) BEGIN RETURN "FUNCTION1"; END;$$
-CREATE FUNCTION host_tests.function2() RETURNS VARCHAR(20) BEGIN RETURN "function2"; END;$$
+CREATE FUNCTION host_tests.function2() RETURNS VARCHAR(20) BEGIN RETURN "FUNCTION2"; END;$$
 CREATE FUNCTION host_tests.function3() RETURNS VARCHAR(20) BEGIN RETURN "FUNCTION3"; END;$$
 DELIMITER ;$$
 
@@ -161,20 +162,60 @@ exec $MRS_CLIENT_ARGS
 --exec $MRS_CLIENT_ARGS --path /svc/hostTests/func
 
 --echo Force host=HOST1 for the request - should use "svc" configured for HOST1 that exposes table2/procedure2/function2
---exec $MRS_CLIENT_ARGS --host HOST1 --path /svc/hostTests/tab
---exec $MRS_CLIENT_ARGS --host HOST1 --path /svc/hostTests/proc
---exec $MRS_CLIENT_ARGS --host HOST1 --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host HOST1 --path /svc/hostTests/tab
+--exec $MRS_CLIENT_ARGS --request-header-host HOST1 --path /svc/hostTests/proc
+--exec $MRS_CLIENT_ARGS --request-header-host HOST1 --path /svc/hostTests/func
+
+--echo Force host=HOST2:<numeric_port> for the request - should use "svc" configured for HOST2 that exposes function3
+--exec $MRS_CLIENT_ARGS --request-header-host HOST2:0 --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host HOST2:8848 --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host HOST2:3123123123122 --path /svc/hostTests/func
+
+--echo Force host=HOST2:<non_port> for the request - should use "svc" configured for url_host="" that exposes function1
+--exec $MRS_CLIENT_ARGS --request-header-host HOST2: --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host HOST2:nan --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host HOST2:22a --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host HOST2:+23 --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host HOST2:!#!@ --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host HOST2:8000: --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host HOST2:8000:8000 --path /svc/hostTests/func
+
+--echo Force various unknown host variations for the request - should use "svc" configured for url_host="" that exposes function1
+--exec $MRS_CLIENT_ARGS --request-header-host : --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host 123 --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host ::: --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host 1:1:1: --path /svc/hostTests/func
+
+--let $mrs_client_arg_path='/svc/hostTests/func'
+--let $mrs_client_arg_host='[]:12'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/svc/hostTests/func'
+--let $mrs_client_arg_host='[::1]:'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/svc/hostTests/func'
+--let $mrs_client_arg_host='[::1]'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/svc/hostTests/func'
+--let $mrs_client_arg_host='[::1]:123'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/svc/hostTests/func'
+--let $mrs_client_arg_host='[::1]:aa'
+--source ../include/mrs/mrs_client.inc
 
 --echo Force host=HOST2 for the request - should use "svc" configured for HOST2 that exposes table3/procedure3/function3
---exec $MRS_CLIENT_ARGS --host HOST2 --path /svc/hostTests/tab
---exec $MRS_CLIENT_ARGS --host HOST2 --path /svc/hostTests/proc
---exec $MRS_CLIENT_ARGS --host HOST2 --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host HOST2 --path /svc/hostTests/tab
+--exec $MRS_CLIENT_ARGS --request-header-host HOST2 --path /svc/hostTests/proc
+--exec $MRS_CLIENT_ARGS --request-header-host HOST2 --path /svc/hostTests/func
 
---echo Force host=HOSTUNKNOW for the request - should use "svc" configured for url_host="" table1/procedure1/function1
+--echo Force host=HOSTUNKNOW for the request - should use "svc" configured for url_host="" that exposes table1/procedure1/function1
 --echo as there is no service for that sepcific host
---exec $MRS_CLIENT_ARGS --host HOSTUNKNOWN --path /svc/hostTests/tab
---exec $MRS_CLIENT_ARGS --host HOSTUNKNOWN --path /svc/hostTests/proc
---exec $MRS_CLIENT_ARGS --host HOSTUNKNOWN --path /svc/hostTests/func
+--exec $MRS_CLIENT_ARGS --request-header-host HOSTUNKNOWN --path /svc/hostTests/tab
+--exec $MRS_CLIENT_ARGS --request-header-host HOSTUNKNOWN --path /svc/hostTests/proc
+--exec $MRS_CLIENT_ARGS --request-header-host HOSTUNKNOWN --path /svc/hostTests/func
 
 # Cleanup
 DROP SCHEMA host_tests;
