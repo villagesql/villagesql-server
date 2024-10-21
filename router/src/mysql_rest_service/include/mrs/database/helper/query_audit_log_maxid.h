@@ -25,6 +25,8 @@
 #ifndef ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_AUDIT_LOG_MAXID_H_
 #define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_AUDIT_LOG_MAXID_H_
 
+#include <optional>
+
 #include "mrs/database/helper/query.h"
 
 namespace mrs {
@@ -34,11 +36,12 @@ class QueryAuditLogMaxId : private Query {
  public:
   QueryAuditLogMaxId();
   uint64_t query_max_id(MySQLSession *session);
+  std::optional<uint64_t> query_max_id_or_null(MySQLSession *session);
 
  private:
   void on_row(const ResultRow &r) override;
 
-  uint64_t max_;
+  std::optional<uint64_t> max_;
 };
 
 }  // namespace database

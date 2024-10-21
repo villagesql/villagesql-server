@@ -27,6 +27,7 @@
 #include "helper/string/contains.h"
 #include "helper/string/generic.h"
 
+#include "mrs/database/helper/query_audit_log_maxid.h"
 #include "mrs/database/monitor/db_access.h"
 #include "mrs/database/query_statistics.h"
 #include "mrs/database/query_version.h"
@@ -143,6 +144,12 @@ class ServiceDisabled : public std::runtime_error {
   explicit ServiceDisabled() : std::runtime_error("service disabled") {}
 };
 
+class AuditLogInconsistency : public std::runtime_error {
+ public:
+  explicit AuditLogInconsistency()
+      : std::runtime_error("audit log inconsistency") {}
+};
+
 void SchemaMonitor::run() {
   log_system("Starting MySQL REST Metadata monitor");
 
@@ -152,6 +159,7 @@ void SchemaMonitor::run() {
           true};  // set to true to force the query on the first run
   const bool is_destination_dynamic = configuration_.provider_rw_->is_dynamic();
   bool state{false};
+  uint64_t max_audit_log_id{0};
   do {
     try {
       auto session_check_version =
@@ -193,6 +201,23 @@ void SchemaMonitor::run() {
                            ? cache_->get_instance(
                                  collector::kMySQLConnectionMetadataRW, true)
                            : std::move(session_check_version);
+
+        // Detect the inconsistency between audit_log table content and our
+        // state. This only does a basic check to detect a scenario where the
+        // max(id) is lower than what we have already seen. This should be good
+        // enough for making sure we reintialize as expected between the MTR
+        // test runs if needed. TODO: This should be removed once we have a
+        // proper way of forcing the MRS full refresh from outside while it is
+        // running.
+        auto audit_log_id =
+            QueryAuditLogMaxId().query_max_id_or_null(session.get());
+        if (audit_log_id) {
+          if (max_audit_log_id > *audit_log_id) {
+            max_audit_log_id = *audit_log_id;
+            throw AuditLogInconsistency();
+          }
+          max_audit_log_id = *audit_log_id;
+        }
 
         fetcher.query(session.get());
 
@@ -298,6 +323,11 @@ void SchemaMonitor::run() {
         force_clear = true;
       }
     } catch (const ServiceDisabled &) {
+      force_clear = true;
+    } catch (const AuditLogInconsistency &) {
+      log_warning(
+          "audit_log table inscosistency discovered, forcing full refresh from "
+          "metadata");
       force_clear = true;
     } catch (const std::exception &exc) {
       log_error("Can't refresh MRDS layout, because of the following error:%s.",

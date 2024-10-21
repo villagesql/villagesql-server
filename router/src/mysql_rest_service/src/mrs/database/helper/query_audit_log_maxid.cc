@@ -34,6 +34,13 @@ QueryAuditLogMaxId::QueryAuditLogMaxId() {
 uint64_t QueryAuditLogMaxId::query_max_id(MySQLSession *session) {
   Query::execute(session);
 
+  return max_ ? *max_ : 0;
+}
+
+std::optional<uint64_t> QueryAuditLogMaxId::query_max_id_or_null(
+    MySQLSession *session) {
+  Query::execute(session);
+
   return max_;
 }
 
@@ -42,7 +49,11 @@ void QueryAuditLogMaxId::on_row(const ResultRow &r) {
 
   char *end;
 
-  max_ = r[0] ? static_cast<uint64_t>(strtoull(r[0], &end, 10)) : 0;
+  if (r[0]) {
+    max_ = static_cast<uint64_t>(strtoull(r[0], &end, 10));
+  } else {
+    max_ = std::nullopt;
+  }
 }
 
 }  // namespace database
