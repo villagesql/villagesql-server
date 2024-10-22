@@ -52,7 +52,7 @@ void Oauth2OidcHandler::RequestHandlerJsonSimpleObjectWithBearer::before_send(
     Request *request) {
   std::string bearer = "Bearer " + token_;
   request->get_output_headers().add("Authorization", bearer.c_str());
-};
+}
 
 Oauth2OidcHandler::Oauth2OidcHandler(const AuthApp &entry)
     : Oauth2Handler{entry} {
