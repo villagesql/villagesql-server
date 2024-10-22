@@ -39,6 +39,13 @@ enum enum_upgrade_mode : int {
   UPGRADE_FORCE
 };
 
+extern TYPELIB check_table_fun_mode_typelib;
+extern const char *check_table_fun_modes[];
+enum enum_check_table_fun_mode : int {
+  CHECK_TABLE_FUN_WARN,
+  CHECK_TABLE_FUN_ABORT
+};
+
 namespace dd {
 namespace upgrade {
 /**

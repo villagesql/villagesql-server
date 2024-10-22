@@ -506,5 +506,22 @@ void warn_on_deprecated_prefix_key_partition(THD *thd, const char *schema_name,
 */
 bool get_implicit_tablespace_options(THD *thd, const Table *table,
                                      ulonglong *autoextend_size);
+
+/**
+  Check whether a table has constraints, virtual columns,
+  default, or partitions that may use functions. If so, we may
+  wish to try to open the table during upgrade to see whether
+  we can (or whether any of the functions have changed in such
+  a way that opening the table is no longer possible).
+
+  @param  table_def    The table to examine.
+  @param  schema_name  The name of the schema, or nullptr.
+  @param  debug        A String_type to return debug_info in, or nullptr.
+  @return true         The table definition potentially uses functions.
+  @return false        The table is basic.
+*/
+bool uses_functions(const Table *table_def, const char *schema_name = nullptr,
+                    String_type *debug = nullptr);
+
 }  // namespace dd
 #endif  // DD_TABLE_INCLUDED
