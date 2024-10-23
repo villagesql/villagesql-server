@@ -1,5 +1,3 @@
-# Verify mapping functionality between field-names and column-names.
-#
 --source include/have_router.inc
 
 # Set the router-id, to generate statistics
@@ -13,7 +11,7 @@
 ## Test starts here
 --echo
 --echo
---echo ## I. Show that files tested in next steps doesn't exist
+--echo ## I. Show that files tested in next steps don't exist
 --echo #
 --echo # 1. request files on service level
 --echo # 2. request files on schema level

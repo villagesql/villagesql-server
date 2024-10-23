@@ -35,7 +35,7 @@ Successfully created MRS metadata.
 Check that the schema was created
 SELECT * FROM mysql_rest_service_metadata.schema_version;
 major	minor	patch
-3	0	0
+3	0	2
 Check that the schema lock is released after the bootstrap, take the lock
 SELECT GET_LOCK('MRS_METADATA_LOCK', 1);
 GET_LOCK('MRS_METADATA_LOCK', 1)
@@ -63,7 +63,7 @@ RELEASE_LOCK('MRS_METADATA_LOCK')
 NULL
 [33m# Ensuring `MRS` metadata schema exists...[39m
 
-Requested to create MRS metadata schema, schema with compatible version '3.0.0' already exists.
+Requested to create MRS metadata schema, schema with compatible version '3.0.2' already exists.
 The compatible versions are: 3.0.0, 2.2.0
 ################################################################################
 V.

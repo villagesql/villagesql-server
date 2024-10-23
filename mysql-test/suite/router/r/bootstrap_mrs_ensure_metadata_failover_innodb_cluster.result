@@ -28,7 +28,7 @@ Successfully created MRS metadata.
 Check that the schema was created
 SELECT * FROM mysql_rest_service_metadata.schema_version;
 major	minor	patch
-3	0	0
+3	0	2
 II. Bootstrap the MRS with --mrs-ensure-metadata-schema parameter and no --mrs
 The expectation is that only schema gets created.
 Use the Secondary node port, the Router should failover to the primary and
@@ -42,7 +42,7 @@ Successfully created MRS metadata.
 Check that the schema was created
 SELECT * FROM mysql_rest_service_metadata.schema_version;
 major	minor	patch
-3	0	0
+3	0	2
 Cleanup
 DROP SCHEMA mysql_rest_service_metadata;
 DROP ROLE mysql_rest_service_admin;

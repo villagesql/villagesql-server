@@ -7,21 +7,21 @@
 #
 # 1. request files on global level
 #
-## II. Modify option on service level
+## II. Modify option on global level
 #
 # 1. add files
 # 2. add indexes
 # 3. add redirect
 # 4. remove all
 #
-UPDATE  `mysql_rest_service_metadata`.`config` SET data='{}';
-# Registred SERVICE at path: /svc2
-SET @service_id2=@service_id;
-# Registred DB_SCHEMA at path: /svc2/sch2
-# Registred DB_OBJECT at path: /svc2/sch2/obj2
 
 #
 # I.1
+Clear the config.data
+UPDATE  `mysql_rest_service_metadata`.`config` SET data='{}';
+SELECT data from  `mysql_rest_service_metadata`.`config`;
+data
+{}
 GET /
 Not Found(404)
 GET /index.html
