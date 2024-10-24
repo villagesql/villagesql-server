@@ -72,17 +72,7 @@ GET /b/authentication/authApps
 ]
 OK
 GET /c/authentication/authApps
-[
-    {
-        "name": "two-of-two",
-        "vendorId": "0x30000000000000000000000000000000"
-    },
-    {
-        "name": "one-of-two",
-        "vendorId": "0x31000000000000000000000000000000"
-    }
-]
-OK
+Ok(200)
 GET /d/authentication/authApps
 []
 OK
@@ -95,17 +85,7 @@ GET /e/authentication/authApps
 ]
 OK
 GET /f/authentication/authApps
-[
-    {
-        "name": "two-of-two",
-        "vendorId": "0x30000000000000000000000000000000"
-    },
-    {
-        "name": "one-of-two",
-        "vendorId": "0x31000000000000000000000000000000"
-    }
-]
-OK
+Ok(200)
 GET /g/authentication/authApps
 []
 OK
@@ -118,17 +98,7 @@ GET /h/authentication/authApps
 ]
 OK
 GET /i/authentication/authApps
-[
-    {
-        "name": "two-of-two",
-        "vendorId": "0x30000000000000000000000000000000"
-    },
-    {
-        "name": "one-of-two",
-        "vendorId": "0x31000000000000000000000000000000"
-    }
-]
-OK
+Ok(200)
 
 #
 # I.2

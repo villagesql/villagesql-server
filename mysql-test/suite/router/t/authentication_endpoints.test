@@ -193,6 +193,8 @@
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/c/authentication/authApps'
+--let $mrs_client_arg_dispaly=request,status
+--let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/two_authentication_apps.sch
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/d/authentication/authApps'
@@ -202,6 +204,8 @@
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/f/authentication/authApps'
+--let $mrs_client_arg_dispaly=request,status
+--let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/two_authentication_apps.sch
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/g/authentication/authApps'
@@ -211,6 +215,8 @@
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/i/authentication/authApps'
+--let $mrs_client_arg_dispaly=request,status
+--let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/two_authentication_apps.sch
 --source ../include/mrs/mrs_client.inc
 
 
