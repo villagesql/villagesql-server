@@ -25,6 +25,7 @@
 #ifndef ROUTER_SRC_REST_MRS_SRC_MRS_OBJECT_MANAGER_H_
 #define ROUTER_SRC_REST_MRS_SRC_MRS_OBJECT_MANAGER_H_
 
+#include <compare>
 #include <map>
 #include <memory>
 #include <vector>
@@ -57,6 +58,39 @@ class EndpointManager : public mrs::interface::EndpointManager {
   using EndpointFactoryPtr = std::shared_ptr<EndpointFactory>;
   using ResponseCache = mrs::ResponseCache;
 
+  class EndpointId {
+   public:
+    enum IdType {
+      IdNone,
+      IdUrlHost,
+      IdService,
+      IdSchema,
+      IdContentSet,
+      IdContentFile,
+      IdObject
+    };
+
+   public:
+    EndpointId() : type{IdNone} {}
+
+    template <IdType p_type>
+    EndpointId(const UniversalId &p_id) : type{p_type}, id{p_id} {}
+
+    EndpointId(const IdType p_type, const UniversalId &p_id)
+        : type{p_type}, id{p_id} {}
+
+    std::strong_ordering operator<=>(const EndpointId &rhs) const {
+      const auto cmp_res = type <=> rhs.type;
+      if (cmp_res != 0) return cmp_res;
+
+      return id <=> rhs.id;
+    }
+
+   public:
+    IdType type;
+    UniversalId id;
+  };
+
  public:
   EndpointManager(collector::MysqlCacheManager *cache, const bool is_ssl,
                   mrs::interface::AuthorizeManager *auth_manager,
@@ -79,11 +113,11 @@ class EndpointManager : public mrs::interface::EndpointManager {
  private:
   void update_options(const std::string &options);
 
-  // Keep shared ownership of Hosts and Services,
+  // Keep shared ownership of Hosts.
   std::map<UniversalId, EndpointBasePtr> hold_host_endpoints_;
 
   // Lets keep all objects in weak ptrs:
-  std::map<UniversalId, std::weak_ptr<EndpointBase>> endpoints_;
+  std::map<EndpointId, std::weak_ptr<EndpointBase>> endpoints_;
 
   // Essential objects
   collector::MysqlCacheManager *cache_;

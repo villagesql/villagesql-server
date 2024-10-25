@@ -132,6 +132,8 @@ using EndpointBase = EndpointManager::EndpointBase;
 using EndpointBasePtr = EndpointManager::EndpointBasePtr;
 using EndpointFactory = EndpointManager::EndpointFactory;
 using ResponseCache = mrs::ResponseCache;
+using EndpointId = EndpointManager::EndpointId;
+using IdType = EndpointManager::EndpointId::IdType;
 
 EndpointManager::EndpointManager(collector::MysqlCacheManager *cache,
                                  const bool is_ssl,
@@ -172,38 +174,39 @@ void EndpointManager::configure(const std::optional<std::string> &options) {
   }
 }
 
-const UniversalId &get_parent_id(const UrlHost &) {
-  static UniversalId empty{};
+const EndpointId &get_parent_endpoint_id(const UrlHost &) {
+  static EndpointId empty{};
   return empty;
 }
 
-const UniversalId &get_parent_id(const DbService &service) {
-  return service.url_host_id;
+const EndpointId get_parent_endpoint_id(const DbService &service) {
+  return {EndpointId::IdUrlHost, service.url_host_id};
 }
 
-const UniversalId &get_parent_id(const ContentFile &content_file) {
-  return content_file.content_set_id;
+const EndpointId get_parent_endpoint_id(const ContentFile &content_file) {
+  return {EndpointId::IdContentSet, content_file.content_set_id};
 }
 
-const UniversalId &get_parent_id(const ContentSet &content_set) {
-  return content_set.service_id;
+const EndpointId get_parent_endpoint_id(const ContentSet &content_set) {
+  return {EndpointId::IdService, content_set.service_id};
 }
 
-const UniversalId &get_parent_id(const DbSchema &schema) {
-  return schema.service_id;
+const EndpointId get_parent_endpoint_id(const DbSchema &schema) {
+  return {EndpointId::IdService, schema.service_id};
 }
 
-const UniversalId &get_parent_id(const DbObject &object) {
-  return object.schema_id;
+const EndpointId get_parent_endpoint_id(const DbObject &object) {
+  return {EndpointId::IdSchema, object.schema_id};
 }
 
 template <typename HoldingContainer>
 std::weak_ptr<EndpointBase> get_object_by_id(HoldingContainer *holding,
-                                             const UniversalId &id) {
-  if (id.empty()) return {};
+                                             const EndpointId &endpoint_id) {
+  if (IdType::IdNone == endpoint_id.type) return {};
+  if (endpoint_id.id.empty()) return {};
 
   std::weak_ptr<EndpointBase> out_ptr;
-  helper::container::get_value(*holding, id, &out_ptr);
+  helper::container::get_value(*holding, endpoint_id, &out_ptr);
 
   return out_ptr;
 }
@@ -272,7 +275,8 @@ void log_debug_db_entry(const DbType &type) {
   }
 }
 
-template <typename Target, typename ChangedContainer, typename HoldingContainer>
+template <IdType id_type, typename Target, typename ChangedContainer,
+          typename HoldingContainer>
 void process_endpoints(
     EndpointFactory *factory, ChangedContainer &in, HoldingContainer *holder,
     std::map<UniversalId, std::shared_ptr<EndpointBase>> *out) {
@@ -280,9 +284,11 @@ void process_endpoints(
   for (const auto &new_entry : in) {
     typename TargetContainer::iterator it;
     log_debug_db_entry(new_entry);
+    EndpointId endpoint_id{id_type, new_entry.id};
     if (out) it = out->find(new_entry.id);
-    auto target = get_object_by_id(holder, new_entry.id).lock();
-    auto parent = get_object_by_id(holder, get_parent_id(new_entry)).lock();
+    auto target = get_object_by_id(holder, endpoint_id).lock();
+    auto parent =
+        get_object_by_id(holder, get_parent_endpoint_id(new_entry)).lock();
 
     if (new_entry.deleted) {
       if (!target) continue;
@@ -292,7 +298,7 @@ void process_endpoints(
         ptr->remove_child_endpoint(target->get_id());
       }
 
-      holder->erase(new_entry.id);
+      holder->erase(endpoint_id);
       if (out && it != out->end()) out->erase(it);
 
       continue;
@@ -312,7 +318,7 @@ void process_endpoints(
       if (out) {
         out->insert(std::make_pair(new_entry.id, ptr));
       }
-      (*holder)[new_entry.id] = ptr;
+      (*holder)[endpoint_id] = ptr;
 
       continue;
     }
@@ -329,7 +335,7 @@ void EndpointManager::update(const std::vector<UrlHost> &hosts) {
     log_debug("Endpoint Manager: Number of updated host entries:%i",
               static_cast<int>(hosts.size()));
   }
-  process_endpoints<mrs::endpoint::UrlHostEndpoint>(
+  process_endpoints<IdType::IdUrlHost, mrs::endpoint::UrlHostEndpoint>(
       endpoint_factory_.get(), hosts, &endpoints_, &hold_host_endpoints_);
 }
 
@@ -338,7 +344,7 @@ void EndpointManager::update(const std::vector<DbService> &services) {
     log_debug("Endpoint Manager: Number of updated service entries:%i",
               static_cast<int>(services.size()));
   }
-  process_endpoints<mrs::endpoint::DbServiceEndpoint>(
+  process_endpoints<IdType::IdService, mrs::endpoint::DbServiceEndpoint>(
       endpoint_factory_.get(), services, &endpoints_, nullptr);
 }
 
@@ -347,7 +353,7 @@ void EndpointManager::update(const std::vector<DbSchema> &schema) {
     log_debug("Endpoint Manager: Number of updated schema entries:%i",
               static_cast<int>(schema.size()));
   }
-  process_endpoints<mrs::endpoint::DbSchemaEndpoint>(
+  process_endpoints<IdType::IdSchema, mrs::endpoint::DbSchemaEndpoint>(
       endpoint_factory_.get(), schema, &endpoints_, nullptr);
 }
 
@@ -356,8 +362,8 @@ void EndpointManager::update(const std::vector<DbObject> &obj) {
     log_debug("Endpoint Manager: Number of updated object entries:%i",
               static_cast<int>(obj.size()));
   }
-  process_endpoints<mrs::endpoint::DbObjectEndpoint>(endpoint_factory_.get(),
-                                                     obj, &endpoints_, nullptr);
+  process_endpoints<IdType::IdObject, mrs::endpoint::DbObjectEndpoint>(
+      endpoint_factory_.get(), obj, &endpoints_, nullptr);
 }
 
 void EndpointManager::update(const std::vector<ContentSet> &set) {
@@ -365,7 +371,7 @@ void EndpointManager::update(const std::vector<ContentSet> &set) {
     log_debug("Endpoint Manager: Number of updated content-set entries:%i",
               static_cast<int>(set.size()));
   }
-  process_endpoints<mrs::endpoint::ContentSetEndpoint>(
+  process_endpoints<IdType::IdContentSet, mrs::endpoint::ContentSetEndpoint>(
       endpoint_factory_.get(), set, &endpoints_, nullptr);
 }
 
@@ -374,7 +380,7 @@ void EndpointManager::update(const std::vector<ContentFile> &files) {
     log_debug("Endpoint Manager: Number of updated content-file entries:%i",
               static_cast<int>(files.size()));
   }
-  process_endpoints<mrs::endpoint::ContentFileEndpoint>(
+  process_endpoints<IdType::IdContentFile, mrs::endpoint::ContentFileEndpoint>(
       endpoint_factory_.get(), files, &endpoints_, nullptr);
 }
 
