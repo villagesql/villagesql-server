@@ -37,12 +37,12 @@ namespace mrs {
 namespace {
 std::string make_table_key(const http::base::Uri &uri,
                            const std::string &user_id) {
-  return uri.get_path() + (user_id.empty() ? "" : "\nuser_id=" + user_id);
+  return uri.join_path() + (user_id.empty() ? "" : "\nuser_id=" + user_id);
 }
 
 std::string make_routine_key(const http::base::Uri &uri,
                              std::string_view req_body) {
-  return std::string(uri.get_path()).append("\n").append(req_body);
+  return std::string(uri.join_path()).append("\n").append(req_body);
 }
 
 std::string make_file_key(const mrs::database::entry::UniversalId &id) {

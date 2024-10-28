@@ -28,6 +28,8 @@ if (!$mrs_escape_query)
 
 --let $mrs_escape_query=`SELECT REPLACE(REPLACE($mrs_escape_query, '%', '%25'), '$', '%24')`
 --let $mrs_escape_query=`SELECT REPLACE('$mrs_escape_query', '"', '%22')`
+--let $mrs_escape_query=`SELECT REPLACE('$mrs_escape_query', '\r\n', '%0D%0A')`
+--let $mrs_escape_query=`SELECT REPLACE('$mrs_escape_query', '\n', '%0A')`
 --let $mrs_escape_query=`SELECT REPLACE(REPLACE('$mrs_escape_query', '{', '%7B'), '}', '%7D')`
 --let $mrs_escape_query=`SELECT REPLACE(REPLACE('$mrs_escape_query', '(', '%28'), ')', '%29')`
 --let $mrs_escape_query=`SELECT REPLACE(REPLACE('$mrs_escape_query', '[', '%5B'), ']', '%5D')`
