@@ -183,6 +183,9 @@ void cs::apply::Commit_order_queue::push(value_type index) {
 
 cs::apply::Commit_order_queue::value_type
 cs::apply::Commit_order_queue::front() {
+  lock::Shared_spin_lock::Guard front_sentry{
+      this->m_push_pop_lock,
+      lock::Shared_spin_lock::enum_lock_acquisition::SL_SHARED};
   return this->m_commit_queue.front();
 }
 
