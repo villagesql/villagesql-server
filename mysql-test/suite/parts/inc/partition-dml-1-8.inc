@@ -37,7 +37,6 @@ connect (session2, localhost, test_user_2,'testpw',test);
 SELECT * FROM t1 PARTITION (`p0-29`);
 --error ER_LOCK_WAIT_TIMEOUT
 SELECT * FROM t1 PARTITION (`p0-29`) WHERE a BETWEEN 0 AND 9 LOCK IN SHARE MODE;
---error ER_LOCK_WAIT_TIMEOUT
 SELECT * FROM t1 PARTITION (`p0-29`) WHERE a BETWEEN 20 AND 29 FOR UPDATE;
 
 connection session1;
@@ -58,7 +57,6 @@ connection session1;
 --echo ####### expect only p0-29 (0-9) has been updated
 --sorted_result
 SELECT * FROM t1 PARTITION (`p0-29`);
---error ER_LOCK_WAIT_TIMEOUT
 SELECT * FROM t1 PARTITION (`p0-29`) WHERE a BETWEEN 0 AND 9 LOCK IN SHARE MODE;
 --error ER_LOCK_WAIT_TIMEOUT
 SELECT * FROM t1 PARTITION (`p0-29`) WHERE a BETWEEN 20 AND 29 FOR UPDATE;
