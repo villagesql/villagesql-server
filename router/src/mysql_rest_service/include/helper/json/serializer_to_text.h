@@ -282,6 +282,13 @@ class SerializerToText {
     return *this;
   }
 
+  template <typename Str1>
+  SerializerToText &member_add_null_value(const Str1 &key) {
+    writer_.Key(key);
+    writer_.Null();
+    return *this;
+  }
+
  private:
   const char *get_raw(const char *value) { return value; }
   const char *get_raw(const std::string &value) { return value.c_str(); }

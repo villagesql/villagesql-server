@@ -72,11 +72,12 @@ inline helper::json::SerializerToText &operator<<(
 }
 
 inline std::string to_string(const AuthApp &entry) {
+  const char *k_default_role_id = "default_role_id";
   helper::json::SerializerToText stt;
   {
     auto obj = stt.add_object();
-    stt.member_add_value("id", entry.id);
-    stt.member_add_value("service_id", entry.service_id);
+    stt.member_add_value("id", "0x" + entry.id.to_string());
+    stt.member_add_value("service_id", "0x" + entry.service_id.to_string());
     stt.member_add_value("name", entry.vendor_name);
     stt.member_add_value("limit_to_registered_users",
                          entry.limit_to_registered_users);
@@ -92,7 +93,11 @@ inline std::string to_string(const AuthApp &entry) {
       stt.member_add_value("url_validation", entry.url_validation);
     }
 
-    stt.member_add_value("default_role_id", entry.default_role_id);
+    if (entry.default_role_id.has_value())
+      stt.member_add_value(k_default_role_id,
+                           "0x" + entry.default_role_id.value().to_string());
+    else
+      stt.member_add_null_value(k_default_role_id);
   }
 
   return stt.get_result();
