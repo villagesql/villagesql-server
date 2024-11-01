@@ -145,6 +145,9 @@ Warning	1264	Out of range value for column 'ushort' at row 1
 Warning	1264	Out of range value for column 'umedium' at row 1
 Warning	1265	Data truncated for column 'options' at row 1
 insert into t1 (tiny) values (1);
+Warnings:
+Warning	1364	Field 'mediumblob_col' doesn't have a default value
+Warning	1364	Field 'longblob_col' doesn't have a default value
 select auto,string,tiny,short,medium,long_int,longlong,real_float,real_double,utiny,ushort,umedium,ulong,ulonglong,mod(floor(time_stamp/1000000),1000000)-mod(curdate(),1000000),date_field,time_field,date_time,blob_col,tinyblob_col,mediumblob_col,longblob_col from t1;
 auto	string	tiny	short	medium	long_int	longlong	real_float	real_double	utiny	ushort	umedium	ulong	ulonglong	mod(floor(time_stamp/1000000),1000000)-mod(curdate(),1000000)	date_field	time_field	date_time	blob_col	tinyblob_col	mediumblob_col	longblob_col
 10	1	1	1	1	1	1	1.0	1.0000	1	00001	1	1	1	0	0000-00-00	00:00:00	0000-00-00 00:00:00	1	1	1	1

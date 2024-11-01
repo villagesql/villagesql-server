@@ -429,6 +429,7 @@ bool Create_field::init(
                               ER_THD(thd, ER_BLOB_CANT_HAVE_DEFAULT), fld_name);
         }
         constant_default = nullptr;
+        if (fld_type != MYSQL_TYPE_JSON) flags |= NO_DEFAULT_VALUE_FLAG;
       }
 
       flags |= BLOB_FLAG;
