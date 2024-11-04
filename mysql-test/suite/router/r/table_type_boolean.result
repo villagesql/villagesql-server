@@ -18,18 +18,18 @@ INSERT INTO test.type_bit2(name, is_active)     VALUES("0", 0),("1",1),("TRUE", 
 
 ## I. Verify JSON encoding/decoding of MYSQL ALIAS BOOLEAN to JSON value
 # 1. Verify that MRS encodes MYSQL BOOLEAN type into JSON NUMERIC value in response docuemnts
-# 2. Verify that documents may be filtere on MYSQL BOOLEAN column/type using JSON NUMERIC value
-# 3. Verify that documents can't filtere on MYSQL BOOLEAN column/type using JSON BOOLEAN value
+# 2. Verify that documents may be filtered on MYSQL BOOLEAN column/type using JSON NUMERIC value
+# 3. Verify that documents can't filtered on MYSQL BOOLEAN column/type using JSON BOOLEAN value
 #
 ## II. Verify JSON encoding/decoding of MYSQL TINYINT(1) to JSON value
 # 1. Verify that MRS encodes MYSQL TINYINT(1) type into JSON NUMERIC value in response docuemnts
-# 2. Verify that documents may be filtere on MYSQL TINYINT(1) column/type using JSON NUMERIC value
-# 3. Verify that documents can't filtere on MYSQL TINYINT(1) column/type using JSON BOOLEAN value
+# 2. Verify that documents may be filtered on MYSQL TINYINT(1) column/type using JSON NUMERIC value
+# 3. Verify that documents can't filtered on MYSQL TINYINT(1) column/type using JSON BOOLEAN value
 #
 ## III. Verify JSON encoding/decoding of MYSQL BIT(1) to JSON value
 # 1. Verify that MRS encodes MYSQL BIT(1) type into JSON BOOLEAN value in response docuemnts
-# 2. Verify that documents may be filtere on MYSQL BIT(1) column/type using JSON NUMERIC value
-# 3. Verify that documents may filtere on MYSQL BIT(1) column/type using JSON BOOLEAN value
+# 2. Verify that documents may be filtered on MYSQL BIT(1) column/type using JSON NUMERIC value
+# 3. Verify that documents may filtered on MYSQL BIT(1) column/type using JSON BOOLEAN value
 #
 # Registred SERVICE at path: /svc
 # Registred DB_SCHEMA at path: /svc/test

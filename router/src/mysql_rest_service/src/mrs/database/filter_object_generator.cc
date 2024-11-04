@@ -297,120 +297,153 @@ void FilterObjectGenerator::parse_orderby_asof_wmember(Object object) {
         throw RestError("`orderby` must be and json object.");
       parse_order(member.second->GetObject());
     } else {
-      if (!where_.is_empty()) where_.append_preformatted(" AND");
-      //      else
-      //        where_ = " WHERE";
-      parse_wmember(member.first, member.second);
+      if (!where_.is_empty()) where_.append_preformatted(" AND ");
+      const bool result = parse_wmember(member.first, member.second);
+      if (!result) {
+        RestError("Invalid `FilterObject`");
+      }
     }
   }
 }
 
-bool FilterObjectGenerator::parse_complex_object(const char *name,
-                                                 Value *value) {
-  //  log_debug("Parser complex_object ");
-  if ("$or"s == name) {
-    where_.append_preformatted("(");
-    parse_complex_or(value);
-    where_.append_preformatted(")");
-  } else if ("$and"s == name) {
-    where_.append_preformatted("(");
-    parse_complex_and(value);
-    where_.append_preformatted(")");
-  } else if ("$match"s == name) {
-    where_.append_preformatted("(");
-    parse_match(value);
-    where_.append_preformatted(")");
-  } else {
-    return false;
-  }
+/*
+ * complexValue
+ *  1) simpleOperatorObject
+ *  2) complexOperatorObject
+ *  3) columnObject
+ */
+std::optional<std::string> FilterObjectGenerator::parse_complex_value(
+    const std::string_view &column_name, Value *value) {
+  log_debug("parse_complex_value %s", column_name.data());
+  if (!value->IsObject()) return {};
+  if (value->MemberCount() != 1) return {};
 
-  return true;
+  auto name = value->MemberBegin()->name.GetString();
+  Value *child = &value->MemberBegin()->value;
+
+  // 1) simpleOperatorObject
+  auto result = parse_simple_operator_object(column_name, value);
+  if (result) return result;
+
+  // 2) complexOperatorObject
+  result = parse_complex_operator_object(column_name, child, name);
+  if (result) return result;
+
+  // 3) columnObject
+  return parse_column_object(name, child);
 }
 
-bool FilterObjectGenerator::parse_simple_object(Value *object) {
-  if (!object->IsObject()) return false;
-  if (object->MemberCount() != 1) return false;
+/*
+ * complexOperatorProperty
+ *  1) complexKey : [complexValues]
+ *  2) complexKey : simpleOperatorObject
+ */
+std::optional<std::string> FilterObjectGenerator::parse_complex_operator_object(
+    const std::string_view &column_name, Value *value,
+    const std::string_view &complex_key) {
+  log_debug("parse_complex_operator_object, column=%s, operator=%s",
+            column_name.data(), complex_key.data());
+  if ("$or"s == complex_key || "$and"s == complex_key) {
+    // 1) complexKey : [complexValues]
+    auto result = parse_complex_values(column_name, value, complex_key);
+    if (result) return result;
 
+    // 2) complexKey : simpleOperatorObject
+    return parse_simple_operator_object(column_name, value);
+  } else if ("$match"s == complex_key) {
+    // this is our extension to the grammar
+    return parse_match(value);
+  }
+
+  return {};
+}
+
+std::optional<std::string> FilterObjectGenerator::parse_simple_operator_object(
+    const std::string_view &column_name, Value *object) {
+  log_debug("parse_simple_operator_object %s", column_name.data());
+  if (column_name.empty()) return {};
+  if (!object->IsObject() || (object->MemberCount() != 1)) return {};
+
+  auto [table, dfield] = resolve_field(column_name);
+  auto db_name = resolve_field_name(table, dfield, column_name, false);
+
+  mysqlrouter::sqlstring result;
   auto name = object->MemberBegin()->name.GetString();
   Value *value = &object->MemberBegin()->value;
-  auto field_name = argument_.back().c_str();
-  auto [table, dfield] = resolve_field(field_name);
-  auto db_name = resolve_field_name(table, dfield, field_name, false);
-
   log_debug("dispatched type %i", static_cast<int>(value->GetType()));
-  where_.append_preformatted(" ");
+
   if ("$eq"s == name) {
-    log_debug("Parser simple_object $eq");
-    where_.append_preformatted(db_name)
+    log_debug("parse_simple_operator_object $eq");
+    result.append_preformatted(db_name)
         .append_preformatted(" = ")
         .append_preformatted(
             to_sqlstring<tosVec, tosGeom, tosString, tosBoolean, tosNumber,
                          tosDate>(dfield.get(), value));
   } else if ("$ne"s == name) {
-    log_debug("Parser simple_object $ne");
-    where_.append_preformatted(db_name)
+    log_debug("parse_simple_operator_object $ne");
+    result.append_preformatted(db_name)
         .append_preformatted(" <> ")
         .append_preformatted(
             to_sqlstring<tosVec, tosGeom, tosString, tosBoolean, tosNumber,
                          tosDate>(dfield.get(), value));
   } else if ("$lt"s == name) {
-    log_debug("Parser simple_object $lt");
-    where_.append_preformatted(db_name)
+    log_debug("parse_simple_operator_object $lt");
+    result.append_preformatted(db_name)
         .append_preformatted(" < ")
         .append_preformatted(
             to_sqlstring<tosNumber, tosDate>(dfield.get(), value));
   } else if ("$lte"s == name) {
-    log_debug("Parser simple_object $lte");
-    where_.append_preformatted(db_name)
+    log_debug("parse_simple_operator_object $lte");
+    result.append_preformatted(db_name)
         .append_preformatted(" <= ")
         .append_preformatted(
             to_sqlstring<tosNumber, tosDate>(dfield.get(), value));
   } else if ("$gt"s == name) {
-    log_debug("Parser simple_object $gt");
-    where_.append_preformatted(db_name)
+    log_debug("parse_simple_operator_object $gt");
+    result.append_preformatted(db_name)
         .append_preformatted(" > ")
         .append_preformatted(
             to_sqlstring<tosNumber, tosDate>(dfield.get(), value));
   } else if ("$gte"s == name) {
-    log_debug("Parser simple_object $gte");
-    where_.append_preformatted(db_name)
+    log_debug("parse_simple_operator_object $gte");
+    result.append_preformatted(db_name)
         .append_preformatted(" >= ")
         .append_preformatted(
             to_sqlstring<tosNumber, tosDate>(dfield.get(), value));
   } else if ("$instr"s == name) {
-    log_debug("Parser simple_object $instr");
-    where_.append_preformatted("instr(")
+    log_debug("parse_simple_operator_object $instr");
+    result.append_preformatted("instr(")
         .append_preformatted(db_name)
         .append_preformatted(", ")
         .append_preformatted(to_sqlstring<tosString>(dfield.get(), value))
         .append_preformatted(")");
   } else if ("$ninstr"s == name) {
-    log_debug("Parser simple_object $not instr");
-    where_.append_preformatted("not instr(")
+    log_debug("parse_simple_operator_object $not instr");
+    result.append_preformatted("not instr(")
         .append_preformatted(db_name)
         .append_preformatted(", ")
         .append_preformatted(to_sqlstring<tosString>(dfield.get(), value))
         .append_preformatted(")");
   } else if ("$like"s == name) {
-    log_debug("Parser simple_object $like");
-    where_.append_preformatted(db_name)
+    log_debug("parse_simple_operator_object $like");
+    result.append_preformatted(db_name)
         .append_preformatted(" like ")
         .append_preformatted(to_sqlstring<tosString>(dfield.get(), value));
   } else if ("$null"s == name) {
-    log_debug("Parser simple_object $null");
-    where_.append_preformatted(db_name).append_preformatted(" IS NULL");
-    log_debug("Parser simple_object $notnull");
+    log_debug("parse_simple_operator_object $null");
+    result.append_preformatted(db_name).append_preformatted(" IS NULL");
+    log_debug("parse_simple_operator_object $notnull");
   } else if ("$notnull"s == name) {
-    where_.append_preformatted(db_name).append_preformatted(" IS NOT NULL");
+    result.append_preformatted(db_name).append_preformatted(" IS NOT NULL");
   } else if ("$between"s == name) {
-    log_debug("Parser simple_object $between");
+    log_debug("parse_simple_operator_object $between");
     if (!value->IsArray())
       throw RestError("Between operator, requires an array field.");
     if (value->Size() != 2)
       throw RestError("Between field, requires array with size of two.");
     // TODO(lkotula): Support of NULL values with different types of `tos-es`
     // (Shouldn't be in review)
-    where_.append_preformatted(db_name)
+    result.append_preformatted(db_name)
         .append_preformatted(" BETWEEN ")
         .append_preformatted(to_sqlstring<tosString, tosNumber, tosDate>(
             dfield.get(), &(*value)[0]))
@@ -418,13 +451,13 @@ bool FilterObjectGenerator::parse_simple_object(Value *object) {
         .append_preformatted(to_sqlstring<tosString, tosNumber, tosDate>(
             dfield.get(), &(*value)[1]));
   } else {
-    return false;
+    return {};
   }
 
-  return true;
+  return result.str();
 }
 
-void FilterObjectGenerator::parse_match(Value *value) {
+std::optional<std::string> FilterObjectGenerator::parse_match(Value *value) {
   log_debug("parse_complex_match");
   if (!value->IsObject())
     throw RestError("Match operator, requires JSON object as value.");
@@ -474,59 +507,142 @@ void FilterObjectGenerator::parse_match(Value *value) {
 
   mysqlrouter::sqlstring v{"MATCH (!) AGAINST(? ?) "};
   v << fields << against_expr->value.GetString() << selected_modifier;
-  where_.append_preformatted(v);
+
+  return v.str();
 }
 
-void FilterObjectGenerator::parse_complex_and(Value *value) {
-  log_debug("Parser complex_and");
-  if (value->IsObject())
-    throw RestError(
-        "Simple operators are not supported for complex operations (just "
-        "arrays).");
+/*
+ * columnProperty
+ *   columnName : string
+ *   columnName : number
+ *   columnName : date
+ *   columnName : <other types>
+ */
+std::optional<std::string> FilterObjectGenerator::parse_direct_value(
+    const std::string_view &column_name, Value *value) {
+  log_debug("parse_direct_value %s", column_name.data());
 
-  if (!value->IsArray())
-    throw RestError("Complex operations requires and array argument.");
-  auto arr = value->GetArray();
-  bool first = true;
-  for (auto &el : helper::json::array_iterator(arr)) {
-    if (!first) where_.append_preformatted(" AND");
-    first = false;
+  auto [table, dfield] = resolve_field(column_name);
+  mysqlrouter::sqlstring dbname =
+      resolve_field_name(table, dfield, column_name, false);
 
-    if (!el.IsObject())
-      throw RestError("Complex expression, array element must be an object.");
-    where_.append_preformatted("(");
-    auto el_as_object = el.GetObject();
-    for (auto member : helper::json::member_iterator(el_as_object)) {
-      parse_wmember(member.first, member.second);
+  mysqlrouter::sqlstring result;
+
+  try {
+    result.append_preformatted(
+        mysqlrouter::sqlstring("!=?")
+        << dbname
+        << to_sqlstring<tosVec, tosGeom, tosString, tosBoolean, tosNumber,
+                        tosDate>(dfield.get(), value));
+  } catch (const RestError &) {
+    // If it is an object we try the other matchers so don't throw, just leave.
+    // According to the grammar we could just leave at the beginning of this
+    // function as an object should not be a fit for direct value, but we
+    // additionally support a GEO datatype which can be represented as an object
+    // in the filter JSON.
+    // Same is true for an array, we could also skip it at the beginning but
+    // here we use it to support Vec datatype matching.
+    if (value->IsObject() || value->IsArray()) {
+      return {};
     }
-    where_.append_preformatted(")");
+    throw;
   }
+
+  return result.str();
 }
 
-void FilterObjectGenerator::parse_complex_or(Value *value) {
-  log_debug("Parser complex_or");
-  if (value->IsObject())
-    throw RestError(
-        "Simple operators are not supported for complex operations (just "
-        "arrays).");
+/*
+ * complexValues
+ *   complexValue , complexValues
+ */
+std::optional<std::string> FilterObjectGenerator::parse_complex_values(
+    const std::string_view &column_name, Value *value,
+    const std::string_view &complex_key) {
+  log_debug("parse_complex_values %s", column_name.data());
+  assert(complex_key == "$and" || complex_key == "$or");
 
-  if (!value->IsArray())
-    throw RestError("Complex operations requires and array argument.");
-  auto arr = value->GetArray();
+  const std::string sql_operator = complex_key == "$and" ? "AND" : "OR";
+  if (!value->IsArray()) {
+    return {};
+  }
+
+  const auto arr = value->GetArray();
+  if (arr.Size() == 0) {
+    throw RestError("parse_complex_values: array can't be empty");
+  }
+
+  std::string result_str;
   bool first = true;
   for (auto &el : helper::json::array_iterator(arr)) {
-    if (!first) where_.append_preformatted(" OR");
-    first = false;
-
-    if (!el.IsObject())
-      throw RestError("Complex expression, array element must be an object.");
-    where_.append_preformatted("(");
-    auto el_as_object = el.GetObject();
-    for (auto member : helper::json::member_iterator(el_as_object)) {
-      parse_wmember(member.first, member.second);
+    auto result = parse_complex_value(column_name, &el);
+    if (!result) {
+      throw RestError("parse_complex_values: failed to parse complex_value");
     }
-    where_.append_preformatted(")");
+
+    if (!first) {
+      result_str += " " + sql_operator + " ";
+    } else {
+      first = false;
+    }
+
+    result_str += "(" + *result + ")";
   }
+
+  return result_str;
+}
+
+namespace {
+/**
+ * columnName
+ *  "\p{Alpha}[[\p{Alpha}]]([[\p{Alnum}]#$_])*$"
+ */
+bool is_valid_column_name(const std::string_view &str) {
+  if (str.empty()) return false;
+  // Check if the first character is alphabetic
+  if (!std::isalpha(str[0])) return false;
+
+  // Check remaining characters: should be alphanumeric, '#', '$', or '_'
+  for (size_t i = 1; i < str.size(); ++i) {
+    const auto &ch = str[i];
+    if (!std::isalnum(ch) && ch != '#' && ch != '$' && ch != '_') {
+      return false;
+    }
+  }
+
+  return true;
+}
+}  // namespace
+
+/*
+ * columnProperty
+ *   1) columnName : string OR number OR date OR geometry OR vector ...
+ *   2) columnName : simpleOperatorObject
+ *   3) columnName : complexOperatorObject
+ *   4) columnName : [complexValues]
+ */
+std::optional<std::string> FilterObjectGenerator::parse_column_object(
+    const std::string_view &column_name, Value *value) {
+  log_debug("parse_column_object %s", column_name.data());
+  if (!is_valid_column_name(column_name)) return {};
+
+  // 1) columnName : simple type
+  auto result = parse_direct_value(column_name, value);
+  if (result) return result;
+
+  // 2) columnName : simpleOperatorObject
+  result = parse_simple_operator_object(column_name, value);
+  if (result) return result;
+
+  // 3) columnName : complexOperatorObject
+  if ((value->IsObject()) && (value->MemberCount() == 1)) {
+    auto name = value->MemberBegin()->name.GetString();
+    Value *child = &value->MemberBegin()->value;
+    result = parse_complex_operator_object(column_name, child, name);
+    if (result) return result;
+  }
+
+  // 4) columnName : [complexValues]
+  return parse_complex_values(column_name, value, "$and");
 }
 
 mysqlrouter::sqlstring FilterObjectGenerator::get_asof() const {
@@ -539,25 +655,29 @@ bool FilterObjectGenerator::has_order() const { return !order_.is_empty(); }
 
 bool FilterObjectGenerator::has_asof() const { return !asof_gtid_.is_empty(); }
 
-void FilterObjectGenerator::parse_wmember(const char *name, Value *value) {
-  log_debug("Parser wmember");
-  using namespace std::literals::string_literals;
-  argument_.push_back(name);
-  if (parse_complex_object(name, value)) return;
-  if (parse_simple_object(value)) return;
-  log_debug("direct field=value");
+/*
+ * wpair
+ *   1) columnProperty
+ *   2) complexOperatorProperty
+ */
+bool FilterObjectGenerator::parse_wmember(const std::string_view &name,
+                                          Value *value) {
+  log_debug("parse_wmember %s", name.data());
+  // 1) columnProperty
+  auto result = parse_column_object(name, value);
 
-  auto [table, dfield] = resolve_field(name);
-  mysqlrouter::sqlstring dbname =
-      resolve_field_name(table, dfield, name, false);
+  // 2) complexOperatorProperty
+  if (!result) result = parse_complex_operator_object("", value, name);
 
-  // TODO(lkotula): array of ComplectValues (Shouldn't be in review)
-  where_.append_preformatted(
-      mysqlrouter::sqlstring(" !=?")
-      << dbname
-      << to_sqlstring<tosVec, tosGeom, tosString, tosBoolean, tosNumber,
-                      tosDate>(dfield.get(), value));
-  argument_.pop_back();
+  if (result) {
+    where_.append_preformatted("(")
+        .append_preformatted((*result).c_str())
+        .append_preformatted(")");
+    return true;
+  }
+
+  log_debug("parse_wmember: no match!");
+  return false;
 }
 
 void FilterObjectGenerator::parse_asof(Value *value) {
@@ -621,7 +741,7 @@ void FilterObjectGenerator::parse_order(Object object) {
 }
 
 std::pair<std::shared_ptr<entry::Table>, std::shared_ptr<entry::Column>>
-FilterObjectGenerator::resolve_field(const char *name) {
+FilterObjectGenerator::resolve_field(const std::string_view &name) {
   if (!object_metadata_) return {nullptr, nullptr};
 
   auto field = object_metadata_->get_field(name);
@@ -630,15 +750,15 @@ FilterObjectGenerator::resolve_field(const char *name) {
 
 mysqlrouter::sqlstring FilterObjectGenerator::resolve_field_name(
     const std::shared_ptr<entry::Table> &table,
-    const std::shared_ptr<entry::Column> &dfield, const char *name,
+    const std::shared_ptr<entry::Column> &dfield, const std::string_view &name,
     bool for_sorting) const {
-  if (!object_metadata_) return mysqlrouter::sqlstring("!") << name;
+  if (!object_metadata_) return mysqlrouter::sqlstring("!") << name.data();
 
   if (dfield) {
     if (!dfield->allow_filtering && !for_sorting && !dfield->is_primary)
-      throw RestError("Cannot filter on field "s + name);
+      throw RestError("Cannot filter on field "s + name.data());
     if (!dfield->allow_sorting && for_sorting && !dfield->is_primary)
-      throw RestError("Cannot sort on field "s + name);
+      throw RestError("Cannot sort on field "s + name.data());
 
     if (joins_allowed_)
       return mysqlrouter::sqlstring("!.!")
@@ -648,9 +768,9 @@ mysqlrouter::sqlstring FilterObjectGenerator::resolve_field_name(
   }
   // TODO(alfredo) filter on nested fields
   if (!for_sorting)
-    throw RestError("Cannot filter on field "s + name);
+    throw RestError("Cannot filter on field "s + name.data());
   else
-    throw RestError("Cannot sort on field "s + name);
+    throw RestError("Cannot sort on field "s + name.data());
 }
 
 }  // namespace database

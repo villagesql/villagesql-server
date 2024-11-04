@@ -27,6 +27,7 @@
 
 #include <list>
 #include <memory>
+#include <optional>
 #include <string>
 
 #ifdef RAPIDJSON_NO_SIZETYPEDEFINE
@@ -63,21 +64,31 @@ class FilterObjectGenerator {
   void reset(const Clear clear = Clear::kAll);
 
  private:
-  void parse_complex_or(Value *value);
-  void parse_complex_and(Value *value);
-  bool parse_simple_object(Value *value);
-  bool parse_complex_object(const char *name, Value *value);
+  std::optional<std::string> parse_simple_operator_object(
+      const std::string_view &column_name, Value *value);
+  std::optional<std::string> parse_complex_operator_object(
+      const std::string_view &column_name, Value *value,
+      const std::string_view &complex_key);
+  std::optional<std::string> parse_complex_value(
+      const std::string_view &column_name, Value *value);
+  std::optional<std::string> parse_complex_values(
+      const std::string_view &column_name, Value *value,
+      const std::string_view &complex_key);
+  std::optional<std::string> parse_column_object(
+      const std::string_view &column_name, Value *value);
+  std::optional<std::string> parse_direct_value(
+      const std::string_view &column_name, Value *value);
+  std::optional<std::string> parse_match(Value *value);
   void parse_orderby_asof_wmember(Object object);
   void parse_order(Object object);
   void parse_asof(Value *value);
-  void parse_wmember(const char *name, Value *value);
-  void parse_match(Value *value);
+  bool parse_wmember(const std::string_view &name, Value *value);
   std::pair<std::shared_ptr<entry::Table>, std::shared_ptr<entry::Column>>
-  resolve_field(const char *name);
+  resolve_field(const std::string_view &name);
   mysqlrouter::sqlstring resolve_field_name(
       const std::shared_ptr<entry::Table> &table,
-      const std::shared_ptr<entry::Column> &dfield, const char *name,
-      bool for_sorting) const;
+      const std::shared_ptr<entry::Column> &dfield,
+      const std::string_view &name, bool for_sorting) const;
 
   std::shared_ptr<database::entry::Object> object_metadata_;
   bool joins_allowed_{false};
