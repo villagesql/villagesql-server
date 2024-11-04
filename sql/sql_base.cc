@@ -2106,6 +2106,11 @@ bool close_temporary_tables(THD *thd) {
       thd->variables.pseudo_thread_id = save_pseudo_thread_id;
       thd->thread_specific_used = save_thread_specific_used;
     } else {
+      if (table->s->has_secondary_engine()) {
+        error = secondary_engine_unload_table_inner(
+            thd, table->s->db.str, table->s->path.str,
+            table->s->secondary_engine, false, false);
+      }
       next = table->next;
       /*
         This is for those cases when we have acquired lock but drop temporary
@@ -6156,6 +6161,12 @@ restart:
       thd->lex->set_has_external_tables();
     }
 
+    if (tbl != nullptr && tbl->s->has_secondary_engine() &&
+        is_temporary_table(tables)) {
+      thd->lex->set_execute_only_in_secondary_engine(true,
+                                                     TEMPORARY_TABLE_USAGE);
+    }
+
     /*
       Access to ACL table in a SELECT ... LOCK IN SHARE MODE are required
       to skip acquiring row locks. So, we use TL_READ_DEFAULT lock on ACL
@@ -6905,6 +6916,10 @@ static bool open_secondary_engine_tables(THD *thd, uint flags) {
   for (; tr != nullptr && (lex->query_tables_own_last == nullptr ||
                            tr != lex->query_tables_own_last[0]);
        tr = tr->next_global) {
+    if (is_temporary_table(tr)) {
+      // Temporary tables are already opened in secondary engine.
+      continue;
+    }
     if (tr->is_placeholder()) {
       continue;
     }
@@ -7630,8 +7645,12 @@ bool open_temporary_table(THD *thd, Table_ref *tl) {
   table->query_id = thd->query_id;
   thd->thread_specific_used = true;
 
-  tl->set_updatable();  // It is not derived table nor non-updatable VIEW.
-  tl->set_insertable();
+  if (table->s->has_secondary_engine()) {
+    tl->set_readonly();
+  } else {
+    tl->set_updatable();  // It is not derived table nor non-updatable VIEW.
+    tl->set_insertable();
+  }
 
   table->reset();
   table->init(thd, tl);

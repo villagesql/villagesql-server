@@ -1073,6 +1073,8 @@ void notify_plugins_after_select(THD *thd, const Sql_cmd *cmd);
 
 std::string_view get_secondary_engine_fail_reason(const LEX *lex);
 
+bool set_secondary_engine_fail_reason(const LEX *lex, std::string_view reason);
+
 void set_fail_reason_and_raise_error(const LEX *lex, std::string_view reason);
 
 const MYSQL_LEX_CSTRING *get_eligible_secondary_engine_from(const LEX *lex);

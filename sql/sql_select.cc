@@ -385,7 +385,8 @@ std::string_view find_secondary_engine_fail_reason(const LEX *lex) {
   const auto *hton = get_secondary_engine_handlerton(lex);
   if (hton != nullptr &&
       hton->find_secondary_engine_offload_fail_reason != nullptr &&
-      lex->thd->variables.use_secondary_engine == SECONDARY_ENGINE_FORCED) {
+      (lex->thd->variables.use_secondary_engine == SECONDARY_ENGINE_FORCED ||
+       lex->can_execute_only_in_secondary_engine())) {
     return hton->find_secondary_engine_offload_fail_reason(lex->thd);
   }
   if (hton == nullptr && get_eligible_secondary_engine_from(lex) != nullptr &&
@@ -400,8 +401,7 @@ std::string_view find_secondary_engine_fail_reason(const LEX *lex) {
   return "All plans were rejected by the secondary storage engine";
 }
 
-static bool set_secondary_engine_fail_reason(const LEX *lex,
-                                             std::string_view reason) {
+bool set_secondary_engine_fail_reason(const LEX *lex, std::string_view reason) {
   const auto *hton = get_secondary_engine_handlerton(lex);
   if (hton != nullptr &&
       hton->set_secondary_engine_offload_fail_reason != nullptr &&
