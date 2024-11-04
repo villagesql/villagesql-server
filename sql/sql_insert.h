@@ -208,6 +208,9 @@ class Query_result_create final : public Query_result_insert {
     create_info = create_info_arg;
     alter_info = alter_info_arg;
   }
+  [[nodiscard]] Table_ref *get_create_table() const override {
+    return create_table;
+  }
 
  private:
   bool stmt_binlog_is_trans() const override;

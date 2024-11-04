@@ -3920,7 +3920,9 @@ enum execute_only_in_secondary_reasons {
   SUPPORTED_IN_PRIMARY,
   CUBE,
   TABLESAMPLE,
-  OUTFILE_OBJECT_STORE
+  OUTFILE_OBJECT_STORE,
+  TEMPORARY_TABLE_CREATION,
+  TEMPORARY_TABLE_USAGE
 };
 
 /*
@@ -4177,9 +4179,11 @@ struct LEX : public Query_tables_list {
   std::map<Item_field *, Field *>::iterator end_values_map() {
     return insert_update_values_map->end();
   }
+
   bool can_execute_only_in_secondary_engine() const {
     return m_can_execute_only_in_secondary_engine;
   }
+
   void set_execute_only_in_secondary_engine(
       const bool execute_only_in_secondary_engine_param,
       execute_only_in_secondary_reasons reason) {
@@ -4190,8 +4194,8 @@ struct LEX : public Query_tables_list {
            reason == SUPPORTED_IN_PRIMARY);
   }
 
-  execute_only_in_secondary_reasons get_not_supported_in_primary_reason()
-      const {
+  [[nodiscard]] execute_only_in_secondary_reasons
+  get_not_supported_in_primary_reason() const {
     return m_execute_only_in_secondary_engine_reason;
   }
 
@@ -4204,6 +4208,10 @@ struct LEX : public Query_tables_list {
         return "TABLESAMPLE";
       case OUTFILE_OBJECT_STORE:
         return "OUTFILE to object store";
+      case TEMPORARY_TABLE_CREATION:
+        return "Secondary engine temporary table creation";
+      case TEMPORARY_TABLE_USAGE:
+        return "Secondary engine temporary table within this statement";
       default:
         return "UNDEFINED";
     }

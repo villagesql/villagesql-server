@@ -156,6 +156,10 @@ bool Sql_cmd_create_table::execute(THD *thd) {
     return true;
   }
 
+  if (validate_secondary_engine_temporary_table(thd, &create_info)) {
+    return true;
+  }
+
   if (((lex->create_info->used_fields & HA_CREATE_USED_DATADIR) != 0 ||
        (lex->create_info->used_fields & HA_CREATE_USED_INDEXDIR) != 0) &&
       check_access(thd, FILE_ACL, any_db, nullptr, nullptr, false, false)) {
