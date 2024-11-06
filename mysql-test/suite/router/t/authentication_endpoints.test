@@ -389,42 +389,31 @@
 --echo
 --echo #
 --echo # I.4
-# TODO: The response body points that the logout was successful,
-#       but no valid session was providen to it.
 --let $mrs_client_arg_path='/a/authentication/logout'
---let $mrs_client_arg_expected_status=Unauthorized
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/b/authentication/logout'
---let $mrs_client_arg_expected_status=Unauthorized
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/c/authentication/logout'
---let $mrs_client_arg_expected_status=Unauthorized
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/d/authentication/logout'
---let $mrs_client_arg_expected_status=Unauthorized
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/e/authentication/logout'
---let $mrs_client_arg_expected_status=Unauthorized
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/f/authentication/logout'
---let $mrs_client_arg_expected_status=Unauthorized
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/g/authentication/logout'
---let $mrs_client_arg_expected_status=Unauthorized
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/h/authentication/logout'
---let $mrs_client_arg_expected_status=Unauthorized
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/i/authentication/logout'
---let $mrs_client_arg_expected_status=Unauthorized
 --source ../include/mrs/mrs_client.inc
 
 --echo

@@ -37,21 +37,23 @@ namespace handler {
 
 using HttpResult = HandlerAuthorizeLogout::HttpResult;
 
-std::string impl_get_json_response_ok() {
+static std::string impl_get_json_response(
+    const HttpStatusCode::key_type k_status, const char *message) {
   helper::json::SerializerToText stt;
   {
     auto obj = stt.add_object();
-    obj->member_add_value("message", "OK");
-    obj->member_add_value("status", 200);
+    obj->member_add_value("message", message);
+    obj->member_add_value("status", k_status);
   }
 
   return stt.get_result();
 }
 
-std::string get_json_response_ok() {
-  static std::string result = impl_get_json_response_ok();
-
-  return result;
+static HttpResult get_json_response_ok() {
+  const auto k_status_ok = HttpStatusCode::Ok;
+  return {k_status_ok,
+          impl_get_json_response(k_status_ok, "Logged out successfully"),
+          HttpResult::Type::typeJson};
 }
 
 HandlerAuthorizeLogout::HandlerAuthorizeLogout(
@@ -88,8 +90,7 @@ uint32_t HandlerAuthorizeLogout::get_access_rights() const {
 
 HttpResult HandlerAuthorizeLogout::handle_get(RequestContext *ctxt) {
   auth_manager_->unauthorize(service_id_, &ctxt->cookies);
-  return {HttpStatusCode::Unauthorized, get_json_response_ok(),
-          HttpResult::Type::typeJson};
+  return get_json_response_ok();
 }
 
 HttpResult HandlerAuthorizeLogout::handle_post(RequestContext *,

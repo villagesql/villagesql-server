@@ -164,55 +164,55 @@ OK
 # I.4
 GET /a/authentication/logout
 {
-    "message": "OK",
+    "message": "Logged out successfully",
     "status": 200
 }
 OK
 GET /b/authentication/logout
 {
-    "message": "OK",
+    "message": "Logged out successfully",
     "status": 200
 }
 OK
 GET /c/authentication/logout
 {
-    "message": "OK",
+    "message": "Logged out successfully",
     "status": 200
 }
 OK
 GET /d/authentication/logout
 {
-    "message": "OK",
+    "message": "Logged out successfully",
     "status": 200
 }
 OK
 GET /e/authentication/logout
 {
-    "message": "OK",
+    "message": "Logged out successfully",
     "status": 200
 }
 OK
 GET /f/authentication/logout
 {
-    "message": "OK",
+    "message": "Logged out successfully",
     "status": 200
 }
 OK
 GET /g/authentication/logout
 {
-    "message": "OK",
+    "message": "Logged out successfully",
     "status": 200
 }
 OK
 GET /h/authentication/logout
 {
-    "message": "OK",
+    "message": "Logged out successfully",
     "status": 200
 }
 OK
 GET /i/authentication/logout
 {
-    "message": "OK",
+    "message": "Logged out successfully",
     "status": 200
 }
 OK
