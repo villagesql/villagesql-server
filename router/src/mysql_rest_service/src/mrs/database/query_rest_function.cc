@@ -62,7 +62,7 @@ mysqlrouter::sqlstring format_parameters(
 
   auto vit = values.begin();
   object->foreach_field<entry::Column, bool>(
-      [&s, &vit, values](const entry::Column &c) {
+      [&s, &vit, &values](const entry::Column &c) {
         if (vit == values.end()) {
           throw std::runtime_error("Parameter not set:"s + c.name);
         }
