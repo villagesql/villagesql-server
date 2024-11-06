@@ -55,6 +55,9 @@ bool text_to(Handler *handler, const Container &c) {
   static_assert(
       std::is_same<typename Container::value_type, char>::value ||
       std::is_same<typename Container::value_type, unsigned char>::value);
+  if (c.size() == 0) {
+    return false;
+  }
   rapidjson::MemoryStream memory_stream{
       reinterpret_cast<const char *>(&*c.begin()), c.size()};
   rapidjson::Reader read;
