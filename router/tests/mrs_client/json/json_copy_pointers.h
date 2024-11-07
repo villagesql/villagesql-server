@@ -135,6 +135,7 @@ class JsonCopyPointers : public helper::json::RapidReaderHandlerToStruct<bool> {
       bool all_ok{true};
       bool non_empty{false};
       for (auto &entry : ptr) {
+        if (k_it == k.end()) break;
         auto it = k_it++;
         while (it != k.end() && it->name.empty()) {
           it = k_it++;
