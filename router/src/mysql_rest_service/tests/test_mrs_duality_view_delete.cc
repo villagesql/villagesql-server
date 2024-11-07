@@ -92,7 +92,7 @@ class DualityViewDelete : public DatabaseRestTableTest {
     DualityViewUpdater dvu(view);
     FilterObjectGenerator fog(view, true);
 
-    fog.parse(make_json(filter));
+    fog.parse(filter);
 
     dvu.delete_(m_.get(), fog);
   }

@@ -52,7 +52,6 @@ class FilterObjectGenerator {
                         bool use_wait_in_where = true);
 
   void reconfigure(uint64_t wait_timeout = 0, bool use_wait_in_where = true);
-  void parse(const Document &doc);
   void parse(const std::string &filter_query);
   mysqlrouter::sqlstring get_result() const;
   mysqlrouter::sqlstring get_asof() const;
@@ -64,6 +63,8 @@ class FilterObjectGenerator {
   void reset(const Clear clear = Clear::kAll);
 
  private:
+  void parse(const Document &doc);
+
   std::optional<std::string> parse_simple_operator_object(
       const std::string_view &column_name, Value *value);
   std::optional<std::string> parse_complex_operator_object(

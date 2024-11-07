@@ -276,6 +276,8 @@ void FilterObjectGenerator::reset(const Clear clear) {
 void FilterObjectGenerator::parse(const Document &doc) {
   reset();
 
+  if (doc.HasParseError())
+    throw RestError("Value used for `FilterObject` is not JSON.");
   if (doc.IsNull()) return;
   if (!doc.IsObject()) throw RestError("`FilterObject` must be a json object.");
 
@@ -283,6 +285,8 @@ void FilterObjectGenerator::parse(const Document &doc) {
 }
 
 void FilterObjectGenerator::parse(const std::string &filter_query) {
+  if (filter_query.empty()) return;
+
   parse(helper::json::text_to_document(filter_query));
 }
 
@@ -431,9 +435,18 @@ std::optional<std::string> FilterObjectGenerator::parse_simple_operator_object(
         .append_preformatted(to_sqlstring<tosString>(dfield.get(), value));
   } else if ("$null"s == name) {
     log_debug("parse_simple_operator_object $null");
+    if (!value->IsNull()) {
+      throw RestError(
+          "Operator '$null' in Filter object accepts only null value.");
+    }
     result.append_preformatted(db_name).append_preformatted(" IS NULL");
-    log_debug("parse_simple_operator_object $notnull");
   } else if ("$notnull"s == name) {
+    log_debug("parse_simple_operator_object $notnull");
+    if (!value->IsNull()) {
+      throw RestError(
+          "Operator '$notnull' in Filter object accepts only null value.");
+    }
+
     result.append_preformatted(db_name).append_preformatted(" IS NOT NULL");
   } else if ("$between"s == name) {
     log_debug("parse_simple_operator_object $between");

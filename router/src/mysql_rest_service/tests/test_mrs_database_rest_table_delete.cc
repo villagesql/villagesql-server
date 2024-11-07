@@ -59,7 +59,7 @@ class DatabaseQueryDelete : public DatabaseRestTableTest {
                      const std::string &filter,
                      const ObjectRowOwnership &row_owner = {}) {
     FilterObjectGenerator fog(root, true, 0);
-    fog.parse(helper::json::text_to_document(filter));
+    fog.parse(filter);
 
     mrs::database::dv::DualityViewUpdater rest(root, row_owner);
 

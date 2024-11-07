@@ -1,0 +1,105 @@
+--source include/have_router.inc
+
+--let $extra_mrs_router_id=1
+--source ../include/predefined_setup/configure_router_mrs_root.inc
+--source ../include/schema/basic_schema.sql
+
+## Test starts here
+--echo
+--echo
+--echo ## I. Verify constrains on FilterObject
+--echo #
+--echo # 1. Verify that FilterObject doesn't accept other types than JsonObject and null.
+--echo # 2. Verify that "$null" opertator doesn't accept other types than null.
+--echo #
+--echo ## II. Verify valid options for FilterObject from point I
+--echo #
+--echo # 1. Verify that FilterObject may be empty.
+--echo # 2. Verify that FilterObject may be an empty JsonObject.
+--echo # 3. Verify that FilterObject may be a null JsonValue.
+--echo # 4. Verify that "$null" operator accepts null JsonValue.
+--echo #
+
+--source ../include/mrs/start_object_definition.inc
+
+# The test uses HOST to have only paths in HREF fields.
+--let $mrs_add_service_path="/svc"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_schema=basic_schema
+--let $mrs_add_schema_path=/basic
+--source ../include/mrs/db_schema/add.inc
+
+--let $mrs_add_db_object=table2
+--let $mrs_add_db_object_path=/table
+--source ../include/mrs/db_object/add.inc
+
+--source ../include/mrs/end_object_definition.inc
+
+
+--echo
+--echo #
+--echo # I.1
+--let $mrs_client_arg_path='/svc/basic/table?q=10'
+--let $mrs_client_arg_expected_status='BadRequest'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/svc/basic/table?q=String'
+--let $mrs_client_arg_expected_status='BadRequest'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/svc/basic/table?q=true'
+--let $mrs_client_arg_expected_status='BadRequest'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/svc/basic/table?q=[]'
+--let $mrs_client_arg_expected_status='BadRequest'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # I.2
+--let $mrs_client_arg_path='/svc/basic/table?q={"comments":{"\\\$null":"invalid-value"}}'
+--let $mrs_client_arg_expected_status='BadRequest'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/svc/basic/table?q={"comments":{"\\\$notnull":"invalid-value"}}'
+--let $mrs_client_arg_expected_status='BadRequest'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # II.1
+--let $mrs_client_arg_path='/svc/basic/table?q='
+--let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/db_object_table_items_non_empty.sch
+--let $mrs_client_arg_dispaly=status
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # II.2
+--let $mrs_client_arg_path='/svc/basic/table?q={}'
+--let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/db_object_table_items_non_empty.sch
+--let $mrs_client_arg_dispaly=status
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # II.3
+--let $mrs_client_arg_path='/svc/basic/table?q=null'
+--let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/db_object_table_items_non_empty.sch
+--let $mrs_client_arg_dispaly=status
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # II.4
+--let $mrs_client_arg_path='/svc/basic/table?q={"comments":{"\\\$null":null}}'
+--let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/db_object_table_items_non_empty.sch
+--let $mrs_client_arg_dispaly=status
+--source ../include/mrs/mrs_client.inc
+
+
+# Cleanup
+--source ../include/mrs/cleanup.inc
