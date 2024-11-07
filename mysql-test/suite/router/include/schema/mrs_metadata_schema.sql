@@ -1,5 +1,3 @@
-# Copyright (c) 2024, Oracle and/or its affiliates.
-
 # -----------------------------------------------------
 # MySQL REST Service Metadata Schema - CREATE Script
 

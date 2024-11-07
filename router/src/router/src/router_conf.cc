@@ -1227,8 +1227,3 @@ std::string MySQLRouterConf::bootstrap(
     return config_file_path;
   }
 }
-
-void MySQLRouterConf::assign_target_uri() {
-  const auto bootstrap_socket = get_bootstrap_socket();
-  target_uri_ = parse_server_uri(bootstrap_uri_, bootstrap_socket);
-}

@@ -1,5 +1,5 @@
 # MySQL InnoDB Cluster schema created.
-# InnDBCluster `AR Single node setup` - created 
+# InnDBCluster `AR Single node setup` - created
 # MySQL Rest Service schema created.
 CREATE USER 'admin'@'%' IDENTIFIED BY 'admin_pass';
 GRANT ALL PRIVILEGES ON *.* TO 'admin'@'%' WITH GRANT OPTION;

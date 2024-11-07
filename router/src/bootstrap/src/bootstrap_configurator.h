@@ -125,8 +125,6 @@ class BootstrapConfigurator {
   BootstrapCredentials mrs_metadata_account_;
   BootstrapCredentials mrs_data_account_;
   std::string mrs_secret_;
-
-  bool bootstrap_mrs_ensure_schema_{false};
   std::string bootstrap_mrs_developer_;
   bool bootstrap_mrs_{false};
   bool is_legacy_{true};
@@ -150,7 +148,6 @@ class BootstrapConfigurator {
 
   void configure_mrs(mysqlrouter::MySQLSession *session,
                      const std::string &config_path);
-  void ensure_mrs_schema(mysqlrouter::MySQLSession *session);
 
   void check_mrs_metadata(mysqlrouter::MySQLSession *session) const;
 

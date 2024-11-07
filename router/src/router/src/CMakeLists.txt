@@ -129,8 +129,6 @@ ENDIF()
 ADD_LIBRARY(router_frontend_lib STATIC
   ${frontend_lib_source_files})
 
-ADD_DEPENDENCIES(router_frontend_lib RouterMrsMetadataSchema)
-
 TARGET_LINK_LIBRARIES(router_frontend_lib
   router_lib
   routing_frontend_lib

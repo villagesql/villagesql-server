@@ -28,7 +28,7 @@ replace_regex
    /.*Adjusting permissions of generated files.*\n//
    ;
 --error 1,2,256
-exec $MYSQLROUTER_BOOTSTRAP 
+exec $MYSQLROUTER_BOOTSTRAP
    -B admin:admin_pass@127.0.0.1:$port
    --directory $MYSQL_TMP_DIR/bootstrap_folder/
    --conf-set-option=DEFAULT.plugin_folder=$ROUTER_PLUGIN_DIRECTORY

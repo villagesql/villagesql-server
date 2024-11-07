@@ -53,7 +53,6 @@ mysqlrouter_bootstrap [--mrs]
                       [--mrs-mysql-metadata-account=<username>]
                       [--mrs-mysql-data-account=<username>]
                       [--mrs-global-secret=<global-secret>]
-                      [--mrs-ensure-metadata-schema]
                       [--mrs-developer=<developer>]
 
 [1m# Options[22m
@@ -242,10 +241,6 @@ mysqlrouter_bootstrap [--mrs]
   --mrs-global-secret <global-secret>
         Common secret string to be used for JSON Web Token encryption.
         Must be common to all MRS Router instances.
-  --mrs-ensure-metadata-schema
-        If there is no MRS metadata schema on the server create one. If
-        there is one with matching version do nothing. If there is one
-        with different version, error out.
   --mrs-developer <developer>
         Expose the services that are in development by the developer
         provided as a parameter.

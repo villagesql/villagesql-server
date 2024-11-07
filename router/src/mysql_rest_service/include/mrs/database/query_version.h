@@ -38,10 +38,6 @@ struct MrsSchemaVersion {
   int minor{0};
   int patch{0};
 
-  bool operator==(const MrsSchemaVersion &other) const {
-    return major == other.major && minor == other.minor && patch == other.patch;
-  }
-
   bool is_compatible(
       std::initializer_list<MrsSchemaVersion> accepted_versions) const {
     for (const auto &other : accepted_versions) {
@@ -69,7 +65,7 @@ class QueryVersion : private Query {
   MrsSchemaVersion v_;
 };
 
-constexpr MrsSchemaVersion kCurrentMrsMetadataVersion{3, 0, 0};
+constexpr MrsSchemaVersion kCurrentMrsMetadataVersion{3, 0, 2};
 
 constexpr std::initializer_list<MrsSchemaVersion>
     kCompatibleMrsMetadataVersions{mrs::database::kCurrentMrsMetadataVersion,
