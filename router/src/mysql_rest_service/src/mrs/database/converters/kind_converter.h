@@ -47,7 +47,7 @@ class KindTypeConverter {
     auto result = mysql_harness::make_upper(value);
     try {
       *out = converter.at(result);
-    } catch (const std::exception &e) {
+    } catch (const std::exception &) {
       using namespace std::string_literals;
       throw std::runtime_error("Invalid value for Kind: "s + result);
     }
