@@ -93,7 +93,8 @@ HandlerContentFile::HandlerContentFile(
       version_calculation.finalize());
 
   if (response_cache) {
-    response_cache_ = response_cache->create_endpoint_cache(0);
+    response_cache_ =
+        std::make_shared<FileEndpointResponseCache>(response_cache);
   }
 }
 

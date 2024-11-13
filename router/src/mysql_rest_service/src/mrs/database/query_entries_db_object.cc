@@ -33,6 +33,9 @@
 #include "mrs/database/query_entry_fields.h"
 #include "mrs/database/query_entry_group_row_security.h"
 #include "mrs/database/query_entry_object.h"
+#include "mysql/harness/logging/logging.h"
+
+IMPORT_LOG_FUNCTIONS()
 
 namespace mrs {
 namespace database {
@@ -60,7 +63,7 @@ QueryEntriesDbObject::QueryEntriesDbObject(
       "  COALESCE(o.items_per_page, db.items_per_page) as `on_page`, "
       "  o.name, db.name as `schema_name`, o.crud_operations + 0, o.format,"
       "  o.media_type, o.auto_detect_media_type, o.object_type, o.options,"
-      "  o.options->>'$.cache_ttl' * 1000 as cache_ttl ! !"
+      "  o.options->>'$.cache_ttl' as cache_ttl ! !"
       " FROM mysql_rest_service_metadata.`db_object` as o"
       "  JOIN mysql_rest_service_metadata.`db_schema` as db on"
       "   o.db_schema_id = db.id"
@@ -154,7 +157,22 @@ void QueryEntriesDbObject::on_row(const ResultRow &row) {
   mysql_row.unserialize(&entry.autodetect_media_type);
   mysql_row.unserialize_with_converter(&entry.type, path_type_converter);
   mysql_row.unserialize(&entry.options);
-  mysql_row.unserialize(&entry.option_cache_ttl_ms);
+
+  {
+    std::optional<std::string> cache_ttl;
+    mysql_row.unserialize(&cache_ttl);
+    entry.option_cache_ttl_ms.reset();
+    if (cache_ttl.has_value()) {
+      try {
+        entry.option_cache_ttl_ms = std::stod(*cache_ttl) * 1000;
+      } catch (...) {
+        log_error(
+            "Option cache_ttl has an invalid value '%s'. Caching will be "
+            "disabled",
+            cache_ttl.value().c_str());
+      }
+    }
+  }
 
   if (db_version_ == mrs::interface::kSupportedMrsMetadataVersion_2) {
     bool user_ownership_enforced{false};

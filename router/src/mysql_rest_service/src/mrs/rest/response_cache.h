@@ -50,7 +50,7 @@ struct CacheEntry {
   std::optional<std::string> media_type_str;
 
   std::string key;
-  TimeType time_created;
+  TimeType expiration_time;
 
   EndpointResponseCache *owner;
 
@@ -63,11 +63,11 @@ constexpr const size_t k_default_object_cache_size = 1000000;
 class ResponseCache {
  public:
   friend class EndpointResponseCache;
+  friend class ItemEndpointResponseCache;
+  friend class FileEndpointResponseCache;
 
   explicit ResponseCache(const std::string &config_key)
       : config_key_(config_key) {}
-
-  std::shared_ptr<EndpointResponseCache> create_endpoint_cache(int64_t ttl_ms);
 
   void configure(const std::string &options);
 
@@ -78,7 +78,7 @@ class ResponseCache {
   void remove(std::shared_ptr<CacheEntry> entry);
   void remove_nolock(std::shared_ptr<CacheEntry> entry);
 
-  void remove_all(EndpointResponseCache *cache);
+  int remove_all(EndpointResponseCache *cache);
 
   void shrink_object_cache(size_t extra_size = 0);
 
@@ -97,6 +97,36 @@ class EndpointResponseCache {
   using Uri = ::http::base::Uri;
   using UniversalId = ::mrs::database::entry::UniversalId;
 
+ protected:
+  EndpointResponseCache(ResponseCache *owner, int64_t ttl_ms);
+  virtual ~EndpointResponseCache() = default;
+
+  std::shared_ptr<CacheEntry> create_entry(
+      const std::string &key, const std::string &data, int64_t items = 0,
+      std::optional<helper::MediaType> media_type = {},
+      std::optional<std::string> media_type_str = {});
+
+  void remove_entry(std::shared_ptr<CacheEntry> entry, bool ejected);
+  virtual void remove_entry_nolock(std::shared_ptr<CacheEntry> entry,
+                                   bool ejected);
+
+  std::shared_ptr<CacheEntry> lookup(const std::string &key);
+
+  friend class ResponseCache;
+
+  ResponseCache *owner_;
+
+  std::chrono::milliseconds ttl_;
+
+  std::unordered_map<std::string, std::shared_ptr<CacheEntry>> cache_;
+  std::shared_mutex cache_mutex_;
+};
+
+class ItemEndpointResponseCache : public EndpointResponseCache {
+ public:
+  ItemEndpointResponseCache(ResponseCache *owner, int64_t ttl_ms);
+  ~ItemEndpointResponseCache() override;
+
   std::shared_ptr<CacheEntry> create_table_entry(const Uri &uri,
                                                  const std::string &user_id,
                                                  const std::string &data,
@@ -110,39 +140,31 @@ class EndpointResponseCache {
       const Uri &uri, std::string_view req_body, const std::string &data,
       int64_t items, const std::string &media_type_str);
 
-  std::shared_ptr<CacheEntry> create_file_entry(const UniversalId &id,
-                                                const std::string &data,
-                                                helper::MediaType media_type);
-
   std::shared_ptr<CacheEntry> lookup_table(const Uri &uri,
                                            const std::string &user_id);
 
   std::shared_ptr<CacheEntry> lookup_routine(const Uri &uri,
                                              std::string_view req_body);
 
+ private:
+  void remove_entry_nolock(std::shared_ptr<CacheEntry> entry,
+                           bool ejected) override;
+};
+
+class FileEndpointResponseCache : public EndpointResponseCache {
+ public:
+  explicit FileEndpointResponseCache(ResponseCache *owner);
+  ~FileEndpointResponseCache() override;
+
+  std::shared_ptr<CacheEntry> create_file_entry(const UniversalId &id,
+                                                const std::string &data,
+                                                helper::MediaType media_type);
+
   std::shared_ptr<CacheEntry> lookup_file(const UniversalId &id);
 
-  EndpointResponseCache(ResponseCache *owner, int64_t ttl_ms);
-  ~EndpointResponseCache();
-
  private:
-  std::shared_ptr<CacheEntry> create_entry(
-      const std::string &key, const std::string &data, int64_t items = 0,
-      std::optional<helper::MediaType> media_type = {},
-      std::optional<std::string> media_type_str = {});
-
-  void remove_entry(std::shared_ptr<CacheEntry> entry);
-
-  std::shared_ptr<CacheEntry> lookup(const std::string &key);
-
-  friend class ResponseCache;
-
-  ResponseCache *owner_;
-
-  int64_t ttl_;
-
-  std::unordered_map<std::string, std::shared_ptr<CacheEntry>> cache_;
-  std::shared_mutex cache_mutex_;
+  void remove_entry_nolock(std::shared_ptr<CacheEntry> entry,
+                           bool ejected) override;
 };
 
 }  // namespace mrs

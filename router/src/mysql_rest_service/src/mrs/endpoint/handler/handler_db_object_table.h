@@ -49,7 +49,8 @@ class HandlerDbObjectTable : public mrs::rest::Handler {
   using DbObjectPtr = std::shared_ptr<DbObject>;
   using DbSchemaPtr = std::shared_ptr<DbSchema>;
   using DbObjectEndpoint = mrs::endpoint::DbObjectEndpoint;
-  using EndpointResponseCachePtr = std::shared_ptr<mrs::EndpointResponseCache>;
+  using EndpointResponseCachePtr =
+      std::shared_ptr<mrs::ItemEndpointResponseCache>;
 
  public:
   HandlerDbObjectTable(std::weak_ptr<DbObjectEndpoint> endpoint,

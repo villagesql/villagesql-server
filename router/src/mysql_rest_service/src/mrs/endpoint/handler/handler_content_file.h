@@ -46,7 +46,8 @@ class HandlerContentFile : public mrs::rest::Handler {
   using QueryFactory = mrs::interface::QueryFactory;
   using ContentFilePtr = ContentFileEndpoint::ContentFilePtr;
   using ContentSetPtr = ContentSetEndpoint::ContentSetPtr;
-  using EndpointResponseCachePtr = std::shared_ptr<mrs::EndpointResponseCache>;
+  using EndpointResponseCachePtr =
+      std::shared_ptr<mrs::FileEndpointResponseCache>;
 
  public:
   HandlerContentFile(std::weak_ptr<ContentFileEndpoint> endpoint,

@@ -28,6 +28,7 @@
 
 #include "helper/json/rapid_json_to_struct.h"
 #include "helper/json/text_to.h"
+#include "mrs/router_observation_entities.h"
 #include "mysql/harness/logging/logging.h"
 
 IMPORT_LOG_FUNCTIONS()
@@ -68,7 +69,14 @@ class ParseResponseCacheOptions
   template <typename ValueType>
   void handle_object_value(const std::string &key, const ValueType &vt) {
     if (key == group_key_ + ".maxCacheSize") {
-      result_.max_cache_size = to_uint(vt);
+      try {
+        result_.max_cache_size = to_uint(vt);
+      } catch (...) {
+        log_error(
+            "Option %s has an invalid value and will fallback to the default",
+            key.c_str());
+        result_.max_cache_size.reset();
+      }
     }
   }
 
@@ -96,15 +104,8 @@ auto parse_json_options(const std::string &config_key,
 
 }  // namespace
 
-std::shared_ptr<EndpointResponseCache> ResponseCache::create_endpoint_cache(
-    int64_t ttl_ms) {
-  auto cache = std::make_shared<EndpointResponseCache>(this, ttl_ms);
-
-  return cache;
-}
-
 void ResponseCache::configure(const std::string &options) {
-  log_debug("%s", __FUNCTION__);
+  log_debug("%s %s", __FUNCTION__, config_key_.c_str());
   auto cache_options = parse_json_options(config_key_, options);
 
   max_size_ =
@@ -117,17 +118,21 @@ void ResponseCache::configure(const std::string &options) {
 }
 
 void ResponseCache::shrink_object_cache(size_t extra_size) {
-  log_debug("%s (%zu + %zu -> %zu)", __FUNCTION__, cache_size_.load(),
-            extra_size, max_size_.load());
+  log_debug("%s %s (size=%zu + %zu, max=%zu)", __FUNCTION__,
+            config_key_.c_str(), cache_size_.load(), extra_size,
+            max_size_.load());
 
-  while (oldest_entry_ && cache_size_ + extra_size > max_size_) {
-    oldest_entry_->owner->remove_entry(oldest_entry_);
+  auto now = CacheEntry::TimeType::clock::now();
+
+  while (oldest_entry_ && cache_size_ + extra_size > max_size_.load()) {
+    oldest_entry_->owner->remove_entry(oldest_entry_,
+                                       now < oldest_entry_->expiration_time);
     remove_nolock(oldest_entry_);
   }
 }
 
 void ResponseCache::push(std::shared_ptr<CacheEntry> entry) {
-  log_debug("%s", __FUNCTION__);
+  log_debug("%s %s", __FUNCTION__, config_key_.c_str());
   size_t size = entry->data.size();
 
   std::lock_guard<std::mutex> lock(entries_mutex_);
@@ -144,7 +149,7 @@ void ResponseCache::push(std::shared_ptr<CacheEntry> entry) {
 }
 
 void ResponseCache::remove(std::shared_ptr<CacheEntry> entry) {
-  log_debug("%s", __FUNCTION__);
+  log_debug("%s %s", __FUNCTION__, config_key_.c_str());
   std::lock_guard<std::mutex> lock(entries_mutex_);
 
   remove_nolock(entry);
@@ -164,11 +169,12 @@ void ResponseCache::remove_nolock(std::shared_ptr<CacheEntry> entry) {
     oldest_entry_ = entry->prev_ptr;
 }
 
-void ResponseCache::remove_all(EndpointResponseCache *cache) {
+int ResponseCache::remove_all(EndpointResponseCache *cache) {
+  int count = 0;
   log_debug("%s", __FUNCTION__);
   std::lock_guard<std::mutex> lock(entries_mutex_);
 
-  if (!newest_entry_) return;
+  if (!newest_entry_) return count;
 
   std::shared_ptr<CacheEntry> new_start = nullptr;
   std::shared_ptr<CacheEntry> new_end = nullptr;
@@ -178,6 +184,8 @@ void ResponseCache::remove_all(EndpointResponseCache *cache) {
     next = ptr->next_ptr;
 
     if (ptr->owner == cache) {
+      ++count;
+
       cache_size_ -= ptr->data.size();
       ptr->next_ptr = nullptr;
       ptr->prev_ptr = nullptr;
@@ -198,49 +206,21 @@ void ResponseCache::remove_all(EndpointResponseCache *cache) {
 
   newest_entry_ = new_start;
   oldest_entry_ = new_end;
+
+  return count;
 }
 
 EndpointResponseCache::EndpointResponseCache(ResponseCache *owner,
                                              int64_t ttl_ms)
-    : owner_(owner), ttl_(ttl_ms) {}
-
-EndpointResponseCache::~EndpointResponseCache() {
-  log_debug("%s", __FUNCTION__);
-  std::unique_lock lock(cache_mutex_);
-
-  owner_->remove_all(this);
-}
-
-std::shared_ptr<CacheEntry> EndpointResponseCache::create_table_entry(
-    const Uri &uri, const std::string &user_id, const std::string &data,
-    int64_t items) {
-  return create_entry(make_table_key(uri, user_id), data, items);
-}
-
-std::shared_ptr<CacheEntry> EndpointResponseCache::create_routine_entry(
-    const Uri &uri, std::string_view req_body, const std::string &data,
-    int64_t items, std::optional<helper::MediaType> media_type) {
-  return create_entry(make_routine_key(uri, req_body), data, items, media_type);
-}
-
-std::shared_ptr<CacheEntry> EndpointResponseCache::create_routine_entry(
-    const Uri &uri, std::string_view req_body, const std::string &data,
-    int64_t items, const std::string &media_type_str) {
-  return create_entry(make_routine_key(uri, req_body), data, items, {},
-                      media_type_str);
-}
-
-std::shared_ptr<CacheEntry> EndpointResponseCache::create_file_entry(
-    const UniversalId &id, const std::string &data,
-    helper::MediaType media_type) {
-  return create_entry(make_file_key(id), data, 0, media_type);
+    : owner_(owner), ttl_(std::chrono::milliseconds(ttl_ms)) {
+  Counter<kEntityCounterRestCachedEndpoints>::increment();
 }
 
 std::shared_ptr<CacheEntry> EndpointResponseCache::create_entry(
     const std::string &key, const std::string &data, int64_t items,
     std::optional<helper::MediaType> media_type,
     std::optional<std::string> media_type_str) {
-  log_debug("%s key=%s", __FUNCTION__, key.c_str());
+  log_debug("%s key=%s ttl=%" PRId64, __FUNCTION__, key.c_str(), ttl_.count());
 
   if (owner_->max_cache_size() < data.size()) {
     log_debug("%s key=%s data=%zu max_cache=%zu", __FUNCTION__, key.c_str(),
@@ -257,7 +237,10 @@ std::shared_ptr<CacheEntry> EndpointResponseCache::create_entry(
 
   entry->owner = this;
   entry->key = key;
-  entry->time_created = CacheEntry::TimeType::clock::now();
+  if (ttl_.count() == 0)  // ttl=0 means no-expiration
+    entry->expiration_time = CacheEntry::TimeType::max();
+  else
+    entry->expiration_time = CacheEntry::TimeType::clock::now() + ttl_;
 
   owner_->push(entry);
   {
@@ -269,28 +252,18 @@ std::shared_ptr<CacheEntry> EndpointResponseCache::create_entry(
   return entry;
 }
 
-void EndpointResponseCache::remove_entry(std::shared_ptr<CacheEntry> entry) {
+void EndpointResponseCache::remove_entry(std::shared_ptr<CacheEntry> entry,
+                                         bool ejected) {
   log_debug("%s key=%s", __FUNCTION__, entry->key.c_str());
   {
     std::unique_lock lock(cache_mutex_);
-
-    cache_.erase(entry->key);
+    remove_entry_nolock(entry, ejected);
   }
 }
 
-std::shared_ptr<CacheEntry> EndpointResponseCache::lookup_table(
-    const Uri &uri, const std::string &user_id) {
-  return lookup(make_table_key(uri, user_id));
-}
-
-std::shared_ptr<CacheEntry> EndpointResponseCache::lookup_routine(
-    const Uri &uri, std::string_view req_body) {
-  return lookup(make_routine_key(uri, req_body));
-}
-
-std::shared_ptr<CacheEntry> EndpointResponseCache::lookup_file(
-    const UniversalId &id) {
-  return lookup(make_file_key(id));
+void EndpointResponseCache::remove_entry_nolock(
+    std::shared_ptr<CacheEntry> entry, [[maybe_unused]] bool ejected) {
+  cache_.erase(entry->key);
 }
 
 std::shared_ptr<CacheEntry> EndpointResponseCache::lookup(
@@ -299,24 +272,143 @@ std::shared_ptr<CacheEntry> EndpointResponseCache::lookup(
 
   auto it = cache_.find(key);
   if (it != cache_.end()) {
-    if (ttl_ > 0) {
-      auto diff = std::chrono::duration_cast<std::chrono::milliseconds>(
-          CacheEntry::TimeType::clock::now() - it->second->time_created);
+    if (it->second->expiration_time < CacheEntry::TimeType::clock::now()) {
+      owner_->remove(it->second);
+      remove_entry_nolock(it->second, false);
 
-      if (diff.count() >= ttl_) {
-        owner_->remove(it->second);
-        cache_.erase(it);
-
-        log_debug("%s key=%s -> expired", __FUNCTION__, key.c_str());
-        return {};
-      }
+      log_debug("%s key=%s -> expired", __FUNCTION__, key.c_str());
+      return {};
     }
+
     log_debug("%s key=%s -> hit", __FUNCTION__, key.c_str());
     return it->second;
   }
 
   log_debug("%s key=%s miss", __FUNCTION__, key.c_str());
   return {};
+}
+
+ItemEndpointResponseCache::ItemEndpointResponseCache(ResponseCache *owner,
+                                                     int64_t ttl_ms)
+    : EndpointResponseCache(owner, ttl_ms) {}
+
+ItemEndpointResponseCache::~ItemEndpointResponseCache() {
+  log_debug("%s", __FUNCTION__);
+
+  int count;
+  {
+    std::unique_lock lock(cache_mutex_);
+    count = owner_->remove_all(this);
+  }
+  Counter<kEntityCounterRestCachedEndpoints>::increment(-1);
+  Counter<kEntityCounterRestCachedItems>::increment(-count);
+}
+
+std::shared_ptr<CacheEntry> ItemEndpointResponseCache::create_table_entry(
+    const Uri &uri, const std::string &user_id, const std::string &data,
+    int64_t items) {
+  auto r = create_entry(make_table_key(uri, user_id), data, items);
+  if (r) {
+    Counter<kEntityCounterRestCacheItemLoads>::increment();
+    Counter<kEntityCounterRestCachedItems>::increment();
+  }
+  return r;
+}
+
+std::shared_ptr<CacheEntry> ItemEndpointResponseCache::create_routine_entry(
+    const Uri &uri, std::string_view req_body, const std::string &data,
+    int64_t items, std::optional<helper::MediaType> media_type) {
+  auto r =
+      create_entry(make_routine_key(uri, req_body), data, items, media_type);
+  if (r) {
+    Counter<kEntityCounterRestCacheItemLoads>::increment();
+    Counter<kEntityCounterRestCachedItems>::increment();
+  }
+  return r;
+}
+
+std::shared_ptr<CacheEntry> ItemEndpointResponseCache::create_routine_entry(
+    const Uri &uri, std::string_view req_body, const std::string &data,
+    int64_t items, const std::string &media_type_str) {
+  auto r = create_entry(make_routine_key(uri, req_body), data, items, {},
+                        media_type_str);
+  if (r) {
+    Counter<kEntityCounterRestCacheItemLoads>::increment();
+    Counter<kEntityCounterRestCachedItems>::increment();
+  }
+  return r;
+}
+
+std::shared_ptr<CacheEntry> ItemEndpointResponseCache::lookup_table(
+    const Uri &uri, const std::string &user_id) {
+  auto r = lookup(make_table_key(uri, user_id));
+  if (r)
+    Counter<kEntityCounterRestCacheItemHits>::increment();
+  else
+    Counter<kEntityCounterRestCacheItemMisses>::increment();
+  return r;
+}
+
+std::shared_ptr<CacheEntry> ItemEndpointResponseCache::lookup_routine(
+    const Uri &uri, std::string_view req_body) {
+  auto r = lookup(make_routine_key(uri, req_body));
+  if (r)
+    Counter<kEntityCounterRestCacheItemHits>::increment();
+  else
+    Counter<kEntityCounterRestCacheItemMisses>::increment();
+  return r;
+}
+
+void ItemEndpointResponseCache::remove_entry_nolock(
+    [[maybe_unused]] std::shared_ptr<CacheEntry> entry, bool ejected) {
+  Counter<kEntityCounterRestCachedItems>::increment(-1);
+  if (ejected) Counter<kEntityCounterRestCacheItemEjects>::increment(1);
+
+  EndpointResponseCache::remove_entry_nolock(entry, ejected);
+}
+
+FileEndpointResponseCache::FileEndpointResponseCache(ResponseCache *owner)
+    : EndpointResponseCache(owner, 0) {}
+
+std::shared_ptr<CacheEntry> FileEndpointResponseCache::lookup_file(
+    const UniversalId &id) {
+  auto r = lookup(make_file_key(id));
+  if (r)
+    Counter<kEntityCounterRestCacheFileHits>::increment();
+  else
+    Counter<kEntityCounterRestCacheFileMisses>::increment();
+  return r;
+}
+
+FileEndpointResponseCache::~FileEndpointResponseCache() {
+  log_debug("%s", __FUNCTION__);
+
+  int count;
+  {
+    std::unique_lock lock(cache_mutex_);
+    count = owner_->remove_all(this);
+  }
+  Counter<kEntityCounterRestCachedEndpoints>::increment(-1);
+  Counter<kEntityCounterRestCachedFiles>::increment(-count);
+}
+
+std::shared_ptr<CacheEntry> FileEndpointResponseCache::create_file_entry(
+    const UniversalId &id, const std::string &data,
+    helper::MediaType media_type) {
+  auto r = create_entry(make_file_key(id), data, 0, media_type);
+  if (r) {
+    Counter<kEntityCounterRestCacheFileLoads>::increment();
+    Counter<kEntityCounterRestCachedFiles>::increment();
+  }
+  return r;
+}
+
+void FileEndpointResponseCache::remove_entry_nolock(
+    [[maybe_unused]] std::shared_ptr<CacheEntry> entry, bool ejected) {
+  Counter<kEntityCounterRestCachedFiles>::increment(-1);
+  if (ejected) Counter<kEntityCounterRestCacheFileEjects>::increment(1);
+
+  EndpointResponseCache::remove_entry_nolock(entry, ejected);
 }
 
 }  // namespace mrs

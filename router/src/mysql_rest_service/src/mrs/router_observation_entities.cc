@@ -129,6 +129,29 @@ void initialize_entities(observability::EntitiesManager *manager) {
   reg.register_entity_with_id<kEntityCounterRestAffectedItems>(
       "restAffectedItems");
 
+  reg.register_entity_with_id<kEntityCounterRestCacheItemLoads>(
+      "restCacheItemLoads");
+  reg.register_entity_with_id<kEntityCounterRestCacheItemEjects>(
+      "restCacheItemEjects");
+  reg.register_entity_with_id<kEntityCounterRestCacheItemHits>(
+      "restCacheItemHits");
+  reg.register_entity_with_id<kEntityCounterRestCacheItemMisses>(
+      "restCacheItemMisses");
+  reg.register_entity_with_id_not_resetable<kEntityCounterRestCachedItems>(
+      "restCachedItems");
+  reg.register_entity_with_id<kEntityCounterRestCacheFileLoads>(
+      "restCacheFileLoads");
+  reg.register_entity_with_id<kEntityCounterRestCacheFileEjects>(
+      "restCacheFileEjects");
+  reg.register_entity_with_id<kEntityCounterRestCacheFileHits>(
+      "restCacheFileHits");
+  reg.register_entity_with_id<kEntityCounterRestCacheFileMisses>(
+      "restCacheFileMisses");
+  reg.register_entity_with_id_not_resetable<kEntityCounterRestCachedFiles>(
+      "restCachedFiles");
+  reg.register_entity_with_id_not_resetable<kEntityCounterRestCachedEndpoints>(
+      "restCachedEndpoints");
+
   reg.register_entity_with_id_not_resetable<kEntityCounterUpdatesHosts>(
       "changesHosts");
   reg.register_entity_with_id_not_resetable<kEntityCounterUpdatesServices>(

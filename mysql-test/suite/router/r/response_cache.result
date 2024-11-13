@@ -10,24 +10,13 @@
 # Registred CONTENT_SET at path: /svc/static
 # Registred CONTENT_FILE at path: /svc/static/file1
 # Registred CONTENT_FILE at path: /svc/static/file2
-update mysql_rest_service_metadata.config set data = json_merge_patch(data, '{"responseCache":{"maxCacheSize":200}, "fileCache":{"maxCacheSize":200}}');
+update mysql_rest_service_metadata.config set data = json_merge_patch(data, '{"responseCache":{"maxCacheSize":200}, "fileCache":{"maxCacheSize":40}}');
 update mysql_rest_service_metadata.db_object set options='{"cache_ttl":5}' where name='table1';
 update mysql_rest_service_metadata.db_object set options='{"cache_ttl":5}' where name='proc_table4';
-GET /svc/basic/t1/1
-{
-    "id": 1,
-    "links": [
-        {
-            "rel": "self",
-            "href": "/svc/basic/t1/1"
-        }
-    ],
-    "_metadata": {
-        "etag": "349A978B6EEAC86C01C2D7FD0F0C13EEAEE998366EF4D2B4881E22957865400F"
-    }
-}
-OK
 update performance_schema.setup_consumers set enabled=1 where name='events_statements_history';
+select json_object('endpoints', max(details->'$.restCachedEndpoints'), 'itemLoads', max(details->'$.restCacheItemLoads'), 'itemEjects', max(details->'$.restCacheItemEjects'), 'itemHits', max(details->'$.restCacheItemHits'), 'itemMisses', max(details->'$.restCacheItemMisses'), 'items', max(details->'$.restCachedItems'), 'fileLoads', max(details->'$.restCacheFileLoads'), 'fileEjects', max(details->'$.restCacheFileEjects'), 'fileHits', max(details->'$.restCacheFileHits'), 'fileMisses', max(details->'$.restCacheFileMisses'), 'files', max(details->'$.restCachedFiles')) as stats from mysql_rest_service_metadata.router_status;
+stats
+{"files": 0, "items": 0, "fileHits": 0, "itemHits": 0, "endpoints": 4, "fileLoads": 0, "itemLoads": 0, "fileEjects": 0, "fileMisses": 0, "itemEjects": 0, "itemMisses": 0}
 select count(*) into @before from performance_schema.events_statements_history where sql_text like '%/svc/basic/t1%' and thread_id<>ps_current_thread_id();
 GET /svc/basic/t1/20
 {
@@ -45,7 +34,7 @@ GET /svc/basic/t1/20
 OK
 select count(*), @before+1 from performance_schema.events_statements_history where sql_text like '%/svc/basic/t1%' and thread_id<>ps_current_thread_id();
 count(*)	@before+1
-2	2
+1	1
 select IF(count(*)=@before+1,'PASS','FAIL') from performance_schema.events_statements_history where sql_text like '%/svc/basic/t1%' and thread_id<>ps_current_thread_id();
 IF(count(*)=@before+1,'PASS','FAIL')
 PASS
@@ -130,6 +119,9 @@ PASS
 select IF(count(*)=@before+1,'PASS','FAIL') from performance_schema.events_statements_history where sql_text like '%content_file WHERE id=%' and thread_id<>ps_current_thread_id();
 IF(count(*)=@before+1,'PASS','FAIL')
 PASS
+select json_object('endpoints', max(details->'$.restCachedEndpoints'), 'itemLoads', max(details->'$.restCacheItemLoads'), 'itemEjects', max(details->'$.restCacheItemEjects'), 'itemHits', max(details->'$.restCacheItemHits'), 'itemMisses', max(details->'$.restCacheItemMisses'), 'items', max(details->'$.restCachedItems'), 'fileLoads', max(details->'$.restCacheFileLoads'), 'fileEjects', max(details->'$.restCacheFileEjects'), 'fileHits', max(details->'$.restCacheFileHits'), 'fileMisses', max(details->'$.restCacheFileMisses'), 'files', max(details->'$.restCachedFiles')) as stats from mysql_rest_service_metadata.router_status;
+stats
+{"files": 1, "items": 2, "fileHits": 1, "itemHits": 2, "endpoints": 4, "fileLoads": 2, "itemLoads": 2, "fileEjects": 1, "fileMisses": 2, "itemEjects": 0, "itemMisses": 2}
 DROP SCHEMA basic_schema;
 DROP SCHEMA mysql_rest_service_metadata;
 DROP ROLE mysql_rest_service_admin;

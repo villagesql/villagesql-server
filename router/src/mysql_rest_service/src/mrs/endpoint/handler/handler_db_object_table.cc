@@ -267,7 +267,8 @@ HandlerDbObjectTable::HandlerDbObjectTable(
   ownership_ = get_user_ownership(entry_->name, entry_->object_description);
 
   if (cache_ttl_ms > 0 && response_cache) {
-    response_cache_ = response_cache->create_endpoint_cache(cache_ttl_ms);
+    response_cache_ = std::make_shared<ItemEndpointResponseCache>(
+        response_cache, cache_ttl_ms);
   }
 }
 
