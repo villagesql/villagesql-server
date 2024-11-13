@@ -35,6 +35,9 @@ class Authentication {
   Result do_basic_flow(HttpClientRequest *request, std::string url,
                        const std::string &user, const std::string &password,
                        const SessionType st);
+  Result do_basic_json_flow(HttpClientRequest *request, std::string url,
+                            const std::string &user,
+                            const std::string &password, const SessionType st);
   Result do_scram_flow(HttpClientRequest *request, std::string url,
                        const std::string &user, const std::string &password,
                        const SessionType st);

@@ -100,7 +100,7 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
                          AuthorizeHandlerPtr &out_it);
   void remove_unreferenced_service_authorizators();
   AuthorizeHandlerPtr choose_authentication_handler(
-      ServiceId service_id, const std::string &app_name);
+      ServiceId service_id, const std::optional<std::string> &app_name);
 
   /**
    * Validate the jwt tokent, and get/create session_id for it.

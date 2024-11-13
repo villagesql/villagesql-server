@@ -22,64 +22,41 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "mrs/authentication/basic_handler.h"
+#include "mrs/authentication/mysql_handler.h"
 
 #include <utility>
 
 #include "mysql/harness/logging/logging.h"
-#include "mysqlrouter/base64.h"
 
 IMPORT_LOG_FUNCTIONS()
 
 namespace mrs {
 namespace authentication {
 
-static bool extract_user_credentials_from_token(
-    [[maybe_unused]] const std::string &token,
-    [[maybe_unused]] std::string *user,
-    [[maybe_unused]] std::string *password) {
-  auto result = Base64::decode(token.c_str());
-
-  auto it = std::find(result.begin(), result.end(), ':');
-  if (it == result.end()) return false;
-
-  *user = std::string(result.begin(), it);
-  *password = std::string(it + 1, result.end());
-
-  return true;
-}
-
-BasicHandler::BasicHandler(const AuthApp &entry,
+MysqlHandler::MysqlHandler(const AuthApp &entry,
                            collector::MysqlCacheManager *cache_manager)
     : WwwAuthenticationHandler(entry), cache_manager_{cache_manager} {
-  log_debug("BasicHandler for service %s, %s",
+  log_debug("MysqlHandler for service %s, %s",
             entry.service_id.to_string().c_str(), to_string(entry).c_str());
 }
 
-UniversalId BasicHandler::get_service_id() const { return entry_.service_id; }
+UniversalId MysqlHandler::get_service_id() const { return entry_.service_id; }
 
-UniversalId BasicHandler::get_id() const { return entry_.id; }
+UniversalId MysqlHandler::get_id() const { return entry_.id; }
 
-bool BasicHandler::www_authorize(const std::string &token,
-                                 SqlSessionCached *out_cache,
-                                 AuthUser *out_user) {
+bool MysqlHandler::verify_credential(const Credentials &credentials,
+                                     SqlSessionCached *out_cache,
+                                     AuthUser *out_user) {
   try {
-    database::entry::AuthUser mrds_user;
-    std::string auth_user;
-    std::string auth_password;
-
-    if (!extract_user_credentials_from_token(token, &auth_user, &auth_password))
-      throw std::runtime_error("extraction failed");
-
     // The MySQL account may be different for different host,
     // even if they use the same user-name.
     //
     // This potential problem should be documented.
-    pre_authorize_account(this, auth_user);
+    pre_authorize_account(this, credentials.user);
 
     auto default_auth_user =
         out_cache->get()->get_connection_parameters().conn_opts;
-    out_cache->get()->change_user(auth_user, auth_password, "");
+    out_cache->get()->change_user(credentials.user, credentials.password, "");
 
     out_user->vendor_user_id =
         (*out_cache->get()->query_one("SELECT CURRENT_USER();"))[0];

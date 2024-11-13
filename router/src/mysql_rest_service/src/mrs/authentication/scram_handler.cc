@@ -262,7 +262,7 @@ SaslResult ScramHandler::client_response(RequestContext &ctxt, Session *session,
   return {};
 }
 
-bool ScramHandler::redirects() const {
+bool ScramHandler::redirects(RequestContext &) const {
   log_debug("ScramHandler::redirects - false");
   return false;
 }

@@ -26,6 +26,9 @@
 
 #include "helper/container/map.h"
 #include "helper/http/url.h"
+#include "helper/json/rapid_json_to_struct.h"
+#include "helper/json/serializer_to_text.h"
+#include "helper/json/text_to.h"
 #include "helper/string/hex.h"
 #include "helper/string/random.h"
 
@@ -34,8 +37,10 @@
 
 namespace mrs_client {
 
-static void authenticate(HttpClientRequest *request, const std::string &user,
-                         const std::string &password) {
+namespace {
+void add_authorization_header(HttpClientRequest *request,
+                              const std::string &user,
+                              const std::string &password) {
   HttpAuthMethodBasic basic;
   const char *kAuthorization = "Authorization";
   std::string auth_string{basic.kMethodName};
@@ -43,17 +48,78 @@ static void authenticate(HttpClientRequest *request, const std::string &user,
   request->add_header(kAuthorization, auth_string.c_str());
 }
 
+std::string get_authorization_json(
+    const std::string &user, const std::string &password, const bool use_jwt,
+    const std::map<std::string, std::string> &url_query) {
+  helper::json::SerializerToText stt;
+
+  {
+    auto obj = stt.add_object();
+    obj->member_add_value("sessionType", (use_jwt ? "bearer" : "cookie"));
+    obj->member_add_value("username", user);
+    obj->member_add_value("password", password);
+
+    for (const auto &[k, v] : url_query) {
+      obj->member_add_value(k, v);
+    }
+  }
+  return stt.get_result();
+}
+
+struct JsonResponse {
+  std::optional<std::string> access_token;
+  std::optional<std::string> session_id;
+};
+
+namespace cvt {
+using std::to_string;
+const std::string &to_string(const std::string &str) { return str; }
+}  // namespace cvt
+
+class ParseJsonResponse
+    : public helper::json::RapidReaderHandlerToStruct<JsonResponse> {
+ public:
+  template <typename ValueType>
+  void handle_object_value(const std::string &key, const ValueType &vt) {
+    if (key == "accessToken") {
+      result_.access_token = cvt::to_string(vt);
+    } else if (key == "sessionId") {
+      result_.session_id = cvt::to_string(vt);
+    }
+  }
+
+  template <typename ValueType>
+  void handle_value(const ValueType &vt) {
+    const auto &key = get_current_key();
+    if (is_object_path()) {
+      handle_object_value(key, vt);
+    }
+  }
+
+  bool String(const Ch *v, rapidjson::SizeType v_len, bool) override {
+    handle_value(std::string{v, v_len});
+    return true;
+  }
+
+  bool RawNumber(const Ch *v, rapidjson::SizeType v_len, bool) override {
+    handle_value(std::string{v, v_len});
+    return true;
+  }
+
+  bool Bool(bool v) override {
+    handle_value(v);
+    return true;
+  }
+};
+
+}  // namespace
+
 Result Authentication::do_basic_flow(HttpClientRequest *request,
                                      std::string url, const std::string &user,
                                      const std::string &password,
                                      const SessionType st) {
-  HttpAuthMethodBasic basic;
-  const char *kAuthorization = "Authorization";
-  std::string auth_string{basic.kMethodName};
-  auth_string += " " + basic.encode_authorization({user, password});
-  request->add_header(kAuthorization, auth_string.c_str());
+  add_authorization_header(request, user, password);
 
-  authenticate(request, user, password);
   if (st == SessionType::kJWT) {
     url = url + "?sessionType=bearer";
   }
@@ -102,6 +168,56 @@ Result Authentication::do_basic_flow(HttpClientRequest *request,
     header += pvalue;
     request->get_session()->add_header(&header[0]);
   }
+
+  return {HttpStatusCode::Ok, {}, {}};
+}
+
+Result Authentication::do_basic_json_flow(HttpClientRequest *request,
+                                          std::string url,
+                                          const std::string &user,
+                                          const std::string &password,
+                                          const SessionType st) {
+  http::base::Uri u{url};
+  bool use_jwt = st == SessionType::kJWT;
+  bool use_cookies = !use_jwt;
+
+  auto body =
+      get_authorization_json(user, password, use_jwt, u.get_query_elements());
+  auto result = request->do_request(HttpMethod::Post, url, body, use_cookies);
+
+  if (result.status != HttpStatusCode::Ok) return result;
+
+  auto [access_token, session_id] =
+      helper::json::text_to_handler<ParseJsonResponse>(result.body);
+
+  if (session_id.has_value() && access_token.has_value())
+    throw std::runtime_error(
+        "Response contains both `session_id` and `access_token` which is not "
+        "allowed.");
+
+  if (!session_id.has_value() && !access_token.has_value())
+    throw std::runtime_error(
+        "Response doesn't contains neither `session_id` nor `access_token`.");
+
+  if (use_jwt && session_id.has_value()) {
+    throw std::runtime_error(
+        "Application requested JWT token, but received a cookie-session-id.");
+  }
+
+  if (use_cookies && access_token.has_value()) {
+    throw std::runtime_error(
+        "Application requested cookie-session-id, but received a JWT token.");
+  }
+
+  if (use_jwt) {
+    std::string header{"Authorization:Bearer "};
+    header += access_token.value();
+    request->get_session()->add_header(&header[0]);
+  }
+
+  // Ignore the `use_cookies`, the cookie should be already set in headers.
+  // The session_id - cookie name is service dependent, thus we would also need
+  // to transfer service_id.
 
   return {HttpStatusCode::Ok, {}, {}};
 }

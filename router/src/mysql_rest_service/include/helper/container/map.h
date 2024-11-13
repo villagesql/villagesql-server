@@ -26,7 +26,6 @@
 #define ROUTER_SRC_REST_MRS_SRC_HELPER_CONTAINER_MAP_H_
 
 namespace helper {
-
 namespace container {
 
 template <typename Container>
@@ -85,7 +84,6 @@ bool get_value_other(Container &container,
 }
 
 }  // namespace container
-
 }  // namespace helper
 
 #endif  // ROUTER_SRC_REST_MRS_SRC_HELPER_CONTAINER_MAP_H_

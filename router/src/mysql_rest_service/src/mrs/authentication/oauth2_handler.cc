@@ -55,7 +55,7 @@ namespace authentication {
 using GenericSessionData = Oauth2Handler::GenericSessionData;
 using AuthApp = mrs::database::entry::AuthApp;
 
-bool Oauth2Handler::redirects() const {
+bool Oauth2Handler::redirects(RequestContext &) const {
   log_debug("Oauth2Handler::redirects");
   return true;
 }

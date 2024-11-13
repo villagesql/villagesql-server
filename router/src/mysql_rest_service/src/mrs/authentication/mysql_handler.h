@@ -33,19 +33,20 @@
 namespace mrs {
 namespace authentication {
 
-class BasicHandler : public WwwAuthenticationHandler {
+class MysqlHandler : public WwwAuthenticationHandler {
  public:
   using AuthApp = database::entry::AuthApp;
 
  public:
-  BasicHandler(const AuthApp &entry,
+  MysqlHandler(const AuthApp &entry,
                collector::MysqlCacheManager *cache_manager);
 
   UniversalId get_service_id() const override;
   UniversalId get_id() const override;
 
-  bool www_authorize(const std::string &token, SqlSessionCached *out_cache,
-                     AuthUser *out_user) override;
+  bool verify_credential(const Credentials &credentials,
+                         SqlSessionCached *out_cache,
+                         AuthUser *out_user) override;
 
  private:
   collector::MysqlCacheManager *cache_manager_;

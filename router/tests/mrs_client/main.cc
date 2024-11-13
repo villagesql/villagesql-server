@@ -179,6 +179,7 @@ static bool authentication_type_convert(
   const static std::map<std::string, AuthenticationType> map{
       {"none", AuthenticationType::kNone},
       {"basic", AuthenticationType::kBasic},
+      {"basic_json", AuthenticationType::kBasicJson},
       {"scram_get", AuthenticationType::kScramGet},
       {"oauth2_f", AuthenticationType::kOauth2}};
 
@@ -639,7 +640,8 @@ std::vector<CmdOption> g_options{
      [](const std::string &value) { g_configuration.session_file = value; }},
     {{"--request-type", "-t"},
      "Define type of the request which should be send to the server.\n"
-     "By default its GET, where allowed values are: GET,POST,PUT,DELETE.",
+     "By default its GET, where allowed values are: "
+     "GET,POST,PUT,DELETE,OPTIONS.",
      CmdOptionValueReq::required,
      "type",
      [](const std::string &value) {
@@ -791,6 +793,11 @@ static Result execute_http_flow(HttpClientRequest *request,
                                 g_configuration.payload);
       } break;
 
+      case http_client::AuthenticationType::kBasicJson: {
+        r = b.do_basic_json_flow(request, path, g_configuration.user,
+                                 g_configuration.password,
+                                 g_configuration.session_type);
+      } break;
       case http_client::AuthenticationType::kBasic: {
         r = b.do_basic_flow(request, path, g_configuration.user,
                             g_configuration.password,

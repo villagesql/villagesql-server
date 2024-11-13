@@ -32,7 +32,7 @@ class MockAuthHandler : public mrs::interface::AuthorizeHandler {
   MOCK_METHOD(mrs::UniversalId, get_service_id, (), (const, override));
   MOCK_METHOD(const AuthApp &, get_entry, (), (const, override));
   MOCK_METHOD(mrs::UniversalId, get_id, (), (const, override));
-  MOCK_METHOD(bool, redirects, (), (const, override));
+  MOCK_METHOD(bool, redirects, (RequestContext & ctxt), (const, override));
   MOCK_METHOD(bool, authorize,
               (RequestContext & ctxt, Session *session, AuthUser *out_user),
               (override));

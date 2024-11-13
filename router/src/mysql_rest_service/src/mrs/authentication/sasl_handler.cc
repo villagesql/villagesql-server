@@ -83,7 +83,7 @@ const AuthApp &SaslHandler::get_entry() const { return entry_; }
 
 UniversalId SaslHandler::get_id() const { return entry_.id; }
 
-bool SaslHandler::redirects() const {
+bool SaslHandler::redirects(RequestContext &) const {
   log_debug("SaslHandler::redirects - false");
   return false;
 }

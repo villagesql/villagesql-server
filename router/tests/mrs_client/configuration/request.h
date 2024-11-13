@@ -35,10 +35,9 @@ class Request {
   using Type = HttpMethod::key_type;
   const static std::map<std::string, Type> &get_map() {
     const static std::map<std::string, Type> map{
-        {"get", HttpMethod::Get},
-        {"post", HttpMethod::Post},
-        {"put", HttpMethod::Put},
-        {"delete", HttpMethod::Delete}};
+        {"get", HttpMethod::Get},         {"post", HttpMethod::Post},
+        {"put", HttpMethod::Put},         {"delete", HttpMethod::Delete},
+        {"options", HttpMethod::Options}, {"connect", HttpMethod::Connect}};
     return map;
   }
 

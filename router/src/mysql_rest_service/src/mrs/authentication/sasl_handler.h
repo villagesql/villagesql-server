@@ -82,7 +82,7 @@ class SaslHandler : public interface::AuthorizeHandler {
   UniversalId get_id() const override;
 
   virtual SessionData *allocate_session_data() = 0;
-  bool redirects() const override;
+  bool redirects(RequestContext &ctxt) const override;
   bool is_authorized(Session *session, AuthUser *user) override;
   bool authorize(RequestContext &ctxt, Session *session,
                  AuthUser *out_user) override;

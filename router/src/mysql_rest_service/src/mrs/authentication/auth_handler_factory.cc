@@ -24,7 +24,7 @@
 
 #include "mrs/authentication/auth_handler_factory.h"
 
-#include "mrs/authentication/basic_handler.h"
+#include "mrs/authentication/mysql_handler.h"
 #include "mrs/authentication/oauth2_facebook_handler.h"
 #include "mrs/authentication/oauth2_google_handler.h"
 #include "mrs/authentication/oauth2_oidc_handler.h"
@@ -40,7 +40,7 @@ using AuthHandlerPtr = AuthHandlerFactory::AuthHandlerPtr;
 AuthHandlerPtr AuthHandlerFactory::create_basic_auth_handler(
     AuthorizeHandlerCallbakcs *cb, const AuthApp &entry,
     MysqlCacheManager *cache_manager) const {
-  using Obj = TrackAuthorizeHandler<AuthorizeHandlerCallbakcs, BasicHandler>;
+  using Obj = TrackAuthorizeHandler<AuthorizeHandlerCallbakcs, MysqlHandler>;
   return std::make_shared<Obj>(cb, entry, cache_manager);
 }
 

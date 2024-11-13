@@ -172,7 +172,7 @@ TEST_F(HandlerAuthorizeTests, do_the_authentication_get) {
         ctxt.selected_handler = mock_auth_handler_;
         return true;
       }));
-  EXPECT_CALL(*mock_auth_handler_, redirects()).WillOnce(Return(true));
+  EXPECT_CALL(*mock_auth_handler_, redirects(_)).WillOnce(Return(true));
 
   EXPECT_CALL(mock_input_buffer_, length()).WillRepeatedly(Return(0));
   EXPECT_CALL(mock_output_buffer_, length()).WillRepeatedly(Return(0));
@@ -200,7 +200,7 @@ TEST_F(HandlerAuthorizeTests, do_the_authentication_post) {
         ctxt.post_authentication = true;
         return true;
       }));
-  EXPECT_CALL(*mock_auth_handler_, redirects()).WillOnce(Return(true));
+  EXPECT_CALL(*mock_auth_handler_, redirects(_)).WillOnce(Return(true));
 
   EXPECT_CALL(mock_input_buffer_, length()).WillRepeatedly(Return(0));
   EXPECT_CALL(mock_input_buffer_, pop_front(0))

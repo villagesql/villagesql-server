@@ -46,9 +46,24 @@ class WwwAuthenticationHandler : public interface::AuthorizeHandler {
   AuthApp entry_;
   UserManager um_{entry_.limit_to_registered_users, entry_.default_role_id};
 
+  struct Credentials {
+    std::string user;
+    std::string password;
+  };
+
+ protected:
+  std::optional<Credentials> authorize_method_get(RequestContext &ctxt,
+                                                  Session *session);
+  std::optional<Credentials> authorize_method_post(RequestContext &ctxt,
+                                                   Session *session);
+
+  virtual bool verify_credential(const Credentials &credentials,
+                                 SqlSessionCached *out_cache,
+                                 AuthUser *out_user) = 0;
+
   void throw_add_www_authenticate(const char *schema);
 
-  bool redirects() const override;
+  bool redirects(RequestContext &ctxt) const override;
   bool is_authorized(Session *session, AuthUser *user) override;
   bool authorize(RequestContext &ctxt, Session *session,
                  AuthUser *out_user) override;
@@ -59,10 +74,6 @@ class WwwAuthenticationHandler : public interface::AuthorizeHandler {
 
   constexpr static char kAuthorization[] = "Authorization";
   constexpr static char kWwwAuthenticate[] = "WWW-Authenticate";
-
-  virtual bool www_authorize(const std::string &token,
-                             SqlSessionCached *out_cache,
-                             AuthUser *out_user) = 0;
 };
 
 }  // namespace authentication

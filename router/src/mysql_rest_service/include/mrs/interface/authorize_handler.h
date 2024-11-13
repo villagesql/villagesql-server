@@ -52,7 +52,7 @@ class AuthorizeHandler {
  public:
   virtual ~AuthorizeHandler() = default;
 
-  virtual bool redirects() const = 0;
+  virtual bool redirects(RequestContext &ctxt) const = 0;
   virtual UniversalId get_service_id() const = 0;
   virtual UniversalId get_id() const = 0;
   virtual const AuthApp &get_entry() const = 0;

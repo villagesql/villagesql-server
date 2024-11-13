@@ -86,7 +86,7 @@ class Oauth2Handler : public interface::AuthorizeHandler {
   UniversalId get_service_id() const override;
   UniversalId get_id() const override;
 
-  bool redirects() const override;
+  bool redirects(RequestContext &ctxt) const override;
   bool is_authorized(Session *session, AuthUser *user) override;
   bool authorize(RequestContext &ctxt, Session *session,
                  AuthUser *out_user) override;

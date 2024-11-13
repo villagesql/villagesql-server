@@ -38,7 +38,7 @@ using Seconds = std::chrono::seconds;
 namespace http_client {
 
 using namespace mrs_client;
-enum class AuthenticationType { kNone, kBasic, kScramGet, kOauth2 };
+enum class AuthenticationType { kNone, kBasic, kBasicJson, kScramGet, kOauth2 };
 enum class ResponseType { kJson, kBinary, kRaw };
 enum class WriteFileFormat { kRaw, kMTR };
 

@@ -78,7 +78,7 @@ OK
 #
 # III.1
 GET /svc1/authentication/login
-
+{"message":"Unauthorized","status":401}
 OK
 GET /svc1/authentication/login
 

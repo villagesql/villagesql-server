@@ -44,6 +44,7 @@
 
 #include "helper/container/generic.h"
 #include "helper/container/map.h"
+#include "helper/json/rapid_json_to_map.h"
 #include "helper/json/rapid_json_to_struct.h"
 #include "helper/json/text_to.h"
 #include "helper/make_shared_ptr.h"
@@ -88,15 +89,15 @@ class AuthenticationOptions {
 };
 
 class ParseAuthenticationOptions
-    : public helper::json::RapidReaderHandlerToStruct<AuthenticationOptions> {
+    : public helper::json::RapidReaderHandlerStringValuesToStruct<
+          AuthenticationOptions> {
  public:
-  template <typename ValueType>
-  uint64_t to_uint(const ValueType &value) {
+  uint64_t to_uint(const std::string &value) {
     return std::stoull(value.c_str());
   }
 
-  template <typename ValueType>
-  void handle_object_value(const std::string &key, const ValueType &vt) {
+  void handle_object_value(const std::string &key,
+                           const std::string &vt) override {
     using std::to_string;
     if (key ==
         "authentication.throttling.perAccount.minimumTimeBetweenRequestsInMs") {
@@ -117,30 +118,6 @@ class ParseAuthenticationOptions
                "authentication.throttling.blockWhenAttemptsExceededInSeconds") {
       result_.block_for = seconds{to_uint(vt)};
     }
-  }
-
-  template <typename ValueType>
-  void handle_value(const ValueType &vt) {
-    const auto &key = get_current_key();
-    if (is_object_path()) {
-      handle_object_value(key, vt);
-    }
-  }
-
-  bool String(const Ch *v, rapidjson::SizeType v_len, bool) override {
-    handle_value(std::string{v, v_len});
-    return true;
-  }
-
-  bool RawNumber(const Ch *v, rapidjson::SizeType v_len, bool) override {
-    handle_value(std::string{v, v_len});
-    return true;
-  }
-
-  bool Bool(bool v) override {
-    const static std::string k_true{"true"}, k_false{"false"};
-    handle_value(v ? k_true : k_false);
-    return true;
   }
 };
 
@@ -507,22 +484,23 @@ std::string AuthorizeManager::authorize(const UniversalId service_id,
 }
 
 AuthorizeHandlerPtr AuthorizeManager::choose_authentication_handler(
-    ServiceId service_id, const std::string &app_name) {
+    ServiceId service_id, const std::optional<std::string> &app_name) {
   auto handlers = get_handlers_by_service_id(service_id);
   if (handlers.empty())
     throw http::Error{
         HttpStatusCode::BadRequest,
         "Bad request - there is no authorization application available"};
 
-  if (app_name.empty() && handlers.size() == 1) {
+  if (!app_name.has_value() && handlers.size() == 1) {
     return handlers[0];
   }
 
+  auto app_name_value = app_name.value_or("");
   AuthorizeHandlerPtr result;
   if (!helper::container::get_if(
           handlers,
-          [&app_name](const auto &handler) {
-            return (app_name == handler->get_entry().app_name);
+          [&app_name_value](const auto &handler) {
+            return (app_name_value == handler->get_entry().app_name);
           },
           &result))
     throw http::Error{
@@ -531,12 +509,71 @@ AuthorizeHandlerPtr AuthorizeManager::choose_authentication_handler(
   return result;
 }
 
+struct AuthorizeParameters {
+  bool use_jwt;
+  std::optional<std::string> session_id;
+  std::optional<std::string> auth_app;
+};
+
+template <typename Container>
+AuthorizeParameters extract_parameters(const Container &container,
+                                       const bool allow_shorts = false) {
+  AuthorizeParameters result;
+  std::string value;
+
+  if (helper::container::get_value(container, "sessionType", &value) &&
+      value == "bearer") {
+    result.use_jwt = 1;
+  }
+
+  if (helper::container::get_value(container, "authApp", &value)) {
+    result.auth_app = value;
+  } else if (allow_shorts &&
+             helper::container::get_value(container, "app", &value)) {
+    // Keep this "case" for backward compatibility.
+    result.auth_app = value;
+  }
+
+  if (helper::container::get_value(container, "session", &value)) {
+    result.session_id = value;
+  }
+
+  return result;
+}
+
+AuthorizeParameters get_authorize_parameters(::http::base::Request *request) {
+  const auto method = request->get_method();
+  const auto &uri = request->get_uri();
+
+  // Please note that the handler that causes the call to
+  // 'AuthorizeManager::authorize', should be configured to allow only
+  // POST and GET, like following handler:
+  //
+  //  uint32_t HandlerAuthorizeLogin::get_access_rights() const {
+  //    using Op = mrs::database::entry::Operation::Values;
+  //    return Op::valueRead | Op::valueCreate;
+  //  }
+  if (method != HttpMethod::Get && method != HttpMethod::Post)
+    throw http::Error{HttpStatusCode::BadRequest,
+                      "Bad request - authorization must be either done in POST "
+                      "or GET request."};
+
+  if (method == HttpMethod::Get) {
+    return extract_parameters(uri.get_query_elements(), true);
+  }
+
+  // POST
+  auto body_object_fields = helper::json::text_to_handler<
+      helper::json::RapidReaderHandlerToMapOfSimpleValues>(
+      request->get_input_body());
+  return extract_parameters(body_object_fields);
+}
+
 bool AuthorizeManager::authorize(ServiceId service_id,
                                  rest::RequestContext &ctxt,
                                  AuthUser *out_user) {
   auto session_cookie_key = get_session_cookie_key_name(service_id);
   auto session_identifier = ctxt.cookies.get(session_cookie_key);
-  auto url = ctxt.get_http_url();
   log_debug(
       "AuthorizeManager::authorize(service_id:%s, session_id:%s, "
       "can_use_jwt:%s)",
@@ -545,20 +582,16 @@ bool AuthorizeManager::authorize(ServiceId service_id,
 
   AuthorizeHandlerPtr selected_handler;
 
-  bool generate_jwt_token = url.get_query_parameter("sessionType") == "bearer";
-  if (generate_jwt_token) url.remove_query_parameter("sessionType");
+  auto [use_jwt, url_session_id, auth_app] =
+      get_authorize_parameters(ctxt.request);
 
-  // TODO(lkotula): Change this hack (Shouldn't be in review)
   if (ctxt.request->get_method() == HttpMethod::Post &&
-      session_identifier.empty()) {
-    auto url_session_id = url.get_query_parameter("session");
-    if (!url_session_id.empty()) {
-      session_identifier = url_session_id;
-      ctxt.cookies.direct()[session_cookie_key] = session_identifier;
-    }
+      session_identifier.empty() && url_session_id.has_value()) {
+    session_identifier = url_session_id.value();
+    ctxt.cookies.direct()[session_cookie_key] = session_identifier;
   }
 
-  if (generate_jwt_token && jwt_secret_.empty()) {
+  if (use_jwt && jwt_secret_.empty()) {
     throw http::Error{HttpStatusCode::BadRequest,
                       "Bad request - bearer not allowed."};
   }
@@ -570,8 +603,7 @@ bool AuthorizeManager::authorize(ServiceId service_id,
       log_warning("Too many requests from host: '%s'.", peer_host.c_str());
     throw_max_rate_exceeded(ac.next_request_allowed_after);
   }
-  selected_handler =
-      choose_authentication_handler(service_id, url.get_query_parameter("app"));
+  selected_handler = choose_authentication_handler(service_id, auth_app);
 
   // Ensure that all code paths, had selected the handlers.
   assert(nullptr != selected_handler.get());
@@ -595,7 +627,7 @@ bool AuthorizeManager::authorize(ServiceId service_id,
 
   if (session_identifier.empty()) {
     session = session_manager_.new_session(selected_handler->get_id());
-    session->generate_token = generate_jwt_token;
+    session->generate_token = use_jwt;
     http::Cookie::SameSite same_site = http::Cookie::None;
     ctxt.cookies.set(session_cookie_key, session->get_session_id(),
                      http::Cookie::duration{0}, "/", &same_site, true, true,
@@ -603,15 +635,12 @@ bool AuthorizeManager::authorize(ServiceId service_id,
     log_debug("new session id=%s", session->get_session_id().c_str());
   } else {
     session = session_manager_.get_session(session_identifier);
-    if (generate_jwt_token) session->generate_token = true;
+    if (use_jwt) session->generate_token = true;
     log_debug("existing session id=%s", session_identifier.c_str());
   }
 
   assert(nullptr != session);
   session->handler_name = selected_handler->get_entry().app_name;
-
-  log_debug("selected_handler::redirects(%s)",
-            (selected_handler->redirects() ? "yes" : "no"));
 
   if (selected_handler->authorize(ctxt, session, out_user)) {
     return true;

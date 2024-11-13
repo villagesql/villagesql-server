@@ -48,7 +48,9 @@ class TrackAuthorizeHandler : public Handler {
     return Handler::get_service_id();
   }
 
-  bool redirects() const override { return Handler::redirects(); }
+  bool redirects(RequestContext &ctxt) const override {
+    return Handler::redirects(ctxt);
+  }
   UniversalId get_id() const override { return Handler::get_id(); }
 
   const AuthApp &get_entry() const override { return Handler::get_entry(); }

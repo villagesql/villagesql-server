@@ -236,6 +236,40 @@ class RapidReaderHandlerToStruct
   int arrays_{0};
 };
 
+template <typename UserResult>
+class RapidReaderHandlerStringValuesToStruct
+    : public RapidReaderHandlerToStruct<UserResult> {
+ public:
+  using Handler = RapidReaderHandlerToStruct<UserResult>;
+  using Ch = typename Handler::Ch;
+
+  virtual void handle_object_value(const std::string &key,
+                                   const std::string &value) = 0;
+
+  void handle_value(const std::string &vt) {
+    const auto &key = Handler::get_current_key();
+    if (Handler::is_object_path()) {
+      handle_object_value(key, vt);
+    }
+  }
+
+  bool String(const Ch *v, rapidjson::SizeType v_len, bool) override {
+    handle_value(std::string{v, v_len});
+    return true;
+  }
+
+  bool RawNumber(const Ch *v, rapidjson::SizeType v_len, bool) override {
+    handle_value(std::string{v, v_len});
+    return true;
+  }
+
+  bool Bool(bool v) override {
+    const static std::string k_true{"true"}, k_false{"false"};
+    handle_value(v ? k_true : k_false);
+    return true;
+  }
+};
+
 }  // namespace json
 }  // namespace helper
 

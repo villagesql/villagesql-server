@@ -85,7 +85,7 @@ HttpResult HandlerAuthorizeLogin::handle_get(
   // Generate the response by the default handler.
 
   log_debug("HandlerAuthorizeLogin::handle_get - before redirects");
-  if (ctxt->selected_handler->redirects())
+  if (ctxt->selected_handler->redirects(*ctxt))
     http::redirect_and_throw(ctxt->request, uri);
   log_debug("HandlerAuthorizeLogin::handle_get - no redirects");
 
@@ -173,6 +173,7 @@ std::string HandlerAuthorizeLogin::append_status_parameters(
 bool HandlerAuthorizeLogin::request_error(RequestContext *ctxt,
                                           const http::Error &error) {
   if (HttpMethod::Options == ctxt->request->get_method()) return false;
+  if (ctxt->post_authentication) return false;
   // Oauth2 authentication may redirect, allow it.
   Url url(ctxt->request->get_uri());
 

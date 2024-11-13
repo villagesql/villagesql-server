@@ -35,7 +35,7 @@ class ScramHandler : public SaslHandler {
  public:
   ScramHandler(const AuthApp &entry, const std::string &random_data);
 
-  bool redirects() const override;
+  bool redirects(RequestContext &ctxt) const override;
 
   SessionData *allocate_session_data() override;
 

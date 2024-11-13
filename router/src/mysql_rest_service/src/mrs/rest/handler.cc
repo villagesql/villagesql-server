@@ -225,8 +225,9 @@ class RestRequestHandler : public ::http::base::RequestHandler {
     const auto service_id = rest_handler_->get_service_id();
     const auto method = ctxt.request->get_method();
 
-    log_debug("handle_request(service_id:%s): start(url='%s')",
+    log_debug("handle_request(service_id:%s): start(method:%s url:'%s')",
               service_id.to_string().c_str(),
+              get_http_method_name(method).c_str(),
               ctxt.request->get_uri().join().c_str());
 
     auto options = rest_handler_->get_options();
