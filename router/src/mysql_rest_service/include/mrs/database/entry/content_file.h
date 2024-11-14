@@ -41,7 +41,7 @@ struct ContentFile {
   UniversalId content_set_id;
   std::string request_path;
   bool requires_authentication;
-  bool enabled;
+  EnabledType enabled;
   uint64_t size;
   std::optional<std::string> options;
 

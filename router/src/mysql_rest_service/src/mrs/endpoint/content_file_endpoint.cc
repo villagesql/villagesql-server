@@ -34,6 +34,7 @@ namespace endpoint {
 using ContentFile = ContentFileEndpoint::ContentFile;
 using ContentFilePtr = ContentFileEndpoint::ContentFilePtr;
 using UniversalId = ContentFileEndpoint::UniversalId;
+using EnabledType = ContentFileEndpoint::EnabledType;
 
 ContentFileEndpoint::ContentFileEndpoint(const ContentFile &entry,
                                          EndpointConfigurationPtr configuration,
@@ -63,13 +64,13 @@ void ContentFileEndpoint::update() {
   observability::EntityCounter<kEntityCounterUpdatesFiles>::increment();
 }
 
-void ContentFileEndpoint::activate() {
+void ContentFileEndpoint::activate_public() {
   handler_ = factory_->create_content_file(shared_from_this());
 }
 
 void ContentFileEndpoint::deactivate() { handler_.reset(); }
 
-bool ContentFileEndpoint::is_this_node_enabled() const {
+EnabledType ContentFileEndpoint::get_this_node_enabled_level() const {
   return entry_->enabled;
 }
 

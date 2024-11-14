@@ -27,6 +27,7 @@
 
 #include <optional>
 
+#include "mrs/database/entry/entry.h"
 #include "mrs/database/entry/universal_id.h"
 
 namespace mrs {
@@ -40,7 +41,7 @@ struct DbSchema {
   std::string name;
   std::string request_path;
   bool requires_auth;
-  bool enabled;
+  EnabledType enabled;
   std::optional<uint64_t> items_per_page;
   std::optional<std::string> options;
   std::optional<std::string> metadata;

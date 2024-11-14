@@ -38,6 +38,7 @@ using DbService = DbServiceEndpoint::DbService;
 using DbServicePtr = DbServiceEndpoint::DbServicePtr;
 using UniversalId = DbServiceEndpoint::UniversalId;
 using EndpointConfiguration = DbServiceEndpoint::EndpointConfiguration;
+using EnabledType = DbServiceEndpoint::EnabledType;
 
 namespace {
 
@@ -103,7 +104,7 @@ void DbServiceEndpoint::update() {
   observability::EntityCounter<kEntityCounterUpdatesServices>::increment();
 }
 
-void DbServiceEndpoint::activate() {
+void DbServiceEndpoint::activate_public() {
   url_handlers_.clear();
   auto this_ep = shared_from_this();
 
@@ -119,7 +120,9 @@ void DbServiceEndpoint::activate() {
 
 void DbServiceEndpoint::deactivate() { url_handlers_.clear(); }
 
-bool DbServiceEndpoint::is_this_node_enabled() const { return entry_->enabled; }
+EnabledType DbServiceEndpoint::get_this_node_enabled_level() const {
+  return entry_->enabled;
+}
 
 std::string DbServiceEndpoint::get_my_url_path_part() const {
   return entry_->url_context_root;

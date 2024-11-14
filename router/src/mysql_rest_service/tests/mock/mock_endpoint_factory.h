@@ -37,7 +37,8 @@
 
 class MockProxy {
  public:
-  MOCK_METHOD(void, activate, (), ());
+  MOCK_METHOD(void, activate_private, (), ());
+  MOCK_METHOD(void, activate_public, (), ());
   MOCK_METHOD(void, deactivate, (), ());
 
   MOCK_METHOD(void, created, (), ());
@@ -57,7 +58,8 @@ class ProxyEndpoint : public Base {
 
   ~ProxyEndpoint() override { proxy_->destroyed(); }
 
-  void activate() override { proxy_->activate(); }
+  void activate_private() override { proxy_->activate_private(); }
+  void activate_public() override { proxy_->activate_public(); }
   void deactivate() override { proxy_->deactivate(); }
 
  private:
@@ -66,6 +68,9 @@ class ProxyEndpoint : public Base {
 
 template <typename Base = mrs::interface::EndpointBase>
 class MockEndpoint : public Base {
+ public:
+  using EnabledType = typename Base::EnabledType;
+
  public:
   template <typename... An>
   MockEndpoint(An &&...args) : Base(std::forward<An>(args)...) {}
@@ -76,7 +81,7 @@ class MockEndpoint : public Base {
   MOCK_METHOD(UniversalId, get_id, (), (const, override));
   MOCK_METHOD(UniversalId, get_parent_id, (), (const, override));
 
-  MOCK_METHOD(bool, is_this_node_enabled, (), (const, override));
+  MOCK_METHOD(EnabledType, get_this_node_enabled_level, (), (const, override));
   MOCK_METHOD(std::string, get_my_url_path_part, (), (const, override));
   MOCK_METHOD(std::string, get_my_url_part, (), (const, override));
 
@@ -87,9 +92,10 @@ class MockEndpoint : public Base {
   MOCK_METHOD(bool, required_authentication, (), (const, override));
   MOCK_METHOD(std::string, get_url_path, (), (const, override));
   MOCK_METHOD(Uri, get_url, (), (const, override));
-  MOCK_METHOD(void, activate, (), (override));
+  MOCK_METHOD(void, activate_public, (), (override));
+  MOCK_METHOD(void, activate_private, (), (override));
   MOCK_METHOD(void, deactivate, (), (override));
-  MOCK_METHOD(bool, is_enabled, (), (const, override));
+  MOCK_METHOD(EnabledType, get_enabled_level, (), (const, override));
   MOCK_METHOD(void, update, (), (override));
 };
 

@@ -36,6 +36,7 @@ namespace endpoint {
 using DbSchema = DbSchemaEndpoint::DbSchema;
 using DbSchemaPtr = DbSchemaEndpoint::DbSchemaPtr;
 using UniversalId = DbSchemaEndpoint::UniversalId;
+using EnabledType = DbSchemaEndpoint::EnabledType;
 
 DbSchemaEndpoint::DbSchemaEndpoint(const DbSchema &entry,
                                    EndpointConfigurationPtr configuration,
@@ -45,7 +46,7 @@ DbSchemaEndpoint::DbSchemaEndpoint(const DbSchema &entry,
   log_debug("DbSchemaEndpoint::DbSchemaEndpoint");
 }
 
-void DbSchemaEndpoint::activate() {
+void DbSchemaEndpoint::activate_public() {
   url_handlers_.clear();
 
   url_handlers_.push_back(
@@ -76,7 +77,9 @@ void DbSchemaEndpoint::set(const DbSchema &entry, EndpointBasePtr parent) {
   changed();
 }
 
-bool DbSchemaEndpoint::is_this_node_enabled() const { return entry_->enabled; }
+EnabledType DbSchemaEndpoint::get_this_node_enabled_level() const {
+  return entry_->enabled;
+}
 
 bool DbSchemaEndpoint::does_this_node_require_authentication() const {
   return entry_->requires_auth;

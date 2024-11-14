@@ -49,7 +49,7 @@ class UrlHostEndpoint : public OptionEndpoint {
 
   UniversalId get_id() const override;
   UniversalId get_parent_id() const override;
-  bool is_enabled() const override;
+  EnabledType get_enabled_level() const override;
 
   const UrlHostPtr get() const;
   void set(const UrlHost &entry, EndpointBasePtr parent);
@@ -58,7 +58,7 @@ class UrlHostEndpoint : public OptionEndpoint {
 
  private:
   void update() override;
-  bool is_this_node_enabled() const override;
+  EnabledType get_this_node_enabled_level() const override;
   std::string get_my_url_path_part() const override;
   std::string get_my_url_part() const override;
   bool does_this_node_require_authentication() const override;

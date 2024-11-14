@@ -120,8 +120,9 @@ class HandleObjectTests : public Test {
           .WillOnce(Return(ByMove(collector::MysqlCacheManager::CachedObject(
               nullptr, false, &parent_.mock_session))));
 
-      EXPECT_CALL(*parent_.mock_db_object_endpoint, is_enabled())
-          .WillRepeatedly(Return(true));
+      EXPECT_CALL(*parent_.mock_db_object_endpoint, get_enabled_level())
+          .WillRepeatedly(
+              Return(mrs::database::entry::EnabledType::EnabledType_public));
       EXPECT_CALL(*parent_.mock_db_object_endpoint, get_url_path())
           .WillRepeatedly(Return(rest_path_));
       EXPECT_CALL(*parent_.mock_db_object_endpoint, get_url())
@@ -130,8 +131,9 @@ class HandleObjectTests : public Test {
           .WillRepeatedly(Return(parent_.db_object.id));
       EXPECT_CALL(*parent_.mock_db_object_endpoint, update()).Times(AtLeast(1));
 
-      EXPECT_CALL(*parent_.mock_db_schema_endpoint, is_enabled())
-          .WillRepeatedly(Return(true));
+      EXPECT_CALL(*parent_.mock_db_schema_endpoint, get_enabled_level())
+          .WillRepeatedly(
+              Return(mrs::database::entry::EnabledType::EnabledType_public));
       EXPECT_CALL(*parent_.mock_db_schema_endpoint, get_id())
           .WillRepeatedly(Return(parent_.db_schema.id));
 

@@ -27,6 +27,7 @@
 
 #include <optional>
 
+#include "mrs/database/entry/entry.h"
 #include "mrs/database/entry/universal_id.h"
 
 namespace mrs {
@@ -47,7 +48,7 @@ struct DbService {
   std::optional<std::string> auth_completed_page_content;
   bool enable_sql_endpoint;
   std::optional<std::string> custom_metadata_schema;
-  bool enabled;
+  EnabledType enabled;
   bool published{true};
   std::optional<std::string> metadata;
 

@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "http/base/uri.h"
+#include "mrs/database/entry/entry.h"
 #include "mrs/database/entry/universal_id.h"
 #include "mrs/interface/endpoint_configuration.h"
 #include "mrs/interface/rest_handler.h"
@@ -50,6 +51,7 @@ namespace interface {
  */
 class EndpointBase : public std::enable_shared_from_this<EndpointBase> {
  public:
+  using EnabledType = mrs::database::entry::EnabledType;
   using EndpointBasePtr = std::shared_ptr<EndpointBase>;
   using UniversalId = mrs::database::entry::UniversalId;
   using Children = std::vector<EndpointBasePtr>;
@@ -73,7 +75,7 @@ class EndpointBase : public std::enable_shared_from_this<EndpointBase> {
   virtual UniversalId get_parent_id() const = 0;
 
  protected:
-  virtual bool is_this_node_enabled() const = 0;
+  virtual EnabledType get_this_node_enabled_level() const = 0;
   virtual std::string get_my_url_path_part() const = 0;
   virtual std::string get_my_url_part() const = 0;
   virtual bool does_this_node_require_authentication() const = 0;
@@ -111,22 +113,48 @@ class EndpointBase : public std::enable_shared_from_this<EndpointBase> {
   }
 
   /*
-   * enable / activate / reactivate this endpoint
+   * enable-public
+   *
+   * The 'override' methods may expose handlers (http endpoints) that
+   * should be visible/available through HTTP interface.
    */
-  virtual void activate() {}
+  virtual void activate_public() {}
+
+  /*
+   * enable-private
+   *
+   * The 'override' methods may initialize some per endpoint
+   * data that may be used internally in dependencies from other endpoints.
+   */
+  virtual void activate_private() {}
 
   /*
    * disable / deactivate
+   *
+   * The endpoint is still in memory, be should no
+   * expose any handlers (http endpoint) nor should be
+   * used internally.
    */
   virtual void deactivate() {}
 
-  virtual bool is_enabled() const {
+  virtual EnabledType get_enabled_level() const {
     auto parent = get_parent_ptr();
 
-    if (!parent) return false;
-    if (!is_this_node_enabled()) return false;
+    if (!parent) return EnabledType::EnabledType_none;
 
-    return parent->is_enabled();
+    auto this_enabled_level = get_this_node_enabled_level();
+
+    if (this_enabled_level == EnabledType::EnabledType_none)
+      return EnabledType::EnabledType_none;
+
+    auto parent_enabled_level = parent->get_enabled_level();
+
+    if (this_enabled_level == EnabledType::EnabledType_public)
+      return parent_enabled_level;
+
+    return parent_enabled_level == EnabledType::EnabledType_public
+               ? EnabledType::EnabledType_private
+               : parent_enabled_level;
   }
 
   void set_parent(EndpointBasePtr parent) {
@@ -174,12 +202,17 @@ class EndpointBase : public std::enable_shared_from_this<EndpointBase> {
    */
  protected:
   virtual void update() {
-    if (is_enabled()) {
-      activate();
-      return;
+    switch (get_enabled_level()) {
+      case EnabledType::EnabledType_public:
+        activate_public();
+        break;
+      case EnabledType::EnabledType_private:
+        activate_private();
+        break;
+      case EnabledType::EnabledType_none:
+        deactivate();
+        break;
     }
-
-    deactivate();
   }
 
   EndpointBasePtr get_child_by_id(const UniversalId &id) const {

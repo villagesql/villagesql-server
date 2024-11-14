@@ -60,10 +60,10 @@ class ContentFileEndpoint : public mrs::interface::EndpointBase {
   void update() override;
 
  private:
-  void activate() override;
+  void activate_public() override;
   void deactivate() override;
 
-  bool is_this_node_enabled() const override;
+  EnabledType get_this_node_enabled_level() const override;
   bool does_this_node_require_authentication() const override;
   std::string get_my_url_path_part() const override;
   std::string get_my_url_part() const override;

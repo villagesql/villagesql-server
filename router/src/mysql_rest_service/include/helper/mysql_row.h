@@ -30,6 +30,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <type_traits>
 
 #include "mysqlrouter/mysql_session.h"
 
@@ -166,6 +167,13 @@ class MySQLRow {
   }
 
  private:
+  template <typename T>
+  typename std::enable_if<std::is_enum<T>::value>::type convert(
+      unsigned field_index, T *out_value, const char *in_value) {
+    auto ptr = reinterpret_cast<std::underlying_type_t<T> *>(out_value);
+    convert(field_index, ptr, in_value);
+  }
+
   void convert(unsigned field_index, bool *out_value, const char *in_value) {
     if (!in_value) {
       *out_value = {};

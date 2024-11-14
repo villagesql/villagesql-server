@@ -223,7 +223,7 @@ void log_debug_db_entry_impl(const DbService &service) {
   log_debug("DbService deleted=%s", helper::to_string(service.deleted).c_str());
   log_debug("DbService protocols=%s",
             helper::container::to_string(service.url_protocols).c_str());
-  log_debug("DbService enabled=%s", helper::to_string(service.enabled).c_str());
+  log_debug("DbService enabled=%i", service.enabled);
   log_debug("DbService host_id=%s", service.url_host_id.to_string().c_str());
   log_debug("DbService in_developement=%s",
             helper::to_string(service.in_development).c_str());
@@ -233,7 +233,7 @@ void log_debug_db_entry_impl(const DbSchema &schema) {
   log_debug("DbSchema id=%s", schema.id.to_string().c_str());
   log_debug("DbSchema deleted=%s", helper::to_string(schema.deleted).c_str());
   log_debug("DbSchema name=%s", schema.name.c_str());
-  log_debug("DbSchema enabled=%s", helper::to_string(schema.enabled).c_str());
+  log_debug("DbSchema enabled=%i", schema.enabled);
   if (!schema.options.has_value()) {
     log_debug("DbSchema options=NONE");
   } else {
@@ -246,7 +246,7 @@ void log_debug_db_entry_impl(const DbObject &obj) {
   log_debug("DbObject id=%s", obj.id.to_string().c_str());
   log_debug("DbObject deleted=%s", helper::to_string(obj.deleted).c_str());
   log_debug("DbObject name=%s", obj.name.c_str());
-  log_debug("DbObject enabled=%s", helper::to_string(obj.enabled).c_str());
+  log_debug("DbObject enabled=%i", obj.enabled);
 }
 
 void log_debug_db_entry_impl(const ContentSet &content_set) {
@@ -254,8 +254,7 @@ void log_debug_db_entry_impl(const ContentSet &content_set) {
   log_debug("ContentSet deleted=%s",
             helper::to_string(content_set.deleted).c_str());
   log_debug("ContentSet request_path=%s", content_set.request_path.c_str());
-  log_debug("ContentSet enabled=%s",
-            helper::to_string(content_set.enabled).c_str());
+  log_debug("ContentSet enabled=%i", content_set.enabled);
 }
 
 void log_debug_db_entry_impl(const ContentFile &content_file) {
@@ -263,8 +262,7 @@ void log_debug_db_entry_impl(const ContentFile &content_file) {
   log_debug("ContentFile deleted=%s",
             helper::to_string(content_file.deleted).c_str());
   log_debug("ContentFile request_path=%s", content_file.request_path.c_str());
-  log_debug("ContentFile enabled=%s",
-            helper::to_string(content_file.enabled).c_str());
+  log_debug("ContentFile enabled=%i", content_file.enabled);
 }
 
 template <typename DbType>

@@ -55,7 +55,7 @@ struct DbObject {
   std::string name;
   std::string schema_name;
   std::string request_path;
-  bool enabled;
+  EnabledType enabled;
   ObjectType type;
   Operation::ValueType crud_operation;
   Format format;

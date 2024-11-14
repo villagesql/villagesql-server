@@ -33,6 +33,7 @@ namespace endpoint {
 using DbObject = DbObjectEndpoint::DbObject;
 using DbObjectPtr = DbObjectEndpoint::DbObjectPtr;
 using UniversalId = DbObjectEndpoint::UniversalId;
+using EnabledType = DbObjectEndpoint::EnabledType;
 
 DbObjectEndpoint::DbObjectEndpoint(const DbObject &entry,
                                    EndpointConfigurationPtr configuration,
@@ -53,7 +54,7 @@ void DbObjectEndpoint::update() {
 
 void DbObjectEndpoint::deactivate() { url_handlers_.clear(); }
 
-void DbObjectEndpoint::activate() {
+void DbObjectEndpoint::activate_public() {
   url_handlers_.clear();
 
   url_handlers_.push_back(
@@ -73,7 +74,9 @@ void DbObjectEndpoint::set(const DbObject &entry, EndpointBasePtr parent) {
 
 const DbObjectPtr DbObjectEndpoint::get() const { return entry_; }
 
-bool DbObjectEndpoint::is_this_node_enabled() const { return entry_->enabled; }
+EnabledType DbObjectEndpoint::get_this_node_enabled_level() const {
+  return entry_->enabled;
+}
 
 bool DbObjectEndpoint::does_this_node_require_authentication() const {
   return entry_->requires_authentication;

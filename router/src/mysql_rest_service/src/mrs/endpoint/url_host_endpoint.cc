@@ -37,6 +37,7 @@ namespace endpoint {
 using UrlHost = UrlHostEndpoint::UrlHost;
 using UrlHostPtr = UrlHostEndpoint::UrlHostPtr;
 using UniversalId = UrlHostEndpoint::UniversalId;
+using EnabledType = UrlHostEndpoint::EnabledType;
 
 UrlHostEndpoint::UrlHostEndpoint(const UrlHost &entry,
                                  EndpointConfigurationPtr configuration,
@@ -78,13 +79,17 @@ UrlHostEndpoint::Uri UrlHostEndpoint::get_url() const {
   return result;
 }
 
-bool UrlHostEndpoint::is_this_node_enabled() const { return true; }
+EnabledType UrlHostEndpoint::get_this_node_enabled_level() const {
+  return EnabledType::EnabledType_public;
+}
 
 std::string UrlHostEndpoint::get_my_url_path_part() const { return ""; }
 
 std::string UrlHostEndpoint::get_my_url_part() const { return entry_->name; }
 
-bool UrlHostEndpoint::is_enabled() const { return true; }
+EnabledType UrlHostEndpoint::get_enabled_level() const {
+  return EnabledType::EnabledType_public;
+}
 
 bool UrlHostEndpoint::does_this_node_require_authentication() const {
   return false;

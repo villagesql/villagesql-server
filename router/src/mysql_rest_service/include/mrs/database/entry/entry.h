@@ -52,6 +52,12 @@ struct EntryKey {
   }
 };
 
+enum EnabledType {
+  EnabledType_none = 0,
+  EnabledType_public = 1,
+  EnabledType_private = 2,
+};
+
 }  // namespace entry
 }  // namespace database
 }  // namespace mrs

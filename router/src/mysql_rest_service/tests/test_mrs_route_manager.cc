@@ -33,6 +33,7 @@
 #include "mock/mock_mysqlcachemanager.h"
 
 using mrs::database::entry::DbObject;
+using EnabledType = mrs::database::entry::EnabledType;
 using testing::_;
 using testing::ByMove;
 using testing::InvokeWithoutArgs;
@@ -118,8 +119,9 @@ class BaseEndpointManagerTests : public Test {
     return result;
   }
 
-  std::vector<DbService> create_services(std::initializer_list<Entry> il,
-                                         bool enabled = true) {
+  std::vector<DbService> create_services(
+      std::initializer_list<Entry> il,
+      EnabledType enabled = EnabledType::EnabledType_public) {
     std::vector<DbService> result;
 
     for (auto i : il) {
@@ -133,8 +135,9 @@ class BaseEndpointManagerTests : public Test {
     return result;
   }
 
-  std::vector<DbSchema> create_schemas(std::initializer_list<Entry> il,
-                                       bool enabled = true) {
+  std::vector<DbSchema> create_schemas(
+      std::initializer_list<Entry> il,
+      EnabledType enabled = EnabledType::EnabledType_public) {
     std::vector<DbSchema> result;
 
     for (auto i : il) {
@@ -148,8 +151,9 @@ class BaseEndpointManagerTests : public Test {
     return result;
   }
 
-  std::vector<DbObject> create_objects(std::initializer_list<Entry> il,
-                                       bool enabled = true) {
+  std::vector<DbObject> create_objects(
+      std::initializer_list<Entry> il,
+      EnabledType enabled = EnabledType::EnabledType_public) {
     std::vector<DbObject> result;
 
     for (auto i : il) {
@@ -183,9 +187,9 @@ TEST_F(BaseEndpointManagerTests, sut_manages_service) {
     EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], created());
     EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], created());
 
-    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_public());
 
     sut_->update(k_hosts);
     sut_->update(services);
@@ -218,9 +222,9 @@ TEST_F(BaseEndpointManagerTests, sut_manages_service_update_service2) {
     EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], created());
     EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], created());
 
-    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_public());
 
     sut_->update(k_hosts);
     sut_->update(services);
@@ -231,7 +235,7 @@ TEST_F(BaseEndpointManagerTests, sut_manages_service_update_service2) {
   // Update just one
   {
     SCOPED_TRACE("Update just one service");
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_public());
 
     sut_->update(create_services({{0x02, k_host_id}}));
 
@@ -274,14 +278,14 @@ TEST_F(BaseEndpointManagerTests, sut_manages_service_activates_endpoints) {
     EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], created());
     EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], created());
 
-    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate_public());
 
     sut_->update(k_hosts);
     sut_->update(services);
@@ -296,9 +300,9 @@ TEST_F(BaseEndpointManagerTests, sut_manages_service_activates_endpoints) {
   // Change service 2, update one db-object
   {
     SCOPED_TRACE("Update service 2, observe update on db_object");
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate_public());
 
     sut_->update(create_services({{0x02_sid, k_host_id}}));
 
@@ -308,10 +312,10 @@ TEST_F(BaseEndpointManagerTests, sut_manages_service_activates_endpoints) {
   // Change service 1, update two db-objects
   {
     SCOPED_TRACE("Update service 1, observe update on two db_objects");
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate_public());
 
     sut_->update(create_services({{0x01_sid, k_host_id}}));
 
@@ -321,9 +325,9 @@ TEST_F(BaseEndpointManagerTests, sut_manages_service_activates_endpoints) {
   // Change schema 1, update two db-objects
   {
     SCOPED_TRACE("Update schema 1");
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate_public());
 
     sut_->update(create_schemas({{0x101_did, 0x1_sid}}));
 
@@ -333,7 +337,7 @@ TEST_F(BaseEndpointManagerTests, sut_manages_service_activates_endpoints) {
   // Change schema 1, update two db-objects
   {
     SCOPED_TRACE("Update object 3");
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate_public());
 
     sut_->update(create_objects({{0x3102_oid, 0x102_did}}));
 
@@ -360,10 +364,10 @@ TEST_F(BaseEndpointManagerTests, sut_manages_service_activates_endpoints) {
   EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], destroyed());
 }
 
-TEST_F(BaseEndpointManagerTests, sut_manages_service_deactivates_endpoints) {
+TEST_F(BaseEndpointManagerTests, sut_manages_service_deactivate_endpoints) {
   std::vector<DbService> services{
       create_services({{0x01_sid, k_host_id}, {0x02_sid, k_host_id}})};
-  const bool k_is_disabled = false;
+  const EnabledType k_is_disabled = EnabledType::EnabledType_none;
 
   // Put two services into the manager
   {
@@ -384,14 +388,14 @@ TEST_F(BaseEndpointManagerTests, sut_manages_service_deactivates_endpoints) {
     EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], created());
     EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], created());
 
-    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate_public());
 
     sut_->update(k_hosts);
     sut_->update(services);
@@ -480,10 +484,10 @@ TEST_F(BaseEndpointManagerTests, sut_manages_service_schemas) {
     EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], created());
     EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], created());
 
-    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate_public());
 
     sut_->update(k_hosts);
     sut_->update(services);
@@ -534,14 +538,14 @@ TEST_F(BaseEndpointManagerTests,
     EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], created());
     EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], created());
 
-    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate_public());
 
     sut_->update(k_hosts);
     sut_->update(services);
@@ -556,16 +560,346 @@ TEST_F(BaseEndpointManagerTests,
   // Change host 1, update on all sub-objects
   {
     SCOPED_TRACE("Update host, observe update on db_object");
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate());
-    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate_public());
 
     sut_->update(k_hosts);
+
+    mock_endpoint_factory_->verifyAndClearMocks();
+  }
+
+  {
+    SCOPED_TRACE("Delete all objects");
+    auto hosts = k_hosts;
+    for (auto &s : hosts) {
+      s.deleted = true;
+    }
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], destroyed());
+
+    sut_->update(hosts);
+    mock_endpoint_factory_->verifyAndClearMocks();
+  }
+}
+
+TEST_F(BaseEndpointManagerTests,
+       sut_manages_service_disable_and_deactivate_dependent_endpoints) {
+  std::vector<DbService> services{
+      create_services({{0x01_sid, k_host_id}, {0x02_sid, k_host_id}})};
+
+  // Put two services into the manager
+  {
+    SCOPED_TRACE("Setup");
+
+    // service-id:   0      1
+    //               |      |
+    // schema-id:    0      1
+    //              / \     |
+    // obj-id:     0   1    2
+
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], created());
+
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate_public());
+
+    sut_->update(k_hosts);
+    sut_->update(services);
+    sut_->update(create_schemas({{0x101_did, 0x1_sid}, {0x102_did, 0x2_sid}}));
+    sut_->update(create_objects({{0x1101_oid, 0x101_did},
+                                 {0x2101_oid, 0x101_did},
+                                 {0x3102_oid, 0x102_did}}));
+
+    mock_endpoint_factory_->verifyAndClearMocks();
+  }
+
+  // Disable service, disable on all sub-objects
+  {
+    SCOPED_TRACE("Update service, observe update on db_object");
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], deactivate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], deactivate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], deactivate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], deactivate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], deactivate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], deactivate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], deactivate());
+
+    sut_->update(create_services({{0x01_sid, k_host_id}, {0x02_sid, k_host_id}},
+                                 EnabledType::EnabledType_none));
+
+    mock_endpoint_factory_->verifyAndClearMocks();
+  }
+
+  {
+    SCOPED_TRACE("Delete all objects");
+    auto hosts = k_hosts;
+    for (auto &s : hosts) {
+      s.deleted = true;
+    }
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], destroyed());
+
+    sut_->update(hosts);
+    mock_endpoint_factory_->verifyAndClearMocks();
+  }
+}
+
+TEST_F(BaseEndpointManagerTests,
+       sut_manages_schema_disable_and_deactivate_dependent_endpoints) {
+  // Put two services into the manager
+  {
+    SCOPED_TRACE("Setup");
+
+    // service-id:   0      1
+    //               |      |
+    // schema-id:    0      1
+    //              / \     |
+    // obj-id:     0   1    2
+
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], created());
+
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate_public());
+
+    sut_->update(k_hosts);
+    sut_->update(
+        create_services({{0x01_sid, k_host_id}, {0x02_sid, k_host_id}}));
+    sut_->update(create_schemas({{0x101_did, 0x1_sid}, {0x102_did, 0x2_sid}}));
+    sut_->update(create_objects({{0x1101_oid, 0x101_did},
+                                 {0x2101_oid, 0x101_did},
+                                 {0x3102_oid, 0x102_did}}));
+
+    mock_endpoint_factory_->verifyAndClearMocks();
+  }
+
+  // Disable schemas, disable on all sub-objects
+  {
+    SCOPED_TRACE("Disable schemas, observe deactivation on db_object");
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], deactivate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], deactivate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], deactivate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], deactivate());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], deactivate());
+
+    sut_->update(create_schemas({{0x101_did, 0x1_sid}, {0x102_did, 0x2_sid}},
+                                EnabledType::EnabledType_none));
+
+    mock_endpoint_factory_->verifyAndClearMocks();
+  }
+
+  {
+    SCOPED_TRACE("Delete all objects");
+    auto hosts = k_hosts;
+    for (auto &s : hosts) {
+      s.deleted = true;
+    }
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], destroyed());
+
+    sut_->update(hosts);
+    mock_endpoint_factory_->verifyAndClearMocks();
+  }
+}
+
+TEST_F(BaseEndpointManagerTests,
+       sut_manages_service_private_and_expect_dependent_endpoints_private) {
+  std::vector<DbService> services{
+      create_services({{0x01_sid, k_host_id}, {0x02_sid, k_host_id}})};
+
+  // Put two services into the manager
+  {
+    SCOPED_TRACE("Setup");
+
+    // service-id:   0      1
+    //               |      |
+    // schema-id:    0      1
+    //              / \     |
+    // obj-id:     0   1    2
+
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], created());
+
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate_public());
+
+    sut_->update(k_hosts);
+    sut_->update(services);
+    sut_->update(create_schemas({{0x101_did, 0x1_sid}, {0x102_did, 0x2_sid}}));
+    sut_->update(create_objects({{0x1101_oid, 0x101_did},
+                                 {0x2101_oid, 0x101_did},
+                                 {0x3102_oid, 0x102_did}}));
+
+    mock_endpoint_factory_->verifyAndClearMocks();
+  }
+
+  // make service private, all sub-objects will be also private
+  {
+    SCOPED_TRACE("Update service, observe update on db_object");
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate_private());
+
+    sut_->update(create_services({{0x01_sid, k_host_id}, {0x02_sid, k_host_id}},
+                                 EnabledType::EnabledType_private));
+
+    mock_endpoint_factory_->verifyAndClearMocks();
+  }
+
+  {
+    SCOPED_TRACE("Delete all objects");
+    auto hosts = k_hosts;
+    for (auto &s : hosts) {
+      s.deleted = true;
+    }
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], destroyed());
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], destroyed());
+
+    sut_->update(hosts);
+    mock_endpoint_factory_->verifyAndClearMocks();
+  }
+}
+
+TEST_F(BaseEndpointManagerTests,
+       sut_manages_schema_private_and_expect_dependent_endpoints_private) {
+  std::vector<DbService> services{
+      create_services({{0x01_sid, k_host_id}, {0x02_sid, k_host_id}})};
+
+  // Put two services into the manager
+  {
+    SCOPED_TRACE("Setup");
+
+    // service-id:   0      1
+    //               |      |
+    // schema-id:    0      1
+    //              / \     |
+    // obj-id:     0   1    2
+
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], created());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], created());
+
+    EXPECT_CALL(mock_endpoint_factory_->mock_url_host[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate_public());
+
+    sut_->update(k_hosts);
+    sut_->update(services);
+    sut_->update(create_schemas({{0x101_did, 0x1_sid}, {0x102_did, 0x2_sid}}));
+    sut_->update(create_objects({{0x1101_oid, 0x101_did},
+                                 {0x2101_oid, 0x101_did},
+                                 {0x3102_oid, 0x102_did}}));
+
+    mock_endpoint_factory_->verifyAndClearMocks();
+  }
+
+  // make schema private, all sub-objects will be also private
+  {
+    SCOPED_TRACE("Update service, observe update on db_object");
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate_private());
+
+    sut_->update(create_schemas({{0x101_did, 0x1_sid}, {0x102_did, 0x2_sid}},
+                                EnabledType::EnabledType_private));
+
+    mock_endpoint_factory_->verifyAndClearMocks();
+  }
+
+  // update service, services public and all sub-objects will be also private
+  {
+    SCOPED_TRACE("Update service, observe update on db_object");
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[0], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_service[1], activate_public());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[0], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_schema[1], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[0], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[1], activate_private());
+    EXPECT_CALL(mock_endpoint_factory_->mock_db_object[2], activate_private());
+
+    sut_->update(services);
 
     mock_endpoint_factory_->verifyAndClearMocks();
   }

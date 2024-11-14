@@ -45,7 +45,8 @@ void OptionEndpoint::update() {
 
   const auto &opt = get_options();
 
-  if (is_enabled() && opt.has_value()) {
+  if (EnabledType::EnabledType_public == get_enabled_level() &&
+      opt.has_value()) {
     using namespace helper::json;
     using namespace mrs::json;
 

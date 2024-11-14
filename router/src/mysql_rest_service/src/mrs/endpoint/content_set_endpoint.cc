@@ -34,6 +34,7 @@ namespace endpoint {
 using ContentSet = ContentSetEndpoint::ContentSet;
 using ContentSetPtr = ContentSetEndpoint::ContentSetPtr;
 using UniversalId = ContentSetEndpoint::UniversalId;
+using EnabledType = ContentSetEndpoint::EnabledType;
 
 ContentSetEndpoint::ContentSetEndpoint(const ContentSet &entry,
                                        EndpointConfigurationPtr configuration,
@@ -61,7 +62,7 @@ void ContentSetEndpoint::update() {
   observability::EntityCounter<kEntityCounterUpdatesContentSets>::increment();
 }
 
-bool ContentSetEndpoint::is_this_node_enabled() const {
+EnabledType ContentSetEndpoint::get_this_node_enabled_level() const {
   return entry_->enabled;
 }
 

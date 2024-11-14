@@ -40,7 +40,7 @@ struct ContentSet {
   UniversalId id;
   UniversalId service_id;
   std::string request_path;
-  bool enabled;
+  EnabledType enabled;
   bool requires_authentication;
   bool internal;
   std::optional<std::string> options;
