@@ -29,8 +29,8 @@
 
 #include <cstddef>  // std::size_t
 #include <cstring>  // std::memcpy
-#include "array_view.h"
-#include "field.h"
+#include "mysql/abi_helpers/array_view.h"
+#include "mysql/abi_helpers/field.h"
 #ifdef MYSQL_SERVER
 #include "my_sys.h"                     // MY_WME
 #include "mysql/psi/psi_memory.h"       // PSI_memory_key
