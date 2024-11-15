@@ -49,36 +49,41 @@ TEST_F(FilterObjectsTest, empty_json_has_nothing_configured) {
 }
 
 TEST_F(FilterObjectsTest, int_json_throws) {
-  ASSERT_THROW(sut_.parse("10"), std::exception);
+  ASSERT_THROW(sut_.parse("10"), mrs::interface::RestError);
 }
 
 TEST_F(FilterObjectsTest, string_json_throws) {
-  ASSERT_THROW(sut_.parse("\"value\""), std::exception);
+  ASSERT_THROW(sut_.parse("\"value\""), mrs::interface::RestError);
 }
 
 TEST_F(FilterObjectsTest, bool_json_throws) {
-  ASSERT_THROW(sut_.parse("true"), std::exception);
+  ASSERT_THROW(sut_.parse("true"), mrs::interface::RestError);
 }
 
 TEST_F(FilterObjectsTest, empty_array_json_throws) {
-  ASSERT_THROW(sut_.parse("[]"), std::exception);
+  ASSERT_THROW(sut_.parse("[]"), mrs::interface::RestError);
 }
 
 TEST_F(FilterObjectsTest, int_array_json_throws) {
-  ASSERT_THROW(sut_.parse("[1,2,3]"), std::exception);
+  ASSERT_THROW(sut_.parse("[1,2,3]"), mrs::interface::RestError);
 }
 
 TEST_F(FilterObjectsTest, non_json_value_throws) {
-  ASSERT_THROW(sut_.parse("some-string"), std::exception);
+  ASSERT_THROW(sut_.parse("some-string"), mrs::interface::RestError);
 }
 
-TEST_F(FilterObjectsTest, operator_null_with_other_arg_thros) {
-  ASSERT_THROW(sut_.parse(R"({"f1":{"$null":1}})"), std::exception);
+TEST_F(FilterObjectsTest, operator_null_with_other_arg_throws) {
+  ASSERT_THROW(sut_.parse(R"({"f1":{"$null":1}})"), mrs::interface::RestError);
 }
 
-TEST_F(FilterObjectsTest, operator_notnull_with_other_arg_thros) {
+TEST_F(FilterObjectsTest, operator_notnull_with_other_arg_throws) {
   ASSERT_THROW(sut_.parse(R"({"f1":{"$notnull":"some string"}})"),
-               std::exception);
+               mrs::interface::RestError);
+}
+
+TEST_F(FilterObjectsTest, unknown_operator_throws) {
+  ASSERT_THROW(sut_.parse(R"({"col1": {"eq": "pENELOPE"}})"),
+               mrs::interface::RestError);
 }
 
 TEST_F(FilterObjectsTest, empty_object_accepted) {
@@ -87,11 +92,11 @@ TEST_F(FilterObjectsTest, empty_object_accepted) {
 }
 
 TEST_F(FilterObjectsTest, orderby_field_must_be_an_object) {
-  ASSERT_THROW(sut_.parse("{\"$orderby\":1}"), std::exception);
+  ASSERT_THROW(sut_.parse("{\"$orderby\":1}"), mrs::interface::RestError);
 }
 
 TEST_F(FilterObjectsTest, orderby_field_must_be_an_object_with_fields) {
-  ASSERT_THROW(sut_.parse("{\"$orderby\":{}}"), std::exception);
+  ASSERT_THROW(sut_.parse("{\"$orderby\":{}}"), mrs::interface::RestError);
 }
 
 TEST_F(FilterObjectsTest, orderby_one_field_asc) {
@@ -183,20 +188,20 @@ TEST_F(FilterObjectsTest, complex_or_two_elements) {
 }
 
 TEST_F(FilterObjectsTest, invalid_match_objects) {
-  ASSERT_THROW(sut_.parse(R"({"$match":[]})"), std::exception);
-  ASSERT_THROW(sut_.parse(R"({"$match":{}})"), std::exception);
+  ASSERT_THROW(sut_.parse(R"({"$match":[]})"), mrs::interface::RestError);
+  ASSERT_THROW(sut_.parse(R"({"$match":{}})"), mrs::interface::RestError);
   ASSERT_THROW(sut_.parse(R"({"$match":{"$params":["c1"], "$against":{}}})"),
-               std::exception);
+               mrs::interface::RestError);
   ASSERT_THROW(
       sut_.parse(
           R"({"$match":{"$params":["c1"], "$against":{"$expr":false}}})"),
-      std::exception);
+      mrs::interface::RestError);
   ASSERT_THROW(
       sut_.parse(R"({"$match":{"$params":{}, "$against":{"$expr":"c1"}}})"),
-      std::exception);
+      mrs::interface::RestError);
   ASSERT_THROW(
       sut_.parse(R"({"$match":{"$params":false, "$against":{"$expr":"c1"}}})"),
-      std::exception);
+      mrs::interface::RestError);
 }
 
 TEST_F(FilterObjectsTest, match_expression_without_modifiers) {
@@ -212,22 +217,22 @@ TEST_F(FilterObjectsTest, match_expression_invalid_modifier) {
   ASSERT_THROW(
       sut_.parse(R"({"$match":{"$params":["c1"], "$against":{"$expr":"q1",
                       "$modifier":""}}})"),
-      std::exception);
+      mrs::interface::RestError);
 
   ASSERT_THROW(sut_.parse(
                    R"({"$match":{"$params":["c1"],
                   "$against":{"$expr":"q1", "$modifier":"SOME TEXT"}}})"),
-               std::exception);
+               mrs::interface::RestError);
 
   ASSERT_THROW(sut_.parse(
                    R"({"$match":{"$params":["c1"], "$against":{"$expr":"q1",
                    "$modifier":false}}})"),
-               std::exception);
+               mrs::interface::RestError);
 
   ASSERT_THROW(
       sut_.parse(R"({"$match":{"$params":["c1"], "$against":{"$expr":"q1",
                       "$modifier":10}}})"),
-      std::exception);
+      mrs::interface::RestError);
 }
 
 TEST_F(FilterObjectsTest, match_expression_with_modifier) {

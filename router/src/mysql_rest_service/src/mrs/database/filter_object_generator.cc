@@ -304,7 +304,7 @@ void FilterObjectGenerator::parse_orderby_asof_wmember(Object object) {
       if (!where_.is_empty()) where_.append_preformatted(" AND ");
       const bool result = parse_wmember(member.first, member.second);
       if (!result) {
-        RestError("Invalid `FilterObject`");
+        throw RestError("Invalid `FilterObject`");
       }
     }
   }
