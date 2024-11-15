@@ -100,12 +100,8 @@ HttpResult HandlerDbObjectMetadataCatalog::handle_get(rest::RequestContext *) {
               .type_json;
 
       rapidjson::Value json_column(rapidjson::kObjectType);
-      json_column.AddMember(
-          "name", rapidjson::Value(c->name.c_str(), allocator), allocator);
-      json_column.AddMember(
-          "type",
-          rapidjson::Value(helper::to_string(data_type).c_str(), allocator),
-          allocator);
+      json_column.AddMember("name", c->name, allocator);
+      json_column.AddMember("type", helper::to_string(data_type), allocator);
 
       members.PushBack(json_column, allocator);
 
@@ -120,28 +116,21 @@ HttpResult HandlerDbObjectMetadataCatalog::handle_get(rest::RequestContext *) {
     rapidjson::Value json_link_desc(rapidjson::kObjectType);
 
     json_link_coll.AddMember("rel", "collection", allocator);
-    json_link_coll.AddMember(
-        "href", rapidjson::Value(url_sch_metadata_catalog_.c_str(), allocator),
-        allocator);
+    json_link_coll.AddMember("href", url_sch_metadata_catalog_, allocator);
     json_link_coll.AddMember("mediaType", "application/json", allocator);
 
     json_link_can.AddMember("rel", "canonical", allocator);
-    json_link_can.AddMember(
-        "href", rapidjson::Value(url_obj_metadata_catalog_.c_str(), allocator),
-        allocator);
+    json_link_can.AddMember("href", url_obj_metadata_catalog_, allocator);
 
     json_link_desc.AddMember("rel", "describes", allocator);
-    json_link_desc.AddMember(
-        "href", rapidjson::Value(url_obj_.c_str(), allocator), allocator);
+    json_link_desc.AddMember("href", url_obj_, allocator);
 
     links.PushBack(json_link_coll, allocator);
     links.PushBack(json_link_can, allocator);
     links.PushBack(json_link_desc, allocator);
 
     json_doc.SetObject()
-        .AddMember("name",
-                   rapidjson::Value(entry_->request_path.c_str(), allocator),
-                   allocator)
+        .AddMember("name", entry_->request_path, allocator)
         .AddMember("primaryKey", primary_key, allocator)
         .AddMember("members", members, allocator)
         .AddMember("links", links, allocator);
