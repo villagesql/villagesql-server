@@ -63,17 +63,27 @@ QueryEntriesDbObject::QueryEntriesDbObject(
       "  COALESCE(o.items_per_page, db.items_per_page) as `on_page`, "
       "  o.name, db.name as `schema_name`, o.crud_operations + 0, o.format,"
       "  o.media_type, o.auto_detect_media_type, o.object_type, o.options,"
-      "  o.options->>'$.cache_ttl' as cache_ttl ! !"
+      "  o.options->>'$.cache_ttl' as cache_ttl !"
       " FROM mysql_rest_service_metadata.`db_object` as o"
       "  JOIN mysql_rest_service_metadata.`db_schema` as db on"
-      "   o.db_schema_id = db.id"
+      "   o.db_schema_id = db.id !"
       ") as parent ";
 
-  if (db_version_ == mrs::interface::kSupportedMrsMetadataVersion_2)
+  if (db_version_ == mrs::interface::kSupportedMrsMetadataVersion_2) {
     query_ << mysqlrouter::sqlstring{
         ", o.row_user_ownership_enforced, o.row_user_ownership_column "};
-  else
-    query_ << mysqlrouter::sqlstring{", o.metadata "};
+    query_ << mysqlrouter::sqlstring{};
+  } else {
+    query_ << mysqlrouter::sqlstring{
+        ", o.metadata, cso.content_set_id, cso.priority, cso.language, "
+        "cso.class_name, "
+        "cso.name as method_name, cso.options as cset_options"};
+
+    query_ << mysqlrouter::sqlstring{
+        " LEFT JOIN mysql_rest_service_metadata.`content_set_has_obj_def` as "
+        "cso "
+        "ON o.id = cso.db_object_id"};
+  }
 }
 
 uint64_t QueryEntriesDbObject::get_last_update() { return audit_log_id_; }
@@ -126,7 +136,8 @@ void QueryEntriesDbObject::on_row(const ResultRow &row) {
   static std::map<std::string, DbObject::ObjectType> path_types{
       {"TABLE", DbObject::k_objectTypeTable},
       {"PROCEDURE", DbObject::k_objectTypeProcedure},
-      {"FUNCTION", DbObject::k_objectTypeFunction}};
+      {"FUNCTION", DbObject::k_objectTypeFunction},
+      {"SCRIPT", DbObject::k_objectTypeScript}};
 
   static std::map<std::string, DbObject::Format> format_types{
       {"FEED", DbObject::formatFeed},
@@ -186,6 +197,20 @@ void QueryEntriesDbObject::on_row(const ResultRow &row) {
     }
   } else {
     mysql_row.unserialize(&entry.metadata);
+    helper::Optional<entry::UniversalId> cset_id;
+    mysql_row.unserialize_with_converter(&cset_id,
+                                         entry::UniversalId::from_raw);
+
+    if (cset_id) {
+      entry::ContentSetHasObjectDef cset_def;
+      cset_def.content_set_id = std::move(*cset_id);
+      mysql_row.unserialize(&cset_def.priority);
+      mysql_row.unserialize(&cset_def.language);
+      mysql_row.unserialize(&cset_def.class_name);
+      mysql_row.unserialize(&cset_def.name);
+      mysql_row.unserialize(&cset_def.options);
+      entry.content_set_def = std::move(cset_def);
+    }
   }
 
   entry.deleted = false;

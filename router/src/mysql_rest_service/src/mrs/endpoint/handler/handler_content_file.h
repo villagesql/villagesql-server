@@ -31,6 +31,7 @@
 
 #include "mrs/endpoint/content_file_endpoint.h"
 #include "mrs/endpoint/content_set_endpoint.h"
+#include "mrs/endpoint/handler/persistent/persistent_data_content_file.h"
 #include "mrs/interface/authorize_manager.h"
 #include "mrs/interface/query_factory.h"
 #include "mrs/rest/handler.h"
@@ -42,18 +43,17 @@ namespace handler {
 
 class HandlerContentFile : public mrs::rest::Handler {
  public:
+  using MySQLSession = Handler::SqlSession;
   using ContentFileEndpoint = mrs::endpoint::ContentFileEndpoint;
   using QueryFactory = mrs::interface::QueryFactory;
   using ContentFilePtr = ContentFileEndpoint::ContentFilePtr;
   using ContentSetPtr = ContentSetEndpoint::ContentSetPtr;
-  using EndpointResponseCachePtr =
-      std::shared_ptr<mrs::FileEndpointResponseCache>;
 
  public:
-  HandlerContentFile(std::weak_ptr<ContentFileEndpoint> endpoint,
-                     mrs::interface::AuthorizeManager *auth_manager,
-                     collector::MysqlCacheManager *cache,
-                     mrs::ResponseCache *response_cache);
+  HandlerContentFile(
+      std::weak_ptr<ContentFileEndpoint> endpoint,
+      mrs::interface::AuthorizeManager *auth_manager,
+      std::shared_ptr<PersistentDataContentFile> persistent_data_content_file);
 
   UniversalId get_service_id() const override;
   UniversalId get_db_object_id() const override;
@@ -74,11 +74,8 @@ class HandlerContentFile : public mrs::rest::Handler {
   std::weak_ptr<ContentFileEndpoint> endpoint_;
   ContentFilePtr entry_file_;
   ContentSetPtr entry_set_;
-
-  collector::MysqlCacheManager *cache_;
   std::string version_;
-
-  EndpointResponseCachePtr response_cache_;
+  std::shared_ptr<PersistentDataContentFile> persistent_data_content_file_;
 };
 
 }  // namespace handler

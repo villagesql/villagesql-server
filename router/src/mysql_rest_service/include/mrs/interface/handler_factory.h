@@ -34,6 +34,9 @@
 #include "mrs/interface/query_factory.h"
 #include "mrs/interface/rest_handler.h"
 
+// TODO move to new factory
+#include "mrs/endpoint/handler/persistent/persistent_data_content_file.h"
+
 namespace mrs {
 namespace interface {
 
@@ -46,6 +49,9 @@ class HandlerFactory {
   using Uri = ::http::base::Uri;
 
   virtual ~HandlerFactory() = default;
+
+  virtual std::shared_ptr<mrs::endpoint::handler::PersistentDataContentFile>
+  create_persisten_content_file(EndpointBasePtr conent_file_endpoint) = 0;
 
   virtual std::unique_ptr<Handler> create_db_schema_metadata_catalog_handler(
       EndpointBasePtr db_schema_endpoint) = 0;
@@ -68,7 +74,8 @@ class HandlerFactory {
   virtual std::unique_ptr<Handler> create_db_object_handler(
       EndpointBasePtr db_object_endpoint) = 0;
   virtual std::unique_ptr<Handler> create_content_file(
-      EndpointBasePtr db_object_endpoint) = 0;
+      EndpointBasePtr db_object_endpoint,
+      std::shared_ptr<mrs::endpoint::handler::PersistentDataContentFile>) = 0;
   virtual std::unique_ptr<Handler> create_authentication_login(
       EndpointBasePtr db_service_endpoint) = 0;
   virtual std::unique_ptr<Handler> create_authentication_logout(

@@ -42,11 +42,22 @@ namespace mrs {
 namespace database {
 namespace entry {
 
+struct ContentSetHasObjectDef {
+  UniversalId content_set_id;
+  // kind
+  uint64_t priority;
+  std::string language;
+  std::string class_name;
+  std::string name;
+  std::optional<std::string> options;
+};
+
 struct DbObject {
   enum ObjectType {
     k_objectTypeTable,
     k_objectTypeProcedure,
-    k_objectTypeFunction
+    k_objectTypeFunction,
+    k_objectTypeScript
   };
   enum Format : uint32_t { formatFeed = 1, formatItem = 2, formatMedia = 3 };
 
@@ -70,6 +81,7 @@ struct DbObject {
   std::vector<RowGroupOwnership> row_group_security;
   ResultSets fields;
   std::shared_ptr<Object> object_description;
+  std::optional<ContentSetHasObjectDef> content_set_def;
 
   bool deleted{false};
 

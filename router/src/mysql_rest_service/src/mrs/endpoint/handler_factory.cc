@@ -36,6 +36,7 @@
 #include "mrs/endpoint/handler/handler_db_object_metadata.h"
 #include "mrs/endpoint/handler/handler_db_object_metadata_catalog.h"
 #include "mrs/endpoint/handler/handler_db_object_openapi.h"
+#include "mrs/endpoint/handler/handler_db_object_script.h"
 #include "mrs/endpoint/handler/handler_db_object_sp.h"
 #include "mrs/endpoint/handler/handler_db_object_table.h"
 #include "mrs/endpoint/handler/handler_db_schema_metadata.h"
@@ -45,6 +46,7 @@
 #include "mrs/endpoint/handler/handler_db_service_openapi.h"
 #include "mrs/endpoint/handler/handler_redirection.h"
 #include "mrs/endpoint/handler/handler_string.h"
+#include "mrs/endpoint/handler/persistent/persistent_data_content_file.h"
 #include "mrs/endpoint/handler/utilities.h"
 #include "mrs/endpoint/url_host_endpoint.h"
 
@@ -139,6 +141,9 @@ HandlerPtr HandlerFactory::create_db_object_handler(EndpointBasePtr endpoint) {
       return std::make_unique<HandlerDbObjectFunction>(
           db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_,
           response_cache_, entry_->option_cache_ttl_ms.value_or(0));
+    case DbObjectLite::k_objectTypeScript:
+      return std::make_unique<HandlerDbObjectScript>(
+          db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_);
   }
 
   assert(false && "all cases must be handled inside the switch.");
@@ -195,13 +200,25 @@ HandlerPtr HandlerFactory::create_db_object_openapi_handler(
                                                   auth_manager_);
 }
 
-HandlerPtr HandlerFactory::create_content_file(EndpointBasePtr endpoint) {
+std::shared_ptr<handler::PersistentDataContentFile>
+HandlerFactory::create_persisten_content_file(EndpointBasePtr endpoint) {
   auto content_file_endpoint =
       std::dynamic_pointer_cast<ContentFileEndpoint>(endpoint);
   assert(content_file_endpoint && "Object must be castable.");
 
-  return std::make_unique<HandlerContentFile>(
-      content_file_endpoint, auth_manager_, cache_manager_, file_cache_);
+  return make_shared<mrs::endpoint::handler::PersistentDataContentFile>(
+      content_file_endpoint->get(), cache_manager_, file_cache_);
+}
+
+HandlerPtr HandlerFactory::create_content_file(
+    EndpointBasePtr endpoint,
+    std::shared_ptr<handler::PersistentDataContentFile> persistent_data) {
+  auto content_file_endpoint =
+      std::dynamic_pointer_cast<ContentFileEndpoint>(endpoint);
+  assert(content_file_endpoint && "Object must be castable.");
+
+  return std::make_unique<HandlerContentFile>(content_file_endpoint,
+                                              auth_manager_, persistent_data);
 }
 
 HandlerPtr HandlerFactory::create_string_handler(

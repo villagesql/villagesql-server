@@ -142,7 +142,6 @@ std::string QueryChangesDbObject::build_query(const std::string &table_name,
         "mysql_rest_service_metadata.object as f where f.id=? GROUP BY "
         "db_object_id)";
     where << id;
-    query << mysqlrouter::sqlstring{""};
     return query.str() + where.str();
   } else if (kObjRefTableName == table_name) {
     mysqlrouter::sqlstring where =
@@ -152,7 +151,6 @@ std::string QueryChangesDbObject::build_query(const std::string &table_name,
         "(f.parent_reference_id=? or f.represents_reference_id=?) GROUP BY "
         "db_object_id)";
     where << id << id;
-    query << mysqlrouter::sqlstring{""};
     return query.str() + where.str();
   } else if (kObjFieldTableName == table_name) {
     mysqlrouter::sqlstring where =
@@ -161,13 +159,11 @@ std::string QueryChangesDbObject::build_query(const std::string &table_name,
         "mysql_rest_service_metadata.object AS o ON o.id=f.object_id WHERE "
         "f.id=? GROUP BY db_object_id)";
     where << id;
-    query << mysqlrouter::sqlstring{""};
     return query.str() + where.str();
   }
 
   mysqlrouter::sqlstring where = " WHERE !=? ";
   where << (table_name + "_id") << id;
-  query << mysqlrouter::sqlstring{""};
 
   return query.str() + where.str();
 }

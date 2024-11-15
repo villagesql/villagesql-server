@@ -39,11 +39,16 @@ ADD_SUBDIRECTORY(protobuf)
 ADD_SUBDIRECTORY(rest_api)
 ADD_SUBDIRECTORY(rest_connection_pool)
 ADD_SUBDIRECTORY(rest_metadata_cache)
+IF(BUNDLED_POLYGLOT_DIR)
+  ADD_SUBDIRECTORY(graalvm)
+  ADD_DEFINITIONS(-DHAVE_GRAALVM_PLUGIN)
+ENDIF()
 ADD_SUBDIRECTORY(mysql_rest_service)
 ADD_SUBDIRECTORY(rest_router)
 ADD_SUBDIRECTORY(rest_routing)
 ADD_SUBDIRECTORY(router)
 ADD_SUBDIRECTORY(routing)
+
 
 # Directory layout after 'make install' is different.
 # Create symlinks to ssl libraries for both: build and install layouts

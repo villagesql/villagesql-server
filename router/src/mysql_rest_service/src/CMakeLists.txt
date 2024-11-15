@@ -57,6 +57,14 @@ ADD_STATIC_LIBRARY(mysql_rest_service_helper
   PRIVATE ${PROJECT_SOURCE_DIR}/src/router/include/
   )
 
+SET(mysql_rest_service_db_includes
+  ${PROJECT_SOURCE_DIR}/src/http/include/
+)
+
+IF(BUNDLED_POLYGLOT_DIR)
+  list(APPEND mysql_rest_service_db_includes ${CMAKE_CURRENT_BINARY_DIR}/../../graalvm/include/)
+ENDIF()
+
 ADD_STATIC_LIBRARY(mysql_rest_service_db
   mrs/database/filter_object_generator.cc
   mrs/database/monitor/schema_monitor.cc
@@ -122,7 +130,8 @@ ADD_STATIC_LIBRARY(mysql_rest_service_db
 
   INCLUDE_DIRECTORIES
   PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}
-  PRIVATE ${PROJECT_SOURCE_DIR}/src/http/include/
+  PRIVATE
+  ${mysql_rest_service_db_includes}
 )
 
 ADD_STATIC_LIBRARY(mysql_rest_service_json
@@ -139,12 +148,32 @@ ADD_STATIC_LIBRARY(mysql_rest_service_json
   http_common
 
   INCLUDE_DIRECTORIES
-  PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
+  PRIVATE
+  ${CMAKE_CURRENT_BINARY_DIR}
   ${CMAKE_CURRENT_SOURCE_DIR}
 
   COMPILE_DEFINITIONS
   PRIVATE MYSQL_ROUTER_LOG_DOMAIN="mrs_json"
   )
+
+SET(mysql_rest_service_impl_libs
+  http_client
+  rest_api
+  mysql_rest_service_db
+)
+
+SET(mysql_rest_service_includes
+  ${PROJECT_SOURCE_DIR}/src/harness/include/
+  ${PROJECT_SOURCE_DIR}/src/metadata_cache/include/
+  ${PROJECT_SOURCE_DIR}/src/routing/include/
+  ${CMAKE_CURRENT_BINARY_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}
+)
+
+IF(BUNDLED_POLYGLOT_DIR)
+  list(APPEND mysql_rest_service_impl_libs graalvm_plugin)
+  list(APPEND mysql_rest_service_includes ${CMAKE_CURRENT_BINARY_DIR}/../../graalvm/include/)
+ENDIF()
 
 ADD_STATIC_LIBRARY(mysql_rest_service_impl
   collector/counted_mysql_session.cc
@@ -178,12 +207,14 @@ ADD_STATIC_LIBRARY(mysql_rest_service_impl
   mrs/endpoint/handler/authentication/handler_authorize_logout.cc
   mrs/endpoint/handler/authentication/handler_authorize_status.cc
   mrs/endpoint/handler/authentication/handler_authorize_user.cc
+  mrs/endpoint/handler/persistent/persistent_data_content_file.cc
   mrs/endpoint/handler/handler_content_file.cc
   mrs/endpoint/handler/handler_db_service_metadata.cc
   mrs/endpoint/handler/handler_db_schema_metadata_catalog.cc
   mrs/endpoint/handler/handler_db_schema_metadata.cc
   mrs/endpoint/handler/handler_db_object_table.cc
   mrs/endpoint/handler/handler_db_object_sp.cc
+  mrs/endpoint/handler/handler_db_object_script.cc
   mrs/endpoint/handler/handler_db_object_function.cc
   mrs/endpoint/handler/handler_db_object_metadata_catalog.cc
   mrs/endpoint/handler/handler_db_object_metadata.cc
@@ -206,40 +237,46 @@ ADD_STATIC_LIBRARY(mysql_rest_service_impl
   mrs/rest/openapi_object_creator.cc
   mrs/monitored/gtid_functions.cc
   mrs/monitored/query_retry_on_ro.cc
+  mrs/file_system/db_service_file_system.cc
 
   INCLUDE_DIRECTORIES
-  PRIVATE ${PROJECT_SOURCE_DIR}/src/harness/include/
-  ${PROJECT_SOURCE_DIR}/src/metadata_cache/include/
-  ${PROJECT_SOURCE_DIR}/src/routing/include/
-  ${CMAKE_CURRENT_BINARY_DIR}
-  ${CMAKE_CURRENT_SOURCE_DIR}
+  PRIVATE
+  ${mysql_rest_service_includes}
 
   LINK_LIBRARIES
-  http_client
-  rest_api
-  mysql_rest_service_db
-
+  ${mysql_rest_service_impl_libs}
+  
   COMPILE_DEFINITIONS
   PRIVATE MYSQL_ROUTER_LOG_DOMAIN="mrs_endpoint"
   )
 
+SET(mysql_rest_service_reqs
+  io_component
+  router_lib
+  routing
+  http_server
+  mysql_rest_service_impl
+  mysql_rest_service_db
+  mysql_rest_service_json
+  mysql_rest_service_helper
+)
+
+IF(BUNDLED_POLYGLOT_DIR)
+  list(APPEND mysql_rest_service_reqs graalvm_plugin)
+ENDIF()
 
 ADD_HARNESS_PLUGIN(mysql_rest_service
   SOURCES
   mysql_rest_service_plugin_config.cc
   mysql_rest_service_plugin.cc
-  REQUIRES io_component;router_lib;routing;http_server;mysql_rest_service_impl;mysql_rest_service_db;mysql_rest_service_json;mysql_rest_service_helper
+  REQUIRES "${mysql_rest_service_reqs}"
   DESTINATION "${ROUTER_INSTALL_PLUGINDIR}"
-  )
+)
 
 TARGET_INCLUDE_DIRECTORIES(mysql_rest_service
   PRIVATE
-    ${PROJECT_SOURCE_DIR}/src/harness/include/
-    ${PROJECT_SOURCE_DIR}/src/metadata_cache/include/
-    ${PROJECT_SOURCE_DIR}/src/routing/include/
-    ${CMAKE_CURRENT_BINARY_DIR}
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    )
+    ${mysql_rest_service_includes}
+)
 
 GENERATE_EXPORT_HEADER(mysql_rest_service
   EXPORT_FILE_NAME ${CMAKE_CURRENT_BINARY_DIR}/../include/mysqlrouter/mysql_rest_service_export.h)

@@ -44,10 +44,12 @@ usr/lib/mysqlrouter/plugin/rest_router.so
 usr/lib/mysqlrouter/plugin/rest_routing.so
 usr/lib/mysqlrouter/plugin/rest_metadata_cache.so
 usr/lib/mysqlrouter/plugin/mysql_rest_service.so
+usr/lib/mysqlrouter/plugin/graalvm.so
 
 # private shared libraries
 usr/lib/mysqlrouter/private/libprotobuf.so.24.4.0
 usr/lib/mysqlrouter/private/libabsl_*.so
+usr/lib/mysqlrouter/private/libpolyglot.so
 usr/lib/mysqlrouter/private/libmysqlrouter_http_client.so.1
 usr/lib/mysqlrouter/private/libmysqlharness.so.1
 usr/lib/mysqlrouter/private/libmysqlharness_stdx.so.1

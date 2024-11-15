@@ -28,6 +28,7 @@
 #include <memory>
 
 #include "mrs/database/entry/content_file.h"
+#include "mrs/endpoint/handler/persistent/persistent_data_content_file.h"
 #include "mrs/endpoint/option_endpoint.h"
 #include "mrs/interface/handler_factory.h"
 
@@ -39,6 +40,9 @@ class ContentSetEndpoint;
 class ContentFileEndpoint : public mrs::interface::EndpointBase {
  public:
   using Parent = mrs::interface::EndpointBase;
+  using PersistentDataContentFile = handler::PersistentDataContentFile;
+  using PersistentDataContentFilePtr =
+      std::shared_ptr<PersistentDataContentFile>;
   using ContentFile = mrs::database::entry::ContentFile;
   using ContentFilePtr = std::shared_ptr<ContentFile>;
   using HandlerFactoryPtr = std::shared_ptr<mrs::interface::HandlerFactory>;
@@ -56,12 +60,20 @@ class ContentFileEndpoint : public mrs::interface::EndpointBase {
   const ContentFilePtr get() const;
   void set(const ContentFile &entry, EndpointBasePtr parent);
 
+  const HandlerPtr &get_handler() const { return handler_; }
+
+  const PersistentDataContentFilePtr &get_persistent_data() const {
+    return persistent_data_;
+  }
+
  protected:
   void update() override;
 
  private:
   void activate_public() override;
+  void activate_private() override;
   void deactivate() override;
+  void activate_common();
 
   EnabledType get_this_node_enabled_level() const override;
   bool does_this_node_require_authentication() const override;
@@ -69,6 +81,7 @@ class ContentFileEndpoint : public mrs::interface::EndpointBase {
   std::string get_my_url_part() const override;
 
   ContentFilePtr entry_;
+  PersistentDataContentFilePtr persistent_data_;
   HandlerFactoryPtr factory_;
   HandlerPtr handler_;
 };

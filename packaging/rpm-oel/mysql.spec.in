@@ -905,6 +905,9 @@ mkdir debug
            -DMYSQLX_UNIX_ADDR="/var/run/mysqld/mysqlx.sock" \
            -DWITH_NUMA=1 \
            %{?mecab_option} \
+%if 0%{?bundled_polyglot:1}
+    -DBUNDLED_POLYGLOT_DIR="%{bundled_polyglot}" \
+%endif
            -DCOMPILATION_COMMENT="%{compilation_comment_debug}" \
            -DCOMPILATION_COMMENT_SERVER="%{compilation_comment_server_debug}" \
            -DMYSQL_SERVER_SUFFIX="%{?server_suffix}"
@@ -958,6 +961,9 @@ mkdir release
            -DMYSQLX_UNIX_ADDR="/var/run/mysqld/mysqlx.sock" \
            -DWITH_NUMA=1 \
            %{?mecab_option} \
+%if 0%{?bundled_polyglot:1}
+    -DBUNDLED_POLYGLOT_DIR="%{bundled_polyglot}" \
+%endif
            -DCOMPILATION_COMMENT="%{compilation_comment_release}" \
            -DCOMPILATION_COMMENT_SERVER="%{compilation_comment_server_release}" \
            -DMYSQL_SERVER_SUFFIX="%{?server_suffix}"
@@ -1996,6 +2002,9 @@ fi
 %{_libdir}/mysqlrouter/private/libmysqlrouter_utils.so.*
 %{_libdir}/mysqlrouter/private/libprotobuf.so.24.4.0
 %{_libdir}/mysqlrouter/private/libabsl_*.so
+%if 0%{?bundled_polyglot:1}
+  %{_libdir}/mysqlrouter/private/libpolyglot*.so
+%endif
 %dir %{_libdir}/mysqlrouter
 %dir %{_libdir}/mysqlrouter/private
 %{_libdir}/mysqlrouter/*.so

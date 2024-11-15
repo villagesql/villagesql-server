@@ -24,12 +24,18 @@
 
 #include "mrs/endpoint/db_service_endpoint.h"
 
+#include <rapidjson/document.h>
 #include <mutex>
 #include <set>
 #include <string>
 
+#include "mrs/endpoint/content_set_endpoint.h"
 #include "mrs/endpoint/url_host_endpoint.h"
+#include "mrs/file_system/db_service_file_system.h"
 #include "mrs/router_observation_entities.h"
+#ifdef HAVE_GRAALVM_PLUGIN
+#include "router/src/graalvm/include/mysqlrouter/graalvm_component.h"
+#endif
 
 namespace mrs {
 namespace endpoint {
@@ -98,6 +104,69 @@ void DbServiceEndpoint::set(const DbService &entry, EndpointBasePtr parent) {
   change_parent(parent);
   changed();
 }
+
+#ifdef HAVE_GRAALVM_PLUGIN
+// TODO(rennox): Should we cache this one? or maybe instead pass the session and
+// get it returned once the entire file system is done with it???
+std::shared_ptr<file_system::DbServiceFileSystem>
+DbServiceEndpoint::get_file_system() {
+  if (!file_system_) {
+    file_system_ = std::make_shared<file_system::DbServiceFileSystem>(this);
+  }
+
+  return file_system_;
+}
+
+std::unique_ptr<graalvm::IGraalVMContext>
+DbServiceEndpoint::get_scripting_context() {
+  std::vector<std::string> files_to_load;
+  std::string content_set_path;
+  for (const auto &child : get_children()) {
+    auto content_set_ep = std::dynamic_pointer_cast<ContentSetEndpoint>(child);
+
+    // We only care about content set childs
+    if (!content_set_ep) {
+      continue;
+    }
+
+    auto cset = content_set_ep->get();
+    if (!cset->options) {
+      continue;
+    }
+
+    content_set_path = content_set_ep->get_url().join();
+
+    rapidjson::Document doc;
+    doc.Parse((*cset->options).data(), (*cset->options).size());
+
+    // TODO (rennox) : Should we just ignore??
+    if (!doc.IsObject()) {
+      continue;
+    }
+
+    if (!doc.HasMember("script_module_files") ||
+        !doc["script_module_files"].IsArray()) {
+      continue;
+    }
+
+    auto array = doc["script_module_files"].GetArray();
+
+    for (rapidjson::Value::ConstValueIterator itr = array.Begin();
+         itr != array.End(); ++itr) {
+      if (itr->HasMember("file_to_load") && (*itr)["file_to_load"].IsString()) {
+        files_to_load.push_back((*itr)["file_to_load"].GetString());
+      }
+    }
+  }
+
+  auto &instance = graalvm::GraalVMComponent::get_instance();
+  const auto id = get()->id.to_string();
+
+  auto globals = shcore::make_dict();
+  globals->emplace("contentSetPath", shcore::Value(content_set_path));
+  return instance.create_context(id, get_file_system(), files_to_load, globals);
+}
+#endif
 
 void DbServiceEndpoint::update() {
   Parent::update();

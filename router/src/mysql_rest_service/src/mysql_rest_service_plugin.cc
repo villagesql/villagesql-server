@@ -268,7 +268,13 @@ static void deinit(mysql_harness::PluginFuncEnv * /* env */) {
   g_mrs_configuration.reset();
 }
 
-static const std::array required{"logger", "http_server", "rest_api", "io"};
+#ifndef HAVE_GRAALVM_PLUGIN
+static std::array<const char *, 4> required = {
+    {"logger", "http_server", "rest_api", "io"}};
+#else
+static std::array<const char *, 5> required = {
+    {"logger", "http_server", "rest_api", "io", "graalvm"}};
+#endif
 
 static const std::array supported_options{"mysql_user",
                                           "mysql_user_data_access",

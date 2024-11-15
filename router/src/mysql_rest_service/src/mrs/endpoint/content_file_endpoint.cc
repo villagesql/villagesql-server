@@ -64,8 +64,17 @@ void ContentFileEndpoint::update() {
   observability::EntityCounter<kEntityCounterUpdatesFiles>::increment();
 }
 
+void ContentFileEndpoint::activate_common() {
+  persistent_data_ =
+      factory_->create_persisten_content_file(shared_from_this());
+}
+
+void ContentFileEndpoint::activate_private() { activate_common(); }
+
 void ContentFileEndpoint::activate_public() {
-  handler_ = factory_->create_content_file(shared_from_this());
+  activate_common();
+  handler_ =
+      factory_->create_content_file(shared_from_this(), persistent_data_);
 }
 
 void ContentFileEndpoint::deactivate() { handler_.reset(); }

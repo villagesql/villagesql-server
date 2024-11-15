@@ -386,9 +386,11 @@ class RestRequestHandler : public ::http::base::RequestHandler {
         return rest_handler_->handle_delete(&ctxt);
         break;
 
-      case HttpMethod::Put:
-        return rest_handler_->handle_put(&ctxt);
+      case HttpMethod::Put: {
+        auto response = rest_handler_->handle_put(&ctxt);
+        return response;
         break;
+      }
 
       default:
         throw http::Error{HttpStatusCode::MethodNotAllowed};

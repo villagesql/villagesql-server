@@ -30,8 +30,15 @@
 #include "mrs/database/entry/db_service.h"
 #include "mrs/endpoint/option_endpoint.h"
 #include "mrs/interface/handler_factory.h"
+#ifdef HAVE_GRAALVM_PLUGIN
+#include "router/src/graalvm/include/mysqlrouter/graalvm_context.h"
+#endif
 
 namespace mrs {
+
+namespace file_system {
+class DbServiceFileSystem;
+}
 namespace endpoint {
 
 class UrlHostEndpoint;
@@ -56,6 +63,9 @@ class DbServiceEndpoint : public OptionEndpoint {
 
   const DbServicePtr get() const;
   void set(const DbService &entry, EndpointBasePtr parent);
+#ifdef HAVE_GRAALVM_PLUGIN
+  std::unique_ptr<graalvm::IGraalVMContext> get_scripting_context();
+#endif
 
  private:
   void update() override;
@@ -67,8 +77,16 @@ class DbServiceEndpoint : public OptionEndpoint {
   std::string get_my_url_part() const override;
   bool does_this_node_require_authentication() const override;
 
+#ifdef HAVE_GRAALVM_PLUGIN
+  std::shared_ptr<file_system::DbServiceFileSystem> get_file_system();
+#endif
+
   DbServicePtr entry_;
   std::vector<HandlerPtr> url_handlers_;
+
+#ifdef HAVE_GRAALVM_PLUGIN
+  std::shared_ptr<file_system::DbServiceFileSystem> file_system_;
+#endif
 };
 
 }  // namespace endpoint

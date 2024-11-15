@@ -44,6 +44,9 @@ class HandlerFactory : public mrs::interface::HandlerFactory {
                  MysqlCacheManager *cache_manager,
                  ResponseCache *response_cache, ResponseCache *file_cache);
 
+  std::shared_ptr<handler::PersistentDataContentFile>
+  create_persisten_content_file(EndpointBasePtr conent_file_endpoint) override;
+
   std::unique_ptr<Handler> create_db_service_metadata_handler(
       EndpointBasePtr db_service_endpoint) override;
 
@@ -66,7 +69,9 @@ class HandlerFactory : public mrs::interface::HandlerFactory {
   std::unique_ptr<Handler> create_db_object_metadata_handler(
       EndpointBasePtr db_object_endpoint) override;
   std::unique_ptr<Handler> create_content_file(
-      EndpointBasePtr db_object_endpoint) override;
+      EndpointBasePtr db_object_endpoint,
+      std::shared_ptr<handler::PersistentDataContentFile> persistent_data)
+      override;
 
   std::unique_ptr<Handler> create_string_handler(
       const UniversalId &service_id, bool requires_authentication,
