@@ -77,6 +77,7 @@ void QueryRestTable::query_entries(
 
   serializer_->begin();
   execute(session);
+
   if (!metadata_received_) on_metadata(0, nullptr);
   serializer_->finish();
 

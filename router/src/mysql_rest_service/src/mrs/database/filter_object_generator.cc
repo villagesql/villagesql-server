@@ -35,6 +35,7 @@
 #include "helper/json/rapid_json_iterator.h"
 #include "helper/json/text_to.h"
 #include "helper/json/to_string.h"
+#include "helper/mysql_column_types.h"
 #include "mrs/interface/rest_error.h"
 
 #include "mysql/harness/logging/logging.h"
@@ -49,7 +50,20 @@ using namespace std::string_literals;
 using Value = FilterObjectGenerator::Value;
 using RestError = mrs::interface::RestError;
 
-std::vector<std::string> get_array_of_string(Value *value) {
+static bool is_date_type(const enum_field_types ft) {
+  switch (ft) {
+    case MYSQL_TYPE_TIMESTAMP:
+    case MYSQL_TYPE_DATE:
+    case MYSQL_TYPE_TIME:
+    case MYSQL_TYPE_DATETIME:
+      return true;
+
+    default:
+      return false;
+  }
+}
+
+static std::vector<std::string> get_array_of_string(Value *value) {
   if (value->IsString()) return {value->GetString()};
 
   if (!value->IsArray())
@@ -171,11 +185,29 @@ class tosBoolean {
 
     return false;
   }
+
   mysqlrouter::sqlstring to_sqlstring(entry::Column *, Value *v) const {
     if (v->IsBool()) {
       if (v->GetBool()) return {"TRUE"};
       return {"FALSE"};
     }
+    return mysqlrouter::sqlstring(helper::json::to_string(v).c_str());
+  }
+};
+
+class tosDateAsString {
+ public:
+  bool acceptable(entry::Column *df, Value *v) const {
+    if (df &&
+        is_date_type(helper::from_mysql_txt_column_type(df->datatype.c_str())
+                         .type_mysql)) {
+      return v->IsString();
+    }
+
+    return false;
+  }
+
+  mysqlrouter::sqlstring to_sqlstring(entry::Column *, Value *v) const {
     return mysqlrouter::sqlstring(helper::json::to_string(v).c_str());
   }
 };
@@ -223,7 +255,7 @@ mysqlrouter::sqlstring to_sqlstring(entry::Column *dfield, Value *value) {
   (r << ... << T());
 
   if (r.result.is_empty())
-    throw RestError("Filter object, not supported type.");
+    throw RestError("Not supported type used in `FilterObject`.");
 
   return r.result;
 }
@@ -285,6 +317,8 @@ void FilterObjectGenerator::parse(const Document &doc) {
 }
 
 void FilterObjectGenerator::parse(const std::string &filter_query) {
+  log_debug("FilterObjectGenerator::parse(filter_query=%s)",
+            filter_query.c_str());
   if (filter_query.empty()) return;
 
   parse(helper::json::text_to_document(filter_query));
@@ -394,26 +428,26 @@ std::optional<std::string> FilterObjectGenerator::parse_simple_operator_object(
     log_debug("parse_simple_operator_object $lt");
     result.append_preformatted(db_name)
         .append_preformatted(" < ")
-        .append_preformatted(
-            to_sqlstring<tosNumber, tosDate>(dfield.get(), value));
+        .append_preformatted(to_sqlstring<tosNumber, tosDate, tosDateAsString>(
+            dfield.get(), value));
   } else if ("$lte"s == name) {
     log_debug("parse_simple_operator_object $lte");
     result.append_preformatted(db_name)
         .append_preformatted(" <= ")
-        .append_preformatted(
-            to_sqlstring<tosNumber, tosDate>(dfield.get(), value));
+        .append_preformatted(to_sqlstring<tosNumber, tosDate, tosDateAsString>(
+            dfield.get(), value));
   } else if ("$gt"s == name) {
     log_debug("parse_simple_operator_object $gt");
     result.append_preformatted(db_name)
         .append_preformatted(" > ")
-        .append_preformatted(
-            to_sqlstring<tosNumber, tosDate>(dfield.get(), value));
+        .append_preformatted(to_sqlstring<tosNumber, tosDate, tosDateAsString>(
+            dfield.get(), value));
   } else if ("$gte"s == name) {
     log_debug("parse_simple_operator_object $gte");
     result.append_preformatted(db_name)
         .append_preformatted(" >= ")
-        .append_preformatted(
-            to_sqlstring<tosNumber, tosDate>(dfield.get(), value));
+        .append_preformatted(to_sqlstring<tosNumber, tosDate, tosDateAsString>(
+            dfield.get(), value));
   } else if ("$instr"s == name) {
     log_debug("parse_simple_operator_object $instr");
     result.append_preformatted("instr(")

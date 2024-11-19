@@ -34,6 +34,7 @@ while($schemas_to_remove)
 
   eval DROP SCHEMA $schema;
 }
+--let $router_test_schemas=
 
 DROP SCHEMA mysql_rest_service_metadata;
 DROP ROLE mysql_rest_service_admin;
