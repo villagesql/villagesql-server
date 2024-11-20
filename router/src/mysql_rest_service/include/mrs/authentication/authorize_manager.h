@@ -135,11 +135,6 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
    * (even if the user doesn't exists).
    */
   const std::string random_data_;
-
-  // TODO(lkotula): Take it from configuration structure (Shouldn't be in
-  // review)
-  std::optional<uint64_t> host_autentication_rate_rps_;
-  std::optional<uint64_t> account_autentication_rate_rps_;
 };
 
 }  // namespace authentication

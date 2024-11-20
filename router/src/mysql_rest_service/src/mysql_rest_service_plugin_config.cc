@@ -290,13 +290,6 @@ PluginConfig::PluginConfig(const ConfigSection *section,
       get_option(section, k_option_metadata_refresh, SecondsOption{});
   router_name_ = router_name;
 
-  account_autentication_rate_rps_ = get_option_no_default(
-      section, "authentication_account_maximum_rate", IntOption<uint64_t>{});
-  host_autentication_rate_rps_ = get_option_no_default(
-      section, "authentication_host_maximum_rate", IntOption<uint64_t>{});
-  authentication_rate_exceeded_block_for_ = get_option(
-      section, "authentication_rate_exceeded_block_for", IntOption<uint64_t>{});
-
   if (mysql_user_data_access_.empty()) {
     mysql_user_data_access_ = mysql_user_;
   }
@@ -374,7 +367,6 @@ bool PluginConfig::is_required(std::string_view option) const {
 
 std::string PluginConfig::get_default(std::string_view option) const {
   if (option == k_option_metadata_refresh) return "5";
-  if (option == "authentication_rate_exceeded_block_for") return "60";
   if (option == "wait_for_metadata_schema_access") return "0";
 
   return {};
