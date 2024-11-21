@@ -31,8 +31,8 @@ exec $MYSQLROUTER_BOOTSTRAP
    --directory $MYSQL_TMP_DIR/bootstrap_folder/
    --mrs --mrs-global-secret=secret --mrs-developer=mike;
 
---echo Check the metadata that expected developer is in router.options
-select JSON_EXTRACT(options, "$.developer") as developer from mysql_rest_service_metadata.router;
+--echo Check the metadata that expected developer is in router.attributes
+select JSON_EXTRACT(attributes, "$.developer") as developer from mysql_rest_service_metadata.router;
 
 --echo ################################################################################
 --echo II.

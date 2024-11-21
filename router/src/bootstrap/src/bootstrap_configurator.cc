@@ -747,6 +747,9 @@ void BootstrapConfigurator::store_mrs_configuration(
                       string_after(rw_section.key, ':'));
   kv.insert_or_assign("mysql_read_only_route",
                       string_after(ro_section.key, ':'));
+  if (!bootstrap_mrs_developer_.empty()) {
+    kv.insert_or_assign("developer", bootstrap_mrs_developer_);
+  }
 
   mysql_harness::ConfigBuilder builder;
   mysql_harness::Path path = config_path;
@@ -855,12 +858,12 @@ void BootstrapConfigurator::store_mrs_account_metadata(
 void BootstrapConfigurator::store_mrs_developer(
     mysqlrouter::MySQLSession *session, uint64_t mrs_router_id,
     const std::string &developer_name) {
-  std::string sql = "UPDATE mysql_rest_service_metadata.router SET options=";
+  std::string sql = "UPDATE mysql_rest_service_metadata.router SET attributes=";
   if (developer_name.empty()) {
-    sql += "JSON_REMOVE(options, '$.developer')";
+    sql += "JSON_REMOVE(attributes, '$.developer')";
   } else {
-    sql += "JSON_SET(options, '$.developer'," + session->quote(developer_name) +
-           ")";
+    sql += "JSON_SET(attributes, '$.developer'," +
+           session->quote(developer_name) + ")";
   }
 
   sql += " WHERE id = " + std::to_string(mrs_router_id);

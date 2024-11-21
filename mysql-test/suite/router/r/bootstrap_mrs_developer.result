@@ -45,8 +45,8 @@ This Router instance can be reached by connecting to:
 
 Once the MySQL Router is started, the MySQL REST Service can be reached at
     https://localhost:8443/<service-name>
-Check the metadata that expected developer is in router.options
-select JSON_EXTRACT(options, "$.developer") as developer from mysql_rest_service_metadata.router;
+Check the metadata that expected developer is in router.attributes
+select JSON_EXTRACT(attributes, "$.developer") as developer from mysql_rest_service_metadata.router;
 developer
 "mike"
 ################################################################################

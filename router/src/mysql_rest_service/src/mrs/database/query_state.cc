@@ -36,7 +36,6 @@ QueryState::QueryState(const std::optional<uint64_t> &router_id)
 
 void QueryState::query_state(MySQLSession *session) {
   changed_ = false;
-  developer_changed_ = false;
   query_state_impl(session, nullptr);
 }
 
@@ -48,16 +47,12 @@ void QueryState::on_row(const ResultRow &r) {
   new_state.service_enabled = atoi(r[0]) > 0;
 
   if (r[1]) new_state.data = r[1];
-  if (r[2]) new_state.developer = r[2];
 
   if (state_ != new_state) {
     changed_ = true;
-    if (state_.developer != new_state.developer) developer_changed_ = true;
     state_ = new_state;
   }
 }
-
-bool QueryState::was_developer_changed() const { return developer_changed_; }
 
 bool QueryState::was_changed() const { return changed_; }
 
@@ -66,17 +61,7 @@ const DbState &QueryState::get_state() const { return state_; }
 void QueryState::query_state_impl(MySQLSession *session,
                                   MySQLSession::Transaction *) {
   query_ =
-      "SELECT"
-      " service_enabled,"
-      " data,"
-      " (SELECT options->'$.developer' FROM "
-      "`mysql_rest_service_metadata`.`router`"
-      " WHERE id=?)"
-      "FROM mysql_rest_service_metadata.config;";
-  if (router_id_.has_value())
-    query_ << router_id_.value();
-  else
-    query_ << nullptr;
+      "SELECT service_enabled, data FROM mysql_rest_service_metadata.config;";
   has_rows_ = false;
   execute(session);
   if (!has_rows_) {

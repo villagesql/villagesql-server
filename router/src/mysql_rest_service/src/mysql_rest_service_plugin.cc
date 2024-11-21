@@ -268,17 +268,16 @@ static void deinit(mysql_harness::PluginFuncEnv * /* env */) {
   g_mrs_configuration.reset();
 }
 
-static std::array<const char *, 4> required = {
-    {"logger", "http_server", "rest_api", "io"}};
+static const std::array required{"logger", "http_server", "rest_api", "io"};
 
-static const std::array<const char *, 7> supported_options{
-    "mysql_user",
-    "mysql_user_data_access",
-    "mysql_read_write_route",
-    "mysql_read_only_route",
-    "router_id",
-    "metadata_refresh_interval",
-    "wait_for_metadata_schema_access"};
+static const std::array supported_options{"mysql_user",
+                                          "mysql_user_data_access",
+                                          "mysql_read_write_route",
+                                          "mysql_read_only_route",
+                                          "router_id",
+                                          "metadata_refresh_interval",
+                                          "developer",
+                                          "wait_for_metadata_schema_access"};
 
 // TODO(lkotula): Consider renaming the plugin from rest_mrds to mrds or
 // something other if it already changed in DB schema, consult with router

@@ -317,6 +317,8 @@ PluginConfig::PluginConfig(const ConfigSection *section,
 
   wait_for_metadata_schema_access_ =
       get_option(section, "wait_for_metadata_schema_access", SecondsOption{});
+
+  developer_ = get_option(section, "developer", StringOption{});
 }
 
 std::set<std::string> PluginConfig::get_waiting_for_routing_plugins() {

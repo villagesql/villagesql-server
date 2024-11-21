@@ -77,38 +77,13 @@ SET @service_id4=@service_id;
 
 
 --echo *******************************************************
---echo We start with empty router.options->"$.developer"
---echo The Router should expose published services 
+--echo We start with router.attributes->"$.developer" read from the config file which is "lukasz"
+--echo The Router should expose published services and the ones assigned to "lukasz"
 --echo *******************************************************
-
---exec $MRS_CLIENT_ARGS --path /svc/basic/t1
---exec $MRS_CLIENT_ARGS --path /svc/basic/t2 --response-type RAW --expected-status 404
---exec $MRS_CLIENT_ARGS --path /svc/basic/t3 --response-type RAW --expected-status 404
---exec $MRS_CLIENT_ARGS --path /svc2/basic/t1
-
---echo *******************************************************
---echo We change the router.options->"$.developer" to "jan"
---echo *******************************************************
---source ../include/mrs/changes/fetch_object.inc
-update mysql_rest_service_metadata.router set options = '{"developer": "jan"}';
---source ../include/mrs/changes/wait_object.inc
-
---exec $MRS_CLIENT_ARGS --path /svc/basic/t1 --response-type RAW --expected-status 404
---exec $MRS_CLIENT_ARGS --path /svc/basic/t2 
---exec $MRS_CLIENT_ARGS --path /svc/basic/t3 --response-type RAW --expected-status 404
---exec $MRS_CLIENT_ARGS --path /svc2/basic/t1
-
-
---echo *******************************************************
---echo We change the router.options->"$.developer" to "lukasz"
---echo *******************************************************
---source ../include/mrs/changes/fetch_object.inc
-update mysql_rest_service_metadata.router set options = '{"developer": "lukasz"}';
---source ../include/mrs/changes/wait_object.inc
 
 --exec $MRS_CLIENT_ARGS --path /svc/basic/t1 --response-type RAW --expected-status 404
 --exec $MRS_CLIENT_ARGS --path /svc/basic/t2 --response-type RAW --expected-status 404
---exec $MRS_CLIENT_ARGS --path /svc/basic/t3 
+--exec $MRS_CLIENT_ARGS --path /svc/basic/t3
 --exec $MRS_CLIENT_ARGS --path /svc2/basic/t1
 
 # Cleanup

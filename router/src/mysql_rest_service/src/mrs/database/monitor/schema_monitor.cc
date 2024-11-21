@@ -99,6 +99,24 @@ bool query_is_node_read_only(mysqlrouter::MySQLSession *session) {
          std::stoul(std::string((*result)[1])) == 1;
 }
 
+void update_router_attributes_on_start(mysqlrouter::MySQLSession *session,
+                                       std::optional<uint64_t> router_id_,
+                                       const std::string &developer) {
+  if (!router_id_) return;
+
+  std::string sql = "UPDATE mysql_rest_service_metadata.router SET attributes=";
+  if (developer.empty()) {
+    sql += "JSON_REMOVE(attributes, '$.developer')";
+  } else {
+    sql +=
+        "JSON_SET(attributes, '$.developer'," + session->quote(developer) + ")";
+  }
+
+  sql += " WHERE id = " + std::to_string(*router_id_);
+
+  session->execute(sql);
+}
+
 }  // namespace
 
 SchemaMonitor::SchemaMonitor(
@@ -160,6 +178,7 @@ void SchemaMonitor::run() {
   const bool is_destination_dynamic = configuration_.provider_rw_->is_dynamic();
   bool state{false};
   uint64_t max_audit_log_id{0};
+  bool attributes_updated_on_start{false};
   do {
     try {
       auto session_check_version =
@@ -181,6 +200,14 @@ void SchemaMonitor::run() {
           continue;
         }
       }
+
+      if (!attributes_updated_on_start) {
+        update_router_attributes_on_start(session_check_version.get(),
+                                          configuration_.router_id_,
+                                          configuration_.developer_);
+        attributes_updated_on_start = true;
+      }
+
       auto supported_schema_version =
           query_supported_mrs_version(session_check_version.get());
 
@@ -284,12 +311,16 @@ void SchemaMonitor::run() {
               "INSERT INTO mysql_rest_service_metadata.router"
               " (id, router_name, address, product_name, version, attributes, "
               "options)"
-              " VALUES (?,?,?,?,?,'{}','{}') ON DUPLICATE KEY UPDATE "
+              " VALUES (?,?,?,?,?,?,'{}') ON DUPLICATE KEY UPDATE "
               "version=?, last_check_in=NOW()"};
 
           update << configuration_.router_id_ << configuration_.router_name_
                  << socket_ops->get_local_hostname()
                  << MYSQL_ROUTER_PACKAGE_NAME << MYSQL_ROUTER_VERSION
+                 << (configuration_.developer_.empty()
+                         ? "{}"
+                         : "{\"developer\": \"" + configuration_.developer_ +
+                               "\"}")
                  << MYSQL_ROUTER_VERSION;
           session->execute(update.str());
 

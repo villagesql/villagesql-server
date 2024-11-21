@@ -42,7 +42,6 @@ class QueryState : public Query {
 
   virtual void query_state(MySQLSession *session);
   virtual bool was_changed() const;
-  virtual bool was_developer_changed() const;
 
   const DbState &get_state() const;
 
@@ -57,7 +56,6 @@ class QueryState : public Query {
   void on_row(const ResultRow &r) override;
 
   DbState state_;
-  bool developer_changed_{false};
   bool changed_{true};
   bool has_rows_{false};
   std::optional<uint64_t> router_id_;

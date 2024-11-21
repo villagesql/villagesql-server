@@ -973,7 +973,7 @@ ORDER BY f.position;
 # -----------------------------------------------------
 USE `mysql_rest_service_metadata`;
 CREATE  OR REPLACE SQL SECURITY INVOKER VIEW `router_services` AS
-SELECT r.id AS router_id, r.router_name, r.address, r.options->>'$.developer' AS router_developer,
+SELECT r.id AS router_id, r.router_name, r.address, r.attributes->>'$.developer' AS router_developer,
     s.id as service_id, h.name AS service_url_host_name,
     s.url_context_root AS service_url_context_root,
     CONCAT(h.name, s.url_context_root) AS service_host_ctx,
@@ -990,12 +990,13 @@ WHERE
     (enabled = 1)
     AND (
     ((published = 1) AND (NOT EXISTS (select s2.id from `mysql_rest_service_metadata`.`service` s2 where s.url_host_id=s2.url_host_id AND s.url_context_root=s2.url_context_root
-        AND JSON_OVERLAPS(r.options->'$.developer', s2.in_development->>'$.developers'))))
+        AND JSON_OVERLAPS(r.attributes->'$.developer', s2.in_development->>'$.developers'))))
     OR
     ((published = 0) AND (s.id IN (select s2.id from `mysql_rest_service_metadata`.`service` s2 where s.url_host_id=s2.url_host_id AND s.url_context_root=s2.url_context_root
-        AND JSON_OVERLAPS(r.options->'$.developer', s2.in_development->>'$.developers'))))
+        AND JSON_OVERLAPS(r.attributes->'$.developer', s2.in_development->>'$.developers'))))
     OR
-    ((published = 0) AND r.options->'$.developer' IS NOT NULL AND s.in_development IS NULL)
+    ((published = 0) AND (r.options->'$.developer' IS NOT NULL
+        OR r.attributes->'$.developer' IS NOT NULL) AND s.in_development IS NULL)
     );
 USE `mysql_rest_service_metadata`;
 

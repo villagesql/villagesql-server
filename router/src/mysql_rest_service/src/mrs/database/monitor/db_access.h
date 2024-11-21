@@ -64,11 +64,6 @@ class DbAccess {
   void query(mysqlrouter::MySQLSession *session) {
     mysqlrouter::MySQLSession::Transaction transaction(session);
     state->query_state(session);
-
-    if (state->was_developer_changed()) {
-      db_service->force_query_all();
-    }
-
     url_host->query_entries(session);
     db_service->query_entries(session);
     db_schema->query_entries(session);

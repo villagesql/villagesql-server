@@ -43,13 +43,11 @@ class DbState {
  public:
   bool service_enabled{false};
   std::optional<std::string> data;
-  std::optional<std::string> developer;
 
   bool operator==(const DbState &other) const {
     if (service_enabled != other.service_enabled) return false;
-    if (data != other.data) return false;
 
-    return developer == other.developer;
+    return data == other.data;
   }
 };
 

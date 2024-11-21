@@ -60,6 +60,9 @@ class Configuration {
   // "mysql_user_data_access"  user to get a proper access granted
   std::chrono::seconds wait_for_metadata_schema_access_;
 
+  // show the "in_development" services for this developer
+  std::string developer_;
+
  public:  // Options fetched from other plugins
   bool is_https_;
   // todo(lkotula): remove ssl_
