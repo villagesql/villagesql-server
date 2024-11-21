@@ -37,6 +37,10 @@
 #include "mrs/interface/endpoint_configuration.h"
 #include "mrs/interface/rest_handler.h"
 
+#include "mysql/harness/logging/logging.h"
+
+IMPORT_LOG_FUNCTIONS()
+
 namespace mrs {
 namespace interface {
 
@@ -201,7 +205,34 @@ class EndpointBase : public std::enable_shared_from_this<EndpointBase> {
    * Generic methods
    */
  protected:
+  std::optional<EnabledType> last_state_;
+  static const char *get_state_name(EnabledType et) {
+    switch (et) {
+      case EnabledType::EnabledType_none:
+        return "disabled";
+      case EnabledType::EnabledType_private:
+        return "private";
+      case EnabledType::EnabledType_public:
+        return "public";
+    }
+    assert(false && "Missing 'enums' value inside the switch.");
+    return "unknown";
+  }
+  void log_update() {
+    auto current = get_enabled_level();
+    if (last_state_ != current) {
+      last_state_ = current;
+
+      log_info("Endpoint(id=%s, path='%s'%s) changed state to '%s'",
+               get_id().to_string().c_str(), get_url().join().c_str(),
+               get_extra_update_data().c_str(), get_state_name(current));
+    }
+  }
+
+  virtual std::string get_extra_update_data() { return {}; }
+
   virtual void update() {
+    log_update();
     switch (get_enabled_level()) {
       case EnabledType::EnabledType_public:
         activate_public();

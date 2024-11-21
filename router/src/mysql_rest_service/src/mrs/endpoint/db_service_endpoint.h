@@ -61,6 +61,7 @@ class DbServiceEndpoint : public OptionEndpoint {
   void update() override;
   void activate_public() override;
   void deactivate() override;
+  std::string get_extra_update_data() override;
   EnabledType get_this_node_enabled_level() const override;
   std::string get_my_url_path_part() const override;
   std::string get_my_url_part() const override;

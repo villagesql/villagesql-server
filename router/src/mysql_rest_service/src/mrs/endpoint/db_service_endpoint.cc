@@ -160,5 +160,9 @@ std::optional<std::string> DbServiceEndpoint::get_options() const {
   return entry_->options;
 }
 
+std::string DbServiceEndpoint::get_extra_update_data() {
+  return std::string(", published:") + (entry_->published ? "yes" : "no");
+}
+
 }  // namespace endpoint
 }  // namespace mrs

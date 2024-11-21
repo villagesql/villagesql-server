@@ -262,8 +262,9 @@ static void init(mysql_harness::PluginFuncEnv *env) {
       // one.
       http_servers.emplace(section->name, HttpServerFactory::create(config));
 
-      log_info("listening on %s:%u", config.srv_address.c_str(),
-               config.srv_port);
+      log_info("listening on %s%s:%u",
+               (config.with_ssl ? "https://" : "http://"),
+               config.srv_address.c_str(), config.srv_port);
 
       auto srv = http_servers.at(section->name);
 

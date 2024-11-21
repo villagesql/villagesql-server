@@ -203,19 +203,19 @@ class RestRequestHandler : public ::http::base::RequestHandler {
                   HttpMethod::key_type method, const HttpHeaders &headers,
                   HttpBuffer &buffer) {
     if (options.header_) {
-      log_debug("HTTP %s method: %s", type,
-                get_http_method_name(method).c_str());
+      log_info("HTTP %s method: %s", type,
+               get_http_method_name(method).c_str());
 
       for (const auto &[k, v] : headers) {
-        log_debug("HTTP %s parameters: %s=%s", type, k.c_str(), v.c_str());
+        log_info("HTTP %s parameters: %s=%s", type, k.c_str(), v.c_str());
       }
     }
 
     auto in_len = buffer.length();
     if (in_len && options.header_) {
       auto data = buffer.copy(in_len);
-      log_debug("HTTP %s body: %.*s", type, static_cast<int>(data.size()),
-                reinterpret_cast<const char *>(&data[0]));
+      log_info("HTTP %s body: %.*s", type, static_cast<int>(data.size()),
+               reinterpret_cast<const char *>(&data[0]));
     }
   }
 
@@ -770,6 +770,10 @@ Handler::Handler(const std::string &url_host,
   for (auto &path : rest_path_matcher_) {
     auto handler = std::make_unique<RestRequestHandler>(this, auth_manager);
     log_debug("router-add: '%s' on host '%s'", path.c_str(), url_host_.c_str());
+    log_info(
+        "Adding Url-Handler that processes requests on host '%s' and path that "
+        "matches regex: '%s'",
+        url_host_.c_str(), path.c_str());
     handler_id_.emplace_back(HttpServerComponent::get_instance().add_route(
         url_host, path, std::move(handler)));
   }
@@ -777,6 +781,10 @@ Handler::Handler(const std::string &url_host,
 
 Handler::~Handler() {
   for (const auto &path : rest_path_matcher_) {
+    log_info(
+        "Removing Url-Handler that processes requests on host: '%s' and path "
+        "that matches regex: '%s'",
+        url_host_.c_str(), path.c_str());
     log_debug("route-remove: '%s' on host '%s'", path.c_str(),
               url_host_.c_str());
   }

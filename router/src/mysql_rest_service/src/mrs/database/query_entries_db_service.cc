@@ -68,7 +68,7 @@ QueryEntriesDbService::QueryEntriesDbService(
 
       query_ << service_is_enabled;
     }
-    query_ << mysqlrouter::sqlstring{", s.name, s.metadata"};
+    query_ << mysqlrouter::sqlstring{", s.name, s.metadata, s.published"};
   }
 }
 
@@ -119,6 +119,7 @@ void QueryEntriesDbService::on_row(const ResultRow &row) {
   if (db_version_ >= mrs::interface::kSupportedMrsMetadataVersion_3) {
     mysql_row.unserialize(&entry.name);
     mysql_row.unserialize(&entry.metadata);
+    mysql_row.unserialize(&entry.published);
   }
 
   entry.deleted = false;
