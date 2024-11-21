@@ -46,6 +46,15 @@ using RequestHandlerPtr = Oauth2Handler::RequestHandlerPtr;
 using std::chrono::seconds;
 using std::chrono::steady_clock;
 
+static void modify_oci_path(std::vector<std::string> &path_elements,
+                            const char *last_path_element) {
+  if (path_elements.empty()) {
+    path_elements.emplace_back("oauth2");
+    path_elements.emplace_back("v1");
+  }
+  path_elements.emplace_back(last_path_element);
+}
+
 const std::string k_oauth_scope = "openid profile email phone";
 
 void Oauth2OidcHandler::RequestHandlerJsonSimpleObjectWithBearer::before_send(
@@ -67,7 +76,7 @@ std::string Oauth2OidcHandler::get_url_location(GenericSessionData *session,
                                                 Url *) const {
   ::http::base::Uri result{entry_.url};
 
-  result.get_path_elements().push_back("authorize");
+  modify_oci_path(result.get_path_elements(), "authorize");
 
   auto &qe = result.get_query_elements();
 
@@ -83,7 +92,7 @@ std::string Oauth2OidcHandler::get_url_location(GenericSessionData *session,
 std::string Oauth2OidcHandler::get_url_direct_auth() const {
   ::http::base::Uri result{entry_.url};
 
-  result.get_path_elements().push_back("token");
+  modify_oci_path(result.get_path_elements(), "token");
 
   return result.join();
 }
@@ -91,7 +100,7 @@ std::string Oauth2OidcHandler::get_url_direct_auth() const {
 std::string Oauth2OidcHandler::get_url_validation(GenericSessionData *) const {
   ::http::base::Uri result{entry_.url};
 
-  result.get_path_elements().push_back("userinfo");
+  modify_oci_path(result.get_path_elements(), "userinfo");
 
   return result.join();
 }
