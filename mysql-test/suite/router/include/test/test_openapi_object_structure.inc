@@ -90,3 +90,11 @@ SET @schema_id_different_types_as_pk=@schema_id;
 --let $mrs_add_db_object_op=READ,UPDATE,DELETE
 --source ../mrs/db_object/add.inc
 
+if ($mrs_schema_version>2)
+{
+  --disable_query_log
+  --disable_result_log
+  UPDATE `mysql_rest_service_metadata`.`service` SET name="" WHERE url_context_root="/svc";
+  --enable_query_log
+  --enable_result_log
+}

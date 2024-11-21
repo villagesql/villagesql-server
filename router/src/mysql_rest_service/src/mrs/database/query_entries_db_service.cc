@@ -48,7 +48,7 @@ QueryEntriesDbService::QueryEntriesDbService(
       "  !, s.comments, s.options,"
       "  s.auth_path, s.auth_completed_url, s.auth_completed_url_validation,"
       "  s.auth_completed_page_content, s.enable_sql_endpoint,"
-      "  s.custom_metadata_schema, s.name !"
+      "  s.custom_metadata_schema !"
       " FROM mysql_rest_service_metadata.`service` as s ) as parent ";
 
   if (db_version_ == mrs::interface::kSupportedMrsMetadataVersion_2)
@@ -68,7 +68,7 @@ QueryEntriesDbService::QueryEntriesDbService(
 
       query_ << service_is_enabled;
     }
-    query_ << mysqlrouter::sqlstring{", s.metadata"};
+    query_ << mysqlrouter::sqlstring{", s.name, s.metadata"};
   }
 }
 
@@ -115,9 +115,9 @@ void QueryEntriesDbService::on_row(const ResultRow &row) {
   mysql_row.unserialize(&entry.auth_completed_page_content);
   mysql_row.unserialize(&entry.enable_sql_endpoint);
   mysql_row.unserialize(&entry.custom_metadata_schema);
-  mysql_row.unserialize(&entry.name);
 
   if (db_version_ >= mrs::interface::kSupportedMrsMetadataVersion_3) {
+    mysql_row.unserialize(&entry.name);
     mysql_row.unserialize(&entry.metadata);
   }
 

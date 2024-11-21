@@ -40,7 +40,7 @@ GET /svc/open-api-catalog/
 {
     "openapi": "3.1.0",
     "info": {
-        "title": "mrs OpenAPI specification",
+        "title": "svc OpenAPI specification",
         "version": "1.0.0"
     },
     "paths": {

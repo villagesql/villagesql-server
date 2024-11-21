@@ -45,7 +45,7 @@ GET /svc/crud_operations/open-api-catalog/
 {
     "openapi": "3.1.0",
     "info": {
-        "title": "mrs OpenAPI specification",
+        "title": "svc OpenAPI specification",
         "version": "1.0.0"
     },
     "paths": {
@@ -604,7 +604,7 @@ GET /svc/different_types/open-api-catalog/
 {
     "openapi": "3.1.0",
     "info": {
-        "title": "mrs OpenAPI specification",
+        "title": "svc OpenAPI specification",
         "version": "1.0.0"
     },
     "paths": {
@@ -1008,7 +1008,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
 {
     "openapi": "3.1.0",
     "info": {
-        "title": "mrs OpenAPI specification",
+        "title": "svc OpenAPI specification",
         "version": "1.0.0"
     },
     "paths": {
