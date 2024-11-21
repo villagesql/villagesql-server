@@ -2228,6 +2228,30 @@ std::string PrintQueryPlan(THD *ethd, const THD *query_thd,
     AddMemberToObject<Json_string>(obj, "query_type", query_type);
   }
 
+  /**
+   * To help identify the "shape" of the JSON output we add a version number
+   * on the format "Major.minor" that should be bumped according to these rules:
+   * Major: bumped when we make breaking changes between releases. This includes
+   *        removal or renaming of fields or access paths and changes in field
+   *        types, e.g. changing a string value to an array. Should be avoided.
+   * minor: bumped when we make additions to the format between releases,
+   *        e.g. add new fields for some access paths, add new access paths.
+   * Should be bumped at most once per release. Reset minor to 0 when Major is
+   * bumped.
+   * This version number is not related to the explain_json_format_version
+   * system variable, and is only referring to the sub-versioning of the JSONv2
+   * EXPLAIN format.
+   */
+  // Major and minor are ints and then converted to a string instead of just
+  // written directly as a string to make them easier to keep track of.
+  // Set to "2.0" in MySQL 9.2.0.
+  const uint8_t Major = 2;
+  const uint8_t minor = 0;
+  std::string explain_json_schema_version =
+      std::to_string(Major) + "." + std::to_string(minor);
+  AddMemberToObject<Json_string>(obj, "json_schema_version",
+                                 explain_json_schema_version);
+
   /*
     Output should be either in json format, or a tree format, depending on
     the specified format

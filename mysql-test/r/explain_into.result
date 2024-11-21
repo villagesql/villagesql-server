@@ -229,7 +229,8 @@ SELECT @v1, JSON_VALID(@v1);
     "actual_first_row_ms": "elided",
     "estimated_total_cost": "elided"
   },
-  "query_type": "select"
+  "query_type": "select",
+  "json_schema_version": "2.0"
 }	1
 
 # User variable is overwritten on successful execution.

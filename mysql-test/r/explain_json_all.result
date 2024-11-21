@@ -8905,7 +8905,8 @@ EXPLAIN
     "estimated_rows": 1.0,
     "estimated_total_cost": 0.8012817382812502
   },
-  "query_type": "select"
+  "query_type": "select",
+  "json_schema_version": "2.0"
 }
 SET @@explain_json_format_version = 1;
 # Check changing system variable in stored procedure works as expected.
@@ -9143,7 +9144,7 @@ EXPLAIN
 EXPLAIN FORMAT=JSON INTO @var SELECT * FROM t t1 JOIN t t2 WHERE t1.i = t2.i;
 SELECT JSON_KEYS(@var);
 JSON_KEYS(@var)
-["query", "query_plan", "query_type"]
+["query", "query_plan", "query_type", "json_schema_version"]
 DROP TABLE t;
 SET @var = NULL;
 SET @@explain_json_format_version = @saved_json_format_version;
