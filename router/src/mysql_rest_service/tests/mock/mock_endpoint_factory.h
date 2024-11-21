@@ -49,6 +49,7 @@ template <typename Base = mrs::interface::EndpointBase>
 class ProxyEndpoint : public Base {
  public:
   using DataType = typename Base::DataType;
+  using Uri = typename Base::Uri;
 
  public:
   ProxyEndpoint(const DataType &data, MockProxy *proxy)
@@ -61,6 +62,7 @@ class ProxyEndpoint : public Base {
   void activate_private() override { proxy_->activate_private(); }
   void activate_public() override { proxy_->activate_public(); }
   void deactivate() override { proxy_->deactivate(); }
+  Uri get_url() const override { return {}; }
 
  private:
   MockProxy *proxy_;
