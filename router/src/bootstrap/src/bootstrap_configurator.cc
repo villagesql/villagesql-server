@@ -815,11 +815,23 @@ uint64_t BootstrapConfigurator::register_mrs_router_instance(
   auto socket_ops = mysql_harness::SocketOperations::instance();
 
   std::string router_name = get_configured_router_name();
-  std::string report_host = socket_ops->get_local_hostname();
+  std::string report_host;
 
   if (auto rh = bootstrapper_.bootstrap_options().find("report-host");
-      rh != bootstrapper_.bootstrap_options().end())
+      rh != bootstrapper_.bootstrap_options().end()) {
     report_host = rh->second;
+  } else {
+    try {
+      report_host = socket_ops->get_local_hostname();
+    } catch (
+        const mysql_harness::SocketOperations::LocalHostnameResolutionError &) {
+      std::cout << "Could not determine the hostname to store in the metadata. "
+                   "Storing 'unknown'. You can use --report-host parameter to "
+                   "overwrite it."
+                << std::endl;
+      report_host = "unknown";
+    }
+  }
 
   session->execute(
       "INSERT INTO mysql_rest_service_metadata.router"
