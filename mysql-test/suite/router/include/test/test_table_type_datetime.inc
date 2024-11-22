@@ -172,7 +172,7 @@ let $mrs_client_arg_json_schema='
 
 # Cleanup
 DROP TABLE `test`.`datetime_values`;
-
+--source ../mrs/cleanup.inc
 
 --let $test_encode_date_begin=
 --let $test_encode_date_end=

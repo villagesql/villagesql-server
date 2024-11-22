@@ -349,6 +349,12 @@ GET /svc/test/datetime/?q=%7B%22dt%22:%7B%22%24gt%22:%7B%22%24date%22:%222024-10
 }
 OK
 DROP TABLE `test`.`datetime_values`;
+DROP SCHEMA mysql_rest_service_metadata;
+DROP ROLE mysql_rest_service_admin;
+DROP ROLE mysql_rest_service_schema_admin;
+DROP ROLE mysql_rest_service_meta_provider;
+DROP ROLE mysql_rest_service_data_provider;
+DROP ROLE mysql_rest_service_dev;
 ## Run parametric tests, where REST object column under test is
 ## TIMESTAMP, and its compared against dates encoded inside a JsonObject using "" key.
 # MySQL Rest Service schema created.
@@ -700,6 +706,12 @@ GET /svc/test/datetime/?q=%7B%22dt%22:%7B%22%24gt%22:%7B%22%24date%22:%222024-10
 }
 OK
 DROP TABLE `test`.`datetime_values`;
+DROP SCHEMA mysql_rest_service_metadata;
+DROP ROLE mysql_rest_service_admin;
+DROP ROLE mysql_rest_service_schema_admin;
+DROP ROLE mysql_rest_service_meta_provider;
+DROP ROLE mysql_rest_service_data_provider;
+DROP ROLE mysql_rest_service_dev;
 ## Run parametric tests, where REST object column under test is
 ## DATETIME, and its compared against dates encoded inside a JsonString.
 # MySQL Rest Service schema created.
@@ -1051,6 +1063,12 @@ GET /svc/test/datetime/?q=%7B%22dt%22:%7B%22%24gt%22:%222024-10-01%2014:30:00.12
 }
 OK
 DROP TABLE `test`.`datetime_values`;
+DROP SCHEMA mysql_rest_service_metadata;
+DROP ROLE mysql_rest_service_admin;
+DROP ROLE mysql_rest_service_schema_admin;
+DROP ROLE mysql_rest_service_meta_provider;
+DROP ROLE mysql_rest_service_data_provider;
+DROP ROLE mysql_rest_service_dev;
 ## Run parametric tests, where REST object column under test is
 ## TIMESTAMP, and its compared against dates encoded inside a JsonString.
 # MySQL Rest Service schema created.

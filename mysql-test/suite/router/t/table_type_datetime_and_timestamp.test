@@ -28,5 +28,3 @@
 --let $test_encode_date_end=
 --let $test_time_type=TIMESTAMP
 --source ../include/test/test_table_type_datetime.inc
-
---source ../include/mrs/cleanup.inc
