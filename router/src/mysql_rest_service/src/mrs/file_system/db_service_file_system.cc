@@ -171,7 +171,7 @@ void DbServiceFileSystem::check_access(const std::string &path,
   // linux path separator was used in the code, so we normalize and give it a
   // chance to look for the file
   if (!content_file_ep && path.find('\\') != std::string::npos) {
-    auto normalized_path = shcore::str_replace(path, "\\", "/");
+    auto normalized_path = str_replace(path, "\\", "/");
     content_file_ep = lookup_file(normalized_path);
   }
 #endif
@@ -200,7 +200,7 @@ DbServiceFileSystem::new_byte_channel(const std::string &path) {
   // linux path separator was used in the code, so we normalize and give it a
   // chance to look for the file
   if (!file_ep && path.find('\\') != std::string::npos) {
-    auto normalized_path = shcore::str_replace(path, "\\", "/");
+    auto normalized_path = str_replace(path, "\\", "/");
     file_ep = lookup_file(normalized_path);
   }
 #endif
