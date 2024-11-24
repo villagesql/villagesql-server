@@ -679,6 +679,7 @@ bool AuthorizeManager::authorize(ServiceId service_id,
   using namespace std::literals::string_literals;
   Session *session{nullptr};
 
+  // TODO(alfredo) - looks duplicate with above?
   if (ctxt.session_id.has_value()) {
     session = session_manager_.get_session(ctxt.session_id.value());
 

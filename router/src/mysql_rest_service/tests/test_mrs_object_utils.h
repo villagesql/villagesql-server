@@ -243,7 +243,7 @@ class ViewBuilder {
           std::cout
               << table->schema << "." << table->table << "." << name
               << " is a primary key in the DB, but is not included/enabled "
-                 "in the duality view\n";
+                 "in the json view\n";
           assert(0);
         }
       }
@@ -254,7 +254,7 @@ class ViewBuilder {
         } else {
           std::cout << table->schema << "." << table->table << "." << name
                     << " is AUTO_INCREMENT in the DB, but is not in the "
-                       "duality view\n";
+                       "json view\n";
           assert(0);
         }
       }

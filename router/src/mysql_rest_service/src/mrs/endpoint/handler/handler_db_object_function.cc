@@ -78,13 +78,6 @@ using Authorization = mrs::rest::Handler::Authorization;
 //
 //  return "";
 //}
-static CachedObject get_session(::mysqlrouter::MySQLSession *,
-                                collector::MysqlCacheManager *cache_manager) {
-  //  if (session) return CachedObject(nullptr, session);
-
-  return cache_manager->get_instance(collector::kMySQLConnectionUserdataRW,
-                                     false);
-}
 
 HandlerDbObjectFunction::HandlerDbObjectFunction(
     std::weak_ptr<DbObjectEndpoint> endpoint,
@@ -130,11 +123,10 @@ static HttpResult handler_mysqlerror(const mysqlrouter::MySQLSession::Error &e,
   return HttpResult(status, std::move(json), HttpResult::Type::typeJson);
 }
 
-HttpResult HandlerDbObjectFunction::handle_put(
-    [[maybe_unused]] rest::RequestContext *ctxt) {
+HttpResult HandlerDbObjectFunction::handle_put(rest::RequestContext *ctxt) {
   using namespace std::string_literals;
 
-  auto session = get_session(ctxt->sql_session_cache.get(), cache_);
+  auto session = get_session(ctxt, collector::kMySQLConnectionUserdataRW);
   auto &input_buffer = ctxt->request->get_input_buffer();
   // TODO(lkotula): New api doesn't have inputbuffer, it has string (Shouldn't
   // be in review)
@@ -252,8 +244,7 @@ HttpResult HandlerDbObjectFunction::handle_post(
   throw http::Error(HttpStatusCode::NotImplemented);
 }
 
-HttpResult HandlerDbObjectFunction::handle_get(
-    [[maybe_unused]] rest::RequestContext *ctxt) {
+HttpResult HandlerDbObjectFunction::handle_get(rest::RequestContext *ctxt) {
   using namespace std::string_literals;
 
   Url::Keys keys;
@@ -265,7 +256,7 @@ HttpResult HandlerDbObjectFunction::handle_get(
   auto sql_values = database::create_function_argument_list(
       obj.get(), requests_uri.get_query_elements(), ownership_,
       ctxt->user.has_user_id ? &ctxt->user.user_id : nullptr);
-  auto session = get_session(ctxt->sql_session_cache.get(), cache_);
+  auto session = get_session(ctxt, collector::kMySQLConnectionUserdataRW);
   // Stored procedures may change the state of the SQL session,
   // we need ensure that its going to be reset.
   // Set as dirty, directly before executing queries.

@@ -56,6 +56,7 @@
 #include "mrs/endpoint/db_schema_endpoint.h"
 #include "mrs/endpoint/handler/url_paths.h"
 #include "mrs/endpoint/handler/utilities.h"
+#include "mrs/endpoint/url_host_endpoint.h"
 #include "mrs/http/error.h"
 #include "mrs/monitored/gtid_functions.h"
 #include "mrs/monitored/query_retry_on_ro.h"
@@ -264,17 +265,6 @@ using MysqlCacheManager = collector::MysqlCacheManager;
 using MySQLConnection = collector::MySQLConnection;
 using MediaType = helper::MediaType;
 
-static CachedObject get_session(
-    ::mysqlrouter::MySQLSession *, MysqlCacheManager *cache_manager,
-    MySQLConnection type = MySQLConnection::kMySQLConnectionUserdataRO) {
-  //  if (session) {
-  //    log_debug("Reusing SQL session");
-  //    return CachedObject(nullptr, session);
-  //  }
-
-  return cache_manager->get_instance(type, false);
-}
-
 using HttpResult = mrs::rest::Handler::HttpResult;
 
 HandlerDbObjectTable::HandlerDbObjectTable(
@@ -302,6 +292,17 @@ HandlerDbObjectTable::HandlerDbObjectTable(
     response_cache_ = std::make_shared<ItemEndpointResponseCache>(
         response_cache, get_options().result.cache_ttl_ms);
   }
+
+  if (auto parent_db_service = lock_parent(ep_parent)) {
+    if (auto parent_host = std::dynamic_pointer_cast<UrlHostEndpoint>(
+            parent_db_service->get_parent_ptr())) {
+      auto host_entry = parent_host->get();
+      auto db_service_entry = parent_db_service->get();
+      if (host_entry && db_service_entry) {
+        passthrough_db_user_ = db_service_entry->passthrough_db_user;
+      }
+    }
+  }
 }
 
 void HandlerDbObjectTable::authorization(rest::RequestContext *ctxt) {
@@ -316,7 +317,7 @@ uint64_t HandlerDbObjectTable::slow_query_timeout() const {
 }
 
 HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
-  auto session = get_session(ctxt->sql_session_cache.get(), cache_);
+  auto session = get_session(ctxt);
   auto object = entry_->object_description;
   database::dv::ObjectFieldFilter field_filter;
   std::optional<std::string> target_field;
@@ -485,14 +486,12 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
 
 /// Post is insert
 HttpResult HandlerDbObjectTable::handle_post(
-    [[maybe_unused]] rest::RequestContext *ctxt,
-    const std::vector<uint8_t> &document) {
+    rest::RequestContext *ctxt, const std::vector<uint8_t> &document) {
   using namespace helper::json::sql;
   rapidjson::Document json_doc;
   auto endpoint = lock_or_throw_unavail(endpoint_);
   auto object = entry_->object_description;
-  auto session = get_session(ctxt->sql_session_cache.get(), cache_,
-                             MySQLConnection::kMySQLConnectionUserdataRW);
+  auto session = get_session(ctxt, MySQLConnection::kMySQLConnectionUserdataRW);
 
   auto last_path =
       get_path_after_object_name(endpoint->get_url(), ctxt->request->get_uri());
@@ -557,8 +556,7 @@ HttpResult HandlerDbObjectTable::handle_delete(rest::RequestContext *ctxt) {
   auto last_path =
       get_path_after_object_name(endpoint->get_url(), requests_uri);
   auto object = entry_->object_description;
-  auto session = get_session(ctxt->sql_session_cache.get(), cache_,
-                             MySQLConnection::kMySQLConnectionUserdataRW);
+  auto session = get_session(ctxt, MySQLConnection::kMySQLConnectionUserdataRW);
   auto addr = session->get_connection_parameters().conn_opts.destination;
 
   uint64_t count = 0;
@@ -683,8 +681,7 @@ HttpResult HandlerDbObjectTable::handle_put(rest::RequestContext *ctxt) {
   }
 
   auto json_obj = json_doc.GetObject();
-  auto session = get_session(ctxt->sql_session_cache.get(), cache_,
-                             MySQLConnection::kMySQLConnectionUserdataRW);
+  auto session = get_session(ctxt, MySQLConnection::kMySQLConnectionUserdataRW);
 
   slow_monitor_->execute(
       [&]() { pk = updater.update(session.get(), pk, json_doc, true); },
@@ -754,6 +751,36 @@ mrs::database::ObjectRowOwnership HandlerDbObjectTable::row_ownership_info(
       entry_->row_group_security, ctxt->user.groups};
 
   return {};
+}
+
+HandlerDbObjectTable::CachedSession HandlerDbObjectTable::get_session(
+    rest::RequestContext *ctxt, collector::MySQLConnection type) {
+  HandlerDbObjectTable::CachedSession tmp;
+
+  tmp = cache_->get_instance(type, false);
+
+  if (passthrough_db_user_) {
+    if (!ctxt->user.is_mysql_auth) {
+      log_debug(
+          "Request to service with passthroughDbUser from non-mysql auth user "
+          "'%s'",
+          ctxt->user.name.c_str());
+      throw http::Error(HttpStatusCode::BadRequest,
+                        "Service requires authentication with "
+                        "MySQL Internal, but user is authenticated with "
+                        "other authApp (or authentication was not configured)");
+    }
+
+    try {
+      tmp->change_user(ctxt->user.name, ctxt->user.mysql_password, "");
+    } catch (const std::exception &e) {
+      log_error("Could not switch to user '%s' for service: %s",
+                ctxt->user.name.c_str(), e.what());
+      throw;
+    }
+  }
+
+  return tmp;
 }
 
 }  // namespace handler

@@ -26,6 +26,8 @@
 #define ROUTER_SRC_MYSQL_REST_SERVICE_INCLUDE_MRS_DATABASE_ENTRY_DB_SERVICE_H_
 
 #include <optional>
+#include <set>
+#include <string>
 
 #include "mrs/database/entry/entry.h"
 #include "mrs/database/entry/universal_id.h"
@@ -52,6 +54,7 @@ struct DbService {
   EnabledType enabled;
   bool published{true};
   std::optional<std::string> metadata;
+  bool passthrough_db_user{false};
 
   bool deleted{false};
 };

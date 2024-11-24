@@ -154,7 +154,7 @@ void JsonQueryBuilder::process_view(std::shared_ptr<entry::JsonMapping> view) {
   process_table({}, view, "");
 
   if (m_select_items.str().empty()) {
-    throw std::runtime_error("Invalid duality view metadata");
+    throw std::runtime_error("Invalid table/view object metadata");
   }
 }
 

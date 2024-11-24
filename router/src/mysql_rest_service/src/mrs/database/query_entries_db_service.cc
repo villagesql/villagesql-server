@@ -28,6 +28,7 @@
 
 #include "helper/mysql_row.h"
 #include "mrs/database/helper/query_audit_log_maxid.h"
+
 #include "mysql/harness/string_utils.h"
 
 namespace mrs {
@@ -48,7 +49,7 @@ QueryEntriesDbService::QueryEntriesDbService(
       "  !, s.comments, s.options,"
       "  s.auth_path, s.auth_completed_url, s.auth_completed_url_validation,"
       "  s.auth_completed_page_content, s.enable_sql_endpoint,"
-      "  s.custom_metadata_schema !"
+      "  s.custom_metadata_schema, s.options->>'$.passthroughDbUser' !"
       " FROM mysql_rest_service_metadata.`service` as s ) as parent ";
 
   if (db_version_ == mrs::interface::kSupportedMrsMetadataVersion_2)
@@ -115,6 +116,7 @@ void QueryEntriesDbService::on_row(const ResultRow &row) {
   mysql_row.unserialize(&entry.auth_completed_page_content);
   mysql_row.unserialize(&entry.enable_sql_endpoint);
   mysql_row.unserialize(&entry.custom_metadata_schema);
+  mysql_row.unserialize(&entry.passthrough_db_user);
 
   if (db_version_ >= mrs::interface::kSupportedMrsMetadataVersion_3) {
     mysql_row.unserialize(&entry.name);

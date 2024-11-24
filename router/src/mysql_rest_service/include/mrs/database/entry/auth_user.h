@@ -100,6 +100,12 @@ struct AuthUser {
     std::string vendor_user_id;
   };
 
+  AuthUser() = default;
+  AuthUser(const AuthUser &) = default;
+  AuthUser &operator=(const AuthUser &) = default;
+
+  ~AuthUser() { memset(&mysql_password[0], 0, mysql_password.size()); }
+
   bool has_user_id{false};
   UserId user_id;
   UniversalId app_id;
@@ -111,6 +117,9 @@ struct AuthUser {
   std::vector<AuthPrivilege> privileges;
   std::set<UniversalId> groups;
   std::string options;
+
+  bool is_mysql_auth{false};
+  std::string mysql_password;
 };
 
 inline std::string to_string(const AuthUser &ud) {

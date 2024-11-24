@@ -889,7 +889,7 @@ std::string compute_checksum(std::shared_ptr<entry::Object> object,
 
 /**
  * @brief Performs various post-processing tasks on a JSON document produced for
- * a duality view.
+ * a json view.
  *
  * - unnest references
  * - exclude fields that are disabled

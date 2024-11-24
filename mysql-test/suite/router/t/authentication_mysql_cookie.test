@@ -15,6 +15,8 @@
 create user mrsuser@'%' identified by 'S3kre7';
 grant all on *.* to mrsuser@'%';
 
+create function basic_schema.whoami() returns text deterministic return current_user();
+
 ## Test starts here
 --echo
 --echo
@@ -69,6 +71,12 @@ grant all on *.* to mrsuser@'%';
 
 --let $mrs_add_db_object=table2
 --let $mrs_add_db_object_path=/o2
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_db_object_type=FUNCTION
+--let $mrs_add_db_object_format=ITEM
+--let $mrs_add_db_object=whoami
+--let $mrs_add_db_object_path=/whoami
 --source ../include/mrs/db_object/add.inc
 
 --let $mrs_add_auth_app=default authentication

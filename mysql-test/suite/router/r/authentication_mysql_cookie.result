@@ -3,6 +3,7 @@
 # DB `basic_schema` - created
 create user mrsuser@'%' identified by 'S3kre7';
 grant all on *.* to mrsuser@'%';
+create function basic_schema.whoami() returns text deterministic return current_user();
 
 
 ## I. Create two servcices that have basic-mysql authentication:
@@ -40,6 +41,7 @@ grant all on *.* to mrsuser@'%';
 # Registred DB_SCHEMA at path: /svc1/basic1
 # Registred DB_OBJECT at path: /svc1/basic1/o1
 # Registred DB_OBJECT at path: /svc1/basic1/o2
+# Registred DB_OBJECT at path: /svc1/basic1/whoami
 # Registred AUTH APP at path: /svc1
 
 #

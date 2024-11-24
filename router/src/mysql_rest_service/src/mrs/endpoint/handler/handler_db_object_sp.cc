@@ -80,12 +80,6 @@ using CachedObject = collector::MysqlCacheManager::CachedObject;
 using Url = helper::http::Url;
 using Authorization = mrs::rest::Handler::Authorization;
 
-static CachedObject get_session(::mysqlrouter::MySQLSession *,
-                                collector::MysqlCacheManager *cache_manager) {
-  return cache_manager->get_instance(collector::kMySQLConnectionUserdataRW,
-                                     false);
-}
-
 HttpResult HandlerDbObjectSP::handle_delete(
     [[maybe_unused]] rest::RequestContext *ctxt) {
   throw http::Error(HttpStatusCode::NotImplemented);
@@ -202,12 +196,12 @@ HandlerDbObjectSP::HandlerDbObjectSP(
     : HandlerDbObjectTable{endpoint, auth_manager,   gtid_manager,
                            cache,    response_cache, slow_monitor} {}
 
-HttpResult HandlerDbObjectSP::handle_put(
-    [[maybe_unused]] rest::RequestContext *ctxt) {
+HttpResult HandlerDbObjectSP::handle_put(rest::RequestContext *ctxt) {
   using namespace std::string_literals;
   using namespace helper::json::sql;
 
-  auto session = get_session(ctxt->sql_session_cache.get(), cache_);
+  auto session = get_session(ctxt, collector::kMySQLConnectionUserdataRW);
+
   auto url = get_endpoint_url(endpoint_);
   auto &input_buffer = ctxt->request->get_input_buffer();
   auto size = input_buffer.length();
@@ -223,7 +217,6 @@ HttpResult HandlerDbObjectSP::handle_put(
       return {std::string{entry->data}};
     }
   }
-
   rapidjson::Document doc;
   doc.Parse(reinterpret_cast<const char *>(request_body.data()),
             request_body.size());
@@ -318,8 +311,7 @@ HttpResult HandlerDbObjectSP::handle_post(
   throw http::Error(HttpStatusCode::NotImplemented);
 }
 
-HttpResult HandlerDbObjectSP::handle_get(
-    [[maybe_unused]] rest::RequestContext *ctxt) {
+HttpResult HandlerDbObjectSP::handle_get(rest::RequestContext *ctxt) {
   using namespace std::string_literals;
 
   Url::Keys keys;
@@ -372,7 +364,7 @@ HttpResult HandlerDbObjectSP::handle_get(
     }
   }
 
-  auto session = get_session(ctxt->sql_session_cache.get(), cache_);
+  auto session = get_session(ctxt, collector::kMySQLConnectionUserdataRW);
   // Stored procedures may change the state of the SQL session,
   // we need ensure that its going to be reset.
   // Set as dirty, directly before executing queries.

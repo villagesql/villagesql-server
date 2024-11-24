@@ -39,8 +39,10 @@
 
 using Type = mrs::interface::RestHandler::HttpResult::Type;
 using HttpResult = mrs::rest::Handler::HttpResult;
-
 using Authorization = mrs::rest::Handler::Authorization;
+using collector::MysqlCacheManager;
+using collector::MySQLConnection;
+using mysqlrouter::MySQLSession;
 
 namespace mrs {
 namespace endpoint {

@@ -57,7 +57,6 @@ bool MysqlHandler::verify_credential(const Credentials &credentials,
     auto default_auth_user =
         out_cache->get()->get_connection_parameters().conn_opts;
     out_cache->get()->change_user(credentials.user, credentials.password, "");
-
     out_user->vendor_user_id =
         (*out_cache->get()->query_one("SELECT CURRENT_USER();"))[0];
 
@@ -67,7 +66,11 @@ bool MysqlHandler::verify_credential(const Credentials &credentials,
 
     out_user->app_id = entry_.id;
 
-    return um_.user_get(out_user, out_cache);
+    auto ret = um_.user_get(out_user, out_cache);
+    out_user->is_mysql_auth = true;
+    out_user->name = credentials.user;
+    out_user->mysql_password = credentials.password;
+    return ret;
   } catch (const std::exception &e) {
     return false;
   }

@@ -26,6 +26,7 @@
 #define ROUTER_SRC_REST_MRS_SRC_MRS_ENDPOINT_HANDLER_HANDLER_DB_OBJECT_TABLE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -52,6 +53,7 @@ class HandlerDbObjectTable : public mrs::rest::Handler {
   using DbObjectEndpoint = mrs::endpoint::DbObjectEndpoint;
   using EndpointResponseCachePtr =
       std::shared_ptr<mrs::ItemEndpointResponseCache>;
+  using CachedSession = collector::MysqlCacheManager::CachedObject;
 
  public:
   HandlerDbObjectTable(std::weak_ptr<DbObjectEndpoint> endpoint,
@@ -77,6 +79,11 @@ class HandlerDbObjectTable : public mrs::rest::Handler {
   uint32_t get_access_rights() const override;
 
  protected:
+  CachedSession get_session(
+      rest::RequestContext *ctxt,
+      collector::MySQLConnection type =
+          collector::MySQLConnection::kMySQLConnectionUserdataRO);
+
   uint64_t get_items_on_page() const;
   mrs::database::ObjectRowOwnership row_ownership_info(
       rest::RequestContext *ctxt,
@@ -92,6 +99,7 @@ class HandlerDbObjectTable : public mrs::rest::Handler {
   mrs::database::entry::RowUserOwnership ownership_;
   EndpointResponseCachePtr response_cache_;
   mrs::database::SlowQueryMonitor *slow_monitor_;
+  bool passthrough_db_user_{false};
 };
 
 }  // namespace handler
