@@ -111,7 +111,7 @@ GET /svc/different_types_as_pk/open-api-catalog/t_decimal
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -125,7 +125,7 @@ GET /svc/different_types_as_pk/open-api-catalog/t_decimal
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -337,7 +337,7 @@ GET /svc/different_types_as_pk/open-api-catalog/t_set
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -351,7 +351,7 @@ GET /svc/different_types_as_pk/open-api-catalog/t_set
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -567,7 +567,7 @@ GET /svc/different_types_as_pk/open-api-catalog/t_timestamp
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -581,7 +581,7 @@ GET /svc/different_types_as_pk/open-api-catalog/t_timestamp
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -792,7 +792,7 @@ GET /svc/different_types_as_pk/open-api-catalog/t_bin
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -806,7 +806,7 @@ GET /svc/different_types_as_pk/open-api-catalog/t_bin
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -1017,7 +1017,7 @@ GET /svc/different_types/open-api-catalog/all_types
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -1063,7 +1063,7 @@ GET /svc/different_types/open-api-catalog/all_types
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -1416,7 +1416,7 @@ GET /svc/crud_operations/open-api-catalog/t1
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -1510,7 +1510,7 @@ GET /svc/crud_operations/open-api-catalog/t2
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -1666,7 +1666,7 @@ GET /svc/crud_operations/open-api-catalog/t3
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -1712,7 +1712,7 @@ GET /svc/crud_operations/open-api-catalog/t3
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -1907,7 +1907,7 @@ GET /svc/crud_operations/open-api-catalog/t4
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],

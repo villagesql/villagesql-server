@@ -88,7 +88,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -137,7 +137,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -248,7 +248,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -294,7 +294,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -444,7 +444,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -597,7 +597,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -643,7 +643,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -827,7 +827,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -841,7 +841,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -1025,7 +1025,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -1039,7 +1039,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -1223,7 +1223,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -1237,7 +1237,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -1421,7 +1421,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -1435,7 +1435,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -1619,7 +1619,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -1633,7 +1633,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -1817,7 +1817,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -1831,7 +1831,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -2015,7 +2015,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -2029,7 +2029,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -2213,7 +2213,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -2227,7 +2227,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],
@@ -2411,7 +2411,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": false,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ]
@@ -2425,7 +2425,7 @@ GET /svc/open-api-catalog/
                         "description": "filter object",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "type": "string"
                         }
                     }
                 ],

@@ -284,7 +284,7 @@ rapidjson::Value OpenApiCreator::get_filter_parameter(
                        .AddMember("required", is_required, allocator_)
                        .AddMember("schema",
                                   rapidjson::Value(rapidjson::kObjectType)
-                                      .AddMember("type", "object", allocator_),
+                                      .AddMember("type", "string", allocator_),
                                   allocator_));
 }
 
