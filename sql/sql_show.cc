@@ -2545,7 +2545,9 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
 
     if (share->engine_attribute.length) {
       packet->append(STRING_WITH_LEN(" /*!80021 ENGINE_ATTRIBUTE="));
-      if (check_table_access(thd, CREATE_ACL, table_list, false, 1, true) &&
+
+      if (for_show_create_stmt &&
+          check_table_access(thd, CREATE_ACL, table_list, false, 1, true) &&
           check_table_access(thd, ALTER_ACL, table_list, false, 1, true)) {
         String rlb;
         String original_query_str(share->engine_attribute.str,
@@ -2554,11 +2556,13 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
         redact_par_url(original_query_str, rlb);
 
         append_unescaped(packet, rlb.ptr(), rlb.length());
-        // inform users without privileges that the result of SHOW CREATE TABLE
-        // is redacted. Useful for the case of redacted mysqldump result.
+        // inform users without privileges that the result of SHOW CREATE
+        // TABLE is redacted. Useful for the case of redacted mysqldump
+        // result.
         push_warning_printf(
             thd, Sql_condition::SL_WARNING, ER_WARN_REDACTED_PRIVILEGES,
             ER_THD(thd, ER_WARN_REDACTED_PRIVILEGES), share->table_name.str);
+
       } else {
         append_unescaped(packet, share->engine_attribute.str,
                          share->engine_attribute.length);
