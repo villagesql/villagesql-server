@@ -50,8 +50,8 @@
 update mysql_rest_service_metadata.config set data = json_merge_patch(data, '{"responseCache":{"maxCacheSize":200}, "fileCache":{"maxCacheSize":40}}');
 
 # Enable caching for t1 and proc
-update mysql_rest_service_metadata.db_object set options='{"cache_ttl":5}' where name='table1';
-update mysql_rest_service_metadata.db_object set options='{"cache_ttl":5}' where name='proc_table4';
+update mysql_rest_service_metadata.db_object set options='{"cacheTimeToLive":5}' where name='table1';
+update mysql_rest_service_metadata.db_object set options='{"cacheTimeToLive":5}' where name='proc_table4';
 
 --source ../include/mrs/end_object_definition.inc
 

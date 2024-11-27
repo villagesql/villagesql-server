@@ -45,6 +45,7 @@
 #include "mrs/endpoint/handler/utilities.h"
 #include "mrs/http/error.h"
 #include "mrs/rest/request_context.h"
+#include "mrs/rest/response_cache.h"
 #include "mrs/router_observation_entities.h"
 
 #ifdef HAVE_GRAALVM_PLUGIN
@@ -69,6 +70,12 @@ using Authorization = mrs::rest::Handler::Authorization;
 using Request = mrs::rest::RequestContext::Request;
 using ResultSets = mrs::database::entry::ResultSets;
 using Fields = std::vector<mrs::database::entry::Field>;
+
+std::string get_endpoint_url(
+    std::weak_ptr<mrs::endpoint::DbObjectEndpoint> &wp) {
+  auto locked = lock_or_throw_unavail(wp);
+  return locked->get_url().join();
+}
 
 class HandlerDbObjectScript::Impl {
  public:
@@ -124,18 +131,11 @@ class HandlerDbObjectScript::Impl {
   virtual ~Impl() = default;
 
 #ifdef HAVE_GRAALVM_PLUGIN
-  shcore::Argument_list get_parameters(const Request *request,
+  shcore::Argument_list get_parameters(std::string_view body,
                                        const Fields &fields) {
-    auto &input_buffer = request->get_input_buffer();
-    auto size = input_buffer.length();
-
     std::vector<shcore::Value> parameters;
-    if (size) {
-      auto request_body = input_buffer.pop_front(size);
-
-      auto params = shcore::Value::parse(
-          {reinterpret_cast<const char *>(request_body.data()),
-           request_body.size()});
+    if (!body.empty()) {
+      auto params = shcore::Value::parse(body);
 
       if (params.get_type() != shcore::Map) {
         throw http::Error(HttpStatusCode::BadRequest,
@@ -204,9 +204,33 @@ HttpResult HandlerDbObjectScript::handle_script(
                       "Missing file to load for  " + entry_->request_path);
   }
 
+  auto cached_response = [](const std::shared_ptr<mrs::CacheEntry> &entry) {
+    if (entry->media_type.has_value()) {
+      return HttpResult(entry->data, *entry->media_type);
+    } else {
+      return HttpResult(std::string(entry->data));
+    }
+  };
+
+  // Get the request body for cache lookup or normal processing
+  auto &input_buffer = ctxt->request->get_input_buffer();
+  auto size = input_buffer.length();
+  auto request_body = input_buffer.pop_front(size);
+  std::string_view body{reinterpret_cast<const char *>(request_body.data()),
+                        request_body.size()};
+
+  if (response_cache_) {
+    auto entry =
+        response_cache_->lookup_routine(get_endpoint_url(endpoint_), body);
+    if (entry) {
+      Counter<kEntityCounterRestReturnedItems>::increment(entry->items);
+      return cached_response(entry);
+    }
+  }
+
   // Process the parameters...
   auto parameters =
-      m_impl->get_parameters(ctxt->request, entry_->fields.parameters.fields);
+      m_impl->get_parameters(body, entry_->fields.parameters.fields);
 
   // Let's find the associated service, will be needed to:
   // - Retrieve the GraalVM associated to the service
@@ -229,15 +253,22 @@ HttpResult HandlerDbObjectScript::handle_script(
       entry_->content_set_def->name, parameters, result_type);
   context.reset();
 
-  if (!result.empty()) {
-    auto response = HttpResult(std::move(result));
+  if (response_cache_) {
+    auto entry = response_cache_->create_routine_entry(
+        get_endpoint_url(endpoint_), body, result, 0,
+        entry_->media_type.value_or(""));
 
-    if (entry_->media_type.has_value()) {
-      response.type_text = *entry_->media_type;
+    if (entry) {
+      return cached_response(entry);
     }
-    return response;
   }
-  return HttpResult();
+
+  // Builds the response when no Cache is used
+  auto response = HttpResult(std::move(result));
+  if (entry_->media_type.has_value()) {
+    response.type_text = *entry_->media_type;
+  }
+  return response;
 #else
   throw http::Error(HttpStatusCode::NotImplemented);
 #endif
@@ -251,8 +282,10 @@ HttpResult HandlerDbObjectScript::handle_delete(
 HandlerDbObjectScript::HandlerDbObjectScript(
     std::weak_ptr<DbObjectEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager,
-    mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache)
-    : HandlerDbObjectTable{endpoint, auth_manager, gtid_manager, cache} {
+    mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache,
+    mrs::ResponseCache *response_cache, int64_t cache_ttl_ms)
+    : HandlerDbObjectTable{endpoint, auth_manager,   gtid_manager,
+                           cache,    response_cache, cache_ttl_ms} {
   { m_impl = std::make_shared<Impl>(this); }
 }
 

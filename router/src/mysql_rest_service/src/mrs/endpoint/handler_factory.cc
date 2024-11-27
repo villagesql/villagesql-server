@@ -143,7 +143,8 @@ HandlerPtr HandlerFactory::create_db_object_handler(EndpointBasePtr endpoint) {
           response_cache_, entry_->option_cache_ttl_ms.value_or(0));
     case DbObjectLite::k_objectTypeScript:
       return std::make_unique<HandlerDbObjectScript>(
-          db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_);
+          db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_,
+          response_cache_, entry_->option_cache_ttl_ms.value_or(0));
   }
 
   assert(false && "all cases must be handled inside the switch.");

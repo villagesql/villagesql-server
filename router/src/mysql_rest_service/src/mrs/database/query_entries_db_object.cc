@@ -63,7 +63,7 @@ QueryEntriesDbObject::QueryEntriesDbObject(
       "  COALESCE(o.items_per_page, db.items_per_page) as `on_page`, "
       "  o.name, db.name as `schema_name`, o.crud_operations + 0, o.format,"
       "  o.media_type, o.auto_detect_media_type, o.object_type, o.options,"
-      "  o.options->>'$.cache_ttl' as cache_ttl !"
+      "  o.options->>'$.cacheTimeToLive' as cache_ttl !"
       " FROM mysql_rest_service_metadata.`db_object` as o"
       "  JOIN mysql_rest_service_metadata.`db_schema` as db on"
       "   o.db_schema_id = db.id !"
@@ -178,7 +178,7 @@ void QueryEntriesDbObject::on_row(const ResultRow &row) {
         entry.option_cache_ttl_ms = std::stod(*cache_ttl) * 1000;
       } catch (...) {
         log_error(
-            "Option cache_ttl has an invalid value '%s'. Caching will be "
+            "Option cacheTimeToLive has an invalid value '%s'. Caching will be "
             "disabled",
             cache_ttl.value().c_str());
       }
