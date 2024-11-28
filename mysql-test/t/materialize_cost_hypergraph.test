@@ -43,7 +43,7 @@ CREATE FUNCTION get_child_cost(rootobj json, jval varchar(200)) returns float
 main_block:
 BEGIN
   DECLARE childobj json;
-  set childobj = rootobj->"$.inputs[0]";
+  set childobj = rootobj->"$.query_plan.inputs[0]";
 
   return get_cost(childobj, jval);
 END
@@ -54,13 +54,13 @@ delimiter ;||
 let $query_prefix=
 EXPLAIN FORMAT=JSON INTO @jsonstr;
 let $store_cost=
-SELECT get_cost(@jsonstr, "$.estimated_total_cost") est INTO;
+SELECT get_cost(@jsonstr, "$.query_plan.estimated_total_cost") est INTO;
 let $store_child_cost=
 SELECT get_child_cost(@jsonstr, "$.estimated_total_cost") est INTO;
 let print_access_type=
-SELECT json_extract(@jsonstr, "$.access_type") access_type;
+SELECT json_extract(@jsonstr, "$.query_plan.access_type") access_type;
 let print_child_access_type=
-SELECT json_extract(@jsonstr, "$.inputs[0].access_type") access_type;
+SELECT json_extract(@jsonstr, "$.query_plan.inputs[0].access_type") access_type;
 
 # With various Accesspaths, verify that the estimated cost increases with rows,
 # aggregation functions and GROUP-BY or DISTINCT columns.

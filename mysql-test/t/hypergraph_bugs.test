@@ -1565,9 +1565,9 @@ ORDER BY -t1.x;
 --eval EXPLAIN FORMAT=JSON INTO @explain $query
 query_vertical
 SELECT
-  JSON_EXTRACT(@explain, '$.access_type') AS sort_for_order_by,
-  JSON_EXTRACT(@explain, '$.inputs[0].access_type') AS sort_for_distinct,
-  JSON_EXTRACT(@explain, '$.inputs[0].inputs[0].join_algorithm') AS hash_join;
+  JSON_EXTRACT(@explain, '$.query_plan.access_type') AS sort_for_order_by,
+  JSON_EXTRACT(@explain, '$.query_plan.inputs[0].access_type') AS sort_for_distinct,
+  JSON_EXTRACT(@explain, '$.query_plan.inputs[0].inputs[0].join_algorithm') AS hash_join;
 
 --eval $query
 

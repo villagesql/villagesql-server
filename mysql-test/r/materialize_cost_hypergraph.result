@@ -96,12 +96,12 @@ DETERMINISTIC
 main_block:
 BEGIN
 DECLARE childobj json;
-set childobj = rootobj->"$.inputs[0]";
+set childobj = rootobj->"$.query_plan.inputs[0]";
 return get_cost(childobj, jval);
 END
 ||
 EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_SMALL_RESULT avg(id) FROM tv s GROUP BY id2;
-SELECT json_extract(@jsonstr, "$.inputs[0].access_type") access_type;
+SELECT json_extract(@jsonstr, "$.query_plan.inputs[0].access_type") access_type;
 access_type
 "temp_table_aggregate"
 SELECT get_child_cost(@jsonstr, "$.estimated_total_cost") est INTO @cost1;
@@ -128,17 +128,17 @@ SELECT round(@cost4, 1);
 round(@cost4, 1)
 45.3
 EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_BIG_RESULT avg(id) FROM tv s GROUP BY id2;
-SELECT json_extract(@jsonstr, "$.access_type") access_type;
+SELECT json_extract(@jsonstr, "$.query_plan.access_type") access_type;
 access_type
 "aggregate"
-SELECT get_cost(@jsonstr, "$.estimated_total_cost") est INTO @cost1;
+SELECT get_cost(@jsonstr, "$.query_plan.estimated_total_cost") est INTO @cost1;
 EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_BIG_RESULT avg(id),avg(id) FROM tv s GROUP BY id2;
-SELECT get_cost(@jsonstr, "$.estimated_total_cost") est INTO @cost2;
+SELECT get_cost(@jsonstr, "$.query_plan.estimated_total_cost") est INTO @cost2;
 SELECT @cost1 < @cost2;
 @cost1 < @cost2
 1
 EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_BIG_RESULT avg(id),avg(id) FROM tv s GROUP BY id2, id3;
-SELECT get_cost(@jsonstr, "$.estimated_total_cost") est INTO @cost3;
+SELECT get_cost(@jsonstr, "$.query_plan.estimated_total_cost") est INTO @cost3;
 SELECT @cost2 < @cost3;
 @cost2 < @cost3
 1
@@ -147,15 +147,15 @@ ANALYZE TABLE tv;
 Table	Op	Msg_type	Msg_text
 test.tv	analyze	status	OK
 EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_BIG_RESULT avg(id),avg(id) FROM tv s GROUP BY id2, id3;
-SELECT get_cost(@jsonstr, "$.estimated_total_cost") est INTO @cost4;
+SELECT get_cost(@jsonstr, "$.query_plan.estimated_total_cost") est INTO @cost4;
 SELECT @cost3 < @cost4;
 @cost3 < @cost4
 1
 SELECT round(@cost4, 1);
 round(@cost4, 1)
-23.1
+83.5
 EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_SMALL_RESULT DISTINCT id FROM tv s;
-SELECT json_extract(@jsonstr, "$.inputs[0].access_type") access_type;
+SELECT json_extract(@jsonstr, "$.query_plan.inputs[0].access_type") access_type;
 access_type
 "materialize"
 SELECT get_child_cost(@jsonstr, "$.estimated_total_cost") est INTO @cost1;
@@ -178,7 +178,7 @@ round(@cost3, 1)
 53.3
 EXPLAIN FORMAT=JSON INTO @jsonstr WITH v AS
 (VALUES ROW(1) UNION ALL SELECT id FROM tv) SELECT * FROM v;
-SELECT json_extract(@jsonstr, "$.inputs[0].access_type") access_type;
+SELECT json_extract(@jsonstr, "$.query_plan.inputs[0].access_type") access_type;
 access_type
 "materialize"
 SELECT get_child_cost(@jsonstr, "$.estimated_total_cost") est INTO @cost1;
@@ -203,7 +203,7 @@ round(@cost3, 1)
 19.1
 EXPLAIN FORMAT=JSON INTO @jsonstr
 SELECT SQL_BIG_RESULT count(id) a FROM tv GROUP BY id ORDER BY a;
-SELECT json_extract(@jsonstr, "$.inputs[0].access_type") access_type;
+SELECT json_extract(@jsonstr, "$.query_plan.inputs[0].access_type") access_type;
 access_type
 "stream"
 SELECT get_child_cost(@jsonstr, "$.estimated_total_cost") est INTO @cost1;

@@ -767,44 +767,46 @@ FROM t1 WINDOW w as (ORDER BY id RANGE BETWEEN 1 FOLLOWING AND 2 FOLLOWING);
 EXPLAIN
 {
   "query": "/* select#1 */ select `test`.`t1`.`id` AS `id`,avg(`test`.`t1`.`id`) OVER `w` AS `avg`,sum(`test`.`t1`.`id`) OVER `w` AS `sum`,count(0) OVER `w` AS `cnt` from `test`.`t1` window `w` AS (ORDER BY `test`.`t1`.`id` RANGE BETWEEN 1 FOLLOWING AND 2 FOLLOWING) ",
-  "inputs": [
-    {
-      "inputs": [
-        {
-          "operation": "Table scan on t1",
-          "table_name": "t1",
-          "access_type": "table",
-          "schema_name": "test",
-          "used_columns": [
-            "id"
-          ],
-          "estimated_rows": 9.0,
-          "estimated_total_cost": 2.986175115207373,
-          "estimated_first_row_cost": 0.3317972350230415
-        }
-      ],
-      "operation": "Sort: t1.id",
-      "access_type": "sort",
-      "sort_fields": [
-        "t1.id"
-      ],
-      "estimated_rows": 9.0,
-      "estimated_total_cost": 7.017075000418735,
-      "estimated_first_row_cost": 7.017075000418735
-    }
-  ],
-  "buffering": true,
-  "functions": [
-    "avg(t1.id) OVER w",
-    "sum(t1.id) OVER w",
-    "count(0) OVER w"
-  ],
-  "operation": "Window aggregate with buffering: avg(t1.id) OVER w, sum(t1.id) OVER w, count(0) OVER w",
-  "query_type": "select",
-  "access_type": "window",
-  "estimated_rows": 9.0,
-  "estimated_total_cost": 9.090807719312744,
-  "estimated_first_row_cost": 7.247489746962514
+  "query_plan": {
+    "inputs": [
+      {
+        "inputs": [
+          {
+            "operation": "Table scan on t1",
+            "table_name": "t1",
+            "access_type": "table",
+            "schema_name": "test",
+            "used_columns": [
+              "id"
+            ],
+            "estimated_rows": 9.0,
+            "estimated_total_cost": 2.986175115207373,
+            "estimated_first_row_cost": 0.3317972350230415
+          }
+        ],
+        "operation": "Sort: t1.id",
+        "access_type": "sort",
+        "sort_fields": [
+          "t1.id"
+        ],
+        "estimated_rows": 9.0,
+        "estimated_total_cost": 7.017075000418735,
+        "estimated_first_row_cost": 7.017075000418735
+      }
+    ],
+    "buffering": true,
+    "functions": [
+      "avg(t1.id) OVER w",
+      "sum(t1.id) OVER w",
+      "count(0) OVER w"
+    ],
+    "operation": "Window aggregate with buffering: avg(t1.id) OVER w, sum(t1.id) OVER w, count(0) OVER w",
+    "access_type": "window",
+    "estimated_rows": 9.0,
+    "estimated_total_cost": 9.090807719312744,
+    "estimated_first_row_cost": 7.247489746962514
+  },
+  "query_type": "select"
 }
 EXPLAIN FORMAT=JSON SELECT /*+ SET_VAR(windowing_use_high_precision=OFF)*/
 d, AVG(d) over w `avg`, SUM(d) OVER w `sum`, COUNT(*) OVER w cnt
@@ -812,44 +814,46 @@ FROM t1 WINDOW w as (ORDER BY d RANGE BETWEEN 1 FOLLOWING AND 2 FOLLOWING);
 EXPLAIN
 {
   "query": "/* select#1 */ select /*+ SET_VAR(windowing_use_high_precision='OFF') */ `test`.`t1`.`d` AS `d`,avg(`test`.`t1`.`d`) OVER `w` AS `avg`,sum(`test`.`t1`.`d`) OVER `w` AS `sum`,count(0) OVER `w` AS `cnt` from `test`.`t1` window `w` AS (ORDER BY `test`.`t1`.`d` RANGE BETWEEN 1 FOLLOWING AND 2 FOLLOWING) ",
-  "inputs": [
-    {
-      "inputs": [
-        {
-          "operation": "Table scan on t1",
-          "table_name": "t1",
-          "access_type": "table",
-          "schema_name": "test",
-          "used_columns": [
-            "d"
-          ],
-          "estimated_rows": 9.0,
-          "estimated_total_cost": 2.986175115207373,
-          "estimated_first_row_cost": 0.3317972350230415
-        }
-      ],
-      "operation": "Sort: t1.d",
-      "access_type": "sort",
-      "sort_fields": [
-        "t1.d"
-      ],
-      "estimated_rows": 9.0,
-      "estimated_total_cost": 7.017075000418735,
-      "estimated_first_row_cost": 7.017075000418735
-    }
-  ],
-  "buffering": true,
-  "functions": [
-    "avg(t1.d) OVER w",
-    "sum(t1.d) OVER w",
-    "count(0) OVER w"
-  ],
-  "operation": "Window aggregate with buffering: avg(t1.d) OVER w, sum(t1.d) OVER w, count(0) OVER w",
-  "query_type": "select",
-  "access_type": "window",
-  "estimated_rows": 9.0,
-  "estimated_total_cost": 9.090807719312744,
-  "estimated_first_row_cost": 7.247489746962514
+  "query_plan": {
+    "inputs": [
+      {
+        "inputs": [
+          {
+            "operation": "Table scan on t1",
+            "table_name": "t1",
+            "access_type": "table",
+            "schema_name": "test",
+            "used_columns": [
+              "d"
+            ],
+            "estimated_rows": 9.0,
+            "estimated_total_cost": 2.986175115207373,
+            "estimated_first_row_cost": 0.3317972350230415
+          }
+        ],
+        "operation": "Sort: t1.d",
+        "access_type": "sort",
+        "sort_fields": [
+          "t1.d"
+        ],
+        "estimated_rows": 9.0,
+        "estimated_total_cost": 7.017075000418735,
+        "estimated_first_row_cost": 7.017075000418735
+      }
+    ],
+    "buffering": true,
+    "functions": [
+      "avg(t1.d) OVER w",
+      "sum(t1.d) OVER w",
+      "count(0) OVER w"
+    ],
+    "operation": "Window aggregate with buffering: avg(t1.d) OVER w, sum(t1.d) OVER w, count(0) OVER w",
+    "access_type": "window",
+    "estimated_rows": 9.0,
+    "estimated_total_cost": 9.090807719312744,
+    "estimated_first_row_cost": 7.247489746962514
+  },
+  "query_type": "select"
 }
 DROP TABLE t1;
 CALL test_hint("SET_VAR(windowing_use_high_precision=OFF)", "windowing_use_high_precision");

@@ -905,7 +905,6 @@ static unique_ptr<Json_object> ExplainQueryPlan(
     bool is_root_of_join) {
   string dml_desc;
   string access_type;
-  string query_type;
   unique_ptr<Json_object> obj = nullptr;
 
   /* Create a Json object for the SELECT path */
@@ -923,7 +922,6 @@ static unique_ptr<Json_object> ExplainQueryPlan(
         access_type = "insert_values";
         [[fallthrough]];
       case SQLCOM_INSERT_SELECT:
-        query_type = "insert";
         dml_desc = string("Insert into ") +
                    query_plan->get_lex()->insert_table_leaf->table->alias;
         break;
@@ -931,20 +929,14 @@ static unique_ptr<Json_object> ExplainQueryPlan(
         access_type = "replace_values";
         [[fallthrough]];
       case SQLCOM_REPLACE_SELECT:
-        query_type = "replace";
         dml_desc = string("Replace into ") +
                    query_plan->get_lex()->insert_table_leaf->table->alias;
         break;
       case SQLCOM_SELECT:
-        query_type = "select";
-        break;
       case SQLCOM_UPDATE:
       case SQLCOM_UPDATE_MULTI:
-        query_type = "update";
-        break;
       case SQLCOM_DELETE:
       case SQLCOM_DELETE_MULTI:
-        query_type = "delete";
         break;
       default:
         assert(false);
@@ -975,10 +967,6 @@ static unique_ptr<Json_object> ExplainQueryPlan(
       return nullptr;
     }
     obj = std::move(dml_obj);
-  }
-
-  if (!query_type.empty()) {
-    AddMemberToObject<Json_string>(obj, "query_type", query_type);
   }
 
   return obj;
@@ -2181,6 +2169,29 @@ unique_ptr<Json_object> ExplainNoAccessPath(const THD::Query_plan *query_plan) {
   return ret_obj;
 }
 
+static std::string GetQueryType(THD::Query_plan const *query_plan) {
+  if (query_plan == nullptr) return "";
+  switch (query_plan->get_command()) {
+    case SQLCOM_INSERT:
+    case SQLCOM_INSERT_SELECT:
+      return "insert";
+    case SQLCOM_REPLACE:
+    case SQLCOM_REPLACE_SELECT:
+      return "replace";
+    case SQLCOM_SELECT:
+      return "select";
+    case SQLCOM_UPDATE:
+    case SQLCOM_UPDATE_MULTI:
+      return "update";
+    case SQLCOM_DELETE:
+    case SQLCOM_DELETE_MULTI:
+      return "delete";
+    default:
+      assert(false);
+      return "";
+  }
+}
+
 std::string PrintQueryPlan(THD *ethd, const THD *query_thd,
                            Query_expression *unit) {
   JOIN *join = nullptr;
@@ -2193,9 +2204,13 @@ std::string PrintQueryPlan(THD *ethd, const THD *query_thd,
     join = unit->first_query_block()->join;
 
   /* Create a Json object for the plan */
-  unique_ptr<Json_object> obj =
+  unique_ptr<Json_object> query_plan_obj =
       ExplainQueryPlan(path, &query_thd->query_plan, join, is_root_of_join);
+  if (query_plan_obj == nullptr) return "";
+
+  unique_ptr<Json_object> obj = create_dom_ptr<Json_object>();
   if (obj == nullptr) return "";
+  if (obj->add_alias("query_plan", std::move(query_plan_obj))) return "";
 
   // Append the (rewritten) query string, if any.
   // Skip this if applicable. See print_query_for_explain() comments.
@@ -2206,6 +2221,11 @@ std::string PrintQueryPlan(THD *ethd, const THD *query_thd,
       if (AddMemberToObject<Json_string>(obj, "query", str.ptr(), str.length()))
         return "";
     }
+  }
+
+  string query_type = GetQueryType(&query_thd->query_plan);
+  if (!query_type.empty()) {
+    AddMemberToObject<Json_string>(obj, "query_type", query_type);
   }
 
   /*
@@ -2291,8 +2311,8 @@ string Explain_format_tree::ExplainJsonToString(Json_object *json) {
   vector<string> tokens_for_force_subplan;
   DBUG_EXECUTE_IF("subplan_tokens", token_ptr = &tokens_for_force_subplan;);
 #endif
-
-  this->ExplainPrintTreeNode(json, 0, &explain, token_ptr);
+  Json_dom *query_plan_json = json->get("query_plan");
+  this->ExplainPrintTreeNode(query_plan_json, 0, &explain, token_ptr);
   if (explain.empty()) return "";
 
   DBUG_EXECUTE_IF("subplan_tokens", {

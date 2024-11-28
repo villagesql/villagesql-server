@@ -711,3 +711,24 @@ SET @v1 = NULL;
 DROP TABLE t;
 
 SET @@explain_json_format_version = @saved_json_format_version;
+
+--echo #
+--echo # Bug#35239659 Separate query attributes and iterator attributes in iterator-based EXPLAIN JSON
+--echo #
+# Not many tests for this since it is tested every time the full JSONv2 format
+# is printed in a test
+
+SET @saved_json_format_version = @@explain_json_format_version;
+SET @@explain_json_format_version = 2;
+
+CREATE TABLE t (i INT);
+# Simple TREE EXPLAIN to show TREE output is not affected
+EXPLAIN FORMAT=TREE SELECT * FROM t t1 JOIN t t2 WHERE t1.i = t2.i;
+
+EXPLAIN FORMAT=JSON INTO @var SELECT * FROM t t1 JOIN t t2 WHERE t1.i = t2.i;
+SELECT JSON_KEYS(@var);
+
+DROP TABLE t;
+SET @var = NULL;
+
+SET @@explain_json_format_version = @saved_json_format_version;

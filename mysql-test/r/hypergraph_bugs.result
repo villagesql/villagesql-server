@@ -1918,9 +1918,9 @@ EXPLAIN FORMAT=JSON INTO @explain SELECT DISTINCT t1.x, t1.y
 FROM t AS t1, t AS t2 WHERE t1.x = t2.x
 ORDER BY -t1.x;
 SELECT
-JSON_EXTRACT(@explain, '$.access_type') AS sort_for_order_by,
-JSON_EXTRACT(@explain, '$.inputs[0].access_type') AS sort_for_distinct,
-JSON_EXTRACT(@explain, '$.inputs[0].inputs[0].join_algorithm') AS hash_join;
+JSON_EXTRACT(@explain, '$.query_plan.access_type') AS sort_for_order_by,
+JSON_EXTRACT(@explain, '$.query_plan.inputs[0].access_type') AS sort_for_distinct,
+JSON_EXTRACT(@explain, '$.query_plan.inputs[0].inputs[0].join_algorithm') AS hash_join;
 sort_for_order_by	"sort"
 sort_for_distinct	"sort"
 hash_join	"hash"

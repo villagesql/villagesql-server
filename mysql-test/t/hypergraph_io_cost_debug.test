@@ -12,8 +12,8 @@
 CREATE FUNCTION check_cost_ratio(plan1 JSON, plan2 JSON, ratio DOUBLE,
   tolerance DOUBLE)
   RETURNS BOOLEAN DETERMINISTIC
-  RETURN ABS(JSON_EXTRACT(plan1, "$.estimated_total_cost")
-         / JSON_EXTRACT(plan2, "$.estimated_total_cost") - ratio)
+  RETURN ABS(JSON_EXTRACT(plan1, "$.query_plan.estimated_total_cost")
+         / JSON_EXTRACT(plan2, "$.query_plan.estimated_total_cost") - ratio)
          < ratio * tolerance;
 
 SET @old_cte_max_recursion_depth=@@cte_max_recursion_depth;
