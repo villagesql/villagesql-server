@@ -39,6 +39,9 @@ namespace handler {
 
 class HandlerAuthorizeLogin : public mrs::rest::Handler {
  public:
+  using Session = http::SessionManager::Session;
+
+ public:
   HandlerAuthorizeLogin(const std::string &url_host,
                         const UniversalId service_id,
                         const std::string &rest_path_matcher,
@@ -62,8 +65,10 @@ class HandlerAuthorizeLogin : public mrs::rest::Handler {
   HttpResult handle_put(RequestContext *ctxt) override;
 
  private:
-  std::string append_status_parameters(RequestContext *ctxt,
-                                       const http::Error &error);
+  Session *get_session(RequestContext *ctxt);
+  std::string append_status_parameters(Session *session,
+                                       const http::Error &error) const;
+  void set_session_cookie(RequestContext *ctxt, Session *session) const;
 
   UniversalId service_id_;
   const std::string redirection_;

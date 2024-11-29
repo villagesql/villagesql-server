@@ -73,6 +73,7 @@ class Oauth2Handler : public interface::AuthorizeHandler {
     std::string refresh_token;
     std::string auth_code;
     std::string redirection;
+    std::string redirection_host;
     seconds expires;
     bool session_id_set{false};
     time_point acquired_at;
@@ -87,9 +88,10 @@ class Oauth2Handler : public interface::AuthorizeHandler {
   UniversalId get_id() const override;
 
   bool redirects(RequestContext &ctxt) const override;
-  bool is_authorized(Session *session, AuthUser *user) override;
   bool authorize(RequestContext &ctxt, Session *session,
                  AuthUser *out_user) override;
+  std::optional<std::string> get_session_id_from_request_data(
+      RequestContext &ctxt) override;
 
   class RequestHandlerJsonSimpleObject : public RequestHandler {
    public:

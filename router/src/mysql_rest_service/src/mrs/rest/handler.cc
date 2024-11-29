@@ -200,11 +200,12 @@ class RestRequestHandler : public ::http::base::RequestHandler {
       : rest_handler_{rest_handler}, auth_manager_{auth_manager} {}
 
   void trace_http(const char *type, interface::ReqRes &options,
-                  HttpMethod::key_type method, const HttpHeaders &headers,
-                  HttpBuffer &buffer) {
+                  HttpMethod::key_type method, const std::string &path,
+                  const HttpHeaders &headers, HttpBuffer &buffer) {
     if (options.header_) {
       log_info("HTTP %s method: %s", type,
                get_http_method_name(method).c_str());
+      log_info("HTTP %s path: %s", type, path.c_str());
 
       for (const auto &[k, v] : headers) {
         log_info("HTTP %s parameters: %s=%s", type, k.c_str(), v.c_str());
@@ -255,7 +256,9 @@ class RestRequestHandler : public ::http::base::RequestHandler {
         break;
     }
 
-    trace_http("Request", options.debug.http.request, method, ih,
+    trace_http("Request", options.debug.http.request, method,
+               ctxt.request->get_uri().join().c_str(), ih,
+
                ctxt.request->get_input_buffer());
 
     for (auto &kv : rest_handler_->get_options().parameters_) {
@@ -551,7 +554,7 @@ class RestRequestHandler : public ::http::base::RequestHandler {
     if (options.debug.http.response.body_)
       log_debug("HTTP Response status: %i", status_code);
 
-    trace_http("Response", options.debug.http.response, req.get_method(),
+    trace_http("Response", options.debug.http.response, req.get_method(), "",
                req.get_output_headers(), req.get_output_buffer());
     req.send_reply(status_code);
   }
@@ -562,7 +565,7 @@ class RestRequestHandler : public ::http::base::RequestHandler {
       log_debug("HTTP Response status: %i", status_code);
       log_debug("HTTP Response status text: %s", status_text.c_str());
     }
-    trace_http("Response", options.debug.http.response, req.get_method(),
+    trace_http("Response", options.debug.http.response, req.get_method(), "",
                req.get_output_headers(), req.get_output_buffer());
     req.send_reply(status_code, status_text);
   }
@@ -574,7 +577,7 @@ class RestRequestHandler : public ::http::base::RequestHandler {
       log_debug("HTTP Response status: %i", status_code);
       log_debug("HTTP Response status text: %s", status_text.c_str());
     }
-    trace_http("Response", options.debug.http.response, req.get_method(),
+    trace_http("Response", options.debug.http.response, req.get_method(), "",
                req.get_output_headers(), buffer);
     req.send_reply(status_code, status_text, buffer);
   }

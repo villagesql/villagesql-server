@@ -183,7 +183,7 @@ class RapidReaderHandlerToStruct
   }
 
  protected:
-  UserResult result_;
+  UserResult result_{};
 
   bool is_object_path() { return level_ > 0 && arrays_ == 0; }
   bool is_array_value() { return arrays_ > 0; }
@@ -246,10 +246,14 @@ class RapidReaderHandlerStringValuesToStruct
   virtual void handle_object_value(const std::string &key,
                                    const std::string &value) = 0;
 
+  virtual void handle_array_value(const std::string &, const std::string &) {}
+
   void handle_value(const std::string &vt) {
     const auto &key = Handler::get_current_key();
     if (Handler::is_object_path()) {
       handle_object_value(key, vt);
+    } else if (Handler::is_array_value()) {
+      handle_array_value(key, vt);
     }
   }
 

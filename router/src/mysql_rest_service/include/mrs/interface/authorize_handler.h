@@ -25,6 +25,9 @@
 #ifndef ROUTER_SRC_REST_MRS_SRC_MRS_INTERFACE_AUTHENTICATION_HANDLER_H_
 #define ROUTER_SRC_REST_MRS_SRC_MRS_INTERFACE_AUTHENTICATION_HANDLER_H_
 
+#include <optional>
+#include <string>
+
 #include "collector/mysql_cache_manager.h"
 #include "mrs/database/entry/auth_app.h"
 #include "mrs/database/entry/auth_user.h"
@@ -57,13 +60,14 @@ class AuthorizeHandler {
   virtual UniversalId get_id() const = 0;
   virtual const AuthApp &get_entry() const = 0;
 
-  virtual bool is_authorized(Session *session, AuthUser *user) = 0;
   virtual bool authorize(RequestContext &ctxt, Session *session,
                          AuthUser *out_user) = 0;
-
+  //  get_session_id_from_request_data
+  virtual std::optional<std::string> get_session_id_from_request_data(
+      RequestContext &ctxt) = 0;
   virtual void pre_authorize_account(
       [[maybe_unused]] AuthorizeHandler *handler,
-      [[maybe_unused]] const std::string &account) {}
+      [[maybe_unused]] const std::string &account) = 0;
 };
 
 }  // namespace interface

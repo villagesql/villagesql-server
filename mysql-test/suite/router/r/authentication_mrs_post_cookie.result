@@ -1,0 +1,139 @@
+# MySQL Rest Service schema created.
+# MySQL Rest Service, server accounts configured.
+# DB `basic_schema` - created
+
+
+## I. Create two services that have mrs authentication:
+#
+# 1. under first service create a schema that requires authentication
+#    and create two objects that don't require authentication, still
+#    they inherit authentication requirement from schema.
+# 2. under second service create a schema that doest require authentication
+#    and create two objects one of which requires authentication.
+#       srv1(mrs auth)->schema1(requires-auth)->object1(doesn't require)
+#       srv1(mrs auth)->schema1(requires-auth)->object2(doesn't require)
+#       srv2(mrs auth)->schema2(doesn't require)->object3(requires)
+#       srv2(mrs auth)->schema2(doesn't require)->object4(doesn't require)
+#
+## II. Verify that non authorized request
+#
+# 1. Have access to db-object (/srv2/schema2/object4)
+# 2. Doesn't have access to db-object (object1,object2,object3)
+#
+## III. Authenticate user1 against service: /srv1, and verify it
+#
+# 1. Have access to db-object (object1,object2,object4)
+# 2. Doesn't have access to db-object (object3)
+#
+## IV. Authenticate user2 against service: /srv2, and verify it
+#
+# 1. Have access to db-object (object3,object4)
+# 2. Doesn't have access to db-object (object1,object2)
+#
+#
+
+#
+# I.1
+# Registred SERVICE at path: /svc1
+# Registred DB_SCHEMA at path: /svc1/basic1
+# Registred DB_OBJECT at path: /svc1/basic1/o1
+# Registred DB_OBJECT at path: /svc1/basic1/o2
+# Registred AUTH APP at path: /svc1
+# Registred MRS USER: "svc1_usr"
+
+#
+# I.2
+# Registred SERVICE at path: /svc2
+# Registred DB_SCHEMA at path: /svc2/basic2
+# Registred DB_OBJECT at path: /svc2/basic2/o3
+# Registred DB_OBJECT at path: /svc2/basic2/o4
+# Registred AUTH APP at path: /svc2
+# Registred MRS USER: "svc2_usr"
+
+#
+# II.1
+GET /svc2/basic2/o4
+
+OK
+
+#
+# II.2
+GET /svc2/basic2/o3
+{
+    "message": "Unauthorized",
+    "status": 401
+}
+OK
+GET /svc1/basic1/o1
+{
+    "message": "Unauthorized",
+    "status": 401
+}
+OK
+GET /svc1/basic1/o2
+{
+    "message": "Unauthorized",
+    "status": 401
+}
+OK
+
+#
+# III.1
+GET /svc1/authentication/login
+{"message":"Unauthorized","status":"401"}
+OK
+GET /svc1/authentication/login
+
+OK
+GET /svc2/authentication/login
+
+OK
+GET /svc1/basic1/o1
+
+OK
+GET /svc1/basic1/o2
+
+OK
+GET /svc2/basic2/o4
+
+OK
+
+#
+# III.2
+GET /svc2/basic2/o3
+{
+    "message": "Unauthorized",
+    "status": 401
+}
+OK
+
+#
+# IV.1
+GET /svc2/basic2/o3
+
+OK
+
+#
+# IV.2
+GET /svc1/basic1/o1
+{
+    "message": "Unauthorized",
+    "status": 401
+}
+OK
+GET /svc1/basic1/o2
+{
+    "message": "Unauthorized",
+    "status": 401
+}
+OK
+GET /svc2/basic2/o4
+
+OK
+DROP SCHEMA basic_schema;
+DROP SCHEMA mysql_rest_service_metadata;
+DROP ROLE mysql_rest_service_admin;
+DROP ROLE mysql_rest_service_schema_admin;
+DROP ROLE mysql_rest_service_meta_provider;
+DROP ROLE mysql_rest_service_data_provider;
+DROP ROLE mysql_rest_service_dev;

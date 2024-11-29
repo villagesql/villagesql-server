@@ -66,6 +66,13 @@ Session *SessionManager::new_session(const SessionId &session_id) {
   return sessions_.back().get();
 }
 
+Session *SessionManager::get_session_secondary_id(const SessionId &id) {
+  std::lock_guard<std::mutex> lck{mutex_};
+  auto result = get_session_handler_specific_id_impl(id);
+
+  return result;
+}
+
 Session *SessionManager::get_session(const SessionId &id) {
   std::lock_guard<std::mutex> lck{mutex_};
   auto result = get_session_impl(id);
@@ -111,19 +118,30 @@ void SessionManager::remove_session(const Session *session) {
   if (it != sessions_.end()) sessions_.erase(it);
 }
 
-Session *SessionManager::get_session_impl(const SessionId &id) {
-  Session *result{nullptr};
+Session *SessionManager::get_session_handler_specific_id_impl(
+    const SessionId &id) {
+  remove_timeouted_impl();
 
+  for (auto &session : sessions_) {
+    if (session->handler_secondary_id == id) {
+      return session.get();
+    }
+  }
+
+  return nullptr;
+}
+
+Session *SessionManager::get_session_impl(const SessionId &id) {
   remove_timeouted_impl();
 
   for (auto &session : sessions_) {
     if (session->get_session_id() == id) {
-      result = session.get();
+      return session.get();
       break;
     }
   }
 
-  return result;
+  return nullptr;
 }
 
 std::string SessionManager::generate_session_id_impl() {

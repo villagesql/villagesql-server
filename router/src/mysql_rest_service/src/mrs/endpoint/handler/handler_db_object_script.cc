@@ -175,7 +175,7 @@ class HandlerDbObjectScript::Impl {
           if (params_map->has_key(el.name)) {
             parameters.emplace_back(params_map->at(el.name));
           } else {
-            parameters.emplace_back(shcore::Value());
+            parameters.emplace_back();
           }
         }
       }

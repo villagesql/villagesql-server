@@ -81,8 +81,9 @@ class ParseFileSharingOptions
 
  public:
   template <typename ValueType, typename Container>
-  bool push_value(const std::string &starts, const std::string &key,
-                  const ValueType &vt, Container *push_to) {
+  bool push_value_when_matches(const std::string &starts,
+                               const std::string &key, const ValueType &vt,
+                               Container *push_to) {
     if (helper::starts_with(key, starts)) {
       push_key_value(push_to, key.substr(starts.length()), to_string(vt));
       return true;
@@ -93,7 +94,8 @@ class ParseFileSharingOptions
   template <typename ValueType>
   void handle_array_value(const std::string &key, const ValueType &vt) {
     static const std::string kHttpContent = "directoryIndexDirective.";
-    push_value(kHttpContent, key, vt, &result_.directory_index_directive_);
+    push_value_when_matches(kHttpContent, key, vt,
+                            &result_.directory_index_directive_);
   }
 
   template <typename ValueType>
@@ -102,9 +104,12 @@ class ParseFileSharingOptions
     static const std::string kHttpRedirects = "defaultRedirects.";
     using std::to_string;
 
-    if (!push_value(kHttpContent, key, vt, &result_.default_static_content_)) {
-      push_value(kHttpRedirects, key, vt, &result_.default_redirects_);
-    }
+    if (push_value_when_matches(kHttpContent, key, vt,
+                                &result_.default_static_content_))
+      return;
+
+    push_value_when_matches(kHttpRedirects, key, vt,
+                            &result_.default_redirects_);
   }
 
   template <typename ValueType>

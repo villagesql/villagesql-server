@@ -26,6 +26,7 @@
 
 #include <cstring>
 #include <fstream>
+#include <iostream>
 
 #include "helper/string/contains.h"
 #include "mysql/harness/string_utils.h"
@@ -55,7 +56,9 @@ void HttpClientSession::fill_request_headers(HttpHeaders *h) const {
     all_values += c.first + "=" + c.second;
   }
 
-  if (!all_values.empty()) h->add("Cookie", all_values.c_str());
+  if (!all_values.empty()) {
+    h->add("Cookie", all_values.c_str());
+  }
 }
 
 void HttpClientSession::analyze_response_headers(const HttpHeaders *h) {

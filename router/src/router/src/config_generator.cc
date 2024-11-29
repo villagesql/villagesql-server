@@ -2231,7 +2231,7 @@ void add_rest_section(
                                              "rest_router");
     ADD_CONFIG_LINE_CHECKED(rest_router_section, "require_realm",
                             std::string(kHttpDefaultAuthRealmName),
-                            rest_plugin_supported_options);
+                            plugin_supported_options);
   }
 
   {
@@ -2250,7 +2250,7 @@ void add_rest_section(
                                               "rest_routing");
     ADD_CONFIG_LINE_CHECKED(rest_routing_section, "require_realm",
                             std::string(kHttpDefaultAuthRealmName),
-                            rest_plugin_supported_options);
+                            plugin_supported_options);
   }
 
   // if this is a innodb cluster
@@ -2259,7 +2259,7 @@ void add_rest_section(
         config_file, config_cmdln_options, "rest_metadata_cache");
     ADD_CONFIG_LINE_CHECKED(rest_metadata_cache_section, "require_realm",
                             std::string(kHttpDefaultAuthRealmName),
-                            rest_plugin_supported_options);
+                            plugin_supported_options);
   }
 }
 

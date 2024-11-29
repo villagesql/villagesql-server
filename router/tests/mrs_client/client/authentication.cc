@@ -24,20 +24,91 @@
 
 #include "client/authentication.h"
 
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+#include <openssl/sha.h>
+
 #include "helper/container/map.h"
 #include "helper/http/url.h"
 #include "helper/json/rapid_json_to_struct.h"
 #include "helper/json/serializer_to_text.h"
 #include "helper/json/text_to.h"
+#include "helper/json/to_string.h"
 #include "helper/string/hex.h"
 #include "helper/string/random.h"
 
+#include "mysql/harness/string_utils.h"
 #include "mysqlrouter/base64.h"
 #include "mysqlrouter/component/http_auth_method_basic.h"
+
+#include "mrs_client_debug.h"
 
 namespace mrs_client {
 
 namespace {
+
+void debugln_struct(int idx, const Result &result) {
+  mrs_debugln("status ", idx, ":", result.status);
+  mrs_debugln("Body   ", idx, ":", result.body);
+
+  for (auto h : result.headers) {
+    mrs_debugln("header  ", idx, ": key=", h.first, ", value=", h.second);
+  }
+}
+
+void calculate_sha256(const unsigned char *client_key,
+                      unsigned char *stored_key, int size) {
+  SHA256(client_key, size, stored_key);
+}
+
+void calculate_hmac(const unsigned char *key, int key_len,
+                    const unsigned char *data, int data_len,
+                    unsigned char *result, unsigned int *result_len) {
+  HMAC(EVP_sha256(), key, key_len, data, data_len, result, result_len);
+}
+
+void calculate_xor(const unsigned char *a, const unsigned char *b,
+                   unsigned char *out, int len) {
+  for (int i = 0; i < len; i++) {
+    out[i] = a[i] ^ b[i];
+  }
+}
+
+std::string compute_client_proof(std::string password, std::string salt,
+                                 int iterations, std::string auth_message) {
+  unsigned char salted_password[SHA256_DIGEST_LENGTH];
+  unsigned char client_key[SHA256_DIGEST_LENGTH];
+  unsigned char stored_key[SHA256_DIGEST_LENGTH];
+  unsigned char client_signature[SHA256_DIGEST_LENGTH];
+  unsigned int len;
+  std::string client_proof(SHA256_DIGEST_LENGTH, '\0');
+  std::string client_key_str{"Client Key"};
+
+  // Generate SaltedPassword using PBKDF2
+  if (!PKCS5_PBKDF2_HMAC(password.data(), password.length(),
+                         (unsigned char *)salt.data(), salt.length(),
+                         iterations, EVP_sha256(), SHA256_DIGEST_LENGTH,
+                         salted_password)) {
+    throw std::runtime_error("Error generating SaltedPassword.");
+  }
+
+  calculate_hmac(salted_password, SHA256_DIGEST_LENGTH,
+                 (unsigned char *)client_key_str.data(),
+                 client_key_str.length(), client_key, &len);
+
+  calculate_sha256(client_key, stored_key, SHA256_DIGEST_LENGTH);
+
+  calculate_hmac(stored_key, SHA256_DIGEST_LENGTH,
+                 (unsigned char *)auth_message.data(), auth_message.length(),
+                 client_signature, &len);
+
+  // Compute ClientProof = ClientKey XOR ClientSignature
+  calculate_xor(client_key, client_signature,
+                (unsigned char *)client_proof.data(), SHA256_DIGEST_LENGTH);
+
+  return client_proof;
+}
+
 void add_authorization_header(HttpClientRequest *request,
                               const std::string &user,
                               const std::string &password) {
@@ -71,44 +142,59 @@ struct JsonResponse {
   std::optional<std::string> session_id;
 };
 
-namespace cvt {
-using std::to_string;
-const std::string &to_string(const std::string &str) { return str; }
-}  // namespace cvt
+struct JsonChallange {
+  std::optional<int> iterations;
+  std::optional<std::string> nonce;
+  std::optional<std::vector<uint8_t>> salt;
+};
 
 class ParseJsonResponse
-    : public helper::json::RapidReaderHandlerToStruct<JsonResponse> {
+    : public helper::json::RapidReaderHandlerStringValuesToStruct<
+          JsonResponse> {
  public:
-  template <typename ValueType>
-  void handle_object_value(const std::string &key, const ValueType &vt) {
+  void handle_object_value(const std::string &key,
+                           const std::string &vt) override {
     if (key == "accessToken") {
-      result_.access_token = cvt::to_string(vt);
+      result_.access_token = vt;
     } else if (key == "sessionId") {
-      result_.session_id = cvt::to_string(vt);
+      result_.session_id = vt;
+    }
+  }
+};
+
+class ParseJsonRawChallenge
+    : public helper::json::RapidReaderHandlerStringValuesToStruct<std::string> {
+ public:
+  void handle_object_value(const std::string &key,
+                           const std::string &vt) override {
+    if (key == "data") {
+      result_ = vt;
+    }
+  }
+};
+
+class ParseJsonObjectChallenge
+    : public helper::json::RapidReaderHandlerStringValuesToStruct<
+          JsonChallange> {
+ public:
+  void handle_object_value(const std::string &key,
+                           const std::string &vt) override {
+    mrs_debugln("handle_object_value key:", key, ", var:", vt);
+    if (key == "iterations") {
+      result_.iterations = atoi(vt.c_str());
+    } else if (key == "nonce") {
+      result_.nonce = vt;
     }
   }
 
-  template <typename ValueType>
-  void handle_value(const ValueType &vt) {
-    const auto &key = get_current_key();
-    if (is_object_path()) {
-      handle_object_value(key, vt);
+  void handle_array_value(const std::string &key,
+                          const std::string &vt) override {
+    mrs_debugln("handle_array_value key:", key, ", var:", vt);
+    if (key == "salt.salt") {
+      if (!result_.salt.has_value()) result_.salt = std::vector<uint8_t>();
+
+      result_.salt.value().push_back(atoi(vt.c_str()));
     }
-  }
-
-  bool String(const Ch *v, rapidjson::SizeType v_len, bool) override {
-    handle_value(std::string{v, v_len});
-    return true;
-  }
-
-  bool RawNumber(const Ch *v, rapidjson::SizeType v_len, bool) override {
-    handle_value(std::string{v, v_len});
-    return true;
-  }
-
-  bool Bool(bool v) override {
-    handle_value(v);
-    return true;
   }
 };
 
@@ -126,6 +212,8 @@ Result Authentication::do_basic_flow(HttpClientRequest *request,
 
   bool set_new_cookies = st == SessionType::kCookie;
   auto result = request->do_request(HttpMethod::Get, url, {}, set_new_cookies);
+
+  debugln_struct(1, result);
 
   if (result.status == HttpStatusCode::NotFound) return result;
 
@@ -185,6 +273,8 @@ Result Authentication::do_basic_json_flow(HttpClientRequest *request,
       get_authorization_json(user, password, use_jwt, u.get_query_elements());
   auto result = request->do_request(HttpMethod::Post, url, body, use_cookies);
 
+  debugln_struct(1, result);
+
   if (result.status != HttpStatusCode::Ok) return result;
 
   auto [access_token, session_id] =
@@ -224,15 +314,68 @@ Result Authentication::do_basic_json_flow(HttpClientRequest *request,
 
 class Scram {
  public:
+  struct Challenge {
+    std::string nonce;
+    std::string salt;
+    std::string iterations;
+  };
   using Base64NoPadd =
       Base64Base<Base64Alphabet::Base64Url, Base64Endianess::BIG, true, '='>;
+  using Base64Data =
+      Base64Base<Base64Alphabet::Base64, Base64Endianess::BIG, true, '='>;
 
   std::string get_initial_auth_data(const std::string &user) {
     const static std::string kParameterAuthData = "data";
     using namespace std::string_literals;
-    client_first_ = "n="s + user + ",r=" + generate_nonce(10);
+    initial_nonce_ = generate_nonce(10);
+    client_first_ = "n="s + user + ",r=" + initial_nonce_;
     return kParameterAuthData + "=" +
            Base64NoPadd::encode(as_array("n,," + client_first_));
+  }
+
+  void parse_auth_data_phase1(const JsonChallange &data) {
+    std::string result{};
+
+    result.append("r=").append(data.nonce.value());
+    result.append(",s=").append(Base64::encode(data.salt.value()));
+    result.append(",i=").append(std::to_string(data.iterations.value()));
+
+    parse_auth_data_phase1(result);
+  }
+
+  void parse_auth_data_phase1(const std::string &data) {
+    auto elements = mysql_harness::split_string(data, ',', true);
+    std::map<std::string, std::string> result;
+    for (const auto &e : elements) {
+      auto idx = e.find("=");
+      if (idx == std::string::npos) continue;
+      result[e.substr(0, idx)] = e.substr(idx + 1);
+    }
+
+    if (!result.count("r"))
+      throw std::runtime_error("Challenge response doesn't contain 'r' field.");
+    if (!result.count("s"))
+      throw std::runtime_error("Challenge response doesn't contain 's' field.");
+    if (!result.count("i"))
+      throw std::runtime_error("Challenge response doesn't contain 'i' field.");
+
+    challenge_.nonce = result["r"];
+    auto a = Base64Data::decode(result["s"]);
+    challenge_.salt = std::string{a.begin(), a.end()};
+    challenge_.iterations = result["i"];
+    server_first_ = data;
+    client_final_ = std::string("r=") + challenge_.nonce;
+  }
+
+  std::string calculate_proof(const std::string &pass) {
+    std::string auth_msg{client_first_ + "," + server_first_ + "," +
+                         client_final_};
+
+    proof_ = compute_client_proof(
+        pass, challenge_.salt, atoi(challenge_.iterations.c_str()), auth_msg);
+    auto proof64 = Base64Data::encode(proof_);
+    auto auth_data = client_final_ + ",p=" + proof64;
+    return "state=response&data=" + Base64NoPadd::encode(auth_data);
   }
 
   std::string as_string(const std::vector<unsigned char> &c) {
@@ -248,60 +391,161 @@ class Scram {
         helper::generate_string<helper::Generator8bitsValues>(size));
   }
 
+  std::string proof_;
+  std::string initial_nonce_;
   std::string client_first_;
+  std::string server_first_;
+  std::string client_final_;
+  Challenge challenge_;
 };
 
-Result Authentication::do_scram_flow(HttpClientRequest *request,
-                                     std::string url, const std::string &user,
-                                     const std::string &,
-                                     const SessionType st) {
+auto check_bearer_cookies(const Result &result, bool must_have_cookies,
+                          bool must_have_token) {
+  int found_cookies{0};
+  for (auto &kv : result.headers) {
+    if (kv.first == "Set-Cookie") {
+      ++found_cookies;
+    }
+  }
+
+  auto [access_token, session_id] =
+      helper::json::text_to_handler<ParseJsonResponse>(result.body);
+
+  if (must_have_cookies && !found_cookies)
+    throw std::runtime_error("Expected cookie sets, but there were none.");
+  if (!must_have_cookies && found_cookies)
+    throw std::runtime_error("Expected no cookie sets, but there " +
+                             std::to_string(found_cookies) + ".");
+
+  if (must_have_token && !access_token.has_value())
+    throw std::runtime_error("Expected token, but it was not set.");
+
+  if (!must_have_token && access_token.has_value())
+    throw std::runtime_error("Expected no token, but it was set.");
+
+  return access_token;
+}
+
+Result Authentication::do_scram_post_flow(HttpClientRequest *request,
+                                          std::string url,
+                                          const std::string &user,
+                                          const std::string &password,
+                                          const SessionType st) {
+  using JsonObject = std::map<std::string, std::string>;
   Scram scram;
 
-  url = url + "?" + scram.get_initial_auth_data(user);
-  //  if (st == SessionType::kJWT) {
-  //    url = url + "?sessionType=bearer";
-  //  }
+  scram.get_initial_auth_data(user);
 
+  JsonObject request_data{
+      {"sessionType", (st == SessionType::kJWT ? "bearer" : "cookie")},
+      {"user", user},
+      {"nonce", scram.initial_nonce_}};
+
+  // TODO(lkotula): check if response has expected number of cookies or bearers
+  // (depending on options)
   bool set_new_cookies = st == SessionType::kCookie;
-  auto result = request->do_request(HttpMethod::Get, url, {}, set_new_cookies);
+  auto result = request->do_request(HttpMethod::Post, url,
+                                    helper::json::to_string(request_data),
+                                    set_new_cookies);
 
   if (result.status == HttpStatusCode::NotFound) return result;
 
-  if (result.status != HttpStatusCode::TemporaryRedirect)
+  if (result.status != HttpStatusCode::Ok &&
+      result.status != HttpStatusCode::Unauthorized &&
+      result.status != HttpStatusCode::TemporaryRedirect)
     throw std::runtime_error(
-        "Expected redirection flow, received other status code.");
+        std::to_string(result.status) +
+        ", Expected status Ok|Unauthorized with payload, received other status "
+        "code.");
 
-  auto location = find_in_headers(result.headers, "Location");
-  if (location.empty())
+  debugln_struct(1, result);
+
+  check_bearer_cookies(result, false, false);
+
+  auto data =
+      helper::json::text_to_handler<ParseJsonObjectChallenge>(result.body);
+  if (!data.nonce.has_value() || !data.iterations.has_value() ||
+      !data.salt.has_value()) {
     throw std::runtime_error(
-        "HTTP redirect, doesn't contain `Location` header.");
+        "The challenge message is missing required fields.");
+  }
 
-  // Parameter value
-  std::string pvalue;
-  http::base::Uri u(location);
-  std::map<std::string, std::string> parameters;
+  scram.parse_auth_data_phase1(data);
+  scram.calculate_proof(password);
 
-  helper::http::Url helper_uri(u);
+  JsonObject request_continue{{"state", "response"},
+                              {"clientProof", scram.proof_},
+                              {"nonce", scram.challenge_.nonce}};
 
-  if (!helper_uri.get_if_query_parameter("login", &pvalue))
-    throw std::runtime_error(
-        "HTTP redirect, doesn't contain `login` query parameter.");
+  result = request->do_request(HttpMethod::Post, url,
+                               helper::json::to_string(request_continue),
+                               set_new_cookies);
 
-  if (pvalue != "success")
-    throw std::runtime_error("HTTP redirect, points that login failed.");
+  debugln_struct(2, result);
 
-  if (st == SessionType::kJWT) {
-    pvalue.clear();
-    if (!helper_uri.get_if_query_parameter("accessToken", &pvalue)) {
-      throw std::runtime_error(
-          "HTTP redirect, doesn't contain `accessToken` query parameter.");
-    }
+  if (result.status != HttpStatusCode::Ok) return result;
 
-    if (pvalue.empty())
-      throw std::runtime_error(
-          "HTTP redirect, doesn't contain valid JWT token.");
+  auto access_token =
+      check_bearer_cookies(result, set_new_cookies, !set_new_cookies);
+
+  if (!set_new_cookies && access_token.has_value()) {
     std::string header{"Authorization:Bearer "};
-    header += pvalue;
+    header += access_token.value();
+    request->get_session()->add_header(&header[0]);
+  }
+
+  return {HttpStatusCode::Ok, {}, {}};
+}
+
+Result Authentication::do_scram_get_flow(HttpClientRequest *request,
+                                         std::string url,
+                                         const std::string &user,
+                                         const std::string &password,
+                                         const SessionType st) {
+  Scram scram;
+
+  auto url_init = url + "?" + scram.get_initial_auth_data(user);
+  if (st == SessionType::kJWT) {
+    url_init = url_init + "&sessionType=bearer";
+  }
+
+  // TODO(lkotula): check if response has expected number of cookies or bearers
+  // (depending on options)
+  bool set_new_cookies = st == SessionType::kCookie;
+  auto result =
+      request->do_request(HttpMethod::Get, url_init, {}, set_new_cookies);
+
+  if (result.status == HttpStatusCode::NotFound) return result;
+
+  if (result.status != HttpStatusCode::Unauthorized &&
+      result.status != HttpStatusCode::TemporaryRedirect)
+    throw std::runtime_error(
+        std::to_string(result.status) +
+        ", Expected status Unauthorized with payload, received other status "
+        "code.");
+
+  debugln_struct(1, result);
+
+  check_bearer_cookies(result, false, false);
+
+  auto data = helper::json::text_to_handler<ParseJsonRawChallenge>(result.body);
+
+  scram.parse_auth_data_phase1(data);
+
+  auto url_final = url + "?" + scram.calculate_proof(password);
+
+  result = request->do_request(HttpMethod::Get, url_final, {}, set_new_cookies);
+
+  debugln_struct(2, result);
+
+  if (result.status != HttpStatusCode::Ok) return result;
+
+  auto access_token =
+      check_bearer_cookies(result, set_new_cookies, !set_new_cookies);
+
+  if (!set_new_cookies && access_token.has_value()) {
+    std::string header{"Authorization:Bearer "};
+    header += access_token.value();
     request->get_session()->add_header(&header[0]);
   }
 

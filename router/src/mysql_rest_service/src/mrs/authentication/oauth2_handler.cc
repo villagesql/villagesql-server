@@ -161,6 +161,9 @@ void Oauth2Handler::new_session_start_login(RequestContext &ctxt,
   // The host is extended with protocol prefix, for example "http://"
   auto url = ctxt.get_http_url();
 
+  log_debug("entry_.url_host = %s", entry_.url_host.c_str());
+  log_debug("entry_.host = %s", entry_.host.c_str());
+
   std::string uri;
   if (!entry_.url_host.empty()) {
     uri = entry_.host + url.get_path();
@@ -168,13 +171,14 @@ void Oauth2Handler::new_session_start_login(RequestContext &ctxt,
     auto host_cstr = ctxt.get_in_headers().find_cstr(":authority");
     uri = entry_.host + (host_cstr ? host_cstr : "localhost") + url.get_path();
   }
+  auto data = new GenericSessionData();
+  session->set_data(data);
+  data->redirection_host = uri;
 
   if (url.get_query().length()) {
     uri += "?" + url.get_query();
   }
 
-  auto data = new GenericSessionData();
-  session->set_data(data);
   data->redirection = uri;
   log_debug("Oauth2Handler new SessionData: redirection=%s",
             data->redirection.c_str());
@@ -184,17 +188,6 @@ void Oauth2Handler::new_session_start_login(RequestContext &ctxt,
 
   // Redirect the web-browser to `get_url_location` URL.
   throw http::ErrorRedirect(get_url_location(data, &url));
-}
-
-bool Oauth2Handler::is_authorized(Session *session, AuthUser *user) {
-  log_debug("is_authorized session=%p, state=%i", session, session->state);
-
-  if (session->state != Session::kUserVerified) return false;
-
-  *user = session->user;
-  log_debug("is_authorized session-user:%s", user->user_id.to_string().c_str());
-
-  return true;
 }
 
 bool Oauth2Handler::authorize(RequestContext &ctxt, Session *session,
@@ -276,6 +269,11 @@ bool Oauth2Handler::authorize(RequestContext &ctxt, Session *session,
   }
 
   return false;
+}
+
+std::optional<std::string> Oauth2Handler::get_session_id_from_request_data(
+    RequestContext &) {
+  return {};
 }
 
 bool Oauth2Handler::http_verify_account(Session *session,

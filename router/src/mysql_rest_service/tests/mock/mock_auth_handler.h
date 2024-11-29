@@ -36,8 +36,12 @@ class MockAuthHandler : public mrs::interface::AuthorizeHandler {
   MOCK_METHOD(bool, authorize,
               (RequestContext & ctxt, Session *session, AuthUser *out_user),
               (override));
-  MOCK_METHOD(bool, is_authorized, (Session * session, AuthUser *user),
+  MOCK_METHOD(void, pre_authorize_account,
+              (mrs::interface::AuthorizeHandler * handler,
+               const std::string &account),
               (override));
+  MOCK_METHOD(std::optional<std::string>, get_session_id_from_request_data,
+              (RequestContext & ctxt), (override));
 };
 
 #endif  // ROUTER_SRC_REST_MRS_TESTS_MOCK_AUTH_HANDLER_H_

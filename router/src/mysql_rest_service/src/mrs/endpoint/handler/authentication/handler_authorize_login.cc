@@ -41,6 +41,7 @@ namespace mrs {
 namespace endpoint {
 namespace handler {
 
+using Session = HandlerAuthorizeLogin::Session;
 using HttpResult = HandlerAuthorizeLogin::HttpResult;
 using Url = helper::http::Url;
 
@@ -76,33 +77,49 @@ uint32_t HandlerAuthorizeLogin::get_access_rights() const {
   return Op::valueRead | Op::valueCreate;
 }
 
-HttpResult HandlerAuthorizeLogin::handle_get(
-    RequestContext *ctxt) {  // TODO(lkotula): Add status to redirection URL:
-                             // (Shouldn't be in review)
-  // ?status=ok|failure
-  // &status=ok|failure
-  auto uri = append_status_parameters(ctxt, {HttpStatusCode::Ok});
-  // Generate the response by the default handler.
+void HandlerAuthorizeLogin::set_session_cookie(RequestContext *ctxt,
+                                               Session *session) const {
+  auto session_cookie_key =
+      ctxt->auth_manager_->get_session_cookie_key_name(get_service_id());
+  http::Cookie::SameSite same_site = http::Cookie::None;
+  ctxt->cookies.set(session_cookie_key, session->get_session_id(),
+                    http::Cookie::duration{0}, "/", &same_site, true, true, {});
+}
 
-  log_debug("HandlerAuthorizeLogin::handle_get - before redirects");
-  if (ctxt->selected_handler->redirects(*ctxt))
-    http::redirect_and_throw(ctxt->request, uri);
-  log_debug("HandlerAuthorizeLogin::handle_get - no redirects");
+HttpResult HandlerAuthorizeLogin::handle_get(RequestContext *ctxt) {
+  auto session = get_session(ctxt);
 
-  auto session = authorization_manager_->get_current_session(
-      get_service_id(), ctxt->request->get_input_headers(), &ctxt->cookies);
+  log_debug("HandlerAuthorizeLogin::handle_get - before redirects %s",
+            ctxt->session_id.value_or("(nil)").c_str());
 
-  if (session && session->generate_token) {
-    log_debug("HandlerAuthorizeLogin::handle_get - post");
-    auto jwt_token =
-        authorization_manager_->get_jwt_token(get_service_id(), session);
-    session->generate_token = false;
-    return HttpResult(HttpStatusCode::Ok,
-                      helper::json::to_string({{"accessToken", jwt_token}}),
-                      helper::MediaType::typeJson);
+  if (!session) {
+    throw http::Error(HttpStatusCode::Unauthorized);
   }
 
-  return {};
+  if (ctxt->selected_handler->redirects(*ctxt)) {
+    set_session_cookie(ctxt, session);
+
+    auto uri = append_status_parameters(session, {HttpStatusCode::Ok});
+    http::redirect_and_throw(ctxt->request, uri);
+  }
+
+  log_debug(
+      "HandlerAuthorizeLogin::handle_get - no redirects (session:%p, "
+      "generate:%s)",
+      session, (session ? (session->generate_token ? "yes" : "no") : "(nill)"));
+
+  if (!session->generate_token) {
+    set_session_cookie(ctxt, session);
+    return HttpResult(HttpStatusCode::Ok, "{}", helper::MediaType::typeJson);
+  }
+
+  log_debug("HandlerAuthorizeLogin::handle_get - post");
+  auto jwt_token =
+      authorization_manager_->get_jwt_token(get_service_id(), session);
+  session->generate_token = false;
+  return HttpResult(HttpStatusCode::Ok,
+                    helper::json::to_string({{"accessToken", jwt_token}}),
+                    helper::MediaType::typeJson);
 }
 
 HttpResult HandlerAuthorizeLogin::handle_post(RequestContext *ctxt,
@@ -131,11 +148,14 @@ static const char *get_authentication_status(HttpStatusCode::key_type code) {
   }
 }
 
-std::string HandlerAuthorizeLogin::append_status_parameters(
-    RequestContext *ctxt, const http::Error &error) {
-  auto session = authorization_manager_->get_current_session(
-      get_service_id(), ctxt->request->get_input_headers(), &ctxt->cookies);
+Session *HandlerAuthorizeLogin::get_session(RequestContext *ctxt) {
+  if (!ctxt->session_id.has_value()) return nullptr;
 
+  return authorization_manager_->get_current_session(ctxt->session_id.value());
+}
+
+std::string HandlerAuthorizeLogin::append_status_parameters(
+    Session *session, const http::Error &error) const {
   std::string jwt_token;
   if (session && session->generate_token &&
       error.status == HttpStatusCode::Ok) {
@@ -173,12 +193,21 @@ std::string HandlerAuthorizeLogin::append_status_parameters(
 bool HandlerAuthorizeLogin::request_error(RequestContext *ctxt,
                                           const http::Error &error) {
   if (HttpMethod::Options == ctxt->request->get_method()) return false;
+
   if (ctxt->post_authentication) return false;
+
+  if (error.status == HttpStatusCode::TemporaryRedirect ||
+      error.status == HttpStatusCode::TooManyRequests)
+    return false;
   // Oauth2 authentication may redirect, allow it.
   Url url(ctxt->request->get_uri());
 
-  auto session = authorization_manager_->get_current_session(
-      get_service_id(), ctxt->request->get_input_headers(), &ctxt->cookies);
+  auto session = get_session(ctxt);
+
+  log_debug(
+      "HandlerAuthorizeLogin::request_error - trying to overwrite  the error: "
+      "%i with redirect",
+      (int)error.status);
 
   if (session) {
     log_debug("session->onRedirect=url_param->onRedirect");
@@ -187,12 +216,9 @@ bool HandlerAuthorizeLogin::request_error(RequestContext *ctxt,
     url.get_if_query_parameter("onCompletionClose",
                                &session->users_on_complete_timeout);
   }
-  if (error.status == HttpStatusCode::TemporaryRedirect ||
-      error.status == HttpStatusCode::TooManyRequests)
-    return false;
 
   // Redirect to original/first page that redirected to us.
-  auto uri = append_status_parameters(ctxt, error);
+  auto uri = append_status_parameters(session, error);
   ctxt->request->send_reply(http::redirect(ctxt->request, uri.c_str()));
   authorization_manager_->discard_current_session(get_service_id(),
                                                   &ctxt->cookies);

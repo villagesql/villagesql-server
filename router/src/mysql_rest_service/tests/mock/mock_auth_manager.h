@@ -53,6 +53,9 @@ class MockAuthManager : public mrs::interface::AuthorizeManager {
   MOCK_METHOD(Container, get_supported_authentication_applications, (ServiceId),
               (override));
   MOCK_METHOD(void, clear, (), (override));
+  MOCK_METHOD(Session *, get_current_session, (SessionId id), (override));
+  MOCK_METHOD(std::string, get_session_cookie_key_name,
+              (const AuthorizeManager::ServiceId id), (override));
 };
 
 #endif  // ROUTER_SRC_REST_MRS_TESTS_MOCK_MOCK_AUTH_MANAGER_H_

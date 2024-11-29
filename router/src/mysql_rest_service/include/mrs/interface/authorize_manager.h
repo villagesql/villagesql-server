@@ -54,6 +54,7 @@ namespace interface {
 
 class AuthorizeManager {
  public:
+  using SessionId = http::SessionManager::SessionId;
   using Session = http::SessionManager::Session;
   using SqlSessionCached = collector::MysqlCacheManager::CachedObject;
   using AuthorizeHandlerPtr = std::shared_ptr<AuthorizeHandler>;
@@ -76,6 +77,7 @@ class AuthorizeManager {
   virtual bool unauthorize(ServiceId id, http::Cookie *cookies) = 0;
   virtual void configure(const std::string &options) = 0;
   virtual std::string get_jwt_token(ServiceId service_id, Session *s) = 0;
+  virtual Session *get_current_session(SessionId id) = 0;
   virtual Session *get_current_session(ServiceId id,
                                        const HttpHeaders &input_headers,
                                        http::Cookie *cookies) = 0;
@@ -87,6 +89,9 @@ class AuthorizeManager {
 
   virtual collector::MysqlCacheManager *get_cache() = 0;
   virtual void clear() = 0;
+
+  virtual std::string get_session_cookie_key_name(
+      const AuthorizeManager::ServiceId id) = 0;
 };
 
 }  // namespace interface

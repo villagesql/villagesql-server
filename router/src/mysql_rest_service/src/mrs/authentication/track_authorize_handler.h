@@ -55,10 +55,6 @@ class TrackAuthorizeHandler : public Handler {
 
   const AuthApp &get_entry() const override { return Handler::get_entry(); }
 
-  bool is_authorized(Session *session, AuthUser *user) override {
-    return Handler::is_authorized(session, user);
-  }
-
   bool authorize(RequestContext &ctxt, Session *session,
                  AuthUser *out_user) override {
     return Handler::authorize(ctxt, session, out_user);
@@ -66,8 +62,9 @@ class TrackAuthorizeHandler : public Handler {
 
   void pre_authorize_account(AuthorizeHandler *handler,
                              const std::string &account) override {
+    log_debug("TrackAuthorizeHandler::pre_authorize_account %s",
+              account.c_str());
     cb_->pre_authorize_account(handler, account);
-    Handler::pre_authorize_account(handler, account);
   }
 
  private:

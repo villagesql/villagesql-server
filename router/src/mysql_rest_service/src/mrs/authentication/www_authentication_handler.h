@@ -64,9 +64,11 @@ class WwwAuthenticationHandler : public interface::AuthorizeHandler {
   void throw_add_www_authenticate(const char *schema);
 
   bool redirects(RequestContext &ctxt) const override;
-  bool is_authorized(Session *session, AuthUser *user) override;
   bool authorize(RequestContext &ctxt, Session *session,
                  AuthUser *out_user) override;
+  std::optional<std::string> get_session_id_from_request_data(
+      RequestContext &) override;
+
   const AuthApp &get_entry() const override;
 
  public:

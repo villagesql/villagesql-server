@@ -72,6 +72,8 @@ std::string g_executable;
 CmdArgHandler g_cmd_handler{};
 http_client::ApplicationConfiguration g_configuration;
 
+bool mrs_client_app_debug{false};
+
 static std::string decode_from_url_query_escaping(const std::string &value) {
   std::string decoded;
   int val;
@@ -181,6 +183,7 @@ static bool authentication_type_convert(
       {"basic", AuthenticationType::kBasic},
       {"basic_json", AuthenticationType::kBasicJson},
       {"scram_get", AuthenticationType::kScramGet},
+      {"scram_post", AuthenticationType::kScramPost},
       {"oauth2_f", AuthenticationType::kOauth2}};
 
   mysql_harness::lower(value);
@@ -804,9 +807,14 @@ static Result execute_http_flow(HttpClientRequest *request,
                             g_configuration.session_type);
       } break;
       case http_client::AuthenticationType::kScramGet: {
-        r = b.do_scram_flow(request, path, g_configuration.user,
-                            g_configuration.password,
-                            g_configuration.session_type);
+        r = b.do_scram_get_flow(request, path, g_configuration.user,
+                                g_configuration.password,
+                                g_configuration.session_type);
+      } break;
+      case http_client::AuthenticationType::kScramPost: {
+        r = b.do_scram_post_flow(request, path, g_configuration.user,
+                                 g_configuration.password,
+                                 g_configuration.session_type);
       } break;
 
       default: {
@@ -932,8 +940,17 @@ static void validate_result(Result &result) {
   if (json_filter && doc.IsNull()) result.body = "";
 }
 
+static bool is_debug_log_enabled() {
+  auto d = getenv("DEBUG");
+  if (!d) return false;
+
+  return 0 == strcmp(d, "1") || 0 == strcmp(d, "true") ||
+         0 == strcmp(d, "TRUE");
+}
+
 int main_app(int argc, char *argv[]) {
   MY_INIT(argv[0]);
+  mrs_client_app_debug = is_debug_log_enabled();
   g_executable = argv[0];
   std::vector<std::string> arguments;
 

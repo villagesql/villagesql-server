@@ -179,6 +179,7 @@ SaslResult ScramHandler::client_initial_response(RequestContext &ctxt,
   }
   session_data->nonce +=
       helper::generate_string<kServerNonceLength, GeneratorNonceCharacters>();
+  session->handler_secondary_id = session_data->nonce;
 
   if (!session_data->ksi.is_valid)
     return SaslResult(get_problem_description(HttpStatusCode::Unauthorized,
@@ -189,7 +190,6 @@ SaslResult ScramHandler::client_initial_response(RequestContext &ctxt,
       static_cast<uint32_t>(session_data->ksi.iterations), session_data->nonce};
   auto auth_continue =
       session_data->scram->set_challange(challange, session->get_session_id());
-
   if (!is_json) {
     return SaslResult(get_problem_description(HttpStatusCode::Unauthorized,
                                               "Solve challenge",
@@ -197,12 +197,6 @@ SaslResult ScramHandler::client_initial_response(RequestContext &ctxt,
   }
 
   return {HttpResult{auth_continue, HttpResult::Type::typeJson}};
-}
-
-// TODO(lkotula): Moved from AuthManager (Shouldn't be in review)
-static std::string get_session_cookie_key_name(const UniversalId id) {
-  using namespace std::literals::string_literals;
-  return "session_"s + id.to_string();
 }
 
 const char *to_string(const bool b) { return b ? "yes" : "no"; }
@@ -221,17 +215,9 @@ SaslResult ScramHandler::client_response(RequestContext &ctxt, Session *session,
   auto auth_continue = session_data->scram->set_continue(auth_data);
   if (!auth_continue.session.empty() &&
       (session->get_session_id() != auth_continue.session)) {
-    auto session_cookie_key = get_session_cookie_key_name(get_service_id());
-    http::Cookie::SameSite same_site = http::Cookie::None;
-    ctxt.cookies.set(session_cookie_key, session->get_session_id(),
-                     http::Cookie::duration{0}, "/", &same_site, true, true,
-                     {});
-    session = ctxt.auth_manager_->get_current_session(
-        get_service_id(), ctxt.get_in_headers(), &ctxt.cookies);
+    return SaslResult(get_problem_description(HttpStatusCode::Unauthorized));
   }
 
-  if (!session)
-    return SaslResult(get_problem_description(HttpStatusCode::Unauthorized));
   session_data = session->get_data<ScramSessionData>();
   if (!session_data->scram || session_data->scram->is_json() != is_json)
     return SaslResult(get_problem_description(HttpStatusCode::Unauthorized));
@@ -265,6 +251,18 @@ SaslResult ScramHandler::client_response(RequestContext &ctxt, Session *session,
 bool ScramHandler::redirects(RequestContext &) const {
   log_debug("ScramHandler::redirects - false");
   return false;
+}
+
+std::optional<std::string> ScramHandler::get_session_id_from_request_data(
+    RequestContext &ctxt) {
+  auto [state, auth_data, is_json] = get_authorize_data(ctxt);
+  if (AuthenticationStateResponse == state) {
+    auto scram_parser = create_scram_parser(is_json);
+    auto auth_continue = scram_parser->set_continue(auth_data);
+
+    if (!auth_continue.nonce.empty()) return auth_continue.nonce;
+  }
+  return {};
 }
 
 }  // namespace authentication

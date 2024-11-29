@@ -25,6 +25,10 @@
 #ifndef ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_REQUESTCONTEXT_H_
 #define ROUTER_SRC_REST_MRS_SRC_MRS_REST_HANDLER_REQUESTCONTEXT_H_
 
+#include <memory>
+#include <optional>
+#include <string>
+
 #include "collector/mysql_cache_manager.h"
 #include "helper/http/url.h"
 #include "http/base/request.h"
@@ -38,10 +42,10 @@ namespace mrs {
 namespace rest {
 
 struct RequestContext {
-  using SqlSessionCached = collector::MysqlCacheManager::CachedObject;
-  using AuthUser = mrs::database::entry::AuthUser;
-  using Url = helper::http::Url;
-  using HeaderAccept = mrs::http::HeaderAccept;
+  using SqlSessionCached = ::collector::MysqlCacheManager::CachedObject;
+  using AuthUser = ::mrs::database::entry::AuthUser;
+  using Url = ::helper::http::Url;
+  using HeaderAccept = ::mrs::http::HeaderAccept;
   using Request = ::http::base::Request;
   using Headers = ::http::base::Headers;
 
@@ -54,6 +58,7 @@ struct RequestContext {
         accepts{get_in_headers().find_cstr("Accept")} {}
 
   Request *request{nullptr};
+  std::optional<std::string> session_id;
   http::Cookie cookies{request};
   SqlSessionCached sql_session_cache;
   interface::AuthorizeManager *auth_manager_;

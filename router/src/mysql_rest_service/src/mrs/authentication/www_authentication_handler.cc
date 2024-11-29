@@ -101,23 +101,6 @@ bool WwwAuthenticationHandler::redirects(RequestContext &ctxt) const {
   return !ctxt.post_authentication;
 }
 
-bool WwwAuthenticationHandler::is_authorized(Session *session, AuthUser *user) {
-  log_debug("WwwAuthenticationHandler::is_authorized");
-  // TODO(lkotula): Right now we do not need to get the session_data (Shouldn't
-  // be in review)
-  auto session_data = session->get_data<WwwAuthSessionData>();
-  if (!session_data) return false;
-  if (session->state != Session::kUserVerified) {
-    log_debug("WwwAuth: user not verified");
-    return false;
-  }
-
-  log_debug("is_authorized returned true");
-  *user = session->user;
-
-  return true;
-}
-
 bool WwwAuthenticationHandler::authorize(RequestContext &ctxt, Session *session,
                                          AuthUser *out_user) {
   log_debug("WwwAuth: Authorize user");
@@ -147,6 +130,11 @@ bool WwwAuthenticationHandler::authorize(RequestContext &ctxt, Session *session,
   if (HttpMethod::Get == method) throw_add_www_authenticate(kBasicSchema);
 
   return false;
+}
+
+std::optional<std::string>
+WwwAuthenticationHandler::get_session_id_from_request_data(RequestContext &) {
+  return {};
 }
 
 static std::string find_header_or(const ::http::base::Headers &headers,

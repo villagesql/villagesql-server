@@ -98,6 +98,7 @@ class SessionManager {
     std::string users_on_complete_url_redirection;
     std::string users_on_complete_timeout;
     std::string handler_name;
+    std::string handler_secondary_id;
     AuthUser user;
 
    private:
@@ -110,6 +111,7 @@ class SessionManager {
   using SessionPtr = std::unique_ptr<Session>;
 
  public:
+  Session *get_session_secondary_id(const SessionId &id);
   Session *get_session(const SessionId &id);
   Session *new_session(const AuthorizationHandlerId id);
   Session *new_session(const SessionId &session_id);
@@ -124,6 +126,8 @@ class SessionManager {
   // Methods with postfix "_impl" at end of method name, marks that the methods
   // doesn't use mutexes, thus it should be used after locking `mutex_` object.
   Session *get_session_impl(const SessionId &id);
+  Session *get_session_handler_specific_id_impl(const SessionId &id);
+
   SessionId generate_session_id_impl();
   void remove_timeouted_impl();
 

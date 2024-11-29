@@ -55,13 +55,13 @@ Oauth2FacebookHandler::~Oauth2FacebookHandler() {
   log_debug("~Oauth2FacebookHandler for service %s", to_string(entry_).c_str());
 }
 
-std::string Oauth2FacebookHandler::get_url_location(GenericSessionData *,
+std::string Oauth2FacebookHandler::get_url_location(GenericSessionData *session,
                                                     Url *url) const {
   std::string result{!entry_.url.empty()
                          ? entry_.url
                          : "https://www.facebook.com/v12.0/dialog/oauth"};
 
-  std::string uri = get_host_alias() + url->get_path();
+  std::string uri = session->redirection_host + url->get_path();
 
   if (url->get_query().length()) {
     url->remove_query_parameter("onCompletionRedirect");

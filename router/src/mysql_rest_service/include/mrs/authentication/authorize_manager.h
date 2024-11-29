@@ -84,6 +84,7 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
                      AuthUser *user) override;
 
   std::string get_jwt_token(UniversalId service_id, Session *s) override;
+  Session *get_current_session(SessionId id) override;
   Session *get_current_session(ServiceId id, const HttpHeaders &input_headers,
                                http::Cookie *cookies) override;
   void discard_current_session(ServiceId id, http::Cookie *cookies) override;
@@ -91,6 +92,8 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
   collector::MysqlCacheManager *get_cache() override { return cache_manager_; }
   Container get_supported_authentication_applications(ServiceId id) override;
   void clear() override;
+  std::string get_session_cookie_key_name(
+      const AuthorizeManager::ServiceId id) override;
 
  private:
   AuthorizeHandlerPtr make_auth(const AuthApp &entry);
@@ -107,7 +110,8 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
    *
    * @returns session id, for found or just created session.
    */
-  std::string authorize(const UniversalId service_id, const helper::Jwt &jwt);
+  std::optional<std::string> authorize_jwt(const UniversalId service_id,
+                                           const helper::Jwt &jwt);
 
  private:  // AuthorizeHandlerCallbacks
   void pre_authorize_account(interface::AuthorizeHandler *handler,

@@ -88,17 +88,6 @@ bool SaslHandler::redirects(RequestContext &) const {
   return false;
 }
 
-bool SaslHandler::is_authorized(Session *session, AuthUser *user) {
-  log_debug("is_authorized session=%p, state=%i", session, session->state);
-
-  if (session->state != Session::kUserVerified) return false;
-
-  *user = session->user;
-  log_debug("is_authorized session-user:%s", user->user_id.to_string().c_str());
-
-  return true;
-}
-
 const static std::string kParameterAuthData = "data";
 
 AuthenticationState get_authentication_state_impl(const std::string &s) {
@@ -140,7 +129,7 @@ SaslData SaslHandler::get_authorize_data(RequestContext &ctxt) {
     auto &ib = ctxt.request->get_input_buffer();
     auto ib_len = ib.length();
     if (0 == ib_len) return {AuthenticationStateInvalid, "", false};
-    std::string data = as_string(ib.pop_front(ib_len));
+    std::string data = as_string(ib.copy(ib_len));
     auto [state_name, has_other_data] =
         helper::json::text_to_handler<JsonGetState>(data);
     auto state = get_authentication_state_impl(state_name);

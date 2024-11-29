@@ -59,6 +59,19 @@ HttpResult HandlerAuthorizeUser::handle_put(RequestContext *ctxt) {
 
   rapidjson::Document doc;
 
+  if (!ctxt->session_id.has_value()) {
+    throw http::Error(HttpStatusCode::BadRequest,
+                      "This endpoint requires authenticated user.");
+  }
+
+  auto session =
+      authorization_manager_->get_current_session(ctxt->session_id.value());
+
+  if (!session) {
+    throw http::Error(HttpStatusCode::BadRequest,
+                      "This endpoint requires unexpired session.");
+  }
+
   if (!helper::json::text_to(&doc, input) || !doc.IsObject())
     throw http::Error(HttpStatusCode::BadRequest,
                       "PUT value isn't a JSON object.");
@@ -85,10 +98,8 @@ HttpResult HandlerAuthorizeUser::handle_put(RequestContext *ctxt) {
           &ctxt->user, &ctxt->sql_session_cache)) {
     throw http::Error(HttpStatusCode::InternalError);
   }
-  auto session = authorization_manager_->get_current_session(
-      get_service_id(), ctxt->request->get_input_headers(), &ctxt->cookies);
 
-  if (session) session->user = ctxt->user;
+  session->user = ctxt->user;
 
   return {};
 }

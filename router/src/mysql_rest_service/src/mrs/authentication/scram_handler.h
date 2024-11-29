@@ -36,6 +36,8 @@ class ScramHandler : public SaslHandler {
   ScramHandler(const AuthApp &entry, const std::string &random_data);
 
   bool redirects(RequestContext &ctxt) const override;
+  std::optional<std::string> get_session_id_from_request_data(
+      RequestContext &) override;
 
   SessionData *allocate_session_data() override;
 
@@ -51,7 +53,7 @@ class ScramHandler : public SaslHandler {
 
  private:
   std::string get_salt_for_the_user(const std::string &user_name) const;
-  const std::string &random_data_;
+  const std::string random_data_;
 };
 
 }  // namespace authentication
