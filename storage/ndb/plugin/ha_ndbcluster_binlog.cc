@@ -5332,7 +5332,7 @@ NdbEventOperation *Ndb_binlog_client::create_event_op_in_NDB(
       if (opt_server_id_bits != 32 || opt_ndb_log_apply_status ||
           opt_ndb_log_orig) {
         // Conditions for enabling filter of replica updates in NDB are not met
-        ndb_log_warning("Binlog: not filtering replica updates in NDB");
+        log_warning(ER_GET_ERRMSG, "Not filtering replica updates in NDB");
       } else {
         ndb_log_info("Binlog: filter replica updates in NDB");
         op->setFilterAnyvalueMySQLNoReplicaUpdates();
@@ -5361,6 +5361,14 @@ NdbEventOperation *Ndb_binlog_client::create_event_op_in_NDB(
           op->setCustomData(nullptr);
           ndb->dropEventOperation(op);
           return nullptr;
+        }
+
+        if (event_data->have_fk || event_data->have_uk) {
+          log_warning(
+              ER_GET_ERRMSG,
+              "Logging row slice for table with Foreign Key or Unique "
+              "Key. May not contain all modifications to uphold constraints on "
+              "apply.");
         }
 
         // all good
