@@ -1739,6 +1739,8 @@ double Item_func_numhybrid::val_real() {
       my_decimal decimal_value, *val;
       double result;
       if (!(val = decimal_op(&decimal_value))) return 0.0;  // null is set
+      my_decimal_round(E_DEC_FATAL_ERROR, val, decimals, /*truncate=*/false,
+                       val);
       my_decimal2double(E_DEC_FATAL_ERROR, val, &result);
       return result;
     }
@@ -1818,6 +1820,10 @@ my_decimal *Item_func_numhybrid::val_decimal(my_decimal *decimal_value) {
   switch (hybrid_type) {
     case DECIMAL_RESULT:
       val = decimal_op(decimal_value);
+      if (val != nullptr && val->frac > decimals) {
+        my_decimal_round(E_DEC_FATAL_ERROR, val, decimals, /*truncate=*/false,
+                         val);
+      }
       break;
     case INT_RESULT: {
       const longlong result = int_op();
