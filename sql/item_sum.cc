@@ -1881,7 +1881,7 @@ Field *Item_sum_hybrid::create_tmp_field(bool group, TABLE *table) {
       break;
     case MYSQL_TYPE_TIME:
       field = new (*THR_MALLOC)
-          Field_timef(is_nullable(), item_name.ptr(), decimals);
+          Field_time(is_nullable(), item_name.ptr(), decimals);
       break;
     case MYSQL_TYPE_TIMESTAMP:
       field = new (*THR_MALLOC)

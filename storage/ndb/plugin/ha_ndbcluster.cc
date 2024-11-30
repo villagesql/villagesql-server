@@ -8361,7 +8361,7 @@ static int create_ndb_column(THD *thd, NDBCOL &col, Field *field,
       col.setLength(1);
       break;
     case MYSQL_TYPE_TIME2: {
-      Field_timef *f = (Field_timef *)field;
+      Field_time *f = down_cast<Field_time *>(field);
       uint prec = f->decimals();
       col.setType(NDBCOL::Time2);
       col.setLength(1);

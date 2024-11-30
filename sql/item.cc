@@ -6568,7 +6568,7 @@ Field *Item::tmp_table_field_from_field_type(TABLE *table,
       break;
     case MYSQL_TYPE_TIME:
       field =
-          new (*THR_MALLOC) Field_timef(m_nullable, item_name.ptr(), decimals);
+          new (*THR_MALLOC) Field_time(m_nullable, item_name.ptr(), decimals);
       break;
     case MYSQL_TYPE_TIMESTAMP:
       field = new (*THR_MALLOC)

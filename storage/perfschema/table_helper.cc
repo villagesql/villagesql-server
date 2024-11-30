@@ -352,14 +352,14 @@ char *get_field_date(Field *f, char *val, uint *len) {
 /* TIME TYPE */
 void set_field_time(Field *f, const char *value, uint len) {
   assert(f->real_type() == MYSQL_TYPE_TIME2);
-  auto *f2 = (Field_timef *)f;
+  auto *f2 = down_cast<Field_time *>(f);
   f2->store(value, len, system_charset_info);
 }
 
 char *get_field_time(Field *f, char *val, uint *len) {
   assert(f->real_type() == MYSQL_TYPE_TIME2);
   String temp;
-  const auto *f2 = (Field_timef *)f;
+  const auto *f2 = down_cast<Field_time *>(f);
   f2->val_str(&temp, nullptr);
   *len = temp.length();
   strncpy(val, temp.ptr(), *len);
