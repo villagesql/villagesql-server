@@ -25,6 +25,7 @@
 #ifndef ROUTER_TESTS_MRS_CLIENT_MRS_CLIENT_DEBUG_H_
 #define ROUTER_TESTS_MRS_CLIENT_MRS_CLIENT_DEBUG_H_
 
+#include <iostream>
 #include <utility>
 
 extern bool mrs_client_app_debug;
