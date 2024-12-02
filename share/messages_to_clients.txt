@@ -10551,6 +10551,11 @@ ER_INVALID_OUTER_REFERENCE
 ER_LIBRARIES_NOT_SUPPORTED
   eng "Libraries are not supported for %s."
 
+ER_LH_WARN_SUMMARY
+  eng "%s"
+
+ER_LH_WARN_INFER_USE_DEFAULT_DELIMITERS
+  eng "Feature Auto delimiter detection is skipped (%s)."
 #
 #  End of 9.x error messages (server-to-client).
 #
