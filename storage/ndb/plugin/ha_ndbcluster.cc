@@ -2374,7 +2374,7 @@ int ha_ndbcluster::add_table_ndb_record(NdbDictionary::Dictionary *dict) {
   }
 
   rec = dict->createRecord(
-      m_table, spec, colId, sizeof(spec[0]),
+      m_table, (colId > 0) ? spec : nullptr, colId, sizeof(spec[0]),
       NdbDictionary::RecMysqldBitfield | NdbDictionary::RecPerColumnFlags);
   if (!rec) ERR_RETURN(dict->getNdbError());
   m_ndb_record = rec;
