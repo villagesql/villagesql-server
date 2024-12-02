@@ -401,6 +401,7 @@ get_expected_destinations_fields(int expected_destinations_num) {
   return result;
 }
 
+#ifndef _WIN32
 static const RestApiComponentTest::json_verifiers_t
 get_expected_destinations_socket_fields(int expected_destinations_num) {
   RestApiComponentTest::json_verifiers_t result{
@@ -422,6 +423,7 @@ get_expected_destinations_socket_fields(int expected_destinations_num) {
 
   return result;
 }
+#endif  // _WIN32
 
 static RestApiComponentTest::json_verifiers_t get_expected_blocked_hosts_fields(
     const int expected_blocked_hosts) {
