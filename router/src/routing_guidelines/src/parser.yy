@@ -191,6 +191,13 @@ using Rtype = routing_guidelines::rpn::Token::Type;
 
 %token <func> T_FUNCTION   "function name"
 
+%destructor {
+    if ($$) {
+      delete $$;
+      $$ = nullptr;
+    }
+} explist
+
 %%
 
 %start unit;

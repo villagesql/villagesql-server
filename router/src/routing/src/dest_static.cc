@@ -27,7 +27,8 @@
 StaticDestinationsManager::StaticDestinationsManager(
     routing::RoutingStrategy strategy, net::io_context &io_ctx,
     MySQLRoutingContext &routing_ctx)
-    : DestinationManager(io_ctx, routing_ctx) {
+    : DestinationManager(io_ctx, routing_ctx),
+      protocol_{routing_ctx.get_protocol()} {
   switch (strategy) {
     case routing::RoutingStrategy::kRoundRobin:
       strategy_handler_ = std::make_unique<Round_robin_strategy>();
@@ -85,7 +86,7 @@ std::unique_ptr<Destination> StaticDestinationsManager::get_next_destination(
   if (dest.is_tcp()) {
     const auto dest_tcp = dest.as_tcp();
     server_info.address = dest_tcp.hostname();
-    if (routing_ctx_.get_protocol() == Protocol::Type::kClassicProtocol) {
+    if (protocol_ == Protocol::Type::kClassicProtocol) {
       server_info.port = dest_tcp.port();
     } else {
       server_info.port_x = dest_tcp.port();

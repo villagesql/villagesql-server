@@ -650,10 +650,9 @@ TEST_F(Routing_guidelines_parser_test, logical_operations) {
   EXPECT_F("NOT 7");
 
   EXPECT_T("2+2 > 2-2 AND Abba < Beatles");
-  // EXPECT_T("2/2 < 2%4 AND NOT Abba >= Beatles");
-  // EXPECT_F("2*2 <= 2%4 OR Abba >= $.mysql");
-  // EXPECT_T("$.a/2 <= 2%4 OR Abba <= Beatles");
-#if 0
+  EXPECT_T("2/2 < 2%4 AND NOT Abba >= Beatles");
+  EXPECT_F("2*2 <= 2%4 OR Abba >= $.mysql");
+  EXPECT_T("$.a/2 <= 2%4 OR Abba <= Beatles");
 
   // Conditional execution of second part of the logical expression
   ctx.set("wrong_address", "matata");
@@ -674,7 +673,6 @@ TEST_F(Routing_guidelines_parser_test, logical_operations) {
   EXPECT_T(
       "$.a <> 10 and $.postgres in (REPLICA, SECONDARY) or $.a * 7 > 3 or 12 "
       "% -$.a > 777");
-#endif
 }
 
 TEST_F(Routing_guidelines_parser_test, in_operator) {

@@ -135,6 +135,9 @@ class StaticDestinationsManager final : public DestinationManager {
   /** @brief List of destinations */
   DestVector destinations_;
   Destination last_destination_;
+
+  /** @brief Protocol for the endpoint */
+  Protocol::Type protocol_;
 };
 
 #endif  // ROUTING_DEST_STATIC_INCLUDED

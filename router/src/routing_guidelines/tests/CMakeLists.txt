@@ -42,3 +42,24 @@ TARGET_INCLUDE_DIRECTORIES(routertest_routing_guidelines_classifier PRIVATE
 FILE(GLOB TEST_FILES RELATIVE
   ${CMAKE_CURRENT_SOURCE_DIR}/data data/simulator/*.json)
 COPY_TEST_FILES(${CMAKE_CURRENT_SOURCE_DIR}/data "${TEST_FILES}")
+
+IF(LIBFUZZER_COMPILE_FLAGS)
+  MYSQL_ADD_EXECUTABLE(routertest_fuzz_routing_guidelines_parser
+    fuzz_parser.cc
+    ../src/rules_parser.cc
+    ../src/routing_guidelines.cc
+    ../src/rpn.cc
+    ../src/utils.cc
+    ${CMAKE_CURRENT_BINARY_DIR}/../src/parser.cc
+    COMPONENT Router
+    LINK_LIBRARIES
+      harness-library  # string_format
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+    SKIP_INSTALL
+    )
+  TARGET_INCLUDE_DIRECTORIES(routertest_fuzz_routing_guidelines_parser
+    PRIVATE $<TARGET_PROPERTY:routing_guidelines-objects,INCLUDE_DIRECTORIES>)
+
+  LIBFUZZER_ADD_TEST(routertest_fuzz_routing_guidelines_parser
+    INITIAL_CORPUS_DIR ${CMAKE_CURRENT_SOURCE_DIR}/corpus_parser)
+ENDIF()

@@ -418,8 +418,12 @@ void Rules_parser::emit_log_operation(rpn::Token::Type type, double arg_split,
 
 bool Rules_parser::emit_in_op(const Exp_info &e, List_info *list,
                               YYLTYPE *llocp, Exp_info *ret) {
+  Scope_guard guard([&]() {
+    delete list;
+    list = nullptr;
+  });
+
   using Type = rpn::Token::Type;
-  std::unique_ptr<std::vector<Exp_info>> list_wrapper(list);
   ret->type = Type::BOOL;
   ret->toks = e.toks + 1;
   for (size_t i = 0; i < list->size(); i++) {
@@ -511,7 +515,10 @@ bool Rules_parser::emit_like_op(const Exp_info &str, const Exp_info &pat,
 bool Rules_parser::emit_function(const rpn::Function_definition *function,
                                  List_info *arguments, YYLTYPE *llocp,
                                  Exp_info *ret) {
-  std::unique_ptr<std::vector<Exp_info>> list_wrapper(arguments);
+  Scope_guard guard([&]() {
+    delete arguments;
+    arguments = nullptr;
+  });
 
   assert(function != nullptr);
   std::string name{function->name};
