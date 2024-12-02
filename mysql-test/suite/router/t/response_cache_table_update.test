@@ -29,14 +29,11 @@ update mysql_rest_service_metadata.config set data = json_merge_patch(data, '{"r
 # options - Enable caching for t2
 --let $mrs_add_db_object=table2
 --let $mrs_add_db_object_path=/t2
---let $mrs_add_db_object_options='{"cacheTimeToLive":15,"logging":{"exceptions":true, "request":{"headers":true, "body":true}, "response":{"headers":true, "body":true}}}'
+--let $mrs_add_db_object_options='{"result": {"cacheTimeToLive":15},"logging":{"exceptions":true, "request":{"headers":true, "body":true}, "response":{"headers":true, "body":true}}}'
 --source ../include/mrs/db_object/add.inc
 
 --source ../include/mrs/end_object_definition.inc
 
-
---let $mrs_host_and_port=127.0.0.1:$HTTP_SERVER_PORT
---let MRS_CLIENT_ARGS=$MRS_CLIENT --url https://$mrs_host_and_port
 
 --exec $MRS_CLIENT_ARGS --path /svc/basic/t2/1 --wait-until-found=60 --display none
 

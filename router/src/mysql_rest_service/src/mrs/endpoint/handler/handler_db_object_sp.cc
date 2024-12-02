@@ -197,9 +197,9 @@ HandlerDbObjectSP::HandlerDbObjectSP(
     std::weak_ptr<DbObjectEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager,
     mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache,
-    mrs::ResponseCache *response_cache, int64_t cache_ttl_ms)
-    : HandlerDbObjectTable{endpoint, auth_manager,   gtid_manager,
-                           cache,    response_cache, cache_ttl_ms} {}
+    mrs::ResponseCache *response_cache)
+    : HandlerDbObjectTable{endpoint, auth_manager, gtid_manager, cache,
+                           response_cache} {}
 
 HttpResult HandlerDbObjectSP::handle_put(
     [[maybe_unused]] rest::RequestContext *ctxt) {

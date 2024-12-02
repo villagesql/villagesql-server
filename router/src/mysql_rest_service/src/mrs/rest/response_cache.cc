@@ -211,7 +211,7 @@ int ResponseCache::remove_all(EndpointResponseCache *cache) {
 }
 
 EndpointResponseCache::EndpointResponseCache(ResponseCache *owner,
-                                             int64_t ttl_ms)
+                                             uint64_t ttl_ms)
     : owner_(owner), ttl_(std::chrono::milliseconds(ttl_ms)) {
   Counter<kEntityCounterRestCachedEndpoints>::increment();
 }
@@ -289,7 +289,7 @@ std::shared_ptr<CacheEntry> EndpointResponseCache::lookup(
 }
 
 ItemEndpointResponseCache::ItemEndpointResponseCache(ResponseCache *owner,
-                                                     int64_t ttl_ms)
+                                                     uint64_t ttl_ms)
     : EndpointResponseCache(owner, ttl_ms) {}
 
 ItemEndpointResponseCache::~ItemEndpointResponseCache() {

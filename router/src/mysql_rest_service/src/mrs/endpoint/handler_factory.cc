@@ -132,19 +132,19 @@ HandlerPtr HandlerFactory::create_db_object_handler(EndpointBasePtr endpoint) {
     case DbObjectLite::k_objectTypeTable:
       return std::make_unique<HandlerDbObjectTable>(
           db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_,
-          response_cache_, entry_->option_cache_ttl_ms.value_or(0));
+          response_cache_);
     case DbObjectLite::k_objectTypeProcedure:
       return std::make_unique<HandlerDbObjectSP>(
           db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_,
-          response_cache_, entry_->option_cache_ttl_ms.value_or(0));
+          response_cache_);
     case DbObjectLite::k_objectTypeFunction:
       return std::make_unique<HandlerDbObjectFunction>(
           db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_,
-          response_cache_, entry_->option_cache_ttl_ms.value_or(0));
+          response_cache_);
     case DbObjectLite::k_objectTypeScript:
       return std::make_unique<HandlerDbObjectScript>(
           db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_,
-          response_cache_, entry_->option_cache_ttl_ms.value_or(0));
+          response_cache_);
   }
 
   assert(false && "all cases must be handled inside the switch.");

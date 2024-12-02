@@ -114,6 +114,7 @@ class Options {
   class Result {
    public:
     bool include_links{true};
+    uint64_t cache_ttl_ms{0};
   } result;
 };
 

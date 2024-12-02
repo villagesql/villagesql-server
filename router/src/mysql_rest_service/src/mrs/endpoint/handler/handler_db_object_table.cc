@@ -251,7 +251,7 @@ HandlerDbObjectTable::HandlerDbObjectTable(
     std::weak_ptr<DbObjectEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager,
     mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache,
-    mrs::ResponseCache *response_cache, int64_t cache_ttl_ms)
+    mrs::ResponseCache *response_cache)
     : Handler(get_endpoint_host(endpoint),
               /*regex-path: ^/service/schema/object(/...)?$*/
               {regex_path_db_object(lock(endpoint)->get_url_path())},
@@ -266,9 +266,9 @@ HandlerDbObjectTable::HandlerDbObjectTable(
   schema_entry_ = ep_parent->get();
   ownership_ = get_user_ownership(entry_->name, entry_->object_description);
 
-  if (cache_ttl_ms > 0 && response_cache) {
+  if (get_options().result.cache_ttl_ms > 0 && response_cache) {
     response_cache_ = std::make_shared<ItemEndpointResponseCache>(
-        response_cache, cache_ttl_ms);
+        response_cache, get_options().result.cache_ttl_ms);
   }
 }
 

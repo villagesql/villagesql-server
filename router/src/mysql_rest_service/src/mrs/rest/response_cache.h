@@ -98,7 +98,7 @@ class EndpointResponseCache {
   using UniversalId = ::mrs::database::entry::UniversalId;
 
  protected:
-  EndpointResponseCache(ResponseCache *owner, int64_t ttl_ms);
+  EndpointResponseCache(ResponseCache *owner, uint64_t ttl_ms);
   virtual ~EndpointResponseCache() = default;
 
   std::shared_ptr<CacheEntry> create_entry(
@@ -124,7 +124,7 @@ class EndpointResponseCache {
 
 class ItemEndpointResponseCache : public EndpointResponseCache {
  public:
-  ItemEndpointResponseCache(ResponseCache *owner, int64_t ttl_ms);
+  ItemEndpointResponseCache(ResponseCache *owner, uint64_t ttl_ms);
   ~ItemEndpointResponseCache() override;
 
   std::shared_ptr<CacheEntry> create_table_entry(const Uri &uri,

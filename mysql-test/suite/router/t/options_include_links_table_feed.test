@@ -40,13 +40,13 @@
 
 --let $mrs_add_db_object=table2
 --let $mrs_add_db_object_path=/t_disabled
---let $mrs_add_db_object_options='{"result":{"include_links":false}}'
+--let $mrs_add_db_object_options='{"result":{"includeLinks":false}}'
 --source ../include/mrs/db_object/add.inc
 
 
 --let $mrs_add_schema=basic_schema
 --let $mrs_add_schema_path=/basic_disabled
---let $mrs_add_schema_options='{"result":{"include_links":false}}'
+--let $mrs_add_schema_options='{"result":{"includeLinks":false}}'
 --source ../include/mrs/db_schema/add.inc
 
 --let $mrs_add_db_object=table2
@@ -56,7 +56,7 @@
 
 --let $mrs_add_service_path="/svc_disabled"
 --let $mrs_add_host_name=""
---let $mrs_add_service_options='{"result":{"include_links":false}}'
+--let $mrs_add_service_options='{"result":{"includeLinks":false}}'
 --source ../include/mrs/service/add.inc
 
 --let $mrs_add_schema=basic_schema

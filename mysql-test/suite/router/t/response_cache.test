@@ -4,6 +4,9 @@
 --source ../include/predefined_setup/configure_router_mrs_root.inc
 --source ../include/schema/basic_schema.sql
 
+# Set cache size for files and data
+update mysql_rest_service_metadata.config set data = json_merge_patch(data, '{"responseCache":{"maxCacheSize":200}, "fileCache":{"maxCacheSize":40}}');
+
 --source ../include/mrs/start_object_definition.inc
 
 # The test uses HOST to have only paths in HREF fields.
@@ -17,7 +20,7 @@
 
 --let $mrs_add_db_object=table1
 --let $mrs_add_db_object_path=/t1
---let $mrs_add_db_object_options='{"logging":{"exceptions":true, "request":{"headers":true, "body":true}, "response":{"headers":true, "body":true}}}'
+--let $mrs_add_db_object_options='{"logging":{"exceptions":true, "request":{"headers":true, "body":true}, "response":{"headers":true, "body":true}}, "result":{"cacheTimeToLive":5}}'
 --source ../include/mrs/db_object/add.inc
 
 --let $mrs_add_db_object=table4
@@ -32,6 +35,7 @@
 --let $mrs_add_db_object_type=PROCEDURE
 --let $mrs_add_db_object=proc_table4
 --let $mrs_add_db_object_path=/proc
+--let $mrs_add_db_object_options='{"result":{"cacheTimeToLive":5}}'
 --source ../include/mrs/db_object/add.inc
 
 --let $mrs_add_content_set_enabled=1
@@ -45,13 +49,6 @@
 --let $mrs_add_content='TEST FILE 2 CONTENT\nEND OF FILE 2\n'
 --let $mrs_add_content_file_path=/file2
 --source ../include/mrs/content_file/add.inc
-
-# Set cache size for files and data
-update mysql_rest_service_metadata.config set data = json_merge_patch(data, '{"responseCache":{"maxCacheSize":200}, "fileCache":{"maxCacheSize":40}}');
-
-# Enable caching for t1 and proc
-update mysql_rest_service_metadata.db_object set options='{"cacheTimeToLive":5}' where name='table1';
-update mysql_rest_service_metadata.db_object set options='{"cacheTimeToLive":5}' where name='proc_table4';
 
 --source ../include/mrs/end_object_definition.inc
 

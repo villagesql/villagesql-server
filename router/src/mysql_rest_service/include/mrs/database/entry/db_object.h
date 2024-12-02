@@ -84,8 +84,6 @@ struct DbObject {
   std::optional<ContentSetHasObjectDef> content_set_def;
 
   bool deleted{false};
-
-  std::optional<uint64_t> option_cache_ttl_ms;
 };
 
 }  // namespace entry

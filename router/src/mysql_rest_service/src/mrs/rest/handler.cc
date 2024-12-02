@@ -659,6 +659,12 @@ uint64_t to_uint(const ValueType &value) {
   return std::stoull(v.c_str());
 }
 
+template <typename ValueType>
+double to_double(const ValueType &value) {
+  const auto &v = cvt::to_string(value);
+  return std::stod(v.c_str());
+}
+
 class ParseOptions
     : public helper::json::RapidReaderHandlerToStruct<mrs::interface::Options> {
  public:
@@ -688,15 +694,17 @@ class ParseOptions
       result_.metadata.gtid = to_bool(vt);
     } else if (key == "query.wait") {
       result_.query.wait = to_uint(vt);
-    } else if (key == "query.embed_wait") {
+    } else if (key == "query.embedWait") {
       result_.query.embed_wait = to_bool(vt);
     } else if (key == "http.allowedOrigin") {
       if (mysql_harness::make_lower(cvt::to_string(vt)) == "auto")
         result_.allowed_origins.type = Result::AllowedOrigins::AllowAll;
       else
         result_.allowed_origins.allowed_origins.push_back(cvt::to_string(vt));
-    } else if (key == "result.include_links") {
+    } else if (key == "result.includeLinks") {
       result_.result.include_links = to_bool(vt);
+    } else if (key == "result.cacheTimeToLive") {
+      result_.result.cache_ttl_ms = to_double(vt) * 1000;
     }
   }
 

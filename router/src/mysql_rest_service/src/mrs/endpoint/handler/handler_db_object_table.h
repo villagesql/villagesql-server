@@ -57,8 +57,7 @@ class HandlerDbObjectTable : public mrs::rest::Handler {
                        mrs::interface::AuthorizeManager *auth_manager,
                        mrs::GtidManager *gtid_manager = nullptr,
                        collector::MysqlCacheManager *cache = nullptr,
-                       mrs::ResponseCache *response_cache = nullptr,
-                       int64_t cache_ttl_ms = 0);
+                       mrs::ResponseCache *response_cache = nullptr);
 
   Authorization requires_authentication() const override;
   UniversalId get_service_id() const override;
