@@ -5846,6 +5846,37 @@ double CostingReceiver::FindAlreadyAppliedSelectivity(
     const JoinPredicate *edge, const AccessPath *left_path,
     const AccessPath *right_path, NodeMap left, NodeMap right) {
   double already_applied = 1.0;
+
+  /*
+    Check if 'condition' is already applied as a ref access. If so, multiply
+    already_applied by the selectivity that is applied through that ref access.
+    Return 'true' if 'condition' is entirely redundant, 'false' otherwise.
+   */
+  const auto process_condition{
+      [&](Item *condition, const CachedPropertiesForPredicate &properties) {
+        const bool already_applied_as_sargable{
+            AlreadyAppliedAsSargable(condition, left_path, right_path).first};
+
+        if (already_applied_as_sargable) {
+          // This predicate was already applied as a ref access earlier.
+          // Make sure not to double-count its selectivity, and also
+          // that we don't reapply it if it was subsumed by the ref access.
+          const int position = m_graph->FindSargableJoinPredicate(condition);
+          already_applied *= m_graph->predicates[position].selectivity;
+        } else if (RedundantThroughSargable(
+                       properties.redundant_against_sargable_predicates,
+                       left_path, right_path, left, right)) {
+          if (TraceStarted(m_thd)) {
+            Trace(m_thd)
+                << " - " << PrintAccessPath(*right_path, *m_graph, "")
+                << " has a sargable predicate that is redundant with our join "
+                   "predicate, skipping\n";
+          }
+          return true;
+        }
+        return false;
+      }};
+
   for (size_t join_cond_idx = 0;
        join_cond_idx < edge->expr->equijoin_conditions.size();
        ++join_cond_idx) {
@@ -5853,26 +5884,22 @@ double CostingReceiver::FindAlreadyAppliedSelectivity(
     const CachedPropertiesForPredicate &properties =
         edge->expr->properties_for_equijoin_conditions[join_cond_idx];
 
-    const auto [already_applied_as_sargable, subsumed] =
-        AlreadyAppliedAsSargable(condition, left_path, right_path);
-    if (already_applied_as_sargable) {
-      // This predicate was already applied as a ref access earlier.
-      // Make sure not to double-count its selectivity, and also
-      // that we don't reapply it if it was subsumed by the ref access.
-      const int position = m_graph->FindSargableJoinPredicate(condition);
-      already_applied *= m_graph->predicates[position].selectivity;
-    } else if (RedundantThroughSargable(
-                   properties.redundant_against_sargable_predicates, left_path,
-                   right_path, left, right)) {
-      if (TraceStarted(m_thd)) {
-        Trace(m_thd)
-            << " - " << PrintAccessPath(*right_path, *m_graph, "")
-            << " has a sargable predicate that is redundant with our join "
-               "predicate, skipping\n";
-      }
+    if (process_condition(condition, properties)) {
       return -1.0;
     }
   }
+
+  for (size_t join_cond_idx = 0;
+       join_cond_idx < edge->expr->join_conditions.size(); ++join_cond_idx) {
+    // A condition may be mapped to a ref access even if it could not be used
+    // as a hash join condition, cf. IsHashEquijoinCondition().
+    if (process_condition(
+            edge->expr->join_conditions[join_cond_idx],
+            edge->expr->properties_for_join_conditions[join_cond_idx])) {
+      return -1.0;
+    }
+  }
+
   return already_applied;
 }
 

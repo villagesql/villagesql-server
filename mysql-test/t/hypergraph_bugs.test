@@ -1475,6 +1475,58 @@ FROM t WHERE x IN (
 DROP TABLE t;
 
 --echo #
+--echo # Bug#37272285 Assertion `false && "Inconsistent row counts for
+--echo # different AccessPath objects."' failed.
+--echo #
+
+CREATE TABLE t1(x INT);
+CREATE TABLE t2(x INT);
+CREATE TABLE t3(id INT PRIMARY KEY);
+CREATE TABLE t4(id INT NULL UNIQUE);
+
+INSERT INTO t1 VALUES (1), (2), (3);
+INSERT INTO t2 VALUES (1), (2), (3);
+INSERT INTO t3 VALUES (1), (2), (3);
+INSERT INTO t4 VALUES (1), (2), (3);
+
+ANALYZE TABLE t1, t2, t3, t4;
+
+# Check that query does not trigger assert.
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE 1 IN
+(SELECT t2.x+1 FROM t2, t3 WHERE t3.id = t1.x+t2.x);
+
+# Check that query does not trigger assert.
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT * FROM t1 LEFT JOIN LATERAL
+(SELECT t2.x+1 k FROM t2, t3 WHERE t3.id = t1.x+t2.x) d2 ON 1=k;
+
+# These two did not trigger the assert, but probably could have if we had
+# implemented NLJ for <=> before fixing Bug#37272285 (cf. Bug#36955411
+# "Hypergraph optimizer does not use index lookups for <=> predicates").
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE 1 IN
+(SELECT t2.x+1 FROM t2, t3 WHERE t3.id <=> t1.x+t2.x);
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT * FROM t1 LEFT JOIN LATERAL
+(SELECT t2.x+1 k FROM t2, t3 WHERE t3.id <=> t1.x+t2.x) d2 ON 1=k;
+
+# These two did not trigger the assert, but probably could have if we had
+# implemented REF_OR_NULL for Hypergraph.
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE 1 IN
+(SELECT t2.x+1 FROM t2, t4 WHERE t4.id = t1.x+t2.x or t4.id IS NULL);
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT * FROM t1 LEFT JOIN LATERAL
+(SELECT t2.x+1 k FROM t2, t4 WHERE t4.id = t1.x+t2.x or t4.id IS NULL) d2
+ON 1=k;
+
+DROP TABLE t1,t2,t3,t4;
+
+--echo #
 --echo # Bug#36578613: Hypergraph result difference when querying I_S.TABLES
 --echo #
 

@@ -1789,6 +1789,108 @@ SELECT NULL FROM t AS t1, t AS t2 STRAIGHT_JOIN t AS t3 ON t2.x = t3.x
 1
 DROP TABLE t;
 #
+# Bug#37272285 Assertion `false && "Inconsistent row counts for
+# different AccessPath objects."' failed.
+#
+CREATE TABLE t1(x INT);
+CREATE TABLE t2(x INT);
+CREATE TABLE t3(id INT PRIMARY KEY);
+CREATE TABLE t4(id INT NULL UNIQUE);
+INSERT INTO t1 VALUES (1), (2), (3);
+INSERT INTO t2 VALUES (1), (2), (3);
+INSERT INTO t3 VALUES (1), (2), (3);
+INSERT INTO t4 VALUES (1), (2), (3);
+ANALYZE TABLE t1, t2, t3, t4;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+test.t3	analyze	status	OK
+test.t4	analyze	status	OK
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE 1 IN
+(SELECT t2.x+1 FROM t2, t3 WHERE t3.id = t1.x+t2.x);
+EXPLAIN
+-> Nested loop semijoin (FirstMatch)  (...)
+    -> Table scan on t1  (...)
+    -> Filter: (t3.id = (t1.x + t2.x))  (...)
+        -> Nested loop inner join  (...)
+            -> Filter: (1 = (t2.x + 1))  (...)
+                -> Table scan on t2  (...)
+            -> Single-row covering index lookup on t3 using PRIMARY (id = (t1.x + t2.x))  (...)
+
+Warnings:
+Note	1276	Field or reference 'test.t1.x' of SELECT #2 was resolved in SELECT #1
+EXPLAIN FORMAT=TREE SELECT * FROM t1 LEFT JOIN LATERAL
+(SELECT t2.x+1 k FROM t2, t3 WHERE t3.id = t1.x+t2.x) d2 ON 1=k;
+EXPLAIN
+-> Nested loop left join  (...)
+    -> Table scan on t1  (...)
+    -> Filter: (t3.id = (t1.x + t2.x))  (...)
+        -> Nested loop inner join  (...)
+            -> Filter: (1 = (t2.x + 1))  (...)
+                -> Table scan on t2  (...)
+            -> Single-row covering index lookup on t3 using PRIMARY (id = (t1.x + t2.x))  (...)
+
+Warnings:
+Note	1276	Field or reference 'test.t1.x' of SELECT #2 was resolved in SELECT #1
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE 1 IN
+(SELECT t2.x+1 FROM t2, t3 WHERE t3.id <=> t1.x+t2.x);
+EXPLAIN
+-> Hash semijoin (FirstMatch) (no condition), extra conditions: (t3.id <=> (t1.x + t2.x))  (...)
+    -> Table scan on t1  (...)
+    -> Hash
+        -> Inner hash join (no condition)  (...)
+            -> Filter: (1 = (t2.x + 1))  (...)
+                -> Table scan on t2  (...)
+            -> Hash
+                -> Table scan on t3  (...)
+
+Warnings:
+Note	1276	Field or reference 'test.t1.x' of SELECT #2 was resolved in SELECT #1
+EXPLAIN FORMAT=TREE SELECT * FROM t1 LEFT JOIN LATERAL
+(SELECT t2.x+1 k FROM t2, t3 WHERE t3.id <=> t1.x+t2.x) d2 ON 1=k;
+EXPLAIN
+-> Left hash join (no condition), extra conditions: (t3.id <=> (t1.x + t2.x))  (...)
+    -> Table scan on t1  (...)
+    -> Hash
+        -> Inner hash join (no condition)  (...)
+            -> Filter: (1 = (t2.x + 1))  (...)
+                -> Table scan on t2  (...)
+            -> Hash
+                -> Table scan on t3  (...)
+
+Warnings:
+Note	1276	Field or reference 'test.t1.x' of SELECT #2 was resolved in SELECT #1
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE 1 IN
+(SELECT t2.x+1 FROM t2, t4 WHERE t4.id = t1.x+t2.x or t4.id IS NULL);
+EXPLAIN
+-> Hash semijoin (FirstMatch) (no condition), extra conditions: ((t4.id = (t1.x + t2.x)) or (t4.id is null))  (...)
+    -> Table scan on t1  (...)
+    -> Hash
+        -> Inner hash join (no condition)  (...)
+            -> Filter: (1 = (t2.x + 1))  (...)
+                -> Table scan on t2  (...)
+            -> Hash
+                -> Table scan on t4  (...)
+
+Warnings:
+Note	1276	Field or reference 'test.t1.x' of SELECT #2 was resolved in SELECT #1
+EXPLAIN FORMAT=TREE SELECT * FROM t1 LEFT JOIN LATERAL
+(SELECT t2.x+1 k FROM t2, t4 WHERE t4.id = t1.x+t2.x or t4.id IS NULL) d2
+ON 1=k;
+EXPLAIN
+-> Left hash join (no condition), extra conditions: ((t4.id = (t1.x + t2.x)) or (t4.id is null))  (...)
+    -> Table scan on t1  (...)
+    -> Hash
+        -> Inner hash join (no condition)  (...)
+            -> Filter: (1 = (t2.x + 1))  (...)
+                -> Table scan on t2  (...)
+            -> Hash
+                -> Table scan on t4  (...)
+
+Warnings:
+Note	1276	Field or reference 'test.t1.x' of SELECT #2 was resolved in SELECT #1
+DROP TABLE t1,t2,t3,t4;
+#
 # Bug#36578613: Hypergraph result difference when querying I_S.TABLES
 #
 CREATE TABLE t(x INT, y LONGTEXT);
