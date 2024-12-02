@@ -210,6 +210,8 @@ void QueryEntriesDbObject::on_row(const ResultRow &row) {
       mysql_row.unserialize(&cset_def.name);
       mysql_row.unserialize(&cset_def.options);
       entry.content_set_def = std::move(cset_def);
+    } else {
+      mysql_row.skip(5);
     }
   }
 
