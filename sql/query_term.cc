@@ -625,6 +625,7 @@ bool Query_term_set_op::prepare_query_term(
       // to store a NULL value for this field during hashing even though the
       // logical result of the set operation can not be NULL.
     }
+    ++idx;
   }
 
   if (m_is_materialized) {

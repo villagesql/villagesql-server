@@ -284,3 +284,11 @@ SELECT JSON_PRETTY(JSON_EXTRACT(
 FROM information_schema.OPTIMIZER_TRACE AS t;
 SET optimizer_trace='enabled=default';
 DROP TABLE t;
+
+--echo #
+--echo # Bug#37341055 MySQL version 9.1.0 crash with query thats works on version 8
+--echo #
+SELECT 'a' AS f1, 'b' AS f2, 'c' AS f3
+UNION
+SELECT 'a' AS f1 , NULL AS f2, 'c' AS f3
+ORDER BY f2, f3;

@@ -645,3 +645,13 @@ info
 ]
 SET optimizer_trace='enabled=default';
 DROP TABLE t;
+#
+# Bug#37341055 MySQL version 9.1.0 crash with query thats works on version 8
+#
+SELECT 'a' AS f1, 'b' AS f2, 'c' AS f3
+UNION
+SELECT 'a' AS f1 , NULL AS f2, 'c' AS f3
+ORDER BY f2, f3;
+f1	f2	f3
+a	NULL	c
+a	b	c
