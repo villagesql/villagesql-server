@@ -22,7 +22,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "mrs/database/duality_view/select.h"
+#include "mrs/database/json_mapper/select.h"
 #include <algorithm>
 #include <iostream>
 #include <memory>
@@ -150,7 +150,7 @@ mysqlrouter::sqlstring format_where_expr(const Table &table,
   return s;
 }
 
-void JsonQueryBuilder::process_view(std::shared_ptr<entry::DualityView> view) {
+void JsonQueryBuilder::process_view(std::shared_ptr<entry::JsonMapping> view) {
   process_table({}, view, "");
 
   if (m_select_items.str().empty()) {

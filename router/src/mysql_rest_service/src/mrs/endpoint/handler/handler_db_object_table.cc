@@ -44,11 +44,11 @@
 #include "helper/json/to_string.h"
 #include "helper/media_detector.h"
 #include "helper/mysql_numeric_value.h"
-#include "mrs/database/duality_view/select.h"
 #include "mrs/database/filter_object_generator.h"
 #include "mrs/database/helper/object_row_ownership.h"
 #include "mrs/database/helper/query_gtid_executed.h"
 #include "mrs/database/helper/query_retry_on_ro.h"
+#include "mrs/database/json_mapper/select.h"
 #include "mrs/database/query_rest_sp_media.h"
 #include "mrs/database/query_rest_table.h"
 #include "mrs/database/query_rest_table_single_row.h"
@@ -514,7 +514,7 @@ HttpResult HandlerDbObjectTable::handle_post(
                       "Invalid JSON document inside the HTTP request, must be "
                       "an JSON object.");
 
-  database::dv::DualityViewUpdater updater(object,
+  database::dv::JsonMappingUpdater updater(object,
                                            row_ownership_info(ctxt, object));
 
   mrs::database::PrimaryKeyColumnValues pk;
@@ -565,7 +565,7 @@ HttpResult HandlerDbObjectTable::handle_delete(rest::RequestContext *ctxt) {
   const auto accepted_content_type =
       validate_content_type_encoding(&ctxt->accepts);
 
-  database::dv::DualityViewUpdater rest(object,
+  database::dv::JsonMappingUpdater rest(object,
                                         row_ownership_info(ctxt, object));
 
   if (!last_path.empty()) {
@@ -661,7 +661,7 @@ HttpResult HandlerDbObjectTable::handle_put(rest::RequestContext *ctxt) {
 
   rapidjson::Document json_doc;
 
-  database::dv::DualityViewUpdater updater(object,
+  database::dv::JsonMappingUpdater updater(object,
                                            row_ownership_info(ctxt, object));
 
   json_doc.Parse((const char *)document.data(), document.size());

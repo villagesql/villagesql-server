@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "mrs/database/duality_view/check.h"
+#include "mrs/database/json_mapper/check.h"
 #include "helper/json/rapid_json_to_text.h"
 #include "helper/json/to_sqlstring.h"
 

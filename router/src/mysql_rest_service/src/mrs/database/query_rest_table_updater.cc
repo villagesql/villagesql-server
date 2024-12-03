@@ -26,14 +26,14 @@
 #include <set>
 #include "helper/json/rapid_json_to_text.h"
 #include "helper/json/to_sqlstring.h"
-#include "mrs/database/duality_view/check.h"
-#include "mrs/database/duality_view/delete.h"
-#include "mrs/database/duality_view/errors.h"
-#include "mrs/database/duality_view/insert.h"
-#include "mrs/database/duality_view/json_input.h"
-#include "mrs/database/duality_view/select.h"
-#include "mrs/database/duality_view/update.h"
 #include "mrs/database/helper/object_checksum.h"
+#include "mrs/database/json_mapper/check.h"
+#include "mrs/database/json_mapper/delete.h"
+#include "mrs/database/json_mapper/errors.h"
+#include "mrs/database/json_mapper/insert.h"
+#include "mrs/database/json_mapper/json_input.h"
+#include "mrs/database/json_mapper/select.h"
+#include "mrs/database/json_mapper/update.h"
 #include "mrs/database/query_rest_table_single_row.h"
 #include "mrs/http/error.h"
 #include "mrs/interface/rest_error.h"
@@ -74,7 +74,7 @@ class RowUpdate;
 
 //
 
-DualityViewUpdater::DualityViewUpdater(
+JsonMappingUpdater::JsonMappingUpdater(
     std::shared_ptr<Object> view, const ObjectRowOwnership &row_ownership_info)
     : view_(view), m_row_ownership_info(row_ownership_info) {}
 
@@ -126,7 +126,7 @@ namespace {
 // }
 
 void safe_run(MySQLSession *session,
-              const std::shared_ptr<DualityViewUpdater::Operation> &op,
+              const std::shared_ptr<JsonMappingUpdater::Operation> &op,
               MySQLSession::Transaction *transaction_started = nullptr) {
   MySQLSession::Transaction safe_transaction;
   if (!transaction_started) {
@@ -145,7 +145,7 @@ void safe_run(MySQLSession *session,
   }
 }
 
-PrimaryKeyColumnValues DualityViewUpdater::insert(
+PrimaryKeyColumnValues JsonMappingUpdater::insert(
     MySQLSession *session, const rapidjson::Document &doc) {
   const bool is_consistent_snapshot = true;
   if (view_->is_read_only()) throw_read_only();
@@ -164,7 +164,7 @@ PrimaryKeyColumnValues DualityViewUpdater::insert(
   return root_insert->primary_key();
 }
 
-PrimaryKeyColumnValues DualityViewUpdater::update(
+PrimaryKeyColumnValues JsonMappingUpdater::update(
     MySQLSession *session, const PrimaryKeyColumnValues &pk_values_a,
     const rapidjson::Document &doc, bool upsert) {
   PrimaryKeyColumnValues pk_values = pk_values_a;
@@ -214,7 +214,7 @@ PrimaryKeyColumnValues DualityViewUpdater::update(
   check_etag(current_doc, doc);
 
   root_update =
-      make_row_update(std::shared_ptr<DualityViewUpdater::Operation>{}, view_,
+      make_row_update(std::shared_ptr<JsonMappingUpdater::Operation>{}, view_,
                       pk_values, row_ownership_info());
 
   {
@@ -232,7 +232,7 @@ PrimaryKeyColumnValues DualityViewUpdater::update(
   return root_update->primary_key();
 }  // namespace dv
 
-uint64_t DualityViewUpdater::delete_(
+uint64_t JsonMappingUpdater::delete_(
     MySQLSession *session, const PrimaryKeyColumnValues &pk_values_a) {
   PrimaryKeyColumnValues pk_values = pk_values_a;
   if (view_->is_read_only()) throw_read_only();
@@ -256,7 +256,7 @@ uint64_t DualityViewUpdater::delete_(
   return del->affected();
 }
 
-uint64_t DualityViewUpdater::delete_(MySQLSession *session,
+uint64_t JsonMappingUpdater::delete_(MySQLSession *session,
                                      const FilterObjectGenerator &filter) {
   const bool is_consistent_snapshot = true;
 
@@ -281,7 +281,7 @@ uint64_t DualityViewUpdater::delete_(MySQLSession *session,
   return del->affected();
 }
 
-void DualityViewUpdater::check(const rapidjson::Document &doc,
+void JsonMappingUpdater::check(const rapidjson::Document &doc,
                                bool for_update) const {
   if (!doc.IsObject()) throw_invalid_type(view_->table);
 
@@ -290,7 +290,7 @@ void DualityViewUpdater::check(const rapidjson::Document &doc,
   checker.process(JSONInputObject(doc.GetObject()));
 }
 
-void DualityViewUpdater::check_etag(const std::string &original_doc,
+void JsonMappingUpdater::check_etag(const std::string &original_doc,
                                     const rapidjson::Document &new_doc) const {
   if (new_doc.HasMember("_metadata")) {
     const auto &metadata = new_doc["_metadata"];
@@ -310,7 +310,7 @@ void DualityViewUpdater::check_etag(const std::string &original_doc,
   // if etag is missing, then just don't validate
 }
 
-std::string DualityViewUpdater::select_one(
+std::string JsonMappingUpdater::select_one(
     MySQLSession *session, const PrimaryKeyColumnValues &pk_values,
     bool &is_owned, RowLockType lock_rows) const {
   QueryRestTableSingleRow q(nullptr, false, false, lock_rows);

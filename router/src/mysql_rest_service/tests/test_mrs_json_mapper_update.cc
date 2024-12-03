@@ -60,9 +60,9 @@ inline std::string unescape(const std::string &s) {
 
 #define EXPECT_UUID(value) EXPECT_EQ(16, unescape(value).size() - 2) << value
 
-class DualityViewUpdate : public DatabaseRestTableTest {
+class JsonMappingUpdate : public DatabaseRestTableTest {
  public:
-  void update_e(std::shared_ptr<DualityView> view,
+  void update_e(std::shared_ptr<JsonMapping> view,
                 const PrimaryKeyColumnValues &pk, const std::string &input,
                 const ObjectRowOwnership &row_owner = {}) {
     try {
@@ -82,10 +82,10 @@ class DualityViewUpdate : public DatabaseRestTableTest {
     }
   }
 
-  void update(std::shared_ptr<DualityView> view,
+  void update(std::shared_ptr<JsonMapping> view,
               const PrimaryKeyColumnValues &pk, const std::string &input,
               const ObjectRowOwnership &row_owner = {}) {
-    DualityViewUpdater dvu(view, row_owner);
+    JsonMappingUpdater dvu(view, row_owner);
     dvu.update(m_.get(), pk, make_json(input));
   }
 
@@ -94,7 +94,7 @@ class DualityViewUpdate : public DatabaseRestTableTest {
     return (*row)[0];
   }
 
-  void test_update(std::shared_ptr<DualityView> view, const std::string &templ,
+  void test_update(std::shared_ptr<JsonMapping> view, const std::string &templ,
                    const PrimaryKeyColumnValues &pk, std::vector<int> &ids,
                    const ObjectRowOwnership &row_owner = {}) {
     std::string input, expected_output;
@@ -102,7 +102,7 @@ class DualityViewUpdate : public DatabaseRestTableTest {
     update(view, pk, input, row_owner);
   }
 
-  void expect_update(std::shared_ptr<DualityView> view,
+  void expect_update(std::shared_ptr<JsonMapping> view,
                      const std::string &templ, const PrimaryKeyColumnValues &pk,
                      std::vector<int> &ids) {
     std::string input, expected_output;
@@ -122,8 +122,8 @@ class DualityViewUpdate : public DatabaseRestTableTest {
     expect_update(f, input, pk, ids);    \
   } while (0)
 
-TEST_F(DualityViewUpdate, invalid_json) {
-  auto root = DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_UPDATE)
+TEST_F(JsonMappingUpdate, invalid_json) {
+  auto root = JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_UPDATE)
                   .field("film_id", FieldFlag::AUTO_INC)
                   .field("title")
                   .field("release_year")
@@ -139,8 +139,8 @@ TEST_F(DualityViewUpdate, invalid_json) {
                     "Invalid document in JSON input for table `film`");
 }
 
-TEST_F(DualityViewUpdate, root_update) {
-  auto root = DualityViewBuilder("mrstestdb", "country", TableFlag::WITH_UPDATE)
+TEST_F(JsonMappingUpdate, root_update) {
+  auto root = JsonMappingBuilder("mrstestdb", "country", TableFlag::WITH_UPDATE)
                   .field("id", "country_id", FieldFlag::AUTO_INC)
                   .field("country")
                   .resolve(m_.get());
@@ -179,14 +179,14 @@ TEST_F(DualityViewUpdate, root_update) {
                 parse_pk("{\"country_id\":8}"), ids);
 }
 
-TEST_F(DualityViewUpdate, root_noupdate) {
-  auto root = DualityViewBuilder("mrstestdb", "country", TableFlag::WITH_INSERT)
+TEST_F(JsonMappingUpdate, root_noupdate) {
+  auto root = JsonMappingBuilder("mrstestdb", "country", TableFlag::WITH_INSERT)
                   .field("id", "country_id", FieldFlag::AUTO_INC)
                   .field("country")
                   .resolve(m_.get());
 
   auto root_field =
-      DualityViewBuilder("mrstestdb", "country",
+      JsonMappingBuilder("mrstestdb", "country",
                          TableFlag::WITH_UPDATE | TableFlag::WITH_NOCHECK)
           .field("id", "country_id", FieldFlag::AUTO_INC)
           .field("country", FieldFlag::WITH_NOUPDATE)
@@ -254,8 +254,8 @@ TEST_F(DualityViewUpdate, root_noupdate) {
               parse_pk("{\"country_id\":8}"), ids);
 }
 
-TEST_F(DualityViewUpdate, child11_parent_noupdate) {
-  auto root = DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_NOUPDATE)
+TEST_F(JsonMappingUpdate, child11_parent_noupdate) {
+  auto root = JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_NOUPDATE)
                   .field("film_id", FieldFlag::AUTO_INC)
                   .field("title")
                   .field("release_year")
@@ -341,9 +341,9 @@ TEST_F(DualityViewUpdate, child11_parent_noupdate) {
   EXPECT_UPDATE(root, test_changes_in_nested, parse_pk("{\"film_id\":6}"), ids);
 }
 
-TEST_F(DualityViewUpdate, child11) {
+TEST_F(JsonMappingUpdate, child11) {
   auto root_noup =
-      DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_UPDATE)
+      JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_UPDATE)
           .field("film_id", FieldFlag::AUTO_INC)
           .field("title")
           .field("release_year")
@@ -355,7 +355,7 @@ TEST_F(DualityViewUpdate, child11) {
           .resolve(m_.get());
 
   auto root_up =
-      DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_UPDATE)
+      JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_UPDATE)
           .field("film_id", FieldFlag::AUTO_INC)
           .field("title")
           .field("release_year")
@@ -419,10 +419,10 @@ TEST_F(DualityViewUpdate, child11) {
 })*";
 }
 
-std::shared_ptr<DualityView> make_root_1n(mysqlrouter::MySQLSession *session,
+std::shared_ptr<JsonMapping> make_root_1n(mysqlrouter::MySQLSession *session,
                                           int flags,
                                           bool child_autoinc = false) {
-  return DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
+  return JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
       .field("id", FieldFlag::AUTO_INC)
       .field("data", "data1")
       .field_to_many("children",
@@ -554,7 +554,7 @@ constexpr const auto test_1n_upd_nop = R"*({
 
 // TODO test for WITH UPDATE on indicidual columns
 
-TEST_F(DualityViewUpdate, child1n_none) {
+TEST_F(JsonMappingUpdate, child1n_none) {
   auto reset = [this]() {
     drop_schema();
     prepare(TestSchema::PLAIN);
@@ -588,7 +588,7 @@ TEST_F(DualityViewUpdate, child1n_none) {
   EXPECT_UPDATE(root, test_1n_upd_nop, parse_pk("{\"id\":10}"), ids);
 }
 
-TEST_F(DualityViewUpdate, child1n_all) {
+TEST_F(JsonMappingUpdate, child1n_all) {
   auto reset = [this]() {
     drop_schema();
     prepare(TestSchema::PLAIN);
@@ -616,7 +616,7 @@ TEST_F(DualityViewUpdate, child1n_all) {
   EXPECT_UPDATE(root, test_1n_upd_nop, parse_pk("{\"id\":10}"), ids);
 }
 
-TEST_F(DualityViewUpdate, child1n) {
+TEST_F(JsonMappingUpdate, child1n) {
   auto reset = [this]() {
     drop_schema();
     prepare(TestSchema::PLAIN);
@@ -694,7 +694,7 @@ TEST_F(DualityViewUpdate, child1n) {
   reset();
 }
 
-TEST_F(DualityViewUpdate, child1n_noupdate) {
+TEST_F(JsonMappingUpdate, child1n_noupdate) {
   auto reset = [this]() {
     drop_schema();
     prepare(TestSchema::PLAIN);
@@ -723,7 +723,7 @@ TEST_F(DualityViewUpdate, child1n_noupdate) {
   EXPECT_UPDATE(root_di, test_1n_upd_nop, parse_pk("{\"id\":10}"), ids);
 }
 
-TEST_F(DualityViewUpdate, child1n_noinsert) {
+TEST_F(JsonMappingUpdate, child1n_noinsert) {
   auto reset = [this]() {
     drop_schema();
     prepare(TestSchema::PLAIN);
@@ -750,7 +750,7 @@ TEST_F(DualityViewUpdate, child1n_noinsert) {
   EXPECT_UPDATE(root_du, test_1n_upd_nop, parse_pk("{\"id\":10}"), ids);
 }
 
-TEST_F(DualityViewUpdate, child1n_nodelete) {
+TEST_F(JsonMappingUpdate, child1n_nodelete) {
   auto reset = [this]() {
     drop_schema();
     prepare(TestSchema::PLAIN);
@@ -775,7 +775,7 @@ TEST_F(DualityViewUpdate, child1n_nodelete) {
   EXPECT_UPDATE(root_ui, test_1n_upd_nop, parse_pk("{\"id\":10}"), ids);
 }
 
-TEST_F(DualityViewUpdate, child1n_autoinc) {
+TEST_F(JsonMappingUpdate, child1n_autoinc) {
   auto reset = [this]() {
     drop_schema();
     prepare(TestSchema::AUTO_INC);
@@ -807,15 +807,15 @@ TEST_F(DualityViewUpdate, child1n_autoinc) {
   reset();
 }
 
-TEST_F(DualityViewUpdate, deep_nested) {}
+TEST_F(JsonMappingUpdate, deep_nested) {}
 
-TEST_F(DualityViewUpdate, deep_nested_delete) {}
+TEST_F(JsonMappingUpdate, deep_nested_delete) {}
 
-TEST_F(DualityViewUpdate, cycle) {
+TEST_F(JsonMappingUpdate, cycle) {
   prepare(TestSchema::CYCLE);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "person", TableFlag::WITH_UPDATE)
+      JsonMappingBuilder("mrstestdb", "person", TableFlag::WITH_UPDATE)
           .field("id")
           .field("name")
           .field_to_one("parent", ViewBuilder("person", TableFlag::WITH_UPDATE)
@@ -879,11 +879,11 @@ TEST_F(DualityViewUpdate, cycle) {
   }
 }
 
-TEST_F(DualityViewUpdate, composite_key) {
+TEST_F(JsonMappingUpdate, composite_key) {
   prepare(TestSchema::COMPOSITE);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
+      JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
           .field("id1")
           .field("id2")
           .field("data1")
@@ -947,11 +947,11 @@ TEST_F(DualityViewUpdate, composite_key) {
                 parse_pk(R"*({"id1":101, "id2":1001})*"), ids);
 }
 
-TEST_F(DualityViewUpdate, column_no_update) {
+TEST_F(JsonMappingUpdate, column_no_update) {
   prepare(TestSchema::AUTO_INC);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
+      JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
           .field("_id", "id", FieldFlag::AUTO_INC)
           .field("data", "data1", FieldFlag::WITH_NOUPDATE)
           .field_to_one(

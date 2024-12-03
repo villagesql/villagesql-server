@@ -606,7 +606,7 @@ void DatabaseRestTableTest::TearDown() {
 }
 
 std::string DatabaseRestTableTest::select_one(
-    std::shared_ptr<mrs::database::entry::DualityView> view,
+    std::shared_ptr<mrs::database::entry::JsonMapping> view,
     const mrs::database::PrimaryKeyColumnValues &pk,
     const mrs::database::dv::ObjectFieldFilter &field_filter,
     const mrs::database::ObjectRowOwnership &row_owner, bool compute_etag) {

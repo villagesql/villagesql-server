@@ -28,7 +28,7 @@
 #include <vector>
 
 #include "helper/expect_throw_msg.h"
-#include "mrs/database/duality_view/delete.h"
+#include "mrs/database/json_mapper/delete.h"
 #include "mrs/database/query_rest_table_updater.h"
 #include "test_mrs_database_rest_table.h"
 #include "test_mrs_object_utils.h"
@@ -43,9 +43,9 @@ using testing::Test;
 
 #define EXPECT_UUID(value) EXPECT_EQ(16, unescape(value).size() - 2) << value
 
-class DualityViewDelete : public DatabaseRestTableTest {
+class JsonMappingDelete : public DatabaseRestTableTest {
  public:
-  void delete_e(std::shared_ptr<DualityView> view,
+  void delete_e(std::shared_ptr<JsonMapping> view,
                 const PrimaryKeyColumnValues &pks,
                 const ObjectRowOwnership &row_owner = {}) {
     try {
@@ -65,21 +65,21 @@ class DualityViewDelete : public DatabaseRestTableTest {
     }
   }
 
-  void delete_(std::shared_ptr<DualityView> view,
+  void delete_(std::shared_ptr<JsonMapping> view,
                const PrimaryKeyColumnValues &pks,
                const ObjectRowOwnership &row_owner = {}) {
-    DualityViewUpdater dvu(view, row_owner);
+    JsonMappingUpdater dvu(view, row_owner);
 
     dvu.delete_(m_.get(), pks);
   }
 
-  void test_delete(std::shared_ptr<DualityView> view,
+  void test_delete(std::shared_ptr<JsonMapping> view,
                    const PrimaryKeyColumnValues &pks,
                    const ObjectRowOwnership &row_owner = {}) {
     delete_(view, pks, row_owner);
   }
 
-  void expect_delete(std::shared_ptr<DualityView> view,
+  void expect_delete(std::shared_ptr<JsonMapping> view,
                      const PrimaryKeyColumnValues &pks) {
     EXPECT_NO_THROW(delete_(view, pks));
 
@@ -87,9 +87,9 @@ class DualityViewDelete : public DatabaseRestTableTest {
     EXPECT_EQ(response, "");
   }
 
-  void test_delete(std::shared_ptr<DualityView> view,
+  void test_delete(std::shared_ptr<JsonMapping> view,
                    const std::string &filter) {
-    DualityViewUpdater dvu(view);
+    JsonMappingUpdater dvu(view);
     FilterObjectGenerator fog(view, true);
 
     fog.parse(filter);
@@ -97,7 +97,7 @@ class DualityViewDelete : public DatabaseRestTableTest {
     dvu.delete_(m_.get(), fog);
   }
 
-  void expect_delete(std::shared_ptr<DualityView> view,
+  void expect_delete(std::shared_ptr<JsonMapping> view,
                      const std::string &filter) {
     EXPECT_NO_THROW(test_delete(view, filter));
   }
@@ -154,7 +154,7 @@ class DualityViewDelete : public DatabaseRestTableTest {
     expect_delete(f, filter);      \
   } while (0)
 
-TEST_F(DualityViewDelete, key_nodelete) {
+TEST_F(JsonMappingDelete, key_nodelete) {
   auto reset = [&]() {
     drop_schema();
     prepare(TestSchema::AUTO_INC);
@@ -163,7 +163,7 @@ TEST_F(DualityViewDelete, key_nodelete) {
 
   reset();
   auto root1 =
-      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
+      JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
           .field("id", FieldFlag::AUTO_INC)
           .field("data", "data1")
           .field_to_one(
@@ -197,7 +197,7 @@ TEST_F(DualityViewDelete, key_nodelete) {
 
   reset();
   auto root2 =
-      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
+      JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
           .field("id", FieldFlag::AUTO_INC)
           .field("data", "data1")
           .field_to_one("child11",
@@ -232,7 +232,7 @@ TEST_F(DualityViewDelete, key_nodelete) {
                      {"child_nm", 0}});
 }
 
-TEST_F(DualityViewDelete, key_delete) {
+TEST_F(JsonMappingDelete, key_delete) {
   auto reset = [&]() {
     drop_schema();
     prepare(TestSchema::AUTO_INC);
@@ -243,7 +243,7 @@ TEST_F(DualityViewDelete, key_delete) {
   {
     reset();
     auto root_all =
-        DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+        JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
             .field("id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one(
@@ -307,7 +307,7 @@ TEST_F(DualityViewDelete, key_delete) {
   {
     reset();
     auto root_none =
-        DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+        JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
             .field("id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one(
@@ -371,7 +371,7 @@ TEST_F(DualityViewDelete, key_delete) {
   {
     reset();
     auto root_1n =
-        DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+        JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
             .field("id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one(
@@ -434,7 +434,7 @@ TEST_F(DualityViewDelete, key_delete) {
   {
     reset();
     auto root_1n_1n =
-        DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+        JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
             .field("id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one(
@@ -498,7 +498,7 @@ TEST_F(DualityViewDelete, key_delete) {
   {
     reset();
     auto root_nm =
-        DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+        JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
             .field("id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one(
@@ -564,11 +564,11 @@ TEST_F(DualityViewDelete, key_delete) {
   }
 }
 
-TEST_F(DualityViewDelete, undeletable_child_pkfk) {
+TEST_F(JsonMappingDelete, undeletable_child_pkfk) {
   // a reference that's also the PK (like in a n:m table) can't be UPDATE only
 }
 
-TEST_F(DualityViewDelete, undeletable_child) {
+TEST_F(JsonMappingDelete, undeletable_child) {
   // update reference to NULL instead of deleting the row
   auto reset = [&]() {
     drop_schema();
@@ -580,7 +580,7 @@ TEST_F(DualityViewDelete, undeletable_child) {
   {
     reset();
     auto root_all =
-        DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+        JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
             .field("id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one(
@@ -644,7 +644,7 @@ TEST_F(DualityViewDelete, undeletable_child) {
   {
     reset();
     auto root_none =
-        DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+        JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
             .field("id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one(
@@ -713,7 +713,7 @@ TEST_F(DualityViewDelete, undeletable_child) {
   {
     reset();
     auto root_1n =
-        DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+        JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
             .field("id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one(
@@ -777,7 +777,7 @@ TEST_F(DualityViewDelete, undeletable_child) {
   {
     reset();
     auto root_1n_1n =
-        DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+        JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
             .field("id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one(
@@ -844,10 +844,10 @@ TEST_F(DualityViewDelete, undeletable_child) {
   }
 }
 
-TEST_F(DualityViewDelete, filter_nodelete) {
+TEST_F(JsonMappingDelete, filter_nodelete) {
   prepare(TestSchema::PLAIN);
 
-  auto root = DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_NODELETE)
+  auto root = JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_NODELETE)
                   .field("id")
                   .field("data", "data1")
                   .resolve(m_.get(), true);
@@ -862,7 +862,7 @@ TEST_F(DualityViewDelete, filter_nodelete) {
       "Data Mapping View does not allow DELETE for table `root`");
 }
 
-TEST_F(DualityViewDelete, filter_delete) {
+TEST_F(JsonMappingDelete, filter_delete) {
   auto reset = [&]() {
     drop_schema();
     prepare(TestSchema::PLAIN);
@@ -871,7 +871,7 @@ TEST_F(DualityViewDelete, filter_delete) {
   reset();
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+      JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
           .field("id", FieldFlag::AUTO_INC)
           .field("data", "data1")
           .field_to_one("child11", ViewBuilder("child_11", 0).field("id"))
@@ -925,12 +925,12 @@ TEST_F(DualityViewDelete, filter_delete) {
   }
 }
 
-TEST_F(DualityViewDelete, cycle) {
+TEST_F(JsonMappingDelete, cycle) {
   prepare(TestSchema::CYCLE);
   snapshot();
 
   auto root =
-      DualityViewBuilder("mrstestdb", "person", TableFlag::WITH_DELETE)
+      JsonMappingBuilder("mrstestdb", "person", TableFlag::WITH_DELETE)
           .field("id")
           .field("name")
           .field_to_one("parent", ViewBuilder("person", TableFlag::WITH_UPDATE)
@@ -972,12 +972,12 @@ TEST_F(DualityViewDelete, cycle) {
   }
 }
 
-TEST_F(DualityViewDelete, cycle_undeletable) {
+TEST_F(JsonMappingDelete, cycle_undeletable) {
   prepare(TestSchema::CYCLE);
   snapshot();
 
   auto root =
-      DualityViewBuilder("mrstestdb", "person", TableFlag::WITH_DELETE)
+      JsonMappingBuilder("mrstestdb", "person", TableFlag::WITH_DELETE)
           .field("id")
           .field("name")
           .field_to_one("parent", ViewBuilder("person", TableFlag::WITH_UPDATE)

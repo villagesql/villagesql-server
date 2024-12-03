@@ -28,8 +28,8 @@
 #include <string>
 #include <vector>
 
-#include "mrs/database/duality_view/select.h"
 #include "mrs/database/helper/query.h"
+#include "mrs/database/json_mapper/select.h"
 
 namespace mrs {
 namespace database {

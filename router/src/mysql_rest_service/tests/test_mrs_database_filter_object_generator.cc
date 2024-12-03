@@ -121,7 +121,7 @@ TEST_F(FilterObjectsTest, match_field_by_string_value) {
 }
 
 TEST_F(FilterObjectsTest, match_field_by_binary_value) {
-  auto root = DualityViewBuilder("mrstestdb", "test")
+  auto root = JsonMappingBuilder("mrstestdb", "test")
                   .field("f1", "f1", "BINARY(16)", FieldFlag::PRIMARY)
                   .resolve();
 

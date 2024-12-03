@@ -23,10 +23,10 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "mrs/database/duality_view/delete.h"
+#include "mrs/database/json_mapper/delete.h"
 
-#include "mrs/database/duality_view/errors.h"
-#include "mrs/database/duality_view/update.h"
+#include "mrs/database/json_mapper/errors.h"
+#include "mrs/database/json_mapper/update.h"
 
 namespace mrs {
 namespace database {
@@ -53,12 +53,12 @@ namespace dv {
 //      - An 1:1 join will never be part of a delete chain
 
 RowDeleteBase::RowDeleteBase(
-    std::shared_ptr<DualityViewUpdater::Operation> parent,
+    std::shared_ptr<JsonMappingUpdater::Operation> parent,
     std::shared_ptr<Table> table, const ObjectRowOwnership &row_ownership)
     : RowChangeOperation(parent, table, row_ownership) {}
 
 RowDeleteBase::RowDeleteBase(
-    std::shared_ptr<DualityViewUpdater::Operation> parent,
+    std::shared_ptr<JsonMappingUpdater::Operation> parent,
     std::shared_ptr<Table> table, const PrimaryKeyColumnValues &pk_values,
     const ObjectRowOwnership &row_ownership)
     : RowChangeOperation(parent, table, pk_values, row_ownership) {}

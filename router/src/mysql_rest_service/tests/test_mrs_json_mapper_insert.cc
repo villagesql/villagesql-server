@@ -28,7 +28,7 @@
 #include <vector>
 
 #include "helper/expect_throw_msg.h"
-#include "mrs/database/duality_view/insert.h"
+#include "mrs/database/json_mapper/insert.h"
 #include "mrs/database/query_rest_table_updater.h"
 #include "mysqlrouter/base64.h"
 #include "test_mrs_database_rest_table.h"
@@ -42,9 +42,9 @@ using testing::Return;
 using testing::StrictMock;
 using testing::Test;
 
-class DualityViewInsert : public DatabaseRestTableTest {
+class JsonMappingInsert : public DatabaseRestTableTest {
  public:
-  PrimaryKeyColumnValues insert_e(std::shared_ptr<DualityView> view,
+  PrimaryKeyColumnValues insert_e(std::shared_ptr<JsonMapping> view,
                                   const std::string &input,
                                   const ObjectRowOwnership &row_owner = {}) {
     try {
@@ -64,10 +64,10 @@ class DualityViewInsert : public DatabaseRestTableTest {
     }
   }
 
-  PrimaryKeyColumnValues insert(std::shared_ptr<DualityView> view,
+  PrimaryKeyColumnValues insert(std::shared_ptr<JsonMapping> view,
                                 const std::string &input,
                                 const ObjectRowOwnership &row_owner = {}) {
-    DualityViewUpdater dvu(view, row_owner);
+    JsonMappingUpdater dvu(view, row_owner);
 
     auto json = make_json(input);
     if (!json.IsObject()) {
@@ -78,7 +78,7 @@ class DualityViewInsert : public DatabaseRestTableTest {
     return dvu.insert(m_.get(), json);
   }
 
-  void test_insert(std::shared_ptr<DualityView> view, const std::string &templ,
+  void test_insert(std::shared_ptr<JsonMapping> view, const std::string &templ,
                    std::vector<int> &ids,
                    const ObjectRowOwnership &row_owner = {}) {
     SCOPED_TRACE(view->as_graphql(true));
@@ -88,7 +88,7 @@ class DualityViewInsert : public DatabaseRestTableTest {
     insert(view, input, row_owner);
   }
 
-  void expect_insert(std::shared_ptr<DualityView> view,
+  void expect_insert(std::shared_ptr<JsonMapping> view,
                      const std::string &templ, std::vector<int> &ids) {
     std::string input, expected_output;
     process_template(templ, ids, &input, &expected_output);
@@ -107,11 +107,11 @@ class DualityViewInsert : public DatabaseRestTableTest {
     expect_insert(f, input, ids);    \
   } while (0)
 
-TEST_F(DualityViewInsert, root_noinsert) {
+TEST_F(JsonMappingInsert, root_noinsert) {
   prepare(TestSchema::PLAIN);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root",
+      JsonMappingBuilder("mrstestdb", "root",
                          TableFlag::WITH_UPDATE | TableFlag::WITH_NOINSERT)
           .field("id")
           .field("data", "data1")
@@ -150,10 +150,10 @@ TEST_F(DualityViewInsert, root_noinsert) {
       "Data Mapping View does not allow INSERT for table `root`");
 }
 
-TEST_F(DualityViewInsert, root_insert) {
+TEST_F(JsonMappingInsert, root_insert) {
   prepare(TestSchema::PLAIN);
 
-  auto root = DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
+  auto root = JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
                   .field("id")
                   .field("data", "data1")
                   .resolve(m_.get(), true);
@@ -189,11 +189,11 @@ TEST_F(DualityViewInsert, root_insert) {
                      "Duplicate entry '1' for key 'root.PRIMARY' (1062)");
 }
 
-TEST_F(DualityViewInsert, root_autoinc) {
+TEST_F(JsonMappingInsert, root_autoinc) {
   prepare(TestSchema::AUTO_INC);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root",
+      JsonMappingBuilder("mrstestdb", "root",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("id", FieldFlag::AUTO_INC)
           .field("data", "data1")
@@ -210,7 +210,7 @@ TEST_F(DualityViewInsert, root_autoinc) {
           .resolve(m_.get(), true);
 
   auto root_1n_update =
-      DualityViewBuilder("mrstestdb", "root",
+      JsonMappingBuilder("mrstestdb", "root",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("id", FieldFlag::AUTO_INC)
           .field("data", "data1")
@@ -327,11 +327,11 @@ TEST_F(DualityViewInsert, root_autoinc) {
       "Data Mapping View does not allow INSERT for table `child_1n`");
 }
 
-TEST_F(DualityViewInsert, root_uuid) {
+TEST_F(JsonMappingInsert, root_uuid) {
   prepare(TestSchema::UUID);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root",
+      JsonMappingBuilder("mrstestdb", "root",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("id", FieldFlag::REV_UUID)
           .field("data", "data1")
@@ -452,11 +452,11 @@ TEST_F(DualityViewInsert, root_uuid) {
   EXPECT_INSERT(root, test_nested_newpk2, ids);
 }
 
-TEST_F(DualityViewInsert, child11) {
+TEST_F(JsonMappingInsert, child11) {
   prepare(TestSchema::PLAIN);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root",
+      JsonMappingBuilder("mrstestdb", "root",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("id")
           .field("data", "data1")
@@ -467,7 +467,7 @@ TEST_F(DualityViewInsert, child11) {
           .resolve(m_.get(), true);
 
   auto root_update =
-      DualityViewBuilder("mrstestdb", "root",
+      JsonMappingBuilder("mrstestdb", "root",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("id")
           .field("data", "data1")
@@ -572,11 +572,11 @@ TEST_F(DualityViewInsert, child11) {
   EXPECT_INSERT(root, test_duppk3, ids);
 }
 
-TEST_F(DualityViewInsert, child1n) {
+TEST_F(JsonMappingInsert, child1n) {
   prepare(TestSchema::PLAIN);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root",
+      JsonMappingBuilder("mrstestdb", "root",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("id")
           .field("data", "data1")
@@ -587,7 +587,7 @@ TEST_F(DualityViewInsert, child1n) {
           .resolve(m_.get(), true);
 
   auto root_update =
-      DualityViewBuilder("mrstestdb", "root",
+      JsonMappingBuilder("mrstestdb", "root",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("id")
           .field("data", "data1")
@@ -599,7 +599,7 @@ TEST_F(DualityViewInsert, child1n) {
           .resolve(m_.get(), true);
 
   auto root_upsert =
-      DualityViewBuilder("mrstestdb", "root",
+      JsonMappingBuilder("mrstestdb", "root",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("id")
           .field("data", "data1")
@@ -612,7 +612,7 @@ TEST_F(DualityViewInsert, child1n) {
           .resolve(m_.get(), true);
 
   auto root_insert =
-      DualityViewBuilder("mrstestdb", "root",
+      JsonMappingBuilder("mrstestdb", "root",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("id")
           .field("data", "data1")
@@ -694,11 +694,11 @@ TEST_F(DualityViewInsert, child1n) {
   EXPECT_INSERT(root_upsert, test_duppk, ids);  // child updated
 }
 
-TEST_F(DualityViewInsert, child1n_autoinc) {
+TEST_F(JsonMappingInsert, child1n_autoinc) {
   prepare(TestSchema::AUTO_INC);
 
   auto root_insert_insert =
-      DualityViewBuilder("mrstestdb", "root",
+      JsonMappingBuilder("mrstestdb", "root",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("id", FieldFlag::AUTO_INC)
           .field("data", "data1")
@@ -710,7 +710,7 @@ TEST_F(DualityViewInsert, child1n_autoinc) {
           .resolve(m_.get(), true);
 
   auto root_insert_update =
-      DualityViewBuilder("mrstestdb", "root",
+      JsonMappingBuilder("mrstestdb", "root",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("id", FieldFlag::AUTO_INC)
           .field("data", "data1")
@@ -722,7 +722,7 @@ TEST_F(DualityViewInsert, child1n_autoinc) {
           .resolve(m_.get(), true);
 
   auto root_insert_upsert =
-      DualityViewBuilder("mrstestdb", "root",
+      JsonMappingBuilder("mrstestdb", "root",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("id", FieldFlag::AUTO_INC)
           .field("data", "data1")
@@ -799,11 +799,11 @@ TEST_F(DualityViewInsert, child1n_autoinc) {
   EXPECT_INSERT(root_insert_upsert, test_duppk, ids);  // child updated
 }
 
-TEST_F(DualityViewInsert, deep_nested_autoinc) {
+TEST_F(JsonMappingInsert, deep_nested_autoinc) {
   prepare(TestSchema::AUTO_INC);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
           .field("id", FieldFlag::AUTO_INC)
           .field("data", "data1")
           .field_to_many(
@@ -857,11 +857,11 @@ TEST_F(DualityViewInsert, deep_nested_autoinc) {
                 ids);
 }
 
-TEST_F(DualityViewInsert, unnest_11) {
+TEST_F(JsonMappingInsert, unnest_11) {
   prepare(TestSchema::AUTO_INC);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
           .field("_id", "id", FieldFlag::AUTO_INC)
           .field("data", "data1")
           .field_to_one("child11",
@@ -907,11 +907,11 @@ TEST_F(DualityViewInsert, unnest_11) {
                      "Column 'child_id' cannot be null");
 }
 
-TEST_F(DualityViewInsert, unnest_1n) {
+TEST_F(JsonMappingInsert, unnest_1n) {
   prepare(TestSchema::AUTO_INC);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
           .field("_id", "id", FieldFlag::AUTO_INC)
           .field("data", "data1")
           .field_to_many("child1n",
@@ -934,12 +934,12 @@ TEST_F(DualityViewInsert, unnest_1n) {
                        "Data Mapping View is read-only");
 }
 
-TEST_F(DualityViewInsert, inconsistent_input) {
+TEST_F(JsonMappingInsert, inconsistent_input) {
   // FKs are usually omitted, but they can be required if they're also the PK
   prepare(TestSchema::AUTO_INC);
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
+        JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
             .field("_id", "id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_many(
@@ -1006,12 +1006,12 @@ TEST_F(DualityViewInsert, inconsistent_input) {
   }
 }
 
-TEST_F(DualityViewInsert, regular_fields_are_optional_on_insert) {
+TEST_F(JsonMappingInsert, regular_fields_are_optional_on_insert) {
   // - all PKs are WITH CHECK (for etag ) by default, regardless of the table
   // level CHECK
   // - all non-PK fields are optional in the JSON
 
-  auto root = DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_INSERT)
+  auto root = JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_INSERT)
                   .field("id", "film_id", FieldFlag::AUTO_INC)
                   .field("title", FieldFlag::WITH_CHECK)
                   .field("description", 0)
@@ -1035,13 +1035,13 @@ TEST_F(DualityViewInsert, regular_fields_are_optional_on_insert) {
   SCOPED_TRACE(root->as_graphql());
 }
 
-// TEST_F(DualityViewGet, no_etag_if_no_check) {}
+// TEST_F(JsonMappingGet, no_etag_if_no_check) {}
 
-TEST_F(DualityViewInsert, cycle) {
+TEST_F(JsonMappingInsert, cycle) {
   prepare(TestSchema::CYCLE);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "person", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "person", TableFlag::WITH_INSERT)
           .field("id")
           .field("name")
           .field_to_one("parent", ViewBuilder("person", TableFlag::WITH_UPDATE)
@@ -1121,11 +1121,11 @@ TEST_F(DualityViewInsert, cycle) {
   }
 }
 
-TEST_F(DualityViewInsert, composite_key) {
+TEST_F(JsonMappingInsert, composite_key) {
   prepare(TestSchema::COMPOSITE);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
           .field("id1")
           .field("id2")
           .field("data1")

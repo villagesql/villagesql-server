@@ -23,8 +23,8 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "mrs/database/duality_view/json_input.h"
-#include "mrs/database/duality_view/errors.h"
+#include "mrs/database/json_mapper/json_input.h"
+#include "mrs/database/json_mapper/errors.h"
 
 namespace mrs {
 namespace database {

@@ -28,8 +28,8 @@
 #include <vector>
 
 #include "http/base/uri.h"
-#include "mrs/database/duality_view/select.h"
 #include "mrs/database/entry/row_user_ownership.h"
+#include "mrs/database/json_mapper/select.h"
 #include "mrs/interface/universal_id.h"
 
 namespace mrs {

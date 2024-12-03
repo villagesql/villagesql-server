@@ -35,12 +35,12 @@
 #include <vector>
 #include "helper/json/rapid_json_to_text.h"
 #include "helper/json/to_sqlstring.h"
-#include "mrs/database/duality_view/errors.h"
-#include "mrs/database/duality_view/select.h"
 #include "mrs/database/entry/object.h"
 #include "mrs/database/filter_object_generator.h"
 #include "mrs/database/helper/object_row_ownership.h"
 #include "mrs/database/helper/query.h"
+#include "mrs/database/json_mapper/errors.h"
+#include "mrs/database/json_mapper/select.h"
 #include "mrs/database/query_uuid.h"
 #include "mrs/interface/query_retry.h"
 #include "mysqlrouter/utils_sqlstring.h"
@@ -60,7 +60,7 @@ PrimaryKeyColumnValues ref_primary_key(const ForeignKeyReference &ref,
                                        const rapidjson::Value &value,
                                        bool throw_if_missing_or_null);
 
-void validate_primary_key_values(const entry::DualityView &view,
+void validate_primary_key_values(const entry::JsonMapping &view,
                                  const ObjectRowOwnership &row_ownership,
                                  PrimaryKeyColumnValues &pk_values);
 

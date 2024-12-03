@@ -137,9 +137,9 @@ bool Table::is_updatable(bool update_only) const {
   return updatable;
 }
 
-bool DualityView::is_updatable() const { return Table::is_updatable(true); }
+bool JsonMapping::is_updatable() const { return Table::is_updatable(true); }
 
-void DualityView::validate_definition() const {
+void JsonMapping::validate_definition() const {
   // Checks:
   // - if any table has no PK -> error
   // - if duplicate field name -> error
@@ -150,7 +150,7 @@ void DualityView::validate_definition() const {
   // - if any nested 1:n join is unnested -> read-only
 }
 
-std::string DualityView::as_graphql(bool extended) const {
+std::string JsonMapping::as_graphql(bool extended) const {
   std::string flags;
   flags += with_insert() ? " @INSERT " : (extended ? " @NOINSERT" : "");
   flags += with_update() ? " @UPDATE " : (extended ? " @NOUPDATE" : "");

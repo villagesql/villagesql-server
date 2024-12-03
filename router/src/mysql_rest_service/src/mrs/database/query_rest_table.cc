@@ -31,10 +31,10 @@
 #include "helper/json/rapid_json_to_text.h"
 #include "helper/json/text_to.h"
 #include "helper/json/to_string.h"
-#include "mrs/database/duality_view/select.h"  // TODO delme?
-#include "mrs/database/duality_view/select.h"
 #include "mrs/database/filter_object_generator.h"
 #include "mrs/database/helper/object_checksum.h"
+#include "mrs/database/json_mapper/select.h"  // TODO delme?
+#include "mrs/database/json_mapper/select.h"
 #include "mrs/json/json_template_factory.h"
 #include "mrs/json/response_json_template.h"
 #include "mysql/harness/logging/logging.h"

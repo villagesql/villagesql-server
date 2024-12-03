@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -22,35 +22,42 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
+#include <map>
+#include <vector>
 
-#include "helpers/process_manager.h"
-#include "mysql/harness/logging/registry.h"
-#include "test/helpers.h"
+#include "test_mrs_object_utils.h"
 
-int main(int argc, char *argv[]) {
-  init_test_logger();
+using namespace mrs::database;
 
-  ::testing::InitGoogleTest(&argc, argv);
+using testing::_;
+using testing::Return;
+using testing::StrictMock;
+using testing::Test;
 
-  const char *kEnvLiveServer = "RUN_WITH_LIVE_MYSQLD";
-  if (nullptr == getenv(kEnvLiveServer)) {
-    auto &filter = testing::GTEST_FLAG(filter);
-    if (filter.empty() || filter == "*") {
-      filter = "-DatabaseQuery*.*:JsonMapping*.*";
-    }
-    std::cerr << filter << std::endl;
-    std::cerr << "Filtering out tests that run on live database. To run those "
-                 "tests set following environment variable: "
-              << kEnvLiveServer << std::endl;
+class JsonMappingMetadataTest : public DatabaseQueryTest {
+ public:
+  void SetUp() override {
+    m_ = std::make_unique<mysqlrouter::MySQLSession>();
+    m_->connect("localhost", 3306, "root", "", "", "",
+                mysqlrouter::MySQLSession::kDefaultConnectTimeout,
+                mysqlrouter::MySQLSession::kDefaultReadTimeout,
+                CLIENT_FOUND_ROWS);
   }
 
-  if (nullptr != getenv("DISABLE_DEBUG_LOG")) {
-    mysql_harness::logging::set_log_level_for_all_loggers(
-        mysql_harness::logging::LogLevel::kFatal);
-  }
+  void dump_snapshot() {}
 
-  ProcessManager::set_origin(Path(argv[0]).dirname());
+  void import(const char *script) {}
+};
 
-  return RUN_ALL_TESTS();
+TEST_F(JsonMappingMetadataTest, check_version) {
+  auto row =
+      m_->query_one("SELECT * FROM mysql_rest_service_metadata.schema_version");
+
+  EXPECT_STREQ((*row)[0], "3");
+  EXPECT_STREQ((*row)[1], "0");
+  EXPECT_STREQ((*row)[2], "0");
 }
+
+TEST_F(JsonMappingMetadataTest, actor) {}

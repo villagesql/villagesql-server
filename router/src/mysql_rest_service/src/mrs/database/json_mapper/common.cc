@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/mysql_rest_service/src/mrs/database/duality_view/common.h"
+#include "router/src/mysql_rest_service/src/mrs/database/json_mapper/common.h"
 #include "mrs/interface/rest_error.h"
 #include "mysqlrouter/base64.h"
 
@@ -78,7 +78,7 @@ PrimaryKeyColumnValues ref_primary_key(const ForeignKeyReference &ref,
   return pk;
 }
 
-void validate_primary_key_values(const entry::DualityView &view,
+void validate_primary_key_values(const entry::JsonMapping &view,
                                  const ObjectRowOwnership &row_ownership,
                                  PrimaryKeyColumnValues &pk_values) {
   auto pk_cols = view.primary_key();

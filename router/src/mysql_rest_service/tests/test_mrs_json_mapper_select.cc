@@ -29,7 +29,7 @@
 
 #include "helper/expect_throw_msg.h"
 #include "mock/mock_session.h"
-#include "mrs/database/duality_view/select.h"
+#include "mrs/database/json_mapper/select.h"
 #include "test_mrs_database_rest_table.h"
 #include "test_mrs_object_utils.h"
 
@@ -40,14 +40,14 @@ using testing::Return;
 using testing::StrictMock;
 using testing::Test;
 
-class DualityViewSelect : public DatabaseRestTableTest {
+class JsonMappingSelect : public DatabaseRestTableTest {
  public:
   void SetUp() override {
     select_include_links_ = true;
     DatabaseRestTableTest::SetUp();
   }
 
-  void expect_select_one(std::shared_ptr<DualityView> view,
+  void expect_select_one(std::shared_ptr<JsonMapping> view,
                          const PrimaryKeyColumnValues &pk,
                          const std::string &expected) {
     auto output = select_one(view, pk);
@@ -61,11 +61,11 @@ class DualityViewSelect : public DatabaseRestTableTest {
     expect_select_one(f, output, pk);    \
   } while (0)
 
-TEST_F(DualityViewSelect, select_one) {
+TEST_F(JsonMappingSelect, select_one) {
   prepare(TestSchema::AUTO_INC);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root", 0)
+      JsonMappingBuilder("mrstestdb", "root", 0)
           .field("_id", "id", FieldFlag::AUTO_INC)
           .field("data", "data1")
           .field_to_one("child11",
@@ -170,11 +170,11 @@ TEST_F(DualityViewSelect, select_one) {
 })*");
 }
 
-TEST_F(DualityViewSelect, unnest_11) {
+TEST_F(JsonMappingSelect, unnest_11) {
   prepare(TestSchema::AUTO_INC);
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "root", 0)
+        JsonMappingBuilder("mrstestdb", "root", 0)
             .field("_id", "id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one(
@@ -276,7 +276,7 @@ TEST_F(DualityViewSelect, unnest_11) {
   }
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "root", 0)
+        JsonMappingBuilder("mrstestdb", "root", 0)
             .field("_id", "id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one("child11",
@@ -376,11 +376,11 @@ TEST_F(DualityViewSelect, unnest_11) {
   }
 }
 
-TEST_F(DualityViewSelect, unnest_1n) {
+TEST_F(JsonMappingSelect, unnest_1n) {
   prepare(TestSchema::AUTO_INC);
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "root", 0)
+        JsonMappingBuilder("mrstestdb", "root", 0)
             .field("_id", "id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one(
@@ -458,7 +458,7 @@ TEST_F(DualityViewSelect, unnest_1n) {
   }
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "root", 0)
+        JsonMappingBuilder("mrstestdb", "root", 0)
             .field("_id", "id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one(
@@ -558,11 +558,11 @@ TEST_F(DualityViewSelect, unnest_1n) {
   }
 }
 
-TEST_F(DualityViewSelect, unnest_nm) {
+TEST_F(JsonMappingSelect, unnest_nm) {
   prepare(TestSchema::AUTO_INC);
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "root", 0)
+        JsonMappingBuilder("mrstestdb", "root", 0)
             .field("_id", "id", FieldFlag::AUTO_INC)
             .field("data", "data1")
             .field_to_one(
@@ -639,11 +639,11 @@ TEST_F(DualityViewSelect, unnest_nm) {
   }
 }
 
-TEST_F(DualityViewSelect, cycle) {
+TEST_F(JsonMappingSelect, cycle) {
   prepare(TestSchema::CYCLE);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "person", 0)
+      JsonMappingBuilder("mrstestdb", "person", 0)
           .field("id")
           .field("name")
           .field_to_one("parent",
@@ -728,11 +728,11 @@ TEST_F(DualityViewSelect, cycle) {
   }
 }
 
-TEST_F(DualityViewSelect, composite_key) {
+TEST_F(JsonMappingSelect, composite_key) {
   prepare(TestSchema::COMPOSITE);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root", 0)
+      JsonMappingBuilder("mrstestdb", "root", 0)
           .field("id1")
           .field("id2")
           .field("data1")

@@ -55,15 +55,15 @@ inline std::string unescape(const std::string &s) {
 
 class DatabaseQueryPost : public DatabaseRestTableTest {
  public:
-  PrimaryKeyColumnValues test_post(std::shared_ptr<DualityView> root,
+  PrimaryKeyColumnValues test_post(std::shared_ptr<JsonMapping> root,
                                    const rapidjson::Document &doc,
                                    const ObjectRowOwnership &row_owner = {}) {
-    mrs::database::dv::DualityViewUpdater rest(root, row_owner);
+    mrs::database::dv::JsonMappingUpdater rest(root, row_owner);
 
     return rest.insert(m_.get(), doc);
   }
 
-  void test_post_ai(std::shared_ptr<DualityView> root,
+  void test_post_ai(std::shared_ptr<JsonMapping> root,
                     const rapidjson::Document &doc,
                     const ObjectRowOwnership &row_owner = {}) {
     auto id = next_auto_inc(root->table);
@@ -73,7 +73,7 @@ class DatabaseQueryPost : public DatabaseRestTableTest {
     EXPECT_EQ(id, pk[root->primary_key()[0]->name].str());
   }
 
-  void test_post_uuid(std::shared_ptr<DualityView> root,
+  void test_post_uuid(std::shared_ptr<JsonMapping> root,
                       const rapidjson::Document &doc,
                       const ObjectRowOwnership &row_owner = {}) {
     auto pk = test_post(root, doc, row_owner);
@@ -87,7 +87,7 @@ TEST_F(DatabaseQueryPost, no_root_fields) {
 
   // no fields in the root object (auto_inc)
   auto root =
-      DualityViewBuilder("mrstestdb", "country", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "country", TableFlag::WITH_INSERT)
           .field("country_id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
           .field_to_many(
               "cities",
@@ -99,7 +99,7 @@ TEST_F(DatabaseQueryPost, no_root_fields) {
           .resolve(m_.get(), true);
 
   {
-    auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+    auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
 
     // omitting all fields in the row is OK (because PK is auto-inc),
     // but the country column is NOT NULL, so we get a db error
@@ -117,13 +117,13 @@ TEST_F(DatabaseQueryPost, no_root_fields) {
 TEST_F(DatabaseQueryPost, no_pk) {
   prepare(TestSchema::PLAIN);
 
-  auto root = DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
+  auto root = JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
                   .field("id", FieldFlag::PRIMARY)
                   .field("data")
                   .resolve(m_.get(), true);
 
   {
-    auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+    auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
 
     EXPECT_JSON_ERROR(rest->insert(m_.get(), make_json(R"*({
     "data": "MyCountry"
@@ -137,13 +137,13 @@ TEST_F(DatabaseQueryPost, no_pk_multi) {
   prepare(TestSchema::PLAIN);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "tc2_base", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "tc2_base", TableFlag::WITH_INSERT)
           .field("id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
           .field("sub_id", FieldFlag::PRIMARY)
           .field("data1")
           .resolve(m_.get(), true);
 
-  auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+  auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
   EXPECT_JSON_ERROR(rest->insert(m_.get(), make_json(R"*({
     "data1": "data"
   })*")),
@@ -158,7 +158,7 @@ TEST_F(DatabaseQueryPost, no_pk_multi) {
 TEST_F(DatabaseQueryPost, no_pk_in_1n_child) {
   prepare(TestSchema::PLAIN);
 
-  auto root = DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
+  auto root = JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
                   .field("id", FieldFlag::PRIMARY)
                   .field("data1")
                   .field_to_many("1n",
@@ -170,7 +170,7 @@ TEST_F(DatabaseQueryPost, no_pk_in_1n_child) {
 
   // no child given, so no problem
   {
-    auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+    auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
 
     rest->insert(m_.get(), make_json(R"*({
     "id": 123,
@@ -179,7 +179,7 @@ TEST_F(DatabaseQueryPost, no_pk_in_1n_child) {
   }
 
   {
-    auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+    auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
 
     EXPECT_JSON_ERROR(rest->insert(m_.get(), make_json(R"*({
     "id": 124,
@@ -193,14 +193,14 @@ TEST_F(DatabaseQueryPost, no_pk_in_1n_child) {
 }
 
 TEST_F(DatabaseQueryPost, unknown_fields) {
-  auto root = DualityViewBuilder("mrstestdb", "country", TableFlag::WITH_INSERT)
+  auto root = JsonMappingBuilder("mrstestdb", "country", TableFlag::WITH_INSERT)
                   .field("country_id", FieldFlag::PRIMARY)
                   .field("country")
                   .resolve(m_.get(), true);
 
   // no PK value given but it's autogenerated
   {
-    auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+    auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
 
     EXPECT_JSON_ERROR(
         rest->insert(m_.get(), make_json(R"*({
@@ -214,7 +214,7 @@ TEST_F(DatabaseQueryPost, unknown_fields) {
 
 TEST_F(DatabaseQueryPost, disabled_fields) {
   auto root =
-      DualityViewBuilder("mrstestdb", "actor", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "actor", TableFlag::WITH_INSERT)
           .field("actor_id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
           .field("first_name")
           .field("last_name")
@@ -245,7 +245,7 @@ TEST_F(DatabaseQueryPost, disabled_fields) {
   }
   // error if disabled fields given
   {
-    auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+    auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
 
     EXPECT_JSON_ERROR(
         rest->insert(m_.get(), make_json(R"*({
@@ -263,7 +263,7 @@ TEST_F(DatabaseQueryPost, disabled_fields) {
 TEST_F(DatabaseQueryPost, type_check_nested) {
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "country", TableFlag::WITH_INSERT)
+        JsonMappingBuilder("mrstestdb", "country", TableFlag::WITH_INSERT)
             .field("country_id", FieldFlag::PRIMARY)
             .field_to_one("nest", ViewBuilder("city")
                                       .field("country_id")
@@ -271,7 +271,7 @@ TEST_F(DatabaseQueryPost, type_check_nested) {
                                       .field("city"))
             .resolve(m_.get(), true);
     {
-      auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+      auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
       EXPECT_JSON_ERROR(
           rest->insert(m_.get(), make_json(R"*({
     "country_id": 123,
@@ -280,7 +280,7 @@ TEST_F(DatabaseQueryPost, type_check_nested) {
           "Invalid value for \"nest\" for table `country` in JSON input");
     }
     {
-      auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+      auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
       EXPECT_JSON_ERROR(
           rest->insert(m_.get(), make_json(R"*({
     "country_id": 123,
@@ -289,7 +289,7 @@ TEST_F(DatabaseQueryPost, type_check_nested) {
           "Invalid value for \"nest\" for table `country` in JSON input");
     }
     {
-      auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+      auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
       EXPECT_JSON_ERROR(
           rest->insert(m_.get(), make_json(R"*({
     "country_id": 123,
@@ -301,7 +301,7 @@ TEST_F(DatabaseQueryPost, type_check_nested) {
   }
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "country", TableFlag::WITH_INSERT)
+        JsonMappingBuilder("mrstestdb", "country", TableFlag::WITH_INSERT)
             .field("country_id", FieldFlag::PRIMARY)
             .field_to_many("nest",
                            ViewBuilder("city", TableFlag::WITH_INSERT)
@@ -311,7 +311,7 @@ TEST_F(DatabaseQueryPost, type_check_nested) {
                            false)
             .resolve(m_.get(), true);
     {
-      auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+      auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
       EXPECT_JSON_ERROR(
           rest->insert(m_.get(), make_json(R"*({
       "country_id": 123,
@@ -320,7 +320,7 @@ TEST_F(DatabaseQueryPost, type_check_nested) {
           "Invalid value for \"nest\" for table `country` in JSON input");
     }
     {
-      auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+      auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
       EXPECT_JSON_ERROR(
           rest->insert(m_.get(), make_json(R"*({
       "country_id": 123,
@@ -329,7 +329,7 @@ TEST_F(DatabaseQueryPost, type_check_nested) {
           "Invalid value for \"nest\" for table `country` in JSON input");
     }
     {
-      auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+      auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
       EXPECT_JSON_ERROR(
           rest->insert(m_.get(), make_json(R"*({
       "country_id": 123,
@@ -338,7 +338,7 @@ TEST_F(DatabaseQueryPost, type_check_nested) {
           "Invalid value for \"nest\" for table `country` in JSON input");
     }
     {
-      auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+      auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
       EXPECT_JSON_ERROR(
           rest->insert(m_.get(), make_json(R"*({
       "country_id": 123,
@@ -347,7 +347,7 @@ TEST_F(DatabaseQueryPost, type_check_nested) {
           "Invalid value for \"nest\" for table `country` in JSON input");
     }
     {
-      auto rest = std::make_unique<mrs::database::dv::DualityViewUpdater>(root);
+      auto rest = std::make_unique<mrs::database::dv::JsonMappingUpdater>(root);
       EXPECT_JSON_ERROR(rest->insert(m_.get(), make_json(R"*({
     "country_id": 123,
     "nest": [1234]
@@ -359,7 +359,7 @@ TEST_F(DatabaseQueryPost, type_check_nested) {
 
 TEST_F(DatabaseQueryPost, special_types) {
   auto root =
-      DualityViewBuilder("mrstestdb", "typetest", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "typetest", TableFlag::WITH_INSERT)
           .field("id", FieldFlag::PRIMARY)
           .field("Geom", "geom", "GEOMETRY")
           .field("Bool", "bool", "BIT(1)")
@@ -427,7 +427,7 @@ TEST_F(DatabaseQueryPost, special_types) {
 TEST_F(DatabaseQueryPost, store_bool_in_int) {
   // sending bool values to be stored in any int column should be converted to 1
   // or 0
-  auto root = DualityViewBuilder("mrstestdb", "t2_base", TableFlag::WITH_INSERT)
+  auto root = JsonMappingBuilder("mrstestdb", "t2_base", TableFlag::WITH_INSERT)
                   .column("id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
                   .field("data2", "data2", "INT")
                   .resolve(m_.get(), true);
@@ -455,7 +455,7 @@ TEST_F(DatabaseQueryPost, field_defaults) {
   ))*");
 
   auto root =
-      DualityViewBuilder("mrstestdb", "defaults_test",
+      JsonMappingBuilder("mrstestdb", "defaults_test",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("a", "a", "int", FieldFlag::PRIMARY)
           .field("b")
@@ -485,7 +485,7 @@ TEST_F(DatabaseQueryPost, root_rowowner_notpk) {
   prepare(TestSchema::PLAIN);
   prepare_user_metadata();
 
-  auto root = DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
+  auto root = JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
                   .field("id", FieldFlag::PRIMARY)
                   .field("owner_id", FieldFlag::OWNER)
                   .field("data2", "data2", "INT")
@@ -536,7 +536,7 @@ TEST_F(DatabaseQueryPost, root_rowowner_pk) {
   prepare_user_metadata();
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root_owner", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "root_owner", TableFlag::WITH_INSERT)
           .field("id", FieldFlag::PRIMARY | FieldFlag::OWNER)
           .field("data2", "data2", "INT")
           .resolve(m_.get());
@@ -582,7 +582,7 @@ TEST_F(DatabaseQueryPost, root_rowowner_pk) {
 TEST_F(DatabaseQueryPost, nested_11_multi) {
   // nested 1:1 children can't be inserted
   auto root =
-      DualityViewBuilder("mrstestdb", "tc2_base", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "tc2_base", TableFlag::WITH_INSERT)
           .field("id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
           .field("sub_id", FieldFlag::PRIMARY)
           .field("data1")
@@ -613,7 +613,7 @@ TEST_F(DatabaseQueryPost, nested_11_multi) {
 
 TEST_F(DatabaseQueryPost, nested_nm_autoinc_ref) {
   auto root =
-      DualityViewBuilder("mrstestdb", "actor", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "actor", TableFlag::WITH_INSERT)
           .field("actor_id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
           .field("first_name")
           .field("last_name")
@@ -656,7 +656,7 @@ TEST_F(DatabaseQueryPost, nested_nm_autoinc_ref) {
 
 TEST_F(DatabaseQueryPost, nested_nm_autoinc_ref_extras) {
   auto root =
-      DualityViewBuilder("mrstestdb", "actor", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "actor", TableFlag::WITH_INSERT)
           .field("actor_id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
           .field("first_name")
           .field("last_name")
@@ -704,7 +704,7 @@ TEST_F(DatabaseQueryPost, nested_nm_autoinc_ref_extras) {
 TEST_F(DatabaseQueryPost, DISABLED_nested_nm_row_owner) {
   // TODO: look into making PK that's also FK optional
   auto root =
-      DualityViewBuilder("mrstestdb", "t2_base", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "t2_base", TableFlag::WITH_INSERT)
           .field("id",
                  FieldFlag::PRIMARY | FieldFlag::AUTO_INC | FieldFlag::OWNER)
           .field("data1")
@@ -740,7 +740,7 @@ TEST_F(DatabaseQueryPost, DISABLED_nested_nm_row_owner) {
 TEST_F(DatabaseQueryPost, nested_nm_multi_row_owner) {
   prepare(TestSchema::COMPOSITE_OWNER);
 
-  auto root = DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
+  auto root = JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_INSERT)
                   .field("id1", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
                   .field("id2", FieldFlag::PRIMARY | FieldFlag::OWNER)
                   .field("data1")

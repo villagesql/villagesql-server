@@ -35,12 +35,12 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "mrs/database/duality_view/errors.h"
-#include "mrs/database/duality_view/select.h"
 #include "mrs/database/entry/object.h"
 #include "mrs/database/filter_object_generator.h"
 #include "mrs/database/helper/object_row_ownership.h"
 #include "mrs/database/helper/query.h"
+#include "mrs/database/json_mapper/errors.h"
+#include "mrs/database/json_mapper/select.h"
 #include "mrs/database/query_uuid.h"
 #include "mrs/interface/query_retry.h"
 #include "mysqlrouter/utils_sqlstring.h"
@@ -49,11 +49,11 @@ namespace mrs {
 namespace database {
 namespace dv {
 
-class DualityViewUpdater : public QueryLog {
+class JsonMappingUpdater : public QueryLog {
  public:
   using Object = entry::Object;
 
-  explicit DualityViewUpdater(
+  explicit JsonMappingUpdater(
       std::shared_ptr<Object> view,
       const ObjectRowOwnership &row_ownership_info = {});
 

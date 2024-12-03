@@ -37,15 +37,15 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "mrs/database/duality_view/change.h"
-#include "mrs/database/duality_view/common.h"
-#include "mrs/database/duality_view/errors.h"
-#include "mrs/database/duality_view/insert.h"
-#include "mrs/database/duality_view/select.h"
 #include "mrs/database/entry/object.h"
 #include "mrs/database/filter_object_generator.h"
 #include "mrs/database/helper/object_row_ownership.h"
 #include "mrs/database/helper/query.h"
+#include "mrs/database/json_mapper/change.h"
+#include "mrs/database/json_mapper/common.h"
+#include "mrs/database/json_mapper/errors.h"
+#include "mrs/database/json_mapper/insert.h"
+#include "mrs/database/json_mapper/select.h"
 #include "mysqlrouter/utils_sqlstring.h"
 
 namespace mrs {
@@ -54,11 +54,11 @@ namespace dv {
 
 class RowUpdateBase : public RowChangeOperation {
  public:
-  RowUpdateBase(std::shared_ptr<DualityViewUpdater::Operation> parent,
+  RowUpdateBase(std::shared_ptr<JsonMappingUpdater::Operation> parent,
                 std::shared_ptr<Table> table, const PrimaryKeyColumnValues &pk,
                 const ObjectRowOwnership &row_ownership);
 
-  RowUpdateBase(std::shared_ptr<DualityViewUpdater::Operation> parent,
+  RowUpdateBase(std::shared_ptr<JsonMappingUpdater::Operation> parent,
                 std::shared_ptr<Table> table,
                 const ObjectRowOwnership &row_ownership);
 
@@ -73,7 +73,7 @@ class RowUpdateBase : public RowChangeOperation {
 
 class RowUpdate : public RowUpdateBase {
  public:
-  RowUpdate(std::shared_ptr<DualityViewUpdater::Operation> parent,
+  RowUpdate(std::shared_ptr<JsonMappingUpdater::Operation> parent,
             std::shared_ptr<Table> table, const PrimaryKeyColumnValues &pk,
             const ObjectRowOwnership &row_ownership);
 
@@ -98,7 +98,7 @@ class RowUpdate : public RowUpdateBase {
   bool feed_columns(mysqlrouter::sqlstring &sql, bool is_null,
                     const char *separator) const;
 
-  RowUpdate(std::shared_ptr<DualityViewUpdater::Operation> parent,
+  RowUpdate(std::shared_ptr<JsonMappingUpdater::Operation> parent,
             std::shared_ptr<Table> table,
             const ObjectRowOwnership &row_ownership)
       : RowUpdateBase(parent, table, row_ownership) {}
@@ -112,7 +112,7 @@ class RowUpdate : public RowUpdateBase {
 
 class RowUpdateReferencing : public RowUpdate {
  public:
-  RowUpdateReferencing(std::shared_ptr<DualityViewUpdater::Operation> parent,
+  RowUpdateReferencing(std::shared_ptr<JsonMappingUpdater::Operation> parent,
                        std::shared_ptr<Table> table,
                        const ObjectRowOwnership &row_ownership);
 
@@ -124,7 +124,7 @@ class RowUpdateReferencing : public RowUpdate {
 
 class RowNoUpdateOrIgnore : public RowUpdateBase {
  public:
-  RowNoUpdateOrIgnore(std::shared_ptr<DualityViewUpdater::Operation> parent,
+  RowNoUpdateOrIgnore(std::shared_ptr<JsonMappingUpdater::Operation> parent,
                       std::shared_ptr<Table> table,
                       const PrimaryKeyColumnValues &pk,
                       const ObjectRowOwnership &row_ownership)
@@ -137,7 +137,7 @@ class RowNoUpdateOrIgnore : public RowUpdateBase {
 
 class RowNoUpdateOrError : public RowUpdate {
  public:
-  RowNoUpdateOrError(std::shared_ptr<DualityViewUpdater::Operation> parent,
+  RowNoUpdateOrError(std::shared_ptr<JsonMappingUpdater::Operation> parent,
                      std::shared_ptr<Table> table,
                      const PrimaryKeyColumnValues &pk,
                      const ObjectRowOwnership &row_ownership)
@@ -155,17 +155,17 @@ class RowNoUpdateOrError : public RowUpdate {
 };
 
 std::shared_ptr<RowUpdate> make_row_update(
-    std::shared_ptr<DualityViewUpdater::Operation> parent,
+    std::shared_ptr<JsonMappingUpdater::Operation> parent,
     std::shared_ptr<Table> table, const PrimaryKeyColumnValues &pk,
     const ObjectRowOwnership &row_ownership);
 
 std::shared_ptr<RowNoUpdateOrIgnore> make_row_no_update_or_ignore(
-    std::shared_ptr<DualityViewUpdater::Operation> parent,
+    std::shared_ptr<JsonMappingUpdater::Operation> parent,
     std::shared_ptr<Table> table, const PrimaryKeyColumnValues &pk,
     const ObjectRowOwnership &row_ownership);
 
 std::shared_ptr<RowNoUpdateOrError> make_row_no_update_or_error(
-    std::shared_ptr<DualityViewUpdater::Operation> parent,
+    std::shared_ptr<JsonMappingUpdater::Operation> parent,
     std::shared_ptr<Table> table, const PrimaryKeyColumnValues &pk,
     const ObjectRowOwnership &row_ownership);
 

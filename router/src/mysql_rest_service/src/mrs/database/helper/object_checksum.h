@@ -27,8 +27,8 @@
 #include <string>
 
 #include "helper/interface/digester.h"
-#include "mrs/database/duality_view/select.h"
 #include "mrs/database/entry/object.h"
+#include "mrs/database/json_mapper/select.h"
 #include "mysqlrouter/digest.h"
 
 namespace mrs {

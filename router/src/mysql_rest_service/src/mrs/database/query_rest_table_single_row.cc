@@ -25,9 +25,9 @@
 #include "mrs/database/query_rest_table_single_row.h"
 #include <stdexcept>
 #include "helper/json/to_string.h"
-#include "mrs/database/duality_view/common.h"
-#include "mrs/database/duality_view/select.h"
 #include "mrs/database/helper/object_checksum.h"
+#include "mrs/database/json_mapper/common.h"
+#include "mrs/database/json_mapper/select.h"
 
 namespace mrs {
 namespace database {

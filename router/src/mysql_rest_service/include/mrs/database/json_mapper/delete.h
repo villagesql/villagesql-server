@@ -37,14 +37,14 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "mrs/database/duality_view/change.h"
-#include "mrs/database/duality_view/common.h"
-#include "mrs/database/duality_view/errors.h"
-#include "mrs/database/duality_view/select.h"
 #include "mrs/database/entry/object.h"
 #include "mrs/database/filter_object_generator.h"
 #include "mrs/database/helper/object_row_ownership.h"
 #include "mrs/database/helper/query.h"
+#include "mrs/database/json_mapper/change.h"
+#include "mrs/database/json_mapper/common.h"
+#include "mrs/database/json_mapper/errors.h"
+#include "mrs/database/json_mapper/select.h"
 #include "mysqlrouter/utils_sqlstring.h"
 
 namespace mrs {

@@ -23,13 +23,13 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/mysql_rest_service/src/mrs/database/duality_view/change.h"
+#include "router/src/mysql_rest_service/src/mrs/database/json_mapper/change.h"
 
 #include <utility>
-#include "mrs/database/duality_view/delete.h"
-#include "mrs/database/duality_view/insert.h"
-#include "mrs/database/duality_view/select.h"
-#include "mrs/database/duality_view/update.h"
+#include "mrs/database/json_mapper/delete.h"
+#include "mrs/database/json_mapper/insert.h"
+#include "mrs/database/json_mapper/select.h"
+#include "mrs/database/json_mapper/update.h"
 #include "mrs/interface/rest_error.h"
 #include "mysqld_error.h"
 #include "mysqlrouter/base64.h"
@@ -44,7 +44,7 @@ using namespace helper::json::sql;
 
 using MySQLSession = mysqlrouter::MySQLSession;
 
-void DualityViewUpdater::Operation::process(JSONInputObject input) {
+void JsonMappingUpdater::Operation::process(JSONInputObject input) {
   JSONInputObject::MemberReference member;
 
   // go through PKs in the first iteration
@@ -92,8 +92,8 @@ void DualityViewUpdater::Operation::process(JSONInputObject input) {
   }
 }
 
-mysqlrouter::sqlstring DualityViewUpdater::Operation::join_to_parent(
-    std::vector<std::shared_ptr<DualityViewUpdater::Operation>> *parents)
+mysqlrouter::sqlstring JsonMappingUpdater::Operation::join_to_parent(
+    std::vector<std::shared_ptr<JsonMappingUpdater::Operation>> *parents)
     const {
   mysqlrouter::sqlstring where;
 
@@ -113,7 +113,7 @@ mysqlrouter::sqlstring DualityViewUpdater::Operation::join_to_parent(
   return where;
 }
 
-void DualityViewUpdater::Operation::append_match_condition(
+void JsonMappingUpdater::Operation::append_match_condition(
     mysqlrouter::sqlstring &sql) const {
   mysqlrouter::sqlstring where;
   auto cont = add_row_owner_check(&where, true);

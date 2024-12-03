@@ -353,7 +353,7 @@ class Object : public Table {
   std::string as_graphql(bool extended = false) const;
 };
 
-using DualityView = Object;
+using JsonMapping = Object;
 
 }  // namespace entry
 }  // namespace database

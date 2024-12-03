@@ -29,8 +29,8 @@
 
 #include "helper/expect_throw_msg.h"
 #include "mock/mock_session.h"
-#include "mrs/database/duality_view/check.h"
 #include "mrs/database/helper/object_checksum.h"
+#include "mrs/database/json_mapper/check.h"
 #include "test_mrs_database_rest_table.h"
 #include "test_mrs_object_utils.h"
 
@@ -44,9 +44,9 @@ using testing::Test;
 
 #define EXPECT_UUID(value) EXPECT_EQ(16, unescape(value).size() - 2) << value
 
-class DualityViewCheck : public DatabaseRestTableTest {
+class JsonMappingCheck : public DatabaseRestTableTest {
  public:
-  void check_e(std::shared_ptr<DualityView> view, const std::string &input,
+  void check_e(std::shared_ptr<JsonMapping> view, const std::string &input,
                bool for_update = false,
                const ObjectRowOwnership &row_owner = {}) {
     SCOPED_TRACE(input);
@@ -67,10 +67,10 @@ class DualityViewCheck : public DatabaseRestTableTest {
     }
   }
 
-  void check(std::shared_ptr<DualityView> view, const std::string &input,
+  void check(std::shared_ptr<JsonMapping> view, const std::string &input,
              bool for_update = false,
              const ObjectRowOwnership &row_owner = {}) {
-    DualityViewUpdater dvu(view, row_owner);
+    JsonMappingUpdater dvu(view, row_owner);
 
     auto json = make_json(input);
     assert(json.IsObject());
@@ -78,18 +78,18 @@ class DualityViewCheck : public DatabaseRestTableTest {
     dvu.check(json, for_update);
   }
 
-  void insert_check(std::shared_ptr<DualityView> view, const std::string &input,
+  void insert_check(std::shared_ptr<JsonMapping> view, const std::string &input,
                     const ObjectRowOwnership &row_owner = {}) {
     check(view, input, false, row_owner);
   }
 
-  void update_check(std::shared_ptr<DualityView> view, const std::string &input,
+  void update_check(std::shared_ptr<JsonMapping> view, const std::string &input,
                     const ObjectRowOwnership &row_owner = {}) {
     check(view, input, true, row_owner);
   }
 };
 
-TEST_F(DualityViewCheck, is_read_only) {
+TEST_F(JsonMappingCheck, is_read_only) {
   int flags[] = {
       0,
       TableFlag::WITH_INSERT,
@@ -112,7 +112,7 @@ TEST_F(DualityViewCheck, is_read_only) {
             continue;
 
           auto root =
-              DualityViewBuilder("mrstestdb", "film", i)
+              JsonMappingBuilder("mrstestdb", "film", i)
                   .field("id", "film_id", FieldFlag::AUTO_INC)
                   .field("title")
                   .field("description")
@@ -148,7 +148,7 @@ TEST_F(DualityViewCheck, is_read_only) {
   }
 }
 
-TEST_F(DualityViewCheck, insert_common) {
+TEST_F(JsonMappingCheck, insert_common) {
   // WITH INSERT/NOINSERT doesn't affect checks here
   // CHECK/NOCHECK shouldn't either
   int film_flags[] = {TableFlag::WITH_CHECK, TableFlag::WITH_NOCHECK};
@@ -156,7 +156,7 @@ TEST_F(DualityViewCheck, insert_common) {
     SCOPED_TRACE(std::to_string(i));
 
     auto root =
-        DualityViewBuilder("mrstestdb", "film", film_flags[i])
+        JsonMappingBuilder("mrstestdb", "film", film_flags[i])
             .field("id", "film_id", FieldFlag::AUTO_INC)
             .field("title")
             .field("description")
@@ -435,9 +435,9 @@ TEST_F(DualityViewCheck, insert_common) {
   }
 }
 
-TEST_F(DualityViewCheck, missing_fields) {
+TEST_F(JsonMappingCheck, missing_fields) {
   auto root =
-      DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_NOCHECK)
+      JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_NOCHECK)
           .field("id", "film_id", FieldFlag::AUTO_INC)
           .field("title")
           .field("description")
@@ -459,7 +459,7 @@ TEST_F(DualityViewCheck, missing_fields) {
           .resolve(m_.get());
 
   auto root_check =
-      DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_CHECK)
+      JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_CHECK)
           .field("id", "film_id", FieldFlag::AUTO_INC)
           .field("title")
           .field("description")
@@ -481,7 +481,7 @@ TEST_F(DualityViewCheck, missing_fields) {
           .resolve(m_.get());
 
   auto root_check_nocheck =
-      DualityViewBuilder("mrstestdb", "film")
+      JsonMappingBuilder("mrstestdb", "film")
           .field("id", "film_id", FieldFlag::AUTO_INC)
           .field("title")
           .field("description", FieldFlag::WITH_NOCHECK)
@@ -697,10 +697,10 @@ TEST_F(DualityViewCheck, missing_fields) {
   })*");
 }
 
-TEST_F(DualityViewCheck, duplicate_id_in_array) {
+TEST_F(JsonMappingCheck, duplicate_id_in_array) {
   // not affected by flags
   auto root =
-      DualityViewBuilder("mrstestdb", "film", 0)
+      JsonMappingBuilder("mrstestdb", "film", 0)
           .field("id", "film_id", FieldFlag::AUTO_INC)
           .field("title")
           .field("description")
@@ -774,9 +774,9 @@ TEST_F(DualityViewCheck, duplicate_id_in_array) {
       "Duplicate keys in \"actors\" for table `film` in JSON input");
 }
 
-TEST_F(DualityViewCheck, insert_missing_pk) {
+TEST_F(JsonMappingCheck, insert_missing_pk) {
   auto root =
-      DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_CHECK)
+      JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_CHECK)
           .field("id", "film_id", FieldFlag::AUTO_INC)
           .field("title")
           .field("description")
@@ -926,7 +926,7 @@ TEST_F(DualityViewCheck, insert_missing_pk) {
                     "ID for table `film_actor` missing in JSON input");
 }
 
-TEST_F(DualityViewCheck, unnest_11) {
+TEST_F(JsonMappingCheck, unnest_11) {
   // WITH INSERT/NOINSERT doesn't affect checks here
   // CHECK/NOCHECK shouldn't either
   int film_flags[] = {TableFlag::WITH_CHECK, TableFlag::WITH_NOCHECK};
@@ -934,7 +934,7 @@ TEST_F(DualityViewCheck, unnest_11) {
     SCOPED_TRACE(std::to_string(i));
 
     auto root =
-        DualityViewBuilder("mrstestdb", "film",
+        JsonMappingBuilder("mrstestdb", "film",
                            film_flags[i] | TableFlag::WITH_UPDATE)
             .field("id", "film_id", FieldFlag::AUTO_INC)
             .field("title")
@@ -966,13 +966,13 @@ TEST_F(DualityViewCheck, unnest_11) {
   }
 }
 
-TEST_F(DualityViewCheck, unnest_1n) {
+TEST_F(JsonMappingCheck, unnest_1n) {
   int flags[] = {TableFlag::WITH_CHECK, TableFlag::WITH_NOCHECK};
   for (int i = 0; i < 1; i++) {
     SCOPED_TRACE(std::to_string(i));
 
     auto root =
-        DualityViewBuilder("mrstestdb", "country",
+        JsonMappingBuilder("mrstestdb", "country",
                            flags[i] | TableFlag::WITH_UPDATE)
             .field("id", "country_id", FieldFlag::AUTO_INC)
             .field("country")
@@ -1006,12 +1006,12 @@ TEST_F(DualityViewCheck, unnest_1n) {
   }
 }
 
-TEST_F(DualityViewCheck, non_pk_fields_are_optional) {
+TEST_F(JsonMappingCheck, non_pk_fields_are_optional) {
   // - all PKs are WITH CHECK (for etag ) by default, regardless of the table
   // level CHECK
 
   auto root =
-      DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_INSERT)
+      JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_INSERT)
           .field("id", "film_id",
                  FieldFlag::PRIMARY | FieldFlag::AUTO_INC |
                      FieldFlag::WITH_NOCHECK)
@@ -1087,7 +1087,7 @@ static std::string get_etag(const std::string &json) {
   return j["_metadata"]["etag"].GetString();
 }
 
-TEST_F(DualityViewCheck, checksum) {
+TEST_F(JsonMappingCheck, checksum) {
   auto data = R"*({
     "id": 123,
     "title": "Title",
@@ -1121,7 +1121,7 @@ TEST_F(DualityViewCheck, checksum) {
   // defaults
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "film", 0)
+        JsonMappingBuilder("mrstestdb", "film", 0)
             .field("id", "film_id", FieldFlag::AUTO_INC)
             .field("title")
             .field("description")
@@ -1153,7 +1153,7 @@ TEST_F(DualityViewCheck, checksum) {
   // explicit WITH CHECK
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_CHECK)
+        JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_CHECK)
             .field("id", "film_id", FieldFlag::AUTO_INC)
             .field("title")
             .field("description", FieldFlag::WITH_CHECK)
@@ -1185,7 +1185,7 @@ TEST_F(DualityViewCheck, checksum) {
   // explicit WITH CHECK, disable check in some columns
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_CHECK)
+        JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_CHECK)
             .field("id", "film_id", FieldFlag::AUTO_INC)
             .field("title")
             .field("description", FieldFlag::WITH_NOCHECK)
@@ -1216,7 +1216,7 @@ TEST_F(DualityViewCheck, checksum) {
   // small variation
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_CHECK)
+        JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_CHECK)
             .field("id", "film_id", FieldFlag::AUTO_INC)
             .field("title")
             .field("description", FieldFlag::WITH_NOCHECK)
@@ -1249,7 +1249,7 @@ TEST_F(DualityViewCheck, checksum) {
   // same but disable field
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_CHECK)
+        JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_CHECK)
             .field("id", "film_id", FieldFlag::AUTO_INC)
             .field("title")
             .field("description", FieldFlag::WITH_NOCHECK)
@@ -1282,7 +1282,7 @@ TEST_F(DualityViewCheck, checksum) {
   // invert the flags, but etag should match
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_NOCHECK)
+        JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_NOCHECK)
             .field("id", "film_id", FieldFlag::AUTO_INC | FieldFlag::WITH_CHECK)
             .field("title", FieldFlag::WITH_CHECK)
             .field("description", 0)
@@ -1317,7 +1317,7 @@ TEST_F(DualityViewCheck, checksum) {
   // PK is always checksummed, unless explicitly NOCHECK on the field
   {
     auto root1 =
-        DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_NOCHECK)
+        JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_NOCHECK)
             .field("id", "film_id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
             .field("title", FieldFlag::WITH_CHECK)
             .field("description", 0)
@@ -1334,7 +1334,7 @@ TEST_F(DualityViewCheck, checksum) {
             .resolve(m_.get());
 
     auto root2 =
-        DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_NOCHECK)
+        JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_NOCHECK)
             .field("id", "film_id",
                    FieldFlag::PRIMARY | FieldFlag::AUTO_INC |
                        FieldFlag::WITH_NOCHECK)
@@ -1395,7 +1395,7 @@ TEST_F(DualityViewCheck, checksum) {
   // completely NOCHECK
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "film", TableFlag::WITH_NOCHECK)
+        JsonMappingBuilder("mrstestdb", "film", TableFlag::WITH_NOCHECK)
             .field("id", "film_id",
                    FieldFlag::PRIMARY | FieldFlag::AUTO_INC |
                        FieldFlag::WITH_NOCHECK)

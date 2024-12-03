@@ -52,7 +52,7 @@ class TestDigest : public helper::interface::Digester {
 };
 
 TEST(ObjectChecksum, plain) {
-  auto root = DualityViewBuilder("mrstestdb", "actor")
+  auto root = JsonMappingBuilder("mrstestdb", "actor")
                   .field("field1")
                   .field("field2")
                   .field("field3")
@@ -98,7 +98,7 @@ TEST(ObjectChecksum, plain) {
 
 TEST(ObjectChecksum, object) {
   auto root =
-      DualityViewBuilder("mrstestdb", "object")
+      JsonMappingBuilder("mrstestdb", "object")
           .field("field1")
           .field("field2")
           .field_to_one(
@@ -149,7 +149,7 @@ TEST(ObjectChecksum, object) {
 
 TEST(ObjectChecksum, array) {
   auto root =
-      DualityViewBuilder("mrstestdb", "object")
+      JsonMappingBuilder("mrstestdb", "object")
           .field("field1")
           .field_to_many(
               "nested1",
@@ -213,7 +213,7 @@ TEST(ObjectChecksum, array) {
 
 TEST(ObjectChecksum, nocheck_disabled) {
   auto root =
-      DualityViewBuilder("mrstestdb", "actor")
+      JsonMappingBuilder("mrstestdb", "actor")
           .field("field")
           .field("field2", FieldFlag::WITH_NOCHECK)
           .field("field3", FieldFlag::DISABLED)
@@ -372,7 +372,7 @@ TEST(ObjectChecksum, nocheck_disabled) {
 
 TEST(ObjectChecksum, column_filter) {
   auto root =
-      DualityViewBuilder("mrstestdb", "actor")
+      JsonMappingBuilder("mrstestdb", "actor")
           .field("field")
           .field("field2", FieldFlag::WITH_NOCHECK)
           .field("field3", FieldFlag::DISABLED)

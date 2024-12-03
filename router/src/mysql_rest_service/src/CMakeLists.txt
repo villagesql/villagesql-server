@@ -112,14 +112,14 @@ ADD_STATIC_LIBRARY(mysql_rest_service_db
   mrs/database/helper/object_checksum.cc
   mrs/database/helper/sp_function_query.cc
   mrs/database/entry/object.cc
-  mrs/database/duality_view/json_input.cc
-  mrs/database/duality_view/common.cc
-  mrs/database/duality_view/change.cc
-  mrs/database/duality_view/delete.cc
-  mrs/database/duality_view/insert.cc
-  mrs/database/duality_view/update.cc
-  mrs/database/duality_view/select.cc
-  mrs/database/duality_view/check.cc
+  mrs/database/json_mapper/json_input.cc
+  mrs/database/json_mapper/common.cc
+  mrs/database/json_mapper/change.cc
+  mrs/database/json_mapper/delete.cc
+  mrs/database/json_mapper/insert.cc
+  mrs/database/json_mapper/update.cc
+  mrs/database/json_mapper/select.cc
+  mrs/database/json_mapper/check.cc
 
   COMPILE_DEFINITIONS
   PRIVATE MYSQL_ROUTER_LOG_DOMAIN="mrs_db"

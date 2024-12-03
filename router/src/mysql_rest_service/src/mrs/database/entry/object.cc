@@ -178,7 +178,7 @@ bool Object::is_read_only() const {
   return false;
 }
 
-std::string DualityView::as_graphql(bool extended) const {
+std::string JsonMapping::as_graphql(bool extended) const {
   std::string flags;
   flags += with_insert() ? " @INSERT" : (extended ? " @NOINSERT" : "");
   flags += with_update() ? " @UPDATE" : (extended ? " @NOUPDATE" : "");

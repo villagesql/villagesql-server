@@ -36,7 +36,7 @@
 #include "helper/json/rapid_json_to_text.h"
 #include "helper/json/to_sqlstring.h"
 #include "helpers/shared_server.h"
-#include "mrs/database/duality_view/select.h"
+#include "mrs/database/json_mapper/select.h"
 #include "mrs/database/query_rest_table.h"
 #include "mrs/database/query_rest_table_single_row.h"
 #include "mrs/http/error.h"
@@ -103,7 +103,7 @@ class DatabaseRestTableTest : public testing::Test {
   bool binlog_changed() const;
 
   std::string select_one(
-      std::shared_ptr<mrs::database::entry::DualityView> view,
+      std::shared_ptr<mrs::database::entry::JsonMapping> view,
       const mrs::database::PrimaryKeyColumnValues &pk,
       const mrs::database::dv::ObjectFieldFilter &field_filter = {},
       const mrs::database::ObjectRowOwnership &row_owner = {},

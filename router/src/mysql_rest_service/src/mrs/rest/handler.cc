@@ -37,7 +37,7 @@
 #include "mysqlrouter/component/http_server_component.h"
 
 #include "mrs/authentication/www_authentication_handler.h"
-#include "mrs/database/duality_view/errors.h"
+#include "mrs/database/json_mapper/errors.h"
 #include "mrs/http/error.h"
 #include "mrs/interface/rest_error.h"
 #include "mrs/rest/request_context.h"

@@ -37,8 +37,8 @@
 #include <vector>
 #include "helper/json/text_to.h"
 #include "mrs/database/converters/column_datatype_converter.h"
-#include "mrs/database/duality_view/errors.h"
 #include "mrs/database/entry/object.h"
+#include "mrs/database/json_mapper/errors.h"
 #include "mrs/database/query_entry_object.h"
 #include "mrs/interface/rest_error.h"
 #include "mysql/harness/string_utils.h"
@@ -54,7 +54,7 @@ using mrs::database::entry::Table;
 
 using mrs::database::entry::Operation;
 
-using mrs::database::entry::DualityView;
+using mrs::database::entry::JsonMapping;
 
 using mrs::database::DataMappingViewError;
 using mrs::database::JSONInputError;
@@ -216,16 +216,16 @@ class ViewBuilder {
     return *this;
   }
 
-  std::shared_ptr<DualityView> resolve(
+  std::shared_ptr<JsonMapping> resolve(
       mysqlrouter::MySQLSession *session = nullptr, bool auto_column = false) {
     int serial = 0;
 
     resolve(session, m_table.get(), serial, auto_column);
 
-    return std::static_pointer_cast<DualityView>(m_table);
+    return std::static_pointer_cast<JsonMapping>(m_table);
   }
 
-  std::shared_ptr<DualityView> root() { return resolve(); }
+  std::shared_ptr<JsonMapping> root() { return resolve(); }
 
   void resolve_columns(mysqlrouter::MySQLSession *session, Table *table,
                        bool auto_column) {
@@ -395,11 +395,11 @@ class ViewBuilder {
   }
 };
 
-class DualityViewBuilder : public ViewBuilder {
+class JsonMappingBuilder : public ViewBuilder {
  public:
-  DualityViewBuilder(const std::string &name, const std::string &schema,
+  JsonMappingBuilder(const std::string &name, const std::string &schema,
                      const std::string &table, int with_flags = 0) {
-    auto view = std::make_shared<DualityView>();
+    auto view = std::make_shared<JsonMapping>();
     view->name = name;
     m_table = view;
     m_table->schema = schema;
@@ -408,9 +408,9 @@ class DualityViewBuilder : public ViewBuilder {
     apply_with_flags(m_table.get(), with_flags);
   }
 
-  DualityViewBuilder(const std::string &schema, const std::string &table,
+  JsonMappingBuilder(const std::string &schema, const std::string &table,
                      int with_flags = 0)
-      : DualityViewBuilder(table + "_dv", schema, table, with_flags) {}
+      : JsonMappingBuilder(table + "_dv", schema, table, with_flags) {}
 };
 
 inline rapidjson::Document make_json(const std::string &json) {

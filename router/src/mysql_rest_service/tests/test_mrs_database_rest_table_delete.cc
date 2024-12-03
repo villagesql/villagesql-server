@@ -47,28 +47,28 @@ using testing::Test;
 
 class DatabaseQueryDelete : public DatabaseRestTableTest {
  public:
-  void test_delete(std::shared_ptr<DualityView> root,
+  void test_delete(std::shared_ptr<JsonMapping> root,
                    const PrimaryKeyColumnValues &pk,
                    const ObjectRowOwnership &row_owner = {}) {
-    mrs::database::dv::DualityViewUpdater rest(root, row_owner);
+    mrs::database::dv::JsonMappingUpdater rest(root, row_owner);
 
     rest.delete_(m_.get(), pk);
   }
 
-  void test_delete_f(std::shared_ptr<DualityView> root,
+  void test_delete_f(std::shared_ptr<JsonMapping> root,
                      const std::string &filter,
                      const ObjectRowOwnership &row_owner = {}) {
     FilterObjectGenerator fog(root, true, 0);
     fog.parse(filter);
 
-    mrs::database::dv::DualityViewUpdater rest(root, row_owner);
+    mrs::database::dv::JsonMappingUpdater rest(root, row_owner);
 
     rest.delete_(m_.get(), fog);
   }
 };
 
 TEST_F(DatabaseQueryDelete, no_pk) {
-  auto root = DualityViewBuilder("mrstestdb", "country", TableFlag::WITH_DELETE)
+  auto root = JsonMappingBuilder("mrstestdb", "country", TableFlag::WITH_DELETE)
                   .field("country_id", FieldFlag::PRIMARY)
                   .field("country")
                   .resolve(m_.get(), true);
@@ -95,7 +95,7 @@ TEST_F(DatabaseQueryDelete, no_pk) {
 }
 
 TEST_F(DatabaseQueryDelete, no_pk_multi) {
-  auto root = DualityViewBuilder("mrstestdb", "country", TableFlag::WITH_DELETE)
+  auto root = JsonMappingBuilder("mrstestdb", "country", TableFlag::WITH_DELETE)
                   .field("country_id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
                   .field("continent_id", FieldFlag::PRIMARY)
                   .field("country")
@@ -115,7 +115,7 @@ TEST_F(DatabaseQueryDelete, no_pk_multi) {
 
 TEST_F(DatabaseQueryDelete, plain_multi) {
   auto root =
-      DualityViewBuilder("mrstestdb", "tc2_base", TableFlag::WITH_DELETE)
+      JsonMappingBuilder("mrstestdb", "tc2_base", TableFlag::WITH_DELETE)
           .field("ID", "id", "int", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
           .field("SUBID", "sub_id", "char(2)", FieldFlag::PRIMARY)
           .field("firstName", "data1", "text")
@@ -139,7 +139,7 @@ TEST_F(DatabaseQueryDelete, plain_multi) {
 }
 
 TEST_F(DatabaseQueryDelete, plain_nodelete) {
-  auto root = DualityViewBuilder("mrstestdb", "actor", TableFlag::WITH_INSERT)
+  auto root = JsonMappingBuilder("mrstestdb", "actor", TableFlag::WITH_INSERT)
                   .field("actorId", "actor_id", "int",
                          FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
                   .field("firstName", "first_name", "text")
@@ -158,7 +158,7 @@ TEST_F(DatabaseQueryDelete, plain_owner_notpk) {
 
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+        JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
             .field("Id", "id", "int", FieldFlag::PRIMARY)
             .field("owner_id", FieldFlag::OWNER)
             .field("data1")
@@ -199,7 +199,7 @@ TEST_F(DatabaseQueryDelete, plain_owner_pk) {
 
   {
     auto root =
-        DualityViewBuilder("mrstestdb", "root_owner", TableFlag::WITH_DELETE)
+        JsonMappingBuilder("mrstestdb", "root_owner", TableFlag::WITH_DELETE)
             .field("id", FieldFlag::PRIMARY | FieldFlag::OWNER)
             .field("data1", "data1")
             .field_to_one("11",
@@ -243,7 +243,7 @@ TEST_F(DatabaseQueryDelete, plain_owner_pk) {
 }
 
 TEST_F(DatabaseQueryDelete, nested_1n) {
-  auto root = DualityViewBuilder("mrstestdb", "country", TableFlag::WITH_DELETE)
+  auto root = JsonMappingBuilder("mrstestdb", "country", TableFlag::WITH_DELETE)
                   .field("country_id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
                   .field("country")
                   .field_to_many("cities",
@@ -258,7 +258,7 @@ TEST_F(DatabaseQueryDelete, nested_1n) {
 }
 
 TEST_F(DatabaseQueryDelete, nested_1n_nodelete) {
-  auto root = DualityViewBuilder("mrstestdb", "country", TableFlag::WITH_DELETE)
+  auto root = JsonMappingBuilder("mrstestdb", "country", TableFlag::WITH_DELETE)
                   .field("country_id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
                   .field("country")
                   .field_to_many("cities",
@@ -275,7 +275,7 @@ TEST_F(DatabaseQueryDelete, nested_1n_nodelete) {
 
 TEST_F(DatabaseQueryDelete, filter_plain) {
   auto root =
-      DualityViewBuilder("mrstestdb", "actor", TableFlag::WITH_DELETE)
+      JsonMappingBuilder("mrstestdb", "actor", TableFlag::WITH_DELETE)
           .field("actorId", "actor_id", "int",
                  FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
           .field("firstName", "first_name", "text", FieldFlag::WITH_FILTERING)
@@ -296,7 +296,7 @@ TEST_F(DatabaseQueryDelete, filter_plain_row_owner_notpk) {
   prepare(TestSchema::PLAIN);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+      JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
           .field("ID", "id")
           .field("owner_id", FieldFlag::WITH_FILTERING | FieldFlag::OWNER)
           .field("data1", FieldFlag::WITH_FILTERING)
@@ -360,7 +360,7 @@ TEST_F(DatabaseQueryDelete, filter_plain_row_owner_pk) {
   prepare(TestSchema::PLAIN);
 
   auto root_pkowner =
-      DualityViewBuilder("mrstestdb", "root_owner", TableFlag::WITH_DELETE)
+      JsonMappingBuilder("mrstestdb", "root_owner", TableFlag::WITH_DELETE)
           .field("ID", "id", "int", FieldFlag::OWNER)
           .field("data1", FieldFlag::WITH_FILTERING)
           .resolve(m_.get(), true);
@@ -406,7 +406,7 @@ TEST_F(DatabaseQueryDelete, filter_plain_row_owner_pk) {
 
 TEST_F(DatabaseQueryDelete, filter_nested_nm) {
   auto root =
-      DualityViewBuilder("mrstestdb", "actor", TableFlag::WITH_DELETE)
+      JsonMappingBuilder("mrstestdb", "actor", TableFlag::WITH_DELETE)
           .field("actor_id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
           .field("first_name", FieldFlag::WITH_FILTERING)
           .field("last_name", FieldFlag::WITH_FILTERING)
@@ -436,7 +436,7 @@ TEST_F(DatabaseQueryDelete, filter_nested_nm_row_owner_notpk) {
       R"*(INSERT INTO mrstestdb.child_nm_join VALUES (1, 1), (2, 2), (1, 3), (5,1))*");
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
+      JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_DELETE)
           .field("ID", "id", "int", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
           .field("owner_id", FieldFlag::OWNER)
           .field("data1", FieldFlag::WITH_FILTERING)
@@ -503,7 +503,7 @@ TEST_F(DatabaseQueryDelete, filter_nested_nm_row_owner_pk) {
       (0x33330000000000000000000000000000, 2))*");
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root_owner", TableFlag::WITH_DELETE)
+      JsonMappingBuilder("mrstestdb", "root_owner", TableFlag::WITH_DELETE)
           .field("ID", "id", FieldFlag::OWNER)
           .field("data1", FieldFlag::WITH_FILTERING)
           .field("data2", FieldFlag::WITH_FILTERING)

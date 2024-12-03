@@ -47,15 +47,15 @@ using testing::Test;
 
 class DatabaseQueryPut : public DatabaseRestTableTest {
  public:
-  PrimaryKeyColumnValues test_put(std::shared_ptr<DualityView> root,
+  PrimaryKeyColumnValues test_put(std::shared_ptr<JsonMapping> root,
                                   const std::string &doc,
                                   const PrimaryKeyColumnValues &pk,
                                   const ObjectRowOwnership &row_owner = {}) {
-    mrs::database::dv::DualityViewUpdater rest(root, row_owner);
+    mrs::database::dv::JsonMappingUpdater rest(root, row_owner);
     return rest.update(m_.get(), pk, make_json(doc), true);
   }
 
-  void expect_put(std::shared_ptr<DualityView> root, const std::string &templ,
+  void expect_put(std::shared_ptr<JsonMapping> root, const std::string &templ,
                   const PrimaryKeyColumnValues &pk,
                   const ObjectRowOwnership &row_owner = {}) {
     std::string input, expected_output;
@@ -87,7 +87,7 @@ TEST_F(DatabaseQueryPut, etag_check) {
   prepare(TestSchema::PLAIN);
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
+      JsonMappingBuilder("mrstestdb", "root", TableFlag::WITH_UPDATE)
           .field("id")
           .field("data1")
           .field("data2")
@@ -164,7 +164,7 @@ TEST_F(DatabaseQueryPut, etag_check) {
 
 TEST_F(DatabaseQueryPut, special_types) {
   auto root =
-      DualityViewBuilder("mrstestdb", "typetest", TableFlag::WITH_UPDATE)
+      JsonMappingBuilder("mrstestdb", "typetest", TableFlag::WITH_UPDATE)
           .field("id", FieldFlag::PRIMARY)
           .field("Geom", "geom", "GEOMETRY")
           .field("Bool", "bool", "BIT(1)")
@@ -197,7 +197,7 @@ TEST_F(DatabaseQueryPut, special_types) {
   EXPECT_STREQ("[1, 2, 3]", (*row)[4]);
 
   auto root_json =
-      DualityViewBuilder("mrstestdb", "typetest", TableFlag::WITH_UPDATE)
+      JsonMappingBuilder("mrstestdb", "typetest", TableFlag::WITH_UPDATE)
           .field("id", FieldFlag::PRIMARY)
           .field("Json", "js", "JSON")
           .resolve(m_.get(), true);
@@ -227,7 +227,7 @@ TEST_F(DatabaseQueryPut, special_types) {
 }
 
 TEST_F(DatabaseQueryPut, update_plain_fields) {
-  auto root = DualityViewBuilder("mrstestdb", "actor", TableFlag::WITH_UPDATE)
+  auto root = JsonMappingBuilder("mrstestdb", "actor", TableFlag::WITH_UPDATE)
                   .field("actorId", "actor_id", "int",
                          FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
                   .field("firstName", "first_name", "text")
@@ -263,7 +263,7 @@ TEST_F(DatabaseQueryPut, update_plain_fields) {
 
 TEST_F(DatabaseQueryPut, no_pk) {
   auto root =
-      DualityViewBuilder("mrstestdb", "country",
+      JsonMappingBuilder("mrstestdb", "country",
                          TableFlag::WITH_UPDATE | TableFlag::WITH_NOCHECK)
           .field("country_id", FieldFlag::PRIMARY)
           .field("country")
@@ -292,7 +292,7 @@ TEST_F(DatabaseQueryPut, no_pk) {
   }
 
   auto root2 =
-      DualityViewBuilder("mrstestdb", "country", TableFlag::WITH_UPDATE)
+      JsonMappingBuilder("mrstestdb", "country", TableFlag::WITH_UPDATE)
           .field("country_id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
           .field("country")
           .resolve(m_.get(), true);
@@ -303,7 +303,7 @@ TEST_F(DatabaseQueryPut, no_pk) {
 }
 
 TEST_F(DatabaseQueryPut, no_pk_multi) {
-  auto root = DualityViewBuilder("mrstestdb", "country", TableFlag::WITH_UPDATE)
+  auto root = JsonMappingBuilder("mrstestdb", "country", TableFlag::WITH_UPDATE)
                   .field("country_id", FieldFlag::PRIMARY)
                   .field("continent_id", FieldFlag::PRIMARY)
                   .field("country")
@@ -331,7 +331,7 @@ TEST_F(DatabaseQueryPut, plain_owner_notpk) {
   prepare_user_metadata();
 
   auto root =
-      DualityViewBuilder("mrstestdb", "t2_base",
+      JsonMappingBuilder("mrstestdb", "t2_base",
                          TableFlag::WITH_UPDATE | TableFlag::WITH_INSERT)
           .field("id", "id", "int", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
           .field("owner_id", FieldFlag::OWNER)
@@ -420,7 +420,7 @@ TEST_F(DatabaseQueryPut, plain_owner_pk) {
    (0x33330000000000000000000000000000, 'three'))*");
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root_owner",
+      JsonMappingBuilder("mrstestdb", "root_owner",
                          TableFlag::WITH_UPDATE | TableFlag::WITH_INSERT)
           .field("id", FieldFlag::PRIMARY | FieldFlag::OWNER)
           .field("data1", "data1")
@@ -523,7 +523,7 @@ TEST_F(DatabaseQueryPut, plain_owner_pk) {
 
 TEST_F(DatabaseQueryPut, nested_11_multi) {
   auto root =
-      DualityViewBuilder("mrstestdb", "tc2_base",
+      JsonMappingBuilder("mrstestdb", "tc2_base",
                          TableFlag::WITH_INSERT | TableFlag::WITH_NOCHECK)
           .field("id", FieldFlag::PRIMARY)
           .field("sub_id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
@@ -559,7 +559,7 @@ TEST_F(DatabaseQueryPut, nested_11_multi) {
 
 TEST_F(DatabaseQueryPut, nested_n1_ref_child_autoinc) {
   auto root =
-      DualityViewBuilder("mrstestdb", "city")
+      JsonMappingBuilder("mrstestdb", "city")
           .field("city_id", FieldFlag::PRIMARY | FieldFlag::AUTO_INC)
           .field("city")
           .column("country_id")

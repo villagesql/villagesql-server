@@ -23,10 +23,10 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/mysql_rest_service/src/mrs/database/duality_view/insert.h"
+#include "router/src/mysql_rest_service/src/mrs/database/json_mapper/insert.h"
 #include "helper/json/rapid_json_to_text.h"
 #include "helper/json/to_sqlstring.h"
-#include "mrs/database/duality_view/update.h"
+#include "mrs/database/json_mapper/update.h"
 #include "mysqlrouter/base64.h"
 namespace mrs {
 namespace database {
@@ -188,7 +188,7 @@ void ReverseUuidRowInsert::on_pre_insert(MySQLSession *session) {
 }
 
 std::shared_ptr<RowInsert> _make_row_insert(
-    std::shared_ptr<DualityViewUpdater::Operation> parent,
+    std::shared_ptr<JsonMappingUpdater::Operation> parent,
     std::shared_ptr<Table> table, const ObjectRowOwnership &row_ownership,
     bool upsert) {
   auto column = table->try_get_generated_id_column();
@@ -216,13 +216,13 @@ std::shared_ptr<RowInsert> _make_row_insert(
 }
 
 std::shared_ptr<RowInsert> make_row_insert(
-    std::shared_ptr<DualityViewUpdater::Operation> parent,
+    std::shared_ptr<JsonMappingUpdater::Operation> parent,
     std::shared_ptr<Table> table, const ObjectRowOwnership &row_ownership) {
   return _make_row_insert(parent, table, row_ownership, false);
 }
 
 std::shared_ptr<RowInsert> make_row_upsert(
-    std::shared_ptr<DualityViewUpdater::Operation> parent,
+    std::shared_ptr<JsonMappingUpdater::Operation> parent,
     std::shared_ptr<Table> table, const ObjectRowOwnership &row_ownership) {
   return _make_row_insert(parent, table, row_ownership, true);
 }

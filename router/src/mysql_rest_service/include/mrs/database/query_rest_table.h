@@ -30,7 +30,6 @@
 #include <string>
 #include <vector>
 
-#include "mrs/database/duality_view/select.h"
 #include "mrs/database/entry/auth_user.h"
 #include "mrs/database/entry/object.h"
 #include "mrs/database/entry/row_group_ownership.h"
@@ -38,6 +37,7 @@
 #include "mrs/database/filter_object_generator.h"
 #include "mrs/database/helper/object_row_ownership.h"
 #include "mrs/database/helper/query.h"
+#include "mrs/database/json_mapper/select.h"
 #include "mrs/database/json_template.h"
 
 namespace mrs {

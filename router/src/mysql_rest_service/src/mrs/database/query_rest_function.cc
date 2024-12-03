@@ -27,7 +27,7 @@
 #include "mysql/harness/logging/logging.h"
 
 #include "helper/mysql_column_types.h"
-#include "mrs/database/duality_view/select.h"
+#include "mrs/database/json_mapper/select.h"
 
 IMPORT_LOG_FUNCTIONS()
 

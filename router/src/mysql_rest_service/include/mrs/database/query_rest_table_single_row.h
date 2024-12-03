@@ -31,7 +31,7 @@
 #include <vector>
 
 #include "helper/mysql_column.h"
-#include "mrs/database/duality_view/select.h"
+#include "mrs/database/json_mapper/select.h"
 #include "mrs/database/query_rest_table.h"
 
 namespace mrs {

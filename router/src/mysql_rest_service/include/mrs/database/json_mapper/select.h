@@ -96,7 +96,7 @@ class JsonQueryBuilder {
         for_update_(for_update),
         bigins_as_string_{for_bigins_as_string} {}
 
-  void process_view(std::shared_ptr<entry::DualityView> view);
+  void process_view(std::shared_ptr<entry::JsonMapping> view);
 
   mysqlrouter::sqlstring query() const {
     mysqlrouter::sqlstring q{"SELECT JSON_OBJECT(?) FROM ?"};

@@ -32,10 +32,10 @@
 #include <vector>
 #include "helper/json/rapid_json_to_text.h"
 #include "helper/json/to_sqlstring.h"
-#include "mrs/database/duality_view/common.h"
-#include "mrs/database/duality_view/errors.h"
-#include "mrs/database/duality_view/json_input.h"
-#include "mrs/database/duality_view/select.h"
+#include "mrs/database/json_mapper/common.h"
+#include "mrs/database/json_mapper/errors.h"
+#include "mrs/database/json_mapper/json_input.h"
+#include "mrs/database/json_mapper/select.h"
 #include "mrs/interface/rest_error.h"
 #include "mysqld_error.h"
 
@@ -47,9 +47,9 @@ class RowInsert;
 class RowDeleteReferencing;
 
 // merge with RowChange and rename to RowChange
-class DualityViewUpdater::Operation
+class JsonMappingUpdater::Operation
     : public QueryLog,
-      public std::enable_shared_from_this<DualityViewUpdater::Operation> {
+      public std::enable_shared_from_this<JsonMappingUpdater::Operation> {
  protected:
   size_t affected_ = 0;
 
@@ -120,7 +120,7 @@ class DualityViewUpdater::Operation
   }
 
   mysqlrouter::sqlstring join_to_parent(
-      std::vector<std::shared_ptr<DualityViewUpdater::Operation>> *parents)
+      std::vector<std::shared_ptr<JsonMappingUpdater::Operation>> *parents)
       const;
 
   void execute(MySQLSession *session) override {
@@ -134,7 +134,7 @@ class DualityViewUpdater::Operation
 
 //
 
-class RowChangeOperation : public DualityViewUpdater::Operation {
+class RowChangeOperation : public JsonMappingUpdater::Operation {
  protected:
   RowChangeOperation(std::shared_ptr<Operation> parent,
                      std::shared_ptr<Table> table,

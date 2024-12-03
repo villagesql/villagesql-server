@@ -74,7 +74,7 @@ class DatabaseQueryGet : public DatabaseRestTableTest {
 };
 
 TEST_F(DatabaseQueryGet, plain) {
-  auto root = DualityViewBuilder("mrstestdb", "actor")
+  auto root = JsonMappingBuilder("mrstestdb", "actor")
                   .field("actor_id", FieldFlag::AUTO_INC)
                   .field("first_name")
                   .field("last_name")
@@ -142,7 +142,7 @@ TEST_F(DatabaseQueryGet, plain) {
 }
 
 TEST_F(DatabaseQueryGet, special_types) {
-  auto root = DualityViewBuilder("mrstestdb", "typetest")
+  auto root = JsonMappingBuilder("mrstestdb", "typetest")
                   .field("id", FieldFlag::PRIMARY)
                   .field("Geom", "geom", "GEOMETRY")
                   .field("Bool", "bool", "BIT(1)")
@@ -192,7 +192,7 @@ TEST_F(DatabaseQueryGet, special_types) {
 
 TEST_F(DatabaseQueryGet, exclude_field_filter) {
   auto root =
-      DualityViewBuilder("mrstestdb", "actor")
+      JsonMappingBuilder("mrstestdb", "actor")
           .column("actor_id")
           .field("first_name")
           .field_to_many(
@@ -289,7 +289,7 @@ TEST_F(DatabaseQueryGet, exclude_field_filter) {
 
 TEST_F(DatabaseQueryGet, include_field_filter) {
   auto root =
-      DualityViewBuilder("mrstestdb", "actor")
+      JsonMappingBuilder("mrstestdb", "actor")
           .column("actor_id")
           .field("first_name")
           .field_to_many(
@@ -756,33 +756,33 @@ TEST_F(DatabaseQueryGet, include_field_filter) {
 
 TEST_F(DatabaseQueryGet, row_filter) {
   auto root =
-      DualityViewBuilder("mrstestdb", "actor")
+      JsonMappingBuilder("mrstestdb", "actor")
           .column("actor_id")
           .field("firstName", "first_name", "text")
           .field("lastName", "last_name", "text", FieldFlag::NOFILTER)
           .field_to_many(
               "films",
-              DualityViewBuilder("film_actor", {{"actor_id", "actor_id"}})
+              JsonMappingBuilder("film_actor", {{"actor_id", "actor_id"}})
                   .column("actor_id")
                   .column("film_id")
                   .unnest(
-                      DualityViewBuilder("film", {{"film_id", "film_id"}})
+                      JsonMappingBuilder("film", {{"film_id", "film_id"}})
                           .column("film_id")
                           .field("title")
                           .field("description")
                           .column("language_id")
                           .unnest(
-                              DualityViewBuilder(
+                              JsonMappingBuilder(
                                   "language", {{"language_id", "language_id"}})
                                   .column("language_id")
                                   .field("language", "name"))
                           .field_to_many(
                               "categories",
-                              DualityViewBuilder("film_category",
+                              JsonMappingBuilder("film_category",
                                                  {{"film_id", "film_id"}})
                                   .column("film_id")
                                   .column("category_id")
-                                  .unnest(DualityViewBuilder(
+                                  .unnest(JsonMappingBuilder(
                                               "category",
                                               {{"category_id", "category_id"}})
                                               .column("category_id")
@@ -817,7 +817,7 @@ TEST_F(DatabaseQueryGet, row_filter) {
 
 TEST_F(DatabaseQueryGet, row_filter_order) {
   auto root =
-      DualityViewBuilder("mrstestdb", "actor")
+      JsonMappingBuilder("mrstestdb", "actor")
           .field("id", "actor_id", "int",
                  FieldFlag::PRIMARY | FieldFlag::SORTABLE)
           .field("firstName", "first_name", "text",
@@ -825,27 +825,27 @@ TEST_F(DatabaseQueryGet, row_filter_order) {
           .field("lastName", "last_name", "text", FieldFlag::NOFILTER)
           .field_to_many(
               "films",
-              DualityViewBuilder("film_actor", {{"actor_id", "actor_id"}})
+              JsonMappingBuilder("film_actor", {{"actor_id", "actor_id"}})
                   .column("actor_id")
                   .column("film_id")
                   .unnest(
-                      DualityViewBuilder("film", {{"film_id", "film_id"}})
+                      JsonMappingBuilder("film", {{"film_id", "film_id"}})
                           .column("film_id")
                           .field("title")
                           .field("description")
                           .column("language_id")
                           .unnest(
-                              DualityViewBuilder(
+                              JsonMappingBuilder(
                                   "language", {{"language_id", "language_id"}})
                                   .column("language_id")
                                   .field("language", "name"))
                           .field_to_many(
                               "categories",
-                              DualityViewBuilder("film_category",
+                              JsonMappingBuilder("film_category",
                                                  {{"film_id", "film_id"}})
                                   .column("film_id")
                                   .column("category_id")
-                                  .unnest(DualityViewBuilder(
+                                  .unnest(JsonMappingBuilder(
                                               "category",
                                               {{"category_id", "category_id"}})
                                               .column("category_id")
@@ -899,7 +899,7 @@ TEST_F(DatabaseQueryGet, row_filter_order) {
 
 TEST_F(DatabaseQueryGet, etag) {
   {
-    auto root = DualityViewBuilder("mrstestdb", "actor")
+    auto root = JsonMappingBuilder("mrstestdb", "actor")
                     .field("actor_id", FieldFlag::PRIMARY)
                     .field("first_name")
                     .field("last_name", FieldFlag::WITH_NOCHECK)
@@ -953,7 +953,7 @@ TEST_F(DatabaseQueryGet, etag) {
   {
     reset();
 
-    auto root = DualityViewBuilder("mrstestdb", "actor")
+    auto root = JsonMappingBuilder("mrstestdb", "actor")
                     .field("actor_id", FieldFlag::PRIMARY)
                     .field("first_name")
                     .field("last_name")
@@ -983,7 +983,7 @@ TEST_F(DatabaseQueryGet, etag) {
   {
     reset();
 
-    auto root = DualityViewBuilder("mrstestdb", "typetest")
+    auto root = JsonMappingBuilder("mrstestdb", "typetest")
                     .field("id", FieldFlag::PRIMARY)
                     .field("Geom", "geom", "GEOMETRY")
                     .field("Bool", "bool", "BIT(1)")
@@ -1010,7 +1010,7 @@ TEST_F(DatabaseQueryGet, row_owner_root) {
   prepare_user_metadata();
 
   auto root =
-      DualityViewBuilder("mrstestdb", "root", 0)
+      JsonMappingBuilder("mrstestdb", "root", 0)
           .field("_id", "id", FieldFlag::AUTO_INC)
           .field("owner_id", FieldFlag::OWNER)
           .field("data", "data1")

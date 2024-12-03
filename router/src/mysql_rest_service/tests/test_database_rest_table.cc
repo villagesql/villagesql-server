@@ -201,7 +201,7 @@ TEST_P(QueryRestTableParameterTests,
   EXPECT_EQ(k_result, sut.response);
 }
 
-using Ob = DualityViewBuilder;
+using Ob = JsonMappingBuilder;
 
 INSTANTIATE_TEST_SUITE_P(
     InstantiateQueryExpectations, QueryRestTableParameterTests,
@@ -242,7 +242,7 @@ INSTANTIATE_TEST_SUITE_P(
 
 TEST_F(QueryRestTableTests, DISABLED_basic_empty_request_throws) {
   auto object =
-      DualityViewBuilder("schema", "obj").field("c2", FieldFlag::PRIMARY).root();
+      JsonMappingBuilder("schema", "obj").field("c2", FieldFlag::PRIMARY).root();
 
   EXPECT_THROW(sut_->query_entries(
                    &mock_session_, object,
@@ -252,7 +252,7 @@ TEST_F(QueryRestTableTests, DISABLED_basic_empty_request_throws) {
 }
 
 TEST_F(QueryRestTableTests, DISABLED_basic_two_request_without_result) {
-  auto object = DualityViewBuilder("schema", "obj")
+  auto object = JsonMappingBuilder("schema", "obj")
                     .field("c1")
                     .field("c2", FieldFlag::PRIMARY)
                     .root();
@@ -275,7 +275,7 @@ TEST_F(QueryRestTableTests, DISABLED_basic_two_request_without_result) {
 
 TEST_F(QueryRestTableTests,
        DISABLED_basic_two_request_without_result_and_no_links) {
-  auto object = DualityViewBuilder("schema", "obj").field("c1").field("c2").root();
+  auto object = JsonMappingBuilder("schema", "obj").field("c1").field("c2").root();
 
   EXPECT_CALL(
       mock_session_,
@@ -292,7 +292,7 @@ TEST_F(QueryRestTableTests,
 }
 
 TEST_F(QueryRestTableTests, DISABLED_basic_query) {
-  auto root = DualityViewBuilder("schema", "obj")
+  auto root = JsonMappingBuilder("schema", "obj")
                   .field("c1", FieldFlag::PRIMARY)
                   .field("c2")
                   .root();

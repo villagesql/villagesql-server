@@ -48,11 +48,11 @@ ADD_TEST_FILE(test_plugin.cc
     ./test_mrs_database_rest_table_put.cc
     ./test_mrs_database_rest_table_post.cc
     ./test_mrs_database_rest_table_delete.cc
-    ./test_mrs_duality_view_check.cc
-    ./test_mrs_duality_view_delete.cc
-    ./test_mrs_duality_view_select.cc
-    ./test_mrs_duality_view_insert.cc
-    ./test_mrs_duality_view_update.cc
+    ./test_mrs_json_mapper_check.cc
+    ./test_mrs_json_mapper_delete.cc
+    ./test_mrs_json_mapper_select.cc
+    ./test_mrs_json_mapper_insert.cc
+    ./test_mrs_json_mapper_update.cc
     ./test_mrs_database_filter_object_generator.cc
     ./test_mrs_parse_json.cc
     ./test_helper_media_detector.cc
