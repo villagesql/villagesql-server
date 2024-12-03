@@ -4089,6 +4089,7 @@ static void dump_table(char *table, char *db) {
       DB_error(mysql, "when retrieving data from server");
       goto err;
     }
+    auto res_guard = create_scope_guard([&] { mysql_free_result(res); });
 
     verbose_msg("-- Retrieving rows...\n");
     if (mysql_num_fields(res) != num_fields) {
@@ -4351,7 +4352,7 @@ static void dump_table(char *table, char *db) {
       fprintf(md_result_file, "commit;\n");
       check_io(md_result_file);
     }
-    mysql_free_result(res);
+    res_guard.reset();
   }
   dynstr_free(&query_string);
   if (extended_insert) dynstr_free(&extended_row);
