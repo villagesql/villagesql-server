@@ -6773,18 +6773,12 @@ Item *all_any_subquery_creator(THD *thd, const POS &pos, Item *left_expr,
     if (negated != nullptr) return negated;
     item = new (thd->mem_root) Item_func_not(item);
   } else {
-    Item_allany_subselect *it = new (thd->mem_root)
+    item = new (thd->mem_root)
         Item_allany_subselect(pos, left_expr, cmp, query_block, all);
-    if (it == nullptr) return nullptr;
+    if (item == nullptr) return nullptr;
 
-    it->set_contextualized();
-    thd->add_item(it);
-
-    if (all) {  // ALL
-      item = it->m_upper_item = new (thd->mem_root) Item_func_not_all(it);
-    } else {  // ANY/SOME
-      item = it->m_upper_item = new (thd->mem_root) Item_func_nop_all(it);
-    }
+    down_cast<Item_subselect *>(item)->set_contextualized();
+    thd->add_item(item);
   }
   return item;
 }

@@ -1126,11 +1126,11 @@ bool Item_in_subselect::subquery_allows_materialization(
         - when there is a single inner column (because for this we have a
         limited implementation of NULLs partial matching).
       */
-      trace_mat.add("treat_UNKNOWN_as_FALSE", abort_on_null);
+      trace_mat.add("treat_UNKNOWN_as_FALSE", !process_nulls());
 
-      if (!abort_on_null && has_nullables && (elements > 1))
+      if (process_nulls() && has_nullables && (elements > 1)) {
         cause = "cannot_handle_partial_matches";
-      else {
+      } else {
         trace_mat.add("possible", true);
         return true;
       }
@@ -3727,8 +3727,10 @@ bool Query_block::flatten_subqueries(THD *thd) {
 
       continue;
     }
-    // Transformation of IN and EXISTS subqueries is supported
-    assert(item->subquery_type() == Item_subselect::IN_SUBQUERY ||
+    // Transformation of ALL, ANY, IN and EXISTS subqueries is supported
+    assert(item->subquery_type() == Item_subselect::ALL_SUBQUERY ||
+           item->subquery_type() == Item_subselect::ANY_SUBQUERY ||
+           item->subquery_type() == Item_subselect::IN_SUBQUERY ||
            item->subquery_type() == Item_subselect::EXISTS_SUBQUERY);
 
     Query_block *child_query_block = item->query_expr()->first_query_block();
@@ -5489,9 +5491,7 @@ bool Query_block::transform_table_subquery_to_join_with_derived(
     if (op_types.resize(sj_outer_exprs.size(), Item_func::EQ_FUNC)) {
       return true;
     }
-  } else {
-    assert(subq_pred->subquery_type() == Item_subselect::EXISTS_SUBQUERY);
-
+  } else if (subq_pred->subquery_type() == Item_subselect::EXISTS_SUBQUERY) {
     if (inner_qb->is_table_value_constructor) {
       if ((inner_qb->select_limit != nullptr &&
            !inner_qb->select_limit->const_item()) ||
@@ -5560,6 +5560,10 @@ bool Query_block::transform_table_subquery_to_join_with_derived(
                   pointer_cast<uchar *>(&ctx));
     }
     inner_qb->select_list_tables = 0;
+  } else if (subq_pred->subquery_type() == Item_subselect::ALL_SUBQUERY ||
+             subq_pred->subquery_type() == Item_subselect::ANY_SUBQUERY) {
+  } else {
+    assert(false);
   }
 
   Semijoin_decorrelation sj_decor(

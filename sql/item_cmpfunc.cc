@@ -509,7 +509,7 @@ longlong Item_func_not_all::val_int() {
   if (empty_underlying_subquery()) return 1;
 
   null_value = args[0]->null_value;
-  return ((!null_value && value == 0) ? 1 : 0);
+  return (!null_value && value == 0) ? 1 : 0;
 }
 
 bool Item_func_not_all::empty_underlying_subquery() {
@@ -2365,7 +2365,7 @@ bool Item_in_optimizer::fix_fields(THD *, Item **) {
     causes the result of the complete Item to be NULL.
     This can never be guaranteed, as the complete Item will return FALSE if
     the subquery's result is empty.
-    But, if the Item's owner previously called top_level_item(), a FALSE
+    But, if apply_is_true() is called for the subquery predicate, a FALSE
     result is equivalent to a NULL result from the owner's POV.
     A NULL value in the left argument will surely lead to a NULL or FALSE
     result for the naked IN. If the complete item is:
@@ -2374,7 +2374,7 @@ bool Item_in_optimizer::fix_fields(THD *, Item **) {
     Right argument doesn't need to be handled, as
     Item_subselect::not_null_tables() is always 0.
   */
-  if (subqpred->abort_on_null && subqpred->value_transform == BOOL_IS_TRUE) {
+  if (subqpred->value_transform == BOOL_IS_TRUE) {
   } else {
     not_null_tables_cache &= ~subqpred->left_expr->not_null_tables();
   }
@@ -2497,13 +2497,15 @@ longlong Item_in_optimizer::val_int() {
   cache->store(subqpred->left_expr);
   cache->cache_value();
 
+  bool result = false;
+
   if (cache->null_value) {
     /*
       We're evaluating
       "<outer_value_list> [NOT] IN (SELECT <inner_value_list>...)"
       where one or more of the outer values is NULL.
     */
-    if (subqpred->abort_on_null) {
+    if (!subqpred->process_nulls()) {
       /*
         We're evaluating a top level item, e.g.
         "<outer_value_list> IN (SELECT <inner_value_list>...)",
@@ -2512,7 +2514,7 @@ longlong Item_in_optimizer::val_int() {
         top level items). The cached value is NULL, so just return
         NULL.
       */
-      null_value = true;
+      subqpred->null_value = true;
     } else {
       /*
         We're evaluating an item where a NULL value in either the
@@ -2547,27 +2549,31 @@ longlong Item_in_optimizer::val_int() {
            already evaluated the subquery for all NULL values: return the same
            result we did last time without evaluating the subquery.
         */
-        null_value = result_for_null_param;
+        subqpred->null_value = result_for_null_param;
       } else {
         /* The subquery has to be evaluated */
         (void)subqpred->val_bool_naked();
-        if (!subqpred->m_value)
-          null_value = subqpred->null_value;
-        else
-          null_value = true;
-        if (all_left_cols_null) result_for_null_param = null_value;
+        if (subqpred->m_value) {
+          subqpred->null_value = true;
+        }
+        if (all_left_cols_null) {
+          result_for_null_param = subqpred->null_value;
+        }
       }
 
       /* Turn all predicates back on */
-      for (uint i = 0; i < ncols; i++) subqpred->set_cond_guard_var(i, true);
+      for (uint i = 0; i < ncols; i++) {
+        subqpred->set_cond_guard_var(i, true);
+      }
     }
-    cache->store(subqpred->left_expr);
-    return subqpred->translate(null_value, false);
+  } else {
+    result = subqpred->val_bool_naked();
   }
-  const bool result = subqpred->val_bool_naked();
-  null_value = subqpred->null_value;
   cache->store(subqpred->left_expr);
-  return subqpred->translate(null_value, result);
+  result = subqpred->return_value(result);
+  null_value = subqpred->null_value;
+
+  return result;
 }
 
 void Item_in_optimizer::cleanup() {
@@ -2593,7 +2599,7 @@ void Item_in_optimizer::update_used_tables() {
 
   // See explanation for this logic in Item_in_optimizer::fix_fields
   Item_in_subselect *subqpred = down_cast<Item_in_subselect *>(args[0]);
-  if (subqpred->abort_on_null && subqpred->value_transform == BOOL_IS_TRUE) {
+  if (subqpred->value_transform == BOOL_IS_TRUE) {
   } else {
     not_null_tables_cache &= subqpred->left_expr->not_null_tables();
   }
@@ -6831,7 +6837,7 @@ Item *Item_func_not::truth_transformer(THD *,
 
 Item *Item_func_comparison::truth_transformer(THD *, Bool_test test) {
   if (test != BOOL_NEGATED) return nullptr;
-  Item *item = negated_item();
+  Item *item = negate_item();
   return item;
 }
 
@@ -6890,66 +6896,38 @@ Item *Item_cond_or::truth_transformer(THD *thd, Bool_test test)
   return item;
 }
 
-Item *Item_func_nop_all::truth_transformer(THD *, Bool_test test) {
-  if (test != BOOL_NEGATED) return nullptr;
-  // "NOT (e $cmp$ ANY (SELECT ...)) -> e $rev_cmp$" ALL (SELECT ...)
-  Item_func_not_all *new_item = new Item_func_not_all(args[0]);
-  Item_allany_subselect *allany = down_cast<Item_allany_subselect *>(args[0]);
-  allany->m_all = !allany->m_all;
-  allany->m_upper_item = new_item;
-  return new_item;
-}
-
-Item *Item_func_not_all::truth_transformer(THD *, Bool_test test) {
-  if (test != BOOL_NEGATED) return nullptr;
-  // "NOT (e $cmp$ ALL (SELECT ...)) -> e $rev_cmp$" ANY (SELECT ...)
-  Item_func_nop_all *new_item = new Item_func_nop_all(args[0]);
-  Item_allany_subselect *allany = down_cast<Item_allany_subselect *>(args[0]);
-  allany->m_all = !allany->m_all;
-  allany->m_upper_item = new_item;
-  return new_item;
-}
-
-Item *Item_func_eq::negated_item() /* a = b  ->  a != b */
+Item_func_comparison *Item_func_eq::negate_item() /* a = b  ->  a <> b */
 {
   auto *i = new Item_func_ne(args[0], args[1]);
   if (i != nullptr) i->marker = marker;  // forward MARKER_IMPLICIT_NE_ZERO
   return i;
 }
 
-Item *Item_func_ne::negated_item() /* a != b  ->  a = b */
+Item_func_comparison *Item_func_ne::negate_item() /* a <> b  ->  a = b */
 {
   auto *i = new Item_func_eq(args[0], args[1]);
   if (i != nullptr) i->marker = marker;  // forward MARKER_IMPLICIT_NE_ZERO
   return i;
 }
 
-Item *Item_func_lt::negated_item() /* a < b  ->  a >= b */
+Item_func_comparison *Item_func_lt::negate_item() /* a < b  ->  a >= b */
 {
   return new Item_func_ge(args[0], args[1]);
 }
 
-Item *Item_func_ge::negated_item() /* a >= b  ->  a < b */
+Item_func_comparison *Item_func_ge::negate_item() /* a >= b  ->  a < b */
 {
   return new Item_func_lt(args[0], args[1]);
 }
 
-Item *Item_func_gt::negated_item() /* a > b  ->  a <= b */
+Item_func_comparison *Item_func_gt::negate_item() /* a > b  ->  a <= b */
 {
   return new Item_func_le(args[0], args[1]);
 }
 
-Item *Item_func_le::negated_item() /* a <= b  ->  a > b */
+Item_func_comparison *Item_func_le::negate_item() /* a <= b  ->  a > b */
 {
   return new Item_func_gt(args[0], args[1]);
-}
-
-/**
-  just fake method, should never be called.
-*/
-Item *Item_func_comparison::negated_item() {
-  assert(0);
-  return nullptr;
 }
 
 bool Item_func_comparison::is_null() {

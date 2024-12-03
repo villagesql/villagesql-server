@@ -543,7 +543,17 @@ class Item_exists_subselect : public Item_subselect {
   /// True if the IS TRUE/FALSE wasn't explicit in the query
   bool implicit_is_op = false;
   Item *truth_transformer(THD *, enum Bool_test test) override;
-  bool translate(bool &null_v, bool v);
+  /**
+    Convert result according to value_transform, null value and supplied value
+
+    @param v boolean value from the primitive subquery predicate
+
+    @returns translated boolean value
+
+    @note Operation will possibly take into account and possibly change null
+          value of the Item.
+  */
+  virtual bool return_value(bool v);
   void apply_is_true() override {
     const bool had_is = with_is_op();
     truth_transformer(nullptr, BOOL_IS_TRUE);
@@ -575,13 +585,6 @@ class Item_exists_subselect : public Item_subselect {
 
   /// value of this item (boolean: exists/not-exists)
   bool m_value{false};
-
-  /**
-    True if naked IN is allowed to exchange FALSE for UNKNOWN.
-    Because this is about the naked IN, there is no public ignore_unknown(),
-    intentionally, so that callers don't get it wrong.
-  */
-  bool abort_on_null{false};
 };
 
 /**
@@ -620,6 +623,19 @@ class Item_in_subselect : public Item_exists_subselect {
     null_value = false;
     m_was_null = false;
   }
+  // Whether to ignore UNKNOWN result (only return TRUE or FALSE)
+  bool ignore_unknown() const {
+    return value_transform != BOOL_IDENTITY && value_transform != BOOL_NEGATED;
+  }
+  /*
+    @returns true if implementation has to process NULL values.
+             Always true if ignore_unknown() is false.
+             Also true if quantified comparison predicate is ALL.
+             Virtual since IN and ALL/ANY need different checks.
+  */
+  virtual bool process_nulls() const { return value_transform != BOOL_IS_TRUE; }
+  bool return_value(bool v) override;
+
   bool transformer(THD *thd, Item **transformed) override;
   bool quantified_comp_transformer(THD *thd, Comp_creator *func,
                                    Item **transformed);
@@ -775,15 +791,35 @@ class Item_allany_subselect final : public Item_in_subselect {
                         bool all);
 
   Subquery_type subquery_type() const override {
-    return m_all ? ALL_SUBQUERY : ANY_SUBQUERY;
+    return m_all_subquery ? ALL_SUBQUERY : ANY_SUBQUERY;
   }
+  Item *truth_transformer(THD *, enum Bool_test test) override;
+  void apply_is_true() override {
+    implicit_is_op = true;
+    if (value_transform == BOOL_IDENTITY) {
+      value_transform = BOOL_IS_TRUE;
+    } else if (value_transform == BOOL_NEGATED) {
+      value_transform = BOOL_IS_FALSE;
+    }
+  }
+  bool process_nulls() const override {
+    return !ignore_unknown() || m_all_subquery;
+  }
+  bool return_value(bool v) override;
+
   bool transformer(THD *thd, Item **transformed) override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
 
+ private:
+  /// The original source for the comparison function
   chooser_compare_func_creator m_func_creator;
-  Comp_creator *m_func;
-  bool m_all;
+  /// The comparison function generator, possibly inverted by NOT
+  Comp_creator *m_compare_func;
+  /// Whether ALL or ANY subquery
+  bool m_all_subquery;
+  /// Used to generate the correct comparison function
+  bool m_inverted{false};
 };
 
 /**
