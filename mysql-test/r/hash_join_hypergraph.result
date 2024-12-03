@@ -3659,7 +3659,7 @@ test.t1	analyze	status	OK
 EXPLAIN FORMAT=tree SELECT * FROM t1 AS alias1 LEFT JOIN t1 AS alias2 ON NOT EXISTS (
 SELECT * FROM t1 WHERE alias1.pk NOT IN ( 20 ) );
 EXPLAIN
--> Left hash join (no condition), extra conditions: exists(select #2) is false  (rows=400)
+-> Left hash join (no condition), extra conditions: (not exists(select #2))  (rows=400)
     -> Table scan on alias1  (rows=20)
     -> Hash
         -> Table scan on alias2  (rows=20)
@@ -3724,7 +3724,7 @@ test.t1	analyze	status	OK
 EXPLAIN FORMAT=tree SELECT * FROM t1 AS alias1 LEFT JOIN t1 AS alias2 ON alias2.f1 = alias1.f1
 AND NOT EXISTS ( SELECT * FROM t1 AS alias3 WHERE alias1.f1 <= 1 );
 EXPLAIN
--> Left hash join (alias2.f1 = alias1.f1), extra conditions: exists(select #2) is false  (rows=2)
+-> Left hash join (alias2.f1 = alias1.f1), extra conditions: (not exists(select #2))  (rows=2)
     -> Table scan on alias1  (rows=2)
     -> Hash
         -> Table scan on alias2  (rows=2)
@@ -3804,7 +3804,7 @@ JOIN t1 AS inner_t3 ON inner_t1.f1 = inner_t2.f1
 SELECT * FROM t1 WHERE table2.pk >= 1 OR table1.f1 = 'G'
     );
 EXPLAIN
--> Left hash join (no condition), extra conditions: exists(select #3) is false  (rows=6.4)
+-> Left hash join (no condition), extra conditions: (not exists(select #3))  (rows=6.4)
     -> Table scan on table1  (rows=4)
     -> Hash
         -> Inner hash join (no condition)  (rows=1.6)

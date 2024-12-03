@@ -4655,7 +4655,7 @@ explain format=tree SELECT 1
 FROM t AS t1
 WHERE NOT EXISTS (SELECT * FROM t AS t2 WHERE t2.f1 < NULL AND t1.f1 = t2.f1);
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=4)
+-> Filter: (not exists(select #2))  (rows=4)
     -> Covering index scan on t1 using f1  (rows=4)
     -> Select #2 (subquery in condition; dependent)
         -> Zero rows (no matching row in const table)  (rows=0)
@@ -4676,7 +4676,7 @@ WHERE NOT EXISTS (SELECT *
 FROM t AS t2
 WHERE t2.f1 BETWEEN 2 AND 3 AND t1.f1 = t2.f1);
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=4)
+-> Filter: (not exists(select #2))  (rows=4)
     -> Covering index scan on t1 using f1  (rows=4)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (rows=1)
@@ -4692,7 +4692,7 @@ FROM (SELECT f1 FROM t AS t2 WHERE t2.f1 < NULL) AS t4
 WHERE t1.f1 = t4.f1
 );
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=4)
+-> Filter: (not exists(select #2))  (rows=4)
     -> Covering index scan on t1 using f1  (rows=4)
     -> Select #2 (subquery in condition; dependent)
         -> Zero rows (no matching row in const table)  (rows=0)
@@ -4718,7 +4718,7 @@ FROM (SELECT f1 FROM t AS t2 WHERE t2.f1 BETWEEN 2 AND 3
 WHERE t1.f1 = t4.f1
 );
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=4)
+-> Filter: (not exists(select #2))  (rows=4)
     -> Covering index scan on t1 using f1  (rows=4)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (rows=1)
@@ -4733,7 +4733,7 @@ WHERE NOT EXISTS (SELECT *
 FROM t AS t2 JOIN t AS t3 ON t2.f1 < NULL
 WHERE t1.f1 = t2.f1);
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=4)
+-> Filter: (not exists(select #2))  (rows=4)
     -> Covering index scan on t1 using f1  (rows=4)
     -> Select #2 (subquery in condition; dependent)
         -> Zero rows (no matching row in const table)  (rows=0)
@@ -4756,7 +4756,7 @@ WHERE NOT EXISTS (SELECT *
 FROM t AS t2 JOIN t AS t3 ON t3.f1 < NULL
 WHERE t1.f1 = t3.f1);
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=4)
+-> Filter: (not exists(select #2))  (rows=4)
     -> Covering index scan on t1 using f1  (rows=4)
     -> Select #2 (subquery in condition; dependent)
         -> Zero rows (no matching row in const table)  (rows=0)
@@ -4779,7 +4779,7 @@ WHERE NOT EXISTS (SELECT *
 FROM t AS t2 JOIN t AS t3 ON t2.f1 BETWEEN 2 AND 3
 WHERE t1.f1 = t2.f1);
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=4)
+-> Filter: (not exists(select #2))  (rows=4)
     -> Covering index scan on t1 using f1  (rows=4)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (rows=1)
@@ -4797,7 +4797,7 @@ WHERE NOT EXISTS (SELECT *
 FROM t AS t2 JOIN t AS t3 ON t3.f1 BETWEEN 2 AND 3
 WHERE t1.f1 = t2.f1);
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=4)
+-> Filter: (not exists(select #2))  (rows=4)
     -> Covering index scan on t1 using f1  (rows=4)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (rows=1)
@@ -4817,7 +4817,7 @@ FROM (SELECT t2.f1 FROM t AS t2 JOIN t AS t3 ON t2.f1 < NULL
 WHERE t1.f1 = t4.f1
 );
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=4)
+-> Filter: (not exists(select #2))  (rows=4)
     -> Covering index scan on t1 using f1  (rows=4)
     -> Select #2 (subquery in condition; dependent)
         -> Zero rows (no matching row in const table)  (rows=0)
@@ -4844,7 +4844,7 @@ FROM (SELECT t2.f1 FROM t AS t2 JOIN t AS t3 ON t3.f1 < NULL
 WHERE t1.f1 = t4.f1
 );
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=4)
+-> Filter: (not exists(select #2))  (rows=4)
     -> Covering index scan on t1 using f1  (rows=4)
     -> Select #2 (subquery in condition; dependent)
         -> Zero rows (no matching row in const table)  (rows=0)
@@ -4872,7 +4872,7 @@ FROM t AS t2 JOIN t AS t3 ON t2.f1 BETWEEN 2 AND 3
 WHERE t1.f1 = t4.f1
 );
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=4)
+-> Filter: (not exists(select #2))  (rows=4)
     -> Covering index scan on t1 using f1  (rows=4)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (rows=1)
@@ -4893,7 +4893,7 @@ FROM t AS t2 JOIN t AS t3 ON t3.f1 BETWEEN 2 AND 3
 WHERE t1.f1 = t4.f1
 );
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=4)
+-> Filter: (not exists(select #2))  (rows=4)
     -> Covering index scan on t1 using f1  (rows=4)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (rows=1)

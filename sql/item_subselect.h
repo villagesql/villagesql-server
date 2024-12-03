@@ -560,9 +560,8 @@ class Item_exists_subselect : public Item_subselect {
     if (!had_is && value_transform == BOOL_IS_TRUE)
       implicit_is_op = true;  // needn't be written by EXPLAIN
   }
-  /// True if the Item has decided that it can do antijoin
-  bool can_do_aj = false;
-  bool choose_semijoin_or_antijoin();
+  bool allow_table_subquery_transform() const;
+  bool use_anti_join_transform() const;
   bool fix_fields(THD *thd, Item **ref) override;
   longlong val_int() override;
   double val_real() override;
@@ -580,8 +579,8 @@ class Item_exists_subselect : public Item_subselect {
   friend class Query_result_exists_subquery;
 
  protected:
-  bool is_semijoin_candidate(THD *thd);
-  bool is_derived_candidate(THD *thd);
+  bool is_semijoin_candidate(THD *thd) const;
+  bool is_derived_candidate(THD *thd) const;
 
   /// value of this item (boolean: exists/not-exists)
   bool m_value{false};
@@ -793,6 +792,8 @@ class Item_allany_subselect final : public Item_in_subselect {
   Subquery_type subquery_type() const override {
     return m_all_subquery ? ALL_SUBQUERY : ANY_SUBQUERY;
   }
+  Comp_creator *compare_func() const { return m_compare_func; }
+
   Item *truth_transformer(THD *, enum Bool_test test) override;
   void apply_is_true() override {
     implicit_is_op = true;
@@ -805,6 +806,7 @@ class Item_allany_subselect final : public Item_in_subselect {
   bool process_nulls() const override {
     return !ignore_unknown() || m_all_subquery;
   }
+  bool eqne_op() const;
   bool return_value(bool v) override;
 
   bool transformer(THD *thd, Item **transformed) override;

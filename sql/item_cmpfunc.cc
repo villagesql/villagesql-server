@@ -2259,6 +2259,11 @@ const Item::Bool_test Item_bool_func::bool_transform[10][8] = {
     {BOOL_ALWAYS_FALSE, BOOL_ALWAYS_TRUE, BOOL_ALWAYS_FALSE, BOOL_ALWAYS_TRUE,
      BOOL_ALWAYS_FALSE, BOOL_ALWAYS_TRUE, BOOL_ALWAYS_FALSE, BOOL_ALWAYS_TRUE}};
 
+const Item::Bool_test Item_bool_func::bool_simplify[10] = {
+    BOOL_IS_TRUE,     BOOL_IS_FALSE,    BOOL_ALWAYS_FALSE, BOOL_IS_FALSE,
+    BOOL_IS_TRUE,     BOOL_ALWAYS_TRUE, BOOL_IS_TRUE,      BOOL_IS_FALSE,
+    BOOL_ALWAYS_TRUE, BOOL_ALWAYS_FALSE};
+
 bool Item_func_truth::resolve_type(THD *thd) {
   set_nullable(false);
   null_value = false;

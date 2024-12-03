@@ -341,7 +341,9 @@ bool PTI_exists_subselect::do_itemize(Parse_context *pc, Item **res) {
   *res = new (pc->mem_root) Item_exists_subselect(m_pos, subselect->value());
   if (*res == nullptr) return true;
 
-  down_cast<Item_subselect *>(*res)->set_contextualized();
+  Item_exists_subselect *exists = down_cast<Item_exists_subselect *>(*res);
+  exists->set_contextualized();
+
   pc->thd->add_item(*res);
 
   return false;

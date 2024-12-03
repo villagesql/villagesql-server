@@ -2736,7 +2736,9 @@ class Item : public Parse_tree_node {
     if (fixed) cleanup();
     return false;
   }
-
+  bool contains_item(uchar *arg) {
+    return *(pointer_cast<Item **>(arg)) == this;
+  }
   virtual bool collect_item_field_processor(uchar *) { return false; }
   virtual bool collect_item_field_or_ref_processor(uchar *) { return false; }
   virtual bool collect_outer_field_processor(uchar *) { return false; }

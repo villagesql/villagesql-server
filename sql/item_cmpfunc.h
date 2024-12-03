@@ -333,12 +333,21 @@ class Item_bool_func : public Item_int_func {
   bool created_by_in2exists() const override { return m_created_by_in2exists; }
   void set_created_by_in2exists();
 
+  virtual Item_bool_func *negate_item() {
+    assert(false);
+    return nullptr;
+  }
+
   static const char *bool_transform_names[10];
   /**
     Array that transforms a boolean test according to another.
     First dimension is existing value, second dimension is test to apply
   */
   static const Bool_test bool_transform[10][8];
+  /**
+    Array used to simplify a boolean test when value cannot be NULL.
+  */
+  static const Bool_test bool_simplify[10];
 
  private:
   /**
@@ -528,7 +537,11 @@ class Comp_creator {
 
   /// This interface is only used by Item_allany_subselect.
   virtual const char *symbol(bool invert) const = 0;
+
+  /// @returns true for operators =, <> and <=>, otherwise false.
   virtual bool eqne_op() const = 0;
+
+  /// @returns true for operators < and <=, otherwise false.
   virtual bool l_op() const = 0;
 };
 
@@ -707,7 +720,7 @@ class Item_func_comparison : public Item_bool_func2 {
     @returns a negated (inverted) version of the comparison predicate,
              as if the predicate was prefixed with NOT.
   */
-  virtual Item_func_comparison *negate_item() = 0;
+  Item_bool_func *negate_item() override = 0;
 
   bool subst_argument_checker(uchar **) override { return true; }
   bool is_null() override;
@@ -1554,6 +1567,30 @@ class Item_func_if final : public Item_func {
     not_null_tables_cache =
         (args[1]->not_null_tables() & args[2]->not_null_tables());
   }
+};
+
+/**
+  IF function with result fixed as boolean value.
+  Result values must be constant boolean values.
+  For internal use only.
+*/
+class Item_bool_if final : public Item_bool_func {
+ public:
+  Item_bool_if(Item *a, Item *b, Item *c) : Item_bool_func(a, b, c) {
+    null_on_null = false;
+  }
+  longlong val_int() override {
+    Item *val = args[0]->val_int() ? args[1] : args[2];
+    longlong result = val->val_int();
+    null_value = result ? false : val->null_value;
+    return result;
+  }
+  bool resolve_type(THD *) override {
+    assert(args[1]->const_item() && args[2]->const_item());
+    return false;
+  }
+  const char *func_name() const override { return "if"; }
+  enum Functype functype() const override { return BOOL_IF_FUNC; }
 };
 
 class Item_func_nullif final : public Item_bool_func2 {

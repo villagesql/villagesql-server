@@ -291,6 +291,7 @@ class Item_func : public Item_result_field {
     ACOS_FUNC,
     MOD_FUNC,
     IF_FUNC,
+    BOOL_IF_FUNC,
     NULLIF_FUNC,
     CASE_FUNC,
     YEAR_FUNC,

@@ -1383,6 +1383,7 @@ class Query_block : public Query_term {
   uint get_in_sum_expr() const { return in_sum_expr; }
 
   bool add_item_to_list(Item *item);
+  bool add_grouping_expr(THD *thd, Item *item);
   bool add_ftfunc_to_list(Item_func_match *func);
   Table_ref *add_table_to_list(THD *thd, Table_ident *table, const char *alias,
                                ulong table_options,
@@ -1392,7 +1393,6 @@ class Query_block : public Query_term {
                                List<String> *partition_names = nullptr,
                                LEX_STRING *option = nullptr,
                                Parse_context *pc = nullptr);
-
   /**
     Add item to the hidden part of select list
 
@@ -2074,8 +2074,20 @@ class Query_block : public Query_term {
 
   /**
     Array of pointers to "base" items; one each for every selected expression
-    and referenced item in the query block. All references to fields are to
-    buffers associated with the primary input tables.
+    and referenced item in the query block. All members of "base_ref_items"
+    are also present in the "fields" container.
+    All references to columns (i.e. Item_field) are to buffers associated
+    with the primary input tables.
+
+    Note: The order of expressions in "base_ref_items" may be different from
+          the order of expressions in "fields".
+    Note: The array must be created with sufficient size during resolving and
+          must be preserved in size and location as long as statement exists.
+    Note: Currently, items representing expressions must be added as follows:
+          <original visible exprs> <hidden exprs> <generated visible exprs>.
+          <hidden exprs> are added during resolving and may be an empty set.
+          <generated visible exprs> are added during possible transformation
+          stages and may also be an empty set.
   */
   Ref_item_array base_ref_items;
 

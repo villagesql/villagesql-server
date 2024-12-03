@@ -288,6 +288,9 @@ class View_creation_ctx : public Default_object_creation_ctx {
 class Item_rollup_group_item;
 
 struct ORDER {
+  ORDER() {}
+  explicit ORDER(Item *grouped_expr) : item_initial(grouped_expr) {}
+
   /// @returns true if item pointer is same as original
   bool is_item_original() const { return item[0] == item_initial; }
 

@@ -4735,7 +4735,7 @@ val
 EXPLAIN FORMAT=TREE SELECT DISTINCT val FROM t1 WHERE NOT EXISTS
 (SELECT * FROM t2 WHERE val = 'asd');
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=30)
+-> Filter: (not exists(select #2))  (rows=30)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=30)
     -> Select #2 (subquery in condition; run only once)
         -> Limit: 1 row(s)  (rows=1)
@@ -4777,7 +4777,7 @@ val
 EXPLAIN FORMAT=TREE SELECT val FROM t1 WHERE NOT EXISTS
 (SELECT * FROM t2 WHERE val = 'asd' ) GROUP BY val;
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=30)
+-> Filter: (not exists(select #2))  (rows=30)
     -> Covering index skip scan for deduplication on t1 using ix_val  (rows=30)
     -> Select #2 (subquery in condition; run only once)
         -> Limit: 1 row(s)  (rows=1)
@@ -4981,7 +4981,7 @@ EXPLAIN FORMAT=TREE SELECT val, MIN(b_id), MAX(b_id) FROM t1 WHERE NOT EXISTS
 (SELECT * FROM t2 WHERE val = 'asd') GROUP BY val;
 EXPLAIN
 -> Group aggregate: min(t1.b_id), max(t1.b_id)  (rows=30.3)
-    -> Filter: exists(select #2) is false  (rows=1000)
+    -> Filter: (not exists(select #2))  (rows=1000)
         -> Covering index scan on t1 using ix_val  (rows=1000)
         -> Select #2 (subquery in condition; run only once)
             -> Limit: 1 row(s)  (rows=1)
@@ -5160,7 +5160,7 @@ val_n
 EXPLAIN FORMAT=TREE SELECT DISTINCT val_n FROM t1 WHERE NOT EXISTS
 (SELECT * FROM t2 WHERE val_n = 'asd');
 EXPLAIN
--> Filter: exists(select #2) is false  (rows=32)
+-> Filter: (not exists(select #2))  (rows=32)
     -> Covering index skip scan for deduplication on t1 using ix_val_n  (rows=32)
     -> Select #2 (subquery in condition; run only once)
         -> Limit: 1 row(s)  (rows=1)
@@ -5313,7 +5313,7 @@ EXPLAIN FORMAT=TREE SELECT val_n, MIN(b_id), MAX(b_id) FROM t1 WHERE NOT EXISTS
 (SELECT * FROM t2 WHERE val_n = 'asd') GROUP BY val_n;
 EXPLAIN
 -> Group aggregate: min(t1.b_id), max(t1.b_id)  (rows=32.3)
-    -> Filter: exists(select #2) is false  (rows=1000)
+    -> Filter: (not exists(select #2))  (rows=1000)
         -> Covering index scan on t1 using ix_val_n  (rows=1000)
         -> Select #2 (subquery in condition; run only once)
             -> Limit: 1 row(s)  (rows=1)
