@@ -55,6 +55,7 @@ class ROUTING_EXPORT MySQLRoutingBase {
   virtual std::vector<mysql_harness::Destination> get_destination_candidates()
       const = 0;
   virtual std::vector<MySQLRoutingAPI::ConnData> get_connections() = 0;
+  virtual MySQLRoutingConnectionBase *get_connection(const std::string &) = 0;
   virtual bool is_accepting_connections() const = 0;
   virtual std::optional<routing::RoutingStrategy> get_routing_strategy()
       const = 0;

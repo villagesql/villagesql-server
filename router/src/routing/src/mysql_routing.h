@@ -262,6 +262,8 @@ class ROUTING_EXPORT MySQLRouting : public MySQLRoutingBase {
 
   std::vector<MySQLRoutingAPI::ConnData> get_connections() override;
 
+  MySQLRoutingConnectionBase *get_connection(const std::string &) override;
+
   DestinationManager *destination_manager() {
     return destination_manager_.get();
   }

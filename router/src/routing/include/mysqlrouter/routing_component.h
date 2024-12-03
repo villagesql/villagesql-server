@@ -156,6 +156,9 @@ class ROUTING_EXPORT MySQLRoutingComponent {
     return routing_guidelines_;
   }
 
+  MySQLRoutingConnectionBase *get_connection(
+      const std::string &client_endpoint);
+
  private:
   // disable copy, as we are a single-instance
   MySQLRoutingComponent(MySQLRoutingComponent const &) = delete;

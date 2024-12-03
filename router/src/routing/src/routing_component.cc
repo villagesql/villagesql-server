@@ -208,6 +208,21 @@ MySQLRoutingComponent &MySQLRoutingComponent::get_instance() {
   return instance;
 }
 
+MySQLRoutingConnectionBase *MySQLRoutingComponent::get_connection(
+    const std::string &client_endpoint) {
+  MySQLRoutingConnectionBase *result = nullptr;
+
+  std::lock_guard<std::mutex> lock(routes_mu_);
+
+  for (const auto &el : routes_) {
+    if (auto r = el.second.lock()) {
+      if ((result = r->get_connection(client_endpoint))) break;
+    }
+  }
+
+  return result;
+}
+
 std::vector<std::string> MySQLRoutingComponent::route_names() const {
   std::vector<std::string> names;
 

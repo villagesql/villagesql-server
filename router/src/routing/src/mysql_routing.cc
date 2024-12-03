@@ -1183,6 +1183,11 @@ std::vector<MySQLRoutingAPI::ConnData> MySQLRouting::get_connections() {
   return connection_container_.get_all_connections_info();
 }
 
+MySQLRoutingConnectionBase *MySQLRouting::get_connection(
+    const std::string &client_endpoint) {
+  return connection_container_.get_connection(client_endpoint);
+}
+
 bool MySQLRouting::is_accepting_connections() const {
   return acceptor_waitable_.serialize_with_cv([this](auto &, auto &) {
     return std::any_of(accepting_endpoints_.begin(), accepting_endpoints_.end(),
