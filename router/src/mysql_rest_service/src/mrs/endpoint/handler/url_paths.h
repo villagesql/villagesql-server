@@ -123,6 +123,25 @@ inline std::string regex_path_db_object(const std::string &object_path) {
   return "^"s + object_path + k_path_id_or_query + "$"s;
 }
 
+inline std::vector<std::string> regex_path_db_object_with_index(
+    const std::string &object_path, const std::string &service_schema_path,
+    const bool is_index) {
+  using namespace std::string_literals;
+  std::vector<std::string> result{"^"s + object_path + k_path_id_or_query +
+                                  "$"s};
+
+  if (is_index) {
+    // When the url path is empty, its root path, which
+    // http plugin processes as "", instead "/".
+    if (service_schema_path.empty())
+      result.push_back("^"s + service_schema_path + "$"s);
+    else
+      result.push_back("^"s + service_schema_path + "/$"s);
+  }
+
+  return result;
+}
+
 inline std::vector<std::string> regex_path_file(std::string service_schema_path,
                                                 const std::string &object_path,
                                                 bool is_index) {
@@ -140,6 +159,12 @@ inline std::vector<std::string> regex_path_file(std::string service_schema_path,
   }
 
   return result;
+}
+
+inline std::string remove_leading_slash_from_path(const std::string &path) {
+  if (path.empty()) return {};
+  if (path[0] == '/') return path.substr(1);
+  return {};
 }
 
 inline std::vector<std::string> regex_path_content_file(

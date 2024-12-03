@@ -55,6 +55,7 @@ class DbObjectEndpoint : public OptionEndpoint {
 
   const DbObjectPtr get() const;
   void set(const DbObject &entry, EndpointBasePtr parent);
+  bool is_index() const;
 
  private:
   void update() override;
@@ -65,6 +66,7 @@ class DbObjectEndpoint : public OptionEndpoint {
   std::string get_my_url_path_part() const override;
   std::string get_my_url_part() const override;
 
+  bool is_index_{false};
   DbObjectPtr entry_;
   std::vector<HandlerPtr> url_handlers_;
 };

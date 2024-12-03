@@ -17,6 +17,7 @@
 # 4. remove all
 #
 
+UPDATE  `mysql_rest_service_metadata`.`config` SET data='{}';
 # Registred SERVICE at path: /svc1
 SET @service_id1=@service_id;
 # Registred DB_SCHEMA at path: /svc1/sch1

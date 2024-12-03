@@ -47,11 +47,13 @@ class HandlerFactory {
   using Handler = mrs::interface::RestHandler;
   using AuthorizeManager = mrs::interface::AuthorizeManager;
   using Uri = ::http::base::Uri;
+  using OptionalIndexNames = EndpointBase::OptionalIndexNames;
 
   virtual ~HandlerFactory() = default;
 
   virtual std::shared_ptr<mrs::endpoint::handler::PersistentDataContentFile>
-  create_persisten_content_file(EndpointBasePtr conent_file_endpoint) = 0;
+  create_persisten_content_file(EndpointBasePtr conent_file_endpoint,
+                                const OptionalIndexNames &index_names) = 0;
 
   virtual std::unique_ptr<Handler> create_db_schema_metadata_catalog_handler(
       EndpointBasePtr db_schema_endpoint) = 0;

@@ -202,13 +202,14 @@ HandlerPtr HandlerFactory::create_db_object_openapi_handler(
 }
 
 std::shared_ptr<handler::PersistentDataContentFile>
-HandlerFactory::create_persisten_content_file(EndpointBasePtr endpoint) {
+HandlerFactory::create_persisten_content_file(
+    EndpointBasePtr endpoint, const OptionalIndexNames &index_names) {
   auto content_file_endpoint =
       std::dynamic_pointer_cast<ContentFileEndpoint>(endpoint);
   assert(content_file_endpoint && "Object must be castable.");
 
   return make_shared<mrs::endpoint::handler::PersistentDataContentFile>(
-      content_file_endpoint->get(), cache_manager_, file_cache_);
+      content_file_endpoint->get(), cache_manager_, file_cache_, index_names);
 }
 
 HandlerPtr HandlerFactory::create_content_file(

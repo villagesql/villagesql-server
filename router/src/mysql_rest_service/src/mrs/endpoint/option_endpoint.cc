@@ -31,10 +31,24 @@
 namespace mrs {
 namespace endpoint {
 
+using OptionalIndexNames = OptionEndpoint::OptionalIndexNames;
+
 OptionEndpoint::OptionEndpoint(UniversalId service_id,
                                EndpointConfigurationPtr configuration,
                                HandlerFactoryPtr factory)
     : EndpointBase(configuration), service_id_{service_id}, factory_{factory} {}
+
+OptionalIndexNames OptionEndpoint::get_index_files() {
+  if (directory_indexes_.has_value()) return directory_indexes_;
+
+  auto parent = get_parent_ptr();
+  if (parent) {
+    EndpointBase *eb = parent.get();
+    return eb->get_index_files();
+  }
+
+  return {};
+}
 
 void OptionEndpoint::update() {
   const bool k_redirect_pernament = true;
@@ -53,9 +67,13 @@ void OptionEndpoint::update() {
     // Get options for current endpoint.
     auto fs = text_to_handler<ParseFileSharingOptions>(opt.value());
 
+    directory_indexes_ = fs.directory_index_directive_;
+
+    auto directory_indexes =
+        get_index_files().value_or(OptionalIndexNames::value_type{});
+
     for (const auto &[k, v] : fs.default_static_content_) {
-      const bool is_index =
-          helper::container::has(fs.directory_index_directive_, k);
+      const bool is_index = helper::container::has(directory_indexes, k);
       handlers_.push_back(factory_->create_string_handler(
           service_id_, required_authentication(), get_url(), get_url_path(), k,
           v, is_index));

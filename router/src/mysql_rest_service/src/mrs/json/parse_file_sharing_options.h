@@ -41,7 +41,7 @@ class FileSharing {
  public:
   std::map<std::string, std::string> default_static_content_;
   std::map<std::string, std::string> default_redirects_;
-  std::vector<std::string> directory_index_directive_;
+  std::optional<std::vector<std::string>> directory_index_directive_;
 };
 
 class ParseFileSharingOptions
@@ -94,8 +94,11 @@ class ParseFileSharingOptions
   template <typename ValueType>
   void handle_array_value(const std::string &key, const ValueType &vt) {
     static const std::string kHttpContent = "directoryIndexDirective.";
+    if (!result_.directory_index_directive_.has_value()) {
+      result_.directory_index_directive_ = std::vector<std::string>{};
+    }
     push_value_when_matches(kHttpContent, key, vt,
-                            &result_.directory_index_directive_);
+                            &result_.directory_index_directive_.value());
   }
 
   template <typename ValueType>

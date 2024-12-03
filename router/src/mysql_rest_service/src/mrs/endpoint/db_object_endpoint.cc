@@ -24,6 +24,7 @@
 
 #include "mrs/endpoint/db_object_endpoint.h"
 
+#include "mrs/endpoint/handler/url_paths.h"
 #include "mrs/observability/entity.h"
 #include "mrs/router_observation_entities.h"
 
@@ -52,10 +53,44 @@ void DbObjectEndpoint::update() {
   observability::EntityCounter<kEntityCounterUpdatesObjects>::increment();
 }
 
-void DbObjectEndpoint::deactivate() { url_handlers_.clear(); }
+void DbObjectEndpoint::deactivate() {
+  url_handlers_.clear();
+  is_index_ = false;
+}
 
 void DbObjectEndpoint::activate_public() {
+  // Currently the index, is defined at endpoint that handles it.
+  // The situation is different with DbObject endpoints. They are
+  // created/updated after the parent, thus DbSchemaEndpoint doesn't
+  // know at `update` which children endpoints can be designed as
+  // directory index.
+  //
+  // For DbObjectEndpoint we need check it here, and register
+  // regexp handler, that matches the path from DbSchemaEndpoint.
+  const bool k_redirect_pernament = true;
+  is_index_ = false;
+  auto parent = get_parent_ptr();
+  const auto &possible_indexes = parent->get_index_files();
+
+  if (possible_indexes.has_value()) {
+    auto entry_name =
+        handler::remove_leading_slash_from_path(entry_->request_path);
+    for (const auto &index : possible_indexes.value()) {
+      if (entry_name == index) {
+        is_index_ = true;
+        break;
+      }
+    }
+  }
+
   url_handlers_.clear();
+
+  if (is_index_) {
+    handlers_.push_back(factory_->create_redirection_handler(
+        service_id_, parent->required_authentication(), parent->get_url(),
+        parent->get_url_path(), "", parent->get_url_path() + "/",
+        k_redirect_pernament));
+  }
 
   url_handlers_.push_back(
       factory_->create_db_object_metadata_handler(shared_from_this()));
@@ -73,6 +108,8 @@ void DbObjectEndpoint::set(const DbObject &entry, EndpointBasePtr parent) {
   change_parent(parent);
   changed();
 }
+
+bool DbObjectEndpoint::is_index() const { return is_index_; }
 
 const DbObjectPtr DbObjectEndpoint::get() const { return entry_; }
 

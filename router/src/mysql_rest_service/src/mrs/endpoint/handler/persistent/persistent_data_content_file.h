@@ -26,7 +26,9 @@
 #define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_PERSISTENT_PERSISTENT_DATA_CONTENT_FILE_H_
 
 #include <memory>
+#include <optional>
 #include <string>
+#include <vector>
 
 #include "collector/mysql_cache_manager.h"
 #include "helper/media_type.h"
@@ -44,6 +46,7 @@ class PersistentDataContentFile {
   using MySQLSession = collector::MysqlCacheManager::Object;
   using EndpointResponseCachePtr =
       std::shared_ptr<mrs::FileEndpointResponseCache>;
+  using OptionalIndexNames = std::optional<std::vector<std::string>>;
 
   struct FetchedFile {
     std::string content;
@@ -53,7 +56,8 @@ class PersistentDataContentFile {
  public:
   PersistentDataContentFile(ContentFilePtr entry_file,
                             collector::MysqlCacheManager *cache,
-                            mrs::ResponseCache *response_cache);
+                            mrs::ResponseCache *response_cache,
+                            const OptionalIndexNames &index_names);
 
   FetchedFile fetch_file(MySQLSession ctxts_sql_session);
 
@@ -61,6 +65,7 @@ class PersistentDataContentFile {
   ContentFilePtr entry_;
   collector::MysqlCacheManager *cache_;
   EndpointResponseCachePtr response_cache_;
+  OptionalIndexNames index_names_;
 };
 
 }  // namespace handler

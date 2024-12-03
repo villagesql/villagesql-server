@@ -131,6 +131,8 @@ class HandleObjectTests : public Test {
           .WillRepeatedly(Return(parent_.db_object.id));
       EXPECT_CALL(*parent_.mock_db_object_endpoint, update()).Times(AtLeast(1));
 
+      EXPECT_CALL(*parent_.mock_db_schema_endpoint, get_url_path())
+          .WillRepeatedly(Return("/db_service/db_schema"));
       EXPECT_CALL(*parent_.mock_db_schema_endpoint, get_enabled_level())
           .WillRepeatedly(
               Return(mrs::database::entry::EnabledType::EnabledType_public));

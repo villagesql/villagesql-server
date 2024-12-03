@@ -49,8 +49,8 @@ static CachedObject get_session(
 
 PersistentDataContentFile::PersistentDataContentFile(
     ContentFilePtr entry_file, collector::MysqlCacheManager *cache,
-    mrs::ResponseCache *response_cache)
-    : entry_{entry_file}, cache_{cache} {
+    mrs::ResponseCache *response_cache, const OptionalIndexNames &index_names)
+    : entry_{entry_file}, cache_{cache}, index_names_{index_names} {
   if (response_cache) {
     response_cache_ =
         std::make_shared<FileEndpointResponseCache>(response_cache);

@@ -39,7 +39,6 @@
 
 namespace mrs {
 namespace endpoint {
-
 namespace handler {
 
 const uint64_t k_default_items_on_page = 25;
@@ -108,11 +107,16 @@ inline std::shared_ptr<DbServiceEndpoint> lock_parent(
 }
 
 inline std::shared_ptr<ContentSetEndpoint> lock_parent(
-    std::shared_ptr<ContentFileEndpoint> &endpoint) {
+    ContentFileEndpoint *endpoint) {
   auto parent = endpoint->get_parent_ptr();
   if (!parent) return {};
 
   return std::dynamic_pointer_cast<ContentSetEndpoint>(parent);
+}
+
+inline std::shared_ptr<ContentSetEndpoint> lock_parent(
+    std::shared_ptr<ContentFileEndpoint> &endpoint) {
+  return lock_parent(endpoint.get());
 }
 
 inline std::optional<std::string> get_endpoint_options(

@@ -53,9 +53,11 @@ class ContentFileEndpoint : public mrs::interface::EndpointBase {
                       EndpointConfigurationPtr configuration,
                       HandlerFactoryPtr factory);
 
+  OptionalIndexNames get_index_files() override { return {}; }
   UniversalId get_id() const override;
   UniversalId get_parent_id() const override;
   std::optional<std::string> get_options() const override;
+  bool is_index() const;
 
   const ContentFilePtr get() const;
   void set(const ContentFile &entry, EndpointBasePtr parent);
@@ -80,10 +82,12 @@ class ContentFileEndpoint : public mrs::interface::EndpointBase {
   std::string get_my_url_path_part() const override;
   std::string get_my_url_part() const override;
 
+  bool is_index_{false};
   ContentFilePtr entry_;
   PersistentDataContentFilePtr persistent_data_;
   HandlerFactoryPtr factory_;
   HandlerPtr handler_;
+  HandlerPtr handler_redirection_;
 };
 
 }  // namespace endpoint

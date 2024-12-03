@@ -223,6 +223,19 @@ mrs::database::entry::RowUserOwnership get_user_ownership(
   return result;
 }
 
+std::vector<std::string> regex_path_for_db_object(
+    std::weak_ptr<mrs::endpoint::DbObjectEndpoint> endpoint) {
+  auto ep = mrs::endpoint::handler::lock(endpoint);
+  auto parent_ep = ep->get_parent_ptr();
+
+  const std::string &object_path = ep->get_url_path();
+  const std::string &service_schema_path = parent_ep->get_url_path();
+  const bool is_index = ep->is_index();
+
+  return mrs::endpoint::handler::regex_path_db_object_with_index(
+      object_path, service_schema_path, is_index);
+}
+
 }  // namespace
 
 namespace mrs {
@@ -254,7 +267,7 @@ HandlerDbObjectTable::HandlerDbObjectTable(
     mrs::ResponseCache *response_cache)
     : Handler(get_endpoint_host(endpoint),
               /*regex-path: ^/service/schema/object(/...)?$*/
-              {regex_path_db_object(lock(endpoint)->get_url_path())},
+              regex_path_for_db_object(endpoint),
               get_endpoint_options(lock(endpoint)), auth_manager),
       gtid_manager_{gtid_manager},
       cache_{cache},

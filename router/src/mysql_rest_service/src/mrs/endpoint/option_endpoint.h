@@ -45,12 +45,15 @@ class OptionEndpoint : public mrs::interface::EndpointBase {
   OptionEndpoint(UniversalId service_id, EndpointConfigurationPtr configuration,
                  HandlerFactoryPtr factory);
 
+  OptionalIndexNames get_index_files() override;
+
  protected:
   void update() override;
 
   UniversalId service_id_;
   std::vector<HandlerPtr> handlers_;
   HandlerFactoryPtr factory_;
+  std::optional<std::vector<std::string>> directory_indexes_;
 };
 
 }  // namespace endpoint

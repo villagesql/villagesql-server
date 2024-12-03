@@ -48,12 +48,17 @@ namespace handler {
 
 namespace {
 
-std::vector<std::string> get_regex_paths(
-    std::weak_ptr<ContentFileEndpoint> endpoint_wptr) {
-  auto endpoint = lock(endpoint_wptr);
-  assert(endpoint && "Endpoint must be valid/lockable at object creation");
+std::vector<std::string> regex_path_for_db_object(
+    std::weak_ptr<mrs::endpoint::ContentFileEndpoint> endpoint) {
+  auto ep = mrs::endpoint::handler::lock(endpoint);
+  auto parent_ep = ep->get_parent_ptr();
 
-  return regex_path_content_file(endpoint->get_url_path());
+  const std::string &object_path = ep->get()->request_path;
+  const std::string &service_schema_path = parent_ep->get_url_path();
+  const bool is_index = ep->is_index();
+
+  return mrs::endpoint::handler::regex_path_file(service_schema_path,
+                                                 object_path, is_index);
 }
 
 }  // namespace
@@ -62,7 +67,7 @@ HandlerContentFile::HandlerContentFile(
     std::weak_ptr<ContentFileEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager,
     std::shared_ptr<PersistentDataContentFile> persistent_data_content_file)
-    : Handler(get_endpoint_host(endpoint), get_regex_paths(endpoint),
+    : Handler(get_endpoint_host(endpoint), regex_path_for_db_object(endpoint),
               get_endpoint_options(lock(endpoint)), auth_manager),
       endpoint_{endpoint},
       persistent_data_content_file_{persistent_data_content_file} {

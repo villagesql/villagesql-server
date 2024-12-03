@@ -51,6 +51,17 @@ INSERT INTO `proc_schema`.`dummy_data` (`name`, `comments`, `date`)
 DROP procedure IF EXISTS `on_resultset`;
 
 DELIMITER $$;
+
+CREATE PROCEDURE `proc_schema`.`procedure_first` ()
+BEGIN
+   select "first content";
+END;$$
+
+CREATE PROCEDURE `proc_schema`.`procedure_second` ()
+BEGIN
+   select "second content";
+END;$$
+
 CREATE PROCEDURE `proc_schema`.`one_resultset` ()
 BEGIN
    select * from `proc_schema`.`dummy_data`;

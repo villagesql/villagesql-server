@@ -52,7 +52,11 @@ TEST_P(ParseFileSharingOptsTests, parse_file_sharing_opts_empty) {
   auto result =
       helper::json::text_to_handler<ParseFileSharingOptions>(p.json_input);
   ASSERT_EQ(p.no_of_contents, result.default_static_content_.size());
-  ASSERT_EQ(p.no_of_idexes, result.directory_index_directive_.size());
+  if (p.no_of_idexes > 0) {
+    ASSERT_EQ(p.no_of_idexes, result.directory_index_directive_.value().size());
+  } else {
+    ASSERT_EQ(false, result.directory_index_directive_.has_value());
+  }
   ASSERT_EQ(p.no_of_redirects, result.default_redirects_.size());
 }
 
@@ -89,7 +93,7 @@ TEST(ParseFileSharingOptsTest, validate_resulting_values) {
 
   // Check sizes
   ASSERT_EQ(4, result.default_static_content_.size());
-  ASSERT_EQ(3, result.directory_index_directive_.size());
+  ASSERT_EQ(3, result.directory_index_directive_.value().size());
   ASSERT_EQ(2, result.default_redirects_.size());
 
   // Check keys
@@ -110,9 +114,9 @@ TEST(ParseFileSharingOptsTest, validate_resulting_values) {
   ASSERT_EQ("f1", result.default_redirects_["R1"]);
   ASSERT_EQ("f2", result.default_redirects_["R2"]);
 
-  ASSERT_EQ("value1", result.directory_index_directive_[0]);
-  ASSERT_EQ("value2", result.directory_index_directive_[1]);
-  ASSERT_EQ("3", result.directory_index_directive_[2]);
+  ASSERT_EQ("value1", result.directory_index_directive_.value()[0]);
+  ASSERT_EQ("value2", result.directory_index_directive_.value()[1]);
+  ASSERT_EQ("3", result.directory_index_directive_.value()[2]);
 }
 
 TEST(ParseFileSharingOptsTest, validate_resulting_values_base64) {
@@ -127,7 +131,7 @@ TEST(ParseFileSharingOptsTest, validate_resulting_values_base64) {
 
   // Check sizes
   ASSERT_EQ(4, result.default_static_content_.size());
-  ASSERT_EQ(3, result.directory_index_directive_.size());
+  ASSERT_EQ(3, result.directory_index_directive_.value().size());
   ASSERT_EQ(2, result.default_redirects_.size());
 
   // Check keys
@@ -148,7 +152,7 @@ TEST(ParseFileSharingOptsTest, validate_resulting_values_base64) {
   ASSERT_EQ("f1", result.default_redirects_["R1"]);
   ASSERT_EQ("f2", result.default_redirects_["R2"]);
 
-  ASSERT_EQ("value1", result.directory_index_directive_[0]);
-  ASSERT_EQ("value2", result.directory_index_directive_[1]);
-  ASSERT_EQ("3", result.directory_index_directive_[2]);
+  ASSERT_EQ("value1", result.directory_index_directive_.value()[0]);
+  ASSERT_EQ("value2", result.directory_index_directive_.value()[1]);
+  ASSERT_EQ("3", result.directory_index_directive_.value()[2]);
 }

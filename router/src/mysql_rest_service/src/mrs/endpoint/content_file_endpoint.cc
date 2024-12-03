@@ -25,6 +25,8 @@
 #include "mrs/endpoint/content_file_endpoint.h"
 
 #include "mrs/endpoint/content_set_endpoint.h"
+#include "mrs/endpoint/handler/url_paths.h"
+#include "mrs/endpoint/handler/utilities.h"
 #include "mrs/observability/entity.h"
 #include "mrs/router_observation_entities.h"
 
@@ -65,19 +67,48 @@ void ContentFileEndpoint::update() {
 }
 
 void ContentFileEndpoint::activate_common() {
-  persistent_data_ =
-      factory_->create_persisten_content_file(shared_from_this());
+  persistent_data_ = factory_->create_persisten_content_file(shared_from_this(),
+                                                             get_index_files());
 }
 
 void ContentFileEndpoint::activate_private() { activate_common(); }
 
 void ContentFileEndpoint::activate_public() {
   activate_common();
+
+  const bool k_redirect_pernament = true;
+  is_index_ = false;
+  auto parent = mrs::endpoint::handler::lock_parent(this);
+  assert(parent && "parent must be valid");
+  const auto &possible_indexes = parent->get_index_files();
+
+  if (possible_indexes.has_value()) {
+    auto entry_name =
+        handler::remove_leading_slash_from_path(entry_->request_path);
+    for (const auto &index : possible_indexes.value()) {
+      if (entry_name == index) {
+        is_index_ = true;
+        break;
+      }
+    }
+  }
+
   handler_ =
       factory_->create_content_file(shared_from_this(), persistent_data_);
+
+  if (is_index_) {
+    handler_redirection_ = factory_->create_redirection_handler(
+        parent->get()->service_id, parent->required_authentication(),
+        parent->get_url(), parent->get_url_path(), "",
+        parent->get_url_path() + "/", k_redirect_pernament);
+  }
 }
 
-void ContentFileEndpoint::deactivate() { handler_.reset(); }
+void ContentFileEndpoint::deactivate() {
+  handler_.reset();
+  handler_redirection_.reset();
+  is_index_ = false;
+}
 
 EnabledType ContentFileEndpoint::get_this_node_enabled_level() const {
   return entry_->enabled;
@@ -98,6 +129,8 @@ std::string ContentFileEndpoint::get_my_url_part() const {
 std::optional<std::string> ContentFileEndpoint::get_options() const {
   return {};
 }
+
+bool ContentFileEndpoint::is_index() const { return is_index_; }
 
 }  // namespace endpoint
 }  // namespace mrs

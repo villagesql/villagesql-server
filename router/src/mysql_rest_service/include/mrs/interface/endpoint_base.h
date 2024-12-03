@@ -64,6 +64,7 @@ class EndpointBase : public std::enable_shared_from_this<EndpointBase> {
   using Handler = mrs::interface::RestHandler;
   using HandlerPtr = std::unique_ptr<Handler>;
   using Uri = ::http::base::Uri;
+  using OptionalIndexNames = std::optional<std::vector<std::string>>;
 
  public:
   EndpointBase(EndpointConfigurationPtr configuration)
@@ -75,8 +76,8 @@ class EndpointBase : public std::enable_shared_from_this<EndpointBase> {
    */
  public:
   virtual UniversalId get_id() const = 0;
-
   virtual UniversalId get_parent_id() const = 0;
+  virtual OptionalIndexNames get_index_files() = 0;
 
  protected:
   virtual EnabledType get_this_node_enabled_level() const = 0;
