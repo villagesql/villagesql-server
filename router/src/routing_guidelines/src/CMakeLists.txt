@@ -59,6 +59,17 @@ IF(UNIX AND "${CMAKE_CXX_COMPILER_VERSION}" VERSION_LESS "6.0")
   TARGET_COMPILE_OPTIONS(routing_guidelines-objects PUBLIC -Wno-attributes)
 ENDIF()
 
+# Converting an OBJECT library to STATIC or SHARED does not work for Xcode,
+# use the OBJECT library everywhere.
+# We don't support creating packages from Xcode projects anyways,
+# so we don't need the INSTALL or GENERATE_EXPORT_HEADER stuff below.
+# See also ADD_CONVENIENCE_LIBRARY and MERGE_CONVENIENCE_LIBRARIES.
+IF(APPLE_XCODE)
+  ADD_LIBRARY(routing_guidelines ALIAS routing_guidelines-objects)
+  ADD_LIBRARY(routing_guidelines-static ALIAS routing_guidelines-objects)
+  RETURN()
+ENDIF()
+
 ADD_LIBRARY(routing_guidelines SHARED $<TARGET_OBJECTS:routing_guidelines-objects>)
 GENERATE_EXPORT_HEADER(routing_guidelines
   EXPORT_FILE_NAME
