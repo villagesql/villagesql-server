@@ -538,6 +538,20 @@ std::vector<CmdOption> g_options{
        }
      }},
 
+    {{"--auth-app"},
+     "Define which authentication application should be used while "
+     "authenticating.",
+     CmdOptionValueReq::required,
+     "meta_auth_app",
+     [](const std::string &value) { g_configuration.auth_app = value; },
+     [](const std::string &) {
+       if (!cnf_should_execute_authentication_flow()) {
+         throw std::invalid_argument(
+             "Authentication app, can be defined while executing "
+             "authentication flow.");
+       }
+     }},
+
     {{"--json-pointer", "-j"},
      "Print only values selected by pointers (inclusive pointer). Multiple "
      "pointer should be "
@@ -797,24 +811,24 @@ static Result execute_http_flow(HttpClientRequest *request,
       } break;
 
       case http_client::AuthenticationType::kBasicJson: {
-        r = b.do_basic_json_flow(request, path, g_configuration.user,
-                                 g_configuration.password,
-                                 g_configuration.session_type);
+        r = b.do_basic_json_flow(
+            request, path, g_configuration.user, g_configuration.password,
+            g_configuration.session_type, g_configuration.auth_app);
       } break;
       case http_client::AuthenticationType::kBasic: {
-        r = b.do_basic_flow(request, path, g_configuration.user,
-                            g_configuration.password,
-                            g_configuration.session_type);
+        r = b.do_basic_flow(
+            request, path, g_configuration.user, g_configuration.password,
+            g_configuration.session_type, g_configuration.auth_app);
       } break;
       case http_client::AuthenticationType::kScramGet: {
-        r = b.do_scram_get_flow(request, path, g_configuration.user,
-                                g_configuration.password,
-                                g_configuration.session_type);
+        r = b.do_scram_get_flow(
+            request, path, g_configuration.user, g_configuration.password,
+            g_configuration.session_type, g_configuration.auth_app);
       } break;
       case http_client::AuthenticationType::kScramPost: {
-        r = b.do_scram_post_flow(request, path, g_configuration.user,
-                                 g_configuration.password,
-                                 g_configuration.session_type);
+        r = b.do_scram_post_flow(
+            request, path, g_configuration.user, g_configuration.password,
+            g_configuration.session_type, g_configuration.auth_app);
       } break;
 
       default: {

@@ -493,7 +493,8 @@ std::optional<std::string> AuthorizeManager::authorize_jwt(
 }
 
 AuthorizeHandlerPtr AuthorizeManager::choose_authentication_handler(
-    ServiceId service_id, const std::optional<std::string> &app_name) {
+    rest::RequestContext &ctxt, ServiceId service_id,
+    const std::optional<std::string> &app_name) {
   auto handlers = get_handlers_by_service_id(service_id);
   if (handlers.empty())
     throw http::Error{
@@ -511,10 +512,33 @@ AuthorizeHandlerPtr AuthorizeManager::choose_authentication_handler(
           [&app_name_value](const auto &handler) {
             return (app_name_value == handler->get_entry().app_name);
           },
-          &result))
+          &result)) {
+    // When there is no app name, try to find the handler
+    // by looking at the payload.
+    //
+    // The payload may contain data pointing to the handler.
+    if (!app_name.has_value()) {
+      for (auto &h : handlers) {
+        auto previouse_session_id = h->get_session_id_from_request_data(ctxt);
+        if (previouse_session_id.has_value()) {
+          auto session = session_manager_.get_session_secondary_id(
+              previouse_session_id.value());
+          // Even if the handler can parse the request and it thinks
+          // that its his payload, we need look a second time,
+          // for the handler using handler-id.
+          // There may be a few different hanlders, with the same
+          // vendor-id.
+          auto handler_id = session->get_authorization_handler_id();
+          for (auto &handler : handlers) {
+            if (handler_id == handler->get_id()) return handler;
+          }
+        }
+      }
+    }
     throw http::Error{
         HttpStatusCode::BadRequest,
         "Bad request - chosen authorization application no available"};
+  }
   return result;
 }
 
@@ -628,7 +652,7 @@ bool AuthorizeManager::authorize(ServiceId service_id,
       log_warning("Too many requests from host: '%s'.", peer_host.c_str());
     throw_max_rate_exceeded(ac.next_request_allowed_after);
   }
-  selected_handler = choose_authentication_handler(service_id, auth_app);
+  selected_handler = choose_authentication_handler(ctxt, service_id, auth_app);
 
   // Ensure that all code paths, had selected the handlers.
   assert(nullptr != selected_handler.get());

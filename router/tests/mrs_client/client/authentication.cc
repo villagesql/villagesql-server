@@ -200,10 +200,11 @@ class ParseJsonObjectChallenge
 
 }  // namespace
 
-Result Authentication::do_basic_flow(HttpClientRequest *request,
-                                     std::string url, const std::string &user,
-                                     const std::string &password,
-                                     const SessionType st) {
+Result Authentication::do_basic_flow(
+    HttpClientRequest *request, std::string url, const std::string &user,
+    const std::string &password, const SessionType st,
+    [[maybe_unused]] const std::optional<std::string> &auth_app) {
+  assert(!auth_app.has_value() && "Not implemented in this app");
   add_authorization_header(request, user, password);
 
   if (st == SessionType::kJWT) {
@@ -260,14 +261,15 @@ Result Authentication::do_basic_flow(HttpClientRequest *request,
   return {HttpStatusCode::Ok, {}, {}};
 }
 
-Result Authentication::do_basic_json_flow(HttpClientRequest *request,
-                                          std::string url,
-                                          const std::string &user,
-                                          const std::string &password,
-                                          const SessionType st) {
+Result Authentication::do_basic_json_flow(
+    HttpClientRequest *request, std::string url, const std::string &user,
+    const std::string &password, const SessionType st,
+    [[maybe_unused]] const std::optional<std::string> &auth_app) {
   http::base::Uri u{url};
   bool use_jwt = st == SessionType::kJWT;
   bool use_cookies = !use_jwt;
+
+  assert(!auth_app.has_value() && "Not implemented in this app");
 
   auto body =
       get_authorization_json(user, password, use_jwt, u.get_query_elements());
@@ -426,11 +428,10 @@ auto check_bearer_cookies(const Result &result, bool must_have_cookies,
   return access_token;
 }
 
-Result Authentication::do_scram_post_flow(HttpClientRequest *request,
-                                          std::string url,
-                                          const std::string &user,
-                                          const std::string &password,
-                                          const SessionType st) {
+Result Authentication::do_scram_post_flow(
+    HttpClientRequest *request, std::string url, const std::string &user,
+    const std::string &password, const SessionType st,
+    const std::optional<std::string> &auth_app) {
   using JsonObject = std::map<std::string, std::string>;
   Scram scram;
 
@@ -440,6 +441,10 @@ Result Authentication::do_scram_post_flow(HttpClientRequest *request,
       {"sessionType", (st == SessionType::kJWT ? "bearer" : "cookie")},
       {"user", user},
       {"nonce", scram.initial_nonce_}};
+
+  if (auth_app.has_value()) {
+    request_data["authApp"] = auth_app.value();
+  }
 
   // TODO(lkotula): check if response has expected number of cookies or bearers
   // (depending on options)
@@ -497,16 +502,19 @@ Result Authentication::do_scram_post_flow(HttpClientRequest *request,
   return {HttpStatusCode::Ok, {}, {}};
 }
 
-Result Authentication::do_scram_get_flow(HttpClientRequest *request,
-                                         std::string url,
-                                         const std::string &user,
-                                         const std::string &password,
-                                         const SessionType st) {
+Result Authentication::do_scram_get_flow(
+    HttpClientRequest *request, std::string url, const std::string &user,
+    const std::string &password, const SessionType st,
+    const std::optional<std::string> &auth_app) {
   Scram scram;
 
   auto url_init = url + "?" + scram.get_initial_auth_data(user);
   if (st == SessionType::kJWT) {
     url_init = url_init + "&sessionType=bearer";
+  }
+
+  if (auth_app.has_value()) {
+    url_init = url_init + "&app=" + auth_app.value();
   }
 
   // TODO(lkotula): check if response has expected number of cookies or bearers

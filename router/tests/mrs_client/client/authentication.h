@@ -34,16 +34,20 @@ class Authentication {
  public:
   Result do_basic_flow(HttpClientRequest *request, std::string url,
                        const std::string &user, const std::string &password,
-                       const SessionType st);
+                       const SessionType st,
+                       const std::optional<std::string> &auth_app);
   Result do_basic_json_flow(HttpClientRequest *request, std::string url,
                             const std::string &user,
-                            const std::string &password, const SessionType st);
+                            const std::string &password, const SessionType st,
+                            const std::optional<std::string> &auth_app);
   Result do_scram_get_flow(HttpClientRequest *request, std::string url,
                            const std::string &user, const std::string &password,
-                           const SessionType st);
+                           const SessionType st,
+                           const std::optional<std::string> &auth_app);
   Result do_scram_post_flow(HttpClientRequest *request, std::string url,
                             const std::string &user,
-                            const std::string &password, const SessionType st);
+                            const std::string &password, const SessionType st,
+                            const std::optional<std::string> &auth_app);
 };
 
 }  // namespace mrs_client

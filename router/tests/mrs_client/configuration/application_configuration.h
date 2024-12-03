@@ -86,6 +86,7 @@ struct ApplicationConfiguration {
   ApplicationDisplay display;
   SessionType session_type{SessionType::kCookie};
   ResponseType response_type{ResponseType::kJson};
+  std::optional<std::string> auth_app;
   std::string content_type;
   HttpStatusCode::key_type expected_status{HttpStatusCode::Ok};
   std::map<std::string, std::string> expected_headers;

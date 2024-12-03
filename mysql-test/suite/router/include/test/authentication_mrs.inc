@@ -23,6 +23,7 @@ if (!$test_scram)
   --die The veriable is required: test_scram.
 }
 
+--let $_test_auth_app=
 --let $extra_mrs_router_id=1
 --source ../predefined_setup/configure_router_mrs_root.inc
 --source ../schema/basic_schema.sql
@@ -83,7 +84,17 @@ if (!$test_scram)
 --let $mrs_add_db_object_path=/o2
 --source ../mrs/db_object/add.inc
 
---let $mrs_add_auth_app=default authentication
+if ($test_second_handler)
+{
+  --let $mrs_add_auth_app=Auth2
+  --let $mrs_add_auth_vendor=MRS
+  --let $mrs_add_auth_service=/svc1
+  --source ../mrs/add_auth_app.inc
+  --let $_test_auth_app=--auth-app=Auth1
+}
+
+
+--let $mrs_add_auth_app=Auth1
 --let $mrs_add_auth_vendor=MRS
 --let $mrs_add_auth_service=/svc1
 --source ../mrs/add_auth_app.inc
@@ -158,11 +169,11 @@ exec $MRS_CLIENT_ARGS
 --echo
 --echo #
 --echo # III.1
-
 exec $MRS_CLIENT_ARGS
   -a $test_scram
   --path /svc1/authentication/login
   -u root_not_existing
+  $_test_auth_app
   --expected-status Unauthorized
   --session-type $test_session_type;
 
@@ -171,6 +182,7 @@ exec $MRS_CLIENT_ARGS
   --path /svc1/authentication/login
   -u svc1_usr
   -p test
+  $_test_auth_app
   --session-type $test_session_type
   --session-file $MYSQL_TMP_DIR/user1_session.dat;
 
@@ -243,6 +255,7 @@ remove_file $MYSQL_TMP_DIR/user1_session.dat;
 remove_file $MYSQL_TMP_DIR/user2_session.dat;
 --source ../mrs/cleanup.inc
 
+--let $test_second_handler=
 --let $test_session_type=
 --let $test_scram=
 
