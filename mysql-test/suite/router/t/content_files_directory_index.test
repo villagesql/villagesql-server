@@ -112,5 +112,5 @@ exec $MRS_CLIENT_ARGS
 
 
 # Cleanup
---let $cleanup_arg_mrs_existing_service=/svc1/sch1/obj1
+--let $cleanup_arg_mrs_existing_service=/svc1/sch/first.html
 --source ../include/mrs/cleanup.inc
