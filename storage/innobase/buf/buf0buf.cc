@@ -2148,13 +2148,7 @@ static void buf_pool_resize() {
     // No locking needed to read, same thread updated those
     ut_ad(buf_pool->curr_size == buf_pool->old_size);
     ut_ad(buf_pool->n_chunks_new == buf_pool->n_chunks);
-#ifdef UNIV_DEBUG
     ut_ad(UT_LIST_GET_LEN(buf_pool->withdraw) == 0);
-
-    buf_flush_list_mutex_enter(buf_pool);
-    ut_ad(buf_pool->flush_rbt == nullptr);
-    buf_flush_list_mutex_exit(buf_pool);
-#endif
 
     buf_pool->curr_size = new_instance_size;
 
@@ -3966,7 +3960,7 @@ dberr_t Buf_fetch<T>::zip_page_handler(buf_block_t *&fix_block) {
     ut_a(success);
   }
 
-  if (!recv_no_ibuf_operations) {
+  if (!recv_recovery_is_on()) {
     if (access_time != std::chrono::steady_clock::time_point{}) {
 #ifdef UNIV_IBUF_COUNT_DEBUG
       ut_a(ibuf_count_get(m_page_id) == 0);
@@ -4820,7 +4814,7 @@ buf_page_t *buf_page_init_for_read(ulint mode, const page_id_t &page_id,
 
     ibuf_mtr_start(&mtr);
 
-    if (!recv_no_ibuf_operations &&
+    if (!recv_recovery_is_on() &&
         !ibuf_page(page_id, page_size, UT_LOCATION_HERE, &mtr)) {
       ibuf_mtr_commit(&mtr);
 
@@ -5899,13 +5893,12 @@ bool buf_page_io_complete(buf_page_t *bpage, bool evict, IORequest *type,
       /* Pages must be uncompressed for crash recovery. */
       ut_a(uncompressed);
       recv_recover_page(true, (buf_block_t *)bpage);
-    }
-
-    if (uncompressed && !Compression::is_compressed_page(frame) &&
-        !recv_no_ibuf_operations &&
-        fil_page_get_type(frame) == FIL_PAGE_INDEX && page_is_leaf(frame) &&
-        !fsp_is_system_temporary(bpage->id.space()) &&
-        !fsp_is_undo_tablespace(bpage->id.space()) && !bpage->was_stale()) {
+    } else if (uncompressed && !Compression::is_compressed_page(frame) &&
+               fil_page_get_type(frame) == FIL_PAGE_INDEX &&
+               page_is_leaf(frame) &&
+               !fsp_is_system_temporary(bpage->id.space()) &&
+               !fsp_is_undo_tablespace(bpage->id.space()) &&
+               !bpage->was_stale()) {
       ibuf_merge_or_delete_for_page((buf_block_t *)bpage, bpage->id,
                                     &bpage->size, true);
     }

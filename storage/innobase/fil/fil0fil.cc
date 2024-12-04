@@ -7548,7 +7548,7 @@ dberr_t Fil_shard::do_io(const IORequest &type, bool sync,
 
 #ifndef UNIV_HOTBACKUP
   /* ibuf bitmap pages must be read in the sync AIO mode: */
-  ut_ad(recv_no_ibuf_operations || req_type.is_write() ||
+  ut_ad(recv_recovery_is_on() || req_type.is_write() ||
         !ibuf_bitmap_page(page_id, page_size) || sync);
 
   auto aio_mode = get_AIO_mode(req_type, sync);
@@ -7557,7 +7557,7 @@ dberr_t Fil_shard::do_io(const IORequest &type, bool sync,
     ut_ad(type.get_original_size() == 0);
     srv_stats.data_read.add(len);
 
-    if (aio_mode == AIO_mode::NORMAL && !recv_no_ibuf_operations &&
+    if (aio_mode == AIO_mode::NORMAL && !recv_recovery_is_on() &&
         ibuf_page(page_id, page_size, UT_LOCATION_HERE, nullptr)) {
       /* Reduce probability of deadlock bugs
       in connection with ibuf: do not let the

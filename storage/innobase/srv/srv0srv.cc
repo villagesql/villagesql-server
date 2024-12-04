@@ -82,6 +82,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql_thd_internal_api.h"
 #include "srv0mon.h"
 
+#include "debug_sync.h" /* CONDITIONAL_SYNC_POINT */
 #include "my_dbug.h"
 #include "my_psi_config.h"
 
@@ -2644,6 +2645,7 @@ bool srv_enable_undo_encryption() {
 static void srv_master_sleep(void) {
   srv_main_thread_op_info = "sleeping";
   std::this_thread::sleep_for(std::chrono::seconds(1));
+  CONDITIONAL_SYNC_POINT("srv_master_sleep");
   srv_main_thread_op_info = "";
 }
 
