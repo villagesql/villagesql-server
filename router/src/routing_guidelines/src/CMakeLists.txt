@@ -32,6 +32,13 @@ BISON_TARGET(match_parser
   VERBOSE
   )
 
+# Needed for some Bison versions.
+MY_CHECK_CXX_COMPILER_WARNING("-Wimplicit-fallthrough" HAS_WARN_FLAG)
+IF(HAS_WARN_FLAG)
+  ADD_COMPILE_FLAGS(${BISON_match_parser_OUTPUT_SOURCE}
+    COMPILE_FLAGS "${HAS_WARN_FLAG}")
+ENDIF()
+
 SET(guidelines_SRC
   ${BISON_match_parser_OUTPUT_SOURCE}
   rules_parser.cc
