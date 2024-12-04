@@ -53,6 +53,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #include "sql_const.h"
 #include "srv0srv.h"
 #include "srv0start.h"
+#include "ut0counting_semaphore.h"
 #ifndef UNIV_HOTBACKUP
 #include "os0event.h"
 #include "os0thread.h"
@@ -725,17 +726,22 @@ class AIO {
   A thread can wait separately for any one of the segments. */
   ulint m_n_segments;
 
-  /** The event which is set to the signaled state when
-  there is space in the aio outside the ibuf segment */
-  os_event_t m_not_full;
-
-  /** The event which is set to the signaled state when
-  there are no pending i/os in this array */
+  /** The event which is set to the signaled state if and only if there are
+  no pending i/os in this array. In other words, when m_n_reserved == 0. */
   os_event_t m_is_empty;
 
-  /** Number of reserved slots in the AIO array outside
-  the ibuf segment */
-  ulint m_n_reserved;
+  /** Number of slots in the m_slots array, which are not yet promised to any
+  thread. A thread which wants to reserve a slot should first call
+  m_unused_slots.acquire(). And once the slot is no longer in use, it should
+  call m_unused_slots.release(). As this is initialized to m_slots.size(),
+  successful call to m_unused_slots.acquire() guarantees finding at least one
+  slot which can be reserved by the thread. In other words, this counter is
+  a lower bound on the number of i, s.t. m_slots[i].is_reserved==false. */
+  ut::counting_semaphore m_unused_slots;
+
+  /** Number of slots in the m_slots array, which have is_reserved==true.
+  This value is updated and checked only under m_mutex. */
+  size_t m_n_reserved;
 
   /** The index of last slot used to reserve. This is used to balance the
    incoming requests more evenly throughout the segments.
@@ -1267,11 +1273,10 @@ ulint AIO::pending_io_count() const {
       ut_a(slot.len > 0);
     }
   }
-
-  ut_a(m_n_reserved == count);
+  ut_a_eq(count, m_n_reserved);
 #endif /* UNIV_DEBUG */
 
-  ulint reserved = m_n_reserved;
+  const auto reserved = m_n_reserved;
 
   release();
 
@@ -1521,11 +1526,8 @@ void AIO::release(Slot *slot) {
 
   slot->is_reserved = false;
 
+  m_unused_slots.release();
   --m_n_reserved;
-
-  if (m_n_reserved == m_slots.size() - 1) {
-    os_event_set(m_not_full);
-  }
 
   if (m_n_reserved == 0) {
     os_event_set(m_is_empty);
@@ -5892,6 +5894,7 @@ dberr_t os_aio_handler(ulint segment, fil_node_t **m1, void **m2,
 AIO::AIO(latch_id_t id, ulint n, ulint segments)
     : m_slots(n),
       m_n_segments(segments),
+      m_unused_slots(n),
       m_n_reserved(),
       m_last_slot_used(0)
 #ifdef LINUX_NATIVE_AIO
@@ -5908,7 +5911,6 @@ AIO::AIO(latch_id_t id, ulint n, ulint segments)
 
   mutex_create(id, &m_mutex);
 
-  m_not_full = os_event_create();
   m_is_empty = os_event_create();
 
 #ifdef LINUX_NATIVE_AIO
@@ -6053,7 +6055,6 @@ AIO::~AIO() {
 
   mutex_destroy(&m_mutex);
 
-  os_event_destroy(m_not_full);
   os_event_destroy(m_is_empty);
 
 #if defined(LINUX_NATIVE_AIO)
@@ -6356,25 +6357,10 @@ Slot *AIO::reserve_slot(IORequest &type, fil_node_t *m1, void *m2,
 
   const auto slots_per_seg = slots_per_segment();
 
-  for (;;) {
-    acquire();
+  m_unused_slots.acquire(os_aio_simulated_wake_handler_threads);
 
-    if (m_n_reserved != m_slots.size()) {
-      break;
-    }
-
-    release();
-
-    if (!srv_use_native_aio) {
-      /* If the handler threads are suspended,
-      wake them so that we get more slots */
-
-      os_aio_simulated_wake_handler_threads();
-    }
-
-    os_event_wait(m_not_full);
-  }
-
+  acquire();
+  ut_a_lt(m_n_reserved, m_slots.size());
   /* We will check first, next(first), next(next(first))... which should be a
   permutation of values 0,..,m_slots.size()-1.*/
   auto find_slot = [this](size_t first, auto next) {
@@ -6428,10 +6414,6 @@ Slot *AIO::reserve_slot(IORequest &type, fil_node_t *m1, void *m2,
 
   if (m_n_reserved == 1) {
     os_event_reset(m_is_empty);
-  }
-
-  if (m_n_reserved == m_slots.size()) {
-    os_event_reset(m_not_full);
   }
 
   slot->is_reserved = true;
@@ -7486,7 +7468,7 @@ void AIO::print(FILE *file) {
     }
   }
 
-  ut_a(m_n_reserved == count);
+  ut_a_eq(m_n_reserved, count);
 
   print_segment_info(file, n_res_seg);
 
