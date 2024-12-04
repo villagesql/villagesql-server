@@ -473,7 +473,7 @@ void concurrency_loop(MYSQL *mysql, uint current, option_string *eptr) {
 
   memset(&conclusion, 0, sizeof(conclusions));
 
-  if (auto_actual_queries)
+  if (auto_actual_queries && auto_generate_sql)
     client_limit = auto_actual_queries;
   else if (num_of_query)
     client_limit = num_of_query / current;
@@ -1141,6 +1141,36 @@ static int get_options(int *argc, char ***argv) {
     exit(1);
   }
 
+  if (!auto_generate_sql && auto_actual_queries) {
+    fprintf(stderr,
+            "Warning: %s: --auto-generate-sql not specified but "
+            "--auto-generate-sql-execute-number options is. Turning "
+            "--auto-generate-sql on!\n",
+            my_progname);
+    auto_generate_sql = 1;
+  }
+  if (!auto_generate_sql && auto_generate_sql_guid_primary) {
+    fprintf(stderr,
+            "Warning: %s: --auto-generate-sql not specified but "
+            "--auto-generate-sql-guid-primary options is. Turning "
+            "--auto-generate-sql on!\n",
+            my_progname);
+    auto_generate_sql = 1;
+  }
+  // we don't do --auto-generate-sql-write-number since it's non-0 by default
+  if (!auto_generate_sql && auto_generate_sql_secondary_indexes) {
+    fprintf(stderr,
+            "Warning: %s: --auto-generate-sql not specified but "
+            "--auto-generate-sql-secondary-indexes options is. Turning "
+            "--auto-generate-sql on!\n",
+            my_progname);
+    auto_generate_sql = 1;
+  }
+  // we don't do --auto-generate-sql-load-type since it's non-null by default
+  // we don't do --auto-generate-sql-unique-query-number since it's non-0 by
+  // default we don't do --auto-generate-sql-unique-write-number as it's ON by
+  // default
+
   if (auto_generate_sql && auto_generate_sql_guid_primary &&
       auto_generate_sql_autoincrement) {
     fprintf(stderr,
@@ -1801,7 +1831,8 @@ extern "C" void *run_task(void *p) {
       if (con->limit && queries == con->limit) goto end;
     }
 
-    if (con->limit && queries < con->limit) goto limit_not_met;
+    if (con->stmt && con->stmt->length && con->limit && queries < con->limit)
+      goto limit_not_met;
 
   end:
     if (commit_rate) run_query(mysql, "COMMIT", strlen("COMMIT"));
