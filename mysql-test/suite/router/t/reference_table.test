@@ -46,6 +46,8 @@
 --exec $MRS_CLIENT_ARGS --path /svc/sakila/city1/1 --wait-until-found 60
 --exec $MRS_CLIENT_ARGS --path /svc/sakila/city2/1 --wait-until-found 60
 
+--source ../include/fail_on_error_in_mysql_router_log_file.inc
+
 # Cleanup
 DROP SCHEMA sakila;
 --source ../include/mrs/cleanup.inc

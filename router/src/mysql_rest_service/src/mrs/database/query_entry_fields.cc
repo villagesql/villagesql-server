@@ -25,6 +25,7 @@
 #include "mrs/database/query_entry_fields.h"
 
 #include <map>
+#include <optional>
 
 #include "helper/mysql_row.h"
 
@@ -68,7 +69,7 @@ bool QueryEntryFields::query_parameters(MySQLSession *session,
 
   processing_ = OnRow::k_fields;
   query_ = {
-      "SELECT ofx.id, ofx.name,"
+      "SELECT ofx.id, ofx.represents_reference_id, ofx.name,"
       "       ofx.db_column->>'$.in', ofx.db_column->>'$.out',"
       "       ofx.db_column->>'$.name', ofx.db_column->>'$.datatype'"
       "   FROM mysql_rest_service_metadata.object_field as ofx"
@@ -92,7 +93,7 @@ bool QueryEntryFields::query_parameters(MySQLSession *session,
   for (auto &item : result_.results) {
     output_result_ = &item;
     query_ = {
-        "SELECT ofx.id, ofx.name,"
+        "SELECT ofx.id, ofx.represents_reference_id, ofx.name,"
         "       ofx.db_column->>'$.in', ofx.db_column->>'$.out',"
         "       ofx.db_column->>'$.name', ofx.db_column->>'$.datatype'"
         "   FROM mysql_rest_service_metadata.object_field as ofx"
@@ -164,16 +165,25 @@ void QueryEntryFields::on_row_params(const ResultRow &row) {
   helper::MySQLRow mysql_row(row, metadata_, num_of_metadata_);
 
   Field entry;
+  entry.data_type = mrs::database::entry::ColumnType::UNKNOWN;
   bool param_in{false};
   bool param_out{false};
 
+  // QueryEntryFields and its clients, doesn't depend on following value.
+  // We fetch it to check if data_ttype value should be configured or not.
+  std::optional<entry::UniversalId> represents_reference_id;
+
   mysql_row.unserialize_with_converter(&entry.id, entry::UniversalId::from_raw);
+  mysql_row.unserialize_with_converter(&represents_reference_id,
+                                       entry::UniversalId::from_raw_optional);
   mysql_row.unserialize(&entry.name);
   mysql_row.unserialize(&param_in);
   mysql_row.unserialize(&param_out);
   mysql_row.unserialize(&entry.bind_name);
   mysql_row.unserialize(&entry.raw_data_type);
-  ColumnDatatypeConverter()(&entry.data_type, entry.raw_data_type);
+  if (!represents_reference_id.has_value()) {
+    ColumnDatatypeConverter()(&entry.data_type, entry.raw_data_type);
+  }
 
   if (param_in && param_out) {
     entry.mode = Mode::modeInOut;
