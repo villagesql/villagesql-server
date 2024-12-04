@@ -466,7 +466,7 @@ RoutingPluginConfig::RoutingPluginConfig(
   GET_OPTION_CHECKED(dest_ssl_curves, section, options::kServerSslCurves,
                      StringOption{});
   auto ssl_session_cache_size_op = IntOption<uint32_t>{1, 0x7fffffff};
-  auto ssl_session_cache_timeout_op = IntOption<uint32_t>{0, 84600};
+  auto ssl_session_cache_timeout_op = IntOption<uint32_t>{0, 86400};
   GET_OPTION_CHECKED(client_ssl_session_cache_mode, section,
                      options::kClientSslSessionCacheMode, BoolOption{});
   GET_OPTION_CHECKED(client_ssl_session_cache_size, section,

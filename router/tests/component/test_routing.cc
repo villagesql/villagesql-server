@@ -2739,15 +2739,15 @@ INSTANTIATE_TEST_SUITE_P(
              /* client_ssl_session_cache_timeout */ "-1", std::nullopt,
              std::nullopt, std::nullopt},
             "Configuration error: option client_ssl_session_cache_timeout in "
-            "[routing:classic] needs value between 0 and 84600 inclusive, "
+            "[routing:classic] needs value between 0 and 86400 inclusive, "
             "was '-1'"},
         SessionReuseInvalidOptionValueParam{
             "client_ssl_session_cache_timeout_out_of_range",
             {std::nullopt, std::nullopt,
-             /* client_ssl_session_cache_timeout */ "84601", std::nullopt,
+             /* client_ssl_session_cache_timeout */ "86401", std::nullopt,
              std::nullopt, std::nullopt},
             "Configuration error: option client_ssl_session_cache_timeout in "
-            "[routing:classic] needs value between 0 and 84600 inclusive, "
+            "[routing:classic] needs value between 0 and 86400 inclusive, "
             "was '84601'"},
         SessionReuseInvalidOptionValueParam{
             "client_ssl_session_cache_timeout_not_integer",
@@ -2755,7 +2755,7 @@ INSTANTIATE_TEST_SUITE_P(
              /* client_ssl_session_cache_timeout */ "a", std::nullopt,
              std::nullopt, std::nullopt},
             "Configuration error: option client_ssl_session_cache_timeout in "
-            "[routing:classic] needs value between 0 and 84600 inclusive, "
+            "[routing:classic] needs value between 0 and 86400 inclusive, "
             "was 'a'"},
         SessionReuseInvalidOptionValueParam{
             "client_ssl_session_cache_timeout_special_character",
@@ -2763,7 +2763,7 @@ INSTANTIATE_TEST_SUITE_P(
              /* client_ssl_session_cache_timeout */ "$", std::nullopt,
              std::nullopt, std::nullopt},
             "Configuration error: option client_ssl_session_cache_timeout in "
-            "[routing:classic] needs value between 0 and 84600 inclusive, "
+            "[routing:classic] needs value between 0 and 86400 inclusive, "
             "was '$'"},
 
         // server
@@ -2834,28 +2834,28 @@ INSTANTIATE_TEST_SUITE_P(
             {std::nullopt, std::nullopt, std::nullopt, std::nullopt,
              std::nullopt, /* server_ssl_session_cache_timeout */ "-1"},
             "Configuration error: option server_ssl_session_cache_timeout in "
-            "[routing:classic] needs value between 0 and 84600 inclusive, "
+            "[routing:classic] needs value between 0 and 86400 inclusive, "
             "was '-1'"},
         SessionReuseInvalidOptionValueParam{
             "server_ssl_session_cache_timeout_out_of_range",
             {std::nullopt, std::nullopt, std::nullopt, std::nullopt,
              std::nullopt, /* server_ssl_session_cache_timeout */ "84601"},
             "Configuration error: option server_ssl_session_cache_timeout in "
-            "[routing:classic] needs value between 0 and 84600 inclusive, "
+            "[routing:classic] needs value between 0 and 86400 inclusive, "
             "was '84601"},
         SessionReuseInvalidOptionValueParam{
             "server_ssl_session_cache_timeout_not_integer",
             {std::nullopt, std::nullopt, std::nullopt, std::nullopt,
              std::nullopt, /* server_ssl_session_cache_timeout */ "a"},
             "Configuration error: option server_ssl_session_cache_timeout in "
-            "[routing:classic] needs value between 0 and 84600 inclusive, "
+            "[routing:classic] needs value between 0 and 86400 inclusive, "
             "was 'a'"},
         SessionReuseInvalidOptionValueParam{
             "server_ssl_session_cache_timeout_special_character",
             {std::nullopt, std::nullopt, std::nullopt, std::nullopt,
              std::nullopt, /* server_ssl_session_cache_timeout */ "$"},
             "Configuration error: option server_ssl_session_cache_timeout in "
-            "[routing:classic] needs value between 0 and 84600 inclusive, "
+            "[routing:classic] needs value between 0 and 86400 inclusive, "
             "was '$"}),
     [](const ::testing::TestParamInfo<SessionReuseInvalidOptionValueParam>
            &info) { return info.param.test_name; });
