@@ -20,16 +20,17 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-INCLUDE_DIRECTORIES(${GMOCK_INCLUDE_DIRS}
-                    ${PROJECT_SOURCE_DIR}/tests/
-                    )
+INCLUDE_DIRECTORIES(
+  ${GMOCK_INCLUDE_DIRS}
+  ${PROJECT_SOURCE_DIR}/tests/
+  )
 
-add_test_file(test_parser.cc
+ADD_TEST_FILE(test_parser.cc
   MODULE routing_guidelines
   LIB_DEPENDS routing_guidelines-static
   )
 
-add_test_file(test_classifier.cc
+ADD_TEST_FILE(test_classifier.cc
   MODULE routing_guidelines
   EXTRA_SOURCES ../src/routing_simulator.cc
   LIB_DEPENDS routing_guidelines-static;

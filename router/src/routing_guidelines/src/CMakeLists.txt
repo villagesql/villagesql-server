@@ -41,23 +41,19 @@ SET(guidelines_SRC
   )
 
 ADD_LIBRARY(routing_guidelines-objects OBJECT ${guidelines_SRC})
-TARGET_LINK_LIBRARIES(routing_guidelines-objects PUBLIC harness_stdx PRIVATE extra::rapidjson)
-# Needed so items tagged with ROUTING_GUIDELINES_EXPORT (to be exposed by the shared
-# version of the library) are not skipped during build
-TARGET_COMPILE_DEFINITIONS(routing_guidelines-objects PUBLIC routing_guidelines_EXPORTS)
+TARGET_LINK_LIBRARIES(routing_guidelines-objects
+  PUBLIC harness_stdx
+  PRIVATE extra::rapidjson)
+# Needed so items tagged with ROUTING_GUIDELINES_EXPORT
+# (to be exposed by the shared version of the library)
+# are not skipped during build
+TARGET_COMPILE_DEFINITIONS(routing_guidelines-objects
+  PUBLIC routing_guidelines_EXPORTS)
 TARGET_INCLUDE_DIRECTORIES(routing_guidelines-objects PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/../include/
   ${CMAKE_CURRENT_BINARY_DIR}/../include/
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR})
-# Needed for bison
-IF(UNIX)
-  TARGET_COMPILE_OPTIONS(routing_guidelines-objects PRIVATE -Wno-implicit-fallthrough)
-ENDIF()
-IF(UNIX AND "${CMAKE_CXX_COMPILER_VERSION}" VERSION_LESS "6.0")
-  # Work around https://gcc.gnu.org/bugzilla/show_bug.cgi?id=43407
-  TARGET_COMPILE_OPTIONS(routing_guidelines-objects PUBLIC -Wno-attributes)
-ENDIF()
 
 # Converting an OBJECT library to STATIC or SHARED does not work for Xcode,
 # use the OBJECT library everywhere.
@@ -70,7 +66,8 @@ IF(APPLE_XCODE)
   RETURN()
 ENDIF()
 
-ADD_LIBRARY(routing_guidelines SHARED $<TARGET_OBJECTS:routing_guidelines-objects>)
+ADD_LIBRARY(routing_guidelines SHARED
+  $<TARGET_OBJECTS:routing_guidelines-objects>)
 GENERATE_EXPORT_HEADER(routing_guidelines
   EXPORT_FILE_NAME
   ${CMAKE_CURRENT_BINARY_DIR}/../include/routing_guidelines/routing_guidelines_lib_export.h
@@ -95,7 +92,8 @@ INSTALL(TARGETS routing_guidelines
 
 
 # static library for tests
-ADD_LIBRARY(routing_guidelines-static STATIC $<TARGET_OBJECTS:routing_guidelines-objects>)
+ADD_LIBRARY(routing_guidelines-static STATIC
+  $<TARGET_OBJECTS:routing_guidelines-objects>)
 TARGET_INCLUDE_DIRECTORIES(routing_guidelines-static PUBLIC
   $<TARGET_PROPERTY:routing_guidelines-objects,INCLUDE_DIRECTORIES>
   )
@@ -105,4 +103,3 @@ TARGET_COMPILE_OPTIONS(routing_guidelines-static PUBLIC
 TARGET_COMPILE_DEFINITIONS(routing_guidelines-static PUBLIC
   $<TARGET_PROPERTY:routing_guidelines-objects,COMPILE_DEFINITIONS>
   )
-
