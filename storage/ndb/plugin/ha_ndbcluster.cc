@@ -6261,7 +6261,7 @@ static void get_default_value(void *def_val, Field *field) {
   }
 }
 
-inline int fail_index_offline(TABLE *t, int index) {
+int fail_index_offline(TABLE *t, int index) {
   KEY *key_info = t->key_info + index;
   push_warning_printf(
       t->in_use, Sql_condition::SL_WARNING, ER_NOT_KEYFILE,
