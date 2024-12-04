@@ -1420,6 +1420,24 @@ SELECT ROW_NUMBER() OVER () FROM t WHERE x = RAND() GROUP BY x;
 DROP TABLE t;
 
 --echo #
+--echo # Bug#35989799 Discontinuity in row estimate for ROLLUP in hypergraph
+--echo #
+
+CREATE TABLE t1(x INT, y INT);
+
+INSERT INTO t1 VALUES (1,1), (2,2);
+
+ANALYZE TABLE t1;
+
+# The row estimate before aggregation is n where n < 1. The estimated
+# number of aggregated rows is then also n, and the total estimate,
+# including the two rollup rows should then be n * (1 + 2).
+--replace_regex $elide_costs
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE x > 0 GROUP BY x, y WITH ROLLUP;
+
+DROP TABLE t1;
+
+--echo #
 --echo # Bug#36099491: Assertion secondary_engine_cost_hook != nullptr
 --echo #               failed with hypergraph_optimizer
 --echo #

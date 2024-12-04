@@ -1400,8 +1400,15 @@ double EstimateAggregateRows(THD *thd, const AccessPath *child,
   }
 
   const double child_rows = child->num_output_rows();
-  if (child_rows < 1.0) {
-    // No rows in the input gives no groups.
+  if (child_rows <= 1.0) {
+    // We make the simplifying assumption that the chance of exactly one
+    // aggregated row is child_rows, and the chance of zero aggregated rows
+    // is 1.0 - child_rows.
+    if (rollup) {
+      // If there is one child row, we get one result row plus one for each
+      // group-by column. If there are zero child rows, we get zero result rows.
+      return child_rows * (1 + query_block->join->group_fields.size());
+    }
     return child_rows;
   }
 

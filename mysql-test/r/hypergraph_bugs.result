@@ -1749,6 +1749,22 @@ SELECT ROW_NUMBER() OVER () FROM t WHERE x = RAND() GROUP BY x;
 ROW_NUMBER() OVER ()
 DROP TABLE t;
 #
+# Bug#35989799 Discontinuity in row estimate for ROLLUP in hypergraph
+#
+CREATE TABLE t1(x INT, y INT);
+INSERT INTO t1 VALUES (1,1), (2,2);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE x > 0 GROUP BY x, y WITH ROLLUP;
+EXPLAIN
+-> Group (no aggregates)  (rows=2)
+    -> Sort: t1.x, t1.y  (rows=0.667)
+        -> Filter: (t1.x > 0)  (rows=0.667)
+            -> Table scan on t1  (rows=2)
+
+DROP TABLE t1;
+#
 # Bug#36099491: Assertion secondary_engine_cost_hook != nullptr
 #               failed with hypergraph_optimizer
 #
