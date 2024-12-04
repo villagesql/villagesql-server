@@ -102,7 +102,9 @@ if ($test_second_handler)
 
 --let $mrs_add_user_name="svc1_usr"
 --let $mrs_add_user_ext_uid=1000
---let $mrs_add_user_auth_string="\$A\$005\$VxmHRs/knOXHlsrB0onsYl8YmX0=\$zBMKnT9FCep0IayH6aF5RI41z9EIGZoYalzD2MR971o="
+# auth_string: $A$005$VxmHRs/knOXHlsrB0onsYl8YmX0=$zBMKnT9FCep0IayH6aF5RI41z9EIGZoYalzD2MR971o=
+# encoded as base64:
+--let $mrs_add_user_auth_string="JEEkMDA1JFZ4bUhScy9rbk9YSGxzckIwb25zWWw4WW1YMD0kekJNS25UOUZDZXAwSWF5SDZhRjVSSTQxejlFSUdab1lhbHpEMk1SOTcxbz0="
 # Auth-string generated for "test" password
 --source ../mrs/user/add.inc
 
@@ -135,7 +137,9 @@ if ($test_second_handler)
 
 --let $mrs_add_user_name="svc2_usr"
 --let $mrs_add_user_ext_uid=2000
---let $mrs_add_user_auth_string="\$A\$005\$VxmHRs/knOXHlsrB0onsYl8YmX0=\$zBMKnT9FCep0IayH6aF5RI41z9EIGZoYalzD2MR971o="
+# auth_string: $A$005$VxmHRs/knOXHlsrB0onsYl8YmX0=$zBMKnT9FCep0IayH6aF5RI41z9EIGZoYalzD2MR971o=
+# encoded as base64:
+--let $mrs_add_user_auth_string="JEEkMDA1JFZ4bUhScy9rbk9YSGxzckIwb25zWWw4WW1YMD0kekJNS25UOUZDZXAwSWF5SDZhRjVSSTQxejlFSUdab1lhbHpEMk1SOTcxbz0="
 # Auth-string generated for "test" password
 --source ../mrs/user/add.inc
 

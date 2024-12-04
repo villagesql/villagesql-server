@@ -1,3 +1,23 @@
+# Add user to authentication-application that was defined in last call to `add_auth_app.inc`.
+# User must provide user-name, external user-id, auth-string
+#
+# ALLOWED PARAMETERS:
+#  * $mrs_add_user_email - users email (optional)
+#  * $mrs_add_user_login_permitted - enabled/disable the user (optional, default true)
+#  * $mrs_add_user_ext_uid - id of the user in external system (required)
+#  * $mrs_add_user_name - name of the user/account
+#  * $mrs_add_user_auth_string= authentication application specific string
+
+# USAGE:
+#
+#    [--let $mrs_add_user_email=[some@email.com]]
+#    [--let $mrs_add_user_login_permitted=[1|0]]
+#    --let $mrs_add_user_ext_uid=EXT_USER_ID
+#    --let $mrs_add_user_name="Me"
+#    --let $mrs_add_user_auth_string=APP_SPECIFIC_AUTH_STRING
+#    --source ../include/mrs/user/add.inc
+#
+
 if (!$mrs_sql_id_variable)
 {
   --let $mrs_sql_id_variable=@user_id
@@ -59,7 +79,7 @@ eval INSERT INTO `mysql_rest_service_metadata`.`mrs_user` (
     $mrs_add_user_login_permitted,
     NULL,
     NULL,
-    $mrs_add_user_auth_string);
+    FROM_BASE64($mrs_add_user_auth_string));
 
 --let $mrs_add_user_role_id=`SELECT IFNULL(default_role_id,"") FROM mysql_rest_service_metadata.auth_app WHERE id=$mrs_sql_app_id_variable`
 
