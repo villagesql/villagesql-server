@@ -39,7 +39,7 @@ const EVP_MD *my_EVP_sha256();
 const EVP_MD *my_EVP_sha384();
 const EVP_MD *my_EVP_sha512();
 
-const EVP_CIPHER *my_EVP_des_ede3_cbc();
+// DES-EDE3-CBC was deliberately not cached here
 const EVP_CIPHER *my_EVP_aes_128_ecb();
 const EVP_CIPHER *my_EVP_aes_128_cbc();
 const EVP_CIPHER *my_EVP_aes_128_cfb1();

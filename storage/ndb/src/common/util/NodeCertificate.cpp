@@ -354,7 +354,7 @@ bool PrivateKey::store(EVP_PKEY *key, const PkiFile::PathName &path,
   if (fd > 0) fp = fdopen(fd, "w");
   if (!fp) return false;
 
-  const EVP_CIPHER *enc = encrypted ? my_EVP_des_ede3_cbc() : nullptr;
+  const EVP_CIPHER *enc = encrypted ? EVP_des_ede3_cbc() : nullptr;
 
   if (PEM_write_PKCS8PrivateKey(fp, key, enc, nullptr, 0, nullptr,
                                 passphrase)) {

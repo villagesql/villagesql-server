@@ -44,7 +44,6 @@ static EVP_MD *md_sha384 = nullptr;
 static EVP_MD *md_sha512 = nullptr;
 
 // cached encryption algorithms
-static EVP_CIPHER *crypt_des_ede3_cbc = nullptr;
 static EVP_CIPHER *crypt_aes_128_ecb = nullptr;
 static EVP_CIPHER *crypt_aes_128_cbc = nullptr;
 static EVP_CIPHER *crypt_aes_128_cfb1 = nullptr;
@@ -106,14 +105,6 @@ const EVP_MD *my_EVP_sha512() {
   return md_sha512;
 #else
   return EVP_sha512();
-#endif
-}
-
-const EVP_CIPHER *my_EVP_des_ede3_cbc() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_des_ede3_cbc;
-#else
-  return EVP_des_ede3_cbc();
 #endif
 }
 
@@ -313,9 +304,6 @@ void my_ssl_algorithm_cache_load() {
   md_sha512 = EVP_MD_fetch(nullptr, "sha512", nullptr);
   assert(md_sha512 != nullptr);
 
-  crypt_des_ede3_cbc = EVP_CIPHER_fetch(nullptr, "DES-EDE3-CBC", nullptr);
-  assert(crypt_des_ede3_cbc != nullptr);
-
   crypt_aes_128_ecb = EVP_CIPHER_fetch(nullptr, "AES-128-ECB", nullptr);
   assert(crypt_aes_128_ecb != nullptr);
 
@@ -397,8 +385,6 @@ void my_ssl_algorithm_cache_unload() {
   EVP_MD_free(md_sha512);
   md_sha512 = nullptr;
 
-  EVP_CIPHER_free(crypt_des_ede3_cbc);
-  crypt_des_ede3_cbc = nullptr;
   EVP_CIPHER_free(crypt_aes_128_ecb);
   crypt_aes_128_ecb = nullptr;
   EVP_CIPHER_free(crypt_aes_128_cbc);
