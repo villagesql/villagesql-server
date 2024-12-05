@@ -1472,7 +1472,8 @@ double EstimateDistinctRows(THD *thd, double child_rows, TermArray terms) {
 void EstimateAggregateCost(THD *thd, AccessPath *path,
                            const Query_block *query_block) {
   const AccessPath *child = path->aggregate().child;
-  if (path->num_output_rows() == kUnknownRowCount) {
+  if (path->num_output_rows() == kUnknownRowCount &&
+      child->num_output_rows() != kUnknownRowCount) {
     path->set_num_output_rows(EstimateAggregateRows(
         thd, child, query_block, path->aggregate().olap == ROLLUP_TYPE));
   }
