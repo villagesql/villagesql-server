@@ -1580,7 +1580,12 @@ bool row_upd_changes_ord_field_binary_func(dict_index_t *index,
         mem_heap_free(temp_heap);
       }
 
-      if (!mbr_equal_cmp(index->rtr_srs.get(), old_mbr, new_mbr)) {
+      /* We use mbr_equal_physically() because we would like to skip
+      Updation of Spatial Index only when the existing MBR in Spatial
+      Index matches physically to the MBR of the new geometry.
+      Else it might cause issues later during searching of record, because
+      cmp_geometry_field() does physical comparison.*/
+      if (!mbr_equal_physically(old_mbr, new_mbr)) {
         return (true);
       } else {
         continue;
