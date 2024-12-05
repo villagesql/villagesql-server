@@ -203,7 +203,7 @@ bool Oauth2Handler::authorize(RequestContext &ctxt, Session *session,
   const bool code_in_parameters = 0 != query_parameters.count(kCode);
 
   log_debug(
-      "Oauth2FacebookHandler::authorize(id=%s, service_id=%s, session_id=%s) "
+      "Oauth2Handler::authorize(id=%s, service_id=%s, session_id=%s) "
       "=> "
       "%s",
       entry_.id.to_string().c_str(), entry_.service_id.to_string().c_str(),
@@ -220,7 +220,8 @@ bool Oauth2Handler::authorize(RequestContext &ctxt, Session *session,
 
     session_data = new GenericSessionData();
     session->set_data(session_data);
-    session_data->access_token = query_parameters.at(kToken);
+    if (token_in_parameters)
+      session_data->access_token = query_parameters.at(kToken);
     session->state = token_in_parameters ? Session::kTokenVerified
                                          : Session::kWaitingForCode;
   }

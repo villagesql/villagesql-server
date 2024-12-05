@@ -286,7 +286,7 @@ AuthorizeHandlerPtr AuthorizeManager::make_auth(const AuthApp &entry) {
   } else if (entry.vendor_id == k_vendor_oidc) {
     if (entry.url.empty()) {
       log_error(
-          "OIDC Authentication application, requires that main"
+          "OIDC Authentication application, requires that "
           "app-specific-URL is set.");
       return {};
     }
