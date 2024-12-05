@@ -1047,6 +1047,12 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
             Alter_info::ALTER_TABLE_ALGORITHM_INPLACE) {
           /* Still fall back to INPLACE since the behaviour is different */
           break;
+        } else if ((ha_alter_info->alter_info->requested_algorithm ==
+                    Alter_info::ALTER_TABLE_ALGORITHM_DEFAULT) &&
+                   !dict_table_is_discarded(m_prebuilt->table) &&
+                   btr_is_index_empty(m_prebuilt->table->first_index())) {
+          /* No records: prefer INPLACE to prevent bumping row version */
+          break;
         } else if (!((m_prebuilt->table->n_def +
                       get_num_cols_added(ha_alter_info)) < REC_MAX_N_FIELDS)) {
           if (ha_alter_info->alter_info->requested_algorithm ==
