@@ -591,7 +591,8 @@ GET /svc/crud_operations/open-api-catalog/
         },
         "securitySchemes": {
             "mrs_login": {
-                "mrs_login": {}
+                "type": "http",
+                "scheme": "custom"
             }
         }
     }
@@ -995,7 +996,8 @@ GET /svc/different_types/open-api-catalog/
         },
         "securitySchemes": {
             "mrs_login": {
-                "mrs_login": {}
+                "type": "http",
+                "scheme": "custom"
             }
         }
     }
@@ -2900,7 +2902,8 @@ GET /svc/different_types_as_pk/open-api-catalog/
         },
         "securitySchemes": {
             "mrs_login": {
-                "mrs_login": {}
+                "type": "http",
+                "scheme": "custom"
             }
         }
     }

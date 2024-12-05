@@ -141,15 +141,8 @@ HttpResult HandlerDbServiceOpenAPI::handle_get(rest::RequestContext *ctxt) {
           "components",
           rapidjson::Value(rapidjson::kObjectType)
               .AddMember("schemas", schema_properties, allocator)
-              .AddMember(
-                  "securitySchemes",
-                  rapidjson::Value(rapidjson::kObjectType)
-                      .AddMember(
-                          rapidjson::Value(rest::k_auth_method_name.data(),
-                                           rest::k_auth_method_name.length(),
-                                           allocator),
-                          rapidjson::Value(rapidjson::kObjectType), allocator),
-                  allocator),
+              .AddMember("securitySchemes",
+                         mrs::rest::get_security_scheme(allocator), allocator),
           allocator);
 
   rapidjson::StringBuffer json_buf;

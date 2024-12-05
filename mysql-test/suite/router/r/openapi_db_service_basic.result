@@ -2849,7 +2849,8 @@ GET /svc/open-api-catalog/
         },
         "securitySchemes": {
             "mrs_login": {
-                "mrs_login": {}
+                "type": "http",
+                "scheme": "custom"
             }
         }
     }

@@ -102,6 +102,16 @@ bool is_supported(
     const std::shared_ptr<mrs::database::entry::DbSchema> &db_schema);
 
 /**
+ * Create security scheme for OpenAPI.
+ *
+ * @param[in] allocator JSON allocator that is used to create OpenAPI swagger.
+ *
+ * @return OpenAPI security scheme object.
+ */
+rapidjson::Value get_security_scheme(
+    rapidjson::Document::AllocatorType &allocator);
+
+/**
  * Sort Endpoint children by request path.
  *
  * @param[in] children Endpoint children.

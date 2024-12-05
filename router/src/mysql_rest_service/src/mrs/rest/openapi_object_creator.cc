@@ -81,6 +81,19 @@ rapidjson::Value get_header_info(
   return result;
 }
 
+rapidjson::Value get_security_scheme(
+    rapidjson::Document::AllocatorType &allocator) {
+  rapidjson::Value result(rapidjson::kObjectType);
+  result.AddMember(
+      rapidjson::Value(rest::k_auth_method_name.data(),
+                       rest::k_auth_method_name.length(), allocator),
+      rapidjson::Value(rapidjson::kObjectType)
+          .AddMember("type", "http", allocator)
+          .AddMember("scheme", "custom", allocator),
+      allocator);
+  return result;
+}
+
 /**
  * Helper class that facilitates generating OpenAPI swagger for the given
  * DBobject entry.
