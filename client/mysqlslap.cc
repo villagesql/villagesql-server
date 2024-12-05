@@ -212,6 +212,8 @@ static uint opt_protocol = 0;
 static int get_options(int *argc, char ***argv);
 static uint opt_mysql_port = 0;
 
+static int set_mysql_options(MYSQL *mysql);
+
 static const char *load_default_groups[] = {"mysqlslap", "client", nullptr};
 
 typedef struct statement statement;
@@ -349,44 +351,21 @@ int main(int argc, char **argv) {
     my_end(0);
     return EXIT_FAILURE;
   }
-  mysql_init(&mysql);
-  if (opt_compress) mysql_options(&mysql, MYSQL_OPT_COMPRESS, NullS);
 
-  if (opt_compress_algorithm)
-    mysql_options(&mysql, MYSQL_OPT_COMPRESSION_ALGORITHMS,
-                  opt_compress_algorithm);
-
-  mysql_options(&mysql, MYSQL_OPT_ZSTD_COMPRESSION_LEVEL,
-                &opt_zstd_compress_level);
-
-  if (SSL_SET_OPTIONS(&mysql)) {
-    fprintf(stderr, "%s", SSL_SET_OPTIONS_ERROR);
+  if (!(mysql_init(&mysql))) {
+    fprintf(stderr, "%s: mysql_init() failed ERROR : %s\n", my_progname,
+            mysql_error(&mysql));
+    my_end(0);
     return EXIT_FAILURE;
   }
-  if (opt_protocol)
-    mysql_options(&mysql, MYSQL_OPT_PROTOCOL, (char *)&opt_protocol);
-#if defined(_WIN32)
-  if (shared_memory_base_name)
-    mysql_options(&mysql, MYSQL_SHARED_MEMORY_BASE_NAME,
-                  shared_memory_base_name);
-#endif
-  mysql_options(&mysql, MYSQL_SET_CHARSET_NAME, default_charset);
 
-  if (opt_plugin_dir && *opt_plugin_dir)
-    mysql_options(&mysql, MYSQL_PLUGIN_DIR, opt_plugin_dir);
+  if (set_mysql_options(&mysql) != 0) {
+    fprintf(stderr, "%s: set_mysql_options() failed\n", my_progname);
+    mysql_close(&mysql);
+    my_end(0);
+    return EXIT_FAILURE;
+  }
 
-  if (opt_default_auth && *opt_default_auth)
-    mysql_options(&mysql, MYSQL_DEFAULT_AUTH, opt_default_auth);
-
-  mysql_options(&mysql, MYSQL_OPT_CONNECT_ATTR_RESET, nullptr);
-  mysql_options4(&mysql, MYSQL_OPT_CONNECT_ATTR_ADD, "program_name",
-                 "mysqlslap");
-  if (using_opt_enable_cleartext_plugin)
-    mysql_options(&mysql, MYSQL_ENABLE_CLEARTEXT_PLUGIN,
-                  (char *)&opt_enable_cleartext_plugin);
-  set_server_public_key(&mysql);
-  set_get_server_public_key_option(&mysql);
-  set_password_options(&mysql);
   if (!opt_only_print) {
     if (!(mysql_real_connect(&mysql, host, user, nullptr, nullptr,
                              opt_mysql_port, opt_mysql_unix_port,
@@ -1445,6 +1424,47 @@ static int get_options(int *argc, char ***argv) {
   return 0;
 }
 
+static int set_mysql_options(MYSQL *mysql) {
+  if (opt_compress) mysql_options(mysql, MYSQL_OPT_COMPRESS, NullS);
+
+  if (opt_compress_algorithm)
+    mysql_options(mysql, MYSQL_OPT_COMPRESSION_ALGORITHMS,
+                  opt_compress_algorithm);
+
+  mysql_options(mysql, MYSQL_OPT_ZSTD_COMPRESSION_LEVEL,
+                &opt_zstd_compress_level);
+
+  if (SSL_SET_OPTIONS(mysql)) {
+    fprintf(stderr, "%s", SSL_SET_OPTIONS_ERROR);
+    return EXIT_FAILURE;
+  }
+  if (opt_protocol)
+    mysql_options(mysql, MYSQL_OPT_PROTOCOL, (char *)&opt_protocol);
+#if defined(_WIN32)
+  if (shared_memory_base_name)
+    mysql_options(mysql, MYSQL_SHARED_MEMORY_BASE_NAME,
+                  shared_memory_base_name);
+#endif
+  mysql_options(mysql, MYSQL_SET_CHARSET_NAME, default_charset);
+
+  if (opt_plugin_dir && *opt_plugin_dir)
+    mysql_options(mysql, MYSQL_PLUGIN_DIR, opt_plugin_dir);
+
+  if (opt_default_auth && *opt_default_auth)
+    mysql_options(mysql, MYSQL_DEFAULT_AUTH, opt_default_auth);
+
+  mysql_options(mysql, MYSQL_OPT_CONNECT_ATTR_RESET, nullptr);
+  mysql_options4(mysql, MYSQL_OPT_CONNECT_ATTR_ADD, "program_name",
+                 "mysqlslap");
+  if (using_opt_enable_cleartext_plugin)
+    mysql_options(mysql, MYSQL_ENABLE_CLEARTEXT_PLUGIN,
+                  (char *)&opt_enable_cleartext_plugin);
+  set_server_public_key(mysql);
+  set_get_server_public_key_option(mysql);
+  set_password_options(mysql);
+  return 0;
+}
+
 static int run_query(MYSQL *mysql, const char *query, size_t len) {
   if (opt_only_print) {
     printf("%.*s;\n", (int)len, query);
@@ -1725,15 +1745,20 @@ extern "C" void *run_task(void *p) {
     }
     native_mutex_unlock(&sleeper_mutex);
 
+    if (mysql_thread_init()) {
+      fprintf(stderr, "%s: mysql_thread_init() failed ERROR : %s\n",
+              my_progname, mysql_error(nullptr));
+      exit(0);
+    }
+
     if (!(mysql = mysql_init(nullptr))) {
       fprintf(stderr, "%s: mysql_init() failed ERROR : %s\n", my_progname,
               mysql_error(mysql));
       exit(0);
     }
 
-    if (mysql_thread_init()) {
-      fprintf(stderr, "%s: mysql_thread_init() failed ERROR : %s\n",
-              my_progname, mysql_error(mysql));
+    if (set_mysql_options(mysql) != 0) {
+      fprintf(stderr, "%s: set_mysql_options() failed\n", my_progname);
       mysql_close(mysql);
       exit(0);
     }
@@ -1761,6 +1786,11 @@ extern "C" void *run_task(void *p) {
         if (!(mysql = mysql_init(nullptr))) {
           fprintf(stderr, "%s: mysql_init() failed ERROR : %s\n", my_progname,
                   mysql_error(mysql));
+          goto end;
+        }
+
+        if (set_mysql_options(mysql) != 0) {
+          fprintf(stderr, "%s: set_mysql_options() failed\n", my_progname);
           goto end;
         }
 
@@ -2080,11 +2110,6 @@ int slap_connect(MYSQL *mysql) {
   /* Connect to server */
   static const ulong connection_retry_sleep = 100000; /* Microseconds */
   int x, connect_error = 1;
-  /* mysql options should be set to worker threads too */
-  set_password_options(mysql);
-  if (using_opt_enable_cleartext_plugin)
-    mysql_options(mysql, MYSQL_ENABLE_CLEARTEXT_PLUGIN,
-                  (char *)&opt_enable_cleartext_plugin);
   for (x = 0; x < 10; x++) {
     if (mysql_real_connect(mysql, host, user, nullptr, create_schema_string,
                            opt_mysql_port, opt_mysql_unix_port,
