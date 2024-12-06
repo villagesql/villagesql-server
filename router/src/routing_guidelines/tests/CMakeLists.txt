@@ -46,11 +46,7 @@ COPY_TEST_FILES(${CMAKE_CURRENT_SOURCE_DIR}/data "${TEST_FILES}")
 IF(LIBFUZZER_COMPILE_FLAGS)
   MYSQL_ADD_EXECUTABLE(routertest_fuzz_routing_guidelines_parser
     fuzz_parser.cc
-    ../src/rules_parser.cc
-    ../src/routing_guidelines.cc
-    ../src/rpn.cc
-    ../src/utils.cc
-    ${CMAKE_CURRENT_BINARY_DIR}/../src/parser.cc
+    $<TARGET_OBJECTS:routing_guidelines-objects>
     COMPONENT Router
     LINK_LIBRARIES
       harness-library  # string_format
