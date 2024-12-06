@@ -65,12 +65,27 @@ TARGET_INCLUDE_DIRECTORIES(routing_guidelines-objects PUBLIC
 # Converting an OBJECT library to STATIC or SHARED does not work for Xcode,
 # use the OBJECT library everywhere.
 # We don't support creating packages from Xcode projects anyways,
-# so we don't need the INSTALL or GENERATE_EXPORT_HEADER stuff below.
+# so we don't need the INSTALL stuff below.
 # See also ADD_CONVENIENCE_LIBRARY and MERGE_CONVENIENCE_LIBRARIES.
 IF(APPLE_XCODE)
   ADD_LIBRARY(routing_guidelines ALIAS routing_guidelines-objects)
   ADD_LIBRARY(routing_guidelines-static ALIAS routing_guidelines-objects)
+  GENERATE_EXPORT_HEADER(routing_guidelines
+    EXPORT_FILE_NAME
+    ${CMAKE_CURRENT_BINARY_DIR}/../include/routing_guidelines/routing_guidelines_lib_export.h)
   RETURN()
+ENDIF()
+
+IF(LIBFUZZER_COMPILE_FLAGS)
+  ADD_LIBRARY(routing_guidelines-fuzzed OBJECT ${guidelines_SRC})
+  # Build it only if needed by other targets.
+  SET_PROPERTY(TARGET routing_guidelines-fuzzed PROPERTY EXCLUDE_FROM_ALL TRUE)
+  TARGET_LINK_LIBRARIES(routing_guidelines-fuzzed
+    $<TARGET_PROPERTY:routing_guidelines-objects,LINK_LIBRARIES>)
+  TARGET_INCLUDE_DIRECTORIES(routing_guidelines-fuzzed PUBLIC
+    $<TARGET_PROPERTY:routing_guidelines-objects,INCLUDE_DIRECTORIES>)
+  TARGET_COMPILE_OPTIONS(routing_guidelines-fuzzed
+    PUBLIC "${LIBFUZZER_COMPILE_FLAGS}")
 ENDIF()
 
 ADD_LIBRARY(routing_guidelines SHARED

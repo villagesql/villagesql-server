@@ -46,7 +46,7 @@ COPY_TEST_FILES(${CMAKE_CURRENT_SOURCE_DIR}/data "${TEST_FILES}")
 IF(LIBFUZZER_COMPILE_FLAGS)
   MYSQL_ADD_EXECUTABLE(routertest_fuzz_routing_guidelines_parser
     fuzz_parser.cc
-    $<TARGET_OBJECTS:routing_guidelines-objects>
+    $<TARGET_OBJECTS:routing_guidelines-fuzzed>
     COMPONENT Router
     LINK_LIBRARIES
       harness-library  # string_format
