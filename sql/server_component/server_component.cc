@@ -349,8 +349,8 @@ mysql_clone_start_statement, mysql_clone_finish_statement,
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, bulk_data_convert)
 Bulk_data_convert::mysql_format, Bulk_data_convert::mysql_format_from_raw,
     Bulk_data_convert::mysql_format_using_key, Bulk_data_convert::is_killed,
-    Bulk_data_convert::compare_keys,
-    Bulk_data_convert::get_row_metadata END_SERVICE_IMPLEMENTATION();
+    Bulk_data_convert::compare_keys, Bulk_data_convert::get_row_metadata_all,
+    Bulk_data_convert::get_table_metadata, END_SERVICE_IMPLEMENTATION();
 
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, bulk_data_load)
 Bulk_data_load::begin, Bulk_data_load::load, Bulk_data_load::open_blob,

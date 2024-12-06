@@ -11113,12 +11113,6 @@ bool ha_innobase::bulk_load_check(THD *) const {
     return false;
   }
 
-  /* Table should not have indexes other than clustered index. */
-  if (table->get_index_count() > 1) {
-    my_error(ER_INDEX_OTHER_THAN_PK, MYF(0), table->name.m_name);
-    return false;
-  }
-
   if (dict_table_in_shared_tablespace(table)) {
     my_error(ER_TABLE_IN_SHARED_TABLESPACE, MYF(0), table->name.m_name);
     return false;
@@ -11134,6 +11128,12 @@ bool ha_innobase::bulk_load_check(THD *) const {
     return false;
   }
 
+  if (!table->foreign_set.empty()) {
+    my_error(ER_FEATURE_UNSUPPORTED, MYF(0), "TABLE WITH FOREIGN KEYS",
+             "LOAD DATA ALGORITHM = BULK");
+    return false;
+  }
+
   return true;
 }
 
@@ -11143,16 +11143,19 @@ size_t ha_innobase::bulk_load_available_memory(THD *) const {
   return max_memory;
 }
 
-void *ha_innobase::bulk_load_begin(THD *thd, size_t data_size, size_t memory,
-                                   size_t num_threads) {
+void *ha_innobase::bulk_load_begin(THD *thd, size_t keynr, size_t data_size,
+                                   size_t memory, size_t num_threads) {
   DEBUG_SYNC_C("innodb_bulk_load_begin");
 
-  if (!bulk_load_check(thd)) {
+  if (keynr == 0 && !bulk_load_check(thd)) {
     return nullptr;
   }
 
-  /* Check if the buffer pool size is enough for the threads requested. */
+  /* Update user_thd and allocates Innodb transaction if not there. */
+  update_thd(thd);
+
   dict_table_t *table = m_prebuilt->table;
+  auto trx = m_prebuilt->trx;
 
   /* Build the template to convert between the two database formats */
   if (m_prebuilt->mysql_template == nullptr ||
@@ -11160,20 +11163,20 @@ void *ha_innobase::bulk_load_begin(THD *thd, size_t data_size, size_t memory,
     build_template(true);
   }
 
-  /* Update user_thd and allocates Innodb transaction if not there. */
-  update_thd(thd);
+  index_init(keynr, false);
 
-  auto trx = m_prebuilt->trx;
-  innobase_register_trx(ht, ha_thd(), trx);
-  trx_start_if_not_started_xa(trx, true, UT_LOCATION_HERE);
+  if (keynr == 0) {
+    innobase_register_trx(ht, ha_thd(), trx);
+    trx_start_if_not_started_xa(trx, true, UT_LOCATION_HERE);
 
-  auto observer = ut::new_withkey<Flush_observer>(
-      ut::make_psi_memory_key(mem_key_ddl), table->space, trx, nullptr);
+    auto observer = ut::new_withkey<Flush_observer>(
+        ut::make_psi_memory_key(mem_key_ddl), table->space, trx, nullptr);
 
-  trx_set_flush_observer(trx, observer);
+    trx_set_flush_observer(trx, observer);
+  }
 
   auto loader = ut::new_withkey<ddl_bulk::Loader>(
-      ut::make_psi_memory_key(mem_key_ddl), num_threads);
+      ut::make_psi_memory_key(mem_key_ddl), num_threads, keynr, trx);
 
   auto db_err = loader->begin(m_prebuilt, data_size, memory);
 
@@ -11299,23 +11302,29 @@ int ha_innobase::bulk_load_end(THD *thd, void *load_ctx, bool is_error) {
     is_error = true;
   }
 
-  auto db_err = loader->end(m_prebuilt, is_error);
+  auto db_err = loader->end(is_error);
+
+  auto is_last_index = [this, loader]() {
+    return loader->get_keynr() == this->table->s->keys - 1;
+  };
 
   report_error(loader, db_err, 0);
   if (db_err != DB_SUCCESS) {
     is_error = true;
   }
 
-  auto observer = trx->flush_observer;
-  ut_a(observer != nullptr);
+  if (is_last_index()) {
+    auto observer = trx->flush_observer;
+    ut_a(observer != nullptr);
 
-  if (is_error) {
-    observer->interrupted();
+    if (is_error) {
+      observer->interrupted();
+    }
+    observer->flush();
+    trx->flush_observer = nullptr;
+
+    ut::delete_(observer);
   }
-  observer->flush();
-  trx->flush_observer = nullptr;
-
-  ut::delete_(observer);
 
   if (!is_error) {
     DBUG_EXECUTE_IF("crash_load_bulk_before_trx_commit", DBUG_SUICIDE(););
@@ -11323,7 +11332,65 @@ int ha_innobase::bulk_load_end(THD *thd, void *load_ctx, bool is_error) {
     auto table = m_prebuilt->table;
     fil_flush(table->space);
   }
+
+  /* Update the statistics. */
+  if (is_last_index()) {
+    auto innodb_table = m_prebuilt->table;
+    if (db_err == DB_SUCCESS) {
+      const dict_stats_upd_option_t option =
+          dict_stats_is_persistent_enabled(innodb_table)
+              ? DICT_STATS_RECALC_PERSISTENT
+              : DICT_STATS_RECALC_TRANSIENT;
+
+      const size_t MAX_RETRY = 5;
+      dberr_t updated{DB_SUCCESS};
+
+      for (size_t retry = 0; retry < MAX_RETRY; ++retry) {
+        if (trx->error_state != DB_SUCCESS) {
+          LogErr(INFORMATION_LEVEL, ER_IB_BULK_LOAD_STATS_WARN,
+                 "ddl_bulk::Loader::end()", innodb_table->name.m_name,
+                 (size_t)updated, (size_t)trx->error_state);
+          break;
+        }
+
+        auto savept = trx_savept_take(trx);
+        const bool silent = true;
+        updated = dict_stats_update(innodb_table, option, trx, silent);
+
+        if (updated != DB_SUCCESS) {
+          LogErr(INFORMATION_LEVEL, ER_IB_BULK_LOAD_STATS_WARN,
+                 "ddl_bulk::Loader::end()", innodb_table->name.m_name,
+                 (size_t)updated, (size_t)trx->error_state);
+
+          if (updated == DB_LOCK_WAIT_TIMEOUT) {
+            trx_rollback_to_savepoint(trx, &savept);
+            const auto ms = std::chrono::milliseconds{20 * (1 + retry)};
+            std::this_thread::sleep_for(ms);
+            LogErr(INFORMATION_LEVEL, ER_IB_BULK_LOAD_STATS_INFO,
+                   "ddl_bulk::Loader::end()", "Retrying",
+                   innodb_table->name.m_name, (size_t)updated,
+                   (size_t)trx->error_state);
+            continue;
+          }
+        }
+
+        break;
+      }
+      if (updated != DB_SUCCESS || trx->error_state != DB_SUCCESS) {
+        LogErr(WARNING_LEVEL, ER_IB_BULK_LOAD_STATS_WARN,
+               "ddl_bulk::Loader::end()", innodb_table->name.m_name,
+               (size_t)updated, (size_t)trx->error_state);
+      } else {
+        LogErr(INFORMATION_LEVEL, ER_IB_BULK_LOAD_STATS_INFO,
+               "ddl_bulk::Loader::end()", "PASS", innodb_table->name.m_name,
+               (size_t)updated, (size_t)trx->error_state);
+      }
+    }
+    DBUG_EXECUTE_IF("crash_bulk_load_after_stats", DBUG_SUICIDE(););
+  }
+
   ut::delete_(loader);
+
   /* We raise the error in report_error. */
   return (db_err == DB_SUCCESS) ? 0 : HA_ERR_GENERIC;
 }

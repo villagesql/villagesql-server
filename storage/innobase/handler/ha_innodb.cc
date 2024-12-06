@@ -14283,7 +14283,7 @@ int create_table_info_t::create_table_update_dict() {
 
   innobase_copy_frm_flags_from_create_info(m_table, m_create_info);
 
-  dict_stats_update(m_table, DICT_STATS_EMPTY_TABLE);
+  dict_stats_update_retry(m_table, DICT_STATS_EMPTY_TABLE, 30);
 
   /* Since no dict_table_close(), deinitialize it explicitly. */
   dict_stats_deinit(m_table);

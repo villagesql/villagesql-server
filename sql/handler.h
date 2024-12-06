@@ -5141,6 +5141,7 @@ class handler {
   @param[in] num_threads number of concurrent threads used for load.
   @return bulk load context or nullptr if unsuccessful. */
   virtual void *bulk_load_begin(THD *thd [[maybe_unused]],
+                                size_t keynr [[maybe_unused]],
                                 size_t data_size [[maybe_unused]],
                                 size_t memory [[maybe_unused]],
                                 size_t num_threads [[maybe_unused]]) {
