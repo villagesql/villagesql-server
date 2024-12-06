@@ -119,8 +119,8 @@ class Routing_guidelines_document_parser {
             rpd_.name = member.value.GetString();
         } else {
           add_error(
-              "Unexpected field, only 'version', 'name', 'sources', "
-              "'destinations', and 'routes' are allowed");
+              "Unexpected field, only 'version', 'name', 'destinations', and "
+              "'routes' are allowed");
         }
       }
       if (rpd_.dest_names.empty())

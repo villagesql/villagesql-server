@@ -218,7 +218,11 @@ TEST_F(InvalidGuidelinesTest, unknown_guidelines_field) {
 
   const auto &guidelines = gb_.add_raw("\"foobar\": \"baz\",").get();
   set_guidelines(guidelines, http_port_, server_port_);
-  EXPECT_TRUE(wait_log_contains(router, "foobar: Unexpected field", 5s));
+  EXPECT_TRUE(wait_log_contains(
+      router,
+      "foobar: Unexpected field, only 'version', 'name', 'destinations', and "
+      "'routes' are allowed",
+      5s));
 }
 
 TEST_F(InvalidGuidelinesTest, missing_version) {
