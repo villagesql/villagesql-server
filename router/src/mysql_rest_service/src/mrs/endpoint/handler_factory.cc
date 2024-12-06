@@ -67,6 +67,11 @@ static std::string get_regex_path_authnetication(
 
 static std::string get_path_redirect(
     const std::shared_ptr<mrs::database::entry::DbService> &service) {
+  if (service->auth_completed_url.has_value() &&
+      !service->auth_completed_url.value().empty()) {
+    return service->auth_completed_url.value();
+  }
+
   std::string auth_path = service->auth_path.has_value()
                               ? service->auth_path.value()
                               : "/authentication";
