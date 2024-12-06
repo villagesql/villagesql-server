@@ -2457,6 +2457,31 @@ IF(NOT WITHOUT_SERVER AND WITH_ROUTER)
 ELSE()
   # Define harness_net_ts target and public include directories.
   ADD_SUBDIRECTORY(router/src/harness/include)
+  # In case we switch from ON to OFF, we do not want mtr
+  # to pick up any obsolete executables.
+  IF(WIN32)
+    SET(MYSQLROUTER_EXE "mysqlrouter.exe")
+  ELSE()
+    SET(MYSQLROUTER_EXE "mysqlrouter")
+  ENDIF()
+  SET(EXE_DIR ${CMAKE_BINARY_DIR}/runtime_output_directory)
+  IF(BUILD_IS_SINGLE_CONFIG)
+    FILE(REMOVE ${EXE_DIR}/${MYSQLROUTER_EXE})
+  ELSE()
+    FILE(REMOVE
+      ${EXE_DIR}/Debug/${MYSQLROUTER_EXE}
+      ${EXE_DIR}/RelWithDebInfo/${MYSQLROUTER_EXE}
+      ${EXE_DIR}/Release/${MYSQLROUTER_EXE}
+      ${EXE_DIR}/MinSizeRel/${MYSQLROUTER_EXE}
+      )
+  ENDIF()
+  # We do not want ctest to pick up obsolete tests.
+  # See similar code for WITH_UNIT_TESTS above.
+  IF(EXISTS "${CMAKE_BINARY_DIR}/router/CTestTestfile.cmake")
+    FILE(GLOB_RECURSE CTEST_TESTFILES
+      "${CMAKE_BINARY_DIR}/router/CTestTestfile.cmake")
+    FILE(REMOVE ${CTEST_TESTFILES})
+  ENDIF()
 ENDIF()
 
 IF(ENABLE_GCOV)
