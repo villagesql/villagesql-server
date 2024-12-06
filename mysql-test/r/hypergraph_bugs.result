@@ -391,13 +391,12 @@ EXPLAIN
 -> Inner hash join (t2.x = t4.x)  (rows=3.16)
     -> Table scan on t4  (rows=10)
     -> Hash
-        -> Hash semijoin (FirstMatch) (t2.x = t1.pk)  (rows=3.16)
+        -> Nested loop semijoin (FirstMatch)  (rows=3.16)
             -> Table scan on t2  (rows=10)
-            -> Hash
-                -> Inner hash join (t1.x = t3.x)  (rows=10)
-                    -> Table scan on t1  (rows=10)
-                    -> Hash
-                        -> Table scan on t3  (rows=10)
+            -> Inner hash join (t1.x = t3.x)  (rows=1)
+                -> Single-row index lookup on t1 using PRIMARY (pk = t2.x)  (rows=1)
+                -> Hash
+                    -> Table scan on t3  (rows=10)
 
 WITH subq AS (
 SELECT * FROM t2
@@ -1093,9 +1092,9 @@ EXPLAIN
             -> Table scan on x3  (rows=1)
             -> Hash
                 -> Inner hash join (x2.e = x4.e), (x2.b = x4.b)  (rows=0.1)
-                    -> Table scan on x2  (rows=1)
+                    -> Table scan on x4  (rows=1)
                     -> Hash
-                        -> Table scan on x4  (rows=1)
+                        -> Table scan on x2  (rows=1)
     -> Table scan on x1  (rows=1)
 
 DROP TABLE t1;
@@ -1855,10 +1854,10 @@ EXPLAIN
     -> Table scan on t1  (...)
     -> Hash
         -> Inner hash join (no condition)  (...)
-            -> Filter: (1 = (t2.x + 1))  (...)
-                -> Table scan on t2  (...)
+            -> Table scan on t3  (...)
             -> Hash
-                -> Table scan on t3  (...)
+                -> Filter: (1 = (t2.x + 1))  (...)
+                    -> Table scan on t2  (...)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.x' of SELECT #2 was resolved in SELECT #1
@@ -1883,10 +1882,10 @@ EXPLAIN
     -> Table scan on t1  (...)
     -> Hash
         -> Inner hash join (no condition)  (...)
-            -> Filter: (1 = (t2.x + 1))  (...)
-                -> Table scan on t2  (...)
+            -> Table scan on t4  (...)
             -> Hash
-                -> Table scan on t4  (...)
+                -> Filter: (1 = (t2.x + 1))  (...)
+                    -> Table scan on t2  (...)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.x' of SELECT #2 was resolved in SELECT #1

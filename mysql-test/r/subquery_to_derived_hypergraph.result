@@ -5386,9 +5386,9 @@ EXPLAIN
 -> Nested loop inner join (FirstMatch)  (rows=0.333)
     -> Limit: 1 row(s)  (rows=1)
         -> Inner hash join (sq2_alias2.col_int = sq2_alias1.pk)  (rows=1)
-            -> Table scan on sq2_alias1  (rows=1)
+            -> Table scan on sq2_alias2  (rows=1)
             -> Hash
-                -> Table scan on sq2_alias2  (rows=1)
+                -> Table scan on sq2_alias1  (rows=1)
     -> Inner hash join (no condition)  (rows=0.333)
         -> Inner hash join (no condition)  (rows=1)
             -> Table scan on alias1  (rows=1)

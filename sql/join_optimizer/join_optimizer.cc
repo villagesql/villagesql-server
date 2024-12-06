@@ -383,9 +383,13 @@ class CostingReceiver {
                                 const char *description_for_trace) const;
 
   bool HasSecondaryEngineCostHook() const {
-    return m_thd->secondary_engine_optimization() ==
-               Secondary_engine_optimization::SECONDARY &&
+    return IsSecondaryEngineOptimization() &&
            m_secondary_engine_cost_hook != nullptr;
+  }
+
+  bool IsSecondaryEngineOptimization() const {
+    return m_thd->secondary_engine_optimization() ==
+           Secondary_engine_optimization::SECONDARY;
   }
 
   NodeMap all_nodes() const { return TablesBetween(0, m_graph->nodes.size()); }
@@ -4741,14 +4745,28 @@ bool CostingReceiver::FoundSubgraphPair(NodeMap left, NodeMap right,
 
       assert(BitsetsAreCommitted(left_path));
       // For inner joins and full outer joins, the order does not matter.
+      //
       // In lieu of a more precise cost model, always keep the one that hashes
-      // the fewest amount of rows. (This has lower initial cost, and the same
-      // cost.)
+      // the fewest rows. With the current rudimentary cost model for hash
+      // joins, we always get the lowest total cost by choosing the table with
+      // the lowest row estimate as the build table. When a better cost model is
+      // implemented, which takes into account the size of the rows and not only
+      // the number of rows, it might make sense to propose both join orders.
+      //
+      // If the join is under a LIMIT, having a lower init cost may be just as
+      // important as a having a lower total cost, so in that case we propose
+      // both join orders and let the tournament decide which to keep.
+      //
+      // For secondary engines, we propose only a single join order, as they
+      // decide on their own which table to use as probe and which table to use
+      // as build.
       //
       // Finally, if either of the sides are parameterized on something
       // external, flipping the order will not necessarily be allowed (and would
       // cause us to not give a hash join for these tables at all).
       if (is_commutative &&
+          (!IsSubset(left | right, m_nodes_under_limit) ||
+           IsSecondaryEngineOptimization()) &&
           !Overlaps(left_path->parameter_tables | right_path->parameter_tables,
                     RAND_TABLE_BIT)) {
         if (left_path->num_output_rows() < right_path->num_output_rows()) {
@@ -4946,8 +4964,7 @@ bool CostingReceiver::AllowHashJoin(NodeMap left, NodeMap right,
   // TODO(Chaithra): It is possible that the various join nests are looked at
   // carefully when relational expressions are created and forcing only NLJ's
   // for such cases.
-  if (m_thd->secondary_engine_optimization() ==
-          Secondary_engine_optimization::SECONDARY &&
+  if (IsSecondaryEngineOptimization() &&
       edge.expr->type == RelationalExpression::LEFT_JOIN &&
       edge.expr->right->type == RelationalExpression::SEMIJOIN) {
     // Check if there is a condition connecting the left side of the outer
