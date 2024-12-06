@@ -233,7 +233,6 @@ class Loader {
 
  private:
   /** Merge the sub-trees to build the cluster index.
-  @param[in]  prebuilt  prebuilt structures from innodb table handler
   @return innodb error code. */
   dberr_t merge_subtrees();
 
