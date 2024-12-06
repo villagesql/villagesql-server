@@ -1400,6 +1400,10 @@ double EstimateAggregateRows(THD *thd, const AccessPath *child,
   }
 
   const double child_rows = child->num_output_rows();
+  if (child_rows == kUnknownRowCount) {
+    return kUnknownRowCount;
+  }
+
   if (child_rows <= 1.0) {
     // We make the simplifying assumption that the chance of exactly one
     // aggregated row is child_rows, and the chance of zero aggregated rows
@@ -1472,8 +1476,7 @@ double EstimateDistinctRows(THD *thd, double child_rows, TermArray terms) {
 void EstimateAggregateCost(THD *thd, AccessPath *path,
                            const Query_block *query_block) {
   const AccessPath *child = path->aggregate().child;
-  if (path->num_output_rows() == kUnknownRowCount &&
-      child->num_output_rows() != kUnknownRowCount) {
+  if (path->num_output_rows() == kUnknownRowCount) {
     path->set_num_output_rows(EstimateAggregateRows(
         thd, child, query_block, path->aggregate().olap == ROLLUP_TYPE));
   }
