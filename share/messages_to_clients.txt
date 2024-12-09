@@ -10452,7 +10452,7 @@ start-error-number 6400
 ER_SERVER_OFFLINE_MODE_REASON
   eng "The server is currently in offline mode since %s, reason: %s"
 
-ER_SERVER_OFFLINE_MODE_USER
+OBSOLETE_ER_SERVER_OFFLINE_MODE_USER
   eng "The server is currently in offline mode since %s, set by user %s"
 
 ER_LH_UNSTRUCTURED_NO_DATA_FOUND

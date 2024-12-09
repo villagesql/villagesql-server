@@ -3981,14 +3981,12 @@ static void check_and_update_password_lock_state(MPVIO_EXT &mpvio, THD *thd,
 */
 void send_server_offline_mode_error() {
   ulonglong timestamp_usec = 0;
-  char set_user[USERNAME_CHAR_LENGTH + 1] = "";
 
   // safe sysvar data access
   const System_variable_tracker var_tracker =
       System_variable_tracker::make_tracker({}, "offline_mode");
   auto f = [&](const System_variable_tracker &, sys_var *var) -> int {
     timestamp_usec = var->get_timestamp();
-    memcpy(set_user, var->get_user(), sizeof(set_user));
     return 0;
   };
   int ret = var_tracker
@@ -4014,14 +4012,6 @@ void send_server_offline_mode_error() {
   get_global_variable_attribute(nullptr, "offline_mode", "reason", value);
   if (!value.empty()) {
     my_error(ER_SERVER_OFFLINE_MODE_REASON, MYF(0), set_time, value.c_str());
-    return;
-  }
-
-  // else, if both SET_TIME and SET_USER are not empty:
-  // "The server is currently in offline mode since $SET_TIME, set by user
-  // $SET_USER"
-  if (set_user[0] != '\0') {
-    my_error(ER_SERVER_OFFLINE_MODE_USER, MYF(0), set_time, set_user);
     return;
   }
 
