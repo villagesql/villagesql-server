@@ -69,208 +69,208 @@ static EVP_CIPHER *crypt_aes_256_ctr = nullptr;
 #endif
 
 const EVP_MD *my_EVP_sha1() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return md_sha1;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return md_sha1 ? md_sha1 : EVP_sha1();
 #else
   return EVP_sha1();
 #endif
 }
 
 const EVP_MD *my_EVP_sha224() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return md_sha224;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return md_sha224 ? md_sha224 : EVP_sha224();
 #else
   return EVP_sha224();
 #endif
 }
 
 const EVP_MD *my_EVP_sha256() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return md_sha256;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return md_sha256 ? md_sha256 : EVP_sha256();
 #else
   return EVP_sha256();
 #endif
 }
 
 const EVP_MD *my_EVP_sha384() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return md_sha384;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return md_sha384 ? md_sha384 : EVP_sha384();
 #else
   return EVP_sha384();
 #endif
 }
 
 const EVP_MD *my_EVP_sha512() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return md_sha512;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return md_sha512 ? md_sha512 : EVP_sha512();
 #else
   return EVP_sha512();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_128_ecb() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_128_ecb;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_128_ecb ? crypt_aes_128_ecb : EVP_aes_128_ecb();
 #else
   return EVP_aes_128_ecb();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_128_cbc() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_128_cbc;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_128_cbc ? crypt_aes_128_cbc : EVP_aes_128_cbc();
 #else
   return EVP_aes_128_cbc();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_128_cfb1() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_128_cfb1;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_128_cfb1 ? crypt_aes_128_cfb1 : EVP_aes_128_cfb1();
 #else
   return EVP_aes_128_cfb1();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_128_cfb8() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_128_cfb8;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_128_cfb8 ? crypt_aes_128_cfb8 : EVP_aes_128_cfb8();
 #else
   return EVP_aes_128_cfb8();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_128_cfb128() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_128_cfb128;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_128_cfb128 ? crypt_aes_128_cfb128 : EVP_aes_128_cfb128();
 #else
   return EVP_aes_128_cfb128();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_128_ofb() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_128_ofb;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_128_ofb ? crypt_aes_128_ofb : EVP_aes_128_ofb();
 #else
   return EVP_aes_128_ofb();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_192_ecb() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_192_ecb;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_192_ecb ? crypt_aes_192_ecb : EVP_aes_192_ecb();
 #else
   return EVP_aes_192_ecb();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_192_cbc() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_192_cbc;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_192_cbc ? crypt_aes_192_cbc : EVP_aes_192_cbc();
 #else
   return EVP_aes_192_cbc();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_192_cfb1() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_192_cfb1;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_192_cfb1 ? crypt_aes_192_cfb1 : EVP_aes_192_cfb1();
 #else
   return EVP_aes_192_cfb1();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_192_cfb8() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_192_cfb8;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_192_cfb8 ? crypt_aes_192_cfb8 : EVP_aes_192_cfb8();
 #else
   return EVP_aes_192_cfb8();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_192_cfb128() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_192_cfb128;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_192_cfb128 ? crypt_aes_192_cfb128 : EVP_aes_192_cfb128();
 #else
   return EVP_aes_192_cfb128();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_192_ofb() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_192_ofb;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_192_ofb ? crypt_aes_192_ofb : EVP_aes_192_ofb();
 #else
   return EVP_aes_192_ofb();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_256_ecb() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_256_ecb;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_256_ecb ? crypt_aes_256_ecb : EVP_aes_256_ecb();
 #else
   return EVP_aes_256_ecb();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_256_cbc() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_256_cbc;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_256_cbc ? crypt_aes_256_cbc : EVP_aes_256_cbc();
 #else
   return EVP_aes_256_cbc();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_256_cfb1() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_256_cfb1;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_256_cfb1 ? crypt_aes_256_cfb1 : EVP_aes_256_cfb1();
 #else
   return EVP_aes_256_cfb1();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_256_cfb8() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_256_cfb8;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_256_cfb8 ? crypt_aes_256_cfb8 : EVP_aes_256_cfb8();
 #else
   return EVP_aes_256_cfb8();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_256_cfb128() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_256_cfb128;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_256_cfb128 ? crypt_aes_256_cfb128 : EVP_aes_256_cfb128();
 #else
   return EVP_aes_256_cfb128();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_256_ofb() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_256_ofb;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_256_ofb ? crypt_aes_256_ofb : EVP_aes_256_ofb();
 #else
   return EVP_aes_256_ofb();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_256_xts() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_256_xts;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_256_xts ? crypt_aes_256_xts : EVP_aes_256_xts();
 #else
   return EVP_aes_256_xts();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_256_wrap() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_256_wrap;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_256_wrap ? crypt_aes_256_wrap : EVP_aes_256_wrap();
 #else
   return EVP_aes_256_wrap();
 #endif
 }
 
 const EVP_CIPHER *my_EVP_aes_256_ctr() {
-#if defined(MYSQL_SERVER) && OPENSSL_VERSION_NUMBER >= 0x30000000L
-  return crypt_aes_256_ctr;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+  return crypt_aes_256_ctr ? crypt_aes_256_ctr : EVP_aes_256_ctr();
 #else
   return EVP_aes_256_ctr();
 #endif
