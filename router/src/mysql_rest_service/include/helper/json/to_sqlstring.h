@@ -31,6 +31,7 @@
 #include <rapidjson/document.h>
 
 #include "helper/json/rapid_json_iterator.h"
+#include "helper/json/rapid_json_to_text.h"
 #include "helper/to_string.h"
 #include "mrs/database/entry/field.h"
 #include "mrs/database/entry/object.h"
@@ -43,13 +44,6 @@ namespace json {
 template <typename Stream, typename Value>
 Stream &to_stream(Stream &stream, const rapidjson::Value &v,
                   const Value &k_true, const Value &k_false) {
-  auto isArrayOfNumbers = [](const rapidjson::Value::ConstArray &arr) {
-    for (const auto &el : array_iterator(arr)) {
-      if (!el.IsNumber()) return false;
-    }
-
-    return arr.Size() > 0;
-  };
   if (v.IsNull()) {
     stream << nullptr;
   } else if (v.IsBool()) {
@@ -68,17 +62,8 @@ Stream &to_stream(Stream &stream, const rapidjson::Value &v,
     stream << v.GetFloat();
   } else if (v.IsDouble()) {
     stream << v.GetDouble();
-  } else if (v.IsArray() && isArrayOfNumbers(v.GetArray())) {
-    std::stringstream result;
-    const char *separator = "[";
-    auto arr = v.GetArray();
-    for (const auto &el : array_iterator(arr)) {
-      result << separator;
-      separator = ",";
-      to_stream(result, el, helper::k_true.c_str(), helper::k_false.c_str());
-    }
-    result << "]";
-    stream << result.str();
+  } else if (v.IsArray() || v.IsObject()) {
+    stream << to_string(v);
   } else {
     using namespace std::string_literals;
     throw std::runtime_error(
