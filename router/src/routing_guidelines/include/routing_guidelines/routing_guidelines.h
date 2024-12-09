@@ -42,7 +42,7 @@
 
 #include "my_compiler.h"
 #include "mysql/harness/net_ts/internet.h"
-#include "routing_guidelines/routing_guidelines_lib_export.h"
+#include "mysqlrouter/routing_guidelines_export.h"
 
 namespace routing_guidelines {
 

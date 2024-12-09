@@ -88,30 +88,15 @@ IF(LIBFUZZER_COMPILE_FLAGS)
     PUBLIC "${LIBFUZZER_COMPILE_FLAGS}")
 ENDIF()
 
-ADD_LIBRARY(routing_guidelines SHARED
-  $<TARGET_OBJECTS:routing_guidelines-objects>)
-GENERATE_EXPORT_HEADER(routing_guidelines
-  EXPORT_FILE_NAME
-  ${CMAKE_CURRENT_BINARY_DIR}/../include/routing_guidelines/routing_guidelines_lib_export.h
-  )
-TARGET_LINK_LIBRARIES(routing_guidelines harness-library)
-TARGET_INCLUDE_DIRECTORIES(routing_guidelines PUBLIC
-  ${CMAKE_CURRENT_SOURCE_DIR}/../include/
-  ${CMAKE_CURRENT_BINARY_DIR}/../include/
-  )
-SET_TARGET_PROPERTIES(routing_guidelines PROPERTIES
-  OUTPUT_NAME "mysqlrouter_routing_guidelines"
-  SOVERSION 1
-  RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/runtime_output_directory
-  LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/library_output_directory
-  )
-INSTALL(TARGETS routing_guidelines
-  RUNTIME DESTINATION ${ROUTER_INSTALL_BINDIR} COMPONENT Router
-  ARCHIVE DESTINATION ${ROUTER_INSTALL_LIBDIR} COMPONENT Router
-  LIBRARY DESTINATION ${ROUTER_INSTALL_LIBDIR} COMPONENT Router
-  NAMELINK_SKIP
-  )
+ROUTER_ADD_SHARED_LIBRARY(routing_guidelines
+  $<TARGET_OBJECTS:routing_guidelines-objects>
 
+  OUTPUT_NAME "mysqlrouter_routing_guidelines"
+
+  LINK_LIBRARIES
+  PUBLIC
+  harness-library
+  )
 
 # static library for tests
 ADD_LIBRARY(routing_guidelines-static STATIC
