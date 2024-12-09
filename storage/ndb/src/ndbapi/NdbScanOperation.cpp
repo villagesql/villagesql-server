@@ -2543,6 +2543,10 @@ NdbOperation *NdbScanOperation::takeOverScanOpNdbRecord(
   AttributeMask readMask;
   record->copyMask(readMask.rep.data, mask);
 
+  if (opType == ReadRequest || opType == ReadExclusive) {
+    op->theLockMode = theLockMode;
+  }
+
   /* Handle any OperationOptions */
   if (opts != nullptr) {
     /* Delegate to static method in NdbOperation */
@@ -2555,7 +2559,6 @@ NdbOperation *NdbScanOperation::takeOverScanOpNdbRecord(
   }
 
   if (opType == ReadRequest || opType == ReadExclusive) {
-    op->theLockMode = theLockMode;
     /*
      * Apart from taking over the row lock, we also support reading again,
      * though typical usage will probably use an empty mask to read nothing.
@@ -3301,8 +3304,7 @@ int NdbIndexScanOperation::next_result_ordered_ndbrecord(const char *&out_row,
     current = m_current_api_receiver;
     for (int i = 0; i < count; i++) {
       const char *nextRow = m_conf_receivers[i]->getNextRow();  // Fetch first
-      assert(nextRow != nullptr);
-      ((void)nextRow);
+      require(nextRow != nullptr);
       ordered_insert_receiver(current--, m_conf_receivers[i]);
     }
     m_current_api_receiver = current;
