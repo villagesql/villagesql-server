@@ -610,7 +610,7 @@ void MySQLSession::prepare_execute_with_bind_parameters(
     validator(nfields, fields);
     for (unsigned int i = 0; i < nfields; ++i) {
       size_t max_length =
-          std::max<unsigned long>(fields[i].max_length + 1, 1000);
+          std::max<unsigned long>(fields[i].max_length + 1, 1000000);
       my_bind[i].buffer_type = MYSQL_TYPE_STRING;
       my_bind[i].buffer = new char[max_length];
       my_bind[i].buffer_length = static_cast<unsigned long>(max_length);
