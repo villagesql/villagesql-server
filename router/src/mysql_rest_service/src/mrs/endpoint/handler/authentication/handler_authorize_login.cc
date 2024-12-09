@@ -172,7 +172,7 @@ std::string HandlerAuthorizeLogin::append_status_parameters(
   if (!jwt_token.empty())
     Url::append_query_parameter(uri, "accessToken", jwt_token);
   if (!session->handler_name.empty())
-    Url::append_query_parameter(uri, "app", session->handler_name);
+    Url::append_query_parameter(uri, "authApp", session->handler_name);
   if (!session->users_on_complete_timeout.empty())
     Url::append_query_parameter(uri, "onCompletionClose",
                                 session->users_on_complete_timeout);
