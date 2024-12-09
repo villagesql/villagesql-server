@@ -159,7 +159,7 @@ bool Oauth2Handler::http_acquire_access_token(GenericSessionData *data) {
 }
 
 static std::string escape(const std::string &in) {
-  std::string translate{" []{}\""};
+  std::string translate{" []{}\"&"};
   std::string path;
   for (auto c : in) {
     if (translate.find(c) != std::string::npos) {
@@ -189,14 +189,13 @@ void Oauth2Handler::new_session_start_login(RequestContext &ctxt,
   session->set_data(data);
   data->redirection_host = uri;
 
+  std::string params;
   if (url.get_query().length()) {
-    uri += "?" + url.get_query();
-    uri += "&session=" + escape(session->get_session_id());
-  } else {
-    uri += "?session=" + escape(session->get_session_id());
+    url.remove_query_parameter("onCompletionRedirect");
+    params = "?" + url.get_query();
   }
 
-  data->redirection = uri;
+  data->redirection = uri + escape(params);
   log_debug("Oauth2Handler new SessionData: redirection=%s",
             data->redirection.c_str());
 
