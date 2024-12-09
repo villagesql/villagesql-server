@@ -504,11 +504,13 @@ void NdbReceiver::calculate_batch_size(Uint32 parallelism, Uint32 &batch_size,
 // static
 Uint32 NdbReceiver::ndbrecord_rowsize(const NdbRecord *result_record,
                                       bool read_range_no) {
-  require(result_record);
-  // Unpacked NdbRecords are stored in its full unprojected form
-  Uint32 rowsize = result_record->m_row_size;
-  // Add space for storing values off record
-  rowsize += result_record->m_row_side_buffer_size;
+  Uint32 rowsize = 0;
+  if (result_record) {
+    // Unpacked NdbRecords are stored in its full unprojected form
+    rowsize += result_record->m_row_size;
+    // Add space for storing values off record
+    rowsize += result_record->m_row_side_buffer_size;
+  }
   // After unpack, the optional RANGE_NO is stored as an Uint32
   if (read_range_no) rowsize += sizeof(Uint32);
 

@@ -983,8 +983,12 @@ void NdbResultStream::prepare() {
   assert(rowBuffer != nullptr);
 
   auto rec = m_operation.getNdbRecord();
-  char *rowSideBuffer = rowBuffer + rec->m_row_size;
-  Uint32 rowSideBufferSize = rec->m_row_side_buffer_size;
+  char *rowSideBuffer = rowBuffer;
+  Uint32 rowSideBufferSize = 0;
+  if (rec) {
+    rowSideBuffer = rowBuffer + rec->m_row_size;
+    rowSideBufferSize = rec->m_row_side_buffer_size;
+  }
   m_receiver.init(NdbReceiver::NDB_QUERY_OPERATION, &m_operation);
   m_receiver.do_setup_ndbrecord(m_operation.getNdbRecord(), rowBuffer,
                                 rowSideBuffer, rowSideBufferSize,
