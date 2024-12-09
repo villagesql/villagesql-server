@@ -37,6 +37,7 @@
 #include "helper/json/rapid_json_to_map.h"
 #include "helper/json/text_to.h"
 #include "helper/json/to_string.h"
+#include "helper/string/hex.h"
 #include "mrs/authentication/www_authentication_handler.h"
 #include "mrs/http/error.h"
 #include "mrs/http/utilities.h"
@@ -136,7 +137,9 @@ bool Oauth2Handler::send_http_request(HttpMethodType method,
   auto &buffer = req.get_input_buffer();
   auto response_data = buffer.pop_front(buffer.length());
 
-  if (request_handler) return request_handler->response(response_data);
+  if (request_handler) {
+    return request_handler->response(response_data);
+  }
 
   return true;
 }
@@ -155,10 +158,21 @@ bool Oauth2Handler::http_acquire_access_token(GenericSessionData *data) {
   return true;
 }
 
+static std::string escape(const std::string &in) {
+  std::string translate{" []{}\""};
+  std::string path;
+  for (auto c : in) {
+    if (translate.find(c) != std::string::npos) {
+      path += "%" + helper::string::hex(std::string{c});
+    } else {
+      path.append(1, c);
+    }
+  }
+
+  return path;
+}
 void Oauth2Handler::new_session_start_login(RequestContext &ctxt,
                                             Session *session) {
-  // `url_host` and `host` field are almost the same.
-  // The host is extended with protocol prefix, for example "http://"
   auto url = ctxt.get_http_url();
 
   log_debug("entry_.url_host = %s", entry_.url_host.c_str());
@@ -177,6 +191,9 @@ void Oauth2Handler::new_session_start_login(RequestContext &ctxt,
 
   if (url.get_query().length()) {
     uri += "?" + url.get_query();
+    uri += "&session=" + escape(session->get_session_id());
+  } else {
+    uri += "?session=" + escape(session->get_session_id());
   }
 
   data->redirection = uri;
