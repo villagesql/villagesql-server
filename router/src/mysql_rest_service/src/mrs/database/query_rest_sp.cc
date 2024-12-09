@@ -70,6 +70,9 @@ static void impl_columns_set(std::vector<helper::Column> &c,
     i = helper::Column(&f, is_bound);
     auto column_def = columns_find(f.name, rs);
     i.name = column_def->name;
+    if (i.type_json == helper::JsonType::kBlob &&
+        column_def->data_type == ColumnType::STRING)
+      i.type_json = helper::JsonType::kString;
   }
 }
 
@@ -132,6 +135,7 @@ static void trace_metadata(unsigned int number, MYSQL_FIELD *fields) {
     log_debug("on_metadata name:%s", fields[n].name);
     log_debug("on_metadata length:%i", (int)fields[n].length);
     log_debug("on_metadata type:%i", (int)fields[n].type);
+    log_debug("on_metadata charset:%i", (int)fields[n].charsetnr);
     log_debug("on_metadata flags:%i", (int)fields[n].flags);
   }
 }
