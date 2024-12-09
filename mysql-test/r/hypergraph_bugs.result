@@ -1758,7 +1758,7 @@ Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
 EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE x > 0 GROUP BY x, y WITH ROLLUP;
 EXPLAIN
--> Group (no aggregates)  (rows=2)
+-> Group (no aggregates)  (rows=2.33)
     -> Sort: t1.x, t1.y  (rows=0.667)
         -> Filter: (t1.x > 0)  (rows=0.667)
             -> Table scan on t1  (rows=2)

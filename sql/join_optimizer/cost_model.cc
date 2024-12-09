@@ -1409,9 +1409,10 @@ double EstimateAggregateRows(THD *thd, const AccessPath *child,
     // aggregated row is child_rows, and the chance of zero aggregated rows
     // is 1.0 - child_rows.
     if (rollup) {
-      // If there is one child row, we get one result row plus one for each
-      // group-by column. If there are zero child rows, we get zero result rows.
-      return child_rows * (1 + query_block->join->group_fields.size());
+      // If there is one child row, we get one result row plus one for
+      // each group-by column. If there are zero child rows, we get a
+      // single result row.
+      return 1.0 + child_rows * query_block->join->group_fields.size();
     }
     return child_rows;
   }

@@ -1431,7 +1431,7 @@ ANALYZE TABLE t1;
 
 # The row estimate before aggregation is n where n < 1. The estimated
 # number of aggregated rows is then also n, and the total estimate,
-# including the two rollup rows should then be n * (1 + 2).
+# including the two rollup rows should then be 1 + n * 2.
 --replace_regex $elide_costs
 EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE x > 0 GROUP BY x, y WITH ROLLUP;
 
