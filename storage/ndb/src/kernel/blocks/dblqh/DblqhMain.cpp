@@ -32288,7 +32288,8 @@ void Dblqh::execDBINFO_SCANREQ(Signal *signal) {
         TablerecPtr tabPtr;
         tabPtr.i = tableid;
         ptrAss(tabPtr, tablerec);
-        if (tabPtr.p->tableStatus != Tablerec::NOT_DEFINED) {
+        if (tabPtr.p->tableStatus == Tablerec::TABLE_DEFINED ||
+            tabPtr.p->tableStatus == Tablerec::TABLE_READ_ONLY) {
           jam();
           // Loop over all fragments for this table.
           for (Uint32 f = 0; f < NDB_ARRAY_SIZE(tabPtr.p->fragrec); f++) {
@@ -32373,7 +32374,8 @@ void Dblqh::execDBINFO_SCANREQ(Signal *signal) {
         TablerecPtr tabPtr;
         tabPtr.i = tableid;
         ptrAss(tabPtr, tablerec);
-        if (tabPtr.p->tableStatus != Tablerec::NOT_DEFINED) {
+        if (tabPtr.p->tableStatus == Tablerec::TABLE_DEFINED ||
+            tabPtr.p->tableStatus == Tablerec::TABLE_READ_ONLY) {
           jam();
           // Loop over the fragments of this table.
           for (Uint32 fragNo = 0; fragNo < NDB_ARRAY_SIZE(tabPtr.p->fragrec);
@@ -32382,7 +32384,6 @@ void Dblqh::execDBINFO_SCANREQ(Signal *signal) {
             if ((myFragPtr.i = tabPtr.p->fragrec[fragNo]) != RNIL) {
               jam();
               c_fragment_pool.getPtr(myFragPtr);
-
               /* Get fragment's stats from TUP */
               const Dbtup::FragStats fs =
                   c_tup->get_frag_stats(myFragPtr.p->tupFragptr);

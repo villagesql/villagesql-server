@@ -368,3 +368,11 @@ max-time: 480
 cmd: testSystemRestart
 args: -n GCPSaveLagLcpSR T1
 max-time: 240
+
+cmd: testNdbinfo
+args: -n ScanFragOperationsDuringCreateDropTable -l 10000 T1
+max-time: 180
+
+cmd: testNdbinfo
+args: -n ScanFragMemUseDuringCreateDropTable -l 10000 T1
+max-time: 180
