@@ -6925,13 +6925,7 @@ class SimulatedAIOHandler {
   @param[in,out]        array   The AIO array
   @param[in]    segment Local segment in the array */
   SimulatedAIOHandler(AIO *array, ulint segment)
-      : m_oldest(),
-        m_n_elems(),
-        m_lowest_offset(std::numeric_limits<uint64_t>::max()),
-        m_array(array),
-        m_n_slots(),
-        m_segment(segment),
-        m_buf() {
+      : m_n_elems(), m_array(array), m_n_slots(), m_segment(segment), m_buf() {
     ut_ad(m_segment < 100);
 
     m_slots.resize(OS_AIO_MERGE_N_CONSECUTIVE);
@@ -6943,10 +6937,8 @@ class SimulatedAIOHandler {
   /** Reset the state of the handler
   @param[in]    n_slots Number of pending AIO operations supported */
   void init(ulint n_slots) {
-    m_oldest = std::chrono::seconds::zero();
     m_n_elems = 0;
     m_n_slots = n_slots;
-    m_lowest_offset = std::numeric_limits<uint64_t>::max();
 
     ut::aligned_free(m_buf);
     m_buf = nullptr;
@@ -6984,13 +6976,13 @@ class SimulatedAIOHandler {
   /** If there are at least 2 seconds old requests, then pick the
   oldest one to prevent starvation.  If several requests have the
   same age, then pick the one at the lowest offset.
+  @param[in] current_time Time of start of the slot selection.
   @return true if request was selected */
-  bool select() {
-    if (!select_oldest()) {
-      return (select_lowest_offset());
+  bool select(std::chrono::steady_clock::time_point current_time) {
+    if (select_oldest(current_time)) {
+      return true;
     }
-
-    return (true);
+    return select_lowest_offset();
   }
 
   /** Check if there are several consecutive blocks
@@ -7152,20 +7144,20 @@ class SimulatedAIOHandler {
 
     ulint offset = m_segment * m_n_slots;
 
-    m_lowest_offset = std::numeric_limits<uint64_t>::max();
+    auto lowest_offset = std::numeric_limits<uint64_t>::max();
 
     for (ulint i = 0; i < m_n_slots; ++i) {
       Slot *slot;
 
       slot = m_array->at(i + offset);
 
-      if (slot->is_reserved && slot->offset < m_lowest_offset) {
+      if (slot->is_reserved && slot->offset < lowest_offset) {
         /* Found an i/o request */
         m_slots[0] = slot;
 
         m_n_elems = 1;
 
-        m_lowest_offset = slot->offset;
+        lowest_offset = slot->offset;
       }
     }
 
@@ -7175,50 +7167,39 @@ class SimulatedAIOHandler {
   typedef std::vector<Slot *> slots_t;
 
  private:
-  /** Select the slot if it is older than the current oldest slot.
-  @param[in]    slot            The slot to check */
-  void select_if_older(Slot *slot) {
-    const auto time_diff =
-        std::max(std::chrono::steady_clock::now() - slot->reservation_time,
-                 std::chrono::steady_clock::duration{0});
-
-    if (time_diff >= std::chrono::seconds{2}) {
-      if ((time_diff > m_oldest) ||
-          (time_diff == m_oldest && slot->offset < m_lowest_offset)) {
-        /* Found an i/o request */
-        m_slots[0] = slot;
-
-        m_n_elems = 1;
-
-        m_oldest = time_diff;
-
-        m_lowest_offset = slot->offset;
-      }
-    }
-  }
-
-  /** Select th oldest slot in the array
-  @return true if oldest slot found */
-  bool select_oldest() {
+  /** Select the oldest slot in the array if there are any older than 2s.
+  @param[in] current_time Time of start of the slot selection.
+  @return true if any slot older than 2s is found */
+  bool select_oldest(std::chrono::steady_clock::time_point current_time) {
     ut_ad(m_n_elems == 0);
 
-    Slot *slot;
     ulint offset = m_n_slots * m_segment;
 
-    slot = m_array->at(offset);
-
-    for (ulint i = 0; i < m_n_slots; ++i, ++slot) {
-      if (slot->is_reserved) {
-        select_if_older(slot);
+    auto currrent_slot = m_array->at(offset);
+    Slot *oldest_slot = nullptr;
+    for (size_t i = 0; i < m_n_slots; ++i, ++currrent_slot) {
+      if (currrent_slot->is_reserved &&
+          (oldest_slot == nullptr ||
+           currrent_slot->reservation_time < oldest_slot->reservation_time ||
+           (currrent_slot->reservation_time == oldest_slot->reservation_time &&
+            currrent_slot->offset < oldest_slot->offset))) {
+        oldest_slot = currrent_slot;
       }
     }
 
-    return (m_n_elems > 0);
+    if (oldest_slot != nullptr &&
+        current_time - oldest_slot->reservation_time >=
+            std::chrono::seconds{2}) {
+      m_slots[0] = oldest_slot;
+
+      m_n_elems = 1;
+      return true;
+    }
+
+    return false;
   }
 
-  std::chrono::steady_clock::duration m_oldest;
   ulint m_n_elems;
-  os_offset_t m_lowest_offset;
 
   AIO *m_array;
   ulint m_n_slots;
@@ -7294,6 +7275,11 @@ static dberr_t os_aio_simulated_handler(ulint global_segment, fil_node_t **m1,
 
     srv_set_io_thread_op_info(global_segment, "looking for i/o requests (b)");
 
+    /* Take the current time once as it may cause syscalls and not be too
+    performant, it improves throughput greatly to have this executed before
+    we grab the AIO mutex. */
+    const auto current_time = std::chrono::steady_clock::now();
+
     array->acquire();
 
     ulint n_reserved;
@@ -7317,7 +7303,7 @@ static dberr_t os_aio_simulated_handler(ulint global_segment, fil_node_t **m1,
 
       return (DB_SUCCESS);
 
-    } else if (handler.select()) {
+    } else if (handler.select(current_time)) {
       break;
     }
 
