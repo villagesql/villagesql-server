@@ -108,8 +108,8 @@ GET /svc/proc/mirror?input=1
         }
     ],
     "outParameters": {
-        "output1": "MQ==",
-        "output2": "MQ=="
+        "output1": "1",
+        "output2": "1"
     }
 }
 OK
@@ -183,8 +183,8 @@ PUT /svc/proc/mirror (payload-size:12)
         }
     ],
     "outParameters": {
-        "output1": "MTA=",
-        "output2": "MTA="
+        "output1": "10",
+        "output2": "10"
     }
 }
 OK

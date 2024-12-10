@@ -137,7 +137,7 @@ GET /svc/proc/inc_text?result=10
 {
     "resultSets": [],
     "outParameters": {
-        "result": "MTBC"
+        "result": "10B"
     }
 }
 OK
@@ -148,7 +148,7 @@ GET /svc/proc/inc_ttext?result=10
 {
     "resultSets": [],
     "outParameters": {
-        "result": "MTBC"
+        "result": "10B"
     }
 }
 OK
@@ -159,7 +159,7 @@ GET /svc/proc/inc_varchar?result=10
 {
     "resultSets": [],
     "outParameters": {
-        "result": "MTAgYQ=="
+        "result": "10 a"
     }
 }
 OK
@@ -305,7 +305,7 @@ GET /svc/proc/inc_set?result=one
 {
     "resultSets": [],
     "outParameters": {
-        "result": "b25lLHR3bw=="
+        "result": "one,two"
     }
 }
 OK
@@ -317,7 +317,7 @@ GET /svc/proc/inc_enum?result=one
 {
     "resultSets": [],
     "outParameters": {
-        "result": "dHdv"
+        "result": "two"
     }
 }
 OK
@@ -345,7 +345,7 @@ PUT /svc/proc/inc_text (payload-size:13)
 {
     "resultSets": [],
     "outParameters": {
-        "result": "MTBC"
+        "result": "10B"
     }
 }
 OK
@@ -356,7 +356,7 @@ PUT /svc/proc/inc_ttext (payload-size:13)
 {
     "resultSets": [],
     "outParameters": {
-        "result": "MTBC"
+        "result": "10B"
     }
 }
 OK
@@ -367,7 +367,7 @@ PUT /svc/proc/inc_varchar (payload-size:13)
 {
     "resultSets": [],
     "outParameters": {
-        "result": "MTAgYQ=="
+        "result": "10 a"
     }
 }
 OK
@@ -513,7 +513,7 @@ PUT /svc/proc/inc_set (payload-size:16)
 {
     "resultSets": [],
     "outParameters": {
-        "result": "b25lLHR3bw=="
+        "result": "one,two"
     }
 }
 OK
@@ -525,7 +525,7 @@ PUT /svc/proc/inc_enum (payload-size:16)
 {
     "resultSets": [],
     "outParameters": {
-        "result": "dHdv"
+        "result": "two"
     }
 }
 OK

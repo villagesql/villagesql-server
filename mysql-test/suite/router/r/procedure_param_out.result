@@ -248,7 +248,7 @@ GET /svc/proc/concat_out?a=10&b=20
 {
     "resultSets": [],
     "outParameters": {
-        "result": "MTAyMA=="
+        "result": "1020"
     }
 }
 OK
@@ -328,7 +328,7 @@ PUT /svc/proc/concat_out (payload-size:15)
 {
     "resultSets": [],
     "outParameters": {
-        "result": "MTAyMA=="
+        "result": "1020"
     }
 }
 OK
@@ -364,7 +364,7 @@ PUT /svc/proc/concat_out (payload-size:19)
 {
     "resultSets": [],
     "outParameters": {
-        "result": "MTAyMA=="
+        "result": "1020"
     }
 }
 OK
@@ -375,7 +375,7 @@ GET /svc/proc/move_char?a=10
 {
     "resultSets": [],
     "outParameters": {
-        "result": "MTAgYXBwZW5kZWQ="
+        "result": "10 appended"
     }
 }
 OK
@@ -505,7 +505,7 @@ PUT /svc/proc/move_char (payload-size:8)
 {
     "resultSets": [],
     "outParameters": {
-        "result": "MTAgYXBwZW5kZWQ="
+        "result": "10 appended"
     }
 }
 OK
