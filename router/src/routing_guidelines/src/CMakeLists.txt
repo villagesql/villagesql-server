@@ -72,7 +72,7 @@ IF(APPLE_XCODE)
   ADD_LIBRARY(routing_guidelines-static ALIAS routing_guidelines-objects)
   GENERATE_EXPORT_HEADER(routing_guidelines
     EXPORT_FILE_NAME
-    ${CMAKE_CURRENT_BINARY_DIR}/../include/routing_guidelines/routing_guidelines_lib_export.h)
+    ${CMAKE_CURRENT_BINARY_DIR}/../include/mysqlrouter/routing_guidelines_export.h)
   RETURN()
 ENDIF()
 
