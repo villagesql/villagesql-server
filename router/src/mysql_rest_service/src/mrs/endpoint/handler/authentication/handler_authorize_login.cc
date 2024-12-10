@@ -97,7 +97,7 @@ HttpResult HandlerAuthorizeLogin::handle_get(RequestContext *ctxt) {
   }
 
   if (ctxt->selected_handler->redirects(*ctxt)) {
-    set_session_cookie(ctxt, session);
+    if (!session->generate_token) set_session_cookie(ctxt, session);
 
     auto uri = append_status_parameters(session, {HttpStatusCode::Ok});
     http::redirect_and_throw(ctxt->request, uri);
