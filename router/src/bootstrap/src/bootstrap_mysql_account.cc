@@ -459,6 +459,12 @@ void BootstrapMySQLAccount::give_grants_to_users(
       statements.push_back("GRANT "s + role + " TO " + new_accounts);
     }
 
+    // if we were granting some roles we need to make sure they are enabled by
+    // default
+    if (user_options.grant_role.size() > 0) {
+      statements.push_back("SET DEFAULT ROLE ALL TO " + new_accounts);
+    }
+
     for (const auto &s : statements) {
       try {
         mysql_->execute(s);  // throws MySQLSession::Error, std::logic_error
