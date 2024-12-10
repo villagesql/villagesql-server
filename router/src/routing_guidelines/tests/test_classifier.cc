@@ -331,7 +331,8 @@ TEST(Routing_guidelines_test, simple_classification) {
                           "mysql.oracle.com",
                           "192.168.0.123",
                           {},
-                          "routing_plugin_1"};
+                          "routing_plugin_1",
+                          "test-router"};
   Server_info server{"NumberOne",
                      "127.0.0.1",
                      3306,
@@ -372,7 +373,8 @@ TEST(Routing_guidelines_test, cs_classification) {
                           "mysql.oracle.com",
                           "192.168.0.123",
                           {},
-                          "routing_plugin_1"};
+                          "routing_plugin_1",
+                          "test-router"};
   Server_info server{"NumberOne",
                      "192.168.5.5",
                      3306,

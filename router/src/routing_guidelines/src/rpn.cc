@@ -291,6 +291,7 @@ enum class Guidelines_vars {
   port_rw,
   port_rw_split,
   route_name,
+  name,
   server_label,
   server_address,
   server_port,
@@ -318,6 +319,7 @@ const std::map<Guidelines_vars, std::string_view> &get_vars_names() {
       {Guidelines_vars::port_rw, "router.port.rw"},
       {Guidelines_vars::port_rw_split, "router.port.rw_split"},
       {Guidelines_vars::route_name, "router.routeName"},
+      {Guidelines_vars::name, "router.name"},
 
       {Guidelines_vars::server_label, "server.label"},
       {Guidelines_vars::server_address, "server.address"},
@@ -374,6 +376,8 @@ Context::Context() {
                vars_names.at(Guidelines_vars::port_rw_split));
   register_var(router_, &Router_info::route_name,
                vars_names.at(Guidelines_vars::route_name));
+  register_var(router_, &Router_info::name,
+               vars_names.at(Guidelines_vars::name));
 
   register_var(server_, &Server_info::label,
                vars_names.at(Guidelines_vars::server_label));

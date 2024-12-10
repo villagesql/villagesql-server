@@ -71,6 +71,7 @@ struct ROUTING_GUIDELINES_EXPORT Router_info {
                 //!< cluster metadata for that Router instance
   std::string route_name;  //!< name of the plugin which handles the
                            //!< connection
+  std::string name;        //!< name of the Router instance
 };
 
 /** Information about one server destination. */

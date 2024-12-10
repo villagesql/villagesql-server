@@ -2021,6 +2021,35 @@ TEST_F(RoutingGuidelinesTest, MatchRoutingRouteName) {
   }
 }
 
+TEST_F(RoutingGuidelinesTest, MatchRouterName) {
+  setup_cluster("metadata_dynamic_nodes_v2_gr.js");
+
+  std::string router_name = "test_router";
+  auto &router = launch_router(
+      get_routing_section(router_port_ro, "SECONDARY", "classic", router_name),
+      get_metadata_cache_section());
+
+  SCOPED_TRACE("Match routing plugin name");
+  instrument_metadata(
+      guidelines_builder::create(
+          {{"d1", "$.server.port=" + std::to_string(cluster_nodes_ports[0])}},
+          {{"r1",
+            "$.router.name=" + router_name,
+            {{"first-available", {"d1"}}}}}),
+      cluster_nodes_ports, cluster_nodes_http_ports[0]);
+  EXPECT_TRUE(
+      wait_log_contains(router, "Routing guidelines document updated", 5s));
+
+  SCOPED_TRACE("Connection is matched");
+  {
+    auto client_res = make_new_connection(router_port_ro);
+    ASSERT_NO_ERROR(client_res);
+    auto port_res = select_port(client_res->get());
+    ASSERT_NO_ERROR(port_res);
+    EXPECT_EQ(*port_res, cluster_nodes_ports[0]);
+  }
+}
+
 TEST_F(RoutingGuidelinesTest, MatchRouterTagsString) {
   setup_cluster("metadata_dynamic_nodes_v2_gr.js");
 

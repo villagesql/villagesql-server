@@ -129,6 +129,7 @@ var defaults = {
 
   router_hostname: "router-host",
   router_options: "",
+  router_name: "test_router",
 };
 
 function ensure_type(options, field, expected_type) {
@@ -1377,7 +1378,7 @@ function get_response(stmt_key, options) {
     case "get_guidelines_router_info":
       return {
         stmt:
-            "SELECT address, attributes->>'$.ROEndpoint', attributes->>'$.RWEndpoint', attributes->>'$.RWSplitEndpoint', attributes->>'$.ROXEndpoint', attributes->>'$.RWXEndpoint', attributes->>'$.LocalCluster', options FROM mysql_innodb_cluster_metadata.v2_routers WHERE router_id=" +
+            "SELECT address, attributes->>'$.ROEndpoint', attributes->>'$.RWEndpoint', attributes->>'$.RWSplitEndpoint', attributes->>'$.ROXEndpoint', attributes->>'$.RWXEndpoint', attributes->>'$.LocalCluster', options, router_name FROM mysql_innodb_cluster_metadata.v2_routers WHERE router_id=" +
             options.router_id,
         result: {
           columns: [
@@ -1388,14 +1389,15 @@ function get_response(stmt_key, options) {
             {"name": "ro_x_endpoint", "type": "STRING"},
             {"name": "rw_x_endpoint", "type": "STRING"},
             {"name": "target_cluster", "type": "STRING"},
-            {"name": "options", "type": "STRING"}
+            {"name": "options", "type": "STRING"},
+            {"name": "router_name", "type": "STRING"}
           ],
           rows: [[
             options.router_hostname, options.router_ro_classic_port,
             options.router_rw_classic_port,
             options.router_rw_split_classic_port, options.router_ro_x_port,
             options.router_rw_x_port, options.innodb_cluster_name,
-            options.router_options
+            options.router_options, options.router_name
           ]]
         }
       };

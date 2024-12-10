@@ -560,7 +560,7 @@ ClusterMetadata::fetch_router_info(const uint16_t router_id) {
       "attributes->>'$.ROXEndpoint', "
       "attributes->>'$.RWXEndpoint', "
       "attributes->>'$.LocalCluster', "
-      "options FROM mysql_innodb_cluster_metadata.v2_routers "
+      "options, router_name FROM mysql_innodb_cluster_metadata.v2_routers "
       "WHERE router_id=?";
   query << router_id << sqlstring::end;
 
@@ -590,6 +590,8 @@ ClusterMetadata::fetch_router_info(const uint16_t router_id) {
         }
       }
     }
+
+    router_info.name = as_string(row[8]);
 
     return true;
   };

@@ -196,7 +196,8 @@ TEST_F(Routing_guidelines_parser_test, context_variable_wrapping) {
                  "mysql.oracle.com",
                  "192.168.0.123",
                  {{"uptime", "2 years"}, {"alarm", "9PM"}},
-                 "routing_ro"};
+                 "routing_ro",
+                 "test-router"};
   ctx.set_router_info(ri);
   EXPECT_NUM(ri.port_ro, "$.router.port.ro");
   EXPECT_NUM(ri.port_rw, "$.router.port.rw");
@@ -213,7 +214,8 @@ TEST_F(Routing_guidelines_parser_test, context_variable_wrapping) {
                                   "mysql.oracle.com",
                                   "192.168.5.123",
                                   {},
-                                  "routing_foo"});
+                                  "routing_foo",
+                                  "test-router"});
   EXPECT_THROW_LIKE(parse_eval("$.router.port"), std::runtime_error,
                     "router.port");
 }
