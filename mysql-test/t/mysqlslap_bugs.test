@@ -22,10 +22,9 @@ SET GLOBAL log_output="TABLE";
 --exec $MYSQL_SLAP --host=127.0.0.1 --port=$MASTER_MYPORT --ssl-mode=require --create="CALL test.signal_if_ssl(1);" --query="SELECT 1" --silent
 --echo # Try with SSL disabled: should pass
 --exec $MYSQL_SLAP --host=127.0.0.1 --port=$MASTER_MYPORT --ssl-mode=disable --create="CALL test.signal_if_ssl(0);" --query="SELECT 2" --silent
-
-SELECT argument FROM mysql.general_log;
-
 SET GLOBAL log_output=default;
+SELECT argument FROM mysql.general_log WHERE command_type = 'Connect' ORDER BY event_time;
+
 DROP PROCEDURE signal_if_ssl;
 TRUNCATE mysql.general_log;
 
