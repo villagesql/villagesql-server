@@ -2748,7 +2748,7 @@ INSTANTIATE_TEST_SUITE_P(
              std::nullopt, std::nullopt},
             "Configuration error: option client_ssl_session_cache_timeout in "
             "[routing:classic] needs value between 0 and 86400 inclusive, "
-            "was '84601'"},
+            "was '86401'"},
         SessionReuseInvalidOptionValueParam{
             "client_ssl_session_cache_timeout_not_integer",
             {std::nullopt, std::nullopt,
@@ -2839,10 +2839,10 @@ INSTANTIATE_TEST_SUITE_P(
         SessionReuseInvalidOptionValueParam{
             "server_ssl_session_cache_timeout_out_of_range",
             {std::nullopt, std::nullopt, std::nullopt, std::nullopt,
-             std::nullopt, /* server_ssl_session_cache_timeout */ "84601"},
+             std::nullopt, /* server_ssl_session_cache_timeout */ "86401"},
             "Configuration error: option server_ssl_session_cache_timeout in "
             "[routing:classic] needs value between 0 and 86400 inclusive, "
-            "was '84601"},
+            "was '86401"},
         SessionReuseInvalidOptionValueParam{
             "server_ssl_session_cache_timeout_not_integer",
             {std::nullopt, std::nullopt, std::nullopt, std::nullopt,
