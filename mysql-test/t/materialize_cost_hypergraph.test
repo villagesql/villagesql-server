@@ -54,7 +54,7 @@ delimiter ;||
 let $query_prefix=
 EXPLAIN FORMAT=JSON INTO @jsonstr;
 let $store_cost=
-SELECT get_cost(@jsonstr, "$.query_plan.estimated_total_cost") est INTO;
+SELECT get_cost(json_extract(@jsonstr, "$.query_plan"), "$.estimated_total_cost") est INTO;
 let $store_child_cost=
 SELECT get_child_cost(@jsonstr, "$.estimated_total_cost") est INTO;
 let print_access_type=

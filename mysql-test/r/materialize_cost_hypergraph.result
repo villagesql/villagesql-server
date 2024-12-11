@@ -131,14 +131,14 @@ EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_BIG_RESULT avg(id) FROM tv s GROUP 
 SELECT json_extract(@jsonstr, "$.query_plan.access_type") access_type;
 access_type
 "aggregate"
-SELECT get_cost(@jsonstr, "$.query_plan.estimated_total_cost") est INTO @cost1;
+SELECT get_cost(json_extract(@jsonstr, "$.query_plan"), "$.estimated_total_cost") est INTO @cost1;
 EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_BIG_RESULT avg(id),avg(id) FROM tv s GROUP BY id2;
-SELECT get_cost(@jsonstr, "$.query_plan.estimated_total_cost") est INTO @cost2;
+SELECT get_cost(json_extract(@jsonstr, "$.query_plan"), "$.estimated_total_cost") est INTO @cost2;
 SELECT @cost1 < @cost2;
 @cost1 < @cost2
 1
 EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_BIG_RESULT avg(id),avg(id) FROM tv s GROUP BY id2, id3;
-SELECT get_cost(@jsonstr, "$.query_plan.estimated_total_cost") est INTO @cost3;
+SELECT get_cost(json_extract(@jsonstr, "$.query_plan"), "$.estimated_total_cost") est INTO @cost3;
 SELECT @cost2 < @cost3;
 @cost2 < @cost3
 1
@@ -147,13 +147,13 @@ ANALYZE TABLE tv;
 Table	Op	Msg_type	Msg_text
 test.tv	analyze	status	OK
 EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_BIG_RESULT avg(id),avg(id) FROM tv s GROUP BY id2, id3;
-SELECT get_cost(@jsonstr, "$.query_plan.estimated_total_cost") est INTO @cost4;
+SELECT get_cost(json_extract(@jsonstr, "$.query_plan"), "$.estimated_total_cost") est INTO @cost4;
 SELECT @cost3 < @cost4;
 @cost3 < @cost4
 1
 SELECT round(@cost4, 1);
 round(@cost4, 1)
-83.5
+23.1
 EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_SMALL_RESULT DISTINCT id FROM tv s;
 SELECT json_extract(@jsonstr, "$.query_plan.inputs[0].access_type") access_type;
 access_type
