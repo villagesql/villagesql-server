@@ -249,7 +249,8 @@ bool metadata_cache::ManagedInstance::operator==(
          xport == other.xport && hidden == other.hidden &&
          disconnect_existing_sessions_when_hidden ==
              other.disconnect_existing_sessions_when_hidden &&
-         ignore == other.ignore;
+         ignore == other.ignore && tags == other.tags &&
+         version == other.version;
 }
 
 metadata_cache::ManagedInstance::ManagedInstance(

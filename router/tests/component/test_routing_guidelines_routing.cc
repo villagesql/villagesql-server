@@ -2383,6 +2383,31 @@ TEST_F(RoutingGuidelinesTest, MatchServerTags) {
     ASSERT_NO_ERROR(port_res);
     EXPECT_EQ(*port_res, cluster_nodes_ports[1]);
   }
+
+  // Update the tag without changing the topology
+  JsonValue new_tags(rapidjson::kObjectType);
+  new_tags.AddMember("my_tag", "baz", alloc);
+  JsonValue new_attributes(rapidjson::kObjectType);
+  new_attributes.AddMember("tags", new_tags, alloc);
+  cluster_nodes[1].attributes = json_to_string(new_attributes);
+
+  SCOPED_TRACE("Match updated tags");
+  instrument_metadata_detailed(
+      guidelines_builder::create(
+          {{"d1", "$.server.tags.my_tag='\"baz\"'"}},
+          {{"r1", "TRUE", {{"first-available", {"d1"}}}}}),
+      gr_nodes, cluster_nodes, cluster_nodes_http_ports[0]);
+  EXPECT_TRUE(
+      wait_log_contains(router, "Routing guidelines document updated", 5s));
+
+  SCOPED_TRACE("Connection is matched after tags update");
+  {
+    auto client_res = make_new_connection(router_port_ro);
+    ASSERT_NO_ERROR(client_res);
+    auto port_res = select_port(client_res->get());
+    ASSERT_NO_ERROR(port_res);
+    EXPECT_EQ(*port_res, cluster_nodes_ports[1]);
+  }
 }
 
 TEST_F(RoutingGuidelinesTest, MatchRouterLocalCluster) {
