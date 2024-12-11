@@ -20,7 +20,7 @@ INSERT INTO test.t1 (c2) VALUES (REPEAT('a', 1000000));
 INSERT INTO test.t1 (c2) VALUES (REPEAT('b', 1000000));
 COMMIT;
 [connection slave]
-include/rpl/receive_event_count.inc [stop after 4 non-header events]
+include/rpl/receive_event_count.inc
 
 ##############################################################
 # 3. Restart the replica with a limit to the relay log size
