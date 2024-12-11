@@ -214,12 +214,14 @@ class PCursor {
   PCursor(btr_pcur_t *pcur, mtr_t *mtr, size_t read_level)
       : m_mtr(mtr), m_pcur(pcur), m_read_level(read_level) {}
 
+ private:
   /** Create a savepoint and commit the mini-transaction.*/
   void savepoint() noexcept;
 
   /** Resume from savepoint. */
   void resume() noexcept;
 
+ public:
   /** Store the position of the user record that is added to the key buffer and,
   commit the mini-transaction. The cursor must not be positioned at infimum
   or supremum.
@@ -320,6 +322,7 @@ class PCursor {
     return m_pcur->get_page_cur();
   }
 
+ private:
   /** Restore from a saved position.
   @return DB_SUCCESS or error code. */
   [[nodiscard]] dberr_t restore_from_savepoint() noexcept;
@@ -327,6 +330,7 @@ class PCursor {
   /** Move to the first user rec on the restored page. */
   [[nodiscard]] dberr_t move_to_user_rec() noexcept;
 
+ public:
   /** @return true if cursor is after last on page. */
   [[nodiscard]] bool is_after_last_on_page() const noexcept {
     return m_pcur->is_after_last_on_page();
@@ -362,6 +366,7 @@ buf_block_t *Parallel_reader::Scan_ctx::block_get_s_latched(
 }
 
 void PCursor::savepoint() noexcept {
+  ut_ad(m_read_level != 0);
   /* Store the cursor position on the previous user record on the page. */
   m_pcur->move_to_prev_on_page();
 
@@ -371,6 +376,7 @@ void PCursor::savepoint() noexcept {
 }
 
 void PCursor::resume() noexcept {
+  ut_ad(m_read_level != 0);
   m_mtr->start();
 
   m_mtr->set_log_mode(MTR_LOG_NO_REDO);
@@ -494,18 +500,9 @@ dberr_t PCursor::move_to_user_rec() noexcept {
 }
 
 dberr_t PCursor::restore_from_savepoint() noexcept {
+  ut_ad(m_read_level != 0);
   resume();
   return m_pcur->is_on_user_rec() ? DB_SUCCESS : move_to_user_rec();
-}
-
-dberr_t Parallel_reader::Thread_ctx::restore_from_savepoint() noexcept {
-  /* If read_level != 0, might return DB_LOCK_NOWAIT error. */
-  ut_ad(m_pcursor->read_level() == 0);
-  return m_pcursor->restore_from_savepoint();
-}
-
-void Parallel_reader::Thread_ctx::savepoint() noexcept {
-  m_pcursor->savepoint();
 }
 
 void Parallel_reader::Thread_ctx::
@@ -531,7 +528,8 @@ dberr_t PCursor::move_to_next_block(dict_index_t *index) {
   ut_ad(m_pcur->is_after_last_on_page());
   dberr_t err = DB_SUCCESS;
 
-  if (rw_lock_get_waiters(dict_index_get_lock(index))) {
+  if (DBUG_EVALUATE_IF("pcursor_move_to_next_block_release_latches", true,
+                       rw_lock_get_waiters(dict_index_get_lock(index)))) {
     /* There are waiters on the index tree lock. Store and restore
     the cursor position, and yield so that scanning a large table
     will not starve other threads. */
@@ -539,6 +537,27 @@ dberr_t PCursor::move_to_next_block(dict_index_t *index) {
     /* We should always yield on a block boundary. */
     ut_ad(m_pcur->is_after_last_on_page());
 
+    if (m_read_level == 0) {
+      save_previous_user_record_as_last_processed();
+      DEBUG_SYNC_C("pcursor_move_to_next_block_latches_released");
+      std::this_thread::yield();
+      restore_to_first_unprocessed();
+      if (m_pcur->is_after_last_on_page()) {
+        /* There's nothing wrong here, as restore_to_first_unprocessed() is not
+        obliged to position the cursor on a *user* record - it can be a
+        supremum. This can happen if
+        a) the block in BP wasn't modified and thus we've restored the cursor
+        exactly where it was, i.e. on supremum
+        b) there is no more records in the table
+        These options aren't mutually exclusive. Both are well handled by: */
+        return move_to_user_rec();
+      } else {
+        /* This happens if we were descending the B-tree, in which case we try
+        to navigate in such a way to arrive at a user record. */
+        ut_a(m_pcur->is_on_user_rec());
+        return DB_SUCCESS;
+      }
+    }
     savepoint();
 
     /* Yield so that another thread can proceed. */

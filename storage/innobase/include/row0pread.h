@@ -250,13 +250,6 @@ class Parallel_reader {
     /** @return the worker thread state. */
     State get_state() const noexcept { return m_state; }
 
-    /** Save current position, commit any active mtr. */
-    void savepoint() noexcept;
-
-    /** Restore saved position to resume the scan.
-    @return DB_SUCCESS or error code. */
-    [[nodiscard]] dberr_t restore_from_savepoint() noexcept;
-
     /** @see PCursor::save_current_user_record_as_last_processed */
     void save_current_user_record_as_last_processed() noexcept;
 
