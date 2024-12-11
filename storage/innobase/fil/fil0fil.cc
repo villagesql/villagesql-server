@@ -37,6 +37,7 @@ The tablespace memory cache */
 #include <fcntl.h>
 #include <sys/types.h>
 
+#include <scope_guard.h>
 #include "arch0page.h"
 #include "btr0btr.h"
 #include "buf0buf.h"
@@ -120,8 +121,10 @@ struct Moved {
   /** Path where it was found during the scan. */
   std::string new_path;
 
-  /** Move occurred before 8.0.37/8.4.1/9.0.0 and missed to update dir flag */
-  bool moved_prev_or_has_datadir;
+  /** This tablespace has moved out of data directory but is missing the
+   DD_TABLE_DATA_DIRECTORY flag. This can happen before versions
+   8.0.38/8.4.1/9.0.0 */
+  bool dd_flag_missing;
 };
 
 using Tablespaces = std::vector<Moved>;
@@ -1571,20 +1574,22 @@ class Fil_system {
   [[nodiscard]] bool check_missing_tablespaces();
 
   /** Note that a file has been relocated.
-  @param[in]    object_id                      Server DD tablespace ID
-  @param[in]    space_id                       InnoDB tablespace ID
-  @param[in]    space_name                     Tablespace name
-  @param[in]    old_path                       Path to the old location
-  @param[in]    new_path                       Path scanned from disk
-  @param[in]    moved_prev_or_has_datadir      The move has happened before
-                                               8.0.38/8.4.1/9.0.0 or table is
-                                               created with data dir clause.*/
+  @param[in]    object_id       Server DD tablespace ID
+  @param[in]    space_id        InnoDB tablespace ID
+  @param[in]    space_name      Tablespace name
+  @param[in]    old_path        Path to the old location
+  @param[in]    new_path        Path scanned from disk
+  @param[in]    dd_flag_missing This tablespace is outside default data
+                                directory but missing the
+                                DD_TABLE_DATA_DIRECTORY flag. This can
+                                happen before versions
+                                8.0.37/8.4.1/9.0.0 */
   void moved(dd::Object_id object_id, space_id_t space_id,
              const char *space_name, const std::string &old_path,
-             const std::string &new_path, bool moved_prev_or_has_datadir) {
+             const std::string &new_path, bool dd_flag_missing) {
     std::lock_guard guard(m_moved_mutex);
-    m_moved.push_back({object_id, space_id, space_name, old_path, new_path,
-                       moved_prev_or_has_datadir});
+    m_moved.push_back(
+        {object_id, space_id, space_name, old_path, new_path, dd_flag_missing});
   }
 
   /** Check if a path is known to InnoDB.
@@ -9608,13 +9613,12 @@ dberr_t Fil_system::prepare_open_for_business(bool read_only_mode) {
       auto old_path = tablespace.old_path;
       auto new_path = tablespace.new_path;
 
-      /* m_moved might have 3 kinds of files
+      /* m_moved might have 2 kinds of files
       1. Files which are actually moved to other directory.
-      2. Files which are created with DATA DIRECTORY flag updated in DD.
-      3. Files which are moved before upgrade and don't have DATA DIRECTORY
-      flags updated in DD.
+      2. Files which are moved before upgrade and don't have
+         DD_TABLE_DATA_DIRECTORY flag updated in DD.
 
-      In case of [2] and [3], old_path and new_path will be equal.
+      In case of [2], old_path and new_path will be equal.
       In read only mode, we shall error out only in case of 1. */
       if (old_path != new_path) {
         ib::error(ER_IB_MSG_344)
@@ -9656,7 +9660,7 @@ dberr_t Fil_system::prepare_open_for_business(bool read_only_mode) {
 
     auto object_id = tablespace.object_id;
 
-    auto moved_prev_or_has_datadir = tablespace.moved_prev_or_has_datadir;
+    auto dd_flag_missing = tablespace.dd_flag_missing;
 
     /* We already have the space name in system cs. */
     err = dd_tablespace_rename(object_id, true, space_name.c_str(),
@@ -9677,22 +9681,12 @@ dberr_t Fil_system::prepare_open_for_business(bool read_only_mode) {
     If not, update the data directory flag */
     if (Fil_path::has_suffix(IBD, new_path)) {
       /* We want to update the dd_table data dir flag for those ibd files which
-      are moved in this restart which is captured in m_moved whose current
-      location is different from where it is originally created. */
-      const bool moved_before_restart =
-          !moved_prev_or_has_datadir && !fpath_old.is_dir_same_as(fpath_new);
-
-      /* moved_prev_or_has_datadir is true when ibd file is moved in previous
-      versions where fpath_old and fpath_new point to newly moved location which
-      is different from default. We want to update dd_table data directory flag
-      as true for this case also. It is also true when table is created using
-      data directory clause. We will ignore that case later in
-      dd_update_table_and_partitions_after_dir_change()*/
-      const bool moved_before_upgrade =
-          moved_prev_or_has_datadir &&
-          !MySQL_datadir_path.is_dir_same_as(fpath_new);
-
-      if (moved_before_restart || moved_before_upgrade) {
+      are moved in this restart and thier current location is different from
+      where it is originally created. This flag also needs to updated if
+      dd_flag_missing is true since this flag represents those ibd files moved
+      in previous versions where fpath_old and fpath_new point to newly moved
+      location which is different from default data directory path. */
+      if (dd_flag_missing || !fpath_old.is_dir_same_as(fpath_new)) {
         err = dd_update_table_and_partitions_after_dir_change(
             object_id, fpath_new.abs_path());
 
@@ -9980,30 +9974,83 @@ Fil_state fil_tablespace_path_equals(space_id_t space_id,
   if (old_dir != new_dir) {
     *new_path = result.first + result.second->front();
     return Fil_state::MOVED;
-  } else if (!new_same_as_default) {
+  } else if (!new_same_as_default && Fil_path::has_suffix(IBD, old_path) &&
+             !fsp_is_shared_tablespace(fsp_flags)) {
     /* We want to recognize those tables which are moved in previous versions
-    and mark the dd_table data dir flag as true as we need to make sure dd_table
-    is in sync with current status of the table. This condition is hit by tables
-    which are moved in previous versions of server before 8.0.38/8.4.1/9.0.0 and
-    the tables which are created using data directory clause as in both cases
-    old dir and new dir will be same but different from default dir. So marking
-    these tables as MOVED_PREV_OR_HAS_DATADIR which is referred later to set the
-    flag */
-    *new_path = old_path;
-    return Fil_state::MOVED_PREV_OR_HAS_DATADIR;
-  }
+    and mark the DD_TABLE_DATA_DIRECTORY flag as true as we need to make sure
+    dd_table is in sync with current status of the table. This condition is hit
+    by tables which are moved in previous versions of server
+    before 8.0.38/8.4.1/9.0. old dir and new dir will be same but different from
+    default dir. So marking these tables as MOVED_PREV which is referred later
+    to set the flag. The shared tablespace are ignored becasue they can't have
+    data directory flag.*/
 
+    const auto components = dict_name::parse_tablespace_path(old_path);
+    if (components.has_value()) {
+      auto thd = current_thd;
+      const auto table_info = components.value();
+      const dd::Table *dd_table = nullptr;
+      auto &dc = *thd->dd_client();
+      dd::cache::Dictionary_client::Auto_releaser releaser(&dc);
+      MDL_ticket *mdl_tkt = nullptr;
+
+      /* DD system thread is also one of the worker threads validating the
+      tablespaces but it doesn't need to take the shared MDL lock on the
+      table. The tablespaces alloted to each of the worker threads are
+      distinct.*/
+      if (!thd->is_dd_system_thread()) {
+        if (dd::acquire_shared_table_mdl(thd, table_info.schema_name.c_str(),
+                                         table_info.table_name.c_str(), true,
+                                         &mdl_tkt)) {
+          return Fil_state::COMPARE_ERROR;
+        }
+      }
+      auto guard = create_scope_guard([&]() {
+        if (!thd->is_dd_system_thread()) {
+          dd_release_mdl(mdl_tkt);
+        }
+      });
+
+      if (dc.acquire<dd::Table>(table_info.schema_name.c_str(),
+                                table_info.table_name.c_str(), &dd_table)) {
+        return Fil_state::COMPARE_ERROR;
+      }
+
+      /* dd_table may not exist for some system tables */
+      if (dd_table) {
+        if (dd_table_is_partitioned(*dd_table)) {
+          const dd::Partition *part_obj = dd_table->get_leaf_partition(
+              (!table_info.subpartition.empty()) ? table_info.subpartition
+                                                 : table_info.partition);
+          if (!part_obj) {
+            return Fil_state::COMPARE_ERROR;
+          }
+
+          if (!part_obj->se_private_data().exists(
+                  dd_table_key_strings[DD_TABLE_DATA_DIRECTORY])) {
+            *new_path = old_path;
+            return Fil_state::MOVED_PREV;
+          }
+        } else {
+          if (!dd_table->se_private_data().exists(
+                  dd_table_key_strings[DD_TABLE_DATA_DIRECTORY])) {
+            *new_path = old_path;
+            return Fil_state::MOVED_PREV;
+          }
+        }
+      }
+    }
+  }
   *new_path = old_path;
   return Fil_state::MATCHES;
 }
 
 void fil_add_moved_space(dd::Object_id dd_object_id, space_id_t space_id,
                          const char *space_name, const std::string &old_path,
-                         const std::string &new_path,
-                         bool moved_prev_or_has_datadir) {
+                         const std::string &new_path, bool dd_flag_missing) {
   /* Keep space_name in system cs. We handle it while modifying DD. */
   fil_system->moved(dd_object_id, space_id, space_name, old_path, new_path,
-                    moved_prev_or_has_datadir);
+                    dd_flag_missing);
 }
 
 bool fil_update_partition_name(space_id_t space_id, uint32_t fsp_flags,
