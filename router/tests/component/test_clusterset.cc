@@ -2620,12 +2620,17 @@ TEST_P(ClusterSetUseReplicaPrimaryAsRwNodeInvalidTest,
         cs_options.topology.clusters[target_cluster_id].nodes[i].classic_port));
   }
 
+  // wait for a few md refresh rounds
+  EXPECT_TRUE(wait_for_transaction_count_increase(
+      cs_options.topology.clusters[0].nodes[0].http_port, 3));
+
   const std::string warning =
-      "WARNING .* Error parsing use_replica_primary_as_rw from the "
-      "router.options: options.use_replica_primary_as_rw='" +
+      "Error parsing use_replica_primary_as_rw from the "
+      "router_options: options.use_replica_primary_as_rw='" +
       GetParam() + "'; not a boolean. Using default value 'false'";
 
-  EXPECT_TRUE(wait_log_contains(router, warning, 1s)) << warning;
+  // the warning should be logged only once
+  check_log_contains(router, warning, 1);
 }
 
 INSTANTIATE_TEST_SUITE_P(UseReplicaPrimaryAsRwNodeInvalid,
@@ -3366,6 +3371,40 @@ TEST_F(ClusterSetTest, HiddenNodes) {
                     cs_options.topology.clusters[kSecondReplicaClusterId]),
                 ::Contains(*port_res));
   }
+}
+
+/**
+ * @test Checks that warning about invalid value of "stats_updates_frequency"
+ * in the metadata is only logged once by the Router
+ */
+TEST_F(ClusterSetTest, InvalidStatsUpdateFrequency) {
+  const int target_cluster_id = 0;
+
+  std::string inv = "\"\"";
+  std::string router_options =
+      R"({"target_cluster" : "00000000-0000-0000-0000-0000000000g1",
+          "stats_updates_frequency": null} )";
+
+  ClusterSetOptions cs_options;
+  cs_options.target_cluster_id = target_cluster_id;
+  cs_options.tracefile = "metadata_clusterset.js";
+  cs_options.router_options = router_options;
+  create_clusterset(cs_options);
+
+  SCOPED_TRACE("// Launch the Router");
+  auto &router = launch_router(cs_options.topology);
+
+  // wait for a few md refresh rounds
+  EXPECT_TRUE(wait_for_transaction_count_increase(
+      cs_options.topology.clusters[0].nodes[0].http_port, 3));
+
+  const std::string warning =
+      "Error parsing stats_updates_frequency from the "
+      "router_options: options.stats_updates_frequency='null'; not an unsigned "
+      "int. Using default value";
+
+  // the warning should be logged only once
+  check_log_contains(router, warning, 1);
 }
 
 int main(int argc, char *argv[]) {
