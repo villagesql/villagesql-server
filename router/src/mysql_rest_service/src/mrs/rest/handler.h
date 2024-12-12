@@ -85,6 +85,9 @@ class Handler : public interface::RestHandler {
   const std::vector<std::string> rest_path_matcher_;
   std::vector<void *> handler_id_;
   interface::AuthorizeManager *authorization_manager_;
+
+  bool log_level_is_debug_;
+  bool log_level_is_info_;
 };
 
 }  // namespace rest

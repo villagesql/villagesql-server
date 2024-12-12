@@ -31,6 +31,7 @@
 #include "mysqld_error.h"
 
 #include "http/base/request_handler.h"
+#include "mysql/harness/logging/logger.h"
 #include "mysql/harness/logging/logging.h"
 #include "mysql/harness/string_utils.h"
 #include "mysqlrouter/component/http_server_component.h"
@@ -80,19 +81,27 @@ uint32_t Handler::check_privileges(
     const UniversalId &service_id, const UniversalId &schema_id,
     const UniversalId &db_object_id) {
   uint32_t aggregated_privileges = 0;
-  log_debug("RestRequestHandler: look for service:%s, schema:%s, obj:%s",
-            service_id.to_string().c_str(), schema_id.to_string().c_str(),
-            db_object_id.to_string().c_str());
+
+  const bool log_level_is_debug = mysql_harness::logging::log_level_is_handled(
+      mysql_harness::logging::LogLevel::kDebug);
+
+  if (log_level_is_debug) {
+    log_debug("RestRequestHandler: look for service:%s, schema:%s, obj:%s",
+              service_id.to_string().c_str(), schema_id.to_string().c_str(),
+              db_object_id.to_string().c_str());
+  }
 
   for (const auto &p : privileges) {
-    log_debug("RestRequestHandler: next iteration");
-    log_debug("RestRequestHandler: permissions:%i", p.crud);
-    log_debug("RestRequestHandler: object_id:%s",
-              to_string(p.object_id).c_str());
-    log_debug("RestRequestHandler: schema_id:%s",
-              to_string(p.schema_id).c_str());
-    log_debug("RestRequestHandler: service_id:%s",
-              to_string(p.service_id).c_str());
+    if (log_level_is_debug) {
+      log_debug("RestRequestHandler: next iteration");
+      log_debug("RestRequestHandler: permissions:%i", p.crud);
+      log_debug("RestRequestHandler: object_id:%s",
+                to_string(p.object_id).c_str());
+      log_debug("RestRequestHandler: schema_id:%s",
+                to_string(p.schema_id).c_str());
+      log_debug("RestRequestHandler: service_id:%s",
+                to_string(p.service_id).c_str());
+    }
 
     if (!p.object_id && !p.schema_id && !p.service_id) {
       aggregated_privileges |= p.crud;
@@ -112,8 +121,10 @@ uint32_t Handler::check_privileges(
     }
   }
 
-  log_debug("RestRequestHandler: aggregated_privileges:%i",
-            aggregated_privileges);
+  if (log_level_is_debug) {
+    log_debug("RestRequestHandler: aggregated_privileges:%i",
+              aggregated_privileges);
+  }
 
   return aggregated_privileges;
 }
@@ -159,36 +170,6 @@ std::string get_http_method_name(HttpMethod::key_type type) {
   return std::to_string(type);
 }
 
-void trace_error(const http::ErrorChangeResponse &e) {
-  log_debug("Catch: ErrorChangeResponse name: %s", e.name());
-  log_debug("Catch: ErrorChangeResponse retry: %s",
-            (e.retry() ? "true" : "false"));
-}
-
-void trace_error(const http::Error &e) {
-  log_debug("Catch: http::Error status: %i", e.status);
-  log_debug("Catch: http::Error message: %s", e.message.c_str());
-}
-
-void trace_error(const mysqlrouter::MySQLSession::Error &e) {
-  log_debug("Catch: MySQLSession::Error code: %i", static_cast<int>(e.code()));
-  log_debug("Catch: MySQLSession::Error message: %s", e.message().c_str());
-  log_debug("Catch: MySQLSession::Error message: %s", e.what());
-}
-
-void trace_error(const RestError &e) {
-  log_debug("Catch: RestError message: %s", e.what());
-}
-
-void trace_error(const std::exception &e) {
-  log_debug("Catch: std::exception message: %s", e.what());
-}
-
-void trace_error(const Handler::HttpResult &e) {
-  log_debug("Catch: HttpResult with code: %i", (int)e.status);
-  log_debug("Catch: HttpResult with message: %s", e.response.c_str());
-}
-
 class RestRequestHandler : public ::http::base::RequestHandler {
  public:
   using Cached = collector::MysqlCacheManager::CachedObject;
@@ -199,24 +180,101 @@ class RestRequestHandler : public ::http::base::RequestHandler {
                      mrs::interface::AuthorizeManager *auth_manager)
       : rest_handler_{rest_handler}, auth_manager_{auth_manager} {}
 
+  void trace_error(const http::ErrorChangeResponse &e) {
+    logger_.debug([&]() {
+      return std::string("Catch: ErrorChangeResponse name: ").append(e.name());
+    });
+    logger_.debug([&]() {
+      return std::string("Catch: ErrorChangeResponse retry: ")
+          .append((e.retry() ? "true" : "false"));
+    });
+  }
+
+  void trace_error(const http::Error &e) {
+    logger_.debug([&]() {
+      return std::string("Catch: http::Error status: ")
+          .append(std::to_string(e.status));
+    });
+    logger_.debug([&]() {
+      return std::string("Catch: http::Error message: ").append(e.message);
+    });
+  }
+
+  void trace_error(const mysqlrouter::MySQLSession::Error &e) {
+    logger_.debug([&]() {
+      return std::string("Catch: MySQLSession::Error code: ")
+          .append(std::to_string(static_cast<int>(e.code())));
+    });
+    logger_.debug([&]() {
+      return std::string("Catch: MySQLSession::Error message: ")
+          .append(e.message());
+    });
+    logger_.debug([&]() {
+      return std::string("Catch: MySQLSession::Error message: ")
+          .append(e.what());
+    });
+  }
+
+  void trace_error(const RestError &e) {
+    logger_.debug([&]() {
+      return std::string("Catch: RestError message: ").append(e.what());
+    });
+  }
+
+  void trace_error(const std::exception &e) {
+    logger_.debug([&]() {
+      return std::string("Catch: std::exception message: ").append(e.what());
+    });
+  }
+
+  void trace_error(const Handler::HttpResult &e) {
+    logger_.debug([&]() {
+      return std::string("Catch: HttpResult with code: ")
+          .append(std::to_string(static_cast<int>(e.status)));
+    });
+    logger_.debug([&]() {
+      return std::string("Catch: HttpResult with message: ").append(e.response);
+    });
+  }
+
   void trace_http(const char *type, interface::ReqRes &options,
                   HttpMethod::key_type method, const std::string &path,
-                  const HttpHeaders &headers, HttpBuffer &buffer) {
-    if (options.header_) {
-      log_info("HTTP %s method: %s", type,
-               get_http_method_name(method).c_str());
-      log_info("HTTP %s path: %s", type, path.c_str());
+                  const HttpHeaders &headers, HttpBuffer &buffer) const {
+    if (!options.header_) return;
 
-      for (const auto &[k, v] : headers) {
-        log_info("HTTP %s parameters: %s=%s", type, k.c_str(), v.c_str());
-      }
+    logger_.info([&]() {
+      return std::string("HTTP ")
+          .append(type)
+          .append(" method: ")
+          .append(get_http_method_name(method));
+    });
+
+    logger_.info([&]() {
+      return std::string("HTTP ")  //
+          .append(type)
+          .append(" path: ")
+          .append(path);
+    });
+
+    for (const auto &[k, v] : headers) {
+      logger_.info([&]() {
+        return std::string("HTTP ")
+            .append(type)
+            .append(" parameters: ")
+            .append(k)
+            .append("=")
+            .append(v);
+      });
     }
 
-    auto in_len = buffer.length();
-    if (in_len && options.header_) {
+    if (auto in_len = buffer.length()) {
       auto data = buffer.copy(in_len);
-      log_info("HTTP %s body: %.*s", type, static_cast<int>(data.size()),
-               reinterpret_cast<const char *>(&data[0]));
+      logger_.info([&]() {
+        return std::string("HTTP ")  //
+            .append(type)
+            .append(" body: ")
+            .append(reinterpret_cast<const char *>(data.data()), data.size());
+      });
     }
   }
 
@@ -227,13 +285,18 @@ class RestRequestHandler : public ::http::base::RequestHandler {
     const auto service_id = rest_handler_->get_service_id();
     const auto method = ctxt.request->get_method();
 
-    log_debug("handle_request(service_id:%s): start(method:%s url:'%s')",
-              service_id.to_string().c_str(),
-              get_http_method_name(method).c_str(),
-              ctxt.request->get_uri().join().c_str());
+    logger_.debug([&]() {
+      return std::string("handle_request(service_id:")
+          .append(service_id.to_string())
+          .append("): start(method:")
+          .append(get_http_method_name(method))
+          .append(" url:'")
+          .append(ctxt.request->get_uri().join())
+          .append("')");
+    });
 
     auto options = rest_handler_->get_options();
-    auto &ih = ctxt.request->get_input_headers();
+    const auto &ih = ctxt.request->get_input_headers();
     auto &oh = ctxt.request->get_output_headers();
 
     switch (ctxt.request->get_method()) {
@@ -257,11 +320,10 @@ class RestRequestHandler : public ::http::base::RequestHandler {
     }
 
     trace_http("Request", options.debug.http.request, method,
-               ctxt.request->get_uri().join().c_str(), ih,
-
+               ctxt.request->get_uri().join(), ih,
                ctxt.request->get_input_buffer());
 
-    for (auto &kv : rest_handler_->get_options().parameters_) {
+    for (const auto &kv : rest_handler_->get_options().parameters_) {
       if (mysql_harness::make_lower(kv.first) ==
           "access-control-allow-origin") {
         if (rest_handler_->get_options().allowed_origins.type !=
@@ -318,29 +380,34 @@ class RestRequestHandler : public ::http::base::RequestHandler {
     }
 
     if (!rest_handler_->request_begin(&ctxt)) {
-      log_debug("'request_begin' returned false");
+      logger_.debug("'request_begin' returned false");
       throw http::Error{HttpStatusCode::Forbidden};
     }
 
     auto required_access = get_access_right_from_http_method(method);
     if (!(required_access & rest_handler_->get_access_rights())) {
-      log_debug(
-          "'required_access' denied, required_access:%i, "
-          "access:%i",
-          required_access, rest_handler_->get_access_rights());
+      logger_.debug([&]() {
+        return std::string("'required_access' denied, required_access:")
+            .append(std::to_string(required_access))
+            .append(", access:")
+            .append(std::to_string(rest_handler_->get_access_rights()));
+      });
       throw http::Error{HttpStatusCode::Forbidden};
     }
 
     auto required_auth = rest_handler_->requires_authentication();
     if (Handler::Authorization::kNotNeeded != required_auth) {
-      log_debug("RestRequestHandler(service_id:%s): authenticate",
-                service_id.to_string().c_str());
+      logger_.debug([&]() {
+        return std::string("RestRequestHandler(service_id:")
+            .append(service_id.to_string())
+            .append("): authenticate");
+      });
 
       // request_ctxt.user is valid after success of this call
       if (Handler::Authorization::kRequires == required_auth) {
         try {
           if (!auth_manager_->authorize(service_id, ctxt, &ctxt.user)) {
-            log_debug("Authentication handler fails");
+            logger_.debug("Authentication handler fails");
             throw http::Error(HttpStatusCode::Unauthorized);
           }
 
@@ -350,7 +417,7 @@ class RestRequestHandler : public ::http::base::RequestHandler {
           return force_result;
         }
 
-        log_debug("Authentication handler ok.");
+        logger_.debug("Authentication handler ok.");
       } else {
         // Just check the user
         auth_manager_->is_authorized(service_id, ctxt, &ctxt.user);
@@ -359,8 +426,12 @@ class RestRequestHandler : public ::http::base::RequestHandler {
       rest_handler_->authorization(&ctxt);
 
       if (rest_handler_->may_check_access()) {
-        log_debug("RestRequestHandler(service_id:%s): required_access:%i",
-                  service_id.to_string().c_str(), required_access);
+        logger_.debug([&]() {
+          return std::string("RestRequestHandler(service_id:")
+              .append(service_id.to_string())
+              .append("): required_access:")
+              .append(std::to_string(required_access));
+        });
         if (!(required_access &
               Handler::check_privileges(ctxt.user.privileges, service_id,
                                         rest_handler_->get_schema_id(),
@@ -370,10 +441,16 @@ class RestRequestHandler : public ::http::base::RequestHandler {
       }
     }
 
-    log_debug("RestRequestHandler(service_id:%s): dispatch(method:%s, path:%s)",
-              service_id.to_string().c_str(),
-              get_http_method_name(ctxt.request->get_method()).c_str(),
-              ctxt.request->get_uri().get_path().c_str());
+    logger_.debug([&]() {
+      return std::string("RestRequestHandler(service_id:")
+          .append(service_id.to_string())
+          .append("dispatch(method:")
+          .append(get_http_method_name(ctxt.request->get_method()))
+          .append(", path:")
+          .append(ctxt.request->get_uri().get_path())
+          .append(")");
+    });
+
     switch (method) {
       case HttpMethod::Get:
         return rest_handler_->handle_get(&ctxt);
@@ -424,7 +501,7 @@ class RestRequestHandler : public ::http::base::RequestHandler {
     } catch (const http::ErrorChangeResponse &e) {
       if (rest_handler_->get_options().debug.log_exceptions) trace_error(e);
       if (e.retry()) {
-        log_debug("handle_request override");
+        logger_.debug("handle_request override");
         auto r = e.change_response(&req);
         send_reply(req, r.status, r.message);
       } else
@@ -454,7 +531,9 @@ class RestRequestHandler : public ::http::base::RequestHandler {
   }
 
  private:
-  static const http::Error err_to_http_error(
+  mysql_harness::logging::DomainLogger logger_;
+
+  static http::Error err_to_http_error(
       const mysqlrouter::MySQLSession::Error &err) {
     if (ER_GTID_MODE_OFF == err.code()) {
       return {HttpStatusCode::BadRequest,
@@ -519,7 +598,7 @@ class RestRequestHandler : public ::http::base::RequestHandler {
 
   template <typename Err>
   void handle_error(RequestContext *ctxt, const Err &err) {
-    log_debug("void handle_error(RequestContext *ctxt, const Err &err)");
+    logger_.debug("void handle_error(RequestContext *ctxt, const Err &err)");
     const http::Error &e = err_to_http_error(err);
     if (!rest_handler_->request_error(ctxt, e)) {
       switch (e.status) {
@@ -551,31 +630,48 @@ class RestRequestHandler : public ::http::base::RequestHandler {
 
   void send_reply(HttpRequest &req, int status_code) {
     auto options = rest_handler_->get_options();
-    if (options.debug.http.response.body_)
-      log_debug("HTTP Response status: %i", status_code);
+    if (options.debug.http.response.body_) {
+      logger_.debug([status_code]() {
+        return std::string("HTTP Response status: ")
+            .append(std::to_string(status_code));
+      });
+    }
 
     trace_http("Response", options.debug.http.response, req.get_method(), "",
                req.get_output_headers(), req.get_output_buffer());
     req.send_reply(status_code);
   }
 
-  void send_reply(HttpRequest &req, int status_code, std::string status_text) {
+  void send_reply(HttpRequest &req, int status_code,
+                  const std::string &status_text) {
     auto options = rest_handler_->get_options();
     if (options.debug.http.response.body_) {
-      log_debug("HTTP Response status: %i", status_code);
-      log_debug("HTTP Response status text: %s", status_text.c_str());
+      logger_.debug([&]() {
+        return std::string("HTTP Response status: ")
+            .append(std::to_string(status_code));
+      });
+
+      logger_.debug([&]() {
+        return std::string("HTTP Response status text: ")  //
+            .append(status_text);
+      });
     }
     trace_http("Response", options.debug.http.response, req.get_method(), "",
                req.get_output_headers(), req.get_output_buffer());
     req.send_reply(status_code, status_text);
   }
 
-  void send_reply(HttpRequest &req, int status_code, std::string status_text,
-                  HttpBuffer &buffer) {
+  void send_reply(HttpRequest &req, int status_code,
+                  const std::string &status_text, HttpBuffer &buffer) {
     auto options = rest_handler_->get_options();
     if (options.debug.http.response.body_) {
-      log_debug("HTTP Response status: %i", status_code);
-      log_debug("HTTP Response status text: %s", status_text.c_str());
+      logger_.debug([&]() {
+        return std::string("HTTP Response status: ")
+            .append(std::to_string(status_code));
+      });
+      logger_.debug([&]() {
+        return std::string("HTTP Response status text: ").append(status_text);
+      });
     }
     trace_http("Response", options.debug.http.response, req.get_method(), "",
                req.get_output_headers(), buffer);
@@ -766,42 +862,63 @@ Handler::Handler(const std::string &url_host,
     : options_{parse_json_options(options)},
       url_host_{url_host},
       rest_path_matcher_{rest_path_matcher},
-      authorization_manager_{auth_manager} {
-  for (const auto &kv : options_.parameters_) {
-    log_debug("headers: '%s':'%s'", kv.first.c_str(), kv.second.c_str());
+      authorization_manager_{auth_manager},
+      log_level_is_debug_(mysql_harness::logging::log_level_is_handled(
+          mysql_harness::logging::LogLevel::kDebug)),
+      log_level_is_info_(mysql_harness::logging::log_level_is_handled(
+          mysql_harness::logging::LogLevel::kInfo)) {
+  if (log_level_is_debug_) {
+    for (const auto &kv : options_.parameters_) {
+      log_debug("headers: '%s':'%s'", kv.first.c_str(), kv.second.c_str());
+    }
+    log_debug("debug.log_exceptions: %s",
+              to_cstr(options_.debug.log_exceptions));
+    log_debug("debug.http.request.header: %s",
+              to_cstr(options_.debug.http.request.header_));
+    log_debug("debug.http.request.body: %s",
+              to_cstr(options_.debug.http.request.body_));
+    log_debug("debug.http.response.header: %s",
+              to_cstr(options_.debug.http.response.header_));
+    log_debug("debug.http.response.body: %s",
+              to_cstr(options_.debug.http.response.body_));
+    log_debug("debug.http.response.detailed_errors_: %s",
+              to_cstr(options_.debug.http.response.detailed_errors_));
   }
-  log_debug("debug.log_exceptions: %s", to_cstr(options_.debug.log_exceptions));
-  log_debug("debug.http.request.header: %s",
-            to_cstr(options_.debug.http.request.header_));
-  log_debug("debug.http.request.body: %s",
-            to_cstr(options_.debug.http.request.body_));
-  log_debug("debug.http.response.header: %s",
-            to_cstr(options_.debug.http.response.header_));
-  log_debug("debug.http.response.body: %s",
-            to_cstr(options_.debug.http.response.body_));
-  log_debug("debug.http.response.detailed_errors_: %s",
-            to_cstr(options_.debug.http.response.detailed_errors_));
 
   for (auto &path : rest_path_matcher_) {
     auto handler = std::make_unique<RestRequestHandler>(this, auth_manager);
-    log_debug("router-add: '%s' on host '%s'", path.c_str(), url_host_.c_str());
-    log_info(
-        "Adding Url-Handler that processes requests on host '%s' and path that "
-        "matches regex: '%s'",
-        url_host_.c_str(), path.c_str());
+
+    if (log_level_is_debug_) {
+      log_debug("router-add: '%s' on host '%s'", path.c_str(),
+                url_host_.c_str());
+    }
+    if (log_level_is_info_) {
+      log_info(
+          "Adding Url-Handler that processes requests on host '%s' and path "
+          "that "
+          "matches regex: '%s'",
+          url_host_.c_str(), path.c_str());
+    }
     handler_id_.emplace_back(HttpServerComponent::get_instance().add_route(
         url_host, path, std::move(handler)));
   }
 }
 
 Handler::~Handler() {
-  for (const auto &path : rest_path_matcher_) {
-    log_info(
-        "Removing Url-Handler that processes requests on host: '%s' and path "
-        "that matches regex: '%s'",
-        url_host_.c_str(), path.c_str());
-    log_debug("route-remove: '%s' on host '%s'", path.c_str(),
-              url_host_.c_str());
+  if (log_level_is_debug_ || log_level_is_info_) {
+    for (const auto &path : rest_path_matcher_) {
+      if (log_level_is_info_) {
+        log_info(
+            "Removing Url-Handler that processes requests on host: '%s' and "
+            "path "
+            "that matches regex: '%s'",
+            url_host_.c_str(), path.c_str());
+      }
+      if (log_level_is_debug_) {
+        log_debug("route-remove: '%s' on host '%s'", path.c_str(),
+                  url_host_.c_str());
+      }
+    }
   }
 
   for (auto id : handler_id_) {
