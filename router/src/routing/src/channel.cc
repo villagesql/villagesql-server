@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #include "mysqlrouter/channel.h"
 
+#include <algorithm>  // min
 #include <cassert>
 
 #include <openssl/bio.h>
@@ -234,6 +235,9 @@ stdx::expected<size_t, std::error_code> Channel::read_to_plain(size_t sz) {
   // decrypt from src-ssl into the ssl-plain-buf
   while (sz > 0) {
     // read at most a SSL frame (16k) to avoid excessive resizes.
+    //
+    // Without the limitation, a 16Mbyte frame takes 150sec to transfer
+    // if CMAKE_BUILD_TYPE is Debug due to disabled optimizations:
     //
     //      | Debug    | RelWithDebInfo
     //   1k |  2100ms  | 256ms
