@@ -320,6 +320,23 @@ void ConfigGenerator::check_target(
   } catch (const metadata_missing &) {
     if (allow_no_metadata) return;
     throw;
+  } catch (const MySQLSession::Error &e) {
+    // The user that was used for bootstrap does not have rights for
+    // mysql_innodb_cluster_metadata (it should not be required it if only MRS
+    // bootstrap is done on standalone server). There is no way to determine if
+    // this schema exists or not so we proceed with MRS bootstrap as if it was
+    // standalone server (not an InnoDB Cluster)
+    if (allow_no_metadata && e.code() == ER_TABLEACCESS_DENIED_ERROR) {
+      log_warning(
+          "NOTE: The mysql user used for the bootstrap does not have rights "
+          "for 'mysql_innodb_cluster_metadata' schema. Assuming "
+          "'mysql_innodb_cluster_metadata' schema does not exist and "
+          "proceeding as with bootstraping against standalone, non-Cluster "
+          "node. If that is not your intention, use the user that has access "
+          "to 'mysql_innodb_cluster_metadata' and repeat the bootstrap.");
+      return;
+    }
+    throw;
   }
   assert(schema_version_);
 
