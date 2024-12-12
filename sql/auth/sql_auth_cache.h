@@ -67,6 +67,7 @@ struct TABLE;
 template <typename Element_type, size_t Prealloc>
 class Prealloced_array;
 class Acl_restrictions;
+enum class Acl_type;
 enum class Lex_acl_attrib_udyn;
 
 /* Classes */
@@ -529,7 +530,7 @@ extern std::unique_ptr<malloc_unordered_multimap<
     column_priv_hash;
 extern std::unique_ptr<
     malloc_unordered_multimap<std::string, unique_ptr_destroy_only<GRANT_NAME>>>
-    proc_priv_hash, func_priv_hash;
+    proc_priv_hash, func_priv_hash, library_priv_hash;
 extern collation_unordered_map<std::string, ACL_USER *> *acl_check_hosts;
 extern bool allow_all_hosts;
 extern uint grant_version; /* Version of priv tables */
@@ -573,12 +574,14 @@ T *name_hash_search(
   return found;
 }
 
+malloc_unordered_multimap<std::string, unique_ptr_destroy_only<GRANT_NAME>>
+    *get_routine_priv_hash(Acl_type type);
+
 inline GRANT_NAME *routine_hash_search(const char *host, const char *ip,
                                        const char *db, const char *user,
-                                       const char *tname, bool proc,
-                                       bool exact) {
-  assert(proc ? proc_priv_hash : func_priv_hash);
-  return name_hash_search(proc ? *proc_priv_hash : *func_priv_hash, host, ip,
+                                       const char *tname,
+                                       Acl_type routine_acl_type, bool exact) {
+  return name_hash_search(*get_routine_priv_hash(routine_acl_type), host, ip,
                           db, user, tname, exact, true);
 }
 
@@ -670,6 +673,7 @@ class Acl_map {
   Table_access_map *table_acls();
   SP_access_map *sp_acls();
   SP_access_map *func_acls();
+  SP_access_map *lib_acls();
   Grant_acl_set *grant_acls();
   Dynamic_privileges *dynamic_privileges();
   Restrictions &restrictions();
@@ -685,6 +689,7 @@ class Acl_map {
   Access_bitmask m_global_acl;
   SP_access_map m_sp_acls;
   SP_access_map m_func_acls;
+  SP_access_map m_lib_acls;
   Grant_acl_set m_with_admin_acls;
   Dynamic_privileges m_dynamic_privileges;
   Restrictions m_restrictions;

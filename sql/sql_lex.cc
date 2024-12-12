@@ -494,6 +494,8 @@ void LEX::reset() {
   set_execute_only_in_hypergraph_optimizer(
       /*execute_in_hypergraph_optimizer_param=*/false,
       SUPPORTED_IN_BOTH_OPTIMIZERS);
+
+  sp_chistics.reset();
 }
 
 /**
@@ -5263,4 +5265,46 @@ void get_select_options_str(ulonglong options, std::string *str) {
 
   // Delete the last space character.
   if (str->length() > len) str->pop_back();
+}
+
+Acl_type lex_type_to_acl_type(ulong lex_type) {
+  if (lex_type == TYPE_ENUM_FUNCTION) {
+    return Acl_type::FUNCTION;
+  }
+  if (lex_type == TYPE_ENUM_PROCEDURE) {
+    return Acl_type::PROCEDURE;
+  }
+  if (lex_type == TYPE_ENUM_LIBRARY) {
+    return Acl_type::LIBRARY;
+  }
+  assert(false);
+  return Acl_type::INVALID_TYPE;
+}
+
+enum_sp_type acl_type_to_enum_sp_type(Acl_type type) {
+  if (type == Acl_type::FUNCTION) {
+    return enum_sp_type::FUNCTION;
+  }
+  if (type == Acl_type::PROCEDURE) {
+    return enum_sp_type::PROCEDURE;
+  }
+  if (type == Acl_type::LIBRARY) {
+    return enum_sp_type::LIBRARY;
+  }
+  assert(false);
+  return enum_sp_type::INVALID_SP_TYPE;
+}
+
+Acl_type enum_sp_type_to_acl_type(enum_sp_type type) {
+  if (type == enum_sp_type::FUNCTION) {
+    return Acl_type::FUNCTION;
+  }
+  if (type == enum_sp_type::PROCEDURE) {
+    return Acl_type::PROCEDURE;
+  }
+  if (type == enum_sp_type::LIBRARY) {
+    return Acl_type::LIBRARY;
+  }
+  assert(false);
+  return Acl_type::INVALID_TYPE;
 }

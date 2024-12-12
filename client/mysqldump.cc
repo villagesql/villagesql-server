@@ -2650,11 +2650,13 @@ static uint dump_routines_for_db(char *db) {
   char query_buff[QUERY_LENGTH];
   const char *routine_type[] = {"FUNCTION", "PROCEDURE"};
   char db_name_buff[NAME_LEN * 2 + 3], name_buff[NAME_LEN * 2 + 3];
+  char escaped_name[NAME_LEN * 2 + 3];
+  char lib_schema_buff[NAME_LEN * 2 + 3], lib_name_buff[NAME_LEN * 2 + 3];
   char *routine_name;
   int i;
   FILE *sql_file = md_result_file;
-  MYSQL_RES *routine_res, *routine_list_res;
-  MYSQL_ROW row, routine_list_row;
+  MYSQL_RES *routine_res, *routine_list_res, *import_res, *imported_library_res;
+  MYSQL_ROW row, routine_list_row, import_list_row;
 
   char db_cl_name[MY_CS_NAME_SIZE];
   int db_cl_altered = false;
@@ -2689,6 +2691,77 @@ static uint dump_routines_for_db(char *db) {
 
   if (opt_xml) fputs("\t<routines>\n", sql_file);
 
+  {
+    /* First dump the libraries. They may be used by the routines. */
+    std::string query{
+        std::string{
+            "SELECT LIBRARY_NAME FROM INFORMATION_SCHEMA.LIBRARIES WHERE "
+            "LIBRARY_SCHEMA = '"} +
+        db_name_buff + "' ORDER BY LIBRARY_NAME"};
+
+    if (mysql_query_with_error_report(mysql, &routine_list_res, query.c_str()))
+      return 1;
+
+    if (mysql_num_rows(routine_list_res)) {
+      while ((routine_list_row = mysql_fetch_row(routine_list_res))) {
+        routine_name = quote_name(routine_list_row[0], name_buff, false);
+        DBUG_PRINT("info", ("retrieving CREATE LIBRARY for %s", name_buff));
+        std::string show_create_query{std::string{"SHOW CREATE LIBRARY "} +
+                                      routine_name};
+        if (mysql_query_with_error_report(mysql, &routine_res,
+                                          show_create_query.c_str()))
+          return 1;
+
+        while ((row = mysql_fetch_row(routine_res))) {
+          /*
+            if the user has EXECUTE privilege he see library names, but NOT the
+            library body of other routines that are not the creator of!
+          */
+          DBUG_PRINT("info",
+                     ("length of body for %s row[2] '%s' is %zu", routine_name,
+                      row[2] ? row[2] : "(null)", row[2] ? strlen(row[2]) : 0));
+          if (row[2] == nullptr) {
+            print_comment(sql_file, true,
+                          "\n-- insufficient privileges to %s\n", query_buff);
+
+            bool freemem = false;
+            char const *text =
+                fix_identifier_with_newline(current_user, &freemem);
+            print_comment(sql_file, true,
+                          "-- does %s have permissions on "
+                          "INFORMATION_SCHEMA.LIBRARIES?\n\n",
+                          text);
+            if (freemem) my_free(const_cast<char *>(text));
+
+            maybe_die(EX_MYSQLERR, "%s has insufficient privileges to %s!",
+                      current_user, query_buff);
+          } else if (strlen(row[2])) {
+            if (opt_xml) {
+              print_xml_row(sql_file, "library", routine_res, &row,
+                            "Create Library");
+              continue;
+            }
+            if (opt_drop)
+              fprintf(sql_file, "DROP LIBRARY IF EXISTS %s;\n", routine_name);
+
+            switch_sql_mode(sql_file, ";", row[1]);
+
+            fprintf(sql_file,
+                    "DELIMITER ;;\n"
+                    "%s ;;\n"
+                    "DELIMITER ;\n",
+                    (const char *)row[2]);
+
+            restore_sql_mode(sql_file, ";");
+          }
+        } /* end of library printing */
+        mysql_free_result(routine_res);
+
+      } /* end of list of libraries */
+    }
+    mysql_free_result(routine_list_res);
+  }
+
   /* 0, retrieve and dump functions, 1, procedures */
   for (i = 0; i <= 1; i++) {
     snprintf(query_buff, sizeof(query_buff), "SHOW %s STATUS WHERE Db = '%s'",
@@ -2700,6 +2773,64 @@ static uint dump_routines_for_db(char *db) {
     if (mysql_num_rows(routine_list_res)) {
       while ((routine_list_row = mysql_fetch_row(routine_list_res))) {
         routine_name = quote_name(routine_list_row[1], name_buff, false);
+
+        /**
+         * TODO: this is a temporary fix until Bug#37375233 is properly
+         * resolved. For each SP, check if libraries in "USING" clause actually
+         * exist. If not, exit with error because such dump would not be
+         * restorable. However, with proper fix, simply treat warnings from SHOW
+         * CREATE SP as errors here.
+         */
+        mysql_real_escape_string_quote(mysql, escaped_name, routine_list_row[1],
+                                       (ulong)strlen(routine_list_row[1]),
+                                       '\'');
+
+        // 1st step: get all imports for the SP
+        snprintf(query_buff, sizeof(query_buff),
+                 "SELECT LIBRARY_SCHEMA, LIBRARY_NAME FROM "
+                 "INFORMATION_SCHEMA.ROUTINE_LIBRARIES WHERE "
+                 "ROUTINE_SCHEMA = '%s' AND ROUTINE_NAME = '%s' AND "
+                 "ROUTINE_TYPE = '%s'",
+                 db_name_buff, escaped_name, routine_type[i]);
+        if (mysql_query_with_error_report(mysql, &import_res, query_buff))
+          return 1;
+
+        // 2nd step: iterate these imports and query I_S.LIBRARIES to check if
+        // they exist and if the current user has access to them
+        if (mysql_num_rows(import_res)) {
+          while ((import_list_row = mysql_fetch_row(import_res))) {
+            mysql_real_escape_string_quote(
+                mysql, lib_schema_buff, import_list_row[0],
+                (ulong)strlen(import_list_row[0]), '\'');
+            mysql_real_escape_string_quote(
+                mysql, lib_name_buff, import_list_row[1],
+                (ulong)strlen(import_list_row[1]), '\'');
+
+            snprintf(query_buff, sizeof(query_buff),
+                     "SELECT * FROM "
+                     "INFORMATION_SCHEMA.LIBRARIES WHERE "
+                     "LIBRARY_SCHEMA = '%s' AND LIBRARY_NAME = '%s'",
+                     lib_schema_buff, lib_name_buff);
+
+            if (mysql_query_with_error_report(mysql, &imported_library_res,
+                                              query_buff))
+              return 1;
+
+            if (mysql_num_rows(imported_library_res) == 0) {
+              // imported library does NOT exist
+              print_comment(
+                  sql_file, true,
+                  "\n-- Library used by %s does not exist: '%s'.'%s'\n",
+                  escaped_name, lib_schema_buff, lib_name_buff);
+              maybe_die(EX_MYSQLERR, "Missing library: %s.%s", lib_schema_buff,
+                        lib_name_buff);
+            }
+            mysql_free_result(imported_library_res);
+          }
+        }
+        mysql_free_result(import_res);
+        // End of temp code until Bug#37375233 is done.
+
         DBUG_PRINT("info",
                    ("retrieving CREATE %s for %s", routine_type[i], name_buff));
         snprintf(query_buff, sizeof(query_buff), "SHOW CREATE %s %s",

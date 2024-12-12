@@ -2694,6 +2694,15 @@ Sql_cmd *PT_show_create_function::make_cmd(THD *thd) {
   return &m_sql_cmd;
 }
 
+Sql_cmd *PT_show_create_library::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+
+  lex->spname = m_spname;
+
+  return &m_sql_cmd;
+}
+
 Sql_cmd *PT_show_create_procedure::make_cmd(THD *thd) {
   LEX *lex = thd->lex;
   lex->sql_command = m_sql_command;

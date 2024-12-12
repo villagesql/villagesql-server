@@ -523,7 +523,7 @@ User_to_dynamic_privileges_map *g_dynamic_privileges_map = nullptr;
 const char *any_db = "*any*";  // Special symbol for check_access
 
 static bool check_routine_level_acl(THD *thd, const char *db, const char *name,
-                                    bool is_proc);
+                                    Acl_type routine_acl_type);
 void get_granted_roles(Role_vertex_descriptor &v,
                        List_of_granted_roles *granted_roles);
 
@@ -1141,7 +1141,9 @@ void make_proxy_privilege_statement(THD *thd [[maybe_unused]], ACL_USER *user,
 */
 
 void make_sp_privilege_statement(THD *thd, ACL_USER *role, Protocol *protocol,
-                                 SP_access_map &sp_map, int type) {
+                                 SP_access_map &sp_map, Acl_type type) {
+  assert(type == Acl_type::PROCEDURE || type == Acl_type::FUNCTION ||
+         type == Acl_type::LIBRARY);
   assert(assert_acl_cache_read_lock(thd));
   SP_access_map::iterator it = sp_map.begin();
   for (; it != sp_map.end(); ++it) {
@@ -1170,10 +1172,14 @@ void make_sp_privilege_statement(THD *thd, ACL_USER *role, Protocol *protocol,
       }
     }
     db.append(STRING_WITH_LEN(" ON "));
-    if (type == 0)
+    if (type == Acl_type::PROCEDURE)
       db.append(STRING_WITH_LEN("PROCEDURE "));
-    else
+    else if (type == Acl_type::FUNCTION)
       db.append(STRING_WITH_LEN("FUNCTION "));
+    else if (type == Acl_type::LIBRARY)
+      db.append(STRING_WITH_LEN("LIBRARY "));
+    else
+      assert(false);
     db.append(sp_name.c_str(), sp_name.length());
     db.append(STRING_WITH_LEN(" TO "));
     append_auth_id(thd, role, &db);
@@ -1551,14 +1557,16 @@ class Get_access_maps : public boost::default_bfs_visitor {
   Get_access_maps(ACL_USER *acl_user, Access_bitmask *access,
                   Db_access_map *db_map, Db_access_map *db_wild_map,
                   Table_access_map *table_map, SP_access_map *sp_map,
-                  SP_access_map *func_map, Grant_acl_set *with_admin_acl,
-                  Dynamic_privileges *dyn_acl, Restrictions *restrictions)
+                  SP_access_map *func_map, SP_access_map *lib_map,
+                  Grant_acl_set *with_admin_acl, Dynamic_privileges *dyn_acl,
+                  Restrictions *restrictions)
       : m_access(access),
         m_db_map(db_map),
         m_db_wild_map(db_wild_map),
         m_table_map(table_map),
         m_sp_map(sp_map),
         m_func_map(func_map),
+        m_lib_map(lib_map),
         m_with_admin_acl(with_admin_acl),
         m_dynamic_acl(dyn_acl),
         m_restrictions(restrictions),
@@ -1607,6 +1615,9 @@ class Get_access_maps : public boost::default_bfs_visitor {
     /* Add user function access */
     get_sp_access_map(&acl_user, m_func_map, func_priv_hash.get());
 
+    /* Add user library access */
+    get_sp_access_map(&acl_user, m_lib_map, library_priv_hash.get());
+
     /* Add dynamic privileges */
     get_dynamic_privileges(&acl_user, m_dynamic_acl);
   }
@@ -1640,6 +1651,7 @@ class Get_access_maps : public boost::default_bfs_visitor {
   Table_access_map *m_table_map;
   SP_access_map *m_sp_map;
   SP_access_map *m_func_map;
+  SP_access_map *m_lib_map;
   Grant_acl_set *m_with_admin_acl;
   Dynamic_privileges *m_dynamic_acl;
   Restrictions *m_restrictions;
@@ -1979,7 +1991,11 @@ deny:
 }
 
 bool check_routine_access(THD *thd, Access_bitmask want_access, const char *db,
-                          char *name, bool is_proc, bool no_errors) {
+                          const char *name, Acl_type routine_acl_type,
+                          bool no_errors) {
+  assert(routine_acl_type == Acl_type::PROCEDURE ||
+         routine_acl_type == Acl_type::FUNCTION ||
+         routine_acl_type == Acl_type::LIBRARY);
   DBUG_TRACE;
   Table_ref tables[1];
 
@@ -2015,7 +2031,8 @@ bool check_routine_access(THD *thd, Access_bitmask want_access, const char *db,
 
   DBUG_PRINT("info", ("Checking routine %s.%s for routine level access.", db,
                       tables->table_name));
-  return check_grant_routine(thd, want_access, tables, is_proc, no_errors);
+  return check_grant_routine(thd, want_access, tables, routine_acl_type,
+                             no_errors);
 }
 
 /**
@@ -2081,15 +2098,19 @@ bool has_full_view_routine_access(THD *thd, const char *db,
   @param thd                  Thread handler
   @param db                   Database name
   @param routine_name         Routine name
-  @param is_proc              True if this routine is a stored procedure, rather
-  than a stored function.
+  @param routine_acl_type            stored procedure, stored function or
+  library
 
   @retval false   no access.
   @retval true    has partial access.
 */
 
 bool has_partial_view_routine_access(THD *thd, const char *db,
-                                     const char *routine_name, bool is_proc) {
+                                     const char *routine_name,
+                                     Acl_type routine_acl_type) {
+  assert(routine_acl_type == Acl_type::PROCEDURE ||
+         routine_acl_type == Acl_type::FUNCTION ||
+         routine_acl_type == Acl_type::LIBRARY);
   DBUG_TRACE;
 
   /*
@@ -2110,7 +2131,7 @@ bool has_partial_view_routine_access(THD *thd, const char *db,
       (save_priv & SHOW_PROC_ACLS))
     return true;
 
-  return !check_routine_level_acl(thd, db, routine_name, is_proc);
+  return !check_routine_level_acl(thd, db, routine_name, routine_acl_type);
 }
 
 /**
@@ -2915,7 +2936,7 @@ int mysql_table_grant(THD *thd, Table_ref *table_list,
 
   @param thd Thread handle
   @param table_list List of routines to give grant
-  @param is_proc Is this a list of procedures?
+  @param routine_acl_type Is this a list of procedures, functions or libraries?
   @param user_list List of users to give grant
   @param rights Table level grant
   @param revoke_grant Is this is a REVOKE command?
@@ -2926,10 +2947,13 @@ int mysql_table_grant(THD *thd, Table_ref *table_list,
   @retval true An error occurred.
 */
 
-bool mysql_routine_grant(THD *thd, Table_ref *table_list, bool is_proc,
-                         List<LEX_USER> &user_list, Access_bitmask rights,
-                         bool revoke_grant, bool write_to_binlog,
-                         bool all_current_privileges) {
+bool mysql_routine_grant(THD *thd, Table_ref *table_list,
+                         Acl_type routine_acl_type, List<LEX_USER> &user_list,
+                         Access_bitmask rights, bool revoke_grant,
+                         bool write_to_binlog, bool all_current_privileges) {
+  assert(routine_acl_type == Acl_type::PROCEDURE ||
+         routine_acl_type == Acl_type::FUNCTION ||
+         routine_acl_type == Acl_type::LIBRARY);
   List_iterator<LEX_USER> str_list(user_list);
   LEX_USER *Str, *tmp_Str;
   Table_ref tables[ACL_TABLES::LAST_ENTRY];
@@ -2950,7 +2974,9 @@ bool mysql_routine_grant(THD *thd, Table_ref *table_list, bool is_proc,
   }
 
   if (!revoke_grant) {
-    if (sp_exist_routines(thd, table_list, is_proc)) return true;
+    if (sp_exist_routines(thd, table_list,
+                          acl_type_to_enum_sp_type(routine_acl_type)))
+      return true;
   }
 
   /*
@@ -3008,7 +3034,7 @@ bool mysql_routine_grant(THD *thd, Table_ref *table_list, bool is_proc,
       table_name = table_list->table_name;
       grant_name =
           routine_hash_search(Str->host.str, NullS, db_name, Str->user.str,
-                              table_name, is_proc, true);
+                              table_name, routine_acl_type, true);
       if (!grant_name) {
         if (revoke_grant) {
           result = report_missing_user_grant_message(
@@ -3022,19 +3048,24 @@ bool mysql_routine_grant(THD *thd, Table_ref *table_list, bool is_proc,
           result = true;
           break;
         }
-        if (is_proc)
+        if (routine_acl_type == Acl_type::PROCEDURE)
           proc_priv_hash->emplace(
               grant_name->hash_key,
               unique_ptr_destroy_only<GRANT_NAME>(grant_name));
-        else
+        else if (routine_acl_type == Acl_type::FUNCTION)
           func_priv_hash->emplace(
+              grant_name->hash_key,
+              unique_ptr_destroy_only<GRANT_NAME>(grant_name));
+        else if (routine_acl_type == Acl_type::LIBRARY)
+          library_priv_hash->emplace(
               grant_name->hash_key,
               unique_ptr_destroy_only<GRANT_NAME>(grant_name));
       }
 
-      if ((error = replace_routine_table(
-               thd, grant_name, tables[4].table, *Str, db_name, table_name,
-               is_proc, rights, revoke_grant, all_current_privileges))) {
+      if ((error = replace_routine_table(thd, grant_name, tables[4].table, *Str,
+                                         db_name, table_name, routine_acl_type,
+                                         rights, revoke_grant,
+                                         all_current_privileges))) {
         result = true;  // Remember error
         if (error < 0) break;
 
@@ -4310,6 +4341,7 @@ bool check_grant_db(THD *thd, const char *db,
     DBUG_PRINT("info", ("No table level acl in column_priv_hash; checking "
                         "for schema level acls"));
     error = check_grant_db_routine(thd, db, proc_priv_hash.get()) &&
+            check_grant_db_routine(thd, db, library_priv_hash.get()) &&
             check_grant_db_routine(thd, db, func_priv_hash.get());
   }
 
@@ -4324,7 +4356,7 @@ bool check_grant_db(THD *thd, const char *db,
    thd          Thread handler
    want_access  Bits of privileges user needs to have
    procs        List of routines to check. The user should have 'want_access'
-   is_proc      True if the list is all procedures, else functions
+   routine_acl_type    the list is all procedures, functions, or libraries
    no_errors    If 0 then we write an error. The error is sent directly to
                 the client
 
@@ -4334,7 +4366,10 @@ bool check_grant_db(THD *thd, const char *db,
 ****************************************************************************/
 
 bool check_grant_routine(THD *thd, Access_bitmask want_access, Table_ref *procs,
-                         bool is_proc, bool no_errors) {
+                         Acl_type routine_acl_type, bool no_errors) {
+  assert(routine_acl_type == Acl_type::PROCEDURE ||
+         routine_acl_type == Acl_type::FUNCTION ||
+         routine_acl_type == Acl_type::LIBRARY);
   Table_ref *table;
   Security_context *sctx = thd->security_context();
   const char *user = sctx->priv_user().str;
@@ -4351,14 +4386,18 @@ bool check_grant_routine(THD *thd, Access_bitmask want_access, Table_ref *procs,
 
   for (table = procs; table; table = table->next_global) {
     if (has_roles) {
-      Access_bitmask acl;
-      if (is_proc) {
+      Access_bitmask acl{};
+      if (routine_acl_type == Acl_type::PROCEDURE) {
         acl =
             sctx->procedure_acl({table->db, table->db_length},
                                 {table->table_name, table->table_name_length});
-      } else {
+      } else if (routine_acl_type == Acl_type::FUNCTION) {
         acl = sctx->function_acl({table->db, table->db_length},
                                  {table->table_name, table->table_name_length});
+      } else if (routine_acl_type == Acl_type::LIBRARY) {
+        assert(false);
+        acl = sctx->library_acl({table->db, table->db_length},
+                                {table->table_name, table->table_name_length});
       }
       table->grant.privilege |= acl;
       DBUG_PRINT("info",
@@ -4367,9 +4406,9 @@ bool check_grant_routine(THD *thd, Access_bitmask want_access, Table_ref *procs,
                   table->db, table->table_name, table->grant.privilege));
     } else {
       GRANT_NAME *grant_proc;
-      if ((grant_proc =
-               routine_hash_search(host, sctx->ip().str, table->db, user,
-                                   table->table_name, is_proc, false))) {
+      if ((grant_proc = routine_hash_search(host, sctx->ip().str, table->db,
+                                            user, table->table_name,
+                                            routine_acl_type, false))) {
         table->grant.privilege |= grant_proc->privs;
         DBUG_PRINT("info", ("Checking for routine acls in %s; "
                             "found %" PRIu32,
@@ -4416,7 +4455,10 @@ err:
 */
 
 static bool check_routine_level_acl(THD *thd, const char *db, const char *name,
-                                    bool is_proc) {
+                                    Acl_type routine_acl_type) {
+  assert(routine_acl_type == Acl_type::PROCEDURE ||
+         routine_acl_type == Acl_type::FUNCTION ||
+         routine_acl_type == Acl_type::LIBRARY);
   DBUG_TRACE;
   bool no_routine_acl = true;
   GRANT_NAME *grant_proc;
@@ -4424,9 +4466,9 @@ static bool check_routine_level_acl(THD *thd, const char *db, const char *name,
   Acl_cache_lock_guard acl_cache_lock(thd, Acl_cache_lock_mode::READ_MODE);
   if (!acl_cache_lock.lock(false)) return no_routine_acl;
 
-  if ((grant_proc =
-           routine_hash_search(sctx->priv_host().str, sctx->ip().str, db,
-                               sctx->priv_user().str, name, is_proc, false)))
+  if ((grant_proc = routine_hash_search(sctx->priv_host().str, sctx->ip().str,
+                                        db, sctx->priv_user().str, name,
+                                        routine_acl_type, false)))
     no_routine_acl = !(grant_proc->privs & SHOW_PROC_ACLS);
   return no_routine_acl;
 }
@@ -4667,8 +4709,9 @@ void get_privilege_access_maps(
     ACL_USER *acl_user, const List_of_auth_id_refs *using_roles,
     Access_bitmask *access, Db_access_map *db_map, Db_access_map *db_wild_map,
     Table_access_map *table_map, SP_access_map *sp_map, SP_access_map *func_map,
-    List_of_granted_roles *granted_roles, Grant_acl_set *with_admin_acl,
-    Dynamic_privileges *dynamic_acl, Restrictions &restrictions) {
+    SP_access_map *lib_map, List_of_granted_roles *granted_roles,
+    Grant_acl_set *with_admin_acl, Dynamic_privileges *dynamic_acl,
+    Restrictions &restrictions) {
   DBUG_TRACE;
   assert(assert_acl_cache_read_lock(current_thd));
   List_of_auth_id_refs activated_roles_ref;
@@ -4688,6 +4731,8 @@ void get_privilege_access_maps(
   get_sp_access_map(acl_user, sp_map, proc_priv_hash.get());
   // get user function privileges
   get_sp_access_map(acl_user, func_map, func_priv_hash.get());
+  // get library privileges
+  get_sp_access_map(acl_user, lib_map, library_priv_hash.get());
   // get dynamic privileges
   get_dynamic_privileges(acl_user, dynamic_acl);
   /* Find out the existing restrictions of the current user. */
@@ -4718,8 +4763,8 @@ void get_privilege_access_maps(
       boost::num_vertices(*g_granted_roles));
 
   const Get_access_maps vis(acl_user, access, db_map, db_wild_map, table_map,
-                            sp_map, func_map, with_admin_acl, dynamic_acl,
-                            &restrictions);
+                            sp_map, func_map, lib_map, with_admin_acl,
+                            dynamic_acl, &restrictions);
   if (has_granted_roles || mandatory_roles.size() > 0) {
     bool acl_user_has_vertex = (user_vertex_it != g_authid_to_vertex->end());
     if (!acl_user_has_vertex) return;
@@ -4879,6 +4924,7 @@ bool mysql_show_grants(THD *thd, LEX_USER *lex_user,
   Table_access_map table_map;
   SP_access_map sp_map;
   SP_access_map func_map;
+  SP_access_map lib_map;
   Grant_acl_set with_admin_acl;
   Dynamic_privileges dynamic_acl;
   List_of_granted_roles granted_roles;
@@ -4887,8 +4933,8 @@ bool mysql_show_grants(THD *thd, LEX_USER *lex_user,
   table_map.set_thd(thd);
   get_privilege_access_maps(acl_user, &using_roles, &access, &db_map,
                             &db_wild_map, &table_map, &sp_map, &func_map,
-                            &granted_roles, &with_admin_acl, &dynamic_acl,
-                            restrictions);
+                            &lib_map, &granted_roles, &with_admin_acl,
+                            &dynamic_acl, restrictions);
   String output;
   make_global_privilege_statement(thd, access, acl_user, &output);
   Protocol *protocol = thd->get_protocol();
@@ -4900,8 +4946,12 @@ bool mysql_show_grants(THD *thd, LEX_USER *lex_user,
   make_database_privilege_statement(thd, acl_user, protocol, db_map,
                                     db_wild_map, restrictions.db());
   make_table_privilege_statement(thd, acl_user, protocol, table_map);
-  make_sp_privilege_statement(thd, acl_user, protocol, sp_map, 0);
-  make_sp_privilege_statement(thd, acl_user, protocol, func_map, 1);
+  make_sp_privilege_statement(thd, acl_user, protocol, sp_map,
+                              Acl_type::PROCEDURE);
+  make_sp_privilege_statement(thd, acl_user, protocol, func_map,
+                              Acl_type::FUNCTION);
+  make_sp_privilege_statement(thd, acl_user, protocol, lib_map,
+                              Acl_type::LIBRARY);
   make_proxy_privilege_statement(thd, acl_user, protocol);
   make_roles_privilege_statement(thd, acl_user, protocol, granted_roles,
                                  show_mandatory_roles);
@@ -5093,10 +5143,12 @@ static int remove_procedure_access_privileges(THD *thd, TABLE *procs_priv_table,
   /* Remove procedure access */
   int result = 0;
   bool revoked;
-  for (int is_proc = 0; is_proc < 2; is_proc++) do {
+  auto proc_types = std::to_array(
+      {Acl_type::FUNCTION, Acl_type::PROCEDURE, Acl_type::LIBRARY});
+  for (const auto &routine_acl_type : proc_types) do {
       malloc_unordered_multimap<std::string,
                                 unique_ptr_destroy_only<GRANT_NAME>> *hash =
-          is_proc ? proc_priv_hash.get() : func_priv_hash.get();
+          get_routine_priv_hash(routine_acl_type);
       revoked = false;
       for (auto it = hash->begin(), next_it = it; it != hash->end();
            it = next_it) {
@@ -5115,7 +5167,8 @@ static int remove_procedure_access_privileges(THD *thd, TABLE *procs_priv_table,
             !strcmp(lex_user.host.str, host)) {
           const int ret = replace_routine_table(
               thd, grant_proc, procs_priv_table, lex_user, grant_proc->db,
-              grant_proc->tname, is_proc, ~(Access_bitmask)0, true, true);
+              grant_proc->tname, routine_acl_type, ~(Access_bitmask)0, true,
+              true);
 
           if (!ret) {
             revoked = true;
@@ -5312,7 +5365,7 @@ class Silence_routine_definer_errors : public Internal_error_handler {
   @param thd       The current thread.
   @param sp_db     DB of the stored procedure
   @param sp_name   Name of the stored procedure
-  @param is_proc   True if this is a SP rather than a function.
+  @param routine_acl_type   procedure, function or library
 
   @retval
     false       OK.
@@ -5321,7 +5374,10 @@ class Silence_routine_definer_errors : public Internal_error_handler {
 */
 
 bool sp_revoke_privileges(THD *thd, const char *sp_db, const char *sp_name,
-                          bool is_proc) {
+                          Acl_type routine_acl_type) {
+  assert(routine_acl_type == Acl_type::PROCEDURE ||
+         routine_acl_type == Acl_type::FUNCTION ||
+         routine_acl_type == Acl_type::LIBRARY);
   bool revoked;
   int int_result;
   bool result = false;
@@ -5352,7 +5408,7 @@ bool sp_revoke_privileges(THD *thd, const char *sp_db, const char *sp_name,
 
   /* Remove procedure access */
   malloc_unordered_multimap<std::string, unique_ptr_destroy_only<GRANT_NAME>>
-      *hash = is_proc ? proc_priv_hash.get() : func_priv_hash.get();
+      *hash = get_routine_priv_hash(routine_acl_type);
   do {
     revoked = false;
     for (auto it = hash->begin(), next_it = it; it != hash->end();
@@ -5376,7 +5432,8 @@ bool sp_revoke_privileges(THD *thd, const char *sp_db, const char *sp_name,
 
         const int ret = replace_routine_table(
             thd, grant_proc, tables[4].table, lex_user, grant_proc->db,
-            grant_proc->tname, is_proc, ~(Access_bitmask)0, true, true);
+            grant_proc->tname, routine_acl_type, ~(Access_bitmask)0, true,
+            true);
         if (ret < 0) {
           result = true;
           revoked = false;
@@ -5403,14 +5460,17 @@ bool sp_revoke_privileges(THD *thd, const char *sp_db, const char *sp_name,
   @param      thd                  The current thread.
   @param      sp_db                DB of the stored procedure.
   @param      sp_name              Name of the stored procedure
-  @param      is_proc              True if this is a SP rather than a function
+  @param      routine_acl_type            procedure, function or library
 
   @retval false Success
   @retval true An error occurred. Error message not yet sent.
 */
 
 bool sp_grant_privileges(THD *thd, const char *sp_db, const char *sp_name,
-                         bool is_proc) {
+                         Acl_type routine_acl_type) {
+  assert(routine_acl_type == Acl_type::PROCEDURE ||
+         routine_acl_type == Acl_type::FUNCTION ||
+         routine_acl_type == Acl_type::LIBRARY);
   Table_ref tables[1];
   List<LEX_USER> user_list;
   bool result = true;
@@ -5462,7 +5522,7 @@ bool sp_grant_privileges(THD *thd, const char *sp_db, const char *sp_name,
     as all errors will be handled later.
   */
   thd->push_internal_handler(&error_handler);
-  result = mysql_routine_grant(thd, tables, is_proc, user_list,
+  result = mysql_routine_grant(thd, tables, routine_acl_type, user_list,
                                DEFAULT_CREATE_PROC_ACLS, false, false, false);
   thd->pop_internal_handler();
 end:

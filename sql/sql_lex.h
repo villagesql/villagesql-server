@@ -227,6 +227,7 @@ enum class enum_sp_type {
   PROCEDURE,
   TRIGGER,
   EVENT,
+  LIBRARY,
   /*
     Must always be the last one.
     Denotes an error condition.
@@ -260,12 +261,22 @@ inline uint to_uint(enum_sp_type val) { return static_cast<uint>(val); }
 #define TYPE_ENUM_PROCEDURE 2
 #define TYPE_ENUM_TRIGGER 3
 #define TYPE_ENUM_PROXY 4
+#define TYPE_ENUM_LIBRARY 5
+#define TYPE_ENUM_INVALID 6
 
 enum class Acl_type {
   TABLE = 0,
   FUNCTION = TYPE_ENUM_FUNCTION,
   PROCEDURE = TYPE_ENUM_PROCEDURE,
+  LIBRARY = TYPE_ENUM_LIBRARY,
+  INVALID_TYPE = TYPE_ENUM_INVALID
 };
+
+Acl_type lex_type_to_acl_type(ulong lex_type);
+
+enum_sp_type acl_type_to_enum_sp_type(Acl_type type);
+
+Acl_type enum_sp_type_to_acl_type(enum_sp_type type);
 
 const LEX_CSTRING sp_data_access_name[] = {
     {STRING_WITH_LEN("")},
@@ -2578,12 +2589,104 @@ typedef struct struct_replica_connection {
   void reset();
 } LEX_REPLICA_CONNECTION;
 
+struct sp_name_with_alias {
+  LEX_CSTRING m_db;
+  LEX_STRING m_name;
+  LEX_CSTRING m_alias;
+
+  sp_name_with_alias(LEX_CSTRING db, LEX_STRING name, LEX_CSTRING alias)
+      : m_db{db}, m_name{name}, m_alias{alias} {}
+};
+
 struct st_sp_chistics {
-  LEX_CSTRING comment;
-  enum enum_sp_suid_behaviour suid;
-  bool detistic;
-  enum enum_sp_data_access daccess;
-  LEX_CSTRING language;  ///< CREATE|ALTER ... LANGUAGE <language>
+  LEX_CSTRING comment = NULL_CSTR;
+  enum enum_sp_suid_behaviour suid = SP_IS_DEFAULT_SUID;
+  bool detistic = false;
+  enum enum_sp_data_access daccess = SP_DEFAULT_ACCESS;
+  LEX_CSTRING language = NULL_CSTR;  ///< CREATE|ALTER ... LANGUAGE <language>
+
+  /**
+    List of imported libraries for this routine
+   */
+  mem_root_deque<sp_name_with_alias> *m_imported_libraries = nullptr;
+
+  /**
+    Add library names to the set of imported libraries.
+
+    We only allow one USING clause in CREATE statements, so repeated calls
+    to this function should fail.
+
+    @param libs Set of libraries to be added
+    @param mem_root MEM_ROOT to use for allocation
+
+    @returns true on failures; false otherwise
+  */
+  bool add_imported_libraries(mem_root_deque<sp_name_with_alias> &libs,
+                              MEM_ROOT *mem_root) {
+    assert(!libs.empty());
+
+    if (m_imported_libraries != nullptr) return true;  // Allow a single USING.
+
+    if (create_imported_libraries_deque(mem_root)) return true;
+
+    while (!libs.empty()) {
+      if (m_imported_libraries->push_back(libs.front())) return true;
+      libs.pop_front();
+    }
+    return false;
+  }
+
+  /**
+    Add a library to the set of imported libraries.
+
+    @param database The library's database.
+    @param name     The library's name.
+    @param alias    The library's alias.
+    @param mem_root MEM_ROOT to use for allocation
+
+    @returns true on failures; false otherwise
+  */
+  bool add_imported_library(std::string_view database, std::string_view name,
+                            std::string_view alias, MEM_ROOT *mem_root) {
+    if (create_imported_libraries_deque(mem_root)) return true;
+
+    return m_imported_libraries->push_back({
+        {strmake_root(mem_root, database.data(), database.length()),
+         database.length()},  // sp_name_with_alias.m_db
+        {strmake_root(mem_root, name.data(), name.length()),
+         name.length()},  // sp_name_with_alias.m_name
+        {strmake_root(mem_root, alias.data(), alias.length()),
+         alias.length()}  // sp_name_with_alias.m_alias
+    });
+  }
+
+  bool create_imported_libraries_deque(MEM_ROOT *mem_root) {
+    if (m_imported_libraries != nullptr) return false;  // Already allocated.
+    m_imported_libraries =
+        new (mem_root) mem_root_deque<sp_name_with_alias>(mem_root);
+    return m_imported_libraries == nullptr;
+  }
+
+  /**
+    Get the set of imported libraries for the routine
+
+    @returns The set of imported libraries, nullptr if no imported libraries
+  */
+  const mem_root_deque<sp_name_with_alias> *get_imported_libraries() {
+    return m_imported_libraries;
+  }
+
+  /**
+    Reset the structure.
+  */
+  void reset(void) {
+    comment = NULL_CSTR;
+    suid = SP_IS_DEFAULT_SUID;
+    detistic = false;
+    daccess = SP_DEFAULT_ACCESS;
+    language = NULL_CSTR;
+    m_imported_libraries = nullptr;
+  }
 };
 
 extern const LEX_STRING null_lex_str;

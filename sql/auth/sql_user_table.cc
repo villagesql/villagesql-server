@@ -356,7 +356,7 @@ static const TABLE_FIELD_TYPE
          {STRING_WITH_LEN("char(64)")},
          {STRING_WITH_LEN("utf8mb3")}},
         {{STRING_WITH_LEN("Routine_type")},
-         {STRING_WITH_LEN("enum('FUNCTION','PROCEDURE')")},
+         {STRING_WITH_LEN("enum('FUNCTION','PROCEDURE','LIBRARY')")},
          {nullptr, 0}},
         {{STRING_WITH_LEN("Grantor")},
          {STRING_WITH_LEN("varchar(288)")},
@@ -1945,7 +1945,7 @@ table_error:
   @param combo   User information.
   @param db      Database name for stored routine.
   @param routine_name  Name for stored routine.
-  @param is_proc  True for stored procedure, false for stored function.
+  @param routine_acl_type  Procedure, function or library
   @param rights  Rights requested.
   @param revoke_grant  Set to true if a REVOKE command is executed.
   @param all_current_privileges Set to true if this is GRANT/REVOKE ALL
@@ -1959,9 +1959,12 @@ table_error:
 
 int replace_routine_table(THD *thd, GRANT_NAME *grant_name, TABLE *table,
                           const LEX_USER &combo, const char *db,
-                          const char *routine_name, bool is_proc,
+                          const char *routine_name, Acl_type routine_acl_type,
                           Access_bitmask rights, bool revoke_grant,
                           bool all_current_privileges) {
+  assert(routine_acl_type == Acl_type::PROCEDURE ||
+         routine_acl_type == Acl_type::FUNCTION ||
+         routine_acl_type == Acl_type::LIBRARY);
   char grantor[USER_HOST_BUFF_SIZE];
   int old_row_exists = 1;
   int error = 0;
@@ -1992,9 +1995,19 @@ int replace_routine_table(THD *thd, GRANT_NAME *grant_name, TABLE *table,
   table->field[2]->store(combo.user.str, combo.user.length, &my_charset_latin1);
   table->field[3]->store(routine_name, strlen(routine_name),
                          &my_charset_latin1);
-  table->field[4]->store((is_proc ? to_longlong(enum_sp_type::PROCEDURE)
-                                  : to_longlong(enum_sp_type::FUNCTION)),
-                         true);
+  switch (routine_acl_type) {
+    case Acl_type::FUNCTION:
+      table->field[4]->store(STRING_WITH_LEN("FUNCTION"), &my_charset_latin1);
+      break;
+    case Acl_type::PROCEDURE:
+      table->field[4]->store(STRING_WITH_LEN("PROCEDURE"), &my_charset_latin1);
+      break;
+    case Acl_type::LIBRARY:
+      table->field[4]->store(STRING_WITH_LEN("LIBRARY"), &my_charset_latin1);
+      break;
+    default:
+      assert(0);
+  }
   store_record(table, record[1]);  // store at pos 1
   key_copy(user_key, table->record[0], table->key_info,
            table->key_info->key_length);
@@ -2099,9 +2112,8 @@ int replace_routine_table(THD *thd, GRANT_NAME *grant_name, TABLE *table,
   if (rights) {
     grant_name->privs = rights;
   } else {
-    erase_specific_element(
-        is_proc ? proc_priv_hash.get() : func_priv_hash.get(),
-        grant_name->hash_key, grant_name);
+    erase_specific_element(get_routine_priv_hash(routine_acl_type),
+                           grant_name->hash_key, grant_name);
   }
   return 0;
 

@@ -620,6 +620,21 @@ Access_bitmask Security_context::function_acl(LEX_CSTRING db,
   }
 }
 
+Access_bitmask Security_context::library_acl(LEX_CSTRING db,
+                                             LEX_CSTRING lib_name) {
+  if (m_acl_map == nullptr) return 0;
+  String q_name;
+  append_identifier_with_backtick(&q_name, db.str, db.length);
+  q_name.append(".");
+  std::string name(lib_name.str, lib_name.length);
+  my_casedn_str(files_charset_info, &name[0]);
+  append_identifier_with_backtick(&q_name, name.c_str(), name.length());
+  SP_access_map::iterator it;
+  it = m_acl_map->lib_acls()->find(q_name.c_ptr());
+  if (it == m_acl_map->lib_acls()->end()) return 0;
+  return filter_access(it->second, q_name.c_ptr());
+}
+
 // return the entire element instead of just the acl?
 Grant_table_aggregate Security_context::table_and_column_acls(
     LEX_CSTRING db, LEX_CSTRING table) {

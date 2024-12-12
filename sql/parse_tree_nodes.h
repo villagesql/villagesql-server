@@ -57,6 +57,7 @@
 #include "sql/resourcegroups/resource_group_basic_types.h"
 #include "sql/resourcegroups/resource_group_sql_cmd.h"
 #include "sql/set_var.h"
+#include "sql/sp_head.h"
 #include "sql/sql_admin.h"  // Sql_cmd_shutdown etc.
 #include "sql/sql_alter.h"
 #include "sql/sql_check_constraint.h"  // Sql_check_constraint_spec
@@ -3527,6 +3528,21 @@ class PT_show_create_function final : public PT_show_base {
   Sql_cmd_show_create_function m_sql_cmd;
 };
 
+/// Parse tree node for SHOW CREATE LIBRARY statement
+
+class PT_show_create_library final : public PT_show_base {
+ public:
+  PT_show_create_library(const POS &pos, sp_name *library_name)
+      : PT_show_base(pos, SQLCOM_SHOW_CREATE_LIBRARY), m_spname(library_name) {}
+
+  Sql_cmd *make_cmd(THD *thd) override;
+
+ private:
+  sp_name *const m_spname;
+
+  Sql_cmd_show_create_library m_sql_cmd;
+};
+
 /// Parse tree node for SHOW CREATE PROCEDURE statement
 
 class PT_show_create_procedure final : public PT_show_base {
@@ -5563,6 +5579,62 @@ class PT_load_table final : public Parse_tree_root {
   Sql_cmd_load_table m_cmd;
 
   const thr_lock_type m_lock_type;
+};
+
+class PT_create_library_stmt final : public Parse_tree_root {
+ public:
+  PT_create_library_stmt(const POS &pos, THD *thd, bool if_not_exists,
+                         sp_name *lib_name, LEX_STRING language,
+                         LEX_STRING lib_source)
+      : Parse_tree_root(pos),
+        m_cmd(thd, if_not_exists, lib_name, language, lib_source) {}
+
+  Sql_cmd *make_cmd(THD *) override { return &m_cmd; }
+
+ private:
+  Sql_cmd_create_library m_cmd;
+};
+
+class PT_drop_library_stmt final : public Parse_tree_root {
+ public:
+  PT_drop_library_stmt(const POS &pos, bool if_exists, sp_name *lib_name)
+      : Parse_tree_root(pos), m_cmd(if_exists, lib_name) {}
+
+  Sql_cmd *make_cmd(THD *) override { return &m_cmd; }
+
+ private:
+  Sql_cmd_drop_library m_cmd;
+};
+
+class PT_library_with_alias final : public Parse_tree_node {
+  typedef Parse_tree_node super;
+
+  sp_name_with_alias m_library;
+
+ public:
+  explicit PT_library_with_alias(const POS &pos, sp_name *lib_name,
+                                 const LEX_CSTRING &alias)
+      : super(pos), m_library(lib_name->m_db, lib_name->m_name, alias) {}
+
+  sp_name_with_alias library() { return m_library; }
+};
+
+class PT_library_list final : public Parse_tree_node {
+  typedef Parse_tree_node super;
+
+  mem_root_deque<sp_name_with_alias> m_libraries;
+
+ public:
+  explicit PT_library_list(const POS &pos)
+      : super(pos), m_libraries(*THR_MALLOC) {}
+
+  bool push_back(PT_library_with_alias *lib) {
+    if (lib == nullptr) return true;  // OOM
+    m_libraries.push_back(lib->library());
+    return false;
+  }
+
+  mem_root_deque<sp_name_with_alias> &get_libraries() { return m_libraries; }
 };
 
 /**

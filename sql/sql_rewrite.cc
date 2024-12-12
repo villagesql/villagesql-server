@@ -1412,6 +1412,9 @@ bool Rewriter_grant::rewrite(String &rlb) const {
     case TYPE_ENUM_FUNCTION:
       rlb.append(STRING_WITH_LEN("FUNCTION "));
       break;
+    case TYPE_ENUM_LIBRARY:
+      rlb.append(STRING_WITH_LEN("LIBRARY "));
+      break;
     default:
       break;
   }

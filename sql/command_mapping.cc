@@ -208,6 +208,9 @@ const char *Command_maps::sql_commands[] = {"select",
                                             "create_srs",
                                             "drop_srs",
                                             "show_parse_tree",
+                                            "create_library",
+                                            "drop_library",
+                                            "show_create_library",
                                             ""};
 // keep the empty string last and add new elements before it.
 

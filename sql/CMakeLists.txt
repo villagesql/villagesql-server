@@ -176,6 +176,7 @@ SET(DD_SOURCES
   dd/impl/system_views/innodb_tablespaces_brief.cc
   dd/impl/system_views/key_column_usage.cc
   dd/impl/system_views/keywords.cc
+  dd/impl/system_views/libraries.cc
   dd/impl/system_views/parameters.cc
   dd/impl/system_views/partitions.cc
   dd/impl/system_views/referential_constraints.cc
@@ -183,6 +184,7 @@ SET(DD_SOURCES
   dd/impl/system_views/role_column_grants.cc
   dd/impl/system_views/role_routine_grants.cc
   dd/impl/system_views/role_table_grants.cc
+  dd/impl/system_views/routine_libraries.cc
   dd/impl/system_views/routines.cc
   dd/impl/system_views/schemata.cc
   dd/impl/system_views/schemata_extensions.cc
@@ -248,6 +250,7 @@ SET(DD_SOURCES
   dd/impl/types/function_impl.cc
   dd/impl/types/index_element_impl.cc
   dd/impl/types/index_impl.cc
+  dd/impl/types/library_impl.cc
   dd/impl/types/object_table_impl.cc
   dd/impl/types/object_table_definition_impl.cc
   dd/impl/types/parameter_impl.cc
@@ -541,6 +544,7 @@ SET(SQL_SHARED_SOURCES
   sql_class.cc
   sql_component.cc
   sql_const_folding.cc
+  sql_cmd_ddl.cc
   sql_cmd_ddl_table.cc
   sql_cmd_srs.cc
   sql_connect.cc

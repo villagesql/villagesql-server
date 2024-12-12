@@ -8514,7 +8514,7 @@ bool Item_func_sp::sp_check_access(THD *thd) {
   DBUG_TRACE;
   assert(m_sp);
   if (check_routine_access(thd, EXECUTE_ACL, m_sp->m_db.str, m_sp->m_name.str,
-                           false, false))
+                           Acl_type::FUNCTION, false))
     return true;
 
   return false;
@@ -8545,8 +8545,9 @@ bool Item_func_sp::fix_fields(THD *thd, Item **ref) {
         thd, m_name_resolution_ctx->view_error_handler,
         m_name_resolution_ctx->view_error_handler_arg);
 
-    const bool res = check_routine_access(thd, EXECUTE_ACL, m_name->m_db.str,
-                                          m_name->m_name.str, false, false);
+    const bool res =
+        check_routine_access(thd, EXECUTE_ACL, m_name->m_db.str,
+                             m_name->m_name.str, Acl_type::FUNCTION, false);
     thd->set_security_context(save_security_ctx);
 
     if (res) return res;
@@ -8958,7 +8959,15 @@ longlong Item_func_can_access_routine::val_int() {
   type_ptr->c_ptr_safe();
   definer_ptr->c_ptr_safe();
 
-  const bool is_procedure = (strcmp(type_ptr->ptr(), "PROCEDURE") == 0);
+  enum_sp_type sp_type{};
+  if (strcmp(type_ptr->ptr(), "PROCEDURE") == 0)
+    sp_type = enum_sp_type::PROCEDURE;
+  else if (strcmp(type_ptr->ptr(), "FUNCTION") == 0)
+    sp_type = enum_sp_type::FUNCTION;
+  else if (strcmp(type_ptr->ptr(), "LIBRARY") == 0)
+    sp_type = enum_sp_type::LIBRARY;
+  else
+    assert(false);
 
   // Skip INFORMATION_SCHEMA database
   if (is_infoschema_db(schema_name_ptr->ptr()) ||
@@ -8993,9 +9002,12 @@ longlong Item_func_can_access_routine::val_int() {
 
   if (check_full_access) {
     return full_access ? 1 : 0;
-  } else if (!full_access && !has_partial_view_routine_access(
-                                 thd, schema_name_ptr->ptr(),
-                                 routine_name_ptr->ptr(), is_procedure)) {
+  }
+  assert(sp_type == enum_sp_type::PROCEDURE ||
+         sp_type == enum_sp_type::FUNCTION || sp_type == enum_sp_type::LIBRARY);
+  if (!full_access && !has_partial_view_routine_access(
+                          thd, schema_name_ptr->ptr(), routine_name_ptr->ptr(),
+                          enum_sp_type_to_acl_type(sp_type))) {
     return 0;
   }
 

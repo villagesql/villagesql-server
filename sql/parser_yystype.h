@@ -96,6 +96,8 @@ class PT_item_list;
 class PT_joined_table;
 class PT_json_table_column;
 class PT_key_part_specification;
+class PT_library_list;
+class PT_library_with_alias;
 class PT_limit_clause;
 class PT_locking_clause;
 class PT_locking_clause_list;
@@ -722,6 +724,9 @@ union MY_SQL_PARSER_STYPE {
     Parse_tree_root *statement;
     LEX_CSTRING schema_name_for_explain;
   } explainable_stmt;
+
+  PT_library_list *library_list;
+  PT_library_with_alias *library_with_alias;
 };
 
 static_assert(sizeof(MY_SQL_PARSER_STYPE) <= 32, "YYSTYPE is too big");

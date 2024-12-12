@@ -151,7 +151,8 @@ enum enum_acl_lists {
   COLUMN_PRIVILEGES_HASH,
   PROC_PRIVILEGES_HASH,
   FUNC_PRIVILEGES_HASH,
-  PROXY_USERS_ACL
+  PROXY_USERS_ACL,
+  LIB_PRIVILEGES_HASH,
 };
 
 bool check_change_password(THD *thd, const char *host, const char *user,
@@ -2431,6 +2432,16 @@ static int handle_grant_struct(enum enum_acl_lists struct_no, bool drop,
           return -1;
       } else
         search_for_matching_grant(func_priv_hash.get(), matches);
+      break;
+
+    case LIB_PRIVILEGES_HASH:
+      if (drop)
+        remove_matching_grants(library_priv_hash.get(), matches);
+      else if (user_to) {
+        if (rename_matching_grants(library_priv_hash.get(), matches, user_to))
+          return -1;
+      } else
+        search_for_matching_grant(library_priv_hash.get(), matches);
       break;
 
     case PROXY_USERS_ACL:

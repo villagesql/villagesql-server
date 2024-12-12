@@ -7492,6 +7492,8 @@ static inline enum_object_type sp_type_to_object_type(uint sp_type) {
       return OBJECT_TYPE_FUNCTION;
     case enum_sp_type::PROCEDURE:
       return OBJECT_TYPE_PROCEDURE;
+    case enum_sp_type::LIBRARY:
+      return OBJECT_TYPE_LIBRARY;
     case enum_sp_type::TRIGGER:
       return OBJECT_TYPE_TRIGGER;
     case enum_sp_type::EVENT:

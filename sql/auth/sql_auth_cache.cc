@@ -145,7 +145,8 @@ unique_ptr<
     column_priv_hash;
 unique_ptr<
     malloc_unordered_multimap<string, unique_ptr_destroy_only<GRANT_NAME>>>
-    proc_priv_hash, func_priv_hash;
+    proc_priv_hash, func_priv_hash, library_priv_hash;
+
 malloc_unordered_map<std::string, unique_ptr_my_free<acl_entry>> db_cache{
     key_memory_acl_cache};
 collation_unordered_map<std::string, ACL_USER *> *acl_check_hosts = nullptr;
@@ -170,6 +171,28 @@ bool validate_user_plugins = true;
 
 #define IP_ADDR_STRLEN (3 + 1 + 3 + 1 + 3 + 1 + 3)
 #define ACL_KEY_LENGTH (IP_ADDR_STRLEN + 1 + NAME_LEN + 1 + USERNAME_LENGTH + 1)
+
+/**
+ * Returns a non-owning raw pointer of either func_priv_hash, proc_priv_hash or
+ * library_priv_hash.
+ */
+malloc_unordered_multimap<std::string, unique_ptr_destroy_only<GRANT_NAME>>
+    *get_routine_priv_hash(Acl_type type) {
+  if (type == Acl_type::FUNCTION) {
+    assert(func_priv_hash);
+    return func_priv_hash.get();
+  }
+  if (type == Acl_type::PROCEDURE) {
+    assert(proc_priv_hash);
+    return proc_priv_hash.get();
+  }
+  if (type == Acl_type::LIBRARY) {
+    assert(library_priv_hash);
+    return library_priv_hash.get();
+  }
+  assert(false);  // TABLE is not a routine
+  return nullptr;
+}
 
 /** Helper: Set user name */
 static void set_username(char **user, const char *user_arg, MEM_ROOT *mem) {
@@ -2459,6 +2482,7 @@ void grant_free(void) {
   column_priv_hash.reset();
   proc_priv_hash.reset();
   func_priv_hash.reset();
+  library_priv_hash.reset();
   memex.Clear();
 }
 
@@ -2531,6 +2555,10 @@ static bool grant_load_procs_priv(TABLE *p_table) {
       new malloc_unordered_multimap<string,
                                     unique_ptr_destroy_only<GRANT_NAME>>(
           key_memory_acl_memex));
+  library_priv_hash.reset(
+      new malloc_unordered_multimap<string,
+                                    unique_ptr_destroy_only<GRANT_NAME>>(
+          key_memory_acl_memex));
   error = p_table->file->ha_index_init(0, true);
   DBUG_EXECUTE_IF("wl7158_grant_load_proc_1", p_table->file->ha_index_end();
                   error = HA_ERR_LOCK_DEADLOCK;);
@@ -2571,11 +2599,13 @@ static bool grant_load_procs_priv(TABLE *p_table) {
                  mem_check->host.get_host() ? mem_check->host.get_host() : "");
         }
       }
-      const enum_sp_type sp_type = to_sp_type(p_table->field[4]->val_int());
-      if (sp_type == enum_sp_type::PROCEDURE) {
-        hash = proc_priv_hash.get();
-      } else if (sp_type == enum_sp_type::FUNCTION) {
+      auto sp_type = p_table->field[4]->val_int();
+      if (sp_type == 1) {  // FUNCTION
         hash = func_priv_hash.get();
+      } else if (sp_type == 2) {  // PROCEDURE
+        hash = proc_priv_hash.get();
+      } else if (sp_type == 3) {  // LIBRARY
+        hash = library_priv_hash.get();
       } else {
         LogErr(WARNING_LEVEL,
                ER_AUTHCACHE_PROCS_PRIV_ENTRY_IGNORED_BAD_ROUTINE_TYPE,
@@ -2747,6 +2777,9 @@ static bool grant_reload_procs_priv(Table_ref *table) {
   unique_ptr<
       malloc_unordered_multimap<string, unique_ptr_destroy_only<GRANT_NAME>>>
       old_func_priv_hash(std::move(func_priv_hash));
+  unique_ptr<
+      malloc_unordered_multimap<string, unique_ptr_destroy_only<GRANT_NAME>>>
+      old_library_priv_hash(std::move(library_priv_hash));
   bool return_val = false;
 
   if ((return_val = grant_load_procs_priv(table->table))) {
@@ -2754,6 +2787,7 @@ static bool grant_reload_procs_priv(Table_ref *table) {
     DBUG_PRINT("error", ("Reverting to old privileges"));
     proc_priv_hash = std::move(old_proc_priv_hash);
     func_priv_hash = std::move(old_func_priv_hash);
+    library_priv_hash = std::move(old_library_priv_hash);
   }
 
   return return_val;
@@ -3393,10 +3427,11 @@ Acl_map::Acl_map(Security_context *sctx, uint64 ver)
     return;
   }
   List_of_granted_roles granted_roles;
-  get_privilege_access_maps(
-      acl_user, sctx->get_active_roles(), &m_global_acl, &m_db_acls,
-      &m_db_wild_acls, &m_table_acls, &m_sp_acls, &m_func_acls, &granted_roles,
-      &m_with_admin_acls, &m_dynamic_privileges, m_restrictions);
+  get_privilege_access_maps(acl_user, sctx->get_active_roles(), &m_global_acl,
+                            &m_db_acls, &m_db_wild_acls, &m_table_acls,
+                            &m_sp_acls, &m_func_acls, &m_lib_acls,
+                            &granted_roles, &m_with_admin_acls,
+                            &m_dynamic_privileges, m_restrictions);
 }
 
 Acl_map::~Acl_map() {
@@ -3413,6 +3448,7 @@ Acl_map &Acl_map::operator=(Acl_map &&map) {
   m_table_acls = std::move(map.m_table_acls);
   m_sp_acls = std::move(map.m_sp_acls);
   m_func_acls = std::move(map.m_func_acls);
+  m_lib_acls = std::move(map.m_lib_acls);
   m_with_admin_acls = std::move(map.m_with_admin_acls);
   m_version = map.m_version;
   m_restrictions = map.m_restrictions;
@@ -3435,6 +3471,8 @@ Grant_acl_set *Acl_map::grant_acls() { return &m_with_admin_acls; }
 SP_access_map *Acl_map::sp_acls() { return &m_sp_acls; }
 
 SP_access_map *Acl_map::func_acls() { return &m_func_acls; }
+
+SP_access_map *Acl_map::lib_acls() { return &m_lib_acls; }
 
 Dynamic_privileges *Acl_map::dynamic_privileges() {
   return &m_dynamic_privileges;

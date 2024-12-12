@@ -302,6 +302,16 @@ class Sql_cmd_show_create_function : public Sql_cmd_show_noplan {
   bool execute_inner(THD *thd) override;
 };
 
+/// Represents SHOW CREATE LIBRARY statement.
+
+class Sql_cmd_show_create_library : public Sql_cmd_show_noplan {
+ public:
+  Sql_cmd_show_create_library()
+      : Sql_cmd_show_noplan(SQLCOM_SHOW_CREATE_LIBRARY) {}
+  bool check_privileges(THD *thd) override;
+  bool execute_inner(THD *thd) override;
+};
+
 /// Represents SHOW CREATE PROCEDURE statement.
 
 class Sql_cmd_show_create_procedure : public Sql_cmd_show_noplan {

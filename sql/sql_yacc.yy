@@ -1458,6 +1458,8 @@ void warn_on_deprecated_user_defined_collation(
 %token<lexer.keyword> VECTOR_SYM      1215     /* MYSQL */
 %token<lexer.keyword> PARAMETERS_SYM  1216     /* MYSQL */
 %token<lexer.keyword> HEADER_SYM      1217     /* MYSQL */
+%token                LIBRARY_SYM     1218     /* MYSQL */
+
 /*
   NOTE! When adding new non-standard keywords, make sure they are added to the
   list ident_keywords_unambiguous lest they become reserved keywords.
@@ -1539,6 +1541,7 @@ void warn_on_deprecated_user_defined_collation(
         persisted_variable_ident
         routine_string
         opt_explain_into
+        opt_library_alias
 
 %type <lex_cstr>
         key_cache_name
@@ -1962,6 +1965,7 @@ void warn_on_deprecated_user_defined_collation(
         call_stmt
         check_table_stmt
         create_index_stmt
+        create_library_stmt
         create_resource_group_stmt
         create_role_stmt
         create_srs_stmt
@@ -1970,6 +1974,7 @@ void warn_on_deprecated_user_defined_collation(
         describe_stmt
         do_stmt
         drop_index_stmt
+        drop_library_stmt
         drop_resource_group_stmt
         drop_role_stmt
         drop_srs_stmt
@@ -1998,6 +2003,7 @@ void warn_on_deprecated_user_defined_collation(
         show_create_database_stmt
         show_create_event_stmt
         show_create_function_stmt
+        show_create_library_stmt
         show_create_procedure_stmt
         show_create_table_stmt
         show_create_trigger_stmt
@@ -2284,6 +2290,8 @@ void warn_on_deprecated_user_defined_collation(
 
 %type <query_id> opt_for_query
 
+%type <library_list> library_list
+%type <library_with_alias> library_name
 %%
 
 /*
@@ -2433,6 +2441,7 @@ simple_statement:
         | commit                        { $$= nullptr; }
         | create                        { $$= nullptr; }
         | create_index_stmt
+        | create_library_stmt
         | create_resource_group_stmt
         | create_role_stmt
         | create_srs_stmt
@@ -2445,6 +2454,7 @@ simple_statement:
         | drop_event_stmt               { $$= nullptr; }
         | drop_function_stmt            { $$= nullptr; }
         | drop_index_stmt
+        | drop_library_stmt
         | drop_logfile_stmt             { $$= nullptr; }
         | drop_procedure_stmt           { $$= nullptr; }
         | drop_resource_group_stmt
@@ -2501,6 +2511,7 @@ simple_statement:
         | show_create_database_stmt
         | show_create_event_stmt
         | show_create_function_stmt
+        | show_create_library_stmt
         | show_create_procedure_stmt
         | show_create_table_stmt
         | show_create_trigger_stmt
@@ -3701,7 +3712,6 @@ ev_sql_stmt:
 
             lex->sphead= sp;
 
-            memset(&lex->sp_chistics, 0, sizeof(st_sp_chistics));
             sp->m_chistics= &lex->sp_chistics;
 
             // Default language is SQL
@@ -3809,6 +3819,44 @@ sp_c_chistic:
           sp_chistic            { }
         | DETERMINISTIC_SYM     { Lex->sp_chistics.detistic= true; }
         | not DETERMINISTIC_SYM { Lex->sp_chistics.detistic= false; }
+        | USING '(' library_list ')'
+          {
+            if (Lex->sp_chistics.add_imported_libraries($3->get_libraries(),
+                                                        YYMEM_ROOT)) {
+               YYTHD->syntax_error_at(@$, "You have an error in your SQL syntax"
+               "; Multiple USING clauses are not supported");
+               MYSQL_YYABORT;
+            }
+          }
+        ;
+
+library_list:
+          library_list ',' library_name
+          {
+            if ($1 == nullptr || $1->push_back($3))
+              MYSQL_YYABORT;
+            $$ = $1;
+            $$->m_pos = @$;
+          }
+        | library_name
+          {
+            $$ = NEW_PTN PT_library_list(@$);
+            if ($$ == nullptr || $$->push_back($1))
+              MYSQL_YYABORT;
+          }
+        ;
+
+library_name:
+          sp_name opt_library_alias
+          {
+            $$ = NEW_PTN PT_library_with_alias(@$, $1, to_lex_cstring($2));
+          }
+        ;
+
+opt_library_alias:
+            %empty { $$ = null_lex_str; }
+          | AS ident { $$ = $2; }
+          | ident { $$ = $1; }
         ;
 
 sp_suid:
@@ -8012,7 +8060,6 @@ alter_procedure_stmt:
               my_error(ER_SP_NO_DROP_SP, MYF(0), "PROCEDURE");
               MYSQL_YYABORT;
             }
-            memset(&lex->sp_chistics, 0, sizeof(st_sp_chistics));
           }
           sp_a_chistics
           {
@@ -8034,7 +8081,6 @@ alter_function_stmt:
               my_error(ER_SP_NO_DROP_SP, MYF(0), "FUNCTION");
               MYSQL_YYABORT;
             }
-            memset(&lex->sp_chistics, 0, sizeof(st_sp_chistics));
           }
           sp_a_chistics
           {
@@ -13908,6 +13954,13 @@ show_create_function_stmt:
           }
         ;
 
+show_create_library_stmt:
+          SHOW CREATE LIBRARY_SYM sp_name
+          {
+            $$ = NEW_PTN PT_show_create_library(@$, $4);
+          }
+        ;
+
 show_create_trigger_stmt:
           SHOW CREATE TRIGGER_SYM sp_name
           {
@@ -16635,6 +16688,7 @@ opt_acl_type:
         | TABLE_SYM     { $$= Acl_type::TABLE; }
         | FUNCTION_SYM  { $$= Acl_type::FUNCTION; }
         | PROCEDURE_SYM { $$= Acl_type::PROCEDURE; }
+        | LIBRARY_SYM   { $$= Acl_type::LIBRARY; }
         ;
 
 opt_privileges:
@@ -17785,7 +17839,6 @@ trigger_tail:
             lex->sphead= sp;
             lex->spname= $3;
 
-            memset(&lex->sp_chistics, 0, sizeof(st_sp_chistics));
             sp->m_chistics= &lex->sp_chistics;
 
             // Default language is SQL
@@ -17973,8 +18026,6 @@ sf_tail:
                                         &sp->m_return_field_def))
               MYSQL_YYABORT;
 
-            memset(&lex->sp_chistics, 0, sizeof(st_sp_chistics));
-
             // Default language is SQL
             lex->sp_chistics.language = {"SQL",3};
           }
@@ -18104,7 +18155,6 @@ sp_tail:
             LEX *lex= thd->lex;
 
             lex->sphead->m_parser_data.set_parameter_end_ptr(@8.cpp.start);
-            memset(&lex->sp_chistics, 0, sizeof(st_sp_chistics));
 
             // Default language is SQL
             lex->sp_chistics.language = {"SQL",3};
@@ -18121,6 +18171,26 @@ sp_tail:
           {                     /*$13*/
             LEX *lex= Lex;
             lex->sql_command= SQLCOM_CREATE_PROCEDURE;
+          }
+        ;
+
+create_library_stmt:
+          CREATE LIBRARY_SYM
+          opt_if_not_exists     /*$3*/
+          sp_name               /*$4*/
+          LANGUAGE_SYM ident    /*$6*/
+          AS routine_string     /*$8*/
+          {
+            Lex->sql_command = SQLCOM_CREATE_LIBRARY;
+            $$ = NEW_PTN PT_create_library_stmt(@$, YYTHD, $3, $4, $6, $8);
+          }
+        ;
+
+drop_library_stmt:
+          DROP LIBRARY_SYM if_exists sp_name
+          {
+            Lex->sql_command = SQLCOM_DROP_LIBRARY;
+            $$ = NEW_PTN PT_drop_library_stmt(@$, $3, $4);
           }
         ;
 

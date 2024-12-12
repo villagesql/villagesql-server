@@ -10548,6 +10548,9 @@ ER_WARN_REDACTED_PRIVILEGES
 ER_INVALID_OUTER_REFERENCE
   eng "Outer reference %s in window's ORDER BY or PARTITION BY clause not allowed."
 
+ER_LIBRARIES_NOT_SUPPORTED
+  eng "Libraries are not supported for %s."
+
 #
 #  End of 9.x error messages (server-to-client).
 #

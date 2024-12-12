@@ -201,7 +201,7 @@ int replace_table_table(THD *thd, GRANT_TABLE *grant_table,
                         bool all_current_privileges);
 int replace_routine_table(THD *thd, GRANT_NAME *grant_name, TABLE *table,
                           const LEX_USER &combo, const char *db,
-                          const char *routine_name, bool is_proc,
+                          const char *routine_name, Acl_type routine_acl_type,
                           Access_bitmask rights, bool revoke_grant,
                           bool all_current_privileges);
 int open_grant_tables(THD *thd, Table_ref *tables, bool *transactional_tables);
@@ -283,8 +283,9 @@ void get_privilege_access_maps(
     ACL_USER *acl_user, const List_of_auth_id_refs *using_roles,
     Access_bitmask *access, Db_access_map *db_map, Db_access_map *db_wild_map,
     Table_access_map *table_map, SP_access_map *sp_map, SP_access_map *func_map,
-    List_of_granted_roles *granted_roles, Grant_acl_set *with_admin_acl,
-    Dynamic_privileges *dynamic_acl, Restrictions &restrictions);
+    SP_access_map *lib_map, List_of_granted_roles *granted_roles,
+    Grant_acl_set *with_admin_acl, Dynamic_privileges *dynamic_acl,
+    Restrictions &restrictions);
 bool clear_default_roles(THD *thd, TABLE *table,
                          const Auth_id_ref &user_auth_id,
                          std::vector<Role_id> *default_roles);

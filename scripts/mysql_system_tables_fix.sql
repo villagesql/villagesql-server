@@ -1631,3 +1631,6 @@ FROM mysql.user WHERE super_priv = 'Y' AND @hadCreateSpatialRefrenceSystem = 0 A
 -- from mysql_native_password into caching_sha2_password.
 UPDATE mysql.user SET plugin='caching_sha2_password', authentication_string='$A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED' WHERE user='mysql.sys';
 UPDATE mysql.user SET plugin='caching_sha2_password', authentication_string='$A$005$THISISACOMBINATIONOFINVALIDSALTANDPASSWORDTHATMUSTNEVERBRBEUSED' WHERE user='mysql.session';
+
+ALTER TABLE procs_priv
+  MODIFY Routine_type enum('FUNCTION','PROCEDURE','LIBRARY') NOT NULL;

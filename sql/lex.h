@@ -378,6 +378,7 @@ static const SYMBOL symbols[] = {
     {SYM("LEFT", LEFT)},
     {SYM("LESS", LESS_SYM)},
     {SYM("LEVEL", LEVEL_SYM)},
+    {SYM("LIBRARY", LIBRARY_SYM)},
     {SYM("LIKE", LIKE)},
     {SYM("LIMIT", LIMIT)},
     {SYM("LINEAR", LINEAR_SYM)},

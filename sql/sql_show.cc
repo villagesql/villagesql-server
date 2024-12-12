@@ -347,6 +347,12 @@ bool Sql_cmd_show_create_function::execute_inner(THD *thd) {
   return sp_show_create_routine(thd, enum_sp_type::FUNCTION, lex->spname);
 }
 
+bool Sql_cmd_show_create_library::check_privileges(THD *) { return false; }
+
+bool Sql_cmd_show_create_library::execute_inner(THD *thd) {
+  return sp_show_create_routine(thd, enum_sp_type::LIBRARY, lex->spname);
+}
+
 bool Sql_cmd_show_create_procedure::check_privileges(THD *) { return false; }
 
 bool Sql_cmd_show_create_procedure::execute_inner(THD *thd) {

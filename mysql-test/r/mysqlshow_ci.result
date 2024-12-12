@@ -126,6 +126,7 @@ Database: information_schema
 | INNODB_VIRTUAL                        |
 | KEY_COLUMN_USAGE                      |
 | KEYWORDS                              |
+| LIBRARIES                             |
 | OPTIMIZER_TRACE                       |
 | PARAMETERS                            |
 | PARTITIONS                            |
@@ -137,6 +138,7 @@ Database: information_schema
 | ROLE_COLUMN_GRANTS                    |
 | ROLE_ROUTINE_GRANTS                   |
 | ROLE_TABLE_GRANTS                     |
+| ROUTINE_LIBRARIES                     |
 | ROUTINES                              |
 | SCHEMA_PRIVILEGES                     |
 | SCHEMATA                              |
@@ -209,6 +211,7 @@ Database: INFORMATION_SCHEMA
 | INNODB_VIRTUAL                        |
 | KEY_COLUMN_USAGE                      |
 | KEYWORDS                              |
+| LIBRARIES                             |
 | OPTIMIZER_TRACE                       |
 | PARAMETERS                            |
 | PARTITIONS                            |
@@ -220,6 +223,7 @@ Database: INFORMATION_SCHEMA
 | ROLE_COLUMN_GRANTS                    |
 | ROLE_ROUTINE_GRANTS                   |
 | ROLE_TABLE_GRANTS                     |
+| ROUTINE_LIBRARIES                     |
 | ROUTINES                              |
 | SCHEMA_PRIVILEGES                     |
 | SCHEMATA                              |

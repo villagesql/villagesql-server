@@ -1325,6 +1325,8 @@ bool Prepared_statement::prepare_query(THD *thd) {
     case SQLCOM_CREATE_EVENT:
     case SQLCOM_ALTER_EVENT:
     case SQLCOM_DROP_EVENT:
+    case SQLCOM_CREATE_LIBRARY:
+    case SQLCOM_DROP_LIBRARY:
     case SQLCOM_SELECT:
     case SQLCOM_DO:
     case SQLCOM_DELETE:
@@ -1345,6 +1347,7 @@ bool Prepared_statement::prepare_query(THD *thd) {
     case SQLCOM_SHOW_CREATE_FUNC:
     case SQLCOM_SHOW_CREATE_PROC:
     case SQLCOM_SHOW_CREATE:
+    case SQLCOM_SHOW_CREATE_LIBRARY:
     case SQLCOM_SHOW_CREATE_TRIGGER:
     case SQLCOM_SHOW_CREATE_USER:
     case SQLCOM_SHOW_DATABASES:

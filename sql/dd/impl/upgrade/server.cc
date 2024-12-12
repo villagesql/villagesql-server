@@ -1039,7 +1039,7 @@ bool invalid_routine(THD *thd, const dd::Schema &schema,
   Routine_event_context_guard guard(thd);
   sp_head *sp = nullptr;
   st_sp_chistics chistics;
-  prepare_sp_chistics_from_dd_routine(&routine, &chistics);
+  prepare_sp_chistics_from_dd_routine(thd, &routine, &chistics);
 
   dd::String_type return_type_str;
   prepare_return_type_string_from_dd_routine(thd, &routine, &return_type_str);

@@ -71,6 +71,7 @@ enum class Consumer_type;
 class LEX_GRANT_AS;
 class ACL_temporary_lock_state;
 typedef std::vector<ACL_temporary_lock_state> Lock_state_list;
+enum class Acl_type;
 
 namespace consts {
 extern const std::string mysql;
@@ -787,7 +788,7 @@ bool mysql_grant(THD *thd, const char *db, List<LEX_USER> &list,
                  Access_bitmask rights, bool revoke_grant, bool is_proxy,
                  const List<LEX_CSTRING> &dynamic_privilege,
                  bool grant_all_current_privileges, LEX_GRANT_AS *grant_as);
-bool mysql_routine_grant(THD *thd, Table_ref *table, bool is_proc,
+bool mysql_routine_grant(THD *thd, Table_ref *table, Acl_type routine_acl_type,
                          List<LEX_USER> &user_list, Access_bitmask rights,
                          bool revoke, bool write_to_binlog,
                          bool all_current_privileges);
@@ -805,7 +806,7 @@ bool check_column_grant_in_table_ref(THD *thd, Table_ref *table_ref,
 bool check_grant_all_columns(THD *thd, Access_bitmask want_access,
                              Field_iterator_table_ref *fields);
 bool check_grant_routine(THD *thd, Access_bitmask want_access, Table_ref *procs,
-                         bool is_proc, bool no_error);
+                         Acl_type routine_acl_type, bool no_error);
 bool check_grant_db(THD *thd, const char *db,
                     const bool check_table_grant = false);
 bool acl_check_proxy_grant_access(THD *thd, const char *host, const char *user,
@@ -821,9 +822,9 @@ bool mysql_show_grants(THD *, LEX_USER *, const List_of_auth_id_refs &, bool,
 bool mysql_show_create_user(THD *thd, LEX_USER *user, bool are_both_users_same);
 bool mysql_revoke_all(THD *thd, List<LEX_USER> &list);
 bool sp_revoke_privileges(THD *thd, const char *sp_db, const char *sp_name,
-                          bool is_proc);
+                          Acl_type routine_acl_type);
 bool sp_grant_privileges(THD *thd, const char *sp_db, const char *sp_name,
-                         bool is_proc);
+                         Acl_type routine_acl_type);
 void fill_effective_table_privileges(THD *thd, GRANT_INFO *grant,
                                      const char *db, const char *table);
 int fill_schema_user_privileges(THD *thd, Table_ref *tables, Item *cond);
@@ -850,13 +851,15 @@ bool check_one_table_access(THD *thd, Access_bitmask privilege,
 bool check_single_table_access(THD *thd, Access_bitmask privilege,
                                Table_ref *tables, bool no_errors);
 bool check_routine_access(THD *thd, Access_bitmask want_access, const char *db,
-                          char *name, bool is_proc, bool no_errors);
+                          const char *name, Acl_type routine_acl_type,
+                          bool no_errors);
 bool check_some_access(THD *thd, Access_bitmask want_access, Table_ref *table);
 bool has_full_view_routine_access(THD *thd, const char *db,
                                   const char *definer_user,
                                   const char *definer_host);
 bool has_partial_view_routine_access(THD *thd, const char *db,
-                                     const char *routine_name, bool is_proc);
+                                     const char *routine_name,
+                                     Acl_type routine_acl_type);
 bool check_access(THD *thd, Access_bitmask want_access, const char *db,
                   Access_bitmask *save_priv,
                   GRANT_INTERNAL_INFO *grant_internal_info,
