@@ -296,6 +296,18 @@ static Field *create_tmp_field_from_item(Item *item, TABLE *table) {
 
   new_field->init(table);
 
+  if (item->type() == Item::FIELD_ITEM) {
+    Item_field *item_field = down_cast<Item_field *>(item);
+    Table_ref *tr = item_field->m_table_ref;
+
+    // Set original db & table name, see Field::new_field()
+    if (new_field->orig_db_name == nullptr && tr != nullptr) {
+      new_field->orig_db_name = tr->db;
+    }
+    if (new_field->orig_table_name == nullptr && tr != nullptr) {
+      new_field->orig_table_name = tr->table_name;
+    }
+  }
   if (item->type() == Item::NULL_ITEM)
     new_field->is_created_from_null_item = true;
   return new_field;

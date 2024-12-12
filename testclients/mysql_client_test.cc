@@ -23673,6 +23673,65 @@ static void test_bug37202066() {
 #endif
 }
 
+static void test_bug37383098() {
+  myheader("test_bug37383098");
+  int rc;
+
+  rc = mysql_query(mysql, "CREATE TABLE t1(a INTEGER, b BIT)");
+  myquery(rc);
+
+  rc = mysql_query(mysql, "INSERT INTO t1 VALUES(0, b'0')");
+  myquery(rc);
+
+  MYSQL_STMT *stmt = nullptr;
+  MYSQL_RES *rs = nullptr;
+
+  const char *query = "SELECT a, b FROM t1";
+
+  const ulong type = (ulong)CURSOR_TYPE_READ_ONLY;
+
+  stmt = mysql_stmt_init(mysql);
+  rc = mysql_stmt_prepare(stmt, query, (ulong)strlen(query));
+  check_execute(stmt, rc);
+
+  rc = mysql_stmt_execute(stmt);
+  check_execute(stmt, rc);
+
+  rs = mysql_stmt_result_metadata(stmt);
+  my_print_result_metadata(rs);
+
+  verify_prepare_field(rs, 0, "a", "a", MYSQL_TYPE_LONG, "t1", "t1", current_db,
+                       11);
+  verify_prepare_field(rs, 1, "b", "b", MYSQL_TYPE_BIT, "t1", "t1", current_db,
+                       1);
+
+  mysql_free_result(rs);
+  mysql_stmt_close(stmt);
+
+  stmt = mysql_stmt_init(mysql);
+  rc = mysql_stmt_prepare(stmt, query, (ulong)strlen(query));
+  check_execute(stmt, rc);
+
+  mysql_stmt_attr_set(stmt, STMT_ATTR_CURSOR_TYPE, &type);
+
+  rc = mysql_stmt_execute(stmt);
+  check_execute(stmt, rc);
+
+  rs = mysql_stmt_result_metadata(stmt);
+  my_print_result_metadata(rs);
+
+  verify_prepare_field(rs, 0, "a", "a", MYSQL_TYPE_LONG, "t1", "t1", current_db,
+                       11);
+  verify_prepare_field(rs, 1, "b", "b", MYSQL_TYPE_BIT, "t1", "t1", current_db,
+                       1);
+
+  mysql_free_result(rs);
+  mysql_stmt_close(stmt);
+
+  rc = mysql_query(mysql, "DROP TABLE t1");
+  myquery(rc);
+}
+
 static struct my_tests_st my_tests[] = {
     {"disable_query_logs", disable_query_logs},
     {"client_query", client_query},
@@ -23987,6 +24046,7 @@ static struct my_tests_st my_tests[] = {
     {"test_wl16221_bind_param", test_wl16221_bind_param},
     {"test_bug36891894", test_bug36891894},
     {"test_bug37202066", test_bug37202066},
+    {"test_bug37383098", test_bug37383098},
     {nullptr, nullptr}};
 
 static struct my_tests_st *get_my_tests() { return my_tests; }
