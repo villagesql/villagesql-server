@@ -2739,6 +2739,38 @@ TEST_P(SplittingConnectionTest, select_overlong) {
   }
 }
 
+TEST_P(SplittingConnectionTest, empty_statements) {
+  RecordProperty("Worklog", "12794");
+  RecordProperty(
+      "Description",
+      "Check if empty statements are properly tokenized and forwarded.");
+
+  MysqlClient cli;
+
+  auto account = SharedServer::caching_sha2_empty_password_account();
+
+  cli.username(account.username);
+  cli.password(account.password);
+
+  ASSERT_NO_ERROR(
+      cli.connect(shared_router()->host(), shared_router()->port(GetParam())));
+
+  for (std::string stmt : {"", "  ", ";"}) {
+    SCOPED_TRACE("// stmt: " + stmt);
+
+    auto query_res = query_one_result(cli, stmt);
+    ASSERT_ERROR(query_res);
+    EXPECT_EQ(query_res.error().value(), 1065) << query_res.error();
+  }
+
+  for (std::string stmt : {"-- ", "/* */"}) {
+    SCOPED_TRACE("// stmt: " + stmt);
+
+    auto query_res = query_one_result(cli, stmt);
+    ASSERT_NO_ERROR(query_res);
+  }
+}
+
 INSTANTIATE_TEST_SUITE_P(Spec, SplittingConnectionTest,
                          ::testing::ValuesIn(share_connection_params),
                          [](auto &info) {
