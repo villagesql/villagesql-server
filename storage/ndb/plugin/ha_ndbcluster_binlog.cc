@@ -7781,6 +7781,9 @@ restart_cluster_failure:
     DBUG_EXECUTE_IF("ndb_binlog_log_table_maps",
                     { dbug_log_table_maps(i_ndb, current_epoch); });
 
+    DBUG_EXECUTE_IF("ndb_binlog_log_multi_server_id",
+                    { dbug_log_multi_server_id(i_ndb, current_epoch); });
+
     DBUG_EXECUTE_IF("ndb_binlog_inject_incident", {
       // Test rpl_injector function for writing incident to binlog
       const std::string message{"Epoch: " + std::to_string(current_epoch)};
