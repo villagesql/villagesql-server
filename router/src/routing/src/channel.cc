@@ -239,7 +239,7 @@ stdx::expected<size_t, std::error_code> Channel::read_to_plain(size_t sz) {
     //   1k |  2100ms  | 256ms
     //  16k |  1966ms  | 219ms
     // 256k | *6509ms* | 189ms
-    const size_t to_read = std::min(sz, 16UL * 1024);
+    const size_t to_read = std::min(sz, static_cast<size_t>(16UL * 1024));
 
     auto dyn_buf = net::dynamic_buffer(plain_buf);
 
