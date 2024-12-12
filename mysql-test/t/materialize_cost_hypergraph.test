@@ -180,6 +180,40 @@ eval $store_child_cost @cost3;
 SELECT @cost2 < @cost3;
 SELECT round(@cost3, 1);
 
+# Bug#37373959: Add rough InnoDB cost into temp-table-aggregation [postfix WL#16117]
+# Estimated cost should gradually increase as estimated temp table size
+# approaches @@tmp_table_size
+select @@tmp_table_size into @orig_tmp_table_size;
+TRUNCATE tv;
+INSERT INTO tv WITH RECURSIVE cte (n) AS
+  (SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 1000)
+    SELECT n,n,n FROM cte order by rand();
+ANALYZE TABLE tv;
+
+eval $query_prefix SELECT SQL_SMALL_RESULT avg(id) FROM tv GROUP BY id2, id3;
+eval $store_child_cost @cost1;
+
+# estimated size less than 90% of tmp_table_size; no change in cost.
+set tmp_table_size=34000;
+eval $query_prefix SELECT SQL_SMALL_RESULT avg(id) FROM tv GROUP BY id2, id3;
+eval $store_child_cost @cost2;
+SELECT round(@cost1) = round(@cost2);
+
+# estimated size = 95% of tmp_table_size. Cost increases.
+set tmp_table_size=30000;
+eval $query_prefix SELECT SQL_SMALL_RESULT avg(id) FROM tv GROUP BY id2, id3;
+eval $store_child_cost @cost3;
+SELECT @cost3 / @cost2 between 3 and 4;
+
+# estimated size more than tmp_table_size. Cost increases 5 times.
+set tmp_table_size=24000;
+eval $query_prefix SELECT SQL_SMALL_RESULT avg(id) FROM tv GROUP BY id2, id3;
+eval $store_child_cost @cost4;
+SELECT round(@cost4 / @cost2);
+
+set tmp_table_size=@orig_tmp_table_size;
+
+# Cleanup
 DROP TABLE tv;
 DROP FUNCTION get_cost;
 DROP FUNCTION get_child_cost;

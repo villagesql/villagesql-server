@@ -226,6 +226,35 @@ SELECT @cost2 < @cost3;
 SELECT round(@cost3, 1);
 round(@cost3, 1)
 3.7
+select @@tmp_table_size into @orig_tmp_table_size;
+TRUNCATE tv;
+INSERT INTO tv WITH RECURSIVE cte (n) AS
+(SELECT 1 UNION ALL SELECT n + 1 FROM cte WHERE n < 1000)
+SELECT n,n,n FROM cte order by rand();
+ANALYZE TABLE tv;
+Table	Op	Msg_type	Msg_text
+test.tv	analyze	status	OK
+EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_SMALL_RESULT avg(id) FROM tv GROUP BY id2, id3;
+SELECT get_child_cost(@jsonstr, "$.estimated_total_cost") est INTO @cost1;
+set tmp_table_size=34000;
+EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_SMALL_RESULT avg(id) FROM tv GROUP BY id2, id3;
+SELECT get_child_cost(@jsonstr, "$.estimated_total_cost") est INTO @cost2;
+SELECT round(@cost1) = round(@cost2);
+round(@cost1) = round(@cost2)
+1
+set tmp_table_size=30000;
+EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_SMALL_RESULT avg(id) FROM tv GROUP BY id2, id3;
+SELECT get_child_cost(@jsonstr, "$.estimated_total_cost") est INTO @cost3;
+SELECT @cost3 / @cost2 between 3 and 4;
+@cost3 / @cost2 between 3 and 4
+1
+set tmp_table_size=24000;
+EXPLAIN FORMAT=JSON INTO @jsonstr SELECT SQL_SMALL_RESULT avg(id) FROM tv GROUP BY id2, id3;
+SELECT get_child_cost(@jsonstr, "$.estimated_total_cost") est INTO @cost4;
+SELECT round(@cost4 / @cost2);
+round(@cost4 / @cost2)
+5
+set tmp_table_size=@orig_tmp_table_size;
 DROP TABLE tv;
 DROP FUNCTION get_cost;
 DROP FUNCTION get_child_cost;

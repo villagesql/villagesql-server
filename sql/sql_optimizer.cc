@@ -6297,25 +6297,39 @@ static ha_rows get_quick_record_count(THD *thd, JOIN_TAB *tab, ha_rows limit,
 }
 
 /*
-  Get estimated record length for semi-join materialization temptable.
+  Get estimated record length of temp tables for cost calculations.
 
   SYNOPSIS
     get_tmp_table_rec_length()
-      items  IN subquery's select list.
+      items            Represents a select list.
+      include_hidden   include hidden fields.
+      can_skip_aggs    skip aggregations not included in the temp table.
+
 
   DESCRIPTION
-    Calculate estimated record length for semi-join materialization
-    temptable. It's an estimate because we don't follow every bit of
-    create_tmp_table()'s logic. This isn't necessary as the return value of
-    this function is used only for cost calculations.
+    Calculate estimated record length for a temptable. It's an estimate because
+    we don't follow every bit of create_tmp_table()'s logic. This isn't
+    necessary as the return value of this function is used only for cost
+    calculations.
 
   RETURN
     Length of the temptable record, in bytes
 */
 
-static uint get_tmp_table_rec_length(const mem_root_deque<Item *> &items) {
+uint get_tmp_table_rec_length(const mem_root_deque<Item *> &items,
+                              bool include_hidden, bool can_skip_aggs) {
   uint len = 0;
-  for (Item *item : VisibleFields(items)) {
+  // (1) In some cases such as GROUP BY, the GROUP BY columns are included as
+  // hidden items in the JOIN fields, and these are also included in the temp
+  // table columns.  include_hidden is meant to indicate this.
+  // (2) Expressions that embed an aggregation function are sometimes not
+  // included in the temp table. E.g. 2*avg(id). can_skip_aggs is meant to
+  // indicate this.
+  for (Item *item : items) {
+    if ((!include_hidden && item->hidden) ||          // (1)
+        (can_skip_aggs && item->has_aggregation() &&  // (2)
+         item->type() != Item::SUM_FUNC_ITEM))        // (2)
+      continue;
     switch (item->result_type()) {
       case REAL_RESULT:
         len += sizeof(double);
@@ -11048,7 +11062,9 @@ static void calculate_materialization_costs(JOIN *join, Table_ref *sj_nest,
   /*
     Calculate temporary table parameters and usage costs
   */
-  const uint rowlen = get_tmp_table_rec_length(*inner_expr_list);
+  const uint rowlen = get_tmp_table_rec_length(*inner_expr_list,
+                                               /*include_hidden=*/false,
+                                               /*can_skip_aggs=*/false);
 
   const Cost_model_server *cost_model = join->cost_model();
 

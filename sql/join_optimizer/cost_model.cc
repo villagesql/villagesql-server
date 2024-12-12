@@ -226,24 +226,81 @@ static double StreamCost(THD *thd, double output_rows, int field_count) {
 }
 
 /**
+  Add InnoDB engine cost overhead into the in-memory table cost if the
+  estimated temp table size exceeds tmp_table_size.
+  @param temptable_engine_cost Pre-calculated cost of in-memory table
+  @param temp_table_size 'tmp_table_size' system variable value.
+  @param output_rows Number of rows that the path outputs.
+  @param join_fields Reference to join fields. These are used to estimate the
+         temp table row length. See get_tmp_table_rec_length() for details.
+  @returns cost after adding the disk cost overhead into the in-memory cost.
+*/
+static double AddInnodbEngineCostOverhead(
+    double temptable_engine_cost, double temp_table_size, double output_rows,
+    const mem_root_deque<Item *> &join_fields) {
+  // For a temp table that uses InnoDB storage engine, the temp table
+  // aggregation cost is observed to be this much times more than the TempTable
+  // storage engine. But it is only a rough estimate for temporary tables that
+  // fit in the buffer pool. A more detailed calibration is needed.
+
+  constexpr double kInnoDBTemptableAggregationOverhead = 5;
+
+  // The JOIN fields has hidden fields added from the GROUP BY items, and these
+  // are also present in the temp table. And, expressions containing aggregates
+  // such as '2 * avg(col))' are not included in the temp table; instead,
+  // 'avg(col)' is extracted from it and added as a temp table hidden field.
+  double rowlen = get_tmp_table_rec_length(join_fields, /*include_hidden=*/true,
+                                           /*skip_agg_exprs=*/true);
+
+  // This temp table size estimation is only based on a quick check,
+  // and based on the fact that the table's hash index consumes extra
+  // space. Proper size estimation is needed.
+  double estimated_temptable_size = output_rows * (64 + rowlen);
+
+  double buffer_ratio = estimated_temptable_size / temp_table_size;
+
+  // Make the cost transition gradual. Start doing it only when the estimated
+  // size reaches 90% of tmp_table_size.
+  double probability_innodb_engine =
+      (buffer_ratio <= 0.9)
+          ? 0
+          : (buffer_ratio >= 1 ? 1 : (buffer_ratio - 0.9) / 0.1);
+
+  double innodb_engine_cost =
+      kInnoDBTemptableAggregationOverhead * temptable_engine_cost;
+  return (1 - probability_innodb_engine) * temptable_engine_cost +
+         probability_innodb_engine * innodb_engine_cost;
+}
+
+/**
   Calculate the estimated initialization cost of a TEMPTABLE_AGGREGATE
   Accesspath This involves the cost for deduplicating input rows, inserting
   them into the temp table, and processing the aggregation functions.
   Cost estimation for this path was introduced only in hypergraph optimizer.
+  @param thd Current thread.
   @param output_rows Number of rows that the path outputs.
   @param input_rows Number of input rows to the path.
   @param agg_count Number of aggregation functions present in the path.
   @param group_by_fields Number of GROUP BY columns present.
+  @param join_fields Reference to join fields. These are used to estimate the
+         temp table row length. See get_tmp_table_rec_length() for details.
   @returns The cost estimate.
  */
-static double TempTableAggregationCost(double output_rows, double input_rows,
-                                       int agg_count, int group_by_fields) {
+static double TempTableAggregationCost(
+    THD *thd, double output_rows, double input_rows, int agg_count,
+    int group_by_fields, const mem_root_deque<Item *> &join_fields) {
   // Suggested cost formula by regression analysis:
   // -17.931E3 + o * 358.04E-3 +
   //  i * 142.04E-3 + i * aggs * 78.696E-3 + i * fields * 74.319E-3
-  return (output_rows * .358 + input_rows * (.142 + (.0787 * agg_count) +
-                                             (.0743 * group_by_fields))) /
-         kUnitCostInMicrosecondsWL16117;
+  double temptable_engine_cost =
+      (output_rows * .358 +
+       input_rows * (.142 + (.0787 * agg_count) + (.0743 * group_by_fields))) /
+      kUnitCostInMicrosecondsWL16117;
+
+  // If temp table exceeds the size threshold, add InnoDB cost overhead.
+  return AddInnodbEngineCostOverhead(temptable_engine_cost,
+                                     thd->variables.tmp_table_size, output_rows,
+                                     join_fields);
 }
 
 // End of definitions of convenience cost functions related to materialization,
@@ -1605,9 +1662,10 @@ void EstimateTemptableAggregateCost(THD *thd, AccessPath *path,
   // Add temp table initialization cost....
   double init_cost = kTempTableCreationCost;
   init_cost += TempTableAggregationCost(
-      num_output_rows, child->num_output_rows(),
+      thd, num_output_rows, child->num_output_rows(),
       query_block->join->tmp_table_param.sum_func_count,
-      CountOrderElements(query_block->join->group_list.order));
+      CountOrderElements(query_block->join->group_list.order),
+      *query_block->join->fields);
 
   double child_cost = std::max(child->cost(), 0.0);
   path->set_init_cost(init_cost + child_cost);
