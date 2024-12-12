@@ -1044,7 +1044,7 @@ GRMetadataBackendV2::fetch_instances_from_metadata_server(
   // obtained from one of the nodes belonging to a quorum.
   std::string query(
       "select C.cluster_id, C.cluster_name, I.mysql_server_uuid, I.endpoint, "
-      "I.xendpoint, I.attributes "
+      "I.xendpoint, I.attributes, I.label "
       "from "
       "mysql_innodb_cluster_metadata.v2_instances I join "
       "mysql_innodb_cluster_metadata.v2_gr_clusters C on I.cluster_id = "
@@ -1053,10 +1053,10 @@ GRMetadataBackendV2::fetch_instances_from_metadata_server(
 
   metadata_cache::ManagedCluster cluster;
   auto result_processor = [&cluster](const MySQLSession::Row &row) -> bool {
-    if (row.size() != 6) {
+    if (row.size() != 7) {
       throw metadata_cache::metadata_error(
           "Unexpected number of fields in the resultset. "
-          "Expected = 6, got = " +
+          "Expected = 7, got = " +
           std::to_string(row.size()));
     }
 
@@ -1067,6 +1067,7 @@ GRMetadataBackendV2::fetch_instances_from_metadata_server(
       return true;  // next row
     }
     set_instance_attributes(instance, as_string(row[5]));
+    instance.label = as_string(row[6]);
 
     cluster.id = as_string(row[0]);
     cluster.name = as_string(row[1]);
@@ -1224,6 +1225,7 @@ GRClusterSetMetadataBackend::update_clusterset_topology_from_metadata_server(
 
   std::string query =
       "select I.mysql_server_uuid, I.endpoint, I.xendpoint, I.attributes, "
+      "I.label, "
       "C.cluster_id, C.cluster_name, CSM.member_role, CSM.invalidated, "
       "CS.domain_name "
       "from mysql_innodb_cluster_metadata.v2_instances I join "
@@ -1246,10 +1248,11 @@ GRClusterSetMetadataBackend::update_clusterset_topology_from_metadata_server(
           const std::string node_addr_classic = as_string(row[1]);
           const std::string node_addr_x = as_string(row[2]);
           const std::string node_attributes = as_string(row[3]);
-          const std::string cluster_id = as_string(row[4]);
-          const std::string cluster_name = as_string(row[5]);
-          const bool cluster_is_primary = as_string(row[6]) == "PRIMARY";
-          const bool cluster_is_invalidated = strtoui_checked(row[7]) == 1;
+          const std::string label = as_string(row[4]);
+          const std::string cluster_id = as_string(row[5]);
+          const std::string cluster_name = as_string(row[6]);
+          const bool cluster_is_primary = as_string(row[7]) == "PRIMARY";
+          const bool cluster_is_invalidated = strtoui_checked(row[8]) == 1;
 
           if (result.clusters_data.empty() ||
               result.clusters_data.back().name != cluster_name) {
@@ -1271,7 +1274,8 @@ GRClusterSetMetadataBackend::update_clusterset_topology_from_metadata_server(
               metadata_cache::ServerRole::Secondary,
               uri_classic.host,
               uri_classic.port,
-              uri_x.port};
+              uri_x.port,
+              label};
 
           set_instance_attributes(instance, node_attributes);
 
@@ -1279,7 +1283,7 @@ GRClusterSetMetadataBackend::update_clusterset_topology_from_metadata_server(
               instance.type == mysqlrouter::InstanceType::ReadReplica) {
             result.clusters_data.back().members.push_back(instance);
             if (result.name.empty()) {
-              result.name = as_string(row[8]);
+              result.name = as_string(row[9]);
             }
           } else {
             log_warning("Ignoring unsupported instance %s:%d, type: %s",

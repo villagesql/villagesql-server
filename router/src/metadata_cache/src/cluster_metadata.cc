@@ -370,7 +370,7 @@ void ClusterMetadata::report_guideline_name(
     sqlstring query(
         "UPDATE mysql_innodb_cluster_metadata.v2_routers SET "
         "attributes = JSON_SET(attributes, '$.CurrentRoutingGuideline', ?) "
-        "where router_id = ? ");
+        "WHERE router_id = ? ");
 
     if (guideline_name.empty()) {
       query << sqlstring::null;

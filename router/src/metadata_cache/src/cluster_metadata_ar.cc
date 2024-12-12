@@ -181,7 +181,7 @@ metadata_cache::ClusterTopology ARClusterMetadata::fetch_topology_from_member(
   // comparing to other members view of the world
   std::string query =
       "select C.cluster_id, C.cluster_name, M.member_id, I.endpoint, "
-      "I.xendpoint, M.member_role, I.attributes from "
+      "I.xendpoint, M.member_role, I.attributes, I.label from "
       "mysql_innodb_cluster_metadata.v2_ar_members M join "
       "mysql_innodb_cluster_metadata.v2_instances I on I.instance_id = "
       "M.instance_id join mysql_innodb_cluster_metadata.v2_ar_clusters C on "
@@ -192,10 +192,10 @@ metadata_cache::ClusterTopology ARClusterMetadata::fetch_topology_from_member(
   }
 
   auto result_processor = [&cluster](const MySQLSession::Row &row) -> bool {
-    if (row.size() != 7) {
+    if (row.size() != 8) {
       throw metadata_cache::metadata_error(
           "Unexpected number of fields in the resultset. "
-          "Expected = 7, got = " +
+          "Expected = 8, got = " +
           std::to_string(row.size()));
     }
 
@@ -218,6 +218,7 @@ metadata_cache::ClusterTopology ARClusterMetadata::fetch_topology_from_member(
     }
 
     set_instance_attributes(instance, as_string(row[6]));
+    instance.label = as_string(row[7]);
 
     std::string warning;
     if (instance.type == mysqlrouter::InstanceType::AsyncMember) {

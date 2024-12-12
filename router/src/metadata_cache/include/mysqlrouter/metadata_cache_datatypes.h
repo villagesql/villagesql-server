@@ -107,7 +107,7 @@ class METADATA_CACHE_EXPORT ManagedInstance {
                   const std::string &p_mysql_server_uuid,
                   const ServerMode p_mode, const ServerRole p_role,
                   const std::string &p_host, const uint16_t p_port,
-                  const uint16_t p_xport);
+                  const uint16_t p_xport, std::string label);
 
   ManagedInstance(const ManagedInstance &) = default;
   ManagedInstance &operator=(const ManagedInstance &) = default;
@@ -149,7 +149,9 @@ class METADATA_CACHE_EXPORT ManagedInstance {
   /** Server tags as defined in the metadata, parsed as a key-value pairs */
   std::map<std::string, std::string, std::less<>> tags{};
 
-  uint32_t version;
+  uint32_t version{0};
+
+  std::string label;
 
   std::string to_string() const {
     std::string result = "uuid: " + mysql_server_uuid + "\n";

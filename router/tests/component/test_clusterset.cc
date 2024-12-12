@@ -3112,7 +3112,7 @@ TEST_F(ClusterSetTest, MatchClusterSetName) {
   create_clusterset(cs_options);
 
   SCOPED_TRACE("// Launch the Router");
-  /*auto &router = */ launch_router(cs_options.topology);
+  auto &router = launch_router(cs_options.topology);
 
   // Policy matching nodes from kSecondReplicaClusterId
   const std::string custom_routing_guidelines = guidelines_builder::create(
@@ -3123,8 +3123,8 @@ TEST_F(ClusterSetTest, MatchClusterSetName) {
 
   SCOPED_TRACE("Set routing guidelines");
   set_mock_metadata_on_all_cs_nodes(cs_options, custom_routing_guidelines);
-  ASSERT_TRUE(wait_for_transaction_count_increase(
-      cs_options.topology.clusters[0].nodes[0].http_port, 3));
+  EXPECT_TRUE(
+      wait_log_contains(router, "Routing guidelines document updated", 5s));
 
   SCOPED_TRACE("Set up connections matching the whole ClusterSet");
   // Let's make a bunch of new connections, they should go to all of the

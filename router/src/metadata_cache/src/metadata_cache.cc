@@ -250,13 +250,13 @@ bool metadata_cache::ManagedInstance::operator==(
          disconnect_existing_sessions_when_hidden ==
              other.disconnect_existing_sessions_when_hidden &&
          ignore == other.ignore && tags == other.tags &&
-         version == other.version;
+         version == other.version && label == other.label;
 }
 
 metadata_cache::ManagedInstance::ManagedInstance(
     mysqlrouter::InstanceType p_type, const std::string &p_mysql_server_uuid,
     const ServerMode p_mode, const ServerRole p_role, const std::string &p_host,
-    const uint16_t p_port, const uint16_t p_xport)
+    const uint16_t p_port, const uint16_t p_xport, std::string label)
     : type(p_type),
       mysql_server_uuid(p_mysql_server_uuid),
       mode(p_mode),
@@ -266,7 +266,8 @@ metadata_cache::ManagedInstance::ManagedInstance(
       xport(p_xport),
       hidden(mysqlrouter::kNodeTagHiddenDefault),
       disconnect_existing_sessions_when_hidden(
-          mysqlrouter::kNodeTagDisconnectWhenHiddenDefault) {}
+          mysqlrouter::kNodeTagDisconnectWhenHiddenDefault),
+      label(std::move(label)) {}
 
 metadata_cache::ManagedInstance::ManagedInstance(
     mysqlrouter::InstanceType p_type)

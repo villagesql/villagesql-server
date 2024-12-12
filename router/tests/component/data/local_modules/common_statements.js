@@ -306,7 +306,9 @@ function get_response(stmt_key, options) {
     case "router_select_metadata_v2_gr":
       return {
         stmt:
-            "select C.cluster_id, C.cluster_name, I.mysql_server_uuid, I.endpoint, I.xendpoint, I.attributes from mysql_innodb_cluster_metadata.v2_instances I join mysql_innodb_cluster_metadata.v2_gr_clusters C on I.cluster_id = C.cluster_id" +
+            "select C.cluster_id, C.cluster_name, I.mysql_server_uuid, I.endpoint, I.xendpoint, I.attributes, I.label " +
+            "from mysql_innodb_cluster_metadata.v2_instances I join mysql_innodb_cluster_metadata.v2_gr_clusters C " +
+            "on I.cluster_id = C.cluster_id" +
             (options.gr_id === undefined || options.gr_id === "" ?
                  " where C.cluster_name = '" + options.innodb_cluster_name +
                      "'" :
@@ -318,16 +320,18 @@ function get_response(stmt_key, options) {
             {"name": "I.mysql_server_uuid", "type": "VAR_STRING"},
             {"name": "I.addresses->>'$.mysqlClassic'", "type": "LONGBLOB"},
             {"name": "I.addresses->>'$.mysqlX'", "type": "LONGBLOB"},
-            {"name": "I.attributes", "type": "VAR_STRING"}
+            {"name": "I.attributes", "type": "VAR_STRING"},
+            {"name": "I.label", "type": "VAR_STRING"}
           ],
           rows: options["innodb_cluster_instances"].map(function(currentValue) {
             var xport = currentValue[3] === undefined ? 0 : currentValue[3];
             var attributes =
                 currentValue[4] === undefined ? "" : currentValue[4];
+            var label = currentValue[1] + ":" + currentValue[2];
             return [
               options.cluster_id, options.innodb_cluster_name, currentValue[0],
               currentValue[1] + ":" + currentValue[2],
-              currentValue[1] + ":" + xport, attributes
+              currentValue[1] + ":" + xport, attributes, label
             ]
           }),
         }
@@ -335,8 +339,9 @@ function get_response(stmt_key, options) {
     case "router_select_metadata_v2_gr_account_verification":
       return {
         stmt:
-            "select C.cluster_id, C.cluster_name, I.mysql_server_uuid, I.endpoint, I.xendpoint, I.attributes from mysql_innodb_cluster_metadata.v2_instances I join mysql_innodb_cluster_metadata.v2_gr_clusters C on I.cluster_id = C.cluster_id" +
-            " where C.cluster_name = 'some_cluster_name'",
+            "select C.cluster_id, C.cluster_name, I.mysql_server_uuid, I.endpoint, I.xendpoint, I.attributes, I.label " +
+            "from mysql_innodb_cluster_metadata.v2_instances I join mysql_innodb_cluster_metadata.v2_gr_clusters C " +
+            "on I.cluster_id = C.cluster_id where C.cluster_name = 'some_cluster_name'",
         // The Router should ignore this result, it only checks if the user has
         // rights to do it
         result: {columns: [{"name": "1", "type": "LONG"}], rows: []}
@@ -344,7 +349,9 @@ function get_response(stmt_key, options) {
     case "router_select_metadata_v2_ar":
       return {
         stmt:
-            "select C.cluster_id, C.cluster_name, M.member_id, I.endpoint, I.xendpoint, M.member_role, I.attributes from mysql_innodb_cluster_metadata.v2_ar_members M join mysql_innodb_cluster_metadata.v2_instances I on I.instance_id = M.instance_id join mysql_innodb_cluster_metadata.v2_ar_clusters C on I.cluster_id = C.cluster_id" +
+            "select C.cluster_id, C.cluster_name, M.member_id, I.endpoint, I.xendpoint, M.member_role, I.attributes, I.label " +
+            "from mysql_innodb_cluster_metadata.v2_ar_members M join mysql_innodb_cluster_metadata.v2_instances I " +
+            "on I.instance_id = M.instance_id join mysql_innodb_cluster_metadata.v2_ar_clusters C on I.cluster_id = C.cluster_id" +
             (options.cluster_id === undefined || options.cluster_id === "" ?
                  "" :
                  (" where C.cluster_id = '" + options.cluster_id + "'")),
@@ -356,7 +363,8 @@ function get_response(stmt_key, options) {
             {"name": "I.endpoint", "type": "LONGBLOB"},
             {"name": "I.xendpoint", "type": "LONGBLOB"},
             {"name": "I.member_role", "type": "VAR_STRING"},
-            {"name": "I.attributes", "type": "VAR_STRING"}
+            {"name": "I.attributes", "type": "VAR_STRING"},
+            {"name": "I.label", "type": "VAR_STRING"}
           ],
           rows: options["innodb_cluster_instances"].map(function(
               currentValue, index) {
@@ -366,10 +374,11 @@ function get_response(stmt_key, options) {
             var default_role = index == 0 ? "PRIMARY" : "SECONDARY";
             var role =
                 currentValue[5] === undefined ? default_role : currentValue[5];
+            var label = currentValue[1] + ":" + currentValue[2];
             return [
               options.cluster_id, options.innodb_cluster_name, currentValue[0],
               currentValue[1] + ":" + currentValue[2],
-              currentValue[1] + ":" + xport, role, attributes
+              currentValue[1] + ":" + xport, role, attributes, label
             ]
           }),
         }
@@ -377,7 +386,9 @@ function get_response(stmt_key, options) {
     case "router_select_metadata_v2_ar_account_verification":
       return {
         stmt:
-            "select C.cluster_id, C.cluster_name, M.member_id, I.endpoint, I.xendpoint, M.member_role, I.attributes from mysql_innodb_cluster_metadata.v2_ar_members M join mysql_innodb_cluster_metadata.v2_instances I on I.instance_id = M.instance_id join mysql_innodb_cluster_metadata.v2_ar_clusters C on I.cluster_id = C.cluster_id " +
+            "select C.cluster_id, C.cluster_name, M.member_id, I.endpoint, I.xendpoint, M.member_role, I.attributes, I.label " +
+            "from mysql_innodb_cluster_metadata.v2_ar_members M join mysql_innodb_cluster_metadata.v2_instances I " +
+            "on I.instance_id = M.instance_id join mysql_innodb_cluster_metadata.v2_ar_clusters C on I.cluster_id = C.cluster_id " +
             "where C.cluster_name ='some_cluster_name';",
         // The Router should ignore this result, it only checks if the user has
         // rights to do it
@@ -1019,7 +1030,7 @@ function get_response(stmt_key, options) {
     case "router_clusterset_all_nodes_by_clusterset_id":
       return {
         stmt:
-            "select I.mysql_server_uuid, I.endpoint, I.xendpoint, I.attributes, " +
+            "select I.mysql_server_uuid, I.endpoint, I.xendpoint, I.attributes, I.label, " +
             "C.cluster_id, C.cluster_name, CSM.member_role, CSM.invalidated, CS.domain_name " +
             "from mysql_innodb_cluster_metadata.v2_instances I " +
             "join mysql_innodb_cluster_metadata.v2_gr_clusters C on I.cluster_id = C.cluster_id join mysql_innodb_cluster_metadata.v2_cs_members CSM " +
@@ -1033,6 +1044,7 @@ function get_response(stmt_key, options) {
             {"type": "STRING", "name": "I.endpoint"},
             {"type": "STRING", "name": "I.xendpoint"},
             {"type": "STRING", "name": "I.attributes"},
+            {"type": "STRING", "name": "I.label"},
             {"type": "STRING", "name": "C.cluster_id"},
             {"type": "STRING", "name": "C.cluster_name"},
             {"type": "STRING", "name": "CSM.member_role"},
@@ -1059,8 +1071,9 @@ function get_response(stmt_key, options) {
                         node.uuid, node.host + ":" + node.classic_port,
                         node.host + ":" +
                             (node.x_port === undefined ? 0 : node.x_port),
-                        node.attributes, node.cluster_uuid, node.cluster_name,
-                        node.cluster_role, node.cluster_invalid,
+                        node.attributes, node.host + ":" + node.classic_port,
+                        node.cluster_uuid, node.cluster_name, node.cluster_role,
+                        node.cluster_invalid,
                         options.clusterset_data.clusterset_name
                       ];
                     })
@@ -1340,7 +1353,7 @@ function get_response(stmt_key, options) {
             "attributes = JSON_SET\\(IF\\(attributes IS NULL, '\\{\\}', attributes\\), '\\$\\.LocalCluster', '" +
             options.router_expected_local_cluster + "'\\) " +
             "WHERE router_id = .*",
-        "ok": {}
+        ok: {}
       };
     case "get_local_cluster_name":
       return {

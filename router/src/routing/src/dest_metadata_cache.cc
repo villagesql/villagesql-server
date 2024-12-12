@@ -291,10 +291,7 @@ DestMetadataCacheManager::get_nodes_from_topology(
       instance_info.cluster_set_name = clusterset_name;
       instance_info.cluster_role = cluster_role;
       instance_info.cluster_name = cluster_name;
-      const auto label_port =
-          cluster_member.port == 0 ? cluster_member.xport : cluster_member.port;
-      instance_info.label =
-          cluster_member.host + ":" + std::to_string(label_port);
+      instance_info.label = cluster_member.label;
       instance_info.cluster_is_invalidated = cluster.is_invalidated;
       instance_info.version = cluster_member.version;
 

@@ -203,9 +203,9 @@ TEST_F(DestMetadataCacheTest, AllowedNodesNoPrimary) {
 
   fill_instance_vector({
       {GR, "uuid1", ServerMode::ReadWrite, ServerRole::Primary, "3306", 3306,
-       33060},
+       33060, "label"},
       {GR, "uuid2", ServerMode::ReadOnly, ServerRole::Secondary, "3307", 3307,
-       33070},
+       33070, "label"},
   });
 
   EXPECT_CALL(metadata_cache_api_, add_acceptor_handler_listener(_));
@@ -215,9 +215,9 @@ TEST_F(DestMetadataCacheTest, AllowedNodesNoPrimary) {
   // new metadata - no primary
   fill_instance_vector({
       {GR, "uuid1", ServerMode::ReadOnly, ServerRole::Secondary, "3306", 3306,
-       33060},
+       33060, "label"},
       {GR, "uuid2", ServerMode::ReadOnly, ServerRole::Secondary, "3307", 3307,
-       33070},
+       33070, "label"},
   });
 
   bool callback_called{false};
@@ -255,9 +255,9 @@ TEST_F(DestMetadataCacheTest, AllowedNodes2Primaries) {
 
   InstanceVector instances{
       {GR, "uuid1", ServerMode::ReadWrite, ServerRole::Primary, "3306", 3306,
-       33060},
+       33060, "label"},
       {GR, "uuid2", ServerMode::ReadOnly, ServerRole::Secondary, "3307", 3307,
-       33070},
+       33070, "label"},
   };
 
   fill_instance_vector(instances);
@@ -315,9 +315,9 @@ TEST_F(DestMetadataCacheTest, AllowedNodesNoSecondaries) {
 
   InstanceVector instances{
       {GR, "uuid1", ServerMode::ReadWrite, ServerRole::Primary, "3306", 3306,
-       33060},
+       33060, "label"},
       {GR, "uuid2", ServerMode::ReadOnly, ServerRole::Secondary, "3307", 3307,
-       33070},
+       33070, "label"},
   };
 
   fill_instance_vector(instances);
@@ -372,9 +372,9 @@ TEST_F(DestMetadataCacheTest, AllowedNodesSecondaryDisconnectToPromoted) {
 
   InstanceVector instances{
       {GR, "uuid1", ServerMode::ReadWrite, ServerRole::Primary, "3306", 3306,
-       33060},
+       33060, "label"},
       {GR, "uuid2", ServerMode::ReadOnly, ServerRole::Secondary, "3307", 3307,
-       33070},
+       33070, "label"},
   };
 
   fill_instance_vector(instances);
@@ -434,9 +434,9 @@ TEST_F(DestMetadataCacheTest, AllowedNodesSecondaryDisconnectToPromotedTwice) {
 
   InstanceVector instances{
       {GR, "uuid1", ServerMode::ReadWrite, ServerRole::Primary, "3306", 3306,
-       33060},
+       33060, "label"},
       {GR, "uuid2", ServerMode::ReadOnly, ServerRole::Secondary, "3307", 3307,
-       33070},
+       33070, "label"},
   };
 
   fill_instance_vector(instances);
@@ -488,9 +488,9 @@ TEST_F(DestMetadataCacheTest,
 
   fill_instance_vector({
       {GR, "uuid1", ServerMode::ReadWrite, ServerRole::Primary, "3306", 3306,
-       33060},
+       33060, "label"},
       {GR, "uuid2", ServerMode::ReadOnly, ServerRole::Secondary, "3307", 3307,
-       33070},
+       33070, "label"},
   });
 
   EXPECT_CALL(metadata_cache_api_, add_acceptor_handler_listener(_));
@@ -542,9 +542,9 @@ TEST_F(DestMetadataCacheTest,
 
   fill_instance_vector({
       {GR, "uuid1", ServerMode::ReadWrite, ServerRole::Primary, "3306", 3306,
-       33060},
+       33060, "label"},
       {GR, "uuid2", ServerMode::ReadOnly, ServerRole::Secondary, "3307", 3307,
-       33070},
+       33070, "label"},
   });
 
   EXPECT_CALL(metadata_cache_api_, add_acceptor_handler_listener(_));
