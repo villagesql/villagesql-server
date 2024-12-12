@@ -15,6 +15,7 @@
 --echo ## NOTE: Results must be manually verified.
 --echo ##
 
+--source include/no_protocol.inc
 --echo
 --echo # Configure two servers to be source and replica.
 --source include/rpl/init_source_replica.inc
