@@ -30,21 +30,52 @@
 #include <ctime>
 #include <string>
 
+// Service name of a service used to leave the group with rejoin option.
 #define GROUP_REPLICATION_MANAGEMENT_SERVICE_NAME \
   "group_replication.group_replication_management"
 
+/**
+  @class GR_start_time_maintain
+
+  This class is used to maintain the timestamp of GR start.
+  During rejoin GR reset this timestamp to the current time.
+*/
 class GR_start_time_maintain {
  private:
+  // Timestamp of GR Start.
   static std::chrono::steady_clock::time_point gr_start_time;
 
  public:
+  /**
+   Resets the gr_start_time to now.
+   During rejoin GR start time is reset to now.
+ */
   static void reset_start_time();
 
+  /**
+   Calculates time difference between GR start and now and does the time
+   comparison with quarantine time.
+
+   @param[in] quarantime_time Quarantine time
+   @param[out] seconds_since_member_join Time difference between GR start and
+   now
+
+   @retval True Difference between GR start and now is bigger then quarantine
+   @retval False Difference between GR start and now is smaller then quarantine
+ */
   static bool check_if_quarantine_time_passed(
       int quarantime_time, unsigned int *seconds_since_member_join);
 };
 
+/*
+ Registers the group_replication_management service.
+ Service group_replication_management can be used to request the member to leave
+ the group with the rejoin option set.
+*/
 bool register_group_replication_management_services();
 
+/*
+ Unregisters the group_replication_management service.
+*/
 bool unregister_group_replication_management_services();
 #endif  // GR_MANAGEMENT_SERVICES_H
