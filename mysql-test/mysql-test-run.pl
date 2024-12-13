@@ -6818,6 +6818,8 @@ sub router_create_keyring($) {
   run_msyqlrouter_keyring_util($keyring_file, $keyring_master_file, "set",
                       ["root", "password", ""]);
   run_msyqlrouter_keyring_util($keyring_file, $keyring_master_file, "set",
+                      ["mrs_user", "password", ""]);
+  run_msyqlrouter_keyring_util($keyring_file, $keyring_master_file, "set",
                       ["rest-user", "jwt_secret", "secret12345"]);
   run_msyqlrouter_keyring_util($keyring_file, $keyring_master_file, "set",
                       ["account_with_auth_socket", "password", ""]);

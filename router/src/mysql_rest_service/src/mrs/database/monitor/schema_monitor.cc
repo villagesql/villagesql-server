@@ -137,7 +137,9 @@ SchemaMonitor::SchemaMonitor(
       proxy_query_factory_{query_factory},
       response_cache_{response_cache},
       file_cache_{file_cache},
-      slow_query_monitor_{slow_query_monitor} {}
+      slow_query_monitor_{slow_query_monitor},
+      md_source_destination_{cache, configuration_.provider_rw_->is_dynamic()} {
+}
 
 SchemaMonitor::~SchemaMonitor() { stop(); }
 
@@ -172,44 +174,23 @@ void SchemaMonitor::run() {
   log_system("Starting MySQL REST Metadata monitor");
 
   bool force_clear{true};
-  bool was_node_read_only{false},
-      is_node_read_only{
-          true};  // set to true to force the query on the first run
-  const bool is_destination_dynamic = configuration_.provider_rw_->is_dynamic();
   bool state{false};
   uint64_t max_audit_log_id{0};
   bool attributes_updated_on_start{false};
   do {
     try {
-      auto session_check_version =
-          cache_->get_instance(collector::kMySQLConnectionMetadataRW, true);
-      if (!is_destination_dynamic && is_node_read_only) {
-        is_node_read_only =
-            query_is_node_read_only(session_check_version.get());
-        if (was_node_read_only != is_node_read_only) {
-          if (is_node_read_only) {
-            log_warning("Node %s is read-only, stopping the REST service",
-                        session_check_version.get()->get_address().c_str());
-          } else {
-            log_info("Node %s is not read-only",
-                     session_check_version.get()->get_address().c_str());
-          }
-          was_node_read_only = is_node_read_only;
-        }
-        if (is_node_read_only) {
-          continue;
-        }
-      }
+      auto session_check_version = md_source_destination_.get_rw_session();
+      if (!session_check_version) continue;
 
       if (!attributes_updated_on_start) {
-        update_router_attributes_on_start(session_check_version.get(),
+        update_router_attributes_on_start((*session_check_version).get(),
                                           configuration_.router_id_,
                                           configuration_.developer_);
         attributes_updated_on_start = true;
       }
 
       auto supported_schema_version =
-          query_supported_mrs_version(session_check_version.get());
+          query_supported_mrs_version((*session_check_version).get());
 
       auto factory{create_schema_monitor_factory(supported_schema_version)};
 
@@ -224,15 +205,15 @@ void SchemaMonitor::run() {
 
       do {
         using namespace observability;
-        auto session = session_check_version.empty()
+        auto session = (*session_check_version).empty()
                            ? cache_->get_instance(
                                  collector::kMySQLConnectionMetadataRW, true)
-                           : std::move(session_check_version);
+                           : std::move(*session_check_version);
 
         // Detect the inconsistency between audit_log table content and our
         // state. This only does a basic check to detect a scenario where the
         // max(id) is lower than what we have already seen. This should be good
-        // enough for making sure we reintialize as expected between the MTR
+        // enough for making sure we reinitialize as expected between the MTR
         // test runs if needed. TODO: This should be removed once we have a
         // proper way of forcing the MRS full refresh from outside while it is
         // running.
@@ -338,32 +319,8 @@ void SchemaMonitor::run() {
           }
         }
       } while (wait_until_next_refresh());
-    } catch (const mrs::database::QueryState::NoRows &exc) {
-      log_error("Can't refresh MRDS layout, because of the following error:%s.",
-                exc.what());
-      force_clear = true;
-    } catch (const mysqlrouter::MySQLSession::Error &exc) {
-      log_error("Can't refresh MRDS layout, because of the following error:%s.",
-                exc.what());
-      if (exc.code() == ER_BAD_DB_ERROR || exc.code() == ER_NO_SUCH_TABLE) {
-        force_clear = true;
-      }
-
-      if (!is_destination_dynamic &&
-          exc.code() == ER_OPTION_PREVENTS_STATEMENT) {
-        is_node_read_only = true;
-        force_clear = true;
-      }
-    } catch (const ServiceDisabled &) {
-      force_clear = true;
-    } catch (const AuditLogInconsistency &) {
-      log_warning(
-          "audit_log table inscosistency discovered, forcing full refresh from "
-          "metadata");
-      force_clear = true;
-    } catch (const std::exception &exc) {
-      log_error("Can't refresh MRDS layout, because of the following error:%s.",
-                exc.what());
+    } catch (const std::exception &) {
+      force_clear = md_source_destination_.handle_error();
     }
 
     if (force_clear) {
@@ -381,6 +338,98 @@ bool SchemaMonitor::wait_until_next_refresh() {
       std::chrono::seconds(configuration_.metadata_refresh_interval_),
       [this](void *) { return !state_.is(k_running); });
   return state_.is(k_running);
+}
+
+std::optional<collector::MysqlCacheManager::CachedObject>
+SchemaMonitor::MetadataSourceDestination::get_rw_session() {
+  if (is_dynamic_) {
+    return cache_->get_instance(collector::kMySQLConnectionMetadataRW, true);
+  }
+
+  collector::MysqlCacheManager::CachedObject result_session;
+  try {
+    result_session =
+        cache_->get_instance(collector::kMySQLConnectionMetadataRW, true);
+    if (current_destination_state_ == DestinationState::k_offline) {
+      current_destination_state_ = DestinationState::k_ok;
+    }
+  } catch (const mysqlrouter::MySQLSession::Error &exc) {
+    if (exc.code() == ER_SERVER_OFFLINE_MODE ||
+        exc.code() == ER_SERVER_OFFLINE_MODE_USER) {
+      current_destination_state_ = DestinationState::k_offline;
+    } else
+      throw;
+  }
+
+  if (current_destination_state_ == DestinationState::k_read_only) {
+    if (!query_is_node_read_only(result_session.get())) {
+      current_destination_state_ = DestinationState::k_ok;
+    }
+  }
+
+  if (previous_destination_state_ != current_destination_state_) {
+    if (current_destination_state_ != DestinationState::k_ok) {
+      const std::string node_id =
+          current_destination_state_ != DestinationState::k_offline
+              ? result_session.get()->get_address()
+              : "";
+      log_warning("Node %s is %s, stopping the REST service", node_id.c_str(),
+                  (current_destination_state_ == DestinationState::k_read_only)
+                      ? "read-only"
+                      : "offline");
+    } else {
+      log_info("Node %s is not read-only nor offline",
+               result_session.get()->get_address().c_str());
+    }
+    previous_destination_state_ = current_destination_state_;
+  }
+  if (current_destination_state_ != DestinationState::k_ok) {
+    return std::nullopt;
+  }
+
+  return result_session;
+}
+
+bool SchemaMonitor::MetadataSourceDestination::handle_error() {
+  bool force_clear{false};
+  try {
+    throw;
+  } catch (const mrs::database::QueryState::NoRows &exc) {
+    log_error("Can't refresh MRDS layout, because of the following error:%s.",
+              exc.what());
+    force_clear = true;
+  } catch (const mysqlrouter::MySQLSession::Error &exc) {
+    log_error("Can't refresh MRDS layout, because of the following error:%s.",
+              exc.what());
+    if (exc.code() == ER_BAD_DB_ERROR || exc.code() == ER_NO_SUCH_TABLE) {
+      force_clear = true;
+    }
+
+    if (!is_dynamic_) {
+      if (exc.code() == ER_OPTION_PREVENTS_STATEMENT) {
+        current_destination_state_ = DestinationState::k_read_only;
+        force_clear = true;
+      }
+
+      if (exc.code() == ER_SERVER_OFFLINE_MODE ||
+          exc.code() == ER_SERVER_OFFLINE_MODE_USER) {
+        current_destination_state_ = DestinationState::k_offline;
+        force_clear = true;
+      }
+    }
+  } catch (const ServiceDisabled &) {
+    force_clear = true;
+  } catch (const AuditLogInconsistency &) {
+    log_warning(
+        "audit_log table inscosistency discovered, forcing full refresh from "
+        "metadata");
+    force_clear = true;
+  } catch (const std::exception &exc) {
+    log_error("Can't refresh MRDS layout, because of the following error:%s.",
+              exc.what());
+  }
+
+  return force_clear;
 }
 
 }  // namespace database

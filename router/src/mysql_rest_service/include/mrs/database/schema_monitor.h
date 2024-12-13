@@ -64,6 +64,27 @@ class SchemaMonitor {
   void stop();
 
  private:
+  class MetadataSourceDestination {
+   public:
+    MetadataSourceDestination(collector::MysqlCacheManager *cache,
+                              const bool is_dynamic)
+        : cache_{cache}, is_dynamic_{is_dynamic} {}
+
+    std::optional<collector::MysqlCacheManager::CachedObject> get_rw_session();
+    bool handle_error();
+
+   private:
+    enum DestinationState { k_ok, k_read_only, k_offline };
+
+    DestinationState current_destination_state_{
+        DestinationState::k_read_only};  // initialize with read-only to force
+                                         // check on the first run
+    DestinationState previous_destination_state_{DestinationState::k_ok};
+
+    collector::MysqlCacheManager *cache_;
+    const bool is_dynamic_;
+  };
+
   void run();
   bool wait_until_next_refresh();
 
@@ -87,6 +108,7 @@ class SchemaMonitor {
   mrs::ResponseCache *response_cache_;
   mrs::ResponseCache *file_cache_;
   SlowQueryMonitor *slow_query_monitor_;
+  MetadataSourceDestination md_source_destination_;
 };
 
 }  // namespace database
