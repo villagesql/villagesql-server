@@ -876,6 +876,8 @@ AccessPath *CreateNestedLoopAccessPath(THD *thd, AccessPath *outer,
   path->nested_loop_join().outer = outer;
   path->nested_loop_join().inner = inner;
   path->nested_loop_join().join_type = join_type;
+  path->has_group_skip_scan =
+      outer->has_group_skip_scan || inner->has_group_skip_scan;
   if (join_type == JoinType::ANTI || join_type == JoinType::SEMI) {
     // This does not make sense as an optimization for anti- or semijoins.
     path->nested_loop_join().pfs_batch_mode = false;
@@ -962,6 +964,8 @@ AccessPath *CreateBKAAccessPath(THD *thd, JOIN *join, AccessPath *outer_path,
   // Will be set later if we get a weedout access path as parent.
   path->bka_join().store_rowids = false;
   path->bka_join().tables_to_get_rowid_for = 0;
+  path->has_group_skip_scan =
+      outer_path->has_group_skip_scan || inner_path->has_group_skip_scan;
 
   return path;
 }
@@ -2319,6 +2323,8 @@ static AccessPath *CreateHashJoinAccessPath(
   path->hash_join().store_rowids = false;
   path->hash_join().rewrite_semi_to_inner = false;
   path->hash_join().tables_to_get_rowid_for = 0;
+  path->has_group_skip_scan =
+      probe_path->has_group_skip_scan || build_path->has_group_skip_scan;
 
   SetCostOnHashJoinAccessPath(*thd->cost_model(), qep_tab->position(), path);
 

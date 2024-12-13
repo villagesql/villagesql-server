@@ -5014,6 +5014,8 @@ void CostingReceiver::ProposeHashJoin(
   join_path.hash_join().rewrite_semi_to_inner = rewrite_semi_to_inner;
   join_path.hash_join().tables_to_get_rowid_for = 0;
   join_path.hash_join().allow_spill_to_disk = true;
+  join_path.has_group_skip_scan =
+      left_path->has_group_skip_scan || right_path->has_group_skip_scan;
 
   // See the equivalent code in ProposeNestedLoopJoin().
   if (rewrite_semi_to_inner) {
@@ -5609,6 +5611,9 @@ void CostingReceiver::ProposeNestedLoopJoin(
   join_path.nested_loop_join().already_expanded_predicates = false;
   join_path.nested_loop_join().outer = left_path;
   join_path.nested_loop_join().inner = right_path;
+  join_path.has_group_skip_scan =
+      left_path->has_group_skip_scan || right_path->has_group_skip_scan;
+
   if (rewrite_semi_to_inner) {
     // This join is a semijoin (which is non-commutative), but the caller wants
     // us to try to invert it anyway; or to be precise, it has already inverted
