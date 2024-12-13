@@ -8222,6 +8222,15 @@ static int create_ndb_column(THD *thd, NDBCOL &col, Field *field,
             }
             mod_size = size;
           }
+          if (col.getPartSize() == 0) {
+            if (thd) {
+              get_thd_ndb(thd)->push_warning(
+                  "BLOB_INLINE_SIZE not supported for BLOB column with no part "
+                  "table (e.g. TINYBLOB), using default value %d",
+                  size);
+            }
+            mod_size = size;
+          }
           col.setInlineSize(mod_size);
         } else {
           col.setInlineSize(size);
@@ -8416,10 +8425,10 @@ static int create_ndb_column(THD *thd, NDBCOL &col, Field *field,
         col.setType(NDBCOL::Text);
         col.setCharset(cs);
       }
-      col.setInlineSize(256);
       // No parts
       col.setPartSize(0);
       col.setStripeSize(0);
+      set_blob_inline_size(thd, col, 256);
       break;
     // mysql_type_blob:
     case MYSQL_TYPE_GEOMETRY:
@@ -8443,12 +8452,13 @@ static int create_ndb_column(THD *thd, NDBCOL &col, Field *field,
         if (field_blob->max_data_length() < (1 << 8))
           goto mysql_type_tiny_blob;
         else if (field_blob->max_data_length() < (1 << 16)) {
-          set_blob_inline_size(thd, col, 256);
-          col.setPartSize(2000);
-          col.setStripeSize(0);
           if (mod_maxblob->m_found) {
             col.setPartSize(DEFAULT_MAX_BLOB_PART_SIZE);
+          } else {
+            col.setPartSize(2000);
           }
+          col.setStripeSize(0);
+          set_blob_inline_size(thd, col, 256);
         } else if (field_blob->max_data_length() < (1 << 24))
           goto mysql_type_medium_blob;
         else
@@ -8463,12 +8473,13 @@ static int create_ndb_column(THD *thd, NDBCOL &col, Field *field,
         col.setType(NDBCOL::Text);
         col.setCharset(cs);
       }
-      set_blob_inline_size(thd, col, 256);
-      col.setPartSize(4000);
-      col.setStripeSize(0);
       if (mod_maxblob->m_found) {
         col.setPartSize(DEFAULT_MAX_BLOB_PART_SIZE);
+      } else {
+        col.setPartSize(4000);
       }
+      col.setStripeSize(0);
+      set_blob_inline_size(thd, col, 256);
       break;
     mysql_type_long_blob:
     case MYSQL_TYPE_LONG_BLOB:
@@ -8478,10 +8489,10 @@ static int create_ndb_column(THD *thd, NDBCOL &col, Field *field,
         col.setType(NDBCOL::Text);
         col.setCharset(cs);
       }
-      set_blob_inline_size(thd, col, 256);
+      // The mod_maxblob modified has no effect here, already at max
       col.setPartSize(DEFAULT_MAX_BLOB_PART_SIZE);
       col.setStripeSize(0);
-      // The mod_maxblob modified has no effect here, already at max
+      set_blob_inline_size(thd, col, 256);
       break;
 
     // MySQL 5.7 binary-encoded JSON type
@@ -8500,9 +8511,9 @@ static int create_ndb_column(THD *thd, NDBCOL &col, Field *field,
       const int NDB_JSON_PART_SIZE = 8100;
 
       col.setType(NDBCOL::Blob);
-      set_blob_inline_size(thd, col, NDB_JSON_INLINE_SIZE);
       col.setPartSize(NDB_JSON_PART_SIZE);
       col.setStripeSize(0);
+      set_blob_inline_size(thd, col, NDB_JSON_INLINE_SIZE);
       break;
     }
     case MYSQL_TYPE_VECTOR: {
