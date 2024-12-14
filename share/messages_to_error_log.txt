@@ -105,7 +105,7 @@ ER_RPL_GTID_TABLE_CANNOT_OPEN
 ER_SYSTEM_SCHEMA_NOT_FOUND
   eng "System schema directory does not exist."
 
-ER_DD_INIT_UPGRADE_FAILED
+OBSOLETE_ER_DD_INIT_UPGRADE_FAILED
   eng "Error in initializing dictionary, upgrade will do a cleanup and exit"
 
 ER_VIEW_UNKNOWN_CHARSET_OR_COLLATION
