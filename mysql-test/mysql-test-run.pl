@@ -482,6 +482,7 @@ sub main {
   $secondary_engine_support =
     ($secondary_engine_support and find_secondary_engine($bindir)) ? 1 : 0;
 
+
   if ($secondary_engine_support) {
     check_secondary_engine_features(using_extern());
     # Append secondary engine test suite to list of default suites if found.
