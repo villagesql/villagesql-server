@@ -857,10 +857,6 @@ TEST_F(XComControlTest, JoinTestWithoutBootNorPeers) {
 }
 
 TEST_F(XComControlTest, JoinTestSkipOwnNodeAndCycleThroughPeerNodes) {
-  connection_descriptor *con =
-      (connection_descriptor *)malloc(sizeof(connection_descriptor));
-  con->fd = 0;
-
   /*connection_descriptor *failed_con =
       (connection_descriptor *)malloc(sizeof(connection_descriptor *));
   failed_con->fd = -1;*/

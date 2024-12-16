@@ -1882,7 +1882,7 @@ void Gcs_xcom_control::set_node_address(
   */
   m_local_node_info = new Gcs_xcom_node_information(address);
 
-  Network_configuration_parameters params;
+  Network_configuration_parameters params{};
   params.port = xcom_node_address->get_member_port();
   m_comms_operation_interface->configure_active_provider(params);
 }
