@@ -3870,7 +3870,7 @@ TEST_F(MDLHtonNotifyTest, NotifyNamespaces) {
       false,  // RESOURCE_GROUPS
       false,  // FOREIGN_KEY
       false,  // CHECK_CONSTRAINT
-      true    // LIBRARY
+      false   // LIBRARY
   };
   static_assert(
       sizeof(notify_or_not) == MDL_key::NAMESPACE_END,
@@ -3880,6 +3880,7 @@ TEST_F(MDLHtonNotifyTest, NotifyNamespaces) {
     MDL_request request;
     if (static_cast<MDL_key::enum_mdl_namespace>(i) == MDL_key::FUNCTION ||
         static_cast<MDL_key::enum_mdl_namespace>(i) == MDL_key::PROCEDURE ||
+        static_cast<MDL_key::enum_mdl_namespace>(i) == MDL_key::LIBRARY ||
         static_cast<MDL_key::enum_mdl_namespace>(i) == MDL_key::TRIGGER ||
         static_cast<MDL_key::enum_mdl_namespace>(i) == MDL_key::EVENT ||
         static_cast<MDL_key::enum_mdl_namespace>(i) ==
@@ -3899,12 +3900,12 @@ TEST_F(MDLHtonNotifyTest, NotifyNamespaces) {
     m_mdl_context.release_transactional_locks();
 
     if (notify_or_not[i]) {
-      EXPECT_EQ(1U, pre_acquire_count());
-      EXPECT_EQ(1U, post_release_count());
+      EXPECT_EQ(1U, pre_acquire_count()) << "index:" << i;
+      EXPECT_EQ(1U, post_release_count()) << "index:" << i;
       reset_counts_and_keys();
     } else {
-      EXPECT_EQ(0U, pre_acquire_count());
-      EXPECT_EQ(0U, post_release_count());
+      EXPECT_EQ(0U, pre_acquire_count()) << "index:" << i;
+      EXPECT_EQ(0U, post_release_count()) << "index:" << i;
     }
   }
 }
