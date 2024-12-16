@@ -1,9 +1,6 @@
 
 --source include/no_valgrind_without_big.inc
 
-# BUG#37382579 The SELECT * FROM INFORMATION_SCHEMA.ROUTINE_LIBRARIES fails when a queried from the hypergraph.
---source include/not_hypergraph.inc
-
 # Binlog is required
 --source include/have_log_bin.inc
 

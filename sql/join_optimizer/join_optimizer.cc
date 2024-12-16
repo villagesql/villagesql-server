@@ -3541,6 +3541,10 @@ AccessPath *CostingReceiver::MakeMaterializePath(const AccessPath &path,
     materialize_path->set_init_once_cost(materialize_path->cost());
     materialize_path->num_output_rows_before_filter = path.num_output_rows();
 
+    // Table functions are always rematerialized before they are rescanned, so
+    // row IDs never survive a rescan.
+    materialize_path->safe_for_rowid = AccessPath::SAFE_IF_SCANNED_ONCE;
+
     materialize_path->parameter_tables = GetNodeMapFromTableMap(
         tl->table_function->used_tables() & ~PSEUDO_TABLE_BITS,
         m_graph->table_num_to_node_num);

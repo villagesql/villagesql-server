@@ -1568,3 +1568,14 @@ EXPLAIN FORMAT=TREE DELETE FROM t WHERE EXISTS
 );
 
 DROP TABLE t;
+
+--echo #
+--echo # Bug#37382579: Hypergraph crash with JSON_TABLE and escaped characters
+--echo #
+
+CREATE TABLE t(txt LONGTEXT);
+INSERT INTO t VALUES ('[1]'), ('[2]'), ('[3]');
+SELECT *
+FROM t, JSON_TABLE(txt, '$[*]' COLUMNS (i INT PATH '$')) AS jt
+ORDER BY i;
+DROP TABLE t;
