@@ -3938,8 +3938,7 @@ void Item_udf_sum::clear() {
 bool Item_udf_sum::add() {
   DBUG_TRACE;
   assert(udf.is_initialized());
-  udf.add(&null_value);
-  return false;
+  return udf.add(&null_value);
 }
 
 void Item_udf_sum::cleanup() {

@@ -4976,17 +4976,24 @@ void udf_handler::clear() {
   is_null = 0;
   Udf_func_clear func = u_d->func_clear;
   func(&initid, &is_null, &error);
+  assert(is_null == 0);
+  assert(error == 0);
 }
 
-void udf_handler::add(bool *null_value) {
+bool udf_handler::add(bool *null_value) {
   assert(is_initialized());
+  assert(error == 0 || error == 1);
   if (get_arguments()) {
     *null_value = true;
-    return;
+    return static_cast<bool>(error);
   }
   Udf_func_add func = u_d->func_add;
   func(&initid, &f_args, &is_null, &error);
-  *null_value = (bool)(is_null || error);
+  assert(is_null == 0 || is_null == 1);
+  assert(error == 0 || error == 1);
+  *null_value = static_cast<bool>(is_null);
+
+  return static_cast<bool>(error);
 }
 
 /**

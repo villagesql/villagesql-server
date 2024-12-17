@@ -140,6 +140,11 @@ MYSQL_ADD_COMPONENT(test_mysql_runtime_error
   MODULE_ONLY
   TEST_ONLY
   )
+MYSQL_ADD_COMPONENT(test_udf_aggregate
+  test_udf_aggregate.cc
+  MODULE_ONLY
+  TEST_ONLY
+  )
 MYSQL_ADD_COMPONENT(test_mysql_current_thread_reader
   test_mysql_current_thread_reader.cc
   MODULE_ONLY

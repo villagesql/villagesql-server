@@ -128,7 +128,7 @@ class udf_handler {
   my_decimal *val_decimal(bool *null_value, my_decimal *dec_buf);
   String *val_str(String *str, String *save_str);
   void clear();
-  void add(bool *null_value);
+  bool add(bool *null_value);
 
  private:
   bool get_arguments();

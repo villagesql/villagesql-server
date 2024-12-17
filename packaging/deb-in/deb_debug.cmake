@@ -191,6 +191,7 @@ usr/lib/mysql/plugin/debug/pfs_example_plugin_employee.so
 usr/lib/mysql/plugin/debug/component_pfs_example.so
 usr/lib/mysql/plugin/debug/component_mysqlx_global_reset.so
 usr/lib/mysql/plugin/debug/component_test_audit_api_message.so
+usr/lib/mysql/plugin/debug/component_test_udf_aggregate.so
 usr/lib/mysql/plugin/debug/component_test_udf_services.so
 usr/lib/mysql/plugin/debug/component_test_mysql_system_variable_set.so
 usr/lib/mysql/plugin/debug/component_test_table_access.so

@@ -146,6 +146,9 @@ component_test_mysql_current_thread_reader  plugin_output_directory  no  TEST_MY
 # test mysql_runtime_error service
 component_test_mysql_runtime_error  plugin_output_directory  no  TEST_MYSQL_RUNTIME_ERROR_COMPONENT
 
+# test mysql_udf_aggregate_error service
+component_test_udf_aggregate  plugin_output_directory  no  TEST_UDF_AGGREGATE
+
 # mysqlbackup component
 component_mysqlbackup           plugin_output_directory  no  MYSQLBACKUP_COMPONENT
 

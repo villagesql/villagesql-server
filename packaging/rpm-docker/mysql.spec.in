@@ -373,6 +373,7 @@ for p in \
          component_test_sys_var_service_str.so \
          component_test_session_var_service.so \
          component_test_table_access.so \
+         component_test_udf_aggregate.so \
          component_test_udf_registration.so \
          component_test_udf_services.so \
          component_udf_reg_3_func.so \
