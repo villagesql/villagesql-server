@@ -2843,6 +2843,7 @@ void ibuf_update_max_tablespace_id(void) {
     max_space_id = mach_read_from_4(field);
   }
 
+  pcur.close();
   ibuf_mtr_commit(&mtr);
 
   /* printf("Maximum space id in insert buffer %lu\n", max_space_id); */
