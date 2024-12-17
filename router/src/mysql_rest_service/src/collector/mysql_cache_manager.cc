@@ -241,13 +241,4 @@ void MysqlCacheManager::configure(const std::string &json_object) {
       cache_options.userdata_rw_limit.value_or(default_mysql_cache_instances_));
 }
 
-std::unique_ptr<collector::CountedMySQLSession>
-MysqlCacheManager::clone_instance(
-    const CountedMySQLSession::ConnectionParameters &params) {
-  std::unique_ptr<CountedMySQLSession> obj{new CountedMySQLSession()};
-  obj->connect_and_set_opts(params, {});
-  mrs::Counter<kEntityCounterMySQLConnectionsCreated>::increment();
-  return obj;
-}
-
 }  // namespace collector

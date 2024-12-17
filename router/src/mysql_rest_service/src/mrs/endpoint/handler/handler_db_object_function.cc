@@ -90,10 +90,9 @@ HandlerDbObjectFunction::HandlerDbObjectFunction(
     std::weak_ptr<DbObjectEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager,
     mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache,
-    mrs::ResponseCache *response_cache,
-    mrs::database::SlowQueryMonitor *slow_monitor)
-    : HandlerDbObjectTable{endpoint, auth_manager,   gtid_manager,
-                           cache,    response_cache, slow_monitor} {}
+    mrs::ResponseCache *response_cache)
+    : HandlerDbObjectTable{endpoint, auth_manager, gtid_manager, cache,
+                           response_cache} {}
 
 HttpResult HandlerDbObjectFunction::handle_delete(
     [[maybe_unused]] rest::RequestContext *ctxt) {
@@ -171,9 +170,7 @@ HttpResult HandlerDbObjectFunction::handle_put(
   database::QueryRestFunction db;
   try {
     if (entry_->format != mrs::database::entry::DbObject::formatMedia) {
-      slow_monitor_->execute(
-          [&]() { db.query_entries(session.get(), obj, values); },
-          session.get(), get_options().query.timeout);
+      db.query_entries(session.get(), obj, values);
 
       Counter<kEntityCounterRestReturnedItems>::increment(db.items);
       Counter<kEntityCounterRestAffectedItems>::increment(
@@ -200,8 +197,7 @@ HttpResult HandlerDbObjectFunction::handle_put(
       return {std::move(db.response)};
     }
 
-    slow_monitor_->execute([&]() { db.query_raw(session.get(), obj, values); },
-                           session.get(), get_options().query.timeout);
+    db.query_raw(session.get(), obj, values);
 
     Counter<kEntityCounterRestReturnedItems>::increment(db.items);
     Counter<kEntityCounterRestAffectedItems>::increment(
@@ -279,10 +275,7 @@ HttpResult HandlerDbObjectFunction::handle_get(
     if (entry_->format != mrs::database::entry::DbObject::formatMedia) {
       log_debug(
           "HandlerDbObjectFunction::handle_get - generating 'Item' response");
-
-      slow_monitor_->execute(
-          [&]() { db.query_entries(session.get(), obj, sql_values); },
-          session.get(), get_options().query.timeout);
+      db.query_entries(session.get(), obj, sql_values);
 
       Counter<kEntityCounterRestReturnedItems>::increment(db.items);
       Counter<kEntityCounterRestAffectedItems>::increment(
@@ -301,9 +294,8 @@ HttpResult HandlerDbObjectFunction::handle_get(
 
       return {std::move(db.response)};
     }
-    slow_monitor_->execute(
-        [&]() { db.query_raw(session.get(), obj, sql_values); }, session.get(),
-        get_options().query.timeout);
+
+    db.query_raw(session.get(), obj, sql_values);
 
     log_debug("media has size:%i", (int)db.response.length());
 

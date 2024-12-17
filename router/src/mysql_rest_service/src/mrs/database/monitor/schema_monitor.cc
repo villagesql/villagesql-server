@@ -126,8 +126,7 @@ SchemaMonitor::SchemaMonitor(
     mrs::observability::EntitiesManager *entities_manager,
     mrs::GtidManager *gtid_manager,
     mrs::database::QueryFactoryProxy *query_factory,
-    mrs::ResponseCache *response_cache, mrs::ResponseCache *file_cache,
-    SlowQueryMonitor *slow_query_monitor)
+    mrs::ResponseCache *response_cache, mrs::ResponseCache *file_cache)
     : configuration_{configuration},
       cache_{cache},
       dbobject_manager_{dbobject_manager},
@@ -136,8 +135,7 @@ SchemaMonitor::SchemaMonitor(
       gtid_manager_{gtid_manager},
       proxy_query_factory_{query_factory},
       response_cache_{response_cache},
-      file_cache_{file_cache},
-      slow_query_monitor_{slow_query_monitor} {}
+      file_cache_{file_cache} {}
 
 SchemaMonitor::~SchemaMonitor() { stop(); }
 
@@ -155,6 +153,8 @@ void SchemaMonitor::stop() {
       cv.notify_all();
     }
   });
+  // The thread might be already stopped or even it has never started
+  if (monitor_thread_.joinable()) monitor_thread_.join();
 }
 
 class ServiceDisabled : public std::runtime_error {
@@ -264,7 +264,6 @@ void SchemaMonitor::run() {
           cache_->configure(global_json_config);
           response_cache_->configure(global_json_config);
           file_cache_->configure(global_json_config);
-          slow_query_monitor_->configure(global_json_config);
 
           log_debug("route turn=%s, changed=%s",
                     (fetcher.get_state().service_enabled ? "on" : "off"),

@@ -23,7 +23,7 @@
 --echo #
 --echo ## 1. GTID synchronization using SELECT WAIT_FOR..
 --let $test_schema=basic
---let $test_options='{"sqlQuery":{"wait":5}}'
+--let $test_options='{"query":{"wait":5}}'
 --let $test_obj1=t1
 --let $test_obj2=t2
 --source ../include/test_metadata_cluster_basic_single_primary_gtid.inc

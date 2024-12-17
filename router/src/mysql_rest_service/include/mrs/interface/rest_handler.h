@@ -109,7 +109,6 @@ class Options {
    public:
     uint64_t wait{1};
     bool embed_wait{false};
-    uint64_t timeout{0};
   } query;
 
   class Result {

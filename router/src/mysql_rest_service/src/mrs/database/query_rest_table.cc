@@ -50,18 +50,14 @@ using MySQLSession = mysqlrouter::MySQLSession;
 
 QueryRestTable::QueryRestTable(const JsonTemplateFactory *factory,
                                bool encode_bigints_as_strings,
-                               bool include_links,
-                               uint64_t max_execution_time_ms)
+                               bool include_links)
     : factory_{factory},
       encode_bigints_as_strings_{encode_bigints_as_strings},
-      include_links_{include_links},
-      max_execution_time_ms_(max_execution_time_ms) {}
+      include_links_{include_links} {}
 
 QueryRestTable::QueryRestTable(bool encode_bigints_as_strings,
-                               bool include_links,
-                               uint64_t max_execution_time_ms)
-    : QueryRestTable(nullptr, encode_bigints_as_strings, include_links,
-                     max_execution_time_ms) {}
+                               bool include_links)
+    : QueryRestTable(nullptr, encode_bigints_as_strings, include_links) {}
 
 void QueryRestTable::query_entries(
     MySQLSession *session, std::shared_ptr<database::entry::Object> object,
@@ -397,15 +393,7 @@ void QueryRestTable::build_query(const ObjectFieldFilter &field_filter,
 
   qb.process_view(object_);
 
-  if (max_execution_time_ms_ > 0) {
-    query_ = sqlstring(
-        "SELECT /*+ MAX_EXECUTION_TIME(?) */ JSON_OBJECT(?) as doc FROM ? ? "
-        "LIMIT ?,?");
-
-    query_ << max_execution_time_ms_;
-  } else {
-    query_ = sqlstring("SELECT JSON_OBJECT(?) as doc FROM ? ? LIMIT ?,?");
-  }
+  query_ = sqlstring("SELECT JSON_OBJECT(?) as doc FROM ? ? LIMIT ?,?");
   std::vector<sqlstring> json_object_fields;
 
   if (!qb.select_items().is_empty())

@@ -190,9 +190,6 @@ class MysqlCacheManager {
     }
   }
 
-  std::unique_ptr<collector::CountedMySQLSession> clone_instance(
-      const CountedMySQLSession::ConnectionParameters &params);
-
   virtual void change_instance(CachedObject &instance,
                                collector::MySQLConnection type) {
     switch (type) {

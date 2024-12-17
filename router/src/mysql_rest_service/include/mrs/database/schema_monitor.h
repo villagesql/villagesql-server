@@ -25,6 +25,7 @@
 #ifndef ROUTER_SRC_REST_MRS_SRC_MRS_MONITOR_H_
 #define ROUTER_SRC_REST_MRS_SRC_MRS_MONITOR_H_
 
+#include <thread>
 #include <vector>
 
 #include "mysql/harness/stdx/monitor.h"
@@ -36,7 +37,6 @@
 #include "mrs/database/entry/db_object.h"
 #include "mrs/database/monitor/schema_monitor_factory.h"
 #include "mrs/database/query_factory_proxy.h"
-#include "mrs/database/slow_query_monitor.h"
 #include "mrs/endpoint_manager.h"
 #include "mrs/gtid_manager.h"
 #include "mrs/interface/query_monitor_factory.h"
@@ -56,8 +56,7 @@ class SchemaMonitor {
                 mrs::GtidManager *gtid_manager,
                 mrs::database::QueryFactoryProxy *query_factory,
                 mrs::ResponseCache *response_cache,
-                mrs::ResponseCache *file_cache,
-                SlowQueryMonitor *slow_query_monitor);
+                mrs::ResponseCache *file_cache);
   ~SchemaMonitor();
 
   void start();
@@ -75,6 +74,7 @@ class SchemaMonitor {
 
   enum State { k_initializing, k_running, k_stopped };
 
+  std::thread monitor_thread_;
   const mrs::Configuration configuration_;
   collector::MysqlCacheManager *cache_;
   mrs::EndpointManager *dbobject_manager_;
@@ -86,7 +86,6 @@ class SchemaMonitor {
   mrs::database::QueryFactoryProxy *proxy_query_factory_;
   mrs::ResponseCache *response_cache_;
   mrs::ResponseCache *file_cache_;
-  SlowQueryMonitor *slow_query_monitor_;
 };
 
 }  // namespace database

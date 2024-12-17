@@ -83,14 +83,12 @@ HandlerFactory::HandlerFactory(AuthorizeManager *auth_manager,
                                GtidManager *gtid_manager,
                                MysqlCacheManager *cache_manager,
                                ResponseCache *response_cache,
-                               ResponseCache *file_cache,
-                               SlowQueryMonitor *slow_query_monitor)
+                               ResponseCache *file_cache)
     : auth_manager_{auth_manager},
       gtid_manager_{gtid_manager},
       cache_manager_{cache_manager},
       response_cache_{response_cache},
-      file_cache_{file_cache},
-      slow_query_monitor_(slow_query_monitor) {}
+      file_cache_{file_cache} {}
 
 HandlerPtr HandlerFactory::create_db_schema_metadata_catalog_handler(
     EndpointBasePtr endpoint) {
@@ -139,15 +137,15 @@ HandlerPtr HandlerFactory::create_db_object_handler(EndpointBasePtr endpoint) {
     case DbObjectLite::k_objectTypeTable:
       return std::make_unique<HandlerDbObjectTable>(
           db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_,
-          response_cache_, slow_query_monitor_);
+          response_cache_);
     case DbObjectLite::k_objectTypeProcedure:
       return std::make_unique<HandlerDbObjectSP>(
           db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_,
-          response_cache_, slow_query_monitor_);
+          response_cache_);
     case DbObjectLite::k_objectTypeFunction:
       return std::make_unique<HandlerDbObjectFunction>(
           db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_,
-          response_cache_, slow_query_monitor_);
+          response_cache_);
     case DbObjectLite::k_objectTypeScript:
       return std::make_unique<HandlerDbObjectScript>(
           db_object_endpoint, auth_manager_, gtid_manager_, cache_manager_,

@@ -13,6 +13,7 @@
 --source ../include/predefined_setup/configure_router_mrs_root.inc
 --source ../include/schema/basic_schema.sql
 
+
 # The test uses HOST to have only paths in HREF fields.
 --let $mrs_add_service_path="/svc"
 --let $mrs_add_host_name=""
@@ -22,7 +23,7 @@
 --echo #
 --echo ## 1. GTID synchronization using WHERE WAIT_FOR..
 --let $test_schema=basic_where
---let $test_options='{"sqlQuery":{"wait":5, "embedWait":true, "timeout": 60000}}'
+--let $test_options='{"query":{"wait":5, "embedWait":true}}'
 --let $test_obj1=t1
 --let $test_obj2=t2
 --source ../include/test_metadata_cluster_basic_single_primary_gtid.inc

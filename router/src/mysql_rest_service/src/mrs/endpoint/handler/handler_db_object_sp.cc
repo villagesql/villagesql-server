@@ -197,10 +197,9 @@ HandlerDbObjectSP::HandlerDbObjectSP(
     std::weak_ptr<DbObjectEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager,
     mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache,
-    mrs::ResponseCache *response_cache,
-    mrs::database::SlowQueryMonitor *slow_monitor)
-    : HandlerDbObjectTable{endpoint, auth_manager,   gtid_manager,
-                           cache,    response_cache, slow_monitor} {}
+    mrs::ResponseCache *response_cache)
+    : HandlerDbObjectTable{endpoint, auth_manager, gtid_manager, cache,
+                           response_cache} {}
 
 HttpResult HandlerDbObjectSP::handle_put(
     [[maybe_unused]] rest::RequestContext *ctxt) {
@@ -282,17 +281,10 @@ HttpResult HandlerDbObjectSP::handle_put(
   database::QueryRestSP db;
   try {
     auto *gtid_manager = get_options().metadata.gtid ? gtid_manager_ : nullptr;
-
-    slow_monitor_->execute(
-        [&]() {
-          db.query_entries(
-              session.get(), schema_entry_->name, entry_->name, url,
-              ownership_.user_ownership_column, result.c_str(),
-              binds.parameters, rs,
-              database::JsonTemplateType::kObjectNestedOutParameters,
-              gtid_manager);
-        },
-        session.get(), get_options().query.timeout);
+    db.query_entries(
+        session.get(), schema_entry_->name, entry_->name, url,
+        ownership_.user_ownership_column, result.c_str(), binds.parameters, rs,
+        database::JsonTemplateType::kObjectNestedOutParameters, gtid_manager);
 
     Counter<kEntityCounterRestReturnedItems>::increment(db.items);
     Counter<kEntityCounterRestAffectedItems>::increment(
@@ -389,16 +381,10 @@ HttpResult HandlerDbObjectSP::handle_get(
     try {
       auto *gtid_manager =
           get_options().metadata.gtid ? gtid_manager_ : nullptr;
-      slow_monitor_->execute(
-          [&]() {
-            db.query_entries(
-                session.get(), schema_entry_->name, entry_->name, url,
-                ownership_.user_ownership_column, result.c_str(),
-                binds.parameters, p,
-                database::JsonTemplateType::kObjectNestedOutParameters,
-                gtid_manager);
-          },
-          session.get(), get_options().query.timeout);
+      db.query_entries(
+          session.get(), schema_entry_->name, entry_->name, url,
+          ownership_.user_ownership_column, result.c_str(), binds.parameters, p,
+          database::JsonTemplateType::kObjectNestedOutParameters, gtid_manager);
 
       Counter<kEntityCounterRestReturnedItems>::increment(db.items);
       Counter<kEntityCounterRestAffectedItems>::increment(
@@ -411,12 +397,9 @@ HttpResult HandlerDbObjectSP::handle_get(
   }
 
   database::QueryRestSPMedia db;
-  slow_monitor_->execute(
-      [&]() {
-        db.query_entries(session.get(), schema_entry_->name, entry_->name,
-                         result.c_str());
-      },
-      session.get(), get_options().query.timeout);
+
+  db.query_entries(session.get(), schema_entry_->name, entry_->name,
+                   result.c_str());
 
   Counter<kEntityCounterRestReturnedItems>::increment(db.items);
   Counter<kEntityCounterRestAffectedItems>::increment(session->affected_rows());

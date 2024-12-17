@@ -176,8 +176,6 @@ void initialize_entities(observability::EntitiesManager *manager) {
       "restAsofNumberOfTimeouts");
   reg.register_entity_with_id<kEntityCounterRestMetadataGtids>(
       "restMetadataGtids");
-  reg.register_entity_with_id<kEntityCounterSqlQueryTimeouts>(
-      "sqlQueryTimeouts");
 
   reg.last_is(kEntityCounterLast);
 }
