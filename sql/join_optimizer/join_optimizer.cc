@@ -8661,6 +8661,8 @@ static void CacheCostInfoForJoinConditions(THD *thd,
       CachedPropertiesForPredicate properties;
       properties.selectivity = EstimateSelectivity(thd, cond, CompanionSet());
       properties.contained_subqueries.init(thd->mem_root);
+      properties.redundant_against_sargable_predicates = {
+          thd->mem_root, graph->predicates.size()};
       FindContainedSubqueries(
           cond, query_block, [&properties](const ContainedSubquery &subquery) {
             properties.contained_subqueries.push_back(subquery);
