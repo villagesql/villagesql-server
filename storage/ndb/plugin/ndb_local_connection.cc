@@ -102,6 +102,10 @@ uint Ndb_local_connection::execute_query(const std::string &sql_query) {
     // catch some SQL parse errors in debug
     assert(result != ER_PARSE_ERROR && result != ER_EMPTY_QUERY);
   }
+  // Reset indicator for "microseconds used in query", thus avoiding that
+  // subsequent queries continue to write fractional microseconds to the binlog
+  m_thd->query_start_usec_used = false;
+
   return result;
 }
 
