@@ -108,8 +108,8 @@ bool Oauth2Handler::send_http_request(HttpMethodType method,
   http_client =
       std::make_unique<::http::client::Client>(io_ctx, std::move(tls_ctx));
 
-  log_debug("Oauth request:%s", url.c_str());
-  log_debug(" - body:%s", body.c_str());
+  log_debug("Oauth2Handler::send_http_request url:%s", url.c_str());
+  log_debug("Oauth2Handler::send_http_request body:%s", body.c_str());
 
   ::http::client::Request req{u, method};
   auto &output_headers = req.get_output_headers();
@@ -127,10 +127,14 @@ bool Oauth2Handler::send_http_request(HttpMethodType method,
   http_client->send_request(&req);
 
   if (0 != http_client->error_code()) {
+    log_debug("Oauth2Handler::send_http_request http_client->error_code():%i",
+              http_client->error_code());
     return false;
   }
 
   if (req.get_response_code() != HttpStatusCode::Ok) {
+    log_debug("Oauth2Handler::send_http_request req->get_response_code():%i",
+              req.get_response_code());
     return false;
   }
 
@@ -138,7 +142,14 @@ bool Oauth2Handler::send_http_request(HttpMethodType method,
   auto response_data = buffer.pop_front(buffer.length());
 
   if (request_handler) {
-    return request_handler->response(response_data);
+    if (!request_handler->response(response_data)) {
+      std::string v{response_data.begin(), response_data.end()};
+      log_debug(
+          "Oauth2Handler::send_http_request request_handler returned error for "
+          "payload:%s",
+          v.c_str());
+      return false;
+    }
   }
 
   return true;
