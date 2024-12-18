@@ -1715,4 +1715,36 @@ col60 INT, col61 INT, col62 INT, col63 INT, col64 INT);
 SELECT t2.pk FROM t1 JOIN t2 NATURAL JOIN t2 AS t3 ON t1.col1 = t3.col1 AND t1.col2 <> t3.col2;
 DROP TABLE t1, t2;
 
+--echo #
+--echo # Bug#36630355: Assertion `false && "Inconsistent row counts for
+--echo #               different AccessPath objects."' failed.
+--echo #
+
+CREATE TABLE t(a INT,
+               b INT,
+               c INT,
+               d BIGINT,
+               KEY (a, d));
+
+SELECT 1
+FROM t AS t1 STRAIGHT_JOIN
+     t AS t2,
+     t AS t3,
+     t AS t4
+WHERE t1.d = t3.d AND
+      t3.a = t4.b AND
+      t3.d = t4.c;
+
+SELECT 1
+FROM t AS t2 STRAIGHT_JOIN
+     t AS t1,
+     t AS t3,
+     t AS t4
+WHERE t1.d = t3.d AND
+      t3.a = t4.b AND
+      t3.d = t4.c;
+
+
+DROP TABLE t;
+
 --source include/disable_hypergraph.inc

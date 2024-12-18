@@ -2990,9 +2990,7 @@ void SortPredicates(Predicate *begin, Predicate *end) {
 int AddPredicate(THD *thd, Item *condition,
                  const RelationalExpression *was_join_condition_for,
                  int source_multiple_equality_idx,
-                 const RelationalExpression *root,
-                 const CompanionSetCollection *companion_collection,
-                 JoinHypergraph *graph) {
+                 const RelationalExpression *root, JoinHypergraph *graph) {
   if (source_multiple_equality_idx != -1) {
     assert(was_join_condition_for != nullptr);
   }
@@ -3022,14 +3020,11 @@ int AddPredicate(THD *thd, Item *condition,
   // companion set of the tables referenced by the predicate. For single-table
   // or table-less queries, there is no companion set. Tables not involved in
   // any equijoins do not have a companion set.
-  const CompanionSet *companion_set = nullptr;
-  if (references_regular_tables && companion_collection != nullptr) {
-    companion_set = companion_collection->Find(used_tables);
-  }
-
-  pred.selectivity = companion_set != nullptr
-                         ? EstimateSelectivity(thd, condition, *companion_set)
-                         : EstimateSelectivity(thd, condition, CompanionSet());
+  pred.selectivity =
+      was_join_condition_for != nullptr
+          ? EstimateSelectivity(thd, condition,
+                                *was_join_condition_for->companion_set)
+          : EstimateSelectivity(thd, condition, CompanionSet());
 
   pred.was_join_condition = was_join_condition_for != nullptr;
   pred.possibly_null_complemented_later =
@@ -3260,7 +3255,7 @@ void AddCycleEdges(THD *thd, const Mem_root_array<Item *> &cycle_inducing_edges,
 void PromoteCycleJoinPredicates(
     THD *thd, const RelationalExpression *root,
     const Mem_root_array<Item_multi_eq *> &multiple_equalities,
-    const CompanionSetCollection &companion_collection, JoinHypergraph *graph) {
+    JoinHypergraph *graph) {
   for (size_t edge_idx = 0; edge_idx < graph->graph.edges.size();
        edge_idx += 2) {
     if (!IsPartOfCycle(graph, edge_idx)) {
@@ -3271,12 +3266,12 @@ void PromoteCycleJoinPredicates(
     for (Item *condition : expr->equijoin_conditions) {
       AddPredicate(thd, condition, expr,
                    FindSourceMultipleEquality(condition, multiple_equalities),
-                   root, &companion_collection, graph);
+                   root, graph);
     }
     for (Item *condition : expr->join_conditions) {
       AddPredicate(thd, condition, expr,
                    FindSourceMultipleEquality(condition, multiple_equalities),
-                   root, &companion_collection, graph);
+                   root, graph);
     }
     expr->join_predicate_last = graph->predicates.size();
     SortPredicates(graph->predicates.begin() + expr->join_predicate_first,
@@ -3632,8 +3627,7 @@ bool MakeSingleTableHypergraph(THD *thd, const Query_block *query_block,
 
     for (Item *item : where_conditions) {
       AddPredicate(thd, item, /*was_join_condition_for=*/nullptr,
-                   /*source_multiple_equality_idx=*/-1, root,
-                   /*companion_collection=*/nullptr, graph);
+                   /*source_multiple_equality_idx=*/-1, root, graph);
     }
     graph->num_where_predicates = graph->predicates.size();
 
@@ -3894,8 +3888,7 @@ bool MakeJoinHypergraph(THD *thd, JoinHypergraph *graph,
                                         companion_collection, graph);
   if (graph->graph.edges.size() != old_graph_edges) {
     // We added at least one cycle-inducing edge.
-    PromoteCycleJoinPredicates(thd, root, multiple_equalities,
-                               companion_collection, graph);
+    PromoteCycleJoinPredicates(thd, root, multiple_equalities, graph);
   }
 
   if (TraceStarted(thd)) {
@@ -3937,8 +3930,7 @@ bool MakeJoinHypergraph(THD *thd, JoinHypergraph *graph,
   // down earlier.
   for (Item *condition : where_conditions) {
     AddPredicate(thd, condition, /*was_join_condition_for=*/nullptr,
-                 /*source_multiple_equality_idx=*/-1, root,
-                 &companion_collection, graph);
+                 /*source_multiple_equality_idx=*/-1, root, graph);
   }
 
   // Table filters should be applied at the bottom, without extending the TES.
