@@ -1541,22 +1541,6 @@ typedef bool (*is_valid_tablespace_name_t)(ts_command_type ts_cmd,
                                            const char *tablespace_name);
 
 /**
-  Get the tablespace name from the SE for the given schema and table.
-
-  @param       thd              Thread context.
-  @param       db_name          Name of the relevant schema.
-  @param       table_name       Name of the relevant table.
-  @param [out] tablespace_name  Name of the tablespace containing the table.
-
-  @return Operation status.
-    @retval == 0  Success.
-    @retval != 0  Error (handler error code returned).
-*/
-typedef int (*get_tablespace_t)(THD *thd, LEX_CSTRING db_name,
-                                LEX_CSTRING table_name,
-                                LEX_CSTRING *tablespace_name);
-
-/**
   Create/drop or alter tablespace in the storage engine.
 
   @param          hton        Hadlerton of the SE.
@@ -2837,7 +2821,6 @@ struct handlerton {
   show_status_t show_status;
   partition_flags_t partition_flags;
   is_valid_tablespace_name_t is_valid_tablespace_name;
-  get_tablespace_t get_tablespace;
   alter_tablespace_t alter_tablespace;
   get_tablespace_filename_ext_t get_tablespace_filename_ext;
   upgrade_tablespace_t upgrade_tablespace;
