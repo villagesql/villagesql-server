@@ -83,6 +83,10 @@ OK
 GET /svc1/authentication/login
 {"message":"Unauthorized","status":"401"}
 OK
+SELECT name,auth_string FROM `mysql_rest_service_metadata`.`mrs_user` ORDER BY name;
+name	auth_string
+svc1_usr	$A$005$VxmHRs/knOXHlsrB0onsYl8YmX0=$zBMKnT9FCep0IayH6aF5RI41z9EIGZoYalzD2MR971o=
+svc2_usr	$A$005$VxmHRs/knOXHlsrB0onsYl8YmX0=$zBMKnT9FCep0IayH6aF5RI41z9EIGZoYalzD2MR971o=
 GET /svc1/authentication/login
 
 OK
