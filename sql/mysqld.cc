@@ -1062,7 +1062,7 @@ static TYPELIB tc_heuristic_recover_typelib = {
     array_elements(tc_heuristic_recover_names) - 1, "",
     tc_heuristic_recover_names, nullptr};
 
-const char *first_keyword = "first", *binary_keyword = "BINARY";
+const char *first_keyword = "first";
 const char *my_localhost = "localhost";
 
 bool opt_large_files = sizeof(my_off_t) > 4;

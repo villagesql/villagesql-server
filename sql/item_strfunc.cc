@@ -107,7 +107,7 @@
 #include "sql/events.h"          // Events::reconstruct_interval_expression
 #include "sql/filesort.h"
 #include "sql/handler.h"
-#include "sql/mysqld.h"                             // binary_keyword etc
+#include "sql/mysqld.h"
 #include "sql/parse_tree_node_base.h"               // Parse_context
 #include "sql/resourcegroups/resource_group_mgr.h"  // num_vcpus
 #include "sql/rpl_gtid.h"
@@ -3124,23 +3124,12 @@ String *Item_func_set_collation::val_str(String *str) {
 
 bool Item_func_set_collation::resolve_type(THD *thd) {
   if (reject_vector_args()) return true;
-  CHARSET_INFO *set_collation;
   String tmp;
   assert(args[1]->basic_const_item());
   String *str = args[1]->val_str(&tmp);
-  const char *colname = str->c_ptr();
-  if (colname == binary_keyword) {
-    set_collation = get_charset_by_csname(args[0]->collation.collation->csname,
-                                          MY_CS_BINSORT, MYF(0));
-    if (set_collation == nullptr) {
-      my_error(ER_COLLATION_CHARSET_MISMATCH, MYF(0), colname,
-               args[0]->collation.collation->csname);
-      return true;
-    }
-  } else {
-    set_collation = mysqld_collation_get_by_name(colname);
-    if (set_collation == nullptr) return true;
-  }
+  const char *collation_name = str->c_ptr();
+  CHARSET_INFO *set_collation = mysqld_collation_get_by_name(collation_name);
+  if (set_collation == nullptr) return true;
 
   if (args[0]->data_type() == MYSQL_TYPE_INVALID &&
       args[0]->propagate_type(
@@ -3150,7 +3139,7 @@ bool Item_func_set_collation::resolve_type(THD *thd) {
 
   if (!my_charset_same(args[0]->collation.collation, set_collation) &&
       args[0]->collation.derivation != DERIVATION_NUMERIC) {
-    my_error(ER_COLLATION_CHARSET_MISMATCH, MYF(0), colname,
+    my_error(ER_COLLATION_CHARSET_MISMATCH, MYF(0), collation_name,
              args[0]->collation.collation->csname);
     return true;
   }

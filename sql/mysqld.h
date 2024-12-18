@@ -351,7 +351,7 @@ extern char *opt_mysql_tmpdir;
 extern size_t mysql_unpacked_real_data_home_len;
 extern MYSQL_PLUGIN_IMPORT MY_TMPDIR mysql_tmpdir_list;
 extern const char *show_comp_option_name[];
-extern const char *first_keyword, *binary_keyword;
+extern const char *first_keyword;
 extern MYSQL_PLUGIN_IMPORT const char *my_localhost;
 extern const char *in_left_expr_name;
 extern SHOW_VAR status_vars[];
