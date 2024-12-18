@@ -552,7 +552,7 @@ static const RestApiTestParams rest_api_valid_methods[]{
        [](const JsonValue *value) {
          ASSERT_NE(value, nullptr);
          ASSERT_TRUE(value->IsString());
-         ASSERT_STREQ(value->GetString(), "1.0");
+         ASSERT_STREQ(value->GetString(), "1.1");
        }}},
      kRoutingSwaggerPaths},
     {"routing_guidelines_schema_keywords",

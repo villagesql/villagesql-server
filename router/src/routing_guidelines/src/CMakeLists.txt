@@ -49,7 +49,7 @@ SET(guidelines_SRC
 
 ADD_LIBRARY(routing_guidelines-objects OBJECT ${guidelines_SRC})
 TARGET_LINK_LIBRARIES(routing_guidelines-objects
-  PUBLIC harness_stdx
+  PUBLIC harness_stdx router_utils
   PRIVATE extra::rapidjson)
 # Needed so items tagged with ROUTING_GUIDELINES_EXPORT
 # (to be exposed by the shared version of the library)
@@ -96,6 +96,7 @@ ROUTER_ADD_SHARED_LIBRARY(routing_guidelines
   LINK_LIBRARIES
   PUBLIC
   harness-library
+  router_utils
   )
 
 # static library for tests

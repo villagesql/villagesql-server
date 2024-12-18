@@ -35,6 +35,8 @@
 #include <utility>
 #include <variant>
 #include <vector>
+
+#include "mysqlrouter/routing_guidelines_version.h"
 #include "routing_guidelines/routing_guidelines.h"
 
 namespace routing_guidelines {
@@ -247,6 +249,12 @@ class Context final {
 
   bool parse_tags_toggled();
 
+  mysqlrouter::RoutingGuidelinesVersion get_version() const { return version_; }
+
+  void set_version(mysqlrouter::RoutingGuidelinesVersion version) {
+    version_ = std::move(version);
+  }
+
  private:
   std::unique_ptr<bool, std::function<void(bool *)>> start_parse_mode() {
     parse_mode_ = true;
@@ -266,6 +274,8 @@ class Context final {
   bool parse_mode_{false};
   bool extended_session_info_{false};
   bool parsing_tags_{false};
+  mysqlrouter::RoutingGuidelinesVersion version_{
+      mysqlrouter::kBaseRoutingGuidelines};
 
   friend class routing_guidelines::Rules_parser;
 };

@@ -40,6 +40,7 @@
 #include "guidelines_schema.h"
 #include "mysql/harness/stdx/ranges.h"     // enumerate, contains
 #include "mysql/harness/utility/string.h"  // mysql_harness::join string_format
+#include "mysqlrouter/routing_guidelines_version.h"
 #include "rules_parser.h"
 #include "utils.h"  // format_json_error
 
@@ -104,6 +105,12 @@ class Routing_guidelines_document_parser {
         add_error(
             "Routing guidelines JSON document schema validation failed: " +
             err_msg);
+      }
+
+      if (doc.HasMember("version")) {
+        context_.set_version(
+            mysqlrouter::routing_guidelines_version_from_string(
+                doc["version"].GetString()));
       }
 
       for (const auto &member : doc.GetObject()) {

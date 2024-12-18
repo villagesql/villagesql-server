@@ -50,6 +50,7 @@ IF(LIBFUZZER_COMPILE_FLAGS)
     COMPONENT Router
     LINK_LIBRARIES
       harness-library  # string_format
+      router_utils     # routing_guidelines_version_from_string
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
     SKIP_INSTALL
     )

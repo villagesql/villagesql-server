@@ -36,10 +36,12 @@ namespace mysqlrouter {
 struct RoutingGuidelinesVersion : public VersionBase {};
 
 constexpr RoutingGuidelinesVersion kBaseRoutingGuidelines{1, 0};
+constexpr RoutingGuidelinesVersion kTagsStringFix{1, 1};
 
 // New versions supported should be put at the end.
 [[maybe_unused]] constexpr std::array kSupportedRoutingGuidelinesVersions{
     kBaseRoutingGuidelines,  // Initial routing guidelines version
+    kTagsStringFix,          // Fixed how tags strings are handled
 };
 
 std::string ROUTER_UTILS_EXPORT

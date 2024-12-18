@@ -29,6 +29,7 @@
 #include <Winsock2.h>  // gethostname()
 #endif
 
+#include <algorithm>  // std::replace
 #include <chrono>
 
 #include "config_builder.h"
@@ -1520,7 +1521,7 @@ TEST_P(GuidelinesFailedUpdate, UpdateWithUnsupportedVersion) {
   EXPECT_TRUE(wait_log_contains(
       router,
       "Update guidelines failed - routing guidelines version not supported. "
-      "Router supported version is 1.0 but got " +
+      "Router supported version is 1.1 but got " +
           GetParam(),
       5s));
   SCOPED_TRACE("Guidelines are not updated");
@@ -1535,7 +1536,7 @@ TEST_P(GuidelinesFailedUpdate, UpdateWithUnsupportedVersion) {
 }
 
 INSTANTIATE_TEST_SUITE_P(GuidelinesFailedUpdateTest, GuidelinesFailedUpdate,
-                         ::testing::Values("1.1", "1.9", "2.5"));
+                         ::testing::Values("1.2", "1.9", "2.5"));
 
 class GuidelinesUpdate : public RoutingGuidelinesTest,
                          public ::testing::WithParamInterface<std::string> {};
@@ -1595,7 +1596,7 @@ TEST_P(GuidelinesUpdate, UpdateWithSupportedVersion) {
 }
 
 INSTANTIATE_TEST_SUITE_P(GuidelinesUpdateTest, GuidelinesUpdate,
-                         ::testing::Values("0.0", "0.5", "1.0"));
+                         ::testing::Values("0.0", "0.5", "1.0", "1.1"));
 
 TEST_F(RoutingGuidelinesTest, UpdateSetToDefault) {
   setup_cluster("metadata_dynamic_nodes_v2_gr.js");
@@ -2050,8 +2051,20 @@ TEST_F(RoutingGuidelinesTest, MatchRouterName) {
   }
 }
 
-TEST_F(RoutingGuidelinesTest, MatchRouterTagsString) {
+struct SupportedMatch {
+  std::string version;
+  std::string match;
+};
+
+class RoutingGuidelinesTagsTest
+    : public RoutingGuidelinesTest,
+      public ::testing::WithParamInterface<SupportedMatch> {};
+
+class RoutingGuidelinesStringTagsTest : public RoutingGuidelinesTagsTest {};
+
+TEST_P(RoutingGuidelinesStringTagsTest, string) {
   setup_cluster("metadata_dynamic_nodes_v2_gr.js");
+  const auto match = GetParam().match;
 
   auto &router = launch_router(get_routing_section(router_port_ro, "SECONDARY"),
                                get_metadata_cache_section());
@@ -2061,8 +2074,9 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsString) {
       guidelines_builder::create(
           {{"d1", "$.server.port=" + std::to_string(cluster_nodes_ports[0])}},
           {{"r1",
-            "$.router.tags.foobar='baz'",
-            {{"first-available", {"d1"}}}}}),
+            "$.router.tags.foobar='" + match + "'",
+            {{"first-available", {"d1"}}}}},
+          "rg", GetParam().version),
       cluster_nodes_ports, cluster_nodes_http_ports[0],
       /*trigger_failover*/ false, "{\"tags\": {\"foobar\": \"baz\"}}");
   EXPECT_TRUE(
@@ -2082,8 +2096,9 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsString) {
       guidelines_builder::create(
           {{"d1", "$.server.port=" + std::to_string(cluster_nodes_ports[0])}},
           {{"r1",
-            "$.router.tags.foobar=\"baz\"",
-            {{"first-available", {"d1"}}}}}),
+            "$.router.tags.foobar=\"" + match + "\"",
+            {{"first-available", {"d1"}}}}},
+          "rg", GetParam().version),
       cluster_nodes_ports, cluster_nodes_http_ports[0],
       /*trigger_failover*/ false, "{\"tags\": {\"foobar\": \"baz\"}}");
   EXPECT_TRUE(
@@ -2102,8 +2117,9 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsString) {
       guidelines_builder::create(
           {{"d1", "$.server.port=" + std::to_string(cluster_nodes_ports[0])}},
           {{"r1",
-            "$.router.tags.foobar='baz'",
-            {{"first-available", {"d1"}}}}}),
+            "$.router.tags.foobar='" + match + "'",
+            {{"first-available", {"d1"}}}}},
+          "rg", GetParam().version),
       cluster_nodes_ports, cluster_nodes_http_ports[0],
       /*trigger_failover*/ false, "{\"tags\": {\"foobar\": \"miss\"}}");
 
@@ -2113,7 +2129,19 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsString) {
   verify_new_connection_fails(router_port_ro);
 }
 
-TEST_F(RoutingGuidelinesTest, MatchRouterTagsBool) {
+INSTANTIATE_TEST_SUITE_P(RoutingGuidelinesStringTags,
+                         RoutingGuidelinesStringTagsTest,
+                         ::testing::Values(SupportedMatch{"1.0", "\"baz\""},
+                                           SupportedMatch{"1.1", "baz"}),
+                         [](auto info) {
+                           std::replace(info.param.version.begin(),
+                                        info.param.version.end(), '.', '_');
+                           return std::string("v") + info.param.version;
+                         });
+
+class RoutingGuidelinesBoolTagsTest : public RoutingGuidelinesTagsTest {};
+
+TEST_P(RoutingGuidelinesBoolTagsTest, boolean) {
   setup_cluster("metadata_dynamic_nodes_v2_gr.js");
 
   auto &router = launch_router(get_routing_section(router_port_ro, "SECONDARY"),
@@ -2123,7 +2151,10 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsBool) {
   instrument_metadata(
       guidelines_builder::create(
           {{"d1", "$.server.port=" + std::to_string(cluster_nodes_ports[0])}},
-          {{"r1", "$.router.tags.foobar=true", {{"first-available", {"d1"}}}}}),
+          {{"r1",
+            "$.router.tags.foobar=" + GetParam().match,
+            {{"first-available", {"d1"}}}}},
+          "rg", GetParam().version),
       cluster_nodes_ports, cluster_nodes_http_ports[0],
       /*trigger_failover*/ false, "{\"tags\": {\"foobar\": true}}");
   EXPECT_TRUE(
@@ -2141,7 +2172,10 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsBool) {
   instrument_metadata(
       guidelines_builder::create(
           {{"d1", "$.server.port=" + std::to_string(cluster_nodes_ports[0])}},
-          {{"r1", "$.router.tags.foobar=true", {{"first-available", {"d1"}}}}}),
+          {{"r1",
+            "$.router.tags.foobar=" + GetParam().match,
+            {{"first-available", {"d1"}}}}},
+          "rg", GetParam().version),
       cluster_nodes_ports, cluster_nodes_http_ports[0],
       /*trigger_failover*/ false, "{\"tags\": {\"foobar\": false}}");
 
@@ -2151,7 +2185,19 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsBool) {
   verify_new_connection_fails(router_port_ro);
 }
 
-TEST_F(RoutingGuidelinesTest, MatchRouterTagsInt) {
+INSTANTIATE_TEST_SUITE_P(RoutingGuidelinesBoolTags,
+                         RoutingGuidelinesBoolTagsTest,
+                         ::testing::Values(SupportedMatch{"1.0", "'true'"},
+                                           SupportedMatch{"1.1", "true"}),
+                         [](auto info) {
+                           std::replace(info.param.version.begin(),
+                                        info.param.version.end(), '.', '_');
+                           return std::string("v") + info.param.version;
+                         });
+
+class RoutingGuidelinesIntTagsTest : public RoutingGuidelinesTagsTest {};
+
+TEST_P(RoutingGuidelinesIntTagsTest, integer) {
   setup_cluster("metadata_dynamic_nodes_v2_gr.js");
 
   auto &router = launch_router(get_routing_section(router_port_ro, "SECONDARY"),
@@ -2161,7 +2207,10 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsInt) {
   instrument_metadata(
       guidelines_builder::create(
           {{"d1", "$.server.port=" + std::to_string(cluster_nodes_ports[0])}},
-          {{"r1", "$.router.tags.foobar=41", {{"first-available", {"d1"}}}}}),
+          {{"r1",
+            "$.router.tags.foobar=" + GetParam().match,
+            {{"first-available", {"d1"}}}}},
+          "rg", GetParam().version),
       cluster_nodes_ports, cluster_nodes_http_ports[0],
       /*trigger_failover*/ false, "{\"tags\": {\"foobar\": 41}}");
   EXPECT_TRUE(
@@ -2179,7 +2228,10 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsInt) {
   instrument_metadata(
       guidelines_builder::create(
           {{"d1", "$.server.port=" + std::to_string(cluster_nodes_ports[0])}},
-          {{"r1", "$.router.tags.foobar=44", {{"first-available", {"d1"}}}}}),
+          {{"r1",
+            "$.router.tags.foobar=" + GetParam().match,
+            {{"first-available", {"d1"}}}}},
+          "rg", GetParam().version),
       cluster_nodes_ports, cluster_nodes_http_ports[0],
       /*trigger_failover*/ false, "{\"tags\": {\"foobar\": 9}}");
 
@@ -2189,7 +2241,18 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsInt) {
   verify_new_connection_fails(router_port_ro);
 }
 
-TEST_F(RoutingGuidelinesTest, MatchRouterTagsNull) {
+INSTANTIATE_TEST_SUITE_P(RoutingGuidelinesIntTags, RoutingGuidelinesIntTagsTest,
+                         ::testing::Values(SupportedMatch{"1.0", "'41'"},
+                                           SupportedMatch{"1.1", "41"}),
+                         [](auto info) {
+                           std::replace(info.param.version.begin(),
+                                        info.param.version.end(), '.', '_');
+                           return std::string("v") + info.param.version;
+                         });
+
+class RoutingGuidelinesNullTagsTest : public RoutingGuidelinesTagsTest {};
+
+TEST_P(RoutingGuidelinesNullTagsTest, null_value) {
   setup_cluster("metadata_dynamic_nodes_v2_gr.js");
 
   auto &router = launch_router(get_routing_section(router_port_ro, "SECONDARY"),
@@ -2199,7 +2262,10 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsNull) {
   instrument_metadata(
       guidelines_builder::create(
           {{"d1", "$.server.port=" + std::to_string(cluster_nodes_ports[0])}},
-          {{"r1", "$.router.tags.foobar=null", {{"first-available", {"d1"}}}}}),
+          {{"r1",
+            "$.router.tags.foobar=" + GetParam().match,
+            {{"first-available", {"d1"}}}}},
+          "rg", GetParam().version),
       cluster_nodes_ports, cluster_nodes_http_ports[0],
       /*trigger_failover*/ false, "{\"tags\": {\"foobar\":null}}");
   EXPECT_TRUE(
@@ -2217,7 +2283,10 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsNull) {
   instrument_metadata(
       guidelines_builder::create(
           {{"d1", "$.server.port=" + std::to_string(cluster_nodes_ports[0])}},
-          {{"r1", "$.router.tags.foobar=NULL", {{"first-available", {"d1"}}}}}),
+          {{"r1",
+            "$.router.tags.foobar=" + GetParam().match,
+            {{"first-available", {"d1"}}}}},
+          "rg", GetParam().version),
       cluster_nodes_ports, cluster_nodes_http_ports[0],
       /*trigger_failover*/ false, "{\"tags\": {\"foobar\": \"not null\"}}");
 
@@ -2227,7 +2296,19 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsNull) {
   verify_new_connection_fails(router_port_ro);
 }
 
-TEST_F(RoutingGuidelinesTest, MatchRouterTagsObj) {
+INSTANTIATE_TEST_SUITE_P(RoutingGuidelinesNullTags,
+                         RoutingGuidelinesNullTagsTest,
+                         ::testing::Values(SupportedMatch{"1.0", "'null'"},
+                                           SupportedMatch{"1.1", "null"}),
+                         [](auto info) {
+                           std::replace(info.param.version.begin(),
+                                        info.param.version.end(), '.', '_');
+                           return std::string("v") + info.param.version;
+                         });
+
+class RoutingGuidelinesObjTagsTest : public RoutingGuidelinesTagsTest {};
+
+TEST_P(RoutingGuidelinesObjTagsTest, object) {
   setup_cluster("metadata_dynamic_nodes_v2_gr.js");
 
   auto &router = launch_router(get_routing_section(router_port_ro, "SECONDARY"),
@@ -2238,8 +2319,9 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsObj) {
       guidelines_builder::create(
           {{"d1", "$.server.port=" + std::to_string(cluster_nodes_ports[0])}},
           {{"r1",
-            R"($.router.tags.foobar={"bar":1})",
-            {{"first-available", {"d1"}}}}}),
+            R"($.router.tags.foobar=)" + GetParam().match,
+            {{"first-available", {"d1"}}}}},
+          "rg", GetParam().version),
       cluster_nodes_ports, cluster_nodes_http_ports[0],
       /*trigger_failover*/ false, R"({"tags": {"foobar": {"bar":1}}})");
   EXPECT_TRUE(
@@ -2258,8 +2340,9 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsObj) {
       guidelines_builder::create(
           {{"d1", "$.server.port=" + std::to_string(cluster_nodes_ports[0])}},
           {{"r1",
-            R"($.router.tags.foobar={"bar":1})",
-            {{"first-available", {"d1"}}}}}),
+            R"($.router.tags.foobar=)" + GetParam().match,
+            {{"first-available", {"d1"}}}}},
+          "rg", GetParam().version),
       cluster_nodes_ports, cluster_nodes_http_ports[0],
       /*trigger_failover*/ false, R"({"tags": {"foobar": {"bar":2}}})");
 
@@ -2268,6 +2351,16 @@ TEST_F(RoutingGuidelinesTest, MatchRouterTagsObj) {
       wait_for_transaction_count_increase(cluster_nodes_http_ports[0], 2));
   verify_new_connection_fails(router_port_ro);
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    RoutingGuidelinesObjTags, RoutingGuidelinesObjTagsTest,
+    ::testing::Values(SupportedMatch{"1.0", "'{\"bar\":1}'"},
+                      SupportedMatch{"1.1", "{\"bar\":1}"}),
+    [](auto info) {
+      std::replace(info.param.version.begin(), info.param.version.end(), '.',
+                   '_');
+      return std::string("v") + info.param.version;
+    });
 
 TEST_F(RoutingGuidelinesTest, MatchRouterTagsInvalid) {
   setup_cluster("metadata_dynamic_nodes_v2_gr.js");
@@ -2432,7 +2525,17 @@ TEST_F(RoutingGuidelinesTest, MatchServerVersion) {
   }
 }
 
-TEST_F(RoutingGuidelinesTest, MatchServerTags) {
+struct ServerSupportedMatch {
+  std::string version;
+  std::string old_match;
+  std::string new_match;
+};
+
+class RoutingGuidelinesServerTagsTest
+    : public RoutingGuidelinesTest,
+      public ::testing::WithParamInterface<ServerSupportedMatch> {};
+
+TEST_P(RoutingGuidelinesServerTagsTest, server_tags) {
   setup_cluster("metadata_dynamic_nodes_v2_gr.js");
 
   auto &router = launch_router(get_routing_section(router_port_ro, "SECONDARY"),
@@ -2453,8 +2556,9 @@ TEST_F(RoutingGuidelinesTest, MatchServerTags) {
   SCOPED_TRACE("Match server tags");
   instrument_metadata_detailed(
       guidelines_builder::create(
-          {{"d1", "$.server.tags.my_tag='foobar'"}},
-          {{"r1", "TRUE", {{"first-available", {"d1"}}}}}),
+          {{"d1", "$.server.tags.my_tag='" + GetParam().old_match + "'"}},
+          {{"r1", "TRUE", {{"first-available", {"d1"}}}}}, "rg",
+          GetParam().version),
       gr_nodes, cluster_nodes, cluster_nodes_http_ports[0]);
   EXPECT_TRUE(
       wait_log_contains(router, "Routing guidelines document updated", 5s));
@@ -2478,8 +2582,9 @@ TEST_F(RoutingGuidelinesTest, MatchServerTags) {
   SCOPED_TRACE("Match updated tags");
   instrument_metadata_detailed(
       guidelines_builder::create(
-          {{"d1", "$.server.tags.my_tag='baz'"}},
-          {{"r1", "TRUE", {{"first-available", {"d1"}}}}}),
+          {{"d1", "$.server.tags.my_tag='" + GetParam().new_match + "'"}},
+          {{"r1", "TRUE", {{"first-available", {"d1"}}}}}, "rg",
+          GetParam().version),
       gr_nodes, cluster_nodes, cluster_nodes_http_ports[0]);
   EXPECT_TRUE(
       wait_log_contains(router, "Routing guidelines document updated", 5s));
@@ -2493,6 +2598,16 @@ TEST_F(RoutingGuidelinesTest, MatchServerTags) {
     EXPECT_EQ(*port_res, cluster_nodes_ports[1]);
   }
 }
+
+INSTANTIATE_TEST_SUITE_P(
+    RoutingGuidelinesServerTags, RoutingGuidelinesServerTagsTest,
+    ::testing::Values(ServerSupportedMatch{"1.0", "\"foobar\"", "\"baz\""},
+                      ServerSupportedMatch{"1.1", "foobar", "baz"}),
+    [](auto info) {
+      std::replace(info.param.version.begin(), info.param.version.end(), '.',
+                   '_');
+      return std::string("v") + info.param.version;
+    });
 
 TEST_F(RoutingGuidelinesTest, MatchRouterLocalCluster) {
   setup_cluster("metadata_dynamic_nodes_v2_gr.js");

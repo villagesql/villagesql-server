@@ -733,7 +733,9 @@ bool Rules_parser::emit_reference(std::string_view name, YYLTYPE *llocp,
     if (offset >= 0) {
       emit_num(offset, rpn::Token::Type::VAR_REF);
     } else {
-      if (name.starts_with("router.tags") || name.starts_with("server.tags")) {
+      if (context_->get_version() > mysqlrouter::kBaseRoutingGuidelines &&
+          (name.starts_with("router.tags") ||
+           name.starts_with("server.tags"))) {
         context_->parsing_tags_ = true;
       }
       emit_string(name, rpn::Token::Type::TAG_REF);

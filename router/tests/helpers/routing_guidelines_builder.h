@@ -53,7 +53,7 @@ struct Route {
 std::string create(const std::vector<Destination> &destinations,
                    const std::vector<Route> &routes,
                    const std::string &name = "test_guidelines",
-                   const std::string &version = "1.0");
+                   const std::string &version = "1.1");
 
 }  // namespace guidelines_builder
 
