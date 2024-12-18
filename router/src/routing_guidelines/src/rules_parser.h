@@ -75,7 +75,7 @@ class Rules_parser final {
       std::function<void(const std::string &)> tracer = nullptr)
       : tracer_(tracer) {}
 
-  rpn::Expression parse(const std::string &buf, rpn::Context *context);
+  rpn::Expression parse(std::string buf, rpn::Context *context);
 
   bool extended_session_info_used() const {
     return extended_session_info_in_use_;
@@ -135,7 +135,7 @@ class Rules_parser final {
   bool session_rand_value_used_{false};
 
   // Scanner state
-  const std::string *buf_{nullptr};
+  std::string buf_;
   std::string::size_type pos_{0};
 
   // Function for trace output

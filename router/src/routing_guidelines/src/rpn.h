@@ -245,6 +245,8 @@ class Context final {
 
   void clear_router_info() { router_ = nullptr; }
 
+  bool parse_tags_toggled();
+
  private:
   std::unique_ptr<bool, std::function<void(bool *)>> start_parse_mode() {
     parse_mode_ = true;
@@ -263,6 +265,7 @@ class Context final {
   std::vector<std::function<Token()>> context_vars_;
   bool parse_mode_{false};
   bool extended_session_info_{false};
+  bool parsing_tags_{false};
 
   friend class routing_guidelines::Rules_parser;
 };
@@ -270,10 +273,10 @@ class Context final {
 class Expression {
  public:
   Expression() = default;
-  Expression(const std::vector<Token> &rpn, const std::string &code)
-      : rpn_(rpn), code_(code) {}
-  Expression(std::vector<Token> &&rpn, const std::string &code)
-      : rpn_(std::move(rpn)), code_(code) {}
+  Expression(const std::vector<Token> &rpn, std::string code)
+      : rpn_(rpn), code_(std::move(code)) {}
+  Expression(std::vector<Token> &&rpn, std::string code)
+      : rpn_(std::move(rpn)), code_(std::move(code)) {}
 
   Token eval(Context *variables,
              const Routing_guidelines_engine::ResolveCache *cache = nullptr,

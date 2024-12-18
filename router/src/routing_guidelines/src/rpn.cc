@@ -492,6 +492,14 @@ std::optional<std::string> Context::get_var_name(const Token &tok) const {
   return std::nullopt;
 }
 
+bool Context::parse_tags_toggled() {
+  if (parsing_tags_) {
+    parsing_tags_ = false;
+    return true;
+  }
+  return false;
+}
+
 Token Context::handle_miss(std::string_view name) const {
   if (parse_mode_) {
     throw std::runtime_error("undefined variable: " + std::string(name));
