@@ -50,6 +50,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0mysql.h"
 #include "row0row.h"
 #include "row0upd.h"
+#include "scope_guard.h"
 #include "srv0mon.h"
 #include "trx0rec.h"
 #include "ut0new.h"
@@ -1843,6 +1844,7 @@ flag_ok:
 
   pcur.open(index, 0, old_pk, PAGE_CUR_LE,
             BTR_MODIFY_TREE | BTR_LATCH_FOR_DELETE, &mtr, UT_LOCATION_HERE);
+  const auto guard = create_scope_guard([&pcur]() { pcur.close(); });
 #ifdef UNIV_DEBUG
   switch (pcur.get_btr_cur()->flag) {
     case BTR_CUR_UNSET:
@@ -2066,6 +2068,7 @@ flag_ok:
 
   pcur.open(index, 0, old_pk, PAGE_CUR_LE, BTR_MODIFY_TREE, &mtr,
             UT_LOCATION_HERE);
+  const auto guard = create_scope_guard([&pcur]() { pcur.close(); });
 #ifdef UNIV_DEBUG
   switch (pcur.get_btr_cur()->flag) {
     case BTR_CUR_UNSET:
