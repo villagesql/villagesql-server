@@ -181,8 +181,6 @@ exec $MRS_CLIENT_ARGS
   --expected-status Unauthorized
   --session-type $test_session_type;
 
-SELECT name,auth_string FROM `mysql_rest_service_metadata`.`mrs_user` ORDER BY name;
-
 exec $MRS_CLIENT_ARGS
   -a $test_scram
   --path /svc1/authentication/login
@@ -255,8 +253,6 @@ exec $MRS_CLIENT_ARGS
   --exclude-json-pointer  "/*"
   --path /svc2/basic2/o4
   --session-file $MYSQL_TMP_DIR/user2_session.dat;
-
-
 
 # Cleanup
 remove_file $MYSQL_TMP_DIR/user1_session.dat;
