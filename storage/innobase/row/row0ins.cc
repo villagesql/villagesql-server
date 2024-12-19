@@ -2028,6 +2028,7 @@ end_scan:
   /* Restore old value */
   dtuple_set_n_fields_cmp(entry, n_fields_cmp);
 
+  pcur.close();
   return err;
 }
 

@@ -1947,6 +1947,7 @@ static dberr_t row_update_inplace_for_intrinsic(const upd_node_t *node) {
       row_upd_changes_field_size_or_external(index, offsets, node->update);
 
   if (size_changes) {
+    pcur.close();
     mtr_commit(&mtr);
     return (DB_FAIL);
   }
@@ -1957,6 +1958,7 @@ static dberr_t row_update_inplace_for_intrinsic(const upd_node_t *node) {
   evicted from the buffer pool it is flushed and we don't lose
   the changes */
   mtr.set_modified();
+  pcur.close();
   mtr_commit(&mtr);
 
   return (DB_SUCCESS);
