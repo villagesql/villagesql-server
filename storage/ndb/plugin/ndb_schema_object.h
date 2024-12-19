@@ -114,7 +114,7 @@ class NDB_SCHEMA_OBJECT {
   } state;
 
   uint increment_use_count() const;
-  uint decremement_use_count() const;
+  uint decrement_use_count() const;
 
   NDB_SCHEMA_OBJECT() = delete;
   NDB_SCHEMA_OBJECT(const NDB_SCHEMA_OBJECT &) = delete;
