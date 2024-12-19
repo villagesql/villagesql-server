@@ -7719,6 +7719,9 @@ restart_cluster_failure:
 
     release_thd_resources(thd);
 
+    // Check that "microsecond timestamps used in query" has been reset
+    assert(thd->query_start_usec_used == false);
+
     if (current_epoch > ndb_latest_handled_binlog_epoch) {
       Mutex_guard injector_mutex_g(injector_data_mutex);
       ndb_latest_handled_binlog_epoch = current_epoch;
