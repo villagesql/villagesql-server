@@ -3139,7 +3139,7 @@ bool Item_func_set_collation::resolve_type(THD *thd) {
 
   if (!my_charset_same(args[0]->collation.collation, set_collation) &&
       args[0]->collation.derivation != DERIVATION_NUMERIC) {
-    my_error(ER_COLLATION_CHARSET_MISMATCH, MYF(0), collation_name,
+    my_error(ER_COLLATION_CHARSET_MISMATCH, MYF(0), set_collation->m_coll_name,
              args[0]->collation.collation->csname);
     return true;
   }
