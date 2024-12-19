@@ -83,7 +83,7 @@ exec $MRS_CLIENT_ARGS
   --path /svc/proc/hello_proc?name=Andresz;
 
 # Cleanup
---eval DROP USER $mrs_user_data
 
 DROP SCHEMA mrs;
 --source ../include/mrs/cleanup.inc
+--eval DROP USER $mrs_user_data
