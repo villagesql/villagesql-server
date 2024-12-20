@@ -948,7 +948,7 @@ bool mysql_rm_db(THD *thd, const LEX_CSTRING &db, bool if_exists) {
         other connected server.
       */
 
-      ha_drop_database(path);
+      ha_drop_database(db.str);
       thd->clear_error(); /* @todo Do not ignore errors */
       const Disable_binlog_guard binlog_guard(thd);
       error = Events::drop_schema_events(thd, *schema);

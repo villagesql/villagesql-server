@@ -12313,28 +12313,26 @@ static int drop_database_impl(THD *thd,
   return 0;
 }
 
-static void ndbcluster_drop_database(handlerton *, char *path) {
+static void ndbcluster_drop_database(handlerton *, const char *db_name) {
   THD *thd = current_thd;
   DBUG_TRACE;
-  DBUG_PRINT("enter", ("path: '%s'", path));
+  DBUG_PRINT("enter", ("db: '%s'", db_name));
 
-  char db[FN_REFLEN];
-  ndb_set_dbname(path, db);
   Ndb_schema_dist_client schema_dist_client(thd);
 
-  if (!schema_dist_client.prepare(db, "")) {
+  if (!schema_dist_client.prepare(db_name, "")) {
     /* Don't allow drop database unless schema distribution is ready */
     return;
   }
 
-  if (drop_database_impl(thd, schema_dist_client, db) != 0) {
+  if (drop_database_impl(thd, schema_dist_client, db_name) != 0) {
     return;
   }
 
-  if (!schema_dist_client.drop_db(db)) {
+  if (!schema_dist_client.drop_db(db_name)) {
     // NOTE! There is currently no way to report an error from this
     // function, just log an error and proceed
-    ndb_log_error("Failed to distribute 'DROP DATABASE %s'", db);
+    ndb_log_error("Failed to distribute 'DROP DATABASE %s'", db_name);
   }
 }
 
