@@ -1490,7 +1490,7 @@ using set_prepared_in_tc_by_xid_t = xa_status_code (*)(handlerton *hton,
 typedef handler *(*create_t)(handlerton *hton, TABLE_SHARE *table,
                              bool partitioned, MEM_ROOT *mem_root);
 
-typedef void (*drop_database_t)(handlerton *hton, char *path);
+typedef void (*drop_database_t)(handlerton *hton, const char *db);
 
 typedef bool (*log_ddl_drop_schema_t)(handlerton *hton,
                                       const char *schema_name);
@@ -7534,7 +7534,14 @@ void ha_pre_dd_shutdown(void);
   @retval true Error
 */
 bool ha_flush_logs(bool binlog_group_flush = false);
-void ha_drop_database(char *path);
+
+/**
+  Call the "drop_database_t" handlerton API for storage engines that
+  implemented it to drop the database.
+
+  @param schema_name name of the database to be dropped.
+*/
+bool ha_drop_database(const char *schema_name);
 
 /**
   Call "log_ddl_drop_schema" handletron for
