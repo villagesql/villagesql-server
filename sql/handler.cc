@@ -926,17 +926,15 @@ void ha_end() {
   my_free(handler_errmsgs);
 }
 
-static bool dropdb_handlerton(THD *, plugin_ref plugin, void *db_name) {
+static bool dropdb_handlerton(THD *, plugin_ref plugin, void *path) {
   handlerton *hton = plugin_data<handlerton *>(plugin);
-  if (hton->state == SHOW_OPTION_YES && hton->drop_database) {
-    hton->drop_database(hton, static_cast<char *>(db_name));
-  }
+  if (hton->state == SHOW_OPTION_YES && hton->drop_database)
+    hton->drop_database(hton, (char *)path);
   return false;
 }
 
-bool ha_drop_database(const char *db_name) {
-  plugin_foreach(nullptr, dropdb_handlerton, MYSQL_STORAGE_ENGINE_PLUGIN,
-                 const_cast<char *>(db_name));
+void ha_drop_database(char *path) {
+  plugin_foreach(nullptr, dropdb_handlerton, MYSQL_STORAGE_ENGINE_PLUGIN, path);
 }
 
 static bool log_ddl_drop_schema_handletron(THD *, plugin_ref plugin,
