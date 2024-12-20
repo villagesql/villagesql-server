@@ -33,12 +33,12 @@
 #include <gmock/gmock.h>  // IWYU pragma: keep
 #include <gtest/gtest.h>  // IWYU pragma: keep
 
+#include "extra/lz4/my_xxhash.h"
 #include "my_alloc.h"
 #include "my_bitmap.h"
 #include "my_config.h"
 #include "my_inttypes.h"
 #include "my_murmur3.h"
-#include "my_xxhash.h"
 #include "mysql/components/services/bits/psi_bits.h"
 #include "prealloced_array.h"
 #include "sql/field.h"

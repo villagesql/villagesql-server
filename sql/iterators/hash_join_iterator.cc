@@ -33,12 +33,12 @@
 #include <utility>
 #include <vector>
 
+#include "extra/lz4/my_xxhash.h"
 #include "field_types.h"
 #include "my_alloc.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_sys.h"
-#include "my_xxhash.h"
 #include "mysql/components/services/bits/psi_bits.h"
 #include "mysqld_error.h"
 #include "sql/item.h"

@@ -40,13 +40,13 @@
 
 #include <ankerl/unordered_dense.h>
 
+#include "extra/lz4/my_xxhash.h"
 #include "field_types.h"
 #include "mem_root_deque.h"
 #include "my_config.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
 #include "my_sys.h"
-#include "my_xxhash.h"
 #include "mysql_com.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"

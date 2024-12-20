@@ -29,6 +29,6 @@
 // avoid conflict with xxhash symbols in liblz4.
 #define XXH_NAMESPACE MY_
 
-#include "xxhash.h"  // IWYU pragma: export
+#include "lz4-1.10.0/lib/xxhash.h"  // IWYU pragma: export
 
 #endif // MY_XXHASH_H_INCLUDED
