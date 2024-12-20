@@ -762,7 +762,6 @@ SET(SQL_SOURCE
   ${CONF_SOURCES}
   ${SQL_SHARED_SOURCES}
   ${SQL_HEADERS}
-  ${BUNDLED_LZ4_PATH}/xxhash.c
   ../libmysql/errmsg.cc
   ../sql-common/client.cc
   ../sql-common/client_plugin.cc
@@ -818,11 +817,6 @@ IF(WIN32)
       )
 ENDIF()
 
-MY_ADD_COMPILE_DEFINITIONS(
-  ${BUNDLED_LZ4_PATH}/xxhash.c
-  COMPILE_DEFINITIONS XXH_NAMESPACE=MY_
-  )
-
 # Workaround for Apple Clang bug on ARM.
 # When linking mysqld (and executables using server_unittest_library)
 # we get linker warnings about
@@ -846,13 +840,6 @@ IF(APPLE_ARM)
     COMPILE_FLAGS -fvisibility=hidden
     )
 ENDIF()
-
-ADD_COMPILE_FLAGS(
-  ${BUNDLED_LZ4_PATH}/xxhash.c
-  iterators/hash_join_iterator.cc
-  rpl_write_set_handler.cc
-  COMPILE_FLAGS -I${CMAKE_SOURCE_DIR}/extra/lz4 -I${BUNDLED_LZ4_PATH}
-  )
 
 ADD_COMPILE_FLAGS(
   iterators/hash_join_buffer.cc
@@ -939,8 +926,7 @@ IF(HAVE_NO_BUILTIN_MEMCMP)
   )
 ENDIF()
 
-
-ADD_STATIC_LIBRARY(sql_main ${SQL_SOURCE} LINK_LIBRARIES ext::icu)
+ADD_STATIC_LIBRARY(sql_main ${SQL_SOURCE} LINK_LIBRARIES ext::icu ext::xxhash)
 ADD_DEPENDENCIES(sql_main GenServerSource)
 ADD_DEPENDENCIES(sql_main GenDigestServerSource)
 ADD_DEPENDENCIES(sql_main GenBootstrapPriv)

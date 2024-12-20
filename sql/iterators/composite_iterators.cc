@@ -30,6 +30,7 @@
 #include <string>
 #include <vector>
 
+#include "extra/lz4/my_xxhash.h"
 #include "field_types.h"
 #include "mem_root_deque.h"
 #include "my_dbug.h"
