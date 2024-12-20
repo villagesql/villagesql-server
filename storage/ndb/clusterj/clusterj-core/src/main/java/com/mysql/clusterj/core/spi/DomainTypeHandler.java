@@ -61,8 +61,6 @@ public interface DomainTypeHandler<T> {
 
     public ValueHandler getValueHandler(Object instance);
 
-    public T getInstance(ValueHandler handler);
-
     public void objectMarkModified(ValueHandler handler, String fieldName);
 
     public void objectSetValues(ResultData rs, ValueHandler handler);

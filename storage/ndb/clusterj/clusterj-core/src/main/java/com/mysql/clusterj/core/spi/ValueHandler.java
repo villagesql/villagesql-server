@@ -99,8 +99,6 @@ public interface ValueHandler extends DynamicObjectDelegate, InvocationHandler {
     void setJavaSqlTimestamp(int fieldNumber, java.sql.Timestamp value);
 
     void setCacheManager(CacheManager cm);
-    void setProxy(Object proxy);
-    Object getProxy();
     void release();
 
 }

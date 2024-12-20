@@ -136,10 +136,6 @@ public class CrazyDomainTypeHandlerFactoryImpl implements DomainTypeHandlerFacto
                     throw new UnsupportedOperationException("Not supported yet.");
                 }
 
-                public T getInstance(ValueHandler handler) {
-                    throw new UnsupportedOperationException("Not supported yet.");
-                }
-
                 public void objectMarkModified(ValueHandler handler, String fieldName) {
                     throw new UnsupportedOperationException("Not supported yet.");
                 }

@@ -402,10 +402,6 @@ public abstract class AbstractDomainTypeHandlerImpl<T> implements DomainTypeHand
         throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
     }
 
-    public T getInstance(ValueHandler handler) {
-        throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
-    }
-
     public Class<?> getOidClass() {
         throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
     }

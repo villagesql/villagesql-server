@@ -190,12 +190,14 @@ int run_tests(int argc, char **argv) {
 
   /* Create the arguments to the Java command line */
   NdbProcess::Args args;
+  const char *extra_java_opts = getenv("JVM_OPTS");
   args.add("-Djava.library.path=", ndbClientDir.c_str());
   args.add("-Dclusterj.properties=", paths.propsFile().c_str());
   args.add("-Duser.timezone=GMT-3");
   args.add("-ea");
   if (getenv("LOG_GC")) args.add("-Xlog:gc=trace:file=clusterj-%p-gc.log");
   args.add2("-cp", classpath.c_str());
+  if (extra_java_opts) args.add(extra_java_opts);
   args.add("testsuite.clusterj.AllTests");
   args.add(clusterjTestJar.c_str());
 

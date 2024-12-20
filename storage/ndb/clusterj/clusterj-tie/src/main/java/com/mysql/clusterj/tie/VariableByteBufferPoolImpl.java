@@ -58,58 +58,121 @@ class VariableByteBufferPoolImpl {
     /** The biggest size of any queue */
     int biggest = 0;
 
-    /** The cleaner method for non-pooled buffers */
-    static Class<?> cleanerClass = null;
-    static Method cleanMethod = null;
-    static Field cleanerField = null;
-    static {
-        // find the package containing Cleaner class
-        try {
-            // try loading from sun.misc - java versions 1.8 and lower
-            cleanerClass = Class.forName("sun.misc.Cleaner");
-        } catch( ClassNotFoundException e1 ) {
-            // Cleaner not in sun.misc
+    /** Portable Cleaner */
+    interface ByteBufferCleaner {
+        void clean(ByteBuffer b);
+    }
+
+    abstract static class Cleaner0 implements ByteBufferCleaner {
+        protected Class<?> implClass = null;
+        protected Method cleanerMethod = null;
+
+        abstract void test() throws ReflectiveOperationException;
+        abstract void invoke(ByteBuffer b) throws ReflectiveOperationException;
+        public void clean(ByteBuffer b) {
             try {
-                // check in java.internal.ref - java versions 1.9 and above
-                cleanerClass = Class.forName("java.internal.ref.Cleaner");
-            } catch( ClassNotFoundException e2 ) {
-                // Cleaner class not found - Cannot use cleaner
-                // only possible reason is Cleaner class has been removed completely
-                String message = local.message("WARN_Buffer_Cleaning_Unusable", e2.getClass().getName(), e2.getMessage());
-                logger.warn(message);
-            }
-        }
-        if (cleanerClass != null)
-        {
-            try {
-                // fetch the cleaner's clean method
-                cleanMethod = cleanerClass.getMethod("clean");
-                // test if cleaner is usable
-                ByteBuffer buffer = ByteBuffer.allocateDirect(1);
-                cleanerField = buffer.getClass().getDeclaredField("cleaner");
-                cleanerField.setAccessible(true);
-                clean(buffer);
-            } catch (Throwable t) {
-                String message = local.message("WARN_Buffer_Cleaning_Unusable", t.getClass().getName(), t.getMessage());
-                logger.warn(message);
-                // cannot use cleaner
-                cleanerField = null;
+                invoke(b);
+            } catch (ReflectiveOperationException e) {
+                // oh well
             }
         }
     }
 
-    /** Clean the non-pooled buffer after use. This frees the memory back to the system. Note that this
-     * only supports the current implementation of DirectByteBuffer and this support may change in future.
+    /* Cleaner1 is code common to SunMiscCleaner and JavaInternalRefCleaner */
+    abstract static class Cleaner1 extends Cleaner0 {
+        private Field cleanerField = null;
+
+        void test() throws ReflectiveOperationException {
+            ByteBuffer buffer = ByteBuffer.allocateDirect(1);
+            cleanerField = buffer.getClass().getDeclaredField("cleaner");
+            cleanerField.setAccessible(true);
+            invoke(buffer);
+        }
+
+        void invoke(ByteBuffer buffer) throws ReflectiveOperationException {
+             cleanerMethod.invoke(implClass.cast(cleanerField.get(buffer)));
+        }
+    }
+
+    /* SunMiscCleaner should be usable by early Java, Java 1.8, and JDK 9 up
+       until build 105. */
+    static class SunMiscCleaner extends Cleaner1 {
+        SunMiscCleaner() throws ReflectiveOperationException {
+            implClass = Class.forName("sun.misc.cleaner");
+            cleanerMethod = implClass.getMethod("clean");
+            logger.debug("Using SunMiscCleaner (Java 8 and earlier)");
+        }
+    }
+
+    /* In OpenJDK 9 build 105, sun.misc.Cleaner was moved to java.internal.ref;
+       see OpenJDK bug 8148117.
+    */
+    static class JavaInternalRefCleaner extends Cleaner1 {
+        JavaInternalRefCleaner() throws ReflectiveOperationException {
+            implClass = Class.forName("java.internal.ref.Cleaner");
+            cleanerMethod = implClass.getMethod("clean");
+            logger.debug("Using JavaInternalRefCleaner (some Java 9 releases)");
+        }
+    }
+
+    /* OpenJDK 9 build 150 added Unsafe.invokeCleaner in sun.misc.Unsafe
+       (OpenJDK bug 8171377); it is usable up through OpenJDK 23, where, with
+       the release of the FFM API, it becomes deprecated for removal.
+    */
+    static class SunMiscUnsafeCleaner extends Cleaner0 {
+        protected Object obj = null;
+
+        SunMiscUnsafeCleaner() throws ReflectiveOperationException {
+            implClass = Class.forName("sun.misc.Unsafe");
+            Field theUnsafe = implClass.getDeclaredField("theUnsafe");
+            theUnsafe.setAccessible(true);
+            obj = theUnsafe.get(null);
+            cleanerMethod = implClass.getMethod("invokeCleaner", ByteBuffer.class);
+        }
+
+        void test() throws ReflectiveOperationException {
+            ByteBuffer b = ByteBuffer.allocateDirect(1);
+            invoke(b);
+        }
+
+        void invoke(ByteBuffer buffer) throws ReflectiveOperationException {
+            cleanerMethod.invoke(obj, buffer);
+        }
+    }
+
+    static ByteBufferCleaner theByteBufferCleaner = null;
+    static {
+        Cleaner0 cleaner = null;
+
+        try {
+            cleaner = new SunMiscCleaner();
+        } catch (ReflectiveOperationException e) { }
+
+        if(cleaner == null) {
+            try {
+                cleaner = new SunMiscUnsafeCleaner();
+            } catch (ReflectiveOperationException e) { }
+        }
+
+        if(cleaner == null) {
+            try {
+                cleaner = new JavaInternalRefCleaner();
+            } catch (ReflectiveOperationException e) { }
+        }
+
+        try {
+            cleaner.test();
+        } catch (Throwable t) {
+            logger.warn(local.message("WARN_Buffer_Cleaning_Unusable", t.getClass().getName(), t.getMessage()));
+        }
+        theByteBufferCleaner = cleaner;
+    }
+
+    /** Clean the non-pooled DirectByteBuffer after use, freeing the memory back to the system.
      */
     static void clean(ByteBuffer buffer) {
-        if (cleanerField != null) {
-            try {
-                // invoke Cleaner's clean method
-                cleanMethod.invoke(cleanerClass.cast(cleanerField.get(buffer)));
-            } catch (Throwable t) {
-                // oh well
-            }
-        }
+        if(theByteBufferCleaner != null)
+            theByteBufferCleaner.clean(buffer);
     }
 
     /** The guard initialization bytes. To enable the guard, change the size of the guard array. */
