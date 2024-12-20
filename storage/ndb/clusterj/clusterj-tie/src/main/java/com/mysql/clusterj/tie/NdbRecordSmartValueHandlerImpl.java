@@ -109,7 +109,6 @@ public class NdbRecordSmartValueHandlerImpl implements SmartValueHandler {
         domainFieldHandlers = null;
         fieldNumberToColumnNumberMap = null;
         transientValues = null;
-        proxy = null;
     }
 
     /** Was this value handler released? */
@@ -141,8 +140,6 @@ public class NdbRecordSmartValueHandlerImpl implements SmartValueHandler {
     private Object[] transientValues = null;
 
     private boolean[] transientModified; 
-
-    private Object proxy;
 
     public NdbRecordSmartValueHandlerImpl(DomainTypeHandlerImpl<?> domainTypeHandler) {
         this.domainTypeHandler = domainTypeHandler;
@@ -790,13 +787,4 @@ public class NdbRecordSmartValueHandlerImpl implements SmartValueHandler {
 
     public void setCacheManager(CacheManager cm) {
     }
-
-    public void setProxy(Object proxy) {
-        this.proxy = proxy;
-    }
-
-    public Object getProxy() {
-        return this.proxy;
-    }
-
 }

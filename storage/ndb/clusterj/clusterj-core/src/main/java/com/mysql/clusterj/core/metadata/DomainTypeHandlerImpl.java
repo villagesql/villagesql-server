@@ -487,8 +487,6 @@ public class DomainTypeHandlerImpl<T> extends AbstractDomainTypeHandlerImpl<T> {
                 ((DynamicObject)instance).delegate((DynamicObjectDelegate)valueHandler);
             } else {
                 instance = (T)Proxy.newProxyInstance(cls.getClassLoader(), proxyInterfaces, valueHandler);
-                // TODO is setProxy really needed?
-                valueHandler.setProxy(instance);
             }
             return instance;
         } catch (InstantiationException ex) {
@@ -530,12 +528,6 @@ public class DomainTypeHandlerImpl<T> extends AbstractDomainTypeHandlerImpl<T> {
         String head = methodName.substring(3, 4).toLowerCase();
         String tail = methodName.substring(4);
         return head + tail;
-    }
-
-    @SuppressWarnings( "unchecked" )
-    public T getInstance(ValueHandler valueHandler) {
-        T instance = (T)valueHandler.getProxy();
-        return instance;
     }
 
     private Class<?> getType(Method method) {

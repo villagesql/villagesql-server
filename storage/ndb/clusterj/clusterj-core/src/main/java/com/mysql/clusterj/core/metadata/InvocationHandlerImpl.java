@@ -108,14 +108,6 @@ public class InvocationHandlerImpl<T> implements InvocationHandler,
         return this.domainTypeHandler == null;
     }
 
-    public void setProxy(Object proxy) {
-        this.proxy = proxy;
-    }
-
-    public Object getProxy() {
-        return proxy;
-    }
-
     public void setCacheManager(CacheManager manager) {
         objectManager = manager;
         resetModified();
