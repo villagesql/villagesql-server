@@ -3634,9 +3634,6 @@ AccessPath *CostingReceiver::MakeMaterializePath(const AccessPath &path,
     // row IDs never survive a rescan.
     materialize_path->safe_for_rowid = AccessPath::SAFE_IF_SCANNED_ONCE;
 
-    materialize_path->parameter_tables = GetNodeMapFromTableMap(
-        tl->table_function->used_tables() & ~PSEUDO_TABLE_BITS,
-        m_graph->table_num_to_node_num);
     if (Overlaps(tl->table_function->used_tables(),
                  OUTER_REF_TABLE_BIT | RAND_TABLE_BIT)) {
       // Make sure the table function is never hashed, ever.
@@ -3670,10 +3667,6 @@ AccessPath *CostingReceiver::MakeMaterializePath(const AccessPath &path,
     materialize_path = GetAccessPathForDerivedTable(
         m_thd, tl, table, rematerialize,
         /*invalidators=*/nullptr, m_need_rowid, stable_path);
-    // Handle LATERAL.
-    materialize_path->parameter_tables =
-        GetNodeMapFromTableMap(tl->derived_query_expression()->m_lateral_deps,
-                               m_graph->table_num_to_node_num);
 
     if (materialize_path->type == AccessPath::MATERIALIZE) {
       materialize_path->parameter_tables |=
@@ -4167,6 +4160,7 @@ void CostingReceiver::ProposeAccessPathForBaseTable(
         &new_fd_set);
     path->ordering_state =
         m_orderings->ApplyFDs(path->ordering_state, new_fd_set);
+    path->parameter_tables |= m_graph->nodes[node_idx].lateral_dependencies();
     ProposeAccessPathWithOrderings(
         TableBitmap(node_idx), new_fd_set, /*obsolete_orderings=*/0, path,
         materialize_subqueries ? "mat. subq" : description_for_trace);

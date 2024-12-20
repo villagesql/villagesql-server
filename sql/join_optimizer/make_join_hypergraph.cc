@@ -3650,7 +3650,8 @@ bool MakeSingleTableHypergraph(THD *thd, const Query_block *query_block,
   return false;
 }
 
-void FindLateralDependencies(JoinHypergraph *graph) {
+void FindLateralDependencies(JoinHypergraph *graph,
+                             const RelationalExpression *root) {
   for (JoinHypergraph::Node &node : graph->nodes) {
     assert(node.lateral_dependencies() == 0);  // Not set yet.
     const Table_ref *const table_ref = node.table()->pos_in_table_list;
@@ -3665,6 +3666,30 @@ void FindLateralDependencies(JoinHypergraph *graph) {
     node.set_lateral_dependencies(GetNodeMapFromTableMap(
         deps & ~PSEUDO_TABLE_BITS, graph->table_num_to_node_num));
   }
+
+  // Some join conditions may contain references to tables outside of the tables
+  // being joined. They typically come from outer references in a correlated
+  // derived table that has been merged into this query block. The referenced
+  // tables must be available when the join condition is evaluated. We ensure
+  // this by marking every table in the join as laterally dependent on the
+  // referenced outer tables, which forces the referenced tables to be made
+  // available via a nested loop join outside of this join.
+  ForEachJoinOperator(root, [&graph](const RelationalExpression *expr) {
+    const table_map used_tables = GetUsedTables(expr->join_conditions) |
+                                  GetUsedTables(expr->equijoin_conditions);
+
+    const NodeMap dependencies = GetNodeMapFromTableMap(
+        used_tables & ~(expr->tables_in_subtree | PSEUDO_TABLE_BITS),
+        graph->table_num_to_node_num);
+
+    if (dependencies != 0) {
+      for (size_t node_idx : BitsSetIn(expr->nodes_in_subtree)) {
+        JoinHypergraph::Node &node = graph->nodes[node_idx];
+        node.set_lateral_dependencies(node.lateral_dependencies() |
+                                      dependencies);
+      }
+    }
+  });
 }
 
 /**
@@ -3857,7 +3882,7 @@ bool MakeJoinHypergraph(THD *thd, JoinHypergraph *graph,
             end(graph->table_num_to_node_num), -1);
 #endif
   MakeJoinGraphFromRelationalExpression(thd, root, graph);
-  FindLateralDependencies(graph);
+  FindLateralDependencies(graph, root);
 
   // Now that we have the hypergraph construction done, it no longer hurts
   // to remove impossible conditions.
