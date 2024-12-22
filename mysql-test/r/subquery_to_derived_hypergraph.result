@@ -4814,10 +4814,10 @@ EXPLAIN
         -> Table scan on derived_1_4  (rows=1)
             -> Materialize  (rows=1)
                 -> Aggregate: avg(table2.col_int)  (rows=1)
-                    -> Inner hash join (no condition)  (rows=8.43)
+                    -> Inner hash join (no condition)  (rows=16.2)
                         -> Table scan on table2  (rows=20)
                         -> Hash
-                            -> Filter: ((table1.col_varchar_key = table1.col_varchar_key) and ((((table1.col_varchar_key = 'D') or (table1.col_varchar_key = table1.col_varchar_key)) and (table1.pk = 1)) or (table1.col_varchar_key < 'O')))  (rows=0.422)
+                            -> Filter: ((table1.col_varchar_key = table1.col_varchar_key) and ((((table1.col_varchar_key = 'D') or (table1.col_varchar_key = table1.col_varchar_key)) and (table1.pk = 1)) or (table1.col_varchar_key < 'O')))  (rows=0.812)
                                 -> Table scan on table1  (rows=20)
         -> Hash
             -> Table scan on derived_1_5  (rows=1)

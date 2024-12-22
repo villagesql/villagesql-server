@@ -76,7 +76,7 @@ Warning	3126	Hint INDEX(`t1` ) is ignored as conflicting/duplicated
 EXPLAIN SELECT /*+ INDEX(t1 i_a, i_b) */ a FROM t1 WHERE a = 1 AND b = 2 AND c = 3;
 EXPLAIN
 -> Filter: (t1.c = 3)  (rows=0.0156)
-    -> Intersect rows sorted by row ID  (rows=0.0156)
+    -> Intersect rows sorted by row ID  (rows=4)
         -> Index range scan on t1 using i_a over (a = 1)  (rows=32)
         -> Index range scan on t1 using i_b over (b = 2)  (rows=32)
 
@@ -88,7 +88,7 @@ EXPLAIN
 EXPLAIN SELECT /*+ INDEX(t1 i_a, i_b) JOIN_INDEX(t1 i_c) */ * FROM t1 WHERE a = 1 AND b = 2 AND c = 3;
 EXPLAIN
 -> Filter: (t1.a = 1)  (rows=0.0156)
-    -> Intersect rows sorted by row ID  (rows=0.0156)
+    -> Intersect rows sorted by row ID  (rows=1)
         -> Index range scan on t1 using i_c over (c = 3)  (rows=1)
         -> Index range scan on t1 using i_b over (b = 2)  (rows=32)
 

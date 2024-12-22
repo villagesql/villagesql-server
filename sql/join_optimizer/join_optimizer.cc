@@ -137,6 +137,7 @@ using std::all_of;
 using std::any_of;
 using std::find_if;
 using std::has_single_bit;
+using std::max;
 using std::min;
 using std::none_of;
 using std::pair;
@@ -1920,6 +1921,44 @@ bool CollectPossibleRangeScans(
   return false;
 }
 
+// Estimates rows for an OR condition using the index merge information
+// setup by the range optimizer. For each part of the OR condition,
+// it finds the index with the lowest estimate. The sum of all such
+// estimates for every part of OR condition is used as the final
+// estimate for the index merge. However, the actual number of rows
+// qualified by the OR predicate could be lesser than this estimate.
+// We do not take into consideration the intersect factor between
+// the rows qualified by the indexes picked as we want to be on the
+// pessimistic side for the estimates.
+ha_rows EstimateRowsFromIndexMerge(THD *thd, const SEL_IMERGE *imerge,
+                                   RANGE_OPT_PARAM *param) {
+  ha_rows total_rows = 0;
+  // For each part of the OR condition, find the cheapest range scan
+  // and use the estimates from it.
+  for (SEL_TREE *tree : imerge->trees) {
+    ha_rows best_rows = HA_POS_ERROR;
+    for (unsigned idx = 0; idx < param->keys; idx++) {
+      SEL_ROOT *root = tree->keys[idx];
+      if (root == nullptr || root->type == SEL_ROOT::Type::MAYBE_KEY ||
+          root->root->maybe_flag) {
+        continue;
+      }
+      const uint keynr = param->real_keynr[idx];
+      const bool covering_index = param->table->covering_keys.is_set(keynr);
+      unsigned mrr_flags, buf_size;
+      Cost_estimate cost;
+      bool is_ror_scan, is_imerge_scan;
+      ha_rows num_rows = check_quick_select(
+          thd, param, idx, covering_index, root, /*update_tbl_stats=*/true,
+          ORDER_NOT_RELEVANT, /*skip_records_in_range=*/false, &mrr_flags,
+          &buf_size, &cost, &is_ror_scan, &is_imerge_scan);
+      best_rows = std::clamp(num_rows, ha_rows{1}, best_rows);
+    }
+    total_rows += best_rows;
+  }
+  return std::min(total_rows, param->table->file->stats.records);
+}
+
 /**
   Based on estimates for all the different range scans (which cover different
   but potentially overlapping combinations of predicates), try to find an
@@ -1959,8 +1998,10 @@ bool CollectPossibleRangeScans(
        selective.
     2. Multiply in its selectivity, and mark all the predicates it covers
        as accounted for. Repeat #1 and #2 for as long as possible.
-    3. For any remaining predicates, multiply by their existing estimate
-       (ie., the one not coming from the range optimizer).
+    3. For any remaining predicates, if the predicate is an OR predicate,
+       check if the range optimizer has set up index merge information. If
+       so, get the estimates from the index merge. Else, multiply by their
+       existing estimate (ie., the one not coming from the range optimizer).
 
   The hope is that in #1, we will usually prefer using selectivity information
   from indexes with more keyparts; e.g., it's better to use an index on (a,b)
@@ -1973,8 +2014,9 @@ bool CollectPossibleRangeScans(
      Estimation of Conjunctive Predicates on CPUs and GPUs”
  */
 double EstimateOutputRowsFromRangeTree(
-    THD *thd, const RANGE_OPT_PARAM &param, ha_rows total_rows,
+    THD *thd, RANGE_OPT_PARAM &param, ha_rows total_rows,
     const Mem_root_array<PossibleRangeScan> &possible_scans,
+    const Mem_root_array<PossibleIndexMerge> &possible_imerges,
     const JoinHypergraph &graph, OverflowBitset predicates) {
   MutableOverflowBitset remaining_predicates = predicates.Clone(thd->mem_root);
   double selectivity = 1.0;
@@ -2039,16 +2081,42 @@ double EstimateOutputRowsFromRangeTree(
     }
   }
 
-  // Cover any remaining predicates by single-predicate estimates.
-  for (int predicate_idx : BitsSetIn(std::move(remaining_predicates))) {
-    if (TraceStarted(thd)) {
-      Trace(thd) << StringPrintf(
-          " - using existing selectivity %.3f from outside range scan "
-          "to cover %s\n",
-          graph.predicates[predicate_idx].selectivity,
-          ItemToString(graph.predicates[predicate_idx].condition).c_str());
+  // Cover any remaining predicates by using index merges setup by range
+  // optimizer. If there is no index merge, use the single-predicate estimates.
+  for (unsigned predicate_idx : BitsSetIn(std::move(remaining_predicates))) {
+    bool imerge_found = false;
+    for (const PossibleIndexMerge &imerge : possible_imerges) {
+      if (imerge.pred_idx != predicate_idx) {
+        continue;
+      }
+      // Note that SetUpRangeScans() would have only set up the single
+      // index range scans. For index merge, we need to calculate the
+      // estimates now.
+      const double rows =
+          EstimateRowsFromIndexMerge(thd, imerge.imerge, &param);
+      const double merge_selectivity =
+          (rows > total_rows) ? 1.0 : (rows / total_rows);
+      selectivity *= merge_selectivity;
+      if (TraceStarted(thd)) {
+        Trace(thd) << StringPrintf(
+            " - using selectivity %.3f (%.3f rows) from index merge scan "
+            "to cover %s\n",
+            merge_selectivity, rows,
+            ItemToString(graph.predicates[predicate_idx].condition).c_str());
+      }
+      imerge_found = true;
+      break;
     }
-    selectivity *= graph.predicates[predicate_idx].selectivity;
+    if (!imerge_found) {
+      if (TraceStarted(thd)) {
+        Trace(thd) << StringPrintf(
+            " - using existing selectivity %.3f from outside range scan "
+            "to cover %s\n",
+            graph.predicates[predicate_idx].selectivity,
+            ItemToString(graph.predicates[predicate_idx].condition).c_str());
+      }
+      selectivity *= graph.predicates[predicate_idx].selectivity;
+    }
   }
   return total_rows * selectivity;
 }
@@ -2389,8 +2457,8 @@ bool CostingReceiver::SetUpRangeScans(
     return true;
   }
   *num_output_rows_after_filter = EstimateOutputRowsFromRangeTree(
-      m_thd, *param, table->file->stats.records, *possible_scans, *m_graph,
-      all_predicates_fixed);
+      m_thd, *param, table->file->stats.records, *possible_scans, *index_merges,
+      *m_graph, all_predicates_fixed);
   *all_predicates = all_predicates_fixed.Clone(m_thd->mem_root);
 
   return false;
@@ -2892,8 +2960,7 @@ void CostingReceiver::ProposeRowIdOrderedIntersect(
   ror_intersect_path.set_init_cost(init_cost);
   double best_rows = std::max<double>(plan.m_out_rows, 1.0);
   ror_intersect_path.set_num_output_rows(
-      ror_intersect_path.num_output_rows_before_filter =
-          min<double>(best_rows, num_output_rows_after_filter));
+      ror_intersect_path.num_output_rows_before_filter = best_rows);
 
   if (IsBitSet(node_idx, m_immediate_update_delete_candidates)) {
     ror_intersect_path.immediate_update_delete_table = node_idx;
@@ -3028,8 +3095,7 @@ void CostingReceiver::ProposeRowIdOrderedUnion(
   };
 
   ror_union_path.set_num_output_rows(
-      ror_union_path.num_output_rows_before_filter =
-          min<double>(num_output_rows, num_output_rows_after_filter));
+      ror_union_path.num_output_rows_before_filter = num_output_rows);
 
   if (IsBitSet(node_idx, m_immediate_update_delete_candidates)) {
     ror_union_path.immediate_update_delete_table = node_idx;
@@ -3248,8 +3314,7 @@ void CostingReceiver::ProposeIndexMerge(
   imerge_path.set_cost(cost);
   imerge_path.set_cost_before_filter(cost);
   imerge_path.set_init_cost(init_cost);
-  imerge_path.num_output_rows_before_filter =
-      min<double>(num_output_rows, num_output_rows_after_filter);
+  imerge_path.num_output_rows_before_filter = num_output_rows;
   imerge_path.set_num_output_rows(imerge_path.num_output_rows_before_filter);
 
   if (IsBitSet(node_idx, m_immediate_update_delete_candidates)) {

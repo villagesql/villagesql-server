@@ -1225,13 +1225,13 @@ EXPLAIN
 
 EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE b=5 OR c<=>NULL;
 EXPLAIN
--> Deduplicate rows sorted by row ID  (rows=4.8)
+-> Deduplicate rows sorted by row ID  (rows=3)
     -> Index range scan on t1 using k_b over (b = 5)  (rows=2)
     -> Index range scan on t1 using k_c over (c = NULL)  (rows=1)
 
 EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE b=5 OR c IS NULL;
 EXPLAIN
--> Deduplicate rows sorted by row ID  (rows=4.8)
+-> Deduplicate rows sorted by row ID  (rows=3)
     -> Index range scan on t1 using k_b over (b = 5)  (rows=2)
     -> Index range scan on t1 using k_c over (c = NULL)  (rows=1)
 
@@ -1266,13 +1266,13 @@ EXPLAIN
 
 EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE b=5 OR c<=>NULL;
 EXPLAIN
--> Deduplicate rows sorted by row ID  (rows=2.03)
+-> Deduplicate rows sorted by row ID  (rows=3)
     -> Index range scan on t1 using k_b over (b = 5)  (rows=2)
     -> Index range scan on t1 using k_c over (c = NULL)  (rows=1)
 
 EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE b=5 OR c IS NULL;
 EXPLAIN
--> Deduplicate rows sorted by row ID  (rows=2.03)
+-> Deduplicate rows sorted by row ID  (rows=3)
     -> Index range scan on t1 using k_b over (b = 5)  (rows=2)
     -> Index range scan on t1 using k_c over (c = NULL)  (rows=1)
 

@@ -4021,10 +4021,9 @@ NULL	7
 EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col) FROM a
 WHERE (group_by_col IN (70 ,9)) OR (aggr_col > 2) GROUP BY group_by_col;
 EXPLAIN
--> Group aggregate: min(a.aggr_col)  (rows=1.67)
-    -> Sort: a.group_by_col  (rows=2.8)
-        -> Filter: ((a.group_by_col in (70,9)) or (a.aggr_col > 2))  (rows=2.8)
-            -> Table scan on a  (rows=6)
+-> Group aggregate: min(a.aggr_col)  (rows=2.45)
+    -> Filter: ((a.group_by_col in (70,9)) or (a.aggr_col > 2))  (rows=6)
+        -> Covering index scan on a using group_by_col_key  (rows=6)
 
 SELECT TRACE RLIKE 'disjuntive_predicate_present' AS OK
 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
@@ -4039,10 +4038,9 @@ NULL	7
 EXPLAIN FORMAT=TREE SELECT group_by_col, MAX(aggr_col) FROM a
 WHERE (group_by_col IN (70 , 9)) OR (aggr_col < 9) GROUP BY group_by_col;
 EXPLAIN
--> Group aggregate: max(a.aggr_col)  (rows=1.67)
-    -> Sort: a.group_by_col  (rows=2.8)
-        -> Filter: ((a.group_by_col in (70,9)) or (a.aggr_col < 9))  (rows=2.8)
-            -> Table scan on a  (rows=6)
+-> Group aggregate: max(a.aggr_col)  (rows=2.45)
+    -> Filter: ((a.group_by_col in (70,9)) or (a.aggr_col < 9))  (rows=6)
+        -> Covering index scan on a using group_by_col_key  (rows=6)
 
 SELECT TRACE RLIKE 'disjuntive_predicate_present' AS OK
 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
