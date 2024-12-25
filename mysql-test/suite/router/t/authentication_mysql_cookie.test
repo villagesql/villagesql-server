@@ -12,6 +12,9 @@
 --source ../include/predefined_setup/configure_router_mrs_root.inc
 --source ../include/schema/basic_schema.sql
 
+create user mrsuser@'%' identified by 'S3kre7';
+grant all on *.* to mrsuser@'%';
+
 ## Test starts here
 --echo
 --echo
@@ -132,13 +135,13 @@ exec $MRS_CLIENT_ARGS
 exec $MRS_CLIENT_ARGS
   -a BASIC
   --path /svc1/authentication/login
-  -u root
+  -u mrsuser -p S3kre7
   --session-file $MYSQL_TMP_DIR/user1_session.dat;
 
 exec $MRS_CLIENT_ARGS
   -a BASIC
   --path /svc2/authentication/login
-  -u root
+  -u mrsuser -p S3kre7
   --session-file $MYSQL_TMP_DIR/user2_session.dat;
 
 ### User1 access
@@ -198,6 +201,7 @@ exec $MRS_CLIENT_ARGS
   --session-file $MYSQL_TMP_DIR/user2_session.dat;
 
 # Cleanup
+drop user mrsuser@'%';
 remove_file $MYSQL_TMP_DIR/user1_session.dat;
 remove_file $MYSQL_TMP_DIR/user2_session.dat;
 --source ../include/mrs/cleanup.inc

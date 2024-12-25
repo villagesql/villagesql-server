@@ -263,7 +263,7 @@ class RestRequestHandler : public ::http::base::RequestHandler {
             .append(" parameters: ")
             .append(k)
             .append("=")
-            .append(v);
+            .append(k == "Authorization" ? "*****" : v);
       });
     }
 
@@ -598,8 +598,14 @@ class RestRequestHandler : public ::http::base::RequestHandler {
 
   template <typename Err>
   void handle_error(RequestContext *ctxt, const Err &err) {
-    logger_.debug("void handle_error(RequestContext *ctxt, const Err &err)");
     const http::Error &e = err_to_http_error(err);
+    logger_.debug([&]() {
+      std::string msg;
+      for (const auto &it : responose_encode_error(e, err)) {
+        msg += " " + it.first + "=" + it.second;
+      }
+      return "handle_error" + msg;
+    });
     if (!rest_handler_->request_error(ctxt, e)) {
       switch (e.status) {
         case HttpStatusCode::Ok:

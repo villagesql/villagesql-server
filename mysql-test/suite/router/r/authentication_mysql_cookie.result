@@ -1,6 +1,8 @@
 # MySQL Rest Service schema created.
 # MySQL Rest Service, server accounts configured.
 # DB `basic_schema` - created
+create user mrsuser@'%' identified by 'S3kre7';
+grant all on *.* to mrsuser@'%';
 
 
 ## I. Create two servcices that have basic-mysql authentication:
@@ -125,6 +127,7 @@ OK
 GET /svc2/basic2/o4
 
 OK
+drop user mrsuser@'%';
 DROP SCHEMA basic_schema;
 DROP SCHEMA mysql_rest_service_metadata;
 DROP ROLE mysql_rest_service_admin;

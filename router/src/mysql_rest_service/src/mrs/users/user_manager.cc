@@ -194,8 +194,8 @@ bool UserManager::user_get(AuthUser *out_user, SqlSessionCache *out_cache,
     return false;
   }
 
-  // TODO(lkotula): It will bring trouble (Shouldn't be in review)
-  std::size_t p = out_user->vendor_user_id.find("@");
+  // username can contain @ but hostname/IP can't
+  std::size_t p = out_user->vendor_user_id.rfind("@");
   if (std::string::npos != p && out_user->name.empty()) {
     out_user->name = out_user->vendor_user_id.substr(0, p);
   }
