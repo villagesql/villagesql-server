@@ -2820,6 +2820,12 @@ void CostingReceiver::ProposeRowIdOrderedIntersect(
                                    INDEX_MERGE_HINT_ENUM)) {
       continue;
     }
+    if (cur_scan->covered_fields.empty() && cpk_scan != nullptr) {
+      // There is no point in adding a ror scan if it covers
+      // a subset of clustered primary index keyparts when a
+      // clustered primary key can be used.
+      continue;
+    }
     if (plan.add(needed_fields, cur_scan, /*is_cpk_scan=*/false,
                  /*trace_idx=*/nullptr, /*ignore_cost=*/false)) {
       UpdateAppliedAndSubsumedPredicates(cur_scan->idx, possible_ror_scans,

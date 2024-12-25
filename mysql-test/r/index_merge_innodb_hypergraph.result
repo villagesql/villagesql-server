@@ -2510,3 +2510,17 @@ EXPLAIN
     -> Index range scan on t1 using k_c over (c = 0)  (rows=5)
 
 DROP TABLE t1;
+#
+# Bug##37199882: Hypergraph chooses ROR intersection for a single range
+#
+CREATE TABLE t1 (f1 INT, f2 INT, f3 INT, PRIMARY KEY (f1,f2), KEY(f1));
+INSERT INTO t1 VALUES (1,1,1),(2,2,2),(3,3,3),(4,4,4),(5,5,5),(6,6,6),
+(7,7,7),(8,8,8),(9,9,9),(10,10,10);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE f1=10;
+EXPLAIN
+-> Index lookup on t1 using PRIMARY (f1 = 10)  (rows=1)
+
+DROP TABLE t1;
