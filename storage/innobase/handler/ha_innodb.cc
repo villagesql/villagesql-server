@@ -18499,6 +18499,16 @@ int ha_innobase::check(THD *thd,                /*!< in: user thread handle */
     /* Scan this index. */
     if (dict_index_is_spatial(index)) {
       ret = row_count_rtree_recs(m_prebuilt, &n_rows, &n_dups);
+      if ((check_opt->flags & T_EXTEND) && (ret == DB_SUCCESS) &&
+          !(n_rows < n_rows_in_table || n_dups < n_rows - n_rows_in_table)) {
+        /* For CHECK TABLE EXTENDED; we also want to make sure that MBR stored
+        in SPATIAL Index is matching the MBR of geometry stored in Clustered
+        record. */
+        m_prebuilt->need_to_access_clustered = true;
+        n_rows = 0;
+        n_dups = 0;
+        ret = row_count_rtree_recs(m_prebuilt, &n_rows, &n_dups);
+      }
     } else {
       ret = row_scan_index_for_mysql(m_prebuilt, index, max_threads, true,
                                      &n_rows);
