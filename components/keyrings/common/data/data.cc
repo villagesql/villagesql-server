@@ -60,7 +60,10 @@ Data &Data::operator=(Data &&src) noexcept {
 }
 
 /** Destructor */
-Data::~Data() { valid_ = false; }
+Data::~Data() {
+  data_.replace(0, data_.length(), data_.length(), '*');
+  valid_ = false;
+}
 
 /** Return self */
 Data Data::get_data() const { return *this; }

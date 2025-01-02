@@ -226,6 +226,7 @@ usr/lib/mysql/plugin/debug/keyring_hashicorp.so
 usr/lib/mysql/plugin/debug/thread_pool.so
 usr/lib/mysql/plugin/debug/firewall.so
 usr/lib/mysql/plugin/debug/component_keyring_encrypted_file.so
+usr/lib/mysql/plugin/debug/component_keyring_hashicorp.so
 usr/lib/mysql/plugin/debug/component_keyring_oci.so
 usr/lib/mysql/plugin/debug/component_enterprise_encryption.so
 usr/lib/mysql/plugin/debug/component_masking.so

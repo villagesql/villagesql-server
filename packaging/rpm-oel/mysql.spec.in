@@ -860,6 +860,7 @@ mkdir debug
            -DWITH_AUTHENTICATION_OPENID_CONNECT=0 \
            -DWITH_AUTHENTICATION_LDAP=0 \
            -DWITH_AUTHENTICATION_OCI=0 \
+           -DWITH_COMPONENT_KEYRING_HASHICORP=0 \
            -DWITH_COMPONENT_KEYRING_OCI=0 \
            -DWITH_CURL=0 \
            -DWITH_KEYRING_HASHICORP=0 \
@@ -907,6 +908,7 @@ mkdir release
            -DWITH_AUTHENTICATION_OPENID_CONNECT=0 \
            -DWITH_AUTHENTICATION_LDAP=0 \
            -DWITH_AUTHENTICATION_OCI=0 \
+           -DWITH_COMPONENT_KEYRING_HASHICORP=0 \
            -DWITH_COMPONENT_KEYRING_OCI=0 \
            -DWITH_CURL=0 \
            -DWITH_KEYRING_HASHICORP=0 \
@@ -961,6 +963,7 @@ mkdir release
            -DWITH_AUTHENTICATION_OPENID_CONNECT=0 \
            -DWITH_AUTHENTICATION_LDAP=0 \
            -DWITH_AUTHENTICATION_OCI=0 \
+           -DWITH_COMPONENT_KEYRING_HASHICORP=0 \
            -DWITH_COMPONENT_KEYRING_OCI=0 \
            -DWITH_CURL=0 \
            -DWITH_KEYRING_HASHICORP=0 \
@@ -1292,6 +1295,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_openid_connect.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_sasl.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_simple.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_hashicorp.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_oci.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/keyring_hashicorp.so
 %endif # ssl_default
@@ -1390,6 +1394,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/authentication_openid_connect.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/authentication_ldap_sasl.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/authentication_ldap_simple.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_keyring_hashicorp.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_keyring_oci.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/keyring_hashicorp.so
 %endif # ssl_default
@@ -1986,6 +1991,9 @@ fi
 %changelog
 * Fri Jan 10 2025 Anibal Pinto <anibal.pinto@oracle.com> - 9.3.0-1
 - Added component_group_replication_elect_prefers_most_updated
+
+* Thu Jan 09 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.0.3-1
+- Add component_keyring_hashicorp.so component
 
 * Fri Nov 29 2024 Jaideep Karande <jaideep.karande@oracle.com> - 9.2.0-1
 - Added component_group_replication_resource_manager

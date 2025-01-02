@@ -112,6 +112,7 @@ usr/lib/mysql/plugin/authentication_pam.so
 usr/lib/mysql/plugin/authentication_webauthn.so
 usr/lib/mysql/plugin/component_enterprise_encryption.so
 usr/lib/mysql/plugin/component_keyring_encrypted_file.so
+usr/lib/mysql/plugin/component_keyring_hashicorp.so
 usr/lib/mysql/plugin/component_keyring_oci.so
 usr/lib/mysql/plugin/data_masking.so
 usr/lib/mysql/plugin/firewall.so

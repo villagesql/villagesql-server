@@ -692,6 +692,7 @@ rm -r $(readlink var) var
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_aws.so
 %endif # add_component_keyring_aws
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_encrypted_file.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_hashicorp.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_oci.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_enterprise_encryption.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_masking.so
@@ -724,6 +725,9 @@ rm -r $(readlink var) var
 %changelog
 * Fri Jan 10 2025 Anibal Pinto <anibal.pinto@oracle.com> - 9.3.0-1
 - Added component_group_replication_elect_prefers_most_updated
+
+* Thu Jan 09 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.3.0-1
+- Add component_keyring_hashicorp.so component
 
 * Fri Nov 29 2024 Jaideep Karande <jaideep.karande@oracle.com> - 9.2.0-1
 - Added component_group_replication_resource_manager

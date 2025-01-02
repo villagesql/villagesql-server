@@ -13044,6 +13044,18 @@ ER_GRP_PRIMARY_ELECTION_METHOD_MEMBER_WEIGHT
 ER_GRP_PRIMARY_ELECTION_FATAL_PROCESS
   eng "Fatal error during the primary election process of Group Replication. The server will leave the group."
 
+ER_KEYRING_COMPONENT_KEYRING_HASHICORP_DATA_EXTRACT_FAILED
+   eng "Hashicorp Vault DATA extract failed."
+
+ER_KEYRING_COMPONENT_KEYRING_HASHICORP_KEY_MALFORMED
+   eng "Hashicorp Vault KEY malformed."
+
+ER_KEYRING_COMPONENT_KEYRING_HASHICORP_AUTH_FAIL
+   eng "Hashicorp Vault server authentication failed."
+
+ER_KEYRING_COMPONENT_KEYRING_HASHICORP_CURL_SETOPT_FAILED
+   eng "Hashicorp Vault server curl_easy_setopt failed."
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

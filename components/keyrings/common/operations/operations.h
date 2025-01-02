@@ -619,6 +619,14 @@ class Keyring_operations {
   }
 
   /**
+    Clear API to clear entire data cache
+  */
+  void clear() {
+    cache_.clear();
+    valid_ = 0;
+  }
+
+  /**
     Generate API
 
     @param [in] metadata Key for the data
