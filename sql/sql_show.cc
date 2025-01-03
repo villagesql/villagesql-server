@@ -2264,7 +2264,7 @@ static bool generate_sql_from_engine_attribute(THD *thd, String *packet,
           String original_url(url.get_data(), url.get_data_length(),
                               system_charset_info);
           String rlb;
-          redact_par_url(original_url, rlb);
+          redact_external_metadata(original_url, rlb);
           append_unescaped(packet, rlb.ptr(), rlb.length());
           packet->append(STRING_WITH_LEN(" "));
           if (!warning_pushed) {
@@ -3073,7 +3073,7 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
 
         if (redact_par) {
           String rlb;
-          redact_par_url(*engine_attribute, rlb);
+          redact_external_metadata(*engine_attribute, rlb);
 
           append_unescaped(packet, rlb.ptr(), rlb.length());
           // inform users without privileges that the result of SHOW CREATE
