@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <memory>
+#include <deque>
+#include <string>
 
 #include "my_byteorder.h"
 #include "my_sys.h"
@@ -42,6 +43,7 @@
 #include "mysql/strings/m_ctype.h"
 #include "mysys_err.h"
 #include "sql_chars.h"
+#include "string_with_len.h"
 #include "strings/collations_internal.h"
 #include "strings/m_ctype_internals.h"
 #include "template_utils.h"
@@ -951,7 +953,7 @@ size_t my_convert(char *to, size_t to_length, const CHARSET_INFO *to_cs,
     int8store(to, uint8korr(from));
   }
 
-  while (length > 0 && static_cast<uchar>(*from) < 0x80) {
+  while (length > 0 && static_cast<uint8_t>(*from) < 0x80) {
     *to++ = *from++;
     --length;
   }

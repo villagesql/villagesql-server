@@ -1,4 +1,4 @@
-/* Copyright (c) 2016, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2016, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -67,8 +67,6 @@
 #include <utility>
 
 #include "m_string.h"
-#include "my_compiler.h"
-#include "mysql/strings/m_ctype.h"
 #include "strings/mb_wc.h"
 #include "strings/uca900_data.h"  // uca900_weights[]
 

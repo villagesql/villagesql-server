@@ -1,4 +1,4 @@
-/* Copyright (c) 2002, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,7 +30,7 @@
 #include <cassert>
 #include <cerrno>
 #include <climits>
-#include <cstdarg>
+#include <cstdarg>  // IWYU pragma: keep
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -50,7 +50,8 @@ MY_COMPILER_DIAGNOSTIC_PUSH()
 // Suppress warning C4146 unary minus operator applied to unsigned type,
 // result still unsigned
 MY_COMPILER_MSVC_DIAGNOSTIC_IGNORE(4146)
-static inline longlong ulonglong_with_sign(bool negative, ulonglong ll) {
+static inline long long ulonglong_with_sign(bool negative,
+                                            unsigned long long ll) {
   return negative ? -ll : ll;
 }
 MY_COMPILER_DIAGNOSTIC_POP()
