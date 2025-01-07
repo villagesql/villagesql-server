@@ -1030,6 +1030,8 @@ INSTANTIATE_TEST_SUITE_P(
     get_test_description);
 
 struct SessionReuseTestParams {
+  std::string test_name;
+
   std::string router_ssl_mode;
   bool server_ssl_enabled;
   bool expected_session_reuse;
@@ -1068,8 +1070,11 @@ TEST_P(SessionReuseTest, SessionReuse) {
   }
 
   const auto router_rw_port = port_pool_.get_next_available();
-  const std::string metadata_cache_section = get_metadata_cache_section(
-      ClusterType::GR_V2, "0.2", "test", test_params.router_ssl_mode);
+  const std::string metadata_cache_section =
+      get_metadata_cache_section(ClusterType::GR_V2, "0.2", "test",
+                                 test_params.router_ssl_mode) +
+      // close connection to allow a reconnect with ssl-session-reuse.
+      "close_connection_after_refresh=1\n";
   const std::string routing_rw = get_metadata_cache_routing_section(
       router_rw_port, "PRIMARY", "first-available", "rw");
 
@@ -1103,6 +1108,7 @@ INSTANTIATE_TEST_SUITE_P(
         /* default ssl_mode in the Router ("PREFERRED"), ssl enabled on the
            server side so we expect session reuse */
         SessionReuseTestParams{
+            "router_default_ssl_mode_with_server_ssl",
             /*router_ssl_mode*/ "",
             /*server_ssl_enabled*/ true,
             /*expected_session_reuse*/ true,
@@ -1110,21 +1116,25 @@ INSTANTIATE_TEST_SUITE_P(
 
         /* ssl_mode in the Router "REQUIRED", ssl enabled on the server side so
            we expect session reuse */
-        SessionReuseTestParams{/*router_ssl_mode*/ "REQUIRED",
+        SessionReuseTestParams{"router_ssl_mode_required_with_server_ssl",
+                               /*router_ssl_mode*/ "REQUIRED",
                                /*server_ssl_enabled*/ true,
                                /*expected_session_reuse*/ true},
 
         /* ssl_mode in the Router "PREFERRED", ssl disabled on the server side
          so we DON'T expect session reuse */
-        SessionReuseTestParams{/*router_ssl_mode*/ "PREFERRED",
+        SessionReuseTestParams{"router_ssl_mode_preferred_without_server_ssl",
+                               /*router_ssl_mode*/ "PREFERRED",
                                /*server_ssl_enabled*/ false,
                                /*expected_session_reuse*/ false},
 
         /* ssl_mode in the Router "DISABLED", ssl enabled on the server side
            so we DON'T expect session reuse */
-        SessionReuseTestParams{/*router_ssl_mode*/ "DISABLED",
+        SessionReuseTestParams{"router_ssl_mode_disabled_with_server_ssl",
+                               /*router_ssl_mode*/ "DISABLED",
                                /*server_ssl_enabled*/ true,
-                               /*expected_session_reuse*/ false}));
+                               /*expected_session_reuse*/ false}),
+    [](const auto &info) { return info.param.test_name; });
 
 struct StatsUpdatesFrequencyParam {
   std::string test_name;
