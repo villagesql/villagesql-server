@@ -1,4 +1,4 @@
-# Copyright (c) 2016, 2024, Oracle and/or its affiliates.
+# Copyright (c) 2016, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -90,7 +90,7 @@ IF (DEB_PRODUCT STREQUAL "commercial")
   SET (DEB_PRODUCTNAMEC "${DEB_BASE_PRODUCTC}Enterprise")
   SET (DEB_NOTPRODUCTNAME "${DEB_BASE_PRODUCT}community")
   SET (DEB_LICENSENAME "Commercial")
-  SET (DEB_SERVERVERSION "${DEB_BASE_VERSION}+commercial-1")
+  SET (DEB_SERVERVERSION "${DEB_BASE_VERSION}+commercial-11")
   # List of plugins that are only in commercial packages
   # Plugins that are in both community and commercial should NOT be added here
   SET (DEB_INSTALL_SERVER_PLUGINS
@@ -155,7 +155,7 @@ ELSE()
   SET (DEB_PRODUCTNAMEC "${DEB_BASE_PRODUCTC}Community")
   SET (DEB_NOTPRODUCTNAME "${DEB_BASE_PRODUCT}commercial")
   SET (DEB_LICENSENAME "GPL")
-  SET (DEB_SERVERVERSION "${DEB_BASE_VERSION}-10")
+  SET (DEB_SERVERVERSION "${DEB_BASE_VERSION}-11")
   SET (DEB_REMOVEPATTERN "com.in")
 ENDIF()
 
