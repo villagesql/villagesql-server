@@ -35,16 +35,25 @@
 #include "my_systime.h"
 #include "my_config.h"
 
+#if SIZEOF_TIME_T < SIZEOF_LONG_LONG
 #include <algorithm>  // std::min
+#endif
 #include <cassert>
 #include <chrono>
 #include <cstdio>  // std::sprintf()
 #include <ctime>
 #include <limits>  // std::numeric_limits
+#include <thread>  // std::this_thread::sleep_for
 
-// Note that timespec is in time.h in C99, but std::timespec will not
-// be in ctime until C++17
-#include <ctime>  // time_t, timespec
+void my_sleep(int64_t micro_seconds) {
+  std::this_thread::sleep_for(std::chrono::microseconds{micro_seconds});
+}
+
+#ifdef _WIN32
+void sleep(unsigned long seconds) {
+  std::this_thread::sleep_for(std::chrono::seconds{seconds});
+}
+#endif  // _WIN32
 
 /**
    Set the value of a timespec object to the current time plus a
