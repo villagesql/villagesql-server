@@ -66,3 +66,14 @@ ADD_CONVENIENCE_LIBRARY(
     $<TARGET_PROPERTY:extra::rapidjson,INTERFACE_COMPILE_DEFINITIONS>
   LINK_LIBRARIES library_mysys extra::rapidjson
 )
+
+IF(MY_COMPILER_IS_GNU AND FPROFILE_USE)
+  ADD_COMPILE_FLAGS(
+    component_helpers/src/keyring_log_builtins_definition.cc
+    json_data/json_reader.cc
+    COMPILE_FLAGS
+    "-Wno-array-bounds"
+    "-Wno-restrict"
+    "-Wno-stringop-overflow"
+    )
+ENDIF()
