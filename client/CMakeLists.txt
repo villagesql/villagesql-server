@@ -60,9 +60,7 @@ MYSQL_ADD_EXECUTABLE(mysqltest
   LINK_LIBRARIES mysqlclient
   )
 
-IF(MY_COMPILER_IS_GNU AND (WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO))
-  TARGET_LINK_OPTIONS(mysqltest PRIVATE -Wno-error=stringop-overflow)
-ENDIF()
+DOWNGRADE_STRINGOP_WARNINGS(mysqltest)
 
 MYSQL_ADD_EXECUTABLE(mysqlcheck
   check/mysqlcheck.cc
