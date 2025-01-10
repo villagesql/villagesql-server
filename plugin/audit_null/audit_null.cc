@@ -1,4 +1,4 @@
-/* Copyright (c) 2010, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -24,8 +24,8 @@
 #include <mysql/plugin.h>
 #include <mysql/plugin_audit.h>
 #include <mysqld_error.h>
-#include <stdio.h>
 #include <sys/types.h>
+#include <cstdio>
 
 #include "lex_string.h"
 #include "m_string.h"

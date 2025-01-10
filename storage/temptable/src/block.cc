@@ -1,4 +1,4 @@
-/* Copyright (c) 2019, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2019, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -23,7 +23,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /** @file storage/temptable/src/block.cc */
 
-#include <assert.h>
+#include <cassert>
 
 #include "my_psi_config.h"
 #include "mysql/components/services/bits/psi_bits.h"

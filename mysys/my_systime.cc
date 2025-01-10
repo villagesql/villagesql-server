@@ -1,4 +1,4 @@
-/* Copyright (c) 2004, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2004, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,8 +35,8 @@
 #include "my_systime.h"
 #include "my_config.h"
 
-#include <assert.h>
 #include <algorithm>  // std::min
+#include <cassert>
 #include <chrono>
 #include <cstdio>  // std::sprintf()
 #include <ctime>
@@ -44,7 +44,7 @@
 
 // Note that timespec is in time.h in C99, but std::timespec will not
 // be in ctime until C++17
-#include <time.h>  // time_t, timespec
+#include <ctime>  // time_t, timespec
 
 /**
    Set the value of a timespec object to the current time plus a

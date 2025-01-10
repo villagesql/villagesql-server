@@ -1,4 +1,4 @@
-// Copyright (c) 2017, 2024, Oracle and/or its affiliates.
+// Copyright (c) 2017, 2025, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0,
@@ -27,8 +27,8 @@
 #include "sql/gis/is_simple.h"          // gis::is_simple
 #include "sql/gis/is_simple_functor.h"  // gis::Is_simple
 
-#include <assert.h>
 #include <boost/geometry.hpp>
+#include <cassert>
 
 // assert
 #include "sql/dd/types/spatial_reference_system.h"  // dd::Spatial_reference_system

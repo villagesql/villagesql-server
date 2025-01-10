@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -33,10 +33,10 @@
 
 /* TODO: check for overrun of memory for names. */
 
-#include <errno.h>
-#include <string.h>
 #include <sys/stat.h>
 #include <algorithm>
+#include <cerrno>
+#include <cstring>
 #include <memory>
 #include <new>
 

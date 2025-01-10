@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2025, Oracle and/or its affiliates.
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
    as published by the Free Software Foundation.
@@ -32,10 +32,10 @@
  * This file follows Google coding style.
  */
 
-#include <stdarg.h>
-#include <string.h>
 #include <sys/types.h>
 #include <algorithm>
+#include <cstdarg>
+#include <cstring>
 #include <iterator>
 
 #include "my_alloc.h"

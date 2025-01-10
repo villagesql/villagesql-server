@@ -8,16 +8,16 @@
  * For conditions of distribution and use, see copyright notice in zlib.h
  *
  * This file was modified by Oracle on 2015-01-23.
- * Modifications Copyright (c) 2015, 2024, Oracle and/or its affiliates.
+ * Modifications Copyright (c) 2015, 2025, Oracle and/or its affiliates.
  */
 
 /* @(#) $Id$ */
 
-#include <errno.h>
 #include <fcntl.h>
-#include <stdio.h>
-#include <string.h>
 #include <sys/types.h>
+#include <cerrno>
+#include <cstdio>
+#include <cstring>
 
 #include "my_byteorder.h"
 #include "my_dbug.h"

@@ -1,4 +1,4 @@
-/* Copyright (c) 2006, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2006, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -21,13 +21,13 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <ctype.h>
 #include <fcntl.h>
 #include <mysql/plugin.h>
 #include <mysql_version.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <time.h>
+#include <cctype>
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
 
 #include "m_string.h"  // strlen
 #include "my_dbug.h"

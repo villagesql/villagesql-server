@@ -1,4 +1,4 @@
-/* Copyright (c) 2013, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2013, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -22,8 +22,8 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <gtest/gtest.h>
-#include <stddef.h>
 #include <algorithm>
+#include <cstddef>
 
 #include "my_bitmap.h"
 #include "my_inttypes.h"

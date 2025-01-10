@@ -1,4 +1,4 @@
-// Copyright (c) 2018, 2024, Oracle and/or its affiliates.
+// Copyright (c) 2018, 2025, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0,
@@ -28,7 +28,7 @@
 #include "sql/gis/simplify.h"
 #include "sql/gis/simplify_functor.h"
 
-#include <assert.h>
+#include <cassert>
 #include <memory>  // std::unique_ptr
 
 #include <boost/geometry.hpp>

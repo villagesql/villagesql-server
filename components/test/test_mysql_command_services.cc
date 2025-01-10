@@ -28,7 +28,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <mysql/components/services/security_context.h>
 #include <mysql/components/services/udf_registration.h>
 #include <mysql/service_srv_session_info.h>
-#include <stdio.h>
+#include <cstdio>
 #include <cstring>
 
 REQUIRES_SERVICE_PLACEHOLDER_AS(mysql_thd_security_context, thd_security_ctx);

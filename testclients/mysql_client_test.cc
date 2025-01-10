@@ -1,4 +1,4 @@
-/* Copyright (c) 2002, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -31,13 +31,13 @@
   contains only the actual tests, plus the list of test functions to call.
 */
 
-#include <errno.h>
 #include <fcntl.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/types.h>
+#include <cerrno>
 #include <condition_variable>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
 #include <memory>
 #include <mutex>
 #include <thread>

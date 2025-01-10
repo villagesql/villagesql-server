@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,8 @@
 #include <mysql/components/service_implementation.h>
 #include <mysql/components/services/pfs_notification.h>
 #include <mysql/components/services/pfs_resource_group.h>
-#include <string.h>
 #include <atomic>
+#include <cstring>
 #include <fstream>
 #include <iostream>
 #include <sstream>

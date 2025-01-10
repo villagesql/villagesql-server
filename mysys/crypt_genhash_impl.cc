@@ -1,4 +1,4 @@
-/* Copyright (c) 2011, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2011, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -40,18 +40,18 @@
 #include <openssl/evp.h>
 #include <openssl/rand.h>
 #include <openssl/sha.h>
-#include <stdint.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
 
 #include "crypt_genhash_impl.h"
 #include "m_string.h"
 #include "my_inttypes.h"
 #include "my_ssl_algo_cache.h"
 
-#include <errno.h>
+#include <cerrno>
 
 #define DIGEST_CTX EVP_MD_CTX
 #define DIGEST_LEN SHA256_DIGEST_LENGTH

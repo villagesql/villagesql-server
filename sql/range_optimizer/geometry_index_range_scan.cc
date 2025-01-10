@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,7 +23,7 @@
 
 #include "sql/range_optimizer/geometry_index_range_scan.h"
 
-#include <stddef.h>
+#include <cstddef>
 
 #include "my_base.h"
 #include "my_dbug.h"

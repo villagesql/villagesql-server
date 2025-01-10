@@ -28,11 +28,11 @@
 
 // UTF-8, as defined in RFC 2279.
 
-#include <assert.h>
-#include <stdint.h>
-#include <string.h>
 #include <sys/types.h>
 #include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <cstring>
 #include <type_traits>
 
 #include "my_byteorder.h"

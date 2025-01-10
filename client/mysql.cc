@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2000, 2024, Oracle and/or its affiliates.
+Copyright (c) 2000, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -27,16 +27,16 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 #include "my_config.h"
 
-#include <errno.h>
 #include <fcntl.h>
-#include <inttypes.h>
-#include <math.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/types.h>
-#include <time.h>
+#include <cerrno>
+#include <cinttypes>
+#include <cmath>
+#include <csignal>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
 
 #include "client/client_query_attributes.h"
 #include "client/include/client_priv.h"
@@ -74,7 +74,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 #endif
 
 #if defined(USE_LIBEDIT_INTERFACE)
-#include <locale.h>
+#include <clocale>
 #endif
 
 #ifdef HAVE_PWD_H

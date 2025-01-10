@@ -1,4 +1,4 @@
-/* Copyright (c) 2004, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2004, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -46,8 +46,8 @@
 
 #include "my_time.h"
 
-#include <assert.h>   // assert
 #include <algorithm>  // std::max
+#include <cassert>    // assert
 #include <cctype>     // std::isspace
 #include <climits>    // UINT_MAX
 #include <cstdio>     // std::sprintf

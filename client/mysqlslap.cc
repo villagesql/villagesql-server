@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2005, 2024, Oracle and/or its affiliates.
+   Copyright (c) 2005, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -88,13 +88,13 @@ TODO:
 
 #include "my_config.h"
 
-#include <ctype.h>
 #include <fcntl.h>
 #include <mysqld_error.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdlib.h>
 #include <sys/types.h>
+#include <cctype>
+#include <csignal>
+#include <cstdarg>
+#include <cstdlib>
 
 #include "client/include/caching_sha2_passwordopt-vars.h"
 #include "client/include/sslopt-vars.h"
@@ -105,8 +105,8 @@ TODO:
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
-#include <stdio.h>
-#include <time.h>
+#include <cstdio>
+#include <ctime>
 
 #include "client/include/client_priv.h"
 #include "compression.h"

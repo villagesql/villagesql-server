@@ -81,14 +81,14 @@
 
 #include "my_config.h"
 
-#include <assert.h>
-#include <ctype.h>
-#include <errno.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/types.h>
-#include <time.h>
+#include <cassert>
+#include <cctype>
+#include <cerrno>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+#include <ctime>
 
 #include <algorithm>
 
@@ -118,7 +118,7 @@
 #if defined(_WIN32)
 #include <process.h>
 #else
-#include <signal.h>
+#include <csignal>
 #endif
 
 #ifndef NDEBUG

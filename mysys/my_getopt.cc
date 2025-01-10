@@ -1,4 +1,4 @@
-/* Copyright (c) 2002, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2002, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -30,14 +30,14 @@
   @file mysys/my_getopt.cc
 */
 
-#include <errno.h>
-#include <limits.h>
-#include <stdio.h>
-#include <stdlib.h>
 #include <sys/types.h>
 #include <algorithm>
 #include <array>
 #include <bitset>
+#include <cerrno>
+#include <climits>
+#include <cstdio>
+#include <cstdlib>
 #include <type_traits>
 
 #include "m_string.h"

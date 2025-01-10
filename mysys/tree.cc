@@ -1,4 +1,4 @@
-/* Copyright (c) 2000, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2000, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -67,9 +67,9 @@
   ft_boolean_search.c (at least) relies on that.
 */
 
-#include <stdio.h>
-#include <string.h>
 #include <sys/types.h>
+#include <cstdio>
+#include <cstring>
 
 #include "my_alloc.h"
 #include "my_base.h"

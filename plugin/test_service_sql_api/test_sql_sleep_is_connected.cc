@@ -1,4 +1,4 @@
-/* Copyright (c) 2020, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2020, 2025, Oracle and/or its affiliates.
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
    as published by the Free Software Foundation.
@@ -23,8 +23,8 @@
 #define LOG_COMPONENT_TAG "test_session_is_connected"
 
 #include <fcntl.h>
-#include <stdlib.h>
 #include <sys/types.h>
+#include <cstdlib>
 
 #include <cstdint>
 

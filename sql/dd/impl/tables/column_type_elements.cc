@@ -1,4 +1,4 @@
-/* Copyright (c) 2014, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2014, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,7 +23,7 @@
 
 #include "sql/dd/impl/tables/column_type_elements.h"
 
-#include <assert.h>
+#include <cassert>
 #include <new>
 
 #include "sql/dd/impl/raw/object_keys.h"       // Parent_id_range_key

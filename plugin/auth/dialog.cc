@@ -1,4 +1,4 @@
-/*  Copyright (c) 2010, 2024, Oracle and/or its affiliates.
+/*  Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License, version 2.0,
@@ -50,10 +50,10 @@
 #include <mysql.h>
 #include <mysql/client_plugin.h>
 #include <mysql/plugin_auth.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdarg>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "my_compiler.h"
 

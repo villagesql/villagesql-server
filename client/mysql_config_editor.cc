@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2012, 2024, Oracle and/or its affiliates.
+   Copyright (c) 2012, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -32,12 +32,12 @@
 
 #include "my_config.h"
 
-#include <errno.h>
 #include <fcntl.h>
-#include <signal.h>
-#include <stdarg.h>
-#include <stdlib.h>
 #include <sys/types.h>
+#include <cerrno>
+#include <csignal>
+#include <cstdarg>
+#include <cstdlib>
 
 #include "client/include/client_priv.h"
 #include "my_aes.h"

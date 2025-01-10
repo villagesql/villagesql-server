@@ -1,4 +1,4 @@
-/*  Copyright (c) 2015, 2024, Oracle and/or its affiliates.
+/*  Copyright (c) 2015, 2025, Oracle and/or its affiliates.
 
     This program is free software; you can redistribute it and/or modify
     it under the terms of the GNU General Public License, version 2.0,
@@ -21,12 +21,12 @@
     along with this program; if not, write to the Free Software
     Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <ctype.h>
 #include <mysql/plugin.h>
 #include <mysql/plugin_audit.h>
 #include <mysql/psi/mysql_memory.h>
 #include <mysql/service_mysql_alloc.h>
-#include <string.h>
+#include <cctype>
+#include <cstring>
 
 #include "my_inttypes.h"
 #include "my_psi_config.h"

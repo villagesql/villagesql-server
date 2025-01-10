@@ -1,4 +1,4 @@
-/* Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -27,8 +27,8 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "my_openssl_fips.h"
-#include <assert.h>
 #include <openssl/err.h>
+#include <cassert>
 
 #if OPENSSL_VERSION_NUMBER < 0x10002000L
 #include <openssl/ec.h>

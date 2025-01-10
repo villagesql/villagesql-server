@@ -1,4 +1,4 @@
-/* Copyright (c) 2007, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2007, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,9 +23,9 @@
 
 #include "sql/mdl.h"
 
-#include <time.h>
 #include <algorithm>
 #include <atomic>
+#include <ctime>
 #include <functional>
 
 #include "lf.h"

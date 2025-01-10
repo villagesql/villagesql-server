@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2019, 2024, Oracle and/or its affiliates.
+   Copyright (c) 2019, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,9 +26,9 @@
 #include "integer_digits.h"
 
 #include <gtest/gtest.h>
-#include <inttypes.h>
-#include <stdint.h>
-#include <stdio.h>
+#include <cinttypes>
+#include <cstdint>
+#include <cstdio>
 #include <iterator>
 #include <limits>
 #include <tuple>
