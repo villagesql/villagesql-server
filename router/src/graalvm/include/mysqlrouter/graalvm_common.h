@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -26,8 +26,15 @@
 #ifndef ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_COMMON_H_
 #define ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_COMMON_H_
 
-namespace shcore {
+#include <stdexcept>
+
+namespace graalvm {
 enum class ResultType { Json, Raw };
-}
+
+class Timeout_error : public std::runtime_error {
+  using std::runtime_error::runtime_error;
+};
+
+}  // namespace graalvm
 
 #endif  // ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_COMMON_H_

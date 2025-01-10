@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -294,7 +294,6 @@ class Polyglot_language
 
   void terminate();
   bool is_terminating() const;
-  void clear_is_terminating();
 
   Script_scope enter_script(const std::string &s);
 
@@ -313,6 +312,7 @@ class Polyglot_language
 
  protected:
   poly_value wrap_callback(poly_callback callback, void *data) const;
+  void clear_is_terminating();
 
   Polyglot_common_context *m_common_context;
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -49,12 +49,15 @@ class GraalVMCommonContext : public shcore::polyglot::Polyglot_common_context {
       const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
       const std::vector<std::string> &module_files,
       const shcore::Dictionary_t &globals);
-  ~GraalVMCommonContext() override = default;
+  ~GraalVMCommonContext() override;
 
   void initialize() override;
   void finalize() override;
+  void start();
+  bool got_fatal_error() const { return m_fatal_error; }
 
  private:
+  void life_cycle_thread();
   void fatal_error() override;
   void flush() override;
   void log(const char *bytes, size_t length) override;
@@ -77,6 +80,18 @@ class GraalVMCommonContext : public shcore::polyglot::Polyglot_common_context {
   std::vector<std::string> m_module_files;
   std::vector<shcore::polyglot::Store> m_cached_sources;
   shcore::Dictionary_t m_globals;
+
+  std::unique_ptr<std::thread> m_life_cycle_thread;
+  std::mutex m_init_mutex;
+  std::condition_variable m_init_condition;
+
+  bool m_initialized = false;
+
+  std::mutex m_finish_mutex;
+  std::condition_variable m_finish_condition;
+
+  // Global fatal error flag to indicate when the VM was ended
+  static bool m_fatal_error;
 };
 
 }  // namespace graalvm

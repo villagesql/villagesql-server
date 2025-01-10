@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -129,7 +129,12 @@ class Polyglot_native_wrapper {
       assert(data);
       const auto collectable = static_cast<ICollectable *>(data);
 
-      collectable->registry()->remove(collectable);
+      // TODO(rennox): Safety code, found cases where registry is gone,
+      // investigate why?
+      auto registry = collectable->registry();
+      if (registry) {
+        registry->remove(collectable);
+      }
     }
 
     return nullptr;

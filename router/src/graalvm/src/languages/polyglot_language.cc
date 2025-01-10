@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -48,6 +48,8 @@
 namespace shcore {
 namespace polyglot {
 
+IMPORT_LOG_FUNCTIONS()
+
 Polyglot_language::Current_script::Current_script()
     : m_root(/*path::getcwd()*/ "") {
   // fake top-level script
@@ -94,9 +96,8 @@ Scoped_global::~Scoped_global() {
   try {
     m_language->globals()->remove_member(m_name);
   } catch (const std::exception &error) {
-    mysql_harness::logging::log_error(
-        "polyglot error while cleaning temporary global '%s': %s",
-        m_name.c_str(), error.what());
+    log_error("polyglot error while cleaning temporary global '%s': %s",
+              m_name.c_str(), error.what());
   }
 }
 
@@ -182,9 +183,8 @@ void Polyglot_language::finalize() {
 
   if (const auto rc = poly_context_close(thread(), context(), true);
       rc != poly_ok) {
-    mysql_harness::logging::log_error(
-        "polyglot error while closing the context: %s",
-        Polyglot_error(thread(), rc).format().c_str());
+    log_error("polyglot error while closing the context: %s",
+              Polyglot_error(thread(), rc).format().c_str());
   }
 
   m_context.reset();
@@ -258,9 +258,8 @@ std::string Polyglot_language::current_script_folder() const {
 void Polyglot_language::throw_exception_object(poly_value exception) const {
   if (const auto rc = poly_throw_exception_object(thread(), exception);
       rc != poly_ok) {
-    mysql_harness::logging::log_error(
-        "While throwing exception, another exception occurred: %s",
-        Polyglot_error(thread(), rc).what());
+    log_error("While throwing exception, another exception occurred: %s",
+              Polyglot_error(thread(), rc).what());
   }
 }
 
@@ -271,9 +270,8 @@ void Polyglot_language::throw_exception_object(
                                              convert(shcore::Value(data)));
     throw_exception_object(exception);
   } catch (const std::exception &error) {
-    mysql_harness::logging::log_error(
-        "While throwing exception, another exception occurred: %s",
-        error.what());
+    log_error("While throwing exception, another exception occurred: %s",
+              error.what());
   }
 }
 

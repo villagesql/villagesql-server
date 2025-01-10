@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -49,25 +49,13 @@ GraalVMJavaScriptContext::GraalVMJavaScriptContext(
 std::string GraalVMJavaScriptContext::execute(
     const std::string &module, const std::string &object,
     const std::string &function, const std::vector<Value> &parameters,
-    ResultType result_type) {
+    int timeout, ResultType result_type) {
   std::string code = "import('" + module + "').then((m) => m." + object + "." +
                      function + "(" +
-                     m_language->get_parameter_string(parameters) + "))";
+                     m_language->get_parameter_string(parameters) +
+                     ")).catch(error=>synch_error(error))";
 
-  return m_language->execute(code, result_type);
-}
-
-shcore::polyglot::Store GraalVMJavaScriptContext::create_module_source(
-    const std::string &code) {
-  // TODO(rennox): change the source name
-  return shcore::polyglot::Store(
-      m_language->thread(),
-      m_language->create_source("GraalVMJavaScriptContext.js", code));
-}
-
-uint64_t GraalVMJavaScriptContext::load_source(poly_reference source) {
-  poly_value result;
-  return m_language->eval(source, &result);
+  return m_language->execute(code, timeout, result_type);
 }
 
 }  // namespace graalvm

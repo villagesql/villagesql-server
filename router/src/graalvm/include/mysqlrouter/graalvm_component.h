@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -31,13 +31,12 @@
 #include <unordered_map>
 
 #include "mysqlrouter/graalvm_plugin_export.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_common_context.h"
 #include "router/src/graalvm/include/mysqlrouter/graalvm_context.h"
+#include "router/src/graalvm/include/mysqlrouter/graalvm_context_pool.h"
 #include "router/src/graalvm/src/file_system/polyglot_file_system.h"
 #include "router/src/graalvm/src/utils/native_value.h"
 
 namespace graalvm {
-
 /**
  * Registry of graal contexts to be used by each service.
  *
@@ -74,8 +73,8 @@ class GRAALVM_PLUGIN_EXPORT GraalVMComponent {
   GraalVMComponent(GraalVMComponent &&) = delete;
   void operator=(GraalVMComponent &&) = delete;
 
-  std::unique_ptr<IGraalVMContext> create_context(
-      const std::string &service_id,
+  std::shared_ptr<Pooled_context> get_context(
+      const std::string &service_id, size_t context_pool_size,
       const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
       const std::vector<std::string> &module_files,
       const shcore::Dictionary_t &globals = {});
@@ -84,9 +83,8 @@ class GRAALVM_PLUGIN_EXPORT GraalVMComponent {
   GraalVMComponent() = default;
   std::mutex m_context_creation;
 
-  std::unordered_map<std::string, std::shared_ptr<GraalVMCommonContext>>
+  std::unordered_map<std::string, std::shared_ptr<Context_pool>>
       m_service_context_handlers;
-  std::vector<shcore::polyglot::Store> m_modules;
 };
 
 }  // namespace graalvm

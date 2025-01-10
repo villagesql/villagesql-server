@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -62,7 +62,8 @@ void Polyglot_common_context::finalize() {
 
   m_garbage_collector.stop();
 
-  if (const auto rc = poly_tear_down_isolate(m_thread); rc != poly_ok) {
+  if (const auto rc = poly_detach_all_threads_and_tear_down_isolate(m_thread);
+      rc != poly_ok) {
     std::string error{"polyglot error while tearing down the isolate"};
     log(error.data(), error.size());
   }

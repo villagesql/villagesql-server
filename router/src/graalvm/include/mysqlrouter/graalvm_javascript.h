@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -43,7 +43,6 @@
 namespace graalvm {
 
 using Value = shcore::Value;
-using ResultType = shcore::ResultType;
 using Dictionary_t = shcore::Dictionary_t;
 using Polyglot_error = shcore::polyglot::Polyglot_error;
 using IFile_system = shcore::polyglot::IFile_system;
@@ -68,8 +67,8 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
              const Dictionary_t &predefined_globals = {});
   void stop();
 
-  std::string execute(const std::string &code,
-                      ResultType result_type = ResultType::Json);
+  std::string execute(const std::string &code, int timeout,
+                      ResultType result_type);
 
   std::string get_parameter_string(const std::vector<Value> &parameters) const;
 
@@ -94,9 +93,8 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
   void output_handler(const char *bytes, size_t length) override;
   void error_handler(const char *bytes, size_t length) override;
 
-  std::string create_result(const Value &result,
-                            const std::string &status = "ok");
-  std::string create_result(const shcore::polyglot::Polyglot_error &error);
+  void create_result(const Value &result, const std::string &status = "ok");
+  void create_result(const shcore::polyglot::Polyglot_error &error);
 
   // Every global function exposed to JavaScript requires:
   // - The function implementation
@@ -115,6 +113,8 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
     static const constexpr auto callback = &GraalVMJavaScript::synch_error;
   };
 
+  void resolve_promise(poly_value promise);
+
   // To control the statement execution, the execution thread will be in wait
   // state until a statement arrives
   std::thread m_execution_thread;
@@ -132,6 +132,7 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
   std::optional<std::string> m_result;
 
   ResultType m_result_type;
+  poly_value m_promise_resolver;
 };
 
 }  // namespace graalvm

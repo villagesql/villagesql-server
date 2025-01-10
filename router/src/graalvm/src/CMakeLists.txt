@@ -1,4 +1,4 @@
-# Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+# Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -28,7 +28,8 @@ SET(graalvm_plugin_SOURCE
   graalvm_javascript_context.cc
   graalvm_javascript.cc
   graalvm_component.cc
-  graalvm_type_conversion.cc  
+  graalvm_type_conversion.cc
+  graalvm_context_pool.cc
   polyglot_wrappers/types_polyglot.cc
   native_wrappers/polyglot_array_wrapper.cc
   native_wrappers/polyglot_collectable.cc

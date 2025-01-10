@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,11 @@
 #include "router/src/graalvm/src/file_system/polyglot_file_system.h"
 #include "router/src/graalvm/src/utils/polyglot_utils.h"
 
+IMPORT_LOG_FUNCTIONS()
+
 namespace graalvm {
+
+bool GraalVMCommonContext::m_fatal_error = false;
 
 GraalVMCommonContext::GraalVMCommonContext(
     const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
@@ -40,17 +44,29 @@ GraalVMCommonContext::GraalVMCommonContext(
     const shcore::Dictionary_t &globals)
     : m_file_system{fs}, m_module_files{module_files}, m_globals{globals} {}
 
+GraalVMCommonContext::~GraalVMCommonContext() {
+  // We are done
+  { std::lock_guard<std::mutex> lock(m_finish_mutex); }
+  m_finish_condition.notify_one();
+  m_life_cycle_thread->join();
+  m_life_cycle_thread.reset();
+}
+
 void GraalVMCommonContext::fatal_error() {
-  // Something really bad happened, so we simply ensure it is indicated on the
-  // screen.
-  std::cout << "Polyglot: FATAL error occurred" << std::endl;
+  // Exit the VM because a fatal, non-recoverable error situation has been
+  // detected. The implementation of this method must not return, and it must
+  // not throw a Java exception. A valid implementation is, e.g., to ask the OS
+  // to kill the process.
+
+  // In our case, we simply set a flag indicating to log further attempts to use
+  // JavaScript contexts
+  m_fatal_error = true;
 }
 
 void GraalVMCommonContext::flush() {}
 
 void GraalVMCommonContext::log(const char *bytes, size_t length) {
-  mysql_harness::logging::log_debug("Polyglot: %.*s", static_cast<int>(length),
-                                    bytes);
+  log_debug("%.*s", static_cast<int>(length), bytes);
 }
 
 poly_engine GraalVMCommonContext::create_engine() {
@@ -74,6 +90,10 @@ poly_engine GraalVMCommonContext::create_engine() {
 
   // shcore::polyglot::throw_if_error(poly_engine_builder_option, m_thread,
   //                                  builder, "engine.TraceSourceCache",
+  //                                  "true");
+
+  // shcore::polyglot::throw_if_error(poly_engine_builder_option, m_thread,
+  //                                  builder, "engine.TraceSourceCacheDetails",
   //                                  "true");
 
   // shcore::polyglot::throw_if_error(poly_engine_builder_option, m_thread,
@@ -106,6 +126,41 @@ void GraalVMCommonContext::initialize() {
     poly_value result;
     m_base_context->eval(m_cached_sources.back().get(), &result);
   }
+}
+
+void GraalVMCommonContext::start() {
+  m_life_cycle_thread = std::make_unique<std::thread>(
+      &GraalVMCommonContext::life_cycle_thread, this);
+
+  // Now waits for the destruction indication
+  {
+    std::unique_lock<std::mutex> lock(m_init_mutex);
+    m_init_condition.wait(lock, [this]() { return m_initialized; });
+  }
+}
+
+/**
+ * When persisting objects in GraalVM (creating references so they are available
+ * across threads/contexts), a reference should be created. Releasing the
+ * references should be done on the same thread where they were created.
+ *
+ * This function controls the life cycle of the common context, to guarantee the
+ * above condition.
+ */
+void GraalVMCommonContext::life_cycle_thread() {
+  initialize();
+  m_initialized = true;
+
+  // Tell the constructor we are done
+  m_init_condition.notify_one();
+
+  // Now waits for the finalization indication
+  {
+    std::unique_lock<std::mutex> lock(m_finish_mutex);
+    m_finish_condition.wait(lock);
+  }
+
+  finalize();
 }
 
 void GraalVMCommonContext::finalize() {

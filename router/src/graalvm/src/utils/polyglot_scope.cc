@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -32,6 +32,8 @@
 namespace shcore {
 namespace polyglot {
 
+IMPORT_LOG_FUNCTIONS()
+
 Polyglot_scope::Polyglot_scope(poly_thread thread) : m_thread{thread} {
   throw_if_error(poly_open_handle_scope, m_thread);
 
@@ -41,8 +43,7 @@ Polyglot_scope::Polyglot_scope(poly_thread thread) : m_thread{thread} {
 void Polyglot_scope::close() {
   if (m_open) {
     if (const auto rc = poly_close_handle_scope(m_thread); rc != poly_ok) {
-      mysql_harness::logging::log_error(
-          "%s", Polyglot_error(m_thread, rc).format().c_str());
+      log_error("%s", Polyglot_error(m_thread, rc).format().c_str());
     } else {
       m_open = false;
     }

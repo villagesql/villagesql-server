@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -263,6 +263,8 @@ class Global_profiler {
 
   void print_stats();
 
+  void reset();
+
   using Time_profilers = std::map<std::string, Profile_timer>;
 
  private:
@@ -314,6 +316,14 @@ extern shcore::utils::Global_profiler *g_active_profiler;
 
 void activate(bool trace_total = true);
 void deactivate(bool trace_total = true);
+
+inline void print_stats() {
+  if (g_active_profiler) g_active_profiler->print_stats();
+}
+
+inline void reset() {
+  if (g_active_profiler) g_active_profiler->reset();
+}
 
 inline void stage_begin(const std::string &id) {
   if (g_active_profiler) g_active_profiler->stage_begin(id);

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -27,6 +27,7 @@
 #define ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_H_
 
 #include <string>
+#include <vector>
 
 #include "router/src/graalvm/include/mysqlrouter/graalvm_common.h"
 #include "router/src/graalvm/src/utils/native_value.h"
@@ -36,11 +37,11 @@ namespace graalvm {
 class IGraalVMContext {
  public:
   virtual ~IGraalVMContext() = default;
-  virtual std::string execute(
-      const std::string &module, const std::string &object,
-      const std::string &function, const std::vector<shcore::Value> &parameters,
-      shcore::ResultType result_type = shcore::ResultType::Json) = 0;
-  // virtual std::string load_module(const std::string &path) = 0;
+  virtual std::string execute(const std::string &module,
+                              const std::string &object,
+                              const std::string &function,
+                              const std::vector<shcore::Value> &parameters,
+                              int timeout, ResultType result_type) = 0;
 };
 
 }  // namespace graalvm

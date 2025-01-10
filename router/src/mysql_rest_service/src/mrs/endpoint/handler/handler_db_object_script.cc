@@ -61,6 +61,10 @@ namespace mrs {
 namespace endpoint {
 namespace handler {
 
+namespace {
+constexpr const int k_default_request_timeout{1000};
+}  // namespace
+
 using namespace std::string_literals;
 using namespace helper::json::sql;
 using HttpResult = mrs::rest::Handler::HttpResult;
@@ -183,6 +187,27 @@ class HandlerDbObjectScript::Impl {
 
     return parameters;
   }
+
+  // A specific timeout can be overriden by as a db_object option
+  int get_timeout(std::string_view options) {
+    int result = k_default_request_timeout;
+
+    if (!options.empty()) {
+      rapidjson::Document doc;
+      doc.Parse(options.data(), options.size());
+      if (doc.IsObject()) {
+        if (doc.HasMember("timeout") && doc["timeout"].IsInt()) {
+          result = doc["timeout"].GetInt();
+
+          if (result <= 0) {
+            result = k_default_request_timeout;
+          }
+        }
+      }
+    }
+
+    return result;
+  }
 #endif
 
   const std::string &entry_script() const { return m_file_to_load; }
@@ -241,34 +266,43 @@ HttpResult HandlerDbObjectScript::handle_script(
                       "No longer available :"s + entry_->request_path);
   }
 
-  auto result_type = shcore::ResultType::Json;
+  auto result_type = graalvm::ResultType::Json;
   if (entry_->format == DbObject::Format::formatMedia &&
       (entry_->media_type.has_value() && *entry_->media_type == "text/html")) {
-    result_type = shcore::ResultType::Raw;
+    result_type = graalvm::ResultType::Raw;
   }
 
   auto context = service_ep->get_scripting_context();
-  auto result = context->execute(
-      m_impl->entry_script(), entry_->content_set_def->class_name,
-      entry_->content_set_def->name, parameters, result_type);
-  context.reset();
 
-  if (response_cache_) {
-    auto entry = response_cache_->create_routine_entry(
-        get_endpoint_url(endpoint_), body, result, 0,
-        entry_->media_type.value_or(""));
+  if (!context) {
+    throw http::Error(HttpStatusCode::InternalError);
+  }
 
-    if (entry) {
-      return cached_response(entry);
+  try {
+    int timeout = m_impl->get_timeout(entry_->options.value_or(""));
+    auto result = context->get()->execute(
+        m_impl->entry_script(), entry_->content_set_def->class_name,
+        entry_->content_set_def->name, parameters, timeout, result_type);
+
+    if (response_cache_) {
+      auto entry = response_cache_->create_routine_entry(
+          get_endpoint_url(endpoint_), body, result, 0,
+          entry_->media_type.value_or(""));
+
+      if (entry) {
+        return cached_response(entry);
+      }
     }
-  }
 
-  // Builds the response when no Cache is used
-  auto response = HttpResult(std::move(result));
-  if (entry_->media_type.has_value()) {
-    response.type_text = *entry_->media_type;
+    // Builds the response when no Cache is used
+    auto response = HttpResult(std::move(result));
+    if (entry_->media_type.has_value()) {
+      response.type_text = *entry_->media_type;
+    }
+    return response;
+  } catch (const graalvm::Timeout_error &error) {
+    throw http::Error(HttpStatusCode::RequestTimeout);
   }
-  return response;
 #else
   throw http::Error(HttpStatusCode::NotImplemented);
 #endif

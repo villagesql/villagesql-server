@@ -32,7 +32,7 @@
 #include "mrs/interface/handler_factory.h"
 
 #ifdef HAVE_GRAALVM_PLUGIN
-#include "router/src/graalvm/include/mysqlrouter/graalvm_context.h"
+#include "router/src/graalvm/include/mysqlrouter/graalvm_context_pool.h"
 #endif
 
 namespace mrs {
@@ -65,7 +65,7 @@ class DbServiceEndpoint : public OptionEndpoint {
   const DbServicePtr get() const;
   void set(const DbService &entry, EndpointBasePtr parent);
 #ifdef HAVE_GRAALVM_PLUGIN
-  std::unique_ptr<graalvm::IGraalVMContext> get_scripting_context();
+  std::shared_ptr<graalvm::Pooled_context> get_scripting_context();
 #endif
 
  private:
@@ -80,6 +80,7 @@ class DbServiceEndpoint : public OptionEndpoint {
 
 #ifdef HAVE_GRAALVM_PLUGIN
   std::shared_ptr<file_system::DbServiceFileSystem> get_file_system();
+  const std::vector<std::string> &get_content_set_scripts();
 #endif
 
   DbServicePtr entry_;
@@ -87,6 +88,9 @@ class DbServiceEndpoint : public OptionEndpoint {
 
 #ifdef HAVE_GRAALVM_PLUGIN
   std::shared_ptr<file_system::DbServiceFileSystem> file_system_;
+  std::optional<std::vector<std::string>> content_set_scripts_;
+  size_t context_pool_size_ = 8;
+  std::string content_set_path_;
 #endif
 };
 

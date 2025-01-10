@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -38,6 +38,8 @@
 namespace shcore {
 namespace polyglot {
 
+IMPORT_LOG_FUNCTIONS()
+
 Store::Store(poly_thread thread, poly_handle object) : m_thread{thread} {
   if (nullptr != object) {
     throw_if_error(poly_create_reference, m_thread, object, &m_reference);
@@ -63,9 +65,8 @@ Store &Store::reset(bool throw_on_error) {
       if (throw_on_error) {
         throw exception;
       } else {
-        mysql_harness::logging::log_error(
-            "polyglot error deleting stored reference: %s",
-            exception.format().c_str());
+        log_error("polyglot error deleting stored reference: %s",
+                  exception.format().c_str());
       }
     }
     m_reference = nullptr;

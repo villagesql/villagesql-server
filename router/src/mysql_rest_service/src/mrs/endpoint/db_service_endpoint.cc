@@ -69,8 +69,6 @@ void DbServiceEndpoint::set(const DbService &entry, EndpointBasePtr parent) {
 }
 
 #ifdef HAVE_GRAALVM_PLUGIN
-// TODO(rennox): Should we cache this one? or maybe instead pass the session and
-// get it returned once the entire file system is done with it???
 std::shared_ptr<file_system::DbServiceFileSystem>
 DbServiceEndpoint::get_file_system() {
   if (!file_system_) {
@@ -80,54 +78,75 @@ DbServiceEndpoint::get_file_system() {
   return file_system_;
 }
 
-std::unique_ptr<graalvm::IGraalVMContext>
-DbServiceEndpoint::get_scripting_context() {
-  std::vector<std::string> files_to_load;
-  std::string content_set_path;
-  for (const auto &child : get_children()) {
-    auto content_set_ep = std::dynamic_pointer_cast<ContentSetEndpoint>(child);
+const std::vector<std::string> &DbServiceEndpoint::get_content_set_scripts() {
+  // TODO(rennox): the content_set_scripts_ should be reset if the content set
+  // is updated, probably makes more sense to move this to the content_set
+  // endpoint??
+  if (!content_set_scripts_.has_value()) {
+    std::vector<std::string> files_to_load;
+    for (const auto &child : get_children()) {
+      auto content_set_ep =
+          std::dynamic_pointer_cast<ContentSetEndpoint>(child);
 
-    // We only care about content set childs
-    if (!content_set_ep) {
-      continue;
-    }
+      // We only care about content set childs
+      if (!content_set_ep) {
+        continue;
+      }
 
-    auto cset = content_set_ep->get();
-    if (!cset->options) {
-      continue;
-    }
+      auto cset = content_set_ep->get();
+      if (!cset->options) {
+        continue;
+      }
 
-    content_set_path = content_set_ep->get_url().join();
+      content_set_path_ = content_set_ep->get_url().join();
 
-    rapidjson::Document doc;
-    doc.Parse((*cset->options).data(), (*cset->options).size());
+      rapidjson::Document doc;
+      doc.Parse((*cset->options).data(), (*cset->options).size());
 
-    // TODO (rennox) : Should we just ignore??
-    if (!doc.IsObject()) {
-      continue;
-    }
+      // TODO (rennox) : Should we just ignore??
+      if (!doc.IsObject()) {
+        continue;
+      }
 
-    if (!doc.HasMember("script_module_files") ||
-        !doc["script_module_files"].IsArray()) {
-      continue;
-    }
+      if (!doc.HasMember("script_module_files") ||
+          !doc["script_module_files"].IsArray()) {
+        continue;
+      }
 
-    auto array = doc["script_module_files"].GetArray();
+      // TODO(rennox): review the final location for this configurable item
+      if (doc.HasMember("context_pool_size") &&
+          doc["context_pool_size"].IsUint()) {
+        context_pool_size_ =
+            static_cast<size_t>(doc["context_pool_size"].GetUint());
+      }
 
-    for (rapidjson::Value::ConstValueIterator itr = array.Begin();
-         itr != array.End(); ++itr) {
-      if (itr->HasMember("file_to_load") && (*itr)["file_to_load"].IsString()) {
-        files_to_load.push_back((*itr)["file_to_load"].GetString());
+      auto array = doc["script_module_files"].GetArray();
+
+      for (rapidjson::Value::ConstValueIterator itr = array.Begin();
+           itr != array.End(); ++itr) {
+        if (itr->HasMember("file_to_load") &&
+            (*itr)["file_to_load"].IsString()) {
+          files_to_load.push_back((*itr)["file_to_load"].GetString());
+        }
       }
     }
+
+    content_set_scripts_ = files_to_load;
   }
 
+  return *content_set_scripts_;
+}
+
+std::shared_ptr<graalvm::Pooled_context>
+DbServiceEndpoint::get_scripting_context() {
   auto &instance = graalvm::GraalVMComponent::get_instance();
   const auto id = get()->id.to_string();
 
   auto globals = shcore::make_dict();
-  globals->emplace("contentSetPath", shcore::Value(content_set_path));
-  return instance.create_context(id, get_file_system(), files_to_load, globals);
+  globals->emplace("contentSetPath", shcore::Value(content_set_path_));
+
+  return instance.get_context(id, context_pool_size_, get_file_system(),
+                              get_content_set_scripts(), globals);
 }
 #endif
 

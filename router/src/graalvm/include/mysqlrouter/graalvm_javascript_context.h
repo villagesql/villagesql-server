@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -37,7 +37,6 @@ namespace graalvm {
 
 using IFile_system = shcore::polyglot::IFile_system;
 using Dictionary_t = shcore::Dictionary_t;
-using ResultType = shcore::ResultType;
 
 class GraalVMJavaScriptContext : public IGraalVMContext {
  public:
@@ -48,10 +47,8 @@ class GraalVMJavaScriptContext : public IGraalVMContext {
 
   std::string execute(const std::string &module, const std::string &object,
                       const std::string &function,
-                      const std::vector<Value> &parameters,
-                      ResultType result_type = ResultType::Json) override;
-  shcore::polyglot::Store create_module_source(const std::string &path);
-  uint64_t load_source(poly_reference source);
+                      const std::vector<Value> &parameters, int timeout,
+                      ResultType result_type) override;
 
  private:
   std::shared_ptr<GraalVMJavaScript> m_language;

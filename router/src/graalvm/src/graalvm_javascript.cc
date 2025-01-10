@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,10 +25,13 @@
 
 #include "mysqlrouter/graalvm_javascript.h"
 
+#include <chrono>
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <string>
 
+#include "include/my_thread.h"
 #include "router/src/graalvm/include/mysqlrouter/graalvm_common.h"
 #include "router/src/graalvm/src/file_system/polyglot_file_system.h"
 #include "router/src/graalvm/src/languages/polyglot_javascript.h"
@@ -40,8 +43,8 @@ namespace graalvm {
 using Value_type = shcore::Value_type;
 using Scoped_global = shcore::polyglot::Scoped_global;
 
-std::string GraalVMJavaScript::create_result(const Value &result,
-                                             const std::string &status) {
+void GraalVMJavaScript::create_result(const Value &result,
+                                      const std::string &status) {
   // If it is a native object, it could well be a wrapper for an language
   // exception, so it is thrown, processed and handled as such
   if (result.get_type() == Value_type::Object) {
@@ -63,13 +66,17 @@ std::string GraalVMJavaScript::create_result(const Value &result,
     dumper.append_value("result", result);
     dumper.end_object();
 
-    return dumper.str();
+    std::lock_guard lock(m_result_mutex);
+    m_result = dumper.str();
   } else {
-    return result.descr(true);
+    std::lock_guard lock(m_result_mutex);
+    m_result = result.descr(true);
   }
+  m_result_condition.notify_one();
 }
 
-std::string GraalVMJavaScript::create_result(const Polyglot_error &error) {
+void GraalVMJavaScript::create_result(const Polyglot_error &error) {
+  std::string result;
   if (m_result_type == ResultType::Json) {
     shcore::JSON_dumper dumper;
     dumper.start_object();
@@ -110,10 +117,13 @@ std::string GraalVMJavaScript::create_result(const Polyglot_error &error) {
 
     dumper.end_object();
 
-    return dumper.str();
+    std::lock_guard lock(m_result_mutex);
+    m_result = dumper.str();
   } else {
-    return error.format(true);
+    std::lock_guard lock(m_result_mutex);
+    m_result = error.format(true);
   }
+  m_result_condition.notify_one();
 }
 
 void GraalVMJavaScript::start(const std::shared_ptr<IFile_system> &fs,
@@ -155,10 +165,13 @@ poly_value GraalVMJavaScript::create_source(const std::string &source,
 }
 
 void GraalVMJavaScript::run() {
+  my_thread_self_setname("GraalVM-Proc");
   initialize(m_file_system);
 
-  for (const auto &it : (*m_predefined_globals)) {
-    set_global(it.first, it.second);
+  if (m_predefined_globals) {
+    for (const auto &it : (*m_predefined_globals)) {
+      set_global(it.first, it.second);
+    }
   }
 
   set_global_function(
@@ -173,6 +186,14 @@ void GraalVMJavaScript::run() {
                                                     Synch_error>,
       this);
 
+  if (const auto rc = Java_script_interface::eval(
+          "(internal)::resolver",
+          R"(new Function ("prom", "prom.then(value => synch_return(value)).catch(error => synch_error(error));");)",
+          &m_promise_resolver);
+      rc != poly_ok) {
+    throw Polyglot_error(thread(), rc);
+  }
+
   while (!m_done) {
     std::unique_lock<std::mutex> lock(m_process_mutex);
     m_process_condition.wait(lock,
@@ -186,7 +207,6 @@ void GraalVMJavaScript::run() {
     poly_value result = nullptr;
 
     try {
-      // TODO(rennox): Should we specify a different source?
       if (const auto rc =
               Java_script_interface::eval("(internal)", *m_code, &result);
           rc != poly_ok) {
@@ -197,23 +217,14 @@ void GraalVMJavaScript::run() {
       // from synch_return
       if (std::string class_name;
           result && is_object(result, &class_name) && class_name == "Promise") {
-        Scoped_global resolver(this, result);
-        resolver.execute(
-            "<<global>>.then(value=> synch_return(value), error => "
-            "synch_error(error))");
+        resolve_promise(result);
       } else {
-        {
-          std::lock_guard lock(m_result_mutex);
-          m_result = create_result(convert(result));
-        }
-        m_result_condition.notify_one();
+        create_result(convert(result));
       }
     } catch (const Polyglot_error &error) {
-      {
-        std::lock_guard lock(m_result_mutex);
-        m_result = create_result(error);
-      }
-      m_result_condition.notify_one();
+      create_result(error);
+    } catch (const std::exception &error) {
+      create_result(Value(error.what()), "error");
     }
 
     m_code.reset();
@@ -332,8 +343,15 @@ std::string GraalVMJavaScript::get_parameter_string(
   return parameter_string;
 }
 
-std::string GraalVMJavaScript::execute(const std::string &code,
+std::string GraalVMJavaScript::execute(const std::string &code, int timeout,
                                        ResultType result_type) {
+  clear_is_terminating();
+
+  auto ms_timeout = std::chrono::milliseconds{timeout};
+
+  // Ensures a clean result...
+  m_result.reset();
+
   {
     std::lock_guard lock(m_process_mutex);
     m_result_type = result_type;
@@ -341,9 +359,22 @@ std::string GraalVMJavaScript::execute(const std::string &code,
   }
   m_process_condition.notify_one();
 
+  {
+    std::unique_lock<std::mutex> lock(m_result_mutex);
+    if (m_result_condition.wait_for(
+            lock, ms_timeout, [this]() { return m_result.has_value(); })) {
+      return *m_result;
+    }
+  }
+
+  // Timeout ocurred, the termination logic should be executed
+  terminate();
+
+  // Now we wait for the termination to be complete
   std::unique_lock<std::mutex> lock(m_result_mutex);
-  m_result_condition.wait(lock);
-  return *m_result;
+  m_result_condition.wait(lock, [this]() { return m_result.has_value(); });
+
+  throw Timeout_error("Timeout");
 }
 
 poly_value GraalVMJavaScript::synch_return(
@@ -352,44 +383,46 @@ poly_value GraalVMJavaScript::synch_return(
 
   // If we got a promise (i.e. chained one) we wait for it to be resolved too
   if (args[0] && is_object(args[0], &class_name) && class_name == "Promise") {
-    Scoped_global resolver(this, args[0]);
-    resolver.execute(
-        "<<global>>.then(value=> synch_return(value), error => "
-        "synch_error(error))");
+    resolve_promise(args[0]);
   } else {
     try {
-      std::lock_guard lock(m_result_mutex);
       // If we got a module, it is automatically resolved as a Polyglot_object
       // i.e. import('<module-path>')
       if (class_name == "[object Module]") {
-        m_result = create_result(to_native_object(args[0], class_name));
+        create_result(to_native_object(args[0], class_name));
       } else {
-        m_result = create_result(convert(args[0]));
+        create_result(convert(args[0]));
       }
     } catch (const Polyglot_error &error) {
-      m_result = create_result(error);
+      create_result(error);
     } catch (const std::exception &error) {
-      m_result = create_result(Value(error.what()), "error");
+      create_result(Value(error.what()), "error");
     }
-
-    m_result_condition.notify_one();
   }
 
   return nullptr;
 }
 
 poly_value GraalVMJavaScript::synch_error(const std::vector<poly_value> &args) {
-  std::lock_guard lock(m_result_mutex);
   try {
-    m_result = create_result(convert(args[0]), "error");
+    create_result(convert(args[0]), "error");
   } catch (const Polyglot_error &error) {
-    m_result = create_result(error);
+    create_result(error);
   } catch (const std::exception &error) {
-    m_result = create_result(Value(error.what()), "error");
+    create_result(Value(error.what()), "error");
   }
-  m_result_condition.notify_one();
 
   return nullptr;
+}
+
+void GraalVMJavaScript::resolve_promise(poly_value promise) {
+  std::array args{promise};
+
+  if (const auto rc = poly_value_execute(thread(), m_promise_resolver,
+                                         args.data(), args.size(), nullptr);
+      rc != poly_ok) {
+    throw Polyglot_error(thread(), rc);
+  }
 }
 
 }  // namespace graalvm

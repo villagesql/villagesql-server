@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, 2024 Oracle and/or its affiliates.
+ * Copyright (c) 2018, 2025 Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -74,6 +74,11 @@ void Global_profiler::print_stats() {
               << " Total Time: " << duration << std::endl;
   }
   std::cout << "===================" << std::endl;
+}
+
+void Global_profiler::reset() {
+  std::lock_guard<std::mutex> lock(m_mutex);
+  m_time_profilers.clear();
 }
 
 }  // namespace utils

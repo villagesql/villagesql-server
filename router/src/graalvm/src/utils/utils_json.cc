@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2015, 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2015, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -257,8 +257,7 @@ void JSON_dumper::append_value(const Value &value) {
         _writer->start_object();
 
         for (index = map->begin(); index != end; ++index) {
-          _writer->append_string(index->first);
-          append_value(index->second);
+          append_value(index->first, index->second);
         }
 
         _writer->end_object();
@@ -289,8 +288,10 @@ void JSON_dumper::append_value(const Value &value) {
 }
 
 void JSON_dumper::append_value(std::string_view key, const Value &value) {
-  _writer->append_string(key);
-  append_value(value);
+  if (value.get_type() != Value_type::Undefined) {
+    _writer->append_string(key);
+    append_value(value);
+  }
 }
 
 void JSON_dumper::append(const Value &value) { append_value(value); }
