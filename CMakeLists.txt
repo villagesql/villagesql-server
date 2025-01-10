@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2024, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2025, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -2437,9 +2437,6 @@ IF(NOT WITHOUT_SERVER)
   ADD_SUBDIRECTORY(mysql-test)
   ADD_SUBDIRECTORY(mysql-test/lib/My/SafeProcess)
   ADD_SUBDIRECTORY(support-files)
-  IF(WITH_INTERNAL)
-    ADD_SUBDIRECTORY(internal)
-  ENDIF()
 ENDIF()
 
 INCLUDE(cmake/abi_check.cmake)
@@ -2481,6 +2478,11 @@ ELSE()
     FILE(GLOB_RECURSE CTEST_TESTFILES
       "${CMAKE_BINARY_DIR}/router/CTestTestfile.cmake")
     FILE(REMOVE ${CTEST_TESTFILES})
+  ENDIF()
+ENDIF()
+IF(NOT WITHOUT_SERVER)
+  IF(WITH_INTERNAL)
+    ADD_SUBDIRECTORY(internal)
   ENDIF()
 ENDIF()
 
