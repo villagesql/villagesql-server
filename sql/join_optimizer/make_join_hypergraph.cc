@@ -2570,9 +2570,14 @@ table_map FindTESForCondition(table_map used_tables,
       // of the rewrite, which is wrong. So the entire left side needs to be
       // included, preventing us to push the condition down into the right side
       // in any case.
+
+      // All tables from the left side.
       tes |= expr->left->tables_in_subtree;
-      tes |= GetUsedTables(expr->equijoin_conditions);
-      tes |= GetUsedTables(expr->join_conditions);
+
+      // And the needed ones from the right side.
+      tes |= (GetUsedTables(expr->equijoin_conditions) |
+              GetUsedTables(expr->join_conditions)) &
+             expr->right->tables_in_subtree;
     }
     return tes;
   } else {

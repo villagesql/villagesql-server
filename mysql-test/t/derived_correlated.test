@@ -1267,7 +1267,6 @@ SELECT * FROM
                    ON t2.x + t0.x = t3.x)
   ) AS dt;
 
---skip_if_hypergraph  # Wrong (empty) result.
 --sorted_result
 SELECT * FROM
   t AS t0,
@@ -1278,7 +1277,6 @@ SELECT * FROM
                    ON t2.x = t3.x + t0.x)
   ) AS dt;
 
---skip_if_hypergraph  # Wrong (empty) result.
 --sorted_result
 SELECT * FROM
   t AS t0,
