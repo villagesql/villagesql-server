@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2000, 2024, Oracle and/or its affiliates.
+   Copyright (c) 2000, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -8604,6 +8604,20 @@ bool mysql_prepare_create_table(
     }
   }
 
+  // Check that we have at least one visible column.
+  bool has_visible_column = false;
+  it.rewind();
+  while ((sql_field = it++)) {
+    if (sql_field->hidden == dd::Column::enum_hidden_type::HT_VISIBLE) {
+      has_visible_column = true;
+      break;
+    }
+  }
+  if (!has_visible_column) {
+    my_error(ER_TABLE_MUST_HAVE_A_VISIBLE_COLUMN, MYF(0));
+    return true;
+  }
+
   /* If fixed row records, we need one bit to check for deleted rows */
   if (!(create_info->table_options & HA_OPTION_PACK_RECORD))
     create_info->null_bits++;
@@ -8989,19 +9003,6 @@ static bool create_table_impl(
   DBUG_TRACE;
   DBUG_PRINT("enter", ("db: '%s'  table: '%s'  tmp: %d", db, table_name,
                        internal_tmp_table));
-
-  // Check that we have at least one visible column.
-  bool has_visible_column = false;
-  for (const Create_field &create_field : alter_info->create_list) {
-    if (create_field.hidden == dd::Column::enum_hidden_type::HT_VISIBLE) {
-      has_visible_column = true;
-      break;
-    }
-  }
-  if (!has_visible_column) {
-    my_error(ER_TABLE_MUST_HAVE_A_VISIBLE_COLUMN, MYF(0));
-    return true;
-  }
 
   if (check_engine(db, table_name, create_info)) return true;
 
