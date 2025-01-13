@@ -85,17 +85,17 @@ UniversalId HandlerAuthorizeLogout::get_schema_id() const {
 
 uint32_t HandlerAuthorizeLogout::get_access_rights() const {
   using Op = mrs::database::entry::Operation::Values;
-  return Op::valueRead;
+  return Op::valueCreate;
 }
 
-HttpResult HandlerAuthorizeLogout::handle_get(RequestContext *ctxt) {
+HttpResult HandlerAuthorizeLogout::handle_get(RequestContext *) {
+  throw http::Error(HttpStatusCode::Forbidden);
+}
+
+HttpResult HandlerAuthorizeLogout::handle_post(RequestContext *ctxt,
+                                               const std::vector<uint8_t> &) {
   auth_manager_->unauthorize(service_id_, &ctxt->cookies, ctxt->session_id);
   return get_json_response_ok();
-}
-
-HttpResult HandlerAuthorizeLogout::handle_post(RequestContext *,
-                                               const std::vector<uint8_t> &) {
-  throw http::Error(HttpStatusCode::Forbidden);
 }
 
 HttpResult HandlerAuthorizeLogout::handle_delete(RequestContext *) {

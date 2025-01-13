@@ -162,55 +162,55 @@ OK
 
 #
 # I.4
-GET /a/authentication/logout
+POST /a/authentication/logout
 {
     "message": "Logged out successfully",
     "status": 200
 }
 OK
-GET /b/authentication/logout
+POST /b/authentication/logout
 {
     "message": "Logged out successfully",
     "status": 200
 }
 OK
-GET /c/authentication/logout
+POST /c/authentication/logout
 {
     "message": "Logged out successfully",
     "status": 200
 }
 OK
-GET /d/authentication/logout
+POST /d/authentication/logout
 {
     "message": "Logged out successfully",
     "status": 200
 }
 OK
-GET /e/authentication/logout
+POST /e/authentication/logout
 {
     "message": "Logged out successfully",
     "status": 200
 }
 OK
-GET /f/authentication/logout
+POST /f/authentication/logout
 {
     "message": "Logged out successfully",
     "status": 200
 }
 OK
-GET /g/authentication/logout
+POST /g/authentication/logout
 {
     "message": "Logged out successfully",
     "status": 200
 }
 OK
-GET /h/authentication/logout
+POST /h/authentication/logout
 {
     "message": "Logged out successfully",
     "status": 200
 }
 OK
-GET /i/authentication/logout
+POST /i/authentication/logout
 {
     "message": "Logged out successfully",
     "status": 200
