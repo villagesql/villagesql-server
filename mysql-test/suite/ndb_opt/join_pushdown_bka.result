@@ -7976,20 +7976,26 @@ insert into t3 values(1, 3), (2, 3);
 explain format=tree select a,
 (select sum(a) over w from t2 window w as(order by t3.a) limit 1)
 from t3;
-EXPLAIN
--> Table scan on t3
--> Select #2 (subquery in projection; dependent)
-    -> Limit: 1 row(s)
-        -> Window aggregate with buffering: sum(t2.a) OVER w
-            -> Sort: t3.a
-                -> Table scan on t2
-
-Warnings:
-Note	1276	Field or reference 'test.t3.a' of SELECT #2 was resolved in SELECT #1
+ERROR HY000: Outer reference test.t3.a in window's ORDER BY or PARTITION BY clause not allowed.
 select a,
 (select sum(a) over w from t2 window w as(order by t3.a) limit 1)
 from t3;
-a	(select sum(a) over w from t2 window w as(order by t3.a) limit 1)
+ERROR HY000: Outer reference test.t3.a in window's ORDER BY or PARTITION BY clause not allowed.
+explain format=tree select a,
+(select sum(a) over w from t2 window w as(order by "whatever") limit 1)
+from t3;
+EXPLAIN
+-> Table scan on t3
+-> Select #2 (subquery in projection; run only once)
+    -> Limit: 1 row(s)
+        -> Window aggregate with buffering: sum(t2.a) OVER w
+            -> Sort: whatever
+                -> Table scan on t2
+
+select a,
+(select sum(a) over w from t2 window w as(order by "whatever") limit 1)
+from t3;
+a	(select sum(a) over w from t2 window w as(order by "whatever") limit 1)
 1	3
 2	3
 drop table t2,t3;
