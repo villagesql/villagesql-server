@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -690,12 +690,13 @@ bool AuthorizeManager::authorize(ServiceId service_id,
         selected_handler->get_session_id_from_request_data(ctxt);
 
     if (handler_spcific_session_id.has_value()) {
-      log_debug("SessionId source: from-handler");
       session = session_manager_.get_session_secondary_id(
           handler_spcific_session_id.value());
       if (session) {
         ctxt.session_id = session->get_session_id();
       }
+      log_debug("SessionId source: from-handler id=%s",
+                session->get_session_id().c_str());
     }
   }
 

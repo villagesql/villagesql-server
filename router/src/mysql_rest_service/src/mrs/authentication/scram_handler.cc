@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2023, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2023, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -102,7 +102,7 @@ struct GeneratorNonceCharacters : public helper::GeneratorBase {
 
   static char generate() {
     static std::vector<char> printable_characters = get_prinatable_characters();
-    return printable_characters[randomize() % printable_characters.size()];
+    return printable_characters[get_random_int(printable_characters.size())];
   }
 };
 
@@ -184,6 +184,8 @@ SaslResult ScramHandler::client_initial_response(RequestContext &ctxt,
   if (!session_data->ksi.is_valid)
     return SaslResult(get_problem_description(HttpStatusCode::Unauthorized,
                                               "Account invalid configuration"));
+  log_debug("s:ksi.salt:          %s",
+            string_array(session_data->ksi.salt).c_str());
 
   ScramServerAuthChallange challange{
       as_vector(session_data->ksi.salt),

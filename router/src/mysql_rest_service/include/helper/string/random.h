@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +26,7 @@
 #define ROUTER_SRC_HELPER_STRING_RANDOM_H_
 
 #include <algorithm>
+#include <random>
 
 namespace helper {
 
@@ -42,10 +43,15 @@ struct GeneratorBase {
   /**
    * Static method that generates random number.
    *
-   * The methods was mainly introduced for easier changing the randomize
-   * algorithm in future.
+   * This method was introduced for easier changing the algorithm
+   * in future. `range` argument decides about the generated numbers
+   * range [0, range).
    */
-  static int randomize() { return rand(); }
+  static int get_random_int(int range) {
+    std::random_device rd;  // a seed source for the random number engine
+    std::uniform_int_distribution<> distrib(0, range - 1);
+    return distrib(rd);
+  }
 };
 
 struct GeneratorSmallAlpha : public GeneratorBase {
@@ -61,8 +67,9 @@ struct GeneratorSmallAlpha : public GeneratorBase {
  public:
   const static int kNumberOfCharacters = smallRange;
   static char generate() {
-    auto result = randomize() % kNumberOfCharacters;
-    return smallBegin + result;
+    std::random_device rd;  // a seed source for the random number engine
+    std::uniform_int_distribution<> distrib(smallBegin, smallEnd);
+    return distrib(rd);
   }
 };
 
@@ -71,7 +78,7 @@ struct GeneratorAlpha : public GeneratorSmallAlpha {
   const static int kNumberOfCharacters = smallRange + bigRange;
 
   static char generate() {
-    auto result = randomize() % kNumberOfCharacters;
+    auto result = get_random_int(kNumberOfCharacters);
     if (result < smallRange) return smallBegin + result;
     result -= smallRange;
     return bigBegin + result;
@@ -87,7 +94,7 @@ struct GeneratorAlphaNumeric : public GeneratorSmallAlpha {
   const static int kNumberOfCharacters = smallRange + bigRange + numericRange;
 
   static char generate() {
-    auto result = randomize() % kNumberOfCharacters;
+    auto result = get_random_int(kNumberOfCharacters);
     if (result < smallRange) return smallBegin + result;
     result -= smallRange;
 
@@ -101,7 +108,7 @@ struct GeneratorAlphaNumeric : public GeneratorSmallAlpha {
 struct Generator8bitsValues : public GeneratorSmallAlpha {
  public:
   static char generate() {
-    auto result = randomize() % 255;
+    auto result = get_random_int(255);
 
     return static_cast<char>(result);
   }

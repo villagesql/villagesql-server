@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2023, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2023, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -74,6 +74,28 @@ void calculate_xor(const unsigned char *a, const unsigned char *b,
   }
 }
 
+static std::string string_array(const std::string &s) {
+  std::string result;
+
+  for (std::size_t i = 0; i < s.length(); ++i) {
+    if (i != 0) result += ",";
+    result += std::to_string((int)(unsigned char)s[i]);
+  }
+
+  return result;
+}
+
+static std::string string_array(const uint8_t *v, std::size_t len) {
+  std::string result;
+
+  for (std::size_t i = 0; i < len; ++i) {
+    if (i != 0) result += ",";
+    result += std::to_string((int)(unsigned char)v[i]);
+  }
+
+  return result;
+}
+
 std::string compute_client_proof(std::string password, std::string salt,
                                  int iterations, std::string auth_message) {
   unsigned char salted_password[SHA256_DIGEST_LENGTH];
@@ -83,6 +105,10 @@ std::string compute_client_proof(std::string password, std::string salt,
   unsigned int len;
   std::string client_proof(SHA256_DIGEST_LENGTH, '\0');
   std::string client_key_str{"Client Key"};
+
+  mrs_debugln("iterations:    ", iterations);
+  mrs_debugln("salt:          ", string_array(salt));
+  mrs_debugln("auth_message:  ", string_array(auth_message));
 
   // Generate SaltedPassword using PBKDF2
   if (!PKCS5_PBKDF2_HMAC(password.data(), password.length(),
@@ -95,6 +121,8 @@ std::string compute_client_proof(std::string password, std::string salt,
   calculate_hmac(salted_password, SHA256_DIGEST_LENGTH,
                  (unsigned char *)client_key_str.data(),
                  client_key_str.length(), client_key, &len);
+
+  mrs_debugln("client_key:    ", string_array(client_key, len));
 
   calculate_sha256(client_key, stored_key, SHA256_DIGEST_LENGTH);
 
@@ -339,7 +367,7 @@ class Scram {
     std::string result{};
 
     result.append("r=").append(data.nonce.value());
-    result.append(",s=").append(Base64::encode(data.salt.value()));
+    result.append(",s=").append(Base64Data::encode(data.salt.value()));
     result.append(",i=").append(std::to_string(data.iterations.value()));
 
     parse_auth_data_phase1(result);
