@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -77,7 +77,8 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
   void update(const Entries &entries) override;
   void configure(const std::string &options) override;
 
-  bool unauthorize(ServiceId id, http::Cookie *cookies) override;
+  bool unauthorize(ServiceId id, http::Cookie *cookies,
+                   const std::optional<SessionId> &session_id) override;
   bool authorize(ServiceId id, rest::RequestContext &ctxt,
                  AuthUser *out_user) override;
   bool is_authorized(ServiceId id, rest::RequestContext &ctxt,
@@ -92,6 +93,7 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
   collector::MysqlCacheManager *get_cache() override { return cache_manager_; }
   Container get_supported_authentication_applications(ServiceId id) override;
   void clear() override;
+  void update_users_cache(const ChangedUsersIds &changed_users_ids) override;
   std::string get_session_cookie_key_name(
       const AuthorizeManager::ServiceId id) override;
 

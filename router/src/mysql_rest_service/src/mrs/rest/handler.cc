@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -620,7 +620,7 @@ class RestRequestHandler : public ::http::base::RequestHandler {
         case HttpStatusCode::Unauthorized:
           if (ctxt->selected_handler) {
             auth_manager_->unauthorize(rest_handler_->get_service_id(),
-                                       &ctxt->cookies);
+                                       &ctxt->cookies, ctxt->session_id);
           }
           [[fallthrough]];
         default:

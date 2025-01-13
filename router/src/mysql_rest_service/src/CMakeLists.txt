@@ -1,4 +1,4 @@
-# Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+# Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -71,6 +71,7 @@ ADD_STATIC_LIBRARY(mysql_rest_service_db
   mrs/database/monitor/slow_query_monitor.cc
   mrs/database/monitor/schema_monitor_factory.cc
   mrs/database/query_entries_auth_privileges.cc
+  mrs/database/query_changes_auth_user.cc
   mrs/database/query_changes_content_file.cc
   mrs/database/query_changes_content_set.cc
   mrs/database/query_changes_db_object.cc

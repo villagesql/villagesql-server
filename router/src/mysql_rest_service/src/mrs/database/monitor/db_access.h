@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -55,6 +55,7 @@ class DbAccess {
         db_object{
             query_monitor_factory->create_db_object_fetcher(query_factory)},
         authentication{query_monitor_factory->create_authentication_fetcher()},
+        auth_user{query_monitor_factory->create_auth_user_monitor(0)},
         content_file{query_monitor_factory->create_content_file_fetcher()},
         content_set{query_monitor_factory->create_content_set_fetcher()},
         router_id_{router_id},
@@ -69,6 +70,7 @@ class DbAccess {
     db_schema->query_entries(session);
     db_object->query_entries(session);
     authentication->query_entries(session);
+    auth_user->query_changed_ids(session);
     content_file->query_entries(session);
     content_set->query_entries(session);
     transaction.commit();
@@ -113,6 +115,10 @@ class DbAccess {
   const QueryEntriesAuthApp::Entries &get_auth_app_entries() const {
     return authentication->get_entries();
   }
+  const QueryChangesAuthUser::ChangedUsersIds &get_auth_user_changed_ids()
+      const {
+    return auth_user->get_changed_ids();
+  }
   const QueryEntriesContentFile::VectorOfPaths &get_content_file_entries()
       const {
     return content_file->entries;
@@ -129,6 +135,7 @@ class DbAccess {
   std::unique_ptr<QueryEntriesDbSchema> db_schema;
   std::unique_ptr<QueryEntriesDbObject> db_object;
   std::unique_ptr<QueryEntriesAuthApp> authentication;
+  std::unique_ptr<QueryChangesAuthUser> auth_user;
   std::unique_ptr<QueryEntriesContentFile> content_file;
   std::unique_ptr<QueryEntriesContentSet> content_set;
 

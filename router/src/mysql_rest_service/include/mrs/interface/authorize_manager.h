@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +31,7 @@
 #include "helper/mysql_time.h"
 #include "mrs/database/entry/auth_app.h"
 #include "mrs/database/entry/auth_user.h"
+#include "mrs/database/entry/universal_id.h"
 #include "mrs/http/cookie.h"
 #include "mrs/http/session_manager.h"
 #include "mrs/interface/authorize_handler.h"
@@ -65,6 +66,7 @@ class AuthorizeManager {
   using ServiceId = UniversalId;
   using Container = std::vector<AuthorizeHandlerPtr>;
   using HttpHeaders = ::http::base::Headers;
+  using ChangedUsersIds = mrs::users::UserManager::ChangedUsersIds;
 
   virtual ~AuthorizeManager() = default;
 
@@ -74,7 +76,8 @@ class AuthorizeManager {
                          AuthUser *out_user) = 0;
   virtual bool is_authorized(ServiceId id, rest::RequestContext &ctxt,
                              AuthUser *user) = 0;
-  virtual bool unauthorize(ServiceId id, http::Cookie *cookies) = 0;
+  virtual bool unauthorize(ServiceId id, http::Cookie *cookies,
+                           const std::optional<SessionId> &session_id) = 0;
   virtual void configure(const std::string &options) = 0;
   virtual std::string get_jwt_token(ServiceId service_id, Session *s) = 0;
   virtual Session *get_current_session(SessionId id) = 0;
@@ -89,6 +92,7 @@ class AuthorizeManager {
 
   virtual collector::MysqlCacheManager *get_cache() = 0;
   virtual void clear() = 0;
+  virtual void update_users_cache(const ChangedUsersIds &changed_users_ids) = 0;
 
   virtual std::string get_session_cookie_key_name(
       const AuthorizeManager::ServiceId id) = 0;

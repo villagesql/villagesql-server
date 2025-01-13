@@ -533,7 +533,7 @@ std::vector<CmdOption> g_options{
      [](const std::string &) {
        if (!cnf_should_execute_authentication_flow()) {
          throw std::invalid_argument(
-             "Session type, can be defined while executing authentication "
+             "Session type can only be defined while executing authentication "
              "flow.");
        }
      }},
@@ -547,15 +547,14 @@ std::vector<CmdOption> g_options{
      [](const std::string &) {
        if (!cnf_should_execute_authentication_flow()) {
          throw std::invalid_argument(
-             "Authentication app, can be defined while executing "
+             "Authentication app can only be defined while executing "
              "authentication flow.");
        }
      }},
 
     {{"--json-pointer", "-j"},
      "Print only values selected by pointers (inclusive pointer). Multiple "
-     "pointer should be "
-     "separated by comma.",
+     "pointer should be separated by comma.",
      CmdOptionValueReq::required,
      "meta_json_pointer",
      [](const std::string &value) {

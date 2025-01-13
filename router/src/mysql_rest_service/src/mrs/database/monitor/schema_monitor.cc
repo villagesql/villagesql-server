@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -256,6 +256,12 @@ void SchemaMonitor::run() {
           auth_manager_->update(fetcher.get_auth_app_entries());
           EntityCounter<kEntityCounterUpdatesAuthentications>::increment(
               fetcher.get_auth_app_entries().size());
+        }
+
+        if (!fetcher.get_auth_user_changed_ids().empty()) {
+          log_debug("clearing the auth_user cache");
+          auth_manager_->update_users_cache(
+              fetcher.get_auth_user_changed_ids());
         }
 
         if (!fetcher.get_host_entries().empty()) {

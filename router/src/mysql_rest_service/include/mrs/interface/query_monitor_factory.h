@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -27,6 +27,7 @@
 
 #include <memory>
 
+#include "mrs/database/query_changes_auth_user.h"
 #include "mrs/database/query_entries_auth_app.h"
 #include "mrs/database/query_entries_content_file.h"
 #include "mrs/database/query_entries_content_set.h"
@@ -73,6 +74,8 @@ class QueryMonitorFactory {
                            const uint64_t last_audit_log_id) = 0;
   virtual std::unique_ptr<database::QueryEntriesAuthApp>
   create_authentication_monitor(const uint64_t last_audit_log_id) = 0;
+  virtual std::unique_ptr<database::QueryChangesAuthUser>
+  create_auth_user_monitor(const uint64_t last_audit_log_id) = 0;
   virtual std::unique_ptr<database::QueryEntriesContentFile>
   create_content_file_monitor(const uint64_t last_audit_log_id) = 0;
   virtual std::unique_ptr<database::QueryEntriesContentSet>

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -120,6 +120,11 @@ class SchemaMonitorFactory : public mrs::interface::QueryMonitorFactory {
       const uint64_t last_audit_log_id) override {
     return std::make_unique<QueryChangesAuthApp<v2::QueryEntriesAuthApp>>(
         last_audit_log_id);
+  }
+
+  virtual std::unique_ptr<database::QueryChangesAuthUser>
+  create_auth_user_monitor(const uint64_t last_audit_log_id) override {
+    return std::make_unique<QueryChangesAuthUser>(last_audit_log_id);
   }
 
   std::unique_ptr<database::QueryEntriesContentFile>

@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -106,6 +106,8 @@ class Oauth2Handler : public interface::AuthorizeHandler {
 
     OutJsonObjectKeyValues output_;
   };
+
+  UserManager &get_user_manager() override { return um_; }
 
  protected:
   virtual std::string get_url_direct_auth() const = 0;

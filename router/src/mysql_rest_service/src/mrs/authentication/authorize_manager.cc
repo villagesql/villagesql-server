@@ -316,12 +316,16 @@ void AuthorizeManager::pre_authorize_account(
   }
 }
 
-bool AuthorizeManager::unauthorize(ServiceId service_id,
-                                   http::Cookie *cookies) {
+bool AuthorizeManager::unauthorize(ServiceId service_id, http::Cookie *cookies,
+                                   const std::optional<SessionId> &session_id) {
   auto session_cookie_key = get_session_cookie_key_name(service_id);
-  auto session_identifier = cookies->get(session_cookie_key);
+  auto session_identifier =
+      session_id ? *session_id : cookies->get(session_cookie_key);
 
-  if (session_identifier.empty()) return false;
+  if (session_identifier.empty()) {
+    log_debug("unauthorize - session_identifier not found");
+    return false;
+  }
 
   return session_manager_.remove_session(session_identifier);
 }
@@ -452,7 +456,7 @@ std::optional<std::string> AuthorizeManager::authorize_jwt(
   auto json_sid = jwt.get_payload_claim_custom("service_id");
 
   if (!json_uid->IsString()) return {};
-  log_debug("JWT token  supported algorithm");
+  log_debug("JWT token supported algorithm");
   if (!json_exp->IsString()) return {};
   if (!json_sid->IsString()) return {};
 
@@ -775,6 +779,14 @@ void AuthorizeManager::clear() { container_.clear(); }
 std::string AuthorizeManager::get_session_cookie_key_name(
     const AuthorizeManager::ServiceId id) {
   return ::mrs::authentication::get_session_cookie_key_name(id);
+}
+
+void AuthorizeManager::update_users_cache(
+    const ChangedUsersIds &changed_users_ids) {
+  get_user_manager()->update_users_cache(changed_users_ids);
+  for (auto &auth_handler : container_) {
+    auth_handler->get_user_manager().update_users_cache(changed_users_ids);
+  }
 }
 
 }  // namespace authentication

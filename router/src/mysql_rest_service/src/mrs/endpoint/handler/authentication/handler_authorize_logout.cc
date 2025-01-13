@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -89,7 +89,7 @@ uint32_t HandlerAuthorizeLogout::get_access_rights() const {
 }
 
 HttpResult HandlerAuthorizeLogout::handle_get(RequestContext *ctxt) {
-  auth_manager_->unauthorize(service_id_, &ctxt->cookies);
+  auth_manager_->unauthorize(service_id_, &ctxt->cookies, ctxt->session_id);
   return get_json_response_ok();
 }
 

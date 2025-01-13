@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -40,6 +40,10 @@ namespace rest {
 struct RequestContext;
 }  // namespace rest
 
+namespace users {
+class UserManager;
+}
+
 namespace interface {
 
 class AuthorizeHandler;
@@ -51,6 +55,7 @@ class AuthorizeHandler {
   using AuthApp = mrs::database::entry::AuthApp;
   using RequestContext = rest::RequestContext;
   using Session = http::SessionManager::Session;
+  using UserManager = mrs::users::UserManager;
 
  public:
   virtual ~AuthorizeHandler() = default;
@@ -59,6 +64,7 @@ class AuthorizeHandler {
   virtual UniversalId get_service_id() const = 0;
   virtual UniversalId get_id() const = 0;
   virtual const AuthApp &get_entry() const = 0;
+  virtual UserManager &get_user_manager() = 0;
 
   virtual bool authorize(RequestContext &ctxt, Session *session,
                          AuthUser *out_user) = 0;

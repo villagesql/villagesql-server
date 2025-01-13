@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2023, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2023, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -118,6 +118,8 @@ class SaslHandler : public interface::AuthorizeHandler {
                                      AuthUser *out_user,
                                      const std::string &auth_data,
                                      const bool is_json) = 0;
+
+  UserManager &get_user_manager() override { return um_; }
 
  protected:
   SaslData get_authorize_data(RequestContext &ctxt);

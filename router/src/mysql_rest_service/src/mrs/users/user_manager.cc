@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -247,6 +247,21 @@ bool UserManager::query_insert_user(SqlSessionCache *out_cache,
   user_cache_.set(UserIndex(*user), *user);
 
   return true;
+}
+
+void UserManager::update_users_cache(const ChangedUsersIds &changed_users_ids) {
+  for (const auto &change : changed_users_ids) {
+    if (change.second == "INSERT") {
+      // we don't care about inserts, if it is not in the cache it will get
+      // added there when needed by the authorization mechanism
+      continue;
+    } else if (change.second == "DELETE" || change.second == "UPDATE") {
+      // for deletes and updates - remove from the cache and let it be refreshed
+      // by the cache when needed
+      user_invalidate(change.first);
+    } else
+      assert(false);
+  }
 }
 
 }  // namespace users

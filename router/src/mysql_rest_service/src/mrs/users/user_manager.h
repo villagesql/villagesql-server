@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -45,6 +45,9 @@ class UserManager {
   using Cache = helper::cache::Cache<UserIndex, AuthUser, 100, PolicyLru>;
   using Handler = mrs::interface::AuthorizeHandler;
   using SqlSessionCache = Handler::SqlSessionCached;
+  // std::pair<UUID, operation{INSERT|UPDATE|DELETE}>
+  using ChangedUsersIds =
+      std::vector<std::pair<database::entry::UniversalId, std::string>>;
 
  public:
   UserManager(const bool limit_to_existing_users,
@@ -59,12 +62,14 @@ class UserManager {
    *
    * If the user entry provided to the function differs from
    * the entry found (cache/db), then the DB entry is updated.
-   * This behavior is provided for account that are
+   * This behavior is provided for accounts that are
    * imported/managed by other sources like in case of OAUTH2.
    */
   bool user_get(AuthUser *out_user, SqlSessionCache *out_cache,
                 const bool update_changed = true);
   void user_invalidate(const UserId id);
+
+  void update_users_cache(const ChangedUsersIds &changed_users_ids);
 
  private:
   bool query_update_user(SqlSessionCache *out_cache, const UserId user_id,

@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -73,6 +73,7 @@ class WwwAuthenticationHandler : public interface::AuthorizeHandler {
 
  public:
   WwwAuthenticationHandler(const AuthApp &entry) : entry_{entry} {}
+  UserManager &get_user_manager() override { return um_; }
 
   constexpr static char kAuthorization[] = "Authorization";
   constexpr static char kWwwAuthenticate[] = "WWW-Authenticate";

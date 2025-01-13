@@ -41,7 +41,9 @@ class MockAuthManager : public mrs::interface::AuthorizeManager {
   MOCK_METHOD(bool, is_authorized,
               (ServiceId id, mrs::rest::RequestContext &ctxt, AuthUser *user),
               (override));
-  MOCK_METHOD(bool, unauthorize, (ServiceId id, mrs::http::Cookie *cookies),
+  MOCK_METHOD(bool, unauthorize,
+              (ServiceId id, mrs::http::Cookie *cookies,
+               const std::optional<SessionId> &session_id),
               (override));
 
   MOCK_METHOD(Session *, get_current_session,
@@ -53,6 +55,7 @@ class MockAuthManager : public mrs::interface::AuthorizeManager {
   MOCK_METHOD(Container, get_supported_authentication_applications, (ServiceId),
               (override));
   MOCK_METHOD(void, clear, (), (override));
+  MOCK_METHOD(void, update_users_cache, (const ChangedUsersIds &), (override));
   MOCK_METHOD(Session *, get_current_session, (SessionId id), (override));
   MOCK_METHOD(std::string, get_session_cookie_key_name,
               (const AuthorizeManager::ServiceId id), (override));
