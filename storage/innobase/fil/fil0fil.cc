@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1995, 2024, Oracle and/or its affiliates.
+Copyright (c) 1995, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -4890,7 +4890,10 @@ static void fil_op_write_space_extend(space_id_t space_id, os_offset_t offset,
 
   DBUG_EXECUTE_IF(
       "ib_redo_log_system_tablespace_expansion", if (space_id == 0) {
-        ib::info() << "System tablespace expansion is redo logged.";
+        /* info message requires increasing the log level of the test,
+        and the test happens to produce the huge logs. Therefore, produce a
+        warning that doesn't require increasing the log level */
+        ib::warn() << "System tablespace expansion is redo logged.";
       });
 }
 #endif
