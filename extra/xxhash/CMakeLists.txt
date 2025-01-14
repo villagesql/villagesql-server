@@ -19,11 +19,29 @@
 #
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA 
+# Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-ADD_STATIC_LIBRARY(lz4_lib
-  ${BUNDLED_LZ4_PATH}/lz4.c
-  ${BUNDLED_LZ4_PATH}/lz4frame.c
-  ${BUNDLED_LZ4_PATH}/lz4hc.c
-  ${BUNDLED_LZ4_PATH}/xxhash.c
+ADD_LIBRARY(xxhash_interface INTERFACE)
+TARGET_LINK_LIBRARIES(xxhash_interface INTERFACE xxhash_lib)
+ADD_LIBRARY(ext::xxhash ALIAS xxhash_interface)
+
+SET(XXHASH_VERSION_DIR "xxHash-0.8.3")
+SET(BUNDLED_XXHASH_PATH
+  "${CMAKE_SOURCE_DIR}/extra/xxhash/${XXHASH_VERSION_DIR}")
+
+# Dispatching is only supported on x86 and x86_64, not ARM.
+ADD_STATIC_LIBRARY(xxhash_lib
+  ${BUNDLED_XXHASH_PATH}/xxhash.c
+# ${BUNDLED_XXHASH_PATH}/xxh_x86dispatch.c
+  COMPILE_DEFINITIONS PRIVATE XXH_NAMESPACE=MY_
   )
+
+# xxhash.h:2450:42:
+# error: "__cplusplus" is not defined, evaluates to 0 [-Werror=undef]
+IF(SOLARIS)
+  TARGET_COMPILE_OPTIONS(xxhash_lib PRIVATE "-Wno-undef")
+ENDIF()
+
+IF(UNIX)
+  TARGET_COMPILE_OPTIONS(xxhash_lib PRIVATE "-fvisibility=hidden")
+ENDIF()
