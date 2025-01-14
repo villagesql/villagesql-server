@@ -33,7 +33,7 @@
 #include <utility>
 #include <vector>
 
-#include "extra/lz4/my_xxhash.h"
+#include "extra/xxhash/my_xxhash.h"
 #include "field_types.h"
 #include "my_alloc.h"
 #include "my_dbug.h"

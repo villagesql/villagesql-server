@@ -40,7 +40,7 @@
 
 #include <ankerl/unordered_dense.h>
 
-#include "extra/lz4/my_xxhash.h"
+#include "extra/xxhash/my_xxhash.h"
 #include "field_types.h"
 #include "mem_root_deque.h"
 #include "my_config.h"
