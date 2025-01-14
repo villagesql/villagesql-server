@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 
-# Copyright (c) 2004, 2024, Oracle and/or its affiliates.
+# Copyright (c) 2004, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -718,6 +718,8 @@ sub main {
       $ENV{'ML_CERTIFICATES'} = "$::opt_vardir/" . "hwaml_cert_files/";
       $ENV{'ML_ENABLE_ENCRYPTION'} = "1";
     }
+    # Setting the number of ML workers per driver
+    set_ml_workers_for_suite($opt_suites);
   }
 
   initialize_servers();
