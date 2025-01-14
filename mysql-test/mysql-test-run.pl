@@ -735,6 +735,8 @@ sub main {
       $ENV{'ML_CERTIFICATES'} = "$::opt_vardir/" . "hwaml_cert_files/";
       $ENV{'ML_ENABLE_ENCRYPTION'} = "1";
     }
+    # Setting the number of ML workers per driver
+    set_ml_workers_for_suite($opt_suites);
   }
 
   initialize_servers();
