@@ -31,7 +31,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
  Created 1/30/1994 Heikki Tuuri
  **********************************************************************/
 
-#include <stdlib.h>
+#include <cstdlib>
 
 #include "my_dbug.h"
 #include "univ.i"

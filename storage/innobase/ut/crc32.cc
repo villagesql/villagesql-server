@@ -90,7 +90,7 @@ factor of two increase in speed on a Power PC G4 (PPC7455) using gcc -O3.
 other files in library. The code in this file is used to make a library for
 external tools. */
 
-#include <string.h>
+#include <cstring>
 #include "my_compiler.h"
 #include "my_config.h"
 #include "my_inttypes.h"

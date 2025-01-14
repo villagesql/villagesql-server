@@ -25,7 +25,7 @@
 
 #include "ndb_modifiers.h"
 
-#include <stdio.h>
+#include <cstdio>
 
 #include "m_string.h"
 #include "my_dbug.h"  // DBUG_PRINT

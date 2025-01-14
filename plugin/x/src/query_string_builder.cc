@@ -25,7 +25,7 @@
 
 #include "plugin/x/src/query_string_builder.h"
 
-#include <assert.h>
+#include <cassert>
 #include <cstdint>
 
 #include <mutex>  // NOLINT(build/c++11)

@@ -27,9 +27,9 @@
 #define Logger_H
 
 #include <ndb_global.h>
-#include <time.h>
 #include <BaseString.hpp>
 #include <NdbOut.hpp>
+#include <ctime>
 #include "portlib/ndb_compiler.h"
 
 #define MAX_LOG_MESSAGE_SIZE 1024

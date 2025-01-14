@@ -26,7 +26,7 @@
 #ifndef PARSE_MASK_HPP
 #define PARSE_MASK_HPP
 
-#include <ctype.h>
+#include <cctype>
 #include <util/BaseString.hpp>
 #include <util/SparseBitmask.hpp>
 

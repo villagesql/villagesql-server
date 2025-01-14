@@ -22,8 +22,8 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "util/ndbxfrm_file.h"
-#include <math.h>
 #include <algorithm>
+#include <cmath>
 #include "portlib/ndb_file.h"
 #include "util/ndb_az31.h"
 #include "util/ndb_math.h"

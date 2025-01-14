@@ -26,7 +26,7 @@
 #include "LogHandler.hpp"
 
 #include <NdbTick.h>
-#include <time.h>
+#include <ctime>
 
 #include "util/cstrbuf.h"
 

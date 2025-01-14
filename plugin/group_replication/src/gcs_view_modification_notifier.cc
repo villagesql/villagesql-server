@@ -23,7 +23,7 @@
 
 #include "plugin/group_replication/include/gcs_view_modification_notifier.h"
 
-#include <time.h>
+#include <ctime>
 
 #include "my_dbug.h"
 #include "my_systime.h"

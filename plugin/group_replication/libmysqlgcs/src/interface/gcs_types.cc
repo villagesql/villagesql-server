@@ -23,7 +23,7 @@
 
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_types.h"
 
-#include <stddef.h>
+#include <cstddef>
 #include <iostream>
 #include <map>
 #include <utility>

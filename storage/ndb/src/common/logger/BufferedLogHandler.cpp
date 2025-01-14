@@ -27,7 +27,7 @@
 #include "util/cstrbuf.h"
 #include "util/require.h"
 
-#include <time.h>
+#include <ctime>
 
 namespace {
 struct ThreadData {

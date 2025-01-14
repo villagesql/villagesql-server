@@ -26,7 +26,7 @@
 #include "kernel/signaldata/TrpKeepAlive.hpp"
 #include "ndb_types.h"
 
-#include <stdio.h>
+#include <cstdio>
 
 #define JAM_FILE_ID 542
 

@@ -24,8 +24,8 @@
 */
 
 #include <ndb_global.h>
-#include <time.h>
 #include <cstring>
+#include <ctime>
 #include <optional>
 #include "ndb_config.h"
 #include "openssl/ssl.h"

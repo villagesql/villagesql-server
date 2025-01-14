@@ -30,7 +30,7 @@
 
 #include "ndb_types.h"
 
-#include <stdio.h>
+#include <cstdio>
 
 class TrpKeepAlive {
   /**

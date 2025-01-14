@@ -25,10 +25,10 @@
 
 #include "plugin/x/client/authentication/password_hasher.h"
 
-#include <assert.h>
 #include <openssl/rand.h>
 #include <openssl/sha.h>
 #include <sys/types.h>
+#include <cassert>
 
 #include <cstdint>
 #include <cstring>

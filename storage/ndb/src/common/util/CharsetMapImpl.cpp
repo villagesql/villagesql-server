@@ -24,7 +24,7 @@
 
 #include "CharsetMapImpl.h"
 
-#include <string.h>
+#include <cstring>
 
 #include "my_sys.h"
 #include "mysql/strings/m_ctype.h"

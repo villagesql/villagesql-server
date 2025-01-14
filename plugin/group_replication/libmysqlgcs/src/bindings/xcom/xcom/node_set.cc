@@ -25,7 +25,7 @@
 #include <stdint.h>
 #endif
 #include <rpc/rpc.h>
-#include <stdlib.h>
+#include <cstdlib>
 
 #include "xcom/bitset.h"
 #include "xcom/xcom_profile.h"

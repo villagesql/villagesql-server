@@ -32,8 +32,8 @@
 #include "ndb_config.h"
 #include "util/cstrbuf.h"
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 
 #define MAX_PORT_NO 65535
 

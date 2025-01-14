@@ -36,7 +36,7 @@
  * increase hash key size.
  **/
 
-#include <assert.h>
+#include <cassert>
 #include "Bitmask.hpp"
 
 #define JAM_FILE_ID 261

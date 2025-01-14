@@ -26,7 +26,7 @@
 #ifndef CPCD_HPP
 #define CPCD_HPP
 
-#include <time.h>
+#include <ctime>
 
 #include <NdbCondition.h>
 #include <NdbThread.h>

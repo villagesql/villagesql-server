@@ -35,10 +35,10 @@
 #include <mgmapi.h>
 #include <ndb_global.h>
 #include <ndb_limits.h>
-#include <stdint.h>
 #include <NdbApi.hpp>
 #include <NdbOut.hpp>
 #include <OutputStream.hpp>
+#include <cstdint>
 #include "NdbImport.hpp"
 #include "portlib/NdbTick.h"
 #include "portlib/ndb_compiler.h"

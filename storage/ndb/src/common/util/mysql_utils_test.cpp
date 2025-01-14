@@ -25,9 +25,9 @@
 
 #ifdef TEST_MYSQL_UTILS_TEST
 
-#include <stdio.h>   // not using namespaces yet
-#include <stdlib.h>  // not using namespaces yet
-#include <string.h>  // not using namespaces yet
+#include <cstdio>   // not using namespaces yet
+#include <cstdlib>  // not using namespaces yet
+#include <cstring>  // not using namespaces yet
 
 #include <util/BaseString.hpp>
 #include <util/NdbTap.hpp>

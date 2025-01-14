@@ -23,7 +23,7 @@
 
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/xplatform/my_xp_util.h"
 
-#include <errno.h>
+#include <cerrno>
 
 #include "my_systime.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_logging_system.h"

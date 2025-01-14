@@ -23,7 +23,7 @@
 
 #include "plugin/group_replication/include/sql_service/sql_service_interface.h"
 
-#include <stddef.h>
+#include <cstddef>
 
 #include <mysql/components/services/log_builtins.h>
 #include <mysql/components/services/mysql_admin_session.h>

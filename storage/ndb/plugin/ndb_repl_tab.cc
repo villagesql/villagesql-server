@@ -25,7 +25,7 @@
 
 #include "storage/ndb/plugin/ndb_repl_tab.h"
 
-#include <stdio.h>
+#include <cstdio>
 
 #include "mf_wcomp.h"
 #include "mysql/strings/m_ctype.h"

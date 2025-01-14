@@ -27,7 +27,7 @@
 
 #include "SysLogHandler.hpp"
 
-#include <time.h>
+#include <ctime>
 
 #include <syslog.h>
 

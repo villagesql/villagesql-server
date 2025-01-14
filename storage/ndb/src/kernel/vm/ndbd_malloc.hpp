@@ -26,7 +26,7 @@
 #ifndef NDBD_MALLOC_H
 #define NDBD_MALLOC_H
 
-#include <stddef.h>
+#include <cstddef>
 
 #include "ndb_types.h"
 

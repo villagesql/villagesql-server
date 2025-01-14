@@ -26,7 +26,7 @@
 #ifndef NDB_PROCESSINFO_HPP
 #define NDB_PROCESSINFO_HPP
 
-#include <stddef.h>  // size_t
+#include <cstddef>  // size_t
 #include "ndb_types.h"
 #include "portlib/ndb_socket.h"  // socklen_t
 

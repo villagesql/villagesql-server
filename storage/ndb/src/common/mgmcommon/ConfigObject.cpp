@@ -27,12 +27,12 @@
 #include <kernel_types.h>
 #include <ndb_global.h>
 #include <ndb_limits.h>
-#include <stdlib.h>
-#include <string.h>
 #include <ConfigSection.hpp>
 #include <EventLogger.hpp>
 #include <Properties.hpp>
 #include <algorithm>
+#include <cstdlib>
+#include <cstring>
 #include "portlib/ndb_socket.h"  // ntohl()
 #include "util/require.h"
 

@@ -27,8 +27,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "ut0wqueue.h"
 
-#include <stddef.h>
 #include <sys/types.h>
+#include <cstddef>
 
 #include "mem0mem.h"
 #include "ut0list.h"

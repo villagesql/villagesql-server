@@ -37,12 +37,12 @@
 #endif
 #include <mysql.h>
 #include <mysqld_error.h>
-#include <stdlib.h>
-#include <string.h>
 #include <NdbApi.hpp>
+#include <cstdlib>
+#include <cstring>
 /* Used for cout. */
-#include <ctype.h>
-#include <stdio.h>
+#include <cctype>
+#include <cstdio>
 #include <iostream>
 
 /**

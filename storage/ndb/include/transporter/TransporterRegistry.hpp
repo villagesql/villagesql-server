@@ -37,7 +37,7 @@
 #ifndef TransporterRegistry_H
 #define TransporterRegistry_H
 
-#include <assert.h>
+#include <cassert>
 #include "ndb_config.h"
 
 #if defined(HAVE_EPOLL_CREATE)

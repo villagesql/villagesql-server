@@ -26,9 +26,9 @@
 #endif
 #include "xcom/site_def.h"
 
-#include <assert.h>
-#include <stdlib.h>
 #include <algorithm>
+#include <cassert>
+#include <cstdlib>
 #include <iterator>
 
 #include "xcom/bitset.h"

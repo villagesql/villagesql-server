@@ -26,8 +26,8 @@
 #endif
 #include "xcom/xcom_interface.h"
 
-#include <assert.h>
-#include <stdlib.h>
+#include <cassert>
+#include <cstdlib>
 
 #include "xcom/app_data.h"
 #include "xcom/bitset.h"

@@ -25,7 +25,7 @@
 
 #include "plugin/x/src/callback_command_delegate.h"
 
-#include <stddef.h>
+#include <cstddef>
 
 #include <string>
 

@@ -55,11 +55,11 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /* First, we deal with  platform-specific or compiler-specific issues. */
 
-#include <errno.h>
+#include <cerrno>
 /* begin standard C headers. */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 /* end standard C headers. */
 

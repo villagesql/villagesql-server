@@ -22,11 +22,11 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #define _XOPEN_SOURCE_EXTENDED
-#include <locale.h>
 #include <ndb_config.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <wchar.h>
+#include <clocale>
+#include <cstdio>
+#include <cstdlib>
+#include <cwchar>
 #ifdef HAVE_NCURSESW_CURSES_H
 #include <ncursesw/curses.h>
 #elif defined HAVE_NCURSESW_H
@@ -39,8 +39,8 @@
 #include <curses.h>
 #endif
 #include <mysql.h>
-#include <signal.h>
 #include <unistd.h>
+#include <csignal>
 #include "client/include/client_priv.h"
 #include "map_helpers.h"
 #include "my_default.h"

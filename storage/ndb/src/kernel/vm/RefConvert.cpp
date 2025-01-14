@@ -23,8 +23,8 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <ndb_limits.h>
-#include <stdio.h>
 #include <RefConvert.hpp>
+#include <cstdio>
 
 #include <NdbTap.hpp>
 static int test_numberToBlock() {

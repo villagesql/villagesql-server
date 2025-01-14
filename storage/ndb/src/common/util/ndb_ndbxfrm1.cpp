@@ -22,8 +22,8 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "util/ndb_ndbxfrm1.h"
-#include <stdio.h>
 #include <algorithm>
+#include <cstdio>
 #include "my_byteorder.h"  // WORDS_BIGENDIAN
 #include "my_compiler.h"   // unlikely
 #include "util/require.h"

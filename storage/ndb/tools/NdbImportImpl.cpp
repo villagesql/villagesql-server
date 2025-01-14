@@ -24,7 +24,7 @@
 */
 
 #include "NdbImportImpl.hpp"
-#include <inttypes.h>
+#include <cinttypes>
 #include <new>
 #include "util/TlsKeyManager.hpp"
 #include "util/ndb_math.h"

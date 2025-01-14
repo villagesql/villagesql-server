@@ -25,7 +25,7 @@
 
 #include "plugin/x/tests/driver/processor/commands/mysqlxtest_error_names.h"
 
-#include <stdlib.h>
+#include <cstdlib>
 #include <sstream>
 #include <stdexcept>
 

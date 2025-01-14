@@ -21,18 +21,18 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <errno.h>
 #include <algorithm>
 #include <cassert>
+#include <cerrno>
 #include <sstream>
 #include <string>
 
 #ifndef XCOM_STANDALONE
 #include <fcntl.h>
-#include <stdio.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <time.h>
+#include <cstdio>
+#include <ctime>
 
 #include "my_dir.h"
 #include "my_io.h"

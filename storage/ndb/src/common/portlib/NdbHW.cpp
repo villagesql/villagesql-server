@@ -25,11 +25,11 @@
 #include <NdbThread.h>
 #include <NdbTick.h>
 #include <ndb_limits.h>
-#include <stdint.h>
-#include <stdio.h>
 #include <File.hpp>
 #include <NdbHW.hpp>
 #include <UtilBuffer.hpp>
+#include <cstdint>
+#include <cstdio>
 #include <iostream>
 #include <thread>
 #include "../src/common/util/parse_mask.hpp"

@@ -25,7 +25,7 @@
 
 #include <ndb_global.h>
 
-#include <time.h>
+#include <ctime>
 
 #include <EventLogger.hpp>
 #include <NdbOut.hpp>

@@ -25,7 +25,7 @@
 
 #include "http/cno/callback_init.h"
 
-#include <stdio.h>
+#include <cstdio>
 
 namespace http {
 namespace cno {

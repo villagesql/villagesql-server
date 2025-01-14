@@ -25,11 +25,11 @@
 
 #include "storage/ndb/plugin/ha_ndb_index_stat.h"
 
-#include <ctype.h>
 #include <mysql/plugin.h>
 #include <mysql/psi/mysql_thread.h>
-#include <time.h>
 #include <atomic>
+#include <cctype>
+#include <ctime>
 
 #include "m_string.h"
 #include "my_dbug.h"

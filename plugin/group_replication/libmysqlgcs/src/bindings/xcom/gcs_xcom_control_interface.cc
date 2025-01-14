@@ -37,8 +37,8 @@ using std::map;
 using std::set;
 using std::string;
 
-#include <assert.h>
 #include <algorithm>
+#include <cassert>
 #include <iostream>
 #include <iterator>
 #include <list>

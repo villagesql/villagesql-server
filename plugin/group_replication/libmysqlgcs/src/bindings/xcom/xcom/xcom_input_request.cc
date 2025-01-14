@@ -24,7 +24,7 @@
 #ifdef _MSC_VER
 #include <stdint.h>
 #endif
-#include <stdlib.h>
+#include <cstdlib>
 #include "xcom/xcom_input_request.h"
 #include "xcom/xcom_memory.h"
 

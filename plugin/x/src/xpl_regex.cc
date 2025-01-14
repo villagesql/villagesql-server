@@ -23,7 +23,7 @@
 
 #include "plugin/x/src/xpl_regex.h"
 
-#include <assert.h>
+#include <cassert>
 #include <memory>
 
 namespace xpl {

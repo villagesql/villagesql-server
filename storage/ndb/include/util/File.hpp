@@ -27,7 +27,7 @@
 #define FILE_H
 
 #include <ndb_global.h>
-#include <time.h>
+#include <ctime>
 
 #ifdef _WIN32
 #include <io.h>

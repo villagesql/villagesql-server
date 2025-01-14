@@ -25,9 +25,9 @@
 
 #include "plugin/x/src/io/xpl_listener_unix_socket.h"
 
-#include <errno.h>
 #include <fcntl.h>
-#include <stdlib.h>
+#include <cerrno>
+#include <cstdlib>
 
 #include "m_string.h"
 #include "my_config.h"  // NOLINT(build/include_subdir)
@@ -40,9 +40,9 @@
 #include "plugin/x/src/xpl_performance_schema.h"
 
 #ifdef HAVE_SYS_UN_H
-#include <signal.h>
 #include <sys/types.h>
 #include <sys/un.h>
+#include <csignal>
 #endif
 
 namespace xpl {

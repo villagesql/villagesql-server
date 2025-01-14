@@ -26,9 +26,9 @@
 #ifndef TRIG_ATTRINFO_HPP
 #define TRIG_ATTRINFO_HPP
 
-#include <string.h>
 #include <trigger_definitions.h>
 #include <NodeBitmask.hpp>
+#include <cstring>
 #include "SignalData.hpp"
 
 #define JAM_FILE_ID 189

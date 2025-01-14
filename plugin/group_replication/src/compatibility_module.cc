@@ -24,8 +24,8 @@
 #include "plugin/group_replication/include/compatibility_module.h"
 #include "plugin/group_replication/include/plugin_constants.h"
 
-#include <assert.h>
-#include <stddef.h>
+#include <cassert>
+#include <cstddef>
 
 Compatibility_module::Compatibility_module() : local_version(nullptr) {}
 

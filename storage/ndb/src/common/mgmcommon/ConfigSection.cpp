@@ -26,11 +26,11 @@
 #include <kernel_types.h>
 #include <ndb_global.h>
 #include <ndb_limits.h>
-#include <stdlib.h>
-#include <string.h>
 #include <ConfigObject.hpp>
 #include <ConfigSection.hpp>
 #include <Properties.hpp>
+#include <cstdlib>
+#include <cstring>
 #include "util/require.h"
 #ifndef _WIN32
 #include <arpa/inet.h>

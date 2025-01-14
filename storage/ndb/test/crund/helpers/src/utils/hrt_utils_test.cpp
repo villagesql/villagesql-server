@@ -28,8 +28,8 @@
  *
  */
 
-#include <assert.h>
-#include <stdio.h>
+#include <cassert>
+#include <cstdio>
 
 #include "hrt_utils.h"
 

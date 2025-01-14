@@ -25,7 +25,7 @@
 
 #include "storage/ndb/plugin/ndb_record_layout.h"
 
-#include <assert.h>
+#include <cassert>
 #include <cstdint>
 #include "NdbApi.hpp"
 #include "my_byteorder.h"

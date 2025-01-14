@@ -23,7 +23,7 @@
 
 #include "plugin/group_replication/include/member_info.h"
 
-#include <stddef.h>
+#include <cstddef>
 
 #include "mutex_lock.h"
 #include "my_byteorder.h"

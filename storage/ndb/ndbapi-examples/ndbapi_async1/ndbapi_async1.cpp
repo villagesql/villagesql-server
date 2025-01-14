@@ -39,7 +39,7 @@
 #include <mysqld_error.h>
 #include <NdbApi.hpp>
 
-#include <stdlib.h>
+#include <cstdlib>
 // Used for cout
 #include <iostream>
 

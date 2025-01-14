@@ -26,8 +26,8 @@
 #endif
 #include "xcom/xcom_msg_queue.h"
 
-#include <assert.h>
-#include <stdlib.h>
+#include <cassert>
+#include <cstdlib>
 
 #include "xcom/pax_msg.h"
 #include "xcom/server_struct.h"

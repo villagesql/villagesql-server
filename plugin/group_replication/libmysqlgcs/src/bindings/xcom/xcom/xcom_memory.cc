@@ -24,7 +24,7 @@
 #include "xcom/xcom_memory.h"
 
 #include <rpc/rpc.h>
-#include <stdlib.h>
+#include <cstdlib>
 
 #include "xcom/xcom_profile.h"
 

@@ -22,7 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "plugin/group_replication/include/plugin_messages/group_service_message.h"
-#include <string.h>
+#include <cstring>
 #include "my_dbug.h"
 #include "plugin/group_replication/include/plugin_handlers/metrics_handler.h"
 

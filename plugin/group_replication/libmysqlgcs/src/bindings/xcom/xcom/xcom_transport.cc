@@ -21,17 +21,17 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <assert.h>
-#include <ctype.h>
-#include <errno.h>
-#include <limits.h>
-#include <math.h>
+#include <cassert>
+#include <cctype>
+#include <cerrno>
+#include <climits>
+#include <cmath>
 #ifdef _MSC_VER
 #include <stdint.h>
 #endif
 #include <rpc/rpc.h>
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 
 #include "xcom/xcom_profile.h"
 #ifndef XCOM_STANDALONE

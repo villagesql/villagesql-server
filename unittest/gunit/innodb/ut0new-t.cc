@@ -24,7 +24,7 @@
 /* See http://code.google.com/p/googletest/wiki/Primer */
 
 #include <gtest/gtest.h>
-#include <stddef.h>
+#include <cstddef>
 #include <memory>
 #include <stdexcept>
 #include <vector>

@@ -24,8 +24,8 @@
 /* See http://code.google.com/p/googletest/wiki/Primer */
 
 #include <gtest/gtest.h>
-#include <string.h>
 #include <array>
+#include <cstring>
 #include <iostream>
 
 #include "storage/innobase/include/univ.i"

@@ -26,9 +26,9 @@
 #endif
 #include "xcom/xcom_cache.h"
 
-#include <assert.h>
 #include <rpc/rpc.h>
-#include <stdlib.h>
+#include <cassert>
+#include <cstdlib>
 
 #include "xcom/app_data.h"
 #include "xcom/bitset.h"

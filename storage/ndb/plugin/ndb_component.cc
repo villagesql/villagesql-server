@@ -25,7 +25,7 @@
 
 #include "storage/ndb/plugin/ndb_component.h"
 
-#include <stdarg.h>
+#include <cstdarg>
 
 #include "my_systime.h"  // set_timespec
 

@@ -27,7 +27,7 @@
 #include "ndb_global.h"
 #include "portlib/ndb_sockaddr.h"
 
-#include <string.h>
+#include <cstring>
 
 /* By default, prefer IPv4 addresses, for smooth upgrade from an IPv4-only
    environment.

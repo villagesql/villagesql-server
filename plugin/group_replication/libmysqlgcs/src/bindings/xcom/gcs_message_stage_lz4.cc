@@ -24,8 +24,8 @@
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_message_stage_lz4.h"
 
 #include <lz4.h>
-#include <string.h>
 #include <cassert>
+#include <cstring>
 #include <limits>
 #include <map>
 

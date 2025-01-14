@@ -24,7 +24,7 @@
 #ifndef _WIN32
 #include <netdb.h>
 #endif
-#include <stdlib.h>
+#include <cstdlib>
 #ifdef _MSC_VER
 #include <stdint.h>
 #endif

@@ -33,8 +33,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "os0event.h"
 
-#include <errno.h>
-#include <time.h>
+#include <cerrno>
+#include <ctime>
 
 #include "ha_prototypes.h"
 #include "ut0mutex.h"

@@ -26,7 +26,7 @@
 #include <ndb_global.h>
 #include "util/require.h"
 
-#include <time.h>
+#include <ctime>
 
 #include <NdbMutex.h>
 #include <NdbSleep.h>

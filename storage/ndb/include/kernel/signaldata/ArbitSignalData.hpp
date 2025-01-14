@@ -28,8 +28,8 @@
 
 #include <NdbHost.h>
 #include <NdbTick.h>
-#include <string.h>
 #include <NodeBitmask.hpp>
+#include <cstring>
 #include "SignalData.hpp"
 #include "SignalDataPrint.hpp"
 

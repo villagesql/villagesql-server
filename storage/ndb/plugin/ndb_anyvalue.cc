@@ -86,7 +86,7 @@
         reserved code.
 */
 
-#include <assert.h>
+#include <cassert>
 
 #include "my_inttypes.h"
 

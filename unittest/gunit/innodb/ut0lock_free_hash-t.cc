@@ -69,7 +69,7 @@ unittest/gunit/innodb/CMakeLists.txt */
 #endif /* TEST_TBB */
 
 #include <gtest/gtest.h>
-#include <stddef.h>
+#include <cstddef>
 #include <thread>
 
 #include "my_thread_local.h" /* Needed to access thread local variables */

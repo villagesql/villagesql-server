@@ -32,9 +32,9 @@
 #include <ndb_limits.h>
 #include <ndb_opts.h>
 #include <ndb_rand.h>
-#include <stdint.h>
 #include <NdbApi.hpp>
 #include <NdbError.hpp>
+#include <cstdint>
 #include "NdbImport.hpp"
 #include "NdbImportCsv.hpp"
 #include "NdbImportUtil.hpp"

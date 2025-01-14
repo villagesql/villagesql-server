@@ -24,7 +24,7 @@
 /* See http://code.google.com/p/googletest/wiki/Primer */
 
 #include <gtest/gtest.h>
-#include <stddef.h>
+#include <cstddef>
 
 #include "storage/innobase/include/fil0fil.h"
 extern bool lower_case_file_system;

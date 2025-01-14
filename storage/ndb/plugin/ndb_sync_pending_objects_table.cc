@@ -24,7 +24,7 @@
 // Implements
 #include "storage/ndb/plugin/ndb_sync_pending_objects_table.h"
 
-#include <assert.h>
+#include <cassert>
 #include <cstdint>
 #include <cstring>  // std::strlen
 

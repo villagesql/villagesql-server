@@ -37,8 +37,8 @@
 #endif
 
 #ifndef XCOM_WITHOUT_OPENSSL
-#include <assert.h>
-#include <stdlib.h>
+#include <cassert>
+#include <cstdlib>
 
 #include <openssl/dh.h>
 #include <openssl/opensslv.h>

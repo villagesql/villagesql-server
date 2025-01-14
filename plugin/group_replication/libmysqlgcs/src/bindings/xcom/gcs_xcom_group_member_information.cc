@@ -23,7 +23,7 @@
 
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_group_member_information.h"
 
-#include <assert.h>
+#include <cassert>
 #include <cstdlib>
 #include <cstring>
 #include <sstream>

@@ -21,7 +21,7 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <string.h> /* memcpy */
+#include <cstring> /* memcpy */
 
 #include "xcom/checked_data.h"
 #include "xcom/xcom_memory.h"

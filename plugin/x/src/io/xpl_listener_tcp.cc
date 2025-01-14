@@ -25,7 +25,7 @@
 
 #include "plugin/x/src/io/xpl_listener_tcp.h"
 
-#include <errno.h>
+#include <cerrno>
 #ifndef _WIN32
 #include <netdb.h>
 #endif

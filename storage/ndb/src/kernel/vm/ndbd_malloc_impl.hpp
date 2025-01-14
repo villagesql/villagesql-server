@@ -35,11 +35,11 @@
 #endif
 #endif
 
-#include <assert.h>
 #include <kernel_types.h>
 #include <Bitmask.hpp>
 #include <EventLogger.hpp>
 #include <Vector.hpp>
+#include <cassert>
 #include <cstdint>
 #include "NdbSeqLock.hpp"
 #include "Pool.hpp"

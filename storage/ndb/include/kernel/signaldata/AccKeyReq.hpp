@@ -26,7 +26,7 @@
 #ifndef ACCKEYREQ_HPP
 #define ACCKEYREQ_HPP
 
-#include <assert.h>
+#include <cassert>
 
 #include "ndb_limits.h"
 

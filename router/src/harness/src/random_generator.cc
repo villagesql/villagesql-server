@@ -25,8 +25,8 @@
 
 #include "random_generator.h"
 
-#include <assert.h>  // <cassert> is flawed: assert() lands in global namespace on Ubuntu 14.04, not std::
 #include <algorithm>
+#include <cassert>
 #include <random>
 #include <stdexcept>
 #include <string>

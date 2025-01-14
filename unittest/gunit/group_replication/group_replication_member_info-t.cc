@@ -23,7 +23,7 @@
 */
 
 #include <gtest/gtest.h>
-#include <stddef.h>
+#include <cstddef>
 #include <string>
 #include <vector>
 

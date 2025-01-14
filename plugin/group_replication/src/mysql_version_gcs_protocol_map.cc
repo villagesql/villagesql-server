@@ -22,7 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "plugin/group_replication/include/mysql_version_gcs_protocol_map.h"
-#include <assert.h>
+#include <cassert>
 #include <cerrno>
 #include <cinttypes>
 #include <limits>

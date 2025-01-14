@@ -28,7 +28,7 @@
 #include "ndb_config.h"
 #include "util/require.h"
 
-#include <time.h>
+#include <ctime>
 
 #include "NdbSleep.h"
 
@@ -39,7 +39,7 @@
 #include <BaseString.hpp>
 #include <InputStream.hpp>
 
-#include <errno.h>
+#include <cerrno>
 #include "CPCD.hpp"
 #include "common.hpp"
 
@@ -58,7 +58,7 @@
 #define _GNU_SOURCE
 #endif
 #include <sched.h>
-#include <stdlib.h>  // atoi
+#include <cstdlib>  // atoi
 #endif
 
 void CPCD::Process::print(FILE *f) {

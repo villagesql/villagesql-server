@@ -26,8 +26,8 @@
 #ifndef CHECKNODEGROUPS_H
 #define CHECKNODEGROUPS_H
 
-#include <string.h>
 #include <NodeBitmask.hpp>
+#include <cstring>
 #include "SignalData.hpp"
 #include "SignalDataPrint.hpp"
 

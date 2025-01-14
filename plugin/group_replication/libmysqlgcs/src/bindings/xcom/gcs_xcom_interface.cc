@@ -23,11 +23,11 @@
 
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_interface.h"
 
-#include <assert.h>
-#include <ctype.h>
-#include <stdio.h>
 #include <algorithm>
+#include <cassert>
+#include <cctype>
 #include <cstdarg>
+#include <cstdio>
 #include <fstream>
 #include <iostream>
 #include <sstream>

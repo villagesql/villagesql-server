@@ -27,11 +27,10 @@
 #ifdef TEST_NDBPROCESS
 
 #include "portlib/NdbProcess.hpp"
-#include <stdlib.h>
-#include <string.h>
 #include <climits>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <string>
 #include <vector>

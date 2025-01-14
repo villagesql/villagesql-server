@@ -24,9 +24,9 @@
 */
 
 #include "diskpage.hpp"
-#include <time.h>
 #include <version.h>
 #include <NdbOut.hpp>
+#include <ctime>
 #include <signaldata/SignalData.hpp>
 
 #define JAM_FILE_ID 364

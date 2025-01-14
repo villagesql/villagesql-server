@@ -23,7 +23,7 @@
 
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/xplatform/my_xp_thread.h"
 
-#include <errno.h>
+#include <cerrno>
 
 #include "my_compiler.h"
 #include "mysql/psi/mysql_thread.h"

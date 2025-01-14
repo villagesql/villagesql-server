@@ -28,7 +28,7 @@
 
 #include <ndb_types.h>
 #include <ndb_version.h>
-#include <string.h>
+#include <cstring>
 
 #define JAM_FILE_ID 466
 

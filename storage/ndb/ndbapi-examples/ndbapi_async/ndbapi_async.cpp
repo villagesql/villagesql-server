@@ -55,10 +55,10 @@
 
 #include <mysql.h>
 #include <mysqld_error.h>
-#include <stdlib.h>
-#include <string.h>
 #include <NdbApi.hpp>
 #include <chrono>
+#include <cstdlib>
+#include <cstring>
 #include <iostream>
 #include <thread>
 

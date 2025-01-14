@@ -28,8 +28,8 @@
 
 #include <ndb_global.h>
 #include <ndb_limits.h>
-#include <stdint.h>
 #include <NdbOut.hpp>
+#include <cstdint>
 #include "NdbImport.hpp"
 #include "NdbImportUtil.hpp"
 // STL

@@ -59,16 +59,16 @@
 
 #include <NdbApi.hpp>
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 // Used for cout
-#include <stdio.h>
+#include <cstdio>
 #include <iostream>
 #ifdef VM_TRACE
 #include <my_dbug.h>
 #endif
 #ifndef assert
-#include <assert.h>
+#include <cassert>
 #endif
 
 /**

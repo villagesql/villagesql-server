@@ -26,9 +26,9 @@
 #ifndef CHECKSUM_HPP
 #define CHECKSUM_HPP
 
-#include <assert.h>
 #include <ndb_types.h>
-#include <stddef.h>
+#include <cassert>
+#include <cstddef>
 
 /**
  * We want the compiler to vectorize the xor-loop using SSE extensions.

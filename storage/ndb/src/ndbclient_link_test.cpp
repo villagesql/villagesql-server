@@ -31,7 +31,7 @@
 #include "../include/util/random.h"
 #include "ndbapi/NdbInfo.hpp"
 
-#include <stdio.h>
+#include <cstdio>
 
 int main(int argc, const char **) {
   if (argc < 0) {

@@ -44,10 +44,10 @@
 
 #include <mysql.h>
 #include <mysqld_error.h>
-#include <stdlib.h>
 #include <NdbApi.hpp>
+#include <cstdlib>
 // Used for cout
-#include <stdio.h>
+#include <cstdio>
 #include <iostream>
 
 static void run_application(MYSQL &, Ndb_cluster_connection &);

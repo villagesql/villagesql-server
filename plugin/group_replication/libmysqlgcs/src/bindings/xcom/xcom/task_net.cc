@@ -34,11 +34,11 @@
 #include <netdb.h>
 #include <sys/socket.h>
 #endif
-#include <assert.h>
-#include <errno.h>
-#include <stdlib.h>
-#include <string.h>
 #include <sys/types.h>
+#include <cassert>
+#include <cerrno>
+#include <cstdlib>
+#include <cstring>
 #ifdef _MSC_VER
 #include <stdint.h>
 #endif

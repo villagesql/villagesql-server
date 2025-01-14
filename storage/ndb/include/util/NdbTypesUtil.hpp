@@ -26,8 +26,8 @@
 #ifndef NDB_TYPES_UTIL_HPP
 #define NDB_TYPES_UTIL_HPP
 
-#include <assert.h>
-#include <string.h>
+#include <cassert>
+#include <cstring>
 #include "my_byteorder.h"
 #include "ndb_constants.h"
 #include "ndb_types.h"

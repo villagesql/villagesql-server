@@ -26,9 +26,9 @@
 #endif
 #include "xcom/synode_no.h"
 
-#include <assert.h>
 #include <rpc/rpc.h>
-#include <stdlib.h>
+#include <cassert>
+#include <cstdlib>
 
 #include "xcom/simset.h"
 #include "xcom/task.h"

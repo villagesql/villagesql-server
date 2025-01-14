@@ -23,8 +23,8 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#include <stdio.h>
-#include <string.h>
+#include <cstdio>
+#include <cstring>
 #include "util/require.h"
 
 #include "kernel/signaldata/FsOpenReq.hpp"

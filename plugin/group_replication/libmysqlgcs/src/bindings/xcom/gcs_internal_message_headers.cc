@@ -23,8 +23,8 @@
 
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_internal_message_headers.h"
 
-#include <stdlib.h>
-#include <string.h>
+#include <cstdlib>
+#include <cstring>
 #include <memory>
 #include <string>
 

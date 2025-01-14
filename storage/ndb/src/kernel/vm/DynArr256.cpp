@@ -25,9 +25,9 @@
 
 #include "DynArr256.hpp"
 #include <NdbTick.h>
-#include <assert.h>
-#include <stdio.h>
 #include <NdbOut.hpp>
+#include <cassert>
+#include <cstdio>
 #include "pc.hpp"
 #include "util/require.h"
 

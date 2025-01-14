@@ -23,7 +23,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include <string.h>
+#include <cstring>
 
 #include "mysql_routing_common.h"
 

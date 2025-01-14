@@ -26,7 +26,7 @@
 #ifndef REFCONVERT_H
 #define REFCONVERT_H
 
-#include <assert.h>
+#include <cassert>
 #include "kernel_types.h"
 #include "ndb_limits.h"
 

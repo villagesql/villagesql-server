@@ -25,9 +25,9 @@
 #include "util/ndb_math.h"
 #include "util/require.h"
 
-#include <assert.h>  // assert()
-#include <stdlib.h>  // abort()
-#include <string.h>
+#include <cassert>  // assert()
+#include <cstdlib>  // abort()
+#include <cstring>
 
 #include <limits>
 #include <new>

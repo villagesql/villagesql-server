@@ -25,8 +25,8 @@
 
 #include "plugin/x/src/operations_factory.h"
 
-#include <errno.h>
 #include <fcntl.h>
+#include <cerrno>
 #ifndef _WIN32
 #include <netdb.h>
 #endif
@@ -39,9 +39,9 @@
 #include "my_systime.h"  // NOLINT(build/include_subdir)
 
 #ifdef HAVE_SYS_UN_H
-#include <signal.h>
 #include <sys/types.h>
 #include <sys/un.h>
+#include <csignal>
 #endif
 
 #include "plugin/x/src/config/config.h"

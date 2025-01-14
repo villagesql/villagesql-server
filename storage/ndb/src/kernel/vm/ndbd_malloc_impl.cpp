@@ -28,7 +28,7 @@
 #include "ndbd_malloc.hpp"
 #include "util/require.h"
 
-#include <time.h>
+#include <ctime>
 
 #include <ndb_global.h>
 #include <portlib/NdbMem.h>

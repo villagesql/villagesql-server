@@ -24,7 +24,7 @@
 // Implements
 #include "storage/ndb/plugin/ndb_pfs_table.h"
 
-#include <assert.h>
+#include <cassert>
 // assert
 
 static int ndb_pfs_rnd_init(PSI_table_handle *handle, bool) {
