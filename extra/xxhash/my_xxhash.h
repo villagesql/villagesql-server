@@ -1,8 +1,5 @@
-#ifndef MY_XXHASH_H_INCLUDED
-#define MY_XXHASH_H_INCLUDED
-
 /*
-  Copyright (c) 2016, 2023, Oracle and/or its affiliates.
+  Copyright (c) 2016, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,10 +22,10 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
+# pragma once
+
 // Define a namespace prefix to all xxhash functions. This is done to
 // avoid conflict with xxhash symbols in liblz4.
 #define XXH_NAMESPACE MY_
 
-#include "lz4-1.10.0/lib/xxhash.h"  // IWYU pragma: export
-
-#endif // MY_XXHASH_H_INCLUDED
+#include "xxHash-0.8.3/xxhash.h"

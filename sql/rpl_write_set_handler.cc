@@ -32,7 +32,7 @@
 #include <utility>
 #include <vector>
 
-#include "extra/lz4/my_xxhash.h"  // IWYU pragma: keep
+#include "extra/xxhash/my_xxhash.h"  // IWYU pragma: keep
 #include "lex_string.h"
 #include "my_base.h"
 #include "my_dbug.h"

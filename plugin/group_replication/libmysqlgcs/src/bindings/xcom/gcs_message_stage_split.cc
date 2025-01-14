@@ -28,7 +28,7 @@
 #include <cstring>  // std::memcpy
 #include <limits>
 #include <unordered_set>
-#include "extra/lz4/my_xxhash.h"
+#include "extra/xxhash/my_xxhash.h"
 
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/gcs_logging_system.h"
 #include "plugin/group_replication/libmysqlgcs/include/mysql/gcs/xplatform/byteorder.h"

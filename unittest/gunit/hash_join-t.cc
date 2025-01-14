@@ -33,7 +33,7 @@
 #include <gmock/gmock.h>  // IWYU pragma: keep
 #include <gtest/gtest.h>  // IWYU pragma: keep
 
-#include "extra/lz4/my_xxhash.h"
+#include "extra/xxhash/my_xxhash.h"
 #include "my_alloc.h"
 #include "my_bitmap.h"
 #include "my_config.h"
