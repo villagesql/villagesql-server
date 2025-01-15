@@ -25,6 +25,7 @@ SET(TARGET_HEADERS
   is_same_ignore_const.h
   is_specialization.h
   meta.h
+  optional_is_same.h
 )
 
 SET(TARGET_SRCS

@@ -53,6 +53,9 @@ Currently, it contains the following:
 - is_specialization.h: utility to determine if a template is a specialization
   of another.
 
+- optional_is_same.h: concept taking one or two arguments; true if the second is
+  omitted or void, or if the two types are the same.
+
 ## Concepts, type predicates, and metafunctions
 
 We use the following terminology.

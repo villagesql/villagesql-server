@@ -21,26 +21,27 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#ifndef MYSQL_META_META_H
-#define MYSQL_META_META_H
+#ifndef MYSQL_META_OPTIONAL_IS_SAME_H
+#define MYSQL_META_OPTIONAL_IS_SAME_H
 
 /// @file
 /// Experimental API header
 
-// Is_const_ref<T> is true if T has const and reference qualifiers.
-#include "mysql/meta/is_const_ref.h"
+#include <concepts>  // same_as
 
-// Is_same_ignore_const<T, U> is true if T and U are the same or differ only in
-// const-ness.
-#include "mysql/meta/is_same_ignore_const.h"
+/// @addtogroup GroupLibsMysqlMeta
+/// @{
 
-// Is_specialization<T, U> is true if class T is a specialization of class
-// template U, where U takes type template arguments. Is_nontype_specialization
-// is the same, but works when U takes non-type template arguments.
-#include "mysql/meta/is_specialization.h"
+namespace mysql::meta {
 
-// Optional_is_same<T[, U]> is true if U is omitted or void, or T and U are the
-// same type.
-#include "mysql/meta/optional_is_same.h"
+/// True if either Other is omitted/void, or Test is the same type as Other.
+template <class Test, class Other = void>
+concept Optional_is_same =
+    std::same_as<Other, void> || std::same_as<Test, Other>;
 
-#endif  // ifndef MYSQL_META_META_H
+}  // namespace mysql::meta
+
+// addtogroup GroupLibsMysqlMeta
+/// @}
+
+#endif  // ifndef MYSQL_META_OPTIONAL_IS_SAME_H
