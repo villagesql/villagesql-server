@@ -3196,6 +3196,10 @@ class THD : public MDL_context_owner,
     return (variables.sql_mode & MODE_TIME_TRUNCATE_FRACTIONAL);
   }
 
+  bool interpret_utf8_as_utf8mb4() const {
+    return (variables.sql_mode & MODE_INTERPRET_UTF8_AS_UTF8MB4);
+  }
+
   /**
    Evaluate the current time, and if it exceeds the long-query-time
    setting, mark the query as slow.

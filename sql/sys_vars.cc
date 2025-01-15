@@ -4761,9 +4761,8 @@ static bool fix_sql_mode(sys_var *self, THD *thd, enum_var_type type) {
   return false;
 }
 /*
-  WARNING: When adding new SQL modes don't forget to update the
-  tables definitions that stores it's value (ie: mysql.event, mysql.routines,
-  mysql.triggers)
+  These strings are used as SET element values in mysql.events, mysql.routines,
+  mysql.triggers.
 */
 static const char *sql_mode_names[] = {"REAL_AS_FLOAT",
                                        "PIPES_AS_CONCAT",
@@ -4798,6 +4797,7 @@ static const char *sql_mode_names[] = {"REAL_AS_FLOAT",
                                        "NO_ENGINE_SUBSTITUTION",
                                        "PAD_CHAR_TO_FULL_LENGTH",
                                        "TIME_TRUNCATE_FRACTIONAL",
+                                       "INTERPRET_UTF8_AS_UTF8MB4",
                                        nullptr};
 export bool sql_mode_string_representation(THD *thd, sql_mode_t sql_mode,
                                            LEX_STRING *ls) {

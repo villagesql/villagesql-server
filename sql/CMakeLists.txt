@@ -796,6 +796,7 @@ SET(SQL_SOURCE
   ${SQL_SHARED_SOURCES}
   ${SQL_HEADERS}
   ../libmysql/errmsg.cc
+  ../mysys/charset.cc
   ../sql-common/client.cc
   ../sql-common/client_plugin.cc
   ../sql-common/client_authentication.cc

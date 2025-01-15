@@ -179,6 +179,7 @@ SET(TESTS
   thread_utils
   timespec
   unhex
+  utf8alias
   val_int_compare
   )
 

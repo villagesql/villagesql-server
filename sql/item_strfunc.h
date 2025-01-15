@@ -1173,11 +1173,11 @@ class Item_func_conv_charset final : public Item_charset_conversion {
 class Item_func_set_collation final : public Item_str_func {
   typedef Item_str_func super;
 
-  LEX_STRING collation_string;
+  LEX_CSTRING collation_string;
 
  public:
   Item_func_set_collation(const POS &pos, Item *a,
-                          const LEX_STRING &collation_string_arg)
+                          const LEX_CSTRING &collation_string_arg)
       : super(pos, a, nullptr), collation_string(collation_string_arg) {}
 
   bool do_itemize(Parse_context *pc, Item **res) override;

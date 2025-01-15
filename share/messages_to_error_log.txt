@@ -13254,6 +13254,15 @@ ER_KEYRING_COMPONENT_KMIP_FAILED_TO_STORE_OR_GENERATE_KEY
 ER_WARN_DEPRECATED_SASL_MECHANISM
   eng "Value '%s' of variable authentication_ldap_sasl_auth_method_name is deprecated and will be removed in future. Consider using more secure '%s'."
 
+ER_INVALID_SERVER_OPTION_CHARSET
+  eng "Character set 'utf8' rejected as command line option."
+
+ER_INVALID_SERVER_OPTION_COLLATION
+  eng "Collation '%s' rejected as command line option."
+
+ER_FAILED_TO_FIND_CHARSET_NAME
+  eng "Unknown character set: '%-.64s'."
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

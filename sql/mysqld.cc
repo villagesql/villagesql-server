@@ -6924,29 +6924,18 @@ int init_common_variables() {
   item_init();
   range_optimizer_init();
   my_string_stack_guard = check_enough_stack_size;
-  /*
-    Process a comma-separated character set list and choose
-    the first available character set. This is mostly for
-    test purposes, to be able to start "mysqld" even if
-    the requested character set is not available (see bug#18743).
-  */
-  for (;;) {
-    char *next_character_set_name =
-        strchr(const_cast<char *>(default_character_set_name), ',');
-    if (next_character_set_name) *next_character_set_name++ = '\0';
-    if (!(default_charset_info = get_charset_by_csname(
-              default_character_set_name, MY_CS_PRIMARY, MYF(MY_WME)))) {
-      if (next_character_set_name) {
-        default_character_set_name = next_character_set_name;
-        default_collation_name = nullptr;  // Ignore collation
-      } else
-        return 1;  // Eof of the list
-    } else {
-      warn_on_deprecated_charset(nullptr, default_charset_info,
-                                 default_character_set_name,
-                                 "--character-set-server");
-      break;
+
+  if (default_character_set_name != nullptr) {
+    default_charset_info = get_charset_by_csname(default_character_set_name,
+                                                 MY_CS_PRIMARY, MYF(MY_WME));
+    if (default_charset_info == nullptr) {
+      LogErr(ERROR_LEVEL, ER_FAILED_TO_FIND_CHARSET_NAME,
+             default_character_set_name);
+      return 1;
     }
+    warn_on_deprecated_charset(nullptr, default_charset_info,
+                               default_character_set_name,
+                               "--character-set-server");
   }
 
   if (default_collation_name) {
@@ -6985,12 +6974,14 @@ int init_common_variables() {
   }
 
   if (!(character_set_filesystem = get_charset_by_csname(
-            character_set_filesystem_name, MY_CS_PRIMARY, MYF(MY_WME))))
+            character_set_filesystem_name, MY_CS_PRIMARY, MYF(MY_WME)))) {
+    LogErr(ERROR_LEVEL, ER_FAILED_TO_FIND_CHARSET_NAME,
+           character_set_filesystem_name);
     return 1;
-  else
-    warn_on_deprecated_charset(nullptr, character_set_filesystem,
-                               character_set_filesystem_name,
-                               "--character-set-filesystem");
+  }
+  warn_on_deprecated_charset(nullptr, character_set_filesystem,
+                             character_set_filesystem_name,
+                             "--character-set-filesystem");
   global_system_variables.character_set_filesystem = character_set_filesystem;
 
 #ifdef WORDS_BIGENDIAN
