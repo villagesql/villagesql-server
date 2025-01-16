@@ -7311,7 +7311,27 @@ bool Query_block::nest_derived(THD *thd, Item *join_cond,
       *nested_join_list,
       [join_cond, &nested_join_list](Table_ref *tr) mutable -> bool {
         if (tr->join_cond() == join_cond) {
-          nested_join_list = &tr->embedding->nested_join->m_tables;
+          // In certain cases, we can have a degenerate join (after other
+          // transformations, i.e. we have a join clause, but only table.
+          // In optimizer trace, this is printed as e.g.
+          //     <constant table> join
+          //     cte2
+          //     on (select 3 from cte2) <> 0             <-- scalar subquery
+          // In such a case there will be no join nest, so tr->embedding will
+          // be empty. The resulting join after we add the new derived table:
+          //   ( <constant table>
+          //     left join
+          //     (select 3 AS `3` from cte2) derived_2_5  <-- new derived table
+          //     on true )
+          //   join cte2
+          //   on derived_2_5.`3` <> 0
+          // which will be simplified in due course to
+          //   (select 3 AS `3` from `cte2`) derived_2_5
+          //   join cte2
+          //   where derived_2_5.`3` <> 0
+          if (tr->embedding != nullptr) {
+            nested_join_list = &tr->embedding->nested_join->m_tables;
+          }
           return true;  // break off walk
         }
         return false;
