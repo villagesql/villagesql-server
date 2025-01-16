@@ -13020,6 +13020,9 @@ ER_GR_RM_MEMBER_LEAVING_RECOVERY_THRESHOLD_HIT
 ER_GR_RM_MEMBER_LEAVING_MEMORY_THRESHOLD_HIT
   eng "Member exiting group: memory used of %d%% exceeded tolerance threshold configured to %d%%."
 
+ER_NO_PATCH_DOWNGRADE_FOR_INNOVATION_RELEASES
+  eng "Patch downgrade from %d to %d is not supported because MySQL server version %d is an innovation release."
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

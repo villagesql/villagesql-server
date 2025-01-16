@@ -82,11 +82,13 @@ MACRO(GET_MYSQL_VERSION)
       MESSAGE(FATAL_ERROR "Version ${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION} should "
                           "be an LTS release.")
     ENDIF()
+    SET(MYSQL_VERSION_MATURITY_IS_LTS 1)
   ELSE()
     IF (NOT MYSQL_VERSION_MATURITY STREQUAL "\"INNOVATION\"")
       MESSAGE(FATAL_ERROR "Version ${MAJOR_VERSION}.${MINOR_VERSION}.${PATCH_VERSION} should "
                           "be an innovation release.")
     ENDIF()
+    SET(MYSQL_VERSION_MATURITY_IS_LTS 0)
   ENDIF()
 
   SET(VERSION
