@@ -866,6 +866,16 @@ bool OperatorsAreRightAsscom(const RelationalExpression &a,
 
 enum class AssociativeRewritesAllowed { ANY, RIGHT_ONLY, LEFT_ONLY };
 
+/// Find a bitmap of used tables for all items in a container.
+template <typename T>
+table_map GetUsedTables(const T &items) {
+  table_map used_tables = 0;
+  for (const Item *item : items) {
+    used_tables |= item->used_tables();
+  }
+  return used_tables;
+}
+
 /**
   Find a bitmap of used tables for all conditions on \<expr\>.
   Note that after all conditions have been pushed, you can check
@@ -877,11 +887,7 @@ enum class AssociativeRewritesAllowed { ANY, RIGHT_ONLY, LEFT_ONLY };
 table_map UsedTablesForCondition(const RelationalExpression &expr) {
   assert(expr.equijoin_conditions
              .empty());  // MakeHashJoinConditions() has not run yet.
-  table_map used_tables = 0;
-  for (Item *cond : expr.join_conditions) {
-    used_tables |= cond->used_tables();
-  }
-  return used_tables;
+  return GetUsedTables(expr.join_conditions);
 }
 
 /**
@@ -942,12 +948,10 @@ bool IsCandidateForCycle(RelationalExpression *expr, Item *cond,
   // Check that we are not combining together anything that is not part of
   // the same companion set (either by means of the condition, or by making
   // a cycle through an already-existing condition).
-  table_map used_tables = cond->used_tables();
   assert(expr->equijoin_conditions
              .empty());  // MakeHashJoinConditions() has not run yet.
-  for (Item *other_cond : expr->join_conditions) {
-    used_tables |= other_cond->used_tables();
-  }
+  const table_map used_tables =
+      cond->used_tables() | GetUsedTables(expr->join_conditions);
   return companion_collection.Find(used_tables & expr->tables_in_subtree) !=
          nullptr;
 }
@@ -2567,12 +2571,8 @@ table_map FindTESForCondition(table_map used_tables,
       // included, preventing us to push the condition down into the right side
       // in any case.
       tes |= expr->left->tables_in_subtree;
-      for (Item *condition : expr->equijoin_conditions) {
-        tes |= condition->used_tables();
-      }
-      for (Item *condition : expr->join_conditions) {
-        tes |= condition->used_tables();
-      }
+      tes |= GetUsedTables(expr->equijoin_conditions);
+      tes |= GetUsedTables(expr->join_conditions);
     }
     return tes;
   } else {
@@ -3328,13 +3328,9 @@ void MakeJoinGraphFromRelationalExpression(THD *thd, RelationalExpression *expr,
   expr->nodes_in_subtree =
       expr->left->nodes_in_subtree | expr->right->nodes_in_subtree;
 
-  table_map used_tables = 0;
-  for (Item *condition : expr->join_conditions) {
-    used_tables |= condition->used_tables();
-  }
-  for (Item *condition : expr->equijoin_conditions) {
-    used_tables |= condition->used_tables();
-  }
+  const table_map used_tables = GetUsedTables(expr->join_conditions) |
+                                GetUsedTables(expr->equijoin_conditions);
+
   const NodeMap used_nodes = GetNodeMapFromTableMap(
       used_tables & ~PSEUDO_TABLE_BITS, graph->table_num_to_node_num);
 
