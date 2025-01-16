@@ -573,7 +573,7 @@ enum_gcs_error Gcs_xcom_interface::configure(
     reconfigured |= true;
   }
 
-  if (poll_spin_loops_str != nullptr && poll_spin_loops_str->size() > 0) {
+  if (poll_spin_loops_str != nullptr && !poll_spin_loops_str->empty()) {
     m_gcs_xcom_app_cfg.set_poll_spin_loops(
         (unsigned int)atoi(poll_spin_loops_str->c_str()));
 

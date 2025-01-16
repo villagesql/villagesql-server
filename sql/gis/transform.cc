@@ -232,12 +232,12 @@ bool transform(const dd::Spatial_reference_system *source_srs,
     dd::String_type source_proj = source_srs->proj4_parameters();
     dd::String_type target_proj = target_srs->proj4_parameters();
 
-    if (source_proj.size() == 0) {
+    if (source_proj.empty()) {
       assert(source_srs->is_projected());
       my_error(ER_TRANSFORM_SOURCE_SRS_NOT_SUPPORTED, MYF(0), source_srs->id());
       return true;
     }
-    if (target_proj.size() == 0) {
+    if (target_proj.empty()) {
       assert(target_srs->is_projected());
       my_error(ER_TRANSFORM_TARGET_SRS_NOT_SUPPORTED, MYF(0), target_srs->id());
       return true;

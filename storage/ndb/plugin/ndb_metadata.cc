@@ -813,7 +813,7 @@ class Compare_context {
   }
 
   bool equal() {
-    if (diffs.size() == 0) return true;
+    if (diffs.empty()) return true;
 
     // Print the list of diffs
     ndb_log_error("Metadata check has failed");

@@ -94,7 +94,7 @@ result parse_options_string(String *str, char delimiter,
   size_t str_end_pos = str_copy.length() - 1;
   result parser_result;
 
-  if (str_copy.size() == 0) {
+  if (str_copy.empty()) {
     parser_result.status = parser_status::OK;
     parser_result.msg = "";
     return parser_result;

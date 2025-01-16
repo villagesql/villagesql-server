@@ -4151,7 +4151,7 @@ void Gis_wkb_vector<T>::reassemble() {
   Geometry::wkbType geotype = get_geotype();
   if (geotype == Geometry::wkb_point || geotype == Geometry::wkb_polygon ||
       geotype == Geometry::wkb_multipoint || m_geo_vect == nullptr ||
-      geotype == Geometry::wkb_linestring || m_geo_vect->size() == 0 ||
+      geotype == Geometry::wkb_linestring || m_geo_vect->empty() ||
       !has_out_of_line_components())
     return;
 

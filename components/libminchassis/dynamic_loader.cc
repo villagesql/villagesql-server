@@ -349,7 +349,7 @@ void mysql_dynamic_loader_imp::deinit() {
       components of that group to not be unloaded, leaving them all still
       loaded in and not deinitialized. There should be an error message issued
       stating a problem during unload to help detect such a problem. */
-    if (mysql_dynamic_loader_imp::components_list.size() > 0) {
+    if (!mysql_dynamic_loader_imp::components_list.empty()) {
       for (auto it = mysql_dynamic_loader_imp::urns_with_gen_list.begin();
            it != mysql_dynamic_loader_imp::urns_with_gen_list.end();) {
         /* If we pass (*it) vector, unload_do_unload_components() function
@@ -1412,7 +1412,7 @@ bool mysql_dynamic_loader_imp::unload_do_unload_components(
                   [comp_ele](mysql_component *ptr) { return ptr == comp_ele; });
       if (v_element != list->end()) {
         list->erase(v_element);
-        if (list->size() == 0) {
+        if (list->empty()) {
           mysql_dynamic_loader_imp::urns_with_gen_list.remove(*list);
         }
         break;

@@ -448,7 +448,7 @@ int ndbxfrm_file::close(bool abort) {
 
     if (!abort) {
       ndbxfrm_input_iterator in = m_file_buffer.get_input_iterator();
-      while (in.size() > 0) {
+      while (!in.empty()) {
         int n = m_file->append(in.cbegin(), in.size());
         if (n == -1) {
           RETURN(-1);

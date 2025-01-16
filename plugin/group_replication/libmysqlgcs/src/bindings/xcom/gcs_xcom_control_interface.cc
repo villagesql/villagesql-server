@@ -1534,7 +1534,7 @@ bool Gcs_xcom_control::xcom_receive_global_view(synode_no const config_id,
     If the execution has managed to pass these steps, the node is alive and
     it is time to start building the view.
   */
-  if (do_not_deliver_to_client || failed_members.size() != 0) {
+  if (do_not_deliver_to_client || !failed_members.empty()) {
     MYSQL_GCS_LOG_TRACE(
         "(My node_id is %d) ::xcom_receive_global_view():: "
         "Discarding view because nothing has changed. "

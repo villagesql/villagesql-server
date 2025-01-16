@@ -10931,7 +10931,7 @@ static struct st_replace_regex *init_replace_regex(const char *expr) {
     }
 
     if (p == expr_end || ++p == expr_end) {
-      if (res->regex_arr.size())
+      if (!res->regex_arr.empty())
         break;
       else
         goto err;

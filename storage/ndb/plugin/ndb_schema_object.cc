@@ -295,7 +295,7 @@ bool NDB_SCHEMA_OBJECT::register_participants(
     const std::unordered_set<uint32> &nodes) {
   std::lock_guard<std::mutex> lock_state(state.m_lock);
 
-  if (state.m_participants.size()) {
+  if (!state.m_participants.empty()) {
     // There are already participants registered, this means that the client has
     // failed the schema operation (most likley due to timeout).
     // As part of failing it has inserted one participant where it's assigned
@@ -309,7 +309,7 @@ bool NDB_SCHEMA_OBJECT::register_participants(
   }
 
   // Assume the list of participants is empty
-  ndbcluster::ndbrequire(state.m_participants.size() == 0);
+  ndbcluster::ndbrequire(state.m_participants.empty());
   // Assume coordinator have not completed
   ndbcluster::ndbrequire(!state.m_coordinator_completed);
 
@@ -416,7 +416,7 @@ bool NDB_SCHEMA_OBJECT::check_timeout(bool is_client, int timeout_seconds,
                                       const char *message) const {
   std::unique_lock<std::mutex> lock_state(state.m_lock);
 
-  if (is_client && state.m_participants.size()) {
+  if (is_client && !state.m_participants.empty()) {
     // The client is checking for timeout but participants have been registered,
     // this means that coordinator has taken over timeout checking
     return false;
@@ -456,7 +456,7 @@ void NDB_SCHEMA_OBJECT::fail_schema_op(uint32 result,
                                        const char *message) const {
   std::unique_lock<std::mutex> lock_state(state.m_lock);
 
-  if (state.m_participants.size() == 0) {
+  if (state.m_participants.empty()) {
     // Participants hasn't been registered yet since the coordinator
     // hasn't heard about schema operation, add own node as participant
     state.m_participants[active_schema_clients.m_own_nodeid];

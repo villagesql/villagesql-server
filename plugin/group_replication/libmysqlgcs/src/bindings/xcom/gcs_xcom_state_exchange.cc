@@ -712,7 +712,7 @@ bool Gcs_xcom_state_exchange::process_member_state(
     m_awaited_vector.erase(p_id);
   }
 
-  bool can_install_view = (m_awaited_vector.size() == 0);
+  bool can_install_view = (m_awaited_vector.empty());
 
   return can_install_view;
 }
@@ -994,7 +994,7 @@ bool Gcs_xcom_state_exchange::process_recovery_state() {
     synodes_needed.insert(member_synodes.begin(), member_synodes.end());
   }
 
-  need_recovery = (is_joining() && synodes_needed.size() != 0);
+  need_recovery = (is_joining() && !synodes_needed.empty());
   if (need_recovery) {
     auto *const comm =
         static_cast<Gcs_xcom_communication_interface *>(m_broadcaster);

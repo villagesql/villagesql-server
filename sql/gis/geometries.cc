@@ -62,7 +62,7 @@ void Point::x(double d) { set<0>(d); }
 void Point::y(double d) { set<1>(d); }
 
 bool Cartesian_linestring::accept(Geometry_visitor *v) {
-  if (!v->visit_enter(this) && m_points.size() > 0) {
+  if (!v->visit_enter(this) && !m_points.empty()) {
     if (m_points[0].accept(v)) return true;
     for (decltype(m_points)::size_type i = 1; i < m_points.size(); i++) {
       if (v->visit(this) || m_points[i].accept(v)) return true;
@@ -100,7 +100,7 @@ void Cartesian_linestring::push_back(Point &&pt) {
 bool Cartesian_linestring::empty() const { return m_points.empty(); }
 
 bool Geographic_linestring::accept(Geometry_visitor *v) {
-  if (!v->visit_enter(this) && m_points.size() > 0) {
+  if (!v->visit_enter(this) && !m_points.empty()) {
     if (m_points[0].accept(v)) return true;
     for (decltype(m_points)::size_type i = 1; i < m_points.size(); i++) {
       if (v->visit(this) || m_points[i].accept(v)) return true;
@@ -130,7 +130,7 @@ Linearring *Linearring::create_linearring(Coordinate_system coordinate_system) {
 }
 
 bool Cartesian_linearring::accept(Geometry_visitor *v) {
-  if (!v->visit_enter(this) && m_points.size() > 0) {
+  if (!v->visit_enter(this) && !m_points.empty()) {
     if (m_points[0].accept(v)) return true;
     for (decltype(m_points)::size_type i = 1; i < m_points.size(); i++) {
       if (v->visit(this) || m_points[i].accept(v)) return true;
@@ -140,7 +140,7 @@ bool Cartesian_linearring::accept(Geometry_visitor *v) {
 }
 
 bool Geographic_linearring::accept(Geometry_visitor *v) {
-  if (!v->visit_enter(this) && m_points.size() > 0) {
+  if (!v->visit_enter(this) && !m_points.empty()) {
     if (m_points[0].accept(v)) return true;
     for (decltype(m_points)::size_type i = 1; i < m_points.size(); i++) {
       if (v->visit(this) || m_points[i].accept(v)) return true;
@@ -324,7 +324,7 @@ Cartesian_geometrycollection::Cartesian_geometrycollection(
 }
 
 bool Cartesian_geometrycollection::accept(Geometry_visitor *v) {
-  if (!v->visit_enter(this) && m_geometries.size() > 0) {
+  if (!v->visit_enter(this) && !m_geometries.empty()) {
     if (m_geometries[0]->accept(v)) return true;
     for (decltype(m_geometries)::size_type i = 1; i < m_geometries.size();
          i++) {
@@ -449,7 +449,7 @@ Geographic_geometrycollection::Geographic_geometrycollection(
 }
 
 bool Geographic_geometrycollection::accept(Geometry_visitor *v) {
-  if (!v->visit_enter(this) && m_geometries.size() > 0) {
+  if (!v->visit_enter(this) && !m_geometries.empty()) {
     if (m_geometries[0]->accept(v)) return true;
     for (decltype(m_geometries)::size_type i = 1; i < m_geometries.size();
          i++) {
@@ -534,7 +534,7 @@ bool Geographic_geometrycollection::empty() const {
 }
 
 bool Cartesian_multipoint::accept(Geometry_visitor *v) {
-  if (!v->visit_enter(this) && m_points.size() > 0) {
+  if (!v->visit_enter(this) && !m_points.empty()) {
     if (m_points[0].accept(v)) return true;
     for (decltype(m_points)::size_type i = 1; i < m_points.size(); i++) {
       if (v->visit(this) || m_points[i].accept(v)) return true;
@@ -556,7 +556,7 @@ void Cartesian_multipoint::push_back(Geometry &&pt) {
 bool Cartesian_multipoint::empty() const { return m_points.empty(); }
 
 bool Geographic_multipoint::accept(Geometry_visitor *v) {
-  if (!v->visit_enter(this) && m_points.size() > 0) {
+  if (!v->visit_enter(this) && !m_points.empty()) {
     if (m_points[0].accept(v)) return true;
     for (decltype(m_points)::size_type i = 1; i < m_points.size(); i++) {
       if (v->visit(this) || m_points[i].accept(v)) return true;
@@ -587,7 +587,7 @@ Multilinestring *Multilinestring::create_multilinestring(
 }
 
 bool Cartesian_multilinestring::accept(Geometry_visitor *v) {
-  if (!v->visit_enter(this) && m_linestrings.size() > 0) {
+  if (!v->visit_enter(this) && !m_linestrings.empty()) {
     if (m_linestrings[0].accept(v)) return true;
     for (decltype(m_linestrings)::size_type i = 1; i < m_linestrings.size();
          i++) {
@@ -610,7 +610,7 @@ void Cartesian_multilinestring::push_back(Geometry &&ls) {
 bool Cartesian_multilinestring::empty() const { return m_linestrings.empty(); }
 
 bool Geographic_multilinestring::accept(Geometry_visitor *v) {
-  if (!v->visit_enter(this) && m_linestrings.size() > 0) {
+  if (!v->visit_enter(this) && !m_linestrings.empty()) {
     if (m_linestrings[0].accept(v)) return true;
     for (decltype(m_linestrings)::size_type i = 1; i < m_linestrings.size();
          i++) {
@@ -642,7 +642,7 @@ Multipolygon *Multipolygon::create_multipolygon(
 }
 
 bool Cartesian_multipolygon::accept(Geometry_visitor *v) {
-  if (!v->visit_enter(this) && m_polygons.size() > 0) {
+  if (!v->visit_enter(this) && !m_polygons.empty()) {
     if (m_polygons[0].accept(v)) return true;
     for (decltype(m_polygons)::size_type i = 1; i < m_polygons.size(); i++) {
       if (v->visit(this) || m_polygons[i].accept(v)) return true;
@@ -664,7 +664,7 @@ void Cartesian_multipolygon::push_back(Geometry &&py) {
 bool Cartesian_multipolygon::empty() const { return m_polygons.empty(); }
 
 bool Geographic_multipolygon::accept(Geometry_visitor *v) {
-  if (!v->visit_enter(this) && m_polygons.size() > 0) {
+  if (!v->visit_enter(this) && !m_polygons.empty()) {
     if (m_polygons[0].accept(v)) return true;
     for (decltype(m_polygons)::size_type i = 1; i < m_polygons.size(); i++) {
       if (v->visit(this) || m_polygons[i].accept(v)) return true;

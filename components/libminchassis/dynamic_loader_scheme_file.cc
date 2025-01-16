@@ -209,7 +209,7 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_scheme_file_imp::unload,
         true, __FILE__, __LINE__);
 
     /* This will happen when load() is not called for a component */
-    if (object_files_list.size() == 0) return false;
+    if (object_files_list.empty()) return false;
 
     my_registry::iterator it = object_files_list.find(std::string(urn));
     if (it == object_files_list.end()) {

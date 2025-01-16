@@ -55,7 +55,7 @@ static std::optional<std::vector<uint8_t>> scramble(
     std::string_view nonce, std::string_view password,
     const EVP_MD *digest_func, bool nonce_before_double_hashed_password) {
   // in case of empty password, the hash is empty too
-  if (password.size() == 0) return std::vector<uint8_t>{};
+  if (password.empty()) return std::vector<uint8_t>{};
 
   const auto digest_size = EVP_MD_size(digest_func);
 

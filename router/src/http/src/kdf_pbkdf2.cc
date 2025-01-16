@@ -54,7 +54,7 @@ std::vector<uint8_t> Pbkdf2::salt() {
 }
 
 Pbkdf2McfAdaptor Pbkdf2McfAdaptor::from_mcf(const std::string &crypt_data) {
-  if (crypt_data.size() == 0 || crypt_data.at(0) != '$') {
+  if (crypt_data.empty() || crypt_data.at(0) != '$') {
     throw std::invalid_argument("no $ at the start");
   }
   auto algo_begin = crypt_data.begin() + 1;

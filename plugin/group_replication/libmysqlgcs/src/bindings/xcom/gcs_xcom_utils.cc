@@ -369,7 +369,7 @@ bool is_parameters_syntax_correct(
    */
 
   // validate group name
-  if (group_name_str != nullptr && group_name_str->size() == 0) {
+  if (group_name_str != nullptr && group_name_str->empty()) {
     MYSQL_GCS_LOG_ERROR("The group_name parameter (" << group_name_str << ")"
                                                      << " is not valid.")
     error = GCS_NOK;
@@ -418,7 +418,7 @@ bool is_parameters_syntax_correct(
   }
 
   // Communication Stack
-  if (communication_stack_str && (communication_stack_str->size() == 0 ||
+  if (communication_stack_str && (communication_stack_str->empty() ||
                                   !is_number(*communication_stack_str))) {
     MYSQL_GCS_LOG_ERROR("The Commmunication Stack parameter ("
                         << communication_stack_str << ") is not valid.")
@@ -537,7 +537,7 @@ bool is_parameters_syntax_correct(
 
   // poll spin loops
   if (poll_spin_loops_str &&
-      (poll_spin_loops_str->size() == 0 || !is_number(*poll_spin_loops_str))) {
+      (poll_spin_loops_str->empty() || !is_number(*poll_spin_loops_str))) {
     MYSQL_GCS_LOG_ERROR("The poll_spin_loops parameter (" << poll_spin_loops_str
                                                           << ") is not valid.")
     error = GCS_NOK;
@@ -551,7 +551,7 @@ bool is_parameters_syntax_correct(
     if (error == GCS_NOK) goto end;
   }
 
-  if (compression_threshold_str && (compression_threshold_str->size() == 0 ||
+  if (compression_threshold_str && (compression_threshold_str->empty() ||
                                     !is_number(*compression_threshold_str))) {
     MYSQL_GCS_LOG_ERROR("The compression_threshold parameter ("
                         << compression_threshold_str << ") is not valid.")
@@ -559,8 +559,7 @@ bool is_parameters_syntax_correct(
     goto end;
   }
 
-  if (wait_time_str &&
-      (wait_time_str->size() == 0 || !is_number(*wait_time_str))) {
+  if (wait_time_str && (wait_time_str->empty() || !is_number(*wait_time_str))) {
     MYSQL_GCS_LOG_ERROR("The wait_time parameter (" << wait_time_str
                                                     << ") is not valid.")
     error = GCS_NOK;
@@ -568,7 +567,7 @@ bool is_parameters_syntax_correct(
   }
 
   if (join_attempts_str &&
-      (join_attempts_str->size() == 0 || !is_number(*join_attempts_str))) {
+      (join_attempts_str->empty() || !is_number(*join_attempts_str))) {
     MYSQL_GCS_LOG_ERROR("The join_attempts parameter (" << join_attempts_str
                                                         << ") is not valid.")
     error = GCS_NOK;
@@ -577,7 +576,7 @@ bool is_parameters_syntax_correct(
 
   // validate suspicions parameters
   if (non_member_expel_timeout_str &&
-      (non_member_expel_timeout_str->size() == 0 ||
+      (non_member_expel_timeout_str->empty() ||
        !is_number(*non_member_expel_timeout_str))) {
     MYSQL_GCS_LOG_ERROR("The non_member_expel_timeout parameter ("
                         << non_member_expel_timeout_str << ") is not valid.")
@@ -586,7 +585,7 @@ bool is_parameters_syntax_correct(
   }
 
   if (join_sleep_time_str &&
-      (join_sleep_time_str->size() == 0 || !is_number(*join_sleep_time_str))) {
+      (join_sleep_time_str->empty() || !is_number(*join_sleep_time_str))) {
     MYSQL_GCS_LOG_ERROR("The join_sleep_time parameter (" << join_sleep_time_str
                                                           << ") is not valid.")
     error = GCS_NOK;
@@ -594,7 +593,7 @@ bool is_parameters_syntax_correct(
   }
 
   if (suspicions_processing_period_str &&
-      (suspicions_processing_period_str->size() == 0 ||
+      (suspicions_processing_period_str->empty() ||
        !is_number(*suspicions_processing_period_str))) {
     MYSQL_GCS_LOG_ERROR("The suspicions_processing_period parameter ("
                         << suspicions_processing_period_str
@@ -603,7 +602,7 @@ bool is_parameters_syntax_correct(
     goto end;
   }
 
-  if (member_expel_timeout_str && (member_expel_timeout_str->size() == 0 ||
+  if (member_expel_timeout_str && (member_expel_timeout_str->empty() ||
                                    !is_number(*member_expel_timeout_str))) {
     MYSQL_GCS_LOG_ERROR("The member_expel_timeout parameter ("
                         << member_expel_timeout_str << ") is not valid.")
@@ -627,7 +626,7 @@ bool is_parameters_syntax_correct(
   }
 
   if (fragmentation_threshold_str &&
-      (fragmentation_threshold_str->size() == 0 ||
+      (fragmentation_threshold_str->empty() ||
        !is_number(*fragmentation_threshold_str))) {
     MYSQL_GCS_LOG_ERROR("The fragmentation_threshold parameter ("
                         << fragmentation_threshold_str << ") is not valid.")
@@ -639,7 +638,7 @@ bool is_parameters_syntax_correct(
   errno = 0;
   if (xcom_cache_size_str != nullptr &&
       // Verify if the input value is a valid number
-      (xcom_cache_size_str->size() == 0 || !is_number(*xcom_cache_size_str) ||
+      (xcom_cache_size_str->empty() || !is_number(*xcom_cache_size_str) ||
        // Check that it is not lower than the min value allowed for the var
        (strtoull(xcom_cache_size_str->c_str(), nullptr, 10) <
         MIN_XCOM_MAX_CACHE_SIZE) ||

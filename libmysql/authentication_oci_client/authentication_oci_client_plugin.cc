@@ -129,7 +129,7 @@ static int oci_authenticate_client_plugin(MYSQL_PLUGIN_VIO *vio,
     return CR_AUTH_PLUGIN_ERROR;
   }
   auto encoded = signer.sign(server_nonce, server_nonce_length);
-  if (encoded.size() == 0) {
+  if (encoded.empty()) {
     log_error("Authentication failed, plugin internal error.");
     return CR_AUTH_PLUGIN_ERROR;
   }

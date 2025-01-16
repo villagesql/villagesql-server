@@ -92,7 +92,7 @@ bool TestExecutionResources::setPath(Resource &resource, int prefix,
 
   const bool setFolder = (resource.type == Resource::Type::Lib);
   std::string path = find_path(resource.name, prefix, setFolder);
-  if (path != "") {
+  if (!path.empty()) {
     resource.paths[prefix] = path;
     return true;
   }

@@ -520,7 +520,7 @@ static char *emit(UDF_INIT *initid [[maybe_unused]], UDF_ARGS *args,
     Allocate array that is used by the audit api service.
   */
   const std::unique_ptr<mysql_event_message_key_value_t[]> key_value_map(
-      key_values.size() > 0
+      !key_values.empty()
           ? new mysql_event_message_key_value_t[key_values.size()]
           : nullptr);
 

@@ -140,7 +140,7 @@ bool channel_imp::factory_deinit() {
   auto release_guard =
       create_scope_guard([&] { mysql_rwlock_unlock(&LOCK_channels); });
 
-  if (channel_by_name_hash->size() || channels->size()) {
+  if (!channel_by_name_hash->empty() || !channels->empty()) {
     return true;
   }
   delete channel_by_name_hash;
@@ -217,7 +217,7 @@ bool channel_imp::ignore_list_remove(std::string &service_implementation) {
   if (m_has_ignore_list) {
     const bool ret = m_ignore_list.erase(service_implementation) == 0;
     if (!ret) initialize_service_counts();
-    m_has_ignore_list = m_ignore_list.size() > 0;
+    m_has_ignore_list = !m_ignore_list.empty();
     return ret;
   }
   return true;
@@ -238,7 +238,7 @@ bool channel_imp::ignore_list_clear() {
       create_scope_guard([&] { mysql_rwlock_unlock(&m_lock); });
   if (m_has_ignore_list) {
     m_ignore_list.clear();
-    m_has_ignore_list = m_ignore_list.size();
+    m_has_ignore_list = !m_ignore_list.empty();
     return false;
   }
   return true;

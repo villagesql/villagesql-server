@@ -89,7 +89,7 @@ ConfigSection::~ConfigSection() {
     /* Neither invalid config section or pointer sections should have any
      * entries.
      */
-    require(m_entry_array.size() == 0);
+    require(m_entry_array.empty());
     return;
   }
   require(m_entry_array.size() == m_num_entries);
@@ -770,7 +770,7 @@ void ConfigSection::verify_section() {
       break;
     default:
       require(!is_real_section());
-      require(m_entry_array.size() == 0);
+      require(m_entry_array.empty());
       break;
   }
 }

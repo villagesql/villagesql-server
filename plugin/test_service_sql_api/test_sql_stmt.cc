@@ -1656,7 +1656,7 @@ static void test_9(MYSQL_SESSION session, void *p) {
       "VERIFY THAT VARIABLES ARE SET AND OUT PRAMETERS WERE NOT TRANSFERED "
       "IN METADATA\n");
 
-  if (ctx.tables.size() != 0) {
+  if (!ctx.tables.empty()) {
     LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "Protocol send the out-parameters to the user");
     return;
@@ -1710,7 +1710,7 @@ static void test_10(MYSQL_SESSION session, void *p) {
       "VERIFY THAT VARIABLES ARE SET AND OUT PRAMETERS WERE NOT TRANSFERED "
       "IN METADATA\n");
 
-  if (ctx.tables.size() != 0) {
+  if (!ctx.tables.empty()) {
     LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                  "Protocol send the out-parameters to the user");
     return;

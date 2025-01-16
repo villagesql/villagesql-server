@@ -122,7 +122,7 @@ bool Policy::parse(const std::string &new_policy_value,
   if (!is_first_factor && policy_strm.eof() && policy_strm.fail())
     parsed_factors.push_back(Factor("", ""));
 
-  if (parsed_factors.size() > MAX_AUTH_FACTORS || parsed_factors.size() == 0)
+  if (parsed_factors.size() > MAX_AUTH_FACTORS || parsed_factors.empty())
     goto error;
 
   return false;

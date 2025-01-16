@@ -951,7 +951,7 @@ extern "C" long long my_median(UDF_INIT *initid, UDF_ARGS *,
                                unsigned char *is_null, unsigned char *) {
   My_median_data *data =
       static_cast<My_median_data *>(static_cast<void *>(initid->ptr));
-  if (data->vec.size() == 0) {
+  if (data->vec.empty()) {
     *is_null = 1;
     return 0;
   }

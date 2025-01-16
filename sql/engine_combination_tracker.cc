@@ -30,7 +30,7 @@ bool Engine_combination_tracker::check_engine(std::string engine_name,
                                               std::string &prev_engine_name,
                                               std::string &prev_database_name,
                                               std::string &prev_table_name) {
-  if (std::get<0>(m_known_engine) == "") {
+  if (std::get<0>(m_known_engine).empty()) {
     m_known_engine = std::make_tuple(engine_name, database_name, table_name);
     return false;
   }
