@@ -1565,7 +1565,9 @@ void append_identifier(const THD *thd, String *packet, const char *name,
     if (!to_length) to_length = 1;
     if (to_length == 1 && chr == static_cast<uchar>(quote_char))
       packet->append(&quote_char, 1, system_charset_info);
-    packet->append(to_name, to_length, system_charset_info);
+    packet->append(to_name,
+                   std::min(to_length, static_cast<size_t>(name_end - to_name)),
+                   system_charset_info);
   }
   packet->append(&quote_char, 1, system_charset_info);
 }
