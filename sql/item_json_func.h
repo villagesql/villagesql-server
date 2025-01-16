@@ -760,6 +760,14 @@ class Item_func_json_row_object final : public Item_json_func {
     null_on_null = false;
   }
 
+  Item_func_json_row_object(THD *thd, mem_root_deque<Item *> *list)
+      : Item_json_func(thd, list) {
+    // Does not return NULL on NULL input. If a key argument is NULL, an error
+    // is raised. If a value argument is NULL, it is interpreted as the JSON
+    // null literal.
+    null_on_null = false;
+  }
+
   const char *func_name() const override { return "json_object"; }
   enum Functype functype() const override { return JSON_OBJECT_FUNC; }
 
