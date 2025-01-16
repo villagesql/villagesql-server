@@ -1220,9 +1220,15 @@ bool initialize_dd_properties(THD *thd) {
                  actual_server_version, MYSQL_VERSION_ID);
           return true;
         } else if (MYSQL_VERSION_ID < server_downgrade_threshold) {
-          LogErr(ERROR_LEVEL, ER_BEYOND_SERVER_DOWNGRADE_THRESHOLD,
-                 actual_server_version, MYSQL_VERSION_ID,
-                 server_downgrade_threshold);
+          // Emit the most suitable error message. Patch downgrades are not
+          // supported for innovation releases, so print that if it's the case.
+          if (mysql_version_maturity == "INNOVATION")
+            LogErr(ERROR_LEVEL, ER_NO_PATCH_DOWNGRADE_FOR_INNOVATION_RELEASES,
+                   actual_server_version, MYSQL_VERSION_ID, MYSQL_VERSION_ID);
+          else
+            LogErr(ERROR_LEVEL, ER_BEYOND_SERVER_DOWNGRADE_THRESHOLD,
+                   actual_server_version, MYSQL_VERSION_ID,
+                   server_downgrade_threshold);
           return true;
         }
       }
