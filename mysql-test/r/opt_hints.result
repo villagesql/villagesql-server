@@ -2720,12 +2720,12 @@ SELECT /*+ QB_NAME(qb2) */ id,c1
 FROM t3
 WHERE c1=1 and c2=9;
 EXPLAIN
--> Append  (cost=0.7 rows=2)
-    -> Stream results  (cost=0.35 rows=1)
-        -> Covering index scan on t1 using c1  (cost=0.35 rows=1)
-    -> Stream results  (cost=0.35 rows=1)
-        -> Filter: (t3.c1 = 1)  (cost=0.35 rows=1)
-            -> Index lookup on t3 using c2 (c2 = 9)  (cost=0.35 rows=1)
+-> Append  (rows=2)
+    -> Stream results  (rows=1)
+        -> Covering index scan on t1 using c1  (rows=1)
+    -> Stream results  (rows=1)
+        -> Filter: (t3.c1 = 1)  (rows=1)
+            -> Index lookup on t3 using c2 (c2 = 9)  (rows=1)
 
 EXPLAIN
 SELECT /*+ INDEX(t3@qb2 c2) QB_NAME(qb1) */ id,c1
@@ -2735,12 +2735,12 @@ SELECT /*+ INDEX(t1@qb1 c1) */ id,c1
 FROM t3
 WHERE c1=1 and c2=9;
 EXPLAIN
--> Append  (cost=0.95 rows=2)
-    -> Stream results  (cost=0.6 rows=1)
-        -> Covering index scan on t1 using c1  (cost=0.6 rows=1)
-    -> Stream results  (cost=0.35 rows=1)
-        -> Filter: (t3.c2 = 9)  (cost=0.35 rows=1)
-            -> Index lookup on t3 using c1 (c1 = 1)  (cost=0.35 rows=1)
+-> Append  (rows=2)
+    -> Stream results  (rows=1)
+        -> Covering index scan on t1 using c1  (rows=1)
+    -> Stream results  (rows=1)
+        -> Filter: (t3.c2 = 9)  (rows=1)
+            -> Index lookup on t3 using c1 (c1 = 1)  (rows=1)
 
 Warnings:
 Warning	3127	Query block name `qb2` is not found for INDEX hint

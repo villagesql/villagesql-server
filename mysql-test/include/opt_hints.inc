@@ -1302,6 +1302,7 @@ WHERE c1=1 and c2=9;
 
 SHOW CREATE VIEW v1;
 
+--replace_regex $elide_costs
 EXPLAIN
 SELECT /*+ INDEX(t3@qb2 c2) */ id,c1
 FROM t1
@@ -1310,6 +1311,7 @@ SELECT /*+ QB_NAME(qb2) */ id,c1
 FROM t3
 WHERE c1=1 and c2=9;
 
+--replace_regex $elide_costs
 EXPLAIN
 SELECT /*+ INDEX(t3@qb2 c2) QB_NAME(qb1) */ id,c1
 FROM t1
