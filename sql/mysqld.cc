@@ -13072,6 +13072,7 @@ bool mysqld_get_one_option(int optid,
       break;
 
     case OPT_EARLY_PLUGIN_LOAD:
+      push_deprecated_warn_no_replacement(nullptr, "--early-plugin-load");
       free_list(opt_early_plugin_load_list_ptr);
       opt_early_plugin_load_list_ptr->push_back(new i_string(argument));
       break;
