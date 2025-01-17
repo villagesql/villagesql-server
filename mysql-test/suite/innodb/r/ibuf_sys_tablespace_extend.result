@@ -81,4 +81,4 @@ id	k
 
 # Cleanup
 
-# restart:
+# Kill and restart:
