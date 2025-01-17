@@ -359,8 +359,9 @@ static void ndbcluster_binlog_index_purge_wait(THD *thd) {
   assert(!ndb_thd_is_binlog_thread(thd));
 
   // Wait until purger has removed all files requested by this session
-  ndb_log_info("Waiting for purge to complete");
+  ndb_log_info("Waiting for purge");
   ndb_binlog_purger.wait_purge_completed_for_session(thd);
+  ndb_log_info("Done waiting for purge");
 }
 
 /*
