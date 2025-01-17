@@ -152,8 +152,9 @@ if(! -d "$opt_srcdir/libmysqld")
 
   if ($opt_vanilla)
   {
-    # Use default options for building
+    # Build MySQL without any NDB functionality
     print("compile-cluster: vanilla build requested, no sugar\n");
+    push(@args, "-DWITH_NDBCLUSTER_STORAGE_ENGINE=0");
   }
   else
   {
