@@ -786,7 +786,12 @@ static bool analyze_timestamp_field_constant(THD *thd, const Item_field *f,
           my_time_set(0, 0, 0, 0, 0, 0, 0, false, MYSQL_TIMESTAMP_DATETIME);
       MYSQL_TIME_STATUS status;
       if (rtype == STRING_RESULT) {
-        String buf, *res = (*const_val)->val_str(&buf);
+        String buf;
+        String *res = (*const_val)->val_str(&buf);
+        if (res == nullptr) {
+          assert((*const_val)->null_value);
+          return false;
+        }
         /*
           Some wrong values are still compared as DATETIME, e.g. '2018-02-31
           06:14:07' (illegal day in February), while worse values lead to
