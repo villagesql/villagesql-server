@@ -95,6 +95,12 @@ bool Table_function::init_args() {
   return false;
 }
 
+void Table_function::fix_after_pullout(Query_block *parent_query_block,
+                                       Query_block *removed_query_block) {
+  do_fix_after_pullout(parent_query_block, removed_query_block);
+  table->pos_in_table_list->dep_tables = used_tables();
+}
+
 /******************************************************************************
   Implementation of JSON_TABLE function
 ******************************************************************************/
@@ -768,6 +774,11 @@ void Table_function_json::do_cleanup() {
   is_source_parsed = false;
   for (uint i = 0; i < MAX_NESTED_PATH; i++) m_jds[i].cleanup();
   for (uint i = 0; i < m_all_columns.size(); i++) m_all_columns[i]->cleanup();
+}
+
+void Table_function_json::do_fix_after_pullout(
+    Query_block *parent_query_block, Query_block *removed_query_block) {
+  source->fix_after_pullout(parent_query_block, removed_query_block);
 }
 
 void JT_data_source::cleanup() {
