@@ -5,6 +5,7 @@
 # test verifies that System tablespace expansion is redo logged and,
 # crash recovery works.
 
+--source include/big_test.inc
 --source include/linux.inc
 --source include/have_debug.inc
 --source include/have_innodb_16k.inc
@@ -265,9 +266,8 @@ SELECT id, k FROM db1.t1 ORDER BY id LIMIT 1;
 --echo
 --echo # Cleanup
 --echo
-
 let restart_parameters = restart:;
---source include/restart_mysqld.inc
+--source include/kill_and_restart_mysqld.inc
 --remove_file $MYSQLD_ERROR_LOG
 --force-rmdir $MYSQLD_DATADIR
 
