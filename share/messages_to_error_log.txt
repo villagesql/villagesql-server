@@ -13149,6 +13149,9 @@ ER_SERVER_MEMORY_OPTION_INVALID
 ER_TEMPTABLE_ENGINE_ERROR
   eng "Temptable: %s"
 
+ER_WARN_KEYRING_PLUGIN_DEPRECTED
+  eng "Plugin %s is of the deprecated keyring plugin type. Please use the corresponding keyring component instead."
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
