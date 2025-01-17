@@ -16,11 +16,14 @@ create procedure db1.p() sql security invoker begin select current_user(); end$$
 create procedure db1.p2() sql security invoker begin select current_user(); end$$
 delimiter ;$$
 
+create role user1role;
+grant all on db1.* to user1role;
+
 create user user1@'%' identified by 'secretpass1';
-grant all on db1.* to user1@'%';
+grant user1role to user1@'%';
 
 create user user3@'%' identified by 'secretpass3';
-grant all on db1.* to user3@'%';
+grant user1role to user3@'%';
 
 create user user2@'%' identified by 'secretpass2';
 grant select, insert, update, delete on db1.tbl2 to user2@'%';
@@ -260,5 +263,6 @@ remove_file $MYSQL_TMP_DIR/user3_session.dat;
 drop user user1@'%';
 drop user user2@'%';
 drop user user3@'%';
+drop user user1role;
 drop schema db1;
 --source ../include/mrs/cleanup.inc
