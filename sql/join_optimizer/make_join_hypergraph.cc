@@ -1908,7 +1908,20 @@ Mem_root_array<Item *> PushDownAsMuchAsPossible(
       // (e.g. an outer join) won't go through that path, so they will
       // be sent through PushDownCondition() below, and possibly end up
       // in table_filters.
-      remaining_parts.push_back(item);
+      if (expr->type == RelationalExpression::SEMIJOIN &&
+          item->is_non_deterministic()) {
+        // If the single-table predicate is non-deterministic, it will be
+        // evaluated after all joins have been performed. This is incorrect if
+        // it is actually a semijoin condition, so we add it to the semijoin
+        // condition to ensure correct handling. If the predicate was actually
+        // in the WHERE clause of the query, it is still safe to push it to the
+        // semijoin condition, so we do it unconditionally. See comments in
+        // PushDownCondition() about why we need special handling of semijoin
+        // conditions that have been pulled up to the WHERE clause.
+        expr->join_conditions.push_back(item);
+      } else {
+        remaining_parts.push_back(item);
+      }
     } else if (is_join_condition_for_expr && !IsMultipleEquals(item) &&
                !IsSubset(item->used_tables() & ~PSEUDO_TABLE_BITS,
                          expr->tables_in_subtree)) {
