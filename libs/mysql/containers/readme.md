@@ -36,6 +36,12 @@ Code documentation: @ref GroupLibsMysqlContainers.
 
 This library provides the following container types and container helpers:
 
+- basic_container_wrapper.h: The CRTP base class (mixin) `Basic_container_wrapper`
+  defines the most basic member functions/boilerplate for a container that is a
+  wrapper around another container. This includes the members of
+  `mysql::ranges::Collection_interface`, the `assign`, `clear`, and
+  `get_memory_resource` member functions, and constructors.
+
 - buffers: Growable sequences of buffers of raw bytes. See details below.
 
 - map_or_set_assign.h: The function `map_or_set_assign` overwrites a
