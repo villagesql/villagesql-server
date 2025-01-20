@@ -517,6 +517,5 @@ void Kerberos::log(int error_code) {
     log_info("Kerberos message: ", err_message);
     krb5.krb5_free_error_message()(m_context, err_message);
   }
-  return;
 }
 }  // namespace auth_ldap_sasl_client

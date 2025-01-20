@@ -288,7 +288,6 @@ static void update_failed_connections_threshold(MYSQL_THD thd [[maybe_unused]],
   Connection_control_error_handler error_handler;
   g_connection_event_coordinator->notify_sys_var(
       &error_handler, OPT_FAILED_CONNECTIONS_THRESHOLD, &new_value);
-  return;
 }
 
 /** Declaration of connection_control_failed_connections_threshold */
@@ -353,7 +352,6 @@ static void update_min_connection_delay(MYSQL_THD thd [[maybe_unused]],
   Connection_control_error_handler error_handler;
   g_connection_event_coordinator->notify_sys_var(
       &error_handler, OPT_MIN_CONNECTION_DELAY, &new_value);
-  return;
 }
 
 /** Declaration of connection_control_max_connection_delay */
@@ -417,7 +415,6 @@ static void update_max_connection_delay(MYSQL_THD thd [[maybe_unused]],
   Connection_control_error_handler error_handler;
   g_connection_event_coordinator->notify_sys_var(
       &error_handler, OPT_MAX_CONNECTION_DELAY, &new_value);
-  return;
 }
 
 /** Declaration of connection_control_max_connection_delay */

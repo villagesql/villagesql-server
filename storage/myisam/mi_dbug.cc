@@ -159,7 +159,6 @@ void _mi_print_key(FILE *stream, HA_KEYSEG *keyseg, const uchar *key,
     }
   }
   (void)fputs("\"\n", stream);
-  return;
 } /* print_key */
 
 #ifdef EXTRA_DEBUG

@@ -26,7 +26,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <mysql/components/service_implementation.h>
 #include <mysql/components/services/mysql_psi_system_service.h>
 
-void impl_min_chassis_psi_system(const char *) { return; }
+void impl_min_chassis_psi_system(const char *) {}
 
 extern SERVICE_TYPE(mysql_psi_system_v1)
     SERVICE_IMPLEMENTATION(mysql_minimal_chassis, mysql_psi_system_v1);

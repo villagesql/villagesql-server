@@ -349,7 +349,6 @@ inline Uint32 BitmaskImpl::getWord(unsigned size [[maybe_unused]],
 inline void BitmaskImpl::setWord(unsigned size [[maybe_unused]], Uint32 data[],
                                  unsigned word_pos, Uint32 new_word) {
   data[word_pos] = new_word;
-  return;
 }
 
 inline bool BitmaskImpl::isclear(unsigned size, const Uint32 data[]) {
@@ -1414,8 +1413,6 @@ inline void BitmaskImpl::copyField(Uint32 _dst[], unsigned dstPos,
     dstPos += bits;
     len -= bits;
   }
-
-  return;
 }
 
 #endif

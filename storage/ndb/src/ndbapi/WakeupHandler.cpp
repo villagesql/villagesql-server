@@ -237,7 +237,6 @@ void MultiNdbWakeupHandler::notifyTransactionCompleted(Ndb *from
   if (!is_wakeups_ignored() && num_completed_trans >= minNdbsToWake) {
     wakeNdb->theImpl->theWaiter.signal(NO_WAIT);  // wakeup client thread
   }
-  return;
 }
 
 void MultiNdbWakeupHandler::notifyWakeup() {

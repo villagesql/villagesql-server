@@ -420,7 +420,6 @@ void Logger::format_timestamp(const time_t epoch, char *str, size_t len) {
       tm_buf.tm_mon + 1,  // month is [0,11]. +1 -> [1,12]
       tm_buf.tm_mday, tm_buf.tm_hour, tm_buf.tm_min, tm_buf.tm_sec);
   str[len - 1] = 0;
-  return;
 }
 
 #ifdef TEST_LOGGER

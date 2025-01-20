@@ -38,5 +38,4 @@ DEFINE_METHOD(void, mysql_runtime_error_imp::emit,
   (void)fputs(buff, stderr);
   (void)fputc('\n', stderr);
   (void)fflush(stderr);
-  return;
 }

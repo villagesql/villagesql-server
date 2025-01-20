@@ -860,7 +860,6 @@ static void keys_free(void *v_key, TREE_FREE mode, const void *v_param) {
         mysql_rwlock_unlock(&param->info->s->key_root_lock[param->keynr]);
       return;
   }
-  return;
 }
 
 int mi_init_bulk_insert(MI_INFO *info, ulong cache_size, ha_rows rows) {

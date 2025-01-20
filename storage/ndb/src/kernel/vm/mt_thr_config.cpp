@@ -160,8 +160,6 @@ THRConfigRebinder::THRConfigRebinder(THRConfigApplier *tca,
   }
   /* Bound */
   m_state = 2;
-
-  return;
 }
 
 THRConfigRebinder::~THRConfigRebinder() {
@@ -188,7 +186,6 @@ THRConfigRebinder::~THRConfigRebinder() {
     case 0:
       break;
   }
-  return;
 }
 
 int THRConfigApplier::do_bind_send(NdbThread *thread, unsigned instance) {

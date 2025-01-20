@@ -160,7 +160,6 @@ void m_by_emp_by_mtype_reset_position(PSI_table_handle *handle) {
   auto *h = (M_by_emp_by_mtype_Table_Handle *)handle;
   h->m_pos.reset();
   h->m_next_pos.reset();
-  return;
 }
 
 /* Read current row from the current_row and display them in the table */

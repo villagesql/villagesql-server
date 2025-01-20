@@ -5692,7 +5692,7 @@ static void print_value(FILE *file, MYSQL_RES *result, MYSQL_ROW row,
       }
     }
   }
-  return; /* This shouldn't happen */
+  /* This shouldn't happen */
 } /* print_value */
 
 /*

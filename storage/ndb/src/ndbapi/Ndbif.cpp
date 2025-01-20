@@ -250,7 +250,6 @@ void Ndb::report_node_failure(Uint32 node_id) {
     theImpl->the_release_ind[0] = 1;
     theImpl->theWaiter.nodeFail(node_id);
   }
-  return;
 }  // Ndb::report_node_failure()
 
 void Ndb::report_node_failure_completed(Uint32 node_id) {
@@ -311,7 +310,6 @@ void Ndb::abortTransactionsAfterNodeFailure(Uint16 aNodeId) {
       completedTransaction(localCon);
     }
   }  // for
-  return;
 }  // Ndb::abortTransactionsAfterNodeFailure()
 
 NdbTransaction *NdbImpl::lookupTransactionFromOperation(const TcKeyConf *conf) {
@@ -1523,7 +1521,6 @@ void Ndb::sendPrepTrans(int forceSend) {
     theImpl->incClientStat(
         did_send ? Ndb::UnforcedSendsCount : Ndb::DeferredSendsCount, 1);
   }
-  return;
 }  // Ndb::sendPrepTrans()
 
 /*****************************************************************************
@@ -1587,7 +1584,6 @@ void Ndb::sendPreparedTransactions(int forceSend) {
   theImpl->lock();
   sendPrepTrans(forceSend);
   theImpl->unlock();
-  return;
 }  // Ndb::sendPreparedTransactions()
 
 /*****************************************************************************

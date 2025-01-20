@@ -192,7 +192,6 @@ void Ndb_cluster_connection_impl::init_get_next_node(
   iter.init_pos = iter.cur_pos;
   iter.scan_state = 0;
   //  fprintf(stderr,"[init %d]",iter.init_pos);
-  return;
 }
 
 Uint32 Ndb_cluster_connection_impl::get_next_node(
@@ -469,11 +468,9 @@ class NdbApiInternalLogHandler : public LogHandler {
     return true;
   }
   bool checkParams() override { return true; }
-  void writeHeader(const char *, Logger::LoggerLevel, time_t) override {
-    return;
-  }
-  void writeMessage(const char *) override { return; }
-  void writeFooter() override { return; }
+  void writeHeader(const char *, Logger::LoggerLevel, time_t) override {}
+  void writeMessage(const char *) override {}
+  void writeFooter() override {}
   void setRepeatFrequency(unsigned val) override {
     m_defaultHandler->setRepeatFrequency(val);
   }

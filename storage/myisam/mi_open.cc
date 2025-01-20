@@ -741,7 +741,6 @@ void mi_setup_functions(MYISAM_SHARE *share) {
   share->file_read = mi_nommap_pread;
   share->file_write = mi_nommap_pwrite;
   if (!(share->options & HA_OPTION_CHECKSUM)) share->calc_checksum = nullptr;
-  return;
 }
 
 static void setup_key_functions(MI_KEYDEF *keyinfo) {
@@ -787,7 +786,6 @@ static void setup_key_functions(MI_KEYDEF *keyinfo) {
     keyinfo->pack_key = _mi_calc_static_key_length;
     keyinfo->store_key = _mi_store_static_key;
   }
-  return;
 }
 
 /*

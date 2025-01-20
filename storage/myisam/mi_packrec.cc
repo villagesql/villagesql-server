@@ -1152,7 +1152,6 @@ static void decode_bytes(MI_COLUMNDEF *rec, MI_BIT_BUFF *bit_buff, uchar *to,
   } while (to != end);
 
   bit_buff->bits = bits;
-  return;
 }
 #endif /* BIT_SAVED == 64 */
 

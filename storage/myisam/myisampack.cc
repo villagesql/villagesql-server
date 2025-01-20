@@ -389,7 +389,6 @@ static void get_options(int *argc, char ***argv) {
     backup = false; /* Not needed */
     tmp_dir[0] = 0;
   }
-  return;
 }
 
 static MI_INFO *open_isam_file(char *name, int mode) {
@@ -800,7 +799,6 @@ static void free_counts_and_tree_and_queue(HUFF_TREE *huff_trees, uint trees,
     my_free(huff_counts);
   }
   delete_queue(&queue); /* This is safe to free */
-  return;
 }
 
 /* Read through old file and gather some statistics */
@@ -1783,7 +1781,6 @@ static void make_traverse_code_tree(HUFF_TREE *huff_tree, HUFF_ELEMENT *element,
     make_traverse_code_tree(huff_tree, element->a.nod.right, size,
                             code + (((ulonglong)1) << size));
   }
-  return;
 }
 
 /*
@@ -1931,7 +1928,6 @@ static void write_field_info(HUFF_COUNTS *counts, uint fields, uint trees) {
           counts->length_bits, counts->tree->tree_number, counts->field_length);
   }
   flush_bits();
-  return;
 }
 
 /* Write all huff_trees to new datafile. Return tot count of
@@ -2655,7 +2651,6 @@ static void write_bits(ulonglong value, uint bits) {
     file_buffer.bits = (int)(BITS_SAVED - bits);
     file_buffer.bitbucket = value << (BITS_SAVED - bits);
   }
-  return;
 }
 
 /* Flush bits in bit_buffer to buffer */

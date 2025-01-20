@@ -1501,7 +1501,6 @@ void NdbThread_UnassignFromCPUSet(struct NdbThread *pThread,
                                   struct NdbCpuSet *cpu_set) {
   (void)pThread;
   (void)cpu_set;
-  return;
 }
 
 int NdbThread_LockCPUSetExclusive(

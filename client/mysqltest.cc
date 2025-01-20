@@ -880,7 +880,6 @@ static void async_mysql_free_result_wrapper(MYSQL_RES *result) {
         socket_event_listen(mysql_get_socket_descriptor(mysql));
     if (listen_result == -1) return;
   }
-  return;
 }
 
 /*
@@ -1573,7 +1572,6 @@ static void free_used_memory() {
   if (server_initialized) mysql_server_end();
 
   // Don't use DBUG after mysql_server_end()
-  return;
 }
 
 static void cleanup_and_exit(int exit_code) {
@@ -3345,7 +3343,6 @@ static void init_builtin_echo(void) {
 #else
 
   builtin_echo[0] = 0;
-  return;
 
 #endif
 }
@@ -5051,7 +5048,6 @@ static void do_wait_for_slave_to_stop(struct st_command *c [[maybe_unused]]) {
     if (done) break;
     my_sleep(SLAVE_POLL_INTERVAL);
   }
-  return;
 }
 
 static void do_sync_with_master2(struct st_command *command, long offset) {
@@ -5113,8 +5109,6 @@ static void do_sync_with_master2(struct st_command *command, long offset) {
           static_cast<int>(command->first_word_len), command->query, query_buf,
           result);
   }
-
-  return;
 }
 
 static void do_sync_with_master(struct st_command *command) {
@@ -5129,7 +5123,6 @@ static void do_sync_with_master(struct st_command *command) {
     command->last_argument = p;
   }
   do_sync_with_master2(command, offset);
-  return;
 }
 
 /*
@@ -11358,29 +11351,24 @@ REP_SET *make_new_set(REP_SETS *sets) {
 void free_last_set(REP_SETS *sets) {
   sets->count--;
   sets->extra++;
-  return;
 }
 
 void free_sets(REP_SETS *sets) {
   my_free(sets->set_buffer);
   my_free(sets->bit_buffer);
-  return;
 }
 
 void internal_set_bit(REP_SET *set, uint bit) {
   set->bits[bit / WORD_BIT] |= 1 << (bit % WORD_BIT);
-  return;
 }
 
 void internal_clear_bit(REP_SET *set, uint bit) {
   set->bits[bit / WORD_BIT] &= ~(1 << (bit % WORD_BIT));
-  return;
 }
 
 void or_bits(REP_SET *to, REP_SET *from) {
   uint i;
   for (i = 0; i < to->size_of_bits; i++) to->bits[i] |= from->bits[i];
-  return;
 }
 
 void copy_bits(REP_SET *to, REP_SET *from) {

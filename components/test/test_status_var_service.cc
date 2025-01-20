@@ -67,7 +67,6 @@ static void char_ptr_foo() {
   swap(char_ptr, char_ptr_variable_value);
 
   if (char_ptr) free(char_ptr);
-  return;
 }
 
 /*

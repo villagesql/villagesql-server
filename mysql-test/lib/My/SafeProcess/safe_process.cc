@@ -169,7 +169,6 @@ static void wait_pid(bool should_sigkill) {
     print_message("The waitpid returned: %d", static_cast<int>(ret_pid));
     exit(1);
   }
-  return;
 }
 
 static void abort_child(void) {

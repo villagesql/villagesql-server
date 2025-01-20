@@ -543,7 +543,6 @@ void ConfigSection::create_v1_section(Uint32 **v1_ptr, Uint32 section_id) {
     create_v1_entry_key(v1_ptr, IntTypeId, CONFIG_KEY_PARENT, section_id);
     create_int_value(v1_ptr, 0);
   }
-  return;
 }
 
 void ConfigSection::create_v2_section(Uint32 **v2_ptr) const {

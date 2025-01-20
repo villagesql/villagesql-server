@@ -325,8 +325,6 @@ static void add_hostname_impl(const char *ip_string, const char *hostname,
     hostname_cache_lru->emplace_front(entry);
     hostname_cache_by_ip->emplace(entry->ip_key, hostname_cache_lru->begin());
   }
-
-  return;
 }
 
 static void add_hostname(const char *ip_string, const char *hostname,
@@ -338,8 +336,6 @@ static void add_hostname(const char *ip_string, const char *hostname,
   MUTEX_LOCK(hostname_lock, &hostname_cache_mutex);
   if (hostname_cache_size() != 0)
     add_hostname_impl(ip_string, hostname, validated, errors, now);
-
-  return;
 }
 
 void inc_host_errors(const char *ip_string, Host_errors *errors) {

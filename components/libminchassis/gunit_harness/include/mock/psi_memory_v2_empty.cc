@@ -30,7 +30,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 namespace psi_memory_v2_empty {
 
-static void register_memory(const char *, PSI_memory_info *, int) { return; }
+static void register_memory(const char *, PSI_memory_info *, int) {}
 
 static PSI_memory_key memory_alloc(PSI_memory_key, size_t,
                                    struct PSI_thread **owner) {
@@ -50,7 +50,7 @@ static PSI_memory_key memory_claim(PSI_memory_key, size_t,
   return PSI_NOT_INSTRUMENTED;
 }
 
-static void memory_free(PSI_memory_key, size_t, struct PSI_thread *) { return; }
+static void memory_free(PSI_memory_key, size_t, struct PSI_thread *) {}
 
 }  // namespace psi_memory_v2_empty
 

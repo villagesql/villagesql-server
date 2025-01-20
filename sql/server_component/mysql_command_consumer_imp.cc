@@ -248,7 +248,6 @@ DEFINE_METHOD(void, mysql_command_consumer_dom_imp::handle_error,
     mysql_components_handle_std_exception(__func__);
     return;
   }
-  return;
 }
 
 /* get_null */
@@ -420,7 +419,6 @@ DEFINE_METHOD(void, mysql_command_consumer_dom_imp::client_capabilities,
     mysql_components_handle_std_exception(__func__);
     return;
   }
-  return;
 }
 DEFINE_BOOL_METHOD(mysql_command_consumer_dom_imp::error,
                    (SRV_CTX_H srv_ctx_h, unsigned int *err_num,
@@ -459,7 +457,6 @@ DEFINE_METHOD(void, mysql_command_consumer_dom_imp::end,
     mysql_components_handle_std_exception(__func__);
     return;
   }
-  return;
 }
 
 DEFINE_BOOL_METHOD(mysql_command_consumer_dom_imp::store_data,

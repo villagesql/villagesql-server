@@ -537,6 +537,5 @@ void Kerberos::log(int error_code) {
   if (err_message) {
     krb5_free_error_message(m_context, err_message);
   }
-  return;
 }
 }  // namespace auth_kerberos_context

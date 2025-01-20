@@ -1195,7 +1195,6 @@ void _mi_store_blob_length(uchar *pos, uint pack_length, uint length) {
     default:
       break;
   }
-  return;
 }
 
 /*

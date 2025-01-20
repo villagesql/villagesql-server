@@ -587,7 +587,6 @@ void ClusterMgr::trp_deliver_signal(const NdbApiSignal *sig,
     default:
       break;
   }
-  return;
 }
 
 ClusterMgr::Node::Node()

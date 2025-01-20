@@ -170,7 +170,6 @@ int main(int argc, char **argv) {
     }
     print(filename, &sysfile);
     delete[] buf;
-    continue;
   }
   ndb_end_and_exit(0);
 }

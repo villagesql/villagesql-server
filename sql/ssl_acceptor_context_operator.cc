@@ -105,7 +105,6 @@ void TLS_channel::singleton_flush(Ssl_acceptor_context_container *container,
     return;
   }
   (void)container->switch_data(news);
-  return;
 }
 
 std::string Lock_and_access_ssl_acceptor_context::show_property(

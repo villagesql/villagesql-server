@@ -37,7 +37,7 @@ const std::string collation("collation");
 const std::string charset("charset");
 }  // namespace consts
 
-void mysql_comp_udf_extension_init() { return; }
+void mysql_comp_udf_extension_init() {}
 
 DEFINE_BOOL_METHOD(mysql_udf_metadata_imp::argument_set,
                    (UDF_ARGS * udf_args, const char *extension_type,

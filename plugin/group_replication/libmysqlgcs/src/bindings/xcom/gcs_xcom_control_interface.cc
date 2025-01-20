@@ -910,8 +910,6 @@ void Gcs_xcom_control::do_remove_node_from_group() {
 
   MYSQL_GCS_LOG_DEBUG("do_remove_node_from_group finished! Returning %d",
                       rm_ret);
-
-  return;
 }
 
 bool Gcs_xcom_control::belongs_to_group() {

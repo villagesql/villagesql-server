@@ -33,9 +33,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <windows.h>
 #endif
 
-void impl_min_chassis_rwlock_register(const char *, PSI_rwlock_info *, int) {
-  return;
-}
+void impl_min_chassis_rwlock_register(const char *, PSI_rwlock_info *, int) {}
 
 int impl_min_chassis_rwlock_init(PSI_rwlock_key, mysql_rwlock_t *that,
                                  const char *, unsigned int) {

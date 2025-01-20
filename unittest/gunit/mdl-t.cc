@@ -214,8 +214,6 @@ class MDL_thread : public Thread, public Test_MDL_context_owner {
       is blocked.
     */
     if (m_lock_blocked) m_lock_blocked->notify();
-
-    return;
   }
 
   MDL_context &get_mdl_context() { return m_mdl_context; }
@@ -3624,7 +3622,6 @@ class MDL_weight_thread : public Thread, public Test_MDL_context_owner {
                                        src_function, src_file, src_line);
 
     m_lock_blocked->notify();
-    return;
   }
 
  private:
@@ -4321,14 +4318,12 @@ class MDL_skip_find_deadlock_thread : public Thread,
                                        src_function, src_file, src_line);
 
     m_lock_blocked->notify();
-    return;
   }
 
   void exit_cond(const PSI_stage_info *stage, const char *src_function,
                  const char *src_file, int src_line) override {
     Test_MDL_context_owner::exit_cond(stage, src_function, src_file, src_line);
     if (m_wait_resume) m_wait_resume->wait_for_notification();
-    return;
   }
 
   bool might_have_commit_order_waiters() const override {

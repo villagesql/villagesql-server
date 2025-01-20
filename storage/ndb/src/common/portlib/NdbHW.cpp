@@ -285,7 +285,6 @@ static void create_cpu_list(struct ndb_hwinfo *hwinfo,
       }
     }
   } while (found);
-  return;
 }
 
 static Uint32 find_largest_virt_l3_group(struct ndb_hwinfo *hwinfo,
@@ -2236,7 +2235,6 @@ static void test_create(struct test_cpumap_data *map, Uint32 test_case) {
       break;
     }
   }
-  return;
 }
 
 #define NUM_TESTS 15

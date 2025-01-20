@@ -1377,7 +1377,6 @@ static void store_values(MYSQL_RES *result) {
     ex_val_max_len[i] = 2; /* Default print width for values */
   }
   ex_var_count = i;
-  return;
 }
 
 static void print_relative_header() {
@@ -1430,7 +1429,6 @@ static void truncate_names() {
     printf(" %-*s|\n", max_val_length + 1, llstr(last_values[i], buff));
   }
   puts(top_line);
-  return;
 }
 
 static bool get_pidfile(MYSQL *mysql, char *pidfile) {

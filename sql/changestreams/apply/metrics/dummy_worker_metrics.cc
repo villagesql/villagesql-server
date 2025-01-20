@@ -33,9 +33,7 @@ Dummy_worker_metrics::get_transaction_type() const {
 }
 
 void Dummy_worker_metrics::set_transaction_type(
-    Dummy_worker_metrics::Transaction_type_info) {
-  return;
-}
+    Dummy_worker_metrics::Transaction_type_info) {}
 
 void Dummy_worker_metrics::set_transaction_ongoing_full_size(int64_t) {}
 

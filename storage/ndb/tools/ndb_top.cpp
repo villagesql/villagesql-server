@@ -424,7 +424,6 @@ static void init_sort_order(unsigned int *sort_order, THREAD_RESULT *tr,
     sort_order[i] = sort_order[max_index];
     sort_order[max_index] = save;
   }
-  return;
 }
 
 int main(int argc, char **argv) {

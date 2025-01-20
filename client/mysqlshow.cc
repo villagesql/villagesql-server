@@ -397,7 +397,6 @@ static void get_options(int *argc, char ***argv) {
   }
   if (debug_info_flag) my_end_arg = MY_CHECK_ERROR | MY_GIVE_INFO;
   if (debug_check_flag) my_end_arg = MY_CHECK_ERROR;
-  return;
 }
 
 static int list_dbs(MYSQL *mysql, const char *wild) {

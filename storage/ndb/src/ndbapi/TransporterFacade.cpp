@@ -3041,7 +3041,6 @@ void TransporterFacade::do_poll(trp_client *clnt, Uint32 wait_time,
   propose_poll_owner();
 
   dbg("%p->do_poll return", clnt);
-  return;
 }
 
 void TransporterFacade::wakeup(trp_client *clnt) {

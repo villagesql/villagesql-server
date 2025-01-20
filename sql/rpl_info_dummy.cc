@@ -65,7 +65,7 @@ int Rpl_info_dummy::do_flush_info(const bool force [[maybe_unused]]) {
   return 0;
 }
 
-void Rpl_info_dummy::do_end_info() { return; }
+void Rpl_info_dummy::do_end_info() {}
 
 int Rpl_info_dummy::do_remove_info() {
   assert(!abort);

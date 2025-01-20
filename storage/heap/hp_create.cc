@@ -317,5 +317,4 @@ void hp_free(HP_SHARE *share) {
   if (not_internal_table) thr_lock_delete(&share->lock);
   my_free(share->name);
   my_free(share);
-  return;
 }

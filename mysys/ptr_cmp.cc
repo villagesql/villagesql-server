@@ -70,7 +70,6 @@ void my_store_ptr(uchar *buff, size_t pack_length, my_off_t pos) {
     default:
       assert(0);
   }
-  return;
 }
 
 my_off_t my_get_ptr(uchar *ptr, size_t pack_length) {

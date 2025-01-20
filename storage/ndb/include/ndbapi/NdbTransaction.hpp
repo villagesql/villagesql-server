@@ -1254,7 +1254,6 @@ inline Uint32 NdbTransaction::get_send_size() { return 0; }
 
 inline void NdbTransaction::set_send_size(Uint32 send_size) {
   (void)send_size;  // unused
-  return;
 }
 
 #ifdef NDB_NO_DROPPED_SIGNAL

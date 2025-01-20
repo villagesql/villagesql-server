@@ -220,7 +220,6 @@ void hp_movelink(HASH_INFO *pos, HASH_INFO *next_link, HASH_INFO *newlink) {
     old_link = next_link;
   } while ((next_link = next_link->next_key) != pos);
   old_link->next_key = newlink;
-  return;
 }
 
 /* Calc hashvalue for a key */

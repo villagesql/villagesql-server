@@ -202,7 +202,6 @@ void Compiled_in_command_iterator::report_error_details(
     Hence, there should never be an error to print.
   */
   assert(false);
-  return;
 }
 
 void Compiled_in_command_iterator::end(void) {

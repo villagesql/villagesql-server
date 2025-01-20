@@ -521,7 +521,6 @@ void NdbTransaction::handleExecuteCompletion() {
   }  // if
 
   theSendStatus = InitState;
-  return;
 }  // NdbTransaction::handleExecuteCompletion()
 
 /**

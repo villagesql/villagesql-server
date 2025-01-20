@@ -209,7 +209,6 @@ class NdbImpl : public trp_client {
   */
   static inline void setNdbError(Ndb &ndb, int code) {
     ndb.theError.code = code;
-    return;
   }
 
   bool forceShortRequests;

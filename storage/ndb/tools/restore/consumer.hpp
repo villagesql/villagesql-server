@@ -70,7 +70,7 @@ class BackupConsumer {
     return true;
   }
   virtual bool isMissingTable(const TableS &) { return false; }
-  virtual void log_temp_errors() { return; }
+  virtual void log_temp_errors() {}
   virtual bool table_equal(const TableS &) { return true; }
   virtual bool table_compatible_check(TableS &) { return true; }
   virtual bool check_blobs(TableS &) { return true; }
