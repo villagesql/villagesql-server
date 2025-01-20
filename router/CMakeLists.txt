@@ -143,6 +143,10 @@ ADD_CUSTOM_TARGET(mysqlrouter_all)
 # Load all modules, including plugins
 ADD_SUBDIRECTORY(src)
 
+IF(WITH_INTERNAL)
+  INCLUDE(${CMAKE_SOURCE_DIR}/internal/cmake/router.cmake)
+ENDIF()
+
 # Enable testing
 
 
