@@ -2105,11 +2105,26 @@ int Arg_comparator::compare_row() {
 
   const uint n = (*left)->cols();
   for (uint i = 0; i < n; i++) {
-    res = comparators[i].compare();
-    /* Aggregate functions don't need special null handling. */
-    if (owner->null_value && owner->type() == Item::FUNC_ITEM) {
+    Arg_comparator &colcmp = comparators[i];
+    res = colcmp.compare();
+
+    if (owner->null_value) {
+      assert(owner->type() == Item::FUNC_ITEM);
       // NULL was compared
-      switch (owner->functype()) {
+      const Item_func::Functype owner_functype = owner->functype();
+      switch (owner_functype) {
+        case Item_func::EQUAL_FUNC: {
+          // compare_null_values return true
+          // if both left and right values
+          // are nulls
+          res = colcmp.compare_null_values() ? 0 : 1;
+          // EQUAL_FUNC does not return nulls
+          owner->null_value = 0;
+          if (res) {
+            return res;
+          }
+          continue;  // for loop
+        } break;
         case Item_func::NE_FUNC:
           break;  // NE never aborts on NULL even if abort_on_null is set
         case Item_func::LT_FUNC:
@@ -2117,9 +2132,12 @@ int Arg_comparator::compare_row() {
         case Item_func::GT_FUNC:
         case Item_func::GE_FUNC:
           return -1;  // <, <=, > and >= always fail on NULL
-        default:      // EQ_FUNC
+        case Item_func::EQ_FUNC:
           if (down_cast<Item_bool_func2 *>(owner)->ignore_unknown())
             return -1;  // We do not need correct NULL returning
+          break;
+        default:
+          assert(0);
       }
       was_null = true;
       owner->null_value = false;
