@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025 Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -86,6 +86,7 @@ HttpResult HandlerDbServiceOpenAPI::handle_get(rest::RequestContext *ctxt) {
 
   auto ep = lock_or_throw_unavail(endpoint_);
 
+  bool add_procedure_metadata{false};
   const auto &schemas = ep->get_children();
   for (const auto &schema_endpoint :
        rest::sort_children_by_request_path<mrs::endpoint::DbSchemaEndpoint>(
@@ -108,6 +109,11 @@ HttpResult HandlerDbServiceOpenAPI::handle_get(rest::RequestContext *ctxt) {
         continue;
       }
 
+      if (entry->type ==
+          mrs::database::entry::DbObject::ObjectType::k_objectTypeProcedure) {
+        add_procedure_metadata = true;
+      }
+
       const auto path =
           url_obj_ + schema_endpoint->get()->request_path + entry->request_path;
       auto path_obj =
@@ -125,6 +131,10 @@ HttpResult HandlerDbServiceOpenAPI::handle_get(rest::RequestContext *ctxt) {
                                     allocator);
       }
     }
+  }
+
+  if (add_procedure_metadata) {
+    rest::get_procedure_metadata_component(schema_properties, allocator);
   }
 
   auto meta_info = rest::get_header_info(entry_, allocator);

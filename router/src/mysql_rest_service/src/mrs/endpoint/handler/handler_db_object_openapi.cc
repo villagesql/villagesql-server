@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025 Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -85,10 +85,6 @@ void HandlerDbObjectOpenAPI::authorization(rest::RequestContext *ctxt) {
 HttpResult HandlerDbObjectOpenAPI::handle_get(rest::RequestContext *) {
   namespace entry_ns = mrs::database::entry;
 
-  if (entry_->type == entry_ns::DbObject::ObjectType::k_objectTypeProcedure ||
-      entry_->type == entry_ns::DbObject::ObjectType::k_objectTypeFunction)
-    throw http::Error(HttpStatusCode::NotFound);
-
   if (entry_->enabled != entry_ns::EnabledType::EnabledType_public)
     throw http::Error(HttpStatusCode::NotFound);
 
@@ -99,6 +95,10 @@ HttpResult HandlerDbObjectOpenAPI::handle_get(rest::RequestContext *) {
   items = rest::get_route_openapi_schema_path(entry_, url_obj_, allocator);
 
   auto schema_properties = rest::get_route_openapi_component(entry_, allocator);
+  if (entry_->type ==
+      mrs::database::entry::DbObject::ObjectType::k_objectTypeProcedure) {
+    rest::get_procedure_metadata_component(schema_properties, allocator);
+  }
 
   json_doc.SetObject()
       .AddMember(

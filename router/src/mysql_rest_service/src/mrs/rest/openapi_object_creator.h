@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025 Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -37,6 +37,9 @@
 #include "mrs/database/entry/db_schema.h"
 #include "mrs/database/entry/db_service.h"
 #include "mrs/endpoint/db_object_endpoint.h"
+#include "mysql/harness/logging/logging.h"
+
+IMPORT_LOG_FUNCTIONS()
 
 namespace mrs {
 namespace rest {
@@ -74,6 +77,16 @@ rapidjson::Value get_route_openapi_schema_path(
  */
 rapidjson::Value get_route_openapi_component(
     DbObjectPtr entry, rapidjson::Document::AllocatorType &allocator);
+
+/**
+ * Create "_metadata" schema component item from a procedure call.
+ *
+ * @param[in, out] schema_properties JSON containing schema components.
+ * @param[in] allocator JSON allocator that is used to create OpenAPI swagger.
+ */
+void get_procedure_metadata_component(
+    rapidjson::Value &schema_properties,
+    rapidjson::Document::AllocatorType &allocator);
 
 /**
  * Create OpenAPI title, version and description.

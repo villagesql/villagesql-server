@@ -1,0 +1,90 @@
+--source include/have_router.inc
+
+--let $extra_mrs_router_id=1
+--source ../include/predefined_setup/configure_router_mrs_root.inc
+--source ../include/schema/functions_schema.sql
+
+
+--source ../include/mrs/start_object_definition.inc
+
+--let $mrs_add_service_path="/svc"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_schema=func_schema
+--let $mrs_add_schema_path=/func
+--source ../include/mrs/db_schema/add.inc
+
+# Function that needs auth
+
+--let $mrs_add_db_object_type=FUNCTION
+--let $mrs_add_db_object_format=ITEM
+--let $mrs_add_db_object=nothing
+--let $mrs_add_db_object_path=/nothing
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_modify_name=result
+--let $mrs_modify_columns=result
+--let $mrs_modify_fields=my_result
+--source ../include/mrs/db_object/add_named_resultset.inc
+SET @db_object_id_func=@db_object_id;
+
+
+--let $mrs_add_auth_app=default authentication
+--let $mrs_add_auth_vendor=MySQL Internal
+--let $mrs_add_auth_service=/svc
+--source ../include/mrs/add_auth_app.inc
+
+--let $mrs_sql_id_variable=@db_object_id_func
+--let $mrs_db_object_requires_auth=1
+--source ../include/mrs/db_object/modify_auth.inc
+
+if ($mrs_schema_version>2)
+{
+  --disable_query_log
+  --disable_result_log
+  UPDATE `mysql_rest_service_metadata`.`service` SET name="" WHERE url_context_root="/svc";
+  --enable_query_log
+  --enable_result_log
+}
+
+--source ../include/mrs/end_object_definition.inc
+
+
+## Test starts here
+--echo
+--echo
+--echo ## I. Verify open-api-catalog for MRS Function Object with authentication
+--echo #
+--echo # 1. Function DB Object requires authentication, user is not authenticated -> OpenAPI does not contain description for the function.
+--echo #
+--echo #
+--echo # 2. Function DB Object requires authentication, user is authenticated -> OpenAPI does contains description for the function.
+--echo #
+--echo #
+
+
+--echo
+--echo #
+--echo # I.1
+--let $mrs_client_arg_path='/svc/open-api-catalog/'
+--source ../include/mrs/mrs_client.inc
+
+
+--echo
+--echo #
+--echo # I.2
+exec $MRS_CLIENT_ARGS
+  -a BASIC
+  --path /svc/authentication/login
+  -u root
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+--let $mrs_client_arg_path='/svc/open-api-catalog/'
+--let $mrs_client_arg_session_file=$MYSQL_TMP_DIR/user_session.dat
+--source ../include/mrs/mrs_client.inc
+
+
+# Cleanup
+remove_file $MYSQL_TMP_DIR/user_session.dat;
+--source ../include/mrs/cleanup.inc

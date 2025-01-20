@@ -313,6 +313,16 @@ BEGIN
   select min(id) from `proc_schema`.`dummy_data`;
 END;$$
 
+CREATE PROCEDURE `proc_schema`.`in_out_and_return` (IN name VARCHAR(255),
+                                             OUT v integer)
+BEGIN
+  INSERT INTO `proc_schema`.`dummy_data` (`name`)
+    VALUES(name);
+
+  SET v=(select min(id) from `proc_schema`.`dummy_data`);
+  select min(id) from `proc_schema`.`dummy_data`;
+END;$$
+
 --enable_query_log
 --enable_result_log
 

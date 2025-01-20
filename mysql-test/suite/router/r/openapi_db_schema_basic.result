@@ -63,7 +63,7 @@ GET /svc/crud_operations/open-api-catalog/
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/components/schemas/table2"
+                                        "$ref": "#/components/schemas/basic_schema_table2"
                                     }
                                 }
                             }
@@ -121,7 +121,7 @@ GET /svc/crud_operations/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/table2"
+                                    "$ref": "#/components/schemas/basic_schema_table2"
                                 }
                             }
                         }
@@ -223,7 +223,7 @@ GET /svc/crud_operations/open-api-catalog/
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/components/schemas/table2"
+                                        "$ref": "#/components/schemas/basic_schema_table2"
                                     }
                                 }
                             }
@@ -266,7 +266,7 @@ GET /svc/crud_operations/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/table2"
+                                "$ref": "#/components/schemas/basic_schema_table2"
                             }
                         }
                     }
@@ -283,7 +283,7 @@ GET /svc/crud_operations/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/table2"
+                                    "$ref": "#/components/schemas/basic_schema_table2"
                                 }
                             }
                         }
@@ -350,7 +350,7 @@ GET /svc/crud_operations/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/table2"
+                                    "$ref": "#/components/schemas/basic_schema_table2"
                                 }
                             }
                         }
@@ -397,7 +397,7 @@ GET /svc/crud_operations/open-api-catalog/
                 }
             },
             "put": {
-                "summary": "Update or create table2 entry_",
+                "summary": "Update or create table2 entry",
                 "parameters": [
                     {
                         "in": "path",
@@ -414,7 +414,7 @@ GET /svc/crud_operations/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/table2"
+                                "$ref": "#/components/schemas/basic_schema_table2"
                             }
                         }
                     }
@@ -431,7 +431,7 @@ GET /svc/crud_operations/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/table2"
+                                    "$ref": "#/components/schemas/basic_schema_table2"
                                 }
                             }
                         }
@@ -516,7 +516,7 @@ GET /svc/crud_operations/open-api-catalog/
                 }
             },
             "put": {
-                "summary": "Update or create table2 entry_",
+                "summary": "Update or create table2 entry",
                 "parameters": [
                     {
                         "in": "path",
@@ -533,7 +533,7 @@ GET /svc/crud_operations/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/table2"
+                                "$ref": "#/components/schemas/basic_schema_table2"
                             }
                         }
                     }
@@ -550,7 +550,7 @@ GET /svc/crud_operations/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/table2"
+                                    "$ref": "#/components/schemas/basic_schema_table2"
                                 }
                             }
                         }
@@ -561,7 +561,7 @@ GET /svc/crud_operations/open-api-catalog/
     },
     "components": {
         "schemas": {
-            "table2": {
+            "basic_schema_table2": {
                 "type": "object",
                 "properties": {
                     "id": {
@@ -623,7 +623,7 @@ GET /svc/different_types/open-api-catalog/
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/components/schemas/table3"
+                                        "$ref": "#/components/schemas/basic_schema_table3"
                                     }
                                 }
                             }
@@ -666,7 +666,7 @@ GET /svc/different_types/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/table3"
+                                "$ref": "#/components/schemas/basic_schema_table3"
                             }
                         }
                     }
@@ -683,7 +683,7 @@ GET /svc/different_types/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/table3"
+                                    "$ref": "#/components/schemas/basic_schema_table3"
                                 }
                             }
                         }
@@ -750,7 +750,7 @@ GET /svc/different_types/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/table3"
+                                    "$ref": "#/components/schemas/basic_schema_table3"
                                 }
                             }
                         }
@@ -797,7 +797,7 @@ GET /svc/different_types/open-api-catalog/
                 }
             },
             "put": {
-                "summary": "Update or create table3 entry_",
+                "summary": "Update or create table3 entry",
                 "parameters": [
                     {
                         "in": "path",
@@ -814,7 +814,7 @@ GET /svc/different_types/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/table3"
+                                "$ref": "#/components/schemas/basic_schema_table3"
                             }
                         }
                     }
@@ -831,7 +831,7 @@ GET /svc/different_types/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/table3"
+                                    "$ref": "#/components/schemas/basic_schema_table3"
                                 }
                             }
                         }
@@ -842,7 +842,7 @@ GET /svc/different_types/open-api-catalog/
     },
     "components": {
         "schemas": {
-            "table3": {
+            "basic_schema_table3": {
                 "type": "object",
                 "properties": {
                     "id": {
@@ -1028,7 +1028,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/components/schemas/t_bin"
+                                        "$ref": "#/components/schemas/pk_types_schema_t_bin"
                                     }
                                 }
                             }
@@ -1123,7 +1123,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_bin"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_bin"
                                 }
                             }
                         }
@@ -1170,7 +1170,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                 }
             },
             "put": {
-                "summary": "Update or create t_bin entry_",
+                "summary": "Update or create t_bin entry",
                 "parameters": [
                     {
                         "in": "path",
@@ -1187,7 +1187,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/t_bin"
+                                "$ref": "#/components/schemas/pk_types_schema_t_bin"
                             }
                         }
                     }
@@ -1204,7 +1204,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_bin"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_bin"
                                 }
                             }
                         }
@@ -1226,7 +1226,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/components/schemas/t_bit"
+                                        "$ref": "#/components/schemas/pk_types_schema_t_bit"
                                     }
                                 }
                             }
@@ -1321,7 +1321,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_bit"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_bit"
                                 }
                             }
                         }
@@ -1368,7 +1368,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                 }
             },
             "put": {
-                "summary": "Update or create t_bit entry_",
+                "summary": "Update or create t_bit entry",
                 "parameters": [
                     {
                         "in": "path",
@@ -1385,7 +1385,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/t_bit"
+                                "$ref": "#/components/schemas/pk_types_schema_t_bit"
                             }
                         }
                     }
@@ -1402,7 +1402,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_bit"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_bit"
                                 }
                             }
                         }
@@ -1424,7 +1424,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/components/schemas/t_date"
+                                        "$ref": "#/components/schemas/pk_types_schema_t_date"
                                     }
                                 }
                             }
@@ -1519,7 +1519,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_date"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_date"
                                 }
                             }
                         }
@@ -1566,7 +1566,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                 }
             },
             "put": {
-                "summary": "Update or create t_date entry_",
+                "summary": "Update or create t_date entry",
                 "parameters": [
                     {
                         "in": "path",
@@ -1583,7 +1583,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/t_date"
+                                "$ref": "#/components/schemas/pk_types_schema_t_date"
                             }
                         }
                     }
@@ -1600,7 +1600,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_date"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_date"
                                 }
                             }
                         }
@@ -1622,7 +1622,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/components/schemas/t_decimal"
+                                        "$ref": "#/components/schemas/pk_types_schema_t_decimal"
                                     }
                                 }
                             }
@@ -1717,7 +1717,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_decimal"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_decimal"
                                 }
                             }
                         }
@@ -1764,7 +1764,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                 }
             },
             "put": {
-                "summary": "Update or create t_decimal entry_",
+                "summary": "Update or create t_decimal entry",
                 "parameters": [
                     {
                         "in": "path",
@@ -1781,7 +1781,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/t_decimal"
+                                "$ref": "#/components/schemas/pk_types_schema_t_decimal"
                             }
                         }
                     }
@@ -1798,7 +1798,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_decimal"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_decimal"
                                 }
                             }
                         }
@@ -1820,7 +1820,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/components/schemas/t_enum"
+                                        "$ref": "#/components/schemas/pk_types_schema_t_enum"
                                     }
                                 }
                             }
@@ -1915,7 +1915,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_enum"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_enum"
                                 }
                             }
                         }
@@ -1962,7 +1962,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                 }
             },
             "put": {
-                "summary": "Update or create t_enum entry_",
+                "summary": "Update or create t_enum entry",
                 "parameters": [
                     {
                         "in": "path",
@@ -1979,7 +1979,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/t_enum"
+                                "$ref": "#/components/schemas/pk_types_schema_t_enum"
                             }
                         }
                     }
@@ -1996,7 +1996,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_enum"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_enum"
                                 }
                             }
                         }
@@ -2018,7 +2018,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/components/schemas/t_float"
+                                        "$ref": "#/components/schemas/pk_types_schema_t_float"
                                     }
                                 }
                             }
@@ -2113,7 +2113,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_float"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_float"
                                 }
                             }
                         }
@@ -2160,7 +2160,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                 }
             },
             "put": {
-                "summary": "Update or create t_float entry_",
+                "summary": "Update or create t_float entry",
                 "parameters": [
                     {
                         "in": "path",
@@ -2177,7 +2177,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/t_float"
+                                "$ref": "#/components/schemas/pk_types_schema_t_float"
                             }
                         }
                     }
@@ -2194,7 +2194,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_float"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_float"
                                 }
                             }
                         }
@@ -2216,7 +2216,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/components/schemas/t_int"
+                                        "$ref": "#/components/schemas/pk_types_schema_t_int"
                                     }
                                 }
                             }
@@ -2311,7 +2311,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_int"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_int"
                                 }
                             }
                         }
@@ -2358,7 +2358,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                 }
             },
             "put": {
-                "summary": "Update or create t_int entry_",
+                "summary": "Update or create t_int entry",
                 "parameters": [
                     {
                         "in": "path",
@@ -2375,7 +2375,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/t_int"
+                                "$ref": "#/components/schemas/pk_types_schema_t_int"
                             }
                         }
                     }
@@ -2392,7 +2392,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_int"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_int"
                                 }
                             }
                         }
@@ -2414,7 +2414,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/components/schemas/t_set"
+                                        "$ref": "#/components/schemas/pk_types_schema_t_set"
                                     }
                                 }
                             }
@@ -2509,7 +2509,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_set"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_set"
                                 }
                             }
                         }
@@ -2556,7 +2556,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                 }
             },
             "put": {
-                "summary": "Update or create t_set entry_",
+                "summary": "Update or create t_set entry",
                 "parameters": [
                     {
                         "in": "path",
@@ -2573,7 +2573,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/t_set"
+                                "$ref": "#/components/schemas/pk_types_schema_t_set"
                             }
                         }
                     }
@@ -2590,7 +2590,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_set"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_set"
                                 }
                             }
                         }
@@ -2612,7 +2612,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                                 "schema": {
                                     "type": "array",
                                     "items": {
-                                        "$ref": "#/components/schemas/t_timestamp"
+                                        "$ref": "#/components/schemas/pk_types_schema_t_timestamp"
                                     }
                                 }
                             }
@@ -2707,7 +2707,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_timestamp"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_timestamp"
                                 }
                             }
                         }
@@ -2754,7 +2754,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                 }
             },
             "put": {
-                "summary": "Update or create t_timestamp entry_",
+                "summary": "Update or create t_timestamp entry",
                 "parameters": [
                     {
                         "in": "path",
@@ -2771,7 +2771,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     "content": {
                         "application/json": {
                             "schema": {
-                                "$ref": "#/components/schemas/t_timestamp"
+                                "$ref": "#/components/schemas/pk_types_schema_t_timestamp"
                             }
                         }
                     }
@@ -2788,7 +2788,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "$ref": "#/components/schemas/t_timestamp"
+                                    "$ref": "#/components/schemas/pk_types_schema_t_timestamp"
                                 }
                             }
                         }
@@ -2799,7 +2799,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
     },
     "components": {
         "schemas": {
-            "t_bin": {
+            "pk_types_schema_t_bin": {
                 "type": "object",
                 "properties": {
                     "id": {
@@ -2808,7 +2808,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     }
                 }
             },
-            "t_bit": {
+            "pk_types_schema_t_bit": {
                 "type": "object",
                 "properties": {
                     "id": {
@@ -2818,7 +2818,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     }
                 }
             },
-            "t_date": {
+            "pk_types_schema_t_date": {
                 "type": "object",
                 "properties": {
                     "id": {
@@ -2828,7 +2828,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     }
                 }
             },
-            "t_decimal": {
+            "pk_types_schema_t_decimal": {
                 "type": "object",
                 "properties": {
                     "id": {
@@ -2838,7 +2838,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     }
                 }
             },
-            "t_enum": {
+            "pk_types_schema_t_enum": {
                 "type": "object",
                 "properties": {
                     "id": {
@@ -2852,7 +2852,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     }
                 }
             },
-            "t_float": {
+            "pk_types_schema_t_float": {
                 "type": "object",
                 "properties": {
                     "id": {
@@ -2863,7 +2863,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     }
                 }
             },
-            "t_int": {
+            "pk_types_schema_t_int": {
                 "type": "object",
                 "properties": {
                     "id": {
@@ -2876,7 +2876,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     }
                 }
             },
-            "t_set": {
+            "pk_types_schema_t_set": {
                 "type": "object",
                 "properties": {
                     "id": {
@@ -2890,7 +2890,7 @@ GET /svc/different_types_as_pk/open-api-catalog/
                     }
                 }
             },
-            "t_timestamp": {
+            "pk_types_schema_t_timestamp": {
                 "type": "object",
                 "properties": {
                     "id": {

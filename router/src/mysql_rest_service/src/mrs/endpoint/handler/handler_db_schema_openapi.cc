@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025 Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -102,6 +102,7 @@ HttpResult HandlerDbSchemaOpenAPI::handle_get(rest::RequestContext *ctxt) {
   rapidjson::Value items(rapidjson::kObjectType);
   rapidjson::Value schema_properties(rapidjson::kObjectType);
 
+  bool add_procedure_metadata{false};
   auto ep = lock(endpoint_);
   const auto &db_endpoints = ep->get_children();
   for (const auto &db_endpoint :
@@ -128,12 +129,21 @@ HttpResult HandlerDbSchemaOpenAPI::handle_get(rest::RequestContext *ctxt) {
       items.AddMember(path->name, path->value, allocator);
     }
 
+    if (db_object->type ==
+        mrs::database::entry::DbObject::ObjectType::k_objectTypeProcedure) {
+      add_procedure_metadata = true;
+    }
+
     auto components_obj =
         rest::get_route_openapi_component(db_object, allocator);
     for (auto component = components_obj.MemberBegin();
          component < components_obj.MemberEnd(); ++component) {
       schema_properties.AddMember(component->name, component->value, allocator);
     }
+  }
+
+  if (add_procedure_metadata) {
+    rest::get_procedure_metadata_component(schema_properties, allocator);
   }
 
   json_doc.SetObject()

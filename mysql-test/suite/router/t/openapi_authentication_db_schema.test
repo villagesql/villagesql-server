@@ -45,7 +45,7 @@ let $mrs_client_arg_json_schema='{
      "paths" : {"not":{"required":["/svc/different_types_as_pk/t_decimal"]}}
   }
 }';
---let $mrs_client_arg_exclude_json_pointer=/components/schemas/table2/properties/date/example,/components/schemas/table3/properties/cdatetime/example,/components/schemas/table3/properties/ctimestamp/example
+--let $mrs_client_arg_exclude_json_pointer=/components/schemas/basic_schema_table2/properties/date/example,/components/schemas/basic_schema_table3/properties/cdatetime/example,/components/schemas/basic_schema_table3/properties/ctimestamp/example
 --source ../include/mrs/mrs_client.inc
 
 
@@ -68,7 +68,7 @@ let $mrs_client_arg_json_schema='{
      "paths" : {"required":["/svc/different_types_as_pk/t_decimal"]}
   }
 }';
---let $mrs_client_arg_exclude_json_pointer=/components/schemas/table2/properties/date/example,/components/schemas/table3/properties/cdatetime/example,/components/schemas/table3/properties/ctimestamp/example,/components/schemas/t_timestamp/properties/id/example
+--let $mrs_client_arg_exclude_json_pointer=/components/schemas/basic_schema_table2/properties/date/example,/components/schemas/basic_schema_table3/properties/cdatetime/example,/components/schemas/basic_schema_table3/properties/ctimestamp/example,/components/schemas/pk_types_schema_t_timestamp/properties/id/example
 --source ../include/mrs/mrs_client.inc
 
 # Cleanup
