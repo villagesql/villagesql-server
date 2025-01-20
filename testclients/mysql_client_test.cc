@@ -23398,7 +23398,7 @@ static void test_wl16221_bind_param() {
   str_length = strlen(str_data);
 
   /* INSERT SMALLINT data as NULL */
-  is_null = 1;
+  is_null = true;
 
   /* Execute the INSERT statement - 1*/
   if (mysql_stmt_execute(stmt)) {
@@ -23425,7 +23425,7 @@ static void test_wl16221_bind_param() {
   str_data[str_size] = '\0';
   str_length = strlen(str_data);
   small_data = 1000; /* smallint */
-  is_null = 0;       /* reset */
+  is_null = false;   /* reset */
 
   /* Execute the INSERT statement - 2*/
   if (mysql_stmt_execute(stmt)) {

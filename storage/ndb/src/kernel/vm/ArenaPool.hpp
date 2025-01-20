@@ -170,7 +170,7 @@ bool ArenaPool<T>::seize(ArenaHead &ah, Ptr<T> &ptr) {
   require(sizeof(T) <= sz * sizeof(Uint32));
   Uint32 off = m_record_info.m_offset_magic;
 
-  if (0)
+  if (false)
     g_eventLogger->info("pos: %u sz: %u (sum: %u) bs: %u", pos, sz, (pos + sz),
                         bs);
 

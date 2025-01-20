@@ -1865,7 +1865,7 @@ bool RestoreDataIterator::readFragmentHeader(int &ret, Uint32 *fragmentId) {
 
   restoreLogger.log_debug("RestoreDataIterator::getNextFragment");
 
-  while (1) {
+  while (true) {
     /* read first part of header */
     int r = buffer_read(&Header, 8, 1);
     if (r < 0) {

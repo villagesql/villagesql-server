@@ -86,7 +86,7 @@ class BackupRestore : public BackupConsumer {
     m_n_tables = 0;
     m_logBytes = m_dataBytes = 0;
     m_logCount = m_dataCount = 0;
-    m_metadata_work_requested = 0;
+    m_metadata_work_requested = false;
     m_restore = false;
     m_restore_meta = false;
     m_no_restore_disk = false;

@@ -419,7 +419,7 @@ Uint32 ConfigRetriever::allocNodeId(int no_retries, int retry_delay_in_seconds,
     return 0;  // Error
   }
 
-  while (1) {
+  while (true) {
     if (ndb_mgm_is_connected(m_handle) == 1 ||
         ndb_mgm_connect_tls(m_handle, 0, 0, verbose, m_tls_req_level) == 0) {
       int res = ndb_mgm_alloc_nodeid(m_handle, m_version, m_node_type,

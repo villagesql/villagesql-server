@@ -1384,7 +1384,7 @@ bool NodeCertificate::parse_name(const char *name) {
 #include <openssl/applink.c>
 static constexpr bool isWin32 = 1;
 #else
-static constexpr bool isWin32 = 0;
+static constexpr bool isWin32 = false;
 #endif
 
 static constexpr bool openssl_version_ok =

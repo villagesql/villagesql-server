@@ -726,7 +726,7 @@ static bool parse_mycnf_opt(int, const struct my_option *opt, char *) {
     (*app_type)++;
   else
     *app_type = order++;
-  return 0;
+  return false;
 }
 
 bool InitConfigFileParser::store_in_properties(

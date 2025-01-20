@@ -367,7 +367,7 @@ int NdbOperation::insertKEYINFO(const char *aValue, Uint32 aStartPosition,
       tkeyData = *tDataPtr;
       tkeyDataPtr++;
       tAttrPos++;
-    } while (1);
+    } while (true);
     return 0;
   }  // if
   /*****************************************************************************
@@ -450,7 +450,7 @@ int NdbOperation::insertKEYINFO(const char *aValue, Uint32 aStartPosition,
     if (anAttrSizeInWords == tAttrPos) goto LastWordLabel;
     tPosition++;
     signalCounter++;
-  } while (1);
+  } while (true);
 
 LastWordLabel:
   return 0;

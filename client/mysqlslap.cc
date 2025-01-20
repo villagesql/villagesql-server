@@ -1126,7 +1126,7 @@ static int get_options(int *argc, char ***argv) {
             "--auto-generate-sql-execute-number options is. Turning "
             "--auto-generate-sql on!\n",
             my_progname);
-    auto_generate_sql = 1;
+    auto_generate_sql = true;
   }
   if (!auto_generate_sql && auto_generate_sql_guid_primary) {
     fprintf(stderr,
@@ -1134,7 +1134,7 @@ static int get_options(int *argc, char ***argv) {
             "--auto-generate-sql-guid-primary options is. Turning "
             "--auto-generate-sql on!\n",
             my_progname);
-    auto_generate_sql = 1;
+    auto_generate_sql = true;
   }
   // we don't do --auto-generate-sql-write-number since it's non-0 by default
   if (!auto_generate_sql && auto_generate_sql_secondary_indexes) {
@@ -1143,7 +1143,7 @@ static int get_options(int *argc, char ***argv) {
             "--auto-generate-sql-secondary-indexes options is. Turning "
             "--auto-generate-sql on!\n",
             my_progname);
-    auto_generate_sql = 1;
+    auto_generate_sql = true;
   }
   // we don't do --auto-generate-sql-load-type since it's non-null by default
   // we don't do --auto-generate-sql-unique-query-number since it's non-0 by

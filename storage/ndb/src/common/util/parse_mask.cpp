@@ -198,7 +198,7 @@ int ParseThreadConfiguration::find_params(char **start, char **end) {
     if (*m_curr_str != '}') break;
     *end = m_curr_str;
     return 0;
-  } while (0);
+  } while (false);
 
   int len = (int)strlen(m_curr_str);
   m_err_msg.assfmt("Invalid format near: '%.*s'", (len > 10) ? 10 : len,

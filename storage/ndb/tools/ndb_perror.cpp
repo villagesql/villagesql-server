@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
 
   if (opt_silent) {
     // --silent overrides any verbose setting
-    opt_verbose = 0;
+    opt_verbose = false;
   }
 
   if (!argc) {

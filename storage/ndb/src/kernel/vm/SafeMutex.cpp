@@ -63,7 +63,7 @@ int SafeMutex::lock_impl() {
   int ret;
   my_thread_t self = my_thread_self();
   assert(self != 0);
-  while (1) {
+  while (true) {
     if (m_level == 0) {
       assert(m_owner == 0);
       m_owner = self;

@@ -473,7 +473,7 @@ int TCP_Transporter::doReceive(TransporterReceiveHandle &recvdata) {
         }
       }
       return nBytesRead;
-    } while (1);
+    } while (true);
   } else {
     return 0;
   }

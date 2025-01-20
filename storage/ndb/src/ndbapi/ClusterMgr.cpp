@@ -590,7 +590,8 @@ void ClusterMgr::trp_deliver_signal(const NdbApiSignal *sig,
   return;
 }
 
-ClusterMgr::Node::Node() : hbFrequency(0), hbCounter(0), processInfoSent(0) {}
+ClusterMgr::Node::Node()
+    : hbFrequency(0), hbCounter(0), processInfoSent(false) {}
 
 /**
  * recalcMinDbVersion

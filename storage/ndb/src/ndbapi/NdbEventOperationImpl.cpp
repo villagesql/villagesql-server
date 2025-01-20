@@ -1059,7 +1059,7 @@ int NdbEventOperationImpl::receive_event() {
           tRecAttrId = (*recAttr)->attrId();
         }
         if (tAttrId == tRecAttrId) {
-          hasSomeData = 1;
+          hasSomeData = true;
           receive_data((*recAttr), aDataPtr, tDataSz);
           (*recAttr) = (*recAttr)->next();
         }
@@ -1814,7 +1814,7 @@ void NdbEventBuffer::resize_known_gci() {
   m_known_gci.fill(newsize, fill);
   Uint64 *array = m_known_gci.getBase();
 
-  if (0) {
+  if (false) {
     printf("before (%u): ", minpos);
     for (Uint32 i = minpos; i != maxpos; i = (i + 1) & mask)
       printf("%u/%u ", Uint32(array[i] >> 32), Uint32(array[i]));
@@ -1822,9 +1822,9 @@ void NdbEventBuffer::resize_known_gci() {
   }
 
   Uint32 idx = mask + 1;  // Store eveything in "new" part of buffer
-  if (0) printf("swapping ");
+  if (false) printf("swapping ");
   while (minpos != maxpos) {
-    if (0) printf("%u-%u ", minpos, idx);
+    if (false) printf("%u-%u ", minpos, idx);
     Uint64 tmp = array[idx];
     array[idx] = array[minpos];
     array[minpos] = tmp;
@@ -1832,13 +1832,13 @@ void NdbEventBuffer::resize_known_gci() {
     idx++;
     minpos = (minpos + 1) & mask;  // NOTE old mask
   }
-  if (0) printf("\n");
+  if (false) printf("\n");
 
   minpos = m_min_gci_index = mask + 1;
   maxpos = m_max_gci_index = idx;
   assert(minpos < maxpos);
 
-  if (0) {
+  if (false) {
     ndbout_c("resize_known_gci from %u to %u", (mask + 1), newsize);
     printf("after: ");
     for (Uint32 i = minpos; i < maxpos; i++) {
@@ -1935,12 +1935,13 @@ fail:
 #endif
 
 Gci_container *NdbEventBuffer::find_bucket_chained(Uint64 gci) {
-  if (0) printf("find_bucket_chained(%u/%u) ", Uint32(gci >> 32), Uint32(gci));
+  if (false)
+    printf("find_bucket_chained(%u/%u) ", Uint32(gci >> 32), Uint32(gci));
   if (unlikely(gci <= m_latestGCI)) {
     /**
      * an already complete GCI
      */
-    if (0)
+    if (false)
       ndbout_c("already complete (%u/%u)", Uint32(m_latestGCI >> 32),
                Uint32(m_latestGCI));
     return nullptr;
@@ -1956,23 +1957,23 @@ Gci_container *NdbEventBuffer::find_bucket_chained(Uint64 gci) {
   while (pos < size) {
     Uint64 cmp = (buckets + pos)->m_gci;
     if (cmp == gci) {
-      if (0) g_eventLogger->info("found pos: %u", pos);
+      if (false) g_eventLogger->info("found pos: %u", pos);
       return buckets + pos;
     }
 
     if (cmp == 0) {
-      if (0) g_eventLogger->info("empty(%u) ", pos);
+      if (false) g_eventLogger->info("empty(%u) ", pos);
       Uint32 search = pos + ACTIVE_GCI_DIRECTORY_SIZE;
       while (search < size) {
         if ((buckets + search)->m_gci == gci) {
           buckets[pos] = buckets[search];
           buckets[search].clear();
-          if (0) printf("moved from %u to %u", search, pos);
+          if (false) printf("moved from %u to %u", search, pos);
           if (search == size - 1) {
             m_active_gci.erase(search);
-            if (0) ndbout_c(" shrink");
+            if (false) ndbout_c(" shrink");
           } else {
-            if (0) printf("\n");
+            if (false) printf("\n");
           }
           return buckets + pos;
         }
@@ -1986,7 +1987,7 @@ Gci_container *NdbEventBuffer::find_bucket_chained(Uint64 gci) {
   /**
    * This is a new bucket...likely close to start
    */
-  if (0) g_eventLogger->info("new (with expand) ");
+  if (false) g_eventLogger->info("new (with expand) ");
 
   {
     Gci_container empty_gci_container(this);
@@ -2029,7 +2030,7 @@ newbucket:
     if (array[pos] > gci) break;
   }
 
-  if (0)
+  if (false)
     g_eventLogger->info("insert %u/%u (max %u/%u) at pos %u (min: %u max: %u)",
                         Uint32(gci >> 32), Uint32(gci),
                         Uint32(array[maxindex] >> 32), Uint32(array[maxindex]),
@@ -2173,7 +2174,7 @@ EpochData *NdbEventBuffer::create_empty_exceptional_epoch(Uint64 gci,
 void NdbEventBuffer::complete_bucket(Gci_container *bucket) {
   const Uint64 gci = bucket->m_gci;
 
-  if (0) {
+  if (false) {
     auto *buckets = (Gci_container *)m_active_gci.getBase();
     g_eventLogger->info("complete %u/%u pos: %u", Uint32(gci >> 32),
                         Uint32(gci), Uint32(bucket - buckets));
@@ -2284,7 +2285,7 @@ void NdbEventBuffer::execSUB_GCP_COMPLETE_REP(
 
   Gci_container *bucket = find_bucket(gci);
 
-  if (0)
+  if (false)
     g_eventLogger->info(
         "execSUB_GCP_COMPLETE_REP(%u/%u) cnt: %u from %x flags: 0x%x",
         Uint32(gci >> 32), Uint32(gci), cnt, rep->senderRef, rep->flags);
@@ -2727,7 +2728,7 @@ void NdbEventBuffer::set_total_buckets(Uint32 cnt) {
     const Uint64 gci = array[pos];
     Gci_container *tmp = find_bucket(gci);
     if (delta >= tmp->m_gcp_complete_rep_count) {
-      if (0)
+      if (false)
         g_eventLogger->info("set_total_buckets(%u) complete %u/%u", cnt,
                             Uint32(tmp->m_gci >> 32), Uint32(tmp->m_gci));
       tmp->m_gcp_complete_rep_count = 0;
@@ -3528,7 +3529,7 @@ int NdbEventBuffer::merge_data(const SubTableData *const sdata, Uint32 len,
       while (i1 < nkey) {
         j1 += AttributeHeader(ptr1[0].p[i1++]).getDataSize();
       }
-      while (1) {
+      while (true) {
         bool b1 = (i1 < ptr1[0].sz);
         bool b2 = (i2 < ptr2[0].sz);
         if (b1 && b2) {
@@ -3572,7 +3573,7 @@ int NdbEventBuffer::merge_data(const SubTableData *const sdata, Uint32 len,
       Uint32 k = 0;
       Uint32 k1 = 0;
       Uint32 k2 = 0;
-      while (1) {
+      while (true) {
         bool b1 = (k1 < ptr1[2].sz);
         bool b2 = (k2 < ptr2[2].sz);
         if (b1 && b2) {

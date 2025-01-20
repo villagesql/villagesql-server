@@ -193,7 +193,7 @@ int MultiNdbWakeupHandler::waitForInput(Ndb **_objs, int _cnt, int min_req,
         ignore_wakeups();
         break;
       }
-    } while (1);
+    } while (true);
   }
   finalize_wait(nready);
   return ret;

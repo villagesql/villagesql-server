@@ -435,7 +435,7 @@ static int ndb_index_stat_str2opt(const char *str, Ndb_index_stat_opt &opt) {
   strcpy(buf, str);
 
   char *p = buf;
-  while (1) {
+  while (true) {
     while (isspace(*p)) p++;
     if (*p == 0) break;
 
@@ -958,7 +958,7 @@ static Ndb_index_stat *ndb_index_stat_get_share(NDB_SHARE *share,
     snap.sample_version = st->sample_version;
     snap.error_count = st->error_count;
     st->access_time = now;
-  } while (0);
+  } while (false);
 
   if (err_out == 0) {
     st->acquire_client_ref();
@@ -1748,7 +1748,7 @@ static void ndb_index_stat_proc_event(Ndb_index_stat_proc &pr) {
   }
   if (ret == 0) return;
 
-  while (1) {
+  while (true) {
     ret = is->next_listener(ndb);
     DBUG_PRINT("index_stat", ("next_listener ret: %d", ret));
     if (ret == -1) {
@@ -2211,7 +2211,7 @@ void Ndb_index_stat_thread::do_run() {
       ndb_index_stat_set_allow(true);
       pr.busy = false;
       ndb_index_stat_proc(pr);
-    } while (0);
+    } while (false);
 
     /* Calculate new time to wake up */
 
@@ -2462,7 +2462,7 @@ int ha_ndbcluster::ndb_index_stat_query(uint inx, const key_range *min_key,
       mysql_mutex_unlock(&ndb_index_stat_thread.stat_mutex);
       break;
     }
-  } while (0);
+  } while (false);
 
   /* Release reference to st */
   st->release_client_ref();

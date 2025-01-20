@@ -664,7 +664,7 @@ inline bool TransporterFacade::get_node_alive(NodeId n) const {
   if (theClusterMgr) {
     return theClusterMgr->getNodeInfo(n).m_alive;
   }
-  return 0;
+  return false;
 }
 
 inline void TransporterFacade::hb_received(NodeId n) {

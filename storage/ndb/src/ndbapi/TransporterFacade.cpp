@@ -1827,7 +1827,7 @@ int TransporterFacade::close_clnt(trp_client *clnt) {
       clnt->prepare_poll();
       if (first) {
         clnt->raw_sendSignal(&signal, theOwnId);
-        clnt->do_forceSend(1);
+        clnt->do_forceSend(true);
         first = false;
       }
 
@@ -1912,7 +1912,7 @@ Uint32 TransporterFacade::open_clnt(trp_client *clnt, int blockNo) {
         clnt->complete_poll();
         DBUG_RETURN(0);
       }
-      clnt->do_forceSend(1);
+      clnt->do_forceSend(true);
       clnt->do_poll(10);
       clnt->complete_poll();
     } else {

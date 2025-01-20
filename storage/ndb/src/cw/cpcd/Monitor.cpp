@@ -57,7 +57,7 @@ CPCD::Monitor::~Monitor() {
 }
 
 void CPCD::Monitor::run() {
-  while (1) {
+  while (true) {
     NdbMutex_Lock(m_changeMutex);
     NdbCondition_WaitTimeout(m_changeCondition, m_changeMutex,
                              m_pollingInterval * 1000);

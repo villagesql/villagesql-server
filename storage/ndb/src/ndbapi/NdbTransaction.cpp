@@ -1010,7 +1010,7 @@ int NdbTransaction::executeNoBlobs(NdbTransaction::ExecType aTypeOfExec,
   m_waitForReply = false;
   executeAsynchPrepare(aTypeOfExec, nullptr, nullptr, abortOption);
   if (m_waitForReply) {
-    while (1) {
+    while (true) {
       int noOfComp = tNdb->sendPollNdb(3 * timeout, 1, forceSend);
       if (unlikely(noOfComp == 0)) {
         /*
@@ -2955,7 +2955,7 @@ const NdbOperation *NdbTransaction::readTuple(
       op->theSimpleIndicator = 1;
     }
 
-    theSimpleState = 0;
+    theSimpleState = false;
   }
 
   /* Setup the record/row for receiving the results. */
@@ -2981,7 +2981,7 @@ const NdbOperation *NdbTransaction::insertTuple(
                     attr_row, mask, opts, sizeOfOptions);
   if (!op) return nullptr;
 
-  theSimpleState = 0;
+  theSimpleState = false;
 
   return op;
 }
@@ -3010,7 +3010,7 @@ const NdbOperation *NdbTransaction::updateTuple(
                     attr_row, mask, opts, sizeOfOptions);
   if (!op) return op;
 
-  theSimpleState = 0;
+  theSimpleState = false;
 
   return op;
 }
@@ -3031,7 +3031,7 @@ const NdbOperation *NdbTransaction::deleteTuple(
                     result_row, result_mask, opts, sizeOfOptions);
   if (!op) return op;
 
-  theSimpleState = 0;
+  theSimpleState = false;
 
   if (result_row != nullptr)  // readBeforeDelete
   {
@@ -3059,7 +3059,7 @@ const NdbOperation *NdbTransaction::writeTuple(
                     attr_row, mask, opts, sizeOfOptions);
   if (!op) return op;
 
-  theSimpleState = 0;
+  theSimpleState = false;
 
   return op;
 }
@@ -3092,7 +3092,7 @@ const NdbOperation *NdbTransaction::refreshTuple(
                     key_row, keymask /* mask */, opts, sizeOfOptions);
   if (!op) return op;
 
-  theSimpleState = 0;
+  theSimpleState = false;
 
   return op;
 }

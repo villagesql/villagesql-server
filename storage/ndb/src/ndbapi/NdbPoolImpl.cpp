@@ -174,7 +174,7 @@ bool NdbPool::init(Uint32 init_no_objects) {
     }
     ret_result = true;
     break;
-  } while (1);
+  } while (true);
   return ret_result;
 }
 
@@ -194,7 +194,7 @@ Ndb *NdbPool::get_ndb_object(Uint32 &hint_id, const char *a_catalog_name,
   Ndb *ret_ndb = nullptr;
   Uint32 hash_entry = compute_hash(a_schema_name);
   NdbMutex_Lock(pool_mutex);
-  while (1) {
+  while (true) {
     /*
     We start by checking if we can use the hinted Ndb object.
     */
@@ -379,7 +379,7 @@ Ndb *NdbPool::get_hint_ndb(Uint32 hint_id, Uint32 hash_entry) {
       }
     }
     return nullptr;
-  } while (1);
+  } while (true);
   /*
   This is where we remove the entry from the free list and from the db hash
   table.

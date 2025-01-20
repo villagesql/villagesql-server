@@ -926,7 +926,7 @@ int NdbIndexStatImpl::read_stat(Ndb *ndb, Head &head) {
 
   if (read_start(con) == -1) return -1;
   if (save_start(con) == -1) return -1;
-  while (1) {
+  while (true) {
     int ret = read_next(con);
     if (ret == -1) return -1;
     if (ret != 0) break;
@@ -1748,7 +1748,7 @@ void NdbIndexStatImpl::cache_hsort(Cache &c) {
 void NdbIndexStatImpl::cache_hsort_sift(Cache &c, int i, int count) {
   int parent = i;
 
-  while (1) {
+  while (true) {
     // left child if any
     int child = parent * 2 + 1;
     if (!(child < count)) break;

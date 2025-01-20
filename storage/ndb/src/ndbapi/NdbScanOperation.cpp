@@ -2391,7 +2391,7 @@ NdbOperation *NdbScanOperation::takeOverScanOp(OperationType opType,
   if (newOp == nullptr) {
     return nullptr;
   }
-  pTrans->theSimpleState = 0;
+  pTrans->theSimpleState = false;
 
   assert(len > 0);
   assert(len < 16384);
@@ -2507,7 +2507,7 @@ NdbOperation *NdbScanOperation::takeOverScanOpNdbRecord(
   NdbOperation *op = pTrans->getNdbOperation(record->table, nullptr);
   if (!op) return nullptr;
 
-  pTrans->theSimpleState = 0;
+  pTrans->theSimpleState = false;
   op->theStatus = NdbOperation::UseNdbRecord;
   op->theOperationType = opType;
   op->m_abortOption = AbortOnError;

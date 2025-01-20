@@ -690,7 +690,7 @@ int SendTest::runTest() {
 }
 
 int SendTest::testRecv() {
-  while (1) {
+  while (true) {
     int r = recv(m_buff_size);
     if (verbose()) printf("                    RECV    .. %d \n", r);
     if (r < 1 && r != TLS_BUSY_TRY_AGAIN) return r;
@@ -741,7 +741,7 @@ int ReadLineTest::testRecv() {
   if (opt_data_dest && !outfp) return error_message("Destination file", -1);
   int r = 0;
   int elapsed_time;
-  while (1) {
+  while (true) {
     elapsed_time = 0;
     r = m_socket.readln(m_timeout, &elapsed_time, m_recv_buffer, m_buff_size,
                         nullptr);
@@ -849,7 +849,7 @@ WritevTest::WritevTest(NdbSocket &s, const char *name, size_t buff,
 int WritevTest::retry_writev() {
   IovList iov(m_iov);
   int nsent = 0;
-  while (1) {
+  while (true) {
     int r = iov.writev(m_socket, m_timeout);
     if (r > 0) nsent += r;
     if (verbose()) printf("WRITEV  .. %d .. %llu \n", r, m_bytes_sent + nsent);
@@ -867,7 +867,7 @@ int WritevTest::testSend() {
   FILE *infp = fopen(opt_data_source, "r");
   int sent = 0;
 
-  while (1) {
+  while (true) {
     m_bytes_sent += sent;
     if (m_bytes_sent >= m_test_bytes) break;
 

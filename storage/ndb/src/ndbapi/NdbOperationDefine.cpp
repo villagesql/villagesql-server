@@ -41,7 +41,7 @@ int NdbOperation::insertTuple() {
   if (theStatus == Init) {
     theStatus = OperationDefined;
     theOperationType = InsertRequest;
-    tNdbCon->theSimpleState = 0;
+    tNdbCon->theSimpleState = false;
     theErrorLine = tErrorLine++;
     theLockMode = LM_Exclusive;
     m_abortOption = AbortOnError;
@@ -59,7 +59,7 @@ int NdbOperation::updateTuple() {
   int tErrorLine = theErrorLine;
   if (theStatus == Init) {
     theStatus = OperationDefined;
-    tNdbCon->theSimpleState = 0;
+    tNdbCon->theSimpleState = false;
     theOperationType = UpdateRequest;
     theErrorLine = tErrorLine++;
     theLockMode = LM_Exclusive;
@@ -78,7 +78,7 @@ int NdbOperation::writeTuple() {
   int tErrorLine = theErrorLine;
   if (theStatus == Init) {
     theStatus = OperationDefined;
-    tNdbCon->theSimpleState = 0;
+    tNdbCon->theSimpleState = false;
     theOperationType = WriteRequest;
     theErrorLine = tErrorLine++;
     theLockMode = LM_Exclusive;
@@ -97,7 +97,7 @@ int NdbOperation::deleteTuple() {
   int tErrorLine = theErrorLine;
   if (theStatus == Init) {
     theStatus = OperationDefined;
-    tNdbCon->theSimpleState = 0;
+    tNdbCon->theSimpleState = false;
     theOperationType = DeleteRequest;
     theErrorLine = tErrorLine++;
     theLockMode = LM_Exclusive;
@@ -137,7 +137,7 @@ int NdbOperation::readTuple() {
   int tErrorLine = theErrorLine;
   if (theStatus == Init) {
     theStatus = OperationDefined;
-    tNdbCon->theSimpleState = 0;
+    tNdbCon->theSimpleState = false;
     theOperationType = ReadRequest;
     theErrorLine = tErrorLine++;
     theLockMode = LM_Read;
@@ -157,7 +157,7 @@ int NdbOperation::readTupleExclusive() {
   int tErrorLine = theErrorLine;
   if (theStatus == Init) {
     theStatus = OperationDefined;
-    tNdbCon->theSimpleState = 0;
+    tNdbCon->theSimpleState = false;
     theOperationType = ReadExclusive;
     theErrorLine = tErrorLine++;
     theLockMode = LM_Exclusive;
@@ -183,7 +183,7 @@ int NdbOperation::simpleRead() {
     theErrorLine = tErrorLine++;
     theLockMode = LM_SimpleRead;
     m_abortOption = AO_IgnoreError;
-    tNdbCon->theSimpleState = 0;
+    tNdbCon->theSimpleState = false;
     return 0;
   } else {
     setErrorCode(4200);
@@ -227,7 +227,7 @@ int NdbOperation::dirtyUpdate() {
   if (theStatus == Init) {
     theStatus = OperationDefined;
     theOperationType = UpdateRequest;
-    tNdbCon->theSimpleState = 0;
+    tNdbCon->theSimpleState = false;
     theSimpleIndicator = 1;
     theDirtyIndicator = 1;
     theErrorLine = tErrorLine++;
@@ -249,7 +249,7 @@ int NdbOperation::dirtyWrite() {
   if (theStatus == Init) {
     theStatus = OperationDefined;
     theOperationType = WriteRequest;
-    tNdbCon->theSimpleState = 0;
+    tNdbCon->theSimpleState = false;
     theSimpleIndicator = 1;
     theDirtyIndicator = 1;
     theErrorLine = tErrorLine++;
@@ -270,7 +270,7 @@ int NdbOperation::interpretedUpdateTuple() {
   int tErrorLine = theErrorLine;
   if (theStatus == Init) {
     theStatus = OperationDefined;
-    tNdbCon->theSimpleState = 0;
+    tNdbCon->theSimpleState = false;
     theOperationType = UpdateRequest;
     theAI_LenInCurrAI = 25;
     theLockMode = LM_Exclusive;
@@ -298,7 +298,7 @@ int NdbOperation::interpretedWriteTuple() {
   int tErrorLine = theErrorLine;
   if (theStatus == Init) {
     theStatus = OperationDefined;
-    tNdbCon->theSimpleState = 0;
+    tNdbCon->theSimpleState = false;
     theOperationType = WriteRequest;
     theAI_LenInCurrAI = 25;
     theLockMode = LM_Exclusive;
@@ -320,7 +320,7 @@ int NdbOperation::interpretedDeleteTuple() {
   int tErrorLine = theErrorLine;
   if (theStatus == Init) {
     theStatus = OperationDefined;
-    tNdbCon->theSimpleState = 0;
+    tNdbCon->theSimpleState = false;
     theOperationType = DeleteRequest;
 
     theErrorLine = tErrorLine++;
@@ -350,13 +350,13 @@ void NdbOperation::setReadLockMode(LockMode lockMode) {
       theDirtyIndicator = 0;
       break;
     case LM_Read:
-      theNdbCon->theSimpleState = 0;
+      theNdbCon->theSimpleState = false;
       theOperationType = ReadRequest;
       theSimpleIndicator = 0;
       theDirtyIndicator = 0;
       break;
     case LM_Exclusive:
-      theNdbCon->theSimpleState = 0;
+      theNdbCon->theSimpleState = false;
       theOperationType = ReadExclusive;
       theSimpleIndicator = 0;
       theDirtyIndicator = 0;

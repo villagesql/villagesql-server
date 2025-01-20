@@ -1246,7 +1246,7 @@ int THRConfig::handle_spec(const char *str, unsigned realtime,
         m_threads[type][index + i].m_nosend = values[IX_NOSEND].unsigned_val;
       }
     }
-  } while (1);
+  } while (true);
   return 0;
 }
 

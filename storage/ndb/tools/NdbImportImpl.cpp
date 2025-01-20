@@ -151,7 +151,7 @@ int NdbImportImpl::get_nodes(Nodes &c) {
     }
     mgm.do_disconnect();
     return 0;
-  } while (0);
+  } while (false);
   return -1;
 }
 
@@ -498,7 +498,7 @@ void NdbImportImpl::Job::do_start() {
       check_userstop();
       NdbSleep_MilliSleep(opt.m_checkloop);
     }
-  } while (0);
+  } while (false);
   log_debug(1, "stop");
   while (m_state != JobState::State_stopped) {
     log_debug(2, "stopping");
@@ -820,7 +820,7 @@ void NdbImportImpl::Team::wait_worker(Worker *w, WorkerState::State state) {
   const Opt &opt = m_util.c_opt;
   uint timeout = opt.m_idlesleep;
   w->lock();
-  while (1) {
+  while (true) {
     log_debug(1, *w << ": wait for " << g_str_state(state));
     if (w->m_state == state || w->m_state == WorkerState::State_stopped) break;
     w->wait(timeout);
@@ -1647,7 +1647,7 @@ void NdbImportImpl::CsvInputWorker::state_send() {
     }
     log_debug(2, "send ready and eof");
     m_inputstate = InputState::State_eof;
-  } while (0);
+  } while (false);
 }
 
 // print
@@ -1808,7 +1808,7 @@ int NdbImportImpl::DbWorker::create_ndb(uint transcnt) {
     }
     m_ndb = ndb;
     return 0;
-  } while (0);
+  } while (false);
   delete ndb;
   return -1;
 }
@@ -2239,7 +2239,7 @@ void NdbImportImpl::ExecOpWorker::state_receive() {
     log_debug(2, "wait for more rows");
     m_idle = true;
     return;
-  } while (0);
+  } while (false);
   // assign op to each row and move the row under the op
   require(m_ops.cnt() == 0);
   Row *row;
@@ -2874,7 +2874,7 @@ void NdbImportImpl::DiagTeam::read_old_diags(const char *name, const char *path,
   {
     uint i = 0;  // current index
     uint n = 0;  // number of buffer switches
-    while (1) {
+    while (true) {
       uint j = 1 - i;
       CsvInput &csvinput1 = *csvinput[i];
       Buf &b1 = buf[i];
@@ -3368,7 +3368,7 @@ void NdbImportImpl::DiagWorker::write_reject() {
   Buf &buf = m_reject_buf;
   RowList &rows_reject = *job.m_rows_reject;
   rows_reject.lock();
-  while (1) {
+  while (true) {
     Row *row = rows_reject.pop_front();
     require(!rows_reject.m_eof);
     if (row == 0) {

@@ -111,7 +111,7 @@ bool ndb_std_get_one_option(int optid, const struct my_option *opt,
       (*g_ndb_opt_usage)();
       exit(0);
   }
-  return 0;
+  return false;
 }
 
 void ndb_std_print_version() {

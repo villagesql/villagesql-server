@@ -311,7 +311,7 @@ TEST_F(XcomSingleWriter, test_analyze_leaders) {
   assert_found_leaders(1);
 
   // Single writer, all nodes in global node set
-  site.cached_leaders = 0;
+  site.cached_leaders = false;
   set_node_set(&site.global_node_set);
 
   ::analyze_leaders(&site);
@@ -326,7 +326,7 @@ TEST_F(XcomSingleWriter, test_analyze_leaders) {
   site.leaders = alloc_leader_array(1);
   site.leaders.leader_array_val[0].address = strdup(node1);
 
-  site.cached_leaders = 0;
+  site.cached_leaders = false;
   reset_node_set(&site.global_node_set);  // Mark all as down
 
   ::analyze_leaders(&site);
@@ -335,7 +335,7 @@ TEST_F(XcomSingleWriter, test_analyze_leaders) {
   assert_leader(0, "all are down");
   assert_found_leaders(1);
 
-  site.cached_leaders = 0;
+  site.cached_leaders = false;
   set_node_set(&site.global_node_set);  // Mark all as present
 
   ::analyze_leaders(&site);
@@ -346,7 +346,7 @@ TEST_F(XcomSingleWriter, test_analyze_leaders) {
 
   // Remove leader from global node set
   site.global_node_set.node_set_val[1] = 0;
-  site.cached_leaders = 0;
+  site.cached_leaders = false;
 
   ::analyze_leaders(&site);
   assert_cached_leaders();

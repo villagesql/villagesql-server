@@ -124,7 +124,7 @@ static void calculate_lcp_sizes(long double &lcp_size,
   long double recovery_work = 60.0;
   long double insert_work = 45.0;
   long double delete_work = 120.0;
-  if (1) {
+  if (true) {
     long double rate = update_rate;
     rate /= (long double)db_size;
     rate *= (long double)2048.0;

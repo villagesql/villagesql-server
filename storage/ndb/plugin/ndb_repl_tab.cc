@@ -408,7 +408,7 @@ int Ndb_rep_tab_reader::lookup(Ndb *ndb,
         conflict_fn_spec = conflict_fn_buffer;
       }
     }
-  } while (0);
+  } while (false);
 
   /* Error handling */
   if (error == 0) {

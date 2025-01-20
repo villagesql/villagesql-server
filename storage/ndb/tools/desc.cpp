@@ -476,7 +476,7 @@ static void print_part_info(Ndb *pNdb, NdbDictionary::Table const *pTab) {
 
       printf("\n");
     }
-  } while (0);
+  } while (false);
   pTrans->close();
 }
 

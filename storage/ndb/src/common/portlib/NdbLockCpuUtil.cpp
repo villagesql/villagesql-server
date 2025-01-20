@@ -99,7 +99,7 @@ static int use_processor_set(const Uint32 *cpu_ids, Uint32 num_cpu_ids,
     }
   }
 
-  while (1) {
+  while (true) {
     for (i = 0; i < num_processor_sets; i++) {
       handler = proc_set_array + i;
       if (handler->ref_count == 0) {

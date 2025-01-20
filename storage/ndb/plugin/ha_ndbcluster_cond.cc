@@ -2395,7 +2395,7 @@ int ha_ndbcluster_cond::generate_scan_filter_from_key(
     DBUG_PRINT("info", ("Unknown hash index scan"));
     // Catch new cases when optimizer changes
     assert(false);
-  } while (0);
+  } while (false);
 
   return 0;
 }

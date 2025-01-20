@@ -3841,7 +3841,7 @@ static bool saveInConfigValues(InitConfigFileParser::Context &ctx,
       require(ok);
     }
     ctx.m_configValues.closeSection();
-  } while (0);
+  } while (false);
   return true;
 }
 
@@ -4088,7 +4088,7 @@ static bool add_node_connections(
   for (i = 0; p_mgm_nodes.get("", i, &nodeId1); i++) {
     for (Uint32 j = 0; p_db_nodes.get("", j, &nodeId2); j++) {
       if (!p_connections.get("", nodeId1 + (nodeId2 << 16), &dummy)) {
-        if (!add_a_connection(sections, ctx, nodeId1, nodeId2, 0)) goto err;
+        if (!add_a_connection(sections, ctx, nodeId1, nodeId2, false)) goto err;
       }
     }
   }
@@ -4098,7 +4098,7 @@ static bool add_node_connections(
     for (Uint32 j = i + 1;; j++) {
       if (!p_mgm_nodes.get("", j, &nodeId2)) break;
       if (!p_connections.get("", nodeId1 + (nodeId2 << 16), &dummy)) {
-        if (!add_a_connection(sections, ctx, nodeId1, nodeId2, 0)) goto err;
+        if (!add_a_connection(sections, ctx, nodeId1, nodeId2, false)) goto err;
       }
     }
   }

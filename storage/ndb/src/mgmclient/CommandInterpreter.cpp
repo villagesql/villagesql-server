@@ -1812,7 +1812,7 @@ int CommandInterpreter::executePurge(char *parameters) {
       command_ok = 1;
       break;
     }
-  } while (0);
+  } while (false);
 
   if (!command_ok) {
     ndbout_c("Unexpected command, expected: PURGE STALE SESSIONS");

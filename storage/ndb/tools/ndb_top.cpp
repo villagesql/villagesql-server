@@ -86,17 +86,17 @@ char *opt_host = (char *)"localhost";
 char *opt_user = (char *)"root";
 char *opt_password = 0;
 char *opt_socket = 0;
-bool tty_password = 0;
+bool tty_password = false;
 char *db_name = (char *)"ndbinfo";
 unsigned int opt_node_id = 0;
 unsigned int opt_sleep_time = 0;
-bool opt_measured_load = 0;
-bool opt_os_load = 0;
-bool opt_color = 0;
-bool opt_text = 0;
-bool opt_graph = 0;
-bool opt_sort = 0;
-bool opt_help = 0;
+bool opt_measured_load = false;
+bool opt_os_load = false;
+bool opt_color = false;
+bool opt_text = false;
+bool opt_graph = false;
+bool opt_sort = false;
+bool opt_help = false;
 
 static char percentage_sign = '%';
 const char *load_default_groups[] = {"ndb_top", "client", 0};
@@ -351,9 +351,9 @@ static bool get_one_option(int optid,
         opt_password = my_strdup(PSI_NOT_INSTRUMENTED, argument, MYF(MY_FAE));
         while (*argument) *argument++ = 'x'; /* Destroy argument */
         if (*start) start[1] = 0;            /* Cut length of argument */
-        tty_password = 0;
+        tty_password = false;
       } else
-        tty_password = 1;
+        tty_password = true;
       break;
     }
     case '?': {
@@ -493,7 +493,7 @@ int main(int argc, char **argv) {
       init_pair(DEFAULT_COLOR, -1, -1);
     }
   }
-  while (1) {
+  while (true) {
     int res;
     if ((res = query_mysql() != 0)) {
       refresh();

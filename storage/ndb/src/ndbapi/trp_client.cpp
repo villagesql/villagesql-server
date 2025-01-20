@@ -514,7 +514,7 @@ int PollGuard::wait_for_input_in_loop(int max_wait_ms, bool forceSend) {
      * Ensure no reply-signals sent by receivers remains unflushed.
      */
     assert(m_clnt->has_unflushed_sends() == false);
-  } while (1);
+  } while (true);
 #ifdef VM_TRACE
   if (verbose) {
     ndbout << "ERR: receiveResponse - theImpl->theWaiter.m_state = ";

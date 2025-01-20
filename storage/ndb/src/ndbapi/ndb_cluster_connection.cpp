@@ -354,7 +354,7 @@ int Ndb_cluster_connection::wait_until_ready(int timeout,
       secondsCounter++;
       milliCounter = 0;
     }  // if
-  } while (1);
+  } while (true);
 }
 
 unsigned Ndb_cluster_connection::get_connect_count() const {
@@ -1404,7 +1404,7 @@ int Ndb_cluster_connection_impl::connect(int no_retries,
     m_latest_error_msg.assign("");
     DBUG_PRINT("exit", ("connect ok, ret: 0"));
     DBUG_RETURN(0);
-  } while (0);
+  } while (false);
 
   const char *erString = m_config_retriever->getErrorString();
   if (erString == nullptr) {

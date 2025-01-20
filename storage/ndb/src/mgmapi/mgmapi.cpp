@@ -2920,7 +2920,7 @@ struct ndb_mgm_configuration *ndb_mgm_get_configuration2(
 
     delete prop;
     DBUG_RETURN((ndb_mgm_configuration *)cvf.getConfigValues());
-  } while (0);
+  } while (false);
 
   delete prop;
   DBUG_RETURN(nullptr);
@@ -3035,7 +3035,7 @@ extern "C" int ndb_mgm_alloc_nodeid(NdbMgmHandle handle, unsigned int version,
       break;
     }
     nodeid = _nodeid;
-  } while (0);
+  } while (false);
 
   delete prop;
   DBUG_RETURN(nodeid);
@@ -3069,7 +3069,7 @@ extern "C" int ndb_mgm_set_int_parameter(NdbMgmHandle handle, int node,
       break;
     }
     res = 0;
-  } while (0);
+  } while (false);
 
   delete prop;
   DBUG_RETURN(res);
@@ -3108,7 +3108,7 @@ extern "C" int ndb_mgm_set_int64_parameter(NdbMgmHandle handle, int node,
       break;
     }
     res = 0;
-  } while (0);
+  } while (false);
 
   delete prop;
   DBUG_RETURN(res);
@@ -3147,7 +3147,7 @@ extern "C" int ndb_mgm_set_string_parameter(NdbMgmHandle handle, int node,
       break;
     }
     res = 0;
-  } while (0);
+  } while (false);
 
   delete prop;
   DBUG_RETURN(res);
@@ -3189,7 +3189,7 @@ extern "C" int ndb_mgm_purge_stale_sessions(NdbMgmHandle handle,
         *purged = nullptr;
     }
     res = 0;
-  } while (0);
+  } while (false);
   delete prop;
   DBUG_RETURN(res);
 }
@@ -3252,7 +3252,7 @@ int ndb_mgm_set_connection_int_parameter(NdbMgmHandle handle, int node1,
       break;
     }
     res = 0;
-  } while (0);
+  } while (false);
 
   delete prop;
   DBUG_RETURN(res);
@@ -3286,7 +3286,7 @@ int ndb_mgm_get_connection_int_parameter(NdbMgmHandle handle, int node1,
       break;
     }
     res = 0;
-  } while (0);
+  } while (false);
 
   if (!prop->get("value", (Uint32 *)value)) {
     fprintf(handle->errstream, "Unable to get value\n");

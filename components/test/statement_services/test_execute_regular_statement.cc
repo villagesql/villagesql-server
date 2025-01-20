@@ -187,8 +187,8 @@ auto test_execute_regular_statement_init(UDF_INIT *udf_init, UDF_ARGS *, char *)
     -> bool {
   if (SERVICE_PLACEHOLDER(mysql_udf_metadata)
           ->result_set(udf_init, "charset", const_cast<char *>("utf8mb4")))
-    return 1;
-  return 0;
+    return true;
+  return false;
 }
 
 static auto init() -> mysql_service_status_t {

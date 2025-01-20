@@ -74,44 +74,44 @@ struct Ndb_pack_type_info {
 };
 
 static const Ndb_pack_type_info g_ndb_pack_type_info[] = {
-    {0, 0, 0, 0, 0},  // NDB_TYPE_UNDEFINED
-    {1, 1, 0, 0, 1},  // NDB_TYPE_TINYINT
-    {1, 1, 0, 0, 1},  // NDB_TYPE_TINYUNSIGNED
-    {1, 2, 0, 0, 1},  // NDB_TYPE_SMALLINT
-    {1, 2, 0, 0, 1},  // NDB_TYPE_SMALLUNSIGNED
-    {1, 3, 0, 0, 1},  // NDB_TYPE_MEDIUMINT
-    {1, 3, 0, 0, 1},  // NDB_TYPE_MEDIUMUNSIGNED
-    {1, 4, 0, 0, 1},  // NDB_TYPE_INT
-    {1, 4, 0, 0, 1},  // NDB_TYPE_UNSIGNED
-    {1, 8, 0, 0, 1},  // NDB_TYPE_BIGINT
-    {1, 8, 0, 0, 1},  // NDB_TYPE_BIGUNSIGNED
-    {1, 4, 0, 0, 1},  // NDB_TYPE_FLOAT
-    {1, 8, 0, 0, 1},  // NDB_TYPE_DOUBLE
-    {1, 0, 0, 0, 0},  // NDB_TYPE_OLDDECIMAL
-    {1, 0, 0, 1, 0},  // NDB_TYPE_CHAR
-    {1, 0, 1, 1, 0},  // NDB_TYPE_VARCHAR
-    {1, 0, 0, 0, 0},  // NDB_TYPE_BINARY
-    {1, 0, 1, 0, 0},  // NDB_TYPE_VARBINARY
-    {1, 8, 0, 0, 0},  // NDB_TYPE_DATETIME
-    {1, 3, 0, 0, 0},  // NDB_TYPE_DATE
-    {0, 0, 0, 0, 0},  // NDB_TYPE_BLOB
-    {0, 0, 0, 1, 0},  // NDB_TYPE_TEXT
-    {0, 0, 0, 0, 0},  // NDB_TYPE_BIT
-    {1, 0, 2, 1, 0},  // NDB_TYPE_LONGVARCHAR
-    {1, 0, 2, 0, 0},  // NDB_TYPE_LONGVARBINARY
-    {1, 3, 0, 0, 0},  // NDB_TYPE_TIME
-    {1, 1, 0, 0, 0},  // NDB_TYPE_YEAR
-    {1, 4, 0, 0, 0},  // NDB_TYPE_TIMESTAMP
-    {1, 0, 0, 0, 0},  // NDB_TYPE_OLDDECIMALUNSIGNED
-    {1, 0, 0, 0, 0},  // NDB_TYPE_DECIMAL
-    {1, 0, 0, 0, 0},  // NDB_TYPE_DECIMALUNSIGNED
+    {false, 0, 0, false, false},  // NDB_TYPE_UNDEFINED
+    {true, 1, 0, false, true},    // NDB_TYPE_TINYINT
+    {true, 1, 0, false, true},    // NDB_TYPE_TINYUNSIGNED
+    {true, 2, 0, false, true},    // NDB_TYPE_SMALLINT
+    {true, 2, 0, false, true},    // NDB_TYPE_SMALLUNSIGNED
+    {true, 3, 0, false, true},    // NDB_TYPE_MEDIUMINT
+    {true, 3, 0, false, true},    // NDB_TYPE_MEDIUMUNSIGNED
+    {true, 4, 0, false, true},    // NDB_TYPE_INT
+    {true, 4, 0, false, true},    // NDB_TYPE_UNSIGNED
+    {true, 8, 0, false, true},    // NDB_TYPE_BIGINT
+    {true, 8, 0, false, true},    // NDB_TYPE_BIGUNSIGNED
+    {true, 4, 0, false, true},    // NDB_TYPE_FLOAT
+    {true, 8, 0, false, true},    // NDB_TYPE_DOUBLE
+    {true, 0, 0, false, false},   // NDB_TYPE_OLDDECIMAL
+    {true, 0, 0, true, false},    // NDB_TYPE_CHAR
+    {true, 0, 1, true, false},    // NDB_TYPE_VARCHAR
+    {true, 0, 0, false, false},   // NDB_TYPE_BINARY
+    {true, 0, 1, false, false},   // NDB_TYPE_VARBINARY
+    {true, 8, 0, false, false},   // NDB_TYPE_DATETIME
+    {true, 3, 0, false, false},   // NDB_TYPE_DATE
+    {false, 0, 0, false, false},  // NDB_TYPE_BLOB
+    {false, 0, 0, true, false},   // NDB_TYPE_TEXT
+    {false, 0, 0, false, false},  // NDB_TYPE_BIT
+    {true, 0, 2, true, false},    // NDB_TYPE_LONGVARCHAR
+    {true, 0, 2, false, false},   // NDB_TYPE_LONGVARBINARY
+    {true, 3, 0, false, false},   // NDB_TYPE_TIME
+    {true, 1, 0, false, false},   // NDB_TYPE_YEAR
+    {true, 4, 0, false, false},   // NDB_TYPE_TIMESTAMP
+    {true, 0, 0, false, false},   // NDB_TYPE_OLDDECIMALUNSIGNED
+    {true, 0, 0, false, false},   // NDB_TYPE_DECIMAL
+    {true, 0, 0, false, false},   // NDB_TYPE_DECIMALUNSIGNED
     /*
      * Fractional time types are varsized.
      * There is no size validation yet.
      */
-    {1, 0, 0, 0, 0},  // NDB_TYPE_TIME2      (3+(0-3) bytes)
-    {1, 0, 0, 0, 0},  // NDB_TYPE_DATETIME2  (5+(0-3) bytes)
-    {1, 0, 0, 0, 0}   // NDB_TYPE_TIMESTAMP2 (4+(0-3) bytes)
+    {true, 0, 0, false, false},  // NDB_TYPE_TIME2      (3+(0-3) bytes)
+    {true, 0, 0, false, false},  // NDB_TYPE_DATETIME2  (5+(0-3) bytes)
+    {true, 0, 0, false, false}   // NDB_TYPE_TIMESTAMP2 (4+(0-3) bytes)
 };
 
 static const int g_ndb_pack_type_info_cnt =

@@ -698,7 +698,7 @@ void NdbTableImpl::init() {
   m_storageType = NDB_STORAGETYPE_DEFAULT;
   m_extra_row_gci_bits = 0;
   m_extra_row_author_bits = 0;
-  m_read_backup = 0;
+  m_read_backup = false;
   m_fully_replicated = false;
 
 #ifdef VM_TRACE
@@ -4689,10 +4689,10 @@ int NdbDictInterface::create_index_obj_from_table(NdbIndexImpl **dst,
         (primCol->m_distributionKey ||
          (distKeys == 0 && primCol->getPrimaryKey()))) {
       keyCount--;
-      org->m_distributionKey = 1;
+      org->m_distributionKey = true;
     } else if (type == NdbDictionary::Object::UniqueHashIndex) {
       keyCount--;
-      org->m_distributionKey = 1;
+      org->m_distributionKey = true;
     }
   }
 
@@ -4700,7 +4700,7 @@ int NdbDictInterface::create_index_obj_from_table(NdbIndexImpl **dst,
     tab->m_noOfDistributionKeys = fullKeyCount;
   } else {
     for (i = 0; i + 1 < tab->m_columns.size(); i++)
-      tab->m_columns[i]->m_distributionKey = 0;
+      tab->m_columns[i]->m_distributionKey = false;
   }
 
   idx->m_table_id = prim->getObjectId();

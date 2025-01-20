@@ -366,7 +366,7 @@ bool SHM_Transporter::connect_server_impl(NdbSocket &&sockfd) {
         (stderr, "(%u)set_socket()(%u)\n", localNodeId, remoteNodeId));
     set_socket(std::move(sockfd));
     DBUG_RETURN(true);
-  } while (0);
+  } while (false);
 
   /* Error occurred */
 
@@ -497,7 +497,7 @@ bool SHM_Transporter::connect_client_impl(NdbSocket &&sockfd) {
     set_socket(std::move(sockfd));
     DEBUG_FPRINTF((stderr, "(%u)set_socket(%u)\n", localNodeId, remoteNodeId));
     DBUG_RETURN(true);
-  } while (0);
+  } while (false);
 
   /* Error occurred */
 
@@ -848,6 +848,6 @@ bool SHM_Transporter::send_is_possible(int timeout_millisec) const {
     } else {
       break;
     }
-  } while (1);
+  } while (true);
   return true;
 }

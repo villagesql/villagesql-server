@@ -532,7 +532,7 @@ extern "C" int ndb_logevent_get_next2(const NdbLogEventHandle h,
   */
   char buf[1024];
   const NDB_TICKS start = NdbTick_getCurrentTicks();
-  while (1) {
+  while (true) {
     if (in.gets(buf, sizeof(buf)) == nullptr) {
       h->m_error = NDB_LEH_READ_ERROR;
       return -1;
@@ -555,7 +555,7 @@ extern "C" int ndb_logevent_get_next2(const NdbLogEventHandle h,
 
   /* Read name-value pairs until empty new line */
   Properties p;
-  while (1) {
+  while (true) {
     if (in.gets(buf, sizeof(buf)) == nullptr) {
       h->m_error = NDB_LEH_READ_ERROR;
       return -1;

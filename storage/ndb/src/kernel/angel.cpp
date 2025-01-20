@@ -783,9 +783,9 @@ void angel_run(const char *progname, const Vector<BaseString> &original_args,
       switch (WEXITSTATUS(status)) {
         case NRT_Default:
           g_eventLogger->info("Angel shutting down");
-          reportShutdown(config.get(), nodeid, 0, 0, false, false, child_error,
-                         child_signal, child_sphase, retriever.ssl_ctx(),
-                         mgm_tls_level);
+          reportShutdown(config.get(), nodeid, 0, false, false, false,
+                         child_error, child_signal, child_sphase,
+                         retriever.ssl_ctx(), mgm_tls_level);
           angel_exit(0);
           break;
         case NRT_NoStart_Restart:
@@ -806,8 +806,8 @@ void angel_run(const char *progname, const Vector<BaseString> &original_args,
             /**
              * Error shutdown && stopOnError()
              */
-            reportShutdown(config.get(), nodeid, error_exit, 0, false, false,
-                           child_error, child_signal, child_sphase,
+            reportShutdown(config.get(), nodeid, error_exit, false, false,
+                           false, child_error, child_signal, child_sphase,
                            retriever.ssl_ctx(), mgm_tls_level);
             angel_exit(0);
           }
@@ -831,7 +831,7 @@ void angel_run(const char *progname, const Vector<BaseString> &original_args,
         /**
          * Error shutdown && stopOnError()
          */
-        reportShutdown(config.get(), nodeid, error_exit, 0, false, false,
+        reportShutdown(config.get(), nodeid, error_exit, false, false, false,
                        child_error, child_signal, child_sphase,
                        retriever.ssl_ctx(), mgm_tls_level);
         angel_exit(0);
@@ -854,7 +854,7 @@ void angel_run(const char *progname, const Vector<BaseString> &original_args,
             "Angel detected too many startup failures(%d), "
             "not restarting again",
             failed_startups_counter);
-        reportShutdown(config.get(), nodeid, error_exit, 0, false, false,
+        reportShutdown(config.get(), nodeid, error_exit, false, false, false,
                        child_error, child_signal, child_sphase,
                        retriever.ssl_ctx(), mgm_tls_level);
         angel_exit(0);
@@ -868,7 +868,7 @@ void angel_run(const char *progname, const Vector<BaseString> &original_args,
       failed_startups_counter = 0;
     }
 
-    reportShutdown(config.get(), nodeid, error_exit, 1, no_start, initial,
+    reportShutdown(config.get(), nodeid, error_exit, true, no_start, initial,
                    child_error, child_signal, child_sphase, retriever.ssl_ctx(),
                    mgm_tls_level);
     g_eventLogger->info(

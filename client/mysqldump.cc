@@ -5178,7 +5178,7 @@ static bool dump_all_views_in_db(char *database) {
   char hash_key[2 * NAME_LEN + 2]; /* "db.tablename" */
   char *afterdot;
 
-  if (opt_ignore_views) return 0;
+  if (opt_ignore_views) return false;
 
   afterdot = my_stpcpy(hash_key, database);
   *afterdot++ = '.';

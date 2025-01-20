@@ -415,7 +415,7 @@ static int checkarg(TableArg &arg, const char *str) {
     arg.m_rowmap_file = path + stem + ".map";
     arg.m_stopt_file = path + stem + ".sto";
     arg.m_stats_file = path + stem + ".stt";
-  } while (0);
+  } while (false);
   return ret;
 }
 
@@ -470,7 +470,7 @@ static int checkopts(int argc, char **argv) {
     for (uint i = 0; i < g_tablecnt; i++) {
       CHK1(checkarg(g_tablearg[i], argv[i]) == 0);
     }
-  } while (0);
+  } while (false);
   return ret;
 }
 
@@ -554,7 +554,7 @@ static int checkerrins() {
       }
     }
     CHK2(found, "undefined error insert: " << type);
-  } while (0);
+  } while (false);
   return ret;
 }
 
@@ -716,7 +716,7 @@ static void domonitor(NdbImport::Job &job) {
   JobStats old_stats = job.m_stats;
   const uint maxtreshold = 1000;
   uint treshold = 1;
-  while (1) {
+  while (true) {
     NdbSleep_MilliSleep(g_opt.m_checkloop);
     job.get_status();
     JobStatus::Status status = job.m_status;
@@ -783,7 +783,7 @@ static int doimp() {
         if (job.remove_table(tabid) == -1) {
           break;
         }
-      } while (0);
+      } while (false);
       bool imp_error = imp.has_error();
       bool job_error = job.has_error();
       job.get_status();
@@ -807,7 +807,7 @@ static int doimp() {
       }
     }
     CHK1(ret == 0);
-  } while (0);
+  } while (false);
   imp.do_disconnect();
   LOG("jobs summary:"
       << " defined: " << jobs_defined << " run: " << jobs_run
@@ -822,7 +822,7 @@ static int doall() {
     setsighandler(true);
     doerrins();
     CHK1(doimp() == 0);
-  } while (0);
+  } while (false);
   clearerrins();
   setsighandler(false);
   return ret;
