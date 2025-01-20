@@ -1213,7 +1213,7 @@ Gcs_xcom_node_address *Gcs_xcom_interface::get_node_address() {
 
 void Gcs_xcom_interface::set_node_address(std::string const &address) {
   delete m_node_address;
-  m_node_address = new Gcs_xcom_node_address(address.c_str());
+  m_node_address = new Gcs_xcom_node_address(address);
   xcom_local_port = m_node_address->get_member_port();
 }
 
@@ -1886,7 +1886,7 @@ void cb_xcom_logger(const int64_t level, const char *message) {
   log << GCS_PREFIX << message;
 
   Gcs_log_manager::get_logger()->log_event(static_cast<gcs_log_level_t>(level),
-                                           log.str().c_str());
+                                           log.str());
 }
 
 /**

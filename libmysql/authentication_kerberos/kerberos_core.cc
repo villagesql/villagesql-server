@@ -336,7 +336,7 @@ bool Kerberos::get_kerberos_config() {
 CLEANUP:
   profile_release(profile);
   info_stream << "destroy_tickets is: " << m_destroy_tickets;
-  log_client_info(info_stream.str().c_str());
+  log_client_info(info_stream.str());
   return res_kerberos;
 }
 

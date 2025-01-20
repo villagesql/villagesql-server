@@ -167,7 +167,7 @@ TEST_F(GcsAllowlist, ListWithHostname) {
   assembled_allowlist << machine_hostname.data();
   assembled_allowlist << "/16,";
   assembled_allowlist << "localhost/32";
-  params.add_parameter("ip_allowlist", assembled_allowlist.str().c_str());
+  params.add_parameter("ip_allowlist", assembled_allowlist.str());
 
   Gcs_interface *gcs = Gcs_xcom_interface::get_interface();
   enum_gcs_error err = gcs->initialize(params);
@@ -225,7 +225,7 @@ TEST_F(GcsAllowlist, ListWithUnresolvableHostname) {
   assembled_allowlist << "/16,";
   assembled_allowlist << "unresolvablehostname/32,";
   assembled_allowlist << "localhost/32";
-  params.add_parameter("ip_allowlist", assembled_allowlist.str().c_str());
+  params.add_parameter("ip_allowlist", assembled_allowlist.str());
 
   Gcs_interface *gcs = Gcs_xcom_interface::get_interface();
   enum_gcs_error err = gcs->initialize(params);

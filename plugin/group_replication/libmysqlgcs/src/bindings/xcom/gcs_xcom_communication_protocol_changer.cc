@@ -381,7 +381,7 @@ void Gcs_xcom_communication_protocol_changer::decrement_nr_packets_in_transit(
           "Will ignore this message. No need to take any further "
           "action. If this behaviour persists, consider restarting "
           "the group at the next convenient time. Details:");
-      log_message.append(node_and_nodes.str().c_str());
+      log_message.append(node_and_nodes.str());
       MYSQL_GCS_LOG_WARN(log_message.c_str());
     } else {
       std::string log_message(
@@ -392,7 +392,7 @@ void Gcs_xcom_communication_protocol_changer::decrement_nr_packets_in_transit(
           "Consider restarting the group at the next convenient time to fix "
           "it. "
           "Details:");
-      log_message.append(node_and_nodes.str().c_str());
+      log_message.append(node_and_nodes.str());
       MYSQL_GCS_LOG_ERROR(log_message.c_str());
     }
     return;

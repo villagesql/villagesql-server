@@ -48,7 +48,7 @@ void Logger_client::log_client_plugin_data_exchange(const unsigned char *buffer,
     sprintf(ascii_string + (2 * i), "%02X", *(buffer + i));
   }
   logstream << "Kerberos client plug-in data exchange: " << ascii_string;
-  log_client_dbg(logstream.str().c_str());
+  log_client_dbg(logstream.str());
   delete[] ascii_string;
   ascii_string = nullptr;
 }

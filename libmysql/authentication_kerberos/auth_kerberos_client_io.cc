@@ -184,7 +184,7 @@ bool Kerberos_client_io::read_gssapi_buffer(unsigned char **gssapi_buffer,
   }
   log_client_stream << "Kerberos client plug-in data read length: "
                     << *buffer_len;
-  log_client_info(log_client_stream.str().c_str());
+  log_client_info(log_client_stream.str());
   g_logger_client->log_client_plugin_data_exchange(*gssapi_buffer, *buffer_len);
   return true;
 }

@@ -198,8 +198,7 @@ bool Routines::update_object_key(Routine_name_key *key, Object_id schema_id,
                                  Routine::enum_routine_type type,
                                  const String_type &routine_name) {
   key->update(INDEX_UK_SCHEMA_ID_TYPE_NAME, FIELD_SCHEMA_ID, schema_id,
-              FIELD_TYPE, type, FIELD_NAME, routine_name.c_str(),
-              name_collation());
+              FIELD_TYPE, type, FIELD_NAME, routine_name, name_collation());
   return false;
 }
 

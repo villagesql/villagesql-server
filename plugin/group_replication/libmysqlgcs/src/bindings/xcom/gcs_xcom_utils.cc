@@ -74,7 +74,7 @@ u_long Gcs_xcom_utils::build_xcom_group_id(Gcs_group_identifier &group_id) {
 
 void Gcs_xcom_utils::process_peer_nodes(
     const std::string *peer_nodes, std::vector<std::string> &processed_peers) {
-  std::string peer_init(peer_nodes->c_str());
+  std::string peer_init(*peer_nodes);
   std::string delimiter = ",";
 
   // Clear all whitespace in the string

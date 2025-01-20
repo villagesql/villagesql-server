@@ -67,7 +67,7 @@ int try_to_interpret_text_as_error_code(
     }
   }
 
-  const int error_code = std::stoi(error_code_in_text_format.c_str());
+  const int error_code = std::stoi(error_code_in_text_format);
 
   if (0 == error_code && 1 == error_code_in_text_format.length()) return 0;
 
