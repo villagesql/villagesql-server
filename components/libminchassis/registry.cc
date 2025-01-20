@@ -251,11 +251,10 @@ DEFINE_BOOL_METHOD(mysql_registry_imp::iterator_create,
     minimal_chassis::rwlock_scoped_lock lock(&mysql_registry_imp::LOCK_registry,
                                              false, __FILE__, __LINE__);
 
-    my_service_registry::const_iterator r =
-        (!service_name_pattern || !*service_name_pattern)
-            ? mysql_registry_no_lock_imp::service_registry.cbegin()
-            : mysql_registry_no_lock_imp::service_registry.find(
-                  service_name_pattern);
+    auto r = (!service_name_pattern || !*service_name_pattern)
+                 ? mysql_registry_no_lock_imp::service_registry.cbegin()
+                 : mysql_registry_no_lock_imp::service_registry.find(
+                       service_name_pattern);
     if (r == mysql_registry_no_lock_imp::service_registry.cend()) {
       return true;
     }
@@ -288,8 +287,7 @@ DEFINE_BOOL_METHOD(mysql_registry_imp::iterator_create,
 DEFINE_METHOD(void, mysql_registry_imp::iterator_release,
               (my_h_service_iterator iterator)) {
   try {
-    my_h_service_iterator_imp *iter =
-        reinterpret_cast<my_h_service_iterator_imp *>(iterator);
+    auto *iter = reinterpret_cast<my_h_service_iterator_imp *>(iterator);
 
     if (!iter) return;
 

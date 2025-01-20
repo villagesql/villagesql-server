@@ -72,7 +72,7 @@ void Group_validation_message::encode_payload(
     std::vector<unsigned char> *buffer) const {
   DBUG_TRACE;
 
-  uint16 group_validation_message_type_aux =
+  auto group_validation_message_type_aux =
       (uint16)group_validation_message_type;
   encode_payload_item_int2(buffer, PIT_VALIDATION_TYPE,
                            group_validation_message_type_aux);
@@ -80,7 +80,7 @@ void Group_validation_message::encode_payload(
   char has_channels_aux = has_channels ? '1' : '0';
   encode_payload_item_char(buffer, PIT_VALIDATION_CHANNEL, has_channels_aux);
 
-  uint16 member_weight_aux = (uint16)member_weight;
+  auto member_weight_aux = (uint16)member_weight;
   encode_payload_item_int2(buffer, PIT_MEMBER_WEIGHT, member_weight_aux);
 
   encode_payload_item_int8(buffer, PIT_SENT_TIMESTAMP,

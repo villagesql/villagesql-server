@@ -35,7 +35,7 @@ namespace dd {
 namespace tables {
 
 const Indexes &Indexes::instance() {
-  static Indexes *s_instance = new Indexes();
+  static auto *s_instance = new Indexes();
   return *s_instance;
 }
 

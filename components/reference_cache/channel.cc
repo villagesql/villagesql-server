@@ -61,7 +61,7 @@ channel_imp::channel_imp(service_names_set<> &service_names) : channel_imp() {
 channel_imp::~channel_imp() { mysql_rwlock_destroy(&m_lock); }
 
 channel_imp *channel_imp::create(service_names_set<> &service_names) {
-  channel_imp *result = new channel_imp(service_names);
+  auto *result = new channel_imp(service_names);
   mysql_rwlock_wrlock(&LOCK_channels);
   auto release_guard =
       create_scope_guard([&] { mysql_rwlock_unlock(&LOCK_channels); });

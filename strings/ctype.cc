@@ -376,7 +376,7 @@ static int fill_uint16(uint16_t *a, unsigned size, const char *str,
 
 static int tailoring_append(MY_XML_PARSER *st, const char *fmt, size_t len,
                             const char *attr) {
-  struct my_cs_file_info *i = (struct my_cs_file_info *)st->user_data;
+  auto *i = (struct my_cs_file_info *)st->user_data;
   size_t newlen = i->tailoring_length + len + 64; /* 64 for format */
   if (MY_XML_OK == my_charset_file_tailoring_realloc(i, newlen)) {
     char *dst = i->tailoring + i->tailoring_length;
@@ -390,7 +390,7 @@ static int tailoring_append(MY_XML_PARSER *st, const char *fmt, size_t len,
 static int tailoring_append2(MY_XML_PARSER *st, const char *fmt, size_t len1,
                              const char *attr1, size_t len2,
                              const char *attr2) {
-  struct my_cs_file_info *i = (struct my_cs_file_info *)st->user_data;
+  auto *i = (struct my_cs_file_info *)st->user_data;
   size_t newlen = i->tailoring_length + len1 + len2 + 64; /* 64 for format */
   if (MY_XML_OK == my_charset_file_tailoring_realloc(i, newlen)) {
     char *dst = i->tailoring + i->tailoring_length;
@@ -440,7 +440,7 @@ static int tailoring_append_abbreviation(MY_XML_PARSER *st, const char *fmt,
 
 extern "C" {
 static int cs_enter(MY_XML_PARSER *st, const char *attr, size_t len) {
-  struct my_cs_file_info *i = (struct my_cs_file_info *)st->user_data;
+  auto *i = (struct my_cs_file_info *)st->user_data;
   struct my_cs_file_section_st *s = cs_file_sec(attr, len);
   int state = s ? s->state : 0;
 
@@ -467,7 +467,7 @@ static int cs_enter(MY_XML_PARSER *st, const char *attr, size_t len) {
 }
 
 static int cs_leave(MY_XML_PARSER *st, const char *attr, size_t len) {
-  struct my_cs_file_info *i = (struct my_cs_file_info *)st->user_data;
+  auto *i = (struct my_cs_file_info *)st->user_data;
   struct my_cs_file_section_st *s = cs_file_sec(attr, len);
   int state = s ? s->state : 0;
   int rc;
@@ -542,7 +542,7 @@ static const char *context_diff_fmt[5] = {
 
 extern "C" {
 static int cs_value(MY_XML_PARSER *st, const char *attr, size_t len) {
-  struct my_cs_file_info *i = (struct my_cs_file_info *)st->user_data;
+  auto *i = (struct my_cs_file_info *)st->user_data;
   struct my_cs_file_section_st *s;
   int state =
       (int)((s = cs_file_sec(st->attr.start, st->attr.end - st->attr.start))

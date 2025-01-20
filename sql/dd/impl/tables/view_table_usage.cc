@@ -38,7 +38,7 @@ namespace tables {
 ///////////////////////////////////////////////////////////////////////////
 
 const View_table_usage &View_table_usage::instance() {
-  static View_table_usage *s_instance = new (std::nothrow) View_table_usage();
+  static auto *s_instance = new (std::nothrow) View_table_usage();
   return *s_instance;
 }
 

@@ -810,7 +810,7 @@ char *display_session_data(UDF_INIT *initid, UDF_ARGS *, char *,
   MYSQL_THD o_thd{nullptr};
   if (thread_reader->get(&o_thd)) return nullptr;
 
-  Connection_data *session_data = reinterpret_cast<Connection_data *>(
+  auto *session_data = reinterpret_cast<Connection_data *>(
       mysql_thd_store_service->get(o_thd, g_slot));
   if (!session_data) return nullptr;
 
@@ -886,7 +886,7 @@ static bool update_current_trace(std::string &event_name,
   MYSQL_THD o_thd{nullptr};
   if (thread_reader->get(&o_thd)) return true;
 
-  Connection_data *session_data = reinterpret_cast<Connection_data *>(
+  auto *session_data = reinterpret_cast<Connection_data *>(
       mysql_thd_store_service->get(o_thd, g_slot));
   if (!session_data) {
     session_data = g_session_data_map->create(connection_id);
@@ -905,7 +905,7 @@ static bool end_current_trace() {
   MYSQL_THD o_thd{nullptr};
   if (thread_reader->get(&o_thd)) return true;
 
-  Connection_data *session_data = reinterpret_cast<Connection_data *>(
+  auto *session_data = reinterpret_cast<Connection_data *>(
       mysql_thd_store_service->get(o_thd, g_slot));
   if (!session_data) return true;
 
@@ -1063,7 +1063,7 @@ bool Event_tracking_connection_implementation::callback(
           break;
         }
         case EVENT_TRACKING_CONNECTION_DISCONNECT: {
-          Connection_data *session_data = reinterpret_cast<Connection_data *>(
+          auto *session_data = reinterpret_cast<Connection_data *>(
               mysql_thd_store_service->get(o_thd, g_slot));
           if (session_data) {
             g_session_data_map->remove(data->connection_id);
@@ -1072,7 +1072,7 @@ bool Event_tracking_connection_implementation::callback(
           break;
         }
         case EVENT_TRACKING_CONNECTION_CHANGE_USER: {
-          Connection_data *session_data = reinterpret_cast<Connection_data *>(
+          auto *session_data = reinterpret_cast<Connection_data *>(
               mysql_thd_store_service->get(o_thd, g_slot));
           if (session_data) {
             session_data = reinterpret_cast<Connection_data *>(

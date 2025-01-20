@@ -65,7 +65,7 @@ bool webauthn_registration::parse_challenge(const char *challenge) {
   length = base64_decode(challenge, (uint64)strlen(challenge), tmp_value,
                          &end_ptr, 0);
   if (length < 0) return true;
-  unsigned char *to = reinterpret_cast<unsigned char *>(tmp_value);
+  auto *to = reinterpret_cast<unsigned char *>(tmp_value);
   /* skip capability flag */
   to++;
   if (!to) return true;
@@ -147,7 +147,7 @@ bool webauthn_registration::make_challenge_response(
                client_data_json_len + attstmt_len +
                net_length_size(attstmt_len) + fmt_len +
                net_length_size(fmt_len);
-  unsigned char *str = new (std::nothrow) unsigned char[len];
+  auto *str = new (std::nothrow) unsigned char[len];
   if (!str) return true;
   unsigned char *pos = str;
 
@@ -197,7 +197,7 @@ bool webauthn_registration::make_challenge_response(
   /* base64 encode the whole thing */
   assert(len == (size_t)(pos - str));
   uint64 needed = base64_needed_encoded_length((uint64)len);
-  unsigned char *tmp_value = new unsigned char[needed];
+  auto *tmp_value = new unsigned char[needed];
   base64_encode(str, len, reinterpret_cast<char *>(tmp_value));
   /* Ensure caller will release this memory. */
   challenge_response = tmp_value;

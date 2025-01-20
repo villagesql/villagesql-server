@@ -54,8 +54,7 @@ class LinkedStack {
 
   BlockHeader *allocBlock() {
     /* Alloc blockheader and element array */
-    BlockHeader *h =
-        (BlockHeader *)A::alloc(allocatorContext, sizeof(BlockHeader));
+    auto *h = (BlockHeader *)A::alloc(allocatorContext, sizeof(BlockHeader));
     E *e = (E *)A::mem_calloc(allocatorContext, blockElements, sizeof(E));
 
     h->next = nullptr;

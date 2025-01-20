@@ -35,7 +35,7 @@ bool printTUX_MAINT_REQ(FILE *output, const Uint32 *theData, Uint32 len,
   }
 
   // const bool inOut = rbn & (1 << 15);
-  const TuxMaintReq *const sig = (const TuxMaintReq *)theData;
+  const auto *const sig = (const TuxMaintReq *)theData;
   fprintf(output, " errorCode=%d\n", sig->errorCode);
   fprintf(output, " table: id=%u", sig->tableId);
   fprintf(output, " index: id=%u", sig->indexId);

@@ -190,8 +190,8 @@ static void test_session_only_open(void *p [[maybe_unused]]) {
       LogPluginErrMsg(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
                       "srv_session_open_%d failed.", i);
   }
-  struct st_plugin_ctx *ctx = new st_plugin_ctx();
-  struct st_plugin_ctx *pctx = (struct st_plugin_ctx *)ctx;
+  auto *ctx = new st_plugin_ctx();
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   COM_DATA cmd;
   pctx->reset();
   memset(&cmd, 0, sizeof(cmd));
@@ -212,7 +212,7 @@ struct test_thread_context {
 
 static void *test_sql_threaded_wrapper(void *param) {
   char buffer[STRING_BUFFER_SIZE];
-  struct test_thread_context *context = (struct test_thread_context *)param;
+  auto *context = (struct test_thread_context *)param;
 
   WRITE_SEP();
   WRITE_STR("init thread\n");

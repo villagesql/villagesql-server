@@ -896,7 +896,7 @@ int NdbOperation::setVarValue(const NdbColumnImpl *tAttrInfo,
   const Uint32 MaxTupleSizeInLongWords = (NDB_MAX_TUPLE_SIZE + 7) / 8;
   Uint64 buf[MaxTupleSizeInLongWords];
   assert(aLen < (NDB_MAX_TUPLE_SIZE - 2));
-  unsigned char *p = (unsigned char *)buf;
+  auto *p = (unsigned char *)buf;
   p[0] = (aLen & 0xff);
   p[1] = (aLen >> 8);
   memcpy(&p[2], aBareValue, aLen);

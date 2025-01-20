@@ -1733,15 +1733,13 @@ Gis_polygon &Gis_polygon::operator=(const Gis_polygon &rhs) {
   m_inn_rings = nullptr;
 
   if (rhs.get_ptr()) {
-    Gis_polygon::ring_type *outer =
-        new Gis_polygon::ring_type(*outer_ring(&rhs));
+    auto *outer = new Gis_polygon::ring_type(*outer_ring(&rhs));
     outer->set_owner(this);
     m_ptr = outer;
   }
 
   if (rhs.inner_rings()) {
-    Gis_polygon::inner_container_type *inners =
-        new Gis_polygon::inner_container_type(*rhs.inner_rings());
+    auto *inners = new Gis_polygon::inner_container_type(*rhs.inner_rings());
     inners->set_owner(this);
     set_inner_rings(inners);
   }
@@ -2219,7 +2217,7 @@ const Geometry::Class_info *Gis_polygon::get_class_info() const {
   */
 void *get_packed_ptr(const Geometry *geo0, size_t *pnbytes) {
   assert(geo0->get_geotype() == Geometry::wkb_polygon && pnbytes != nullptr);
-  const Gis_polygon *geo = static_cast<const Gis_polygon *>(geo0);
+  const auto *geo = static_cast<const Gis_polygon *>(geo0);
   Gis_polygon::ring_type *out_ring = outer_ring(geo);
   Gis_polygon::inner_container_type *inn_rings = geo->inner_rings();
   size_t &nbytes = *pnbytes;
@@ -2269,7 +2267,7 @@ void *get_packed_ptr(const Geometry *geo0, size_t *pnbytes) {
  */
 const char *get_packed_ptr(Geometry *geo0) {
   assert(geo0->get_geotype() == Geometry::wkb_polygon);
-  Gis_polygon *geo = static_cast<Gis_polygon *>(geo0);
+  auto *geo = static_cast<Gis_polygon *>(geo0);
   Gis_polygon::ring_type *out_ring = outer_ring(geo);
   Gis_polygon::inner_container_type *inn_rings = geo->inner_rings();
   if (inn_rings)
@@ -2287,7 +2285,7 @@ const char *get_packed_ptr(Geometry *geo0) {
 bool polygon_is_packed(Geometry *plgn, Geometry *mplgn) {
   assert(plgn->get_geotype() == Geometry::wkb_polygon &&
          mplgn->get_geotype() == Geometry::wkb_multipolygon);
-  Gis_polygon *geo = static_cast<Gis_polygon *>(plgn);
+  auto *geo = static_cast<Gis_polygon *>(plgn);
   Gis_polygon::ring_type *out_ring = outer_ring(geo);
   Gis_polygon::inner_container_type *inn_rings = geo->inner_rings();
   const char *orstart = out_ring->get_cptr();
@@ -2307,7 +2305,7 @@ bool polygon_is_packed(Geometry *plgn, Geometry *mplgn) {
 
 void own_rings(Geometry *geo0) {
   assert(geo0->get_geotype() == Geometry::wkb_polygon);
-  Gis_polygon *geo = static_cast<Gis_polygon *>(geo0);
+  auto *geo = static_cast<Gis_polygon *>(geo0);
 
   if (outer_ring(geo)) outer_ring(geo)->set_owner(geo);
   if (geo->inner_rings()) geo->inner_rings()->set_owner(geo);
@@ -3769,7 +3767,7 @@ static inline Gis_polygon::inner_container_type *inner_rings(const Geometry *g)
 static inline Gis_polygon::inner_container_type *inner_rings(
     const Geometry *g) {
   assert(g->get_geotype() == Geometry::wkb_polygon);
-  const Gis_polygon *p = static_cast<const Gis_polygon *>(g);
+  const auto *p = static_cast<const Gis_polygon *>(g);
   return p->inner_rings();
 }
 
@@ -3787,7 +3785,7 @@ static inline void set_inner_rings(
 static inline void set_inner_rings(Geometry *g,
                                    Gis_polygon::inner_container_type *inns) {
   assert(g->get_geotype() == Geometry::wkb_polygon);
-  Gis_polygon *p = static_cast<Gis_polygon *>(g);
+  auto *p = static_cast<Gis_polygon *>(g);
   p->set_inner_rings(inns);
 }
 
@@ -4290,7 +4288,7 @@ void Gis_wkb_vector<T>::reassemble() {
 
   // Starting step two of the algorithm --- Reassembling.
   // Assemble the ins and outs into a single chunk.
-  for (segs_t::iterator itr = segs.begin(); itr != segs.end(); ++itr) {
+  for (auto itr = segs.begin(); itr != segs.end(); ++itr) {
     size_t i = itr->first;
     start = itr->second.first;
     end = itr->second.second;

@@ -40,8 +40,8 @@ class MessageEncodingDecodingTest : public GcsBaseTest {};
 TEST_F(MessageEncodingDecodingTest, EncodeDecodeTest) {
   const unsigned int n16 = 256;
   const unsigned int n32 = 65536;
-  Gcs_message_data *message_data16 = new Gcs_message_data(n16, n16);
-  Gcs_message_data *message_data32 = new Gcs_message_data(n32, n32);
+  auto *message_data16 = new Gcs_message_data(n16, n16);
+  auto *message_data32 = new Gcs_message_data(n32, n32);
 
   uchar uint32_buf[n32];
   uchar uint16_buf[n16];
@@ -111,7 +111,7 @@ class MessageDataTest : public GcsBaseTest {};
 
 TEST_F(MessageDataTest, AppendtoHeaderTest) {
   std::string test_data("to_append");
-  Gcs_message_data *message_data = new Gcs_message_data(test_data.length(), 0);
+  auto *message_data = new Gcs_message_data(test_data.length(), 0);
 
   message_data->append_to_header(pointer_cast<const uchar *>(test_data.c_str()),
                                  test_data.length());
@@ -123,7 +123,7 @@ TEST_F(MessageDataTest, AppendtoHeaderTest) {
 
 TEST_F(MessageDataTest, AppendtoPayloadTest) {
   std::string test_data("to_append");
-  Gcs_message_data *message_data = new Gcs_message_data(0, test_data.length());
+  auto *message_data = new Gcs_message_data(0, test_data.length());
 
   message_data->append_to_payload(
       pointer_cast<const uchar *>(test_data.c_str()), test_data.length());
@@ -136,7 +136,7 @@ TEST_F(MessageDataTest, AppendtoPayloadTest) {
 TEST_F(MessageDataTest, EncodeTest) {
   std::string test_header("header");
   std::string test_payload("payload");
-  Gcs_message_data *message_data =
+  auto *message_data =
       new Gcs_message_data(test_header.length(), test_payload.length());
 
   message_data->append_to_header(
@@ -163,7 +163,7 @@ TEST_F(MessageDataTest, EncodeTest) {
 TEST_F(MessageDataTest, EncodeNullTest) {
   std::string test_header("header");
   std::string test_payload("payload");
-  Gcs_message_data *message_data =
+  auto *message_data =
       new Gcs_message_data(test_header.length(), test_payload.length());
 
   message_data->append_to_header(
@@ -198,7 +198,7 @@ TEST_F(MessageDataTest, EncodeNullTest) {
 TEST_F(MessageDataTest, DecodeTest) {
   std::string test_header("header");
   std::string test_payload("payload");
-  Gcs_message_data *message_data =
+  auto *message_data =
       new Gcs_message_data(test_header.length() + 1, test_payload.length() + 1);
 
   message_data->append_to_header(
@@ -239,7 +239,7 @@ TEST_F(MessageDataTest, DecodeTest) {
 TEST_F(MessageDataTest, DecodeNullTest) {
   std::string test_header("header");
   std::string test_payload("payload");
-  Gcs_message_data *message_data =
+  auto *message_data =
       new Gcs_message_data(test_header.length(), test_payload.length());
 
   message_data->append_to_header(

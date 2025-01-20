@@ -29,7 +29,7 @@
 
 bool printISOLATE_ORD(FILE *output, const Uint32 *theData, Uint32 len,
                       Uint16 /*receiverBlockNo*/) {
-  const IsolateOrd *const sig = (const IsolateOrd *)theData;
+  const auto *const sig = (const IsolateOrd *)theData;
 
   fprintf(output,
           " senderRef : %x step : %s delayMillis : %u, nodesToIsolate :",

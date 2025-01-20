@@ -305,7 +305,7 @@ int NdbInfo::createScanOperation(const Table *table,
     // instead it returns hardcoded values or dynamic information about the
     // cluster which it retrieves using NdbApi functions. Use the special
     // NdbInfoScanVirtual implementation
-    NdbInfoScanVirtual *virtual_scan =
+    auto *virtual_scan =
         new NdbInfoScanVirtual(m_connection, table, table->m_virt);
     if (!virtual_scan) return ERR_OutOfMemory;
 
@@ -325,7 +325,7 @@ int NdbInfo::createScanOperation(const Table *table,
     max_nodes = 1;
   }
 
-  NdbInfoScanNodes *scan_op =
+  auto *scan_op =
       new NdbInfoScanNodes(m_connection, table, max_rows, max_bytes, max_nodes);
   if (!scan_op) return ERR_OutOfMemory;
   // Global id counter, not critical if you get same id on two instances
@@ -485,7 +485,7 @@ const char *NdbInfo::Table::getName() const { return m_name.c_str(); }
 Uint32 NdbInfo::Table::getTableId() const { return m_table_id; }
 
 bool NdbInfo::Table::addColumn(const NdbInfo::Column aCol) {
-  NdbInfo::Column *col = new NdbInfo::Column(aCol);
+  auto *col = new NdbInfo::Column(aCol);
   if (col == nullptr) {
     errno = ENOMEM;
     return false;

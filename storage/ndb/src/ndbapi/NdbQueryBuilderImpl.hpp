@@ -158,7 +158,7 @@ class Uint32Buffer {
 #endif
       //    ndbout << "Uint32Buffer::alloc() Extend buffer from: " << m_avail
       //           << ", to: " << newSize << endl;
-      Uint32 *newBuf = new Uint32[newSize];
+      auto *newBuf = new Uint32[newSize];
       if (likely(newBuf != nullptr)) {
         assert(newBuf);
         memcpy(newBuf, m_array, m_size * sizeof(Uint32));
@@ -216,7 +216,7 @@ class Uint32Buffer {
    */
   void appendBytes(const void *src, Uint32 len) {
     if (likely(len > 0)) {
-      Uint32 wordCount = static_cast<Uint32>(
+      auto wordCount = static_cast<Uint32>(
           (len + sizeof(Uint32) - 1 - m_bytesLeft) / sizeof(Uint32));
       Uint32 *dst = alloc(wordCount);
       if (likely(dst != nullptr)) {

@@ -88,7 +88,7 @@ ha_checksum mi_unique_hash(MI_UNIQUEDEF *def, const uchar *record) {
   HA_KEYSEG *keyseg;
 
   for (keyseg = def->seg; keyseg < def->end; keyseg++) {
-    enum ha_base_keytype type = (enum ha_base_keytype)keyseg->type;
+    auto type = (enum ha_base_keytype)keyseg->type;
     uint length = keyseg->length;
 
     if (keyseg->null_bit) {
@@ -147,7 +147,7 @@ int mi_unique_comp(MI_UNIQUEDEF *def, const uchar *a, const uchar *b,
   HA_KEYSEG *keyseg;
 
   for (keyseg = def->seg; keyseg < def->end; keyseg++) {
-    enum ha_base_keytype type = (enum ha_base_keytype)keyseg->type;
+    auto type = (enum ha_base_keytype)keyseg->type;
     uint a_length, b_length;
     a_length = b_length = keyseg->length;
 

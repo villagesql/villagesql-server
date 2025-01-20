@@ -482,7 +482,7 @@ void NdbEventOperationImpl::print_blob_part_bufs(
     if (blob->theFixedDataFlag) {
       sz = blob->thePartSize;
     } else {
-      const uchar *p = (const uchar *)blob->theBlobEventDataBuf.data;
+      const auto *p = (const uchar *)blob->theBlobEventDataBuf.data;
       sz = p[0] + (p[1] << 8);
     }
 
@@ -550,7 +550,7 @@ int NdbEventOperationImpl::readBlobParts(char *buf, NdbBlob *blob, Uint32 part,
       if (blob->theFixedDataFlag) {
         sz = blob->thePartSize;
       } else {
-        const uchar *p = (const uchar *)blob->theBlobEventDataBuf.data;
+        const auto *p = (const uchar *)blob->theBlobEventDataBuf.data;
         sz = p[0] + (p[1] << 8);
         src += 2;
       }
@@ -834,8 +834,7 @@ Uint64 NdbEventOperationImpl::getTransId() const {
 bool NdbEventOperationImpl::execSUB_TABLE_DATA(const NdbApiSignal *signal,
                                                const LinearSectionPtr ptr[3]) {
   DBUG_ENTER("NdbEventOperationImpl::execSUB_TABLE_DATA");
-  const SubTableData *const sdata =
-      CAST_CONSTPTR(SubTableData, signal->getDataPtr());
+  const auto *const sdata = CAST_CONSTPTR(SubTableData, signal->getDataPtr());
 
   if (signal->isFirstFragment()) {
     /*
@@ -1951,7 +1950,7 @@ Gci_container *NdbEventBuffer::find_bucket_chained(Uint64 gci) {
     return nullptr;
   }
 
-  Uint32 pos = Uint32(gci & ACTIVE_GCI_MASK);
+  auto pos = Uint32(gci & ACTIVE_GCI_MASK);
   Uint32 size = m_active_gci.size();
   Gci_container *buckets = m_active_gci.getBase();
   while (pos < size) {
@@ -2163,7 +2162,7 @@ EpochData *NdbEventBuffer::create_empty_exceptional_epoch(Uint64 gci,
   void *memptr = alloc(sizeof(EpochData));
   assert(memptr != nullptr);  // alloc failure caught in ::alloc()
   const MonotonicEpoch epoch(m_epoch_generation, gci);
-  EpochData *newEpochData =
+  auto *newEpochData =
       new (memptr) EpochData(epoch, nullptr, 0, exceptional_event_data);
   if (type >= NdbDictionary::Event::_TE_INCONSISTENT) {
     newEpochData->m_error = type;
@@ -2175,7 +2174,7 @@ void NdbEventBuffer::complete_bucket(Gci_container *bucket) {
   const Uint64 gci = bucket->m_gci;
 
   if (0) {
-    Gci_container *buckets = (Gci_container *)m_active_gci.getBase();
+    auto *buckets = (Gci_container *)m_active_gci.getBase();
     g_eventLogger->info("complete %u/%u pos: %u", Uint32(gci >> 32),
                         Uint32(gci), Uint32(bucket - buckets));
   }
@@ -3092,7 +3091,7 @@ EventBufData *NdbEventBuffer::alloc_data() {
   DBUG_ENTER_EVENT("alloc_data");
   void *memptr = alloc(sizeof(EventBufData));
   assert(memptr != nullptr);  // Alloc failures caught in ::alloc()
-  EventBufData *data = new (memptr) EventBufData();
+  auto *data = new (memptr) EventBufData();
   DBUG_RETURN_EVENT(data);
 }
 
@@ -3100,7 +3099,7 @@ EventBufDataHead *NdbEventBuffer::alloc_data_main() {
   DBUG_ENTER_EVENT("alloc_data_main");
   void *memptr = alloc(sizeof(EventBufDataHead));
   assert(memptr != nullptr);  // Alloc failures caught in ::alloc()
-  EventBufDataHead *data = new (memptr) EventBufDataHead();
+  auto *data = new (memptr) EventBufDataHead();
   DBUG_RETURN_EVENT(data);
 }
 
@@ -3353,7 +3352,7 @@ int NdbEventBuffer::copy_data(const SubTableData *const sdata, Uint32 len,
   for (int i = 0; i <= 2; i++) {
     if (ptr[i].sz > 0) {
       // Ok to cast const away, memory allocated in alloc_mem call above.
-      Uint32 *p = const_cast<Uint32 *>(data->ptr[i].p);
+      auto *p = const_cast<Uint32 *>(data->ptr[i].p);
       memcpy(p, ptr[i].p, ptr[i].sz << 2);
     }
   }
@@ -3850,7 +3849,7 @@ EpochData *Gci_container::createEpochData(Uint64 gci) {
   void *memptr = m_event_buffer->alloc(sizeof(EpochData));
   assert(memptr != nullptr);  // alloc failure caught in ::alloc()
   const MonotonicEpoch epoch(m_event_buffer->m_epoch_generation, gci);
-  EpochData *newEpochData =
+  auto *newEpochData =
       new (memptr) EpochData(epoch, m_gci_op_list, m_gci_op_count, m_head);
 
   DBUG_PRINT_EVENT("info", ("created EpochData: %p  m_gci_op_list: %p",
@@ -3880,7 +3879,7 @@ NdbEventOperation *NdbEventBuffer::createEventOperation(const char *eventName,
     return nullptr;
   }
 
-  NdbEventOperation *tOp = new NdbEventOperation(m_ndb, event.release());
+  auto *tOp = new NdbEventOperation(m_ndb, event.release());
   if (tOp == nullptr) {
     theError.code = 4000;
     return nullptr;
@@ -3903,7 +3902,7 @@ NdbEventOperation *NdbEventBuffer::createEventOperation(const char *eventName,
 NdbEventOperationImpl *NdbEventBuffer::createEventOperationImpl(
     NdbEventImpl *event, NdbError &theError) {
   DBUG_TRACE;
-  NdbEventOperationImpl *tOp = new NdbEventOperationImpl(m_ndb, event);
+  auto *tOp = new NdbEventOperationImpl(m_ndb, event);
   if (tOp == nullptr) {
     theError.code = 4000;
     return nullptr;
@@ -4249,7 +4248,7 @@ Uint32 EventBufData_hash::getpkhash(NdbEventOperationImpl *op,
   Uint32 nkey = tab->m_noOfKeys;
   assert(nkey != 0 && nkey <= ptr[0].sz);
   const Uint32 *hptr = ptr[0].p;
-  const uchar *dptr = (const uchar *)ptr[1].p;
+  const auto *dptr = (const uchar *)ptr[1].p;
 
   // hash registers
   uint64 nr1 = 0;
@@ -4295,8 +4294,8 @@ bool EventBufData_hash::getpkequal(NdbEventOperationImpl *op,
   assert(nkey != 0 && nkey <= ptr1[0].sz && nkey <= ptr2[0].sz);
   const Uint32 *hptr1 = ptr1[0].p;
   const Uint32 *hptr2 = ptr2[0].p;
-  const uchar *dptr1 = (const uchar *)ptr1[1].p;
-  const uchar *dptr2 = (const uchar *)ptr2[1].p;
+  const auto *dptr1 = (const uchar *)ptr1[1].p;
+  const auto *dptr2 = (const uchar *)ptr2[1].p;
 
   bool equal = true;
 

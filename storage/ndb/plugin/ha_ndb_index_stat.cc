@@ -637,8 +637,8 @@ void Ndb_index_stat_glob::set_status() {
   // cache size
   const uint cache_limit = opt.get(Ndb_index_stat_opt::Icache_limit);
   const uint cache_total = cache_query_bytes + cache_clean_bytes;
-  double cache_pct = (double)0.0;
-  double cache_high_pct = (double)0.0;
+  double cache_pct = 0.0;
+  double cache_high_pct = 0.0;
   if (cache_limit != 0) {
     cache_pct = (double)100.0 * (double)cache_total / (double)cache_limit;
     cache_high_pct =
@@ -865,8 +865,8 @@ struct Ndb_index_stat_snap {
 static Ndb_index_stat *ndb_index_stat_alloc(const NDBINDEX *index,
                                             const NDBTAB *table, int &err_out) {
   err_out = 0;
-  Ndb_index_stat *st = new Ndb_index_stat;
-  NdbIndexStat *is = new NdbIndexStat;
+  auto *st = new Ndb_index_stat;
+  auto *is = new NdbIndexStat;
   if (st != nullptr && is != nullptr) {
     st->is = is;
     st->index_id = index->getObjectId();
@@ -1344,9 +1344,9 @@ static void ndb_index_stat_proc_idle(Ndb_index_stat_proc &pr,
   const longlong clean_delay = opt.get(Ndb_index_stat_opt::Iclean_delay);
   const longlong check_delay = opt.get(Ndb_index_stat_opt::Icheck_delay);
 
-  const longlong pr_now = (longlong)pr.now;
-  const longlong st_read_time = (longlong)st->read_time;
-  const longlong st_check_time = (longlong)st->check_time;
+  const longlong pr_now = pr.now;
+  const longlong st_read_time = st->read_time;
+  const longlong st_check_time = st->check_time;
 
   const longlong clean_wait = st_read_time + clean_delay - pr_now;
   const longlong check_wait = st_check_time + check_delay - pr_now;
@@ -1511,7 +1511,7 @@ static void ndb_index_stat_proc_evict(Ndb_index_stat_proc &pr, int lt) {
   const uint batch = opt.get(Ndb_index_stat_opt::Ievict_batch);
   const longlong evict_delay = opt.get(Ndb_index_stat_opt::Ievict_delay);
   pr.now = ndb_index_stat_time();
-  const longlong pr_now = (longlong)pr.now;
+  const longlong pr_now = pr.now;
 
   if (!ndb_index_stat_proc_evict()) return;
 
@@ -1525,7 +1525,7 @@ static void ndb_index_stat_proc_evict(Ndb_index_stat_proc &pr, int lt) {
   while (st_loop != nullptr && st_lru_cnt < batch) {
     Ndb_index_stat *st = st_loop;
     st_loop = st_loop->list_next;
-    const longlong st_read_time = (longlong)st->read_time;
+    const longlong st_read_time = st->read_time;
     if (st_read_time + evict_delay <= pr_now &&
         st->query_bytes + st->clean_bytes != 0 && !st->to_delete) {
       /* Insertion sort into the batch from the end */
@@ -1655,8 +1655,8 @@ static void ndb_index_stat_proc_error(Ndb_index_stat_proc &pr,
   const Ndb_index_stat_opt &opt = ndb_index_stat_opt;
   const longlong error_delay = opt.get(Ndb_index_stat_opt::Ierror_delay);
 
-  const longlong pr_now = (longlong)pr.now;
-  const longlong st_error_time = (longlong)st->error_time;
+  const longlong pr_now = pr.now;
+  const longlong st_error_time = st->error_time;
   const longlong error_wait = st_error_time + error_delay - pr_now;
 
   DBUG_PRINT("index_stat", ("st %s error_wait:%lld error_count:%u"

@@ -935,7 +935,7 @@ static int setval(const struct my_option *opts, void *value,
         if (err) {
           /* Accept an integer representation of the set */
           char *endptr;
-          const ulonglong arg = (ulonglong)strtol(argument, &endptr, 10);
+          const auto arg = (ulonglong)strtol(argument, &endptr, 10);
           if (*endptr || (arg >> 1) >= (1ULL << (opts->typelib->count - 1))) {
             res = EXIT_ARGUMENT_INVALID;
             goto ret;
@@ -1147,7 +1147,7 @@ template ulonglong eval_num_suffix<ulonglong>(const char *, int *,
 
 static longlong getopt_ll(const char *arg, bool set_maximum_value,
                           const my_option *optp, int *err) {
-  longlong num = eval_num_suffix<longlong>(arg, err, optp->name);
+  auto num = eval_num_suffix<longlong>(arg, err, optp->name);
   if (set_maximum_value && *err == 0 &&
       *static_cast<longlong *>(optp->value) > num) {
     *static_cast<longlong *>(optp->value) = num;
@@ -1194,7 +1194,7 @@ longlong getopt_ll_limit_value(longlong num, const struct my_option *optp,
   char buf1[255], buf2[255];
   const ulonglong block_size =
       (optp->block_size ? (ulonglong)optp->block_size : 1L);
-  const longlong max_of_type =
+  const auto max_of_type =
       (longlong)max_of_int_range(optp->var_type & GET_TYPE_MASK);
 
   if (num > 0 && ((ulonglong)num > (ulonglong)optp->max_value) &&

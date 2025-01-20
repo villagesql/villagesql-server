@@ -79,7 +79,7 @@ NdbScanOperation::~NdbScanOperation() {
  *
  *****************************************************************************/
 void NdbScanOperation::setErrorCode(int aErrorCode) const {
-  NdbScanOperation *pnonConstThis = const_cast<NdbScanOperation *>(this);
+  auto *pnonConstThis = const_cast<NdbScanOperation *>(this);
 
   NdbTransaction *tmp = theNdbCon;
   pnonConstThis->theNdbCon = m_transConnection;
@@ -88,7 +88,7 @@ void NdbScanOperation::setErrorCode(int aErrorCode) const {
 }
 
 void NdbScanOperation::setErrorCodeAbort(int aErrorCode) const {
-  NdbScanOperation *pnonConstThis = const_cast<NdbScanOperation *>(this);
+  auto *pnonConstThis = const_cast<NdbScanOperation *>(this);
 
   NdbTransaction *tmp = theNdbCon;
   pnonConstThis->theNdbCon = m_transConnection;
@@ -473,7 +473,7 @@ int NdbScanOperation::handleScanOptionsVersion(const ScanOptions *&optionsPtr,
                (sizeOfOptions != sizeof(ScanOptions)))) {
     /* Different size passed, perhaps it's an old client */
     if (sizeOfOptions == sizeof(ScanOptions_v1)) {
-      const ScanOptions_v1 *oldOptions = (const ScanOptions_v1 *)optionsPtr;
+      const auto *oldOptions = (const ScanOptions_v1 *)optionsPtr;
 
       /* v1 of ScanOptions, copy into current version
        * structure and update options ptr
@@ -674,7 +674,7 @@ int NdbIndexScanOperation::getDistKeyFromRange(const NdbRecord *key_record,
   Uint32 xfrmbuf[MAX_KEY_SIZE_IN_WORDS * MAX_XFRM_MULTIPLY];
   char shrinkbuf[NDB_MAX_KEY_SIZE];
   char *tmpshrink = shrinkbuf;
-  Uint32 tmplen = (Uint32)sizeof(shrinkbuf);
+  auto tmplen = (Uint32)sizeof(shrinkbuf);
 
   /* This can't work for User Defined partitioning */
   assert(key_record->table->m_fragmentType !=
@@ -730,8 +730,7 @@ int NdbScanOperation::validatePartInfoPtr(const Ndb::PartitionSpec *&partInfo,
                                           Ndb::PartitionSpec &tmpSpec) {
   if (unlikely(sizeOfPartInfo != sizeof(Ndb::PartitionSpec))) {
     if (sizeOfPartInfo == sizeof(Ndb::PartitionSpec_v1)) {
-      const Ndb::PartitionSpec_v1 *oldPSpec =
-          (const Ndb::PartitionSpec_v1 *)partInfo;
+      const auto *oldPSpec = (const Ndb::PartitionSpec_v1 *)partInfo;
 
       /* Let's upgrade to the latest variant */
       tmpSpec.type = oldPSpec->type;
@@ -1035,7 +1034,7 @@ int NdbIndexScanOperation::setBound(const NdbRecord *key_record,
       theDistrKeyIndicator_ = (m_pruneState == SPS_ONE_PARTITION);
       theDistributionKey = m_pruningKey;
 
-      ScanTabReq *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
+      auto *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
       ScanTabReq::setDistributionKeyFlag(req->requestInfo,
                                          theDistrKeyIndicator_);
       req->distributionKey = theDistributionKey;
@@ -1257,7 +1256,7 @@ int NdbScanOperation::processTableScanDefs(NdbScanOperation::LockMode lm,
   }  // if
 
   theSCAN_TABREQ->setSignal(GSN_SCAN_TABREQ, refToBlock(theNdbCon->m_tcRef));
-  ScanTabReq *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
+  auto *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
   req->apiConnectPtr = theNdbCon->theTCConPtr;
   req->tableId = m_accessTable->m_id;
   req->tableSchemaVersion = m_accessTable->m_version;
@@ -1362,7 +1361,7 @@ void NdbScanOperation::setReadLockMode(LockMode lockMode) {
       return;
   }
   theLockMode = lockMode;
-  ScanTabReq *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
+  auto *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
   Uint32 reqInfo = req->requestInfo;
   ScanTabReq::setLockMode(reqInfo, lockExcl);
   ScanTabReq::setHoldLockFlag(reqInfo, lockHoldMode);
@@ -1376,7 +1375,7 @@ int NdbScanOperation::fix_receivers(Uint32 parallel) {
     const Uint32 sz = parallel * (4 * sizeof(char *) + sizeof(Uint32));
 
     /* Allocate as Uint64 to ensure proper alignment for pointers. */
-    Uint64 *tmp = new Uint64[(sz + 7) / 8];
+    auto *tmp = new Uint64[(sz + 7) / 8];
     if (tmp == nullptr) {
       setErrorCodeAbort(4000);
       return -1;
@@ -1849,7 +1848,7 @@ void NdbScanOperation::close(bool forceSend, bool releaseOp) {
   m_transConnection = nullptr;
 
   if (tTransCon && releaseOp) {
-    NdbIndexScanOperation *tOp = (NdbIndexScanOperation *)this;
+    auto *tOp = (NdbIndexScanOperation *)this;
 
     bool ret [[maybe_unused]];
     if (theStatus != WaitResponse) {
@@ -1960,8 +1959,7 @@ int NdbScanOperation::finaliseScanOldApi() {
    */
   int result = -1;
 
-  const unsigned char *emptyMask =
-      (const unsigned char *)NdbDictionaryImpl::m_emptyMask;
+  const auto *emptyMask = (const unsigned char *)NdbDictionaryImpl::m_emptyMask;
 
   if (theOperationType == OpenScanRequest)
     /* Create table scan operation with an empty
@@ -1971,7 +1969,7 @@ int NdbScanOperation::finaliseScanOldApi() {
                            emptyMask, &options, sizeof(ScanOptions));
   else {
     assert(theOperationType == OpenRangeScanRequest);
-    NdbIndexScanOperation *isop = static_cast<NdbIndexScanOperation *>(this);
+    auto *isop = static_cast<NdbIndexScanOperation *>(this);
 
     if (isop->currentRangeOldApi != nullptr) {
       /* Add current bound to bound list */
@@ -2083,7 +2081,7 @@ int NdbScanOperation::prepareSendScan(Uint32 /*aTC_ConnectPtr*/,
    * ScanTabReq
    *  (Always request keyinfo when using blobs)
    */
-  ScanTabReq *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
+  auto *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
   Uint32 reqInfo = req->requestInfo;
   ScanTabReq::setKeyinfoFlag(reqInfo, keyInfo);
   ScanTabReq::setNoDiskFlag(reqInfo, (m_flags & OF_NO_DISK) != 0);
@@ -2135,7 +2133,7 @@ int NdbScanOperation::prepareSendScan(Uint32 /*aTC_ConnectPtr*/,
   assert(theParallelism > 0);
   const Uint32 alloc_size =
       ((full_rowsize + bufsize) * theParallelism) / sizeof(Uint32);
-  Uint32 *buf = new Uint32[alloc_size];
+  auto *buf = new Uint32[alloc_size];
   DBUG_EXECUTE_IF("ndb_scanbuff_oom", {
     g_eventLogger->info("DBUG_EXECUTE_IF(ndb_scanbuff_oom...");
     delete[] buf;
@@ -2261,8 +2259,7 @@ int NdbScanOperation::doSendScan(int aProcessorId) {
     Uint32 attrInfoLen = secs[1].sz;
     Uint32 keyInfoLen = (numSections == 3) ? secs[2].sz : 0;
 
-    ScanTabReq *scanTabReq =
-        CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
+    auto *scanTabReq = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
 
     Uint32 connectPtr = scanTabReq->apiConnectPtr;
     Uint32 transId1 = scanTabReq->transId1;
@@ -2280,7 +2277,7 @@ int NdbScanOperation::doSendScan(int aProcessorId) {
     if (keyInfoLen) {
       GSIReader keyInfoReader(secs[2].sectionIter);
       theSCAN_TABREQ->theVerId_signalNumber = GSN_KEYINFO;
-      KeyInfo *keyInfo = (KeyInfo *)theSCAN_TABREQ->getDataPtrSend();
+      auto *keyInfo = (KeyInfo *)theSCAN_TABREQ->getDataPtrSend();
       keyInfo->connectPtr = connectPtr;
       keyInfo->transId[0] = transId1;
       keyInfo->transId[1] = transId2;
@@ -2300,7 +2297,7 @@ int NdbScanOperation::doSendScan(int aProcessorId) {
 
     GSIReader attrInfoReader(secs[1].sectionIter);
     theSCAN_TABREQ->theVerId_signalNumber = GSN_ATTRINFO;
-    AttrInfo *attrInfo = (AttrInfo *)theSCAN_TABREQ->getDataPtrSend();
+    auto *attrInfo = (AttrInfo *)theSCAN_TABREQ->getDataPtrSend();
     attrInfo->connectPtr = connectPtr;
     attrInfo->transId[0] = transId1;
     attrInfo->transId[1] = transId2;
@@ -2425,7 +2422,7 @@ NdbOperation *NdbScanOperation::takeOverScanOp(OperationType opType,
   }
 
   // Copy the first 8 words of key info from KEYINF20 into TCKEYREQ
-  TcKeyReq *tcKeyReq = CAST_PTR(TcKeyReq, newOp->theTCREQ->getDataPtrSend());
+  auto *tcKeyReq = CAST_PTR(TcKeyReq, newOp->theTCREQ->getDataPtrSend());
   Uint32 i = MIN(TcKeyReq::MaxKeyInfo, len);
   memcpy(tcKeyReq->keyInfo, src, 4 * i);
   src += i * 4;
@@ -2438,7 +2435,7 @@ NdbOperation *NdbScanOperation::takeOverScanOp(OperationType opType,
     while (tSignal && left > KeyInfo::DataLength) {
       tSignal->setSignal(GSN_KEYINFO, refToBlock(pTrans->m_tcRef));
       tSignal->setLength(KeyInfo::MaxSignalLength);
-      KeyInfo *keyInfo = CAST_PTR(KeyInfo, tSignal->getDataPtrSend());
+      auto *keyInfo = CAST_PTR(KeyInfo, tSignal->getDataPtrSend());
       memcpy(keyInfo->keyData, src, 4 * KeyInfo::DataLength);
       src += 4 * KeyInfo::DataLength;
       left -= KeyInfo::DataLength;
@@ -2452,7 +2449,7 @@ NdbOperation *NdbScanOperation::takeOverScanOp(OperationType opType,
       tSignal->setSignal(GSN_KEYINFO, refToBlock(pTrans->m_tcRef));
       tSignal->setLength(KeyInfo::HeaderLength + left);
       newOp->theLastKEYINFO = tSignal;
-      KeyInfo *keyInfo = CAST_PTR(KeyInfo, tSignal->getDataPtrSend());
+      auto *keyInfo = CAST_PTR(KeyInfo, tSignal->getDataPtrSend());
       memcpy(keyInfo->keyData, src, 4 * left);
     }
   }
@@ -2878,8 +2875,7 @@ int NdbIndexScanOperation::setBound(const NdbColumnImpl *tAttrInfo, int type,
       }
 
       /* Initialise bounds definition info */
-      OldApiScanRangeDefinition *boundsDef =
-          (OldApiScanRangeDefinition *)boundSpace->aRef();
+      auto *boundsDef = (OldApiScanRangeDefinition *)boundSpace->aRef();
 
       boundsDef->oldBound.lowBound.highestKey = 0;
       boundsDef->oldBound.lowBound.highestSoFarIsStrict = false;
@@ -2893,8 +2889,7 @@ int NdbIndexScanOperation::setBound(const NdbColumnImpl *tAttrInfo, int type,
       currentRangeOldApi = boundSpace;
     }
 
-    OldApiScanRangeDefinition *bounds =
-        (OldApiScanRangeDefinition *)currentRangeOldApi->aRef();
+    auto *bounds = (OldApiScanRangeDefinition *)currentRangeOldApi->aRef();
 
     /* Add to lower bound if required */
     if (type == BoundEQ || type == BoundLE || type == BoundLT) {
@@ -2931,8 +2926,7 @@ int NdbIndexScanOperation::setBound(const NdbColumnImpl *tAttrInfo, int type,
  */
 int NdbIndexScanOperation::buildIndexBoundOldApi(int range_no) {
   IndexBound ib;
-  OldApiScanRangeDefinition *boundDef =
-      (OldApiScanRangeDefinition *)currentRangeOldApi->aRef();
+  auto *boundDef = (OldApiScanRangeDefinition *)currentRangeOldApi->aRef();
 
   int result = 1;
 
@@ -3186,7 +3180,7 @@ int NdbIndexScanOperation::processIndexScanDefs(LockMode lm, Uint32 scan_flags,
      */
     if (order_desc) {
       m_descending = true;
-      ScanTabReq *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
+      auto *req = CAST_PTR(ScanTabReq, theSCAN_TABREQ->getDataPtrSend());
       ScanTabReq::setDescendingFlag(req->requestInfo, true);
     }
     if (order_by) {
@@ -3494,8 +3488,7 @@ int NdbScanOperation::close_impl(bool forceSend, PollGuard *poll_guard) {
    * any
    */
   if (theOperationType == OpenRangeScanRequest) {
-    NdbIndexScanOperation *isop =
-        reinterpret_cast<NdbIndexScanOperation *>(this);
+    auto *isop = reinterpret_cast<NdbIndexScanOperation *>(this);
 
     /* Release any Index Bound resources */
     isop->releaseIndexBoundsOldApi();

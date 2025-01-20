@@ -135,7 +135,7 @@ bool ParserImpl::run(Context *ctx, const class Properties **pDst,
     return false;
   }
 
-  Properties *p = new Properties();
+  auto *p = new Properties();
 
   bool invalidArgument = false;
   ctx->m_currentToken = input.gets(ctx->m_tokenBuffer, sz);

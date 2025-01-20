@@ -81,7 +81,7 @@ bool Properties_impl::get(const String_type &key, String_type *value) const {
     assert(false);
     return true;
   }
-  const_iterator it = m_map.find(key);
+  auto it = m_map.find(key);
   if (it == m_map.end()) {
     // Key is not present.
     assert(false); /* purecov: inspected */

@@ -202,8 +202,7 @@ struct test_thread_context {
 };
 
 static void *test_sql_threaded_wrapper(void *param) {
-  struct test_thread_context *thread_context =
-      (struct test_thread_context *)param;
+  auto *thread_context = (struct test_thread_context *)param;
 
   test_context->separator();
   test_context->log_test_line("init thread");

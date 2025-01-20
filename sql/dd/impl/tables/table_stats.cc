@@ -70,7 +70,7 @@ Table_stats::Table_stats() {
 ///////////////////////////////////////////////////////////////////////////
 
 const Table_stats &Table_stats::instance() {
-  static Table_stats *s_instance = new Table_stats();
+  static auto *s_instance = new Table_stats();
   return *s_instance;
 }
 

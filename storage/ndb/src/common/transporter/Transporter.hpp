@@ -408,9 +408,8 @@ inline void Transporter::iovec_data_sent(int nBytesSent) {
 inline bool Transporter::checksum_state::compute(const void *buf, size_t len) {
   const Uint32 inputSum = chksum;
   Uint32 off = 0;
-  unsigned char *psum =
-      static_cast<unsigned char *>(static_cast<void *>(&chksum));
-  const unsigned char *bytes = static_cast<const unsigned char *>(buf);
+  auto *psum = static_cast<unsigned char *>(static_cast<void *>(&chksum));
+  const auto *bytes = static_cast<const unsigned char *>(buf);
 
   while (off < len) {
     const Uint32 available = len - off;

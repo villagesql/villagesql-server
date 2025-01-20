@@ -572,7 +572,7 @@ const char *PropertiesImpl::getProps(const char *name, PropertiesImpl **impl) {
     *impl = this;
     return ret;
   } else {
-    Uint32 sz = Uint32(tmp - name);
+    auto sz = Uint32(tmp - name);
     char *tmp2 = (char *)malloc(sz + 1);
     memcpy(tmp2, name, sz);
     tmp2[sz] = 0;
@@ -601,7 +601,7 @@ const char *PropertiesImpl::getPropsPut(const char *name,
     *impl = this;
     return ret;
   } else {
-    Uint32 sz = Uint32(tmp - name);
+    auto sz = Uint32(tmp - name);
     char *tmp2 = (char *)malloc(sz + 1);
     memcpy(tmp2, name, sz);
     tmp2[sz] = 0;
@@ -609,7 +609,7 @@ const char *PropertiesImpl::getPropsPut(const char *name,
     PropertyImpl *nvp = get(tmp2);
 
     if (nvp == nullptr) {
-      Properties *tmpP = new Properties();
+      auto *tmpP = new Properties();
       PropertyImpl tmpPI = PropertyImpl(tmp2, tmpP);
       PropertyImpl *nvp2 = put(tmpPI);
 

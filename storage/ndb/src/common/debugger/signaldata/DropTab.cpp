@@ -32,7 +32,7 @@ bool printDROP_TAB_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const DropTabReq *sig = (const DropTabReq *)theData;
+  const auto *sig = (const DropTabReq *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, " requestType: %u", sig->requestType);
@@ -50,7 +50,7 @@ bool printDROP_TAB_CONF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const DropTabConf *sig = (const DropTabConf *)theData;
+  const auto *sig = (const DropTabConf *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");
@@ -66,7 +66,7 @@ bool printDROP_TAB_REF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const DropTabRef *sig = (const DropTabRef *)theData;
+  const auto *sig = (const DropTabRef *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");

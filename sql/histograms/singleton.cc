@@ -64,7 +64,7 @@ Singleton<T> *Singleton<T>::create(MEM_ROOT *mem_root,
                                    const std::string &col_name,
                                    Value_map_type data_type) {
   bool error = false;
-  Singleton<T> *singleton = new (mem_root)
+  auto *singleton = new (mem_root)
       Singleton<T>(mem_root, db_name, tbl_name, col_name, data_type, &error);
   if (error) return nullptr;
   return singleton;
@@ -276,7 +276,7 @@ bool Singleton<T>::json_to_histogram(const Json_object &json_object,
     return true;
   }
 
-  const Json_array *buckets = down_cast<const Json_array *>(buckets_dom);
+  const auto *buckets = down_cast<const Json_array *>(buckets_dom);
   if (m_buckets.reserve(buckets->size())) return true;  // OOM
 
   for (size_t i = 0; i < buckets->size(); ++i) {
@@ -289,7 +289,7 @@ bool Singleton<T>::json_to_histogram(const Json_object &json_object,
       context->report_node(bucket_dom, Message::JSON_WRONG_ATTRIBUTE_TYPE);
       return true;
     }
-    const Json_array *bucket = down_cast<const Json_array *>(bucket_dom);
+    const auto *bucket = down_cast<const Json_array *>(bucket_dom);
     if (bucket->size() != 2) {
       context->report_node(bucket_dom, Message::JSON_WRONG_BUCKET_TYPE_2);
       return true;
@@ -303,7 +303,7 @@ bool Singleton<T>::json_to_histogram(const Json_object &json_object,
       return true;
     }
 
-    const Json_double *cumulative_frequency =
+    const auto *cumulative_frequency =
         down_cast<const Json_double *>(cumulative_frequency_dom);
 
     const Json_dom *value_dom = (*bucket)[0];

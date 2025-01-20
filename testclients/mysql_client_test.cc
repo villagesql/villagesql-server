@@ -12834,7 +12834,7 @@ static void test_bug8722() {
 
 static MYSQL_STMT *open_cursor(const char *query) {
   int rc;
-  const ulong type = (ulong)CURSOR_TYPE_READ_ONLY;
+  const auto type = (ulong)CURSOR_TYPE_READ_ONLY;
 
   MYSQL_STMT *stmt = mysql_stmt_init(mysql);
   rc = mysql_stmt_prepare(stmt, query, (ulong)strlen(query));
@@ -14172,7 +14172,7 @@ static void test_bug11904() {
   MYSQL_STMT *stmt1;
   int rc;
   const char *stmt_text;
-  const ulong type = (ulong)CURSOR_TYPE_READ_ONLY;
+  const auto type = (ulong)CURSOR_TYPE_READ_ONLY;
   MYSQL_BIND my_bind[2];
   int country_id = 0;
   char row_data[11] = {0};
@@ -21676,7 +21676,7 @@ static void test_bug31691060_1() {
   const char *query =
       "SELECT a, (SELECT b FROM t2 WHERE t1.a=t2.a) FROM t1 WHERE a = ?";
 
-  const ulong type = (ulong)CURSOR_TYPE_READ_ONLY;
+  const auto type = (ulong)CURSOR_TYPE_READ_ONLY;
 
   MYSQL_STMT *stmt = mysql_stmt_init(mysql);
   rc = mysql_stmt_prepare(stmt, query, (ulong)strlen(query));
@@ -21753,7 +21753,7 @@ static void test_bug31691060_2() {
 
   const char *query = "SHOW PRIVILEGES";
 
-  const ulong type = (ulong)CURSOR_TYPE_READ_ONLY;
+  const auto type = (ulong)CURSOR_TYPE_READ_ONLY;
 
   MYSQL_STMT *stmt = mysql_stmt_init(mysql);
   rc = mysql_stmt_prepare(stmt, query, (ulong)strlen(query));
@@ -22763,7 +22763,7 @@ static void test_bug25584097() {
       MYSQL *lmysql;
       MYSQL_STMT *stmt;
       const char *sqlstmt = "select sleep(300)";
-      unsigned long ct = (unsigned long)CURSOR_TYPE_READ_ONLY;
+      auto ct = (unsigned long)CURSOR_TYPE_READ_ONLY;
 
       printf("child thread start\n");
       lmysql = mysql_client_init(nullptr);
@@ -23688,7 +23688,7 @@ static void test_bug37383098() {
 
   const char *query = "SELECT a, b FROM t1";
 
-  const ulong type = (ulong)CURSOR_TYPE_READ_ONLY;
+  const auto type = (ulong)CURSOR_TYPE_READ_ONLY;
 
   stmt = mysql_stmt_init(mysql);
   rc = mysql_stmt_prepare(stmt, query, (ulong)strlen(query));

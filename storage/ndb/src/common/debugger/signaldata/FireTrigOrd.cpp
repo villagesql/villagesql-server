@@ -43,7 +43,7 @@ static const char *trigEvent(Uint32 i) {
 
 bool printFIRE_TRIG_ORD(FILE *output, const Uint32 *theData, Uint32 len,
                         Uint16 /*receiverBlockNo*/) {
-  const FireTrigOrd *const sig = (const FireTrigOrd *)theData;
+  const auto *const sig = (const FireTrigOrd *)theData;
 
   fprintf(output, " TriggerId: %d TriggerEvent: %s\n", sig->getTriggerId(),
           trigEvent(sig->getTriggerEvent()));

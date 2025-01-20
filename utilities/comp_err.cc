@@ -1095,7 +1095,7 @@ static struct message *find_message(struct errors *err, const char *lang,
 
 static ha_checksum checksum_format_specifier(const char *msg) {
   ha_checksum chksum = 0;
-  const uchar *p = (const uchar *)msg;
+  const auto *p = (const uchar *)msg;
   const uchar *start = nullptr;
   uint32 num_format_specifiers = 0;
   while (*p) {

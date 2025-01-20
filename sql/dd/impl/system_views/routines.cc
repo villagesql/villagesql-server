@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Routines &Routines::instance() {
-  static Routines *s_instance = new Routines();
+  static auto *s_instance = new Routines();
   return *s_instance;
 }
 

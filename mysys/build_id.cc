@@ -78,12 +78,12 @@ static int build_id_callback(dl_phdr_info *info, size_t, void *data_) {
     return 0;
   }
 
-  callback_data *data = reinterpret_cast<callback_data *>(data_);
+  auto *data = reinterpret_cast<callback_data *>(data_);
 
   for (unsigned i = 0; i < info->dlpi_phnum; i++) {
     if (info->dlpi_phdr[i].p_type != PT_NOTE) continue;
 
-    elf_note *note = reinterpret_cast<elf_note *>(
+    auto *note = reinterpret_cast<elf_note *>(
         reinterpret_cast<void *>(info->dlpi_addr + info->dlpi_phdr[i].p_vaddr));
     ptrdiff_t segment_size = info->dlpi_phdr[i].p_filesz;
 

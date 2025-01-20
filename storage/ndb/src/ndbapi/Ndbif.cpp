@@ -333,7 +333,7 @@ void NdbImpl::drop_batched_fragments(
   batched_fragments->extract_signal_only(&signal);
 
   require(signal.readSignalNumber() == GSN_SUB_TABLE_DATA);
-  const SubTableData *sdata = CAST_CONSTPTR(SubTableData, signal.getDataPtr());
+  const auto *sdata = CAST_CONSTPTR(SubTableData, signal.getDataPtr());
   const Uint64 gci = (Uint64(sdata->gci_hi) << 32) | sdata->gci_lo;
   m_ndb.theEventBuffer->create_empty_exceptional_epoch(
       gci, NdbDictionary::Event::_TE_INCONSISTENT);
@@ -368,8 +368,7 @@ Int32 NdbImpl::assemble_data_event_signal(
   }
 
   if (result == AssembleBatchedFragments::NEED_SETUP) {
-    const SubTableData *sdata =
-        CAST_CONSTPTR(SubTableData, signal->getDataPtr());
+    const auto *sdata = CAST_CONSTPTR(SubTableData, signal->getDataPtr());
 
     const bool setup_ok = batched_fragments->setup(sdata->totalLen);
     if (unlikely(!setup_ok)) {
@@ -450,7 +449,7 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
   switch (tSignalNumber) {
     case GSN_TCKEYCONF:
     case GSN_TCINDXCONF: {
-      const TcKeyConf *const keyConf = (const TcKeyConf *)tDataPtr;
+      const auto *const keyConf = (const TcKeyConf *)tDataPtr;
       if (tFirstData != RNIL) {
         tCon = void2con(tFirstDataPtr);
       } else {
@@ -531,8 +530,7 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
           Uint32 com;
           if (num_sections > 0) {
             if (type == NdbReceiver::NDB_QUERY_OPERATION) {
-              NdbQueryOperationImpl *impl_owner =
-                  (NdbQueryOperationImpl *)owner;
+              auto *impl_owner = (NdbQueryOperationImpl *)owner;
               com = impl_owner->execTRANSID_AI(ptr[0].p, ptr[0].sz);
             } else {
               com = tRec->execTRANSID_AI(ptr[0].p, ptr[0].sz);
@@ -555,8 +553,7 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
              * QUERY-receiver support short (and 'packed') TRANSID_AI.
              */
             if (type == NdbReceiver::NDB_QUERY_OPERATION) {
-              NdbQueryOperationImpl *impl_owner =
-                  (NdbQueryOperationImpl *)owner;
+              auto *impl_owner = (NdbQueryOperationImpl *)owner;
               com =
                   impl_owner->execTRANSID_AI(tDataPtr + TransIdAI::HeaderLength,
                                              tLen - TransIdAI::HeaderLength);
@@ -595,8 +592,7 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
             }
             case NdbReceiver::NDB_QUERY_OPERATION: {
               // Handled differently whether it is a scan or lookup
-              NdbQueryOperationImpl *impl_owner =
-                  (NdbQueryOperationImpl *)owner;
+              auto *impl_owner = (NdbQueryOperationImpl *)owner;
               if (impl_owner->getQueryDef().isScanQuery()) {
                 tNewState =
                     (((WaitSignalType)tWaitState) == WAIT_SCAN ? (Uint32)NO_WAIT
@@ -653,7 +649,7 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
       break;
     }
     case GSN_TC_COMMITCONF: {
-      const TcCommitConf *const commitConf = (const TcCommitConf *)tDataPtr;
+      const auto *const commitConf = (const TcCommitConf *)tDataPtr;
       const BlockReference aTCRef = aSignal->theSendersBlockRef;
 
       if (tFirstDataPtr == nullptr) {
@@ -757,8 +753,7 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
       if (tCon != nullptr) {
         if (tCon->theSendStatus == NdbTransaction::sendTC_OP) {
           if (receiver->getType() == NdbReceiver::NDB_QUERY_OPERATION) {
-            NdbQueryOperationImpl *tmp =
-                (NdbQueryOperationImpl *)(receiver->m_owner);
+            auto *tmp = (NdbQueryOperationImpl *)(receiver->m_owner);
             if (tmp->execTCKEYREF(aSignal) && tCon->OpCompleteFailure() != -1) {
               myNdb->completedTransaction(tCon);
               return;
@@ -932,7 +927,7 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
       break;
     }
     case GSN_TCKEY_FAILCONF: {
-      const TcKeyFailConf *failConf = (const TcKeyFailConf *)tDataPtr;
+      const auto *failConf = (const TcKeyFailConf *)tDataPtr;
       const BlockReference aTCRef = aSignal->theSendersBlockRef;
       if (tFirstDataPtr != nullptr) {
         const NdbReceiver *const receiver = void2rec(tFirstDataPtr);
@@ -1073,7 +1068,7 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
       }
 
       const Uint64 latestGCI = myNdb->getLatestGCI();
-      const SubGcpCompleteRep *const rep =
+      const auto *const rep =
           CAST_CONSTPTR(SubGcpCompleteRep, aSignal->getDataPtr());
       myNdb->theEventBuffer->execSUB_GCP_COMPLETE_REP(rep, tLen);
       if (tWaitState == WAIT_EVENT && myNdb->getLatestGCI() != latestGCI) {
@@ -1094,11 +1089,10 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
         copy_ptr[i].sz = 0;
       }
 
-      const SubTableData *sdata =
-          CAST_CONSTPTR(SubTableData, aSignal->getDataPtr());
+      const auto *sdata = CAST_CONSTPTR(SubTableData, aSignal->getDataPtr());
 
       const Uint32 oid = sdata->senderData;
-      NdbEventOperationImpl *op = (NdbEventOperationImpl *)int2void(oid);
+      auto *op = (NdbEventOperationImpl *)int2void(oid);
       if (unlikely(op == nullptr ||
                    op->m_magic_number != NDB_EVENT_OP_MAGIC_NUMBER)) {
         g_eventLogger->error(
@@ -1169,8 +1163,7 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
       return;  // Ignore
     }
     case GSN_NODE_FAILREP: {
-      const NodeFailRep *rep =
-          CAST_CONSTPTR(NodeFailRep, aSignal->getDataPtr());
+      const auto *rep = CAST_CONSTPTR(NodeFailRep, aSignal->getDataPtr());
       Uint32 len = NodeFailRep::getNodeMaskLength(aSignal->getLength());
       const Uint32 *nbm;
       if (aSignal->m_noOfSections >= 1) {
@@ -1195,8 +1188,7 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
       break;
     }
     case GSN_NF_COMPLETEREP: {
-      const NFCompleteRep *rep =
-          CAST_CONSTPTR(NFCompleteRep, aSignal->getDataPtr());
+      const auto *rep = CAST_CONSTPTR(NFCompleteRep, aSignal->getDataPtr());
       myNdb->report_node_failure_completed(rep->failedNodeId);
       break;
     }
@@ -1205,8 +1197,7 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
       break;
     }
     case GSN_ALLOC_NODEID_CONF: {
-      const AllocNodeIdConf *rep =
-          CAST_CONSTPTR(AllocNodeIdConf, aSignal->getDataPtr());
+      const auto *rep = CAST_CONSTPTR(AllocNodeIdConf, aSignal->getDataPtr());
       Uint32 nodeId = rep->nodeId;
       myNdb->connected(numberToRef(myNdb->theNdbBlockNumber, nodeId));
       break;

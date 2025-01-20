@@ -32,7 +32,7 @@ bool printCREATE_INDX_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const CreateIndxReq *sig = (const CreateIndxReq *)theData;
+  const auto *sig = (const CreateIndxReq *)theData;
   fprintf(output, " clientRef: 0x%x", sig->clientRef);
   fprintf(output, " clientData: %u", sig->clientData);
   fprintf(output, "\n");
@@ -55,7 +55,7 @@ bool printCREATE_INDX_CONF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const CreateIndxConf *sig = (const CreateIndxConf *)theData;
+  const auto *sig = (const CreateIndxConf *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " clientData: %u", sig->clientData);
   fprintf(output, " transId: 0x%x", sig->transId);
@@ -73,7 +73,7 @@ bool printCREATE_INDX_REF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const CreateIndxRef *sig = (const CreateIndxRef *)theData;
+  const auto *sig = (const CreateIndxRef *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " clientData: %u", sig->clientData);
   fprintf(output, " transId: 0x%x", sig->transId);

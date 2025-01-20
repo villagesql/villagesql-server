@@ -230,7 +230,7 @@ void webauthn_assertion::set_client_data(const unsigned char *salt,
 bool webauthn_assertion::parse_challenge(const unsigned char *challenge) {
   char rp[RELYING_PARTY_ID_LENGTH + 1] = {0};
   unsigned char salt[CHALLENGE_LENGTH + 1] = {0};
-  unsigned char *to = const_cast<unsigned char *>(challenge);
+  auto *to = const_cast<unsigned char *>(challenge);
   if (!to) return true;
   /* skip reading capability flag */
   to++;

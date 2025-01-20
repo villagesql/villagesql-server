@@ -201,7 +201,7 @@ static int ngram_parser_parse(MYSQL_FTPARSER_PARAM *param) {
   MYSQL_FTPARSER_BOOLEAN_INFO bool_info = {FT_TOKEN_WORD, 0,      0, 0, 0, 0,
                                            ' ',           nullptr};
   const CHARSET_INFO *cs = param->cs;
-  uchar **start = reinterpret_cast<uchar **>(&param->doc);
+  auto **start = reinterpret_cast<uchar **>(&param->doc);
   uchar *end = *start + param->length;
   FT_WORD word = {nullptr, 0, 0};
   int ret = 0;

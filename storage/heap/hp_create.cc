@@ -242,9 +242,9 @@ err:
 
 static int keys_compare(const void *a, const void *b, const void *c) {
   uint not_used[2];
-  const heap_rb_param *param = pointer_cast<const heap_rb_param *>(a);
-  const uchar *key1 = pointer_cast<const uchar *>(b);
-  const uchar *key2 = pointer_cast<const uchar *>(c);
+  const auto *param = pointer_cast<const heap_rb_param *>(a);
+  const auto *key1 = pointer_cast<const uchar *>(b);
+  const auto *key2 = pointer_cast<const uchar *>(c);
   return ha_key_cmp(param->keyseg, key1, key2, param->key_length,
                     param->search_flag, not_used);
 }

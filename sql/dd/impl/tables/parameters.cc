@@ -35,7 +35,7 @@ namespace dd {
 namespace tables {
 
 const Parameters &Parameters::instance() {
-  static Parameters *s_instance = new Parameters();
+  static auto *s_instance = new Parameters();
   return *s_instance;
 }
 

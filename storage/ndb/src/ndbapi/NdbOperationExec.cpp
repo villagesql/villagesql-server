@@ -100,7 +100,7 @@ class OldNdbApiSectionIterator : public GenericSectionIterator {
       /* Second signal is KeyInfo or AttrInfo
        * Ignore header words
        */
-      NdbApiSignal *sig = (NdbApiSignal *)currentPos;
+      auto *sig = (NdbApiSignal *)currentPos;
       assert(sig->getLength() >= KeyAndAttrInfoHeaderLength);
       sz = sig->getLength() - KeyAndAttrInfoHeaderLength;
       currentPos = sig->next();
@@ -112,7 +112,7 @@ class OldNdbApiSectionIterator : public GenericSectionIterator {
 };
 
 void NdbOperation::setLastFlag(NdbApiSignal *signal, Uint32 lastFlag) {
-  TcKeyReq *const req = CAST_PTR(TcKeyReq, signal->getDataPtrSend());
+  auto *const req = CAST_PTR(TcKeyReq, signal->getDataPtrSend());
   TcKeyReq::setExecuteFlag(req->requestInfo, lastFlag);
 }
 
@@ -122,7 +122,7 @@ void NdbOperation::setLastFlag(NdbApiSignal *signal, Uint32 lastFlag) {
  * NdbRecord or not.
  */
 void NdbOperation::setRequestInfoTCKEYREQ(bool lastFlag, bool longSignal) {
-  TcKeyReq *const req = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
+  auto *const req = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
   Uint32 requestInfo = req->requestInfo;
   TcKeyReq::setExecuteFlag(requestInfo, lastFlag);
   TcKeyReq::setSimpleFlag(requestInfo, theSimpleIndicator);
@@ -197,7 +197,7 @@ int NdbOperation::doSendKeyReq(int aNodeId, GenericSectionPtr *secs,
 
     Uint32 keyInfoInReq = MIN(keyInfoLen, TcKeyReq::MaxKeyInfo);
     Uint32 attrInfoInReq = MIN(attrInfoLen, TcKeyReq::MaxAttrInfo);
-    TcKeyReq *tcKeyReq = (TcKeyReq *)request->getDataPtrSend();
+    auto *tcKeyReq = (TcKeyReq *)request->getDataPtrSend();
     Uint32 connectPtr = tcKeyReq->apiConnectPtr;
     Uint32 transId1 = tcKeyReq->transId1;
     Uint32 transId2 = tcKeyReq->transId2;
@@ -231,7 +231,7 @@ int NdbOperation::doSendKeyReq(int aNodeId, GenericSectionPtr *secs,
 
     if (keyInfoLen) {
       request->theVerId_signalNumber = indexReq ? GSN_INDXKEYINFO : GSN_KEYINFO;
-      KeyInfo *keyInfo = (KeyInfo *)request->getDataPtrSend();
+      auto *keyInfo = (KeyInfo *)request->getDataPtrSend();
       keyInfo->connectPtr = connectPtr;
       keyInfo->transId[0] = transId1;
       keyInfo->transId[1] = transId2;
@@ -252,7 +252,7 @@ int NdbOperation::doSendKeyReq(int aNodeId, GenericSectionPtr *secs,
     if (attrInfoLen) {
       request->theVerId_signalNumber =
           indexReq ? GSN_INDXATTRINFO : GSN_ATTRINFO;
-      AttrInfo *attrInfo = (AttrInfo *)request->getDataPtrSend();
+      auto *attrInfo = (AttrInfo *)request->getDataPtrSend();
       attrInfo->connectPtr = connectPtr;
       attrInfo->transId[0] = transId1;
       attrInfo->transId[1] = transId2;
@@ -315,12 +315,10 @@ int NdbOperation::doSend(int aNodeId, Uint32 lastFlag) {
      * We use special iterators to extract this
      */
 
-    TcKeyReq *tcKeyReq = (TcKeyReq *)theTCREQ->getDataPtrSend();
-    const Uint32 inlineKIOffset =
-        Uint32(tcKeyReq->keyInfo - (Uint32 *)tcKeyReq);
+    auto *tcKeyReq = (TcKeyReq *)theTCREQ->getDataPtrSend();
+    const auto inlineKIOffset = Uint32(tcKeyReq->keyInfo - (Uint32 *)tcKeyReq);
     const Uint32 inlineKILength = MIN(TcKeyReq::MaxKeyInfo, theTupKeyLen);
-    const Uint32 inlineAIOffset =
-        Uint32(tcKeyReq->attrInfo - (Uint32 *)tcKeyReq);
+    const auto inlineAIOffset = Uint32(tcKeyReq->attrInfo - (Uint32 *)tcKeyReq);
     const Uint32 inlineAILength =
         MIN(TcKeyReq::MaxAttrInfo, theTotalCurrAI_Len);
 
@@ -448,7 +446,7 @@ int NdbOperation::prepareSend(Uint32 aTC_ConnectPtr, Uint64 aTransId,
   // We start by filling in the first 9 unconditional words of the
   // TCKEYREQ signal.
   //-------------------------------------------------------------
-  TcKeyReq *const tcKeyReq = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
+  auto *const tcKeyReq = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
 
   Uint32 tTableId = m_accessTable->m_id;
   Uint32 tSchemaVersion = m_accessTable->m_version;
@@ -547,7 +545,7 @@ Uint32 NdbOperation::repack_read(Uint32 len) {
   Uint32 save = len;
   Bitmask<MAXNROFATTRIBUTESINWORDS> mask;
   NdbApiSignal *tSignal = theFirstATTRINFO;
-  TcKeyReq *const tcKeyReq = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
+  auto *const tcKeyReq = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
   Uint32 cols = m_currentTable->m_columns.size();
 
   Uint32 *ptr = tcKeyReq->attrInfo;
@@ -765,7 +763,7 @@ int NdbOperation::prepareSendInterpreted() {
   Uint32 tSubroutineSize = theSubroutineSize;
   if (theOperationType != OpenScanRequest &&
       theOperationType != OpenRangeScanRequest) {
-    TcKeyReq *const tcKeyReq = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
+    auto *const tcKeyReq = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
 
     tcKeyReq->attrInfo[0] = tInitialReadSize;
     tcKeyReq->attrInfo[1] = tInterpretedSize;
@@ -811,7 +809,7 @@ int NdbOperation::buildSignalsNdbRecord(Uint32 aTC_ConnectPtr, Uint64 aTransId,
   const bool isScanTakeover = (key_rec == nullptr);
   const bool isUnlock = (theOperationType == UnlockRequest);
 
-  TcKeyReq *tcKeyReq = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
+  auto *tcKeyReq = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
   Uint32 hdrSize = fillTcKeyReqHdr(tcKeyReq, aTC_ConnectPtr, aTransId);
   /* No KeyInfo goes in the TCKEYREQ signal - it all goes into
    * a separate KeyInfo section
@@ -1325,7 +1323,7 @@ int NdbOperation::prepareSendNdbRecord(AbortOption ao) {
   // There are a number of flags in the TCKEYREQ header that
   // we have to set at this point...they are not correctly
   // defined before the call to execute().
-  TcKeyReq *tcKeyReq = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
+  auto *tcKeyReq = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
 
   Uint8 abortOption =
       (ao == DefaultAbortOption) ? (Uint8)m_abortOption : (Uint8)ao;
@@ -1533,7 +1531,7 @@ int NdbOperation::insertATTRINFOData_NdbRecord(const char *value1,
   theTotalCurrAI_Len += (byteSize1 + byteSize2 + 3) / 4;
 
   Uint32 space_bytes = attrInfoRemain * 4;
-  unsigned char *space_ptr = (unsigned char *)theATTRINFOptr;
+  auto *space_ptr = (unsigned char *)theATTRINFOptr;
 
   for (int i = 0; i < 2; i++) {
     Uint32 value_bytes = (i == 0) ? byteSize1 : byteSize2;

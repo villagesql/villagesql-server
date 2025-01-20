@@ -56,7 +56,7 @@ bool printCOPY_GCI_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const CopyGCIReq *sig = (const CopyGCIReq *)theData;
+  const auto *sig = (const CopyGCIReq *)theData;
 
   static char buf[255];
   print(buf, sizeof(buf), (CopyGCIReq::CopyReason)sig->copyReason);

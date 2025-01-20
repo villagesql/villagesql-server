@@ -66,7 +66,7 @@ static bool is_terminate_suspicion_thread() {
 }
 
 static void *suspicions_processing_thread(void *ptr) {
-  Gcs_xcom_control *gcs_ctrl = (Gcs_xcom_control *)ptr;
+  auto *gcs_ctrl = (Gcs_xcom_control *)ptr;
   Gcs_suspicions_manager *mgr = gcs_ctrl->get_suspicions_manager();
 
   while (!is_terminate_suspicion_thread()) {
@@ -80,7 +80,7 @@ static void *suspicions_processing_thread(void *ptr) {
 }
 
 static void *xcom_taskmain_startup(void *ptr) {
-  Gcs_xcom_control *gcs_ctrl = (Gcs_xcom_control *)ptr;
+  auto *gcs_ctrl = (Gcs_xcom_control *)ptr;
   Gcs_xcom_proxy *proxy = gcs_ctrl->get_xcom_proxy();
   xcom_port port = gcs_ctrl->get_node_address()->get_member_port();
   bool error = true;
@@ -843,8 +843,7 @@ void Gcs_xcom_control::do_remove_node_from_group() {
     for (it = current_view->get_members().begin();
          !con && it != current_view->get_members().end(); it++) {
       std::string peer_rep_ip;
-      Gcs_xcom_node_address *peer =
-          new Gcs_xcom_node_address(it->get_member_id());
+      auto *peer = new Gcs_xcom_node_address(it->get_member_id());
 
       view_members.push_back(peer);
     }
@@ -966,8 +965,7 @@ void Gcs_xcom_control::build_total_members(
     /*
       Build the member identifier from the address reported.
     */
-    Gcs_member_identifier *member_id =
-        new Gcs_member_identifier((*nodes_it).get_member_id());
+    auto *member_id = new Gcs_member_identifier((*nodes_it).get_member_id());
 
     /*
       Check whether the node is reported as alive or faulty.
@@ -1315,7 +1313,7 @@ void Gcs_xcom_control::install_leave_view(
   Gcs_view *current_view = m_view_control->get_unsafe_current_view();
 
   // Create the new view id here, based in the previous one plus 1
-  Gcs_xcom_view_identifier *new_view_id = new Gcs_xcom_view_identifier(
+  auto *new_view_id = new Gcs_xcom_view_identifier(
       static_cast<const Gcs_xcom_view_identifier &>(
           current_view->get_view_id()));
   new_view_id->increment_by_one();
@@ -1643,7 +1641,7 @@ void Gcs_xcom_control::process_control_message(
   MYSQL_GCS_LOG_TRACE(
       "::process_control_message():: Received a control message")
 
-  Xcom_member_state *ms_info = new Xcom_member_state(
+  auto *ms_info = new Xcom_member_state(
       maximum_supported_protocol_version, msg->get_message_data().get_payload(),
       msg->get_message_data().get_payload_length());
 
@@ -1726,8 +1724,7 @@ void Gcs_xcom_control::process_control_message(
     Gcs_xcom_view_identifier *provided_view_id =
         m_state_exchange->get_new_view_id();
 
-    Gcs_xcom_view_identifier *new_view_id =
-        new Gcs_xcom_view_identifier(*provided_view_id);
+    auto *new_view_id = new Gcs_xcom_view_identifier(*provided_view_id);
 
     new_view_id->increment_by_one();
 
@@ -1782,8 +1779,8 @@ void Gcs_xcom_control::install_view(
   Gcs_xcom_view_identifier v_id(*new_view_id);
 
   // Create the new view
-  Gcs_view *current_view = new Gcs_view(members, v_id, left_members,
-                                        joined_members, group, error_code);
+  auto *current_view = new Gcs_view(members, v_id, left_members, joined_members,
+                                    group, error_code);
 
   // Build the exchanged data
   Exchanged_data data_to_deliver;
@@ -1793,8 +1790,7 @@ void Gcs_xcom_control::install_view(
       MYSQL_GCS_LOG_DEBUG(
           "Processing exchanged data while installing the new view")
 
-      Gcs_member_identifier *member_id =
-          new Gcs_member_identifier((*states_it).first);
+      auto *member_id = new Gcs_member_identifier((*states_it).first);
 
       Xcom_member_state *data_exchanged = (*states_it).second;
 
@@ -1829,8 +1825,7 @@ void Gcs_xcom_control::install_view(
   */
   m_view_control->set_belongs_to_group(true);
 
-  map<int, const Gcs_control_event_listener &>::iterator callback_it =
-      event_listeners.begin();
+  auto callback_it = event_listeners.begin();
 
   while (callback_it != event_listeners.end()) {
     (*callback_it).second.on_view_changed(*current_view, data_to_deliver);

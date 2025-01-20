@@ -840,7 +840,7 @@ void NdbResultSet::init(NdbQueryImpl &query, Uint32 maxRows,
                         Uint32 bufferSize) {
   {
     NdbBulkAllocator &bufferAlloc = query.getRowBufferAlloc();
-    Uint32 *buffer =
+    auto *buffer =
         reinterpret_cast<Uint32 *>(bufferAlloc.allocObjMem(bufferSize));
     m_buffer = NdbReceiver::initReceiveBuffer(buffer, bufferSize, maxRows);
 
@@ -2030,7 +2030,7 @@ int NdbQueryParamValue::serializeValue(const class NdbColumnImpl &column,
         if (unlikely(len > 1 + static_cast<Uint32>(column.getLength())))
           return QRY_CHAR_PARAMETER_TRUNCATED;
 
-        const Uint8 shortLen = static_cast<Uint8>(len - 1);
+        const auto shortLen = static_cast<Uint8>(len - 1);
         dst.appendBytes(&shortLen, 1);
         dst.appendBytes(((const Uint8 *)m_value.raw) + 2, shortLen);
       }
@@ -2156,7 +2156,7 @@ void NdbQueryImpl::postFetchRelease() {
 NdbQueryImpl *NdbQueryImpl::buildQuery(NdbTransaction &trans,
                                        const NdbQueryDefImpl &queryDef) {
   assert(queryDef.getNoOfOperations() > 0);
-  NdbQueryImpl *const query = new NdbQueryImpl(trans, queryDef);
+  auto *const query = new NdbQueryImpl(trans, queryDef);
   if (unlikely(query == nullptr)) {
     trans.setOperationErrorCodeAbort(Err_MemoryAlloc);
     return nullptr;
@@ -2594,7 +2594,7 @@ NdbQueryImpl::FetchResult NdbQueryImpl::awaitMoreResults(bool forceSend) {
         const Uint32 seq = m_transaction.theNodeSequence;
 
         /* More results are on the way, so we wait for them.*/
-        const FetchResult waitResult = static_cast<FetchResult>(
+        const auto waitResult = static_cast<FetchResult>(
             poll_guard.wait_scan(3 * timeout, nodeId, forceSend));
 
         if (ndb->getNodeSequence(nodeId) != seq)
@@ -2988,7 +2988,7 @@ int NdbQueryImpl::prepareSend() {
   }
 
   const Uint32Buffer &queryTree = getQueryDef().getSerialized();
-  const QueryNode *queryNode = (const QueryNode *)queryTree.addr(1);
+  const auto *queryNode = (const QueryNode *)queryTree.addr(1);
 
   // Fill in parameters (into ATTRINFO) for QueryTree.
   for (Uint32 i = 0; i < m_countOperations; i++) {
@@ -3226,8 +3226,7 @@ int NdbQueryImpl::doSend(int nodeId, bool lastFlag) {
     NdbApiSignal tSignal(&ndb);
     tSignal.setSignal(GSN_SCAN_TABREQ, refToBlock(m_scanTransaction->m_tcRef));
 
-    ScanTabReq *const scanTabReq =
-        CAST_PTR(ScanTabReq, tSignal.getDataPtrSend());
+    auto *const scanTabReq = CAST_PTR(ScanTabReq, tSignal.getDataPtrSend());
     Uint32 reqInfo = 0;
 
     const Uint64 transId = m_scanTransaction->getTransactionId();
@@ -3341,7 +3340,7 @@ int NdbQueryImpl::doSend(int nodeId, bool lastFlag) {
     NdbApiSignal tSignal(&ndb);
     tSignal.setSignal(GSN_TCKEYREQ, refToBlock(m_transaction.m_tcRef));
 
-    TcKeyReq *const tcKeyReq = CAST_PTR(TcKeyReq, tSignal.getDataPtrSend());
+    auto *const tcKeyReq = CAST_PTR(TcKeyReq, tSignal.getDataPtrSend());
 
     const Uint64 transId = m_transaction.getTransactionId();
     tcKeyReq->apiConnectPtr = m_transaction.theTCConPtr;
@@ -3473,8 +3472,7 @@ int NdbQueryImpl::sendFetchMore(NdbWorker *workers[], Uint32 cnt,
   Ndb &ndb = *getNdbTransaction().getNdb();
   NdbApiSignal tSignal(&ndb);
   tSignal.setSignal(GSN_SCAN_NEXTREQ, refToBlock(m_scanTransaction->m_tcRef));
-  ScanNextReq *const scanNextReq =
-      CAST_PTR(ScanNextReq, tSignal.getDataPtrSend());
+  auto *const scanNextReq = CAST_PTR(ScanNextReq, tSignal.getDataPtrSend());
 
   assert(m_scanTransaction);
   const Uint64 transId = m_scanTransaction->getTransactionId();
@@ -3539,7 +3537,7 @@ int NdbQueryImpl::closeTcCursor(bool forceSend) {
 
   /* Wait for outstanding scan results from current batch fetch */
   while (m_pendingWorkers > 0) {
-    const FetchResult result = static_cast<FetchResult>(
+    const auto result = static_cast<FetchResult>(
         poll_guard.wait_scan(3 * timeout, nodeId, forceSend));
 
     if (unlikely(ndb->getNodeSequence(nodeId) != seq))
@@ -3571,7 +3569,7 @@ int NdbQueryImpl::closeTcCursor(bool forceSend) {
 
     /* Wait for close to be confirmed: */
     while (m_pendingWorkers > 0) {
-      const FetchResult result = static_cast<FetchResult>(
+      const auto result = static_cast<FetchResult>(
           poll_guard.wait_scan(3 * timeout, nodeId, forceSend));
 
       if (unlikely(ndb->getNodeSequence(nodeId) != seq))
@@ -3612,8 +3610,7 @@ int NdbQueryImpl::sendClose(int nodeId) {
   Ndb &ndb = *m_transaction.getNdb();
   NdbApiSignal tSignal(&ndb);
   tSignal.setSignal(GSN_SCAN_NEXTREQ, refToBlock(m_scanTransaction->m_tcRef));
-  ScanNextReq *const scanNextReq =
-      CAST_PTR(ScanNextReq, tSignal.getDataPtrSend());
+  auto *const scanNextReq = CAST_PTR(ScanNextReq, tSignal.getDataPtrSend());
 
   assert(m_scanTransaction);
   const Uint64 transId = m_scanTransaction->getTransactionId();
@@ -4552,7 +4549,7 @@ int NdbQueryOperationImpl::prepareAttrInfo(Uint32Buffer &attrInfo,
       attrInfo.append(m_params);
     }
 
-    QN_LookupParameters *param =
+    auto *param =
         reinterpret_cast<QN_LookupParameters *>(attrInfo.addr(startPos));
     if (unlikely(param == nullptr)) return Err_MemoryAlloc;
 
@@ -4587,8 +4584,7 @@ int NdbQueryOperationImpl::prepareAttrInfo(Uint32Buffer &attrInfo,
    * Create QueryNodeParameters type matching each QueryNode.
    */
   const Uint32 type = QueryNode::getOpType(queryNode->len);
-  const QueryNodeParameters::OpType paramType =
-      (QueryNodeParameters::OpType)type;
+  const auto paramType = (QueryNodeParameters::OpType)type;
   switch (paramType) {
     case QueryNodeParameters::QN_LOOKUP:
       assert(!def.isScanOperation());
@@ -4652,7 +4648,7 @@ int NdbQueryOperationImpl::prepareAttrInfo(Uint32Buffer &attrInfo,
 
   switch (paramType) {
     case QueryNodeParameters::QN_LOOKUP: {
-      QN_LookupParameters *param =
+      auto *param =
           reinterpret_cast<QN_LookupParameters *>(attrInfo.addr(startPos));
       if (unlikely(param == nullptr)) return Err_MemoryAlloc;
 
@@ -4662,7 +4658,7 @@ int NdbQueryOperationImpl::prepareAttrInfo(Uint32Buffer &attrInfo,
       break;
     }
     case QueryNodeParameters::QN_SCAN_FRAG: {
-      QN_ScanFragParameters *param =
+      auto *param =
           reinterpret_cast<QN_ScanFragParameters *>(attrInfo.addr(startPos));
       if (unlikely(param == nullptr)) return Err_MemoryAlloc;
 
@@ -4697,9 +4693,8 @@ int NdbQueryOperationImpl::prepareAttrInfo(Uint32Buffer &attrInfo,
     // Check deprecated QueryNode types last:
     case QueryNodeParameters::QN_SCAN_INDEX_v1:  // Deprecated
     {
-      QN_ScanIndexParameters_v1 *param =
-          reinterpret_cast<QN_ScanIndexParameters_v1 *>(
-              attrInfo.addr(startPos));
+      auto *param = reinterpret_cast<QN_ScanIndexParameters_v1 *>(
+          attrInfo.addr(startPos));
       if (unlikely(param == nullptr)) return Err_MemoryAlloc;
 
       assert(m_parallelism == Parallelism_max ||
@@ -4729,7 +4724,7 @@ int NdbQueryOperationImpl::prepareAttrInfo(Uint32Buffer &attrInfo,
     case QueryNodeParameters::QN_SCAN_FRAG_v1:  // Deprecated
     {
       assert(paramType == QueryNodeParameters::QN_SCAN_FRAG_v1);
-      QN_ScanFragParameters_v1 *param =
+      auto *param =
           reinterpret_cast<QN_ScanFragParameters_v1 *>(attrInfo.addr(startPos));
       if (unlikely(param == nullptr)) return Err_MemoryAlloc;
 
@@ -4857,8 +4852,7 @@ static int appendBound(Uint32Buffer &keyInfo,
 
   switch (bound->getKind()) {
     case NdbQueryOperandImpl::Const: {
-      const NdbConstOperandImpl &constOp =
-          static_cast<const NdbConstOperandImpl &>(*bound);
+      const auto &constOp = static_cast<const NdbConstOperandImpl &>(*bound);
 
       const int error = serializeConstOp(constOp, keyInfo, len);
       if (unlikely(error)) return error;
@@ -4866,7 +4860,7 @@ static int appendBound(Uint32Buffer &keyInfo,
       break;
     }
     case NdbQueryOperandImpl::Param: {
-      const NdbParamOperandImpl *const paramOp =
+      const auto *const paramOp =
           static_cast<const NdbParamOperandImpl *>(bound);
       const int paramNo = paramOp->getParamIx();
       assert(actualParam != nullptr);
@@ -4969,7 +4963,7 @@ int NdbQueryOperationImpl::prepareLookupKeyInfo(
 
     switch (keys[keyNo]->getKind()) {
       case NdbQueryOperandImpl::Const: {
-        const NdbConstOperandImpl *const constOp =
+        const auto *const constOp =
             static_cast<const NdbConstOperandImpl *>(keys[keyNo]);
         const int error = serializeConstOp(*constOp, keyInfo, dummy);
         if (unlikely(error)) return error;
@@ -4977,7 +4971,7 @@ int NdbQueryOperationImpl::prepareLookupKeyInfo(
         break;
       }
       case NdbQueryOperandImpl::Param: {
-        const NdbParamOperandImpl *const paramOp =
+        const auto *const paramOp =
             static_cast<const NdbParamOperandImpl *>(keys[keyNo]);
         int paramNo = paramOp->getParamIx();
         assert(actualParam != nullptr);
@@ -5059,7 +5053,7 @@ bool NdbQueryOperationImpl::execTCKEYREF(const NdbApiSignal *aSignal) {
   /* The SPJ block does not forward TCKEYREFs for trees with scan roots.*/
   assert(!getQueryDef().isScanQuery());
 
-  const TcKeyRef *ref = CAST_CONSTPTR(TcKeyRef, aSignal->getDataPtr());
+  const auto *ref = CAST_CONSTPTR(TcKeyRef, aSignal->getDataPtr());
   if (!getQuery().m_transaction.checkState_TransId(ref->transId)) {
 #ifdef NDB_NO_DROPPED_SIGNAL
     abort();

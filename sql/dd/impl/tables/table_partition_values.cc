@@ -43,7 +43,7 @@ namespace dd {
 namespace tables {
 
 const Table_partition_values &Table_partition_values::instance() {
-  static Table_partition_values *s_instance = new Table_partition_values();
+  static auto *s_instance = new Table_partition_values();
   return *s_instance;
 }
 
@@ -131,7 +131,7 @@ Raw_key *Table_partition_values_pk::create_access_key(
 
   KEY *key_info = t->key_info + INDEX_NO;
 
-  Raw_key *k =
+  auto *k =
       new (std::nothrow) Raw_key(INDEX_NO, key_info->key_length, HA_WHOLE_KEY);
 
   key_copy(k->key, t->record[0], key_info, k->key_len);

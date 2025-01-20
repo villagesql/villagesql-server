@@ -654,7 +654,7 @@ size_t my_long10_to_str_8bit(const CHARSET_INFO *cs [[maybe_unused]], char *dst,
   char *p, *e;
   long int new_val;
   unsigned sign = 0;
-  unsigned long int uval = (unsigned long int)val;
+  auto uval = (unsigned long int)val;
 
   e = p = &buffer[sizeof(buffer) - 1];
   *p = 0;
@@ -691,7 +691,7 @@ size_t my_longlong10_to_str_8bit(const CHARSET_INFO *cs [[maybe_unused]],
   char *p, *e;
   long long_val;
   unsigned sign = 0;
-  unsigned long long uval = (unsigned long long)val;
+  auto uval = (unsigned long long)val;
 
   if (radix < 0) {
     if (val < 0) {
@@ -714,7 +714,7 @@ size_t my_longlong10_to_str_8bit(const CHARSET_INFO *cs [[maybe_unused]],
 
   while (uval > (unsigned long long)LONG_MAX) {
     unsigned long long quo = uval / (unsigned)10;
-    unsigned rem = (unsigned)(uval - quo * (unsigned)10);
+    auto rem = (unsigned)(uval - quo * (unsigned)10);
     *--p = '0' + rem;
     uval = quo;
   }
@@ -747,8 +747,8 @@ static int my_wildcmp_8bit_impl(const CHARSET_INFO *cs, const char *str,
                                 const char *wildend_arg, int escape, int w_one,
                                 int w_many, int recurse_level) {
   int result = -1; /* Not found, using wildcards */
-  const uint8_t *wildstr = pointer_cast<const uint8_t *>(wildstr_arg);
-  const uint8_t *wildend = pointer_cast<const uint8_t *>(wildend_arg);
+  const auto *wildstr = pointer_cast<const uint8_t *>(wildstr_arg);
+  const auto *wildend = pointer_cast<const uint8_t *>(wildend_arg);
 
   if (my_string_stack_guard && my_string_stack_guard(recurse_level)) return -1;
   while (wildstr != wildend) {
@@ -920,7 +920,7 @@ size_t my_charpos_8bit(const CHARSET_INFO *cs [[maybe_unused]],
 size_t my_well_formed_len_8bit(const CHARSET_INFO *cs [[maybe_unused]],
                                const char *start, const char *end,
                                size_t nchars, int *error) {
-  size_t nbytes = (size_t)(end - start);
+  auto nbytes = (size_t)(end - start);
   *error = 0;
   return std::min(nbytes, nchars);
 }
@@ -943,8 +943,8 @@ bool my_instr_simple(const CHARSET_INFO *cs, const char *b, size_t b_length,
       return true; /* Empty string is always found */
     }
 
-    const uint8_t *str = pointer_cast<const uint8_t *>(b);
-    const uint8_t *search = pointer_cast<const uint8_t *>(s);
+    const auto *str = pointer_cast<const uint8_t *>(b);
+    const auto *search = pointer_cast<const uint8_t *>(s);
     const uint8_t *end =
         pointer_cast<const uint8_t *>(b) + b_length - s_length + 1;
     const uint8_t *search_end = pointer_cast<const uint8_t *>(s) + s_length;
@@ -997,8 +997,8 @@ typedef struct {
 #define PLANE_NUMBER(x) (((x) >> 8) % PLANE_NUM)
 
 static int pcmp(const void *f, const void *s) {
-  const uni_idx *F = (const uni_idx *)f;
-  const uni_idx *S = (const uni_idx *)s;
+  const auto *F = (const uni_idx *)f;
+  const auto *S = (const uni_idx *)s;
   int res;
 
   if (!(res = ((S->nchars) - (F->nchars))))

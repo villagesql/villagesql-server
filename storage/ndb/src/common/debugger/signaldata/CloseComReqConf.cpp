@@ -29,7 +29,7 @@
 
 bool printCLOSECOMREQCONF(FILE *output, const Uint32 *theData, Uint32 len,
                           Uint16 /*receiverBlockNo*/) {
-  const CloseComReqConf *cc = (const CloseComReqConf *)theData;
+  const auto *cc = (const CloseComReqConf *)theData;
 
   if (len == 1) {
     fprintf(output, " xxxBlockRef = (%d, %d)\n", refToBlock(cc->xxxBlockRef),

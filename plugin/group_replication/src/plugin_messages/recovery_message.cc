@@ -59,7 +59,7 @@ void Recovery_message::encode_payload(
     std::vector<unsigned char> *buffer) const {
   DBUG_TRACE;
 
-  uint16 recovery_message_type_aux = (uint16)recovery_message_type;
+  auto recovery_message_type_aux = (uint16)recovery_message_type;
   encode_payload_item_int2(buffer, PIT_RECOVERY_MESSAGE_TYPE,
                            recovery_message_type_aux);
 

@@ -370,21 +370,21 @@ void TransporterFacade::handleMissingClnt(const SignalHeader *header,
   Uint32 gsn = header->theVerId_signalNumber;
   Uint32 transId[2];
   if (gsn == GSN_TCKEYCONF || gsn == GSN_TCINDXCONF) {
-    const TcKeyConf *conf = CAST_CONSTPTR(TcKeyConf, theData);
+    const auto *conf = CAST_CONSTPTR(TcKeyConf, theData);
     if (TcKeyConf::getMarkerFlag(conf->confInfo) == false) {
       return;
     }
     transId[0] = conf->transId1;
     transId[1] = conf->transId2;
   } else if (gsn == GSN_TC_COMMITCONF) {
-    const TcCommitConf *conf = CAST_CONSTPTR(TcCommitConf, theData);
+    const auto *conf = CAST_CONSTPTR(TcCommitConf, theData);
     if ((conf->apiConnectPtr & 1) == 0) {
       return;
     }
     transId[0] = conf->transId1;
     transId[1] = conf->transId2;
   } else if (gsn == GSN_TCKEY_FAILCONF) {
-    const TcKeyFailConf *conf = CAST_CONSTPTR(TcKeyFailConf, theData);
+    const auto *conf = CAST_CONSTPTR(TcKeyFailConf, theData);
     if ((conf->apiConnectPtr & 1) == 0) {
       return;
     }
@@ -619,7 +619,7 @@ void TransporterFacade::check_cpu_usage(NDB_TICKS currTime) {
   m_last_recv_thread_cpu_usage_in_micros = cpu_time;
   m_recv_thread_cpu_usage_in_percent = percentage;
 
-  Uint64 spin_cpu_time = (Uint64)theTransporterRegistry->get_total_spintime();
+  auto spin_cpu_time = (Uint64)theTransporterRegistry->get_total_spintime();
   theTransporterRegistry->reset_total_spintime();
   spin_cpu_time += Uint32(expired_time_in_micros / Uint64(200));
   Uint64 spin_percentage =
@@ -1732,7 +1732,7 @@ void TransporterFacade::connected() {
   signal.theTrace = 0;
   signal.theLength = AllocNodeIdConf::SignalLength;
 
-  AllocNodeIdConf *rep = CAST_PTR(AllocNodeIdConf, signal.getDataPtrSend());
+  auto *rep = CAST_PTR(AllocNodeIdConf, signal.getDataPtrSend());
   rep->senderRef = 0;
   rep->senderData = 0;
   rep->nodeId = theOwnId;
@@ -1780,7 +1780,7 @@ int TransporterFacade::close_clnt(trp_client *clnt) {
   signal.theVerId_signalNumber = GSN_CLOSE_COMREQ;
   signal.theTrace = 0;
   signal.theLength = 1;
-  CloseComReqConf *req = CAST_PTR(CloseComReqConf, signal.getDataPtrSend());
+  auto *req = CAST_PTR(CloseComReqConf, signal.getDataPtrSend());
   req->xxxBlockRef = numberToRef(clnt->m_blockNo, theOwnId);
 
   if (clnt) {
@@ -2205,8 +2205,7 @@ int TransporterFacade::sendFragmentedSignal(trp_client *clnt,
        * section
        */
       tmp_ptr[i].sz = send_sz;
-      FragmentedSectionIterator *fragIter =
-          (FragmentedSectionIterator *)tmp_ptr[i].sectionIter;
+      auto *fragIter = (FragmentedSectionIterator *)tmp_ptr[i].sectionIter;
       const Uint32 total_sec_sz = ptr[i].sz;
       const Uint32 start = (total_sec_sz - remaining_sec_sz);
       bool ok = fragIter->setRange(start, send_sz);

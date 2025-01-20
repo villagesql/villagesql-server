@@ -43,7 +43,7 @@ bool printTCKEYCONF(FILE *output, const Uint32 *theData, Uint32 len,
     } while (len);
     return true;
   } else {
-    const TcKeyConf *const sig = (const TcKeyConf *)theData;
+    const auto *const sig = (const TcKeyConf *)theData;
 
     Uint32 i = 0;
     Uint32 confInfo = sig->confInfo;

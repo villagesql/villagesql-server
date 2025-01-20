@@ -161,7 +161,7 @@ inline void FsBuffer::clear() {
 }
 
 static Uint32 *align(Uint32 *ptr, Uint32 alignment, bool downwards) {
-  const UintPtr a = (UintPtr)ptr;
+  const auto a = (UintPtr)ptr;
   const UintPtr b = a % alignment;
 
   if (downwards) {

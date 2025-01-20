@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Libraries &Libraries::instance() {
-  static Libraries *s_instance = new Libraries();
+  static auto *s_instance = new Libraries();
   return *s_instance;
 }
 

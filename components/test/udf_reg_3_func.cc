@@ -187,14 +187,14 @@ bool avgcost_init(UDF_INIT *initid, UDF_ARGS *args, char *message) {
 
 void avgcost_deinit(UDF_INIT *initid) {
   void *void_ptr = initid->ptr;
-  avgcost_data *data = static_cast<avgcost_data *>(void_ptr);
+  auto *data = static_cast<avgcost_data *>(void_ptr);
   delete data;
 }
 
 /* This is needed to get things to work in MySQL 4.1.1 and above */
 
 void avgcost_clear(UDF_INIT *initid, unsigned char *, unsigned char *) {
-  struct avgcost_data *data = (struct avgcost_data *)initid->ptr;
+  auto *data = (struct avgcost_data *)initid->ptr;
   data->totalprice = 0.0;
   data->totalquantity = 0;
   data->count = 0;
@@ -203,7 +203,7 @@ void avgcost_clear(UDF_INIT *initid, unsigned char *, unsigned char *) {
 void avgcost_add(UDF_INIT *initid, UDF_ARGS *args, unsigned char *,
                  unsigned char *) {
   if (args->args[0] && args->args[1]) {
-    struct avgcost_data *data = (struct avgcost_data *)initid->ptr;
+    auto *data = (struct avgcost_data *)initid->ptr;
     long long quantity = *((long long *)args->args[0]);
     long long newquantity = data->totalquantity + quantity;
     double price = *((double *)args->args[1]);
@@ -239,7 +239,7 @@ void avgcost_add(UDF_INIT *initid, UDF_ARGS *args, unsigned char *,
 
 double avgcost(UDF_INIT *initid, UDF_ARGS *, unsigned char *is_null,
                unsigned char *) {
-  struct avgcost_data *data = (struct avgcost_data *)initid->ptr;
+  auto *data = (struct avgcost_data *)initid->ptr;
   if (!data->count || !data->totalquantity) {
     *is_null = 1;
     return 0.0;

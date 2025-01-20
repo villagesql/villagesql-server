@@ -29,7 +29,7 @@
 
 bool printLOCAL_ROUTE_ORD(FILE *output, const Uint32 *theData, Uint32 len,
                           Uint16 /*rbn*/) {
-  const LocalRouteOrd *sig = (const LocalRouteOrd *)theData;
+  const auto *sig = (const LocalRouteOrd *)theData;
   Uint32 pathcnt = sig->cnt >> 16;
   Uint32 dstcnt = sig->cnt & 0xFFFF;
 

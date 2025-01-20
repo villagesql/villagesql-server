@@ -38,7 +38,7 @@ namespace dd {
 namespace tables {
 
 const Events &Events::instance() {
-  static Events *s_instance = new Events();
+  static auto *s_instance = new Events();
   return *s_instance;
 }
 

@@ -33,7 +33,7 @@ namespace dd {
 namespace system_views {
 
 const Keywords &Keywords::instance() {
-  static Keywords *s_instance = new Keywords();
+  static auto *s_instance = new Keywords();
   return *s_instance;
 }
 

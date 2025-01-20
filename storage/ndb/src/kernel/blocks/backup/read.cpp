@@ -284,7 +284,7 @@ void insert_row(Uint32 page_id, Uint32 page_idx, bool is_insert, bool is_all) {
     }
     return;
   }
-  RowEntry *new_row_entry = (RowEntry *)malloc(sizeof(struct RowEntry));
+  auto *new_row_entry = (RowEntry *)malloc(sizeof(struct RowEntry));
   if (new_row_entry == NULL) {
     ndbout_c("Malloc failure in insert_row");
     ndb_end_and_exit(1);
@@ -771,7 +771,7 @@ int main(int argc, char *argv[]) {
       Uint32 *data;
       while ((dataLen = readLogEntry(f, &data, fileHeader.FileType,
                                      log_entry_version)) > 0) {
-        LogEntry *logEntry = (LogEntry *)data;
+        auto *logEntry = (LogEntry *)data;
         /**
          * Log Entry
          */
@@ -788,7 +788,7 @@ int main(int argc, char *argv[]) {
         if (opt_verbose_level > 0) {
           Int32 pos = 0;
           while (pos < dataLen) {
-            AttributeHeader *ah = (AttributeHeader *)&logEntry->Data[pos];
+            auto *ah = (AttributeHeader *)&logEntry->Data[pos];
             ndbout_c(" Attribut: %d Size: %d", ah->getAttributeId(),
                      ah->getDataSize());
             pos += ah->getDataSize() + 1;
@@ -1220,8 +1220,7 @@ Uint32 decompress_part_pairs(struct BackupFormat::LCPCtlFile *lcpCtlFilePtr,
                              Uint32 num_parts) {
   static unsigned char c_part_array[BackupFormat::NDB_MAX_LCP_PARTS * 4];
   Uint32 total_parts = 0;
-  unsigned char *part_array =
-      (unsigned char *)&lcpCtlFilePtr->partPairs[0].startPart;
+  auto *part_array = (unsigned char *)&lcpCtlFilePtr->partPairs[0].startPart;
   memcpy(c_part_array, part_array, 3 * num_parts);
   Uint32 j = 0;
   for (Uint32 part = 0; part < num_parts; part++) {

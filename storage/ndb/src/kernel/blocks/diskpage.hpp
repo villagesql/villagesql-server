@@ -292,11 +292,10 @@ inline File_formats::Datafile::Extent_header *
 File_formats::Datafile::Extent_page::get_header(Uint32 no, Uint32 extent_size,
                                                 bool v2) {
   if (v2) {
-    File_formats::Datafile::Extent_page_v2 *page_v2 =
-        (File_formats::Datafile::Extent_page_v2 *)this;
+    auto *page_v2 = (File_formats::Datafile::Extent_page_v2 *)this;
     return (Extent_header *)page_v2->get_header_v2(no, extent_size);
   } else {
-    Uint32 *tmp = (Uint32 *)m_extents;
+    auto *tmp = (Uint32 *)m_extents;
     tmp += no * File_formats::Datafile::extent_header_words(extent_size, v2);
     return (Extent_header *)tmp;
   }
@@ -305,7 +304,7 @@ File_formats::Datafile::Extent_page::get_header(Uint32 no, Uint32 extent_size,
 inline File_formats::Datafile::Extent_header_v2 *
 File_formats::Datafile::Extent_page_v2::get_header_v2(Uint32 no,
                                                       Uint32 extent_size) {
-  Uint32 *tmp = (Uint32 *)m_extents;
+  auto *tmp = (Uint32 *)m_extents;
   tmp += no * File_formats::Datafile::extent_header_words(extent_size, true);
   return (Extent_header_v2 *)tmp;
 }
@@ -345,13 +344,12 @@ File_formats::Datafile::Extent_page::get_extent_data(Uint32 no,
                                                      bool v2) {
   Extent_data *ret_data;
   if (v2) {
-    File_formats::Datafile::Extent_page_v2 *page_v2 =
-        (File_formats::Datafile::Extent_page_v2 *)this;
-    Uint32 *tmp = (Uint32 *)page_v2->m_extents;
+    auto *page_v2 = (File_formats::Datafile::Extent_page_v2 *)this;
+    auto *tmp = (Uint32 *)page_v2->m_extents;
     tmp += no * File_formats::Datafile::extent_header_words(extent_size, v2);
     ret_data = (Extent_data *)&((Extent_header_v2 *)tmp)->m_page_bitmask[0];
   } else {
-    Uint32 *tmp = (Uint32 *)m_extents;
+    auto *tmp = (Uint32 *)m_extents;
     tmp += no * File_formats::Datafile::extent_header_words(extent_size, v2);
     ret_data = (Extent_data *)&((Extent_header *)tmp)->m_page_bitmask[0];
   }
@@ -362,8 +360,7 @@ inline Uint32 *File_formats::Datafile::Extent_page::get_table_id(
     Uint32 no, Uint32 extent_size, bool v2) {
   Uint32 *ret_data;
   if (v2) {
-    File_formats::Datafile::Extent_page_v2 *page_v2 =
-        (File_formats::Datafile::Extent_page_v2 *)this;
+    auto *page_v2 = (File_formats::Datafile::Extent_page_v2 *)this;
     File_formats::Datafile::Extent_header_v2 *header =
         page_v2->get_header_v2(no, extent_size);
     ret_data = &header->m_table;
@@ -379,8 +376,7 @@ inline Uint32 *File_formats::Datafile::Extent_page::get_fragment_id(
     Uint32 no, Uint32 extent_size, bool v2) {
   Uint32 *ret_data;
   if (v2) {
-    File_formats::Datafile::Extent_page_v2 *page =
-        (File_formats::Datafile::Extent_page_v2 *)this;
+    auto *page = (File_formats::Datafile::Extent_page_v2 *)this;
     File_formats::Datafile::Extent_header_v2 *header =
         page->get_header_v2(no, extent_size);
     ret_data = &header->m_fragment_id;
@@ -401,8 +397,7 @@ inline Uint32 *File_formats::Datafile::Extent_page::get_create_table_version(
     Uint32 no, Uint32 extent_size, bool v2) {
   Uint32 *ret_data;
   if (v2) {
-    File_formats::Datafile::Extent_page_v2 *page =
-        (File_formats::Datafile::Extent_page_v2 *)this;
+    auto *page = (File_formats::Datafile::Extent_page_v2 *)this;
     File_formats::Datafile::Extent_header_v2 *header =
         page->get_header_v2(no, extent_size);
     ret_data = &header->m_create_table_version;

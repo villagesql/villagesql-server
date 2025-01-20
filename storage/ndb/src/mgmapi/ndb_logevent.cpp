@@ -498,7 +498,7 @@ extern "C" int ndb_logevent_get_next(const NdbLogEventHandle h,
      * Undo effect of bug#16723708 fix to maintain
      * backwards compatibility
      */
-    Uint32 category = (Uint32)dst->category;
+    auto category = (Uint32)dst->category;
     switch (category) {
       case (Uint32)NDB_MGM_ILLEGAL_EVENT_CATEGORY:
         category = (Uint32)LogLevel::llInvalid;

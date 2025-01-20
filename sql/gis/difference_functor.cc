@@ -190,7 +190,7 @@ std::unique_ptr<Cartesian_multipoint> Difference::eval(
 
 std::unique_ptr<Geometry> Difference::eval(
     const Cartesian_point *g1, const Cartesian_geometrycollection *g2) const {
-  Cartesian_multipoint *result_g = new Cartesian_multipoint();
+  auto *result_g = new Cartesian_multipoint();
   std::unique_ptr<Geometry> result(result_g);
   result_g->push_back(*g1);
   for (auto g : *g2) {
@@ -256,7 +256,7 @@ std::unique_ptr<Cartesian_multilinestring> Difference::eval(
 std::unique_ptr<Geometry> Difference::eval(
     const Cartesian_linestring *g1,
     const Cartesian_geometrycollection *g2) const {
-  Cartesian_multilinestring *result_g = new Cartesian_multilinestring();
+  auto *result_g = new Cartesian_multilinestring();
   std::unique_ptr<Geometry> result(result_g);
   result_g->push_back(*g1);
   for (auto g : *g2) {
@@ -324,7 +324,7 @@ std::unique_ptr<Cartesian_multipolygon> Difference::eval(
 
 std::unique_ptr<Geometry> Difference::eval(
     const Cartesian_polygon *g1, const Cartesian_geometrycollection *g2) const {
-  Cartesian_multipolygon *result_g = new Cartesian_multipolygon();
+  auto *result_g = new Cartesian_multipolygon();
   std::unique_ptr<Geometry> result(result_g);
   result_g->push_back(*g1);
   for (auto g : *g2) {
@@ -589,7 +589,7 @@ std::unique_ptr<Geographic_multipoint> Difference::eval(
 
 std::unique_ptr<Geometry> Difference::eval(
     const Geographic_point *g1, const Geographic_geometrycollection *g2) const {
-  Geographic_multipoint *result_g = new Geographic_multipoint();
+  auto *result_g = new Geographic_multipoint();
   std::unique_ptr<Geometry> result(result_g);
   result_g->push_back(*g1);
   for (auto g : *g2) {
@@ -657,7 +657,7 @@ std::unique_ptr<Geographic_multilinestring> Difference::eval(
 std::unique_ptr<Geometry> Difference::eval(
     const Geographic_linestring *g1,
     const Geographic_geometrycollection *g2) const {
-  Geographic_multilinestring *result_g = new Geographic_multilinestring();
+  auto *result_g = new Geographic_multilinestring();
   std::unique_ptr<Geometry> result(result_g);
   result_g->push_back(*g1);
   for (auto g : *g2) {
@@ -726,7 +726,7 @@ std::unique_ptr<Geographic_multipolygon> Difference::eval(
 std::unique_ptr<Geometry> Difference::eval(
     const Geographic_polygon *g1,
     const Geographic_geometrycollection *g2) const {
-  Geographic_multipolygon *result_g = new Geographic_multipolygon();
+  auto *result_g = new Geographic_multipolygon();
   std::unique_ptr<Geometry> result(result_g);
   result_g->push_back(*g1);
   for (auto g : *g2) {

@@ -29,8 +29,8 @@
 #include "storage/myisammrg/myrg_def.h"
 
 static int queue_key_cmp(void *keyseg, uchar *a, uchar *b) {
-  MYRG_TABLE *ma = (MYRG_TABLE *)a;
-  MYRG_TABLE *mb = (MYRG_TABLE *)b;
+  auto *ma = (MYRG_TABLE *)a;
+  auto *mb = (MYRG_TABLE *)b;
   MI_INFO *aa = ma->table;
   MI_INFO *bb = mb->table;
   uint not_used[2];

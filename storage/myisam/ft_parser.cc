@@ -47,16 +47,16 @@ struct MY_FT_PARSER_PARAM {
 };
 
 static int FT_WORD_cmp(const void *a, const void *b, const void *c) {
-  const CHARSET_INFO *cs = static_cast<const CHARSET_INFO *>(a);
-  const FT_WORD *w1 = static_cast<const FT_WORD *>(b);
-  const FT_WORD *w2 = static_cast<const FT_WORD *>(c);
+  const auto *cs = static_cast<const CHARSET_INFO *>(a);
+  const auto *w1 = static_cast<const FT_WORD *>(b);
+  const auto *w2 = static_cast<const FT_WORD *>(c);
   return ha_compare_text(cs, (uchar *)w1->pos, w1->len, (uchar *)w2->pos,
                          w2->len, false);
 }
 
 static int walk_and_copy(void *v_word, uint32 count, void *v_docstat) {
-  FT_WORD *word = static_cast<FT_WORD *>(v_word);
-  FT_DOCSTAT *docstat = static_cast<FT_DOCSTAT *>(v_docstat);
+  auto *word = static_cast<FT_WORD *>(v_word);
+  auto *docstat = static_cast<FT_DOCSTAT *>(v_docstat);
   word->weight = LWS_IN_USE;
   docstat->sum += word->weight;
   memcpy((docstat->list)++, word, sizeof(FT_WORD));
@@ -253,7 +253,7 @@ static int ft_add_word(MYSQL_FTPARSER_PARAM *param, char *word, int word_len,
                        [[maybe_unused]]) {
   TREE *wtree;
   FT_WORD w;
-  MY_FT_PARSER_PARAM *ft_param = (MY_FT_PARSER_PARAM *)param->mysql_ftparam;
+  auto *ft_param = (MY_FT_PARSER_PARAM *)param->mysql_ftparam;
   DBUG_TRACE;
   wtree = ft_param->wtree;
   if (param->flags & MYSQL_FTFLAGS_NEED_COPY) {
@@ -274,9 +274,9 @@ static int ft_add_word(MYSQL_FTPARSER_PARAM *param, char *word, int word_len,
 
 static int ft_parse_internal(MYSQL_FTPARSER_PARAM *param, char *doc_arg,
                              int doc_len) {
-  uchar *doc = (uchar *)doc_arg;
+  auto *doc = (uchar *)doc_arg;
   uchar *end = doc + doc_len;
-  MY_FT_PARSER_PARAM *ft_param = (MY_FT_PARSER_PARAM *)param->mysql_ftparam;
+  auto *ft_param = (MY_FT_PARSER_PARAM *)param->mysql_ftparam;
   TREE *wtree = ft_param->wtree;
   FT_WORD w;
   DBUG_TRACE;

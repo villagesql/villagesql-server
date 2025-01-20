@@ -247,9 +247,9 @@ void MutexMonitor::enable() {
   /** Note: We don't add any latch meta-data after startup. Therefore
   there is no need to use a mutex here. */
 
-  LatchMetaData::iterator end = latch_meta.end();
+  auto end = latch_meta.end();
 
-  for (LatchMetaData::iterator it = latch_meta.begin(); it != end; ++it) {
+  for (auto it = latch_meta.begin(); it != end; ++it) {
     if (*it != nullptr) {
       (*it)->get_counter()->enable();
     }
@@ -261,9 +261,9 @@ void MutexMonitor::disable() {
   /** Note: We don't add any latch meta-data after startup. Therefore
   there is no need to use a mutex here. */
 
-  LatchMetaData::iterator end = latch_meta.end();
+  auto end = latch_meta.end();
 
-  for (LatchMetaData::iterator it = latch_meta.begin(); it != end; ++it) {
+  for (auto it = latch_meta.begin(); it != end; ++it) {
     if (*it != nullptr) {
       (*it)->get_counter()->disable();
     }
@@ -275,9 +275,9 @@ void MutexMonitor::reset() {
   /** Note: We don't add any latch meta-data after startup. Therefore
   there is no need to use a mutex here. */
 
-  LatchMetaData::iterator end = latch_meta.end();
+  auto end = latch_meta.end();
 
-  for (LatchMetaData::iterator it = latch_meta.begin(); it != end; ++it) {
+  for (auto it = latch_meta.begin(); it != end; ++it) {
     if (*it != nullptr) {
       (*it)->get_counter()->reset();
     }

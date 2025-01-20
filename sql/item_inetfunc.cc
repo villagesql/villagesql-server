@@ -132,7 +132,7 @@ String *Item_func_inet_ntoa::val_str(String *str) {
   assert(fixed);
   assert(arg_count == 1);
   null_value = true;
-  const ulonglong n = (ulonglong)args[0]->val_int();
+  const auto n = (ulonglong)args[0]->val_int();
 
   /*
     We do not know if args[0] is NULL until we have called
@@ -291,7 +291,7 @@ static bool str_to_ipv4(const char *str, int str_length,
     return false;
   }
 
-  unsigned char *ipv4_bytes = (unsigned char *)ipv4_address;
+  auto *ipv4_bytes = (unsigned char *)ipv4_address;
   const char *p = str;
   int byte_value = 0;
   int chars_in_group = 0;
@@ -564,7 +564,7 @@ static bool str_to_ipv6(const char *str, int str_length,
 */
 
 static void ipv4_to_str(const in_addr *ipv4, char *str) {
-  const unsigned char *ipv4_bytes = (const unsigned char *)ipv4;
+  const auto *ipv4_bytes = (const unsigned char *)ipv4;
 
   sprintf(str, "%d.%d.%d.%d", ipv4_bytes[0], ipv4_bytes[1], ipv4_bytes[2],
           ipv4_bytes[3]);
@@ -589,7 +589,7 @@ static void ipv6_to_str(const in6_addr *ipv6, char *str) {
     int length;
   };
 
-  const unsigned char *ipv6_bytes = (const unsigned char *)ipv6;
+  const auto *ipv6_bytes = (const unsigned char *)ipv6;
 
   // 1. Translate IPv6-address bytes to words.
   // We can't just cast to short, because it's not guaranteed

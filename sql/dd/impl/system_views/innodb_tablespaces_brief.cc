@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Innodb_tablespaces_brief &Innodb_tablespaces_brief::instance() {
-  static Innodb_tablespaces_brief *s_instance = new Innodb_tablespaces_brief();
+  static auto *s_instance = new Innodb_tablespaces_brief();
   return *s_instance;
 }
 

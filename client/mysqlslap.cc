@@ -1732,7 +1732,7 @@ extern "C" void *run_task(void *p) {
   MYSQL *mysql;
   MYSQL_RES *result;
   statement *ptr;
-  thread_context *con = (thread_context *)p;
+  auto *con = (thread_context *)p;
 
   {
     DBUG_TRACE;

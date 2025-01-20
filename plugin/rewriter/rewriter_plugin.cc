@@ -465,7 +465,7 @@ static int rewrite_query_notify(MYSQL_THD thd,
                                 const void *event) {
   assert(event_class == MYSQL_AUDIT_PARSE_CLASS);
 
-  const struct mysql_event_parse *event_parse =
+  const auto *event_parse =
       static_cast<const struct mysql_event_parse *>(event);
 
   if (event_parse->event_subclass != MYSQL_AUDIT_PARSE_POSTPARSE ||

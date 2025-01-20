@@ -249,7 +249,7 @@ inline bool TransientPagePool::clear(Uint32 index) {
   require(leaf_page_id != MapPage::NO_VALUE);
   assert(leaf_page_id < RNIL);
   void *vpage = m_mem_manager->get_page(leaf_page_id);
-  MapPage *leaf_page = static_cast<MapPage *>(vpage);
+  auto *leaf_page = static_cast<MapPage *>(vpage);
   Uint32 low = index & MapPage::VALUE_INDEX_MASK;
   require(low < MapPage::PAGE_WORDS);
   leaf_page->set(low, MapPage::NO_VALUE);
@@ -266,7 +266,7 @@ inline Uint32 TransientPagePool::get(Uint32 index) const {
   require(leaf_page_id != MapPage::NO_VALUE);
   assert(leaf_page_id < RNIL);
   void *vpage = m_mem_manager->get_page(leaf_page_id);
-  MapPage *leaf_page = static_cast<MapPage *>(vpage);
+  auto *leaf_page = static_cast<MapPage *>(vpage);
   Uint32 low = index & MapPage::VALUE_INDEX_MASK;
   require(low < MapPage::PAGE_WORDS);
   const Uint32 value = leaf_page->get(low);
@@ -299,7 +299,7 @@ inline Uint32 TransientPagePool::get_valid(Uint32 index) const {
   }
 
   void *vpage = m_mem_manager->get_page(leaf_page_id);
-  MapPage *leaf_page = static_cast<MapPage *>(vpage);
+  auto *leaf_page = static_cast<MapPage *>(vpage);
   return leaf_page->get(low);
 }
 
@@ -321,7 +321,7 @@ inline bool TransientPagePool::shrink() {
   Uint32 leaf_page_id = m_root_page->get(high);
   require(leaf_page_id != MapPage::NO_VALUE);
   void *vpage = m_mem_manager->get_page(leaf_page_id);
-  MapPage *leaf_page = static_cast<MapPage *>(vpage);
+  auto *leaf_page = static_cast<MapPage *>(vpage);
 
   Uint32 low = index & MapPage::VALUE_INDEX_MASK;
   require(low < MapPage::PAGE_WORDS);

@@ -38,7 +38,7 @@ namespace thread {
 
 namespace {
 extern "C" void *thread_start_routine(void *arg) {
-  Thread *start_arg = (Thread *)arg;
+  auto *start_arg = (Thread *)arg;
   Thread::run_wrapper(start_arg);
   return nullptr;
 }

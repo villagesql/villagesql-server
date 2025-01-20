@@ -278,8 +278,7 @@ bool Gcs_packet::allocate_serialization_buffer() {
 
   /* Allocate the serialization buffer. */
   unsigned long long buffer_size = m_fixed_header.get_total_length();
-  unsigned char *buffer =
-      static_cast<unsigned char *>(std::malloc(buffer_size));
+  auto *buffer = static_cast<unsigned char *>(std::malloc(buffer_size));
   if (buffer != nullptr) {
     m_serialized_packet.reset(buffer);
     m_serialized_packet_size = buffer_size;

@@ -199,7 +199,7 @@ static ib_rbt_node_t *rbt_tree_add_child(const ib_rbt_t *tree,
                                          ib_rbt_bound_t *parent,
                                          ib_rbt_node_t *node) {
   /* Cast away the const. */
-  ib_rbt_node_t *last = (ib_rbt_node_t *)parent->last;
+  auto *last = (ib_rbt_node_t *)parent->last;
 
   if (last == tree->root || parent->result < 0) {
     last->left = node;
@@ -800,7 +800,7 @@ bool rbt_delete(ib_rbt_t *tree,  /*!< in: rb tree */
                 const void *key) /*!< in: key to delete */
 {
   bool deleted = false;
-  ib_rbt_node_t *node = (ib_rbt_node_t *)rbt_lookup(tree, key);
+  auto *node = (ib_rbt_node_t *)rbt_lookup(tree, key);
 
   if (node) {
     rbt_remove_node_and_rebalance(tree, node);

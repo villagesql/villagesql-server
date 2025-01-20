@@ -590,7 +590,7 @@ static int default_local_infile_init(void **ptr, const char *filename,
 
 static int default_local_infile_read(void *ptr, char *buf, uint buf_len) {
   int count;
-  default_local_infile_data *data = (default_local_infile_data *)ptr;
+  auto *data = (default_local_infile_data *)ptr;
 
   if ((count = (int)my_read(data->fd, (uchar *)buf, buf_len, MYF(0))) < 0) {
     char errbuf[MYSYS_STRERROR_SIZE];
@@ -614,7 +614,7 @@ static int default_local_infile_read(void *ptr, char *buf, uint buf_len) {
 */
 
 static void default_local_infile_end(void *ptr) {
-  default_local_infile_data *data = (default_local_infile_data *)ptr;
+  auto *data = (default_local_infile_data *)ptr;
   if (data) /* If not error on open */
   {
     if (data->fd >= 0) my_close(data->fd, MYF(MY_WME));
@@ -638,7 +638,7 @@ static void default_local_infile_end(void *ptr) {
 
 static int default_local_infile_error(void *ptr, char *error_msg,
                                       uint error_msg_len) {
-  default_local_infile_data *data = (default_local_infile_data *)ptr;
+  auto *data = (default_local_infile_data *)ptr;
   if (data) /* If not error on open */
   {
     strmake(error_msg, data->error_msg, error_msg_len);
@@ -1841,7 +1841,7 @@ static bool execute(MYSQL_STMT *stmt, char *packet, ulong length,
   DBUG_DUMP("packet", (uchar *)packet, length);
 
   int4store(buff, stmt->stmt_id); /* Send stmt id to server */
-  uchar flags = (uchar)stmt->flags;
+  auto flags = (uchar)stmt->flags;
 
   /*
     If the server supports query attributes raise the flag that we
@@ -2929,7 +2929,7 @@ static void read_binary_date(MYSQL_TIME *tm, uchar **pos) {
 
 static void fetch_string_with_conversion(MYSQL_BIND *param, char *value,
                                          size_t length) {
-  uchar *buffer = pointer_cast<uchar *>(param->buffer);
+  auto *buffer = pointer_cast<uchar *>(param->buffer);
   const char *endptr = value + length;
 
   /*
@@ -2978,7 +2978,7 @@ static void fetch_string_with_conversion(MYSQL_BIND *param, char *value,
       int err;
       const double data =
           my_strntod(&my_charset_latin1, value, length, &endptr, &err);
-      const float fdata = (float)data;
+      const auto fdata = (float)data;
       *param->error = (fdata != data) | (err != 0);
       floatstore(buffer, fdata);
       break;
@@ -2993,7 +2993,7 @@ static void fetch_string_with_conversion(MYSQL_BIND *param, char *value,
     }
     case MYSQL_TYPE_TIME: {
       MYSQL_TIME_STATUS status;
-      MYSQL_TIME *tm = (MYSQL_TIME *)buffer;
+      auto *tm = (MYSQL_TIME *)buffer;
       str_to_time(value, length, tm, &status);
       *param->error = (status.warnings != 0);
       break;
@@ -3002,7 +3002,7 @@ static void fetch_string_with_conversion(MYSQL_BIND *param, char *value,
     case MYSQL_TYPE_DATETIME:
     case MYSQL_TYPE_TIMESTAMP: {
       MYSQL_TIME_STATUS status;
-      MYSQL_TIME *tm = (MYSQL_TIME *)buffer;
+      auto *tm = (MYSQL_TIME *)buffer;
       (void)str_to_datetime(value, length, tm, TIME_FUZZY_DATE, &status);
       *param->error =
           (status.warnings != 0) && (param->buffer_type == MYSQL_TYPE_DATE &&
@@ -3055,7 +3055,7 @@ static inline Float convert_with_inexact_check(Int i, bool *is_inexact) {
     workaround Intel FPU executive precision feature.
     (See http://gcc.gnu.org/bugzilla/show_bug.cgi?id=323 for details)
    */
-  volatile Float f = static_cast<Float>(i);
+  volatile auto f = static_cast<Float>(i);
 
   // If i is positive, it is possible for it to have been rounded outside
   // Int's range. If so, converting back to check is undefined behavior,
@@ -3091,7 +3091,7 @@ static inline Float convert_with_inexact_check(Int i, bool *is_inexact) {
 
 static void fetch_long_with_conversion(MYSQL_BIND *param, MYSQL_FIELD *field,
                                        longlong value, bool is_unsigned) {
-  uchar *buffer = pointer_cast<uchar *>(param->buffer);
+  auto *buffer = pointer_cast<uchar *>(param->buffer);
 
   switch (param->buffer_type) {
     case MYSQL_TYPE_NULL: /* do nothing */
@@ -3150,8 +3150,8 @@ static void fetch_long_with_conversion(MYSQL_BIND *param, MYSQL_FIELD *field,
     }
     default: {
       uchar buff[22]; /* Enough for longlong */
-      uchar *end = (uchar *)longlong10_to_str(value, (char *)buff,
-                                              is_unsigned ? 10 : -10);
+      auto *end = (uchar *)longlong10_to_str(value, (char *)buff,
+                                             is_unsigned ? 10 : -10);
       /* Resort to string conversion which supports all typecodes */
       uint length = (uint)(end - buff);
 
@@ -3182,7 +3182,7 @@ static void fetch_long_with_conversion(MYSQL_BIND *param, MYSQL_FIELD *field,
 
 static void fetch_float_with_conversion(MYSQL_BIND *param, MYSQL_FIELD *field,
                                         double value, my_gcvt_arg_type type) {
-  uchar *buffer = pointer_cast<uchar *>(param->buffer);
+  auto *buffer = pointer_cast<uchar *>(param->buffer);
   const double val64 = (value < 0 ? -floor(-value) : floor(value));
 
   switch (param->buffer_type) {
@@ -3213,10 +3213,10 @@ static void fetch_float_with_conversion(MYSQL_BIND *param, MYSQL_FIELD *field,
           *param->error = true;
           break;
         }
-        const ushort data = (ushort)value;
+        const auto data = (ushort)value;
         shortstore(buffer, data);
       } else {
-        const short data = (short)value;
+        const auto data = (short)value;
         shortstore(buffer, data);
       }
       *param->error =
@@ -3229,10 +3229,10 @@ static void fetch_float_with_conversion(MYSQL_BIND *param, MYSQL_FIELD *field,
           *param->error = true;
           break;
         }
-        const uint32 data = (uint32)value;
+        const auto data = (uint32)value;
         longstore(buffer, data);
       } else {
-        const int32 data = (int32)value;
+        const auto data = (int32)value;
         longstore(buffer, data);
       }
       *param->error =
@@ -3245,10 +3245,10 @@ static void fetch_float_with_conversion(MYSQL_BIND *param, MYSQL_FIELD *field,
           *param->error = true;
           break;
         }
-        const ulonglong data = (ulonglong)value;
+        const auto data = (ulonglong)value;
         longlongstore(buffer, data);
       } else {
-        const longlong data = (longlong)value;
+        const auto data = (longlong)value;
         longlongstore(buffer, data);
       }
       *param->error =
@@ -3256,7 +3256,7 @@ static void fetch_float_with_conversion(MYSQL_BIND *param, MYSQL_FIELD *field,
                                        : (double)(*(longlong *)buffer));
       break;
     case MYSQL_TYPE_FLOAT: {
-      const float data = (float)value;
+      const auto data = (float)value;
       floatstore(buffer, data);
       *param->error = (*(float *)buffer) != value;
       break;
@@ -3337,7 +3337,7 @@ static void fetch_datetime_with_conversion(MYSQL_BIND *param,
     case MYSQL_TYPE_INT24:
     case MYSQL_TYPE_LONG:
     case MYSQL_TYPE_LONGLONG: {
-      const longlong value = (longlong)TIME_to_ulonglong(*my_time);
+      const auto value = (longlong)TIME_to_ulonglong(*my_time);
       fetch_long_with_conversion(param, field, value, true);
       break;
     }
@@ -3406,7 +3406,7 @@ static void fetch_result_with_conversion(MYSQL_BIND *param, MYSQL_FIELD *field,
       break;
     }
     case MYSQL_TYPE_LONGLONG: {
-      const longlong value = (longlong)sint8korr(*row);
+      const auto value = (longlong)sint8korr(*row);
       fetch_long_with_conversion(param, field, value,
                                  field->flags & UNSIGNED_FLAG);
       *row += 8;
@@ -3486,7 +3486,7 @@ static void fetch_result_tinyint(MYSQL_BIND *param, MYSQL_FIELD *field,
 static void fetch_result_short(MYSQL_BIND *param, MYSQL_FIELD *field,
                                uchar **row) {
   const bool field_is_unsigned = (field->flags & UNSIGNED_FLAG);
-  ushort data = (ushort)sint2korr(*row);
+  auto data = (ushort)sint2korr(*row);
   shortstore(pointer_cast<uchar *>(param->buffer), data);
   *param->error = param->is_unsigned != field_is_unsigned && data > INT_MAX16;
   *row += 2;
@@ -3496,7 +3496,7 @@ static void fetch_result_int32(MYSQL_BIND *param,
                                MYSQL_FIELD *field [[maybe_unused]],
                                uchar **row) {
   const bool field_is_unsigned = (field->flags & UNSIGNED_FLAG);
-  uint32 data = (uint32)sint4korr(*row);
+  auto data = (uint32)sint4korr(*row);
   longstore(pointer_cast<uchar *>(param->buffer), data);
   *param->error = param->is_unsigned != field_is_unsigned && data > INT_MAX32;
   *row += 4;
@@ -3506,7 +3506,7 @@ static void fetch_result_int64(MYSQL_BIND *param,
                                MYSQL_FIELD *field [[maybe_unused]],
                                uchar **row) {
   const bool field_is_unsigned = (field->flags & UNSIGNED_FLAG);
-  ulonglong data = (ulonglong)sint8korr(*row);
+  auto data = (ulonglong)sint8korr(*row);
   *param->error = param->is_unsigned != field_is_unsigned && data > LLONG_MAX;
   longlongstore(pointer_cast<uchar *>(param->buffer), data);
   *row += 8;
@@ -3531,21 +3531,21 @@ static void fetch_result_double(MYSQL_BIND *param,
 static void fetch_result_time(MYSQL_BIND *param,
                               MYSQL_FIELD *field [[maybe_unused]],
                               uchar **row) {
-  MYSQL_TIME *tm = (MYSQL_TIME *)param->buffer;
+  auto *tm = (MYSQL_TIME *)param->buffer;
   read_binary_time(tm, row);
 }
 
 static void fetch_result_date(MYSQL_BIND *param,
                               MYSQL_FIELD *field [[maybe_unused]],
                               uchar **row) {
-  MYSQL_TIME *tm = (MYSQL_TIME *)param->buffer;
+  auto *tm = (MYSQL_TIME *)param->buffer;
   read_binary_date(tm, row);
 }
 
 static void fetch_result_datetime(MYSQL_BIND *param,
                                   MYSQL_FIELD *field [[maybe_unused]],
                                   uchar **row) {
-  MYSQL_TIME *tm = (MYSQL_TIME *)param->buffer;
+  auto *tm = (MYSQL_TIME *)param->buffer;
   read_binary_datetime(tm, row);
 }
 
@@ -4153,7 +4153,7 @@ static void stmt_update_metadata(MYSQL_STMT *stmt, MYSQL_ROWS *data) {
   MYSQL_BIND *my_bind, *end;
   MYSQL_FIELD *field;
   uchar *null_ptr, bit;
-  uchar *row = (uchar *)data->data;
+  auto *row = (uchar *)data->data;
 #ifndef NDEBUG
   uchar *row_end = row + data->length;
 #endif

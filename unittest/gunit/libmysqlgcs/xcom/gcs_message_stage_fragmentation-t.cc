@@ -284,7 +284,7 @@ TEST_F(GcsMessageStageFragmentationTest, ReassemblyOfFragmentsThatCrossViews) {
       Gcs_member_identifier(m_mock_xcom_address.get_member_address()),
       *xcom_nodes_first_view);
 
-  Gcs_message_data *message_data = new Gcs_message_data(0, payload.size());
+  auto *message_data = new Gcs_message_data(0, payload.size());
   message_data->append_to_payload(
       reinterpret_cast<uchar const *>(payload.c_str()), payload.size());
   ASSERT_GT(message_data->get_encode_size(), FRAGMENT_THRESHOLD);

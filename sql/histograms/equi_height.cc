@@ -69,7 +69,7 @@ Equi_height<T> *Equi_height<T>::create(MEM_ROOT *mem_root,
                                        const std::string &col_name,
                                        Value_map_type data_type) {
   bool error = false;
-  Equi_height<T> *equi_height = new (mem_root)
+  auto *equi_height = new (mem_root)
       Equi_height<T>(mem_root, db_name, tbl_name, col_name, data_type, &error);
   if (error) return nullptr;
   return equi_height;
@@ -520,7 +520,7 @@ bool Equi_height<T>::json_to_histogram(const Json_object &json_object,
     return true;
   }
 
-  const Json_array *buckets = down_cast<const Json_array *>(buckets_dom);
+  const auto *buckets = down_cast<const Json_array *>(buckets_dom);
   if (m_buckets.reserve(buckets->size())) return true;
   for (size_t i = 0; i < buckets->size(); ++i) {
     const Json_dom *bucket_dom = (*buckets)[i];
@@ -531,7 +531,7 @@ bool Equi_height<T>::json_to_histogram(const Json_object &json_object,
       return true;
     }
 
-    const Json_array *bucket = down_cast<const Json_array *>(bucket_dom);
+    const auto *bucket = down_cast<const Json_array *>(bucket_dom);
     // Only the first four items are defined, others are simply ignored.
     assert(!already_validated || (bucket->size() == 4));
     if (bucket->size() < 4) {
@@ -571,7 +571,7 @@ bool Equi_height<T>::add_bucket_from_json(const Json_array *json_bucket,
     return true;
   }
 
-  const Json_double *cumulative_frequency =
+  const auto *cumulative_frequency =
       down_cast<const Json_double *>(cumulative_frequency_dom);
 
   const Json_dom *num_distinct_dom = (*json_bucket)[3];
@@ -580,8 +580,7 @@ bool Equi_height<T>::add_bucket_from_json(const Json_array *json_bucket,
     num_distinct_v = down_cast<const Json_uint *>(num_distinct_dom)->value();
   } else if (!context->binary() &&
              num_distinct_dom->json_type() == enum_json_type::J_INT) {
-    const Json_int *num_distinct =
-        down_cast<const Json_int *>(num_distinct_dom);
+    const auto *num_distinct = down_cast<const Json_int *>(num_distinct_dom);
     if (num_distinct->value() < 1) {
       context->report_node(num_distinct_dom,
                            Message::JSON_INVALID_NUM_DISTINCT);

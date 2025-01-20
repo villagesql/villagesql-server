@@ -226,7 +226,7 @@ bool SocketServer::doAccept() {
 }
 
 extern "C" void *socketServerThread_C(void *_ss) {
-  SocketServer *ss = (SocketServer *)_ss;
+  auto *ss = (SocketServer *)_ss;
   ss->doRun();
   return nullptr;
 }
@@ -367,7 +367,7 @@ bool SocketServer::stopSessions(bool wait, unsigned wait_timeout) {
 /***** Session code ******/
 
 extern "C" void *sessionThread_C(void *_sc) {
-  SocketServer::Session *si = (SocketServer::Session *)_sc;
+  auto *si = (SocketServer::Session *)_sc;
 
   assert(si->m_thread_stopped == false);
 

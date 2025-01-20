@@ -134,7 +134,7 @@ TEST_F(GcsAllowlist, AbsentList) {
   ASSERT_EQ(err, GCS_OK);
 
   // verify that a allowlist was provided by default
-  Gcs_xcom_interface *xcs = static_cast<Gcs_xcom_interface *>(gcs);
+  auto *xcs = static_cast<Gcs_xcom_interface *>(gcs);
   MYSQL_GCS_LOG_INFO("Allowlist as string with collected IP addresses: "
                      << xcs->get_ip_allowlist().to_string());
   ASSERT_FALSE(xcs->get_ip_allowlist().get_configured_ip_allowlist().empty());
@@ -174,7 +174,7 @@ TEST_F(GcsAllowlist, ListWithHostname) {
   ASSERT_EQ(err, GCS_OK);
 
   // verify that a allowlist was provided by default
-  Gcs_xcom_interface *xcs = static_cast<Gcs_xcom_interface *>(gcs);
+  auto *xcs = static_cast<Gcs_xcom_interface *>(gcs);
   MYSQL_GCS_LOG_INFO("Allowlist as string with collected IP addresses: "
                      << xcs->get_ip_allowlist().to_string());
   ASSERT_FALSE(xcs->get_ip_allowlist().get_configured_ip_allowlist().empty());
@@ -232,7 +232,7 @@ TEST_F(GcsAllowlist, ListWithUnresolvableHostname) {
   ASSERT_EQ(err, GCS_OK);
 
   // verify that a allowlist was provided by default
-  Gcs_xcom_interface *xcs = static_cast<Gcs_xcom_interface *>(gcs);
+  auto *xcs = static_cast<Gcs_xcom_interface *>(gcs);
   MYSQL_GCS_LOG_INFO("Allowlist as string with collected IP addresses: "
                      << xcs->get_ip_allowlist().to_string());
   ASSERT_FALSE(xcs->get_ip_allowlist().get_configured_ip_allowlist().empty());

@@ -1247,8 +1247,7 @@ static int match_expected_error(struct st_command *command,
   std::uint8_t index = 0;
 
   // Iterator for list/vector of expected errors
-  std::vector<std::unique_ptr<Error>>::iterator error =
-      expected_errors->begin();
+  auto error = expected_errors->begin();
 
   // Iterate over list of expected errors
   for (; error != expected_errors->end(); error++) {
@@ -8665,7 +8664,7 @@ static void append_table_headings(DYNAMIC_STRING *ds, MYSQL_FIELD *field,
 static bool match_warnings(Expected_warnings *warnings, std::uint32_t error,
                            bool *warning_found) {
   bool match_found = false;
-  std::vector<std::unique_ptr<Warning>>::iterator warning = warnings->begin();
+  auto warning = warnings->begin();
 
   for (; warning != warnings->end(); warning++) {
     if ((*warning)->warning_code() == error) {

@@ -902,7 +902,7 @@ int CertSubject::bound_hostname(int n, char *buffer, int size) const {
     int name_type;
     if (n < sk_GENERAL_NAME_num(m_bound_hostnames)) {
       GENERAL_NAME *name = sk_GENERAL_NAME_value(m_bound_hostnames, n);
-      ASN1_STRING *str =
+      auto *str =
           static_cast<ASN1_STRING *>(GENERAL_NAME_get0_value(name, &name_type));
       if (name_type == GEN_DNS) {
         if (str->length < size) size = str->length;
@@ -924,7 +924,7 @@ bool CertSubject::bound_localhost() const {
   if (sk_GENERAL_NAME_num(m_bound_hostnames) == 1) {
     int name_type;
     GENERAL_NAME *name = sk_GENERAL_NAME_value(m_bound_hostnames, 0);
-    ASN1_STRING *str =
+    auto *str =
         static_cast<ASN1_STRING *>(GENERAL_NAME_get0_value(name, &name_type));
     if (name_type == GEN_DNS) {
       if ((str->length == 9) &&
@@ -1171,13 +1171,13 @@ void NodeCertificate::init_from_credentials(STACK_OF(X509) * certs,
 
 const NodeCertificate *NodeCertificate::from_credentials(STACK_OF(X509) * certs,
                                                          EVP_PKEY *key) {
-  NodeCertificate *nc = new NodeCertificate();
+  auto *nc = new NodeCertificate();
   nc->init_from_credentials(certs, key);
   return nc;
 }
 
 const NodeCertificate *NodeCertificate::for_peer(X509 *cert) {
-  NodeCertificate *nc = new NodeCertificate();
+  auto *nc = new NodeCertificate();
   nc->init_from_x509(cert);
   return nc;
 }
@@ -1489,7 +1489,7 @@ static int file_subtest_csr(bool output) {
   require(r);
 
   if (output) {
-    NodeCertificate *nc = new NodeCertificate(*csr, key);
+    auto *nc = new NodeCertificate(*csr, key);
     r1 = nc->self_sign();
     require(!r1);
     Certificate::write(nc->all_certs(), stdout);

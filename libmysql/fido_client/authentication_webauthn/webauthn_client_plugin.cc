@@ -104,8 +104,7 @@ static int webauthn_auth_client_plugin_option(const char *option,
     return 0;
   }
   if (strcmp(option, "registration_challenge") == 0) {
-    unsigned char *p =
-        reinterpret_cast<unsigned char *>(const_cast<void *>(val));
+    auto *p = reinterpret_cast<unsigned char *>(const_cast<void *>(val));
     memcpy(registration_challenge, p, strlen(reinterpret_cast<char *>(p)));
     /* finish registration */
     if (do_registration()) return 1;
@@ -249,7 +248,7 @@ static bool do_registration() {
   } else
 #endif
   {
-    webauthn_registration *fr = new webauthn_registration();
+    auto *fr = new webauthn_registration();
     if (fr->make_credentials(const_cast<const char *>(
             reinterpret_cast<char *>(registration_challenge)))) {
       delete fr;

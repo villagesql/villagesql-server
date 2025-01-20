@@ -1055,7 +1055,7 @@ class MDL_lock {
 static MDL_map mdl_locks;
 
 static const uchar *mdl_locks_key(const uchar *record, size_t *length) {
-  const MDL_lock *lock = pointer_cast<const MDL_lock *>(record);
+  const auto *lock = pointer_cast<const MDL_lock *>(record);
   *length = lock->key.length();
   return lock->key.ptr();
 }
@@ -1111,13 +1111,13 @@ static void mdl_lock_cons(uchar *arg) {
 }
 
 static void mdl_lock_dtor(uchar *arg) {
-  MDL_lock *lock = (MDL_lock *)(arg + LF_HASH_OVERHEAD);
+  auto *lock = (MDL_lock *)(arg + LF_HASH_OVERHEAD);
   lock->~MDL_lock();
 }
 
 static void mdl_lock_reinit(uchar *dst_arg, const uchar *src_arg) {
-  MDL_lock *dst = (MDL_lock *)dst_arg;
-  const MDL_key *src = (const MDL_key *)src_arg;
+  auto *dst = (MDL_lock *)dst_arg;
+  const auto *src = (const MDL_key *)src_arg;
   dst->reinit(src);
 }
 
@@ -1285,7 +1285,7 @@ extern "C" {
 */
 static int mdl_lock_match_unused(const uchar *arg,
                                  void *match_arg [[maybe_unused]]) {
-  const MDL_lock *lock = (const MDL_lock *)arg;
+  const auto *lock = (const MDL_lock *)arg;
   /*
     It is OK to check MDL_lock::m_fast_path_state non-atomically here
     since the fact that MDL_lock object is unused will be properly
@@ -1322,7 +1322,7 @@ void MDL_map::remove_random_unused(MDL_context *ctx, LF_PINS *pins,
     Since this method is called only when unused/total lock objects ratio is
     high enough, there is a good chance for this technique to succeed.
   */
-  MDL_lock *lock = static_cast<MDL_lock *>(lf_hash_random_match(
+  auto *lock = static_cast<MDL_lock *>(lf_hash_random_match(
       &m_locks, pins, &mdl_lock_match_unused, ctx->get_random(), nullptr));
 
   if (lock == nullptr || lock == MY_LF_ERRPTR) {
@@ -1585,7 +1585,7 @@ void MDL_request::init_by_part_key_with_source(
 */
 
 inline MDL_lock *MDL_lock::create(const MDL_key *mdl_key) {
-  MDL_lock *result = new (std::nothrow) MDL_lock();
+  auto *result = new (std::nothrow) MDL_lock();
   if (result) result->reinit(mdl_key);
   return result;
 }
@@ -4558,7 +4558,7 @@ bool MDL_context::has_locks(MDL_key::enum_mdl_namespace mdl_namespace) const {
   MDL_ticket *ticket;
 
   for (int i = 0; i < MDL_DURATION_END; i++) {
-    const enum_mdl_duration duration = static_cast<enum_mdl_duration>(i);
+    const auto duration = static_cast<enum_mdl_duration>(i);
 
     MDL_ticket_store::List_iterator it = m_ticket_store.list_iterator(duration);
     while ((ticket = it++)) {
@@ -4583,7 +4583,7 @@ bool MDL_context::has_locks_waited_for() const {
   MDL_ticket *ticket;
 
   for (int i = 0; i < MDL_DURATION_END; i++) {
-    const enum_mdl_duration duration = static_cast<enum_mdl_duration>(i);
+    const auto duration = static_cast<enum_mdl_duration>(i);
 
     MDL_ticket_store::List_iterator it = m_ticket_store.list_iterator(duration);
     while ((ticket = it++)) {

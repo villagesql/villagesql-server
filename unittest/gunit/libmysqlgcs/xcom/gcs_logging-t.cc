@@ -72,7 +72,7 @@ TEST_F(LoggingInfrastructureTest, InjectedMockLoggerTest) {
   }
 
   // Initialize new mock logger
-  Mock_Logger *anotherLogger = new Mock_Logger();
+  auto *anotherLogger = new Mock_Logger();
   Gcs_log_manager::initialize(anotherLogger);
 
   // anotherLogger initialized

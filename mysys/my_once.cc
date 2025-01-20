@@ -99,13 +99,13 @@ void *my_once_alloc(size_t Size, myf MyFlags) {
 
 char *my_once_strdup(const char *src, myf myflags) {
   const size_t len = strlen(src) + 1;
-  uchar *dst = static_cast<uchar *>(my_once_alloc(len, myflags));
+  auto *dst = static_cast<uchar *>(my_once_alloc(len, myflags));
   if (dst) memcpy(dst, src, len);
   return (char *)dst;
 }
 
 void *my_once_memdup(const void *src, size_t len, myf myflags) {
-  uchar *dst = static_cast<uchar *>(my_once_alloc(len, myflags));
+  auto *dst = static_cast<uchar *>(my_once_alloc(len, myflags));
   if (dst) memcpy(dst, src, len);
   return dst;
 }

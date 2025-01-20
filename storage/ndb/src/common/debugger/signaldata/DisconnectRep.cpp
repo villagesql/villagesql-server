@@ -32,7 +32,7 @@ bool printDISCONNECT_REP(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const DisconnectRep *const sig = (const DisconnectRep *)theData;
+  const auto *const sig = (const DisconnectRep *)theData;
 
   fprintf(output, " NodeId: %d, ErrorCode: %d\n", sig->nodeId, sig->err);
 

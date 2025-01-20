@@ -366,7 +366,7 @@ int THRConfigApplier::do_bind(NdbThread *thread, const T_Thread *thr) {
              thr->m_bind_type == T_Thread::B_CPUSET_EXCLUSIVE_BIND) {
     const SparseBitmask &tmp = m_cpu_sets[thr->m_bind_no];
     Uint32 num_cpu_ids = tmp.count();
-    Uint32 *cpu_ids = (Uint32 *)malloc(sizeof(Uint32) * num_cpu_ids);
+    auto *cpu_ids = (Uint32 *)malloc(sizeof(Uint32) * num_cpu_ids);
     if (!cpu_ids) {
       return -errno;
     }

@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Innodb_foreign_cols &Innodb_foreign_cols::instance() {
-  static Innodb_foreign_cols *s_instance = new Innodb_foreign_cols();
+  static auto *s_instance = new Innodb_foreign_cols();
   return *s_instance;
 }
 

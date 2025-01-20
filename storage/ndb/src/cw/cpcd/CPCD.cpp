@@ -81,7 +81,7 @@ int CPCD::findUniqueId() {
 bool CPCD::defineProcess(const class Properties &args,
                          const uintptr_t sessionid, RequestStatus *rs,
                          int *id) {
-  CPCD::Process *proc = new CPCD::Process(args, this, sessionid);
+  auto *proc = new CPCD::Process(args, this, sessionid);
 
   if (proc->m_id == -1) proc->m_id = findUniqueId();
 

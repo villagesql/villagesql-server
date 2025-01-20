@@ -28,8 +28,7 @@ namespace system_views {
 
 const Administrable_role_authorizations &
 Administrable_role_authorizations::instance() {
-  static Administrable_role_authorizations *s_instance =
-      new Administrable_role_authorizations();
+  static auto *s_instance = new Administrable_role_authorizations();
   return *s_instance;
 }
 

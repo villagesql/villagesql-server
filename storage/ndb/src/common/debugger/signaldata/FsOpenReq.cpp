@@ -31,7 +31,7 @@ bool printFSOPENREQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const FsOpenReq *const sig = (const FsOpenReq *)theData;
+  const auto *const sig = (const FsOpenReq *)theData;
 
   fprintf(output, " UserReference: H\'%.8x, userPointer: H\'%.8x\n",
           sig->userReference, sig->userPointer);

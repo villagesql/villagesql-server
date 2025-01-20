@@ -2031,7 +2031,7 @@ static void BM_UTF8MB4_0900_bin(size_t num_iterations) {
       "✌️🐶👩🏽";
   const int len = strlen(content);
 
-  uchar *dest = new uchar[len];
+  auto *dest = new uchar[len];
 
   StartBenchmarkTiming();
   for (size_t i = 0; i < num_iterations; ++i) {

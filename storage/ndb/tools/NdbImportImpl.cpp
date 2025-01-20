@@ -398,30 +398,30 @@ void NdbImportImpl::Job::do_create() {
   if (opt.m_input_type != 0) {
     if (strcmp(opt.m_input_type, "random") == 0) {
       uint workercnt = opt.m_input_workers;
-      RandomInputTeam *team = new RandomInputTeam(job, workercnt);
+      auto *team = new RandomInputTeam(job, workercnt);
       add_team(team);
     }
     if (strcmp(opt.m_input_type, "csv") == 0) {
       uint workercnt = opt.m_input_workers;
-      CsvInputTeam *team = new CsvInputTeam(job, workercnt);
+      auto *team = new CsvInputTeam(job, workercnt);
       add_team(team);
     }
   }
   if (opt.m_output_type != 0) {
     if (strcmp(opt.m_output_type, "null") == 0) {
       uint workercnt = opt.m_output_workers;
-      NullOutputTeam *team = new NullOutputTeam(job, workercnt);
+      auto *team = new NullOutputTeam(job, workercnt);
       add_team(team);
     }
     if (strcmp(opt.m_output_type, "ndb") == 0) {
       uint workercnt = opt.m_output_workers;
-      RelayOpTeam *team = new RelayOpTeam(job, workercnt);
+      auto *team = new RelayOpTeam(job, workercnt);
       add_team(team);
     }
     if (strcmp(opt.m_output_type, "ndb") == 0) {
       require(opt.m_db_workers != 0);
       uint workercnt = opt.m_db_workers * nodecnt;
-      ExecOpTeam *team = new ExecOpTeam(job, workercnt);
+      auto *team = new ExecOpTeam(job, workercnt);
       add_team(team);
     }
   }
@@ -786,7 +786,7 @@ static void *start_worker_c(void *data);
 }
 
 static void *start_worker_c(void *data) {
-  NdbImportImpl::Worker *w = (NdbImportImpl::Worker *)data;
+  auto *w = (NdbImportImpl::Worker *)data;
   require(w != 0);
   w->do_start();
   return 0;
@@ -1222,7 +1222,7 @@ NdbImportImpl::RandomInputTeam::RandomInputTeam(Job &job, uint workercnt)
 NdbImportImpl::RandomInputTeam::~RandomInputTeam() {}
 
 NdbImportImpl::Worker *NdbImportImpl::RandomInputTeam::create_worker(uint n) {
-  RandomInputWorker *w = new RandomInputWorker(*this, n);
+  auto *w = new RandomInputWorker(*this, n);
   return w;
 }
 
@@ -1299,7 +1299,7 @@ NdbImportImpl::Row *NdbImportImpl::RandomInputWorker::create_row(
     const Attr &attr = attrs[i];
     switch (attr.m_type) {
       case NdbDictionary::Column::Unsigned: {
-        uint32 val = (uint32)rowid;
+        auto val = (uint32)rowid;
         attr.set_value(row, &val, sizeof(val));
       } break;
       case NdbDictionary::Column::Bigunsigned: {
@@ -1359,7 +1359,7 @@ NdbImportImpl::CsvInputTeam::CsvInputTeam(Job &job, uint workercnt)
 NdbImportImpl::CsvInputTeam::~CsvInputTeam() {}
 
 NdbImportImpl::Worker *NdbImportImpl::CsvInputTeam::create_worker(uint n) {
-  CsvInputWorker *w = new CsvInputWorker(*this, n);
+  auto *w = new CsvInputWorker(*this, n);
   return w;
 }
 
@@ -1382,7 +1382,7 @@ void NdbImportImpl::CsvInputTeam::do_init() {
   log_debug(1, "file: opened: " << file.get_path());
   const uint workerno = 0;
   file.m_workerno = workerno;
-  CsvInputWorker *w = static_cast<CsvInputWorker *>(get_worker(workerno));
+  auto *w = static_cast<CsvInputWorker *>(get_worker(workerno));
   w->m_firstread = true;
 }
 
@@ -1429,7 +1429,7 @@ void NdbImportImpl::CsvInputWorker::do_init() {
   if (m_firstread) {
     // this worker does first read
     if (opt.m_resume) {
-      CsvInputTeam &team = static_cast<CsvInputTeam &>(m_team);
+      auto &team = static_cast<CsvInputTeam &>(m_team);
       WorkerFile &file = team.m_file;
       RangeList &ranges_in = rowmap_in.m_ranges;
       require(!ranges_in.empty());
@@ -1536,7 +1536,7 @@ void NdbImportImpl::CsvInputWorker::state_read() {
     m_eof = true;
   }
   file.lock();
-  CsvInputWorker *w2 = static_cast<CsvInputWorker *>(next_worker());
+  auto *w2 = static_cast<CsvInputWorker *>(next_worker());
   file.m_workerno = w2->m_workerno;
   file.unlock();
   if (m_firstread) {
@@ -1554,7 +1554,7 @@ void NdbImportImpl::CsvInputWorker::state_waittail() {
     m_state = WorkerState::State_stop;
     return;
   }
-  CsvInputTeam &team = static_cast<CsvInputTeam &>(m_team);
+  auto &team = static_cast<CsvInputTeam &>(m_team);
   team.m_stat_waittail->add(1);
   m_idle = true;
 }
@@ -1579,8 +1579,8 @@ void NdbImportImpl::CsvInputWorker::state_movetail() {
     m_state = WorkerState::State_stop;
     return;
   }
-  CsvInputTeam &team = static_cast<CsvInputTeam &>(m_team);
-  CsvInputWorker *w2 = static_cast<CsvInputWorker *>(next_worker());
+  auto &team = static_cast<CsvInputTeam &>(m_team);
+  auto *w2 = static_cast<CsvInputWorker *>(next_worker());
   w2->lock();
   log_debug(2, "next worker: " << *w2);
   if (w2->m_inputstate == InputState::State_waittail) {
@@ -1699,7 +1699,7 @@ NdbImportImpl::NullOutputTeam::NullOutputTeam(Job &job, uint workercnt)
 NdbImportImpl::NullOutputTeam::~NullOutputTeam() {}
 
 NdbImportImpl::Worker *NdbImportImpl::NullOutputTeam::create_worker(uint n) {
-  NullOutputWorker *w = new NullOutputWorker(*this, n);
+  auto *w = new NullOutputWorker(*this, n);
   return w;
 }
 
@@ -1921,7 +1921,7 @@ NdbImportImpl::RelayOpTeam::RelayOpTeam(Job &job, uint workercnt)
 NdbImportImpl::RelayOpTeam::~RelayOpTeam() {}
 
 NdbImportImpl::Worker *NdbImportImpl::RelayOpTeam::create_worker(uint n) {
-  RelayOpWorker *w = new RelayOpWorker(*this, n);
+  auto *w = new RelayOpWorker(*this, n);
   return w;
 }
 
@@ -1963,7 +1963,7 @@ void NdbImportImpl::RelayOpWorker::do_init() {
         strcmp(opt.m_errins_type, "bug34917498") == 0)
       len = MAX_KEY_SIZE_IN_WORDS << 2;
     const uint count64 = ndb_ceil_div<uint64>(len, sizeof(uint64)) + 1;
-    uint64 *ptr = new uint64[count64];
+    auto *ptr = new uint64[count64];
     m_xfrmbuf.reset(ptr);
     m_xfrmbuflen = count64 * sizeof(uint64);
   }
@@ -2443,10 +2443,9 @@ void NdbImportImpl::ExecOpWorkerAsynch::do_end() {
 }
 
 static void asynch_callback(int result, NdbTransaction *trans, void *tx_void) {
-  NdbImportImpl::Tx *tx = (NdbImportImpl::Tx *)tx_void;
+  auto *tx = (NdbImportImpl::Tx *)tx_void;
   require(trans == tx->m_trans);
-  NdbImportImpl::ExecOpWorkerAsynch *w =
-      (NdbImportImpl::ExecOpWorkerAsynch *)(tx->m_worker);
+  auto *w = (NdbImportImpl::ExecOpWorkerAsynch *)(tx->m_worker);
   w->asynch_callback(tx);
 }
 
@@ -2822,7 +2821,7 @@ NdbImportImpl::DiagTeam::DiagTeam(Job &job, uint workercnt)
 NdbImportImpl::DiagTeam::~DiagTeam() {}
 
 NdbImportImpl::Worker *NdbImportImpl::DiagTeam::create_worker(uint n) {
-  DiagWorker *w = new DiagWorker(*this, n);
+  auto *w = new DiagWorker(*this, n);
   return w;
 }
 
@@ -3296,7 +3295,7 @@ void NdbImportImpl::DiagWorker::do_end() {
 
 void NdbImportImpl::DiagWorker::write_result() {
   log_debug(1, "write_result");
-  DiagTeam &team = static_cast<DiagTeam &>(m_team);
+  auto &team = static_cast<DiagTeam &>(m_team);
   const Job &job = team.m_job;
   File &file = team.m_result_file;
   Buf &buf = m_result_buf;
@@ -3363,7 +3362,7 @@ void NdbImportImpl::DiagWorker::write_result() {
 
 void NdbImportImpl::DiagWorker::write_reject() {
   log_debug(2, "write_reject");
-  DiagTeam &team = static_cast<DiagTeam &>(m_team);
+  auto &team = static_cast<DiagTeam &>(m_team);
   Job &job = team.m_job;
   File &file = team.m_reject_file;
   Buf &buf = m_reject_buf;
@@ -3407,7 +3406,7 @@ void NdbImportImpl::DiagWorker::write_reject() {
 
 void NdbImportImpl::DiagWorker::write_rowmap() {
   log_debug(1, "write_rowmap");
-  DiagTeam &team = static_cast<DiagTeam &>(m_team);
+  auto &team = static_cast<DiagTeam &>(m_team);
   const Job &job = team.m_job;
   File &file = team.m_rowmap_file;
   Buf &buf = m_rowmap_buf;
@@ -3433,7 +3432,7 @@ void NdbImportImpl::DiagWorker::write_rowmap() {
 
 void NdbImportImpl::DiagWorker::write_stopt() {
   static const Opt &opt = m_util.c_opt;
-  DiagTeam &team = static_cast<DiagTeam &>(m_team);
+  auto &team = static_cast<DiagTeam &>(m_team);
   const Job &job = team.m_job;
   File &file = team.m_stopt_file;
   Buf &buf = m_stopt_buf;
@@ -3476,7 +3475,7 @@ void NdbImportImpl::DiagWorker::write_stopt() {
 }
 
 void NdbImportImpl::DiagWorker::write_stats() {
-  DiagTeam &team = static_cast<DiagTeam &>(m_team);
+  auto &team = static_cast<DiagTeam &>(m_team);
   const Job &job = team.m_job;
   File &file = team.m_stats_file;
   Buf &buf = m_stats_buf;
@@ -3536,7 +3535,7 @@ static void *start_job_c(void *data);
 }
 
 static void *start_job_c(void *data) {
-  NdbImportImpl::Job *job = (NdbImportImpl::Job *)data;
+  auto *job = (NdbImportImpl::Job *)data;
   require(job != 0);
   job->do_start();
   return 0;

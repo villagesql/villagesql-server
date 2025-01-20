@@ -40,7 +40,7 @@ namespace dd {
 namespace tables {
 
 const Routines &Routines::instance() {
-  static Routines *s_instance = new Routines();
+  static auto *s_instance = new Routines();
   return *s_instance;
 }
 
@@ -180,8 +180,7 @@ Routines::Routines() {
 ///////////////////////////////////////////////////////////////////////////
 
 Routine *Routines::create_entity_object(const Raw_record &r) const {
-  Routine::enum_routine_type routine_type =
-      (Routine::enum_routine_type)r.read_int(FIELD_TYPE);
+  auto routine_type = (Routine::enum_routine_type)r.read_int(FIELD_TYPE);
 
   if (routine_type == Routine::RT_FUNCTION)
     return dd::create_object<Function>();

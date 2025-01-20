@@ -60,10 +60,8 @@ bool TLS_channel::singleton_init(Ssl_acceptor_context_container **out,
   if (callbacks->provision_certs()) return true;
 
   enum enum_ssl_init_error error = SSL_INITERR_NOERROR;
-  Ssl_acceptor_context_data *news =
-      new Ssl_acceptor_context_data(channel, callbacks, true, &error);
-  Ssl_acceptor_context_container *new_container =
-      new Ssl_acceptor_context_container(news);
+  auto *news = new Ssl_acceptor_context_data(channel, callbacks, true, &error);
+  auto *new_container = new Ssl_acceptor_context_container(news);
   if (news == nullptr || new_container == nullptr) {
     LogErr(WARNING_LEVEL, ER_SSL_LIBRARY_ERROR,
            "Error initializing the SSL context system structure");
@@ -101,8 +99,7 @@ void TLS_channel::singleton_flush(Ssl_acceptor_context_container *container,
                                   Ssl_init_callback *callbacks,
                                   enum enum_ssl_init_error *error, bool force) {
   if (container == nullptr) return;
-  Ssl_acceptor_context_data *news =
-      new Ssl_acceptor_context_data(channel, callbacks, false, error);
+  auto *news = new Ssl_acceptor_context_data(channel, callbacks, false, error);
   if (*error != SSL_INITERR_NOERROR && !force) {
     delete news;
     return;

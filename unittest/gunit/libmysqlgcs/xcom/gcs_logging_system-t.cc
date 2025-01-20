@@ -71,7 +71,7 @@ class LoggingDebuggingSystemTest : public GcsBaseTestNoLogging {
 };
 
 TEST_F(LoggingDebuggingSystemTest, DefaultLifecycle) {
-  Mock_gcs_log_sink *mock_sink = static_cast<Mock_gcs_log_sink *>(
+  auto *mock_sink = static_cast<Mock_gcs_log_sink *>(
       static_cast<Gcs_async_buffer *>(common_sink)->get_sink());
 
   ON_CALL(*mock_sink, initialize()).WillByDefault(Return(GCS_OK));
@@ -109,7 +109,7 @@ TEST_F(LoggingDebuggingSystemTest, DefaultLifecycle) {
   Gcs_log_manager::initialize(logger);
   Gcs_debug_manager::initialize(debugger);
 
-  Gcs_group_identifier *group_id = new Gcs_group_identifier("only_group");
+  auto *group_id = new Gcs_group_identifier("only_group");
   Gcs_interface_parameters if_params;
 
   if_params.add_parameter("group_name", group_id->get_group_id());

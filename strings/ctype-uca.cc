@@ -955,11 +955,9 @@ const uint16_t *my_uca_contraction2_weight(
   if (!cont_nodes) return nullptr;
 
   if (!cont_nodes->empty()) {
-    std::vector<MY_CONTRACTION>::const_iterator node_it1 =
-        find_contraction_part_in_trie(*cont_nodes, wc1);
+    auto node_it1 = find_contraction_part_in_trie(*cont_nodes, wc1);
     if (node_it1 == cont_nodes->end() || node_it1->ch != wc1) return nullptr;
-    std::vector<MY_CONTRACTION>::const_iterator node_it2 =
-        find_contraction_part_in_trie(node_it1->child_nodes, wc2);
+    auto node_it2 = find_contraction_part_in_trie(node_it1->child_nodes, wc2);
     if (node_it2 != node_it1->child_nodes.end() && node_it2->ch == wc2 &&
         node_it2->is_contraction_tail)
       return node_it2->weight;
@@ -1112,11 +1110,10 @@ const uint16_t *my_uca_scanner::contraction_find(my_wc_t wc0,
 ALWAYS_INLINE
 const uint16_t *my_uca_scanner::previous_context_find(my_wc_t wc0,
                                                       my_wc_t wc1) {
-  std::vector<MY_CONTRACTION>::const_iterator node_it1 =
-      find_contraction_part_in_trie(*uca->contraction_nodes, wc1);
+  auto node_it1 = find_contraction_part_in_trie(*uca->contraction_nodes, wc1);
   if (node_it1 == uca->contraction_nodes->end() || node_it1->ch != wc1)
     return nullptr;
-  std::vector<MY_CONTRACTION>::const_iterator node_it2 =
+  auto node_it2 =
       find_contraction_part_in_trie(node_it1->child_nodes_context, wc0);
   if (node_it2 != node_it1->child_nodes_context.end() && node_it2->ch == wc0) {
     if (uca->version == UCA_V900) {
@@ -3960,8 +3957,7 @@ static MY_CONTRACTION *add_contraction_to_trie(
   if (r->with_context)  // previous-context contraction
   {
     assert(my_wstrnlen(r->curr, MY_UCA_MAX_CONTRACTION) == 2);
-    std::vector<MY_CONTRACTION>::iterator node_it =
-        find_contraction_part_in_trie(*cont_nodes, r->curr[1]);
+    auto node_it = find_contraction_part_in_trie(*cont_nodes, r->curr[1]);
     if (node_it == cont_nodes->end() || node_it->ch != r->curr[1]) {
       new_node.ch = r->curr[1];
       node_it = cont_nodes->insert(node_it, new_node);

@@ -196,7 +196,7 @@ void fill_value_map(Value_map<T> *map, int number_of_keys,
       const uint64_t max_frequency = 10000;
       const uint64_t p = 131071;
       for (int i = 1; i <= number_of_keys; ++i) {
-        uint64_t x = static_cast<uint64_t>(i);
+        auto x = static_cast<uint64_t>(i);
         uint64_t frequency =
             1 + (((39618 + 107019 * x + 78986 * x * x) % p) % max_frequency);
         map->add_values(key, frequency);

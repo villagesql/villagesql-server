@@ -35,7 +35,7 @@ class MgmtThread {
   struct NdbThread *m_thread;
 
   static void *run_C(void *t) {
-    MgmtThread *thread = (MgmtThread *)t;
+    auto *thread = (MgmtThread *)t;
     thread->run();
     return 0;
   }

@@ -31,7 +31,7 @@ namespace dd {
 namespace system_views {
 
 const Key_column_usage &Key_column_usage::instance() {
-  static Key_column_usage *s_instance = new Key_column_usage();
+  static auto *s_instance = new Key_column_usage();
   return *s_instance;
 }
 

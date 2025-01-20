@@ -260,7 +260,7 @@ int mi_lock_database(MI_INFO *info, int lock_type) {
 */
 
 void mi_get_status(void *param, int concurrent_insert) {
-  MI_INFO *info = (MI_INFO *)param;
+  auto *info = (MI_INFO *)param;
   DBUG_TRACE;
   DBUG_PRINT("info",
              ("key_file: %ld  data_file: %ld  concurrent_insert: %d",
@@ -280,7 +280,7 @@ void mi_get_status(void *param, int concurrent_insert) {
 }
 
 void mi_update_status(void *param) {
-  MI_INFO *info = (MI_INFO *)param;
+  auto *info = (MI_INFO *)param;
   /*
     Because someone may have closed the table we point at, we only
     update the state if its our own state.  This isn't a problem as
@@ -317,7 +317,7 @@ void mi_update_status(void *param) {
 }
 
 void mi_restore_status(void *param) {
-  MI_INFO *info = (MI_INFO *)param;
+  auto *info = (MI_INFO *)param;
   info->state = &info->s->state.state;
   info->append_insert_at_end = false;
 }
@@ -348,7 +348,7 @@ void mi_copy_status(void *to, void *from) {
 */
 
 bool mi_check_status(void *param) {
-  MI_INFO *info = (MI_INFO *)param;
+  auto *info = (MI_INFO *)param;
   /*
     The test for w_locks == 1 is here because this thread has already done an
     external lock (in other words: w_locks == 1 means no other threads has

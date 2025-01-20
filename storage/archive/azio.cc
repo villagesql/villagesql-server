@@ -392,7 +392,7 @@ int destroy(azio_stream *s) {
   azread returns the number of bytes actually read (0 for end of file).
 */
 size_t ZEXPORT azread(azio_stream *s, voidp buf, size_t len, int *error) {
-  Bytef *start = (Bytef *)buf; /* starting point for crc computation */
+  auto *start = (Bytef *)buf; /* starting point for crc computation */
   Byte *next_out; /* == stream.next_out but not forced far (for MSDOS) */
   *error = 0;
 
@@ -732,7 +732,7 @@ void putLong(File file, uLong x) {
   of error.
 */
 uLong getLong(azio_stream *s) {
-  uLong x = (uLong)get_byte(s);
+  auto x = (uLong)get_byte(s);
   int c;
 
   x += ((uLong)get_byte(s)) << 8;

@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Innodb_fields &Innodb_fields::instance() {
-  static Innodb_fields *s_instance = new Innodb_fields();
+  static auto *s_instance = new Innodb_fields();
   return *s_instance;
 }
 

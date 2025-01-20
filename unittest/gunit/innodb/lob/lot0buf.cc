@@ -101,7 +101,7 @@ class buf_pool_t {
  private:
   buf_block_t *alloc(page_no_t page_no) {
     Fname("buf_pool_t::alloc");
-    buf_block_t *block = new (std::nothrow) buf_block_t;
+    auto *block = new (std::nothrow) buf_block_t;
     assert(block != nullptr);
     /* Ensure that the page_no is not already allocated. */
     assert(m_buf_pool.find(page_no) == m_buf_pool.end());

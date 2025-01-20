@@ -147,7 +147,7 @@ int main(int argc, char **argv) {
   }
 #endif
 
-  Ndb_cluster_connection *cluster_connection = new Ndb_cluster_connection(
+  auto *cluster_connection = new Ndb_cluster_connection(
       connectstring);  // Object representing the cluster
 
   int r = cluster_connection->connect(5 /* retries               */,
@@ -266,7 +266,7 @@ int main(int argc, char **argv) {
                     Uint64 length = 0;
                     bh->getLength(length);
                     // read into buffer
-                    unsigned char *buf = new unsigned char[length];
+                    auto *buf = new unsigned char[length];
                     memset(buf, 'X', length);
                     Uint32 n = length;
                     bh->readData(buf, n);  // n is in/out

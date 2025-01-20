@@ -134,7 +134,7 @@ static int use_processor_set(const Uint32 *cpu_ids, Uint32 num_cpu_ids,
      * The current array of processor set handlers is too small, double its
      * size and try again.
      */
-    processor_set_handler *new_proc_set_array =
+    auto *new_proc_set_array =
         new (std::nothrow) processor_set_handler[2 * num_processor_sets];
 
     if (!new_proc_set_array) {

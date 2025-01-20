@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Routine_libraries &Routine_libraries::instance() {
-  static Routine_libraries *s_instance = new Routine_libraries();
+  static auto *s_instance = new Routine_libraries();
   return *s_instance;
 }
 

@@ -67,7 +67,7 @@ struct mysql_heartbeat_context {
 
 static void *mysql_heartbeat(void *p) {
   DBUG_TRACE;
-  struct mysql_heartbeat_context *con = (struct mysql_heartbeat_context *)p;
+  auto *con = (struct mysql_heartbeat_context *)p;
   char buffer[HEART_STRING_BUFFER];
   time_t result;
   struct tm tm_tmp;
@@ -115,7 +115,7 @@ static int daemon_example_plugin_init(void *p) {
   const time_t result = time(nullptr);
   struct tm tm_tmp;
 
-  struct st_plugin_int *plugin = (struct st_plugin_int *)p;
+  auto *plugin = (struct st_plugin_int *)p;
 
   con = (struct mysql_heartbeat_context *)my_malloc(
       key_memory_mysql_heartbeat_context,
@@ -166,9 +166,8 @@ static int daemon_example_plugin_init(void *p) {
 static int daemon_example_plugin_deinit(void *p) {
   DBUG_TRACE;
   char buffer[HEART_STRING_BUFFER];
-  struct st_plugin_int *plugin = (struct st_plugin_int *)p;
-  struct mysql_heartbeat_context *con =
-      (struct mysql_heartbeat_context *)plugin->data;
+  auto *plugin = (struct st_plugin_int *)p;
+  auto *con = (struct mysql_heartbeat_context *)plugin->data;
   const time_t result = time(nullptr);
   struct tm tm_tmp;
   void *dummy_retval;

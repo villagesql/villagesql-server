@@ -48,8 +48,7 @@ bool Gcs_interface_parameters::check_parameters(const char *params[],
 
 bool Gcs_interface_parameters::check_parameters(
     const std::vector<std::string> &params) const {
-  for (std::vector<std::string>::const_iterator it = params.begin();
-       it != params.end(); ++it) {
+  for (auto it = params.begin(); it != params.end(); ++it) {
     if (get_parameter(*it)) return true;
   }
   return false;

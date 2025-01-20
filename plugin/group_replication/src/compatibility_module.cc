@@ -103,10 +103,7 @@ Compatibility_type Compatibility_module::check_incompatibility(
       search_its;
 
   search_its = this->incompatibilities.equal_range(from.get_version());
-  for (std::multimap<unsigned int,
-                     std::pair<unsigned int, unsigned int>>::iterator it =
-           search_its.first;
-       it != search_its.second; ++it) {
+  for (auto it = search_its.first; it != search_its.second; ++it) {
     if (check_version_range_incompatibility(to, it->second.first,
                                             it->second.second)) {
       return INCOMPATIBLE;

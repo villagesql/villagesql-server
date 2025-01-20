@@ -33,7 +33,7 @@ namespace dd {
 namespace tables {
 
 const Index_partitions &Index_partitions::instance() {
-  static Index_partitions *s_instance = new Index_partitions();
+  static auto *s_instance = new Index_partitions();
   return *s_instance;
 }
 

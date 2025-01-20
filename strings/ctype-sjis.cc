@@ -17937,8 +17937,8 @@ mb:
 static size_t my_numcells_sjis(const CHARSET_INFO *cs [[maybe_unused]],
                                const char *str, const char *str_end) {
   size_t clen;
-  const uint8_t *b = pointer_cast<const uint8_t *>(str);
-  const uint8_t *e = pointer_cast<const uint8_t *>(str_end);
+  const auto *b = pointer_cast<const uint8_t *>(str);
+  const auto *e = pointer_cast<const uint8_t *>(str_end);
 
   for (clen = 0; b < e;) {
     if (*b >= 0xA1 && *b <= 0xDF) {

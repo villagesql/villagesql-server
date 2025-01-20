@@ -288,7 +288,7 @@ void Group_member_info::encode_payload(
   encode_payload_item_string(buffer, PIT_HOSTNAME, hostname.c_str(),
                              hostname.length());
 
-  uint16 port_aux = (uint16)port;
+  auto port_aux = (uint16)port;
   encode_payload_item_int2(buffer, PIT_PORT, port_aux);
 
   encode_payload_item_string(buffer, PIT_UUID, uuid.c_str(), uuid.length());
@@ -300,10 +300,10 @@ void Group_member_info::encode_payload(
   char status_aux = (uchar)status;
   encode_payload_item_char(buffer, PIT_STATUS, status_aux);
 
-  uint32 version_aux = (uint32)member_version->get_version();
+  auto version_aux = (uint32)member_version->get_version();
   encode_payload_item_int4(buffer, PIT_VERSION, version_aux);
 
-  uint16 write_set_extraction_algorithm_aux =
+  auto write_set_extraction_algorithm_aux =
       (uint16)write_set_extraction_algorithm;
   encode_payload_item_int2(buffer, PIT_WRITE_SET_EXTRACTION_ALGORITHM,
                            write_set_extraction_algorithm_aux);
@@ -322,7 +322,7 @@ void Group_member_info::encode_payload(
   char role_aux = (uchar)role;
   encode_payload_item_char(buffer, PIT_MEMBER_ROLE, role_aux);
 
-  uint32 configuration_flags_aux = (uint32)configuration_flags;
+  auto configuration_flags_aux = (uint32)configuration_flags;
   encode_payload_item_int4(buffer, PIT_CONFIGURATION_FLAGS,
                            configuration_flags_aux);
 
@@ -333,11 +333,10 @@ void Group_member_info::encode_payload(
   encode_payload_item_char(buffer, PIT_CONFLICT_DETECTION_ENABLE,
                            conflict_detection_enable_aux);
 
-  uint16 member_weight_aux = (uint16)member_weight;
+  auto member_weight_aux = (uint16)member_weight;
   encode_payload_item_int2(buffer, PIT_MEMBER_WEIGHT, member_weight_aux);
 
-  uint16 lower_case_table_names_aux =
-      static_cast<uint16>(lower_case_table_names);
+  auto lower_case_table_names_aux = static_cast<uint16>(lower_case_table_names);
 #ifndef NDEBUG
   if (lower_case_table_names != SKIP_ENCODING_LOWER_CASE_TABLE_NAMES)
 #endif
@@ -997,7 +996,7 @@ bool Group_member_info_manager::get_group_member_info(
     const string &uuid, Group_member_info &member_info_arg) {
   MUTEX_LOCK(lock, &update_lock);
 
-  map<string, Group_member_info *>::iterator it = members->find(uuid);
+  auto it = members->find(uuid);
   if (it != members->end()) {
     member_info_arg.update(*it->second);
     return false;
@@ -1112,13 +1111,12 @@ Group_member_info_manager::get_group_member_status_by_member_id(
 Group_member_info_list *Group_member_info_manager::get_all_members() {
   mysql_mutex_lock(&update_lock);
 
-  Group_member_info_list *all_members =
-      new std::vector<Group_member_info *,
-                      Malloc_allocator<Group_member_info *>>(
-          Malloc_allocator<Group_member_info *>(key_group_member_info));
+  auto *all_members = new std::vector<Group_member_info *,
+                                      Malloc_allocator<Group_member_info *>>(
+      Malloc_allocator<Group_member_info *>(key_group_member_info));
   map<string, Group_member_info *>::iterator it;
   for (it = members->begin(); it != members->end(); it++) {
-    Group_member_info *member_copy = new Group_member_info(*(*it).second);
+    auto *member_copy = new Group_member_info(*(*it).second);
     all_members->push_back(member_copy);
   }
 
@@ -1132,8 +1130,7 @@ std::list<Gcs_member_identifier>
   std::list<Gcs_member_identifier> *online_members = nullptr;
   mysql_mutex_lock(&update_lock);
 
-  for (map<string, Group_member_info *>::iterator it = members->begin();
-       it != members->end(); it++) {
+  for (auto it = members->begin(); it != members->end(); it++) {
     if ((*it).second->get_member_version().get_version() <
         TRANSACTION_WITH_GUARANTEES_VERSION) {
       goto end; /* purecov: inspected */
@@ -1141,8 +1138,7 @@ std::list<Gcs_member_identifier>
   }
 
   online_members = new std::list<Gcs_member_identifier>();
-  for (map<string, Group_member_info *>::iterator it = members->begin();
-       it != members->end(); it++) {
+  for (auto it = members->begin(); it != members->end(); it++) {
     if ((*it).second->get_recovery_status() ==
             Group_member_info::MEMBER_ONLINE &&
         !((*it).second->get_gcs_member_id() == exclude_member)) {
@@ -1332,7 +1328,7 @@ void Group_member_info_manager::update_enforce_everywhere_checks_flag(
 }
 
 void Group_member_info_manager::clear_members() {
-  map<string, Group_member_info *>::iterator it = members->begin();
+  auto it = members->begin();
   while (it != members->end()) {
     if ((*it).second == local_member_info) {
       ++it;
@@ -1348,7 +1344,7 @@ bool Group_member_info_manager::is_conflict_detection_enabled() {
   bool conflict_detection = false;
 
   mysql_mutex_lock(&update_lock);
-  map<string, Group_member_info *>::iterator it = members->begin();
+  auto it = members->begin();
   while (it != members->end()) {
     if ((*it).second != local_member_info) {
       conflict_detection |= (*it).second->is_conflict_detection_enabled();
@@ -1361,8 +1357,7 @@ bool Group_member_info_manager::is_conflict_detection_enabled() {
 }
 
 void Group_member_info_manager::encode(vector<uchar> *to_encode) {
-  Group_member_info_manager_message *group_info_message =
-      new Group_member_info_manager_message(*this);
+  auto *group_info_message = new Group_member_info_manager_message(*this);
   group_info_message->encode(to_encode);
   delete group_info_message;
 }
@@ -1371,8 +1366,7 @@ Group_member_info_list *Group_member_info_manager::decode(
     const uchar *to_decode, size_t length) {
   Group_member_info_list *decoded_members = nullptr;
 
-  Group_member_info_manager_message *group_info_message =
-      new Group_member_info_manager_message();
+  auto *group_info_message = new Group_member_info_manager_message();
   group_info_message->decode(to_decode, length);
   decoded_members = group_info_message->get_all_members();
   delete group_info_message;
@@ -1430,7 +1424,7 @@ bool Group_member_info_manager::is_majority_unreachable() {
   int unreachables = 0;
 
   mysql_mutex_lock(&update_lock);
-  map<string, Group_member_info *>::iterator it = members->begin();
+  auto it = members->begin();
 
   for (it = members->begin(); it != members->end(); it++) {
     Group_member_info *info = (*it).second;
@@ -1446,7 +1440,7 @@ bool Group_member_info_manager::is_unreachable_member_present() {
   bool ret = false;
 
   mysql_mutex_lock(&update_lock);
-  map<string, Group_member_info *>::iterator it = members->begin();
+  auto it = members->begin();
 
   for (it = members->begin(); it != members->end() && !ret; it++) {
     Group_member_info *info = (*it).second;
@@ -1463,7 +1457,7 @@ bool Group_member_info_manager::is_recovering_member_present() {
   bool ret = false;
 
   mysql_mutex_lock(&update_lock);
-  map<string, Group_member_info *>::iterator it = members->begin();
+  auto it = members->begin();
 
   for (it = members->begin(); it != members->end() && !ret; it++) {
     Group_member_info *info = (*it).second;
@@ -1479,7 +1473,7 @@ bool Group_member_info_manager::is_recovering_member_present() {
 std::string Group_member_info_manager::get_string_current_view_active_hosts()
     const {
   std::stringstream hosts_string;
-  map<string, Group_member_info *>::iterator all_members_it = members->begin();
+  auto all_members_it = members->begin();
   bool first_entry = true;
 
   while (all_members_it != members->end()) {
@@ -1538,14 +1532,13 @@ void Group_member_info_manager_message::clear_members() {
 
 Group_member_info_list *Group_member_info_manager_message::get_all_members() {
   DBUG_TRACE;
-  Group_member_info_list *all_members =
-      new std::vector<Group_member_info *,
-                      Malloc_allocator<Group_member_info *>>(
-          Malloc_allocator<Group_member_info *>(key_group_member_info));
+  auto *all_members = new std::vector<Group_member_info *,
+                                      Malloc_allocator<Group_member_info *>>(
+      Malloc_allocator<Group_member_info *>(key_group_member_info));
 
   Group_member_info_list_iterator it;
   for (it = members->begin(); it != members->end(); it++) {
-    Group_member_info *member_copy = new Group_member_info(*(*it));
+    auto *member_copy = new Group_member_info(*(*it));
     all_members->push_back(member_copy);
   }
 
@@ -1556,7 +1549,7 @@ void Group_member_info_manager_message::encode_payload(
     std::vector<unsigned char> *buffer) const {
   DBUG_TRACE;
 
-  uint16 number_of_members = (uint16)members->size();
+  auto number_of_members = (uint16)members->size();
   encode_payload_item_int2(buffer, PIT_MEMBERS_NUMBER, number_of_members);
 
   Group_member_info_list_iterator it;
@@ -1584,15 +1577,14 @@ void Group_member_info_manager_message::decode_payload(
   for (uint16 i = 0; i < number_of_members; i++) {
     decode_payload_item_type_and_length(&slider, &payload_item_type,
                                         &payload_item_length);
-    Group_member_info *member =
-        new Group_member_info(slider,
-                              payload_item_length
+    auto *member = new Group_member_info(slider,
+                                         payload_item_length
 #ifdef DISABLE_PSI_MUTEX
-                              // Allow use this method on unit tests.
-                              ,
-                              PSI_NOT_INSTRUMENTED
+                                         // Allow use this method on unit tests.
+                                         ,
+                                         PSI_NOT_INSTRUMENTED
 #endif
-        );
+    );
     members->push_back(member);
     slider += payload_item_length;
   }

@@ -41,7 +41,7 @@ namespace dd {
 namespace tables {
 
 const Column_statistics &Column_statistics::instance() {
-  static Column_statistics *s_instance = new Column_statistics();
+  static auto *s_instance = new Column_statistics();
   return *s_instance;
 }
 

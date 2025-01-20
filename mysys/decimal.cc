@@ -1494,7 +1494,7 @@ int bin2decimal(const uchar *from, decimal_t *to, int precision, int scale,
   int bin_size = decimal_bin_size_inline(precision, scale);
 
   sanity(to);
-  uchar *d_copy = static_cast<uchar *>(alloca(bin_size));
+  auto *d_copy = static_cast<uchar *>(alloca(bin_size));
   memcpy(d_copy, from, bin_size);
   d_copy[0] ^= 0x80;
   from = d_copy;

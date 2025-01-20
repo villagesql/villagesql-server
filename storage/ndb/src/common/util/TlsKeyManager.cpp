@@ -89,7 +89,7 @@ static constexpr const char *cipher_list =
     "ECDHE-ECDSA-AES128-GCM-SHA256";
 
 static int error_callback(const char *str, size_t, void *vp) {
-  intptr_t r = reinterpret_cast<intptr_t>(vp);
+  auto r = reinterpret_cast<intptr_t>(vp);
   g_eventLogger->error("NDB TLS [%" PRIuPTR "]: %s", r, str);
   return 0;
 }
@@ -332,7 +332,7 @@ int TlsKeyManager::check_socket_for_auth(const NdbSocket &socket,
   X509 *cert = socket.peer_certificate();
   if (!cert) return TlsKeyError::auth2_no_cert;
 
-  ClientAuthorization *auth = new ClientAuthorization(cert);
+  auto *auth = new ClientAuthorization(cert);
   Certificate::free(cert);
 
   if (auth->m_cert->bound_hostnames() == 0) {

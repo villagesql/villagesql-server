@@ -243,7 +243,7 @@ inline Uint32 SHM_Writer::writev(const struct iovec *vec, int count) {
    */
   Uint32 total = 0;
   for (int i = 0; i < count; i++) {
-    unsigned char *ptr = (unsigned char *)vec[i].iov_base;
+    auto *ptr = (unsigned char *)vec[i].iov_base;
     Uint32 remain = vec[i].iov_len;
     Uint32 segment;
     Uint32 maxBytes;

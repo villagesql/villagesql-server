@@ -624,11 +624,11 @@ static bool is_supported_temporal_type(enum_field_types type) {
 static uint operand_count(const Item *item) {
   switch (item->type()) {
     case Item::FUNC_ITEM: {
-      const Item_func *func_item = static_cast<const Item_func *>(item);
+      const auto *func_item = static_cast<const Item_func *>(item);
       return func_item->argument_count();
     }
     case Item::COND_ITEM: {
-      Item_cond *cond_item =
+      auto *cond_item =
           const_cast<Item_cond *>(static_cast<const Item_cond *>(item));
       List<Item> *arguments = cond_item->argument_list();
       // A COND_ITEM (And/or) is visited both infix and postfix, so need '+1'
@@ -648,7 +648,7 @@ static uint operand_count(const Item *item) {
   Also checks if condition is supported.
 */
 static void ndb_serialize_cond(const Item *item, void *arg) {
-  Ndb_cond_traverse_context *context = (Ndb_cond_traverse_context *)arg;
+  auto *context = (Ndb_cond_traverse_context *)arg;
   DBUG_TRACE;
 
   // Check if we are skipping arguments to a function to be evaluated
@@ -951,7 +951,7 @@ static void ndb_serialize_cond(const Item *item, void *arg) {
             return;
           }
           case Item::FIELD_ITEM: {
-            const Item_field *field_item = down_cast<const Item_field *>(item);
+            const auto *field_item = down_cast<const Item_field *>(item);
             Field *field = field_item->field;
             const enum_field_types type = field->real_type();
 
@@ -1141,7 +1141,7 @@ static void ndb_serialize_cond(const Item *item, void *arg) {
 
             const table_map this_or_param_table(this_table |
                                                 context->m_param_expr_tables);
-            const Item_func *func_item = static_cast<const Item_func *>(item);
+            const auto *func_item = static_cast<const Item_func *>(item);
             switch (func_item->functype()) {
               case Item_func::EQ_FUNC: {
                 DBUG_PRINT("info", ("EQ_FUNC"));
@@ -1230,11 +1230,10 @@ static void ndb_serialize_cond(const Item *item, void *arg) {
                 break;
               }
               case Item_func::LIKE_FUNC: {
-                Ndb_expect_stack *expect_next =
-                    new (*THR_MALLOC) Ndb_expect_stack();
+                auto *expect_next = new (*THR_MALLOC) Ndb_expect_stack();
                 DBUG_PRINT("info", ("LIKE_FUNC"));
 
-                const Item_func_like *like_func =
+                const auto *like_func =
                     static_cast<const Item_func_like *>(func_item);
                 if (like_func->escape_was_used_in_parsing()) {
                   DBUG_PRINT("info",
@@ -1295,9 +1294,9 @@ static void ndb_serialize_cond(const Item *item, void *arg) {
               }
               case Item_func::BETWEEN: {
                 DBUG_PRINT("info", ("BETWEEN, rewriting using AND"));
-                const Item_func_between *between_func =
+                const auto *between_func =
                     static_cast<const Item_func_between *>(func_item);
-                Ndb_rewrite_context *rewrite_context =
+                auto *rewrite_context =
                     new (*THR_MALLOC) Ndb_rewrite_context(func_item);
                 rewrite_context->next = context->rewrite_stack;
                 context->rewrite_stack = rewrite_context;
@@ -1315,9 +1314,9 @@ static void ndb_serialize_cond(const Item *item, void *arg) {
               }
               case Item_func::IN_FUNC: {
                 DBUG_PRINT("info", ("IN_FUNC, rewriting using OR"));
-                const Item_func_in *in_func =
+                const auto *in_func =
                     static_cast<const Item_func_in *>(func_item);
-                Ndb_rewrite_context *rewrite_context =
+                auto *rewrite_context =
                     new (*THR_MALLOC) Ndb_rewrite_context(func_item);
                 rewrite_context->next = context->rewrite_stack;
                 context->rewrite_stack = rewrite_context;
@@ -1343,7 +1342,7 @@ static void ndb_serialize_cond(const Item *item, void *arg) {
           }
 
           case Item::COND_ITEM: {
-            const Item_cond *cond_item = static_cast<const Item_cond *>(item);
+            const auto *cond_item = static_cast<const Item_cond *>(item);
             if (context->expecting(Item::COND_ITEM)) {
               switch (cond_item->functype()) {
                 case Item_func::COND_AND_FUNC:
@@ -1564,7 +1563,7 @@ static List<const Ndb_item> cond_push_boolean_term(
     List<Item> remainder_list;
     List<const Ndb_item> code;
 
-    Item_cond *cond = (Item_cond *)term;
+    auto *cond = (Item_cond *)term;
     if (cond->functype() == Item_func::COND_AND_FUNC) {
       DBUG_PRINT("info", ("COND_AND_FUNC"));
 
@@ -1647,9 +1646,9 @@ static List<const Ndb_item> cond_push_boolean_term(
     }
     return code;
   } else if (term->type() == Item::FUNC_ITEM) {
-    const Item_func *item_func = static_cast<const Item_func *>(term);
+    const auto *item_func = static_cast<const Item_func *>(term);
     if (item_func->functype() == Item_func::TRIG_COND_FUNC) {
-      const Item_func_trig_cond *func_trig =
+      const auto *func_trig =
           static_cast<const Item_func_trig_cond *>(item_func);
 
       if (func_trig->get_trig_type() ==
@@ -1744,7 +1743,7 @@ void ha_ndbcluster_cond::prep_cond_push(const Item *cond,
   const Ndb_item *ndb_item;
   while ((ndb_item = li++)) {
     if (ndb_item->get_type() == NDB_PARAM) {
-      const Ndb_param *param = down_cast<const Ndb_param *>(ndb_item);
+      const auto *param = down_cast<const Ndb_param *>(ndb_item);
       param->set_param_no(params.size());
       params.push_back(down_cast<const Ndb_param *>(ndb_item));
     }
@@ -1825,7 +1824,7 @@ int ha_ndbcluster_cond::build_scan_filter_predicate(
       assert(a != nullptr);
       if (a == nullptr) break;
 
-      const Ndb_func *ndb_func = down_cast<const Ndb_func *>(ndb_item);
+      const auto *ndb_func = down_cast<const Ndb_func *>(ndb_item);
       NDB_FUNC_TYPE function_type =
           (negated) ? Ndb_func::negate(ndb_func->get_func_type())
                     : ndb_func->get_func_type();
@@ -2141,7 +2140,7 @@ int ha_ndbcluster_cond::build_scan_filter_group(
     if (ndb_item == nullptr) return 1;
     switch (ndb_item->get_type()) {
       case NDB_FUNCTION: {
-        const Ndb_func *ndb_func = down_cast<const Ndb_func *>(ndb_item);
+        const auto *ndb_func = down_cast<const Ndb_func *>(ndb_item);
         switch (ndb_func->get_func_type()) {
           case NDB_COND_AND_FUNC: {
             level++;
@@ -2241,7 +2240,7 @@ int ha_ndbcluster_cond::generate_scan_filter_from_cond(
   // Determine if we need to wrap an AND group around condition(s)
   const Ndb_item *ndb_item = m_ndb_cond.head();
   if (ndb_item->get_type() == NDB_FUNCTION) {
-    const Ndb_func *ndb_func = down_cast<const Ndb_func *>(ndb_item);
+    const auto *ndb_func = down_cast<const Ndb_func *>(ndb_item);
     switch (ndb_func->get_func_type()) {
       case NDB_COND_AND_FUNC:
       case NDB_COND_OR_FUNC:

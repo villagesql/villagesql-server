@@ -35,7 +35,7 @@ namespace dd {
 namespace tables {
 
 const Column_type_elements &Column_type_elements::instance() {
-  static Column_type_elements *s_instance = new Column_type_elements();
+  static auto *s_instance = new Column_type_elements();
   return *s_instance;
 }
 

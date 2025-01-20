@@ -301,7 +301,7 @@ TEST_F(MyAllocTest, ArrayAllocInitialization) {
 
   // Initialize from rvalue. (Verifies that a bug, which made it only initialize
   // the first element correctly, is fixed.)
-  std::string *string_array1 = alloc.ArrayAlloc<std::string>(
+  auto *string_array1 = alloc.ArrayAlloc<std::string>(
       10, std::string("abcdefghijklmnopqrstuvwxyz"));
   ASSERT_NE(nullptr, string_array1);
   for (int i = 0; i < 10; ++i) {

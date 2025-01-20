@@ -32,7 +32,7 @@ bool printLQH_TRANSCONF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const LqhTransConf *const sig = (const LqhTransConf *)theData;
+  const auto *const sig = (const LqhTransConf *)theData;
   fprintf(output, " tcRef: %x\n", sig->tcRef);
   fprintf(output, " lqhNodeId: %x\n", sig->lqhNodeId);
   fprintf(output, " operationStatus: %x\n", sig->operationStatus);

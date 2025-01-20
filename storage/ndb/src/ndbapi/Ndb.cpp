@@ -2120,8 +2120,8 @@ const char *Ndb::getNdbErrorDetail(const NdbError &err, char *buff,
          * base table, schema and database, and put that in
          * string form into the caller's buffer
          */
-        UintPtr uip = (UintPtr)err.details;
-        Uint32 indexObjectId = (Uint32)(uip - (UintPtr(0)));
+        auto uip = (UintPtr)err.details;
+        auto indexObjectId = (Uint32)(uip - (UintPtr(0)));
         Uint32 primTableObjectId = ~(Uint32)0;
         BaseString indexName;
         char splitChars[2] = {table_name_separator, 0};
@@ -2230,8 +2230,8 @@ const char *Ndb::getNdbErrorDetail(const NdbError &err, char *buff,
          * `details` has the violated fk id.
          * We'll fetch the fully qualified fk name
          * and put that in caller's buffer */
-        const UintPtr uip = (UintPtr)err.details;
-        const Uint32 foreignKeyId = (Uint32)(uip - (UintPtr(0)));
+        const auto uip = (UintPtr)err.details;
+        const auto foreignKeyId = (Uint32)(uip - (UintPtr(0)));
 
         NdbDictionary::Dictionary::List allForeignKeys;
         int rc = theDictionary->listObjects(allForeignKeys,

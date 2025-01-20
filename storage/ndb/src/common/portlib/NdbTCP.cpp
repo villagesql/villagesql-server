@@ -54,7 +54,7 @@ static struct addrinfo *get_preferred_address(struct addrinfo *ai_list) {
       first_ip4_addr = ai;
     }
     if ((ai->ai_family == AF_INET6) && (first_unscoped_ip6_addr == nullptr)) {
-      struct sockaddr_in6 *addr = (struct sockaddr_in6 *)ai->ai_addr;
+      auto *addr = (struct sockaddr_in6 *)ai->ai_addr;
       if (addr->sin6_scope_id == 0) {
         first_unscoped_ip6_addr = ai;
       }
@@ -78,7 +78,7 @@ static int get_addr(ndb_sockaddr *dst, const struct addrinfo *src) {
   }
 
   if (src->ai_family == AF_INET6) {
-    const sockaddr_in6 *addr6_ptr = (const sockaddr_in6 *)src->ai_addr;
+    const auto *addr6_ptr = (const sockaddr_in6 *)src->ai_addr;
     if (addr6_ptr->sin6_scope_id != 0) {
       return -1;  // require unscoped address
     }

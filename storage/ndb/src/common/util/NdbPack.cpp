@@ -54,7 +54,7 @@ void NdbPack::Error::set_error(const Error &e2) const {
 // NdbPack::Endian
 
 void NdbPack::Endian::convert(void *ptr, Uint32 len) {
-  Uint8 *p = (Uint8 *)ptr;
+  auto *p = (Uint8 *)ptr;
   for (Uint32 i = 0; i < len / 2; i++) {
     Uint32 j = len - i - 1;
     Uint8 tmp = p[i];
@@ -417,7 +417,7 @@ int NdbPack::DataC::cmp(const DataC &d2, Uint32 cnt, Uint32 &num_eq) const {
 
 int NdbPack::Data::add(const void *data, Uint32 *len_out) {
   assert(data != nullptr);
-  const Uint8 *item = (const Uint8 *)data;
+  const auto *item = (const Uint8 *)data;
   const Uint32 i = m_cnt;  // item index
   if (unlikely(i >= m_spec.m_cnt)) {
     set_error(DataCntOverflow, __LINE__);
@@ -441,7 +441,7 @@ int NdbPack::Data::add(const void *data, Uint32 *len_out) {
 }
 
 int NdbPack::Data::add(const void *data, Uint32 cnt, Uint32 *len_out) {
-  const Uint8 *data_ptr = (const Uint8 *)data;
+  const auto *data_ptr = (const Uint8 *)data;
   Uint32 len_tot = 0;
   for (Uint32 i = 0; i < cnt; i++) {
     Uint32 len;
@@ -1295,7 +1295,7 @@ void Tdata::finalize() {
   ll3("create: " << m_data);
   chk1((int)m_data.get_full_len() == m_packLen);
   {
-    const Uint8 *p = (const Uint8 *)m_data.get_full_buf();
+    const auto *p = (const Uint8 *)m_data.get_full_buf();
     chk1(p[0] + (p[1] << 8) == m_packLen - 2);
   }
 }
@@ -1545,7 +1545,7 @@ struct Tboundlist {
     m_cnt = bound_cnt == -1 ? Max : bound_cnt;
     int i;
     for (i = 0; i < m_cnt; i++) {
-      Tdata *tdata = new Tdata(tspec, true, 0);
+      auto *tdata = new Tdata(tspec, true, 0);
       m_tbound[i] = new Tbound(*tdata);
     }
   }
@@ -1622,7 +1622,7 @@ static void testdesc(const Tdata &tdata) {
   ll3("testdesc: " << tdata);
   const Tspec &tspec = tdata.m_tspec;
   const NdbPack::Data &data = tdata.m_data;
-  const Uint8 *buf_old = (const Uint8 *)data.get_full_buf();
+  const auto *buf_old = (const Uint8 *)data.get_full_buf();
   const Uint32 varBytes = data.get_var_bytes();
   // const Uint32 nullMaskLen = tspec.m_spec.get_nullmask_len(false);
   const Uint32 dataLen = data.get_data_len();
@@ -1698,7 +1698,7 @@ static void testconvert(const Tdata &tdata) {
   int i;
   for (i = 0; i < 10; i++) {
     int k = getrandom(3);  // assumes Endian::Value 0,1,2
-    NdbPack::Endian::Value v = (NdbPack::Endian::Value)k;
+    auto v = (NdbPack::Endian::Value)k;
     chk2(data_new.convert(v) == 0, data_new);
     if (v == NdbPack::Endian::Native || v == NdbPack::Endian::get_endian()) {
       num_eq = ~(Uint32)0;

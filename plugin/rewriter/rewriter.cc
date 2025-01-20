@@ -163,7 +163,7 @@ struct Refresh_callback_args {
 };
 
 extern "C" void *refresh_callback(void *p_args) {
-  Refresh_callback_args *args = pointer_cast<Refresh_callback_args *>(p_args);
+  auto *args = pointer_cast<Refresh_callback_args *>(p_args);
   (args->me->do_refresh)(args->session_thd);
   return nullptr;
 }

@@ -103,7 +103,7 @@ void Block_PSI_track_logical_deallocation(size_t size) {
 void Block_PSI_track_physical_ram_allocation(void *ptr [[maybe_unused]],
                                              size_t size [[maybe_unused]]) {
 #ifdef TEMPTABLE_PFS_MEMORY
-  my_memory_header *mh = (my_memory_header *)ptr;
+  auto *mh = (my_memory_header *)ptr;
   mh->m_magic = PSI_MEMORY_MAGIC;
   mh->m_size = size;
   mh->m_key = PSI_MEMORY_CALL(memory_alloc)(
@@ -115,7 +115,7 @@ void Block_PSI_track_physical_ram_allocation(void *ptr [[maybe_unused]],
 
 void Block_PSI_track_physical_ram_deallocation(uint8_t *ptr [[maybe_unused]]) {
 #ifdef TEMPTABLE_PFS_MEMORY
-  my_memory_header *mh = (my_memory_header *)ptr;
+  auto *mh = (my_memory_header *)ptr;
   PSI_MEMORY_CALL(memory_free)
   (mh->m_key, mh->m_size + PSI_HEADER_SIZE, mh->m_owner);
   assert(PSI_REAL_MEM_KEY(mh->m_key) == mem_key_physical_ram ||
@@ -126,7 +126,7 @@ void Block_PSI_track_physical_ram_deallocation(uint8_t *ptr [[maybe_unused]]) {
 void Block_PSI_track_physical_disk_allocation(void *ptr [[maybe_unused]],
                                               size_t size [[maybe_unused]]) {
 #ifdef TEMPTABLE_PFS_MEMORY
-  my_memory_header *mh = (my_memory_header *)ptr;
+  auto *mh = (my_memory_header *)ptr;
   mh->m_magic = PSI_MEMORY_MAGIC;
   mh->m_size = size;
   mh->m_key = PSI_MEMORY_CALL(memory_alloc)(
@@ -138,7 +138,7 @@ void Block_PSI_track_physical_disk_allocation(void *ptr [[maybe_unused]],
 
 void Block_PSI_track_physical_disk_deallocation(uint8_t *ptr [[maybe_unused]]) {
 #ifdef TEMPTABLE_PFS_MEMORY
-  my_memory_header *mh = (my_memory_header *)ptr;
+  auto *mh = (my_memory_header *)ptr;
   PSI_MEMORY_CALL(memory_free)
   (mh->m_key, mh->m_size + PSI_HEADER_SIZE, mh->m_owner);
 

@@ -42,7 +42,7 @@ namespace dd {
 namespace tables {
 
 const Schemata &Schemata::instance() {
-  static Schemata *s_instance = new Schemata();
+  static auto *s_instance = new Schemata();
   return *s_instance;
 }
 

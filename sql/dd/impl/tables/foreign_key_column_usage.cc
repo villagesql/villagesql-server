@@ -33,7 +33,7 @@ namespace dd {
 namespace tables {
 
 const Foreign_key_column_usage &Foreign_key_column_usage::instance() {
-  static Foreign_key_column_usage *s_instance = new Foreign_key_column_usage();
+  static auto *s_instance = new Foreign_key_column_usage();
   return *s_instance;
 }
 

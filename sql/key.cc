@@ -194,7 +194,7 @@ void key_restore(uchar *to_record, const uchar *from_key, const KEY *key_info,
       key_length--;
     }
     if (key_part->type == HA_KEYTYPE_BIT) {
-      Field_bit *field = (Field_bit *)(key_part->field);
+      auto *field = (Field_bit *)(key_part->field);
       if (field->bit_len) {
         const uchar bits =
             *(from_key + key_part->length - field->pack_length_in_rec() - 1);
@@ -215,7 +215,7 @@ void key_restore(uchar *to_record, const uchar *from_key, const KEY *key_info,
         have to ignore GCov compaining.
       */
       const uint blob_length = uint2korr(from_key);
-      Field_blob *field = (Field_blob *)key_part->field;
+      auto *field = (Field_blob *)key_part->field;
       from_key += HA_KEY_BLOB_LENGTH;
       key_length -= HA_KEY_BLOB_LENGTH;
       field->set_ptr_offset(to_record - field->table->record[0],

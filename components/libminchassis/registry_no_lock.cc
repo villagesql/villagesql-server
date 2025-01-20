@@ -54,8 +54,7 @@ void mysql_registry_no_lock_imp::deinit() {
 mysql_service_implementation *
 mysql_registry_no_lock_imp::get_service_implementation_by_interface(
     my_h_service interface) {
-  my_interface_mapping::const_iterator iter =
-      mysql_registry_no_lock_imp::interface_mapping.find(interface);
+  auto iter = mysql_registry_no_lock_imp::interface_mapping.find(interface);
   if (iter == mysql_registry_no_lock_imp::interface_mapping.cend()) {
     return nullptr;
   }
@@ -75,8 +74,7 @@ mysql_registry_no_lock_imp::get_service_implementation_by_interface(
 */
 uint64_t mysql_registry_no_lock_imp::get_service_implementation_reference_count(
     my_h_service interface) {
-  my_interface_mapping::const_iterator iter =
-      mysql_registry_no_lock_imp::interface_mapping.find(interface);
+  auto iter = mysql_registry_no_lock_imp::interface_mapping.find(interface);
   if (iter == mysql_registry_no_lock_imp::interface_mapping.cend()) {
     return -1;
   }
@@ -225,9 +223,8 @@ bool mysql_registry_no_lock_imp::unregister_nolock(
 
     {
       /* Find the implementation and check if it is not being referenced. */
-      my_service_registry::iterator imp_iter =
-          mysql_registry_no_lock_imp::service_registry.find(
-              service_implementation_name);
+      auto imp_iter = mysql_registry_no_lock_imp::service_registry.find(
+          service_implementation_name);
       if (imp_iter == mysql_registry_no_lock_imp::service_registry.end() ||
           imp_iter->second->get_reference_count() > 0) {
         return true;
@@ -246,9 +243,8 @@ bool mysql_registry_no_lock_imp::unregister_nolock(
         mysql_registry_no_lock_imp::interface_mapping.find(imp->interface()));
 
     /* Look if it is the default implementation. */
-    my_service_registry::iterator default_iter =
-        mysql_registry_no_lock_imp::service_registry.find(
-            imp->service_name_c_str());
+    auto default_iter = mysql_registry_no_lock_imp::service_registry.find(
+        imp->service_name_c_str());
     if (default_iter == mysql_registry_no_lock_imp::service_registry.end()) {
       /* A Service Implementation and no default present. The state is not
         consistent. */
@@ -257,7 +253,7 @@ bool mysql_registry_no_lock_imp::unregister_nolock(
 
     if (default_iter->second == imp.get()) {
       /* Remove the default implementation too. */
-      my_service_registry::iterator new_default_iter =
+      auto new_default_iter =
           mysql_registry_no_lock_imp::service_registry.erase(default_iter);
 
       /* Search for a new default implementation. */

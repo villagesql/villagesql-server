@@ -720,7 +720,7 @@ static bool parse_mycnf_opt(int, const struct my_option *opt, char *) {
    * const my_option object.
    * See load_defaults(Vector<struct my_option>& options, const char* groups[])
    */
-  my_option *mutable_opt = const_cast<my_option *>(opt);
+  auto *mutable_opt = const_cast<my_option *>(opt);
   long *app_type = (long *)&mutable_opt->app_type;
   if (opt->comment)
     (*app_type)++;

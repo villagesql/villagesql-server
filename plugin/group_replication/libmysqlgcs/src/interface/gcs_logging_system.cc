@@ -258,7 +258,7 @@ void Gcs_async_buffer::consume_events() {
 }
 
 void *consumer_function(void *ptr) {
-  Gcs_async_buffer *l = static_cast<Gcs_async_buffer *>(ptr);
+  auto *l = static_cast<Gcs_async_buffer *>(ptr);
   l->consume_events();
 
   My_xp_thread_util::exit(nullptr);

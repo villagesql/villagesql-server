@@ -102,7 +102,7 @@ ConfigObject::~ConfigObject() {
 }
 
 ConfigObject *ConfigObject::copy_current(ConfigSection *curr_section) const {
-  ConfigObject *new_co = new ConfigObject();
+  auto *new_co = new ConfigObject();
   DEB_MALLOC(("new(%u) => %p", __LINE__, new_co));
   ConfigSection *new_cs = curr_section->copy();
   if (new_cs == nullptr) {
@@ -182,7 +182,7 @@ void ConfigObject::createSections(Uint32 num_sections) {
 }
 
 bool ConfigObject::createSection(Uint32 section_type, Uint32 type) {
-  ConfigSection *cs = new ConfigSection(this);
+  auto *cs = new ConfigSection(this);
   DEB_MALLOC(("new(%u) => %p", __LINE__, cs));
   if (section_type == CONFIG_SECTION_NODE) {
     if (type == DATA_NODE_TYPE) {
@@ -413,7 +413,7 @@ bool ConfigObject::unpack_v1(const Uint32 *src, Uint32 len) {
   {
     /* 2) above */
     Uint32 len32 = (len >> 2);
-    const Uint32 *tmp = (const Uint32 *)src;
+    const auto *tmp = (const Uint32 *)src;
     Uint32 chk = 0;
     for (Uint32 i = 0; (i + 1) < len32; i++) {
       chk ^= ntohl(tmp[i]);
@@ -1019,7 +1019,7 @@ bool ConfigObject::unpack_v2(const Uint32 *src, Uint32 len) {
     return false;
   }
   data++;  // Step past checksum
-  Uint32 tot_len_words = Uint32(data - src);
+  auto tot_len_words = Uint32(data - src);
   if (unlikely(tot_len_words != m_v2_tot_len)) {
     m_error_code = WRONG_V2_UNPACK_LENGTH;
     return false;
@@ -1034,7 +1034,7 @@ bool ConfigObject::unpack_v2(const Uint32 *src, Uint32 len) {
 
 bool ConfigObject::check_checksum(const Uint32 *src, Uint32 len) {
   Uint32 len32 = (len >> 2);
-  const Uint32 *tmp = (const Uint32 *)src;
+  const auto *tmp = (const Uint32 *)src;
   Uint32 chk = 0;
   for (Uint32 i = 0; (i + 1) < len32; i++) {
     chk ^= ntohl(tmp[i]);

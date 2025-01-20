@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Collations &Collations::instance() {
-  static Collations *s_instance = new Collations();
+  static auto *s_instance = new Collations();
   return *s_instance;
 }
 

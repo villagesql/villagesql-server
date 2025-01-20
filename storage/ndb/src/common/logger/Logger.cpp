@@ -243,7 +243,7 @@ void Logger::startAsync(unsigned buffer_kb) {
   Guard g(m_log_mutex);
 
   if (m_internalBufferedHandler == nullptr) {
-    BufferedLogHandler *blh =
+    auto *blh =
         new BufferedLogHandler(m_internalLogListHandler,
                                false, /* m_internalLogListHandler not owned */
                                m_pCategory, buffer_kb);
@@ -593,8 +593,8 @@ TAPTEST(logger) {
     const std::string fileB = "fileB.log";
     const std::string fileC = "fileC.log";
 
-    Ndb_log_consumer *log_consumer1 = new Ndb_log_consumer(fileB.c_str());
-    Ndb_log_consumer *log_consumer2 = new Ndb_log_consumer(fileC.c_str());
+    auto *log_consumer1 = new Ndb_log_consumer(fileB.c_str());
+    auto *log_consumer2 = new Ndb_log_consumer(fileC.c_str());
 
     g_eventLogger->close();
     clearFile(fileA);

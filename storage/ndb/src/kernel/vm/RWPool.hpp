@@ -204,7 +204,7 @@ template <typename T>
 void RWPool<T>::release(Ptr<T> ptr) {
   Uint32 cur_page = m_current_page_no;
   Uint32 ptr_page = ptr.i >> POOL_RECORD_BITS;
-  Uint32 *record_ptr = (Uint32 *)ptr.p;
+  auto *record_ptr = (Uint32 *)ptr.p;
   Uint32 magic_val = *(record_ptr + m_record_info.m_offset_magic);
 
   if (likely(magic_val == ~(Uint32)m_record_info.m_type_id)) {
@@ -270,7 +270,7 @@ void RWPool<T>::handle_invalid_release(Ptr<T> ptr) {
 
   Uint32 pos = ptr.i & POOL_RECORD_MASK;
   Uint32 pageI = ptr.i >> POOL_RECORD_BITS;
-  Uint32 *record_ptr_p = (Uint32 *)ptr.p;
+  auto *record_ptr_p = (Uint32 *)ptr.p;
   Uint32 *record_ptr_i = (m_memroot + pageI)->m_data + pos;
 
   Uint32 magic = *(record_ptr_p + m_record_info.m_offset_magic);

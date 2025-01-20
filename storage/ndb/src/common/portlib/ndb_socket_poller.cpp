@@ -33,7 +33,7 @@ bool ndb_socket_poller::set_max_count(unsigned count) {
     // Ignore decrease or setting same value
     return true;
   }
-  posix_poll_fd *pfds = new posix_poll_fd[count];
+  auto *pfds = new posix_poll_fd[count];
   if (pfds == nullptr) return false;
   if (m_pfds != &m_one_pfd) delete[] m_pfds;
   m_pfds = pfds;

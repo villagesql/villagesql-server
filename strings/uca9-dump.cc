@@ -800,7 +800,7 @@ int main(int ac, char **av) {
     return 0;
   }
 
-  MY_UCA *uca = new MY_UCA();
+  auto *uca = new MY_UCA();
   int pageloaded[MY_UCA_NPAGES];
 
   memset(uca, 0, sizeof(MY_UCA));

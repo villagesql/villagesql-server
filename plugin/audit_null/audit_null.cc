@@ -469,7 +469,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
       0,
   };
   size_t buffer_data = 0;
-  const unsigned long event_subclass =
+  const auto event_subclass =
       static_cast<unsigned long>(*static_cast<const int *>(event));
   char *order_str = THDVAR(thd, event_order_check);
   const int event_order_started = (int)THDVAR(thd, event_order_started);
@@ -484,8 +484,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
   increment_counter(&number_of_calls);
 
   if (event_class == MYSQL_AUDIT_GENERAL_CLASS) {
-    const struct mysql_event_general *event_general =
-        (const struct mysql_event_general *)event;
+    const auto *event_general = (const struct mysql_event_general *)event;
 
     switch (event_general->event_subclass) {
       case MYSQL_AUDIT_GENERAL_LOG:
@@ -504,8 +503,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         break;
     }
   } else if (event_class == MYSQL_AUDIT_CONNECTION_CLASS) {
-    const struct mysql_event_connection *event_connection =
-        (const struct mysql_event_connection *)event;
+    const auto *event_connection = (const struct mysql_event_connection *)event;
 
     switch (event_connection->event_subclass) {
       case MYSQL_AUDIT_CONNECTION_CONNECT:
@@ -524,8 +522,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         break;
     }
   } else if (event_class == MYSQL_AUDIT_PARSE_CLASS) {
-    const struct mysql_event_parse *event_parse =
-        (const struct mysql_event_parse *)event;
+    const auto *event_parse = (const struct mysql_event_parse *)event;
 
     switch (event_parse->event_subclass) {
       case MYSQL_AUDIT_PARSE_PREPARSE:
@@ -590,8 +587,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
        (const struct mysql_event_server_shutdown *) event; */
     increment_counter(&number_of_calls_server_shutdown);
   } else if (event_class == MYSQL_AUDIT_COMMAND_CLASS) {
-    const struct mysql_event_command *local_event_command =
-        (const struct mysql_event_command *)event;
+    const auto *local_event_command = (const struct mysql_event_command *)event;
 
     buffer_data =
         get_snprintf_len(snprintf(buffer, sizeof(buffer), "command_id=\"%d\"",
@@ -609,8 +605,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         break;
     }
   } else if (event_class == MYSQL_AUDIT_QUERY_CLASS) {
-    const struct mysql_event_query *event_query =
-        (const struct mysql_event_query *)event;
+    const auto *event_query = (const struct mysql_event_query *)event;
 
     buffer_data = get_snprintf_len(
         snprintf(buffer, sizeof(buffer), "sql_command_id=\"%d\"",
@@ -634,8 +629,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         break;
     }
   } else if (event_class == MYSQL_AUDIT_TABLE_ACCESS_CLASS) {
-    const struct mysql_event_table_access *event_table =
-        (const struct mysql_event_table_access *)event;
+    const auto *event_table = (const struct mysql_event_table_access *)event;
 
     buffer_data = get_snprintf_len(
         snprintf(buffer, sizeof(buffer), "db=\"%s\" table=\"%s\"",
@@ -659,8 +653,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         break;
     }
   } else if (event_class == MYSQL_AUDIT_GLOBAL_VARIABLE_CLASS) {
-    const struct mysql_event_global_variable *event_gvar =
-        (const struct mysql_event_global_variable *)event;
+    const auto *event_gvar = (const struct mysql_event_global_variable *)event;
 
     /* Copy the variable content into the buffer. We do not guarantee that the
        variable value will fit into buffer. The buffer should be large enough
@@ -689,7 +682,7 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
         break;
     }
   } else if (event_class == MYSQL_AUDIT_MESSAGE_CLASS) {
-    const struct mysql_event_message *evt =
+    const auto *evt =
         reinterpret_cast<const struct mysql_event_message *>(event);
 
     buffer_data = get_snprintf_len(

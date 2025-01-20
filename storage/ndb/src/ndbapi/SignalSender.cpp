@@ -42,7 +42,7 @@ SimpleSignal::SimpleSignal(const SimpleSignal &src) : header(src.header) {
   for (Uint32 i = 0; i < NDB_ARRAY_SIZE(ptr); i++) {
     ptr[i].p = nullptr;
     if (src.ptr[i].p != nullptr) {
-      Uint32 *p = new Uint32[src.ptr[i].sz];
+      auto *p = new Uint32[src.ptr[i].sz];
       memcpy(p, src.ptr[i].p, 4 * src.ptr[i].sz);
       ptr[i].p = p;
       ptr[i].sz = src.ptr[i].sz;
@@ -56,7 +56,7 @@ SimpleSignal &SimpleSignal::operator=(const SimpleSignal &src) {
   for (Uint32 i = 0; i < NDB_ARRAY_SIZE(ptr); i++) {
     ptr[i].p = nullptr;
     if (src.ptr[i].p != nullptr) {
-      Uint32 *p = new Uint32[src.ptr[i].sz];
+      auto *p = new Uint32[src.ptr[i].sz];
       memcpy(p, src.ptr[i].p, 4 * src.ptr[i].sz);
       ptr[i].p = p;
       ptr[i].sz = src.ptr[i].sz;
@@ -271,10 +271,10 @@ void SignalSender::trp_deliver_signal(const NdbApiSignal *signal,
     }
   }
 
-  SimpleSignal *s = new SimpleSignal(true);
+  auto *s = new SimpleSignal(true);
   s->header = *signal;
   for (Uint32 i = 0; i < s->header.m_noOfSections; i++) {
-    Uint32 *p = new Uint32[ptr[i].sz];
+    auto *p = new Uint32[ptr[i].sz];
     memcpy(p, ptr[i].p, 4 * ptr[i].sz);
     s->ptr[i].p = p;
     s->ptr[i].sz = ptr[i].sz;

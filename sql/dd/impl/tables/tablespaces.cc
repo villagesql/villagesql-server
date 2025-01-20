@@ -35,7 +35,7 @@ namespace dd {
 namespace tables {
 
 const Tablespaces &Tablespaces::instance() {
-  static Tablespaces *s_instance = new Tablespaces();
+  static auto *s_instance = new Tablespaces();
   return *s_instance;
 }
 

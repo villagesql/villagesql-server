@@ -83,7 +83,7 @@ MI_INFO *test_if_reopen(char *filename) {
   LIST *pos;
 
   for (pos = myisam_open_list; pos; pos = pos->next) {
-    MI_INFO *info = (MI_INFO *)pos->data;
+    auto *info = (MI_INFO *)pos->data;
     MYISAM_SHARE *share = info->s;
     if (!strcmp(share->unique_file_name, filename) && share->last_version)
       return info;

@@ -391,7 +391,7 @@ int my_search_option_files(const char *conf_file, int *argc, char ***argv,
       uint i;
       const char **extra_groups;
       const size_t instance_len = strlen(my_defaults_group_suffix);
-      struct handle_option_ctx *ctx = (struct handle_option_ctx *)func_ctx;
+      auto *ctx = (struct handle_option_ctx *)func_ctx;
       char *ptr;
       TYPELIB *group = ctx->group;
 
@@ -424,7 +424,7 @@ int my_search_option_files(const char *conf_file, int *argc, char ***argv,
     size_t len;
     const char **extra_groups;
     size_t instance_len = 0;
-    struct handle_option_ctx *ctx = (struct handle_option_ctx *)func_ctx;
+    auto *ctx = (struct handle_option_ctx *)func_ctx;
     char *ptr;
     TYPELIB *group = ctx->group;
 
@@ -532,7 +532,7 @@ err:
 static int handle_default_option(void *in_ctx, const char *group_name,
                                  const char *option, const char *cnf_file) {
   char *tmp;
-  struct handle_option_ctx *ctx = (struct handle_option_ctx *)in_ctx;
+  auto *ctx = (struct handle_option_ctx *)in_ctx;
 
   if (!option) return 0;
 
@@ -1018,8 +1018,7 @@ static int search_default_file_with_ext(Process_option_func opt_handler,
 
             /* add the include file to the paths list with the class of the
              * including file */
-            std::map<string, enum_variable_source>::iterator it =
-                default_paths.find(name);
+            auto it = default_paths.find(name);
             /*
               The current file should always be a part of the paths.
               But that applies only for the server.
@@ -1047,8 +1046,7 @@ static int search_default_file_with_ext(Process_option_func opt_handler,
 
         /* add the include file to the paths list with the class of the
          * including file */
-        std::map<string, enum_variable_source>::iterator it =
-            default_paths.find(name);
+        auto it = default_paths.find(name);
         /*
           The current file should always be a part of the paths.
           But that applies only for the server.
@@ -1544,8 +1542,7 @@ void update_variable_source(const char *opt_name, const char *value) {
     }
   }
 
-  std::map<string, enum_variable_source>::iterator it =
-      default_paths.find(path);
+  auto it = default_paths.find(path);
   if (it != default_paths.end()) {
     my_variable_sources source;
     std::pair<std::map<string, my_variable_sources>::iterator, bool> ret;
@@ -1582,8 +1579,7 @@ void set_variable_source(const char *opt_name, void *value) {
   while ((pos = src_name.find("-")) != string::npos)
     src_name.replace(pos, 1, "_");
 
-  std::map<string, my_variable_sources>::iterator it =
-      variables_hash.find(src_name);
+  auto it = variables_hash.find(src_name);
   if (it != variables_hash.end()) {
     if ((get_opt_arg_source *)value) {
       memcpy(((get_opt_arg_source *)value)->m_path_name,

@@ -32,7 +32,7 @@ bool printLQHKEYREQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const LqhKeyReq *const sig = (const LqhKeyReq *)theData;
+  const auto *const sig = (const LqhKeyReq *)theData;
 
   fprintf(output,
           " ClientPtr = H\'%.8x hashValue = H\'%.8x tcBlockRef = H\'%.8x\n"

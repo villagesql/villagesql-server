@@ -151,10 +151,10 @@ inline Uint32 rotateChecksum(const Uint32 sum, Uint32 byte_steps) {
   assert(byte_steps > 0);
   assert(byte_steps < 4);
 
-  const unsigned char *psum =
+  const auto *psum =
       static_cast<const unsigned char *>(static_cast<const void *>(&sum));
   Uint32 rot;
-  unsigned char *prot = static_cast<unsigned char *>(static_cast<void *>(&rot));
+  auto *prot = static_cast<unsigned char *>(static_cast<void *>(&rot));
   for (int i = 0, j = byte_steps; i < 4; i++, j = (j + 1) % 4) {
     prot[i] = psum[j];
   }
@@ -181,8 +181,7 @@ inline Uint32 computeXorChecksumBytes(const unsigned char *buf, size_t bytes,
 
   // checksum buf[0..rotate-1] per byte
   if (rotate > 0) {
-    unsigned char *psum =
-        static_cast<unsigned char *>(static_cast<void *>(&sum));
+    auto *psum = static_cast<unsigned char *>(static_cast<void *>(&sum));
     for (size_t i = 0; i < rotate && i < bytes; i++) {
       psum[i] ^= buf[i];
     }
@@ -207,8 +206,7 @@ inline Uint32 computeXorChecksumBytes(const unsigned char *buf, size_t bytes,
 
   // checksum buf[rotate+4*words..bytes-1] per byte
   {
-    unsigned char *psum =
-        static_cast<unsigned char *>(static_cast<void *>(&sum));
+    auto *psum = static_cast<unsigned char *>(static_cast<void *>(&sum));
     for (size_t i = rotate, j = rotate + 4 * words; j < bytes;
          j++, i = (i + 1) % 4) {
       psum[i] ^= buf[j];

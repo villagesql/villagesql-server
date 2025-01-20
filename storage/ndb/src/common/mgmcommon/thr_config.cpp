@@ -1141,7 +1141,7 @@ int THRConfig::handle_spec(const char *str, unsigned realtime,
       return ret_code;
     }
 
-    T_Type type = (T_Type)loc_type;
+    auto type = (T_Type)loc_type;
     m_setInThreadConfig.set(loc_type);
 
     int cpu_values = 0;

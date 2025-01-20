@@ -32,7 +32,7 @@ bool printGET_CONFIG_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const GetConfigReq *sig = (const GetConfigReq *)theData;
+  const auto *sig = (const GetConfigReq *)theData;
   fprintf(output, " nodeId : %u senderRef : %x\n", sig->nodeId, sig->senderRef);
   return true;
 }
@@ -44,7 +44,7 @@ bool printGET_CONFIG_REF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const GetConfigRef *sig = (const GetConfigRef *)theData;
+  const auto *sig = (const GetConfigRef *)theData;
   fprintf(output, " error : %u\n", sig->error);
   return true;
 }
@@ -56,7 +56,7 @@ bool printGET_CONFIG_CONF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const GetConfigConf *sig = (const GetConfigConf *)theData;
+  const auto *sig = (const GetConfigConf *)theData;
   fprintf(output, " Config size : %u\n", sig->configLength);
   return true;
 }

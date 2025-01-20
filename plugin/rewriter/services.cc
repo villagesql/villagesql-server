@@ -63,7 +63,7 @@ Condition_handler::~Condition_handler() = default;
 */
 static int handle(int sql_errno, const char *sqlstate, const char *message,
                   void *state) {
-  Condition_handler *handler = static_cast<Condition_handler *>(state);
+  auto *handler = static_cast<Condition_handler *>(state);
   return handler->handle(sql_errno, sqlstate, message);
 }
 
@@ -101,13 +101,13 @@ int get_number_params(MYSQL_THD thd) {
 }
 
 static int process_item(MYSQL_ITEM item, uchar *arg) {
-  Literal_visitor *visitor = pointer_cast<Literal_visitor *>(arg);
+  auto *visitor = pointer_cast<Literal_visitor *>(arg);
   if (visitor->visit(item)) return 1;
   return 0;
 }
 
 bool visit_parse_tree(MYSQL_THD thd, Literal_visitor *visitor) {
-  uchar *arg = pointer_cast<uchar *>(visitor);
+  auto *arg = pointer_cast<uchar *>(visitor);
   return mysql_parser_visit_tree(thd, process_item, arg) != 0;
 }
 

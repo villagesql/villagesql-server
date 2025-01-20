@@ -337,7 +337,7 @@ void session_connect_callback(int handle,
     if (group.empty()) group = "RESOURCE_GROUP";
     group += "_" + std::to_string(handle);
 
-    User_data *user_data = (User_data *)thread_attrs->m_user_data;
+    auto *user_data = (User_data *)thread_attrs->m_user_data;
     if (user_data == nullptr) {
       g_user_data.m_handle = handle;
       g_user_data.m_priority = handle * 10;

@@ -434,8 +434,8 @@ static void run_multi_threaded(const char *label, size_t initial_hash_size,
   hash = new ut_lock_free_hash_t(initial_hash_size, true);
 #endif
 
-  std::thread **threads = new std::thread *[n_threads];
-  thread_params_t *params = new thread_params_t[n_threads];
+  auto **threads = new std::thread *[n_threads];
+  auto *params = new thread_params_t[n_threads];
 
   hash_insert(hash, n_common, 0);
 

@@ -62,7 +62,7 @@ const bool debugUinitMemUse = false;
 #endif
 
 static void *touch_mem(void *arg) {
-  struct AllocTouchMem *touch_mem_ptr = (struct AllocTouchMem *)arg;
+  auto *touch_mem_ptr = (struct AllocTouchMem *)arg;
 
 #if defined(VM_TRACE_MEM)
   g_eventLogger->info(
@@ -75,7 +75,7 @@ static void *touch_mem(void *arg) {
   size_t sz = touch_mem_ptr->sz;
   Uint32 index = touch_mem_ptr->index;
   bool make_readwritable = touch_mem_ptr->make_readwritable;
-  unsigned char *p = (unsigned char *)touch_mem_ptr->p;
+  auto *p = (unsigned char *)touch_mem_ptr->p;
   size_t num_pages_per_thread = 1;
   size_t first_page;
 
@@ -112,7 +112,7 @@ static void *touch_mem(void *arg) {
     num_pages_per_thread = tot_pages - first_page;
   }
 
-  unsigned char *ptr = (unsigned char *)(p + (first_page * TOUCH_PAGE_SIZE));
+  auto *ptr = (unsigned char *)(p + (first_page * TOUCH_PAGE_SIZE));
   const unsigned char *end = p + sz;
 
   for (Uint32 i = 0; i < num_pages_per_thread;

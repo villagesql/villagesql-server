@@ -34,7 +34,7 @@ bool printFSREF(FILE *output, const Uint32 *theData, Uint32 len,
 
   bool ret = true;
 
-  const FsRef *const sig = (const FsRef *)theData;
+  const auto *const sig = (const FsRef *)theData;
 
   fprintf(output, " UserPointer: %d\n", sig->userPointer);
 

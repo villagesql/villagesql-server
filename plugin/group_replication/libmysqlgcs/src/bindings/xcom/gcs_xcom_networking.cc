@@ -93,7 +93,7 @@ static bool is_address_localhost(const std::string &address) {
 bool get_local_addresses(Gcs_sock_probe_interface &sock_probe_if,
                          std::map<std::string, int> &addr_to_cidr_bits,
                          bool filter_out_inactive) {
-  sock_probe *s = (sock_probe *)calloc(1, sizeof(sock_probe));
+  auto *s = (sock_probe *)calloc(1, sizeof(sock_probe));
 
   if (sock_probe_if.init_sock_probe(s) < 0) {
     free(s);
@@ -259,7 +259,7 @@ bool resolve_ip_addr_from_hostname(std::string name,
                                    std::vector<std::string> &ip) {
   int res = true;
   char cip[INET6_ADDRSTRLEN];
-  socklen_t cip_len = static_cast<socklen_t>(sizeof(cip));
+  auto cip_len = static_cast<socklen_t>(sizeof(cip));
   struct addrinfo *addrinf = nullptr, *addrinf_cycle = nullptr, hints;
   struct sockaddr *sa = nullptr;
   void *in_addr = nullptr;
@@ -301,7 +301,7 @@ bool resolve_all_ip_addr_from_hostname(
     std::string name, std::vector<std::pair<sa_family_t, std::string>> &ips) {
   int res = true;
   char cip[INET6_ADDRSTRLEN];
-  socklen_t cip_len = static_cast<socklen_t>(sizeof(cip));
+  auto cip_len = static_cast<socklen_t>(sizeof(cip));
   struct addrinfo *addrinf = nullptr, *addrinfo_list = nullptr, hints;
   struct sockaddr *sa = nullptr;
   void *in_addr = nullptr;
@@ -373,7 +373,7 @@ bool string_to_sockaddr(const std::string &addr, struct sockaddr_storage *sa) {
 static bool sock_descriptor_to_sockaddr(int fd, struct sockaddr_storage *sa) {
   int res = 0;
   memset(sa, 0, sizeof(struct sockaddr_storage));
-  socklen_t addr_size = static_cast<socklen_t>(sizeof(struct sockaddr_storage));
+  auto addr_size = static_cast<socklen_t>(sizeof(struct sockaddr_storage));
   if (!(res = getpeername(fd, (struct sockaddr *)sa, &addr_size))) {
     if (sa->ss_family != AF_INET && sa->ss_family != AF_INET6) {
       MYSQL_GCS_LOG_DEBUG(
@@ -422,7 +422,7 @@ static bool sock_descriptor_to_sockaddr(int fd, struct sockaddr_storage *sa) {
   */
 static bool sock_descriptor_to_string(int fd, std::string &out) {
   struct sockaddr_storage sa;
-  socklen_t addr_size = static_cast<socklen_t>(sizeof(struct sockaddr_storage));
+  auto addr_size = static_cast<socklen_t>(sizeof(struct sockaddr_storage));
   char saddr[INET6_ADDRSTRLEN];
 
   // get the sockaddr struct
@@ -759,8 +759,7 @@ bool get_address_for_allowlist(
 }
 
 void Gcs_ip_allowlist::clear() {
-  std::set<Gcs_ip_allowlist_entry *>::const_iterator wl_it =
-      m_ip_allowlist.begin();
+  auto wl_it = m_ip_allowlist.begin();
   while (wl_it != m_ip_allowlist.end()) {
     delete (*wl_it);
     m_ip_allowlist.erase(wl_it++);

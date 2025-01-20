@@ -93,8 +93,7 @@ class Ssl_acceptor_context_iterator {
 };
 
 bool init_mysql_main_iterator(property_iterator *it) {
-  Ssl_acceptor_context_iterator *container =
-      new Ssl_acceptor_context_iterator(mysql_main);
+  auto *container = new Ssl_acceptor_context_iterator(mysql_main);
   if (container == nullptr) return false;
   *it = reinterpret_cast<property_iterator>(container);
   return true;
@@ -102,22 +101,19 @@ bool init_mysql_main_iterator(property_iterator *it) {
 
 bool init_mysql_admin_iterator(property_iterator *it) {
   if (mysql_admin == nullptr) return false;
-  Ssl_acceptor_context_iterator *container =
-      new Ssl_acceptor_context_iterator(mysql_admin);
+  auto *container = new Ssl_acceptor_context_iterator(mysql_admin);
   if (container == nullptr) return false;
   *it = reinterpret_cast<property_iterator>(container);
   return true;
 }
 
 void deinit_tls_status_iterator(property_iterator it) {
-  Ssl_acceptor_context_iterator *container =
-      reinterpret_cast<Ssl_acceptor_context_iterator *>(it);
+  auto *container = reinterpret_cast<Ssl_acceptor_context_iterator *>(it);
   if (container != nullptr) delete container;
 }
 
 bool get_tls_status(property_iterator it, TLS_channel_property *property) {
-  Ssl_acceptor_context_iterator *container =
-      reinterpret_cast<Ssl_acceptor_context_iterator *>(it);
+  auto *container = reinterpret_cast<Ssl_acceptor_context_iterator *>(it);
   if (container == nullptr || property == nullptr) return false;
 
   Ssl_acceptor_context_iterator_data data;
@@ -141,8 +137,7 @@ bool get_tls_status(property_iterator it, TLS_channel_property *property) {
 }
 
 bool next_tls_status(property_iterator it) {
-  Ssl_acceptor_context_iterator *container =
-      reinterpret_cast<Ssl_acceptor_context_iterator *>(it);
+  auto *container = reinterpret_cast<Ssl_acceptor_context_iterator *>(it);
   if (container == nullptr) return false;
   return container->next();
 }

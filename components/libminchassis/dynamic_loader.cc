@@ -498,8 +498,7 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_imp::iterator_create,
         &mysql_dynamic_loader_imp::LOCK_dynamic_loader, false, __FILE__,
         __LINE__);
 
-    my_component_registry::const_iterator r =
-        mysql_dynamic_loader_imp::components_list.cbegin();
+    auto r = mysql_dynamic_loader_imp::components_list.cbegin();
 
     if (r == mysql_dynamic_loader_imp::components_list.cend()) {
       return true;
@@ -516,8 +515,7 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_imp::iterator_create,
 DEFINE_METHOD(void, mysql_dynamic_loader_imp::iterator_release,
               (my_h_component_iterator iterator)) {
   try {
-    my_h_component_iterator_imp *iter =
-        reinterpret_cast<my_h_component_iterator_imp *>(iterator);
+    auto *iter = reinterpret_cast<my_h_component_iterator_imp *>(iterator);
 
     if (!iter) return;
 
@@ -1006,7 +1004,7 @@ bool mysql_dynamic_loader_imp::unload_do_list_components(const char *urns[],
   /* Lookup for components by URNs specified. */
   for (int it = 0; it < component_count; ++it) {
     const my_string urn = my_string(urns[it]);
-    my_component_registry::iterator component_it =
+    auto component_it =
         mysql_dynamic_loader_imp::components_list.find(urn.c_str());
     /* Return error if any component is not loaded. */
     if (component_it == mysql_dynamic_loader_imp::components_list.end()) {
@@ -1062,8 +1060,7 @@ bool mysql_dynamic_loader_imp::unload_do_topological_order(
   for (mysql_component *component : components_to_unload) {
     for (const mysql_service_placeholder_ref_t *service :
          component->get_required_services()) {
-      std::map<const void *, std::vector<mysql_component *>>::iterator it =
-          dependency_graph.find(*service->implementation);
+      auto it = dependency_graph.find(*service->implementation);
       if (it != dependency_graph.end()) {
         it->second.push_back(component);
       }
@@ -1229,8 +1226,7 @@ bool mysql_dynamic_loader_imp::
           mysql_registry_imp::get_service_implementation_reference_count(
               reinterpret_cast<my_h_service>(service->implementation));
       if (reference_count > 0) {
-        std::map<const void *, std::vector<mysql_component *>>::const_iterator
-            it = dependency_graph.find(service->implementation);
+        auto it = dependency_graph.find(service->implementation);
         if (it == dependency_graph.end() ||
             reference_count != it->second.size()) {
           mysql_error_service_printf(
@@ -1475,7 +1471,7 @@ bool mysql_dynamic_loader_imp::get_scheme_service_from_urn(
   my_string scheme(urn.begin(), urn.begin() + scheme_end, urn.get_allocator());
 
   /* Look for scheme loading service in cache. */
-  scheme_service_map::iterator scheme_it = scheme_services.find(scheme);
+  auto scheme_it = scheme_services.find(scheme);
   if (scheme_it != scheme_services.end()) {
     *out_scheme_service = scheme_it->second;
   } else {

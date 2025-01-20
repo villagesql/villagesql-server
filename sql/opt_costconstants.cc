@@ -268,7 +268,7 @@ uint Cost_model_constants::find_handler_slot_from_name(
   if (!plugin) return HA_SLOT_UNDEF;
 
   // Find the handlerton for this storage engine
-  handlerton *ht = plugin_data<handlerton *>(plugin);
+  auto *ht = plugin_data<handlerton *>(plugin);
   assert(ht != nullptr);
   if (!ht) {
     assert(false); /* purecov: inspected */

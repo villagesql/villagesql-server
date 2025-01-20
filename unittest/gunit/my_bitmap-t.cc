@@ -397,7 +397,7 @@ error_is_overlapping:
 bool test_intersect(MY_BITMAP *map, uint bitsize) {
   uint bitsize2 = 1 + get_rand_bit(MAX_TESTED_BITMAP_SIZE - 1);
   MY_BITMAP map2;
-  my_bitmap_map *map2buf = new my_bitmap_map[bitsize2];
+  auto *map2buf = new my_bitmap_map[bitsize2];
   bitmap_init(&map2, map2buf, bitsize2);
 
   uint test_bit1 = get_rand_bit(bitsize);

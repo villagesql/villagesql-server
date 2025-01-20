@@ -28,7 +28,7 @@ namespace dd {
 namespace system_views {
 
 const Role_routine_grants &Role_routine_grants::instance() {
-  static Role_routine_grants *s_instance = new Role_routine_grants();
+  static auto *s_instance = new Role_routine_grants();
   return *s_instance;
 }
 

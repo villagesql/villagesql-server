@@ -215,7 +215,7 @@ static void setError(NdbMgmHandle h, int error, int error_line, const char *msg,
 
 extern "C" NdbMgmHandle ndb_mgm_create_handle() {
   DBUG_ENTER("ndb_mgm_create_handle");
-  NdbMgmHandle h = (NdbMgmHandle)malloc(sizeof(ndb_mgm_handle));
+  auto h = (NdbMgmHandle)malloc(sizeof(ndb_mgm_handle));
   if (!h) DBUG_RETURN(nullptr);
 
   h->connected = 0;
@@ -747,7 +747,7 @@ extern "C" int ndb_mgm_connect(NdbMgmHandle handle, int no_retries,
   }
 #endif
 
-  Uint32 i = Uint32(~0);
+  auto i = Uint32(~0);
   while (!sock.is_valid()) {
     Uint32 invalid_Address = 0;
     // do all the mgmt servers
@@ -1211,7 +1211,7 @@ extern "C" struct ndb_mgm_cluster_state *ndb_mgm_get_status2(
 
   const int noOfNodes = atoi(split[1].c_str());
 
-  ndb_mgm_cluster_state *state = (ndb_mgm_cluster_state *)malloc(
+  auto *state = (ndb_mgm_cluster_state *)malloc(
       sizeof(ndb_mgm_cluster_state) +
       noOfNodes * (sizeof(ndb_mgm_node_state) + sizeof("000.000.000.000#")));
 
@@ -1423,7 +1423,7 @@ extern "C" struct ndb_mgm_cluster_state2 *ndb_mgm_get_status3(
 
   const int noOfNodes = atoi(split[1].c_str());
 
-  ndb_mgm_cluster_state2 *state = (ndb_mgm_cluster_state2 *)malloc(
+  auto *state = (ndb_mgm_cluster_state2 *)malloc(
       sizeof(ndb_mgm_cluster_state2) +
       (noOfNodes - 1) * sizeof(ndb_mgm_node_state2));
 
@@ -2287,7 +2287,7 @@ extern "C" int ndb_mgm_dump_state(NdbMgmHandle handle, int nodeId,
   char buf[256];
   buf[0] = 0;
   for (int i = 0; i < _num_args; i++) {
-    unsigned n = (unsigned)strlen(buf);
+    auto n = (unsigned)strlen(buf);
     if (n + 20 > sizeof(buf)) {
       SET_ERROR(handle, NDB_MGM_USAGE_ERROR, "arguments too long");
       DBUG_RETURN(-1);
@@ -3682,7 +3682,7 @@ const NdbSocket &_ndb_mgm_get_socket(NdbMgmHandle h) { return h->socket; }
 int ndb_mgm_has_tls(NdbMgmHandle h) { return h->socket.has_tls() ? 1 : 0; }
 
 static ndb_mgm_cert_table *new_cert_table() {
-  ndb_mgm_cert_table *table = new ndb_mgm_cert_table;
+  auto *table = new ndb_mgm_cert_table;
   table->session_id = 0;
   table->peer_address = nullptr;
   table->cert_serial = nullptr;
@@ -3792,8 +3792,8 @@ int ndb_mgm_get_tls_stats(NdbMgmHandle handle, ndb_mgm_tls_stats *result) {
 */
 
 static int cmp_event(const void *_a, const void *_b) {
-  const ndb_logevent *a = (const ndb_logevent *)_a;
-  const ndb_logevent *b = (const ndb_logevent *)_b;
+  const auto *a = (const ndb_logevent *)_a;
+  const auto *b = (const ndb_logevent *)_b;
 
   // So far all events are of same type
   assert(a->type == b->type);
@@ -3867,8 +3867,8 @@ extern "C" struct ndb_mgm_events *ndb_mgm_dump_events(
   delete reply;
 
   // Read the streamed events
-  ndb_mgm_events *events = (ndb_mgm_events *)malloc(
-      sizeof(ndb_mgm_events) + num_events * sizeof(ndb_logevent));
+  auto *events = (ndb_mgm_events *)malloc(sizeof(ndb_mgm_events) +
+                                          num_events * sizeof(ndb_logevent));
   if (!events) {
     SET_ERROR(handle, NDB_MGM_OUT_OF_MEMORY,
               "Allocating ndb_mgm_events struct");

@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Check_constraints &Check_constraints::instance() {
-  static Check_constraints *s_instance = new Check_constraints();
+  static auto *s_instance = new Check_constraints();
   return *s_instance;
 }
 

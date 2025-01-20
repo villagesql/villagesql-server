@@ -312,7 +312,7 @@ static void dump_decoded_server_status(const char *prefix, uint server_status) {
 
 static int handle_start_column_metadata(void *pctx, uint num_cols, uint,
                                         const CHARSET_INFO *resultcs) {
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   char buffer[STRING_BUFFER_SIZE];
   WRITE_STR("handle_start_column_metadata\n");
   DBUG_TRACE;
@@ -328,7 +328,7 @@ static int handle_start_column_metadata(void *pctx, uint num_cols, uint,
 
 static int handle_send_column_metadata(void *pctx, struct st_send_field *field,
                                        const CHARSET_INFO *) {
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   //  char buffer[STRING_BUFFER_SIZE];
   //  WRITE_STR("handle_send_column_metadata\n");
   DBUG_TRACE;
@@ -354,7 +354,7 @@ static int handle_send_column_metadata(void *pctx, struct st_send_field *field,
 static int handle_end_column_metadata(void *pctx, uint server_status,
                                       uint warn_count) {
   char buffer[STRING_BUFFER_SIZE];
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   DBUG_TRACE;
   ctx->server_status = server_status;
   ctx->warn_count = warn_count;
@@ -366,7 +366,7 @@ static int handle_end_column_metadata(void *pctx, uint server_status,
 }
 
 static int handle_start_row(void *pctx) {
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   char buffer[STRING_BUFFER_SIZE];
   WRITE_STR("handle_start_row\n");
   DBUG_TRACE;
@@ -375,7 +375,7 @@ static int handle_start_row(void *pctx) {
 }
 
 static int handle_end_row(void *pctx) {
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   char buffer[STRING_BUFFER_SIZE];
   DBUG_TRACE;
   WRITE_STR("handle_end_row\n");
@@ -404,7 +404,7 @@ static ulong get_client_capabilities(void *) {
 }
 
 static int handle_store_null(void *pctx) {
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   //  WRITE_STR("handle_store_null\n");
   DBUG_TRACE;
   const uint col = ctx->current_col;
@@ -416,7 +416,7 @@ static int handle_store_null(void *pctx) {
 
 static int handle_store_integer(void *pctx, longlong value) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   DBUG_TRACE;
   const uint col = ctx->current_col;
   ctx->current_col++;
@@ -431,7 +431,7 @@ static int handle_store_integer(void *pctx, longlong value) {
 
 static int handle_store_longlong(void *pctx, longlong value, uint is_unsigned) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   DBUG_TRACE;
   const uint col = ctx->current_col;
   ctx->current_col++;
@@ -454,7 +454,7 @@ static const char *test_decimal_as_string(char *buff, const decimal_t *val,
 
 static int handle_store_decimal(void *pctx, const decimal_t *value) {
   char buffer[LARGE_STRING_BUFFER_SIZE]{};
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   DBUG_TRACE;
   const uint col = ctx->current_col;
   ctx->current_col++;
@@ -469,7 +469,7 @@ static int handle_store_decimal(void *pctx, const decimal_t *value) {
 
 static int handle_store_double(void *pctx, double value, uint32) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   DBUG_TRACE;
   const uint col = ctx->current_col;
   ctx->current_col++;
@@ -483,7 +483,7 @@ static int handle_store_double(void *pctx, double value, uint32) {
 
 static int handle_store_date(void *pctx, const MYSQL_TIME *value) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   DBUG_TRACE;
   const uint col = ctx->current_col;
   ctx->current_col++;
@@ -500,7 +500,7 @@ static int handle_store_date(void *pctx, const MYSQL_TIME *value) {
 
 static int handle_store_time(void *pctx, const MYSQL_TIME *value, uint) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   DBUG_TRACE;
   const uint col = ctx->current_col;
   ctx->current_col++;
@@ -516,7 +516,7 @@ static int handle_store_time(void *pctx, const MYSQL_TIME *value, uint) {
 
 static int handle_store_datetime(void *pctx, const MYSQL_TIME *value, uint) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   DBUG_TRACE;
   const uint col = ctx->current_col;
   ctx->current_col++;
@@ -534,7 +534,7 @@ static int handle_store_datetime(void *pctx, const MYSQL_TIME *value, uint) {
 
 static int handle_store_string(void *pctx, const char *const value,
                                size_t length, const CHARSET_INFO *const) {
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   DBUG_TRACE;
   const uint col = ctx->current_col;
   ctx->current_col++;
@@ -548,7 +548,7 @@ static int handle_store_string(void *pctx, const char *const value,
 static void handle_ok(void *pctx, uint server_status, uint statement_warn_count,
                       ulonglong affected_rows, ulonglong last_insert_id,
                       const char *const message) {
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   char buffer[STRING_BUFFER_SIZE];
   WRITE_STR("handle_ok\n");
   DBUG_TRACE;
@@ -573,7 +573,7 @@ static void handle_ok(void *pctx, uint server_status, uint statement_warn_count,
 static void handle_error(void *pctx, uint sql_errno, const char *const err_msg,
                          const char *const sqlstate) {
   char buffer[LARGE_STRING_BUFFER_SIZE];
-  Server_context *ctx = (Server_context *)pctx;
+  auto *ctx = (Server_context *)pctx;
   WRITE_STR("handle_error\n");
   DBUG_TRACE;
   /// was setting current_row size to 0...
@@ -1883,7 +1883,7 @@ struct test_thread_context {
 
 static void *test_sql_threaded_wrapper(void *param) {
   char buffer[STRING_BUFFER_SIZE];
-  struct test_thread_context *context = (struct test_thread_context *)param;
+  auto *context = (struct test_thread_context *)param;
 
   WRITE_SEP();
   WRITE_STR("init thread\n");

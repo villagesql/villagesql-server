@@ -85,7 +85,7 @@ class SqlListTest : public ::testing::Test {
 // Tests that we can construct and destruct lists.
 TEST_F(SqlListTest, ConstructAndDestruct) {
   EXPECT_TRUE(m_int_list.is_empty());
-  List<int> *p_int_list = new (*THR_MALLOC) List<int>;
+  auto *p_int_list = new (*THR_MALLOC) List<int>;
   EXPECT_TRUE(p_int_list->is_empty());
   ::destroy_at(p_int_list);
 }

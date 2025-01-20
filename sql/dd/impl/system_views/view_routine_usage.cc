@@ -31,7 +31,7 @@ namespace dd {
 namespace system_views {
 
 const View_routine_usage &View_routine_usage::instance() {
-  static View_routine_usage *s_instance = new View_routine_usage();
+  static auto *s_instance = new View_routine_usage();
   return *s_instance;
 }
 

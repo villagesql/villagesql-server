@@ -3701,7 +3701,7 @@ static bool transform(InitConfigFileParser::Context &ctx, Properties &dst,
   Uint64 oldVal;
   require(ctx.m_currentSection->get(oldName, &oldVal));
 
-  Uint64 newVal = (Uint64)((Int64)oldVal * mul + add);
+  auto newVal = (Uint64)((Int64)oldVal * mul + add);
   if (!ctx.m_info->verify(ctx.m_currentInfo, newName, newVal)) {
     ctx.reportError(
         "Unable to handle deprecation, new value not within bounds"

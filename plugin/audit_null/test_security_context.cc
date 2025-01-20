@@ -52,8 +52,7 @@ static int test_security_context_notify(MYSQL_THD thd,
     return 0;
   }
 
-  const struct mysql_event_command *event_command =
-      (const struct mysql_event_command *)event;
+  const auto *event_command = (const struct mysql_event_command *)event;
 
   if (event_command->command_id != COM_STMT_PREPARE &&
       event_command->command_id != COM_QUERY) {

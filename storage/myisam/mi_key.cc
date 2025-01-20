@@ -77,7 +77,7 @@ uint _mi_make_key(MI_INFO *info, uint keynr, uchar *key, const uchar *record,
 
   start = key;
   for (keyseg = info->s->keyinfo[keynr].seg; keyseg->type; keyseg++) {
-    enum ha_base_keytype type = (enum ha_base_keytype)keyseg->type;
+    auto type = (enum ha_base_keytype)keyseg->type;
     uint length = keyseg->length;
     uint char_length;
     const CHARSET_INFO *cs = keyseg->charset;
@@ -210,7 +210,7 @@ uint _mi_pack_key(MI_INFO *info, uint keynr, uchar *key, const uchar *old,
 
   for (keyseg = info->s->keyinfo[keynr].seg; keyseg->type && keypart_map;
        old += keyseg->length, keyseg++) {
-    enum ha_base_keytype type = (enum ha_base_keytype)keyseg->type;
+    auto type = (enum ha_base_keytype)keyseg->type;
     uint length = keyseg->length;
     uint char_length;
     const uchar *pos;

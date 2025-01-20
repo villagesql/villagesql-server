@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Files &Files::instance() {
-  static Files *s_instance = new Files();
+  static auto *s_instance = new Files();
   return *s_instance;
 }
 

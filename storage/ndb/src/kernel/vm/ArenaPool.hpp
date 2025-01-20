@@ -130,7 +130,7 @@ inline T *ArenaPool<T>::getPtr(Uint32 i) const {
 template <typename T>
 inline void ArenaPool<T>::release(Ptr<T> ptr) {
   // TODO add trait extracting magic for type T
-  Uint32 *record_ptr = reinterpret_cast<Uint32 *>(ptr.p);
+  auto *record_ptr = reinterpret_cast<Uint32 *>(ptr.p);
   Uint32 off = m_record_info.m_offset_magic;
   Uint32 type_id = m_record_info.m_type_id;
   Uint32 magic_val = *(record_ptr + off);
@@ -218,7 +218,7 @@ void ArenaPool<T>::handle_invalid_release(Ptr<T> ptr) {
 
   // Uint32 pos = ptr.i & POOL_RECORD_MASK;
   // Uint32 pageI = ptr.i >> POOL_RECORD_BITS;
-  Uint32 *record_ptr_p = (Uint32 *)ptr.p;
+  auto *record_ptr_p = (Uint32 *)ptr.p;
 
   Uint32 magic = *(record_ptr_p + m_record_info.m_offset_magic);
   BaseString::snprintf(buf, sizeof(buf),

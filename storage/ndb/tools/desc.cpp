@@ -487,7 +487,7 @@ int desc_hashmap(Ndb_cluster_connection &con, Ndb *myndb, char const *name) {
   NdbDictionary::HashMap hm;
   if (dict->getHashMap(hm, name) == 0) {
     Uint32 len = hm.getMapLen();
-    Uint32 *tmp = new Uint32[len];
+    auto *tmp = new Uint32[len];
     hm.getMapValues(tmp, len);
     for (Uint32 i = 0; i < len; i++) {
       printf("%.2u ", tmp[i]);

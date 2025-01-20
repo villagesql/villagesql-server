@@ -150,7 +150,7 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_scheme_file_imp::load,
     });
 
     /* Look for "list_components" function. */
-    list_components_func list_func = reinterpret_cast<list_components_func>(
+    auto list_func = reinterpret_cast<list_components_func>(
         dlsym(handle, COMPONENT_ENTRY_FUNC));
     if (list_func == nullptr) {
       return true;
@@ -211,13 +211,13 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_scheme_file_imp::unload,
     /* This will happen when load() is not called for a component */
     if (object_files_list.empty()) return false;
 
-    my_registry::iterator it = object_files_list.find(std::string(urn));
+    auto it = object_files_list.find(std::string(urn));
     if (it == object_files_list.end()) {
       return true;
     }
 
     /* Delete entry from library entry points list. */
-    list_components_func list_func = reinterpret_cast<list_components_func>(
+    auto list_func = reinterpret_cast<list_components_func>(
         dlsym(it->second, "list_components"));
     library_entry_set.erase(list_func);
 

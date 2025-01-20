@@ -40,6 +40,6 @@ I_Kerberos_client *Kerberos_client_create_factory(
     return static_cast<I_Kerberos_client *>(client);
   }
 #endif
-  Gssapi_client *client = new Gssapi_client(spn, vio, upn, password);
+  auto *client = new Gssapi_client(spn, vio, upn, password);
   return static_cast<I_Kerberos_client *>(client);
 }

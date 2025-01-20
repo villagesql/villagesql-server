@@ -28,8 +28,7 @@ namespace system_views {
 
 const Collation_charset_applicability &
 Collation_charset_applicability::instance() {
-  static Collation_charset_applicability *s_instance =
-      new Collation_charset_applicability();
+  static auto *s_instance = new Collation_charset_applicability();
   return *s_instance;
 }
 

@@ -32,7 +32,7 @@ bool printLQH_FRAG_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const LqhFragReq *sig = (const LqhFragReq *)theData;
+  const auto *sig = (const LqhFragReq *)theData;
 
   fprintf(output, " senderData: %d senderRef: %x", sig->senderData,
           sig->senderRef);
@@ -61,7 +61,7 @@ bool printLQH_FRAG_CONF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const LqhFragConf *sig = (const LqhFragConf *)theData;
+  const auto *sig = (const LqhFragConf *)theData;
 
   fprintf(output, " senderData: %d lqhFragPtr: %d\n", sig->senderData,
           sig->lqhFragPtr);
@@ -75,7 +75,7 @@ bool printLQH_FRAG_REF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const LqhFragRef *sig = (const LqhFragRef *)theData;
+  const auto *sig = (const LqhFragRef *)theData;
 
   fprintf(output, " senderData: %d errorCode: %d\n", sig->senderData,
           sig->errorCode);

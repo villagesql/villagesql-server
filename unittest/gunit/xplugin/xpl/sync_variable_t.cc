@@ -49,14 +49,14 @@ class Xpl_sync_variable : public ::testing::Test {
         m_thread_ended(false) {}
 
   static void *start_routine_set(void *data) {
-    Xpl_sync_variable *self = static_cast<Xpl_sync_variable *>(data);
+    auto *self = static_cast<Xpl_sync_variable *>(data);
     self->set_value();
 
     return nullptr;
   }
 
   static void *start_routine_set_and_expect(void *data) {
-    Xpl_sync_variable *self = static_cast<Xpl_sync_variable *>(data);
+    auto *self = static_cast<Xpl_sync_variable *>(data);
     self->set_value();
     self->m_sut.wait_for(EXPECTED_VALUE_SET_EXPECT);
 

@@ -32,7 +32,7 @@ bool printFAIL_REP(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const FailRep *const sig = (const FailRep *)theData;
+  const auto *const sig = (const FailRep *)theData;
 
   fprintf(output, " FailedNode: %d, FailCause: %d\n", sig->failNodeId,
           sig->failCause);

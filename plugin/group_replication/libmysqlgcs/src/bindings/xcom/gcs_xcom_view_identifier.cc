@@ -58,8 +58,7 @@ Gcs_view_identifier *Gcs_xcom_view_identifier::clone() const {
 
 bool Gcs_xcom_view_identifier::equals(const Gcs_view_identifier &other) const {
   // Static cast is safe because of the typeid safeguard in the base class
-  const Gcs_xcom_view_identifier &cast_other =
-      static_cast<const Gcs_xcom_view_identifier &>(other);
+  const auto &cast_other = static_cast<const Gcs_xcom_view_identifier &>(other);
   return m_fixed_part == cast_other.m_fixed_part &&
          m_monotonic_part == cast_other.m_monotonic_part;
 }
@@ -67,8 +66,7 @@ bool Gcs_xcom_view_identifier::equals(const Gcs_view_identifier &other) const {
 bool Gcs_xcom_view_identifier::lessThan(
     const Gcs_view_identifier &other) const {
   // Static cast is safe because of the typeid safeguard in the base class
-  const Gcs_xcom_view_identifier &cast_other =
-      static_cast<const Gcs_xcom_view_identifier &>(other);
+  const auto &cast_other = static_cast<const Gcs_xcom_view_identifier &>(other);
   return (m_fixed_part == cast_other.m_fixed_part
               ? m_monotonic_part < cast_other.m_monotonic_part
               : m_fixed_part < cast_other.m_fixed_part);

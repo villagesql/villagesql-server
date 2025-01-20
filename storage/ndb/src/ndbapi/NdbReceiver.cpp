@@ -771,7 +771,7 @@ static inline UintPtr pad_pos(UintPtr pos, Uint32 align, Uint32 bitPos) {
 }
 
 static inline const Uint8 *pad(const Uint8 *src, Uint32 align, Uint32 bitPos) {
-  UintPtr ptr = UintPtr(src);
+  auto ptr = UintPtr(src);
   return (const Uint8 *)pad_pos(ptr, align, bitPos);
 }
 
@@ -782,13 +782,13 @@ static inline const Uint8 *pad(const Uint8 *src, Uint32 align, Uint32 bitPos) {
  */
 static void handle_packed_bit(const char *_src, Uint32 pos, Uint32 len,
                               char *_dst) {
-  const Uint32 *src = (const Uint32 *)_src;
+  const auto *src = (const Uint32 *)_src;
   assert((UintPtr(src) & 3) == 0);
 
   /* Convert char* to aligned Uint32* and some byte offset */
-  UintPtr uiPtr = UintPtr((Uint32 *)_dst);
+  auto uiPtr = UintPtr((Uint32 *)_dst);
   Uint32 dstByteOffset = Uint32(uiPtr) & 3;
-  Uint32 *dst = (Uint32 *)(uiPtr - dstByteOffset);
+  auto *dst = (Uint32 *)(uiPtr - dstByteOffset);
 
   BitmaskImpl::copyField(dst, dstByteOffset << 3, src, pos, len);
 }
@@ -806,8 +806,8 @@ Uint32 NdbReceiver::unpackRecAttr(NdbRecAttr **recAttr, Uint32 bmlen,
   constexpr Uint32 ERROR = UINT32_MAX;
   if (unlikely(bmlen > aLength)) return ERROR;
   NdbRecAttr *currRecAttr = *recAttr;
-  const Uint8 *src = (const Uint8 *)(aDataPtr + bmlen);
-  const Uint8 *const end = (const Uint8 *)(aDataPtr + aLength);
+  const auto *src = (const Uint8 *)(aDataPtr + bmlen);
+  const auto *const end = (const Uint8 *)(aDataPtr + aLength);
   Uint32 bitPos = 0;
   for (Uint32 i = 0, attrId = 0; i < 32 * bmlen; i++, attrId++) {
     if (BitmaskImpl::get(bmlen, aDataPtr, i)) {
@@ -942,7 +942,7 @@ Uint32 NdbReceiver::unpackNdbRecord(const NdbRecord *rec, const Uint32 bmlen,
                                     char *row_side_buffer,
                                     Uint32 row_side_buffer_size) {
   assert(bmlen <= 0x07FF);
-  const Uint8 *src = (const Uint8 *)(aDataPtr + bmlen);
+  const auto *src = (const Uint8 *)(aDataPtr + bmlen);
   uint bitPos = 0;
   uint attrId = 0;
   uint bitIndex = 0;
@@ -1045,7 +1045,7 @@ Uint32 NdbReceiver::unpackNdbRecord(const NdbRecord *rec, const Uint32 bmlen,
     src += sz;
     memcpy(col_row_ptr, source, sz);
   }
-  const Uint32 len = (Uint32)(((const Uint32 *)pad(src, 0, bitPos)) - aDataPtr);
+  const auto len = (Uint32)(((const Uint32 *)pad(src, 0, bitPos)) - aDataPtr);
   return len;
 }
 
@@ -1343,10 +1343,10 @@ int NdbReceiver::execSCANOPCONF(Uint32 tcPtrI, Uint32 len, Uint32 rows) {
 void NdbReceiver::setErrorCode(int code) {
   theMagicNumber = 0;
   if (getType() == NDB_QUERY_OPERATION) {
-    NdbQueryOperationImpl *op = (NdbQueryOperationImpl *)getOwner();
+    auto *op = (NdbQueryOperationImpl *)getOwner();
     op->getQuery().setErrorCode(code);
   } else {
-    NdbOperation *const op = (NdbOperation *)getOwner();
+    auto *const op = (NdbOperation *)getOwner();
     assert(op->checkMagicNumber() == 0);
     op->setErrorCode(code);
   }

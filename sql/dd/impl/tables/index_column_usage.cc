@@ -33,7 +33,7 @@ namespace dd {
 namespace tables {
 
 const Index_column_usage &Index_column_usage::instance() {
-  static Index_column_usage *s_instance = new Index_column_usage();
+  static auto *s_instance = new Index_column_usage();
   return *s_instance;
 }
 

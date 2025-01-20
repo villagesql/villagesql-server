@@ -523,8 +523,8 @@ void Resource_limits::init_resource_spare(Uint32 id, Uint32 pct) {
  */
 
 int Ndbd_mem_manager::PageInterval::compare(const void *px, const void *py) {
-  const PageInterval *x = static_cast<const PageInterval *>(px);
-  const PageInterval *y = static_cast<const PageInterval *>(py);
+  const auto *x = static_cast<const PageInterval *>(px);
+  const auto *y = static_cast<const PageInterval *>(py);
 
   if (x->start < y->start) {
     return -1;
@@ -687,8 +687,8 @@ Uint32 Ndbd_mem_manager::get_shared_in_use() const {
 }
 
 int cmp_chunk(const void *chunk_vptr_1, const void *chunk_vptr_2) {
-  InitChunk *ptr1 = (InitChunk *)chunk_vptr_1;
-  InitChunk *ptr2 = (InitChunk *)chunk_vptr_2;
+  auto *ptr1 = (InitChunk *)chunk_vptr_1;
+  auto *ptr2 = (InitChunk *)chunk_vptr_2;
   if (ptr1->m_ptr < ptr2->m_ptr) return -1;
   if (ptr1->m_ptr > ptr2->m_ptr) return 1;
   assert(false);
@@ -708,7 +708,7 @@ bool Ndbd_mem_manager::init(Uint32 *watchCounter, Uint32 max_pages,
   Uint32 pages = max_pages;
   Uint32 max_page = 0;
 
-  const Uint64 pg = Uint64(sizeof(Alloc_page));
+  const auto pg = Uint64(sizeof(Alloc_page));
   if (pages == 0) {
     return false;
   }
@@ -846,7 +846,7 @@ bool Ndbd_mem_manager::init(Uint32 *watchCounter, Uint32 max_pages,
     m_unmapped_chunks[i].m_start = Uint32(start);
     Uint64 last64 = start + m_unmapped_chunks[i].m_cnt;
     assert((last64 >> 32) == 0);
-    Uint32 last = Uint32(last64);
+    auto last = Uint32(last64);
 
     if (last > max_page) max_page = last;
   }

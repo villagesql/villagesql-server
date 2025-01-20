@@ -205,7 +205,7 @@ bool ndb_option::get_one_option(int optid, const my_option *opt, char *arg) {
    * Make sure your option definition only set app_type to nullptr or pointing
    * to a ndb_option object, else your code is broken.
    */
-  ndb_option *opt_obj = static_cast<ndb_option *>(opt->app_type);
+  auto *opt_obj = static_cast<ndb_option *>(opt->app_type);
   return opt_obj->get_option(optid, opt, arg);
 }
 

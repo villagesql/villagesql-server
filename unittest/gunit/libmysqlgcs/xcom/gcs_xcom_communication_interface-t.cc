@@ -337,7 +337,7 @@ TEST_F(XComCommunicationTest, SendMessageTest) {
   std::string test_payload("payload");
   Gcs_member_identifier member_id("member");
   Gcs_group_identifier group_id("group");
-  Gcs_message_data *message_data =
+  auto *message_data =
       new Gcs_message_data(test_header.length(), test_payload.length());
 
   Gcs_message message(member_id, group_id, message_data);

@@ -291,8 +291,8 @@ struct st_match_and_save_arg {
   pointers not pinned by any thread.
 */
 static int match_and_save(void *v_el, void *v_arg) {
-  LF_PINS *el = static_cast<LF_PINS *>(v_el);
-  st_match_and_save_arg *arg = static_cast<st_match_and_save_arg *>(v_arg);
+  auto *el = static_cast<LF_PINS *>(v_el);
+  auto *arg = static_cast<st_match_and_save_arg *>(v_arg);
   int i;
   LF_PINS *el_end = el + LF_DYNARRAY_LEVEL_LENGTH;
   for (; el < el_end; el++) {
@@ -348,8 +348,7 @@ static void lf_pinbox_real_free(LF_PINS *pins) {
 }
 
 static inline std::atomic<uchar *> &next_node(LF_PINBOX *P, uchar *X) {
-  std::atomic<uchar *> *free_ptr =
-      (std::atomic<uchar *> *)(X + P->free_ptr_offset);
+  auto *free_ptr = (std::atomic<uchar *> *)(X + P->free_ptr_offset);
   return *free_ptr;
 }
 
@@ -368,9 +367,9 @@ LF_REQUIRE_PINS(1)
     first->el->el->....->el->last. Use first==last to free only one element.
 */
 static void alloc_free(void *v_first, void *v_last, void *v_allocator) {
-  uchar *first = static_cast<uchar *>(v_first);
-  uchar *last = static_cast<uchar *>(v_last);
-  LF_ALLOCATOR *allocator = static_cast<LF_ALLOCATOR *>(v_allocator);
+  auto *first = static_cast<uchar *>(v_first);
+  auto *last = static_cast<uchar *>(v_last);
+  auto *allocator = static_cast<LF_ALLOCATOR *>(v_allocator);
   uchar *node = allocator->top;
   do {
     anext_node(last) = node;
@@ -438,7 +437,7 @@ void lf_alloc_destroy(LF_ALLOCATOR *allocator) {
     pin[0] is used, it's removed on return.
 */
 void *lf_alloc_new(LF_PINS *pins) {
-  LF_ALLOCATOR *allocator = (LF_ALLOCATOR *)(pins->pinbox->free_func_arg);
+  auto *allocator = (LF_ALLOCATOR *)(pins->pinbox->free_func_arg);
   uchar *node;
   for (;;) {
     do {

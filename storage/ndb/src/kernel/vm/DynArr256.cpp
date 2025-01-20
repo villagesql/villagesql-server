@@ -146,14 +146,14 @@ inline bool DA256Page::get(Uint32 node, Uint32 idx, Uint32 type_id,
   Uint32 *magic_ptr, p;
   if (idx != 255) {
     Uint32 line = div15(idx);
-    Uint32 *ptr = (Uint32 *)(m_nodes + node);
+    auto *ptr = (Uint32 *)(m_nodes + node);
 
     p = 0;
     val_ptr = (ptr + 1 + idx + line);
     magic_ptr = (ptr + (idx & ~15));
   } else {
     Uint32 b = (node + 1) >> 4;
-    Uint32 *ptr = (Uint32 *)(m_header + b);
+    auto *ptr = (Uint32 *)(m_header + b);
 
     p = node - (b << 4) + b;
     val_ptr = (ptr + 1 + p);
@@ -464,7 +464,7 @@ static inline bool seizenode(DA256Page *page, Uint32 idx, Uint32 type_id) {
   Uint32 b = (idx + 1) >> 4;
   Uint32 p = idx - (b << 4) + b;
 
-  DA256Node *ptr = (DA256Node *)(page->m_nodes + idx);
+  auto *ptr = (DA256Node *)(page->m_nodes + idx);
 
 #ifdef DA256_USE_PREFETCH
 #if defined(__GNUC__) && !(__GNUC__ == 2 && __GNUC_MINOR__ < 96)
@@ -512,7 +512,7 @@ static bool releasenode(DA256Page *page, Uint32 idx, Uint32 type_id) {
   Uint32 b = (idx + 1) >> 4;
   Uint32 p = idx - (b << 4) + b;
 
-  DA256Node *ptr = (DA256Node *)(page->m_nodes + idx);
+  auto *ptr = (DA256Node *)(page->m_nodes + idx);
 
 #ifdef DA256_USE_PREFETCH
 #if defined(__GNUC__) && !(__GNUC__ == 2 && __GNUC_MINOR__ < 96)
@@ -578,7 +578,7 @@ Uint32 DynArr256Pool::seize() {
   }
 
   Uint32 idx = page->first_free();
-  DA256Free *ptr = (DA256Free *)(page->m_nodes + idx);
+  auto *ptr = (DA256Free *)(page->m_nodes + idx);
   if (likely(ptr->m_magic == type_id)) {
     Uint32 last_free = page->last_free();
     Uint32 next_page = ((DA256Free *)(page->m_nodes + last_free))->m_next_free;
@@ -616,7 +616,7 @@ void DynArr256Pool::release(Uint32 ptrI) {
   Uint32 page_idx = ptrI & DA256_MASK;
   DA256Page *memroot = m_memroot;
   DA256Page *page = memroot + page_no;
-  DA256Free *ptr = (DA256Free *)(page->m_nodes + page_idx);
+  auto *ptr = (DA256Free *)(page->m_nodes + page_idx);
 
   Guard2 g(m_mutex);
   Uint32 last_free = page->last_free();
@@ -632,7 +632,7 @@ void DynArr256Pool::release(Uint32 ptrI) {
 
       if (lf != RNIL) {
         page = memroot + lf;
-        DA256Free *pptr = (DA256Free *)(page->m_nodes + page->last_free());
+        auto *pptr = (DA256Free *)(page->m_nodes + page->last_free());
         pptr->m_next_free = page_no;
       }
     } else if (page->is_empty()) {

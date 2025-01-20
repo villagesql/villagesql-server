@@ -2915,7 +2915,7 @@ int sort_write_record(MI_SORT_PARAM *sort_param) {
 /* Compare two keys from _create_index_by_sort */
 
 static int sort_key_cmp(void *cmp_arg, uchar *u_a, uchar *u_b) {
-  MI_SORT_PARAM *sort_param = (MI_SORT_PARAM *)cmp_arg;
+  auto *sort_param = (MI_SORT_PARAM *)cmp_arg;
   void *a = u_a;
   void *b = u_b;
   uint not_used[2];

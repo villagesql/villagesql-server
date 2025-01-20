@@ -189,8 +189,7 @@ static std::unique_ptr<Geometry> typed_geometry_collection_apply_intersection(
       return mpy_result;
     }
     if (is_collection(mpy_result.get())) {
-      Geometrycollection *gc_mpy_result =
-          down_cast<Geometrycollection *>(mpy_result.get());
+      auto *gc_mpy_result = down_cast<Geometrycollection *>(mpy_result.get());
       for (size_t i = 0; i < gc_mpy_result->size(); i++)
         result->push_back((*gc_mpy_result)[i]);
     } else
@@ -203,8 +202,7 @@ static std::unique_ptr<Geometry> typed_geometry_collection_apply_intersection(
       return mls_result;
     }
     if (is_collection(mls_result.get())) {
-      Geometrycollection *gc_mls_result =
-          down_cast<Geometrycollection *>(mls_result.get());
+      auto *gc_mls_result = down_cast<Geometrycollection *>(mls_result.get());
       for (size_t i = 0; i < gc_mls_result->size(); i++)
         result->push_back((*gc_mls_result)[i]);
     } else
@@ -217,8 +215,7 @@ static std::unique_ptr<Geometry> typed_geometry_collection_apply_intersection(
       return mpt_result;
     }
     if (is_collection(mpt_result.get())) {
-      Geometrycollection *gc_mpt_result =
-          down_cast<Geometrycollection *>(mpt_result.get());
+      auto *gc_mpt_result = down_cast<Geometrycollection *>(mpt_result.get());
       for (size_t i = 0; i < gc_mpt_result->size(); i++)
         result->push_back((*gc_mpt_result)[i]);
     } else

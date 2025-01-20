@@ -356,8 +356,7 @@ static enum_serialization_result append_key_entries(const Json_object *object,
 #endif
 
   // Add the key entries.
-  for (Json_object::const_iterator it = object->begin(); it != object->end();
-       ++it) {
+  for (auto it = object->begin(); it != object->end(); ++it) {
     const std::string *key = &it->first;
     size_t len = key->length();
 
@@ -462,7 +461,7 @@ bool attempt_inline_value(const Json_dom *value, String *dest, size_t pos,
       inlined_type = JSONB_TYPE_LITERAL;
       break;
     case enum_json_type::J_INT: {
-      const Json_int *i = down_cast<const Json_int *>(value);
+      const auto *i = down_cast<const Json_int *>(value);
       if (!i->is_16bit() && !(large && i->is_32bit()))
         return false;  // cannot inline this value
       inlined_val = static_cast<int32>(i->value());
@@ -470,7 +469,7 @@ bool attempt_inline_value(const Json_dom *value, String *dest, size_t pos,
       break;
     }
     case enum_json_type::J_UINT: {
-      const Json_uint *i = down_cast<const Json_uint *>(value);
+      const auto *i = down_cast<const Json_uint *>(value);
       if (!i->is_16bit() && !(large && i->is_32bit()))
         return false;  // cannot inline this value
       inlined_val = static_cast<int32>(i->value());
@@ -718,7 +717,7 @@ static enum_serialization_result serialize_json_value(
 
   switch (dom->json_type()) {
     case enum_json_type::J_ARRAY: {
-      const Json_array *array = down_cast<const Json_array *>(dom);
+      const auto *array = down_cast<const Json_array *>(dom);
       (*dest)[type_pos] = JSONB_TYPE_SMALL_ARRAY;
       result = serialize_json_array(array, /*large=*/false, depth,
                                     error_handler, dest);
@@ -742,7 +741,7 @@ static enum_serialization_result serialize_json_value(
       break;
     }
     case enum_json_type::J_OBJECT: {
-      const Json_object *object = down_cast<const Json_object *>(dom);
+      const auto *object = down_cast<const Json_object *>(dom);
       (*dest)[type_pos] = JSONB_TYPE_SMALL_OBJECT;
       result = serialize_json_object(object, /*large=*/false, depth,
                                      error_handler, dest);
@@ -766,7 +765,7 @@ static enum_serialization_result serialize_json_value(
       break;
     }
     case enum_json_type::J_STRING: {
-      const Json_string *jstr = down_cast<const Json_string *>(dom);
+      const auto *jstr = down_cast<const Json_string *>(dom);
       size_t size = jstr->size();
       if (append_variable_length(dest, size) ||
           dest->append(jstr->value().c_str(), size))
@@ -776,7 +775,7 @@ static enum_serialization_result serialize_json_value(
       break;
     }
     case enum_json_type::J_INT: {
-      const Json_int *i = down_cast<const Json_int *>(dom);
+      const auto *i = down_cast<const Json_int *>(dom);
       longlong val = i->value();
       if (i->is_16bit()) {
         if (append_int16(dest, static_cast<int16>(val)))
@@ -794,7 +793,7 @@ static enum_serialization_result serialize_json_value(
       break;
     }
     case enum_json_type::J_UINT: {
-      const Json_uint *i = down_cast<const Json_uint *>(dom);
+      const auto *i = down_cast<const Json_uint *>(dom);
       ulonglong val = i->value();
       if (i->is_16bit()) {
         if (append_int16(dest, static_cast<int16>(val)))
@@ -813,7 +812,7 @@ static enum_serialization_result serialize_json_value(
     }
     case enum_json_type::J_DOUBLE: {
       // Store the double in a platform-independent eight-byte format.
-      const Json_double *d = down_cast<const Json_double *>(dom);
+      const auto *d = down_cast<const Json_double *>(dom);
       if (reserve(dest, 8)) return FAILURE; /* purecov: inspected */
       float8store(dest->ptr() + dest->length(), d->value());
       dest->length(dest->length() + 8);
@@ -967,9 +966,8 @@ static Value parse_scalar(uint8 type, const char *data, size_t len) {
       if (len < 1) return err(); /* purecov: inspected */
 
       // The type is encoded as a uint8 that maps to an enum_field_types.
-      const uint8 type_byte = static_cast<uint8>(*data);
-      const enum_field_types field_type =
-          static_cast<enum_field_types>(type_byte);
+      const auto type_byte = static_cast<uint8>(*data);
+      const auto field_type = static_cast<enum_field_types>(type_byte);
 
       // Then there's the length of the value.
       uint32 val_len;

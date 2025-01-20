@@ -148,7 +148,7 @@ const char *Ndb_cluster_connection::get_connectstring(char *buf,
 }
 
 extern "C" void *run_ndb_cluster_connection_connect_thread(void *me) {
-  Ndb_cluster_connection_impl *connection = (Ndb_cluster_connection_impl *)me;
+  auto *connection = (Ndb_cluster_connection_impl *)me;
   connection->m_run_connect_thread = 1;
   connection->connect_thread();
   return me;
@@ -408,7 +408,7 @@ class NdbApiInternalLogHandler : public LogHandler {
     if (g_api_internal_log_handler == nullptr) {
       /* None defined, create it and add to the g_eventLogger*/
       LogHandler *clh = new ConsoleLogHandler();
-      NdbApiInternalLogHandler *nilh = new NdbApiInternalLogHandler(clh);
+      auto *nilh = new NdbApiInternalLogHandler(clh);
       g_eventLogger->addHandler(nilh);
       g_api_internal_log_handler = nilh;
     }
@@ -1268,7 +1268,7 @@ int Ndb_cluster_connection_impl::configure(
 void Ndb_cluster_connection_impl::do_test() {
   Ndb_cluster_connection_node_iter iter;
   int n = no_db_nodes() + 5;
-  Uint32 *nodes = new Uint32[n + 1];
+  auto *nodes = new Uint32[n + 1];
 
   for (int g = 0; g < n; g++) {
     for (int h = 0; h < n; h++) {
@@ -1606,7 +1606,7 @@ Uint32 Ndb_cluster_connection_impl::select_node(NdbImpl *impl_ndb,
   const Uint32 nodes_arr_cnt = m_nodes_proximity.size();
 
   Uint32 best_node = nodes[0];
-  Uint32 best_idx = Uint32(~0);
+  auto best_idx = Uint32(~0);
   Uint32 best_usage = 0;
   Int32 best_score = MAX_PROXIMITY_GROUP;  // Lower is better
 

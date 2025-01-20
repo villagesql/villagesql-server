@@ -823,17 +823,16 @@ int _mi_ck_write_tree(MI_INFO *info, uint keynr, uchar *key, uint key_length) {
 
 static int keys_compare(const void *a, const void *b, const void *c) {
   uint not_used[2];
-  const bulk_insert_param *param = static_cast<const bulk_insert_param *>(a);
-  const uchar *key1 = static_cast<const uchar *>(b);
-  const uchar *key2 = static_cast<const uchar *>(c);
+  const auto *param = static_cast<const bulk_insert_param *>(a);
+  const auto *key1 = static_cast<const uchar *>(b);
+  const auto *key2 = static_cast<const uchar *>(c);
   return ha_key_cmp(param->info->s->keyinfo[param->keynr].seg, key1, key2,
                     USE_WHOLE_KEY, SEARCH_SAME, not_used);
 }
 
 static void keys_free(void *v_key, TREE_FREE mode, const void *v_param) {
-  uchar *key = static_cast<uchar *>(v_key);
-  const bulk_insert_param *param =
-      static_cast<const bulk_insert_param *>(v_param);
+  auto *key = static_cast<uchar *>(v_key);
+  const auto *param = static_cast<const bulk_insert_param *>(v_param);
   /*
     Probably I can use info->lastkey here, but I'm not sure,
     and to be safe I'd better use local lastkey.

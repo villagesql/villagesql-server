@@ -312,7 +312,7 @@ static unsigned mbcharlen_ujis(const CHARSET_INFO *cs [[maybe_unused]],
 static size_t my_well_formed_len_ujis(const CHARSET_INFO *cs [[maybe_unused]],
                                       const char *beg, const char *end,
                                       size_t pos, int *error) {
-  const uint8_t *b = pointer_cast<const uint8_t *>(beg);
+  const auto *b = pointer_cast<const uint8_t *>(beg);
 
   for (*error = 0; pos && b < pointer_cast<const uint8_t *>(end); pos--, b++) {
     const char *chbeg;
@@ -356,8 +356,8 @@ static size_t my_well_formed_len_ujis(const CHARSET_INFO *cs [[maybe_unused]],
 static size_t my_numcells_eucjp(const CHARSET_INFO *cs [[maybe_unused]],
                                 const char *str, const char *str_end) {
   size_t clen = 0;
-  const uint8_t *b = pointer_cast<const uint8_t *>(str);
-  const uint8_t *e = pointer_cast<const uint8_t *>(str_end);
+  const auto *b = pointer_cast<const uint8_t *>(str);
+  const auto *e = pointer_cast<const uint8_t *>(str_end);
 
   for (clen = 0; b < e;) {
     if (*b == 0x8E) {

@@ -61,7 +61,7 @@ int Ndb_component::init() {
 
 extern "C" void *Ndb_component_run_C(void *arg) {
   my_thread_init();
-  Ndb_component *self = reinterpret_cast<Ndb_component *>(arg);
+  auto *self = reinterpret_cast<Ndb_component *>(arg);
   self->run_impl();
   my_thread_end();
   my_thread_exit(nullptr);

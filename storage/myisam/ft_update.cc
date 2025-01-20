@@ -270,7 +270,7 @@ uint _ft_make_key(MI_INFO *info, uint keynr, uchar *keybuf, FT_WORD *wptr,
   DBUG_TRACE;
 
   {
-    float weight = (float)((filepos == HA_OFFSET_ERROR) ? 0 : wptr->weight);
+    auto weight = (float)((filepos == HA_OFFSET_ERROR) ? 0 : wptr->weight);
     mi_float4store(buf, weight);
   }
 

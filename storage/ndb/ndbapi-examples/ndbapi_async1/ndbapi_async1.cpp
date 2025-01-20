@@ -72,7 +72,7 @@ int main(int argc, char **argv) {
   const char *connectstring = argv[2];
   ndb_init();
 
-  Ndb_cluster_connection *cluster_connection = new Ndb_cluster_connection(
+  auto *cluster_connection = new Ndb_cluster_connection(
       connectstring);  // Object representing the cluster
 
   int r = cluster_connection->connect(5 /* retries               */,

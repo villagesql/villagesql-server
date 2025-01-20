@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Referential_constraints &Referential_constraints::instance() {
-  static Referential_constraints *s_instance = new Referential_constraints();
+  static auto *s_instance = new Referential_constraints();
   return *s_instance;
 }
 

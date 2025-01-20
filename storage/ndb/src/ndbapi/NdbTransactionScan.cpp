@@ -51,7 +51,7 @@
  *
  ****************************************************************************/
 int NdbTransaction::receiveSCAN_TABREF(const NdbApiSignal *aSignal) {
-  const ScanTabRef *ref = CAST_CONSTPTR(ScanTabRef, aSignal->getDataPtr());
+  const auto *ref = CAST_CONSTPTR(ScanTabRef, aSignal->getDataPtr());
 
   if (checkState_TransId(&ref->transId1)) {
     if (theScanningOp) {
@@ -85,7 +85,7 @@ int NdbTransaction::receiveSCAN_TABREF(const NdbApiSignal *aSignal) {
  *****************************************************************************/
 int NdbTransaction::receiveSCAN_TABCONF(const NdbApiSignal *aSignal,
                                         const Uint32 *ops, Uint32 len) {
-  const ScanTabConf *conf = CAST_CONSTPTR(ScanTabConf, aSignal->getDataPtr());
+  const auto *conf = CAST_CONSTPTR(ScanTabConf, aSignal->getDataPtr());
 
   if (checkState_TransId(&conf->transId1)) {
     /**
@@ -126,8 +126,7 @@ int NdbTransaction::receiveSCAN_TABCONF(const NdbApiSignal *aSignal,
           const Uint32 activeMask =
               ndbd_send_active_bitmask(nodeVersion) ? *ops++ : 0;
 
-          NdbQueryOperationImpl *queryOp =
-              (NdbQueryOperationImpl *)tOp->m_owner;
+          auto *queryOp = (NdbQueryOperationImpl *)tOp->m_owner;
           assert(&queryOp->getQuery() == m_scanningQuery);
           if (queryOp->execSCAN_TABCONF(tcPtrI, rowCount, moreMask, activeMask,
                                         tOp))

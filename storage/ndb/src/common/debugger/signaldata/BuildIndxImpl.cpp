@@ -30,7 +30,7 @@ bool printBUILD_INDX_IMPL_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const BuildIndxImplReq *sig = (const BuildIndxImplReq *)theData;
+  const auto *sig = (const BuildIndxImplReq *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, " requestType: %u", sig->requestType);
@@ -54,7 +54,7 @@ bool printBUILD_INDX_IMPL_CONF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const BuildIndxImplConf *sig = (const BuildIndxImplConf *)theData;
+  const auto *sig = (const BuildIndxImplConf *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");
@@ -68,7 +68,7 @@ bool printBUILD_INDX_IMPL_REF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const BuildIndxImplRef *sig = (const BuildIndxImplRef *)theData;
+  const auto *sig = (const BuildIndxImplRef *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");

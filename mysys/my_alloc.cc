@@ -87,7 +87,7 @@ MEM_ROOT::Block *MEM_ROOT::AllocBlock(size_t wanted_length,
   }
 
   const size_t bytes_to_alloc = length + ALIGN_SIZE(sizeof(Block));
-  Block *new_block = static_cast<Block *>(
+  auto *new_block = static_cast<Block *>(
       my_malloc(m_psi_key, bytes_to_alloc, MYF(MY_WME | ME_FATALERROR)));
   if (new_block == nullptr) {
     if (m_error_handler) (m_error_handler)();

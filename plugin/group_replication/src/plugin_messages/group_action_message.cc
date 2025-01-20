@@ -134,15 +134,15 @@ void Group_action_message::encode_payload(
     std::vector<unsigned char> *buffer) const {
   DBUG_TRACE;
 
-  uint16 group_action_message_type_aux = (uint16)group_action_type;
+  auto group_action_message_type_aux = (uint16)group_action_type;
   encode_payload_item_int2(buffer, PIT_ACTION_TYPE,
                            group_action_message_type_aux);
 
-  uint16 group_action_message_phase_aux = (uint16)group_action_phase;
+  auto group_action_message_phase_aux = (uint16)group_action_phase;
   encode_payload_item_int2(buffer, PIT_ACTION_PHASE,
                            group_action_message_phase_aux);
 
-  uint32 return_value_aux = (uint32)return_value;
+  auto return_value_aux = (uint32)return_value;
   encode_payload_item_int4(buffer, PIT_ACTION_RETURN_VALUE, return_value_aux);
   /*
     Optional payload items.
@@ -152,7 +152,7 @@ void Group_action_message::encode_payload(
                                primary_election_uuid.c_str(),
                                primary_election_uuid.length());
     if (m_transaction_monitor_timeout >= 0) {
-      uint32 transaction_monitor_timeout_aux =
+      auto transaction_monitor_timeout_aux =
           (uint32)m_transaction_monitor_timeout;
       encode_payload_item_int4(buffer, PIT_ACTION_TRANSACTION_MONITOR_TIMEOUT,
                                transaction_monitor_timeout_aux);

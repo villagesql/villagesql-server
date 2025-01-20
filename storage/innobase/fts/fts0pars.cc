@@ -1293,8 +1293,8 @@ YYSTYPE yylval;
 
       {
         yytype_int16 *yyss1 = yyss;
-        union yyalloc *yyptr =
-          (union yyalloc *) YYSTACK_ALLOC (YYSTACK_BYTES (yystacksize));
+        auto *yyptr =
+            (union yyalloc *)YYSTACK_ALLOC(YYSTACK_BYTES(yystacksize));
         if (! yyptr)
           goto yyexhaustedlab;
         YYSTACK_RELOCATE (yyss_alloc, yyss);
@@ -1926,16 +1926,16 @@ fts_lexer_create(
         const byte*     query,
         ulint           query_len)
 {
-  fts_lexer_t *fts_lexer = static_cast<fts_lexer_t *>(
-      ut::malloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, sizeof(fts_lexer_t)));
+        auto *fts_lexer = static_cast<fts_lexer_t *>(
+            ut::malloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, sizeof(fts_lexer_t)));
 
-  if (boolean_mode) {
-    fts0blex_init(&fts_lexer->yyscanner);
-    fts0b_scan_bytes(reinterpret_cast<const char *>(query),
-                     static_cast<int>(query_len), fts_lexer->yyscanner);
-    fts_lexer->scanner = reinterpret_cast<fts_scan>(fts_blexer);
-    /* FIXME: Debugging */
-    /* fts0bset_debug(1 , fts_lexer->yyscanner); */
+        if (boolean_mode) {
+      fts0blex_init(&fts_lexer->yyscanner);
+      fts0b_scan_bytes(reinterpret_cast<const char *>(query),
+                       static_cast<int>(query_len), fts_lexer->yyscanner);
+      fts_lexer->scanner = reinterpret_cast<fts_scan>(fts_blexer);
+      /* FIXME: Debugging */
+      /* fts0bset_debug(1 , fts_lexer->yyscanner); */
   } else {
     fts0tlex_init(&fts_lexer->yyscanner);
     fts0t_scan_bytes(reinterpret_cast<const char *>(query),

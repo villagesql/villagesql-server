@@ -108,7 +108,7 @@ static long my_strntol_mb2_or_mb4(const CHARSET_INFO *cs, const char *nptr,
   unsigned int cutlim;
   uint32_t cutoff = 0;
   uint32_t res = 0;
-  const uint8_t *s = pointer_cast<const uint8_t *>(nptr);
+  const auto *s = pointer_cast<const uint8_t *>(nptr);
   const uint8_t *e = pointer_cast<const uint8_t *>(nptr) + l;
   const uint8_t *save = nullptr;
 
@@ -205,7 +205,7 @@ static unsigned long my_strntoul_mb2_or_mb4(const CHARSET_INFO *cs,
   unsigned int cutlim;
   uint32_t cutoff = 0;
   uint32_t res = 0;
-  const uint8_t *s = pointer_cast<const uint8_t *>(nptr);
+  const auto *s = pointer_cast<const uint8_t *>(nptr);
   const uint8_t *e = pointer_cast<const uint8_t *>(nptr) + l;
   const uint8_t *save = nullptr;
 
@@ -295,7 +295,7 @@ static long long my_strntoll_mb2_or_mb4(const CHARSET_INFO *cs,
   unsigned long long cutoff = 0;
   unsigned int cutlim = 0;
   unsigned long long res = 0;
-  const uint8_t *s = pointer_cast<const uint8_t *>(nptr);
+  const auto *s = pointer_cast<const uint8_t *>(nptr);
   const uint8_t *e = pointer_cast<const uint8_t *>(nptr) + l;
   const uint8_t *save = nullptr;
 
@@ -391,7 +391,7 @@ static unsigned long long my_strntoull_mb2_or_mb4(const CHARSET_INFO *cs,
   unsigned long long cutoff = 0;
   unsigned int cutlim;
   unsigned long long res = 0;
-  const uint8_t *s = pointer_cast<const uint8_t *>(nptr);
+  const auto *s = pointer_cast<const uint8_t *>(nptr);
   const uint8_t *e = pointer_cast<const uint8_t *>(nptr) + l;
   const uint8_t *save = nullptr;
 
@@ -477,7 +477,7 @@ static double my_strntod_mb2_or_mb4(const CHARSET_INFO *cs, const char *nptr,
   char buf[256];
   double res;
   char *b = buf;
-  const uint8_t *s = pointer_cast<const uint8_t *>(nptr);
+  const auto *s = pointer_cast<const uint8_t *>(nptr);
   const uint8_t *end = nullptr;
   my_wc_t wc;
   int cnv;
@@ -504,7 +504,7 @@ static unsigned long long my_strntoull10rnd_mb2_or_mb4(
     const char **endptr, int *err) {
   char buf[256], *b = buf;
   unsigned long long res = 0;
-  const uint8_t *s = pointer_cast<const uint8_t *>(nptr);
+  const auto *s = pointer_cast<const uint8_t *>(nptr);
   my_wc_t wc;
   int cnv;
 
@@ -535,7 +535,7 @@ static size_t my_l10tostr_mb2_or_mb4(const CHARSET_INFO *cs, char *dst,
   char *p, *db, *de;
   long int new_val;
   int sl = 0;
-  unsigned long int uval = (unsigned long int)val;
+  auto uval = (unsigned long int)val;
 
   p = &buffer[sizeof(buffer) - 1];
   *p = '\0';
@@ -580,7 +580,7 @@ static size_t my_ll10tostr_mb2_or_mb4(const CHARSET_INFO *cs, char *dst,
   char *p, *db, *de;
   long long_val;
   int sl = 0;
-  unsigned long long uval = (unsigned long long)val;
+  auto uval = (unsigned long long)val;
 
   if (radix < 0) {
     if (val < 0) {
@@ -600,7 +600,7 @@ static size_t my_ll10tostr_mb2_or_mb4(const CHARSET_INFO *cs, char *dst,
 
   while (uval > (unsigned long long)LONG_MAX) {
     unsigned long long quo = uval / (unsigned)10;
-    unsigned rem = (unsigned)(uval - quo * (unsigned)10);
+    auto rem = (unsigned)(uval - quo * (unsigned)10);
     *--p = '0' + rem;
     uval = quo;
   }
@@ -877,7 +877,7 @@ static size_t my_vsnprintf_mb2(char *dst, size_t n, const char *fmt,
     {
       const char *par = va_arg(ap, char *);
       size_t plen;
-      size_t left_len = (size_t)(end - dst);
+      auto left_len = (size_t)(end - dst);
       if (!par) par = "(null)";
       plen = strlen(par);
       if (left_len <= plen * 2) plen = left_len / 2 - 1;
@@ -1949,7 +1949,7 @@ static size_t my_vsnprintf_utf32(char *dst, size_t n, const char *fmt,
     {
       const char *par = va_arg(ap, char *);
       size_t plen;
-      size_t left_len = (size_t)(end - dst);
+      auto left_len = (size_t)(end - dst);
       if (!par) par = "(null)";
       plen = strlen(par);
       if (left_len <= plen * 4) plen = left_len / 4 - 1;
@@ -2155,7 +2155,7 @@ static size_t my_numchars_utf32(const CHARSET_INFO *cs [[maybe_unused]],
 
 static size_t my_charpos_utf32(const CHARSET_INFO *cs [[maybe_unused]],
                                const char *b, const char *e, size_t pos) {
-  size_t string_length = (size_t)(e - b);
+  auto string_length = (size_t)(e - b);
   return pos * 4 > string_length ? string_length + 4 : pos * 4;
 }
 
@@ -2746,7 +2746,7 @@ static size_t my_numchars_ucs2(const CHARSET_INFO *cs [[maybe_unused]],
 
 static size_t my_charpos_ucs2(const CHARSET_INFO *cs [[maybe_unused]],
                               const char *b, const char *e, size_t pos) {
-  size_t string_length = (size_t)(e - b);
+  auto string_length = (size_t)(e - b);
   return pos > string_length ? string_length + 2 : pos * 2;
 }
 

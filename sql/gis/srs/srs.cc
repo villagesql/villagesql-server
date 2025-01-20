@@ -452,7 +452,7 @@ bool Geographic_srs::init(gis::srid_t srid,
 bool Geographic_srs::can_be_modified_to(
     const Spatial_reference_system &srs) const {
   if (srs.srs_type() == Srs_type::GEOGRAPHIC) {
-    const Geographic_srs &that = static_cast<const Geographic_srs &>(srs);
+    const auto &that = static_cast<const Geographic_srs &>(srs);
 
     // The SRS is WGS 84 and we're adding a all-zero TOWGS84 clause.
     bool wgs84_add_towgs84 =
@@ -496,7 +496,7 @@ bool Geographic_srs::can_be_modified_to(
 bool Projected_srs::common_proj_parameters_can_be_modified_to(
     const Spatial_reference_system &srs) const {
   if (srs.srs_type() == Srs_type::PROJECTED) {
-    const Projected_srs &that = static_cast<const Projected_srs &>(srs);
+    const auto &that = static_cast<const Projected_srs &>(srs);
     return m_geographic_srs.can_be_modified_to(that.m_geographic_srs) &&
            m_linear_unit == that.m_linear_unit && m_axes[0] == that.m_axes[0] &&
            m_axes[1] == that.m_axes[1];
@@ -608,7 +608,7 @@ bool Popular_visualisation_pseudo_mercator_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::POPULAR_VISUALISATION_PSEUDO_MERCATOR) {
-    const Popular_visualisation_pseudo_mercator_srs &that =
+    const auto &that =
         static_cast<const Popular_visualisation_pseudo_mercator_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -655,7 +655,7 @@ bool Lambert_azimuthal_equal_area_spherical_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::LAMBERT_AZIMUTHAL_EQUAL_AREA_SPHERICAL) {
-    const Lambert_azimuthal_equal_area_spherical_srs &that =
+    const auto &that =
         static_cast<const Lambert_azimuthal_equal_area_spherical_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -701,8 +701,7 @@ bool Equidistant_cylindrical_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::EQUIDISTANT_CYLINDRICAL) {
-    const Equidistant_cylindrical_srs &that =
-        static_cast<const Equidistant_cylindrical_srs &>(srs);
+    const auto &that = static_cast<const Equidistant_cylindrical_srs &>(srs);
     return m_standard_parallel_1 == that.m_standard_parallel_1 &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_false_easting == that.m_false_easting &&
@@ -746,7 +745,7 @@ bool Equidistant_cylindrical_spherical_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::EQUIDISTANT_CYLINDRICAL_SPHERICAL) {
-    const Equidistant_cylindrical_spherical_srs &that =
+    const auto &that =
         static_cast<const Equidistant_cylindrical_spherical_srs &>(srs);
     return m_standard_parallel_1 == that.m_standard_parallel_1 &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -794,8 +793,7 @@ bool Krovak_north_orientated_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::KROVAK_NORTH_ORIENTATED) {
-    const Krovak_north_orientated_srs &that =
-        static_cast<const Krovak_north_orientated_srs &>(srs);
+    const auto &that = static_cast<const Krovak_north_orientated_srs &>(srs);
     return m_latitude_of_center == that.m_latitude_of_center &&
            m_longitude_of_center == that.m_longitude_of_center &&
            m_azimuth == that.m_azimuth &&
@@ -860,8 +858,7 @@ bool Krovak_modified_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::KROVAK_MODIFIED) {
-    const Krovak_modified_srs &that =
-        static_cast<const Krovak_modified_srs &>(srs);
+    const auto &that = static_cast<const Krovak_modified_srs &>(srs);
     return m_latitude_of_center == that.m_latitude_of_center &&
            m_longitude_of_center == that.m_longitude_of_center &&
            m_azimuth == that.m_azimuth &&
@@ -917,7 +914,7 @@ bool Krovak_modified_north_orientated_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::KROVAK_MODIFIED_NORTH_ORIENTATED) {
-    const Krovak_modified_north_orientated_srs &that =
+    const auto &that =
         static_cast<const Krovak_modified_north_orientated_srs &>(srs);
     return m_latitude_of_center == that.m_latitude_of_center &&
            m_longitude_of_center == that.m_longitude_of_center &&
@@ -961,7 +958,7 @@ bool Lambert_conic_conformal_2sp_michigan_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::LAMBERT_CONIC_CONFORMAL_2SP_MICHIGAN) {
-    const Lambert_conic_conformal_2sp_michigan_srs &that =
+    const auto &that =
         static_cast<const Lambert_conic_conformal_2sp_michigan_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -1013,8 +1010,7 @@ bool Colombia_urban_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::COLOMBIA_URBAN) {
-    const Colombia_urban_srs &that =
-        static_cast<const Colombia_urban_srs &>(srs);
+    const auto &that = static_cast<const Colombia_urban_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_false_easting == that.m_false_easting &&
@@ -1062,7 +1058,7 @@ bool Lambert_conic_conformal_1sp_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::LAMBERT_CONIC_CONFORMAL_1SP) {
-    const Lambert_conic_conformal_1sp_srs &that =
+    const auto &that =
         static_cast<const Lambert_conic_conformal_1sp_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -1112,7 +1108,7 @@ bool Lambert_conic_conformal_2sp_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::LAMBERT_CONIC_CONFORMAL_2SP) {
-    const Lambert_conic_conformal_2sp_srs &that =
+    const auto &that =
         static_cast<const Lambert_conic_conformal_2sp_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -1163,7 +1159,7 @@ bool Lambert_conic_conformal_2sp_belgium_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::LAMBERT_CONIC_CONFORMAL_2SP_BELGIUM) {
-    const Lambert_conic_conformal_2sp_belgium_srs &that =
+    const auto &that =
         static_cast<const Lambert_conic_conformal_2sp_belgium_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -1213,8 +1209,7 @@ bool Mercator_variant_a_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::MERCATOR_VARIANT_A) {
-    const Mercator_variant_a_srs &that =
-        static_cast<const Mercator_variant_a_srs &>(srs);
+    const auto &that = static_cast<const Mercator_variant_a_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_scale_factor == that.m_scale_factor &&
@@ -1260,8 +1255,7 @@ bool Mercator_variant_b_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::MERCATOR_VARIANT_B) {
-    const Mercator_variant_b_srs &that =
-        static_cast<const Mercator_variant_b_srs &>(srs);
+    const auto &that = static_cast<const Mercator_variant_b_srs &>(srs);
     return m_standard_parallel_1 == that.m_standard_parallel_1 &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_false_easting == that.m_false_easting &&
@@ -1305,8 +1299,7 @@ bool Cassini_soldner_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::CASSINI_SOLDNER) {
-    const Cassini_soldner_srs &that =
-        static_cast<const Cassini_soldner_srs &>(srs);
+    const auto &that = static_cast<const Cassini_soldner_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_false_easting == that.m_false_easting &&
@@ -1351,8 +1344,7 @@ bool Transverse_mercator_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::TRANSVERSE_MERCATOR) {
-    const Transverse_mercator_srs &that =
-        static_cast<const Transverse_mercator_srs &>(srs);
+    const auto &that = static_cast<const Transverse_mercator_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_scale_factor == that.m_scale_factor &&
@@ -1399,7 +1391,7 @@ bool Transverse_mercator_south_orientated_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::TRANSVERSE_MERCATOR_SOUTH_ORIENTATED) {
-    const Transverse_mercator_south_orientated_srs &that =
+    const auto &that =
         static_cast<const Transverse_mercator_south_orientated_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -1447,8 +1439,7 @@ bool Oblique_stereographic_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::OBLIQUE_STEREOGRAPHIC) {
-    const Oblique_stereographic_srs &that =
-        static_cast<const Oblique_stereographic_srs &>(srs);
+    const auto &that = static_cast<const Oblique_stereographic_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_scale_factor == that.m_scale_factor &&
@@ -1495,7 +1486,7 @@ bool Polar_stereographic_variant_a_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::POLAR_STEREOGRAPHIC_VARIANT_A) {
-    const Polar_stereographic_variant_a_srs &that =
+    const auto &that =
         static_cast<const Polar_stereographic_variant_a_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -1542,8 +1533,7 @@ bool New_zealand_map_grid_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::NEW_ZEALAND_MAP_GRID) {
-    const New_zealand_map_grid_srs &that =
-        static_cast<const New_zealand_map_grid_srs &>(srs);
+    const auto &that = static_cast<const New_zealand_map_grid_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_false_easting == that.m_false_easting &&
@@ -1585,7 +1575,7 @@ bool Hotine_oblique_mercator_variant_a_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::HOTINE_OBLIQUE_MERCATOR_VARIANT_A) {
-    const Hotine_oblique_mercator_variant_a_srs &that =
+    const auto &that =
         static_cast<const Hotine_oblique_mercator_variant_a_srs &>(srs);
     return m_latitude_of_center == that.m_latitude_of_center &&
            m_longitude_of_center == that.m_longitude_of_center &&
@@ -1638,8 +1628,7 @@ bool Laborde_oblique_mercator_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::LABORDE_OBLIQUE_MERCATOR) {
-    const Laborde_oblique_mercator_srs &that =
-        static_cast<const Laborde_oblique_mercator_srs &>(srs);
+    const auto &that = static_cast<const Laborde_oblique_mercator_srs &>(srs);
     return m_latitude_of_center == that.m_latitude_of_center &&
            m_longitude_of_center == that.m_longitude_of_center &&
            m_azimuth == that.m_azimuth &&
@@ -1690,7 +1679,7 @@ bool Hotine_oblique_mercator_variant_b_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::HOTINE_OBLIQUE_MERCATOR_VARIANT_B) {
-    const Hotine_oblique_mercator_variant_b_srs &that =
+    const auto &that =
         static_cast<const Hotine_oblique_mercator_variant_b_srs &>(srs);
     return m_latitude_of_center == that.m_latitude_of_center &&
            m_longitude_of_center == that.m_longitude_of_center &&
@@ -1742,8 +1731,7 @@ bool Tunisia_mining_grid_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::TUNISIA_MINING_GRID) {
-    const Tunisia_mining_grid_srs &that =
-        static_cast<const Tunisia_mining_grid_srs &>(srs);
+    const auto &that = static_cast<const Tunisia_mining_grid_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_false_easting == that.m_false_easting &&
@@ -1773,7 +1761,7 @@ bool Lambert_conic_near_conformal_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::LAMBERT_CONIC_NEAR_CONFORMAL) {
-    const Lambert_conic_near_conformal_srs &that =
+    const auto &that =
         static_cast<const Lambert_conic_near_conformal_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -1821,8 +1809,7 @@ bool American_polyconic_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::AMERICAN_POLYCONIC) {
-    const American_polyconic_srs &that =
-        static_cast<const American_polyconic_srs &>(srs);
+    const auto &that = static_cast<const American_polyconic_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_false_easting == that.m_false_easting &&
@@ -1867,7 +1854,7 @@ bool Krovak_srs::can_be_modified_to(const Spatial_reference_system &srs) const {
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::KROVAK) {
-    const Krovak_srs &that = static_cast<const Krovak_srs &>(srs);
+    const auto &that = static_cast<const Krovak_srs &>(srs);
     return m_latitude_of_center == that.m_latitude_of_center &&
            m_longitude_of_center == that.m_longitude_of_center &&
            m_azimuth == that.m_azimuth &&
@@ -1918,7 +1905,7 @@ bool Lambert_azimuthal_equal_area_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::LAMBERT_AZIMUTHAL_EQUAL_AREA) {
-    const Lambert_azimuthal_equal_area_srs &that =
+    const auto &that =
         static_cast<const Lambert_azimuthal_equal_area_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -1965,8 +1952,7 @@ bool Albers_equal_area_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::ALBERS_EQUAL_AREA) {
-    const Albers_equal_area_srs &that =
-        static_cast<const Albers_equal_area_srs &>(srs);
+    const auto &that = static_cast<const Albers_equal_area_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_standard_parallel_1 == that.m_standard_parallel_1 &&
@@ -2016,7 +2002,7 @@ bool Transverse_mercator_zoned_grid_system_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::TRANSVERSE_MERCATOR_ZONED_GRID_SYSTEM) {
-    const Transverse_mercator_zoned_grid_system_srs &that =
+    const auto &that =
         static_cast<const Transverse_mercator_zoned_grid_system_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_initial_longitude == that.m_initial_longitude &&
@@ -2070,7 +2056,7 @@ bool Lambert_conic_conformal_west_orientated_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::LAMBERT_CONIC_CONFORMAL_WEST_ORIENTATED) {
-    const Lambert_conic_conformal_west_orientated_srs &that =
+    const auto &that =
         static_cast<const Lambert_conic_conformal_west_orientated_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -2101,8 +2087,7 @@ bool Bonne_south_orientated_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::BONNE_SOUTH_ORIENTATED) {
-    const Bonne_south_orientated_srs &that =
-        static_cast<const Bonne_south_orientated_srs &>(srs);
+    const auto &that = static_cast<const Bonne_south_orientated_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_false_easting == that.m_false_easting &&
@@ -2146,7 +2131,7 @@ bool Polar_stereographic_variant_b_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::POLAR_STEREOGRAPHIC_VARIANT_B) {
-    const Polar_stereographic_variant_b_srs &that =
+    const auto &that =
         static_cast<const Polar_stereographic_variant_b_srs &>(srs);
     return m_standard_parallel == that.m_standard_parallel &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -2191,7 +2176,7 @@ bool Polar_stereographic_variant_c_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::POLAR_STEREOGRAPHIC_VARIANT_C) {
-    const Polar_stereographic_variant_c_srs &that =
+    const auto &that =
         static_cast<const Polar_stereographic_variant_c_srs &>(srs);
     return m_standard_parallel == that.m_standard_parallel &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -2236,8 +2221,7 @@ bool Guam_projection_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::GUAM_PROJECTION) {
-    const Guam_projection_srs &that =
-        static_cast<const Guam_projection_srs &>(srs);
+    const auto &that = static_cast<const Guam_projection_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_false_easting == that.m_false_easting &&
@@ -2281,7 +2265,7 @@ bool Modified_azimuthal_equidistant_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::MODIFIED_AZIMUTHAL_EQUIDISTANT) {
-    const Modified_azimuthal_equidistant_srs &that =
+    const auto &that =
         static_cast<const Modified_azimuthal_equidistant_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -2326,8 +2310,7 @@ bool Hyperbolic_cassini_soldner_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::HYPERBOLIC_CASSINI_SOLDNER) {
-    const Hyperbolic_cassini_soldner_srs &that =
-        static_cast<const Hyperbolic_cassini_soldner_srs &>(srs);
+    const auto &that = static_cast<const Hyperbolic_cassini_soldner_srs &>(srs);
     return m_latitude_of_origin == that.m_latitude_of_origin &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
            m_false_easting == that.m_false_easting &&
@@ -2371,7 +2354,7 @@ bool Lambert_cylindrical_equal_area_spherical_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::LAMBERT_CYLINDRICAL_EQUAL_AREA_SPHERICAL) {
-    const Lambert_cylindrical_equal_area_spherical_srs &that =
+    const auto &that =
         static_cast<const Lambert_cylindrical_equal_area_spherical_srs &>(srs);
     return m_standard_parallel_1 == that.m_standard_parallel_1 &&
            m_longitude_of_origin == that.m_longitude_of_origin &&
@@ -2417,7 +2400,7 @@ bool Lambert_cylindrical_equal_area_srs::can_be_modified_to(
   if (common_proj_parameters_can_be_modified_to(srs) &&
       static_cast<const Projected_srs &>(srs).projection_type() ==
           Projection_type::LAMBERT_CYLINDRICAL_EQUAL_AREA) {
-    const Lambert_cylindrical_equal_area_srs &that =
+    const auto &that =
         static_cast<const Lambert_cylindrical_equal_area_srs &>(srs);
     return m_standard_parallel_1 == that.m_standard_parallel_1 &&
            m_longitude_of_origin == that.m_longitude_of_origin &&

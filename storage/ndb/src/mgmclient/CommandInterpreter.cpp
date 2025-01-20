@@ -1244,7 +1244,7 @@ bool CommandInterpreter::execute_impl(const char *_line, bool interactive) {
     }
     // for mysql client compatibility remove trailing ';'
     {
-      unsigned last = (unsigned)(strlen(line) - 1);
+      auto last = (unsigned)(strlen(line) - 1);
       if (line[last] == ';') {
         line[last] = 0;
         do_continue = 1;
@@ -2536,7 +2536,7 @@ static void report_events(const ndb_logevent &event) {
   LogLevel::EventCategory cat = LogLevel::llInvalid;
   EventLogger::EventTextFunction textF;
 
-  const EventReport *real_event = (const EventReport *)event.SavedEvent.data;
+  const auto *real_event = (const EventReport *)event.SavedEvent.data;
   Uint32 type = real_event->getEventType();
 
   if (EventLoggerBase::event_lookup(type, cat, threshold, severity, textF))
@@ -2559,8 +2559,8 @@ static void report_events(const ndb_logevent &event) {
 }
 
 static int sort_log(const void *_a, const void *_b) {
-  const ndb_logevent *a = (const ndb_logevent *)_a;
-  const ndb_logevent *b = (const ndb_logevent *)_b;
+  const auto *a = (const ndb_logevent *)_a;
+  const auto *b = (const ndb_logevent *)_b;
 
   if (a->source_nodeid == b->source_nodeid) {
     return a->SavedEvent.seq - b->SavedEvent.seq;

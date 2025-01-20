@@ -1536,8 +1536,8 @@ static int make_huff_tree(HUFF_TREE *huff_tree, HUFF_COUNTS *huff_counts) {
 static int compare_tree(const void *cmp_arg [[maybe_unused]], const void *a,
                         const void *b) {
   uint length;
-  const uchar *s = (const uchar *)a;
-  const uchar *t = (const uchar *)b;
+  const auto *s = (const uchar *)a;
+  const auto *t = (const uchar *)b;
   for (length = global_count->field_length; length--;)
     if (*s++ != *t++) return (int)s[-1] - (int)t[-1];
   return 0;
@@ -1566,8 +1566,8 @@ static int compare_tree(const void *cmp_arg [[maybe_unused]], const void *a,
 
 static int save_counts_in_queue(void *v_key, element_count count,
                                 void *v_tree) {
-  uchar *key = static_cast<uchar *>(v_key);
-  HUFF_TREE *tree = static_cast<HUFF_TREE *>(v_tree);
+  auto *key = static_cast<uchar *>(v_key);
+  auto *tree = static_cast<HUFF_TREE *>(v_tree);
   HUFF_ELEMENT *new_huff_el;
 
   new_huff_el = tree->element_buffer + (tree->elements++);
@@ -1846,7 +1846,7 @@ static char *hexdigits(ulonglong value) {
 
 static int write_header(PACK_MRG_INFO *mrg, uint head_length, uint trees,
                         my_off_t tot_elements, my_off_t filelength) {
-  uchar *buff = (uchar *)file_buffer.pos;
+  auto *buff = (uchar *)file_buffer.pos;
 
   memset(buff, 0, HEAD_LENGTH);
   memcpy(buff, myisam_pack_file_magic, 4);

@@ -94,7 +94,7 @@ int my_validate_password_policy(const char *password,
     plugin = my_plugin_lock_by_name(nullptr, validate_password_plugin,
                                     MYSQL_VALIDATE_PASSWORD_PLUGIN);
     if (plugin) {
-      st_mysql_validate_password *password_validate =
+      auto *password_validate =
           (st_mysql_validate_password *)plugin_decl(plugin)->info;
 
       if (!password_validate->validate_password(&password_str)) {
@@ -151,7 +151,7 @@ int my_calculate_password_strength(const char *password,
     plugin_ref plugin = my_plugin_lock_by_name(
         nullptr, validate_password_plugin, MYSQL_VALIDATE_PASSWORD_PLUGIN);
     if (plugin) {
-      st_mysql_validate_password *password_strength =
+      auto *password_strength =
           (st_mysql_validate_password *)plugin_decl(plugin)->info;
 
       res = password_strength->get_password_strength(&password_str);

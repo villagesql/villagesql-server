@@ -56,7 +56,7 @@ static int plugin_init(MYSQL_PLUGIN) {
 static int rewrite_ddl(MYSQL_THD, mysql_event_class_t event_class,
                        const void *event) {
   /* We can exit early if this is not a pre-parse event. */
-  const struct mysql_event_parse *event_parse =
+  const auto *event_parse =
       static_cast<const struct mysql_event_parse *>(event);
   if (event_class != MYSQL_AUDIT_PARSE_CLASS ||
       event_parse->event_subclass != MYSQL_AUDIT_PARSE_PREPARSE)

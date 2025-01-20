@@ -32,7 +32,7 @@ bool printALTER_TAB_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const AlterTabReq *sig = (const AlterTabReq *)theData;
+  const auto *sig = (const AlterTabReq *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, " requestType: %u", sig->requestType);
@@ -58,7 +58,7 @@ bool printALTER_TAB_CONF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const AlterTabConf *sig = (const AlterTabConf *)theData;
+  const auto *sig = (const AlterTabConf *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, " connectPtr: %u", sig->connectPtr);
@@ -73,7 +73,7 @@ bool printALTER_TAB_REF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const AlterTabRef *sig = (const AlterTabRef *)theData;
+  const auto *sig = (const AlterTabRef *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");

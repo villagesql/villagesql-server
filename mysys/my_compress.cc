@@ -245,7 +245,7 @@ static uchar *zlib_compress_alloc(mysql_zlib_compress_context *comp_ctx,
 
 static bool zlib_uncompress(uchar *packet, size_t len, size_t *complen) {
   uLongf tmp_complen;
-  uchar *compbuf =
+  auto *compbuf =
       (uchar *)my_malloc(key_memory_my_compress_alloc, *complen, MYF(MY_WME));
   int error;
   if (!compbuf) return true; /* Not enough memory */

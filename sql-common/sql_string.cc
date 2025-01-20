@@ -1145,7 +1145,7 @@ bool validate_string(const CHARSET_INFO *cs, const char *str, size_t length,
   */
   *length_error = false;
 
-  const uchar *from = reinterpret_cast<const uchar *>(str);
+  const auto *from = reinterpret_cast<const uchar *>(str);
   const uchar *from_end = from + length;
   my_charset_conv_mb_wc mb_wc = cs->cset->mb_wc;
 

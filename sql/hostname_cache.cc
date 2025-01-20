@@ -443,7 +443,7 @@ static inline bool is_hostname_valid(const char *hostname) {
 
 int ip_to_hostname(struct sockaddr_storage *ip_storage, const char *ip_string,
                    char **hostname, uint *connect_errors) {
-  const struct sockaddr *ip = (const sockaddr *)ip_storage;
+  const auto *ip = (const sockaddr *)ip_storage;
   int err_code;
   Host_errors errors;
 

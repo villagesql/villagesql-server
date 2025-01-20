@@ -222,7 +222,7 @@ class BlobBatchChecker {
       NdbBlob *firstBlob = nextOp->theBlobList;
       const Uint32 opType = firstBlob->getOpType();
       const Uint32 tableId = firstBlob->theTable->m_id;
-      const Uint32 indexId = (Uint32)firstBlob->theAccessTable->m_id;
+      const auto indexId = (Uint32)firstBlob->theAccessTable->m_id;
 
       /**
        * Lookup index used for any previous ops on this table in
@@ -1406,7 +1406,7 @@ int NdbTransaction::sendTC_HBREP()  // Send a TC_HBREP signal;
     return -1;
   }
 
-  TcHbRep *const tcHbRep = CAST_PTR(TcHbRep, tSignal->getDataPtrSend());
+  auto *const tcHbRep = CAST_PTR(TcHbRep, tSignal->getDataPtrSend());
 
   tcHbRep->apiConnectPtr = theTCConPtr;
 
@@ -1769,7 +1769,7 @@ Remark:         Release all cursor operations.
 ******************************************************************************/
 void NdbTransaction::releaseScanOperations(NdbIndexScanOperation *cursorOp) {
   while (cursorOp != nullptr) {
-    NdbIndexScanOperation *next = (NdbIndexScanOperation *)cursorOp->next();
+    auto *next = (NdbIndexScanOperation *)cursorOp->next();
     cursorOp->release();
     theNdb->releaseScanOperation(cursorOp);
     cursorOp = next;
@@ -2419,7 +2419,7 @@ Parameters:    aSignal: The signal object pointer.
 Remark:
 ******************************************************************************/
 int NdbTransaction::receiveTC_COMMITREF(const NdbApiSignal *aSignal) {
-  const TcCommitRef *ref = CAST_CONSTPTR(TcCommitRef, aSignal->getDataPtr());
+  const auto *ref = CAST_CONSTPTR(TcCommitRef, aSignal->getDataPtr());
   if (checkState_TransId(&ref->transId1)) {
     setOperationErrorCodeAbort(ref->errorCode);
     theCommitStatus = Aborted;
@@ -2548,7 +2548,7 @@ from other transactions.
     const Uint32 tNoOfOperations = TcKeyConf::getNoOfOperations(tTemp);
     const Uint32 tCommitFlag = TcKeyConf::getCommitFlag(tTemp);
 
-    const Uint32 *tPtr = (const Uint32 *)&keyConf->operations[0];
+    const auto *tPtr = (const Uint32 *)&keyConf->operations[0];
     Uint32 tNoComp = theNoOfOpCompleted;
     for (Uint32 i = 0; i < tNoOfOperations; i++) {
       NdbReceiver *const tReceiver =
@@ -3473,7 +3473,7 @@ int NdbTransaction::releaseLockHandle(const NdbLockHandle *lockHandle) {
   }
 
   /* Now return it to the Ndb's freelist */
-  NdbLockHandle *lh = const_cast<NdbLockHandle *>(lockHandle);
+  auto *lh = const_cast<NdbLockHandle *>(lockHandle);
 
   lh->thePrev = nullptr;
   lh->theNext = nullptr;

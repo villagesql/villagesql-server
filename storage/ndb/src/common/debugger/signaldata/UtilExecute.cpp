@@ -32,7 +32,7 @@ bool printUTIL_EXECUTE_REQ(FILE *out, const Uint32 *data, Uint32 len,
     return false;
   }
 
-  const UtilExecuteReq *const sig = (const UtilExecuteReq *)data;
+  const auto *const sig = (const UtilExecuteReq *)data;
   fprintf(out,
           " senderRef: H'%.8x, senderData: H'%.8x prepareId: %d "
           " releaseFlag: %d\n",
@@ -48,7 +48,7 @@ bool printUTIL_EXECUTE_CONF(FILE *out, const Uint32 *data, Uint32 len,
     return false;
   }
 
-  const UtilExecuteConf *sig = (const UtilExecuteConf *)data;
+  const auto *sig = (const UtilExecuteConf *)data;
   fprintf(out, " senderData: H'%.8x gci: %u/%u\n", sig->senderData, sig->gci_hi,
           sig->gci_lo);
   return true;
@@ -61,7 +61,7 @@ bool printUTIL_EXECUTE_REF(FILE *out, const Uint32 *data, Uint32 len,
     return false;
   }
 
-  const UtilExecuteRef *sig = (const UtilExecuteRef *)data;
+  const auto *sig = (const UtilExecuteRef *)data;
   fprintf(out, " senderData: H'%.8x, ", sig->senderData);
   fprintf(
       out, " errorCode: %s, ",

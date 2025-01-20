@@ -1078,7 +1078,7 @@ void thr_print_locks(void) {
   puts("Current locks:");
   for (list = thr_lock_thread_list; list && count++ < MAX_THREADS;
        list = list_rest(list)) {
-    THR_LOCK *lock = (THR_LOCK *)list->data;
+    auto *lock = (THR_LOCK *)list->data;
     mysql_mutex_lock(&lock->mutex);
     printf("lock: %p:", lock);
     if ((lock->write_wait.data || lock->read_wait.data) &&

@@ -155,7 +155,7 @@ void Protocol_change_notification::do_execute() {
 }
 
 void *process_notification_thread(void *ptr_object) {
-  Gcs_xcom_engine *engine = static_cast<Gcs_xcom_engine *>(ptr_object);
+  auto *engine = static_cast<Gcs_xcom_engine *>(ptr_object);
 
   /*
     This thread will invoke the event handlers on Group Replication,

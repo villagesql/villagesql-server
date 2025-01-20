@@ -210,7 +210,7 @@ static void reportShutdown(const ndb_mgm_configuration *config, NodeId nodeid,
   assert(restart || (!restart && !initial && !nostart));
 
   Uint32 length, theData[25];
-  EventReport *rep = CAST_PTR(EventReport, &theData[0]);
+  auto *rep = CAST_PTR(EventReport, &theData[0]);
   rep->eventType = 0; /* Ensure it's initialised */
 
   rep->setNodeId(nodeid);

@@ -18717,8 +18717,8 @@ static int my_wc_mb_cp932(const CHARSET_INFO *cs [[maybe_unused]], my_wc_t wc,
 static size_t my_numcells_cp932(const CHARSET_INFO *cs [[maybe_unused]],
                                 const char *str, const char *str_end) {
   size_t clen = 0;
-  const uint8_t *b = pointer_cast<const uint8_t *>(str);
-  const uint8_t *e = pointer_cast<const uint8_t *>(str_end);
+  const auto *b = pointer_cast<const uint8_t *>(str);
+  const auto *e = pointer_cast<const uint8_t *>(str_end);
 
   for (clen = 0; b < e;) {
     if (*b >= 0xA1 && *b <= 0xDF) {

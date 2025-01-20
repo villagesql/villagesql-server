@@ -31,7 +31,7 @@ namespace dd {
 namespace system_views {
 
 const Views &Views::instance() {
-  static Views *s_instance = new Views();
+  static auto *s_instance = new Views();
   return *s_instance;
 }
 

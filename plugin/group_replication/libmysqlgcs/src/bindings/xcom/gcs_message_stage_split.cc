@@ -257,7 +257,7 @@ void Gcs_message_stage_split_v2::apply_transformation_single_fragment(
 
    There is a single fragment, which is this one.
    */
-  Gcs_split_header_v2 &stage_header =
+  auto &stage_header =
       static_cast<Gcs_split_header_v2 &>(packet.get_current_stage_header());
   stage_header.set_message_part_id(0);
   stage_header.set_num_messages(1);
@@ -293,9 +293,8 @@ Gcs_message_stage_split_v2::create_fragments(
    payload. We do this to avoid the extra allocation and copy.
    */
   Gcs_packet &first_fragment = packet;
-  Gcs_split_header_v2 &first_fragment_header =
-      static_cast<Gcs_split_header_v2 &>(
-          first_fragment.get_current_stage_header());
+  auto &first_fragment_header = static_cast<Gcs_split_header_v2 &>(
+      first_fragment.get_current_stage_header());
   first_fragment_header.set_num_messages(nr_fragments);
   first_fragment_header.set_message_part_id(0);
   first_fragment_header.set_payload_length(m_split_threshold);

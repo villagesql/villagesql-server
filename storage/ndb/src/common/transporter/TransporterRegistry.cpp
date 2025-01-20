@@ -851,7 +851,7 @@ bool TransporterRegistry::createSHMTransporter(TransporterConfiguration *config
   /* Don't use index 0, special use case for extra  transporters */
   config->transporterIndex = nTransporters + 1;
 
-  SHM_Transporter *t = new SHM_Transporter(
+  auto *t = new SHM_Transporter(
       *this, config->transporterIndex, config->localHostName,
       config->remoteHostName, config->s_port, config->isMgmConnection,
       localNodeId, config->remoteNodeId, config->serverNodeId, config->checksum,
@@ -1306,7 +1306,7 @@ Uint32 TransporterRegistry::spin_check_transporters(
 #ifdef NDB_SHM_TRANSPORTER_SUPPORTED
   Uint64 micros_passed = 0;
   bool any_connected = false;
-  Uint64 spintime = Uint64(recvdata.m_spintime);
+  auto spintime = Uint64(recvdata.m_spintime);
 
   if (spintime == 0) {
     return res;
@@ -1702,7 +1702,7 @@ Uint32 TransporterRegistry::performReceive(TransporterReceiveHandle &recvdata,
     NodeId node_id = transp->getRemoteNodeId();
     bool more_pending = false;
     if (transp->getTransporterType() == tt_TCP_TRANSPORTER) {
-      TCP_Transporter *t = (TCP_Transporter *)transp;
+      auto *t = (TCP_Transporter *)transp;
       assert(recvdata.m_transporters.get(trp_id));
       assert(recv_thread_idx == transp->get_recv_thread_idx());
 
@@ -1735,7 +1735,7 @@ Uint32 TransporterRegistry::performReceive(TransporterReceiveHandle &recvdata,
     } else {
 #ifdef NDB_SHM_TRANSPORTER_SUPPORTED
       require(transp->getTransporterType() == tt_SHM_TRANSPORTER);
-      SHM_Transporter *t = (SHM_Transporter *)transp;
+      auto *t = (SHM_Transporter *)transp;
       assert(recvdata.m_transporters.get(trp_id));
       if (is_connected(trp_id)) {
 #if defined(VM_TRACE) || !defined(NDEBUG) || defined(ERROR_INSERT)
@@ -1800,7 +1800,7 @@ Uint32 TransporterRegistry::performReceive(TransporterReceiveHandle &recvdata,
       if (unlikely(recvdata.m_handled_transporters.get(trp_id)))
         continue;  // Skip now to avoid starvation
       if (t->getTransporterType() == tt_TCP_TRANSPORTER) {
-        TCP_Transporter *t_tcp = (TCP_Transporter *)t;
+        auto *t_tcp = (TCP_Transporter *)t;
         Uint32 *ptr;
         Uint32 sz = t_tcp->getReceiveData(&ptr);
         Uint32 szUsed =
@@ -1813,7 +1813,7 @@ Uint32 TransporterRegistry::performReceive(TransporterReceiveHandle &recvdata,
       } else {
 #ifdef NDB_SHM_TRANSPORTER_SUPPORTED
         require(t->getTransporterType() == tt_SHM_TRANSPORTER);
-        SHM_Transporter *t_shm = (SHM_Transporter *)t;
+        auto *t_shm = (SHM_Transporter *)t;
         Uint32 *readPtr, *eodPtr, *endPtr;
         t_shm->getReceivePtr(&readPtr, &eodPtr, &endPtr);
         recvdata.transporter_recv_from(node_id);
@@ -2739,7 +2739,7 @@ Uint32 TransporterRegistry::update_connections(
       case CONNECTED:
 #ifdef NDB_SHM_TRANSPORTER_SUPPORTED
         if (t->getTransporterType() == tt_SHM_TRANSPORTER) {
-          SHM_Transporter *shm_trp = (SHM_Transporter *)t;
+          auto *shm_trp = (SHM_Transporter *)t;
           spintime = MAX(spintime, shm_trp->get_spintime());
         }
 #endif
@@ -2999,11 +2999,11 @@ bool TransporterRegistry::start_service(SocketServer &socket_server) {
   for (unsigned i = 0; i < m_transporter_interface.size(); i++) {
     Transporter_interface &t = m_transporter_interface[i];
 
-    unsigned short port = (unsigned short)t.m_s_service_port;
+    auto port = (unsigned short)t.m_s_service_port;
     if (t.m_s_service_port < 0)
       port = -t.m_s_service_port;  // is a dynamic port
-    SocketAuthTls *auth = new SocketAuthTls(&m_tls_keys, t.m_require_tls);
-    TransporterService *transporter_service = new TransporterService(auth);
+    auto *auth = new SocketAuthTls(&m_tls_keys, t.m_require_tls);
+    auto *transporter_service = new TransporterService(auth);
     ndb_sockaddr addr;
     if (t.m_interface && Ndb_getAddr(&addr, t.m_interface)) {
       g_eventLogger->error(

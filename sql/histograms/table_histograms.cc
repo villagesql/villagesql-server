@@ -44,7 +44,7 @@
 
 Table_histograms *Table_histograms::create(PSI_memory_key psi_key) noexcept {
   MEM_ROOT mem_root(psi_key, 512);
-  Table_histograms *table_histograms = new (&mem_root) Table_histograms();
+  auto *table_histograms = new (&mem_root) Table_histograms();
   if (table_histograms == nullptr) return nullptr;
 
   // Move the MEM_ROOT that we used to allocate the object onto the object.

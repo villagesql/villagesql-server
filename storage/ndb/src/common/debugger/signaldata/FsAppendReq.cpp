@@ -34,7 +34,7 @@ bool printFSAPPENDREQ(FILE *output, const Uint32 *theData, Uint32 len,
 
   bool ret = true;
 
-  const FsAppendReq *const sig = (const FsAppendReq *)theData;
+  const auto *const sig = (const FsAppendReq *)theData;
 
   fprintf(output, " FilePointer: %d\n", sig->filePointer);
   fprintf(output, " UserReference: H\'%.8x, UserPointer: H\'%.8x\n",

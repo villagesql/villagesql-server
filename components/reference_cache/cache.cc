@@ -34,7 +34,7 @@ cache_imp *cache_imp::create(channel_imp *channel,
                              SERVICE_TYPE(registry) * registry) {
   assert(channel != nullptr);
   mysql_rwlock_rdlock(&LOCK_channels);
-  cache_imp *retval = new cache_imp(channel, registry);
+  auto *retval = new cache_imp(channel, registry);
   mysql_rwlock_unlock(&LOCK_channels);
   return retval;
 }
@@ -142,7 +142,7 @@ bool cache_imp::get(unsigned service_name_index, const my_h_service **out_ref) {
         continue;
       }
 
-      my_h_service *cache_row = (my_h_service *)my_malloc(
+      auto *cache_row = (my_h_service *)my_malloc(
           KEY_mem_reference_cache,
           (cache_set.size() + 1) * sizeof(my_h_service), MY_ZEROFILL);
 

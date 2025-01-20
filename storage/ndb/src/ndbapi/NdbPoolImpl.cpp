@@ -425,7 +425,7 @@ void NdbPool::remove_db_hash(Uint32 id, Uint32 hash_entry) {
 }
 
 Uint32 NdbPool::compute_hash(const char *a_schema_name) {
-  Uint32 len = Uint32(strlen(a_schema_name));
+  auto len = Uint32(strlen(a_schema_name));
   Uint32 h = 147;
   for (Uint32 i = 0; i < len; i++) {
     Uint32 c = a_schema_name[i];

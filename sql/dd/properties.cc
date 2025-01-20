@@ -57,8 +57,8 @@ bool Properties::from_str(const String_type &number, T *value) {
     return true;
 
   // If the target type is less than 8 bytes, check boundaries.
-  int64 trg_min = static_cast<int64>(std::numeric_limits<T>::min());
-  int64 trg_max = static_cast<int64>(std::numeric_limits<T>::max());
+  auto trg_min = static_cast<int64>(std::numeric_limits<T>::min());
+  auto trg_max = static_cast<int64>(std::numeric_limits<T>::max());
   if (sizeof(T) < 8 && (tmp < trg_min || tmp > trg_max)) return true;
 
   // Finally, cast to target type.

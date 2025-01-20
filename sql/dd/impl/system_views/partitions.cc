@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Partitions &Partitions::instance() {
-  static Partitions *s_instance = new Partitions();
+  static auto *s_instance = new Partitions();
   return *s_instance;
 }
 

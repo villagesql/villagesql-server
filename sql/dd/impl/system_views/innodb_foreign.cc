@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Innodb_foreign &Innodb_foreign::instance() {
-  static Innodb_foreign *s_instance = new Innodb_foreign();
+  static auto *s_instance = new Innodb_foreign();
   return *s_instance;
 }
 

@@ -855,7 +855,7 @@ static struct ndb_hwinfo *Ndb_SetHWInfo() {
   }
   memset(p_cpudata, 0, sz_cpudata);
 
-  struct ndb_hwinfo *res = (struct ndb_hwinfo *)p_hwinfo;
+  auto *res = (struct ndb_hwinfo *)p_hwinfo;
   res->cpu_info = (ndb_cpuinfo_data *)p_cpuinfo;
   res->cpu_data = (ndb_cpudata *)p_cpudata;
   res->cpu_cnt_max = ncpu;
@@ -1438,7 +1438,7 @@ static int Ndb_ReloadCPUData(struct ndb_hwinfo *hwinfo) {
 
     char *base = (char *)&hwinfo->cpu_data[curr_cpu];
     for (int i = 0; i < 12; i++) {
-      Uint64 *ptr = (Uint64 *)(base + offsets[i]);
+      auto *ptr = (Uint64 *)(base + offsets[i]);
       *ptr = t2us(ticks[i]);
     }
     curr_cpu++;
@@ -1576,7 +1576,7 @@ static int get_physical_package_ids(struct ndb_hwinfo *hwinfo) {
       perror(error_buf);
       return -1;
     }
-    Uint32 package_id = (Uint32)strtol(read_buf, nullptr, 10);
+    auto package_id = (Uint32)strtol(read_buf, nullptr, 10);
     int err_code = errno;
     if (package_id == 0 && (err_code == EINVAL || err_code == ERANGE)) {
       snprintf(error_buf, sizeof(error_buf), "Failed to convert %s into number",
@@ -1584,7 +1584,7 @@ static int get_physical_package_ids(struct ndb_hwinfo *hwinfo) {
       perror(error_buf);
       return -1;
     }
-    Uint32 socket_id = Uint32(~0);
+    auto socket_id = Uint32(~0);
     int max_socket_id = -1;
     for (Uint32 i = 0; i < hwinfo->cpu_cnt_max; i++) {
       if (hwinfo->cpu_info[i].package_id == package_id) {

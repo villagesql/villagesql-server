@@ -291,8 +291,7 @@ int my_connection_handler_set(Connection_handler_functions *chf,
   assert(chf != nullptr && tef != nullptr);
   if (chf == nullptr || tef == nullptr) return 1;
 
-  Plugin_connection_handler *conn_handler =
-      new (std::nothrow) Plugin_connection_handler(chf);
+  auto *conn_handler = new (std::nothrow) Plugin_connection_handler(chf);
   if (conn_handler == nullptr) return 1;
 
   Connection_handler_manager::get_instance()->load_connection_handler(

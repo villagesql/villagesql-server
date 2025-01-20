@@ -479,8 +479,7 @@ static char *emit(UDF_INIT *initid [[maybe_unused]], UDF_ARGS *args,
 
     const std::string key(*arguments, *arg_lengths);
 
-    const std::map<std::string, mysql_event_message_key_value_t>::const_iterator
-        iter = key_values.find(key);
+    const auto iter = key_values.find(key);
     if (iter != key_values.end()) {
       handler.error("Duplicated key [%d].", args->arg_count - arg_count);
       return result;
@@ -529,9 +528,7 @@ static char *emit(UDF_INIT *initid [[maybe_unused]], UDF_ARGS *args,
   /*
     Convert key value map into an array passed to the message function.
   */
-  for (std::map<std::string, mysql_event_message_key_value_t>::const_iterator
-           i = key_values.begin();
-       i != key_values.end(); ++i, ++kv) {
+  for (auto i = key_values.begin(); i != key_values.end(); ++i, ++kv) {
     *kv = i->second;
   }
 

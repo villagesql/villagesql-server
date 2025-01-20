@@ -280,7 +280,7 @@ static void sql_handle_ok(void *ctx, uint server_status,
                           ulonglong last_insert_id, const char *const message) {
   DBUG_TRACE;
 
-  Callback_data *cbd = (Callback_data *)ctx;
+  auto *cbd = (Callback_data *)ctx;
 
   cbd->server_status = server_status;
   cbd->warn_count = statement_warn_count;
@@ -293,7 +293,7 @@ static void sql_handle_error(void *ctx, uint sql_errno,
                              const char *const err_msg,
                              const char *const sqlstate) {
   DBUG_TRACE;
-  Callback_data *cbd = (Callback_data *)ctx;
+  auto *cbd = (Callback_data *)ctx;
   WRITE_VAL("ERROR %i %s\n", sql_errno, err_msg);
   cbd->error_called = true;
   cbd->err = sql_errno;
@@ -303,7 +303,7 @@ static void sql_handle_error(void *ctx, uint sql_errno,
 
 static void sql_shutdown(void *ctx, int shutdown_server) {
   DBUG_TRACE;
-  Callback_data *cbd = (Callback_data *)ctx;
+  auto *cbd = (Callback_data *)ctx;
 
   cbd->shutdown = shutdown_server;
   cbd->shutdown_called = true;

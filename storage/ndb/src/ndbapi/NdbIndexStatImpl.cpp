@@ -1134,7 +1134,7 @@ inline double NdbIndexStatImpl::Cache::get_rir1(uint pos) const {
   const Uint8 *ptr = get_valueptr(pos);
   Uint32 n;
   memcpy(&n, &ptr[0], 4);
-  double x = (double)n;
+  double x = n;
   return x;
 }
 
@@ -1158,7 +1158,7 @@ inline double NdbIndexStatImpl::Cache::get_unq1(uint pos, uint k) const {
   const Uint8 *ptr = get_valueptr(pos);
   Uint32 n;
   memcpy(&n, &ptr[4 + k * 4], 4);
-  double x = (double)n;
+  double x = n;
   return x;
 }
 
@@ -1493,8 +1493,8 @@ static NDB_DOUBLE iterative_solution(NDB_DOUBLE fragments, NDB_DOUBLE rows,
    *
    * When returning we will convert the estimated RPK to a factor instead.
    */
-  NDB_DOUBLE percent_change = (NDB_DOUBLE)0.5;
-  NDB_DOUBLE prev_est_uniques_found = (NDB_DOUBLE)0.0;
+  NDB_DOUBLE percent_change = 0.5;
+  NDB_DOUBLE prev_est_uniques_found = 0.0;
   bool prev_decreased = true;
   bool decreased;
   unsigned i = 0;
@@ -1603,12 +1603,12 @@ int NdbIndexStatImpl::cache_insert(Con &con) {
   con.m_cachePos = nextPos;
 
   Uint8 *cacheKeyPtr = &c.m_keyArray[con.m_cacheKeyOffset];
-  const Uint8 *keyPtr = (const Uint8 *)m_keyData.get_data_buf();
+  const auto *keyPtr = (const Uint8 *)m_keyData.get_data_buf();
   memcpy(cacheKeyPtr, keyPtr, keyLen);
   con.m_cacheKeyOffset = nextKeyOffset;
 
   Uint8 *cacheValuePtr = &c.m_valueArray[con.m_cacheValueOffset];
-  const Uint8 *valuePtr = (const Uint8 *)m_valueData.get_data_buf();
+  const auto *valuePtr = (const Uint8 *)m_valueData.get_data_buf();
   memcpy(cacheValuePtr, valuePtr, c.m_valueLen);
   con.m_cacheValueOffset = nextValueOffset;
 

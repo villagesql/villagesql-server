@@ -74,7 +74,7 @@ class my_rcu_lock_test : public ::testing::Test {
 
   static void rcu_writer(size_t reps, time_t waitms) {
     for (size_t i = 0; i < reps; i++) {
-      payload_s *newp = new payload_s("a", "b", "c");
+      auto *newp = new payload_s("a", "b", "c");
 
       bool ret = lock->write_wait_and_delete(newp);
       EXPECT_EQ(ret, false);

@@ -581,7 +581,7 @@ static void vio_get_normalized_ip(const struct sockaddr *src, size_t src_length,
     case AF_INET6: {
       const auto *src_addr6 = (const struct sockaddr_in6 *)src;
       const struct in6_addr *src_ip6 = &(src_addr6->sin6_addr);
-      const uint32 *src_ip6_int32 =
+      const auto *src_ip6_int32 =
           pointer_cast<const uint32 *>(src_ip6->s6_addr);
 
       if (IN6_IS_ADDR_V4MAPPED(src_ip6) || IN6_IS_ADDR_V4COMPAT(src_ip6)) {
@@ -1116,7 +1116,7 @@ bool vio_socket_connect(Vio *vio, struct sockaddr *addr, socklen_t len,
       (vio_io_wait(vio, VIO_IO_EVENT_CONNECT, timeout) == 1)) {
     int error;
     IF_WIN(int, socklen_t) optlen = sizeof(error);
-    IF_WIN(char, void) *optval = (IF_WIN(char, void) *)&error;
+    auto *optval = (IF_WIN(char, void) *)&error;
 
     /*
       At this point, we know that something happened on the socket.

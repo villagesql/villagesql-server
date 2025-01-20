@@ -59,7 +59,7 @@ bool printCREATE_EVNT_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const CreateEvntReq *const sig = (const CreateEvntReq *)theData;
+  const auto *const sig = (const CreateEvntReq *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");
@@ -85,7 +85,7 @@ bool printCREATE_EVNT_CONF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const CreateEvntConf *const sig = (const CreateEvntConf *)theData;
+  const auto *const sig = (const CreateEvntConf *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");
@@ -111,7 +111,7 @@ bool printCREATE_EVNT_REF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const CreateEvntRef *const sig = (const CreateEvntRef *)theData;
+  const auto *const sig = (const CreateEvntRef *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");

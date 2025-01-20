@@ -225,8 +225,8 @@ static int my_wildcmp_mb_impl(const CHARSET_INFO *cs, const char *str,
                               const char *wildend_arg, int escape, int w_one,
                               int w_many, int recurse_level) {
   int result = -1; /* Not found, using wildcards */
-  const uint8_t *wildstr = pointer_cast<const uint8_t *>(wildstr_arg);
-  const uint8_t *wildend = pointer_cast<const uint8_t *>(wildend_arg);
+  const auto *wildstr = pointer_cast<const uint8_t *>(wildstr_arg);
+  const auto *wildend = pointer_cast<const uint8_t *>(wildend_arg);
 
   if (my_string_stack_guard && my_string_stack_guard(recurse_level)) return -1;
   while (wildstr != wildend) {
@@ -948,8 +948,8 @@ static int my_wildcmp_mb_bin_impl(const CHARSET_INFO *cs, const char *str,
                                   const char *wildend_arg, int escape,
                                   int w_one, int w_many, int recurse_level) {
   int result = -1; /* Not found, using wildcards */
-  const uint8_t *wildstr = pointer_cast<const uint8_t *>(wildstr_arg);
-  const uint8_t *wildend = pointer_cast<const uint8_t *>(wildend_arg);
+  const auto *wildstr = pointer_cast<const uint8_t *>(wildstr_arg);
+  const auto *wildend = pointer_cast<const uint8_t *>(wildend_arg);
 
   if (my_string_stack_guard && my_string_stack_guard(recurse_level)) return -1;
   while (wildstr != wildend) {

@@ -235,7 +235,7 @@ class Wkb_parser {
     }
 
     std::uint32_t wkb_type = parse_uint32(bo);
-    Geometry_type type = static_cast<Geometry_type>(wkb_type);
+    auto type = static_cast<Geometry_type>(wkb_type);
 
     if (!is_valid_type_or_subtype(type, Geometry_type::kGeometry))
       throw std::exception();
@@ -385,7 +385,7 @@ std::unique_ptr<Geometry> parse_wkb(THD *thd,
                                     const dd::Spatial_reference_system *srs,
                                     const char *wkb, std::size_t length,
                                     bool ignore_axis_order) {
-  unsigned char *begin = pointer_cast<unsigned char *>(const_cast<char *>(wkb));
+  auto *begin = pointer_cast<unsigned char *>(const_cast<char *>(wkb));
   unsigned char *end = begin + length;
   std::unique_ptr<Geometry> g = nullptr;
   bool res;
@@ -427,7 +427,7 @@ std::unique_ptr<Geometry> parse_wkb(THD *thd,
 }
 
 bool parse_srid(const char *str, std::size_t length, srid_t *srid) {
-  unsigned char *begin = pointer_cast<unsigned char *>(const_cast<char *>(str));
+  auto *begin = pointer_cast<unsigned char *>(const_cast<char *>(str));
 
   if (length < sizeof(srid_t)) return true;
   *srid = uint4korr(begin);  // Always little-endian.

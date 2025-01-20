@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Innodb_datafiles &Innodb_datafiles::instance() {
-  static Innodb_datafiles *s_instance = new Innodb_datafiles();
+  static auto *s_instance = new Innodb_datafiles();
   return *s_instance;
 }
 

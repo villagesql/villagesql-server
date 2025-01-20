@@ -86,7 +86,7 @@ class ClusterMemberInfoTest : public ::testing::Test {
 };
 
 TEST_F(ClusterMemberInfoTest, EncodeDecodeIdempotencyTest) {
-  vector<uchar> *encoded = new vector<uchar>();
+  auto *encoded = new vector<uchar>();
   local_node->encode(encoded);
 
   Group_member_info decoded_local_node(&encoded->front(), encoded->size(),
@@ -196,7 +196,7 @@ TEST_F(ClusterMemberInfoManagerTest, GetLocalInfoByUUIDTest) {
       Group_member_info::MEMBER_OFFLINE;
 
   Member_version local_member_plugin_version(plugin_version);
-  Group_member_info *new_member = new Group_member_info(
+  auto *new_member = new Group_member_info(
       hostname.c_str(), port, uuid.c_str(), write_set_algorithm,
       gcs_member_id.get_member_id(), status, local_member_plugin_version,
       gtid_assignment_block_size, Group_member_info::MEMBER_ROLE_PRIMARY,
@@ -242,7 +242,7 @@ TEST_F(ClusterMemberInfoManagerTest, UpdateGtidSetsOfLocalObjectTest) {
 }
 
 TEST_F(ClusterMemberInfoManagerTest, GetLocalInfoByUUIDAfterEncodingTest) {
-  vector<uchar> *encoded = new vector<uchar>();
+  auto *encoded = new vector<uchar>();
   cluster_member_mgr->encode(encoded);
 
   Group_member_info_list *decoded_members =
@@ -291,7 +291,7 @@ TEST_F(ClusterMemberInfoManagerTest, GetLocalInfoByUUIDAfterEncodingTest) {
 TEST_F(ClusterMemberInfoManagerTest,
        UpdateStatusOfLocalObjectAfterExchangeTest) {
   Notification_context ctx;
-  vector<uchar> *encoded = new vector<uchar>();
+  auto *encoded = new vector<uchar>();
   cluster_member_mgr->encode(encoded);
 
   Group_member_info_list *decoded_members =
@@ -357,7 +357,7 @@ TEST_F(ClusterMemberInfoManagerTest, EncodeDecodeLargeSets) {
       Group_member_info::MEMBER_OFFLINE;
 
   Member_version local_member_plugin_version(plugin_version);
-  Group_member_info *new_member = new Group_member_info(
+  auto *new_member = new Group_member_info(
       hostname.c_str(), port, uuid.c_str(), write_set_algorithm,
       gcs_member_id.get_member_id(), status, local_member_plugin_version,
       gtid_assignment_block_size, Group_member_info::MEMBER_ROLE_PRIMARY,
@@ -379,7 +379,7 @@ TEST_F(ClusterMemberInfoManagerTest, EncodeDecodeLargeSets) {
   ASSERT_TRUE(false == retrieved_local_info_not_found);
   ASSERT_EQ(retrieved_local_info.get_uuid(), uuid_to_get);
 
-  vector<uchar> *encoded = new vector<uchar>();
+  auto *encoded = new vector<uchar>();
   cluster_member_mgr->encode(encoded);
 
   Group_member_info_list *decoded_members =

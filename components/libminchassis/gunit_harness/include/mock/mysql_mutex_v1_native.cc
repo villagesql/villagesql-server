@@ -35,14 +35,14 @@ static void _register(const char * /*category*/, PSI_mutex_info * /*info*/,
 static int _init(PSI_mutex_key /*key*/, mysql_mutex_t *that,
                  const native_mutexattr_t * /*attr*/, const char * /*src_file*/,
                  unsigned int /*src_line*/) {
-  std::mutex *mtx = new std::mutex();
+  auto *mtx = new std::mutex();
   that->m_psi = reinterpret_cast<struct PSI_mutex *>(mtx);
   return 0;
 }
 
 static int _destroy(mysql_mutex_t *that, const char * /*src_file*/,
                     unsigned int /*src_line*/) {
-  std::mutex *mtx = reinterpret_cast<std::mutex *>(that->m_psi);
+  auto *mtx = reinterpret_cast<std::mutex *>(that->m_psi);
   delete mtx;
   that->m_psi = nullptr;
   return 0;
@@ -50,20 +50,20 @@ static int _destroy(mysql_mutex_t *that, const char * /*src_file*/,
 
 static int _lock(mysql_mutex_t *that, const char * /*src_file*/,
                  unsigned int /*src_line*/) {
-  std::mutex *mtx = reinterpret_cast<std::mutex *>(that->m_psi);
+  auto *mtx = reinterpret_cast<std::mutex *>(that->m_psi);
   mtx->lock();
   return 0;
 }
 
 static int _trylock(mysql_mutex_t *that, const char * /*src_file*/,
                     unsigned int /*src_line*/) {
-  std::mutex *mtx = reinterpret_cast<std::mutex *>(that->m_psi);
+  auto *mtx = reinterpret_cast<std::mutex *>(that->m_psi);
   return mtx->try_lock() ? 0 : -1;
 }
 
 static int _unlock(mysql_mutex_t *that, const char * /*src_file*/,
                    unsigned int /*src_line*/) {
-  std::mutex *mtx = reinterpret_cast<std::mutex *>(that->m_psi);
+  auto *mtx = reinterpret_cast<std::mutex *>(that->m_psi);
   mtx->unlock();
   return 0;
 }

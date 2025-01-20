@@ -31,7 +31,7 @@ namespace dd {
 namespace system_views {
 
 const Table_constraints &Table_constraints::instance() {
-  static Table_constraints *s_instance = new Table_constraints();
+  static auto *s_instance = new Table_constraints();
   return *s_instance;
 }
 

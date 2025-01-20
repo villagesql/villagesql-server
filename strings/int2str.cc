@@ -99,7 +99,7 @@ char *ll2str(int64_t val, char *dst, int radix, bool upcase) {
 char *longlong10_to_str(int64_t val, char *dst, int radix) {
   assert(radix == 10 || radix == -10);
 
-  uint64_t uval = static_cast<uint64_t>(val);
+  auto uval = static_cast<uint64_t>(val);
 
   if (radix < 0) /* -10 */
   {

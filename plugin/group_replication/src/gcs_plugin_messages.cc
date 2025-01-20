@@ -68,7 +68,7 @@ void Plugin_gcs_message::encode_header(
   int8store(slider, m_msg_len);
   slider += WIRE_MSG_LEN_SIZE;
 
-  unsigned short s_cargo_type = (unsigned short)m_cargo_type;
+  auto s_cargo_type = (unsigned short)m_cargo_type;
   int2store(slider, s_cargo_type);
   slider += WIRE_CARGO_TYPE_SIZE;
 
@@ -119,8 +119,7 @@ Plugin_gcs_message::enum_cargo_type Plugin_gcs_message::get_cargo_type(
   unsigned short s_cargo_type = 0;
   s_cargo_type = uint2korr(slider);
   // enum may have 32bit storage
-  Plugin_gcs_message::enum_cargo_type cargo_type =
-      (Plugin_gcs_message::enum_cargo_type)s_cargo_type;
+  auto cargo_type = (Plugin_gcs_message::enum_cargo_type)s_cargo_type;
 
   return cargo_type;
 }

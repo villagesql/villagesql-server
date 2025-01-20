@@ -57,7 +57,7 @@ Index_stats::Index_stats() {
 ///////////////////////////////////////////////////////////////////////////
 
 const Index_stats &Index_stats::instance() {
-  static Index_stats *s_instance = new Index_stats();
+  static auto *s_instance = new Index_stats();
   return *s_instance;
 }
 

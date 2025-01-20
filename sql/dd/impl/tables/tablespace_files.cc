@@ -33,7 +33,7 @@ namespace dd {
 namespace tables {
 
 const Tablespace_files &Tablespace_files::instance() {
-  static Tablespace_files *s_instance = new Tablespace_files();
+  static auto *s_instance = new Tablespace_files();
   return *s_instance;
 }
 

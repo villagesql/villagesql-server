@@ -197,8 +197,7 @@ void Gcs_xcom_communication::remove_event_listener(int event_listener_handle) {
 
 void Gcs_xcom_communication::notify_received_message(
     std::unique_ptr<Gcs_message> &&message) {
-  map<int, const Gcs_communication_event_listener &>::iterator callback_it =
-      event_listeners.begin();
+  auto callback_it = event_listeners.begin();
 
   while (callback_it != event_listeners.end()) {
     callback_it->second.on_message_received(*message);
@@ -257,7 +256,7 @@ Gcs_xcom_communication::possible_packet_recovery_donors() const {
 
   std::vector<Gcs_xcom_node_information> donors;
 
-  Gcs_xcom_interface *const xcom_interface =
+  auto *const xcom_interface =
       static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());
   if (xcom_interface != nullptr) {
     Gcs_member_identifier myself{
@@ -580,7 +579,7 @@ static bool are_we_still_in_the_group(
     Gcs_xcom_view_change_control_interface &view_control) {
   bool still_in_the_group = false;
 
-  Gcs_xcom_interface *const xcom_interface =
+  auto *const xcom_interface =
       static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());
   if (xcom_interface != nullptr) {
     std::string &myself =

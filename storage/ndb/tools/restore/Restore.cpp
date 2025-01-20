@@ -157,7 +157,7 @@ class TwiddleUtil {
         // Nothing to swap
         break;
       case 16: {
-        Uint16 *ptr = (Uint16 *)data_ptr;
+        auto *ptr = (Uint16 *)data_ptr;
         for (Uint32 i = 0; i < m_twiddle_array_size; i++) {
           *ptr = Twiddle16(*ptr);
           ptr++;
@@ -165,7 +165,7 @@ class TwiddleUtil {
         break;
       }
       case 32: {
-        Uint32 *ptr = (Uint32 *)data_ptr;
+        auto *ptr = (Uint32 *)data_ptr;
         for (Uint32 i = 0; i < m_twiddle_array_size; i++) {
           *ptr = Twiddle32(*ptr);
           ptr++;
@@ -173,7 +173,7 @@ class TwiddleUtil {
         break;
       }
       case 64: {
-        Uint64 *ptr = (Uint64 *)data_ptr;
+        auto *ptr = (Uint64 *)data_ptr;
         for (Uint32 i = 0; i < m_twiddle_array_size; i++) {
           *ptr = Twiddle64(*ptr);
           ptr++;
@@ -281,38 +281,32 @@ RestoreMetaData::~RestoreMetaData() {
   for (Uint32 i = 0; i < m_objects.size(); i++) {
     switch (m_objects[i].m_objType) {
       case DictTabInfo::Tablespace: {
-        NdbDictionary::Tablespace *dst =
-            (NdbDictionary::Tablespace *)m_objects[i].m_objPtr;
+        auto *dst = (NdbDictionary::Tablespace *)m_objects[i].m_objPtr;
         delete dst;
         break;
       }
       case DictTabInfo::LogfileGroup: {
-        NdbDictionary::LogfileGroup *dst =
-            (NdbDictionary::LogfileGroup *)m_objects[i].m_objPtr;
+        auto *dst = (NdbDictionary::LogfileGroup *)m_objects[i].m_objPtr;
         delete dst;
         break;
       }
       case DictTabInfo::Datafile: {
-        NdbDictionary::Datafile *dst =
-            (NdbDictionary::Datafile *)m_objects[i].m_objPtr;
+        auto *dst = (NdbDictionary::Datafile *)m_objects[i].m_objPtr;
         delete dst;
         break;
       }
       case DictTabInfo::Undofile: {
-        NdbDictionary::Undofile *dst =
-            (NdbDictionary::Undofile *)m_objects[i].m_objPtr;
+        auto *dst = (NdbDictionary::Undofile *)m_objects[i].m_objPtr;
         delete dst;
         break;
       }
       case DictTabInfo::HashMap: {
-        NdbDictionary::HashMap *dst =
-            (NdbDictionary::HashMap *)m_objects[i].m_objPtr;
+        auto *dst = (NdbDictionary::HashMap *)m_objects[i].m_objPtr;
         delete dst;
         break;
       }
       case DictTabInfo::ForeignKey: {
-        NdbDictionary::ForeignKey *dst =
-            (NdbDictionary::ForeignKey *)m_objects[i].m_objPtr;
+        auto *dst = (NdbDictionary::ForeignKey *)m_objects[i].m_objPtr;
         delete dst;
         break;
       }
@@ -441,7 +435,7 @@ bool RestoreMetaData::readMetaTableDesc() {
       return parseTableDescriptor((Uint32 *)ptr, len);
       break;
     case DictTabInfo::Tablespace: {
-      NdbDictionary::Tablespace *dst = new NdbDictionary::Tablespace;
+      auto *dst = new NdbDictionary::Tablespace;
       errcode = NdbDictInterface::parseFilegroupInfo(
           NdbTablespaceImpl::getImpl(*dst), (Uint32 *)ptr, len);
       if (errcode) delete dst;
@@ -451,7 +445,7 @@ bool RestoreMetaData::readMetaTableDesc() {
       break;
     }
     case DictTabInfo::LogfileGroup: {
-      NdbDictionary::LogfileGroup *dst = new NdbDictionary::LogfileGroup;
+      auto *dst = new NdbDictionary::LogfileGroup;
       errcode = NdbDictInterface::parseFilegroupInfo(
           NdbLogfileGroupImpl::getImpl(*dst), (Uint32 *)ptr, len);
       if (errcode) delete dst;
@@ -461,7 +455,7 @@ bool RestoreMetaData::readMetaTableDesc() {
       break;
     }
     case DictTabInfo::Datafile: {
-      NdbDictionary::Datafile *dst = new NdbDictionary::Datafile;
+      auto *dst = new NdbDictionary::Datafile;
       errcode = NdbDictInterface::parseFileInfo(NdbDatafileImpl::getImpl(*dst),
                                                 (Uint32 *)ptr, len);
       if (errcode) delete dst;
@@ -471,7 +465,7 @@ bool RestoreMetaData::readMetaTableDesc() {
       break;
     }
     case DictTabInfo::Undofile: {
-      NdbDictionary::Undofile *dst = new NdbDictionary::Undofile;
+      auto *dst = new NdbDictionary::Undofile;
       errcode = NdbDictInterface::parseFileInfo(NdbUndofileImpl::getImpl(*dst),
                                                 (Uint32 *)ptr, len);
       if (errcode) delete dst;
@@ -481,7 +475,7 @@ bool RestoreMetaData::readMetaTableDesc() {
       break;
     }
     case DictTabInfo::HashMap: {
-      NdbDictionary::HashMap *dst = new NdbDictionary::HashMap;
+      auto *dst = new NdbDictionary::HashMap;
       errcode = NdbDictInterface::parseHashMapInfo(
           NdbHashMapImpl::getImpl(*dst), (Uint32 *)ptr, len);
       if (errcode) delete dst;
@@ -507,7 +501,7 @@ bool RestoreMetaData::readMetaTableDesc() {
       break;
     }
     case DictTabInfo::ForeignKey: {
-      NdbDictionary::ForeignKey *dst = new NdbDictionary::ForeignKey;
+      auto *dst = new NdbDictionary::ForeignKey;
       errcode = NdbDictInterface::parseForeignKeyInfo(
           NdbForeignKeyImpl::getImpl(*dst), (const Uint32 *)ptr, len);
       if (errcode) delete dst;
@@ -741,7 +735,7 @@ bool RestoreMetaData::readFragmentInfo() {
       table = getTable(tableId);
     }
 
-    FragmentInfo *tmp = new FragmentInfo;
+    auto *tmp = new FragmentInfo;
     tmp->fragmentNo = ntohl(fragInfo.FragmentNo);
     tmp->noOfRecords = ntohl(fragInfo.NoOfRecordsLow) +
                        (((Uint64)ntohl(fragInfo.NoOfRecordsHigh)) << 32);
@@ -816,7 +810,7 @@ bool RestoreMetaData::parseTableDescriptor(const Uint32 *data, Uint32 len) {
   if (tableImpl == 0) return false;
 
   restoreLogger.log_debug("parseTableInfo %s done", tableImpl->getName());
-  TableS *table = new TableS(m_fileHeader.NdbVersion, tableImpl);
+  auto *table = new TableS(m_fileHeader.NdbVersion, tableImpl);
   if (table == NULL) {
     return false;
   }
@@ -983,7 +977,7 @@ bool TupleS::prepareRecord(TableS &tab) {
 }
 
 static inline Uint8 *pad(Uint8 *src, Uint32 align, Uint32 bitPos) {
-  UintPtr ptr = UintPtr(src);
+  auto ptr = UintPtr(src);
   switch (align) {
     case DictTabInfo::aBit:
     case DictTabInfo::a32Bit:
@@ -1020,7 +1014,7 @@ bool applyColumnTransform(const NdbDictionary::Column *col,
     attr_data->size = 0;
     attr_data->void_value = NULL;
   } else {
-    const uchar *dst_char = (const uchar *)dst_ptr;
+    const auto *dst_char = (const uchar *)dst_ptr;
     attr_data->null = false;
     attr_data->void_value = dst_ptr;
     switch (col->getArrayType()) {
@@ -1088,7 +1082,7 @@ const TupleS *RestoreDataIterator::getNextTuple(int &res,
       continue;
     }
 
-    Uint32 *buf_ptr = (Uint32 *)_buf_ptr;
+    auto *buf_ptr = (Uint32 *)_buf_ptr;
     if (m_currentTable->backupVersion >= NDBD_RAW_LCP) {
       res = readTupleData_packed(buf_ptr, dataLength);
     } else {
@@ -1159,7 +1153,7 @@ int RestoreDataIterator::readTupleData_packed(Uint32 *buf_ptr,
    * Iterate through attributes...
    */
   const Uint32 *bmptr = ptr + 1;
-  Uint8 *src = (Uint8 *)(bmptr + bmlen32);
+  auto *src = (Uint8 *)(bmptr + bmlen32);
   Uint32 bmpos = 0;
   Uint32 bitPos = 0;
   for (Uint32 i = 0; i < (Uint32)tab->getNoOfColumns(); i++, bmpos++) {
@@ -1192,7 +1186,7 @@ int RestoreDataIterator::readTupleData_packed(Uint32 *buf_ptr,
     switch (align) {
       case DictTabInfo::aBit: {  // Bit
         src = pad(src, 0, 0);
-        Uint32 *src32 = (Uint32 *)src;
+        auto *src32 = (Uint32 *)src;
 
         Uint32 len32 = (len + 31) >> 5;
         Uint32 *tmp = get_extra_storage(len32);
@@ -1316,7 +1310,7 @@ int RestoreDataIterator::readVarData(Uint32 *buf_ptr, Uint32 *ptr,
                                      Uint32 dataLength) {
   while (ptr + 2 < buf_ptr + dataLength) {
     typedef BackupFormat::DataFile::VariableData VarData;
-    VarData *data = (VarData *)ptr;
+    auto *data = (VarData *)ptr;
     Uint32 sz = ntohl(data->Sz);
     Uint32 attrId = ntohl(data->Id);  // column_no
 
@@ -1376,7 +1370,7 @@ int RestoreDataIterator::readVarData_drop6(Uint32 *buf_ptr, Uint32 *ptr,
     assert(ptr < buf_ptr + dataLength);
 
     typedef BackupFormat::DataFile::VariableData VarData;
-    VarData *data = (VarData *)ptr;
+    auto *data = (VarData *)ptr;
     Uint32 sz = ntohl(data->Sz);
     assert(ntohl(data->Id) == attrId);
 
@@ -1986,7 +1980,7 @@ AttributeDesc::~AttributeDesc() {
 }
 
 void TableS::createAttr(NdbDictionary::Column *column) {
-  AttributeDesc *d = new AttributeDesc(column);
+  auto *d = new AttributeDesc(column);
   if (d == NULL) {
     restoreLogger.log_error("Restore: Failed to allocate memory");
     abort();
@@ -2149,7 +2143,7 @@ const LogEntry *RestoreLogIterator::getNextLogEntry(int &res) {
         tables.
       */
       typedef BackupFormat::LogFile::LogEntry_no_fragid LogE_no_fragid;
-      LogE_no_fragid *logE_no_fragid = (LogE_no_fragid *)logEntryPtr;
+      auto *logE_no_fragid = (LogE_no_fragid *)logEntryPtr;
       tableId = ntohl(logE_no_fragid->TableId);
       triggerEvent = ntohl(logE_no_fragid->TriggerEvent);
       frag_id = 0;
@@ -2220,8 +2214,8 @@ const LogEntry *RestoreLogIterator::getNextLogEntry(int &res) {
   m_logEntry.clear();
   m_rowBuffIndex = 0;
 
-  AttributeHeader *ah = (AttributeHeader *)attr_data;
-  AttributeHeader *end = (AttributeHeader *)(attr_data + attr_data_len);
+  auto *ah = (AttributeHeader *)attr_data;
+  auto *end = (AttributeHeader *)(attr_data + attr_data_len);
   AttributeS *attr;
   m_logEntry.m_frag_id = frag_id;
   while (ah < end) {

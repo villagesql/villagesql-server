@@ -195,7 +195,7 @@ class Query_string_builder_multiple_tags_param_testsuite
 
 TEST_P(Query_string_builder_multiple_tags_param_testsuite,
        format_putStringValueInsideQuery_whenMultipleTagsInFormat) {
-  std::list<std::string>::const_iterator i = values.begin();
+  auto i = values.begin();
 
   // In each iteration format creates new object without previous state
   // Thus similar test are needed with one call/multiple args
@@ -271,7 +271,7 @@ class Query_string_builder_multiple_too_many_tags_param_testsuite
 
 TEST_P(Query_string_builder_multiple_too_many_tags_param_testsuite,
        format_putStringValueInsideQuery_whenMultipleTagsInFormat) {
-  std::list<std::string>::const_iterator i = values.begin();
+  auto i = values.begin();
 
   ASSERT_LT(0u, values.size());
 

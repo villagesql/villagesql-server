@@ -67,16 +67,16 @@ struct FT_SUPERDOC {
 };
 
 static int FT_SUPERDOC_cmp(const void *, const void *a, const void *b) {
-  const FT_SUPERDOC *p1 = pointer_cast<const FT_SUPERDOC *>(a);
-  const FT_SUPERDOC *p2 = pointer_cast<const FT_SUPERDOC *>(b);
+  const auto *p1 = pointer_cast<const FT_SUPERDOC *>(a);
+  const auto *p2 = pointer_cast<const FT_SUPERDOC *>(b);
   if (p1->doc.dpos < p2->doc.dpos) return -1;
   if (p1->doc.dpos == p2->doc.dpos) return 0;
   return 1;
 }
 
 static int walk_and_match(void *v_word, uint32 count, void *v_aio) {
-  FT_WORD *word = static_cast<FT_WORD *>(v_word);
-  ALL_IN_ONE *aio = static_cast<ALL_IN_ONE *>(v_aio);
+  auto *word = static_cast<FT_WORD *>(v_word);
+  auto *aio = static_cast<ALL_IN_ONE *>(v_aio);
   int subkeys = 0, r;
   uint keylen, doc_cnt;
   FT_SUPERDOC sdoc, *sptr;
@@ -190,8 +190,8 @@ static int walk_and_match(void *v_word, uint32 count, void *v_aio) {
 }
 
 static int walk_and_copy(void *v_from, uint32, void *v_to) {
-  FT_SUPERDOC *from = static_cast<FT_SUPERDOC *>(v_from);
-  FT_DOC **to = static_cast<FT_DOC **>(v_to);
+  auto *from = static_cast<FT_SUPERDOC *>(v_from);
+  auto **to = static_cast<FT_DOC **>(v_to);
   DBUG_TRACE;
   from->doc.weight += from->tmp_weight * from->word_ptr->weight;
   (*to)->dpos = from->doc.dpos;
@@ -201,8 +201,8 @@ static int walk_and_copy(void *v_from, uint32, void *v_to) {
 }
 
 static int walk_and_push(void *v_from, uint32, void *v_best) {
-  FT_SUPERDOC *from = static_cast<FT_SUPERDOC *>(v_from);
-  QUEUE *best = static_cast<QUEUE *>(v_best);
+  auto *from = static_cast<FT_SUPERDOC *>(v_from);
+  auto *best = static_cast<QUEUE *>(v_best);
   DBUG_TRACE;
   from->doc.weight += from->tmp_weight * from->word_ptr->weight;
   best->elements = std::min(best->elements, uint(ft_query_expansion_limit - 1));
@@ -211,8 +211,8 @@ static int walk_and_push(void *v_from, uint32, void *v_best) {
 }
 
 static int FT_DOC_cmp(void *, uchar *a_arg, uchar *b_arg) {
-  FT_DOC *a = (FT_DOC *)a_arg;
-  FT_DOC *b = (FT_DOC *)b_arg;
+  auto *a = (FT_DOC *)a_arg;
+  auto *b = (FT_DOC *)b_arg;
   double c = b->weight - a->weight;
   return ((c < 0) ? -1 : (c > 0) ? 1 : 0);
 }
@@ -307,8 +307,8 @@ err:
 }
 
 int ft_nlq_read_next(FT_INFO *handler_base, char *record) {
-  st_ft_info_nlq *handler = (st_ft_info_nlq *)handler_base;
-  MI_INFO *info = (MI_INFO *)handler->info;
+  auto *handler = (st_ft_info_nlq *)handler_base;
+  auto *info = (MI_INFO *)handler->info;
 
   // Move to the next document that has a non-zero score.
   while (++handler->curdoc < handler->ndocs &&
@@ -332,7 +332,7 @@ int ft_nlq_read_next(FT_INFO *handler_base, char *record) {
 float ft_nlq_find_relevance(FT_INFO *handler_base,
                             uchar *record [[maybe_unused]],
                             uint length [[maybe_unused]]) {
-  st_ft_info_nlq *handler = (st_ft_info_nlq *)handler_base;
+  auto *handler = (st_ft_info_nlq *)handler_base;
   int a, b, c;
   FT_DOC *docs = handler->doc;
   my_off_t docid = handler->info->lastpos;
@@ -357,11 +357,11 @@ float ft_nlq_find_relevance(FT_INFO *handler_base,
 void ft_nlq_close_search(FT_INFO *handler) { my_free(handler); }
 
 float ft_nlq_get_relevance(FT_INFO *handler_base) {
-  st_ft_info_nlq *handler = (st_ft_info_nlq *)handler_base;
+  auto *handler = (st_ft_info_nlq *)handler_base;
   return (float)handler->doc[handler->curdoc].weight;
 }
 
 void ft_nlq_reinit_search(FT_INFO *handler_base) {
-  st_ft_info_nlq *handler = (st_ft_info_nlq *)handler_base;
+  auto *handler = (st_ft_info_nlq *)handler_base;
   handler->curdoc = -1;
 }

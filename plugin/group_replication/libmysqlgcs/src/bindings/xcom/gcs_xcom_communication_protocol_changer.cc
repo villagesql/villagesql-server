@@ -413,7 +413,7 @@ void Gcs_xcom_communication_protocol_changer::decrement_nr_packets_in_transit(
    Unless it is a state exchange packet, because of the reasons specified in
    atomically_increment_nr_packets_in_transit.
    */
-  Gcs_xcom_interface *const xcom_interface =
+  auto *const xcom_interface =
       static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());
   if (xcom_interface != nullptr) {
     Gcs_xcom_node_address *myself_node_address =

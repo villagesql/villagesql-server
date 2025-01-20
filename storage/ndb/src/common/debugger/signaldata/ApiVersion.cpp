@@ -32,7 +32,7 @@ bool printAPI_VERSION_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const ApiVersionReq *sig = (const ApiVersionReq *)&theData[0];
+  const auto *sig = (const ApiVersionReq *)&theData[0];
 
   fprintf(output,
           " senderRef: (node: %d, block: %d), nodeId: %d\n"
@@ -44,7 +44,7 @@ bool printAPI_VERSION_REQ(FILE *output, const Uint32 *theData, Uint32 len,
 
 bool printAPI_VERSION_CONF(FILE *output, const Uint32 *theData, Uint32 len,
                            Uint16 /*recBlockNo*/) {
-  const ApiVersionConf *sig = (const ApiVersionConf *)&theData[0];
+  const auto *sig = (const ApiVersionConf *)&theData[0];
 
   if (len <= ApiVersionConf::SignalLengthIPv4) {
     fprintf(output,

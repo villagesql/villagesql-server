@@ -164,7 +164,7 @@ void closeTransaction(async_callback_t *cb) {
  * Callback executed when transaction has return from NDB
  */
 static void callback(int result, NdbTransaction *trans, void *aObject) {
-  async_callback_t *cbData = (async_callback_t *)aObject;
+  auto *cbData = (async_callback_t *)aObject;
   if (result < 0) {
     /**
      * Error: Temporary or permanent?

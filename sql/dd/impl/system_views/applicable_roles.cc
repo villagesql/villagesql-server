@@ -120,7 +120,7 @@ const String_type &Applicable_roles::cte_expression() {
 }
 
 const Applicable_roles &Applicable_roles::instance() {
-  static Applicable_roles *s_instance = new Applicable_roles();
+  static auto *s_instance = new Applicable_roles();
   return *s_instance;
 }
 

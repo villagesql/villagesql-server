@@ -87,7 +87,7 @@ int ndb_zlib::set_memory(void *mem, size_t size) {
 }
 
 void *ndb_zlib::alloc(void *opaque, unsigned items, unsigned size) {
-  ndb_zlib *ths = static_cast<ndb_zlib *>(opaque);
+  auto *ths = static_cast<ndb_zlib *>(opaque);
   size_t sz = size_t{items} * size_t{size};
   if (ths->mem_top + sz <= ths->mem_end) {
     void *p = ths->mem_top;
@@ -98,7 +98,7 @@ void *ndb_zlib::alloc(void *opaque, unsigned items, unsigned size) {
 }
 
 void ndb_zlib::free(void *opaque, void *address) {
-  ndb_zlib *ths = static_cast<ndb_zlib *>(opaque);
+  auto *ths = static_cast<ndb_zlib *>(opaque);
   REQUIRE(ths->mem_begin <= address);
   REQUIRE(address < ths->mem_top);
   REQUIRE(address < ths->mem_end);

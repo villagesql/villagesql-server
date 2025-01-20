@@ -101,7 +101,7 @@ NdbOperation::~NdbOperation() {
 void NdbOperation::setErrorCode(int anErrorCode) const {
   /* Setting an error is considered to be a const
      operation, hence the nasty cast here */
-  NdbOperation *pnonConstThis = const_cast<NdbOperation *>(this);
+  auto *pnonConstThis = const_cast<NdbOperation *>(this);
 
   pnonConstThis->theError.code = anErrorCode;
   theNdbCon->theErrorLine = theErrorLine;
@@ -119,7 +119,7 @@ void NdbOperation::setErrorCode(int anErrorCode) const {
 void NdbOperation::setErrorCodeAbort(int anErrorCode) const {
   /* Setting an error is considered to be a const
      operation, hence the nasty cast here */
-  NdbOperation *pnonConstThis = const_cast<NdbOperation *>(this);
+  auto *pnonConstThis = const_cast<NdbOperation *>(this);
 
   pnonConstThis->theError.code = anErrorCode;
   theNdbCon->theErrorLine = theErrorLine;
@@ -192,7 +192,7 @@ int NdbOperation::init(const NdbTableImpl *tab, NdbTransaction *myConnection) {
   theTCREQ->setSignal(m_tcReqGSN, refToBlock(theNdbCon->m_tcRef));
 
   theAI_LenInCurrAI = 20;
-  TcKeyReq *const tcKeyReq = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
+  auto *const tcKeyReq = CAST_PTR(TcKeyReq, theTCREQ->getDataPtrSend());
   tcKeyReq->scanInfo = 0;
   theKEYINFOptr = &tcKeyReq->keyInfo[0];
   theATTRINFOptr = &tcKeyReq->attrInfo[0];

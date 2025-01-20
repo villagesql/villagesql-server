@@ -61,7 +61,7 @@ auto transform_helper(
     case Coordinate_system::kCartesian: {
       // Workaround for limitation in Developer Studio 12.5 on Solaris that
       // doesn't allow returning std::unique_ptr<subtype of Geometry>.
-      CartesianGeometry *pt_result = new CartesianGeometry();
+      auto *pt_result = new CartesianGeometry();
       std::unique_ptr<Geometry> result(pt_result);
       m_transformation.forward(g, *pt_result);
       return result;
@@ -69,7 +69,7 @@ auto transform_helper(
     case Coordinate_system::kGeographic: {
       // Workaround for limitation in Developer Studio 12.5 on Solaris that
       // doesn't allow returning std::unique_ptr<subtype of Geometry>.
-      GeographicGeometry *pt_result = new GeographicGeometry();
+      auto *pt_result = new GeographicGeometry();
       std::unique_ptr<Geometry> result(pt_result);
       m_transformation.forward(g, *pt_result);
       return result;
@@ -89,8 +89,7 @@ auto transform_gc_helper(const InputGeometryCollection &g,
     case Coordinate_system::kCartesian: {
       // Workaround for limitation in Developer Studio 12.5 on Solaris that
       // doesn't allow returning std::unique_ptr<subtype of Geometry>.
-      Cartesian_geometrycollection *gc_result =
-          new Cartesian_geometrycollection();
+      auto *gc_result = new Cartesian_geometrycollection();
       std::unique_ptr<Geometry> result(gc_result);
       for (std::size_t i = 0; i < g.size(); i++) {
         std::unique_ptr<Geometry> geom_res(transform(g[i]));
@@ -101,8 +100,7 @@ auto transform_gc_helper(const InputGeometryCollection &g,
     case Coordinate_system::kGeographic: {
       // Workaround for limitation in Developer Studio 12.5 on Solaris that
       // doesn't allow returning std::unique_ptr<subtype of Geometry>.
-      Geographic_geometrycollection *gc_result =
-          new Geographic_geometrycollection();
+      auto *gc_result = new Geographic_geometrycollection();
       std::unique_ptr<Geometry> result(gc_result);
       for (std::size_t i = 0; i < g.size(); i++) {
         std::unique_ptr<Geometry> geom_res(transform(g[i]));

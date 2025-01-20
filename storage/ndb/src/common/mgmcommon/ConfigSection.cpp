@@ -221,8 +221,8 @@ void ConfigSection::Entry::create_v1_entry(Uint32 **v1_ptr,
     }
     case Int64TypeId: {
       Uint64 val = m_int64;
-      Uint32 low = Uint32(val & 0xFFFFFFFF);
-      Uint32 high = Uint32(val >> 32);
+      Uint32 low = val & 0xFFFFFFFF;
+      Uint32 high = val >> 32;
       create_v1_entry_key(v1_ptr, Int64TypeId, m_key, section_id);
       create_int_value(v1_ptr, high);
       create_int_value(v1_ptr, low);
@@ -259,8 +259,8 @@ void ConfigSection::Entry::create_v2_entry(Uint32 **v2_ptr) const {
     }
     case Int64TypeId: {
       Uint64 val = m_int64;
-      Uint32 low = Uint32(val & 0xFFFFFFFF);
-      Uint32 high = Uint32(val >> 32);
+      Uint32 low = val & 0xFFFFFFFF;
+      Uint32 high = val >> 32;
       create_v2_entry_key(v2_ptr, Int64TypeId, m_key);
       create_int_value(v2_ptr, high);
       create_int_value(v2_ptr, low);
@@ -290,7 +290,7 @@ void ConfigSection::Entry::create_v2_entry(Uint32 **v2_ptr) const {
 Uint32 ConfigSection::Entry::unpack_entry(const Uint32 **data) {
   Uint32 key = read_v2_int_value(data);
   Uint32 key_type = (key >> V2_TYPE_SHIFT) & V2_TYPE_MASK;
-  ValueType type = (ValueType)key_type;
+  auto type = (ValueType)key_type;
   key = (key >> V2_KEY_SHIFT) & V2_KEY_MASK;
   m_key = key;
   m_type = type;
@@ -717,7 +717,7 @@ void ConfigSection::set_node_ids(ConfigSection::Entry *entry) {
 
 ConfigSection::Entry *ConfigSection::copy_entry(
     const ConfigSection::Entry *dup_entry) const {
-  ConfigSection::Entry *new_entry = new Entry;
+  auto *new_entry = new Entry;
   *new_entry = *dup_entry;
   if (dup_entry->m_type == StringTypeId) {
     const char *str = strdup(dup_entry->m_string);
@@ -802,7 +802,7 @@ void ConfigSection::set_node_id_from_keys() {
 }
 
 ConfigSection *ConfigSection::copy() const {
-  ConfigSection *new_config_section = new ConfigSection(m_cfg_object);
+  auto *new_config_section = new ConfigSection(m_cfg_object);
   DEB_MALLOC(("new(%u) => %p", __LINE__, new_config_section));
   require(is_real_section());
   new_config_section->m_magic = this->m_magic;
@@ -824,7 +824,7 @@ ConfigSection *ConfigSection::copy() const {
 
 ConfigSection *ConfigSection::copy_no_primary_keys(
     const Key_bitset &keys) const {
-  ConfigSection *new_config_section = new ConfigSection(m_cfg_object);
+  auto *new_config_section = new ConfigSection(m_cfg_object);
   DEB_MALLOC(("new(%u) => %p", __LINE__, new_config_section));
   require(is_real_section());
   new_config_section->m_magic = this->m_magic;

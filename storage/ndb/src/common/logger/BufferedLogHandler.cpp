@@ -36,7 +36,7 @@ struct ThreadData {
 }  // namespace
 
 void *async_log_function(void *args) {
-  ThreadData *data = (ThreadData *)args;
+  auto *data = (ThreadData *)args;
   BufferedLogHandler *buf_loghandler = data->buf_loghandler;
 
   while (!buf_loghandler->isStopSet()) {
@@ -67,7 +67,7 @@ BufferedLogHandler::BufferedLogHandler(LogHandler *dest_loghandler,
   m_logbuf = new LogBuffer(
       buffer_kb * 1024, new MessageStreamLostMsgHandler(buffer_msg_category));
 
-  ThreadData *thr_data = new ThreadData();
+  auto *thr_data = new ThreadData();
   thr_data->buf_loghandler = this;
 
   m_log_threadvar =

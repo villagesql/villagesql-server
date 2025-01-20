@@ -44,7 +44,7 @@
 */
 
 static void timer_notify_thread_func(sigval arg) {
-  my_timer_t *timer = static_cast<my_timer_t *>(arg.sival_ptr);
+  auto *timer = static_cast<my_timer_t *>(arg.sival_ptr);
   timer->notify_function(timer);
 }
 

@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const St_geometry_columns &St_geometry_columns::instance() {
-  static St_geometry_columns *s_instance = new St_geometry_columns();
+  static auto *s_instance = new St_geometry_columns();
   return *s_instance;
 }
 

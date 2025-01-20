@@ -85,7 +85,7 @@ Value_map_base::Value_map_base(const CHARSET_INFO *charset,
 
 template <class T>
 bool Value_map_base::add_values(const T &value, const ha_rows count) {
-  Value_map<T> *value_map = down_cast<Value_map<T> *>(this);
+  auto *value_map = down_cast<Value_map<T> *>(this);
   return value_map->add_values(value, count);
 }
 

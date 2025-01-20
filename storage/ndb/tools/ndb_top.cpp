@@ -163,8 +163,7 @@ int query_mysql() {
   if (num_rows == 0) {
     return 4;
   }
-  THREAD_RESULT *tr_array =
-      (THREAD_RESULT *)malloc(sizeof(THREAD_RESULT) * num_rows);
+  auto *tr_array = (THREAD_RESULT *)malloc(sizeof(THREAD_RESULT) * num_rows);
   require(tr_array != NULL);
   thread_result = tr_array;
 

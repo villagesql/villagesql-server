@@ -135,7 +135,7 @@ int PluginInfoFrontend::run() {
 
     // all the other versions so far have the same structure from our
     // perspective
-    Plugin_v1 *plugin = plugin_file.get_plugin_struct<Plugin_v1>(plugin_name);
+    auto *plugin = plugin_file.get_plugin_struct<Plugin_v1>(plugin_name);
     Plugin_info plugin_info(*plugin);
 
     cout_ << plugin_info << std::endl;

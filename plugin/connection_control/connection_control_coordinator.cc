@@ -156,7 +156,7 @@ void Connection_event_coordinator::notify_event(
     MYSQL_THD thd, Error_handler *error_handler,
     const mysql_event_connection *connection_event) {
   DBUG_TRACE;
-  std::vector<Connection_event_subscriber>::iterator it = m_subscribers.begin();
+  auto it = m_subscribers.begin();
 
   while (it != m_subscribers.end()) {
     Connection_event_subscriber event_subscriber = *it;
@@ -185,7 +185,7 @@ void Connection_event_coordinator::notify_sys_var(
     Error_handler *error_handler, opt_connection_control variable,
     void *new_value) {
   DBUG_TRACE;
-  std::vector<Connection_event_subscriber>::iterator it = m_subscribers.begin();
+  auto it = m_subscribers.begin();
 
   while (it != m_subscribers.end()) {
     Connection_event_subscriber event_subscriber = *it;

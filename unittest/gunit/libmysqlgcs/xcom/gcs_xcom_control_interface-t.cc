@@ -690,7 +690,7 @@ class XComControlTest : public GcsBaseTest {
 
     Gcs_group_identifier fake_group_id(group_id->get_group_id());
 
-    Gcs_view *fake_view =
+    auto *fake_view =
         new Gcs_view(members, view_id, leaving, joined, fake_group_id);
     return fake_view;
   }
@@ -865,7 +865,7 @@ TEST_F(XComControlTest, JoinTestSkipOwnNodeAndCycleThroughPeerNodes) {
     (void)a;
     (void)b;
 
-    connection_descriptor *failed_con =
+    auto *failed_con =
         (connection_descriptor *)malloc(sizeof(connection_descriptor));
     failed_con->fd = -1;
 
@@ -876,7 +876,7 @@ TEST_F(XComControlTest, JoinTestSkipOwnNodeAndCycleThroughPeerNodes) {
     (void)a;
     (void)b;
 
-    connection_descriptor *failed_con =
+    auto *failed_con =
         (connection_descriptor *)malloc(sizeof(connection_descriptor));
     failed_con->fd = 0;
 
@@ -931,7 +931,7 @@ TEST_F(XComControlTest, JoinTestAllPeersUnavailable) {
     (void)a;
     (void)b;
 
-    connection_descriptor *failed_con =
+    auto *failed_con =
         (connection_descriptor *)malloc(sizeof(connection_descriptor));
     failed_con->fd = -1;
 
@@ -1001,7 +1001,7 @@ TEST_F(XComControlTest, LeaveTestMultiMember) {
 
   Gcs_group_identifier fake_group_id(group_id->get_group_id());
 
-  Gcs_view *fake_old_view =
+  auto *fake_old_view =
       new Gcs_view(members, view_id, leaving, joined, fake_group_id);
 
   enum_gcs_error result = xcom_control_if->join(fake_old_view);
@@ -1072,8 +1072,8 @@ TEST_F(XComControlTest, RemoveEventListenerTest) {
 Gcs_message *create_state_exchange_msg(Gcs_member_identifier &member_id,
                                        Gcs_group_identifier &group_id,
                                        Stored_States *out_stored_states) {
-  Gcs_message_data *dummy = new Gcs_message_data(0, 3);
-  uchar to_append = (uchar)1;
+  auto *dummy = new Gcs_message_data(0, 3);
+  auto to_append = (uchar)1;
 
   dummy->append_to_payload(&to_append, 1);
   dummy->append_to_payload(&to_append, 1);
@@ -1082,7 +1082,7 @@ Gcs_message *create_state_exchange_msg(Gcs_member_identifier &member_id,
   const Gcs_xcom_view_identifier view_id(999999, 1);
   synode_no configuration_id = null_synode;
   Gcs_xcom_synode_set snapshot;
-  Xcom_member_state *member_state = new Xcom_member_state(
+  auto *member_state = new Xcom_member_state(
       view_id, configuration_id, Gcs_protocol_version::HIGHEST_KNOWN, snapshot,
       nullptr, 0);
 
@@ -1091,7 +1091,7 @@ Gcs_message *create_state_exchange_msg(Gcs_member_identifier &member_id,
   uint64_t buffer_len = member_state->get_encode_header_size() +
                         dummy->get_encode_size() +
                         member_state->get_encode_snapshot_size();
-  uchar *buffer = static_cast<uchar *>(malloc(buffer_len * sizeof(uchar)));
+  auto *buffer = static_cast<uchar *>(malloc(buffer_len * sizeof(uchar)));
   uchar *slider = buffer;
 
   auto header_len = member_state->get_encode_header_size();
@@ -1106,7 +1106,7 @@ Gcs_message *create_state_exchange_msg(Gcs_member_identifier &member_id,
   member_state->encode_snapshot(slider, &snapshot_len);
   slider += snapshot_len;
 
-  Gcs_message *msg =
+  auto *msg =
       new Gcs_message(member_id, group_id, new Gcs_message_data(0, buffer_len));
   msg->get_message_data().append_to_payload(buffer, buffer_len);
 
@@ -1137,22 +1137,17 @@ TEST_F(XComControlTest, ViewChangedJoiningTest) {
                                  P_PROP | P_ACC | P_LEARN}};
 
   // Common unit test data
-  Gcs_xcom_view_identifier *view_id = new Gcs_xcom_view_identifier(999999, 27);
+  auto *view_id = new Gcs_xcom_view_identifier(999999, 27);
 
   string member_addr_1(node_addrs[0].address);
-  Gcs_member_identifier *node1_member_id =
-      new Gcs_member_identifier(member_addr_1);
+  auto *node1_member_id = new Gcs_member_identifier(member_addr_1);
 
   string member_addr_2(node_addrs[1].address);
-  Gcs_member_identifier *node2_member_id =
-      new Gcs_member_identifier(member_addr_2);
+  auto *node2_member_id = new Gcs_member_identifier(member_addr_2);
 
-  std::set<Gcs_member_identifier *> *total_set =
-      new std::set<Gcs_member_identifier *>();
-  std::set<Gcs_member_identifier *> *join_set =
-      new std::set<Gcs_member_identifier *>();
-  std::set<Gcs_member_identifier *> *left_set =
-      new std::set<Gcs_member_identifier *>();
+  auto *total_set = new std::set<Gcs_member_identifier *>();
+  auto *join_set = new std::set<Gcs_member_identifier *>();
+  auto *left_set = new std::set<Gcs_member_identifier *>();
 
   total_set->insert(node1_member_id);
   total_set->insert(node2_member_id);
@@ -1209,7 +1204,7 @@ TEST_F(XComControlTest, ViewChangedJoiningTest) {
   message_id.msgno = 4;
   message_id.node = 0;
 
-  Gcs_xcom_nodes *xcom_nodes = new Gcs_xcom_nodes(site_config, nodes);
+  auto *xcom_nodes = new Gcs_xcom_nodes(site_config, nodes);
 
   /*
     Process a global view message delivered by XCOM but say
@@ -1244,13 +1239,12 @@ TEST_F(XComControlTest, ViewChangedJoiningTest) {
   ASSERT_TRUE(xcom_control_if->belongs_to_group());
   ASSERT_TRUE(current_view != nullptr);
 
-  const Gcs_xcom_view_identifier &current_view_id =
+  const auto &current_view_id =
       down_cast<const Gcs_xcom_view_identifier &>(current_view->get_view_id());
   ASSERT_EQ(typeid(Gcs_xcom_view_identifier).name(),
             typeid(current_view_id).name());
 
-  Gcs_xcom_view_identifier *xcom_view_id =
-      const_cast<Gcs_xcom_view_identifier *>(&current_view_id);
+  auto *xcom_view_id = const_cast<Gcs_xcom_view_identifier *>(&current_view_id);
 
   ASSERT_EQ(view_id->get_fixed_part(), xcom_view_id->get_fixed_part());
   ASSERT_EQ(view_id->get_monotonic_part() + 1,
@@ -1360,7 +1354,7 @@ TEST_F(XComControlTest, FailedNodeRemovalTest) {
 
   Gcs_group_identifier fake_group_id(group_id->get_group_id());
 
-  Gcs_view *fake_old_view =
+  auto *fake_old_view =
       new Gcs_view(members, view_id, leaving, joined, fake_group_id);
 
   // registering the listener
@@ -1375,7 +1369,7 @@ TEST_F(XComControlTest, FailedNodeRemovalTest) {
   message_id.msgno = 3;
   message_id.node = 0;
 
-  Gcs_xcom_nodes *xcom_nodes = new Gcs_xcom_nodes(site_config, nodes);
+  auto *xcom_nodes = new Gcs_xcom_nodes(site_config, nodes);
 
   bool view_accepted = xcom_control_if->xcom_receive_global_view(
       null_synode, message_id, xcom_nodes, false, null_synode);
@@ -1484,7 +1478,7 @@ TEST_F(XComControlTest, FailedNodeGlobalViewTest) {
 
   Gcs_group_identifier fake_group_id(group_id->get_group_id());
 
-  Gcs_view *fake_old_view =
+  auto *fake_old_view =
       new Gcs_view(members, view_id, leaving, joined, fake_group_id);
 
   // registering the listener
@@ -1499,7 +1493,7 @@ TEST_F(XComControlTest, FailedNodeGlobalViewTest) {
   message_id.msgno = 2;
   message_id.node = 0;
 
-  Gcs_xcom_nodes *xcom_nodes = new Gcs_xcom_nodes(site_config, nodes);
+  auto *xcom_nodes = new Gcs_xcom_nodes(site_config, nodes);
 
   bool view_accepted = xcom_control_if->xcom_receive_global_view(
       null_synode, message_id, xcom_nodes, true, null_synode);
@@ -2046,7 +2040,7 @@ TEST_F(XComControlTest, ThreeSuspectNodesRemovalAfterTimeoutReset) {
 }
 
 void *parallel_invocation(void *ptr) {
-  InvocationHelper *helper = (InvocationHelper *)ptr;
+  auto *helper = (InvocationHelper *)ptr;
   helper->invokeMethod();
 
   return nullptr;
@@ -2061,7 +2055,7 @@ TEST_F(XComControlTest, ParallellJoinsTest) {
   EXPECT_CALL(proxy, xcom_init(_)).Times(1);
   EXPECT_CALL(proxy, xcom_exit()).Times(0);
 
-  InvocationHelper *helper = new InvocationHelper(xcom_control_if, JJ);
+  auto *helper = new InvocationHelper(xcom_control_if, JJ);
 
   My_xp_thread_impl thread;
   thread.create(PSI_NOT_INSTRUMENTED, nullptr, parallel_invocation,
@@ -2091,7 +2085,7 @@ TEST_F(XComControlTest, ParallelLeavesTest) {
   enum_gcs_error result = xcom_control_if->join(create_fake_view());
   ASSERT_EQ(GCS_OK, result);
 
-  InvocationHelper *helper = new InvocationHelper(xcom_control_if, LL);
+  auto *helper = new InvocationHelper(xcom_control_if, LL);
 
   My_xp_thread_impl thread;
   thread.create(PSI_NOT_INSTRUMENTED, nullptr, parallel_invocation,
@@ -2120,7 +2114,7 @@ TEST_F(XComControlTest, ParallelLeaveAndDelayedJoinTest) {
   enum_gcs_error result = xcom_control_if->join(create_fake_view());
   ASSERT_EQ(GCS_OK, result);
 
-  InvocationHelper *helper = new InvocationHelper(xcom_control_if, LJ);
+  auto *helper = new InvocationHelper(xcom_control_if, LJ);
 
   My_xp_thread_impl thread;
   thread.create(PSI_NOT_INSTRUMENTED, nullptr, parallel_invocation,
@@ -2146,7 +2140,7 @@ TEST_F(XComControlTest, ParallelJoinAndDelayedLeaveTest) {
   EXPECT_CALL(proxy, xcom_exit()).Times(0);
   EXPECT_CALL(proxy, delete_node_address(_, _)).Times(2);
 
-  InvocationHelper *helper = new InvocationHelper(xcom_control_if, JL);
+  auto *helper = new InvocationHelper(xcom_control_if, JL);
 
   My_xp_thread_impl thread;
   thread.create(PSI_NOT_INSTRUMENTED, nullptr, parallel_invocation,
@@ -2280,7 +2274,7 @@ TEST_F(XComControlTest, LocalViewAfterExpel) {
   std::vector<Gcs_member_identifier> leaving;
   std::vector<Gcs_member_identifier> joined;
   Gcs_group_identifier fake_group_id(group_id->get_group_id());
-  Gcs_view *fake_old_view =
+  auto *fake_old_view =
       new Gcs_view(members, view_id, leaving, joined, fake_group_id);
 
   // Join the group with fake view
@@ -2313,7 +2307,7 @@ TEST_F(XComControlTest, LocalViewAfterExpel) {
   alloc_node_set(&nodes, 1);
   set_node_set(&nodes);
 
-  Gcs_xcom_nodes *xcom_nodes = new Gcs_xcom_nodes(site_config, nodes);
+  auto *xcom_nodes = new Gcs_xcom_nodes(site_config, nodes);
 
   // Install expel view and verify that it succeeded
   bool expel_view_accepted = xcom_control_if->xcom_receive_global_view(

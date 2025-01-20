@@ -33,7 +33,7 @@ bool printNF_COMPLETE_REP(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const NFCompleteRep *sig = (const NFCompleteRep *)theData;
+  const auto *sig = (const NFCompleteRep *)theData;
   const char *who = getBlockName(sig->blockNo, nullptr);
 
   if (who == nullptr) {

@@ -143,7 +143,7 @@ bool SHM_Transporter::setupBuffers() {
   sizeOfBuffer -= 2 * sharedSize;
   sizeOfBuffer /= 2;
 
-  Uint32 *base1 = (Uint32 *)shmBuf;
+  auto *base1 = (Uint32 *)shmBuf;
 
   Uint32 *sharedReadIndex1 = base1;
   Uint32 *sharedWriteIndex1 = base1 + 1;
@@ -153,7 +153,7 @@ bool SHM_Transporter::setupBuffers() {
   serverMutex = (NdbMutex *)(base1 + 16);
   char *startOfBuf1 = shmBuf + sharedSize;
 
-  Uint32 *base2 = (Uint32 *)(shmBuf + sizeOfBuffer + sharedSize);
+  auto *base2 = (Uint32 *)(shmBuf + sizeOfBuffer + sharedSize);
   Uint32 *sharedReadIndex2 = base2;
   Uint32 *sharedWriteIndex2 = base2 + 1;
   clientStatusFlag = base2 + 4;

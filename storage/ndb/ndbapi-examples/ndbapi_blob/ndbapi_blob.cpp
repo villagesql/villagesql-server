@@ -305,7 +305,7 @@ struct ActiveHookData {
 };
 
 int myFetchHook(NdbBlob *myBlobHandle, void *arg) {
-  ActiveHookData *ahd = (ActiveHookData *)arg;
+  auto *ahd = (ActiveHookData *)arg;
 
   ahd->readLength = sizeof(ahd->buffer) - 1;
   return myBlobHandle->readData(ahd->buffer, ahd->readLength);

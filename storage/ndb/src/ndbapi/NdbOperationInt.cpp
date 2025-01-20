@@ -923,7 +923,7 @@ int NdbOperation::branch_col(Uint32 type, Uint32 ColId, const void *val,
 
   if (initial_interpreterCheck() == -1) DBUG_RETURN(-1);
 
-  Interpreter::BinaryCondition c = (Interpreter::BinaryCondition)type;
+  auto c = (Interpreter::BinaryCondition)type;
 
   const NdbColumnImpl *col = m_currentTable->getColumn(ColId);
 

@@ -1003,7 +1003,7 @@ class NdbEventBuffer {
   NdbMutex *m_add_drop_mutex;
 
   inline Gci_container *find_bucket(Uint64 gci) {
-    Uint32 pos = (Uint32)(gci & ACTIVE_GCI_MASK);
+    auto pos = (Uint32)(gci & ACTIVE_GCI_MASK);
     Gci_container *bucket = ((Gci_container *)(m_active_gci.getBase())) + pos;
     if (likely(gci == bucket->m_gci)) return bucket;
 

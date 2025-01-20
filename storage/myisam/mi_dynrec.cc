@@ -1110,7 +1110,7 @@ size_t _mi_rec_unpack(MI_INFO *info, uchar *to, const uchar *from,
       } else if (type == FIELD_BLOB) {
         uint size_length = rec_length - portable_sizeof_char_ptr;
         ulong blob_length = _mi_calc_blob_length(size_length, from);
-        ulong from_left = (ulong)(from_end - from);
+        auto from_left = (ulong)(from_end - from);
         if (from_left < size_length || from_left - size_length < blob_length ||
             from_left - size_length - blob_length < min_pack_length)
           goto err;

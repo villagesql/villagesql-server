@@ -60,7 +60,7 @@ ulong STDCALL net_field_length(uchar **packet) {
 /* The same as above but with max length check */
 ulong STDCALL net_field_length_checked(uchar **packet, ulong max_length) {
   ulong len;
-  uchar *pos = (uchar *)*packet;
+  auto *pos = (uchar *)*packet;
 
   if (*pos < 251) {
     (*packet)++;

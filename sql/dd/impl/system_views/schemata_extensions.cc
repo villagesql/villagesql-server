@@ -31,7 +31,7 @@ namespace dd {
 namespace system_views {
 
 const Schemata_extensions &Schemata_extensions::instance() {
-  static Schemata_extensions *s_instance = new Schemata_extensions();
+  static auto *s_instance = new Schemata_extensions();
   return *s_instance;
 }
 

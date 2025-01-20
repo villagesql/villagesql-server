@@ -84,8 +84,7 @@ void BM_DD_pfs(size_t num_iterations) {
   StopBenchmarkTiming();
   StartBenchmarkTiming();
   for (size_t n = 0; n < num_iterations; n++) {
-    Dummy_object<with_pfs, n_children> *dummy =
-        new Dummy_object<with_pfs, n_children>();
+    auto *dummy = new Dummy_object<with_pfs, n_children>();
     delete dummy;
   }
   StopBenchmarkTiming();

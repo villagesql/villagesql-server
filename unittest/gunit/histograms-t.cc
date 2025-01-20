@@ -263,8 +263,7 @@ void VerifyCommonJSONFields(Json_object *json_histogram,
   EXPECT_NE(histogram_type_dom, nullptr);
   EXPECT_EQ(histogram_type_dom->json_type(), enum_json_type::J_STRING);
 
-  Json_string *json_histogram_type =
-      static_cast<Json_string *>(histogram_type_dom);
+  auto *json_histogram_type = static_cast<Json_string *>(histogram_type_dom);
 
   switch (histogram->get_histogram_type()) {
     case Histogram::enum_histogram_type::EQUI_HEIGHT:
@@ -290,7 +289,7 @@ void VerifyCommonJSONFields(Json_object *json_histogram,
   EXPECT_NE(collation_id_dom, nullptr);
   EXPECT_EQ(collation_id_dom->json_type(), enum_json_type::J_UINT);
 
-  Json_array *buckets = static_cast<Json_array *>(buckets_dom);
+  auto *buckets = static_cast<Json_array *>(buckets_dom);
   EXPECT_EQ(buckets->size(), histogram->get_num_buckets());
 }
 
@@ -311,20 +310,20 @@ void VerifySingletonBucketConstraintsDouble(const Histogram *histogram) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = down_cast<Json_array *>(buckets_dom);
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
 
   double previous_value = 0.0;
   double previous_cumulative_frequency = 0.0;
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
 
-    Json_double *json_frequency = down_cast<Json_double *>((*bucket)[1]);
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[1]);
     double current_cumulative_frequency = json_frequency->value();
     EXPECT_GT(current_cumulative_frequency, 0.0);
     EXPECT_LE(current_cumulative_frequency, 1.0);
 
-    Json_double *json_double = down_cast<Json_double *>((*bucket)[0]);
+    auto *json_double = down_cast<Json_double *>((*bucket)[0]);
     double current_value = json_double->value();
     if (i > 0) {
       EXPECT_TRUE(Histogram_comparator()(previous_value, current_value));
@@ -342,20 +341,20 @@ void VerifySingletonBucketConstraintsInt(Histogram *histogram) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = down_cast<Json_array *>(buckets_dom);
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
 
   longlong previous_value = 0;
   double previous_cumulative_frequency = 0.0;
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
 
-    Json_double *json_frequency = down_cast<Json_double *>((*bucket)[1]);
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[1]);
     double current_cumulative_frequency = json_frequency->value();
     EXPECT_GT(current_cumulative_frequency, 0.0);
     EXPECT_LE(current_cumulative_frequency, 1.0);
 
-    Json_int *json_int = down_cast<Json_int *>((*bucket)[0]);
+    auto *json_int = down_cast<Json_int *>((*bucket)[0]);
     longlong current_value = json_int->value();
     if (i > 0) {
       EXPECT_TRUE(Histogram_comparator()(previous_value, current_value));
@@ -373,20 +372,20 @@ void VerifySingletonBucketConstraintsUInt(Histogram *histogram) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = down_cast<Json_array *>(buckets_dom);
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
 
   ulonglong previous_value = 0;
   double previous_cumulative_frequency = 0.0;
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
 
-    Json_double *json_frequency = down_cast<Json_double *>((*bucket)[1]);
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[1]);
     double current_cumulative_frequency = json_frequency->value();
     EXPECT_GT(current_cumulative_frequency, 0.0);
     EXPECT_LE(current_cumulative_frequency, 1.0);
 
-    Json_uint *json_uint = down_cast<Json_uint *>((*bucket)[0]);
+    auto *json_uint = down_cast<Json_uint *>((*bucket)[0]);
     ulonglong current_value = json_uint->value();
     if (i > 0) {
       EXPECT_TRUE(Histogram_comparator()(previous_value, current_value));
@@ -405,20 +404,20 @@ void VerifySingletonBucketConstraintsString(Histogram *histogram,
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = down_cast<Json_array *>(buckets_dom);
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
 
   String previous_value;
   double previous_cumulative_frequency = 0.0;
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
 
-    Json_double *json_frequency = down_cast<Json_double *>((*bucket)[1]);
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[1]);
     double current_cumulative_frequency = json_frequency->value();
     EXPECT_GT(current_cumulative_frequency, 0.0);
     EXPECT_LE(current_cumulative_frequency, 1.0);
 
-    Json_opaque *json_opaque = down_cast<Json_opaque *>((*bucket)[0]);
+    auto *json_opaque = down_cast<Json_opaque *>((*bucket)[0]);
     String current_value(json_opaque->value(), json_opaque->size(), charset);
     if (i > 0) {
       EXPECT_TRUE(Histogram_comparator()(previous_value, current_value));
@@ -436,20 +435,20 @@ void VerifySingletonBucketConstraintsDecimal(Histogram *histogram) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = down_cast<Json_array *>(buckets_dom);
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
 
   const my_decimal *previous_value = nullptr;
   double previous_cumulative_frequency = 0.0;
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
 
-    Json_double *json_frequency = down_cast<Json_double *>((*bucket)[1]);
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[1]);
     double current_cumulative_frequency = json_frequency->value();
     EXPECT_GT(current_cumulative_frequency, 0.0);
     EXPECT_LE(current_cumulative_frequency, 1.0);
 
-    Json_decimal *json_decimal = down_cast<Json_decimal *>((*bucket)[0]);
+    auto *json_decimal = down_cast<Json_decimal *>((*bucket)[0]);
     const my_decimal *current_value = json_decimal->value();
     if (i > 0) {
       EXPECT_TRUE(Histogram_comparator()(*previous_value, *current_value));
@@ -467,20 +466,20 @@ void VerifySingletonBucketConstraintsTemporal(Histogram *histogram) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = down_cast<Json_array *>(buckets_dom);
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
 
   const MYSQL_TIME *previous_value = nullptr;
   double previous_cumulative_frequency = 0.0;
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
 
-    Json_double *json_frequency = down_cast<Json_double *>((*bucket)[1]);
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[1]);
     double current_cumulative_frequency = json_frequency->value();
     EXPECT_GT(current_cumulative_frequency, 0.0);
     EXPECT_LE(current_cumulative_frequency, 1.0);
 
-    Json_datetime *json_datetime = down_cast<Json_datetime *>((*bucket)[0]);
+    auto *json_datetime = down_cast<Json_datetime *>((*bucket)[0]);
     const MYSQL_TIME *current_value = json_datetime->value();
     if (i > 0) {
       EXPECT_TRUE(Histogram_comparator()(*previous_value, *current_value));
@@ -511,28 +510,28 @@ void VerifyEquiHeightBucketConstraintsDouble(Histogram *histogram) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = down_cast<Json_array *>(buckets_dom);
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
 
   double previous_upper_value = 0.0;
   double previous_cumulative_frequency = 0.0;
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
 
-    Json_double *json_frequency = down_cast<Json_double *>((*bucket)[2]);
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[2]);
     double current_cumulative_frequency = json_frequency->value();
     EXPECT_GT(current_cumulative_frequency, 0.0);
     EXPECT_LE(current_cumulative_frequency, 1.0);
 
-    Json_uint *json_num_distinct = down_cast<Json_uint *>((*bucket)[3]);
+    auto *json_num_distinct = down_cast<Json_uint *>((*bucket)[3]);
     EXPECT_GE(json_num_distinct->value(), 1ULL);
 
     /*
       Index 1 should be lower inclusive value, and index 2 should be upper
       inclusive value.
     */
-    Json_double *json_double_lower = down_cast<Json_double *>((*bucket)[0]);
-    Json_double *json_double_upper = down_cast<Json_double *>((*bucket)[1]);
+    auto *json_double_lower = down_cast<Json_double *>((*bucket)[0]);
+    auto *json_double_upper = down_cast<Json_double *>((*bucket)[1]);
 
     double current_lower_value = json_double_lower->value();
     double current_upper_value = json_double_upper->value();
@@ -557,28 +556,28 @@ void VerifyEquiHeightBucketConstraintsInt(Histogram *histogram) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = down_cast<Json_array *>(buckets_dom);
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
 
   longlong previous_upper_value = 0;
   double previous_cumulative_frequency = 0.0;
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
 
-    Json_double *json_frequency = down_cast<Json_double *>((*bucket)[2]);
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[2]);
     double current_cumulative_frequency = json_frequency->value();
     EXPECT_GT(current_cumulative_frequency, 0.0);
     EXPECT_LE(current_cumulative_frequency, 1.0);
 
-    Json_uint *json_num_distinct = down_cast<Json_uint *>((*bucket)[3]);
+    auto *json_num_distinct = down_cast<Json_uint *>((*bucket)[3]);
     EXPECT_GE(json_num_distinct->value(), 1ULL);
 
     /*
       Index 1 should be lower inclusive value, and index 2 should be upper
       inclusive value.
     */
-    Json_int *json_int_lower = down_cast<Json_int *>((*bucket)[0]);
-    Json_int *json_int_upper = down_cast<Json_int *>((*bucket)[1]);
+    auto *json_int_lower = down_cast<Json_int *>((*bucket)[0]);
+    auto *json_int_upper = down_cast<Json_int *>((*bucket)[1]);
 
     longlong current_lower_value = json_int_lower->value();
     longlong current_upper_value = json_int_upper->value();
@@ -603,28 +602,28 @@ void VerifyEquiHeightBucketConstraintsUInt(Histogram *histogram) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = down_cast<Json_array *>(buckets_dom);
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
 
   ulonglong previous_upper_value = 0;
   double previous_cumulative_frequency = 0.0;
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
 
-    Json_double *json_frequency = down_cast<Json_double *>((*bucket)[2]);
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[2]);
     double current_cumulative_frequency = json_frequency->value();
     EXPECT_GT(current_cumulative_frequency, 0.0);
     EXPECT_LE(current_cumulative_frequency, 1.0);
 
-    Json_uint *json_num_distinct = down_cast<Json_uint *>((*bucket)[3]);
+    auto *json_num_distinct = down_cast<Json_uint *>((*bucket)[3]);
     EXPECT_GE(json_num_distinct->value(), 1ULL);
 
     /*
       Index 1 should be lower inclusive value, and index 2 should be upper
       inclusive value.
     */
-    Json_uint *json_uint_lower = down_cast<Json_uint *>((*bucket)[0]);
-    Json_uint *json_uint_upper = down_cast<Json_uint *>((*bucket)[1]);
+    auto *json_uint_lower = down_cast<Json_uint *>((*bucket)[0]);
+    auto *json_uint_upper = down_cast<Json_uint *>((*bucket)[1]);
 
     ulonglong current_lower_value = json_uint_lower->value();
     ulonglong current_upper_value = json_uint_upper->value();
@@ -650,28 +649,28 @@ void VerifyEquiHeightBucketConstraintsString(Histogram *histogram,
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = down_cast<Json_array *>(buckets_dom);
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
 
   String previous_upper_value;
   double previous_cumulative_frequency = 0.0;
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
 
-    Json_double *json_frequency = down_cast<Json_double *>((*bucket)[2]);
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[2]);
     double current_cumulative_frequency = json_frequency->value();
     EXPECT_GT(current_cumulative_frequency, 0.0);
     EXPECT_LE(current_cumulative_frequency, 1.0);
 
-    Json_uint *json_num_distinct = down_cast<Json_uint *>((*bucket)[3]);
+    auto *json_num_distinct = down_cast<Json_uint *>((*bucket)[3]);
     EXPECT_GE(json_num_distinct->value(), 1ULL);
 
     /*
       Index 1 should be lower inclusive value, and index 2 should be upper
       inclusive value.
     */
-    Json_opaque *json_opaque_lower = down_cast<Json_opaque *>((*bucket)[0]);
-    Json_opaque *json_opaque_upper = down_cast<Json_opaque *>((*bucket)[1]);
+    auto *json_opaque_lower = down_cast<Json_opaque *>((*bucket)[0]);
+    auto *json_opaque_upper = down_cast<Json_opaque *>((*bucket)[1]);
 
     String current_lower_value(json_opaque_lower->value(),
                                json_opaque_lower->size(), charset);
@@ -699,28 +698,28 @@ void VerifyEquiHeightBucketConstraintsDecimal(Histogram *histogram) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = down_cast<Json_array *>(buckets_dom);
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
 
   const my_decimal *previous_upper_value = nullptr;
   double previous_cumulative_frequency = 0.0;
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
 
-    Json_double *json_frequency = down_cast<Json_double *>((*bucket)[2]);
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[2]);
     double current_cumulative_frequency = json_frequency->value();
     EXPECT_GT(current_cumulative_frequency, 0.0);
     EXPECT_LE(current_cumulative_frequency, 1.0);
 
-    Json_uint *json_num_distinct = down_cast<Json_uint *>((*bucket)[3]);
+    auto *json_num_distinct = down_cast<Json_uint *>((*bucket)[3]);
     EXPECT_GE(json_num_distinct->value(), 1ULL);
 
     /*
       Index 1 should be lower inclusive value, and index 2 should be upper
       inclusive value.
     */
-    Json_decimal *json_decimal_lower = down_cast<Json_decimal *>((*bucket)[0]);
-    Json_decimal *json_decimal_upper = down_cast<Json_decimal *>((*bucket)[1]);
+    auto *json_decimal_lower = down_cast<Json_decimal *>((*bucket)[0]);
+    auto *json_decimal_upper = down_cast<Json_decimal *>((*bucket)[1]);
 
     const my_decimal *current_lower_value(json_decimal_lower->value());
     const my_decimal *current_upper_value(json_decimal_upper->value());
@@ -746,30 +745,28 @@ void VerifyEquiHeightBucketConstraintsTemporal(Histogram *histogram) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = down_cast<Json_array *>(buckets_dom);
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
 
   const MYSQL_TIME *previous_upper_value = nullptr;
   double previous_cumulative_frequency = 0.0;
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
 
-    Json_double *json_frequency = down_cast<Json_double *>((*bucket)[2]);
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[2]);
     double current_cumulative_frequency = json_frequency->value();
     EXPECT_GT(current_cumulative_frequency, 0.0);
     EXPECT_LE(current_cumulative_frequency, 1.0);
 
-    Json_uint *json_num_distinct = down_cast<Json_uint *>((*bucket)[3]);
+    auto *json_num_distinct = down_cast<Json_uint *>((*bucket)[3]);
     EXPECT_GE(json_num_distinct->value(), 1ULL);
 
     /*
       Index 1 should be lower inclusive value, and index 2 should be upper
       inclusive value.
     */
-    Json_datetime *json_datetime_lower =
-        down_cast<Json_datetime *>((*bucket)[0]);
-    Json_datetime *json_datetime_upper =
-        down_cast<Json_datetime *>((*bucket)[1]);
+    auto *json_datetime_lower = down_cast<Json_datetime *>((*bucket)[0]);
+    auto *json_datetime_upper = down_cast<Json_datetime *>((*bucket)[1]);
 
     const MYSQL_TIME *current_lower_value(json_datetime_lower->value());
     const MYSQL_TIME *current_upper_value(json_datetime_upper->value());
@@ -811,14 +808,14 @@ void VerifyEquiHeightJSONStructure(Histogram *histogram,
   VerifyCommonJSONFields(&json_object, histogram);
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = static_cast<Json_array *>(buckets_dom);
+  auto *buckets = static_cast<Json_array *>(buckets_dom);
 
   // Verify that all the buckets have the expected structure.
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
     EXPECT_EQ(bucket_dom->json_type(), enum_json_type::J_ARRAY);
 
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
     EXPECT_EQ(bucket->size(), 4U);
 
     // Index 0 should be lower inclusive value.
@@ -856,14 +853,14 @@ void VerifySingletonJSONStructure(Histogram *histogram,
   VerifyCommonJSONFields(&json_object, histogram);
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *buckets = static_cast<Json_array *>(buckets_dom);
+  auto *buckets = static_cast<Json_array *>(buckets_dom);
 
   // Verify that all the buckets have the expected structure.
   for (size_t i = 0; i < buckets->size(); ++i) {
     Json_dom *bucket_dom = (*buckets)[i];
     EXPECT_EQ(bucket_dom->json_type(), enum_json_type::J_ARRAY);
 
-    Json_array *bucket = static_cast<Json_array *>(bucket_dom);
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
     EXPECT_EQ(bucket->size(), 2U);
 
     // Index 0 should be the value.
@@ -1264,12 +1261,11 @@ void VerifySingletonBucketContentsInt(Json_array *singleton_buckets,
                                       int bucket_index,
                                       double cumulative_frequency,
                                       longlong value) {
-  Json_array *json_bucket =
+  auto *json_bucket =
       down_cast<Json_array *>((*singleton_buckets)[bucket_index]);
 
-  Json_int *json_value = down_cast<Json_int *>((*json_bucket)[0]);
-  Json_double *json_cumulative_frequency =
-      down_cast<Json_double *>((*json_bucket)[1]);
+  auto *json_value = down_cast<Json_int *>((*json_bucket)[0]);
+  auto *json_cumulative_frequency = down_cast<Json_double *>((*json_bucket)[1]);
 
   EXPECT_DOUBLE_EQ(cumulative_frequency, json_cumulative_frequency->value());
   EXPECT_EQ(value, json_value->value());
@@ -1283,12 +1279,11 @@ void VerifySingletonBucketContentsUInt(Json_array *singleton_buckets,
                                        int bucket_index,
                                        double cumulative_frequency,
                                        ulonglong value) {
-  Json_array *json_bucket =
+  auto *json_bucket =
       down_cast<Json_array *>((*singleton_buckets)[bucket_index]);
 
-  Json_uint *json_value = down_cast<Json_uint *>((*json_bucket)[0]);
-  Json_double *json_cumulative_frequency =
-      down_cast<Json_double *>((*json_bucket)[1]);
+  auto *json_value = down_cast<Json_uint *>((*json_bucket)[0]);
+  auto *json_cumulative_frequency = down_cast<Json_double *>((*json_bucket)[1]);
 
   EXPECT_DOUBLE_EQ(cumulative_frequency, json_cumulative_frequency->value());
   EXPECT_EQ(value, json_value->value());
@@ -1303,12 +1298,11 @@ void VerifySingletonBucketContentsString(Json_array *singleton_buckets,
                                          double cumulative_frequency,
                                          String value,
                                          const CHARSET_INFO *charset) {
-  Json_array *json_bucket =
+  auto *json_bucket =
       down_cast<Json_array *>((*singleton_buckets)[bucket_index]);
 
-  Json_opaque *json_value_dom = down_cast<Json_opaque *>((*json_bucket)[0]);
-  Json_double *json_cumulative_frequency =
-      down_cast<Json_double *>((*json_bucket)[1]);
+  auto *json_value_dom = down_cast<Json_opaque *>((*json_bucket)[0]);
+  auto *json_cumulative_frequency = down_cast<Json_double *>((*json_bucket)[1]);
 
   String json_value(json_value_dom->value(), json_value_dom->size(), charset);
 
@@ -1325,12 +1319,11 @@ void VerifySingletonBucketContentsDouble(Json_array *singleton_buckets,
                                          int bucket_index,
                                          double cumulative_frequency,
                                          double value) {
-  Json_array *json_bucket =
+  auto *json_bucket =
       down_cast<Json_array *>((*singleton_buckets)[bucket_index]);
 
-  Json_double *json_value = down_cast<Json_double *>((*json_bucket)[0]);
-  Json_double *json_cumulative_frequency =
-      down_cast<Json_double *>((*json_bucket)[1]);
+  auto *json_value = down_cast<Json_double *>((*json_bucket)[0]);
+  auto *json_cumulative_frequency = down_cast<Json_double *>((*json_bucket)[1]);
 
   EXPECT_DOUBLE_EQ(cumulative_frequency, json_cumulative_frequency->value());
   EXPECT_EQ(value, json_value->value());
@@ -1344,12 +1337,11 @@ void VerifySingletonBucketContentsDecimal(Json_array *singleton_buckets,
                                           int bucket_index,
                                           double cumulative_frequency,
                                           my_decimal value) {
-  Json_array *json_bucket =
+  auto *json_bucket =
       down_cast<Json_array *>((*singleton_buckets)[bucket_index]);
 
-  Json_decimal *json_value = down_cast<Json_decimal *>((*json_bucket)[0]);
-  Json_double *json_cumulative_frequency =
-      down_cast<Json_double *>((*json_bucket)[1]);
+  auto *json_value = down_cast<Json_decimal *>((*json_bucket)[0]);
+  auto *json_cumulative_frequency = down_cast<Json_double *>((*json_bucket)[1]);
 
   EXPECT_DOUBLE_EQ(cumulative_frequency, json_cumulative_frequency->value());
   EXPECT_EQ(my_decimal_cmp(json_value->value(), &value), 0);
@@ -1363,12 +1355,11 @@ void VerifySingletonBucketContentsTemporal(Json_array *singleton_buckets,
                                            int bucket_index,
                                            double cumulative_frequency,
                                            MYSQL_TIME value) {
-  Json_array *json_bucket =
+  auto *json_bucket =
       down_cast<Json_array *>((*singleton_buckets)[bucket_index]);
 
-  Json_datetime *json_value = down_cast<Json_datetime *>((*json_bucket)[0]);
-  Json_double *json_cumulative_frequency =
-      down_cast<Json_double *>((*json_bucket)[1]);
+  auto *json_value = down_cast<Json_datetime *>((*json_bucket)[0]);
+  auto *json_cumulative_frequency = down_cast<Json_double *>((*json_bucket)[1]);
 
   EXPECT_DOUBLE_EQ(cumulative_frequency, json_cumulative_frequency->value());
   EXPECT_EQ(my_time_compare(*json_value->value(), value), 0);
@@ -1458,7 +1449,7 @@ void VerifyEquiHeightSerialization(MEM_ROOT *mem_root,
   Histogram *deserialized_histogram = Histogram::json_to_histogram(
       mem_root, "db1", "tbl1", "col1", json_object, &ctx);
   ASSERT_TRUE(deserialized_histogram != nullptr);
-  Equi_height<T> *deserialized_equi_height =
+  auto *deserialized_equi_height =
       dynamic_cast<Equi_height<T> *>(deserialized_histogram);
   ASSERT_TRUE(deserialized_equi_height != nullptr);
 
@@ -1576,7 +1567,7 @@ TEST_F(HistogramsTest, VerifyEquiHeightContentsInt2) {
   Value_map<longlong> values(&my_charset_numeric, Value_map_type::INT);
   values.add_null_values(10000);
   for (longlong i = 0; i < 10000; i++) {
-    size_t frequency = static_cast<size_t>(10000 - i);
+    auto frequency = static_cast<size_t>(10000 - i);
     values.add_values(i, frequency);
   }
 
@@ -1646,7 +1637,7 @@ TEST_F(HistogramsTest, VerifySingletonContentsDouble) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *json_buckets = static_cast<Json_array *>(buckets_dom);
+  auto *json_buckets = static_cast<Json_array *>(buckets_dom);
 
   VerifySingletonBucketContentsDouble(json_buckets, 0, (10.0 / 70.0),
                                       std::numeric_limits<double>::lowest());
@@ -1689,7 +1680,7 @@ TEST_F(HistogramsTest, VerifySingletonContentsInt) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *json_buckets = static_cast<Json_array *>(buckets_dom);
+  auto *json_buckets = static_cast<Json_array *>(buckets_dom);
 
   VerifySingletonBucketContentsInt(json_buckets, 0, (10.0 / 80.0),
                                    std::numeric_limits<longlong>::lowest());
@@ -1733,7 +1724,7 @@ TEST_F(HistogramsTest, VerifySingletonContentsUInt) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *json_buckets = static_cast<Json_array *>(buckets_dom);
+  auto *json_buckets = static_cast<Json_array *>(buckets_dom);
 
   VerifySingletonBucketContentsUInt(json_buckets, 0, (10.0 / 60.0),
                                     std::numeric_limits<ulonglong>::lowest());
@@ -1773,7 +1764,7 @@ TEST_F(HistogramsTest, VerifySingletonContentsString) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *json_buckets = static_cast<Json_array *>(buckets_dom);
+  auto *json_buckets = static_cast<Json_array *>(buckets_dom);
 
   String string1("", &my_charset_latin1);
   String string2("string1", &my_charset_latin1);
@@ -1818,7 +1809,7 @@ TEST_F(HistogramsTest, VerifySingletonContentsDecimal) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *json_buckets = static_cast<Json_array *>(buckets_dom);
+  auto *json_buckets = static_cast<Json_array *>(buckets_dom);
 
   my_decimal decimal1;
   int2my_decimal(E_DEC_FATAL_ERROR, -1000LL, false, &decimal1);
@@ -1872,7 +1863,7 @@ TEST_F(HistogramsTest, VerifySingletonContentsDateTime) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *json_buckets = static_cast<Json_array *>(buckets_dom);
+  auto *json_buckets = static_cast<Json_array *>(buckets_dom);
 
   MYSQL_TIME time1;
   TIME_from_longlong_datetime_packed(&time1, 914866242077065216);
@@ -1921,7 +1912,7 @@ TEST_F(HistogramsTest, VerifySingletonContentsBlob) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_object));
 
   Json_dom *buckets_dom = json_object.get("buckets");
-  Json_array *json_buckets = static_cast<Json_array *>(buckets_dom);
+  auto *json_buckets = static_cast<Json_array *>(buckets_dom);
 
   String blob1(blob_buf1, 4, &my_charset_bin);
   String blob2("bar", &my_charset_bin);
@@ -2206,7 +2197,7 @@ TEST_F(HistogramsTest, BigEquiHeight) {
   Value_map<longlong> values(&my_charset_numeric, Value_map_type::INT);
   values.add_null_values(514);
   for (longlong i = 0; i < 100000; i++) {
-    size_t frequency = static_cast<size_t>((rand() % 10000) + 1);
+    auto frequency = static_cast<size_t>((rand() % 10000) + 1);
     values.add_values(i, frequency);
   }
 
@@ -2256,7 +2247,7 @@ TEST_F(HistogramsTest, HistogramTimeCreated) {
   EXPECT_FALSE(histogram->histogram_to_json(&json_histogram));
 
   Json_dom *last_updated_dom = json_histogram.get("last-updated");
-  Json_datetime *last_updated = down_cast<Json_datetime *>(last_updated_dom);
+  auto *last_updated = down_cast<Json_datetime *>(last_updated_dom);
 
   longlong seconds_diff = 0;
   long microseconds_diff = 0;

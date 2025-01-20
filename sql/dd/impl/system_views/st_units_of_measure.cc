@@ -61,7 +61,7 @@ static std::string to_string(const gis::Unit_Type unit_type) {
 }
 
 const St_units_of_measure &St_units_of_measure::instance() {
-  static St_units_of_measure *m_instance = new St_units_of_measure();
+  static auto *m_instance = new St_units_of_measure();
   return *m_instance;
 }
 

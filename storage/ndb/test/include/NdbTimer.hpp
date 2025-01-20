@@ -72,7 +72,7 @@ inline void NdbTimer::printTransactionStatistics(const char *text,
                                                  int numTransactions,
                                                  int numOperations) {
   // Convert to Uint32 in order to be able to print it to screen
-  Uint32 lapTime = (Uint32)elapsedTime();
+  auto lapTime = (Uint32)elapsedTime();
   ndbout_c(
       "%i transactions, %i %s total time = %d ms\nAverage %f ms/transaction, "
       "%f ms/%s.\n%f transactions/second, %f %ss/second.\n",
@@ -85,7 +85,7 @@ inline void NdbTimer::printTransactionStatistics(const char *text,
 
 inline void NdbTimer::printTestTimer(int numLoops, int numRecords) {
   // Convert to Uint32 in order to be able to print it to screen
-  Uint32 lapTime = (Uint32)elapsedTime();
+  auto lapTime = (Uint32)elapsedTime();
   ndbout_c(
       "%i loop * %i records, total time = %d ms\nAverage %f ms/loop, %f "
       "ms/record.\n%f looop/second, %f records/second.\n",
@@ -97,7 +97,7 @@ inline void NdbTimer::printTestTimer(int numLoops, int numRecords) {
 
 inline void NdbTimer::printTotalTime(void) {
   // Convert to Uint32 in order to be able to print it to screen
-  Uint32 lapTime = (Uint32)elapsedTime();
+  auto lapTime = (Uint32)elapsedTime();
   Uint32 secTime = lapTime / 1000;
   ndbout_c("Total time : %d seconds (%d ms)\n", secTime, lapTime);
 }

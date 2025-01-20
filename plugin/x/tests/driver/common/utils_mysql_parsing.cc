@@ -69,15 +69,15 @@ size_t determineStatementRanges(const char *sql, size_t length,
                                 const std::string &line_break,
                                 std::stack<std::string> &input_context_stack) {
   int full_statement_count = 0;
-  const unsigned char *delimiter_head =
+  const auto *delimiter_head =
       pointer_cast<const unsigned char *>(delimiter.c_str());
 
   const unsigned char keyword[] = "delimiter";
 
-  const unsigned char *head = pointer_cast<const unsigned char *>(sql);
+  const auto *head = pointer_cast<const unsigned char *>(sql);
   const unsigned char *tail = head;
   const unsigned char *end = head + length;
-  const unsigned char *new_line =
+  const auto *new_line =
       pointer_cast<const unsigned char *>(line_break.c_str());
   bool have_content = false;  // Set when anything else but comments were found
                               // for the current statement.

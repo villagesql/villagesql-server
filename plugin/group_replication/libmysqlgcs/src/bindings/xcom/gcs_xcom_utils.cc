@@ -379,7 +379,7 @@ bool is_parameters_syntax_correct(
   // validate bootstrap string
   // accepted values: true, false, on, off
   if (bootstrap_group_str != nullptr) {
-    std::string &flag = const_cast<std::string &>(*bootstrap_group_str);
+    auto &flag = const_cast<std::string &>(*bootstrap_group_str);
     error = is_valid_flag("bootstrap_group", flag);
     if (error == GCS_NOK) goto end;
   }
@@ -546,7 +546,7 @@ bool is_parameters_syntax_correct(
 
   // validate compression
   if (compression_str != nullptr) {
-    std::string &flag = const_cast<std::string &>(*compression_str);
+    auto &flag = const_cast<std::string &>(*compression_str);
     error = is_valid_flag("compression", flag);
     if (error == GCS_NOK) goto end;
   }
@@ -612,15 +612,14 @@ bool is_parameters_syntax_correct(
 
   // Validate allowlist reconfiguration parameter
   if (reconfigure_ip_allowlist_str != nullptr) {
-    std::string &flag =
-        const_cast<std::string &>(*reconfigure_ip_allowlist_str);
+    auto &flag = const_cast<std::string &>(*reconfigure_ip_allowlist_str);
     error = is_valid_flag("reconfigure_ip_allowlist", flag);
     if (error == GCS_NOK) goto end;
   }
 
   // validate fragmentation
   if (fragmentation_str != nullptr) {
-    std::string &flag = const_cast<std::string &>(*fragmentation_str);
+    auto &flag = const_cast<std::string &>(*fragmentation_str);
     error = is_valid_flag("fragmentation", flag);
     if (error == GCS_NOK) goto end;
   }

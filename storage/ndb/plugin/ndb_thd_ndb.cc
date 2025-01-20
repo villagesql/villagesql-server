@@ -44,7 +44,7 @@ static const int MAX_TRANSACTIONS = 4;
 Thd_ndb *Thd_ndb::seize(THD *thd, const char *name) {
   DBUG_TRACE;
 
-  Thd_ndb *thd_ndb = new Thd_ndb(thd, name);
+  auto *thd_ndb = new Thd_ndb(thd, name);
   if (thd_ndb == nullptr) {
     return nullptr;
   }

@@ -51,7 +51,7 @@ static void cleanup() { var += 1; }
 
 TEST_F(XcomNotificationTest, ProcessDummyNotification) {
   int val = 0;
-  Gcs_xcom_engine *engine = new Gcs_xcom_engine();
+  auto *engine = new Gcs_xcom_engine();
 
   ASSERT_EQ(val, 0);
 
@@ -64,7 +64,7 @@ TEST_F(XcomNotificationTest, ProcessDummyNotification) {
 }
 
 TEST_F(XcomNotificationTest, ProcessFinalizeNotification) {
-  Gcs_xcom_engine *engine = new Gcs_xcom_engine();
+  auto *engine = new Gcs_xcom_engine();
 
   ASSERT_EQ(var, 0);
 

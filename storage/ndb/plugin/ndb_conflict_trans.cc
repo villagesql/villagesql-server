@@ -240,12 +240,12 @@ static bool determine_packed_key_size(const NdbDictionary::Table *table,
 
 /* st_mem_root_allocator implementation */
 void *st_mem_root_allocator::alloc(void *ctx, size_t bytes) {
-  st_mem_root_allocator *a = (st_mem_root_allocator *)ctx;
+  auto *a = (st_mem_root_allocator *)ctx;
   return a->mem_root->Alloc(bytes);
 }
 
 void *st_mem_root_allocator::mem_calloc(void *ctx, size_t nelem, size_t bytes) {
-  st_mem_root_allocator *a = (st_mem_root_allocator *)ctx;
+  auto *a = (st_mem_root_allocator *)ctx;
   return a->mem_root->Alloc(nelem * bytes);
 }
 
@@ -300,7 +300,7 @@ int DependencyTracker::track_operation(const NdbDictionary::Table *table,
   DBUG_PRINT("info", ("Required length for key : %u", required_buff_size));
 
   /* Alloc space for packed key and struct in MEM_ROOT */
-  uchar *packed_key_buff = (uchar *)mra.mem_root->Alloc(required_buff_size);
+  auto *packed_key_buff = (uchar *)mra.mem_root->Alloc(required_buff_size);
   void *element_mem = mra.mem_root->Alloc(sizeof(st_row_event_key_info));
 
   if (pack_key_to_buffer(table, key_rec, row, packed_key_buff,
@@ -317,7 +317,7 @@ int DependencyTracker::track_operation(const NdbDictionary::Table *table,
     }
   }
 
-  st_row_event_key_info *key_info = new (element_mem) st_row_event_key_info(
+  auto *key_info = new (element_mem) st_row_event_key_info(
       table, packed_key_buff, required_buff_size, transaction_id);
 
   /* Now try to add element to hash */

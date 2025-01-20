@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Triggers &Triggers::instance() {
-  static Triggers *s_instance = new Triggers();
+  static auto *s_instance = new Triggers();
   return *s_instance;
 }
 

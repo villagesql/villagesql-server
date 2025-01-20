@@ -215,7 +215,7 @@ bool Raw_record::store_timestamp(int field_no, const my_timeval &tv) {
 ///////////////////////////////////////////////////////////////////////////
 
 bool Raw_record::store_json(int field_no, const Json_wrapper &json) {
-  Field_json *json_field = down_cast<Field_json *>(field(field_no));
+  auto *json_field = down_cast<Field_json *>(field(field_no));
   return json_field->store_json(&json) != TYPE_OK;
 }
 

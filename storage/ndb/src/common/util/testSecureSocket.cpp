@@ -403,13 +403,13 @@ class ClientTest {
 };
 
 void *runClientSendThread(void *p) {
-  ClientTest *t = (ClientTest *)p;
+  auto *t = (ClientTest *)p;
   t->runTestSend();
   my_thread_exit(&t->sendStatus);
 }
 
 void *runClientRecvThread(void *p) {
-  ClientTest *t = (ClientTest *)p;
+  auto *t = (ClientTest *)p;
   t->runTestRecv();
   my_thread_exit(&t->recvStatus);
 }
@@ -989,8 +989,8 @@ int run_client(const char *server_host) {
 /* Server */
 void run_server(bool standalone = false) {
   SocketServer server;
-  PlainService *s1 = new PlainService(opt_sink);
-  TlsService *s2 = new TlsService(opt_sink);
+  auto *s1 = new PlainService(opt_sink);
+  auto *s2 = new TlsService(opt_sink);
   unsigned short port = opt_port;
   const char *srvType = opt_sink ? "sink" : "echo";
 

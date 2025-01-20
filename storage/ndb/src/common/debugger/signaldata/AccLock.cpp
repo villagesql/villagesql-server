@@ -28,7 +28,7 @@
 
 bool printACC_LOCKREQ(FILE *output, const Uint32 *theData, Uint32 len,
                       Uint16 /*rbn*/) {
-  const AccLockReq *const sig = (const AccLockReq *)theData;
+  const auto *const sig = (const AccLockReq *)theData;
   Uint32 reqtype = sig->requestInfo & 0xFF;
   switch (sig->returnCode) {
     case RNIL:

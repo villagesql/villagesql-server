@@ -201,7 +201,7 @@ static bool values_are_equal(const T &val1, const T &val2) {
 */
 template <class T>
 double Bucket<T>::get_distance_from_lower(const T &value) const {
-  const double lower_inclusive = static_cast<double>(get_lower_inclusive());
+  const auto lower_inclusive = static_cast<double>(get_lower_inclusive());
   return (value - lower_inclusive) /
          (get_upper_inclusive() - lower_inclusive + 1.0);
 }
@@ -299,16 +299,16 @@ double Bucket<String>::get_distance_from_lower(const String &value) const {
   std::unique_ptr<uchar[]> upper_buf(new uchar[max_strnxfrm_len]());
   std::unique_ptr<uchar[]> lower_buf(new uchar[max_strnxfrm_len]());
 
-  const uchar *ptr = pointer_cast<const uchar *>(value.ptr());
+  const auto *ptr = pointer_cast<const uchar *>(value.ptr());
   size_t value_len = my_strnxfrm(value.charset(), value_buf.get(),
                                  max_strnxfrm_len, ptr, value.length());
 
-  const uchar *ptr2 = pointer_cast<const uchar *>(get_lower_inclusive().ptr());
+  const auto *ptr2 = pointer_cast<const uchar *>(get_lower_inclusive().ptr());
   size_t lower_len =
       my_strnxfrm(value.charset(), lower_buf.get(), max_strnxfrm_len, ptr2,
                   get_lower_inclusive().length());
 
-  const uchar *ptr3 = pointer_cast<const uchar *>(get_upper_inclusive().ptr());
+  const auto *ptr3 = pointer_cast<const uchar *>(get_upper_inclusive().ptr());
   size_t upper_len =
       my_strnxfrm(value.charset(), upper_buf.get(), max_strnxfrm_len, ptr3,
                   get_upper_inclusive().length());
@@ -438,7 +438,7 @@ double Bucket<T>::get_distance_from_upper(const T &value) const {
 
 template <>
 double Bucket<longlong>::get_distance_from_upper(const longlong &value) const {
-  const double upper_inclusive = static_cast<double>(get_upper_inclusive());
+  const auto upper_inclusive = static_cast<double>(get_upper_inclusive());
   return (upper_inclusive - value) /
          (upper_inclusive - get_lower_inclusive() + 1.0);
 }
@@ -446,7 +446,7 @@ double Bucket<longlong>::get_distance_from_upper(const longlong &value) const {
 template <>
 double Bucket<ulonglong>::get_distance_from_upper(
     const ulonglong &value) const {
-  const double upper_inclusive = static_cast<double>(get_upper_inclusive());
+  const auto upper_inclusive = static_cast<double>(get_upper_inclusive());
   return (upper_inclusive - value) /
          (upper_inclusive - get_lower_inclusive() + 1.0);
 }

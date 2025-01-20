@@ -606,7 +606,7 @@ end:
 }
 
 void cleanup_xcom() {
-  Gcs_xcom_interface *intf =
+  auto *intf =
       static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());
   intf->finalize_xcom();
   s_xcom_proxy->xcom_destroy_ssl();
@@ -618,14 +618,14 @@ void cleanup_xcom() {
 void Gcs_xcom_interface::finalize_xcom() {
   Gcs_group_identifier *group_identifier = nullptr;
   map<u_long, Gcs_group_identifier *>::iterator xcom_configured_groups_it;
-  Gcs_xcom_interface *intf =
+  auto *intf =
       static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());
 
   for (xcom_configured_groups_it = m_xcom_configured_groups.begin();
        xcom_configured_groups_it != m_xcom_configured_groups.end();
        xcom_configured_groups_it++) {
     group_identifier = (*xcom_configured_groups_it).second;
-    Gcs_xcom_control *control_if = static_cast<Gcs_xcom_control *>(
+    auto *control_if = static_cast<Gcs_xcom_control *>(
         intf->get_control_session(*group_identifier));
     if (control_if->is_xcom_running()) {
       MYSQL_GCS_LOG_DEBUG(
@@ -639,14 +639,14 @@ void Gcs_xcom_interface::finalize_xcom() {
 void Gcs_xcom_interface::make_gcs_leave_group_on_error() {
   Gcs_group_identifier *group_identifier = nullptr;
   map<u_long, Gcs_group_identifier *>::iterator xcom_configured_groups_it;
-  Gcs_xcom_interface *intf =
+  auto *intf =
       static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());
 
   for (xcom_configured_groups_it = m_xcom_configured_groups.begin();
        xcom_configured_groups_it != m_xcom_configured_groups.end();
        xcom_configured_groups_it++) {
     group_identifier = (*xcom_configured_groups_it).second;
-    Gcs_xcom_control *control_if = static_cast<Gcs_xcom_control *>(
+    auto *control_if = static_cast<Gcs_xcom_control *>(
         intf->get_control_session(*group_identifier));
     control_if->do_remove_node_from_group();
     control_if->do_leave_view();
@@ -772,7 +772,7 @@ gcs_xcom_group_interfaces *Gcs_xcom_interface::get_group_interfaces(
     group_interface = new gcs_xcom_group_interfaces();
     m_group_interfaces[group_identifier.get_group_id()] = group_interface;
 
-    Gcs_xcom_statistics *stats = new Gcs_xcom_statistics(m_stats_mgr);
+    auto *stats = new Gcs_xcom_statistics(m_stats_mgr);
 
     group_interface->statistics_interface = stats;
 
@@ -790,13 +790,13 @@ gcs_xcom_group_interfaces *Gcs_xcom_interface::get_group_interfaces(
     Gcs_xcom_state_exchange_interface *se =
         new Gcs_xcom_state_exchange(group_interface->communication_interface);
 
-    Gcs_xcom_group_management *xcom_group_management =
+    auto *xcom_group_management =
         new Gcs_xcom_group_management(s_xcom_proxy, group_identifier, vce);
     group_interface->management_interface = xcom_group_management;
 
     std::unique_ptr<Network_provider_operations_interface>
         net_manager_for_control = ::get_network_operations_interface();
-    Gcs_xcom_control *xcom_control = new Gcs_xcom_control(
+    auto *xcom_control = new Gcs_xcom_control(
         m_node_address, m_xcom_peers, group_identifier, s_xcom_proxy,
         xcom_group_management, gcs_engine, se, vce, m_boot, m_socket_util,
         std::move(net_manager_for_control), m_stats_mgr);
@@ -882,7 +882,7 @@ void Gcs_xcom_interface::clean_group_references() {
 }
 
 void start_ssl() {
-  Gcs_xcom_interface *intf =
+  auto *intf =
       static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());
   intf->initialize_ssl();
 }
@@ -1014,7 +1014,7 @@ bool Gcs_xcom_interface::initialize_xcom(
 
   /*Setup Network and SSL related*/
   // Initialize XCom's Network Provider Manager
-  enum_transport_protocol comm_stack =
+  auto comm_stack =
       static_cast<enum_transport_protocol>(std::atoi(comm_stack_str->c_str()));
   s_xcom_proxy->initialize_network_manager();
   s_xcom_proxy->set_network_manager_active_provider(comm_stack);
@@ -1170,7 +1170,7 @@ void Gcs_xcom_interface::clear_peer_nodes() {
 void Gcs_xcom_interface::set_xcom_group_information(
     const std::string &group_id) {
   Gcs_group_identifier *old_s = nullptr;
-  Gcs_group_identifier *new_s = new Gcs_group_identifier(group_id);
+  auto *new_s = new Gcs_group_identifier(group_id);
   u_long xcom_group_id = Gcs_xcom_utils::build_xcom_group_id(*new_s);
 
   MYSQL_GCS_LOG_TRACE(
@@ -1223,7 +1223,7 @@ enum_gcs_error Gcs_xcom_interface::configure_message_stages(
    Define local variables.
    */
   bool error = false;
-  Gcs_xcom_communication *comm_if =
+  auto *comm_if =
       static_cast<Gcs_xcom_communication *>(get_communication_session(gid));
   Gcs_message_pipeline &pipeline = comm_if->get_msg_pipeline();
   bool compression_enabled = false;
@@ -1355,7 +1355,7 @@ void cb_xcom_receive_data(synode_no message_id, synode_no origin,
     return;
   }
 
-  Gcs_xcom_nodes *xcom_nodes = new Gcs_xcom_nodes(site, nodes);
+  auto *xcom_nodes = new Gcs_xcom_nodes(site, nodes);
   assert(xcom_nodes->is_valid());
   free_node_set(&nodes);
 
@@ -1453,7 +1453,7 @@ void do_cb_xcom_receive_data(synode_no message_id, synode_no origin,
     return;
   }
 
-  Gcs_xcom_interface *intf =
+  auto *intf =
       static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());
 
   Gcs_group_identifier *destination =
@@ -1465,7 +1465,7 @@ void do_cb_xcom_receive_data(synode_no message_id, synode_no origin,
     return;
   }
 
-  Gcs_xcom_control *xcom_control =
+  auto *xcom_control =
       static_cast<Gcs_xcom_control *>(intf->get_control_session(*destination));
 
   /*
@@ -1516,9 +1516,8 @@ void do_cb_xcom_receive_data(synode_no message_id, synode_no origin,
       get_my_xcom_id(), xcom_nodes->get_node_no(), message_id.group_id,
       static_cast<long long unsigned>(message_id.msgno), message_id.node);
 
-  Gcs_xcom_communication *xcom_communication =
-      static_cast<Gcs_xcom_communication *>(
-          intf->get_communication_session(*destination));
+  auto *xcom_communication = static_cast<Gcs_xcom_communication *>(
+      intf->get_communication_session(*destination));
   assert(xcom_communication != nullptr);
 
   auto packet = Gcs_packet::make_incoming_packet(
@@ -1619,7 +1618,7 @@ void cb_xcom_receive_global_view(synode_no config_id, synode_no message_id,
     return;
   }
 
-  Gcs_xcom_nodes *xcom_nodes = new Gcs_xcom_nodes(site, nodes);
+  auto *xcom_nodes = new Gcs_xcom_nodes(site, nodes);
   assert(xcom_nodes->is_valid());
   free_node_set(&nodes);
 
@@ -1641,7 +1640,7 @@ void do_cb_xcom_receive_global_view(synode_no config_id, synode_no message_id,
                                     Gcs_xcom_nodes *xcom_nodes,
                                     xcom_event_horizon event_horizon,
                                     synode_no max_synode) {
-  Gcs_xcom_interface *intf =
+  auto *intf =
       static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());
 
   Gcs_group_identifier *destination =
@@ -1654,7 +1653,7 @@ void do_cb_xcom_receive_global_view(synode_no config_id, synode_no message_id,
     return;
   }
 
-  Gcs_xcom_control *xcom_control_if =
+  auto *xcom_control_if =
       static_cast<Gcs_xcom_control *>(intf->get_control_session(*destination));
 
   /*
@@ -1770,7 +1769,7 @@ void cb_xcom_receive_local_view(synode_no config_id, node_set nodes) {
     return;
   }
 
-  Gcs_xcom_nodes *xcom_nodes = new Gcs_xcom_nodes(site, nodes);
+  auto *xcom_nodes = new Gcs_xcom_nodes(site, nodes);
   assert(xcom_nodes->is_valid());
   free_node_set(&nodes);
 
@@ -1868,7 +1867,7 @@ void cb_xcom_expel(int status [[maybe_unused]]) {
 }
 
 void do_cb_xcom_expel() {
-  Gcs_xcom_interface *intf =
+  auto *intf =
       static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());
   if (intf) {
     intf->make_gcs_leave_group_on_error();
@@ -1922,7 +1921,7 @@ int cb_xcom_debugger_check(const int64_t options) {
 */
 
 int cb_xcom_socket_accept(int fd, site_def const *xcom_config) {
-  Gcs_xcom_interface *intf =
+  auto *intf =
       static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());
 
   Gcs_ip_allowlist &wl = intf->get_ip_allowlist();

@@ -137,7 +137,6 @@ void aggregated_stats_buffer::add_from(aggregated_stats_buffer &shard) {
 }
 
 uint64_t aggregated_stats_buffer::get_counter(std::size_t offset) {
-  std::atomic_uint64_t *counter =
-      pointer_cast<std::atomic_uint64_t *>((char *)this + offset);
+  auto *counter = pointer_cast<std::atomic_uint64_t *>((char *)this + offset);
   return counter->load();
 }

@@ -146,7 +146,7 @@ void narrow_geometry(std::unique_ptr<Geometry> *g) {
     case Geometry_type::kMultilinestring:
     case Geometry_type::kMultipolygon:
     case Geometry_type::kGeometrycollection: {
-      Geometrycollection *gc = down_cast<Geometrycollection *>(g->get());
+      auto *gc = down_cast<Geometrycollection *>(g->get());
       if (gc->size() == 1) {
         g->reset((*gc)[0].clone());
         gc = nullptr;

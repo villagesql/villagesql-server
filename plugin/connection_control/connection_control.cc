@@ -129,7 +129,7 @@ static int connection_control_notify(MYSQL_THD thd,
   DBUG_TRACE;
   try {
     if (event_class == MYSQL_AUDIT_CONNECTION_CLASS) {
-      const struct mysql_event_connection *connection_event =
+      const auto *connection_event =
           (const struct mysql_event_connection *)event;
       Connection_control_error_handler error_handler;
       /** Notify event coordinator */
@@ -449,7 +449,7 @@ static int show_delay_generated(MYSQL_THD thd [[maybe_unused]], SHOW_VAR *var,
                                 char *buff) {
   var->type = SHOW_LONGLONG;
   var->value = buff;
-  longlong *value = reinterpret_cast<longlong *>(buff);
+  auto *value = reinterpret_cast<longlong *>(buff);
   const int64 current_val =
       g_statistics.stats_array[STAT_CONNECTION_DELAY_TRIGGERED].load();
   *value = static_cast<longlong>(current_val);

@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Character_sets &Character_sets::instance() {
-  static Character_sets *s_instance = new Character_sets();
+  static auto *s_instance = new Character_sets();
   return *s_instance;
 }
 

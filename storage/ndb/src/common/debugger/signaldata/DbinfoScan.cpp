@@ -31,7 +31,7 @@ bool printDBINFO_SCAN(FILE *output, const Uint32 *theData, Uint32 len, Uint16) {
     return false;
   }
 
-  const DbinfoScan *sig = (const DbinfoScan *)theData;
+  const auto *sig = (const DbinfoScan *)theData;
   fprintf(output, " resultData: 0x%x", sig->resultData);
   fprintf(output, " transid: { 0x%x, 0x%x}", sig->transId[0], sig->transId[1]);
   fprintf(output, " resultRef: 0x%x", sig->resultRef);
@@ -66,7 +66,7 @@ bool printDBINFO_SCAN_REF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const DbinfoScanRef *sig = (const DbinfoScanRef *)theData;
+  const auto *sig = (const DbinfoScanRef *)theData;
   fprintf(output, " resultData: 0x%x", sig->resultData);
   fprintf(output, " transid: { 0x%x, 0x%x}", sig->transId[0], sig->transId[1]);
   fprintf(output, " resultRef: 0x%x", sig->resultRef);

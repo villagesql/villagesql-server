@@ -44,7 +44,7 @@ namespace dd {
 namespace tables {
 
 const Tables &Tables::instance() {
-  static Tables *s_instance = new Tables();
+  static auto *s_instance = new Tables();
   return *s_instance;
 }
 
@@ -208,8 +208,7 @@ Tables::Tables() {
 ///////////////////////////////////////////////////////////////////////////
 
 Abstract_table *Tables::create_entity_object(const Raw_record &r) const {
-  enum_table_type table_type =
-      static_cast<enum_table_type>(r.read_int(FIELD_TYPE));
+  auto table_type = static_cast<enum_table_type>(r.read_int(FIELD_TYPE));
 
   if (table_type == enum_table_type::BASE_TABLE)
     return dd::create_object<Table>();

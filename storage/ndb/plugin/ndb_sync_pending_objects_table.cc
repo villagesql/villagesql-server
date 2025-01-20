@@ -44,9 +44,9 @@ static PSI_table_handle *ndb_pending_objects_open_table(PSI_pos **pos) {
     table close which is implemented in the base class. See the
     ndb_pfs_close_table() function in ndb_pfs_table.cc
   */
-  Ndb_sync_pending_objects_table *table = new Ndb_sync_pending_objects_table();
+  auto *table = new Ndb_sync_pending_objects_table();
   *row_pos = table->get_position_address();
-  PSI_table_handle *handle = reinterpret_cast<PSI_table_handle *>(table);
+  auto *handle = reinterpret_cast<PSI_table_handle *>(table);
   return handle;
 }
 

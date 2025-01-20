@@ -44,9 +44,9 @@ const uchar *skip_trailing_orig(const uchar *ptr, size_t len) {
   const uchar *end = ptr + len;
 
   if (len > 20) {
-    const uchar *end_words = (const uchar *)(intptr)(((ulonglong)(intptr)end) /
-                                                     SIZEOF_INT * SIZEOF_INT);
-    const uchar *start_words =
+    const auto *end_words = (const uchar *)(intptr)(((ulonglong)(intptr)end) /
+                                                    SIZEOF_INT * SIZEOF_INT);
+    const auto *start_words =
         (const uchar *)(intptr)((((ulonglong)(intptr)ptr) + SIZEOF_INT - 1) /
                                 SIZEOF_INT * SIZEOF_INT);
 
@@ -80,9 +80,9 @@ const uchar *skip_trailing_4byte(const uchar *ptr, size_t len) {
   const uchar *end = ptr + len;
 
   if (len > 20) {
-    const uchar *end_words = (const uchar *)(intptr)(((ulonglong)(intptr)end) /
-                                                     SIZEOF_INT * SIZEOF_INT);
-    const uchar *start_words =
+    const auto *end_words = (const uchar *)(intptr)(((ulonglong)(intptr)end) /
+                                                    SIZEOF_INT * SIZEOF_INT);
+    const auto *start_words =
         (const uchar *)(intptr)((((ulonglong)(intptr)ptr) + SIZEOF_INT - 1) /
                                 SIZEOF_INT * SIZEOF_INT);
 
@@ -104,9 +104,9 @@ const uchar *skip_trailing_8byte(const uchar *ptr, size_t len) {
   const uchar *end = ptr + len;
 
   if (len > 20) {
-    const uchar *end_words =
+    const auto *end_words =
         (const uchar *)(longlong)(((ulonglong)(longlong)end) / 8 * 8);
-    const uchar *start_words =
+    const auto *start_words =
         (const uchar *)(longlong)((((ulonglong)(longlong)ptr) + 8 - 1) / 8 * 8);
 
     assert(end_words > ptr);

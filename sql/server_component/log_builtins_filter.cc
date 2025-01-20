@@ -438,7 +438,7 @@ static log_filter_apply log_filter_try_apply(log_line *ll, int ln,
 
     case LOG_FILTER_THROTTLE: {
       const ulonglong now = my_micro_time();
-      const ulong rate =
+      const auto rate =
           (ulong)((r->aux.data.data_integer < 0) ? 0
                                                  : r->aux.data.data_integer);
       ulong suppressed = 0;

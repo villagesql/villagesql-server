@@ -352,7 +352,7 @@ int NdbOperation::insertKEYINFO(const char *aValue, Uint32 aStartPosition,
   if ((tEndPos < 9)) {
     Uint32 tkeyData = *(const Uint32 *)aValue;
     // TcKeyReq* tcKeyReq = CAST_PTR(TcKeyReq, tTCREQ->getDataPtrSend());
-    const Uint32 *tDataPtr = (const Uint32 *)aValue;
+    const auto *tDataPtr = (const Uint32 *)aValue;
     tAttrPos = 1;
     Uint32 *tkeyDataPtr = theKEYINFOptr + aStartPosition - 1;
     // (Uint32*)&tcKeyReq->keyInfo[aStartPosition - 1];

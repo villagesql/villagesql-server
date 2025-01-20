@@ -96,9 +96,8 @@ long long test_thd_store_service_function(UDF_INIT *, UDF_ARGS *,
   MYSQL_THD o_thd{nullptr};
   if (thread_service->get(&o_thd)) return 0;
 
-  Test_mysql_thd_data *test_mysql_thd_data =
-      reinterpret_cast<Test_mysql_thd_data *>(
-          mysql_thd_store_service->get(o_thd, g_slot));
+  auto *test_mysql_thd_data = reinterpret_cast<Test_mysql_thd_data *>(
+      mysql_thd_store_service->get(o_thd, g_slot));
 
   if (test_mysql_thd_data) delete test_mysql_thd_data;
 
@@ -138,8 +137,7 @@ static mysql_service_status_t init() {
           &g_slot))
     return true;
 
-  Test_mysql_thd_data *test_mysql_thd_data =
-      new (std::nothrow) Test_mysql_thd_data();
+  auto *test_mysql_thd_data = new (std::nothrow) Test_mysql_thd_data();
 
   auto cleanup_guard = create_scope_guard([&] {
     if (g_slot) (void)mysql_thd_store_service->unregister_slot(g_slot);
@@ -151,9 +149,8 @@ static mysql_service_status_t init() {
           o_thd, g_slot, reinterpret_cast<void *>(test_mysql_thd_data)))
     return true;
 
-  Test_mysql_thd_data *retrieved_test_mysql_thd_data =
-      reinterpret_cast<Test_mysql_thd_data *>(
-          mysql_thd_store_service->get(nullptr, g_slot));
+  auto *retrieved_test_mysql_thd_data = reinterpret_cast<Test_mysql_thd_data *>(
+      mysql_thd_store_service->get(nullptr, g_slot));
 
   if (!retrieved_test_mysql_thd_data ||
       !retrieved_test_mysql_thd_data->sanity(expected))
@@ -193,9 +190,8 @@ static mysql_service_status_t deinit() {
   MYSQL_THD o_thd{nullptr};
   if (thread_service->get(&o_thd)) return true;
 
-  Test_mysql_thd_data *test_mysql_thd_data =
-      reinterpret_cast<Test_mysql_thd_data *>(
-          mysql_thd_store_service->get(o_thd, g_slot));
+  auto *test_mysql_thd_data = reinterpret_cast<Test_mysql_thd_data *>(
+      mysql_thd_store_service->get(o_thd, g_slot));
 
   if (!test_mysql_thd_data || !test_mysql_thd_data->sanity(expected))
     return true;

@@ -3942,7 +3942,7 @@ static bool is_binary_field(MYSQL_FIELD *field) {
 
 static void print_as_hex(FILE *output_file, const char *str, ulong len,
                          ulong total_bytes_to_send) {
-  const unsigned char *ptr = pointer_cast<const unsigned char *>(str);
+  const auto *ptr = pointer_cast<const unsigned char *>(str);
   const unsigned char *end = ptr + len;
   ulong i;
 

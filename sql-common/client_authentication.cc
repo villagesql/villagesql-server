@@ -225,8 +225,7 @@ int sha256_password_auth_client(MYSQL_PLUGIN_VIO *vio, MYSQL *mysql) {
     if (vio->write_packet(vio, &zero_byte, 1)) return CR_ERROR;
   } else {
     /* Password is a 0-terminated byte array ('\0' character included) */
-    unsigned int passwd_len =
-        static_cast<unsigned int>(strlen(mysql->passwd) + 1);
+    auto passwd_len = static_cast<unsigned int>(strlen(mysql->passwd) + 1);
     if (!connection_is_secure) {
       /*
         If no public key; request one from the server.
@@ -446,8 +445,7 @@ net_async_status sha256_password_auth_client_nonblocking(MYSQL_PLUGIN_VIO *vio,
   int io_result;
   const bool connection_is_secure = (mysql_get_ssl_cipher(mysql) != nullptr);
   unsigned char *pkt;
-  unsigned int passwd_len =
-      static_cast<unsigned int>(strlen(mysql->passwd) + 1);
+  auto passwd_len = static_cast<unsigned int>(strlen(mysql->passwd) + 1);
 
   mysql_async_auth *ctx = ASYNC_DATA(mysql)->connect_context->auth_context;
   switch (static_cast<client_auth_sha256_password_plugin_status>(
@@ -661,8 +659,7 @@ int caching_sha2_password_auth_client(MYSQL_PLUGIN_VIO *vio, MYSQL *mysql) {
     return CR_OK;
   } else {
     /* Password is a 0-terminated byte array ('\0' character included) */
-    unsigned int passwd_len =
-        static_cast<unsigned int>(strlen(mysql->passwd) + 1);
+    auto passwd_len = static_cast<unsigned int>(strlen(mysql->passwd) + 1);
     int pkt_len = 0;
     {
       /* First try with SHA2 scramble */
@@ -813,8 +810,7 @@ net_async_status caching_sha2_password_auth_client_nonblocking(
   net_async_status status = NET_ASYNC_NOT_READY;
   const bool connection_is_secure = is_secure_transport(mysql);
   bool got_public_key_from_server = false;
-  const unsigned int passwd_len =
-      static_cast<unsigned int>(strlen(mysql->passwd) + 1);
+  const auto passwd_len = static_cast<unsigned int>(strlen(mysql->passwd) + 1);
   unsigned char *pkt;
   mysql_async_auth *ctx = ASYNC_DATA(mysql)->connect_context->auth_context;
 

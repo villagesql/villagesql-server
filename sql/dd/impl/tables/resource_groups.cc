@@ -58,7 +58,7 @@ Resource_groups::Resource_groups() {
 }
 
 const Resource_groups &Resource_groups::instance() {
-  static Resource_groups *s_instance = new Resource_groups();
+  static auto *s_instance = new Resource_groups();
   return *s_instance;
 }
 

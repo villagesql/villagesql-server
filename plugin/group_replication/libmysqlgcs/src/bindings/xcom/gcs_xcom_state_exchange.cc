@@ -323,7 +323,7 @@ Gcs_xcom_state_exchange::Gcs_xcom_state_exchange(
       m_ms_xcom_nodes() {}
 
 Gcs_xcom_state_exchange::~Gcs_xcom_state_exchange() {
-  Gcs_xcom_communication_interface *binding_broadcaster =
+  auto *binding_broadcaster =
       static_cast<Gcs_xcom_communication_interface *>(m_broadcaster);
 
   binding_broadcaster->cleanup_buffered_packets();
@@ -334,7 +334,7 @@ Gcs_xcom_state_exchange::~Gcs_xcom_state_exchange() {
 void Gcs_xcom_state_exchange::init() {}
 
 void Gcs_xcom_state_exchange::reset_with_flush() {
-  Gcs_xcom_communication_interface *binding_broadcaster =
+  auto *binding_broadcaster =
       static_cast<Gcs_xcom_communication_interface *>(m_broadcaster);
 
   /*
@@ -398,7 +398,7 @@ void Gcs_xcom_state_exchange::reset() {
 }
 
 void Gcs_xcom_state_exchange::end() {
-  Gcs_xcom_communication_interface *binding_broadcaster =
+  auto *binding_broadcaster =
       static_cast<Gcs_xcom_communication_interface *>(m_broadcaster);
 
   binding_broadcaster->deliver_buffered_packets();
@@ -443,9 +443,8 @@ bool Gcs_xcom_state_exchange::state_exchange(
       it. Please, check ::get_new_view_id to find out how the view is
       chosen.
     */
-    const Gcs_xcom_view_identifier &xcom_view_id =
-        static_cast<const Gcs_xcom_view_identifier &>(
-            current_view->get_view_id());
+    const auto &xcom_view_id = static_cast<const Gcs_xcom_view_identifier &>(
+        current_view->get_view_id());
     fixed_part = xcom_view_id.get_fixed_part();
     monotonic_part = xcom_view_id.get_monotonic_part();
   } else {
@@ -524,7 +523,7 @@ enum_gcs_error Gcs_xcom_state_exchange::broadcast_state(
   uint64_t exchangeable_data_len = 0;
   uint64_t exchangeable_snapshot_len = 0;
 
-  Gcs_xcom_communication_interface *xcom_communication =
+  auto *xcom_communication =
       static_cast<Gcs_xcom_communication_interface *>(m_broadcaster);
 
   Gcs_xcom_synode_set snapshot =
@@ -621,7 +620,7 @@ enum_gcs_error Gcs_xcom_state_exchange::broadcast_state(
   MYSQL_GCS_LOG_TRACE(
       "Creating message to carry exchangeable data: (payload)=%llu",
       static_cast<long long unsigned>(buffer_len));
-  Gcs_message_data *message_data = new Gcs_message_data(0, buffer_len);
+  auto *message_data = new Gcs_message_data(0, buffer_len);
   message_data->append_to_payload(buffer, buffer_len);
   free(buffer);
   buffer = nullptr;
@@ -655,7 +654,7 @@ void Gcs_xcom_state_exchange::update_awaited_vector() {
 
 void Gcs_xcom_state_exchange::update_communication_channel(
     const Gcs_xcom_nodes &xcom_nodes) {
-  Gcs_xcom_communication_interface *xcom_communication =
+  auto *xcom_communication =
       static_cast<Gcs_xcom_communication_interface *>(m_broadcaster);
 
   xcom_communication->update_members_information(m_local_information,
@@ -790,8 +789,7 @@ bool Gcs_xcom_state_exchange::incompatible_with_group() const {
   bool constexpr COMPATIBLE = false;
   bool result = INCOMPATIBLE;
 
-  Gcs_xcom_communication &comm =
-      static_cast<Gcs_xcom_communication &>(*m_broadcaster);
+  auto &comm = static_cast<Gcs_xcom_communication &>(*m_broadcaster);
   Gcs_message_pipeline &pipeline = comm.get_msg_pipeline();
 
   /*
@@ -886,8 +884,7 @@ Gcs_xcom_state_exchange::compute_incompatible_joiners() {
   std::vector<Gcs_xcom_node_information> incompatible_joiners;
 
   /* Get the protocol version that is in use. */
-  Gcs_xcom_communication &comm =
-      static_cast<Gcs_xcom_communication &>(*m_broadcaster);
+  auto &comm = static_cast<Gcs_xcom_communication &>(*m_broadcaster);
   Gcs_message_pipeline &pipeline = comm.get_msg_pipeline();
   Gcs_protocol_version const protocol_version = pipeline.get_version();
 
@@ -939,8 +936,7 @@ Gcs_xcom_state_exchange::compute_incompatible_joiners() {
 }
 
 void Gcs_xcom_state_exchange::compute_maximum_supported_protocol_version() {
-  Gcs_xcom_communication &comm =
-      static_cast<Gcs_xcom_communication &>(*m_broadcaster);
+  auto &comm = static_cast<Gcs_xcom_communication &>(*m_broadcaster);
 
   /* Compute the maximum common protocol supported by the group. */
   Gcs_protocol_version max_supported_version =

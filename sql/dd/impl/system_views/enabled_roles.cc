@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const Enabled_roles &Enabled_roles::instance() {
-  static Enabled_roles *s_instance = new Enabled_roles();
+  static auto *s_instance = new Enabled_roles();
   return *s_instance;
 }
 

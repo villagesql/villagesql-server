@@ -229,9 +229,9 @@ int main(int argc, char **argv) {
       exitcode = 1;
       continue;
     }
-    const Uint32 bytes = (Uint32)sbuf.st_size;
+    const auto bytes = (Uint32)sbuf.st_size;
 
-    Uint32 *buf = new Uint32[bytes / 4 + 1];
+    auto *buf = new Uint32[bytes / 4 + 1];
 
     FILE *f = fopen(filename, "rb");
     if (f == 0) {
@@ -240,7 +240,7 @@ int main(int argc, char **argv) {
       exitcode = 1;
       continue;
     }
-    Uint32 sz = (Uint32)fread(buf, 1, bytes, f);
+    auto sz = (Uint32)fread(buf, 1, bytes, f);
     fclose(f);
     if (sz != bytes) {
       ndbout << filename << ": read failed errno=" << errno << endl;
@@ -256,7 +256,7 @@ int main(int argc, char **argv) {
       continue;
     }
 
-    SchemaFile *sf = (SchemaFile *)&buf[0];
+    auto *sf = (SchemaFile *)&buf[0];
     int ret;
     if (sf->NdbVersion < NDB_SF_VERSION_5_0_6)
       ret = print_old(filename, sf, sz);

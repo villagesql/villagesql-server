@@ -27,7 +27,7 @@ namespace dd {
 namespace system_views {
 
 const User_attributes &User_attributes::instance() {
-  static User_attributes *s_instance = new User_attributes();
+  static auto *s_instance = new User_attributes();
   return *s_instance;
 }
 

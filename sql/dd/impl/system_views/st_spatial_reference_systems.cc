@@ -27,8 +27,7 @@ namespace dd {
 namespace system_views {
 
 const St_spatial_reference_systems &St_spatial_reference_systems::instance() {
-  static St_spatial_reference_systems *s_instance =
-      new St_spatial_reference_systems();
+  static auto *s_instance = new St_spatial_reference_systems();
   return *s_instance;
 }
 

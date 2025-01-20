@@ -31,7 +31,7 @@ bool printCREATE_TAB_REQ(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const CreateTabReq *sig = (const CreateTabReq *)theData;
+  const auto *sig = (const CreateTabReq *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, " requestType: %u", sig->requestType);
@@ -50,7 +50,7 @@ bool printCREATE_TAB_CONF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const CreateTabConf *sig = (const CreateTabConf *)theData;
+  const auto *sig = (const CreateTabConf *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");
@@ -64,7 +64,7 @@ bool printCREATE_TAB_REF(FILE *output, const Uint32 *theData, Uint32 len,
     return false;
   }
 
-  const CreateTabRef *sig = (const CreateTabRef *)theData;
+  const auto *sig = (const CreateTabRef *)theData;
   fprintf(output, " senderRef: 0x%x", sig->senderRef);
   fprintf(output, " senderData: %u", sig->senderData);
   fprintf(output, "\n");

@@ -28,7 +28,7 @@ namespace dd {
 namespace system_views {
 
 const Role_table_grants &Role_table_grants::instance() {
-  static Role_table_grants *s_instance = new Role_table_grants();
+  static auto *s_instance = new Role_table_grants();
   return *s_instance;
 }
 

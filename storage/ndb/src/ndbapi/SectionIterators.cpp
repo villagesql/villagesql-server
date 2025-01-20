@@ -398,7 +398,7 @@ int testSignalSectionIterator() {
 
   /* Allocate some signals */
   for (int i = 0; i < totalNumSignals; i++) {
-    NdbApiSignal *sig = new NdbApiSignal((BlockReference)0);
+    auto *sig = new NdbApiSignal((BlockReference)0);
 
     if (poolHead == nullptr) {
       poolHead = sig;
