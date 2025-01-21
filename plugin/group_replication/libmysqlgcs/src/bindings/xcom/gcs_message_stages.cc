@@ -390,7 +390,7 @@ end:
 
 void Gcs_message_pipeline::update_members_information(
     const Gcs_member_identifier &me, const Gcs_xcom_nodes &xcom_nodes) const {
-  for (auto &stage : m_handlers) {
+  for (const auto &stage : m_handlers) {
     stage.second->update_members_information(me, xcom_nodes);
   }
 }
@@ -398,7 +398,7 @@ void Gcs_message_pipeline::update_members_information(
 Gcs_xcom_synode_set Gcs_message_pipeline::get_snapshot() const {
   Gcs_xcom_synode_set synods;
 
-  for (auto &stage : m_handlers) {
+  for (const auto &stage : m_handlers) {
     Gcs_xcom_synode_set synods_per_stage = stage.second->get_snapshot();
     synods.insert(synods_per_stage.begin(), synods_per_stage.end());
   }

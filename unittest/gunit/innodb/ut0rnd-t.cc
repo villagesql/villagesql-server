@@ -370,7 +370,7 @@ static void test_interval_fast_distribution(uint64_t n) {
 
   for (uint64_t i = 0; i < max_count; i++) {
     const auto value = ut::random_from_interval_fast(0, n - 1);
-    for (auto target : target_score) {
+    for (auto *target : target_score) {
       if (value == target[0]) {
         target[1]++;
       }
@@ -378,7 +378,7 @@ static void test_interval_fast_distribution(uint64_t n) {
     ut_delay(ut::random_from_interval_fast(0, 6));
   }
 
-  for (auto target : target_score) {
+  for (auto *target : target_score) {
     // EXPECT_GE(target[1], min_score);
     // EXPECT_LE(target[1], max_score);
 

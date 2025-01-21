@@ -114,7 +114,7 @@ int PluginInfoFrontend::run() {
       break;
   }
 
-  auto &rest_args = arg_handler_.get_rest_arguments();
+  const auto &rest_args = arg_handler_.get_rest_arguments();
   auto rest_args_count = rest_args.size();
 
   if (rest_args_count != 2) {

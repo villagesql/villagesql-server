@@ -44,7 +44,7 @@ inline bool ptr_is_suitably_aligned(void *ptr) {
 /* test edge cases */
 TEST(ut0new, edgecases) {
 #ifdef UNIV_PFS_MEMORY
-  auto ptr = ut::new_arr<byte>(ut::Count{0});
+  auto *ptr = ut::new_arr<byte>(ut::Count{0});
   EXPECT_NE(nullptr, ptr);
   ut::delete_arr((byte *)ptr);
 #endif /* UNIV_PFS_MEMORY */
@@ -634,7 +634,7 @@ TEST(ut0new_new_delete_arr, unique_ptr_demo) {
 }
 
 TEST(ut0new_new_delete_arr, demo_with_non_default_constructible_types) {
-  auto ptr = ut::new_arr_withkey<Pod_type>(
+  auto *ptr = ut::new_arr_withkey<Pod_type>(
       ut::make_psi_memory_key(pfs_key), std::forward_as_tuple(1, 2),
       std::forward_as_tuple(3, 4), std::forward_as_tuple(5, 6),
       std::forward_as_tuple(7, 8), std::forward_as_tuple(9, 10));
@@ -656,7 +656,7 @@ TEST(ut0new_new_delete_arr, demo_with_non_default_constructible_types) {
 TEST(ut0new_new_delete_arr,
      demo_with_explicit_N_default_constructible_instances) {
   constexpr auto n_elements = 5;
-  auto ptr = ut::new_arr_withkey<Default_constructible_pod>(
+  auto *ptr = ut::new_arr_withkey<Default_constructible_pod>(
       ut::make_psi_memory_key(pfs_key), std::forward_as_tuple(),
       std::forward_as_tuple(), std::forward_as_tuple(), std::forward_as_tuple(),
       std::forward_as_tuple());
@@ -671,7 +671,7 @@ TEST(ut0new_new_delete_arr,
 TEST(ut0new_new_delete_arr,
      demo_with_N_default_constructible_instances_through_ut_count) {
   constexpr auto n_elements = 5;
-  auto ptr = ut::new_arr_withkey<Default_constructible_pod>(
+  auto *ptr = ut::new_arr_withkey<Default_constructible_pod>(
       ut::make_psi_memory_key(pfs_key), ut::Count(n_elements));
 
   for (size_t elem = 0; elem < n_elements; elem++) {
@@ -690,7 +690,7 @@ TEST(
     int x, y;
   };
 
-  auto ptr = ut::new_arr_withkey<Type>(
+  auto *ptr = ut::new_arr_withkey<Type>(
       ut::make_psi_memory_key(pfs_key), std::forward_as_tuple(1, 2),
       std::forward_as_tuple(), std::forward_as_tuple(3, 4),
       std::forward_as_tuple(5, 6), std::forward_as_tuple());
@@ -727,7 +727,7 @@ TEST(
 
   bool exception_thrown_and_caught = false;
   try {
-    auto ptr = ut::new_arr_withkey<Type_that_may_throw>(
+    auto *ptr = ut::new_arr_withkey<Type_that_may_throw>(
         ut::make_psi_memory_key(pfs_key), ut::Count(7));
     ASSERT_FALSE(ptr);
   } catch (std::runtime_error &) {
@@ -757,7 +757,7 @@ TEST(
 
   bool exception_thrown_and_caught = false;
   try {
-    auto ptr = ut::new_arr_withkey<Type_that_may_throw>(
+    auto *ptr = ut::new_arr_withkey<Type_that_may_throw>(
         ut::make_psi_memory_key(pfs_key), std::forward_as_tuple(0, 1),
         std::forward_as_tuple(2, 3), std::forward_as_tuple(4, 5),
         std::forward_as_tuple(6, 7), std::forward_as_tuple(8, 9));
@@ -786,7 +786,7 @@ TEST(
 
   bool exception_thrown_and_caught = false;
   try {
-    auto ptr = ut::new_arr_withkey<Type_that_always_throws>(
+    auto *ptr = ut::new_arr_withkey<Type_that_always_throws>(
         ut::make_psi_memory_key(pfs_key), ut::Count(7));
     ASSERT_FALSE(ptr);
   } catch (std::runtime_error &) {
@@ -814,7 +814,7 @@ TEST(
 
   bool exception_thrown_and_caught = false;
   try {
-    auto ptr = ut::new_arr_withkey<Type_that_always_throws>(
+    auto *ptr = ut::new_arr_withkey<Type_that_always_throws>(
         ut::make_psi_memory_key(pfs_key), std::forward_as_tuple(0, 1),
         std::forward_as_tuple(2, 3), std::forward_as_tuple(4, 5),
         std::forward_as_tuple(6, 7), std::forward_as_tuple(8, 9));
@@ -842,7 +842,7 @@ TEST(ut0new_new_delete,
 
   bool exception_thrown_and_caught = false;
   try {
-    auto ptr = ut::new_withkey<Type_that_always_throws>(
+    auto *ptr = ut::new_withkey<Type_that_always_throws>(
         ut::make_psi_memory_key(pfs_key));
     ASSERT_FALSE(ptr);
   } catch (std::runtime_error &) {
@@ -854,13 +854,13 @@ TEST(ut0new_new_delete,
 }
 
 TEST(ut0new_new_delete, zero_sized_allocation_returns_valid_ptr) {
-  auto ptr = ut::new_<byte>(0);
+  auto *ptr = ut::new_<byte>(0);
   EXPECT_NE(ptr, nullptr);
   ut::delete_(ptr);
 }
 
 TEST(ut0new_new_delete_arr, zero_sized_allocation_returns_valid_ptr) {
-  auto ptr = ut::new_arr<byte>(ut::Count{0});
+  auto *ptr = ut::new_arr<byte>(ut::Count{0});
   EXPECT_NE(ptr, nullptr);
   ut::delete_arr(ptr);
 }
@@ -874,9 +874,9 @@ TEST(ut0new_new_delete_arr,
 
   int y = 10;
   int x = 20;
-  auto ptr = ut::new_arr_withkey<My_ref>(ut::make_psi_memory_key(pfs_key),
-                                         std::forward_as_tuple(x),
-                                         std::forward_as_tuple(y));
+  auto *ptr = ut::new_arr_withkey<My_ref>(ut::make_psi_memory_key(pfs_key),
+                                          std::forward_as_tuple(x),
+                                          std::forward_as_tuple(y));
   EXPECT_EQ(ptr[0]._ref, x);
   EXPECT_EQ(ptr[1]._ref, y);
   x = 30;
@@ -896,9 +896,9 @@ TEST(ut0new_new_delete_arr,
 
   int y = 10;
   int x = 20;
-  auto ptr = ut::new_arr_withkey<My_ref>(ut::make_psi_memory_key(pfs_key),
-                                         std::make_tuple(std::ref(x)),
-                                         std::make_tuple(std::ref(y)));
+  auto *ptr = ut::new_arr_withkey<My_ref>(ut::make_psi_memory_key(pfs_key),
+                                          std::make_tuple(std::ref(x)),
+                                          std::make_tuple(std::ref(y)));
   EXPECT_EQ(ptr[0]._ref, x);
   EXPECT_EQ(ptr[1]._ref, y);
   x = 30;
@@ -910,8 +910,8 @@ TEST(ut0new_new_delete_arr,
 }
 
 TEST(ut0new_new_delete_arr, proper_overload_resolution_is_selected) {
-  auto ptr = ut::new_arr_withkey<Pod_type>(ut::make_psi_memory_key(pfs_key),
-                                           std::forward_as_tuple(1, 2));
+  auto *ptr = ut::new_arr_withkey<Pod_type>(ut::make_psi_memory_key(pfs_key),
+                                            std::forward_as_tuple(1, 2));
   EXPECT_EQ(ptr[0].x, 1);
   EXPECT_EQ(ptr[0].y, 2);
   ut::delete_arr(ptr);
@@ -1662,7 +1662,7 @@ TEST(
 
   bool exception_thrown_and_caught = false;
   try {
-    auto ptr = ut::aligned_new_arr_withkey<Type_that_may_throw>(
+    auto *ptr = ut::aligned_new_arr_withkey<Type_that_may_throw>(
         ut::make_psi_memory_key(pfs_key), 2 * alignof(std::max_align_t),
         ut::Count(7));
     ASSERT_FALSE(ptr);
@@ -1693,7 +1693,7 @@ TEST(
 
   bool exception_thrown_and_caught = false;
   try {
-    auto ptr = ut::aligned_new_arr_withkey<Type_that_may_throw>(
+    auto *ptr = ut::aligned_new_arr_withkey<Type_that_may_throw>(
         ut::make_psi_memory_key(pfs_key), 2 * alignof(std::max_align_t),
         std::forward_as_tuple(0, 1), std::forward_as_tuple(2, 3),
         std::forward_as_tuple(4, 5), std::forward_as_tuple(6, 7),
@@ -1723,7 +1723,7 @@ TEST(
 
   bool exception_thrown_and_caught = false;
   try {
-    auto ptr = ut::aligned_new_arr_withkey<Type_that_always_throws>(
+    auto *ptr = ut::aligned_new_arr_withkey<Type_that_always_throws>(
         ut::make_psi_memory_key(pfs_key), 2 * alignof(std::max_align_t),
         ut::Count(7));
     ASSERT_FALSE(ptr);
@@ -1752,7 +1752,7 @@ TEST(
 
   bool exception_thrown_and_caught = false;
   try {
-    auto ptr = ut::aligned_new_arr_withkey<Type_that_always_throws>(
+    auto *ptr = ut::aligned_new_arr_withkey<Type_that_always_throws>(
         ut::make_psi_memory_key(pfs_key), 2 * alignof(std::max_align_t),
         std::forward_as_tuple(0, 1), std::forward_as_tuple(2, 3),
         std::forward_as_tuple(4, 5), std::forward_as_tuple(6, 7),
@@ -1781,7 +1781,7 @@ TEST(ut0new_aligned_new_delete,
 
   bool exception_thrown_and_caught = false;
   try {
-    auto ptr = ut::aligned_new_withkey<Type_that_always_throws>(
+    auto *ptr = ut::aligned_new_withkey<Type_that_always_throws>(
         ut::make_psi_memory_key(pfs_key), 2 * alignof(std::max_align_t));
     ASSERT_FALSE(ptr);
   } catch (std::runtime_error &) {

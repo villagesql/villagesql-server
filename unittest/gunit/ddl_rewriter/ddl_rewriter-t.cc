@@ -161,7 +161,7 @@ std::vector<Query_pair> missing_rewrite_queries{
      " CREATE TABLE t(i int) ENCRYPTION='N'"}};
 
 void test_queries(const std::vector<Query_pair> &queries) {
-  for (auto &q : queries) {
+  for (const auto &q : queries) {
     std::string rewrite_result;
     bool expect_rewrite = (q.query != q.rewritten_query);
     EXPECT_EQ(query_rewritten(q.query, &rewrite_result), expect_rewrite);

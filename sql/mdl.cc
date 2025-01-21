@@ -4674,7 +4674,7 @@ MDL_ticket_store::MDL_ticket_handle MDL_ticket_store::find_in_hash(
   // VS tags std::find_if with 'nodiscard'.
   (void)std::find_if(foundrng.first, foundrng.second,
                      [&](const Ticket_map::value_type &vt) {
-                       auto &th = vt.second;
+                       const auto &th = vt.second;
                        if (!th.m_ticket->has_stronger_or_equal_type(req.type)) {
                          return false;
                        }
@@ -4772,7 +4772,7 @@ void MDL_ticket_store::remove(enum_mdl_duration dur, MDL_ticket *ticket) {
 
   auto foundit = std::find_if(
       foundrng.first, foundrng.second, [&](const Ticket_map::value_type &vt) {
-        auto &th = vt.second;
+        const auto &th = vt.second;
         assert(th.m_ticket != ticket || th.m_dur == dur);
         return (th.m_ticket == ticket);
       });

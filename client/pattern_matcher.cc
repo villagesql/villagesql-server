@@ -81,7 +81,7 @@ bool Pattern_matcher::is_matching(const std::string &text,
   DBUG_TRACE;
 
   // traverse all patterns, return true on first match
-  for (auto &pattern : m_patterns) {
+  for (const auto &pattern : m_patterns) {
     if (info->coll->wildcmp(info, text.c_str(), text.c_str() + text.length(),
                             pattern.c_str(), pattern.c_str() + pattern.length(),
                             WILD_ESCAPE, WILD_ONE, WILD_MANY) == 0) {

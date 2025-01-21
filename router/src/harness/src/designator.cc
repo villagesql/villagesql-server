@@ -202,7 +202,7 @@ void Designator::parse_root() {
 }
 
 bool Designator::version_good(const Version &version) const {
-  for (auto &check : constraint) {
+  for (const auto &check : constraint) {
     switch (check.first) {
       case LESS_THEN:
         if (!(version < check.second)) return false;

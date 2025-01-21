@@ -62,7 +62,7 @@ const String_type Properties_impl::raw_string() const {
   str.reserve(16 * m_map.size());
 
   // Iterate over all valid map entries.
-  for (auto &it : m_map) {
+  for (const auto &it : m_map) {
     assert(valid_key(it.first));
     if (valid_key(it.first)) {
       escape(&str, it.first);

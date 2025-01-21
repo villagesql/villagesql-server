@@ -137,7 +137,7 @@ void ndb_dd_table_fix_partition_count(dd::Table *table_def,
         dd_partitions->at(ndb_num_partitions)->is_persistent();
 
     for (size_t i = ndb_num_partitions; i < dd_num_partitions; i++) {
-      auto partition = dd_partitions->at(ndb_num_partitions);
+      auto *partition = dd_partitions->at(ndb_num_partitions);
       dd_partitions->remove(dynamic_cast<dd::Partition_impl *>(partition));
     }
 

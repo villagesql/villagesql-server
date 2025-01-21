@@ -49,7 +49,7 @@ JsonDocument DynamicConfig::get_json(const ValueType value_type) const {
   json_doc.SetObject();
   auto &allocator = json_doc.GetAllocator();
 
-  auto &config = get_config(value_type);
+  const auto &config = get_config(value_type);
 
   for (const auto &section : config) {
     const std::string &section_name = section.first.first;

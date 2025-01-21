@@ -311,9 +311,9 @@ TEST_F(MyAllocTest, ArrayAllocInitialization) {
 
   // Should be allowed to create an array of a class which is not
   // copy-constructible.
-  auto uptr_array1 = alloc.ArrayAlloc<std::unique_ptr<int>>(10);
+  auto *uptr_array1 = alloc.ArrayAlloc<std::unique_ptr<int>>(10);
   ASSERT_NE(nullptr, uptr_array1);
-  auto uptr_array2 = alloc.ArrayAlloc<std::unique_ptr<int>>(10, nullptr);
+  auto *uptr_array2 = alloc.ArrayAlloc<std::unique_ptr<int>>(10, nullptr);
   ASSERT_NE(nullptr, uptr_array2);
   for (int i = 0; i < 10; ++i) {
     EXPECT_EQ(nullptr, uptr_array1[i]);

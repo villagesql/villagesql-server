@@ -145,7 +145,7 @@ struct st_plugin_ctx {
 
 static int sql_start_result_metadata(void *ctx, uint num_cols, uint,
                                      const CHARSET_INFO *resultcs) {
-  auto pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   DBUG_TRACE;
   DBUG_PRINT("info", ("resultcs->number: %d", resultcs->number));
   DBUG_PRINT("info", ("resultcs->csname: %s", resultcs->csname));
@@ -158,7 +158,7 @@ static int sql_start_result_metadata(void *ctx, uint num_cols, uint,
 
 static int sql_field_metadata(void *ctx, struct st_send_field *field,
                               const CHARSET_INFO *) {
-  auto pctx = (struct st_plugin_ctx *)ctx;
+  auto *pctx = (struct st_plugin_ctx *)ctx;
   st_send_field_n *cfield = &pctx->sql_field[pctx->current_col];
   DBUG_TRACE;
   DBUG_PRINT("info", ("field->db_name: %s", field->db_name));
@@ -521,7 +521,7 @@ struct Thread_data {
 };
 
 static void *test_session_thread(void *ctxt) {
-  auto thread_data = (Thread_data *)ctxt;
+  auto *thread_data = (Thread_data *)ctxt;
 
   if (srv_session_init_thread(thread_data->p))
     LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG,
@@ -666,7 +666,7 @@ long long reset_connection_exe(UDF_INIT *, UDF_ARGS *, unsigned char *,
 
 void register_udf_reset_connection() {
   DBUG_TRACE;
-  auto reg = mysql_plugin_registry_acquire();
+  const auto *reg = mysql_plugin_registry_acquire();
   {
     Udf_registrator udf_reg{"udf_registration", reg};
     if (udf_reg.is_valid()) {
@@ -683,7 +683,7 @@ void register_udf_reset_connection() {
 
 void unregister_udf_reset_connection() {
   DBUG_TRACE;
-  auto reg = mysql_plugin_registry_acquire();
+  const auto *reg = mysql_plugin_registry_acquire();
   {
     Udf_registrator udf_reg{"udf_registration", reg};
     if (udf_reg.is_valid()) {

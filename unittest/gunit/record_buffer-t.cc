@@ -63,7 +63,7 @@ TEST_P(RecordBufferTestP, BasicTest) {
       Add a record and verify that the number of records has grown,
       whereas the maximum size and the record size stay the same.
     */
-    const auto rec = buf.add_record();
+    auto *const rec = buf.add_record();
     EXPECT_EQ(i + 1, buf.records());
     EXPECT_NE(nullptr, rec);
     EXPECT_EQ(rec, buf.record(i));

@@ -982,7 +982,7 @@ void NdbResultStream::prepare() {
       reinterpret_cast<char *>(query.getRowBufferAlloc().allocObjMem(rowSize));
   assert(rowBuffer != nullptr);
 
-  auto rec = m_operation.getNdbRecord();
+  const auto *rec = m_operation.getNdbRecord();
   char *rowSideBuffer = rowBuffer;
   Uint32 rowSideBufferSize = 0;
   if (rec) {

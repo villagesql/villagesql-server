@@ -64,7 +64,7 @@ void ut_set_assert_callback(std::function<void()> &callback) {
   flush_error_log_messages();
 
 #else  /* !UNIV_HOTBACKUP && !defined(UNIV_NO_ERR_MSGS) */
-  auto filename = base_name(file);
+  const auto *filename = base_name(file);
 
   if (filename == nullptr) {
     filename = "null";

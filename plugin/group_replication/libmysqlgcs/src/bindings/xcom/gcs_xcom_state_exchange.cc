@@ -909,7 +909,7 @@ Gcs_xcom_state_exchange::compute_incompatible_joiners() {
 
       auto my_protocol = gcs_protocol_to_mysql_version(protocol_version);
       auto joiner_protocol = gcs_protocol_to_mysql_version(joiner_version);
-      auto &joiner = joiner_id->get_member_id();
+      const auto &joiner = joiner_id->get_member_id();
 
       MYSQL_GCS_LOG_WARN("The server "
                          << joiner

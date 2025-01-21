@@ -340,7 +340,7 @@ bool clone_os_test_load(std::string &path) {
   char dlpath[FN_REFLEN];
 
   unpack_filename(dlpath, path.c_str());
-  auto handle = dlopen(dlpath, RTLD_NOW);
+  auto *handle = dlopen(dlpath, RTLD_NOW);
 
   if (handle == nullptr) {
     return false;

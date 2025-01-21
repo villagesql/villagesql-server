@@ -311,7 +311,7 @@ TEST_F(XComNetworkProviderManagerTest,
   ASSERT_FALSE(
       Network_provider_manager::getInstance().start_active_network_provider());
 
-  auto connection_to =
+  auto *connection_to =
       Network_provider_manager::getInstance().open_xcom_connection("", 12345,
                                                                    false);
   ASSERT_NE(connection_to, nullptr);

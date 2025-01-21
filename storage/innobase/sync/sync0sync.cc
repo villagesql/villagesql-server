@@ -285,7 +285,7 @@ void MutexMonitor::reset() {
 
   mutex_enter(&rw_lock_list_mutex);
 
-  for (auto rw_lock : rw_lock_list) {
+  for (auto *rw_lock : rw_lock_list) {
     rw_lock->count_os_wait = 0;
   }
 

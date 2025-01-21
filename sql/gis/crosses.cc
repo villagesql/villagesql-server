@@ -432,7 +432,7 @@ bool Crosses::eval(const Cartesian_multipoint *g1,
   // At least one point in g1 has to be within g2, and at least one point in
   // g1
   // has to be disjoint from g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_disjoint = false;
     if (!found_disjoint) {
       pt_disjoint = disjoint(&pt, g2);
@@ -457,7 +457,7 @@ bool Crosses::eval(const Cartesian_multipoint *g1,
   // At least one point in g1 has to be within g2, and at least one point in
   // g1
   // has to be disjoint from g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_disjoint = false;
     if (!found_disjoint) {
       pt_disjoint = disjoint(&pt, g2);
@@ -494,7 +494,7 @@ bool Crosses::eval(const Cartesian_multipoint *g1,
   // At least one point in g1 has to be within g2, and at least one point in
   // g1
   // has to be disjoint from g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_disjoint = false;
     if (!found_disjoint) {
       pt_disjoint = disjoint(&pt, g2);
@@ -519,7 +519,7 @@ bool Crosses::eval(const Cartesian_multipoint *g1,
   // At least one point in g1 has to be within g2, and at least one point in
   // g1
   // has to be disjoint from g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_disjoint = false;
     if (!found_disjoint) {
       pt_disjoint = disjoint(&pt, g2);
@@ -711,7 +711,7 @@ bool Crosses::eval(const Geographic_multipoint *g1,
   // At least one point in g1 has to be within g2, and at least one point in
   // g1
   // has to be disjoint from g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_disjoint = false;
     if (!found_disjoint) {
       pt_disjoint = disjoint(&pt, g2);
@@ -736,7 +736,7 @@ bool Crosses::eval(const Geographic_multipoint *g1,
   // At least one point in g1 has to be within g2, and at least one point in
   // g1
   // has to be disjoint from g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_disjoint = false;
     if (!found_disjoint) {
       pt_disjoint = disjoint(&pt, g2);
@@ -773,7 +773,7 @@ bool Crosses::eval(const Geographic_multipoint *g1,
   // At least one point in g1 has to be within g2, and at least one point in
   // g1
   // has to be disjoint from g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_disjoint = false;
     if (!found_disjoint) {
       pt_disjoint = disjoint(&pt, g2);
@@ -798,7 +798,7 @@ bool Crosses::eval(const Geographic_multipoint *g1,
   // At least one point in g1 has to be within g2, and at least one point in
   // g1
   // has to be disjoint from g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_disjoint = false;
     if (!found_disjoint) {
       pt_disjoint = disjoint(&pt, g2);

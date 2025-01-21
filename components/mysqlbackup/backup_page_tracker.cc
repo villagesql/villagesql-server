@@ -127,7 +127,7 @@ mysql_service_status_t Backup_page_tracker::register_udfs() {
   // Initialize the UDF list
   initialize_udf_list();
 
-  for (auto udf : m_udf_list) {
+  for (auto *udf : m_udf_list) {
     if (udf->m_is_registered) {
       std::string msg{udf->m_name + " is already registered."};
       LogErr(ERROR_LEVEL, ER_MYSQLBACKUP_MSG, msg.c_str());
@@ -163,7 +163,7 @@ mysql_service_status_t Backup_page_tracker::register_udfs() {
 mysql_service_status_t Backup_page_tracker::unregister_udfs() {
   mysql_service_status_t fail_status{0};
 
-  for (auto udf : m_udf_list) {
+  for (auto *udf : m_udf_list) {
     int was_present;
     if (mysql_service_udf_registration->udf_unregister(udf->m_name.c_str(),
                                                        &was_present) &&

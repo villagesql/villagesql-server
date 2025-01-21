@@ -78,7 +78,7 @@ TEST_F(XcomSingleWriter, test_xcom_client_set_max_leaders) {
 TEST_F(XcomSingleWriter, test_xcom_client_set_leaders) {
   std::array<char const *, 5> a = {nullptr, "hostname", "xxfunnyxx.nohost.foo",
                                    "localhost", "127.0.0.1"};
-  for (auto name : a) {  // Should always return 0 because of nullptr
+  for (const auto *name : a) {  // Should always return 0 because of nullptr
     ASSERT_EQ(0, xcom_client_set_leaders(nullptr, 1, &name, test_group_id));
   }
 }

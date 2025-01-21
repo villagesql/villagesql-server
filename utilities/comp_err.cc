@@ -1512,7 +1512,7 @@ static char *parse_text_line(char *pos, bool allow_newline_escape) {
     fprintf(stderr, "Could not find a '\"' on the end of the message\n");
     return nullptr;
   }
-  for (auto end_of_line = pos + 1; *end_of_line; end_of_line++) {
+  for (auto *end_of_line = pos + 1; *end_of_line; end_of_line++) {
     if (*end_of_line != '\n' && *end_of_line != '\r') {
       fprintf(stderr,
               "Unexpected character at the end of the line, expected newline, "

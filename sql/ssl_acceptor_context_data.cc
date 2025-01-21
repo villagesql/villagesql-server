@@ -353,9 +353,9 @@ Ssl_acceptor_context_data::~Ssl_acceptor_context_data() {
 
 std::string Ssl_acceptor_context_data::show_property(
     Ssl_acceptor_context_property_type property_type) const {
-  auto c =
+  auto *c =
       (ssl_acceptor_fd_ == nullptr) ? nullptr : ssl_acceptor_fd_->ssl_context;
-  auto s = acceptor_;
+  auto *s = acceptor_;
   std::string output;
   switch (property_type) {
     case Ssl_acceptor_context_property_type::accept_renegotiates: {

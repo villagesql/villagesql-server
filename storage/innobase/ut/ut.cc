@@ -76,8 +76,8 @@ void ut_print_buf(FILE *file,      /*!< in: file where to print */
 @param[in] buf Memory buffer
 @param[in] len Length of the buffer */
 void ut_print_buf_hex(std::ostream &o, const void *buf, ulint len) {
-  auto ptr = reinterpret_cast<const byte *>(buf);
-  const auto end = ptr + len;
+  const auto *ptr = reinterpret_cast<const byte *>(buf);
+  const auto *const end = ptr + len;
 
   o << "(0x";
   while (ptr < end) {

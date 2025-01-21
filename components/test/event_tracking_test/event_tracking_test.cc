@@ -159,7 +159,7 @@ int main(int argc, char **argv) {
     deinit_registry();
   });
 
-  auto dynamic_loader = get_dynamic_loader();
+  auto *dynamic_loader = get_dynamic_loader();
 
   if (!dynamic_loader) {
     std::cerr << "Could not get handle of dynamic loader" << std::endl;

@@ -2983,7 +2983,7 @@ static void var_set_escape(struct st_command *command, VAR *dst) {
     if (std::find(begin, end, c) != end) dst_len++;
   // Allocate space for escaped string
   alloc_var(dst, dst_len);
-  auto dst_char = dst->str_val;
+  auto *dst_char = dst->str_val;
   // Compute escaped string
   for (char c : src) {
     if (std::find(begin, end, c) != end) *dst_char++ = '\\';

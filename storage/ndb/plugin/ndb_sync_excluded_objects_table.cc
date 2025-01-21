@@ -37,7 +37,7 @@ static unsigned long long ndb_excluded_objects_row_count() {
 
 static PSI_table_handle *ndb_excluded_objects_open_table(PSI_pos **pos) {
   // Constructs a table object and returns an opaque pointer
-  auto row_pos = reinterpret_cast<uint32_t **>(pos);
+  auto *row_pos = reinterpret_cast<uint32_t **>(pos);
   /*
     Creates an instance of the table. Note that this is deallocated during the
     table close which is implemented in the base class. See the

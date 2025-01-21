@@ -130,7 +130,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
 
   switch (event_data->event_class) {
     case Event_tracking_class::AUTHENTICATION: {
-      for (auto handle : state->authentication) {
+      for (const auto *handle : state->authentication) {
         retval |=
             (handle->notify(reinterpret_cast<
                             const mysql_event_tracking_authentication_data *>(
@@ -141,7 +141,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
       break;
     }
     case Event_tracking_class::COMMAND: {
-      for (auto handle : state->command) {
+      for (const auto *handle : state->command) {
         retval |=
             (handle->notify(
                 reinterpret_cast<const mysql_event_tracking_command_data *>(
@@ -153,7 +153,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
     }
 
     case Event_tracking_class::CONNECTION: {
-      for (auto handle : state->connection) {
+      for (const auto *handle : state->connection) {
         retval |=
             (handle->notify(
                  reinterpret_cast<const mysql_event_tracking_connection_data *>(
@@ -164,7 +164,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
       break;
     }
     case Event_tracking_class::GENERAL: {
-      for (auto handle : state->general) {
+      for (const auto *handle : state->general) {
         retval |=
             (handle->notify(
                  reinterpret_cast<const mysql_event_tracking_general_data *>(
@@ -175,7 +175,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
       break;
     }
     case Event_tracking_class::GLOBAL_VARIABLE: {
-      for (auto handle : state->global_var) {
+      for (const auto *handle : state->global_var) {
         retval |=
             (handle->notify(reinterpret_cast<
                             const mysql_event_tracking_global_variable_data *>(
@@ -186,7 +186,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
       break;
     }
     case Event_tracking_class::MESSAGE: {
-      for (auto handle : state->message) {
+      for (const auto *handle : state->message) {
         retval |=
             (handle->notify(
                 reinterpret_cast<const mysql_event_tracking_message_data *>(
@@ -197,7 +197,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
       break;
     }
     case Event_tracking_class::PARSE: {
-      for (auto handle : state->parse) {
+      for (const auto *handle : state->parse) {
         retval |=
             (handle->notify(reinterpret_cast<mysql_event_tracking_parse_data *>(
                 const_cast<void *>(event_data->event))))
@@ -207,7 +207,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
       break;
     }
     case Event_tracking_class::QUERY: {
-      for (auto handle : state->query) {
+      for (const auto *handle : state->query) {
         retval |= (handle->notify(
                       reinterpret_cast<const mysql_event_tracking_query_data *>(
                           event_data->event)))
@@ -217,7 +217,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
       break;
     }
     case Event_tracking_class::SHUTDOWN: {
-      for (auto handle : state->lifecycle) {
+      for (const auto *handle : state->lifecycle) {
         retval |=
             (handle->notify_shutdown(
                 reinterpret_cast<const mysql_event_tracking_shutdown_data *>(
@@ -228,7 +228,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
       break;
     }
     case Event_tracking_class::STARTUP: {
-      for (auto handle : state->lifecycle) {
+      for (const auto *handle : state->lifecycle) {
         retval |=
             (handle->notify_startup(
                 reinterpret_cast<const mysql_event_tracking_startup_data *>(
@@ -239,7 +239,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
       break;
     }
     case Event_tracking_class::STORED_PROGRAM: {
-      for (auto handle : state->stored_program) {
+      for (const auto *handle : state->stored_program) {
         retval |=
             (handle->notify(reinterpret_cast<
                             const mysql_event_tracking_stored_program_data *>(
@@ -250,7 +250,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
       break;
     }
     case Event_tracking_class::TABLE_ACCESS: {
-      for (auto handle : state->table_access) {
+      for (const auto *handle : state->table_access) {
         retval |=
             (handle->notify(reinterpret_cast<
                             const mysql_event_tracking_table_access_data *>(

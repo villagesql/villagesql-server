@@ -65,7 +65,8 @@ static auto test_fatal_signal_callback(int signum,
     -> void {
   assert(signum == SIGSEGV);
   if (signum != SIGSEGV) return;
-  auto message = "Signal from the test_mysql_signal_handler component.\n";
+  const auto *message =
+      "Signal from the test_mysql_signal_handler component.\n";
   safe_write_stderr(message, strlen(message));
 }
 

@@ -212,7 +212,7 @@ TEST_F(Rpl_commit_order_queue_test, Pushing_while_poping_test) {
   std::map<cs::apply::Commit_order_queue::value_type,
            cs::apply::Commit_order_queue::value_type>
       dup;
-  for (auto v : f) {
+  for (auto *v : f) {
     if (v == nullptr) continue;
     bool inserted{false};
     std::tie(std::ignore, inserted) =
@@ -295,7 +295,7 @@ TEST_F(Rpl_commit_order_queue_test, Pushing_then_poping_test) {
   std::map<cs::apply::Commit_order_queue::value_type,
            cs::apply::Commit_order_queue::value_type>
       dup;
-  for (auto v : f) {
+  for (auto *v : f) {
     if (v == nullptr) continue;
     bool inserted{false};
     std::tie(std::ignore, inserted) =

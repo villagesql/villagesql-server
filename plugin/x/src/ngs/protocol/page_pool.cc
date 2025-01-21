@@ -43,7 +43,7 @@ Memory_block_pool::~Memory_block_pool() {
   MUTEX_LOCK(lock, m_mutex);
 
   while (m_page_cache) {
-    auto to_delete = reinterpret_cast<char *>(m_page_cache);
+    auto *to_delete = reinterpret_cast<char *>(m_page_cache);
     m_page_cache = m_page_cache->m_next;
 
     ngs::free_array<char>(to_delete);
@@ -92,7 +92,7 @@ char *Memory_block_pool::get_page_from_cache() {
 
     if (m_page_cache) {
       --m_number_of_cached_pages;
-      auto result = m_page_cache;
+      auto *result = m_page_cache;
 
       m_page_cache = m_page_cache->m_next;
       result->~Node_linked_list();

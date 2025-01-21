@@ -85,7 +85,7 @@ Callback_command_delegate::Field_value::~Field_value() {
 Callback_command_delegate::Row_data::~Row_data() { clear(); }
 
 void Callback_command_delegate::Row_data::clear() {
-  for (auto f : fields) ngs::free_object(f);
+  for (auto *f : fields) ngs::free_object(f);
 
   fields.clear();
 }
@@ -107,7 +107,7 @@ Callback_command_delegate::Row_data::operator=(const Row_data &other) {
 void Callback_command_delegate::Row_data::clone_fields(const Row_data &other) {
   fields.reserve(other.fields.size());
 
-  for (auto f : other.fields) {
+  for (auto *f : other.fields) {
     this->fields.push_back(f ? ngs::allocate_object<Field_value>(*f) : nullptr);
   }
 }

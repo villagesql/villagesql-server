@@ -1533,7 +1533,7 @@ TEST(ut0crc32, software) {
   init();
   for (size_t o = 0; o < 128; ++o) {
     for (size_t size = 0; size <= 512; ++size) {
-      const auto data = &random_data.data[o];
+      auto *const data = &random_data.data[o];
       const auto good = naive_crc32(data, size);
       EXPECT_EQ(good, software::crc32(data, size));
     }
@@ -1544,7 +1544,7 @@ TEST(ut0crc32, hardware) {
   for (size_t o = 0; o < 128; ++o) {
     for (size_t size = 0; size + o <= random_data.data.size(); ++size) {
       if (rand() % 100) continue;
-      const auto data = &random_data.data[o];
+      auto *const data = &random_data.data[o];
       const auto good = software::crc32(data, size);
 
       EXPECT_EQ(good, ut_crc32(data, size));

@@ -137,7 +137,7 @@ void rmdir(std::string path) { EXPECT_EQ(::rmdir(path.c_str()), 0); }
 void unlink(std::string path) { EXPECT_EQ(::unlink(path.c_str()), 0); }
 
 void create_file(std::string path) {
-  auto f = fopen(path.c_str(), "w");
+  auto *f = fopen(path.c_str(), "w");
   EXPECT_NE(f, nullptr);
   fclose(f);
 }

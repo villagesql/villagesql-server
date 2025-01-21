@@ -105,7 +105,7 @@ static auto test_execute_prepared_statement(UDF_INIT *, UDF_ARGS *arguments,
                                             unsigned char *error) -> char * {
   *error = 1;
 
-  auto statement = my_h_statement{nullptr};
+  auto *statement = my_h_statement{nullptr};
   auto query =
       mysql_cstring_with_length{arguments->args[0], strlen(arguments->args[0])};
 
@@ -220,7 +220,7 @@ static auto test_execute_prepared_statement(UDF_INIT *, UDF_ARGS *arguments,
        arg_index++) {
     switch (arguments->arg_type[arg_index]) {
       case STRING_RESULT: {
-        auto value = arguments->args[arg_index];
+        auto *value = arguments->args[arg_index];
         if (SERVICE_PLACEHOLDER(mysql_stmt_bind)
                 ->bind_param(statement, param_index, false,
                              MYSQL_SP_ARG_TYPE_VARCHAR, false, value,
@@ -353,7 +353,7 @@ static auto test_execute_prepared_statement(UDF_INIT *, UDF_ARGS *arguments,
   }
 #endif
 
-  if (auto exec_result = execute_statement(statement, error, result, length);
+  if (auto *exec_result = execute_statement(statement, error, result, length);
       exec_result != nullptr) {
     return exec_result;
   }

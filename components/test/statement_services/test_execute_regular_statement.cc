@@ -90,7 +90,7 @@ static auto test_execute_regular_statement(UDF_INIT *, UDF_ARGS *arguments,
                                            unsigned char *error) -> char * {
   *error = 1;
 
-  auto statement = my_h_statement{nullptr};
+  auto *statement = my_h_statement{nullptr};
   auto query =
       mysql_cstring_with_length{arguments->args[0], strlen(arguments->args[0])};
   if (SERVICE_PLACEHOLDER(mysql_stmt_factory)->init(&statement) != 0) return {};

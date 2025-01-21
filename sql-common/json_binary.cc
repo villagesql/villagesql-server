@@ -1439,8 +1439,8 @@ bool Value::has_space(size_t pos, size_t needed, size_t *offset) const {
   */
   const auto entry_size = value_entry_size(m_large);
   size_t i = pos + 1;
-  for (auto entry = m_data + value_entry_offset(pos); i < m_element_count;
-       ++i) {
+  for (const auto *entry = m_data + value_entry_offset(pos);
+       i < m_element_count; ++i) {
     entry += entry_size;
     // TODO Give up after N iterations?
     if (inlined_type(*entry, m_large)) continue;

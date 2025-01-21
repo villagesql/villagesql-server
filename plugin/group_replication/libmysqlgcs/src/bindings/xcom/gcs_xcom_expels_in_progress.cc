@@ -58,7 +58,7 @@ void Gcs_xcom_expels_in_progress::forget_expels_that_have_taken_effect(
        removed from `expels_in_progress` because it matches
        `member_under_effect`.
      */
-    auto const func = __func__;
+    const auto *const func = __func__;
     auto const expel_has_taken_effect =
         [&func, config_id_where_members_under_effect,
          member_under_effect](std::pair<Gcs_member_identifier, synode_no> const

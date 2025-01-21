@@ -158,7 +158,7 @@ static void test_sql() {
     }
 
     test_context->log_test_line("Verify Session ", i + 1, " variable");
-    auto session_thd = srv_session_info_get_thd(sessions[session_index]);
+    auto *session_thd = srv_session_info_get_thd(sessions[session_index]);
 
     if (expected_session_variable_value(session_index) !=
         THDVAR(session_thd, var_int)) {

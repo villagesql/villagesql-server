@@ -269,7 +269,8 @@ static bool geometry_collection_apply_touches(const Touches &f,
               throw null_value_exception();
             for (std::size_t i = 0;
                  i < down_cast<const Cartesian_multipoint *>(g1)->size(); i++) {
-              auto &pt = (*down_cast<const Cartesian_multipoint *>(g1))[i];
+              const auto &pt =
+                  (*down_cast<const Cartesian_multipoint *>(g1))[i];
               if (bg::relate(
                       pt, *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
                       mask) ||
@@ -380,7 +381,8 @@ static bool geometry_collection_apply_touches(const Touches &f,
             for (std::size_t i = 0;
                  i < down_cast<const Geographic_multipoint *>(g1)->size();
                  i++) {
-              auto &pt = (*down_cast<const Geographic_multipoint *>(g1))[i];
+              const auto &pt =
+                  (*down_cast<const Geographic_multipoint *>(g1))[i];
               if (bg::relate(
                       pt,
                       *down_cast<Geographic_multilinestring *>(g2_mls.get()),
@@ -631,7 +633,7 @@ bool Touches::eval(const Cartesian_multipoint *g1,
 
   // At least one point in g1 has to touch g2, and none of the points in g1
   // may be within g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_touches = false;
     if (!touches) {
       pt_touches = bg::touches(pt, *g2);
@@ -652,7 +654,7 @@ bool Touches::eval(const Cartesian_multipoint *g1,
 
   // At least one point in g1 has to touch g2, and none of the points in g1
   // may be within g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_touches = false;
     if (!touches) {
       pt_touches = bg::touches(pt, *g2);
@@ -686,7 +688,7 @@ bool Touches::eval(const Cartesian_multipoint *g1,
 
   // At least one point in g1 has to touch g2, and none of the points in g1
   // may be within g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_touches = false;
     if (!touches) {
       pt_touches = bg::touches(pt, *g2);
@@ -707,7 +709,7 @@ bool Touches::eval(const Cartesian_multipoint *g1,
 
   // At least one point in g1 has to touch g2, and none of the points in g1
   // may be within g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_touches = false;
     if (!touches) {
       pt_touches = bg::touches(pt, *g2);
@@ -952,7 +954,7 @@ bool Touches::eval(const Geographic_multipoint *g1,
 
   // At least one point in g1 has to touch g2, and none of the points in g1
   // may be within g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_touches = false;
     if (!touches) {
       pt_touches = bg::touches(pt, *g2, m_geographic_pl_pa_strategy);
@@ -973,7 +975,7 @@ bool Touches::eval(const Geographic_multipoint *g1,
 
   // At least one point in g1 has to touch g2, and none of the points in g1
   // may be within g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_touches = false;
     if (!touches) {
       pt_touches = bg::touches(pt, *g2, m_geographic_pl_pa_strategy);
@@ -1007,7 +1009,7 @@ bool Touches::eval(const Geographic_multipoint *g1,
 
   // At least one point in g1 has to touch g2, and none of the points in g1
   // may be within g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_touches = false;
     if (!touches) {
       pt_touches = bg::touches(pt, *g2, m_geographic_pl_pa_strategy);
@@ -1028,7 +1030,7 @@ bool Touches::eval(const Geographic_multipoint *g1,
 
   // At least one point in g1 has to touch g2, and none of the points in g1
   // may be within g2.
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     bool pt_touches = false;
     if (!touches) {
       pt_touches = bg::touches(pt, *g2, m_geographic_pl_pa_strategy);

@@ -766,7 +766,7 @@ static bool convert_synode_set_to_synode_array(
   if (to.synode_no_array_val == nullptr) goto end;
   to.synode_no_array_len = nr_synodes;
 
-  for (auto &gcs_synod : synode_set) {
+  for (const auto &gcs_synod : synode_set) {
     to.synode_no_array_val[index] = gcs_synod.get_synod();
     index++;
   }

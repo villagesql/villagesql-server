@@ -374,11 +374,11 @@ void Gcs_packet::deserialize(buffer_ptr &&buffer,
 void Gcs_packet::dump(std::ostringstream &output) const {
   m_fixed_header.dump(output);
 
-  for (auto &dynamic_header : m_dynamic_headers) {
+  for (const auto &dynamic_header : m_dynamic_headers) {
     dynamic_header.dump(output);
   }
 
-  for (auto &stage_header : m_stage_metadata) {
+  for (const auto &stage_header : m_stage_metadata) {
     stage_header->dump(output);
   }
 }

@@ -4683,7 +4683,7 @@ static Name_vec make_name_vec(size_t t) {
   Helper function for benchmark.
  */
 static void lock_bench(MDL_context &ctx, const Name_vec &names) {
-  for (auto &name : names) {
+  for (const auto &name : names) {
     MDL_request request;
     MDL_REQUEST_INIT(&request, MDL_key::TABLE, "S", name.c_str(),
                      MDL_INTENTION_EXCLUSIVE, MDL_TRANSACTION);

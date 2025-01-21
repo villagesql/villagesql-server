@@ -122,8 +122,8 @@ Keyring_encryption_test::Keyring_encryption_test(
 bool Keyring_encryption_test::test_aes() {
   if (!ok_) return false;
 
-  const auto writer = aes_service_.writer();
-  const auto aes = aes_service_.aes();
+  const auto *const writer = aes_service_.writer();
+  const auto *const aes = aes_service_.aes();
 
   const std::string aes_key_1("AES_test_key_1");
   if (writer->store("aes_key_1", "keyring_aes_test",

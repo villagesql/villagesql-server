@@ -158,7 +158,7 @@ static void test_concurrent_producers_sequential_consumer(
   while (payload != nullptr) {
     app_data_ptr a = ::xcom_input_request_extract_app_data(payload);
     consumed.push_back(a);
-    auto previous_payload = payload;
+    auto *previous_payload = payload;
     payload = ::xcom_input_request_extract_next(previous_payload);
     ::xcom_input_request_reply(previous_payload, nullptr);
     ::xcom_input_request_free(previous_payload);
@@ -206,7 +206,7 @@ static void test_concurrent_producers_concurrent_consumer(
     while (payload != nullptr) {
       app_data_ptr a = ::xcom_input_request_extract_app_data(payload);
       consumed.push_back(a);
-      auto previous_payload = payload;
+      auto *previous_payload = payload;
       payload = ::xcom_input_request_extract_next(previous_payload);
       ::xcom_input_request_reply(previous_payload, nullptr);
       ::xcom_input_request_free(previous_payload);

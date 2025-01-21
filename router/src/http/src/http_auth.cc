@@ -67,7 +67,7 @@ std::string HttpAuthChallenge::str() const {
     is_first = false;
   }
 
-  for (auto &kv : params_) {
+  for (const auto &kv : params_) {
     if (!is_first) {
       out.append(",");
     } else {
@@ -158,7 +158,7 @@ std::string HttpAuthCredentials::str() const {
     is_first = false;
   }
 
-  for (auto &kv : params_) {
+  for (const auto &kv : params_) {
     if (!is_first) {
       out.append(",");
     }
@@ -178,7 +178,7 @@ bool HttpAuth::require_auth(http::base::Request &req,
   constexpr char kWwwAuthenticate[]{"WWW-Authenticate"};
   constexpr char kMethodBasic[]{"Basic"};
   // enforce authentication
-  auto authorization = req.get_input_headers().find(kAuthorization);
+  const auto *authorization = req.get_input_headers().find(kAuthorization);
 
   auto &out_hdrs = req.get_output_headers();
 

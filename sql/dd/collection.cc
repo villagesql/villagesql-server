@@ -170,7 +170,7 @@ bool Collection<T>::restore_items(Parent_item *parent,
   */
   rs.reset();
 
-  for (auto item : m_items) {
+  for (auto *item : m_items) {
     if (item->restore_children(otx) || item->validate()) {
       clear_all_items();
       return true;

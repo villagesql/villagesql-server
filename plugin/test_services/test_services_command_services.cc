@@ -71,7 +71,7 @@ static char *test_command_service_udf(UDF_INIT *, UDF_ARGS *args, char *result,
 
   // Query by attaching to the THD to the session service.
   MYSQL_SESSION mysql_session = srv_session_open(nullptr, nullptr);
-  auto loc_thd = srv_session_info_get_thd(mysql_session);
+  auto *loc_thd = srv_session_info_get_thd(mysql_session);
   if (loc_thd) {
     // Fill the secruity context of session we got.
     Security_context_handle sctx;

@@ -81,7 +81,7 @@ TEST_F(KeyringCommonJsonReader_test, JsonReaderTest) {
   ASSERT_TRUE(element.second.data() == "abcdefghijklmnop");
   ASSERT_TRUE(element.second.type() == "AES");
 
-  auto ext = output[0].second.get();
+  auto *ext = output[0].second.get();
   ASSERT_TRUE(ext->version() == "1.0");
 
   element = output[1].first;

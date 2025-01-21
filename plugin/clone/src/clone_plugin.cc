@@ -301,7 +301,7 @@ static int check_donor_addr_format(MYSQL_THD thd, SYS_VAR *var [[maybe_unused]],
   char temp_buffer[STRING_BUFFER_USUAL_SIZE];
   auto buf_len = static_cast<int>(sizeof(temp_buffer));
 
-  auto addrs_cstring = value->val_str(value, temp_buffer, &buf_len);
+  const auto *addrs_cstring = value->val_str(value, temp_buffer, &buf_len);
 
   if (addrs_cstring && (addrs_cstring == temp_buffer)) {
     addrs_cstring = thd_strmake(thd, addrs_cstring, buf_len);

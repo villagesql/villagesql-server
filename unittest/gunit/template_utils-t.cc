@@ -68,7 +68,7 @@ TEST(TemplateUtilsTest, DownCastRvalueReference) {
 TEST(TemplateUtilsTest, DownCastPointer) {
   Descendent descendent;
   Base *baseref = &descendent;
-  auto descendentref = down_cast<Descendent *>(baseref);
+  auto *descendentref = down_cast<Descendent *>(baseref);
 
   EXPECT_EQ(1, baseref->id());
   EXPECT_EQ(2, descendentref->id());

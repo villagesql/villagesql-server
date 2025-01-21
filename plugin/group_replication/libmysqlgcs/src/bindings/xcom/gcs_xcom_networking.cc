@@ -798,7 +798,7 @@ bool Gcs_ip_allowlist::do_check_block_allowlist(
     The check compares both IPs' bytes (octets) in network byte order.
   */
   bool block = true;
-  for (auto &wl_it : m_ip_allowlist) {
+  for (const auto &wl_it : m_ip_allowlist) {
     std::unique_ptr<std::vector<
         std::pair<std::vector<unsigned char>, std::vector<unsigned char>>>>
         wl_value((*wl_it).get_value());

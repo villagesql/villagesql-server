@@ -47,7 +47,7 @@ DEFINE_BOOL_METHOD(mysql_command_consumer_dom_imp::start,
     auto *mysql_handle = reinterpret_cast<Mysql_handle *>(mysql_h);
     ctx->m_mysql = mysql_handle->mysql;
     *srv_ctx_h = reinterpret_cast<SRV_CTX_H>(ctx);
-    auto mcs_extn = MYSQL_COMMAND_SERVICE_EXTN(ctx->m_mysql);
+    auto *mcs_extn = MYSQL_COMMAND_SERVICE_EXTN(ctx->m_mysql);
     mcs_extn->consumer_srv_data = reinterpret_cast<SRV_CTX_H *>(ctx);
     ctx->m_result = &mcs_extn->data;
     if (!(*ctx->m_result = (MYSQL_DATA *)my_malloc(
@@ -307,7 +307,7 @@ DEFINE_BOOL_METHOD(mysql_command_consumer_dom_imp::get,
                    (SRV_CTX_H srv_ctx_h, const DECIMAL_T_H decimal)) {
   try {
     auto *ctx = reinterpret_cast<Dom_ctx *>(srv_ctx_h);
-    auto value = (const decimal_t *)(decimal);
+    const auto *value = (const decimal_t *)(decimal);
     if (ctx == nullptr) return true;
     char buff[DECIMAL_MAX_STR_LENGTH + 1];
     int string_length = DECIMAL_MAX_STR_LENGTH + 1;
@@ -349,7 +349,7 @@ DEFINE_BOOL_METHOD(mysql_command_consumer_dom_imp::get_date,
   try {
     auto *ctx = reinterpret_cast<Dom_ctx *>(srv_ctx_h);
     if (ctx == nullptr) return true;
-    auto value = (const MYSQL_TIME *)(time);
+    const auto *value = (const MYSQL_TIME *)(time);
     char buff[MAX_DATE_STRING_REP_LENGTH];
     const size_t length = my_date_to_str(*value, buff);
     const bool ret_val = store_data(srv_ctx_h, buff, length);
@@ -366,7 +366,7 @@ DEFINE_BOOL_METHOD(mysql_command_consumer_dom_imp::get_time,
   try {
     auto *ctx = reinterpret_cast<Dom_ctx *>(srv_ctx_h);
     if (ctx == nullptr) return true;
-    auto value = (const MYSQL_TIME *)(time);
+    const auto *value = (const MYSQL_TIME *)(time);
     char buff[MAX_DATE_STRING_REP_LENGTH];
     const size_t length = my_time_to_str(*value, buff, precision);
     const bool ret_val = store_data(srv_ctx_h, buff, length);
@@ -383,7 +383,7 @@ DEFINE_BOOL_METHOD(mysql_command_consumer_dom_imp::get_datetime,
   try {
     auto *ctx = reinterpret_cast<Dom_ctx *>(srv_ctx_h);
     if (ctx == nullptr) return true;
-    auto value = (const MYSQL_TIME *)(time);
+    const auto *value = (const MYSQL_TIME *)(time);
     char buff[MAX_DATE_STRING_REP_LENGTH];
     const size_t length = my_datetime_to_str(*value, buff, precision);
     const bool ret_val = store_data(srv_ctx_h, buff, length);

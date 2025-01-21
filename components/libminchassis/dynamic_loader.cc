@@ -1171,7 +1171,7 @@ bool mysql_dynamic_loader_imp::unload_do_lock_provided_services(
 
     if (pre_unload_notification.is_valid()) {
       std::vector<const char *> services;
-      for (auto &one : components_to_unload) {
+      for (const auto &one : components_to_unload) {
         for (const mysql_service_ref_t *service :
              one->get_provided_services()) {
           services.push_back(service->name);
@@ -1402,7 +1402,7 @@ bool mysql_dynamic_loader_imp::unload_do_unload_components(
        mysql_component pointers. */
     for (auto list = mysql_dynamic_loader_imp::urns_with_gen_list.begin();
          list != mysql_dynamic_loader_imp::urns_with_gen_list.end(); ++list) {
-      auto comp_ele = (*component_it).second.get();
+      auto *comp_ele = (*component_it).second.get();
       auto v_element =
           find_if((*list).begin(), (*list).end(),
                   [comp_ele](mysql_component *ptr) { return ptr == comp_ele; });

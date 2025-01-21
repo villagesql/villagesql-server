@@ -104,7 +104,7 @@ bool Within::eval(const Cartesian_point *g1,
 bool Within::eval(const Cartesian_point *g1,
                   const Cartesian_geometrycollection *g2) const {
   // g1 must be within one of the elements of g2.
-  for (auto g : *g2)
+  for (auto *g : *g2)
     if ((*this)(g1, g)) return true;
   return false;
 }
@@ -433,7 +433,7 @@ bool Within::eval(const Cartesian_multipoint *g1,
   // At least one point in g1 must be within g2. The rest has to intersect g2.
   bool within = false;
   bool intersects = false;
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     if (!within) {
       within = bg::within(pt, *g2);
       if (!within)
@@ -453,7 +453,7 @@ bool Within::eval(const Cartesian_multipoint *g1,
   // At least one point in g1 must be within g2. The rest has to intersect g2.
   bool within = false;
   bool intersects = false;
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     if (!within) {
       within = bg::within(pt, *g2);
       if (!within)
@@ -474,7 +474,7 @@ bool Within::eval(const Cartesian_multipoint *g1,
   Intersects intersects_func(m_semi_major, m_semi_minor);
   bool within = false;
   bool intersects = false;
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     if (!within) {
       within = eval(&pt, g2);
       if (!within)
@@ -491,7 +491,7 @@ bool Within::eval(const Cartesian_multipoint *g1,
 
 bool Within::eval(const Cartesian_multipoint *g1,
                   const Cartesian_multipoint *g2) const {
-  for (auto &pt : *g1)
+  for (const auto &pt : *g1)
     if (!bg::within(pt, *g2)) return false;
   return true;
 }
@@ -501,7 +501,7 @@ bool Within::eval(const Cartesian_multipoint *g1,
   // At least one point in g1 must be within g2. The rest has to intersect g2.
   bool within = false;
   bool intersects = false;
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     if (!within) {
       within = bg::within(pt, *g2);
       if (!within)
@@ -521,7 +521,7 @@ bool Within::eval(const Cartesian_multipoint *g1,
   // At least one point in g1 must be within g2. The rest has to intersect g2.
   bool within = false;
   bool intersects = false;
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     if (!within) {
       within = bg::within(pt, *g2);
       if (!within)
@@ -671,7 +671,7 @@ bool Within::eval(const Geographic_point *g1,
 bool Within::eval(const Geographic_point *g1,
                   const Geographic_geometrycollection *g2) const {
   // g1 must be within one of the elements of g2.
-  for (auto g : *g2)
+  for (auto *g : *g2)
     if ((*this)(g1, g)) return true;
   return false;
 }
@@ -1012,7 +1012,7 @@ bool Within::eval(const Geographic_multipoint *g1,
   // At least one point in g1 must be within g2. The rest has to intersect g2.
   bool within = false;
   bool intersects = false;
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     if (!within) {
       within = bg::within(pt, *g2, m_geographic_pl_pa_strategy);
       if (!within)
@@ -1032,7 +1032,7 @@ bool Within::eval(const Geographic_multipoint *g1,
   // At least one point in g1 must be within g2. The rest has to intersect g2.
   bool within = false;
   bool intersects = false;
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     if (!within) {
       within = bg::within(pt, *g2, m_geographic_pl_pa_strategy);
       if (!within)
@@ -1053,7 +1053,7 @@ bool Within::eval(const Geographic_multipoint *g1,
   Intersects intersects_func(m_semi_major, m_semi_minor);
   bool within = false;
   bool intersects = false;
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     if (!within) {
       within = eval(&pt, g2);
       if (!within)
@@ -1072,7 +1072,7 @@ bool Within::eval(const Geographic_multipoint *g1,
                   const Geographic_multipoint *g2) const {
   // Default strategy is OK. P/P computations do not depend on shape of
   // ellipsoid.
-  for (auto &pt : *g1)
+  for (const auto &pt : *g1)
     if (!bg::within(pt, *g2)) return false;
   return true;
 }
@@ -1082,7 +1082,7 @@ bool Within::eval(const Geographic_multipoint *g1,
   // At least one point in g1 must be within g2. The rest has to intersect g2.
   bool within = false;
   bool intersects = false;
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     if (!within) {
       within = bg::within(pt, *g2, m_geographic_pl_pa_strategy);
       if (!within)
@@ -1102,7 +1102,7 @@ bool Within::eval(const Geographic_multipoint *g1,
   // At least one point in g1 must be within g2. The rest has to intersect g2.
   bool within = false;
   bool intersects = false;
-  for (auto &pt : *g1) {
+  for (const auto &pt : *g1) {
     if (!within) {
       within = bg::within(pt, *g2, m_geographic_pl_pa_strategy);
       if (!within)

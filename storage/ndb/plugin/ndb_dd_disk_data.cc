@@ -147,7 +147,7 @@ void ndb_dd_disk_data_add_file(dd::Tablespace *object_def,
 
 void ndb_dd_disk_data_get_file_names(const dd::Tablespace *object_def,
                                      std::vector<std::string> &file_names) {
-  for (const auto file : object_def->files()) {
+  for (const auto *const file : object_def->files()) {
     file_names.push_back((file->filename()).c_str());
   }
 }

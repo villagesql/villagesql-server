@@ -52,7 +52,7 @@ class Xcl_ssl_config_tests : public Test {
   bool assert_value(Field field, Method method, const Value_type value,
                     const bool reset = true) {
     if (reset) m_sut.reset(new Ssl_config());
-    auto sut = m_sut.get();
+    auto *sut = m_sut.get();
     sut->*field = value;
 
     return (sut->*method)();

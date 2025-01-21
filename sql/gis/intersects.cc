@@ -59,11 +59,11 @@ static bool geometry_collection_apply_intersects(const Intersects &f,
                                                  const Geometry *g1,
                                                  const Geometry *g2) {
   if (g1->type() == Geometry_type::kGeometrycollection) {
-    const auto gc1 = down_cast<const GC *>(g1);
+    const auto *const gc1 = down_cast<const GC *>(g1);
     for (const auto g1_i : *gc1)
       if (geometry_collection_apply_intersects<GC>(f, g1_i, g2)) return true;
   } else if (g2->type() == Geometry_type::kGeometrycollection) {
-    const auto gc2 = down_cast<const GC *>(g2);
+    const auto *const gc2 = down_cast<const GC *>(g2);
     for (const auto g2_j : *gc2)
       if (geometry_collection_apply_intersects<GC>(f, g1, g2_j)) return true;
   } else {

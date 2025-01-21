@@ -96,7 +96,7 @@ Ssl_context::~Ssl_context() {
 bool Ssl_context::activate_tls(iface::Vio *conn,
                                const int32_t handshake_timeout) {
   unsigned long error = 0;  // NOLINT(runtime/int)
-  auto vio = conn->get_vio();
+  auto *vio = conn->get_vio();
   if (sslaccept(m_ssl_acceptor, vio, handshake_timeout, &error) != 0) {
     log_debug("Error during SSL handshake for client connection (%" PRIu64 ")",
               static_cast<uint64_t>(error));

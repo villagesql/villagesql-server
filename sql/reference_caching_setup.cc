@@ -171,7 +171,7 @@ void Event_reference_caching_channels::deinit() {
 }
 
 Event_reference_caching_channels *Event_reference_caching_channels::create() {
-  auto obj = new (std::nothrow) Event_reference_caching_channels();
+  auto *obj = new (std::nothrow) Event_reference_caching_channels();
   if (obj) obj->init();
   return obj;
 }
@@ -180,7 +180,7 @@ bool Event_reference_caching_channels::create_cache(
     Cache_vector &cache_vector) {
   if (!valid_) return true;
 
-  for (auto one_channel : channels_) {
+  for (auto *one_channel : channels_) {
     reference_caching_cache one_cache;
     if (reference_caching_cache_service_->create(one_channel, srv_registry,
                                                  &one_cache)) {
@@ -224,7 +224,7 @@ Event_reference_caching_cache::~Event_reference_caching_cache() { deinit(); }
 void Event_reference_caching_cache::deinit() {
   if (local_cache_vector_.empty()) return;
 
-  for (auto one_cache : local_cache_vector_) {
+  for (auto *one_cache : local_cache_vector_) {
     reference_caching_cache_service_->destroy(one_cache);
   }
   local_cache_vector_.clear();

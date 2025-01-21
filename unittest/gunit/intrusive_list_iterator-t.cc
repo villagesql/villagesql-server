@@ -46,8 +46,8 @@ struct IntrusivePointee {
 };
 
 void IntrusiveListIteratorTest::SetUp() {
-  auto two = new IntrusivePointee{2, nullptr};
-  auto one = new IntrusivePointee{1, two};
+  auto *two = new IntrusivePointee{2, nullptr};
+  auto *one = new IntrusivePointee{1, two};
   first = one;
 }
 
@@ -89,13 +89,13 @@ TEST_F(IntrusiveListIteratorTest, IteratorContainer) {
   IteratorContainer<TestedIterator> container(first);
   int answers[] = {1, 2};
   int i = 0;
-  for (auto element : container) EXPECT_EQ(answers[i++], element->value);
+  for (auto *element : container) EXPECT_EQ(answers[i++], element->value);
 }
 
 TEST_F(IntrusiveListIteratorTest, NextFunctionContainer) {
   NextFunctionContainer<IntrusivePointee, GetNextInList> container(first);
   int answers[] = {1, 2};
   int i = 0;
-  for (auto element : container) EXPECT_EQ(answers[i++], element->value);
+  for (auto *element : container) EXPECT_EQ(answers[i++], element->value);
 }
 }  // namespace intrusive_list_iterator_unittest

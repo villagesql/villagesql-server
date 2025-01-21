@@ -927,7 +927,7 @@ bool ndbinfo_define_dd_tables(List<const Plugin_table> *plugin_tables) {
                 return (strcmp(x->m.name, y->m.name) < 0);
               });
 
-    for (auto *table : tables) {
+    for (const auto *table : tables) {
       plugin_tables->push_back(ndbinfo_define_table(*table));
     }
   }

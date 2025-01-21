@@ -555,7 +555,7 @@ void PropertiesImpl::clear() { content.clear(); }
 Uint32 PropertiesImpl::getTotalItems() const {
   int ret = 0;
 
-  for (auto &x : content) {
+  for (const auto &x : content) {
     if (x.second.valueType == PropertiesType_Properties) {
       ret += ((Properties *)x.second.value)->impl->getTotalItems();
     } else {

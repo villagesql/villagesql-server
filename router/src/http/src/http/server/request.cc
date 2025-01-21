@@ -113,7 +113,7 @@ void ServerRequest::send_reply(StatusType status_code,
 
   static std::string k_path;
 
-  auto value = holder_.input_headers_.find("Connection");
+  const auto *value = holder_.input_headers_.find("Connection");
   if (value) {
     if (http::base::compare_case_insensitive(*value, "Keep-Alive"sv)) {
       holder_.output_headers_.add("Connection", "Keep-Alive");
@@ -135,7 +135,7 @@ base::method::key_type ServerRequest::get_method() const {
 const base::Uri &ServerRequest::get_uri() const { return uri_; }
 
 bool ServerRequest::is_modified_since(time_t last_modified) {
-  auto *value = holder_.input_headers_.find("If-Modified-Since");
+  const auto *value = holder_.input_headers_.find("If-Modified-Since");
 
   if (value) {
     try {

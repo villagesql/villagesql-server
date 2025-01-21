@@ -70,7 +70,7 @@ NdbLogEventHandle ndb_mgm_create_logevent_handle_same_socket(NdbMgmHandle mh) {
 extern "C" NdbLogEventHandle ndb_mgm_create_logevent_handle(
     NdbMgmHandle mh, const int filter[]) {
   constexpr bool allow_tls = true;
-  auto h = new (std::nothrow) ndb_logevent_handle(
+  auto *h = new (std::nothrow) ndb_logevent_handle(
       ndb_mgm_listen_event_internal(mh, filter, 1, allow_tls));
 
   if (h && !h->socket.is_valid()) {

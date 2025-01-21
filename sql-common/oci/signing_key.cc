@@ -98,7 +98,7 @@ Signing_Key::Signing_Key(const std::string &file_name)
     return;
   }
 
-  auto key = m_private_key.release();
+  auto *key = m_private_key.release();
   key = PEM_read_PrivateKey(fp, &key, nullptr, nullptr);
   if (key == nullptr) {
     log_error("Cannot read signing key file " + file_name);
