@@ -37,9 +37,7 @@ using std::vector;
 
 Group_member_info::Group_member_info(PSI_mutex_key psi_mutex_key_arg)
     : Plugin_gcs_message(CT_MEMBER_INFO_MESSAGE),
-      hostname(""),
       port(0),
-      uuid(""),
       status(MEMBER_OFFLINE),
       write_set_extraction_algorithm(0),
       gtid_assignment_block_size(0),

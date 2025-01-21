@@ -58,7 +58,7 @@ Properties *Properties::parse_properties(const String_type &raw_properties) {
 }
 
 const String_type Properties_impl::raw_string() const {
-  String_type str("");
+  String_type str;
   str.reserve(16 * m_map.size());
 
   // Iterate over all valid map entries.

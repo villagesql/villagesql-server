@@ -24,7 +24,7 @@
 #include "client/mysqltest/expected_errors.h"
 
 std::string Expected_errors::error_list() {
-  std::string error_list("");
+  std::string error_list;
 
   for (std::size_t i = 0; i < m_errors.size(); i++) {
     if (i > 0) error_list.append(",");

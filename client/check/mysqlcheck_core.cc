@@ -131,14 +131,14 @@ static inline void escape_str(const string &src, size_t start, size_t end,
 }
 
 static string escape_table_name(const string &src) {
-  string res = "";
+  string res;
 
   escape_str(src, 0, src.length(), res);
   return res;
 }
 
 static string escape_db_table_name(const string &src, size_t dot_pos) {
-  string res = "";
+  string res;
 
   /* Escape database name. */
   escape_str(src, 0, dot_pos - 1, res);

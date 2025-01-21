@@ -24,9 +24,7 @@
 #include "plugin/group_replication/include/group_actions/group_action.h"
 
 Group_action_diagnostics::Group_action_diagnostics()
-    : message_level(GROUP_ACTION_LOG_END),
-      log_message(""),
-      warning_message("") {}
+    : message_level(GROUP_ACTION_LOG_END) {}
 
 void Group_action_diagnostics::set_execution_info(
     Group_action_diagnostics *diagnostics) {

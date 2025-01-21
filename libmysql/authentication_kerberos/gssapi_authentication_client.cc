@@ -139,7 +139,7 @@ bool Gssapi_client::obtain_store_credentials() {
 
 std::string Gssapi_client::get_user_name() {
   log_client_dbg("Getting user name from Kerberos credential cache.");
-  std::string cached_user_name{""};
+  std::string cached_user_name;
   if (m_kerberos->get_upn(&cached_user_name)) {
     size_t pos = std::string::npos;
     /* Remove realm */

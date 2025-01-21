@@ -28,14 +28,12 @@
 
 Group_service_message::Group_service_message()
     : Plugin_gcs_message(CT_MESSAGE_SERVICE_MESSAGE),
-      m_tag(""),
       m_data(Malloc_allocator<uchar>(key_message_service_received_message)),
       m_data_pointer(nullptr),
       m_data_pointer_length(0) {}
 
 Group_service_message::Group_service_message(const uchar *buf, size_t len)
     : Plugin_gcs_message(CT_MESSAGE_SERVICE_MESSAGE),
-      m_tag(""),
       m_data(Malloc_allocator<uchar>(key_message_service_received_message)),
       m_data_pointer(nullptr),
       m_data_pointer_length(0) {

@@ -86,7 +86,7 @@ TEST(TemplateUtilsTest, FindTrimmedEndCstr) {
 }
 
 TEST(TemplateUtilsTest, FindTrimmedEndString) {
-  std::string s = "";
+  std::string s;
   EXPECT_EQ(s.end(), myu::FindTrimmedEnd(s.begin(), s.end(), myu::IsSpace));
 
   s = "foo";
@@ -112,7 +112,7 @@ TEST(TemplateUtilsTest, FindTrimmedRangeCstr) {
 }
 
 TEST(TemplateUtilsTest, FindTrimmedRangeString) {
-  std::string s = "";
+  std::string s;
   EXPECT_EQ(std::make_pair(s.begin(), s.end()),
             myu::FindTrimmedRange(s.begin(), s.end(), myu::IsSpace));
 
@@ -142,7 +142,7 @@ TEST(TemplateUtilsTest, SplitEmptyCstr) {
 }
 
 TEST(TemplateUtilsTest, SplitEmptyString) {
-  std::string s = "";
+  std::string s;
   StrVec elts;
   myu::Split(s.begin(), s.end(), myu::IsComma,
              [&](const auto &f, const auto &l) { elts.emplace_back(f, l); });

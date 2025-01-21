@@ -405,7 +405,7 @@ static int checkarg(TableArg &arg, const char *str) {
       arg.m_table = table;
     }
     arg.m_input_file = full;
-    std::string path = "";
+    std::string path;
     if (strcmp(g_opt.m_state_dir, ".") != 0) {
       path += g_opt.m_state_dir;
       path += "/";

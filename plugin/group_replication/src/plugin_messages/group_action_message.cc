@@ -31,7 +31,6 @@ Group_action_message::Group_action_message()
       group_action_type(ACTION_MESSAGE_END),
       group_action_phase(ACTION_PHASE_END),
       return_value(0),
-      primary_election_uuid(""),
       gcs_protocol(Gcs_protocol_version::UNKNOWN),
       m_action_initiator(ACTION_INITIATOR_UNKNOWN) {}
 
@@ -40,7 +39,6 @@ Group_action_message::Group_action_message(enum_action_message_type type)
       group_action_type(type),
       group_action_phase(ACTION_PHASE_END),
       return_value(0),
-      primary_election_uuid(""),
       gcs_protocol(Gcs_protocol_version::UNKNOWN),
       m_action_initiator(ACTION_INITIATOR_UNKNOWN) {}
 
@@ -60,7 +58,6 @@ Group_action_message::Group_action_message(Gcs_protocol_version gcs_protocol)
       group_action_type(ACTION_SET_COMMUNICATION_PROTOCOL_MESSAGE),
       group_action_phase(ACTION_PHASE_END),
       return_value(0),
-      primary_election_uuid(""),
       gcs_protocol(gcs_protocol),
       m_action_initiator(ACTION_INITIATOR_UNKNOWN) {}
 

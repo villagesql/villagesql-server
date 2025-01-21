@@ -37,7 +37,7 @@ namespace system_views {
 /// Escapes (only) apostrophes
 /// @return string with apostrophes escaped with backslash
 static std::string escape(const std::string &str) {
-  std::string res = "";
+  std::string res;
   for (auto letter : str) {
     if (letter == '\'') {
       res += "\\'";
