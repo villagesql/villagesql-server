@@ -2767,7 +2767,8 @@ String *Item_func_rpad::val_str(String *str) {
     tmp_value.length(res_charpos);  // Shorten result if longer
     return &tmp_value;
   }
-  const size_t pad_char_length = pad->numchars();
+  const size_t pad_char_length =
+      std::max(pad->numchars(), static_cast<size_t>(1));
   const size_t pad_byte_length = pad->length();
 
   remainder_char_length -= res_char_length;
@@ -2779,7 +2780,6 @@ String *Item_func_rpad::val_str(String *str) {
   if (target_byte_size > current_thd->variables.max_allowed_packet) {
     return push_packet_overflow_warning(current_thd, func_name());
   }
-  if (pad_char_length == 0) return make_empty_result();
   /*
     alloc_buffer() doesn't modify 'res' because 'res' is guaranteed too short
     at this stage.
@@ -2975,7 +2975,8 @@ String *Item_func_lpad::val_str(String *str) {
     return &tmp_value;
   }
 
-  const size_t pad_char_length = pad->numchars();
+  const size_t pad_char_length =
+      std::max(pad->numchars(), static_cast<size_t>(1));
 
   remainder_char_length -= res_char_length;
 
@@ -2987,7 +2988,6 @@ String *Item_func_lpad::val_str(String *str) {
     return push_packet_overflow_warning(current_thd, func_name());
   }
 
-  if (pad_char_length == 0) return make_empty_result();
   if (str->alloc(target_byte_size)) {
     my_error(ER_DA_OOM, MYF(0));
     return error_str();
