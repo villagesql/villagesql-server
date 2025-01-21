@@ -7574,11 +7574,11 @@ ER_GIS_MAX_POINTS_IN_GEOMETRY_OVERFLOWED
 ER_SQL_MODE_MERGED
   eng "'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release."
 
-ER_VTOKEN_PLUGIN_TOKEN_MISMATCH
+OBSOLETE_ER_VTOKEN_PLUGIN_TOKEN_MISMATCH
   eng "Version token mismatch for %.*s. Correct value %.*s"
   bgn "Клеймото за версия %.*s не съвпада. Правилната стойност е %.*s"
 
-ER_VTOKEN_PLUGIN_TOKEN_NOT_FOUND
+OBSOLETE_ER_VTOKEN_PLUGIN_TOKEN_NOT_FOUND
   eng "Version token %.*s not found."
   bgn "Не е намерено клеймо за версия %.*s"
 

@@ -170,7 +170,6 @@ usr/lib/mysql/plugin/semisync_slave.so
 usr/lib/mysql/plugin/semisync_source.so
 usr/lib/mysql/plugin/semisync_replica.so
 usr/lib/mysql/plugin/libpluginmecab.so
-usr/lib/mysql/plugin/version_token.so
 usr/lib/mysql/plugin/group_replication.so
 usr/lib/mysql/plugin/connection_control.so
 usr/lib/mysql/plugin/component_connection_control.so

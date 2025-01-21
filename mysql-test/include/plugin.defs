@@ -64,7 +64,6 @@ test_udf_services  			plugin_output_directory  no TESTUDFREGISTRATION test_udf_r
 test_udf_services  			plugin_output_directory  no TESTUDFEXTENSIONSERVICES test_udf_extension_services
 group_replication  			plugin_output_directory  no GROUP_REPLICATION
 locking_service    			plugin_output_directory  no LOCKING_SERVICE
-version_token      			plugin_output_directory  no VERSION_TOKEN
 # Test services framework
 libtest_services                        plugin_output_directory  no TESTSERVICES
 libtest_services_threaded               plugin_output_directory  no TESTSERVICESTHREADED

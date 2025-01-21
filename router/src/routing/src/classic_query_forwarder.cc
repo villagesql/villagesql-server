@@ -364,9 +364,7 @@ stdx::flags<StmtClassifier> classify(SqlLexer &&lexer, bool forbid_set_trackers,
 
               if (ident == "GET_LOCK" ||  //
                   ident == "SERVICE_GET_WRITE_LOCKS" ||
-                  ident == "SERVICE_GET_READ_LOCKS" ||
-                  ident == "VERSION_TOKENS_LOCK_SHARED" ||
-                  ident == "VERSION_TOKENS_LOCK_EXCLUSIVE") {
+                  ident == "SERVICE_GET_READ_LOCKS") {
                 classified |= StmtClassifier::StateChangeOnSuccess;
 
                 // always sent to the read-write servers.

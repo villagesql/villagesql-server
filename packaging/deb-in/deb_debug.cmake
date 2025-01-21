@@ -91,7 +91,6 @@ usr/lib/mysql/plugin/debug/semisync_slave.so
 usr/lib/mysql/plugin/debug/semisync_source.so
 usr/lib/mysql/plugin/debug/semisync_replica.so
 usr/lib/mysql/plugin/debug/validate_password.so
-usr/lib/mysql/plugin/debug/version_token.so
 usr/lib/mysql/plugin/debug/component_audit_api_message_emit.so
 usr/lib/mysql/plugin/debug/component_keyring_file.so
 ")
