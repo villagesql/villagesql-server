@@ -21,29 +21,51 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#ifndef MYSQL_META_META_H
-#define MYSQL_META_META_H
+#ifndef MYSQL_META_IS_SAME_AS_ALL_H
+#define MYSQL_META_IS_SAME_AS_ALL_H
 
 /// @file
 /// Experimental API header
 
-// Is_same_as_all<T, U, ...> is true if all the given types are the same type.
-#include "mysql/meta/is_same_as_all.h"
+#include <type_traits>
 
-// Is_const_ref<T> is true if T has const and reference qualifiers.
-#include "mysql/meta/is_const_ref.h"
+/// @addtogroup GroupLibsMysqlMeta
+/// @{
 
-// Is_same_ignore_const<T, U> is true if T and U are the same or differ only in
-// const-ness.
-#include "mysql/meta/is_same_ignore_const.h"
+namespace mysql::meta::detail {
 
-// Is_specialization<T, U> is true if class T is a specialization of class
-// template U, where U takes type template arguments. Is_nontype_specialization
-// is the same, but works when U takes non-type template arguments.
-#include "mysql/meta/is_specialization.h"
+/// Helper to implement Is_same_as_all. This is the primary template.
+template <class... Types>
+struct All_same_helper : std::false_type {};
 
-// Optional_is_same<T[, U]> is true if U is omitted or void, or T and U are the
-// same type.
-#include "mysql/meta/optional_is_same.h"
+/// Helper to implement Is_same_as_all. This is the specialization to zero
+/// arguments.
+template <>
+struct All_same_helper<> : std::true_type {};
 
-#endif  // ifndef MYSQL_META_META_H
+/// Helper to implement Is_same_as_all. This is the specialization to one
+/// argument.
+template <class Type>
+struct All_same_helper<Type> : std::true_type {};
+
+/// Helper to implement Is_same_as_all. This is the recursive step with two or
+/// more arguments.
+template <class First, class... Rest>
+struct All_same_helper<First, First, Rest...>
+    : All_same_helper<First, Rest...> {};
+
+}  // namespace mysql::meta::detail
+
+namespace mysql::meta {
+
+/// True if all the given types are equal (like a vararg version of
+/// std::same_as).
+template <class... Types>
+concept Is_same_as_all = detail::All_same_helper<Types...>::value;
+
+}  // namespace mysql::meta
+
+// addtogroup GroupLibsMysqlMeta
+/// @}
+
+#endif  // ifndef MYSQL_META_IS_SAME_AS_ALL_H

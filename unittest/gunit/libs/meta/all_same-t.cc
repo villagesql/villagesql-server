@@ -1,4 +1,4 @@
-// Copyright (c) 2025, Oracle and/or its affiliates.
+// Copyright (c) 2023, 2025, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0,
@@ -19,31 +19,27 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+// Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA.
 
-#ifndef MYSQL_META_META_H
-#define MYSQL_META_META_H
+#include <gtest/gtest.h>                // TEST
+#include "mysql/meta/is_same_as_all.h"  // Is_same_as_all
 
-/// @file
-/// Experimental API header
+// Verify at compile time that Is_same_as_all works as expected.
+//
+// There is nothing to execute, this is a compile-time-only test.
 
-// Is_same_as_all<T, U, ...> is true if all the given types are the same type.
-#include "mysql/meta/is_same_as_all.h"
+using namespace mysql::meta;
 
-// Is_const_ref<T> is true if T has const and reference qualifiers.
-#include "mysql/meta/is_const_ref.h"
+// Apparently zero-argument concepts are disallowed on el7-arm-64bit gcc 10.1.
+// Uncomment the following line if that changes.
+// static_assert(Is_same_as_all<>);
 
-// Is_same_ignore_const<T, U> is true if T and U are the same or differ only in
-// const-ness.
-#include "mysql/meta/is_same_ignore_const.h"
+static_assert(Is_same_as_all<int>);
+static_assert(Is_same_as_all<int, int>);
+static_assert(Is_same_as_all<int, int, int>);
+static_assert(!Is_same_as_all<int, float>);
+static_assert(!Is_same_as_all<float, int, int>);
+static_assert(!Is_same_as_all<int, float, int>);
+static_assert(!Is_same_as_all<int, int, float>);
 
-// Is_specialization<T, U> is true if class T is a specialization of class
-// template U, where U takes type template arguments. Is_nontype_specialization
-// is the same, but works when U takes non-type template arguments.
-#include "mysql/meta/is_specialization.h"
-
-// Optional_is_same<T[, U]> is true if U is omitted or void, or T and U are the
-// same type.
-#include "mysql/meta/optional_is_same.h"
-
-#endif  // ifndef MYSQL_META_META_H
+TEST(LibsMetaAllSame, Basic) {}
