@@ -70,11 +70,14 @@ const std::string &to_string(
               : k_version3);
 }
 
-mrs::interface::SupportedMrsMetadataVersion query_supported_mrs_version(
+mrs::database::MrsSchemaVersion query_schema_version(
     mysqlrouter::MySQLSession *session) {
   QueryVersion q;
-  auto mrs_version = q.query_version(session);
+  return q.query_version(session);
+}
 
+mrs::interface::SupportedMrsMetadataVersion check_supported_mrs_version(
+    const mrs::database::MrsSchemaVersion &mrs_version) {
   if (mrs_version.is_compatible({mrs::database::kCurrentMrsMetadataVersion}))
     return mrs::interface::kSupportedMrsMetadataVersion_3;
 
@@ -82,8 +85,14 @@ mrs::interface::SupportedMrsMetadataVersion query_supported_mrs_version(
     return mrs::interface::kSupportedMrsMetadataVersion_2;
 
   std::stringstream error_message;
-  error_message << "Unsupported MRS version detected: " << mrs_version.major
-                << "." << mrs_version.minor << "." << mrs_version.patch;
+  if (mrs_version == mrs::database::kSchemaUpgradeMrsMetadataVersion) {
+    error_message << "MRS metadata schema upgrade detected: stopping the "
+                     "service until it's finished";
+  } else {
+    error_message << "Unsupported MRS version detected: " << mrs_version.major
+                  << "." << mrs_version.minor << "." << mrs_version.patch;
+  }
+
   throw std::runtime_error(error_message.str());
 }
 
@@ -170,6 +179,12 @@ class AuditLogInconsistency : public std::runtime_error {
       : std::runtime_error("audit log inconsistency") {}
 };
 
+class MetadataSchemaVersionChange : public std::runtime_error {
+ public:
+  explicit MetadataSchemaVersionChange()
+      : std::runtime_error("metadata schema version change") {}
+};
+
 void SchemaMonitor::run() {
   log_system("Starting MySQL REST Metadata monitor");
 
@@ -177,6 +192,8 @@ void SchemaMonitor::run() {
   bool state{false};
   uint64_t max_audit_log_id{0};
   bool attributes_updated_on_start{false};
+  mrs::database::MrsSchemaVersion current_schema_version;
+
   do {
     try {
       auto session_check_version = md_source_destination_.get_rw_session();
@@ -189,8 +206,10 @@ void SchemaMonitor::run() {
         attributes_updated_on_start = true;
       }
 
+      current_schema_version =
+          query_schema_version((*session_check_version).get());
       auto supported_schema_version =
-          query_supported_mrs_version((*session_check_version).get());
+          check_supported_mrs_version(current_schema_version);
 
       auto factory{create_schema_monitor_factory(supported_schema_version)};
 
@@ -209,6 +228,11 @@ void SchemaMonitor::run() {
                            ? cache_->get_instance(
                                  collector::kMySQLConnectionMetadataRW, true)
                            : std::move(*session_check_version);
+
+        const auto schema_version = query_schema_version(session.get());
+        if (schema_version != current_schema_version) {
+          throw MetadataSchemaVersionChange();
+        }
 
         // Detect the inconsistency between audit_log table content and our
         // state. This only does a basic check to detect a scenario where the
@@ -428,6 +452,11 @@ bool SchemaMonitor::MetadataSourceDestination::handle_error() {
   } catch (const AuditLogInconsistency &) {
     log_warning(
         "audit_log table inscosistency discovered, forcing full refresh from "
+        "metadata");
+    force_clear = true;
+  } catch (const MetadataSchemaVersionChange &) {
+    log_warning(
+        "metadata schema version change discovered, forcing full refresh from "
         "metadata");
     force_clear = true;
   } catch (const std::exception &exc) {

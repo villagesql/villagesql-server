@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -49,6 +49,12 @@ struct MrsSchemaVersion {
     return false;
   }
 
+  bool operator==(const MrsSchemaVersion &o) const {
+    return major == o.major && minor == o.minor && patch == o.patch;
+  }
+
+  bool operator!=(const MrsSchemaVersion &o) const { return !operator==(o); }
+
   std::string str() const {
     return std::to_string(major) + "." + std::to_string(minor) + "." +
            std::to_string(patch);
@@ -66,6 +72,8 @@ class QueryVersion : private Query {
 };
 
 constexpr MrsSchemaVersion kCurrentMrsMetadataVersion{3, 0, 2};
+
+constexpr MrsSchemaVersion kSchemaUpgradeMrsMetadataVersion{0, 0, 0};
 
 constexpr std::initializer_list<MrsSchemaVersion>
     kCompatibleMrsMetadataVersions{mrs::database::kCurrentMrsMetadataVersion,
