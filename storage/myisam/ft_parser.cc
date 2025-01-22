@@ -232,7 +232,7 @@ uchar ft_simple_get_word(const CHARSET_INFO *cs, uchar **start,
 
     word->len = (uint)(doc - word->pos);
 
-    if (skip_stopwords == false ||
+    if (!skip_stopwords ||
         (length >= ft_min_word_len && length < ft_max_word_len &&
          !is_stopword((char *)word->pos, word->len))) {
       *start = doc;

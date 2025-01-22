@@ -816,10 +816,7 @@ static bool async_mysql_read_query_result_wrapper(MYSQL *mysql) {
     const int result = socket_event_listen(mysql_get_socket_descriptor(mysql));
     if (result == -1) return true;
   }
-  if (status == NET_ASYNC_ERROR) {
-    return true;
-  }
-  return false;
+  return status == NET_ASYNC_ERROR;
 }
 
 static int async_mysql_next_result_wrapper(MYSQL *mysql) {
@@ -2478,7 +2475,7 @@ void var_set(const char *var_name, const char *var_name_end,
     var_name++;
 
   digit = *var_name - '0';
-  if (!(digit < 10 && digit >= 0)) {
+  if (digit >= 10 || digit < 0) {
     v = var_obtain(var_name, (uint)(var_name_end - var_name));
   } else
     v = var_reg + digit;
@@ -7188,7 +7185,7 @@ static void do_block(enum block_cmd cmd, struct st_command *command) {
 
       case NE_OP:
         if (v.is_int)
-          v.int_val = !(v2.is_int && v2.int_val == v.int_val);
+          v.int_val = !v2.is_int || v2.int_val != v.int_val;
         else
           v.int_val = (std::strcmp(v.str_val, v2.str_val) != 0);
         break;

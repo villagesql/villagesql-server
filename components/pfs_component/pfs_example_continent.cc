@@ -232,7 +232,7 @@ int write_rows_from_component(Continent_Table_Handle *handle) {
     int i = (continent_next_available_index + 1) % CONTINENT_MAX_ROWS;
     int itr_count = 0;
     while (itr_count < CONTINENT_MAX_ROWS) {
-      if (continent_records_array[i].m_exist == false) {
+      if (!continent_records_array[i].m_exist) {
         continent_next_available_index = i;
         break;
       }

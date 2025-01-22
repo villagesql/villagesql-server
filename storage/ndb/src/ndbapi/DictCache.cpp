@@ -271,8 +271,8 @@ NdbTableImpl *GlobalDictCache::put(const BaseString &name, NdbTableImpl *tab) {
 
   TableVersion &ver = vers->back();
   if (ver.m_status != RETREIVING ||
-      !(ver.m_impl == nullptr || ver.m_impl == f_invalid_table ||
-        ver.m_impl == f_altered_table) ||
+      (ver.m_impl != nullptr && ver.m_impl != f_invalid_table &&
+       ver.m_impl != f_altered_table) ||
       ver.m_version != 0 || ver.m_refCount == 0) {
     abort();
   }

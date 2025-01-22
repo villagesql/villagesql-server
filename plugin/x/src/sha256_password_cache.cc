@@ -186,11 +186,8 @@ SHA256_password_cache::create_hash(const std::string &value) const {
   unsigned char digest_buffer[length];
 
   auto one_digest_round = [&](const std::string &value) {
-    if (sha256_digest.update_digest(value.c_str(), value.length()) ||
-        sha256_digest.retrieve_digest(digest_buffer, length)) {
-      return false;
-    }
-    return true;
+    return !(sha256_digest.update_digest(value.c_str(), value.length()) ||
+             sha256_digest.retrieve_digest(digest_buffer, length));
   };
 
   // First digest round

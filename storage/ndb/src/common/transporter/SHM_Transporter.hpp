@@ -196,7 +196,7 @@ class SHM_Transporter : public Transporter {
   /**
    * @return - True if the reader has data to read on its segment.
    */
-  bool hasDataToRead() const { return reader->empty() == false; }
+  bool hasDataToRead() const { return !reader->empty(); }
 
   void make_error_info(char info[], int sz);
 

@@ -90,10 +90,10 @@ int NdbOperation::equal_impl(const NdbColumnImpl *tAttrInfo,
     Uint32 tAttrId = tAttrInfo->m_column_no;  // not m_attrId;
     Uint32 i = 0;
     if (tAttrInfo->m_pk) {
-      Uint32 tKeyDefined = theTupleKeyDefined[0][2];
+      bool tKeyDefined = (theTupleKeyDefined[0][2] > 0);
       Uint32 tKeyAttrId = theTupleKeyDefined[0][0];
       do {
-        if (tKeyDefined == false) {
+        if (!tKeyDefined) {
           goto keyEntryFound;
         } else {
           if (tKeyAttrId != tAttrId) {
@@ -108,7 +108,7 @@ int NdbOperation::equal_impl(const NdbColumnImpl *tAttrInfo,
              *****************************************************************/
             i++;
             tKeyAttrId = theTupleKeyDefined[i][0];
-            tKeyDefined = theTupleKeyDefined[i][2];
+            tKeyDefined = (theTupleKeyDefined[i][2] > 0);
             continue;
           } else {
             goto equal_error2;
@@ -209,7 +209,7 @@ int NdbOperation::equal_impl(const NdbColumnImpl *tAttrInfo,
        * allowed to define any initial reads and interpreted program code
        * before the key column values are copied into the AttrInfo section.
        **********************************************************************/
-      if (!(theInterpretIndicator && tOpType == WriteRequest)) {
+      if (!theInterpretIndicator || tOpType != WriteRequest) {
         insertATTRINFO(ahValue);
         insertATTRINFOloop((const Uint32 *)aValue, totalSizeInWords);
       }

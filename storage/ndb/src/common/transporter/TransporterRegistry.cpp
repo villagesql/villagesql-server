@@ -3079,10 +3079,7 @@ int TransporterRegistry::get_transporter_count() const {
 bool TransporterRegistry::is_shm_transporter(TrpId trp_id) {
   assert(trp_id < maxTransporters);
   Transporter *trp = allTransporters[trp_id];
-  if (trp->getTransporterType() == tt_SHM_TRANSPORTER)
-    return true;
-  else
-    return false;
+  return trp->getTransporterType() == tt_SHM_TRANSPORTER;
 }
 
 TransporterType TransporterRegistry::get_transporter_type(TrpId trp_id) const {
@@ -3172,7 +3169,7 @@ bool TransporterRegistry::connect_client(NdbMgmHandle *h) {
   }
   NdbSocket secureSocket = connect_ndb_mgmd(h);
   bool res = t->connect_client(std::move(secureSocket));
-  if (res == true) {
+  if (res) {
     const TrpId trpId = t->getTransporterIndex();
     DEBUG_FPRINTF((stderr,
                    "(%u)performStates[trp:%u] = DISCONNECTING,"

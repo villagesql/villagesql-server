@@ -460,7 +460,7 @@ Remark:        Sets an error code on the connection object from an
 *****************************************************************************/
 void NdbTransaction::setOperationErrorCodeAbort(int error) {
   DBUG_ENTER("NdbTransaction::setOperationErrorCodeAbort");
-  if (theTransactionIsStarted == false) {
+  if (!theTransactionIsStarted) {
     theCommitStatus = Aborted;
   } else if ((theCommitStatus != Committed) && (theCommitStatus != Aborted)) {
     theCommitStatus = NeedAbort;
@@ -1183,7 +1183,7 @@ void NdbTransaction::executeAsynchPrepare(
      *      same action.
      ****************************************************************************/
     if (aTypeOfExec == Rollback) {
-      if (theTransactionIsStarted == false || theSimpleState) {
+      if (!theTransactionIsStarted || theSimpleState) {
         theCommitStatus = Aborted;
         theSendStatus = sendCompleted;
       } else {
@@ -1210,7 +1210,7 @@ void NdbTransaction::executeAsynchPrepare(
 
   NdbQueryImpl *const lastLookupQuery = getLastLookupQuery(m_firstQuery);
 
-  if (tTransactionIsStarted == true) {
+  if (tTransactionIsStarted) {
     if (tLastOp != nullptr) {
       if (aTypeOfExec == Commit) {
         /*****************************************************************************
@@ -1245,7 +1245,7 @@ void NdbTransaction::executeAsynchPrepare(
         DBUG_VOID_RETURN;  // No Commit with no operations is OK
       }                    // if
     }                      // if
-  } else if (tTransactionIsStarted == false) {
+  } else if (!tTransactionIsStarted) {
     NdbOperation *tFirstOp = theFirstOpInList;
 
     /*
@@ -1566,7 +1566,7 @@ Remark:        Order NDB to rollback the transaction.
 int NdbTransaction::sendROLLBACK()  // Send a TCROLLBACKREQ signal;
 {
   Ndb *tNdb = theNdb;
-  if ((theTransactionIsStarted == true) && (theCommitStatus != Committed) &&
+  if ((theTransactionIsStarted) && (theCommitStatus != Committed) &&
       (theCommitStatus != Aborted)) {
     /**************************************************************************
      *	The user did not perform any rollback but simply closed the
@@ -1654,7 +1654,7 @@ Remark:         Release all operations.
 void NdbTransaction::release() {
   releaseOperations();
   releaseLockHandles();
-  if ((theTransactionIsStarted == true) &&
+  if ((theTransactionIsStarted) &&
       ((theCommitStatus != Committed) && (theCommitStatus != Aborted))) {
     /************************************************************************
      *	The user did not perform any rollback but simply closed the
@@ -3275,7 +3275,7 @@ int NdbTransaction::report_node_failure(Uint32 id) {
    */
   NdbQueryImpl *qtmp = m_firstActiveQuery;
   while (qtmp != nullptr) {
-    if (qtmp->getQueryDef().isScanQuery() == false) {
+    if (!qtmp->getQueryDef().isScanQuery()) {
       count++;
       qtmp->setErrorCode(4119);
     }

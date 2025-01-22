@@ -61,7 +61,7 @@ void Group_validation_message::decode_payload(const unsigned char *buffer,
 
   unsigned char has_channels_aux = '0';
   decode_payload_item_char(&slider, &payload_item_type, &has_channels_aux);
-  has_channels = (has_channels_aux == '1') ? true : false;
+  has_channels = has_channels_aux == '1';
 
   uint16 member_weight_aux = 0;
   decode_payload_item_int2(&slider, &payload_item_type, &member_weight_aux);

@@ -164,18 +164,19 @@ bool Keyring_encryption_test::test_aes() {
   }
   const std::string iv1("abcdefgh12345678");
 
-  if (aes->encrypt("aes_key_invalid", "keyring_aes_test", mode.c_str(),
-                   block_size,
-                   reinterpret_cast<const unsigned char *>(iv1.c_str()),
-                   padding, plaintext, plaintext_length, output_1.get(),
-                   ciphertext_length, &ciphertext_length) == false) {
+  if (!static_cast<bool>(aes->encrypt(
+          "aes_key_invalid", "keyring_aes_test", mode.c_str(), block_size,
+          reinterpret_cast<const unsigned char *>(iv1.c_str()), padding,
+          plaintext, plaintext_length, output_1.get(), ciphertext_length,
+          &ciphertext_length))) {
     std::cerr << "Failed negative test for AES-CBC-256" << std::endl;
     return false;
   }
-  if (aes->encrypt("secret_key_1", "keyring_aes_test", mode.c_str(), block_size,
-                   reinterpret_cast<const unsigned char *>(iv1.c_str()),
-                   padding, plaintext, plaintext_length, output_1.get(),
-                   ciphertext_length, &ciphertext_length) == false) {
+  if (!static_cast<bool>(aes->encrypt(
+          "secret_key_1", "keyring_aes_test", mode.c_str(), block_size,
+          reinterpret_cast<const unsigned char *>(iv1.c_str()), padding,
+          plaintext, plaintext_length, output_1.get(), ciphertext_length,
+          &ciphertext_length))) {
     std::cerr << "Failed negative test for AES-CBC-256" << std::endl;
     return false;
   }
@@ -206,19 +207,20 @@ bool Keyring_encryption_test::test_aes() {
   }
   memset(output_2.get(), 0, decrypted_length);
 
-  if (aes->decrypt("aes_key_invalid", "keyring_aes_test", mode.c_str(),
-                   block_size,
-                   reinterpret_cast<const unsigned char *>(iv1.c_str()),
-                   padding, output_1.get(), ciphertext_length, output_2.get(),
-                   decrypted_length, &decrypted_length) == false) {
+  if (!static_cast<bool>(aes->decrypt(
+          "aes_key_invalid", "keyring_aes_test", mode.c_str(), block_size,
+          reinterpret_cast<const unsigned char *>(iv1.c_str()), padding,
+          output_1.get(), ciphertext_length, output_2.get(), decrypted_length,
+          &decrypted_length))) {
     std::cerr << "Failed negative test for AES-CBC-256" << std::endl;
     return false;
   }
 
-  if (aes->decrypt("secret_key_1", "keyring_aes_test", mode.c_str(), block_size,
-                   reinterpret_cast<const unsigned char *>(iv1.c_str()),
-                   padding, output_1.get(), ciphertext_length, output_2.get(),
-                   decrypted_length, &decrypted_length) == false) {
+  if (!static_cast<bool>(aes->decrypt(
+          "secret_key_1", "keyring_aes_test", mode.c_str(), block_size,
+          reinterpret_cast<const unsigned char *>(iv1.c_str()), padding,
+          output_1.get(), ciphertext_length, output_2.get(), decrypted_length,
+          &decrypted_length))) {
     std::cerr << "Failed negative test for AES-CBC-256" << std::endl;
     return false;
   }

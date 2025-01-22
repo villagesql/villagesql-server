@@ -239,8 +239,7 @@ void TCP_Transporter::setSocketOptions(ndb_socket_t socket) {
 }
 
 bool TCP_Transporter::setSocketNonBlocking(ndb_socket_t socket) {
-  if (ndb_socket_nonblock(socket, true) == 0) return true;
-  return false;
+  return ndb_socket_nonblock(socket, true) == 0;
 }
 
 bool TCP_Transporter::send_is_possible(int timeout_millisec) const {

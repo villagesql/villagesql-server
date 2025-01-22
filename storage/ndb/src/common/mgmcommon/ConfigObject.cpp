@@ -869,17 +869,11 @@ bool ConfigObject::unpack_default_sections(const Uint32 **data) {
     return false;
   }
   DEB_MALLOC(("new(%u) => %p", __LINE__, m_shm_default_section));
-  if (unlikely(!m_shm_default_section->unpack_shm_section(data))) {
-    return false;
-  }
-  return true;
+  return likely(m_shm_default_section->unpack_shm_section(data));
 }
 
 bool ConfigObject::unpack_system_section(const Uint32 **data) {
-  if (unlikely(!m_system_section->unpack_system_section(data))) {
-    return false;
-  }
-  return true;
+  return likely(m_system_section->unpack_system_section(data));
 }
 
 bool ConfigObject::unpack_node_sections(const Uint32 **data) {
@@ -1039,10 +1033,7 @@ bool ConfigObject::check_checksum(const Uint32 *src, Uint32 len) {
   for (Uint32 i = 0; (i + 1) < len32; i++) {
     chk ^= ntohl(tmp[i]);
   }
-  if (unlikely(chk != ntohl(tmp[len32 - 1]))) {
-    return false;
-  }
-  return true;
+  return likely(chk == ntohl(tmp[len32 - 1]));
 }
 
 void ConfigObject::create_v1_header_section(Uint32 **v1_ptr,

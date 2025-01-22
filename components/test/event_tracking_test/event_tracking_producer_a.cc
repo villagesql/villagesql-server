@@ -430,8 +430,7 @@ bool Event_producer::generate_events() {
 
 static mysql_service_status_t init() {
   g_event_producer = new (std::nothrow) Event_producer();
-  if (!g_event_producer || g_event_producer->generate_events()) return true;
-  return false;
+  return !g_event_producer || g_event_producer->generate_events();
 }
 
 static mysql_service_status_t deinit() {

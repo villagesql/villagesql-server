@@ -54,10 +54,10 @@ static Geographic_point reinterpret_as_degrees(const Cartesian_point &g) {
   double lon_deg = g.x();
   double lat_deg = g.y();
 
-  if (!(-180.0 < lon_deg && lon_deg <= 180.0))
+  if (-180.0 >= lon_deg || lon_deg > 180.0)
     throw longitude_out_of_range_exception(lon_deg, -180.0, 180.0);
 
-  if (!(-90.0 <= lat_deg && lat_deg <= 90.0))
+  if (-90.0 > lat_deg || lat_deg > 90.0)
     throw latitude_out_of_range_exception(lat_deg, -90.0, 90.0);
 
   return {lon_deg * M_PI / 180.0, lat_deg * M_PI / 180.0};

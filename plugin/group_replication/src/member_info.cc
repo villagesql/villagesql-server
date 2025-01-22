@@ -463,8 +463,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
       case PIT_CONFLICT_DETECTION_ENABLE:
         if (slider + payload_item_length <= end) {
           unsigned char conflict_detection_enable_aux = *slider;
-          conflict_detection_enable =
-              (conflict_detection_enable_aux == '1') ? true : false;
+          conflict_detection_enable = conflict_detection_enable_aux == '1';
         }
         break;
 
@@ -486,15 +485,14 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
       case PIT_GROUP_ACTION_RUNNING:
         if (slider + payload_item_length <= end) {
           unsigned char is_action_running_aux = *slider;
-          group_action_running = (is_action_running_aux == '1') ? true : false;
+          group_action_running = is_action_running_aux == '1';
         }
         break;
 
       case PIT_PRIMARY_ELECTION_RUNNING:
         if (slider + payload_item_length <= end) {
           unsigned char is_election_running_aux = *slider;
-          primary_election_running =
-              (is_election_running_aux == '1') ? true : false;
+          primary_election_running = is_election_running_aux == '1';
         }
         break;
 
@@ -507,8 +505,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
       case PIT_DEFAULT_TABLE_ENCRYPTION:
         if (slider + payload_item_length <= end) {
           unsigned char default_table_encryption_aux = *slider;
-          default_table_encryption =
-              (default_table_encryption_aux == '1') ? true : false;
+          default_table_encryption = default_table_encryption_aux == '1';
         }
         break;
       case PIT_PURGED_GTID:
@@ -533,8 +530,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
       case PIT_ALLOW_SINGLE_LEADER:
         if (slider + payload_item_length <= end) {
           unsigned char allow_single_leader_aux = *slider;
-          m_allow_single_leader =
-              (allow_single_leader_aux == '1') ? true : false;
+          m_allow_single_leader = allow_single_leader_aux == '1';
         }
         break;
       case PIT_GROUP_ACTION_RUNNING_NAME:
@@ -555,7 +551,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
         if (slider + payload_item_length <= end) {
           unsigned char preemptive_garbage_collection_aux = *slider;
           m_preemptive_garbage_collection =
-              (preemptive_garbage_collection_aux == '1') ? true : false;
+              preemptive_garbage_collection_aux == '1';
         }
         break;
     }
@@ -913,9 +909,7 @@ bool Group_member_info::comparator_group_member_weight(Group_member_info *m1,
 
 bool Group_member_info::has_greater_version(Group_member_info *other) {
   MUTEX_LOCK(lock, &update_lock);
-  if (*member_version > *(other->member_version)) return true;
-
-  return false;
+  return *member_version > *(other->member_version);
 }
 
 bool Group_member_info::has_lower_uuid_internal(Group_member_info *other) {

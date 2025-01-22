@@ -52,7 +52,7 @@ static DEFINE_BOOL_METHOD(create, (const char *service_names[],
 
     *out_channel =
         reinterpret_cast<reference_caching_channel>(channel_imp::create(refs));
-    return *out_channel ? false : true;
+    return *out_channel == nullptr;
   } catch (...) {
     return true;
   }

@@ -233,7 +233,7 @@ extern "C" void *socketServerThread_C(void *_ss) {
 
 struct NdbThread *SocketServer::startServer() {
   m_threadLock.lock();
-  if (m_thread == nullptr && m_stopThread == false) {
+  if (m_thread == nullptr && !m_stopThread) {
     m_thread = NdbThread_Create(socketServerThread_C, (void **)this,
                                 0,  // default stack size
                                 "NdbSockServ", NDB_THREAD_PRIO_LOW);

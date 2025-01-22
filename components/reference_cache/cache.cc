@@ -58,7 +58,7 @@ bool cache_imp::get(unsigned service_name_index, const my_h_service **out_ref) {
       // cache hit
       *out_ref = m_cache[service_name_index];
     }
-    return *out_ref ? false : true;
+    return *out_ref == nullptr;
   }
 
   // cache miss
@@ -155,7 +155,7 @@ bool cache_imp::get(unsigned service_name_index, const my_h_service **out_ref) {
     }
   }
   m_populated = true;
-  return *out_ref ? false : true;
+  return *out_ref == nullptr;
 }
 
 bool cache_imp::flush() {

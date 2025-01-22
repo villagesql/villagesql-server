@@ -454,9 +454,9 @@ inline bool NdbBlob::isScanOp() {
 }
 
 inline bool NdbBlob::isReadOnlyOp() {
-  return !(theNdbOp->theOperationType == NdbOperation::InsertRequest ||
-           theNdbOp->theOperationType == NdbOperation::UpdateRequest ||
-           theNdbOp->theOperationType == NdbOperation::WriteRequest);
+  return theNdbOp->theOperationType != NdbOperation::InsertRequest &&
+         theNdbOp->theOperationType != NdbOperation::UpdateRequest &&
+         theNdbOp->theOperationType != NdbOperation::WriteRequest;
 }
 
 inline bool NdbBlob::isTakeOverOp() {
@@ -1480,7 +1480,7 @@ int NdbBlob::readDataPrivate(char *buf, Uint32 &bytes) {
         part += partsThisTrip;
         count -= partsThisTrip;
         // skip last op batch execute if partial last block remains
-        if (!(count == 0 && len > 0)) {
+        if (count != 0 || len <= 0) {
           /* Execute this batch before defining next */
           if (executePendingBlobReads() == -1) {
             /* If any part read failed with "Not found" error, blob is

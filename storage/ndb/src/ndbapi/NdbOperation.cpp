@@ -106,7 +106,7 @@ void NdbOperation::setErrorCode(int anErrorCode) const {
   pnonConstThis->theError.code = anErrorCode;
   theNdbCon->theErrorLine = theErrorLine;
   theNdbCon->theErrorOperation = pnonConstThis;
-  if (!(m_abortOption == AO_IgnoreError && m_noErrorPropagation))
+  if (m_abortOption != AO_IgnoreError || !m_noErrorPropagation)
     theNdbCon->setOperationErrorCode(anErrorCode);
 }
 

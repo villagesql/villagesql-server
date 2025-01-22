@@ -1489,8 +1489,7 @@ static bool ndb_index_stat_proc_evict() {
 
   const uint cache_lowpct = opt.get(Ndb_index_stat_opt::Icache_lowpct);
   const uint cache_limit = opt.get(Ndb_index_stat_opt::Icache_limit);
-  if (100 * curr_size <= cache_lowpct * cache_limit) return false;
-  return true;
+  return 100 * curr_size > cache_lowpct * cache_limit;
 }
 
 /* Check if st1 is better or as good to evict than st2 */
@@ -2133,7 +2132,7 @@ void Ndb_index_stat_thread::do_run() {
   set_timespec(&abstime, 0);
   for (;;) {
     mysql_mutex_lock(&LOCK_client_waiting);
-    if (client_waiting == false) {
+    if (!client_waiting) {
       const int ret = mysql_cond_timedwait(&COND_client_waiting,
                                            &LOCK_client_waiting, &abstime);
       if (ret == ETIMEDOUT)

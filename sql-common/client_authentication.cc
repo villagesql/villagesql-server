@@ -160,10 +160,8 @@ static bool encrypt_RSA_public_key(const unsigned char *password,
 static bool encrypt_RSA_public_key(const unsigned char *password,
                                    int password_len, unsigned char *to,
                                    RSA *public_key) {
-  if (RSA_public_encrypt(password_len, password, to, public_key,
-                         RSA_PKCS1_OAEP_PADDING) == -1)
-    return true;
-  return false;
+  return RSA_public_encrypt(password_len, password, to, public_key,
+                            RSA_PKCS1_OAEP_PADDING) == -1;
 }
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
 

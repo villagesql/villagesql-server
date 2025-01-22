@@ -232,10 +232,8 @@ static bool determine_packed_key_size(const NdbDictionary::Table *table,
                                       const uchar *record,
                                       Uint32 &required_buff_size) {
   /* Use pack_key_to_buffer to calculate length required */
-  if (pack_key_to_buffer(table, key_rec, record, nullptr, required_buff_size) ==
-      -1)
-    return false;
-  return true;
+  return pack_key_to_buffer(table, key_rec, record, nullptr,
+                            required_buff_size) != -1;
 }
 
 /* st_mem_root_allocator implementation */

@@ -2355,10 +2355,7 @@ bool ConfigInfo::verify(const Properties *section, const char *fname,
   if (min > max) {
     warning("verify", fname);
   }
-  if (value >= min && value <= max)
-    return true;
-  else
-    return false;
+  return value >= min && value <= max;
 }
 
 bool ConfigInfo::verify_enum(const Properties *section, const char *fname,
@@ -2368,8 +2365,7 @@ bool ConfigInfo::verify_enum(const Properties *section, const char *fname,
   require(section->get(fname, &p));
   require(p->get("values", &values));
 
-  if (values->get(value, &value_int)) return true;
-  return false;
+  return values->get(value, &value_int);
 }
 
 /*
@@ -3621,7 +3617,7 @@ static bool checkConnectionConstraints(InitConfigFileParser::Context &ctx,
    * -# Not both of them are MGMs
    */
   if ((strcmp(type1, DB_TOKEN) != 0 && strcmp(type2, DB_TOKEN) != 0) &&
-      !(strcmp(type1, MGM_TOKEN) == 0 && strcmp(type2, MGM_TOKEN) == 0)) {
+      (strcmp(type1, MGM_TOKEN) != 0 || strcmp(type2, MGM_TOKEN) != 0)) {
     ctx.reportError(
         "Invalid connection between node %d (%s) and node %d (%s)"
         " - [%s] starting at line: %d",
@@ -3686,10 +3682,9 @@ static bool transform(InitConfigFileParser::Context &ctx, Properties &dst,
   require(ctx.m_currentSection->getTypeOf(oldName, &oldType));
   ConfigInfo::Type newType = ctx.m_info->getType(ctx.m_currentInfo, newName);
 
-  if (!((oldType == PropertiesType_Uint32 ||
-         oldType == PropertiesType_Uint64) &&
-        (newType == ConfigInfo::CI_INT || newType == ConfigInfo::CI_INT64 ||
-         newType == ConfigInfo::CI_BOOL))) {
+  if ((oldType != PropertiesType_Uint32 && oldType != PropertiesType_Uint64) ||
+      (newType != ConfigInfo::CI_INT && newType != ConfigInfo::CI_INT64 &&
+       newType != ConfigInfo::CI_BOOL)) {
     ndbout << "oldType: " << (int)oldType << ", newType: " << (int)newType
            << endl;
     ctx.reportError(
@@ -3920,7 +3915,7 @@ static int check_connection(struct InitConfigFileParser::Context &ctx,
           map, nodeId1, hostname);
       return -1;
     }
-    if (!(val > 0 && val < MAX_NDB_NODES)) {
+    if (val <= 0 || val >= MAX_NDB_NODES) {
       ctx.reportError(
           "Invalid node in in ConnectionMap(\"%s\" for "
           "node: %d, hostname: %s",
@@ -3955,7 +3950,7 @@ static bool add_a_connection(Vector<ConfigInfo::ConfigRuleSection> &sections,
 
   if (tmp->get("ConnectionMap", &map)) {
     if ((ret = check_connection(ctx, map, nodeId1, hostname1, nodeId2)) != 1) {
-      return ret == 0 ? true : false;
+      return ret == 0;
     }
   }
 
@@ -3977,7 +3972,7 @@ static bool add_a_connection(Vector<ConfigInfo::ConfigRuleSection> &sections,
 
   if (tmp->get("ConnectionMap", &map)) {
     if ((ret = check_connection(ctx, map, nodeId2, hostname2, nodeId1)) != 1) {
-      return ret == 0 ? true : false;
+      return ret == 0;
     }
   }
 

@@ -141,8 +141,7 @@ int Callback_command_delegate::start_row() {
 }
 
 int Callback_command_delegate::end_row() {
-  if (m_end_row && !m_end_row(m_current_row)) return true;
-  return false;
+  return m_end_row && !m_end_row(m_current_row);
 }
 
 void Callback_command_delegate::abort_row() {}

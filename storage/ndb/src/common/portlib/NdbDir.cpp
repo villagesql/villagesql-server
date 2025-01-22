@@ -146,7 +146,7 @@ const char *NdbDir::Iterator::next_file(void) {
   bool is_reg;
   const char *name;
   while ((name = m_impl.next_entry(is_reg)) != nullptr) {
-    if (is_reg == true) return name;  // Found regular file
+    if (is_reg) return name;  // Found regular file
   }
   return nullptr;
 }
@@ -248,7 +248,7 @@ loop : {
       return false;
     }
 
-    if (unlink(path) == 0 || NdbDir::remove(path) == true) {
+    if (unlink(path) == 0 || NdbDir::remove(path)) {
       path[len] = 0;
       continue;
     }
@@ -279,7 +279,7 @@ loop : {
   }
 }
 
-  if (only_contents == false && NdbDir::remove(dir) == false) {
+  if (!only_contents && !NdbDir::remove(dir)) {
     g_eventLogger->info("Failed to remove directory '%s', error: %d", dir,
                         errno);
     return false;

@@ -503,7 +503,7 @@ int NdbSocket::ssl_readln(int timeout, int *elapsed, char *buf, int len,
       return reader.length();
     }
 
-  } while (!(reader.error() || (*elapsed >= timeout)));
+  } while (!reader.error() && (*elapsed < timeout));
 
   Debug_Log("ssl_readln => -1 [ELAPSED: %d]", *elapsed);
   if (*elapsed >= timeout) return 0;

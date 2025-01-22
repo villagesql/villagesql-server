@@ -294,7 +294,7 @@ size_t LogBuffer::get(char *buf, size_t buf_size, uint timeout_ms) {
   }
 
   // Wait until there's something in the buffer or until timeout
-  while ((m_size == 0) && (cond_ret == 0) && (m_stop == false)) {
+  while ((m_size == 0) && (cond_ret == 0) && !m_stop) {
     /**
      * Log buffer is empty, block until signal is received
      * or until timeout.

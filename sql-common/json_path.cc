@@ -295,11 +295,7 @@ static bool parse_path(Stream *stream, Json_path *path) {
   }
 
   // a path may not end with an ellipsis
-  if (path->leg_count() > 0 && path->last_leg()->get_type() == jpl_ellipsis) {
-    return true;
-  }
-
-  return false;
+  return path->leg_count() > 0 && path->last_leg()->get_type() == jpl_ellipsis;
 }
 
 /**

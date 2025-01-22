@@ -708,12 +708,9 @@ static bool unregister_udf() {
 }
 
 static bool register_udf() {
-  if (udf_registration_srv->udf_register("test_component_trace_log", INT_RESULT,
-                                         (Udf_func_any)test_component_trace_log,
-                                         nullptr, nullptr)) {
-    return true;
-  }
-  return false;
+  return udf_registration_srv->udf_register(
+             "test_component_trace_log", INT_RESULT,
+             (Udf_func_any)test_component_trace_log, nullptr, nullptr) != 0;
 }
 
 /**

@@ -1916,7 +1916,7 @@ int CommandInterpreter::executeConnect(char *parameters, bool interactive) {
     basestring = new BaseString(parameters);
     m_constr = basestring->trim().c_str();
   }
-  if (connect(interactive) == false) {
+  if (!connect(interactive)) {
     return -1;
   }
   if (basestring != NULL) delete basestring;
@@ -2999,7 +2999,7 @@ int CommandInterpreter::executeStartBackup(char *parameters, bool interactive) {
     }
 
     if (args[i] == "SNAPSHOTEND") {
-      if (b_log == true) {
+      if (b_log) {
         invalid_command(parameters);
         return -1;
       }
@@ -3008,7 +3008,7 @@ int CommandInterpreter::executeStartBackup(char *parameters, bool interactive) {
       continue;
     }
     if (args[i] == "SNAPSHOTSTART") {
-      if (b_log == true) {
+      if (b_log) {
         invalid_command(parameters);
         return -1;
       }
@@ -3017,8 +3017,7 @@ int CommandInterpreter::executeStartBackup(char *parameters, bool interactive) {
       continue;
     }
     if (args[i] == "NOWAIT") {
-      if (b_nowait == true || b_wait_completed == true ||
-          b_wait_started == true) {
+      if (b_nowait || b_wait_completed || b_wait_started) {
         invalid_command(parameters);
         return -1;
       }
@@ -3027,8 +3026,7 @@ int CommandInterpreter::executeStartBackup(char *parameters, bool interactive) {
       continue;
     }
     if (args[i] == "WAIT") {
-      if (b_nowait == true || b_wait_completed == true ||
-          b_wait_started == true) {
+      if (b_nowait || b_wait_completed || b_wait_started) {
         invalid_command(parameters);
         return -1;
       }

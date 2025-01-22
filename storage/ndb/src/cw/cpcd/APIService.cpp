@@ -215,7 +215,7 @@ void CPCDAPISession::defineProcess(Parser_t::Context & /* unused */,
   if (!m_cpcd.loadingProcessList) {
     m_output->println("define process");
     m_output->println("status: %d", rs.getStatus());
-    if (ret == true) {
+    if (ret) {
       m_output->println("id: %d", id);
 
       BaseString procType;

@@ -592,7 +592,7 @@ static int remove_command(void) {
 
   /* Warn if no login path is specified. */
   if (opt_warn && ((locate_login_path(&file_buf, opt_login_path)) != nullptr) &&
-      (login_path_specified == false)) {
+      (!login_path_specified)) {
     int choice;
     printf(
         "WARNING : No login path specified, so options from the default "

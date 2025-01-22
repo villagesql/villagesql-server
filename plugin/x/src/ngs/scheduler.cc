@@ -104,7 +104,7 @@ void Scheduler_dynamic::set_idle_worker_timeout(
 void Scheduler_dynamic::stop() {
   int32_t int_1 = 1;
   if (m_is_running.compare_exchange_strong(int_1, 0)) {
-    while (m_tasks.empty() == false) {
+    while (!m_tasks.empty()) {
       Task *task = nullptr;
 
       if (m_tasks.pop(task)) free_object(task);
@@ -130,7 +130,7 @@ void Scheduler_dynamic::stop() {
 // NOTE: Scheduler takes ownership of the task and deletes it after
 //       completion with delete operator.
 bool Scheduler_dynamic::post(Task *task) {
-  if (is_running() == false || task == nullptr) return false;
+  if (!is_running() || task == nullptr) return false;
 
   {
     MUTEX_LOCK(lock, m_worker_pending_mutex);
@@ -148,7 +148,7 @@ bool Scheduler_dynamic::post(Task *task) {
     }
   }
 
-  while (m_tasks.push(task) == false) {
+  while (!m_tasks.push(task)) {
   }
   m_worker_pending_cond.signal(m_worker_pending_mutex);
 
@@ -223,8 +223,7 @@ void *Scheduler_dynamic::worker() {
       try {
         Task *task = nullptr;
 
-        while (is_running() && m_tasks.empty() == false &&
-               task_available == false) {
+        while (is_running() && !m_tasks.empty() && !task_available) {
           task_available = m_tasks.pop(task);
         }
 

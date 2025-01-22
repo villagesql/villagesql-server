@@ -1037,7 +1037,7 @@ void Ndb::closeTransaction(NdbTransaction *aConnection) {
     DBUG_VOID_RETURN;
   }
 
-  if (aConnection->theReleaseOnClose == false) {
+  if (!aConnection->theReleaseOnClose) {
     /**
      * Put it back in idle list for that node
      */
@@ -1873,7 +1873,7 @@ int Ndb::pollEvents2(int aMillisecondNumber, Uint64 *highestQueuedEpoch) {
     found = theEventBuffer->pollEvents(highestQueuedEpoch);
   }
 
-  if ((highestQueuedEpoch) && (isExpectingHigherQueuedEpochs() == false))
+  if ((highestQueuedEpoch) && (!isExpectingHigherQueuedEpochs()))
     *highestQueuedEpoch = NDB_FAILURE_GCI;
 
   return found;
@@ -1925,7 +1925,7 @@ int Ndb::pollEvents(int aMillisecondNumber, Uint64 *highestQueuedEpoch) {
     found = theEventBuffer->pollEvents(highestQueuedEpoch);
   }
 
-  if ((highestQueuedEpoch) && (isExpectingHigherQueuedEpochs() == false))
+  if ((highestQueuedEpoch) && (!isExpectingHigherQueuedEpochs()))
     *highestQueuedEpoch = NDB_FAILURE_GCI;
 
   return found;

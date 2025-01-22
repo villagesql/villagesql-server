@@ -644,7 +644,7 @@ int ndbxfrm_file::read_header(ndbxfrm_input_iterator *in, const byte *pwd_key,
       if (cipher != ndb_ndbxfrm1::cipher_cbc &&
           cipher != ndb_ndbxfrm1::cipher_xts)
         RETURN(-1);
-      if (!(padding == 0 || padding == ndb_ndbxfrm1::padding_pkcs)) RETURN(-1);
+      if (padding != 0 && padding != ndb_ndbxfrm1::padding_pkcs) RETURN(-1);
       if (krm != ndb_ndbxfrm1::krm_pbkdf2_sha256 &&
           krm != ndb_ndbxfrm1::krm_aeskw_256)
         RETURN(-1);
@@ -782,11 +782,7 @@ int ndbxfrm_file::read_trailer(ndbxfrm_input_reverse_iterator *rin,
     m_data_size = data_size;
 
     Uint32 data_crc32 = 0;
-    if (ndbxfrm_trailer.get_data_crc32(&data_crc32) == 0) {
-      m_have_data_crc32 = true;
-    } else {
-      m_have_data_crc32 = false;
-    }
+    m_have_data_crc32 = (ndbxfrm_trailer.get_data_crc32(&data_crc32) == 0);
     m_data_crc32 = data_crc32;
   } else {
     require(m_file_format == FF_RAW);

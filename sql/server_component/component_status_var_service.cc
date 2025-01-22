@@ -42,9 +42,7 @@ struct SHOW_VAR;
 DEFINE_BOOL_METHOD(mysql_status_variable_registration_imp::register_variable,
                    (SHOW_VAR * status_var)) {
   try {
-    if (add_status_vars(status_var)) return true;
-
-    return false;
+    return add_status_vars(status_var);
   } catch (...) {
     mysql_components_handle_std_exception(__func__);
   }

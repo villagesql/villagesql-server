@@ -159,11 +159,7 @@ void Kerberos_plugin_client::create_upn(std::string account_name) {
 }
 
 bool Kerberos_plugin_client::authenticate() {
-  if (m_kerberos_client->authenticate()) {
-    return true;
-  } else {
-    return false;
-  }
+  return m_kerberos_client->authenticate();
 }
 
 bool Kerberos_plugin_client::read_spn_realm_from_server() {

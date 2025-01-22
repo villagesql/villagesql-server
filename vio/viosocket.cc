@@ -464,7 +464,7 @@ int vio_shutdown(Vio *vio) {
   int r = 0;
   DBUG_TRACE;
 
-  if (vio->inactive == false) {
+  if (!vio->inactive) {
     assert(vio->type == VIO_TYPE_TCPIP || vio->type == VIO_TYPE_SOCKET ||
            vio->type == VIO_TYPE_SSL);
 

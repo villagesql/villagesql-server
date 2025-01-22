@@ -367,7 +367,7 @@ bool ConfigRetriever::verifyConfig(const ndb_mgm_configuration *conf,
     Uint32 conn_preferred_ip_version = 4;
 
     iter.get(CFG_CONNECTION_PREFER_IP_VER, &conn_preferred_ip_version);
-    if (!(conn_preferred_ip_version == 6 || conn_preferred_ip_version == 4)) {
+    if (conn_preferred_ip_version != 6 && conn_preferred_ip_version != 4) {
       tmp.assfmt("Invalid IP version: %d", conn_preferred_ip_version);
       setError(CR_ERROR, tmp);
       return false;

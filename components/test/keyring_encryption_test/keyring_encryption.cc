@@ -67,7 +67,7 @@ int main(int argc, char **argv) {
   constexpr int exit_status = EXIT_FAILURE;
 
   int exit_code;
-  if (process_options(&argc, &argv, exit_code) == false) {
+  if (!process_options(&argc, &argv, exit_code)) {
     std::cerr << "Error processing options" << std::endl;
     return exit_status;
   }

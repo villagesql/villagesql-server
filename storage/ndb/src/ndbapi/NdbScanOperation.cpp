@@ -1199,7 +1199,7 @@ int NdbScanOperation::processTableScanDefs(NdbScanOperation::LockMode lm,
 
   theNdbCon->theScanningOp = this;
   // The number of acc-scans are limited therefore use tup-scans instead.
-  bool tupScan = (scan_flags & SF_TupScan) || true;
+  bool tupScan = true;  // (scan_flags & SF_TupScan)
 #if defined(VM_TRACE)
   if (theNdb->theImpl->forceAccTableScans) {
     tupScan = false;
@@ -1517,8 +1517,8 @@ int NdbScanOperation::executeCursor(int nodeId) {
 
       return 0;
     } else {
-      if (!(theImpl->get_node_stopping(nodeId) &&
-            (theImpl->getNodeSequence(nodeId) == seq))) {
+      if (!theImpl->get_node_stopping(nodeId) ||
+          (theImpl->getNodeSequence(nodeId) != seq)) {
         TRACE_DEBUG("The node is hard dead when attempting to start a scan");
         setErrorCode(4029);
         tCon->theReleaseOnClose = true;
@@ -1749,7 +1749,7 @@ int NdbScanOperation::send_next_scan(Uint32 cnt, bool stopScanFlag) {
 
     Uint32 *theData = tSignal.getDataPtrSend();
     theData[0] = theNdbCon->theTCConPtr;
-    theData[1] = stopScanFlag == true ? 1 : 0;
+    theData[1] = stopScanFlag ? 1 : 0;
     Uint64 transId = theNdbCon->theTransactionId;
     theData[2] = (Uint32)transId;
     theData[3] = (Uint32)(transId >> 32);
@@ -2855,7 +2855,7 @@ int NdbIndexScanOperation::setBound(const NdbColumnImpl *tAttrInfo, int type,
 
     byteOffset = attr.offset;
 
-    bool inclusive = !((type == BoundLT) || (type == BoundGT));
+    bool inclusive = (type != BoundLT) && (type != BoundGT);
 
     if (currentRangeOldApi == nullptr) {
       /* Current bound is undefined, allocate space for definition */

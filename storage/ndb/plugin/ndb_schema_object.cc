@@ -243,7 +243,7 @@ std::string NDB_SCHEMA_OBJECT::waiting_participants_to_string() const {
   const char *separator = "";
   std::string participants("[");
   for (const auto &it : state.m_participants) {
-    if (it.second.m_completed == true) continue;  // Don't show completed
+    if (it.second.m_completed) continue;  // Don't show completed
     participants.append(separator).append(std::to_string(it.first));
     separator = ",";
   }

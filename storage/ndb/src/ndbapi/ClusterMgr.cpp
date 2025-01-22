@@ -387,7 +387,7 @@ void ClusterMgr::threadMain() {
 
       if (!theNode.defined) continue;
 
-      if (theNode.is_connected() == false) {
+      if (!theNode.is_connected()) {
         theFacade.startConnecting(nodeId);
         continue;
       }
@@ -744,12 +744,9 @@ void ClusterMgr::execAPI_REGREQ(const Uint32 *theData) {
     node.m_info.m_version = apiRegReq->version;
     node.m_info.m_mysql_version = apiRegReq->mysql_version;
 
-    if (getMajor(node.m_info.m_version) < getMajor(NDB_VERSION) ||
-        getMinor(node.m_info.m_version) < getMinor(NDB_VERSION)) {
-      node.compatible = false;
-    } else {
-      node.compatible = true;
-    }
+    node.compatible =
+        !(getMajor(node.m_info.m_version) < getMajor(NDB_VERSION) ||
+          getMinor(node.m_info.m_version) < getMinor(NDB_VERSION));
   }
 
   NdbApiSignal signal(numberToRef(API_CLUSTERMGR, theFacade.ownId()));
@@ -1055,7 +1052,7 @@ void ClusterMgr::execNF_COMPLETEREP(const NdbApiSignal *signal,
   assert(nodeId > 0 && nodeId < MAX_NODES);
 
   trp_node &node = theNodes[nodeId];
-  if (node.nfCompleteRep == false) {
+  if (!node.nfCompleteRep) {
     node.nfCompleteRep = true;
     theFacade.for_each(this, signal, ptr);
   }
@@ -1202,7 +1199,7 @@ void ClusterMgr::reportDisconnected(NodeId nodeId) {
    */
   if (theFacade.m_poll_owner != this) unlock();
 
-  if (node_failrep == false) {
+  if (!node_failrep) {
     /**
      * Inform API
      *
@@ -1266,7 +1263,7 @@ void ClusterMgr::execNODE_FAILREP(const NdbApiSignal *sig,
     bool connected = theNode.is_connected();
     set_node_dead(theNode);
 
-    if (node_failrep == false) {
+    if (!node_failrep) {
       theNode.m_node_fail_rep = true;
       NodeBitmask::set(theAllNodes, i);
       copy->noOfNodes++;
@@ -1301,7 +1298,7 @@ void ClusterMgr::execNODE_FAILREP(const NdbApiSignal *sig,
 
     for (Uint32 i = 1; i < MAX_NODES; i++) {
       trp_node &theNode = theNodes[i];
-      if (theNode.defined && theNode.nfCompleteRep == false) {
+      if (theNode.defined && !theNode.nfCompleteRep) {
         rep->failedNodeId = i;
         execNF_COMPLETEREP(&signal, nullptr);
       }

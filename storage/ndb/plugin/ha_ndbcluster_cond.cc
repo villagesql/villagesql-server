@@ -977,7 +977,7 @@ static void ndb_serialize_cond(const Item *item, void *arg) {
                 type != MYSQL_TYPE_BIT &&
                 /* Char(0) field is treated as Bit fields inside NDB
                    Hence not supported in scan filter */
-                (!(type == MYSQL_TYPE_STRING && field->pack_length() == 0)) &&
+                (type != MYSQL_TYPE_STRING || field->pack_length() != 0) &&
                 // No BLOB support in scan filter
                 type != MYSQL_TYPE_TINY_BLOB &&
                 type != MYSQL_TYPE_MEDIUM_BLOB &&

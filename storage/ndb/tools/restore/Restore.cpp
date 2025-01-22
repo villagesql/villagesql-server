@@ -1789,8 +1789,8 @@ bool BackupFile::readHeader() {
   restoreLogger.log_debug("magicByteOrder is %u", magicByteOrder);
 
   if (m_fileHeader.FileType != m_expectedFileHeader.FileType &&
-      !(m_expectedFileHeader.FileType == BackupFormat::LOG_FILE &&
-        m_fileHeader.FileType == BackupFormat::UNDO_FILE)) {
+      (m_expectedFileHeader.FileType != BackupFormat::LOG_FILE ||
+       m_fileHeader.FileType != BackupFormat::UNDO_FILE)) {
     // UNDO_FILE will do in case where we expect LOG_FILE
     abort();
   }
@@ -2042,10 +2042,7 @@ bool TableS::get_auto_data(const TupleS &tuple, Uint32 *syskey,
   attr_desc = tuple.getDesc(1);
   const AttributeS attr2 = {attr_desc, *attr_data};
   memcpy(nextid, attr2.Data.u_int64_value, sizeof(Uint64));
-  if (*syskey < 0x10000000) {
-    return true;
-  }
-  return false;
+  return *syskey < 0x10000000;
 }
 
 Uint16 Twiddle16(Uint16 in) {

@@ -225,7 +225,7 @@ int ParseThreadConfiguration::parse_params(char *str, ParamValue values[]) {
       m_err_msg.assfmt("Unknown param near: '%s'", m_curr_str);
       return -1;
     }
-    if (values[idx].found == true) {
+    if (values[idx].found) {
       m_err_msg.assfmt("Param '%s' found twice", m_parse_params[idx].name);
       return -1;
     }

@@ -918,7 +918,7 @@ bool Gcs_xcom_interface::initialize_xcom(
   /*
     Whether the proxy should be created or not.
   */
-  bool create_proxy = (s_xcom_proxy == nullptr ? true : false);
+  bool create_proxy = (s_xcom_proxy == nullptr);
 
   /*
     Since initializing XCom is actually joining the group itself, one shall

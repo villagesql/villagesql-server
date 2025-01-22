@@ -308,9 +308,7 @@ class Keyring_proxy_imp {
       const auto *local_object =
           reinterpret_cast<my_h_keyring_keys_metadata_iterator_keyring_proxy *>(
               forward_iterator);
-      if (local_object == nullptr || !local_object->iterator_valid)
-        return false;
-      return true;
+      return !(local_object == nullptr || !local_object->iterator_valid);
     } catch (...) {
       return false;
     }

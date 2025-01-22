@@ -1706,10 +1706,8 @@ uint16_t uca_scanner_900<Mb_wc, LEVELS_FOR_COMPARE>::apply_reorder_param(
 
 // See Unicode TR35 section 3.14.1.
 static bool is_tertiary_weight_upper_case(uint16_t weight) {
-  if ((weight >= 0x08 && weight <= 0x0C) || weight == 0x0E || weight == 0x11 ||
-      weight == 0x12 || weight == 0x1D)
-    return true;
-  return false;
+  return (weight >= 0x08 && weight <= 0x0C) || weight == 0x0E ||
+         weight == 0x11 || weight == 0x12 || weight == 0x1D;
 }
 
 template <class Mb_wc, int LEVELS_FOR_COMPARE>
@@ -3452,8 +3450,8 @@ static void change_weight_if_case_first(CHARSET_INFO *cs,
                                         size_t curr_len,
                                         size_t tailored_ce_cnt) {
   /* We only need to implement [caseFirst upper] right now. */
-  if (!(cs->coll_param && cs->coll_param->case_first == CASE_FIRST_UPPER &&
-        cs->levels_for_compare == 3))
+  if (!cs->coll_param || cs->coll_param->case_first != CASE_FIRST_UPPER ||
+      cs->levels_for_compare != 3)
     return;
 
   assert(cs->uca->version == UCA_V900);

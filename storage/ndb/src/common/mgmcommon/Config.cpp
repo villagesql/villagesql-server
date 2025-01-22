@@ -259,9 +259,9 @@ static void compare_value(const char *name, const char *key,
   Uint32 pid = pinfo->_paramId;
   {
     Uint32 val;
-    if (it.get(pid, &val) == true) {
+    if (it.get(pid, &val)) {
       Uint32 val2;
-      if (it2.get(pid, &val2) == true) {
+      if (it2.get(pid, &val2)) {
         if (val != val2) {
           Properties info(true);
           info.put("Type", DT_DIFF);
@@ -281,9 +281,9 @@ static void compare_value(const char *name, const char *key,
 
   {
     Uint64 val;
-    if (it.get(pid, &val) == true) {
+    if (it.get(pid, &val)) {
       Uint64 val2;
-      if (it2.get(pid, &val2) == true) {
+      if (it2.get(pid, &val2)) {
         if (val != val2) {
           Properties info(true);
           info.put("Type", DT_DIFF);
@@ -303,9 +303,9 @@ static void compare_value(const char *name, const char *key,
 
   {
     const char *val;
-    if (it.get(pid, &val) == true) {
+    if (it.get(pid, &val)) {
       const char *val2;
-      if (it2.get(pid, &val2) == true) {
+      if (it2.get(pid, &val2)) {
         if (strcmp(val, val2)) {
           Properties info(true);
           info.put("Type", DT_DIFF);

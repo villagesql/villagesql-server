@@ -371,7 +371,7 @@ void TransporterFacade::handleMissingClnt(const SignalHeader *header,
   Uint32 transId[2];
   if (gsn == GSN_TCKEYCONF || gsn == GSN_TCINDXCONF) {
     const auto *conf = CAST_CONSTPTR(TcKeyConf, theData);
-    if (TcKeyConf::getMarkerFlag(conf->confInfo) == false) {
+    if (!TcKeyConf::getMarkerFlag(conf->confInfo)) {
       return;
     }
     transId[0] = conf->transId1;
@@ -849,7 +849,7 @@ void TransporterFacade::remove_trp_client_from_wakeup_list(trp_client *clnt) {
  * require the m_send_thread_mutex to be held by callee.
  */
 void TransporterFacade::wakeup_send_thread(void) {
-  if (m_send_thread_nodes.get(SEND_THREAD_NO) == false) {
+  if (!m_send_thread_nodes.get(SEND_THREAD_NO)) {
     NdbCondition_Signal(m_send_thread_cond);
   }
   m_send_thread_nodes.set(SEND_THREAD_NO);
@@ -986,7 +986,7 @@ void TransporterFacade::threadMainSend(void) {
      */
     TrpBitmask send_trps(m_has_data_trps);
 
-    if (m_send_thread_nodes.get(SEND_THREAD_NO) == false) {
+    if (!m_send_thread_nodes.get(SEND_THREAD_NO)) {
       if (!m_has_data_trps.isclear()) {
         /**
          * Take a 200us micro-nap to allow more buffered data
@@ -1214,7 +1214,7 @@ int TransporterFacade::get_recv_thread_activation_threshold() const {
  */
 bool TransporterFacade::raise_thread_prio(NdbThread *thread) {
   int ret_code = NdbThread_SetThreadPrio(thread, 9);
-  return (ret_code == 0) ? true : false;
+  return ret_code == 0;
 }
 
 static const int DEFAULT_MIN_ACTIVE_CLIENTS_RECV_THREAD = 8;
@@ -1331,7 +1331,7 @@ void TransporterFacade::threadMainReceive(void) {
     recv_client->complete_poll();
   }
 
-  if (recv_client->m_poll.m_poll_owner == true) {
+  if (recv_client->m_poll.m_poll_owner) {
     /*
       Ensure to release poll ownership before proceeding to delete the
       transporter client and thus close it. That code expects not to be
@@ -2935,7 +2935,7 @@ void TransporterFacade::do_poll(trp_client *clnt, Uint32 wait_time,
 
   Uint32 elapsed_ms = 0;  //'wait_time' used so far
   do {
-    if (clnt->m_poll.m_poll_owner == false) {
+    if (!clnt->m_poll.m_poll_owner) {
       assert(wait_time >= elapsed_ms);
       const Uint32 rem_wait_time = wait_time - elapsed_ms;
       /**

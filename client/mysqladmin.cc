@@ -468,7 +468,7 @@ int main(int argc, char *argv[]) {
                   (char *)&opt_enable_cleartext_plugin);
 
   first_command = find_type(argv[0], &command_typelib, FIND_TYPE_BASIC);
-  can_handle_passwords = first_command == ADMIN_PASSWORD ? true : false;
+  can_handle_passwords = first_command == ADMIN_PASSWORD;
   mysql_options(&mysql, MYSQL_OPT_CAN_HANDLE_EXPIRED_PASSWORDS,
                 &can_handle_passwords);
 

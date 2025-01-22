@@ -272,7 +272,7 @@ int ename_write_row_values(PSI_table_handle *handle) {
     int i = (ename_next_available_index + 1) % EMPLOYEEE_NAME_MAX_ROWS;
     int itr_count = 0;
     while (itr_count < EMPLOYEEE_NAME_MAX_ROWS) {
-      if (ename_records_array[i].m_exist == false) {
+      if (!ename_records_array[i].m_exist) {
         ename_next_available_index = i;
         break;
       }

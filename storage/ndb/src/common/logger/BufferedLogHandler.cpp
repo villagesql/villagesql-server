@@ -93,12 +93,7 @@ bool BufferedLogHandler::open() { return true; }
 
 bool BufferedLogHandler::close() { return true; }
 
-bool BufferedLogHandler::is_open() {
-  if (m_log_threadvar == nullptr) {
-    return false;
-  }
-  return true;
-}
+bool BufferedLogHandler::is_open() { return m_log_threadvar != nullptr; }
 
 //
 // PROTECTED

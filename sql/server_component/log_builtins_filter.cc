@@ -949,7 +949,7 @@ int log_builtins_filter_parse_suppression_list(char *list, bool update) {
     end = start;
 
     // find first non-token character (i.e. first character after token)
-    while ((*end != '\0') && !(isspace(*end) || (*end == ','))) end++;
+    while ((*end != '\0') && !isspace(*end) && (*end != ',')) end++;
 
     // no token found, end loop
     if ((len = (end - start)) == 0) {
@@ -978,9 +978,9 @@ int log_builtins_filter_parse_suppression_list(char *list, bool update) {
     else
       errcode = mysql_symbol_to_errno(symbol);
 
-    if (!(((errcode >= EE_ERROR_FIRST) && (errcode <= EE_ERROR_LAST)) ||
-          ((errcode >= ER_SERVER_RANGE_START) &&
-           (mysql_errno_to_builtin(errcode) >= 0))))
+    if (((errcode < EE_ERROR_FIRST) || (errcode > EE_ERROR_LAST)) &&
+        ((errcode < ER_SERVER_RANGE_START) ||
+         (mysql_errno_to_builtin(errcode) < 0)))
       goto fail;
 
     if (update) {

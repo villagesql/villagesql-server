@@ -5308,10 +5308,10 @@ static int dump_selected_tables(char *db, char **table_names, int tables) {
 
   /* Can't LOCK TABLES in I_S / P_S, so don't try. */
   if (lock_tables &&
-      !(mysql_get_server_version(mysql) >= FIRST_INFORMATION_SCHEMA_VERSION &&
-        !my_strcasecmp(&my_charset_latin1, db, INFORMATION_SCHEMA_DB_NAME)) &&
-      !(mysql_get_server_version(mysql) >= FIRST_PERFORMANCE_SCHEMA_VERSION &&
-        !my_strcasecmp(&my_charset_latin1, db, PERFORMANCE_SCHEMA_DB_NAME))) {
+      (mysql_get_server_version(mysql) < FIRST_INFORMATION_SCHEMA_VERSION ||
+       my_strcasecmp(&my_charset_latin1, db, INFORMATION_SCHEMA_DB_NAME)) &&
+      (mysql_get_server_version(mysql) < FIRST_PERFORMANCE_SCHEMA_VERSION ||
+       my_strcasecmp(&my_charset_latin1, db, PERFORMANCE_SCHEMA_DB_NAME))) {
     if (mysql_real_query(mysql, lock_tables_query.str,
                          (ulong)(lock_tables_query.length - 1))) {
       if (!opt_force) {
@@ -5962,7 +5962,7 @@ static bool get_gtid_mode(MYSQL *mysql_con) {
      get the gtid_mode value from the second column.
   */
   gtid_mode_val = gtid_mode_row ? (char *)gtid_mode_row[1] : nullptr;
-  gtid_mode = (gtid_mode_val && strcmp(gtid_mode_val, "OFF")) ? true : false;
+  gtid_mode = gtid_mode_val && strcmp(gtid_mode_val, "OFF");
   mysql_free_result(gtid_mode_res);
 
   return gtid_mode;

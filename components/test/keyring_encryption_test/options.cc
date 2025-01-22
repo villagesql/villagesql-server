@@ -101,11 +101,8 @@ bool get_one_option(int optid, const struct my_option *, char *) {
 }
 
 static bool check_options_for_sanity() {
-  if (Options::s_component_dir == nullptr || !*Options::s_component_dir ||
-      Options::s_keyring == nullptr || !*Options::s_keyring) {
-    return false;
-  }
-  return true;
+  return !(Options::s_component_dir == nullptr || !*Options::s_component_dir ||
+           Options::s_keyring == nullptr || !*Options::s_keyring);
 }
 
 static bool get_options(int argc, char **argv, int &exit_code) {
@@ -114,7 +111,7 @@ static bool get_options(int argc, char **argv, int &exit_code) {
     return false;
   }
 
-  if (check_options_for_sanity() == false) return false;
+  if (!check_options_for_sanity()) return false;
 
   return true;
 }

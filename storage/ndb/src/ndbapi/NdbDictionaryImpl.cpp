@@ -2420,10 +2420,7 @@ NdbTableImpl *NdbDictionaryImpl::getBlobTable(uint tab_id, uint col_no) {
 bool NdbDictionaryImpl::setTransporter(class Ndb *ndb,
                                        class TransporterFacade *tf) {
   m_globalHash = tf->m_globalDictCache;
-  if (m_receiver.setTransporter(ndb)) {
-    return true;
-  }
-  return false;
+  return m_receiver.setTransporter(ndb);
 }
 
 bool NdbDictInterface::setTransporter(class Ndb *ndb) {
@@ -3135,9 +3132,9 @@ int NdbDictInterface::parseTableInfo(NdbTableImpl **ret, const Uint32 *data,
   impl->m_extra_row_author_bits = tableDesc->ExtraRowAuthorBits;
   impl->m_partitionBalance =
       (NdbDictionary::Object::PartitionBalance)tableDesc->PartitionBalance;
-  impl->m_read_backup = tableDesc->ReadBackupFlag == 0 ? false : true;
+  impl->m_read_backup = tableDesc->ReadBackupFlag != 0;
   impl->m_partitionCount = tableDesc->PartitionCount;
-  impl->m_fully_replicated = tableDesc->FullyReplicatedFlag == 0 ? false : true;
+  impl->m_fully_replicated = tableDesc->FullyReplicatedFlag != 0;
 
   DBUG_PRINT("info", ("m_logging: %u, partitionBalance: %d"
                       " m_read_backup %u, tableVersion: %u",
@@ -3792,22 +3789,14 @@ int NdbDictInterface::compChangeMask(const NdbTableImpl &old_impl,
       ok = true;
     } else if (old_impl.m_partitionBalance ==
                NdbDictionary::Object::PartitionBalance_ForRPByNode) {
-      if (impl.m_partitionBalance !=
-          NdbDictionary::Object::PartitionBalance_ForRAByNode) {
-        ok = true;
-      } else {
-        ok = false;
-      }
+      ok = impl.m_partitionBalance !=
+           NdbDictionary::Object::PartitionBalance_ForRAByNode;
     } else if (old_impl.m_partitionBalance ==
                NdbDictionary::Object::PartitionBalance_ForRAByLDM) {
-      if (impl.m_partitionBalance !=
-              NdbDictionary::Object::PartitionBalance_ForRAByNode &&
-          impl.m_partitionBalance !=
-              NdbDictionary::Object::PartitionBalance_ForRPByNode) {
-        ok = true;
-      } else {
-        ok = false;
-      }
+      ok = impl.m_partitionBalance !=
+               NdbDictionary::Object::PartitionBalance_ForRAByNode &&
+           impl.m_partitionBalance !=
+               NdbDictionary::Object::PartitionBalance_ForRPByNode;
     } else {
       /**
        * Unknown partition balance
@@ -4532,7 +4521,7 @@ int NdbDictionaryImpl::dropBlobTables(const NdbTableImpl &t) {
     if (ret != 0) {
       DBUG_PRINT("info", ("col %s: blob table %s: error %d", c.m_name.c_str(),
                           bt->m_internalName.c_str(), m_error.code));
-      if (!(ret == 709 || ret == 723))  // "force" mode on
+      if (ret != 709 && ret != 723)  // "force" mode on
         ERR_RETURN(getNdbError(), -1);
     }
     // leave c.m_blobTable defined
@@ -6846,8 +6835,8 @@ bool NdbDictionaryImpl::validateRecordSpec(
          ~NdbDictionary::RecordSpecification::BitColMapsNullBitOnly) &&
         ((recSpec[rs].column_flags &
           NdbDictionary::RecordSpecification::BitColMapsNullBitOnly) &&
-         !((col->getLength() == 1) &&
-           (flags & NdbDictionary::RecMysqldBitfield)))) {
+         ((col->getLength() != 1) ||
+          !(flags & NdbDictionary::RecMysqldBitfield)))) {
       m_error.code = 4556;
       return false;
     }

@@ -169,7 +169,7 @@ int machine_write_row_values(PSI_table_handle *handle) {
   int size = machine_records_vector.size();
   for (int i = 0; i < size; i++) {
     Machine_Record *record = &machine_records_vector.at(i);
-    if (record->m_exist == false) {
+    if (!record->m_exist) {
       copy_record(record, &h->current_row);
       found = true;
       break;

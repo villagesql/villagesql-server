@@ -88,16 +88,16 @@ int ndb_mgm_configuration_iterator::get(int param, unsigned *value) const {
     ConfigValues::ConstIterator::get().
   */
   assert(sizeof *value == sizeof(Uint32));
-  return m_config.get(param, value) != true;
+  return !m_config.get(param, value);
 }
 
 int ndb_mgm_configuration_iterator::get(int param,
                                         unsigned long long *value) const {
-  return m_config.get(param, value) != true;
+  return !m_config.get(param, value);
 }
 
 int ndb_mgm_configuration_iterator::get(int param, const char **value) const {
-  return m_config.get(param, value) != true;
+  return !m_config.get(param, value);
 }
 
 /**

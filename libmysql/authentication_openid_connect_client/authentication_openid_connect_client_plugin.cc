@@ -103,10 +103,8 @@ bool get_jwt_parts(std::string jwt, std::string &head, std::string &body,
   if (get_part(jwt, body)) return true;
 
   sig = jwt;
-  if (sig.empty() ||
-      sig.find_first_not_of(base64url_chars) != std::string::npos)
-    return true;
-  return false;
+  return sig.empty() ||
+         sig.find_first_not_of(base64url_chars) != std::string::npos;
 }
 
 /**

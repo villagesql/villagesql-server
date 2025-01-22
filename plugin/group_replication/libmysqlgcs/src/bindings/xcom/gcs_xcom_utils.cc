@@ -144,7 +144,7 @@ bool is_valid_hostname(const std::string &server_and_port) {
 
 end:
   if (addr) freeaddrinfo(addr);
-  return error == false;
+  return !error;
 }
 
 void fix_parameters_syntax(Gcs_interface_parameters &interface_params) {
@@ -655,7 +655,7 @@ bool is_parameters_syntax_correct(
 
 end:
   delete sock_probe_interface;
-  return error == GCS_NOK ? false : true;
+  return error != GCS_NOK;
 }
 
 std::string gcs_protocol_to_mysql_version(Gcs_protocol_version protocol) {

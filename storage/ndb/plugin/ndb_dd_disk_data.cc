@@ -155,8 +155,5 @@ void ndb_dd_disk_data_get_file_names(const dd::Tablespace *object_def,
 bool ndb_dd_disk_data_get_table_refs(
     THD *thd, const dd::Tablespace &object_def,
     std::vector<dd::Tablespace_table_ref> &table_refs) {
-  if (dd::fetch_tablespace_table_refs(thd, object_def, &table_refs)) {
-    return false;
-  }
-  return true;
+  return !dd::fetch_tablespace_table_refs(thd, object_def, &table_refs);
 }

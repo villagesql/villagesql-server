@@ -95,10 +95,7 @@ static bool get_one_option(int optid, const struct my_option *, char *) {
 }
 
 static bool check_options_for_sanity() {
-  if (g_component_dir == nullptr || !*g_component_dir) {
-    return true;
-  }
-  return false;
+  return g_component_dir == nullptr || !*g_component_dir;
 }
 
 static bool get_options(int argc, char **argv, int &exit_code) {
@@ -173,7 +170,7 @@ int main(int argc, char **argv) {
     full_path.append("/");
     full_path.append(component);
     const char *urn[] = {full_path.c_str()};
-    return dynamic_loader->load(urn, 1) ? true : false;
+    return dynamic_loader->load(urn, 1) != 0;
   };
 
   auto unload_component = [&dynamic_loader](const char *component_dir,

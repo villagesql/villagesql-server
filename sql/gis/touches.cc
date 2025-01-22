@@ -89,22 +89,22 @@ static bool geometry_collection_apply_touches(const Touches &f,
         throw null_value_exception();
 
       // Check that at least one part of g1 touches at least one part of g2.
-      if (!((!g1_mpt->empty() && !g2_mls->empty() &&
-             f(g1_mpt.get(), g2_mls.get())) ||
-            (!g1_mpt->empty() && !g2_mpy->empty() &&
-             f(g1_mpt.get(), g2_mpy.get())) ||
-            (!g1_mls->empty() && !g2_mpt->empty() &&
-             f(g1_mls.get(), g2_mpt.get())) ||
-            (!g1_mls->empty() && !g2_mls->empty() &&
-             f(g1_mls.get(), g2_mls.get())) ||
-            (!g1_mls->empty() && !g2_mpy->empty() &&
-             f(g1_mls.get(), g2_mpy.get())) ||
-            (!g1_mpy->empty() && !g2_mpt->empty() &&
-             f(g1_mpy.get(), g2_mpt.get())) ||
-            (!g1_mpy->empty() && !g2_mls->empty() &&
-             f(g1_mpy.get(), g2_mls.get())) ||
-            (!g1_mpy->empty() && !g2_mpy->empty() &&
-             f(g1_mpy.get(), g2_mpy.get()))))
+      if ((g1_mpt->empty() || g2_mls->empty() ||
+           !f(g1_mpt.get(), g2_mls.get())) &&
+          (g1_mpt->empty() || g2_mpy->empty() ||
+           !f(g1_mpt.get(), g2_mpy.get())) &&
+          (g1_mls->empty() || g2_mpt->empty() ||
+           !f(g1_mls.get(), g2_mpt.get())) &&
+          (g1_mls->empty() || g2_mls->empty() ||
+           !f(g1_mls.get(), g2_mls.get())) &&
+          (g1_mls->empty() || g2_mpy->empty() ||
+           !f(g1_mls.get(), g2_mpy.get())) &&
+          (g1_mpy->empty() || g2_mpt->empty() ||
+           !f(g1_mpy.get(), g2_mpt.get())) &&
+          (g1_mpy->empty() || g2_mls->empty() ||
+           !f(g1_mpy.get(), g2_mls.get())) &&
+          (g1_mpy->empty() || g2_mpy->empty() ||
+           !f(g1_mpy.get(), g2_mpy.get())))
         return false;
 
       // Check that the interiors of g1 and g2 are disjoint.
@@ -204,9 +204,9 @@ static bool geometry_collection_apply_touches(const Touches &f,
       gc_union(f.semi_major(), f.semi_minor(), &g2_mpt, &g2_mls, &g2_mpy);
 
       // Check that at g1 touches at least one part of g2.
-      if (!((!g2_mpt->empty() && f(g1, g2_mpt.get())) ||
-            (!g2_mls->empty() && f(g1, g2_mls.get())) ||
-            (!g2_mpy->empty() && f(g1, g2_mpy.get()))))
+      if ((g2_mpt->empty() || !f(g1, g2_mpt.get())) &&
+          (g2_mls->empty() || !f(g1, g2_mls.get())) &&
+          (g2_mpy->empty() || !f(g1, g2_mpy.get())))
         return false;
 
       // Check that the interiors of g1 and g2 are disjoint.

@@ -92,10 +92,8 @@ static bool has_no_conflicting_authority(const T &element, const char *name,
 /// @retval false The element doesn't have the specified authority clause.
 template <typename T>
 static bool has_authority(const T &element, const char *name, int code) {
-  if (element.authority.valid &&
-      has_no_conflicting_authority(element, name, code))
-    return true;
-  return false;
+  return static_cast<bool>(element.authority.valid &&
+                           has_no_conflicting_authority(element, name, code));
 }
 
 /**

@@ -104,5 +104,5 @@ bool my_chmod(const char *filename, ulong perm_flags, myf MyFlags) {
     MyOsError(my_errno(), EE_CHANGE_PERMISSIONS, MYF(0), filename);
   }
 
-  return ret_val ? true : false;
+  return ret_val != 0;
 }

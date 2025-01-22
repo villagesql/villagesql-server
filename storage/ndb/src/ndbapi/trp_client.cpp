@@ -74,9 +74,8 @@ trp_client::PollQueue::~PollQueue() {
    * Require that trp_client user
    * doesn't destroy object when holding any locks.
    */
-  if (unlikely(m_waiting != PQ_IDLE || m_locked == true ||
-               m_poll_owner == true || m_poll_queue == true ||
-               m_next != nullptr || m_prev != nullptr)) {
+  if (unlikely(m_waiting != PQ_IDLE || m_locked || m_poll_owner ||
+               m_poll_queue || m_next != nullptr || m_prev != nullptr)) {
     g_eventLogger->info(
         "ERR: ::~PollQueue: Deleting trp_clnt in use:"
         " waiting %d locked %u poll_owner %u poll_queue %u next %p prev %p",

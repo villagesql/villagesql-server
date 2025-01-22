@@ -394,7 +394,7 @@ static int create_l3_cache_list(struct ndb_hwinfo *hwinfo) {
     Uint32 found_online = 0;
     for (Uint32 cpu_id = 0; cpu_id < ncpu; cpu_id++) {
       if (hwinfo->cpu_info[cpu_id].l3_cache_id == l3_cache_id &&
-          hwinfo->cpu_info[cpu_id].in_l3_cache_list == false) {
+          !static_cast<bool>(hwinfo->cpu_info[cpu_id].in_l3_cache_list)) {
         if (found == 0) {
           g_first_l3_cache[l3_cache_id] = cpu_id;
           prev_cpu_id = cpu_id;
@@ -1422,7 +1422,7 @@ static int Ndb_ReloadCPUData(struct ndb_hwinfo *hwinfo) {
       // no number found...
       return -1;
     }
-    if (!(val >= 0 && val <= (long)max_cpu_no)) {
+    if (val < 0 || val > (long)max_cpu_no) {
       assert(false);
       return -1;
     }
@@ -1730,7 +1730,7 @@ static int Ndb_ReloadHWInfo(struct ndb_hwinfo *hwinfo) {
       hwinfo->cpu_info[curr_cpu].online = 1;
       cpu_online_count++;
     } else if (sscanf(buf, "core id : %u", &val) == 1) {
-      if (!(curr_cpu >= 0 && curr_cpu <= (int)max_cpu_no)) {
+      if (curr_cpu < 0 || curr_cpu > (int)max_cpu_no) {
         snprintf(error_buf, sizeof(error_buf), "CPU %u is outside max %u", val,
                  max_cpu_no);
         perror(error_buf);
@@ -1738,7 +1738,7 @@ static int Ndb_ReloadHWInfo(struct ndb_hwinfo *hwinfo) {
       }
       hwinfo->cpu_info[curr_cpu].core_id = val;
     } else if (sscanf(buf, "physical id : %u", &val) == 1) {
-      if (!(curr_cpu >= 0 && curr_cpu <= (int)max_cpu_no)) {
+      if (curr_cpu < 0 || curr_cpu > (int)max_cpu_no) {
         snprintf(error_buf, sizeof(error_buf), "CPU %u is outside max %u", val,
                  max_cpu_no);
         perror(error_buf);
@@ -1749,7 +1749,7 @@ static int Ndb_ReloadHWInfo(struct ndb_hwinfo *hwinfo) {
     } else if (sscanf(buf, "cpu cores : %u", &val) == 1) {
       num_cpu_cores_per_socket = val;
     } else if ((p = strstr(buf, "model name")) != nullptr) {
-      if (!(curr_cpu >= 0 && curr_cpu <= (int)max_cpu_no)) {
+      if (curr_cpu < 0 || curr_cpu > (int)max_cpu_no) {
         snprintf(error_buf, sizeof(error_buf), "CPU %u is outside max %u", val,
                  max_cpu_no);
         perror(error_buf);

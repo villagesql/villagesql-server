@@ -129,8 +129,7 @@ bool ndb_is_load_default_arg_separator(const char *arg) {
     load_default() in 5.5+ returns an extra arg which has to
     be skipped when processing the argv array
    */
-  if (my_getopt_is_args_separator(arg)) return true;
-  return false;
+  return my_getopt_is_args_separator(arg);
 }
 
 static Ndb_opts *registeredNdbOpts;

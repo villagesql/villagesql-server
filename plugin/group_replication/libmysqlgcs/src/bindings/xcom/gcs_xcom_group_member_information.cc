@@ -280,7 +280,7 @@ Gcs_xcom_nodes::Gcs_xcom_nodes(const site_def *site, node_set &nodes)
                 site->nodes.node_list_val[i].uuid.data.data_len);
 
     /* Get member status and save it */
-    bool alive = nodes.node_set_val[i] ? true : false;
+    bool alive = nodes.node_set_val[i] != 0;
 
     Gcs_xcom_node_information node(address, uuid, i, alive);
 

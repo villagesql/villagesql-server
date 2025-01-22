@@ -1042,9 +1042,8 @@ yysyntax_error (YYSIZE_T *yymsg_alloc, char **yymsg,
                   }
                 yyarg[yycount++] = yytname[yyx];
                 yysize1 = yysize + yytnamerr(nullptr, yytname[yyx]);
-                if (! (yysize <= yysize1
-                       && yysize1 <= YYSTACK_ALLOC_MAXIMUM))
-                  return 2;
+                if (yysize > yysize1 || yysize1 > YYSTACK_ALLOC_MAXIMUM)
+                    return 2;
                 yysize = yysize1;
               }
         }
@@ -1066,16 +1065,14 @@ yysyntax_error (YYSIZE_T *yymsg_alloc, char **yymsg,
     }
 
   yysize1 = yysize + yystrlen (yyformat);
-  if (! (yysize <= yysize1 && yysize1 <= YYSTACK_ALLOC_MAXIMUM))
-    return 2;
+  if (yysize > yysize1 || yysize1 > YYSTACK_ALLOC_MAXIMUM) return 2;
   yysize = yysize1;
 
   if (*yymsg_alloc < yysize)
     {
       *yymsg_alloc = 2 * yysize;
-      if (! (yysize <= *yymsg_alloc
-             && *yymsg_alloc <= YYSTACK_ALLOC_MAXIMUM))
-        *yymsg_alloc = YYSTACK_ALLOC_MAXIMUM;
+      if (yysize > *yymsg_alloc || *yymsg_alloc > YYSTACK_ALLOC_MAXIMUM)
+          *yymsg_alloc = YYSTACK_ALLOC_MAXIMUM;
       return 1;
     }
 

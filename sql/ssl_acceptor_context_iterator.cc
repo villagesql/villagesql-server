@@ -83,8 +83,7 @@ class Ssl_acceptor_context_iterator {
   bool next() {
     if (it_ == data_.cend()) return false;
     ++it_;
-    if (it_ == data_.cend()) return false;
-    return true;
+    return it_ != data_.cend();
   }
 
  private:
@@ -117,7 +116,7 @@ bool get_tls_status(property_iterator it, TLS_channel_property *property) {
   if (container == nullptr || property == nullptr) return false;
 
   Ssl_acceptor_context_iterator_data data;
-  if (container->get(data) == false) return false;
+  if (!container->get(data)) return false;
 
   size_t copy_size;
 

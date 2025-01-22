@@ -349,7 +349,7 @@ void NdbInfo::flush_tables() {
   // Delete all but the hardcoded tables
   for (auto it = m_tables.begin(); it != m_tables.end();) {
     Table *tab = it->second.get();
-    if (!(tab == m_tables_table || tab == m_columns_table))
+    if (tab != m_tables_table && tab != m_columns_table)
       it = m_tables.erase(it);
     else
       ++it;

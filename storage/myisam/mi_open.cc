@@ -512,12 +512,10 @@ MI_INFO *mi_open_share(const char *name, MYISAM_SHARE *old_share, int mode,
     mysql_rwlock_init(mi_key_rwlock_MYISAM_SHARE_mmap_lock, &share->mmap_lock);
     if (myisam_concurrent_insert) {
       share->concurrent_insert =
-          ((share->options &
-            (HA_OPTION_READ_ONLY_DATA | HA_OPTION_TMP_TABLE |
-             HA_OPTION_COMPRESS_RECORD | HA_OPTION_TEMP_COMPRESS_RECORD)) ||
-           (open_flags & HA_OPEN_TMP_TABLE) || share->have_rtree)
-              ? false
-              : true;
+          !((share->options &
+             (HA_OPTION_READ_ONLY_DATA | HA_OPTION_TMP_TABLE |
+              HA_OPTION_COMPRESS_RECORD | HA_OPTION_TEMP_COMPRESS_RECORD)) ||
+            (open_flags & HA_OPEN_TMP_TABLE) || share->have_rtree);
       if (share->concurrent_insert) {
         share->lock.get_status = mi_get_status;
         share->lock.copy_status = mi_copy_status;

@@ -68,21 +68,17 @@ class Mock_callback_commands {
 };
 
 MATCHER_P(Eq_mysql_time, n, "") {
-  if ((arg.year != n.year) || (arg.month != n.month) || (arg.day != n.day) ||
+  return !static_cast<bool>(
+      (arg.year != n.year) || (arg.month != n.month) || (arg.day != n.day) ||
       (arg.hour != n.hour) || (arg.minute != n.minute) ||
       (arg.second != n.second) || (arg.second_part != n.second_part) ||
-      (arg.neg != n.neg) || (arg.time_type != n.time_type))
-    return false;
-
-  return true;
+      (arg.neg != n.neg) || (arg.time_type != n.time_type));
 }
 
 MATCHER_P(Eq_decimal, n, "") {
-  if ((arg.intg != n.intg) || (arg.frac != n.frac) || (arg.len != n.len) ||
-      (arg.sign != n.sign) || (arg.buf != n.buf))
-    return false;
-
-  return true;
+  return !static_cast<bool>((arg.intg != n.intg) || (arg.frac != n.frac) ||
+                            (arg.len != n.len) || (arg.sign != n.sign) ||
+                            (arg.buf != n.buf));
 }
 
 MATCHER_P(Eq_info, param, "") {

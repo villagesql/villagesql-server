@@ -616,16 +616,16 @@ class Geometry_well_formed_checker : public WKB_scanner_event_handler {
     switch (geotype) {
       case Geometry::wkb_point:
         // Points can only appear in multipoints and in linestrings (R4).
-        if (!(outer_type == Geometry::wkb_multipoint ||
-              (!has_hdr && outer_type == Geometry::wkb_linestring)))
+        if (outer_type != Geometry::wkb_multipoint &&
+            (has_hdr || outer_type != Geometry::wkb_linestring))
           is_ok = false;
         if (outer_type == Geometry::wkb_linestring) ++points_in_linestring;
         break;
       case Geometry::wkb_linestring:
         // Linestrings can only appear in multilinestrings and as rings
         // in polygons (R4).
-        if (!(outer_type == Geometry::wkb_multilinestring ||
-              (!has_hdr && outer_type == Geometry::wkb_polygon)))
+        if (outer_type != Geometry::wkb_multilinestring &&
+            (has_hdr || outer_type != Geometry::wkb_polygon))
           is_ok = false;
         break;
       case Geometry::wkb_polygon:
@@ -936,9 +936,7 @@ Geometry *Geometry::create_from_wkb(THD *thd, Geometry_buffer *buffer,
 bool Geometry::envelope(MBR *mbr) const {
   wkb_parser wkb(get_cptr(), get_cptr() + get_nbytes());
 
-  if (get_mbr(mbr, &wkb)) return true;
-
-  return false;
+  return get_mbr(mbr, &wkb);
 }
 
 class GeomColl_component_counter : public WKB_scanner_event_handler {
@@ -1448,8 +1446,7 @@ bool Gis_line_string::init_from_wkt(Gis_read_stream *trs, String *wkb) {
 out:
 
   write_at_position(np_pos, n_points, wkb);
-  if (trs->check_next_symbol(')')) return true;
-  return false;
+  return trs->check_next_symbol(')');
 }
 
 uint Gis_line_string::init_from_wkb(THD *thd, const char *wkb, uint len,
@@ -1642,7 +1639,7 @@ Gis_polygon::Gis_polygon(const self &r) : Geometry(r), m_inn_rings(nullptr) {
   Gis_polygon::ring_type *r_out = nullptr, *outer = nullptr;
   Gis_polygon::inner_container_type *r_inners = nullptr, *inners = nullptr;
 
-  if (r.is_bg_adapter() == false || r.get_ptr() == nullptr) return;
+  if (!r.is_bg_adapter() || r.get_ptr() == nullptr) return;
 
   std::unique_ptr<Gis_polygon::ring_type> guard1;
   std::unique_ptr<Gis_polygon::inner_container_type> guard2;
@@ -2017,8 +2014,7 @@ bool Gis_polygon::init_from_wkt(Gis_read_stream *trs, String *wkb) {
       break;
   }
   write_at_position(lr_pos, n_linear_rings, wkb);
-  if (trs->check_next_symbol(')')) return true;
-  return false;
+  return trs->check_next_symbol(')');
 }
 
 uint Gis_polygon::init_from_wkb(THD *thd, const char *wkb, uint len,
@@ -2369,8 +2365,7 @@ bool Gis_multi_point::init_from_wkt(Gis_read_stream *trs, String *wkb) {
       break;
   }
   write_at_position(np_pos, n_points, wkb);  // Store number of found points
-  if (trs->check_next_symbol(')')) return true;
-  return false;
+  return trs->check_next_symbol(')');
 }
 
 uint Gis_multi_point::init_from_wkb(THD *thd, const char *wkb, uint len,
@@ -2553,8 +2548,7 @@ bool Gis_multi_line_string::init_from_wkt(Gis_read_stream *trs, String *wkb) {
       break;
   }
   write_at_position(ls_pos, n_line_strings, wkb);
-  if (trs->check_next_symbol(')')) return true;
-  return false;
+  return trs->check_next_symbol(')');
 }
 
 uint Gis_multi_line_string::init_from_wkb(THD *thd, const char *wkb, uint len,
@@ -2822,8 +2816,7 @@ bool Gis_multi_polygon::init_from_wkt(Gis_read_stream *trs, String *wkb) {
       break;
   }
   write_at_position(np_pos, n_polygons, wkb);
-  if (trs->check_next_symbol(')')) return true;
-  return false;
+  return trs->check_next_symbol(')');
 }
 
 uint Gis_multi_polygon::init_from_wkb(THD *thd, const char *wkb, uint len,
@@ -3425,8 +3418,7 @@ bool Gis_geometry_collection::get_mbr(MBR *mbr, wkb_parser *wkb) const {
   }
 
   /* An collection containing only a few empty collections, the MBR is NULL. */
-  if (!found_one) return true;
-  return false;
+  return !found_one;
 }
 
 int Gis_geometry_collection::num_geometries(uint32 *num) const {

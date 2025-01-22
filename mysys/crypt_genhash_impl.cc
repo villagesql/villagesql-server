@@ -165,7 +165,7 @@ static uint getrounds(const char *s) {
     An error occurred or there is non-numeric stuff at the end
     which isn't one of the crypt(3c) special chars ',' or '$'
   */
-  if (errno != 0 || val < 0 || !(*e == '\0' || *e == ',' || *e == '$')) {
+  if (errno != 0 || val < 0 || (*e != '\0' && *e != ',' && *e != '$')) {
     return (0);
   }
 

@@ -72,20 +72,14 @@ bool LocalConfig::init(const char *connectString, const char *fileName) {
   // 2. Check given filename
   if (fileName && strlen(fileName) > 0) {
     bool fopenError;
-    if (readFile(fileName, fopenError)) {
-      return true;
-    }
-    return false;
+    return readFile(fileName, fopenError);
   }
 
   // 3. Check environment variable
   char buf[255];
   if (NdbEnv_GetEnv("NDB_CONNECTSTRING", buf, sizeof(buf)) &&
       strlen(buf) != 0) {
-    if (readConnectString(buf, "NDB_CONNECTSTRING")) {
-      return true;
-    }
-    return false;
+    return readConnectString(buf, "NDB_CONNECTSTRING");
   }
 
   // 4. Check Ndb.cfg in NDB_HOME

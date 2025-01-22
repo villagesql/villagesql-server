@@ -256,7 +256,7 @@ Uint32 TransporterRegistry::unpack(TransporterReceiveHandle &recvHandle,
 
   if (likely(!(state & HaltInput))) {
     while ((eodPtr >= readPtr + (1 + (sizeof(Protocol6) >> 2))) &&
-           (loop_count < MAX_RECEIVED_SIGNALS) && doStopReceiving == false &&
+           (loop_count < MAX_RECEIVED_SIGNALS) && !doStopReceiving &&
            unpack_one(readPtr, eodPtr, eodPtr, prio, signalHeader, signalData,
                       ptr, errorCode)) {
       loop_count++;
@@ -272,7 +272,7 @@ Uint32 TransporterRegistry::unpack(TransporterReceiveHandle &recvHandle,
     /** state has 'HaltInput' */
 
     while ((eodPtr >= readPtr + (1 + (sizeof(Protocol6) >> 2))) &&
-           (loop_count < MAX_RECEIVED_SIGNALS) && doStopReceiving == false &&
+           (loop_count < MAX_RECEIVED_SIGNALS) && !doStopReceiving &&
            unpack_one(readPtr, eodPtr, eodPtr, prio, signalHeader, signalData,
                       ptr, errorCode)) {
       loop_count++;
@@ -333,7 +333,7 @@ Uint32 *TransporterRegistry::unpack(TransporterReceiveHandle &recvHandle,
   if (likely(!(state & HaltInput))) {
     while ((readPtr < endPtr) &&
            (eodPtr >= readPtr + (1 + (sizeof(Protocol6) >> 2))) &&
-           (loop_count < MAX_RECEIVED_SIGNALS) && doStopReceiving == false &&
+           (loop_count < MAX_RECEIVED_SIGNALS) && !doStopReceiving &&
            unpack_one(readPtr, eodPtr, endPtr, prio, signalHeader, signalData,
                       ptr, errorCode)) {
       loop_count++;
@@ -351,7 +351,7 @@ Uint32 *TransporterRegistry::unpack(TransporterReceiveHandle &recvHandle,
 
     while ((readPtr < endPtr) &&
            (eodPtr >= readPtr + (1 + (sizeof(Protocol6) >> 2))) &&
-           (loop_count < MAX_RECEIVED_SIGNALS) && doStopReceiving == false &&
+           (loop_count < MAX_RECEIVED_SIGNALS) && !doStopReceiving &&
            unpack_one(readPtr, eodPtr, endPtr, prio, signalHeader, signalData,
                       ptr, errorCode)) {
       loop_count++;

@@ -357,9 +357,9 @@ bool mi_check_status(void *param) {
   DBUG_PRINT("info", ("dellink: %ld  r_locks: %u  w_locks: %u",
                       (long)info->s->state.dellink, (uint)info->s->r_locks,
                       (uint)info->s->w_locks));
-  return (bool)!(info->s->state.dellink == HA_OFFSET_ERROR ||
-                 (myisam_concurrent_insert == 2 && info->s->r_locks &&
-                  info->s->w_locks == 1));
+  return (info->s->state.dellink != HA_OFFSET_ERROR) &&
+         (myisam_concurrent_insert != 2 || !info->s->r_locks ||
+          info->s->w_locks != 1);
 }
 
 /****************************************************************************

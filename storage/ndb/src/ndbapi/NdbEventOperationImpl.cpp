@@ -812,8 +812,7 @@ bool NdbEventOperationImpl::isErrorEpoch(
 
 bool NdbEventOperationImpl::isEmptyEpoch() {
   const Uint32 type = getEventType2();
-  if (type == NdbDictionary::Event::TE_EMPTY) return true;
-  return false;
+  return type == NdbDictionary::Event::TE_EMPTY;
 }
 
 Uint32 NdbEventOperationImpl::getAnyValue() const {

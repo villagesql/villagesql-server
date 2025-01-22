@@ -169,7 +169,7 @@ int index_seek(const std::map<int, int> &index,
   if (iter == index.cend()) return -1;
 
   /* Check for exact match */
-  if (!(seek.inclusive() && (iter->first == key))) {
+  if (!seek.inclusive() || (iter->first != key)) {
     /* Exact match failed. Check for bounded ranges */
     if (seek.high() || seek.low()) {
       if (seek.high() && iter->first == key) {
@@ -343,14 +343,12 @@ class VirtualScanContext {
 
   bool create_ndb(const char *dbname = "sys") {
     m_ndb = new Ndb(m_connection, dbname);
-    if (m_ndb->init() != 0) return false;
-    return true;
+    return m_ndb->init() == 0;
   }
 
   bool openTable(const char *tabname) {
     m_ndbtab = m_ndb->getDictionary()->getTableGlobal(tabname);
-    if (!m_ndbtab) return false;
-    return true;
+    return m_ndbtab != nullptr;
   }
 
   NdbDictionary::Dictionary *getDictionary() const {
@@ -416,8 +414,7 @@ class VirtualScanContext {
 
   bool startTrans() {
     m_trans = m_ndb->startTransaction();
-    if (!m_trans) return false;
-    return true;
+    return m_trans != nullptr;
   }
   NdbTransaction *getTrans() { return m_trans; }
 
@@ -1215,10 +1212,7 @@ class IndexStatsTable : public VirtualTable {
                                      (1 << sample_version_col->getColumnNo()) |
                                      (1 << load_time_col->getColumnNo()) |
                                      (1 << sample_count_col->getColumnNo()));
-    if (!ctx->scanTable(ctx->getRecord(), NdbOperation::LM_Read, &attr_mask)) {
-      return false;
-    }
-    return true;
+    return ctx->scanTable(ctx->getRecord(), NdbOperation::LM_Read, &attr_mask);
   }
 
   int read_row(VirtualScanContext *ctx, VirtualTable::Row &w,

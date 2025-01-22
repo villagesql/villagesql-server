@@ -1080,8 +1080,8 @@ int NdbOperation::setNoWait() {
     return -1;
   }
 
-  if ((!((theOperationType == ReadRequest) ||
-         (theOperationType == ReadExclusive))) ||
+  if (((theOperationType != ReadRequest) &&
+       (theOperationType != ReadExclusive)) ||
       theDirtyIndicator) {
     /* Only allowed for locking reads */
     setErrorCodeAbort(4108); /* Faulty operation type */
@@ -1243,10 +1243,10 @@ int NdbOperation::handleOperationOptions(const OperationType type,
     /* Only allowed for pk ops on user defined partitioned tables
      * or when defining an unlock operation
      */
-    if (unlikely(!(((op->m_attribute_record->flags &
-                     NdbRecord::RecHasUserDefinedPartitioning) &&
-                    (op->m_key_record->table->m_index == nullptr)) ||
-                   (type == UnlockRequest)))) {
+    if (unlikely((!(op->m_attribute_record->flags &
+                    NdbRecord::RecHasUserDefinedPartitioning) ||
+                  (op->m_key_record->table->m_index != nullptr)) &&
+                 (type != UnlockRequest))) {
       /* Explicit partitioning info not allowed for table and operation*/
       return 4546;
     }
@@ -1256,9 +1256,9 @@ int NdbOperation::handleOperationOptions(const OperationType type,
 
   if (opts->optionsPresent & OperationOptions::OO_INTERPRETED) {
     /* Check the operation type is valid */
-    if (!((type == ReadRequest) || (type == ReadExclusive) ||
-          (type == UpdateRequest) || (type == DeleteRequest) ||
-          (type == WriteRequest)))
+    if ((type != ReadRequest) && (type != ReadExclusive) &&
+        (type != UpdateRequest) && (type != DeleteRequest) &&
+        (type != WriteRequest))
       /* NdbInterpretedCode not supported for operation type */
       return 4539;
 
@@ -1337,7 +1337,7 @@ int NdbOperation::handleOperationOptions(const OperationType type,
   }
 
   if (opts->optionsPresent & OperationOptions::OO_NOWAIT) {
-    if ((!((type == ReadRequest) || (type == ReadExclusive))) ||
+    if (((type != ReadRequest) && (type != ReadExclusive)) ||
         (op->theLockMode == LM_CommittedRead)) {
       /* Only allowed for locking reads */
       return 4108; /* Faulty operation type */

@@ -1173,8 +1173,8 @@ int THRConfig::handle_spec(const char *str, unsigned realtime,
       m_err_msg.assfmt("Cannot set spintime on non-exec threads");
       return -1;
     }
-    if (values[IX_NOSEND].found &&
-        !(type == T_LDM || type == T_TC || type == T_MAIN || type == T_REP)) {
+    if (values[IX_NOSEND].found && type != T_LDM && type != T_TC &&
+        type != T_MAIN && type != T_REP) {
       m_err_msg.assfmt("Can only set nosend on main, ldm, tc and rep threads");
       return -1;
     }

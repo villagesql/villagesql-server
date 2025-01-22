@@ -116,10 +116,7 @@ bool Path::qpath(const std::string &qp) {
     filename(qp.substr(idx + 1, qp.size() - idx));
     path(qp.substr(0, idx));
   }
-  if (is_qualified_path())
-    return true;
-  else
-    return false;
+  return is_qualified_path();
 }
 
 bool Path::normalize_path() {

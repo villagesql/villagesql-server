@@ -771,7 +771,7 @@ static void printf_log(const char *format, ...) {
 
 static bool cmp_filename(struct file_info *file_info, const char *name) {
   if (!file_info) return true;
-  return strcmp(file_info->name, name) ? true : false;
+  return strcmp(file_info->name, name) != 0;
 }
 
 #include "storage/myisam/mi_extrafunc.h"

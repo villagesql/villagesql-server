@@ -549,7 +549,7 @@ static void exec_test_cmd(MYSQL_SESSION session, const char *test_cmd,
       session, COM_QUERY, &cmd, &my_charset_utf8mb3_general_ci, &sql_cbs,
       CS_BINARY_REPRESENTATION, ctx);
   if (fail) {
-    if (callback_called == false)
+    if (!callback_called)
       LogPluginErr(ERROR_LEVEL, ER_LOG_PRINTF_MSG, "Callback not called");
     else
       callback_called = false;

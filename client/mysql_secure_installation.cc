@@ -202,7 +202,7 @@ static int get_response(const char *opt_message, int default_answer = -1) {
   int i = 0;
   if (opt_message) {
     fprintf(stdout, "%s", opt_message);
-    if (opt_use_default == true && default_answer != -1) {
+    if (opt_use_default && default_answer != -1) {
       fprintf(stdout, " %c \n", (char)default_answer);
       return default_answer;
     }
@@ -462,9 +462,7 @@ static bool mysql_set_password(MYSQL *mysql, char *password) {
 static bool mysql_expire_password(MYSQL *mysql) {
   char sql[] = "UPDATE mysql.user SET password_expired= 'Y'";
   const size_t sql_len = strlen(sql);
-  if (mysql_real_query(mysql, sql, (ulong)sql_len)) return false;
-
-  return true;
+  return mysql_real_query(mysql, sql, (ulong)sql_len) == 0;
 }
 
 /**
@@ -818,7 +816,7 @@ int main(int argc, char *argv[]) {
   if (!hadpass) {
     fprintf(stdout, "Please set the password for %s here.\n", opt_user);
     set_opt_user_password(component_set);
-  } else if (opt_use_default == false) {
+  } else if (!opt_use_default) {
     char prompt[256];
     fprintf(stdout, "Using existing password for %s.\n", opt_user);
 
@@ -852,8 +850,8 @@ int main(int argc, char *argv[]) {
     to be marked for expiration upon exit so the DBA will remember to set a new
     one.
   */
-  if (g_expire_password_on_exit == true) {
-    if (mysql_expire_password(&mysql_handle) == false) {
+  if (g_expire_password_on_exit) {
+    if (!mysql_expire_password(&mysql_handle)) {
       fprintf(stdout,
               "... Failed to expire password!\n"
               "** Please consult the MySQL server documentation. **\n"

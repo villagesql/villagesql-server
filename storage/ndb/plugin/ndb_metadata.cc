@@ -71,7 +71,7 @@ dd::String_type Ndb_metadata::partition_expression() const {
   dd::String_type expr;
   if (m_ndbtab->getFragmentType() == NdbDictionary::Table::HashMapPartition &&
       m_ndbtab->getDefaultNoPartitionsFlag() &&
-      m_ndbtab->getFragmentCount() == 0 && m_ndbtab->getLinearFlag() == false) {
+      m_ndbtab->getFragmentCount() == 0 && !m_ndbtab->getLinearFlag()) {
     // Default partitioning
     return expr;
   }
@@ -598,7 +598,7 @@ bool Ndb_metadata::create_table_def(Ndb *ndb, dd::Table *table_def) const {
   table_def->set_engine("ndbcluster");
 
   // row_format
-  if (m_ndbtab->getForceVarPart() == false) {
+  if (!m_ndbtab->getForceVarPart()) {
     table_def->set_row_format(dd::Table::RF_FIXED);
   } else {
     table_def->set_row_format(dd::Table::RF_DYNAMIC);

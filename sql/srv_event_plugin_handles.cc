@@ -134,9 +134,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
         retval |=
             (handle->notify(reinterpret_cast<
                             const mysql_event_tracking_authentication_data *>(
-                event_data->event)))
-                ? true
-                : false;
+                event_data->event))) != 0;
       }
       break;
     }
@@ -145,9 +143,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
         retval |=
             (handle->notify(
                 reinterpret_cast<const mysql_event_tracking_command_data *>(
-                    event_data->event)))
-                ? true
-                : false;
+                    event_data->event))) != 0;
       }
       break;
     }
@@ -157,9 +153,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
         retval |=
             (handle->notify(
                  reinterpret_cast<const mysql_event_tracking_connection_data *>(
-                     event_data->event))
-                 ? true
-                 : false);
+                     event_data->event)) != 0);
       }
       break;
     }
@@ -168,9 +162,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
         retval |=
             (handle->notify(
                  reinterpret_cast<const mysql_event_tracking_general_data *>(
-                     event_data->event))
-                 ? true
-                 : false);
+                     event_data->event)) != 0);
       }
       break;
     }
@@ -179,9 +171,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
         retval |=
             (handle->notify(reinterpret_cast<
                             const mysql_event_tracking_global_variable_data *>(
-                event_data->event)))
-                ? true
-                : false;
+                event_data->event))) != 0;
       }
       break;
     }
@@ -190,9 +180,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
         retval |=
             (handle->notify(
                 reinterpret_cast<const mysql_event_tracking_message_data *>(
-                    event_data->event)))
-                ? true
-                : false;
+                    event_data->event))) != 0;
       }
       break;
     }
@@ -200,9 +188,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
       for (const auto *handle : state->parse) {
         retval |=
             (handle->notify(reinterpret_cast<mysql_event_tracking_parse_data *>(
-                const_cast<void *>(event_data->event))))
-                ? true
-                : false;
+                const_cast<void *>(event_data->event)))) != 0;
       }
       break;
     }
@@ -210,9 +196,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
       for (const auto *handle : state->query) {
         retval |= (handle->notify(
                       reinterpret_cast<const mysql_event_tracking_query_data *>(
-                          event_data->event)))
-                      ? true
-                      : false;
+                          event_data->event))) != 0;
       }
       break;
     }
@@ -221,9 +205,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
         retval |=
             (handle->notify_shutdown(
                 reinterpret_cast<const mysql_event_tracking_shutdown_data *>(
-                    event_data->event)))
-                ? true
-                : false;
+                    event_data->event))) != 0;
       }
       break;
     }
@@ -232,9 +214,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
         retval |=
             (handle->notify_startup(
                 reinterpret_cast<const mysql_event_tracking_startup_data *>(
-                    event_data->event)))
-                ? true
-                : false;
+                    event_data->event))) != 0;
       }
       break;
     }
@@ -243,9 +223,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
         retval |=
             (handle->notify(reinterpret_cast<
                             const mysql_event_tracking_stored_program_data *>(
-                event_data->event)))
-                ? true
-                : false;
+                event_data->event))) != 0;
       }
       break;
     }
@@ -254,9 +232,7 @@ bool srv_event_call_plugin_handles(struct st_mysql_event_generic *event_data) {
         retval |=
             (handle->notify(reinterpret_cast<
                             const mysql_event_tracking_table_access_data *>(
-                event_data->event)))
-                ? true
-                : false;
+                event_data->event))) != 0;
       }
       break;
     }

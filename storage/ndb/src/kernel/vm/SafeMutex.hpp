@@ -67,7 +67,7 @@ class SafeMutex {
       : m_name(name),
         m_limit(limit),
         m_debug(debug),
-        m_simple(!(limit > 1 || debug)) {
+        m_simple(limit <= 1 && !debug) {
     assert(m_limit >= 1),
         m_owner = 0;  // wl4391_todo assuming numeric non-zero
     m_initdone = false;

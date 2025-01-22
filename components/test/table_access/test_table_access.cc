@@ -782,11 +782,7 @@ static bool udf_init(UDF_INIT *initid, UDF_ARGS *args, char *message) {
   const char *attr_name = "charset";
   const char *attr_value = "utf8mb4";
   char *attr_value_2 = const_cast<char *>(attr_value);
-  if (udf_metadata_srv->result_set(initid, attr_name, attr_value_2)) {
-    return true;
-  }
-
-  return false;
+  return udf_metadata_srv->result_set(initid, attr_name, attr_value_2) != 0;
 }
 
 static void udf_deinit(UDF_INIT *) {}

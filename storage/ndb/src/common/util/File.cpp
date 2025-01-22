@@ -42,8 +42,7 @@ time_t File_class::mtime(const char *aFileName) {
 
 bool File_class::exists(const char *aFileName) {
   struct stat s;
-  if (stat(aFileName, &s) != 0) return false;
-  return true;
+  return stat(aFileName, &s) == 0;
 }
 
 ndb_off_t File_class::size(FILE *f) {
@@ -53,10 +52,10 @@ ndb_off_t File_class::size(FILE *f) {
 }
 
 bool File_class::rename(const char *currFileName, const char *newFileName) {
-  return ::rename(currFileName, newFileName) == 0 ? true : false;
+  return ::rename(currFileName, newFileName) == 0;
 }
 bool File_class::remove(const char *aFileName) {
-  return ::remove(aFileName) == 0 ? true : false;
+  return ::remove(aFileName) == 0;
 }
 
 File_class::File_class() : m_file(nullptr), m_fileMode("r") {}

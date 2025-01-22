@@ -158,7 +158,7 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_scheme_file_imp::load,
 
     /* Check if library is not already loaded, by comparing "list_components"
       function address. */
-    if (library_entry_set.insert(list_func).second == false) {
+    if (!library_entry_set.insert(list_func).second) {
       return true;
     }
 
@@ -175,7 +175,7 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_scheme_file_imp::load,
 
     /* Add library and it's handle to list of loaded libraries. */
 
-    if (object_files_list.emplace(urn_string, handle).second == false) {
+    if (!object_files_list.emplace(urn_string, handle).second) {
       return true;
     }
 

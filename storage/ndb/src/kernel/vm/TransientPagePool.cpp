@@ -113,7 +113,7 @@ bool TransientPagePool::getPtr(Ptr<Page> &p) const {
   if (unlikely(!getUncheckedPtr(p))) {
     return false;
   }
-  if (unlikely(!(p.p != NULL && Magic::match(p.p->m_magic, m_type_id)))) {
+  if (unlikely(p.p == NULL || !Magic::match(p.p->m_magic, m_type_id))) {
     g_eventLogger->info(
         "Magic::match failed in %s: "
         "type_id %08x rg %u tid %u: "
@@ -334,8 +334,7 @@ inline bool TransientPagePool::shrink() {
   m_mem_manager->release_page(m_type_id, leaf_page_id);
   m_root_page->set(high, MapPage::NO_VALUE);
 
-  if (new_top == RNIL) return false;
-  return true;
+  return new_top != RNIL;
 }
 
 inline TransientPagePool::MapPage::MapPage(Uint32 magic) {

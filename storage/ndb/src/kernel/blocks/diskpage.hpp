@@ -333,9 +333,7 @@ inline bool File_formats::Datafile::Extent_data::check_free(
   Uint32 sum = 0;
   for (; words; words--) sum |= m_page_bitmask[words - 1];
 
-  if (sum & 0x3333) return false;
-
-  return true;
+  return (sum & 0x3333) == 0;
 }
 
 inline File_formats::Datafile::Extent_data *

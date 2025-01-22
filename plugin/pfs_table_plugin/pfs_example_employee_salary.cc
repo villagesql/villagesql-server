@@ -170,7 +170,7 @@ int esalary_write_row_values(PSI_table_handle *handle) {
   int size = esalary_records_vector.size();
   for (int i = 0; i < size; i++) {
     Esalary_Record *record = &esalary_records_vector.at(i);
-    if (record->m_exist == false) {
+    if (!record->m_exist) {
       copy_record(record, &h->current_row);
       found = true;
       break;

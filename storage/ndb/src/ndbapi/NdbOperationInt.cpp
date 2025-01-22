@@ -73,8 +73,8 @@ bool NdbOperation::isNdbRecordOperation() {
   /* All scans are 'NdbRecord'.  For PK and UK access
    * check if we've got an m_attribute_record set
    */
-  return !(((m_type == PrimaryKeyAccess) || (m_type == UniqueIndexAccess)) &&
-           (m_attribute_record == nullptr));
+  return ((m_type != PrimaryKeyAccess) && (m_type != UniqueIndexAccess)) ||
+         (m_attribute_record != nullptr);
 }
 
 int NdbOperation::incCheck(const NdbColumnImpl *tNdbColumnImpl) {
@@ -86,7 +86,7 @@ int NdbOperation::incCheck(const NdbColumnImpl *tNdbColumnImpl) {
 
   if (theInterpretIndicator == 1) {
     if (tNdbColumnImpl == nullptr) goto inc_check_error1;
-    if ((tNdbColumnImpl->getInterpretableType() != true) ||
+    if ((!tNdbColumnImpl->getInterpretableType()) ||
         (tNdbColumnImpl->m_nullable))
       goto inc_check_error2;
     if (theStatus == ExecInterpretedValue) {
@@ -136,8 +136,7 @@ int NdbOperation::write_attrCheck(const NdbColumnImpl *tNdbColumnImpl) {
 
   if (theInterpretIndicator == 1) {
     if (tNdbColumnImpl == nullptr) goto write_attr_check_error1;
-    if (tNdbColumnImpl->getInterpretableType() == false)
-      goto write_attr_check_error2;
+    if (!tNdbColumnImpl->getInterpretableType()) goto write_attr_check_error2;
     if (theStatus == ExecInterpretedValue) {
       ;  // Simply continue with interpretation
     } else if (theStatus == SubroutineExec) {
@@ -161,7 +160,7 @@ write_attr_check_error1:
   return -1;
 
 write_attr_check_error2:
-  if (tNdbColumnImpl->getInterpretableType() == false) {
+  if (!tNdbColumnImpl->getInterpretableType()) {
     setErrorCodeAbort(4217);
     return -1;
   }  // if
@@ -178,8 +177,7 @@ int NdbOperation::read_attrCheck(const NdbColumnImpl *tNdbColumnImpl) {
 
   if (theInterpretIndicator == 1) {
     if (tNdbColumnImpl == nullptr) goto read_attr_check_error1;
-    if (tNdbColumnImpl->getInterpretableType() == false)
-      goto read_attr_check_error2;
+    if (!tNdbColumnImpl->getInterpretableType()) goto read_attr_check_error2;
     if (theStatus == ExecInterpretedValue) {
       ;  // Simply continue with interpretation
     } else if (theStatus == GetValue) {
@@ -206,7 +204,7 @@ read_attr_check_error1:
   return -1;
 
 read_attr_check_error2:
-  if (tNdbColumnImpl->getInterpretableType() == false)
+  if (!tNdbColumnImpl->getInterpretableType())
     setErrorCodeAbort(4217);
   else
     setErrorCodeAbort(4219);

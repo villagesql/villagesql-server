@@ -107,7 +107,7 @@ bool ndb_dd_table_is_using_fixed_row_format(const dd::Table *table_def) {
 
 void ndb_dd_table_set_row_format(dd::Table *table_def,
                                  const bool force_var_part) {
-  if (force_var_part == false) {
+  if (!force_var_part) {
     table_def->set_row_format(dd::Table::RF_FIXED);
   } else {
     table_def->set_row_format(dd::Table::RF_DYNAMIC);

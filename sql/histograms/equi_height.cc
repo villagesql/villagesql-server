@@ -647,9 +647,7 @@ bool Equi_height<T>::add_bucket_from_json(const Json_array *json_bucket,
   equi_height::Bucket<T> bucket(lower_value, upper_value,
                                 cumulative_frequency->value(), num_distinct_v);
 
-  if (m_buckets.push_back(bucket)) return true;
-
-  return false;
+  return static_cast<bool>(m_buckets.push_back(bucket));
 }
 
 template <class T>

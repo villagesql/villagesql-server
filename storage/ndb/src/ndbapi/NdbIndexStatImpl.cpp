@@ -2184,7 +2184,7 @@ void NdbIndexStatImpl::query_interpolate(const Cache &c, const Range &range,
       stat.m_rule[0] = "r2.2";
       // skip for now
     }
-    if (true) {
+    {
       stat.m_rule[0] = "r2.3";
       const double w = 0.5;
       value.m_rir = w * c.get_rir(posL1, posH1);
@@ -2213,7 +2213,7 @@ void NdbIndexStatImpl::query_interpolate(const Cache &c, const Range &range,
       stat.m_rule[0] = "r3.2";
       // skip for now
     }
-    if (true) {
+    {
       stat.m_rule[0] = "r3.3";
       const double w = 0.5;
       value.m_rir = w * c.get_rir(posL1, posH1);
@@ -2225,7 +2225,7 @@ void NdbIndexStatImpl::query_interpolate(const Cache &c, const Range &range,
       return;
     }
   }
-  if (true) {
+  {
     stat.m_rule[0] = "r4";
     value.m_rir = value2.m_rir - value1.m_rir;
     for (uint k = 0; k < keyAttrs; k++) {
@@ -2268,7 +2268,7 @@ void NdbIndexStatImpl::query_interpolate(const Cache &c, const Bound &bound,
       }
       return;
     }
-    if (true) {
+    {
       stat.m_rule = "b1.2";
       value.m_empty = true;
       return;
@@ -2323,7 +2323,7 @@ void NdbIndexStatImpl::query_interpolate(const Cache &c, const Bound &bound,
     }
     return;
   }
-  if (true) {
+  {
     stat.m_rule = "b4";
     const double wL = 0.5;
     const double wH = 0.5;

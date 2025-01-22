@@ -292,7 +292,7 @@ int country_write_row_values(PSI_table_handle *handle) {
     int i = (country_next_available_index + 1) % COUNTRY_MAX_ROWS;
     int itr_count = 0;
     while (itr_count < COUNTRY_MAX_ROWS) {
-      if (country_records_array[i].m_exist == false) {
+      if (!country_records_array[i].m_exist) {
         country_next_available_index = i;
         break;
       }

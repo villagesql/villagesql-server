@@ -1244,7 +1244,7 @@ static ulonglong getopt_ull(const char *arg, bool set_maximum_value,
   ulonglong num;
 
   /* If a negative number is specified as a value for the option. */
-  if (arg == nullptr || is_negative_num(arg) == true) {
+  if (arg == nullptr || is_negative_num(arg)) {
     num = (ulonglong)optp->min_value;
     my_getopt_error_reporter(WARNING_LEVEL,
                              EE_ADJUSTED_ULONGLONG_VALUE_FOR_OPTION, optp->name,

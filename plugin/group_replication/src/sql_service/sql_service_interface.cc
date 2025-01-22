@@ -285,7 +285,8 @@ bool Sql_service_interface::is_acl_disabled() {
     return false; /* purecov: inspected */
 
   MYSQL_LEX_CSTRING value;
-  if (false != security_context_get_option(scontext, "priv_user", &value))
+  if (static_cast<bool>(
+          security_context_get_option(scontext, "priv_user", &value)))
     return false; /* purecov: inspected */
 
   return 0 != value.length && nullptr != strstr(value.str, "skip-grants ");

@@ -268,5 +268,5 @@ bool my_aes_needs_iv(my_aes_opmode opmode) {
   int iv_length;
   iv_length = EVP_CIPHER_iv_length(cipher);
   assert(iv_length == 0 || iv_length == MY_AES_IV_SIZE);
-  return iv_length != 0 ? true : false;
+  return iv_length != 0;
 }

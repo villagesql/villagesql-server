@@ -776,7 +776,7 @@ bool my_parse_charset_xml(MY_CHARSET_LOADER *loader, const char *buf,
   my_xml_set_leave_handler(&p, cs_leave);
   info.loader = loader;
   my_xml_set_user_data(&p, (void *)&info);
-  rc = (my_xml_parse(&p, buf, len) == MY_XML_OK) ? false : true;
+  rc = my_xml_parse(&p, buf, len) != MY_XML_OK;
   my_xml_parser_free(&p);
   my_charset_file_free(&info);
   if (rc != MY_XML_OK) {

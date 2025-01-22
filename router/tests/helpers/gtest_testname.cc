@@ -29,8 +29,7 @@ std::string gtest_sanitize_param_name(const std::string &name) {
   std::string p{name};
 
   for (auto &c : p) {
-    if (!((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
-          (c >= '0' && c <= '9')))
+    if ((c < 'A' || c > 'Z') && (c < 'a' || c > 'z') && (c < '0' || c > '9'))
       c = '_';
   }
   return p;

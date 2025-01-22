@@ -686,13 +686,13 @@ void test_key_replace(Test::CertAuthority &ca) {
     TlsKeyManager km1;
     km1.init(154, ndb.nc[154]);
     bool r = km1.check_replace_date(.85F);
-    ok((r == true), "    Cert 154 should not be replaced");
+    ok(r, "    Cert 154 should not be replaced");
   }
   {
     TlsKeyManager km2;
     km2.init(155, ndb.nc[155]);
     bool r = km2.check_replace_date(.85F);
-    ok((r == false), "    Cert 155 should be replaced");
+    ok(!r, "    Cert 155 should be replaced");
   }
 }
 

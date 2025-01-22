@@ -261,11 +261,8 @@ DEFINE_BOOL_METHOD(mysql_string_imp::get_char,
     const int ret = str->charpos(index);
     if (ret < 0) return true;
     const char *ptr = (str->ptr() + ret);
-    if ((*mb_wc)(str->charset(), out_char, pointer_cast<const uchar *>(ptr),
-                 (const uchar *)(str->ptr() + str->length())) <= 0)
-      return true;
-
-    return false;
+    return (*mb_wc)(str->charset(), out_char, pointer_cast<const uchar *>(ptr),
+                    (const uchar *)(str->ptr() + str->length())) <= 0;
   } catch (...) {
     mysql_components_handle_std_exception(__func__);
   }

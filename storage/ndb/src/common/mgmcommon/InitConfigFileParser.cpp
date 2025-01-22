@@ -1127,19 +1127,18 @@ int main() {
 #endif
 
   // Invalid multipliers
-  ok1(InitConfigFileParser::convertStringToUint64("10kB", value) == false);
-  ok1(InitConfigFileParser::convertStringToUint64("10 M", value) == false);
-  ok1(InitConfigFileParser::convertStringToUint64("10 \"M12L\"", value) ==
-      false);
-  ok1(InitConfigFileParser::convertStringToUint64("10 'M12L'", value) == false);
-  ok1(InitConfigFileParser::convertStringToUint64("10M12L", value) == false);
-  ok1(InitConfigFileParser::convertStringToUint64("10T'", value) == false);
+  ok1(!InitConfigFileParser::convertStringToUint64("10kB", value));
+  ok1(!InitConfigFileParser::convertStringToUint64("10 M", value));
+  ok1(!InitConfigFileParser::convertStringToUint64("10 \"M12L\"", value));
+  ok1(!InitConfigFileParser::convertStringToUint64("10 'M12L'", value));
+  ok1(!InitConfigFileParser::convertStringToUint64("10M12L", value));
+  ok1(!InitConfigFileParser::convertStringToUint64("10T'", value));
 
-  ok1(InitConfigFileParser::convertStringToUint64("M", value) == false);
-  ok1(InitConfigFileParser::convertStringToUint64("MAX_UINT", value) == false);
-  ok1(InitConfigFileParser::convertStringToUint64("Magnus'", value) == false);
-  ok1(InitConfigFileParser::convertStringToUint64("", value) == false);
-  ok1(InitConfigFileParser::convertStringToUint64("trettisju", value) == false);
+  ok1(!InitConfigFileParser::convertStringToUint64("M", value));
+  ok1(!InitConfigFileParser::convertStringToUint64("MAX_UINT", value));
+  ok1(!InitConfigFileParser::convertStringToUint64("Magnus'", value));
+  ok1(!InitConfigFileParser::convertStringToUint64("", value));
+  ok1(!InitConfigFileParser::convertStringToUint64("trettisju", value));
 
   return exit_status();
 }

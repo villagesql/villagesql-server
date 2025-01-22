@@ -407,7 +407,7 @@ int ClientAuthorization::run_check_name(int n) {
 
   bool cmp = compare_list(ai_list);
   freeaddrinfo(ai_list);
-  if (cmp == true) return 0;
+  if (cmp) return 0;
   return TlsKeyError::auth2_bad_hostname;
 }
 

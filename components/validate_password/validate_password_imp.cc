@@ -1075,10 +1075,8 @@ static mysql_service_status_t validate_password_deinit() {
   mysql_rwlock_destroy(&LOCK_dict_file);
   delete dictionary_words;
   dictionary_words = nullptr;
-  if (unregister_system_variables() || unregister_status_variables() ||
-      log_service_deinit())
-    return true;
-  return false;
+  return unregister_system_variables() || unregister_status_variables() ||
+         log_service_deinit();
 }
 /* This component provides an implementation for validate_password component
    only. */

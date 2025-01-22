@@ -1380,7 +1380,7 @@ static struct languages *parse_charset_string(char *str) {
   }
 
   str = skip_delimiters(str);
-  if (!(*str != ';' && *str)) return nullptr;
+  if (*str == ';' || !*str) return nullptr;
 
   do {
     /*creating new element of the linked list */

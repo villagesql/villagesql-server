@@ -59,13 +59,10 @@ bool Test_udf_charset::prepare_return_udf(UDF_INIT *initid, UDF_ARGS *args,
   // Consider the second UDF argument to determine the charset of return value
   const uint index = 1;
   std::string csname;
-  if (validate_inputs(args, expected_arg_count) ||
-      fetch_charset_or_collation_from_arg(args, index, csname) ||
-      set_return_value_charset_or_collation(initid, csname) ||
-      set_udf_init(initid, args))
-    return true;
-
-  return false;
+  return validate_inputs(args, expected_arg_count) ||
+         fetch_charset_or_collation_from_arg(args, index, csname) ||
+         set_return_value_charset_or_collation(initid, csname) ||
+         set_udf_init(initid, args);
 }
 
 /**
@@ -88,12 +85,9 @@ bool Test_udf_charset::prepare_args_udf(UDF_INIT *initid, UDF_ARGS *args,
   set_ext_type(type);
   const uint index = 1;
   std::string csname;
-  if (validate_inputs(args, expected_arg_count) ||
-      fetch_charset_or_collation_from_arg(args, index, csname) ||
-      set_args_init(args, csname) || set_udf_init(initid, args))
-    return true;
-
-  return false;
+  return validate_inputs(args, expected_arg_count) ||
+         fetch_charset_or_collation_from_arg(args, index, csname) ||
+         set_args_init(args, csname) || set_udf_init(initid, args);
 }
 
 /**
@@ -191,13 +185,10 @@ bool Test_udf_charset_const_value::prepare_return_udf(
   // Consider the second UDF argument to determine the charset of return value
   const uint index = 1;
   std::string csname;
-  if (validate_inputs(args, expected_arg_count) ||
-      fetch_charset_or_collation_from_arg(args, index, csname) ||
-      set_return_value_charset_or_collation(initid, csname) ||
-      set_udf_init(initid, args))
-    return true;
-
-  return false;
+  return validate_inputs(args, expected_arg_count) ||
+         fetch_charset_or_collation_from_arg(args, index, csname) ||
+         set_return_value_charset_or_collation(initid, csname) ||
+         set_udf_init(initid, args);
 }
 
 /**
@@ -219,12 +210,9 @@ bool Test_udf_charset_const_value::prepare_args_udf(
   set_ext_type(type);
   std::string csname;
   const uint index = 1;
-  if (validate_inputs(args, expected_arg_count) ||
-      fetch_charset_or_collation_from_arg(args, index, csname) ||
-      set_args_init(args, csname) || set_udf_init(initid, args))
-    return true;
-
-  return false;
+  return validate_inputs(args, expected_arg_count) ||
+         fetch_charset_or_collation_from_arg(args, index, csname) ||
+         set_args_init(args, csname) || set_udf_init(initid, args);
 }
 
 /**

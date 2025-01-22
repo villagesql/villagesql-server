@@ -389,7 +389,7 @@ int vio_ssl_shutdown(Vio *vio) {
 void vio_ssl_delete(Vio *vio) {
   if (!vio) return; /* It must be safe to delete null pointer */
 
-  if (vio->inactive == false)
+  if (!vio->inactive)
     vio_ssl_shutdown(vio); /* Still open, close connection first */
 
   if (vio->ssl_arg) {
@@ -801,5 +801,5 @@ int sslconnect(struct st_VioSSLFd *ptr, Vio *vio, long timeout,
 }
 
 bool vio_ssl_has_data(Vio *vio) {
-  return SSL_pending(static_cast<SSL *>(vio->ssl_arg)) > 0 ? true : false;
+  return SSL_pending(static_cast<SSL *>(vio->ssl_arg)) > 0;
 }

@@ -131,7 +131,7 @@ bool Ndb_schema_dist_client::prepare(const char *db, const char *tabname) {
       Ndb_schema_dist_table::DB_NAME.c_str(),
       Ndb_schema_dist_table::TABLE_NAME.c_str(), m_share_reference.c_str());
 
-  if (m_share == nullptr || m_share->have_event_operation() == false ||
+  if (m_share == nullptr || !m_share->have_event_operation() ||
       DBUG_EVALUATE_IF("ndb_schema_dist_not_ready_early", true, false)) {
     // The NDB_SHARE for mysql.ndb_schema hasn't been created or not setup
     // yet -> schema distribution is not ready
@@ -144,8 +144,7 @@ bool Ndb_schema_dist_client::prepare(const char *db, const char *tabname) {
   m_result_share = NDB_SHARE::acquire_reference(
       Ndb_schema_result_table::DB_NAME.c_str(),
       Ndb_schema_result_table::TABLE_NAME.c_str(), m_share_reference.c_str());
-  if (m_result_share == nullptr ||
-      m_result_share->have_event_operation() == false) {
+  if (m_result_share == nullptr || !m_result_share->have_event_operation()) {
     // The mysql.ndb_schema_result hasn't been created or not setup yet ->
     // schema distribution is not ready
     push_warning(m_thd, Sql_condition::SL_WARNING, ER_GET_ERRMSG,
@@ -217,9 +216,7 @@ bool Ndb_schema_dist_client::prepare_rename(const char *db, const char *tabname,
        as part of a statement "ALTER TABLE ... ENGINE=innodb" before schema
        distribution has started running.
     */
-    if (Ndb_dist_priv_util::is_privilege_table(db, tabname)) return true;
-
-    return false;
+    return Ndb_dist_priv_util::is_privilege_table(db, tabname);
   }
 
   // Allow additional keys for rename which will use the "old" name

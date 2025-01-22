@@ -252,7 +252,7 @@ static int audit_null_plugin_init(void *arg [[maybe_unused]]) {
 
 static int audit_null_plugin_deinit(void *arg [[maybe_unused]]) {
   assert(arg);
-  if (g_plugin_installed == true) {
+  if (g_plugin_installed) {
     my_free((void *)(g_record_buffer));
 
     g_record_buffer = nullptr;
@@ -746,8 +746,8 @@ static int audit_null_notify(MYSQL_THD thd, mysql_event_class_t event_class,
     event_command.length = 0;
 
     if (exact_check == 1 && event_order_started == 1) {
-      if (!(event_class == MYSQL_AUDIT_GENERAL_CLASS &&
-            event_subclass == MYSQL_AUDIT_GENERAL_ERROR)) {
+      if (event_class != MYSQL_AUDIT_GENERAL_CLASS ||
+          event_subclass != MYSQL_AUDIT_GENERAL_ERROR) {
         strxnmov(buffer, sizeof(buffer), event_name.str, " instead of ",
                  event_token.str, NullS);
         my_message(ER_AUDIT_API_ABORT, buffer, MYF(0));

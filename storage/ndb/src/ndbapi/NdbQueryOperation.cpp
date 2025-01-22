@@ -1273,7 +1273,7 @@ void NdbResultStream::prepareResultSet(const SpjTreeNodeMask expectingResults,
                  << ", row: " << tupleNo << ", child: " << childId << endl;
         }
 
-        if (childMatched == false)  // Didn't match
+        if (!childMatched)  // Didn't match
         {
           hasMatchingChild.clear(childId);
           if (childStream.isInnerJoin()) {
@@ -1302,7 +1302,7 @@ void NdbResultStream::prepareResultSet(const SpjTreeNodeMask expectingResults,
               !stillActive.overlaps(childStream.m_dependants) ||  // 1)
               (isSortedResult() && tupleNo < rowCount - 1);       // 2)
 
-          if (childMatched == true) {
+          if (childMatched) {
             /**
              * Found a match for this outer joined child.
              * If child is the firstInner in this outer-joined_nest, the entire
@@ -3198,10 +3198,10 @@ int NdbQueryImpl::doSend(int nodeId, bool lastFlag) {
   }
 
   if (rootDef.isScanOperation()) {
-    Uint32 scan_flags = 0;  // TODO: Specify with ScanOptions::SO_SCANFLAGS
+    // Uint32 scan_flags = 0;  // TODO: Specify with ScanOptions::SO_SCANFLAGS
 
     // The number of acc-scans are limited therefore use tup-scans instead.
-    bool tupScan = (scan_flags & NdbScanOperation::SF_TupScan) || true;
+    bool tupScan = true;  // (scan_flags & NdbScanOperation::SF_TupScan)
 #if defined(VM_TRACE)
     if (ndb.theImpl->forceAccTableScans) {
       tupScan = false;
@@ -5038,7 +5038,7 @@ bool NdbQueryOperationImpl::execTRANSID_AI(const Uint32 *ptr, Uint32 len) {
     ret = m_queryImpl.handleBatchComplete(*worker);
   }
 
-  if (false && traceSignals) {
+  if (false) {  // if (traceSignals) {
     ndbout << "NdbQueryOperationImpl::execTRANSID_AI(): returns:" << ret
            << ", *this=" << *this << endl;
   }
@@ -5148,7 +5148,7 @@ bool NdbQueryOperationImpl::execSCAN_TABCONF(Uint32 tcPtrI, Uint32 rowCount,
     /* This fragment is now complete */
     ret = m_queryImpl.handleBatchComplete(*worker);
   }
-  if (false && traceSignals) {
+  if (false) {  // if (traceSignals) {
     ndbout << "NdbQueryOperationImpl::execSCAN_TABCONF():, returns:" << ret
            << ", tcPtrI=" << tcPtrI << " rowCount=" << rowCount
            << " *this=" << *this << endl;

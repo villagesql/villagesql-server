@@ -265,7 +265,7 @@ static int arg_check(IError_handler &handler, unsigned int arg_count,
   /*
     At least one argument count was matched against definition.
   */
-  if (result == false) {
+  if (!result) {
     handler.error("Invalid argument count.");
     return -1;
   }
@@ -287,7 +287,7 @@ static int arg_check(IError_handler &handler, unsigned int arg_count,
         result = true;
     }
 
-    if (result == false) {
+    if (!result) {
       handler.error("Invalid argument type [%d].", i);
       return -1;
     }
@@ -301,7 +301,7 @@ static int arg_check(IError_handler &handler, unsigned int arg_count,
                                    handler, args[i], arg_lengths[i], i))))
         result = true;
 
-    if (result == false) {
+    if (!result) {
       /*
         Error has been already set by the validator.
       */
@@ -369,9 +369,7 @@ static bool arg_check(IError_handler &handler, UDF_ARGS *args) {
     arg_lengths += audit_log_extra_args_def[arg_res].count;
   };
 
-  if (set_args_charset_info(args, handler)) return true;
-
-  return false;
+  return set_args_charset_info(args, handler);
 }
 
 /**

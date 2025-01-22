@@ -1535,8 +1535,7 @@ void update_variable_source(const char *opt_name, const char *value) {
             break;
           }
         }
-        if (skip_variable == false)
-          var_name = var_name.substr(prefix[4].size());
+        if (!skip_variable) var_name = var_name.substr(prefix[4].size());
       } else
         var_name = var_name.substr(prefix[id].size());
     }
@@ -1558,7 +1557,7 @@ void update_variable_source(const char *opt_name, const char *value) {
      option name as key and mysqld-auto.cnf file path + PERSISTED
      as value.
     */
-    if (ret.second == false) variables_hash[var_name] = source;
+    if (!ret.second) variables_hash[var_name] = source;
   }
 }
 

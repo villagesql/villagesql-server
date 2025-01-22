@@ -179,7 +179,7 @@ class Json_string_handler
                                           Json_string_handler> {
  public:
   bool Key(const char *str, rapidjson::SizeType /*length*/, bool /*copy*/) {
-    return !(m_level == 1 && std::strcmp("_id", str) == 0);
+    return m_level != 1 || std::strcmp("_id", str) != 0;
   }
   bool StartObject() {
     ++m_level;

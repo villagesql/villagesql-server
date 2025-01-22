@@ -153,8 +153,5 @@ int Rpl_sys_key_access::next() {
 }
 
 bool Rpl_sys_key_access::is_read_error() {
-  if (m_error != HA_ERR_END_OF_FILE && m_error != HA_ERR_KEY_NOT_FOUND)
-    return true;
-
-  return false;
+  return m_error != HA_ERR_END_OF_FILE && m_error != HA_ERR_KEY_NOT_FOUND;
 }

@@ -74,7 +74,7 @@ bool NdbPool::initPoolMutex() {
   bool ret_result = false;
   if (pool_mutex == nullptr) {
     pool_mutex = NdbMutex_Create();
-    ret_result = ((pool_mutex == nullptr) ? false : true);
+    ret_result = (pool_mutex != nullptr);
   }
   return ret_result;
 }

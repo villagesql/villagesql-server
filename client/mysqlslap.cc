@@ -1164,8 +1164,7 @@ static int get_options(int *argc, char ***argv) {
     that we actually added a key!
   */
   if (auto_generate_sql && auto_generate_sql_type[0] == 'k')
-    if (auto_generate_sql_autoincrement == false &&
-        auto_generate_sql_guid_primary == false) {
+    if (!auto_generate_sql_autoincrement && !auto_generate_sql_guid_primary) {
       fprintf(stderr, "%s: Can't perform key test without a primary key!\n",
               my_progname);
       exit(1);

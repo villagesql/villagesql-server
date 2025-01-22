@@ -360,11 +360,8 @@ bool string_to_sockaddr(const std::string &addr, struct sockaddr_storage *sa) {
     Try IPv6.
    */
   sa->ss_family = AF_INET6;
-  if (inet_pton(AF_INET6, addr.c_str(),
-                &(((struct sockaddr_in6 *)sa)->sin6_addr)) == 1)
-    return false;
-
-  return true;
+  return inet_pton(AF_INET6, addr.c_str(),
+                   &(((struct sockaddr_in6 *)sa)->sin6_addr)) != 1;
 }
 
 /**
@@ -414,7 +411,7 @@ static bool sock_descriptor_to_sockaddr(int fd, struct sockaddr_storage *sa) {
         break;
     }
   }
-  return res ? true : false;
+  return res != 0;
 }
 
 /**

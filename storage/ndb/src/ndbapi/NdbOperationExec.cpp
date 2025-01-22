@@ -589,7 +589,7 @@ Uint32 NdbOperation::repack_read(Uint32 len) {
      * or READ_PACKED
      * (Correct NdbRecAttrs will be used when data is received)
      */
-    if (all == false && ((1 + newlen) > TcKeyReq::MaxAttrInfo)) {
+    if (!all && ((1 + newlen) > TcKeyReq::MaxAttrInfo)) {
       return save;
     }
 
@@ -1649,7 +1649,7 @@ int NdbOperation::receiveTCKEYREF(const NdbApiSignal *aSignal) {
   theReceiver.m_received_result_length = ~0;
 
   // not dirty read
-  if (!(theOperationType == ReadRequest && theDirtyIndicator)) {
+  if (theOperationType != ReadRequest || !theDirtyIndicator) {
     theNdbCon->OpCompleteFailure();
     return -1;
   }
