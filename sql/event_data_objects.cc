@@ -1177,7 +1177,7 @@ end:
     if (construct_drop_event_sql(thd, &sp_sql, m_schema_name, m_event_name))
       ret = true;
     else {
-      ulong saved_master_access;
+      Access_bitmask saved_master_access;
 
       thd->set_query(sp_sql.c_ptr_safe(), sp_sql.length());
       /*

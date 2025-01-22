@@ -88,7 +88,8 @@ bool Sql_cmd_alter_table_exchange_partition::execute(THD *thd) {
   */
   const HA_CREATE_INFO create_info(*lex->create_info);
   Alter_info alter_info(*m_alter_info, thd->mem_root);
-  const ulong priv_needed = ALTER_ACL | DROP_ACL | INSERT_ACL | CREATE_ACL;
+  const Access_bitmask priv_needed =
+      ALTER_ACL | DROP_ACL | INSERT_ACL | CREATE_ACL;
 
   DBUG_TRACE;
 

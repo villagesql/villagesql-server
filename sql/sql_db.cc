@@ -125,7 +125,7 @@ static bool find_db_tables(THD *thd, const dd::Schema &schema, const char *db,
 static long mysql_rm_arc_files(THD *thd, MY_DIR *dirp, const char *org_path);
 static bool rm_dir_w_symlink(const char *org_path, bool send_error);
 static void mysql_change_db_impl(THD *thd, const LEX_CSTRING &new_db_name,
-                                 ulong new_db_access,
+                                 Access_bitmask new_db_access,
                                  const CHARSET_INFO *new_db_charset);
 
 bool get_default_db_collation(const dd::Schema &schema,
@@ -1332,7 +1332,7 @@ err:
 */
 
 static void mysql_change_db_impl(THD *thd, const LEX_CSTRING &new_db_name,
-                                 ulong new_db_access,
+                                 Access_bitmask new_db_access,
                                  const CHARSET_INFO *new_db_charset) {
   /* 1. Change current database in THD. */
 
@@ -1490,7 +1490,7 @@ bool mysql_change_db(THD *thd, const LEX_CSTRING &new_db_name,
   LEX_CSTRING new_db_file_name_cstr;
 
   Security_context *sctx = thd->security_context();
-  ulong db_access = sctx->current_db_access();
+  Access_bitmask db_access = sctx->current_db_access();
   const CHARSET_INFO *db_default_cl = nullptr;
 
   // We must make sure the schema is released and unlocked in the right order.

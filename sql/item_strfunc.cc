@@ -4480,7 +4480,7 @@ String *Item_func_get_dd_column_privileges::val_str(String *str) {
                                       table_name_ptr->c_ptr_safe());
 
       // Get column grants
-      uint col_access;
+      Access_bitmask col_access;
       col_access =
           get_column_grant(thd, &grant_info, schema_name_ptr->c_ptr_safe(),
                            table_name_ptr->c_ptr_safe(),

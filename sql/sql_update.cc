@@ -145,7 +145,7 @@ bool Sql_cmd_update::precheck(THD *thd) {
       if (tr->is_derived() || tr->uses_materialization())
         tr->grant.privilege = SELECT_ACL;
       else {
-        auto chk = [&](long want_access) {
+        auto chk = [&](Access_bitmask want_access) {
           const bool ignore_errors = (want_access == UPDATE_ACL);
           return check_access(thd, want_access, tr->db, &tr->grant.privilege,
                               &tr->grant.m_internal, false, ignore_errors) ||

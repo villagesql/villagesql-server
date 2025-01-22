@@ -1812,7 +1812,8 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
         TODO: remove this when we have full 64 bit my_time_t support
       */
       LogErr(ERROR_LEVEL, ER_UNSUPPORTED_DATE);
-      const ulong master_access = thd->security_context()->master_access();
+      const Access_bitmask master_access =
+          thd->security_context()->master_access();
       thd->security_context()->set_master_access(master_access | SHUTDOWN_ACL);
       error = true;
       kill_mysql();

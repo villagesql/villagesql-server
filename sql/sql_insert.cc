@@ -433,8 +433,9 @@ bool Sql_cmd_insert_base::precheck(THD *thd) {
     Check that we have modify privileges for the first table and
     select privileges for the rest
   */
-  ulong privilege = INSERT_ACL | (duplicates == DUP_REPLACE ? DELETE_ACL : 0) |
-                    (update_value_list.empty() ? 0 : UPDATE_ACL);
+  Access_bitmask privilege = INSERT_ACL |
+                             (duplicates == DUP_REPLACE ? DELETE_ACL : 0) |
+                             (update_value_list.empty() ? 0 : UPDATE_ACL);
 
   if (check_one_table_access(thd, privilege, lex->query_tables)) return true;
 
@@ -1054,9 +1055,9 @@ bool Sql_cmd_insert_base::prepare_inner(THD *thd) {
       Require proper privileges for all leaf tables of the view.
       @todo - Check for target table only.
     */
-    ulong privilege = INSERT_ACL |
-                      (duplicates == DUP_REPLACE ? DELETE_ACL : 0) |
-                      (update_value_list.empty() ? 0 : UPDATE_ACL);
+    Access_bitmask privilege = INSERT_ACL |
+                               (duplicates == DUP_REPLACE ? DELETE_ACL : 0) |
+                               (update_value_list.empty() ? 0 : UPDATE_ACL);
 
     if (select->check_view_privileges(thd, privilege, privilege)) return true;
     /*

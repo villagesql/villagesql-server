@@ -1274,7 +1274,7 @@ bool mysqld_show_create_db(THD *thd, char *dbname,
   char buff[2048], orig_dbname[NAME_LEN];
   String buffer(buff, sizeof(buff), system_charset_info);
   Security_context *sctx = thd->security_context();
-  uint db_access;
+  Access_bitmask db_access;
   HA_CREATE_INFO create;
   bool schema_read_only{false};
   const uint create_options = create_info ? create_info->options : 0;
@@ -4147,7 +4147,7 @@ static int get_schema_tmp_table_columns_record(THD *thd, Table_ref *tables,
       table->field[TMP_TABLE_COLUMNS_EXTRA]->store(STRING_WITH_LEN("NULL"), cs);
 
     // PRIVILEGES
-    uint col_access;
+    Access_bitmask col_access;
     check_access(thd, SELECT_ACL, db_name.str, &tables->grant.privilege,
                  nullptr, false, tables->schema_table != nullptr);
     col_access = get_column_grant(thd, &tables->grant, db_name.str,

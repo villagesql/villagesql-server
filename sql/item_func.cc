@@ -9207,7 +9207,7 @@ longlong Item_func_can_access_column::val_int() {
                    &grant_info.privilege, nullptr, false, true))
     return 0;
 
-  const uint col_access =
+  const Access_bitmask col_access =
       get_column_grant(thd, &grant_info, schema_name_ptr->ptr(),
                        table_name_ptr->ptr(), column_name_ptr->ptr()) &
       COL_ACLS;
