@@ -1725,7 +1725,7 @@ Gis_polygon &Gis_polygon::operator=(const Gis_polygon &rhs) {
   if (this->m_owner == nullptr) this->m_owner = rhs.get_owner();
 
   if (m_ptr) delete outer_ring(this);
-  if (m_inn_rings) delete m_inn_rings;
+  delete m_inn_rings;
   m_ptr = nullptr;
   m_inn_rings = nullptr;
 
@@ -1753,8 +1753,8 @@ void Gis_polygon::set_ptr(void *ptr, size_t len) {
   set_bg_adapter(true);
   ring_type *outer = outer_ring(this);
 
-  if (outer) delete outer;
-  if (m_inn_rings) delete m_inn_rings;
+  delete outer;
+  delete m_inn_rings;
 
   set_nbytes(len);
 

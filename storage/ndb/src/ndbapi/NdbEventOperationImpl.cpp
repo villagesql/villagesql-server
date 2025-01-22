@@ -930,7 +930,7 @@ int NdbEventOperationImpl::receive_event() {
         p->theColumn = tAttrInfo;
         p = p->next();
       }
-      if (tmp_table_impl) delete tmp_table_impl;
+      delete tmp_table_impl;
     }
     DBUG_RETURN(1);
   }

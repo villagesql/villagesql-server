@@ -42,7 +42,7 @@
 TlsKeyManager::TlsKeyManager() { NdbMutex_Init(&m_cert_table_mutex); }
 
 void TlsKeyManager::free_path_strings() {
-  if (m_search_path) delete m_search_path;
+  delete m_search_path;
   if (m_path_string) free(m_path_string);
   m_search_path = nullptr;
   m_path_string = nullptr;

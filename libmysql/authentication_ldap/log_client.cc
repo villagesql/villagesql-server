@@ -46,11 +46,7 @@ Ldap_logger::Ldap_logger(ldap_log_level log_level)
   m_log_writer = new Ldap_log_writer_error();
 }
 
-Ldap_logger::~Ldap_logger() {
-  if (m_log_writer) {
-    delete m_log_writer;
-  }
-}
+Ldap_logger::~Ldap_logger() { delete m_log_writer; }
 
 const char dbg_prefix[] = "[DBG]";
 const char info_prefix[] = "[Note]";

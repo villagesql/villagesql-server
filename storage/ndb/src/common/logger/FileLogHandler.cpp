@@ -173,7 +173,7 @@ bool FileLogHandler::getParams(BaseString &config) {
 
 bool FileLogHandler::setFilename(const BaseString &filename) {
   close();
-  if (m_pLogFile) delete m_pLogFile;
+  delete m_pLogFile;
   m_pLogFile = new File_class(filename.c_str(), "a+");
   return open();
 }

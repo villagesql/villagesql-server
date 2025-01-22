@@ -108,7 +108,7 @@ bool init_mysql_admin_iterator(property_iterator *it) {
 
 void deinit_tls_status_iterator(property_iterator it) {
   auto *container = reinterpret_cast<Ssl_acceptor_context_iterator *>(it);
-  if (container != nullptr) delete container;
+  delete container;
 }
 
 bool get_tls_status(property_iterator it, TLS_channel_property *property) {

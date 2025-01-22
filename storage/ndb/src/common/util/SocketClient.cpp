@@ -53,7 +53,7 @@ SocketClient::SocketClient(SocketAuthenticator *sa)
 
 SocketClient::~SocketClient() {
   if (ndb_socket_valid(m_sockfd)) ndb_socket_close(m_sockfd);
-  if (m_auth) delete m_auth;
+  delete m_auth;
 }
 
 bool SocketClient::init(int af) {

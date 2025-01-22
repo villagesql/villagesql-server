@@ -151,9 +151,7 @@ bool webauthn_registration::make_challenge_response(
   if (!str) return true;
   unsigned char *pos = str;
 
-  auto cleanup = create_scope_guard([&] {
-    if (str) delete[] str;
-  });
+  auto cleanup = create_scope_guard([&] { delete[] str; });
   if (is_fido2()) {
     capability |= RESIDENT_KEYS;
   }

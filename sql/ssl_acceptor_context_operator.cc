@@ -39,7 +39,7 @@ Ssl_acceptor_context_container::Ssl_acceptor_context_container(
 }
 
 Ssl_acceptor_context_container ::~Ssl_acceptor_context_container() {
-  if (lock_ != nullptr) delete lock_;
+  delete lock_;
   lock_ = nullptr;
 }
 
@@ -65,7 +65,7 @@ bool TLS_channel::singleton_init(Ssl_acceptor_context_container **out,
   if (news == nullptr || new_container == nullptr) {
     LogErr(WARNING_LEVEL, ER_SSL_LIBRARY_ERROR,
            "Error initializing the SSL context system structure");
-    if (new_container) delete new_container;
+    delete new_container;
     return true;
   }
 

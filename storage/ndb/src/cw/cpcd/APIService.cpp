@@ -149,7 +149,7 @@ CPCDAPISession::CPCDAPISession(FILE *f, CPCD &cpcd)
 CPCDAPISession::~CPCDAPISession() {
   delete m_input;
   delete m_parser;
-  if (m_output) delete m_output;
+  delete m_output;
 }
 
 void CPCDAPISession::runSession() {

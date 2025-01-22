@@ -97,7 +97,7 @@ BaseString::~BaseString() { delete[] m_chr; }
 
 BaseString &BaseString::assign(const char *s) {
   if (s == nullptr) {
-    if (m_chr) delete[] m_chr;
+    delete[] m_chr;
     m_chr = nullptr;
     m_len = 0;
     return *this;

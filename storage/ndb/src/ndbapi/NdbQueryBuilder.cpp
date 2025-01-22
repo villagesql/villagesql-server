@@ -498,7 +498,7 @@ int NdbQueryOptionsImpl::copyInterpretedCode(const NdbInterpretedCode &src) {
   }
 
   /* Replace existing NdbInterpretedCode */
-  if (m_interpretedCode) delete m_interpretedCode;
+  delete m_interpretedCode;
 
   m_interpretedCode = interpretedCode;
   return 0;

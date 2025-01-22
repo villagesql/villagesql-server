@@ -176,8 +176,8 @@ static int webauthn_auth_client(MYSQL_PLUGIN_VIO *vio, MYSQL *) {
   webauthn_assertion *wa = nullptr;
   size_t length = 0;
   auto cleanup = create_scope_guard([&] {
-    if (buff) delete[] buff;
-    if (wa) delete wa;
+    delete[] buff;
+    delete wa;
   });
 
 #ifndef NDEBUG

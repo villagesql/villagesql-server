@@ -147,7 +147,7 @@ static mysql_service_status_t init() {
 }
 
 static mysql_service_status_t deinit() {
-  if (g_event_producer) delete g_event_producer;
+  delete g_event_producer;
   g_event_producer = nullptr;
   return false;
 }

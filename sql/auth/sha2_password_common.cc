@@ -183,7 +183,7 @@ Generate_scramble::Generate_scramble(
 */
 
 Generate_scramble::~Generate_scramble() {
-  if (m_digest_generator) delete m_digest_generator;
+  delete m_digest_generator;
   m_digest_generator = nullptr;
 }
 
@@ -297,7 +297,7 @@ Validate_scramble::Validate_scramble(
 /** Validate_scramble destructor */
 
 Validate_scramble::~Validate_scramble() {
-  if (m_digest_generator) delete m_digest_generator;
+  delete m_digest_generator;
   m_digest_generator = nullptr;
 }
 

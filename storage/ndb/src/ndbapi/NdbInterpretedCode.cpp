@@ -72,11 +72,7 @@ NdbInterpretedCode::NdbInterpretedCode(const NdbRecord &record, Uint32 *buffer,
   m_table_impl = record.table;
 }
 
-NdbInterpretedCode::~NdbInterpretedCode() {
-  if (m_internal_buffer != nullptr) {
-    delete[] m_internal_buffer;
-  }
-}
+NdbInterpretedCode::~NdbInterpretedCode() { delete[] m_internal_buffer; }
 
 void NdbInterpretedCode::set_sql_null_semantics(
     UnknownHandling unknown_action) {

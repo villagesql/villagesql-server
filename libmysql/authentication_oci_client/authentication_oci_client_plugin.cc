@@ -202,7 +202,7 @@ static int initialize_plugin(char *, size_t, int, va_list) {
 }
 
 static int deinitialize_plugin() {
-  if (s_oci_config_file != nullptr) delete s_oci_config_file;
+  delete s_oci_config_file;
   free_plugin_option(s_oci_config_location);
   free_plugin_option(s_authentication_oci_client_config_profile);
   return 0;

@@ -590,9 +590,9 @@ Ndb_cluster_connection_impl::~Ndb_cluster_connection_impl() {
   if (m_transporter_facade != nullptr) {
     m_transporter_facade->stop_instance();
   }
-  if (m_globalDictCache) {
-    delete m_globalDictCache;
-  }
+
+  delete m_globalDictCache;
+
   if (m_connect_thread) {
     void *status;
     m_run_connect_thread = 0;
@@ -645,7 +645,7 @@ Ndb_cluster_connection_impl::~Ndb_cluster_connection_impl() {
   if (m_new_delete_ndb_cond) NdbCondition_Destroy(m_new_delete_ndb_cond);
   m_new_delete_ndb_cond = nullptr;
 
-  if (m_multi_wait_group) delete m_multi_wait_group;
+  delete m_multi_wait_group;
   m_multi_wait_group = nullptr;
 
   m_uri_scheme.clear();

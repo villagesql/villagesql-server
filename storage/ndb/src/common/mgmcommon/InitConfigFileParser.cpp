@@ -58,9 +58,9 @@ InitConfigFileParser::Context::Context()
 }
 
 InitConfigFileParser::Context::~Context() {
-  if (m_config != nullptr) delete m_config;
+  delete m_config;
 
-  if (m_defaults != nullptr) delete m_defaults;
+  delete m_defaults;
 }
 
 Config *InitConfigFileParser::parseConfig(const char *filename) {

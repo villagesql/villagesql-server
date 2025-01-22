@@ -69,9 +69,7 @@ SimpleSignal::~SimpleSignal() {
   if (!deallocSections) return;
 
   for (Uint32 i = 0; i < NDB_ARRAY_SIZE(ptr); i++) {
-    if (ptr[i].p != nullptr) {
-      delete[] ptr[i].p;
-    }
+    delete[] ptr[i].p;
   }
 }
 

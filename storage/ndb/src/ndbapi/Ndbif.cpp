@@ -199,15 +199,9 @@ error_handler:
 
 void Ndb::releaseTransactionArrays() {
   DBUG_ENTER("Ndb::releaseTransactionArrays");
-  if (thePreparedTransactionsArray != nullptr) {
-    delete[] thePreparedTransactionsArray;
-  }  // if
-  if (theSentTransactionsArray != nullptr) {
-    delete[] theSentTransactionsArray;
-  }  // if
-  if (theCompletedTransactionsArray != nullptr) {
-    delete[] theCompletedTransactionsArray;
-  }  // if
+  delete[] thePreparedTransactionsArray;
+  delete[] theSentTransactionsArray;
+  delete[] theCompletedTransactionsArray;
   DBUG_VOID_RETURN;
 }  // Ndb::releaseTransactionArrays()
 

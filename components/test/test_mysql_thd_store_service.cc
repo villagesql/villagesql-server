@@ -99,7 +99,7 @@ long long test_thd_store_service_function(UDF_INIT *, UDF_ARGS *,
   auto *test_mysql_thd_data = reinterpret_cast<Test_mysql_thd_data *>(
       mysql_thd_store_service->get(o_thd, g_slot));
 
-  if (test_mysql_thd_data) delete test_mysql_thd_data;
+  delete test_mysql_thd_data;
 
   test_mysql_thd_data = new Test_mysql_thd_data();
 
@@ -141,7 +141,7 @@ static mysql_service_status_t init() {
 
   auto cleanup_guard = create_scope_guard([&] {
     if (g_slot) (void)mysql_thd_store_service->unregister_slot(g_slot);
-    if (test_mysql_thd_data) delete test_mysql_thd_data;
+    delete test_mysql_thd_data;
   });
 
   if (!test_mysql_thd_data ||

@@ -880,8 +880,8 @@ static Ndb_index_stat *ndb_index_stat_alloc(const NDBINDEX *index,
   } else {
     err_out = NdbIndexStat::NoMemError;
   }
-  if (is != nullptr) delete is;
-  if (st != nullptr) delete st;
+  delete is;
+  delete st;
   return nullptr;
 }
 

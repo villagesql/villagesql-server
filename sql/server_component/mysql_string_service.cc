@@ -464,7 +464,7 @@ DEFINE_BOOL_METHOD(mysql_string_imp::substr,
     *out_string = (my_h_string)out_str_obj;
     return false;
   } catch (...) {
-    if (out_str_obj != nullptr) delete[] out_str_obj;
+    delete[] out_str_obj;
     mysql_components_handle_std_exception(__func__);
   }
   return true;

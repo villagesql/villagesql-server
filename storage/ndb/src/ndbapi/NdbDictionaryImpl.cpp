@@ -326,7 +326,7 @@ void NdbColumnImpl::init(Type t) {
 }
 
 NdbColumnImpl::~NdbColumnImpl() {
-  if (m_blobTable != nullptr) delete m_blobTable;
+  delete m_blobTable;
   m_blobTable = nullptr;
 }
 
@@ -979,7 +979,7 @@ int NdbTableImpl::assign(const NdbTableImpl &org) {
   m_read_backup = org.m_read_backup;
   m_fully_replicated = org.m_fully_replicated;
 
-  if (m_index != nullptr) delete m_index;
+  delete m_index;
   m_index = org.m_index;
 
   m_primaryTable = org.m_primaryTable;
@@ -2165,7 +2165,7 @@ NdbEventImpl::~NdbEventImpl() {
   DBUG_ENTER("NdbEventImpl::~NdbEventImpl");
   DBUG_PRINT("info", ("this: %p", this));
   for (unsigned i = 0; i < m_columns.size(); i++) delete m_columns[i];
-  if (m_tableImpl) delete m_tableImpl;
+  delete m_tableImpl;
   DBUG_VOID_RETURN;
 }
 

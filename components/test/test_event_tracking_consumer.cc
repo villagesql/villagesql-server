@@ -565,7 +565,7 @@ static mysql_service_status_t init() {
     if (!variables_registered)
       (void)mysql_status_var_service->unregister_variable(status_vars);
     if (!functions_registered) unregister_functions();
-    if (g_session_data_map) delete g_session_data_map;
+    delete g_session_data_map;
     g_session_data_map = nullptr;
   });
 
@@ -611,8 +611,8 @@ static mysql_service_status_t deinit() {
     mysql_thd_store_service->set(o_thd, g_slot, nullptr);
   }
 
-  if (g_event_tracking_counters) delete g_event_tracking_counters;
-  if (g_session_data_map) delete g_session_data_map;
+  delete g_event_tracking_counters;
+  delete g_session_data_map;
 
   /* Unregister functions */
   unregister_functions();
@@ -794,7 +794,7 @@ bool display_session_data_init(UDF_INIT *initid, UDF_ARGS *args,
 
 /** Deinit function for display_session_data */
 void display_session_data_deinit(UDF_INIT *initid) {
-  if (initid->ptr) delete[] initid->ptr;
+  delete[] initid->ptr;
   initid->ptr = nullptr;
 }
 

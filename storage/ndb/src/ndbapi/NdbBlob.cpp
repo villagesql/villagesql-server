@@ -396,7 +396,7 @@ void NdbBlob::Buf::alloc(unsigned n) {
 }
 
 void NdbBlob::Buf::release() {
-  if (data) delete[] data;
+  delete[] data;
   data = nullptr;
   size = 0;
   maxsize = 0;

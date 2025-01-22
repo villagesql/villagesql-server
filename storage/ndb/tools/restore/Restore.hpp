@@ -188,9 +188,7 @@ class TupleS {
     m_currentTable = 0;
     allAttrData = 0;
   }
-  ~TupleS() {
-    if (allAttrData) delete[] allAttrData;
-  }
+  ~TupleS() { delete[] allAttrData; }
   TupleS(const TupleS &tuple);  // disable copy constructor
   TupleS &operator=(const TupleS &tuple);
   int getNoOfAttributes() const;
