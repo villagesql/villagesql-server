@@ -43,6 +43,7 @@
 #include <cmath>
 #include <deque>
 #include <limits>
+#include <memory>
 #include <new>
 #include <string>
 #include <utility>
@@ -631,9 +632,10 @@ bool JOIN::optimize(bool finalize_access_paths) {
         std::min<uintmax_t>(std::numeric_limits<int64_t>::max(),
                             thd->variables.optimizer_trace_max_mem_size))};
 
-    UnstructuredTrace unstructured_trace{max_trace_bytes};
+    std::unique_ptr<UnstructuredTrace> unstructured_trace;
     if (thd->opt_trace.is_started()) {
-      thd->opt_trace.set_unstructured_trace(&unstructured_trace);
+      unstructured_trace = std::make_unique<UnstructuredTrace>(max_trace_bytes);
+      thd->opt_trace.set_unstructured_trace(unstructured_trace.get());
     }
 
     // Add the contents of unstructured_trace to the JSON tree when we exit
