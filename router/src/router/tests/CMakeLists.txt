@@ -56,6 +56,8 @@ ADD_HARNESS_TEST_FILE(test_certificate_handler.cc
 
 ADD_HARNESS_TEST_FILE(test_uri.cc
   MODULE ${TEST_MODULE}
+  EXTRA_SOURCES
+    ${CMAKE_SOURCE_DIR}/unittest/gunit/benchmark.cc
   LIB_DEPENDS
     test-helpers
     router_utils
