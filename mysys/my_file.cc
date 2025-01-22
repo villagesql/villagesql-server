@@ -53,7 +53,6 @@
 #include "mysql/service_mysql_alloc.h"
 #include "mysys/my_static.h"
 #include "mysys/mysys_priv.h"
-#include "sql/malloc_allocator.h"
 #include "sql/stateless_allocator.h"
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h> /* RLIMIT_NOFILE */

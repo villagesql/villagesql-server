@@ -989,8 +989,6 @@ void Ndbd_mem_manager::init_resource_spare(Uint32 id, Uint32 pct) {
   mt_mem_manager_unlock();
 }
 
-#include <NdbOut.hpp>
-
 void Ndbd_mem_manager::grow(Uint32 start, Uint32 cnt) {
   assert(cnt);
   Uint32 start_bmp = start >> BPP_2LOG;

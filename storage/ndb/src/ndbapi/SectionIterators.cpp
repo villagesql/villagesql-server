@@ -241,7 +241,6 @@ const Uint32 *FragmentedSectionIterator::getNextWords(Uint32 &sz) {
 
 #include <random.h>
 #include <util/NdbTap.hpp>
-#include "NdbApiSignal.hpp"
 
 #define VERIFY(x)                                            \
   if ((x) == 0) {                                            \

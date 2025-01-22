@@ -52,7 +52,6 @@
 
 #include <mgmapi.h>
 #include <mgmapi_config_parameters.h>
-#include <EventLogger.hpp>
 #include <mgmapi_configuration.hpp>
 
 #if 0

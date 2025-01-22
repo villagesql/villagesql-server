@@ -23,11 +23,10 @@
 */
 
 #include "md5_hash.hpp"
-#include "my_config.h"
 
-#include <my_compiler.h>  // likely
-#include <my_config.h>    // big/little endian
 #include <cstring>        // memcpy()
+#include "my_compiler.h"  // likely
+#include "my_config.h"    // big/little endian
 
 /*
  * This code implements the MD5 message-digest algorithm.

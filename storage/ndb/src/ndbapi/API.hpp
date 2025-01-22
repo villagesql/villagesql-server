@@ -59,7 +59,6 @@
 #include "NdbQueryOperation.hpp"
 #include "NdbQueryOperationImpl.hpp"
 
-#include <NdbReceiver.hpp>
 #include "NdbImpl.hpp"
 
 #include "TransporterFacade.hpp"

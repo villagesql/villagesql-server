@@ -38,7 +38,6 @@
 #include <ndb_version.h>
 
 #include <NdbOut.hpp>
-#include "API.hpp"
 
 /**
  * Old NdbApi KeyInfo Section Iterator
