@@ -146,7 +146,7 @@ int ConfigRetriever::do_connect(int no_retries, int retry_delay_in_seconds,
 
 int ConfigRetriever::disconnect() { return ndb_mgm_disconnect(m_handle); }
 
-bool ConfigRetriever::is_connected(void) {
+bool ConfigRetriever::is_connected() {
   return (ndb_mgm_is_connected(m_handle) != 0);
 }
 

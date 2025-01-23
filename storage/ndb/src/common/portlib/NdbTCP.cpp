@@ -309,7 +309,7 @@ static void CHECK_SPLIT(const char str[], int chk_result,
      having to link with "everything", implement it locally
 */
 
-static void socket_library_init(void) {
+static void socket_library_init() {
 #ifdef _WIN32
   WORD requested_version = MAKEWORD(2, 0);
   WSADATA wsa_data;

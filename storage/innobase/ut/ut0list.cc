@@ -37,7 +37,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /** Create a new list.
  @return list */
-ib_list_t *ib_list_create(void) {
+ib_list_t *ib_list_create() {
   return (static_cast<ib_list_t *>(
       ut::zalloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, sizeof(ib_list_t))));
 }

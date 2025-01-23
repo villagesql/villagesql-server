@@ -307,7 +307,7 @@ static struct my_option my_long_options[] = {
      &g_opt.m_missing_ai_col, nullptr, 0, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
     NdbStdOpt::end_of_options};
 
-static void short_usage_sub(void) {
+static void short_usage_sub() {
   ndb_short_usage_sub("database textfile...");
   printf(
       "\n"

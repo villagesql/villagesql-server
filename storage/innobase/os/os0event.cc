@@ -611,7 +611,7 @@ bool os_event::global_initialized{false};
 std::atomic_size_t os_event::n_objects_alive{0};
 #endif /* UNIV_DEBUG */
 
-void os_event_global_init(void) {
+void os_event_global_init() {
   ut_ad(os_event::n_objects_alive.load() == 0);
 #ifndef _WIN32
   int ret = pthread_condattr_init(&os_event::cond_attr);
@@ -636,7 +636,7 @@ void os_event_global_init(void) {
   os_event::global_initialized = true;
 }
 
-void os_event_global_destroy(void) {
+void os_event_global_destroy() {
   ut_a(os_event::global_initialized);
   ut_ad(os_event::n_objects_alive.load() == 0);
 #ifndef _WIN32

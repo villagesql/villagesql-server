@@ -280,12 +280,12 @@ uint parse_delimiter(const char *script, statement **stmt, char delm);
 int parse_option(const char *origin, option_string **stmt, char delm);
 static int drop_schema(MYSQL *mysql, const char *db);
 size_t get_random_string(char *buf);
-static statement *build_table_string(void);
-static statement *build_insert_string(void);
-static statement *build_update_string(void);
+static statement *build_table_string();
+static statement *build_insert_string();
+static statement *build_update_string();
 static statement *build_select_string(bool key);
 static int generate_primary_key_list(MYSQL *mysql, option_string *engine_stmt);
-static int drop_primary_key_list(void);
+static int drop_primary_key_list();
 static int create_schema(MYSQL *mysql, const char *db, statement *stmt,
                          option_string *engine_stmt);
 static void set_sql_mode(MYSQL *mysql);
@@ -720,7 +720,7 @@ static struct my_option my_long_options[] = {
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
      0, nullptr, 0, nullptr}};
 
-static void usage(void) {
+static void usage() {
   print_version();
   puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2005"));
   puts("Run a query multiple times against the server.\n");
@@ -791,7 +791,7 @@ size_t get_random_string(char *buf) {
   This function builds a create table query if the user opts to not supply
   a file or string containing a create table statement
 */
-static statement *build_table_string(void) {
+static statement *build_table_string() {
   char buf[HUGE_STRING_LENGTH];
   unsigned int col_count;
   statement *ptr;
@@ -897,7 +897,7 @@ static statement *build_table_string(void) {
   This function builds insert statements when the user opts to not supply
   an insert file or string containing insert data
 */
-static statement *build_update_string(void) {
+static statement *build_update_string() {
   char buf[HUGE_STRING_LENGTH];
   unsigned int col_count;
   statement *ptr;
@@ -961,7 +961,7 @@ static statement *build_update_string(void) {
   This function builds insert statements when the user opts to not supply
   an insert file or string containing insert data
 */
-static statement *build_insert_string(void) {
+static statement *build_insert_string() {
   char buf[HUGE_STRING_LENGTH];
   unsigned int col_count;
   statement *ptr;
@@ -1527,7 +1527,7 @@ static int generate_primary_key_list(MYSQL *mysql, option_string *engine_stmt) {
   return 0;
 }
 
-static int drop_primary_key_list(void) {
+static int drop_primary_key_list() {
   unsigned long long counter;
 
   if (primary_keys_number_of) {

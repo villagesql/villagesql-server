@@ -356,8 +356,8 @@ CHARSET_INFO *charset_info =
 */
 static char *timer_file = nullptr;
 static ulonglong timer_start;
-static void timer_output(void);
-static ulonglong timer_now(void);
+static void timer_output();
+static ulonglong timer_now();
 
 static ulong connection_retry_sleep = 100000; /* Microseconds */
 
@@ -3325,7 +3325,7 @@ static FILE *my_popen(DYNAMIC_STRING *ds_cmd, const char *mode,
   return popen(ds_cmd->str, mode);
 }
 
-static void init_builtin_echo(void) {
+static void init_builtin_echo() {
 #ifdef _WIN32
   size_t echo_length;
 
@@ -5127,7 +5127,7 @@ static void do_sync_with_master(struct st_command *command) {
   done on the local mysql server
 */
 
-static void ndb_wait_for_binlog_injector(void) {
+static void ndb_wait_for_binlog_injector() {
   MYSQL_RES *res;
   MYSQL_ROW row;
   MYSQL *mysql = &cur_con->mysql;
@@ -9641,7 +9641,7 @@ static void create_stacktrace_collector_event() {
 
 #else /* _WIN32 */
 
-static void init_signal_handling(void) {
+static void init_signal_handling() {
   struct sigaction sa;
   DBUG_TRACE;
 
@@ -10530,7 +10530,7 @@ int main(int argc, char **argv) {
   the time between executing the two commands.
 */
 
-void timer_output(void) {
+void timer_output() {
   if (timer_file) {
     char buf[32], *end;
     const ulonglong timer = timer_now() - timer_start;
@@ -10541,7 +10541,7 @@ void timer_output(void) {
   }
 }
 
-ulonglong timer_now(void) { return my_micro_time() / 1000; }
+ulonglong timer_now() { return my_micro_time() / 1000; }
 
 /*
   Get arguments for replace_columns. The syntax is:

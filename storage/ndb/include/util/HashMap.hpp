@@ -123,7 +123,7 @@ class HashMap {
 
   bool remove(const K &k) { return m_hash.erase(k) != 0; }
 
-  size_t entries(void) const { return m_hash.size(); }
+  size_t entries() const { return m_hash.size(); }
 
   // Forwarders to the underlying map.
 

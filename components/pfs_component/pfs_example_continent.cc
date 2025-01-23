@@ -39,7 +39,7 @@ unsigned int continent_next_available_index = 0;
 
 Continent_record continent_records_array[CONTINENT_MAX_ROWS] = {{"", 0, false}};
 
-int continent_delete_all_rows(void) {
+int continent_delete_all_rows() {
   native_mutex_lock(&LOCK_continent_records_array);
   for (int i = 0; i < CONTINENT_MAX_ROWS; i++)
     continent_records_array[i].m_exist = false;
@@ -245,9 +245,7 @@ int write_rows_from_component(Continent_Table_Handle *handle) {
   return 0;
 }
 
-unsigned long long continent_get_row_count(void) {
-  return continent_rows_in_table;
-}
+unsigned long long continent_get_row_count() { return continent_rows_in_table; }
 
 void init_continent_share(PFS_engine_table_share_proxy *share) {
   /* Instantiate and initialize PFS_engine_table_share_proxy */

@@ -63,8 +63,8 @@ class NdbLinHash {
  public:
   NdbLinHash() = default;
   ~NdbLinHash() = default;
-  void createHashTable(void);
-  void releaseHashTable(void);
+  void createHashTable();
+  void releaseHashTable();
 
   int insertKey(const char *str, Uint32 len, Uint32 lkey1, C *data);
   C *deleteKey(const char *str, Uint32 len);
@@ -72,8 +72,8 @@ class NdbLinHash {
   C *getData(const char *, Uint32);
   Uint32 *getKey(const char *, Uint32);
 
-  void shrinkTable(void);
-  void expandHashTable(void);
+  void shrinkTable();
+  void expandHashTable();
 
   Uint32 Hash(const char *str, Uint32 len);
   Uint32 Hash(Uint32 h);
@@ -264,7 +264,7 @@ inline C *NdbLinHash<C>::deleteKey(const char *str, Uint32 len) {
 }
 
 template <class C>
-inline void NdbLinHash<C>::releaseHashTable(void) {
+inline void NdbLinHash<C>::releaseHashTable() {
   NdbElement_t<C> *tNextElement;
   NdbElement_t<C> *tElement;
 
@@ -288,7 +288,7 @@ inline void NdbLinHash<C>::releaseHashTable(void) {
 }
 
 template <class C>
-inline void NdbLinHash<C>::shrinkTable(void) {
+inline void NdbLinHash<C>::shrinkTable() {
   Segment_t *lastseg;
   NdbElement_t<C> **chainp;
   Uint32 oldlast = p + max;
@@ -320,7 +320,7 @@ inline void NdbLinHash<C>::shrinkTable(void) {
 }
 
 template <class C>
-inline void NdbLinHash<C>::expandHashTable(void) {
+inline void NdbLinHash<C>::expandHashTable() {
   NdbElement_t<C> **oldbucketp, *chain, *headofold, *headofnew, *next;
   Uint32 maxp = max + 1;
   Uint32 newadress = maxp + p;

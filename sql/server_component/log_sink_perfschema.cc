@@ -261,7 +261,7 @@ log_sink_pfs_event *log_sink_pfs_event_valid(log_sink_pfs_event *e,
 }
 
 // expire tail event (oldest event in buffer) by adjusting the read-pointer
-static inline void log_sink_pfs_event_expire(void) {
+static inline void log_sink_pfs_event_expire() {
   assert(log_sink_pfs_buffered_events > 0);
   assert(ring_buffer_read != nullptr);
 

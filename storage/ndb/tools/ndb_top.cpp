@@ -274,12 +274,12 @@ static struct my_option my_long_options[] = {
 static void short_usage_sub() { printf("Usage: %s [OPTIONS]\n", my_progname); }
 
 #define NDB_TOP_VERSION "1.0"
-static void print_version(void) {
+static void print_version() {
   printf("%s  Ver %s Distrib %s, for %s (%s)\n", my_progname, NDB_TOP_VERSION,
          MYSQL_SERVER_VERSION, SYSTEM_TYPE, MACHINE_TYPE);
 } /* print_version */
 
-static void usage(void) {
+static void usage() {
   print_version();
   puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2017"));
   puts("ndb_top");

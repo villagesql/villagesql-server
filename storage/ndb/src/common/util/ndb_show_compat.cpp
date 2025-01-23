@@ -23,10 +23,10 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-void ndbPrintFullyCompatibleTable(void);
-void ndbPrintUpgradeCompatibleTable(void);
+void ndbPrintFullyCompatibleTable();
+void ndbPrintUpgradeCompatibleTable();
 
-int main(void) {
+int main() {
   ndbPrintFullyCompatibleTable();
   ndbPrintUpgradeCompatibleTable();
 }

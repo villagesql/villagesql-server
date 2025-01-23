@@ -276,7 +276,7 @@ int esalary_delete_row_values(PSI_table_handle *handle) {
   return 0;
 }
 
-int esalary_delete_all_rows(void) {
+int esalary_delete_all_rows() {
   mysql_mutex_lock(&LOCK_esalary_records_array);
   esalary_records_vector.clear();
   esalary_rows_in_table = 0;
@@ -284,7 +284,7 @@ int esalary_delete_all_rows(void) {
   return 0;
 }
 
-unsigned long long esalary_get_row_count(void) { return esalary_rows_in_table; }
+unsigned long long esalary_get_row_count() { return esalary_rows_in_table; }
 
 void init_esalary_share(PFS_engine_table_share_proxy *share) {
   share->m_table_name = "pfs_example_employee_salary";

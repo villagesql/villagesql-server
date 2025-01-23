@@ -69,7 +69,7 @@ class DirIteratorImpl {
     return 0;
   }
 
-  void close(void) {
+  void close() {
     if (m_dirp) closedir(m_dirp);
     m_dirp = nullptr;
   }
@@ -140,9 +140,9 @@ NdbDir::Iterator::~Iterator() { delete &m_impl; }
 
 int NdbDir::Iterator::open(const char *path) { return m_impl.open(path); }
 
-void NdbDir::Iterator::close(void) { m_impl.close(); }
+void NdbDir::Iterator::close() { m_impl.close(); }
 
-const char *NdbDir::Iterator::next_file(void) {
+const char *NdbDir::Iterator::next_file() {
   bool is_reg;
   const char *name;
   while ((name = m_impl.next_entry(is_reg)) != nullptr) {
@@ -151,22 +151,22 @@ const char *NdbDir::Iterator::next_file(void) {
   return nullptr;
 }
 
-const char *NdbDir::Iterator::next_entry(void) {
+const char *NdbDir::Iterator::next_entry() {
   bool is_reg;
   return m_impl.next_entry(is_reg);
 }
 
-mode_t NdbDir::u_r(void) { return IF_WIN(0, S_IRUSR); }
-mode_t NdbDir::u_w(void) { return IF_WIN(0, S_IWUSR); }
-mode_t NdbDir::u_x(void) { return IF_WIN(0, S_IXUSR); }
+mode_t NdbDir::u_r() { return IF_WIN(0, S_IRUSR); }
+mode_t NdbDir::u_w() { return IF_WIN(0, S_IWUSR); }
+mode_t NdbDir::u_x() { return IF_WIN(0, S_IXUSR); }
 
-mode_t NdbDir::g_r(void) { return IF_WIN(0, S_IRGRP); }
-mode_t NdbDir::g_w(void) { return IF_WIN(0, S_IWGRP); }
-mode_t NdbDir::g_x(void) { return IF_WIN(0, S_IXGRP); }
+mode_t NdbDir::g_r() { return IF_WIN(0, S_IRGRP); }
+mode_t NdbDir::g_w() { return IF_WIN(0, S_IWGRP); }
+mode_t NdbDir::g_x() { return IF_WIN(0, S_IXGRP); }
 
-mode_t NdbDir::o_r(void) { return IF_WIN(0, S_IROTH); }
-mode_t NdbDir::o_w(void) { return IF_WIN(0, S_IWOTH); }
-mode_t NdbDir::o_x(void) { return IF_WIN(0, S_IXOTH); }
+mode_t NdbDir::o_r() { return IF_WIN(0, S_IROTH); }
+mode_t NdbDir::o_w() { return IF_WIN(0, S_IWOTH); }
+mode_t NdbDir::o_x() { return IF_WIN(0, S_IXOTH); }
 
 bool NdbDir::create(const char *dir, mode_t mode [[maybe_unused]],
                     bool ignore_existing) {
@@ -212,7 +212,7 @@ NdbDir::Temp::~Temp() {
 #endif
 }
 
-const char *NdbDir::Temp::path(void) const { return m_path; }
+const char *NdbDir::Temp::path() const { return m_path; }
 
 bool NdbDir::remove(const char *path) {
 #ifdef _WIN32

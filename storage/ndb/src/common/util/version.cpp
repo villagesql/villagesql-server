@@ -249,12 +249,12 @@ static void ndbPrintCompatibleTable(struct NdbUpGradeCompatible table[]) {
   printf("\n");
 }
 
-void ndbPrintFullyCompatibleTable(void) {
+void ndbPrintFullyCompatibleTable() {
   printf("ndbCompatibleTable_full\n");
   ndbPrintCompatibleTable(ndbCompatibleTable_full);
 }
 
-void ndbPrintUpgradeCompatibleTable(void) {
+void ndbPrintUpgradeCompatibleTable() {
   printf("ndbCompatibleTable_upgrade\n");
   ndbPrintCompatibleTable(ndbCompatibleTable_upgrade);
 }

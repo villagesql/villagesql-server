@@ -111,7 +111,7 @@ class TransporterFacade : public TransporterCallback,
    * Get/Set wait time in the send thread.
    */
   void setSendThreadInterval(Uint32 ms);
-  Uint32 getSendThreadInterval(void) const;
+  Uint32 getSendThreadInterval() const;
 
   Uint32 mapRefToIdx(Uint32 blockReference) const;
 
@@ -355,9 +355,9 @@ class TransporterFacade : public TransporterCallback,
   int theStopWakeup;
   Uint32 sendThreadWaitMillisec;
 
-  void threadMainSend(void);
+  void threadMainSend();
   NdbThread *theSendThread;
-  void threadMainReceive(void);
+  void threadMainReceive();
   NdbThread *theReceiveThread;
 
 #define MAX_NUM_WAKEUPS 128
@@ -369,7 +369,7 @@ class TransporterFacade : public TransporterCallback,
   void check_cpu_usage(NDB_TICKS currTime);
   void calc_recv_thread_wakeup();
   void remove_trp_client_from_wakeup_list(trp_client *);
-  void threadMainWakeup(void);
+  void threadMainWakeup();
   NdbThread *theWakeupThread;
 
   NDB_TICKS m_last_cpu_usage_check;
@@ -594,7 +594,7 @@ class TransporterFacade : public TransporterCallback,
   }
   **/
 
-  void wakeup_send_thread(void);
+  void wakeup_send_thread();
   NdbMutex *m_send_thread_mutex;
   NdbCondition *m_send_thread_cond;
 

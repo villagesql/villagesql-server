@@ -419,7 +419,7 @@ int country_delete_row_values(PSI_table_handle *handle) {
   return 0;
 }
 
-int country_delete_all_rows(void) {
+int country_delete_all_rows() {
   native_mutex_lock(&LOCK_country_records_array);
   for (int i = 0; i < COUNTRY_MAX_ROWS; i++)
     country_records_array[i].m_exist = false;
@@ -429,7 +429,7 @@ int country_delete_all_rows(void) {
   return 0;
 }
 
-unsigned long long country_get_row_count(void) { return country_rows_in_table; }
+unsigned long long country_get_row_count() { return country_rows_in_table; }
 
 void init_country_share(PFS_engine_table_share_proxy *share) {
   /* Instantiate and initialize PFS_engine_table_share_proxy */

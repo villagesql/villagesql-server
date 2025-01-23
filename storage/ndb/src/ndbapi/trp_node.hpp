@@ -52,7 +52,7 @@ struct trp_node {
     assert(defined);
     m_connected = connected;
   }
-  bool is_connected(void) const {
+  bool is_connected() const {
     const bool connected = m_connected;
     // Must be defined if connected
     assert(!connected || (connected && defined));
@@ -64,7 +64,7 @@ struct trp_node {
     m_api_reg_conf = confirmed;
   }
 
-  bool is_confirmed(void) const {
+  bool is_confirmed() const {
     const bool confirmed = m_api_reg_conf;
     assert(!confirmed || (confirmed && is_connected()));
     return confirmed;

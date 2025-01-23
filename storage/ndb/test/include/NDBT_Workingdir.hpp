@@ -55,7 +55,7 @@ class NDBT_Workingdir {
     if (access(m_wd.c_str(), F_OK) == 0) NdbDir::remove_recursive(m_wd.c_str());
   }
 
-  const char *path(void) const { return m_wd.c_str(); }
+  const char *path() const { return m_wd.c_str(); }
 };
 
 #endif

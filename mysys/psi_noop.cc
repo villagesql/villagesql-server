@@ -119,7 +119,7 @@ static void set_thread_THD_noop(PSI_thread *, THD *) {}
 
 static void set_thread_os_id_noop(PSI_thread *) {}
 
-static PSI_thread *get_thread_noop(void) { return nullptr; }
+static PSI_thread *get_thread_noop() { return nullptr; }
 
 static void set_thread_user_noop(const char *, int) {}
 
@@ -152,7 +152,7 @@ static int set_thread_resource_group_by_id_noop(PSI_thread *, ulonglong,
 
 static void aggregate_thread_status_noop(PSI_thread *) {}
 
-static void delete_current_thread_noop(void) {}
+static void delete_current_thread_noop() {}
 
 static void delete_thread_noop(PSI_thread *) {}
 
@@ -589,7 +589,7 @@ static PSI_stage_progress *start_stage_noop(PSI_stage_key, const char *, int) {
 
 static PSI_stage_progress *get_current_stage_progress_noop() { return nullptr; }
 
-static void end_stage_noop(void) {}
+static void end_stage_noop() {}
 
 static PSI_stage_service_t psi_stage_noop = {
     register_stage_noop, start_stage_noop, get_current_stage_progress_noop,

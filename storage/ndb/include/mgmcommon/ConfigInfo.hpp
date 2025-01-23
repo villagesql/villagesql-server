@@ -226,7 +226,7 @@ class ConfigInfo {
     ParamInfoIter(const ConfigInfo &info, Uint32 section,
                   Uint32 section_type = ~0);
 
-    const ParamInfo *next(void);
+    const ParamInfo *next();
   };
 
   struct AliasPair {

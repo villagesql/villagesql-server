@@ -117,7 +117,7 @@ void *my_once_memdup(const void *src, size_t len, myf myflags) {
     my_once_free()
 */
 
-void my_once_free(void) {
+void my_once_free() {
   USED_MEM *next, *old;
   DBUG_TRACE;
 

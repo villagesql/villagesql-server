@@ -80,7 +80,7 @@ class NdbInfo {
     bool rowCountIsExact() const { return m_exact_row_count; }
 
     bool addColumn(const Column aCol);
-    unsigned columns(void) const;
+    unsigned columns() const;
     const Column *getColumn(const unsigned attributeId) const;
     const Column *getColumn(const char *name) const;
 
@@ -98,7 +98,7 @@ class NdbInfo {
   };
 
   NdbInfo(class Ndb_cluster_connection *connection, const char *prefix);
-  bool init(void);
+  bool init();
   ~NdbInfo();
 
   int openTable(const char *table_name, const Table **);
@@ -125,8 +125,8 @@ class NdbInfo {
   bool addColumn(Uint32 tableId, const Column aCol);
 
   bool load_ndbinfo_tables();
-  bool load_hardcoded_tables(void);
-  bool load_virtual_tables(void);
+  bool load_hardcoded_tables();
+  bool load_virtual_tables();
   bool load_tables();
   bool check_tables();
   void flush_tables();

@@ -106,7 +106,7 @@ static uint ex_var_count, max_var_length, max_val_length;
 #include "client/include/caching_sha2_passwordopt-vars.h"
 #include "client/include/multi_factor_passwordopt-vars.h"
 
-static void usage(void);
+static void usage();
 extern "C" bool get_one_option(int optid, const struct my_option *opt,
                                char *argument);
 static bool sql_connect(MYSQL *mysql, uint wait);
@@ -1193,7 +1193,7 @@ static char **mask_password(int argc, char ***argv) {
   return (temp_argv);
 }
 
-static void usage(void) {
+static void usage() {
   print_version();
   puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2000"));
   puts("Administration program for the mysqld daemon.");

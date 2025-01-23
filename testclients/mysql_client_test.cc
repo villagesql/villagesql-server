@@ -22971,7 +22971,7 @@ static void test_wl14839() {
   mysql_close(lmysql);
 }
 
-static void test_wl15633(void) {
+static void test_wl15633() {
   myheader("test_wl15633");
   MYSQL *mysql_local;
   net_async_status status;
@@ -23059,7 +23059,7 @@ static void test_bug34951115_run_one_ps(const char *stmt_text) {
   mysql_stmt_close(stmt);
 }
 
-static void test_bug34951115(void) {
+static void test_bug34951115() {
   myheader("test_bug34951115");
 
   /* Create and fill test table */
@@ -23114,7 +23114,7 @@ static bool send_query(MYSQL *mysql_con, const char *query) {
   return true;
 }
 
-static void test_wl16221_reconnect(void) {
+static void test_wl16221_reconnect() {
   /*
     Uses the following helper functions
     1. send_query

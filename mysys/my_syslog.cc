@@ -323,7 +323,7 @@ int my_openlog(const char *name, int option, int facility) {
      0 Success
     -1 Error
 */
-int my_closelog(void) {
+int my_closelog() {
   DBUG_TRACE;
 #ifndef _WIN32
   closelog();

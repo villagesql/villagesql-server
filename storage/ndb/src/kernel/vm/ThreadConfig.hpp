@@ -36,7 +36,7 @@ class ThreadConfig {
  public:
   ThreadConfig();
   ~ThreadConfig();
-  void init(void);
+  void init();
 
   void ipControlLoop(NdbThread *);
 

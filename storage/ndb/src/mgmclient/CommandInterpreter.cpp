@@ -159,7 +159,7 @@ class CommandInterpreter {
 
   int test_tls();
   bool connect(bool interactive);
-  void disconnect(void);
+  void disconnect();
 
   /**
    * A execute function definition
@@ -1107,7 +1107,7 @@ bool CommandInterpreter::connect(bool interactive) {
   DBUG_RETURN(m_connected);
 }
 
-void CommandInterpreter::disconnect(void) {
+void CommandInterpreter::disconnect() {
   DBUG_ENTER("CommandInterpreter::disconnect");
 
   if (m_event_thread) {

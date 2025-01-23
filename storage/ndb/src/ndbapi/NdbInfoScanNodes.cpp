@@ -144,7 +144,7 @@ int NdbInfoScanNodes::execute() {
   DBUG_RETURN(ret);
 }
 
-int NdbInfoScanNodes::sendDBINFO_SCANREQ(void) {
+int NdbInfoScanNodes::sendDBINFO_SCANREQ() {
   DBUG_ENTER("NdbInfoScanNodes::sendDBINFO_SCANREQ");
 
   SimpleSignal ss;
@@ -198,7 +198,7 @@ int NdbInfoScanNodes::sendDBINFO_SCANREQ(void) {
   DBUG_RETURN(0);
 }
 
-int NdbInfoScanNodes::receive(void) {
+int NdbInfoScanNodes::receive() {
   DBUG_ENTER("NdbInfoScanNodes::receive");
   while (true) {
     const SimpleSignal *sig = m_signal_sender->waitFor();

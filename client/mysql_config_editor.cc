@@ -83,13 +83,13 @@ static bool opt_verbose, opt_all,
     login_path_specified = false;
 
 static int execute_commands(int command);
-static int set_command(void);
-static int remove_command(void);
-static int print_command(void);
+static int set_command();
+static int remove_command();
+static int print_command();
 static void print_login_path(DYNAMIC_STRING *file_buf, const char *path_name);
 static void remove_login_path(DYNAMIC_STRING *file_buf, const char *path_name);
 static char *locate_login_path(DYNAMIC_STRING *file_buf, const char *path_name);
-static bool check_and_create_login_file(void);
+static bool check_and_create_login_file();
 static void mask_password_and_print(char *buf);
 static int reset_login_file(bool gen_key);
 
@@ -102,14 +102,14 @@ static int do_handle_options(int argc, char *argv[]);
 static void remove_options(DYNAMIC_STRING *file_buf, const char *path_name);
 static void remove_option(DYNAMIC_STRING *file_buf, const char *path_name,
                           const char *option_name);
-bool generate_login_key(void);
-static int read_login_key(void);
-static int add_header(void);
+bool generate_login_key();
+static int read_login_key();
+static int add_header();
 static void my_perror(const char *msg);
 
 static void verbose_msg(const char *fmt, ...)
     MY_ATTRIBUTE((format(printf, 1, 2)));
-static void usage_program(void);
+static void usage_program();
 static void usage_command(int command);
 extern "C" bool get_one_option(int optid, const struct my_option *opt,
                                char *argument);
@@ -494,7 +494,7 @@ done:
            0              Success
 */
 
-static int set_command(void) {
+static int set_command() {
   DBUG_TRACE;
 
   DYNAMIC_STRING file_buf, path_buf;
@@ -577,7 +577,7 @@ error:
   return -1;
 }
 
-static int remove_command(void) {
+static int remove_command() {
   DBUG_TRACE;
 
   DYNAMIC_STRING file_buf, path_buf;
@@ -625,7 +625,7 @@ error:
            0              Success
 */
 
-static int print_command(void) {
+static int print_command() {
   DBUG_TRACE;
   DYNAMIC_STRING file_buf;
 
@@ -655,7 +655,7 @@ error:
            false          Success
 */
 
-static bool check_and_create_login_file(void) {
+static bool check_and_create_login_file() {
   DBUG_TRACE;
 
   MY_STAT stat_info;
@@ -1211,7 +1211,7 @@ static int decrypt_buffer(const char *cipher, int cipher_len, char plain[]) {
                           length written, otherwise.
 */
 
-static int add_header(void) {
+static int add_header() {
   DBUG_TRACE;
 
   /* Reserved for future use. */
@@ -1260,7 +1260,7 @@ bool generate_login_key() {
            0              Success
 */
 
-static int read_login_key(void) {
+static int read_login_key() {
   DBUG_TRACE;
 
   verbose_msg("Reading the login key.\n");
@@ -1315,7 +1315,7 @@ static void usage_command(int command) {
   my_print_variables(command_data[command].options);
 }
 
-static void usage_program(void) {
+static void usage_program() {
   print_version();
   puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2012"));
   puts("MySQL Configuration Utility.");

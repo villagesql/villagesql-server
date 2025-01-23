@@ -313,7 +313,7 @@ static PSI_rwlock_info all_dynamic_loader_rwlocks[] = {
     {&key_rwlock_LOCK_dynamic_loader, "LOCK_dynamic_loader", PSI_FLAG_SINGLETON,
      0, PSI_DOCUMENT_ME}};
 
-static void init_dynamic_loader_psi_keys(void) {
+static void init_dynamic_loader_psi_keys() {
   const char *category = "components";
   int count;
 

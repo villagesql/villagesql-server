@@ -377,7 +377,7 @@ int ename_delete_row_values(PSI_table_handle *handle) {
   return 0;
 }
 
-int ename_delete_all_rows(void) {
+int ename_delete_all_rows() {
   mysql_mutex_lock(&LOCK_ename_records_array);
   for (int i = 0; i < EMPLOYEEE_NAME_MAX_ROWS; i++)
     ename_records_array[i].m_exist = false;
@@ -387,7 +387,7 @@ int ename_delete_all_rows(void) {
   return 0;
 }
 
-unsigned long long ename_get_row_count(void) { return ename_rows_in_table; }
+unsigned long long ename_get_row_count() { return ename_rows_in_table; }
 
 void init_ename_share(PFS_engine_table_share_proxy *share) {
   share->m_table_name = "pfs_example_employee_name";

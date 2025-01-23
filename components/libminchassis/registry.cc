@@ -59,7 +59,7 @@ static PSI_rwlock_info all_registry_rwlocks[] = {
     {&::key_rwlock_LOCK_registry, "LOCK_registry", PSI_FLAG_SINGLETON, 0,
      PSI_DOCUMENT_ME}};
 
-static void init_registry_psi_keys(void) {
+static void init_registry_psi_keys() {
   const char *category = "components";
   int count;
 

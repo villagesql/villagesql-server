@@ -540,7 +540,7 @@ void TransporterFacade::setSendThreadInterval(Uint32 ms) {
   }
 }
 
-Uint32 TransporterFacade::getSendThreadInterval(void) const {
+Uint32 TransporterFacade::getSendThreadInterval() const {
   return sendThreadWaitMillisec;
 }
 
@@ -848,7 +848,7 @@ void TransporterFacade::remove_trp_client_from_wakeup_list(trp_client *clnt) {
  * Signal the send thread to wake up.
  * require the m_send_thread_mutex to be held by callee.
  */
-void TransporterFacade::wakeup_send_thread(void) {
+void TransporterFacade::wakeup_send_thread() {
   if (!m_send_thread_nodes.get(SEND_THREAD_NO)) {
     NdbCondition_Signal(m_send_thread_cond);
   }
@@ -959,7 +959,7 @@ void TransporterFacade::do_send_adaptive(const TrpBitmask &trps) {
  * to wake up immediately if required. This is used if a state of
  * high send buffer usage is detected.
  */
-void TransporterFacade::threadMainSend(void) {
+void TransporterFacade::threadMainSend() {
   while (theSendThread == nullptr) {
     /* Wait until theSendThread have been set */
     NdbSleep_MilliSleep(10);
@@ -1236,7 +1236,7 @@ static const int DEFAULT_MIN_ACTIVE_CLIENTS_RECV_THREAD = 8;
   threadMainReceive(), if we get the poll right, or in the
   do_poll from the thread already having the poll rights.
 */
-void TransporterFacade::threadMainReceive(void) {
+void TransporterFacade::threadMainReceive() {
   NDB_TICKS lastCheck = NdbTick_getCurrentTicks();
   NDB_TICKS receive_activation_time;
   init_cpu_usage(lastCheck);

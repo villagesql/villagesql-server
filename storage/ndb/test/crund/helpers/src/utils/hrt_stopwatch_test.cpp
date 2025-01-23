@@ -38,7 +38,7 @@
  * High-Resolution Time Stopwatch Utility -- Test
  */
 
-static void do_something(void) {
+static void do_something() {
   const unsigned long loop = 1000000000L;
   unsigned long i;
   static volatile unsigned long dummy;

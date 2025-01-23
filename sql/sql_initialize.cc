@@ -136,7 +136,7 @@ bool generate_password(char *password, int size) {
   return failed;
 }
 
-bool Compiled_in_command_iterator::begin(void) {
+bool Compiled_in_command_iterator::begin() {
   m_cmds_ofs = m_cmd_ofs = 0;
 
   LogErr(INFORMATION_LEVEL, ER_SERVER_INIT_COMPILED_IN_COMMANDS,
@@ -204,7 +204,7 @@ void Compiled_in_command_iterator::report_error_details(
   assert(false);
 }
 
-void Compiled_in_command_iterator::end(void) {
+void Compiled_in_command_iterator::end() {
   LogErr(INFORMATION_LEVEL, ER_INIT_BOOTSTRAP_COMPLETE);
 }
 

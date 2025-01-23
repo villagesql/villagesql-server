@@ -42,11 +42,11 @@
 #include "mysys/mysys_priv.h"
 #include "mysys_err.h"
 
-static uint my_get_large_page_size_int(void);
+static uint my_get_large_page_size_int();
 
 /* Gets the size of large pages from the OS */
 
-uint my_get_large_page_size(void) {
+uint my_get_large_page_size() {
   uint size;
   DBUG_TRACE;
 
@@ -60,7 +60,7 @@ uint my_get_large_page_size(void) {
 
 /* Linux-specific function to determine the size of large pages */
 
-uint my_get_large_page_size_int(void) {
+uint my_get_large_page_size_int() {
   MYSQL_FILE *f;
   uint size = 0;
   char buf[256];

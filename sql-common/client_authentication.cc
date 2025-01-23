@@ -66,7 +66,7 @@ int sha256_password_init(char *, size_t, int, va_list) {
   return 0;
 }
 
-int sha256_password_deinit(void) {
+int sha256_password_deinit() {
   mysql_reset_server_public_key();
   mysql_mutex_destroy(&g_public_key_mutex);
   return 0;
@@ -580,7 +580,7 @@ err:
 
 int caching_sha2_password_init(char *, size_t, int, va_list) { return 0; }
 
-int caching_sha2_password_deinit(void) { return 0; }
+int caching_sha2_password_deinit() { return 0; }
 
 static bool is_secure_transport(MYSQL *mysql) {
   if (!mysql || !mysql->net.vio) return false;

@@ -57,7 +57,7 @@ void delete_keyring_file_data() {
   keyring_file_data = nullptr;
 }
 
-void keyring_init_psi_keys(void) {
+void keyring_init_psi_keys() {
   const char *category = "keyring";
   int count;
 

@@ -58,7 +58,7 @@ extern mysql_component_t mysql_component_mysql_server;
 
 SERVICE_TYPE(mysql_server_runnable) * runnable;
 
-static void atexit_main(void) {
+static void atexit_main() {
   /* set back the dynamic_loader_scheme_file service to minimal_chassis
      service */
   registrator->set_default("dynamic_loader_scheme_file.mysql_minimal_chassis");

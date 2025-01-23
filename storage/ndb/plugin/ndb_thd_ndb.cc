@@ -71,7 +71,7 @@ void Thd_ndb::release(Thd_ndb *thd_ndb) {
   delete thd_ndb;
 }
 
-bool Thd_ndb::recycle_ndb(void) {
+bool Thd_ndb::recycle_ndb() {
   DBUG_TRACE;
   DBUG_PRINT("enter", ("ndb: %p", ndb));
 
@@ -105,7 +105,7 @@ bool Thd_ndb::recycle_ndb(void) {
   return true;
 }
 
-bool Thd_ndb::valid_ndb(void) const {
+bool Thd_ndb::valid_ndb() const {
   // The ndb object should be valid as long as a
   // global schema lock transaction is ongoing
   if (global_schema_lock_trans) return true;
@@ -252,7 +252,7 @@ void Thd_ndb::set_trans_option(Trans_options option) {
   trans_options |= option;
 }
 
-void Thd_ndb::reset_trans_options(void) {
+void Thd_ndb::reset_trans_options() {
   DBUG_PRINT("info", ("Resetting trans_options"));
   trans_options = 0;
 }

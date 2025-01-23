@@ -261,11 +261,11 @@ static void safe_hash_change(SAFE_HASH *hash, uchar *old_data,
 /* Variable to store all key cache objects */
 static SAFE_HASH key_cache_hash;
 
-bool multi_keycache_init(void) {
+bool multi_keycache_init() {
   return safe_hash_init(&key_cache_hash, (uchar *)dflt_key_cache);
 }
 
-void multi_keycache_free(void) { safe_hash_free(&key_cache_hash); }
+void multi_keycache_free() { safe_hash_free(&key_cache_hash); }
 
 /*
   Get a key cache to be used for a specific table.

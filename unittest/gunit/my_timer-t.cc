@@ -99,7 +99,7 @@ static void timer_set_and_wait(test_timer_t *test, unsigned int fired_count) {
   EXPECT_EQ(state, 0);
 }
 
-static void test_timer(void) {
+static void test_timer() {
   int rc;
   test_timer_t test;
 

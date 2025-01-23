@@ -73,7 +73,7 @@ static void hrt_tprint(const hrt_tstamp *x) {
   hrt_ctprint(&x->ctstamp);
 }
 
-static void do_something(void) {
+static void do_something() {
   const unsigned long loop = 1000000000L;
   unsigned long i;
   static volatile unsigned long dummy;

@@ -250,7 +250,7 @@ static void log_syslog_reopen() {
 /**
   Stop using syslog / EventLog. Call as late as possible.
 */
-void log_syslog_exit(void) {
+void log_syslog_exit() {
   log_syslog_close();
 
   // free ident.
@@ -473,7 +473,7 @@ static void sysvar_update_tag(MYSQL_THD thd [[maybe_unused]],
   @retval 0   success
   @retval -1  failure
 */
-static int sysvar_install_tag(void) {
+static int sysvar_install_tag() {
   char *var_value;
   char *new_value;
   size_t var_len = MAX_TAG_LEN;
@@ -607,7 +607,7 @@ static void sysvar_update_fac(MYSQL_THD thd [[maybe_unused]],
   @retval 0   success
   @retval -1  failure
 */
-static int sysvar_install_fac(void) {
+static int sysvar_install_fac() {
   char *var_value;
   char *new_value;
   size_t var_len = MAX_FAC_LEN;
@@ -695,7 +695,7 @@ static void sysvar_update_pid(MYSQL_THD thd [[maybe_unused]],
   @retval 0   success
   @retval -1  failure
 */
-static int sysvar_install_pid(void) {
+static int sysvar_install_pid() {
   char *var_value = nullptr;
   size_t var_len = 15;
   bool var_bool;

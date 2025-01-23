@@ -133,7 +133,7 @@ class Ndbinfo {
     } m;
     Column col[1];
 
-    int columns(void) const { return m.ncols; }
+    int columns() const { return m.ncols; }
   };
   static int getNumTableEntries();
   static const Table *getTable(int i);
@@ -151,7 +151,7 @@ class Ndbinfo {
    public:
     Row(class Signal *signal, DbinfoScanReq &req);
 
-    Uint32 getLength(void) const { return (Uint32)(curr - start); }
+    Uint32 getLength() const { return (Uint32)(curr - start); }
 
     Uint32 *getDataPtr() const { return start; }
 
@@ -160,7 +160,7 @@ class Ndbinfo {
     void write_uint32(Uint32 value);
     void write_uint64(Uint64 value);
 
-    int columns(void) const { return col_counter; }
+    int columns() const { return col_counter; }
 
    private:
     bool check_buffer_space(class AttributeHeader &ah) const;

@@ -222,7 +222,7 @@ class TransporterRegistry {
    * (if set) is destroyed, and this is destroyed by the destructor
    */
   void set_mgm_handle(NdbMgmHandle h);
-  NdbMgmHandle get_mgm_handle(void) { return m_mgm_handle; }
+  NdbMgmHandle get_mgm_handle() { return m_mgm_handle; }
 
   bool init(NodeId localNodeId);
 

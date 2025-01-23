@@ -834,14 +834,14 @@ static void check_io(FILE *file) {
   if (ferror(file) || errno == 5) die(EX_EOF, "Got errno %d on write", errno);
 }
 
-static void short_usage_sub(void) {
+static void short_usage_sub() {
   printf("Usage: %s [OPTIONS] database [tables]\n", my_progname);
   printf("OR     %s [OPTIONS] --databases [OPTIONS] DB1 [DB2 DB3...]\n",
          my_progname);
   printf("OR     %s [OPTIONS] --all-databases [OPTIONS]\n", my_progname);
 }
 
-static void usage(void) {
+static void usage() {
   print_version();
   puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2000"));
   puts("Dumping structure and contents of MySQL databases and tables.");
@@ -851,7 +851,7 @@ static void usage(void) {
   my_print_variables(my_long_options);
 } /* usage */
 
-static void short_usage(void) {
+static void short_usage() {
   short_usage_sub();
   printf("For more options, use %s --help\n", my_progname);
 }
@@ -5469,7 +5469,7 @@ static int do_stop_replica_sql(MYSQL *mysql_con) {
   return (0);
 }
 
-static int add_stop_replica(void) {
+static int add_stop_replica() {
   if (opt_comments)
     fprintf(md_result_file,
             "\n--\n-- stop replica statement to make a recovery dump\n--\n\n");
@@ -5478,7 +5478,7 @@ static int add_stop_replica(void) {
   return (0);
 }
 
-static int add_replica_statements(void) {
+static int add_replica_statements() {
   if (opt_comments)
     fprintf(md_result_file,
             "\n--\n-- start replica statement to make a recovery dump\n--\n\n");

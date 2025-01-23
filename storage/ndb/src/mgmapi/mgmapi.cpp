@@ -103,7 +103,7 @@ struct ndb_mgm_handle {
   int mgmd_version_build;
   struct ssl_ctx_st *ssl_ctx;
 
-  int mgmd_version(void) const {
+  int mgmd_version() const {
     // Must be connected
     assert(connected);
     // Check that version has been read

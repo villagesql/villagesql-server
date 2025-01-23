@@ -45,7 +45,7 @@ NdbInfo::NdbInfo(class Ndb_cluster_connection *connection, const char *prefix)
                         m_full_prefix.lastIndexOf(DIR_SEPARATOR[0]) + 1);
 }
 
-bool NdbInfo::init(void) {
+bool NdbInfo::init() {
   if (native_mutex_init(&m_mutex, MY_MUTEX_INIT_FAST)) return false;
   if (!load_hardcoded_tables()) return false;
   if (!NdbInfoScanVirtual::create_virtual_tables(m_virtual_tables))
@@ -53,7 +53,7 @@ bool NdbInfo::init(void) {
   return true;
 }
 
-NdbInfo::~NdbInfo(void) {
+NdbInfo::~NdbInfo() {
   NdbInfoScanVirtual::delete_virtual_tables(m_virtual_tables);
   native_mutex_destroy(&m_mutex);
 }
@@ -69,7 +69,7 @@ BaseString NdbInfo::mysql_table_name(const Table &table) const {
   DBUG_RETURN(mysql_name);
 }
 
-bool NdbInfo::load_hardcoded_tables(void) {
+bool NdbInfo::load_hardcoded_tables() {
   {
     Table tabs("tables", (Uint32)0, 0, true);
     if (!tabs.addColumn(Column("table_id", 0, Column::Number)) ||
@@ -113,7 +113,7 @@ bool NdbInfo::addColumn(Uint32 tableId, Column aCol) {
   return true;
 }
 
-bool NdbInfo::load_ndbinfo_tables(void) {
+bool NdbInfo::load_ndbinfo_tables() {
   DBUG_ENTER("load_ndbinfo_tables");
   assert(m_tables_table && m_columns_table);
 
@@ -498,7 +498,7 @@ bool NdbInfo::Table::addColumn(const NdbInfo::Column aCol) {
   return true;
 }
 
-unsigned NdbInfo::Table::columns(void) const { return m_columns.size(); }
+unsigned NdbInfo::Table::columns() const { return m_columns.size(); }
 
 const NdbInfo::Column *NdbInfo::Table::getColumn(
     const unsigned attributeId) const {
@@ -521,7 +521,7 @@ const NdbInfo::Column *NdbInfo::Table::getColumn(const char *name) const {
 
 const VirtualTable *NdbInfo::Table::getVirtualTable() const { return m_virt; }
 
-bool NdbInfo::load_virtual_tables(void) {
+bool NdbInfo::load_virtual_tables() {
   // The virtual tables should already have been created
   assert(m_virtual_tables.size() > 0);
 

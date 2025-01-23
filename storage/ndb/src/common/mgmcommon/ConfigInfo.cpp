@@ -4455,7 +4455,7 @@ ConfigInfo::ParamInfoIter::ParamInfoIter(const ConfigInfo &info, Uint32 section,
   abort();
 }
 
-const ConfigInfo::ParamInfo *ConfigInfo::ParamInfoIter::next(void) {
+const ConfigInfo::ParamInfo *ConfigInfo::ParamInfoIter::next() {
   assert(m_curr_param < m_info.m_NoOfParams);
   do {
     /*  Loop through the parameter and return a pointer to the next found */

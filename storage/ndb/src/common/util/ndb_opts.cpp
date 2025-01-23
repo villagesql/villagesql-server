@@ -34,17 +34,17 @@
 #include "unhex.h"
 #include "util/require.h"
 
-using usage_fn = void (*)(void);
+using usage_fn = void (*)();
 
 static const char *load_default_groups[] = {"mysql_cluster", nullptr};
 
-static void default_ndb_opt_short(void) { ndb_short_usage_sub(nullptr); }
+static void default_ndb_opt_short() { ndb_short_usage_sub(nullptr); }
 
 /* declaration only */
 void ndb_usage(usage_fn, const char *load_default_groups[],
                struct my_option *my_long_options);
 
-static void default_ndb_opt_usage(void) {
+static void default_ndb_opt_usage() {
   struct my_option my_long_options[] = {
       NdbStdOpt::usage,           NdbStdOpt::help,
       NdbStdOpt::version,         NdbStdOpt::ndb_connectstring,
@@ -60,7 +60,7 @@ static void default_ndb_opt_usage(void) {
 static usage_fn g_ndb_opt_short_usage = default_ndb_opt_short;
 static usage_fn g_ndb_opt_usage = default_ndb_opt_usage;
 
-void ndb_opt_set_usage_funcs(void (*short_usage)(void), void (*usage)(void)) {
+void ndb_opt_set_usage_funcs(void (*short_usage)(), void (*usage)()) {
   /* Check that the program name has been set already */
   assert(my_progname);
 
@@ -68,7 +68,7 @@ void ndb_opt_set_usage_funcs(void (*short_usage)(void), void (*usage)(void)) {
   if (usage) g_ndb_opt_usage = usage;
 }
 
-static inline const char *ndb_progname(void) {
+static inline const char *ndb_progname() {
   if (my_progname) return my_progname;
   return "<unknown program>";
 }
@@ -168,7 +168,7 @@ int Ndb_opts::handle_options(bool (*get_opt_fn)(int, const struct my_option *,
   return ::handle_options(main_argc_ptr, main_argv_ptr, options, get_opt_fn);
 }
 
-void Ndb_opts::set_usage_funcs(void (*short_fn)(void), void (*long_fn)(void)) {
+void Ndb_opts::set_usage_funcs(void (*short_fn)(), void (*long_fn)(void)) {
   if (short_fn) short_usage_fn = short_fn;
   if (long_fn) long_usage_extra_fn = long_fn;
 }

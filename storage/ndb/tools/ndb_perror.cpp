@@ -52,7 +52,7 @@ static struct my_option my_long_options[] = {
 
 const char *load_default_groups[] = {0};
 
-static void short_usage_sub(void) {
+static void short_usage_sub() {
   ndb_short_usage_sub("[ERRORCODE [ERRORCODE...]]");
 }
 

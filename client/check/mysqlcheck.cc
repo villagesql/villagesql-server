@@ -264,7 +264,7 @@ static struct my_option my_long_options[] = {
 
 static const char *load_default_groups[] = {"mysqlcheck", "client", nullptr};
 
-static void usage(void);
+static void usage();
 static int get_options(int *argc, char ***argv, MEM_ROOT *alloc);
 static int dbConnect(char *host, char *user);
 static void dbDisconnect(char *host);
@@ -273,7 +273,7 @@ static void safe_exit(int error);
 
 static int what_to_do = 0;
 
-static void usage(void) {
+static void usage() {
   print_version();
   puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2000"));
   puts(

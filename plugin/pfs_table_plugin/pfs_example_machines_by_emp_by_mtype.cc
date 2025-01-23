@@ -190,7 +190,7 @@ int m_by_emp_by_mtype_read_column_value(PSI_table_handle *handle,
   return 0;
 }
 
-unsigned long long m_by_emp_by_mtype_get_row_count(void) { return 0; }
+unsigned long long m_by_emp_by_mtype_get_row_count() { return 0; }
 
 void init_m_by_emp_by_mtype_share(PFS_engine_table_share_proxy *share) {
   share->m_table_name = "pfs_example_machine_by_employee_by_type";

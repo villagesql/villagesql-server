@@ -274,7 +274,7 @@ static void reportShutdown(const ndb_mgm_configuration *config, NodeId nodeid,
   }
 }
 
-static void ignore_signals(void) {
+static void ignore_signals() {
   static const int ignore_list[] = {
 #ifdef SIGBREAK
     SIGBREAK,
@@ -922,4 +922,4 @@ void angel_run(const char *progname, const Vector<BaseString> &original_args,
 /*
   Order angel to shutdown it's ndbd
 */
-void angel_stop(void) { stop_child = true; }
+void angel_stop() { stop_child = true; }

@@ -98,14 +98,14 @@ class NdbProcess {
      */
     void add(const Args &args);
 
-    const Vector<BaseString> &args(void) const { return m_args; }
+    const Vector<BaseString> &args() const { return m_args; }
     void clear() { m_args.clear(); }
   };
 
   ~NdbProcess() { assert(!running()); }
   void closeHandles();
   static void printerror();
-  bool stop(void);
+  bool stop();
   bool wait(int &ret, int timeout_msec = 0);
   bool running() const;
 

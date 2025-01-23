@@ -62,7 +62,7 @@ Uint32 g_subgenreid = 0;
 NdbConnection *g_trans = 0;
 static void lookup();
 
-int main(void) {
+int main() {
   ndb_init();
 
   Ndb_cluster_connection con;

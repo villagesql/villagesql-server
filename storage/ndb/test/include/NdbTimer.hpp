@@ -46,7 +46,7 @@ class NdbTimer {
   void printTransactionStatistics(const char *text, int numTransactions,
                                   int numOperations);
   void printTestTimer(int numLoops, int numRecords);
-  void printTotalTime(void);
+  void printTotalTime();
 
  private:
   NDB_TICKS startTicks;
@@ -55,16 +55,16 @@ class NdbTimer {
 
 inline NdbTimer::NdbTimer() { doReset(); }
 
-inline void NdbTimer::doReset(void) {
+inline void NdbTimer::doReset() {
   NdbTick_Invalidate(&startTicks);
   NdbTick_Invalidate(&stopTicks);
 }
 
-inline void NdbTimer::doStart(void) { startTicks = NdbTick_getCurrentTicks(); }
+inline void NdbTimer::doStart() { startTicks = NdbTick_getCurrentTicks(); }
 
-inline void NdbTimer::doStop(void) { stopTicks = NdbTick_getCurrentTicks(); }
+inline void NdbTimer::doStop() { stopTicks = NdbTick_getCurrentTicks(); }
 
-inline Uint64 NdbTimer::elapsedTime(void) const {
+inline Uint64 NdbTimer::elapsedTime() const {
   return NdbTick_Elapsed(startTicks, stopTicks).milliSec();
 }
 
@@ -95,7 +95,7 @@ inline void NdbTimer::printTestTimer(int numLoops, int numRecords) {
       1000.0 / ((double)lapTime / (numLoops * numRecords)));
 }
 
-inline void NdbTimer::printTotalTime(void) {
+inline void NdbTimer::printTotalTime() {
   // Convert to Uint32 in order to be able to print it to screen
   auto lapTime = (Uint32)elapsedTime();
   Uint32 secTime = lapTime / 1000;

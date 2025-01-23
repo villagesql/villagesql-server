@@ -180,7 +180,7 @@ static void setbits(const Uint32 *src, Uint32 *dst, Uint32 bit_pos,
 /****************************************************************************/
 
 /* Set up a bunch of test bit fields. */
-void fill(void) {
+void fill() {
   uint32_t i, j;
   uint32_t p = 0;
 
@@ -195,7 +195,7 @@ void fill(void) {
   }
 }
 
-void write(void) {
+void write() {
   uint32_t i, idx;
 
   for (i = 0, idx = 0; i < N; i++, idx += S) {
@@ -204,7 +204,7 @@ void write(void) {
   }
 }
 
-void read(void) {
+void read() {
   uint32_t buf[4];
   uint32_t i;
 

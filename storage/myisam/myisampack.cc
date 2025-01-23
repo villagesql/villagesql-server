@@ -178,9 +178,9 @@ static char *make_new_name(char *new_name, char *old_name);
 static char *make_old_name(char *new_name, char *old_name);
 static void init_file_buffer(File file, bool read_buffer);
 static int flush_buffer(ulong neaded_length);
-static void end_file_buffer(void);
+static void end_file_buffer();
 static void write_bits(ulonglong value, uint bits);
-static void flush_bits(void);
+static void flush_bits();
 static int save_state(MI_INFO *isam_file, PACK_MRG_INFO *mrg,
                       my_off_t new_length, ha_checksum crc);
 static int save_state_mrg(File file, PACK_MRG_INFO *isam_file,
@@ -310,7 +310,7 @@ static struct my_option my_long_options[] = {
     {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
      0, nullptr, 0, nullptr}};
 
-static void usage(void) {
+static void usage() {
   print_version();
   puts(ORACLE_WELCOME_COPYRIGHT_NOTICE("2002"));
 
@@ -2620,7 +2620,7 @@ static int flush_buffer(ulong neaded_length) {
   return 0;
 }
 
-static void end_file_buffer(void) { my_free(file_buffer.buffer); }
+static void end_file_buffer() { my_free(file_buffer.buffer); }
 
 /* output `bits` low bits of `value' */
 
@@ -2655,7 +2655,7 @@ static void write_bits(ulonglong value, uint bits) {
 
 /* Flush bits in bit_buffer to buffer */
 
-static void flush_bits(void) {
+static void flush_bits() {
   int bits;
   ulonglong bit_buffer;
 

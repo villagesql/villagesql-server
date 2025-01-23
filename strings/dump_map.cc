@@ -35,7 +35,7 @@ static void print_short_array(unsigned short *a, size_t width) {
   printf("};\n");
 }
 
-int main(void) {
+int main() {
   char str[160];
   unsigned short touni[256];
   unsigned short fromuni[65536];

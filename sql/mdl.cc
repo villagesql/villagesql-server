@@ -88,7 +88,7 @@ static PSI_memory_info all_mdl_memory[] = {
   Initialise all the performance schema instrumentation points
   used by the MDL subsystem.
 */
-static void init_mdl_psi_keys(void) {
+static void init_mdl_psi_keys() {
   int count;
 
   count = static_cast<int>(array_elements(all_mdl_mutexes));

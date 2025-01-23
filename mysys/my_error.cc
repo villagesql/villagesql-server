@@ -408,7 +408,7 @@ bool my_error_unregister(int first, int last) {
     not released here as they may be static.
 */
 
-void my_error_unregister_all(void) {
+void my_error_unregister_all() {
   struct my_err_head *cursor, *saved_next;
 
   for (cursor = my_errmsgs_globerrs.meh_next; cursor != nullptr;

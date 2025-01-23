@@ -169,7 +169,7 @@ bool Ndb_component::is_server_started() {
   return server_started;
 }
 
-bool Ndb_component::wait_for_server_started(void) {
+bool Ndb_component::wait_for_server_started() {
   log_verbose(1, "Wait for server start");
 
   mysql_mutex_lock(&m_start_stop_mutex);

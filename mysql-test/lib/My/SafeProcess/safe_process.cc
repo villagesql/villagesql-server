@@ -171,13 +171,13 @@ static void wait_pid(bool should_sigkill) {
   }
 }
 
-static void abort_child(void) {
+static void abort_child() {
   message("Aborting child: %d", static_cast<int>(child_pid));
   kill(-child_pid, SIGABRT);
   wait_pid(false);
 }
 
-static void kill_child(void) {
+static void kill_child() {
   // Terminate whole process group
   message("Terminating child: %d", static_cast<int>(child_pid));
   kill(-child_pid, SIGTERM);
