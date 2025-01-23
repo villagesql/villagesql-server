@@ -1348,8 +1348,11 @@ class Query_block : public Query_term {
   ORDER *find_in_group_list(Item *item, int *rollup_level) const;
   int group_list_size() const;
 
-  /// @returns true if query block contains window functions
+  /// @returns true if query block contains windows
   bool has_windows() const { return m_windows.elements > 0; }
+
+  /// @returns true if query block contains window functions
+  bool has_wfs();
 
   void invalidate();
 

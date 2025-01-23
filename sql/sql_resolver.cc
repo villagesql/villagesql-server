@@ -4632,6 +4632,14 @@ int Query_block::group_list_size() const {
   return size;
 }
 
+bool Query_block::has_wfs() {
+  List_iterator<Window> wi1(m_windows);
+  for (Window *w1 = wi1++; w1 != nullptr; w1 = wi1++) {
+    if (w1->functions().elements > 0) return true;
+  }
+  return false;
+}
+
 /**
   Checks whether an item matches a grouped expression, creates an
   Item_rollup_group_item around it and replaces the reference to it with that
