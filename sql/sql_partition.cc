@@ -213,17 +213,25 @@ static uint32 get_list_array_idx_for_endpoint(partition_info *part_info,
 
 Item *convert_charset_partition_constant(Item *item, const CHARSET_INFO *cs) {
   THD *thd = current_thd;
-  Name_resolution_context *context = &thd->lex->current_query_block()->context;
-  Table_ref *save_list = context->table_list;
+  Query_block *qb = thd->lex->current_query_block();
+  Name_resolution_context *context = nullptr;
+  Table_ref *save_list = nullptr;
   const char *save_where = thd->where;
 
   item = item->convert_charset(thd, cs);
   if (item == nullptr) return nullptr;
-  context->table_list = nullptr;
+
+  if (qb != nullptr) {
+    context = &qb->context;
+    save_list = context->table_list;
+    context->table_list = nullptr;
+  }
   thd->where = "convert character set partition constant";
   if (item->fix_fields(thd, nullptr)) return nullptr;
   thd->where = save_where;
-  context->table_list = save_list;
+  if (qb != nullptr) {
+    context->table_list = save_list;
+  }
   return item;
 }
 

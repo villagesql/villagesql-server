@@ -1253,6 +1253,7 @@ bool opt_no_monitor = false;
 #endif
 
 long opt_upgrade_mode = UPGRADE_AUTO;
+long opt_check_table_funs = CHECK_TABLE_FUN_ABORT;
 bool opt_initialize = false;
 bool opt_skip_replica_start = false;  ///< If set, slave is not autostarted
 bool opt_enable_named_pipe = false;
@@ -10787,6 +10788,15 @@ struct my_option my_long_early_options[] = {
      "tables.",
      &opt_noacl, &opt_noacl, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0,
      nullptr},
+    {"check-table-functions", 0,
+     "On upgrade, the server attempts to open tables with SQL functions in "
+     "their DEFAULT, INDEX, and PARTITION clauses, virtual columns, and "
+     "CONSTRAINTs. "
+     "WARN runs the test but proceeds even if potential issues are found; "
+     "ABORT (default) stops the server if potential issues are found.",
+     &opt_check_table_funs, &opt_check_table_funs,
+     &check_table_fun_mode_typelib, GET_ENUM, REQUIRED_ARG,
+     CHECK_TABLE_FUN_ABORT, 0, 0, nullptr, 0, nullptr},
     {"help", '?', "Display this help and exit.", &opt_help, &opt_help, nullptr,
      GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"verbose", 'v', "Used with --help option for detailed help.", &opt_verbose,

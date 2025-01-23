@@ -12324,6 +12324,12 @@ OBSOLETE_ER_RPL_KILL_OLD_DUMP_THREAD_ENCOUNTERED
 OBSOLETE_ER_RPL_MTA_ALLOW_COMMIT_OUT_OF_ORDER
   eng "The transaction '%-.192s' will commit out of order with respect to its source to follow the group global order."
 
+ER_CHECK_TABLE_FUNCTIONS
+  eng "Can not open table `%s`.`%s`; functions in constraints, partitions, or virtual columns may have failed."
+
+ER_CHECK_TABLE_FUNCTIONS_DETAIL
+  eng "%s"
+
 #
 # End of 8.0 error messages intended to be written to the server error log.
 #
