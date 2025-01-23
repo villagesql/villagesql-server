@@ -1497,7 +1497,7 @@ void update_variable_source(const char *opt_name, const char *value) {
   /* opt_name must be of form --XXXXX which means min length must be 3 */
   if (var_name.length() < 3) return;
 
-  std::size_t pos = var_name.find("=");
+  std::size_t pos = var_name.find('=');
   /* strip the value part if present */
   if (pos != string::npos) var_name = var_name.substr(0, pos);
 
@@ -1508,7 +1508,7 @@ void update_variable_source(const char *opt_name, const char *value) {
   var_name = var_name.substr(2);
 
   /* replace all '-' to '_' */
-  while ((pos = var_name.find("-")) != string::npos)
+  while ((pos = var_name.find('-')) != string::npos)
     var_name.replace(pos, 1, "_");
 
   /*
@@ -1575,7 +1575,7 @@ void set_variable_source(const char *opt_name, void *value) {
   std::size_t pos;
 
   /* replace all '-' to '_' */
-  while ((pos = src_name.find("-")) != string::npos)
+  while ((pos = src_name.find('-')) != string::npos)
     src_name.replace(pos, 1, "_");
 
   auto it = variables_hash.find(src_name);

@@ -143,7 +143,7 @@ std::string Gssapi_client::get_user_name() {
   if (m_kerberos->get_upn(&cached_user_name)) {
     size_t pos = std::string::npos;
     /* Remove realm */
-    if ((pos = cached_user_name.find("@")) != std::string::npos) {
+    if ((pos = cached_user_name.find('@')) != std::string::npos) {
       log_client_dbg("Trimming realm from upn.");
       cached_user_name.erase(pos, cached_user_name.length() - pos + 1);
     }

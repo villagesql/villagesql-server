@@ -175,7 +175,7 @@ bool Gcs_debug_options::get_debug_options(const std::string &debug_options,
       return true;
   }
 
-  if (!match && (debug_options.find(",") != std::string::npos)) return true;
+  if (!match && (debug_options.find(',') != std::string::npos)) return true;
 
   return false;
 }

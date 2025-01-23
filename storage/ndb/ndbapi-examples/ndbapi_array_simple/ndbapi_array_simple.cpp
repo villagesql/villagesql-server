@@ -125,7 +125,7 @@ static int get_string(const NdbRecAttr *attr, string &str) {
     str = string(data_start_ptr, attr_bytes);
     if (attr->getType() == NdbDictionary::Column::Char) {
       /* Fixed Char : remove blank spaces at the end */
-      size_t endpos = str.find_last_not_of(" ");
+      size_t endpos = str.find_last_not_of(' ');
       if (string::npos != endpos) {
         str = str.substr(0, endpos + 1);
       }

@@ -188,13 +188,13 @@ static bool scan_donor_list(const std::string &donor_list,
 
   try {
     /* Don't allow space in donor list. */
-    auto space_pos = donor_list.find(" ");
+    auto space_pos = donor_list.find(' ');
     if (space_pos != std::string::npos) {
       return (false);
     }
     /* Scan through all entries. */
     while (comma_pos != std::string::npos) {
-      comma_pos = donor_list.find(",", begin_pos);
+      comma_pos = donor_list.find(',', begin_pos);
       auto entry_len = comma_pos;
 
       if (entry_len != std::string::npos) {
@@ -206,7 +206,7 @@ static bool scan_donor_list(const std::string &donor_list,
       }
 
       const std::string entry = donor_list.substr(begin_pos, entry_len);
-      auto colon_pos = entry.find(":");
+      auto colon_pos = entry.find(':');
 
       /* Bad entry if no separator is found or found in beginning. */
       if (colon_pos == std::string::npos || colon_pos == 0) {

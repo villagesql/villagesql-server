@@ -336,7 +336,7 @@ bool Kerberos::get_kerberos_config() {
 
   /* IPV6 */
   if (m_ldap_server_host[0] == '[') {
-    auto pos = m_ldap_server_host.find("]");
+    auto pos = m_ldap_server_host.find(']');
     if (pos != m_ldap_server_host.npos &&
         (m_ldap_server_host.length() > (pos + 1)) &&
         (m_ldap_server_host[pos + 1] == ':')) {
@@ -345,7 +345,7 @@ bool Kerberos::get_kerberos_config() {
   }
   /* IPV4 */
   else {
-    auto pos = m_ldap_server_host.find(":");
+    auto pos = m_ldap_server_host.find(':');
     if (pos != m_ldap_server_host.npos) {
       m_ldap_server_host.erase(pos);
     }

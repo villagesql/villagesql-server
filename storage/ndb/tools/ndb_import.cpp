@@ -380,7 +380,7 @@ static int checkarg(TableArg &arg, const char *str) {
     std::string full = str;  // foo/t1.bar.csv
     convertpath(full);
     std::string base = full;  // t1.bar.csv
-    std::size_t slash = full.rfind("/");
+    std::size_t slash = full.rfind('/');
     if (slash != std::string::npos) {
       base = full.substr(slash + 1);
     }
@@ -392,13 +392,13 @@ static int checkarg(TableArg &arg, const char *str) {
     }
     CHK1(ret == 0);
     std::string stem = base;  // t1.bar
-    std::size_t rdot = base.rfind(".");
+    std::size_t rdot = base.rfind('.');
     if (rdot != std::string::npos) {
       stem = base.substr(0, rdot);
     }
     if (g_opt.m_table == nullptr) {
       std::string table = stem;  // t1
-      std::size_t ldot = stem.find(".");
+      std::size_t ldot = stem.find('.');
       if (ldot != std::string::npos) {
         table = stem.substr(0, ldot);
       }
