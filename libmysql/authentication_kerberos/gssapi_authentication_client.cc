@@ -124,7 +124,7 @@ void Gssapi_client::set_upn_info(const std::string &upn,
   m_password = {pwd};
   /* Kerberos core uses UPN for all other operations. UPN has changed, releases
    * current object and create */
-  if (m_kerberos.get()) {
+  if (m_kerberos) {
     m_kerberos.release();
   }
   m_kerberos = std::unique_ptr<auth_kerberos_context::Kerberos>(

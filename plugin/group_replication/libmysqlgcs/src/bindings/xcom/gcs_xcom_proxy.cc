@@ -94,7 +94,7 @@ bool Gcs_xcom_proxy_impl::xcom_client_get_event_horizon(
       xcom_input_try_push_and_get_reply(data);
   std::unique_ptr<Gcs_xcom_input_queue::Reply> reply = future.get();
   bool const processable_reply =
-      (reply.get() != nullptr && reply->get_payload() != nullptr);
+      (reply != nullptr && reply->get_payload() != nullptr);
   if (processable_reply) {
     bool const reply_ok = (reply->get_payload()->cli_err == REQUEST_OK);
     if (reply_ok) {
@@ -137,7 +137,7 @@ bool Gcs_xcom_proxy_impl::xcom_client_set_leaders(
       xcom_input_try_push_and_get_reply(data);
   std::unique_ptr<Gcs_xcom_input_queue::Reply> reply = future.get();
   bool const processable_reply =
-      (reply.get() != nullptr && reply->get_payload() != nullptr);
+      (reply != nullptr && reply->get_payload() != nullptr);
 
   bool successful = false;
   if (processable_reply) {
@@ -161,7 +161,7 @@ bool Gcs_xcom_proxy_impl::xcom_client_get_leaders(uint32_t gid,
       xcom_input_try_push_and_get_reply(data);
   std::unique_ptr<Gcs_xcom_input_queue::Reply> reply = future.get();
   bool const processable_reply =
-      (reply.get() != nullptr && reply->get_payload() != nullptr);
+      (reply != nullptr && reply->get_payload() != nullptr);
   if (processable_reply) {
     bool const reply_ok = (reply->get_payload()->cli_err == REQUEST_OK);
     if (reply_ok) {
@@ -661,7 +661,7 @@ bool Gcs_xcom_proxy_impl::xcom_client_force_config(node_list *nl,
       xcom_input_try_push_and_get_reply(data);
   std::unique_ptr<Gcs_xcom_input_queue::Reply> reply = future.get();
   bool const processable_reply =
-      (reply.get() != nullptr && reply->get_payload() != nullptr);
+      (reply != nullptr && reply->get_payload() != nullptr);
 
   bool successful = false;
   if (processable_reply) {

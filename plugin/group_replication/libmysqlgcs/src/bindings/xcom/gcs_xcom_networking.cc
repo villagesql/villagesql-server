@@ -872,11 +872,11 @@ bool Gcs_ip_allowlist::do_check_block_xcom(
     }
 
     wl_value.reset(xcom_addr_wl->get_value());
-    if (wl_value.get() == nullptr) {
+    if (wl_value == nullptr) {
       continue;
     }
 
-    for (auto &wl_value_entry : *wl_value.get()) {
+    for (auto &wl_value_entry : *wl_value) {
       xcom_octets = &wl_value_entry.first;
 
       // no point in comparing different families, e.g. IPv4 with IPv6

@@ -115,22 +115,22 @@ static bool geometry_collection_apply_equals(const Equals &f,
       switch (g1->type()) {
         case Geometry_type::kPoint:
         case Geometry_type::kMultipoint: {
-          bool mls_empty = !g2_mls.get() || g2_mls->empty();
-          bool mpy_empty = !g2_mpy.get() || g2_mpy->empty();
+          bool mls_empty = !g2_mls || g2_mls->empty();
+          bool mpy_empty = !g2_mpy || g2_mpy->empty();
           if (!mls_empty || !mpy_empty) return false;
           return f(g1, g2_mpt.get());
         }
         case Geometry_type::kLinestring:
         case Geometry_type::kMultilinestring: {
-          bool mpt_empty = !g2_mpt.get() || g2_mpt->empty();
-          bool mpy_empty = !g2_mpy.get() || g2_mpy->empty();
+          bool mpt_empty = !g2_mpt || g2_mpt->empty();
+          bool mpy_empty = !g2_mpy || g2_mpy->empty();
           if (!mpt_empty || !mpy_empty) return false;
           return f(g1, g2_mls.get());
         }
         case Geometry_type::kPolygon:
         case Geometry_type::kMultipolygon: {
-          bool mpt_empty = !g2_mpt.get() || g2_mpt->empty();
-          bool mls_empty = !g2_mls.get() || g2_mls->empty();
+          bool mpt_empty = !g2_mpt || g2_mpt->empty();
+          bool mls_empty = !g2_mls || g2_mls->empty();
           if (!mpt_empty || !mls_empty) return false;
           return f(g1, g2_mpy.get());
         }

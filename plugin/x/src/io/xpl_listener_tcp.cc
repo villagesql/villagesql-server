@@ -101,11 +101,11 @@ class Tcp_creator {
     std::shared_ptr<iface::Socket> result_socket = create_socket_from_addrinfo(
         ai.get(), KEY_socket_x_tcpip, AF_INET, &used_ai);
 
-    if (nullptr == result_socket.get())
+    if (nullptr == result_socket)
       result_socket = create_socket_from_addrinfo(ai.get(), KEY_socket_x_tcpip,
                                                   AF_INET6, &used_ai);
 
-    if (nullptr == result_socket.get()) {
+    if (nullptr == result_socket) {
       m_system_interface->get_socket_error_and_message(&error_code, &errstr);
 
       error_message = String_formatter()
@@ -343,7 +343,7 @@ std::shared_ptr<iface::Socket> Listener_tcp::create_socket() {
   std::shared_ptr<addrinfo> ai =
       creator.resolve_bind_address(m_bind_address, m_port, m_last_error);
 
-  if (nullptr == ai.get()) return std::shared_ptr<iface::Socket>();
+  if (nullptr == ai) return std::shared_ptr<iface::Socket>();
 
   for (uint32_t waited = 0, retry = 1; waited <= m_port_open_timeout; ++retry) {
     result_socket =
@@ -352,7 +352,7 @@ std::shared_ptr<iface::Socket> Listener_tcp::create_socket() {
     // Success, lets break the loop
     // `create_and_bind_socket` in case of invalid socket/failure
     //  returns empty pointer
-    if (nullptr != result_socket.get()) {
+    if (nullptr != result_socket) {
       m_bind_address = creator.get_used_address();
       break;
     }

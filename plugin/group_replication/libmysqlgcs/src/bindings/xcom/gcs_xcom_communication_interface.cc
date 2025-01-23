@@ -538,7 +538,7 @@ end:
 
 void Gcs_xcom_communication::process_user_data_packet(
     Gcs_packet &&packet, std::unique_ptr<Gcs_xcom_nodes> &&xcom_nodes) {
-  m_protocol_changer.decrement_nr_packets_in_transit(packet, *xcom_nodes.get());
+  m_protocol_changer.decrement_nr_packets_in_transit(packet, *xcom_nodes);
 
   /*
    If a view exchange phase is being executed, messages are buffered
