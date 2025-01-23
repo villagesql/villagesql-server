@@ -85,7 +85,7 @@ void ServerRequest::send_error(StatusType status_code,
                 40);
 
   const auto size =
-      snprintf(&buffer[0], buffer.size(), k_err_html_response_format.data(),
+      snprintf(buffer.data(), buffer.size(), k_err_html_response_format.data(),
                status_code, status_text.c_str(), status_text.c_str());
 
   assert(0 != size &&

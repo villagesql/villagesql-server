@@ -163,52 +163,56 @@ INSTANTIATE_TEST_SUITE_P(Strnxfrm, StrnxfrmTest,
 TEST_P(StrnxfrmTest, OriginalSrcDst) {
   CHARSET_INFO *cs = init_collation("latin1_swedish_ci");
   for (size_t ix = 0; ix < num_iterations; ++ix)
-    strnxfrm_orig(cs, &m_dst[0], m_length, m_length, &m_src[0], m_length, 192);
+    strnxfrm_orig(cs, m_dst.data(), m_length, m_length, m_src.data(), m_length,
+                  192);
 }
 
 TEST_P(StrnxfrmTest, OriginalUnrolledSrcDst) {
   CHARSET_INFO *cs = init_collation("latin1_swedish_ci");
   for (size_t ix = 0; ix < num_iterations; ++ix)
-    strnxfrm_orig_unrolled(cs, &m_dst[0], m_length, m_length, &m_src[0],
+    strnxfrm_orig_unrolled(cs, m_dst.data(), m_length, m_length, m_src.data(),
                            m_length, 192);
 }
 
 TEST_P(StrnxfrmTest, ModifiedSrcDst) {
   CHARSET_INFO *cs = init_collation("latin1_swedish_ci");
   for (size_t ix = 0; ix < num_iterations; ++ix)
-    strnxfrm_new(cs, &m_dst[0], m_length, m_length, &m_src[0], m_length, 192);
+    strnxfrm_new(cs, m_dst.data(), m_length, m_length, m_src.data(), m_length,
+                 192);
 }
 
 TEST_P(StrnxfrmTest, ModifiedUnrolledSrcDst) {
   CHARSET_INFO *cs = init_collation("latin1_swedish_ci");
   for (size_t ix = 0; ix < num_iterations; ++ix)
-    strnxfrm_new_unrolled(cs, &m_dst[0], m_length, m_length, &m_src[0],
+    strnxfrm_new_unrolled(cs, m_dst.data(), m_length, m_length, m_src.data(),
                           m_length, 192);
 }
 
 TEST_P(StrnxfrmTest, OriginalSrcSrc) {
   CHARSET_INFO *cs = init_collation("latin1_swedish_ci");
   for (size_t ix = 0; ix < num_iterations; ++ix)
-    strnxfrm_orig(cs, &m_src[0], m_length, m_length, &m_src[0], m_length, 192);
+    strnxfrm_orig(cs, m_src.data(), m_length, m_length, m_src.data(), m_length,
+                  192);
 }
 
 TEST_P(StrnxfrmTest, OriginalUnrolledSrcSrc) {
   CHARSET_INFO *cs = init_collation("latin1_swedish_ci");
   for (size_t ix = 0; ix < num_iterations; ++ix)
-    strnxfrm_orig_unrolled(cs, &m_src[0], m_length, m_length, &m_src[0],
+    strnxfrm_orig_unrolled(cs, m_src.data(), m_length, m_length, m_src.data(),
                            m_length, 192);
 }
 
 TEST_P(StrnxfrmTest, ModifiedSrcSrc) {
   CHARSET_INFO *cs = init_collation("latin1_swedish_ci");
   for (size_t ix = 0; ix < num_iterations; ++ix)
-    strnxfrm_new(cs, &m_src[0], m_length, m_length, &m_src[0], m_length, 192);
+    strnxfrm_new(cs, m_src.data(), m_length, m_length, m_src.data(), m_length,
+                 192);
 }
 
 TEST_P(StrnxfrmTest, ModifiedUnrolledSrcSrc) {
   CHARSET_INFO *cs = init_collation("latin1_swedish_ci");
   for (size_t ix = 0; ix < num_iterations; ++ix)
-    strnxfrm_new_unrolled(cs, &m_src[0], m_length, m_length, &m_src[0],
+    strnxfrm_new_unrolled(cs, m_src.data(), m_length, m_length, m_src.data(),
                           m_length, 192);
 }
 

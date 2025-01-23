@@ -184,7 +184,7 @@ class Query_string_builder_multiple_tags_param_testsuite
  public:
   void SetUp() override {
     values = GetParam().m_values;
-    expected_query = &GetParam().m_expected[0];
+    expected_query = GetParam().m_expected.data();
 
     query.put(GetParam().m_query.c_str());
   }

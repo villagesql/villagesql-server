@@ -41,7 +41,7 @@ bool Perfschema_module::register_pfs_tables(Pfs_tables &tables) {
 
   for (auto &table : tables) shares.push_back(table->get_share());
 
-  if (!reg.is_valid() || reg->add_tables(&shares[0], shares.size()))
+  if (!reg.is_valid() || reg->add_tables(shares.data(), shares.size()))
     return true; /* purecov: inspected */
 
   return false;
@@ -57,7 +57,7 @@ bool Perfschema_module::unregister_pfs_tables(Pfs_tables &tables) {
 
   for (auto &table : tables) shares.push_back(table->get_share());
 
-  if (!reg.is_valid() || reg->delete_tables(&shares[0], shares.size()))
+  if (!reg.is_valid() || reg->delete_tables(shares.data(), shares.size()))
     return true; /* purecov: inspected */
 
   return false;

@@ -132,7 +132,7 @@ static void test_sql() {
 
     test_context->log_test("\nQuery ", session_id_text, ": ");
 
-    snprintf(&(buffer[0]), buffer.length(),
+    snprintf(buffer.data(), buffer.length(),
              "SET SESSION test_session_attach_var_int = %i;",
              expected_session_variable_value(i));
 

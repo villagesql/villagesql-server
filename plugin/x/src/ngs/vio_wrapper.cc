@@ -87,7 +87,7 @@ xpl::Connection_type Vio_wrapper::get_type() const {
 
 sockaddr_storage *Vio_wrapper::peer_addr(std::string *address, uint16_t *port) {
   address->resize(256);
-  char *buffer = &(*address)[0];
+  char *buffer = address->data();
 
   buffer[0] = 0;
 

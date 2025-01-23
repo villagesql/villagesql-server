@@ -190,8 +190,8 @@ class Tcp_creator {
     m_used_address.resize(200, '\0');
 
     if (vio_getnameinfo((const struct sockaddr *)used_ai->ai_addr,
-                        &m_used_address[0], m_used_address.length(), nullptr, 0,
-                        NI_NUMERICHOST)) {
+                        m_used_address.data(), m_used_address.length(), nullptr,
+                        0, NI_NUMERICHOST)) {
       m_used_address[0] = '\0';
     }
 

@@ -54,7 +54,7 @@ class NdbProcess {
 #endif
 
   class Pipes {
-    std::array<pipe_handle_t, 4> fd;
+    pipe_handle_t fd[4];
     bool is_setup{false};
 
    public:

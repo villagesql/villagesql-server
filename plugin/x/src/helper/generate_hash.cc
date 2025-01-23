@@ -53,7 +53,7 @@ namespace xpl {
 
 std::string generate_hash(const std::string &input) {
   std::string hash(2 * SHA1_HASH_SIZE + 2, '\0');
-  ::scrambled_input(&hash[0], input.c_str(), input.length());
+  ::scrambled_input(hash.data(), input.c_str(), input.length());
   hash.resize(2 * SHA1_HASH_SIZE);  // strip the \0
   return hash;
 }

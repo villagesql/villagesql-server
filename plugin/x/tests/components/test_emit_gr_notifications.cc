@@ -30,7 +30,7 @@ bool udf_func_init(UDF_INIT *, UDF_ARGS *udf_args, char *) {
 
   std::string value = "utf8mb4";
   mysql_service_mysql_udf_metadata->argument_set(udf_args, "charset", 0,
-                                                 &value[0]);
+                                                 value.data());
   return false;
 }
 

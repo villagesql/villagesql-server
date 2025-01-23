@@ -4941,7 +4941,7 @@ static void do_perl(struct st_command *command) {
     std::string script = "push @INC, \".\";\n";
     script.append(ds_script.str, ds_script.length);
 
-    str_to_file(temp_file_path, &script[0], script.size());
+    str_to_file(temp_file_path, script.data(), script.size());
 
     /* Format the "perl <filename>" command */
     snprintf(buf, sizeof(buf), "perl %s", temp_file_path);
