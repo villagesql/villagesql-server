@@ -25,7 +25,6 @@
 #define RPL_OPT_TRACKER_H_
 
 #include <my_systime.h>
-#include <mysql/components/library_mysys/option_usage_data.h>
 #include <mysql/components/minimal_chassis.h>
 #include <mysql/components/services/bits/psi_thread_bits.h>
 #include <mysql/components/services/mysql_option_tracker.h>
@@ -106,15 +105,6 @@ class Rpl_opt_tracker {
   void track_replication_replica_internal(bool enabled);
 
   /**
-    Tracks the Group Replication feature usage data.
-    It only updates usage data if the feature is enabled.
-
-    @param enabled  true:  tracks as enabled
-                    false: tracks as disabled
-  */
-  void track_group_replication_usage_internal(bool enabled);
-
-  /**
     Helper method to acquire the mysql_option_tracker_option
     service.
 
@@ -137,16 +127,27 @@ class Rpl_opt_tracker {
 
   my_thread_handle m_thread_id;
   bool m_stop_worker{false};
-  static constexpr const Timeout_type s_tracking_period{3600};  // 1 hour
+  static constexpr const Timeout_type s_tracking_period{600};  // 10 minutes
 
   static const std::string s_c_name_mysql_server;
   static const std::string s_f_name_binary_log;
   static const std::string s_f_name_replication_replica;
-  static const std::string s_f_name_group_replication;
 
-  Option_usage_data m_option_usage_binary_log;
-  Option_usage_data m_option_usage_replication_replica;
-  Option_usage_data m_option_usage_group_replication;
+ public:
+  static unsigned long long m_opt_option_tracker_usage_binary_log;
+  static unsigned long long m_opt_option_tracker_usage_replication_replica;
+
+ protected:
+  static bool cb_binlog(unsigned long long new_value) {
+    m_opt_option_tracker_usage_binary_log = new_value;
+    return false;
+  }
+  static bool cb_binlog_define_failed;
+  static bool cb_replica(unsigned long long new_value) {
+    m_opt_option_tracker_usage_replication_replica = new_value;
+    return false;
+  }
+  static bool cb_replica_define_failed;
 };
 
 /**

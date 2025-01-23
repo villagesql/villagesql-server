@@ -5503,6 +5503,10 @@ static SHOW_VAR group_replication_status_vars[] = {
     {"Gr_last_consensus_end_timestamp",
      (char *)&Plugin_status_variables::get_last_consensus_end_timestamp,
      SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"option_tracker_usage:Group Replication",
+     reinterpret_cast<char *>(
+         &opt_option_tracker_usage_group_replication_plugin),
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
     {nullptr, nullptr, SHOW_LONG, SHOW_SCOPE_GLOBAL},
 };
 

@@ -41,7 +41,7 @@ DEFINE_BOOL_METHOD(Keyring_writer_service_impl::store,
                    (const char *data_id, const char *auth_id,
                     const unsigned char *data, size_t data_size,
                     const char *data_type)) {
-  keyring_file_component_option_usage_set();
+  ++opt_option_tracker_usage_file_keyring;
   return store_template<Keyring_file_backend>(data_id, auth_id, data, data_size,
                                               data_type, *g_keyring_operations,
                                               *g_component_callbacks);
@@ -49,7 +49,7 @@ DEFINE_BOOL_METHOD(Keyring_writer_service_impl::store,
 
 DEFINE_BOOL_METHOD(Keyring_writer_service_impl::remove,
                    (const char *data_id, const char *auth_id)) {
-  keyring_file_component_option_usage_set();
+  ++opt_option_tracker_usage_file_keyring;
   return remove_template<Keyring_file_backend>(
       data_id, auth_id, *g_keyring_operations, *g_component_callbacks);
 }

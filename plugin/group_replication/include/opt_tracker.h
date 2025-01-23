@@ -45,4 +45,10 @@ void track_group_replication_unavailable();
 */
 void track_group_replication_enabled(bool enabled);
 
+/**
+@brief A status variable counter for usage tracking by the option_tracker
+component
+*/
+extern unsigned long long opt_option_tracker_usage_group_replication_plugin;
+
 #endif /* OPT_TRACKER_INCLUDED */

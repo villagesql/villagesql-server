@@ -26,7 +26,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 extern bool validate_password_component_option_usage_init();
 extern bool validate_password_component_option_usage_deinit();
-extern bool validate_password_component_option_usage_set(
-    unsigned long every_nth = 100);
+extern unsigned long long opt_option_tracker_usage_validate_password_component;
 
 #endif /* VALIDATE_PASSWORD_COMPONENT_OPTION_USAGE_H */

@@ -279,7 +279,7 @@ bool Connection_delay_action::notify_event(
     conditional_wait(wait_time);
     rd_lock.lock();
 
-    connection_control_component_option_usage_set();
+    ++opt_option_tracker_usage_connection_control_component;
   }
 
   if (connection_event->status != 0) {

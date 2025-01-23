@@ -28,8 +28,7 @@ namespace connection_control {
 
 extern bool connection_control_component_option_usage_init();
 extern bool connection_control_component_option_usage_deinit();
-extern bool connection_control_component_option_usage_set(
-    unsigned long every_nth_time = 100);
+extern unsigned long long opt_option_tracker_usage_connection_control_component;
 }  // namespace connection_control
 
 #endif /* CONNECTION_CONTROL_COMPONENT_OPTION_USAGE_H */

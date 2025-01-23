@@ -50,7 +50,7 @@ DEFINE_BOOL_METHOD(Keyring_metadata_query_service_impl::is_initialized, ()) {
 DEFINE_BOOL_METHOD(Keyring_metadata_query_service_impl::init,
                    (my_h_keyring_component_metadata_iterator *
                     metadata_iterator)) {
-  keyring_file_component_option_usage_set();
+  ++opt_option_tracker_usage_file_keyring;
   *metadata_iterator = nullptr;
   std::unique_ptr<config_vector> it;
   const bool retval =

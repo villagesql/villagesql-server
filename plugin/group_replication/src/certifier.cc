@@ -33,6 +33,7 @@
 #include "mysql/gtid/tsid.h"
 #include "plugin/group_replication/include/certifier.h"
 #include "plugin/group_replication/include/observer_trans.h"
+#include "plugin/group_replication/include/opt_tracker.h"
 #include "plugin/group_replication/include/plugin.h"
 #include "plugin/group_replication/include/plugin_handlers/metrics_handler.h"
 #include "plugin/group_replication/include/plugin_messages/recovery_metadata_message_compressed_parts.h"
@@ -156,6 +157,13 @@ void Certifier_broadcast_thread::dispatcher() {
   mysql_mutex_unlock(&broadcast_run_lock);
 
   while (!aborted) {
+    // Increase Group Replication feature usage every 10 minutes.
+    if (broadcast_counter % 600 == 0 ||
+        DBUG_EVALUATE_IF("rpl_opt_tracker_small_tracking_period", true,
+                         false)) {
+      ++opt_option_tracker_usage_group_replication_plugin;
+    }
+
     // Broadcast Transaction identifiers every 30 seconds
     if (broadcast_counter % 30 == 0) {
       applier_module->get_pipeline_stats_member_collector()
