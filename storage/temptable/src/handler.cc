@@ -33,6 +33,7 @@ TempTable public handler API implementation. */
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/plugin.h"
 #include "sql/mysqld.h"
+#include "sql/sql_class.h"
 #include "sql/sql_thd_internal_api.h"
 #include "sql/system_variables.h"
 #include "storage/temptable/include/temptable/row.h"

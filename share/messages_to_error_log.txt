@@ -12844,6 +12844,9 @@ ER_RPL_KILL_OLD_DUMP_THREAD_ENCOUNTERED
 ER_RPL_MTA_ALLOW_COMMIT_OUT_OF_ORDER
   eng "The transaction '%-.192s' will commit out of order with respect to its source to follow the group global order."
 
+ER_TEMPTABLE_ENGINE_ERROR
+  eng "Temptable: %s"
+
 # DO NOT add server-to-client messages here;
 # they go in messages_to_clients.txt
 # in the same directory as this file.
@@ -13145,9 +13148,6 @@ ER_INFO_AUTHENTICATION_OCI
 
 ER_SERVER_MEMORY_OPTION_INVALID
    eng "MySQL Server configured to use %llu bytes but can only access %llu bytes."
-
-ER_TEMPTABLE_ENGINE_ERROR
-  eng "Temptable: %s"
 
 ER_WARN_KEYRING_PLUGIN_DEPRECTED
   eng "Plugin %s is of the deprecated keyring plugin type. Please use the corresponding keyring component instead."
