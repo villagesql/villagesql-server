@@ -38,7 +38,7 @@ std::string get_routing_thread_name(const std::string &config_name,
   // Verify this assumption
   constexpr char kRouting[] = "routing";
   size_t kRoutingLen = sizeof(kRouting) - 1;  // -1 to ignore string terminator
-  if (memcmp(p, kRouting, kRoutingLen)) return prefix + ":parse err";
+  if (memcmp(p, kRouting, kRoutingLen) != 0) return prefix + ":parse err";
 
   // skip over "routing[:]"
   p += kRoutingLen;

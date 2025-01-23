@@ -2711,7 +2711,7 @@ void ConfigInfo::print_impl(const char *section_filter,
   /* Iterate through all sections */
   for (int i = 0; i < m_noOfSectionNames; i++) {
     const char *s = m_sectionNames[i];
-    if (section_filter && strcmp(section_filter, s))
+    if (section_filter && strcmp(section_filter, s) != 0)
       continue;  // Skip this section
 
     const Properties *sec = getInfo(s);

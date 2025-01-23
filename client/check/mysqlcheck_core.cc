@@ -291,7 +291,7 @@ static void print_result() {
         list
       */
       if (found_error && opt_auto_repair && what_to_do != DO_REPAIR &&
-          strcmp(row[3], "OK")) {
+          strcmp(row[3], "OK") != 0) {
         if (table_rebuild) {
           if (prev_alter[0])
             alter_table_cmds.push_back(prev_alter);
@@ -315,7 +315,7 @@ static void print_result() {
       } else {
         printf("%s\n%-9s: %s", row[0], row[2], row[3]);
       }
-      if (opt_auto_repair && strcmp(row[2], "note")) {
+      if (opt_auto_repair && strcmp(row[2], "note") != 0) {
         const char *alter_txt = strstr(row[3], "ALTER TABLE");
         found_error = true;
         if (alter_txt) {

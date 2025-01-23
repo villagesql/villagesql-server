@@ -47,7 +47,8 @@ LogHandler::~LogHandler() {}
 void LogHandler::append(const char *pCategory, Logger::LoggerLevel level,
                         const char *pMsg, time_t now) {
   if (m_max_repeat_frequency == 0 || level != m_last_level ||
-      strcmp(pCategory, m_last_category) || strcmp(pMsg, m_last_message)) {
+      strcmp(pCategory, m_last_category) != 0 ||
+      strcmp(pMsg, m_last_message) != 0) {
     if (m_count_repeated_messages > 0)  // print that message
       append_impl(m_last_category, m_last_level, m_last_message, now);
 

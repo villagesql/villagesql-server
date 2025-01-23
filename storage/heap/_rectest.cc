@@ -31,7 +31,7 @@
 int hp_rectest(HP_INFO *info, const uchar *old) {
   DBUG_TRACE;
 
-  if (memcmp(info->current_ptr, old, (size_t)info->s->reclength)) {
+  if (memcmp(info->current_ptr, old, (size_t)info->s->reclength) != 0) {
     set_my_errno(HA_ERR_RECORD_CHANGED);
     return HA_ERR_RECORD_CHANGED; /* Record have changed */
   }

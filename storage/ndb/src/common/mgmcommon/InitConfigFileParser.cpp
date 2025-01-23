@@ -1046,7 +1046,7 @@ Config *InitConfigFileParser::parse_mycnf(const char *cluster_config_suffix) {
             // HostName specified a second time, check that it matches
             const char *host_name;
             require(ctx.m_currentSection->get("HostName", &host_name));
-            if (strcmp(host_name, list[j].c_str())) {
+            if (strcmp(host_name, list[j].c_str()) != 0) {
               ctx.reportError(
                   "Illegal value 'HostName=%s' specified for "
                   "%s, previously set to '%s'",

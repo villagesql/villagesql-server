@@ -737,7 +737,7 @@ bool NdbTableImpl::equal(const NdbTableImpl &obj) const {
     }
   }
   if (m_frm.length() != obj.m_frm.length() ||
-      (memcmp(m_frm.get_data(), obj.m_frm.get_data(), m_frm.length()))) {
+      (memcmp(m_frm.get_data(), obj.m_frm.get_data(), m_frm.length()) != 0)) {
     DBUG_PRINT("info", ("m_frm not equal"));
     DBUG_RETURN(false);
   }

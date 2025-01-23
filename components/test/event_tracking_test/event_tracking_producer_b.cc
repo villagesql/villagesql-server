@@ -104,7 +104,7 @@ bool Event_producer::generate_events() {
           if (query->get(iter, &implementation_name)) return true;
 
           if (strncmp(implementation_name, service_name.c_str(),
-                      service_name.length())) {
+                      service_name.length()) != 0) {
             break;
           }
 

@@ -544,7 +544,7 @@ extern "C" int ndb_logevent_get_next2(const NdbLogEventHandle h,
 
     if (strcmp("log event reply\n", buf) == 0) break;
 
-    if (strcmp("<PING>\n", buf)) g_eventLogger->info("skipped: %s", buf);
+    if (strcmp("<PING>\n", buf) != 0) g_eventLogger->info("skipped: %s", buf);
 
     if (in.timedout()) return 0;
 

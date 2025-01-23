@@ -111,7 +111,7 @@ int mi_update(MI_INFO *info, const uchar *oldrec, uchar *newrec) {
         uint old_length = _mi_make_key(info, i, old_key, oldrec, pos);
 
         if (new_length != old_length ||
-            memcmp((uchar *)old_key, (uchar *)new_key, new_length)) {
+            memcmp((uchar *)old_key, (uchar *)new_key, new_length) != 0) {
           if ((int)i == info->lastinx)
             key_changed |= HA_STATE_WRITTEN; /* Mark that keyfile changed */
           changed |= ((ulonglong)1 << i);
@@ -150,7 +150,7 @@ int mi_update(MI_INFO *info, const uchar *oldrec, uchar *newrec) {
     org_delete_link = share->state.dellink;
     if ((*share->update_record)(info, pos, newrec)) goto err;
     if (!key_changed &&
-        (memcmp((char *)&state, (char *)info->state, sizeof(state)) ||
+        (memcmp((char *)&state, (char *)info->state, sizeof(state)) != 0 ||
          org_split != share->state.split ||
          org_delete_link != share->state.dellink))
       key_changed |= HA_STATE_CHANGED; /* Must update index file */

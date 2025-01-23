@@ -75,6 +75,6 @@ bool different_serialized_meta_data(const uchar *a_meta_data,
                                     const uchar *b_meta_data,
                                     size_t b_meta_data_length) {
   return (a_meta_data_length != b_meta_data_length) ||
-         (memcmp(a_meta_data, b_meta_data, a_meta_data_length));
+         (memcmp(a_meta_data, b_meta_data, a_meta_data_length) != 0);
 }
 /* purecov: end */

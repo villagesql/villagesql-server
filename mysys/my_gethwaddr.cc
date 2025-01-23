@@ -133,7 +133,7 @@ bool my_gethwaddr(uchar *to) {
       /* Get HW address, break if not 0 */
       if (ioctl(fd, SIOCGIFHWADDR, &ifr) >= 0) {
         memcpy(to, &ifr.ifr_hwaddr.sa_data, ETHER_ADDR_LEN);
-        if (memcmp(to, zero_array, ETHER_ADDR_LEN)) {
+        if (memcmp(to, zero_array, ETHER_ADDR_LEN) != 0) {
           res = 0;
           break;
         }

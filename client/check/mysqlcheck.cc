@@ -421,7 +421,7 @@ static int get_options(int *argc, char ***argv, MEM_ROOT *alloc) {
     else
       default_charset = MYSQL_AUTODETECT_CHARSET_NAME;
   }
-  if (strcmp(default_charset, MYSQL_AUTODETECT_CHARSET_NAME) &&
+  if (strcmp(default_charset, MYSQL_AUTODETECT_CHARSET_NAME) != 0 &&
       !get_charset_by_csname(default_charset, MY_CS_PRIMARY, MYF(MY_WME))) {
     printf("Unsupported character set: %s\n", default_charset);
     return 1;

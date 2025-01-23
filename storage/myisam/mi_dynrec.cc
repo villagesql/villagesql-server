@@ -1429,7 +1429,7 @@ static int _mi_cmp_buffer(File file, const uchar *buff, my_off_t filepos,
 
   while (length > IO_SIZE * 2) {
     if (mysql_file_pread(file, temp_buff, next_length, filepos, MYF(MY_NABP)) ||
-        memcmp(buff, temp_buff, next_length))
+        memcmp(buff, temp_buff, next_length) != 0)
       goto err;
     filepos += next_length;
     buff += next_length;

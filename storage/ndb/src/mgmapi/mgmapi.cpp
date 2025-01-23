@@ -3207,14 +3207,14 @@ extern "C" int ndb_mgm_check_connection(NdbMgmHandle handle) {
   if (out.println("%s", "")) goto ndb_mgm_check_connection_error;
 
   in.gets(buf, sizeof(buf));
-  if (strcmp("check connection reply\n", buf))
+  if (strcmp("check connection reply\n", buf) != 0)
     goto ndb_mgm_check_connection_error;
 
   in.gets(buf, sizeof(buf));
-  if (strcmp("result: Ok\n", buf)) goto ndb_mgm_check_connection_error;
+  if (strcmp("result: Ok\n", buf) != 0) goto ndb_mgm_check_connection_error;
 
   in.gets(buf, sizeof(buf));
-  if (strcmp("\n", buf)) goto ndb_mgm_check_connection_error;
+  if (strcmp("\n", buf) != 0) goto ndb_mgm_check_connection_error;
 
   DBUG_RETURN(0);
 
@@ -3708,7 +3708,7 @@ int ndb_mgm_list_certs(NdbMgmHandle handle, ndb_mgm_cert_table **data) {
   char buf[1024];
 
   in.gets(buf, sizeof(buf));
-  if (strcmp("list certs reply\n", buf)) DBUG_RETURN(-1);
+  if (strcmp("list certs reply\n", buf) != 0) DBUG_RETURN(-1);
 
   int ncerts = 0;
   struct ndb_mgm_cert_table *current = *data = nullptr;

@@ -282,7 +282,7 @@ int main(int argc, char *argv[]) {
       if (msg &&
           my_strnncoll(&my_charset_latin1, (const uchar *)msg, 13,
                        (const uchar *)"Unknown Error", 13) &&
-          (!unknown_error || strcmp(msg, unknown_error))) {
+          (!unknown_error || strcmp(msg, unknown_error) != 0)) {
         found = 1;
         if (verbose)
           printf("OS error code %3d:  %s\n", code, msg);

@@ -268,7 +268,8 @@ DEFINE_BOOL_METHOD(mysql_registry_imp::iterator_create,
         other than what's caller is looking for.
       */
       if (strncmp(r->first, service_name_pattern,
-                  std::min(strlen(r->first), strlen(service_name_pattern))))
+                  std::min(strlen(r->first), strlen(service_name_pattern))) !=
+          0)
         return true;
     }
 

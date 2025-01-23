@@ -1439,7 +1439,8 @@ bool Gis_line_string::init_from_wkt(Gis_read_stream *trs, String *wkb) {
   firstpt = wkb->ptr() + np_pos + 4;
   lastpt = wkb->ptr() + wkb->length() - POINT_DATA_SIZE;
 
-  if (n_points < 4 || memcmp(lastpt, firstpt, POINT_DATA_SIZE)) return true;
+  if (n_points < 4 || memcmp(lastpt, firstpt, POINT_DATA_SIZE) != 0)
+    return true;
 
   assert(n_points == (lastpt - firstpt) / POINT_DATA_SIZE + 1);
 
@@ -1467,7 +1468,7 @@ uint Gis_line_string::init_from_wkb(THD *thd, const char *wkb, uint len,
 
   // Make sure all rings of a polygon are closed.
   if (is_polygon_ring() &&
-      memcmp(wkb + 4, wkb_end - POINT_DATA_SIZE, POINT_DATA_SIZE))
+      memcmp(wkb + 4, wkb_end - POINT_DATA_SIZE, POINT_DATA_SIZE) != 0)
     return 0;
 
   if (res->reserve(proper_length, 512)) return 0;

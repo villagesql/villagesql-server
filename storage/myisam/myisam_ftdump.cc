@@ -139,7 +139,7 @@ int main(int argc, char *argv[]) {
     lengths[keylen]++;
 
     if (count || stats) {
-      if (strcmp(buf, buf2)) {
+      if (strcmp(buf, buf2) != 0) {
         if (*buf2) {
           uniq++;
           avg_gws += gws = GWS_IN_USE;

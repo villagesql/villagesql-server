@@ -634,7 +634,7 @@ bool Ndb_schema_dist_client::acl_notify(const char *database, const char *query,
   assert(m_holding_acl_mutex);
   auto key = m_prepared_keys.keys()[0];
   std::string new_query("use ");
-  if (database != nullptr && strcmp(database, "mysql")) {
+  if (database != nullptr && strcmp(database, "mysql") != 0) {
     new_query.append(database).append(";").append(query, query_length);
     query = new_query.c_str();
     query_length = new_query.size();

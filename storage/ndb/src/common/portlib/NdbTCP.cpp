@@ -271,7 +271,7 @@ static void CHECK(const char *name, int chk_result,
   addr_str1 = Ndb_inet_ntop(&addr, buf1, sizeof(buf1));
   fprintf(stderr, "> '%s' -> '%s'\n", name, addr_str1);
 
-  if (chk_address && strcmp(addr_str1, chk_address)) {
+  if (chk_address && strcmp(addr_str1, chk_address) != 0) {
     fprintf(stderr, "> mismatch from expected '%s'\n", chk_address);
     abort();
   }

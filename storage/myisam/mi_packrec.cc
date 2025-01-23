@@ -176,7 +176,7 @@ bool _mi_read_pack_info(MI_INFO *info, bool fix_keys) {
     goto err0;
   }
   /* Only the first three bytes of magic number are independent of version. */
-  if (memcmp((uchar *)header, (uchar *)myisam_pack_file_magic, 3)) {
+  if (memcmp((uchar *)header, (uchar *)myisam_pack_file_magic, 3) != 0) {
     set_my_errno(HA_ERR_WRONG_IN_RECORD);
     goto err0;
   }

@@ -590,7 +590,7 @@ have_plugin:
     goto err;
   }
 
-  if (strcmp(name, plugin->name)) {
+  if (strcmp(name, plugin->name) != 0) {
     errmsg = "name mismatch";
     goto err;
   }

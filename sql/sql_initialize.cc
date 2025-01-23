@@ -240,7 +240,7 @@ bool initialize_create_data_directory(const char *data_home) {
     /* Ignore files that start with . or == 'lost+found'. */
     for (uint i = 0; i < dir->number_off_files; i++) {
       FILEINFO *file = dir->dir_entry + i;
-      if (file->name[0] != '.' && strcmp(file->name, "lost+found")) {
+      if (file->name[0] != '.' && strcmp(file->name, "lost+found") != 0) {
         no_files = false;
         break;
       }

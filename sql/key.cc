@@ -293,7 +293,8 @@ bool key_cmp_if_same(const TABLE *table, const uchar *key, uint idx,
           (HA_BLOB_PART | HA_VAR_LENGTH_PART | HA_BIT_PART))) {
       // We can use memcpy.
       const uint length = min((uint)(key_end - key), store_length);
-      if (memcmp(key, table->record[0] + key_part->offset, length)) return true;
+      if (memcmp(key, table->record[0] + key_part->offset, length) != 0)
+        return true;
     } else {
       // Use the regular comparison function.
       if (key_part->field->key_cmp(key, key_part->length)) return true;

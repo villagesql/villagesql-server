@@ -5679,7 +5679,7 @@ static void print_value(FILE *file, MYSQL_RES *result, MYSQL_ROW row,
 
   for (; (field = mysql_fetch_field(result)); row++) {
     if (!strcmp(field->name, name)) {
-      if (row[0] && row[0][0] && strcmp(row[0], "0")) /* Skip default */
+      if (row[0] && row[0][0] && strcmp(row[0], "0") != 0) /* Skip default */
       {
         fputc(' ', file);
         fputs(prefix, file);
@@ -5962,7 +5962,7 @@ static bool get_gtid_mode(MYSQL *mysql_con) {
      get the gtid_mode value from the second column.
   */
   gtid_mode_val = gtid_mode_row ? (char *)gtid_mode_row[1] : nullptr;
-  gtid_mode = gtid_mode_val && strcmp(gtid_mode_val, "OFF");
+  gtid_mode = gtid_mode_val && strcmp(gtid_mode_val, "OFF") != 0;
   mysql_free_result(gtid_mode_res);
 
   return gtid_mode;
@@ -6292,7 +6292,7 @@ static bool get_view_structure(char *table, char *db) {
       "WITH %s CHECK OPTION" is available from 5.0.2
       Surround it with !50002 comments
     */
-    if (strcmp(row[0], "NONE")) {
+    if (strcmp(row[0], "NONE") != 0) {
       ptr = search_buf;
       search_len =
           (ulong)(strxmov(ptr, "WITH ", row[0], " CHECK OPTION", NullS) - ptr);

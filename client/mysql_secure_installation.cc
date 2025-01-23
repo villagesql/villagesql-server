@@ -499,7 +499,7 @@ static void set_opt_user_password(int component_set) {
 
     password2 = get_tty_password("\nRe-enter new password: ");
 
-    if (strcmp(password1, password2)) {
+    if (strcmp(password1, password2) != 0) {
       fprintf(stdout, "Sorry, passwords do not match.\n");
       continue;
     }

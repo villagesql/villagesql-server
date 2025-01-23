@@ -676,7 +676,7 @@ static void verify_col_data(const char *table, const char *col,
     fprintf(stdout, "\n *** ERROR: FAILED TO GET THE RESULT ***");
     exit(1);
   }
-  if (strcmp(row[field], exp_data)) {
+  if (strcmp(row[field], exp_data) != 0) {
     fprintf(stdout, "\n obtained: `%s` (expected: `%s`)", row[field], exp_data);
     DIE_UNLESS(false);
   }

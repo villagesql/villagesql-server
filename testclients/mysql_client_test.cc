@@ -19388,7 +19388,7 @@ static void test_mysql_binlog() {
     MYSQL_ROW row;
     DIE_IF(mysql_query(mysql, "SHOW BINARY LOG STATUS"));
     DIE_UNLESS(res = mysql_store_result(mysql));
-    if (!(row = mysql_fetch_row(res)) || strcmp(row[0], binlog_name)) {
+    if (!(row = mysql_fetch_row(res)) || strcmp(row[0], binlog_name) != 0) {
       if (!opt_silent) fprintf(stdout, "Skipping test_mysql_binlog\n");
       mysql_free_result(res);
       return;
@@ -22961,7 +22961,7 @@ static void test_wl14839() {
     DIE_UNLESS(false);
   }
   printf("check the status Tls_sni_server_name var's value.\n");
-  if (strcmp(row[1], "gizmo")) {
+  if (strcmp(row[1], "gizmo") != 0) {
     fprintf(stdout, "\n obtained: `%s` (expected: `gizmo`)", row[1]);
     DIE_UNLESS(false);
   }

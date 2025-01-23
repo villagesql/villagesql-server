@@ -75,8 +75,8 @@ void Config::print(const char *section_filter, NodeId nodeid_filter,
           default_info.sectionName(section, section_type);
 
       // Section name filter
-      if (section_filter &&                      // Filter is on
-          strcmp(section_filter, section_name))  // Value is different
+      if (section_filter &&                           // Filter is on
+          strcmp(section_filter, section_name) != 0)  // Value is different
         continue;
 
       // NodeId filter
@@ -92,8 +92,8 @@ void Config::print(const char *section_filter, NodeId nodeid_filter,
       const char *val_str;
       while ((pinfo = param_iter.next())) {
         // Param name filter
-        if (param_filter &&                       // Filter is on
-            strcmp(param_filter, pinfo->_fname))  // Value is different
+        if (param_filter &&                            // Filter is on
+            strcmp(param_filter, pinfo->_fname) != 0)  // Value is different
           continue;
 
         if (section_name)  // Print section name only first time
@@ -306,7 +306,7 @@ static void compare_value(const char *name, const char *key,
     if (it.get(pid, &val)) {
       const char *val2;
       if (it2.get(pid, &val2)) {
-        if (strcmp(val, val2)) {
+        if (strcmp(val, val2) != 0) {
           Properties info(true);
           info.put("Type", DT_DIFF);
           info.put("New", val2);

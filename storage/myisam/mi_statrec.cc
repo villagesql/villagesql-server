@@ -119,7 +119,7 @@ int _mi_cmp_static_record(MI_INFO *info, const uchar *old) {
     if (info->s->file_read(info, info->rec_buff, info->s->base.reclength,
                            info->lastpos, MYF(MY_NABP)))
       return -1;
-    if (memcmp(info->rec_buff, old, (uint)info->s->base.reclength)) {
+    if (memcmp(info->rec_buff, old, (uint)info->s->base.reclength) != 0) {
       DBUG_DUMP("read", old, info->s->base.reclength);
       DBUG_DUMP("disk", info->rec_buff, info->s->base.reclength);
       set_my_errno(HA_ERR_RECORD_CHANGED); /* Record have changed */

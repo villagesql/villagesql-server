@@ -82,7 +82,7 @@ File my_create_with_symlink(const char *linkname, const char *filename,
     if (linkname) filename = linkname;
   } else {
     if (linkname) my_realpath(abs_linkname, linkname, MYF(0));
-    create_link = (linkname && strcmp(abs_linkname, filename));
+    create_link = (linkname && strcmp(abs_linkname, filename) != 0);
   }
 
   if (!(MyFlags & MY_DELETE_OLD)) {
@@ -198,7 +198,7 @@ int my_rename_with_symlink(const char *from, const char *to, myf MyFlags) {
     /* Remove created link */
     my_delete(to, MyFlags);
     /* Rename file back */
-    if (strcmp(link_name, tmp_name))
+    if (strcmp(link_name, tmp_name) != 0)
       (void)my_rename(tmp_name, link_name, MyFlags);
     set_my_errno(save_errno);
     result = 1;

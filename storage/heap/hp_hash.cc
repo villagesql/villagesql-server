@@ -433,7 +433,8 @@ int hp_rec_key_cmp(HP_KEYDEF *keydef, const uchar *rec1, const uchar *rec2) {
                                 char_length2))
         return 1;
     } else {
-      if (memcmp(rec1 + seg->start, rec2 + seg->start, seg->length)) return 1;
+      if (memcmp(rec1 + seg->start, rec2 + seg->start, seg->length) != 0)
+        return 1;
     }
   }
   return 0;
@@ -515,7 +516,7 @@ int hp_key_cmp(HP_KEYDEF *keydef, const uchar *rec, const uchar *key) {
                                 char_length_key))
         return 1;
     } else {
-      if (memcmp(rec + seg->start, key, seg->length)) return 1;
+      if (memcmp(rec + seg->start, key, seg->length) != 0) return 1;
     }
   }
   return 0;

@@ -112,7 +112,7 @@ bool cache_imp::get(unsigned service_name_index, const my_h_service **out_ref) {
           // not the same service
           if ((service_name_length != service_name.name_.length()) ||
               strncmp(implementation_name, service_name.name_.c_str(),
-                      service_name.name_.length()))
+                      service_name.name_.length()) != 0)
             break;
 
           // not in the ignore list

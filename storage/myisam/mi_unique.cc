@@ -66,7 +66,7 @@ bool mi_check_unique(MI_INFO *info, MI_UNIQUEDEF *def, uchar *record,
     if (_mi_search_next(info, info->s->keyinfo + def->key, info->lastkey,
                         MI_UNIQUE_HASH_LENGTH, SEARCH_BIGGER,
                         info->s->state.key_root[def->key]) ||
-        memcmp(info->lastkey, key_buff, MI_UNIQUE_HASH_LENGTH)) {
+        memcmp(info->lastkey, key_buff, MI_UNIQUE_HASH_LENGTH) != 0) {
       info->page_changed = true; /* Can't optimize read next */
       info->lastpos = lastpos;
       return false; /* end of tree */

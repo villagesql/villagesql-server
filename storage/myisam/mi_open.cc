@@ -180,7 +180,7 @@ MI_INFO *mi_open_share(const char *name, MYISAM_SHARE *old_share, int mode,
       goto err;
     }
     if (memcmp((uchar *)share->state.header.file_version,
-               (uchar *)myisam_file_magic, 4)) {
+               (uchar *)myisam_file_magic, 4) != 0) {
       DBUG_PRINT("error", ("Wrong header in %s", name_buff));
       DBUG_DUMP("error_dump", share->state.header.file_version, head_length);
       set_my_errno(HA_ERR_NOT_A_TABLE);

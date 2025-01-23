@@ -168,7 +168,7 @@ void channel_imp::initialize_service_counts() {
         size_t service_name_length = (dot - implementation_name);
         if ((service_name_length != service_name->name_.length()) ||
             strncmp(implementation_name, service_name->name_.c_str(),
-                    service_name->name_.length()))
+                    service_name->name_.length()) != 0)
           break;
       }
       if (dot && m_ignore_list.find(dot) == m_ignore_list.end())
@@ -391,7 +391,7 @@ bool channel_imp::service_notification(const char **services,
         if (query->get(iter, &implementation_name)) break;
 
         if (strncmp(implementation_name, service_name.c_str(),
-                    service_name.length())) {
+                    service_name.length()) != 0) {
           break;
         }
 

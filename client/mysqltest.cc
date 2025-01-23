@@ -2189,7 +2189,7 @@ static int compare_files2(File fd, const char *filename2) {
       error = RESULT_LENGTH_MISMATCH;
       break;
     }
-    if ((memcmp(buff, buff2, len))) {
+    if ((memcmp(buff, buff2, len) != 0)) {
       /* Content of this part differed */
       error = RESULT_CONTENT_MISMATCH;
       break;
@@ -3892,7 +3892,7 @@ static int recursive_copy(DYNAMIC_STRING *ds_source,
         directory "abc" under "def" and copy the files from source to
         destination directory.
       */
-      if (std::strcmp(src_dir_name, dest_dir_name)) {
+      if (std::strcmp(src_dir_name, dest_dir_name) != 0) {
         dynstr_append(ds_destination, src_dir_name);
         my_dirend(dest_dir_info);
         dest_dir_info =
@@ -5176,7 +5176,7 @@ static void ndb_wait_for_binlog_injector() {
 
         /* latest_trans_epoch */
         while (*status && std::strncmp(status, latest_trans_epoch_str,
-                                       sizeof(latest_trans_epoch_str) - 1))
+                                       sizeof(latest_trans_epoch_str) - 1) != 0)
           status++;
         if (*status) {
           status += sizeof(latest_trans_epoch_str) - 1;
@@ -5188,7 +5188,7 @@ static void ndb_wait_for_binlog_injector() {
         /* latest_handled_binlog */
         while (*status &&
                std::strncmp(status, latest_handled_binlog_epoch_str,
-                            sizeof(latest_handled_binlog_epoch_str) - 1))
+                            sizeof(latest_handled_binlog_epoch_str) - 1) != 0)
           status++;
         if (*status) {
           status += sizeof(latest_handled_binlog_epoch_str) - 1;
@@ -5873,7 +5873,7 @@ static void do_shutdown_server(struct st_command *command) {
     // Check if we should generate a minidump on timeout.
     if (query_get_string(mysql, "SHOW VARIABLES LIKE 'core_file'", 1,
                          &ds_file_name) ||
-        std::strcmp("ON", ds_file_name.c_str())) {
+        std::strcmp("ON", ds_file_name.c_str()) != 0) {
     } else {
       // Get the data dir and use it as path for a minidump if needed.
       if (query_get_string(mysql, "SHOW VARIABLES LIKE 'datadir'", 1,
@@ -5953,7 +5953,7 @@ static bool check_and_filter_once_property(DYNAMIC_STRING ds_property,
                                            std::string *warn_argument) {
   if (ds_property.length) {
     // Second argument exists, and it should be "ONCE" keyword.
-    if (std::strcmp(ds_property.str, "ONCE"))
+    if (std::strcmp(ds_property.str, "ONCE") != 0)
       die("Second argument to '%s' command should always be \"ONCE\" keyword.",
           command_names[curr_command->type - 1]);
 
@@ -9784,7 +9784,7 @@ int main(int argc, char **argv) {
     if (log_file.open(opt_logdir, result_file_name, ".log"))
       cleanup_and_exit(1);
   } else {
-    if (std::strcmp(cur_file->file_name, "<stdin>")) {
+    if (std::strcmp(cur_file->file_name, "<stdin>") != 0) {
       if (log_file.open(opt_logdir, cur_file->file_name, ".log"))
         cleanup_and_exit(1);
     } else {
@@ -9797,7 +9797,7 @@ int main(int argc, char **argv) {
       if (progress_file.open(opt_logdir, result_file_name, ".progress"))
         cleanup_and_exit(1);
     } else {
-      if (std::strcmp(cur_file->file_name, "<stdin>")) {
+      if (std::strcmp(cur_file->file_name, "<stdin>") != 0) {
         if (progress_file.open(opt_logdir, cur_file->file_name, ".progress"))
           cleanup_and_exit(1);
       } else {
@@ -9843,7 +9843,7 @@ int main(int argc, char **argv) {
 
   /* Turn on VERIFY_IDENTITY mode only if host=="localhost". */
   if (opt_ssl_mode == SSL_MODE_VERIFY_IDENTITY) {
-    if (!opt_host || std::strcmp(opt_host, "localhost"))
+    if (!opt_host || std::strcmp(opt_host, "localhost") != 0)
       opt_ssl_mode = SSL_MODE_VERIFY_CA;
   }
 

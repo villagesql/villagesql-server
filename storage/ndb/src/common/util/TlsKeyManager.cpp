@@ -296,7 +296,7 @@ int TlsKeyManager::check_server_host_auth(const NodeCertificate &nc,
   /* If the server's certificate is bound to the name "localhost",
      the server's configured HostName must be either "" or "localhost" */
   if (nc.bound_localhost()) {
-    if (strlen(hostname) && strcmp(hostname, "localhost"))
+    if (strlen(hostname) && strcmp(hostname, "localhost") != 0)
       return TlsKeyError::auth2_bad_hostname;
     return 0;
   }
