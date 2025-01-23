@@ -198,9 +198,8 @@ void fix_parameters_syntax(Gcs_interface_parameters &interface_params) {
 
   bool should_configure_allowlist = true;
   if (ip_allowlist_reconfigure_str) {
-    should_configure_allowlist =
-        ip_allowlist_reconfigure_str->compare("on") == 0 ||
-        ip_allowlist_reconfigure_str->compare("true") == 0;
+    should_configure_allowlist = *ip_allowlist_reconfigure_str == "on" ||
+                                 *ip_allowlist_reconfigure_str == "true";
   }
 
   // sets the default ip allowlist
@@ -466,7 +465,7 @@ bool is_parameters_syntax_correct(
     }
 
     for (auto &ip_entry : ip) {
-      if (ip_entry.compare(host) != 0)
+      if (ip_entry != host)
         MYSQL_GCS_LOG_INFO("Translated '" << host << "' to "
                                           << ip_entry.c_str());
     }
@@ -483,7 +482,7 @@ bool is_parameters_syntax_correct(
     // see if any IP matches fromt he root namespace
     for (it = ips.begin(); it != ips.end() && !matches_local_ip; it++) {
       for (auto &ip_entry : ip) {
-        matches_local_ip = (*it).first.compare(ip_entry) == 0;
+        matches_local_ip = (*it).first == ip_entry;
 
         if (matches_local_ip) break;
       }
@@ -516,7 +515,7 @@ bool is_parameters_syntax_correct(
         for (it = namespace_ips.begin();
              it != namespace_ips.end() && !matches_local_ip; it++) {
           for (auto &ip_entry : ip) {
-            matches_local_ip = (*it).first.compare(ip_entry) == 0;
+            matches_local_ip = (*it).first == ip_entry;
 
             if (matches_local_ip) break;
           }

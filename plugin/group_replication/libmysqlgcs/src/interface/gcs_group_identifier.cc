@@ -36,6 +36,6 @@ bool Gcs_group_identifier::operator<(const Gcs_group_identifier &other) const {
 }
 
 bool Gcs_group_identifier::operator==(const Gcs_group_identifier &other) const {
-  return group_id.compare(other.group_id) == 0;
+  return group_id == other.group_id;
 }
 /* purecov: end */

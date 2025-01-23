@@ -5642,7 +5642,7 @@ static bool validate_bug_number_argument(std::string bug_number) {
 
   // Check if string representing a bug number starts 'BUG' keyword.
   // Note: This keyword is case-inseinsitive.
-  if (bug_number.substr(0, 3).compare("bug") != 0) return false;
+  if (bug_number.substr(0, 3) != "bug") return false;
 
   // Check if the string contains '#' after 'BUG' keyword
   if (bug_number.at(3) != '#') return false;

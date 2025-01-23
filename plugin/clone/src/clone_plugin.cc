@@ -266,7 +266,7 @@ static int match_valid_donor_address(MYSQL_THD thd, const char *host,
                    transform_lower);
 
     /* Check if input matches with configured host and port. */
-    if (0 == valid_host.compare(host) && port == valid_port) {
+    if (host == valid_host && port == valid_port) {
       found = true;
     }
     return (found);

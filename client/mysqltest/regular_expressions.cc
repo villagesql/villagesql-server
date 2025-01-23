@@ -189,7 +189,7 @@ int multi_reg_replace(struct st_replace_regex *r, char *val, size_t *len) {
           If some replacement is performed, write the replaced string into the
           output buffer.
         */
-        if (sout.compare(sin) != 0) {
+        if (sout != sin) {
           *len = sout.length();
           if (*len >= (uint)*buf_len_p) {
             uint need_buf_len = (*len) + 1;

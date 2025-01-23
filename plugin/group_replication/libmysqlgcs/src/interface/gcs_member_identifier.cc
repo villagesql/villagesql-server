@@ -43,5 +43,5 @@ bool Gcs_member_identifier::operator<(
 
 bool Gcs_member_identifier::operator==(
     const Gcs_member_identifier &other) const {
-  return m_member_id.compare(other.m_member_id) == 0;
+  return m_member_id == other.m_member_id;
 }

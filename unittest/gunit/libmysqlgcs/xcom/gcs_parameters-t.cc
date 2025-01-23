@@ -114,14 +114,12 @@ TEST_F(GcsParametersTest, ParametersCompression) {
       m_xcs->get_initialization_parameters();
 
   // compression is ON by default
-  ASSERT_TRUE(init_params.get_parameter("compression")->compare("on") == 0);
+  ASSERT_TRUE(*init_params.get_parameter("compression") == "on");
 
   // compression_threshold is set to the default
   std::stringstream ss;
   ss << Gcs_message_stage_lz4::DEFAULT_THRESHOLD;
-  ASSERT_TRUE(
-      init_params.get_parameter("compression_threshold")->compare(ss.str()) ==
-      0);
+  ASSERT_TRUE(*init_params.get_parameter("compression_threshold") == ss.str());
 
   // finalize the interface
   err = m_gcs->finalize();
@@ -152,12 +150,11 @@ TEST_F(GcsParametersTest, ParametersCompression) {
   ASSERT_EQ(err, GCS_OK);
 
   // compression is ON by default
-  ASSERT_TRUE(init_params2.get_parameter("compression")->compare(compression) ==
-              0);
+  ASSERT_TRUE(*init_params2.get_parameter("compression") == compression);
 
   // compression is set to the value we explicitly configured
-  ASSERT_TRUE(init_params2.get_parameter("compression_threshold")
-                  ->compare(compression_threshold) == 0);
+  ASSERT_TRUE(*init_params2.get_parameter("compression_threshold") ==
+              compression_threshold);
 
   err = m_gcs->finalize();
 
@@ -189,14 +186,13 @@ TEST_F(GcsParametersTest, ParametersFragmentation) {
       m_xcs->get_initialization_parameters();
 
   // fragmentation is ON by default
-  ASSERT_TRUE(init_params.get_parameter("fragmentation")->compare("on") == 0);
+  ASSERT_TRUE(*init_params.get_parameter("fragmentation") == "on");
 
   // fragmentation_threshold is set to the default
   std::stringstream ss;
   ss << Gcs_message_stage_split_v2::DEFAULT_THRESHOLD;
-  ASSERT_TRUE(
-      init_params.get_parameter("fragmentation_threshold")->compare(ss.str()) ==
-      0);
+  ASSERT_TRUE(*init_params.get_parameter("fragmentation_threshold") ==
+              ss.str());
 
   // finalize the interface
   err = m_gcs->finalize();
@@ -228,12 +224,11 @@ TEST_F(GcsParametersTest, ParametersFragmentation) {
   ASSERT_EQ(err, GCS_OK);
 
   // fragmentation is ON by default
-  ASSERT_TRUE(
-      init_params2.get_parameter("fragmentation")->compare(fragmentation) == 0);
+  ASSERT_TRUE(*init_params2.get_parameter("fragmentation") == fragmentation);
 
   // fragmentation is set to the value we explicitly configured
-  ASSERT_TRUE(init_params2.get_parameter("fragmentation_threshold")
-                  ->compare(fragmentation_threshold) == 0);
+  ASSERT_TRUE(*init_params2.get_parameter("fragmentation_threshold") ==
+              fragmentation_threshold);
 
   err = m_gcs->finalize();
 

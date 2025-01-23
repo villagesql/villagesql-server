@@ -127,7 +127,7 @@ TEST_F(XcomStatisticsManagerTest, AddAndGetMultipleSuspiciousTest) {
   std::string node_to_find{"node1"};
 
   auto find_node = [&](Gcs_node_suspicious &elem) {
-    return elem.m_node_address.compare(node_to_find) == 0;
+    return elem.m_node_address == node_to_find;
   };
 
   auto result1 =

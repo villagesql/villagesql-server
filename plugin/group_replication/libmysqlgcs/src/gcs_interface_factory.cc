@@ -100,7 +100,7 @@ enum_available_interfaces Gcs_interface_factory::from_string(
   std::transform(binding.begin(), binding.end(),
                  std::back_inserter(binding_to_lower), ::tolower);
 
-  if (binding_to_lower.compare("xcom") == 0) retval = XCOM;
+  if (binding_to_lower == "xcom") retval = XCOM;
 
   return retval;
 }

@@ -330,7 +330,7 @@ static bool skip_own_peer_address(
 
   for (const auto &local_node_info_str_ip_entry : my_own_addresses) {
     for (auto &peer_rep_ip_entry : peer_rep_ip) {
-      if (peer_rep_ip_entry.compare(local_node_info_str_ip_entry.first) == 0 &&
+      if (peer_rep_ip_entry == local_node_info_str_ip_entry.first &&
           peer_port == my_own_port) {
         // Skip own address if configured in the peer list
         return true;

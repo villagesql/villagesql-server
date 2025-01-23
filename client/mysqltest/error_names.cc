@@ -33,7 +33,7 @@ static st_error global_error_names[] = {
 
 int get_errcode_from_name(std::string error_name) {
   for (st_error *error = global_error_names; error->name; error++) {
-    if (error_name.compare(error->name) == 0) return error->error_code;
+    if (error_name == error->name) return error->error_code;
   }
 
   // Unknown SQL error name, return -1

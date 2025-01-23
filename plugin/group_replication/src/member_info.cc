@@ -806,7 +806,7 @@ void Group_member_info::set_is_primary_election_running(bool is_running) {
 
 bool Group_member_info::operator==(Group_member_info &other) {
   MUTEX_LOCK(lock, &update_lock);
-  return uuid.compare(other.get_uuid()) == 0;
+  return uuid == other.get_uuid();
 }
 
 const char *Group_member_info::get_member_status_string(

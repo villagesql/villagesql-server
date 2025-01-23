@@ -246,7 +246,7 @@ bool get_local_private_addresses(std::map<std::string, int> &out,
     std::string ip = it->first;
     int cidr = it->second;
 
-    if (ip.compare("::1") == 0 || ip.compare(0, 2, "fd") == 0 ||
+    if (ip == "::1" || ip.compare(0, 2, "fd") == 0 ||
         ip.compare(0, 4, "fe80") == 0) {
       out.insert(std::make_pair(ip, cidr));
     }

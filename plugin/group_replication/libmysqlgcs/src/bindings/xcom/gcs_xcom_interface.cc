@@ -472,9 +472,8 @@ enum_gcs_error Gcs_xcom_interface::configure(
 
   bool should_configure_allowlist = false;
   if (ip_allowlist_reconfigure_str) {
-    should_configure_allowlist =
-        ip_allowlist_reconfigure_str->compare("on") == 0 ||
-        ip_allowlist_reconfigure_str->compare("true") == 0;
+    should_configure_allowlist = *ip_allowlist_reconfigure_str == "on" ||
+                                 *ip_allowlist_reconfigure_str == "true";
   }
 
   if (should_configure_allowlist) {
@@ -542,8 +541,8 @@ enum_gcs_error Gcs_xcom_interface::configure(
    */
   if (bootstrap_group_str != nullptr) {
     // Changing bootstrap_group
-    bool received_boot_param = bootstrap_group_str->compare("on") == 0 ||
-                               bootstrap_group_str->compare("true") == 0;
+    bool received_boot_param =
+        *bootstrap_group_str == "on" || *bootstrap_group_str == "true";
 
     m_boot = received_boot_param;
     xcom_control->set_boot_node(m_boot);
@@ -960,8 +959,7 @@ bool Gcs_xcom_interface::initialize_xcom(
 
   MYSQL_GCS_LOG_DEBUG("Configured Local member: %s", local_node_str->c_str())
 
-  m_boot = bootstrap_group_str->compare("on") == 0 ||
-           bootstrap_group_str->compare("true") == 0;
+  m_boot = *bootstrap_group_str == "on" || *bootstrap_group_str == "true";
 
   MYSQL_GCS_LOG_DEBUG("Configured Bootstrap: %s", bootstrap_group_str->c_str())
 
@@ -1238,7 +1236,7 @@ enum_gcs_error Gcs_xcom_interface::configure_message_stages(
    */
   const std::string *sptr =
       m_initialization_parameters.get_parameter("compression");
-  if (sptr->compare("on") == 0) {
+  if (*sptr == "on") {
     compression_threshold = static_cast<unsigned long long>(atoll(
         m_initialization_parameters.get_parameter("compression_threshold")
             ->c_str()));
@@ -1249,7 +1247,7 @@ enum_gcs_error Gcs_xcom_interface::configure_message_stages(
   }
 
   sptr = m_initialization_parameters.get_parameter("fragmentation");
-  if (sptr->compare("on") == 0) {
+  if (*sptr == "on") {
     fragmentation_threshold = static_cast<unsigned long long>(atoll(
         m_initialization_parameters.get_parameter("fragmentation_threshold")
             ->c_str()));

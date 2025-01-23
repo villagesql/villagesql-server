@@ -129,8 +129,8 @@ TEST_F(XcomStatisticsTest, SuspiciousCountTest) {
 
   uint32_t node_to_find = 0;
   auto find_node_lambda = [&](Gcs_node_suspicious elem) {
-    return elem.m_node_address.compare(
-               suspicious_list.at(node_to_find).m_node_address) == 0;
+    return elem.m_node_address ==
+           suspicious_list.at(node_to_find).m_node_address;
   };
 
   for (; node_to_find < suspicious_list_ret.size(); node_to_find++) {
@@ -142,7 +142,7 @@ TEST_F(XcomStatisticsTest, SuspiciousCountTest) {
   }
 
   auto do_not_find_node_lambda = [](Gcs_node_suspicious elem) {
-    return elem.m_node_address.compare("node6") == 0;
+    return elem.m_node_address == "node6";
   };
 
   auto result_from_find =
