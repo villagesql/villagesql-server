@@ -2516,7 +2516,10 @@ void CostingReceiver::ProposeRangeScans(
           materialize_subqueries, num_output_rows_after_filter, &new_path,
           &new_fd_set);
 
-      string description_for_trace = string(key->name) + " range";
+      string description_for_trace;
+      if (TraceStarted(m_thd)) {
+        description_for_trace = string(key->name) + " range";
+      }
       ProposeAccessPathWithOrderings(
           TableBitmap(node_idx), new_fd_set,
           /*obsolete_orderings=*/0, &new_path,
@@ -2588,7 +2591,10 @@ void CostingReceiver::ProposeRangeScans(
             materialize_subqueries, num_output_rows_after_filter, &new_path,
             &new_fd_set);
 
-        string description_for_trace = string(key->name) + " ordered range";
+        string description_for_trace;
+        if (TraceStarted(m_thd)) {
+          description_for_trace = string(key->name) + " ordered range";
+        }
         auto access_path_it = m_access_paths.find(TableBitmap(node_idx));
         assert(access_path_it != m_access_paths.end());
         ProposeAccessPath(
@@ -2983,12 +2989,14 @@ void CostingReceiver::ProposeRowIdOrderedIntersect(
       ror_intersect_path.filter_predicates, m_graph->materializable_predicates);
   // Add some trace info.
   string description_for_trace;
-  for (AccessPath *path : *ror_intersect_path.rowid_intersection().children) {
-    description_for_trace +=
-        string(param->table->key_info[path->index_range_scan().index].name) +
-        " ";
+  if (TraceStarted(m_thd)) {
+    for (AccessPath *path : *ror_intersect_path.rowid_intersection().children) {
+      description_for_trace +=
+          string(param->table->key_info[path->index_range_scan().index].name) +
+          " ";
+    }
+    description_for_trace += "intersect";
   }
-  description_for_trace += "intersect";
   for (bool materialize_subqueries : {false, true}) {
     AccessPath new_path = ror_intersect_path;
     FunctionalDependencySet new_fd_set;
@@ -3129,23 +3137,27 @@ void CostingReceiver::ProposeRowIdOrderedUnion(
                                             m_graph->materializable_predicates);
   // Add some trace info.
   string description_for_trace;
-  for (AccessPath *path : *ror_union_path.rowid_union().children) {
-    if (path->type == AccessPath::ROWID_INTERSECTION) {
-      description_for_trace += "[";
-      for (AccessPath *range_path : *path->rowid_intersection().children) {
+  if (TraceStarted(m_thd)) {
+    for (AccessPath *path : *ror_union_path.rowid_union().children) {
+      if (path->type == AccessPath::ROWID_INTERSECTION) {
+        description_for_trace += "[";
+        for (AccessPath *range_path : *path->rowid_intersection().children) {
+          description_for_trace +=
+              string(
+                  param->table->key_info[range_path->index_range_scan().index]
+                      .name) +
+              " ";
+        }
+        description_for_trace += "intersect] ";
+      } else {
         description_for_trace +=
-            string(param->table->key_info[range_path->index_range_scan().index]
-                       .name) +
+            string(
+                param->table->key_info[path->index_range_scan().index].name) +
             " ";
       }
-      description_for_trace += "intersect] ";
-    } else {
-      description_for_trace +=
-          string(param->table->key_info[path->index_range_scan().index].name) +
-          " ";
     }
+    description_for_trace += "union";
   }
-  description_for_trace += "union";
   for (bool materialize_subqueries : {false, true}) {
     AccessPath new_path = ror_union_path;
     FunctionalDependencySet new_fd_set;
@@ -3351,12 +3363,14 @@ void CostingReceiver::ProposeIndexMerge(
                                             m_graph->materializable_predicates);
   // Add some trace info.
   string description_for_trace;
-  for (AccessPath *path : *imerge_path.index_merge().children) {
-    description_for_trace +=
-        string(param->table->key_info[path->index_range_scan().index].name) +
-        " ";
+  if (TraceStarted(m_thd)) {
+    for (AccessPath *path : *imerge_path.index_merge().children) {
+      description_for_trace +=
+          string(param->table->key_info[path->index_range_scan().index].name) +
+          " ";
+    }
+    description_for_trace += "sort-union";
   }
-  description_for_trace += "sort-union";
   for (bool materialize_subqueries : {false, true}) {
     AccessPath new_path = imerge_path;
     FunctionalDependencySet new_fd_set;
