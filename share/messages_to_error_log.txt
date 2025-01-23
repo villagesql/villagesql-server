@@ -5781,8 +5781,8 @@ ER_IB_MSG_81
 ER_IB_MSG_82
   eng "%s"
 
-ER_IB_MSG_83
-  eng "%s"
+ER_IB_ERR_PAGE_DIRTY_AT_SHUTDOWN
+  eng "Page still fixed or dirty at shutdown. %s"
 
 ER_IB_MSG_84
   eng "%s"
