@@ -3913,7 +3913,7 @@ bool Query_expression::is_mergeable() const {
   Query_block *const select = first_query_block();
   return !select->is_grouped() && select->having_cond() == nullptr &&
          !select->is_distinct() && select->has_tables() &&
-         !select->has_limit() && !select->has_windows();
+         !select->has_limit() && !select->has_wfs();
 }
 
 /**
