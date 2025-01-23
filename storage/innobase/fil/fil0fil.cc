@@ -10572,7 +10572,7 @@ byte *fil_tablespace_redo_extend(byte *ptr, const byte *end,
 
 #if defined(UNIV_DEBUG)
   /* Validate that there are no pages in the buffer pool. */
-  buf_must_be_all_freed();
+  buf_assert_all_are_replaceable();
 #endif /* UNIV_DEBUG */
 
   /* Adjust the actual allocation size to take care of the allocation
