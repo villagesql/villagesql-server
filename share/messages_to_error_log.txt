@@ -13146,6 +13146,9 @@ ER_INFO_AUTHENTICATION_OCI
 ER_SERVER_MEMORY_OPTION_INVALID
    eng "MySQL Server configured to use %llu bytes but can only access %llu bytes."
 
+ER_TEMPTABLE_ENGINE_ERROR
+  eng "Temptable: %s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
