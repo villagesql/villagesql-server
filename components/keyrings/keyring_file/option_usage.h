@@ -26,7 +26,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 extern bool keyring_file_component_option_usage_init();
 extern bool keyring_file_component_option_usage_deinit();
-extern bool keyring_file_component_option_usage_set(
-    unsigned long every_nth = 100);
+extern unsigned long long opt_option_tracker_usage_file_keyring;
 
 #endif /* KEYRING_FILE_COMPONENT_OPTION_USAGE_H */

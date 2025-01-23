@@ -27,8 +27,9 @@ ADD_LIBRARY(library_mysys STATIC
   my_memory.cc
   my_hex_tools.cc
   my_base64_encode.cc
-  option_usage_data.cc
+  option_tracker_usage.cc
 )
+ADD_DEPENDENCIES(library_mysys GenError)
 
 IF(UNIX)
   TARGET_COMPILE_OPTIONS(library_mysys PRIVATE "-fvisibility=hidden")

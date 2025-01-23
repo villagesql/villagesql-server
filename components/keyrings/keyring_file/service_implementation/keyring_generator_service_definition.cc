@@ -40,7 +40,7 @@ namespace service_definition {
 DEFINE_BOOL_METHOD(Keyring_generator_service_impl::generate,
                    (const char *data_id, const char *auth_id,
                     const char *data_type, size_t data_size)) {
-  keyring_file_component_option_usage_set();
+  ++opt_option_tracker_usage_file_keyring;
   return generate_template<Keyring_file_backend>(
       data_id, auth_id, data_type, data_size, *g_keyring_operations,
       *g_component_callbacks);

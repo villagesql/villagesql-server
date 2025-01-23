@@ -45,6 +45,7 @@ typedef enum opt_connection_control {
 */
 typedef enum stats_connection_control {
   STAT_CONNECTION_DELAY_TRIGGERED = 0,
+  STAT_OPTION_USAGE = 1,
   STAT_LAST /* Must be last */
 } stats_connection_control;
 

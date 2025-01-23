@@ -43,7 +43,7 @@ namespace service_definition {
 DEFINE_BOOL_METHOD(Keyring_reader_service_impl::init,
                    (const char *data_id, const char *auth_id,
                     my_h_keyring_reader_object *reader_object)) {
-  keyring_file_component_option_usage_set();
+  ++opt_option_tracker_usage_file_keyring;
   std::unique_ptr<Iterator<Data>> it;
   const int retval = init_reader_template<Keyring_file_backend>(
       data_id, auth_id, it, *g_keyring_operations, *g_component_callbacks);

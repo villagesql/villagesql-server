@@ -459,6 +459,10 @@ static int show_delay_generated(MYSQL_THD thd [[maybe_unused]], SHOW_VAR *var,
 /** Array of status variables. Used in plugin declaration. */
 SHOW_VAR
 connection_control_status_variables[STAT_LAST + 1] = {
+    {"option_tracker_usage:Connection DoS control",
+     reinterpret_cast<char *>(
+         &opt_option_tracker_usage_connection_control_plugin),
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
     {"Connection_control_delay_generated", (char *)&show_delay_generated,
      SHOW_FUNC, SHOW_SCOPE_GLOBAL},
     {nullptr, nullptr, enum_mysql_show_type(0), enum_mysql_show_scope(0)}};

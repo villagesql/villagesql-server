@@ -109,6 +109,10 @@ static SHOW_VAR validate_password_status_variables[] = {
     {"validate_password.dictionary_file_words_count",
      (char *)&validate_password_dictionary_file_words_count, SHOW_LONGLONG,
      SHOW_SCOPE_GLOBAL},
+    {"option_tracker_usage:Password validation component",
+     reinterpret_cast<char *>(
+         &opt_option_tracker_usage_validate_password_component),
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
     {nullptr, nullptr, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 
 /**
@@ -547,7 +551,7 @@ DEFINE_BOOL_METHOD(validate_password_imp::get_strength,
     return true;
   }
 
-  validate_password_component_option_usage_set();
+  ++opt_option_tracker_usage_validate_password_component;
   if (!is_valid_password_by_user_name(thd, password)) return true;
 
   if (mysql_service_mysql_string_iterator->iterator_create(password, &iter)) {
@@ -596,7 +600,7 @@ DEFINE_BOOL_METHOD(validate_password_imp::validate,
         .message("validate_password component is not yet initialized");
     return true;
   }
-  validate_password_component_option_usage_set();
+  ++opt_option_tracker_usage_validate_password_component;
   return (validate_password_policy_strength(thd, password,
                                             validate_password_policy) == 0);
 }
@@ -617,7 +621,7 @@ DEFINE_BOOL_METHOD(validate_password_imp::validate,
 DEFINE_BOOL_METHOD(validate_password_changed_characters_imp::validate,
                    (my_h_string current_password, my_h_string new_password,
                     uint *minimum_required, uint *changed)) {
-  validate_password_component_option_usage_set();
+  ++opt_option_tracker_usage_validate_password_component;
   try {
     uint current_length = 0, new_length = 0;
     if (changed) *changed = 0;

@@ -310,6 +310,12 @@ SHOW_VAR static component_connection_control_status_variables[STAT_LAST + 1] = {
      .value = reinterpret_cast<char *>(&show_delay_generated),
      .type = SHOW_FUNC,
      .scope = SHOW_SCOPE_GLOBAL},
+    {.name = "option_tracker_usage:Connection control component",
+     .value = reinterpret_cast<char *>(
+         &connection_control::
+             opt_option_tracker_usage_connection_control_component),
+     .type = SHOW_LONGLONG,
+     .scope = SHOW_SCOPE_GLOBAL},
     {.name = nullptr,
      .value = nullptr,
      .type = static_cast<enum_mysql_show_type>(0),

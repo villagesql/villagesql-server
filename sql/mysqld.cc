@@ -12008,6 +12008,14 @@ SHOW_VAR status_vars[] = {
     {"Deprecated_use_fk_on_non_standard_key_last_timestamp",
      (char *)&show_deprecated_use_fk_on_non_standard_key_last_timestamp,
      SHOW_FUNC, SHOW_SCOPE_GLOBAL},
+    {"option_tracker_usage:Binary Log",
+     reinterpret_cast<char *>(
+         &Rpl_opt_tracker::m_opt_option_tracker_usage_binary_log),
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
+    {"option_tracker_usage:Replication Replica",
+     reinterpret_cast<char *>(
+         &Rpl_opt_tracker::m_opt_option_tracker_usage_replication_replica),
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_FUNC, SHOW_SCOPE_ALL}};
 
 void add_terminator(vector<my_option> *options) {

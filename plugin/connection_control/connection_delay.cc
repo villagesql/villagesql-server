@@ -566,7 +566,7 @@ bool Connection_delay_action::notify_event(
     conditional_wait(thd, wait_time);
     rd_lock.lock();
 
-    connection_control_plugin_option_usage_set();
+    ++opt_option_tracker_usage_connection_control_plugin;
 
     /* Introduce a delay to check that connection delay status doesn't last
      * longer than configured */
