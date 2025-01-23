@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cctype>
 #include <climits>
+#include <ostream>
 #include <stdexcept>
 #include <string>
 
