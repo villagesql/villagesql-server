@@ -149,7 +149,7 @@ class mock_gcs_xcom_proxy : public Gcs_xcom_proxy_base {
   /* Mocking fails compilation on Windows. It attempts to copy the std::future
    * which is non-copyable. */
   Gcs_xcom_input_queue::future_reply xcom_input_try_push_and_get_reply(
-      app_data_ptr) {
+      app_data_ptr) override {
     return std::future<std::unique_ptr<Gcs_xcom_input_queue::Reply>>();
   }
   MOCK_METHOD0(xcom_input_try_pop, xcom_input_request_ptr());

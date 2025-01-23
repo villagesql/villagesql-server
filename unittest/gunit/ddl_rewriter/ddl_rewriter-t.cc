@@ -34,7 +34,7 @@ namespace ddl_rewriter_unittest {
 class DDL_rewriter_test : public ::testing::Test {
  public:
   DDL_rewriter_test() = default;
-  ~DDL_rewriter_test() = default;
+  ~DDL_rewriter_test() override = default;
 };
 
 struct Query_pair {

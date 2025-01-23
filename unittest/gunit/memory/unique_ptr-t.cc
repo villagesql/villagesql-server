@@ -33,8 +33,8 @@ namespace unittests {
 class Unique_ptr_test : public ::testing::Test {
  protected:
   Unique_ptr_test() = default;
-  virtual void SetUp() {}
-  virtual void TearDown() {}
+  void SetUp() override {}
+  void TearDown() override {}
 };
 
 TEST_F(Unique_ptr_test, Array_template_test) {

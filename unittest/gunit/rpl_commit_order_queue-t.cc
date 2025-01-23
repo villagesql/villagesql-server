@@ -39,8 +39,8 @@ namespace unittests {
 class Rpl_commit_order_queue_test : public ::testing::Test {
  protected:
   Rpl_commit_order_queue_test() = default;
-  virtual void SetUp() {}
-  virtual void TearDown() {}
+  void SetUp() override {}
+  void TearDown() override {}
 
   std::atomic<bool> m_go{false};
   std::atomic<size_t> m_count{0};

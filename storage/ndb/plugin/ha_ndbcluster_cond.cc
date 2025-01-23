@@ -144,7 +144,7 @@ class Ndb_end_cond : public Ndb_item {
 
  public:
   Ndb_end_cond() = default;
-  NDB_ITEM_TYPE get_type() const override final { return NDB_END_COND; }
+  NDB_ITEM_TYPE get_type() const final { return NDB_END_COND; }
 };
 
 class Ndb_func : public Ndb_item {
@@ -160,7 +160,7 @@ class Ndb_func : public Ndb_item {
   Ndb_func(Item_func::Functype func_type, uint no_args)
       : m_func_type(item_func_to_ndb_func(func_type)), m_arg_count(no_args) {}
 
-  NDB_ITEM_TYPE get_type() const override final { return NDB_FUNCTION; }
+  NDB_ITEM_TYPE get_type() const final { return NDB_FUNCTION; }
 
   NDB_FUNC_TYPE get_func_type() const { return m_func_type; }
 
@@ -237,7 +237,7 @@ class Ndb_field : public Ndb_item {
   Ndb_field(Field *field, int column_no)
       : m_field(field), m_column_no(column_no) {}
 
-  NDB_ITEM_TYPE get_type() const override final { return NDB_FIELD; }
+  NDB_ITEM_TYPE get_type() const final { return NDB_FIELD; }
 
   Field *get_field() const { return m_field; }
 
@@ -261,7 +261,7 @@ class Ndb_param : public Ndb_item {
  public:
   Ndb_param(const Item_field *item) : m_item(item), m_param_no(0) {}
 
-  NDB_ITEM_TYPE get_type() const override final { return NDB_PARAM; }
+  NDB_ITEM_TYPE get_type() const final { return NDB_PARAM; }
 
   void set_param_no(uint param_no) const { m_param_no = param_no; }
 

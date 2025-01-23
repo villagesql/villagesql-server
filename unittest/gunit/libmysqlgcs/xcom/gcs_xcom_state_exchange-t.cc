@@ -71,8 +71,9 @@ class mock_gcs_xcom_communication_interface
                               Cargo_type type));
   /* Mocking fails compilation on Windows. It attempts to copy the
    * std::unique_ptr which is non-copyable. */
-  void buffer_incoming_packet(Gcs_packet &&packet,
-                              std::unique_ptr<Gcs_xcom_nodes> &&xcom_nodes) {
+  void buffer_incoming_packet(
+      Gcs_packet &&packet,
+      std::unique_ptr<Gcs_xcom_nodes> &&xcom_nodes) override {
     buffer_incoming_packet_mock(packet, xcom_nodes);
   }
   MOCK_METHOD2(buffer_incoming_packet_mock,
@@ -91,7 +92,8 @@ class mock_gcs_xcom_communication_interface
    std::unique_ptr which is non-copyable.
    */
   Gcs_message *convert_packet_to_message(
-      Gcs_packet &&packet, std::unique_ptr<Gcs_xcom_nodes> &&xcom_nodes) {
+      Gcs_packet &&packet,
+      std::unique_ptr<Gcs_xcom_nodes> &&xcom_nodes) override {
     return convert_packet_to_message_mock(packet, xcom_nodes);
   }
   MOCK_METHOD2(convert_packet_to_message_mock,
@@ -101,8 +103,9 @@ class mock_gcs_xcom_communication_interface
    Mocking fails compilation on Windows. It attempts to copy the
    std::unique_ptr which is non-copyable.
    */
-  void process_user_data_packet(Gcs_packet &&packet,
-                                std::unique_ptr<Gcs_xcom_nodes> &&xcom_nodes) {
+  void process_user_data_packet(
+      Gcs_packet &&packet,
+      std::unique_ptr<Gcs_xcom_nodes> &&xcom_nodes) override {
     process_user_data_packet_mock(packet, xcom_nodes);
   }
   MOCK_METHOD2(process_user_data_packet_mock,
@@ -114,7 +117,7 @@ class mock_gcs_xcom_communication_interface
    which is non-copyable.
    */
   std::pair<bool, std::future<void>> set_protocol_version(
-      Gcs_protocol_version new_version) {
+      Gcs_protocol_version new_version) override {
     auto future = std::async([this, new_version]() {
       return set_protocol_version_mock(new_version);
     });
@@ -135,7 +138,7 @@ class mock_gcs_xcom_communication_interface
                void(std::shared_ptr<Network_provider> provider));
   MOCK_METHOD0(get_incoming_connections_protocol, enum_transport_protocol());
 
-  virtual Gcs_message_pipeline &get_msg_pipeline() { return m_msg_pipeline; }
+  Gcs_message_pipeline &get_msg_pipeline() override { return m_msg_pipeline; }
 
  private:
   Gcs_message_pipeline m_msg_pipeline;

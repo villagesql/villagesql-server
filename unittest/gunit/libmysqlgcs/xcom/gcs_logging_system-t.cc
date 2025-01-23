@@ -176,7 +176,7 @@ class Wrapper_file_sink : public Sink_interface {
         .WillByDefault(Invoke(m_sink, &Gcs_file_sink::get_information));
   }
 
-  ~Wrapper_file_sink() { delete m_sink; }
+  ~Wrapper_file_sink() override { delete m_sink; }
 
   MOCK_METHOD1(log_event, void(const std::string &message));
   MOCK_METHOD2(log_event, void(const char *message, size_t message_size));

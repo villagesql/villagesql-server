@@ -72,8 +72,8 @@ using ticket_t = binlog::BgcTicket::ValueType;
 class Bgc_ticket_manager_test : public ::testing::Test {
  protected:
   Bgc_ticket_manager_test() = default;
-  virtual void SetUp() {}
-  virtual void TearDown() {}
+  void SetUp() override {}
+  void TearDown() override {}
 };
 
 TEST_F(Bgc_ticket_manager_test, Several_tickets_test) {

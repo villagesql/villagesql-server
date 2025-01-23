@@ -175,8 +175,8 @@ class Integrals_lockfree_queue_test : public ::testing::Test {
 
  protected:
   Integrals_lockfree_queue_test() = default;
-  virtual void SetUp() {}
-  virtual void TearDown() {}
+  void SetUp() override {}
+  void TearDown() override {}
 };
 
 TEST_F(Integrals_lockfree_queue_test, Padding_indexing_test) {

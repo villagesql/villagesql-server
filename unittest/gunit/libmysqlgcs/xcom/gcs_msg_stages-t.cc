@@ -433,18 +433,18 @@ TEST_F(XcomStagesTest, ReceivePacketWithUnknownStage) {
  */
 class Gcs_new_stage_1 : public Gcs_message_stage {
  protected:
-  virtual stage_status skip_apply(
+  stage_status skip_apply(
       uint64_t const &original_payload_size) const override {
     bool result = (original_payload_size != 0);
     return result ? stage_status::apply : stage_status::abort;
   }
 
-  virtual stage_status skip_revert(const Gcs_packet &packet) const override {
+  stage_status skip_revert(const Gcs_packet &packet) const override {
     bool result = (packet.get_payload_length() != 0);
     return result ? stage_status::apply : stage_status::abort;
   }
 
-  virtual std::pair<bool, std::vector<Gcs_packet>> apply_transformation(
+  std::pair<bool, std::vector<Gcs_packet>> apply_transformation(
       Gcs_packet &&packet) override {
     int64_t id = htole64(get_id());
 
@@ -470,8 +470,8 @@ class Gcs_new_stage_1 : public Gcs_message_stage {
     return std::make_pair(false, std::move(packets_out));
   }
 
-  virtual std::pair<Gcs_pipeline_incoming_result, Gcs_packet>
-  revert_transformation(Gcs_packet &&packet) override {
+  std::pair<Gcs_pipeline_incoming_result, Gcs_packet> revert_transformation(
+      Gcs_packet &&packet) override {
 #ifndef NDEBUG
     auto const old_payload_length = packet.get_payload_length();
 #endif
@@ -509,9 +509,9 @@ class Gcs_new_stage_1 : public Gcs_message_stage {
  public:
   explicit Gcs_new_stage_1() : m_id(std::rand()) {}
 
-  virtual ~Gcs_new_stage_1() override = default;
+  ~Gcs_new_stage_1() override = default;
 
-  virtual Stage_code get_stage_code() const override { return my_stage_code(); }
+  Stage_code get_stage_code() const override { return my_stage_code(); }
 
   static Stage_code my_stage_code() { return static_cast<Stage_code>(10); }
 
@@ -555,7 +555,7 @@ class Gcs_new_stage_split_4 : public Gcs_message_stage_split_v2 {
 
   ~Gcs_new_stage_split_4() override = default;
 
-  virtual Stage_code get_stage_code() const override { return my_stage_code(); }
+  Stage_code get_stage_code() const override { return my_stage_code(); }
 
   static Stage_code my_stage_code() { return static_cast<Stage_code>(13); }
 };
@@ -567,7 +567,7 @@ class Gcs_new_stage_lz4_5 : public Gcs_message_stage_lz4 {
 
   ~Gcs_new_stage_lz4_5() override = default;
 
-  virtual Stage_code get_stage_code() const override { return my_stage_code(); }
+  Stage_code get_stage_code() const override { return my_stage_code(); }
 
   static Stage_code my_stage_code() { return static_cast<Stage_code>(14); }
 };

@@ -98,9 +98,9 @@ class XComNetworkProviderManagerTest : public GcsBaseTest {
  protected:
   XComNetworkProviderManagerTest() {}
 
-  virtual void SetUp() {}
+  void SetUp() override {}
 
-  virtual void TearDown() {}
+  void TearDown() override {}
 };
 
 TEST_F(XComNetworkProviderManagerTest, BasicManagerTest) {

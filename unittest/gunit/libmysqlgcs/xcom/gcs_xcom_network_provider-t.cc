@@ -30,9 +30,9 @@ class XComNetworkProviderTest : public GcsBaseTest {
  protected:
   XComNetworkProviderTest() {}
 
-  virtual void SetUp() {}
+  void SetUp() override {}
 
-  virtual void TearDown() {}
+  void TearDown() override {}
 };
 
 TEST_F(XComNetworkProviderTest, StartAndStopTestMissingPort) {

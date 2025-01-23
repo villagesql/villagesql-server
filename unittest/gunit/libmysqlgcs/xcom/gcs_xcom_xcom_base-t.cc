@@ -49,7 +49,7 @@ class XcomBase : public GcsBaseTest {
     auto xcom_network_provider = std::make_shared<Xcom_network_provider>();
     net_manager.add_network_provider(xcom_network_provider);
   }
-  ~XcomBase() { ::deinit_cache(); }
+  ~XcomBase() override { ::deinit_cache(); }
 };
 
 TEST_F(XcomBase, XcomSendClientAppDataUpgradeScenario) {

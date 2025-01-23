@@ -433,8 +433,8 @@ class NdbApiInternalLogHandler : public LogHandler {
     g_api_internal_log_handler = nullptr;
   }
 
-  virtual void append(const char *pCategory, Logger::LoggerLevel level,
-                      const char *pMsg, time_t now) override {
+  void append(const char *pCategory, Logger::LoggerLevel level,
+              const char *pMsg, time_t now) override {
     {
       if (m_userConsumer) {
         Guard g(m_consumer_mutex);

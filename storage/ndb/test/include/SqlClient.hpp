@@ -52,7 +52,7 @@ class SqlResultSet : public Properties {
   SqlResultSet();
   SqlResultSet(SqlResultSet &) = delete;
   SqlResultSet(SqlResultSet &&) = delete;
-  ~SqlResultSet();
+  ~SqlResultSet() override;
 
   const char *column(const char *col_name);
   std::string_view columnAsString(const char *col_name);

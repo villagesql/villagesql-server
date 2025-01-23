@@ -36,8 +36,8 @@ namespace unittests {
 class Shared_spin_lock_test : public ::testing::Test {
  protected:
   Shared_spin_lock_test() = default;
-  virtual void SetUp() {}
-  virtual void TearDown() {}
+  void SetUp() override {}
+  void TearDown() override {}
 };
 
 TEST_F(Shared_spin_lock_test, Lock_unlock_test) {

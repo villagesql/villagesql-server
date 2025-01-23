@@ -50,8 +50,8 @@ using Aligned_atomic_accessor_ut =
 class AlignedAtomicTest : public ::testing::Test {
  protected:
   AlignedAtomicTest() = default;
-  virtual void SetUp() {}
-  virtual void TearDown() {}
+  void SetUp() override {}
+  void TearDown() override {}
 };
 
 TEST_F(AlignedAtomicTest, Class_template_test) {
