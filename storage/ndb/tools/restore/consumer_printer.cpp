@@ -33,7 +33,8 @@ bool BackupPrinter::table(const TableS &tab) {
   if (m_print || m_print_meta) {
     m_ndbout << tab;
     info.setLevel(254);
-    info << "Successfully printed table: ", tab.m_dictTable->getName();
+    info << "Successfully printed table: " << tab.m_dictTable->getName() << endl
+         << endl;
   }
   return true;
 }

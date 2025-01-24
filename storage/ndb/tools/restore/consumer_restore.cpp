@@ -2845,6 +2845,11 @@ bool BackupRestore::table(const TableS &table) {
 
     int retries;
     for (retries = 0; retries < MAX_RETRIES; retries++) {
+      if ((dict->getTable(copy.getName())) != nullptr) {
+        restoreLogger.log_info("Table %s already exists. Skipping.",
+                               copy.getName());
+        break;
+      }
       if (dict->createTable(copy) == -1) {
         const NdbError &error = dict->getNdbError();
         if (error.status != NdbError::TemporaryError) {
@@ -3081,6 +3086,13 @@ bool BackupRestore::endOfTables() {
     if (m_restore_meta && !m_disable_indexes && !m_rebuild_indexes) {
       if (!ndbapi_dict_operation_retry(
               [idx](NdbDictionary::Dictionary *dict) {
+                if (dict->getIndexGlobal(idx->getName(), idx->getTableName()) !=
+                    nullptr) {
+                  restoreLogger.log_info(
+                      "Index `%s` on `%s` already exists. Skipping",
+                      idx->getName(), idx->getTableName());
+                  return 0;
+                }
                 return dict->createIndex(*idx);
               },
               dict)) {

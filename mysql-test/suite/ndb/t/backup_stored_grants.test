@@ -107,8 +107,8 @@ EOF
 --exec $NDB_RESTORE -b $post_id -n 1 -m -r --include-stored-grants --disable-indexes $POST_B >> $R_OUT
 --exec $NDB_RESTORE -b $post_id -n 2    -r --include-stored-grants --disable-indexes $POST_B >> $R_OUT
 --exec echo "Test D (Rebuild Indexes)" >> $R_OUT
---exec $NDB_RESTORE -b $post_id -n 1 --rebuild-indexes $POST_B >> $R_OUT
---exec $NDB_RESTORE -b $post_id -n 2 --rebuild-indexes $POST_B >> $R_OUT
+--exec $NDB_RESTORE -b $post_id -n 1 --include-stored-grants --rebuild-indexes $POST_B >> $R_OUT
+--exec $NDB_RESTORE -b $post_id -n 2 --include-stored-grants --rebuild-indexes $POST_B >> $R_OUT
 --echo Expect 4 rows:
 --exec $NDB_SELECT_COUNT -d mysql ndb_sql_metadata
 

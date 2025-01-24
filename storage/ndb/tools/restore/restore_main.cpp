@@ -133,7 +133,7 @@ static bool ga_exclude_missing_columns = false;
 static bool ga_exclude_missing_tables = false;
 static bool opt_exclude_intermediate_sql_tables = true;
 static bool ga_with_apply_status = false;
-static bool opt_include_stored_grants = false;
+bool opt_include_stored_grants = false;
 #ifdef ERROR_INSERT
 static unsigned int _error_insert = 0;
 #endif

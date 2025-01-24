@@ -55,6 +55,7 @@ extern thread_local EmulatedJamBuffer *NDB_THREAD_TLS_JAM;
 extern NdbRecordPrintFormat g_ndbrecord_print_format;
 extern bool ga_skip_unknown_objects;
 extern bool ga_skip_broken_objects;
+extern bool opt_include_stored_grants;
 
 extern ndb_password_state g_backup_password_state;
 
@@ -588,7 +589,8 @@ bool RestoreMetaData::markSysTables() {
         strcmp(tableName, NDB_REP_DB "/def/" NDB_APPLY_TABLE) == 0 ||
         strcmp(tableName, NDB_REP_DB "/def/" NDB_SCHEMA_TABLE) == 0 ||
         strcmp(tableName, "mysql/def/ndb_schema_result") == 0 ||
-        strcmp(tableName, "mysql/def/ndb_sql_metadata") == 0) {
+        (strcmp(tableName, "mysql/def/ndb_sql_metadata") == 0 &&
+         !opt_include_stored_grants)) {
       table->m_isSysTable = true;
       if (strcmp(tableName, "SYSTAB_0") == 0 ||
           strcmp(tableName, "sys/def/SYSTAB_0") == 0)
