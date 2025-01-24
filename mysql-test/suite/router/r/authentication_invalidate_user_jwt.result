@@ -11,7 +11,7 @@ OK
 GET /svc1/basic1/o1
 
 OK
-GET /svc1/authentication/logout
+POST /svc1/authentication/logout
 {
     "message": "Logged out successfully",
     "status": 200
