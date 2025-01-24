@@ -2179,6 +2179,10 @@ class Query_block : public Query_term {
 
   bool no_table_names_allowed{false};  ///< used for global order by
 
+  /// Keeps track of the current ORDER BY expression we are resolving for
+  /// ORDER BY, if any. Not used for GROUP BY or windowing ordering.
+  int m_current_order_by_number{0};
+
   /// Hidden items added during optimization
   /// @note that using this means we modify resolved data during optimization
   uint hidden_items_from_optimization{0};
