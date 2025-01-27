@@ -36,7 +36,7 @@ class Document_id_generator_test : public ::testing::Test {
  public:
   iface::Document_id_generator &generator(const uint64_t timestamp,
                                           const uint64_t serial) {
-    gen.reset(new ngs::Document_id_generator(timestamp, serial));
+    gen = std::make_unique<ngs::Document_id_generator>(timestamp, serial);
     return *gen;
   }
 

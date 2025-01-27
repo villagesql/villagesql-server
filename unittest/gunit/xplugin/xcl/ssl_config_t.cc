@@ -42,7 +42,7 @@ using Ssl_mode_field = Ssl_config::Mode Ssl_config::*;
 class Xcl_ssl_config_tests : public Test {
  public:
   bool assert_mode_requires_ssl(const Ssl_config::Mode m) {
-    m_sut.reset(new Ssl_config());
+    m_sut = std::make_unique<Ssl_config>();
     m_sut->m_mode = m;
 
     return m_sut->does_mode_requires_ssl();
@@ -51,7 +51,7 @@ class Xcl_ssl_config_tests : public Test {
   template <typename Value_type, typename Method, typename Field>
   bool assert_value(Field field, Method method, const Value_type value,
                     const bool reset = true) {
-    if (reset) m_sut.reset(new Ssl_config());
+    if (reset) m_sut = std::make_unique<Ssl_config>();
     auto *sut = m_sut.get();
     sut->*field = value;
 

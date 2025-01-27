@@ -76,7 +76,7 @@ std::unique_ptr<Geometry> Simplify::eval(const Cartesian_polygon &g) const {
   std::unique_ptr<Geometry> result(py_result);
   bg::simplify(g, *py_result, m_max_distance);
   if (py_result->exterior_ring().size() < 4)
-    result.reset(new Cartesian_polygon());
+    result = std::make_unique<Cartesian_polygon>();
   return result;
 }
 

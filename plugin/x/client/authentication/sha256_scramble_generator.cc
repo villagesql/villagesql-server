@@ -35,6 +35,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include <openssl/evp.h>
 
 #include <cstdint>
+#include <memory>
 #include "my_dbug.h"  // DBUG instrumentation  NOLINT(build/include_subdir)
 #include "my_ssl_algo_cache.h"
 
@@ -163,7 +164,7 @@ Generate_scramble::Generate_scramble(
     : m_src(source), m_rnd(rnd), m_digest_type(digest_type) {
   switch (m_digest_type) {
     case Digest_info::SHA256_DIGEST: {
-      m_digest_generator.reset(new SHA256_digest());
+      m_digest_generator = std::make_unique<SHA256_digest>();
       m_digest_length = CACHING_SHA2_DIGEST_LENGTH;
       break;
     }

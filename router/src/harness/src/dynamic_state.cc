@@ -26,6 +26,7 @@
 #include "mysql/harness/dynamic_state.h"
 
 #include <fstream>
+#include <memory>
 #include <stdexcept>
 #include <system_error>
 
@@ -106,7 +107,7 @@ struct DynamicState::Pimpl {
 
 DynamicState::DynamicState(const std::string &file_name)
     : file_name_(file_name) {
-  pimpl_.reset(new Pimpl());
+  pimpl_ = std::make_unique<Pimpl>();
   pimpl_->json_state_doc_.SetObject();
 }
 

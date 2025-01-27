@@ -161,8 +161,8 @@ bool mysql_registry_no_lock_imp::register_service_nolock(
     const char *service_implementation_name, my_h_service ptr) {
   try {
     std::unique_ptr<mysql_service_implementation> imp =
-        std::unique_ptr<mysql_service_implementation>(
-            new mysql_service_implementation(ptr, service_implementation_name));
+        std::make_unique<mysql_service_implementation>(
+            ptr, service_implementation_name);
 
     if (imp->interface() == nullptr) {
       return true;

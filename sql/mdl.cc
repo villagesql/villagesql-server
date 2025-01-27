@@ -27,6 +27,7 @@
 #include <atomic>
 #include <ctime>
 #include <functional>
+#include <memory>
 
 #include "lf.h"
 #include "my_dbug.h"
@@ -4725,7 +4726,8 @@ void MDL_ticket_store::push_front(enum_mdl_duration dur, MDL_ticket *ticket) {
     // If this is the first time we cross the threshold, the map must
     // be allocated
     if (m_map == nullptr) {
-      m_map.reset(new Ticket_map{INITIAL_BUCKET_COUNT, Hash{}, Key_equal{}});
+      m_map = std::make_unique<Ticket_map>(INITIAL_BUCKET_COUNT, Hash{},
+                                           Key_equal{});
     }
     // In any event, it should now be empty
     assert(m_map->empty());

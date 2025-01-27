@@ -29,6 +29,7 @@
 
 #include <boost/geometry.hpp>  // boost::geometry::difference
 #include <cassert>
+#include <memory>
 
 // assert
 #include "sql/gis/difference_functor.h"
@@ -94,9 +95,9 @@ void split_gc(const Geometrycollection *gc, std::unique_ptr<Multipoint> *mpt,
               std::unique_ptr<Multipolygon> *mpy) {
   switch (gc->coordinate_system()) {
     case Coordinate_system::kCartesian:
-      mpt->reset(new Cartesian_multipoint());
-      mls->reset(new Cartesian_multilinestring());
-      mpy->reset(new Cartesian_multipolygon());
+      *mpt = std::make_unique<Cartesian_multipoint>();
+      *mls = std::make_unique<Cartesian_multilinestring>();
+      *mpy = std::make_unique<Cartesian_multipolygon>();
       typed_split_gc<Cartesian_point, Cartesian_linestring, Cartesian_polygon,
                      Cartesian_geometrycollection, Cartesian_multipoint,
                      Cartesian_multilinestring, Cartesian_multipolygon>(
@@ -106,9 +107,9 @@ void split_gc(const Geometrycollection *gc, std::unique_ptr<Multipoint> *mpt,
           down_cast<Cartesian_multipolygon *>(mpy->get()));
       break;
     case Coordinate_system::kGeographic:
-      mpt->reset(new Geographic_multipoint());
-      mls->reset(new Geographic_multilinestring());
-      mpy->reset(new Geographic_multipolygon());
+      *mpt = std::make_unique<Geographic_multipoint>();
+      *mls = std::make_unique<Geographic_multilinestring>();
+      *mpy = std::make_unique<Geographic_multipolygon>();
       typed_split_gc<Geographic_point, Geographic_linestring,
                      Geographic_polygon, Geographic_geometrycollection,
                      Geographic_multipoint, Geographic_multilinestring,

@@ -23,6 +23,7 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
  */
 #include <cinttypes>
+#include <memory>
 #include <string>
 
 #include "violite.h"  // NOLINT(build/include_subdir)
@@ -62,8 +63,9 @@ bool Ssl_context::setup(const char *tls_version, const char *ssl_key,
                         const char *ssl_ca, const char *ssl_capath,
                         const char *ssl_cert, const char *ssl_cipher,
                         const char *ssl_crl, const char *ssl_crlpath) {
-  m_config.reset(new Config{tls_version, ssl_key, ssl_ca, ssl_capath, ssl_cert,
-                            ssl_cipher, ssl_crl, ssl_crlpath});
+  m_config =
+      std::make_unique<Config>(tls_version, ssl_key, ssl_ca, ssl_capath,
+                               ssl_cert, ssl_cipher, ssl_crl, ssl_crlpath);
   return setup(*m_config);
 }
 
@@ -82,7 +84,7 @@ bool Ssl_context::setup(const Config &config) {
     return false;
   }
 
-  m_options.reset(new Ssl_context_options(m_ssl_acceptor));
+  m_options = std::make_unique<Ssl_context_options>(m_ssl_acceptor);
 
   return true;
 }

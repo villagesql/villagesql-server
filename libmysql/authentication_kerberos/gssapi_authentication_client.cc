@@ -26,6 +26,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 
 #include "auth_kerberos_client_io.h"
 #include "gssapi_utility.h"
@@ -40,9 +41,8 @@ Gssapi_client::Gssapi_client(const std::string &spn, MYSQL_PLUGIN_VIO *vio,
       m_vio{vio},
       m_user_principal_name{upn},
       m_password{password} {
-  m_kerberos = std::unique_ptr<auth_kerberos_context::Kerberos>(
-      new auth_kerberos_context::Kerberos(m_user_principal_name.c_str(),
-                                          m_password.c_str()));
+  m_kerberos = std::make_unique<auth_kerberos_context::Kerberos>(
+      m_user_principal_name.c_str(), m_password.c_str());
 }
 
 Gssapi_client::~Gssapi_client() {}
@@ -127,9 +127,8 @@ void Gssapi_client::set_upn_info(const std::string &upn,
   if (m_kerberos) {
     m_kerberos.release();
   }
-  m_kerberos = std::unique_ptr<auth_kerberos_context::Kerberos>(
-      new auth_kerberos_context::Kerberos(m_user_principal_name.c_str(),
-                                          m_password.c_str()));
+  m_kerberos = std::make_unique<auth_kerberos_context::Kerberos>(
+      m_user_principal_name.c_str(), m_password.c_str());
 }
 
 bool Gssapi_client::obtain_store_credentials() {

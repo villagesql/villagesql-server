@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "plugin/x/src/services/registrator.h"
 
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -33,7 +34,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 namespace xpl {
 
 Service_registrator::Service_registrator() {
-  m_registration.reset(new Service_registry_registration(&m_registry));
+  m_registration = std::make_unique<Service_registry_registration>(&m_registry);
 }
 
 void Service_registrator::register_service(const Service &s) {

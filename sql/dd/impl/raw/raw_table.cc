@@ -25,6 +25,7 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <memory>
 #include <new>
 
 #include "m_string.h"
@@ -97,7 +98,7 @@ bool Raw_table::find_record(const Object_key &key,
     return true;
   }
 
-  r.reset(new Raw_record(table));
+  r = std::make_unique<Raw_record>(table);
   return false;
 }
 
@@ -215,7 +216,7 @@ bool Raw_table::find_last_record(const Object_key &key,
     return true;
   }
 
-  r.reset(new Raw_record(table));
+  r = std::make_unique<Raw_record>(table);
 
   return false;
 }

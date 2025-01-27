@@ -23,6 +23,8 @@
 
 #include <gtest/gtest.h>
 
+#include <memory>
+
 #include "mysql_com.h"  // NOLINT(build/include_subdir)
 #include "sha1.h"       // for SHA1_HASH_SIZE NOLINT(build/include_subdir)
 
@@ -53,7 +55,7 @@ using ::testing::ReturnRef;
 class User_password_verification : public ::testing::Test {
  public:
   void SetUp() override {
-    m_cache_mock.reset(new mock::Sha256_password_cache());
+    m_cache_mock = std::make_unique<mock::Sha256_password_cache>();
     m_cached_value = {std::begin(CACHED_VALUE_TABLE),
                       std::end(CACHED_VALUE_TABLE)};
   }

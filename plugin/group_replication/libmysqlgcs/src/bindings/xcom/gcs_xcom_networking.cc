@@ -25,6 +25,7 @@
 #include <bitset>
 #include <cerrno>
 #include <cstring>
+#include <memory>
 #include <set>
 
 #ifndef _WIN32
@@ -852,8 +853,8 @@ bool Gcs_ip_allowlist::do_check_block_xcom(
     */
     bool is_hostname = string_to_sockaddr(xcom_addr.get_member_ip(), &xcom_sa);
     if (is_hostname) {
-      xcom_addr_wl.reset(
-          new Gcs_ip_allowlist_entry_hostname(xcom_addr.get_member_ip()));
+      xcom_addr_wl = std::make_unique<Gcs_ip_allowlist_entry_hostname>(
+          xcom_addr.get_member_ip());
     } else {
       std::string xcom_entry_netmask;
 
@@ -862,8 +863,8 @@ bool Gcs_ip_allowlist::do_check_block_xcom(
       else
         xcom_entry_netmask.append("128");
 
-      xcom_addr_wl.reset(new Gcs_ip_allowlist_entry_ip(
-          xcom_addr.get_member_ip(), xcom_entry_netmask));
+      xcom_addr_wl = std::make_unique<Gcs_ip_allowlist_entry_ip>(
+          xcom_addr.get_member_ip(), xcom_entry_netmask);
     }
 
     bool error = xcom_addr_wl->init_value();

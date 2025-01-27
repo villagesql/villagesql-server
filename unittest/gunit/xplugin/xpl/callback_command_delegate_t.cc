@@ -91,7 +91,9 @@ MATCHER_P(Eq_info, param, "") {
 
 class Callback_command_delegate_testsuite : public Test {
  public:
-  void SetUp() override { m_sut.reset(new Callback_command_delegate()); }
+  void SetUp() override {
+    m_sut = std::make_unique<Callback_command_delegate>();
+  }
 
   void create_sut_with_callback_mock() {
     Callback_command_delegate::Start_row_callback start_row =
@@ -100,7 +102,7 @@ class Callback_command_delegate_testsuite : public Test {
         std::bind(&Mock_callback_commands::end_row, &m_mock_callbacks,
                   std::placeholders::_1);
 
-    m_sut.reset(new Callback_command_delegate(start_row, end_row));
+    m_sut = std::make_unique<Callback_command_delegate>(start_row, end_row);
   }
 
   void assert_row_and_data_functions(const bool expected_result) {

@@ -690,8 +690,8 @@ bool mysql_dynamic_loader_imp::load_do_load_component_by_scheme(
       return true;
     }
     /* Here we assume loaded_component_raw will be list with only one item. */
-    loaded_components.push_back(std::unique_ptr<mysql_component>(
-        new mysql_component(loaded_component_raw, urn)));
+    loaded_components.push_back(
+        std::make_unique<mysql_component>(loaded_component_raw, urn));
   }
 
   /*
