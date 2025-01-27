@@ -31,8 +31,8 @@
 namespace {
 constexpr bool is_number(std::string_view s) {
   bool at_least_one_digit{false};
-  const auto *cur = s.begin();
-  const auto *const end = s.end();
+  auto cur = s.begin();
+  const auto end = s.end();
 
   if (cur == end) return false;  // empty.
 
