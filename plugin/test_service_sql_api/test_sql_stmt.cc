@@ -174,15 +174,12 @@ class Table {
     if (!cs_info) {
       WRITE_STR("\t[meta] no charset\n");
       return;
-    } else {
-      WRITE_VAL("\t[meta][charset result] number: %d\n", cs_info->number);
-      WRITE_VAL("\t[meta][charset result] name: %s\n", cs_info->csname);
-      WRITE_VAL("\t[meta][charset result] collation: %s\n",
-                cs_info->m_coll_name);
-      WRITE_VAL("\t[meta][charset result] sort order: %s\n",
-                cs_info->sort_order);
-      WRITE_STR("\n");
     }
+    WRITE_VAL("\t[meta][charset result] number: %d\n", cs_info->number);
+    WRITE_VAL("\t[meta][charset result] name: %s\n", cs_info->csname);
+    WRITE_VAL("\t[meta][charset result] collation: %s\n", cs_info->m_coll_name);
+    WRITE_VAL("\t[meta][charset result] sort order: %s\n", cs_info->sort_order);
+    WRITE_STR("\n");
 
     for (size_t i = 0; i < num_rows; i++) {
       size_t col = 0;

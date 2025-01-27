@@ -1001,7 +1001,8 @@ static int execute_commands(MYSQL *mysql, int argc, char **argv) {
           my_printf_error(0, "Too few arguments to change password",
                           error_flags);
           return 1;
-        } else if (argc == 1) {
+        }
+        if (argc == 1) {
           /* prompt for password */
           typed_password = get_tty_password("New password: ");
           verified = get_tty_password("Confirm new password: ");

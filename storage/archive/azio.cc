@@ -231,7 +231,8 @@ int get_byte(azio_stream *s) {
     if (s->stream.avail_in == 0) {
       s->z_eof = 1;
       return EOF;
-    } else if (s->stream.avail_in == (uInt)-1) {
+    }
+    if (s->stream.avail_in == (uInt)-1) {
       s->z_eof = 1;
       s->z_err = Z_ERRNO;
       return EOF;
@@ -600,14 +601,13 @@ int ZEXPORT azflush(azio_stream *s, int flush) {
     read_header(s, buffer); /* skip the .az header */
 
     return Z_OK;
-  } else {
-    s->forced_flushes++;
-    err = do_flush(s, flush);
-
-    if (err) return err;
-    my_sync(s->file, MYF(0));
-    return s->z_err == Z_STREAM_END ? Z_OK : s->z_err;
   }
+  s->forced_flushes++;
+  err = do_flush(s, flush);
+
+  if (err) return err;
+  my_sync(s->file, MYF(0));
+  return s->z_err == Z_STREAM_END ? Z_OK : s->z_err;
 }
 
 /* ===========================================================================

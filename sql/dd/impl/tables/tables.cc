@@ -212,8 +212,7 @@ Abstract_table *Tables::create_entity_object(const Raw_record &r) const {
 
   if (table_type == enum_table_type::BASE_TABLE)
     return dd::create_object<Table>();
-  else
-    return dd::create_object<View>();
+  return dd::create_object<View>();
 }
 
 ///////////////////////////////////////////////////////////////////////////

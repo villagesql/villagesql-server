@@ -98,7 +98,7 @@ double my_rnd_ssl(bool *failed) {
   if (my_rand_buffer((unsigned char *)&res, sizeof(res))) {
     *failed = true;
     return 0;
-  } else
-    *failed = false;
+  }
+  *failed = false;
   return (double)res / (double)UINT_MAX;
 }

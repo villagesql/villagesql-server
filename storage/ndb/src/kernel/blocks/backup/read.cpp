@@ -563,7 +563,8 @@ void handle_print_restored_rows() {
           ignored_rows++;
         }
         continue;
-      } else if (parts_array[part_id] == ALL_PART) {
+      }
+      if (parts_array[part_id] == ALL_PART) {
         if (header_type != BackupFormat::INSERT_TYPE) {
           ndbout_c("NOT INSERT_TYPE when expected");
           ndb_end_and_exit(1);

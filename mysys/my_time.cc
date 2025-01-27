@@ -193,10 +193,11 @@ bool check_date(const MYSQL_TIME &my_time, bool not_zero_date,
         (my_time.month == 0 || my_time.day == 0)) {
       *was_cut = MYSQL_TIME_WARN_ZERO_IN_DATE;
       return true;
-    } else if ((!(flags & TIME_INVALID_DATES) && my_time.month &&
-                my_time.day > days_in_month[my_time.month - 1] &&
-                (my_time.month != 2 || calc_days_in_year(my_time.year) != 366 ||
-                 my_time.day != 29))) {
+    }
+    if ((!(flags & TIME_INVALID_DATES) && my_time.month &&
+         my_time.day > days_in_month[my_time.month - 1] &&
+         (my_time.month != 2 || calc_days_in_year(my_time.year) != 366 ||
+          my_time.day != 29))) {
       *was_cut = MYSQL_TIME_WARN_OUT_OF_RANGE;
       return true;
     }
@@ -686,11 +687,10 @@ bool str_to_datetime(const char *const str_arg, std::size_t length,
       status->warnings = MYSQL_TIME_WARN_TRUNCATED;
       l_time->time_type = MYSQL_TIMESTAMP_NONE;
       return true;
-    } else {
-      l_time->time_type = MYSQL_TIMESTAMP_DATETIME_TZ;
-      l_time->time_zone_displacement = displacement;
-      return false;
     }
+    l_time->time_type = MYSQL_TIMESTAMP_DATETIME_TZ;
+    l_time->time_zone_displacement = displacement;
+    return false;
   }
 
   for (; str != end; str++) {
@@ -922,10 +922,10 @@ fractional:
           return true;
         }
         break;
-      } else {
-        status->set_deprecation(MYSQL_TIME_STATUS::DEPRECATION::DP_SUPERFLUOUS,
-                                str_arg, end, str);
       }
+      status->set_deprecation(MYSQL_TIME_STATUS::DEPRECATION::DP_SUPERFLUOUS,
+                              str_arg, end, str);
+
     } while (++str != end);
   }
   return false;
@@ -952,7 +952,8 @@ bool number_to_time(longlong nr, MYSQL_TIME *ltime, int *warnings) {
     set_max_time(ltime, false);
     *warnings |= MYSQL_TIME_WARN_OUT_OF_RANGE;
     return true;
-  } else if (nr < -TIME_MAX_VALUE) {
+  }
+  if (nr < -TIME_MAX_VALUE) {
     set_max_time(ltime, true);
     *warnings |= MYSQL_TIME_WARN_OUT_OF_RANGE;
     return true;
@@ -1147,7 +1148,8 @@ my_time_t my_system_gmt_sec(const MYSQL_TIME &my_time, my_time_t *my_timezone,
   */
   if (t->year > MYTIME_MAX_YEAR) {
     return 0;  // out of range
-  } else if ((t->year == MYTIME_MAX_YEAR) && (t->month == 1) && (t->day > 4)) {
+  }
+  if ((t->year == MYTIME_MAX_YEAR) && (t->month == 1) && (t->day > 4)) {
     /*
       Below we will pass static_cast<uint>(t->day - shift) to calc_daynr.
       As we don't want to get an overflow here, we will shift
@@ -2536,8 +2538,7 @@ bool time_add_nanoseconds_adjust_frac(MYSQL_TIME *ltime, uint nanoseconds,
                                       int *warnings, bool truncate) {
   if (truncate)
     return time_add_nanoseconds_with_truncate(ltime, nanoseconds, warnings);
-  else
-    return time_add_nanoseconds_with_round(ltime, nanoseconds, warnings);
+  return time_add_nanoseconds_with_round(ltime, nanoseconds, warnings);
 }
 
 /**
@@ -2554,8 +2555,7 @@ bool datetime_add_nanoseconds_adjust_frac(MYSQL_TIME *ltime, uint nanoseconds,
                                           int *warnings, bool truncate) {
   if (truncate)
     return datetime_add_nanoseconds_with_truncate(ltime, nanoseconds);
-  else
-    return datetime_add_nanoseconds_with_round(ltime, nanoseconds, warnings);
+  return datetime_add_nanoseconds_with_round(ltime, nanoseconds, warnings);
 }
 
 /** Rounding functions */

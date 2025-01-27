@@ -146,10 +146,8 @@ static int safe_print_str(const char *addr, int max_len) {
 
     if ((nbytes = pread(fd, buf, count, offset)) < 0) {
       /* Just in case... */
-      if (errno == EINTR)
-        continue;
-      else
-        break;
+      if (errno == EINTR) continue;
+      break;
     }
 
     /* Advance offset into memory. */

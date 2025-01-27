@@ -1344,16 +1344,12 @@ static bool compare_comm_sections(ConfigSection *first, ConfigSection *second) {
   if (first == second) return false;
   Uint32 first_node_id = first->get_first_node_id();
   Uint32 second_node_id = second->get_first_node_id();
-  if (first_node_id < second_node_id)
-    return true;
-  else if (first_node_id > second_node_id)
-    return false;
+  if (first_node_id < second_node_id) return true;
+  if (first_node_id > second_node_id) return false;
   first_node_id = first->get_second_node_id();
   second_node_id = second->get_second_node_id();
-  if (first_node_id < second_node_id)
-    return true;
-  else if (first_node_id > second_node_id)
-    return false;
+  if (first_node_id < second_node_id) return true;
+  if (first_node_id > second_node_id) return false;
   /* We should never have two comm sections with same node ids */
   require(false);
   return false;

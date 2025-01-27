@@ -486,7 +486,8 @@ int PollGuard::wait_for_input_in_loop(int max_wait_ms, bool forceSend) {
 
     if (likely(state == NO_WAIT)) {
       return 0;
-    } else if (state == WAIT_NODE_FAILURE) {
+    }
+    if (state == WAIT_NODE_FAILURE) {
       ret_val = -2;
       m_waiter->set_state(NO_WAIT);
       break;

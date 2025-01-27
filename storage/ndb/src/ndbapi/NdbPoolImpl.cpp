@@ -374,9 +374,8 @@ Ndb *NdbPool::get_hint_ndb(Uint32 hint_id, Uint32 hash_entry) {
       ret_ndb = m_pool_reference[hint_id].ndb_reference;
       if (ret_ndb != nullptr) {
         break;
-      } else {
-        assert(false);
       }
+      assert(false);
     }
     return nullptr;
   } while (true);

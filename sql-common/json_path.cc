@@ -748,18 +748,17 @@ static bool is_ecmascript_identifier(const std::string_view &name) {
 
     if (first_codepoint) {
       return false;
-    } else {
-      // unicode combining mark
-      if (unicode_combining_mark(codepoint)) continue;
-
-      // a unicode digit
-      if (is_digit(codepoint)) continue;
-      if (is_connector_punctuation(codepoint)) continue;
-      // <ZWNJ>
-      if (codepoint == 0x200C) continue;
-      // <ZWJ>
-      if (codepoint == 0x200D) continue;
     }
+    // unicode combining mark
+    if (unicode_combining_mark(codepoint)) continue;
+
+    // a unicode digit
+    if (is_digit(codepoint)) continue;
+    if (is_connector_punctuation(codepoint)) continue;
+    // <ZWNJ>
+    if (codepoint == 0x200C) continue;
+    // <ZWJ>
+    if (codepoint == 0x200D) continue;
 
     // nope
     return false;

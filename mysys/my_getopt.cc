@@ -525,8 +525,8 @@ int my_handle_options2(int *argc, char ***argv,
                                          EE_OPTION_IGNORED_DUE_TO_INVALID_VALUE,
                                          my_progname, optp->name, optend);
                 continue;
-              } else
-                *((bool *)value) = ret;
+              }
+              *((bool *)value) = ret;
             }
             if (get_one_option &&
                 get_one_option(
@@ -577,8 +577,8 @@ int my_handle_options2(int *argc, char ***argv,
                 if (get_one_option && get_one_option(optp->id, optp, argument))
                   return EXIT_UNSPECIFIED_ERROR;
                 continue;
-              } else if (optp->arg_type == REQUIRED_ARG ||
-                         optp->arg_type == OPT_ARG) {
+              }
+              if (optp->arg_type == REQUIRED_ARG || optp->arg_type == OPT_ARG) {
                 if (*(optend + 1)) {
                   /* The rest of the option is option argument */
                   argument = optend + 1;
@@ -744,10 +744,9 @@ static char *check_struct_option(char *cur_arg, char *key_name) {
     size_t len = std::min(size_t(dot_pos - cur_arg), size_t(FN_REFLEN - 1));
     strmake(key_name, cur_arg, len);
     return ++dot_pos;
-  } else {
-    key_name[0] = 0;
-    return cur_arg;
   }
+  key_name[0] = 0;
+  return cur_arg;
 }
 
 /**

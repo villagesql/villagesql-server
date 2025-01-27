@@ -503,9 +503,8 @@ EXIT:
   if (res_kerberos) {
     log(res_kerberos);
     return false;
-  } else {
-    return true;
   }
+  return true;
 }
 
 void Kerberos::log(int error_code) {

@@ -610,9 +610,8 @@ NdbQueryBuilder *NdbQueryBuilder::create() {
   auto *const impl = new NdbQueryBuilderImpl();
   if (likely(impl != nullptr)) {
     return &impl->m_interface;
-  } else {
-    return nullptr;
   }
+  return nullptr;
 }
 
 void NdbQueryBuilder::destroy() { delete &m_impl; }
@@ -1059,7 +1058,8 @@ const NdbQueryDefImpl *NdbQueryBuilderImpl::prepare(const Ndb *ndb) {
 inline int NdbQueryBuilderImpl::takeOwnership(NdbQueryOperandImpl *operand) {
   if (unlikely(operand == nullptr)) {
     return Err_MemoryAlloc;
-  } else if (unlikely(m_operands.push_back(operand) != 0)) {
+  }
+  if (unlikely(m_operands.push_back(operand) != 0)) {
     assert(errno == ENOMEM);
     delete operand;
     return Err_MemoryAlloc;
@@ -1071,7 +1071,8 @@ inline int NdbQueryBuilderImpl::takeOwnership(
     NdbQueryOperationDefImpl *operation) {
   if (unlikely(operation == nullptr)) {
     return Err_MemoryAlloc;
-  } else if (unlikely(m_operations.push_back(operation) != 0)) {
+  }
+  if (unlikely(m_operations.push_back(operation) != 0)) {
     assert(errno == ENOMEM);
     delete operation;
     return Err_MemoryAlloc;
@@ -1513,7 +1514,8 @@ int NdbQueryIndexScanOperationDefImpl::checkPrunable(
   if (indexRecord->m_no_of_distribution_keys !=
       tableRecord->m_no_of_distribution_keys) {
     return 0;  // Index does not contain all fields in the distribution key.
-  } else if (shortestBound < prefixLength) {
+  }
+  if (shortestBound < prefixLength) {
     // Bounds set on query instance are to short to contain full dist key.
     return 0;
   }
@@ -1707,10 +1709,9 @@ int NdbQueryOperationDefImpl::addChild(NdbQueryOperationDefImpl *childOp) {
   }
   if (likely(m_children.push_back(childOp) == 0)) {
     return 0;
-  } else {
-    assert(errno == ENOMEM);
-    return Err_MemoryAlloc;
   }
+  assert(errno == ENOMEM);
+  return Err_MemoryAlloc;
 }
 
 void NdbQueryOperationDefImpl::removeChild(
@@ -2367,9 +2368,8 @@ int NdbQueryPKLookupOperationDefImpl ::serializeOperation(
   const Uint32 length = serializedDef.getSize() - startPos;
   if (unlikely(length > 0xFFFF)) {
     return QRY_DEFINITION_TOO_LARGE;  // Query definition too large.
-  } else {
-    QueryNode::setOpLen(node->len, QueryNode::QN_LOOKUP, length);
   }
+  QueryNode::setOpLen(node->len, QueryNode::QN_LOOKUP, length);
 
 #ifdef __TRACE_SERIALIZATION
   ndbout << "Serialized node " << getInternalOpNo() << " : ";
@@ -2444,9 +2444,8 @@ int NdbQueryIndexOperationDefImpl ::serializeOperation(
     const Uint32 length = serializedDef.getSize() - startPos;
     if (unlikely(length > 0xFFFF)) {
       return QRY_DEFINITION_TOO_LARGE;  // Query definition too large.
-    } else {
-      QueryNode::setOpLen(node->len, QueryNode::QN_LOOKUP, length);
     }
+    QueryNode::setOpLen(node->len, QueryNode::QN_LOOKUP, length);
 
 #ifdef __TRACE_SERIALIZATION
     ndbout << "Serialized index " << getInternalOpNo() - 1 << " : ";
@@ -2508,9 +2507,8 @@ int NdbQueryIndexOperationDefImpl ::serializeOperation(
   const Uint32 length = serializedDef.getSize() - startPos;
   if (unlikely(length > 0xFFFF)) {
     return QRY_DEFINITION_TOO_LARGE;  // Query definition too large.
-  } else {
-    QueryNode::setOpLen(node->len, QueryNode::QN_LOOKUP, length);
   }
+  QueryNode::setOpLen(node->len, QueryNode::QN_LOOKUP, length);
 
 #ifdef __TRACE_SERIALIZATION
   ndbout << "Serialized node " << getInternalOpNo() << " : ";

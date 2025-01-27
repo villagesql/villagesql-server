@@ -345,12 +345,9 @@ class NdbQueryOperationDefImpl {
 
   const NdbQueryOperationDefImpl *getFirstInEmbeddingNest() const {
     assert(m_firstInner == nullptr || m_firstUpper == nullptr);
-    if (m_firstInner != nullptr)
-      return m_firstInner;
-    else if (m_firstUpper != nullptr)
-      return m_firstUpper;
-    else
-      return nullptr;
+    if (m_firstInner != nullptr) return m_firstInner;
+    if (m_firstUpper != nullptr) return m_firstUpper;
+    return nullptr;
   }
 
   const NdbTableImpl &getTable() const { return m_table; }

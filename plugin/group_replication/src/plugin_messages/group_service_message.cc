@@ -57,9 +57,8 @@ const uchar *Group_service_message::get_data() {
 
   if (nullptr != m_data_pointer) {
     return m_data_pointer; /* purecov: inspected */
-  } else {
-    return m_data.data();
   }
+  return m_data.data();
 }
 
 size_t Group_service_message::get_data_length() {
@@ -67,9 +66,8 @@ size_t Group_service_message::get_data_length() {
 
   if (nullptr != m_data_pointer) {
     return m_data_pointer_length; /* purecov: inspected */
-  } else {
-    return m_data.size();
   }
+  return m_data.size();
 }
 
 void Group_service_message::encode_payload(std::vector<uchar> *buffer) const {

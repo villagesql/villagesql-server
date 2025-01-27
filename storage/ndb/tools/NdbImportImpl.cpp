@@ -2614,12 +2614,11 @@ void NdbImportImpl::ExecOpWorkerAsynch::state_define() {
                                  " temporary errors is %u (limit %u)",
                                  temperrors, opt.m_temperrors);
             break;
-          } else {
-            m_util.set_error_ndb(m_error, __LINE__, ndberror,
-                                 "table %s: get autoincrement failed",
-                                 table.m_tab->getName());
-            break;
           }
+          m_util.set_error_ndb(m_error, __LINE__, ndberror,
+                               "table %s: get autoincrement failed",
+                               table.m_tab->getName());
+          break;
         }
 
         set_auto_inc_val(attr, row, val, m_error);
@@ -2651,12 +2650,11 @@ void NdbImportImpl::ExecOpWorkerAsynch::state_define() {
                              " temporary errors is %u (limit %u)",
                              temperrors, opt.m_temperrors);
         break;
-      } else {
-        m_util.set_error_ndb(m_error, __LINE__, ndberror,
-                             "table %s: start transaction failed",
-                             table.m_tab->getName());
-        break;
       }
+      m_util.set_error_ndb(m_error, __LINE__, ndberror,
+                           "table %s: start transaction failed",
+                           table.m_tab->getName());
+      break;
     }
     NdbTransaction *trans = tx->m_trans;
     require(trans != 0);

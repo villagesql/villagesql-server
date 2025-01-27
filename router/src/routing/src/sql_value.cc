@@ -44,7 +44,8 @@ constexpr bool is_number(std::string_view s) {
     if (ch == '.') {
       ++cur;
       break;
-    } else if (ch < '0' || ch > '9') {
+    }
+    if (ch < '0' || ch > '9') {
       // not a digit, fail
       return false;
     }

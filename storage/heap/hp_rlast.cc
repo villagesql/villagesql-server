@@ -49,10 +49,9 @@ int heap_rlast(HP_INFO *info, uchar *record, int inx) {
       return my_errno();
     }
     return 0;
-  } else {
-    info->current_ptr = nullptr;
-    info->current_hash_ptr = nullptr;
-    info->update = HA_STATE_NEXT_FOUND;
-    return heap_rprev(info, record);
   }
+  info->current_ptr = nullptr;
+  info->current_hash_ptr = nullptr;
+  info->update = HA_STATE_NEXT_FOUND;
+  return heap_rprev(info, record);
 }

@@ -162,9 +162,8 @@ bool ServerRequest::add_last_modified(time_t last_modified) {
     holder_.output_headers_.add("Last-Modified", date_buf);
 
     return true;
-  } else {
-    return false;
   }
+  return false;
 }
 
 }  // namespace server

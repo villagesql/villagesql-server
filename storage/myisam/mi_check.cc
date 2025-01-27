@@ -2633,14 +2633,13 @@ static int sort_get_next_record(MI_SORT_PARAM *sort_param) {
                       llstr(sort_param->start_recpos, llbuff),
                       (ulong)block_info.rec_len);
                   return 1;
-                } else {
-                  mi_check_print_info(param,
-                                      "Not enough memory for blob at %s (need "
-                                      "%lu); Row skipped",
-                                      llstr(sort_param->start_recpos, llbuff),
-                                      (ulong)block_info.rec_len);
-                  goto try_next;
                 }
+                mi_check_print_info(param,
+                                    "Not enough memory for blob at %s (need "
+                                    "%lu); Row skipped",
+                                    llstr(sort_param->start_recpos, llbuff),
+                                    (ulong)block_info.rec_len);
+                goto try_next;
               }
             } else
               to = sort_param->rec_buff;

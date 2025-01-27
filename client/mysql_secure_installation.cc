@@ -262,7 +262,7 @@ static void execute_query_with_message(const char *query,
 static bool execute_query(const char **query, size_t length) {
   if (!mysql_real_query(&mysql_handle, (const char *)*query, (ulong)length))
     return false;
-  else if (mysql_errno(&mysql_handle) == CR_SERVER_GONE_ERROR) {
+  if (mysql_errno(&mysql_handle) == CR_SERVER_GONE_ERROR) {
     fprintf(stdout, " ... Failed! Error: %s\n", mysql_error(&mysql_handle));
     free_resources();
     exit(1);
@@ -537,8 +537,8 @@ static void set_opt_user_password(int component_set) {
       if (!execute_query(&query_const, (unsigned int)(end - query))) {
         my_free(query);
         break;
-      } else
-        fprintf(stdout, " ... Failed! Error: %s\n", mysql_error(&mysql_handle));
+      }
+      fprintf(stdout, " ... Failed! Error: %s\n", mysql_error(&mysql_handle));
     }
   }
 }

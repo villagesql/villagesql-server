@@ -110,10 +110,9 @@ int NdbOperation::equal_impl(const NdbColumnImpl *tAttrInfo,
             tKeyAttrId = theTupleKeyDefined[i][0];
             tKeyDefined = (theTupleKeyDefined[i][2] > 0);
             continue;
-          } else {
-            goto equal_error2;
-          }  // if
-        }    // if
+          }
+          goto equal_error2;
+        }  // if
       } while (i < NDB_MAX_NO_OF_ATTRIBUTES_IN_KEY);
       goto equal_error2;
     } else {

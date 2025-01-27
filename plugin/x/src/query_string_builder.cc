@@ -71,10 +71,8 @@ Query_string_builder &Query_string_builder::quote_identifier_if_needed(
   } else {
     need_quote = true;
   }
-  if (need_quote)
-    return quote_identifier(s, length);
-  else
-    return put(s, length);
+  if (need_quote) return quote_identifier(s, length);
+  return put(s, length);
 }
 
 namespace {

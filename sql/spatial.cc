@@ -729,10 +729,8 @@ bool Geometry::is_well_formed(const char *from, size_t length,
 }
 
 static double wkb_get_double(const char *ptr, Geometry::wkbByteOrder bo) {
-  if (bo == Geometry::wkb_ndr)
-    return float8get(ptr);
-  else
-    return mi_float8get(pointer_cast<const uchar *>(ptr));
+  if (bo == Geometry::wkb_ndr) return float8get(ptr);
+  return mi_float8get(pointer_cast<const uchar *>(ptr));
 }
 
 /**
@@ -776,10 +774,8 @@ static bool check_coordinate_range(double x, double y, double srs_angular_unit,
 }
 
 static uint32 wkb_get_uint(const char *ptr, Geometry::wkbByteOrder bo) {
-  if (bo == Geometry::wkb_ndr)
-    return uint4korr(ptr);
-  else
-    return mi_uint4korr(pointer_cast<const uchar *>(ptr));
+  if (bo == Geometry::wkb_ndr) return uint4korr(ptr);
+  return mi_uint4korr(pointer_cast<const uchar *>(ptr));
 }
 
 /**

@@ -1209,7 +1209,8 @@ void NdbResultStream::prepareResultSet(const SpjTreeNodeMask expectingResults,
           // Done with this tupleNo
           setSkippedFirstMatch(tupleNo);
           continue;  // Skip further processing of this row
-        } else if (!m_firstMatchedNodes.overlaps(expectingResults)) {
+        }
+        if (!m_firstMatchedNodes.overlaps(expectingResults)) {
           // No semi joined tables affected by the 'expecting'.
           // Do nothing, except keeping 'isSkipped' if already set.
           if (unlikely(traceSignals)) {
@@ -1376,7 +1377,8 @@ void NdbResultStream::prepareResultSet(const SpjTreeNodeMask expectingResults,
                     << "  -> Skip it" << endl;
               }
               break;  // Skip further child matching against this tupleNo
-            } else if (unlikely(traceSignals)) {
+            }
+            if (unlikely(traceSignals)) {
               /**
                * Join-nests has a first-inner being a sibling of (same parent
                * as) this childStream. Can not skip yet, but was un-matched
@@ -1523,9 +1525,8 @@ NdbWorker *NdbWorker::receiverIdLookup(NdbWorker *workers, Uint32 noOfWorkers,
   }
   if (unlikely(current < 0)) {
     return nullptr;
-  } else {
-    return &workers[current];
   }
+  return &workers[current];
 }
 
 NdbWorker::NdbWorker()
@@ -1743,9 +1744,8 @@ int NdbQuery::setBound(const NdbRecord *keyRecord,
   if (unlikely(error)) {
     m_impl.setErrorCode(error);
     return -1;
-  } else {
-    return 0;
   }
+  return 0;
 }
 
 int NdbQuery::getRangeNo() const { return m_impl.getRangeNo(); }
@@ -2345,9 +2345,11 @@ int NdbQueryImpl::setBound(const NdbRecord *key_record,
   Uint32 length = m_keyInfo.getSize() - startPos;
   if (unlikely(m_keyInfo.isMemoryExhausted())) {
     return Err_MemoryAlloc;
-  } else if (unlikely(length > 0xFFFF)) {
+  }
+  if (unlikely(length > 0xFFFF)) {
     return QRY_DEFINITION_TOO_LARGE;  // Query definition too large.
-  } else if (likely(length > 0)) {
+  }
+  if (likely(length > 0)) {
     m_keyInfo.put(startPos, m_keyInfo.get(startPos) | (length << 16) |
                                 (bound->range_no << 4));
   }
@@ -2425,10 +2427,9 @@ NdbQuery::NextResultOutcome NdbQueryImpl::nextResult(bool fetchAllowed,
     NdbQuery::NextResultOutcome res =
         getQueryOperation(m_globalCursor).nextResult(fetchAllowed, forceSend);
 
-    if (unlikely(res == NdbQuery::NextResult_error))
-      return res;
+    if (unlikely(res == NdbQuery::NextResult_error)) return res;
 
-    else if (res == NdbQuery::NextResult_scanComplete) {
+    if (res == NdbQuery::NextResult_scanComplete) {
       if (m_globalCursor == 0)  // Completed reading all results from root
         break;
       m_globalCursor--;  // Get 'next' from  ancestor
@@ -2442,10 +2443,8 @@ NdbQuery::NextResultOutcome NdbQueryImpl::nextResult(bool fetchAllowed,
       for (uint child = m_globalCursor + 1; child < getNoOfOperations();
            child++) {
         res = getQueryOperation(child).firstResult();
-        if (unlikely(res == NdbQuery::NextResult_error))
-          return res;
-        else if (res == NdbQuery::NextResult_gotRow)
-          m_globalCursor = child;
+        if (unlikely(res == NdbQuery::NextResult_error)) return res;
+        if (res == NdbQuery::NextResult_gotRow) m_globalCursor = child;
       }
       return NdbQuery::NextResult_gotRow;
     } else {
@@ -2613,27 +2612,26 @@ NdbQueryImpl::FetchResult NdbQueryImpl::awaitMoreResults(bool forceSend) {
     // Fall through only if ::hasReceivedError()
     assert(m_error.code);
     return FetchResult_gotError;
-  } else  // is a Lookup query
-  {
-    /* The root operation is a lookup. Lookups are guaranteed to be complete
-     * before NdbTransaction::execute() returns. Therefore we do not set
-     * the lock, because we know that the signal receiver thread will not
-     * be accessing m_workers at this time.
-     */
-    m_applFrags.prepareMoreResults(m_workers, m_workerCount);
-    if (m_applFrags.getCurrent() != nullptr) {
-      return FetchResult_ok;
-    }
+  }
+  // is a Lookup query
+  /* The root operation is a lookup. Lookups are guaranteed to be complete
+   * before NdbTransaction::execute() returns. Therefore we do not set
+   * the lock, because we know that the signal receiver thread will not
+   * be accessing m_workers at this time.
+   */
+  m_applFrags.prepareMoreResults(m_workers, m_workerCount);
+  if (m_applFrags.getCurrent() != nullptr) {
+    return FetchResult_ok;
+  }
 
-    /* Getting here means that either:
-     *  - No results was returned (TCKEYREF)
-     *  - There was no matching row for an inner join.
-     *  - or, the application called nextResult() twice for a lookup query.
-     */
-    assert(m_pendingWorkers == 0);
-    assert(m_finalWorkers == getWorkerCount());
-    return FetchResult_noMoreData;
-  }  // if(getQueryDef().isScanQuery())
+  /* Getting here means that either:
+   *  - No results was returned (TCKEYREF)
+   *  - There was no matching row for an inner join.
+   *  - or, the application called nextResult() twice for a lookup query.
+   */
+  assert(m_pendingWorkers == 0);
+  assert(m_finalWorkers == getWorkerCount());
+  return FetchResult_noMoreData;
 
 }  // NdbQueryImpl::awaitMoreResults
 
@@ -2672,7 +2670,8 @@ bool NdbQueryImpl::handleBatchComplete(NdbWorker &worker) {
      */
     worker.setReceivedMore();
     return true;
-  } else if (!getQueryDef().isScanQuery())  // A failed lookup query
+  }
+  if (!getQueryDef().isScanQuery())  // A failed lookup query
   {
     /**
      * A lookup query will retrieve the rows as part of ::execute().
@@ -3087,16 +3086,15 @@ const Uint32 *InitialReceiverIdIterator::getNextWords(Uint32 &sz) {
   if (m_workerNo >= m_workerCount) {
     sz = 0;
     return nullptr;
-  } else {
-    Uint32 cnt = 0;
-    while (cnt < bufSize && m_workerNo < m_workerCount) {
-      m_receiverIds[cnt] = m_workers[m_workerNo].getReceiverId();
-      cnt++;
-      m_workerNo++;
-    }
-    sz = cnt;
-    return m_receiverIds;
   }
+  Uint32 cnt = 0;
+  while (cnt < bufSize && m_workerNo < m_workerCount) {
+    m_receiverIds[cnt] = m_workers[m_workerNo].getReceiverId();
+    cnt++;
+    m_workerNo++;
+  }
+  sz = cnt;
+  return m_receiverIds;
 }
 
 /** This iterator is used for inserting a sequence of 'TcPtrI'
@@ -3145,16 +3143,15 @@ const Uint32 *FetchMoreTcIdIterator::getNextWords(Uint32 &sz) {
   if (m_currWorkerNo >= m_workerCount) {
     sz = 0;
     return nullptr;
-  } else {
-    Uint32 cnt = 0;
-    while (cnt < bufSize && m_currWorkerNo < m_workerCount) {
-      m_receiverIds[cnt] = m_workers[m_currWorkerNo]->getReceiverTcPtrI();
-      cnt++;
-      m_currWorkerNo++;
-    }
-    sz = cnt;
-    return m_receiverIds;
   }
+  Uint32 cnt = 0;
+  while (cnt < bufSize && m_currWorkerNo < m_workerCount) {
+    m_receiverIds[cnt] = m_workers[m_currWorkerNo]->getReceiverTcPtrI();
+    cnt++;
+    m_currWorkerNo++;
+  }
+  sz = cnt;
+  return m_receiverIds;
 }
 
 /******************************************************************************
@@ -3713,10 +3710,10 @@ NdbWorker *NdbQueryImpl::OrderedFragSet::getCurrent() const {
 
   if (unlikely(m_activeWorkerCount == 0)) {
     return nullptr;
-  } else {
-    assert(!m_activeWorkers[m_activeWorkerCount - 1]->isEmpty());
-    return m_activeWorkers[m_activeWorkerCount - 1];
   }
+  assert(!m_activeWorkers[m_activeWorkerCount - 1]->isEmpty());
+  return m_activeWorkers[m_activeWorkerCount - 1];
+
 }  // OrderedFragSet::getCurrent()
 
 /**
@@ -3889,9 +3886,8 @@ int NdbQueryImpl::OrderedFragSet::compare(const NdbWorker &worker1,
   if (worker1.isEmpty()) {
     if (!worker2.isEmpty()) {
       return -1;
-    } else {
-      return 0;
     }
+    return 0;
   }
 
   /* Neither stream is empty so we must compare records.*/
@@ -4065,13 +4061,12 @@ SpjTreeNodeMask NdbQueryOperationImpl::getDependants() const {
 Uint32 NdbQueryOperationImpl::getNoOfLeafOperations() const {
   if (getNoOfChildOperations() == 0) {
     return 1;
-  } else {
-    Uint32 sum = 0;
-    for (unsigned i = 0; i < getNoOfChildOperations(); i++)
-      sum += getChildOperation(i).getNoOfLeafOperations();
-
-    return sum;
   }
+  Uint32 sum = 0;
+  for (unsigned i = 0; i < getNoOfChildOperations(); i++)
+    sum += getChildOperation(i).getNoOfLeafOperations();
+
+  return sum;
 }
 
 NdbRecAttr *NdbQueryOperationImpl::getValue(const char *anAttrName,
@@ -4085,9 +4080,8 @@ NdbRecAttr *NdbQueryOperationImpl::getValue(const char *anAttrName,
   if (unlikely(column == nullptr)) {
     getQuery().setErrorCode(Err_UnknownColumn);
     return nullptr;
-  } else {
-    return getValue(*column, resultBuffer);
   }
+  return getValue(*column, resultBuffer);
 }
 
 NdbRecAttr *NdbQueryOperationImpl::getValue(Uint32 anAttrId,
@@ -4097,9 +4091,8 @@ NdbRecAttr *NdbQueryOperationImpl::getValue(Uint32 anAttrId,
   if (unlikely(column == nullptr)) {
     getQuery().setErrorCode(Err_UnknownColumn);
     return nullptr;
-  } else {
-    return getValue(*column, resultBuffer);
   }
+  return getValue(*column, resultBuffer);
 }
 
 NdbRecAttr *NdbQueryOperationImpl::getValue(const NdbColumnImpl &column,
@@ -4248,7 +4241,7 @@ NdbQuery::NextResultOutcome NdbQueryOperationImpl::nextResult(bool fetchAllowed,
    * 'next' will never be able to return anything for a lookup operation.
    *  NOTE: This is a pure optimization shortcut!
    */
-  else if (m_operationDef.isScanOperation()) {
+  if (m_operationDef.isScanOperation()) {
     const NdbWorker *worker = m_queryImpl.m_applFrags.getCurrent();
     if (worker != nullptr) {
       NdbResultStream &resultStream = worker->getResultStream(*this);
@@ -4506,9 +4499,9 @@ Uint32 NdbQueryOperationImpl ::calculateBatchedRows(
     // Return max(Unit32) to avoid interfering with batch size calculation
     // for parent.
     return 0xffffffff;
-  } else {
-    return maxBatchRows;
   }
+  return maxBatchRows;
+
 }  // NdbQueryOperationImpl::calculateBatchedRows
 
 void NdbQueryOperationImpl::setBatchedRows(Uint32 batchedRows) {
@@ -4938,9 +4931,11 @@ int NdbQueryOperationImpl::prepareIndexKeyInfo(
   Uint32 length = keyInfo.getSize() - startPos;
   if (unlikely(keyInfo.isMemoryExhausted())) {
     return Err_MemoryAlloc;
-  } else if (unlikely(length > 0xFFFF)) {
+  }
+  if (unlikely(length > 0xFFFF)) {
     return QRY_DEFINITION_TOO_LARGE;  // Query definition too large.
-  } else if (likely(length > 0)) {
+  }
+  if (likely(length > 0)) {
     keyInfo.put(startPos, keyInfo.get(startPos) | (length << 16));
   }
 
@@ -5225,14 +5220,17 @@ int NdbQueryOperationImpl::setParallelism(Uint32 parallelism) {
   if (!getQueryOperationDef().isScanOperation()) {
     getQuery().setErrorCode(QRY_WRONG_OPERATION_TYPE);
     return -1;
-  } else if (getOrdering() == NdbQueryOptions::ScanOrdering_ascending ||
-             getOrdering() == NdbQueryOptions::ScanOrdering_descending) {
+  }
+  if (getOrdering() == NdbQueryOptions::ScanOrdering_ascending ||
+      getOrdering() == NdbQueryOptions::ScanOrdering_descending) {
     getQuery().setErrorCode(QRY_SEQUENTIAL_SCAN_SORTED);
     return -1;
-  } else if (getQueryOperationDef().getOpNo() > 0) {
+  }
+  if (getQueryOperationDef().getOpNo() > 0) {
     getQuery().setErrorCode(Err_FunctionNotImplemented);
     return -1;
-  } else if (parallelism < 1 || parallelism > NDB_PARTITION_MASK) {
+  }
+  if (parallelism < 1 || parallelism > NDB_PARTITION_MASK) {
     getQuery().setErrorCode(Err_ParameterError);
     return -1;
   }
@@ -5253,7 +5251,8 @@ int NdbQueryOperationImpl::setAdaptiveParallelism() {
   if (!getQueryOperationDef().isScanOperation()) {
     getQuery().setErrorCode(QRY_WRONG_OPERATION_TYPE);
     return -1;
-  } else if (getQueryOperationDef().getOpNo() == 0) {
+  }
+  if (getQueryOperationDef().getOpNo() == 0) {
     getQuery().setErrorCode(Err_FunctionNotImplemented);
     return -1;
   }

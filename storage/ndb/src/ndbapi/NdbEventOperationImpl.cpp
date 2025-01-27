@@ -2558,21 +2558,19 @@ void NdbEventBuffer::handle_change_nodegroup(const SubGcpCompleteRep *rep) {
               m_ndb->getReference(), m_ndb->getNdbObjectName(),
               Uint32(tmp->m_gci >> 32), Uint32(tmp->m_gci));
           break;
-        } else {
-          found = 2;
-          g_eventLogger->info(
-              "Ndb 0x%x %s :   gci %u/%u marking and increasing expected count",
-              m_ndb->getReference(), m_ndb->getNdbObjectName(),
-              Uint32(tmp->m_gci >> 32), Uint32(tmp->m_gci));
-          tmp->m_state |= Gci_container::GC_CHANGE_CNT;
-          tmp->m_gcp_complete_rep_count += cnt;
-          break;
         }
-      } else {
-        g_eventLogger->info("Ndb 0x%x %s :   ignoring non boundary gci %u/%u",
-                            m_ndb->getReference(), m_ndb->getNdbObjectName(),
-                            Uint32(array[pos] >> 32), Uint32(array[pos]));
+        found = 2;
+        g_eventLogger->info(
+            "Ndb 0x%x %s :   gci %u/%u marking and increasing expected count",
+            m_ndb->getReference(), m_ndb->getNdbObjectName(),
+            Uint32(tmp->m_gci >> 32), Uint32(tmp->m_gci));
+        tmp->m_state |= Gci_container::GC_CHANGE_CNT;
+        tmp->m_gcp_complete_rep_count += cnt;
+        break;
       }
+      g_eventLogger->info("Ndb 0x%x %s :   ignoring non boundary gci %u/%u",
+                          m_ndb->getReference(), m_ndb->getNdbObjectName(),
+                          Uint32(array[pos] >> 32), Uint32(array[pos]));
     }
 
     if (found == 0) {
@@ -2624,19 +2622,17 @@ void NdbEventBuffer::handle_change_nodegroup(const SubGcpCompleteRep *rep) {
               m_ndb->getReference(), m_ndb->getNdbObjectName(),
               Uint32(tmp->m_gci >> 32), Uint32(tmp->m_gci));
           break;
-        } else {
-          found = 2;
-          g_eventLogger->info("Ndb 0x%x %s :   gci %u/%u marking",
-                              m_ndb->getReference(), m_ndb->getNdbObjectName(),
-                              Uint32(tmp->m_gci >> 32), Uint32(tmp->m_gci));
-          tmp->m_state |= Gci_container::GC_CHANGE_CNT;
-          break;
         }
-      } else {
-        g_eventLogger->info("Ndb 0x%x %s :   ignoring non boundary gci %u/%u",
+        found = 2;
+        g_eventLogger->info("Ndb 0x%x %s :   gci %u/%u marking",
                             m_ndb->getReference(), m_ndb->getNdbObjectName(),
-                            Uint32(array[pos] >> 32), Uint32(array[pos]));
+                            Uint32(tmp->m_gci >> 32), Uint32(tmp->m_gci));
+        tmp->m_state |= Gci_container::GC_CHANGE_CNT;
+        break;
       }
+      g_eventLogger->info("Ndb 0x%x %s :   ignoring non boundary gci %u/%u",
+                          m_ndb->getReference(), m_ndb->getNdbObjectName(),
+                          Uint32(array[pos] >> 32), Uint32(array[pos]));
     }
 
     if (found == 0) {
@@ -3208,9 +3204,8 @@ Uint64 NdbEventBuffer::get_free_data_sz() const {
   // Only tail block might have additional free data:
   if (likely(m_mem_block_tail != nullptr)) {
     return m_mem_block_free_sz + m_mem_block_tail->get_free();
-  } else {
-    return m_mem_block_free_sz;
   }
+  return m_mem_block_free_sz;
 }
 
 Uint64 NdbEventBuffer::get_used_data_sz() const {

@@ -90,10 +90,8 @@ class foo_cache {
       for (const my_h_service *svc = refs; *svc; svc++) {
         SERVICE_TYPE(mysql_test_foo) *f =
             reinterpret_cast<SERVICE_TYPE(mysql_test_foo) *>(*svc);
-        if (f->emit(arg))
-          break;
-        else
-          called++;
+        if (f->emit(arg)) break;
+        called++;
       }
     }
     return called;  // the reference wasn't valid or the service call failed

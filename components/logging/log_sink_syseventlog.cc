@@ -349,10 +349,8 @@ static int var_update_tag(const char *tag) {
 static int var_check_fac(const char *fac) {
   SYSLOG_FACILITY rsf;
 
-  if (log_syslog_find_facility(fac, &rsf))
-    return -1;
-  else if (log_bs->length(fac) >= MAX_FAC_LEN)
-    return -2; /* purecov: inspected */
+  if (log_syslog_find_facility(fac, &rsf)) return -1;
+  if (log_bs->length(fac) >= MAX_FAC_LEN) return -2; /* purecov: inspected */
   return 0;
 }
 

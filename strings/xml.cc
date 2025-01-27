@@ -278,10 +278,9 @@ static int my_xml_enter(MY_XML_PARSER *st, const char *str, size_t len) {
   st->attr.end[0] = '\0';
   if (st->flags & MY_XML_FLAG_RELATIVE_NAMES)
     return st->enter ? st->enter(st, str, len) : MY_XML_OK;
-  else
-    return st->enter
-               ? st->enter(st, st->attr.start, st->attr.end - st->attr.start)
-               : MY_XML_OK;
+  return st->enter
+             ? st->enter(st, st->attr.start, st->attr.end - st->attr.start)
+             : MY_XML_OK;
 }
 
 static void mstr(char *s, const char *src, size_t l1, size_t l2) {

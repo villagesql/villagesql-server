@@ -469,9 +469,9 @@ int key_cmp(KEY_PART_INFO *key_part, const uchar *key, uint key_length) {
         if (!field_is_null) return res;  // Found key is > range
         /* null -- exact match, go to next key part */
         continue;
-      } else if (field_is_null)
-        return -res;  // NULL is less than any value
-      key++;          // Skip null byte
+      }
+      if (field_is_null) return -res;  // NULL is less than any value
+      key++;                           // Skip null byte
       store_length--;
     }
     if ((cmp = key_part->field->key_cmp(key, key_part->length)) < 0)
@@ -528,16 +528,16 @@ int key_cmp2(KEY_PART_INFO *key_part, const uchar *key1, uint key1_length,
               key2's null flag is '1' (since *key1 != *key2) then return 1;
         */
         return (*key1) ? -res : res;
-      } else {
-        /*
-          If null indicating flag in key1 and key2 are same and
-            > if it is '1' , both are NULLs and both are same, continue with
-              next key in key_part.
-            > if it is '0', then go ahead and compare the content using
-              field->key_cmp.
-        */
-        if (*key1) continue;
       }
+      /*
+      If null indicating flag in key1 and key2 are same and
+        > if it is '1' , both are NULLs and both are same, continue with
+          next key in key_part.
+        > if it is '0', then go ahead and compare the content using
+          field->key_cmp.
+      */
+      if (*key1) continue;
+
       /*
         Increment the key1 and key2 pointers to point them to the actual
         key values

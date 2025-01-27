@@ -777,16 +777,16 @@ uint _mi_get_pack_key(MI_KEYDEF *keyinfo, uint nod_flag, uchar **page_pos,
         page += rest_length;
         key += rest_length;
         continue;
-      } else {
-        if (keyseg->flag & HA_NULL_PART) {
-          if (!length--) /* Null part */
-          {
-            *key++ = 0;
-            continue;
-          }
-          *key++ = 1; /* Not null */
-        }
       }
+      if (keyseg->flag & HA_NULL_PART) {
+        if (!length--) /* Null part */
+        {
+          *key++ = 0;
+          continue;
+        }
+        *key++ = 1; /* Not null */
+      }
+
       if (length > (uint)keyseg->length) {
         DBUG_PRINT("error", ("Found too long packed key: %u of %u at %p",
                              length, keyseg->length, *page_pos));
@@ -958,18 +958,18 @@ uchar *_mi_get_key(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *page, uchar *key,
   if (!(keyinfo->flag & (HA_VAR_LENGTH_KEY | HA_BINARY_PACK_KEY))) {
     memmove((uchar *)key, (uchar *)keypos, keyinfo->keylength + nod_flag);
     return keypos + keyinfo->keylength + nod_flag;
-  } else {
-    page += 2 + nod_flag;
-    key[0] = 0; /* safety */
-    while (page <= keypos) {
-      *return_key_length = (*keyinfo->get_key)(keyinfo, nod_flag, &page, key);
-      if (*return_key_length == 0) {
-        mi_print_error(info->s, HA_ERR_CRASHED);
-        set_my_errno(HA_ERR_CRASHED);
-        return nullptr;
-      }
+  }
+  page += 2 + nod_flag;
+  key[0] = 0; /* safety */
+  while (page <= keypos) {
+    *return_key_length = (*keyinfo->get_key)(keyinfo, nod_flag, &page, key);
+    if (*return_key_length == 0) {
+      mi_print_error(info->s, HA_ERR_CRASHED);
+      set_my_errno(HA_ERR_CRASHED);
+      return nullptr;
     }
   }
+
   DBUG_PRINT("exit", ("page: %p  length: %u", page, *return_key_length));
   return page;
 } /* _mi_get_key */
@@ -989,18 +989,18 @@ static bool _mi_get_prev_key(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *page,
     memmove((uchar *)key, (uchar *)keypos - *return_key_length - nod_flag,
             *return_key_length);
     return false;
-  } else {
-    page += 2 + nod_flag;
-    key[0] = 0; /* safety */
-    while (page < keypos) {
-      *return_key_length = (*keyinfo->get_key)(keyinfo, nod_flag, &page, key);
-      if (*return_key_length == 0) {
-        mi_print_error(info->s, HA_ERR_CRASHED);
-        set_my_errno(HA_ERR_CRASHED);
-        return true;
-      }
+  }
+  page += 2 + nod_flag;
+  key[0] = 0; /* safety */
+  while (page < keypos) {
+    *return_key_length = (*keyinfo->get_key)(keyinfo, nod_flag, &page, key);
+    if (*return_key_length == 0) {
+      mi_print_error(info->s, HA_ERR_CRASHED);
+      set_my_errno(HA_ERR_CRASHED);
+      return true;
     }
   }
+
   return false;
 } /* _mi_get_key */
 

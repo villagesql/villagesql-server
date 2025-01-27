@@ -54,10 +54,9 @@ static std::string escape(const std::string &str) {
 static std::string to_string(const gis::Unit_Type unit_type) {
   if (unit_type == gis::Unit_Type::kLinear) {
     return "LINEAR";
-  } else {
-    assert(false);
-    return "";
   }
+  assert(false);
+  return "";
 }
 
 const St_units_of_measure &St_units_of_measure::instance() {

@@ -69,9 +69,9 @@ int Ndb_rep_tab_key::attempt_match(const char *keyptr, const uint keylen,
                    (const uchar *)candidateptr, candidatelen) == 0) {
     /* Exact match */
     return exactmatchvalue;
-  } else if (my_wildcmp(system_charset_info, keyptr, keyptr + keylen,
-                        candidateptr, candidateptr + candidatelen, '\\',
-                        wild_one, wild_many) == 0) {
+  }
+  if (my_wildcmp(system_charset_info, keyptr, keyptr + keylen, candidateptr,
+                 candidateptr + candidatelen, '\\', wild_one, wild_many) == 0) {
     /* Wild match */
     return 0;
   }
@@ -356,11 +356,10 @@ int Ndb_rep_tab_reader::lookup(Ndb *ndb,
         DBUG_PRINT("info",
                    ("No %s.%s table", ndb_rep_db, ndb_replication_table));
         return 0;
-      } else {
-        error = 0;
-        ndberror = ndbtab_g.getNdbError();
-        break;
       }
+      error = 0;
+      ndberror = ndbtab_g.getNdbError();
+      break;
     }
 
     if ((error = check_schema(reptab, &error_str)) != 0) {

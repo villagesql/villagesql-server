@@ -70,11 +70,11 @@ mysql_service_status_t test_string_service_init() {
   if (!(test_text = (char *)malloc(MAX_BUFFER_LENGTH + 1))) {
     WRITE_LOG("%s\n", "Allcoate buffer failed. Stopped test execution.");
     return (true);
-  } else {
-    for (int i = 0; i < MAX_BUFFER_LENGTH / TEST_TEXT_LIT_LENGTH; i++) {
-      strcpy(&test_text[i * TEST_TEXT_LIT_LENGTH], test_text_lit);
-    }
   }
+  for (int i = 0; i < MAX_BUFFER_LENGTH / TEST_TEXT_LIT_LENGTH; i++) {
+    strcpy(&test_text[i * TEST_TEXT_LIT_LENGTH], test_text_lit);
+  }
+
   WRITE_LOG("%s\n", test_text);
 
   if (mysql_service_mysql_string_factory->create(&out_string)) {

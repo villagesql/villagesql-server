@@ -156,10 +156,9 @@ Bucket *find_all_matches(HashTable *ht, const char *str, uint length,
   if (!b) {
     *res_length = 0;
     return (Bucket *)nullptr;
-  } else {
-    *res_length = length;
-    return b;
   }
+  *res_length = length;
+  return b;
 }
 
 Bucket *find_longest_match(HashTable *ht, char *str, uint length,

@@ -176,7 +176,8 @@ static int simple_parser_parse(MYSQL_FTPARSER_PARAM *param) {
     if (end == docend) {
       if (end > start) add_word(param, start, end - start);
       break;
-    } else if (my_isspace(param->cs, *end)) {
+    }
+    if (my_isspace(param->cs, *end)) {
       if (end > start) add_word(param, start, end - start);
       start = end + 1;
     }

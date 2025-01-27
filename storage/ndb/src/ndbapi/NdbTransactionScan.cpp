@@ -61,11 +61,10 @@ int NdbTransaction::receiveSCAN_TABREF(const NdbApiSignal *aSignal) {
       m_scanningQuery->execCLOSE_SCAN_REP(ref->errorCode, ref->closeNeeded);
     }
     return 0;
-  } else {
-#ifdef NDB_NO_DROPPED_SIGNAL
-    abort();
-#endif
   }
+#ifdef NDB_NO_DROPPED_SIGNAL
+  abort();
+#endif
 
   return -1;
 }
@@ -146,11 +145,10 @@ int NdbTransaction::receiveSCAN_TABCONF(const NdbApiSignal *aSignal,
       }
     }  // while
     return retVal;
-  } else {
-#ifdef NDB_NO_DROPPED_SIGNAL
-    abort();
-#endif
   }
+#ifdef NDB_NO_DROPPED_SIGNAL
+  abort();
+#endif
 
   return -1;
 }

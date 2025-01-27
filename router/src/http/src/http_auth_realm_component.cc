@@ -65,9 +65,8 @@ std::error_code HttpAuthRealmComponent::authenticate(
     const std::string &authdata) {
   if (auto realm = get(inst)) {
     return realm->authenticate(username, authdata);
-  } else {
-    return make_error_code(HttpAuthErrc::kRealmNotFound);
   }
+  return make_error_code(HttpAuthErrc::kRealmNotFound);
 }
 
 HttpAuthRealmComponent &HttpAuthRealmComponent::get_instance() {

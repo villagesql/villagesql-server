@@ -133,7 +133,8 @@ int ParseThreadConfiguration::find_next() {
 
   if (*m_curr_str == 0) {
     return 0;
-  } else if (*m_curr_str == ',') {
+  }
+  if (*m_curr_str == ',') {
     m_curr_str++;
     return 1;
   }

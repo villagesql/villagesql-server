@@ -1482,17 +1482,17 @@ uint save_pack_length(uint version, uchar *block_buff, ulong length) {
     assert(length <= 0xFFFFFF);
     int3store(block_buff + 1, (ulong)length);
     return 4;
-  } else {
-    int4store(block_buff + 1, (ulong)length);
-    return 5;
   }
+  int4store(block_buff + 1, (ulong)length);
+  return 5;
 }
 
 uint read_pack_length(uint version, const uchar *buf, ulong *length) {
   if (buf[0] < 254) {
     *length = buf[0];
     return 1;
-  } else if (buf[0] == 254) {
+  }
+  if (buf[0] == 254) {
     *length = uint2korr(buf + 1);
     return 3;
   }
@@ -1500,10 +1500,9 @@ uint read_pack_length(uint version, const uchar *buf, ulong *length) {
   {
     *length = uint3korr(buf + 1);
     return 4;
-  } else {
-    *length = uint4korr(buf + 1);
-    return 5;
   }
+  *length = uint4korr(buf + 1);
+  return 5;
 }
 
 uint calc_pack_length(uint version, ulong length) {

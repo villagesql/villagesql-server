@@ -887,7 +887,8 @@ static size_t my_vsnprintf_mb2(char *dst, size_t n, const char *fmt,
         dst[1] = par[0];
       }
       continue;
-    } else if (*fmt == 'd' || *fmt == 'u') /* Integer parameter */
+    }
+    if (*fmt == 'd' || *fmt == 'u') /* Integer parameter */
     {
       char nbuf[16];
       char *pbuf = nbuf;
@@ -1961,7 +1962,8 @@ static size_t my_vsnprintf_utf32(char *dst, size_t n, const char *fmt,
         dst[3] = par[0];
       }
       continue;
-    } else if (*fmt == 'd' || *fmt == 'u') /* Integer parameter */
+    }
+    if (*fmt == 'd' || *fmt == 'u') /* Integer parameter */
     {
       char nbuf[16];
       char *pbuf = nbuf;

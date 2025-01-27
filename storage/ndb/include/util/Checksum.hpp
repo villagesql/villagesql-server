@@ -94,18 +94,17 @@ inline Uint32 computeXorChecksum(const Uint32 *const buf, const size_t words,
                                  Uint32 sum = 0) {
   if (words < 256) {  // Decided by empirical experiments
     return xorChecksum(buf, words, sum);
-  } else {
-    /**
-     * For larger memory blocks there is a ~20% performance gain using aligned
-     * memory accesses. Blocks has to be large enough to compensate for the
-     * extra overhead of finding the aligned start (below).
-     */
-    unsigned int i;
-    for (i = 0; ((size_t)(buf + i) % 16) != 0; ++i)
-      sum ^= buf[i];  // Advance to a 16 byte aligned address
-
-    return computeXorChecksumAligned16(buf + i, words - i, sum);
   }
+  /**
+   * For larger memory blocks there is a ~20% performance gain using aligned
+   * memory accesses. Blocks has to be large enough to compensate for the
+   * extra overhead of finding the aligned start (below).
+   */
+  unsigned int i;
+  for (i = 0; ((size_t)(buf + i) % 16) != 0; ++i)
+    sum ^= buf[i];  // Advance to a 16 byte aligned address
+
+  return computeXorChecksumAligned16(buf + i, words - i, sum);
 }
 
 #else

@@ -77,12 +77,11 @@ std::optional<std::string> BasePluginConfig::get_option_string_(
     }
 
     return value;
-  } else {
-    try {
-      return value = section->get(option);
-    } catch (const mysql_harness::bad_option &) {
-      return {};
-    }
+  }
+  try {
+    return value = section->get(option);
+  } catch (const mysql_harness::bad_option &) {
+    return {};
   }
 }
 

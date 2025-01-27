@@ -216,8 +216,9 @@ int Ndb_split_string_address_port(const char *arg, char *host, size_t hostlen,
       return 0;
     }
     return -1;
-  } else if ((port_colon = strchr(arg, ':')) &&
-             (strchr(port_colon + 1, ':') == nullptr)) {
+  }
+  if ((port_colon = strchr(arg, ':')) &&
+      (strchr(port_colon + 1, ':') == nullptr)) {
     // checking for IPv4_address:port or hostname:port
     size_t copy_bytes = port_colon - arg;
     if ((copy_bytes >= hostlen) || (strlen(port_colon + 1) >= servlen))

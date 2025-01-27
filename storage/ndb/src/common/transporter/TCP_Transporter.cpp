@@ -326,7 +326,8 @@ bool TCP_Transporter::doSend(bool need_wakeup [[maybe_unused]]) {
       assert(sum >= sum_sent);
       remain = sum - sum_sent;
       break;
-    } else if (nBytesSent > 0)  // Sent some, more pending
+    }
+    if (nBytesSent > 0)  // Sent some, more pending
     {
       sum_sent += nBytesSent;
       require(remain >= (Uint32)nBytesSent);

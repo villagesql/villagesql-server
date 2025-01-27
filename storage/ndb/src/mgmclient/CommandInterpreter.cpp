@@ -1901,10 +1901,10 @@ int CommandInterpreter::executeShow(char *parameters) {
     ndb_mgm_destroy_iterator(it);
 
     return 0;
-  } else {
-    ndbout << "Invalid argument: '" << parameters << "'" << endl;
-    return -1;
   }
+  ndbout << "Invalid argument: '" << parameters << "'" << endl;
+  return -1;
+
   return 0;
 }
 
@@ -2210,10 +2210,10 @@ int CommandInterpreter::executeEnterSingleUser(char *parameters) {
     ndbout_c("Entering single user mode for node %d failed", nodeId);
     printError();
     return -1;
-  } else {
-    ndbout_c("Single user mode entered");
-    ndbout_c("Access is granted for API node %d only.", nodeId);
   }
+  ndbout_c("Single user mode entered");
+  ndbout_c("Access is granted for API node %d only.", nodeId);
+
   return 0;
 }
 
@@ -2223,12 +2223,11 @@ int CommandInterpreter::executeExitSingleUser(char * /*parameters*/) {
     ndbout_c("Exiting single user mode failed.");
     printError();
     return -1;
-  } else {
-    ndbout_c("Exiting single user mode in progress.");
-    ndbout_c(
-        "Use ALL STATUS or SHOW to see when single user mode has been exited.");
-    return 0;
   }
+  ndbout_c("Exiting single user mode in progress.");
+  ndbout_c(
+      "Use ALL STATUS or SHOW to see when single user mode has been exited.");
+  return 0;
 }
 
 int CommandInterpreter::executeStart(int processId, const char * /*parameters*/,
@@ -2264,11 +2263,11 @@ int CommandInterpreter::executeStart(Vector<BaseString> & /*command_list*/,
     ndbout_c("Start failed.");
     printError();
     return -1;
-  } else {
-    ndbout << "Node";
-    for (int i = 0; i < no_of_nodes; i++) ndbout << " " << node_ids[i];
-    ndbout_c(" is being started");
   }
+  ndbout << "Node";
+  for (int i = 0; i < no_of_nodes; i++) ndbout << " " << node_ids[i];
+  ndbout_c(" is being started");
+
   return 0;
 }
 
@@ -2440,16 +2439,16 @@ int CommandInterpreter::executeStatus(int processId, const char *parameters,
   if (all) {
     for (int i = 0; i < cl->no_of_nodes; i++) print_status(cl->node_states + i);
     return 0;
-  } else {
-    for (int i = 0; i < cl->no_of_nodes; i++) {
-      if (cl->node_states[i].node_id == processId) {
-        print_status(cl->node_states + i);
-        return 0;
-      }
-    }
-    ndbout << processId << ": Node not found" << endl;
-    return -1;
   }
+  for (int i = 0; i < cl->no_of_nodes; i++) {
+    if (cl->node_states[i].node_id == processId) {
+      print_status(cl->node_states + i);
+      return 0;
+    }
+  }
+  ndbout << processId << ": Node not found" << endl;
+  return -1;
+
   return 0;
 }  //
 
@@ -2711,9 +2710,9 @@ int CommandInterpreter::executeLogLevel(int processId, const char *parameters,
     ndbout_c(" failed.");
     printError();
     return -1;
-  } else {
-    ndbout_c(" OK!");
   }
+  ndbout_c(" OK!");
+
   return 0;
 }
 
@@ -2989,13 +2988,11 @@ int CommandInterpreter::executeStartBackup(char *parameters, bool interactive) {
           args[1].length() <= strlen(out)) {
         input_backupId = static_cast<unsigned>(tmp_backupId);
         continue;
-      } else {
-        BaseString::snprintf(out, sizeof(out),
-                             "Backup ID out of range [1 - %u]",
-                             MAX_BACKUPS - 1);
-        invalid_command(parameters, out);
-        return -1;
       }
+      BaseString::snprintf(out, sizeof(out), "Backup ID out of range [1 - %u]",
+                           MAX_BACKUPS - 1);
+      invalid_command(parameters, out);
+      return -1;
     }
 
     if (args[i] == "SNAPSHOTEND") {
@@ -3216,9 +3213,8 @@ int CommandInterpreter::executeAbortBackup(char *parameters) {
       ndbout << "Abort of backup " << bid << " failed" << endl;
       printError();
       return -1;
-    } else {
-      ndbout << "Abort of backup " << bid << " ordered" << endl;
     }
+    ndbout << "Abort of backup " << bid << " ordered" << endl;
   }
   return 0;
 executeAbortBackupError1:
@@ -3252,9 +3248,8 @@ int CommandInterpreter::executeCreateNodeGroup(char *parameters) {
     if (result != 0) {
       printError();
       return -1;
-    } else {
-      ndbout << "Nodegroup " << ng << " created" << endl;
     }
+    ndbout << "Nodegroup " << ng << " created" << endl;
   }
 
   return 0;
@@ -3278,9 +3273,8 @@ int CommandInterpreter::executeDropNodeGroup(char *parameters) {
     if (result != 0) {
       printError();
       return -1;
-    } else {
-      ndbout << "Drop Node Group " << ng << " done" << endl;
     }
+    ndbout << "Drop Node Group " << ng << " done" << endl;
   }
   return 0;
 err:

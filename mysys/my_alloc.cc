@@ -139,16 +139,15 @@ void *MEM_ROOT::AllocSlow(size_t length) {
     }
 
     return pointer_cast<char *>(new_block) + ALIGN_SIZE(sizeof(*new_block));
-  } else {
-    // The normal case: Throw away the current block, allocate a new block,
-    // and use that to satisfy the new allocation.
-    if (ForceNewBlock(/*minimum_length=*/length)) {
-      return nullptr;
-    }
-    char *new_mem = m_current_free_start;
-    m_current_free_start += length;
-    return new_mem;
   }
+  // The normal case: Throw away the current block, allocate a new block,
+  // and use that to satisfy the new allocation.
+  if (ForceNewBlock(/*minimum_length=*/length)) {
+    return nullptr;
+  }
+  char *new_mem = m_current_free_start;
+  m_current_free_start += length;
+  return new_mem;
 }
 
 bool MEM_ROOT::ForceNewBlock(size_t minimum_length) {

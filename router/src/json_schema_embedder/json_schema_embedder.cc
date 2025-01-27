@@ -106,10 +106,8 @@ int main(int argc, const char **argv) {
         if (!fprintf(hdr_file, "0x%02x, ", c))
           throw_error("Failed writing output file", out_filename);
       } else {
-        if (feof(in_file))
-          break;
-        else
-          throw_error("Failed reading input file", in_filename);
+        if (feof(in_file)) break;
+        throw_error("Failed reading input file", in_filename);
       }
 
       // line break every 16th element

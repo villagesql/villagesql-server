@@ -570,14 +570,14 @@ DEFINE_BOOL_METHOD(validate_password_imp::get_strength,
   if (n_chars < validate_password_length) {
     *strength = PASSWORD_SCORE;
     return false;
-  } else {
-    policy = PASSWORD_POLICY_LOW;
-    if (validate_password_policy_strength(thd, password,
-                                          PASSWORD_POLICY_MEDIUM)) {
-      policy = PASSWORD_POLICY_MEDIUM;
-      if (validate_dictionary_check(password)) policy = PASSWORD_POLICY_STRONG;
-    }
   }
+  policy = PASSWORD_POLICY_LOW;
+  if (validate_password_policy_strength(thd, password,
+                                        PASSWORD_POLICY_MEDIUM)) {
+    policy = PASSWORD_POLICY_MEDIUM;
+    if (validate_dictionary_check(password)) policy = PASSWORD_POLICY_STRONG;
+  }
+
   *strength = ((policy + 1) * PASSWORD_SCORE + PASSWORD_SCORE);
   return false;
 }

@@ -63,20 +63,20 @@ bool Member_version::operator<(const Member_version &other) const {
 
   if (get_major_version() < other.get_major_version()) {
     return true;
-  } else if (get_major_version() > other.get_major_version()) {
+  }
+  if (get_major_version() > other.get_major_version()) {
     return false;
-  } else  // major version are the same
-  {
-    if (get_minor_version() < other.get_minor_version()) {
-      return true;
-    } else if (get_minor_version() > other.get_minor_version()) {
-      return false;
-    } else  // minor version are the same
-    {
-      if (get_patch_version() < other.get_patch_version()) {
-        return true;
-      }
-    }
+  }
+  // major version are the same
+  if (get_minor_version() < other.get_minor_version()) {
+    return true;
+  }
+  if (get_minor_version() > other.get_minor_version()) {
+    return false;
+  }
+  // minor version are the same
+  if (get_patch_version() < other.get_patch_version()) {
+    return true;
   }
 
   return false;

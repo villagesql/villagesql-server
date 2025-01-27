@@ -1193,14 +1193,13 @@ inline const NdbColumnImpl *NdbTableImpl::getColumn(const char *name) const {
 
   if (sz > ColNameHashThresh) {
     return getColumnByHash(name);
-  } else {
-    NdbColumnImpl *const *cols = m_columns.getBase();
-    for (Uint32 i = 0; i < sz; i++, cols++) {
-      NdbColumnImpl *col = *cols;
-      if (col != nullptr && strcmp(name, col->m_name.c_str()) == 0) return col;
-    }
-    return nullptr;
   }
+  NdbColumnImpl *const *cols = m_columns.getBase();
+  for (Uint32 i = 0; i < sz; i++, cols++) {
+    NdbColumnImpl *col = *cols;
+    if (col != nullptr && strcmp(name, col->m_name.c_str()) == 0) return col;
+  }
+  return nullptr;
 }
 
 inline NdbIndexImpl &NdbIndexImpl::getImpl(NdbDictionary::Index &t) {

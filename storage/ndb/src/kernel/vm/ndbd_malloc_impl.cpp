@@ -818,7 +818,8 @@ bool Ndbd_mem_manager::init(Uint32 *watchCounter, Uint32 max_pages,
             20,
         (Uint64)(sizeof(Alloc_page) * allocated) >> 20);
     return false;
-  } else if (allocated < pages) {
+  }
+  if (allocated < pages) {
     g_eventLogger->warning(
         "Unable to alloc requested memory from OS: min: %lldMb"
         " requested: %lldMb allocated: %lldMb",

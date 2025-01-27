@@ -212,9 +212,9 @@ int _mi_ck_write(MI_INFO *info, uint keynr, uchar *key, uint key_length) {
 
   if (info->bulk_insert && is_tree_inited(&info->bulk_insert[keynr])) {
     return _mi_ck_write_tree(info, keynr, key, key_length);
-  } else {
-    return _mi_ck_write_btree(info, keynr, key, key_length);
   }
+  return _mi_ck_write_btree(info, keynr, key, key_length);
+
 } /* _mi_ck_write */
 
 /**********************************************************************

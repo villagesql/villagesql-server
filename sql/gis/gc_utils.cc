@@ -255,9 +255,9 @@ std::unique_ptr<gis::Geometrycollection> narrowest_multigeometry(
 
   if (!multipoint->empty())
     return std::unique_ptr<gis::Geometrycollection>(multipoint.release());
-  else if (!multilinestring->empty())
+  if (!multilinestring->empty())
     return std::unique_ptr<gis::Geometrycollection>(multilinestring.release());
-  else if (!multipolygon->empty())
+  if (!multipolygon->empty())
     return std::unique_ptr<gis::Geometrycollection>(multipolygon.release());
   assert(false);
   return geometrycollection;

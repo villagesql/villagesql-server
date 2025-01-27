@@ -403,8 +403,7 @@ std::string quote_identifier_if_needed(const std::string &ident,
 
   if (needs_quotation || digits == ident.length())
     return quote_char + ident + quote_char;
-  else
-    return ident;
+  return ident;
 }
 
 const sqlstring sqlstring::null(sqlstring("NULL", 0));

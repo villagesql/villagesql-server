@@ -2890,8 +2890,8 @@ MY_LOCALE *my_locale_by_name(THD *thd, const char *name, size_t length) {
     // Check that locale is on its correct position in the array
     assert(locale == my_locales[locale->number]);
     return locale;
-  } else if ((locale =
-                  my_locale_by_name(my_locales_deprecated, name, length))) {
+  }
+  if ((locale = my_locale_by_name(my_locales_deprecated, name, length))) {
     /*
       Replace the deprecated locale to the corresponding
       'fresh' locale with the same ID.

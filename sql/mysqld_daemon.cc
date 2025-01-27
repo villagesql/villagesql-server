@@ -92,40 +92,40 @@ int mysqld::runtime::mysqld_daemonize() {
     if (rc != 1) {
       LogErr(ERROR_LEVEL, ER_FAILED_TO_FIND_MYSQLD_STATUS, strerror(errno), rc);
       return -2;
-    } else if (waitstatus != 1) {
+    }
+    if (waitstatus != 1) {
       return -2;
     }
     // Parent should return to calling function (mysqld_main) and not
     // call exit() directly.
     return -1;
+  }
+  // Child, close read end of pipe file descriptor.
+  close(pipe_fd[0]);
+
+  int stdinfd;
+  if ((stdinfd = open("/dev/null", O_RDONLY)) <= STDERR_FILENO) {
+    close(pipe_fd[1]);
+    exit(MYSQLD_ABORT_EXIT);
+  }
+
+  if (!(dup2(stdinfd, STDIN_FILENO) != STDIN_FILENO) && (setsid() > -1)) {
+    close(stdinfd);
+    pid_t grand_child_pid = fork();
+    switch (grand_child_pid) {
+      case 0:  // Grand child
+        is_daemon_proc = true;
+        return pipe_fd[1];
+      case -1:
+        close(pipe_fd[1]);
+        _exit(MYSQLD_FAILURE_EXIT);
+      default:
+        _exit(MYSQLD_SUCCESS_EXIT);
+    }
   } else {
-    // Child, close read end of pipe file descriptor.
-    close(pipe_fd[0]);
-
-    int stdinfd;
-    if ((stdinfd = open("/dev/null", O_RDONLY)) <= STDERR_FILENO) {
-      close(pipe_fd[1]);
-      exit(MYSQLD_ABORT_EXIT);
-    }
-
-    if (!(dup2(stdinfd, STDIN_FILENO) != STDIN_FILENO) && (setsid() > -1)) {
-      close(stdinfd);
-      pid_t grand_child_pid = fork();
-      switch (grand_child_pid) {
-        case 0:  // Grand child
-          is_daemon_proc = true;
-          return pipe_fd[1];
-        case -1:
-          close(pipe_fd[1]);
-          _exit(MYSQLD_FAILURE_EXIT);
-        default:
-          _exit(MYSQLD_SUCCESS_EXIT);
-      }
-    } else {
-      close(stdinfd);
-      close(pipe_fd[1]);
-      _exit(MYSQLD_SUCCESS_EXIT);
-    }
+    close(stdinfd);
+    close(pipe_fd[1]);
+    _exit(MYSQLD_SUCCESS_EXIT);
   }
 }
 

@@ -165,8 +165,9 @@ size_t my_write(File Filedes, const uchar *Buffer, size_t Count, myf MyFlags) {
       continue; /* Retry if something written */
 
     if (my_errno() == EINTR) {
-      continue;                                /* Interrupted, retry */
-    } else if (writtenbytes == 0 && !errors++) /* Retry once */
+      continue; /* Interrupted, retry */
+    }
+    if (writtenbytes == 0 && !errors++) /* Retry once */
     {
       /* We may come here if the file quota is exeeded */
       continue;

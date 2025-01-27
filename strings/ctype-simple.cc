@@ -1249,14 +1249,12 @@ unsigned long long my_strntoull10rnd_8bit(const CHARSET_INFO *cs
       if (unsigned_flag) {
         *error = ul ? MY_ERRNO_ERANGE : 0;
         return 0;
-      } else {
-        *error = 0;
-        return (unsigned long long)(long long)-(long)ul;
       }
-    } else {
       *error = 0;
-      return (unsigned long long)ul;
+      return (unsigned long long)(long long)-(long)ul;
     }
+    *error = 0;
+    return (unsigned long long)ul;
   }
 
   digits = (int)(str - beg);
@@ -1387,14 +1385,13 @@ ret_sign:
       if (ull == static_cast<unsigned long long>(LLONG_MIN))
         return static_cast<unsigned long long>(LLONG_MIN);
       return (unsigned long long)-(long long)ull;
-    } else {
-      if (ull > (unsigned long long)LLONG_MAX) {
-        *error = MY_ERRNO_ERANGE;
-        return (unsigned long long)LLONG_MAX;
-      }
-      *error = 0;
-      return ull;
     }
+    if (ull > (unsigned long long)LLONG_MAX) {
+      *error = MY_ERRNO_ERANGE;
+      return (unsigned long long)LLONG_MAX;
+    }
+    *error = 0;
+    return ull;
   }
 
   /* Unsigned number */
@@ -1421,10 +1418,9 @@ ret_too_big:
   if (unsigned_flag) {
     if (negative) return 0;
     return ULLONG_MAX;
-  } else {
-    if (negative) return LLONG_MIN;
-    return LLONG_MAX;
   }
+  if (negative) return LLONG_MIN;
+  return LLONG_MAX;
 }
 
 /*

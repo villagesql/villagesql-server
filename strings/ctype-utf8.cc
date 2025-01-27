@@ -5108,13 +5108,11 @@ size_t my_strnxfrm_unicode(const CHARSET_INFO *cs, uint8_t *dst, size_t dstlen,
   if (cs->cset->mb_wc == my_mb_wc_utf8mb3_thunk) {
     return my_strnxfrm_unicode_tmpl(cs, Mb_wc_utf8mb3(), dst, dstlen, nweights,
                                     src, srclen, flags);
-  } else {
-    // Fallback using a function pointer (which the compiler is unlikely
-    // to be able to optimize away).
-    Mb_wc_through_function_pointer mb_wc(cs);
-    return my_strnxfrm_unicode_tmpl(cs, mb_wc, dst, dstlen, nweights, src,
-                                    srclen, flags);
-  }
+  }  // Fallback using a function pointer (which the compiler is unlikely
+  // to be able to optimize away).
+  Mb_wc_through_function_pointer mb_wc(cs);
+  return my_strnxfrm_unicode_tmpl(cs, mb_wc, dst, dstlen, nweights, src, srclen,
+                                  flags);
 }
 
 /*
@@ -5719,14 +5717,10 @@ static uint my_ismbchar_utf8mb3(const CHARSET_INFO *, const char *b,
 
 static uint my_mbcharlen_utf8mb3(const CHARSET_INFO *cs [[maybe_unused]],
                                  uint c) {
-  if (c < 0x80)
-    return 1;
-  else if (c < 0xc2)
-    return 0; /* Illegal mb head */
-  else if (c < 0xe0)
-    return 2;
-  else if (c < 0xf0)
-    return 3;
+  if (c < 0x80) return 1;
+  if (c < 0xc2) return 0; /* Illegal mb head */
+  if (c < 0xe0) return 2;
+  if (c < 0xf0) return 3;
   return 0; /* Illegal mb head */
   ;
 }

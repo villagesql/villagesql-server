@@ -151,19 +151,24 @@ uchar ft_get_word(const CHARSET_INFO *cs, uchar **start, uchar *end,
           if (*doc == FTB_YES) {
             param->yesno = +1;
             continue;
-          } else if (*doc == FTB_EGAL) {
+          }
+          if (*doc == FTB_EGAL) {
             param->yesno = 0;
             continue;
-          } else if (*doc == FTB_NO) {
+          }
+          if (*doc == FTB_NO) {
             param->yesno = -1;
             continue;
-          } else if (*doc == FTB_INC) {
+          }
+          if (*doc == FTB_INC) {
             param->weight_adjust++;
             continue;
-          } else if (*doc == FTB_DEC) {
+          }
+          if (*doc == FTB_DEC) {
             param->weight_adjust--;
             continue;
-          } else if (*doc == FTB_NEG) {
+          }
+          if (*doc == FTB_NEG) {
             param->wasign = !param->wasign;
             continue;
           }

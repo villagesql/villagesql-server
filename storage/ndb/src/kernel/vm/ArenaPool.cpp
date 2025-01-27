@@ -37,7 +37,8 @@ static Uint32 computeBlockSize(Uint32 blockSz, Uint32 wpp) {
     Uint32 spillsz = wpp % (blockSz - i);
     if (spillsz == 0) {
       return blockSz - i;
-    } else if (spillsz < minspill) {
+    }
+    if (spillsz < minspill) {
       minspill = spillsz;
       minspill_bs = blockSz - i;
     }

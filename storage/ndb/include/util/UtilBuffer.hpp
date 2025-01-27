@@ -108,12 +108,9 @@ class UtilBuffer {
   bool empty() const { return len == 0; }
 
   bool equal(const UtilBuffer &cmp) const {
-    if (len == 0 && cmp.len == 0)
-      return true;
-    else if (len != cmp.len)
-      return false;
-    else
-      return (memcmp(get_data(), cmp.get_data(), len) == 0);
+    if (len == 0 && cmp.len == 0) return true;
+    if (len != cmp.len) return false;
+    return (memcmp(get_data(), cmp.get_data(), len) == 0);
   }
 
   int assign(const UtilBuffer &buf) {

@@ -287,9 +287,8 @@ template <>
 double Bucket<String>::get_distance_from_lower(const String &value) const {
   assert(value.charset()->number == get_lower_inclusive().charset()->number);
 
-  if (Histogram_comparator()(value, get_lower_inclusive()))
-    return 0.0;
-  else if (values_are_equal(get_lower_inclusive(), get_upper_inclusive()))
+  if (Histogram_comparator()(value, get_lower_inclusive())) return 0.0;
+  if (values_are_equal(get_lower_inclusive(), get_upper_inclusive()))
     return 1.0;
 
   uint max_strnxfrm_len = value.charset()->coll->strnxfrmlen(
@@ -364,10 +363,8 @@ double Bucket<MYSQL_TIME>::get_distance_from_lower(
     value_modified.second_part = 0;
   }
 
-  if (Histogram_comparator()(value_modified, lower_modified))
-    return 0.0;
-  else if (values_are_equal(lower_modified, upper_modified))
-    return 1.0;
+  if (Histogram_comparator()(value_modified, lower_modified)) return 0.0;
+  if (values_are_equal(lower_modified, upper_modified)) return 1.0;
 
   /*
     Calculate the difference in seconds between the upper inclusive value and
@@ -399,9 +396,8 @@ double Bucket<MYSQL_TIME>::get_distance_from_lower(
 template <>
 double Bucket<my_decimal>::get_distance_from_lower(
     const my_decimal &value) const {
-  if (Histogram_comparator()(value, get_lower_inclusive()))
-    return 0.0;
-  else if (values_are_equal(get_lower_inclusive(), get_upper_inclusive()))
+  if (Histogram_comparator()(value, get_lower_inclusive())) return 0.0;
+  if (values_are_equal(get_lower_inclusive(), get_upper_inclusive()))
     return 1.0;
 
   double lower_inclusive_double;

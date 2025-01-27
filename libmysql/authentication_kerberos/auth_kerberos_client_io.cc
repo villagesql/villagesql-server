@@ -86,9 +86,8 @@ bool Kerberos_client_io::read_spn_realm_from_server(
       memcpy(buffer_tmp, buffer + cur_pos, length);
       cur_pos += length;
       return true;
-    } else {
-      return false;
     }
+    return false;
   };
   /* Get "SPN length 2 bytes + SPN + UPN realm length 2 bytes + UPN realm from
    * the server. */
@@ -161,12 +160,11 @@ bool Kerberos_client_io::write_gssapi_buffer(const unsigned char *buffer,
     log_client_error(
         "Kerberos client plug-in has failed to write data to the server. ");
     return false;
-  } else {
-    log_client_dbg(
-        "Kerberos_client_io::write_gssapi_buffer: kerberos write to server "
-        "has succeed ");
-    return true;
   }
+  log_client_dbg(
+      "Kerberos_client_io::write_gssapi_buffer: kerberos write to server "
+      "has succeed ");
+  return true;
 }
 
 bool Kerberos_client_io::read_gssapi_buffer(unsigned char **gssapi_buffer,

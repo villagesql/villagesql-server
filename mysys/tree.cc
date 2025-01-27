@@ -430,14 +430,13 @@ void *tree_search_next(TREE *tree, TREE_ELEMENT ***last_pos, int l_offs,
       *++*last_pos = x;
     }
     return ELEMENT_KEY(tree, x);
-  } else {
-    TREE_ELEMENT *y = *--*last_pos;
-    while (y != &tree->null_element && x == ELEMENT_CHILD(y, r_offs)) {
-      x = y;
-      y = *--*last_pos;
-    }
-    return y == &tree->null_element ? nullptr : ELEMENT_KEY(tree, y);
   }
+  TREE_ELEMENT *y = *--*last_pos;
+  while (y != &tree->null_element && x == ELEMENT_CHILD(y, r_offs)) {
+    x = y;
+    y = *--*last_pos;
+  }
+  return y == &tree->null_element ? nullptr : ELEMENT_KEY(tree, y);
 }
 
 /*

@@ -19283,10 +19283,8 @@ static unsigned my_ismbchar_gb18030(const CHARSET_INFO *cs [[maybe_unused]],
 
   if (e - p <= 1 || !is_mb_odd(p[0])) return 0;
 
-  if (is_mb_even_2(p[1]))
-    return 2;
-  else if (e - p > 3 && is_mb_even_4(p[1]) && is_mb_odd(p[2]) &&
-           is_mb_even_4(p[3]))
+  if (is_mb_even_2(p[1])) return 2;
+  if (e - p > 3 && is_mb_even_4(p[1]) && is_mb_odd(p[2]) && is_mb_even_4(p[3]))
     return 4;
 
   return 0;
@@ -19428,8 +19426,8 @@ static int my_mb_wc_gb18030(const CHARSET_INFO *cs [[maybe_unused]],
     /* [0x00, 0x7F] */
     *pwc = s[0];
     return 1;
-  } else if (!is_mb_odd(s[0]))
-    return MY_CS_ILSEQ;
+  }
+  if (!is_mb_odd(s[0])) return MY_CS_ILSEQ;
 
   if (s + 2 > e) return MY_CS_TOOSMALL2;
 
@@ -19438,7 +19436,8 @@ static int my_mb_wc_gb18030(const CHARSET_INFO *cs [[maybe_unused]],
     *pwc = tab_gb18030_2_uni[idx];
 
     return (*pwc == 0) ? MY_CS_ILSEQ : 2;
-  } else if (is_mb_even_4(s[1])) {
+  }
+  if (is_mb_even_4(s[1])) {
     if (s + 4 > e) return MY_CS_TOOSMALL4;
 
     if (!(is_mb_odd(s[2]) && is_mb_even_4(s[3]))) return MY_CS_ILSEQ;
@@ -19489,8 +19488,8 @@ static int my_mb_wc_gb18030(const CHARSET_INFO *cs [[maybe_unused]],
 
     *pwc = cp;
     return 4;
-  } else
-    return MY_CS_ILSEQ;
+  }
+  return MY_CS_ILSEQ;
 }
 
 /**
@@ -19586,22 +19585,20 @@ static unsigned case_info_code_to_gb18030(unsigned code) {
   if ((code >= MIN_2_BYTE_UNICASE && code <= MAX_2_BYTE_UNICASE) ||
       code < UNICASE_4_BYTE_OFFSET)
     return code;
-  else {
-    uint8_t gbchs[4];
+  uint8_t gbchs[4];
 
-    if (code >= UNICASE_4_BYTE_OFFSET && code < MIN_2_BYTE_UNICASE)
-      code -= UNICASE_4_BYTE_OFFSET;
-    else if (code >= (MIN_3_BYTE_FROM_UNI & 0xFFFF) &&
-             code <= (MAX_3_BYTE_FROM_UNI & 0xFFFF))
-      code += (MIN_3_BYTE_FROM_UNI & 0xFF0000);
-    else
-      assert(0);
+  if (code >= UNICASE_4_BYTE_OFFSET && code < MIN_2_BYTE_UNICASE)
+    code -= UNICASE_4_BYTE_OFFSET;
+  else if (code >= (MIN_3_BYTE_FROM_UNI & 0xFFFF) &&
+           code <= (MAX_3_BYTE_FROM_UNI & 0xFFFF))
+    code += (MIN_3_BYTE_FROM_UNI & 0xFF0000);
+  else
+    assert(0);
 
-    unsigned r = diff_to_gb18030_4(gbchs, 4, code);
-    assert(r == 4);
+  unsigned r = diff_to_gb18030_4(gbchs, 4, code);
+  assert(r == 4);
 
-    return r == 4 ? gb18030_chs_to_code(gbchs, 4) : 0;
-  }
+  return r == 4 ? gb18030_chs_to_code(gbchs, 4) : 0;
 }
 
 /**
@@ -19825,10 +19822,12 @@ static unsigned get_weight_if_chinese_character(unsigned code) {
     if ((code & 0xFF) > 0x7F) idx -= 0x01;
 
     return PINYIN_WEIGHT_BASE + gb18030_2_weight_py[idx];
-  } else if (code >= PINYIN_4_BYTE_1_START && code <= PINYIN_4_BYTE_1_END) {
+  }
+  if (code >= PINYIN_4_BYTE_1_START && code <= PINYIN_4_BYTE_1_END) {
     unsigned idx = gb18030_4_code_to_diff(code) - PINYIN_4_1_DIFF;
     return PINYIN_WEIGHT_BASE + gb18030_4_weight_py_p1[idx];
-  } else if (code >= PINYIN_4_BYTE_2_START && code <= PINYIN_4_BYTE_2_END) {
+  }
+  if (code >= PINYIN_4_BYTE_2_START && code <= PINYIN_4_BYTE_2_END) {
     unsigned idx = gb18030_4_code_to_diff(code) - PINYIN_4_2_DIFF;
     return PINYIN_WEIGHT_BASE + gb18030_4_weight_py_p2[idx];
   }
@@ -20014,12 +20013,9 @@ static int my_strnncoll_gb18030(const CHARSET_INFO *cs, const uint8_t *s,
                                 size_t t_length, bool t_is_prefix) {
   int res = my_strnncoll_gb18030_internal(cs, &s, s_length, &t, t_length);
 
-  if (res != 0)
-    return res;
-  else if (t_is_prefix && s_length > t_length)
-    return 0;
-  else
-    return (int)(s_length - t_length);
+  if (res != 0) return res;
+  if (t_is_prefix && s_length > t_length) return 0;
+  return (int)(s_length - t_length);
 }
 
 /**

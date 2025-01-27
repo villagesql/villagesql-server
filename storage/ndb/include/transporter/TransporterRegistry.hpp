@@ -857,7 +857,8 @@ inline bool TransporterRegistry::backoff_update_and_check_time_for_connect(
   for (int i = 0; i < attempt_moments_count; i++) {
     if (connectingTime[nodeId] == attempt_moments[i]) {
       return true;
-    } else if (connectingTime[nodeId] < attempt_moments[i]) {
+    }
+    if (connectingTime[nodeId] < attempt_moments[i]) {
       return false;
     }
   }

@@ -112,11 +112,10 @@ bool files_validate_format(const Log_files_context &files_ctx,
     ib::error(ER_IB_MSG_LOG_FILE_FORMAT_TOO_NEW, file_path.c_str(),
               ulong{first_file.m_header.m_format});
     return false;
-  } else {
-    const auto directory = log_directory_path(files_ctx);
-    ib::error(ER_IB_MSG_LOG_PRE_8_0_30_MISSING_FILE0, directory.c_str());
-    return false;
   }
+  const auto directory = log_directory_path(files_ctx);
+  ib::error(ER_IB_MSG_LOG_PRE_8_0_30_MISSING_FILE0, directory.c_str());
+  return false;
 }
 
 }  // namespace log_pre_8_0_30

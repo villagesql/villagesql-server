@@ -601,10 +601,8 @@ const char *Group_member_info::get_member_role_string() {
   if (!in_primary_mode_internal() ||
       role == Group_member_info::MEMBER_ROLE_PRIMARY)
     return "PRIMARY";
-  else if (role == Group_member_info::MEMBER_ROLE_SECONDARY)
-    return "SECONDARY";
-  else
-    return "";
+  if (role == Group_member_info::MEMBER_ROLE_SECONDARY) return "SECONDARY";
+  return "";
 }
 
 Gcs_member_identifier Group_member_info::get_gcs_member_id() {

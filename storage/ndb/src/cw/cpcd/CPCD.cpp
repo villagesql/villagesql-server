@@ -398,13 +398,12 @@ bool CPCD::loadProcessList() {
       logger.info("Starting with empty configuration");
       loadingProcessList = false;
       return false;
-    } else {
-      logger.info("Configuration file `%s' missing", m_procfile.c_str());
-      logger.info("Backup configuration file `%s' is used", secondfile.c_str());
-      /* XXX Maybe we should just rename the backup file to the official
-       * name, and be done with it?
-       */
     }
+    logger.info("Configuration file `%s' missing", m_procfile.c_str());
+    logger.info("Backup configuration file `%s' is used", secondfile.c_str());
+    /* XXX Maybe we should just rename the backup file to the official
+     * name, and be done with it?
+     */
   }
 
   /*

@@ -603,10 +603,8 @@ inline const NdbPack::Type &NdbPack::Spec::get_type(Uint32 i) const {
 inline Uint32 NdbPack::Spec::get_cnt() const { return m_cnt; }
 
 inline Uint32 NdbPack::Spec::get_nullable_cnt(bool allNullable) const {
-  if (!allNullable)
-    return m_nullableCnt;
-  else
-    return m_cnt;
+  if (!allNullable) return m_nullableCnt;
+  return m_cnt;
 }
 
 inline Uint32 NdbPack::Spec::get_nullmask_len(bool allNullable) const {

@@ -1930,7 +1930,8 @@ static bool execute(MYSQL_STMT *stmt, char *packet, ulong length,
     */
     if (stmt->mysql) set_stmt_errmsg(stmt, net);
     return true;
-  } else if (mysql->status == MYSQL_STATUS_GET_RESULT)
+  }
+  if (mysql->status == MYSQL_STATUS_GET_RESULT)
     stmt->mysql->status = MYSQL_STATUS_STATEMENT_GET_RESULT;
   return false;
 }
@@ -4553,9 +4554,8 @@ net_async_status STDCALL mysql_next_result_nonblocking(MYSQL *mysql) {
   if (mysql->server_status & SERVER_MORE_RESULTS_EXISTS) {
     status = (*mysql->methods->next_result_nonblocking)(mysql);
     return status;
-  } else {
-    MYSQL_TRACE_STAGE(mysql, READY_FOR_COMMAND);
   }
+  MYSQL_TRACE_STAGE(mysql, READY_FOR_COMMAND);
 
   return NET_ASYNC_COMPLETE_NO_MORE_RESULTS; /* No more results */
 }

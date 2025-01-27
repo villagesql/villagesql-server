@@ -104,10 +104,8 @@ int mysql_string_iterator_next(mysql_string_iterator_handle iterator_handle) {
       pointer_cast<const uchar *>(end)));
   iterator->ctype = char_type;
   tmp_len = (char_len > 0 ? char_len : (char_len < 0 ? -char_len : 1));
-  if (iterator->iterator_ptr + tmp_len > end)
-    return (0);
-  else
-    iterator->iterator_ptr += tmp_len;
+  if (iterator->iterator_ptr + tmp_len > end) return (0);
+  iterator->iterator_ptr += tmp_len;
   return (1);
 }
 

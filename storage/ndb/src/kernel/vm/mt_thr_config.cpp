@@ -46,14 +46,10 @@ const THRConfig::T_Thread *THRConfigApplier::find_thread(
   int instanceNo;
   if ((instanceNo = findBlock(SUMA, instancelist, cnt)) >= 0) {
     Uint32 num_main_threads = getThreadCount(T_REP) + getThreadCount(T_MAIN);
-    if (num_main_threads == 2)
-      return &m_threads[T_REP][instanceNo];
-    else if (num_main_threads == 1)
-      return &m_threads[T_MAIN][instanceNo];
-    else if (num_main_threads == 0)
-      return &m_threads[T_RECV][instanceNo];
-    else
-      abort();
+    if (num_main_threads == 2) return &m_threads[T_REP][instanceNo];
+    if (num_main_threads == 1) return &m_threads[T_MAIN][instanceNo];
+    if (num_main_threads == 0) return &m_threads[T_RECV][instanceNo];
+    abort();
   } else if ((instanceNo = findBlock(DBDIH, instancelist, cnt)) >= 0) {
     return &m_threads[T_MAIN][instanceNo];
   } else if ((instanceNo = findBlock(DBLQH, instancelist, cnt)) >= 0) {
@@ -62,10 +58,10 @@ const THRConfig::T_Thread *THRConfigApplier::find_thread(
     int num_query_threads = (int)getThreadCount(T_QUERY);
     if ((instanceNo - 1) < num_query_threads) {
       return &m_threads[T_QUERY][instanceNo - 1];  // remove proxy...
-    } else {
-      instanceNo -= num_query_threads;
-      return &m_threads[T_RECOVER][instanceNo - 1];  // remove proxy...
     }
+    instanceNo -= num_query_threads;
+    return &m_threads[T_RECOVER][instanceNo - 1];  // remove proxy...
+
   } else if ((instanceNo = findBlock(TRPMAN, instancelist, cnt)) >= 0) {
     return &m_threads[T_RECV][instanceNo - 1];  // remove proxy
   } else if ((instanceNo = findBlock(DBTC, instancelist, cnt)) >= 0) {
@@ -384,10 +380,8 @@ int THRConfigApplier::do_bind(NdbThread *thread, const T_Thread *thr) {
   } else {
     return 0;
   }
-  if (res == 0)
-    return 1;
-  else
-    return -res;
+  if (res == 0) return 1;
+  return -res;
 }
 
 #define JAM_FILE_ID 297

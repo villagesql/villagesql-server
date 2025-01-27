@@ -445,12 +445,12 @@ static bool allow_rewrite() {
     // for other skip-grant threads, check config variable
     // rewriter_enabled_for_threads_without_privilege_checks
     return sys_var_enabled_for_threads_without_privilege_checks;
-  } else {
-    if (global_grants_check->has_global_grant(
-            reinterpret_cast<Security_context_handle>(sec_ctx),
-            STRING_WITH_LEN("SKIP_QUERY_REWRITE")))
-      return false;
   }
+  if (global_grants_check->has_global_grant(
+          reinterpret_cast<Security_context_handle>(sec_ctx),
+          STRING_WITH_LEN("SKIP_QUERY_REWRITE")))
+    return false;
+
   return true;
 }
 

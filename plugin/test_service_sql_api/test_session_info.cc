@@ -646,11 +646,10 @@ static void test_sql(void *p) {
                  "Thread handler id is NOT equal to session id "
                  "srv_session_info_get_session_id(session_1)");
     return;
-  } else {
-    WRITE_STR(
-        "Thread handler id IS equal to session id returned by "
-        "srv_session_info_get_session_id(Session_1)\n\n");
   }
+  WRITE_STR(
+      "Thread handler id IS equal to session id returned by "
+      "srv_session_info_get_session_id(Session_1)\n\n");
 
   /* Session 2 */
   WRITE_SEP();
@@ -667,11 +666,10 @@ static void test_sql(void *p) {
                  "srv_session_info_get_session_id(session_2)");
     delete plugin_ctx;
     return;
-  } else {
-    WRITE_STR(
-        "Thread handler id IS equal to session id returned by "
-        "srv_session_info_get_session_id(Session_2)\n\n");
   }
+  WRITE_STR(
+      "Thread handler id IS equal to session id returned by "
+      "srv_session_info_get_session_id(Session_2)\n\n");
 
   /* All information from performance_schema  */
   snprintf(buffer_query, sizeof(buffer_query),

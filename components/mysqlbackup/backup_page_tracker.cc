@@ -546,6 +546,5 @@ int page_track_callback(MYSQL_THD opaque_thd [[maybe_unused]],
   // on-going backup interrupted, stop receiving the changed page data
   if (!Backup_page_tracker::m_receive_changed_page_data)
     return (2);  // interrupt an ongoing transfer
-  else
-    return (0);
+  return (0);
 }

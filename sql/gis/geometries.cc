@@ -74,17 +74,15 @@ bool Cartesian_linestring::accept(Geometry_visitor *v) {
 Linestring *Linestring::create_linestring(Coordinate_system coordinate_system) {
   if (coordinate_system == Coordinate_system::kCartesian) {
     return new Cartesian_linestring;
-  } else {
-    return new Geographic_linestring;
   }
+  return new Geographic_linestring;
 }
 
 Multipoint *Multipoint::create_multipoint(Coordinate_system coordinate_system) {
   if (coordinate_system == Coordinate_system::kCartesian) {
     return new Cartesian_multipoint;
-  } else {
-    return new Geographic_multipoint;
   }
+  return new Geographic_multipoint;
 }
 
 void Cartesian_linestring::push_back(const Point &pt) {
@@ -124,9 +122,8 @@ bool Geographic_linestring::empty() const { return m_points.empty(); }
 Linearring *Linearring::create_linearring(Coordinate_system coordinate_system) {
   if (coordinate_system == Coordinate_system::kCartesian) {
     return new Cartesian_linearring;
-  } else {
-    return new Geographic_linearring;
   }
+  return new Geographic_linearring;
 }
 
 bool Cartesian_linearring::accept(Geometry_visitor *v) {
@@ -152,9 +149,8 @@ bool Geographic_linearring::accept(Geometry_visitor *v) {
 Polygon *Polygon::create_polygon(Coordinate_system coordinate_system) {
   if (coordinate_system == Coordinate_system::kCartesian) {
     return new Cartesian_polygon;
-  } else {
-    return new Geographic_polygon;
   }
+  return new Geographic_polygon;
 }
 
 bool Cartesian_polygon::accept(Geometry_visitor *v) {
@@ -278,9 +274,8 @@ Geometrycollection *Geometrycollection::create_geometrycollection(
     Coordinate_system coordinate_system) {
   if (coordinate_system == Coordinate_system::kCartesian) {
     return new Cartesian_geometrycollection;
-  } else {
-    return new Geographic_geometrycollection;
   }
+  return new Geographic_geometrycollection;
 }
 
 Cartesian_geometrycollection::Cartesian_geometrycollection(
@@ -581,9 +576,8 @@ Multilinestring *Multilinestring::create_multilinestring(
     Coordinate_system coordinate_system) {
   if (coordinate_system == Coordinate_system::kCartesian) {
     return new Cartesian_multilinestring;
-  } else {
-    return new Geographic_multilinestring;
   }
+  return new Geographic_multilinestring;
 }
 
 bool Cartesian_multilinestring::accept(Geometry_visitor *v) {
@@ -636,9 +630,8 @@ Multipolygon *Multipolygon::create_multipolygon(
     Coordinate_system coordinate_system) {
   if (coordinate_system == Coordinate_system::kCartesian) {
     return new Cartesian_multipolygon;
-  } else {
-    return new Geographic_multipolygon;
   }
+  return new Geographic_multipolygon;
 }
 
 bool Cartesian_multipolygon::accept(Geometry_visitor *v) {

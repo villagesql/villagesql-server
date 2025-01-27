@@ -105,11 +105,10 @@ size_t determineStatementRanges(const char *sql, size_t length,
             {
               input_context_stack.push("/*");
               break;
-            } else {
-              if (*++tail == '/') {
-                tail++;  // Skip the slash too.
-                break;
-              }
+            }
+            if (*++tail == '/') {
+              tail++;  // Skip the slash too.
+              break;
             }
           }
 

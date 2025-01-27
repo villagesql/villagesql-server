@@ -77,8 +77,7 @@ static int socket_auth(MYSQL_PLUGIN_VIO *vio, MYSQL_SERVER_AUTH_INFO *info) {
   if (!strcmp(pwd->pw_name, info->user_name) ||
       !strcmp(pwd->pw_name, info->auth_string))
     return CR_OK;
-  else
-    return CR_ERROR;
+  return CR_ERROR;
 }
 
 static int generate_auth_string_hash(char *outbuf [[maybe_unused]],

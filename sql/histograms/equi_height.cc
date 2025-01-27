@@ -548,14 +548,13 @@ bool Equi_height<T>::json_to_histogram(const Json_object &json_object,
     if (m_buckets.empty()) {
       context->report_global(Message::JSON_IMPOSSIBLE_EMPTY_EQUI_HEIGHT);
       return true;
-    } else {
-      equi_height::Bucket<T> *last_bucket = &m_buckets[m_buckets.size() - 1];
-      float sum =
-          last_bucket->get_cumulative_frequency() + get_null_values_fraction();
-      if (std::abs(sum - 1.0) > 0) {
-        context->report_global(Message::JSON_INVALID_TOTAL_FREQUENCY);
-        return true;
-      }
+    }
+    equi_height::Bucket<T> *last_bucket = &m_buckets[m_buckets.size() - 1];
+    float sum =
+        last_bucket->get_cumulative_frequency() + get_null_values_fraction();
+    if (std::abs(sum - 1.0) > 0) {
+      context->report_global(Message::JSON_INVALID_TOTAL_FREQUENCY);
+      return true;
     }
   }
   return false;
@@ -758,9 +757,8 @@ double Equi_height<T>::get_less_than_selectivity(const T &value) const {
     assert(distance <= 1.0);
     return previous_bucket_cumulative_frequency +
            (found_bucket_frequency * distance);
-  } else {
-    return previous_bucket_cumulative_frequency;
   }
+  return previous_bucket_cumulative_frequency;
 }
 
 template <class T>
@@ -803,12 +801,11 @@ double Equi_height<T>::get_greater_than_selectivity(const T &value) const {
   */
   if (Histogram_comparator()(value, found->get_lower_inclusive())) {
     return found_bucket_frequency + next_buckets_frequency;
-  } else {
-    const double distance = found->get_distance_from_upper(value);
-    assert(distance >= 0.0);
-    assert(distance <= 1.0);
-    return distance * found_bucket_frequency + next_buckets_frequency;
   }
+  const double distance = found->get_distance_from_upper(value);
+  assert(distance >= 0.0);
+  assert(distance <= 1.0);
+  return distance * found_bucket_frequency + next_buckets_frequency;
 }
 
 // Explicit template instantiations.

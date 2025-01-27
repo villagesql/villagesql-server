@@ -412,7 +412,8 @@ static size_t scan_one_character(const char *s, const char *e, my_wc_t *wc) {
     }
     wc[0] = 0;
     return len;
-  } else if ((s[0] & 0x80) == 0) /* 7-bit character */
+  }
+  if ((s[0] & 0x80) == 0) /* 7-bit character */
   {
     wc[0] = 0;
     return 1;

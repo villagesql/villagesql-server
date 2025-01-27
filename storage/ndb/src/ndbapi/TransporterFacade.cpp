@@ -2058,11 +2058,10 @@ int TransporterFacade::sendSignal(trp_client *clnt, const NdbApiSignal *aSignal,
               aNode == ownId()));
     }
     return (ss == SEND_OK ? 0 : -1);
-  } else {
-    g_eventLogger->info("ERR: SigLen = %u BlockRec = %u SignalNo = %d", Tlen,
-                        TBno, aSignal->theVerId_signalNumber);
-    assert(0);
-  }           // if
+  }
+  g_eventLogger->info("ERR: SigLen = %u BlockRec = %u SignalNo = %d", Tlen,
+                      TBno, aSignal->theVerId_signalNumber);
+  assert(0);
   return -1;  // Node Dead
 }
 
@@ -2162,96 +2161,95 @@ int TransporterFacade::sendFragmentedSignal(trp_client *clnt,
       this_chunk_sz += remaining_sec_sz;
       i++;
       continue;
-    } else {
-      assert(this_chunk_sz <= CHUNK_SZ);
-      /* This section doesn't fit, truncate it */
-      unsigned send_sz = CHUNK_SZ - this_chunk_sz;
-      if (i != start_i) {
-        /* We ensure that the first piece of a new section which is
-         * being truncated is a multiple of NDB_SECTION_SEGMENT_SZ
-         * (to simplify reassembly).  Subsequent non-truncated pieces
-         * will be CHUNK_SZ which is a multiple of NDB_SECTION_SEGMENT_SZ
-         * The final piece does not need to be a multiple of
-         * NDB_SECTION_SEGMENT_SZ
-         *
-         * We round down the available send space to the nearest whole
-         * number of segments.
-         * If there's not enough space for one segment, then we round up
-         * to one segment.  This can make us send more than CHUNK_SZ, which
-         * is ok as it's defined as less than the maximum message length.
-         */
-        send_sz = (send_sz / NDB_SECTION_SEGMENT_SZ) *
-                  NDB_SECTION_SEGMENT_SZ;               /* Round down */
-        send_sz = MAX(send_sz, NDB_SECTION_SEGMENT_SZ); /* At least one */
-        send_sz = MIN(send_sz, remaining_sec_sz);       /* Only actual data */
-
-        /* If we've squeezed the last bit of data in, jump out of
-         * here to send the last fragment.
-         * Otherwise, send what we've collected so far.
-         */
-        if ((send_sz == remaining_sec_sz) && /* All sent */
-            (i == secs - 1))                 /* No more sections */
-        {
-          this_chunk_sz += remaining_sec_sz;
-          i++;
-          continue;
-        }
-      }
-
-      /* At this point, there must be data to send in a further signal */
-      assert((send_sz < remaining_sec_sz) || (i < secs - 1));
-
-      /* Modify tmp generic section ptr to describe truncated
-       * section
-       */
-      tmp_ptr[i].sz = send_sz;
-      auto *fragIter = (FragmentedSectionIterator *)tmp_ptr[i].sectionIter;
-      const Uint32 total_sec_sz = ptr[i].sz;
-      const Uint32 start = (total_sec_sz - remaining_sec_sz);
-      bool ok = fragIter->setRange(start, send_sz);
-      assert(ok);
-      if (!ok) return -1;
-
-      if (fragment_info < 2)  // 1 = first fragment signal
-                              // 2 = middle fragments
-        fragment_info++;
-
-      // send tmp_signal
-      tmp_signal_data[i - start_i + 1] = unique_id;
-      tmp_signal.setLength(i - start_i + 2);
-      tmp_signal.m_fragmentInfo = fragment_info;
-      tmp_signal.m_noOfSections = i - start_i + 1;
-      // do prepare send
-      {
-        TrpId trp_id = 0;
-        SendStatus ss = theTransporterRegistry->prepareSend(
-            clnt, &tmp_signal, 1, /*JBB*/
-            tmp_signal_data, aNode, trp_id, &tmp_ptr[start_i]);
-        if (likely(ss == SEND_OK)) {
-          assert(theClusterMgr->getNodeInfo(aNode).is_confirmed() ||
-                 tmp_signal.readSignalNumber() == GSN_API_REGREQ);
-        } else {
-          if (unlikely(ss == SEND_MESSAGE_TOO_BIG)) {
-            handle_message_too_big(aNode, aSignal, &tmp_ptr[start_i], __LINE__);
-          }
-          return -1;
-        }
-      }
-      assert(remaining_sec_sz >= send_sz);
-      Uint32 remaining = remaining_sec_sz - send_sz;
-      tmp_ptr[i].sz = remaining;
-      /* Set sub-range iterator to cover remaining words */
-      ok = fragIter->setRange(start + send_sz, remaining);
-      assert(ok);
-      if (!ok) return -1;
-
-      if (remaining == 0) /* This section's done, move onto the next */
-        i++;
-
-      // setup variables for next signal
-      start_i = i;
-      this_chunk_sz = 0;
     }
+    assert(this_chunk_sz <= CHUNK_SZ);
+    /* This section doesn't fit, truncate it */
+    unsigned send_sz = CHUNK_SZ - this_chunk_sz;
+    if (i != start_i) {
+      /* We ensure that the first piece of a new section which is
+       * being truncated is a multiple of NDB_SECTION_SEGMENT_SZ
+       * (to simplify reassembly).  Subsequent non-truncated pieces
+       * will be CHUNK_SZ which is a multiple of NDB_SECTION_SEGMENT_SZ
+       * The final piece does not need to be a multiple of
+       * NDB_SECTION_SEGMENT_SZ
+       *
+       * We round down the available send space to the nearest whole
+       * number of segments.
+       * If there's not enough space for one segment, then we round up
+       * to one segment.  This can make us send more than CHUNK_SZ, which
+       * is ok as it's defined as less than the maximum message length.
+       */
+      send_sz = (send_sz / NDB_SECTION_SEGMENT_SZ) *
+                NDB_SECTION_SEGMENT_SZ;               /* Round down */
+      send_sz = MAX(send_sz, NDB_SECTION_SEGMENT_SZ); /* At least one */
+      send_sz = MIN(send_sz, remaining_sec_sz);       /* Only actual data */
+
+      /* If we've squeezed the last bit of data in, jump out of
+       * here to send the last fragment.
+       * Otherwise, send what we've collected so far.
+       */
+      if ((send_sz == remaining_sec_sz) && /* All sent */
+          (i == secs - 1))                 /* No more sections */
+      {
+        this_chunk_sz += remaining_sec_sz;
+        i++;
+        continue;
+      }
+    }
+
+    /* At this point, there must be data to send in a further signal */
+    assert((send_sz < remaining_sec_sz) || (i < secs - 1));
+
+    /* Modify tmp generic section ptr to describe truncated
+     * section
+     */
+    tmp_ptr[i].sz = send_sz;
+    auto *fragIter = (FragmentedSectionIterator *)tmp_ptr[i].sectionIter;
+    const Uint32 total_sec_sz = ptr[i].sz;
+    const Uint32 start = (total_sec_sz - remaining_sec_sz);
+    bool ok = fragIter->setRange(start, send_sz);
+    assert(ok);
+    if (!ok) return -1;
+
+    if (fragment_info < 2)  // 1 = first fragment signal
+                            // 2 = middle fragments
+      fragment_info++;
+
+    // send tmp_signal
+    tmp_signal_data[i - start_i + 1] = unique_id;
+    tmp_signal.setLength(i - start_i + 2);
+    tmp_signal.m_fragmentInfo = fragment_info;
+    tmp_signal.m_noOfSections = i - start_i + 1;
+    // do prepare send
+    {
+      TrpId trp_id = 0;
+      SendStatus ss = theTransporterRegistry->prepareSend(
+          clnt, &tmp_signal, 1, /*JBB*/
+          tmp_signal_data, aNode, trp_id, &tmp_ptr[start_i]);
+      if (likely(ss == SEND_OK)) {
+        assert(theClusterMgr->getNodeInfo(aNode).is_confirmed() ||
+               tmp_signal.readSignalNumber() == GSN_API_REGREQ);
+      } else {
+        if (unlikely(ss == SEND_MESSAGE_TOO_BIG)) {
+          handle_message_too_big(aNode, aSignal, &tmp_ptr[start_i], __LINE__);
+        }
+        return -1;
+      }
+    }
+    assert(remaining_sec_sz >= send_sz);
+    Uint32 remaining = remaining_sec_sz - send_sz;
+    tmp_ptr[i].sz = remaining;
+    /* Set sub-range iterator to cover remaining words */
+    ok = fragIter->setRange(start + send_sz, remaining);
+    assert(ok);
+    if (!ok) return -1;
+
+    if (remaining == 0) /* This section's done, move onto the next */
+      i++;
+
+    // setup variables for next signal
+    start_i = i;
+    this_chunk_sz = 0;
   }
 
   unsigned a_sz = aSignal->getLength();

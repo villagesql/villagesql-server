@@ -731,7 +731,8 @@ void TransporterRegistry::remove_allTransporters(Transporter *t) {
   TrpId trp_id = t->getTransporterIndex();
   if (trp_id == 0) {
     return;
-  } else if (t == allTransporters[trp_id]) {
+  }
+  if (t == allTransporters[trp_id]) {
     DEBUG_FPRINTF((stderr,
                    "remove trp_id %u for node %u from allTransporters\n",
                    trp_id, t->getRemoteNodeId()));
@@ -824,9 +825,8 @@ bool TransporterRegistry::createTCPTransporter(
     t = new TCP_Transporter(*this, config);
   }
 
-  if (t == nullptr)
-    return false;
-  else if (!t->initTransporter()) {
+  if (t == nullptr) return false;
+  if (!t->initTransporter()) {
     delete t;
     return false;
   }
@@ -982,32 +982,28 @@ SendStatus TransporterRegistry::prepareSendTemplate(
         DEBUG_FPRINTF((stderr, "TE_SIGNAL_LOST_SEND_BUFFER_FULL\n"));
         report_error(trp_id, TE_SIGNAL_LOST_SEND_BUFFER_FULL);
         return SEND_BUFFER_FULL;
-      } else {
-        g_eventLogger->info("Send message too big: length %u", lenBytes);
-        return SEND_MESSAGE_TOO_BIG;
       }
-    } else {
-#ifdef ERROR_INSERT
-      if (m_blocked.get(trp_id)) {
-        /* Looks like it disconnected while blocked.  We'll pretend
-         * not to notice for now
-         */
-        WARNING("Signal to " << t->getRemoteNodeId()
-                             << " discarded as transporter " << trp_id
-                             << " blocked + disconnected");
-        return SEND_OK;
-      }
-#endif
-      DEBUG("Signal to " << t->getRemoteNodeId() << " lost(disconnect) ");
-      return SEND_DISCONNECTED;
+      g_eventLogger->info("Send message too big: length %u", lenBytes);
+      return SEND_MESSAGE_TOO_BIG;
     }
-  } else {
-    DEBUG("Discarding message to block: "
-          << signalHeader->theReceiversBlockNumber
-          << " node: " << t->getRemoteNodeId());
-
-    return SEND_BLOCKED;
+#ifdef ERROR_INSERT
+    if (m_blocked.get(trp_id)) {
+      /* Looks like it disconnected while blocked.  We'll pretend
+       * not to notice for now
+       */
+      WARNING("Signal to " << t->getRemoteNodeId()
+                           << " discarded as transporter " << trp_id
+                           << " blocked + disconnected");
+      return SEND_OK;
+    }
+#endif
+    DEBUG("Signal to " << t->getRemoteNodeId() << " lost(disconnect) ");
+    return SEND_DISCONNECTED;
   }
+  DEBUG("Discarding message to block: " << signalHeader->theReceiversBlockNumber
+                                        << " node: " << t->getRemoteNodeId());
+
+  return SEND_BLOCKED;
 }
 
 Transporter *TransporterRegistry::prepareSend_getTransporter(
@@ -1121,29 +1117,28 @@ SendStatus TransporterRegistry::prepareSendOverAllLinks(
       trp_ids.set(trp_id);
     }
     return status;
-  } else {
-    SendStatus return_status = SEND_OK;
-    Uint32 num_trps = multi_trp->get_num_active_transporters();
-    for (Uint32 i = 0; i < num_trps; i++) {
-      Transporter *t = multi_trp->get_active_transporter(i);
-      require(t != nullptr);
-      const TrpId trp_id = t->getTransporterIndex();
-      if (unlikely(trp_id == 0)) continue;
-      SendStatus status = prepareSendTemplate(sendHandle, signalHeader, prio,
-                                              signalData, t, section);
-      if (likely(status == SEND_OK)) {
-        require(trp_id < MAX_NTRANSPORTERS);
-        trp_ids.set(trp_id);
-      } else if (status != SEND_BLOCKED && status != SEND_DISCONNECTED) {
-        /*
-         * Treat SEND_BLOCKED and SEND_DISCONNECTED as SEND_OK.
-         * Else take the last bad status returned.
-         */
-        return_status = status;
-      }
-    }
-    return return_status;
   }
+  SendStatus return_status = SEND_OK;
+  Uint32 num_trps = multi_trp->get_num_active_transporters();
+  for (Uint32 i = 0; i < num_trps; i++) {
+    Transporter *t = multi_trp->get_active_transporter(i);
+    require(t != nullptr);
+    const TrpId trp_id = t->getTransporterIndex();
+    if (unlikely(trp_id == 0)) continue;
+    SendStatus status = prepareSendTemplate(sendHandle, signalHeader, prio,
+                                            signalData, t, section);
+    if (likely(status == SEND_OK)) {
+      require(trp_id < MAX_NTRANSPORTERS);
+      trp_ids.set(trp_id);
+    } else if (status != SEND_BLOCKED && status != SEND_DISCONNECTED) {
+      /*
+       * Treat SEND_BLOCKED and SEND_DISCONNECTED as SEND_OK.
+       * Else take the last bad status returned.
+       */
+      return_status = status;
+    }
+  }
+  return return_status;
 }
 
 bool TransporterRegistry::setup_wakeup_socket(
@@ -3309,14 +3304,13 @@ Uint32 *TransporterRegistry::getWritePtr(TransporterSendBufferHandle *handle,
       //-------------------------------------------------
       if (!handle->forceSend(trp_id)) {
         return nullptr;
-      } else {
-        //-------------------------------------------------
-        // Since send was successful we will make a renewed
-        // attempt at inserting the signal into the buffer.
-        //-------------------------------------------------
-        insertPtr = handle->getWritePtr(trp_id, lenBytes, prio,
-                                        t->get_max_send_buffer(), error);
-      }  // if
+      }
+      //-------------------------------------------------
+      // Since send was successful we will make a renewed
+      // attempt at inserting the signal into the buffer.
+      //-------------------------------------------------
+      insertPtr = handle->getWritePtr(trp_id, lenBytes, prio,
+                                      t->get_max_send_buffer(), error);
     } else {
       return nullptr;
     }  // if
@@ -3500,22 +3494,25 @@ void calculate_send_buffer_level(Uint64 node_send_buffer_size,
   if (node_send_buffer_size < 128 * 1024) {
     level = SB_NO_RISK_LEVEL;
     return;
-  } else if (node_send_buffer_size < 256 * 1024) {
+  }
+  if (node_send_buffer_size < 256 * 1024) {
     level = SB_LOW_LEVEL;
     return;
-  } else if (node_send_buffer_size < 384 * 1024) {
+  }
+  if (node_send_buffer_size < 384 * 1024) {
     level = SB_MEDIUM_LEVEL;
     return;
-  } else if (node_send_buffer_size < 1024 * 1024) {
+  }
+  if (node_send_buffer_size < 1024 * 1024) {
     level = SB_HIGH_LEVEL;
     return;
-  } else if (node_send_buffer_size < 2 * 1024 * 1024) {
+  }
+  if (node_send_buffer_size < 2 * 1024 * 1024) {
     level = SB_RISK_LEVEL;
     return;
-  } else {
-    level = SB_CRITICAL_LEVEL;
-    return;
   }
+  level = SB_CRITICAL_LEVEL;
+  return;
 }
 
 template class Vector<TransporterRegistry::Transporter_interface>;

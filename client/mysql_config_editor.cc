@@ -895,10 +895,9 @@ static void remove_option(DYNAMIC_STRING *file_buf, const char *path_name,
       }
       option_found = true;
       break;
-    } else {
-      /* Move to next line. */
-      while ((--search_len > 1) && (*(++start) != '\n')) {
-      }
+    }
+    /* Move to next line. */
+    while ((--search_len > 1) && (*(++start) != '\n')) {
     }
   }
 

@@ -426,10 +426,8 @@ static int list_dbs(MYSQL *mysql, const char *wild) {
     row = mysql_fetch_row(result);
     if (!my_strcasecmp(&my_charset_latin1, row[0], wild)) {
       mysql_free_result(result);
-      if (opt_status)
-        return list_table_status(mysql, wild, nullptr);
-      else
-        return list_tables(mysql, wild, nullptr);
+      if (opt_status) return list_table_status(mysql, wild, nullptr);
+      return list_tables(mysql, wild, nullptr);
     }
   }
 

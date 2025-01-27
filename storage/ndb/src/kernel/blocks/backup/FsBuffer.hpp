@@ -166,9 +166,8 @@ static Uint32 *align(Uint32 *ptr, Uint32 alignment, bool downwards) {
 
   if (downwards) {
     return (Uint32 *)(a - b);
-  } else {
-    return (Uint32 *)(a + (b == 0 ? 0 : (alignment - b)));
   }
+  return (Uint32 *)(a + (b == 0 ? 0 : (alignment - b)));
 }
 
 inline const char *FsBuffer::setup(Uint32 *Buffer, Uint32 Size, Uint32 Block,

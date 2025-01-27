@@ -115,8 +115,7 @@ unsigned int max_display_length_for_field(enum_field_types sql_type,
       unsigned char type = metadata >> 8;
       if (type == MYSQL_TYPE_SET || type == MYSQL_TYPE_ENUM)
         return metadata & 0xff;
-      else
-        return (((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0x00ff);
+      return (((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0x00ff);
     }
 
     case MYSQL_TYPE_YEAR:

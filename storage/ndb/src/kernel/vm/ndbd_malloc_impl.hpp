@@ -905,13 +905,14 @@ inline Free_page_data *Ndbd_mem_manager::get_free_page_data(Alloc_page *ptr,
 inline Uint32 Ndbd_mem_manager::get_page_zone(Uint32 page) {
   if (page < ZONE_19_BOUND) {
     return ZONE_19;
-  } else if (page < ZONE_27_BOUND) {
-    return ZONE_27;
-  } else if (page < ZONE_30_BOUND) {
-    return ZONE_30;
-  } else {
-    return ZONE_32;
   }
+  if (page < ZONE_27_BOUND) {
+    return ZONE_27;
+  }
+  if (page < ZONE_30_BOUND) {
+    return ZONE_30;
+  }
+  return ZONE_32;
 }
 
 inline void Ndbd_mem_manager::set(Uint32 first, Uint32 last) {

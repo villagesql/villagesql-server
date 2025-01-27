@@ -76,9 +76,8 @@ bool Kerberos_plugin_client::obtain_store_credentials() {
         "will be aborted. Please provide valid configuration, user name and "
         "password.");
     return false;
-  } else {
-    return true;
   }
+  return true;
 }
 
 void Kerberos_plugin_client::set_mysql_account_name(
@@ -201,13 +200,12 @@ static int kerberos_authenticate(MYSQL_PLUGIN_VIO *vio, MYSQL *mysql) {
                       << mysql->user;
     log_client_info(log_client_stream.str());
     return CR_OK;
-  } else {
-    log_client_stream.str("");
-    log_client_stream << "Kerberos authentication has failed for the user: "
-                      << mysql->user;
-    log_client_error(log_client_stream.str());
-    return CR_ERROR;
   }
+  log_client_stream.str("");
+  log_client_stream << "Kerberos authentication has failed for the user: "
+                    << mysql->user;
+  log_client_error(log_client_stream.str());
+  return CR_ERROR;
 }
 
 static int initialize_plugin(char *, size_t, int, va_list) {

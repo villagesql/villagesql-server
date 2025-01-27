@@ -136,7 +136,8 @@ int THRConfig::setLockExecuteThreadToCPU(const char *mask) {
         "(error: %d)",
         mask, res);
     return -1;
-  } else if (res == 0) {
+  }
+  if (res == 0) {
     m_err_msg.assfmt(
         "LockExecuteThreadToCPU: %s"
         " with empty bitmask not allowed",

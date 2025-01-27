@@ -581,10 +581,9 @@ int NdbScanOperation::getPartValueFromInfo(const Ndb::PartitionSpec *partInfo,
          */
         *partValue = hashVal;
         return 0;
-      } else {
-        setErrorCodeAbort(ret);
-        return -1;
       }
+      setErrorCodeAbort(ret);
+      return -1;
     }
 
     case Ndb::PartitionSpec::PS_DISTR_KEY_RECORD: {
@@ -599,10 +598,9 @@ int NdbScanOperation::getPartValueFromInfo(const Ndb::PartitionSpec *partInfo,
          */
         *partValue = hashVal;
         return 0;
-      } else {
-        setErrorCodeAbort(ret);
-        return -1;
       }
+      setErrorCodeAbort(ret);
+      return -1;
     }
   }
 
@@ -716,13 +714,12 @@ int NdbIndexScanOperation::getDistKeyFromRange(const NdbRecord *key_record,
   if (ret == 0) {
     *distKey = hashValue;
     return 0;
-  } else {
-#ifdef VM_TRACE
-    ndbout << "err: " << ret << endl;
-#endif
-    setErrorCodeAbort(ret);
-    return -1;
   }
+#ifdef VM_TRACE
+  ndbout << "err: " << ret << endl;
+#endif
+  setErrorCodeAbort(ret);
+  return -1;
 }
 
 int NdbScanOperation::validatePartInfoPtr(const Ndb::PartitionSpec *&partInfo,
@@ -1516,19 +1513,18 @@ int NdbScanOperation::executeCursor(int nodeId) {
       m_executed = true;  // Mark operation as executed
 
       return 0;
+    }
+    if (!theImpl->get_node_stopping(nodeId) ||
+        (theImpl->getNodeSequence(nodeId) != seq)) {
+      TRACE_DEBUG("The node is hard dead when attempting to start a scan");
+      setErrorCode(4029);
+      tCon->theReleaseOnClose = true;
     } else {
-      if (!theImpl->get_node_stopping(nodeId) ||
-          (theImpl->getNodeSequence(nodeId) != seq)) {
-        TRACE_DEBUG("The node is hard dead when attempting to start a scan");
-        setErrorCode(4029);
-        tCon->theReleaseOnClose = true;
-      } else {
-        TRACE_DEBUG("The node is stopping when attempting to start a scan");
-        setErrorCode(4030);
-      }  // if
-      tCon->theCommitStatus = NdbTransaction::Aborted;
-      return -1;
+      TRACE_DEBUG("The node is stopping when attempting to start a scan");
+      setErrorCode(4030);
     }  // if
+    tCon->theCommitStatus = NdbTransaction::Aborted;
+    return -1;
   }
 }
 
@@ -1683,7 +1679,8 @@ int NdbScanOperation::nextResultNdbRecord(const char *&out_row,
         int ret_code = poll_guard.wait_scan(3 * timeout, nodeId, forceSend);
         if (ret_code == 0 && seq == theImpl->getNodeSequence(nodeId)) {
           continue;
-        } else if (ret_code == -1) {
+        }
+        if (ret_code == -1) {
           retVal = -1;
         } else {
           idx = last;
@@ -2623,10 +2620,9 @@ NdbBlob *NdbScanOperation::getBlobHandle(const char *anAttrName) {
       m_keyInfo = 1;
 
     return NdbOperation::getBlobHandle(m_transConnection, col);
-  } else {
-    setErrorCode(4004);
-    return nullptr;
   }
+  setErrorCode(4004);
+  return nullptr;
 }
 
 NdbBlob *NdbScanOperation::getBlobHandle(Uint32 anAttrId) {
@@ -2642,10 +2638,9 @@ NdbBlob *NdbScanOperation::getBlobHandle(Uint32 anAttrId) {
       m_keyInfo = 1;
 
     return NdbOperation::getBlobHandle(m_transConnection, col);
-  } else {
-    setErrorCode(4004);
-    return nullptr;
   }
+  setErrorCode(4004);
+  return nullptr;
 }
 
 /**
@@ -2718,8 +2713,7 @@ NdbRecAttr *NdbScanOperation::getValue_impl(const NdbColumnImpl *attrInfo,
                                             char *aValue) {
   if (theStatus == UseNdbRecord)
     return getValue_NdbRecord_scan(attrInfo, aValue);
-  else
-    return getValue_NdbRecAttr_scan(attrInfo, aValue);
+  return getValue_NdbRecAttr_scan(attrInfo, aValue);
 }
 
 NdbIndexScanOperation::NdbIndexScanOperation(Ndb *aNdb)
@@ -2909,11 +2903,10 @@ int NdbIndexScanOperation::setBound(const NdbColumnImpl *tAttrInfo, int type,
         return -1;
     }
     return 0;
-  } else {
-    /* Can only call setBound/equal() for an NdbIndexScanOperation */
-    setErrorCodeAbort(4514);
-    return -1;
   }
+  /* Can only call setBound/equal() for an NdbIndexScanOperation */
+  setErrorCodeAbort(4514);
+  return -1;
 }
 
 /* Method called just prior to scan execution to initialise
@@ -3316,10 +3309,9 @@ int NdbIndexScanOperation::next_result_ordered_ndbrecord(const char *&out_row,
   if (current < theParallelism &&
       (out_row = m_api_receivers[current]->getCurrentRow()) != nullptr) {
     return 0;
-  } else {
-    theError.code = Err_scanAlreadyComplete;
-    return 1;  // End-of-file
   }
+  theError.code = Err_scanAlreadyComplete;
+  return 1;  // End-of-file
 }
 
 /* Insert a newly fully-retrieved receiver in the correct sorted place. */
@@ -3420,10 +3412,9 @@ int NdbIndexScanOperation::ordered_send_scan_wait_for_all(bool forceSend) {
     Uint32 new_receivers = m_conf_receivers_count;
     m_conf_receivers_count = 0;
     return new_receivers;
-  } else {
-    setErrorCode(4028);
-    return -1;
   }
+  setErrorCode(4028);
+  return -1;
 }
 
 /*

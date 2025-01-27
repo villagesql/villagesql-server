@@ -117,7 +117,8 @@ bool Loopback_Transporter::doSend(bool need_wakeup) {
       assert(sum >= sum_sent);
       remain = sum - sum_sent;
       break;
-    } else if (nBytesSent > 0)  // Sent some, more pending
+    }
+    if (nBytesSent > 0)  // Sent some, more pending
     {
       sum_sent += nBytesSent;
       remain -= nBytesSent;

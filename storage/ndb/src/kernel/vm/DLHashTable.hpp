@@ -250,9 +250,9 @@ inline bool DLMHashTable<P, M>::first(Iterator &iter) const {
     iter.curr.i = hashValues[i];
     iter.curr.p = thePool.getPtr(iter.curr.i);
     return true;
-  } else {
-    iter.curr.i = RNIL;
   }
+  iter.curr.i = RNIL;
+
   return false;
 }
 
@@ -279,10 +279,9 @@ inline bool DLMHashTable<P, M>::next(Iterator &iter) const {
       iter.curr.i = hashValues[i];
       iter.curr.p = thePool.getPtr(iter.curr.i);
       return true;
-    } else {
-      iter.curr.setNull();
-      return false;
     }
+    iter.curr.setNull();
+    return false;
   }
 
   iter.curr.i = M::nextHash(*iter.curr.p);

@@ -108,7 +108,8 @@ static void *touch_mem(void *arg) {
 
   if (first_page >= tot_pages) {
     return NULL; /* We're done, no page to handle */
-  } else if ((tot_pages - first_page) < num_pages_per_thread) {
+  }
+  if ((tot_pages - first_page) < num_pages_per_thread) {
     num_pages_per_thread = tot_pages - first_page;
   }
 

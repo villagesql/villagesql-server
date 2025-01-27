@@ -50,12 +50,9 @@ bool Server_ids::unpack_dynamic_ids(char *param_dynamic_ids) {
   num_items = atoi(token);
   for (uint i = 0; i < num_items; i++) {
     token = my_strtok_r(nullptr, " ", &last);
-    if (token == nullptr)
-      return true;
-    else {
-      const ulong val = atol(token);
-      dynamic_ids.insert_unique(val);
-    }
+    if (token == nullptr) return true;
+    const ulong val = atol(token);
+    dynamic_ids.insert_unique(val);
   }
   return false;
 }

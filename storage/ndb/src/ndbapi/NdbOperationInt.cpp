@@ -104,10 +104,10 @@ int NdbOperation::incCheck(const NdbColumnImpl *tNdbColumnImpl) {
       m_flags &= ~(Uint8)OF_NO_DISK;
     }
     return tNdbColumnImpl->m_attrId;
-  } else {
-    if (theNdbCon->theCommitStatus == NdbTransaction::Started)
-      setErrorCodeAbort(4200);
   }
+  if (theNdbCon->theCommitStatus == NdbTransaction::Started)
+    setErrorCodeAbort(4200);
+
   return -1;
 
 inc_check_error1:
@@ -149,10 +149,10 @@ int NdbOperation::write_attrCheck(const NdbColumnImpl *tNdbColumnImpl) {
       m_flags &= ~(Uint8)OF_NO_DISK;
     }
     return tNdbColumnImpl->m_attrId;
-  } else {
-    if (theNdbCon->theCommitStatus == NdbTransaction::Started)
-      setErrorCodeAbort(4200);
   }
+  if (theNdbCon->theCommitStatus == NdbTransaction::Started)
+    setErrorCodeAbort(4200);
+
   return -1;
 
 write_attr_check_error1:
@@ -193,10 +193,10 @@ int NdbOperation::read_attrCheck(const NdbColumnImpl *tNdbColumnImpl) {
       m_flags &= ~(Uint8)OF_NO_DISK;
     }
     return tNdbColumnImpl->m_attrId;
-  } else {
-    if (theNdbCon->theCommitStatus == NdbTransaction::Started)
-      setErrorCodeAbort(4200);
   }
+  if (theNdbCon->theCommitStatus == NdbTransaction::Started)
+    setErrorCodeAbort(4200);
+
   return -1;
 
 read_attr_check_error1:
@@ -221,21 +221,23 @@ int NdbOperation::initial_interpreterCheck() {
   if (theInterpretIndicator == 1) {
     if (theStatus == ExecInterpretedValue) {
       return 0;  // Simply continue with interpretation
-    } else if (theStatus == GetValue) {
+    }
+    if (theStatus == GetValue) {
       theInitialReadSize = theTotalCurrAI_Len - AttrInfo::SectionSizeInfoLength;
       theStatus = ExecInterpretedValue;
       return 0;
-    } else if (theStatus == SubroutineExec) {
-      return 0;  // Simply continue with interpretation
-    } else {
-      setErrorCodeAbort(4231);
-      return -1;
     }
+    if (theStatus == SubroutineExec) {
+      return 0;  // Simply continue with interpretation
+    }
+    setErrorCodeAbort(4231);
+    return -1;
+
     return 0;
-  } else {
-    if (theNdbCon->theCommitStatus == NdbTransaction::Started)
-      setErrorCodeAbort(4200);
   }
+  if (theNdbCon->theCommitStatus == NdbTransaction::Started)
+    setErrorCodeAbort(4200);
+
   return -1;
 }
 
@@ -249,23 +251,26 @@ int NdbOperation::labelCheck() {
   if (theInterpretIndicator == 1) {
     if (theStatus == ExecInterpretedValue) {
       return 0;  // Simply continue with interpretation
-    } else if (theStatus == GetValue) {
+    }
+    if (theStatus == GetValue) {
       theInitialReadSize = theTotalCurrAI_Len - AttrInfo::SectionSizeInfoLength;
       theStatus = ExecInterpretedValue;
       return 0;
-    } else if (theStatus == SubroutineExec) {
+    }
+    if (theStatus == SubroutineExec) {
       return 0;  // Simply continue with interpretation
-    } else if (theStatus == SubroutineEnd) {
+    }
+    if (theStatus == SubroutineEnd) {
       theStatus = SubroutineExec;
     } else {
       setErrorCodeAbort(4231);
       return -1;
     }
     return 0;
-  } else {
-    if (theNdbCon->theCommitStatus == NdbTransaction::Started)
-      setErrorCodeAbort(4200);
   }
+  if (theNdbCon->theCommitStatus == NdbTransaction::Started)
+    setErrorCodeAbort(4200);
+
   return -1;
 }
 
@@ -279,17 +284,18 @@ int NdbOperation::intermediate_interpreterCheck() {
   if (theInterpretIndicator == 1) {
     if (theStatus == ExecInterpretedValue) {
       return 0;  // Simply continue with interpretation
-    } else if (theStatus == SubroutineExec) {
-      return 0;  // Simply continue with interpretation
-    } else {
-      setErrorCodeAbort(4231);
-      return -1;
     }
+    if (theStatus == SubroutineExec) {
+      return 0;  // Simply continue with interpretation
+    }
+    setErrorCodeAbort(4231);
+    return -1;
+
     return 0;
-  } else {
-    if (theNdbCon->theCommitStatus == NdbTransaction::Started)
-      setErrorCodeAbort(4200);
   }
+  if (theNdbCon->theCommitStatus == NdbTransaction::Started)
+    setErrorCodeAbort(4200);
+
   return -1;
 }
 

@@ -268,10 +268,8 @@ int update_scan(Ndb *myNdb) {
   int res;
   for (;;) {
     res = myScanOp->nextResult(true);
-    if (res == 1)
-      break;  // Scan done.
-    else if (res)
-      APIERROR(myScanOp->getNdbError());
+    if (res == 1) break;  // Scan done.
+    if (res) APIERROR(myScanOp->getNdbError());
 
     Uint64 length = 0;
     if (myBlobHandle->getLength(length) == -1)

@@ -1117,88 +1117,80 @@ static const MY_UNICASE_CHARACTER *my_caseinfo_pages_big5[256] = {
 static MY_UNICASE_INFO my_caseinfo_big5 = {0xFFFF, my_caseinfo_pages_big5};
 
 static uint16_t big5strokexfrm(uint16_t i) {
-  if ((i == 0xA440) || (i == 0xA441))
-    return 0xA440;
-  else if (((i >= 0xA442) && (i <= 0xA453)) || ((i >= 0xC940) && (i <= 0xC944)))
+  if ((i == 0xA440) || (i == 0xA441)) return 0xA440;
+  if (((i >= 0xA442) && (i <= 0xA453)) || ((i >= 0xC940) && (i <= 0xC944)))
     return 0xA442;
-  else if (((i >= 0xA454) && (i <= 0xA47E)) || ((i >= 0xC945) && (i <= 0xC94C)))
+  if (((i >= 0xA454) && (i <= 0xA47E)) || ((i >= 0xC945) && (i <= 0xC94C)))
     return 0xA454;
-  else if (((i >= 0xA4A1) && (i <= 0xA4FD)) || ((i >= 0xC94D) && (i <= 0xC962)))
+  if (((i >= 0xA4A1) && (i <= 0xA4FD)) || ((i >= 0xC94D) && (i <= 0xC962)))
     return 0xA4A1;
-  else if (((i >= 0xA4FE) && (i <= 0xA5DF)) || ((i >= 0xC963) && (i <= 0xC9AA)))
+  if (((i >= 0xA4FE) && (i <= 0xA5DF)) || ((i >= 0xC963) && (i <= 0xC9AA)))
     return 0xA4FE;
-  else if (((i >= 0xA5E0) && (i <= 0xA6E9)) || ((i >= 0xC9AB) && (i <= 0xCA59)))
+  if (((i >= 0xA5E0) && (i <= 0xA6E9)) || ((i >= 0xC9AB) && (i <= 0xCA59)))
     return 0xA5E0;
-  else if (((i >= 0xA6EA) && (i <= 0xA8C2)) || ((i >= 0xCA5A) && (i <= 0xCBB0)))
+  if (((i >= 0xA6EA) && (i <= 0xA8C2)) || ((i >= 0xCA5A) && (i <= 0xCBB0)))
     return 0xA6EA;
-  else if ((i == 0xA260) || ((i >= 0xA8C3) && (i <= 0xAB44)) ||
-           ((i >= 0xCBB1) && (i <= 0xCDDC)))
+  if ((i == 0xA260) || ((i >= 0xA8C3) && (i <= 0xAB44)) ||
+      ((i >= 0xCBB1) && (i <= 0xCDDC)))
     return 0xA8C3;
-  else if ((i == 0xA259) || (i == 0xF9DA) || ((i >= 0xAB45) && (i <= 0xADBB)) ||
-           ((i >= 0xCDDD) && (i <= 0xD0C7)))
+  if ((i == 0xA259) || (i == 0xF9DA) || ((i >= 0xAB45) && (i <= 0xADBB)) ||
+      ((i >= 0xCDDD) && (i <= 0xD0C7)))
     return 0xAB45;
-  else if ((i == 0xA25A) || ((i >= 0xADBC) && (i <= 0xB0AD)) ||
-           ((i >= 0xD0C8) && (i <= 0xD44A)))
+  if ((i == 0xA25A) || ((i >= 0xADBC) && (i <= 0xB0AD)) ||
+      ((i >= 0xD0C8) && (i <= 0xD44A)))
     return 0xADBC;
-  else if ((i == 0xA25B) || (i == 0xA25C) || ((i >= 0xB0AE) && (i <= 0xB3C2)) ||
-           ((i >= 0xD44B) && (i <= 0xD850)))
+  if ((i == 0xA25B) || (i == 0xA25C) || ((i >= 0xB0AE) && (i <= 0xB3C2)) ||
+      ((i >= 0xD44B) && (i <= 0xD850)))
     return 0xB0AE;
-  else if ((i == 0xF9DB) || ((i >= 0xB3C3) && (i <= 0xB6C2)) ||
-           ((i >= 0xD851) && (i <= 0xDCB0)))
+  if ((i == 0xF9DB) || ((i >= 0xB3C3) && (i <= 0xB6C2)) ||
+      ((i >= 0xD851) && (i <= 0xDCB0)))
     return 0xB3C3;
-  else if ((i == 0xA25D) || (i == 0xA25F) || (i == 0xC6A1) || (i == 0xF9D6) ||
-           (i == 0xF9D8) || ((i >= 0xB6C3) && (i <= 0xB9AB)) ||
-           ((i >= 0xDCB1) && (i <= 0xE0EF)))
+  if ((i == 0xA25D) || (i == 0xA25F) || (i == 0xC6A1) || (i == 0xF9D6) ||
+      (i == 0xF9D8) || ((i >= 0xB6C3) && (i <= 0xB9AB)) ||
+      ((i >= 0xDCB1) && (i <= 0xE0EF)))
     return 0xB6C3;
-  else if ((i == 0xF9DC) || ((i >= 0xB9AC) && (i <= 0xBBF4)) ||
-           ((i >= 0xE0F0) && (i <= 0xE4E5)))
+  if ((i == 0xF9DC) || ((i >= 0xB9AC) && (i <= 0xBBF4)) ||
+      ((i >= 0xE0F0) && (i <= 0xE4E5)))
     return 0xB9AC;
-  else if ((i == 0xA261) || ((i >= 0xBBF5) && (i <= 0xBEA6)) ||
-           ((i >= 0xE4E6) && (i <= 0xE8F3)))
+  if ((i == 0xA261) || ((i >= 0xBBF5) && (i <= 0xBEA6)) ||
+      ((i >= 0xE4E6) && (i <= 0xE8F3)))
     return 0xBBF5;
-  else if ((i == 0xA25E) || (i == 0xF9D7) || (i == 0xF9D9) ||
-           ((i >= 0xBEA7) && (i <= 0xC074)) || ((i >= 0xE8F4) && (i <= 0xECB8)))
+  if ((i == 0xA25E) || (i == 0xF9D7) || (i == 0xF9D9) ||
+      ((i >= 0xBEA7) && (i <= 0xC074)) || ((i >= 0xE8F4) && (i <= 0xECB8)))
     return 0xBEA7;
-  else if (((i >= 0xC075) && (i <= 0xC24E)) || ((i >= 0xECB9) && (i <= 0xEFB6)))
+  if (((i >= 0xC075) && (i <= 0xC24E)) || ((i >= 0xECB9) && (i <= 0xEFB6)))
     return 0xC075;
-  else if (((i >= 0xC24F) && (i <= 0xC35E)) || ((i >= 0xEFB7) && (i <= 0xF1EA)))
+  if (((i >= 0xC24F) && (i <= 0xC35E)) || ((i >= 0xEFB7) && (i <= 0xF1EA)))
     return 0xC24F;
-  else if (((i >= 0xC35F) && (i <= 0xC454)) || ((i >= 0xF1EB) && (i <= 0xF3FC)))
+  if (((i >= 0xC35F) && (i <= 0xC454)) || ((i >= 0xF1EB) && (i <= 0xF3FC)))
     return 0xC35F;
-  else if (((i >= 0xC455) && (i <= 0xC4D6)) || ((i >= 0xF3FD) && (i <= 0xF5BF)))
+  if (((i >= 0xC455) && (i <= 0xC4D6)) || ((i >= 0xF3FD) && (i <= 0xF5BF)))
     return 0xC455;
-  else if (((i >= 0xC4D7) && (i <= 0xC56A)) || ((i >= 0xF5C0) && (i <= 0xF6D5)))
+  if (((i >= 0xC4D7) && (i <= 0xC56A)) || ((i >= 0xF5C0) && (i <= 0xF6D5)))
     return 0xC4D7;
-  else if (((i >= 0xC56B) && (i <= 0xC5C7)) || ((i >= 0xF6D6) && (i <= 0xF7CF)))
+  if (((i >= 0xC56B) && (i <= 0xC5C7)) || ((i >= 0xF6D6) && (i <= 0xF7CF)))
     return 0xC56B;
-  else if (((i >= 0xC5C8) && (i <= 0xC5F0)) || ((i >= 0xF7D0) && (i <= 0xF8A4)))
+  if (((i >= 0xC5C8) && (i <= 0xC5F0)) || ((i >= 0xF7D0) && (i <= 0xF8A4)))
     return 0xC5C8;
-  else if (((i >= 0xC5F1) && (i <= 0xC654)) || ((i >= 0xF8A5) && (i <= 0xF8ED)))
+  if (((i >= 0xC5F1) && (i <= 0xC654)) || ((i >= 0xF8A5) && (i <= 0xF8ED)))
     return 0xC5F1;
-  else if (((i >= 0xC655) && (i <= 0xC664)) || ((i >= 0xF8EE) && (i <= 0xF96A)))
+  if (((i >= 0xC655) && (i <= 0xC664)) || ((i >= 0xF8EE) && (i <= 0xF96A)))
     return 0xC655;
-  else if (((i >= 0xC665) && (i <= 0xC66B)) || ((i >= 0xF96B) && (i <= 0xF9A1)))
+  if (((i >= 0xC665) && (i <= 0xC66B)) || ((i >= 0xF96B) && (i <= 0xF9A1)))
     return 0xC665;
-  else if (((i >= 0xC66C) && (i <= 0xC675)) || ((i >= 0xF9A2) && (i <= 0xF9B9)))
+  if (((i >= 0xC66C) && (i <= 0xC675)) || ((i >= 0xF9A2) && (i <= 0xF9B9)))
     return 0xC66C;
-  else if (((i >= 0xC676) && (i <= 0xC678)) || ((i >= 0xF9BA) && (i <= 0xF9C5)))
+  if (((i >= 0xC676) && (i <= 0xC678)) || ((i >= 0xF9BA) && (i <= 0xF9C5)))
     return 0xC676;
-  else if (((i >= 0xC679) && (i <= 0xC67C)) || ((i >= 0xF9C7) && (i <= 0xF9CB)))
+  if (((i >= 0xC679) && (i <= 0xC67C)) || ((i >= 0xF9C7) && (i <= 0xF9CB)))
     return 0xC679;
-  else if ((i == 0xC67D) || ((i >= 0xF9CC) && (i <= 0xF9CF)))
-    return 0xC67D;
-  else if (i == 0xF9D0)
-    return 0xF9D0;
-  else if ((i == 0xC67E) || (i == 0xF9D1))
-    return 0xC67E;
-  else if ((i == 0xF9C6) || (i == 0xF9D2))
-    return 0xF9C6;
-  else if (i == 0xF9D3)
-    return 0xF9D3;
-  else if (i == 0xF9D4)
-    return 0xF9D4;
-  else if (i == 0xF9D5)
-    return 0xF9D5;
+  if ((i == 0xC67D) || ((i >= 0xF9CC) && (i <= 0xF9CF))) return 0xC67D;
+  if (i == 0xF9D0) return 0xF9D0;
+  if ((i == 0xC67E) || (i == 0xF9D1)) return 0xC67E;
+  if ((i == 0xF9C6) || (i == 0xF9D2)) return 0xF9C6;
+  if (i == 0xF9D3) return 0xF9D3;
+  if (i == 0xF9D4) return 0xF9D4;
+  if (i == 0xF9D5) return 0xF9D5;
   return 0xA140;
 }
 

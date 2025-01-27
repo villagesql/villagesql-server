@@ -246,10 +246,8 @@ class Wkb_parser {
     double x = parse_double(bo);
     double y = parse_double(bo);
     if (!std::isfinite(x) || !std::isfinite(y)) throw std::exception();
-    if (m_swap_axes)
-      return Point_t(transform_x(y), transform_y(x));
-    else
-      return Point_t(transform_x(x), transform_y(y));
+    if (m_swap_axes) return Point_t(transform_x(y), transform_y(x));
+    return Point_t(transform_x(x), transform_y(y));
   }
 
   Point_t parse_wkb_point() {

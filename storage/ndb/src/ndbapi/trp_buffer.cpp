@@ -64,10 +64,10 @@ void TFBuffer::validate() const {
       assert(m_head->m_bytes == 0);
     }
     return;
-  } else {
-    assert(m_head != nullptr);
-    assert(m_tail != nullptr);
   }
+  assert(m_head != nullptr);
+  assert(m_tail != nullptr);
+
   Uint32 sum [[maybe_unused]] = 0;
   TFPage *p = m_head;
   while (p) {

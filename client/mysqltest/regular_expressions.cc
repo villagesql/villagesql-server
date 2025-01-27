@@ -258,7 +258,6 @@ int search_protocol_re(std::regex *re, const char *str) {
 
     // Match found
     return 1;
-  } else {
-    return 0;
   }
+  return 0;
 }

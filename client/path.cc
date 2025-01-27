@@ -145,14 +145,13 @@ bool Path::exists() {
     if (dir == nullptr) return false;
     my_dirend(dir);
     return true;
-  } else {
-    MY_STAT s;
-    std::string qpath(m_path);
-    qpath.append(FN_DIRSEP).append(m_filename);
-    if (my_stat(qpath.c_str(), &s, MYF(0)) == nullptr) return false;
-    if (!MY_S_ISREG(s.st_mode)) return false;
-    return true;
   }
+  MY_STAT s;
+  std::string qpath(m_path);
+  qpath.append(FN_DIRSEP).append(m_filename);
+  if (my_stat(qpath.c_str(), &s, MYF(0)) == nullptr) return false;
+  if (!MY_S_ISREG(s.st_mode)) return false;
+  return true;
 }
 
 std::string Path::to_str() {

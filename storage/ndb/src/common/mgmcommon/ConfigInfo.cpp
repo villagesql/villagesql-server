@@ -4151,7 +4151,8 @@ static bool check_node_vs_replicas(Vector<ConfigInfo::ConfigRuleSection> &,
       if (tmp->get("Nodegroup", &ng)) {
         if (ng == NDB_NO_NODEGROUP) {
           continue;
-        } else if (ng >= MAX_NDB_NODE_GROUPS) {
+        }
+        if (ng >= MAX_NDB_NODE_GROUPS) {
           ctx.reportError(
               "Invalid nodegroup %u for node %u, Max nodegroups allowed: %d",
               ng, id, MAX_NDB_NODE_GROUPS);
@@ -4560,10 +4561,8 @@ std::optional<BaseString> ConfigInfo::normalizeParamValue(
       bool tmp_bool;
       // convertStringToBool also handles numeric 0 and 1
       if (!InitConfigFileParser::convertStringToBool(str, tmp_bool)) return {};
-      if (tmp_bool)
-        return {"1"};
-      else
-        return {"0"};
+      if (tmp_bool) return {"1"};
+      return {"0"};
     }
     case ConfigInfo::CI_INT:
     case ConfigInfo::CI_INT64: {

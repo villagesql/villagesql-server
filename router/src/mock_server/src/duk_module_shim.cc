@@ -587,27 +587,32 @@ static duk_ret_t cb_load_module(duk_context *ctx) {
 
     duk_push_undefined(ctx);
     return 1;
-  } else if (0 == strcmp(resolved_id, "util")) {
+  }
+  if (0 == strcmp(resolved_id, "util")) {
     duk_put_function_list(ctx, 1, util_module_funcs);
 
     duk_push_undefined(ctx);
     return 1;
-  } else if (0 == strcmp(resolved_id, "fs")) {
+  }
+  if (0 == strcmp(resolved_id, "fs")) {
     duk_put_function_list(ctx, 1, fs_module_funcs);
 
     duk_push_undefined(ctx);
     return 1;
-  } else if (0 == strcmp(resolved_id, "process")) {
+  }
+  if (0 == strcmp(resolved_id, "process")) {
     duk_put_function_list(ctx, 1, process_module_funcs);
 
     duk_push_undefined(ctx);
     return 1;
-  } else if (0 == strcmp(resolved_id, "console")) {
+  }
+  if (0 == strcmp(resolved_id, "console")) {
     duk_put_function_list(ctx, 1, console_module_funcs);
 
     duk_push_undefined(ctx);
     return 1;
-  } else if (0 == strcmp(resolved_id, "events")) {
+  }
+  if (0 == strcmp(resolved_id, "events")) {
     duk_push_string(ctx, "events.js");
     if (DUK_EXEC_SUCCESS !=
         duk_pcompile_string_filename(
@@ -668,17 +673,20 @@ static duk_ret_t cb_load_module(duk_context *ctx) {
 
     duk_push_undefined(ctx);
     return 1;
-  } else if (0 == strcmp(resolved_id, "assert")) {
+  }
+  if (0 == strcmp(resolved_id, "assert")) {
     duk_put_function_list(ctx, 1, assert_module_funcs);
 
     duk_push_undefined(ctx);
     return 1;
-  } else if (0 == strcmp(resolved_id, "tty")) {
+  }
+  if (0 == strcmp(resolved_id, "tty")) {
     duk_put_function_list(ctx, 1, tty_module_funcs);
 
     duk_push_undefined(ctx);
     return 1;
-  } else if (0 == strcmp(resolved_id, "os")) {
+  }
+  if (0 == strcmp(resolved_id, "os")) {
     duk_put_function_list(ctx, 1, os_module_funcs);
 
     duk_push_undefined(ctx);

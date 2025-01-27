@@ -849,10 +849,8 @@ const NdbDictionary::Column *NdbDictionary::Index::getColumn(
 const char *NdbDictionary::Index::getIndexColumn(int no) const {
   const NdbDictionary::Column *col = getColumn(no);
 
-  if (col)
-    return col->getName();
-  else
-    return nullptr;
+  if (col) return col->getName();
+  return nullptr;
 }
 
 const NdbRecord *NdbDictionary::Index::getDefaultRecord() const {
@@ -1600,7 +1598,8 @@ int NdbDictionary::Dictionary::prepareHashMap(const Table &oldTableF,
       newTable.m_hash_map_id = oldTable.m_hash_map_id;
       newTable.m_hash_map_version = oldTable.m_hash_map_version;
       return 0;
-    } else if (newTable.getFullyReplicated()) {
+    }
+    if (newTable.getFullyReplicated()) {
       // Fully replicated tables may not change partition count.
       m_impl.m_error.code = 797;  // WrongPartitionBalanceFullyReplicated
       return -1;

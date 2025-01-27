@@ -397,12 +397,9 @@ double Singleton<T>::get_equal_to_selectivity(const T &value) const {
   if (found == m_buckets.end()) return 0.0;
 
   if (Histogram_comparator()(value, found->value) == 0) {
-    if (found == m_buckets.begin())
-      return found->cumulative_frequency;
-    else {
-      const auto previous = std::prev(found, 1);
-      return found->cumulative_frequency - previous->cumulative_frequency;
-    }
+    if (found == m_buckets.begin()) return found->cumulative_frequency;
+    const auto previous = std::prev(found, 1);
+    return found->cumulative_frequency - previous->cumulative_frequency;
   }
 
   return 0.0;
@@ -416,12 +413,9 @@ double Singleton<T>::get_less_than_selectivity(const T &value) const {
   */
   const auto found = std::lower_bound(m_buckets.begin(), m_buckets.end(), value,
                                       Histogram_comparator());
-  if (found == m_buckets.begin())
-    return 0.0;
-  else {
-    const auto previous = std::prev(found, 1);
-    return previous->cumulative_frequency;
-  }
+  if (found == m_buckets.begin()) return 0.0;
+  const auto previous = std::prev(found, 1);
+  return previous->cumulative_frequency;
 }
 
 template <class T>
@@ -433,12 +427,9 @@ double Singleton<T>::get_greater_than_selectivity(const T &value) const {
   const auto found = std::upper_bound(m_buckets.begin(), m_buckets.end(), value,
                                       Histogram_comparator());
 
-  if (found == m_buckets.begin())
-    return get_non_null_values_fraction();
-  else {
-    const auto previous = std::prev(found, 1);
-    return get_non_null_values_fraction() - previous->cumulative_frequency;
-  }
+  if (found == m_buckets.begin()) return get_non_null_values_fraction();
+  const auto previous = std::prev(found, 1);
+  return get_non_null_values_fraction() - previous->cumulative_frequency;
 }
 
 // Explicit template instantiations.

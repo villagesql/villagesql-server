@@ -1517,9 +1517,8 @@ NdbWaitGroup *Ndb_cluster_connection::create_ndb_wait_group(int size) {
   if (m_impl.m_multi_wait_group == nullptr) {
     m_impl.m_multi_wait_group = new NdbWaitGroup(this, size);
     return m_impl.m_multi_wait_group;
-  } else {
-    return nullptr;  // NdbWaitGroup already exists
   }
+  return nullptr;  // NdbWaitGroup already exists
 }
 
 bool Ndb_cluster_connection::release_ndb_wait_group(NdbWaitGroup *group) {
@@ -1527,9 +1526,8 @@ bool Ndb_cluster_connection::release_ndb_wait_group(NdbWaitGroup *group) {
     delete m_impl.m_multi_wait_group;
     m_impl.m_multi_wait_group = nullptr;
     return true;
-  } else {
-    return false;
   }
+  return false;
 }
 
 Uint32 Ndb_cluster_connection_impl::select_any(NdbImpl *impl_ndb) {
@@ -1549,11 +1547,11 @@ Uint32 Ndb_cluster_connection_impl::select_any(NdbImpl *impl_ndb) {
   }
   if (num_prospective_nodes == 0) {
     return 0;
-  } else if (num_prospective_nodes == 1) {
-    return prospective_node_ids[0];
-  } else {
-    return select_node(impl_ndb, prospective_node_ids, num_prospective_nodes);
   }
+  if (num_prospective_nodes == 1) {
+    return prospective_node_ids[0];
+  }
+  return select_node(impl_ndb, prospective_node_ids, num_prospective_nodes);
 }
 
 /**
@@ -1582,11 +1580,11 @@ Uint32 Ndb_cluster_connection_impl::select_location_based(NdbImpl *impl_ndb,
   }
   if (num_prospective_nodes == 0) {
     return nodes[0];
-  } else if (num_prospective_nodes == 1) {
-    return prospective_node_ids[0];
-  } else {
-    return select_node(impl_ndb, prospective_node_ids, num_prospective_nodes);
   }
+  if (num_prospective_nodes == 1) {
+    return prospective_node_ids[0];
+  }
+  return select_node(impl_ndb, prospective_node_ids, num_prospective_nodes);
 }
 
 Uint32 Ndb_cluster_connection_impl::select_node(NdbImpl *impl_ndb,
@@ -1594,7 +1592,8 @@ Uint32 Ndb_cluster_connection_impl::select_node(NdbImpl *impl_ndb,
                                                 Uint32 cnt) {
   if (cnt == 1) {
     return nodes[0];
-  } else if (cnt == 0) {
+  }
+  if (cnt == 0) {
     return 0;
   }
 

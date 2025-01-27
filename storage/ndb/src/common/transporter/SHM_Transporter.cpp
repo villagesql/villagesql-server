@@ -780,21 +780,17 @@ bool SHM_Transporter::handle_reverse_awake_state() {
     if (isServer) {
       if (*clientStatusFlag == 1 || *clientAwakenedFlag == 1) {
         return true;
-      } else {
-        *clientAwakenedFlag = 1;
-        return false;
       }
-    } else {
-      if (*serverStatusFlag == 1 || *serverAwakenedFlag == 1) {
-        return true;
-      } else {
-        *serverAwakenedFlag = 1;
-        return false;
-      }
+      *clientAwakenedFlag = 1;
+      return false;
     }
-  } else {
-    return true;
+    if (*serverStatusFlag == 1 || *serverAwakenedFlag == 1) {
+      return true;
+    }
+    *serverAwakenedFlag = 1;
+    return false;
   }
+  return true;
 }
 
 void SHM_Transporter::updateReceivePtr(TransporterReceiveHandle &recvdata,
@@ -845,9 +841,9 @@ bool SHM_Transporter::send_is_possible(int timeout_millisec) const {
       }
       DEBUG_FPRINTF((stderr, "send_is_possible, timed out\n"));
       return false;
-    } else {
-      break;
     }
+    break;
+
   } while (true);
   return true;
 }

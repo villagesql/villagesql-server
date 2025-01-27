@@ -46,10 +46,9 @@ int NdbOperation::insertTuple() {
     theLockMode = LM_Exclusive;
     m_abortOption = AbortOnError;
     return 0;
-  } else {
-    setErrorCode(4200);
-    return -1;
-  }  // if
+  }
+  setErrorCode(4200);
+  return -1;
 }  // NdbOperation::insertTuple()
 /******************************************************************************
  * int updateTuple();
@@ -65,10 +64,9 @@ int NdbOperation::updateTuple() {
     theLockMode = LM_Exclusive;
     m_abortOption = AbortOnError;
     return 0;
-  } else {
-    setErrorCode(4200);
-    return -1;
-  }  // if
+  }
+  setErrorCode(4200);
+  return -1;
 }  // NdbOperation::updateTuple()
 /*****************************************************************************
  * int writeTuple();
@@ -84,10 +82,9 @@ int NdbOperation::writeTuple() {
     theLockMode = LM_Exclusive;
     m_abortOption = AbortOnError;
     return 0;
-  } else {
-    setErrorCode(4200);
-    return -1;
-  }  // if
+  }
+  setErrorCode(4200);
+  return -1;
 }  // NdbOperation::writeTuple()
 /*****************************************************************************
  * int deleteTuple();
@@ -103,10 +100,9 @@ int NdbOperation::deleteTuple() {
     theLockMode = LM_Exclusive;
     m_abortOption = AbortOnError;
     return 0;
-  } else {
-    setErrorCode(4200);
-    return -1;
-  }  // if
+  }
+  setErrorCode(4200);
+  return -1;
 }  // NdbOperation::deleteTuple()
 
 /******************************************************************************
@@ -143,10 +139,9 @@ int NdbOperation::readTuple() {
     theLockMode = LM_Read;
     m_abortOption = AO_IgnoreError;
     return 0;
-  } else {
-    setErrorCode(4200);
-    return -1;
-  }  // if
+  }
+  setErrorCode(4200);
+  return -1;
 }  // NdbOperation::readTuple()
 
 /******************************************************************************
@@ -163,10 +158,9 @@ int NdbOperation::readTupleExclusive() {
     theLockMode = LM_Exclusive;
     m_abortOption = AO_IgnoreError;
     return 0;
-  } else {
-    setErrorCode(4200);
-    return -1;
-  }  // if
+  }
+  setErrorCode(4200);
+  return -1;
 }  // NdbOperation::readTupleExclusive()
 
 /*****************************************************************************
@@ -185,10 +179,9 @@ int NdbOperation::simpleRead() {
     m_abortOption = AO_IgnoreError;
     tNdbCon->theSimpleState = false;
     return 0;
-  } else {
-    setErrorCode(4200);
-    return -1;
-  }  // if
+  }
+  setErrorCode(4200);
+  return -1;
 }  // NdbOperation::simpleRead()
 
 /*****************************************************************************
@@ -212,10 +205,9 @@ int NdbOperation::committedRead() {
     theLockMode = LM_CommittedRead;
     m_abortOption = AO_IgnoreError;
     return 0;
-  } else {
-    setErrorCode(4200);
-    return -1;
-  }  // if
+  }
+  setErrorCode(4200);
+  return -1;
 }  // NdbOperation::committedRead()
 
 /*****************************************************************************
@@ -234,10 +226,9 @@ int NdbOperation::dirtyUpdate() {
     theLockMode = LM_CommittedRead;
     m_abortOption = AbortOnError;
     return 0;
-  } else {
-    setErrorCode(4200);
-    return -1;
-  }  // if
+  }
+  setErrorCode(4200);
+  return -1;
 }  // NdbOperation::dirtyUpdate()
 
 /******************************************************************************
@@ -256,10 +247,9 @@ int NdbOperation::dirtyWrite() {
     theLockMode = LM_CommittedRead;
     m_abortOption = AbortOnError;
     return 0;
-  } else {
-    setErrorCode(4200);
-    return -1;
-  }  // if
+  }
+  setErrorCode(4200);
+  return -1;
 }  // NdbOperation::dirtyWrite()
 
 /******************************************************************************
@@ -278,10 +268,9 @@ int NdbOperation::interpretedUpdateTuple() {
     m_abortOption = AbortOnError;
     initInterpreter();
     return 0;
-  } else {
-    setErrorCode(4200);
-    return -1;
-  }  // if
+  }
+  setErrorCode(4200);
+  return -1;
 }  // NdbOperation::interpretedUpdateTuple()
 
 /******************************************************************************
@@ -306,10 +295,9 @@ int NdbOperation::interpretedWriteTuple() {
     m_abortOption = AbortOnError;
     initInterpreter();
     return 0;
-  } else {
-    setErrorCode(4200);
-    return -1;
-  }  // if
+  }
+  setErrorCode(4200);
+  return -1;
 }  // NdbOperation::interpretedWriteTuple()
 
 /*****************************************************************************
@@ -329,10 +317,9 @@ int NdbOperation::interpretedDeleteTuple() {
     m_abortOption = AbortOnError;
     initInterpreter();
     return 0;
-  } else {
-    setErrorCode(4200);
-    return -1;
-  }  // if
+  }
+  setErrorCode(4200);
+  return -1;
 }  // NdbOperation::interpretedDeleteTuple()
 
 void NdbOperation::setReadLockMode(LockMode lockMode) {
@@ -418,19 +405,16 @@ NdbRecAttr *NdbOperation::getValue_impl(const NdbColumnImpl *tAttrInfo,
       if ((tRecAttr = theReceiver.getValue(tAttrInfo, aValue)) != nullptr) {
         theErrorLine++;
         return tRecAttr;
-      } else {
-        setErrorCodeAbort(4000);
-        return nullptr;
       }
-    } else {
+      setErrorCodeAbort(4000);
       return nullptr;
-    }  // if insertATTRINFO failure
-  } else {
-    if (tAttrInfo == nullptr) {
-      setErrorCodeAbort(4004);
-      return nullptr;
-    }  // if
-  }    // if
+    }
+    return nullptr;
+  }
+  if (tAttrInfo == nullptr) {
+    setErrorCodeAbort(4004);
+    return nullptr;
+  }  // if
   setErrorCodeAbort(4200);
   return nullptr;
 }
@@ -450,10 +434,9 @@ NdbRecAttr *NdbOperation::getValue_NdbRecord(const NdbColumnImpl *tAttrInfo,
   if ((tRecAttr = theReceiver.getValue(tAttrInfo, aValue)) != nullptr) {
     theErrorLine++;
     return tRecAttr;
-  } else {
-    setErrorCodeAbort(4000);
-    return nullptr;
   }
+  setErrorCodeAbort(4000);
+  return nullptr;
 }
 
 /*****************************************************************************

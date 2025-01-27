@@ -3178,8 +3178,8 @@ static uint get_table_structure(const char *table, char *db, char *table_type,
           my_free(scv_buff);
 
           return 0;
-        } else
-          my_free(scv_buff);
+        }
+        my_free(scv_buff);
 
         n_cols = mysql_num_rows(result);
         if (0 != n_cols) {
@@ -5414,29 +5414,29 @@ static int do_show_binary_log_status(MYSQL *mysql_con) {
           mysql_con, &source,
           get_compatible_rpl_source_query("SHOW BINARY LOG STATUS").c_str())) {
     return 1;
-  } else {
-    row = mysql_fetch_row(source);
-    if (row && row[0] && row[1]) {
-      /* SHOW BINARY LOG STATUS reports file and position */
-      print_comment(md_result_file, false,
-                    "\n--\n-- Position to start replication or point-in-time "
-                    "recovery from\n--\n\n");
-      fprintf(
-          md_result_file, "%s%s %s='%s', %s=%s;\n", comment_prefix,
-          get_compatible_rpl_replica_command("CHANGE REPLICATION SOURCE TO")
-              .c_str(),
-          get_compatible_rpl_replica_command("SOURCE_LOG_FILE").c_str(), row[0],
-          get_compatible_rpl_replica_command("SOURCE_LOG_POS").c_str(), row[1]);
-      check_io(md_result_file);
-    } else if (!opt_force) {
-      /* SHOW BINARY LOG STATUS reports nothing and --force is not enabled */
-      my_printf_error(0, "Error: Binlogging on server not active", MYF(0));
-      mysql_free_result(source);
-      maybe_exit(EX_MYSQLERR);
-      return 1;
-    }
-    mysql_free_result(source);
   }
+  row = mysql_fetch_row(source);
+  if (row && row[0] && row[1]) {
+    /* SHOW BINARY LOG STATUS reports file and position */
+    print_comment(md_result_file, false,
+                  "\n--\n-- Position to start replication or point-in-time "
+                  "recovery from\n--\n\n");
+    fprintf(
+        md_result_file, "%s%s %s='%s', %s=%s;\n", comment_prefix,
+        get_compatible_rpl_replica_command("CHANGE REPLICATION SOURCE TO")
+            .c_str(),
+        get_compatible_rpl_replica_command("SOURCE_LOG_FILE").c_str(), row[0],
+        get_compatible_rpl_replica_command("SOURCE_LOG_POS").c_str(), row[1]);
+    check_io(md_result_file);
+  } else if (!opt_force) {
+    /* SHOW BINARY LOG STATUS reports nothing and --force is not enabled */
+    my_printf_error(0, "Error: Binlogging on server not active", MYF(0));
+    mysql_free_result(source);
+    maybe_exit(EX_MYSQLERR);
+    return 1;
+  }
+  mysql_free_result(source);
+
   return 0;
 }
 

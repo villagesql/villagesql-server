@@ -136,9 +136,9 @@ bool FileLogHandler::createNewFile() {
     newMtime = File_class::mtime(newName);
     if (newMtime < preMtime) {
       break;
-    } else {
-      preMtime = newMtime;
     }
+    preMtime = newMtime;
+
   } while (File_class::exists(newName));
 
   m_pLogFile->close();

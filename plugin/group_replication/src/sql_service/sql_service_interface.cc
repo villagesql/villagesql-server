@@ -245,14 +245,14 @@ int Sql_service_interface::wait_for_session_server(ulong total_timeout) {
 
       err = 1;
       break;
-    } else {
-      /*
-        If we have more tries.
-        Then sleep before new attempts are made.
-      */
-      my_sleep(wait_retry_sleep);
-      ++number_of_tries;
     }
+    /*
+     If we have more tries.
+     Then sleep before new attempts are made.
+    */
+    my_sleep(wait_retry_sleep);
+    ++number_of_tries;
+
     /* purecov: end */
   }
 

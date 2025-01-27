@@ -255,8 +255,8 @@ class mock_gcs_xcom_state_exchange_interface
     if (m_process_member_state_iteration == 0) {
       m_process_member_state_iteration++;
       return false;
-    } else
-      return true;
+    }
+    return true;
   }
 
   bool free_members_joined(synode_no,

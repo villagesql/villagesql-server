@@ -1334,7 +1334,8 @@ ALWAYS_INLINE int uca_scanner_any<Mb_wc>::next() {
           (cweight = previous_context_find(prev_char, wc))) {
         prev_char = 0; /* Clear for the next character */
         return *cweight;
-      } else if (my_uca_can_be_contraction_head(uca->contraction_flags, wc)) {
+      }
+      if (my_uca_can_be_contraction_head(uca->contraction_flags, wc)) {
         /* Check if wc starts a contraction */
         size_t chars_skipped;
         if ((cweight = contraction_find(wc, &chars_skipped))) {
@@ -1424,7 +1425,8 @@ uca_scanner_900<Mb_wc, LEVELS_FOR_COMPARE>::handle_ja_contraction_quat_wt() {
     num_of_ce_left = 0;
     if (is_katakana_char(prev_char)) {
       return JA_KATA_QUAT_WEIGHT;
-    } else if (is_hiragana_char(prev_char)) {
+    }
+    if (is_hiragana_char(prev_char)) {
       return JA_HIRA_QUAT_WEIGHT;
     }
   }
@@ -1461,7 +1463,8 @@ uca_scanner_900<Mb_wc, LEVELS_FOR_COMPARE>::handle_ja_common_quat_wt(
     if (is_katakana_char(wc) || is_katakana_iteration(wc) ||
         is_ja_length_mark(wc)) {
       return JA_KATA_QUAT_WEIGHT;
-    } else if (is_hiragana_char(wc) || is_hiragana_iteration(wc)) {
+    }
+    if (is_hiragana_char(wc) || is_hiragana_iteration(wc)) {
       return JA_HIRA_QUAT_WEIGHT;
     }
     return -1;
@@ -1530,7 +1533,8 @@ ALWAYS_INLINE int uca_scanner_900<Mb_wc, LEVELS_FOR_COMPARE>::next_raw() {
         }
         prev_char = 0; /* Clear for the next code point */
         return *cweight;
-      } else if (my_uca_can_be_contraction_head(uca->contraction_flags, wc)) {
+      }
+      if (my_uca_can_be_contraction_head(uca->contraction_flags, wc)) {
         /* Check if wc starts a contraction */
         size_t chars_skipped;  // Ignored.
         if ((cweight = contraction_find(wc, &chars_skipped))) return *cweight;
@@ -1541,10 +1545,8 @@ ALWAYS_INLINE int uca_scanner_900<Mb_wc, LEVELS_FOR_COMPARE>::next_raw() {
     // For Japanese kana-sensitive collation.
     if (LEVELS_FOR_COMPARE == 4 && cs->coll_param == &ja_coll_param) {
       int quat_wt = handle_ja_common_quat_wt(wc);
-      if (quat_wt == -1)
-        continue;
-      else if (quat_wt)
-        return quat_wt;
+      if (quat_wt == -1) continue;
+      if (quat_wt) return quat_wt;
     }
     /* Process single code point */
     unsigned page = wc >> 8;
@@ -1827,10 +1829,9 @@ static int my_strnncoll_uca(const CHARSET_INFO *cs, const Mb_wc mb_wc,
 
         // s is now also on the next level. Continue comparison.
         continue;
-      } else {
-        // s is longer than t (and t_prefix isn't set).
-        return 1;
       }
+      // s is longer than t (and t_prefix isn't set).
+      return 1;
     }
 
     if (sscanner.get_weight_level() > current_lv) {
@@ -1848,8 +1849,7 @@ static inline int my_space_weight(const CHARSET_INFO *cs) /* W3-TODO */
 {
   if (cs->uca && cs->uca->version == UCA_V900)
     return UCA900_WEIGHT(cs->uca->weights[0], /*weight_lv=*/0, 0x20);
-  else
-    return cs->uca->weights[0][0x20 * cs->uca->lengths[0]];
+  return cs->uca->weights[0][0x20 * cs->uca->lengths[0]];
 }
 
 /**
@@ -1892,10 +1892,8 @@ static inline uint16_t *my_char_weight_addr_900(MY_UCA_INFO *uca, my_wc_t wc) {
   unsigned page = wc >> 8;
   unsigned ofst = wc & 0xFF;
   uint16_t *weights = uca->weights[page];
-  if (weights)
-    return UCA900_WEIGHT_ADDR(weights, /*level=*/0, ofst);
-  else
-    return nullptr;
+  if (weights) return UCA900_WEIGHT_ADDR(weights, /*level=*/0, ofst);
+  return nullptr;
 }
 
 /*
@@ -3892,10 +3890,10 @@ static bool apply_shift_900(MY_COLL_RULES *rules, MY_COLL_RULE *r, uint16_t *to,
   if (r->before_level == 1)  // Apply "&[before primary]".
     return apply_primary_shift_900(rules, r, to, to_stride, nweights,
                                    last_weight_ptr);
-  else if (r->before_level == 2)  // Apply "[before 2]".
+  if (r->before_level == 2)  // Apply "[before 2]".
     return apply_secondary_shift_900(rules, r, to, to_stride, nweights,
                                      last_weight_ptr);
-  else if (r->before_level == 3)  // Apply "[before 3]".
+  if (r->before_level == 3)  // Apply "[before 3]".
     return apply_tertiary_shift_900(rules, r, to, to_stride, nweights,
                                     last_weight_ptr);
   return false;
@@ -3970,22 +3968,21 @@ static MY_CONTRACTION *add_contraction_to_trie(
     node_it->is_contraction_tail = true;
     node_it->contraction_len = 2;
     return &(*node_it);
-  } else  // normal contraction
-  {
-    size_t contraction_len = my_wstrnlen(r->curr, MY_UCA_MAX_CONTRACTION);
-    std::vector<MY_CONTRACTION>::iterator node_it;
-    for (size_t ch_ind = 0; ch_ind < contraction_len; ++ch_ind) {
-      node_it = find_contraction_part_in_trie(*cont_nodes, r->curr[ch_ind]);
-      if (node_it == cont_nodes->end() || node_it->ch != r->curr[ch_ind]) {
-        new_node.ch = r->curr[ch_ind];
-        node_it = cont_nodes->insert(node_it, new_node);
-      }
-      cont_nodes = &node_it->child_nodes;
-    }
-    node_it->is_contraction_tail = true;
-    node_it->contraction_len = contraction_len;
-    return &(*node_it);
   }
+  // normal contraction
+  size_t contraction_len = my_wstrnlen(r->curr, MY_UCA_MAX_CONTRACTION);
+  std::vector<MY_CONTRACTION>::iterator node_it;
+  for (size_t ch_ind = 0; ch_ind < contraction_len; ++ch_ind) {
+    node_it = find_contraction_part_in_trie(*cont_nodes, r->curr[ch_ind]);
+    if (node_it == cont_nodes->end() || node_it->ch != r->curr[ch_ind]) {
+      new_node.ch = r->curr[ch_ind];
+      node_it = cont_nodes->insert(node_it, new_node);
+    }
+    cont_nodes = &node_it->child_nodes;
+  }
+  node_it->is_contraction_tail = true;
+  node_it->contraction_len = contraction_len;
+  return &(*node_it);
 }
 
 static bool apply_one_rule(CHARSET_INFO *cs, MY_COLL_RULES *rules,
@@ -4058,7 +4055,8 @@ static int check_rules(const MY_COLL_RULES *rules, const MY_UCA_INFO *dst,
       snprintf(rules->errmsg->errarg, sizeof(rules->errmsg->errarg), "u%04X",
                (unsigned)r->curr[0]);
       return true;
-    } else if (r->base[0] > src->maxchar) {
+    }
+    if (r->base[0] > src->maxchar) {
       rules->errmsg->errcode = EE_RESET_CHAR_OUT_OF_RANGE;
       snprintf(rules->errmsg->errarg, sizeof(rules->errmsg->errarg), "u%04X",
                (unsigned)r->base[0]);
@@ -4138,12 +4136,9 @@ static inline my_wc_t convert_implicit_to_ch(uint16_t first, uint16_t second) {
                                 # groups
     BBBB = (CP & 0x7FFF) | 0x8000
    */
-  if (first < 0xFB80)
-    return (((first - 0xFB40) << 15) | (second & 0x7FFF));
-  else if (first < 0xFBC0)
-    return (((first - 0xFB80) << 15) | (second & 0x7FFF));
-  else
-    return (((first - 0xFBC0) << 15) | (second & 0x7FFF));
+  if (first < 0xFB80) return (((first - 0xFB40) << 15) | (second & 0x7FFF));
+  if (first < 0xFBC0) return (((first - 0xFB80) << 15) | (second & 0x7FFF));
+  return (((first - 0xFBC0) << 15) | (second & 0x7FFF));
 }
 
 /*

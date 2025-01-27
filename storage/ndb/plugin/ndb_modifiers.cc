@@ -160,9 +160,8 @@ int NDB_Modifiers::parseModifierListString(const char *string) {
           if (pos && pos[0] == ',') pos++;
 
           break;
-        } else {
-          break;
         }
+        break;
       }
     }  // for (modifier_name)
 
@@ -181,9 +180,8 @@ int NDB_Modifiers::parseModifierListString(const char *string) {
 
   if (pos) {
     return pos - string;
-  } else {
-    return strlen(string);
   }
+  return strlen(string);
 }
 
 int NDB_Modifiers::loadComment(const char *str, size_t len) {
@@ -220,12 +218,11 @@ int NDB_Modifiers::loadComment(const char *str, size_t len) {
   if (mod_len > 0) {
     m_mod_len = mod_len + m_prefixLen;
     return 0;
-  } else {
-    DBUG_PRINT("info",
-               ("parseModifierListString (%s) returned %d", pos, mod_len));
-    /* Parse error */
-    return -1;
   }
+  DBUG_PRINT("info",
+             ("parseModifierListString (%s) returned %d", pos, mod_len));
+  /* Parse error */
+  return -1;
 }
 
 NDB_Modifier *NDB_Modifiers::find(const char *name) const {

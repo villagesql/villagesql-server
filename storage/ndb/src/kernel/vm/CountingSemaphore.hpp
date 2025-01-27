@@ -87,11 +87,10 @@ class CountingSemaphore {
     if (inUse == totalResources) {
       queuedRequests++;
       return true;
-    } else {
-      assert(queuedRequests == 0);
-      inUse++;
-      return false;
     }
+    assert(queuedRequests == 0);
+    inUse++;
+    return false;
   }
 
   /**

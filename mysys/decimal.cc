@@ -1246,7 +1246,8 @@ int double2lldiv_t(double nr, lldiv_t *lld) {
     lld->quot = LLDIV_MAX;
     lld->rem = 0;
     return E_DEC_OVERFLOW;
-  } else if (nr < LLDIV_MIN) {
+  }
+  if (nr < LLDIV_MIN) {
     lld->quot = LLDIV_MIN;
     lld->rem = 0;
     return E_DEC_OVERFLOW;

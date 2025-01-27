@@ -498,9 +498,8 @@ enum_gcs_error Gcs_xcom_proxy_impl::xcom_wait_exit() {
   auto event_string = [](int res) {
     if (res == ETIMEDOUT) {
       return "the group communication engine to exit";
-    } else {
-      return "group communication engine to exit";
     }
+    return "group communication engine to exit";
   };
   return xcom_wait_for_condition(
       m_cond_xcom_exit, m_lock_xcom_exit, [this]() { return !m_is_xcom_exit; },

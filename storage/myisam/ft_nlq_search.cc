@@ -348,10 +348,8 @@ float ft_nlq_find_relevance(FT_INFO *handler_base,
       a = c;
   }
   /* bounds check to avoid accessing unallocated handler->doc  */
-  if (a < handler->ndocs && docs[a].dpos == docid)
-    return (float)docs[a].weight;
-  else
-    return 0.0;
+  if (a < handler->ndocs && docs[a].dpos == docid) return (float)docs[a].weight;
+  return 0.0;
 }
 
 void ft_nlq_close_search(FT_INFO *handler) { my_free(handler); }

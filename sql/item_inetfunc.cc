@@ -741,7 +741,8 @@ bool Item_func_inet6_ntoa::calc_value(String *arg, String *buffer) {
     buffer->append(str, strlen(str), &my_charset_latin1);
 
     return true;
-  } else if ((int)arg->length() == IN6_ADDR_SIZE) {
+  }
+  if ((int)arg->length() == IN6_ADDR_SIZE) {
     char str[INET6_ADDRSTRLEN];
 
     ipv6_to_str((const in6_addr *)arg->ptr(), str);

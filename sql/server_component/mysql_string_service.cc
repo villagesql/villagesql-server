@@ -352,10 +352,8 @@ DEFINE_BOOL_METHOD(mysql_string_imp::iterator_get_next,
                  pointer_cast<const uchar *>(end));
     if (iterator->value_status <= 0) iterator->value = 0;
     tmp_len = (char_len > 0 ? char_len : (char_len < 0 ? -char_len : 1));
-    if (iterator->iterator_ptr + tmp_len > end)
-      return true;
-    else
-      iterator->iterator_ptr += tmp_len;
+    if (iterator->iterator_ptr + tmp_len > end) return true;
+    iterator->iterator_ptr += tmp_len;
     return false;
   } catch (...) {
     mysql_components_handle_std_exception(__func__);

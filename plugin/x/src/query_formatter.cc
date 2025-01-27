@@ -71,7 +71,8 @@ class Sql_search_tags {
         if (0 != m_escape_chars) {
           --m_escape_chars;
           return true;
-        } else if ('\\' == character) {
+        }
+        if ('\\' == character) {
           ++m_escape_chars;
           return true;
         }
@@ -125,12 +126,11 @@ class Sql_search_tags {
       return if_matching_switch_state(character, try_block_state,
                                       matching_chars, block_begin,
                                       block_begin_length);
-    } else {
-      if_matching_switch_state(character, Block_none, matching_chars, block_end,
-                               block_end_length);
-
-      return true;
     }
+    if_matching_switch_state(character, Block_none, matching_chars, block_end,
+                             block_end_length);
+
+    return true;
   }
 
   bool should_be_ignored(const char character) {

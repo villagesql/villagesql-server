@@ -176,23 +176,21 @@ bool mysql_registry_no_lock_imp::register_service_nolock(
     /* Fail if it was present already. */
     if (!addition_result.second) {
       return true;
-    } else {
-      try {
-        /* Register interface in mapping */
-        mysql_registry_no_lock_imp::interface_mapping.emplace(imp->interface(),
-                                                              imp.get());
+    }
+    try {
+      /* Register interface in mapping */
+      mysql_registry_no_lock_imp::interface_mapping.emplace(imp->interface(),
+                                                            imp.get());
 
-        /* Register the Service Implementation as default for Service name in
-          case none were registered before. */
-        mysql_registry_no_lock_imp::service_registry.emplace_hint(
-            addition_result.first, imp->service_name_c_str(), imp.get());
-      } catch (...) {
-        mysql_registry_no_lock_imp::service_registry.erase(
-            addition_result.first);
-        /* unique_ptr still has ownership over implementation object, we
-          don't have to delete it explicitly. */
-        return true;
-      }
+      /* Register the Service Implementation as default for Service name in
+        case none were registered before. */
+      mysql_registry_no_lock_imp::service_registry.emplace_hint(
+          addition_result.first, imp->service_name_c_str(), imp.get());
+    } catch (...) {
+      mysql_registry_no_lock_imp::service_registry.erase(addition_result.first);
+      /* unique_ptr still has ownership over implementation object, we
+        don't have to delete it explicitly. */
+      return true;
     }
 
     /* Pointer is stored in registry, thous we release ownership. */

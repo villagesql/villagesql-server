@@ -591,7 +591,8 @@ static void pad_max_char(const CHARSET_INFO *cs, char *str, char *end) {
     if (cs->max_sort_char <= 255) {
       memset(str, cs->max_sort_char, end - str);
       return;
-    } else if (cs->max_sort_char <= 0xFFFF) {
+    }
+    if (cs->max_sort_char <= 0xFFFF) {
       buf[0] = (char)(cs->max_sort_char >> 8);
       buf[1] = cs->max_sort_char & 0xFF;
       buflen = 2;
@@ -840,7 +841,8 @@ bool my_like_range_generic(const CHARSET_INFO *cs, const char *ptr,
         goto pad_set_lengths; /* No space */
       max_str += res;
       continue;
-    } else if (wc == (my_wc_t)w_one) {
+    }
+    if (wc == (my_wc_t)w_one) {
       if ((res = cs->cset->wc_mb(cs, cs->min_sort_char,
                                  pointer_cast<uint8_t *>(min_str),
                                  pointer_cast<uint8_t *>(min_end))) <= 0)
@@ -853,7 +855,8 @@ bool my_like_range_generic(const CHARSET_INFO *cs, const char *ptr,
         goto pad_set_lengths;
       max_str += res;
       continue;
-    } else if (wc == (my_wc_t)w_many) {
+    }
+    if (wc == (my_wc_t)w_many) {
       /*
         Calculate length of keys:
         a\min\min... is the smallest possible string

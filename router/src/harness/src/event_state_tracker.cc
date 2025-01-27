@@ -46,14 +46,12 @@ bool EventStateTracker::state_changed(
   if (it == events_.end()) {
     events_.emplace(key, state);
     return true;
-  } else {
-    if (it->second != state) {
-      it->second = state;
-      return true;
-    } else {
-      return false;
-    }
   }
+  if (it->second != state) {
+    it->second = state;
+    return true;
+  }
+  return false;
 }
 
 void EventStateTracker::remove_tag(const std::string &tag) {

@@ -254,38 +254,33 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
       ls_diff = d(g1_mls.get(), g2_mls.get());
       ls_diff = d(ls_diff.get(), g2_mpy.get());
       return (!ls_diff->is_empty());
-    } else {
-      if (g1->coordinate_system() == Coordinate_system::kCartesian) {
-        Cartesian_geometrycollection gc;
-        gc.push_back(*g2);
-        return geometry_collection_apply_crosses<Cartesian_geometrycollection>(
-            f, g1, &gc);
-      } else {
-        assert(g1->coordinate_system() == Coordinate_system::kGeographic);
-        Geographic_geometrycollection gc;
-        gc.push_back(*g2);
-        return geometry_collection_apply_crosses<Geographic_geometrycollection>(
-            f, g1, &gc);
-      }
     }
-  } else {
-    if (g2->type() == Geometry_type::kGeometrycollection) {
-      if (g1->coordinate_system() == Coordinate_system::kCartesian) {
-        Cartesian_geometrycollection gc;
-        gc.push_back(*g1);
-        return geometry_collection_apply_crosses<Cartesian_geometrycollection>(
-            f, &gc, g2);
-      } else {
-        assert(g1->coordinate_system() == Coordinate_system::kGeographic);
-        Geographic_geometrycollection gc;
-        gc.push_back(*g1);
-        return geometry_collection_apply_crosses<Geographic_geometrycollection>(
-            f, &gc, g2);
-      }
-    } else {
-      return f(g1, g2);
+    if (g1->coordinate_system() == Coordinate_system::kCartesian) {
+      Cartesian_geometrycollection gc;
+      gc.push_back(*g2);
+      return geometry_collection_apply_crosses<Cartesian_geometrycollection>(
+          f, g1, &gc);
     }
+    assert(g1->coordinate_system() == Coordinate_system::kGeographic);
+    Geographic_geometrycollection gc;
+    gc.push_back(*g2);
+    return geometry_collection_apply_crosses<Geographic_geometrycollection>(
+        f, g1, &gc);
   }
+  if (g2->type() == Geometry_type::kGeometrycollection) {
+    if (g1->coordinate_system() == Coordinate_system::kCartesian) {
+      Cartesian_geometrycollection gc;
+      gc.push_back(*g1);
+      return geometry_collection_apply_crosses<Cartesian_geometrycollection>(
+          f, &gc, g2);
+    }
+    assert(g1->coordinate_system() == Coordinate_system::kGeographic);
+    Geographic_geometrycollection gc;
+    gc.push_back(*g1);
+    return geometry_collection_apply_crosses<Geographic_geometrycollection>(
+        f, &gc, g2);
+  }
+  return f(g1, g2);
 }
 
 Crosses::Crosses(double semi_major, double semi_minor)

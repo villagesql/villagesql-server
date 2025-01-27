@@ -43,11 +43,11 @@ enum_compression_algorithm get_compression_algorithm(std::string name) {
   if (!my_strcasecmp(&my_charset_latin1, name.c_str(),
                      COMPRESSION_ALGORITHM_ZLIB))
     return enum_compression_algorithm::MYSQL_ZLIB;
-  else if (!my_strcasecmp(&my_charset_latin1, name.c_str(),
-                          COMPRESSION_ALGORITHM_ZSTD))
+  if (!my_strcasecmp(&my_charset_latin1, name.c_str(),
+                     COMPRESSION_ALGORITHM_ZSTD))
     return enum_compression_algorithm::MYSQL_ZSTD;
-  else if (!my_strcasecmp(&my_charset_latin1, name.c_str(),
-                          COMPRESSION_ALGORITHM_UNCOMPRESSED))
+  if (!my_strcasecmp(&my_charset_latin1, name.c_str(),
+                     COMPRESSION_ALGORITHM_UNCOMPRESSED))
     return enum_compression_algorithm::MYSQL_UNCOMPRESSED;
   return enum_compression_algorithm::MYSQL_INVALID;
 }

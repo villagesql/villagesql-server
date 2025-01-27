@@ -370,10 +370,8 @@ const char *get_filename_from_path(const char *path) {
     fname = strrchr(path, '\\');
   else
     fname = strrchr(path, '/');
-  if (fname == nullptr)
-    return path;
-  else
-    return ++fname;
+  if (fname == nullptr) return path;
+  return ++fname;
 }
 
 static uint opt_protocol = 0;
@@ -828,12 +826,9 @@ static int async_mysql_next_result_wrapper(MYSQL *mysql) {
     const int result = socket_event_listen(mysql_get_socket_descriptor(mysql));
     if (result == -1) return 1;
   }
-  if (status == NET_ASYNC_ERROR)
-    return 1;
-  else if (status == NET_ASYNC_COMPLETE_NO_MORE_RESULTS)
-    return -1;
-  else
-    return 0;
+  if (status == NET_ASYNC_ERROR) return 1;
+  if (status == NET_ASYNC_COMPLETE_NO_MORE_RESULTS) return -1;
+  return 0;
 }
 
 static MYSQL *async_mysql_real_connect_wrapper(
@@ -847,10 +842,8 @@ static MYSQL *async_mysql_real_connect_wrapper(
          NET_ASYNC_NOT_READY) {
     t.check();
   }
-  if (status == NET_ASYNC_ERROR)
-    return nullptr;
-  else
-    return mysql;
+  if (status == NET_ASYNC_ERROR) return nullptr;
+  return mysql;
 }
 
 static int async_mysql_query_wrapper(MYSQL *mysql, const char *query) {
@@ -885,17 +878,13 @@ static void async_mysql_free_result_wrapper(MYSQL_RES *result) {
   --async-client option is set or not.
 */
 static MYSQL_ROW mysql_fetch_row_wrapper(MYSQL_RES *res) {
-  if (enable_async_client)
-    return async_mysql_fetch_row_wrapper(res);
-  else
-    return mysql_fetch_row(res);
+  if (enable_async_client) return async_mysql_fetch_row_wrapper(res);
+  return mysql_fetch_row(res);
 }
 
 static MYSQL_RES *mysql_store_result_wrapper(MYSQL *mysql) {
-  if (enable_async_client)
-    return async_mysql_store_result_wrapper(mysql);
-  else
-    return mysql_store_result(mysql);
+  if (enable_async_client) return async_mysql_store_result_wrapper(mysql);
+  return mysql_store_result(mysql);
 }
 
 static int mysql_real_query_wrapper(MYSQL *mysql, const char *query,
@@ -905,8 +894,7 @@ static int mysql_real_query_wrapper(MYSQL *mysql, const char *query,
 
   if (enable_async_client)
     return async_mysql_real_query_wrapper(mysql, query, length);
-  else
-    return mysql_real_query(mysql, query, length);
+  return mysql_real_query(mysql, query, length);
 }
 
 static int mysql_send_query_wrapper(MYSQL *mysql, const char *query,
@@ -916,8 +904,7 @@ static int mysql_send_query_wrapper(MYSQL *mysql, const char *query,
 
   if (enable_async_client)
     return async_mysql_send_query_wrapper(mysql, query, length);
-  else
-    return mysql_send_query(mysql, query, length);
+  return mysql_send_query(mysql, query, length);
 }
 
 static bool mysql_read_query_result_wrapper(MYSQL *mysql) {
@@ -933,17 +920,13 @@ static int mysql_query_wrapper(MYSQL *mysql, const char *query) {
   int rc;
   if (0 != (rc = global_attrs->set_params(mysql))) return rc;
 
-  if (enable_async_client)
-    return async_mysql_query_wrapper(mysql, query);
-  else
-    return mysql_query(mysql, query);
+  if (enable_async_client) return async_mysql_query_wrapper(mysql, query);
+  return mysql_query(mysql, query);
 }
 
 static int mysql_next_result_wrapper(MYSQL *mysql) {
-  if (enable_async_client)
-    return async_mysql_next_result_wrapper(mysql);
-  else
-    return mysql_next_result(mysql);
+  if (enable_async_client) return async_mysql_next_result_wrapper(mysql);
+  return mysql_next_result(mysql);
 }
 
 static MYSQL *mysql_real_connect_wrapper(MYSQL *mysql, const char *host,
@@ -954,16 +937,13 @@ static MYSQL *mysql_real_connect_wrapper(MYSQL *mysql, const char *host,
   if (enable_async_client)
     return async_mysql_real_connect_wrapper(mysql, host, user, passwd, db, port,
                                             unix_socket, client_flag);
-  else
-    return mysql_real_connect(mysql, host, user, passwd, db, port, unix_socket,
-                              client_flag);
+  return mysql_real_connect(mysql, host, user, passwd, db, port, unix_socket,
+                            client_flag);
 }
 
 static void mysql_free_result_wrapper(MYSQL_RES *result) {
-  if (enable_async_client)
-    return async_mysql_free_result_wrapper(result);
-  else
-    return mysql_free_result(result);
+  if (enable_async_client) return async_mysql_free_result_wrapper(result);
+  return mysql_free_result(result);
 }
 
 /* async client test code (end) */
@@ -5294,30 +5274,18 @@ static void check_variable_name(const char *var_name, const char *var_name_end,
   op - character pointer to mathematical expression
 */
 static bool is_operator(const char *op) {
-  if (*op == '+')
-    return true;
-  else if (*op == '-')
-    return true;
-  else if (*op == '*')
-    return true;
-  else if (*op == '/')
-    return true;
-  else if (*op == '%')
-    return true;
-  else if (*op == '&' && *(op + 1) == '&')
-    return true;
-  else if (*op == '|' && *(op + 1) == '|')
-    return true;
-  else if (*op == '&')
-    return true;
-  else if (*op == '|')
-    return true;
-  else if (*op == '^')
-    return true;
-  else if (*op == '>' && *(op + 1) == '>')
-    return true;
-  else if (*op == '<' && *(op + 1) == '<')
-    return true;
+  if (*op == '+') return true;
+  if (*op == '-') return true;
+  if (*op == '*') return true;
+  if (*op == '/') return true;
+  if (*op == '%') return true;
+  if (*op == '&' && *(op + 1) == '&') return true;
+  if (*op == '|' && *(op + 1) == '|') return true;
+  if (*op == '&') return true;
+  if (*op == '|') return true;
+  if (*op == '^') return true;
+  if (*op == '>' && *(op + 1) == '>') return true;
+  if (*op == '<' && *(op + 1) == '<') return true;
 
   return false;
 }
@@ -6141,18 +6109,17 @@ static void do_disable_warnings(struct st_command *command) {
     // Set 'disable_warnings' property value to 1
     set_property(command, P_WARN, true);
     return;
-  } else {
-    // Parse the warning list argument specified with disable_warnings
-    // command.
-    parse_warning_list_argument(command);
-
-    // Update the environment variables containing the list of disabled
-    // and enabled warnings.
-    update_disabled_enabled_warnings_list_var();
-
-    // Set 'disable_warnings' property value to 1
-    set_property(command, P_WARN, true);
   }
+  // Parse the warning list argument specified with disable_warnings
+  // command.
+  parse_warning_list_argument(command);
+
+  // Update the environment variables containing the list of disabled
+  // and enabled warnings.
+  update_disabled_enabled_warnings_list_var();
+
+  // Set 'disable_warnings' property value to 1
+  set_property(command, P_WARN, true);
 
   command->last_argument = command->end;
 }
@@ -10920,10 +10887,8 @@ static struct st_replace_regex *init_replace_regex(const char *expr) {
     }
 
     if (p == expr_end || ++p == expr_end) {
-      if (!res->regex_arr.empty())
-        break;
-      else
-        goto err;
+      if (!res->regex_arr.empty()) break;
+      goto err;
     }
     /* we found the start */
     reg.pattern = buf_p;

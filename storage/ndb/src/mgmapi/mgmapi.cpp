@@ -2951,17 +2951,13 @@ extern "C" int ndb_mgm_get_configuration_nodeid(NdbMgmHandle handle) {
 }
 
 extern "C" int ndb_mgm_get_connected_port(NdbMgmHandle handle) {
-  if (handle->cfg_i >= 0)
-    return handle->cfg.ids[handle->cfg_i].port;
-  else
-    return 0;
+  if (handle->cfg_i >= 0) return handle->cfg.ids[handle->cfg_i].port;
+  return 0;
 }
 
 extern "C" const char *ndb_mgm_get_connected_host(NdbMgmHandle handle) {
-  if (handle->cfg_i >= 0)
-    return handle->cfg.ids[handle->cfg_i].name.c_str();
-  else
-    return nullptr;
+  if (handle->cfg_i >= 0) return handle->cfg.ids[handle->cfg_i].name.c_str();
+  return nullptr;
 }
 
 extern "C" const char *ndb_mgm_get_connectstring(NdbMgmHandle handle, char *buf,

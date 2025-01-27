@@ -2183,16 +2183,15 @@ static uint *make_offset_code_tree(HUFF_TREE *huff_tree, HUFF_ELEMENT *element,
     /* Store the byte code or the index of the column value. */
     prev_offset[1] = element->a.nod.right->a.leaf.element_nr;
     return offset;
-  } else {
-    /*
-      Recursively traverse the tree to the right. Mark it as an offset to
-      another tree node (in contrast to a byte code or column value index).
-    */
-    uint temp = (uint)(offset - prev_offset - 1);
-    prev_offset[1] = IS_OFFSET + temp;
-    if (huff_tree->max_offset < temp) huff_tree->max_offset = temp;
-    return make_offset_code_tree(huff_tree, element->a.nod.right, offset);
   }
+  /*
+  Recursively traverse the tree to the right. Mark it as an offset to
+  another tree node (in contrast to a byte code or column value index).
+  */
+  uint temp = (uint)(offset - prev_offset - 1);
+  prev_offset[1] = IS_OFFSET + temp;
+  if (huff_tree->max_offset < temp) huff_tree->max_offset = temp;
+  return make_offset_code_tree(huff_tree, element->a.nod.right, offset);
 }
 
 /* Get number of bits needed to represent value */

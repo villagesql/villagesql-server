@@ -191,262 +191,243 @@ static bool geometry_collection_apply_touches(const Touches &f,
       }
 
       return true;
-    } else {
-      return f(g2, g1);
     }
-  } else {
-    if (g2->type() == Geometry_type::kGeometrycollection) {
-      std::unique_ptr<Multipoint> g2_mpt;
-      std::unique_ptr<Multilinestring> g2_mls;
-      std::unique_ptr<Multipolygon> g2_mpy;
-      split_gc(down_cast<const Geometrycollection *>(g2), &g2_mpt, &g2_mls,
-               &g2_mpy);
-      gc_union(f.semi_major(), f.semi_minor(), &g2_mpt, &g2_mls, &g2_mpy);
+    return f(g2, g1);
+  }
+  if (g2->type() == Geometry_type::kGeometrycollection) {
+    std::unique_ptr<Multipoint> g2_mpt;
+    std::unique_ptr<Multilinestring> g2_mls;
+    std::unique_ptr<Multipolygon> g2_mpy;
+    split_gc(down_cast<const Geometrycollection *>(g2), &g2_mpt, &g2_mls,
+             &g2_mpy);
+    gc_union(f.semi_major(), f.semi_minor(), &g2_mpt, &g2_mls, &g2_mpy);
 
-      // Check that at g1 touches at least one part of g2.
-      if ((g2_mpt->empty() || !f(g1, g2_mpt.get())) &&
-          (g2_mls->empty() || !f(g1, g2_mls.get())) &&
-          (g2_mpy->empty() || !f(g1, g2_mpy.get())))
-        return false;
+    // Check that at g1 touches at least one part of g2.
+    if ((g2_mpt->empty() || !f(g1, g2_mpt.get())) &&
+        (g2_mls->empty() || !f(g1, g2_mls.get())) &&
+        (g2_mpy->empty() || !f(g1, g2_mpy.get())))
+      return false;
 
-      // Check that the interiors of g1 and g2 are disjoint.
-      boost::geometry::de9im::mask mask("T********");
-      if (g1->coordinate_system() == Coordinate_system::kCartesian) {
-        switch (g1->type()) {
-          case Geometry_type::kPoint:
-            if (!g2_mpt->empty() && g2_mls->empty() && g2_mpy->empty())
-              throw null_value_exception();
-            if (bg::relate(*down_cast<const Cartesian_point *>(g1),
-                           *down_cast<Cartesian_multipoint *>(g2_mpt.get()),
-                           mask) ||
-                bg::relate(
-                    *down_cast<const Cartesian_point *>(g1),
-                    *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
-                    mask) ||
-                bg::relate(*down_cast<const Cartesian_point *>(g1),
-                           *down_cast<Cartesian_multipolygon *>(g2_mpy.get()),
-                           mask))
-              return false;
-            break;
-          case Geometry_type::kLinestring:
-            for (std::size_t i = 0;
-                 i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
-                 i++) {
-              auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
-              if (bg::relate(pt, *down_cast<const Cartesian_linestring *>(g1),
-                             mask))
-                return false;
-            }
-            if (bg::relate(
-                    *down_cast<const Cartesian_linestring *>(g1),
-                    *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
-                    mask) ||
-                bg::relate(*down_cast<const Cartesian_linestring *>(g1),
-                           *down_cast<Cartesian_multipolygon *>(g2_mpy.get()),
-                           mask))
-              return false;
-            break;
-          case Geometry_type::kPolygon:
-            for (std::size_t i = 0;
-                 i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
-                 i++) {
-              auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
-              if (bg::relate(pt, *down_cast<const Cartesian_polygon *>(g1),
-                             mask))
-                return false;
-            }
-            if (bg::relate(
-                    *down_cast<const Cartesian_polygon *>(g1),
-                    *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
-                    mask) ||
-                bg::relate(*down_cast<const Cartesian_polygon *>(g1),
-                           *down_cast<Cartesian_multipolygon *>(g2_mpy.get()),
-                           mask))
-              return false;
-            break;
-          case Geometry_type::kMultipoint:
-            if (!g2_mpt->empty() && g2_mls->empty() && g2_mpy->empty())
-              throw null_value_exception();
-            for (std::size_t i = 0;
-                 i < down_cast<const Cartesian_multipoint *>(g1)->size(); i++) {
-              const auto &pt =
-                  (*down_cast<const Cartesian_multipoint *>(g1))[i];
-              if (bg::relate(
-                      pt, *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
-                      mask) ||
-                  bg::relate(pt,
-                             *down_cast<Cartesian_multipolygon *>(g2_mpy.get()),
-                             mask))
-                return false;
-            }
-            if (bg::relate(*down_cast<const Cartesian_multipoint *>(g1),
-                           *down_cast<Cartesian_multipoint *>(g2_mpt.get()),
-                           mask))
-              return false;
-            break;
-          case Geometry_type::kMultilinestring:
-            for (std::size_t i = 0;
-                 i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
-                 i++) {
-              auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
-              if (bg::relate(pt,
-                             *down_cast<const Cartesian_multilinestring *>(g1),
-                             mask))
-                return false;
-            }
-            if (bg::relate(
-                    *down_cast<const Cartesian_multilinestring *>(g1),
-                    *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
-                    mask) ||
-                bg::relate(*down_cast<const Cartesian_multilinestring *>(g1),
-                           *down_cast<Cartesian_multipolygon *>(g2_mpy.get()),
-                           mask))
-              return false;
-            break;
-          case Geometry_type::kMultipolygon:
-            for (std::size_t i = 0;
-                 i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
-                 i++) {
-              auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
-              if (bg::relate(pt, *down_cast<const Cartesian_multipolygon *>(g1),
-                             mask))
-                return false;
-            }
-            if (bg::relate(
-                    *down_cast<const Cartesian_multipolygon *>(g1),
-                    *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
-                    mask) ||
-                bg::relate(*down_cast<const Cartesian_multipolygon *>(g1),
-                           *down_cast<Cartesian_multipolygon *>(g2_mpy.get()),
-                           mask))
-              return false;
-            break;
-          default:
-            assert(false); /* purecov: inspected */
+    // Check that the interiors of g1 and g2 are disjoint.
+    boost::geometry::de9im::mask mask("T********");
+    if (g1->coordinate_system() == Coordinate_system::kCartesian) {
+      switch (g1->type()) {
+        case Geometry_type::kPoint:
+          if (!g2_mpt->empty() && g2_mls->empty() && g2_mpy->empty())
+            throw null_value_exception();
+          if (bg::relate(*down_cast<const Cartesian_point *>(g1),
+                         *down_cast<Cartesian_multipoint *>(g2_mpt.get()),
+                         mask) ||
+              bg::relate(*down_cast<const Cartesian_point *>(g1),
+                         *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
+                         mask) ||
+              bg::relate(*down_cast<const Cartesian_point *>(g1),
+                         *down_cast<Cartesian_multipolygon *>(g2_mpy.get()),
+                         mask))
             return false;
-        }
-      } else {
-        assert(g1->coordinate_system() == Coordinate_system::kGeographic);
-        switch (g1->type()) {
-          case Geometry_type::kPoint:
-            if (bg::relate(*down_cast<const Geographic_point *>(g1),
-                           *down_cast<Geographic_multipoint *>(g2_mpt.get()),
-                           mask) ||
-                bg::relate(
-                    *down_cast<const Geographic_point *>(g1),
-                    *down_cast<Geographic_multilinestring *>(g2_mls.get()),
+          break;
+        case Geometry_type::kLinestring:
+          for (std::size_t i = 0;
+               i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
+               i++) {
+            auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
+            if (bg::relate(pt, *down_cast<const Cartesian_linestring *>(g1),
+                           mask))
+              return false;
+          }
+          if (bg::relate(*down_cast<const Cartesian_linestring *>(g1),
+                         *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
+                         mask) ||
+              bg::relate(*down_cast<const Cartesian_linestring *>(g1),
+                         *down_cast<Cartesian_multipolygon *>(g2_mpy.get()),
+                         mask))
+            return false;
+          break;
+        case Geometry_type::kPolygon:
+          for (std::size_t i = 0;
+               i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
+               i++) {
+            auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
+            if (bg::relate(pt, *down_cast<const Cartesian_polygon *>(g1), mask))
+              return false;
+          }
+          if (bg::relate(*down_cast<const Cartesian_polygon *>(g1),
+                         *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
+                         mask) ||
+              bg::relate(*down_cast<const Cartesian_polygon *>(g1),
+                         *down_cast<Cartesian_multipolygon *>(g2_mpy.get()),
+                         mask))
+            return false;
+          break;
+        case Geometry_type::kMultipoint:
+          if (!g2_mpt->empty() && g2_mls->empty() && g2_mpy->empty())
+            throw null_value_exception();
+          for (std::size_t i = 0;
+               i < down_cast<const Cartesian_multipoint *>(g1)->size(); i++) {
+            const auto &pt = (*down_cast<const Cartesian_multipoint *>(g1))[i];
+            if (bg::relate(
+                    pt, *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
+                    mask) ||
+                bg::relate(pt,
+                           *down_cast<Cartesian_multipolygon *>(g2_mpy.get()),
+                           mask))
+              return false;
+          }
+          if (bg::relate(*down_cast<const Cartesian_multipoint *>(g1),
+                         *down_cast<Cartesian_multipoint *>(g2_mpt.get()),
+                         mask))
+            return false;
+          break;
+        case Geometry_type::kMultilinestring:
+          for (std::size_t i = 0;
+               i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
+               i++) {
+            auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
+            if (bg::relate(pt,
+                           *down_cast<const Cartesian_multilinestring *>(g1),
+                           mask))
+              return false;
+          }
+          if (bg::relate(*down_cast<const Cartesian_multilinestring *>(g1),
+                         *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
+                         mask) ||
+              bg::relate(*down_cast<const Cartesian_multilinestring *>(g1),
+                         *down_cast<Cartesian_multipolygon *>(g2_mpy.get()),
+                         mask))
+            return false;
+          break;
+        case Geometry_type::kMultipolygon:
+          for (std::size_t i = 0;
+               i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
+               i++) {
+            auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
+            if (bg::relate(pt, *down_cast<const Cartesian_multipolygon *>(g1),
+                           mask))
+              return false;
+          }
+          if (bg::relate(*down_cast<const Cartesian_multipolygon *>(g1),
+                         *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
+                         mask) ||
+              bg::relate(*down_cast<const Cartesian_multipolygon *>(g1),
+                         *down_cast<Cartesian_multipolygon *>(g2_mpy.get()),
+                         mask))
+            return false;
+          break;
+        default:
+          assert(false); /* purecov: inspected */
+          return false;
+      }
+    } else {
+      assert(g1->coordinate_system() == Coordinate_system::kGeographic);
+      switch (g1->type()) {
+        case Geometry_type::kPoint:
+          if (bg::relate(*down_cast<const Geographic_point *>(g1),
+                         *down_cast<Geographic_multipoint *>(g2_mpt.get()),
+                         mask) ||
+              bg::relate(*down_cast<const Geographic_point *>(g1),
+                         *down_cast<Geographic_multilinestring *>(g2_mls.get()),
+                         mask, geographic_pl_pa_strategy) ||
+              bg::relate(*down_cast<const Geographic_point *>(g1),
+                         *down_cast<Geographic_multipolygon *>(g2_mpy.get()),
+                         mask, geographic_pl_pa_strategy))
+            return false;
+          break;
+        case Geometry_type::kLinestring:
+          for (std::size_t i = 0;
+               i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
+               i++) {
+            auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
+            if (bg::relate(pt, *down_cast<const Geographic_linestring *>(g1),
+                           mask, geographic_pl_pa_strategy))
+              return false;
+          }
+          if (bg::relate(*down_cast<const Geographic_linestring *>(g1),
+                         *down_cast<Geographic_multilinestring *>(g2_mls.get()),
+                         mask, geographic_ll_la_aa_strategy) ||
+              bg::relate(*down_cast<const Geographic_linestring *>(g1),
+                         *down_cast<Geographic_multipolygon *>(g2_mpy.get()),
+                         mask, geographic_ll_la_aa_strategy))
+            return false;
+          break;
+        case Geometry_type::kPolygon:
+          for (std::size_t i = 0;
+               i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
+               i++) {
+            auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
+            if (bg::relate(pt, *down_cast<const Geographic_polygon *>(g1), mask,
+                           geographic_pl_pa_strategy))
+              return false;
+          }
+          if (bg::relate(*down_cast<const Geographic_polygon *>(g1),
+                         *down_cast<Geographic_multilinestring *>(g2_mls.get()),
+                         mask, geographic_ll_la_aa_strategy) ||
+              bg::relate(*down_cast<const Geographic_polygon *>(g1),
+                         *down_cast<Geographic_multipolygon *>(g2_mpy.get()),
+                         mask, geographic_ll_la_aa_strategy))
+            return false;
+          break;
+        case Geometry_type::kMultipoint:
+          for (std::size_t i = 0;
+               i < down_cast<const Geographic_multipoint *>(g1)->size(); i++) {
+            const auto &pt = (*down_cast<const Geographic_multipoint *>(g1))[i];
+            if (bg::relate(
+                    pt, *down_cast<Geographic_multilinestring *>(g2_mls.get()),
                     mask, geographic_pl_pa_strategy) ||
-                bg::relate(*down_cast<const Geographic_point *>(g1),
+                bg::relate(pt,
                            *down_cast<Geographic_multipolygon *>(g2_mpy.get()),
                            mask, geographic_pl_pa_strategy))
               return false;
-            break;
-          case Geometry_type::kLinestring:
-            for (std::size_t i = 0;
-                 i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
-                 i++) {
-              auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
-              if (bg::relate(pt, *down_cast<const Geographic_linestring *>(g1),
-                             mask, geographic_pl_pa_strategy))
-                return false;
-            }
-            if (bg::relate(
-                    *down_cast<const Geographic_linestring *>(g1),
-                    *down_cast<Geographic_multilinestring *>(g2_mls.get()),
-                    mask, geographic_ll_la_aa_strategy) ||
-                bg::relate(*down_cast<const Geographic_linestring *>(g1),
-                           *down_cast<Geographic_multipolygon *>(g2_mpy.get()),
-                           mask, geographic_ll_la_aa_strategy))
-              return false;
-            break;
-          case Geometry_type::kPolygon:
-            for (std::size_t i = 0;
-                 i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
-                 i++) {
-              auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
-              if (bg::relate(pt, *down_cast<const Geographic_polygon *>(g1),
-                             mask, geographic_pl_pa_strategy))
-                return false;
-            }
-            if (bg::relate(
-                    *down_cast<const Geographic_polygon *>(g1),
-                    *down_cast<Geographic_multilinestring *>(g2_mls.get()),
-                    mask, geographic_ll_la_aa_strategy) ||
-                bg::relate(*down_cast<const Geographic_polygon *>(g1),
-                           *down_cast<Geographic_multipolygon *>(g2_mpy.get()),
-                           mask, geographic_ll_la_aa_strategy))
-              return false;
-            break;
-          case Geometry_type::kMultipoint:
-            for (std::size_t i = 0;
-                 i < down_cast<const Geographic_multipoint *>(g1)->size();
-                 i++) {
-              const auto &pt =
-                  (*down_cast<const Geographic_multipoint *>(g1))[i];
-              if (bg::relate(
-                      pt,
-                      *down_cast<Geographic_multilinestring *>(g2_mls.get()),
-                      mask, geographic_pl_pa_strategy) ||
-                  bg::relate(
-                      pt, *down_cast<Geographic_multipolygon *>(g2_mpy.get()),
-                      mask, geographic_pl_pa_strategy))
-                return false;
-            }
-            // Default strategy is OK for multipoint-multipoint.
-            if (bg::relate(*down_cast<const Geographic_multipoint *>(g1),
-                           *down_cast<Geographic_multipoint *>(g2_mpt.get()),
-                           mask))
-              return false;
-            break;
-          case Geometry_type::kMultilinestring:
-            for (std::size_t i = 0;
-                 i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
-                 i++) {
-              auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
-              if (bg::relate(pt,
-                             *down_cast<const Geographic_multilinestring *>(g1),
-                             mask, geographic_pl_pa_strategy))
-                return false;
-            }
-            if (bg::relate(
-                    *down_cast<const Geographic_multilinestring *>(g1),
-                    *down_cast<Geographic_multilinestring *>(g2_mls.get()),
-                    mask, geographic_ll_la_aa_strategy) ||
-                bg::relate(*down_cast<const Geographic_multilinestring *>(g1),
-                           *down_cast<Geographic_multipolygon *>(g2_mpy.get()),
-                           mask, geographic_ll_la_aa_strategy))
-              return false;
-            break;
-          case Geometry_type::kMultipolygon:
-            for (std::size_t i = 0;
-                 i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
-                 i++) {
-              auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
-              if (bg::relate(pt,
-                             *down_cast<const Geographic_multipolygon *>(g1),
-                             mask, geographic_pl_pa_strategy))
-                return false;
-            }
-            if (bg::relate(
-                    *down_cast<const Geographic_multipolygon *>(g1),
-                    *down_cast<Geographic_multilinestring *>(g2_mls.get()),
-                    mask, geographic_ll_la_aa_strategy) ||
-                bg::relate(*down_cast<const Geographic_multipolygon *>(g1),
-                           *down_cast<Geographic_multipolygon *>(g2_mpy.get()),
-                           mask, geographic_ll_la_aa_strategy))
-              return false;
-            break;
-          default:
-            assert(false); /* purecov: inspected */
+          }
+          // Default strategy is OK for multipoint-multipoint.
+          if (bg::relate(*down_cast<const Geographic_multipoint *>(g1),
+                         *down_cast<Geographic_multipoint *>(g2_mpt.get()),
+                         mask))
             return false;
-        }
+          break;
+        case Geometry_type::kMultilinestring:
+          for (std::size_t i = 0;
+               i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
+               i++) {
+            auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
+            if (bg::relate(pt,
+                           *down_cast<const Geographic_multilinestring *>(g1),
+                           mask, geographic_pl_pa_strategy))
+              return false;
+          }
+          if (bg::relate(*down_cast<const Geographic_multilinestring *>(g1),
+                         *down_cast<Geographic_multilinestring *>(g2_mls.get()),
+                         mask, geographic_ll_la_aa_strategy) ||
+              bg::relate(*down_cast<const Geographic_multilinestring *>(g1),
+                         *down_cast<Geographic_multipolygon *>(g2_mpy.get()),
+                         mask, geographic_ll_la_aa_strategy))
+            return false;
+          break;
+        case Geometry_type::kMultipolygon:
+          for (std::size_t i = 0;
+               i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
+               i++) {
+            auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
+            if (bg::relate(pt, *down_cast<const Geographic_multipolygon *>(g1),
+                           mask, geographic_pl_pa_strategy))
+              return false;
+          }
+          if (bg::relate(*down_cast<const Geographic_multipolygon *>(g1),
+                         *down_cast<Geographic_multilinestring *>(g2_mls.get()),
+                         mask, geographic_ll_la_aa_strategy) ||
+              bg::relate(*down_cast<const Geographic_multipolygon *>(g1),
+                         *down_cast<Geographic_multipolygon *>(g2_mpy.get()),
+                         mask, geographic_ll_la_aa_strategy))
+            return false;
+          break;
+        default:
+          assert(false); /* purecov: inspected */
+          return false;
       }
-
-      return true;
-    } else {
-      return f(g1, g2);
     }
+
+    return true;
   }
+  return f(g1, g2);
 }
 
 Touches::Touches(double semi_major, double semi_minor)

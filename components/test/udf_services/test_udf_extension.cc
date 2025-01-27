@@ -494,25 +494,23 @@ bool Test_udf_charset_base::convert(const std::string &out_charset_name,
   if (mysql_service_mysql_string_factory->create(&out_string)) {
     s_message << "Create string failed.";
     return true;
-  } else {
-    mysql_service_mysql_string_factory->destroy(out_string);
-    if (mysql_service_mysql_string_converter->convert_from_buffer(
-            &out_string, in_buffer.c_str(), in_buffer.length(),
-            in_charset_name.c_str())) {
-      mysql_service_mysql_string_factory->destroy(out_string);
-      s_message << "Failed to retrieve the buffer in charset " +
-                       in_charset_name;
-      return true;
-    }
-    if (mysql_service_mysql_string_converter->convert_to_buffer(
-            out_string, out_buffer, out_buffer_length,
-            out_charset_name.c_str())) {
-      mysql_service_mysql_string_factory->destroy(out_string);
-      s_message << "Failed to convert the buffer in charset " +
-                       out_charset_name;
-      return true;
-    }
   }
+  mysql_service_mysql_string_factory->destroy(out_string);
+  if (mysql_service_mysql_string_converter->convert_from_buffer(
+          &out_string, in_buffer.c_str(), in_buffer.length(),
+          in_charset_name.c_str())) {
+    mysql_service_mysql_string_factory->destroy(out_string);
+    s_message << "Failed to retrieve the buffer in charset " + in_charset_name;
+    return true;
+  }
+  if (mysql_service_mysql_string_converter->convert_to_buffer(
+          out_string, out_buffer, out_buffer_length,
+          out_charset_name.c_str())) {
+    mysql_service_mysql_string_factory->destroy(out_string);
+    s_message << "Failed to convert the buffer in charset " + out_charset_name;
+    return true;
+  }
+
   mysql_service_mysql_string_factory->destroy(out_string);
   return false;
 }

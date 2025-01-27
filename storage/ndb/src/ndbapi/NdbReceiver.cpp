@@ -1179,14 +1179,14 @@ int NdbReceiver::unpackRow(const Uint32 *aDataPtr, Uint32 aLength, char *row) {
       m_rec_attr_data = aDataPtr;
       m_rec_attr_len = aLength;
       return 0;
-    } else {
-      /* Put values into RecAttr now */
-      const int ret = handle_rec_attrs(m_firstRecAttr, aDataPtr, aLength);
-      if (unlikely(ret != 0)) return -1;
-
-      aDataPtr += aLength;
-      aLength = 0;
     }
+    /* Put values into RecAttr now */
+    const int ret = handle_rec_attrs(m_firstRecAttr, aDataPtr, aLength);
+    if (unlikely(ret != 0)) return -1;
+
+    aDataPtr += aLength;
+    aLength = 0;
+
   }  // if (aLength > 0)
 
   m_rec_attr_data = nullptr;

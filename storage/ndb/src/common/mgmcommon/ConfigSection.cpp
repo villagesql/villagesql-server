@@ -337,9 +337,11 @@ bool ConfigSection::Entry::equal(Entry *cmp) const {
   }
   if (m_type == IntTypeId) {
     return (m_int == cmp->m_int);
-  } else if (m_type == Int64TypeId) {
+  }
+  if (m_type == Int64TypeId) {
     return (m_int64 == cmp->m_int64);
-  } else if (m_type == StringTypeId) {
+  }
+  if (m_type == StringTypeId) {
     Uint32 first_len = strlen(m_string);
     Uint32 second_len = strlen(cmp->m_string);
     if (first_len != second_len) {
@@ -430,10 +432,8 @@ Uint32 ConfigSection::get_section_type_value() {
 static bool compare_entry_key(ConfigSection::Entry *first,
                               ConfigSection::Entry *second) {
   if (first == second) return false;
-  if (first->m_key < second->m_key)
-    return true;
-  else if (first->m_key > second->m_key)
-    return false;
+  if (first->m_key < second->m_key) return true;
+  if (first->m_key > second->m_key) return false;
   /* Two entries should never have the same key */
   require(false);
   return false;

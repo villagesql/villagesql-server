@@ -827,7 +827,7 @@ static set_arg_result log_filter_set_arg(const char **token, const size_t *len,
   }
 
   // prio -- convenience: we convert ERROR / WARNING / INFO -> int
-  else if ((li->type == LOG_ITEM_LOG_PRIO) && !isdigit(**token)) {
+  if ((li->type == LOG_ITEM_LOG_PRIO) && !isdigit(**token)) {
     int prio = -1;
 
     *state = "Resolving prio ...";
@@ -851,7 +851,7 @@ static set_arg_result log_filter_set_arg(const char **token, const size_t *len,
   }
 
   // quoted string
-  else if (((**token == '\"') || (**token == '\''))) {
+  if (((**token == '\"') || (**token == '\''))) {
     *state = "setting quoted string argument";
 
     // if it's any ad hoc type, we set it to "ad hoc string"

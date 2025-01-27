@@ -176,8 +176,7 @@ inline Int32 NdbLinHash<C>::insertKey(const char *str, Uint32 len, Uint32 lkey1,
   for (chain = *chainp; chain != nullptr; chain = chain->next) {
     if (chain->len == len && !memcmp(chain->str, str, len))
       return -1; /* Element already exists */
-    else
-      oldChain = chain;
+    oldChain = chain;
   }
 
   /* New entry */
@@ -256,9 +255,8 @@ inline C *NdbLinHash<C>::deleteKey(const char *str, Uint32 len) {
       }
       delete chain;
       return data;
-    } else {
-      oldChain = chain;
     }
+    oldChain = chain;
   }
   return nullptr; /* Element doesn't exist */
 }

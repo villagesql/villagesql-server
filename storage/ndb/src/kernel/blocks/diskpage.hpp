@@ -273,19 +273,17 @@ inline Uint32 File_formats::Datafile::extent_header_words(
            ((extent_size_in_pages * EXTENT_HEADER_BITMASK_BITS_PER_PAGE_v2 +
              31) >>
             5);
-  } else {
-    return EXTENT_HEADER_FIXED_WORDS +
-           ((extent_size_in_pages * EXTENT_HEADER_BITMASK_BITS_PER_PAGE + 31) >>
-            5);
   }
+  return EXTENT_HEADER_FIXED_WORDS +
+         ((extent_size_in_pages * EXTENT_HEADER_BITMASK_BITS_PER_PAGE + 31) >>
+          5);
 }
 
 inline Uint32 File_formats::Datafile::extent_page_words(bool v2) {
   if (v2) {
     return File_formats::Datafile::EXTENT_PAGE_WORDS_v2;
-  } else {
-    return File_formats::Datafile::EXTENT_PAGE_WORDS;
   }
+  return File_formats::Datafile::EXTENT_PAGE_WORDS;
 }
 
 inline File_formats::Datafile::Extent_header *
@@ -294,11 +292,10 @@ File_formats::Datafile::Extent_page::get_header(Uint32 no, Uint32 extent_size,
   if (v2) {
     auto *page_v2 = (File_formats::Datafile::Extent_page_v2 *)this;
     return (Extent_header *)page_v2->get_header_v2(no, extent_size);
-  } else {
-    auto *tmp = (Uint32 *)m_extents;
-    tmp += no * File_formats::Datafile::extent_header_words(extent_size, v2);
-    return (Extent_header *)tmp;
   }
+  auto *tmp = (Uint32 *)m_extents;
+  tmp += no * File_formats::Datafile::extent_header_words(extent_size, v2);
+  return (Extent_header *)tmp;
 }
 
 inline File_formats::Datafile::Extent_header_v2 *

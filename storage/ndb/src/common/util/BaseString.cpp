@@ -524,10 +524,9 @@ char *BaseString::trim(char *str, const char *delim) {
   if (pos > len) {
     str[0] = 0;
     return nullptr;
-  } else {
-    memmove(str, &str[pos], len - pos + 1);
-    str[len - pos + 1] = 0;
   }
+  memmove(str, &str[pos], len - pos + 1);
+  str[len - pos + 1] = 0;
 
   return str;
 }

@@ -648,15 +648,14 @@ int CPCD::Process::start() {
       m_status = STOPPED;
       m_pid = bad_pid;
       return -1;
-    } else {
-      logger.info(
-          "While starting %d.  Found old pid file with no running "
-          "process (pid %d). Removing pid file!\n",
-          m_id, m_pid);
-      m_status = STOPPED;
-      removePid();
-      m_pid = bad_pid;
     }
+    logger.info(
+        "While starting %d.  Found old pid file with no running "
+        "process (pid %d). Removing pid file!\n",
+        m_id, m_pid);
+    m_status = STOPPED;
+    removePid();
+    m_pid = bad_pid;
   }
 
   m_status = STARTING;

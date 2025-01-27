@@ -584,7 +584,8 @@ static int merge_buffers(MI_SORT_PARAM *info, uint keys, IO_CACHE *from_file,
             if (buffpek->base + buffpek->max_keys * sort_length == base) {
               buffpek->max_keys += max_keys;
               break;
-            } else if (base + max_keys * sort_length == buffpek->base) {
+            }
+            if (base + max_keys * sort_length == buffpek->base) {
               buffpek->base = base;
               buffpek->max_keys += max_keys;
               break;

@@ -685,23 +685,22 @@ int NdbSqlUtil::maskBit(const void *data, unsigned dataLen, const void *mask,
     if ((lastDataWord & lastMaskWord) != 0) return 1;
 
     return 0;
-  } else {
-    while (--words) {
-      if ((*(wdata++) & *wmask) != *wmask) return 1;
-
-      wmask++;
-    }
-
-    /* For the last word, we mask out any insignificant bytes */
-    const Uint32 sigBytes = bytes & 3;  // 0..3; 0 == all bytes significant
-    const Uint32 comparisonMask = sigBytes ? (1 << (sigBytes * 8)) - 1 : ~0;
-    const Uint32 lastDataWord = *wdata & comparisonMask;
-    const Uint32 lastMaskWord = *wmask & comparisonMask;
-
-    if ((lastDataWord & lastMaskWord) != lastMaskWord) return 1;
-
-    return 0;
   }
+  while (--words) {
+    if ((*(wdata++) & *wmask) != *wmask) return 1;
+
+    wmask++;
+  }
+
+  /* For the last word, we mask out any insignificant bytes */
+  const Uint32 sigBytes = bytes & 3;  // 0..3; 0 == all bytes significant
+  const Uint32 comparisonMask = sigBytes ? (1 << (sigBytes * 8)) - 1 : ~0;
+  const Uint32 lastDataWord = *wdata & comparisonMask;
+  const Uint32 lastMaskWord = *wmask & comparisonMask;
+
+  if ((lastDataWord & lastMaskWord) != lastMaskWord) return 1;
+
+  return 0;
 }
 
 // check charset
@@ -762,8 +761,7 @@ uint NdbSqlUtil::check_column_for_ordered_index(Uint32 typeId,
       if (cs != nullptr && cs->cset != nullptr && cs->coll != nullptr &&
           cs->coll->strnncollsp != nullptr)
         return 0;
-      else
-        return 743;
+      return 743;
     } break;
     case Type::Undefined:
     case Type::Blob:
@@ -948,7 +946,8 @@ Uint32 NdbSqlUtil::strnxfrm_hash_len(const CHARSET_INFO *cs, unsigned maxLen) {
   if (cs->pad_attribute == NO_PAD && cs != &my_charset_bin) {
     // The hash_sort() value, see strnxfrm_hash
     return sizeof(uint64);
-  } else if (likely(cs->strxfrm_multiply > 0)) {
+  }
+  if (likely(cs->strxfrm_multiply > 0)) {
     // The full space-padded string will be produced
     return cs->strxfrm_multiply * maxLen;
   }

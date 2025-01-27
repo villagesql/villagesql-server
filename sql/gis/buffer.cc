@@ -304,12 +304,11 @@ std::unique_ptr<Geometry> Buffer::typed_buffer(T &g) const {
     if (strats.distance < 0 && (g.type() == Geometry_type::kPolygon ||
                                 g.type() == Geometry_type::kMultipolygon)) {
       return std::make_unique<Cartesian_geometrycollection>();
-    } else {
-      // bg::buffer is only supposed to return an empty answer for Polygon,
-      // Multipolygon, or GC - if the distance is negative. This suggests an
-      // unknown error.
-      throw invalid_buffer_result_exception();
     }
+    // bg::buffer is only supposed to return an empty answer for Polygon,
+    // Multipolygon, or GC - if the distance is negative. This suggests an
+    // unknown error.
+    throw invalid_buffer_result_exception();
   }
 
   if (res->size() == 1) return std::make_unique<Cartesian_polygon>((*res)[0]);

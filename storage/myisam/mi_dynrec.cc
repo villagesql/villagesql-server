@@ -183,10 +183,9 @@ size_t mi_mmap_pread(MI_INFO *info, uchar *Buffer, size_t Count,
     memcpy(Buffer, info->s->file_map + offset, Count);
     if (info->s->concurrent_insert) mysql_rwlock_unlock(&info->s->mmap_lock);
     return 0;
-  } else {
-    if (info->s->concurrent_insert) mysql_rwlock_unlock(&info->s->mmap_lock);
-    return mysql_file_pread(info->dfile, Buffer, Count, offset, MyFlags);
   }
+  if (info->s->concurrent_insert) mysql_rwlock_unlock(&info->s->mmap_lock);
+  return mysql_file_pread(info->dfile, Buffer, Count, offset, MyFlags);
 }
 
 /* wrapper for mysql_file_pread in case if mmap isn't used */
@@ -228,11 +227,10 @@ size_t mi_mmap_pwrite(MI_INFO *info, const uchar *Buffer, size_t Count,
     memcpy(info->s->file_map + offset, Buffer, Count);
     if (info->s->concurrent_insert) mysql_rwlock_unlock(&info->s->mmap_lock);
     return 0;
-  } else {
-    info->s->nonmmaped_inserts++;
-    if (info->s->concurrent_insert) mysql_rwlock_unlock(&info->s->mmap_lock);
-    return mysql_file_pwrite(info->dfile, Buffer, Count, offset, MyFlags);
   }
+  info->s->nonmmaped_inserts++;
+  if (info->s->concurrent_insert) mysql_rwlock_unlock(&info->s->mmap_lock);
+  return mysql_file_pwrite(info->dfile, Buffer, Count, offset, MyFlags);
 }
 
 /* wrapper for mysql_file_pwrite in case if mmap isn't used */
@@ -1009,10 +1007,10 @@ bool _mi_rec_check(MI_INFO *info, const uchar *record, uchar *rec_buff,
           tmp_length = (uint)*record;
           to += 1 + tmp_length;
           continue;
-        } else {
-          tmp_length = uint2korr(record);
-          to += get_pack_length(tmp_length) + tmp_length;
         }
+        tmp_length = uint2korr(record);
+        to += get_pack_length(tmp_length) + tmp_length;
+
         continue;
       } else {
         to += length;

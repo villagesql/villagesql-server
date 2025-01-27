@@ -396,8 +396,8 @@ static int _ft2_search_no_lock(FTB *ftb, FTB_WORD *ftbw, bool init_search) {
         */
         ftb->state = FTB::INDEX_DONE;
         return 1; /* search is done */
-      } else
-        return 0;
+      }
+      return 0;
     }
 
     /*
@@ -857,10 +857,8 @@ static int ftb_find_relevance_add_word(MYSQL_FTPARSER_PARAM *param, char *word,
     if (ha_compare_text(ftb->charset, (uchar *)word, len,
                         (uchar *)ftbw->word + 1, ftbw->len - 1,
                         (bool)(ftbw->flags & FTB_FLAG_TRUNC))) {
-      if (ftb->with_scan & FTB_FLAG_TRUNC)
-        continue;
-      else
-        break;
+      if (ftb->with_scan & FTB_FLAG_TRUNC) continue;
+      break;
     }
     if (ftbw->docid[1] == ftb->info->lastpos) continue;
     ftbw->docid[1] = ftb->info->lastpos;
@@ -932,9 +930,9 @@ extern "C" float ft_boolean_find_relevance(FT_INFO *ftb_base, uchar *record,
   if (ftbe->docid[1] == docid && ftbe->cur_weight > 0 &&
       ftbe->yesses >= ftbe->ythresh && !ftbe->nos) { /* row matched ! */
     return ftbe->cur_weight;
-  } else { /* match failed ! */
-    return 0.0;
   }
+  /* match failed ! */
+  return 0.0;
 }
 
 extern "C" void ft_boolean_close_search(FT_INFO *ftb_base) {

@@ -659,9 +659,8 @@ bool RestoreMetaData::fixBlobs() {
             table->m_dictTable->getName(), j, c->m_name.c_str());
         if (ga_skip_broken_objects) {
           continue;
-        } else {
-          return false;
         }
+        return false;
       }
       assert(blobTable->m_dictTable != NULL);
       assert(blobTable->m_blobTables.size() == 0);

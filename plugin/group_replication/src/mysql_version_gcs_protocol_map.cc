@@ -81,14 +81,14 @@ Gcs_protocol_version convert_to_gcs_protocol(
     Member_version const &mysql_version, Member_version const &my_version) {
   if (version_5_7_14 <= mysql_version && mysql_version < version_8_0_16) {
     return Gcs_protocol_version::V1;
-  } else if (version_8_0_16 <= mysql_version &&
-             mysql_version < version_8_0_27) {
-    return Gcs_protocol_version::V2;
-  } else if (version_8_0_27 <= mysql_version && mysql_version <= my_version) {
-    return Gcs_protocol_version::V3;
-  } else {
-    return Gcs_protocol_version::UNKNOWN;
   }
+  if (version_8_0_16 <= mysql_version && mysql_version < version_8_0_27) {
+    return Gcs_protocol_version::V2;
+  }
+  if (version_8_0_27 <= mysql_version && mysql_version <= my_version) {
+    return Gcs_protocol_version::V3;
+  }
+  return Gcs_protocol_version::UNKNOWN;
 }
 
 static std::string const one_or_two_digit_number_regex = "([0-9]{1,2})";

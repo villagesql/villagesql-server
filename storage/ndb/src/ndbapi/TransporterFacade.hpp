@@ -672,17 +672,13 @@ inline void TransporterFacade::hb_received(NodeId n) {
 }
 
 inline Uint32 TransporterFacade::getMinDbNodeVersion() const {
-  if (theClusterMgr)
-    return theClusterMgr->minDbVersion;
-  else
-    return 0;
+  if (theClusterMgr) return theClusterMgr->minDbVersion;
+  return 0;
 }
 
 inline Uint32 TransporterFacade::getMinApiNodeVersion() const {
-  if (theClusterMgr)
-    return theClusterMgr->minApiVersion;
-  else
-    return 0;
+  if (theClusterMgr) return theClusterMgr->minApiVersion;
+  return 0;
 }
 
 inline const trp_node &trp_client::getNodeInfo(Uint32 nodeId) const {

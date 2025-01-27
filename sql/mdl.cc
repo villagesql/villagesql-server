@@ -1261,7 +1261,7 @@ MDL_lock *MDL_map::find_or_insert(LF_PINS *pins, const MDL_key *mdl_key,
     int rc = lf_hash_insert(&m_locks, pins, mdl_key);
     if (rc == -1) /* If OOM. */
       return nullptr;
-    else if (rc == 0) {
+    if (rc == 0) {
       /*
         New MDL_lock object is not used yet. So we need to
         increment number of unused lock objects.

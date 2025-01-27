@@ -114,9 +114,8 @@ int compare_through_strxfrm(CHARSET_INFO *cs, const char *a, const char *b) {
 
   if (alen == blen) {
     return 0;
-  } else {
-    return (alen < blen) ? -1 : 1;
   }
+  return (alen < blen) ? -1 : 1;
 }
 
 #if defined(__cpp_char8_t) && __cpp_char8_t

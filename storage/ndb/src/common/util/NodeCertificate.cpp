@@ -360,12 +360,11 @@ bool PrivateKey::store(EVP_PKEY *key, const PkiFile::PathName &path,
                                 passphrase)) {
     fclose(fp);
     return true;
-  } else {
-    handle_pem_error("PEM_write_PKCS8PrivateKey");
-    fclose(fp);
-    PkiFile::remove(path);
-    return false;
   }
+  handle_pem_error("PEM_write_PKCS8PrivateKey");
+  fclose(fp);
+  PkiFile::remove(path);
+  return false;
 }
 
 bool PrivateKey::store(EVP_PKEY *key, const char *dir, const char *file,
@@ -537,11 +536,10 @@ bool SigningRequest::store(const char *dir) const {
   if (write(fp)) {
     fclose(fp);
     return true;
-  } else {
-    fclose(fp);
-    PkiFile::remove(path);
-    return false;
   }
+  fclose(fp);
+  PkiFile::remove(path);
+  return false;
 }
 
 bool SigningRequest::write(FILE *fp) const {
@@ -677,11 +675,10 @@ bool Certificate::store(STACK_OF(X509) * certs, const PkiFile::PathName &path) {
   if (Certificate::write(certs, fp)) {
     fclose(fp);
     return true;
-  } else {
-    fclose(fp);
-    PkiFile::remove(path);
-    return false;
   }
+  fclose(fp);
+  PkiFile::remove(path);
+  return false;
 }
 
 bool Certificate::store(STACK_OF(X509) * certs, const char *dir,

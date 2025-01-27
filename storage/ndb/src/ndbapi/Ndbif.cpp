@@ -590,29 +590,26 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
                     (((WaitSignalType)tWaitState) == WAIT_SCAN ? (Uint32)NO_WAIT
                                                                : tWaitState);
                 break;
-              } else {
-                if (tCon->OpCompleteSuccess() !=
-                    -1) {  // More completions pending?
-                  myNdb->completedTransaction(tCon);
-                }
-                return;
               }
+              if (tCon->OpCompleteSuccess() !=
+                  -1) {  // More completions pending?
+                myNdb->completedTransaction(tCon);
+              }
+              return;
             }
             default: {
               goto InvalidSignal;
             }
           }
           break;
-        } else {
-          /**
-           * This is ok as transaction can have been aborted before TRANSID_AI
-           * arrives (if TUP on  other node than TC)
-           */
-          return;
         }
-      } else {
+        /**
+         * This is ok as transaction can have been aborted before TRANSID_AI
+         * arrives (if TUP on  other node than TC)
+         */
         return;
       }
+      return;
     }
     case GSN_SCAN_TABCONF: {
       tCon = void2con(tFirstDataPtr);
@@ -725,13 +722,12 @@ void NdbImpl::trp_deliver_signal(const NdbApiSignal *aSignal,
             goto InvalidSignal;
         }
         break;
-      } else {
-        /**
-         * This is ok as transaction can have been aborted before KEYINFO20
-         * arrives (if TUP on  other node than TC)
-         */
-        return;
       }
+      /**
+       * This is ok as transaction can have been aborted before KEYINFO20
+       * arrives (if TUP on  other node than TC)
+       */
+      return;
     }
     case GSN_TCKEYREF: {
       if (tFirstDataPtr == nullptr) {
@@ -1460,15 +1456,14 @@ void Ndb::sendPrepTrans(int forceSend) {
           const Uint64 current_time = NdbTick_CurrentMillisecond();
           a_con->theStartTransTime = current_time;
           continue;
-        } else {
-          /*
-          Although all precautions we did not manage to send the operations
-          Must have been a dropped connection on the transporter side.
-          We don't expect to be able to continue using this connection so
-          we will treat it as a node failure.
-          */
-          TRACE_DEBUG("Send problem even after checking node status");
-        }  // if
+        }
+        /*
+        Although all precautions we did not manage to send the operations
+        Must have been a dropped connection on the transporter side.
+        We don't expect to be able to continue using this connection so
+        we will treat it as a node failure.
+        */
+        TRACE_DEBUG("Send problem even after checking node status");
       } else {
         /*
         The send buffer is currently full or at least close to. We will
@@ -1681,9 +1676,9 @@ int Ndb::sendRecSignal(Uint16 node_id, Uint32 aWaitState, NdbApiSignal *aSignal,
       if (return_code != -1) {
         return poll_guard.wait_n_unlock(WAITFOR_RESPONSE_TIMEOUT, node_id,
                                         aWaitState, false);
-      } else {
-        return_code = -3;
       }
+      return_code = -3;
+
     } else {
       return_code = -4;
     }  // if

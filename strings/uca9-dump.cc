@@ -154,9 +154,8 @@ static int load_uca_file(MY_UCA *uca, int maxchar, int *pageloaded,
     if (codenum > 1) {
       /* Contractions we don't support. */
       continue;
-    } else {
-      item = &uca->item[code];
     }
+    item = &uca->item[code];
 
     /*
       Split weight string into separate weights
@@ -346,8 +345,8 @@ static char *page_name(const MY_UCA *uca, int page, bool pageloaded) {
     snprintf(page_name_buf, sizeof(page_name_buf), "%s_p%03X", prefix_name(uca),
              page);
     return page_name_buf;
-  } else
-    return page_name_null;
+  }
+  return page_name_null;
 }
 
 static void print_one_page(const MY_UCA *uca, int page,
@@ -546,12 +545,9 @@ uint16_t change_zh_implicit(uint16_t weight) {
  */
 my_wc_t convert_implicit_to_ch(uint16_t first, uint16_t second) {
   assert(first >= 0xFB40 && first <= 0xFBC1);
-  if (first < 0xFB80)
-    return (((first - 0xFB40) << 15) | (second & 0x7FFF));
-  else if (first < 0xFBC0)
-    return (((first - 0xFB80) << 15) | (second & 0x7FFF));
-  else
-    return (((first - 0xFBC0) << 15) | (second & 0x7FFF));
+  if (first < 0xFB80) return (((first - 0xFB40) << 15) | (second & 0x7FFF));
+  if (first < 0xFBC0) return (((first - 0xFB80) << 15) | (second & 0x7FFF));
+  return (((first - 0xFBC0) << 15) | (second & 0x7FFF));
 }
 
 int dump_zh_hans(MY_UCA *uca, int *pageloaded, FILE *infile, FILE *outfile) {

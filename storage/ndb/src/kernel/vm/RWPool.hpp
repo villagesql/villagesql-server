@@ -146,7 +146,8 @@ bool RWPool<T>::seize(Ptr<T> &ptr) {
     m_current_first_free =
         pageP->m_data[pos + m_record_info.m_offset_next_pool];
     return true;
-  } else if (pos + size < RWPage::RWPAGE_WORDS) {
+  }
+  if (pos + size < RWPage::RWPAGE_WORDS) {
   seize_first:
     ptr.i = (m_current_page_no << POOL_RECORD_BITS) + pos;
     Uint32 *const p = pageP->m_data + pos;
@@ -240,7 +241,8 @@ void RWPool<T>::release(Ptr<T> ptr) {
       page->m_prev_page = RNIL;
       m_first_free_page = ptr_page;
       return;
-    } else if (ref_cnt == 1) {
+    }
+    if (ref_cnt == 1) {
       /**
        * It's now empty...release it
        */

@@ -176,101 +176,99 @@ int NdbOperation::doSendKeyReq(int aNodeId, GenericSectionPtr *secs,
     const Uint32 long_sections_size = keyInfoLen + attrInfoLen;
     if (long_sections_size <= NDB_MAX_LONG_SECTIONS_SIZE) {
       return impl->sendSignal(request, aNodeId, secs, numSecs);
-    } else if (ndbd_frag_tckeyreq(tcNodeVersion)) {
+    }
+    if (ndbd_frag_tckeyreq(tcNodeVersion)) {
       return impl->sendFragmentedSignal(request, aNodeId, secs, numSecs);
-    } else {
-      /* It should not be possible to see a table definition that supports
-       * big rows unless all data nodes that are started also can handle it.
-       */
-      require(ndbd_frag_tckeyreq(tcNodeVersion));
-      return -1;
     }
-  } else {
-    /* Send signal as short request - either for backwards
-     * compatibility or testing
-     *
-     * This means that Read Committed Base flag will be
-     * overwritten and thus ignored.
+    /* It should not be possible to see a table definition that supports
+     * big rows unless all data nodes that are started also can handle it.
      */
-    Uint32 sigCount = 1;
-
-    Uint32 keyInfoInReq = MIN(keyInfoLen, TcKeyReq::MaxKeyInfo);
-    Uint32 attrInfoInReq = MIN(attrInfoLen, TcKeyReq::MaxAttrInfo);
-    auto *tcKeyReq = (TcKeyReq *)request->getDataPtrSend();
-    Uint32 connectPtr = tcKeyReq->apiConnectPtr;
-    Uint32 transId1 = tcKeyReq->transId1;
-    Uint32 transId2 = tcKeyReq->transId2;
-    bool indexReq = (request->theVerId_signalNumber == GSN_TCINDXREQ);
-
-    Uint32 reqLen = request->theLength;
-
-    /* Set TCKEYREQ flags */
-    TcKeyReq::setKeyLength(tcKeyReq->requestInfo, keyInfoLen);
-    TcKeyReq::setAIInTcKeyReq(tcKeyReq->requestInfo, attrInfoInReq);
-    TcKeyReq::setAttrinfoLen(tcKeyReq->attrLen, attrInfoLen);
-
-    Uint32 *writePtr = request->getDataPtrSend() + reqLen;
-
-    GSIReader keyInfoReader(secs[0].sectionIter);
-    GSIReader attrInfoReader(secs[1].sectionIter);
-
-    keyInfoReader.copyNWords(writePtr, keyInfoInReq);
-    writePtr += keyInfoInReq;
-    attrInfoReader.copyNWords(writePtr, attrInfoInReq);
-
-    reqLen += keyInfoInReq + attrInfoInReq;
-    assert(reqLen <= TcKeyReq::SignalLength);
-
-    request->setLength(reqLen);
-
-    if (impl->sendSignal(request, aNodeId) == -1) return -1;
-
-    keyInfoLen -= keyInfoInReq;
-    attrInfoLen -= attrInfoInReq;
-
-    if (keyInfoLen) {
-      request->theVerId_signalNumber = indexReq ? GSN_INDXKEYINFO : GSN_KEYINFO;
-      auto *keyInfo = (KeyInfo *)request->getDataPtrSend();
-      keyInfo->connectPtr = connectPtr;
-      keyInfo->transId[0] = transId1;
-      keyInfo->transId[1] = transId2;
-
-      while (keyInfoLen) {
-        Uint32 dataWords = MIN(keyInfoLen, KeyInfo::DataLength);
-
-        keyInfoReader.copyNWords(&keyInfo->keyData[0], dataWords);
-        request->setLength(KeyInfo::HeaderLength + dataWords);
-
-        if (impl->sendSignal(request, aNodeId) == -1) return -1;
-
-        keyInfoLen -= dataWords;
-        sigCount++;
-      }
-    }
-
-    if (attrInfoLen) {
-      request->theVerId_signalNumber =
-          indexReq ? GSN_INDXATTRINFO : GSN_ATTRINFO;
-      auto *attrInfo = (AttrInfo *)request->getDataPtrSend();
-      attrInfo->connectPtr = connectPtr;
-      attrInfo->transId[0] = transId1;
-      attrInfo->transId[1] = transId2;
-
-      while (attrInfoLen) {
-        Uint32 dataWords = MIN(attrInfoLen, AttrInfo::DataLength);
-
-        attrInfoReader.copyNWords(&attrInfo->attrData[0], dataWords);
-        request->setLength(AttrInfo::HeaderLength + dataWords);
-
-        if (impl->sendSignal(request, aNodeId) == -1) return -1;
-
-        attrInfoLen -= dataWords;
-        sigCount++;
-      }
-    }
-
-    return sigCount;
+    require(ndbd_frag_tckeyreq(tcNodeVersion));
+    return -1;
   }
+  /* Send signal as short request - either for backwards
+   * compatibility or testing
+   *
+   * This means that Read Committed Base flag will be
+   * overwritten and thus ignored.
+   */
+  Uint32 sigCount = 1;
+
+  Uint32 keyInfoInReq = MIN(keyInfoLen, TcKeyReq::MaxKeyInfo);
+  Uint32 attrInfoInReq = MIN(attrInfoLen, TcKeyReq::MaxAttrInfo);
+  auto *tcKeyReq = (TcKeyReq *)request->getDataPtrSend();
+  Uint32 connectPtr = tcKeyReq->apiConnectPtr;
+  Uint32 transId1 = tcKeyReq->transId1;
+  Uint32 transId2 = tcKeyReq->transId2;
+  bool indexReq = (request->theVerId_signalNumber == GSN_TCINDXREQ);
+
+  Uint32 reqLen = request->theLength;
+
+  /* Set TCKEYREQ flags */
+  TcKeyReq::setKeyLength(tcKeyReq->requestInfo, keyInfoLen);
+  TcKeyReq::setAIInTcKeyReq(tcKeyReq->requestInfo, attrInfoInReq);
+  TcKeyReq::setAttrinfoLen(tcKeyReq->attrLen, attrInfoLen);
+
+  Uint32 *writePtr = request->getDataPtrSend() + reqLen;
+
+  GSIReader keyInfoReader(secs[0].sectionIter);
+  GSIReader attrInfoReader(secs[1].sectionIter);
+
+  keyInfoReader.copyNWords(writePtr, keyInfoInReq);
+  writePtr += keyInfoInReq;
+  attrInfoReader.copyNWords(writePtr, attrInfoInReq);
+
+  reqLen += keyInfoInReq + attrInfoInReq;
+  assert(reqLen <= TcKeyReq::SignalLength);
+
+  request->setLength(reqLen);
+
+  if (impl->sendSignal(request, aNodeId) == -1) return -1;
+
+  keyInfoLen -= keyInfoInReq;
+  attrInfoLen -= attrInfoInReq;
+
+  if (keyInfoLen) {
+    request->theVerId_signalNumber = indexReq ? GSN_INDXKEYINFO : GSN_KEYINFO;
+    auto *keyInfo = (KeyInfo *)request->getDataPtrSend();
+    keyInfo->connectPtr = connectPtr;
+    keyInfo->transId[0] = transId1;
+    keyInfo->transId[1] = transId2;
+
+    while (keyInfoLen) {
+      Uint32 dataWords = MIN(keyInfoLen, KeyInfo::DataLength);
+
+      keyInfoReader.copyNWords(&keyInfo->keyData[0], dataWords);
+      request->setLength(KeyInfo::HeaderLength + dataWords);
+
+      if (impl->sendSignal(request, aNodeId) == -1) return -1;
+
+      keyInfoLen -= dataWords;
+      sigCount++;
+    }
+  }
+
+  if (attrInfoLen) {
+    request->theVerId_signalNumber = indexReq ? GSN_INDXATTRINFO : GSN_ATTRINFO;
+    auto *attrInfo = (AttrInfo *)request->getDataPtrSend();
+    attrInfo->connectPtr = connectPtr;
+    attrInfo->transId[0] = transId1;
+    attrInfo->transId[1] = transId2;
+
+    while (attrInfoLen) {
+      Uint32 dataWords = MIN(attrInfoLen, AttrInfo::DataLength);
+
+      attrInfoReader.copyNWords(&attrInfo->attrData[0], dataWords);
+      request->setLength(AttrInfo::HeaderLength + dataWords);
+
+      if (impl->sendSignal(request, aNodeId) == -1) return -1;
+
+      attrInfoLen -= dataWords;
+      sigCount++;
+    }
+  }
+
+  return sigCount;
 }
 
 /******************************************************************************
@@ -416,7 +414,8 @@ int NdbOperation::prepareSend(Uint32 aTC_ConnectPtr, Uint64 aTransId,
       if (tStatus != GetValue) {
         setErrorCodeAbort(4116);
         return -1;
-      } else if (unlikely(tDirtyIndicator && tTotalCurrAI_Len == 0)) {
+      }
+      if (unlikely(tDirtyIndicator && tTotalCurrAI_Len == 0)) {
         getValue(NdbDictionary::Column::FRAGMENT);
         tTotalCurrAI_Len = theTotalCurrAI_Len;
         assert(theTotalCurrAI_Len);
@@ -599,11 +598,10 @@ Uint32 NdbOperation::repack_read(Uint32 len) {
     if (all) {
       AttributeHeader::init(ptr, AttributeHeader::READ_ALL, cols);
       return 1;
-    } else {
-      AttributeHeader::init(ptr, AttributeHeader::READ_PACKED, 4 * newlen);
-      memcpy(ptr + 1, &mask, 4 * newlen);
-      return 1 + newlen;
     }
+    AttributeHeader::init(ptr, AttributeHeader::READ_PACKED, 4 * newlen);
+    memcpy(ptr + 1, &mask, 4 * newlen);
+    return 1 + newlen;
   }
 
   return save;

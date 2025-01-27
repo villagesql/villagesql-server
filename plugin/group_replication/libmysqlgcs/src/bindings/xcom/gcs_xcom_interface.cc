@@ -1827,10 +1827,8 @@ synode_no cb_xcom_get_app_snap(blob *gcs_snap [[maybe_unused]]) {
 }
 
 int cb_xcom_get_should_exit() {
-  if (s_xcom_proxy)
-    return (int)s_xcom_proxy->get_should_exit();
-  else
-    return 0;
+  if (s_xcom_proxy) return (int)s_xcom_proxy->get_should_exit();
+  return 0;
 }
 
 void cb_xcom_ready(int status [[maybe_unused]]) {
@@ -1930,7 +1928,6 @@ int cb_xcom_socket_accept(int fd, site_def const *xcom_config) {
 xcom_input_request_ptr cb_xcom_input_try_pop() {
   if (s_xcom_proxy != nullptr) {
     return s_xcom_proxy->xcom_input_try_pop();
-  } else {
-    return nullptr;
   }
+  return nullptr;
 }

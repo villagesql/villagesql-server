@@ -1702,8 +1702,8 @@ const char *Ndb::externalizeTableName(const char *internalTableName,
       ;
     }
     return ptr;
-  } else
-    return internalTableName;
+  }
+  return internalTableName;
 }
 
 const char *Ndb::externalizeIndexName(const char *internalIndexName,
@@ -1722,9 +1722,8 @@ const char *Ndb::externalizeIndexName(const char *internalIndexName,
     }
 
     return ptr + 1;
-  } else {
-    return internalIndexName;
   }
+  return internalIndexName;
 }
 
 // Format internal name from db, schema and table name

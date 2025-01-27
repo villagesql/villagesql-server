@@ -188,10 +188,8 @@ static bool append_int64(String *dest, int64 value) {
   @return false if successfully appended, true otherwise
 */
 bool append_offset_or_size(String *dest, size_t offset_or_size, bool large) {
-  if (large)
-    return append_int32(dest, static_cast<int32>(offset_or_size));
-  else
-    return append_int16(dest, static_cast<int16>(offset_or_size));
+  if (large) return append_int32(dest, static_cast<int32>(offset_or_size));
+  return append_int16(dest, static_cast<int16>(offset_or_size));
 }
 
 /**

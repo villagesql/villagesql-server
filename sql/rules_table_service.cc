@@ -114,8 +114,8 @@ Cursor::Cursor(THD *mysql_thd)
     m_table_list = nullptr;
     m_table_is_malformed = true;
     return;  // Error
-  } else
-    m_table_is_malformed = false;
+  }
+  m_table_is_malformed = false;
 
   add_column(table->read_set, pattern_column());
   add_column(table->read_set, pattern_database_column());

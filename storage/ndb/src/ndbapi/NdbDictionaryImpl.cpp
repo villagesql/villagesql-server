@@ -2201,10 +2201,8 @@ void NdbEventImpl::setTable(NdbTableImpl *tableImpl) {
 }
 
 const NdbDictionary::Table *NdbEventImpl::getTable() const {
-  if (m_tableImpl)
-    return m_tableImpl->m_facade;
-  else
-    return nullptr;
+  if (m_tableImpl) return m_tableImpl->m_facade;
+  return nullptr;
 }
 
 int NdbEventImpl::setTable(const char *table) {
@@ -2393,10 +2391,8 @@ NdbTableImpl *NdbDictionaryImpl::getBlobTable(const NdbTableImpl &tab,
     NdbColumnImpl *col = tab.m_columns[col_no];
     if (col != nullptr) {
       NdbTableImpl *bt = col->m_blobTable;
-      if (bt != nullptr)
-        return bt;
-      else
-        m_error.code = 4273;  // No blob table..
+      if (bt != nullptr) return bt;
+      m_error.code = 4273;  // No blob table..
     } else
       m_error.code = 4249;  // Invalid table..
   } else
@@ -6116,9 +6112,8 @@ int NdbDictInterface::listObjects(NdbDictionary::Dictionary::List &list,
 
   if (listTablesLongSignal) {
     return unpackListTables(list, fullyQualifiedNames);
-  } else {
-    return unpackOldListTables(list, fullyQualifiedNames);
   }
+  return unpackOldListTables(list, fullyQualifiedNames);
 }
 
 int NdbDictInterface::unpackListTables(NdbDictionary::Dictionary::List &list,
@@ -6508,7 +6503,8 @@ int NdbDictInterface::forceGCPWait(int type) {
       return -1;
     }
     return -1;
-  } else if (type == 1) {
+  }
+  if (type == 1) {
     tSignal.getDataPtrSend()[0] = 6099;
     tSignal.theReceiversBlockNumber = DBDIH;
     tSignal.theVerId_signalNumber = GSN_DUMP_STATE_ORD;
@@ -6537,9 +6533,9 @@ int NdbDictInterface::forceGCPWait(int type) {
       break;
     }
     return m_error.code == 0 ? 0 : -1;
-  } else {
-    m_error.code = 4003;
   }
+  m_error.code = 4003;
+
   return -1;
 }
 
@@ -6772,12 +6768,9 @@ int NdbDictionaryImpl::dropLogfileGroup(const NdbLogfileGroupImpl &fg) {
 static int cmp_ndbrec_attr(const void *a, const void *b) {
   const auto *r1 = (const NdbRecord::Attr *)a;
   const auto *r2 = (const NdbRecord::Attr *)b;
-  if (r1->attrId < r2->attrId)
-    return -1;
-  else if (r1->attrId == r2->attrId)
-    return 0;
-  else
-    return 1;
+  if (r1->attrId < r2->attrId) return -1;
+  if (r1->attrId == r2->attrId) return 0;
+  return 1;
 }
 
 struct BitRange {
@@ -6790,12 +6783,9 @@ static int cmp_bitrange(const void *a, const void *b) {
   const BitRange &brA = *(const BitRange *)a;
   const BitRange &brB = *(const BitRange *)b;
 
-  if (brA.start < brB.start)
-    return -1;
-  else if (brA.start == brB.start)
-    return 0;
-  else
-    return 1;
+  if (brA.start < brB.start) return -1;
+  if (brA.start == brB.start) return 0;
+  return 1;
 }
 
 bool NdbDictionaryImpl::validateRecordSpec(
@@ -7617,10 +7607,8 @@ void NdbDictionaryImpl::releaseRecord_impl(NdbRecord *rec) {
 
 NdbDictionary::RecordType NdbDictionaryImpl::getRecordType(
     const NdbRecord *record) {
-  if (record->flags & NdbRecord::RecIsIndex)
-    return NdbDictionary::IndexAccess;
-  else
-    return NdbDictionary::TableAccess;
+  if (record->flags & NdbRecord::RecIsIndex) return NdbDictionary::IndexAccess;
+  return NdbDictionary::TableAccess;
 }
 
 const char *NdbDictionaryImpl::getRecordTableName(const NdbRecord *record) {

@@ -338,9 +338,8 @@ int ndb_password_state::get_from_tty() {
   if (r >= 0) {
     if (is_password()) {
       return set_password(m_password_buffer, r);
-    } else {
-      return set_key(m_password_buffer, r);
     }
+    return set_key(m_password_buffer, r);
   }
 
   clear_password();
@@ -370,9 +369,8 @@ int ndb_password_state::get_from_stdin() {
   if (r >= 0) {
     if (is_password()) {
       return set_password(m_password_buffer, r);
-    } else {
-      return set_key(m_password_buffer, r);
     }
+    return set_key(m_password_buffer, r);
   }
 
   clear_password();

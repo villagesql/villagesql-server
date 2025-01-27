@@ -130,7 +130,8 @@ uint _mi_make_key(MI_INFO *info, uint keynr, uchar *key, const uchar *record,
       memcpy((uchar *)key, pos, (size_t)char_length);
       key += char_length;
       continue;
-    } else if (keyseg->flag & HA_BLOB_PART) {
+    }
+    if (keyseg->flag & HA_BLOB_PART) {
       uint tmp_length = _mi_calc_blob_length(keyseg->bit_start, pos);
       memcpy(&pos, pos + keyseg->bit_start, sizeof(char *));
       length = std::min(length, tmp_length);
@@ -139,7 +140,8 @@ uint _mi_make_key(MI_INFO *info, uint keynr, uchar *key, const uchar *record,
       if (char_length > 0) memcpy((uchar *)key, pos, (size_t)char_length);
       key += char_length;
       continue;
-    } else if (keyseg->flag & HA_SWAP_KEY) { /* Numerical column */
+    }
+    if (keyseg->flag & HA_SWAP_KEY) { /* Numerical column */
       if (type == HA_KEYTYPE_FLOAT) {
         float nr = float4get(pos);
         if (std::isnan(nr)) {
@@ -241,7 +243,8 @@ uint _mi_pack_key(MI_INFO *info, uint keynr, uchar *key, const uchar *old,
       memcpy((uchar *)key, pos, (size_t)char_length);
       key += char_length;
       continue;
-    } else if (keyseg->flag & (HA_VAR_LENGTH_PART | HA_BLOB_PART)) {
+    }
+    if (keyseg->flag & (HA_VAR_LENGTH_PART | HA_BLOB_PART)) {
       /* Length of key-part used with mi_rkey() always 2 */
       uint tmp_length = uint2korr(pos);
       pos += 2;
@@ -252,7 +255,8 @@ uint _mi_pack_key(MI_INFO *info, uint keynr, uchar *key, const uchar *old,
       memcpy((uchar *)key, pos, (size_t)char_length);
       key += char_length;
       continue;
-    } else if (keyseg->flag & HA_SWAP_KEY) { /* Numerical column */
+    }
+    if (keyseg->flag & HA_SWAP_KEY) { /* Numerical column */
       pos += length;
       while (length--) *key++ = *--pos;
       continue;

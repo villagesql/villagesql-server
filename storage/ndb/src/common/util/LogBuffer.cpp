@@ -308,7 +308,8 @@ size_t LogBuffer::get(char *buf, size_t buf_size, uint timeout_ms) {
   if (m_size == 0) {
     // log buffer empty even after timeout, return
     return 0;
-  } else if (m_size < buf_size) {
+  }
+  if (m_size < buf_size) {
     // change num of bytes to be copied to available bytes
     size = m_size;
   }

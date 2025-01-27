@@ -1265,14 +1265,11 @@ inline Uint32 NdbTransaction::getMagicNumberFromObject() const {
 }
 
 inline int NdbTransaction::checkMagicNumber() {
-  if (theMagicNumber == getMagicNumber())
-    return 0;
-  else {
+  if (theMagicNumber == getMagicNumber()) return 0;
 #ifdef NDB_NO_DROPPED_SIGNAL
-    abort();
+  abort();
 #endif
-    return -1;
-  }
+  return -1;
 }
 
 inline bool NdbTransaction::checkState_TransId(const Uint32 *transId) const {

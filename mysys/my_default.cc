@@ -1265,48 +1265,47 @@ static mysql_file_getline_ret mysql_file_getline(char *buff, int size,
     }
     buff[length] = 0;
     return {buff, noop_free};
-  } else {
-    mysql_file_getline_ret line{nullptr, noop_free}; /* The output line */
-    size_t lineLen = 0;                              /* Cached length of line */
+  }
+  mysql_file_getline_ret line{nullptr, noop_free}; /* The output line */
+  size_t lineLen = 0;                              /* Cached length of line */
 
-    while (true) {
-      /* Read up to size bytes */
-      if (mysql_file_fgets(buff, size, file) == nullptr) {
-        /* End of file */
-        return line;
-      }
+  while (true) {
+    /* Read up to size bytes */
+    if (mysql_file_fgets(buff, size, file) == nullptr) {
+      /* End of file */
+      return line;
+    }
 
-      /* Calculate size of line, including null termination */
-      const size_t buffLen = strlen(buff);
+    /* Calculate size of line, including null termination */
+    const size_t buffLen = strlen(buff);
 
-      /* Check if the provided buff is enough for the line */
-      if (lineLen == 0 && buff[buffLen - 1] == '\n') {
-        return {buff, noop_free};
-      }
+    /* Check if the provided buff is enough for the line */
+    if (lineLen == 0 && buff[buffLen - 1] == '\n') {
+      return {buff, noop_free};
+    }
 
-      if (buffLen == 0) return line;
+    if (buffLen == 0) return line;
 
-      lineLen += buffLen;
+    lineLen += buffLen;
 
-      /* Allocate the line buffer */
-      char *l = static_cast<char *>(malloc(lineLen + 1));
-      if (l == nullptr) {
-        /* malloc failed */
-        return {nullptr, noop_free};
-      }
+    /* Allocate the line buffer */
+    char *l = static_cast<char *>(malloc(lineLen + 1));
+    if (l == nullptr) {
+      /* malloc failed */
+      return {nullptr, noop_free};
+    }
 
-      if (line.get() != nullptr) {
-        /* Append new output of fgets to existing line */
-        sprintf(l, "%s%s", line.get(), buff);
-      } else {
-        sprintf(l, "%s", buff);
-      }
-      line = {l, std::free};
+    if (line.get() != nullptr) {
+      /* Append new output of fgets to existing line */
+      sprintf(l, "%s%s", line.get(), buff);
+    } else {
+      sprintf(l, "%s", buff);
+    }
+    line = {l, std::free};
 
-      /* Check if we reached the end of the line */
-      if (buff[buffLen - 1] == '\n') {
-        return line;
-      }
+    /* Check if we reached the end of the line */
+    if (buff[buffLen - 1] == '\n') {
+      return line;
     }
   }
 }
@@ -1775,8 +1774,7 @@ int check_file_permissions(const char *file_name, bool is_login_file,
     This is mainly done to protect us to not read a file created by
     the mysqld server, but the check is still valid in most context.
   */
-  else if ((stat_info.st_mode & S_IWOTH) &&
-           (stat_info.st_mode & S_IFMT) == S_IFREG)
+  if ((stat_info.st_mode & S_IWOTH) && (stat_info.st_mode & S_IFMT) == S_IFREG)
 
   {
     my_message_local(WARNING_LEVEL, EE_IGNORE_WORLD_WRITABLE_CONFIG_FILE,

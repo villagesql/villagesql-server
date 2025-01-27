@@ -245,24 +245,23 @@ int main(int argc, char *const argv[]) {
       if (i >= argc) die("No real args -> nothing to do");
       child_argv = &argv[i + 1];
       break;
-    } else {
-      if (strcmp(arg, "--verbose") == 0) {
-        verbose++;
-      } else if (strncmp(arg, "--parent-pid", 12) == 0) {
-        /* Override parent_pid with a value provided by user */
-        const char *start;
-        if ((start = strstr(arg, "=")) == nullptr)
-          die("Could not find start of option value in '%s'", arg);
-        start++; /* Step past = */
-        if ((parent_pid = atoi(start)) == 0)
-          die("Invalid value '%s' passed to --parent-id", start);
-      } else if (strcmp(arg, "--nocore") == 0) {
-        nocore = true;  // Don't allow the process to dump core
-      } else if (strncmp(arg, "--env ", 6) == 0) {
-        putenv(strdup(arg + 6));
-      } else
-        die("Unknown option: %s", arg);
     }
+    if (strcmp(arg, "--verbose") == 0) {
+      verbose++;
+    } else if (strncmp(arg, "--parent-pid", 12) == 0) {
+      /* Override parent_pid with a value provided by user */
+      const char *start;
+      if ((start = strstr(arg, "=")) == nullptr)
+        die("Could not find start of option value in '%s'", arg);
+      start++; /* Step past = */
+      if ((parent_pid = atoi(start)) == 0)
+        die("Invalid value '%s' passed to --parent-id", start);
+    } else if (strcmp(arg, "--nocore") == 0) {
+      nocore = true;  // Don't allow the process to dump core
+    } else if (strncmp(arg, "--env ", 6) == 0) {
+      putenv(strdup(arg + 6));
+    } else
+      die("Unknown option: %s", arg);
   }
   if (!child_argv || *child_argv == nullptr) die("nothing to do");
 

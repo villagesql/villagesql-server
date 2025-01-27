@@ -411,15 +411,13 @@ static int get_password_strength(mysql_string_handle password) {
 
   mysql_string_iterator_free(iter);
   if (n_chars < MIN_DICTIONARY_WORD_LENGTH) return (policy);
-  if (n_chars < validate_password_length)
-    return (PASSWORD_SCORE);
-  else {
-    policy = PASSWORD_POLICY_LOW;
-    if (validate_password_policy_strength(password, PASSWORD_POLICY_MEDIUM)) {
-      policy = PASSWORD_POLICY_MEDIUM;
-      if (validate_dictionary_check(password)) policy = PASSWORD_POLICY_STRONG;
-    }
+  if (n_chars < validate_password_length) return (PASSWORD_SCORE);
+  policy = PASSWORD_POLICY_LOW;
+  if (validate_password_policy_strength(password, PASSWORD_POLICY_MEDIUM)) {
+    policy = PASSWORD_POLICY_MEDIUM;
+    if (validate_dictionary_check(password)) policy = PASSWORD_POLICY_STRONG;
   }
+
   return ((policy + 1) * PASSWORD_SCORE + PASSWORD_SCORE);
 }
 

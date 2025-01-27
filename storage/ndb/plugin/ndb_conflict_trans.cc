@@ -343,25 +343,23 @@ int DependencyTracker::track_operation(const NdbDictionary::Table *table,
       assert(res == 0 || error_text != nullptr);
 
       return res;
-    } else {
-      /*
-         How can we have two updates to the same row with the
-         same transaction id?  Only if the transaction id
-         is invalid (e.g. not set)
-         In normal cases with only one upstream master, each
-         distinct master user transaction will have a unique
-         id, and all operations on a row in that transaction
-         will be merged in TUP prior to emitting a SUMA
-         event.
-         This could be relaxed for more complex upstream
-         topologies, but acts as a sanity guard currently.
-      */
-      if (existingTransIdOnRow != InvalidTransactionId) {
-        assert(false);
-        error_text =
-            "Two row operations to same key sharing user transaction id";
-        return -1;
-      }
+    }
+    /*
+      How can we have two updates to the same row with the
+      same transaction id?  Only if the transaction id
+      is invalid (e.g. not set)
+      In normal cases with only one upstream master, each
+      distinct master user transaction will have a unique
+      id, and all operations on a row in that transaction
+      will be merged in TUP prior to emitting a SUMA
+      event.
+      This could be relaxed for more complex upstream
+      topologies, but acts as a sanity guard currently.
+    */
+    if (existingTransIdOnRow != InvalidTransactionId) {
+      assert(false);
+      error_text = "Two row operations to same key sharing user transaction id";
+      return -1;
     }
   }
 
@@ -422,9 +420,9 @@ bool DependencyTracker::in_conflict(Uint64 trans_id) {
   if ((entry = trans_hash.get(&key))) {
     DBUG_PRINT("info", ("in_conflict : %u", entry->getInConflict()));
     return entry->getInConflict();
-  } else {
-    assert(!TRACK_ALL_TRANSACTIONS);
   }
+  assert(!TRACK_ALL_TRANSACTIONS);
+
   return false;
 }
 
