@@ -13090,12 +13090,11 @@ bool mysqld_get_one_option(int optid,
     case OPT_REPLICA_PARALLEL_TYPE:
       push_deprecated_warn_no_replacement(nullptr, "--replica-parallel-type");
       break;
+#ifndef DBUG_OFF
     case OPT_REPLICA_PARALLEL_WORKERS:
-      if (opt_mts_replica_parallel_workers == 0) {
-        push_deprecated_warn(nullptr, "--replica-parallel-workers=0",
-                             "'--replica-parallel-workers=1'");
-      }
+      assert(opt_mts_replica_parallel_workers != 0);
       break;
+#endif
     case OPT_SYNC_RELAY_LOG_INFO:
       LogErr(WARNING_LEVEL, ER_DEPRECATE_MSG_NO_REPLACEMENT,
              "--sync-relay-log-info");

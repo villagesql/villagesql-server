@@ -9697,6 +9697,16 @@ int Rows_log_event::do_apply_event(Relay_log_info const *rli) {
 
     thd->binlog_row_event_extra_data = m_extra_row_info.get_ndb_info();
 
+    DBUG_EXECUTE_IF("wait_before_executing_write_rows_event", {
+      if (get_type_code() == mysql::binlog::event::WRITE_ROWS_EVENT) {
+        const char act[] =
+            "now SIGNAL signal.waiting_on_event_execution "
+            "WAIT_FOR signal.can_continue_execution";
+        assert(opt_debug_sync_timeout > 0);
+        assert(!debug_sync_set_action(current_thd, STRING_WITH_LEN(act)));
+      }
+    };);
+
     /* A small test to verify that objects have consistent types */
     assert(sizeof(thd->variables.option_bits) ==
            sizeof(OPTION_RELAXED_UNIQUE_CHECKS));

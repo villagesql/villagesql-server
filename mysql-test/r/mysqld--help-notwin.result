@@ -1121,15 +1121,13 @@ The following options may be given as the first argument:
  storage engine.
  (Defaults to on; use --skip-replica-allow-batching to disable.)
  --replica-checkpoint-group=# 
- When using multi-threaded applier
- (replica_parallel_workers>0), it will update the worker
- progress status periodically. This option specifies the
- maximum number of committed transactions between updates.
+ Applier worker threads progress status is updated
+ periodically. This option specifies the maximum number of
+ committed transactions between updates.
  --replica-checkpoint-period=# 
- When using a multi-threaded applier
- (replica_parallel_workers>0), it will update the worker
- progress status periodically. This option specifies the
- maximum number of milliseconds between updates.
+ Applier worker threads progress status is updated
+ periodically. This option specifies the maximum number of
+ milliseconds between updates.
  --replica-compressed-protocol 
  Use compression in the source/replica protocol.
  --replica-exec-mode=name 
@@ -1157,7 +1155,7 @@ The following options may be given as the first argument:
  in parallel using the logical timestamps computed by the
  source.
  --replica-parallel-workers=# 
- Number of worker threads for executing events in parallel
+ Number of worker threads applying changes in parallel 
  --replica-pending-jobs-size-max=# 
  Soft limit on the size, in bytes, of per-worker queues of
  events that have not yet been applied. The queue size may

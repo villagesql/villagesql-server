@@ -1683,16 +1683,6 @@ static Sys_var_bool Sys_explicit_defaults_for_timestamp(
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(check_explicit_defaults_for_timestamp));
 
-static bool replica_parallel_workers_update(sys_var *, THD *thd,
-                                            enum_var_type) {
-  if (opt_mts_replica_parallel_workers == 0) {
-    push_warning_printf(thd, Sql_condition::SL_WARNING,
-                        ER_WARN_DEPRECATED_SYNTAX,
-                        ER_THD(thd, ER_WARN_DEPRECATED_SYNTAX), "0", "1");
-  }
-  return false;
-}
-
 static Sys_var_bool Sys_binlog_rows_query(
     "binlog_rows_query_log_events",
     "Allow writing of Rows_query_log events into binary log.",
@@ -6165,9 +6155,9 @@ static Sys_var_uint Sys_sync_relayloginfo_period(
 
 static Sys_var_uint Sys_replica_checkpoint_period(
     "replica_checkpoint_period",
-    "When using a multi-threaded applier (replica_parallel_workers>0), it "
-    "will update the worker progress status periodically. This option "
-    "specifies the maximum number of milliseconds between updates.",
+    "Applier worker threads progress status is updated periodically. "
+    "This option specifies the maximum number of milliseconds between "
+    "updates.",
     GLOBAL_VAR(opt_mta_checkpoint_period), CMD_LINE(REQUIRED_ARG),
 #ifndef NDEBUG
     VALID_RANGE(0, UINT_MAX), DEFAULT(300), BLOCK_SIZE(1));
@@ -6180,9 +6170,9 @@ static Sys_var_deprecated_alias Sys_slave_checkpoint_period(
 
 static Sys_var_uint Sys_replica_checkpoint_group(
     "replica_checkpoint_group",
-    "When using multi-threaded applier (replica_parallel_workers>0), it will "
-    "update the worker progress status periodically. This option specifies "
-    "the maximum number of committed transactions between updates.",
+    "Applier worker threads progress status is updated periodically. "
+    "This option specifies the maximum number of committed transactions "
+    "between updates.",
     GLOBAL_VAR(opt_mta_checkpoint_group), CMD_LINE(REQUIRED_ARG),
 #ifndef NDEBUG
     VALID_RANGE(1, MTS_MAX_BITS_IN_GROUP), DEFAULT(512), BLOCK_SIZE(1));
@@ -6234,12 +6224,11 @@ static Sys_var_deprecated_alias Sys_slave_transaction_retries(
 
 static Sys_var_ulong Sys_replica_parallel_workers(
     "replica_parallel_workers",
-    "Number of worker threads for executing events in parallel ",
+    "Number of worker threads applying changes in parallel ",
     PERSIST_AS_READONLY GLOBAL_VAR(opt_mts_replica_parallel_workers),
     CMD_LINE(REQUIRED_ARG, OPT_REPLICA_PARALLEL_WORKERS),
-    VALID_RANGE(0, MTS_MAX_WORKERS), DEFAULT(4), BLOCK_SIZE(1), NO_MUTEX_GUARD,
-    NOT_IN_BINLOG, ON_CHECK(nullptr),
-    ON_UPDATE(replica_parallel_workers_update));
+    VALID_RANGE(1, MTS_MAX_WORKERS), DEFAULT(4), BLOCK_SIZE(1), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
 
 static Sys_var_deprecated_alias Sys_slave_parallel_workers(
     "slave_parallel_workers", Sys_replica_parallel_workers);
