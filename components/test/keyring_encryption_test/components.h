@@ -25,7 +25,6 @@
 
 #ifndef COMPONENTS_INCLUDED
 #define COMPONENTS_INCLUDED
-
 #include <mysql/components/minimal_chassis.h> /* Minimal chassis */
 #include <mysql/components/my_service.h>
 #include <mysql/components/service.h>
@@ -35,6 +34,7 @@
 #include <mysql/components/services/keyring_reader_with_status.h>
 #include <mysql/components/services/keyring_writer.h>
 #include <mysql/components/services/registry.h>
+#include <string>
 
 namespace components {
 using registry_type_t = SERVICE_TYPE_NO_CONST(registry);
