@@ -6687,29 +6687,11 @@ void Suma::start_resend(Signal *signal, Uint32 buck) {
   Bucket *bucket = c_buckets + buck;
   Page_pos pos = bucket->m_buffer_head;
 
-  // Start resending from the epoch that is not yet ack'd
-  const Uint64 resend_start_gci = bucket->m_max_acked_gci + 1;
-
-  // Out of buffer release is ongoing. So don't start resending in order
-  // to avoid sending epochs where part of them are already released.
-  // Inform about the first in-doubt epoch that resending will start from.
-  if (m_out_of_buffer_gci) {
-    jam();
-    signal->theData[0] = NDB_LE_SubscriptionStatus;
-    signal->theData[1] = 2;  // INCONSISTENT;
-    signal->theData[2] = 0;  // Not used
-    signal->theData[3] = (Uint32)resend_start_gci;
-    signal->theData[4] = (Uint32)(resend_start_gci >> 32);
-    sendSignal(CMVMI_REF, GSN_EVENT_REP, signal, 5, JBB);
-    m_missing_data = true;
-    return;
-  }
-
-  if (pos.m_page_id == RNIL) {
+  if (!m_out_of_buffer_gci && pos.m_page_id == RNIL) {
     jam();
     g_eventLogger->info(
-        "SUMA bucket %u resend complete as it is empty and will become "
-        "active. max_acked: %u/%u  max_gci at bucket header : %u/%u",
+        "SUMA bucket %u resend complete as the bucket is empty and will "
+        "become active. max_acked: %u/%u  max_gci at bucket header : %u/%u",
         buck, Uint32(bucket->m_max_acked_gci >> 32),
         Uint32(bucket->m_max_acked_gci), Uint32(pos.m_max_gci >> 32),
         Uint32(pos.m_max_gci));
@@ -6718,7 +6700,9 @@ void Suma::start_resend(Signal *signal, Uint32 buck) {
     return;
   }
 
-  if (resend_start_gci > m_max_seen_gci) {
+  // Start resending from the epoch that is not yet ack'd
+  const Uint64 resend_start_gci = bucket->m_max_acked_gci + 1;
+  if (!m_out_of_buffer_gci && resend_start_gci > m_max_seen_gci) {
     jam();
     // Everything seen has been sent + acked by subscribers
     ndbrequire(pos.m_page_id == bucket->m_buffer_tail);
@@ -6741,12 +6725,39 @@ void Suma::start_resend(Signal *signal, Uint32 buck) {
    * current epoch to be delivered in-order, therefore we must continue to
    * buffer it so that it is re-sent in order.
    */
-  bucket->m_state |= (Bucket::BUCKET_TAKEOVER | Bucket::BUCKET_RESEND);
+  bucket->m_state |= (Bucket::BUCKET_TAKEOVER);
   bucket->m_switchover_node = get_responsible_node(buck);
   bucket->m_switchover_gci = m_max_seen_gci;
 
   ndbassert(!m_active_buckets.get(buck));
   m_switchover_buckets.set(buck);
+
+  if (unlikely(m_out_of_buffer_gci)) {
+    jam();
+    // Gap in the event stream
+    m_missing_data = true;
+
+    // Inform the incident to the users
+    signal->theData[0] = NDB_LE_SubscriptionStatus;
+    signal->theData[1] = 2;  // INCONSISTENT;
+    signal->theData[2] = 0;  // Not used
+    signal->theData[3] = (Uint32)resend_start_gci;
+    signal->theData[4] = (Uint32)(resend_start_gci >> 32);
+    sendSignal(CMVMI_REF, GSN_EVENT_REP, signal, 5, JBB);
+
+    g_eventLogger->info(
+        "SUMA Gap in the event stream. No need to start "
+        "resending. Bucket %u will become active. "
+        "Bucket's max_acked_gci %u/%u max_seen_gci %u/%u",
+        buck, Uint32(bucket->m_max_acked_gci >> 32),
+        Uint32(bucket->m_max_acked_gci), Uint32(m_max_seen_gci >> 32),
+        Uint32(m_max_seen_gci));
+    return;
+  }
+
+  // Start resending from resend_start_gci to m_max_seen_gci, which is
+  // the switchover_gci where resend ends and forwarding starts.
+  bucket->m_state |= Bucket::BUCKET_RESEND;
 
   g_eventLogger->info("SUMA Start resending bucket %u from %u/%u to %u/%u ",
                       buck, Uint32(resend_start_gci >> 32),
@@ -6769,8 +6780,47 @@ void Suma::resend_bucket(Signal *signal, Uint32 buck, Uint64 min_gci,
                          Uint32 pos, Uint64 last_gci) {
   ndbrequire(buck < NO_OF_BUCKETS);
   Bucket *bucket = c_buckets + buck;
-  Uint32 tail = bucket->m_buffer_tail;
+  /**
+   * Check if out_of_buffer handling began and releasing buffers while
+   * resending took a break (CONTINUEB).
+   */
+  if (unlikely(m_out_of_buffer_gci)) {
+    jam();
+    // Gap in the event stream
+    m_missing_data = true;
 
+    // Stop resending
+    ndbassert(bucket->m_state & Bucket::BUCKET_RESEND);
+    bucket->m_state &= ~(Uint32)Bucket::BUCKET_RESEND;
+
+    // Ensure bucket take-over :
+    // - either it is waiting to be taken over
+    // - or it has already been taken over.
+    ndbrequire(bucket->m_state & Bucket::BUCKET_TAKEOVER ||
+               m_active_buckets.get(buck));
+
+    g_eventLogger->info(
+        "SUMA Stops resending due to out-of-buffer "
+        "handling while resending. "
+        "Bucket %u will become active. "
+        "Bucket's max_acked_gci %u/%u "
+        "resend-start gci %u/%u ",
+        buck, Uint32(bucket->m_max_acked_gci >> 32),
+        Uint32(bucket->m_max_acked_gci), (Uint32)(min_gci >> 32),
+        (Uint32)(min_gci));
+
+    // Inform the incident
+    signal->theData[0] = NDB_LE_SubscriptionStatus;
+    signal->theData[1] = 2;  // INCONSISTENT;
+    signal->theData[2] = 0;  // Not used
+    signal->theData[3] = (Uint32)(min_gci);
+    signal->theData[4] = (Uint32)(min_gci >> 32);
+    sendSignal(CMVMI_REF, GSN_EVENT_REP, signal, 5, JBB);
+
+    return;
+  }
+
+  Uint32 tail = bucket->m_buffer_tail;
   Buffer_page *page = c_page_pool.getPtr(tail);
   Uint64 max_gci = page->m_max_gci_lo | (Uint64(page->m_max_gci_hi) << 32);
   Uint32 next_page = page->m_next_page;
@@ -7019,7 +7069,15 @@ next:
   if (tail == RNIL) {
     jam();
     bucket->m_state &= ~(Uint32)Bucket::BUCKET_RESEND;
+
+    /**
+     * Bucket takeover in sendSUB_GCP_COMPLETE_REP() sets bucket head's
+     * m_page_id and m_next_page to RNIL to inform the resend fiber to
+     * indicate that the swtich_over gci is completed and no more data
+     * will arrive. Resend fiber uses this info to terminate resending.
+     */
     ndbassert(!(bucket->m_state & Bucket::BUCKET_TAKEOVER));
+
     g_eventLogger->info("SUMA Resend done for bucket %u", buck);
     return;
   }
