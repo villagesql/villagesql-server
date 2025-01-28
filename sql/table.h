@@ -86,6 +86,7 @@ class Item_field;
 class Json_diff_vector;
 class Json_seekable_path;
 class Json_wrapper;
+class Name_string;
 class Opt_hints_qb;
 class Opt_hints_table;
 class Query_result_union;
@@ -4203,7 +4204,7 @@ void update_create_info_from_table(HA_CREATE_INFO *info, TABLE *form);
 Ident_name_check check_db_name(const char *name, size_t length);
 Ident_name_check check_and_convert_db_name(LEX_STRING *db,
                                            bool preserve_lettercase);
-bool check_column_name(const char *name);
+bool check_column_name(const Name_string &namestring);
 Ident_name_check check_table_name(const char *name, size_t length);
 int rename_file_ext(const char *from, const char *to, const char *ext);
 char *get_field(MEM_ROOT *mem, Field *field);

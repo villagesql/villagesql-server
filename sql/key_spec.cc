@@ -164,7 +164,7 @@ bool Foreign_key_spec::validate(THD *thd, const char *table_name,
   }
 
   for (const Key_part_spec *fk_col : ref_columns) {
-    if (check_column_name(fk_col->get_field_name())) {
+    if (check_column_name(to_lex_cstring(fk_col->get_field_name()))) {
       my_error(ER_WRONG_COLUMN_NAME, MYF(0), fk_col->get_field_name());
       return true;
     }

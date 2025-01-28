@@ -337,7 +337,7 @@ bool PTI_expr_with_alias::itemize(Parse_context *pc, Item **res) {
 
   if (alias.str) {
     if (pc->thd->lex->sql_command == SQLCOM_CREATE_VIEW &&
-        check_column_name(alias.str)) {
+        check_column_name(alias)) {
       my_error(ER_WRONG_COLUMN_NAME, MYF(0), alias.str);
       return true;
     }

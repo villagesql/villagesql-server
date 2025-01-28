@@ -4611,7 +4611,7 @@ bool prepare_create_field(THD *thd, const char *error_schema_name,
 
   if (!(sql_field->flags & NOT_NULL_FLAG)) create_info->null_bits++;
 
-  if (check_column_name(sql_field->field_name)) {
+  if (check_column_name(to_lex_cstring(sql_field->field_name))) {
     my_error(ER_WRONG_COLUMN_NAME, MYF(0), sql_field->field_name);
     return true;
   }
@@ -7259,7 +7259,7 @@ static bool prepare_key(
     return true;
   }
 
-  if (!key_info->name || check_column_name(key_info->name)) {
+  if (!key_info->name || check_column_name(to_lex_cstring(key_info->name))) {
     my_error(ER_WRONG_NAME_FOR_INDEX, MYF(0), key_info->name);
     return true;
   }
