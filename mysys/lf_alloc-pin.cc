@@ -140,7 +140,7 @@ static void lf_pinbox_real_free(LF_PINS *pins);
 void lf_pinbox_init(LF_PINBOX *pinbox, uint free_ptr_offset,
                     lf_pinbox_free_func *free_func, void *free_func_arg) {
   assert(free_ptr_offset % sizeof(void *) == 0);
-  static_assert(sizeof(LF_PINS) == 64, "");
+  static_assert(sizeof(LF_PINS) == 64);
   lf_dynarray_init(&pinbox->pinarray, sizeof(LF_PINS));
   pinbox->pinstack_top_ver = 0;
   pinbox->pins_in_array = 0;

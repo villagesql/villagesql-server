@@ -160,7 +160,7 @@ union ull_dbl {
 ulonglong getopt_double2ulonglong(double v) {
   union ull_dbl u;
   u.dbl = v;
-  static_assert(sizeof(ulonglong) >= sizeof(double), "");
+  static_assert(sizeof(ulonglong) >= sizeof(double));
   return u.ull;
 }
 
