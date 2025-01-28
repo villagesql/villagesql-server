@@ -786,6 +786,9 @@ static bool check_table_funs(THD *thd, std::unique_ptr<Schema> &schema,
 
   // Function called on each table to validate it.
   auto process_table = [&](std::unique_ptr<dd::Table> &table) {
+    // Skip non-InnoDB tables as their search engine may not be available yet.
+    if (strcasecmp(table->engine().c_str(), "InnoDB")) return false;
+
     // Are SQL functions used in table def (defaults, virtual columns, etc.)?
     if (dd::uses_functions(table.get(), schema->name().c_str())) {
       Open_table_context ot_ctx(
