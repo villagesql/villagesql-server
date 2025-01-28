@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -69,6 +69,10 @@ static void impl_columns_set(std::vector<helper::Column> &c,
 
     i = helper::Column(&f, is_bound);
     auto column_def = columns_find(f.name, rs);
+    if (!column_def) {
+      log_debug("Column definition not found: %s", f.name);
+      continue;
+    }
     i.name = column_def->name;
     if (i.type_json == helper::JsonType::kBlob &&
         column_def->data_type == ColumnType::STRING)
