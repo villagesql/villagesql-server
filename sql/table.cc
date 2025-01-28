@@ -3748,16 +3748,24 @@ Ident_name_check check_table_name(const char *name, size_t length) {
   return Ident_name_check::OK;
 }
 
-bool check_column_name(const char *name) {
+bool check_column_name(const Name_string &namestring) {
+  size_t valid_length = 0;
+  bool length_error = false;
+  if (validate_string(system_charset_info, namestring.ptr(),
+                      namestring.length(), &valid_length, &length_error)) {
+    return true;
+  }
+  const char *name = namestring.ptr();
   // name length in symbols
   size_t name_length = 0;
   bool last_char_is_space = true;
+  const char *name_end = name + namestring.length();
+  const bool is_multibyte = use_mb(system_charset_info);
 
   while (*name) {
     last_char_is_space = my_isspace(system_charset_info, *name);
-    if (use_mb(system_charset_info)) {
-      const int len = my_ismbchar(system_charset_info, name,
-                                  name + system_charset_info->mbmaxlen);
+    if (is_multibyte) {
+      const int len = my_ismbchar(system_charset_info, name, name_end);
       if (len) {
         name += len;
         name_length++;

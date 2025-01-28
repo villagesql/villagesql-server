@@ -14213,7 +14213,7 @@ opt_explain_into:
           }
         | INTO '@' ident_or_text
           {
-            if(check_column_name($3.str)) {
+            if(check_column_name($3)) {
               MYSQL_YYABORT_ERROR(ER_ILLEGAL_USER_VAR, MYF(0), $3.str);
             }
             $$ = $3;
@@ -17693,7 +17693,7 @@ view_tail:
               for (auto column_alias : $5)
               {
                 // Report error if the column name/length is incorrect.
-                if (check_column_name(column_alias.str))
+                if (check_column_name(column_alias))
                 {
                   my_error(ER_WRONG_COLUMN_NAME, MYF(0), column_alias.str);
                   MYSQL_YYABORT;

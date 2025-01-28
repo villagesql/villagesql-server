@@ -1112,8 +1112,7 @@ size_t bin_to_hex_str(char *to, size_t to_len, const char *from,
                                 prefix for a character, i.e. the byte length
                                 of that invalid character is undefined.
 
-  @retval true if the whole input byte sequence is a valid character string.
-               The length_error output parameter is undefined.
+  @retval true if the input is invalid.
 
   @return
     if the whole input byte sequence is a valid character string

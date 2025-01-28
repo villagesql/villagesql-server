@@ -6151,7 +6151,7 @@ bool Item_func_set_user_var::resolve_type(THD *thd) {
 // static
 user_var_entry *user_var_entry::create(THD *thd, const Name_string &name,
                                        const CHARSET_INFO *cs) {
-  if (check_column_name(name.ptr())) {
+  if (check_column_name(name)) {
     my_error(ER_ILLEGAL_USER_VAR, MYF(0), name.ptr());
     return nullptr;
   }
