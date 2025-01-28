@@ -3416,8 +3416,7 @@ static bool sel_restore_position_for_mysql(
   ut_ad(!success || pcur->m_rel_pos == BTR_PCUR_ON);
 #ifdef UNIV_DEBUG
   if (pcur->m_pos_state == BTR_PCUR_IS_POSITIONED_OPTIMISTIC) {
-    ut_ad(pcur->m_rel_pos == BTR_PCUR_BEFORE ||
-          pcur->m_rel_pos == BTR_PCUR_AFTER);
+    ut_ad(pcur->m_rel_pos == BTR_PCUR_BEFORE);
   } else {
     ut_ad(pcur->m_pos_state == BTR_PCUR_IS_POSITIONED);
     ut_ad((pcur->m_rel_pos == BTR_PCUR_ON) == pcur->is_on_user_rec());

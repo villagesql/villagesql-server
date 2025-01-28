@@ -266,8 +266,7 @@ class PCursor {
 
 #ifdef UNIV_DEBUG
     if (m_pcur->m_pos_state == BTR_PCUR_IS_POSITIONED_OPTIMISTIC) {
-      ut_ad(m_pcur->m_rel_pos == BTR_PCUR_BEFORE ||
-            m_pcur->m_rel_pos == BTR_PCUR_AFTER);
+      ut_ad(m_pcur->m_rel_pos == BTR_PCUR_BEFORE);
     } else {
       ut_ad(m_pcur->m_pos_state == BTR_PCUR_IS_POSITIONED);
       ut_ad((m_pcur->m_rel_pos == BTR_PCUR_ON) == m_pcur->is_on_user_rec());
@@ -437,15 +436,14 @@ void PCursor::restore_to_first_unprocessed() noexcept {
   m_mtr->start();
   m_mtr->set_log_mode(MTR_LOG_NO_REDO);
   m_pcur->restore_position(BTR_SEARCH_LEAF, m_mtr, UT_LOCATION_HERE);
-  if (m_pcur->m_pos_state == BTR_PCUR_IS_POSITIONED_OPTIMISTIC) {
-    /* The BTR_PCUR_IS_POSITIONED_OPTIMISTIC means the implementation of
-    btr_pcur_t::restore_position() successfully re-acquired a block stored in
-    hint and it wasn't modified meanwhile, and in such case it does not advance
-    the cursor to the next position even though BTR_PCUR_AFTER was used, so we
-    have to do it ourselves. */
-    ut_a(!m_pcur->is_after_last_on_page());
-    m_pcur->move_to_next_on_page();
-  }
+
+  /* The BTR_PCUR_IS_POSITIONED_OPTIMISTIC only happens in case of a successful
+  optimistic restoration in which the cursor points to a user record after
+  restoration. But, in save_previous_user_record_as_last_processed() the cursor
+  pointed to SUPREMUM before calling m_ptr->store_position(mtr), so it would
+  also point there if optimistic restoration succeeded, which is not a user
+  record. */
+  ut_ad(m_pcur->m_pos_state != BTR_PCUR_IS_POSITIONED_OPTIMISTIC);
 }
 
 dberr_t PCursor::move_to_user_rec() noexcept {
