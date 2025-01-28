@@ -27,8 +27,6 @@ Gcs_xcom_synode::Gcs_xcom_synode() noexcept : synode_(null_synode) {}
 
 Gcs_xcom_synode::Gcs_xcom_synode(synode_no synod) noexcept : synode_(synod) {}
 
-Gcs_xcom_synode::~Gcs_xcom_synode() = default;
-
 Gcs_xcom_synode::Gcs_xcom_synode(Gcs_xcom_synode &&other) noexcept
     : synode_(other.synode_) {
   other.synode_ = null_synode;

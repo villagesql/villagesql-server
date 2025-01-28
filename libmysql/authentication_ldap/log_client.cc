@@ -85,6 +85,5 @@ Ldap_log_writer_error::Ldap_log_writer_error() = default;
 
 /**
  */
-Ldap_log_writer_error::~Ldap_log_writer_error() = default;
 
 }  // namespace auth_ldap_sasl_client

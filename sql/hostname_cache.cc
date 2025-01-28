@@ -111,8 +111,6 @@ Host_errors::Host_errors()
       m_init_connect(0),
       m_local(0) {}
 
-Host_errors::~Host_errors() = default;
-
 void Host_errors::reset() {
   m_connect = 0;
   m_host_blocked = 0;

@@ -41,7 +41,7 @@
 struct Host_errors {
  public:
   Host_errors();
-  ~Host_errors();
+  ~Host_errors() = default;
 
   void reset();
   void aggregate(const Host_errors *errors);

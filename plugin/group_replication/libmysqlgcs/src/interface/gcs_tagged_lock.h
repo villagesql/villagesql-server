@@ -86,7 +86,7 @@ class Gcs_tagged_lock {
   using Tag = std::uint64_t;
 
   Gcs_tagged_lock() noexcept;
-  ~Gcs_tagged_lock();
+  ~Gcs_tagged_lock() = default;
 
   /**
    * Starts an optimistic read-side section.

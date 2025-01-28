@@ -41,7 +41,7 @@ class Gcs_xcom_synode {
   Gcs_xcom_synode() noexcept;
   explicit Gcs_xcom_synode(synode_no synod) noexcept;
 
-  ~Gcs_xcom_synode();
+  ~Gcs_xcom_synode() = default;
 
   Gcs_xcom_synode(Gcs_xcom_synode const &other) = default;
   Gcs_xcom_synode &operator=(Gcs_xcom_synode const &other) = default;
