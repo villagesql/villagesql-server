@@ -227,7 +227,7 @@ class NdbDictionary {
     Object(const Object &) = default;
 
    private:
-    Object &operator=(const Object &);
+    Object &operator=(const Object &) = delete;
   };
 
   class Dictionary;  // Forward declaration

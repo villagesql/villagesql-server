@@ -239,8 +239,8 @@ class Pool {
   }
 
  private:
-  Pool<T> &operator=(const Pool<T> &cp);
-  Pool(const Pool<T> &cp);
+  Pool<T> &operator=(const Pool<T> &cp) = delete;
+  Pool(const Pool<T> &cp) = delete;
 
   int theIncSize;
   int theTop;

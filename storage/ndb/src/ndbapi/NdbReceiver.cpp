@@ -143,8 +143,8 @@ class NdbReceiverBuffer {
   static const Uint32 headerWords = 4;  // 4*Uint32's below
 
   // No copying / assignment:
-  NdbReceiverBuffer(const NdbReceiverBuffer &);
-  NdbReceiverBuffer &operator=(const NdbReceiverBuffer &);
+  NdbReceiverBuffer(const NdbReceiverBuffer &) = delete;
+  NdbReceiverBuffer &operator=(const NdbReceiverBuffer &) = delete;
 
   const Uint32 m_maxRows;       // Max capacity in #rows / #keys
   const Uint32 m_bufSizeWords;  // Size of 'm_buffer'

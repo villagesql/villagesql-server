@@ -256,8 +256,8 @@ class Uint32Buffer {
 
  private:
   /** Should not be copied, nor assigned.*/
-  Uint32Buffer(Uint32Buffer &);
-  Uint32Buffer &operator=(Uint32Buffer &);
+  Uint32Buffer(Uint32Buffer &) = delete;
+  Uint32Buffer &operator=(Uint32Buffer &) = delete;
 
  private:
   Uint32 m_local[initSize];  // Initial static bufferspace

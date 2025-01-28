@@ -129,7 +129,7 @@ class buf_pool_t {
   }
 
   /** Copy constructor is disabled. */
-  buf_pool_t(const buf_pool_t &other);
+  buf_pool_t(const buf_pool_t &other) = delete;
 
   /** The map between the page number, and the actual page. */
   std::map<page_no_t, buf_block_t *> m_buf_pool;

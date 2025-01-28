@@ -204,7 +204,8 @@ class Ndbinfo {
     friend class SimulatedBlock;
     Uint32 rows;
     Uint32 bytes;
-    Ratelimit(const Ratelimit &);  // Not impl
+    Ratelimit(const Ratelimit &) = delete;
+
    public:
     Ratelimit() : rows(0), bytes(0) {}
 

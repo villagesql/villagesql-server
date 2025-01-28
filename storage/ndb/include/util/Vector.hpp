@@ -304,8 +304,8 @@ class MutexVector : public NdbLockable {
 
  private:
   // Don't allow copy and assignment of MutexVector
-  MutexVector(const MutexVector &);
-  MutexVector<T> &operator=(const MutexVector<T> &);
+  MutexVector(const MutexVector &) = delete;
+  MutexVector<T> &operator=(const MutexVector<T> &) = delete;
 
   T *m_items;
   unsigned m_size;

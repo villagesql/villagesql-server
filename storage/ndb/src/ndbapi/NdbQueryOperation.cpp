@@ -320,8 +320,8 @@ class NdbWorker {
 
  private:
   /** No copying.*/
-  NdbWorker(const NdbWorker &);
-  NdbWorker &operator=(const NdbWorker &);
+  NdbWorker(const NdbWorker &) = delete;
+  NdbWorker &operator=(const NdbWorker &) = delete;
 
   static constexpr Uint32 voidWorkerNo = 0xffffffff;
 
@@ -434,8 +434,8 @@ class NdbResultSet {
 
  private:
   /** No copying.*/
-  NdbResultSet(const NdbResultSet &);
-  NdbResultSet &operator=(const NdbResultSet &);
+  NdbResultSet(const NdbResultSet &) = delete;
+  NdbResultSet &operator=(const NdbResultSet &) = delete;
 
   /** The buffers which we receive the results into */
   NdbReceiverBuffer *m_buffer;
@@ -626,8 +626,8 @@ class NdbResultStream {
 
    private:
     /** No copying.*/
-    TupleSet(const TupleSet &);
-    TupleSet &operator=(const TupleSet &);
+    TupleSet(const TupleSet &) = delete;
+    TupleSet &operator=(const TupleSet &) = delete;
   };
 
  private:
@@ -791,8 +791,8 @@ class NdbResultStream {
   }
 
   /** No copying.*/
-  NdbResultStream(const NdbResultStream &);
-  NdbResultStream &operator=(const NdbResultStream &);
+  NdbResultStream(const NdbResultStream &) = delete;
+  NdbResultStream &operator=(const NdbResultStream &) = delete;
 };  // class NdbResultStream
 
 //////////////////////////////////////////////

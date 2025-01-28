@@ -502,8 +502,8 @@ class DLHashTable
       : DLMHashTable<P, DLHashTableDefaultMethods<typename P::Type, U>>(p) {}
 
  private:
-  DLHashTable(const DLHashTable &);
-  DLHashTable &operator=(const DLHashTable &);
+  DLHashTable(const DLHashTable &) = delete;
+  DLHashTable &operator=(const DLHashTable &) = delete;
 };
 
 #undef JAM_FILE_ID

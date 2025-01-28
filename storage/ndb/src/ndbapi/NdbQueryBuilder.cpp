@@ -1838,9 +1838,9 @@ class Uint16Sequence {
 
  private:
   /** Should not be copied.*/
-  Uint16Sequence(Uint16Sequence &);
+  Uint16Sequence(Uint16Sequence &) = delete;
   /** Should not be assigned.*/
-  Uint16Sequence &operator=(Uint16Sequence &);
+  Uint16Sequence &operator=(Uint16Sequence &) = delete;
 
   Uint32 *m_seq;        // Preallocated buffer to append Uint16's into
   const Uint32 m_size;  // Uint16 words available in m_seq

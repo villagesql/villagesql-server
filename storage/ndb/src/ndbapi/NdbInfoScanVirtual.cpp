@@ -85,8 +85,8 @@ class VirtualTable {
     Row(class NdbInfoScanVirtual *owner, const NdbInfo::Table *table,
         char *buffer, size_t buf_size);
 
-    Row(const Row &);             // Prevent
-    Row &operator=(const Row &);  // Prevent
+    Row(const Row &) = delete;
+    Row &operator=(const Row &) = delete;
 
     const class NdbInfoScanVirtual *const m_owner;
     const NdbInfo::Table *const m_table;

@@ -117,8 +117,8 @@ bool visit_parse_tree(MYSQL_THD thd, Literal_visitor *visitor) {
 */
 class Lex_str {
   MYSQL_LEX_STRING m_str;
-  Lex_str &operator=(const Lex_str &);
-  Lex_str(const Lex_str &);
+  Lex_str &operator=(const Lex_str &) = delete;
+  Lex_str(const Lex_str &) = delete;
 
  public:
   Lex_str(MYSQL_LEX_STRING str) : m_str(str) {}
@@ -149,8 +149,8 @@ string get_current_query_normalized(MYSQL_THD thd) {
 */
 class Array_ptr {
   int *m_ptr;
-  Array_ptr &operator=(const Array_ptr &);
-  Array_ptr(const Array_ptr &);
+  Array_ptr &operator=(const Array_ptr &) = delete;
+  Array_ptr(const Array_ptr &) = delete;
 
  public:
   Array_ptr(int *str) : m_ptr(str) {}
