@@ -43,7 +43,7 @@ bool can_use_poly_mul();
 #endif /* !CRC32_DEFAULT */
 namespace software {
 uint32_t crc32(const byte *data, size_t len);
-}
+}  // namespace software
 
 namespace innodb_ut0crc32_unittest {
 

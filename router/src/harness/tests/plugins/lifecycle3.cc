@@ -38,7 +38,7 @@
 
 namespace mysql_harness {
 class PluginFuncEnv;
-}
+}  // namespace mysql_harness
 
 #if defined(_MSC_VER) && defined(routertestplugin_lifecycle3_EXPORTS)
 /* We are building this library */

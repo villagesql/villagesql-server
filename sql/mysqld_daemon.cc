@@ -43,7 +43,7 @@
 
 namespace {
 bool is_daemon_proc = false;
-}
+}  // namespace
 
 /**
   Prediacate to test if we're currently executing

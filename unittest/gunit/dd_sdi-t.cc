@@ -61,7 +61,7 @@
 
 namespace {
 int FANOUT = 3;
-}
+}  // namespace
 
 namespace dd {
 class Sdi_wcontext;
