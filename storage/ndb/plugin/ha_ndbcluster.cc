@@ -2214,6 +2214,8 @@ int ha_ndbcluster::open_index(NdbDictionary::Dictionary *dict,
       const NdbError &err = dict->getNdbError();
       if (err.code != 4243) ERR_RETURN(err);
       // Index Not Found. Proceed with this index unavailable.
+      // Mark table as invalid to avoid caching the table definition.
+      table->invalidate_dict();
     }
   }
 
@@ -2238,6 +2240,8 @@ int ha_ndbcluster::open_index(NdbDictionary::Dictionary *dict,
       const NdbError &err = dict->getNdbError();
       if (err.code != 4243) ERR_RETURN(err);
       // Index Not Found. Proceed with this index unavailable.
+      // Mark table as invalid to avoid caching the table definition.
+      table->invalidate_dict();
     }
   }
 
