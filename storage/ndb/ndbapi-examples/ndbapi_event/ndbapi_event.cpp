@@ -133,7 +133,7 @@ int main(int argc, char **argv) {
   const char *connectstring = argv[1];
   int timeout = atoi(argv[2]);
   ndb_init();
-  bool merge_events = argc > 3 && strchr(argv[3], 'm') != 0;
+  bool merge_events = argc > 3 && strchr(argv[3], 'm') != nullptr;
 #ifdef VM_TRACE
   bool dbug = argc > 3 && strchr(argv[3], 'd') != 0;
   if (dbug) {
@@ -194,7 +194,7 @@ int main(int argc, char **argv) {
     // Start "transaction" for handling events
     NdbEventOperation *op;
     printf("create EventOperation\n");
-    if ((op = myNdb->createEventOperation(eventName)) == NULL)
+    if ((op = myNdb->createEventOperation(eventName)) == nullptr)
       APIERROR(myNdb->getNdbError());
     op->mergeEvents(merge_events);
 
@@ -297,7 +297,7 @@ int main(int argc, char **argv) {
     }
     // don't want to listen to events anymore
     if (myNdb->dropEventOperation(the_op)) APIERROR(myNdb->getNdbError());
-    the_op = 0;
+    the_op = nullptr;
 
     j++;
   }

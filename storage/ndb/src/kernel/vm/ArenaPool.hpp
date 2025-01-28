@@ -55,7 +55,7 @@ struct ArenaHead {
     m_block_size = 0;
     m_first_block = RNIL;
     m_current_block = RNIL;
-    m_current_block_ptr = 0;
+    m_current_block_ptr = nullptr;
   }
 
   ArenaBlock *m_current_block_ptr;

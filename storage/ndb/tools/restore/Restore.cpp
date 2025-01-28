@@ -323,7 +323,7 @@ RestoreMetaData::~RestoreMetaData() {
 TableS *RestoreMetaData::getTable(Uint32 tableId) const {
   for (Uint32 i = 0; i < allTables.size(); i++)
     if (allTables[i]->getTableId() == tableId) return allTables[i];
-  return NULL;
+  return nullptr;
 }
 
 Uint32 RestoreMetaData::getStartGCP() const { return m_startGCP; }
@@ -427,7 +427,7 @@ bool RestoreMetaData::readMetaTableDesc() {
   }  // if
 
   int errcode = 0;
-  DictObject obj = {sectionInfo[2], 0};
+  DictObject obj = {sectionInfo[2], nullptr};
   switch (obj.m_objType) {
     case DictTabInfo::SystemTable:
     case DictTabInfo::UserTable:
@@ -576,7 +576,7 @@ bool RestoreMetaData::markSysTables() {
         // index stats tables and indexes
         strncmp(tableName, NDB_INDEX_STAT_PREFIX,
                 sizeof(NDB_INDEX_STAT_PREFIX) - 1) == 0 ||
-        strstr(tableName, "/" NDB_INDEX_STAT_PREFIX) != 0 ||
+        strstr(tableName, "/" NDB_INDEX_STAT_PREFIX) != nullptr ||
         /*
           The following is for old MySQL versions,
            before we changed the database name of the tables from
@@ -642,7 +642,7 @@ bool RestoreMetaData::fixBlobs() {
       n++;
       if (c->getPartSize() == 0) continue;
       Uint32 k;
-      TableS *blobTable = NULL;
+      TableS *blobTable = nullptr;
       for (k = 0; k < getNoOfTables(); k++) {
         TableS *tmp = allTables[k];
         if (tmp->m_main_table == table && tmp->m_main_column_id == j) {
@@ -650,7 +650,7 @@ bool RestoreMetaData::fixBlobs() {
           break;
         }
       }
-      if (blobTable == NULL) {
+      if (blobTable == nullptr) {
         table->m_broken = true;
         /* Corrupt backup, has main table, but no blob table */
         restoreLogger.log_error(
@@ -709,7 +709,7 @@ bool RestoreMetaData::readGCPEntry() {
 
 bool RestoreMetaData::readFragmentInfo() {
   BackupFormat::CtlFile::FragmentInfo fragInfo;
-  TableS *table = 0;
+  TableS *table = nullptr;
   Uint32 tableId = RNIL;
 
   int r;
@@ -757,14 +757,14 @@ bool RestoreMetaData::readFragmentInfo() {
 TableS::TableS(Uint32 version, NdbTableImpl *tableImpl)
     : m_dictTable(tableImpl) {
   m_noOfNullable = m_nullBitmaskSize = 0;
-  m_auto_val_attrib = 0;
+  m_auto_val_attrib = nullptr;
   m_max_auto_val = 0;
   m_noOfRecords = 0;
   backupVersion = version;
   m_isSysTable = false;
   m_isSYSTAB_0 = false;
   m_broken = false;
-  m_main_table = NULL;
+  m_main_table = nullptr;
   m_main_column_id = ~(Uint32)0;
   m_has_blobs = false;
 
@@ -772,11 +772,11 @@ TableS::TableS(Uint32 version, NdbTableImpl *tableImpl)
     createAttr(tableImpl->getColumn(i));
 
   m_staging = false;
-  m_stagingTable = NULL;
+  m_stagingTable = nullptr;
   m_stagingFlags = 0;
 
   m_pk_extended = false;
-  m_pk_index = NULL;
+  m_pk_index = nullptr;
 }
 
 TableS::~TableS() {
@@ -790,7 +790,7 @@ TableS::~TableS() {
 
 // Parse dictTabInfo buffer and pushback to to vector storage
 bool RestoreMetaData::parseTableDescriptor(const Uint32 *data, Uint32 len) {
-  NdbTableImpl *tableImpl = 0;
+  NdbTableImpl *tableImpl = nullptr;
   int ret = NdbDictInterface::parseTableInfo(&tableImpl, data, len, false,
                                              ndbd_drop6(m_fileHeader.NdbVersion)
                                                  ? MAKE_VERSION(5, 1, 2)
@@ -808,11 +808,11 @@ bool RestoreMetaData::parseTableDescriptor(const Uint32 *data, Uint32 len) {
         "Check version of backup and schema contained in backup.");
     return false;
   }
-  if (tableImpl == 0) return false;
+  if (tableImpl == nullptr) return false;
 
   restoreLogger.log_debug("parseTableInfo %s done", tableImpl->getName());
   auto *table = new TableS(m_fileHeader.NdbVersion, tableImpl);
-  if (table == NULL) {
+  if (table == nullptr) {
     return false;
   }
 
@@ -865,7 +865,7 @@ void RestoreDataIterator::calc_row_extra_storage_words(
     }
     /* Space for output from this column transform */
     const AttributeDesc *attr_desc = tableSpec->getAttributeDesc(i);
-    if (attr_desc->transform != NULL) {
+    if (attr_desc->transform != nullptr) {
       transform_words += attr_desc->getSizeInWords();
     }
   }
@@ -887,8 +887,8 @@ void RestoreDataIterator::alloc_extra_storage(Uint32 words) {
 
 void RestoreDataIterator::free_extra_storage() {
   if (m_extra_storage_ptr) free(m_extra_storage_ptr);
-  m_extra_storage_ptr = 0;
-  m_extra_storage_curr_ptr = 0;
+  m_extra_storage_ptr = nullptr;
+  m_extra_storage_curr_ptr = nullptr;
 }
 
 Uint32 RestoreDataIterator::get_free_extra_storage() const {
@@ -934,7 +934,7 @@ Uint32 *RestoreDataIterator::get_extra_storage(Uint32 len) {
   }
 
   abort();
-  return 0;
+  return nullptr;
 }
 
 TupleS &TupleS::operator=(const TupleS &tuple) {
@@ -947,7 +947,7 @@ TupleS &TupleS::operator=(const TupleS &tuple) {
   return *this;
 }
 int TupleS::getNoOfAttributes() const {
-  if (m_currentTable == 0) return 0;
+  if (m_currentTable == nullptr) return 0;
   return m_currentTable->getNoOfAttributes();
 }
 
@@ -966,11 +966,11 @@ bool TupleS::prepareRecord(TableS &tab) {
       return true;
     }
     delete[] allAttrData;
-    m_currentTable = 0;
+    m_currentTable = nullptr;
   }
 
   allAttrData = new AttributeData[tab.getNoOfAttributes()];
-  if (allAttrData == 0) return false;
+  if (allAttrData == nullptr) return false;
 
   m_currentTable = &tab;
 
@@ -1002,18 +1002,18 @@ bool applyColumnTransform(const NdbDictionary::Column *col,
                           AttributeData *attr_data, void *dst_buf) {
   assert(attr_desc->transform != NULL);
 
-  void *src_ptr = (attr_data->null ? NULL : attr_data->void_value);
+  void *src_ptr = (attr_data->null ? nullptr : attr_data->void_value);
   void *dst_ptr = dst_buf;
 
   if (!attr_desc->transform->apply(col, src_ptr, &dst_ptr)) {
     return false;
   }
 
-  if (dst_ptr == NULL) {
+  if (dst_ptr == nullptr) {
     assert(col->getNullable());
     attr_data->null = true;
     attr_data->size = 0;
-    attr_data->void_value = NULL;
+    attr_data->void_value = nullptr;
   } else {
     const auto *dst_char = (const uchar *)dst_ptr;
     attr_data->null = false;
@@ -1049,7 +1049,7 @@ const TupleS *RestoreDataIterator::getNextTuple(int &res,
     if (r != 1) {
       restoreLogger.log_error("getNextTuple:Error reading length of data part");
       res = -1;
-      return NULL;
+      return nullptr;
     }  // if
 
     // Convert length from network byte order
@@ -1061,7 +1061,7 @@ const TupleS *RestoreDataIterator::getNextTuple(int &res,
       // End of this data fragment
       restoreLogger.log_debug("End of fragment");
       res = 0;
-      return NULL;
+      return nullptr;
     }  // if
 
     // Read tuple data
@@ -1070,7 +1070,7 @@ const TupleS *RestoreDataIterator::getNextTuple(int &res,
     if (r < 0 || Uint32(r) != dataLenBytes) {
       restoreLogger.log_error("getNextTuple:Read error: ");
       res = -1;
-      return NULL;
+      return nullptr;
     }
 
     m_count++;
@@ -1091,14 +1091,14 @@ const TupleS *RestoreDataIterator::getNextTuple(int &res,
     }
 
     if (res) {
-      return NULL;
+      return nullptr;
     }
 
     /* Apply column transforms if the table has any defined */
     if (m_current_table_has_transforms) {
       for (int i = 0; i < m_currentTable->getNoOfAttributes(); i++) {
         const AttributeDesc *attr_desc = m_currentTable->getAttributeDesc(i);
-        if (attr_desc->transform == NULL) {
+        if (attr_desc->transform == nullptr) {
           continue;
         }
         const NdbDictionary::Column *col =
@@ -1109,7 +1109,7 @@ const TupleS *RestoreDataIterator::getNextTuple(int &res,
         if (!applyColumnTransform(col, attr_desc, m_tuple.getData(i),
                                   dst_buf)) {
           res = -1;
-          return NULL;
+          return nullptr;
         }
       }
     }
@@ -1167,7 +1167,7 @@ int RestoreDataIterator::readTupleData_packed(Uint32 *buf_ptr,
       bmpos++;
       if (BitmaskImpl::get(bmlen32, bmptr, bmpos)) {
         attr_data->null = true;
-        attr_data->void_value = NULL;
+        attr_data->void_value = nullptr;
         continue;
       }
     }
@@ -1294,7 +1294,7 @@ int RestoreDataIterator::readTupleData_old(Uint32 *buf_ptr, Uint32 dataLength) {
     AttributeData *attr_data = m_tuple.getData(attrId);
 
     attr_data->null = true;
-    attr_data->void_value = NULL;
+    attr_data->void_value = nullptr;
   }
 
   int res;
@@ -1324,7 +1324,7 @@ int RestoreDataIterator::readVarData(Uint32 *buf_ptr, Uint32 *ptr,
       const Uint32 ind = attr_desc->m_nullBitIndex;
       if (BitmaskImpl::get(m_currentTable->m_nullBitmaskSize, buf_ptr, ind)) {
         attr_data->null = true;
-        attr_data->void_value = NULL;
+        attr_data->void_value = nullptr;
         continue;
       }
     }
@@ -1363,7 +1363,7 @@ int RestoreDataIterator::readVarData_drop6(Uint32 *buf_ptr, Uint32 *ptr,
       const Uint32 ind = attr_desc->m_nullBitIndex;
       if (BitmaskImpl::get(m_currentTable->m_nullBitmaskSize, buf_ptr, ind)) {
         attr_data->null = true;
-        attr_data->void_value = NULL;
+        attr_data->void_value = nullptr;
         continue;
       }
     }
@@ -1429,7 +1429,7 @@ BackupFile::~BackupFile() {
     restoreLogger.log_error("Warning: File did not close correctly.");
   }
 
-  if (m_buffer != 0) {
+  if (m_buffer != nullptr) {
     free(m_buffer);
   }
 }
@@ -1708,7 +1708,7 @@ void BackupFile::setLogFile(const BackupFile &bf, Uint32 no) {
 
 void BackupFile::setName(const char *p, const char *n) {
   const Uint32 sz = sizeof(m_path);
-  if (p != 0 && strlen(p) > 0) {
+  if (p != nullptr && strlen(p) > 0) {
     if (p[strlen(p) - 1] == DIR_SEPARATOR[0]) {
       BaseString::snprintf(m_path, sz, "%s", p);
     } else {
@@ -1922,7 +1922,7 @@ bool RestoreDataIterator::readFragmentHeader(int &ret, Uint32 *fragmentId) {
                           Header.FragmentNo, Header.ChecksumType);
 
   m_currentTable = m_metaData.getTable(Header.TableId);
-  if (m_currentTable == 0) {
+  if (m_currentTable == nullptr) {
     ret = -1;
     return false;
   }
@@ -1968,7 +1968,7 @@ bool RestoreDataIterator::validateFragmentFooter() {
 }  // RestoreDataIterator::getFragmentFooter
 
 AttributeDesc::AttributeDesc(NdbDictionary::Column *c)
-    : m_column(c), transform(NULL), truncation_detected(false) {
+    : m_column(c), transform(nullptr), truncation_detected(false) {
   size = 8 * NdbColumnImpl::getImpl(*c).m_attrSize;
   arraySize = NdbColumnImpl::getImpl(*c).m_arraySize;
   staging = false;
@@ -1977,18 +1977,18 @@ AttributeDesc::AttributeDesc(NdbDictionary::Column *c)
 
 AttributeDesc::~AttributeDesc() {
   delete transform;
-  transform = NULL;
+  transform = nullptr;
 }
 
 void TableS::createAttr(NdbDictionary::Column *column) {
   auto *d = new AttributeDesc(column);
-  if (d == NULL) {
+  if (d == nullptr) {
     restoreLogger.log_error("Restore: Failed to allocate memory");
     abort();
   }
   d->attrId = allAttributesDesc.size();
-  d->convertFunc = NULL;
-  d->parameter = NULL;
+  d->convertFunc = nullptr;
+  d->parameter = nullptr;
   d->m_exclude = false;
   allAttributesDesc.push_back(d);
 
@@ -2105,16 +2105,16 @@ const LogEntry *RestoreLogIterator::getNextLogEntry(int &res) {
       // no more log data to read
       if (read_result == 0) {
         res = 0;
-        return 0;
+        return nullptr;
       }
       if (read_result < 0 || read_result != 1) {
         res = -1;
-        return 0;
+        return nullptr;
       }
     } else {
       if (buffer_read_ahead(&len, sizeof(Uint32), 1) != 1) {
         res = -1;
-        return 0;
+        return nullptr;
       }
     }
     len = ntohl(len);
@@ -2123,12 +2123,12 @@ const LogEntry *RestoreLogIterator::getNextLogEntry(int &res) {
     int r = buffer_get_ptr((void **)(&logEntryPtr), 1, data_len);
     if (r < 0 || Uint32(r) != data_len) {
       res = -2;
-      return 0;
+      return nullptr;
     }
 
     if (len == 0) {
       res = 0;
-      return 0;
+      return nullptr;
     }
 
     const Uint32 backup_file_version = m_metaData.getFileHeader().NdbVersion;
@@ -2205,7 +2205,7 @@ const LogEntry *RestoreLogIterator::getNextLogEntry(int &res) {
       break;
     default:
       res = -1;
-      return NULL;
+      return nullptr;
   }
 
   const TableS *tab = m_logEntry.m_table;
@@ -2218,10 +2218,10 @@ const LogEntry *RestoreLogIterator::getNextLogEntry(int &res) {
   m_logEntry.m_frag_id = frag_id;
   while (ah < end) {
     attr = m_logEntry.add_attr();
-    if (attr == NULL) {
+    if (attr == nullptr) {
       restoreLogger.log_error("Restore: Failed to allocate memory");
       res = -1;
-      return 0;
+      return nullptr;
     }
 
     if (unlikely(!m_hostByteOrder)) *(Uint32 *)ah = Twiddle32(*(Uint32 *)ah);
@@ -2232,7 +2232,7 @@ const LogEntry *RestoreLogIterator::getNextLogEntry(int &res) {
     const Uint32 sz = ah->getByteSize();
     if (sz == 0) {
       attr->Data.null = true;
-      attr->Data.void_value = NULL;
+      attr->Data.void_value = nullptr;
       attr->Data.size = 0;
     } else {
       attr->Data.null = false;
@@ -2250,7 +2250,7 @@ const LogEntry *RestoreLogIterator::getNextLogEntry(int &res) {
 
       if (!applyColumnTransform(col, attr->Desc, &attr->Data, dst_buf)) {
         res = -1;
-        return 0;
+        return nullptr;
       }
     }
 
@@ -2271,8 +2271,8 @@ NdbOut &operator<<(NdbOut &ndbout, const AttributeS &attr) {
     return ndbout;
   }
 
-  NdbRecAttr tmprec(0);
-  tmprec.setup(desc.m_column, 0);
+  NdbRecAttr tmprec(nullptr);
+  tmprec.setup(desc.m_column, nullptr);
 
   assert(desc.size % 8 == 0);
 #ifndef NDEBUG
@@ -2427,7 +2427,7 @@ void RestoreLogger::log_error(const char *fmt, ...) {
 
   NdbMutex_Lock(m_mutex);
   if (print_timestamp) {
-    Logger::format_timestamp(time(NULL), timestamp, sizeof(timestamp));
+    Logger::format_timestamp(time(nullptr), timestamp, sizeof(timestamp));
     err << timestamp << " ";
   }
 
@@ -2444,7 +2444,7 @@ void RestoreLogger::log_info(const char *fmt, ...) {
 
   NdbMutex_Lock(m_mutex);
   if (print_timestamp) {
-    Logger::format_timestamp(time(NULL), timestamp, sizeof(timestamp));
+    Logger::format_timestamp(time(nullptr), timestamp, sizeof(timestamp));
     info << timestamp << " ";
   }
 
@@ -2461,7 +2461,7 @@ void RestoreLogger::log_debug(const char *fmt, ...) {
 
   NdbMutex_Lock(m_mutex);
   if (print_timestamp) {
-    Logger::format_timestamp(time(NULL), timestamp, sizeof(timestamp));
+    Logger::format_timestamp(time(nullptr), timestamp, sizeof(timestamp));
     debug << timestamp << " ";
   }
 
@@ -2476,7 +2476,7 @@ void RestoreLogger::setThreadPrefix(const char *prefix) {
 
 const char *RestoreLogger::getThreadPrefix() const {
   const char *prefix = (const char *)NDB_THREAD_TLS_JAM;
-  if (prefix == NULL) {
+  if (prefix == nullptr) {
     prefix = "";
   }
   return prefix;

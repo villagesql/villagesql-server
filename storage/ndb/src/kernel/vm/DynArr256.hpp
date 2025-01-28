@@ -172,7 +172,7 @@ inline Uint32 DynArr256::release(ReleaseIterator &iter, Uint32 *retptr) {
 }
 
 inline Uint32 DynArr256::trim(Uint32 pos, ReleaseIterator &iter) {
-  return truncate(pos, iter, NULL);
+  return truncate(pos, iter, nullptr);
 }
 
 inline Uint32 *DynArr256::get(Uint32 pos) const {

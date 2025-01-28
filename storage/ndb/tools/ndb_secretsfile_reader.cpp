@@ -58,10 +58,10 @@ static struct my_option my_long_options[] =
 
   // Specific options
   { "filesystem-password", NDB_OPT_NOSHORT, "Filesystem password",
-    nullptr, nullptr, 0, GET_PASSWORD, OPT_ARG,
+    nullptr, nullptr, nullptr, GET_PASSWORD, OPT_ARG,
     0, 0, 0, nullptr, 0, &opt_filesystem_password},
   {"filesystem-password-from-stdin", NDB_OPT_NOSHORT, "Filesystem password",
-   &opt_filesystem_password_from_stdin.opt_value, nullptr, 0, GET_BOOL, NO_ARG,
+   &opt_filesystem_password_from_stdin.opt_value, nullptr, nullptr, GET_BOOL, NO_ARG,
    0, 0, 0, nullptr, 0, &opt_filesystem_password_from_stdin},
   NdbStdOpt::end_of_options
 };

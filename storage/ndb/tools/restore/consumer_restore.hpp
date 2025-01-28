@@ -71,7 +71,7 @@ class BackupRestore : public BackupConsumer {
  public:
   BackupRestore(Ndb_cluster_connection *conn, const char *instance_name,
                 Uint32 parallelism)
-      : m_ndb(NULL),
+      : m_ndb(nullptr),
         m_cluster_connection(conn),
         m_fatal_error(false)
 #ifdef ERROR_INSERT
@@ -94,13 +94,13 @@ class BackupRestore : public BackupConsumer {
     m_restore_epoch = false;
     m_delete_epoch_tuple = false;
     m_parallelism = parallelism;
-    m_callback = 0;
-    m_free_callback = 0;
+    m_callback = nullptr;
+    m_free_callback = nullptr;
     m_no_upgrade = false;
     m_tableChangesMask = 0;
     m_preserve_trailing_spaces = false;
     m_pk_update_warning_count = 0;
-    m_cache.m_old_table = 0;
+    m_cache.m_old_table = nullptr;
     m_with_apply_status = false;
     m_with_sql_metadata = false;
     m_disable_indexes = false;

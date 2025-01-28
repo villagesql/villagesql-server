@@ -51,7 +51,8 @@ NdbOut &operator<<(NdbOut &out, const File_formats::Zero_page_header &obj) {
   char buf[256];
   out << "page size:   " << obj.m_page_size << endl;
   out << "ndb version: " << obj.m_ndb_version << ", "
-      << ndbGetVersionString(obj.m_ndb_version, 0, 0, buf, sizeof(buf)) << endl;
+      << ndbGetVersionString(obj.m_ndb_version, 0, nullptr, buf, sizeof(buf))
+      << endl;
   out << "ndb node id: " << obj.m_node_id << endl;
   out << "file type:   " << obj.m_file_type << endl;
 

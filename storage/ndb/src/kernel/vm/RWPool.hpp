@@ -88,7 +88,7 @@ inline void *RWPool<T>::getPtr(Uint32 i) const {
     return record;
   }
   handle_invalid_get_ptr(i);
-  return 0; /* purify: deadcode */
+  return nullptr; /* purify: deadcode */
 }
 
 template <typename T>
@@ -102,7 +102,7 @@ inline void *RWPool<T>::getPtr(const Record_info &ri, Uint32 i) const {
     return record;
   }
   handle_invalid_get_ptr(i);
-  return 0; /* purify: deadcode */
+  return nullptr; /* purify: deadcode */
 }
 
 #define REC_NIL GLOBAL_PAGE_SIZE_WORDS
@@ -193,7 +193,7 @@ bool RWPool<T>::seize(Ptr<T> &ptr) {
     goto seize_first;
   }
 
-  m_current_page = 0;
+  m_current_page = nullptr;
   m_current_page_no = RNIL;
   m_current_pos = RWPage::RWPAGE_WORDS;
   m_current_first_free = REC_NIL;

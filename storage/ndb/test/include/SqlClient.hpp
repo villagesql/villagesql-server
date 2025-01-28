@@ -87,7 +87,7 @@ class SqlClient {
        object (since it's not owned by the class).
    */
   SqlClient(MYSQL *mysql);
-  SqlClient(const char *dbname = "mysql", const char *suffix = NULL);
+  SqlClient(const char *dbname = "mysql", const char *suffix = nullptr);
   ~SqlClient();
 
   bool doQuery(const char *query);

@@ -185,8 +185,8 @@ class TupleS {
 
  public:
   TupleS() {
-    m_currentTable = 0;
-    allAttrData = 0;
+    m_currentTable = nullptr;
+    allAttrData = nullptr;
   }
   ~TupleS() { delete[] allAttrData; }
   TupleS(const TupleS &tuple);  // disable copy constructor
@@ -268,7 +268,7 @@ class TableS {
 
   int getNoOfAttributes() const { return allAttributesDesc.size(); }
 
-  bool have_auto_inc() const { return m_auto_val_attrib != 0; }
+  bool have_auto_inc() const { return m_auto_val_attrib != nullptr; }
 
   bool have_auto_inc(Uint32 id) const {
     return (m_auto_val_attrib ? m_auto_val_attrib->attrId == id : false);
@@ -302,7 +302,9 @@ class TableS {
    * Returns true if a table contains blobs, or is
    * a Blob parts table
    */
-  bool isBlobRelated() const { return (m_has_blobs || m_main_table != NULL); }
+  bool isBlobRelated() const {
+    return (m_has_blobs || m_main_table != nullptr);
+  }
 
   inline bool isBroken() const {
     return m_broken || (m_main_table && m_main_table->isBroken());
@@ -402,7 +404,7 @@ class BackupFile {
 
   void setName(const char *path, const char *name);
 
-  BackupFile(void (*free_data_callback)(void *) = 0, void *ctx = 0);
+  BackupFile(void (*free_data_callback)(void *) = nullptr, void *ctx = nullptr);
   virtual ~BackupFile();
 
  public:

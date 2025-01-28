@@ -144,7 +144,7 @@ int main(int argc, char **argv) {
     auto *buf = new Uint32[bytes / 4 + 1];
 
     FILE *f = fopen(filename, "rb");
-    if (f == 0) {
+    if (f == nullptr) {
       ndbout << "Failed to open file" << endl;
       delete[] buf;
       continue;

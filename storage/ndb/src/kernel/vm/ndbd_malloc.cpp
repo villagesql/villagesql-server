@@ -107,7 +107,7 @@ static void *touch_mem(void *arg) {
   first_page = index * num_pages_per_thread;
 
   if (first_page >= tot_pages) {
-    return NULL; /* We're done, no page to handle */
+    return nullptr; /* We're done, no page to handle */
   }
   if ((tot_pages - first_page) < num_pages_per_thread) {
     num_pages_per_thread = tot_pages - first_page;
@@ -150,7 +150,7 @@ static void *touch_mem(void *arg) {
       *watchCounter = 9;
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 void ndbd_alloc_touch_mem(void *p, size_t sz, volatile Uint32 *watchCounter,
@@ -189,13 +189,13 @@ void ndbd_alloc_touch_mem(void *p, size_t sz, volatile Uint32 *watchCounter,
     touch_mem_struct[i].index = i;
     touch_mem_struct[i].make_readwritable = make_readwritable;
 
-    thread_ptr[i] = NULL;
+    thread_ptr[i] = nullptr;
     if (sz > MIN_START_THREAD_SIZE) {
       thread_ptr[i] =
           NdbThread_Create(touch_mem, (NDB_THREAD_ARG *)&touch_mem_struct[i], 0,
                            "touch_thread", NDB_THREAD_PRIO_MEAN);
     }
-    if (thread_ptr[i] == NULL) {
+    if (thread_ptr[i] == nullptr) {
       touch_mem((void *)&touch_mem_struct[i]);
     }
   }

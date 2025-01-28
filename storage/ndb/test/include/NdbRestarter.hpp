@@ -36,7 +36,8 @@
 
 class NdbRestarter {
  public:
-  NdbRestarter(const char *_addr = 0, class Ndb_cluster_connection *con = 0);
+  NdbRestarter(const char *_addr = nullptr,
+               class Ndb_cluster_connection *con = nullptr);
   ~NdbRestarter();
 
   int getDbNodeId(int _i);
@@ -173,7 +174,8 @@ class NdbRestarter {
   const ndb_mgm_configuration *getConfig();
 
   class Ndb_cluster_connection *m_cluster_connection;
-  int wait_until_ready(const int *nodes = 0, int cnt = 0, int timeout = 60);
+  int wait_until_ready(const int *nodes = nullptr, int cnt = 0,
+                       int timeout = 60);
 
  public:
   Vector<ndb_mgm_node_state> ndbNodes;

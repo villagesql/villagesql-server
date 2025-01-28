@@ -114,7 +114,7 @@ static inline int trylock(struct thr_spin_lock *sl) {
 #endif
 
 struct thr_mutex {
-  thr_mutex(const char *name = 0) {
+  thr_mutex(const char *name = nullptr) {
     NdbMutex_Init(&m_mutex);
     register_lock(this, name);
   }

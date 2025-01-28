@@ -33,11 +33,11 @@
 #define JAM_FILE_ID 503
 
 TransientPagePool::TransientPagePool()
-    : m_mem_manager(NULL), m_root_page(NULL), m_top(RNIL), m_type_id(0) {}
+    : m_mem_manager(nullptr), m_root_page(nullptr), m_top(RNIL), m_type_id(0) {}
 
 TransientPagePool::TransientPagePool(Uint32 type_id,
                                      Ndbd_mem_manager *mem_manager)
-    : m_mem_manager(NULL), m_root_page(NULL), m_top(RNIL), m_type_id(0) {
+    : m_mem_manager(nullptr), m_root_page(nullptr), m_top(RNIL), m_type_id(0) {
   init(type_id, mem_manager);
 }
 
@@ -81,7 +81,7 @@ bool TransientPagePool::seize(Ptr<Page> &p) {
   Uint32 page_number;
   void *vpage = m_mem_manager->alloc_page(m_type_id, &page_number,
                                           Ndbd_mem_manager::NDB_ZONE_LE_32);
-  if (unlikely(vpage == NULL)) {
+  if (unlikely(vpage == nullptr)) {
     return false;
   }
   require(page_number != MapPage::NO_VALUE);
@@ -113,7 +113,7 @@ bool TransientPagePool::getPtr(Ptr<Page> &p) const {
   if (unlikely(!getUncheckedPtr(p))) {
     return false;
   }
-  if (unlikely(p.p == NULL || !Magic::match(p.p->m_magic, m_type_id))) {
+  if (unlikely(p.p == nullptr || !Magic::match(p.p->m_magic, m_type_id))) {
     g_eventLogger->info(
         "Magic::match failed in %s: "
         "type_id %08x rg %u tid %u: "
@@ -121,7 +121,7 @@ bool TransientPagePool::getPtr(Ptr<Page> &p) const {
         "magic %08x expected %08x",
         __func__, m_type_id, GET_RG(m_type_id), GET_TID(m_type_id), p.i, p.p,
         p.p->m_magic, Magic::make(m_type_id));
-    require(p.p != NULL && Magic::match(p.p->m_magic, m_type_id));
+    require(p.p != nullptr && Magic::match(p.p->m_magic, m_type_id));
   }
   return true;
 }
@@ -134,7 +134,7 @@ Uint64 TransientPagePool::getMemoryNeed(Uint32 pages) {
 
 bool TransientPagePool::getUncheckedPtr(Ptr<Page> &p) const {
   if (unlikely(p.i == RNIL)) {
-    p.p = NULL;
+    p.p = nullptr;
     return false;
   }
   Uint32 page_number = get_valid(p.i);
@@ -151,7 +151,7 @@ bool TransientPagePool::getValidPtr(Ptr<Page> &p) const {
   if (unlikely(!getUncheckedPtr(p))) {
     return false;
   }
-  if (unlikely(p.p == NULL)) {
+  if (unlikely(p.p == nullptr)) {
     return false;
   }
   return Magic::match(p.p->m_magic, m_type_id);
@@ -204,7 +204,7 @@ inline bool TransientPagePool::set(Uint32 index, Uint32 value) {
   require(value != MapPage::NO_VALUE);
   assert(value < RNIL);
   assert(index <= get_next_index(m_top));
-  require(m_root_page != NULL);
+  require(m_root_page != nullptr);
 
   Uint32 high =
       (index >> MapPage::VALUE_INDEX_BITS) & MapPage::VALUE_INDEX_MASK;
@@ -218,7 +218,7 @@ inline bool TransientPagePool::set(Uint32 index, Uint32 value) {
   if (unlikely(leaf_page_id == MapPage::NO_VALUE)) {
     void *p = m_mem_manager->alloc_page(m_type_id, &leaf_page_id,
                                         Ndbd_mem_manager::NDB_ZONE_LE_32);
-    if (unlikely(p == NULL)) {
+    if (unlikely(p == nullptr)) {
       return false;
     }
     require(leaf_page_id != MapPage::NO_VALUE);
@@ -241,7 +241,7 @@ inline bool TransientPagePool::set(Uint32 index, Uint32 value) {
 inline bool TransientPagePool::clear(Uint32 index) {
   require(index == m_top);  // Can only clear from top
   require(m_top != RNIL && index <= m_top);
-  require(m_root_page != NULL);
+  require(m_root_page != nullptr);
   Uint32 high =
       (index >> MapPage::VALUE_INDEX_BITS) & MapPage::VALUE_INDEX_MASK;
   require(high < MapPage::PAGE_WORDS);
@@ -258,7 +258,7 @@ inline bool TransientPagePool::clear(Uint32 index) {
 
 inline Uint32 TransientPagePool::get(Uint32 index) const {
   require(m_top != RNIL && index <= m_top);
-  require(m_root_page != NULL);
+  require(m_root_page != nullptr);
   Uint32 high =
       (index >> MapPage::VALUE_INDEX_BITS) & MapPage::VALUE_INDEX_MASK;
   require(high < MapPage::PAGE_WORDS);
@@ -278,7 +278,7 @@ inline Uint32 TransientPagePool::get_valid(Uint32 index) const {
   if (unlikely(m_top == RNIL || index > m_top)) {
     return MapPage::NO_VALUE;
   }
-  if (unlikely(m_root_page == NULL)) {
+  if (unlikely(m_root_page == nullptr)) {
     return MapPage::NO_VALUE;
   }
 
@@ -308,7 +308,7 @@ inline Uint32 TransientPagePool::get_valid(Uint32 index) const {
  * be removed.
  */
 inline bool TransientPagePool::shrink() {
-  if (unlikely(m_root_page == NULL || m_top == RNIL)) {
+  if (unlikely(m_root_page == nullptr || m_top == RNIL)) {
     return false;
   }
 

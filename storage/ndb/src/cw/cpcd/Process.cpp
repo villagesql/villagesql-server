@@ -189,7 +189,7 @@ void CPCD::Process::monitor() {
         m_status = STOPPED;
         removePid();
         m_pid = bad_pid;
-      } else if (time(NULL) > m_stopping_time + m_stop_timeout) {
+      } else if (time(nullptr) > m_stopping_time + m_stop_timeout) {
         do_shutdown(true /* force sigkill */);
       }
       break;
@@ -264,7 +264,7 @@ int CPCD::Process::readPid() {
 
   f = fopen(filename, "r");
 
-  if (f == NULL) {
+  if (f == nullptr) {
     return -1; /* File didn't exist */
   }
 
@@ -272,7 +272,7 @@ int CPCD::Process::readPid() {
   size_t r = fread(buf, 1, sizeof(buf), f);
   fclose(f);
   if (r > 0) {
-    m_pid = strtol(buf, (char **)NULL, 0);
+    m_pid = strtol(buf, (char **)nullptr, 0);
   }
 
   if (errno == 0) {
@@ -308,7 +308,7 @@ int CPCD::Process::writePid(int pid) {
 
   f = fdopen(fd, "w");
 
-  if (f == NULL) {
+  if (f == nullptr) {
     logger.error("Cannot open `%s': %s\n", tmpfilename, strerror(errno));
     return -1; /* Couldn't open file */
   }
@@ -338,7 +338,7 @@ void CPCD::Process::removePid() {
 static void setup_environment(const char *env) {
   char **p;
   p = BaseString::argify("", env);
-  for (int i = 0; p[i] != NULL; i++) {
+  for (int i = 0; p[i] != nullptr; i++) {
     /*int res = */ putenv(p[i]);
   }
 }

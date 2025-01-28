@@ -28,7 +28,7 @@
 int SafeMutex::create() {
   int ret;
   if (m_initdone) return err(ErrState, __LINE__);
-  ret = native_mutex_init(&m_mutex, 0);
+  ret = native_mutex_init(&m_mutex, nullptr);
   if (ret != 0) return err(ret, __LINE__);
   ret = native_cond_init(&m_cond);
   if (ret != 0) return err(ret, __LINE__);

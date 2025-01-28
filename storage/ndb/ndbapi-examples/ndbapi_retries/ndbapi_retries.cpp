@@ -98,13 +98,14 @@ static inline void sleep(unsigned int seconds) { Sleep(seconds / 1000); }
   }
 
 void printTransactionError(NdbTransaction *ndbTransaction) {
-  const NdbOperation *ndbOp = NULL;
+  const NdbOperation *ndbOp = nullptr;
   int i = 0;
 
   /****************************************************************
    * Print NdbError object of every operations in the transaction *
    ****************************************************************/
-  while ((ndbOp = ndbTransaction->getNextCompletedOperation(ndbOp)) != NULL) {
+  while ((ndbOp = ndbTransaction->getNextCompletedOperation(ndbOp)) !=
+         nullptr) {
     NdbError error = ndbOp->getNdbError();
     std::cout << "           OPERATION " << i + 1 << ": " << error.code << " "
               << error.message << std::endl
@@ -127,7 +128,7 @@ int insert(int transactionId, NdbTransaction *myTransaction,
   NdbOperation *myOperation;  // For other operations
 
   myOperation = myTransaction->getNdbOperation(myTable);
-  if (myOperation == NULL) return -1;
+  if (myOperation == nullptr) return -1;
 
   if (myOperation->insertTuple() ||
       myOperation->equal("ATTR1", transactionId) ||
@@ -156,7 +157,7 @@ int executeInsertTransaction(int transactionId, Ndb *myNdb,
      * Start and execute transaction *
      *********************************/
     myTransaction = myNdb->startTransaction();
-    if (myTransaction == NULL) {
+    if (myTransaction == nullptr) {
       APIERROR(myNdb->getNdbError());
       ndberror = myNdb->getNdbError();
       result = -1;  // Failure
@@ -195,7 +196,7 @@ int executeInsertTransaction(int transactionId, Ndb *myNdb,
     /*********************
      * Close transaction *
      *********************/
-    if (myTransaction != NULL) {
+    if (myTransaction != nullptr) {
       myNdb->closeTransaction(myTransaction);
     }
   }
@@ -279,7 +280,7 @@ int main(int argc, char **argv) {
 
   const NdbDictionary::Dictionary *myDict = myNdb->getDictionary();
   const NdbDictionary::Table *myTable = myDict->getTable("api_retries");
-  if (myTable == NULL) {
+  if (myTable == nullptr) {
     APIERROR(myDict->getNdbError());
     return -1;
   }

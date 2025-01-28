@@ -123,7 +123,7 @@ DynArr256Pool::DynArr256Pool() {
   m_type_id = RNIL;
   m_first_free = RNIL;
   m_last_free = RNIL;
-  m_memroot = 0;
+  m_memroot = nullptr;
   m_inuse_nodes = 0;
   m_pg_count = 0;
   m_used = 0;
@@ -131,7 +131,7 @@ DynArr256Pool::DynArr256Pool() {
 }
 
 void DynArr256Pool::init(Uint32 type_id, const Pool_context &pc) {
-  init(0, type_id, pc);
+  init(nullptr, type_id, pc);
 }
 
 void DynArr256Pool::init(NdbMutex *m, Uint32 type_id, const Pool_context &pc) {
@@ -186,7 +186,7 @@ Uint32 *DynArr256::get_dirty(Uint32 pos) const {
   Uint32 type_id = (~m_pool->m_type_id) & 0xFFFF;
 
   if (unlikely(pos >= g_max_sizes[sz])) {
-    return 0;
+    return nullptr;
   }
 
 #ifdef DA256_USE_PX
@@ -197,7 +197,7 @@ Uint32 *DynArr256::get_dirty(Uint32 pos) const {
   Uint32 *retVal = &m_head.m_ptr_i;
   for (; sz--;) {
     if (unlikely(ptrI == RNIL)) {
-      return 0;
+      return nullptr;
     }
 #ifdef DA256_USE_PX
     Uint32 p0 = px[sz];
@@ -217,7 +217,7 @@ Uint32 *DynArr256::get_dirty(Uint32 pos) const {
   return retVal;
 err:
   require(false);
-  return 0;
+  return nullptr;
 }
 
 Uint32 *DynArr256::set(Uint32 pos) {
@@ -227,7 +227,7 @@ Uint32 *DynArr256::set(Uint32 pos) {
 
   if (unlikely(pos >= g_max_sizes[sz])) {
     if (unlikely(!expand(pos))) {
-      return 0;
+      return nullptr;
     }
     sz = m_head.m_sz;
   }
@@ -250,10 +250,10 @@ Uint32 *DynArr256::set(Uint32 pos) {
       if (ERROR_INSERTED(3005)) {
         // Demonstrate Bug#25851801 7.6.2(DMR2):: COMPLETE CLUSTER CRASHED
         // DURING UNIQUE KEY CREATION ... Simulate m_pool->seize() failed.
-        return 0;
+        return nullptr;
       }
       if (unlikely((ptrI = m_pool->seize()) == RNIL)) {
-        return 0;
+        return nullptr;
       }
       m_head.m_no_of_nodes++;
       *retVal = ptrI;
@@ -276,7 +276,7 @@ Uint32 *DynArr256::set(Uint32 pos) {
 
 err:
   require(false);
-  return 0;
+  return nullptr;
 }
 
 static inline void initpage(DA256Page *p, Uint32 page_no, Uint32 type_id) {
@@ -409,7 +409,7 @@ Uint32 DynArr256::truncate(Uint32 trunc_pos, ReleaseIterator &iter,
       require(false);
     }
     assert(refPtr != NULL);
-    if (ptrVal != NULL) {
+    if (ptrVal != nullptr) {
       *ptrVal = *refPtr;
     } else if (is_value && *refPtr != RNIL) {
       return 0;
@@ -449,7 +449,7 @@ Uint32 DynArr256::truncate(Uint32 trunc_pos, ReleaseIterator &iter,
 #if defined VM_TRACE || defined ERROR_INSERT
       if (iter.m_pos < m_head.m_high_pos) m_head.m_high_pos = iter.m_pos;
 #endif
-      if (is_value && ptrVal != NULL) return 1;
+      if (is_value && ptrVal != nullptr) return 1;
     } else {  // sz++
       assert(iter.m_ptr_i[iter.m_sz + 1] == RNIL);
       iter.m_sz++;
@@ -561,7 +561,7 @@ Uint32 DynArr256Pool::seize() {
   if (ff == RNIL) {
     Uint32 page_no;
     if (likely((page = (DA256Page *)m_ctx.alloc_page27(type_id, &page_no)) !=
-               0)) {
+               nullptr)) {
       initpage(page, page_no, type_id);
       m_pg_count++;
 #ifdef UNIT_TEST

@@ -35,7 +35,7 @@
 
 #define JAM_FILE_ID 463
 
-static const char *progname = 0;
+static const char *progname = nullptr;
 static bool allflag = false;
 static bool checkonly = false;
 static bool equalcontents = false;
@@ -203,20 +203,20 @@ int main(int argc, char **argv) {
   int exitcode = 0;
 
   while (argc > 1 && argv[1][0] == '-') {
-    if (strchr(argv[1], 'a') != 0) allflag = true;
-    if (strchr(argv[1], 'c') != 0) checkonly = true;
-    if (strchr(argv[1], 'e') != 0) equalcontents = true;
-    if (strchr(argv[1], 'q') != 0) okquiet = true;
-    if (strchr(argv[1], 't') != 0) transok = true;
-    if (strchr(argv[1], 'h') != 0 || strchr(argv[1], '?') != 0) {
+    if (strchr(argv[1], 'a') != nullptr) allflag = true;
+    if (strchr(argv[1], 'c') != nullptr) checkonly = true;
+    if (strchr(argv[1], 'e') != nullptr) equalcontents = true;
+    if (strchr(argv[1], 'q') != nullptr) okquiet = true;
+    if (strchr(argv[1], 't') != nullptr) transok = true;
+    if (strchr(argv[1], 'h') != nullptr || strchr(argv[1], '?') != nullptr) {
       usage();
       ndb_end_and_exit(0);
     }
     argc--, argv++;
   }
 
-  const char *prevfilename = 0;
-  Uint32 *prevbuf = 0;
+  const char *prevfilename = nullptr;
+  Uint32 *prevbuf = nullptr;
   Uint32 prevbytes = 0;
 
   while (argc > 1) {
@@ -234,7 +234,7 @@ int main(int argc, char **argv) {
     auto *buf = new Uint32[bytes / 4 + 1];
 
     FILE *f = fopen(filename, "rb");
-    if (f == 0) {
+    if (f == nullptr) {
       ndbout << filename << ": open failed errno=" << errno << endl;
       delete[] buf;
       exitcode = 1;
@@ -272,7 +272,7 @@ int main(int argc, char **argv) {
              << " version=" << version(sf->NdbVersion) << endl;
     }
 
-    if (equalcontents && prevfilename != 0) {
+    if (equalcontents && prevfilename != nullptr) {
       if (prevbytes != bytes || memcmp(prevbuf, buf, bytes) != 0) {
         ndbout << filename << ": differs from " << prevfilename << endl;
         exitcode = 1;

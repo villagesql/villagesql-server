@@ -397,7 +397,7 @@ inline Uint32 *File_formats::Datafile::Extent_page::get_create_table_version(
         page->get_header_v2(no, extent_size);
     ret_data = &header->m_create_table_version;
   } else {
-    ret_data = NULL;
+    ret_data = nullptr;
   }
   return ret_data;
 }

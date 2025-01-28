@@ -126,13 +126,13 @@ int main(int argc, char **argv) {
    ******************************************************/
   const NdbDictionary::Dictionary *myDict = myNdb->getDictionary();
   const NdbDictionary::Table *myTable = myDict->getTable("api_async1");
-  if (myTable == NULL) APIERROR(myDict->getNdbError());
+  if (myTable == nullptr) APIERROR(myDict->getNdbError());
   for (int i = 0; i < 2; i++) {
     myNdbTransaction[i] = myNdb->startTransaction();
-    if (myNdbTransaction[i] == NULL) APIERROR(myNdb->getNdbError());
+    if (myNdbTransaction[i] == nullptr) APIERROR(myNdb->getNdbError());
 
     myNdbOperation = myNdbTransaction[i]->getNdbOperation(myTable);
-    if (myNdbOperation == NULL) APIERROR(myNdbTransaction[i]->getNdbError());
+    if (myNdbOperation == nullptr) APIERROR(myNdbTransaction[i]->getNdbError());
 
     myNdbOperation->insertTuple();
     myNdbOperation->equal("ATTR1", 20 + i);
@@ -140,7 +140,7 @@ int main(int argc, char **argv) {
 
     // Prepare transaction (the transaction is NOT yet sent to NDB)
     myNdbTransaction[i]->executeAsynchPrepare(NdbTransaction::Commit, &callback,
-                                              NULL);
+                                              nullptr);
   }
 
   // Send all transactions to NDB

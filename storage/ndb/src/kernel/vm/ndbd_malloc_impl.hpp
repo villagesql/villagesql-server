@@ -288,7 +288,8 @@ class Ndbd_mem_manager {
 
   bool init(Uint32 *watchCounter, Uint32 pages,
             bool allow_alloc_less_than_requested = true);
-  void map(Uint32 *watchCounter, bool memlock = false, Uint32 resources[] = 0);
+  void map(Uint32 *watchCounter, bool memlock = false,
+           Uint32 resources[] = nullptr);
   void init_resource_spare(Uint32 id, Uint32 pct);
   void *get_memroot() const;
 
@@ -850,7 +851,7 @@ inline void *Ndbd_mem_manager::get_valid_page(Uint32 page_num) const {
 #ifdef VM_TRACE
     abort();
 #endif
-    return NULL;
+    return nullptr;
   }
   bool page_is_mapped;
   Uint32 lock_value;
@@ -886,7 +887,7 @@ inline void *Ndbd_mem_manager::get_valid_page(Uint32 page_num) const {
 #ifdef VM_TRACE
     abort();
 #endif
-    return NULL;
+    return nullptr;
   }
 
   return (void *)(m_base_page + page_num);

@@ -35,7 +35,7 @@
 static void *monitor_thread_create_wrapper(void *arg) {
   auto *mon = (CPCD::Monitor *)arg;
   mon->run();
-  return NULL;
+  return nullptr;
 }
 
 CPCD::Monitor::Monitor(CPCD *cpcd, int poll) {

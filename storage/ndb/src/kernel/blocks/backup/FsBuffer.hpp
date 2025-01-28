@@ -154,7 +154,7 @@ inline FsBuffer::FsBuffer() { clear(); }
 
 inline void FsBuffer::clear() {
   m_minRead = m_maxRead = m_maxWrite = m_size = m_bufSize = m_free = 0;
-  m_buffer = m_start = 0;
+  m_buffer = m_start = nullptr;
   m_freeLwm = 0;
   m_preparedWriteSize = 0;
   m_preparedReadSize = 0;
@@ -226,14 +226,14 @@ inline void FsBuffer::reset() {
 }
 
 inline const char *FsBuffer::valid() const {
-  if (m_buffer == 0) return "Null pointer buffer";
+  if (m_buffer == nullptr) return "Null pointer buffer";
   if (m_bufSize == 0) return "Zero size buffer";
   if (m_blockSize == 0) return "Zero block size";
   if (m_minRead < m_blockSize) return "Min read less than block size";
   if (m_maxRead < m_blockSize) return "Max read less than block size";
   if (m_maxRead < m_minRead) return "Max read less than min read";
   if (m_size == 0) return "Zero usable space";
-  return 0;
+  return nullptr;
 }
 
 inline Uint32 FsBuffer::getBufferSize() const { return m_bufSize; }

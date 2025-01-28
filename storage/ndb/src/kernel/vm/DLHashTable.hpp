@@ -190,11 +190,11 @@ class DLMHashTable {
 
 template <typename P, typename M>
 inline DLMHashTable<P, M>::DLMHashTable(P &_pool)
-    : mask(0), hashValues(NULL), thePool(_pool) {}
+    : mask(0), hashValues(nullptr), thePool(_pool) {}
 
 template <typename P, typename M>
 inline DLMHashTable<P, M>::~DLMHashTable() {
-  if (hashValues != NULL) delete[] hashValues;
+  if (hashValues != nullptr) delete[] hashValues;
 }
 
 template <typename P, typename M>
@@ -202,7 +202,7 @@ inline bool DLMHashTable<P, M>::setSize(Uint32 size) {
   Uint32 i = 1;
   while (i < size) i *= 2;
 
-  if (hashValues != NULL) {
+  if (hashValues != nullptr) {
     /*
       If setSize() is called twice with different size values then this is
       most likely a bug.

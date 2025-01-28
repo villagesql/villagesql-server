@@ -49,7 +49,7 @@ int main() {
     while (ndb_mgm_is_connected(handle) != 0) {
       struct ndb_mgm_cluster_state *state = ndb_mgm_get_status(handle);
 
-      if (state == NULL) {
+      if (state == nullptr) {
         printf("ndb_mgm_get_status failed, error: '%d: %s', line: %d\n",
                ndb_mgm_get_latest_error(handle),
                ndb_mgm_get_latest_error_desc(handle),

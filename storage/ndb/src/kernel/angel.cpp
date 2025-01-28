@@ -233,7 +233,8 @@ static void reportShutdown(const ndb_mgm_configuration *config, NodeId nodeid,
   }
 
   // Log event locally
-  g_eventLogger->log(rep->getEventType(), theData, length, rep->getNodeId(), 0);
+  g_eventLogger->log(rep->getEventType(), theData, length, rep->getNodeId(),
+                     nullptr);
 
   // Log event to cluster log
   ndb_mgm_configuration_iterator iter(config, CFG_SECTION_NODE);
@@ -251,7 +252,7 @@ static void reportShutdown(const ndb_mgm_configuration *config, NodeId nodeid,
     connect_str.assfmt("%s %d", hostname, port);
 
     NdbMgmHandle h = ndb_mgm_create_handle();
-    if (h == 0) {
+    if (h == nullptr) {
       g_eventLogger->warning(
           "Unable to report shutdown reason "
           "to '%s'(failed to create mgm handle)",
@@ -354,10 +355,10 @@ extern int real_main(int, char **);
 
 static char **create_argv(const Vector<BaseString> &args) {
   char **argv = (char **)malloc(sizeof(char *) * (args.size() + 1));
-  if (argv == NULL) return NULL;
+  if (argv == nullptr) return nullptr;
 
   for (unsigned i = 0; i < args.size(); i++) argv[i] = strdup(args[i].c_str());
-  argv[args.size()] = NULL;
+  argv[args.size()] = nullptr;
   return argv;
 }
 
@@ -522,9 +523,9 @@ static bool configure(const ndb_mgm_configuration *conf, NodeId nodeid) {
 
   NdbConfig_SetPath(datadir);
 
-  if (NdbDir::chdir(NdbConfig_get_path(NULL)) != 0) {
+  if (NdbDir::chdir(NdbConfig_get_path(nullptr)) != 0) {
     g_eventLogger->warning("Cannot change directory to '%s', error: %d",
-                           NdbConfig_get_path(NULL), errno);
+                           NdbConfig_get_path(nullptr), errno);
     // Ignore error
   }
 

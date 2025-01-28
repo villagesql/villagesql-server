@@ -50,7 +50,7 @@ static struct my_option my_long_options[] = {
     NdbStdOpt::version,
     NdbStdOpt::end_of_options};
 
-const char *load_default_groups[] = {0};
+const char *load_default_groups[] = {nullptr};
 
 static void short_usage_sub() {
   ndb_short_usage_sub("[ERRORCODE [ERRORCODE...]]");

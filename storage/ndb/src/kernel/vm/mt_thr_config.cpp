@@ -67,7 +67,7 @@ const THRConfig::T_Thread *THRConfigApplier::find_thread(
   } else if ((instanceNo = findBlock(DBTC, instancelist, cnt)) >= 0) {
     return &m_threads[T_TC][instanceNo - 1];  // remove proxy
   }
-  return 0;
+  return nullptr;
 }
 
 void THRConfigApplier::appendInfo(BaseString &str, const unsigned short list[],

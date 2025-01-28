@@ -53,7 +53,7 @@ extern "C"
         void _ndbclient_exports(void) {
   (void)ndb_init();
   Ndb_cluster_connection cluster_connection;
-  NdbScanFilter scan_filter((NdbOperation *)0);
+  NdbScanFilter scan_filter((NdbOperation *)nullptr);
   NdbIndexStat index_stat;
   NdbInfo info(&cluster_connection, "");
   drop_instance();  // NdbPool

@@ -77,15 +77,15 @@ struct thread_result_type {
 };
 typedef struct thread_result_type THREAD_RESULT;
 
-static THREAD_RESULT *thread_result = NULL;
+static THREAD_RESULT *thread_result = nullptr;
 static unsigned int ndb_threads = 0;
 
-static MYSQL *con = NULL;
+static MYSQL *con = nullptr;
 unsigned int opt_port_number = 0;
 char *opt_host = (char *)"localhost";
 char *opt_user = (char *)"root";
-char *opt_password = 0;
-char *opt_socket = 0;
+char *opt_password = nullptr;
+char *opt_socket = nullptr;
 bool tty_password = false;
 char *db_name = (char *)"ndbinfo";
 unsigned int opt_node_id = 0;
@@ -99,7 +99,7 @@ bool opt_sort = false;
 bool opt_help = false;
 
 static char percentage_sign = '%';
-const char *load_default_groups[] = {"ndb_top", "client", 0};
+const char *load_default_groups[] = {"ndb_top", "client", nullptr};
 
 void handle_error() { printf("%s\n\r", mysql_error(con)); }
 
@@ -107,7 +107,7 @@ void cleanup(bool in_screen) {
   if (in_screen) {
     endwin();
   }
-  if (con != NULL) {
+  if (con != nullptr) {
     mysql_close(con);
   }
   if (thread_result) {
@@ -120,12 +120,12 @@ void cleanup(bool in_screen) {
 
 int connect_mysql() {
   const mysql_protocol_type connect_protocol =
-      opt_socket != 0 ? MYSQL_PROTOCOL_SOCKET : MYSQL_PROTOCOL_TCP;
+      opt_socket != nullptr ? MYSQL_PROTOCOL_SOCKET : MYSQL_PROTOCOL_TCP;
   mysql_options(con, MYSQL_OPT_PROTOCOL, (void *)&connect_protocol);
 
   MYSQL *loc = mysql_real_connect(con, opt_host, opt_user, opt_password,
                                   db_name, opt_port_number, opt_socket, 0);
-  return loc == NULL ? 1 : 0;
+  return loc == nullptr ? 1 : 0;
 }
 
 int query_mysql() {
@@ -147,7 +147,7 @@ int query_mysql() {
   if ((res = mysql_query(con, query_str))) return res;
 
   MYSQL_RES *result = mysql_store_result(con);
-  if (result == NULL) return 2;
+  if (result == nullptr) return 2;
 
   int num_fields = mysql_num_fields(result);
   if (num_fields != 11) {
@@ -156,15 +156,15 @@ int query_mysql() {
 
   uint64_t num_rows = mysql_num_rows(result);
 
-  if (thread_result != NULL) {
+  if (thread_result != nullptr) {
     free(thread_result);
-    thread_result = NULL;
+    thread_result = nullptr;
   }
   if (num_rows == 0) {
     return 4;
   }
   auto *tr_array = (THREAD_RESULT *)malloc(sizeof(THREAD_RESULT) * num_rows);
-  require(tr_array != NULL);
+  require(tr_array != nullptr);
   thread_result = tr_array;
 
   ndb_threads = 0;
@@ -204,7 +204,7 @@ int query_mysql() {
 
 static char *tombs(const wchar_t *wc, const char *c) {
   char *p;
-  size_t n = wcstombs(NULL, wc, 0);
+  size_t n = wcstombs(nullptr, wc, 0);
   if (n == (size_t)-1) {
     p = strdup(c);
   } else {
@@ -242,34 +242,37 @@ void resize_window(int dummy) { g_resize_window = 1; }
 static struct my_option my_long_options[] = {
     {"host", 'h', "Hostname of MySQL Server", &opt_host, nullptr, nullptr,
      GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
-    {"port", 'P', "Port of MySQL Server", &opt_port_number, nullptr, 0,
+    {"port", 'P', "Port of MySQL Server", &opt_port_number, nullptr, nullptr,
      GET_UINT, REQUIRED_ARG, 3306, 0, 0, nullptr, 0, nullptr},
     {"socket", 'S', "The socket file to use for connection.", &opt_socket,
-     nullptr, 0, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
-    {"user", 'u', "Username to log into MySQL Server", &opt_user, nullptr, 0,
-     GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
-    {"password", 'p', "Password to log into MySQL Server (default is NULL)", 0,
-     0, 0, GET_PASSWORD, OPT_ARG, 0, 0, 0, nullptr, 0, nullptr},
-    {"node_id", 'n', "Node id of data node to watch", &opt_node_id, nullptr, 0,
-     GET_UINT, REQUIRED_ARG, 1, 0, 0, nullptr, 0, nullptr},
-    {"sleep_time", 's', "Sleep time between each refresh of statistics",
-     &opt_sleep_time, nullptr, 0, GET_UINT, REQUIRED_ARG, 1, 0, 0, nullptr, 0,
+     nullptr, nullptr, GET_STR_ALLOC, REQUIRED_ARG, 0, 0, 0, nullptr, 0,
      nullptr},
+    {"user", 'u', "Username to log into MySQL Server", &opt_user, nullptr,
+     nullptr, GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
+    {"password", 'p', "Password to log into MySQL Server (default is NULL)",
+     nullptr, nullptr, nullptr, GET_PASSWORD, OPT_ARG, 0, 0, 0, nullptr, 0,
+     nullptr},
+    {"node_id", 'n', "Node id of data node to watch", &opt_node_id, nullptr,
+     nullptr, GET_UINT, REQUIRED_ARG, 1, 0, 0, nullptr, 0, nullptr},
+    {"sleep_time", 's', "Sleep time between each refresh of statistics",
+     &opt_sleep_time, nullptr, nullptr, GET_UINT, REQUIRED_ARG, 1, 0, 0,
+     nullptr, 0, nullptr},
     {"measured_load", 'm', "Show measured load by thread", &opt_measured_load,
-     nullptr, 0, GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
-    {"os_load", 'o', "Show load measured by OS", &opt_os_load, nullptr, 0,
+     nullptr, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
+    {"os_load", 'o', "Show load measured by OS", &opt_os_load, nullptr, nullptr,
      GET_BOOL, NO_ARG, 1, 0, 0, nullptr, 0, nullptr},
-    {"color", 'c', "Use color in ASCII graphs", &opt_color, nullptr, 0,
+    {"color", 'c', "Use color in ASCII graphs", &opt_color, nullptr, nullptr,
      GET_BOOL, NO_ARG, 1, 0, 0, nullptr, 0, nullptr},
-    {"text", 't', "Use text to represent data", &opt_text, nullptr, 0, GET_BOOL,
-     NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
-    {"graph", 'g', "Use ASCII graphs to represent data", &opt_graph, nullptr, 0,
-     GET_BOOL, NO_ARG, 1, 0, 0, nullptr, 0, nullptr},
+    {"text", 't', "Use text to represent data", &opt_text, nullptr, nullptr,
+     GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
+    {"graph", 'g', "Use ASCII graphs to represent data", &opt_graph, nullptr,
+     nullptr, GET_BOOL, NO_ARG, 1, 0, 0, nullptr, 0, nullptr},
     {"sort", 'r', "Sort threads after highest measured usage", &opt_sort,
-     nullptr, 0, GET_BOOL, NO_ARG, 1, 0, 0, nullptr, 0, nullptr},
-    {"help", '?', "Print usage", &opt_help, nullptr, 0, GET_BOOL, NO_ARG, 0, 0,
-     0, 0, 0, 0},
-    {0, 0, 0, 0, 0, 0, GET_NO_ARG, NO_ARG, 0, 0, 0, nullptr, 0, nullptr}};
+     nullptr, nullptr, GET_BOOL, NO_ARG, 1, 0, 0, nullptr, 0, nullptr},
+    {"help", '?', "Print usage", &opt_help, nullptr, nullptr, GET_BOOL, NO_ARG,
+     0, 0, 0, nullptr, 0, nullptr},
+    {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
+     0, nullptr, 0, nullptr}};
 
 static void short_usage_sub() { printf("Usage: %s [OPTIONS]\n", my_progname); }
 
@@ -436,7 +439,7 @@ int main(int argc, char **argv) {
   MY_INIT("ndb_top");
   MEM_ROOT alloc{PSI_NOT_INSTRUMENTED, 512};
   my_load_defaults(MYSQL_CONFIG_NAME, load_default_groups, &argc, &argv, &alloc,
-                   NULL);
+                   nullptr);
 
   ret = handle_options(&argc, &argv, my_long_options, get_one_option);
   if (ret != 0) {
@@ -460,8 +463,8 @@ int main(int argc, char **argv) {
     exit_code = 1;
     goto exit_handling;
   }
-  con = mysql_init(NULL);
-  if (con == NULL) {
+  con = mysql_init(nullptr);
+  if (con == nullptr) {
     usage();
     printf("\n\rError message:\n\rmysql_init failed\n");
     exit_code = 1;
