@@ -403,7 +403,7 @@ void Properties::print(FILE *out, const char *prefix) const {
     prefix = "";
   }
 
-  for (auto i : impl->content) {
+  for (const auto &i : impl->content) {
     switch (i.second.valueType) {
       case PropertiesType_Uint32:
         fprintf(out, "%s%s = (Uint32) %d\n", prefix, i.second.name,

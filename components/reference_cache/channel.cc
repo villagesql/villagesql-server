@@ -74,7 +74,7 @@ channel_imp *channel_imp::create(service_names_set<> &service_names) {
     return nullptr;
   }
 
-  for (auto service_name : service_names) {
+  for (const auto &service_name : service_names) {
     channel_by_name_hash->insert(
         channel_by_name_hash_t::value_type(service_name.name_, result));
   }
@@ -92,7 +92,7 @@ bool channel_imp::destroy(channel_imp *channel) {
     if (it != channels->end()) {
       channels->erase(it);
 
-      for (auto service_name : channel->get_service_names()) {
+      for (const auto &service_name : channel->get_service_names()) {
         auto range = channel_by_name_hash->equal_range(service_name.name_);
         for (auto it_local = range.first; it_local != range.second;
              ++it_local) {

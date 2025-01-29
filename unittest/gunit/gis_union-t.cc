@@ -272,7 +272,7 @@ TYPED_TEST(UnionTest, LinestringPolygon) {
       ls_crossing_base_py_difference<TypeParam>();
 
   expected_result.push_back(py);
-  for (typename TypeParam::Linestring ls : ls_result)
+  for (const typename TypeParam::Linestring &ls : ls_result)
     expected_result.push_back(ls);
 
   this->test_valid_input(ls1, py, py);

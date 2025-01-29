@@ -83,7 +83,7 @@ bool cache_imp::get(unsigned service_name_index, const my_h_service **out_ref) {
   m_cache_version = m_channel->version();
 
   bool no_op = true;
-  for (auto service_name : m_service_names) {
+  for (const auto &service_name : m_service_names) {
     no_op &= (service_name.count_.load() == 0);
   }
 
@@ -93,7 +93,7 @@ bool cache_imp::get(unsigned service_name_index, const my_h_service **out_ref) {
         m_service_names.size() * sizeof(my_h_service *), MY_ZEROFILL);
 
     unsigned offset = 0;
-    for (auto service_name : m_service_names) {
+    for (const auto &service_name : m_service_names) {
       if (service_name.count_.load() == 0) continue;
       std::set<my_h_service> cache_set;
 

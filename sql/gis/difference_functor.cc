@@ -59,7 +59,8 @@ static std::unique_ptr<Geometry> typed_geometry_collection_apply_difference(
     if (mpy_result->type() == Geometry_type::kPolygon)
       result->push_back(*mpy_result);
     else
-      for (auto py : *down_cast<MPy *>(mpy_result.get())) result->push_back(py);
+      for (const auto &py : *down_cast<MPy *>(mpy_result.get()))
+        result->push_back(py);
   }
 
   if (!mls->is_empty()) {
@@ -70,7 +71,8 @@ static std::unique_ptr<Geometry> typed_geometry_collection_apply_difference(
     if (mls_result->type() == Geometry_type::kLinestring)
       result->push_back(*mls_result);
     else
-      for (auto ls : *down_cast<MLs *>(mls_result.get())) result->push_back(ls);
+      for (const auto &ls : *down_cast<MLs *>(mls_result.get()))
+        result->push_back(ls);
   }
 
   if (!mpt->is_empty()) {
@@ -81,7 +83,8 @@ static std::unique_ptr<Geometry> typed_geometry_collection_apply_difference(
     if (mpt_result->type() == Geometry_type::kPoint)
       result->push_back(*mpt_result);
     else
-      for (auto pt : *down_cast<MPt *>(mpt_result.get())) result->push_back(pt);
+      for (const auto &pt : *down_cast<MPt *>(mpt_result.get()))
+        result->push_back(pt);
   }
 
   return std::make_unique<GC>(*result);

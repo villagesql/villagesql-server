@@ -56,8 +56,8 @@ static auto remove_overlapping_mpt_mls(MPt const &mpt, MLs const &mls,
                                        Geometrycollection &result) {
   std::unique_ptr<MPt> difference = std::make_unique<MPt>();
   bg::difference(mpt, mls, *difference);
-  for (auto ls : mls) result.push_back(ls);
-  for (auto pt : *difference) result.push_back(pt);
+  for (const auto &ls : mls) result.push_back(ls);
+  for (const auto &pt : *difference) result.push_back(pt);
 }
 
 template <typename MPt, typename MLs, typename MPy>

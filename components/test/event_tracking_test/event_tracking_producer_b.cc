@@ -117,7 +117,7 @@ bool Event_producer::generate_events() {
     }
   }
 
-  for (auto element : service_names) {
+  for (const auto &element : service_names) {
     my_service<SERVICE_TYPE(event_tracking_example)> example_service(
         element.first.c_str(), mysql_service_registry);
 

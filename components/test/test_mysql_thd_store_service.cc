@@ -54,7 +54,7 @@ class Test_mysql_thd_data final {
   bool sanity(const std::string &expected) {
     std::string actual{};
 
-    for (auto one : vector_) {
+    for (const auto &one : vector_) {
       actual.append(one);
     }
 

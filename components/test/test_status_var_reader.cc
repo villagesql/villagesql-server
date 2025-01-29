@@ -68,7 +68,7 @@ class udf_list {
   bool unregister() {
     udf_list_t delete_set;
     /* try to unregister all of the udfs */
-    for (auto udf : set) {
+    for (const auto &udf : set) {
       int was_present = 0;
       if (!mysql_service_udf_registration->udf_unregister(udf.c_str(),
                                                           &was_present) ||
@@ -77,7 +77,7 @@ class udf_list {
     }
 
     /* remove the unregistered ones from the list */
-    for (auto udf : delete_set) set.remove(udf);
+    for (const auto &udf : delete_set) set.remove(udf);
 
     /* success: empty set */
     if (set.empty()) return false;

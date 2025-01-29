@@ -184,7 +184,7 @@ int main(int argc, const char *argv[]) {
   out << "typedef struct { const char *word; int reserved; } keyword_t;\n\n";
 
   out << "static const keyword_t keyword_list[]= {\n";
-  for (auto p : words)
+  for (const auto &p : words)
     out << "  { \"" << p.first << "\", " << (p.second ? 1 : 0) << " },\n";
   out << "};/*keyword_list*/\n\n";
 

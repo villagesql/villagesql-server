@@ -104,7 +104,7 @@ static auto symdifference_multipoint_linear_or_areal(const SymDifference &f,
                                                      Geometry2 g2) {
   std::unique_ptr<GCType> result = std::make_unique<GCType>();
   if (!g2->is_empty()) result->push_back(*g2);
-  for (auto p : *g1) {
+  for (const auto &p : *g1) {
     if (call_bg_disjoint(p, *g2, f)) result->push_back(p);
   }
   return result;
@@ -126,7 +126,7 @@ static auto symdifference_linear_areal(const SymDifference &f, Linear g1,
   call_bg_difference(*g1, *g2, *difference, f);
   std::unique_ptr<GCType> result = std::make_unique<GCType>();
   if (!g2->is_empty()) result->push_back(*g2);
-  for (auto ls : *difference) result->push_back(ls);
+  for (const auto &ls : *difference) result->push_back(ls);
   return result;
 }
 

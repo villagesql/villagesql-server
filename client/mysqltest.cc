@@ -11652,7 +11652,7 @@ void dynstr_append_sorted(DYNAMIC_STRING *ds, DYNAMIC_STRING *ds_input,
   std::stable_sort(sorted.begin() + first_unsorted_row, sorted.end());
 
   /* Create new result */
-  for (auto i : sorted) {
+  for (const auto &i : sorted) {
     dynstr_append_mem(ds, i.c_str(), i.length());
     dynstr_append(ds, "\n");
   }
