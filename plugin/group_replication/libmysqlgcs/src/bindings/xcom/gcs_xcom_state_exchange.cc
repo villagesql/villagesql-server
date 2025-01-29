@@ -87,7 +87,6 @@ uint64_t Xcom_member_state::get_encode_snapshot_size() const {
 
   return snapshot_size;
 }
-extern uint32_t get_my_xcom_id();
 
 bool Xcom_member_state::encode_header(uchar *buffer,
                                       uint64_t *buffer_len) const {

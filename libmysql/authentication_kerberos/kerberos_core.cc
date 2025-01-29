@@ -30,8 +30,6 @@
 #include <krb5/krb5.h>
 #include <profile.h>
 
-extern Logger_client *g_logger_client;
-
 namespace auth_kerberos_context {
 
 Kerberos::Kerberos(const char *upn, const char *password)

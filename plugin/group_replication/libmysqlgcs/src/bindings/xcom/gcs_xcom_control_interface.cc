@@ -43,12 +43,6 @@ using std::string;
 #include <iterator>
 #include <list>
 
-/*
-  This is used to disable the arbitrator hack in XCOM just
-  in case it is not disabled by default.
-*/
-extern int ARBITRATOR_HACK;
-
 // Suspicion timeout in 100s of nanoseconds (60 seconds)
 static const uint64_t NON_MEMBER_EXPEL_TIMEOUT = 60 * 10000000;
 
@@ -1630,8 +1624,6 @@ end:
 
   return ret;
 }
-
-extern uint32_t get_my_xcom_id();
 
 void Gcs_xcom_control::process_control_message(
     Gcs_message *msg, Gcs_protocol_version maximum_supported_protocol_version,

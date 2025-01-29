@@ -79,10 +79,6 @@
 #include <arpa/inet.h>
 #endif
 
-#ifdef HAVE_PSI_INTERFACE
-extern PSI_mutex_key key_hash_filo_lock;
-#endif  // HAVE_PSI_INTERFACE
-
 using std::list;
 using std::string;
 using std::unique_ptr;

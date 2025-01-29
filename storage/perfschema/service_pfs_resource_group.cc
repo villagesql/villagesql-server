@@ -34,20 +34,6 @@
 #include "storage/perfschema/pfs_services.h"
 #include "template_utils.h"
 
-extern int pfs_set_thread_resource_group_vc(const char *group_name,
-                                            int group_name_len,
-                                            void *user_data);
-extern int pfs_set_thread_resource_group_by_id_vc(PSI_thread *thread,
-                                                  ulonglong thread_id,
-                                                  const char *group_name,
-                                                  int group_name_len,
-                                                  void *user_data);
-extern int pfs_get_thread_system_attrs_vc(PSI_thread_attrs *thread_attrs);
-
-extern int pfs_get_thread_system_attrs_by_id_vc(PSI_thread *thread,
-                                                ulonglong thread_id,
-                                                PSI_thread_attrs *thread_attrs);
-
 int impl_pfs_set_thread_resource_group(const char *group_name,
                                        int group_name_len, void *user_data) {
   return pfs_set_thread_resource_group_vc(group_name, group_name_len,

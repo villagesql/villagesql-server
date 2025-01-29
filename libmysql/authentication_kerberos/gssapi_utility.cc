@@ -27,8 +27,6 @@
 #include <cstdlib>
 #include <cstring>
 
-extern Logger_client *g_logger_client;
-
 static void gssapi_errmsg(OM_uint32 major, OM_uint32 minor, char *buf,
                           size_t size) {
   OM_uint32 message_context{0};

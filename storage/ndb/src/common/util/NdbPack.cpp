@@ -1783,8 +1783,6 @@ static void testrun() {
   }
 }
 
-extern void NdbOut_Init();
-
 static int testmain() {
   ndb_init();
   signal(SIGABRT, SIG_DFL);

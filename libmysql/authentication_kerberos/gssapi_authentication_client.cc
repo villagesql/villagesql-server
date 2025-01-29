@@ -32,8 +32,6 @@
 #include "gssapi_utility.h"
 #include "log_client.h"
 
-extern Logger_client *g_logger_client;
-
 Gssapi_client::Gssapi_client(const std::string &spn, MYSQL_PLUGIN_VIO *vio,
                              const std::string &upn,
                              const std::string &password)

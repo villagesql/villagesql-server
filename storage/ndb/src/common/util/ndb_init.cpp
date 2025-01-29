@@ -49,7 +49,6 @@ extern int NdbLockCpu_Init();
 extern void NdbLockCpu_End();
 extern void NdbTick_Init();
 extern void NdbOut_Init();
-extern void NdbSpin_Init();
 extern int NdbHW_Init();
 extern void NdbHW_End();
 

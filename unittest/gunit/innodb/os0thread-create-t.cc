@@ -27,8 +27,6 @@
 
 #include "os0thread-create.h"
 
-extern uint32_t srv_max_n_threads;
-
 namespace {
 
 struct Global_init {

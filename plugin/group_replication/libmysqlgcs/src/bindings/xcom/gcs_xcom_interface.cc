@@ -53,8 +53,6 @@ using std::map;
 using std::string;
 using std::vector;
 
-extern uint32_t get_my_xcom_id();
-
 Gcs_interface *Gcs_xcom_interface::interface_reference_singleton = nullptr;
 
 Gcs_xcom_config::Gcs_xcom_config()
