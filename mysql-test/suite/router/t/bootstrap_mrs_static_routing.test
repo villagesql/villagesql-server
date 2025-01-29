@@ -19,7 +19,8 @@ exec $MYSQLROUTER_BOOTSTRAP
    --conf-set-option=DEFAULT.plugin_folder=$ROUTER_PLUGIN_DIRECTORY
    -B admin:admin_pass@127.0.0.1:$MASTER_MYPORT
    --directory $MYSQL_TMP_DIR/bootstrap_folder/
-   --mrs --mrs-global-secret something_important ;
+   --mrs --mrs-global-secret something_important
+   --conf-set-option=mysql_rest_service.metadata_refresh_interval=1;
 
 --replace_regex /=.*\/bootstrap_folder\/.*/=TEMP_DIR_FILE_OR_FOLDER//mysql_user=mysql_router_mrs1_.*/mysql_user=mysql_router_mrs1_RANDOM/ /user=mysql_router1_.*/user=mysql_router1_RANDOM/ /plugin_folder=.*/plugin_folder=ROUTER_PLUGIN_DIRECTORY/ /destinations=.*/destinations=ADDR:PORT/
 --cat_file $MYSQL_TMP_DIR/bootstrap_folder/mysqlrouter.conf

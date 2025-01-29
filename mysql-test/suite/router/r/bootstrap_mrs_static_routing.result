@@ -117,6 +117,7 @@ mysql_read_write_route=bootstrap_rw
 mysql_user=mysql_router_mrs1_RANDOM
 mysql_user_data_access=
 router_id=1
+metadata_refresh_interval=1
 
 DROP USER 'admin'@'%';
 DROP SCHEMA mysql_rest_service_metadata;

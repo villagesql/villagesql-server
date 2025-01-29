@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -146,8 +146,9 @@ class BootstrapConfigurator {
   void show_help();
   void show_usage() noexcept;
 
-  void configure_mrs(mysqlrouter::MySQLSession *session,
-                     const std::string &config_path);
+  void configure_mrs(
+      mysqlrouter::MySQLSession *session, const std::string &config_path,
+      const std::map<std::string, std::string> &config_cmdln_options);
 
   void check_mrs_metadata(mysqlrouter::MySQLSession *session) const;
 
@@ -158,8 +159,9 @@ class BootstrapConfigurator {
   void create_mrs_users(mysqlrouter::MySQLSession *session,
                         uint64_t mrs_router_id);
   void store_mrs_data_in_keyring();
-  void store_mrs_configuration(const std::string &config_path,
-                               uint64_t mrs_router_id);
+  void store_mrs_configuration(
+      const std::string &config_path, uint64_t mrs_router_id,
+      const std::map<std::string, std::string> &config_cmdln_options);
   uint64_t register_mrs_router_instance(mysqlrouter::MySQLSession *session);
 
   std::string get_configured_router_name() const;

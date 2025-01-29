@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +31,7 @@
 
 #include "bootstrap_mysql_account.h"
 #include "config_builder.h"
+#include "config_section_printer.h"
 #include "dim.h"
 #include "harness_assert.h"
 #include "keyring_handler.h"
@@ -290,12 +291,14 @@ void BootstrapConfigurator::run() {
   if (bootstrapper_.skipped()) keyring_.init(config_, false);
 
   if (bootstrap_mrs_) {
-    configure_mrs(bootstrapper_.session(), config_path);
+    configure_mrs(bootstrapper_.session(), config_path,
+                  bootstrapper_.get_config_cmdln_options());
   }
 }
 
-void BootstrapConfigurator::configure_mrs(mysqlrouter::MySQLSession *session,
-                                          const std::string &config_path) {
+void BootstrapConfigurator::configure_mrs(
+    mysqlrouter::MySQLSession *session, const std::string &config_path,
+    const std::map<std::string, std::string> &config_cmdln_options) {
   if (can_configure_mrs(config_path)) {
     // XXX move this check to before regular bootstrap is done
     check_mrs_metadata(session);
@@ -328,7 +331,7 @@ void BootstrapConfigurator::configure_mrs(mysqlrouter::MySQLSession *session,
     store_mrs_data_in_keyring();
 
     std::cout << "- Adjusting configuration file " << config_path << "\n";
-    store_mrs_configuration(config_path, mrs_router_id);
+    store_mrs_configuration(config_path, mrs_router_id, config_cmdln_options);
 
     std::cout << "\n"
               << "Once the MySQL Router is started, the MySQL REST Service can "
@@ -727,7 +730,8 @@ std::string BootstrapConfigurator::get_configured_rest_endpoint() const {
 }
 
 void BootstrapConfigurator::store_mrs_configuration(
-    const std::string &config_path, uint64_t mrs_router_id) {
+    const std::string &config_path, uint64_t mrs_router_id,
+    const std::map<std::string, std::string> &config_cmdln_options) {
   auto [rw_section, ro_section] = get_config_classic_sections();
 
   if (rw_section.key.empty()) {
@@ -736,27 +740,29 @@ void BootstrapConfigurator::store_mrs_configuration(
     return;
   }
 
-  std::map<std::string, std::string> kv;
-
-  kv.insert_or_assign("router_id", std::to_string(mrs_router_id));
-
-  kv.insert_or_assign("mysql_user", mrs_metadata_account_.user);
-  if (mrs_metadata_account_.user != mrs_data_account_.user)
-    kv.insert_or_assign("mysql_user_data_access", mrs_data_account_.user);
-  kv.insert_or_assign("mysql_read_write_route",
-                      string_after(rw_section.key, ':'));
-  kv.insert_or_assign("mysql_read_only_route",
-                      string_after(ro_section.key, ':'));
-  if (!bootstrap_mrs_developer_.empty()) {
-    kv.insert_or_assign("developer", bootstrap_mrs_developer_);
-  }
-
-  mysql_harness::ConfigBuilder builder;
   mysql_harness::Path path = config_path;
   std::ofstream os;
   os.exceptions(std::ofstream::failbit | std::ofstream::badbit);
   os.open(path.c_str(), std::ofstream::out | std::ofstream::app);
-  os << builder.build_section(kConfigMrsSection, kv);
+
+  {
+    // this scope is need as the ConfigSectionPrinter destructor uses `os`, so
+    // needs to execute before the `.close()`
+    mysql_harness::ConfigSectionPrinter mrs_section(os, config_cmdln_options,
+                                                    kConfigMrsSection);
+    mrs_section.add_line("mysql_read_only_route",
+                         string_after(ro_section.key, ':'));
+    mrs_section.add_line("mysql_read_write_route",
+                         string_after(rw_section.key, ':'));
+    mrs_section.add_line("mysql_user", mrs_metadata_account_.user);
+    if (mrs_metadata_account_.user != mrs_data_account_.user)
+      mrs_section.add_line("mysql_user_data_access", mrs_data_account_.user,
+                           true);
+    mrs_section.add_line("router_id", std::to_string(mrs_router_id));
+    if (!bootstrap_mrs_developer_.empty()) {
+      mrs_section.add_line("developer", bootstrap_mrs_developer_);
+    }
+  }
   os.close();
 }
 

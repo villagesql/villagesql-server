@@ -111,6 +111,13 @@ class ConfigSectionPrinter {
       assert(dot != std::string::npos);
       const std::string section_name = cmdln_option_key.substr(0, dot);
 
+      // MRS bootstrap is currently done as a separate step, if we add the
+      // configuration overwrites here it will fail later complaining that there
+      // already is a mysql_rest_service section
+      if (section_name == "mysql_rest_service") {
+        continue;
+      }
+
       if (used_sections_.contains(section_name)) {
         continue;
       }
