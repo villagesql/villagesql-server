@@ -31,7 +31,7 @@
 
 NdbEventOperation::NdbEventOperation(Ndb *ndb,
                                      const NdbDictionary::Event *event)
-    : m_impl(*new NdbEventOperationImpl(*this, ndb, std::move(event))) {}
+    : m_impl(*new NdbEventOperationImpl(*this, ndb, event)) {}
 
 NdbEventOperation::NdbEventOperation(NdbEventOperationImpl &impl)
     : m_impl(impl) {}

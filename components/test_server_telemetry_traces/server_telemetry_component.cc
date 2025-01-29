@@ -407,7 +407,7 @@ static telemetry_locker_t *tm_stmt_start(telemetry_session_t * /* session */,
     *flags = TRACE_STATEMENTS;
 
     const Statement_Data info;
-    data->m_stmt_stack.push_back(std::move(info));
+    data->m_stmt_stack.push_back(info);
 
   } else {
     *flags = TRACE_NOTHING;
