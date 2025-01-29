@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -53,6 +53,7 @@
 #include "mrs/observability/entities_manager.h"
 #include "mrs/router_observation_entities.h"
 #include "mysql_rest_service_plugin_config.h"
+#include "supported_mysql_rest_service_options.h"
 
 IMPORT_LOG_FUNCTIONS()
 
@@ -290,15 +291,6 @@ static std::array<const char *, 5> required = {
     {"logger", "http_server", "rest_api", "io", "graalvm"}};
 #endif
 
-static const std::array supported_options{"mysql_user",
-                                          "mysql_user_data_access",
-                                          "mysql_read_write_route",
-                                          "mysql_read_only_route",
-                                          "router_id",
-                                          "metadata_refresh_interval",
-                                          "developer",
-                                          "wait_for_metadata_schema_access"};
-
 // TODO(lkotula): Consider renaming the plugin from rest_mrds to mrds or
 // something other if it already changed in DB schema, consult with router
 // guys if such change would break their feelings (Shouldn't be in review)
@@ -319,7 +311,8 @@ mysql_harness::Plugin MYSQL_REST_SERVICE_EXPORT
         run,     // run
         stop,    // on_signal_stop
         false,   // signals ready
-        supported_options.size(), supported_options.data(),
+        mysql_rest_service_supported_options.size(),
+        mysql_rest_service_supported_options.data(),
         nullptr  // TODO(lkotula): add (Shouldn't be in review)
 };
 }
