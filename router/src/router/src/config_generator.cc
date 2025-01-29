@@ -431,6 +431,7 @@ void ConfigGenerator::bootstrap_system_deployment(
     const std::string &state_file_path,
     const std::map<std::string, std::string> &user_options,
     const std::map<std::string, std::vector<std::string>> &multivalue_options,
+    const std::map<std::string, std::string> &config_cmdline_options,
     const std::map<std::string, std::string> &default_paths) {
   auto options(user_options);
   mysql_harness::Path _config_file_path(config_file_path);
@@ -475,8 +476,8 @@ void ConfigGenerator::bootstrap_system_deployment(
 
   const std::string bootstrap_report_text = bootstrap_deployment(
       program_name, config_files[0], config_files[1], config_file_path,
-      state_file_path, router_name, options, multivalue_options, default_paths,
-      false, auto_clean);
+      state_file_path, router_name, options, multivalue_options,
+      config_cmdline_options, default_paths, false, auto_clean);
 
   for (size_t i = 0; i < config_files.size(); ++i) {
     config_files[i].close();
@@ -540,6 +541,7 @@ void ConfigGenerator::bootstrap_directory_deployment(
     const std::string &program_name, const std::string &directory,
     const std::map<std::string, std::string> &user_options,
     const std::map<std::string, std::vector<std::string>> &multivalue_options,
+    const std::map<std::string, std::string> &config_cmdline_options,
     const std::map<std::string, std::string> &default_paths) {
   bool force = user_options.find("force") != user_options.end();
   mysql_harness::Path path(directory);
@@ -682,7 +684,8 @@ void ConfigGenerator::bootstrap_directory_deployment(
   const std::string bootstrap_report_text = bootstrap_deployment(
       program_name, config_files[0], config_files[1], config_files_names[0],
       config_files_names[1], router_name, options, multivalue_options,
-      default_paths, true, auto_clean);  // throws std::runtime_error, ?
+      config_cmdline_options, default_paths, true,
+      auto_clean);  // throws std::runtime_error, ?
 
   for (size_t i = 0; i < config_files_names.size(); ++i) {
     auto &config_file = config_files[i];
@@ -1102,96 +1105,13 @@ void ConfigGenerator::prepare_ssl_certificate_files(
   }
 }
 
-namespace {
-
-bool is_valid_conf_ident(const std::string &name) {
-  if (name.empty()) return false;
-
-  return std::all_of(name.begin(), name.end(),
-                     mysql_harness::is_valid_conf_ident_char);
-}
-
-std::map<std::string, std::string> get_config_cmdln_options(
-    const std::map<std::string, std::vector<std::string>> &multivalue_options) {
-  if (multivalue_options.count("conf-set-option") == 0) return {};
-
-  std::map<std::string, std::string> result;
-
-  const auto &conf_options = multivalue_options.at("conf-set-option");
-  for (const auto &option : conf_options) {
-    const auto eq_pos = option.find_first_of('=');
-    if (eq_pos == std::string::npos) {
-      throw std::runtime_error("conf-set-option: invalid option '" + option +
-                               "', should be section.option_name=value");
-    }
-
-    std::string option_id = option.substr(0, eq_pos);
-    const std::string option_value = option.substr(eq_pos + 1);
-
-    const auto dot = option_id.find('.');
-    if (dot == std::string::npos) {
-      throw std::runtime_error("conf-set-option: invalid option '" + option +
-                               "', should be section.option_name=value");
-    }
-
-    const std::string section_name = option_id.substr(0, dot);
-    bool section_name_valid{false};
-    const auto colon = section_name.find(':');
-    if (colon != std::string::npos) {
-      std::string section = section_name.substr(0, colon);
-      const std::string label =
-          section_name.substr(colon + 1, section_name.length() - colon - 1);
-
-      section_name_valid =
-          is_valid_conf_ident(section) && is_valid_conf_ident(label);
-
-      // label part is not allowed for DEFAULT section
-      std::transform(section.begin(), section.end(), section.begin(),
-                     ::tolower);
-      if (section == "default") {
-        throw std::runtime_error(
-            "conf-set-option: DEFAULT section is not allowed to have a key: '" +
-            section_name + "'");
-      }
-    } else {
-      section_name_valid = is_valid_conf_ident(section_name);
-    }
-
-    if (!section_name_valid) {
-      throw std::runtime_error("conf-set-option: invalid section name '" +
-                               section_name + "'");
-    }
-
-    const std::string option_name =
-        option_id.substr(dot + 1, option_id.length() - dot - 1);
-
-    if (!is_valid_conf_ident(option_name)) {
-      throw std::runtime_error("conf-set-option: invalid option name '" +
-                               option_name + "'");
-    }
-
-    std::transform(option_id.begin(), option_id.end(), option_id.begin(),
-                   ::tolower);
-
-    if (result.count(option_id) > 0) {
-      throw std::runtime_error("conf-set-option: duplicate value for option '" +
-                               option_id + "'");
-    }
-
-    result[option_id] = option_value;
-  }
-
-  return result;
-}
-
-}  // namespace
-
 std::string ConfigGenerator::bootstrap_deployment(
     const std::string &program_name, std::ofstream &config_file,
     std::ofstream &state_file, const mysql_harness::Path &config_file_path,
     const mysql_harness::Path &state_file_path, const std::string &router_name,
     const std::map<std::string, std::string> &user_options,
     const std::map<std::string, std::vector<std::string>> &multivalue_options,
+    const std::map<std::string, std::string> &config_cmdline_options,
     const std::map<std::string, std::string> &default_paths,
     bool directory_deployment, AutoCleaner &auto_clean) {
   bool force = user_options.find("force") != user_options.end();
@@ -1251,8 +1171,8 @@ std::string ConfigGenerator::bootstrap_deployment(
     }
     create_config(conf_stream, state_stream, conf_options.router_id,
                   router_name, system_username, cluster_info, username, options,
-                  default_paths, get_config_cmdln_options(multivalue_options),
-                  state_file_path.str(), full, auto_clean);
+                  default_paths, config_cmdline_options, state_file_path.str(),
+                  full, auto_clean);
 
     mysql_harness::LoaderConfig config{mysql_harness::Config::allow_keys};
     config.read(conf_stream);
@@ -1326,8 +1246,8 @@ std::string ConfigGenerator::bootstrap_deployment(
     auto system_username = get_from_map(user_options, "user"s, ""s);
     create_config(config_file, state_file, conf_options.router_id, router_name,
                   system_username, cluster_info, conf_options.username, options,
-                  default_paths, get_config_cmdln_options(multivalue_options),
-                  state_file_path.str(), false, auto_clean);
+                  default_paths, config_cmdline_options, state_file_path.str(),
+                  false, auto_clean);
   }
 
   // return bootstrap report (several lines of human-readable text)

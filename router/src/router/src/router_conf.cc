@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2015, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2015, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -1108,6 +1108,92 @@ void MySQLRouterConf::connect() {
   }
 }
 
+namespace {
+
+bool is_valid_conf_ident(const std::string &name) {
+  if (name.empty()) return false;
+
+  return std::all_of(name.begin(), name.end(),
+                     mysql_harness::is_valid_conf_ident_char);
+}
+
+}  // namespace
+
+std::map<std::string, std::string> MySQLRouterConf::get_config_cmdln_options()
+    const {
+  const auto &multivalue_options = bootstrap_multivalue_options_;
+
+  if (multivalue_options.count("conf-set-option") == 0) return {};
+
+  std::map<std::string, std::string> result;
+
+  const auto &conf_options = multivalue_options.at("conf-set-option");
+  for (const auto &option : conf_options) {
+    const auto eq_pos = option.find_first_of('=');
+    if (eq_pos == std::string::npos) {
+      throw std::runtime_error("conf-set-option: invalid option '" + option +
+                               "', should be section.option_name=value");
+    }
+
+    std::string option_id = option.substr(0, eq_pos);
+    const std::string option_value = option.substr(eq_pos + 1);
+
+    const auto dot = option_id.find('.');
+    if (dot == std::string::npos) {
+      throw std::runtime_error("conf-set-option: invalid option '" + option +
+                               "', should be section.option_name=value");
+    }
+
+    const std::string section_name = option_id.substr(0, dot);
+    bool section_name_valid{false};
+    const auto colon = section_name.find(':');
+    if (colon != std::string::npos) {
+      std::string section = section_name.substr(0, colon);
+      const std::string label =
+          section_name.substr(colon + 1, section_name.length() - colon - 1);
+
+      section_name_valid =
+          is_valid_conf_ident(section) && is_valid_conf_ident(label);
+
+      // label part is not allowed for DEFAULT section
+      std::transform(section.begin(), section.end(), section.begin(),
+                     ::tolower);
+      if (section == "default") {
+        throw std::runtime_error(
+            "conf-set-option: DEFAULT section is not allowed to have a key: '" +
+            section_name + "'");
+      }
+    } else {
+      section_name_valid = is_valid_conf_ident(section_name);
+    }
+
+    if (!section_name_valid) {
+      throw std::runtime_error("conf-set-option: invalid section name '" +
+                               section_name + "'");
+    }
+
+    const std::string option_name =
+        option_id.substr(dot + 1, option_id.length() - dot - 1);
+
+    if (!is_valid_conf_ident(option_name)) {
+      throw std::runtime_error("conf-set-option: invalid option name '" +
+                               option_name + "'");
+    }
+
+    std::transform(option_id.begin(), option_id.end(), option_id.begin(),
+                   ::tolower);
+
+    if (result.count(option_id) > 0) {
+      throw std::runtime_error("conf-set-option: duplicate value for option '" +
+                               option_id + "'");
+    }
+
+    result[option_id] = option_value;
+  }
+
+  return result;
+}
+
 // throws MySQLSession::Error, std::runtime_error, std::out_of_range,
 // std::logic_error, ... ?
 std::string MySQLRouterConf::bootstrap(
@@ -1163,6 +1249,7 @@ std::string MySQLRouterConf::bootstrap(
 #endif
 
   auto default_paths = mysqlrouter::get_default_paths(origin);
+  const auto config_cmdln_options = get_config_cmdln_options();
 
   if (bootstrap_directory_.empty()) {
     std::string config_file_path =
@@ -1205,7 +1292,7 @@ std::string MySQLRouterConf::bootstrap(
     } else {
       config_gen.bootstrap_system_deployment(
           program_name, config_file_path, state_file_path, bootstrap_options_,
-          bootstrap_multivalue_options_, default_paths);
+          bootstrap_multivalue_options_, config_cmdln_options, default_paths);
     }
     return config_file_path;
   } else {
@@ -1221,7 +1308,7 @@ std::string MySQLRouterConf::bootstrap(
     } else {
       config_gen.bootstrap_directory_deployment(
           program_name, bootstrap_directory_, bootstrap_options_,
-          bootstrap_multivalue_options_, default_paths);
+          bootstrap_multivalue_options_, config_cmdln_options, default_paths);
     }
 
     return config_file_path;

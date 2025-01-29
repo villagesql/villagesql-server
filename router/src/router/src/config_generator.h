@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2016, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2016, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -104,12 +104,14 @@ class ConfigGenerator {
       const std::string &state_file_path,
       const std::map<std::string, std::string> &options,
       const std::map<std::string, std::vector<std::string>> &multivalue_options,
+      const std::map<std::string, std::string> &config_cmdline_options,
       const std::map<std::string, std::string> &default_paths);
 
   void bootstrap_directory_deployment(
       const std::string &program_name, const std::string &directory,
       const std::map<std::string, std::string> &options,
       const std::map<std::string, std::vector<std::string>> &multivalue_options,
+      const std::map<std::string, std::string> &config_cmdline_options,
       const std::map<std::string, std::string> &default_paths);
 
   void set_keyring_info(const KeyringInfo &keyring_info) {
@@ -258,6 +260,7 @@ class ConfigGenerator {
       const mysql_harness::Path &state_file_path, const std::string &name,
       const std::map<std::string, std::string> &options,
       const std::map<std::string, std::vector<std::string>> &multivalue_options,
+      const std::map<std::string, std::string> &config_cmdline_options,
       const std::map<std::string, std::string> &default_paths,
       bool directory_deployment, AutoCleaner &auto_clean);
 
