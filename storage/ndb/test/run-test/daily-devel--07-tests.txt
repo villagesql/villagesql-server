@@ -376,3 +376,7 @@ max-time: 180
 cmd: testNdbinfo
 args: -n ScanFragMemUseDuringCreateDropTable -l 10000 T1
 max-time: 180
+
+cmd: test_event
+args: -n SumaOutOfBuffer T3
+max-time: 480

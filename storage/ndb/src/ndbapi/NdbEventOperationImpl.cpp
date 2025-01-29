@@ -1484,6 +1484,10 @@ int NdbEventBuffer::flushIncompleteEvents(Uint64 gci) {
     Gci_container *tmp = find_bucket(array[minpos]);
     assert(tmp);
     assert(maxpos == m_max_gci_index);
+
+    // g_eventLogger->info("Flushing %u/%u", Uint32(array[minpos] >> 32),
+    // Uint32(array[minpos]));
+
     tmp->clear();
     minpos = (minpos + 1) & mask;
   }
@@ -2394,13 +2398,26 @@ void NdbEventBuffer::execSUB_GCP_COMPLETE_REP(
 
       complete_bucket(bucket);
       m_latestGCI = gci;  // before reportStatus
+      /*
+      g_eventLogger->info("Ndb 0x%x %s : m_latestGCI %u/%u",
+                          m_ndb->getReference(), m_ndb->getNdbObjectName(),
+                          Uint32(gci >> 32), Uint32(gci));
+      */
       reportStatus(reason_to_report);
 
       if (unlikely(m_latest_complete_GCI > gci)) {
         complete_outof_order_gcis();
       }
     } else {
-      if (unlikely(m_startup_hack)) {
+      if (unlikely(m_startup_hack) ||
+          bucket->m_state == Gci_container::GC_INCONSISTENT) {
+        if (bucket->m_state == Gci_container::GC_INCONSISTENT) {
+          g_eventLogger->info("Ndb 0x%x %s : Inconsistent epoch %u/%u",
+                              m_ndb->getReference(), m_ndb->getNdbObjectName(),
+                              Uint32(gci >> 32), Uint32(gci));
+          // Received inconsistent epoch. Release all incomplete epochs
+          // received before it.
+        }
         flushIncompleteEvents(gci);
         bucket = find_bucket(gci);
         assert(bucket);
