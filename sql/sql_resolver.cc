@@ -4472,29 +4472,25 @@ bool setup_order(THD *thd, Ref_item_array ref_item_array, Table_ref *tables,
       continue;
     }
 
+    select->m_current_order_by_number = number;
     if (find_order_in_list(thd, ref_item_array, tables, order, fields, false,
                            false))
       return true;
+
     if ((*order->item)->has_aggregation()) {
       /*
         Aggregated expressions in ORDER BY are not supported by SQL standard,
-        but MySQL has some limited support for them. The limitations are
-        checked below:
+        but MySQL has some limited support for them.
 
         1. A set operation query is not aggregated, so ordering by a set
-           function is always wrong.
-      */
-      if (for_set_operation) {
-        my_error(ER_AGGREGATE_ORDER_FOR_UNION, MYF(0), number);
-        return true;
-      }
+           function which aggregates in the set operation's query block is
+           always wrong. Checked in check_sum_func.
 
-      /*
-        2. A non-aggregated query combined with a set function in ORDER BY
-           that does not contain an outer reference is illegal, because it
-           would cause the query to become aggregated.
-           (Since is_aggregated is false, this expression would cause
-            agg_func_used() to become true).
+        2. A non-aggregated query combined with a grouped aggregate function in
+           ORDER BY that does not contain an outer reference is illegal,
+           because it would cause the query to become aggregated.  (Since
+           is_aggregated is false, this expression would cause agg_func_used()
+           to become true). This limitation is checked below.
       */
       if (!is_aggregated && select->agg_func_used()) {
         my_error(ER_AGGREGATE_ORDER_NON_AGG_QUERY, MYF(0), number);

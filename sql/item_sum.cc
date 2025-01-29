@@ -330,6 +330,18 @@ bool Item_sum::check_sum_func(THD *thd, Item **ref) {
     }
   }
 
+  if (aggr_query_block->master_query_expression()->is_set_operation() &&
+      aggr_query_block == (aggr_query_block->master_query_expression()
+                               ->query_term()
+                               ->query_block())) {
+    // Should only even get here when resolving order by
+    assert(aggr_query_block->m_current_order_by_number > 0);
+
+    my_error(ER_AGGREGATE_ORDER_FOR_UNION, MYF(0),
+             aggr_query_block->m_current_order_by_number);
+    return true;
+  }
+
   if (aggr_query_block != base_query_block) {
     referenced_by[0] = ref;
     /*
