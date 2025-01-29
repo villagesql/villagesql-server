@@ -102,7 +102,7 @@ bool files_validate_format(const Log_files_context &files_ctx,
                            const ut::vector<Log_file_id_and_header> &files,
                            Log_format &format) {
   ut_a(!files.empty());
-  const auto first_file = files.front();
+  const auto &first_file = files.front();
   if (first_file.m_id == 0) {
     if (first_file.m_header.m_format < to_int(Log_format::VERSION_8_0_30)) {
       format = static_cast<Log_format>(first_file.m_header.m_format);
