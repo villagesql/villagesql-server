@@ -28,8 +28,7 @@
 #include "plugin/group_replication/include/perfschema/table_replication_group_member_actions.h"
 #include "plugin/group_replication/include/perfschema/utilities.h"
 
-namespace gr {
-namespace perfschema {
+namespace gr::perfschema {
 
 bool Perfschema_module::register_pfs_tables(Pfs_tables &tables) {
   Registry_guard guard;
@@ -104,5 +103,4 @@ bool Perfschema_module::finalize() {
   return false;
 }
 
-}  // namespace perfschema
-}  // namespace gr
+}  // namespace gr::perfschema

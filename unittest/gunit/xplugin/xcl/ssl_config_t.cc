@@ -29,8 +29,7 @@
 
 #include "plugin/x/client/context/xssl_config.h"
 
-namespace xcl {
-namespace test {
+namespace xcl::test {
 
 using ::testing::Test;
 using ::testing::Values;
@@ -118,5 +117,4 @@ TEST_F(Xcl_ssl_config_tests, requires_ca) {
       assert_value(mode, requires_ca, Ssl_config::Mode::Ssl_verify_identity));
 }
 
-}  // namespace test
-}  // namespace xcl
+}  // namespace xcl::test

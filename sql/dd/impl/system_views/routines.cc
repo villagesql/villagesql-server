@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/routines.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Routines &Routines::instance() {
   static auto *s_instance = new Routines();
@@ -170,5 +169,4 @@ Routines::Routines() {
   m_target_def.add_where("AND rtn.type IN ('FUNCTION', 'PROCEDURE')");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

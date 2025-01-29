@@ -27,8 +27,7 @@
 #include "sql/dd/impl/tables/dd_properties.h"  // TARGET_DD_VERSION
 #include "sql/dd/impl/types/object_table_definition_impl.h"
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -83,5 +82,4 @@ Object_key *Index_stats::create_range_key_by_table_name(
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

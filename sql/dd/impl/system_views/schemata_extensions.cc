@@ -27,8 +27,7 @@
 
 #include "sql/stateless_allocator.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Schemata_extensions &Schemata_extensions::instance() {
   static auto *s_instance = new Schemata_extensions();
@@ -54,5 +53,4 @@ const System_view_definition *Schemata_extensions::view_definition() const {
   return System_view_impl::view_definition();
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

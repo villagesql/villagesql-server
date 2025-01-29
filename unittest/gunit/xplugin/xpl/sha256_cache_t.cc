@@ -26,9 +26,7 @@
 
 #include "plugin/x/src/sha256_password_cache.h"
 
-namespace xpl {
-
-namespace test {
+namespace xpl::test {
 
 using ::testing::_;
 using ::testing::DoAll;
@@ -137,5 +135,4 @@ TEST_F(Sha256_cache_test_suite, clear_cache) {
   ASSERT_TRUE(m_cache.size() == 0);
 }
 
-}  // namespace test
-}  // namespace xpl
+}  // namespace xpl::test

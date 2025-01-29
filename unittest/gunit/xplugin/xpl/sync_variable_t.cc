@@ -32,9 +32,7 @@
 #include "plugin/x/src/helper/multithread/sync_variable.h"
 #include "plugin/x/src/ngs/thread.h"
 
-namespace xpl {
-
-namespace test {
+namespace xpl::test {
 
 const int EXPECTED_VALUE_FIRST = 10;
 const int EXPECTED_VALUE_SECOND = 20;
@@ -153,5 +151,4 @@ TEST_F(
   ASSERT_TRUE(m_sut.is(EXPECTED_VALUE_SET_EXPECT));
 }
 
-}  // namespace test
-}  // namespace xpl
+}  // namespace xpl::test

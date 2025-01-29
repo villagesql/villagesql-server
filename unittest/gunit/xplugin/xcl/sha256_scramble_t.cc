@@ -25,8 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "plugin/x/client/authentication/sha256_scramble_generator.h"
 
-namespace xcl {
-namespace sha256_scramble_unittest {
+namespace xcl::sha256_scramble_unittest {
 
 using namespace xcl::sha256_password;
 
@@ -155,5 +154,4 @@ TEST(SHA256_digest_test, generate_sha256_scramble) {
       memcmp(expected_scramble1, scramble, CACHING_SHA2_DIGEST_LENGTH) == 0);
 }
 
-}  // namespace sha256_scramble_unittest
-}  // namespace xcl
+}  // namespace xcl::sha256_scramble_unittest

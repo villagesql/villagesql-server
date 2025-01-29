@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/user_attributes.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const User_attributes &User_attributes::instance() {
   static auto *s_instance = new User_attributes();
@@ -42,5 +41,4 @@ User_attributes::User_attributes() {
   m_target_def.add_where("CAN_ACCESS_USER(mysql.user.user,mysql.user.host)");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

@@ -29,8 +29,7 @@
 #include "sql/dd/impl/tables/dd_properties.h"  // TARGET_DD_VERSION
 #include "sql/dd/impl/types/object_table_definition_impl.h"
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Foreign_key_column_usage &Foreign_key_column_usage::instance() {
   static auto *s_instance = new Foreign_key_column_usage();
@@ -90,5 +89,4 @@ Object_key *Foreign_key_column_usage::create_primary_key(Object_id fk_id,
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

@@ -29,8 +29,7 @@
 #include "sql/dd/impl/tables/dd_properties.h"  // TARGET_DD_VERSION
 #include "sql/dd/impl/types/object_table_definition_impl.h"
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Tablespace_files &Tablespace_files::instance() {
   static auto *s_instance = new Tablespace_files();
@@ -82,5 +81,4 @@ Object_key *Tablespace_files::create_primary_key(Object_id tablespace_id,
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

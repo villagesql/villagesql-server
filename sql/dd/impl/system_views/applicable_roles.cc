@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/applicable_roles.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const String_type &Applicable_roles::cte_expression() {
   static String_type s_cte_expression(
@@ -157,5 +156,4 @@ Applicable_roles::Applicable_roles() {
   m_target_def.add_where("c_to_user != ''");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

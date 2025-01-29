@@ -597,8 +597,7 @@ static bool my_read_charset_file(MY_CHARSET_LOADER *loader,
   return false;
 }
 
-namespace mysql {
-namespace collation_internals {
+namespace mysql::collation_internals {
 
 Collations::Collations(const char *charset_dir, MY_CHARSET_LOADER *loader)
     : m_charset_dir{charset_dir ? charset_dir : ""},
@@ -750,5 +749,4 @@ CHARSET_INFO *Collations::find_by_name_unsafe(
   return find_collation_in_hash(m_all_by_collation_name, name());
 }
 
-}  // namespace collation_internals
-}  // namespace mysql
+}  // namespace mysql::collation_internals

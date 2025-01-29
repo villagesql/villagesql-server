@@ -27,8 +27,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-namespace memory {
-namespace unittests {
+namespace memory::unittests {
 
 class Unique_ptr_test : public ::testing::Test {
  protected:
@@ -104,5 +103,4 @@ TEST_F(Unique_ptr_test, Class_template_test) {
   EXPECT_EQ(equal, false);
 }
 
-}  // namespace unittests
-}  // namespace memory
+}  // namespace memory::unittests

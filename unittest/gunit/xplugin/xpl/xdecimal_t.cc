@@ -26,8 +26,7 @@
 
 #include "plugin/x/client/mysqlxclient/xdecimal.h"
 
-namespace xpl {
-namespace test {
+namespace xpl::test {
 
 TEST(xdecimal, str) {
   EXPECT_EQ(std::string("\x00\x1C", 2), xcl::Decimal::from_str("1").to_bytes());
@@ -114,5 +113,4 @@ TEST(xdecimal, invalid) {
   ASSERT_FALSE(xcl::Decimal::from_str("0f").is_valid());
 }
 
-}  // namespace test
-}  // namespace xpl
+}  // namespace xpl::test

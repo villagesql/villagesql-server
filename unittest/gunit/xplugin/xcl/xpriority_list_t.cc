@@ -32,8 +32,7 @@
 
 #include "plugin/x/client/xpriority_list.h"
 
-namespace xcl {
-namespace test {
+namespace xcl::test {
 
 using ::testing::ContainerEq;
 using ::testing::Test;
@@ -255,5 +254,4 @@ TEST_F(Xcl_xpriority_list_tests, remove_holds_elements_in_sequence) {
   assert_plist_remove_element_and_verify("remove_eight", "c1", {});
 }
 
-}  // namespace test
-}  // namespace xcl
+}  // namespace xcl::test

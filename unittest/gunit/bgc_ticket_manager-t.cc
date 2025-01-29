@@ -32,8 +32,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-namespace binlog {
-namespace unittests {
+namespace binlog::unittests {
 
 using ticket_t = binlog::BgcTicket::ValueType;
 
@@ -167,5 +166,4 @@ TEST_F(Bgc_ticket_manager_test, Several_tickets_test) {
   EXPECT_EQ(std::is_sorted(tickets.begin(), tickets.end()), true);
 }
 
-}  // namespace unittests
-}  // namespace binlog
+}  // namespace binlog::unittests

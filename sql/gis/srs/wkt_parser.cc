@@ -118,9 +118,7 @@ BOOST_FUSION_ADAPT_STRUCT(
                                  axes)(gis::srs::wkt_parser::Authority,
                                        authority))
 
-namespace gis {
-namespace srs {
-namespace wkt_parser {
+namespace gis::srs::wkt_parser {
 
 /// @cond DOXYGEN_DOESNT_UNDERSTAND_THIS_LINE
 namespace qi = boost::spirit::qi;
@@ -234,9 +232,7 @@ struct Grammar : qi::grammar<Iterator, Coordinate_system(), Skipper> {
   qi::rule<Iterator, Coordinate_system(), Skipper> start;
 };
 
-}  // namespace wkt_parser
-}  // namespace srs
-}  // namespace gis
+}  // namespace gis::srs::wkt_parser
 
 bool gis::srs::wkt_parser::parse_wkt(
     srid_t srid, const char *begin, const char *end,

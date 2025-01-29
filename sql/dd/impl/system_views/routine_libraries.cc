@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/routine_libraries.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Routine_libraries &Routine_libraries::instance() {
   static auto *s_instance = new Routine_libraries();
@@ -69,5 +68,4 @@ Routine_libraries::Routine_libraries() {
       "AND JSON_VALID(GET_DD_PROPERTY_KEY_VALUE(rtn.options,'libraries')) = 1");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

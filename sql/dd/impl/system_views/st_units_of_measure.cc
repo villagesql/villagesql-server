@@ -31,8 +31,7 @@
 #include "mysql/strings/dtoa.h"
 #include "sql/gis/st_units_of_measure.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 /// Escapes (only) apostrophes
 /// @return string with apostrophes escaped with backslash
@@ -96,5 +95,4 @@ St_units_of_measure::St_units_of_measure() {
   m_target_def.add_field(FIELD_DESCRIPTION, "DESCRIPTION", "DESCRIPTION");
   m_target_def.add_from(ss.str());
 }
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

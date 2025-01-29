@@ -29,8 +29,7 @@
 
 struct CHARSET_INFO;
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 Resource_groups::Resource_groups() {
   m_target_def.set_table_name("resource_groups");
@@ -72,5 +71,4 @@ bool Resource_groups::update_object_key(Global_name_key *key,
   return false;
 }
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

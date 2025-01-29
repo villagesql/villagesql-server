@@ -39,8 +39,7 @@
 #define PVERSION41_CHAR '*'
 #define SCRAMBLE_LENGTH 20
 
-namespace xcl {
-namespace password_hasher {
+namespace xcl::password_hasher {
 namespace {
 
 const char *_dig_vec_upper = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
@@ -169,5 +168,4 @@ std::string scramble(const std::string &message, const std::string &password) {
   return result;
 }
 
-}  // namespace password_hasher
-}  // namespace xcl
+}  // namespace xcl::password_hasher

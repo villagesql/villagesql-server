@@ -29,9 +29,7 @@
 #include "plugin/x/src/helper/multithread/mutex.h"
 #include "plugin/x/src/ngs/scheduler.h"
 
-namespace xpl {
-
-namespace test {
+namespace xpl::test {
 
 template <typename T>
 struct Result_collector {
@@ -81,6 +79,4 @@ TEST(xpl_scheduler_dynamic, DISABLED_run_1000_tasks) {
     ASSERT_EQ(idx, result_set.m_result[idx]);
 }
 
-}  // namespace test
-
-}  // namespace xpl
+}  // namespace xpl::test

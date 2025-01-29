@@ -31,8 +31,7 @@
 
 struct CHARSET_INFO;
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Columns &Columns::instance() {
   static auto *s_instance = new Columns();
@@ -168,5 +167,4 @@ Object_key *Columns::create_key_by_table_id(Object_id table_id) {
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

@@ -27,8 +27,7 @@
 
 #include "sql/stateless_allocator.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Schemata &Schemata::instance() {
   static auto *s_instance = new Schemata();
@@ -62,5 +61,4 @@ Schemata::Schemata() {
   m_target_def.add_where("CAN_ACCESS_DATABASE(sch.name)");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

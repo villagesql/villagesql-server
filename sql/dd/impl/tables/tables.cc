@@ -40,8 +40,7 @@
 
 struct CHARSET_INFO;
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Tables &Tables::instance() {
   static auto *s_instance = new Tables();
@@ -280,5 +279,4 @@ Object_id Tables::read_se_private_id(const Raw_record &r) {
   return r.read_uint(Tables::FIELD_SE_PRIVATE_ID, -1);
 }
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

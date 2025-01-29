@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/st_geometry_columns.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const St_geometry_columns &St_geometry_columns::instance() {
   static auto *s_instance = new St_geometry_columns();
@@ -56,5 +55,4 @@ St_geometry_columns::St_geometry_columns() {
       "              'multilinestring', 'multipolygon','geomcollection')");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

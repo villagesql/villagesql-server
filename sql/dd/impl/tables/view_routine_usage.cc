@@ -32,8 +32,7 @@
 #include "sql/mysqld.h"
 #include "sql/stateless_allocator.h"
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 ///////////////////////////////////////////////////////////////////////////
 
@@ -108,5 +107,4 @@ Object_key *View_routine_usage::create_key_by_name(
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

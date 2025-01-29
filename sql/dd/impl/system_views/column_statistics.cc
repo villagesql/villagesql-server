@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/column_statistics.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Column_statistics &Column_statistics::instance() {
   static auto *s_instance = new Column_statistics();
@@ -42,5 +41,4 @@ Column_statistics::Column_statistics() {
   m_target_def.add_where("CAN_ACCESS_TABLE(SCHEMA_NAME, TABLE_NAME)");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

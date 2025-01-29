@@ -28,8 +28,7 @@
 #include <cassert>
 #include <string>
 
-namespace http {
-namespace cno {
+namespace http::cno {
 namespace {
 
 class ErrorCategory : public std::error_category {
@@ -64,8 +63,7 @@ class ErrorCategory : public std::error_category {
 };
 
 }  // namespace
-}  // namespace cno
-}  // namespace http
+}  // namespace http::cno
 
 std::error_code make_error_code(const cno_error_t *ec) {
   return {ec->code, http::cno::ErrorCategory::singleton()};

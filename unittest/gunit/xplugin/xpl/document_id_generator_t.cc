@@ -29,8 +29,7 @@
 
 #include "plugin/x/src/ngs/document_id_generator.h"
 
-namespace xpl {
-namespace test {
+namespace xpl::test {
 
 class Document_id_generator_test : public ::testing::Test {
  public:
@@ -162,5 +161,4 @@ INSTANTIATE_TEST_SUITE_P(document_id_generation,
                          Document_id_generator_param_test,
                          testing::ValuesIn(document_id_param));
 
-}  // namespace test
-}  // namespace xpl
+}  // namespace xpl::test

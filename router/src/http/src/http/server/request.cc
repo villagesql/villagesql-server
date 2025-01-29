@@ -40,8 +40,7 @@ std::string_view k_err_html_response_format{
     "<H1>%s</H1>\n"
     "</BODY></HTML>\n"};
 
-namespace http {
-namespace server {
+namespace http::server {
 
 using Headers = ServerRequest::Headers;
 using IOBuffer = ServerRequest::IOBuffer;
@@ -166,5 +165,4 @@ bool ServerRequest::add_last_modified(time_t last_modified) {
   return false;
 }
 
-}  // namespace server
-}  // namespace http
+}  // namespace http::server

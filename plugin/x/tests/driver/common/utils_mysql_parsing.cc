@@ -28,9 +28,7 @@
 #include "plugin/x/tests/driver/common/utils_string_parsing.h"
 #include "template_utils.h"
 
-namespace shcore {
-namespace mysql {
-namespace splitter {
+namespace shcore::mysql::splitter {
 //--------------------------------------------------------------------------------------------------
 
 const unsigned char *skip_leading_whitespace(const unsigned char *head,
@@ -278,6 +276,4 @@ size_t determineStatementRanges(const char *sql, size_t length,
 
   return full_statement_count;
 }
-}  // namespace splitter
-}  // namespace mysql
-}  // namespace shcore
+}  // namespace shcore::mysql::splitter

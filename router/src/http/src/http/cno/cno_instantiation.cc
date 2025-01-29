@@ -25,13 +25,11 @@
 
 #include "http/cno/cno_interface.h"
 
-namespace http {
-namespace cno {
+namespace http::cno {
 
 // must be declared in .cc file as otherwise each plugin
 // gets its own class-instance of http::base::RequestHandler which leads
 // to undefined behaviour (ubsan -> vptr)
 CnoInterface::~CnoInterface() = default;
 
-}  // namespace cno
-}  // namespace http
+}  // namespace http::cno

@@ -38,9 +38,7 @@
 #include <ios>
 #include <iostream>
 
-namespace oci {
-
-namespace ssl {
+namespace oci::ssl {
 /**
  * BASE64 encode encrypted data.
  */
@@ -150,5 +148,4 @@ bool verify(const std::string &digest, const std::string &message,
   std::cerr << "Match!\n";
   return true;
 }
-}  // namespace ssl
-}  // namespace oci
+}  // namespace oci::ssl

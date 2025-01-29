@@ -31,8 +31,7 @@
 #include "sql/dd/impl/types/object_table_definition_impl.h"
 #include "sql/dd/impl/types/tablespace_impl.h"  // dd::Tablespace_impl
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Tablespaces &Tablespaces::instance() {
   static auto *s_instance = new Tablespaces();
@@ -94,5 +93,4 @@ bool Tablespaces::update_object_key(Global_name_key *key,
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

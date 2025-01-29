@@ -27,8 +27,7 @@
 
 #include <cstdio>
 
-namespace http {
-namespace cno {
+namespace http::cno {
 
 CnoInterface *get_cno(void *cb_data) {
   return reinterpret_cast<CnoInterface *>(cb_data);
@@ -93,5 +92,4 @@ void callback_init(cno_connection_t *cno, CnoInterface *icno) {
   cno->cb_code = &g_cno_vtable;
 }
 
-}  // namespace cno
-}  // namespace http
+}  // namespace http::cno

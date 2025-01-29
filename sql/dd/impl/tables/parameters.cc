@@ -31,8 +31,7 @@
 
 struct CHARSET_INFO;
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Parameters &Parameters::instance() {
   static auto *s_instance = new Parameters();
@@ -134,5 +133,4 @@ Object_key *Parameters::create_primary_key(Object_id routine_id,
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

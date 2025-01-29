@@ -28,9 +28,7 @@
 #include <stdexcept>
 #include <string>
 
-namespace http {
-namespace base {
-namespace status_code {
+namespace http::base::status_code {
 
 name_type to_string(key_type key) {
   switch (key) {
@@ -165,6 +163,4 @@ name_type to_string(key_type key) {
   }
 }
 
-}  // namespace status_code
-}  // namespace base
-}  // namespace http
+}  // namespace http::base::status_code

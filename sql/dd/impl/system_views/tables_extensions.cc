@@ -43,8 +43,7 @@ const dd::system_views::Tables_extensions *s_instance =
 
 }  // namespace
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Tables_extensions &Tables_extensions::instance() { return *s_instance; }
 
@@ -80,5 +79,4 @@ Tables_extensions::Tables_extensions(const dd::String_type &n) {
 }
 
 const dd::String_type &Tables_extensions::view_name() { return s_view_name; }
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

@@ -34,8 +34,7 @@ const dd::system_views::Tablespaces_extensions *s_instance =
 
 }  // namespace
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Tablespaces_extensions &Tablespaces_extensions::instance() {
   return *s_instance;
@@ -58,5 +57,4 @@ Tablespaces_extensions::Tablespaces_extensions(const dd::String_type &n) {
 const dd::String_type &Tablespaces_extensions::view_name() {
   return s_view_name;
 }
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

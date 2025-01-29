@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/partitions.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Partitions &Partitions::instance() {
   static auto *s_instance = new Partitions();
@@ -207,5 +206,4 @@ Partitions::Partitions() {
   m_target_def.add_where("AND part.parent_partition_id IS NULL");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

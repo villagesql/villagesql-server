@@ -49,8 +49,7 @@
 #include "sql/sql_time.h"              // calc_time_diff
 #include "template_utils.h"
 
-namespace histograms {
-namespace equi_height {
+namespace histograms::equi_height {
 
 template <typename T>
 Bucket<T>::Bucket(T lower, T upper, double freq, ha_rows num_distinct)
@@ -455,5 +454,4 @@ template class Bucket<longlong>;
 template class Bucket<MYSQL_TIME>;
 template class Bucket<my_decimal>;
 
-}  // namespace equi_height
-}  // namespace histograms
+}  // namespace histograms::equi_height

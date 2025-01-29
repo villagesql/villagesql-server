@@ -29,8 +29,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "plugin/x/src/services/service_udf_registration.h"
 #include "plugin/x/src/xpl_log.h"
 
-namespace xpl {
-namespace udf {
+namespace xpl::udf {
 
 Registrator::Registrator() {
   m_udf_registrator = std::make_unique<Service_udf_registration>(&m_registry);
@@ -61,5 +60,4 @@ void Registrator::unregistration(Name_registry *udf_names) {
       ++i;
 }
 
-}  // namespace udf
-}  // namespace xpl
+}  // namespace xpl::udf

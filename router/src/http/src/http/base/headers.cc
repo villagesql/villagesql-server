@@ -31,8 +31,7 @@
 #include "http/base/headers.h"
 #include "m_string.h"  // NOLINT(build/include_subdir)
 
-namespace http {
-namespace base {
+namespace http::base {
 
 bool compare_case_insensitive(const std::string &l, const std::string_view &r) {
   if (l.length() != r.length()) return false;
@@ -94,5 +93,4 @@ void Headers::remove(const std::string_view &key) {
   if (it != map_.end()) map_.erase(it);
 }
 
-}  // namespace base
-}  // namespace http
+}  // namespace http::base

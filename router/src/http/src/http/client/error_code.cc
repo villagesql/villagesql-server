@@ -28,8 +28,7 @@
 #include <cassert>
 #include <string>
 
-namespace http {
-namespace client {
+namespace http::client {
 namespace {
 
 class ErrorCategory : public std::error_category {
@@ -65,8 +64,7 @@ class ErrorCategory : public std::error_category {
 };
 
 }  // namespace
-}  // namespace client
-}  // namespace http
+}  // namespace http::client
 
 std::error_code make_error_code(const http::client::FailureCode ec) {
   return {static_cast<int>(ec), http::client::ErrorCategory::singleton()};

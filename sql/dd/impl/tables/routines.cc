@@ -36,8 +36,7 @@
 
 struct CHARSET_INFO;
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Routines &Routines::instance() {
   static auto *s_instance = new Routines();
@@ -217,5 +216,4 @@ Object_key *Routines::create_key_by_definer(const String_type &definer) {
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

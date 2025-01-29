@@ -28,9 +28,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-namespace containers {
-namespace lf {
-namespace unittests {
+namespace containers::lf::unittests {
 
 static std::atomic<int> pushed{0};
 static std::atomic<int> popped{0};
@@ -204,6 +202,4 @@ TEST_F(Integrals_lockfree_queue_test, Interleaved_indexing_test) {
   Integrals_lockfree_queue_test::test_queue(queue);
 }
 
-}  // namespace unittests
-}  // namespace lf
-}  // namespace containers
+}  // namespace containers::lf::unittests

@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/administrable_role_authorizations.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Administrable_role_authorizations &
 Administrable_role_authorizations::instance() {
@@ -42,5 +41,4 @@ Administrable_role_authorizations::Administrable_role_authorizations() {
   m_target_def.add_where("IS_GRANTABLE='YES'");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

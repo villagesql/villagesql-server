@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/collation_charset_applicability.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Collation_charset_applicability &
 Collation_charset_applicability::instance() {
@@ -45,5 +44,4 @@ Collation_charset_applicability::Collation_charset_applicability() {
       "cs.id = col.character_set_id ");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

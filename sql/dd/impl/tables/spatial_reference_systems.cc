@@ -33,8 +33,7 @@
 #include "sql/dd/impl/types/object_table_definition_impl.h"
 #include "sql/dd/impl/types/spatial_reference_system_impl.h"  // dd::Spatial_refere...
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Spatial_reference_systems &Spatial_reference_systems::instance() {
   static auto *s_instance = new Spatial_reference_systems();
@@ -129,5 +128,4 @@ Object_key *Spatial_reference_systems::create_key_by_catalog_id(
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

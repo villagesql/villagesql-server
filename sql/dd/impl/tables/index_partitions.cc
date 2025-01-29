@@ -29,8 +29,7 @@
 #include "sql/dd/impl/tables/dd_properties.h"  // TARGET_DD_VERSION
 #include "sql/dd/impl/types/object_table_definition_impl.h"
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Index_partitions &Index_partitions::instance() {
   static auto *s_instance = new Index_partitions();
@@ -89,5 +88,4 @@ Object_key *Index_partitions::create_primary_key(Object_id partition_id,
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

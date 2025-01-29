@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/innodb_foreign.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Innodb_foreign &Innodb_foreign::instance() {
   static auto *s_instance = new Innodb_foreign();
@@ -65,5 +64,4 @@ Innodb_foreign::Innodb_foreign() {
   m_target_def.add_where("GROUP BY fk.id");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

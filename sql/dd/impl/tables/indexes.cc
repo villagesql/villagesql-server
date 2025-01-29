@@ -31,8 +31,7 @@
 
 struct CHARSET_INFO;
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Indexes &Indexes::instance() {
   static auto *s_instance = new Indexes();
@@ -122,5 +121,4 @@ Object_key *Indexes::create_key_by_table_id(Object_id table_id) {
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

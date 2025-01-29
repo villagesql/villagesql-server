@@ -30,9 +30,7 @@
 #include "plugin/x/src/ngs/error_code.h"
 #include "plugin/x/src/query_string_builder.h"
 
-namespace xpl {
-
-namespace test {
+namespace xpl::test {
 
 namespace {
 
@@ -291,6 +289,4 @@ INSTANTIATE_TEST_SUITE_P(
         Query_and_expected_values("SELECT ? FROM", "",
                                   Assign_list("First")("Second"))));
 
-}  // namespace test
-
-}  // namespace xpl
+}  // namespace xpl::test

@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/libraries.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Libraries &Libraries::instance() {
   static auto *s_instance = new Libraries();
@@ -61,5 +60,4 @@ Libraries::Libraries() {
   m_target_def.add_where("AND rtn.type = 'LIBRARY'");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

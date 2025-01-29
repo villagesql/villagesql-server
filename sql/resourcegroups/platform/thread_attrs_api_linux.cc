@@ -40,8 +40,7 @@
 #include "mysql/components/services/log_builtins.h"
 #include "mysqld_error.h"
 
-namespace resourcegroups {
-namespace platform {
+namespace resourcegroups::platform {
 
 bool is_platform_supported() { return true; }
 
@@ -193,5 +192,4 @@ bool can_thread_priority_be_set() {
   LogErr(ERROR_LEVEL, ER_RES_GRP_FAILED_TO_DETERMINE_NICE_CAPABILITY);
   return false;
 }
-}  // namespace platform
-}  // namespace resourcegroups
+}  // namespace resourcegroups::platform

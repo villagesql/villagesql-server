@@ -27,8 +27,7 @@
 
 #include "sql/stateless_allocator.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Columns &Columns::instance() {
   static auto *s_instance = new Columns();
@@ -146,5 +145,4 @@ Columns::Columns() {
       "'User'), col.options)");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

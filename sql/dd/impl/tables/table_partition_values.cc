@@ -39,8 +39,7 @@
 #include "sql/key.h"
 #include "sql/table.h"
 
-namespace dd {
-namespace tables {
+namespace dd::tables {
 
 const Table_partition_values &Table_partition_values::instance() {
   static auto *s_instance = new Table_partition_values();
@@ -151,5 +150,4 @@ String_type Table_partition_values_pk::str() const {
 
 ///////////////////////////////////////////////////////////////////////////
 
-}  // namespace tables
-}  // namespace dd
+}  // namespace dd::tables

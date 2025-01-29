@@ -334,8 +334,7 @@ void push_fp_to_string(std::stringstream &proj4,
   proj4 << proj4_parameter << double_str;
 }
 
-namespace gis {
-namespace srs {
+namespace gis::srs {
 
 bool Geographic_srs::init(gis::srid_t srid,
                           gis::srs::wkt_parser::Geographic_cs *g) {
@@ -2423,8 +2422,7 @@ std::string Lambert_cylindrical_equal_area_srs::proj4_parameters() const {
   return proj4.str();
 }
 
-}  // namespace srs
-}  // namespace gis
+}  // namespace gis::srs
 
 /**
   Create a geographic SRS description from a parse tree.

@@ -31,8 +31,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-namespace memory {
-namespace unittests {
+namespace memory::unittests {
 
 class Ref_ptr_test : public ::testing::Test {
  protected:
@@ -61,5 +60,4 @@ TEST_F(Ref_ptr_test, Class_template_test) {
   EXPECT_EQ(equal, true);
 }
 
-}  // namespace unittests
-}  // namespace memory
+}  // namespace memory::unittests

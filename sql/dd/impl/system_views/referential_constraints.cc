@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/referential_constraints.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Referential_constraints &Referential_constraints::instance() {
   static auto *s_instance = new Referential_constraints();
@@ -64,5 +63,4 @@ Referential_constraints::Referential_constraints() {
   m_target_def.add_where("AND IS_VISIBLE_DD_OBJECT(tbl.hidden)");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

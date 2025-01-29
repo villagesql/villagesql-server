@@ -30,8 +30,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-namespace lock {
-namespace unittests {
+namespace lock::unittests {
 
 class Shared_spin_lock_test : public ::testing::Test {
  protected:
@@ -330,5 +329,4 @@ TEST_F(Shared_spin_lock_test, Sentry_class_test) {
             false);  // Exclusive access is not acquired anymore
 }  // namespace unittests
 
-}  // namespace unittests
-}  // namespace lock
+}  // namespace lock::unittests

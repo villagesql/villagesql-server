@@ -45,8 +45,7 @@ void make_password_from_salt(char *to, const uint8 *hash_stage2) {
   octet2hex(to, (const char *)hash_stage2, SHA1_HASH_SIZE);
 }
 
-namespace xpl {
-namespace test {
+namespace xpl::test {
 
 using ::testing::_;
 using ::testing::Return;
@@ -163,5 +162,4 @@ TEST_F(User_password_verification, sha256_memory_verification_fail) {
       "user", "host", SHA256_MEMORY_CLIENT_STRING, ""));
 }
 
-}  // namespace test
-}  // namespace xpl
+}  // namespace xpl::test

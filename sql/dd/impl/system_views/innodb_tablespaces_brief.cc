@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/innodb_tablespaces_brief.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Innodb_tablespaces_brief &Innodb_tablespaces_brief::instance() {
   static auto *s_instance = new Innodb_tablespaces_brief();
@@ -61,5 +60,4 @@ Innodb_tablespaces_brief::Innodb_tablespaces_brief() {
   m_target_def.add_where("AND ts.name<>'innodb_temporary'");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

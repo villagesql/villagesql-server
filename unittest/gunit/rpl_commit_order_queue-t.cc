@@ -33,8 +33,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-namespace rpl {
-namespace unittests {
+namespace rpl::unittests {
 
 class Rpl_commit_order_queue_test : public ::testing::Test {
  protected:
@@ -404,5 +403,4 @@ TEST_F(Rpl_commit_order_queue_test, Remove) {
   EXPECT_EQ(queue.to_string(), "EOF");
 }
 
-}  // namespace unittests
-}  // namespace rpl
+}  // namespace rpl::unittests

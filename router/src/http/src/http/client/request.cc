@@ -27,8 +27,7 @@
 
 #include <utility>
 
-namespace http {
-namespace client {
+namespace http::client {
 
 using IOBuffer = Request::IOBuffer;
 using MethodType = Request::MethodType;
@@ -75,5 +74,4 @@ void Request::set_uri(Uri &&uri) { holder_->uri = std::move(uri); }
 
 void Request::set_uri(const Uri &uri) { holder_->uri = uri; }
 
-}  // namespace client
-}  // namespace http
+}  // namespace http::client

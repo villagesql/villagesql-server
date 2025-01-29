@@ -29,8 +29,7 @@
 #include "sql/keyword_list.h"
 #include "sql/stateless_allocator.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Keywords &Keywords::instance() {
   static auto *s_instance = new Keywords();
@@ -58,5 +57,4 @@ Keywords::Keywords() {
   m_target_def.add_from(ss.str());
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

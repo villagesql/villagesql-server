@@ -51,8 +51,7 @@ class Spatial_reference_system;
 class Tablespace;
 }  // namespace dd
 
-namespace dd {
-namespace cache {
+namespace dd::cache {
 
 // Put a new element into the map.
 template <typename T>
@@ -150,5 +149,4 @@ template class Local_multi_map<Schema>;
 template class Local_multi_map<Spatial_reference_system>;
 template class Local_multi_map<Tablespace>;
 
-}  // namespace cache
-}  // namespace dd
+}  // namespace dd::cache

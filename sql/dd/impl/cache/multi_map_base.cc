@@ -37,8 +37,7 @@
 #include "sql/dd/types/spatial_reference_system.h"  // Spatial_reference_system
 #include "sql/dd/types/tablespace.h"                // Tablespace
 
-namespace dd {
-namespace cache {
+namespace dd::cache {
 
 // Helper function to remove the mapping of a single element.
 template <typename T>
@@ -80,5 +79,4 @@ template class Multi_map_base<Schema>;
 template class Multi_map_base<Spatial_reference_system>;
 template class Multi_map_base<Tablespace>;
 
-}  // namespace cache
-}  // namespace dd
+}  // namespace dd::cache

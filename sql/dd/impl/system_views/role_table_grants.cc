@@ -24,8 +24,7 @@
 #include "sql/dd/impl/system_views/role_table_grants.h"
 #include "sql/dd/impl/system_views/applicable_roles.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Role_table_grants &Role_table_grants::instance() {
   static auto *s_instance = new Role_table_grants();
@@ -63,5 +62,4 @@ Role_table_grants::Role_table_grants() {
   m_target_def.add_where(" AND c_enabled = TRUE");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

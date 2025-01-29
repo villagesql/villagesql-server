@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/events.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Events &Events::instance() {
   static auto *s_instance = new Events();
@@ -100,5 +99,4 @@ Events::Events() {
   m_target_def.add_where("CAN_ACCESS_EVENT(sch.name)");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

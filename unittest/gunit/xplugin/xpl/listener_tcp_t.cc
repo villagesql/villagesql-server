@@ -40,8 +40,7 @@
 #include "unittest/gunit/xplugin/xpl/mock/socket_events.h"
 #include "unittest/gunit/xplugin/xpl/mock/system.h"
 
-namespace xpl {
-namespace test {
+namespace xpl::test {
 
 using namespace ::testing;  // NOLINT(build/namespaces)
 
@@ -521,5 +520,4 @@ TEST_F(Listener_tcp_testsuite, loop_does_nothing_always) {
   sut->loop();
 }
 
-}  // namespace test
-}  // namespace xpl
+}  // namespace xpl::test

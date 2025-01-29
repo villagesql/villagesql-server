@@ -43,8 +43,7 @@ void PrintTo(const Command_delegate::Info &x, ::std::ostream *os) {
 
 }  // namespace ngs
 
-namespace xpl {
-namespace test {
+namespace xpl::test {
 namespace {
 
 const longlong EXPECTED_VALUE_INTEGER = 1;
@@ -259,5 +258,4 @@ TEST_F(Callback_command_delegate_testsuite,
   ASSERT_NO_FATAL_FAILURE(assert_sut_status_should_be_empty());
 }
 
-}  // namespace test
-}  // namespace xpl
+}  // namespace xpl::test

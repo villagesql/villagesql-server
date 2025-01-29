@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/parameters.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Parameters &Parameters::instance() {
   static auto *s_instance = new Parameters();
@@ -129,5 +128,4 @@ Parameters::Parameters() {
       "rtn.definer, FALSE)");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

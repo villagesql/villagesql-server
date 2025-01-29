@@ -27,8 +27,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-namespace mysql::containers::buffers {
-namespace grow_calculator::unittest {
+namespace mysql::containers::buffers::grow_calculator::unittest {
 
 using Grow_calculator_t = mysql::containers::buffers::Grow_calculator;
 using Size_t = mysql::containers::buffers::Grow_calculator::Size_t;
@@ -60,5 +59,4 @@ TEST(GrowPolicyTest, BasicGrowPolicyTest) {
   EXPECT_EQ(error, grow_calculator.compute_new_size(0, 1001));
 }
 
-}  // namespace grow_calculator::unittest
-}  // namespace mysql::containers::buffers
+}  // namespace mysql::containers::buffers::grow_calculator::unittest

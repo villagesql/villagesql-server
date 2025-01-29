@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/collations.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Collations &Collations::instance() {
   static auto *s_instance = new Collations();
@@ -55,5 +54,4 @@ Collations::Collations() {
       "col.character_set_id=cs.id ");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views

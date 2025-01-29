@@ -23,8 +23,7 @@
 
 #include "sql/dd/impl/system_views/triggers.h"
 
-namespace dd {
-namespace system_views {
+namespace dd::system_views {
 
 const Triggers &Triggers::instance() {
   static auto *s_instance = new Triggers();
@@ -97,5 +96,4 @@ Triggers::Triggers() {
   m_target_def.add_where("AND IS_VISIBLE_DD_OBJECT(tbl.hidden)");
 }
 
-}  // namespace system_views
-}  // namespace dd
+}  // namespace dd::system_views
