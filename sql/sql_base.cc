@@ -9238,9 +9238,10 @@ bool setup_fields(THD *thd, Access_bitmask want_privilege, bool allow_sum_func,
         and carried forward up to the tmp table where the WF can be
         evaluated.
       */
-      if ((item->has_aggregation() && !(item->type() == Item::SUM_FUNC_ITEM &&
-                                        !item->m_is_window_function)) ||  //(1)
-          item->has_wf()) {                                               // (2)
+      if (!item->const_item() &&
+          ((item->has_aggregation() && !(item->type() == Item::SUM_FUNC_ITEM &&
+                                         !item->m_is_window_function)) ||  //(1)
+           item->has_wf())) {  // (2)
         LEX::Splitting_window_expression s(thd->lex, item->has_wf());
         if (item->split_sum_func(thd, ref_item_array, fields)) {
           return true;
