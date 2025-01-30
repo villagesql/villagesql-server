@@ -54,7 +54,7 @@ std::string get_routing_thread_name(const std::string &config_name,
   std::string key = p;
   const char kPrefix[] = "_default_";
   size_t pos = key.find(kPrefix);
-  if (pos != key.npos) {
+  if (pos != std::string::npos) {
     key = key.substr(pos + sizeof(kPrefix) - 1);  // -1 for string terminator
   }
 

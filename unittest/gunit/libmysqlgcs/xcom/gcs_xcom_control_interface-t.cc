@@ -1088,13 +1088,13 @@ Gcs_message *create_state_exchange_msg(Gcs_member_identifier &member_id,
 
   (*out_stored_states)[member_id] = member_state;
 
-  uint64_t buffer_len = member_state->get_encode_header_size() +
+  uint64_t buffer_len = Xcom_member_state::get_encode_header_size() +
                         dummy->get_encode_size() +
                         member_state->get_encode_snapshot_size();
   auto *buffer = static_cast<uchar *>(malloc(buffer_len * sizeof(uchar)));
   uchar *slider = buffer;
 
-  auto header_len = member_state->get_encode_header_size();
+  auto header_len = Xcom_member_state::get_encode_header_size();
   member_state->encode_header(slider, &header_len);
   slider += header_len;
 

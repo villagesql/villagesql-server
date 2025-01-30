@@ -298,9 +298,13 @@ static inline void RunSortBenchmark(size_t num_iterations, bool stable_sort) {
     std::vector<uchar *> keys = helper.GetKeys();
     StartBenchmarkTiming();
     if (stable_sort) {
-      std::stable_sort(keys.begin(), keys.end(), Compare(helper.record_size));
+      std::stable_sort(
+          keys.begin(), keys.end(),
+          Compare(filesort_compare_unittest::FileSortBMHelper::record_size));
     } else {
-      std::sort(keys.begin(), keys.end(), Compare(helper.record_size));
+      std::sort(
+          keys.begin(), keys.end(),
+          Compare(filesort_compare_unittest::FileSortBMHelper::record_size));
     }
     StopBenchmarkTiming();
   }

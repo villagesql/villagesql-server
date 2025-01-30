@@ -548,7 +548,7 @@ enum_gcs_error Gcs_xcom_state_exchange::broadcast_state(
     This returns the size of the header that will compose the
     message.
   */
-  exchangeable_header_len = member_state.get_encode_header_size();
+  exchangeable_header_len = Xcom_member_state::get_encode_header_size();
 
   /*
     This returns the size of snapshot information that will

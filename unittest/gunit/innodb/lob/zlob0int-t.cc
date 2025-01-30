@@ -47,7 +47,8 @@ void index_entry_test_00() {
   z_index_entry_t ie(ptr.get());
   ie.init();
   std::cout << ie << std::endl;
-  std::cout << "Size of one z_index_entry_t: " << ie.SIZE << std::endl;
+  std::cout << "Size of one z_index_entry_t: " << zlob::z_index_entry_t::SIZE
+            << std::endl;
 }
 
 void frag_entry_test_00() {
@@ -55,16 +56,17 @@ void frag_entry_test_00() {
   z_frag_entry_t fe(ptr.get());
   fe.init();
   std::cout << fe << std::endl;
-  std::cout << "Size of one z_frag_entry_t: " << fe.SIZE << std::endl;
+  std::cout << "Size of one z_frag_entry_t: " << zlob::z_frag_entry_t::SIZE
+            << std::endl;
 }
 
 void z_first_page_basic_test() {
   z_first_page_t first;
-  std::cout << "Size of index entries=" << first.size_of_index_entries()
-            << std::endl;
-  std::cout << "Size of frag entries=" << first.size_of_frag_entries()
-            << std::endl;
-  std::cout << "Payload=" << first.payload() << std::endl;
+  std::cout << "Size of index entries="
+            << zlob::z_first_page_t::size_of_index_entries() << std::endl;
+  std::cout << "Size of frag entries="
+            << zlob::z_first_page_t::size_of_frag_entries() << std::endl;
+  std::cout << "Payload=" << zlob::z_first_page_t::payload() << std::endl;
   first.alloc();
 
   std::cout << first << std::endl;

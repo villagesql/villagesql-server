@@ -40,10 +40,9 @@ class HttpAuthMethodBasicTest
       public ::testing::WithParamInterface<HttpAuthMethodBasicParams> {};
 
 TEST_P(HttpAuthMethodBasicTest, ensure) {
-  HttpAuthMethodBasic m;
-
   std::error_code ec;
-  auto auth_data = m.decode_authorization(GetParam().input, ec);
+  auto auth_data =
+      HttpAuthMethodBasic::decode_authorization(GetParam().input, ec);
   EXPECT_EQ(ec, GetParam().ec) << ec.message();
   if (!ec) {
     EXPECT_EQ(auth_data.username, GetParam().username);

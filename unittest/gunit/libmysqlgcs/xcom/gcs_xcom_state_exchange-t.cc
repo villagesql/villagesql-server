@@ -187,7 +187,7 @@ class XComStateExchangeTest : public GcsBaseTest {
       recovery snapshot.
     */
     exchangeable_data_len = encoded_payload.size();
-    exchangeable_header_len = encoded_member_state.get_encode_header_size();
+    exchangeable_header_len = Xcom_member_state::get_encode_header_size();
     exchangeable_snapshot_len = encoded_member_state.get_encode_snapshot_size();
 
     buffer_len = exchangeable_header_len + exchangeable_data_len +

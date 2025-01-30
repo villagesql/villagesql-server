@@ -750,12 +750,13 @@ void print(std::ostream &out, ref_t ref) {
   buf_block_t *first = it->second;
   base_node_page_t page(first);
 
-  out << "Number of index entries in first page: " << page.node_count()
-      << std::endl;
-  out << "Amount of data in first page: " << page.max_space_available()
-      << std::endl;
+  out << "Number of index entries in first page: "
+      << lob::base_node_page_t::node_count() << std::endl;
+  out << "Amount of data in first page: "
+      << lob::base_node_page_t::max_space_available() << std::endl;
   out << "Total size of LOB: "
-      << page.max_space_available() + UNIV_PAGE_SIZE * (page.node_count() - 1)
+      << lob::base_node_page_t::max_space_available() +
+             UNIV_PAGE_SIZE * (lob::base_node_page_t::node_count() - 1)
       << std::endl;
   out << "Number of index entries in index page: " << node_page_t::node_count()
       << std::endl;

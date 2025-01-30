@@ -50,7 +50,7 @@ static buf_block_t *create_first_page() {
   flst_init(index_list);
   flst_init(free_list);
 
-  ulint node_count = page.node_count();
+  ulint node_count = lob::base_node_page_t::node_count();
   LOG("Number of LOB index entries = " << node_count);
 
   byte *cur = page.nodes_begin();

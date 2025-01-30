@@ -63,7 +63,7 @@ class GcsParametersTest : public GcsBaseTest {
 
   void TearDown() override {
     // fake factory cleanup member function
-    static_cast<Gcs_xcom_interface *>(m_gcs)->cleanup();
+    Gcs_xcom_interface::cleanup();
   }
 
   Gcs_interface *m_gcs;

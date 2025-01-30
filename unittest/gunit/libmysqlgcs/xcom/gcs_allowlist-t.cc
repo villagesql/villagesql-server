@@ -145,7 +145,7 @@ TEST_F(GcsAllowlist, AbsentList) {
   err = gcs->finalize();
 
   // claim interface memory back
-  xcs->cleanup();
+  Gcs_xcom_interface::cleanup();
 
   // initialization failed, and thus so will finalization
   ASSERT_EQ(err, GCS_OK);
@@ -203,7 +203,7 @@ TEST_F(GcsAllowlist, ListWithHostname) {
   err = gcs->finalize();
 
   // claim interface memory back
-  xcs->cleanup();
+  Gcs_xcom_interface::cleanup();
 
   ASSERT_EQ(err, GCS_OK);
 }
@@ -247,7 +247,7 @@ TEST_F(GcsAllowlist, ListWithUnresolvableHostname) {
   err = gcs->finalize();
 
   // claim interface memory back
-  xcs->cleanup();
+  Gcs_xcom_interface::cleanup();
 
   ASSERT_EQ(err, GCS_OK);
 }

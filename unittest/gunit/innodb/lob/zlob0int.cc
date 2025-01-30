@@ -362,7 +362,7 @@ std::pair<ulint, ulint> z_insert_strm(z_first_page_t &first, trx_id_t trxid,
   if (first.get_data_len() == 0) {
     /* First page is unused. Use it. */
     byte *ptr = first.begin_data_ptr();
-    ulint size = first.payload();
+    ulint size = zlob::z_first_page_t::payload();
 
     ulint to_copy = remain > size ? size : remain;
     memcpy(ptr, lob_ptr, to_copy);
@@ -382,7 +382,7 @@ std::pair<ulint, ulint> z_insert_strm(z_first_page_t &first, trx_id_t trxid,
     data_page.alloc();
 
     byte *ptr = data_page.begin_data_ptr();
-    ulint size = data_page.payload();
+    ulint size = zlob::z_data_page_t::payload();
     ulint to_copy = remain > size ? size : remain;
     memcpy(ptr, lob_ptr, to_copy);
     remain -= to_copy;
@@ -420,7 +420,7 @@ std::pair<ulint, ulint> z_insert_strm(z_first_page_t &first, trx_id_t trxid,
     data_page.alloc();
 
     byte *ptr = data_page.begin_data_ptr();
-    ulint size = data_page.payload();
+    ulint size = zlob::z_data_page_t::payload();
     ulint to_copy = remain > size ? size : remain;
     memcpy(ptr, lob_ptr, to_copy);
     remain -= to_copy;
