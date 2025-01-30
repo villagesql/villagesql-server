@@ -621,6 +621,16 @@ void Table_trigger_dispatcher::disable_fields_temporary_nullability() {
 }
 
 /**
+  Reset the temporary null values set to the field for triggers.
+ */
+void Table_trigger_dispatcher::reset_field_nulls() {
+  assert(m_subject_table);
+
+  for (Field **next_field = m_subject_table->field; *next_field; ++next_field)
+    (*next_field)->reset_tmp_null();
+}
+
+/**
   Iterate along triggers and print necessary upgrade warnings.
 
   Now it prints the warning about missing 'CREATED' attribute.
