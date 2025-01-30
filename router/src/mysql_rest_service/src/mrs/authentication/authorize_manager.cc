@@ -73,7 +73,6 @@ using AuthorizeHandlerPtr = AuthorizeManager::AuthorizeHandlerPtr;
 const UniversalId k_vendor_mrs{{0x30, 0}};
 const UniversalId k_vendor_mysql{{0x31, 0}};
 const UniversalId k_vendor_facebook{{0x32, 0}};
-const UniversalId k_vendor_twitter{{0x33, 0}};
 const UniversalId k_vendor_google{{0x34, 0}};
 const UniversalId k_vendor_oidc{{0x35, 0}};
 
@@ -277,8 +276,6 @@ AuthorizeHandlerPtr AuthorizeManager::make_auth(const AuthApp &entry) {
     return factory_->create_basic_auth_handler(this, entry, cache_manager_);
   } else if (entry.vendor_id == k_vendor_facebook) {
     return factory_->create_facebook_auth_handler(this, entry);
-  } else if (entry.vendor_id == k_vendor_twitter) {
-    return factory_->create_twitter_auth_handler(this, entry);
   } else if (entry.vendor_id == k_vendor_google) {
     return factory_->create_google_auth_handler(this, entry);
   } else if (entry.vendor_id == k_vendor_mrs) {

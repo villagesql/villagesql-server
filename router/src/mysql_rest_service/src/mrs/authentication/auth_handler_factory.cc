@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -28,7 +28,6 @@
 #include "mrs/authentication/oauth2_facebook_handler.h"
 #include "mrs/authentication/oauth2_google_handler.h"
 #include "mrs/authentication/oauth2_oidc_handler.h"
-#include "mrs/authentication/oauth2_twitter_handler.h"
 #include "mrs/authentication/scram_handler.h"
 #include "mrs/authentication/track_authorize_handler.h"
 
@@ -48,13 +47,6 @@ AuthHandlerPtr AuthHandlerFactory::create_facebook_auth_handler(
     AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const {
   using Obj =
       TrackAuthorizeHandler<AuthorizeHandlerCallbakcs, Oauth2FacebookHandler>;
-  return std::make_shared<Obj>(cb, entry);
-}
-
-AuthHandlerPtr AuthHandlerFactory::create_twitter_auth_handler(
-    AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const {
-  using Obj =
-      TrackAuthorizeHandler<AuthorizeHandlerCallbakcs, Oauth2TwitterHandler>;
   return std::make_shared<Obj>(cb, entry);
 }
 

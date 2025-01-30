@@ -36,9 +36,6 @@ class MockAuthHandlerFactory : public mrs::interface::AuthHandlerFactory {
   MOCK_METHOD(AuthHandlerPtr, create_facebook_auth_handler,
               (AuthorizeHandlerCallbakcs * cb, const AuthApp &entry),
               (const, override));
-  MOCK_METHOD(AuthHandlerPtr, create_twitter_auth_handler,
-              (AuthorizeHandlerCallbakcs * cb, const AuthApp &entry),
-              (const, override));
   MOCK_METHOD(AuthHandlerPtr, create_google_auth_handler,
               (AuthorizeHandlerCallbakcs * cb, const AuthApp &entry),
               (const, override));

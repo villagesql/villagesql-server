@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -49,8 +49,6 @@ class AuthHandlerFactory {
       AuthorizeHandlerCallbakcs *cb, const AuthApp &entry,
       MysqlCacheManager *cache_manager) const = 0;
   virtual AuthHandlerPtr create_facebook_auth_handler(
-      AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const = 0;
-  virtual AuthHandlerPtr create_twitter_auth_handler(
       AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const = 0;
   virtual AuthHandlerPtr create_google_auth_handler(
       AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const = 0;
