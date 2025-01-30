@@ -37,6 +37,7 @@
 #include <cmath>
 #include <cstdint>
 #include <cstring>
+#include <functional>
 #include <type_traits>
 #include <utility>
 
@@ -61,6 +62,7 @@
 #include "sql/derror.h"       // ER_THD
 #include "sql/error_handler.h"
 #include "sql/field.h"
+#include "sql/hash.h"
 #include "sql/histograms/histogram.h"
 #include "sql/item.h"
 #include "sql/item_func.h"
@@ -504,6 +506,10 @@ void Item_func_not::print(const THD *thd, String *str,
   str->append('(');
   Item_func::print(thd, str, query_type);
   str->append(')');
+}
+
+uint64_t Item_func_not::hash() {
+  return CombineNonCommutativeSigs(HashString("not"), Item_func::hash());
 }
 
 /**
@@ -2433,6 +2439,14 @@ void Item_in_optimizer::print(const THD *thd, String *str,
   str->append(')');
 }
 
+uint64_t Item_in_optimizer::hash() {
+  return CombineNonCommutativeSigs(
+      HashCString(func_name()),
+      CombineNonCommutativeSigs(
+          down_cast<Item_in_subselect *>(args[0])->left_expr->hash(),
+          Item_func::hash_args(false)));
+}
+
 /**
    The implementation of optimized @<outer expression@> [NOT] IN @<subquery@>
    predicates. It applies to predicates which have gone through the IN->EXISTS
@@ -3565,6 +3579,13 @@ void Item_func_between::print(const THD *thd, String *str,
   str->append(')');
 }
 
+uint64_t Item_func_between::hash() {
+  uint64_t hash = HashString("func_between");
+  hash = CombineNonCommutativeSigs(hash,
+                                   HashNumber(static_cast<uint8_t>(negated)));
+  return CombineNonCommutativeSigs(hash, hash_args(false));
+}
+
 Field *Item_func_ifnull::tmp_table_field(TABLE *table) {
   return tmp_table_field_from_field_type(table, false);
 }
@@ -4378,6 +4399,21 @@ void Item_func_case::print(const THD *thd, String *str,
     str->append(' ');
   }
   str->append(STRING_WITH_LEN("end)"));
+}
+
+uint64_t Item_func_case::hash() {
+  auto hash = HashString("(func_case)");
+  if (first_expr_num != -1) {
+    hash = CombineNonCommutativeSigs(hash, args[first_expr_num]->hash());
+  }
+  for (uint i = 0; i < ncases; i += 2) {
+    hash = CombineNonCommutativeSigs(hash, args[i]->hash());
+    hash = CombineNonCommutativeSigs(hash, args[i + 1]->hash());
+  }
+  if (else_expr_num != -1) {
+    hash = CombineNonCommutativeSigs(hash, args[else_expr_num]->hash());
+  }
+  return hash;
 }
 
 Item_func_case::~Item_func_case() {
@@ -5622,6 +5658,15 @@ void Item_func_in::print(const THD *thd, String *str,
   str->append(STRING_WITH_LEN("))"));
 }
 
+uint64_t Item_func_in::hash() {
+  auto hash = HashString("func_in");
+  if (negated) {
+    hash = CombineNonCommutativeSigs(hash, HashString("func_in_not"));
+  }
+  hash = CombineNonCommutativeSigs(hash, hash_args(true));
+  return hash;
+}
+
 /*
   Evaluate the function and return its value.
 
@@ -6219,6 +6264,14 @@ void Item_cond::print(const THD *thd, String *str,
   str->append(')');
 }
 
+uint64_t Item_cond::hash() {
+  uint64_t hash_val = 0;
+  for (auto &item : list) {
+    hash_val = CombineCommutativeSigs(hash_val, item.hash());
+  }
+  return CombineNonCommutativeSigs(HashCString(func_name()), hash_val);
+}
+
 bool Item_cond::truth_transform_arguments(THD *thd, Bool_test test) {
   assert(test == BOOL_NEGATED);
   List_iterator<Item> li(list);
@@ -6496,6 +6549,10 @@ void Item_func_isnull::print(const THD *thd, String *str,
   str->append(STRING_WITH_LEN(" is null)"));
 }
 
+uint64_t Item_func_isnull::hash() {
+  return CombineNonCommutativeSigs(HashString("func_is_null"), args[0]->hash());
+}
+
 longlong Item_is_not_null_test::val_int() {
   assert(fixed);
   assert(used_tables_cache != 0);
@@ -6553,6 +6610,10 @@ void Item_func_isnotnull::print(const THD *thd, String *str,
   str->append('(');
   args[0]->print(thd, str, query_type);
   str->append(STRING_WITH_LEN(" is not null)"));
+}
+uint64_t Item_func_isnotnull::hash() {
+  return CombineNonCommutativeSigs(HashString("func_is_not_null"),
+                                   args[0]->hash());
 }
 
 float Item_func_like::get_filtering_effect(THD *thd, table_map filter_for_table,
@@ -6784,6 +6845,16 @@ void Item_func_like::print(const THD *thd, String *str,
     args[2]->print(thd, str, query_type);
   }
   str->append(')');
+}
+
+uint64_t Item_func_like::hash() {
+  auto hash = CombineNonCommutativeSigs(
+      HashString("func_like"),
+      CombineNonCommutativeSigs(args[0]->hash(), args[1]->hash()));
+  if (arg_count > 2) {
+    hash = CombineNonCommutativeSigs(hash, args[2]->hash());
+  }
+  return hash;
 }
 
 bool Item_func_xor::do_itemize(Parse_context *pc, Item **res) {
@@ -7369,6 +7440,17 @@ void Item_multi_eq::print(const THD *thd, String *str,
   str->append(')');
 }
 
+uint64_t Item_multi_eq::hash() {
+  auto hash = HashCString(func_name());
+  if (m_const_arg != nullptr) {
+    hash = CombineNonCommutativeSigs(hash, m_const_arg[0].hash());
+  }
+  for (auto &item_field : fields) {
+    hash = CombineCommutativeSigs(hash, item_field.hash());
+  }
+  return hash;
+}
+
 bool Item_multi_eq::eq_specific(const Item *item) const {
   const Item_multi_eq *item_eq = down_cast<const Item_multi_eq *>(item);
   if ((m_const_arg != nullptr) != (item_eq->m_const_arg != nullptr)) {
@@ -7496,6 +7578,38 @@ void Item_func_trig_cond::print(const THD *thd, String *str,
   str->append(", ");
   args[0]->print(thd, str, query_type);
   str->append(", true)");
+}
+
+uint64_t Item_func_trig_cond::hash() {
+  auto hash =
+      CombineNonCommutativeSigs(HashCString(func_name()), args[0]->hash());
+  switch (trig_type) {
+    case IS_NOT_NULL_COMPL:
+      hash = CombineNonCommutativeSigs(hash, HashString("is_not_null_compl"));
+      break;
+    case FOUND_MATCH:
+      hash = CombineNonCommutativeSigs(hash, HashString("found_match"));
+      break;
+    case OUTER_FIELD_IS_NOT_NULL:
+      hash = CombineNonCommutativeSigs(hash,
+                                       HashString("outer_field_is_not_null"));
+      break;
+    default:
+      assert(0);
+  }
+  if (m_join != nullptr) {
+    Table_ref *first_table, *last_table;
+    get_table_range(&first_table, &last_table);
+    hash =
+        CombineNonCommutativeSigs(hash, HashCString(first_table->table->alias));
+    if (first_table != last_table) {
+      /* Approximate hash: case of t1 LEFT JOIN (t2,t3,...): consider first and
+       * last table in the hash. */
+      hash = CombineNonCommutativeSigs(hash,
+                                       HashCString(last_table->table->alias));
+    }
+  }
+  return hash;
 }
 
 /**

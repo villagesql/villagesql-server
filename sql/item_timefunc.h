@@ -862,6 +862,7 @@ class Item_date_literal final : public Item_date_func {
   const char *func_name() const override { return "date_literal"; }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64_t hash() override;
   longlong val_date_temporal() override {
     assert(fixed);
     return cached_time.val_packed();
@@ -922,6 +923,10 @@ class Item_time_literal final : public Item_time_func {
   table_map not_null_tables() const override { return used_tables(); }
   void cleanup() override { assert(marker == MARKER_NONE); }
   bool eq_specific(const Item *item) const override;
+
+ private:
+  uint64_t m_hash{0};
+  uint64_t hash() override;
 };
 
 /**
@@ -966,6 +971,7 @@ class Item_datetime_literal final : public Item_datetime_func {
   table_map not_null_tables() const override { return used_tables(); }
   void cleanup() override { assert(marker == MARKER_NONE); }
   bool eq_specific(const Item *item) const override;
+  uint64_t hash() override;
 };
 
 /**

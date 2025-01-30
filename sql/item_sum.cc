@@ -67,6 +67,8 @@
 #include "sql/gis/geometry_extraction.h"
 #include "sql/gis/relops.h"
 #include "sql/handler.h"
+#include "sql/hash.h"
+#include "sql/item.h"
 #include "sql/item_cmpfunc.h"
 #include "sql/item_func.h"
 #include "sql/item_json_func.h"
@@ -492,6 +494,17 @@ void Item_sum::print(const THD *thd, String *str,
     str->append(" OVER ");
     m_window->print(thd, str, query_type, false);
   }
+}
+
+uint64_t Item_sum::hash() {
+  auto hash = HashCString(func_name());
+  if (has_with_distinct()) {
+    hash = CombineNonCommutativeSigs(hash, HashString("func_distinct"));
+  }
+  for (uint i = 0; i < arg_count; i++) {
+    hash = CombineNonCommutativeSigs(hash, args[i]->hash());
+  }
+  return hash;
 }
 
 bool Item_sum::resolve_type(THD *thd) {
@@ -3973,6 +3986,14 @@ void Item_udf_sum::print(const THD *thd, String *str,
   str->append(')');
 }
 
+uint64_t Item_udf_sum::hash() {
+  auto hash = HashCString(func_name());
+  for (uint i = 0; i < arg_count; i++) {
+    hash = CombineNonCommutativeSigs(hash, args[i]->hash());
+  }
+  return hash;
+}
+
 Item *Item_sum_udf_float::copy_or_same(THD *thd) {
   assert(udf.is_initialized());
   return new (thd->mem_root) Item_sum_udf_float(thd, this);
@@ -4769,6 +4790,25 @@ void Item_func_group_concat::print(const THD *thd, String *str,
     separator->print(str);
   }
   str->append(STRING_WITH_LEN("\')"));
+}
+
+uint64_t Item_func_group_concat::hash() {
+  auto hash = HashString("func_group_concat");
+  if (distinct) {
+    hash = CombineNonCommutativeSigs(hash, HashString("func_concat_distinct"));
+  }
+
+  for (uint i = 0; i < m_field_arg_count; i++) {
+    hash = CombineNonCommutativeSigs(hash, args[i]->hash());
+  }
+  if (m_order_arg_count > 0) {
+    hash = CombineNonCommutativeSigs(hash, HashString("func_concat_order_by "));
+    for (uint i = 0; i < m_order_arg_count; i++) {
+      hash =
+          CombineNonCommutativeSigs(hash, args[i + m_field_arg_count]->hash());
+    }
+  }
+  return hash;
 }
 
 bool Item_non_framing_wf::fix_fields(THD *thd, Item **items) {

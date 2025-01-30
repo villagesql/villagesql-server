@@ -102,6 +102,7 @@
 #include "sql/debug_sync.h"      // DEBUG_SYNC
 #include "sql/derror.h"          // ER_THD
 #include "sql/error_handler.h"   // Internal_error_handler
+#include "sql/hash.h"
 #include "sql/item.h"            // Item_json
 #include "sql/item_cmpfunc.h"    // get_datetime_value
 #include "sql/item_json_func.h"  // get_json_wrapper
@@ -760,6 +761,25 @@ void Item_func::print_args(const THD *thd, String *str, uint from,
     args[i]->print(thd, str, query_type);
   }
 }
+
+uint64_t Item_func::hash_args(bool commutative) const {
+  uint64_t hash = 0;
+  for (uint i = 0; i < arg_count; i++) {
+    if (commutative) {
+      hash = CombineCommutativeSigs(args[i]->hash(), hash);
+    } else {
+      hash = CombineNonCommutativeSigs(hash, args[i]->hash());
+    }
+  }
+  return hash;
+}
+
+uint64_t Item_func::hash(bool commutative_args) {
+  return CombineNonCommutativeSigs(HashCString(func_name()),
+                                   hash_args(commutative_args));
+}
+
+uint64_t Item_func::hash() { return Item_func::hash(false); }
 
 void Item_func::print_op(const THD *thd, String *str,
                          enum_query_type query_type) const {
@@ -2054,6 +2074,16 @@ void Item_typecast_decimal::print(const THD *thd, String *str,
   str->append_ulonglong(decimals);
   str->append(')');
   str->append(')');
+}
+
+uint64_t Item_typecast_decimal::hash() {
+  const uint precision =
+      my_decimal_length_to_precision(max_length, decimals, unsigned_flag);
+  return CombineNonCommutativeSigs(
+      HashString("func_cast_decimal"),
+      CombineNonCommutativeSigs(
+          args[0]->hash(), CombineNonCommutativeSigs(HashNumber(precision),
+                                                     HashNumber(decimals))));
 }
 
 void Item_typecast_decimal::add_json_info(Json_object *obj) {
@@ -4206,6 +4236,13 @@ void Item_rollup_group_item::print(const THD *thd, String *str,
   snprintf(buf, sizeof(buf), "%d", m_min_rollup_level);
   str->append(buf);
   str->append(')');
+}
+
+uint64_t Item_rollup_group_item::hash() {
+  return CombineNonCommutativeSigs(
+      HashCString(func_name()),
+      CombineNonCommutativeSigs(hash_args(false),
+                                HashNumber(m_min_rollup_level)));
 }
 
 bool Item_rollup_group_item::eq_specific(const Item *item) const {
@@ -6585,6 +6622,11 @@ void Item_func_set_user_var::print(const THD *thd, String *str,
   print_assignment(thd, str, query_type);
   str->append(STRING_WITH_LEN(")"));
 }
+uint64_t Item_func_set_user_var::hash() {
+  return CombineNonCommutativeSigs(
+      HashCString("set_user_var"),
+      CombineNonCommutativeSigs(HashCString(name.ptr()), args[0]->hash()));
+}
 
 bool Item_func_set_user_var::send(Protocol *protocol, String *str_arg) {
   if (result_field) {
@@ -7084,6 +7126,11 @@ void Item_func_get_user_var::print(const THD *thd, String *str,
   str->append(')');
 }
 
+uint64_t Item_func_get_user_var::hash() {
+  return CombineNonCommutativeSigs(HashCString("get_user_var"),
+                                   HashCString(name.ptr()));
+}
+
 bool Item_func_get_user_var::eq_specific(const Item *item) const {
   const Item_func_get_user_var *other =
       down_cast<const Item_func_get_user_var *>(item);
@@ -7166,6 +7213,10 @@ void Item_user_var_as_out_param::print(const THD *thd, String *str,
   append_identifier(thd, str, name.ptr(), name.length());
 }
 
+uint64_t Item_user_var_as_out_param::hash() {
+  return CombineNonCommutativeSigs(HashCString("@"), HashCString(name.ptr()));
+}
+
 Item_func_get_system_var::Item_func_get_system_var(
     const System_variable_tracker &var_tracker, enum_var_type scope)
     : var_scope{scope}, cache_present{0}, var_tracker{var_tracker} {
@@ -7216,6 +7267,9 @@ bool Item_func_get_system_var::resolve_type(THD *) {
 void Item_func_get_system_var::print(const THD *, String *str,
                                      enum_query_type) const {
   str->append(item_name);
+}
+uint64_t Item_func_get_system_var::hash() {
+  return HashCString(item_name.ptr());
 }
 
 Audit_global_variable_get_event::Audit_global_variable_get_event(
@@ -7963,6 +8017,14 @@ void Item_func_match::print(const THD *thd, String *str,
   else if (flags & FT_EXPAND)
     str->append(STRING_WITH_LEN(" with query expansion"));
   str->append(STRING_WITH_LEN("))"));
+}
+
+uint64_t Item_func_match::hash() {
+  uint64_t hash = CombineNonCommutativeSigs(
+      HashCString("func_match_against"),
+      CombineNonCommutativeSigs(Item_func::hash(), against->hash()));
+  hash = CombineNonCommutativeSigs(hash, HashNumber(flags));
+  return hash;
 }
 
 void Item_func_match::add_json_info(Json_object *obj) {

@@ -251,6 +251,49 @@ TEST_F(ItemTest, ItemInt) {
   */
 }
 
+TEST_F(ItemTest, ItemUIntHash) {
+  Item_uint *item_uint = new Item_uint(10);
+  Item_uint *item_uint2 = new Item_uint(10);
+  Item_uint *item_uint3 = new Item_uint(30);
+  EXPECT_EQ(item_uint->hash(), item_uint2->hash());
+  EXPECT_NE(item_uint3->hash(), item_uint2->hash());
+}
+
+TEST_F(ItemTest, ItemNameConstHash) {
+  const char short_str[] = "abc";
+  const char short_str2[] = "abd";
+  auto *item_short_string =
+      new Item_string(STRING_WITH_LEN(short_str), &my_charset_latin1);
+  auto *item_short_string2 =
+      new Item_string(STRING_WITH_LEN(short_str2), &my_charset_latin1);
+  auto *int_item = new Item_int(10);
+  auto *int_item2 = new Item_int(20);
+  Item_name_const name_const(POS(), item_short_string, int_item);
+  Item_name_const name_const2(POS(), item_short_string, int_item);
+  Item_name_const name_const3(POS(), item_short_string2, int_item2);
+  Item_name_const name_const4(POS(), item_short_string2, int_item);
+  EXPECT_EQ(name_const.hash(), name_const2.hash());
+  EXPECT_NE(name_const3.hash(), name_const2.hash());
+  EXPECT_NE(name_const4.hash(), name_const3.hash());
+  char short_hex_str[] = "a";
+  char short_hex_str2[] = "b";
+  LEX_STRING lex_string{short_hex_str, 1};
+  LEX_STRING lex_string2{short_hex_str2, 1};
+  auto *item_hex_string = new Item_hex_string(POS(), lex_string);
+  auto *item_hex_string2 = new Item_hex_string(POS(), lex_string2);
+  auto *item_hex_string3 = new Item_hex_string(POS(), lex_string2);
+  EXPECT_NE(item_hex_string->hash(), item_hex_string2->hash());
+  EXPECT_EQ(item_hex_string2->hash(), item_hex_string3->hash());
+}
+
+TEST_F(ItemTest, ItemCaseExprHash) {
+  Item_case_expr *item_ce = new Item_case_expr(10);
+  Item_case_expr *item_ce2 = new Item_case_expr(10);
+  Item_case_expr *item_ce3 = new Item_case_expr(30);
+  EXPECT_EQ(item_ce->hash(), item_ce2->hash());
+  EXPECT_NE(item_ce->hash(), item_ce3->hash());
+}
+
 TEST_F(ItemTest, ItemString) {
   const char short_str[] = "abc";
   const char long_str[] = "abcd";
@@ -260,6 +303,10 @@ TEST_F(ItemTest, ItemString) {
 
   Item_string *item_short_string =
       new Item_string(STRING_WITH_LEN(short_str), &my_charset_latin1);
+  Item_string *item_short_string2 =
+      new Item_string(STRING_WITH_LEN(short_str), &my_charset_latin1);
+  Item_string *item_short_string3 =
+      new Item_string(STRING_WITH_LEN(short_str), &my_charset_bin);
   Item_string *item_long_string =
       new Item_string(STRING_WITH_LEN(long_str), &my_charset_latin1);
   Item_string *item_space_string =
@@ -269,6 +316,13 @@ TEST_F(ItemTest, ItemString) {
   Item_string *item_bad_char_end =
       new Item_string(STRING_WITH_LEN(bad_char_end), &my_charset_bin);
 
+  EXPECT_NE(item_short_string->hash(), 0);
+  EXPECT_EQ(item_short_string->hash(), item_short_string2->hash());
+  EXPECT_EQ(item_short_string->hash(), item_short_string3->hash());
+  EXPECT_NE(item_short_string->hash(), item_long_string->hash());
+  EXPECT_NE(item_short_string->hash(), item_space_string->hash());
+  EXPECT_NE(item_short_string->hash(), item_bad_char->hash());
+  EXPECT_NE(item_short_string->hash(), item_bad_char_end->hash());
   /*
     Bug 16407965 ITEM::SAVE_IN_FIELD_NO_WARNING() DOES NOT RETURN CORRECT
                  CONVERSION STATUS
@@ -375,12 +429,25 @@ TEST_F(ItemTest, ItemEqual) {
       "0123456789012345678901234567890123456789"
       "0123456789012345678901234567890123456789"
       "0123456789012345678901234567890123456789";
+  const char bar[] =
+      "0123456789012345678901234567890123456788"
+      "0123456789012345678901234567890123456781"
+      "0123456789012345678901234567890123456782";
   Item_multi_eq *item_equal =
       new Item_multi_eq(new Item_string(STRING_WITH_LEN(foo), &my_charset_bin),
+                        new Item_field(&mft));
+  Item_multi_eq *item_equal2 =
+      new Item_multi_eq(new Item_string(STRING_WITH_LEN(foo), &my_charset_bin),
+                        new Item_field(&mft));
+  Item_multi_eq *item_equal3 =
+      new Item_multi_eq(new Item_string(STRING_WITH_LEN(bar), &my_charset_bin),
                         new Item_field(&mft));
 
   EXPECT_FALSE(item_equal->fix_fields(thd(), nullptr));
   EXPECT_EQ(1, item_equal->val_int());
+  EXPECT_NE(item_equal->hash(), 0);
+  EXPECT_EQ(item_equal->hash(), item_equal2->hash());
+  EXPECT_NE(item_equal->hash(), item_equal3->hash());
 }
 
 TEST_F(ItemTest, ItemViewRef) {
@@ -389,6 +456,7 @@ TEST_F(ItemTest, ItemViewRef) {
   Item_field *field1 = new Item_field(&f_field1);
   Item_field *field2 = new Item_field(&f_field2);
   Item *field3 = new Item_int(123);
+  Item *field4 = new Item_int(1232);
 
   // Create a view reference over a constant expression from an inner
   // table of an outer join.
@@ -398,11 +466,33 @@ TEST_F(ItemTest, ItemViewRef) {
   Item_view_ref *view_ref =
       new Item_view_ref(&thd()->lex->current_query_block()->context, &field3,
                         nullptr, nullptr, "t1", "f1", &table);
+  Item_view_ref *view_ref2 =
+      new Item_view_ref(&thd()->lex->current_query_block()->context, &field3,
+                        nullptr, nullptr, "t1", "f1", &table);
+  Item_view_ref *view_ref3 =
+      new Item_view_ref(&thd()->lex->current_query_block()->context, &field4,
+                        nullptr, nullptr, "t2", "f1", &table);
 
+  Item_view_ref *view_ref31 =
+      new Item_view_ref(&thd()->lex->current_query_block()->context, &field3,
+                        nullptr, nullptr, "t2", "f1", &table);
+  Item_view_ref *view_ref4 =
+      new Item_view_ref(&thd()->lex->current_query_block()->context, &field3,
+                        nullptr, nullptr, "t1", "f2", &table);
+  EXPECT_NE(view_ref->hash(), 0);
+  EXPECT_EQ(view_ref->hash(), view_ref2->hash());
+  EXPECT_NE(view_ref->hash(), view_ref3->hash());
+  EXPECT_NE(view_ref3->hash(), view_ref31->hash());
+  EXPECT_NE(view_ref3->hash(), view_ref4->hash());
   Item_func_eq *eq1 = new Item_func_eq(field1, field2);
   Item_func_eq *eq2 = new Item_func_eq(field1, field3);
   Item_func_eq *eq3 = new Item_func_eq(field1, view_ref);
-
+  Item_func_eq *eq4 = new Item_func_eq(field1, view_ref);
+  EXPECT_NE(eq1->hash(), 0UL);
+  EXPECT_EQ(eq1->hash(), 4100790992186704807ULL);
+  EXPECT_EQ(eq4->hash(), eq3->hash());
+  EXPECT_NE(eq1->hash(), eq2->hash());
+  EXPECT_NE(eq1->hash(), eq3->hash());
   // True because both arguments are fields.
   EXPECT_TRUE(eq1->contains_only_equi_join_condition());
   // False because the right side argument is a constant and
@@ -414,6 +504,19 @@ TEST_F(ItemTest, ItemViewRef) {
   // it as constant expression there by making it a filter and
   // not a equi-join condition.
   EXPECT_FALSE(eq3->contains_only_equi_join_condition());
+
+  auto *item_int_ref1 =
+      new Item_int_with_ref(field1->field->type(), field1->field->val_int(),
+                            field3, field1->field->is_flag_set(UNSIGNED_FLAG));
+  auto *item_int_ref2 =
+      new Item_int_with_ref(field2->field->type(), field2->field->val_int(),
+                            field4, field2->field->is_flag_set(UNSIGNED_FLAG));
+  auto *item_int_ref3 =
+      new Item_int_with_ref(field2->field->type(), field2->field->val_int(),
+                            field4, field2->field->is_flag_set(UNSIGNED_FLAG));
+
+  EXPECT_NE(item_int_ref1->hash(), item_int_ref2->hash());
+  EXPECT_EQ(item_int_ref3->hash(), item_int_ref2->hash());
 }
 
 TEST_F(ItemTest, ItemRollupSwitcher) {
@@ -433,9 +536,21 @@ TEST_F(ItemTest, ItemRollupSwitcher) {
   EXPECT_TRUE(agg1->eq(sw2));
   EXPECT_TRUE(sw1->eq(sw2));
   EXPECT_TRUE(sw1->eq(agg2));
-
+  EXPECT_EQ(sw1->hash(), sw2->hash());
+  EXPECT_NE(sw1->hash(), 0);
   EXPECT_FALSE(agg1->is_rollup_sum_wrapper());
   EXPECT_TRUE(sw1->is_rollup_sum_wrapper());
+
+  Item_rollup_group_item *gi1 = new Item_rollup_group_item(1, agg1);
+  Item_rollup_group_item *gi2 = new Item_rollup_group_item(1, agg1);
+  Item_rollup_group_item *gi3 = new Item_rollup_group_item(1, agg2);
+  Item_rollup_group_item *gi4 = new Item_rollup_group_item(2, agg2);
+  EXPECT_EQ(gi1->hash(), gi2->hash());
+  EXPECT_EQ(gi3->hash(), gi2->hash());
+  EXPECT_NE(gi3->hash(), gi4->hash());
+  EXPECT_NE(gi1->hash(), 0);
+  EXPECT_EQ(gi3->hash(), 16249556224246059739ULL);
+  EXPECT_EQ(gi4->hash(), 17376352938218015750ULL);
 }
 
 TEST_F(ItemTest, ItemEqualEq) {
@@ -477,6 +592,58 @@ TEST_F(ItemTest, ItemEqualEq) {
       }
     }
   }
+}
+
+TEST_F(ItemTest, ItemHashEq) {
+  Mock_field_timestamp field1(Field::NONE, 0);
+  field1.field_name = "field1";
+  field1.table->const_table = false;
+  auto *if1 = new Item_field(&field1);
+  if1->table_name = "t1";
+  if1->db_name = "db1";
+  Mock_field_timestamp field2(Field::NONE, 0);
+  field2.field_name = "field1";
+  field2.table->const_table = false;
+  auto *if2 = new Item_field(&field2);
+  if2->table_name = "t1";
+  if2->db_name = "db1";
+  Mock_field_timestamp field3(Field::NONE, 0);
+  field3.field_name = "field1";
+  field3.table->const_table = false;
+  auto *if3 = new Item_field(&field3);
+  if3->table_name = "t2";
+  if3->db_name = "db1";
+  Mock_field_timestamp field4(Field::NONE, 0);
+  field4.field_name = "field2";
+  auto *if4 = new Item_field(&field4);
+  if4->table_name = "t2";
+  if4->db_name = "db1";
+  Mock_field_timestamp field5(Field::NONE, 0);
+  field4.field_name = "field2";
+  auto *if5 = new Item_field(&field5);
+  if5->table_name = "t2";
+  if5->db_name = "db2";
+  EXPECT_EQ(if1->hash(), 15949012521114663756UL);
+  EXPECT_EQ(if1->hash(), if2->hash());
+  EXPECT_EQ(if1->hash(), if2->hash());
+  EXPECT_NE(if2->hash(), if3->hash());
+  EXPECT_NE(if3->hash(), if4->hash());
+  EXPECT_NE(if4->hash(), if5->hash());
+  auto *item_n1 = new Item_int(10);
+  auto *item_n2 = new Item_int(20);
+  auto item_default1 = Item_default_value(POS(), item_n1);
+  auto item_default2 = Item_default_value(POS(), item_n1);
+  auto item_default3 = Item_default_value(POS(), item_n2);
+
+  EXPECT_EQ(item_default1.hash(), item_default2.hash());
+  EXPECT_NE(item_default1.hash(), item_default3.hash());
+
+  auto item_insert1 = Item_insert_value(POS(), item_n1);
+  auto item_insert2 = Item_insert_value(POS(), item_n1);
+  auto item_insert3 = Item_insert_value(POS(), item_n2);
+
+  EXPECT_EQ(item_insert1.hash(), item_insert2.hash());
+  EXPECT_NE(item_insert3.hash(), item_insert2.hash());
 }
 
 TEST_F(ItemTest, ItemFuncExportSet) {
@@ -628,16 +795,47 @@ TEST_F(ItemTest, ItemFuncNegLongLongMin) {
 */
 TEST_F(ItemTest, ItemFuncSetUserVar) {
   const longlong val1 = 1;
-  Item_decimal *item_dec = new Item_decimal(val1, false);
-  Item_string *item_str = new Item_string("1", 1, &my_charset_latin1);
+  auto *item_dec = new Item_decimal(1.0);
+  auto *item_dec0 = new Item_decimal(0.0);
+  auto *item_dec2 = new Item_decimal(1.0);
+  auto *item_dec3 = new Item_decimal(2.0);
+  auto *item_str = new Item_string("1", 1, &my_charset_latin1);
+  EXPECT_EQ(item_dec->hash(), item_dec2->hash());
+  EXPECT_NE(item_dec0->hash(), item_dec2->hash());
+  EXPECT_NE(item_dec0->hash(), 0ULL);
+  EXPECT_NE(item_dec2->hash(), item_dec3->hash());
+  auto *item_f1 = new Item_float("1e1", 3);
+  auto *item_f2 = new Item_float("10e0", 4);
+  auto *item_f3 = new Item_float("5.0e0", 5);
+  auto *item_f4 = new Item_float("5.1e0", 5);
+  EXPECT_EQ(item_f1->hash(), item_f2->hash());
+  EXPECT_NE(item_f3->hash(), item_f4->hash());
 
   LEX_CSTRING var_name = {STRING_WITH_LEN("a")};
+  LEX_CSTRING var_name2 = {STRING_WITH_LEN("b")};
   Item_func_set_user_var *user_var =
       new Item_func_set_user_var(var_name, item_str);
+  Item_func_set_user_var *user_var2 =
+      new Item_func_set_user_var(var_name2, item_str);
+  Item_func_set_user_var *user_var3 =
+      new Item_func_set_user_var(var_name, item_str);
+  POS p;
+  Item_user_var_as_out_param *user_var_out =
+      new Item_user_var_as_out_param(p, Name_string(STRING_WITH_LEN("JSON")));
+  Item_user_var_as_out_param *user_var_out2 =
+      new Item_user_var_as_out_param(p, Name_string(STRING_WITH_LEN("JSON")));
+  Item_user_var_as_out_param *user_var_out3 =
+      new Item_user_var_as_out_param(p, Name_string(STRING_WITH_LEN("JSON2")));
   EXPECT_FALSE(user_var->set_entry(thd(), true));
   EXPECT_FALSE(user_var->fix_fields(thd(), nullptr));
+  EXPECT_FALSE(user_var2->fix_fields(thd(), nullptr));
   EXPECT_EQ(val1, user_var->val_int());
-
+  EXPECT_NE(user_var->hash(), 0);
+  EXPECT_EQ(user_var->hash(), user_var3->hash());
+  EXPECT_NE(user_var2->hash(), user_var3->hash());
+  EXPECT_NE(user_var_out->hash(), 0);
+  EXPECT_EQ(user_var_out->hash(), user_var_out2->hash());
+  EXPECT_NE(user_var_out3->hash(), user_var_out2->hash());
   my_decimal decimal;
   my_decimal *decval_1 = user_var->val_decimal(&decimal);
   user_var->save_item_result(item_str);
@@ -957,6 +1155,14 @@ TEST_F(ItemTest, ItemJson) {
   Json_string jstr("123");
   Item_json *item = new Item_json(
       make_unique_destroy_only<Json_wrapper>(mem_root, &jstr, true), name);
+  Json_string jstr2("124");
+  Item_json *item2 = new Item_json(
+      make_unique_destroy_only<Json_wrapper>(mem_root, &jstr2, true), name);
+  Item_json *item3 = new Item_json(
+      make_unique_destroy_only<Json_wrapper>(mem_root, &jstr2, true), name);
+
+  EXPECT_NE(item->hash(), item2->hash());
+  EXPECT_EQ(item3->hash(), item2->hash());
 
   Json_wrapper wr;
   EXPECT_FALSE(item->val_json(&wr));

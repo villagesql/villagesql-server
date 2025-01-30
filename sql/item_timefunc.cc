@@ -30,8 +30,10 @@
 */
 
 #include "sql/item_timefunc.h"
+#include <cstdint>
 
 #include "my_config.h"
+#include "sql/hash.h"
 #ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
 #endif
@@ -955,6 +957,11 @@ void Item_date_literal::print(const THD *, String *str, enum_query_type) const {
   str->append('\'');
 }
 
+uint64_t Item_date_literal::hash() {
+  return CombineNonCommutativeSigs(HashCString("date literal"),
+                                   HashCString(cached_time.cptr()));
+}
+
 bool Item_datetime_literal::eq_specific(const Item *item) const {
   return cached_time.eq(
       down_cast<const Item_datetime_literal *>(item)->cached_time);
@@ -967,6 +974,11 @@ void Item_datetime_literal::print(const THD *, String *str,
   str->append('\'');
 }
 
+uint64_t Item_datetime_literal::hash() {
+  return CombineNonCommutativeSigs(HashCString("TIMESTAMP literal"),
+                                   HashCString(cached_time.cptr()));
+}
+
 bool Item_time_literal::eq_specific(const Item *item) const {
   return cached_time.eq(
       down_cast<const Item_time_literal *>(item)->cached_time);
@@ -976,6 +988,15 @@ void Item_time_literal::print(const THD *, String *str, enum_query_type) const {
   str->append("TIME'");
   str->append(cached_time.cptr());
   str->append('\'');
+}
+
+uint64_t Item_time_literal::hash() {
+  if (m_hash == 0ULL) {
+    m_hash = CombineNonCommutativeSigs(
+        HashCString("time literal"),
+        HashString(cached_time.cptr() != nullptr ? cached_time.cptr() : "X"));
+  }
+  return m_hash;
 }
 
 bool Item_func_at_time_zone::resolve_type(THD *thd) {

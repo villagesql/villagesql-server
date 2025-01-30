@@ -234,6 +234,7 @@ SET(SERVER_TESTS
   graph_simplification
   gtid_specification_parsing
   handler
+  hash
   hash_join
   histograms
   histogram_selectivity
@@ -249,6 +250,7 @@ SET(SERVER_TESTS
   item_func_regexp
   item_json_func
   item_like
+  item_param
   item_timefunc
   join_syntax
   join_tab_sort
