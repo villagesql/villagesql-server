@@ -34,7 +34,7 @@
 
 Kerberos_client_io::Kerberos_client_io(MYSQL_PLUGIN_VIO *vio) : m_vio{vio} {}
 
-Kerberos_client_io::~Kerberos_client_io() {}
+Kerberos_client_io::~Kerberos_client_io() = default;
 
 /*
   Data Format:

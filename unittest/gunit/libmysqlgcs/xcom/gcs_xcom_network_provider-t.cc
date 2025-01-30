@@ -28,7 +28,7 @@
 namespace gcs_xcom_networkprovidertest {
 class XComNetworkProviderTest : public GcsBaseTest {
  protected:
-  XComNetworkProviderTest() {}
+  XComNetworkProviderTest() = default;
 
   void SetUp() override {}
 

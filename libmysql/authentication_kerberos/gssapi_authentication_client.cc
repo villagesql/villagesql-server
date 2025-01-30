@@ -43,7 +43,7 @@ Gssapi_client::Gssapi_client(const std::string &spn, MYSQL_PLUGIN_VIO *vio,
       m_user_principal_name.c_str(), m_password.c_str());
 }
 
-Gssapi_client::~Gssapi_client() {}
+Gssapi_client::~Gssapi_client() = default;
 
 bool Gssapi_client::authenticate() {
   bool rc_auth{false};

@@ -96,7 +96,7 @@ class mock_network_provider : public Network_provider {
 
 class XComNetworkProviderManagerTest : public GcsBaseTest {
  protected:
-  XComNetworkProviderManagerTest() {}
+  XComNetworkProviderManagerTest() = default;
 
   void SetUp() override {}
 

@@ -37,7 +37,7 @@ Command_delegate::Command_delegate(void *srv, SRV_CTX_H srv_ctx_h)
   assert(m_srv_ctx_h != nullptr);
 }
 
-Command_delegate::~Command_delegate() {}
+Command_delegate::~Command_delegate() = default;
 
 Callback_command_delegate::Callback_command_delegate(void *srv,
                                                      SRV_CTX_H srv_ctx_h)

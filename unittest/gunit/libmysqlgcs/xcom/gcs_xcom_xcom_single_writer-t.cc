@@ -58,8 +58,8 @@ uint32_t constexpr const test_group_id{0xbaadcafe};
 
 class XcomSingleWriter : public GcsBaseTest {
  protected:
-  XcomSingleWriter() {}
-  ~XcomSingleWriter() override {}
+  XcomSingleWriter() = default;
+  ~XcomSingleWriter() override = default;
 };
 
 auto xprintf = [](std::ostream &os, auto... args) {

@@ -42,7 +42,7 @@ Headers::Headers() = default;
 
 Headers::Headers(Headers &&other) : map_{std::move(other.map_)} {}
 
-Headers::~Headers() {}
+Headers::~Headers() = default;
 
 void Headers::add(const std::string_view &key, std::string &&value) {
   remove(key);
