@@ -377,6 +377,7 @@ inline handlerton *OptimizerTestBase::EnableSecondaryEngine(
         MakeSecondaryEngineFlags(SecondaryEngineFlag::SUPPORTS_HASH_JOIN);
   }
   hton->secondary_engine_modify_view_ap_cost = nullptr;
+  hton->secondary_engine_nrows = nullptr;
   hton->secondary_engine_check_optimizer_request =
       [](THD *, const JoinHypergraph &, const AccessPath *, int, int, bool,
          std::string *) {

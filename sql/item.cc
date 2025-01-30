@@ -25,8 +25,10 @@
 #include "sql/item.h"
 
 #include "integer_digits.h"
+#include "lex_string.h"
 #include "my_compiler.h"
 #include "my_config.h"
+#include "sql/hash.h"
 
 #include <stdio.h>
 #ifdef HAVE_SYS_TIME_H
@@ -2011,6 +2013,11 @@ void Item_splocal::print(const THD *thd, String *str, enum_query_type) const {
   }
 }
 
+uint64_t Item_splocal::hash() {
+  return CombineNonCommutativeSigs(HashCString(m_name.ptr()),
+                                   HashNumber(m_var_idx));
+}
+
 bool Item_splocal::set_value(THD *thd, sp_rcontext *ctx, Item **it) {
   return ctx->set_variable(thd, false, get_var_idx(), it);
 }
@@ -2046,6 +2053,11 @@ void Item_case_expr::print(const THD *, String *str, enum_query_type) const {
     return; /* purecov: inspected */
   (void)str->append(STRING_WITH_LEN("case_expr@"));
   qs_append(m_case_expr_id, str);
+}
+
+uint64_t Item_case_expr::hash() {
+  return CombineNonCommutativeSigs(HashString("case_expr@"),
+                                   HashNumber(m_case_expr_id));
 }
 
 /*****************************************************************************
@@ -2181,6 +2193,12 @@ void Item_name_const::print(const THD *thd, String *str,
   str->append(',');
   value_item->print(thd, str, query_type);
   str->append(')');
+}
+
+uint64_t Item_name_const::hash() {
+  return CombineNonCommutativeSigs(
+      HashCString("NAME_CONST"),
+      CombineNonCommutativeSigs(name_item->hash(), value_item->hash()));
 }
 
 /*
@@ -3242,6 +3260,33 @@ void Item_ident::print(const THD *thd, String *str, enum_query_type query_type,
   append_identifier(thd, str, f_name, strlen(f_name));
 }
 
+uint64_t Item_ident::hash() {
+  if (m_hash_val > 0) {
+    return m_hash_val;
+  }
+  uint64_t hash = 0;
+  if (m_orig_db_name != nullptr) {
+    hash = HashCString(m_orig_db_name);
+  }
+  if (m_orig_table_name != nullptr) {
+    hash = CombineNonCommutativeSigs(hash, HashCString(m_orig_table_name));
+  }
+  if (m_orig_field_name != nullptr) {
+    hash = CombineNonCommutativeSigs(hash, HashCString(m_orig_field_name));
+  }
+  if (db_name != nullptr) {
+    hash = CombineNonCommutativeSigs(hash, HashCString(db_name));
+  }
+  if (table_name != nullptr) {
+    hash = CombineNonCommutativeSigs(hash, HashCString(table_name));
+  }
+  if (field_name != nullptr) {
+    hash = CombineNonCommutativeSigs(hash, HashCString(field_name));
+  }
+  m_hash_val = hash;
+  return hash;
+}
+
 TYPELIB *Item_field::get_typelib() const {
   return down_cast<Field_enum *>(field)->typelib;
 }
@@ -3514,6 +3559,8 @@ void Item_int::print(const THD *, String *str,
   }
 }
 
+uint64_t Item_int::hash() { return HashNumber(value); }
+
 String *Item_uint::val_str(String *str) {
   // following assert is redundant, because fixed=1 assigned in constructor
   assert(fixed);
@@ -3529,6 +3576,8 @@ void Item_uint::print(const THD *, String *str,
   }
   str->append_ulonglong(value);
 }
+
+uint64_t Item_uint::hash() { return HashNumber(value); }
 
 Item_decimal::Item_decimal(const POS &pos, const char *str_arg, uint length,
                            const CHARSET_INFO *charset)
@@ -3617,6 +3666,21 @@ void Item_decimal::print(const THD *, String *str,
   my_decimal2string(E_DEC_FATAL_ERROR, &decimal_value, &tmp);
   str->append(tmp);
 }
+
+uint64_t HashDecimal(const my_decimal &decimal_value) {
+  auto hash = CombineNonCommutativeSigs(
+      static_cast<uint64_t>(decimal_value.sign()),
+      CombineNonCommutativeSigs(HashNumber(decimal_value.intg),
+                                HashNumber(decimal_value.frac)));
+  for (int i = 0;
+       i < std::min(decimal_value.intg + decimal_value.frac, decimal_value.len);
+       i++) {
+    hash = CombineNonCommutativeSigs(hash, HashNumber(decimal_value.buf[i]));
+  }
+  return hash;
+}
+
+uint64_t Item_decimal::hash() { return HashDecimal(decimal_value); }
 
 bool Item_decimal::eq(const Item *item) const {
   if (type() == item->type()) {
@@ -3734,6 +3798,8 @@ void Item_string::print(const THD *, String *str,
   str->append('\'');
 }
 
+uint64_t Item_string::hash() { return HashString(to_string_view(str_value)); }
+
 double double_from_string_with_check(const CHARSET_INFO *cs, const char *cptr,
                                      const char *end) {
   int error;
@@ -3810,7 +3876,14 @@ my_decimal *Item_string::val_decimal(my_decimal *decimal_value) {
   return val_decimal_from_string(decimal_value);
 }
 
+uint64_t Item_static_string_func::hash() {
+  return CombineNonCommutativeSigs(HashCString(func_name.ptr()),
+                                   Item_string::hash());
+}
+
 bool Item_null::eq(const Item *item) const { return item->type() == type(); }
+
+uint64_t Item_null::hash() { return kNullStrHash; }
 
 double Item_null::val_real() {
   // following assert is redundant, because fixed=1 assigned in constructor
@@ -3846,6 +3919,18 @@ Item_param::Item_param(const POS &pos, MEM_ROOT *root, uint pos_in_query_arg)
   item_name.set("?");
   // Initial type is "invalid type", type will be assigned from context
   set_nullable(true);  // All parameters are nullable
+}
+
+Item_param::Item_param(const POS &pos, double val)
+    : super(pos), pos_in_query(0) {
+  double2my_decimal(E_DEC_FATAL_ERROR, val, &decimal_value);
+  set_param_state(DECIMAL_VALUE);
+}
+
+Item_param::Item_param(const POS &pos, long long val)
+    : super(pos), pos_in_query(0) {
+  value.integer = val;
+  set_param_state(INT_VALUE);
 }
 
 bool Item_param::do_itemize(Parse_context *pc, Item **res) {
@@ -4995,6 +5080,54 @@ void Item_param::print(const THD *thd, String *str,
     String tmp(buffer, sizeof(buffer), &my_charset_bin);
     const String *res = query_val_str(thd, &tmp);
     if (res != nullptr) str->append(*res);
+  }
+}
+
+uint64_t Item_param::hash() {
+  if (m_param_state == NO_VALUE) {
+    return HashCString("no value param");
+  }
+  switch (m_param_state) {
+    case INT_VALUE:
+      return HashNumber(value.integer);
+    case REAL_VALUE:
+      return HashNumber(value.real);
+    case DECIMAL_VALUE: {
+      return HashDecimal(decimal_value);
+    }
+    case TIME_VALUE: {
+      return CombineNonCommutativeSigs(
+          HashNumber(value.time.year),
+          CombineNonCommutativeSigs(
+              HashNumber(value.time.month),
+              CombineNonCommutativeSigs(
+                  HashNumber(value.time.day),
+                  CombineNonCommutativeSigs(
+                      HashNumber(value.time.hour),
+                      CombineNonCommutativeSigs(
+                          HashNumber(value.time.minute),
+                          CombineNonCommutativeSigs(
+                              HashNumber(value.time.second),
+                              CombineNonCommutativeSigs(
+                                  HashNumber(static_cast<uint64_t>(
+                                      value.time.second_part)),
+                                  HashNumber(
+                                      value.time.time_zone_displacement))))))));
+    }
+    case STRING_VALUE:
+    case LONG_DATA_VALUE: {
+      return HashString(to_string_view(str_value));
+    }
+    case NULL_VALUE: {
+      return kNullStrHash;
+    }
+    case NO_VALUE: {
+      assert(false);
+      return 0;
+    }
+    default:
+      assert(0);
+      return 0;
   }
 }
 
@@ -7171,6 +7304,13 @@ void Item_temporal_with_ref::print(const THD *, String *str,
   str->append('\'');
 }
 
+uint64_t Item_int_with_ref::hash() {
+  if (ref != nullptr) {
+    return ref->hash();
+  }
+  return 0;
+}
+
 Item_num *Item_uint::neg() {
   Item_decimal *item = new Item_decimal(value, true);
   return item->neg();
@@ -7260,6 +7400,8 @@ void Item_float::print(const THD *, String *str,
   num.set_real(value, decimals, &my_charset_bin);
   str->append(num);
 }
+
+uint64_t Item_float::hash() { return HashNumber(value); }
 
 /*
   hex item
@@ -7455,6 +7597,8 @@ void Item_hex_string::print(const THD *, String *str,
   }
 }
 
+uint64_t Item_hex_string::hash() { return HashCString(str_value.ptr()); }
+
 bool Item_hex_string::eq(const Item *item) const {
   if (item->type() == type()) {
     Item *arg = const_cast<Item *>(item);
@@ -7529,6 +7673,13 @@ void Item_json::print(const THD *, String *str, enum_query_type) const {
   str->append("json'");
   m_value->to_string(str, true, "", JsonDepthErrorHandler);
   str->append("'");
+}
+
+uint64_t Item_json::hash() {
+  if (m_value != nullptr) {
+    return m_value->make_hash_key(0);
+  }
+  return 0;
 }
 
 bool Item_json::val_json(Json_wrapper *result) {
@@ -8701,6 +8852,17 @@ void Item_ref::print(const THD *thd, String *str,
   }
 }
 
+uint64_t Item_ref::hash() {
+  uint64_t hash = Item_ident::hash();
+  if (m_ref_item == nullptr) {  // Unresolved reference
+    return hash;
+  }
+  return CombineNonCommutativeSigs(
+      hash, CombineNonCommutativeSigs(
+                HashString("Ref_Item"),
+                (m_ref_item != nullptr ? ref_item()->hash() : 0)));
+}
+
 bool Item_ref::send(Protocol *prot, String *tmp) {
   return ref_item()->send(prot, tmp);
 }
@@ -9239,6 +9401,11 @@ void Item_default_value::print(const THD *thd, String *str,
   str->append(')');
 }
 
+uint64_t Item_default_value::hash() {
+  return CombineNonCommutativeSigs(HashString("default-"),
+                                   arg ? arg->hash() : 0);
+}
+
 type_conversion_status Item_default_value::save_in_field_inner(
     Field *field_arg, bool no_conversions) {
   THD *thd = current_thd;
@@ -9417,6 +9584,11 @@ void Item_insert_value::print(const THD *thd, String *str,
   str->append(STRING_WITH_LEN("values("));
   arg->print(thd, str, query_type);
   str->append(')');
+}
+
+uint64_t Item_insert_value::hash() {
+  return CombineNonCommutativeSigs(HashString("values("),
+                                   arg ? arg->hash() : 0);
 }
 
 /**
@@ -9863,6 +10035,11 @@ void Item_cache::store(Item *item) {
   value_cached = false;
 }
 
+/// Get the name of the cached field of an Item_cache_json instance.
+inline static const char *whence(const Item_field *cached_field) {
+  return cached_field != nullptr ? cached_field->field_name : "?";
+}
+
 void Item_cache::print(const THD *thd, String *str,
                        enum_query_type query_type) const {
   str->append(STRING_WITH_LEN("<cache>("));
@@ -9871,6 +10048,13 @@ void Item_cache::print(const THD *thd, String *str,
   else
     Item::print(thd, str, query_type);
   str->append(')');
+}
+
+uint64_t Item_cache::hash() {
+  return CombineNonCommutativeSigs(
+      HashString("cache"),
+      CombineNonCommutativeSigs(example ? example->hash() : 0ULL,
+                                HashCString(whence(cached_field))));
 }
 
 bool Item_cache::walk(Item_processor processor, enum_walk walk, uchar *arg) {
@@ -10257,11 +10441,6 @@ void Item_cache_json::store_value(Item *expr, Json_wrapper *wr) {
 bool Item_cache_json::val_json(Json_wrapper *wr) {
   if (has_value() && !null_value) *wr = *m_value;
   return current_thd->is_error();
-}
-
-/// Get the name of the cached field of an Item_cache_json instance.
-inline static const char *whence(const Item_field *cached_field) {
-  return cached_field != nullptr ? cached_field->field_name : "?";
 }
 
 String *Item_cache_json::val_str(String *tmp) {

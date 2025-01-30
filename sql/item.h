@@ -2504,6 +2504,16 @@ class Item : public Parse_tree_node {
     str->append(full_name());
   }
 
+  /**
+  Generate hash unique to an item depending on its attributes. When overriding
+  this function, care must be taken to properly handle and fix possible hash
+  collisions, either due to missing attributes or other reasons.
+
+  If a unique hash cannot be generated for the Item (e.g. due to lack of
+  available information), the NULL hash value should be returned (0).
+  */
+  virtual uint64_t hash() { return 0; }
+
   void print_item_w_name(const THD *thd, String *,
                          enum_query_type query_type) const;
   /**
@@ -4044,6 +4054,8 @@ class Item_splocal final : public Item_sp_variable,
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
 
+  uint64_t hash() override;
+
  public:
   uint get_var_idx() const { return m_var_idx; }
 
@@ -4087,6 +4099,8 @@ class Item_case_expr final : public Item_sp_variable {
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
 
+  uint64_t hash() override;
+
  private:
   uint m_case_expr_id;
 };
@@ -4129,6 +4143,8 @@ class Item_name_const final : public Item {
   bool is_null() override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+
+  uint64_t hash() override;
 
   Item_result result_type() const override { return value_item->result_type(); }
 
@@ -4177,6 +4193,9 @@ inline constexpr uint16 NO_FIELD_INDEX((uint16)(-1));
 
 class Item_ident : public Item {
   typedef Item super;
+
+  /** To cache the hash value of this item, populated upon hash() invocation. */
+  uint64_t m_hash_val{0};
 
  protected:
   /**
@@ -4342,6 +4361,7 @@ class Item_ident : public Item {
              enum_query_type query_type) const override {
     print(thd, str, query_type, db_name, table_name);
   }
+  uint64_t hash() override;
 
  protected:
   /**
@@ -4369,6 +4389,8 @@ class Item_ident : public Item {
   */
   void print(const THD *thd, String *str, enum_query_type query_type,
              const char *db_name_arg, const char *table_name_arg) const;
+
+  uint64_t hash(const char *db_name_arg, const char *table_name_arg);
 
  public:
   ///< Argument object to change_context_processor
@@ -4837,6 +4859,7 @@ class Item_null : public Item_basic_constant {
              enum_query_type query_type) const override {
     str->append(query_type == QT_NORMALIZED_FORMAT ? "?" : "NULL");
   }
+  uint64_t hash() override;
 
   bool check_partition_func_processor(uchar *) override { return false; }
 };
@@ -5012,6 +5035,9 @@ class Item_param final : public Item, private Settable_routine_parameter {
 
   Item_param(const POS &pos, MEM_ROOT *root, uint pos_in_query_arg);
 
+  Item_param(const POS &pos, long long val);
+  Item_param(const POS &pos, double val);
+
   bool do_itemize(Parse_context *pc, Item **item) override;
 
   Item_result result_type() const override { return m_result_type; }
@@ -5105,6 +5131,7 @@ class Item_param final : public Item, private Settable_routine_parameter {
   table_map used_tables() const override { return INNER_TABLE_BIT; }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64_t hash() override;
   bool is_null() override {
     assert(m_param_state != NO_VALUE);
     return m_param_state == NULL_VALUE;
@@ -5272,6 +5299,7 @@ class Item_int : public Item_num {
   Item *clone_item() const override { return new Item_int(this); }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64_t hash() override;
   Item_num *neg() override {
     value = -value;
     return this;
@@ -5374,6 +5402,7 @@ class Item_uint : public Item_int {
   }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64_t hash() override;
   Item_num *neg() override;
   uint decimal_precision() const override { return max_length; }
 };
@@ -5415,6 +5444,7 @@ class Item_decimal : public Item_num {
   }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64_t hash() override;
   Item_num *neg() override {
     my_decimal_neg(&decimal_value);
     unsigned_flag = !decimal_value.sign();
@@ -5507,6 +5537,7 @@ class Item_float : public Item_num {
   }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64_t hash() override;
   bool eq(const Item *item) const override;
 };
 
@@ -5677,6 +5708,7 @@ class Item_string : public Item_basic_constant {
   }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64_t hash() override;
   bool check_partition_func_processor(uchar *) override { return false; }
 
   /**
@@ -5745,7 +5777,7 @@ class Item_static_string_func : public Item_string {
   void print(const THD *, String *str, enum_query_type) const override {
     str->append(func_name);
   }
-
+  uint64_t hash() override;
   bool check_partition_func_processor(uchar *) override { return true; }
   bool check_function_as_value_generator(uchar *args) override {
     Check_function_as_value_generator_parameters *func_arg =
@@ -5852,6 +5884,7 @@ class Item_hex_string : public Item_basic_constant {
   Item_result cast_to_int_type() const override { return INT_RESULT; }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64_t hash() override;
   bool eq(const Item *item) const override;
   bool check_partition_func_processor(uchar *) override { return false; }
   static LEX_CSTRING make_hex_str(const char *str, size_t str_length);
@@ -6122,6 +6155,7 @@ class Item_ref : public Item_ident {
   bool clean_up_after_removal(uchar *arg) override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64_t hash() override;
   void cleanup() override;
   Item_field *field_for_view_update() override {
     return ref_item()->field_for_view_update();
@@ -6462,6 +6496,7 @@ class Item_int_with_ref : public Item_int {
     unsigned_flag = unsigned_arg;
   }
   Item *clone_item() const override;
+  uint64_t hash() override;
   Item *real_item() override { return ref; }
   const Item *real_item() const override { return ref; }
 };
@@ -6478,6 +6513,7 @@ class Item_temporal_with_ref : public Item_int_with_ref {
   }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+
   bool val_date(Date_val *, my_time_flags_t) override {
     assert(false);
     return true;
@@ -6619,6 +6655,7 @@ class Item_default_value final : public Item_field {
   void cleanup() override { Item::cleanup(); }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64_t hash() override;
   table_map used_tables() const override { return 0; }
   Item *get_tmp_table_item(THD *thd) override { return copy_or_same(thd); }
   bool collect_item_field_or_view_ref_processor(uchar *arg) override;
@@ -6699,6 +6736,7 @@ class Item_insert_value final : public Item_field {
   void cleanup() override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64_t hash() override;
   /*
    We use RAND_TABLE_BIT to prevent Item_insert_value from
    being treated as a constant and precalculated before execution
@@ -6909,6 +6947,7 @@ class Item_cache : public Item_basic_constant {
   table_map used_tables() const override { return used_table_map; }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64_t hash() override;
   bool eq_def(const Field *field) {
     return cached_field != nullptr && cached_field->field->eq_def(field);
   }
@@ -7406,6 +7445,7 @@ class Item_json final : public Item_basic_constant {
   ~Item_json() override;
   enum Type type() const override { return STRING_ITEM; }
   void print(const THD *, String *str, enum_query_type) const override;
+  uint64_t hash() override;
   bool val_json(Json_wrapper *result) override;
   Item_result result_type() const override { return STRING_RESULT; }
   double val_real() override;

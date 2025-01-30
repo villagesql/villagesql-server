@@ -68,6 +68,7 @@
 #include "sql/dd/string_type.h"
 #include "sql/dd/types/object_table.h"  // dd::Object_table
 #include "sql/discrete_interval.h"      // Discrete_interval
+#include "sql/join_optimizer/overflow_bitset.h"
 #include "sql/key.h"
 #include "sql/sql_const.h"       // SHOW_COMP_OPTION
 #include "sql/sql_list.h"        // SQL_I_List
@@ -2470,6 +2471,46 @@ using secondary_engine_modify_view_ap_cost_t = bool (*)(
     THD *thd, const JoinHypergraph &hypergraph, AccessPath *access_path);
 
 /**
+  Type for signature generation and for retrieving nrows estimate
+  from secondary engine for current AccessPath.
+*/
+struct SecondaryEngineNrowsParameters {
+  /** The thread context */
+  THD *thd;
+  /** The AccessPath to retrieve Nrows for. */
+  AccessPath *access_path;
+  /** Hypergraph for current query block. */
+  const JoinHypergraph *graph;
+  /** Predicates actually applied for AccessPath::REF and other parameterized
+   * types. */
+  OverflowBitset applied_predicates{};
+  /** if ap->nrows should be acually updated. */
+  bool to_update_rows{true};
+  /** if ap->signature generation should be forced. Default behavior is to
+   * generate if ap->signature != 0. */
+  bool to_force_resign{false};
+  /** if nonnull, an additional signature should be combined with current AP. */
+  size_t *extra_sig{nullptr};
+
+  SecondaryEngineNrowsParameters(THD *thd, AccessPath *access_path,
+                                 const JoinHypergraph *graph)
+      : thd(thd), access_path(access_path), graph(graph) {}
+
+  explicit SecondaryEngineNrowsParameters(THD *thd)
+      : thd(thd), access_path(nullptr), graph(nullptr) {}
+};
+
+/**
+  Type for signature generation and for retrieving nrows estimate
+  from secondary engine for current AccessPath.
+  @param params for this function. Refer to typedef for detailed description.
+  @retval true if an updated nrow estimate is available.
+  @retval false if no nrow estimate is available.
+  */
+using secondary_engine_nrows_t =
+    bool (*)(const SecondaryEngineNrowsParameters &params);
+
+/**
   Checks whether the tables used in an explain query are loaded in the secondary
   engine.
   @param thd thread context.
@@ -2604,6 +2645,11 @@ const handlerton *SecondaryEngineHandlerton(const THD *thd);
 /// used.
 const handlerton *EligibleSecondaryEngineHandlerton(
     THD *thd, const LEX_CSTRING *secondary_engine_in_name);
+
+// Returns the secondary_engine_nrows hook from plugin, if plugin is install and
+// the hook is installed.
+std::optional<secondary_engine_nrows_t> RetrieveSecondaryEngineNrowsHook(
+    THD *thd);
 
 // FIXME: Temporary workaround to enable storage engine plugins to use the
 // before_commit hook. Remove after WL#11320 has been completed.
@@ -3024,6 +3070,12 @@ struct handlerton {
   ///
   /// @see secondary_engine_modify_view_ap_cost_t for function signature.
   secondary_engine_modify_view_ap_cost_t secondary_engine_modify_view_ap_cost;
+
+  /// Pointer to a function that provides nrow estimates for access paths
+  /// from secondary storage engine
+  ///
+  /// @see secondary_engine_nrows_t for function signature.
+  secondary_engine_nrows_t secondary_engine_nrows;
 
   /// Pointer to a function that returns the query offload or exec failure
   /// reason as a string given a thread context (representing the query) when

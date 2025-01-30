@@ -31,6 +31,7 @@
 #include <string>
 
 #include "decimal.h"
+#include "my_temporal.h"
 #include "my_time.h"
 #include "mysql/strings/m_ctype.h"
 #include "mysql_time.h"
@@ -75,6 +76,38 @@ TEST_F(ItemTimeFuncTest, dateAddInterval) {
 
   // The below result is not correct, see Bug#16198372
   EXPECT_DOUBLE_EQ(20130122145222.234567, item->val_real());
+}
+
+TEST_F(ItemTimeFuncTest, datetimeliteraltest) {
+  Datetime_val time1;
+  TIME_from_longlong_datetime_packed(&time1, 1845541820734373888);
+
+  Datetime_val time2;
+  TIME_from_longlong_datetime_packed(&time2, 914866242077065217);
+
+  auto *literal1 =
+      new Item_datetime_literal(&time1, 0, thd()->variables.time_zone);
+  auto *literal2 =
+      new Item_datetime_literal(&time2, 0, thd()->variables.time_zone);
+
+  EXPECT_NE(literal1->hash(), 0);
+  EXPECT_NE(literal1->hash(), literal2->hash());
+  EXPECT_EQ(literal1->hash(), 13033637353971124907ULL);
+
+  MYSQL_TIME date1;
+  set_zero_time(&date1, MYSQL_TIMESTAMP_DATE);
+  TIME_from_longlong_date_packed(&date1, 914866242077065217);
+
+  MYSQL_TIME date2;
+  set_zero_time(&date2, MYSQL_TIMESTAMP_DATE);
+  TIME_from_longlong_date_packed(&date2, 1845541820734373888);
+
+  Item_date_literal *dliteral1 = new Item_date_literal(&date1);
+  Item_date_literal *dliteral2 = new Item_date_literal(&date2);
+
+  EXPECT_NE(dliteral1->hash(), 0);
+  EXPECT_NE(dliteral1->hash(), dliteral2->hash());
+  EXPECT_EQ(dliteral1->hash(), 12438047714759670047ULL);
 }
 
 // Checks that the metadata and result are consistent for a time function that
@@ -311,6 +344,13 @@ TEST_F(ItemTimeFuncTest, CastAsYearMetadata) {
 
   CheckMetadataAndResult(
       thd(), new Item_typecast_year(POS(), new Item_int(2155)), 2155);
+
+  auto item_dec1 = new Item_typecast_decimal(POS(), new Item_int(2021), 4, 2);
+  auto item_dec2 = new Item_typecast_decimal(POS(), new Item_int(2021), 4, 2);
+  auto item_dec3 = new Item_typecast_decimal(POS(), new Item_int(3021), 4, 2);
+  EXPECT_EQ(item_dec1->hash(), item_dec2->hash());
+  EXPECT_NE(item_dec1->hash(), item_dec3->hash());
+  EXPECT_EQ(item_dec1->hash(), 16714317382683303445ULL);
 }
 
 // Verifies that the results returned by the WEEKDAY function are consistent

@@ -4313,6 +4313,9 @@ TEST_F(HypergraphOptimizerTest, FullTextCanSkipRanking) {
   EXPECT_EQ(nullptr, (*ftfuncs)[0]->master);
   EXPECT_FALSE((*ftfuncs)[0]->can_skip_ranking());
   EXPECT_EQ((*ftfuncs)[0], (*ftfuncs)[1]->get_master());
+  EXPECT_NE((*ftfuncs)[0]->hash(), 0);
+  EXPECT_NE((*ftfuncs)[0]->hash(), (*ftfuncs)[2]->hash());
+  EXPECT_NE((*ftfuncs)[3]->hash(), (*ftfuncs)[2]->hash());
 
   // MATCH (t1.x) AGAINST ('b') does not need ranking, since it's only used
   // in a standalone predicate.

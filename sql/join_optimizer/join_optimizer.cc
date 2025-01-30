@@ -148,13 +148,13 @@ using std::swap;
 
 namespace {
 
-string PrintAccessPath(const AccessPath &path, const JoinHypergraph &graph,
+string PrintAccessPath(THD *thd, AccessPath &path, const JoinHypergraph &graph,
                        const char *description_for_trace);
 void PrintJoinOrder(const AccessPath *path, string *join_order);
 
 AccessPath *CreateMaterializationPath(
-    THD *thd, JOIN *join, AccessPath *path, TABLE *temp_table,
-    Temp_table_param *temp_table_param, bool copy_items,
+    THD *thd, const JoinHypergraph &graph, JOIN *join, AccessPath *path,
+    TABLE *temp_table, Temp_table_param *temp_table_param, bool copy_items,
     double *distinct_rows = nullptr,
     MaterializePathParameters::DedupType dedup_reason =
         MaterializePathParameters::NO_DEDUP);
@@ -359,6 +359,8 @@ class CostingReceiver {
   }
 
   bool FoundSingleNode(int node_idx);
+
+  const JoinHypergraph &hypergraph() const { return *m_graph; }
 
   bool evaluate_secondary_engine_optimizer_state_request();
 
@@ -834,9 +836,9 @@ class CostingReceiver {
       int join_predicate_last, bool materialize_subqueries,
       AccessPath *join_path, FunctionalDependencySet *new_fd_set);
   double FindAlreadyAppliedSelectivity(const JoinPredicate *edge,
-                                       const AccessPath *left_path,
-                                       const AccessPath *right_path,
-                                       NodeMap left, NodeMap right);
+                                       AccessPath *left_path,
+                                       AccessPath *right_path, NodeMap left,
+                                       NodeMap right);
 
   void CommitBitsetsToHeap(AccessPath *path) const;
   bool BitsetsAreCommitted(AccessPath *path) const;
@@ -958,11 +960,11 @@ void CostingReceiver::TraceAccessPaths(NodeMap nodes) {
   Trace(m_thd) << " - current access paths for " << PrintSet(nodes) << ": ";
 
   bool first = true;
-  for (const AccessPath *path : it->second.paths) {
+  for (AccessPath *path : it->second.paths) {
     if (!first) {
       Trace(m_thd) << ", ";
     }
-    Trace(m_thd) << PrintAccessPath(*path, *m_graph, "");
+    Trace(m_thd) << PrintAccessPath(m_thd, *path, *m_graph, "");
     first = false;
   }
   Trace(m_thd) << ")\n";
@@ -1444,7 +1446,6 @@ ProposeResult RefAccessBuilder::ProposePath() const {
                                ? kUnknownRowCount
                                : predicate_analysis.value().selectivity *
                                      m_table->file->stats.records)};
-
   const double row_count{
       m_force_num_output_rows_after_filter == kUnknownRowCount
           ? kUnknownRowCount
@@ -1456,23 +1457,35 @@ ProposeResult RefAccessBuilder::ProposePath() const {
           // of the filters, so we make our usual independence assumption.
           m_force_num_output_rows_after_filter *
               predicate_analysis.value().join_condition_selectivity};
-
+  SecondaryEngineNrowsParameters secondary_engine_nrows_params{thd(), &path,
+                                                               graph()};
+  secondary_engine_nrows_params.applied_predicates =
+      predicate_analysis->predicates.applied();
   if (table_ref.uses_materialization()) {
     path.set_num_output_rows(row_count == kUnknownRowCount
                                  ? path.num_output_rows_before_filter
                                  : row_count);
 
+    ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
+
     AccessPath *const materialize_path{
         m_receiver->MakeMaterializePath(path, m_table)};
+
     if (materialize_path == nullptr) {
       return ProposeResult::kError;
     }
 
+    secondary_engine_nrows_params.access_path = materialize_path;
+    bool found_materialize_nrows_cached =
+        ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
+
     if (materialize_path->type == AccessPath::MATERIALIZE) {
       auto &materialize{materialize_path->materialize()};
 
-      const double rows{materialize.subquery_rows *
-                        predicate_analysis.value().selectivity};
+      double rows{found_materialize_nrows_cached
+                      ? materialize_path->num_output_rows()
+                      : materialize.subquery_rows *
+                            predicate_analysis.value().selectivity};
 
       materialize.table_path->set_cost(
           EstimateRefAccessCost(m_table, m_key_idx, rows));
@@ -3767,7 +3780,7 @@ bool CostingReceiver::ProposeTableScan(
   }
   path.ordering_state = 0;
 
-  const double num_output_rows = table->file->stats.records;
+  double num_output_rows = table->file->stats.records;
   const double cost = EstimateTableScanCost(table);
 
   path.num_output_rows_before_filter = num_output_rows;
@@ -3812,11 +3825,29 @@ bool CostingReceiver::ProposeTableScan(
     path = *materialize_path;
     assert(path.cost() >= 0.0);
   } else if (tl->uses_materialization()) {
+    SecondaryEngineNrowsParameters secondary_engine_nrows_params{m_thd, &path,
+                                                                 m_graph};
     path.set_num_output_rows(num_output_rows);
+    if (ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params)) {
+      num_output_rows = path.num_output_rows();
+    }
     AccessPath *const materialize_path{MakeMaterializePath(path, table)};
+
     if (materialize_path == nullptr) {
       return true;
     } else {
+      secondary_engine_nrows_params.access_path = materialize_path;
+      bool applied_nrows_hook =
+          ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
+      if (materialize_path->type == AccessPath::MATERIALIZE) {
+        EstimateMaterializeCost(m_thd, materialize_path);
+        materialize_path->materialize().table_path->signature =
+            materialize_path->signature;
+        if (applied_nrows_hook) {
+          materialize_path->materialize().table_path->set_num_output_rows(
+              materialize_path->num_output_rows());
+        }
+      }
       assert(materialize_path->type != AccessPath::MATERIALIZE ||
              materialize_path->materialize().table_path->type ==
                  AccessPath::TABLE_SCAN);
@@ -4371,12 +4402,19 @@ void CostingReceiver::ApplyPredicatesForBaseTable(
     double nrows = std::max(path->num_output_rows(), hg_cardinality.value());
     SetNumOutputRowsAfterFilter(path, nrows);
   }
+  SecondaryEngineNrowsParameters secondary_engine_nrows_params{m_thd, path,
+                                                               m_graph};
+  secondary_engine_nrows_params.to_force_resign =
+      true;  // always force resign, can have different
+             // predicates. since leaf node, not expensive to
+             // resign.
+  secondary_engine_nrows_params.applied_predicates =
+      absorbed_predicates.applied();
+  ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
 
   if (materialize_subqueries) {
     CommitBitsetsToHeap(path);
-    ExpandSingleFilterAccessPath(m_thd, path, m_query_block->join,
-                                 m_graph->predicates,
-                                 m_graph->num_where_predicates);
+    ExpandSingleFilterAccessPath(m_thd, *m_graph, path, m_query_block->join);
     assert(path->type == AccessPath::FILTER);
     path->filter().materialize_subqueries = true;
     path->set_cost(path->cost() +
@@ -4645,7 +4683,8 @@ bool CostingReceiver::evaluate_secondary_engine_optimizer_state_request() {
   TODO(khatlen): If HeatWave gets capable of processing queries with such
   conditions, this workaround should be removed.
  */
-void MoveDegenerateJoinConditionToFilter(THD *thd, Query_block *query_block,
+void MoveDegenerateJoinConditionToFilter(THD *thd, JoinHypergraph &graph,
+                                         Query_block *query_block,
                                          const JoinPredicate **edge,
                                          AccessPath **right_path) {
   assert(SecondaryEngineHandlerton(thd) != nullptr);
@@ -4678,6 +4717,9 @@ void MoveDegenerateJoinConditionToFilter(THD *thd, Query_block *query_block,
   filter_path->delayed_predicates = (*right_path)->delayed_predicates;
   filter_path->set_num_output_rows(filter_path->num_output_rows() *
                                    (*edge)->selectivity);
+  SecondaryEngineNrowsParameters secondary_engine_nrows_params{thd, filter_path,
+                                                               &graph};
+  ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
   filter_path->set_cost(filter_path->cost() +
                         EstimateFilterCost(thd,
                                            (*right_path)->num_output_rows(),
@@ -4988,7 +5030,8 @@ bool CostingReceiver::FoundSubgraphPair(NodeMap left, NodeMap right,
   This is used for converting semijoins to inner joins. If the grouping is
   empty, all rows are the same, and we make a simple LIMIT 1 instead.
  */
-AccessPath *DeduplicateForSemijoin(THD *thd, AccessPath *path,
+AccessPath *DeduplicateForSemijoin(THD *thd, JoinHypergraph &graph,
+                                   AccessPath *path,
                                    std::span<Item *> semijoin_group,
                                    RelationalExpression *expr) {
   AccessPath *dedup_path = nullptr;
@@ -4998,6 +5041,9 @@ AccessPath *DeduplicateForSemijoin(THD *thd, AccessPath *path,
                                           /*count_all_rows=*/false,
                                           /*reject_multiple_rows=*/false,
                                           /*send_records_override=*/nullptr);
+    SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+        thd, dedup_path, &graph};
+    ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
   } else if (expr->sj_enabled_strategies & OPTIMIZER_SWITCH_LOOSE_SCAN) {
     /*
       The semijoin group is non-empty, and we need to remove duplicates.
@@ -5033,6 +5079,9 @@ AccessPath *DeduplicateForSemijoin(THD *thd, AccessPath *path,
     CopyBasicProperties(*path, dedup_path);
     dedup_path->set_num_output_rows(
         EstimateDistinctRows(thd, path->num_output_rows(), semijoin_group));
+    SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+        thd, dedup_path, &graph};
+    ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
     dedup_path->set_cost(dedup_path->cost() +
                          (kDedupOneRowCost * path->num_output_rows()));
   }
@@ -5049,7 +5098,7 @@ string CostingReceiver::PrintSubgraphHeader(const JoinPredicate *edge,
                    GenerateExpressionLabel(edge->expr).c_str());
   for (int pred_idx : BitsSetIn(join_path.filter_predicates)) {
     ret += StringPrintf(
-        " - applied (delayed) predicate %s\n",
+        " - applied (delayed) predicate %s \n",
         ItemToString(m_graph->predicates[pred_idx].condition).c_str());
   }
   return ret;
@@ -5180,7 +5229,7 @@ void CostingReceiver::ProposeHashJoin(
 
   if (edge->expr->type == RelationalExpression::LEFT_JOIN &&
       SecondaryEngineHandlerton(m_thd) != nullptr) {
-    MoveDegenerateJoinConditionToFilter(m_thd, m_query_block, &edge,
+    MoveDegenerateJoinConditionToFilter(m_thd, *m_graph, m_query_block, &edge,
                                         &right_path);
   }
 
@@ -5213,7 +5262,7 @@ void CostingReceiver::ProposeHashJoin(
     // don't have to worry about copying ordering_state etc.
     CommitBitsetsToHeap(left_path);
     join_path.hash_join().outer = DeduplicateForSemijoin(
-        m_thd, left_path, edge->semijoin_group, edge->expr);
+        m_thd, *m_graph, left_path, edge->semijoin_group, edge->expr);
   }
 
   // TODO(sgunders): Consider removing redundant join conditions.
@@ -5503,12 +5552,14 @@ void CostingReceiver::ApplyDelayedPredicatesAfterJoin(
   }
   join_path->filter_predicates = std::move(filter_predicates);
   join_path->delayed_predicates = std::move(delayed_predicates);
+  SecondaryEngineNrowsParameters secondary_engine_nrows_params{m_thd, join_path,
+                                                               m_graph};
+  ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
 
   if (materialize_subqueries) {
     CommitBitsetsToHeap(join_path);
-    ExpandSingleFilterAccessPath(m_thd, join_path, m_query_block->join,
-                                 m_graph->predicates,
-                                 m_graph->num_where_predicates);
+    ExpandSingleFilterAccessPath(m_thd, *m_graph, join_path,
+                                 m_query_block->join);
     assert(join_path->type == AccessPath::FILTER);
     join_path->filter().materialize_subqueries = true;
     join_path->set_cost(
@@ -5823,7 +5874,7 @@ void CostingReceiver::ProposeNestedLoopJoin(
     // NOTE: We purposefully don't overwrite left_path here, so that we
     // don't have to worry about copying ordering_state etc.
     join_path.nested_loop_join().outer = DeduplicateForSemijoin(
-        m_thd, left_path, edge->semijoin_group, edge->expr);
+        m_thd, *m_graph, left_path, edge->semijoin_group, edge->expr);
   } else if (edge->expr->type == RelationalExpression::STRAIGHT_INNER_JOIN) {
     join_path.nested_loop_join().join_type = JoinType::INNER;
   } else {
@@ -6027,9 +6078,11 @@ void CostingReceiver::ProposeNestedLoopJoin(
   Returns -1.0 if there is at least one sargable predicate that is entirely
   redundant, and that this subgraph pair should not be attempted joined at all.
  */
-double CostingReceiver::FindAlreadyAppliedSelectivity(
-    const JoinPredicate *edge, const AccessPath *left_path,
-    const AccessPath *right_path, NodeMap left, NodeMap right) {
+double CostingReceiver::FindAlreadyAppliedSelectivity(const JoinPredicate *edge,
+                                                      AccessPath *left_path,
+                                                      AccessPath *right_path,
+                                                      NodeMap left,
+                                                      NodeMap right) {
   double already_applied = 1.0;
 
   /*
@@ -6053,7 +6106,7 @@ double CostingReceiver::FindAlreadyAppliedSelectivity(
                        left_path, right_path, left, right)) {
           if (TraceStarted(m_thd)) {
             Trace(m_thd)
-                << " - " << PrintAccessPath(*right_path, *m_graph, "")
+                << " - " << PrintAccessPath(m_thd, *right_path, *m_graph, "")
                 << " has a sargable predicate that is redundant with our join "
                    "predicate, skipping\n";
           }
@@ -6237,7 +6290,7 @@ bool IsMaterializationPath(const AccessPath *path) {
   }
 }
 
-string PrintAccessPath(const AccessPath &path, const JoinHypergraph &graph,
+string PrintAccessPath(THD *thd, AccessPath &path, const JoinHypergraph &graph,
                        const char *description_for_trace) {
   string str = "{";
   string join_order;
@@ -6253,6 +6306,11 @@ string PrintAccessPath(const AccessPath &path, const JoinHypergraph &graph,
   }
 
   str += AccessPathTypeName(path.type);
+  SecondaryEngineNrowsParameters secondary_engine_nrows_params{thd, &path,
+                                                               &graph};
+  secondary_engine_nrows_params.to_update_rows = false;
+  bool nrows_from_secondary_engine =
+      ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
   str += ", cost=" + FormatNumberReadably(path.cost()) +
          ", init_cost=" + FormatNumberReadably(path.init_cost());
 
@@ -6260,7 +6318,9 @@ string PrintAccessPath(const AccessPath &path, const JoinHypergraph &graph,
     str += ", rescan_cost=" + FormatNumberReadably(path.rescan_cost());
   }
   str += ", rows=" + FormatNumberReadably(path.num_output_rows());
-
+  if (path.signature > 0 && nrows_from_secondary_engine) {
+    str += " via stats cache";
+  }
   if (!join_order.empty()) str += ", join_order=" + join_order;
 
   // Print parameter tables, if any.
@@ -6290,7 +6350,9 @@ string PrintAccessPath(const AccessPath &path, const JoinHypergraph &graph,
   } else if (path.safe_for_rowid == AccessPath::UNSAFE) {
     str += StringPrintf(", unsafe_for_rowid");
   }
-
+  if (path.signature > 0) {
+    str += ", signature=" + std::to_string(path.signature);
+  }
   DBUG_EXECUTE_IF("subplan_tokens", {
     str += ", token=";
     str += GetForceSubplanToken(const_cast<AccessPath *>(&path),
@@ -6469,14 +6531,21 @@ AccessPath *CostingReceiver::ProposeAccessPath(
         "force_subplan_" + GetForceSubplanToken(path, m_query_block->join);
     DBUG_EXECUTE_IF(token.c_str(), path->forced_by_dbug = true;);
   });
-
+  assert(!IsSecondaryEngineNrowsHookApplicable(path, m_thd, m_graph) ||
+         path->signature > 0 ||
+         !IsSecondaryNrowsHookEnabledAndApplicable(path, m_thd, m_graph));
   if (existing_paths->empty()) {
     if (TraceStarted(m_thd)) {
       Trace(m_thd) << " - "
-                   << PrintAccessPath(*path, *m_graph, description_for_trace)
+                   << PrintAccessPath(m_thd, *path, *m_graph,
+                                      description_for_trace)
                    << " is first alternative, keeping\n";
     }
     AccessPath *insert_position = new (m_thd->mem_root) AccessPath(*path);
+    assert(!IsSecondaryEngineNrowsHookApplicable(insert_position, m_thd,
+                                                 m_graph) ||
+           insert_position->signature > 0 ||
+           !IsSecondaryNrowsHookEnabledAndApplicable(path, m_thd, m_graph));
     existing_paths->push_back(insert_position);
     CommitBitsetsToHeap(insert_position);
     return insert_position;
@@ -6502,26 +6571,53 @@ AccessPath *CostingReceiver::ProposeAccessPath(
 #endif
   if (verify_consistency && path->parameter_tables == 0 &&
       path->num_output_rows() >= 1e-3) {
-    for (const AccessPath *other_path : *existing_paths) {
+    for (AccessPath *other_path : *existing_paths) {
       // do not compare aggregated paths with unaggregated paths
       if (path->has_group_skip_scan != other_path->has_group_skip_scan) {
         continue;
       }
+      SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+          m_thd, other_path, m_graph};
+      bool was_other_used_sc =
+          ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
+      secondary_engine_nrows_params.access_path = path;
+      bool cur_use_sc =
+          ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
+      /* we equalise Nrows for other similar paths, but not for REF's cause
+       * lookup and scan can have different Nrows. */
+      if (was_other_used_sc && path->type != AccessPath::REF) {
+        path->set_num_output_rows(other_path->num_output_rows());
+        if (path->num_output_rows_before_filter < path->num_output_rows()) {
+          path->num_output_rows_before_filter = path->num_output_rows();
+        }
+
+      } else if (!was_other_used_sc && cur_use_sc &&
+                 other_path->type != AccessPath::REF) {
+        other_path->set_num_output_rows(path->num_output_rows());
+        if (other_path->num_output_rows_before_filter <
+            other_path->num_output_rows()) {
+          other_path->num_output_rows_before_filter =
+              other_path->num_output_rows();
+        }
+      }
 
       if (other_path->parameter_tables == 0 &&
-          (other_path->num_output_rows() < path->num_output_rows() * 0.99 ||
-           other_path->num_output_rows() > path->num_output_rows() * 1.01)) {
+          (other_path->num_output_rows() < path->num_output_rows() * 0.9 ||
+           other_path->num_output_rows() > path->num_output_rows() * 1.1)) {
         if (TraceStarted(m_thd)) {
-          Trace(m_thd) << " - WARNING: " << PrintAccessPath(*path, *m_graph, "")
+          Trace(m_thd) << " - WARNING: "
+                       << PrintAccessPath(m_thd, *path, *m_graph, "")
                        << " has inconsistent row counts with "
-                       << PrintAccessPath(*other_path, *m_graph, "") << ".";
+                       << PrintAccessPath(m_thd, *other_path, *m_graph, "")
+                       << ".";
           if (has_known_row_count_inconsistency_bugs) {
             Trace(m_thd) << "\n   This is a bug, but probably a known one.\n";
           } else {
             Trace(m_thd) << " This is a bug.\n";
           }
         }
-        if (!has_known_row_count_inconsistency_bugs) {
+        if (!has_known_row_count_inconsistency_bugs &&
+            !IsSecondaryEngineNrowsHookApplicable(path, m_thd, m_graph)) {
           assert(false &&
                  "Inconsistent row counts for different AccessPath objects.");
         }
@@ -6543,9 +6639,11 @@ AccessPath *CostingReceiver::ProposeAccessPath(
         result == PathComparisonResult::SECOND_DOMINATES) {
       if (TraceStarted(m_thd)) {
         Trace(m_thd) << " - "
-                     << PrintAccessPath(*path, *m_graph, description_for_trace)
+                     << PrintAccessPath(m_thd, *path, *m_graph,
+                                        description_for_trace)
                      << " is not better than existing path "
-                     << PrintAccessPath(*(*existing_paths)[i], *m_graph, "")
+                     << PrintAccessPath(m_thd, *(*existing_paths)[i], *m_graph,
+                                        "")
                      << ", discarding\n";
       }
       return nullptr;
@@ -6568,14 +6666,21 @@ AccessPath *CostingReceiver::ProposeAccessPath(
       }
     }
   }
-
+  assert(!IsSecondaryEngineNrowsHookApplicable(path, m_thd, m_graph) ||
+         path->signature > 0 ||
+         !IsSecondaryNrowsHookEnabledAndApplicable(path, m_thd, m_graph));
   if (insert_position == nullptr) {
     if (TraceStarted(m_thd)) {
       Trace(m_thd) << " - "
-                   << PrintAccessPath(*path, *m_graph, description_for_trace)
+                   << PrintAccessPath(m_thd, *path, *m_graph,
+                                      description_for_trace)
                    << " is potential alternative, keeping\n";
     }
     insert_position = new (m_thd->mem_root) AccessPath(*path);
+    assert(!IsSecondaryEngineNrowsHookApplicable(insert_position, m_thd,
+                                                 m_graph) ||
+           insert_position->signature > 0 ||
+           !IsSecondaryNrowsHookEnabledAndApplicable(path, m_thd, m_graph));
     existing_paths->emplace_back(insert_position);
     CommitBitsetsToHeap(insert_position);
     return insert_position;
@@ -6585,20 +6690,23 @@ AccessPath *CostingReceiver::ProposeAccessPath(
     if (existing_paths->size() == 1) {  // Only one left.
       if (num_dominated == 1) {
         Trace(m_thd) << " - "
-                     << PrintAccessPath(*path, *m_graph, description_for_trace)
+                     << PrintAccessPath(m_thd, *path, *m_graph,
+                                        description_for_trace)
                      << " is better than previous "
-                     << PrintAccessPath(*insert_position, *m_graph, "")
+                     << PrintAccessPath(m_thd, *insert_position, *m_graph, "")
                      << ", replacing\n";
       } else {
         Trace(m_thd)
-            << " - " << PrintAccessPath(*path, *m_graph, description_for_trace)
+            << " - "
+            << PrintAccessPath(m_thd, *path, *m_graph, description_for_trace)
             << " is better than all previous alternatives, replacing all\n";
       }
     } else {
       assert(num_dominated > 0);
       Trace(m_thd) << StringPrintf(
           " - %s is better than %d others, replacing them\n",
-          PrintAccessPath(*path, *m_graph, description_for_trace).c_str(),
+          PrintAccessPath(m_thd, *path, *m_graph, description_for_trace)
+              .c_str(),
           num_dominated);
     }
   }
@@ -6607,8 +6715,9 @@ AccessPath *CostingReceiver::ProposeAccessPath(
   return insert_position;
 }
 
-AccessPath MakeSortPathWithoutFilesort(THD *thd, AccessPath *child,
-                                       ORDER *order, int ordering_state) {
+AccessPath MakeSortPathWithoutFilesort(THD *thd, const JoinHypergraph &graph,
+                                       AccessPath *child, ORDER *order,
+                                       int ordering_state) {
   assert(order != nullptr);
   AccessPath sort_path;
   sort_path.type = AccessPath::SORT;
@@ -6624,6 +6733,9 @@ AccessPath MakeSortPathWithoutFilesort(THD *thd, AccessPath *child,
   sort_path.sort().force_sort_rowids = false;
   sort_path.has_group_skip_scan = child->has_group_skip_scan;
   sort_path.count_examined_rows = true;
+  SecondaryEngineNrowsParameters secondary_engine_nrows_params{thd, &sort_path,
+                                                               &graph};
+  ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
   EstimateSortCost(thd, &sort_path);
   return sort_path;
 }
@@ -6720,13 +6832,16 @@ void CostingReceiver::ProposeAccessPathWithOrderings(
     }
 
     AccessPath sort_path = MakeSortPathWithoutFilesort(
-        m_thd, path, sort_ahead_ordering.order, new_state);
+        m_thd, *m_graph, path, sort_ahead_ordering.order, new_state);
 
     sort_path.applied_sargable_join_predicates() =
         ClearFilterPredicates(path->applied_sargable_join_predicates(),
                               m_graph->num_where_predicates, m_thd->mem_root);
     sort_path.delayed_predicates = path->delayed_predicates;
-
+    SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+        m_thd, &sort_path, m_graph};
+    ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
+    EstimateSortCost(m_thd, &sort_path);
     char buf[256];
     if (TraceStarted(m_thd)) {
       if (description_for_trace[0] == '\0') {
@@ -6741,6 +6856,7 @@ void CostingReceiver::ProposeAccessPathWithOrderings(
         &sort_path, nodes, &path_set->paths, obsolete_orderings, buf);
     if (insert_position != nullptr && !path_is_on_heap) {
       path = new (m_thd->mem_root) AccessPath(*path);
+      path->signature = insert_position->signature;
       CommitBitsetsToHeap(path);
       insert_position->sort().child = path;
       assert(BitsetsAreCommitted(insert_position));
@@ -6770,8 +6886,9 @@ bool CheckSupportedQuery(THD *thd) {
 
   The actual temporary table will be created and filled out during finalization.
  */
-AccessPath *CreateMaterializationOrStreamingPath(THD *thd, JOIN *join,
-                                                 AccessPath *path,
+AccessPath *CreateMaterializationOrStreamingPath(THD *thd,
+                                                 const JoinHypergraph &graph,
+                                                 JOIN *join, AccessPath *path,
                                                  bool need_rowid,
                                                  bool copy_items) {
   // If the path is already a materialization path, we are already ready.
@@ -6793,6 +6910,9 @@ AccessPath *CreateMaterializationOrStreamingPath(THD *thd, JOIN *join,
     AccessPath *stream_path = NewStreamingAccessPath(
         thd, path, join, /*temp_table_param=*/nullptr, /*table=*/nullptr,
         /*ref_slice=*/-1);
+    SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+        thd, stream_path, &graph};
+    ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
     EstimateStreamCost(thd, stream_path);
     return stream_path;
   } else {
@@ -6801,19 +6921,21 @@ AccessPath *CreateMaterializationOrStreamingPath(THD *thd, JOIN *join,
     // smaller temporary table at the expense of more seeks, we could
     // materialize only aggregate functions and do a multi-table sort
     // by docid, but this situation is rare, so we go for simplicity.)
-    return CreateMaterializationPath(thd, join, path, /*temp_table=*/nullptr,
+    return CreateMaterializationPath(thd, graph, join, path,
+                                     /*temp_table=*/nullptr,
                                      /*temp_table_param=*/nullptr, copy_items);
   }
 }
 
-AccessPath *GetSafePathToSort(THD *thd, JOIN *join, AccessPath *path,
-                              bool need_rowid, bool force_materialization) {
+AccessPath *GetSafePathToSort(THD *thd, const JoinHypergraph &graph, JOIN *join,
+                              AccessPath *path, bool need_rowid,
+                              bool force_materialization) {
   if (force_materialization ||
       (need_rowid && path->safe_for_rowid == AccessPath::UNSAFE)) {
     // We need to materialize this path before we can sort it,
     // since it might not give us stable row IDs.
     return CreateMaterializationOrStreamingPath(
-        thd, join, new (thd->mem_root) AccessPath(*path), need_rowid,
+        thd, graph, join, new (thd->mem_root) AccessPath(*path), need_rowid,
         /*copy_items=*/true);
   } else {
     return path;
@@ -6829,9 +6951,9 @@ AccessPath *GetSafePathToSort(THD *thd, JOIN *join, AccessPath *path,
          it should be calculated here and returned through this parameter.
  */
 AccessPath *CreateMaterializationPath(
-    THD *thd, JOIN *join, AccessPath *path, TABLE *temp_table,
-    Temp_table_param *temp_table_param, bool copy_items, double *distinct_rows,
-    MaterializePathParameters::DedupType dedup_reason) {
+    THD *thd, const JoinHypergraph &graph, JOIN *join, AccessPath *path,
+    TABLE *temp_table, Temp_table_param *temp_table_param, bool copy_items,
+    double *distinct_rows, MaterializePathParameters::DedupType dedup_reason) {
   // For GROUP BY, we require slices to handle subqueries in HAVING clause.
   // For DISTINCT, we don't require slices. See InitTmpTableSliceRefs()
   // comments.
@@ -6841,6 +6963,7 @@ AccessPath *CreateMaterializationPath(
 
   AccessPath *table_path =
       NewTableScanAccessPath(thd, temp_table, /*count_examined_rows=*/false);
+
   AccessPath *materialize_path = NewMaterializeAccessPath(
       thd,
       SingleMaterializeQueryBlock(thd, path, /*select_number=*/-1, join,
@@ -6850,7 +6973,13 @@ AccessPath *CreateMaterializationPath(
       /*rematerialize=*/true,
       /*limit_rows=*/HA_POS_ERROR, /*reject_multiple_rows=*/false,
       dedup_reason);
-
+  SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+      thd, materialize_path, &graph};
+  bool found_cached_nrows =
+      ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
+  secondary_engine_nrows_params.access_path = table_path;
+  secondary_engine_nrows_params.extra_sig = &materialize_path->signature;
+  ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
   // If this is for DISTINCT/GROUPBY, distinct_rows has to be non-null.
   assert(!(dedup_reason != MaterializePathParameters::NO_DEDUP &&
            distinct_rows == nullptr));
@@ -6860,8 +6989,9 @@ AccessPath *CreateMaterializationPath(
            distinct_rows != nullptr));
 
   // Estimate the cost using a possibly cached distinct row count.
-  if (distinct_rows != nullptr)
+  if (!found_cached_nrows && distinct_rows != nullptr)
     materialize_path->set_num_output_rows(*distinct_rows);
+
   EstimateMaterializeCost(thd, materialize_path);
 
   // Cache the distinct row count.
@@ -7297,12 +7427,13 @@ AccessPath *CreateZeroRowsForEmptyJoin(JOIN *join, const char *cause) {
          need to recalculate it, or kUnknownRowCount if unknown.
   @returns The AGGREGATE AccessPath.
  */
-AccessPath CreateStreamingAggregationPath(THD *thd, AccessPath *path,
-                                          JOIN *join, olap_type olap,
-                                          double row_estimate) {
+AccessPath CreateStreamingAggregationPath(THD *thd, const JoinHypergraph &graph,
+                                          AccessPath *path, JOIN *join,
+                                          olap_type olap, double row_estimate) {
   AccessPath *child_path = path;
   const Query_block *query_block = join->query_block;
-
+  SecondaryEngineNrowsParameters secondary_engine_nrows_params{thd, path,
+                                                               &graph};
   // Create a streaming node, if one is needed. It is needed for aggregation of
   // some full-text queries, because AggregateIterator doesn't preserve the
   // position of the underlying scans.
@@ -7310,6 +7441,8 @@ AccessPath CreateStreamingAggregationPath(THD *thd, AccessPath *path,
     child_path = NewStreamingAccessPath(
         thd, path, join, /*temp_table_param=*/nullptr, /*table=*/nullptr,
         /*ref_slice=*/-1);
+    secondary_engine_nrows_params.access_path = child_path;
+    ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
     CopyBasicProperties(*path, child_path);
   }
 
@@ -7318,6 +7451,8 @@ AccessPath CreateStreamingAggregationPath(THD *thd, AccessPath *path,
   aggregate_path.aggregate().child = child_path;
   aggregate_path.aggregate().olap = olap;
   aggregate_path.set_num_output_rows(row_estimate);
+  secondary_engine_nrows_params.access_path = &aggregate_path;
+  ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
   aggregate_path.has_group_skip_scan = child_path->has_group_skip_scan;
   EstimateAggregateCost(thd, &aggregate_path, query_block);
   return aggregate_path;
@@ -7392,8 +7527,7 @@ void ApplyFinalPredicatesAndExpandFilters(THD *thd,
       // Now that we have decided on a full plan, expand all the applied filter
       // maps into proper FILTER nodes for execution. This is a no-op in the
       // second iteration.
-      ExpandFilterAccessPaths(thd, &path, graph.join(), graph.predicates,
-                              graph.num_where_predicates);
+      ExpandFilterAccessPaths(thd, graph, &path, graph.join());
 
       if (materialize_subqueries) {
         assert(path.type == AccessPath::FILTER);
@@ -7418,6 +7552,7 @@ void ApplyFinalPredicatesAndExpandFilters(THD *thd,
 }
 
 static AccessPath *CreateTemptableAggregationPath(THD *thd,
+                                                  const JoinHypergraph &graph,
                                                   Query_block *query_block,
                                                   AccessPath *child_path,
                                                   double *aggregate_rows) {
@@ -7427,9 +7562,14 @@ static AccessPath *CreateTemptableAggregationPath(THD *thd,
   AccessPath *aggregate_path = NewTemptableAggregateAccessPath(
       thd, child_path, query_block->join, /*temp_table_param=*/nullptr,
       /*table=*/nullptr, table_path, REF_SLICE_TMP1);
-
   // Use a possibly cached row count.
   aggregate_path->set_num_output_rows(*aggregate_rows);
+  SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+      thd, aggregate_path, &graph};
+  ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
+  secondary_engine_nrows_params.access_path = table_path;
+  secondary_engine_nrows_params.extra_sig = &aggregate_path->signature;
+  ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
   EstimateTemptableAggregateCost(thd, aggregate_path, query_block);
   // Cache the row count.
   *aggregate_rows = aggregate_path->num_output_rows();
@@ -7491,7 +7631,9 @@ void ApplyHavingOrQualifyCondition(THD *thd, Item *having_cond,
     filter_path.set_num_output_rows(
         root_path->num_output_rows() *
         EstimateSelectivity(thd, having_cond, CompanionSet()));
-
+    SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+        thd, &filter_path, &receiver->hypergraph()};
+    ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
     const FilterCost filter_cost = EstimateFilterCost(
         thd, root_path->num_output_rows(), having_cond, query_block);
 
@@ -7741,7 +7883,6 @@ AccessPath ApplyDistinctParameters::MakeSortPathForDistinct(
   // ApplyDistinctParameters::ProposeDistinctPaths(), so we expect that the
   // reduced ordering is always non-empty here.
   assert(sort_path.sort().order != nullptr);
-
   EstimateSortCost(thd, &sort_path, output_rows);
   return sort_path;
 }
@@ -7771,6 +7912,9 @@ void ApplyDistinctParameters::ProposeDistinctPaths(
                                  /*calc_found_rows=*/false,
                                  /*reject_multiple_rows=*/false,
                                  /*send_records_override=*/nullptr);
+    SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+        thd, limit_path, &receiver->hypergraph()};
+    ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
     receiver->ProposeAccessPath(limit_path, receiver->all_nodes(),
                                 new_root_candidates,
                                 /*obsolete_orderings=*/0, "");
@@ -7803,7 +7947,9 @@ void ApplyDistinctParameters::ProposeDistinctPaths(
 
     CopyBasicProperties(*root_path, dedup_path);
     dedup_path->set_num_output_rows(output_rows);
-
+    SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+        thd, dedup_path, &receiver->hypergraph()};
+    ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
     dedup_path->set_cost(dedup_path->cost() +
                          (kDedupOneRowCost * root_path->num_output_rows()));
     receiver->ProposeAccessPath(dedup_path, receiver->all_nodes(),
@@ -7816,7 +7962,8 @@ void ApplyDistinctParameters::ProposeDistinctPaths(
   if (materialize_plan_possible) {
     receiver->ProposeAccessPath(
         CreateMaterializationPath(
-            thd, query_block->join, root_path, /*temp_table=*/nullptr,
+            thd, receiver->hypergraph(), query_block->join, root_path,
+            /*temp_table=*/nullptr,
             /*temp_table_param=*/nullptr,
             /*copy_items=*/true, &output_rows,
             MaterializePathParameters::DEDUP_FOR_DISTINCT),
@@ -7827,7 +7974,7 @@ void ApplyDistinctParameters::ProposeDistinctPaths(
   }
 
   root_path = GetSafePathToSort(
-      thd, query_block->join, root_path, need_rowid,
+      thd, receiver->hypergraph(), query_block->join, root_path, need_rowid,
       ForceMaterializationBeforeSort(*query_block, need_rowid));
 
   // We need to sort. Try all sort-ahead, not just the one directly
@@ -7841,7 +7988,9 @@ void ApplyDistinctParameters::ProposeDistinctPaths(
       AccessPath sort_path{
           MakeSortPathForDistinct(root_path, sort_ahead_ordering.ordering_idx,
                                   ordering_state.value(), output_rows)};
-
+      SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+          thd, &sort_path, &receiver->hypergraph()};
+      ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
       receiver->ProposeAccessPath(&sort_path, receiver->all_nodes(),
                                   new_root_candidates,
                                   /*obsolete_orderings=*/0, "");
@@ -7972,7 +8121,7 @@ AccessPathArray ApplyOrderBy(THD *thd, const CostingReceiver &receiver,
 
     if (sort_needed) {
       root_path = GetSafePathToSort(
-          thd, join, root_path, need_rowid,
+          thd, receiver.hypergraph(), join, root_path, need_rowid,
           ForceMaterializationBeforeSort(query_block, need_rowid));
 
       AccessPath *sort_path = new (thd->mem_root) AccessPath;
@@ -7989,6 +8138,9 @@ AccessPathArray ApplyOrderBy(THD *thd, const CostingReceiver &receiver,
       sort_path->sort().order = join->order.order;
       sort_path->has_group_skip_scan = root_path->has_group_skip_scan;
       sort_path->count_examined_rows = true;
+      SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+          thd, sort_path, &receiver.hypergraph()};
+      ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
       EstimateSortCost(thd, sort_path);
       root_path = sort_path;
     }
@@ -7999,6 +8151,9 @@ AccessPathArray ApplyOrderBy(THD *thd, const CostingReceiver &receiver,
                                            offset_rows, join->calc_found_rows,
                                            /*reject_multiple_rows=*/false,
                                            /*send_records_override=*/nullptr);
+      SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+          thd, root_path, &receiver.hypergraph()};
+      ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
     }
 
     receiver.ProposeAccessPath(
@@ -8008,18 +8163,23 @@ AccessPathArray ApplyOrderBy(THD *thd, const CostingReceiver &receiver,
   return new_root_candidates;
 }
 
-static AccessPath *ApplyWindow(THD *thd, AccessPath *root_path, Window *window,
+static AccessPath *ApplyWindow(THD *thd, const JoinHypergraph &graph,
+                               AccessPath *root_path, Window *window,
                                JOIN *join, bool need_rowid_for_window) {
   AccessPath *window_path =
       NewWindowAccessPath(thd, root_path, window, /*temp_table_param=*/nullptr,
                           /*ref_slice=*/-1, window->needs_buffering());
+
   CopyBasicProperties(*root_path, window_path);
+  SecondaryEngineNrowsParameters secondary_engine_nrows_params{thd, window_path,
+                                                               &graph};
+  ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
   window_path->set_cost(window_path->cost() +
                         kWindowOneRowCost * window_path->num_output_rows());
 
   // NOTE: copy_items = false, because the window iterator does the copying
   // itself.
-  return CreateMaterializationOrStreamingPath(thd, join, window_path,
+  return CreateMaterializationOrStreamingPath(thd, graph, join, window_path,
                                               need_rowid_for_window,
                                               /*copy_items=*/false);
 }
@@ -8190,21 +8350,25 @@ static int FindBestOrderingForWindow(
 }
 
 AccessPath *MakeSortPathAndApplyWindows(
-    THD *thd, JOIN *join, AccessPath *root_path, int ordering_idx, ORDER *order,
-    const LogicalOrderings &orderings,
+    THD *thd, const JoinHypergraph &graph, JOIN *join, AccessPath *root_path,
+    int ordering_idx, ORDER *order, const LogicalOrderings &orderings,
     Bounds_checked_array<bool> windows_this_iteration,
     FunctionalDependencySet fd_set, bool need_rowid_for_window,
     int single_window_idx, Bounds_checked_array<bool> finished_windows,
     int *num_windows_left) {
-  AccessPath sort_path = MakeSortPathWithoutFilesort(thd, root_path, order,
-                                                     /*ordering_state=*/0);
+  AccessPath sort_path =
+      MakeSortPathWithoutFilesort(thd, graph, root_path, order,
+                                  /*ordering_state=*/0);
   sort_path.ordering_state =
       orderings.ApplyFDs(orderings.SetOrder(ordering_idx), fd_set);
   root_path = new (thd->mem_root) AccessPath(sort_path);
-
+  SecondaryEngineNrowsParameters secondary_engine_nrows_params{thd, root_path,
+                                                               &graph};
+  ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
   if (single_window_idx >= 0) {
-    root_path = ApplyWindow(thd, root_path, join->m_windows[single_window_idx],
-                            join, need_rowid_for_window);
+    root_path =
+        ApplyWindow(thd, graph, root_path, join->m_windows[single_window_idx],
+                    join, need_rowid_for_window);
     finished_windows[single_window_idx] = true;
     --(*num_windows_left);
     return root_path;
@@ -8214,8 +8378,8 @@ AccessPath *MakeSortPathAndApplyWindows(
     if (!windows_this_iteration[window_idx]) {
       continue;
     }
-    root_path = ApplyWindow(thd, root_path, join->m_windows[window_idx], join,
-                            need_rowid_for_window);
+    root_path = ApplyWindow(thd, graph, root_path, join->m_windows[window_idx],
+                            join, need_rowid_for_window);
     finished_windows[window_idx] = true;
     --(*num_windows_left);
   }
@@ -8339,7 +8503,7 @@ static AccessPathArray ApplyWindowFunctions(
   for (AccessPath *root_path : root_candidates) {
     if (TraceStarted(thd)) {
       Trace(thd) << "Considering window order on top of "
-                 << PrintAccessPath(*root_path, graph, "") << "\n";
+                 << PrintAccessPath(thd, *root_path, graph, "") << "\n";
     }
 
     // First, go through and check which windows we can do without
@@ -8355,8 +8519,8 @@ static AccessPathArray ApplyWindowFunctions(
           Trace(thd) << std::string(" - window ") << window->printable_name()
                      << " does not need further sorting\n";
         }
-        root_path =
-            ApplyWindow(thd, root_path, window, join, need_rowid_for_window);
+        root_path = ApplyWindow(thd, graph, root_path, window, join,
+                                need_rowid_for_window);
         finished_windows[window_idx] = true;
         --num_windows_left;
       } else {
@@ -8408,7 +8572,7 @@ static AccessPathArray ApplyWindowFunctions(
       }
 
       root_path = MakeSortPathAndApplyWindows(
-          thd, join, root_path,
+          thd, receiver.hypergraph(), join, root_path,
           sort_ahead_orderings[sort_ahead_ordering_idx].ordering_idx,
           sort_ahead_orderings[sort_ahead_ordering_idx].order, orderings,
           windows_this_iteration, fd_set, need_rowid_for_window,
@@ -8426,7 +8590,8 @@ static AccessPathArray ApplyWindowFunctions(
 
       Bounds_checked_array<bool> windows_this_iteration;
       root_path = MakeSortPathAndApplyWindows(
-          thd, join, root_path, join->m_windows[window_idx]->m_ordering_idx,
+          thd, receiver.hypergraph(), join, root_path,
+          join->m_windows[window_idx]->m_ordering_idx,
           clone(thd, join->m_windows[window_idx]->sorting_order(thd)),
           orderings, windows_this_iteration, fd_set, need_rowid_for_window,
           window_idx, finished_windows, &num_windows_left);
@@ -8774,7 +8939,8 @@ bool ApplyAggregation(
     // need sorting, so that we get *only* temp table plans to choose from.
     if (!group_needs_sort && !force_temptable_plan) {
       AccessPath aggregate_path = CreateStreamingAggregationPath(
-          thd, root_path, join, query_block->olap, aggregate_rows);
+          thd, receiver.hypergraph(), root_path, join, query_block->olap,
+          aggregate_rows);
       aggregate_rows = aggregate_path.num_output_rows();
       receiver.ProposeAccessPath(&aggregate_path, receiver.all_nodes(),
                                  &new_root_candidates,
@@ -8789,29 +8955,33 @@ bool ApplyAggregation(
              propose_temptable_without_aggregation));
 
     if (propose_temptable_aggregation) {
-      receiver.ProposeAccessPath(
-          CreateTemptableAggregationPath(thd, query_block, root_path,
-                                         &aggregate_rows),
-          receiver.all_nodes(), &new_root_candidates, /*obsolete_orderings=*/0,
-          "temp table aggregate");
+      auto path = CreateTemptableAggregationPath(
+          thd, receiver.hypergraph(), query_block, root_path, &aggregate_rows);
+      receiver.ProposeAccessPath(path, receiver.all_nodes(),
+                                 &new_root_candidates, /*obsolete_orderings=*/0,
+                                 "temp table aggregate");
 
       // Skip sort plans if we want to force temp table plan.
       if (force_temptable_plan) continue;
     } else if (propose_temptable_without_aggregation) {
-      receiver.ProposeAccessPath(
-          CreateMaterializationPath(
-              thd, join, root_path, /*temp_table=*/nullptr,
-              /*temp_table_param=*/nullptr,
-              /*copy_items=*/true, &aggregate_rows,
-              MaterializePathParameters::DEDUP_FOR_GROUP_BY),
-          receiver.all_nodes(), &new_root_candidates, /*obsolete_orderings=*/0,
-          "materialize with deduplication");
+      auto path = CreateMaterializationPath(
+          thd, receiver.hypergraph(), join, root_path, /*temp_table=*/nullptr,
+          /*temp_table_param=*/nullptr,
+          /*copy_items=*/true, &aggregate_rows,
+          MaterializePathParameters::DEDUP_FOR_GROUP_BY);
+      SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+          thd, path, &receiver.hypergraph()};
+      ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
+      receiver.ProposeAccessPath(path, receiver.all_nodes(),
+                                 &new_root_candidates, /*obsolete_orderings=*/0,
+                                 "materialize with deduplication");
 
       // Skip sort plans if we want to force temp table plan.
       if (force_temptable_plan) continue;
     }
 
-    root_path = GetSafePathToSort(thd, join, root_path, need_rowid,
+    root_path = GetSafePathToSort(thd, receiver.hypergraph(), join, root_path,
+                                  need_rowid,
                                   /*force_materialization=*/false);
 
     // We need to sort. Try all sort-ahead, not just the one directly derived
@@ -8851,7 +9021,8 @@ bool ApplyAggregation(
       }
 
       AccessPath aggregate_path = CreateStreamingAggregationPath(
-          thd, sort_path, join, query_block->olap, aggregate_rows);
+          thd, receiver.hypergraph(), sort_path, join, query_block->olap,
+          aggregate_rows);
       aggregate_rows = aggregate_path.num_output_rows();
       receiver.ProposeAccessPath(&aggregate_path, receiver.all_nodes(),
                                  &new_root_candidates,
@@ -9144,6 +9315,9 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
     path->set_cost(0.0);
     path->set_init_cost(0.0);
     path->set_cost_before_filter(0.0);
+    SecondaryEngineNrowsParameters secondary_engine_nrows_params{thd, path,
+                                                                 &graph};
+    ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
     receiver.ProposeAccessPath(path, all_nodes, &root_candidates,
                                /*obsolete_orderings=*/0,
                                /*description_for_trace=*/"");
@@ -9221,8 +9395,7 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
                                          &fd_set, &root_candidates);
   } else {
     for (AccessPath *root_path : root_candidates) {
-      ExpandFilterAccessPaths(thd, root_path, join, graph.predicates,
-                              graph.num_where_predicates);
+      ExpandFilterAccessPaths(thd, graph, root_path, graph.join());
     }
   }
 
@@ -9268,9 +9441,9 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
   if (query_block->is_explicitly_grouped() && !join->m_windows.is_empty()) {
     AccessPathArray new_root_candidates(PSI_NOT_INSTRUMENTED);
     for (AccessPath *root_path : root_candidates) {
-      root_path =
-          CreateMaterializationOrStreamingPath(thd, join, root_path, need_rowid,
-                                               /*copy_items=*/true);
+      root_path = CreateMaterializationOrStreamingPath(
+          thd, receiver.hypergraph(), join, root_path, need_rowid,
+          /*copy_items=*/true);
       receiver.ProposeAccessPath(root_path, all_nodes, &new_root_candidates,
                                  /*obsolete_orderings=*/0, "");
     }
@@ -9379,6 +9552,9 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
           query_expression->offset_limit_cnt, join->calc_found_rows,
           /*reject_multiple_rows=*/false,
           /*send_records_override=*/nullptr);
+      SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+          thd, limit_path, &graph};
+      ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
       receiver.ProposeAccessPath(limit_path, all_nodes, &new_root_candidates,
                                  /*obsolete_orderings=*/0, "");
     }
@@ -9398,6 +9574,9 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
       }
       AccessPath *delete_path = NewDeleteRowsAccessPath(
           thd, root_path, update_delete_target_tables, immediate_tables);
+      SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+          thd, delete_path, &graph};
+      ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
       EstimateDeleteRowsCost(delete_path);
       receiver.ProposeAccessPath(delete_path, all_nodes, &new_root_candidates,
                                  /*obsolete_orderings=*/0, "");
@@ -9414,6 +9593,10 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
       }
       AccessPath *update_path = NewUpdateRowsAccessPath(
           thd, root_path, update_delete_target_tables, immediate_tables);
+      SecondaryEngineNrowsParameters secondary_engine_nrows_params{
+          thd, update_path, &graph};
+      ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
+
       EstimateUpdateRowsCost(update_path);
       receiver.ProposeAccessPath(update_path, all_nodes, &new_root_candidates,
                                  /*obsolete_orderings=*/0, "");
@@ -9481,9 +9664,9 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
     // window here, or create_tmp_table() will not create fields for its window
     // functions. (All other windows have already been materialized.)
     bool copy_items = join->m_windows.is_empty();
-    root_path =
-        CreateMaterializationPath(thd, join, root_path, /*temp_table=*/nullptr,
-                                  /*temp_table_param=*/nullptr, copy_items);
+    root_path = CreateMaterializationPath(
+        thd, receiver.hypergraph(), join, root_path, /*temp_table=*/nullptr,
+        /*temp_table_param=*/nullptr, copy_items);
   }
 
   if (TraceStarted(thd)) {
@@ -9493,19 +9676,23 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
 #ifndef NDEBUG
   WalkAccessPaths(
       root_path, join, WalkAccessPathPolicy::ENTIRE_QUERY_BLOCK,
-      [&](const AccessPath *path, const JOIN *) {
-        assert(path->cost() >= path->init_cost());
-        assert(path->init_cost() >= path->init_once_cost());
-        // For RAPID, these row counts may not be consistent at this point,
-        // see PopulateNrowsStatisticFromQkrnToAp().
-        assert(secondary_engine_cost_hook != nullptr ||
-               path->type != AccessPath::MATERIALIZE ||
-               (path->num_output_rows() ==
-                    path->materialize().table_path->num_output_rows() &&
-                path->num_output_rows_before_filter ==
-                    path->materialize()
-                        .table_path->num_output_rows_before_filter));
-        return false;
+      [&secondary_engine_cost_hook, &thd, &graph](AccessPath *path,
+                                                  const JOIN *) {
+        if (!IsSecondaryEngineNrowsHookApplicable(path, thd, &graph)) {
+          assert(path->cost() >= path->init_cost());
+          assert(path->init_cost() >= path->init_once_cost());
+          // For RAPID, these row counts may not be consistent at this
+          // point, see PopulateNrowsStatisticFromQkrnToAp().
+          assert(secondary_engine_cost_hook != nullptr ||
+                 path->type != AccessPath::MATERIALIZE ||
+                 (path->num_output_rows() ==
+                      path->materialize().table_path->num_output_rows() &&
+                  path->num_output_rows_before_filter ==
+                      path->materialize()
+                          .table_path->num_output_rows_before_filter));
+          return false;
+        }
+        return true;
       });
 #endif
 

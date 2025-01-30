@@ -1071,6 +1071,21 @@ bool optimize_secondary_engine(THD *thd) {
 }
 
 void notify_plugins_after_select(THD *thd, const Sql_cmd *cmd) {
+  auto executed_in = (cmd != nullptr && cmd->using_secondary_storage_engine())
+                         ? SelectExecutedIn::kSecondaryEngine
+                         : SelectExecutedIn::kPrimaryEngine;
+
+  /* If a cached plugin has been found, and query is non-trivial as defined by
+   * m_current_query_cost > 10, invoke the plugin callback directly. */
+  if (thd->m_current_query_cost >= 10 &&
+      thd->eligible_secondary_engine_handlerton() != nullptr &&
+      thd->eligible_secondary_engine_handlerton()->notify_after_select !=
+          nullptr) {
+    thd->eligible_secondary_engine_handlerton()->notify_after_select(
+        thd, executed_in);
+    return;
+  }
+
   /* Return if secondary engine is not forced and one of the 2 conditions is
    * true:
    * 1. when secondary engine statement context is not present, query cost is
@@ -1079,6 +1094,7 @@ void notify_plugins_after_select(THD *thd, const Sql_cmd *cmd) {
    * is the better execution engine for this query.
    * This prevents calling plugin_foreach for short queries, reducing the
    * overhead. */
+
   bool is_secondary_engine_not_forced =
       thd->variables.use_secondary_engine != SECONDARY_ENGINE_FORCED;
   if (is_secondary_engine_not_forced && !thd->lex->has_external_tables() &&
@@ -1088,18 +1104,6 @@ void notify_plugins_after_select(THD *thd, const Sql_cmd *cmd) {
        (thd->secondary_engine_statement_context() != nullptr &&
         thd->secondary_engine_statement_context()
             ->is_primary_engine_optimal()))) {
-    return;
-  }
-
-  auto executed_in = (cmd != nullptr && cmd->using_secondary_storage_engine())
-                         ? SelectExecutedIn::kSecondaryEngine
-                         : SelectExecutedIn::kPrimaryEngine;
-  /* if secondary engine has been cached */
-  if (thd->eligible_secondary_engine_handlerton() != nullptr &&
-      thd->eligible_secondary_engine_handlerton()->notify_after_select !=
-          nullptr) {
-    thd->eligible_secondary_engine_handlerton()->notify_after_select(
-        thd, executed_in);
     return;
   }
 

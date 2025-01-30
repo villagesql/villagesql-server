@@ -600,6 +600,7 @@ class Item_sum : public Item_func {
   }
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64 hash() override;
   bool eq(const Item *item) const override;
   bool eq_specific(const Item *item) const override;
   /**
@@ -2006,6 +2007,7 @@ class Item_udf_sum : public Item_sum {
   void cleanup() override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64 hash() override;
 };
 
 class Item_sum_udf_float final : public Item_udf_sum {
@@ -2249,6 +2251,7 @@ class Item_func_group_concat final : public Item_sum {
   void no_rows_in_result() override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
+  uint64 hash() override;
   bool change_context_processor(uchar *arg) override {
     context = pointer_cast<Item_ident::Change_context *>(arg)->m_context;
     return false;
