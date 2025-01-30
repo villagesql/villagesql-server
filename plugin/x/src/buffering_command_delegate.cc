@@ -37,7 +37,7 @@ Buffering_command_delegate::Buffering_command_delegate()
 
 void Buffering_command_delegate::reset() {
   m_resultset.clear();
-  Command_delegate::reset();
+  xpl::Callback_command_delegate::reset();
 }
 
 Callback_command_delegate::Row_data *
