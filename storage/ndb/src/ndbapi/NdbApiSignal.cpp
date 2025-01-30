@@ -89,7 +89,9 @@ NdbApiSignal::NdbApiSignal(Ndb *ndb) {
 /**
  * Copy constructor
  */
-NdbApiSignal::NdbApiSignal(const NdbApiSignal &src) { copyFrom(&src); }
+NdbApiSignal::NdbApiSignal(const NdbApiSignal &src) : SignalHeader(src) {
+  copyFrom(&src);
+}
 /******************************************************************************
 ~NdbApiSignal();
 
@@ -253,6 +255,7 @@ void NdbApiSignal::copyFrom(const NdbApiSignal *src) {
   theReceiversBlockNumber = src->theReceiversBlockNumber;
   theSendersBlockRef = src->theSendersBlockRef;
   theLength = src->theLength;
+  theSendersSignalId = src->theSendersSignalId;
   theTrace = src->theTrace;
   m_noOfSections = src->m_noOfSections;
   m_fragmentInfo = src->m_fragmentInfo;
