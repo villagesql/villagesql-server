@@ -4547,14 +4547,6 @@ static bool innodb_redo_log_capacity_is_set() {
   return innodb_variable_is_set("innodb_redo_log_capacity");
 }
 
-bool innodb_log_file_size_is_set() {
-  return innodb_variable_is_set("innodb_log_file_size");
-}
-
-bool innodb_log_n_files_is_set() {
-  return innodb_variable_is_set("innodb_log_files_in_group");
-}
-
 static inline bool innodb_buffer_pool_instances_is_set() {
   return innodb_variable_is_set("innodb_buffer_pool_instances");
 }
@@ -4666,31 +4658,12 @@ static void innodb_redo_log_capacity_init() {
     return;
   }
 
-  const bool file_size_set = innodb_log_file_size_is_set();
-
-  const bool n_files_set = innodb_log_n_files_is_set();
-
   bool capacity_set = innodb_redo_log_capacity_is_set();
-
-  if (capacity_set) {
-    if (file_size_set) {
-      ib::warn(ER_IB_MSG_LOG_PARAMS_FILE_SIZE_UNUSED);
-    }
-    if (n_files_set) {
-      ib::warn(ER_IB_MSG_LOG_PARAMS_N_FILES_UNUSED);
-    }
-  } else {
-    if (file_size_set || n_files_set) {
-      srv_redo_log_capacity_used = srv_log_file_size * srv_log_n_files;
-      capacity_set = true;  // do not change it in dedicated_server mode
-      ib::warn(ER_IB_MSG_LOG_PARAMS_LEGACY_USAGE, srv_redo_log_capacity_used);
-    }
-  }
 
   if (srv_dedicated_server) {
     if (!capacity_set) {
       /* Growth of REDO has high correlation with num of concurrent users which
-depends on num of CPUs */
+      depends on num of CPUs */
       srv_redo_log_capacity = std::clamp(
           std::min(std::thread::hardware_concurrency() / 2, 16U) * GB,
           LOG_CAPACITY_MIN, LOG_CAPACITY_MAX);
@@ -22885,17 +22858,6 @@ static MYSQL_SYSVAR_ULONG(
     INNODB_LOG_BUFFER_SIZE_MIN, INNODB_LOG_BUFFER_SIZE_MAX, 1024);
 
 static MYSQL_SYSVAR_ULONGLONG(
-    log_file_size, srv_log_file_size, PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
-    "Size of each log file before upgrading to 8.0.30. Deprecated.", nullptr,
-    nullptr, 48 * 1024 * 1024L, 4 * 1024 * 1024L, ULLONG_MAX, 1024 * 1024L);
-
-static MYSQL_SYSVAR_ULONG(
-    log_files_in_group, srv_log_n_files,
-    PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
-    "Number of log files before upgrading to 8.0.30. Deprecated.", nullptr,
-    nullptr, 2, 2, 100, 0);
-
-static MYSQL_SYSVAR_ULONGLONG(
     redo_log_capacity, srv_redo_log_capacity,
     PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_PERSIST_AS_READ_ONLY,
     "Limitation for total size of redo log files on disk (expressed in bytes).",
@@ -23568,8 +23530,6 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(deadlock_detect),
     MYSQL_SYSVAR(page_size),
     MYSQL_SYSVAR(log_buffer_size),
-    MYSQL_SYSVAR(log_file_size),
-    MYSQL_SYSVAR(log_files_in_group),
     MYSQL_SYSVAR(redo_log_capacity),
 #ifdef UNIV_DEBUG_DEDICATED
     MYSQL_SYSVAR(debug_sys_mem_size),

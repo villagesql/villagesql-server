@@ -11684,10 +11684,10 @@ ER_IB_MSG_LOG_WRITER_ENTERED_EXTRA_MARGIN
 ER_IB_MSG_LOG_WRITER_EXITED_EXTRA_MARGIN
   eng "Redo log reclaimed some free space, resuming user threads."
 
-ER_IB_MSG_LOG_PARAMS_FILE_SIZE_UNUSED
+OBSOLETE_ER_IB_MSG_LOG_PARAMS_FILE_SIZE_UNUSED
   eng "Ignored deprecated configuration parameter innodb_log_file_size. Used innodb_redo_log_capacity instead."
 
-ER_IB_MSG_LOG_PARAMS_N_FILES_UNUSED
+OBSOLETE_ER_IB_MSG_LOG_PARAMS_N_FILES_UNUSED
   eng "Ignored deprecated configuration parameter innodb_log_files_in_group. Used innodb_redo_log_capacity instead."
 
 ER_IB_MSG_LOG_UPGRADE_FORCED_RECV

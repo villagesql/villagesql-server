@@ -433,12 +433,6 @@ extern bool srv_redo_log_encrypt;
 /* Maximum number of redo files of a cloned DB. */
 constexpr size_t SRV_N_LOG_FILES_CLONE_MAX = 1000;
 
-/** Value of innodb_log_files_in_group. This is deprecated. */
-extern ulong srv_log_n_files;
-
-/** Value of innodb_log_file_size. Expressed in bytes. This is deprecated. */
-extern ulonglong srv_log_file_size;
-
 /** Value of innodb_redo_log_capacity. Expressed in bytes. Might be set
 during startup automatically when started in "dedicated server mode". */
 extern ulonglong srv_redo_log_capacity;

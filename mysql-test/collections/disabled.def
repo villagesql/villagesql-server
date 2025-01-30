@@ -60,7 +60,6 @@ innodb.innodb_autoextend_upgrade           : Bug#36312666 Several InnoDB testcas
 innodb.instant_ddl_recovery_old_2          : Bug#36312666 Several InnoDB testcases fail after the change to 9.0
 innodb.log_8_0_11_case1                    : Bug#36312666 Several InnoDB testcases fail after the change to 9.0
 innodb.log_8_0_19_case1                    : Bug#36312666 Several InnoDB testcases fail after the change to 9.0
-innodb.log_deprecated_params_upgrade       : Bug#36312666 Several InnoDB testcases fail after the change to 9.0
 innodb.partition_upgrade_8013              : Bug#36312666 Several InnoDB testcases fail after the change to 9.0
 innodb.partition_upgrade_8013_debug        : Bug#36312666 Several InnoDB testcases fail after the change to 9.0
 innodb.partition_upgrade_8015              : Bug#36312666 Several InnoDB testcases fail after the change to 9.0
