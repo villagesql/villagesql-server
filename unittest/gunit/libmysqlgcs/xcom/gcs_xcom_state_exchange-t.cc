@@ -339,15 +339,15 @@ TEST_F(XComStateExchangeTest, StateExchangeProcessStatesPhase) {
                                         copied_payload, copied_length);
 
   ASSERT_TRUE(state_1->get_view_id()->get_fixed_part() != 0);
-  ASSERT_EQ(state_1->get_view_id()->get_monotonic_part(), 0u);
-  ASSERT_EQ(state_1->get_data_size(), 0u);
+  ASSERT_EQ(state_1->get_view_id()->get_monotonic_part(), 0U);
+  ASSERT_EQ(state_1->get_data_size(), 0U);
   ASSERT_TRUE(synode_eq(state_1->get_configuration_id(), configuration_id));
 
-  ASSERT_EQ(state_exchange->get_total()->size(), 2u);
-  ASSERT_EQ(state_exchange->get_joined()->size(), 2u);
-  ASSERT_EQ(state_exchange->get_left()->size(), 0u);
+  ASSERT_EQ(state_exchange->get_total()->size(), 2U);
+  ASSERT_EQ(state_exchange->get_joined()->size(), 2U);
+  ASSERT_EQ(state_exchange->get_left()->size(), 0U);
   ASSERT_EQ(*(state_exchange->get_group()), group_name);
-  ASSERT_EQ(state_exchange->get_member_states()->size(), 0u);
+  ASSERT_EQ(state_exchange->get_member_states()->size(), 0U);
 
   /*
     Simulate message received by member 1.
@@ -356,7 +356,7 @@ TEST_F(XComStateExchangeTest, StateExchangeProcessStatesPhase) {
       state_1, *member_id_1, Gcs_protocol_version::V1,
       Gcs_protocol_version::V1);
   ASSERT_FALSE(can_install);
-  ASSERT_EQ(state_exchange->get_member_states()->size(), 1u);
+  ASSERT_EQ(state_exchange->get_member_states()->size(), 1U);
 
   /*
     Simulate message received by member 2.
@@ -370,7 +370,7 @@ TEST_F(XComStateExchangeTest, StateExchangeProcessStatesPhase) {
                                                      Gcs_protocol_version::V1,
                                                      Gcs_protocol_version::V1);
   ASSERT_TRUE(can_install);
-  ASSERT_EQ(state_exchange->get_member_states()->size(), 2u);
+  ASSERT_EQ(state_exchange->get_member_states()->size(), 2U);
 
   /*
     Simulate how the view is calculated.
@@ -408,7 +408,7 @@ TEST_F(XComStateExchangeTest, StateExchangeChoosingView) {
   */
   std::map<Gcs_member_identifier, Xcom_member_state *> *member_states =
       state_exchange->get_member_states();
-  ASSERT_EQ(member_states->size(), 0u);
+  ASSERT_EQ(member_states->size(), 0U);
 
   /*
     If there is one view, there is no much choice and the view is picked.
@@ -422,7 +422,7 @@ TEST_F(XComStateExchangeTest, StateExchangeChoosingView) {
                                         snapshot, nullptr, 0);
   (*member_states)[*member_id_1] = state_1;
   new_view_id = state_exchange->get_new_view_id();
-  ASSERT_EQ(member_states->size(), 1u);
+  ASSERT_EQ(member_states->size(), 1U);
   ASSERT_EQ(view_id_1.get_fixed_part(), new_view_id->get_fixed_part());
   ASSERT_EQ(view_id_1.get_monotonic_part(), new_view_id->get_monotonic_part());
 
@@ -436,7 +436,7 @@ TEST_F(XComStateExchangeTest, StateExchangeChoosingView) {
                                         snapshot, nullptr, 0);
   (*member_states)[*member_id_2] = state_2;
   new_view_id = state_exchange->get_new_view_id();
-  ASSERT_EQ(member_states->size(), 2u);
+  ASSERT_EQ(member_states->size(), 2U);
   ASSERT_TRUE(*member_id_1 < *member_id_2);
   ASSERT_EQ(view_id_2.get_fixed_part(), new_view_id->get_fixed_part());
   ASSERT_EQ(view_id_2.get_monotonic_part(), new_view_id->get_monotonic_part());
@@ -451,7 +451,7 @@ TEST_F(XComStateExchangeTest, StateExchangeChoosingView) {
                                         snapshot, nullptr, 0);
   (*member_states)[*member_id_3] = state_3;
   new_view_id = state_exchange->get_new_view_id();
-  ASSERT_EQ(member_states->size(), 3u);
+  ASSERT_EQ(member_states->size(), 3U);
   ASSERT_TRUE(*member_id_1 < *member_id_2);
   ASSERT_TRUE(*member_id_3 < *member_id_2);
   ASSERT_EQ(view_id_2.get_fixed_part(), new_view_id->get_fixed_part());
@@ -473,7 +473,7 @@ TEST_F(XComStateExchangeTest, StateExchangeChoosingView) {
                                         snapshot, nullptr, 0);
   (*member_states)[*member_id_4] = state_4;
   new_view_id = state_exchange->get_new_view_id();
-  ASSERT_EQ(member_states->size(), 4u);
+  ASSERT_EQ(member_states->size(), 4U);
   ASSERT_TRUE(*member_id_1 < *member_id_2);
   ASSERT_TRUE(*member_id_3 < *member_id_2);
   ASSERT_TRUE(*member_id_4 < *member_id_2);
@@ -523,7 +523,7 @@ TEST_F(XComStateExchangeTest, StateExchangeWrongAssumptionsView) {
   */
   std::map<Gcs_member_identifier, Xcom_member_state *> *member_states =
       state_exchange->get_member_states();
-  ASSERT_EQ(member_states->size(), 0u);
+  ASSERT_EQ(member_states->size(), 0U);
 
   /*
     Two views where the monotonic part in each view is different from
@@ -544,7 +544,7 @@ TEST_F(XComStateExchangeTest, StateExchangeWrongAssumptionsView) {
                                         snapshot, nullptr, 0);
   (*member_states)[*member_id_2] = state_2;
   new_view_id = state_exchange->get_new_view_id();
-  ASSERT_EQ(member_states->size(), 2u);
+  ASSERT_EQ(member_states->size(), 2U);
   ASSERT_TRUE(new_view_id == nullptr);
 
   for (state_it = member_states->begin(); state_it != member_states->end();
@@ -568,7 +568,7 @@ TEST_F(XComStateExchangeTest, StateExchangeWrongAssumptionsView) {
                                         snapshot, nullptr, 0);
   (*member_states)[*member_id_4] = state_4;
   new_view_id = state_exchange->get_new_view_id();
-  ASSERT_EQ(member_states->size(), 2u);
+  ASSERT_EQ(member_states->size(), 2U);
   ASSERT_TRUE(new_view_id == nullptr);
   (void)new_view_id;
 
@@ -639,7 +639,7 @@ TEST_F(XComStateExchangeTest, StateExchangeDiscardSynodes) {
       state_1, *member_id_1, Gcs_protocol_version::V1,
       Gcs_protocol_version::V1);
   ASSERT_FALSE(can_install);
-  ASSERT_EQ(state_exchange->get_member_states()->size(), 0u);
+  ASSERT_EQ(state_exchange->get_member_states()->size(), 0U);
 
   delete member_id_1;
 }

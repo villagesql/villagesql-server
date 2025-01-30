@@ -128,10 +128,10 @@ const Vt100Param vt100_params[]{
                Vt100::background(Vt100::Color::BrightBlue),
                {ESC "[104m"}},
     Vt100Param{"format_foreground_rgb_red",
-               Vt100::foreground(Vt100::Rgb{255u, 0u, 0u}),
+               Vt100::foreground(Vt100::Rgb{255U, 0U, 0U}),
                {ESC "[38;2;255;0;0m"}},
     Vt100Param{"format_background_rgb_blue",
-               Vt100::background(Vt100::Rgb{0u, 0u, 255u}),
+               Vt100::background(Vt100::Rgb{0U, 0U, 255U}),
                {ESC "[48;2;0;0;255m"}},
     Vt100Param{
         "format_foreground_index_red", Vt100::foreground(1), {ESC "[38;5;1m"}},

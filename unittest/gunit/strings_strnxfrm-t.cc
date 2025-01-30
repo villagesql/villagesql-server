@@ -2229,8 +2229,8 @@ TEST(BitfiddlingTest, DISABLED_FastOutOfRange) {
           uint32 four_bytes;
           memcpy(&four_bytes, bytes, sizeof(four_bytes));
           bool any_out_of_range_fast =
-              (((four_bytes + 0x01010101u) & 0x80808080) ||
-               ((four_bytes - 0x20202020u) & 0x80808080));
+              (((four_bytes + 0x01010101U) & 0x80808080) ||
+               ((four_bytes - 0x20202020U) & 0x80808080));
 
           EXPECT_EQ(any_out_of_range_slow, any_out_of_range_fast);
         }

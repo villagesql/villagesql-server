@@ -275,7 +275,7 @@ void Filesort_buffer::reset() {
 }
 
 bool Filesort_buffer::preallocate_records(size_t num_records) {
-  if (m_max_record_length == 0xFFFFFFFFu) {
+  if (m_max_record_length == 0xFFFFFFFFU) {
     // The rest of the code uses this value for “infinite” and saturates to it,
     // so even if we have a large sort buffer (> 4 GB), we we can't know for
     // sure there's going to be room.

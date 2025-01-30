@@ -5932,7 +5932,7 @@ static int scanEventTable(Ndb *pNdb, const NdbDictionary::Table *pTab,
       goto error;
 
     if ((event_id = pOp->getValue(6)) == nullptr ||
-        (event_name = pOp->getValue(0u)) == nullptr)
+        (event_name = pOp->getValue(0U)) == nullptr)
       goto error;
 
     if (pTrans->execute(NdbTransaction::NoCommit) == -1) {

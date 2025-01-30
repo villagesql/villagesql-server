@@ -138,7 +138,7 @@ TEST(TemplateUtilsTest, SplitEmptyCstr) {
     elts.emplace_back(f, (l - f));
   });
 
-  EXPECT_EQ(0u, elts.size());
+  EXPECT_EQ(0U, elts.size());
 }
 
 TEST(TemplateUtilsTest, SplitEmptyString) {
@@ -147,7 +147,7 @@ TEST(TemplateUtilsTest, SplitEmptyString) {
   myu::Split(s.begin(), s.end(), myu::IsComma,
              [&](const auto &f, const auto &l) { elts.emplace_back(f, l); });
 
-  EXPECT_EQ(0u, elts.size());
+  EXPECT_EQ(0U, elts.size());
 }
 
 TEST(TemplateUtilsTest, SplitSingleRangeCstr) {

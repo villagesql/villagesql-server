@@ -105,7 +105,7 @@ TEST_F(FileSortBufferTest, OneBigRecordFits) {
     implementation detail; if the record pointer allocation gets
     smarter in the future, the test will have to be adjusted.
   */
-  fs_info.set_max_size(10485760, 0xFFFFFFFFu);
+  fs_info.set_max_size(10485760, 0xFFFFFFFFU);
   Bounds_checked_array<uchar> buf;
   size_t min_size = 1;
   for (;;)  // Termination condition within loop.

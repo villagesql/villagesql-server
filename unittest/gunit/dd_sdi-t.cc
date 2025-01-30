@@ -305,7 +305,7 @@ template <typename T>
 void verify(T *dd_obj) {
   dd::String_type sdi = serialize_drv(dd_obj);
   // std::cout << "Verifying json: \n" << sdi << std::endl;
-  ASSERT_GT(sdi.size(), 0u);
+  ASSERT_GT(sdi.size(), 0U);
   std::unique_ptr<T> dst_obj{deserialize_drv<T>(sdi)};
   dd::String_type dst_sdi = serialize_drv(dst_obj.get());
   EXPECT_EQ(dst_sdi, sdi);
@@ -405,7 +405,7 @@ TEST(SdiTest, Serialization_perf) {
 
   for (int i = 0; i < 1; ++i) {
     dd::String_type sdi = dd::serialize(nullptr, *t, "perftest");
-    EXPECT_GT(sdi.size(), 100000u);
+    EXPECT_GT(sdi.size(), 100000U);
   }
 }
 #endif /* NDEBUG */
@@ -413,34 +413,34 @@ TEST(SdiTest, Serialization_perf) {
 TEST(SdiTest, CharPromotion) {
   signed char x = 127;
   unsigned char ux = x;
-  EXPECT_EQ(127u, ux);
+  EXPECT_EQ(127U, ux);
 
   unsigned short usx = x;
-  EXPECT_EQ(127u, usx);
+  EXPECT_EQ(127U, usx);
 
   unsigned int uix = x;
-  EXPECT_EQ(127u, usx);
+  EXPECT_EQ(127U, usx);
 
   unsigned char tmp = 0xe0;
   x = static_cast<signed char>(tmp);
   EXPECT_EQ(-32, x);
 
   ux = x;
-  EXPECT_EQ(224u, ux);
+  EXPECT_EQ(224U, ux);
 
   usx = x;
   short sx = x;
   EXPECT_EQ(-32, sx);
   unsigned short usy = sx;
   EXPECT_EQ(usx, usy);
-  EXPECT_EQ(65504u, usx);
+  EXPECT_EQ(65504U, usx);
 
   uix = x;
   int ix = x;
   EXPECT_EQ(-32, ix);
   unsigned int uiy = ix;
   EXPECT_EQ(uix, uiy);
-  EXPECT_EQ(4294967264u, uix);
+  EXPECT_EQ(4294967264U, uix);
 }
 
 TEST(SdiTest, Utf8Filename) {
@@ -457,14 +457,14 @@ TEST(SdiTest, Utf8FilenameTrunc) {
   for (int i = 0; i < 16; ++i) {
     name.append("\xe0\xa0\x80");
   }
-  EXPECT_EQ(51u, name.length());
+  EXPECT_EQ(51U, name.length());
 
   dd::Table_impl x{};
   x.set_name(name);
   x.set_id(42);
   dd::String_type fn = dd::sdi_file::sdi_filename(x.id(), x.name(), "foobar");
   std::replace(fn.begin(), fn.end(), '\\', '/');
-  EXPECT_EQ(96u, fn.length());
+  EXPECT_EQ(96U, fn.length());
   EXPECT_EQ(
       "./foobar/"
       "@0800@0800@0800@0800@0800@0800@0800@0800@0800@0800@0800@0800@0800@0800@"

@@ -23196,7 +23196,7 @@ static void test_wl16221_kill() {
       DIE_UNLESS(0);
     }
 
-    DIE_UNLESS((mysql_kill(mysql, (unsigned long)0xff12345678ul) ==
+    DIE_UNLESS((mysql_kill(mysql, (unsigned long)0xff12345678UL) ==
                 CR_INVALID_CONN_HANDLE));
 
     mysql_close(mysql);

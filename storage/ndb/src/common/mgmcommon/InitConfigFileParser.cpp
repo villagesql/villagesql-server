@@ -1114,16 +1114,16 @@ int main() {
 
   // Valid multipliers
   ok1(InitConfigFileParser::convertStringToUint64("37k", value));
-  ok1(value == 37ull * 1024);
+  ok1(value == 37ULL * 1024);
   ok1(InitConfigFileParser::convertStringToUint64("37K", value));
-  ok1(value == 37ull * 1024);
+  ok1(value == 37ULL * 1024);
   ok1(InitConfigFileParser::convertStringToUint64("37M", value));
-  ok1(value == 37ull * 1024 * 1024);
+  ok1(value == 37ULL * 1024 * 1024);
   ok1(InitConfigFileParser::convertStringToUint64("37G", value));
-  ok1(value == 37ull * 1024 * 1024 * 1024);
+  ok1(value == 37ULL * 1024 * 1024 * 1024);
 #ifdef NOT_YET
   ok1(InitConfigFileParser::convertStringToUint64("37T", value));
-  ok1(value == 37ull * 1024 * 1024 * 1024 * 1024);
+  ok1(value == 37ULL * 1024 * 1024 * 1024 * 1024);
 #endif
 
   // Invalid multipliers

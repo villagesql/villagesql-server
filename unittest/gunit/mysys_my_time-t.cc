@@ -365,7 +365,7 @@ TEST(MysysMyTime, DatetimeAddInterval) {
   DatetimeResult tr = make_datetime_from_string("20200229T235959.670000", 0);
   EXPECT_VALID_DATETIME(tr);
   EXPECT_EQ(670000LL, tr.t.second_part);
-  Interval i = {0, 0, 0, 0, 0, 0, 330000ull, false};
+  Interval i = {0, 0, 0, 0, 0, 0, 330000ULL, false};
   int warnings = 0;
   EXPECT_EQ(false,
             date_add_interval(&tr.t, INTERVAL_MICROSECOND, i, &warnings));

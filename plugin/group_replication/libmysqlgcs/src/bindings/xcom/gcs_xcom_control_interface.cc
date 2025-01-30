@@ -2290,7 +2290,7 @@ uint64_t Gcs_suspicions_manager::get_non_member_expel_timeout() {
 void Gcs_suspicions_manager::set_non_member_expel_timeout_seconds(
     unsigned long sec) {
   m_suspicions_parameters_mutex.lock();
-  m_non_member_expel_timeout = sec * 10000000ul;
+  m_non_member_expel_timeout = sec * 10000000UL;
   MYSQL_GCS_LOG_DEBUG("Set non-member expel timeout to %lu seconds (%lu  ns).",
                       sec, m_non_member_expel_timeout * 100);
   m_suspicions_parameters_mutex.unlock();
@@ -2307,7 +2307,7 @@ uint64_t Gcs_suspicions_manager::get_member_expel_timeout() {
 void Gcs_suspicions_manager::set_member_expel_timeout_seconds(
     unsigned long sec) {
   m_suspicions_parameters_mutex.lock();
-  m_member_expel_timeout = sec * 10000000ul;
+  m_member_expel_timeout = sec * 10000000UL;
   MYSQL_GCS_LOG_DEBUG("Set member expel timeout to %lu seconds (%lu  ns).", sec,
                       m_member_expel_timeout * 100);
   m_suspicions_parameters_mutex.unlock();

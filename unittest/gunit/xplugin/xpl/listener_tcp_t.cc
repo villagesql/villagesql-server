@@ -268,7 +268,7 @@ TEST_P(Listener_tcp_retry_testsuite,
   EXPECT_CALL(*m_mock_system, get_socket_errno())
       .Times(n)
       .WillRepeatedly(Return(SOCKET_EADDRINUSE));
-  EXPECT_CALL(*m_mock_system, sleep(Gt(0u))).Times(n);
+  EXPECT_CALL(*m_mock_system, sleep(Gt(0U))).Times(n);
 
   EXPECT_CALL(*m_mock_system, freeaddrinfo(&ai));
 

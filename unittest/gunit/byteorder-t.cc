@@ -60,7 +60,7 @@ INSTANTIATE_TEST_SUITE_P(Foo, Float4Test,
                                            -numeric_limits<float>::min(),
                                            -numeric_limits<float>::max(),
                                            -numeric_limits<float>::epsilon(),
-                                           -1.0f, 0.0f, 1.0f));
+                                           -1.0F, 0.0F, 1.0F));
 /*
   The actual test case for float: store and get some values.
  */

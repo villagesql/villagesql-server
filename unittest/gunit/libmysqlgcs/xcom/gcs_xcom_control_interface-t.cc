@@ -1289,9 +1289,9 @@ TEST_F(XComControlTest, FailedNodeRemovalTest) {
 
   // Get suspicions manager and enable majority
   Gcs_suspicions_manager *mgr = xcom_control_if->get_suspicions_manager();
-  mgr->set_suspicions_processing_period(15u);
-  mgr->set_non_member_expel_timeout_seconds(60ul);
-  mgr->set_member_expel_timeout_seconds(0ul);
+  mgr->set_suspicions_processing_period(15U);
+  mgr->set_non_member_expel_timeout_seconds(60UL);
+  mgr->set_member_expel_timeout_seconds(0UL);
 
   Gcs_xcom_uuid uuid_1 = Gcs_xcom_uuid::create_uuid();
   blob blob_1 = {{0, static_cast<char *>(malloc(uuid_1.actual_value.size()))}};
@@ -1523,9 +1523,9 @@ TEST_F(XComControlTest, SuspectMembersRemoval) {
   // Get Gcs_suspicions_manager and set default parameters values
   Gcs_suspicions_manager *mgr = xcom_control_if->get_suspicions_manager();
   Gcs_xcom_nodes xcom_nodes;
-  mgr->set_suspicions_processing_period(15u);
-  mgr->set_non_member_expel_timeout_seconds(60ul);
-  mgr->set_member_expel_timeout_seconds(0ul);
+  mgr->set_suspicions_processing_period(15U);
+  mgr->set_non_member_expel_timeout_seconds(60UL);
+  mgr->set_member_expel_timeout_seconds(0UL);
 
   // Build vector with suspect nodes
   std::vector<Gcs_member_identifier *> no_nodes, member_suspect_nodes;
@@ -1547,7 +1547,7 @@ TEST_F(XComControlTest, SuspectMembersRemoval) {
   // Check if suspicions list is empty
   const Gcs_xcom_nodes &suspicions_list = mgr->get_suspicions();
   long unsigned int number_suspects = suspicions_list.get_size();
-  ASSERT_EQ(0ul, number_suspects);
+  ASSERT_EQ(0UL, number_suspects);
   MYSQL_GCS_LOG_TRACE("List has %lu suspects.", number_suspects);
 
   // Check if the manager has kept the majority
@@ -1578,9 +1578,9 @@ TEST_F(XComControlTest, SuspectMemberFailedRemovalDueToMajorityLoss) {
   // Get Gcs_suspicions_manager and set default parameters values
   Gcs_suspicions_manager *mgr = xcom_control_if->get_suspicions_manager();
   Gcs_xcom_nodes xcom_nodes;
-  mgr->set_suspicions_processing_period(15u);
-  mgr->set_non_member_expel_timeout_seconds(60ul);
-  mgr->set_member_expel_timeout_seconds(0ul);
+  mgr->set_suspicions_processing_period(15U);
+  mgr->set_non_member_expel_timeout_seconds(60UL);
+  mgr->set_member_expel_timeout_seconds(0UL);
 
   // Build vector with suspect nodes
   std::vector<Gcs_member_identifier *> no_nodes, member_suspect_nodes;
@@ -1606,7 +1606,7 @@ TEST_F(XComControlTest, SuspectMemberFailedRemovalDueToMajorityLoss) {
   // Check if suspicions list is empty as they've timed out
   const Gcs_xcom_nodes &suspicions_list = mgr->get_suspicions();
   long unsigned int number_suspects = suspicions_list.get_size();
-  ASSERT_EQ(0ul, number_suspects);
+  ASSERT_EQ(0UL, number_suspects);
   MYSQL_GCS_LOG_TRACE("List has %lu suspects.", number_suspects);
 
   // Add two additional members in order to enable majority
@@ -1625,7 +1625,7 @@ TEST_F(XComControlTest, SuspectMemberFailedRemovalDueToMajorityLoss) {
 
   // Check if suspicions list is empty
   number_suspects = suspicions_list.get_size();
-  ASSERT_EQ(0ul, number_suspects);
+  ASSERT_EQ(0UL, number_suspects);
   MYSQL_GCS_LOG_TRACE("List has %lu suspects.", number_suspects);
 
   result = xcom_control_if->leave();
@@ -1653,9 +1653,9 @@ TEST_F(XComControlTest, ThreeSuspectNodesRemoval) {
   // Get Gcs_suspicions_manager
   Gcs_suspicions_manager *mgr = xcom_control_if->get_suspicions_manager();
   Gcs_xcom_nodes xcom_nodes;
-  mgr->set_suspicions_processing_period(2u);
-  mgr->set_non_member_expel_timeout_seconds(1ul);
-  mgr->set_member_expel_timeout_seconds(5ul);
+  mgr->set_suspicions_processing_period(2U);
+  mgr->set_non_member_expel_timeout_seconds(1UL);
+  mgr->set_member_expel_timeout_seconds(5UL);
 
   // Build vector with suspect nodes
   std::vector<Gcs_member_identifier *> no_nodes, non_member_suspect_nodes,
@@ -1722,7 +1722,7 @@ TEST_F(XComControlTest, ThreeSuspectNodesRemoval) {
 
   // Check if suspicions list is empty
   number_suspects = suspicions_list.get_size();
-  ASSERT_EQ(0ul, number_suspects);
+  ASSERT_EQ(0UL, number_suspects);
   MYSQL_GCS_LOG_TRACE("List has %lu suspects.", number_suspects);
 
   result = xcom_control_if->leave();
@@ -1753,9 +1753,9 @@ TEST_F(XComControlTest, FalseThreeSuspectNodesWithdrawn) {
   // Get Gcs_suspicions_manager
   Gcs_suspicions_manager *mgr = xcom_control_if->get_suspicions_manager();
   Gcs_xcom_nodes xcom_nodes;
-  mgr->set_suspicions_processing_period(15u);
-  mgr->set_non_member_expel_timeout_seconds(5ul);
-  mgr->set_member_expel_timeout_seconds(5ul);
+  mgr->set_suspicions_processing_period(15U);
+  mgr->set_non_member_expel_timeout_seconds(5UL);
+  mgr->set_member_expel_timeout_seconds(5UL);
 
   // Build vector with suspect nodes
   std::vector<Gcs_member_identifier *> no_nodes, non_member_suspect_nodes,
@@ -1782,7 +1782,7 @@ TEST_F(XComControlTest, FalseThreeSuspectNodesWithdrawn) {
 
   const Gcs_xcom_nodes &suspicions_list = mgr->get_suspicions();
   long unsigned int number_suspects = suspicions_list.get_size();
-  ASSERT_EQ(3ul, number_suspects);
+  ASSERT_EQ(3UL, number_suspects);
   MYSQL_GCS_LOG_TRACE("List has %lu suspects.", number_suspects);
 
   // Wait for less than timeout and period in order to remove suspicions
@@ -1842,9 +1842,9 @@ TEST_F(XComControlTest, ThreeSuspectNodesRemovalAndWithdrawn) {
   // Get Gcs_suspicions_manager
   Gcs_suspicions_manager *mgr = xcom_control_if->get_suspicions_manager();
   Gcs_xcom_nodes xcom_nodes;
-  mgr->set_suspicions_processing_period(11u);
-  mgr->set_non_member_expel_timeout_seconds(5ul);
-  mgr->set_member_expel_timeout_seconds(5ul);
+  mgr->set_suspicions_processing_period(11U);
+  mgr->set_non_member_expel_timeout_seconds(5UL);
+  mgr->set_member_expel_timeout_seconds(5UL);
 
   // Build vector with suspect nodes
   std::vector<Gcs_member_identifier *> no_nodes, non_member_suspect_nodes,
@@ -1894,7 +1894,7 @@ TEST_F(XComControlTest, ThreeSuspectNodesRemovalAndWithdrawn) {
     timed out.
   */
   number_suspects = suspicions_list.get_size();
-  ASSERT_EQ(2ul, number_suspects);
+  ASSERT_EQ(2UL, number_suspects);
   MYSQL_GCS_LOG_TRACE("List has %lu number_suspects", number_suspects);
 
   alive_nodes.push_back(new Gcs_member_identifier("127.0.0.1:12348"));
@@ -1915,7 +1915,7 @@ TEST_F(XComControlTest, ThreeSuspectNodesRemovalAndWithdrawn) {
     still hasn't timed out.
   */
   number_suspects = suspicions_list.get_size();
-  ASSERT_EQ(1ul, number_suspects);
+  ASSERT_EQ(1UL, number_suspects);
   MYSQL_GCS_LOG_TRACE("List has %lu number_suspects", number_suspects);
 
   // Wait for period to be sure suspect nodes are expelled
@@ -1929,7 +1929,7 @@ TEST_F(XComControlTest, ThreeSuspectNodesRemovalAndWithdrawn) {
     should already have timed out.
   */
   number_suspects = suspicions_list.get_size();
-  ASSERT_EQ(0ul, number_suspects);
+  ASSERT_EQ(0UL, number_suspects);
 
   MYSQL_GCS_LOG_TRACE("List has %lu number_suspects", number_suspects);
 
@@ -1966,9 +1966,9 @@ TEST_F(XComControlTest, ThreeSuspectNodesRemovalAfterTimeoutReset) {
   // Get Gcs_suspicions_manager
   Gcs_suspicions_manager *mgr = xcom_control_if->get_suspicions_manager();
   Gcs_xcom_nodes xcom_nodes;
-  mgr->set_suspicions_processing_period(1u);
-  mgr->set_non_member_expel_timeout_seconds(60ul);
-  mgr->set_member_expel_timeout_seconds(30ul);
+  mgr->set_suspicions_processing_period(1U);
+  mgr->set_non_member_expel_timeout_seconds(60UL);
+  mgr->set_member_expel_timeout_seconds(30UL);
 
   // Build vector with suspect nodes
   std::vector<Gcs_member_identifier *> no_nodes, non_member_suspect_nodes,
@@ -2009,15 +2009,15 @@ TEST_F(XComControlTest, ThreeSuspectNodesRemovalAfterTimeoutReset) {
   ASSERT_EQ(mgr->has_majority(), true);
 
   // Update the value of the timeout parameters
-  mgr->set_non_member_expel_timeout_seconds(0ul);
-  mgr->set_member_expel_timeout_seconds(0ul);
+  mgr->set_non_member_expel_timeout_seconds(0UL);
+  mgr->set_member_expel_timeout_seconds(0UL);
 
   // Wait for twice the period to be sure all suspect nodes were expelled
   My_xp_util::sleep_seconds(2 * mgr->get_suspicions_processing_period());
 
   // Check if suspicions list is empty
   number_suspects = suspicions_list.get_size();
-  ASSERT_EQ(0ul, number_suspects);
+  ASSERT_EQ(0UL, number_suspects);
   MYSQL_GCS_LOG_TRACE("List has %lu suspects.", number_suspects);
 
   // Check if the manager kept the majority enabled
@@ -2172,9 +2172,9 @@ TEST_F(XComControlTest, NodeTooFarMessage) {
   // Get Gcs_suspicions_manager and set default parameters values
   Gcs_suspicions_manager *mgr = xcom_control_if->get_suspicions_manager();
   Gcs_xcom_nodes xcom_nodes;
-  mgr->set_suspicions_processing_period(15u);
-  mgr->set_non_member_expel_timeout_seconds(60ul);
-  mgr->set_member_expel_timeout_seconds(60ul);
+  mgr->set_suspicions_processing_period(15U);
+  mgr->set_non_member_expel_timeout_seconds(60UL);
+  mgr->set_member_expel_timeout_seconds(60UL);
 
   // Build vector with suspect nodes
   std::vector<Gcs_member_identifier *> no_nodes, member_suspect_nodes;
@@ -2402,9 +2402,9 @@ TEST_F(XComControlTest, DoNotDisbandEntireGroup) {
 
   // Get Gcs_suspicions_manager and set default parameters values
   Gcs_suspicions_manager *mgr = xcom_control_if->get_suspicions_manager();
-  mgr->set_suspicions_processing_period(15u);
-  mgr->set_non_member_expel_timeout_seconds(60ul);
-  mgr->set_member_expel_timeout_seconds(0ul);
+  mgr->set_suspicions_processing_period(15U);
+  mgr->set_non_member_expel_timeout_seconds(60UL);
+  mgr->set_member_expel_timeout_seconds(0UL);
 
   /* Test expulsion of suspect_2.
      We should issue the expel, as specified in the EXPECT_CALL(proxy,

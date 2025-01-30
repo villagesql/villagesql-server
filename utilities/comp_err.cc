@@ -660,7 +660,7 @@ static int create_sys_files(struct languages *lang_head,
     int4store(head + 10, row_count);
     head[30] = csnum;
 
-    my_fseek(to, 0l, MY_SEEK_SET);
+    my_fseek(to, 0L, MY_SEEK_SET);
     if (my_fwrite(to, (uchar *)head, HEADER_LENGTH, MYF(MY_WME | MY_FNABP)))
       goto err;
 

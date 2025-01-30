@@ -66,5 +66,5 @@ TEST(StringTest, StringBuffer) {
   StringBuffer<3> sb("abc", 3, &my_charset_bin);
   sb.append("def");
   EXPECT_STREQ("abcdef", sb.c_ptr());
-  EXPECT_EQ(6u, sb.length());
+  EXPECT_EQ(6U, sb.length());
 }

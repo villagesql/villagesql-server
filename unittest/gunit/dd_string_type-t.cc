@@ -151,7 +151,7 @@ TEST_F(TrackingStringTypeTest, TrackingStringstreamGetString) {
   x << "This is a number " << 42 << " followed by a double " << 36.9
     << std::endl;
   Tracking_string y = x.str();
-  EXPECT_EQ(46u, y.size());
+  EXPECT_EQ(46U, y.size());
 }
 
 }  // namespace dd_string_type_unit_test

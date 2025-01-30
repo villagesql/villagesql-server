@@ -1623,8 +1623,8 @@ ALWAYS_INLINE void uca_scanner_900<Mb_wc, LEVELS_FOR_COMPARE>::for_each_weight(
       */
       uint32_t four_bytes = 0;
       memcpy(&four_bytes, sbeg_local, sizeof(four_bytes));
-      if (((four_bytes + 0x01010101u) & 0x80808080) ||
-          ((four_bytes - 0x20202020u) & 0x80808080))
+      if (((four_bytes + 0x01010101U) & 0x80808080) ||
+          ((four_bytes - 0x20202020U) & 0x80808080))
         break;
       const int s_res0 = ascii_wpage[sbeg_local[0]];
       const int s_res1 = ascii_wpage[sbeg_local[1]];

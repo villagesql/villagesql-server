@@ -881,8 +881,8 @@ void check_transform(const dd::Spatial_reference_system_impl &srs1,
   auto g = dynamic_cast<Geometry2 *>(result_g.get());
 
   // Verify result is correct.
-  EXPECT_NEAR(g->x(), g2.x(), 0.000001f);
-  EXPECT_NEAR(g->y(), g2.y(), 0.000001f);
+  EXPECT_NEAR(g->x(), g2.x(), 0.000001F);
+  EXPECT_NEAR(g->y(), g2.y(), 0.000001F);
 
   // for debugging
   // print<Geometry2>::apply(*g);
@@ -896,8 +896,8 @@ void check_transform(const dd::Spatial_reference_system_impl &srs1,
     auto g_inv = dynamic_cast<Geometry1 *>(result_g_inv.get());
 
     // Verify result is correct.
-    EXPECT_NEAR(g_inv->x(), g1.x(), 0.1f);
-    EXPECT_NEAR(g_inv->y(), g1.y(), 0.1f);
+    EXPECT_NEAR(g_inv->x(), g1.x(), 0.1F);
+    EXPECT_NEAR(g_inv->y(), g1.y(), 0.1F);
   }
 }
 

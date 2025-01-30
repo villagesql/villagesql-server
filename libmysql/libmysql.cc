@@ -771,7 +771,7 @@ int STDCALL mysql_kill(MYSQL *mysql, ulong pid) {
     There is an analog of this failsafe in the server as we might see old
     libmysql connection to a new server as well as the other way around.
   */
-  if (pid & (~0xfffffffful)) return CR_INVALID_CONN_HANDLE;
+  if (pid & (~0xffffffffUL)) return CR_INVALID_CONN_HANDLE;
   int4store(buff, pid);
   std::string kill_stmt = "KILL " + std::to_string(pid);
   return mysql_real_query(mysql, kill_stmt.c_str(), kill_stmt.length());

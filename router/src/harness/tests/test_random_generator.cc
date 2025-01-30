@@ -39,7 +39,7 @@ const std::string kAlphabetAll = kAlphabetDigits + kAlphabetLowercase +
 TEST(UtilsTests, generate_identifier_ok) {
   using RandGen = mysql_harness::RandomGenerator;
   RandGen generator;
-  const unsigned kTestLen = 100u;
+  const unsigned kTestLen = 100U;
 
   // digits only
   {
@@ -85,20 +85,20 @@ TEST(UtilsTests, generate_identifier_ok) {
   // length = 0
   {
     std::string s = generator.generate_identifier(0);
-    EXPECT_EQ(0u, s.size());
+    EXPECT_EQ(0U, s.size());
   }
 
   // length = 1
   {
     std::string s = generator.generate_identifier(1);
-    EXPECT_EQ(1u, s.size());
+    EXPECT_EQ(1U, s.size());
   }
 }
 
 TEST(UtilsTests, generate_identifier_wrong_alphabet_mask) {
   using RandGen = mysql_harness::RandomGenerator;
   RandGen generator;
-  const unsigned kTestLen = 100u;
+  const unsigned kTestLen = 100U;
 
   {
     try {
@@ -132,7 +132,7 @@ TEST(UtilsTests, generate_identifier_check_symbols_usage) {
 
 TEST(UtilsTests, generate_strong_password_ok) {
   mysql_harness::RandomGenerator generator;
-  const unsigned kTestLen = 8u;
+  const unsigned kTestLen = 8U;
 
   const std::string pass = generator.generate_strong_password(kTestLen);
 
@@ -153,7 +153,7 @@ TEST(UtilsTests, generate_strong_password_ok) {
 
 TEST(UtilsTests, generate_strong_password_too_short) {
   mysql_harness::RandomGenerator generator;
-  const unsigned kTestLen = 7u;
+  const unsigned kTestLen = 7U;
 
   try {
     generator.generate_strong_password(kTestLen);
