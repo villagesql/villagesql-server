@@ -142,7 +142,7 @@ int NdbTick_GetMonotonicClockId(clockid_t *clk) {
 }
 #endif
 
-const NDB_TICKS NdbTick_getCurrentTicks() {
+NDB_TICKS NdbTick_getCurrentTicks() {
   assert(isInited);
 
 #if defined(HAVE_CLOCK_GETTIME)
@@ -215,7 +215,7 @@ const NDB_TICKS NdbTick_getCurrentTicks() {
   }
 }
 
-const NDB_TICKS NdbTick_AddMilliseconds(NDB_TICKS ticks, Uint64 ms) {
+NDB_TICKS NdbTick_AddMilliseconds(NDB_TICKS ticks, Uint64 ms) {
   assert(isInited);
   assert(NdbTick_IsValid(ticks));
   assert(NdbDuration::tick_frequency >= MILLISEC_PER_SEC);

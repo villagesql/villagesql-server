@@ -266,7 +266,7 @@ void *consumer_function(void *ptr) {
   return nullptr;
 }
 
-const std::string Gcs_async_buffer::get_information() const {
+std::string Gcs_async_buffer::get_information() const {
   std::stringstream ss;
 
   ss << "asynchronous:"

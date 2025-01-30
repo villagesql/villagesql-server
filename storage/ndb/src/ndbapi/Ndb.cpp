@@ -1739,7 +1739,7 @@ BaseString Ndb::internalize_table_name(const char *db_name, const char *schema,
 }
 
 // Format internal name using schema and db name from the Ndb object
-const BaseString Ndb::internalize_table_name(const char *external_name) const {
+BaseString Ndb::internalize_table_name(const char *external_name) const {
   DBUG_TRACE;
   DBUG_PRINT("enter", ("external_name: %s", external_name));
 
@@ -1753,7 +1753,7 @@ const BaseString Ndb::internalize_table_name(const char *external_name) const {
                                 theImpl->m_schemaname.c_str(), external_name);
 }
 
-const BaseString Ndb::getDatabaseFromInternalName(const char *internalName) {
+BaseString Ndb::getDatabaseFromInternalName(const char *internalName) {
   char *databaseName = new char[strlen(internalName) + 1];
   if (databaseName == nullptr) {
     errno = ENOMEM;
@@ -1770,7 +1770,7 @@ const BaseString Ndb::getDatabaseFromInternalName(const char *internalName) {
   return ret;
 }
 
-const BaseString Ndb::getSchemaFromInternalName(const char *internalName) {
+BaseString Ndb::getSchemaFromInternalName(const char *internalName) {
   char *schemaName = new char[strlen(internalName)];
   if (schemaName == nullptr) {
     errno = ENOMEM;

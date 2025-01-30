@@ -289,7 +289,7 @@ class Gcs_async_buffer {
     in use was the standard output.
   */
 
-  const std::string get_information() const;
+  std::string get_information() const;
 
   /**
     Consumer thread invokes this method to process log events until it is

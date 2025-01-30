@@ -33,7 +33,7 @@ Member_version::Member_version(unsigned int version) {
 
 uint32 Member_version::get_version() const { return this->version; }
 
-const std::string Member_version::get_version_string() const {
+std::string Member_version::get_version_string() const {
   std::stringstream member_version;
   member_version << std::hex << get_major_version() << "."
                  << get_minor_version() << "." << get_patch_version();

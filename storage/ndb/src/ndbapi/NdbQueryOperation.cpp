@@ -158,7 +158,7 @@ class CorrelationData {
 
   Uint32 getRootReceiverId() const { return m_corrPart[2]; }
 
-  const TupleCorrelation getTupleCorrelation() const {
+  TupleCorrelation getTupleCorrelation() const {
     return TupleCorrelation(m_corrPart[1]);
   }
 

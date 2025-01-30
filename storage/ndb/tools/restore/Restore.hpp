@@ -334,7 +334,7 @@ class TableS {
     return false;
   }
 
-  const Vector<TableS *> getBlobTables() { return m_blobTables; }
+  Vector<TableS *> getBlobTables() { return m_blobTables; }
 
   bool m_staging;
   BaseString m_stagingName;

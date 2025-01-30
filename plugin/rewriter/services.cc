@@ -123,7 +123,7 @@ class Lex_str {
  public:
   Lex_str(MYSQL_LEX_STRING str) : m_str(str) {}
 
-  const MYSQL_LEX_STRING get() { return m_str; }
+  MYSQL_LEX_STRING get() { return m_str; }
 
   ~Lex_str() { mysql_parser_free_string(m_str); }
 };

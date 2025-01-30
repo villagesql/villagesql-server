@@ -1073,7 +1073,7 @@ void NdbTableImpl::setDbSchema(const char *db, const char *schema) {
   updateMysqlName();
 }
 
-const BaseString NdbTableImpl::get_internal_name_prefix(const char *name) {
+BaseString NdbTableImpl::get_internal_name_prefix(const char *name) {
   DBUG_TRACE;
   // Function should only be called with both internal and external name set
   assert(m_internalName.length() && m_externalName.length());
@@ -1783,8 +1783,8 @@ const char *NdbIndexImpl::getTableName() const { return m_tableName.c_str(); }
 
 const NdbTableImpl *NdbIndexImpl::getIndexTable() const { return m_table; }
 
-const BaseString NdbIndexImpl::old_internal_index_name(
-    const NdbTableImpl *table, const char *index_name) {
+BaseString NdbIndexImpl::old_internal_index_name(const NdbTableImpl *table,
+                                                 const char *index_name) {
   BaseString ret;
   DBUG_TRACE;
   DBUG_PRINT("enter", ("index_name: %s", index_name));
@@ -1815,8 +1815,8 @@ const BaseString NdbIndexImpl::old_internal_index_name(
   return ret;
 }
 
-const BaseString NdbIndexImpl::internal_index_name(const NdbTableImpl *table,
-                                                   const char *index_name) {
+BaseString NdbIndexImpl::internal_index_name(const NdbTableImpl *table,
+                                             const char *index_name) {
   BaseString ret;
   DBUG_TRACE;
   DBUG_PRINT("enter", ("index_name: %s", index_name));

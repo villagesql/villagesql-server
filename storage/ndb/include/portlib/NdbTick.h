@@ -76,12 +76,12 @@ int NdbTick_GetMonotonicClockId(clockid_t *clk);
  * Returns number of 'ticks' since some
  * platforms dependent epoch start.
  */
-const NDB_TICKS NdbTick_getCurrentTicks(void);
+NDB_TICKS NdbTick_getCurrentTicks(void);
 
 /**
  * Add specified number of milliseconds to a 'ticks' value.
  */
-const NDB_TICKS NdbTick_AddMilliseconds(NDB_TICKS ticks, Uint64 ms);
+NDB_TICKS NdbTick_AddMilliseconds(NDB_TICKS ticks, Uint64 ms);
 
 static void NdbTick_Invalidate(NDB_TICKS *ticks);
 static int NdbTick_IsValid(NDB_TICKS ticks);
@@ -127,7 +127,7 @@ class NdbDuration {
 
   friend Uint64 NdbTick_CurrentMillisecond(void);
 
-  friend const NDB_TICKS NdbTick_AddMilliseconds(NDB_TICKS ticks, Uint64 ms);
+  friend NDB_TICKS NdbTick_AddMilliseconds(NDB_TICKS ticks, Uint64 ms);
 
   friend void NdbTick_Init();
 

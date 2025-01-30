@@ -131,12 +131,12 @@ bool Network_provider_manager::stop_network_provider(
   return net_provider ? cleanup_and_stop() : true;
 }
 
-const std::shared_ptr<Network_provider>
+std::shared_ptr<Network_provider>
 Network_provider_manager::get_active_provider() {
   return this->get_provider(get_running_protocol());
 }
 
-const std::shared_ptr<Network_provider>
+std::shared_ptr<Network_provider>
 Network_provider_manager::get_incoming_connections_provider() {
   return this->get_provider(get_incoming_connections_protocol());
 }
@@ -219,7 +219,7 @@ bool Network_provider_manager::configure_active_provider_secure_connections(
   return config_ssl_ok;
 }
 
-const std::shared_ptr<Network_provider> Network_provider_manager::get_provider(
+std::shared_ptr<Network_provider> Network_provider_manager::get_provider(
     enum_transport_protocol provider) {
   auto net_provider = m_network_providers.find(provider);
 

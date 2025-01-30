@@ -65,7 +65,7 @@ class DynArr256Pool {
     Uint32 nodes_per_page;
   };
 
-  const Info getInfo() const;
+  Info getInfo() const;
 
   Uint32 getUsed() { return m_used; }      // # entries currently seized
   Uint32 getUsedHi() { return m_usedHi; }  // high water mark for getUsed()

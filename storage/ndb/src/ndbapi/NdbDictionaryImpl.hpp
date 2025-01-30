@@ -240,7 +240,7 @@ class NdbTableImpl : public NdbDictionary::Table, public NdbDictObjectImpl {
 
   // Return string with internal name format using same prefix
   // i.e name prefixed with "db/schema/" part of the internal name
-  const BaseString get_internal_name_prefix(const char *name);
+  BaseString get_internal_name_prefix(const char *name);
 
   /**
    *
@@ -392,11 +392,11 @@ class NdbIndexImpl : public NdbDictionary::Index, public NdbDictObjectImpl {
   NdbDictionary::Index *m_facade;
 
   // Return string with old internal index format (used before 5.1.12)
-  static const BaseString old_internal_index_name(const NdbTableImpl *table,
-                                                  const char *index_name);
+  static BaseString old_internal_index_name(const NdbTableImpl *table,
+                                            const char *index_name);
   // Return string with internal index name format
-  static const BaseString internal_index_name(const NdbTableImpl *table,
-                                              const char *index_name);
+  static BaseString internal_index_name(const NdbTableImpl *table,
+                                        const char *index_name);
 };
 
 class NdbOptimizeTableHandleImpl : public NdbDictionary::OptimizeTableHandle {

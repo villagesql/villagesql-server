@@ -673,7 +673,7 @@ void DynArr256Pool::release(Uint32 ptrI) {
   require(false);
 }
 
-const DynArr256Pool::Info DynArr256Pool::getInfo() const {
+DynArr256Pool::Info DynArr256Pool::getInfo() const {
   Info info;
   info.pg_count = m_pg_count;
   info.pg_byte_sz = static_cast<Uint32>(sizeof(DA256Page));

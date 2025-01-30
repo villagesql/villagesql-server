@@ -347,8 +347,8 @@ static constexpr const char *get_signaling_error() {
          "restarting Group Replication on this server.";
 }
 
-static const std::string get_connection_test_error(const std::string &address,
-                                                   int port) {
+static std::string get_connection_test_error(const std::string &address,
+                                             int port) {
   std::stringstream retval;
   retval << "The group communication engine failed to test connectivity to the "
             "local group communication engine on "
