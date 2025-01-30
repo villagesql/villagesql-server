@@ -162,6 +162,7 @@ class Table_trigger_dispatcher : public Table_trigger_field_support {
 
   void enable_fields_temporary_nullability(THD *thd);
   void disable_fields_temporary_nullability();
+  void reset_field_nulls();
 
   void print_upgrade_warnings(THD *thd);
 
