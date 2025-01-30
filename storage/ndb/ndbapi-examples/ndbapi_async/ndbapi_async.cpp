@@ -197,7 +197,7 @@ void asynchExitHandler(Ndb *m_ndb) {
 /* returns true if is recoverable (temporary),
  *  false if it is an  error that is permanent.
  */
-bool asynchErrorHandler(NdbTransaction *trans, Ndb *ndb) {
+bool asynchErrorHandler(NdbTransaction *trans, Ndb * /*ndb*/) {
   NdbError error = trans->getNdbError();
   switch (error.status) {
     case NdbError::Success:

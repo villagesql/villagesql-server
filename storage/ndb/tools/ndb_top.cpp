@@ -237,7 +237,7 @@ int print_light_shade() {
 int print_space() { return addstr(" "); }
 
 static volatile sig_atomic_t g_resize_window = 0;
-void resize_window(int dummy) { g_resize_window = 1; }
+void resize_window(int /*dummy*/) { g_resize_window = 1; }
 
 static struct my_option my_long_options[] = {
     {"host", 'h', "Hostname of MySQL Server", &opt_host, nullptr, nullptr,

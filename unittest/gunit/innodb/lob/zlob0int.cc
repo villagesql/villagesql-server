@@ -48,10 +48,9 @@ const ulint Z_CHUNK_SIZE = KB128;
 static std::map<ref_t, page_no_t> g_zlob;
 
 /** Purge one index entry.
-@param[in]  trxid  purging data belonging to trxid.
 @param[in,out]  lst  the list from which this entry will be removed.
 @param[in,out]  free_list the list to which this entry will be added. */
-fil_addr_t z_index_entry_t::purge_version(trx_id_t trxid, z_first_page_t &first,
+fil_addr_t z_index_entry_t::purge_version(z_first_page_t &first,
                                           flst_base_node_t *lst,
                                           flst_base_node_t *free_list) {
   /* Save the location of next node. */
@@ -74,10 +73,8 @@ fil_addr_t z_index_entry_t::purge_version(trx_id_t trxid, z_first_page_t &first,
 not have older versions.  If older version is there, bring it back to the
 index list from the versions list.  Then remove the current entry from
 the index list.  Move the versions list from current entry to older entry.
-@param[in]  trxid  The transaction identifier.
 @param[in]  first  The first lob page containing index list and free list. */
-fil_addr_t z_index_entry_t::make_old_version_current(trx_id_t trxid,
-                                                     z_first_page_t &first) {
+fil_addr_t z_index_entry_t::make_old_version_current(z_first_page_t &first) {
   flst_base_node_t *idx_flst = first.index_list();
   flst_base_node_t *free_list = first.free_list();
   flst_base_node_t *version_list = get_versions_list();
@@ -95,7 +92,7 @@ fil_addr_t z_index_entry_t::make_old_version_current(trx_id_t trxid,
     insert_before(idx_flst, old_entry);
   }
 
-  fil_addr_t loc = purge_version(trxid, first, idx_flst, free_list);
+  fil_addr_t loc = purge_version(first, idx_flst, free_list);
 
   ut_ad(flst_validate(idx_flst));
 
@@ -476,8 +473,8 @@ std::pair<ulint, ulint> z_insert_strm(z_first_page_t &first, trx_id_t trxid,
 @param[in]  blob  the uncompressed LOB.
 @param[out] out_entry the newly inserted index entry. can be NULL.
 */
-dberr_t z_insert_chunk(z_first_page_t &first, trx_id_t trxid, ref_t ref,
-                       byte *blob, ulint len, z_index_entry_t *out_entry) {
+dberr_t z_insert_chunk(z_first_page_t &first, trx_id_t trxid, byte *blob,
+                       ulint len, z_index_entry_t *out_entry) {
   ut_ad(len <= Z_CHUNK_SIZE);
   z_stream strm;
 
@@ -539,7 +536,7 @@ dberr_t z_insert(trx_id_t trxid, ref_t ref, byte *blob, ulint len) {
   while (remain > 0) {
     z_index_entry_t entry;
     ulint size = (remain >= Z_CHUNK_SIZE) ? Z_CHUNK_SIZE : remain;
-    err = z_insert_chunk(first, trxid, ref, ptr, size, &entry);
+    err = z_insert_chunk(first, trxid, ptr, size, &entry);
     ptr += size;
     remain -= size;
 
@@ -887,7 +884,7 @@ ulint z_replace(trx_id_t trxid, lob::ref_t ref, ulint offset, ulint len,
 
   /* chunk now has the new data to be inserted. */
   z_index_entry_t new_entry;
-  z_insert_chunk(first, trxid, ref, chunk, length_1, &new_entry);
+  z_insert_chunk(first, trxid, chunk, length_1, &new_entry);
   cur_entry.insert_after(flst, new_entry);
   cur_entry.remove(flst);
   new_entry.set_old_version(cur_entry);
@@ -920,7 +917,7 @@ ulint z_replace(trx_id_t trxid, lob::ref_t ref, ulint offset, ulint len,
 
       /* Chunk now contains new data to be inserted. */
       /** @todo if there was error, rollback must happen. */
-      z_insert_chunk(first, trxid, ref, chunk, len1, &new_entry);
+      z_insert_chunk(first, trxid, chunk, len1, &new_entry);
       cur_entry.insert_after(flst, new_entry);
       cur_entry.remove(flst);
       new_entry.set_old_version(cur_entry);
@@ -932,7 +929,7 @@ ulint z_replace(trx_id_t trxid, lob::ref_t ref, ulint offset, ulint len,
     } else {
       /* Full chunk is to be replaced. No need to read old data. */
       /** @todo if there was error, rollback must happen. */
-      z_insert_chunk(first, trxid, ref, from_ptr, size, &new_entry);
+      z_insert_chunk(first, trxid, from_ptr, size, &new_entry);
 
       ut_ad(new_entry.get_trx_id() == trxid);
 
@@ -1048,7 +1045,7 @@ ulint z_insert_middle(trx_id_t trxid, lob::ref_t ref, ulint offset, byte *data,
 
     ulint chunk_size = yet_to_skip + can_insert;
     z_index_entry_t entry;
-    z_insert_chunk(first, trxid, ref, ptr, chunk_size, &entry);
+    z_insert_chunk(first, trxid, ptr, chunk_size, &entry);
     cur_entry.insert_after(flst, entry);
     cur_entry.remove(flst);
     entry.set_old_version(cur_entry);
@@ -1067,7 +1064,7 @@ ulint z_insert_middle(trx_id_t trxid, lob::ref_t ref, ulint offset, byte *data,
       break;
     }
 
-    z_insert_chunk(first, trxid, ref, insert_ptr, size, &entry);
+    z_insert_chunk(first, trxid, insert_ptr, size, &entry);
     insert_ptr += size;
 
     ut_ad(insert_len >= size);
@@ -1092,15 +1089,14 @@ ulint z_insert_middle(trx_id_t trxid, lob::ref_t ref, ulint offset, byte *data,
     memcpy(ptr + insert_len, saved_ptr, to_copy);
 
     z_index_entry_t entry;
-    z_insert_chunk(first, trxid, ref, ptr, insert_len + to_copy, &entry);
+    z_insert_chunk(first, trxid, ptr, insert_len + to_copy, &entry);
 
     cur_entry.insert_after(flst, entry);
     cur_entry.reset(entry);
 
     if (to_copy < saved_len) {
       ulint saved_remain = saved_len - to_copy;
-      z_insert_chunk(first, trxid, ref, saved_ptr + to_copy, saved_remain,
-                     &entry);
+      z_insert_chunk(first, trxid, saved_ptr + to_copy, saved_remain, &entry);
 
       cur_entry.insert_after(flst, entry);
       cur_entry.reset(entry);
@@ -1192,7 +1188,7 @@ ulint z_remove_middle(trx_id_t trxid, lob::ref_t ref, ulint offset, ulint len) {
     ulint n = len1 - yet_to_skip - to_remove;
     memmove(to, from, n);
 
-    z_insert_chunk(first, trxid, ref, chunk, (len1 - to_remove), &new_entry);
+    z_insert_chunk(first, trxid, chunk, (len1 - to_remove), &new_entry);
     cur_entry.insert_after(flst, new_entry);
     cur_entry.remove(flst);
     new_entry.set_old_version(cur_entry);
@@ -1243,7 +1239,7 @@ ulint z_remove_middle(trx_id_t trxid, lob::ref_t ref, ulint offset, ulint len) {
     z_index_entry_t new_entry;
 
     ptr = &chunk[to_remove];
-    z_insert_chunk(first, trxid, ref, ptr, (len1 - to_remove), &new_entry);
+    z_insert_chunk(first, trxid, ptr, (len1 - to_remove), &new_entry);
     cur_entry.insert_after(flst, new_entry);
     cur_entry.remove(flst);
     new_entry.set_old_version(cur_entry);
@@ -1285,7 +1281,7 @@ void z_purge(trx_id_t trxid, lob::ref_t ref) {
       flst_node_t *ver_node = fut_get_ptr(ver_loc);
       z_index_entry_t vers_entry(ver_node);
       if (vers_entry.can_be_purged(trxid)) {
-        ver_loc = vers_entry.purge_version(trxid, first, vers, free_list);
+        ver_loc = vers_entry.purge_version(first, vers, free_list);
       } else {
         ver_loc = vers_entry.get_next();
       }
@@ -1293,7 +1289,7 @@ void z_purge(trx_id_t trxid, lob::ref_t ref) {
 
     /* Now process the current entry. */
     if (cur_entry.can_be_purged(trxid)) {
-      node_loc = cur_entry.make_old_version_current(trxid, first);
+      node_loc = cur_entry.make_old_version_current(first);
     } else {
       node_loc = cur_entry.get_next();
     }

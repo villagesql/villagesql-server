@@ -1120,7 +1120,7 @@ const TupleS *RestoreDataIterator::getNextTuple(int &res,
 TableS *RestoreDataIterator::getCurrentTable() { return m_currentTable; }
 
 int RestoreDataIterator::readTupleData_packed(Uint32 *buf_ptr,
-                                              Uint32 dataLength) {
+                                              Uint32 /*dataLength*/) {
   Uint32 *ptr = buf_ptr;
   /**
    * Unpack READ_PACKED header
@@ -1686,7 +1686,7 @@ void BackupFile::setDataFile(const BackupFile &bf, Uint32 no) {
   setName(bf.m_path, name);
 }
 
-void BackupFile::setLogFile(const BackupFile &bf, Uint32 no) {
+void BackupFile::setLogFile(const BackupFile &bf, Uint32 /*no*/) {
   m_nodeId = bf.m_nodeId;
   m_expectedFileHeader = bf.m_fileHeader;
   m_expectedFileHeader.FileType = BackupFormat::LOG_FILE;

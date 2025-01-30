@@ -684,7 +684,7 @@ inline void Resource_limits::post_release_resource_pages(Uint32 id,
   release_resource_spare(id, cnt);
 }
 
-inline void Resource_limits::release_resource_spare(Uint32 id, Uint32 cnt) {
+inline void Resource_limits::release_resource_spare(Uint32 id, Uint32 /*cnt*/) {
   const Resource_limit &rl = m_limit[id - 1];
 
   Uint32 pct = rl.m_spare_pct;

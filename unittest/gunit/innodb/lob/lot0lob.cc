@@ -591,11 +591,11 @@ dberr_t remove_middle(trx_id_t trxid, ref_t ref, ulint offset, ulint len) {
     buf_block_t *new_block = nullptr;
     if (type == FIL_PAGE_TYPE_LOB_FIRST) {
       base_node_page_t page(block);
-      new_block = page.remove_middle(trxid, page_offset, want);
+      new_block = page.remove_middle(page_offset, want);
 
     } else if (type == FIL_PAGE_TYPE_LOB_DATA) {
       data_page_t page(block);
-      new_block = page.remove_middle(trxid, page_offset, want);
+      new_block = page.remove_middle(page_offset, want);
     } else {
       ut_error;
     }
@@ -664,7 +664,7 @@ void trx_purge(trx_id_t trxid, ref_t ref) {
       flst_node_t *ver_node = fut_get_ptr(ver_loc);
       index_entry_t vers_entry(ver_node);
       if (vers_entry.can_be_purged(trxid)) {
-        ver_loc = vers_entry.purge_version(trxid, vers, free_list);
+        ver_loc = vers_entry.purge_version(vers, free_list);
       } else {
         ver_loc = flst_get_next_addr(ver_node);
       }
@@ -675,7 +675,7 @@ void trx_purge(trx_id_t trxid, ref_t ref) {
 
     /* Now process the current entry. */
     if (entry.can_be_purged(trxid)) {
-      entry.make_old_version_current(trxid, page);
+      entry.make_old_version_current(page);
     }
   }
 
@@ -692,9 +692,8 @@ void trx_purge(trx_id_t trxid, ref_t ref) {
 }
 
 /** Remove/Delete/Destory the given LOB.
-@param[in]  trxid  The transaction identifier.
 @param[in]  ref  The LOB reference.*/
-void remove(trx_id_t trxid, ref_t ref) {
+void remove(trx_id_t /*trxid*/, ref_t ref) {
   auto it = g_lob.find(ref);
 
   if (it == g_lob.end()) {
@@ -718,12 +717,12 @@ void remove(trx_id_t trxid, ref_t ref) {
     while (!fil_addr_is_null(ver_loc)) {
       flst_node_t *ver_node = fut_get_ptr(ver_loc);
       index_entry_t vers_entry(ver_node);
-      vers_entry.purge_version(trxid, vers, free_list);
+      vers_entry.purge_version(vers, free_list);
       ver_loc = flst_get_first(ver_node);
     }
 
     /* Now process the current entry. */
-    entry.purge_version(trxid, base, free_list);
+    entry.purge_version(base, free_list);
 
     node_loc = flst_get_first(base);
   }

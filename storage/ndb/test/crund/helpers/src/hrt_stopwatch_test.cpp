@@ -45,7 +45,7 @@ static void do_something() {
   for (i = 0; i < loop; i++) dummy = i;
 }
 
-int main(int argc, const char *argv[]) {
+int main(int /*argc*/, const char * /*argv*/[]) {
   printf("--> main()\n");
 
   printf("init stopwatches...\n");

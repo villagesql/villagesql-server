@@ -35,13 +35,13 @@ class BackupConsumer {
  public:
   BackupConsumer() {}
   virtual ~BackupConsumer() {}
-  virtual bool init(Uint32 tableCompabilityMask) { return true; }
-  virtual bool object(Uint32 tableType, const void *) { return true; }
+  virtual bool init(Uint32 /*tableCompabilityMask*/) { return true; }
+  virtual bool object(Uint32 /*tableType*/, const void *) { return true; }
   virtual bool table(const TableS &) { return true; }
-  virtual bool fk(Uint32 tableType, const void *) { return true; }
+  virtual bool fk(Uint32 /*tableType*/, const void *) { return true; }
   virtual bool endOfTables() { return true; }
   virtual bool endOfTablesFK() { return true; }
-  virtual bool tuple(const TupleS &, Uint32 fragId) { return true; }
+  virtual bool tuple(const TupleS &, Uint32 /*fragId*/) { return true; }
   virtual void tuple_free() {}
   virtual void endOfTuples() {}
   virtual bool logEntry(const LogEntry &) { return true; }
@@ -51,22 +51,24 @@ class BackupConsumer {
   virtual bool finalize_table(const TableS &) { return true; }
   virtual bool rebuild_indexes(const TableS &) { return true; }
   virtual bool createSystable(const TableS &) { return true; }
-  virtual bool update_apply_status(const RestoreMetaData &metaData,
-                                   bool snapshotstart) {
+  virtual bool update_apply_status(const RestoreMetaData & /*metaData*/,
+                                   bool /*snapshotstart*/) {
     return true;
   }
   virtual bool delete_epoch_tuple() { return true; }
-  virtual bool report_started(unsigned backup_id, unsigned node_id) {
+  virtual bool report_started(unsigned /*backup_id*/, unsigned /*node_id*/) {
     return true;
   }
-  virtual bool report_meta_data(unsigned backup_id, unsigned node_id) {
+  virtual bool report_meta_data(unsigned /*backup_id*/, unsigned /*node_id*/) {
     return true;
   }
-  virtual bool report_data(unsigned backup_id, unsigned node_id) {
+  virtual bool report_data(unsigned /*backup_id*/, unsigned /*node_id*/) {
     return true;
   }
-  virtual bool report_log(unsigned backup_id, unsigned node_id) { return true; }
-  virtual bool report_completed(unsigned backup_id, unsigned node_id) {
+  virtual bool report_log(unsigned /*backup_id*/, unsigned /*node_id*/) {
+    return true;
+  }
+  virtual bool report_completed(unsigned /*backup_id*/, unsigned /*node_id*/) {
     return true;
   }
   virtual bool isMissingTable(const TableS &) { return false; }

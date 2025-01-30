@@ -279,7 +279,7 @@ err:
   return nullptr;
 }
 
-static inline void initpage(DA256Page *p, Uint32 page_no, Uint32 type_id) {
+static inline void initpage(DA256Page *p, Uint32 type_id) {
   Uint32 i, j;
 #ifdef DA256_USE_PREFETCH
 #if defined(__GNUC__) && !(__GNUC__ == 2 && __GNUC_MINOR__ < 96)
@@ -562,7 +562,7 @@ Uint32 DynArr256Pool::seize() {
     Uint32 page_no;
     if (likely((page = (DA256Page *)m_ctx.alloc_page27(type_id, &page_no)) !=
                nullptr)) {
-      initpage(page, page_no, type_id);
+      initpage(page, type_id);
       m_pg_count++;
 #ifdef UNIT_TEST
       allocatedpages++;

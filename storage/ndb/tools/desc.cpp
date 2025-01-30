@@ -482,7 +482,8 @@ static void print_part_info(Ndb *pNdb, NdbDictionary::Table const *pTab) {
   pTrans->close();
 }
 
-int desc_hashmap(Ndb_cluster_connection &con, Ndb *myndb, char const *name) {
+int desc_hashmap(Ndb_cluster_connection & /*con*/, Ndb *myndb,
+                 char const *name) {
   NdbDictionary::Dictionary *dict = myndb->getDictionary();
   require(dict);
 

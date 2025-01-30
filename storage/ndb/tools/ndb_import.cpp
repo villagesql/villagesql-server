@@ -590,7 +590,7 @@ extern "C" {
 static void *doerrins_c(void *data);
 }
 
-static void *doerrins_c(void *data) {
+static void *doerrins_c(void * /*data*/) {
   const char *type = g_opt.m_errins_type;
   uint delay = g_opt.m_errins_delay;
   uint ms = delay / 2 + ndb_rand() % (delay + 1);

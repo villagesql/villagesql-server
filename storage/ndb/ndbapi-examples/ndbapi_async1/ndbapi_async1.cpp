@@ -196,7 +196,7 @@ static void drop_table(MYSQL &mysql) {
  *   - A pointer to an arbitrary object.)
  */
 
-static void callback(int result, NdbTransaction *myTrans, void *aObject) {
+static void callback(int result, NdbTransaction *myTrans, void * /*aObject*/) {
   if (result == -1) {
     std::cout << "Poll error: " << std::endl;
     APIERROR(myTrans->getNdbError());

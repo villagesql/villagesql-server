@@ -103,7 +103,7 @@ static int print_head(const char *filename, const SchemaFile *sf) {
 
 inline Uint32 table_version_minor(Uint32 ver) { return ver >> 24; }
 
-static int print_old(const char *filename, const SchemaFile *sf, Uint32 sz) {
+static int print_old(const char *filename, const SchemaFile *sf) {
   int retcode = 0;
 
   if (print_head(filename, sf) != 0) retcode = 1;
@@ -259,7 +259,7 @@ int main(int argc, char **argv) {
     auto *sf = (SchemaFile *)&buf[0];
     int ret;
     if (sf->NdbVersion < NDB_SF_VERSION_5_0_6)
-      ret = print_old(filename, sf, sz);
+      ret = print_old(filename, sf);
     else
       ret = print(filename, sf, sz);
 

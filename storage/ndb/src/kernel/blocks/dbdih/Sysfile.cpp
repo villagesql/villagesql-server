@@ -313,7 +313,7 @@ int Sysfile::pack_sysfile_format_v2(Uint32 cdata[],
 }
 
 int Sysfile::pack_sysfile_format_v1(Uint32 cdata[],
-                                    Uint32 *cdata_size_ptr) const {
+                                    Uint32 * /*cdata_size_ptr*/) const {
   if (maxNodeId == 0 || maxNodeId > 48) {
     return -1;
   }

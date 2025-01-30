@@ -214,7 +214,7 @@ void read() {
   }
 }
 
-int main(int argc, char *argv[]) {
+int main(int /*argc*/, char * /*argv*/[]) {
   uint32_t i;
 
   srand(1);

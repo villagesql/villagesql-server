@@ -223,8 +223,7 @@ ulint data_page_t::append(trx_id_t trxid, byte *&data, ulint &len) {
 }
 
 template <typename PageType>
-buf_block_t *remove_middle_page(PageType *page, trx_id_t trxid, ulint offset,
-                                ulint &len) {
+buf_block_t *remove_middle_page(PageType *page, ulint offset, ulint &len) {
   buf_block_t *new_block = nullptr;
 
   /* Total data available in the given page. */
@@ -263,25 +262,21 @@ buf_block_t *remove_middle_page(PageType *page, trx_id_t trxid, ulint offset,
   return (new_block);
 }
 
-buf_block_t *base_node_page_t::remove_middle(trx_id_t trxid, ulint offset,
-                                             ulint &len) {
-  return (remove_middle_page(this, trxid, offset, len));
+buf_block_t *base_node_page_t::remove_middle(ulint offset, ulint &len) {
+  return (remove_middle_page(this, offset, len));
 }
 
-buf_block_t *data_page_t::remove_middle(trx_id_t trxid, ulint offset,
-                                        ulint &len) {
-  return (remove_middle_page(this, trxid, offset, len));
+buf_block_t *data_page_t::remove_middle(ulint offset, ulint &len) {
+  return (remove_middle_page(this, offset, len));
 }
 
 /** The current index entry points to a latest LOB page.  It may or may
 not have older versions.  If older version is there, bring it back to the
 index list from the versions list.  Then remove the current entry from
 the index list.  Move the versions list from current entry to older entry.
-@param[in]  trxid  The transaction identifier.
 @param[in]  first_page  The first lob page containing index list and free
                         list. */
-void index_entry_t::make_old_version_current(trx_id_t trxid,
-                                             base_node_page_t &first_page) {
+void index_entry_t::make_old_version_current(base_node_page_t &first_page) {
   flst_base_node_t *base = first_page.index_list();
   flst_base_node_t *free_list = first_page.free_list();
   flst_base_node_t *version_list = get_versions_ptr();
@@ -299,7 +294,7 @@ void index_entry_t::make_old_version_current(trx_id_t trxid,
     flst_insert_before(base, old_node, m_node);
   }
 
-  purge_version(trxid, base, free_list);
+  purge_version(base, free_list);
 
   ut_ad(flst_validate(base));
 }
@@ -334,7 +329,7 @@ void index_entry_t::purge() {
   set_data_len(0);
 }
 
-fil_addr_t index_entry_t::purge_version(trx_id_t trxid, flst_base_node_t *lst,
+fil_addr_t index_entry_t::purge_version(flst_base_node_t *lst,
                                         flst_base_node_t *free_list) {
   /* Save the location of next node. */
   fil_addr_t next_loc = flst_get_next_addr(m_node);

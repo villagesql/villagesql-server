@@ -44,7 +44,7 @@ NdbImportImpl::NdbImportImpl(NdbImport &facade)
 
 NdbImportImpl::~NdbImportImpl() { log_debug(1, "dtor"); }
 
-NdbOut &operator<<(NdbOut &out, const NdbImportImpl &impl) {
+NdbOut &operator<<(NdbOut &out, const NdbImportImpl & /*impl*/) {
   out << "impl ";
   return out;
 }
@@ -62,7 +62,7 @@ NdbImportImpl::Mgm::Mgm(NdbImportImpl &impl)
 
 NdbImportImpl::Mgm::~Mgm() { do_disconnect(); }
 
-NdbOut &operator<<(NdbOut &out, const NdbImportImpl::Mgm &mgm) {
+NdbOut &operator<<(NdbOut &out, const NdbImportImpl::Mgm & /*mgm*/) {
   out << "mgm ";
   return out;
 }
@@ -2442,7 +2442,8 @@ void NdbImportImpl::ExecOpWorkerAsynch::do_end() {
   }
 }
 
-static void asynch_callback(int result, NdbTransaction *trans, void *tx_void) {
+static void asynch_callback(int /*result*/, NdbTransaction *trans,
+                            void *tx_void) {
   auto *tx = (NdbImportImpl::Tx *)tx_void;
   require(trans == tx->m_trans);
   auto *w = (NdbImportImpl::ExecOpWorkerAsynch *)(tx->m_worker);
@@ -2498,7 +2499,7 @@ void NdbImportImpl::ExecOpWorkerAsynch::asynch_callback(Tx *tx) {
 
 void NdbImportImpl::ExecOpWorkerAsynch::set_auto_inc_val(const Attr &attr,
                                                          Row *row, Uint64 val,
-                                                         Error &error) {
+                                                         Error & /*error*/) {
   switch (attr.m_type) {
     case NdbDictionary::Column::Tinyint: {
       const int8 byteval = val;

@@ -432,13 +432,13 @@ static void BM_RND_GEN_STD_LINEAR(const size_t num_iterations) {
                                   std::numeric_limits<uint64_t>::max()>
       eng;
   benchmark_hasher(num_iterations,
-                   [&eng](uint64_t, uint64_t n) { return eng(); });
+                   [&eng](uint64_t, uint64_t /*n*/) { return eng(); });
 }
 BENCHMARK(BM_RND_GEN_STD_LINEAR)
 
 static void BM_RND_GEN(const size_t num_iterations) {
   benchmark_hasher(num_iterations,
-                   [](uint64_t, uint64_t n) { return ut::random_64(); });
+                   [](uint64_t, uint64_t /*n*/) { return ut::random_64(); });
 }
 BENCHMARK(BM_RND_GEN)
 
@@ -467,14 +467,14 @@ BENCHMARK(BM_HASH_UINT64_OLD)
 /* Micro-benchmark raw pair of uint32_t hash performance. */
 
 static void BM_HASH_UINT64_PAIR(const size_t num_iterations) {
-  benchmark_hasher(num_iterations, [](uint64_t fold, uint64_t n) {
+  benchmark_hasher(num_iterations, [](uint64_t fold, uint64_t /*n*/) {
     return ut::hash_uint64_pair(fold, ut::random_64());
   });
 }
 BENCHMARK(BM_HASH_UINT64_PAIR)
 
 static void BM_HASH_UINT32_PAIR_OLD(const size_t num_iterations) {
-  benchmark_hasher(num_iterations, [](uint64_t fold, uint64_t n) {
+  benchmark_hasher(num_iterations, [](uint64_t fold, uint64_t /*n*/) {
     return ut::detail::hash_uint32_pair_ib(fold, ut::random_64());
   });
 }

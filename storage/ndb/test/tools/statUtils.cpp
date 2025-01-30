@@ -32,7 +32,7 @@
  * range [99..101], and eventually stabilize around ~100.
  * stdDev should be ~1.0 for this number series.
  */
-int main(int argc, char **argv) {
+int main(int /*argc*/, char ** /*argv*/) {
   NdbStatistics stats;
   bool pass = true;
   const float delta = 0.1;

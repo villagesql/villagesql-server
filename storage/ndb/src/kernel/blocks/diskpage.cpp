@@ -42,8 +42,10 @@ void File_formats::Zero_page_header::init(File_type ft, Uint32 node_id,
   m_time = now;
 }
 
-int File_formats::Zero_page_header::validate(File_type ft, Uint32 node_id,
-                                             Uint32 version, Uint32 now) {
+int File_formats::Zero_page_header::validate(File_type /*ft*/,
+                                             Uint32 /*node_id*/,
+                                             Uint32 /*version*/,
+                                             Uint32 /*now*/) {
   return 0;  // TODO Check header
 }
 

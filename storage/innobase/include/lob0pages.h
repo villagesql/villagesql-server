@@ -150,11 +150,6 @@ struct data_page_t : public basic_page_t {
   @return number of bytes appended. */
   ulint append(trx_id_t trxid, byte *&data, ulint &len);
 
-  std::pair<ulint, byte *> insert_middle(trx_t *trx, ulint offset, byte *&data,
-                                         ulint &len, buf_block_t *&new_block);
-
-  buf_block_t *remove_middle(trx_t *trx, ulint offset, ulint &len);
-
   ulint max_space_available() const { return (payload()); }
 
   ulint space_left() const;

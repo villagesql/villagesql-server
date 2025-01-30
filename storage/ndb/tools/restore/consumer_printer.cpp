@@ -38,7 +38,7 @@ bool BackupPrinter::table(const TableS &tab) {
   return true;
 }
 
-bool BackupPrinter::tuple(const TupleS &tup, Uint32 fragId) {
+bool BackupPrinter::tuple(const TupleS &tup, Uint32 /*fragId*/) {
   m_dataCount++;
   if (m_print || m_print_data) {
     if (m_ndbout.m_out == info.m_out) {
@@ -71,8 +71,8 @@ void BackupPrinter::endOfLogEntrys() {
          << " to stdout." << endl;
   }
 }
-bool BackupPrinter::update_apply_status(const RestoreMetaData &metaData,
-                                        bool snapshotstart) {
+bool BackupPrinter::update_apply_status(const RestoreMetaData & /*metaData*/,
+                                        bool /*snapshotstart*/) {
   if (m_print) {
   }
   return true;
