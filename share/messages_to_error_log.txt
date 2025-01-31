@@ -9865,7 +9865,7 @@ OBSOLETE_ER_IB_MSG_UNDO_INJECT_BEFORE_RSEG
 ER_IB_MSG_FAILED_TO_FINISH_TRUNCATE
   eng "%s Failed to finish truncating Undo Tablespace '%s'"
 
-ER_IB_MSG_DEPRECATED_INNODB_UNDO_TABLESPACES
+OBSOLETE_ER_IB_MSG_DEPRECATED_INNODB_UNDO_TABLESPACES
   eng "The setting INNODB_UNDO_TABLESPACES is deprecated and is no longer used.  InnoDB always creates 2 undo tablespaces to start with. If you need more, please use CREATE UNDO TABLESPACE."
 
 ER_IB_MSG_WRONG_TABLESPACE_DIR

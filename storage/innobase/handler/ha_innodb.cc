@@ -4512,28 +4512,6 @@ static
 /** Minimum expected tablespace size. (5M) */
 static const ulint MIN_EXPECTED_TABLESPACE_SIZE = 5 * 1024 * 1024;
 
-/** Validate innodb_undo_tablespaces. Log a warning if it was set
-explicitly. */
-static void innodb_undo_tablespaces_deprecate() {
-  if (sysvar_source_svc == nullptr) {
-    return;
-  }
-
-  static const char *variable_name = "innodb_undo_tablespaces";
-  enum enum_variable_source source;
-
-  if (sysvar_source_svc->get(variable_name,
-                             static_cast<unsigned int>(strlen(variable_name)),
-                             &source)) {
-    return;
-  }
-
-  if (source != COMPILED) {
-    ib::warn(ER_IB_MSG_DEPRECATED_INNODB_UNDO_TABLESPACES);
-    srv_undo_tablespaces = FSP_IMPLICIT_UNDO_TABLESPACES;
-  }
-}
-
 template <size_t N>
 static bool innodb_variable_is_set(const char (&var_name)[N]) {
   enum enum_variable_source source;
@@ -5002,8 +4980,6 @@ static int innodb_init_params() {
   }
 
   innodb_buffer_pool_size_init();
-
-  innodb_undo_tablespaces_deprecate();
 
   innodb_redo_log_capacity_init();
 
@@ -21595,19 +21571,6 @@ static void innodb_reset_all_monitor_update(THD *thd, SYS_VAR *, void *var_ptr,
   innodb_monitor_update(thd, var_ptr, save, MONITOR_RESET_ALL_VALUE, true);
 }
 
-/** Validate the value of innodb_undo_tablespaces global variable. This function
-is registered as a callback with MySQL.
-@param[in]      thd       thread handle
-@param[in]      var       pointer to system variable
-@param[in]      var_ptr   where the formal string goes
-@param[in]      save      immediate result from check function */
-static void innodb_undo_tablespaces_update(THD *thd [[maybe_unused]],
-                                           SYS_VAR *var [[maybe_unused]],
-                                           void *var_ptr [[maybe_unused]],
-                                           const void *save [[maybe_unused]]) {
-  innodb_undo_tablespaces_deprecate();
-}
-
 /* Declare default check function for boolean system variable. Cannot include
 sql_plugin_var.h header in this file due to conflicting macro definitions. */
 int check_func_bool(THD *, SYS_VAR *, void *save, st_mysql_value *value);
@@ -23126,14 +23089,6 @@ static MYSQL_SYSVAR_STR(
     "Directory where temp tablespace files live, this path can be absolute.",
     nullptr, nullptr, nullptr);
 
-static MYSQL_SYSVAR_ULONG(undo_tablespaces, srv_undo_tablespaces,
-                          PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_NOPERSIST,
-                          "Number of undo tablespaces to use. (deprecated)",
-                          nullptr, innodb_undo_tablespaces_update,
-                          FSP_IMPLICIT_UNDO_TABLESPACES, /* Default setting */
-                          FSP_MIN_UNDO_TABLESPACES,      /* Minimum value */
-                          FSP_MAX_UNDO_TABLESPACES, 0);  /* Maximum value */
-
 static MYSQL_SYSVAR_ULONGLONG(
     max_undo_log_size, srv_max_undo_tablespace_size, PLUGIN_VAR_OPCMDARG,
     "Maximum size of an UNDO tablespace in MB (If an UNDO tablespace grows"
@@ -23656,7 +23611,6 @@ static SYS_VAR *innobase_system_variables[] = {
     MYSQL_SYSVAR(rollback_segments),
     MYSQL_SYSVAR(undo_directory),
     MYSQL_SYSVAR(temp_tablespaces_dir),
-    MYSQL_SYSVAR(undo_tablespaces),
     MYSQL_SYSVAR(sync_array_size),
     MYSQL_SYSVAR(compression_failure_threshold_pct),
     MYSQL_SYSVAR(compression_pad_pct_max),

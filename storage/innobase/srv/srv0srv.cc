@@ -155,10 +155,6 @@ uint32_t srv_rseg_init_threads = 1;
 separated by ';' and can also be absolute paths. */
 char *srv_undo_dir = nullptr;
 
-/** The number of implicit undo tablespaces to use for rollback
-segments. */
-ulong srv_undo_tablespaces = FSP_IMPLICIT_UNDO_TABLESPACES;
-
 #ifndef UNIV_HOTBACKUP
 /* The number of rollback segments per tablespace */
 ulong srv_rollback_segments = TRX_SYS_N_RSEGS;

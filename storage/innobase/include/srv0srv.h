@@ -403,9 +403,6 @@ extern char *srv_innodb_directories;
 /** Server undo tablespaces directory, can be absolute path. */
 extern char *srv_undo_dir;
 
-/** Number of undo tablespaces to use. */
-extern ulong srv_undo_tablespaces;
-
 /** The number of rollback segments per tablespace */
 extern ulong srv_rollback_segments;
 
