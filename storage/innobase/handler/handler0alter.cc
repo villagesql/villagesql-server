@@ -5431,7 +5431,6 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
   mem_heap_t *heap;
   const char **col_names;
   int error;
-  ulint max_col_len;
   ulint add_autoinc_col_no = ULINT_UNDEFINED;
   ulonglong autoinc_col_max_value = 0;
   ulint fts_doc_col_no = ULINT_UNDEFINED;
@@ -5587,7 +5586,7 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
     goto err_exit_no_heap;
   }
 
-  max_col_len = DICT_MAX_FIELD_LEN_BY_FORMAT_FLAG(info.flags());
+  const uint32_t max_col_len = DICT_MAX_FIELD_LEN_BY_FORMAT_FLAG(info.flags());
 
   /* Check each index's column length to make sure they do not
   exceed limit */
@@ -5612,16 +5611,19 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
     }
   }
 
-  /* Check existing index definitions for too-long column
-  prefixes as well, in case max_col_len shrunk. */
-  for (const dict_index_t *index = indexed_table->first_index(); index;
-       index = index->next()) {
-    if (index->type & DICT_FTS) {
+  /* Handle corrupted full-text search indexes before adding a new one */
+  if (add_fts_idx) {
+    for (const dict_index_t *index = indexed_table->first_index(); index;
+         index = index->next()) {
+      if (!(index->type & DICT_FTS)) {
+        continue;
+      }
+
       assert(index->type == DICT_FTS || index->is_corrupted());
 
       /* We need to drop any corrupted fts indexes
       before we add a new fts index. */
-      if (add_fts_idx && index->type & DICT_CORRUPT) {
+      if (index->is_corrupted()) {
         ib_errf(m_user_thd, IB_LOG_LEVEL_ERROR, ER_INNODB_INDEX_CORRUPT,
                 "Fulltext index '%s' is corrupt. "
                 "you should drop this index first.",
@@ -5629,17 +5631,14 @@ bool ha_innobase::prepare_inplace_alter_table_impl(
 
         goto err_exit_no_heap;
       }
-
-      continue;
     }
+  }
 
-    for (ulint i = 0; i < dict_index_get_n_fields(index); i++) {
-      const dict_field_t *field = index->get_field(i);
-      if (field->prefix_len > max_col_len) {
-        my_error(ER_INDEX_COLUMN_TOO_LONG, MYF(0), max_col_len);
-        goto err_exit_no_heap;
-      }
-    }
+  /* Check if existing index definitions of table will exceed the index
+  limit based on the table format */
+  if (!innobase_check_index_len(altered_table, max_col_len)) {
+    my_error(ER_INDEX_COLUMN_TOO_LONG, MYF(0), max_col_len);
+    goto err_exit_no_heap;
   }
 
   n_drop_index = 0;
