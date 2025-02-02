@@ -50,7 +50,7 @@ Content-Type  ->  application/problem+json
 Content-Length  ->  36
 GET /svc/basic/proc_all
 Date -> %DATE%
-Access-Control-Allow-Methods  ->  GET, PUT, OPTIONS
+Access-Control-Allow-Methods  ->  GET, POST, PUT, DELETE, OPTIONS
 Content-Type  ->  application/json
 Content-Length  ->  129
 GET /svc/basic/proc_get
@@ -60,12 +60,12 @@ Content-Type  ->  application/json
 Content-Length  ->  129
 PUT /svc/functions/func_all (payload-size:15)
 Date -> %DATE%
-Access-Control-Allow-Methods  ->  GET, PUT, OPTIONS
+Access-Control-Allow-Methods  ->  GET, POST, PUT, DELETE, OPTIONS
 Content-Type  ->  application/json
 Content-Length  ->  13
 PUT /svc/functions/func_get (payload-size:15)
 Date -> %DATE%
-Access-Control-Allow-Methods  ->  GET, PUT, OPTIONS
+Access-Control-Allow-Methods  ->  GET, POST, PUT, DELETE, OPTIONS
 Content-Type  ->  application/json
 Content-Length  ->  13
 ## Change the Access-Control-Allow-Methods in the headers on a service-level

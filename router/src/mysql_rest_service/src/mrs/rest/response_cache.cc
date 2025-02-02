@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -317,9 +317,8 @@ std::shared_ptr<CacheEntry> ItemEndpointResponseCache::create_table_entry(
 
 std::shared_ptr<CacheEntry> ItemEndpointResponseCache::create_routine_entry(
     const Uri &uri, std::string_view req_body, const std::string &data,
-    int64_t items, std::optional<helper::MediaType> media_type) {
-  auto r =
-      create_entry(make_routine_key(uri, req_body), data, items, media_type);
+    std::optional<helper::MediaType> media_type) {
+  auto r = create_entry(make_routine_key(uri, req_body), data, 0, media_type);
   if (r) {
     Counter<kEntityCounterRestCacheItemLoads>::increment();
     Counter<kEntityCounterRestCachedItems>::increment();
@@ -329,8 +328,8 @@ std::shared_ptr<CacheEntry> ItemEndpointResponseCache::create_routine_entry(
 
 std::shared_ptr<CacheEntry> ItemEndpointResponseCache::create_routine_entry(
     const Uri &uri, std::string_view req_body, const std::string &data,
-    int64_t items, const std::string &media_type_str) {
-  auto r = create_entry(make_routine_key(uri, req_body), data, items, {},
+    const std::string &media_type_str) {
+  auto r = create_entry(make_routine_key(uri, req_body), data, 0, {},
                         media_type_str);
   if (r) {
     Counter<kEntityCounterRestCacheItemLoads>::increment();

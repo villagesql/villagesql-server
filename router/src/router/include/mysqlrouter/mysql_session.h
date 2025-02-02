@@ -467,6 +467,9 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
     return query_one(stmt, [](unsigned, MYSQL_FIELD *) {});
   }
 
+  virtual bool execute_nb(
+      const std::string &query);  // throws Error, std::logic_error
+
   virtual uint64_t last_insert_id() noexcept;
   virtual uint64_t affected_rows() noexcept;
 
@@ -519,6 +522,14 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
 
   using mysql_result_type = std::unique_ptr<MYSQL_RES, MYSQL_RES_Deleter>;
 
+  enum class AsyncQueryState {
+    kNone,        // no async query active
+    kQuery,       // waiting query to finish
+    kStoreResult  // waiting store result to finish
+  };
+  AsyncQueryState async_state_ = AsyncQueryState::kNone;
+  bool async_query_logged_ = false;
+
   /**
    * run query.
    *
@@ -535,10 +546,16 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
   stdx::expected<mysql_result_type, MysqlError> real_query(
       const std::string &q);
 
+  stdx::expected<mysql_result_type, MysqlError> real_query_nb(
+      const std::string &q);
+
   /**
-   * log query before running it.
+   * log query after running it.
    */
   stdx::expected<mysql_result_type, MysqlError> logged_real_query(
+      const std::string &q);
+
+  stdx::expected<mysql_result_type, MysqlError> logged_real_query_nb(
       const std::string &q);
 
   void throw_mysqlerror(MYSQL_STMT *stmt, uint64_t ps_id);

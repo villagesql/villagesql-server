@@ -215,7 +215,7 @@
 exec $MRS_CLIENT_ARGS
   --path /svc/func/nothing -t POST
   --wait-until-found 60
-  --expected-status Forbidden;
+  --expected-status BadRequest;
 
 --echo
 --echo #

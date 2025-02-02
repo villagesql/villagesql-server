@@ -123,8 +123,8 @@ OK
 # I.1
 POST /svc/proc/nothing
 {
-    "message": "Forbidden",
-    "status": 403
+    "message": "Bad Request",
+    "status": 400
 }
 OK
 

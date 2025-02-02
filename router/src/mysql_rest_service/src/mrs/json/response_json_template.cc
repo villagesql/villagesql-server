@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -107,42 +107,44 @@ void ResponseJsonTemplate::end_resultset(const std::optional<bool> &has_more) {
   }
 
   json_root_items_ = JsonSerializer::Array();
-  if (!limit_not_set_) {
-    json_root_->member_add_value("limit", limit_);
-    json_root_->member_add_value("offset", offset_);
-    json_root_->member_add_value("hasMore", has_more_ ? "true" : "false",
-                                 helper::JsonType::kBool);
-  }
-  json_root_->member_add_value("count", std::min(limit_, pushed_documents_));
-
-  if (include_links_) {
-    auto array_links = serializer_.member_add_array("links");
-    array_links->add_object()
-        ->member_add_value("rel", "self")
-        .member_add_value("href", url_ + "/");
-
-    if (has_more_) {
-      auto url_next =
-          url_ + "/?offset=" + std::to_string(offset_ + limit_) +
-          (is_default_limit_ ? "" : "&limit=" + std::to_string(limit_));
-      array_links->add_object()
-          ->member_add_value("rel", "next")
-          .member_add_value("href", url_next);
+  if (json_root_.is_usable()) {
+    if (!limit_not_set_) {
+      json_root_->member_add_value("limit", limit_);
+      json_root_->member_add_value("offset", offset_);
+      json_root_->member_add_value("hasMore", has_more_ ? "true" : "false",
+                                   helper::JsonType::kBool);
     }
+    json_root_->member_add_value("count", std::min(limit_, pushed_documents_));
+    if (include_links_) {
+      auto array_links = serializer_.member_add_array("links");
+      array_links->add_object()
+          ->member_add_value("rel", "self")
+          .member_add_value("href", url_ + "/");
 
-    if (offset_ && !limit_not_set_) {
-      auto url_prev =
-          url_ + "/?offset=" +
-          std::to_string(offset_ >= limit_ ? offset_ - limit_ : 0) +
-          (is_default_limit_ ? "" : "&limit=" + std::to_string(limit_));
-      auto url_first =
-          url_ + (is_default_limit_ ? "" : "/?limit=" + std::to_string(limit_));
-      array_links->add_object()
-          ->member_add_value("rel", "prev")
-          .member_add_value("href", url_prev);
-      array_links->add_object()
-          ->member_add_value("rel", "first")
-          .member_add_value("href", url_first);
+      if (has_more_) {
+        auto url_next =
+            url_ + "/?offset=" + std::to_string(offset_ + limit_) +
+            (is_default_limit_ ? "" : "&limit=" + std::to_string(limit_));
+        array_links->add_object()
+            ->member_add_value("rel", "next")
+            .member_add_value("href", url_next);
+      }
+
+      if (offset_ && !limit_not_set_) {
+        auto url_prev =
+            url_ + "/?offset=" +
+            std::to_string(offset_ >= limit_ ? offset_ - limit_ : 0) +
+            (is_default_limit_ ? "" : "&limit=" + std::to_string(limit_));
+        auto url_first =
+            url_ +
+            (is_default_limit_ ? "" : "/?limit=" + std::to_string(limit_));
+        array_links->add_object()
+            ->member_add_value("rel", "prev")
+            .member_add_value("href", url_prev);
+        array_links->add_object()
+            ->member_add_value("rel", "first")
+            .member_add_value("href", url_first);
+      }
     }
   }
   json_root_ = JsonSerializer::Object();

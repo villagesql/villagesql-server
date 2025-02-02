@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2023, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2023, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -27,22 +27,63 @@
 
 #include <vector>
 
+#include "helper/http/url.h"
 #include "http/base/uri.h"
 #include "mrs/database/entry/row_user_ownership.h"
+#include "mrs/database/helper/bind.h"
 #include "mrs/database/json_mapper/select.h"
 #include "mrs/interface/universal_id.h"
+#include "mysqlrouter/utils_sqlstring.h"
 
 namespace mrs {
 namespace database {
 
 ColumnValues create_function_argument_list(
-    const entry::Object *object, const std::vector<uint8_t> &json_document,
-    const entry::RowUserOwnership &ownership, mrs::UniversalId *user_id);
+    const entry::Object *object, rapidjson::Document &doc,
+    const entry::RowUserOwnership &ownership,
+    const mysqlrouter::sqlstring &user_id);
 
 ColumnValues create_function_argument_list(
-    const entry::Object *object,
-    const ::http::base::Uri::QueryElements &url_query,
-    const entry::RowUserOwnership &ownership, mrs::UniversalId *user_id);
+    const entry::Object *object, const helper::http::Url::Parameters &query_kv,
+    const entry::RowUserOwnership &ownership,
+    const mysqlrouter::sqlstring &user_id);
+
+void fill_procedure_argument_list_with_binds(
+    mrs::database::entry::ResultSets &rs, const rapidjson::Document &doc,
+    const entry::RowUserOwnership &ownership,
+    const mysqlrouter::sqlstring &user_id, mrs::database::MysqlBind *out_binds,
+    std::string *out_params);
+
+void fill_procedure_argument_list_with_binds(
+    mrs::database::entry::ResultSets &rs,
+    const helper::http::Url::Parameters &query_kv,
+    const entry::RowUserOwnership &ownership,
+    const mysqlrouter::sqlstring &user_id, mrs::database::MysqlBind *out_binds,
+    std::string *out_params);
+
+using DataType = mrs::database::entry::ColumnType;
+
+inline mysqlrouter::sqlstring get_sql_format(DataType type) {
+  using namespace helper;
+  switch (type) {
+    case DataType::BINARY:
+      return mysqlrouter::sqlstring("FROM_BASE64(?)");
+
+    case DataType::GEOMETRY:
+      return mysqlrouter::sqlstring("ST_GeomFromGeoJSON(?)");
+
+    case DataType::VECTOR:
+      return mysqlrouter::sqlstring("STRING_TO_VECTOR(?)");
+
+    case DataType::JSON:
+      return mysqlrouter::sqlstring("CAST(? as JSON)");
+
+    default: {
+    }
+  }
+
+  return mysqlrouter::sqlstring("?");
+}
 
 }  // namespace database
 }  // namespace mrs

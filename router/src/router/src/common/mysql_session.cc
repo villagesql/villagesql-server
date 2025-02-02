@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2016, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2016, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -405,6 +405,7 @@ void MySQLSession::connect(const std::string &host, unsigned int port,
     ssl_sessions_cache.store_ssl_session(connection_, endpoint_str);
   }
 
+  async_state_ = AsyncQueryState::kNone;
   connected_ = true;
   connection_address_ = endpoint_str;
 
@@ -442,6 +443,7 @@ void MySQLSession::reset() {
        << ")";
     throw Error(ss.str(), mysql_errno(connection_));
   }
+  async_state_ = AsyncQueryState::kNone;
 }
 
 void MySQLSession::change_user(const std::string &user,
@@ -455,6 +457,7 @@ void MySQLSession::change_user(const std::string &user,
        << ")";
     throw Error(ss.str(), mysql_errno(connection_));
   }
+  async_state_ = AsyncQueryState::kNone;
 }
 
 void MySQLSession::disconnect() {
@@ -466,6 +469,7 @@ void MySQLSession::disconnect() {
   MySQLClientThreadToken api_token;
   mysql_init(connection_);
   connected_ = false;
+  async_state_ = AsyncQueryState::kNone;
   connection_address_.clear();
 }
 
@@ -511,6 +515,56 @@ MySQLSession::real_query(const std::string &q) {
   return res;
 }
 
+// mysql_error=0 means ASYNC_NOT_READY
+stdx::expected<MySQLSession::mysql_result_type, MysqlError>
+MySQLSession::real_query_nb(const std::string &q) {
+  if (!connected_) {
+    return stdx::unexpected(make_mysql_error_code(CR_COMMANDS_OUT_OF_SYNC));
+  }
+
+  if (async_state_ == AsyncQueryState::kNone) {
+    async_state_ = AsyncQueryState::kQuery;
+    async_query_logged_ = false;
+  }
+  if (async_state_ == AsyncQueryState::kQuery) {
+    auto query_res =
+        mysql_real_query_nonblocking(connection_, q.data(), q.size());
+
+    if (query_res == NET_ASYNC_ERROR) {
+      async_state_ = AsyncQueryState::kNone;
+      return stdx::unexpected(make_mysql_error_code(connection_));
+    }
+    if (query_res == NET_ASYNC_NOT_READY) {
+      return stdx::unexpected(make_mysql_error_code(0U));
+    }
+
+    async_state_ = AsyncQueryState::kStoreResult;
+  }
+
+  assert(async_state_ == AsyncQueryState::kStoreResult);
+
+  MYSQL_RES *res;
+  auto store_res = mysql_store_result_nonblocking(connection_, &res);
+  if (store_res == NET_ASYNC_ERROR) {
+    async_state_ = AsyncQueryState::kNone;
+    return stdx::unexpected(make_mysql_error_code(connection_));
+  }
+  if (store_res == NET_ASYNC_NOT_READY) {
+    return stdx::unexpected(make_mysql_error_code(0U));
+  }
+  async_state_ = AsyncQueryState::kNone;
+  async_query_logged_ = false;
+
+  if (!res) {
+    // no error, but also no resultset
+    if (mysql_errno(connection_) == 0) return {};
+
+    return stdx::unexpected(make_mysql_error_code(connection_));
+  }
+
+  return mysql_result_type{res};
+}
+
 stdx::expected<MySQLSession::mysql_result_type, MysqlError>
 MySQLSession::logged_real_query(const std::string &q) {
   using clock_type = std::chrono::steady_clock;
@@ -541,6 +595,48 @@ MySQLSession::logged_real_query(const std::string &q) {
 
     return msg;
   });
+
+  return query_res;
+}
+
+stdx::expected<MySQLSession::mysql_result_type, MysqlError>
+MySQLSession::logged_real_query_nb(const std::string &q) {
+  using clock_type = std::chrono::steady_clock;
+
+  auto start = clock_type::now();
+  auto query_res = real_query_nb(q);
+
+  if (query_res || query_res.error() != 0 || !async_query_logged_) {
+    logger_.debug([this, &q, &query_res, start]() {
+      auto dur = clock_type::now() - start;
+      auto msg = get_address() + " (" +
+                 std::to_string(
+                     std::chrono::duration_cast<std::chrono::microseconds>(dur)
+                         .count()) +
+                 " us)> " + log_filter_.filter(q);
+
+      if (query_res) {
+        auto const *res = query_res.value().get();
+
+        msg += " // OK";
+        if (res) {
+          msg += " " + std::to_string(res->row_count) + " row" +
+                 (res->row_count != 1 ? "s" : "");
+        }
+      } else {
+        auto err = query_res.error();
+        if (err.value() == 0) {
+          msg += " // ASYNC_NOT_READY";
+          async_query_logged_ = true;
+        } else {
+          msg +=
+              " // ERROR: " + std::to_string(err.value()) + " " + err.message();
+        }
+      }
+
+      return msg;
+    });
+  }
 
   return query_res;
 }
@@ -790,6 +886,23 @@ std::unique_ptr<MySQLSession::ResultRow> MySQLSession::query_one(
   }
 
   return {};
+}
+
+bool MySQLSession::execute_nb(const std::string &q) {
+  auto query_res = logged_real_query_nb(q);
+
+  if (!query_res) {
+    auto ec = query_res.error();
+    if (ec.value() == 0) return false;  // ASYNC_NOT_READY
+
+    std::stringstream ss;
+    ss << "Error executing \"" << log_filter_.filter(q);
+    ss << "\": " << ec.message() << " (" << ec.value() << ")";
+    throw Error(ss.str(), ec.value(), ec.message());
+  }
+
+  // in case we got a result, just let it get freed.
+  return true;
 }
 
 uint64_t MySQLSession::last_insert_id() noexcept {

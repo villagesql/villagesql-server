@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2023, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2023, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -120,8 +120,7 @@ void QueryRestFunction::query_entries_impl(
   json_type_ = JsonType::kNull;
 
   auto parameters = format_parameters(object, values);
-  auto from = format_from_clause(
-      object);  // format_from_clause(object->base_tables, {}, false);
+  auto from = format_from_clause(object);
 
   query(session, mysqlrouter::sqlstring{"SELECT !(!)"} << from << parameters);
 }

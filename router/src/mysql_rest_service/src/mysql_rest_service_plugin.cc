@@ -143,6 +143,7 @@ struct MrdsModule {
   }
 
   void start() {
+    task_monitor.start();
     slow_monitor.start();
     // must be called last
     mrds_monitor.start();
@@ -150,6 +151,7 @@ struct MrdsModule {
 
   void stop() {
     slow_monitor.stop();
+    task_monitor.stop();
     mrds_monitor.stop();
   }
 
@@ -165,6 +167,7 @@ struct MrdsModule {
   mrs::ResponseCache file_cache{"fileCache"};
   mrs::database::SlowQueryMonitor slow_monitor{configuration,
                                                &mysql_connection_cache};
+  mrs::database::MysqlTaskMonitor task_monitor;
 
   mrs::EndpointManager mrds_object_manager{&mysql_connection_cache,
                                            configuration.is_https_,
@@ -173,7 +176,8 @@ struct MrdsModule {
                                            nullptr,
                                            &response_cache,
                                            &file_cache,
-                                           &slow_monitor};
+                                           &slow_monitor,
+                                           &task_monitor};
   mrs::observability::EntitiesManager entities_manager;
 
   /**

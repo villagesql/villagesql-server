@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -134,11 +134,11 @@ class ItemEndpointResponseCache : public EndpointResponseCache {
 
   std::shared_ptr<CacheEntry> create_routine_entry(
       const Uri &uri, std::string_view req_body, const std::string &data,
-      int64_t items, std::optional<helper::MediaType> media_type = {});
+      std::optional<helper::MediaType> media_type = {});
 
   std::shared_ptr<CacheEntry> create_routine_entry(
       const Uri &uri, std::string_view req_body, const std::string &data,
-      int64_t items, const std::string &media_type_str);
+      const std::string &media_type_str);
 
   std::shared_ptr<CacheEntry> lookup_table(const Uri &uri,
                                            const std::string &user_id);

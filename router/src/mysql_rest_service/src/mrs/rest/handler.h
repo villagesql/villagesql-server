@@ -80,7 +80,7 @@ class Handler : public interface::RestHandler {
  protected:
   interface::Options options_;
   const std::string url_host_;
-  const std::vector<std::string> rest_path_matcher_;
+  std::vector<std::string> rest_path_matcher_;
   std::vector<void *> handler_id_;
   interface::AuthorizeManager *authorization_manager_;
   const std::string protocol_;

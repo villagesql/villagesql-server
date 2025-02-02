@@ -494,6 +494,7 @@ class RestRequestHandler : public ::http::base::RequestHandler {
         out_hdrs.add("Cache-Control", "no-cache");
         out_hdrs.add("ETag", result.etag.c_str());
       }
+
       out_hdrs.add("Content-Type",
                    get_content_type(result.type, result.type_text));
 
@@ -777,7 +778,6 @@ class ParseOptions
     //              cvt::to_string(vt).c_str());
     static const std::string kHeaders = "headers.";
     using std::to_string;
-
     if (helper::starts_with(key, kHeaders)) {
       result_.parameters_[key.substr(kHeaders.length())] = cvt::to_string(vt);
     } else if (key == "logging.exceptions") {
@@ -810,6 +810,26 @@ class ParseOptions
       result_.result.include_links = to_bool(vt);
     } else if (key == "result.cacheTimeToLive") {
       result_.result.cache_ttl_ms = to_double(vt) * 1000;
+    } else if (key == "mysqlTask.name") {
+      result_.mysql_task.name = cvt::to_string(vt);
+    } else if (key == "mysqlTask.eventSchema") {
+      result_.mysql_task.event_schema = cvt::to_string(vt);
+    } else if (key == "mysqlTask.driver") {
+      auto driver = mysql_harness::make_lower(cvt::to_string(vt));
+      if (driver == "database") {
+        result_.mysql_task.driver =
+            mrs::interface::Options::MysqlTask::DriverType::kDatabase;
+      } else if (driver == "router") {
+        result_.mysql_task.driver =
+            mrs::interface::Options::MysqlTask::DriverType::kRouter;
+      } else {
+        log_warning("Invalid driver type '%s' for option '%s'", driver.c_str(),
+                    key.c_str());
+        result_.mysql_task.driver =
+            mrs::interface::Options::MysqlTask::DriverType::kNone;
+      }
+    } else if (key == "mysqlTask.monitoringSql") {
+      result_.mysql_task.monitoring_sql.push_back(cvt::to_string(vt));
     }
   }
 
@@ -819,6 +839,8 @@ class ParseOptions
     if (key == "http.allowedOrigin") {
       result_.allowed_origins.type = Result::AllowedOrigins::AllowSpecified;
       result_.allowed_origins.allowed_origins.push_back(cvt::to_string(vt));
+    } else if (key == "mysqlTask.monitoringSql.monitoringSql") {
+      result_.mysql_task.monitoring_sql.push_back(cvt::to_string(vt));
     }
   }
 
@@ -826,7 +848,10 @@ class ParseOptions
   void handle_value(const ValueType &vt) {
     const auto &key = get_current_key();
     if (is_object_path()) {
-      handle_object_value(key, vt);
+      if (key == "mysqlTask.statusDataJsonSchema")
+        result_.mysql_task.status_data_json_schema = cvt::to_string(vt);
+      else
+        handle_object_value(key, vt);
     } else if (is_array_value()) {
       handle_array_value(key, vt);
     }
@@ -897,8 +922,7 @@ Handler::Handler(const Protocol protocol, const std::string &url_host,
     if (log_level_is_info_) {
       log_info(
           "Adding Url-Handler that processes requests on host '%s' and path "
-          "that "
-          "matches regex: '%s'",
+          "that matches regex: '%s'",
           url_host_.c_str(), path.c_str());
     }
     handler_id_.emplace_back(HttpServerComponent::get_instance().add_route(

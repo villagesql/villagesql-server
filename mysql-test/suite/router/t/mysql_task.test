@@ -1,0 +1,577 @@
+
+--disable_query_log
+--disable_result_log
+# TODO(alfredo): temporary location of mysql_tasks.sql, should be removed once it's included in the server
+--source ../include/schema/mysql_tasks.sql
+--enable_query_log
+--enable_result_log
+
+
+# create the schemas
+create schema sysdb; # the event with the SPs that the user will be executing
+create schema db1; # DB owned by the user where task events can get created
+
+
+delimiter $$;
+
+create table db1.prog (id int primary key auto_increment, user varchar(255), pct int);
+
+# a raw SP with no task support
+create procedure sysdb.p(IN param1 INT, OUT param2 INT, INOUT param3 INT) sql security invoker
+begin
+    declare i int default 0;
+
+    if param1 = 1234 then
+        SIGNAL SQLSTATE '99999' SET MESSAGE_TEXT = 'ERROR!?', MYSQL_ERRNO = 9999;
+    end if;
+
+    insert into db1.prog values (default, current_user(), 5);
+    do get_lock('testlock', 60);
+    insert into db1.prog values (default, current_user(), 50);
+
+    set param2 = param1 + 1;
+    set param3 = param3 + 1;
+
+    set @my_result = concat('result', param1);
+end$$
+
+
+create function sysdb.f(param1 INT) returns INT sql security invoker reads sql data
+begin
+    if param1 = 1234 then
+        SIGNAL SQLSTATE '99999' SET MESSAGE_TEXT = 'ERROR!?', MYSQL_ERRNO = 9999;
+    end if;
+    # these inserts dont help with the test because they dont seem to get committed until the function returns
+    #insert into db1.prog values (default, current_user(), 5);
+    do get_lock('testlock', 60);
+
+    return param1 + 1;
+end$$
+
+delimiter ;$$
+
+set global general_log=1;
+
+create user user1@'%' identified by 'secretpass1';
+grant all on db1.* to user1@'%';
+grant execute on sysdb.* to user1@'%';
+grant mysql_task_user to user1@'%';
+
+--source include/have_router.inc
+
+--let $extra_mrs_router_id=1
+
+--source ../include/predefined_setup/configure_router_mrs_root.inc
+
+--source ../include/mrs/start_object_definition.inc
+
+--let $mrs_add_service_path="/svc"
+--let $mrs_add_service_options='{"logging":{"exceptions":true}, "passthroughDbUser":true}'
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_schema=sysdb
+--let $mrs_add_schema_path=/db
+--let $mrs_add_schema_auth=TRUE
+--source ../include/mrs/db_schema/add.inc
+
+--let $mrs_add_db_object_type=PROCEDURE
+--let $mrs_add_db_object=p
+--let $mrs_add_db_object_path=/pDatabase
+--let $mrs_add_db_object_options='{"mysqlTask":{"driver": "database", "eventSchema":"db1", "monitoringSql": ["CALL mysql_tasks.add_task_log(@task_id, ''PROGRESS REPORT'', JSON_OBJECT(''lastUpdate'', NOW(6)), (select pct from db1.prog order by id desc limit 1), ''RUNNING'');"], "statusDataJsonSchema":{"lastUpdate":"string"}}}'
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_db_object_type=PROCEDURE
+--let $mrs_add_db_object=p
+--let $mrs_add_db_object_path=/pRouter
+--let $mrs_add_db_object_options='{"sqlQuery":{"timeout":60000},"mysqlTask":{"driver": "router", "eventSchema":"db1", "monitoringSql": ["CALL mysql_tasks.add_task_log(@task_id, ''PROGRESS REPORT'', JSON_OBJECT(''lastUpdate'', NOW(6)), (select pct from db1.prog order by id desc limit 1), ''RUNNING'');"], "statusDataJsonSchema":{"lastUpdate":"string"}}}'
+--source ../include/mrs/db_object/add.inc
+
+
+--let $mrs_add_db_object_type=FUNCTION
+--let $mrs_add_db_object_format=ITEM
+--let $mrs_add_db_object=f
+--let $mrs_add_db_object_path=/fDatabase
+--let $mrs_add_db_object_options='{"mysqlTask":{"driver": "database", "eventSchema":"db1", "monitoringSql": ["CALL mysql_tasks.add_task_log(@task_id, ''PROGRESS REPORT'', JSON_OBJECT(''lastUpdate'', NOW(6)), (select pct from db1.prog order by id desc limit 1), ''RUNNING'');"], "statusDataJsonSchema":{"lastUpdate":"string"}}}'
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_db_object_type=FUNCTION
+--let $mrs_add_db_object_format=ITEM
+--let $mrs_add_db_object=f
+--let $mrs_add_db_object_path=/fRouter
+--let $mrs_add_db_object_options='{"sqlQuery":{"timeout":60000},"mysqlTask":{"driver": "router", "eventSchema":"db1", "monitoringSql": ["select pct into @p from db1.prog order by id desc limit 1", "CALL mysql_tasks.add_task_log(@task_id, ''PROGRESS REPORT'', JSON_OBJECT(''lastUpdate'', NOW(6)), @p, ''RUNNING'')"], "statusDataJsonSchema":{"lastUpdate":"string"}}}'
+#--let $mrs_add_db_object_options='{"sqlQuery":{"timeout":60000},"mysqlTask":{"driver": "router", "eventSchema":"db1", "monitoringSql": [], "statusDataJsonSchema":{"lastUpdate":"string"}}}'
+--source ../include/mrs/db_object/add.inc
+
+
+--let $mrs_add_auth_app=default authentication
+--let $mrs_add_auth_registered_users_only=1
+--let $mrs_add_auth_vendor=MySQL Internal
+--let $mrs_add_auth_service=/svc
+--source ../include/mrs/add_auth_app.inc
+
+--let $mrs_add_user_ext_uid='user1@%'
+--let $mrs_add_user_name='user1'
+--let $mrs_add_user_auth_string='ignore'
+--source ../include/mrs/user/add.inc
+
+--source ../include/mrs/end_object_definition.inc
+
+# authenticate user1
+exec $MRS_CLIENT_ARGS
+  -a BASIC
+  --path /svc/authentication/login
+  -u user1
+  -p secretpass1
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+--let app_user_id=`select bin_to_uuid(id, 1) from mysql_rest_service_metadata.mrs_user limit 1`
+
+# start task at server (SP)
+######################
+--echo "Test pDatabase"
+do get_lock('testlock', 1);
+
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/pDatabase
+  --payload '{"param1":5, "param3": 41}'
+  --expected-status 202
+  --session-file $MYSQL_TMP_DIR/user1_session.dat
+  --write-format mtr
+  --write-to-file $MYSQL_TMP_DIR/task_info.json > $MYSQL_TMP_DIR/output;
+
+--source $MYSQL_TMP_DIR/task_info.json
+--let $task_id=`select json_unquote(json_extract('$mrs_result', '\$.taskId'))`
+--replace_result $task_id TASK_ID
+--cat_file $MYSQL_TMP_DIR/task_info.json
+
+--source wait_task_running.inc
+
+## query in-progress status of the task
+--replace_regex /"lastUpdate": ".*"/"lastUpdate": TIMESTAMP/
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/pDatabase/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+do release_lock('testlock');
+
+--source wait_task_completed.inc
+
+## query completed status of the task
+--replace_regex /"lastUpdate": ".*"/"lastUpdate": TIMESTAMP/ /"progress": 5.*/"progress": ###/
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/pDatabase/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+# start task that will error out
+--echo "Test pDatabase error"
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/pDatabase
+  --payload '{"param1":1234, "param3": 41}'
+  --expected-status 202
+  --session-file $MYSQL_TMP_DIR/user1_session.dat
+  --write-format mtr
+  --write-to-file $MYSQL_TMP_DIR/task_info.json > $MYSQL_TMP_DIR/output;
+
+--source $MYSQL_TMP_DIR/task_info.json
+--let $task_id=`select json_unquote(json_extract('$mrs_result', '\$.taskId'))`
+--replace_result $task_id TASK_ID
+--cat_file $MYSQL_TMP_DIR/task_info.json
+
+--source wait_task_completed.inc
+
+## query error status of task
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/pDatabase/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+ # start task to get killed
+ --echo "Test kill pDatabase"
+ do get_lock('testlock', 2);
+
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/pDatabase
+  --payload '{"param1":222, "param3": 43}'
+  --expected-status 202
+  --session-file $MYSQL_TMP_DIR/user1_session.dat
+  --write-format mtr
+  --write-to-file $MYSQL_TMP_DIR/task_info.json > $MYSQL_TMP_DIR/output;
+
+--source $MYSQL_TMP_DIR/task_info.json
+--let $task_id=`select json_unquote(json_extract('$mrs_result', '\$.taskId'))`
+--replace_result $task_id TASK_ID
+--cat_file $MYSQL_TMP_DIR/task_info.json
+
+--source wait_task_running.inc
+
+--replace_regex /"lastUpdate": ".*"/"lastUpdate": TIMESTAMP/ /"progress": 5.*/"progress": ###/
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/pDatabase/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc/db/pDatabase/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+--source wait_task_completed.inc
+
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/pDatabase/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+do release_lock('testlock');
+
+
+# start task at server (function)
+######################
+--echo "Start fDatabase"
+
+do get_lock('testlock', 3);
+
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/fDatabase
+  --payload '{"param1":5}'
+  --expected-status 202
+  --session-file $MYSQL_TMP_DIR/user1_session.dat
+  --write-format mtr
+  --write-to-file $MYSQL_TMP_DIR/task_info.json > $MYSQL_TMP_DIR/output;
+
+--source $MYSQL_TMP_DIR/task_info.json
+--let $task_id=`select json_unquote(json_extract('$mrs_result', '\$.taskId'))`
+--replace_result $task_id TASK_ID
+--cat_file $MYSQL_TMP_DIR/task_info.json
+
+--source wait_task_running.inc
+
+## query in-progress status of the task
+--replace_regex /"lastUpdate": ".*"/"lastUpdate": TIMESTAMP/
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/fDatabase/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+do release_lock('testlock');
+--source wait_task_completed.inc
+
+## query completed status of the task
+--replace_regex /"lastUpdate": ".*"/"lastUpdate": TIMESTAMP/ /"progress": 5.*/"progress": ###/
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/fDatabase/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+
+# start task that will error out
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/fDatabase
+  --payload '{"param1":1234}'
+  --expected-status 202
+  --session-file $MYSQL_TMP_DIR/user1_session.dat
+  --write-format mtr
+  --write-to-file $MYSQL_TMP_DIR/task_info.json > $MYSQL_TMP_DIR/output;
+
+--source $MYSQL_TMP_DIR/task_info.json
+--let $task_id=`select json_unquote(json_extract('$mrs_result', '\$.taskId'))`
+--replace_result $task_id TASK_ID
+--cat_file $MYSQL_TMP_DIR/task_info.json
+
+--source wait_task_completed.inc
+
+## query error status of task
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/fDatabase/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+ # start task to get killed
+ do get_lock('testlock', 4);
+
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/fDatabase
+  --payload '{"param1":222}'
+  --expected-status 202
+  --session-file $MYSQL_TMP_DIR/user1_session.dat
+  --write-format mtr
+  --write-to-file $MYSQL_TMP_DIR/task_info.json > $MYSQL_TMP_DIR/output;
+
+--source $MYSQL_TMP_DIR/task_info.json
+--let $task_id=`select json_unquote(json_extract('$mrs_result', '\$.taskId'))`
+--replace_result $task_id TASK_ID
+--cat_file $MYSQL_TMP_DIR/task_info.json
+
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc/db/fDatabase/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+--source wait_task_completed.inc
+
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/fDatabase/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+do release_lock('testlock');
+
+
+# start task at router (SP)
+######################
+truncate db1.prog;
+insert into db1.prog values (default, 'empty', 0);
+do get_lock('testlock', 5);
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/pRouter
+  --payload '{"param1":8, "param3": 43}'
+  --expected-status 202
+  --session-file $MYSQL_TMP_DIR/user1_session.dat
+  --write-format mtr
+  --write-to-file $MYSQL_TMP_DIR/task_info.json > $MYSQL_TMP_DIR/output;
+
+--source $MYSQL_TMP_DIR/task_info.json
+--let $task_id=`select json_unquote(json_extract('$mrs_result', '\$.taskId'))`
+--replace_result $task_id TASK_ID
+--cat_file $MYSQL_TMP_DIR/task_info.json
+
+--source wait_task_running.inc
+
+## query in-progress status of the task
+--replace_regex /"lastUpdate": ".*"/"lastUpdate": TIMESTAMP/ /"progress": 5.*/"progress": ###/
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/pRouter/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+do release_lock('testlock');
+--source wait_task_completed.inc
+
+## query completed status of the task
+--replace_regex /"lastUpdate": ".*"/"lastUpdate": TIMESTAMP/ /"progress": 5.*/"progress": ###/
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/pRouter/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+# start task that will error out
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/pRouter
+  --payload '{"param1":1234, "param3": 12}'
+  --expected-status 202
+  --session-file $MYSQL_TMP_DIR/user1_session.dat
+  --write-format mtr
+  --write-to-file $MYSQL_TMP_DIR/task_info.json > $MYSQL_TMP_DIR/output;
+
+--source $MYSQL_TMP_DIR/task_info.json
+--let $task_id=`select json_unquote(json_extract('$mrs_result', '\$.taskId'))`
+--replace_result $task_id TASK_ID
+--cat_file $MYSQL_TMP_DIR/task_info.json
+
+--source wait_task_completed.inc
+
+## query error status of task
+--replace_regex /"lastUpdate": ".*"/"lastUpdate": TIMESTAMP/ /"progress": 5.*/"progress": ###/
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/pRouter/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+ # start task to get killed
+ do get_lock('testlock', 6);
+
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/pRouter
+  --payload '{"param1":222, "param3": 43}'
+  --expected-status 202
+  --session-file $MYSQL_TMP_DIR/user1_session.dat
+  --write-format mtr
+  --write-to-file $MYSQL_TMP_DIR/task_info.json > $MYSQL_TMP_DIR/output;
+
+--source $MYSQL_TMP_DIR/task_info.json
+--let $task_id=`select json_unquote(json_extract('$mrs_result', '\$.taskId'))`
+--replace_result $task_id TASK_ID
+--cat_file $MYSQL_TMP_DIR/task_info.json
+
+--source wait_task_running.inc
+
+--replace_regex /"lastUpdate": ".*"/"lastUpdate": TIMESTAMP/ /"progress": 5.*/"progress": ###/
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/pRouter/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc/db/pRouter/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+--source wait_task_completed.inc
+
+--replace_regex /"lastUpdate": ".*"/"lastUpdate": TIMESTAMP/ /"progress": 5.*/"progress": ###/
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/pRouter/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+do release_lock('testlock');
+
+# start task at router (function)
+######################
+do get_lock('testlock', 1);
+truncate db1.prog;
+insert into db1.prog values (default, 'empty', 1);
+
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/fRouter
+  --payload '{"param1":1}'
+  --expected-status 202
+  --session-file $MYSQL_TMP_DIR/user1_session.dat
+  --write-format mtr
+  --write-to-file $MYSQL_TMP_DIR/task_info.json > $MYSQL_TMP_DIR/output;
+
+--source $MYSQL_TMP_DIR/task_info.json
+--let $task_id=`select json_unquote(json_extract('$mrs_result', '\$.taskId'))`
+--replace_result $task_id TASK_ID
+--cat_file $MYSQL_TMP_DIR/task_info.json
+
+--source wait_task_running.inc
+
+## query in-progress status of the task
+--replace_regex /"lastUpdate": ".*"/"lastUpdate": TIMESTAMP/ /"progress": 5.*/"progress": ###/
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/fRouter/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+do release_lock('testlock');
+--source wait_task_completed.inc
+
+## query completed status of the task
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/fRouter/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+
+# start task that will error out
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/fRouter
+  --payload '{"param1":1234}'
+  --expected-status 202
+  --session-file $MYSQL_TMP_DIR/user1_session.dat
+  --write-format mtr
+  --write-to-file $MYSQL_TMP_DIR/task_info.json > $MYSQL_TMP_DIR/output;
+
+--source $MYSQL_TMP_DIR/task_info.json
+--let $task_id=`select json_unquote(json_extract('$mrs_result', '\$.taskId'))`
+--replace_result $task_id TASK_ID
+--cat_file $MYSQL_TMP_DIR/task_info.json
+
+--source wait_task_completed.inc
+
+## query error status of task
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/fRouter/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+# kill task
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/fRouter
+  --payload '{"param1":1}'
+  --expected-status 202
+  --session-file $MYSQL_TMP_DIR/user1_session.dat
+  --write-format mtr
+  --write-to-file $MYSQL_TMP_DIR/task_info.json > $MYSQL_TMP_DIR/output;
+
+--source $MYSQL_TMP_DIR/task_info.json
+--let $task_id=`select json_unquote(json_extract('$mrs_result', '\$.taskId'))`
+--replace_result $task_id TASK_ID
+--cat_file $MYSQL_TMP_DIR/task_info.json
+
+--source wait_task_running.inc
+
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc/db/fRouter/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+--source wait_task_completed.inc
+
+--replace_result $task_id TASK_ID
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/fRouter/$task_id
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+# Cleanup
+remove_file $MYSQL_TMP_DIR/user1_session.dat;
+remove_file $MYSQL_TMP_DIR/task_info.json;
+remove_file $MYSQL_TMP_DIR/output;
+drop user user1@'%';
+drop schema db1;
+drop schema sysdb;
+drop schema mysql_tasks;
+drop role mysql_task_user;
+drop role mysql_task_admin;
+
+--source ../include/mrs/cleanup.inc

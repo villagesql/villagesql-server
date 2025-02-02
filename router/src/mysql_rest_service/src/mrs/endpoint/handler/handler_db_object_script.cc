@@ -43,6 +43,7 @@
 #include "mrs/endpoint/content_set_endpoint.h"
 #include "mrs/endpoint/db_service_endpoint.h"
 #include "mrs/endpoint/handler/helper/utilities.h"
+#include "mrs/endpoint/handler/routine_utilities.h"
 #include "mrs/http/error.h"
 #include "mrs/rest/request_context.h"
 #include "mrs/rest/response_cache.h"
@@ -78,12 +79,6 @@ using Authorization = mrs::rest::Handler::Authorization;
 using Request = mrs::rest::RequestContext::Request;
 using ResultSets = mrs::database::entry::ResultSets;
 using Fields = std::vector<mrs::database::entry::Field>;
-
-std::string get_endpoint_url(
-    std::weak_ptr<mrs::endpoint::DbObjectEndpoint> &wp) {
-  auto locked = lock_or_throw_unavail(wp);
-  return locked->get_url().join();
-}
 
 class HandlerDbObjectScript::Impl {
  public:

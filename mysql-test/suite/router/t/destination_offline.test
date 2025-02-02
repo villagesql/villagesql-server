@@ -19,7 +19,6 @@ insert into test_schema.tab values(1, "Andresh");
 --let $mrs_host_and_port=127.0.0.1:$HTTP_SERVER_PORT
 --let MRS_CLIENT_ARGS=$MRS_CLIENT --url https://$mrs_host_and_port --response-type RAW  --display REQUEST,STATUS
 
-
 --source ../include/mrs/start_object_definition.inc
 
 # Create a service

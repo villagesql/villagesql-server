@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -47,7 +47,7 @@ class Query {
   virtual void query(MySQLSession *session, const std::string &q);
   virtual void prepare_and_execute(MySQLSession *session, const std::string &q,
                                    std::vector<MYSQL_BIND> pt,
-                                   OnResultSetEnd &on_resultset_end);
+                                   const OnResultSetEnd &on_resultset_end);
 
   std::unique_ptr<MySQLSession::ResultRow> query_one(MySQLSession *session);
   std::unique_ptr<MySQLSession::ResultRow> query_one(MySQLSession *session,
@@ -67,7 +67,7 @@ class QueryLog : public Query {
   void query(MySQLSession *session, const std::string &q) override;
   void prepare_and_execute(MySQLSession *session, const std::string &q,
                            std::vector<MYSQL_BIND> pt,
-                           OnResultSetEnd &on_resultset_end) override;
+                           const OnResultSetEnd &on_resultset_end) override;
 };
 
 }  // namespace database

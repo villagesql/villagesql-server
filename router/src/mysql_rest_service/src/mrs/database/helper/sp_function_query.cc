@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2023, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2023, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -34,6 +34,7 @@
 #include "helper/json/to_string.h"
 #include "helper/mysql_numeric_value.h"
 #include "mrs/database/entry/object.h"
+#include "mysqlrouter/utils_sqlstring.h"
 
 #include "mysql/harness/logging/logging.h"
 
@@ -53,9 +54,23 @@ namespace {
 
 // CLANG doesn't allow capture, already captured variable.
 // Instead using lambda let use class (llvm-issue #48582).
-class CompareFieldName {
+class CompareFieldNameP {
  public:
-  CompareFieldName(const std::string &k) : key_{k} {}
+  CompareFieldNameP(const std::string &k) : key_{k} {}
+
+  bool operator()(const mrs::database::entry::Field &f) const {
+    return f.name == key_;
+  }
+
+ private:
+  const std::string &key_;
+};
+
+// CLANG doesn't allow capture, already captured variable.
+// Instead using lambda let use class (llvm-issue #48582).
+class CompareFieldNameF {
+ public:
+  CompareFieldNameF(const std::string &k) : key_{k} {}
 
   bool operator()(const ObjectFieldPtr &of) const { return of->name == key_; }
 
@@ -66,14 +81,10 @@ class CompareFieldName {
 }  // namespace
 
 ColumnValues create_function_argument_list(
-    const entry::Object *object, const std::vector<uint8_t> &json_document,
-    const entry::RowUserOwnership &ownership, mrs::UniversalId *user_id) {
+    const entry::Object *object, rapidjson::Document &doc,
+    const entry::RowUserOwnership &ownership,
+    const mysqlrouter::sqlstring &user_id) {
   using namespace std::string_literals;
-  rapidjson::Document doc;
-
-  if (!helper::json::text_to(&doc, json_document))
-    throw std::invalid_argument(
-        "Can't parse requests payload. It must be an Json object.");
 
   if (!doc.IsObject())
     throw std::invalid_argument(
@@ -100,18 +111,19 @@ ColumnValues create_function_argument_list(
   ColumnValues result;
 
   for (auto &ofield : object_fields) {
-    auto pfiled = dynamic_cast<entry::ParameterField *>(ofield.get());
-    if (!pfiled) continue;
+    auto pfield = dynamic_cast<entry::ParameterField *>(ofield.get());
+    if (!pfield) continue;
 
     if (ownership.user_ownership_enforced &&
-        (ownership.user_ownership_column == pfiled->column_name)) {
-      if (!user_id) throw std::invalid_argument("Authentication is required.");
-      result.push_back(to_sqlstring(*user_id));
-    } else if (pfiled->mode == entry::ModeType::kIN) {
-      auto it = doc.FindMember(pfiled->name.c_str());
+        (ownership.user_ownership_column == pfield->column_name)) {
+      if (user_id.is_empty())
+        throw std::invalid_argument("Authentication is required.");
+      result.push_back(user_id);
+    } else if (pfield->mode == entry::ModeType::kIN) {
+      auto it = doc.FindMember(pfield->name.c_str());
       if (it != doc.MemberEnd()) {
         mysqlrouter::sqlstring sql("?");
-        sql << std::make_pair(&it->value, pfiled->type);
+        sql << std::make_pair(&it->value, pfield->type);
         result.push_back(sql);
       } else {
         result.emplace_back("NULL");
@@ -167,44 +179,48 @@ static mysqlrouter::sqlstring to_sqlstring(const std::string &value,
 }
 
 ColumnValues create_function_argument_list(
-    const entry::Object *object,
-    const ::http::base::Uri::QueryElements &url_query,
-    const entry::RowUserOwnership &ownership, mrs::UniversalId *user_id) {
+    const entry::Object *object, const helper::http::Url::Parameters &query_kv,
+    const entry::RowUserOwnership &ownership,
+    const mysqlrouter::sqlstring &user_id) {
   using namespace std::string_literals;
-  Url::Keys keys;
 
   auto table = object->table;
   if (entry::KindType::PARAMETERS != object->kind) {
     throw std::logic_error(
         "Bad object kind for function or procedure db-object.");
   }
-
   auto &object_fields = object->fields;
 
-  for (auto &[key, _] : url_query) {
-    std::shared_ptr<ObjectField> object_field;
+  // Check if all parameters in documents are present in parameter list.
+  Url::Keys keys;
+  Url::Values values;
 
-    CompareFieldName search_for{key};
-    if (!helper::container::get_if(object_fields, search_for, &object_field)) {
-      throw std::invalid_argument("Not allowed object_field:"s + key);
+  for (const auto &[key, _] : query_kv) {
+    const ObjectFieldPtr *param;
+    CompareFieldNameF search_for(key);
+    if (!helper::container::get_ptr_if(object_fields, search_for, &param)) {
+      throw http::Error(HttpStatusCode::BadRequest,
+                        "Not allowed parameter:"s + key);
     }
   }
 
   ColumnValues result;
 
   for (auto &ofield : object_fields) {
-    auto pfiled = dynamic_cast<entry::ParameterField *>(ofield.get());
-    if (!pfiled) continue;
+    auto pfield = dynamic_cast<entry::ParameterField *>(ofield.get());
+    if (!pfield) continue;
 
     if (ownership.user_ownership_enforced &&
-        (ownership.user_ownership_column == pfiled->column_name)) {
-      if (!user_id) throw std::invalid_argument("Authentication is required.");
-      result.push_back(to_sqlstring(*user_id));
-    } else if (pfiled->mode == entry::ModeType::kIN) {
-      auto it = url_query.find(ofield->name);
-
-      if (url_query.end() != it) {
-        result.push_back(to_sqlstring(it->second, pfiled));
+        (ownership.user_ownership_column == pfield->column_name)) {
+      if (user_id.is_empty())
+        throw std::invalid_argument("Authentication is required.");
+      result.push_back(user_id);
+    } else if (pfield->mode == entry::ModeType::kIN) {
+      auto it = query_kv.find(pfield->name);
+      if (it != query_kv.end()) {
+        mysqlrouter::sqlstring sql("?");
+        sql << to_sqlstring(it->second, pfield);
+        result.push_back(sql);
       } else {
         result.emplace_back("NULL");
       }
@@ -212,6 +228,142 @@ ColumnValues create_function_argument_list(
   }
 
   return result;
+}
+
+mysqlrouter::sqlstring to_sqlstring(const std::string &value, DataType type) {
+  using namespace helper;
+  auto v = get_type_inside_text(value);
+  switch (type) {
+    case DataType::BOOLEAN:
+      if (kDataInteger == v) return mysqlrouter::sqlstring{value.c_str()};
+      return mysqlrouter::sqlstring("?") << value;
+
+    case DataType::DOUBLE:
+      if (kDataString == v) return mysqlrouter::sqlstring("?") << value;
+      return mysqlrouter::sqlstring{value.c_str()};
+
+    case DataType::INTEGER:
+      if (kDataString == v) return mysqlrouter::sqlstring("?") << value;
+      return mysqlrouter::sqlstring{value.c_str()};
+
+    case DataType::BINARY:
+      return mysqlrouter::sqlstring("FROM_BASE64(?)") << value;
+
+    case DataType::GEOMETRY:
+      return mysqlrouter::sqlstring("ST_GeomFromGeoJSON(?)") << value;
+
+    case DataType::VECTOR:
+      return mysqlrouter::sqlstring("STRING_TO_VECTOR(?)") << value;
+
+    case DataType::JSON:
+      return mysqlrouter::sqlstring("CAST(? as JSON)") << value;
+
+    case DataType::STRING:
+      return mysqlrouter::sqlstring("?") << value;
+
+    case DataType::UNKNOWN:
+      // Lets handle it by function return.
+      break;
+  }
+
+  assert(nullptr && "Shouldn't happen");
+  return {};
+}
+
+void fill_procedure_argument_list_with_binds(
+    mrs::database::entry::ResultSets &rs,
+    const helper::http::Url::Parameters &query_kv,
+    const entry::RowUserOwnership &ownership,
+    const mysqlrouter::sqlstring &user_id, mrs::database::MysqlBind *out_binds,
+    std::string *out_params) {
+  using namespace std::string_literals;
+
+  Url::Keys keys;
+  Url::Values values;
+
+  auto &pf = rs.parameters.fields;
+  for (const auto &[key, _] : query_kv) {
+    const database::entry::Field *param;
+    CompareFieldNameP search_for(key);
+    if (!helper::container::get_ptr_if(pf, search_for, &param)) {
+      throw http::Error(HttpStatusCode::BadRequest,
+                        "Not allowed parameter:"s + key);
+    }
+  }
+
+  for (auto &el : pf) {
+    if (!out_params->empty()) *out_params += ",";
+
+    if (ownership.user_ownership_enforced &&
+        (ownership.user_ownership_column == el.bind_name)) {
+      if (user_id.is_empty())
+        throw std::invalid_argument("Authentication is required.");
+      *out_params += user_id.str();
+    } else if (el.mode == mrs::database::entry::Field::Mode::modeIn) {
+      auto it = query_kv.find(el.name);
+      if (query_kv.end() != it) {
+        *out_params += to_sqlstring(it->second, el.data_type).str();
+      } else {
+        *out_params += "NULL";
+      }
+    } else if (el.mode == mrs::database::entry::Field::Mode::modeOut) {
+      out_binds->fill_mysql_bind_for_out(el.data_type);
+      *out_params += "?";
+    } else {
+      auto it = query_kv.find(el.name);
+      *out_params += "?";
+      if (query_kv.end() != it) {
+        log_debug("Bind param el.data_type:%i %s", (int)el.data_type,
+                  el.raw_data_type.c_str());
+        out_binds->fill_mysql_bind_for_inout(it->second, el.data_type);
+      } else {
+        out_binds->fill_null_as_inout(el.data_type);
+      }
+    }
+  }
+}
+
+void fill_procedure_argument_list_with_binds(
+    mrs::database::entry::ResultSets &rs, const rapidjson::Document &doc,
+    const entry::RowUserOwnership &ownership,
+    const mysqlrouter::sqlstring &user_id, mrs::database::MysqlBind *out_binds,
+    std::string *out_params) {
+  using namespace std::string_literals;
+
+  Url::Keys keys;
+  Url::Values values;
+
+  auto &pf = rs.parameters.fields;
+
+  for (auto &el : pf) {
+    if (!out_params->empty()) *out_params += ",";
+    if (ownership.user_ownership_enforced &&
+        (ownership.user_ownership_column == el.bind_name)) {
+      if (user_id.is_empty())
+        throw std::invalid_argument("Authentication is required.");
+      *out_params += user_id;
+    } else if (el.mode == mrs::database::entry::Field::Mode::modeIn) {
+      auto it = doc.FindMember(el.name.c_str());
+      if (it != doc.MemberEnd()) {
+        mysqlrouter::sqlstring sql = get_sql_format(el.data_type);
+        sql << it->value;
+        *out_params += sql.str();
+      } else {
+        *out_params += "NULL";
+      }
+    } else if (el.mode == mrs::database::entry::Field::Mode::modeOut) {
+      out_binds->fill_mysql_bind_for_out(el.data_type);
+      *out_params += "?";
+    } else {
+      auto it = doc.FindMember(el.name.c_str());
+      *out_params += "?";
+      if (it != doc.MemberEnd()) {
+        out_binds->fill_mysql_bind_for_inout(it->value, el.data_type);
+      } else {
+        out_binds->fill_null_as_inout(el.data_type);
+      }
+    }
+  }
 }
 
 }  // namespace database

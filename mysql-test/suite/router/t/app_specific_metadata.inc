@@ -74,8 +74,8 @@
 
 --let MRS_CLIENT_ARGS=$MRS_CLIENT --url https://$mrs_host_and_port
 
-exec $MRS_CLIENT_ARGS --path /svc_md/basic_schema_md/proc_int_md
-    --wait-until-found=60 --display REQUEST;
+exec $MRS_CLIENT_ARGS -t POST --path /svc_md/basic_schema_md/proc_int_md
+    --payload {} --wait-until-found=60 --display REQUEST;
 
 --echo
 --echo Check the _metadata on service level

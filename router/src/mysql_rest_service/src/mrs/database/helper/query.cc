@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -40,7 +40,7 @@ void QueryLog::query(MySQLSession *session, const std::string &q) {
 
 void QueryLog::prepare_and_execute(MySQLSession *session, const std::string &q,
                                    std::vector<MYSQL_BIND> pt,
-                                   OnResultSetEnd &on_resultset_end) {
+                                   const OnResultSetEnd &on_resultset_end) {
   log_debug("Prepare: %s", q.c_str());
   Query::prepare_and_execute(session, q, pt, on_resultset_end);
 }
@@ -88,9 +88,10 @@ std::unique_ptr<MySQLSession::ResultRow> Query::query_one(
 }
 
 void Query::execute(MySQLSession *session) { query(session, query_); }
+
 void Query::prepare_and_execute(MySQLSession *session, const std::string &q,
                                 std::vector<MYSQL_BIND> pt,
-                                OnResultSetEnd &on_resultset_end) {
+                                const OnResultSetEnd &on_resultset_end) {
   auto id = session->prepare(q);
 
   try {

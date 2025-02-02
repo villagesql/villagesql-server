@@ -38,12 +38,17 @@
 #include "helper/media_detector.h"
 #include "helper/mysql_numeric_value.h"
 #include "mrs/database/helper/bind.h"
+#include "mrs/database/helper/sp_function_query.h"
 #include "mrs/database/query_rest_sp.h"
 #include "mrs/database/query_rest_sp_media.h"
+#include "mrs/database/query_rest_task.h"
+#include "mrs/database/query_rest_task_status.h"
 #include "mrs/endpoint/handler/helper/utilities.h"
+#include "mrs/endpoint/handler/routine_utilities.h"
 #include "mrs/http/error.h"
 #include "mrs/rest/request_context.h"
 #include "mrs/router_observation_entities.h"
+#include "mysql/harness/utility/string.h"
 
 IMPORT_LOG_FUNCTIONS()
 
@@ -51,221 +56,44 @@ namespace mrs {
 namespace endpoint {
 namespace handler {
 
-namespace {
-
-// CLANG doesn't allow capture, already captured variable.
-// Instead using lambda let use class (llvm-issue #48582).
-class CompareFieldName {
- public:
-  CompareFieldName(const std::string &k) : key_{k} {}
-
-  bool operator()(const mrs::database::entry::Field &f) const {
-    return f.name == key_;
-  }
-
- private:
-  const std::string &key_;
-};
-
-std::string get_endpoint_url(
-    std::weak_ptr<mrs::endpoint::DbObjectEndpoint> &wp) {
-  auto locked = lock_or_throw_unavail(wp);
-  return locked->get_url().join();
-}
-
-}  // namespace
-
 using HttpResult = mrs::rest::Handler::HttpResult;
 using CachedObject = collector::MysqlCacheManager::CachedObject;
 using Url = helper::http::Url;
 using Authorization = mrs::rest::Handler::Authorization;
-
-HttpResult HandlerDbObjectSP::handle_delete(
-    [[maybe_unused]] rest::RequestContext *ctxt) {
-  throw http::Error(HttpStatusCode::NotImplemented);
-}
-
-std::string to_string(rapidjson::Value *v) {
-  if (v->IsString()) {
-    return std::string{v->GetString(), v->GetStringLength()};
-  }
-
-  return helper::json::to_string(v);
-}
-
-using DataType = mrs::database::entry::ColumnType;
-
-mysqlrouter::sqlstring get_sql_format(DataType type) {
-  using namespace helper;
-  switch (type) {
-    case DataType::BINARY:
-      return mysqlrouter::sqlstring("FROM_BASE64(?)");
-
-    case DataType::GEOMETRY:
-      return mysqlrouter::sqlstring("ST_GeomFromGeoJSON(?)");
-
-    case DataType::VECTOR:
-      return mysqlrouter::sqlstring("STRING_TO_VECTOR(?)");
-
-    case DataType::JSON:
-      return mysqlrouter::sqlstring("CAST(? as JSON)");
-
-    default: {
-    }
-  }
-
-  return mysqlrouter::sqlstring("?");
-}
-
-mysqlrouter::sqlstring to_sqlstring(const std::string &value, DataType type) {
-  using namespace helper;
-  auto v = get_type_inside_text(value);
-  switch (type) {
-    case DataType::BOOLEAN:
-      if (kDataInteger == v) return mysqlrouter::sqlstring{value.c_str()};
-      return mysqlrouter::sqlstring("?") << value;
-
-    case DataType::DOUBLE:
-      if (kDataString == v) return mysqlrouter::sqlstring("?") << value;
-      return mysqlrouter::sqlstring{value.c_str()};
-
-    case DataType::INTEGER:
-      if (kDataString == v) return mysqlrouter::sqlstring("?") << value;
-      return mysqlrouter::sqlstring{value.c_str()};
-
-    case DataType::BINARY:
-      return mysqlrouter::sqlstring("FROM_BASE64(?)") << value;
-
-    case DataType::GEOMETRY:
-      return mysqlrouter::sqlstring("ST_GeomFromGeoJSON(?)") << value;
-
-    case DataType::VECTOR:
-      return mysqlrouter::sqlstring("STRING_TO_VECTOR(?)") << value;
-
-    case DataType::JSON:
-      return mysqlrouter::sqlstring("CAST(? as JSON)") << value;
-
-    case DataType::STRING:
-      return mysqlrouter::sqlstring("?") << value;
-
-    case DataType::UNKNOWN:
-      // Lets handle it by function return.
-      break;
-  }
-
-  assert(nullptr && "Shouldn't happen");
-  return {};
-}
-
-static HttpResult handler_mysqlerror(const mysqlrouter::MySQLSession::Error &e,
-                                     database::QueryRestSP *db) {
-  static const std::string k_state_with_user_defined_error = "45000";
-  if (!db->get_sql_state()) throw e;
-
-  auto sql_state = db->get_sql_state();
-  log_debug("While handling SP, received a mysql-error with state: %s",
-            sql_state);
-  if (k_state_with_user_defined_error != sql_state) {
-    throw e;
-  }
-  // 5000 is the offset for HTTPStatus errors,
-  // Still first HTTP status begins with 100 code,
-  // because of that we are validating the value
-  // not against 5000, but 5100.
-  if (e.code() < 5100 || e.code() >= 5600) {
-    throw e;
-  }
-  helper::json::MapObject map{{"message", e.message()}};
-  HttpResult::HttpStatus status = e.code() - 5000;
-  try {
-    HttpStatusCode::get_default_status_text(status);
-  } catch (...) {
-    throw e;
-  }
-  auto json = helper::json::to_string(map);
-  log_debug("SP - generated custom HTTPstats + message:%s", json.c_str());
-  return HttpResult(status, std::move(json), HttpResult::Type::typeJson);
-}
 
 HandlerDbObjectSP::HandlerDbObjectSP(
     std::weak_ptr<DbObjectEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager,
     mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache,
     mrs::ResponseCache *response_cache,
-    mrs::database::SlowQueryMonitor *slow_monitor)
+    mrs::database::SlowQueryMonitor *slow_monitor,
+    mrs::database::MysqlTaskMonitor *task_monitor)
     : HandlerDbObjectTable{endpoint, auth_manager,   gtid_manager,
-                           cache,    response_cache, slow_monitor} {}
+                           cache,    response_cache, slow_monitor},
+      task_monitor_(task_monitor) {}
 
 HttpResult HandlerDbObjectSP::handle_put(rest::RequestContext *ctxt) {
-  using namespace std::string_literals;
+  auto &input_buffer = ctxt->request->get_input_buffer();
+  auto size = input_buffer.length();
+  auto request_body = input_buffer.pop_front(size);
+
+  return handle_post(ctxt, request_body);
+}
+
+HttpResult HandlerDbObjectSP::call(rest::RequestContext *ctxt,
+                                   rapidjson::Document doc) {
   using namespace helper::json::sql;
 
   auto session = get_session(ctxt, collector::kMySQLConnectionUserdataRW);
 
   auto url = get_endpoint_url(endpoint_);
-  auto &input_buffer = ctxt->request->get_input_buffer();
-  auto size = input_buffer.length();
-  auto request_body = input_buffer.pop_front(size);
-
-  if (response_cache_) {
-    auto entry = response_cache_->lookup_routine(
-        ctxt->request->get_uri(),
-        {reinterpret_cast<const char *>(request_body.data()),
-         request_body.size()});
-    if (entry) {
-      Counter<kEntityCounterRestReturnedItems>::increment(entry->items);
-      return {std::string{entry->data}};
-    }
-  }
-  rapidjson::Document doc;
-  doc.Parse(reinterpret_cast<const char *>(request_body.data()),
-            request_body.size());
-
-  if (!doc.IsObject()) throw http::Error(HttpStatusCode::BadRequest);
-
   auto &rs = entry_->fields;
-  auto &p = rs.parameters.fields;
-  for (auto el : helper::json::member_iterator(doc)) {
-    auto key = el.first;
-    const database::entry::Field *param;
-    if (!helper::container::get_ptr_if(
-            p, [key](auto &v) { return v.name == key; }, &param)) {
-      throw http::Error(HttpStatusCode::BadRequest,
-                        "Not allowed parameter:"s + key);
-    }
-  }
-
   mrs::database::MysqlBind binds;
   std::string result;
+  auto user_id = get_user_id(ctxt, false);
 
-  for (auto &el : p) {
-    if (!result.empty()) result += ",";
-
-    if (ownership_.user_ownership_enforced &&
-        (ownership_.user_ownership_column == el.bind_name)) {
-      result += to_sqlstring(ctxt->user.user_id).str();
-    } else if (el.mode == mrs::database::entry::Field::Mode::modeIn) {
-      auto it = doc.FindMember(el.name.c_str());
-      if (it != doc.MemberEnd()) {
-        mysqlrouter::sqlstring sql = get_sql_format(el.data_type);
-        sql << it->value;
-        result += sql.str();
-      } else {
-        result += "NULL";
-      }
-    } else if (el.mode == mrs::database::entry::Field::Mode::modeOut) {
-      binds.fill_mysql_bind_for_out(el.data_type);
-      result += "?";
-    } else {
-      auto it = doc.FindMember(el.name.c_str());
-      result += "?";
-      if (it != doc.MemberEnd()) {
-        binds.fill_mysql_bind_for_inout(it->value, el.data_type);
-      } else {
-        binds.fill_null_as_inout(el.data_type);
-      }
-    }
-  }
+  fill_procedure_argument_list_with_binds(rs, doc, ownership_, user_id, &binds,
+                                          &result);
 
   // Stored procedures may change the state of the SQL session,
   // we need ensure that its going to be reset.
@@ -286,83 +114,29 @@ HttpResult HandlerDbObjectSP::handle_put(rest::RequestContext *ctxt) {
               gtid_manager);
         },
         session.get(), get_options().query.timeout);
-
-    Counter<kEntityCounterRestReturnedItems>::increment(db.items);
-    Counter<kEntityCounterRestAffectedItems>::increment(
-        session->affected_rows());
   } catch (const mysqlrouter::MySQLSession::Error &e) {
-    return handler_mysqlerror(e, &db);
+    return handler_mysqlerror(e, db.get_sql_state());
   }
 
-  if (response_cache_) {
-    auto entry = response_cache_->create_routine_entry(
-        url,
-        {reinterpret_cast<const char *>(request_body.data()),
-         request_body.size()},
-        db.response, db.items);
-  }
-
-  return {std::move(db.response)};
+  return {HttpStatusCode::Ok, std::move(db.response),
+          HttpResult::Type::typeJson};
 }
 
-HttpResult HandlerDbObjectSP::handle_post(
-    [[maybe_unused]] rest::RequestContext *ctxt,
-    [[maybe_unused]] const std::vector<uint8_t> &document) {
-  throw http::Error(HttpStatusCode::NotImplemented);
-}
-
-HttpResult HandlerDbObjectSP::handle_get(rest::RequestContext *ctxt) {
+HttpResult HandlerDbObjectSP::call(
+    rest::RequestContext *ctxt, const helper::http::Url::Parameters &query_kv) {
   using namespace std::string_literals;
 
   Url::Keys keys;
   Url::Values values;
 
   auto url = get_endpoint_url(endpoint_);
-  auto &requests_uri = ctxt->request->get_uri();
-  const auto &query_kv = requests_uri.get_query_elements();
-
-  auto &p = entry_->fields;
-  auto &pf = p.parameters.fields;
-  for (const auto &[key, _] : query_kv) {
-    const database::entry::Field *param;
-    CompareFieldName search_for(key);
-    if (!helper::container::get_ptr_if(pf, search_for, &param)) {
-      throw http::Error(HttpStatusCode::BadRequest,
-                        "Not allowed parameter:"s + key);
-    }
-  }
-
+  auto &rs = entry_->fields;
   std::string result;
   mrs::database::MysqlBind binds;
+  auto user_id = get_user_id(ctxt, false);
 
-  for (auto &el : pf) {
-    if (!result.empty()) result += ",";
-
-    if (ownership_.user_ownership_enforced &&
-        (ownership_.user_ownership_column == el.bind_name)) {
-      result += to_sqlstring(ctxt->user.user_id).str();
-    } else if (el.mode == mrs::database::entry::Field::Mode::modeIn) {
-      auto it = query_kv.find(el.name);
-      if (query_kv.end() != it) {
-        result += to_sqlstring(it->second, el.data_type).str();
-      } else {
-        result += "NULL";
-      }
-    } else if (el.mode == mrs::database::entry::Field::Mode::modeOut) {
-      binds.fill_mysql_bind_for_out(el.data_type);
-      result += "?";
-    } else {
-      auto it = query_kv.find(el.name);
-      result += "?";
-      if (query_kv.end() != it) {
-        log_debug("Bind param el.data_type:%i %s", (int)el.data_type,
-                  el.raw_data_type.c_str());
-        binds.fill_mysql_bind_for_inout(it->second, el.data_type);
-      } else {
-        binds.fill_null_as_inout(el.data_type);
-      }
-    }
-  }
+  fill_procedure_argument_list_with_binds(rs, query_kv, ownership_, user_id,
+                                          &binds, &result);
 
   auto session = get_session(ctxt, collector::kMySQLConnectionUserdataRW);
   // Stored procedures may change the state of the SQL session,
@@ -386,17 +160,13 @@ HttpResult HandlerDbObjectSP::handle_get(rest::RequestContext *ctxt) {
             db.query_entries(
                 session.get(), schema_entry_->name, entry_->name, url,
                 ownership_.user_ownership_column, result.c_str(),
-                binds.parameters, p,
+                binds.parameters, rs,
                 database::JsonTemplateType::kObjectNestedOutParameters,
                 gtid_manager);
           },
           session.get(), get_options().query.timeout);
-
-      Counter<kEntityCounterRestReturnedItems>::increment(db.items);
-      Counter<kEntityCounterRestAffectedItems>::increment(
-          session->affected_rows());
     } catch (const mysqlrouter::MySQLSession::Error &e) {
-      return handler_mysqlerror(e, &db);
+      return handler_mysqlerror(e, db.get_sql_state());
     }
 
     return {std::move(db.response)};
@@ -409,9 +179,6 @@ HttpResult HandlerDbObjectSP::handle_get(rest::RequestContext *ctxt) {
                          result.c_str());
       },
       session.get(), get_options().query.timeout);
-
-  Counter<kEntityCounterRestReturnedItems>::increment(db.items);
-  Counter<kEntityCounterRestAffectedItems>::increment(session->affected_rows());
 
   if (entry_->autodetect_media_type) {
     log_debug(
@@ -430,10 +197,147 @@ HttpResult HandlerDbObjectSP::handle_get(rest::RequestContext *ctxt) {
   return {std::move(db.response), helper::MediaType::typeUnknownBinary};
 }
 
+HttpResult HandlerDbObjectSP::call_async(rest::RequestContext *ctxt,
+                                         rapidjson::Document doc) {
+  using namespace helper::json::sql;
+
+  // only authenticated users can start async tasks
+  auto user_id = get_user_id(ctxt, true);
+  auto session = get_session(ctxt, collector::kMySQLConnectionUserdataRW);
+
+  // Stored procedures may change the state of the SQL session,
+  // we need ensure that its going to be reset.
+  // Set as dirty, directly before executing queries.
+  session.set_dirty();
+
+  database::QueryRestMysqlTask db(task_monitor_);
+  try {
+    slow_monitor_->execute(
+        [&]() {
+          std::optional<std::string> user_ownership_column{
+              ownership_.user_ownership_enforced
+                  ? std::make_optional(ownership_.user_ownership_column)
+                  : std::nullopt};
+
+          if (get_options().mysql_task.driver ==
+              interface::Options::MysqlTask::DriverType::kDatabase)
+            db.execute_procedure_at_server(
+                session.get(), user_id, user_ownership_column,
+                schema_entry_->name, entry_->name, get_endpoint_url(endpoint_),
+                get_options().mysql_task, doc, entry_->fields);
+          else
+            db.execute_procedure_at_router(
+                std::move(session), user_id, user_ownership_column,
+                schema_entry_->name, entry_->name, get_endpoint_url(endpoint_),
+                get_options().mysql_task, doc, entry_->fields);
+        },
+        session.get(), get_options().query.timeout);
+  } catch (const mysqlrouter::MySQLSession::Error &e) {
+    return handler_mysqlerror(e, db.get_sql_state());
+  }
+
+  return {HttpStatusCode::Accepted, std::move(db.response),
+          HttpResult::Type::typeJson};
+}
+
+HttpResult HandlerDbObjectSP::handle_post(
+    rest::RequestContext *ctxt, const std::vector<uint8_t> &document) {
+  using namespace std::string_literals;
+
+  rapidjson::Document doc;
+  doc.Parse(reinterpret_cast<const char *>(document.data()), document.size());
+
+  if (!doc.IsObject()) throw http::Error(HttpStatusCode::BadRequest);
+
+  auto &rs = entry_->fields;
+  auto &param_fields = rs.parameters.fields;
+  for (auto el : helper::json::member_iterator(doc)) {
+    auto key = el.first;
+    const database::entry::Field *param;
+    if (!helper::container::get_ptr_if(
+            param_fields, [key](auto &v) { return v.name == key; }, &param)) {
+      throw http::Error(HttpStatusCode::BadRequest,
+                        "Not allowed parameter:"s + key);
+    }
+  }
+
+  // Execute the SP. If it's an async task, then start the task and return 202
+  if (get_options().mysql_task.driver !=
+      interface::Options::MysqlTask::DriverType::kNone) {
+    return call_async(ctxt, std::move(doc));
+  } else {
+    if (response_cache_) {
+      auto entry = response_cache_->lookup_routine(
+          ctxt->request->get_uri(),
+          {reinterpret_cast<const char *>(document.data()), document.size()});
+      if (entry) {
+        return {std::string{entry->data}};
+      }
+    }
+
+    auto res = call(ctxt, std::move(doc));
+
+    if (response_cache_ && res.status == HttpStatusCode::Ok) {
+      auto entry = response_cache_->create_routine_entry(
+          ctxt->request->get_uri(),
+          {reinterpret_cast<const char *>(document.data()), document.size()},
+          res.response);
+    }
+
+    return res;
+  }
+}
+
+HttpResult HandlerDbObjectSP::handle_get(rest::RequestContext *ctxt) {
+  // Get async task status on /svc/db/sp/taskId
+  if (get_options().mysql_task.driver !=
+      interface::Options::MysqlTask::DriverType::kNone) {
+    // only authenticated users can start async tasks
+    auto user_id = get_user_id(ctxt, true);
+    auto session = get_session(ctxt, collector::kMySQLConnectionUserdataRW);
+    std::string task_id =
+        get_path_after_object_name(endpoint_, ctxt->request->get_uri());
+
+    std::string result;
+
+    log_debug("HandlerDbObjectSP::handle_get check task_id=%s",
+              task_id.c_str());
+    database::QueryRestTaskStatus db;
+    db.query_status(session.get(), ctxt->request->get_uri().get_path(), user_id,
+                    get_options().mysql_task, task_id);
+
+    return {db.status, std::move(db.response), HttpResult::Type::typeJson};
+  } else {
+    auto &requests_uri = ctxt->request->get_uri();
+    const auto &query_kv = requests_uri.get_query_elements();
+
+    return call(ctxt, query_kv);
+  }
+}
+
+HttpResult HandlerDbObjectSP::handle_delete(rest::RequestContext *ctxt) {
+  // no task, no status
+  if (get_options().mysql_task.driver ==
+      interface::Options::MysqlTask::DriverType::kNone)
+    throw http::Error(HttpStatusCode::Forbidden);
+
+  // only authenticated users can start async tasks
+  auto user_id = get_user_id(ctxt, true);
+  auto session = get_session(ctxt, collector::kMySQLConnectionUserdataRW);
+  std::string task_id =
+      get_path_after_object_name(endpoint_, ctxt->request->get_uri());
+
+  database::QueryRestMysqlTask::kill_task(session.get(), user_id, task_id);
+
+  return {"{}"};
+}
+
 uint32_t HandlerDbObjectSP::get_access_rights() const {
   return HandlerDbObjectTable::get_access_rights() &
          (mrs::database::entry::Operation::valueRead |
-          mrs::database::entry::Operation::valueUpdate);
+          mrs::database::entry::Operation::valueCreate |
+          mrs::database::entry::Operation::valueUpdate |
+          mrs::database::entry::Operation::valueDelete);
 }
 
 }  // namespace handler

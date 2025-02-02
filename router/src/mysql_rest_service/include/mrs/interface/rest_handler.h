@@ -112,6 +112,17 @@ class Options {
     uint64_t timeout{0};
   } query;
 
+  class MysqlTask {
+   public:
+    enum class DriverType { kNone, kDatabase, kRouter };
+
+    std::string name;
+    DriverType driver = DriverType::kNone;
+    std::string event_schema;
+    std::string status_data_json_schema;
+    std::vector<std::string> monitoring_sql;
+  } mysql_task;
+
   class Result {
    public:
     bool include_links{true};

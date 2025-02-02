@@ -220,7 +220,7 @@ exec $MRS_CLIENT_ARGS
 --echo # I.1
 exec $MRS_CLIENT_ARGS
   --path /svc/proc/nothing -t POST
-  --expected-status Forbidden;
+  --expected-status BadRequest;
 
 --echo
 --echo #

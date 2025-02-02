@@ -83,14 +83,12 @@ using ResponseCache = mrs::ResponseCache;
 using EndpointId = EndpointManager::EndpointId;
 using IdType = EndpointManager::EndpointId::IdType;
 
-EndpointManager::EndpointManager(collector::MysqlCacheManager *cache,
-                                 const bool is_ssl,
-                                 mrs::interface::AuthorizeManager *auth_manager,
-                                 mrs::GtidManager *gtid_manager,
-                                 EndpointFactoryPtr endpoint_factory,
-                                 ResponseCache *response_cache,
-                                 ResponseCache *file_cache,
-                                 SlowQueryMonitor *slow_query_monitor)
+EndpointManager::EndpointManager(
+    collector::MysqlCacheManager *cache, const bool is_ssl,
+    mrs::interface::AuthorizeManager *auth_manager,
+    mrs::GtidManager *gtid_manager, EndpointFactoryPtr endpoint_factory,
+    ResponseCache *response_cache, ResponseCache *file_cache,
+    SlowQueryMonitor *slow_query_monitor, MysqlTaskMonitor *task_monitor)
     : cache_{cache},
       is_ssl_{is_ssl},
       auth_manager_{auth_manager},
@@ -99,7 +97,7 @@ EndpointManager::EndpointManager(collector::MysqlCacheManager *cache,
   if (!endpoint_factory_) {
     auto handler_factory = std::make_shared<mrs::endpoint::HandlerFactory>(
         auth_manager_, gtid_manager_, cache_, response_cache, file_cache,
-        slow_query_monitor);
+        slow_query_monitor, task_monitor);
     auto configuration = std::make_shared<EndpointConfiguration>(is_ssl);
     endpoint_factory_ =
         std::make_shared<EndpointFactory>(handler_factory, configuration);

@@ -24,6 +24,7 @@
 
 #include "mrs/database/query_rest_sp.h"
 
+#include "helper/json/to_string.h"
 #include "mrs/interface/http_result.h"
 #include "mrs/json/json_template_factory.h"
 #include "mrs/monitored/gtid_functions.h"
@@ -197,7 +198,6 @@ void QueryRestSP::query_entries(
     const JsonTemplateType type, mrs::GtidManager *gtid_manager) {
   rs_ = &rs;
   items_started_ = false;
-  items = 0;
   number_of_resultsets_ = 0;
   items_in_resultset_ = 0;
   ignore_column_ = ignore_column.c_str();

@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -46,7 +46,7 @@ class QueryRestSP : private QueryLog {
   using ResultSets = entry::ResultSets;
 
  public:
-  QueryRestSP(JsonTemplateFactory *factory = nullptr);
+  explicit QueryRestSP(JsonTemplateFactory *factory = nullptr);
 
   virtual void query_entries(collector::CountedMySQLSession *session,
                              const std::string &schema,
@@ -61,7 +61,6 @@ class QueryRestSP : private QueryLog {
 
   const char *get_sql_state();
   std::string response;
-  uint64_t items;
 
  protected:
   std::shared_ptr<JsonTemplate> create_template(JsonTemplateType type);

@@ -103,8 +103,8 @@
 # I.1
 POST /svc/func/nothing
 {
-    "message": "Forbidden",
-    "status": 403
+    "message": "Parameters must be encoded as fields in Json object.",
+    "status": 400
 }
 OK
 
@@ -121,7 +121,7 @@ OK
 # I.3
 PUT /svc/func/nothing
 {
-    "message": "Can't parse requests payload. It must be an Json object.",
+    "message": "Parameters must be encoded as fields in Json object.",
     "status": 400
 }
 OK
@@ -139,7 +139,7 @@ OK
 # I.5
 PUT /svc/func/nothing (payload-size:25)
 {
-    "message": "Not allowed object_field:not-existing-param",
+    "message": "Not allowed parameter:not-existing-param",
     "status": 400
 }
 OK
@@ -148,7 +148,7 @@ OK
 # I.6
 GET /svc/func/nothing?not-existing-param=10
 {
-    "message": "Not allowed object_field:not-existing-param",
+    "message": "Not allowed parameter:not-existing-param",
     "status": 400
 }
 OK
