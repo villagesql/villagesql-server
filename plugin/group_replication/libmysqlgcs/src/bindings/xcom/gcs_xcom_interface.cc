@@ -1552,19 +1552,18 @@ static bool must_filter_xcom_view_v1(synode_no config_id,
 
   bool filter_xcom_view = already_processed || event_horizon_reconfiguration;
 
-  MYSQL_GCS_TRACE_EXECUTE(if (filter_xcom_view) {
-    if (filter_xcom_view) {
-      MYSQL_GCS_LOG_TRACE(
-          "Received a global view we already processed: { group=%" PRIu32
-          " msgno=%" PRIu64 " node=%" PRIu32 " }",
-          config_id.group_id, config_id.msgno, config_id.node);
-    } else {
-      MYSQL_GCS_LOG_TRACE(
-          "Received a global view due to an event horizon reconfiguration: { "
-          "same_xcom_nodes=%d different_event_horizons=%d }",
-          same_xcom_nodes, different_event_horizons);
-    }
-  });
+  MYSQL_GCS_TRACE_EXECUTE(
+      if (filter_xcom_view) {
+        MYSQL_GCS_LOG_TRACE(
+            "Received a global view we already processed: { group=%" PRIu32
+            " msgno=%" PRIu64 " node=%" PRIu32 " }",
+            config_id.group_id, config_id.msgno, config_id.node);
+      } else {
+        MYSQL_GCS_LOG_TRACE(
+            "Received a global view due to an event horizon reconfiguration: { "
+            "same_xcom_nodes=%d different_event_horizons=%d }",
+            same_xcom_nodes, different_event_horizons);
+      });
 
   return filter_xcom_view;
 }
