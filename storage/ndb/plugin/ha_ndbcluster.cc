@@ -17635,6 +17635,9 @@ static SHOW_VAR ndb_status_vars[] = {
     {"Ndb", (char *)&show_ndb_metadata_synced, SHOW_FUNC, SHOW_SCOPE_GLOBAL},
     {"Ndb", (char *)&show_ndb_metadata_excluded_count, SHOW_FUNC,
      SHOW_SCOPE_GLOBAL},
+    {"Ndb_schema_participant_count",
+     (char *)&ndbcluster_binlog_get_schema_participant_count, SHOW_FUNC,
+     SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_LONG, SHOW_SCOPE_GLOBAL}};
 
 static MYSQL_SYSVAR_ULONG(extra_logging,         /* name */
