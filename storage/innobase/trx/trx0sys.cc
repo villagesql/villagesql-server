@@ -59,8 +59,9 @@ this program; if not, write to the Free Software Foundation, Inc.,
 /** The transaction system */
 trx_sys_t *trx_sys = nullptr;
 
-std::atomic<trx_id_t> Trx_by_id_with_min::s_lower_bound{0};
-std::atomic<trx_id_t> Trx_by_id_with_min::s_lower_bound_candidate{0};
+std::atomic<trx_id_t> Trx_by_id_with_min::s_lower_bound[2] = {0, 0};
+std::atomic<bool> Trx_by_id_with_min::s_updating_lower_bound{false};
+
 trx_id_t Trx_by_id_with_min::get_better_lower_bound_for_already_active_id() {
   trx_id_t min_seen = TRX_ID_MAX;
   static_assert(TRX_SHARDS_N < 1000, "The loop should be short");
@@ -72,46 +73,35 @@ trx_id_t Trx_by_id_with_min::get_better_lower_bound_for_already_active_id() {
         std::min(min_seen, trx_sys->shards[i].active_rw_trxs.peek().min_id());
   }
 
-  if (s_lower_bound.load() < min_seen) {
-    trx_id_t not_in_use{0};
+  auto current_lower_bound = get_cheap_lower_bound_for_already_active_id();
+  /* Only do something if it can result in bumping the s_lower_bound. */
+  if (current_lower_bound < min_seen) {
     /* Get the exclusive right to update the s_lower_bound and get help of other
     threads in updating the s_lower_bound_candidate. */
-    if (s_lower_bound_candidate.compare_exchange_strong(not_in_use, min_seen)) {
+    if (!s_updating_lower_bound.exchange(true)) {
+      const size_t index_to_update =
+          s_lower_bound[0].load() < s_lower_bound[1].load() ? 0 : 1;
+      s_lower_bound[index_to_update].store(min_seen | UPDATING_LOWER_BOUND);
+
       /* Check all the slots again. If another thread T lowers a value in a slot
-      after we have checked it, then T will lower the s_lower_bound_candidate
-      later, which we will handle in the while loop below. */
+      after we have checked it, then T will lower the
+      s_lower_bound[index_to_update] later. For an exhaustive proof see
+      s_lower_bound's doxygen */
       for (size_t i = 0; i < TRX_SHARDS_N; ++i) {
         min_seen = std::min(min_seen,
                             trx_sys->shards[i].active_rw_trxs.peek().min_id());
       }
-      limit_to(s_lower_bound_candidate, min_seen);
-      /* Since this point s_lower_bound_candidate must a good lower bound of
-      all ids in all shards, except for those which are currently in the
-      middle of insert(trx_id) and have not yet finished a call to
-      limit_to(s_lower_bound_candidate, trx_id).
-      But, such thread T will update s_lower_bound_candidate before updating
-      s_lower_bound. So, in the following dance, either:
-
-      1. we will load() the value T has stored in s_lower_bound_candidate, in
-      which case we will take it into account when storing to s_lower_bound.
-      Good.
-
-      2. we will s_lower_bound_candidate.load() before T stores to it,
-      in which case T will later store to s_lower_bound, which can either:
-
-        2.1. happen before we execute compare_exchange_weak, in which case
-        compare_exchange_weak will fail, and we will retry. Good.
-
-        2.2. happen after we've executed compare_exchange_weak, in which case
-        the thread T will update the s_lower_bound correctly. Good. */
-      while (true) {
-        auto old_lower_bound = s_lower_bound.load();
-        min_seen = s_lower_bound_candidate.load();
-        if (s_lower_bound.compare_exchange_weak(old_lower_bound, min_seen)) {
-          break;
-        }
-      }
-      s_lower_bound_candidate.store(0);
+      limit_to(s_lower_bound[index_to_update], min_seen);
+      /* Since this point onwards the
+      min(min_seen,s_lower_bound[index_to_update]&~UPDATING_LOWER_BOUND) must be
+      a good lower bound of all ids in all shards, except for those which are
+      currently in the middle of insert(trx_id) and have not yet tried to lower
+      the s_lower_bound using CAS. This is fine and in line of the definition of
+      a "lower bound", which only cares about finished calls to insert().*/
+      min_seen =
+          s_lower_bound[index_to_update].fetch_xor(UPDATING_LOWER_BOUND) ^
+          UPDATING_LOWER_BOUND;
+      s_updating_lower_bound.store(false);
     }
   }
   return min_seen;
