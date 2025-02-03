@@ -3096,6 +3096,9 @@ bool Protocol_classic::end_result_metadata() {
         <li>0x1f for dynamic strings, double, float</li>
         <li>0x00 to 0x51 for decimals</li>
         </ul></td></tr>
+  <tr><td>@ref sect_protocol_basic_dt_string_fix "string[2]"</td>
+      <td>reserved</td>
+      <td>reserved for future use.</td></tr>
   </table>
 
   @note `decimals` and `column_length` can be used for text output formatting
