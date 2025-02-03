@@ -54,7 +54,7 @@ bool LocalDnsCache::getCachedOrResolveAddress(ndb_sockaddr *result,
 
 int LocalDnsCache::getAddress(ndb_sockaddr *result_address,
                               const char *hostname) {
-  if (m_failed_lookups.count(hostname) != 0) {
+  if (m_failed_lookups.contains(hostname)) {
     // Lookup failed earlier, same result now
     return -1;
   }

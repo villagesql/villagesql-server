@@ -159,7 +159,7 @@ int main(int argc, const char *argv[]) {
 
     if (!isalpha(sym->name[0])) continue;  // Operator.
 
-    bool is_reserved = keyword_tokens.count(sym->tok) == 0;
+    bool is_reserved = !keyword_tokens.contains(sym->tok);
     if (!words.insert(std::make_pair(sym->name, is_reserved)).second) {
       fprintf(stderr,
               "This should not happen: \"%s\" has duplicates."

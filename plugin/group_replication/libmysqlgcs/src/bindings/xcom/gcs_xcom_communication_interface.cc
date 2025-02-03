@@ -184,7 +184,7 @@ int Gcs_xcom_communication::add_event_listener(
   int handler_key = 0;
   do {
     handler_key = rand();
-  } while (event_listeners.count(handler_key) != 0);
+  } while (event_listeners.contains(handler_key));
 
   event_listeners.emplace(handler_key, event_listener);
 
