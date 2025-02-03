@@ -217,8 +217,7 @@ void Gcs_xcom_communication::buffer_incoming_packet(
 
   MYSQL_GCS_LOG_TRACE("Buffering packet cargo=%u", packet.get_cargo_type());
 
-  m_buffered_packets.push_back(
-      std::make_pair(std::move(packet), std::move(xcom_nodes)));
+  m_buffered_packets.emplace_back(std::move(packet), std::move(xcom_nodes));
 }
 
 void Gcs_xcom_communication::deliver_buffered_packets() {

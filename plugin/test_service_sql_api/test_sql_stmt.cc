@@ -317,7 +317,7 @@ static int handle_start_column_metadata(void *pctx, uint num_cols, uint,
   DBUG_PRINT("info", ("resultcs->csname: %s", resultcs->csname));
   DBUG_PRINT("info", ("resultcs->m_coll_name: %s", resultcs->m_coll_name));
 
-  ctx->tables.push_back(Table(num_cols, resultcs));
+  ctx->tables.emplace_back(num_cols, resultcs);
   ctx->current_col = 0;
 
   return false;
@@ -340,10 +340,10 @@ static int handle_send_column_metadata(void *pctx, struct st_send_field *field,
   DBUG_PRINT("info", ("field->decimals: %d", (int)field->decimals));
   DBUG_PRINT("info", ("field->type: %d", (int)field->type));
 
-  ctx->tables.back().columns.push_back(
-      Column(field->db_name, field->table_name, field->org_table_name,
-             field->col_name, field->org_col_name, field->length,
-             field->charsetnr, field->flags, field->decimals, field->type));
+  ctx->tables.back().columns.emplace_back(
+      field->db_name, field->table_name, field->org_table_name, field->col_name,
+      field->org_col_name, field->length, field->charsetnr, field->flags,
+      field->decimals, field->type);
   ctx->current_col++;
   return false;
 }
@@ -406,7 +406,7 @@ static int handle_store_null(void *pctx) {
   DBUG_TRACE;
   const uint col = ctx->current_col;
   ctx->current_col++;
-  ctx->tables.back().columns[col].row_values.push_back("[NULL]");
+  ctx->tables.back().columns[col].row_values.emplace_back("[NULL]");
 
   return false;
 }
@@ -420,8 +420,7 @@ static int handle_store_integer(void *pctx, longlong value) {
 
   const size_t len = snprintf(buffer, sizeof(buffer), "%lld", value);
 
-  ctx->tables.back().columns[col].row_values.push_back(
-      std::string(buffer, len));
+  ctx->tables.back().columns[col].row_values.emplace_back(buffer, len);
 
   return false;
 }
@@ -436,8 +435,7 @@ static int handle_store_longlong(void *pctx, longlong value, uint is_unsigned) {
   const size_t len =
       snprintf(buffer, sizeof(buffer), is_unsigned ? "%llu" : "%lld", value);
 
-  ctx->tables.back().columns[col].row_values.push_back(
-      std::string(buffer, len));
+  ctx->tables.back().columns[col].row_values.emplace_back(buffer, len);
 
   return false;
 }
@@ -458,8 +456,7 @@ static int handle_store_decimal(void *pctx, const decimal_t *value) {
 
   int len = SIZEOF_SQL_STR_VALUE;
   test_decimal_as_string(buffer, value, &len);
-  ctx->tables.back().columns[col].row_values.push_back(
-      std::string(buffer, len));
+  ctx->tables.back().columns[col].row_values.emplace_back(buffer, len);
 
   return false;
 }
@@ -472,8 +469,7 @@ static int handle_store_double(void *pctx, double value, uint32) {
   ctx->current_col++;
 
   const size_t len = snprintf(buffer, sizeof(buffer), "%3.7g", value);
-  ctx->tables.back().columns[col].row_values.push_back(
-      std::string(buffer, len));
+  ctx->tables.back().columns[col].row_values.emplace_back(buffer, len);
 
   return false;
 }
@@ -489,8 +485,7 @@ static int handle_store_date(void *pctx, const MYSQL_TIME *value) {
       snprintf(buffer, sizeof(buffer), "%s%4d-%02d-%02d", value->neg ? "-" : "",
                value->year, value->month, value->day);
 
-  ctx->tables.back().columns[col].row_values.push_back(
-      std::string(buffer, len));
+  ctx->tables.back().columns[col].row_values.emplace_back(buffer, len);
 
   return false;
 }
@@ -506,8 +501,7 @@ static int handle_store_time(void *pctx, const MYSQL_TIME *value, uint) {
       buffer, sizeof(buffer), "%s%02d:%02d:%02d", value->neg ? "-" : "",
       value->day ? (value->day * 24 + value->hour) : value->hour, value->minute,
       value->second);
-  ctx->tables.back().columns[col].row_values.push_back(
-      std::string(buffer, len));
+  ctx->tables.back().columns[col].row_values.emplace_back(buffer, len);
   return false;
 }
 
@@ -523,8 +517,7 @@ static int handle_store_datetime(void *pctx, const MYSQL_TIME *value, uint) {
                value->neg ? "-" : "", value->year, value->month, value->day,
                value->hour, value->minute, value->second);
 
-  ctx->tables.back().columns[col].row_values.push_back(
-      std::string(buffer, len));
+  ctx->tables.back().columns[col].row_values.emplace_back(buffer, len);
 
   return false;
 }
@@ -536,8 +529,7 @@ static int handle_store_string(void *pctx, const char *const value,
   const uint col = ctx->current_col;
   ctx->current_col++;
 
-  ctx->tables.back().columns[col].row_values.push_back(
-      std::string(value, length));
+  ctx->tables.back().columns[col].row_values.emplace_back(value, length);
 
   return false;
 }

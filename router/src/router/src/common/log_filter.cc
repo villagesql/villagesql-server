@@ -43,8 +43,8 @@ std::string LogFilter::filter(std::string statement) const {
 
 void LogFilter::add_pattern(const std::string &pattern,
                             const std::string &replacement) {
-  patterns_.push_back(std::make_pair(
-      std::regex(pattern, std::regex_constants::icase), replacement));
+  patterns_.emplace_back(std::regex(pattern, std::regex_constants::icase),
+                         replacement);
 }
 
 void SQLLogFilter::add_default_sql_patterns() {

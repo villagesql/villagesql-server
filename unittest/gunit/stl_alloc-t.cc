@@ -337,8 +337,8 @@ class Container_container {
 
  public:
   Container_container() {
-    d.push_back(Container_object());
-    d.push_back(Container_object());
+    d.emplace_back();
+    d.emplace_back();
   }
 };
 

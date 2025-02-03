@@ -67,11 +67,11 @@ class Tcp_creator {
 
     if (BIND_ALL_ADDRESSES == bind_address) {
       bind_addresses.clear();
-      bind_addresses.push_back(BIND_IPv4_ADDRESS);
+      bind_addresses.emplace_back(BIND_IPv4_ADDRESS);
 
       if (is_ipv6_avaiable()) {
         log_info(ER_XPLUGIN_IPv6_AVAILABLE);
-        bind_addresses.push_back(BIND_IPv6_ADDRESS);
+        bind_addresses.emplace_back(BIND_IPv6_ADDRESS);
       }
     }
 

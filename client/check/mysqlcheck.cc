@@ -533,7 +533,7 @@ int main(int argc, char **argv) {
   // Sun Studio does not work with range constructor from char** to string.
   vector<string> conv;
   conv.reserve(argc);
-  for (int i = 0; i < argc; i++) conv.push_back(argv[i]);
+  for (int i = 0; i < argc; i++) conv.emplace_back(argv[i]);
 
   mysql_check(sock, what_to_do, opt_alldbs, opt_check_only_changed,
               opt_extended, opt_databases, opt_fast, opt_medium_check,

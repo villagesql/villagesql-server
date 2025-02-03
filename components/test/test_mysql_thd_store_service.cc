@@ -41,14 +41,14 @@ namespace test_mysql_thd_store_service {
 class Test_mysql_thd_data final {
  public:
   Test_mysql_thd_data() {
-    vector_.push_back("Quick ");
-    vector_.push_back("Brown ");
-    vector_.push_back("Fox ");
-    vector_.push_back("Jumped ");
-    vector_.push_back("Over ");
-    vector_.push_back("The ");
-    vector_.push_back("Lazy ");
-    vector_.push_back("Dog.");
+    vector_.emplace_back("Quick ");
+    vector_.emplace_back("Brown ");
+    vector_.emplace_back("Fox ");
+    vector_.emplace_back("Jumped ");
+    vector_.emplace_back("Over ");
+    vector_.emplace_back("The ");
+    vector_.emplace_back("Lazy ");
+    vector_.emplace_back("Dog.");
   }
 
   bool sanity(const std::string &expected) {

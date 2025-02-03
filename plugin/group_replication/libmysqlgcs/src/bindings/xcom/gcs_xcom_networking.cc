@@ -331,7 +331,7 @@ bool resolve_all_ip_addr_from_hostname(
 
     if (!inet_ntop(sa->sa_family, in_addr, cip, cip_len)) goto end;
 
-    ips.push_back(std::make_pair(sa->sa_family, std::string(cip)));
+    ips.emplace_back(sa->sa_family, std::string(cip));
 
     addrinfo_list = addrinfo_list->ai_next;
   }

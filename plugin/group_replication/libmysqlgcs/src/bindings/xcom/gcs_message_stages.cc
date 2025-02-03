@@ -263,7 +263,7 @@ std::pair<bool, Gcs_packet> Gcs_message_pipeline::create_packet(
 
   for (auto const &stage_code : stages_to_apply) {
     Gcs_message_stage &stage = *retrieve_stage(stage_code);
-    dynamic_headers.push_back(Gcs_dynamic_header(stage_code, 0));
+    dynamic_headers.emplace_back(stage_code, 0);
     stage_headers.push_back(stage.get_stage_header());
   }
 

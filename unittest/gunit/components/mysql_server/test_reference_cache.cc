@@ -174,7 +174,7 @@ static DEFINE_BOOL_METHOD(mysql_test_ref_cache_benchmark_run,
 
   std::vector<std::thread> thds;
   for (long long i = 0; i < n_threads; i++)
-    thds.push_back(std::thread([n_reps, n_sleep, n_flush]() {
+    thds.emplace_back([n_reps, n_sleep, n_flush]() {
       foo_cache *c = foo_cache::get_foo_cache();
       for (long long arg = 0; n_reps == 0 || arg < n_reps; arg++) {
         /* take again to measure the effect of fetching a populated cache */
@@ -190,7 +190,7 @@ static DEFINE_BOOL_METHOD(mysql_test_ref_cache_benchmark_run,
       }
 
       foo_cache::release_foo_cache();
-    }));
+    });
 
   std::for_each(thds.begin(), thds.end(), [](std::thread &t) { t.join(); });
   return 0;

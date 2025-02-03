@@ -172,7 +172,7 @@ static int process_all_tables_in_db(const string &database) {
     /* Skip views if we don't perform renaming. */
     if ((num_columns == 2) && (strcmp(row[1], "VIEW") == 0)) continue;
 
-    table_names.push_back(row[0]);
+    table_names.emplace_back(row[0]);
   }
   mysql_free_result(res);
 
@@ -294,7 +294,7 @@ static void print_result() {
           strcmp(row[3], "OK") != 0) {
         if (table_rebuild) {
           if (prev_alter[0])
-            alter_table_cmds.push_back(prev_alter);
+            alter_table_cmds.emplace_back(prev_alter);
           else
             tables4rebuild.push_back(escape_db_table_name(prev, dot_pos));
         } else {
@@ -346,7 +346,7 @@ static void print_result() {
   if (found_error && opt_auto_repair && what_to_do != DO_REPAIR) {
     if (table_rebuild) {
       if (prev_alter[0])
-        alter_table_cmds.push_back(prev_alter);
+        alter_table_cmds.emplace_back(prev_alter);
       else
         tables4rebuild.push_back(escape_db_table_name(prev, dot_pos));
     } else {

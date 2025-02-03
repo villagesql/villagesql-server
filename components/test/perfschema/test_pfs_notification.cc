@@ -484,7 +484,7 @@ bool test_pfs_notification() {
     if (handle == 0) {
       print_log("register_notification() failed");
     } else {
-      registrations.push_back(Registration(callbacks, handle));
+      registrations.emplace_back(callbacks, handle);
       ss << "register_notification " << handle;
       print_log(ss.str());
     }
