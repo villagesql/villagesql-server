@@ -403,7 +403,7 @@ class CPCD {
    *          - The RequestStatus will be filled in with a suitable error
    *            if an error occurred.
    */
-  bool undefineProcess(const int id, uintptr_t sessionid, RequestStatus *rs);
+  bool undefineProcess(int id, uintptr_t sessionid, RequestStatus *rs);
 
   /** Marks a Process for starting.
    *
@@ -417,7 +417,7 @@ class CPCD {
    *          - RequestStatus will be filled in with a suitable error
    *            if an error occurred.
    */
-  bool startProcess(const int id, uintptr_t sessionid, RequestStatus *rs);
+  bool startProcess(int id, uintptr_t sessionid, RequestStatus *rs);
 
   /** Marks a Process for stopping.
    *
@@ -427,7 +427,7 @@ class CPCD {
    *          - The RequestStatus will be filled in with a suitable error
    *            if an error occurred.
    */
-  bool stopProcess(const int id, uintptr_t sessionid, RequestStatus *rs);
+  bool stopProcess(int id, uintptr_t sessionid, RequestStatus *rs);
 
   /** Generates a list of processes, and sends them to the CPCD client */
   bool listProcesses(RequestStatus *rs, MutexVector<const char *> &);

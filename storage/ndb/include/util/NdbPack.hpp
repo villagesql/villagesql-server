@@ -466,9 +466,9 @@ class NdbPack {
    public:
     DataArray() {}
     ~DataArray() {}
-    void init_poai(const Uint32 *buf, const Uint32 cnt);
-    void init_bound(const BoundC &, const Uint32 cnt);
-    int cmp(const Spec *spec, const DataArray *d2, const Uint32 cnt) const;
+    void init_poai(const Uint32 *buf, Uint32 cnt);
+    void init_bound(const BoundC &, Uint32 cnt);
+    int cmp(const Spec *spec, const DataArray *d2, Uint32 cnt) const;
     Uint32 cnt() const;
     Uint32 get_null_cnt() const;
     Uint32 get_data_len() const;
@@ -483,9 +483,9 @@ class NdbPack {
   class BoundArray {
    public:
     BoundArray();
-    BoundArray(const Spec *, const DataArray *, const int side);
+    BoundArray(const Spec *, const DataArray *, int side);
     ~BoundArray() {}
-    int cmp(const DataArray *d2, const Uint32 cnt, bool ok_to_ret_eq) const;
+    int cmp(const DataArray *d2, Uint32 cnt, bool ok_to_ret_eq) const;
     Uint32 cnt() const;
 
    private:

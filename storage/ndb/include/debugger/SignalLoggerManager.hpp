@@ -171,7 +171,7 @@ class SignalLoggerManager {
    * Print data word in hex.  Adds line break before the word
    * when pos > 0 && pos % 7 == 0.  Increments pos.
    */
-  static void printDataWord(FILE *output, Uint32 &pos, const Uint32 data);
+  static void printDataWord(FILE *output, Uint32 &pos, Uint32 data);
 
  private:
   bool m_logDistributed;

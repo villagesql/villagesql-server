@@ -1260,10 +1260,9 @@ class NdbOperation {
    *
    * @return 0 for success.  NDBAPI to set error otherwise.
    */
-  static int handleOperationOptions(const OperationType type,
+  static int handleOperationOptions(OperationType type,
                                     const OperationOptions *opts,
-                                    const Uint32 sizeOfOptions,
-                                    NdbOperation *op);
+                                    Uint32 sizeOfOptions, NdbOperation *op);
 
   /******************************************************************************
    * The methods below is the execution part of the NdbOperation

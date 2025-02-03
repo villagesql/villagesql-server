@@ -56,10 +56,9 @@ class ParseThreadConfiguration {
  public:
   ParseThreadConfiguration(const char *str,
                            const struct ParseEntries *parse_entries,
-                           const unsigned int num_parse_entries,
+                           unsigned int num_parse_entries,
                            const struct ParseParams *parse_params,
-                           const unsigned int num_parse_params,
-                           BaseString &err_msg);
+                           unsigned int num_parse_params, BaseString &err_msg);
   ~ParseThreadConfiguration();
 
   int read_params(ParamValue values[], unsigned int num_values,

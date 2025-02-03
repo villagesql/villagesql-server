@@ -320,11 +320,10 @@ class NdbImportCsv {
     ~Eval();
     void do_init();
     void do_eval();
-    void eval_line(Row *row, Line *line, const uint expect_attrcnt);
-    void eval_auto_inc_field(Row *row, Line *line, Field *field,
-                             const uint attr_id);
-    void eval_field(Row *row, Line *line, Field *field, const uint attr_id);
-    void eval_null(Row *row, Line *line, Field *field, const uint attr_id);
+    void eval_line(Row *row, Line *line, uint expect_attrcnt);
+    void eval_auto_inc_field(Row *row, Line *line, Field *field, uint attr_id);
+    void eval_field(Row *row, Line *line, Field *field, uint attr_id);
+    void eval_null(Row *row, Line *line, Field *field, uint attr_id);
     Input &m_input;
     NdbImportCsv &m_csv;
     NdbImportUtil &m_util;

@@ -121,7 +121,7 @@ class Logger {
       @len max length of result buffer
 
   */
-  static void format_timestamp(const time_t epoch, char *str, size_t len);
+  static void format_timestamp(time_t epoch, char *str, size_t len);
 
   // Timestamp - handy class for getting a timestamp string
   class Timestamp {

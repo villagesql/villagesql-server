@@ -87,8 +87,7 @@ T xorChecksum(const T *const buf, const size_t words, T sum) {
  * We only use this aligned variant of XorChecksum for large memory blocks.
  * Thus, the overhead for the extra function call should be relatively small.
  */
-Uint32 computeXorChecksumAligned16(const Uint32 *buf, const size_t words,
-                                   const Uint32 sum);
+Uint32 computeXorChecksumAligned16(const Uint32 *buf, size_t words, Uint32 sum);
 
 inline Uint32 computeXorChecksum(const Uint32 *const buf, const size_t words,
                                  Uint32 sum = 0) {

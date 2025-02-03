@@ -79,9 +79,9 @@ class NdbInfo {
     Uint32 getRowsEstimate() const { return m_rows_estimate; }
     bool rowCountIsExact() const { return m_exact_row_count; }
 
-    bool addColumn(const Column aCol);
+    bool addColumn(Column aCol);
     unsigned columns() const;
-    const Column *getColumn(const unsigned attributeId) const;
+    const Column *getColumn(unsigned attributeId) const;
     const Column *getColumn(const char *name) const;
 
     const class VirtualTable *getVirtualTable() const;
@@ -122,7 +122,7 @@ class NdbInfo {
   BaseString m_short_prefix;  // "./ndbinfo/"
   Uint32 m_id_counter;
 
-  bool addColumn(Uint32 tableId, const Column aCol);
+  bool addColumn(Uint32 tableId, Column aCol);
 
   bool load_ndbinfo_tables();
   bool load_hardcoded_tables();

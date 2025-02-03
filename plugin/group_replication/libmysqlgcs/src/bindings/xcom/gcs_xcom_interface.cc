@@ -174,10 +174,10 @@ int cb_xcom_socket_accept(int fd, site_def const *xcom_config);
 xcom_input_request_ptr cb_xcom_input_try_pop();
 
 // XCom logging callback
-void cb_xcom_logger(const int64_t level, const char *message);
+void cb_xcom_logger(int64_t level, const char *message);
 void cb_xcom_debugger(const char *format, ...)
     MY_ATTRIBUTE((format(printf, 1, 2)));
-int cb_xcom_debugger_check(const int64_t options);
+int cb_xcom_debugger_check(int64_t options);
 
 Gcs_interface *Gcs_xcom_interface::get_interface() {
   if (interface_reference_singleton == nullptr) {

@@ -142,7 +142,7 @@ class NdbProcess {
 
   static std::unique_ptr<NdbProcess> create_via_ssh(
       const BaseString &name, const BaseString &host, const BaseString &path,
-      const BaseString &cwd, const Args &args, Pipes *const fds = nullptr);
+      const BaseString &cwd, const Args &args, Pipes *fds = nullptr);
 
  private:
 #ifdef _WIN32

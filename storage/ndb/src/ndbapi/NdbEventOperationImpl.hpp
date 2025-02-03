@@ -280,7 +280,7 @@ class EventBufData_hash {
     };
   };
 
-  void append(const Pos hpos);
+  void append(Pos hpos);
   EventBufData *search(Pos &hpos, NdbEventOperationImpl *op,
                        const LinearSectionPtr ptr[3]);
 
@@ -652,7 +652,7 @@ class NdbEventOperationImpl : public NdbEventOperation {
 
 class EventBufferManager {
  public:
-  EventBufferManager(const Ndb *const m_ndb);
+  EventBufferManager(const Ndb *m_ndb);
   ~EventBufferManager() {}
 
  private:
@@ -822,13 +822,13 @@ class NdbEventBuffer {
   void init_gci_containers();
 
   // accessed from the "receive thread"
-  int insertDataL(NdbEventOperationImpl *op, const SubTableData *const sdata,
+  int insertDataL(NdbEventOperationImpl *op, const SubTableData *sdata,
                   Uint32 len, const LinearSectionPtr ptr[3]);
-  void execSUB_GCP_COMPLETE_REP(const SubGcpCompleteRep *const, Uint32 len,
+  void execSUB_GCP_COMPLETE_REP(const SubGcpCompleteRep *, Uint32 len,
                                 int complete_cluster_failure = 0);
-  void execSUB_START_CONF(const SubStartConf *const, Uint32 len);
-  void execSUB_STOP_CONF(const SubStopConf *const, Uint32 len);
-  void execSUB_STOP_REF(const SubStopRef *const, Uint32 len);
+  void execSUB_START_CONF(const SubStartConf *, Uint32 len);
+  void execSUB_STOP_CONF(const SubStopConf *, Uint32 len);
+  void execSUB_STOP_REF(const SubStopRef *, Uint32 len);
 
   void complete_outof_order_gcis();
 
@@ -882,9 +882,9 @@ class NdbEventBuffer {
   EventBufData *alloc_data();
   EventBufDataHead *alloc_data_main();
   int alloc_mem(EventBufData *data, const LinearSectionPtr ptr[3]);
-  int copy_data(const SubTableData *const sdata, Uint32 len,
+  int copy_data(const SubTableData *sdata, Uint32 len,
                 const LinearSectionPtr ptr[3], EventBufData *data);
-  int merge_data(const SubTableData *const sdata, Uint32 len,
+  int merge_data(const SubTableData *sdata, Uint32 len,
                  const LinearSectionPtr ptr[3], EventBufData *data);
   int get_main_data(Gci_container *bucket, EventBufData_hash::Pos &hpos,
                     EventBufData *blob_data);
@@ -1025,7 +1025,7 @@ class NdbEventBuffer {
 
   Uint16 find_sub_data_stream_number(Uint16 sub_data_stream);
   void crash_on_invalid_SUB_GCP_COMPLETE_REP(const Gci_container *bucket,
-                                             const SubGcpCompleteRep *const rep,
+                                             const SubGcpCompleteRep *rep,
                                              Uint32 replen, Uint32 remcnt,
                                              Uint32 repcnt) const;
 

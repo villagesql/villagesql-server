@@ -121,7 +121,7 @@
   }
 
 int myCreateEvent(Ndb *myNdb, const char *eventName, const char *eventTableName,
-                  const char **eventColumnName, const int noEventColumnName,
+                  const char **eventColumnName, int noEventColumnName,
                   bool merge_events);
 
 int main(int argc, char **argv) {

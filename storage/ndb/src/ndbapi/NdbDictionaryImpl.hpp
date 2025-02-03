@@ -484,8 +484,8 @@ class NdbEventImpl : public NdbDictionary::Event, public NdbDictObjectImpl {
   const NdbDictionary::Table *getTable() const;
   int setTable(const char *table);
   const char *getTableName() const;
-  void addTableEvent(const NdbDictionary::Event::TableEvent t);
-  bool getTableEvent(const NdbDictionary::Event::TableEvent t) const;
+  void addTableEvent(NdbDictionary::Event::TableEvent t);
+  bool getTableEvent(NdbDictionary::Event::TableEvent t) const;
   void setReport(Uint32 report_options);
   Uint32 getReport() const;
   int getNoOfEventColumns() const;

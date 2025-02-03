@@ -627,8 +627,7 @@ class NdbBlob {
     OT_DELETE = 1 << 4
   } OpTypes;
   Uint32 getOpType();  // Not const as used methods !const
-  static bool isOpTypeSafeWithBatch(const Uint32 batchOpTypes,
-                                    const Uint32 newOpType);
+  static bool isOpTypeSafeWithBatch(Uint32 batchOpTypes, Uint32 newOpType);
 
   // Key compare
   /* Returns 0 if different, 1 if same, - otherwise */

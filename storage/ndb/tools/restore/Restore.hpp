@@ -416,7 +416,7 @@ class BackupFile {
   const char *getFilename() const { return m_fileName; }
   Uint32 getNodeId() const { return m_nodeId; }
   const BackupFormat::FileHeader &getFileHeader() const { return m_fileHeader; }
-  bool Twiddle(const AttributeDesc *const attr_desc, AttributeData *attr_data);
+  bool Twiddle(const AttributeDesc *attr_desc, AttributeData *attr_data);
 
   Uint64 get_file_size() const { return m_file_size; }
   /**
@@ -435,7 +435,7 @@ class BackupFile {
   static const Uint32 BUFFER_SIZE = 128 * 1024;
 
  private:
-  void twiddle_atribute(const AttributeDesc *const attr_desc,
+  void twiddle_atribute(const AttributeDesc *attr_desc,
                         AttributeData *attr_data);
 };
 
@@ -501,7 +501,7 @@ class RestoreDataIterator : public BackupFile {
   bool validateFragmentFooter();
   bool validateRestoreDataIterator();
 
-  const TupleS *getNextTuple(int &res, const bool skipFragment);
+  const TupleS *getNextTuple(int &res, bool skipFragment);
   TableS *getCurrentTable();
 
  private:

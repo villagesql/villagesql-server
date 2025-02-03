@@ -266,8 +266,8 @@ class TransporterFacade : public TransporterCallback,
   int get_auto_reconnect() const;
 
   /* TransporterCallback interface. */
-  bool deliver_signal(SignalHeader *const header, Uint8 prio,
-                      TransporterError &error_code, Uint32 *const signalData,
+  bool deliver_signal(SignalHeader *header, Uint8 prio,
+                      TransporterError &error_code, Uint32 *signalData,
                       LinearSectionPtr ptr[3]) override;
   void handleMissingClnt(const SignalHeader *header, const Uint32 *theData);
 
@@ -324,7 +324,7 @@ class TransporterFacade : public TransporterCallback,
    * was delivered to it by the poll_owner.
    */
   void lock_client(trp_client *);
-  bool check_if_locked(const trp_client *, const Uint32 start) const;
+  bool check_if_locked(const trp_client *, Uint32 start) const;
 
   /**
    * List if trp_clients locked by the *m_poll_owner.

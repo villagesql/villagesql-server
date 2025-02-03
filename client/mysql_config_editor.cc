@@ -94,7 +94,7 @@ static void mask_password_and_print(char *buf);
 static int reset_login_file(bool gen_key);
 
 static int encrypt_buffer(const char *plain, int plain_len, char cipher[],
-                          const int aes_len);
+                          int aes_len);
 static int decrypt_buffer(const char *cipher, int cipher_len, char plain[]);
 static int encrypt_and_write_file(DYNAMIC_STRING *file_buf);
 static int read_and_decrypt_file(DYNAMIC_STRING *file_buf);
