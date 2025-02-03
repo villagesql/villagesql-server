@@ -26,6 +26,7 @@
 #ifndef MYSQLROUTER_CONFIG_SECTION_PRINTER_INCLUDED
 #define MYSQLROUTER_CONFIG_SECTION_PRINTER_INCLUDED
 
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
