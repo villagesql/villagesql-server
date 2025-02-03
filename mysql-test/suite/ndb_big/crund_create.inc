@@ -1,33 +1,12 @@
--- Copyright (c) 2010, 2025, Oracle and/or its affiliates.
---
--- This program is free software; you can redistribute it and/or modify
--- it under the terms of the GNU General Public License, version 2.0,
--- as published by the Free Software Foundation.
---
--- This program is designed to work with certain software (including
--- but not limited to OpenSSL) that is licensed under separate terms,
--- as designated in a particular file or component or in included license
--- documentation.  The authors of MySQL hereby grant you an additional
--- permission to link the program and your derivative works with the
--- separately licensed software that they have either included with
--- the program or referenced in the documentation.
---
--- This program is distributed in the hope that it will be useful,
--- but WITHOUT ANY WARRANTY; without even the implied warranty of
--- MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
--- GNU General Public License, version 2.0, for more details.
---
--- You should have received a copy of the GNU General Public License
--- along with this program; if not, write to the Free Software
--- Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+# This file can be outside of mysql-test-run to create the test and
+# result tables for the CRUND benchmark environment described under
+# storage/ndb/test/crund
+#
+# mysql -u root < crund_create.inc
+#
 
-SET default_storage_engine=NDB;
-
-DROP DATABASE IF EXISTS crunddb;
 CREATE DATABASE crunddb;
 USE crunddb;
-
--- schema details: $ ndb_desc -c localhost <table lower case> -d <database>
 
 CREATE TABLE a (
         id              INT     PRIMARY KEY,
@@ -35,7 +14,7 @@ CREATE TABLE a (
         clong           BIGINT,
         cfloat          FLOAT,
         cdouble         DOUBLE
-);
+) engine = ndbcluster DEFAULT CHARSET=latin1;
 
 CREATE TABLE b (
         id              INT     PRIMARY KEY,
@@ -56,7 +35,7 @@ CREATE TABLE b (
         -- ctext_utf8      TEXT(202) CHARACTER SET UTF8MB3,
         CONSTRAINT FK_B_1 FOREIGN KEY (a_id) REFERENCES a (id),
         INDEX I_B_FK (a_id)
-);
+) engine = ndbcluster DEFAULT CHARSET=latin1;
 
 CREATE TABLE s (
         c0      VARCHAR(10)     NOT NULL,
@@ -85,15 +64,15 @@ CREATE TABLE s (
         -- UNIQUE INDEX c2_UNIQUE (c2 ASC),
         -- UNIQUE INDEX c7_UNIQUE (c7 ASC),
         -- UNIQUE INDEX c8_UNIQUE (c8 ASC)
-);
+) engine = ndbcluster DEFAULT CHARSET=latin1;
 
--- ----------------------------------------------------------------------
--- Results Schema
--- ----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# Results Schema
+# ----------------------------------------------------------------------
 
--- aggregated results from crund runs
--- example queries:
--- load data infile '/Users/mz/mysql/crundcharting/log_results.csv' ignore into table results fields terminated by ',' ignore 1 lines;
+# aggregated results from crund runs
+# example queries:
+# load data infile 'log_results.csv' ignore into table results fields terminated by ',' ignore 1 lines;
 CREATE TABLE results (
         metric          VARCHAR(16)     NOT NULL,
         cload           VARCHAR(16)     NOT NULL,
@@ -105,15 +84,15 @@ CREATE TABLE results (
         metric_nrows    DECIMAL(8,2)    NOT NULL,
         rsdev           DECIMAL(8,2)    NOT NULL,
         UNIQUE KEY (metric, cload, nrows, op, xmode)
-) ENGINE=MEMORY;
+) DEFAULT CHARSET=latin1;
 
--- base view with rtime as metric
+# base view with rtime as metric
 CREATE VIEW results_rtime
        AS (SELECT cload, op, xmode, nrows, nrows_metric
            FROM results
            WHERE metric = 'rtime[ms]');
 
--- base views for fixed xMode values
+# base views for fixed xMode values
 CREATE VIEW results_rtime_indy AS
         (SELECT cload, op, nrows_metric AS 'indy', nrows
          FROM results_rtime
@@ -127,12 +106,12 @@ CREATE VIEW results_rtime_bulk AS
          FROM results_rtime
          WHERE xmode='bulk');
 
--- joined view with xmode values in columns
--- using left outer joines (full outer joins not supported, emulateable by union of left+right)
--- i.e., ok for bulk-only results but have to deal with indy- and each-only results separately
--- example queries:
--- select * from results_rtime_xmode where op like '%getAttr%' order by nrows, cload, op;
--- select * from results_rtime_xmode where op like '%getAttr%' and nrows=1000 order by cload, op;
+# joined view with xmode values in columns
+# using left outer joines (full outer joins not supported, emulateable by union of left+right)
+# i.e., ok for bulk-only results but have to deal with indy- and each-only results separately
+# example queries:
+# select * from results_rtime_xmode where op like '%getAttr%' order by nrows, cload, op;
+# select * from results_rtime_xmode where op like '%getAttr%' and nrows=1000 order by cload, op;
 CREATE VIEW results_rtime_xmode AS
         (SELECT nrows,
                 cload,
@@ -145,7 +124,7 @@ CREATE VIEW results_rtime_xmode AS
                 NATURAL LEFT OUTER JOIN results_rtime_indy AS i
          ORDER BY nrows, cload, op);
 
--- base views for fixed nrows values (10^2, 10^3, 10^4)
+# base views for fixed nrows values (10^2, 10^3, 10^4)
 CREATE VIEW results_rtime_nrows2 AS
         (SELECT cload, op, nrows_metric AS 'nrows2', xmode
          FROM results_rtime
@@ -159,13 +138,13 @@ CREATE VIEW results_rtime_nrows4 AS
          FROM results_rtime
          WHERE nrows=10000);
 
--- joined view with nrows values in columns
--- using inner joines (full outer joins not supported, emulateable by union of left+right)
--- i.e., have to deal with r2/r3/r4-only results separately
--- example queries:
--- select * from results_rtime_nrows where op like '%getAttr%' order by xmode, cload, op;
--- select * from results_rtime_nrows where op like '%getAttr%' and xmode='bulk' order by cload, op;
--- select * from results_rtime_nrows where op like '%delAll%' and xmode='bulk' order by cload, op;
+# joined view with nrows values in columns
+# using inner joines (full outer joins not supported, emulateable by union of left+right)
+# i.e., have to deal with r2/r3/r4-only results separately
+# example queries:
+# select * from results_rtime_nrows where op like '%getAttr%' order by xmode, cload, op;
+# select * from results_rtime_nrows where op like '%getAttr%' and xmode='bulk' order by cload, op;
+# select * from results_rtime_nrows where op like '%delAll%' and xmode='bulk' order by cload, op;
 CREATE VIEW results_rtime_nrows AS
         (SELECT xmode,
                 cload,
