@@ -28,10 +28,10 @@
 #endif
 
 #include <string>
+#include <vector>
 
 #include "File.hpp"
 #include "NdbProcess.hpp"
-#include "cstrbuf.h"
 #include "mgmapi.h"
 #include "ndb_version.h"
 
