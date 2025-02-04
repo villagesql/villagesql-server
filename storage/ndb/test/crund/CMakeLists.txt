@@ -1,4 +1,4 @@
-# Copyright (c) 2008, 2025, Oracle and/or its affiliates.
+# Copyright (c) 2010, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -21,32 +21,41 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-# Disable specific types of warnings for current directory
-# if the compiler supports the flag
+INCLUDE_DIRECTORIES(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/helpers)
 
-INCLUDE(ndb_downgrade_warnings)
+#
+## runCrund
+###
+NDB_ADD_EXECUTABLE(runCrund runCrund.cpp NDBCLIENT)
+TARGET_COMPILE_DEFINITIONS(runCrund PRIVATE
+                           CMAKE_BINARY_DIR=\"${CMAKE_BINARY_DIR}\"
+                           WITH_CLASSPATH=\"${WITH_CLASSPATH}\"
+                          )
 
-IF(MY_COMPILER_IS_GNU_OR_CLANG)
-  INCLUDE(CheckCXXCompilerFlag)
-  FOREACH(warning
-      "cast-qual"
-      "maybe-uninitialized"
-      "restrict"
-      "unused-but-set-variable"
-      "unused-parameter"
-      )
-    MY_CHECK_CXX_COMPILER_WARNING("${warning}" HAS_WARN_FLAG)
-    IF(HAS_WARN_FLAG)
-      SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-${warning}")
-      SET(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wno-${warning}")
-    ENDIF()
-  ENDFOREACH()
+#
+## C++ Crund Helpers
+###
+SET (C_HELPER_SOURCES
+     helpers/src/hrt_stopwatch.cpp
+     helpers/src/hrt_gstopwatch.cpp
+     helpers/src/hrt_utils.cpp
+     )
+
+ADD_CONVENIENCE_LIBRARY(crund_helpers ${C_HELPER_SOURCES})
+
+NDB_ADD_TEST(hrt_utils_test helpers/src/hrt_utils_test.cpp LIBS crund_helpers)
+NDB_ADD_TEST(hrt_stopwatch_test helpers/src/hrt_stopwatch_test.cpp
+             LIBS crund_helpers)
+NDB_ADD_TEST(Properties_test helpers/src/Properties_test.cpp)
+
+#
+## C++ Crund (AB load for ndbapi)
+###
+ADD_SUBDIRECTORY(cpp)
+
+#
+## Java Crund (AB & S loads for ClusterJ, Ndbjtie, and JDBC)
+###
+IF(WITH_NDB_JAVA)
+  ADD_SUBDIRECTORY(java)
 ENDIF()
-
-ADD_SUBDIRECTORY(src)
-IF(WITH_NDB_TEST)
-  ADD_SUBDIRECTORY(tools)
-  ADD_SUBDIRECTORY(ndbapi)
-  ADD_SUBDIRECTORY(run-test)
-  ADD_SUBDIRECTORY(crund)
-ENDIF(WITH_NDB_TEST)
