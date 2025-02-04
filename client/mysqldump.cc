@@ -35,6 +35,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <forward_list>
 #include <string>
 #include <unordered_map>
 
@@ -179,6 +180,8 @@ static uint my_end_arg;
 static char *opt_mysql_unix_port = nullptr;
 static char *opt_bind_addr = nullptr;
 static int first_error = 0;
+static bool opt_dump_users = false;
+static bool opt_add_drop_user = false;
 #include "client/include/authentication_kerberos_clientopt-vars.h"
 #include "client/include/caching_sha2_passwordopt-vars.h"
 #include "client/include/multi_factor_passwordopt-vars.h"
@@ -249,7 +252,8 @@ const char *default_dbug_option = "d:t:o,/tmp/mysqldump.trace";
 /* have we seen any VIEWs during table scanning? */
 bool seen_views = false;
 
-collation_unordered_set<string> *ignore_table;
+collation_unordered_set<string> *ignore_table, *include_user;
+std::forward_list<string> *exclude_user;
 
 static struct my_option my_long_options[] = {
     {"all-databases", 'A',
@@ -272,6 +276,9 @@ static struct my_option my_long_options[] = {
     {"add-drop-trigger", 0, "Add a DROP TRIGGER before each create.",
      &opt_drop_trigger, &opt_drop_trigger, nullptr, GET_BOOL, NO_ARG, 0, 0, 0,
      nullptr, 0, nullptr},
+    {"add-drop-user", 0, "Add DROP USER when dumping the user definitions",
+     &opt_add_drop_user, &opt_add_drop_user, nullptr, GET_BOOL, OPT_ARG, 0, 0,
+     0, nullptr, 0, nullptr},
     {"add-locks", OPT_LOCKS, "Add locks around INSERT statements.", &opt_lock,
      &opt_lock, nullptr, GET_BOOL, NO_ARG, 1, 0, 0, nullptr, 0, nullptr},
     {"allow-keywords", OPT_KEYWORDS,
@@ -451,6 +458,21 @@ static struct my_option my_long_options[] = {
      "use the directive multiple times, once for each table.  Each table must "
      "be specified with both database and table names, e.g., "
      "--ignore-table=database.table.",
+     nullptr, nullptr, nullptr, GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0,
+     nullptr},
+    {"exclude-user", OPT_MYSQLDUMP_EXCLUDE_USER,
+     "Do not dump the specified user account. To specify more than one user "
+     "account to exclude, use the directive multiple times, once for each user "
+     "account.  Each user account must be specified with both user and host "
+     "part, e.g., --exclude-user=foo@localhost.",
+     nullptr, nullptr, nullptr, GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0,
+     nullptr},
+    {"include-user", OPT_MYSQLDUMP_INCLUDE_USER,
+     "Dump the specified user account. If no --include-user is specified, dump "
+     "all user accounts by default. To specify more than one user account to "
+     "dump, use the directive multiple times, once for each user account.  "
+     "Each user account must be specified with both user and host part, e.g., "
+     "--exclude-users=foo@localhost.",
      nullptr, nullptr, nullptr, GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0,
      nullptr},
     {"include-source-host-port", OPT_MYSQLDUMP_INCLUDE_SOURCE_HOST_PORT,
@@ -666,6 +688,11 @@ static struct my_option my_long_options[] = {
     {"user", 'u', "User for login if not current user.", &current_user,
      &current_user, nullptr, GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0,
      nullptr},
+    {"users", 0,
+     "Dump user accounts as logical definitions in the form of CREATE USER and "
+     "GRANT statements. Not compatible with --flush-privileges!",
+     &opt_dump_users, &opt_dump_users, nullptr, GET_BOOL, OPT_ARG, 0, 0, 0,
+     nullptr, 0, nullptr},
     {"verbose", 'v', "Print info about the various stages.", &verbose, &verbose,
      nullptr, GET_BOOL, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"version", 'V', "Output version information and exit.", nullptr, nullptr,
@@ -767,6 +794,9 @@ static void verbose_msg(const char *fmt, ...)
     MY_ATTRIBUTE((format(printf, 1, 2)));
 static char const *fix_identifier_with_newline(char const *object_name,
                                                bool *freemem);
+static bool dump_users(FILE *sql_file);
+static bool dump_grants(FILE *sql_file);
+static bool fetch_users_list_if_include_is_empty();
 
 static std::unordered_map<string, string> compatibility_rpl_replica_commands = {
     {"SHOW REPLICA STATUS", "SHOW SLAVE STATUS"},
@@ -1095,7 +1125,23 @@ static bool get_one_option(int optid, const struct my_option *opt,
                 "Illegal use of option --ignore-table=<database>.<table>\n");
         exit(1);
       }
-      ignore_table->insert(argument);
+      ignore_table->emplace(argument);
+      break;
+    }
+    case (int)OPT_MYSQLDUMP_EXCLUDE_USER: {
+      if (!strchr(argument, '@')) {
+        fprintf(stderr, "Illegal use of option --exclude-user=<user>@<host>\n");
+        exit(1);
+      }
+      exclude_user->emplace_front(argument);
+      break;
+    }
+    case (int)OPT_MYSQLDUMP_INCLUDE_USER: {
+      if (!strchr(argument, '@')) {
+        fprintf(stderr, "Illegal use of option --include-user=<user>@<host>\n");
+        exit(1);
+      }
+      include_user->emplace(argument);
       break;
     }
     case (int)OPT_COMPATIBLE: {
@@ -1177,6 +1223,9 @@ static int get_options(int *argc, char ***argv) {
 
   ignore_table =
       new collation_unordered_set<string>(charset_info, PSI_NOT_INSTRUMENTED);
+  exclude_user = new std::forward_list<string>();
+  include_user =
+      new collation_unordered_set<string>(charset_info, PSI_NOT_INSTRUMENTED);
   /* Don't copy internal log tables */
   ignore_table->insert("mysql.apply_status");
   ignore_table->insert("mysql.schema");
@@ -1191,6 +1240,47 @@ static int get_options(int *argc, char ***argv) {
       mysql_options(nullptr, MYSQL_OPT_NET_BUFFER_LENGTH,
                     &opt_net_buffer_length)) {
     exit(1);
+  }
+  if (opt_dump_users) {
+    if (flush_privileges) {
+      fprintf(
+          stderr,
+          "%s: The --users option is incompatible with --flush-privileges\n",
+          my_progname);
+      return (EX_USAGE);
+    }
+    if (opt_xml) {
+      fprintf(stderr, "%s: The --users option is incompatible with --xml\n",
+              my_progname);
+      return (EX_USAGE);
+    }
+    /* ignore the ACL tables if we are dumping logical ACL */
+    ignore_table->insert("mysql.user");
+    ignore_table->insert("mysql.global_grants");
+    ignore_table->insert("mysql.db");
+    ignore_table->insert("mysql.tables_priv");
+    ignore_table->insert("mysql.columns_priv");
+    ignore_table->insert("mysql.procs_priv");
+    ignore_table->insert("mysql.proxies_priv");
+    ignore_table->insert("mysql.default_roles");
+    ignore_table->insert("mysql.role_edges");
+    ignore_table->insert("mysql.password_history");
+  } else {
+    if (include_user->size() > 0) {
+      fprintf(stderr,
+              "%s: The --include-user option is a no-op without --users\n",
+              my_progname);
+    }
+    if (!exclude_user->empty()) {
+      fprintf(stderr,
+              "%s: The --exclude-user option is a no-op without --users\n",
+              my_progname);
+    }
+    if (opt_add_drop_user) {
+      fprintf(stderr,
+              "%s: The --add-drop-user option is a no-op without --users\n",
+              my_progname);
+    }
   }
 
   if (debug_info_flag) my_end_arg = MY_CHECK_ERROR | MY_GIVE_INFO;
@@ -1242,7 +1332,8 @@ static int get_options(int *argc, char ***argv) {
       !(charset_info =
             get_charset_by_csname(default_charset, MY_CS_PRIMARY, MYF(MY_WME))))
     exit(1);
-  if ((*argc < 1 && !opt_alldbs) || (*argc > 0 && opt_alldbs)) {
+  if ((*argc < 1 && !opt_alldbs && !opt_dump_users) ||
+      (*argc > 0 && opt_alldbs)) {
     short_usage();
     return EX_USAGE;
   }
@@ -1625,10 +1716,12 @@ static void free_resources() {
   if (md_result_file && md_result_file != stdout)
     my_fclose(md_result_file, MYF(0));
   free_passwords();
-  if (ignore_table != nullptr) {
-    delete ignore_table;
-    ignore_table = nullptr;
-  }
+  delete ignore_table;
+  ignore_table = nullptr;
+  delete include_user;
+  include_user = nullptr;
+  delete exclude_user;
+  exclude_user = nullptr;
   if (insert_pat_inited) dynstr_free(&insert_pat);
   if (opt_ignore_error) my_free(opt_ignore_error);
   opt_init_commands.free();
@@ -4564,6 +4657,8 @@ static int dump_tablespaces_for_databases(char **databases) {
   int r;
   int i;
 
+  if (databases[0] == nullptr) return 0;
+
   init_dynamic_string_checked(&where,
                               " AND TABLESPACE_NAME IN ("
                               "SELECT DISTINCT TABLESPACE_NAME FROM"
@@ -5151,10 +5246,10 @@ static int dump_all_tables_in_db(char *database) {
             "-- Warning: get_table_structure() failed with some internal "
             "error for 'slow_log' table\n");
     }
-  }
-  if (flush_privileges && using_mysql_db) {
-    fprintf(md_result_file, "\n--\n-- Flush Grant Tables \n--\n");
-    fprintf(md_result_file, "\n/*! FLUSH PRIVILEGES */;\n");
+    if (flush_privileges) {
+      fprintf(md_result_file, "\n--\n-- Flush Grant Tables \n--\n");
+      fprintf(md_result_file, "\n/*! FLUSH PRIVILEGES */;\n");
+    }
   }
   return 0;
 } /* dump_all_tables_in_db */
@@ -6372,6 +6467,90 @@ static bool get_view_structure(char *table, char *db) {
   return false;
 }
 
+static bool fetch_users_list_if_include_is_empty() {
+  if (include_user->size() != 0) return false;
+
+  const char *enum_users_query =
+      "SELECT CONCAT('\\'',user,'\\'@\\'',host,'\\''),"
+      " CONCAT(QUOTE(user),'@',QUOTE(host)), CONCAT(user,'@',host)"
+      "FROM mysql.user";
+  MYSQL_RES *enum_users_res;
+  MYSQL_ROW enum_users_row;
+  if (mysql_query_with_error_report(mysql, &enum_users_res, enum_users_query))
+    return true;
+  if (!enum_users_res) return true;
+  auto enum_users_res_guard =
+      create_scope_guard([&] { mysql_free_result(enum_users_res); });
+
+  while ((enum_users_row = mysql_fetch_row(enum_users_res)) != nullptr) {
+    const char *user_name;
+    if (strcmp(enum_users_row[0], enum_users_row[1]) ||
+        strpbrk(enum_users_row[0], ".%- "))
+      user_name = enum_users_row[1];
+    else
+      user_name = enum_users_row[2];
+    include_user->emplace(user_name);
+  }
+  return false;
+}
+
+static void retract_excluded_users() {
+  for (; !exclude_user->empty(); exclude_user->pop_front()) {
+    if (0 == include_user->erase(exclude_user->front())) {
+      fprintf(stderr,
+              "Warning: --exclude-user=%s didn't match any included account\n",
+              exclude_user->front().c_str());
+    }
+  }
+}
+
+/**
+  @brief Do a logical dump of all ACL data: users, roles, grants
+
+  @param sql_file The output SQL file to write to
+  @retval false success
+  @retval true failure
+*/
+static bool dump_users(FILE *sql_file) {
+  for (auto user : *include_user) {
+    if (opt_add_drop_user) fprintf(sql_file, "DROP USER %s;\n", user.c_str());
+
+    /* execute and dump SHOW CREATE USER */
+    MYSQL_RES *res;
+    MYSQL_ROW row;
+    std::string query = "SHOW CREATE USER " + user;
+    if (mysql_query_with_error_report(mysql, &res, query.c_str())) return true;
+    if (!res) return true;
+    auto res_guard = create_scope_guard([&] { mysql_free_result(res); });
+    if (nullptr == (row = mysql_fetch_row(res))) {
+      DB_error(mysql, "retrieving SHOW CREATE USER result");
+      return true;
+    }
+    fprintf(sql_file, "%s;\n", row[0]);
+  }
+  return false;
+}
+
+static bool dump_grants(FILE *sql_file) {
+  for (auto user : *include_user) {
+    /* execute and dump SHOW GRANTS */
+    MYSQL_RES *res;
+    MYSQL_ROW row;
+    std::string query = "SHOW GRANTS FOR " + user;
+    if (mysql_query_with_error_report(mysql, &res, query.c_str())) return true;
+    if (!res) return true;
+    auto res_guard = create_scope_guard([&] { mysql_free_result(res); });
+    while (nullptr != (row = mysql_fetch_row(res))) {
+      fprintf(sql_file, "%s;\n", row[0]);
+    }
+    if (mysql_errno(mysql) != 0) {
+      DB_error(mysql, "retrieving SHOW CREATE USER result");
+      return true;
+    }
+  }
+  return false;
+}
+
 /*
   The following functions are wrappers for the dynamic string functions
   and if they fail, the wrappers will terminate the current process.
@@ -6503,6 +6682,12 @@ int main(int argc, char **argv) {
    */
   if (process_set_gtid_purged(mysql, server_has_gtid_enabled)) goto err;
 
+  if (opt_dump_users) {
+    fetch_users_list_if_include_is_empty();
+    retract_excluded_users();
+    dump_users(md_result_file);
+  }
+
   if (opt_source_data && do_show_binary_log_status(mysql)) goto err;
   if (opt_replica_data && do_show_replica_status(mysql)) goto err;
   if (opt_single_transaction &&
@@ -6547,6 +6732,8 @@ int main(int argc, char **argv) {
       dump_databases(argv);
     }
   }
+
+  if (opt_dump_users) dump_grants(md_result_file);
 
   /* if --dump-replica , start the replica sql thread */
   if (opt_replica_data && do_start_replica_sql(mysql)) goto err;
