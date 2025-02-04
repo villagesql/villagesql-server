@@ -252,10 +252,18 @@ CHARSET_INFO *get_charset(uint cs_number, myf flags) {
 
 namespace {
 
-template <size_t N>
-bool starts_with(std::string_view name, const char (&prefix)[N]) {
-  size_t len = N - 1;
-  return name.size() >= len && memcmp(name.data(), prefix, len) == 0;
+bool starts_with_utf8(const char *name) {
+  // See normalization of names in mysql::collation::Name::Name()
+  const uint8_t *map = my_charset_latin1.to_lower;
+  constexpr const char prefix[] = "UTF8_";
+  if (strlen(name) < strlen(prefix)) return false;
+  for (unsigned int ix = 0; ix < strlen(prefix); ++ix) {
+    if (map[static_cast<uint8_t>(name[ix])] !=
+        map[static_cast<uint8_t>(prefix[ix])]) {
+      return false;
+    }
+  }
+  return true;
 }
 
 }  // namespace
@@ -275,7 +283,7 @@ CHARSET_INFO *my_collation_get_by_name(const char *collation_name, myf flags,
   std::call_once(charsets_initialized, init_available_charsets);
 
   std::string collation_name_string(collation_name);
-  if (starts_with(collation_name_string, "utf8_")) {
+  if (starts_with_utf8(collation_name)) {
     // insert "mb3" to get "utf8mb3_xxxx"
     collation_name_string.insert(4, "mb3");
     collation_name = collation_name_string.c_str();
