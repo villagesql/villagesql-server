@@ -130,6 +130,10 @@ void dict_hdr_get_new_id(table_id_t *table_id, space_index_t *index_id,
   if (index_id) {
     id = mach_read_from_8(dict_hdr + DICT_HDR_INDEX_ID);
     id++;
+    constexpr ib_id_t max_uint32 = 0xFFFFFFFF;
+    DBUG_EXECUTE_IF(
+        "simulate_index_id_exceed_uint32",
+        if (id < max_uint32) { id = max_uint32; });
     mlog_write_ull(dict_hdr + DICT_HDR_INDEX_ID, id, &mtr);
     *index_id = id;
   }
