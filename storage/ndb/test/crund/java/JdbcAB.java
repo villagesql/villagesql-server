@@ -279,7 +279,7 @@ public class JdbcAB extends CrundLoad {
             final int n = id.length;
             final Object[] a = new Object[n];
             for (int i = 0; i < n; i++)
-                a[i] = new Integer(id[i]);
+                a[i] = Integer.valueOf(id[i]);
             return conn.createArrayOf("integer", a);
         }
 

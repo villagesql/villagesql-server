@@ -52,7 +52,7 @@ public class JdbcDriverTest {
         }
         try {
             //Class.forName(driver);
-            Class.forName(driver).newInstance();
+            Class.forName(driver).getDeclaredConstructor().newInstance();
         } catch (ClassNotFoundException e) {
             System.out.println("Cannot load JDBC driver '" + driver
                                + "' from classpath '"

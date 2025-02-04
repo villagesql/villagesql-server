@@ -614,10 +614,8 @@ public class NdbjtieAB extends CrundLoad {
             try {
                 ah = new ArrayList<H>(n);
                 for (int i = 0; i < n; i++)
-                    ah.add(cls.newInstance());
-            } catch (InstantiationException ex) {
-                throw new RuntimeException(ex);
-            } catch (IllegalAccessException ex) {
+                    ah.add(cls.getDeclaredConstructor().newInstance());
+            } catch (Exception ex) {
                 throw new RuntimeException(ex);
             }
             pos = 0;
@@ -831,7 +829,7 @@ public class NdbjtieAB extends CrundLoad {
             oh = (H[])Array.newInstance(cls, n); // max: nConcScans
             try {
                 for (int i = 0; i < n; i++)
-                    oh[i] = cls.newInstance();
+                    oh[i] = cls.getDeclaredConstructor().newInstance();
             } catch (Exception ex) {
                 throw new RuntimeException(ex);
             }
