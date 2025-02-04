@@ -64,7 +64,7 @@ SET(JAVA_CRUND_SOURCES
 
 SET(CLASSPATH
     ${CMAKE_CURRENT_BINARY_DIR}/target/classes
-    ${CMAKE_BINARY_DIR}/storage/ndb/clusterj/target/classes
+    ${CMAKE_BINARY_DIR}/storage/ndb/clusterj/clusterj-api/target/classes
     ${CMAKE_BINARY_DIR}/storage/ndb/src/ndbjtie/target/classes
    )
 
