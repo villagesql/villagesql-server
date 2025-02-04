@@ -146,7 +146,7 @@ void TwsDriver::runTests() {
 
   assert(nOpsStart <= nOpsEnd && nOpsScale > 1);
   for (int i = nOpsStart; i <= nOpsEnd; i *= nOpsScale) {
-    runLoads(i);
+    runLoads_(i);
   }
 
   cout << endl
@@ -157,7 +157,7 @@ void TwsDriver::runTests() {
   closeConnection();
 }
 
-void TwsDriver::runLoads(int nOps) {
+void TwsDriver::runLoads_(int nOps) {
   cout << endl
        << "------------------------------------------------------------"
        << endl;

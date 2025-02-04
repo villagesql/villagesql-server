@@ -123,7 +123,7 @@ void Driver::init() {
   loadProperties();
   initProperties();
   printProperties();
-  if (showPropsAndExit) return;
+  if (showPropsAndExit) exit(1);
 
   openLogFile();
   clearLogBuffers();
@@ -131,7 +131,6 @@ void Driver::init() {
 }
 
 void Driver::close() {
-  if (showPropsAndExit) return;
   closeLoads();
   clearLogBuffers();
   closeLogFile();
@@ -259,8 +258,6 @@ void Driver::addLoads() {
 
 void Driver::runLoads() {
   if (hasIgnoredSettings) {
-    if (showPropsAndExit) return;
-
     cout << endl
          << "++++++++++++  SOME SETTINGS IGNORED, SEE ABOVE  ++++++++++++"
          << endl;

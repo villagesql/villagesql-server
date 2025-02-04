@@ -35,6 +35,17 @@ import java.sql.ResultSet;
 import com.mysql.cluster.crund.CrundDriver.XMode;
 
 class JdbcS extends CrundSLoad {
+
+    static public void main(String[] args) {
+        System.out.println("JdbcS.main()");
+        CrundDriver.parseArguments(args);
+        final CrundDriver driver = new CrundDriver();
+        final CrundSLoad load = new JdbcS(driver);
+        driver.run();
+        System.out.println();
+        System.out.println("JdbcS.main(): done.");
+    }
+
     // JDBC settings
     protected String jdbcDriver;
     protected String url;

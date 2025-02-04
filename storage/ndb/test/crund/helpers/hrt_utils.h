@@ -29,6 +29,8 @@
  *
  */
 
+#include "ndb_config.h"
+
 #ifndef _utils_hrt_utils
 #define _utils_hrt_utils
 #ifdef __cplusplus
@@ -192,7 +194,7 @@ extern "C" {
 #error "unsupported HRT_REALTIME_METHOD: " HRT_REALTIME_METHOD
 #endif
 #else
-#if (defined(_POSIX_TIMERS) && (_POSIX_TIMERS + 0 >= 0))
+#if HAVE_CLOCK_GETTIME
 #define HRT_REALTIME_METHOD HRT_USE_CLOCK_GETTIME
 #else
 #define HRT_REALTIME_METHOD HRT_USE_GETTIMEOFDAY
@@ -206,8 +208,7 @@ extern "C" {
 #error "unsupported HRT_CPUTIME_METHOD: " HRT_CPUTIME_METHOD
 #endif
 #else
-#if (defined(_POSIX_TIMERS) && (_POSIX_TIMERS + 0 >= 0) && \
-     defined(_POSIX_CPUTIME) && (_POSIX_CPUTIME + 0 >= 0))
+#if HAVE_CLOCK_GETTIME
 #define HRT_CPUTIME_METHOD HRT_USE_CLOCK_GETTIME
 #else
 #define HRT_CPUTIME_METHOD HRT_USE_GETRUSAGE

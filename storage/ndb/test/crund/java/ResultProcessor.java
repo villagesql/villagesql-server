@@ -33,6 +33,10 @@ import java.util.TreeMap;
 import java.util.EnumSet;
 import java.text.ParseException;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.FileSystems;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileReader;
@@ -40,7 +44,6 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.InputStream;
-
 
 /**
  * Processes the result files of the Crund benchmark.
@@ -106,19 +109,22 @@ public class ResultProcessor {
         public void close() throws IOException {
             assert tmp != null;
             assert dst != null;
-            dst.flush();
-            final File to = new File(outFilePrefix + "." + suffix);
-            if (tmp.renameTo(to)) {
+            dst.close();
+            final Path to =
+                FileSystems.getDefault().getPath(outFilePrefix + "." + suffix);
+            try {
+                Files.move(tmp.toPath(), to);
                 out.println("wrote file: \t" + to);
-            } else {
+            }
+            catch(IOException ex) {
                 out.flush();
                 err.println("ERROR: failed to rename temp file:" + endl
                             + "    '" + tmp + "'" + endl
                             + " to output file:" + endl
                             + "    '" + to + "'");
+                throw ex;
             }
             tmp = null;
-            dst.close();
             dst = null;
         }
 
@@ -428,7 +434,7 @@ public class ResultProcessor {
         err.println("usage: [options] <log file>...");
         err.println("    [-w <number>]       skip w warmup runs [w=0]");
         err.println("    [-d <number>]       mark ops with rsdev>d [d=10]");
-        err.println("    [-f txt,csv]        generate output formats [txt]");
+        err.println("    [-f txt,csv]        generate output formats [csv]");
         err.println("    [-o <file>]         out file prefix [./log_results]");
         err.println("    [-h|--help]         print usage message and exit");
         err.println();
@@ -439,7 +445,7 @@ public class ResultProcessor {
     static public void parseArguments(String[] args) {
         String w = "0";
         String d = "10";
-        String f = "txt";
+        String f = "csv";
         String o = "./log_results";
         for (int i = 0; i < args.length; i++) {
             final String arg = args[i];

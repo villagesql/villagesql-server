@@ -59,6 +59,17 @@ import com.mysql.ndbjtie.ndbapi.NdbOperationConst.AbortOption;
 import com.mysql.cluster.crund.CrundDriver.XMode;
 
 class NdbjtieS extends CrundSLoad {
+
+    static public void main(String[] args) {
+        System.out.println("NdbjtieS.main()");
+        CrundDriver.parseArguments(args);
+        final CrundDriver driver = new CrundDriver();
+        final CrundSLoad load = new NdbjtieS(driver);
+        driver.run();
+        System.out.println();
+        System.out.println("NdbjtieS.main(): done.");
+    }
+
     // NDB settings
     protected String mgmdConnect;
     protected String catalog;

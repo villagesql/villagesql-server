@@ -37,7 +37,6 @@ class TwsDriver : public Driver {
   static const char *toStr(XMode mode);
   bool renewConnection;
   bool renewOperations;
-  bool logSumOfOps;
   LockMode lockMode;
   int nOpsStart;
   int nOpsEnd;
@@ -59,7 +58,7 @@ class TwsDriver : public Driver {
   virtual void initOperations() = 0;
   virtual void closeOperations() = 0;
   virtual void runTests();
-  virtual void runLoads(int nOps);
+  virtual void runLoads_(int nOps);
   virtual void runOperations(int nOps);
   virtual void runInserts(XMode mode, int nOps) = 0;
   virtual void runLookups(XMode mode, int nOps) = 0;

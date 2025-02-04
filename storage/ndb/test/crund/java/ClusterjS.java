@@ -49,6 +49,16 @@ class ClusterjS extends CrundSLoad {
         super(driver);
     }
 
+    static public void main(String[] args) {
+        System.out.println("ClusterjS.main()");
+        CrundDriver.parseArguments(args);
+        final CrundDriver driver = new CrundDriver();
+        final CrundSLoad load = new ClusterjS(driver);
+        driver.run();
+        System.out.println();
+        System.out.println("ClusterjS.main(): done.");
+    }
+
     // ----------------------------------------------------------------------
     // ClusterJ intializers/finalizers
     // ----------------------------------------------------------------------

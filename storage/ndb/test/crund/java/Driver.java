@@ -64,6 +64,7 @@ public abstract class Driver {
     // driver command-line arguments
     static private final List<String> propFileNames = new ArrayList<String>();
     static private String logFileName;
+    static protected boolean showPropsAndExit = false;
 
     // driver settings
     protected final Properties props = new Properties();
@@ -99,6 +100,7 @@ public abstract class Driver {
         out.println("    [-p <file name>]...    properties file name");
         out.println("    [-l <file name>]       log file name for results");
         out.println("    [-h|--help]            print usage message and exit");
+        out.println("    [--show-properties]    display properties and exit");
         out.println();
         System.exit(1); // return an error code
     }
@@ -121,6 +123,8 @@ public abstract class Driver {
                 logFileName = args[++i];
             } else if (arg.equals("-h") || arg.equals("--help")) {
                 exitUsage();
+            } else if (arg.equals("--show-properties")) {
+                showPropsAndExit = true;
             } else {
                 out.println("unknown option: " + arg);
                 exitUsage();
@@ -191,6 +195,8 @@ public abstract class Driver {
         loadProperties();
         initProperties();
         printProperties();
+        if(showPropsAndExit) System.exit(1);
+
         writeProperties();
         openLogFile();
         clearLogBuffers();

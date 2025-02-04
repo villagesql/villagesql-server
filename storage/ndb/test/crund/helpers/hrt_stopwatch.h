@@ -45,8 +45,8 @@ extern "C" {
  */
 typedef struct hrt_stopwatch {
   hrt_tstamp *tstamps;
-  unsigned int top;
-  unsigned int cap;
+  int top;
+  int cap;
 } hrt_stopwatch;
 
 /*

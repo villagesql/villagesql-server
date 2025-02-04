@@ -614,17 +614,6 @@ public class ClusterjAB extends CrundLoad {
                     }
                 });
 
-            ops.add(
-                new WriteOp("B_clearA", xMode) {
-                    protected void write(int id) {
-                        // blind update
-                        final IB o = session.newInstance(IB.class);
-                        o.setId(id);
-                        final int aId = -1;
-                        o.setAid(aId);
-                        session.updatePersistent(o);
-                    }
-                });
 
             ops.add(
                 new WriteOp("B_del", xMode) {

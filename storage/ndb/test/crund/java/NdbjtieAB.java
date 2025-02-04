@@ -1237,15 +1237,6 @@ public class NdbjtieAB extends CrundLoad {
                 });
 
             ops.add(
-                new UpdateOp("B_clearA", xMode, model.table_B) {
-                    public void setValues(int id) {
-                        setKeyB(op, id); // needs to be set first
-                        final int aid = -1;
-                        setAIdB(op, aid);
-                    }
-                });
-
-            ops.add(
                 new DeleteOp("B_del", xMode, model.table_B) {
                     public void setValues(int id) {
                         setKeyB(op, id);

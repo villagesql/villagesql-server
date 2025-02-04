@@ -26,11 +26,11 @@ INCLUDE_DIRECTORIES(BEFORE ${CMAKE_CURRENT_SOURCE_DIR}/helpers)
 #
 ## runCrund
 ###
-# NDB_ADD_EXECUTABLE(runCrund runCrund.cpp NDBCLIENT)
-# TARGET_COMPILE_DEFINITIONS(runCrund PRIVATE
-#                           CMAKE_BINARY_DIR=\"${CMAKE_BINARY_DIR}\"
-#                           WITH_CLASSPATH=\"${WITH_CLASSPATH}\"
-#                          )
+NDB_ADD_EXECUTABLE(runCrund runCrund.cpp NDBCLIENT)
+TARGET_COMPILE_DEFINITIONS(runCrund PRIVATE
+                           CMAKE_BINARY_DIR=\"${CMAKE_BINARY_DIR}\"
+                           WITH_CLASSPATH=\"${WITH_CLASSPATH}\"
+                          )
 
 #
 ## C++ Crund Helpers
