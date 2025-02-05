@@ -31,8 +31,6 @@
 #include "sql/gis/union_functor.h"
 #include "sql/sql_exception_handler.h"  // handle_gis_exception
 
-namespace bg = boost::geometry;
-
 namespace gis {
 
 bool union_(const dd::Spatial_reference_system *srs, const Geometry *g1,

@@ -35,7 +35,6 @@
 
 namespace bg = boost::geometry;
 namespace bgs = boost::geometry::srs;
-namespace bgsd = boost::geometry::strategy::distance;
 
 namespace gis {
 

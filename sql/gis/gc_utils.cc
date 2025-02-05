@@ -40,8 +40,6 @@
 #include "sql/gis/union_functor.h"
 #include "template_utils.h"  // down_cast
 
-namespace bg = boost::geometry;
-
 namespace gis {
 
 template <typename Pt, typename Ls, typename Py, typename GC, typename MPt,
