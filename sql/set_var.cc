@@ -1430,6 +1430,8 @@ int sql_set_variables(THD *thd, List<set_var_base> *var_list, bool opened) {
         thd->optimizer_switch_flag(OPTIMIZER_SWITCH_HYPERGRAPH_OPTIMIZER));
 
     const Prepared_stmt_arena_holder ps_arena_holder(thd);
+    const Prepare_error_tracker tracker(thd);
+
     while ((var = it++)) {
       if ((error = var->resolve(thd))) goto err;
     }
