@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -23,8 +23,8 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef ROUTER_SRC_MYSQL_REST_SERVICE_INCLUDE_MRS_DATABASE_DUALITY_VIEW_JSON_INPUT_H_
-#define ROUTER_SRC_MYSQL_REST_SERVICE_INCLUDE_MRS_DATABASE_DUALITY_VIEW_JSON_INPUT_H_
+#ifndef ROUTER_SRC_MYSQL_REST_SERVICE_INCLUDE_MRS_DATABASE_JSON_MAPPER_VIEW_JSON_INPUT_H_
+#define ROUTER_SRC_MYSQL_REST_SERVICE_INCLUDE_MRS_DATABASE_JSON_MAPPER_VIEW_JSON_INPUT_H_
 
 #ifdef RAPIDJSON_NO_SIZETYPEDEFINE
 #include "my_rapidjson_size_t.h"
@@ -275,4 +275,4 @@ JSONInputObject make_input_object(const JSONInputObject::MemberReference &ref,
 }  // namespace database
 }  // namespace mrs
 
-#endif  // ROUTER_SRC_MYSQL_REST_SERVICE_INCLUDE_MRS_DATABASE_DUALITY_VIEW_JSON_INPUT_H_
+#endif  // ROUTER_SRC_MYSQL_REST_SERVICE_INCLUDE_MRS_DATABASE_JSON_MAPPER_VIEW_JSON_INPUT_H_

@@ -36,7 +36,7 @@ if ($mrs_sql_id_variable_ob)
     
     if ($mrs_schema_version == 3)
     {
-      let $_object_options=`SELECT JSON_MERGE_PATCH(JSON_OBJECT(), IF(FIND_IN_SET("CREATE","$mrs_add_db_object_op"),'{"duality_view_insert":true}',"{}"), IF(FIND_IN_SET("UPDATE","$mrs_add_db_object_op"),'{"duality_view_update":true}',"{}"), IF(FIND_IN_SET("UPDATE","$mrs_add_db_object_op"),'{"duality_view_delete":true}',"{}"))`;
+      let $_object_options=`SELECT JSON_MERGE_PATCH(JSON_OBJECT(), IF(FIND_IN_SET("CREATE","$mrs_add_db_object_op"),'{"dataMappingViewInsert":true}',"{}"), IF(FIND_IN_SET("UPDATE","$mrs_add_db_object_op"),'{"dataMappingViewUpdate":true}',"{}"), IF(FIND_IN_SET("UPDATE","$mrs_add_db_object_op"),'{"dataMappingViewDelete":true}',"{}"))`;
       eval INSERT INTO mysql_rest_service_metadata.object(id, db_object_id, name, options) VALUES($mrs_sql_id_variable_ob, $mrs_sql_id_variable, "$mrs_add_db_object", '$_object_options');
     }
     if ($mrs_schema_version == 2)

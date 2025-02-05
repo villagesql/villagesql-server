@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2023, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2023, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -395,10 +395,14 @@ QueryEntryObject::UniversalId QueryEntryObject::query_object(
   mysqlrouter::sqlstring q{
       "SELECT object.id, object.kind,"
       " row_ownership_field_id,"
-      " object.options->>'$.duality_view_insert',"
-      " object.options->>'$.duality_view_update',"
-      " object.options->>'$.duality_view_delete',"
-      " object.options->>'$.duality_view_no_check'"
+      " COALESCE(object.options->>'$.dataMappingViewInsert',"
+      " object.options->>'$.duality_view_insert') = 'true',"
+      " COALESCE(object.options->>'$.dataMappingViewUpdate',"
+      " object.options->>'$.duality_view_update') = 'true',"
+      " COALESCE(object.options->>'$.dataMappingViewDelete',"
+      " object.options->>'$.duality_view_delete') = 'true',"
+      " COALESCE(object.options->>'$.dataMappingViewNoCheck',"
+      " object.options->>'$.duality_view_no_check') = 'true'"
       "  FROM mysql_rest_service_metadata.object"
       "  JOIN mysql_rest_service_metadata.db_object"
       "    ON object.db_object_id = db_object.id"
@@ -444,10 +448,14 @@ void QueryEntryObject::set_query_object_reference(
       " object_reference.unnest OR "
       "   object_reference.reduce_to_value_of_field_id IS NOT NULL,"
       " object_reference.row_ownership_field_id,"
-      " object_reference.options->>'$.duality_view_insert',"
-      " object_reference.options->>'$.duality_view_update',"
-      " object_reference.options->>'$.duality_view_delete',"
-      " object_reference.options->>'$.duality_view_no_check'"
+      " COALESCE(object_reference.options->>'$.dataMappingViewInsert',"
+      " object_reference.options->>'$.duality_view_insert') = 'true',"
+      " COALESCE(object_reference.options->>'$.dataMappingViewUpdate',"
+      " object_reference.options->>'$.duality_view_update') = 'true',"
+      " COALESCE(object_reference.options->>'$.dataMappingViewDelete',"
+      " object_reference.options->>'$.duality_view_delete') = 'true',"
+      " COALESCE(object_reference.options->>'$.dataMappingViewNoCheck',"
+      " object_reference.options->>'$.duality_view_no_check') = 'true'"
       " FROM mysql_rest_service_metadata.object_field"
       " JOIN mysql_rest_service_metadata.object_reference"
       "  ON object_field.represents_reference_id = object_reference.id"
