@@ -507,14 +507,14 @@ std::string Geographic_srs::partial_proj4_parameters() const {
   std::stringstream proj4;
 
   my_fcvt_compact(semi_major_axis(), double_str, &error);
-  if (error) return std::string();
+  if (error) return {};
   proj4 << " +a=" << double_str;
 
   if (inverse_flattening() == 0.0) {
     proj4 << " +b=" << double_str;
   } else {
     my_fcvt_compact(inverse_flattening(), double_str, &error);
-    if (error) return std::string();
+    if (error) return {};
     proj4 << " +rf=" << double_str;
   }
 
@@ -532,7 +532,7 @@ std::string Geographic_srs::partial_proj4_parameters() const {
     for (int i = 0; i < 7; i++) {
       if (i != 0) proj4 << ",";
       my_fcvt_compact(m_towgs84[i], double_str, &error);
-      if (error) return std::string();
+      if (error) return {};
       proj4 << double_str;
     }
   } else {

@@ -75,7 +75,7 @@ Decompressor::Grow_constraint_t Decompressor::get_grow_constraint_hint() const {
 
 Decompressor::Grow_constraint_t Decompressor::do_get_grow_constraint_hint()
     const {
-  return Grow_constraint_t();
+  return {};
 }
 
 }  // namespace mysql::binlog::event::compression

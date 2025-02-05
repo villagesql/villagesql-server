@@ -108,7 +108,7 @@ bool my_metadata::get_value(const char *name, const char **value) {
   @return Reference to the iterator created.
 */
 my_metadata::const_iterator my_metadata::create_iterator() {
-  return my_metadata::const_iterator(data.begin(), &data);
+  return {data.begin(), &data};
 }
 
 /**

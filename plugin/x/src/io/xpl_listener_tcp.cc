@@ -84,12 +84,11 @@ class Tcp_creator {
     if (nullptr == result) {
       error_message = "can't resolve `hostname`";
 
-      return std::shared_ptr<addrinfo>();
+      return {};
     }
 
-    return std::shared_ptr<addrinfo>(
-        result, std::bind(&iface::System::freeaddrinfo, m_system_interface,
-                          std::placeholders::_1));
+    return {result, std::bind(&iface::System::freeaddrinfo, m_system_interface,
+                              std::placeholders::_1)};
   }
 
   std::shared_ptr<iface::Socket> create_and_bind_socket(
@@ -116,7 +115,7 @@ class Tcp_creator {
                           .append(")")
                           .get_result();
 
-      return std::shared_ptr<iface::Socket>();
+      return {};
     }
 
 #ifdef IPV6_V6ONLY
@@ -169,7 +168,7 @@ class Tcp_creator {
                               "running with Mysqlx ?")
                           .get_result();
 
-      return std::shared_ptr<iface::Socket>();
+      return {};
     }
 
     if (result_socket->listen(backlog) < 0) {
@@ -184,7 +183,7 @@ class Tcp_creator {
                           .append(")")
                           .get_result();
 
-      return std::shared_ptr<iface::Socket>();
+      return {};
     }
 
     m_used_address.resize(200, '\0');
@@ -217,7 +216,7 @@ class Tcp_creator {
       }
     }
 
-    return std::shared_ptr<iface::Socket>();
+    return {};
   }
 
   bool is_ipv6_avaiable() {
@@ -343,7 +342,7 @@ std::shared_ptr<iface::Socket> Listener_tcp::create_socket() {
   std::shared_ptr<addrinfo> ai =
       creator.resolve_bind_address(m_bind_address, m_port, m_last_error);
 
-  if (nullptr == ai) return std::shared_ptr<iface::Socket>();
+  if (nullptr == ai) return {};
 
   for (uint32_t waited = 0, retry = 1; waited <= m_port_open_timeout; ++retry) {
     result_socket =

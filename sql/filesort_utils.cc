@@ -439,11 +439,10 @@ Bounds_checked_array<uchar> Filesort_buffer::get_contiguous_buffer() {
     free_sort_buffer();
 
     if (allocate_sized_block(m_max_size_in_bytes)) {
-      return Bounds_checked_array<uchar>(nullptr, 0);
+      return {nullptr, 0};
     }
   }
-  return Bounds_checked_array<uchar>(m_blocks.back().get(),
-                                     m_max_size_in_bytes);
+  return {m_blocks.back().get(), m_max_size_in_bytes};
 }
 
 void Filesort_buffer::update_peak_memory_used() const {

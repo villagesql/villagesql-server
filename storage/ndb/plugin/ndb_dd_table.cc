@@ -62,19 +62,19 @@ Ndb_dd_handle ndb_dd_table_get_spi_and_version(const dd::Table *table_def) {
 
   if (spi == dd::INVALID_OBJECT_ID) {
     DBUG_PRINT("error", ("Table definition contained an invalid object id"));
-    return Ndb_dd_handle();
+    return {};
   }
 
   if (!table_def->se_private_data().exists(object_version_key)) {
     DBUG_PRINT("error", ("Table definition didn't contain property '%s'",
                          object_version_key));
-    return Ndb_dd_handle();
+    return {};
   }
 
   if (table_def->se_private_data().get(object_version_key, &version)) {
     DBUG_PRINT("error", ("Table definition didn't have a valid number for '%s'",
                          object_version_key));
-    return Ndb_dd_handle();
+    return {};
   }
 
   Ndb_dd_handle handle(spi, version);

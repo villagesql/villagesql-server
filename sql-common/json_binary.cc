@@ -954,7 +954,7 @@ static Value parse_scalar(uint8 type, const char *data, size_t len) {
       if (read_variable_length(data, len, &str_len, &n))
         return err();                      /* purecov: inspected */
       if (len < n + str_len) return err(); /* purecov: inspected */
-      return Value(data + n, str_len);
+      return {data + n, str_len};
     }
     case JSONB_TYPE_OPAQUE: {
       /*
@@ -973,7 +973,7 @@ static Value parse_scalar(uint8 type, const char *data, size_t len) {
       if (read_variable_length(data + 1, len - 1, &val_len, &n))
         return err();                          /* purecov: inspected */
       if (len < 1 + n + val_len) return err(); /* purecov: inspected */
-      return Value(field_type, data + 1 + n, val_len);
+      return {field_type, data + 1 + n, val_len};
     }
     default:
       // Not a valid scalar type.
@@ -1034,7 +1034,7 @@ static Value parse_array_or_object(Value::enum_type t, const char *data,
   // The header should not be larger than the full size of the value.
   if (header_size > bytes) return err(); /* purecov: inspected */
 
-  return Value(t, data, bytes, element_count, large);
+  return {t, data, bytes, element_count, large};
 }
 
 /**
@@ -1151,7 +1151,7 @@ Value Value::key(size_t pos) const {
       (m_length < key_offset + key_length))
     return err(); /* purecov: inspected */
 
-  return Value(m_data + key_offset, key_length);
+  return {m_data + key_offset, key_length};
 }
 
 /**

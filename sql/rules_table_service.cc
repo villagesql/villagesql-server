@@ -189,6 +189,6 @@ Cursor::~Cursor() {
   delete m_table_list;
 }
 
-Cursor end() { return Cursor(); }
+Cursor end() { return {}; }
 
 }  // namespace rules_table_service

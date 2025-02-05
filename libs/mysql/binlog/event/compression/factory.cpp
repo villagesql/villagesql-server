@@ -41,7 +41,7 @@ std::unique_ptr<Compressor> Factory::build_compressor(
     default:
       break;
   }
-  return std::unique_ptr<Compressor>();
+  return {};
 }
 
 std::unique_ptr<Decompressor> Factory::build_decompressor(
@@ -54,7 +54,7 @@ std::unique_ptr<Decompressor> Factory::build_decompressor(
     default:
       break;
   }
-  return std::unique_ptr<Decompressor>();
+  return {};
 }
 
 }  // namespace mysql::binlog::event::compression

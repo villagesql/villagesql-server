@@ -387,7 +387,7 @@ bool BaseString::starts_with(const char *str) const {
 BaseString BaseString::substr(ssize_t start, ssize_t stop) const {
   if (stop < 0) stop = length();
   ssize_t len = stop - start;
-  if (len <= 0) return BaseString("");
+  if (len <= 0) return {""};
   BaseString s;
   s.assign(m_chr + start, len);
   return s;

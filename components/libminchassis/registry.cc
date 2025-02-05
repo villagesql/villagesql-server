@@ -100,8 +100,7 @@ void mysql_registry_imp::rw_lock_deinit() {
 */
 minimal_chassis::rwlock_scoped_lock
 mysql_registry_imp::lock_registry_for_write() {
-  return minimal_chassis::rwlock_scoped_lock(&LOCK_registry, true, __FILE__,
-                                             __LINE__);
+  return {&LOCK_registry, true, __FILE__, __LINE__};
 }
 
 /**

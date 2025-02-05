@@ -66,7 +66,7 @@ Member_version convert_to_mysql_version(
       assert(false && "GCS protocol should have been V1 or V2, or V3");
       break;
   }
-  return Member_version(0x000000);
+  return {0x000000};
 }
 
 /*
@@ -153,5 +153,5 @@ Member_version convert_to_member_version(char const *str) {
   auto patch_str = version_str.substr(minor_dot_index + 1);
   auto patch = convert_to_base_16_number(patch_str.c_str());
 
-  return Member_version((major << 16) | (minor << 8) | patch);
+  return {(major << 16) | (minor << 8) | patch};
 }

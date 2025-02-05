@@ -414,11 +414,11 @@ std::unique_ptr<Geometry> parse_wkb(THD *thd,
     }
   } else {
     assert(false); /* purecov: inspected */
-    return std::unique_ptr<Geometry>();
+    return {};
   }
 
   if (res) {
-    return std::unique_ptr<Geometry>();
+    return {};
   }
 
   return g;

@@ -604,8 +604,8 @@ String String::substr(int offset, int count) const {
   }
   const size_t bytes_offset = this->charpos(offset);
 
-  return String(this->m_ptr + bytes_offset,
-                this->charpos(offset + count) - bytes_offset, this->m_charset);
+  return {this->m_ptr + bytes_offset,
+          this->charpos(offset + count) - bytes_offset, this->m_charset};
 }
 
 /*
