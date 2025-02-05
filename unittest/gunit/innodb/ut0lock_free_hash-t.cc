@@ -306,7 +306,7 @@ void hash_check_deleted(const ut_hash_interface_t *hash, size_t n_elements,
 
 class ut0lock_free_hash : public ::testing::Test {
  public:
-  static void SetUpTestCase() {
+  static void SetUpTestSuite() {
     srv_max_n_threads = 1024;
 
     os_event_global_init();
@@ -314,7 +314,7 @@ class ut0lock_free_hash : public ::testing::Test {
     os_thread_open();
   }
 
-  static void TearDownTestCase() {
+  static void TearDownTestSuite() {
     os_thread_close();
     sync_check_close();
     os_event_global_destroy();

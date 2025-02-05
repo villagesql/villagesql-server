@@ -108,13 +108,13 @@ class MDLTest : public ::testing::Test, public Test_MDL_context_owner {
  protected:
   MDLTest() : m_null_ticket(nullptr), m_null_request(nullptr) {}
 
-  static void SetUpTestCase() {
+  static void SetUpTestSuite() {
     /* Save original and install our custom error hook. */
     m_old_error_handler_hook = error_handler_hook;
     error_handler_hook = test_error_handler_hook;
   }
 
-  static void TearDownTestCase() {
+  static void TearDownTestSuite() {
     error_handler_hook = m_old_error_handler_hook;
   }
 

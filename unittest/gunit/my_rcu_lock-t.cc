@@ -52,13 +52,13 @@ class my_rcu_lock_test : public ::testing::Test {
 
   void TearDown() override {}
 
-  static void SetUpTestCase() {
+  static void SetUpTestSuite() {
     lock = new MyRcuLockTest(new payload_s("a", "b", "c"));
     reads = 0;
     writes = 0;
   }
 
-  static void TearDownTestCase() { delete lock; }
+  static void TearDownTestSuite() { delete lock; }
 
   static void rcu_reader(size_t reps) {
     for (size_t i = 0; i < reps; i++) {

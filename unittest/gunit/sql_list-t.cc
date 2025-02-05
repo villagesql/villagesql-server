@@ -67,7 +67,7 @@ class SqlListTest : public ::testing::Test {
 
   void SetUp() override { THR_MALLOC = &m_mem_root_p; }
 
-  static void SetUpTestCase() {
+  static void SetUpTestSuite() {
     current_thd = nullptr;
     THR_MALLOC = nullptr;
   }

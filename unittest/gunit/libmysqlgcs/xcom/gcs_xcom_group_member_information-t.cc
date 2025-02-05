@@ -44,7 +44,7 @@ class GcsNodeAddressTest : public GcsBaseTest {
  protected:
   GcsNodeAddressTest() = default;
 
-  static void SetUpTestCase() {}
+  static void SetUpTestSuite() {}
 };
 
 TEST_F(GcsNodeAddressTest, TestNodeAddress) {
@@ -260,7 +260,7 @@ class GcsUUIDTest : public GcsBaseTest {
  protected:
   GcsUUIDTest() = default;
 
-  static void SetUpTestCase() {}
+  static void SetUpTestSuite() {}
 };
 
 TEST_F(GcsUUIDTest, TestGcsUUID) {
@@ -310,7 +310,7 @@ class GcsNodeInformationTest : public GcsBaseTest {
  protected:
   GcsNodeInformationTest() = default;
 
-  static void SetUpTestCase() {}
+  static void SetUpTestSuite() {}
 };
 
 TEST_F(GcsNodeInformationTest, TestGcsNodeInformation) {
@@ -397,7 +397,7 @@ class GcsNodesTest : public GcsBaseTest {
  protected:
   GcsNodesTest() = default;
 
-  static void SetUpTestCase() {}
+  static void SetUpTestSuite() {}
 };
 
 TEST_F(GcsNodesTest, TestGcsNodesBasicProperties) {

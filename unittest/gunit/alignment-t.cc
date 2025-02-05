@@ -47,7 +47,7 @@ class AlignmentTest : public ::testing::Test {
   static int *aligned_data;
   static uchar *unaligned_data;
 
-  static void SetUpTestCase() {
+  static void SetUpTestSuite() {
     aligned_data = new int[num_records];
     unaligned_data = new uchar[(num_records + 1) * sizeof(int)];
     for (int ix = 0; ix < num_records; ++ix) {
@@ -59,7 +59,7 @@ class AlignmentTest : public ::testing::Test {
     memcpy(unaligned_data + 1, aligned_data, num_records * sizeof(int));
   }
 
-  static void TearDownTestCase() {
+  static void TearDownTestSuite() {
     delete[] aligned_data;
     delete[] unaligned_data;
   }
