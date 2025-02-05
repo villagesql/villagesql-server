@@ -30,6 +30,7 @@
 #include <boost/geometry.hpp>  // boost::geometry::difference
 #include <cassert>
 #include <memory>
+#include <utility>
 
 // assert
 #include "sql/gis/difference_functor.h"
@@ -171,9 +172,9 @@ void typed_gc_union(double semi_major, double semi_minor,
   } else
     points.reset(down_cast<MPt *>(pt_difference.release()));
 
-  mpy->reset(polygons.release());
-  mls->reset(linestrings.release());
-  mpt->reset(points.release());
+  *mpy = std::move(polygons);
+  *mls = std::move(linestrings);
+  *mpt = std::move(points);
 }
 
 void gc_union(double semi_major, double semi_minor,

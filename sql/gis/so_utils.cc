@@ -27,6 +27,8 @@
 /// (union, intersection, difference, symdifference).
 
 #include "sql/gis/so_utils.h"
+
+#include <utility>
 #include "sql/gis/equals_functor.h"
 #include "sql/gis/geometries.h"
 #include "sql/gis/geometries_cs.h"
@@ -56,7 +58,7 @@ static void typed_remove_duplicates(double semi_major, double semi_minor,
         }
         if (include) mpt->push_back(pt);
       }
-      g->reset(mpt.release());
+      *g = std::move(mpt);
       break;
     }
     case Geometry_type::kMultilinestring: {
@@ -71,7 +73,7 @@ static void typed_remove_duplicates(double semi_major, double semi_minor,
         }
         if (include) mls->push_back(ls);
       }
-      g->reset(mls.release());
+      *g = std::move(mls);
       break;
     }
     case Geometry_type::kMultipolygon: {
@@ -86,7 +88,7 @@ static void typed_remove_duplicates(double semi_major, double semi_minor,
         }
         if (include) mpy->push_back(py);
       }
-      g->reset(mpy.release());
+      *g = std::move(mpy);
       break;
     }
     case Geometry_type::kGeometrycollection: {
@@ -105,7 +107,7 @@ static void typed_remove_duplicates(double semi_major, double semi_minor,
         }
         if (include) gc->push_back(*g1_ptr);
       }
-      g->reset(gc.release());
+      *g = std::move(gc);
       break;
     }
     default: {

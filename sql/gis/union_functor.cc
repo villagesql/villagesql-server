@@ -26,6 +26,7 @@
 /// This file implements the union functor.
 
 #include <boost/geometry.hpp>  // boost::geometry::union_
+#include <utility>
 
 #include "sql/gis/gc_utils.h"
 #include "sql/gis/geometries.h"
@@ -57,17 +58,17 @@ typed_geometry_collection_apply_union(const Union &f,
   gc_union(f.semi_major(), f.semi_minor(), &mpt, &mls, &mpy);
 
   if (mpt->is_empty() && mls->is_empty()) {
-    result.reset(mpy.release());
+    result = std::move(mpy);
     return result;
   }
 
   if (mpy->is_empty() && mpt->is_empty()) {
-    result.reset(mls.release());
+    result = std::move(mls);
     return result;
   }
 
   if (mpy->is_empty() && mls->is_empty()) {
-    result.reset(mpt.release());
+    result = std::move(mpt);
     return result;
   }
 
