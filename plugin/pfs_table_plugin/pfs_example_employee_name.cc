@@ -379,8 +379,7 @@ int ename_delete_row_values(PSI_table_handle *handle) {
 
 int ename_delete_all_rows() {
   mysql_mutex_lock(&LOCK_ename_records_array);
-  for (int i = 0; i < EMPLOYEEE_NAME_MAX_ROWS; i++)
-    ename_records_array[i].m_exist = false;
+  for (auto &i : ename_records_array) i.m_exist = false;
   ename_rows_in_table = 0;
   ename_next_available_index = 0;
   mysql_mutex_unlock(&LOCK_ename_records_array);

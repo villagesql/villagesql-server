@@ -802,9 +802,8 @@ struct print<gis::Geographic_point> {
 template <>
 struct print<gis::Cartesian_linestring> {
   static void apply(gis::Cartesian_linestring g2) {
-    for (std::size_t p = 0; p < g2.size(); p++) {
-      std::cout << std::setprecision(20) << g2[p].x() << "," << g2[p].y()
-                << " ";
+    for (auto &p : g2) {
+      std::cout << std::setprecision(20) << p.x() << "," << p.y() << " ";
     }
     std::cout << std::endl;
   }
@@ -813,9 +812,8 @@ struct print<gis::Cartesian_linestring> {
 template <>
 struct print<gis::Geographic_linestring> {
   static void apply(gis::Geographic_linestring g2) {
-    for (std::size_t p = 0; p < g2.size(); p++) {
-      std::cout << std::setprecision(20) << g2[p].x() << "," << g2[p].y()
-                << " ";
+    for (auto &p : g2) {
+      std::cout << std::setprecision(20) << p.x() << "," << p.y() << " ";
     }
     std::cout << std::endl;
   }

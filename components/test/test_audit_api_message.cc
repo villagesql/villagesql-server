@@ -186,8 +186,8 @@ static mysql_service_status_t init() {
 
 static mysql_service_status_t deinit() {
   int was_present = 0;
-  for (size_t i = 0; i < no_udfs; ++i)
-    mysql_service_udf_registration->udf_unregister(udf_names[i], &was_present);
+  for (auto udf_name : udf_names)
+    mysql_service_udf_registration->udf_unregister(udf_name, &was_present);
 
   return false;
 }

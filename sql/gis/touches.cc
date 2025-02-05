@@ -122,9 +122,7 @@ static bool geometry_collection_apply_touches(const Touches &f,
                          mask))
             return false;
         }
-        for (std::size_t i = 0;
-             i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size(); i++) {
-          auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
+        for (auto &pt : *down_cast<Cartesian_multipoint *>(g2_mpt.get())) {
           if (bg::relate(pt,
                          *down_cast<Cartesian_multilinestring *>(g1_mls.get()),
                          mask) ||
@@ -162,10 +160,7 @@ static bool geometry_collection_apply_touches(const Touches &f,
                          mask, geographic_pl_pa_strategy))
             return false;
         }
-        for (std::size_t i = 0;
-             i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
-             i++) {
-          auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
+        for (auto &pt : *down_cast<Geographic_multipoint *>(g2_mpt.get())) {
           if (bg::relate(pt,
                          *down_cast<Geographic_multilinestring *>(g1_mls.get()),
                          mask, geographic_pl_pa_strategy) ||
@@ -227,10 +222,7 @@ static bool geometry_collection_apply_touches(const Touches &f,
             return false;
           break;
         case Geometry_type::kLinestring:
-          for (std::size_t i = 0;
-               i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
+          for (auto &pt : *down_cast<Cartesian_multipoint *>(g2_mpt.get())) {
             if (bg::relate(pt, *down_cast<const Cartesian_linestring *>(g1),
                            mask))
               return false;
@@ -244,10 +236,7 @@ static bool geometry_collection_apply_touches(const Touches &f,
             return false;
           break;
         case Geometry_type::kPolygon:
-          for (std::size_t i = 0;
-               i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
+          for (auto &pt : *down_cast<Cartesian_multipoint *>(g2_mpt.get())) {
             if (bg::relate(pt, *down_cast<const Cartesian_polygon *>(g1), mask))
               return false;
           }
@@ -262,9 +251,7 @@ static bool geometry_collection_apply_touches(const Touches &f,
         case Geometry_type::kMultipoint:
           if (!g2_mpt->empty() && g2_mls->empty() && g2_mpy->empty())
             throw null_value_exception();
-          for (std::size_t i = 0;
-               i < down_cast<const Cartesian_multipoint *>(g1)->size(); i++) {
-            const auto &pt = (*down_cast<const Cartesian_multipoint *>(g1))[i];
+          for (const auto &pt : *down_cast<const Cartesian_multipoint *>(g1)) {
             if (bg::relate(
                     pt, *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
                     mask) ||
@@ -279,10 +266,7 @@ static bool geometry_collection_apply_touches(const Touches &f,
             return false;
           break;
         case Geometry_type::kMultilinestring:
-          for (std::size_t i = 0;
-               i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
+          for (auto &pt : *down_cast<Cartesian_multipoint *>(g2_mpt.get())) {
             if (bg::relate(pt,
                            *down_cast<const Cartesian_multilinestring *>(g1),
                            mask))
@@ -297,10 +281,7 @@ static bool geometry_collection_apply_touches(const Touches &f,
             return false;
           break;
         case Geometry_type::kMultipolygon:
-          for (std::size_t i = 0;
-               i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
+          for (auto &pt : *down_cast<Cartesian_multipoint *>(g2_mpt.get())) {
             if (bg::relate(pt, *down_cast<const Cartesian_multipolygon *>(g1),
                            mask))
               return false;
@@ -333,10 +314,7 @@ static bool geometry_collection_apply_touches(const Touches &f,
             return false;
           break;
         case Geometry_type::kLinestring:
-          for (std::size_t i = 0;
-               i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
+          for (auto &pt : *down_cast<Geographic_multipoint *>(g2_mpt.get())) {
             if (bg::relate(pt, *down_cast<const Geographic_linestring *>(g1),
                            mask, geographic_pl_pa_strategy))
               return false;
@@ -350,10 +328,7 @@ static bool geometry_collection_apply_touches(const Touches &f,
             return false;
           break;
         case Geometry_type::kPolygon:
-          for (std::size_t i = 0;
-               i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
+          for (auto &pt : *down_cast<Geographic_multipoint *>(g2_mpt.get())) {
             if (bg::relate(pt, *down_cast<const Geographic_polygon *>(g1), mask,
                            geographic_pl_pa_strategy))
               return false;
@@ -367,9 +342,7 @@ static bool geometry_collection_apply_touches(const Touches &f,
             return false;
           break;
         case Geometry_type::kMultipoint:
-          for (std::size_t i = 0;
-               i < down_cast<const Geographic_multipoint *>(g1)->size(); i++) {
-            const auto &pt = (*down_cast<const Geographic_multipoint *>(g1))[i];
+          for (const auto &pt : *down_cast<const Geographic_multipoint *>(g1)) {
             if (bg::relate(
                     pt, *down_cast<Geographic_multilinestring *>(g2_mls.get()),
                     mask, geographic_pl_pa_strategy) ||
@@ -385,10 +358,7 @@ static bool geometry_collection_apply_touches(const Touches &f,
             return false;
           break;
         case Geometry_type::kMultilinestring:
-          for (std::size_t i = 0;
-               i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
+          for (auto &pt : *down_cast<Geographic_multipoint *>(g2_mpt.get())) {
             if (bg::relate(pt,
                            *down_cast<const Geographic_multilinestring *>(g1),
                            mask, geographic_pl_pa_strategy))
@@ -403,10 +373,7 @@ static bool geometry_collection_apply_touches(const Touches &f,
             return false;
           break;
         case Geometry_type::kMultipolygon:
-          for (std::size_t i = 0;
-               i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
+          for (auto &pt : *down_cast<Geographic_multipoint *>(g2_mpt.get())) {
             if (bg::relate(pt, *down_cast<const Geographic_multipolygon *>(g1),
                            mask, geographic_pl_pa_strategy))
               return false;

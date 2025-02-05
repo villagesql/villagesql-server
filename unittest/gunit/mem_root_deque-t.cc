@@ -26,6 +26,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <deque>
+#include <ranges>
 
 #include "mem_root_deque.h"
 #include "my_alloc.h"
@@ -236,14 +237,14 @@ TEST(MemRootDequeTest, ReverseIteration) {
   d.push_back(2);
   d.push_back(3);
   mem_root_deque<int> e(&mem_root);
-  for (auto it = d.rbegin(); it != d.rend(); ++it) {
-    e.push_back(*it);
+  for (int &it : std::ranges::reverse_view(d)) {
+    e.push_back(it);
   }
   EXPECT_THAT(e, ElementsAre(3, 2, 1));
 
   const mem_root_deque<int> &d_ref = d;
-  for (auto it = d_ref.rbegin(); it != d_ref.rend(); ++it) {
-    e.push_back(*it);
+  for (int it : std::ranges::reverse_view(d_ref)) {
+    e.push_back(it);
   }
 }
 

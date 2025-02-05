@@ -700,9 +700,8 @@ int dump_zh_hans(MY_UCA *uca, int *pageloaded, FILE *infile, FILE *outfile) {
   fprintf(outfile, "\n};\n\n");
 
   fprintf(outfile, "int zh_han_to_single_weight[] = {\n");
-  for (auto map_it = zh_han_to_single_weight_map.begin();
-       map_it != zh_han_to_single_weight_map.end(); map_it++) {
-    fprintf(outfile, "  0x%05X, 0x%04X,\n", map_it->first, map_it->second);
+  for (auto &map_it : zh_han_to_single_weight_map) {
+    fprintf(outfile, "  0x%05X, 0x%04X,\n", map_it.first, map_it.second);
   }
   fprintf(outfile, "\n};\n\n");
   fprintf(outfile, "extern const int ZH_HAN_WEIGHT_PAIRS = %lu;\n",

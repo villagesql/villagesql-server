@@ -1526,8 +1526,8 @@ static void free_used_memory() {
     my_free((*q));
   }
 
-  for (size_t i = 0; i < 10; i++) {
-    if (var_reg[i].alloced_len) my_free(var_reg[i].str_val);
+  for (auto &i : var_reg) {
+    if (i.alloced_len) my_free(i.str_val);
   }
 
   delete q_lines;
@@ -2569,8 +2569,7 @@ static void set_property(st_command *command, enum_prop property, bool value) {
 void revert_properties() {
   if (!once_property) return;
 
-  for (std::size_t i = 0; i < P_MAX; i++) {
-    Property &prop = prop_list[i];
+  for (auto &prop : prop_list) {
     if (prop.set) {
       *prop.var = prop.old;
       prop.set = false;
@@ -6224,9 +6223,8 @@ static void do_error(struct st_command *command) {
         die("The sqlstate must be exactly %d chars long.", SQLSTATE_LENGTH);
 
       // Check the validity of an SQLSTATE string.
-      for (std::size_t i = 0; i < error.length(); i++) {
-        if (!my_isdigit(charset_info, error[i]) &&
-            !my_isupper(charset_info, error[i]))
+      for (char i : error) {
+        if (!my_isdigit(charset_info, i) && !my_isupper(charset_info, i))
           die("The sqlstate may only consist of digits[0-9] and _uppercase_ "
               "letters.");
       }

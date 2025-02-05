@@ -421,8 +421,7 @@ int country_delete_row_values(PSI_table_handle *handle) {
 
 int country_delete_all_rows() {
   native_mutex_lock(&LOCK_country_records_array);
-  for (int i = 0; i < COUNTRY_MAX_ROWS; i++)
-    country_records_array[i].m_exist = false;
+  for (auto &i : country_records_array) i.m_exist = false;
   country_rows_in_table = 0;
   country_next_available_index = 0;
   native_mutex_unlock(&LOCK_country_records_array);

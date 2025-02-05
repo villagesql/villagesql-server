@@ -91,18 +91,12 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
           shared_interior = bg::relate(
               *down_cast<Cartesian_multipoint *>(g1_mpt.get()),
               *down_cast<Cartesian_multipoint *>(g2_mpt.get()), mask);
-          for (std::size_t i = 0;
-               i < down_cast<Cartesian_multipoint *>(g1_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Cartesian_multipoint *>(g1_mpt.get()))[i];
+          for (auto &pt : *down_cast<Cartesian_multipoint *>(g1_mpt.get())) {
             shared_interior |= bg::relate(
                 pt, *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
                 mask);
           }
-          for (std::size_t i = 0;
-               i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
+          for (auto &pt : *down_cast<Cartesian_multipoint *>(g2_mpt.get())) {
             shared_interior |= bg::relate(
                 pt, *down_cast<Cartesian_multilinestring *>(g1_mls.get()),
                 mask);
@@ -128,10 +122,7 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
           shared_interior = bg::relate(
               *down_cast<Cartesian_multipoint *>(g1_mpt.get()),
               *down_cast<Cartesian_multipoint *>(g2_mpt.get()), mask);
-          for (std::size_t i = 0;
-               i < down_cast<Cartesian_multipoint *>(g1_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Cartesian_multipoint *>(g1_mpt.get()))[i];
+          for (auto &pt : *down_cast<Cartesian_multipoint *>(g1_mpt.get())) {
             shared_interior |=
                 bg::relate(
                     pt, *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
@@ -140,10 +131,7 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
                            *down_cast<Cartesian_multipolygon *>(g2_mpy.get()),
                            mask);
           }
-          for (std::size_t i = 0;
-               i < down_cast<Cartesian_multipoint *>(g2_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Cartesian_multipoint *>(g2_mpt.get()))[i];
+          for (auto &pt : *down_cast<Cartesian_multipoint *>(g2_mpt.get())) {
             shared_interior |= bg::relate(
                 pt, *down_cast<Cartesian_multilinestring *>(g1_mls.get()),
                 mask);
@@ -166,18 +154,12 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
           shared_interior = bg::relate(
               *down_cast<Geographic_multipoint *>(g1_mpt.get()),
               *down_cast<Geographic_multipoint *>(g2_mpt.get()), mask);
-          for (std::size_t i = 0;
-               i < down_cast<Geographic_multipoint *>(g1_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Geographic_multipoint *>(g1_mpt.get()))[i];
+          for (auto &pt : *down_cast<Geographic_multipoint *>(g1_mpt.get())) {
             shared_interior |= bg::relate(
                 pt, *down_cast<Geographic_multilinestring *>(g2_mls.get()),
                 mask);
           }
-          for (std::size_t i = 0;
-               i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
+          for (auto &pt : *down_cast<Geographic_multipoint *>(g2_mpt.get())) {
             shared_interior |= bg::relate(
                 pt, *down_cast<Geographic_multilinestring *>(g1_mls.get()),
                 mask);
@@ -211,10 +193,7 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
           shared_interior = bg::relate(
               *down_cast<Geographic_multipoint *>(g1_mpt.get()),
               *down_cast<Geographic_multipoint *>(g2_mpt.get()), mask);
-          for (std::size_t i = 0;
-               i < down_cast<Geographic_multipoint *>(g1_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Geographic_multipoint *>(g1_mpt.get()))[i];
+          for (auto &pt : *down_cast<Geographic_multipoint *>(g1_mpt.get())) {
             shared_interior |=
                 bg::relate(
                     pt, *down_cast<Geographic_multilinestring *>(g2_mls.get()),
@@ -223,10 +202,7 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
                            *down_cast<Geographic_multipolygon *>(g2_mpy.get()),
                            mask, geographic_pl_pa_strategy);
           }
-          for (std::size_t i = 0;
-               i < down_cast<Geographic_multipoint *>(g2_mpt.get())->size();
-               i++) {
-            auto &pt = (*down_cast<Geographic_multipoint *>(g2_mpt.get()))[i];
+          for (auto &pt : *down_cast<Geographic_multipoint *>(g2_mpt.get())) {
             shared_interior |= bg::relate(
                 pt, *down_cast<Geographic_multilinestring *>(g1_mls.get()),
                 mask, geographic_pl_pa_strategy);

@@ -26,9 +26,9 @@
 void Expected_warnings::add_warning(std::uint32_t warning_code,
                                     const char *warning_name,
                                     bool once_property) {
-  for (std::size_t i = 0; i < m_warnings.size(); i++) {
+  for (auto &m_warning : m_warnings) {
     // Warning already exist, don't add it.
-    if (m_warnings.at(i)->warning_code() == warning_code) return;
+    if (m_warning->warning_code() == warning_code) return;
   }
 
   // Add a new warning to the existing list.

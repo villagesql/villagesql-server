@@ -1522,10 +1522,8 @@ void update_variable_source(const char *opt_name, const char *value) {
         const string skip_variables[] = {
             "skip_name_resolve",     "skip_networking",  "skip_show_database",
             "skip_external_locking", "skip_slave_start", "skip_replica_start"};
-        for (uint skip_index = 0;
-             skip_index < sizeof(skip_variables) / sizeof(skip_variables[0]);
-             ++skip_index) {
-          if (var_name == skip_variables[skip_index]) {
+        for (const auto &skip_index : skip_variables) {
+          if (var_name == skip_index) {
             /*
              Do not trim the skip_ prefix for variables which
              start with skip

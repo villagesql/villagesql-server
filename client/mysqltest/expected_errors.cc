@@ -39,8 +39,8 @@ std::string Expected_errors::error_list() {
 
 std::vector<unsigned int> Expected_errors::errors() {
   std::vector<unsigned int> errors;
-  for (std::size_t i = 0; i < m_errors.size(); i++) {
-    errors.push_back(m_errors.at(i)->error_code());
+  for (auto &m_error : m_errors) {
+    errors.push_back(m_error->error_code());
   }
   return errors;
 }

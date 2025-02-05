@@ -117,7 +117,7 @@ TEST(CollationLoaderTest, RandomCollation) {
   // Look up one collation to initialize the all_charsets array.
   lookup_collation("latin1_swedish_ci");
   std::thread test_thd[4];
-  for (int i = 0; i < 4; i++) test_thd[i] = std::thread(TestRandomCollation);
-  for (int i = 0; i < 4; i++) test_thd[i].join();
+  for (auto &i : test_thd) i = std::thread(TestRandomCollation);
+  for (auto &i : test_thd) i.join();
 }
 }  // namespace collation_loader_unittest

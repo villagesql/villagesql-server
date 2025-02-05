@@ -38,13 +38,13 @@ static void gssapi_errmsg(OM_uint32 major, OM_uint32 minor, char *buf,
   char *end = t_message + size - 1;
   int types[] = {GSS_C_GSS_CODE, GSS_C_MECH_CODE};
 
-  for (int i = 0; i < 2; i++) {
+  for (int type : types) {
     message_context = 0;
-    status_code = types[i] == GSS_C_GSS_CODE ? major : minor;
+    status_code = type == GSS_C_GSS_CODE ? major : minor;
 
     if (!status_code) continue;
     do {
-      maj_status = gss_display_status(&min_status, status_code, types[i],
+      maj_status = gss_display_status(&min_status, status_code, type,
                                       GSS_C_NO_OID, &message_context, &status);
       if (maj_status) break;
 

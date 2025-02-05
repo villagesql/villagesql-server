@@ -78,8 +78,8 @@ TEST_F(dynamic_loader, try_unload_the_same_component_in_group) {
   static const char *urns[] = {"file://component_example_component1"};
   std::string path;
   const char *absolute_urns[2];
-  for (int i = 0; i < 2; i++)
-    absolute_urns[i] = (char *)malloc(2046 * sizeof(char));
+  for (auto &absolute_urn : absolute_urns)
+    absolute_urn = (char *)malloc(2046 * sizeof(char));
   make_absolute_urn(*urns, &path);
   strcpy(const_cast<char *>(absolute_urns[0]), path.c_str());
   ASSERT_FALSE(loader->load(absolute_urns, 1));
@@ -89,7 +89,8 @@ TEST_F(dynamic_loader, try_unload_the_same_component_in_group) {
   strcpy(const_cast<char *>(absolute_urns[1]), path.c_str());
   ASSERT_TRUE(loader->unload((const char **)absolute_urns, 2));
   ASSERT_FALSE(loader->unload((const char **)&absolute_urns[0], 1));
-  for (int i = 0; i < 2; i++) free(const_cast<char *>(absolute_urns[i]));
+  for (auto &absolute_urn : absolute_urns)
+    free(const_cast<char *>(absolute_urn));
 }
 
 TEST_F(dynamic_loader, try_load_twice) {
@@ -151,8 +152,8 @@ TEST_F(dynamic_loader, load_different_components) {
   std::string path1, path2, path3;
   const char *absolute_urn;
   const char *absolute_urns[2];
-  for (int i = 0; i < 2; i++)
-    absolute_urns[i] = (char *)malloc(2046 * sizeof(char));
+  for (auto &absolute_urn : absolute_urns)
+    absolute_urn = (char *)malloc(2046 * sizeof(char));
   make_absolute_urn(*urns1, &path1);
   absolute_urn = path1.c_str();
   {
@@ -179,7 +180,8 @@ TEST_F(dynamic_loader, load_different_components) {
     my_service<SERVICE_TYPE(example_math)> service("example_math", reg);
     ASSERT_TRUE((bool)service);
   }
-  for (int i = 0; i < 2; i++) free(const_cast<char *>(absolute_urns[i]));
+  for (auto &absolute_urn : absolute_urns)
+    free(const_cast<char *>(absolute_urn));
 }
 
 TEST_F(dynamic_loader, dependencies) {
@@ -189,8 +191,8 @@ TEST_F(dynamic_loader, dependencies) {
   std::string path1, path2;
   const char *absolute_urn;
   const char *absolute_urns[2];
-  for (int i = 0; i < 2; i++)
-    absolute_urns[i] = (char *)malloc(2046 * sizeof(char));
+  for (auto &absolute_urn : absolute_urns)
+    absolute_urn = (char *)malloc(2046 * sizeof(char));
   make_absolute_urn(*urns1, &path1);
   absolute_urn = path1.c_str();
   {
@@ -212,7 +214,8 @@ TEST_F(dynamic_loader, dependencies) {
     my_service<SERVICE_TYPE(example_math)> service("example_math", reg);
     ASSERT_TRUE((bool)service);
   }
-  for (int i = 0; i < 2; i++) free(const_cast<char *>(absolute_urns[i]));
+  for (auto &absolute_urn : absolute_urns)
+    free(const_cast<char *>(absolute_urn));
 }
 
 TEST_F(dynamic_loader, cyclic_dependencies) {
@@ -247,16 +250,16 @@ TEST_F(dynamic_loader, cyclic_dependencies) {
   ASSERT_TRUE(loader->load(&absolute_cyclic_depends_broken2, 1));
 
   /* Correct cyclic dependency.*/
-  for (int i = 0; i < 2; i++)
-    absolute_cyclic_depends[i] = (char *)malloc(2046 * sizeof(char));
+  for (auto &absolute_cyclic_depend : absolute_cyclic_depends)
+    absolute_cyclic_depend = (char *)malloc(2046 * sizeof(char));
   make_absolute_urn(urns_cyclic_depends[0], &path2);
   strcpy(const_cast<char *>(absolute_cyclic_depends[0]), path2.c_str());
   make_absolute_urn(urns_cyclic_depends[1], &path3);
   strcpy(const_cast<char *>(absolute_cyclic_depends[1]), path3.c_str());
   ASSERT_FALSE(loader->load(absolute_cyclic_depends, 2));
   ASSERT_FALSE(loader->unload(absolute_cyclic_depends, 2));
-  for (int i = 0; i < 2; i++)
-    free(const_cast<char *>(absolute_cyclic_depends[i]));
+  for (auto &absolute_cyclic_depend : absolute_cyclic_depends)
+    free(const_cast<char *>(absolute_cyclic_depend));
 }
 
 TEST_F(dynamic_loader, first_dependency) {
@@ -303,8 +306,8 @@ TEST_F(dynamic_loader, iteration) {
                                "file://component_example_component3"};
   std::string path;
   const char *absolute_urns[3];
-  for (int i = 0; i < 3; i++)
-    absolute_urns[i] = (char *)malloc(2046 * sizeof(char));
+  for (auto &absolute_urn : absolute_urns)
+    absolute_urn = (char *)malloc(2046 * sizeof(char));
   make_absolute_urn(urns[0], &path);
   strcpy(const_cast<char *>(absolute_urns[0]), path.c_str());
   make_absolute_urn(urns[1], &path);
@@ -336,7 +339,8 @@ TEST_F(dynamic_loader, iteration) {
   /* there should be at least 3 test components loaded. */
   ASSERT_GE(count, 3);
   ASSERT_TRUE(test_library_found);
-  for (int i = 0; i < 3; i++) free(const_cast<char *>(absolute_urns[i]));
+  for (auto &absolute_urn : absolute_urns)
+    free(const_cast<char *>(absolute_urn));
 }
 
 TEST_F(dynamic_loader, metadata) {
@@ -358,8 +362,8 @@ TEST_F(dynamic_loader, metadata) {
 
   std::string path;
   const char *absolute_urns[3];
-  for (int i = 0; i < 3; i++)
-    absolute_urns[i] = (char *)malloc(2046 * sizeof(char));
+  for (auto &absolute_urn : absolute_urns)
+    absolute_urn = (char *)malloc(2046 * sizeof(char));
   make_absolute_urn(urns[0], &path);
   strcpy(const_cast<char *>(absolute_urns[0]), path.c_str());
   make_absolute_urn(urns[1], &path);
@@ -426,7 +430,8 @@ TEST_F(dynamic_loader, metadata) {
       ASSERT_TRUE(property_found);
     }
   }
-  for (int i = 0; i < 3; i++) free(const_cast<char *>(absolute_urns[i]));
+  for (auto &absolute_urn : absolute_urns)
+    free(const_cast<char *>(absolute_urn));
 }
 
 /* mandatory main function */

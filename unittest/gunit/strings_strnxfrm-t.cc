@@ -503,8 +503,8 @@ TEST(StrXfrmTest, NullPointer) {
   cs->coll->strnxfrm(cs, buf, sizeof(buf), sizeof(buf), nullptr, 0,
                      MY_STRXFRM_PAD_TO_MAXLEN);
 
-  for (size_t i = 0; i < sizeof(buf); ++i) {
-    EXPECT_EQ(0, buf[i]);
+  for (unsigned char &i : buf) {
+    EXPECT_EQ(0, i);
   }
 }
 

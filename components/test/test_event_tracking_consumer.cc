@@ -259,9 +259,7 @@ class Event_tracking_counters {
  public:
   /** Constructor */
   Event_tracking_counters() {
-    for (unsigned int i = 0; i < static_cast<unsigned int>(Event_types::LAST);
-         ++i)
-      event_counters_[i] = 0;
+    for (auto &event_counter : event_counters_) event_counter = 0;
   }
 
   /** Destructor */
@@ -311,9 +309,7 @@ class Event_tracking_counters {
   }
 
   void reset_all() {
-    for (unsigned int index = 0;
-         index < static_cast<unsigned int>(Event_types::LAST); ++index)
-      event_counters_[index] = 0;
+    for (auto &event_counter : event_counters_) event_counter = 0;
   }
 
  private:

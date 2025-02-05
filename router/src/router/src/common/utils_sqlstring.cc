@@ -278,10 +278,10 @@ std::string escape_sql_string(const std::string &s, bool wildcards) {
   std::string result;
   result.reserve(s.size());
 
-  for (std::string::const_iterator ch = s.begin(); ch != s.end(); ++ch) {
+  for (char ch : s) {
     char escape = 0;
 
-    switch (*ch) {
+    switch (ch) {
       case 0: /* Must be escaped for 'mysql' */
         escape = '0';
         break;
@@ -314,7 +314,7 @@ std::string escape_sql_string(const std::string &s, bool wildcards) {
       result.push_back('\\');
       result.push_back(escape);
     } else
-      result.push_back(*ch);
+      result.push_back(ch);
   }
   return result;
 }
@@ -327,10 +327,10 @@ std::string escape_backticks(const std::string &s) {
   std::string result;
   result.reserve(s.size());
 
-  for (std::string::const_iterator ch = s.begin(); ch != s.end(); ++ch) {
+  for (char ch : s) {
     char escape = 0;
 
-    switch (*ch) {
+    switch (ch) {
       case 0: /* Must be escaped for 'mysql' */
         escape = '0';
         break;
@@ -352,7 +352,7 @@ std::string escape_backticks(const std::string &s) {
       result.push_back('\\');
       result.push_back(escape);
     } else
-      result.push_back(*ch);
+      result.push_back(ch);
   }
   return result;
 }
@@ -388,11 +388,11 @@ std::string quote_identifier_if_needed(const std::string &ident,
   size_t digits = 0;
 
   if (!needs_quotation) {
-    for (std::string::const_iterator i = ident.begin(); i != ident.end(); ++i) {
-      if ((*i >= 'a' && *i <= 'z') || (*i >= 'A' && *i <= 'Z') ||
-          (*i >= '0' && *i <= '9') || (*i == '_') || (*i == '$') ||
-          ((unsigned char)(*i) > 0x7F)) {
-        if (*i >= '0' && *i <= '9') digits++;
+    for (char i : ident) {
+      if ((i >= 'a' && i <= 'z') || (i >= 'A' && i <= 'Z') ||
+          (i >= '0' && i <= '9') || (i == '_') || (i == '$') ||
+          ((unsigned char)i > 0x7F)) {
+        if (i >= '0' && i <= '9') digits++;
 
         continue;
       }

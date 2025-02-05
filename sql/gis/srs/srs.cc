@@ -184,32 +184,32 @@ static bool set_parameters(gis::srid_t srid,
     In other words: If a parameter has an EPSG authority code, obey
     it. If not, use the parameter name.
   */
-  for (auto i = proj->parameters.begin(); i != proj->parameters.end(); i++) {
+  for (auto &parameter : proj->parameters) {
     bool unused = true;
-    for (size_t j = 0; j < params->size(); j++) {
+    for (auto &param : *params) {
       if (!my_strcasecmp(&my_charset_latin1, "EPSG",
-                         i->authority.name.c_str())) {
+                         parameter.authority.name.c_str())) {
         if (!my_strcasecmp(&my_charset_latin1,
-                           std::to_string(params->at(j).first).c_str(),
-                           i->authority.code.c_str())) {
-          *(params->at(j).second) = i->value;
+                           std::to_string(param.first).c_str(),
+                           parameter.authority.code.c_str())) {
+          *(param.second) = parameter.value;
           unused = false;
         }
       } else if (!my_strcasecmp(&my_charset_latin1,
-                                param_names[params->at(j).first].c_str(),
-                                i->name.c_str())) {
-        *(params->at(j).second) = i->value;
+                                param_names[param.first].c_str(),
+                                parameter.name.c_str())) {
+        *(param.second) = parameter.value;
         unused = false;
       } else if (!my_strcasecmp(&my_charset_latin1,
-                                param_aliases[params->at(j).first].c_str(),
-                                i->name.c_str())) {
-        *(params->at(j).second) = i->value;
+                                param_aliases[param.first].c_str(),
+                                parameter.name.c_str())) {
+        *(param.second) = parameter.value;
         unused = false;
       }
     }
     if (unused) {
       my_error(ER_SRS_UNUSED_PROJ_PARAMETER_PRESENT, MYF(0), srid,
-               i->name.c_str());
+               parameter.name.c_str());
       return true;
     }
   }

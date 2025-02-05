@@ -4276,10 +4276,10 @@ void Gis_wkb_vector<T>::reassemble() {
 
   // Starting step two of the algorithm --- Reassembling.
   // Assemble the ins and outs into a single chunk.
-  for (auto itr = segs.begin(); itr != segs.end(); ++itr) {
-    size_t i = itr->first;
-    start = itr->second.first;
-    end = itr->second.second;
+  for (auto &seg : segs) {
+    size_t i = seg.first;
+    start = seg.second.first;
+    end = seg.second.second;
     const Geometry *veci = &(vec[i]);
     last_i = i;
 

@@ -354,8 +354,8 @@ static enum_serialization_result append_key_entries(const Json_object *object,
 #endif
 
   // Add the key entries.
-  for (auto it = object->begin(); it != object->end(); ++it) {
-    const std::string *key = &it->first;
+  for (const auto &it : *object) {
+    const std::string *key = &it.first;
     size_t len = key->length();
 
 #ifndef NDEBUG

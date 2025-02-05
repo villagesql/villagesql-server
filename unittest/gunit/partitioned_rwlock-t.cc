@@ -127,9 +127,9 @@ TEST(PartitionedRwlock, Concurrent) {
     readers[i].init(i, &rwlock, &shared_counter);
 
   writer.start();
-  for (uint i = 0; i < PARTS_NUM; ++i) readers[i].start();
+  for (auto &reader : readers) reader.start();
 
-  for (uint i = 0; i < PARTS_NUM; ++i) readers[i].join();
+  for (auto &reader : readers) reader.join();
   writer.join();
 
   rwlock.destroy();

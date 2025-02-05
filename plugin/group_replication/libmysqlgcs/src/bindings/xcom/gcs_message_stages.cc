@@ -28,6 +28,7 @@
 #include <cstring>
 #include <iostream>
 #include <iterator>
+#include <ranges>
 #include <sstream>
 #include <tuple>
 #include <type_traits>
@@ -342,8 +343,7 @@ Gcs_message_pipeline::process_incoming(Gcs_packet &&packet) const {
 
   /* Revert the stages from last to first. */
   auto const dynamic_headers = packet.get_dynamic_headers();
-  for (auto it = dynamic_headers.rbegin(); it != dynamic_headers.rend(); it++) {
-    Gcs_dynamic_header const &dynamic_header = *it;
+  for (auto dynamic_header : std::ranges::reverse_view(dynamic_headers)) {
     Gcs_pipeline_incoming_result error_code;
 
     std::tie(error_code, packet) =

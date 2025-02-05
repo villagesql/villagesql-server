@@ -80,14 +80,13 @@ TEST(ut0mem, utstrsqlformat) {
       {"a'b'c'", 6, 32, 12, "'a''b''c'''"},
   };
 
-  for (ulint i = 0; i < UT_ARR_SIZE(test_data); i++) {
+  for (auto &i : test_data) {
     memcpy(buf, buf_initial, buf_initial_sz);
 
-    ret = ut_str_sql_format(test_data[i].in, test_data[i].in_len, buf,
-                            test_data[i].buf_size);
+    ret = ut_str_sql_format(i.in, i.in_len, buf, i.buf_size);
 
-    EXPECT_EQ(test_data[i].ret_expected, ret);
-    EXPECT_STREQ(test_data[i].buf_expected, buf);
+    EXPECT_EQ(i.ret_expected, ret);
+    EXPECT_STREQ(i.buf_expected, buf);
   }
 }
 

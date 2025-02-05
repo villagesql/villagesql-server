@@ -124,8 +124,8 @@ TEST_F(SqlListTest, DeepCopy) {
 TEST_F(SqlListTest, Iterate) {
   int values[] = {3, 2, 1};
   insert_values(values, &m_int_list);
-  for (size_t ix = 0; ix < array_elements(values); ++ix) {
-    EXPECT_EQ(values[ix], *m_int_list_iter++);
+  for (int &value : values) {
+    EXPECT_EQ(value, *m_int_list_iter++);
   }
   m_int_list_iter.init(m_int_list);
   int *value;
@@ -160,8 +160,8 @@ TEST(SqlIlistTest, PushBackAndIterate) {
   I_List_iterator<Linked_node> i_list_iter(i_list);
   int values[] = {11, 22, 33, 42, 5};
   EXPECT_EQ(null_node, i_list.head());
-  for (size_t ix = 0; ix < array_elements(values); ++ix) {
-    i_list.push_back(new Linked_node(values[ix]));
+  for (int value : values) {
+    i_list.push_back(new Linked_node(value));
   }
 
   Linked_node *node;
@@ -181,8 +181,8 @@ TEST(SqlIlistTest, PushFrontAndIterate) {
   I_List<Linked_node> i_list;
   I_List_iterator<Linked_node> i_list_iter(i_list);
   int values[] = {11, 22, 33, 42, 5};
-  for (size_t ix = 0; ix < array_elements(values); ++ix) {
-    i_list.push_front(new Linked_node(values[ix]));
+  for (int value : values) {
+    i_list.push_front(new Linked_node(value));
   }
 
   Linked_node *node;

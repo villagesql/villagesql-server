@@ -114,8 +114,8 @@ TEST_F(IPListTest, Iterate) {
   I_P_ListTestValue<int> values[] = {3, 2, 1};
   insert_values(values, &m_int_list);
   m_int_list_iter.init(m_int_list);
-  for (size_t ix = 0; ix < array_elements(values); ++ix) {
-    EXPECT_EQ(values[ix], *m_int_list_iter++);
+  for (auto &value : values) {
+    EXPECT_EQ(value, *m_int_list_iter++);
   }
   m_int_list_iter.init(m_int_list);
   I_P_ListTestValue<int> *value;

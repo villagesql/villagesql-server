@@ -1244,9 +1244,9 @@ bool generate_login_key() {
 
   verbose_msg("Generating a new key.\n");
   /* Get a sequence of random non-printable ASCII */
-  for (uint i = 0; i < LOGIN_KEY_LEN; i++) {
+  for (char &i : my_key) {
     bool failed;
-    my_key[i] = (char)((int)(my_rnd_ssl(&failed) * 100000) % 32);
+    i = (char)((int)(my_rnd_ssl(&failed) * 100000) % 32);
     if (failed) return true;
   }
   return false;

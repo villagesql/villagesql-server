@@ -778,17 +778,14 @@ static void test_selects(MYSQL_SESSION session, void *p) {
   auto *plugin_ctx = new st_plugin_ctx();
 
   const char *last_db = nullptr;
-  const size_t stmt_count =
-      sizeof(test_query_plan) / sizeof(test_query_plan[0]);
-  for (size_t i = 0; i < stmt_count; i++) {
+  for (auto &i : test_query_plan) {
     /* Change current DB if needed */
-    if (last_db != test_query_plan[i].db) {
-      last_db = test_query_plan[i].db;
+    if (last_db != i.db) {
+      last_db = i.db;
 
       change_current_db(session, last_db ? last_db : "", plugin_ctx, p);
     }
-    run_statement(session, test_query_plan[i].query, plugin_ctx,
-                  test_query_plan[i].generates_result_set, p);
+    run_statement(session, i.query, plugin_ctx, i.generates_result_set, p);
 
     last_db = nullptr;
   }

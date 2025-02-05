@@ -54,7 +54,7 @@ TEST(initialize_password, random_pwd_0) {
   bool failed = ::generate_password(&pass[1], 0);
   EXPECT_EQ(failed, false);
 
-  for (unsigned inx = 0; inx < sizeof(pass); inx++) EXPECT_EQ(pass[inx], 0);
+  for (char &pas : pass) EXPECT_EQ(pas, 0);
 }
 
 TEST(initialize_password, random_pwd_1) {

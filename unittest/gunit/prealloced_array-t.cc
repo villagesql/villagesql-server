@@ -189,9 +189,9 @@ TEST_F(PreallocedArrayTest, InsertUnique) {
   std::mt19937 urng(rng());
   std::shuffle(int_10.begin(), int_10.end(), urng);
   Prealloced_array<int, 1> unique_arr(PSI_NOT_INSTRUMENTED);
-  for (int *pi = int_10.begin(); pi != int_10.end(); ++pi) {
-    unique_arr.insert_unique(*pi);
-    EXPECT_EQ(1U, unique_arr.count_unique(*pi));
+  for (int &pi : int_10) {
+    unique_arr.insert_unique(pi);
+    EXPECT_EQ(1U, unique_arr.count_unique(pi));
   }
   EXPECT_EQ(10U, unique_arr.size());
   // Duplicates should have been ignored, and the result should be sorted.

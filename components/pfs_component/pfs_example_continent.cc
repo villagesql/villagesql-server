@@ -41,8 +41,7 @@ Continent_record continent_records_array[CONTINENT_MAX_ROWS] = {{"", 0, false}};
 
 int continent_delete_all_rows() {
   native_mutex_lock(&LOCK_continent_records_array);
-  for (int i = 0; i < CONTINENT_MAX_ROWS; i++)
-    continent_records_array[i].m_exist = false;
+  for (auto &i : continent_records_array) i.m_exist = false;
   continent_rows_in_table = 0;
   continent_next_available_index = 0;
   native_mutex_unlock(&LOCK_continent_records_array);

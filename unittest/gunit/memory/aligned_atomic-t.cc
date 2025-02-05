@@ -103,8 +103,8 @@ TEST_F(AlignedAtomicTest, AlignedAllocationArray) {
   static const int array_size = 10;
   memory::Aligned_atomic<int> atm[array_size];
 
-  for (int i = 0; i < array_size; i++)
-    EXPECT_EQ((unsigned long long)accessor.get_underlying(atm[i]) %
+  for (auto &i : atm)
+    EXPECT_EQ((unsigned long long)accessor.get_underlying(i) %
                   memory::cache_line_size(),
               0);
 }

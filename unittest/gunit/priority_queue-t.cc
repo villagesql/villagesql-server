@@ -802,8 +802,8 @@ TEST_F(PriorityQueueTest, Sort) {
 
   std::stringstream ss1, ss2;
   ss1 << pqcopy;
-  for (size_t i = 0; i < keyscopy.size(); ++i) {
-    ss2 << keyscopy[i] << " ";
+  for (int i : keyscopy) {
+    ss2 << i << " ";
   }
   EXPECT_STREQ(ss1.str().c_str(), ss2.str().c_str());
 }

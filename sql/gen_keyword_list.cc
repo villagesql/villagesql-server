@@ -151,8 +151,8 @@ int main(int argc, const char *argv[]) {
 
   std::map<std::string, bool> words;
 
-  for (size_t i = 0; i < array_elements(symbols); i++) {
-    const SYMBOL *sym = &symbols[i];
+  for (const auto &symbol : symbols) {
+    const SYMBOL *sym = &symbol;
 
     if (sym->group != SG_KEYWORDS && sym->group != SG_HINTABLE_KEYWORDS)
       continue;  // Function or optimizer hint name.

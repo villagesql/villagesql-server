@@ -4600,9 +4600,9 @@ static void my_calc_char_grp_gap_param(CHARSET_INFO *cs, int &rec_ind) {
   Char_grp_info *last_grp = nullptr;
   for (Char_grp_info *info = std::begin(char_grp_infos);
        info < std::end(char_grp_infos); ++info) {
-    for (int ind = 0; ind < UCA_MAX_CHAR_GRP; ++ind) {
-      if (param->reorder_grp[ind] == CHARGRP_NONE) break;
-      if (param->reorder_grp[ind] != info->group) continue;
+    for (auto &ind : param->reorder_grp) {
+      if (ind == CHARGRP_NONE) break;
+      if (ind != info->group) continue;
       if (param->max_weight < info->grp_wt_bdy.end)
         param->max_weight = info->grp_wt_bdy.end;
       /*

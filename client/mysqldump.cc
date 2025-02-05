@@ -1774,8 +1774,8 @@ static bool do_ignore_error() {
 
   if (last_errno == 0) goto done;
 
-  for (uint *it = ignore_error.begin(); it != ignore_error.end(); ++it) {
-    if (last_errno == *it) {
+  for (unsigned int &it : ignore_error) {
+    if (last_errno == it) {
       found = true;
       break;
     }

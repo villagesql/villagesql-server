@@ -957,8 +957,8 @@ size_t Group_member_info_manager::get_number_of_members_online() {
   size_t number = 0;
   mysql_mutex_lock(&update_lock);
 
-  for (auto it = members->begin(); it != members->end(); it++) {
-    if ((*it).second->get_recovery_status() ==
+  for (auto &member : *members) {
+    if (member.second->get_recovery_status() ==
         Group_member_info::MEMBER_ONLINE) {
       number++;
     }
@@ -1021,13 +1021,13 @@ Member_version Group_member_info_manager::get_group_lowest_online_version() {
 
   mysql_mutex_lock(&update_lock);
 
-  for (auto it = members->begin(); it != members->end(); it++) {
-    if ((*it).second->get_member_version() < lowest_version &&
-        (*it).second->get_recovery_status() != /* Not part of group */
+  for (auto &member : *members) {
+    if (member.second->get_member_version() < lowest_version &&
+        member.second->get_recovery_status() != /* Not part of group */
             Group_member_info::MEMBER_OFFLINE &&
-        (*it).second->get_recovery_status() !=
+        member.second->get_recovery_status() !=
             Group_member_info::MEMBER_ERROR) {
-      lowest_version = (*it).second->get_member_version();
+      lowest_version = member.second->get_member_version();
     }
   }
 
@@ -1120,19 +1120,19 @@ std::list<Gcs_member_identifier>
   std::list<Gcs_member_identifier> *online_members = nullptr;
   mysql_mutex_lock(&update_lock);
 
-  for (auto it = members->begin(); it != members->end(); it++) {
-    if ((*it).second->get_member_version().get_version() <
+  for (auto &member : *members) {
+    if (member.second->get_member_version().get_version() <
         TRANSACTION_WITH_GUARANTEES_VERSION) {
       goto end; /* purecov: inspected */
     }
   }
 
   online_members = new std::list<Gcs_member_identifier>();
-  for (auto it = members->begin(); it != members->end(); it++) {
-    if ((*it).second->get_recovery_status() ==
+  for (auto &member : *members) {
+    if (member.second->get_recovery_status() ==
             Group_member_info::MEMBER_ONLINE &&
-        !((*it).second->get_gcs_member_id() == exclude_member)) {
-      online_members->push_back((*it).second->get_gcs_member_id());
+        !(member.second->get_gcs_member_id() == exclude_member)) {
+      online_members->push_back(member.second->get_gcs_member_id());
     }
   }
 
