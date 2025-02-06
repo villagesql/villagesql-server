@@ -76,7 +76,7 @@ class my_rcu_lock_test : public ::testing::Test {
     for (size_t i = 0; i < reps; i++) {
       auto *newp = new payload_s("a", "b", "c");
 
-      bool ret = lock->write_wait_and_delete(newp);
+      bool const ret = lock->write_wait_and_delete(newp);
       EXPECT_EQ(ret, false);
       /*
         RCU works best with relatively infrequent writes compared to reads.

@@ -67,7 +67,7 @@ TEST_F(ComponentLoadParser_test, Parser) {
   std::string with_spaces =
       "   file://component1, file://component2, file://component3; "
       "file://component4, file://component5, file://component6 ;   ";
-  std::string without_spaces =
+  std::string const without_spaces =
       "file://component1,file://component2,file://component3;file://"
       "component4,file://component5,file://component6;";
   ;

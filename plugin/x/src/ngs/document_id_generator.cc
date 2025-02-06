@@ -49,8 +49,8 @@ std::string Document_id_generator::generate(const Variables &vars) {
   MUTEX_LOCK(lock, m_generate_mutex);
   const uint64_t k_prev_serial = m_serial;
   if (vars.increment > 1) {
-    uint64_t tmp = (m_serial + vars.increment - vars.offset) /
-                   static_cast<uint64_t>(vars.increment);
+    uint64_t const tmp = (m_serial + vars.increment - vars.offset) /
+                         static_cast<uint64_t>(vars.increment);
     m_serial = tmp * static_cast<uint64_t>(vars.increment) + vars.offset;
   } else {
     ++m_serial;

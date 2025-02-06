@@ -151,7 +151,7 @@ double test_distribution(const std::string &test_name, T hasher,
   const auto variance_limit = calculate_limit_variance_from_expected(N);
   for (uint32_t M = stepM, i = 0; M <= maxM; M += stepM) {
     for (; i < M; i++) {
-      uint32_t hash = hasher(i * multiplier, N_mod);
+      uint32_t const hash = hasher(i * multiplier, N_mod);
       assert(hash < N);
       buckets[hash]++;
     }
@@ -275,7 +275,7 @@ TEST(ut0rnd, hash_uint64_pair_sysbench_ahi_distribution) {
   ut_crc32_init();
   std::array<size_t, 8> buckets{};
   for (int i = 0; i < 8; i++) {
-    uint32_t hash = ut::hash_uint64_pair(149 + 2 * i, i) % 8;
+    uint32_t const hash = ut::hash_uint64_pair(149 + 2 * i, i) % 8;
     buckets[hash]++;
   }
 
@@ -313,7 +313,7 @@ TEST(ut0rnd, hash_uint64_pair_highest_byte_distribution) {
       main non-zero part of the value in the highest bytes. The value of
       `highest` byte will be inserted to the 8th, the highest byte of this
       value and it represents the lowest byte of the BIGINT field's value. */
-      uint64_t rec = 0x9a533400000080ULL | (highest << (64 - 8));
+      uint64_t const rec = 0x9a533400000080ULL | (highest << (64 - 8));
       EXPECT_TRUE(hashes_left.insert(ut::hash_uint64_pair(rec, seed)).second);
       EXPECT_TRUE(hashes_right.insert(ut::hash_uint64_pair(seed, rec)).second);
     }

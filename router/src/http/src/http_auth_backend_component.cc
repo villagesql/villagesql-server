@@ -35,7 +35,7 @@
 std::error_code HttpAuthBackendComponent::authenticate(
     const std::string &inst, const std::string &username,
     const std::string &authdata) {
-  std::lock_guard<std::mutex> lk(backends_m_);
+  std::lock_guard<std::mutex> const lk(backends_m_);
 
   auto it = auth_backends_.find(inst);
   if (it == auth_backends_.end()) {
@@ -47,13 +47,13 @@ std::error_code HttpAuthBackendComponent::authenticate(
 
 void HttpAuthBackendComponent::add_backend(
     const std::string &name, std::shared_ptr<HttpAuthBackend> backend) {
-  std::lock_guard<std::mutex> lk(backends_m_);
+  std::lock_guard<std::mutex> const lk(backends_m_);
 
   auth_backends_[name] = std::move(backend);
 }
 
 void HttpAuthBackendComponent::remove_backend(const std::string &name) {
-  std::lock_guard<std::mutex> lk(backends_m_);
+  std::lock_guard<std::mutex> const lk(backends_m_);
 
   const auto it = auth_backends_.find(name);
   if (it != auth_backends_.end()) {

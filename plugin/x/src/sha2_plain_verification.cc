@@ -58,9 +58,9 @@ bool Sha2_plain_verification::verify_authentication_string(
     b = db_string.find('$', b + 1);
     if (b == std::string::npos) return false;
 
-    std::string iteration_info =
+    std::string const iteration_info =
         db_string.substr(b + 1, sha2_password::ITERATION_LENGTH);
-    unsigned int iterations =
+    unsigned int const iterations =
         std::min((std::stoul(iteration_info, nullptr, 16)) *
                      sha2_password::ITERATION_MULTIPLIER,
                  sha2_password::MAX_ITERATIONS);
@@ -68,10 +68,10 @@ bool Sha2_plain_verification::verify_authentication_string(
     b = db_string.find('$', b + 1);
     if (b == std::string::npos) return false;
 
-    std::string salt = db_string.substr(b + 1, CRYPT_SALT_LENGTH);
+    std::string const salt = db_string.substr(b + 1, CRYPT_SALT_LENGTH);
     if (salt.size() != CRYPT_SALT_LENGTH) return false;
 
-    std::string digest = db_string.substr(b + CRYPT_SALT_LENGTH + 1);
+    std::string const digest = db_string.substr(b + CRYPT_SALT_LENGTH + 1);
 
     if (compute_password_hash(client_string, salt, iterations) == digest) {
       client_string_matches = true;

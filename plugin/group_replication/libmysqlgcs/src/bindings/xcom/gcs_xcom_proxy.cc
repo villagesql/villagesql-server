@@ -444,7 +444,7 @@ enum_gcs_error Gcs_xcom_proxy_impl::xcom_wait_for_condition(
   if (res != 0) {
     // There was an error
     ret = GCS_NOK;
-    std::string error_string = condition_event(res);
+    std::string const error_string = condition_event(res);
     if (res == ETIMEDOUT) {
       MYSQL_GCS_LOG_ERROR("Timeout while waiting for " << error_string << "!")
     } else if (res == EINVAL) {
@@ -537,9 +537,9 @@ void Gcs_xcom_proxy_impl::xcom_wait_for_xcom_comms_status_change(int &status) {
     return "the group communication engine's communications status to change";
   };
 
-  enum_gcs_error res = xcom_wait_for_condition(m_cond_xcom_comms_status,
-                                               m_lock_xcom_comms_status,
-                                               wait_cond, event_string);
+  enum_gcs_error const res = xcom_wait_for_condition(m_cond_xcom_comms_status,
+                                                     m_lock_xcom_comms_status,
+                                                     wait_cond, event_string);
 
   m_lock_xcom_comms_status.lock();
   if (res != GCS_OK) {

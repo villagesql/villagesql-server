@@ -89,7 +89,8 @@ void internal_do_microbenchmark(const char *name, void (*func)(size_t)) {
   else
     func(calibration_iterations);
   StopBenchmarkTiming();
-  double seconds_used_per_iteration = seconds_used / calibration_iterations;
+  double const seconds_used_per_iteration =
+      seconds_used / calibration_iterations;
 
   size_t num_iterations;
 
@@ -115,7 +116,7 @@ void internal_do_microbenchmark(const char *name, void (*func)(size_t)) {
          1e9 * seconds_used / double(num_iterations));
 
   if (bytes_processed > 0) {
-    double bytes_per_second = bytes_processed / seconds_used;
+    double const bytes_per_second = bytes_processed / seconds_used;
     if (bytes_per_second > (512 << 20))  // 0.5 GB/sec.
       printf(" %8.2f GB/sec", bytes_per_second / (1 << 30));
     else

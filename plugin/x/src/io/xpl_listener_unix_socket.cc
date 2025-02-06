@@ -123,7 +123,7 @@ class Unixsocket_creator {
     m_system_interface->unlink(unix_socket_file.c_str());
 
     // bind
-    int old_mask = umask(0);
+    int const old_mask = umask(0);
     if (listener_socket->bind(reinterpret_cast<struct sockaddr *>(&addr),
                               sizeof(addr)) < 0) {
       umask(old_mask);
@@ -251,8 +251,8 @@ class Unixsocket_creator {
         ++pid_begin;
       }
 
-      pid_t parent_pid = m_system_interface->get_ppid();
-      pid_t read_pid = atoi(pid_begin);
+      pid_t const parent_pid = m_system_interface->get_ppid();
+      pid_t const read_pid = atoi(pid_begin);
 
       if (read_pid <= 0) {
         error_message = "invalid PID in UNIX socket lock file ";

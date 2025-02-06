@@ -262,11 +262,11 @@ class GcsMessageStageFragmentationTest : public GcsBaseTest {
 /* Verify that the reassembly of fragments whose delivery crosses views works.
  */
 TEST_F(GcsMessageStageFragmentationTest, ReassemblyOfFragmentsThatCrossViews) {
-  Mock_gcs_communication_event_listener ev_listener;
-  int listener_ref = m_xcom_comm_if.add_event_listener(ev_listener);
+  Mock_gcs_communication_event_listener const ev_listener;
+  int const listener_ref = m_xcom_comm_if.add_event_listener(ev_listener);
   EXPECT_CALL(ev_listener, on_message_received(_)).Times(1);
 
-  std::string payload("payload!");
+  std::string const payload("payload!");
 
   bool constexpr FRAGMENT = true;
   unsigned long long constexpr FRAGMENT_THRESHOLD = 10;
@@ -299,10 +299,10 @@ TEST_F(GcsMessageStageFragmentationTest, ReassemblyOfFragmentsThatCrossViews) {
   ASSERT_EQ(packets_out.size(), 2);
 
   /* Mock sending the packets to affect the protocol changer. */
-  Gcs_message message(
+  Gcs_message const message(
       Gcs_member_identifier(m_mock_xcom_address.get_member_address()),
       m_mock_gid, message_data);
-  enum_gcs_error message_result = m_xcom_comm_if.send_message(message);
+  enum_gcs_error const message_result = m_xcom_comm_if.send_message(message);
   ASSERT_EQ(GCS_OK, message_result);
 
   /* Receive first fragment in one view. */

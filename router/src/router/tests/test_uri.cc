@@ -43,7 +43,7 @@ class URISimpleTests : public ::testing::Test {};
 // default constructor tests
 
 TEST_F(URISimpleTests, Constructor) {
-  URI u;
+  URI const u;
   ASSERT_TRUE(u.scheme.empty());
   ASSERT_TRUE(u.host.empty());
   ASSERT_EQ(u.port, 0);
@@ -636,7 +636,7 @@ class URIParseThrowingTests
 
 TEST_P(URIParseThrowingTests, FailsParseURI) {
   // call GetParam outside the ASSERT to actually make it work
-  URITestFailData test_data = GetParam();
+  URITestFailData const test_data = GetParam();
 
   try {
     auto u = URI(test_data.input.uri);
@@ -1225,8 +1225,8 @@ INSTANTIATE_TEST_SUITE_P(URITests, URIRootlessThrowingTests,
 
 namespace {
 void UriStr(size_t iter) {
-  std::string uri_str = "http://user:pass@host:80/path?query=val";
-  mysqlrouter::URI uri(uri_str);
+  std::string const uri_str = "http://user:pass@host:80/path?query=val";
+  mysqlrouter::URI const uri(uri_str);
 
   while ((iter--) != 0) {
     if (uri_str != uri.str()) abort();
@@ -1234,8 +1234,8 @@ void UriStr(size_t iter) {
 }
 
 void UriOstream(size_t iter) {
-  std::string uri_str = "http://user:pass@host:80/path?query=val";
-  mysqlrouter::URI uri(uri_str);
+  std::string const uri_str = "http://user:pass@host:80/path?query=val";
+  mysqlrouter::URI const uri(uri_str);
 
   while ((iter--) != 0) {
     std::stringstream os;

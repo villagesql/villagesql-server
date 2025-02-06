@@ -96,7 +96,7 @@ size_t determineStatementRanges(const char *sql, size_t length,
       case '/':  // Possible multi line comment or hidden (conditional) command.
         if (*(tail + 1) == '*') {
           tail += 2;
-          bool is_hidden_command = (*tail == '!');
+          bool const is_hidden_command = (*tail == '!');
           while (true) {
             while (tail < end && *tail != '*') tail++;
             if (tail == end)  // Unfinished comment.
@@ -138,7 +138,7 @@ size_t determineStatementRanges(const char *sql, size_t length,
       case '\'':
       case '`': {
         have_content = true;
-        char quote = *tail++;
+        char const quote = *tail++;
 
         if (input_context_stack.empty() || input_context_stack.top() == "-") {
           // Quoted string/id. Skip this in a local loop if is opening quote.
@@ -169,9 +169,9 @@ size_t determineStatementRanges(const char *sql, size_t length,
         // text or a character,
         // which is not part of a regular MySQL identifier (0-9, A-Z, a-z, _, $,
         // \u0080-\uffff).
-        unsigned char previous =
+        unsigned char const previous =
             tail > pointer_cast<const unsigned char *>(sql) ? *(tail - 1) : 0;
-        bool is_identifier_char =
+        bool const is_identifier_char =
             previous >= 0x80 || (previous >= '0' && previous <= '9') ||
             ((previous | 0x20) >= 'a' && (previous | 0x20) <= 'z') ||
             previous == '$' || previous == '_';

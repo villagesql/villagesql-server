@@ -609,7 +609,7 @@ class XComControlTest : public GcsBaseTest {
     peers.push_back(new Gcs_xcom_node_address("127.0.0.1:12346"));
     peers.push_back(new Gcs_xcom_node_address("127.0.0.1:12347"));
 
-    string group_name("only_group");
+    string const group_name("only_group");
     group_id = new Gcs_group_identifier(group_name);
 
     mock_socket_util = new NiceMock<mock_my_xp_socket_util>();
@@ -678,17 +678,17 @@ class XComControlTest : public GcsBaseTest {
 
  public:
   Gcs_view *create_fake_view() {
-    string address = xcom_node_address->get_member_address();
-    Gcs_member_identifier local_member_information(address);
+    string const address = xcom_node_address->get_member_address();
+    Gcs_member_identifier const local_member_information(address);
 
     std::vector<Gcs_member_identifier> members;
     members.push_back(local_member_information);
 
-    Gcs_xcom_view_identifier view_id(111111, 1);
-    std::vector<Gcs_member_identifier> leaving;
-    std::vector<Gcs_member_identifier> joined;
+    Gcs_xcom_view_identifier const view_id(111111, 1);
+    std::vector<Gcs_member_identifier> const leaving;
+    std::vector<Gcs_member_identifier> const joined;
 
-    Gcs_group_identifier fake_group_id(group_id->get_group_id());
+    Gcs_group_identifier const fake_group_id(group_id->get_group_id());
 
     auto *fake_view =
         new Gcs_view(members, view_id, leaving, joined, fake_group_id);
@@ -767,7 +767,7 @@ TEST_F(XComControlTest, JoinTestFailedToStartComms) {
       .Times(1)
       .WillOnce(SetArgReferee<0>(XCOM_COMMS_OTHER));
 
-  enum_gcs_error result = xcom_control_if->join();
+  enum_gcs_error const result = xcom_control_if->join();
   ASSERT_EQ(GCS_NOK, result);
   ASSERT_FALSE(xcom_control_if->is_xcom_running());
 }
@@ -786,7 +786,7 @@ TEST_F(XComControlTest, JoinTestFailedToConnectToXComQueueSignallingMechanism) {
   EXPECT_CALL(proxy, xcom_init(_)).Times(1);
   EXPECT_CALL(proxy, xcom_exit()).Times(1);
 
-  enum_gcs_error result = xcom_control_if->join();
+  enum_gcs_error const result = xcom_control_if->join();
   ASSERT_EQ(GCS_NOK, result);
   ASSERT_FALSE(xcom_control_if->is_xcom_running());
 }
@@ -801,7 +801,7 @@ TEST_F(XComControlTest, JoinTestFailedToSendBootToXCom) {
   EXPECT_CALL(proxy, xcom_init(_)).Times(1);
   EXPECT_CALL(proxy, xcom_exit()).Times(1);
 
-  enum_gcs_error result = xcom_control_if->join();
+  enum_gcs_error const result = xcom_control_if->join();
   ASSERT_EQ(GCS_NOK, result);
   ASSERT_FALSE(xcom_control_if->is_xcom_running());
 }
@@ -814,7 +814,7 @@ TEST_F(XComControlTest, JoinTestFailedToStartXCom) {
   EXPECT_CALL(proxy, xcom_init(_)).Times(1);
   EXPECT_CALL(proxy, xcom_exit()).Times(1);
 
-  enum_gcs_error result = xcom_control_if->join();
+  enum_gcs_error const result = xcom_control_if->join();
 
   ASSERT_EQ(GCS_NOK, result);
 }
@@ -831,7 +831,7 @@ TEST_F(XComControlTest, JoinTestTimeoutStartingXCom) {
   EXPECT_CALL(proxy, xcom_init(_)).Times(1);
   EXPECT_CALL(proxy, xcom_exit()).Times(1);
 
-  enum_gcs_error result = xcom_control_if->join();
+  enum_gcs_error const result = xcom_control_if->join();
 
   ASSERT_EQ(GCS_NOK, result);
 
@@ -851,7 +851,7 @@ TEST_F(XComControlTest, JoinTestWithoutBootNorPeers) {
   std::vector<Gcs_xcom_node_address *> peers;
   xcom_control_if->set_peer_nodes(peers);
 
-  enum_gcs_error result = xcom_control_if->join();
+  enum_gcs_error const result = xcom_control_if->join();
   ASSERT_EQ(GCS_NOK, result);
   ASSERT_FALSE(xcom_control_if->is_xcom_running());
 }
@@ -958,7 +958,7 @@ TEST_F(XComControlTest, JoinTestAllPeersUnavailable) {
   EXPECT_CALL(proxy, xcom_client_close_connection(_)).Times(0);
 
   xcom_control_if->set_boot_node(false);
-  enum_gcs_error result = xcom_control_if->join();
+  enum_gcs_error const result = xcom_control_if->join();
   ASSERT_EQ(GCS_NOK, result);
 }
 
@@ -971,7 +971,7 @@ TEST_F(XComControlTest, LeaveTestWithoutJoin) {
   EXPECT_CALL(proxy, xcom_exit()).Times(0);
   EXPECT_CALL(proxy, xcom_client_remove_node(_, _)).Times(0);
 
-  enum_gcs_error result = xcom_control_if->leave();
+  enum_gcs_error const result = xcom_control_if->leave();
   ASSERT_EQ(GCS_NOK, result);
   ASSERT_FALSE(xcom_control_if->is_xcom_running());
 }
@@ -985,21 +985,21 @@ TEST_F(XComControlTest, LeaveTestMultiMember) {
   EXPECT_CALL(proxy, xcom_init(_)).Times(1);
   EXPECT_CALL(proxy, xcom_exit()).Times(0);
 
-  string member_id_1 = xcom_node_address->get_member_address();
-  Gcs_member_identifier local_member_information_1(member_id_1);
+  string const member_id_1 = xcom_node_address->get_member_address();
+  Gcs_member_identifier const local_member_information_1(member_id_1);
 
-  string member_id_2("127.0.0.1:12343");
-  Gcs_member_identifier local_member_information_2(member_id_2);
+  string const member_id_2("127.0.0.1:12343");
+  Gcs_member_identifier const local_member_information_2(member_id_2);
 
   std::vector<Gcs_member_identifier> members;
   members.push_back(local_member_information_1);
   members.push_back(local_member_information_2);
 
-  Gcs_xcom_view_identifier view_id(111111, 1);
-  std::vector<Gcs_member_identifier> leaving;
-  std::vector<Gcs_member_identifier> joined;
+  Gcs_xcom_view_identifier const view_id(111111, 1);
+  std::vector<Gcs_member_identifier> const leaving;
+  std::vector<Gcs_member_identifier> const joined;
 
-  Gcs_group_identifier fake_group_id(group_id->get_group_id());
+  Gcs_group_identifier const fake_group_id(group_id->get_group_id());
 
   auto *fake_old_view =
       new Gcs_view(members, view_id, leaving, joined, fake_group_id);
@@ -1012,15 +1012,16 @@ TEST_F(XComControlTest, LeaveTestMultiMember) {
 }
 
 TEST_F(XComControlTest, GetLocalInformationTest) {
-  Gcs_member_identifier result = xcom_control_if->get_local_member_identifier();
-  std::string address = xcom_node_address->get_member_address();
+  Gcs_member_identifier const result =
+      xcom_control_if->get_local_member_identifier();
+  std::string const address = xcom_node_address->get_member_address();
   ASSERT_EQ(address, result.get_member_id());
 }
 
 TEST_F(XComControlTest, SetEventListenerTest) {
-  mock_gcs_control_event_listener control_listener;
+  mock_gcs_control_event_listener const control_listener;
 
-  int reference = xcom_control_if->add_event_listener(control_listener);
+  int const reference = xcom_control_if->add_event_listener(control_listener);
 
   ASSERT_NE(0, reference);
   ASSERT_EQ((long unsigned int)1,
@@ -1030,11 +1031,11 @@ TEST_F(XComControlTest, SetEventListenerTest) {
 }
 
 TEST_F(XComControlTest, SetEventListenersTest) {
-  mock_gcs_control_event_listener control_listener;
-  mock_gcs_control_event_listener another_control_listener;
+  mock_gcs_control_event_listener const control_listener;
+  mock_gcs_control_event_listener const another_control_listener;
 
-  int reference = xcom_control_if->add_event_listener(control_listener);
-  int another_reference =
+  int const reference = xcom_control_if->add_event_listener(control_listener);
+  int const another_reference =
       xcom_control_if->add_event_listener(another_control_listener);
 
   ASSERT_NE(0, reference);
@@ -1049,11 +1050,11 @@ TEST_F(XComControlTest, SetEventListenersTest) {
 }
 
 TEST_F(XComControlTest, RemoveEventListenerTest) {
-  mock_gcs_control_event_listener control_listener;
-  mock_gcs_control_event_listener another_control_listener;
+  mock_gcs_control_event_listener const control_listener;
+  mock_gcs_control_event_listener const another_control_listener;
 
-  int reference = xcom_control_if->add_event_listener(control_listener);
-  int another_reference =
+  int const reference = xcom_control_if->add_event_listener(control_listener);
+  int const another_reference =
       xcom_control_if->add_event_listener(another_control_listener);
 
   xcom_control_if->remove_event_listener(reference);
@@ -1080,17 +1081,17 @@ Gcs_message *create_state_exchange_msg(Gcs_member_identifier &member_id,
   dummy->append_to_payload(&to_append, 1);
 
   const Gcs_xcom_view_identifier view_id(999999, 1);
-  synode_no configuration_id = null_synode;
-  Gcs_xcom_synode_set snapshot;
+  synode_no const configuration_id = null_synode;
+  Gcs_xcom_synode_set const snapshot;
   auto *member_state = new Xcom_member_state(
       view_id, configuration_id, Gcs_protocol_version::HIGHEST_KNOWN, snapshot,
       nullptr, 0);
 
   (*out_stored_states)[member_id] = member_state;
 
-  uint64_t buffer_len = Xcom_member_state::get_encode_header_size() +
-                        dummy->get_encode_size() +
-                        member_state->get_encode_snapshot_size();
+  const uint64_t buffer_len = Xcom_member_state::get_encode_header_size() +
+                              dummy->get_encode_size() +
+                              member_state->get_encode_snapshot_size();
   auto *buffer = static_cast<uchar *>(malloc(buffer_len * sizeof(uchar)));
   uchar *slider = buffer;
 
@@ -1117,12 +1118,12 @@ Gcs_message *create_state_exchange_msg(Gcs_member_identifier &member_id,
 }
 
 TEST_F(XComControlTest, ViewChangedJoiningTest) {
-  Gcs_xcom_uuid uuid_1 = Gcs_xcom_uuid::create_uuid();
+  Gcs_xcom_uuid const uuid_1 = Gcs_xcom_uuid::create_uuid();
   blob blob_1 = {{0, static_cast<char *>(malloc(uuid_1.actual_value.size()))}};
   uuid_1.encode(reinterpret_cast<uchar **>(&blob_1.data.data_val),
                 &blob_1.data.data_len);
 
-  Gcs_xcom_uuid uuid_2 = Gcs_xcom_uuid::create_uuid();
+  Gcs_xcom_uuid const uuid_2 = Gcs_xcom_uuid::create_uuid();
   blob blob_2 = {{0, static_cast<char *>(malloc(uuid_2.actual_value.size()))}};
   uuid_2.encode(reinterpret_cast<uchar **>(&blob_2.data.data_val),
                 &blob_2.data.data_len);
@@ -1139,10 +1140,10 @@ TEST_F(XComControlTest, ViewChangedJoiningTest) {
   // Common unit test data
   auto *view_id = new Gcs_xcom_view_identifier(999999, 27);
 
-  string member_addr_1(node_addrs[0].address);
+  string const member_addr_1(node_addrs[0].address);
   auto *node1_member_id = new Gcs_member_identifier(member_addr_1);
 
-  string member_addr_2(node_addrs[1].address);
+  string const member_addr_2(node_addrs[1].address);
   auto *node2_member_id = new Gcs_member_identifier(member_addr_2);
 
   auto *total_set = new std::set<Gcs_member_identifier *>();
@@ -1293,17 +1294,17 @@ TEST_F(XComControlTest, FailedNodeRemovalTest) {
   mgr->set_non_member_expel_timeout_seconds(60UL);
   mgr->set_member_expel_timeout_seconds(0UL);
 
-  Gcs_xcom_uuid uuid_1 = Gcs_xcom_uuid::create_uuid();
+  Gcs_xcom_uuid const uuid_1 = Gcs_xcom_uuid::create_uuid();
   blob blob_1 = {{0, static_cast<char *>(malloc(uuid_1.actual_value.size()))}};
   uuid_1.encode(reinterpret_cast<uchar **>(&blob_1.data.data_val),
                 &blob_1.data.data_len);
 
-  Gcs_xcom_uuid uuid_2 = Gcs_xcom_uuid::create_uuid();
+  Gcs_xcom_uuid const uuid_2 = Gcs_xcom_uuid::create_uuid();
   blob blob_2 = {{0, static_cast<char *>(malloc(uuid_2.actual_value.size()))}};
   uuid_2.encode(reinterpret_cast<uchar **>(&blob_2.data.data_val),
                 &blob_2.data.data_len);
 
-  Gcs_xcom_uuid uuid_3 = Gcs_xcom_uuid::create_uuid();
+  Gcs_xcom_uuid const uuid_3 = Gcs_xcom_uuid::create_uuid();
   blob blob_3 = {{0, static_cast<char *>(malloc(uuid_3.actual_value.size()))}};
   uuid_3.encode(reinterpret_cast<uchar **>(&blob_3.data.data_val),
                 &blob_3.data.data_len);
@@ -1334,31 +1335,32 @@ TEST_F(XComControlTest, FailedNodeRemovalTest) {
   EXPECT_CALL(proxy, find_site_def(_)).Times(0);
 
   // Setting fake values
-  string member_id_1("127.0.0.1:12345");
-  Gcs_member_identifier local_member_information_1(member_id_1);
+  string const member_id_1("127.0.0.1:12345");
+  Gcs_member_identifier const local_member_information_1(member_id_1);
 
-  string member_id_2("127.0.0.1:12343");
-  Gcs_member_identifier local_member_information_2(member_id_2);
+  string const member_id_2("127.0.0.1:12343");
+  Gcs_member_identifier const local_member_information_2(member_id_2);
 
-  string member_id_3("127.0.0.1:12341");
-  Gcs_member_identifier local_member_information_3(member_id_3);
+  string const member_id_3("127.0.0.1:12341");
+  Gcs_member_identifier const local_member_information_3(member_id_3);
 
   std::vector<Gcs_member_identifier> members;
   members.push_back(local_member_information_1);
   members.push_back(local_member_information_2);
   members.push_back(local_member_information_3);
 
-  Gcs_xcom_view_identifier view_id(111111, 1);
-  std::vector<Gcs_member_identifier> leaving;
-  std::vector<Gcs_member_identifier> joined;
+  Gcs_xcom_view_identifier const view_id(111111, 1);
+  std::vector<Gcs_member_identifier> const leaving;
+  std::vector<Gcs_member_identifier> const joined;
 
-  Gcs_group_identifier fake_group_id(group_id->get_group_id());
+  Gcs_group_identifier const fake_group_id(group_id->get_group_id());
 
   auto *fake_old_view =
       new Gcs_view(members, view_id, leaving, joined, fake_group_id);
 
   // registering the listener
-  int listener_handle = xcom_control_if->add_event_listener(mock_ev_listener);
+  int const listener_handle =
+      xcom_control_if->add_event_listener(mock_ev_listener);
 
   // Test
   enum_gcs_error result = xcom_control_if->join(fake_old_view);
@@ -1371,7 +1373,7 @@ TEST_F(XComControlTest, FailedNodeRemovalTest) {
 
   auto *xcom_nodes = new Gcs_xcom_nodes(site_config, nodes);
 
-  bool view_accepted = xcom_control_if->xcom_receive_global_view(
+  bool const view_accepted = xcom_control_if->xcom_receive_global_view(
       null_synode, message_id, xcom_nodes, false, null_synode);
   ASSERT_TRUE(view_accepted);
 
@@ -1430,12 +1432,12 @@ TEST_F(XComControlTest, FailedNodeGlobalViewTest) {
       .Times(1)
       .WillOnce(Invoke(check_view_ok));
 
-  Gcs_xcom_uuid uuid_1 = Gcs_xcom_uuid::create_uuid();
+  Gcs_xcom_uuid const uuid_1 = Gcs_xcom_uuid::create_uuid();
   blob blob_1 = {{0, static_cast<char *>(malloc(uuid_1.actual_value.size()))}};
   uuid_1.encode(reinterpret_cast<uchar **>(&blob_1.data.data_val),
                 &blob_1.data.data_len);
 
-  Gcs_xcom_uuid uuid_2 = Gcs_xcom_uuid::create_uuid();
+  Gcs_xcom_uuid const uuid_2 = Gcs_xcom_uuid::create_uuid();
   blob blob_2 = {{0, static_cast<char *>(malloc(uuid_2.actual_value.size()))}};
   uuid_2.encode(reinterpret_cast<uchar **>(&blob_2.data.data_val),
                 &blob_2.data.data_len);
@@ -1462,27 +1464,28 @@ TEST_F(XComControlTest, FailedNodeGlobalViewTest) {
   EXPECT_CALL(proxy, find_site_def(_)).Times(0);
 
   // Setting fake values
-  string address_1("127.0.0.1:12343");
-  Gcs_member_identifier local_member_information_1(address_1);
+  string const address_1("127.0.0.1:12343");
+  Gcs_member_identifier const local_member_information_1(address_1);
 
-  string address_2("127.0.0.1:12343");
-  Gcs_member_identifier local_member_information_2(address_2);
+  string const address_2("127.0.0.1:12343");
+  Gcs_member_identifier const local_member_information_2(address_2);
 
   std::vector<Gcs_member_identifier> members;
   members.push_back(local_member_information_1);
   members.push_back(local_member_information_2);
 
-  Gcs_xcom_view_identifier view_id(111111, 1);
-  std::vector<Gcs_member_identifier> leaving;
-  std::vector<Gcs_member_identifier> joined;
+  Gcs_xcom_view_identifier const view_id(111111, 1);
+  std::vector<Gcs_member_identifier> const leaving;
+  std::vector<Gcs_member_identifier> const joined;
 
-  Gcs_group_identifier fake_group_id(group_id->get_group_id());
+  Gcs_group_identifier const fake_group_id(group_id->get_group_id());
 
   auto *fake_old_view =
       new Gcs_view(members, view_id, leaving, joined, fake_group_id);
 
   // registering the listener
-  int listener_handle = xcom_control_if->add_event_listener(mock_ev_listener);
+  int const listener_handle =
+      xcom_control_if->add_event_listener(mock_ev_listener);
 
   // Test
   enum_gcs_error result = xcom_control_if->join(fake_old_view);
@@ -1495,7 +1498,7 @@ TEST_F(XComControlTest, FailedNodeGlobalViewTest) {
 
   auto *xcom_nodes = new Gcs_xcom_nodes(site_config, nodes);
 
-  bool view_accepted = xcom_control_if->xcom_receive_global_view(
+  bool const view_accepted = xcom_control_if->xcom_receive_global_view(
       null_synode, message_id, xcom_nodes, true, null_synode);
   ASSERT_TRUE(view_accepted);
 
@@ -1546,7 +1549,7 @@ TEST_F(XComControlTest, SuspectMembersRemoval) {
 
   // Check if suspicions list is empty
   const Gcs_xcom_nodes &suspicions_list = mgr->get_suspicions();
-  long unsigned int number_suspects = suspicions_list.get_size();
+  long unsigned int const number_suspects = suspicions_list.get_size();
   ASSERT_EQ(0UL, number_suspects);
   MYSQL_GCS_LOG_TRACE("List has %lu suspects.", number_suspects);
 
@@ -1781,7 +1784,7 @@ TEST_F(XComControlTest, FalseThreeSuspectNodesWithdrawn) {
   mgr->inform_on_majority(true);
 
   const Gcs_xcom_nodes &suspicions_list = mgr->get_suspicions();
-  long unsigned int number_suspects = suspicions_list.get_size();
+  long unsigned int const number_suspects = suspicions_list.get_size();
   ASSERT_EQ(3UL, number_suspects);
   MYSQL_GCS_LOG_TRACE("List has %lu suspects.", number_suspects);
 
@@ -2082,7 +2085,7 @@ TEST_F(XComControlTest, ParallelLeavesTest) {
   EXPECT_CALL(proxy, xcom_client_remove_node(_, _)).Times(1);
   EXPECT_CALL(proxy, delete_node_address(_, _)).Times(2);
 
-  enum_gcs_error result = xcom_control_if->join(create_fake_view());
+  enum_gcs_error const result = xcom_control_if->join(create_fake_view());
   ASSERT_EQ(GCS_OK, result);
 
   auto *helper = new InvocationHelper(xcom_control_if, LL);
@@ -2111,7 +2114,7 @@ TEST_F(XComControlTest, ParallelLeaveAndDelayedJoinTest) {
   EXPECT_CALL(proxy, xcom_init(_)).Times(2);
   EXPECT_CALL(proxy, xcom_exit()).Times(0);
 
-  enum_gcs_error result = xcom_control_if->join(create_fake_view());
+  enum_gcs_error const result = xcom_control_if->join(create_fake_view());
   ASSERT_EQ(GCS_OK, result);
 
   auto *helper = new InvocationHelper(xcom_control_if, LJ);
@@ -2193,7 +2196,7 @@ TEST_F(XComControlTest, NodeTooFarMessage) {
     ASSERT_TRUE(synode_eq(node_it->get_max_synode(), null_synode));
   }
 
-  synode_no suspicion_synode = {1, 100, 0};
+  synode_no const suspicion_synode = {1, 100, 0};
   // Insert suspicions into manager
   mgr->process_view(null_synode, &xcom_nodes, no_nodes, no_nodes,
                     member_suspect_nodes, no_nodes, true, suspicion_synode);
@@ -2211,7 +2214,7 @@ TEST_F(XComControlTest, NodeTooFarMessage) {
                   suspicion_synode));
   }
 
-  synode_no last_removed = {1, 200, 0};
+  synode_no const last_removed = {1, 200, 0};
   // Do it again with a higher last_removed_from_cache value
   mgr->update_last_removed(last_removed);
   mgr->run_process_suspicions(true);
@@ -2263,17 +2266,17 @@ TEST_F(XComControlTest, LocalViewAfterExpel) {
   xcom_control_if->add_event_listener(mock_ev_listener);
 
   // Create fake view with two members
-  string member_id_1 = xcom_node_address->get_member_address();
-  Gcs_member_identifier local_member_information_1(member_id_1);
-  string member_id_2("127.0.0.1:12343");
-  Gcs_member_identifier local_member_information_2(member_id_2);
+  string const member_id_1 = xcom_node_address->get_member_address();
+  Gcs_member_identifier const local_member_information_1(member_id_1);
+  string const member_id_2("127.0.0.1:12343");
+  Gcs_member_identifier const local_member_information_2(member_id_2);
   std::vector<Gcs_member_identifier> members;
   members.push_back(local_member_information_1);
   members.push_back(local_member_information_2);
-  Gcs_xcom_view_identifier view_id(111111, 1);
-  std::vector<Gcs_member_identifier> leaving;
-  std::vector<Gcs_member_identifier> joined;
-  Gcs_group_identifier fake_group_id(group_id->get_group_id());
+  Gcs_xcom_view_identifier const view_id(111111, 1);
+  std::vector<Gcs_member_identifier> const leaving;
+  std::vector<Gcs_member_identifier> const joined;
+  Gcs_group_identifier const fake_group_id(group_id->get_group_id());
   auto *fake_old_view =
       new Gcs_view(members, view_id, leaving, joined, fake_group_id);
 
@@ -2288,7 +2291,7 @@ TEST_F(XComControlTest, LocalViewAfterExpel) {
   message_id.msgno = 4;
   message_id.node = 0;
 
-  Gcs_xcom_uuid uuid = Gcs_xcom_uuid::create_uuid();
+  Gcs_xcom_uuid const uuid = Gcs_xcom_uuid::create_uuid();
   blob blob = {{0, static_cast<char *>(malloc(uuid.actual_value.size()))}};
   uuid.encode(reinterpret_cast<uchar **>(&blob.data.data_val),
               &blob.data.data_len);
@@ -2310,14 +2313,14 @@ TEST_F(XComControlTest, LocalViewAfterExpel) {
   auto *xcom_nodes = new Gcs_xcom_nodes(site_config, nodes);
 
   // Install expel view and verify that it succeeded
-  bool expel_view_accepted = xcom_control_if->xcom_receive_global_view(
+  bool const expel_view_accepted = xcom_control_if->xcom_receive_global_view(
       null_synode, message_id, xcom_nodes, false, null_synode);
   ASSERT_TRUE(expel_view_accepted);
   Gcs_view *current_view = mock_vce->get_current_view();
   check_view_expelled(*current_view);
 
   // Try to Install local view and verify that it fails
-  bool local_view_accepted = xcom_control_if->xcom_receive_local_view(
+  bool const local_view_accepted = xcom_control_if->xcom_receive_local_view(
       null_synode, xcom_nodes, null_synode);
   ASSERT_FALSE(local_view_accepted);
 
@@ -2410,7 +2413,7 @@ TEST_F(XComControlTest, DoNotDisbandEntireGroup) {
      We should issue the expel, as specified in the EXPECT_CALL(proxy,
      xcom_client_remove_node(_, _)) above. */
   // Build vector with suspect nodes
-  std::vector<Gcs_member_identifier *> no_nodes;
+  std::vector<Gcs_member_identifier *> const no_nodes;
   std::vector<Gcs_member_identifier *> member_suspect_nodes{suspect_2.get()};
 
   // Insert suspicions into manager

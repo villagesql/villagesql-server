@@ -343,8 +343,8 @@ class Container_container {
 };
 
 TYPED_TEST(STLAllocTestNested, NestedContainers) {
-  Container_container cc1;
-  Container_container cc2;
+  Container_container const cc1;
+  Container_container const cc2;
   list<Container_container, TypeParam> l1(this->allocator);
   l1.push_back(cc1);
   l1.push_back(cc2);
@@ -398,8 +398,8 @@ TYPED_TEST(STLAllocTestBasicStringTemplate, BasicTest) {
 //
 TYPED_TEST(STLAllocTestBasicStringTemplate, OutOfMemTest) {
   // Scope guard which ensures flag is reset
-  std::unique_ptr<bool, decltype(reset_sfa)> sg(&simulate_failed_allocation,
-                                                reset_sfa);
+  std::unique_ptr<bool, decltype(reset_sfa)> const sg(
+      &simulate_failed_allocation, reset_sfa);
 
   typedef default_string<TypeParam> String_type;
 

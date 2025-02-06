@@ -33,7 +33,7 @@ namespace mysys_my_getpw {
 
 // Verify that a default-constructed PasswdValue is void
 TEST(MysysMyGetpw, DefaultPasswdValue) {
-  PasswdValue pv;
+  PasswdValue const pv;
   EXPECT_TRUE(pv.IsVoid());
 }
 // Verify basic value operations
@@ -42,7 +42,7 @@ TEST(MysysMyGetpw, BasicValueOperations) {
   pv.pw_name = "root";
   PasswdValue copy = pv;
   EXPECT_EQ(std::string{"root"}, copy.pw_name);
-  PasswdValue moved = std::move(copy);
+  PasswdValue const moved = std::move(copy);
   EXPECT_EQ(std::string{"root"}, moved.pw_name);
   PasswdValue assigned;
   assigned = pv;
@@ -51,7 +51,7 @@ TEST(MysysMyGetpw, BasicValueOperations) {
 
 // Verify that it is possible to retrive entry for root using symbolic name
 TEST(MysysMyGetpw, GetpwnamRoot) {
-  PasswdValue rootpw = my_getpwnam("root");
+  PasswdValue const rootpw = my_getpwnam("root");
   EXPECT_EQ(std::string{"root"}, rootpw.pw_name);
   EXPECT_EQ(0U, rootpw.pw_uid);
   EXPECT_EQ(0U, rootpw.pw_gid);
@@ -59,7 +59,7 @@ TEST(MysysMyGetpw, GetpwnamRoot) {
 
 // Verify that it is possible to retrive entry for root using numeric id
 TEST(MysysMyGetpw, GetpwuidRoot) {
-  PasswdValue rootpw = my_getpwuid(0);
+  PasswdValue const rootpw = my_getpwuid(0);
   EXPECT_EQ(std::string{"root"}, rootpw.pw_name);
   EXPECT_EQ(0U, rootpw.pw_uid);
   EXPECT_EQ(0U, rootpw.pw_gid);
@@ -67,7 +67,7 @@ TEST(MysysMyGetpw, GetpwuidRoot) {
 
 // Verify that non-existent user give void value
 TEST(MysysMyGetpw, NonExistentUser) {
-  PasswdValue none = my_getpwnam("thereisnosuchuser___");
+  PasswdValue const none = my_getpwnam("thereisnosuchuser___");
   EXPECT_TRUE(none.IsVoid());
 }
 

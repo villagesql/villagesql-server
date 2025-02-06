@@ -169,7 +169,7 @@ struct Query_and_expected_values {
      << " expected:" << query_and_expected.m_expected << std::endl
      << " [";
 
-  std::ostream_iterator<std::string> out_it(os, ", ");
+  std::ostream_iterator<std::string> const out_it(os, ", ");
   std::copy(query_and_expected.m_values.begin(),
             query_and_expected.m_values.end(), out_it);
 

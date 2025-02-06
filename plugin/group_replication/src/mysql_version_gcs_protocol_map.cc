@@ -101,9 +101,10 @@ static bool is_one_or_two_digit_number(const std::string &s) {
 
 bool valid_mysql_version_string(char const *version_str) {
   std::string const dot_regex = "\\.";
-  std::regex mysql_version_regex(one_or_two_digit_number_regex + dot_regex +
-                                 one_or_two_digit_number_regex + dot_regex +
-                                 one_or_two_digit_number_regex);
+  std::regex const mysql_version_regex(
+      one_or_two_digit_number_regex + dot_regex +
+      one_or_two_digit_number_regex + dot_regex +
+      one_or_two_digit_number_regex);
   return std::regex_match(version_str, mysql_version_regex);
 }
 
@@ -135,8 +136,8 @@ static unsigned int convert_to_base_16_number(char const *const str) {
 Member_version convert_to_member_version(char const *str) {
   assert(valid_mysql_version_string(str));
 
-  std::string version_str(str);
-  Member_version version(0);
+  std::string const version_str(str);
+  Member_version const version(0);
   auto const major_dot_index = version_str.find('.');
   auto const minor_dot_index = version_str.find('.', major_dot_index + 1);
 

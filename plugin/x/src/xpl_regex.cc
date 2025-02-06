@@ -53,7 +53,7 @@ bool Regex::match(const char *value) const {
   if (!U_SUCCESS(m_status)) return false;
 
   UErrorCode match_status{U_ZERO_ERROR};
-  icu::UnicodeString value_as_utf8{icu::UnicodeString::fromUTF8(value)};
+  icu::UnicodeString const value_as_utf8{icu::UnicodeString::fromUTF8(value)};
   std::unique_ptr<icu::RegexMatcher> regexp{
       m_pattern->matcher(value_as_utf8, match_status)};
 
@@ -65,7 +65,7 @@ bool Regex::match(const char *value) const {
 bool Regex::match_groups(const char *value, Group_list *groups,
                          const bool skip_empty_group) const {
   UErrorCode status{m_status};
-  icu::UnicodeString value_from_utf8{icu::UnicodeString::fromUTF8(value)};
+  icu::UnicodeString const value_from_utf8{icu::UnicodeString::fromUTF8(value)};
   std::unique_ptr<icu::RegexMatcher> matcher{
       m_pattern->matcher(value_from_utf8, status)};
   if (!matcher || !matcher->matches(status)) return false;

@@ -449,7 +449,7 @@ TEST_F(MDLTest, SavePoint) {
 
   EXPECT_FALSE(m_mdl_context.try_acquire_lock(&m_request));
   EXPECT_FALSE(m_mdl_context.try_acquire_lock(&request_2));
-  MDL_savepoint savepoint = m_mdl_context.mdl_savepoint();
+  MDL_savepoint const savepoint = m_mdl_context.mdl_savepoint();
   EXPECT_FALSE(m_mdl_context.try_acquire_lock(&request_3));
   EXPECT_FALSE(m_mdl_context.try_acquire_lock(&request_4));
 
@@ -640,13 +640,15 @@ TEST_F(MDLTest, UpgradableConcurrency) {
 */
 
 TEST_F(MDLTest, SharedWriteLowPrioCompatibility) {
-  enum_mdl_type compatible[] = {
+  enum_mdl_type const compatible[] = {
       MDL_SHARED,       MDL_SHARED_HIGH_PRIO,      MDL_SHARED_READ,
       MDL_SHARED_WRITE, MDL_SHARED_WRITE_LOW_PRIO, MDL_SHARED_UPGRADABLE};
-  enum_mdl_type incompatible[] = {MDL_SHARED_READ_ONLY, MDL_SHARED_NO_WRITE,
-                                  MDL_SHARED_NO_READ_WRITE, MDL_EXCLUSIVE};
-  enum_mdl_type higher_prio[] = {MDL_SHARED_READ_ONLY, MDL_SHARED_NO_WRITE,
-                                 MDL_SHARED_NO_READ_WRITE, MDL_EXCLUSIVE};
+  enum_mdl_type const incompatible[] = {
+      MDL_SHARED_READ_ONLY, MDL_SHARED_NO_WRITE, MDL_SHARED_NO_READ_WRITE,
+      MDL_EXCLUSIVE};
+  enum_mdl_type const higher_prio[] = {MDL_SHARED_READ_ONLY,
+                                       MDL_SHARED_NO_WRITE,
+                                       MDL_SHARED_NO_READ_WRITE, MDL_EXCLUSIVE};
   Notification lock_grabbed;
   Notification release_lock;
   MDL_thread mdl_thread(table_name1, MDL_SHARED_WRITE_LOW_PRIO, &lock_grabbed,
@@ -807,13 +809,15 @@ TEST_F(MDLTest, SharedWriteLowPrioCompatibility) {
 */
 
 TEST_F(MDLTest, SharedReadOnlyCompatibility) {
-  enum_mdl_type compatible[] = {MDL_SHARED,           MDL_SHARED_HIGH_PRIO,
-                                MDL_SHARED_READ,      MDL_SHARED_UPGRADABLE,
-                                MDL_SHARED_READ_ONLY, MDL_SHARED_NO_WRITE};
-  enum_mdl_type incompatible[] = {MDL_SHARED_WRITE, MDL_SHARED_WRITE_LOW_PRIO,
-                                  MDL_SHARED_NO_READ_WRITE, MDL_EXCLUSIVE};
-  enum_mdl_type higher_prio[] = {MDL_SHARED_WRITE, MDL_SHARED_NO_READ_WRITE,
-                                 MDL_EXCLUSIVE};
+  enum_mdl_type const compatible[] = {
+      MDL_SHARED,           MDL_SHARED_HIGH_PRIO,
+      MDL_SHARED_READ,      MDL_SHARED_UPGRADABLE,
+      MDL_SHARED_READ_ONLY, MDL_SHARED_NO_WRITE};
+  enum_mdl_type const incompatible[] = {
+      MDL_SHARED_WRITE, MDL_SHARED_WRITE_LOW_PRIO, MDL_SHARED_NO_READ_WRITE,
+      MDL_EXCLUSIVE};
+  enum_mdl_type const higher_prio[] = {MDL_SHARED_WRITE,
+                                       MDL_SHARED_NO_READ_WRITE, MDL_EXCLUSIVE};
   Notification lock_grabbed;
   Notification release_lock;
   MDL_thread mdl_thread(table_name1, MDL_SHARED_READ_ONLY, &lock_grabbed,
@@ -2795,7 +2799,7 @@ TEST_F(MDLTest, UnusedMinRatio) {
   EXPECT_EQ(0, mdl_get_unused_locks_count());
 
   /* Take a savepoint to be able to release part of the locks in future. */
-  MDL_savepoint savepoint = m_mdl_context.mdl_savepoint();
+  MDL_savepoint const savepoint = m_mdl_context.mdl_savepoint();
 
   /* Acquire a few more locks. */
   for (i = 0; i < TABLES; ++i) {
@@ -3728,7 +3732,7 @@ TEST_F(MDLTest, FindLockOwner) {
                      nullptr, nullptr);
   MDL_thread thread2(table_name1, MDL_EXCLUSIVE, &second_grabbed,
                      &second_release, &second_blocked, nullptr);
-  MDL_key mdl_key(MDL_key::TABLE, db_name, table_name1);
+  MDL_key const mdl_key(MDL_key::TABLE, db_name, table_name1);
 
   /* There should be no lock owner before we have started any threads. */
   MDLTestContextVisitor visitor1;
@@ -3848,7 +3852,7 @@ class MDLHtonNotifyTest : public MDLTest {
 */
 
 TEST_F(MDLHtonNotifyTest, NotifyNamespaces) {
-  bool notify_or_not[] = {
+  bool const notify_or_not[] = {
       false,  // GLOBAL
       false,  // BACKUP_LOCK
       true,   // TABLESPACE

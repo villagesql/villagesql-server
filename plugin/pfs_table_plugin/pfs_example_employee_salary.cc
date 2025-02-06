@@ -167,7 +167,7 @@ int esalary_write_row_values(PSI_table_handle *handle) {
   mysql_mutex_lock(&LOCK_esalary_records_array);
 
   h->current_row.m_exist = true;
-  int size = esalary_records_vector.size();
+  int const size = esalary_records_vector.size();
   for (int i = 0; i < size; i++) {
     Esalary_Record *record = &esalary_records_vector.at(i);
     if (!record->m_exist) {

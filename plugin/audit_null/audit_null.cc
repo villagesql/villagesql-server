@@ -163,8 +163,8 @@ static SHOW_VAR simple_status[] = {
     {nullptr, nullptr, SHOW_UNDEF, SHOW_SCOPE_GLOBAL}};
 
 static void increment_counter(volatile int *counter) {
-  int value = *counter;
-  int new_value = value + 1;
+  int const value = *counter;
+  int const new_value = value + 1;
   *counter = new_value;
 }
 

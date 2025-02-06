@@ -44,7 +44,7 @@ static PSI_memory_info all_rewrite_memory[] = {
 
 static int plugin_init(MYSQL_PLUGIN) {
   const char *category = "rewriter";
-  int count = static_cast<int>(array_elements(all_rewrite_memory));
+  int const count = static_cast<int>(array_elements(all_rewrite_memory));
   mysql_memory_register(category, all_rewrite_memory, count);
   return 0; /* success */
 }

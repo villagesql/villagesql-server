@@ -131,7 +131,7 @@ TYPED_TEST(RelopsTest, CodeCoverage) {
   py.push_back(lr);
   gc.push_back(py);
 
-  typename TypeParam::Geometrycollection gc_empty;
+  typename TypeParam::Geometrycollection const gc_empty;
   gc.push_back(gc_empty);
 
   typename TypeParam::Geometrycollection gc_inner;

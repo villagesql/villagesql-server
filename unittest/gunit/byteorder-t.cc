@@ -282,8 +282,8 @@ TYPED_TEST(IntegralTest, PutAndGet) {
     put_integral(this->buf, this->input);
     get_integral(this->output, this->buf);
     // Visual studio rejects: EXPECT_EQ(this->input, this->output);
-    TypeParam myinput = this->input;
-    TypeParam myoutput = this->output;
+    TypeParam const myinput = this->input;
+    TypeParam const myoutput = this->output;
     EXPECT_EQ(myinput, myoutput);
   }
 }

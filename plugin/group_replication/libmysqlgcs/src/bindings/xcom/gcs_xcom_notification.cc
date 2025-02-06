@@ -200,7 +200,7 @@ void Gcs_xcom_engine::initialize(xcom_initialize_functor *functor
 void Gcs_xcom_engine::finalize(xcom_finalize_functor *functor) {
   MYSQL_GCS_LOG_DEBUG("Gcs_xcom_engine::finalize invoked!");
   auto *notification = new Finalize_notification(this, functor);
-  bool scheduled = push(notification);
+  bool const scheduled = push(notification);
   if (!scheduled) {
     MYSQL_GCS_LOG_DEBUG(
         "Tried to enqueue a finalize but the member is about to stop.")

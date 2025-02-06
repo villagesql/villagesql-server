@@ -105,7 +105,7 @@ TEST_F(Xpl_sync_variable, wait_returnsRightAway_whenCurrentValueMatches) {
 
 TEST_F(Xpl_sync_variable,
        wait_returnsRightAway_whenCurrentValueInArrayMatches) {
-  int VALUES[] = {EXPECTED_VALUE_SECOND, EXPECTED_VALUE_FIRST};
+  int const VALUES[] = {EXPECTED_VALUE_SECOND, EXPECTED_VALUE_FIRST};
   m_sut.wait_for(VALUES);
 }
 
@@ -125,7 +125,7 @@ TEST_F(Xpl_sync_variable, set_returnsOldValue) {
 
 TEST_F(Xpl_sync_variable,
        wait_returnsRightAway_whenNewCurrentValueInArrayMatches) {
-  int VALUES[] = {EXPECTED_VALUE_SECOND, EXPECTED_VALUE_FIRST};
+  int const VALUES[] = {EXPECTED_VALUE_SECOND, EXPECTED_VALUE_FIRST};
   m_sut.set(EXPECTED_VALUE_SECOND);
   m_sut.wait_for(VALUES);
 }
@@ -143,7 +143,7 @@ TEST_F(
     Xpl_sync_variable,
     wait_returnsDelayed_whenThreadChangesValueAndItsInArrayOfExpectedValues) {
   std::thread t(&Xpl_sync_variable::start_routine_set_and_expect, this);
-  int VALUES[] = {EXPECTED_VALUE_SET};
+  int const VALUES[] = {EXPECTED_VALUE_SET};
   m_sut.wait_for_and_set(VALUES, EXPECTED_VALUE_SET_EXPECT);
   t.join();
 

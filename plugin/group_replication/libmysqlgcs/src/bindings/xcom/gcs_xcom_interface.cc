@@ -520,7 +520,7 @@ enum_gcs_error Gcs_xcom_interface::configure(
   }
 
   {
-    Gcs_group_identifier group_id(*group_name_str);
+    Gcs_group_identifier const group_id(*group_name_str);
     xcom_control = (Gcs_xcom_control *)get_control_session(group_id);
     if (((bootstrap_group_str != nullptr) || (local_node_str != nullptr)) &&
         xcom_control->belongs_to_group()) {
@@ -539,7 +539,7 @@ enum_gcs_error Gcs_xcom_interface::configure(
    */
   if (bootstrap_group_str != nullptr) {
     // Changing bootstrap_group
-    bool received_boot_param =
+    bool const received_boot_param =
         *bootstrap_group_str == "on" || *bootstrap_group_str == "true";
 
     m_boot = received_boot_param;
@@ -915,7 +915,7 @@ bool Gcs_xcom_interface::initialize_xcom(
   /*
     Whether the proxy should be created or not.
   */
-  bool create_proxy = (s_xcom_proxy == nullptr);
+  bool const create_proxy = (s_xcom_proxy == nullptr);
 
   /*
     Since initializing XCom is actually joining the group itself, one shall
@@ -996,7 +996,7 @@ bool Gcs_xcom_interface::initialize_xcom(
 
   MYSQL_GCS_LOG_DEBUG("Configured waiting time(s): %s", wait_time_str->c_str())
 
-  int wait_time = atoi(wait_time_str->c_str());
+  int const wait_time = atoi(wait_time_str->c_str());
   assert(wait_time > 0);
 
   // Setup the proxy
@@ -1033,7 +1033,7 @@ bool Gcs_xcom_interface::initialize_xcom(
   }
 
   if (ssl_fips_mode_str) {
-    int ssl_fips_mode_int =
+    int const ssl_fips_mode_int =
         s_xcom_proxy->xcom_get_ssl_fips_mode(ssl_fips_mode_str->c_str());
     if (ssl_fips_mode_int == -1) /* INVALID_SSL_FIPS_MODE */
     {
@@ -1064,7 +1064,7 @@ bool Gcs_xcom_interface::initialize_xcom(
     const std::string *tls_ciphersuites =
         interface_params.get_parameter("tls_ciphersuites");
 
-    ssl_parameters ssl_configuration = {
+    ssl_parameters const ssl_configuration = {
         ssl_mode_int,
         server_key_file ? server_key_file->c_str() : nullptr,
         server_cert_file ? server_cert_file->c_str() : nullptr,
@@ -1075,7 +1075,7 @@ bool Gcs_xcom_interface::initialize_xcom(
         crl_file ? crl_file->c_str() : nullptr,
         crl_path ? crl_path->c_str() : nullptr,
         cipher ? cipher->c_str() : nullptr};
-    tls_parameters tls_configuration = {
+    tls_parameters const tls_configuration = {
         tls_version ? tls_version->c_str() : nullptr,
         tls_ciphersuites ? tls_ciphersuites->c_str() : nullptr};
 
@@ -1167,7 +1167,7 @@ void Gcs_xcom_interface::set_xcom_group_information(
     const std::string &group_id) {
   Gcs_group_identifier *old_s = nullptr;
   auto *new_s = new Gcs_group_identifier(group_id);
-  u_long xcom_group_id = Gcs_xcom_utils::build_xcom_group_id(*new_s);
+  u_long const xcom_group_id = Gcs_xcom_utils::build_xcom_group_id(*new_s);
 
   MYSQL_GCS_LOG_TRACE(
       "::set_xcom_group_information():: Configuring XCom "
@@ -1396,7 +1396,7 @@ void cb_xcom_receive_data(synode_no message_id, synode_no origin,
   Gcs_xcom_notification *notification =
       new Data_notification(do_cb_xcom_receive_data, message_id, origin,
                             xcom_nodes, last_removed, size, data);
-  bool scheduled = gcs_engine->push(notification);
+  bool const scheduled = gcs_engine->push(notification);
   if (!scheduled) {
     MYSQL_GCS_LOG_DEBUG(
         "xcom_id %x Tried to enqueue a message but the member is about to "
@@ -1550,7 +1550,8 @@ static bool must_filter_xcom_view_v1(synode_no config_id,
   bool const event_horizon_reconfiguration =
       (same_xcom_nodes && different_event_horizons);
 
-  bool filter_xcom_view = already_processed || event_horizon_reconfiguration;
+  bool const filter_xcom_view =
+      already_processed || event_horizon_reconfiguration;
 
   MYSQL_GCS_TRACE_EXECUTE(
       if (filter_xcom_view) {
@@ -1569,7 +1570,7 @@ static bool must_filter_xcom_view_v1(synode_no config_id,
 }
 
 static bool must_filter_xcom_view_v3(Gcs_xcom_nodes const &xcom_nodes) {
-  bool filter_xcom_view =
+  bool const filter_xcom_view =
       last_accepted_xcom_config.same_xcom_nodes_v3(xcom_nodes);
 
   MYSQL_GCS_TRACE_EXECUTE(if (filter_xcom_view) {
@@ -1620,7 +1621,7 @@ void cb_xcom_receive_global_view(synode_no config_id, synode_no message_id,
   Gcs_xcom_notification *notification = new Global_view_notification(
       do_cb_xcom_receive_global_view, config_id, message_id, xcom_nodes,
       event_horizon, max_synode);
-  bool scheduled = gcs_engine->push(notification);
+  bool const scheduled = gcs_engine->push(notification);
   if (!scheduled) {
     MYSQL_GCS_LOG_DEBUG(
         "Tried to enqueue a global view but the member is about to stop.")
@@ -1737,7 +1738,7 @@ void do_cb_xcom_receive_global_view(synode_no config_id, synode_no message_id,
   Gcs_protocol_version const protocol =
       xcom_communication_if->get_protocol_version();
 
-  bool do_not_deliver_to_client =
+  bool const do_not_deliver_to_client =
       must_filter_xcom_view(config_id, *xcom_nodes, event_horizon, protocol);
 
   if (!(xcom_control_if->xcom_receive_global_view(
@@ -1770,7 +1771,7 @@ void cb_xcom_receive_local_view(synode_no config_id, node_set nodes) {
 
   Gcs_xcom_notification *notification = new Local_view_notification(
       do_cb_xcom_receive_local_view, config_id, xcom_nodes, max_synode);
-  bool scheduled = gcs_engine->push(notification);
+  bool const scheduled = gcs_engine->push(notification);
   if (!scheduled) {
     MYSQL_GCS_LOG_DEBUG(
         "Tried to enqueue a local view but the member is about to stop.")
@@ -1848,7 +1849,7 @@ void cb_xcom_exit(int status [[maybe_unused]]) {
 void cb_xcom_expel(int status [[maybe_unused]]) {
   Gcs_xcom_notification *notification =
       new Expel_notification(do_cb_xcom_expel);
-  bool scheduled = gcs_engine->push(notification);
+  bool const scheduled = gcs_engine->push(notification);
   if (!scheduled) {
     MYSQL_GCS_LOG_DEBUG(
         "Tried to enqueue an expel request but the member is about to stop.")

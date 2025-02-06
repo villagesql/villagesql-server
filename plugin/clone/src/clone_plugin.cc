@@ -215,7 +215,7 @@ static bool scan_donor_list(const std::string &donor_list,
 
       auto port_str = entry.substr(colon_pos + 1);
       /* Allow only decimal digit in PORT. */
-      for (char &digit : port_str) {
+      for (char const &digit : port_str) {
         if (std::isdigit(digit) == 0) {
           return (false);
         }
@@ -223,7 +223,7 @@ static bool scan_donor_list(const std::string &donor_list,
       auto valid_port = static_cast<uint32_t>(std::stoi(port_str));
       auto valid_host = entry.substr(0, colon_pos);
 
-      bool match = callback(valid_host, valid_port);
+      bool const match = callback(valid_host, valid_port);
 
       if (match) {
         return (true);
@@ -257,7 +257,8 @@ static int match_valid_donor_address(MYSQL_THD thd, const char *host,
   auto &valid_str = configs[0].second;
   bool found = false;
 
-  Donor_Callback callback = [&](std::string &valid_host, uint32_t valid_port) {
+  Donor_Callback const callback = [&](std::string &valid_host,
+                                      uint32_t valid_port) {
     /* Host in MySQL is case insensitive and converted to lower case. */
     auto transform_lower = [](unsigned char c) {
       return static_cast<unsigned char>(std::tolower(c));
@@ -317,9 +318,9 @@ static int check_donor_addr_format(MYSQL_THD thd, SYS_VAR *var [[maybe_unused]],
 
   const std::string addrs(addrs_cstring);
 
-  Donor_Callback callback = [](std::string, uint32_t) { return (false); };
+  Donor_Callback const callback = [](std::string, uint32_t) { return (false); };
 
-  bool success = scan_donor_list(addrs_cstring, callback);
+  bool const success = scan_donor_list(addrs_cstring, callback);
 
   if (!success) {
     (*(const char **)save) = nullptr;

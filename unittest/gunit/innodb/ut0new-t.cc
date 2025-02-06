@@ -616,7 +616,7 @@ TEST(ut0new_new_delete, unique_ptr_demo) {
       ut::delete_(p);
     }
   };
-  std::unique_ptr<int, Int_deleter> ptr(ut::new_<int>(1), Int_deleter{});
+  std::unique_ptr<int, Int_deleter> const ptr(ut::new_<int>(1), Int_deleter{});
 }
 
 TEST(ut0new_new_delete_arr, unique_ptr_demo) {
@@ -626,7 +626,7 @@ TEST(ut0new_new_delete_arr, unique_ptr_demo) {
       ut::delete_arr(p);
     }
   };
-  std::unique_ptr<int, Int_arr_deleter> ptr(
+  std::unique_ptr<int, Int_arr_deleter> const ptr(
       ut::new_arr<int>(std::forward_as_tuple(1), std::forward_as_tuple(2),
                        std::forward_as_tuple(3), std::forward_as_tuple(4),
                        std::forward_as_tuple(5)),
@@ -1605,7 +1605,7 @@ TEST(aligned_new_delete, unique_ptr_demo) {
       ut::aligned_delete(p);
     }
   };
-  std::unique_ptr<int, Aligned_int_deleter> ptr(
+  std::unique_ptr<int, Aligned_int_deleter> const ptr(
       ut::aligned_new<int>(alignment, 1), Aligned_int_deleter{});
 }
 
@@ -1617,7 +1617,7 @@ TEST(aligned_new_delete_arr, unique_ptr_demo) {
       ut::aligned_delete_arr(p);
     }
   };
-  std::unique_ptr<int, Aligned_int_arr_deleter> ptr(
+  std::unique_ptr<int, Aligned_int_arr_deleter> const ptr(
       ut::aligned_new_arr<int>(
           alignment, std::forward_as_tuple(1), std::forward_as_tuple(2),
           std::forward_as_tuple(3), std::forward_as_tuple(4),

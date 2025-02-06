@@ -32,7 +32,7 @@ struct CHARSET_INFO;
 extern CHARSET_INFO *system_charset_info;
 
 TEST(StringTest, EmptyString) {
-  String s;
+  String const s;
   const uint32 len = 0;
   EXPECT_EQ(len, s.length());
   EXPECT_EQ(len, s.alloced_length());

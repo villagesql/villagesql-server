@@ -65,9 +65,9 @@ TEST_F(KeyringCommonJsonReader_test, JsonReaderTest) {
       "    }"
       "  ]"
       "}");
-  Json_reader json_reader(data);
+  Json_reader const json_reader(data);
   ASSERT_TRUE(json_reader.valid());
-  string expected_version("1.0");
+  string const expected_version("1.0");
   ASSERT_TRUE(json_reader.version() == expected_version);
   ASSERT_TRUE(json_reader.num_elements() == 3);
 

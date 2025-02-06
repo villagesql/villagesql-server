@@ -59,7 +59,7 @@ TEST_F(GcsXcomInputQueueTest, FailureToPushToBackend) {
   Gcs_xcom_input_queue_impl<MockGcsMpscQueue> queue;
   bool const pushed = queue.push(new_app_data());
   ASSERT_EQ(pushed, false);
-  Gcs_xcom_input_queue_impl<MockGcsMpscQueue>::future_reply f =
+  Gcs_xcom_input_queue_impl<MockGcsMpscQueue>::future_reply const f =
       queue.push_and_get_reply(new_app_data());
   ASSERT_EQ(f.valid(), false);
 }

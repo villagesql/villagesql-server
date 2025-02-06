@@ -95,9 +95,9 @@ class Callback_command_delegate_testsuite : public Test {
   }
 
   void create_sut_with_callback_mock() {
-    Callback_command_delegate::Start_row_callback start_row =
+    Callback_command_delegate::Start_row_callback const start_row =
         std::bind(&Mock_callback_commands::start_row, &m_mock_callbacks);
-    Callback_command_delegate::End_row_callback end_row =
+    Callback_command_delegate::End_row_callback const end_row =
         std::bind(&Mock_callback_commands::end_row, &m_mock_callbacks,
                   std::placeholders::_1);
 
@@ -127,7 +127,7 @@ class Callback_command_delegate_testsuite : public Test {
   }
 
   void assert_sut_status_should_be_empty() {
-    ngs::Command_delegate::Info expect_empty;
+    ngs::Command_delegate::Info const expect_empty;
     ASSERT_THAT(m_sut->get_info(), Eq_info(expect_empty));
   }
 

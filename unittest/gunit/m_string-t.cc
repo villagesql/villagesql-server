@@ -76,7 +76,7 @@ TEST(MString, HumanReadableSize) {
   EXPECT_EQ("1023", HumanReadable(nextafter(1024.0, -DBL_MAX)));
   EXPECT_EQ("1K", HumanReadable(nextafter(1024.0, DBL_MAX)));
 
-  double yotta = pow(1024.0, 8.0);
+  double const yotta = pow(1024.0, 8.0);
   EXPECT_EQ("9223372036854774784Y",
             HumanReadable(
                 nextafter(static_cast<double>(LLONG_MAX) * yotta, -DBL_MAX)));

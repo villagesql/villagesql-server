@@ -79,7 +79,7 @@ void Single_primary_message::decode_payload(const unsigned char *buffer,
         if (slider + payload_item_length <= end) {
           assert(single_primary_message_type ==
                  SINGLE_PRIMARY_PRIMARY_ELECTION);
-          uint16 election_mode_aux = uint2korr(slider);
+          uint16 const election_mode_aux = uint2korr(slider);
           election_mode = (enum_primary_election_mode)election_mode_aux;
         }
     }

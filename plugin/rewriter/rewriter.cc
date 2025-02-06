@@ -68,7 +68,7 @@ Rewriter::~Rewriter() = default;
 bool Rewriter::load_rule(MYSQL_THD thd, Persisted_rule *diskrule) {
   std::unique_ptr<Rule> memrule_ptr(new Rule);
   Rule *memrule = memrule_ptr.get();
-  Rule::Load_status load_status = memrule->load(thd, diskrule);
+  Rule::Load_status const load_status = memrule->load(thd, diskrule);
 
   switch (load_status) {
     case Rule::OK:

@@ -228,7 +228,7 @@ void *Scheduler_dynamic::worker() {
         }
 
         if (task_available && task) {
-          Memory_instrumented<Task>::Unique_ptr task_ptr(task);
+          Memory_instrumented<Task>::Unique_ptr const task_ptr(task);
           thread_waiting_time = TIME_VALUE_NOT_VALID;
 
           (*task_ptr)();

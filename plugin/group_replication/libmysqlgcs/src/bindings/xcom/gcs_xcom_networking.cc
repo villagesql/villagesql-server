@@ -138,7 +138,7 @@ bool get_local_addresses(Gcs_sock_probe_interface &sock_probe_if,
         inmask = &((struct sockaddr_in *)netmask)->sin_addr;
 
         // byte order does not matter, only how many bits are set does
-        std::bitset<sizeof(unsigned long) * 8> prefix(inmask->s_addr);
+        std::bitset<sizeof(unsigned long) * 8> const prefix(inmask->s_addr);
 
         sname[0] = smask[0] = '\0';
 
@@ -165,11 +165,11 @@ bool get_local_addresses(Gcs_sock_probe_interface &sock_probe_if,
         // byte order does not matter, only how many bits are set does
         std::ostringstream binary_string;
         for (int ipv6_bytes = 0; ipv6_bytes < 16; ipv6_bytes++) {
-          std::bitset<8> prefix_unit(inmaskv6->s6_addr[ipv6_bytes]);
+          std::bitset<8> const prefix_unit(inmaskv6->s6_addr[ipv6_bytes]);
           binary_string << prefix_unit.to_string();
         }
 
-        std::bitset<(4 * sizeof(unsigned long) * 8)> prefix(
+        std::bitset<(4 * sizeof(unsigned long) * 8)> const prefix(
             binary_string.str());
 
         sname[0] = smask[0] = '\0';
@@ -222,8 +222,8 @@ bool get_local_private_addresses(std::map<std::string, int> &out,
   - Class C - 16-bit block	192.168.0.0 – 192.168.255.255
   */
   for (it = addr_to_cidr.begin(); it != addr_to_cidr.end(); it++) {
-    std::string ip = it->first;
-    int cidr = it->second;
+    std::string const ip = it->first;
+    int const cidr = it->second;
 
     int part1, part2, part3, part4;
     sscanf(ip.c_str(), "%d.%d.%d.%d", &part1, &part2, &part3, &part4);
@@ -244,8 +244,8 @@ bool get_local_private_addresses(std::map<std::string, int> &out,
   multiple subnets
  */
   for (it = addr_to_cidr.begin(); it != addr_to_cidr.end(); it++) {
-    std::string ip = it->first;
-    int cidr = it->second;
+    std::string const ip = it->first;
+    int const cidr = it->second;
 
     if (ip == "::1" || ip.compare(0, 2, "fd") == 0 ||
         ip.compare(0, 4, "fe80") == 0) {
@@ -285,7 +285,7 @@ bool resolve_ip_addr_from_hostname(std::string name,
     memset(cip, '\0', cip_len);
     if (!inet_ntop(sa->sa_family, in_addr, cip, cip_len)) goto end;
 
-    std::string resolved_ip(cip);
+    std::string const resolved_ip(cip);
     ip.push_back(resolved_ip);
 
     addrinf_cycle = addrinf_cycle->ai_next;
@@ -380,7 +380,7 @@ static bool sock_descriptor_to_sockaddr(int fd, struct sockaddr_storage *sa) {
       res = 1;
     }
   } else {
-    int err = errno;
+    int const err = errno;
     switch (err) {
       case EBADF:
         MYSQL_GCS_LOG_DEBUG("The file descriptor fd=%d is not valid", fd);
@@ -495,7 +495,7 @@ Gcs_ip_allowlist_entry_ip::Gcs_ip_allowlist_entry_ip(std::string addr,
     : Gcs_ip_allowlist_entry(addr, mask) {}
 
 bool Gcs_ip_allowlist_entry_ip::init_value() {
-  bool error = get_address_for_allowlist(get_addr(), get_mask(), m_value);
+  bool const error = get_address_for_allowlist(get_addr(), get_mask(), m_value);
 
   return error;
 }
@@ -536,7 +536,7 @@ std::vector<std::pair<std::vector<unsigned char>, std::vector<unsigned char>>>
                    [](std::pair<sa_family_t, std::string> const &ip_entry) {
                      return ip_entry.first == AF_INET;
                    });
-  bool has_v4_addresses = has_v4_addresses_it != ips.end();
+  bool const has_v4_addresses = has_v4_addresses_it != ips.end();
 
   auto *retval = new std::vector<
       std::pair<std::vector<unsigned char>, std::vector<unsigned char>>>();
@@ -584,7 +584,7 @@ std::string Gcs_ip_allowlist::to_string() const {
 
 bool Gcs_ip_allowlist::is_valid(const std::string &the_list) {
   // lock the list
-  Atomic_lock_guard guard{m_atomic_guard};
+  Atomic_lock_guard const guard{m_atomic_guard};
 
   // copy the string
   std::string allowlist = the_list;
@@ -638,7 +638,7 @@ bool Gcs_ip_allowlist::is_valid(const std::string &the_list) {
 
 bool Gcs_ip_allowlist::configure(const std::string &the_list) {
   // lock the list
-  Atomic_lock_guard guard{m_atomic_guard};
+  Atomic_lock_guard const guard{m_atomic_guard};
 
   // copy the list
   std::string allowlist = the_list;
@@ -797,8 +797,8 @@ bool Gcs_ip_allowlist::do_check_block_allowlist(
   */
   bool block = true;
   for (const auto &wl_it : m_ip_allowlist) {
-    std::unique_ptr<std::vector<
-        std::pair<std::vector<unsigned char>, std::vector<unsigned char>>>>
+    std::unique_ptr<std::vector<std::pair<std::vector<unsigned char>,
+                                          std::vector<unsigned char>>>> const
         wl_value((*wl_it).get_value());
 
     if (wl_value == nullptr) continue;
@@ -851,7 +851,8 @@ bool Gcs_ip_allowlist::do_check_block_xcom(
 
       TODO: CHANGE THIS 32!!!!
     */
-    bool is_hostname = string_to_sockaddr(xcom_addr.get_member_ip(), &xcom_sa);
+    bool const is_hostname =
+        string_to_sockaddr(xcom_addr.get_member_ip(), &xcom_sa);
     if (is_hostname) {
       xcom_addr_wl = std::make_unique<Gcs_ip_allowlist_entry_hostname>(
           xcom_addr.get_member_ip());
@@ -867,7 +868,7 @@ bool Gcs_ip_allowlist::do_check_block_xcom(
           xcom_addr.get_member_ip(), xcom_entry_netmask);
     }
 
-    bool error = xcom_addr_wl->init_value();
+    bool const error = xcom_addr_wl->init_value();
     if (error) {
       continue;
     }
@@ -955,7 +956,7 @@ end:
 
 bool Gcs_ip_allowlist::shall_block(int fd, site_def const *xcom_config) {
   // lock the list
-  Atomic_lock_guard guard{m_atomic_guard};
+  Atomic_lock_guard const guard{m_atomic_guard};
 
   bool ret = true;
   if (fd > 0) {
@@ -983,7 +984,7 @@ bool Gcs_ip_allowlist::shall_block(int fd, site_def const *xcom_config) {
 bool Gcs_ip_allowlist::shall_block(const std::string &ip_addr,
                                    site_def const *xcom_config) {
   // lock the list
-  Atomic_lock_guard guard{m_atomic_guard};
+  Atomic_lock_guard const guard{m_atomic_guard};
 
   bool ret = true;
   if (!ip_addr.empty()) {

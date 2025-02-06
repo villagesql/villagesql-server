@@ -166,7 +166,7 @@ int machine_write_row_values(PSI_table_handle *handle) {
   mysql_mutex_lock(&LOCK_machine_records_array);
 
   h->current_row.m_exist = true;
-  int size = machine_records_vector.size();
+  int const size = machine_records_vector.size();
   for (int i = 0; i < size; i++) {
     Machine_Record *record = &machine_records_vector.at(i);
     if (!record->m_exist) {

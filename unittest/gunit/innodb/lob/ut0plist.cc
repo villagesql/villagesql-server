@@ -90,7 +90,7 @@ void test_01() {
 
   base.print_list(std::cout);
 
-  plist_node_t first = base.get_first_node();
+  plist_node_t const first = base.get_first_node();
   plist_node_t last = base.get_last_node();
   plist_node_t cur = first.get_next_node();
   cur = cur.get_next_node();

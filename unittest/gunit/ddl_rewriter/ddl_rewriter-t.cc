@@ -163,7 +163,7 @@ std::vector<Query_pair> missing_rewrite_queries{
 void test_queries(const std::vector<Query_pair> &queries) {
   for (const auto &q : queries) {
     std::string rewrite_result;
-    bool expect_rewrite = (q.query != q.rewritten_query);
+    bool const expect_rewrite = (q.query != q.rewritten_query);
     EXPECT_EQ(query_rewritten(q.query, &rewrite_result), expect_rewrite);
     if (expect_rewrite) {
       EXPECT_EQ(rewrite_result, q.rewritten_query);

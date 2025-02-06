@@ -411,7 +411,7 @@ int Status_pfs::read_column_value(PSI_field *field, uint32_t index) {
       mysql_pfscol_bigint->set_unsigned(field, bigint_value);
       break;
     case 11: /* GTID_EXECUTED */ {
-      int length = is_null ? 0 : m_data.m_gtid_string.length();
+      int const length = is_null ? 0 : m_data.m_gtid_string.length();
       mysql_pfscol_text->set(
           field, is_null ? nullptr : m_data.m_gtid_string.c_str(), length);
     } break;

@@ -52,7 +52,7 @@ class buf_pool_t {
     Fname("buf_pool_t::buf_pool_t");
     ulint page_count;
     LOG("Requested buffer pool size = " << MB100);
-    ulint mem_size = ut_2pow_round(buf_pool_size, UNIV_PAGE_SIZE);
+    ulint const mem_size = ut_2pow_round(buf_pool_size, UNIV_PAGE_SIZE);
     LOG("Will be allocating = " << mem_size);
     page_count = mem_size / UNIV_PAGE_SIZE;
     LOG("Number of pages = " << page_count);

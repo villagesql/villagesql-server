@@ -52,7 +52,7 @@ namespace filesort_compare_unittest {
 */
 
 inline int bytes_to_int(const uchar *s) {
-  int val = longget(s);
+  int const val = longget(s);
   return val ^ 0x80000000;
 }
 
@@ -66,7 +66,7 @@ TEST(BufferAlignmentTest, IntsToBytesToInt) {
   memset(buf, 0, sizeof(buf));
   for (int ix = 0; ix < 6; ++ix) {
     int test_data[] = {INT_MIN32, -42, -1, 0, 1, 42, INT_MAX32};
-    for (int val : test_data) {
+    for (const int val : test_data) {
       int_to_bytes(buf + ix, val);
       EXPECT_EQ(val, bytes_to_int(buf + ix));
     }
@@ -263,8 +263,8 @@ class Mem_compare_int {
  public:
   explicit Mem_compare_int(size_t n) : m_size(n), rest(n - sizeof(int)) {}
   bool operator()(const uchar *s1, const uchar *s2) {
-    int int1 = bytes_to_int(s1);
-    int int2 = bytes_to_int(s2);
+    int const int1 = bytes_to_int(s1);
+    int const int2 = bytes_to_int(s2);
     if (int1 == int2) return mem_compare_1(s1 + rest, s2 + rest, rest);
     return int1 < int2;
   }
@@ -278,8 +278,8 @@ class Mem_compare_int_4 {
  public:
   explicit Mem_compare_int_4(size_t) : keyno(1) {}
   bool operator()(const uchar *s1, const uchar *s2) {
-    int inta1 = bytes_to_int(s1);
-    int intb1 = bytes_to_int(s2);
+    int const inta1 = bytes_to_int(s1);
+    int const intb1 = bytes_to_int(s2);
     if (keyno < 4 && inta1 == intb1) {
       ++keyno;
       return operator()(s1 + sizeof(int), s2 + sizeof(int));
@@ -292,7 +292,7 @@ class Mem_compare_int_4 {
 template <class Compare>
 static inline void RunSortBenchmark(size_t num_iterations, bool stable_sort) {
   StopBenchmarkTiming();
-  FileSortBMHelper helper;
+  FileSortBMHelper const helper;
   for (size_t ix = 0; ix < num_iterations; ++ix) {
     std::vector<uchar *> keys = helper.GetKeys();
     StartBenchmarkTiming();

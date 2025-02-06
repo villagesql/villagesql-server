@@ -98,7 +98,7 @@ class Integrals_lockfree_queue_test : public ::testing::Test {
     popped = 0;
     removed = 0;
 
-    size_t total_threads{Threads * 4};
+    size_t const total_threads{Threads * 4};
     std::vector<std::thread> threads;
 
     for (size_t idx = 0; idx != total_threads; ++idx) {
@@ -107,7 +107,7 @@ class Integrals_lockfree_queue_test : public ::testing::Test {
             switch (n_thread % 4) {
               case 0: {  // Producer threads
                 for (size_t k = 0; k != Workload;) {
-                  value_type value = n_thread * Workload + k;
+                  value_type const value = n_thread * Workload + k;
                   queue << value;  // Using `push` or `<<` is the same
                   if (queue.get_state() == Queue::enum_queue_state::SUCCESS) {
                     ++pushed;
@@ -119,7 +119,7 @@ class Integrals_lockfree_queue_test : public ::testing::Test {
               }
               case 1: {  // Remover thread
                 for (; popped.load() + removed.load() != Workload * Threads;) {
-                  int n_success =
+                  int const n_success =
                       queue.erase_if([=](value_type item) mutable -> bool {
                         return item >= ((n_thread - 1) * Workload) &&
                                item < (n_thread * Workload);
@@ -178,7 +178,7 @@ class Integrals_lockfree_queue_test : public ::testing::Test {
 };
 
 TEST_F(Integrals_lockfree_queue_test, Padding_indexing_test) {
-  size_t size = Workload;
+  size_t const size = Workload;
   container::Integrals_lockfree_queue<Integrals_lockfree_queue_test::value_type,
                                       Null, Erased>
       queue{size};
@@ -189,7 +189,7 @@ TEST_F(Integrals_lockfree_queue_test, Padding_indexing_test) {
 }
 
 TEST_F(Integrals_lockfree_queue_test, Interleaved_indexing_test) {
-  size_t size = Workload;
+  size_t const size = Workload;
   container::Integrals_lockfree_queue<
       Integrals_lockfree_queue_test::value_type, Null, Erased,
       container::Interleaved_indexing<

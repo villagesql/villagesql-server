@@ -927,7 +927,7 @@ void check_transform(const dd::String_type &srs1_str,
 }
 
 TEST(TransformTest, GeogcsProjcsCombinations) {
-  gis::Geographic_point gp{0.001, 0.0002};
+  gis::Geographic_point const gp{0.001, 0.0002};
 
   // Point to Point transformations
   // geogcs - geogcs

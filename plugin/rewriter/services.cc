@@ -74,23 +74,23 @@ static MYSQL_LEX_STRING make_lex_string(const string &str) {
 }
 
 void set_current_database(MYSQL_THD thd, const string &db) {
-  MYSQL_LEX_STRING db_str = make_lex_string(db);
+  MYSQL_LEX_STRING const db_str = make_lex_string(db);
   mysql_parser_set_current_database(thd, db_str);
 }
 
 bool parse(MYSQL_THD thd, const string &query, bool is_prepared,
            Condition_handler *handler) {
-  MYSQL_LEX_STRING query_str = make_lex_string(query);
+  MYSQL_LEX_STRING const query_str = make_lex_string(query);
   return mysql_parser_parse(thd, query_str, is_prepared, handle, handler);
 }
 
 bool parse(MYSQL_THD thd, const string &query, bool is_prepared) {
-  MYSQL_LEX_STRING query_str = make_lex_string(query);
+  MYSQL_LEX_STRING const query_str = make_lex_string(query);
   return mysql_parser_parse(thd, query_str, is_prepared, nullptr, nullptr);
 }
 
 bool is_supported_statement(MYSQL_THD thd) {
-  int type = mysql_parser_get_statement_type(thd);
+  int const type = mysql_parser_get_statement_type(thd);
   return (type == STATEMENT_TYPE_SELECT || type == STATEMENT_TYPE_UPDATE ||
           type == STATEMENT_TYPE_DELETE || type == STATEMENT_TYPE_INSERT ||
           type == STATEMENT_TYPE_REPLACE);
@@ -137,7 +137,8 @@ string print_item(MYSQL_ITEM item) {
 }
 
 string get_current_query_normalized(MYSQL_THD thd) {
-  MYSQL_LEX_STRING normalized_pattern = mysql_parser_get_normalized_query(thd);
+  MYSQL_LEX_STRING const normalized_pattern =
+      mysql_parser_get_normalized_query(thd);
   string s;
   s.assign(normalized_pattern.str, normalized_pattern.length);
   return s;
@@ -160,7 +161,7 @@ class Array_ptr {
 };
 
 std::vector<int> get_parameter_positions(MYSQL_THD thd) {
-  int number_params = get_number_params(thd);
+  int const number_params = get_number_params(thd);
   Array_ptr parameter_positions(new int[number_params]);
   mysql_parser_extract_prepared_params(thd, parameter_positions.get());
   std::vector<int> positions(parameter_positions.get(),

@@ -60,7 +60,7 @@
 #endif
 
 static duk_ret_t node_path_join(duk_context *ctx) {
-  duk_idx_t arg_count = duk_get_top(ctx);
+  duk_idx_t const arg_count = duk_get_top(ctx);
   duk_idx_t i;
 
   duk_push_string(ctx, "/");
@@ -88,7 +88,7 @@ static duk_ret_t normalize_path(duk_context *ctx, duk_idx_t obj_idx) {
 }
 
 static duk_ret_t node_format_string(duk_context *ctx) {
-  duk_idx_t arg_count = duk_get_top(ctx);
+  duk_idx_t const arg_count = duk_get_top(ctx);
   duk_idx_t arg_ndx = 1;
   size_t section_count = 0;
 
@@ -379,7 +379,7 @@ static duk_ret_t cb_resolve_module(duk_context *ctx) {
       return 1;
     }
   } else {
-    int has_parent_id = strlen(parent_id) > 0;
+    int const has_parent_id = strlen(parent_id) > 0;
 
     if (has_parent_id && module_id[0] == '.') {
       // strip the filename from the parent's id
@@ -723,10 +723,10 @@ void duk_module_shim_init(duk_context *ctx,
   duk_put_global_string(ctx, "clearTimeout");
 
   // var _module = []
-  duk_idx_t module_ndx = duk_push_object(ctx);  // module
+  duk_idx_t const module_ndx = duk_push_object(ctx);  // module
 
   // var _paths = []
-  duk_idx_t paths_ndx = duk_push_array(ctx);  // array
+  duk_idx_t const paths_ndx = duk_push_array(ctx);  // array
 
   size_t ndx{};
   for (const auto &prefix : prefixes) {

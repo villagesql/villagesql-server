@@ -170,17 +170,17 @@ class XComStateExchangeTest : public GcsBaseTest {
     uint64_t exchangeable_data_len = 0;
     uint64_t exchangeable_snapshot_len = 0;
 
-    Gcs_xcom_view_identifier dummy_view_id(1, 1);
+    Gcs_xcom_view_identifier const dummy_view_id(1, 1);
     synode_no dummy_cfg_id;
     dummy_cfg_id.group_id = 1;
     dummy_cfg_id.msgno = 1;
     dummy_cfg_id.node = 1;
-    Gcs_xcom_synode_set dummy_snapshot;
-    std::string encoded_payload = "I am sooper dooper payload";
+    Gcs_xcom_synode_set const dummy_snapshot;
+    std::string const encoded_payload = "I am sooper dooper payload";
 
-    Xcom_member_state encoded_member_state(dummy_view_id, dummy_cfg_id,
-                                           encoder_protocol_version,
-                                           dummy_snapshot, nullptr, 0);
+    Xcom_member_state const encoded_member_state(dummy_view_id, dummy_cfg_id,
+                                                 encoder_protocol_version,
+                                                 dummy_snapshot, nullptr, 0);
 
     /*
       Allocate a buffer that will contain the header, the data, and the packet
@@ -217,9 +217,9 @@ class XComStateExchangeTest : public GcsBaseTest {
     slider += exchangeable_snapshot_len;
 
     /* Decode the message. */
-    Xcom_member_state decoded_member_state(encoder_protocol_version, buffer,
-                                           buffer_len);
-    std::string decoded_payload(
+    Xcom_member_state const decoded_member_state(encoder_protocol_version,
+                                                 buffer, buffer_len);
+    std::string const decoded_payload(
         reinterpret_cast<const char *>(decoded_member_state.get_data()),
         decoded_member_state.get_data_size());
     ASSERT_EQ(encoded_payload, decoded_payload);
@@ -241,8 +241,8 @@ TEST_F(XComStateExchangeTest, StateExchangeBroadcastJoinerTest) {
       .Times(1)
       .WillOnce(Return(GCS_OK));
 
-  std::string member_1_addr("127.0.0.1:12345");
-  std::string member_2_addr("127.0.0.1:12346");
+  std::string const member_1_addr("127.0.0.1:12345");
+  std::string const member_2_addr("127.0.0.1:12346");
 
   // Set up parameters
   std::vector<Gcs_member_identifier *> total_members;
@@ -259,13 +259,13 @@ TEST_F(XComStateExchangeTest, StateExchangeBroadcastJoinerTest) {
   std::string group_name("group_name");
 
   auto *mi = new Gcs_member_identifier(member_2_addr);
-  synode_no configuration_id = null_synode;
+  synode_no const configuration_id = null_synode;
 
   Gcs_xcom_nodes nodes;
   nodes.add_node(Gcs_xcom_node_information(member_1_addr));
   nodes.add_node(Gcs_xcom_node_information(member_2_addr));
 
-  bool leaving = state_exchange->state_exchange(
+  bool const leaving = state_exchange->state_exchange(
       configuration_id, total_members, left_members, joined_members,
       data_to_exchange, nullptr, &group_name, *mi, nodes);
 
@@ -293,14 +293,14 @@ TEST_F(XComStateExchangeTest, StateExchangeProcessStatesPhase) {
     Define that the first view delivered has two members, i.e.
     two members are simultaneously joining the view.
   */
-  synode_no configuration_id = null_synode;
+  synode_no const configuration_id = null_synode;
 
   std::string group_name("group_name");
 
-  std::string member_1_addr("127.0.0.1:12345");
+  std::string const member_1_addr("127.0.0.1:12345");
   auto *member_id_1 = new Gcs_member_identifier(member_1_addr);
 
-  std::string member_2_addr("127.0.0.1:12346");
+  std::string const member_2_addr("127.0.0.1:12346");
   auto *member_id_2 = new Gcs_member_identifier(member_2_addr);
 
   std::vector<Gcs_member_identifier *> total_members;
@@ -326,7 +326,7 @@ TEST_F(XComStateExchangeTest, StateExchangeProcessStatesPhase) {
   /*
     Send a state exchange message on behalf of member 1.
   */
-  bool leaving = state_exchange->state_exchange(
+  bool const leaving = state_exchange->state_exchange(
       configuration_id, total_members, left_members, joined_members,
       data_to_exchange, nullptr, &group_name, *member_id_1, nodes);
   ASSERT_FALSE(leaving);
@@ -362,7 +362,7 @@ TEST_F(XComStateExchangeTest, StateExchangeProcessStatesPhase) {
     Simulate message received by member 2.
   */
   const Gcs_xcom_view_identifier view_id_2(99999, 0);
-  Gcs_xcom_synode_set snapshot;
+  Gcs_xcom_synode_set const snapshot;
   auto *state_2 =
       new Xcom_member_state(view_id_2, configuration_id,
                             Gcs_protocol_version::V1, snapshot, nullptr, 0);
@@ -389,18 +389,18 @@ TEST_F(XComStateExchangeTest, StateExchangeChoosingView) {
     Prepare configuration to simulate state exchanges and
     calculate the new view.
   */
-  synode_no configuration_id = null_synode;
+  synode_no const configuration_id = null_synode;
 
-  std::string member_1_addr("127.0.0.1:12345");
+  std::string const member_1_addr("127.0.0.1:12345");
   auto *member_id_1 = new Gcs_member_identifier(member_1_addr);
 
-  std::string member_2_addr("127.0.0.1:12348");
+  std::string const member_2_addr("127.0.0.1:12348");
   auto *member_id_2 = new Gcs_member_identifier(member_2_addr);
 
-  std::string member_3_addr("127.0.0.1:12346");
+  std::string const member_3_addr("127.0.0.1:12346");
   auto *member_id_3 = new Gcs_member_identifier(member_3_addr);
 
-  std::string member_4_addr("127.0.0.1:12347");
+  std::string const member_4_addr("127.0.0.1:12347");
   auto *member_id_4 = new Gcs_member_identifier(member_4_addr);
 
   /*
@@ -415,8 +415,8 @@ TEST_F(XComStateExchangeTest, StateExchangeChoosingView) {
   */
   Gcs_xcom_view_identifier *new_view_id = nullptr;
 
-  Gcs_xcom_view_identifier view_id_1(99999, 0);
-  Gcs_xcom_synode_set snapshot;
+  Gcs_xcom_view_identifier const view_id_1(99999, 0);
+  Gcs_xcom_synode_set const snapshot;
   auto *state_1 = new Xcom_member_state(view_id_1, configuration_id,
                                         Gcs_protocol_version::HIGHEST_KNOWN,
                                         snapshot, nullptr, 0);
@@ -430,7 +430,7 @@ TEST_F(XComStateExchangeTest, StateExchangeChoosingView) {
     If there is two views where all the monotonic parts are zero, the one
     with the greater member identifier is picked.
   */
-  Gcs_xcom_view_identifier view_id_2(88888, 0);
+  Gcs_xcom_view_identifier const view_id_2(88888, 0);
   auto *state_2 = new Xcom_member_state(view_id_2, configuration_id,
                                         Gcs_protocol_version::HIGHEST_KNOWN,
                                         snapshot, nullptr, 0);
@@ -445,7 +445,7 @@ TEST_F(XComStateExchangeTest, StateExchangeChoosingView) {
     If there are n views where their monotonic parts are zero, the one
     with the greater member identifier is picked.
   */
-  Gcs_xcom_view_identifier view_id_3(66666, 0);
+  Gcs_xcom_view_identifier const view_id_3(66666, 0);
   auto *state_3 = new Xcom_member_state(view_id_3, configuration_id,
                                         Gcs_protocol_version::HIGHEST_KNOWN,
                                         snapshot, nullptr, 0);
@@ -467,7 +467,7 @@ TEST_F(XComStateExchangeTest, StateExchangeChoosingView) {
     the members that are part of the previous view must have the same
     view identifier.
   */
-  Gcs_xcom_view_identifier view_id_4(77777, 1);
+  Gcs_xcom_view_identifier const view_id_4(77777, 1);
   auto *state_4 = new Xcom_member_state(view_id_4, configuration_id,
                                         Gcs_protocol_version::HIGHEST_KNOWN,
                                         snapshot, nullptr, 0);
@@ -506,16 +506,16 @@ TEST_F(XComStateExchangeTest, StateExchangeWrongAssumptionsView) {
   Gcs_xcom_view_identifier *new_view_id = nullptr;
   std::map<Gcs_member_identifier, Xcom_member_state *>::iterator state_it;
 
-  std::string member_1_addr("127.0.0.1:12345");
+  std::string const member_1_addr("127.0.0.1:12345");
   auto *member_id_1 = new Gcs_member_identifier(member_1_addr);
 
-  std::string member_2_addr("127.0.0.1:12348");
+  std::string const member_2_addr("127.0.0.1:12348");
   auto *member_id_2 = new Gcs_member_identifier(member_2_addr);
 
-  std::string member_3_addr("127.0.0.1:12346");
+  std::string const member_3_addr("127.0.0.1:12346");
   auto *member_id_3 = new Gcs_member_identifier(member_3_addr);
 
-  std::string member_4_addr("127.0.0.1:12347");
+  std::string const member_4_addr("127.0.0.1:12347");
   auto *member_id_4 = new Gcs_member_identifier(member_4_addr);
 
   /*
@@ -530,15 +530,15 @@ TEST_F(XComStateExchangeTest, StateExchangeWrongAssumptionsView) {
     zero but the fixed parts don't match. This situation cannot happen
     in practice.
   */
-  synode_no configuration_id = null_synode;
-  Gcs_xcom_view_identifier view_id_1(99999, 1);
-  Gcs_xcom_synode_set snapshot;
+  synode_no const configuration_id = null_synode;
+  Gcs_xcom_view_identifier const view_id_1(99999, 1);
+  Gcs_xcom_synode_set const snapshot;
   auto *state_1 = new Xcom_member_state(view_id_1, configuration_id,
                                         Gcs_protocol_version::HIGHEST_KNOWN,
                                         snapshot, nullptr, 0);
   (*member_states)[*member_id_1] = state_1;
 
-  Gcs_xcom_view_identifier view_id_2(88888, 1);
+  Gcs_xcom_view_identifier const view_id_2(88888, 1);
   auto *state_2 = new Xcom_member_state(view_id_2, configuration_id,
                                         Gcs_protocol_version::HIGHEST_KNOWN,
                                         snapshot, nullptr, 0);
@@ -556,13 +556,13 @@ TEST_F(XComStateExchangeTest, StateExchangeWrongAssumptionsView) {
     Two views where the monotonic part in each view is different from
     zero but they don't match. This situation cannot happen in practice.
   */
-  Gcs_xcom_view_identifier view_id_3(99999, 1);
+  Gcs_xcom_view_identifier const view_id_3(99999, 1);
   auto *state_3 = new Xcom_member_state(view_id_3, configuration_id,
                                         Gcs_protocol_version::HIGHEST_KNOWN,
                                         snapshot, nullptr, 0);
   (*member_states)[*member_id_3] = state_3;
 
-  Gcs_xcom_view_identifier view_id_4(99999, 2);
+  Gcs_xcom_view_identifier const view_id_4(99999, 2);
   auto *state_4 = new Xcom_member_state(view_id_4, configuration_id,
                                         Gcs_protocol_version::HIGHEST_KNOWN,
                                         snapshot, nullptr, 0);
@@ -590,7 +590,7 @@ TEST_F(XComStateExchangeTest, StateExchangeDiscardSynodes) {
     Define that the first view delivered has two members, i.e.
     two members are simultaneously joining the view.
   */
-  synode_no configuration_id = null_synode;
+  synode_no const configuration_id = null_synode;
 
   synode_no invalid_configuration_id = null_synode;
   invalid_configuration_id.group_id = 0;
@@ -599,7 +599,7 @@ TEST_F(XComStateExchangeTest, StateExchangeDiscardSynodes) {
 
   std::string group_name("group_name");
 
-  std::string member_1_addr("127.0.0.1:12345");
+  std::string const member_1_addr("127.0.0.1:12345");
   auto *member_id_1 = new Gcs_member_identifier(member_1_addr);
 
   std::vector<Gcs_member_identifier *> total_members;
@@ -631,11 +631,11 @@ TEST_F(XComStateExchangeTest, StateExchangeDiscardSynodes) {
     ignored.
   */
   const Gcs_xcom_view_identifier view_id_1(99999, 0);
-  Gcs_xcom_synode_set snapshot;
+  Gcs_xcom_synode_set const snapshot;
   auto *state_1 = new Xcom_member_state(view_id_1, invalid_configuration_id,
                                         Gcs_protocol_version::HIGHEST_KNOWN,
                                         snapshot, nullptr, 0);
-  bool can_install = state_exchange->process_member_state(
+  bool const can_install = state_exchange->process_member_state(
       state_1, *member_id_1, Gcs_protocol_version::V1,
       Gcs_protocol_version::V1);
   ASSERT_FALSE(can_install);

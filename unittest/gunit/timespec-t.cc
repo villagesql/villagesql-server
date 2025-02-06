@@ -48,7 +48,7 @@ class TimespecTest : public ::testing::Test {
 /* Tests for set_timespec_nsec */
 
 TEST_F(TimespecTest, TestNsecZero) {
-  ulonglong nsec = 0;
+  ulonglong const nsec = 0;
   set_timespec_nsec(&ts, nsec);
   verify_timespec();
 }
@@ -61,25 +61,25 @@ TEST_F(TimespecTest, TestNsecMax) {
 /* Tests for set_timespec (taking a seconds argument) */
 
 TEST_F(TimespecTest, TestSecZero) {
-  ulonglong sec = 0;
+  ulonglong const sec = 0;
   set_timespec(&ts, sec);
   verify_timespec();
 }
 
 TEST_F(TimespecTest, TestSec_LONG_TIMEOUT) {
-  ulonglong sec = LONG_TIMEOUT;
+  ulonglong const sec = LONG_TIMEOUT;
   set_timespec(&ts, sec);
   verify_timespec();
 }
 
 TEST_F(TimespecTest, TestSec_INT_MAX32) {
-  ulonglong sec = INT_MAX32;
+  ulonglong const sec = INT_MAX32;
   set_timespec(&ts, sec);
   verify_timespec();
 }
 
 TEST_F(TimespecTest, TestSec_UINT_MAX32) {
-  ulonglong sec = UINT_MAX32;
+  ulonglong const sec = UINT_MAX32;
   set_timespec(&ts, sec);
   verify_timespec();
 }

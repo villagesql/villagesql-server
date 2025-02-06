@@ -71,7 +71,7 @@ const std::string *Headers::find(const std::string_view &key) const {
 }
 
 const char *Headers::find_cstr(const char *key) const {
-  std::string_view sv_key{key};
+  std::string_view const sv_key{key};
   for (const auto &element : map_) {
     if (compare_case_insensitive(element.first, sv_key)) {
       return element.second.c_str();

@@ -257,7 +257,7 @@ enum_gcs_error Gcs_xcom_group_management::set_single_leader(
       "leader.",
       leader.get_member_id().c_str());
 
-  bool success = m_xcom_proxy->xcom_set_leaders(
+  bool const success = m_xcom_proxy->xcom_set_leaders(
       m_gid_hash, one_preferred_leader, preferred_leader, one_active_leader);
   return success ? GCS_OK : GCS_NOK;
 }
@@ -271,7 +271,7 @@ enum_gcs_error Gcs_xcom_group_management::set_everyone_leader() {
       "The member is attempting to reconfigure XCom to use everyone as "
       "leader.");
 
-  bool success = m_xcom_proxy->xcom_set_leaders(
+  bool const success = m_xcom_proxy->xcom_set_leaders(
       m_gid_hash, zero_preferred_leaders, empty_preferred_leaders,
       everyone_active_leader);
   return success ? GCS_OK : GCS_NOK;

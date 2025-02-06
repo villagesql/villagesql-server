@@ -136,7 +136,7 @@ std::ofstream DynamicState::open_for_write() {
 }
 
 bool DynamicState::load() {
-  std::unique_lock<std::mutex> lock(pimpl_->json_file_lock_);
+  std::unique_lock<std::mutex> const lock(pimpl_->json_file_lock_);
   bool result{false};
 
   auto input_file = open_for_read();
@@ -161,7 +161,7 @@ void DynamicState::ensure_valid_against_schema() {
         "Parsing JSON schema failed at offset " +
         std::to_string(schema_json.GetErrorOffset()) + ": " +
         rapidjson::GetParseError_En(schema_json.GetParseError()));
-  JsonSchemaDocument schema(schema_json);
+  JsonSchemaDocument const schema(schema_json);
 
   // validate JSON against schema; throws std::runtime_error if validation fails
   try {
@@ -198,10 +198,10 @@ void DynamicState::ensure_version_compatibility() {
   }
 
   // the format od the string should be MAJOR.MINOR.PATCH
-  std::string version_str = it->value.GetString();
+  std::string const version_str = it->value.GetString();
   SchemaVersion version;
-  int res = sscanf(version_str.c_str(), "%u.%u.%u", &version.major,
-                   &version.minor, &version.patch);
+  int const res = sscanf(version_str.c_str(), "%u.%u.%u", &version.major,
+                         &version.minor, &version.patch);
   if (res != 3) {
     throw std::runtime_error(
         std::string("Invalid version field format, expected MAJOR.MINOR.PATCH, "
@@ -226,7 +226,7 @@ bool DynamicState::load_from_stream(std::istream &input_stream) {
 
   auto &json_doc = pimpl_->json_state_doc_;
 
-  std::unique_lock<std::mutex> lock(pimpl_->json_state_doc_lock_);
+  std::unique_lock<std::mutex> const lock(pimpl_->json_state_doc_lock_);
 
   if (json_doc.ParseStream<rapidjson::kParseCommentsFlag>(istream)
           .HasParseError()) {
@@ -242,7 +242,7 @@ bool DynamicState::load_from_stream(std::istream &input_stream) {
 }
 
 bool DynamicState::save(bool is_clusterset, bool pretty) {
-  std::unique_lock<std::mutex> lock(pimpl_->json_file_lock_);
+  std::unique_lock<std::mutex> const lock(pimpl_->json_file_lock_);
 
   auto output_file = open_for_write();
 
@@ -261,7 +261,7 @@ bool DynamicState::save_to_stream(std::ostream &output_stream,
 
   update_section(kVersionFieldName, std::move(version));
 
-  std::unique_lock<std::mutex> lock(pimpl_->json_state_doc_lock_);
+  std::unique_lock<std::mutex> const lock(pimpl_->json_state_doc_lock_);
   if (pretty) {
     rapidjson::PrettyWriter<JsonStringBuffer> out_writer{out_buffer};
     pimpl_->json_state_doc_.Accept(out_writer);
@@ -276,7 +276,7 @@ bool DynamicState::save_to_stream(std::ostream &output_stream,
 
 std::unique_ptr<JsonValue> DynamicState::get_section(
     const std::string &section_name) {
-  std::unique_lock<std::mutex> lock(pimpl_->json_state_doc_lock_);
+  std::unique_lock<std::mutex> const lock(pimpl_->json_state_doc_lock_);
 
   auto &json_doc = pimpl_->json_state_doc_;
   auto it = json_doc.FindMember(
@@ -290,7 +290,7 @@ std::unique_ptr<JsonValue> DynamicState::get_section(
 
 bool DynamicState::update_section(const std::string &section_name,
                                   JsonValue &&value) {
-  std::unique_lock<std::mutex> lock(pimpl_->json_state_doc_lock_);
+  std::unique_lock<std::mutex> const lock(pimpl_->json_state_doc_lock_);
 
   auto &json_doc = pimpl_->json_state_doc_;
   auto &allocator = json_doc.GetAllocator();

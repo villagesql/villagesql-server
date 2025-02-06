@@ -58,7 +58,7 @@ class ErrorCategory : public std::error_category {
   }
 
   static const std::error_category &singleton() noexcept {
-    static ErrorCategory instance;
+    static ErrorCategory const instance;
     return instance;
   }
 };

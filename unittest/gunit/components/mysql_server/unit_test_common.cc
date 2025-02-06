@@ -76,7 +76,7 @@ int make_realpath(char *to, const char *filename) {
 #ifndef _WIN32
   int result = 0;
 
-  unique_ptr_free<char> ptr(realpath(filename, nullptr));
+  unique_ptr_free<char> const ptr(realpath(filename, nullptr));
   if (ptr) {
     make_str(to, ptr.get(), FN_REFLEN - 1);
   } else {

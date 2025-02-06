@@ -75,7 +75,7 @@ MATCHER(EqInvalidSocket, "") {
 }
 
 MATCHER_P(EqCastToCStr, expected, "") {
-  std::string force_string = expected;
+  std::string const force_string = expected;
   return force_string == static_cast<char *>(arg);
 }
 
@@ -150,7 +150,7 @@ class Listener_unix_socket_testsuite : public Test {
         .WillRepeatedly(Return(SOCKET_OK));  // back in setup_listener()
     EXPECT_CALL(*m_mock_socket, set_socket_thread_owner());
 
-    std::shared_ptr<iface::Socket> socket = m_mock_socket;
+    std::shared_ptr<iface::Socket> const socket = m_mock_socket;
     EXPECT_CALL(m_mock_socket_events, listen(socket, _)).WillOnce(Return(true));
   }
 
@@ -214,7 +214,7 @@ TEST_F(Listener_unix_socket_testsuite,
 TEST_F(Listener_unix_socket_testsuite,
        unixsocket_try_to_create_unixsocket_with_too_long_filename) {
 #if defined(HAVE_SYS_UN_H)
-  std::string long_filename(2000, 'a');
+  std::string const long_filename(2000, 'a');
   sut = std::make_shared<Listener_unix_socket>(
       m_mock_factory, long_filename, std::ref(m_mock_socket_events), BACKLOG);
 
@@ -492,7 +492,7 @@ TEST_F(Listener_unix_socket_testsuite, unixsocket_event_regiester_failure) {
       .WillRepeatedly(Return(SOCKET_OK));  // back in setup_listener()
   EXPECT_CALL(*m_mock_socket, set_socket_thread_owner());
 
-  std::shared_ptr<iface::Socket> socket = m_mock_socket;
+  std::shared_ptr<iface::Socket> const socket = m_mock_socket;
   EXPECT_CALL(m_mock_socket_events, listen(socket, _)).WillOnce(Return(false));
 
   EXPECT_CALL(*m_mock_system, unlink(StrEq(UNIX_SOCKET_LOCK_FILE)))

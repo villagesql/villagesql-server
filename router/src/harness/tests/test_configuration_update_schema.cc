@@ -64,7 +64,7 @@ class TestConfigurationUpdateSchema : public ::testing::Test {
           std::to_string(schema_json.GetErrorOffset()) + ": " +
           rapidjson::GetParseError_En(schema_json.GetParseError()));
     }
-    JsonSchemaDocument schema_doc(schema_json);
+    JsonSchemaDocument const schema_doc(schema_json);
 
     // 2. create json document from string to verify
     JsonDocument verified_json_doc;

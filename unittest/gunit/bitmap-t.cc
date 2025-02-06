@@ -59,14 +59,14 @@ TEST_F(BitmapTest, IntersectTest) {
 TEST_F(BitmapTest, ULLTest) {
   bitmap.set_all();
   bitmap.intersect(0x0123456789ABCDEFULL);
-  ulonglong ull = bitmap.to_ulonglong();
+  ulonglong const ull = bitmap.to_ulonglong();
   EXPECT_TRUE(ull == 0x0123456789ABCDEFULL);
 
   Bitmap<24> bitmap24;
   bitmap24.init();
   bitmap24.set_all();
   bitmap24.intersect(0x47BULL);
-  ulonglong ull24 = bitmap24.to_ulonglong();
+  ulonglong const ull24 = bitmap24.to_ulonglong();
   EXPECT_TRUE(ull24 == 0x47BULL);
 }
 

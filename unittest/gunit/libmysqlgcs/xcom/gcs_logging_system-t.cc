@@ -124,7 +124,7 @@ TEST_F(LoggingDebuggingSystemTest, DefaultLifecycle) {
   if_params.add_parameter("ip_allowlist", Gcs_ip_allowlist::DEFAULT_ALLOWLIST);
 
   Gcs_interface *xcom_if = Gcs_xcom_interface::get_interface();
-  enum_gcs_error initialized = xcom_if->initialize(if_params);
+  enum_gcs_error const initialized = xcom_if->initialize(if_params);
 
   ASSERT_EQ(GCS_OK, initialized);
 
@@ -143,7 +143,7 @@ TEST_F(LoggingDebuggingSystemTest, DefaultLifecycle) {
     Gcs_log_manager::get_logger()->log_event(level, c_msg);
   }
 
-  enum_gcs_error finalize_error = xcom_if->finalize();
+  enum_gcs_error const finalize_error = xcom_if->finalize();
   ASSERT_EQ(GCS_OK, finalize_error);
 
   Gcs_xcom_interface::cleanup();
@@ -197,13 +197,13 @@ TEST_F(FileOutputSystemTest, SinkFileTest) {
   */
   char file_name_buffer[FN_REFLEN];
   std::stringstream buffer;
-  std::string repeat("/unknown");
-  size_t base = repeat.length();
+  std::string const repeat("/unknown");
+  size_t const base = repeat.length();
   size_t size = 0;
   File m_fd;
   uchar read_buffer[10];
   read_buffer[0] = '\0';
-  std::string info("testing");
+  std::string const info("testing");
 
   /*
     Try to create a file that exceeds the normal name's length.

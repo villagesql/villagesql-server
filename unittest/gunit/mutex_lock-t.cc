@@ -42,12 +42,12 @@ using FakeMutexLock = Generic_mutex_lock<FakeMutex>;
 
 namespace mutex_lock_unittest {
 TEST(MutexLockTest, DefaultConstruct) {
-  { FakeMutexLock _; }
+  { FakeMutexLock const _; }
 }
 TEST(MutexLockTest, Plain) {
   FakeMutex mm;
   {
-    FakeMutexLock _{&mm, __FILE__, __LINE__};
+    FakeMutexLock const _{&mm, __FILE__, __LINE__};
     EXPECT_EQ(1, mm.times_locked);
     EXPECT_EQ(0, mm.times_unlocked);
   }
@@ -94,13 +94,13 @@ TEST(MutexLockTest, MoveConstruct) {
   FakeMutex mm;
   {
     FakeMutexLock src = FakeMutexLock(nullptr, __FILE__, __LINE__);
-    FakeMutexLock dst{std::move(src)};
+    FakeMutexLock const dst{std::move(src)};
     EXPECT_EQ(0, mm.times_locked);
     EXPECT_EQ(0, mm.times_unlocked);
   }
   {
     FakeMutexLock src = FakeMutexLock(&mm, __FILE__, __LINE__);
-    FakeMutexLock dst{std::move(src)};
+    FakeMutexLock const dst{std::move(src)};
     EXPECT_EQ(1, mm.times_locked);
     EXPECT_EQ(0, mm.times_unlocked);
   }

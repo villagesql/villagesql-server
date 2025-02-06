@@ -64,7 +64,8 @@ Gcs_xcom_communication_protocol_changer::set_protocol_version(
       m_tagged_lock.try_lock();
   assert(we_acquired_lock);
 
-  std::string new_version_readable = gcs_protocol_to_mysql_version(new_version);
+  std::string const new_version_readable =
+      gcs_protocol_to_mysql_version(new_version);
 
   MYSQL_GCS_LOG_INFO(
       "This node has started changing the protocol version from "
@@ -98,7 +99,7 @@ void Gcs_xcom_communication_protocol_changer::begin_protocol_version_change(
   m_tentative_new_protocol = new_version;
   m_promise = std::promise<void>();
 
-  std::string old_version_readable =
+  std::string const old_version_readable =
       gcs_protocol_to_mysql_version(get_protocol_version());
 
   /* Change the pipeline. */
@@ -109,7 +110,8 @@ void Gcs_xcom_communication_protocol_changer::begin_protocol_version_change(
           static_cast<Gcs_protocol_version>(m_tentative_new_protocol));
   assert(!failed && "Setting the pipeline version should not have failed");
 
-  std::string new_version_readable = gcs_protocol_to_mysql_version(new_version);
+  std::string const new_version_readable =
+      gcs_protocol_to_mysql_version(new_version);
 
   MYSQL_GCS_LOG_INFO(
       "Message Pipeline version has been modified to protocol version "
@@ -164,7 +166,7 @@ void Gcs_xcom_communication_protocol_changer::commit_protocol_version_change() {
 void Gcs_xcom_communication_protocol_changer::
     release_tagged_lock_and_notify_waiters() {
   {
-    std::unique_lock<std::mutex> lock(m_mutex);
+    std::unique_lock<std::mutex> const lock(m_mutex);
     m_tagged_lock.unlock();
   }
   m_protocol_change_finished.notify_all();
@@ -265,7 +267,7 @@ void Gcs_xcom_communication_protocol_changer::
 
     Gcs_xcom_notification *notification = new Protocol_change_notification(
         do_function_finish_protocol_version_change, this, tag);
-    bool scheduled = m_gcs_engine.push(notification);
+    bool const scheduled = m_gcs_engine.push(notification);
     if (!scheduled) {
       MYSQL_GCS_LOG_DEBUG(
           "Tried to enqueue a protocol change request but the member is "
@@ -405,7 +407,7 @@ void Gcs_xcom_communication_protocol_changer::decrement_nr_packets_in_transit(
         "member identifier from incoming packet.");
   }
 
-  Gcs_member_identifier origin(origin_member_id);
+  Gcs_member_identifier const origin(origin_member_id);
 
   /*
    If the packet comes from me, decrement the number of packets in transit.
@@ -425,7 +427,7 @@ void Gcs_xcom_communication_protocol_changer::decrement_nr_packets_in_transit(
           "own address from currently installed configuration.")
     }
 
-    std::string myself_node_address_string =
+    std::string const myself_node_address_string =
         myself_node_address->get_member_address();
 
     if (myself_node_address_string.empty()) {
@@ -434,10 +436,10 @@ void Gcs_xcom_communication_protocol_changer::decrement_nr_packets_in_transit(
           "own address representation from currently installed configuration.")
     }
 
-    Gcs_member_identifier myself{myself_node_address_string};
+    Gcs_member_identifier const myself{myself_node_address_string};
 
     bool const message_comes_from_me = (origin == myself);
-    std::string new_version_readable =
+    std::string const new_version_readable =
         gcs_protocol_to_mysql_version(get_protocol_version());
 
     if (message_comes_from_me) {

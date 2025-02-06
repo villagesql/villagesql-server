@@ -56,7 +56,7 @@ TEST_P(Vt100Test, ensure_generates) {
  * @test Vt100Filter(..., false) doesn't filter out Vt100 sequences.
  */
 TEST_P(Vt100Test, ensure_filter_ignores) {
-  std::ostringstream out_stream;
+  std::ostringstream const out_stream;
   Vt100Filter filtered_streambuf(out_stream.rdbuf(), false);
   std::ostream filtered_stream(&filtered_streambuf);
 
@@ -70,7 +70,7 @@ TEST_P(Vt100Test, ensure_filter_ignores) {
  * @test Vt100Filter(..., true) removes Vt100 sequences.
  */
 TEST_P(Vt100Test, ensure_filter_filters) {
-  std::ostringstream out_stream;
+  std::ostringstream const out_stream;
   Vt100Filter filtered_streambuf(out_stream.rdbuf(), true);
   std::ostream filtered_stream(&filtered_streambuf);
 

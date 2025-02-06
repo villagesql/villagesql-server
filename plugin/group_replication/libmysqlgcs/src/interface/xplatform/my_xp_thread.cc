@@ -59,7 +59,7 @@ int My_xp_thread_server::create_detached(PSI_thread_key key [[maybe_unused]],
 
   My_xp_thread_util::attr_setdetachstate(attr, NATIVE_THREAD_CREATE_DETACHED);
 
-  int ret_status = create(key, attr, func, arg);
+  int const ret_status = create(key, attr, func, arg);
 
   if (using_my_attr) My_xp_thread_util::attr_destroy(&my_attr);
 

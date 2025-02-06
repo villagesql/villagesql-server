@@ -46,8 +46,8 @@ int replace_all(std::string &input, const std::string &to_find,
 }
 
 void trim(std::string &value, const std::string &whitespace) {
-  std::size_t first = value.find_first_not_of(whitespace);
-  std::size_t last = value.find_last_not_of(whitespace);
+  std::size_t const first = value.find_first_not_of(whitespace);
+  std::size_t const last = value.find_last_not_of(whitespace);
 
   if (first == std::string::npos) {
     value = "";

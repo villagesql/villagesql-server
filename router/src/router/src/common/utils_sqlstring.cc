@@ -421,7 +421,7 @@ sqlstring::sqlstring() : _format(0) {}
 std::string sqlstring::consume_until_next_escape() {
   std::string::size_type e = _format_string_left.length(), p = 0;
   while (p < e) {
-    char ch = _format_string_left[p];
+    char const ch = _format_string_left[p];
     if (ch == '?' || ch == '!') break;
     ++p;
   }
@@ -440,7 +440,7 @@ int sqlstring::next_escape() {
   if (_format_string_left.empty())
     throw std::invalid_argument(
         "Error formatting SQL query: more arguments than escapes");
-  int c = _format_string_left[0];
+  int const c = _format_string_left[0];
   _format_string_left = _format_string_left.substr(1);
   return c;
 }
@@ -462,7 +462,7 @@ bool sqlstring::done() const {
 }
 
 sqlstring &sqlstring::operator<<(const double v) {
-  int esc = next_escape();
+  int const esc = next_escape();
   if (esc != '?')
     throw std::invalid_argument(
         "Error formatting SQL query: invalid escape for numeric argument");
@@ -479,9 +479,9 @@ sqlstring &sqlstring::operator<<(const sqlstringformat format) {
 }
 
 sqlstring &sqlstring::operator<<(const std::string &v) {
-  int esc = next_escape();
+  int const esc = next_escape();
   if (esc == '!') {
-    std::string escaped = escape_backticks(v);
+    std::string const escaped = escape_backticks(v);
     if ((_format._flags & QuoteOnlyIfNeeded) != 0)
       append(quote_identifier_if_needed(escaped, '`'));
     else
@@ -516,13 +516,13 @@ sqlstring &sqlstring::operator<<(const sqlstring &v) {
 }
 
 sqlstring &sqlstring::operator<<(const char *v) {
-  int esc = next_escape();
+  int const esc = next_escape();
 
   if (esc == '!') {
     if (!v)
       throw std::invalid_argument(
           "Error formatting SQL query: NULL value found for identifier");
-    std::string quoted = escape_backticks(v);
+    std::string const quoted = escape_backticks(v);
     if (quoted == v && (_format._flags & QuoteOnlyIfNeeded))
       append(quoted);
     else

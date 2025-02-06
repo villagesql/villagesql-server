@@ -73,8 +73,8 @@ static void BM_utf8_Convert_Check(size_t num_iterations) {
   uint errors;
   StartBenchmarkTiming();
   for (size_t i = 0; i < num_iterations; ++i) {
-    size_t len [[maybe_unused]] = my_convert(buf, sizeof(buf), to_cs, content,
-                                             content_len, from_cs, &errors);
+    size_t const len [[maybe_unused]] = my_convert(
+        buf, sizeof(buf), to_cs, content, content_len, from_cs, &errors);
   }
   StopBenchmarkTiming();
   ASSERT_EQ(0, errors);

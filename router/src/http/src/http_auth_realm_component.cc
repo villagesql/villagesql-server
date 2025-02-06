@@ -34,13 +34,13 @@
 
 void HttpAuthRealmComponent::add_realm(const std::string &name,
                                        std::shared_ptr<HttpAuthRealm> realm) {
-  std::lock_guard<std::mutex> lk(realms_m_);
+  std::lock_guard<std::mutex> const lk(realms_m_);
 
   auth_realms_[name] = std::move(realm);
 }
 
 void HttpAuthRealmComponent::remove_realm(const std::string &name) {
-  std::lock_guard<std::mutex> lk(realms_m_);
+  std::lock_guard<std::mutex> const lk(realms_m_);
 
   const auto it = auth_realms_.find(name);
   if (it != auth_realms_.end()) {
@@ -50,7 +50,7 @@ void HttpAuthRealmComponent::remove_realm(const std::string &name) {
 
 std::shared_ptr<HttpAuthRealm> HttpAuthRealmComponent::get(
     const std::string &inst) {
-  std::lock_guard<std::mutex> lk(realms_m_);
+  std::lock_guard<std::mutex> const lk(realms_m_);
 
   auto it = auth_realms_.find(inst);
   if (it == auth_realms_.end()) {

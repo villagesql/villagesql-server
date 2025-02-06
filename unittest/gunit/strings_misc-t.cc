@@ -45,13 +45,13 @@ void test_caseup_casedn(const CHARSET_INFO *cs) {
     // fprintf(stdout, "compatible %s\n", cs->m_coll_name);
     strncpy(test_string, input_string, sizeof(test_string));
 
-    size_t uplen = my_caseup_str(cs, test_string);
+    size_t const uplen = my_caseup_str(cs, test_string);
     EXPECT_EQ(5, uplen);
     EXPECT_STREQ(test_string, output_string);
 
     EXPECT_EQ(0, my_strcasecmp(cs, test_string, output_string));
 
-    size_t downlen = my_casedn_str(cs, test_string);
+    size_t const downlen = my_casedn_str(cs, test_string);
     EXPECT_EQ(5, downlen);
     EXPECT_STREQ(test_string, input_string);
   } else {

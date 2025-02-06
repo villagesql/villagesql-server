@@ -123,7 +123,7 @@ std::pair<bool, std::vector<Gcs_packet>> Gcs_message_pipeline::process_outgoing(
   Gcs_packet packet;
   uint64_t buffer_size = 0;
 
-  Gcs_protocol_version current_version =
+  Gcs_protocol_version const current_version =
       m_pipeline_version.load(std::memory_order_relaxed);
   Gcs_protocol_version pipeline_version = current_version;
   /*

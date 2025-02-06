@@ -63,21 +63,22 @@ class XcomSingleWriter : public GcsBaseTest {
 };
 
 auto xprintf = [](std::ostream &os, auto... args) {
-  int dummy[] = {(os << args, 0)...};
+  int const dummy[] = {(os << args, 0)...};
   (void)dummy;
 };
 
 TEST_F(XcomSingleWriter, test_xcom_client_set_max_leaders) {
-  std::array<uint32_t, 4> numbers = {std::numeric_limits<uint32_t>::min(), 0, 1,
-                                     std::numeric_limits<uint32_t>::max()};
+  std::array<uint32_t, 4> const numbers = {
+      std::numeric_limits<uint32_t>::min(), 0, 1,
+      std::numeric_limits<uint32_t>::max()};
   for (auto n : numbers) {  // Should always return 0 because of nullptr
     ASSERT_EQ(0, xcom_client_set_max_leaders(nullptr, n, test_group_id));
   }
 }
 
 TEST_F(XcomSingleWriter, test_xcom_client_set_leaders) {
-  std::array<char const *, 5> a = {nullptr, "hostname", "xxfunnyxx.nohost.foo",
-                                   "localhost", "127.0.0.1"};
+  std::array<char const *, 5> const a = {
+      nullptr, "hostname", "xxfunnyxx.nohost.foo", "localhost", "127.0.0.1"};
   for (const auto *name : a) {  // Should always return 0 because of nullptr
     ASSERT_EQ(0, xcom_client_set_leaders(nullptr, 1, &name, test_group_id));
   }
@@ -99,7 +100,7 @@ TEST_F(XcomSingleWriter, test_recompute_node_set) {
   test_node_address node_b{"node_b:67890"};
   test_node_address list_1[]{node_a, node_b};
   test_node_address list_2[]{node_b, node_a};
-  node_list old_nodes{2, list_1};
+  node_list const old_nodes{2, list_1};
   node_list new_nodes{2, list_2};
   bool failed{false};
 
@@ -111,7 +112,7 @@ TEST_F(XcomSingleWriter, test_recompute_node_set) {
     xdr_free((xdrproc_t)xdr_node_set, (char *)&old_set);
     xdr_free((xdrproc_t)xdr_node_set, (char *)&new_set);
   }};
-  std::unique_ptr<node_set, decltype(cleanup)> guard(&old_set, cleanup);
+  std::unique_ptr<node_set, decltype(cleanup)> const guard(&old_set, cleanup);
 
   // Note failure and print message
   auto fail{[&failed](auto... args) {
@@ -159,7 +160,7 @@ TEST_F(XcomSingleWriter, test_recompute_timestamps) {
   test_node_address node_b{"node_b:67890"};
   node_address list_1[]{node_a, node_b};
   node_address list_2[]{node_b, node_a};
-  node_list old_nodes{2, list_1};
+  node_list const old_nodes{2, list_1};
   node_list new_nodes{2, list_2};
   bool failed{false};
 
@@ -169,7 +170,8 @@ TEST_F(XcomSingleWriter, test_recompute_timestamps) {
     xdr_free((xdrproc_t)xdr_node_address, (char *)&node_a);
     xdr_free((xdrproc_t)xdr_node_address, (char *)&node_b);
   }};
-  std::unique_ptr<node_address, decltype(cleanup)> guard(&node_a, cleanup);
+  std::unique_ptr<node_address, decltype(cleanup)> const guard(&node_a,
+                                                               cleanup);
 
   // Note failure and print message
   auto fail{[&failed](auto... args) {
@@ -252,7 +254,7 @@ TEST_F(XcomSingleWriter, test_analyze_leaders) {
     free(uuid.data.data_val);
     free_site_def_body(p);
   }};
-  std::unique_ptr<site_def, decltype(cleanup)> guard(&site, cleanup);
+  std::unique_ptr<site_def, decltype(cleanup)> const guard(&site, cleanup);
 
   // Note failure and print message
   auto fail{[&failed](auto... args) {
@@ -372,7 +374,7 @@ TEST_F(XcomSingleWriter, test_unsafe_leaders) {
     free_site_defs();
     xdr_free((xdrproc_t)xdr_app_data, (char *)&a);
   }};
-  std::unique_ptr<site_def, decltype(cleanup)> guard(site, cleanup);
+  std::unique_ptr<site_def, decltype(cleanup)> const guard(site, cleanup);
 
   // Note failure and print message
   auto fail{[&failed](auto... args) {
@@ -455,7 +457,7 @@ TEST_F(XcomSingleWriter, test_handle_max_leaders) {
     free_site_defs();
     xdr_free((xdrproc_t)xdr_app_data, (char *)&a);
   }};
-  std::unique_ptr<site_def, decltype(cleanup)> guard(site, cleanup);
+  std::unique_ptr<site_def, decltype(cleanup)> const guard(site, cleanup);
 
   // Note failure and print message
   auto fail{[&failed](auto... args) {
@@ -529,7 +531,7 @@ TEST_F(XcomSingleWriter, test_handle_set_leaders) {
     free_site_defs();
     free_app();
   }};
-  std::unique_ptr<site_def, decltype(cleanup)> guard(site, cleanup);
+  std::unique_ptr<site_def, decltype(cleanup)> const guard(site, cleanup);
 
   // Note failure and print message
   auto fail{[&](auto... args) {
@@ -617,7 +619,7 @@ TEST_F(XcomSingleWriter, test_handle_leaders) {
   }};
 
   site = new_site_def();
-  std::unique_ptr<site_def, decltype(cleanup)> guard(site, cleanup);
+  std::unique_ptr<site_def, decltype(cleanup)> const guard(site, cleanup);
 
   init_me(&site->nodes, nodes[0]);
   alloc_node_set(&site->global_node_set, 1);

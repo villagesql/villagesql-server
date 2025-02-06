@@ -42,7 +42,7 @@ class Ref_ptr_test : public ::testing::Test {
 
 TEST_F(Ref_ptr_test, Class_template_test) {
   std::string str{"012345678"};
-  memory::Ref_ptr<std::string> ptr{str};
+  memory::Ref_ptr<std::string> const ptr{str};
   EXPECT_EQ(ptr->length(), 9);
   EXPECT_EQ(*ptr, "012345678");
 
@@ -51,7 +51,7 @@ TEST_F(Ref_ptr_test, Class_template_test) {
   EXPECT_EQ(equal, true);
 
   std::string str2{"012345678"};
-  memory::Ref_ptr<std::string> ptr3{str2};
+  memory::Ref_ptr<std::string> const ptr3{str2};
   equal = (ptr2 == ptr3);
   EXPECT_EQ(equal, false);
 

@@ -66,22 +66,22 @@ Compatibility_type Compatibility_module::check_local_incompatibility(
 
 bool Compatibility_module::check_version_range_incompatibility(
     Member_version &from, unsigned int to_min, unsigned int to_max) {
-  unsigned int to_max_major_version = to_max >> 16;
-  unsigned int to_min_major_version = to_min >> 16;
+  unsigned int const to_max_major_version = to_max >> 16;
+  unsigned int const to_min_major_version = to_min >> 16;
   // if it is outside the range of the major version
   if (from.get_major_version() > to_max_major_version ||
       from.get_major_version() < to_min_major_version)
     return false;
 
-  unsigned int to_max_minor_version = (to_max >> 8) & 0xff;
-  unsigned int to_min_minor_version = (to_min >> 8) & 0xff;
+  unsigned int const to_max_minor_version = (to_max >> 8) & 0xff;
+  unsigned int const to_min_minor_version = (to_min >> 8) & 0xff;
   // if it is outside the range of the minor version
   if (from.get_minor_version() > to_max_minor_version ||
       from.get_minor_version() < to_min_minor_version)
     return false; /* purecov: inspected */
 
-  unsigned int to_max_patch_version = to_max & 0xff;
-  unsigned int to_min_patch_version = to_min & 0xff;
+  unsigned int const to_max_patch_version = to_max & 0xff;
+  unsigned int const to_min_patch_version = to_min & 0xff;
   // if it is outside the range of the patch version
   if (from.get_patch_version() > to_max_patch_version ||
       from.get_patch_version() < to_min_patch_version)

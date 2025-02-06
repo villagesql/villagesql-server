@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
     return EXIT_FAILURE;
   }
 
-  std::string_view arg_1(argv[1]);
+  std::string_view const arg_1(argv[1]);
 
   int signum;
 

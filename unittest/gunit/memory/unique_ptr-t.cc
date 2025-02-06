@@ -80,7 +80,7 @@ TEST_F(Unique_ptr_test, Array_template_test) {
   delete[] underlying;
 
   auto ptr2 = memory::make_unique<char[]>(10);
-  bool equal = (ptr == ptr2);
+  bool const equal = (ptr == ptr2);
   EXPECT_EQ(equal, false);
 }
 
@@ -99,7 +99,7 @@ TEST_F(Unique_ptr_test, Class_template_test) {
   delete underlying;
 
   auto ptr2 = memory::make_unique<std::string>("012345678");
-  bool equal = (ptr == ptr2);
+  bool const equal = (ptr == ptr2);
   EXPECT_EQ(equal, false);
 }
 

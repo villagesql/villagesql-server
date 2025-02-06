@@ -47,7 +47,7 @@ Gcs_interface *Gcs_interface_factory::get_interface_implementation(
 
 Gcs_interface *Gcs_interface_factory::get_interface_implementation(
     const std::string &binding) {
-  enum_available_interfaces binding_translation =
+  enum_available_interfaces const binding_translation =
       Gcs_interface_factory::from_string(binding);
 
   return Gcs_interface_factory::get_interface_implementation(
@@ -55,7 +55,7 @@ Gcs_interface *Gcs_interface_factory::get_interface_implementation(
 }
 
 void Gcs_interface_factory::cleanup(const std::string &binding) {
-  enum_available_interfaces binding_translation =
+  enum_available_interfaces const binding_translation =
       Gcs_interface_factory::from_string(binding);
 
   Gcs_interface_factory::cleanup(binding_translation);
@@ -73,7 +73,7 @@ void Gcs_interface_factory::cleanup(enum_available_interfaces binding) {
 
 void Gcs_interface_factory::cleanup_thread_communication_resources(
     const std::string &binding) {
-  enum_available_interfaces binding_translation =
+  enum_available_interfaces const binding_translation =
       Gcs_interface_factory::from_string(binding);
 
   Gcs_interface_factory::cleanup_thread_communication_resources(

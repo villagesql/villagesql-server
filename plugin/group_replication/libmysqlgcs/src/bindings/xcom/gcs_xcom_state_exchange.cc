@@ -95,7 +95,7 @@ bool Xcom_member_state::encode_header(uchar *buffer,
   uint32_t group_id = 0;
   uint64_t msg_no = 0;
   uint32_t node_no = 0;
-  uint64_t encoded_size = get_encode_header_size();
+  uint64_t const encoded_size = get_encode_header_size();
   unsigned char *slider = buffer;
 
   MYSQL_GCS_LOG_TRACE("xcom_id %x Encoding header for exchangeable data.",
@@ -157,7 +157,7 @@ bool Xcom_member_state::encode_header(uchar *buffer,
 
 bool Xcom_member_state::encode_snapshot(uchar *buffer,
                                         uint64_t *buffer_len) const {
-  uint64_t encoded_size = get_encode_snapshot_size();
+  uint64_t const encoded_size = get_encode_snapshot_size();
   unsigned char *slider = buffer;
   uint64_t nr_synods = 0;
 
@@ -280,13 +280,13 @@ bool Xcom_member_state::decode_snapshot(const uchar *buffer,
 bool Xcom_member_state::decode(const uchar *data, uint64_t data_size) {
   const uchar *slider = data;
   decode_header(slider, data_size);
-  uint64_t exchangeable_header_size = get_encode_header_size();
+  uint64_t const exchangeable_header_size = get_encode_header_size();
   slider += exchangeable_header_size;
 
   decode_snapshot(data, data_size);
-  uint64_t snapshot_size = get_encode_snapshot_size();
+  uint64_t const snapshot_size = get_encode_snapshot_size();
 
-  uint64_t exchangeable_data_size =
+  uint64_t const exchangeable_data_size =
       data_size - exchangeable_header_size - snapshot_size;
 
   if (exchangeable_data_size != 0) {
@@ -462,12 +462,12 @@ bool Gcs_xcom_state_exchange::state_exchange(
       Note that in some (old) platforms that do not have high resolution
       timers we default to rand.
     */
-    uint64_t ts = My_xp_util::getsystime();
+    uint64_t const ts = My_xp_util::getsystime();
     fixed_part = ((ts == 0) ? static_cast<uint64_t>(rand())
                             : (ts + static_cast<uint64_t>((rand()) % 1000)));
     monotonic_part = 0;
   }
-  Gcs_xcom_view_identifier proposed_view(fixed_part, monotonic_part);
+  Gcs_xcom_view_identifier const proposed_view(fixed_part, monotonic_part);
 
   fill_member_set(total, m_ms_total);
   fill_member_set(joined, m_ms_joined);
@@ -478,7 +478,7 @@ bool Gcs_xcom_state_exchange::state_exchange(
     Calculate if i am leaving...
     If so, SE will be interrupted and it will return true...
   */
-  bool leaving = is_leaving();
+  bool const leaving = is_leaving();
 
   if (!leaving) {
     update_awaited_vector();
@@ -525,11 +525,11 @@ enum_gcs_error Gcs_xcom_state_exchange::broadcast_state(
   auto *xcom_communication =
       static_cast<Gcs_xcom_communication_interface *>(m_broadcaster);
 
-  Gcs_xcom_synode_set snapshot =
+  Gcs_xcom_synode_set const snapshot =
       xcom_communication->get_msg_pipeline().get_snapshot();
-  Xcom_member_state member_state(proposed_view, m_configuration_id,
-                                 Gcs_protocol_version::HIGHEST_KNOWN, snapshot,
-                                 nullptr, 0);
+  Xcom_member_state const member_state(proposed_view, m_configuration_id,
+                                       Gcs_protocol_version::HIGHEST_KNOWN,
+                                       snapshot, nullptr, 0);
 
   /*
     The exchangeable_data may have a list with Gcs_message_data
@@ -624,8 +624,8 @@ enum_gcs_error Gcs_xcom_state_exchange::broadcast_state(
   free(buffer);
   buffer = nullptr;
 
-  Gcs_group_identifier group_id(*m_group_name);
-  Gcs_message message(m_local_information, group_id, message_data);
+  Gcs_group_identifier const group_id(*m_group_name);
+  Gcs_message const message(m_local_information, group_id, message_data);
 
   unsigned long long message_length = 0;
   return xcom_communication->do_send_message(
@@ -710,7 +710,7 @@ bool Gcs_xcom_state_exchange::process_member_state(
     m_awaited_vector.erase(p_id);
   }
 
-  bool can_install_view = (m_awaited_vector.empty());
+  bool const can_install_view = (m_awaited_vector.empty());
 
   return can_install_view;
 }
@@ -884,7 +884,7 @@ Gcs_xcom_state_exchange::compute_incompatible_joiners() {
 
   /* Get the protocol version that is in use. */
   auto &comm = static_cast<Gcs_xcom_communication &>(*m_broadcaster);
-  Gcs_message_pipeline &pipeline = comm.get_msg_pipeline();
+  Gcs_message_pipeline const &pipeline = comm.get_msg_pipeline();
   Gcs_protocol_version const protocol_version = pipeline.get_version();
 
   /* Compute the set of incompatible joiners. */

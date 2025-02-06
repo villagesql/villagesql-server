@@ -58,7 +58,7 @@ extern "C" int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
   uri_a_ss << uri_a;
 
   // parse what we generated. It shouldn't throw.
-  URI uri_b(URIParser::parse(uri_a_ss.str()));
+  URI const uri_b(URIParser::parse(uri_a_ss.str()));
 
   if (uri_a != uri_b) {
     std::string err("URI fields differ: ");

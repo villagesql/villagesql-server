@@ -96,10 +96,10 @@ CHARSET_INFO *init_collation(const char *name) {
 
 int compare_through_strxfrm(CHARSET_INFO *cs, const char *a, const char *b) {
   uchar abuf[256], bbuf[256];
-  int alen = my_strnxfrm(cs, abuf, sizeof(abuf), pointer_cast<const uchar *>(a),
-                         strlen(a));
-  int blen = my_strnxfrm(cs, bbuf, sizeof(bbuf), pointer_cast<const uchar *>(b),
-                         strlen(b));
+  int const alen = my_strnxfrm(cs, abuf, sizeof(abuf),
+                               pointer_cast<const uchar *>(a), strlen(a));
+  int const blen = my_strnxfrm(cs, bbuf, sizeof(bbuf),
+                               pointer_cast<const uchar *>(b), strlen(b));
 
   if (false)  // Enable this for debugging.
   {
@@ -109,7 +109,7 @@ int compare_through_strxfrm(CHARSET_INFO *cs, const char *a, const char *b) {
     print_array(bbuf, blen);
   }
 
-  int cmp = memcmp(abuf, bbuf, std::min(alen, blen));
+  int const cmp = memcmp(abuf, bbuf, std::min(alen, blen));
   if (cmp != 0) return cmp;
 
   if (alen == blen) {
@@ -2222,13 +2222,13 @@ TEST(BitfiddlingTest, DISABLED_FastOutOfRange) {
         bytes[2] = c;
         for (int d = 0; d < 256; ++d) {
           bytes[3] = d;
-          bool any_out_of_range_slow =
+          bool const any_out_of_range_slow =
               (a < 0x20 || a > 0x7e) || (b < 0x20 || b > 0x7e) ||
               (c < 0x20 || c > 0x7e) || (d < 0x20 || d > 0x7e);
 
           uint32 four_bytes;
           memcpy(&four_bytes, bytes, sizeof(four_bytes));
-          bool any_out_of_range_fast =
+          bool const any_out_of_range_fast =
               (((four_bytes + 0x01010101U) & 0x80808080) ||
                ((four_bytes - 0x20202020U) & 0x80808080));
 
@@ -2249,12 +2249,12 @@ TEST(BitfiddlingTest, FastOutOfRange16) {
     bytes[0] = a;
     for (int b = 0; b < 256; ++b) {
       bytes[1] = b;
-      bool any_out_of_range_slow =
+      bool const any_out_of_range_slow =
           (a < 0x20 || a > 0x7e) || (b < 0x20 || b > 0x7e);
 
       uint16 two_bytes;
       memcpy(&two_bytes, bytes, sizeof(two_bytes));
-      bool any_out_of_range_fast =
+      bool const any_out_of_range_fast =
           (((two_bytes + uint16{0x0101}) & uint16{0x8080}) ||
            ((two_bytes - uint16{0x2020}) & uint16{0x8080}));
 
@@ -2338,11 +2338,11 @@ void test_strnxfrmlen(CHARSET_INFO *cs) {
   const size_t max_len = cs->coll->strnxfrmlen(cs, cs->mbmaxlen);
 
   for (my_wc_t ch = 0; ch <= 0x10ffff; ++ch) {
-    size_t in_len = cs->cset->wc_mb(cs, ch, inbuf, inbuf + sizeof(inbuf));
+    size_t const in_len = cs->cset->wc_mb(cs, ch, inbuf, inbuf + sizeof(inbuf));
     if (in_len <= 0) {
       continue;  // Not representable in this character set.
     }
-    size_t out_len =
+    size_t const out_len =
         cs->coll->strnxfrm(cs, outbuf, sizeof(outbuf), 1, inbuf, in_len, 0);
     EXPECT_LE(out_len, max_len);
     if (out_len > max_len) {
@@ -2690,7 +2690,7 @@ TEST(StrmxfrmHashTest, HashStability) {
 
       char buf[4096];
       uint errors;
-      size_t len =
+      size_t const len =
           my_convert(buf, sizeof(buf), cs, test_str.data(), test_str.size(),
                      &my_charset_utf8mb4_0900_ai_ci, &errors);
       ASSERT_EQ(0, errors);

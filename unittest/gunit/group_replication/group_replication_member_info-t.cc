@@ -41,27 +41,27 @@ class ClusterMemberInfoTest : public ::testing::Test {
   ClusterMemberInfoTest() = default;
 
   void SetUp() override {
-    string hostname("pc_hostname");
-    string uuid("781f947c-db4a-11e3-98d1-f01faf1a1c44");
-    uint port = 4444;
-    uint plugin_version = 0x000400;
-    uint write_set_algorithm = 1;
+    string const hostname("pc_hostname");
+    string const uuid("781f947c-db4a-11e3-98d1-f01faf1a1c44");
+    uint const port = 4444;
+    uint const plugin_version = 0x000400;
+    uint const write_set_algorithm = 1;
     string executed_gtid("aaaa:1-10");
     string purged_gtid("pppp:1-9");
-    uint lower_case_table_names = 0;
-    bool default_table_encryption = false;
+    uint const lower_case_table_names = 0;
+    bool const default_table_encryption = false;
     string retrieved_gtid("bbbb:1-10");
-    ulonglong gtid_assignment_block_size = 9223372036854775807ULL;
-    bool in_primary_mode = false;
-    bool has_enforces_update_everywhere_checks = false;
-    uint member_weight = 70;
-    std::string member_recovery_endpoints = "DEFAULT";
-    std::string member_view_change_uuid = "AUTOMATIC";
-    bool allow_single_leader = true;
+    ulonglong const gtid_assignment_block_size = 9223372036854775807ULL;
+    bool const in_primary_mode = false;
+    bool const has_enforces_update_everywhere_checks = false;
+    uint const member_weight = 70;
+    std::string const member_recovery_endpoints = "DEFAULT";
+    std::string const member_view_change_uuid = "AUTOMATIC";
+    bool const allow_single_leader = true;
 
     gcs_member_id = new Gcs_member_identifier("stuff");
 
-    Group_member_info::Group_member_status status =
+    Group_member_info::Group_member_status const status =
         Group_member_info::MEMBER_OFFLINE;
 
     Member_version local_member_plugin_version(plugin_version);
@@ -126,24 +126,24 @@ class ClusterMemberInfoManagerTest : public ::testing::Test {
   ClusterMemberInfoManagerTest() = default;
 
   void SetUp() override {
-    string hostname("pc_hostname");
-    string uuid("8d7r947c-dr4a-17i3-59d1-f01faf1kkc44");
-    uint port = 4444;
-    uint write_set_algorithm = 1;
-    uint lower_case_table_names = 0;
-    bool default_table_encryption = false;
-    uint plugin_version = 0x000400;
+    string const hostname("pc_hostname");
+    string const uuid("8d7r947c-dr4a-17i3-59d1-f01faf1kkc44");
+    uint const port = 4444;
+    uint const write_set_algorithm = 1;
+    uint const lower_case_table_names = 0;
+    bool const default_table_encryption = false;
+    uint const plugin_version = 0x000400;
     gcs_member_id = new Gcs_member_identifier("stuff");
-    ulonglong gtid_assignment_block_size = 9223372036854775807ULL;
-    bool in_primary_mode = false;
-    bool has_enforces_update_everywhere_checks = false;
-    uint member_weight = 80;
-    std::string member_recovery_endpoints = "DEFAULT";
-    std::string member_view_change_uuid =
+    ulonglong const gtid_assignment_block_size = 9223372036854775807ULL;
+    bool const in_primary_mode = false;
+    bool const has_enforces_update_everywhere_checks = false;
+    uint const member_weight = 80;
+    std::string const member_recovery_endpoints = "DEFAULT";
+    std::string const member_view_change_uuid =
         "8896eb66-8684-11eb-8dcd-0242ac130003";
-    bool allow_single_leader = false;
+    bool const allow_single_leader = false;
 
-    Group_member_info::Group_member_status status =
+    Group_member_info::Group_member_status const status =
         Group_member_info::MEMBER_OFFLINE;
 
     Member_version local_member_plugin_version(plugin_version);
@@ -173,26 +173,27 @@ class ClusterMemberInfoManagerTest : public ::testing::Test {
 
 TEST_F(ClusterMemberInfoManagerTest, GetLocalInfoByUUIDTest) {
   // Add another member info in order to make this test more realistic
-  string hostname("pc_hostname2");
-  string uuid("781f947c-db4a-22e3-99d4-f01faf1a1c44");
-  uint port = 4444;
-  uint write_set_algorithm = 1;
-  uint lower_case_table_names = 0;
-  bool default_table_encryption = false;
-  uint plugin_version = 0x000400;
-  Gcs_member_identifier gcs_member_id("another_stuff");
+  string const hostname("pc_hostname2");
+  string const uuid("781f947c-db4a-22e3-99d4-f01faf1a1c44");
+  uint const port = 4444;
+  uint const write_set_algorithm = 1;
+  uint const lower_case_table_names = 0;
+  bool const default_table_encryption = false;
+  uint const plugin_version = 0x000400;
+  Gcs_member_identifier const gcs_member_id("another_stuff");
   string executed_gtid("aaaa:1-11");
   string purged_gtid("pppp:1-8");
   string retrieved_gtid("bbbb:1-11");
-  ulonglong gtid_assignment_block_size = 9223372036854775807ULL;
-  bool in_primary_mode = false;
-  bool has_enforces_update_everywhere_checks = false;
-  uint member_weight = 90;
-  std::string member_recovery_endpoints = "DEFAULT";
-  std::string member_view_change_uuid = "99f957fc-75c5-445d-98ae-7ea02e55c5be";
-  bool allow_single_leader = true;
+  ulonglong const gtid_assignment_block_size = 9223372036854775807ULL;
+  bool const in_primary_mode = false;
+  bool const has_enforces_update_everywhere_checks = false;
+  uint const member_weight = 90;
+  std::string const member_recovery_endpoints = "DEFAULT";
+  std::string const member_view_change_uuid =
+      "99f957fc-75c5-445d-98ae-7ea02e55c5be";
+  bool const allow_single_leader = true;
 
-  Group_member_info::Group_member_status status =
+  Group_member_info::Group_member_status const status =
       Group_member_info::MEMBER_OFFLINE;
 
   Member_version local_member_plugin_version(plugin_version);
@@ -208,7 +209,7 @@ TEST_F(ClusterMemberInfoManagerTest, GetLocalInfoByUUIDTest) {
 
   cluster_member_mgr->add(new_member);
 
-  string uuid_to_get("8d7r947c-dr4a-17i3-59d1-f01faf1kkc44");
+  string const uuid_to_get("8d7r947c-dr4a-17i3-59d1-f01faf1kkc44");
 
   Group_member_info retrieved_local_info;
   const bool retrieved_local_info_not_found =
@@ -253,7 +254,7 @@ TEST_F(ClusterMemberInfoManagerTest, GetLocalInfoByUUIDAfterEncodingTest) {
   delete decoded_members;
   delete encoded;
 
-  string uuid_to_get("8d7r947c-dr4a-17i3-59d1-f01faf1kkc44");
+  string const uuid_to_get("8d7r947c-dr4a-17i3-59d1-f01faf1kkc44");
 
   Group_member_info retrieved_local_info;
   const bool retrieved_local_info_not_found =
@@ -333,27 +334,28 @@ TEST_F(ClusterMemberInfoManagerTest,
 
 TEST_F(ClusterMemberInfoManagerTest, EncodeDecodeLargeSets) {
   // Add another member info in order to make this test more realistic
-  string hostname("pc_hostname2");
-  string uuid("781f947c-db4a-22e3-99d4-f01faf1a1c44");
-  uint port = 4444;
-  uint write_set_algorithm = 1;
-  uint lower_case_table_names = 0;
-  bool default_table_encryption = false;
-  uint plugin_version = 0x000400;
-  Gcs_member_identifier gcs_member_id("another_stuff");
+  string const hostname("pc_hostname2");
+  string const uuid("781f947c-db4a-22e3-99d4-f01faf1a1c44");
+  uint const port = 4444;
+  uint const write_set_algorithm = 1;
+  uint const lower_case_table_names = 0;
+  bool const default_table_encryption = false;
+  uint const plugin_version = 0x000400;
+  Gcs_member_identifier const gcs_member_id("another_stuff");
   string executed_gtid("aaaa:1-11:12-14:16-20:22-30");
   string purged_gtid("pppp:1-11:12-14:17-20:26-39:50-78");
   // Add an huge gtid string (bigger then 16 bits )
   string retrieved_gtid(70000, 'a');
-  ulonglong gtid_assignment_block_size = 9223372036854775807ULL;
-  bool in_primary_mode = false;
-  bool has_enforces_update_everywhere_checks = false;
-  uint member_weight = 40;
-  std::string member_recovery_endpoints = "DEFAULT";
-  std::string member_view_change_uuid = "ba1c4c32-1887-4ccf-bc5a-8f6165d19ea3";
-  bool allow_single_leader = true;
+  ulonglong const gtid_assignment_block_size = 9223372036854775807ULL;
+  bool const in_primary_mode = false;
+  bool const has_enforces_update_everywhere_checks = false;
+  uint const member_weight = 40;
+  std::string const member_recovery_endpoints = "DEFAULT";
+  std::string const member_view_change_uuid =
+      "ba1c4c32-1887-4ccf-bc5a-8f6165d19ea3";
+  bool const allow_single_leader = true;
 
-  Group_member_info::Group_member_status status =
+  Group_member_info::Group_member_status const status =
       Group_member_info::MEMBER_OFFLINE;
 
   Member_version local_member_plugin_version(plugin_version);
@@ -369,7 +371,7 @@ TEST_F(ClusterMemberInfoManagerTest, EncodeDecodeLargeSets) {
 
   cluster_member_mgr->add(new_member);
 
-  string uuid_to_get("8d7r947c-dr4a-17i3-59d1-f01faf1kkc44");
+  string const uuid_to_get("8d7r947c-dr4a-17i3-59d1-f01faf1kkc44");
 
   Group_member_info retrieved_local_info;
   bool retrieved_local_info_not_found =

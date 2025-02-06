@@ -295,7 +295,7 @@ void Group_member_info::encode_payload(
                              gcs_member_id->get_member_id().c_str(),
                              gcs_member_id->get_member_id().length());
 
-  char status_aux = (uchar)status;
+  char const status_aux = (uchar)status;
   encode_payload_item_char(buffer, PIT_STATUS, status_aux);
 
   auto version_aux = (uint32)member_version->get_version();
@@ -317,7 +317,7 @@ void Group_member_info::encode_payload(
   encode_payload_item_int8(buffer, PIT_GTID_ASSIGNMENT_BLOCK_SIZE,
                            gtid_assignment_block_size);
 
-  char role_aux = (uchar)role;
+  char const role_aux = (uchar)role;
   encode_payload_item_char(buffer, PIT_MEMBER_ROLE, role_aux);
 
   auto configuration_flags_aux = (uint32)configuration_flags;
@@ -327,7 +327,8 @@ void Group_member_info::encode_payload(
   /*
     MySQL 5.7.18+ payloads
   */
-  char conflict_detection_enable_aux = conflict_detection_enable ? '1' : '0';
+  char const conflict_detection_enable_aux =
+      conflict_detection_enable ? '1' : '0';
   encode_payload_item_char(buffer, PIT_CONFLICT_DETECTION_ENABLE,
                            conflict_detection_enable_aux);
 
@@ -345,15 +346,16 @@ void Group_member_info::encode_payload(
     MySQL 8.0+ payloads
   */
 
-  char is_action_running_aux = group_action_running ? '1' : '0';
+  char const is_action_running_aux = group_action_running ? '1' : '0';
   encode_payload_item_char(buffer, PIT_GROUP_ACTION_RUNNING,
                            is_action_running_aux);
 
-  char is_election_running_aux = primary_election_running ? '1' : '0';
+  char const is_election_running_aux = primary_election_running ? '1' : '0';
   encode_payload_item_char(buffer, PIT_PRIMARY_ELECTION_RUNNING,
                            is_election_running_aux);
 
-  char default_table_encryption_aux = default_table_encryption ? '1' : '0';
+  char const default_table_encryption_aux =
+      default_table_encryption ? '1' : '0';
 #ifndef NDEBUG
   if (!skip_encode_default_table_encryption)
 #endif
@@ -374,7 +376,7 @@ void Group_member_info::encode_payload(
                                m_view_change_uuid.c_str(),
                                m_view_change_uuid.length());
 
-  char allow_single_leader_aux = m_allow_single_leader ? '1' : '0';
+  char const allow_single_leader_aux = m_allow_single_leader ? '1' : '0';
   encode_payload_item_char(buffer, PIT_ALLOW_SINGLE_LEADER,
                            allow_single_leader_aux);
 
@@ -387,7 +389,7 @@ void Group_member_info::encode_payload(
                                m_group_action_running_description.length());
   }
 
-  char preemptive_garbage_collection_aux =
+  char const preemptive_garbage_collection_aux =
       m_preemptive_garbage_collection ? '1' : '0';
   encode_payload_item_char(buffer, PIT_PREEMPTIVE_GARBAGE_COLLECTION,
                            preemptive_garbage_collection_aux);
@@ -462,21 +464,21 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
     switch (payload_item_type) {
       case PIT_CONFLICT_DETECTION_ENABLE:
         if (slider + payload_item_length <= end) {
-          unsigned char conflict_detection_enable_aux = *slider;
+          unsigned char const conflict_detection_enable_aux = *slider;
           conflict_detection_enable = conflict_detection_enable_aux == '1';
         }
         break;
 
       case PIT_MEMBER_WEIGHT:
         if (slider + payload_item_length <= end) {
-          uint16 member_weight_aux = uint2korr(slider);
+          uint16 const member_weight_aux = uint2korr(slider);
           member_weight = (uint)member_weight_aux;
         }
         break;
 
       case PIT_LOWER_CASE_TABLE_NAME:
         if (slider + payload_item_length <= end) {
-          uint16 lower_case_table_names_aux = uint2korr(slider);
+          uint16 const lower_case_table_names_aux = uint2korr(slider);
           lower_case_table_names =
               static_cast<uint>(lower_case_table_names_aux);
         }
@@ -484,14 +486,14 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
 
       case PIT_GROUP_ACTION_RUNNING:
         if (slider + payload_item_length <= end) {
-          unsigned char is_action_running_aux = *slider;
+          unsigned char const is_action_running_aux = *slider;
           group_action_running = is_action_running_aux == '1';
         }
         break;
 
       case PIT_PRIMARY_ELECTION_RUNNING:
         if (slider + payload_item_length <= end) {
-          unsigned char is_election_running_aux = *slider;
+          unsigned char const is_election_running_aux = *slider;
           primary_election_running = is_election_running_aux == '1';
         }
         break;
@@ -504,7 +506,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
       */
       case PIT_DEFAULT_TABLE_ENCRYPTION:
         if (slider + payload_item_length <= end) {
-          unsigned char default_table_encryption_aux = *slider;
+          unsigned char const default_table_encryption_aux = *slider;
           default_table_encryption = default_table_encryption_aux == '1';
         }
         break;
@@ -529,7 +531,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
 
       case PIT_ALLOW_SINGLE_LEADER:
         if (slider + payload_item_length <= end) {
-          unsigned char allow_single_leader_aux = *slider;
+          unsigned char const allow_single_leader_aux = *slider;
           m_allow_single_leader = allow_single_leader_aux == '1';
         }
         break;
@@ -549,7 +551,7 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
         break;
       case PIT_PREEMPTIVE_GARBAGE_COLLECTION:
         if (slider + payload_item_length <= end) {
-          unsigned char preemptive_garbage_collection_aux = *slider;
+          unsigned char const preemptive_garbage_collection_aux = *slider;
           m_preemptive_garbage_collection =
               preemptive_garbage_collection_aux == '1';
         }
@@ -1195,7 +1197,7 @@ void Group_member_info_manager::update_member_status(
   it = members->find(uuid);
 
   if (it != members->end()) {
-    Group_member_info::Group_member_status old_status =
+    Group_member_info::Group_member_status const old_status =
         (*it).second->get_recovery_status();
     if (old_status != new_status) {
       (*it).second->update_recovery_status(new_status);
@@ -1252,7 +1254,8 @@ void Group_member_info_manager::update_member_role(
   it = members->find(uuid);
 
   if (it != members->end()) {
-    Group_member_info::Group_member_role old_role = (*it).second->get_role();
+    Group_member_info::Group_member_role const old_role =
+        (*it).second->get_role();
     if (old_role != new_role) {
       (*it).second->set_role(new_role);
       ctx.set_member_role_changed();
@@ -1267,11 +1270,11 @@ void Group_member_info_manager::update_group_primary_roles(
   mysql_mutex_lock(&update_lock);
 
   for (std::pair<const string, Group_member_info *> &member_info : *members) {
-    Group_member_info::Group_member_role new_role =
+    Group_member_info::Group_member_role const new_role =
         (member_info.second->get_uuid() == uuid)
             ? Group_member_info::MEMBER_ROLE_PRIMARY
             : Group_member_info::MEMBER_ROLE_SECONDARY;
-    Group_member_info::Group_member_role old_role =
+    Group_member_info::Group_member_role const old_role =
         member_info.second->get_role();
 
     if (old_role != new_role) {

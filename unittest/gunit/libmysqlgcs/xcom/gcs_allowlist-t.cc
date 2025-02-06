@@ -59,7 +59,7 @@ TEST_F(GcsAllowlist, InvalidConfiguration) {
 
 TEST_F(GcsAllowlist, ValidListIPv6) {
   Gcs_ip_allowlist wl;
-  std::string list =
+  std::string const list =
       "::1/128,192.168.1.1/24,fe80::2ab2:bdff:fe16:8d07/67, "
       "2606:b400:8b0:40:4308:1306:ad4a:6e51";
   wl.configure(list);
@@ -188,7 +188,7 @@ TEST_F(GcsAllowlist, ListWithHostname) {
                    [](std::pair<sa_family_t, std::string> const &ip_entry) {
                      return ip_entry.first == AF_INET;
                    });
-  bool has_v4_addresses = has_v4_addresses_it != ips.end();
+  bool const has_v4_addresses = has_v4_addresses_it != ips.end();
 
   // This should not block to whatever address localhost resolves
   for (auto &ip : ips) {

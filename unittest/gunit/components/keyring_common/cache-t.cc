@@ -52,12 +52,12 @@ TEST_F(KeyringCommonCache_test, CacheDataTest) {
       metadata3("key3", "foo@bar.com");
   Metadata metadata4("key1", "bar@foo.com"), metadata5("key2", "bar@foo.com"),
       metadata6("key3", "bar@foo.com"), metadata7("key4", "bar@foo.com");
-  Metadata metadata8("key", "foo@bar.com");
+  Metadata const metadata8("key", "foo@bar.com");
 
   Data data1("Data1", "Type1"), data2("Data2", "Type2"),
       data3("Data3", "Type3");
-  Data data4("Data1", "Type1");
-  Data invalid_data;
+  Data const data4("Data1", "Type1");
+  Data const invalid_data;
 
   Datacache<Data> cache;
 

@@ -82,7 +82,8 @@ bool equal_prefix_chars_driver(const dd::String_type &a,
 
 static void mock_properties(dd::Properties &p, uint64 size) {
   for (uint64 i = 0; i < size; ++i) {
-    dd::String_type key = (down_cast<dd::Properties_impl &>(p)).valid_key_at(i);
+    dd::String_type const key =
+        (down_cast<dd::Properties_impl &>(p)).valid_key_at(i);
     p.set(key, i);
   }
 }
@@ -259,10 +260,10 @@ bool diff(const dd::String_type &expected, dd::String_type actual) {
   }
   typedef dd::String_type::const_iterator csit_t;
   typedef std::pair<csit_t, csit_t> diff_t_;
-  csit_t expected_end = expected.end();
+  csit_t const expected_end = expected.end();
   actual.resize(expected.size());
-  csit_t actual_end = actual.end();
-  diff_t_ diff =
+  csit_t const actual_end = actual.end();
+  diff_t_ const diff =
       std::mismatch(expected.begin(), expected.end(), actual.begin());
 
   std::cout << dd::String_type(expected.begin(), diff.first) << "\n@ offset "
@@ -276,7 +277,7 @@ template <typename T>
 dd::String_type serialize_drv(const T *dd_obj) {
   dd::RJ_StringBuffer buf;
   dd::Sdi_writer w(buf);
-  dd::String_type s = "driver schema";
+  dd::String_type const s = "driver schema";
   dd::Sdi_wcontext *wctx = get_wctx();
   dd_obj->serialize(wctx, &w);
   return dd::String_type(buf.GetString(), buf.GetSize());
@@ -303,17 +304,17 @@ dd::String_type api_serialize(const dd::Table *table) {
 
 template <typename T>
 void verify(T *dd_obj) {
-  dd::String_type sdi = serialize_drv(dd_obj);
+  dd::String_type const sdi = serialize_drv(dd_obj);
   // std::cout << "Verifying json: \n" << sdi << std::endl;
   ASSERT_GT(sdi.size(), 0U);
-  std::unique_ptr<T> dst_obj{deserialize_drv<T>(sdi)};
-  dd::String_type dst_sdi = serialize_drv(dst_obj.get());
+  std::unique_ptr<T> const dst_obj{deserialize_drv<T>(sdi)};
+  dd::String_type const dst_sdi = serialize_drv(dst_obj.get());
   EXPECT_EQ(dst_sdi, sdi);
 }
 
 template <typename T>
 void simple_test() {
-  std::unique_ptr<T> dd_obj(dd::create_object<T>());
+  std::unique_ptr<T> const dd_obj(dd::create_object<T>());
   mock_dd_obj(dd_obj.get());
   verify(dd_obj.get());
 }
@@ -321,11 +322,11 @@ void simple_test() {
 template <typename AP>
 void api_test(const AP &ap) {
   typedef typename AP::element_type T;
-  dd::Sdi_type sdi = api_serialize(ap.get());
-  std::unique_ptr<T> d(dd::create_object<T>());
+  dd::Sdi_type const sdi = api_serialize(ap.get());
+  std::unique_ptr<T> const d(dd::create_object<T>());
   dd::deserialize(nullptr, sdi, d.get());
 
-  dd::Sdi_type d_sdi = api_serialize(d.get());
+  dd::Sdi_type const d_sdi = api_serialize(d.get());
 
   EXPECT_EQ(d_sdi.size(), sdi.size());
   EXPECT_EQ(d_sdi, sdi);
@@ -339,7 +340,7 @@ TEST(SdiTest, Column_type_element) { simple_test<dd::Column_type_element>(); }
 TEST(SdiTest, Column) { simple_test<dd::Column>(); }
 
 TEST(SdiTest, Column_statistics) {
-  std::unique_ptr<dd::Column_statistics> dd_obj(
+  std::unique_ptr<dd::Column_statistics> const dd_obj(
       dd::create_object<dd::Column_statistics>());
 
   MEM_ROOT mem_root(PSI_NOT_INSTRUMENTED, 256);
@@ -351,10 +352,10 @@ TEST(SdiTest, Column_statistics) {
     deserialization (which will include re-generating histogram data) will be
     available later.
   */
-  dd::String_type sdi = serialize_drv(dd_obj.get());
+  dd::String_type const sdi = serialize_drv(dd_obj.get());
   EXPECT_FALSE(sdi.empty());
 
-  std::unique_ptr<dd::Column_statistics> deserialized{
+  std::unique_ptr<dd::Column_statistics> const deserialized{
       deserialize_drv<dd::Column_statistics>(sdi)};
 
   EXPECT_TRUE(dd_obj.get()->schema_name() == deserialized.get()->schema_name());
@@ -384,14 +385,14 @@ TEST(SdiTest, Tablespace_file) { simple_test<dd::Tablespace_file>(); }
 TEST(SdiTest, Tablespace) { simple_test<dd::Tablespace>(); }
 
 TEST(SdiTest, Table_API) {
-  std::unique_ptr<dd::Table> t(dd::create_object<dd::Table>());
+  std::unique_ptr<dd::Table> const t(dd::create_object<dd::Table>());
   mock_dd_obj(t.get());
   // std::cout << "Serialized table:\n" << serialize_ap(t) << std::endl;
   api_test(t);
 }
 
 TEST(SdiTest, Tablespace_API) {
-  std::unique_ptr<dd::Tablespace> ts(dd::create_object<dd::Tablespace>());
+  std::unique_ptr<dd::Tablespace> const ts(dd::create_object<dd::Tablespace>());
   mock_dd_obj(ts.get());
 
   api_test(ts);
@@ -421,7 +422,7 @@ TEST(SdiTest, CharPromotion) {
   unsigned int uix = x;
   EXPECT_EQ(127U, usx);
 
-  unsigned char tmp = 0xe0;
+  unsigned char const tmp = 0xe0;
   x = static_cast<signed char>(tmp);
   EXPECT_EQ(-32, x);
 
@@ -429,16 +430,16 @@ TEST(SdiTest, CharPromotion) {
   EXPECT_EQ(224U, ux);
 
   usx = x;
-  short sx = x;
+  short const sx = x;
   EXPECT_EQ(-32, sx);
-  unsigned short usy = sx;
+  unsigned short const usy = sx;
   EXPECT_EQ(usx, usy);
   EXPECT_EQ(65504U, usx);
 
   uix = x;
-  int ix = x;
+  int const ix = x;
   EXPECT_EQ(-32, ix);
-  unsigned int uiy = ix;
+  unsigned int const uiy = ix;
   EXPECT_EQ(uix, uiy);
   EXPECT_EQ(4294967264U, uix);
 }

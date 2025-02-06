@@ -323,7 +323,7 @@ class ut0lock_free_hash : public ::testing::Test {
 
 TEST_F(ut0lock_free_hash, single_threaded) {
 #ifdef HAVE_UT_CHRONO_T
-  ut_chrono_t chrono("single threaded");
+  ut_chrono_t const chrono("single threaded");
 #endif /* HAVE_UT_CHRONO_T */
 
 #if defined(TEST_STD_MAP) || defined(TEST_STD_UNORDERED_MAP)
@@ -419,7 +419,7 @@ static void run_multi_threaded(const char *label, size_t initial_hash_size,
                                size_t n_common, size_t n_priv_per_thread,
                                size_t n_threads, F thread_func) {
 #ifdef HAVE_UT_CHRONO_T
-  ut_chrono_t chrono(label);
+  ut_chrono_t const chrono(label);
 #endif /* HAVE_UT_CHRONO_T */
 
   ut_hash_interface_t *hash;

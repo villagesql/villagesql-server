@@ -581,7 +581,7 @@ static bool are_we_still_in_the_group(
   auto *const xcom_interface =
       static_cast<Gcs_xcom_interface *>(Gcs_xcom_interface::get_interface());
   if (xcom_interface != nullptr) {
-    std::string &myself =
+    std::string const &myself =
         xcom_interface->get_node_address()->get_member_address();
     Gcs_view const *const view = view_control.get_unsafe_current_view();
     still_in_the_group = (view != nullptr && view->has_member(myself));

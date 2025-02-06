@@ -55,9 +55,9 @@ void Vio_wrapper::set_timeout_in_ms(const Direction direction,
   // To get the millisecond resolution, we need to duplicate the logic
   // from "vio_timeout".
 
-  bool old_mode = m_vio->write_timeout < 0 && m_vio->read_timeout < 0;
+  bool const old_mode = m_vio->write_timeout < 0 && m_vio->read_timeout < 0;
 
-  int which = direction == Direction::k_write ? 1 : 0;
+  int const which = direction == Direction::k_write ? 1 : 0;
 
   if (which)
     m_vio->write_timeout = timeout_ms;

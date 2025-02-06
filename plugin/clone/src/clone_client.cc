@@ -106,7 +106,7 @@ void Thread_Info::throttle(uint64_t data_target, uint64_t net_target) {
       we sleep more frequently. */
       m_interval = m_interval / 2;
     }
-    Time_Msec sleep_time(sleep_ms);
+    Time_Msec const sleep_time(sleep_ms);
     std::this_thread::sleep_for(sleep_time);
   } else {
     /* Reset interval back to default 100ms. */
@@ -938,7 +938,7 @@ int Client::connect_remote(bool is_restart, bool use_aux) {
       err = remote_command(COM_EXIT, false);
       log_error(get_thd(), true, err, "Source Task COM_EXIT");
 
-      bool abort_net = (err != 0);
+      bool const abort_net = (err != 0);
       mysql_service_clone_protocol->mysql_clone_disconnect(get_thd(), m_conn,
                                                            abort_net, false);
       snprintf(info_mesg, 128, "Source Task Disconnect: abort: %s",
@@ -1172,7 +1172,7 @@ void Client::use_other_configs() {
     auto res = config_name.compare("clone_donor_timeout_after_network_failure");
     if (res == 0) {
       try {
-        int timeout_minutes = std::stoi(key_val.second);
+        int const timeout_minutes = std::stoi(key_val.second);
         s_reconnect_timeout = Time_Min(timeout_minutes);
       } catch (...) {
         assert(false);
@@ -1752,12 +1752,12 @@ int Client::wait(Time_Sec wait_time) {
   sec -= std::chrono::duration_cast<Time_Sec>(min);
   log_strm << "Wait time remaining is " << min.count() << " minutes and "
            << sec.count() << " seconds.";
-  std::string log_str(log_strm.str());
+  std::string const log_str(log_strm.str());
   LogPluginErr(INFORMATION_LEVEL, ER_CLONE_CLIENT_TRACE, log_str.c_str());
   log_strm.str("");
 
   for (;;) {
-    Time_Msec sleep_time(100);
+    Time_Msec const sleep_time(100);
     std::this_thread::sleep_for(sleep_time);
     auto cur_time = Clock::now();
 
@@ -1777,7 +1777,7 @@ int Client::wait(Time_Sec wait_time) {
       auto remaining_time = wait_time - duration_sec;
       min = std::chrono::duration_cast<Time_Min>(remaining_time);
       log_strm << "Wait time remaining is " << min.count() << " minutes.";
-      std::string log_str(log_strm.str());
+      std::string const log_str(log_strm.str());
       LogPluginErr(INFORMATION_LEVEL, ER_CLONE_CLIENT_TRACE, log_str.c_str());
       log_strm.str("");
     }

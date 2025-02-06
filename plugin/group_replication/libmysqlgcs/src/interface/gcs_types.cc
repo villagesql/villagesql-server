@@ -30,7 +30,7 @@
 
 void Gcs_interface_parameters::add_parameter(const std::string &name,
                                              const std::string &value) {
-  std::pair<const std::string, const std::string> to_add(name, value);
+  std::pair<const std::string, const std::string> const to_add(name, value);
 
   parameters.erase(name);
   parameters.insert(to_add);
@@ -40,7 +40,7 @@ void Gcs_interface_parameters::add_parameter(const std::string &name,
 bool Gcs_interface_parameters::check_parameters(const char *params[],
                                                 int size) const {
   for (int index = 0; index < size; index++) {
-    std::string param(params[index]);
+    std::string const param(params[index]);
     if (get_parameter(param)) return true;
   }
   return false;

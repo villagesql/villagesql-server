@@ -42,7 +42,7 @@ bool Native_plain_verification::verify_authentication_string(
 
   bool client_string_matches = client_string.empty() && db_string.empty();
 
-  std::string hash_string{"*" + generate_hash(client_string)};
+  std::string const hash_string{"*" + generate_hash(client_string)};
   if (!client_string_matches && hash_string == db_string) {
     client_string_matches = true;
   }

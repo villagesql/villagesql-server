@@ -77,7 +77,7 @@ void Group_validation_message::encode_payload(
   encode_payload_item_int2(buffer, PIT_VALIDATION_TYPE,
                            group_validation_message_type_aux);
 
-  char has_channels_aux = has_channels ? '1' : '0';
+  char const has_channels_aux = has_channels ? '1' : '0';
   encode_payload_item_char(buffer, PIT_VALIDATION_CHANNEL, has_channels_aux);
 
   auto member_weight_aux = (uint16)member_weight;

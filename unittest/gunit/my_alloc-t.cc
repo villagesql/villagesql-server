@@ -208,7 +208,7 @@ TEST_F(MyAllocTest, CheckErrorReporting) {
   m_root.set_max_capacity(100);
   EXPECT_EQ(nullptr, m_root.Alloc(1000));
   m_root.set_error_for_capacity_exceeded(true);
-  Mock_global_error_handler error_handler(EE_CAPACITY_EXCEEDED);
+  Mock_global_error_handler const error_handler(EE_CAPACITY_EXCEEDED);
   EXPECT_NE(nullptr, m_root.Alloc(1000));
   EXPECT_EQ(1, error_handler.handle_called());
 

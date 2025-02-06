@@ -97,7 +97,7 @@ TEST(CostEstimateTest, Operators) {
   EXPECT_DOUBLE_EQ(initial_io_cost + initial_cpu_cost, ce_copy.total_cost());
 
   // operator+
-  Cost_estimate ce_copy2 = ce_io + ce_cpu;
+  Cost_estimate const ce_copy2 = ce_io + ce_cpu;
   const double copy2_totcost =
       initial_io_cost + added_io_cost + initial_cpu_cost;
   EXPECT_DOUBLE_EQ(copy2_totcost, ce_copy2.total_cost());

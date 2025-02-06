@@ -127,7 +127,7 @@ static DEFINE_BOOL_METHOD(mysql_test_ref_cache_release_cache, ()) {
 }
 
 static DEFINE_BOOL_METHOD(mysql_test_ref_cache_produce_event, (int arg)) {
-  int result = 0;
+  int const result = 0;
   foo_cache *c = foo_cache::get_foo_cache();
   if (c) {
     return c->call(arg);

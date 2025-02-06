@@ -111,7 +111,7 @@ class UrlParsingTest : public ::testing::Test,
 TEST_P(UrlParsingTest, parse_and_verify) {
   auto p = GetParam();
 
-  http::base::Uri u{p.uri.uri};
+  http::base::Uri const u{p.uri.uri};
 
   EXPECT_EQ(p.scheme, u.get_scheme());
   EXPECT_EQ(p.host, u.get_host());
@@ -158,7 +158,7 @@ TEST_P(UrlParsingTest, move_path_query) {
 TEST_P(UrlParsingTest, move_data) {
   auto p = GetParam();
 
-  http::base::Uri u_parsed{p.uri.uri};
+  http::base::Uri const u_parsed{p.uri.uri};
   http::base::Uri u;
 
   u.set_scheme(u_parsed.get_scheme());
@@ -273,7 +273,7 @@ INSTANTIATE_TEST_SUITE_P(
             "a=%5b%22aaaa%22%2c20%2c30%2c%7b%22field1%22%3a%22value1%22%"
             "7d%5d"}));
 
-TEST(UrlParsingTest, reproduce) { mysqlrouter::URI u{"BEB://B:///"}; }
+TEST(UrlParsingTest, reproduce) { mysqlrouter::URI const u{"BEB://B:///"}; }
 
 int main(int argc, char *argv[]) {
   ::testing::InitGoogleTest(&argc, argv);

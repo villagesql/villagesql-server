@@ -46,7 +46,7 @@ class MySqlRouterThreadTest : public testing::Test {
 
 void *f(void *) {
   {
-    std::unique_lock<std::mutex> lk(flag_cond_mutex);
+    std::unique_lock<std::mutex> const lk(flag_cond_mutex);
     // mutex is needed to ensure that testing thread doesn't exit
     // after a spurious wakeup after 'flag' got set, but 'notify_one()'
     // got called

@@ -40,7 +40,7 @@ bool EventStateTracker::state_changed(
   const Key key{static_cast<size_t>(event_id),
                 std::hash<std::string>{}(additional_tag)};
 
-  std::unique_lock<std::mutex> lock(events_mtx_);
+  std::unique_lock<std::mutex> const lock(events_mtx_);
 
   auto it = events_.find(key);
   if (it == events_.end()) {
@@ -55,7 +55,7 @@ bool EventStateTracker::state_changed(
 }
 
 void EventStateTracker::remove_tag(const std::string &tag) {
-  std::unique_lock<std::mutex> lock(events_mtx_);
+  std::unique_lock<std::mutex> const lock(events_mtx_);
 
   const auto hashed_tag = std::hash<std::string>{}(tag);
   for (auto it = events_.begin(); it != events_.end();) {
@@ -68,7 +68,7 @@ void EventStateTracker::remove_tag(const std::string &tag) {
 }
 
 void EventStateTracker::clear() {
-  std::unique_lock<std::mutex> lock(events_mtx_);
+  std::unique_lock<std::mutex> const lock(events_mtx_);
   events_.clear();
 }
 

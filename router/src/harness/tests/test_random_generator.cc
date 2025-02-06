@@ -43,7 +43,7 @@ TEST(UtilsTests, generate_identifier_ok) {
 
   // digits only
   {
-    std::string s =
+    std::string const s =
         generator.generate_identifier(kTestLen, RandGen::AlphabetDigits);
     EXPECT_EQ(std::string::npos, s.find_first_not_of(kAlphabetDigits));
     EXPECT_EQ(kTestLen, s.size());
@@ -51,7 +51,7 @@ TEST(UtilsTests, generate_identifier_ok) {
 
   // lowercase letters only
   {
-    std::string s =
+    std::string const s =
         generator.generate_identifier(kTestLen, RandGen::AlphabetLowercase);
     EXPECT_EQ(std::string::npos, s.find_first_not_of(kAlphabetLowercase));
     EXPECT_EQ(kTestLen, s.size());
@@ -59,7 +59,7 @@ TEST(UtilsTests, generate_identifier_ok) {
 
   // uppercase letters only
   {
-    std::string s =
+    std::string const s =
         generator.generate_identifier(kTestLen, RandGen::AlphabetUppercase);
     EXPECT_EQ(std::string::npos, s.find_first_not_of(kAlphabetUppercase));
     EXPECT_EQ(kTestLen, s.size());
@@ -67,7 +67,7 @@ TEST(UtilsTests, generate_identifier_ok) {
 
   // special characters only
   {
-    std::string s =
+    std::string const s =
         generator.generate_identifier(kTestLen, RandGen::AlphabetSpecial);
     EXPECT_EQ(std::string::npos, s.find_first_not_of(kAlphabetSpecial));
     EXPECT_EQ(kTestLen, s.size());
@@ -75,7 +75,7 @@ TEST(UtilsTests, generate_identifier_ok) {
 
   // digits and lowercase only
   {
-    std::string s = generator.generate_identifier(
+    std::string const s = generator.generate_identifier(
         kTestLen, RandGen::AlphabetLowercase | RandGen::AlphabetDigits);
     EXPECT_EQ(std::string::npos,
               s.find_first_not_of(kAlphabetDigits + kAlphabetLowercase));
@@ -84,13 +84,13 @@ TEST(UtilsTests, generate_identifier_ok) {
 
   // length = 0
   {
-    std::string s = generator.generate_identifier(0);
+    std::string const s = generator.generate_identifier(0);
     EXPECT_EQ(0U, s.size());
   }
 
   // length = 1
   {
-    std::string s = generator.generate_identifier(1);
+    std::string const s = generator.generate_identifier(1);
     EXPECT_EQ(1U, s.size());
   }
 }
@@ -123,7 +123,7 @@ TEST(UtilsTests, generate_identifier_check_symbols_usage) {
   // unlikely.
   constexpr unsigned kBigNumber = 10 * 1000;
 
-  std::string s =
+  std::string const s =
       generator.generate_identifier(kBigNumber, RandGen::AlphabetAll);
   for (const char &c : kAlphabetAll) {
     EXPECT_NE(std::string::npos, s.find(c));

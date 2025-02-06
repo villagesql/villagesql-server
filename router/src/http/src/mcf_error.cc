@@ -48,7 +48,7 @@ const std::error_category &mcf_category() noexcept {
     }
   };
 
-  static socket_category_impl instance;
+  static socket_category_impl const instance;
   return instance;
 }
 

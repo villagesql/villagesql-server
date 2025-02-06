@@ -110,7 +110,7 @@ void ServerRequest::send_reply(StatusType status_code,
                                const IOBuffer &buffer) {
   using namespace std::literals;  // NOLINT(build/namespaces_literals)
 
-  static std::string k_path;
+  static std::string const k_path;
 
   const auto *value = holder_.input_headers_.find("Connection");
   if (value) {
@@ -138,7 +138,7 @@ bool ServerRequest::is_modified_since(time_t last_modified) {
 
   if (value) {
     try {
-      time_t if_mod_since_ts =
+      time_t const if_mod_since_ts =
           http::base::time_from_rfc5322_fixdate(value->c_str());
 
       if (!(last_modified > if_mod_since_ts)) {

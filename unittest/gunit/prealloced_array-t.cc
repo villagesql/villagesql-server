@@ -74,7 +74,7 @@ TEST_F(PreallocedArrayDeathTest, EmptyPopBack) {
 
 TEST_F(PreallocedArrayDeathTest, EmptyErase) {
   ::testing::FLAGS_gtest_death_test_style = "threadsafe";
-  size_t ix = 0;
+  size_t const ix = 0;
   EXPECT_DEATH_IF_SUPPORTED(int_10.erase(ix), ".*Assertion .*ix < size.*");
 }
 
@@ -278,18 +278,20 @@ TEST_F(PreallocedArrayTest, NoMemLeaksAssignAt) {
 
 TEST_F(PreallocedArrayTest, NoMemLeaksInitializing) {
   const size_t initial_capacity = 10;
-  Prealloced_array<IntWrap, initial_capacity> array1(PSI_NOT_INSTRUMENTED, 0);
+  Prealloced_array<IntWrap, initial_capacity> const array1(PSI_NOT_INSTRUMENTED,
+                                                           0);
   EXPECT_EQ(0U, array1.size());
 
-  Prealloced_array<IntWrap, initial_capacity> array2(PSI_NOT_INSTRUMENTED,
-                                                     initial_capacity / 2);
+  Prealloced_array<IntWrap, initial_capacity> const array2(
+      PSI_NOT_INSTRUMENTED, initial_capacity / 2);
   EXPECT_EQ(5U, array2.size());
 
-  Prealloced_array<IntWrap, 10> array3(PSI_NOT_INSTRUMENTED, initial_capacity);
+  Prealloced_array<IntWrap, 10> const array3(PSI_NOT_INSTRUMENTED,
+                                             initial_capacity);
   EXPECT_EQ(10U, array3.size());
 
-  Prealloced_array<IntWrap, 10> array4(PSI_NOT_INSTRUMENTED,
-                                       2 * initial_capacity);
+  Prealloced_array<IntWrap, 10> const array4(PSI_NOT_INSTRUMENTED,
+                                             2 * initial_capacity);
   EXPECT_EQ(20U, array4.size());
 }
 
@@ -531,7 +533,7 @@ TEST_F(PreallocedArrayTest, ShrinkToFit) {
   array.push_back(1);
   array.push_back(2);
   array.push_back(3);
-  size_t capacity = array.capacity();
+  size_t const capacity = array.capacity();
   EXPECT_LE(3U, capacity);
 
   // After clear(), array is empty, but the capacity is unchanged.
@@ -546,14 +548,14 @@ TEST_F(PreallocedArrayTest, ShrinkToFit) {
 
 // https://docs.microsoft.com/en-us/cpp/overview/cpp-conformance-improvements?view=vs-2019#implicit-conversion-of-integral-constant-expressions-to-null-pointer
 TEST_F(PreallocedArrayTest, CorrectOverloadIsChosen) {
-  Prealloced_array<int *, 4> array{PSI_NOT_INSTRUMENTED};
+  Prealloced_array<int *, 4> const array{PSI_NOT_INSTRUMENTED};
   EXPECT_EQ(0, array.size());
 
   int x = 2;
-  Prealloced_array<int *, 4> array2{&x};
+  Prealloced_array<int *, 4> const array2{&x};
   EXPECT_EQ(1, array2.size());
 
-  Prealloced_array<int64_t, 4> array3{x};
+  Prealloced_array<int64_t, 4> const array3{x};
   EXPECT_EQ(1, array3.size());
 }
 

@@ -132,7 +132,7 @@ class Listener_tcp_testsuite : public Test {
                 bind(ai->ai_addr, static_cast<socklen_t>(ai->ai_addrlen)))
         .WillOnce(Return(POSIX_OK));
     EXPECT_CALL(*mock_socket, listen(BACKLOG)).WillOnce(Return(POSIX_OK));
-    std::shared_ptr<iface::Socket> socket_ptr = mock_socket;
+    std::shared_ptr<iface::Socket> const socket_ptr = mock_socket;
     EXPECT_CALL(m_mock_socket_events, listen(socket_ptr, _))
         .WillOnce(Return(socket_events_listen));
   }
@@ -453,7 +453,7 @@ TEST_F(Listener_tcp_testsuite,
 
   expect_create_socket(&ai4, ALL_INTERFACES_6, AF_INET, INVALID_SOCKET);
 
-  std::shared_ptr<mock::Socket> mock_socket_ipv6(
+  std::shared_ptr<mock::Socket> const mock_socket_ipv6(
       new StrictMock<mock::Socket>());
   EXPECT_CALL(*mock_socket_ipv6, get_socket_fd()).WillOnce(Return(SOCKET_OK));
   EXPECT_CALL(*m_mock_factory,

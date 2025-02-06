@@ -76,7 +76,7 @@ class Bgc_ticket_manager_test : public ::testing::Test {
 };
 
 TEST_F(Bgc_ticket_manager_test, Several_tickets_test) {
-  size_t total_threads{300};
+  size_t const total_threads{300};
   std::vector<std::thread> threads;
   std::mutex mtx;
   std::condition_variable condition;
@@ -84,7 +84,7 @@ TEST_F(Bgc_ticket_manager_test, Several_tickets_test) {
   std::default_random_engine r_engine{r_device()};
   std::uniform_int_distribution<int> uniform_dist{25, 200};
   size_t thread_test_loops = 100;
-  size_t max_ticket = (total_threads / 10) * thread_test_loops;
+  size_t const max_ticket = (total_threads / 10) * thread_test_loops;
   std::vector<std::uint64_t> tickets;
   std::mutex mutex_tickets;
 
@@ -132,7 +132,7 @@ TEST_F(Bgc_ticket_manager_test, Several_tickets_test) {
                 std::this_thread::yield();
               }
               {
-                std::unique_lock lock{mtx};
+                std::unique_lock const lock{mtx};
                 condition.notify_all();
               }
             }

@@ -182,7 +182,7 @@ int64_t Plugin_gcs_message::get_sent_timestamp(
 
     if (timestamp_payload_item_type == payload_item_type) {
       if (slider + payload_item_length <= end) {
-        uint64 sent_timestamp = uint8korr(slider);
+        uint64 const sent_timestamp = uint8korr(slider);
         assert(0 != sent_timestamp);
         return sent_timestamp;
       }

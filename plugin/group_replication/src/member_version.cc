@@ -100,7 +100,7 @@ bool Member_version::operator<=(const Member_version &other) const {
 uint8_t Member_version::get_major_version_decimal() const {
   std::stringstream major_hex;
   major_hex << std::hex << get_major_version();
-  uint8_t major_dec = std::stoul(major_hex.str());
+  uint8_t const major_dec = std::stoul(major_hex.str());
   assert(major_dec <= 99);
   return major_dec;
 }
@@ -108,7 +108,7 @@ uint8_t Member_version::get_major_version_decimal() const {
 uint8_t Member_version::get_minor_version_decimal() const {
   std::stringstream minor_hex;
   minor_hex << std::hex << get_minor_version();
-  uint8_t minor_dec = std::stoul(minor_hex.str());
+  uint8_t const minor_dec = std::stoul(minor_hex.str());
   assert(minor_dec <= 99);
   return minor_dec;
 }
@@ -116,7 +116,7 @@ uint8_t Member_version::get_minor_version_decimal() const {
 uint8_t Member_version::get_patch_version_decimal() const {
   std::stringstream patch_hex;
   patch_hex << std::hex << get_patch_version();
-  uint8_t patch_dec = std::stoul(patch_hex.str());
+  uint8_t const patch_dec = std::stoul(patch_hex.str());
   assert(patch_dec <= 99);
   return patch_dec;
 }
@@ -133,12 +133,12 @@ void Member_version::update_version_decimal(const uint8_t major,
     5.9.30 -> 0x050930
     version= 0 x 16^5 + 5 x 16^4 + 0 x 16^3 + 9 x 16^2 + 3 x 16^1 + 0 x 16^0
   */
-  uint8_t v1 = patch / 10;
-  uint8_t v0 = patch - v1 * 10;
-  uint8_t v3 = minor / 10;
-  uint8_t v2 = minor - v3 * 10;
-  uint8_t v5 = major / 10;
-  uint8_t v4 = major - v5 * 10;
+  uint8_t const v1 = patch / 10;
+  uint8_t const v0 = patch - v1 * 10;
+  uint8_t const v3 = minor / 10;
+  uint8_t const v2 = minor - v3 * 10;
+  uint8_t const v5 = major / 10;
+  uint8_t const v4 = major - v5 * 10;
 
   this->version =
       v0 + v1 * 16 + v2 * 256 + v3 * 4096 + v4 * 65536 + v5 * 1048576;

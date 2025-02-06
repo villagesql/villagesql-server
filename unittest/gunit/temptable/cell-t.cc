@@ -39,21 +39,21 @@ TEST(Cell, ConstructorAndGetters) {
   const unsigned char *const null_data = nullptr;
 
   {
-    temptable::Cell cell(false, valid_data_length, valid_data);
+    temptable::Cell const cell(false, valid_data_length, valid_data);
     EXPECT_EQ(cell.is_null(), false);
     EXPECT_EQ(cell.data_length(), valid_data_length);
     EXPECT_EQ(cell.data(), valid_data);
   }
 
   {
-    temptable::Cell cell(true, valid_data_length - 1, valid_data + 1);
+    temptable::Cell const cell(true, valid_data_length - 1, valid_data + 1);
     EXPECT_EQ(cell.is_null(), true);
     EXPECT_EQ(cell.data_length(), valid_data_length - 1);
     EXPECT_EQ(cell.data(), valid_data + 1);
   }
 
   {
-    temptable::Cell cell(true, 0, null_data);
+    temptable::Cell const cell(true, 0, null_data);
     EXPECT_EQ(cell.is_null(), true);
     EXPECT_EQ(cell.data_length(), 0);
     EXPECT_EQ(cell.data(), null_data);

@@ -52,7 +52,8 @@ inline std::string::value_type Designator::next() {
 }
 
 [[noreturn]] void Designator::parse_error(const std::string &prefix) const {
-  std::string message(prefix + " at '" + std::string(cur_, input_.end()) + "'");
+  std::string const message(prefix + " at '" + std::string(cur_, input_.end()) +
+                            "'");
   throw std::runtime_error(message);
 }
 
@@ -68,7 +69,7 @@ long Designator::parse_number() {
   trace(__func__);
 #endif
   skip_space();
-  std::string::const_iterator start = cur_;
+  std::string::const_iterator const start = cur_;
   while (::isdigit(peek())) ++cur_;
   if (std::distance(start, cur_) == 0) parse_error("Expected number");
   return strtol(std::string(start, cur_).c_str(), nullptr, 10);
@@ -79,7 +80,7 @@ void Designator::parse_plugin() {
   trace(__func__);
 #endif
   skip_space();
-  std::string::const_iterator start = cur_;
+  std::string::const_iterator const start = cur_;
   if (!::isalpha(peek()) && peek() != '_')
     parse_error("Invalid start of module name");
   while (::isalnum(peek()) || peek() == '_') ++cur_;
@@ -92,8 +93,8 @@ void Designator::parse_version_list() {
 #endif
   while (true) {
     skip_space();
-    Relation rel = parse_relation();
-    Version ver = parse_version();
+    Relation const rel = parse_relation();
+    Version const ver = parse_version();
     constraint.push_back(std::make_pair(rel, ver));
 #if DO_DEBUG
     trace(__func__);
@@ -240,7 +241,7 @@ Designator::Designator(const std::string &str)
   parse_root();
   skip_space();  // Trailing space allowed
   if (cur_ != input_.end()) {
-    std::string trailing(cur_, input_.end());
+    std::string const trailing(cur_, input_.end());
     throw std::runtime_error("Trailing input: '" + trailing + "'");
   }
 }

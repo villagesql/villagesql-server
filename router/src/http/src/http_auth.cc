@@ -123,7 +123,7 @@ HttpAuthCredentials HttpAuthCredentials::from_header(const std::string &hdr,
     return {{}, {}, {}};
   }
 
-  std::string scheme(begin_scheme, end_scheme);
+  std::string const scheme(begin_scheme, end_scheme);
   std::string token;
 
   if (end_scheme != hdr.end()) {

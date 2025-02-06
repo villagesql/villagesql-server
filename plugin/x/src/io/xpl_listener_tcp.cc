@@ -220,7 +220,7 @@ class Tcp_creator {
   }
 
   bool is_ipv6_avaiable() {
-    std::shared_ptr<iface::Socket> socket(m_factory.create_socket(
+    std::shared_ptr<iface::Socket> const socket(m_factory.create_socket(
         KEY_socket_x_diagnostics, AF_INET6, SOCK_STREAM, 0));
     const bool has_ipv6 = INVALID_SOCKET != socket->get_socket_fd();
 
@@ -326,7 +326,7 @@ std::shared_ptr<iface::Socket> Listener_tcp::create_socket() {
   int error_code;
 
   std::shared_ptr<iface::Socket> result_socket;
-  std::shared_ptr<iface::System> system_interface(
+  std::shared_ptr<iface::System> const system_interface(
       m_operations_factory->create_system_interface());
 
   log_debug("TCP Sockets address is '%s' and port is %i",
@@ -339,7 +339,7 @@ std::shared_ptr<iface::Socket> Listener_tcp::create_socket() {
     return nullptr;
 #endif
   }
-  std::shared_ptr<addrinfo> ai =
+  std::shared_ptr<addrinfo> const ai =
       creator.resolve_bind_address(m_bind_address, m_port, m_last_error);
 
   if (nullptr == ai) return {};

@@ -36,19 +36,19 @@ TEST(Mysys, MyLoadPath) {
   static const std::string filename = "filename";
 
   // Path with absolute path component.
-  std::string absolute_path_name = FN_LIBCHAR + filename;
+  std::string const absolute_path_name = FN_LIBCHAR + filename;
   my_load_path(dest, absolute_path_name.c_str(), nullptr);
   EXPECT_STREQ(dest, absolute_path_name.c_str());
 
   // Path with home directory component.
   dest[0] = '\0';
-  std::string home_dir_path_name = FN_HOMELIB + (FN_LIBCHAR + filename);
+  std::string const home_dir_path_name = FN_HOMELIB + (FN_LIBCHAR + filename);
   my_load_path(dest, home_dir_path_name.c_str(), nullptr);
   EXPECT_STREQ(dest, home_dir_path_name.c_str());
 
   // Path with current directory component.
   dest[0] = '\0';
-  std::string parent_dir_path_name = FN_CURLIB + (FN_LIBCHAR + filename);
+  std::string const parent_dir_path_name = FN_CURLIB + (FN_LIBCHAR + filename);
   my_load_path(dest, parent_dir_path_name.c_str(), nullptr);
   char temp_buf[256];
   my_getwd(temp_buf, sizeof(temp_buf), MYF(0));
@@ -56,7 +56,7 @@ TEST(Mysys, MyLoadPath) {
 
   // Path with prefix component appended.
   dest[0] = '\0';
-  std::string prefix_path_name = "/basedir/";
+  std::string const prefix_path_name = "/basedir/";
   my_load_path(dest, filename.c_str(), prefix_path_name.c_str());
   EXPECT_STREQ(dest, (prefix_path_name + filename).c_str());
 

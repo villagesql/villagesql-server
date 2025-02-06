@@ -55,7 +55,7 @@ char *Memory_block_pool::allocate() {
   char *object_data = get_page_from_cache();
 
   if (nullptr == object_data) {
-    size_t memory_to_allocate = m_config.m_page_size;
+    size_t const memory_to_allocate = m_config.m_page_size;
 
     ngs::allocate_array(object_data, memory_to_allocate,
                         KEY_memory_x_send_buffer);

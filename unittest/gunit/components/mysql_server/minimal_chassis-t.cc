@@ -94,6 +94,6 @@ int main(int argc, char **argv) {
   if (res_length > 0) basedir_buf[res_length - 1] = '\0';
   my_setwd(basedir_buf, 0);
 
-  int retval = RUN_ALL_TESTS();
+  int const retval = RUN_ALL_TESTS();
   return retval;
 }

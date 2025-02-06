@@ -75,7 +75,7 @@ u_long Gcs_xcom_utils::build_xcom_group_id(Gcs_group_identifier &group_id) {
 void Gcs_xcom_utils::process_peer_nodes(
     const std::string *peer_nodes, std::vector<std::string> &processed_peers) {
   std::string peer_init(*peer_nodes);
-  std::string delimiter = ",";
+  std::string const delimiter = ",";
 
   // Clear all whitespace in the string
   peer_init.erase(std::remove(peer_init.begin(), peer_init.end(), ' '),
@@ -88,7 +88,7 @@ void Gcs_xcom_utils::process_peer_nodes(
   std::string::size_type pos = peer_init.find_first_of(delimiter, lastPos);
 
   while (std::string::npos != pos || std::string::npos != lastPos) {
-    std::string peer(peer_init.substr(lastPos, pos - lastPos));
+    std::string const peer(peer_init.substr(lastPos, pos - lastPos));
     processed_peers.push_back(peer);
 
     // Skip delimiter
@@ -103,7 +103,7 @@ void Gcs_xcom_utils::validate_peer_nodes(
     std::vector<std::string> &peers, std::vector<std::string> &invalid_peers) {
   std::vector<std::string>::iterator it;
   for (it = peers.begin(); it != peers.end();) {
-    std::string server_and_port = *it;
+    std::string const server_and_port = *it;
     if (!is_valid_hostname(server_and_port)) {
       invalid_peers.push_back(server_and_port);
       it = peers.erase(it);
@@ -442,7 +442,7 @@ bool is_parameters_syntax_correct(
       goto end;
     }
 
-    std::string host(host_str);
+    std::string const host(host_str);
     std::vector<std::string> ip;
     int configured_protocol;
     std::string net_namespace;

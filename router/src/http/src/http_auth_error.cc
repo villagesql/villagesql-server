@@ -46,7 +46,7 @@ const std::error_category &http_auth_error_category() noexcept {
     }
   };
 
-  static socket_category_impl instance;
+  static socket_category_impl const instance;
   return instance;
 }
 

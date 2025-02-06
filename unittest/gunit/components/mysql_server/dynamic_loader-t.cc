@@ -102,7 +102,7 @@ TEST_F(dynamic_loader, try_load_twice) {
   ASSERT_FALSE(loader->load(&absolute_urns, 1));
   ASSERT_TRUE(loader->load(&absolute_urns, 1));
   {
-    my_service<SERVICE_TYPE(example_math)> service("example_math", reg);
+    my_service<SERVICE_TYPE(example_math)> const service("example_math", reg);
     ASSERT_FALSE((bool)service);
   }
 
@@ -157,12 +157,12 @@ TEST_F(dynamic_loader, load_different_components) {
   make_absolute_urn(*urns1, &path1);
   absolute_urn = path1.c_str();
   {
-    my_service<SERVICE_TYPE(example_math)> service("example_math", reg);
+    my_service<SERVICE_TYPE(example_math)> const service("example_math", reg);
     ASSERT_TRUE((bool)service);
   }
   ASSERT_FALSE(loader->load(&absolute_urn, 1));
   {
-    my_service<SERVICE_TYPE(example_math)> service("example_math", reg);
+    my_service<SERVICE_TYPE(example_math)> const service("example_math", reg);
     ASSERT_FALSE((bool)service);
   }
   ASSERT_FALSE(loader->unload(&absolute_urn, 1));
@@ -172,12 +172,12 @@ TEST_F(dynamic_loader, load_different_components) {
   strcpy(const_cast<char *>(absolute_urns[1]), path3.c_str());
   ASSERT_FALSE(loader->load(absolute_urns, 2));
   {
-    my_service<SERVICE_TYPE(example_math)> service("example_math", reg);
+    my_service<SERVICE_TYPE(example_math)> const service("example_math", reg);
     ASSERT_FALSE((bool)service);
   }
   ASSERT_FALSE(loader->unload(absolute_urns, 2));
   {
-    my_service<SERVICE_TYPE(example_math)> service("example_math", reg);
+    my_service<SERVICE_TYPE(example_math)> const service("example_math", reg);
     ASSERT_TRUE((bool)service);
   }
   for (auto &loop_absolute_urn : absolute_urns)
@@ -196,12 +196,12 @@ TEST_F(dynamic_loader, dependencies) {
   make_absolute_urn(*urns1, &path1);
   absolute_urn = path1.c_str();
   {
-    my_service<SERVICE_TYPE(example_math)> service("example_math", reg);
+    my_service<SERVICE_TYPE(example_math)> const service("example_math", reg);
     ASSERT_TRUE((bool)service);
   }
   ASSERT_TRUE(loader->load(&absolute_urn, 1));
   {
-    my_service<SERVICE_TYPE(example_math)> service("example_math", reg);
+    my_service<SERVICE_TYPE(example_math)> const service("example_math", reg);
     ASSERT_TRUE((bool)service);
   }
   make_absolute_urn(urns2[0], &path2);
@@ -211,7 +211,7 @@ TEST_F(dynamic_loader, dependencies) {
   ASSERT_FALSE(loader->load(absolute_urns, 2));
   ASSERT_FALSE(loader->unload(absolute_urns, 2));
   {
-    my_service<SERVICE_TYPE(example_math)> service("example_math", reg);
+    my_service<SERVICE_TYPE(example_math)> const service("example_math", reg);
     ASSERT_TRUE((bool)service);
   }
   for (auto &loop_absolute_urn : absolute_urns)
@@ -352,7 +352,7 @@ TEST_F(dynamic_loader, metadata) {
       "dynamic_loader_metadata_enumerate", reg);
   ASSERT_FALSE(metadata_service);
 
-  my_service<SERVICE_TYPE(dynamic_loader_metadata_query)>
+  my_service<SERVICE_TYPE(dynamic_loader_metadata_query)> const
       metadata_query_service("dynamic_loader_metadata_query", reg);
   ASSERT_FALSE(metadata_query_service);
 
@@ -448,7 +448,7 @@ int main(int argc, char **argv) {
   if (res_length > 0) basedir_buf[res_length - 1] = '\0';
   my_setwd(basedir_buf, 0);
 
-  int retval = RUN_ALL_TESTS();
+  int const retval = RUN_ALL_TESTS();
   my_end(0);
   return retval;
 }

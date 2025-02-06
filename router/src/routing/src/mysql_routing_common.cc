@@ -37,7 +37,8 @@ std::string get_routing_thread_name(const std::string &config_name,
   //   "routing" (without key).
   // Verify this assumption
   constexpr char kRouting[] = "routing";
-  size_t kRoutingLen = sizeof(kRouting) - 1;  // -1 to ignore string terminator
+  size_t const kRoutingLen =
+      sizeof(kRouting) - 1;  // -1 to ignore string terminator
   if (memcmp(p, kRouting, kRoutingLen) != 0) return prefix + ":parse err";
 
   // skip over "routing[:]"
@@ -53,7 +54,7 @@ std::string get_routing_thread_name(const std::string &config_name,
   // "<cluster_name>_default_" so that suffixes ("x_ro", etc) can fit
   std::string key = p;
   const char kPrefix[] = "_default_";
-  size_t pos = key.find(kPrefix);
+  const size_t pos = key.find(kPrefix);
   if (pos != std::string::npos) {
     key = key.substr(pos + sizeof(kPrefix) - 1);  // -1 for string terminator
   }

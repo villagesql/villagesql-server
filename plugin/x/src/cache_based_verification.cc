@@ -48,7 +48,7 @@ void Cache_based_verification::hex2octet(uint8_t *to, const char *str,
 
   const char *str_end = str + len;
   while (str < str_end) {
-    char tmp = char_val(*str++);
+    char const tmp = char_val(*str++);
     *to++ = (tmp << 4) | char_val(*str++);
   }
 }

@@ -374,8 +374,8 @@ static string shorten_query(MYSQL_LEX_STRING query) {
 static void log_nonrewritten_query(MYSQL_THD thd, const uchar *digest_buf,
                                    Rewrite_result result) {
   if (sys_var_verbose >= 2) {
-    string query = shorten_query(mysql_parser_get_query(thd));
-    string digest = services::print_digest(digest_buf);
+    string const query = shorten_query(mysql_parser_get_query(thd));
+    string const digest = services::print_digest(digest_buf);
     string message;
     message.append("Statement \"");
     message.append(query);
@@ -497,7 +497,7 @@ static int rewrite_query_notify(MYSQL_THD thd,
   else {
     *((int *)event_parse->flags) |=
         (int)MYSQL_AUDIT_PARSE_REWRITE_PLUGIN_QUERY_REWRITTEN;
-    bool is_prepared =
+    bool const is_prepared =
         (*(event_parse->flags) &
          MYSQL_AUDIT_PARSE_REWRITE_PLUGIN_IS_PREPARED_STATEMENT) != 0;
 

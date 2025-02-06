@@ -47,11 +47,11 @@ bool Sha256_plain_verification::verify_authentication_string(
   bool client_string_matches = client_string.empty() && db_string.empty();
 
   if (!client_string_matches) {
-    std::string::size_type b = db_string.find('$', 1);
+    std::string::size_type const b = db_string.find('$', 1);
 
     if (b == std::string::npos) return false;
 
-    std::string salt = db_string.substr(b + 1, CRYPT_SALT_LENGTH);
+    std::string const salt = db_string.substr(b + 1, CRYPT_SALT_LENGTH);
 
     if (salt.size() != CRYPT_SALT_LENGTH) return false;
 

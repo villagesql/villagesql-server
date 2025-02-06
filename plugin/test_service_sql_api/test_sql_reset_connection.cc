@@ -591,7 +591,7 @@ static void test_com_reset_connection(void *p) {
 
   const my_thread_id session_id = srv_session_info_get_session_id(st_session);
 
-  std::unique_ptr<st_plugin_ctx> ctx(new st_plugin_ctx());
+  std::unique_ptr<st_plugin_ctx> const ctx(new st_plugin_ctx());
   query_execute(st_session, ctx.get(), "set @secret = 123");
   query_execute(st_session, ctx.get(), "select @secret");
   reset_connection(st_session, ctx.get());
@@ -613,7 +613,7 @@ static void test_com_reset_connection_from_another_session(void *p) {
 
   const my_thread_id session_id = srv_session_info_get_session_id(st_session);
 
-  std::unique_ptr<st_plugin_ctx> ctx(new st_plugin_ctx());
+  std::unique_ptr<st_plugin_ctx> const ctx(new st_plugin_ctx());
   query_execute(st_session, ctx.get(), "set @another_secret = 456");
   query_execute(st_session, ctx.get(), "select @another_secret");
   WRITE_STR(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>\n");
@@ -668,7 +668,7 @@ void register_udf_reset_connection() {
   DBUG_TRACE;
   const auto *reg = mysql_plugin_registry_acquire();
   {
-    Udf_registrator udf_reg{"udf_registration", reg};
+    Udf_registrator const udf_reg{"udf_registration", reg};
     if (udf_reg.is_valid()) {
       udf_reg->udf_register(
           "reset_connection", INT_RESULT,
@@ -685,7 +685,7 @@ void unregister_udf_reset_connection() {
   DBUG_TRACE;
   const auto *reg = mysql_plugin_registry_acquire();
   {
-    Udf_registrator udf_reg{"udf_registration", reg};
+    Udf_registrator const udf_reg{"udf_registration", reg};
     if (udf_reg.is_valid()) {
       int was_present = 0;
       udf_reg->udf_unregister("reset_connection", &was_present);

@@ -48,7 +48,7 @@ TEST_F(FileSortBufferTest, Basic) {
 
   fs_info.set_max_size(32768, 10);
   for (uint ix = 0; ix < 10; ++ix) {
-    Bounds_checked_array<uchar> buf = fs_info.get_next_record_pointer(10);
+    Bounds_checked_array<uchar> const buf = fs_info.get_next_record_pointer(10);
     ASSERT_GE(buf.size(), 10);
     memcpy(buf.array(), letters, 10);
     fs_info.commit_used_memory(10);

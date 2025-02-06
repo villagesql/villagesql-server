@@ -129,8 +129,8 @@ TEST_F(GcsParametersTest, ParametersCompression) {
   // --------------------------------------------------------
   // Compression explicit values
   // --------------------------------------------------------
-  std::string compression = "off";
-  std::string compression_threshold = "1";
+  std::string const compression = "off";
+  std::string const compression_threshold = "1";
 
   Gcs_interface_parameters explicit_values;
   explicit_values.add_parameter("group_name", "ola");
@@ -202,8 +202,8 @@ TEST_F(GcsParametersTest, ParametersFragmentation) {
   // --------------------------------------------------------
   // Fragmentation explicit values
   // --------------------------------------------------------
-  std::string fragmentation = "off";
-  std::string fragmentation_threshold = "1";
+  std::string const fragmentation = "off";
+  std::string const fragmentation_threshold = "1";
 
   Gcs_interface_parameters explicit_values;
   explicit_values.add_parameter("group_name", "ola");
@@ -292,7 +292,7 @@ TEST_F(GcsParametersTest, AbsentLocalNode) {
 TEST_F(GcsParametersTest, InvalidPeerNodes) {
   std::string *p =
       const_cast<std::string *>(m_params.get_parameter("peer_nodes"));
-  std::string save = *p;
+  std::string const save = *p;
 
   // invalid peer
   *p = "127.0.0.1 24844,127.0.0.1 24845";
@@ -309,7 +309,7 @@ TEST_F(GcsParametersTest, InvalidPeerNodes) {
 TEST_F(GcsParametersTest, InvalidLocalNode) {
   std::string *p =
       const_cast<std::string *>(m_params.get_parameter("local_node"));
-  std::string save = *p;
+  std::string const save = *p;
 
   // invalid peer
   *p = "127.0.0.1 24844";
@@ -320,7 +320,7 @@ TEST_F(GcsParametersTest, InvalidLocalNode) {
 TEST_F(GcsParametersTest, InvalidPollSpinLoops) {
   std::string *p =
       const_cast<std::string *>(m_params.get_parameter("poll_spin_loops"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "Invalid";
   do_check_params();
@@ -330,7 +330,7 @@ TEST_F(GcsParametersTest, InvalidPollSpinLoops) {
 TEST_F(GcsParametersTest, InvalidCompressionThreshold) {
   std::string *p = const_cast<std::string *>(
       m_params.get_parameter("compression_threshold"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "Invalid";
   do_check_params();
@@ -340,7 +340,7 @@ TEST_F(GcsParametersTest, InvalidCompressionThreshold) {
 TEST_F(GcsParametersTest, InvalidFragmentationThreshold) {
   std::string *p = const_cast<std::string *>(
       m_params.get_parameter("fragmentation_threshold"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "Invalid";
   do_check_params();
@@ -350,7 +350,7 @@ TEST_F(GcsParametersTest, InvalidFragmentationThreshold) {
 TEST_F(GcsParametersTest, InvalidLocalNodeAddress) {
   std::string *p =
       const_cast<std::string *>(m_params.get_parameter("local_node"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "127.0";
   do_check_params();
@@ -360,7 +360,7 @@ TEST_F(GcsParametersTest, InvalidLocalNodeAddress) {
 TEST_F(GcsParametersTest, InvalidAllowlistIPMask) {
   std::string *p =
       const_cast<std::string *>(m_params.get_parameter("ip_allowlist"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "192.168.1.1/33";
   do_check_params();
@@ -370,7 +370,7 @@ TEST_F(GcsParametersTest, InvalidAllowlistIPMask) {
 TEST_F(GcsParametersTest, InvalidAllowlistIP) {
   std::string *p =
       const_cast<std::string *>(m_params.get_parameter("ip_allowlist"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "192.168.1.256/24";
   do_check_params();
@@ -380,7 +380,7 @@ TEST_F(GcsParametersTest, InvalidAllowlistIP) {
 TEST_F(GcsParametersTest, InvalidAllowlistIPs) {
   std::string *p =
       const_cast<std::string *>(m_params.get_parameter("ip_allowlist"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "192.168.1.222/24,255.257.256.255";
   do_check_params();
@@ -390,7 +390,7 @@ TEST_F(GcsParametersTest, InvalidAllowlistIPs) {
 TEST_F(GcsParametersTest, HalfBakedIP) {
   std::string *p =
       const_cast<std::string *>(m_params.get_parameter("ip_allowlist"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "192.168.";
   do_check_params();
@@ -400,7 +400,7 @@ TEST_F(GcsParametersTest, HalfBakedIP) {
 TEST_F(GcsParametersTest, InvalidLocalNode_IP_not_found) {
   std::string *p =
       const_cast<std::string *>(m_params.get_parameter("local_node"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "8.8.8.8:24844";
   do_check_params();
@@ -417,7 +417,7 @@ TEST_F(GcsParametersTest, InvalidLocalNode_IP_not_found) {
 TEST_F(GcsParametersTest, InvalidNonMemberExpelTimeout) {
   std::string *p = const_cast<std::string *>(
       m_params.get_parameter("non_member_expel_timeout"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "Invalid";
   do_check_params();
@@ -434,7 +434,7 @@ TEST_F(GcsParametersTest, InvalidNonMemberExpelTimeout) {
 TEST_F(GcsParametersTest, InvalidSuspicionsProcessingPeriod) {
   std::string *p = const_cast<std::string *>(
       m_params.get_parameter("suspicions_processing_period"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "Invalid";
   do_check_params();
@@ -451,7 +451,7 @@ TEST_F(GcsParametersTest, InvalidSuspicionsProcessingPeriod) {
 TEST_F(GcsParametersTest, InvalidMemberExpelTimeout) {
   std::string *p =
       const_cast<std::string *>(m_params.get_parameter("member_expel_timeout"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "Invalid";
   do_check_params();
@@ -468,7 +468,7 @@ TEST_F(GcsParametersTest, InvalidMemberExpelTimeout) {
 TEST_F(GcsParametersTest, InvalidJoinAttempts) {
   std::string *p =
       const_cast<std::string *>(m_params.get_parameter("join_attempts"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "Invalid";
   do_check_params();
@@ -478,7 +478,7 @@ TEST_F(GcsParametersTest, InvalidJoinAttempts) {
 TEST_F(GcsParametersTest, InvalidJoinSleepTime) {
   std::string *p =
       const_cast<std::string *>(m_params.get_parameter("join_sleep_time"));
-  std::string save = *p;
+  std::string const save = *p;
 
   *p = "Invalid";
   do_check_params();

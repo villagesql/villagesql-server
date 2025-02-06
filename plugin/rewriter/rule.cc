@@ -179,6 +179,6 @@ Rewrite_result Rule::create_new_query(MYSQL_THD thd) {
 }
 
 bool Rule::matches(MYSQL_THD thd) const {
-  string normalized_query = services::get_current_query_normalized(thd);
+  string const normalized_query = services::get_current_query_normalized(thd);
   return normalized_query == m_pattern.normalized_pattern;
 }

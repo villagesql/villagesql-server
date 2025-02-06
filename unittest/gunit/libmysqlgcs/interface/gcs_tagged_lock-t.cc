@@ -33,7 +33,7 @@ class GcsTaggedLock : public GcsBaseTest {
 };
 
 TEST_F(GcsTaggedLock, SuccessfulOptimisticRead) {
-  Gcs_tagged_lock lock;
+  Gcs_tagged_lock const lock;
 
   auto tag = lock.optimistic_read();
   ASSERT_TRUE(lock.validate_optimistic_read(tag));

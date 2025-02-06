@@ -49,8 +49,8 @@ TEST_F(MessageEncodingDecodingTest, EncodeDecodeTest) {
   memset(uint32_buf, 0, n32);
   memset(uint16_buf, 0, n16);
 
-  std::string uint16_buf_str("buffer16");
-  std::string uint32_buf_str("buffer32");
+  std::string const uint16_buf_str("buffer16");
+  std::string const uint32_buf_str("buffer32");
 
   uint16_buf_str.copy((char *)uint16_buf, uint16_buf_str.size(), 0);
   uint32_buf_str.copy((char *)uint32_buf, uint32_buf_str.size(), 0);
@@ -88,16 +88,16 @@ TEST_F(MessageEncodingDecodingTest, EncodeDecodeTest) {
   EXPECT_EQ(n16, to_decode16.get_header_length());
   EXPECT_EQ(n16, to_decode16.get_payload_length());
 
-  std::string returned_header16((const char *)to_decode16.get_header());
+  std::string const returned_header16((const char *)to_decode16.get_header());
   EXPECT_EQ("buffer16", returned_header16);
 
-  std::string returned_payload16((const char *)to_decode16.get_payload());
+  std::string const returned_payload16((const char *)to_decode16.get_payload());
   EXPECT_EQ("buffer16", returned_payload16);
 
-  std::string returned_header32((const char *)to_decode32.get_header());
+  std::string const returned_header32((const char *)to_decode32.get_header());
   EXPECT_EQ("buffer32", returned_header32);
 
-  std::string returned_payload32((const char *)to_decode32.get_payload());
+  std::string const returned_payload32((const char *)to_decode32.get_payload());
   EXPECT_EQ("buffer32", returned_payload32);
 
   free(buffer16);
@@ -110,7 +110,7 @@ TEST_F(MessageEncodingDecodingTest, EncodeDecodeTest) {
 class MessageDataTest : public GcsBaseTest {};
 
 TEST_F(MessageDataTest, AppendtoHeaderTest) {
-  std::string test_data("to_append");
+  std::string const test_data("to_append");
   auto *message_data = new Gcs_message_data(test_data.length(), 0);
 
   message_data->append_to_header(pointer_cast<const uchar *>(test_data.c_str()),
@@ -122,7 +122,7 @@ TEST_F(MessageDataTest, AppendtoHeaderTest) {
 }
 
 TEST_F(MessageDataTest, AppendtoPayloadTest) {
-  std::string test_data("to_append");
+  std::string const test_data("to_append");
   auto *message_data = new Gcs_message_data(0, test_data.length());
 
   message_data->append_to_payload(
@@ -134,8 +134,8 @@ TEST_F(MessageDataTest, AppendtoPayloadTest) {
 }
 
 TEST_F(MessageDataTest, EncodeTest) {
-  std::string test_header("header");
-  std::string test_payload("payload");
+  std::string const test_header("header");
+  std::string const test_payload("payload");
   auto *message_data =
       new Gcs_message_data(test_header.length(), test_payload.length());
 
@@ -161,8 +161,8 @@ TEST_F(MessageDataTest, EncodeTest) {
 }
 
 TEST_F(MessageDataTest, EncodeNullTest) {
-  std::string test_header("header");
-  std::string test_payload("payload");
+  std::string const test_header("header");
+  std::string const test_payload("payload");
   auto *message_data =
       new Gcs_message_data(test_header.length(), test_payload.length());
 
@@ -196,8 +196,8 @@ TEST_F(MessageDataTest, EncodeNullTest) {
 }
 
 TEST_F(MessageDataTest, DecodeTest) {
-  std::string test_header("header");
-  std::string test_payload("payload");
+  std::string const test_header("header");
+  std::string const test_payload("payload");
   auto *message_data =
       new Gcs_message_data(test_header.length() + 1, test_payload.length() + 1);
 
@@ -226,10 +226,10 @@ TEST_F(MessageDataTest, DecodeTest) {
   EXPECT_EQ(test_header.length() + 1, to_decode.get_header_length());
   EXPECT_EQ(test_payload.length() + 1, to_decode.get_payload_length());
 
-  std::string returned_header((const char *)to_decode.get_header());
+  std::string const returned_header((const char *)to_decode.get_header());
   EXPECT_EQ(test_header, returned_header);
 
-  std::string returned_payload((const char *)to_decode.get_payload());
+  std::string const returned_payload((const char *)to_decode.get_payload());
   EXPECT_EQ(test_payload, returned_payload);
 
   free(buffer);
@@ -237,8 +237,8 @@ TEST_F(MessageDataTest, DecodeTest) {
 }
 
 TEST_F(MessageDataTest, DecodeNullTest) {
-  std::string test_header("header");
-  std::string test_payload("payload");
+  std::string const test_header("header");
+  std::string const test_payload("payload");
   auto *message_data =
       new Gcs_message_data(test_header.length(), test_payload.length());
 

@@ -319,7 +319,7 @@ TEST(Sql_I_ListTest, Construction) {
   SQL_I_List<Element> y(x);
   EXPECT_EQ(2, x.elements);
   EXPECT_EQ(2, y.elements);
-  SQL_I_List<Element> z(std::move(y));
+  SQL_I_List<Element> const z(std::move(y));
   EXPECT_EQ(2, z.elements);
   EXPECT_EQ(0, y.elements);
   EXPECT_EQ(&y.first, y.next);

@@ -59,7 +59,8 @@ void IntrusiveListIteratorTest::TearDown() {
 }
 
 TEST_F(IntrusiveListIteratorTest, BarePointer) {
-  IntrusiveListIterator<IntrusivePointee, &IntrusivePointee::next> it(first);
+  IntrusiveListIterator<IntrusivePointee, &IntrusivePointee::next> const it(
+      first);
   EXPECT_EQ(1, (*it)->value);
 }
 
@@ -75,7 +76,7 @@ using TestedIterator = NextFunctionIterator<IntrusivePointee, GetNextInList>;
 IntrusivePointee *GetNextInList(const IntrusivePointee *ip) { return ip->next; }
 
 TEST_F(IntrusiveListIteratorTest, IndirectionFunction) {
-  TestedIterator it(first);
+  TestedIterator const it(first);
   EXPECT_EQ(1, (*it)->value);
 }
 

@@ -78,7 +78,7 @@ Query_string_builder &Query_string_builder::quote_identifier_if_needed(
 namespace {
 inline void escape_char(const char *s, const size_t length, const char escape,
                         ngs::PFS_string *buff) {
-  size_t str_pos = buff->size();
+  size_t const str_pos = buff->size();
   // resize the buffer to fit the original size + worst case length of s
   buff->resize(str_pos + length * 2);
 
@@ -102,12 +102,12 @@ Query_string_builder &Query_string_builder::escape_identifier(const char *s,
 
 Query_string_builder &Query_string_builder::escape_string(const char *s,
                                                           size_t length) {
-  size_t str_pos = m_str.size();
+  size_t const str_pos = m_str.size();
   // resize the buffer to fit the original size + worst case length of s
   m_str.resize(str_pos + 2 * length + 1);
 
-  size_t r = escape_string_for_mysql(m_charset, &m_str[str_pos], 2 * length + 1,
-                                     s, length);
+  size_t const r = escape_string_for_mysql(m_charset, &m_str[str_pos],
+                                           2 * length + 1, s, length);
   m_str.resize(str_pos + r);
 
   return *this;

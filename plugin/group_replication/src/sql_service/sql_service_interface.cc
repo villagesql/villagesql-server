@@ -199,7 +199,8 @@ long Sql_service_interface::execute_query(std::string sql_string) {
   cmd.com_query.query = sql_string.c_str();
   cmd.com_query.length = static_cast<unsigned int>(sql_string.length());
 
-  long err = execute_internal(&rset, m_txt_or_bin, m_charset, cmd, COM_QUERY);
+  long const err =
+      execute_internal(&rset, m_txt_or_bin, m_charset, cmd, COM_QUERY);
 
   return err;
 }
@@ -215,7 +216,8 @@ long Sql_service_interface::execute_query(std::string sql_string,
   cmd.com_query.query = sql_string.c_str();
   cmd.com_query.length = static_cast<unsigned int>(sql_string.length());
 
-  long err = execute_internal(rset, cs_txt_or_bin, cs_charset, cmd, COM_QUERY);
+  long const err =
+      execute_internal(rset, cs_txt_or_bin, cs_charset, cmd, COM_QUERY);
 
   return err;
 }
@@ -227,14 +229,15 @@ long Sql_service_interface::execute(COM_DATA cmd,
                                     const CHARSET_INFO *cs_charset) {
   DBUG_TRACE;
 
-  long err = execute_internal(rset, cs_txt_or_bin, cs_charset, cmd, cmd_type);
+  long const err =
+      execute_internal(rset, cs_txt_or_bin, cs_charset, cmd, cmd_type);
 
   return err;
 }
 
 int Sql_service_interface::wait_for_session_server(ulong total_timeout) {
   int number_of_tries = 0;
-  ulong wait_retry_sleep = total_timeout * 1000000 / MAX_NUMBER_RETRIES;
+  ulong const wait_retry_sleep = total_timeout * 1000000 / MAX_NUMBER_RETRIES;
   int err = 0;
 
   while (!srv_session_server_is_available()) {

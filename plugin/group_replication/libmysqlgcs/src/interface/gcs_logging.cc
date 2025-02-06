@@ -62,7 +62,7 @@ const std::string Gcs_debug_options::m_debug_all(
 
 int64_t Gcs_debug_options::get_valid_debug_options() {
   int64_t ret = 0;
-  unsigned int num_options = get_number_debug_options();
+  unsigned int const num_options = get_number_debug_options();
 
   unsigned int i = 0;
   for (i = 0; i < num_options; i++) {
@@ -91,7 +91,7 @@ int64_t Gcs_debug_options::get_current_debug_options() {
 
 int64_t Gcs_debug_options::get_current_debug_options(
     std::string &res_debug_options) {
-  int64_t debug_options = load_debug_options();
+  int64_t const debug_options = load_debug_options();
   get_debug_options(debug_options, res_debug_options);
   return debug_options;
 }
@@ -99,7 +99,7 @@ int64_t Gcs_debug_options::get_current_debug_options(
 bool Gcs_debug_options::get_debug_options(const int64_t debug_options,
                                           std::string &res_debug_options) {
   unsigned int i = 0;
-  unsigned int num_options = get_number_debug_options();
+  unsigned int const num_options = get_number_debug_options();
 
   /*
     There are options that are not valid here so an error is returned.
@@ -136,7 +136,7 @@ bool Gcs_debug_options::get_debug_options(const std::string &debug_options,
   bool found;
   bool match = false;
   unsigned int i;
-  unsigned int num_options = get_number_debug_options();
+  unsigned int const num_options = get_number_debug_options();
 
   res_debug_options = GCS_DEBUG_NONE;
 
