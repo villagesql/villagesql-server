@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -46,23 +46,26 @@ using Session = SessionManager::Session;
 using SessionIdType = SessionManager::SessionId;
 
 SessionManager::Session::Session(const SessionId id,
-                                 const AuthorizationHandlerId &authorization_id)
+                                 const AuthorizationHandlerId &authorization_id,
+                                 const std::string &holder_name)
     : id_{id},
       access_time_{system_clock::now()},
-      authorization_handler_id_{authorization_id} {}
+      authorization_handler_id_{authorization_id},
+      holder_name_{holder_name} {}
 
 Session *SessionManager::new_session(
-    const AuthorizationHandlerId authorize_handler_id) {
+    const AuthorizationHandlerId authorize_handler_id,
+    const std::string &holder_name) {
   std::lock_guard<std::mutex> lck{mutex_};
-  sessions_.push_back(std::make_unique<Session>(generate_session_id_impl(),
-                                                authorize_handler_id));
+  sessions_.push_back(std::make_unique<Session>(
+      generate_session_id_impl(), authorize_handler_id, holder_name));
   return sessions_.back().get();
 }
 
 Session *SessionManager::new_session(const SessionId &session_id) {
   std::lock_guard<std::mutex> lck{mutex_};
-  sessions_.push_back(
-      std::make_unique<Session>(session_id, AuthorizationHandlerId{}));
+  sessions_.push_back(std::make_unique<Session>(
+      session_id, AuthorizationHandlerId{}, std::string()));
   return sessions_.back().get();
 }
 
@@ -109,13 +112,18 @@ void SessionManager::remove_session(const Session::SessionData *session_data) {
   remove_session(session_data->internal_session);
 }
 
-void SessionManager::remove_session(const Session *session) {
+bool SessionManager::remove_session(const Session *session) {
   std::lock_guard<std::mutex> lck{mutex_};
   auto it = std::find_if(
       sessions_.begin(), sessions_.end(),
       [session](const auto &item) { return item.get() == session; });
 
-  if (it != sessions_.end()) sessions_.erase(it);
+  if (it != sessions_.end()) {
+    sessions_.erase(it);
+    return true;
+  }
+
+  return false;
 }
 
 Session *SessionManager::get_session_handler_specific_id_impl(

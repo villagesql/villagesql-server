@@ -76,14 +76,10 @@ class AuthorizeManager {
                          AuthUser *out_user) = 0;
   virtual bool is_authorized(ServiceId id, rest::RequestContext &ctxt,
                              AuthUser *user) = 0;
-  virtual bool unauthorize(ServiceId id, http::Cookie *cookies,
-                           const std::optional<SessionId> &session_id) = 0;
+  virtual bool unauthorize(Session *session, http::Cookie *cookies) = 0;
   virtual void configure(const std::string &options) = 0;
   virtual std::string get_jwt_token(ServiceId service_id, Session *s) = 0;
-  virtual Session *get_current_session(SessionId id) = 0;
-  virtual Session *get_current_session(ServiceId id,
-                                       const HttpHeaders &input_headers,
-                                       http::Cookie *cookies) = 0;
+
   virtual users::UserManager *get_user_manager() = 0;
   virtual Container get_supported_authentication_applications(ServiceId id) = 0;
 
@@ -93,9 +89,6 @@ class AuthorizeManager {
   virtual collector::MysqlCacheManager *get_cache() = 0;
   virtual void clear() = 0;
   virtual void update_users_cache(const ChangedUsersIds &changed_users_ids) = 0;
-
-  virtual std::string get_session_cookie_key_name(
-      const AuthorizeManager::ServiceId id) = 0;
 };
 
 }  // namespace interface

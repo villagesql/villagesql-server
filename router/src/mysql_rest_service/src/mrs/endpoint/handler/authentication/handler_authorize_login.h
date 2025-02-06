@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -65,10 +65,9 @@ class HandlerAuthorizeLogin : public mrs::rest::Handler {
   HttpResult handle_put(RequestContext *ctxt) override;
 
  private:
-  Session *get_session(RequestContext *ctxt);
   std::string append_status_parameters(Session *session,
                                        const http::Error &error) const;
-  void set_session_cookie(RequestContext *ctxt, Session *session) const;
+  void set_session_cookie(RequestContext *ctxt) const;
 
   UniversalId service_id_;
   const std::string redirection_;

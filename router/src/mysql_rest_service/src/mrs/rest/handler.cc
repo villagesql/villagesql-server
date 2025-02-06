@@ -618,9 +618,8 @@ class RestRequestHandler : public ::http::base::RequestHandler {
           send_reply(*ctxt->request, e.status, e.message);
           break;
         case HttpStatusCode::Unauthorized:
-          if (ctxt->selected_handler) {
-            auth_manager_->unauthorize(rest_handler_->get_service_id(),
-                                       &ctxt->cookies, ctxt->session_id);
+          if (ctxt->selected_handler && ctxt->session) {
+            auth_manager_->unauthorize(ctxt->session, &ctxt->cookies);
           }
           [[fallthrough]];
         default:

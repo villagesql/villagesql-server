@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -131,8 +131,6 @@ TEST_F(HandlerAuthorizeTests, unauthorized_access_when_method_delete) {
 
   EXPECT_CALL(mock_input_buffer_, length()).WillRepeatedly(Return(0));
   EXPECT_CALL(mock_output_buffer_, length()).WillRepeatedly(Return(0));
-  EXPECT_CALL(mock_auth_, get_current_session(_, _, _))
-      .WillRepeatedly(Return(nullptr));
   EXPECT_CALL(mock_output_headers_,
               find(StrEq("Access-Control-Allow-Methods")));
   EXPECT_CALL(mock_output_headers_, add(StrEq("Access-Control-Allow-Methods"),
@@ -149,8 +147,6 @@ TEST_F(HandlerAuthorizeTests, unauthorized_access_when_method_put) {
 
   EXPECT_CALL(mock_input_buffer_, length()).WillRepeatedly(Return(0));
   EXPECT_CALL(mock_output_buffer_, length()).WillRepeatedly(Return(0));
-  EXPECT_CALL(mock_auth_, get_current_session(_, _, _))
-      .WillRepeatedly(Return(nullptr));
   EXPECT_CALL(mock_output_headers_,
               find(StrEq("Access-Control-Allow-Methods")));
   EXPECT_CALL(mock_output_headers_,
@@ -166,20 +162,17 @@ TEST_F(HandlerAuthorizeTests, do_the_authentication_get) {
   expectGeneric(HttpMethod::Get);
   const std::string k_session_id{"session_id_text"};
   const std::string k_cookie_name{"session_cookie"};
-  mrs::authentication::AuthorizeManager::Session session{k_session_id, {}};
+  mrs::authentication::AuthorizeManager::Session session{
+      k_session_id, {}, k_cookie_name};
 
-  EXPECT_CALL(mock_auth_, get_current_session(k_session_id))
-      .WillRepeatedly(Return(&session));
-  EXPECT_CALL(mock_auth_, get_session_cookie_key_name(k_service_id))
-      .WillOnce(Return(k_cookie_name));
   EXPECT_CALL(mock_auth_, authorize(_, _, _))
-      .WillOnce(Invoke([this, &k_session_id](ServiceId,
-                                             mrs::rest::RequestContext &ctxt,
-                                             AuthUser *) -> bool {
-        ctxt.selected_handler = mock_auth_handler_;
-        ctxt.session_id = k_session_id;
-        return true;
-      }));
+      .WillOnce(
+          Invoke([this, &session](ServiceId, mrs::rest::RequestContext &ctxt,
+                                  AuthUser *) -> bool {
+            ctxt.selected_handler = mock_auth_handler_;
+            ctxt.session = &session;
+            return true;
+          }));
 
   EXPECT_CALL(*mock_auth_handler_, redirects(_)).WillOnce(Return(true));
 
@@ -204,21 +197,18 @@ TEST_F(HandlerAuthorizeTests, do_the_authentication_post) {
   expectGeneric(HttpMethod::Post);
   const std::string k_session_id{"session_id_text"};
   const std::string k_cookie_name{"session_cookie"};
-  mrs::authentication::AuthorizeManager::Session session{k_session_id, {}};
+  mrs::authentication::AuthorizeManager::Session session{
+      k_session_id, {}, k_cookie_name};
 
-  EXPECT_CALL(mock_auth_, get_current_session(k_session_id))
-      .WillRepeatedly(Return(&session));
-  EXPECT_CALL(mock_auth_, get_session_cookie_key_name(k_service_id))
-      .WillOnce(Return(k_cookie_name));
   EXPECT_CALL(mock_auth_, authorize(_, _, _))
-      .WillOnce(Invoke([this, &k_session_id](ServiceId,
-                                             mrs::rest::RequestContext &ctxt,
-                                             AuthUser *) -> bool {
-        ctxt.selected_handler = mock_auth_handler_;
-        ctxt.post_authentication = true;
-        ctxt.session_id = k_session_id;
-        return true;
-      }));
+      .WillOnce(
+          Invoke([this, &session](ServiceId, mrs::rest::RequestContext &ctxt,
+                                  AuthUser *) -> bool {
+            ctxt.selected_handler = mock_auth_handler_;
+            ctxt.post_authentication = true;
+            ctxt.session = &session;
+            return true;
+          }));
   EXPECT_CALL(*mock_auth_handler_, redirects(_)).WillOnce(Return(true));
 
   EXPECT_CALL(mock_input_buffer_, length()).WillRepeatedly(Return(0));
@@ -243,8 +233,8 @@ TEST_F(HandlerAuthorizeTests, do_the_authentication_post) {
 TEST_F(HandlerAuthorizeTests, do_the_authentication_fails) {
   expectGeneric(HttpMethod::Get);
 
-  EXPECT_CALL(mock_auth_, get_current_session(_, _, _))
-      .WillRepeatedly(Return(nullptr));
+  //  EXPECT_CALL(mock_auth_, get_current_session(_, _, _))
+  //      .WillRepeatedly(Return(nullptr));
   EXPECT_CALL(mock_auth_, authorize(_, _, _))
       .WillOnce(Invoke([this](ServiceId, mrs::rest::RequestContext &ctxt,
                               AuthUser *) -> bool {

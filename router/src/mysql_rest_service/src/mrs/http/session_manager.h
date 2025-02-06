@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -63,7 +63,8 @@ class SessionManager {
     };
 
    public:
-    Session(const SessionId id, const AuthorizationHandlerId &authorization);
+    Session(const SessionId id, const AuthorizationHandlerId &authorization,
+            const std::string &holder_name);
 
     template <typename Derived>
     Derived *get_data() {
@@ -82,6 +83,8 @@ class SessionManager {
     }
 
     const SessionId &get_session_id() const { return id_; }
+
+    const std::string &get_holder_name() const { return holder_name_; }
 
     system_clock::time_point get_access_time() const { return access_time_; }
 
@@ -106,6 +109,7 @@ class SessionManager {
     SessionId id_;
     system_clock::time_point access_time_;
     AuthorizationHandlerId authorization_handler_id_{0};
+    std::string holder_name_;
   };
 
   using SessionPtr = std::unique_ptr<Session>;
@@ -113,11 +117,12 @@ class SessionManager {
  public:
   Session *get_session_secondary_id(const SessionId &id);
   Session *get_session(const SessionId &id);
-  Session *new_session(const AuthorizationHandlerId id);
+  Session *new_session(const AuthorizationHandlerId id,
+                       const std::string &holder_name);
   Session *new_session(const SessionId &session_id);
 
   void remove_session(const Session::SessionData *session_data);
-  void remove_session(const Session *session);
+  bool remove_session(const Session *session);
   bool remove_session(const SessionId session);
   void remove_timeouted();
   system_clock::duration get_timeout() { return timeout_; }

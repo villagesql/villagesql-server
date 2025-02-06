@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -77,46 +77,47 @@ uint32_t HandlerAuthorizeLogin::get_access_rights() const {
   return Op::valueRead | Op::valueCreate;
 }
 
-void HandlerAuthorizeLogin::set_session_cookie(RequestContext *ctxt,
-                                               Session *session) const {
-  auto session_cookie_key =
-      ctxt->auth_manager_->get_session_cookie_key_name(get_service_id());
-  http::Cookie::SameSite same_site = http::Cookie::None;
-  ctxt->cookies.set(session_cookie_key, session->get_session_id(),
-                    http::Cookie::duration{0}, "/", &same_site, true, true, {});
+void HandlerAuthorizeLogin::set_session_cookie(RequestContext *ctxt) const {
+  assert(ctxt->session && "handle_get/post should have checked it");
+
+  const auto &session_cookie_key = ctxt->session->get_holder_name();
+  if (!session_cookie_key.empty()) {
+    http::Cookie::SameSite same_site = http::Cookie::None;
+    ctxt->cookies.set(session_cookie_key, ctxt->session->get_session_id(),
+                      http::Cookie::duration{0}, "/", &same_site, true, true,
+                      {});
+  }
 }
 
 HttpResult HandlerAuthorizeLogin::handle_get(RequestContext *ctxt) {
-  auto session = get_session(ctxt);
-
   log_debug("HandlerAuthorizeLogin::handle_get - before redirects %s",
-            ctxt->session_id.value_or("(nil)").c_str());
+            ctxt->session ? ctxt->session->get_session_id().c_str() : "(null)");
 
-  if (!session) {
+  if (!ctxt->session) {
     throw http::Error(HttpStatusCode::Unauthorized);
   }
 
   if (ctxt->selected_handler->redirects(*ctxt)) {
-    if (!session->generate_token) set_session_cookie(ctxt, session);
+    if (!ctxt->session->generate_token) set_session_cookie(ctxt);
 
-    auto uri = append_status_parameters(session, {HttpStatusCode::Ok});
+    auto uri = append_status_parameters(ctxt->session, {HttpStatusCode::Ok});
     http::redirect_and_throw(ctxt->request, uri);
   }
 
   log_debug(
       "HandlerAuthorizeLogin::handle_get - no redirects (session:%p, "
-      "generate:%s)",
-      session, (session ? (session->generate_token ? "yes" : "no") : "(nill)"));
+      "generate_token:%s)",
+      ctxt->session, (ctxt->session->generate_token ? "yes" : "no"));
 
-  if (!session->generate_token) {
-    set_session_cookie(ctxt, session);
+  if (!ctxt->session->generate_token) {
+    set_session_cookie(ctxt);
     return HttpResult(HttpStatusCode::Ok, "{}", helper::MediaType::typeJson);
   }
 
   log_debug("HandlerAuthorizeLogin::handle_get - post");
   auto jwt_token =
-      authorization_manager_->get_jwt_token(get_service_id(), session);
-  session->generate_token = false;
+      authorization_manager_->get_jwt_token(get_service_id(), ctxt->session);
+  ctxt->session->generate_token = false;
   return HttpResult(HttpStatusCode::Ok,
                     helper::json::to_string({{"accessToken", jwt_token}}),
                     helper::MediaType::typeJson);
@@ -148,12 +149,6 @@ static const char *get_authentication_status(HttpStatusCode::key_type code) {
   }
 }
 
-Session *HandlerAuthorizeLogin::get_session(RequestContext *ctxt) {
-  if (!ctxt->session_id.has_value()) return nullptr;
-
-  return authorization_manager_->get_current_session(ctxt->session_id.value());
-}
-
 std::string HandlerAuthorizeLogin::append_status_parameters(
     Session *session, const http::Error &error) const {
   std::string jwt_token;
@@ -162,7 +157,7 @@ std::string HandlerAuthorizeLogin::append_status_parameters(
     jwt_token =
         authorization_manager_->get_jwt_token(get_service_id(), session);
   }
-  http::SessionManager::Session dummy{"", UniversalId{}};
+  http::SessionManager::Session dummy{"", UniversalId{}, ""};
   session = session ? session : &dummy;
 
   ::http::base::Uri uri(session->users_on_complete_url_redirection.empty()
@@ -202,23 +197,22 @@ bool HandlerAuthorizeLogin::request_error(RequestContext *ctxt,
   // Oauth2 authentication may redirect, allow it.
   Url url(ctxt->request->get_uri());
 
-  auto session = get_session(ctxt);
-
   log_debug(
       "HandlerAuthorizeLogin::request_error - trying to overwrite  the error: "
       "%i with redirect",
       (int)error.status);
 
-  if (session) {
+  if (ctxt->session) {
     log_debug("session->onRedirect=url_param->onRedirect");
-    url.get_if_query_parameter("onCompletionRedirect",
-                               &session->users_on_complete_url_redirection);
+    url.get_if_query_parameter(
+        "onCompletionRedirect",
+        &ctxt->session->users_on_complete_url_redirection);
     url.get_if_query_parameter("onCompletionClose",
-                               &session->users_on_complete_timeout);
+                               &ctxt->session->users_on_complete_timeout);
   }
 
   // Redirect to original/first page that redirected to us.
-  auto uri = append_status_parameters(session, error);
+  auto uri = append_status_parameters(ctxt->session, error);
   ctxt->request->send_reply(http::redirect(ctxt->request, uri.c_str()));
   authorization_manager_->discard_current_session(get_service_id(),
                                                   &ctxt->cookies);

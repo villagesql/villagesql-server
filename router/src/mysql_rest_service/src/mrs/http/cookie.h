@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -38,7 +38,10 @@ class Cookie {
  public:
   using duration = std::chrono::steady_clock::duration;
   using Request = ::http::base::Request;
+  using MapWithCookies = std::map<std::string, std::string>;
   enum SameSite { None, Lex, Strict };
+
+ public:
   Cookie(Request *request);
 
   static void clear(Request *request, const char *cookie_name);
@@ -55,11 +58,11 @@ class Cookie {
            bool http_only = false, const std::string &domain = {});
   std::string get(const std::string &key);
   void clear(const char *cookie_name);
-  std::map<std::string, std::string> &direct();
+  MapWithCookies &direct();
 
  private:
   static const char *kHttpParameterNameCookie;
-  std::map<std::string, std::string> cookies_;
+  MapWithCookies cookies_;
   Request *request_;
 };
 

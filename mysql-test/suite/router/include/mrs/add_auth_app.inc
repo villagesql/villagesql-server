@@ -59,8 +59,8 @@ if ($mrs_schema_version == 3)
     $mrs_add_auth_client_secret
     );
   eval INSERT INTO mysql_rest_service_metadata.service_has_auth_app(service_id, auth_app_id)
-    VALUES((SELECT id FROM mysql_rest_service_metadata.service WHERE url_context_root like "$mrs_add_auth_service"),
-         $mrs_sql_id_variable);
+    SELECT id,$mrs_sql_id_variable FROM mysql_rest_service_metadata.service WHERE url_context_root rlike "$mrs_add_auth_service"
+         ;
 }
 if ($mrs_schema_version == 2)
 {
@@ -69,7 +69,7 @@ if ($mrs_schema_version == 2)
     default_role_id, app_id, access_token)
     VALUES($mrs_sql_id_variable,
     (SELECT id FROM mysql_rest_service_metadata.auth_vendor WHERE name like "$mrs_add_auth_vendor"),
-    (SELECT id FROM mysql_rest_service_metadata.service WHERE url_context_root like "$mrs_add_auth_service"),
+    (SELECT id FROM mysql_rest_service_metadata.service WHERE url_context_root rlike "$mrs_add_auth_service"),
     "$mrs_add_auth_app",
     1,
     $mrs_add_auth_registered_users_only,

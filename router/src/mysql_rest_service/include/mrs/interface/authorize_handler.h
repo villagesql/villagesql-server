@@ -63,6 +63,7 @@ class AuthorizeHandler {
   virtual bool redirects(RequestContext &ctxt) const = 0;
   virtual UniversalId get_service_id() const = 0;
   virtual UniversalId get_id() const = 0;
+
   virtual const AuthApp &get_entry() const = 0;
   virtual UserManager &get_user_manager() = 0;
 

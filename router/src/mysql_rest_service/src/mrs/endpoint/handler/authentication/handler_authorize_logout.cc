@@ -94,7 +94,7 @@ HttpResult HandlerAuthorizeLogout::handle_get(RequestContext *) {
 
 HttpResult HandlerAuthorizeLogout::handle_post(RequestContext *ctxt,
                                                const std::vector<uint8_t> &) {
-  auth_manager_->unauthorize(service_id_, &ctxt->cookies, ctxt->session_id);
+  auth_manager_->unauthorize(ctxt->session, &ctxt->cookies);
   return get_json_response_ok();
 }
 

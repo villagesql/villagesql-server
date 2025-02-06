@@ -67,6 +67,8 @@ using seconds = std::chrono::seconds;
 using Headers = ::http::base::Headers;
 using JwtHolder = helper::JwtHolder;
 using Jwt = helper::Jwt;
+using SessionId = AuthorizeManager::SessionId;
+using Session = AuthorizeManager::Session;
 using Handlers = AuthorizeManager::AuthHandlers;
 using AuthorizeHandlerPtr = AuthorizeManager::AuthorizeHandlerPtr;
 
@@ -174,10 +176,8 @@ Jwt get_bearer_token_jwt(const Headers &headers) {
   return {};
 }
 
-static std::string get_session_cookie_key_name(
-    const AuthorizeManager::ServiceId id) {
-  using namespace std::literals::string_literals;
-  return "session_"s + id.to_string();
+std::string get_session_cookie_key_name(const UniversalId &id) {
+  return "session_" + id.to_string();
 }
 
 }  // namespace
@@ -201,6 +201,9 @@ AuthorizeManager::AuthorizeManager(collector::MysqlCacheManager *cache_manager,
 
 void AuthorizeManager::configure(const std::string &options) {
   auto cnf = parse_json_options(options);
+
+  // Move object in a thread safe mode
+  // The assign operator is overloaded.
   accounts_rate_ = RateControlFor<std::string>(
       cnf.account_requests_per_minute_, cnf.block_for,
       cnf.account_minimum_time_between_requests);
@@ -313,18 +316,12 @@ void AuthorizeManager::pre_authorize_account(
   }
 }
 
-bool AuthorizeManager::unauthorize(ServiceId service_id, http::Cookie *cookies,
-                                   const std::optional<SessionId> &session_id) {
-  auto session_cookie_key = get_session_cookie_key_name(service_id);
-  auto session_identifier =
-      session_id ? *session_id : cookies->get(session_cookie_key);
-
-  if (session_identifier.empty()) {
-    log_debug("unauthorize - session_identifier not found");
-    return false;
+bool AuthorizeManager::unauthorize(Session *session, http::Cookie *cookies) {
+  if (cookies->direct().count(session->get_holder_name())) {
+    cookies->clear(session->get_holder_name().c_str());
   }
 
-  return session_manager_.remove_session(session_identifier);
+  return session_manager_.remove_session(session);
 }
 
 static std::string current_timestamp(std::chrono::system_clock::duration d) {
@@ -374,11 +371,12 @@ std::string AuthorizeManager::get_jwt_token(UniversalId service_id,
 
   if (!s->user.email.empty()) doc_set_member(payload, "email", s->user.email);
 
+  const auto &aid = s->get_authorization_handler_id();
   doc_set_member(payload, "exp", exp);
   doc_set_member(
-      payload, "service_id",
-      std::string_view{reinterpret_cast<const char *>(service_id.raw.data()),
-                       service_id.raw.size()});
+      payload, "auth_app",
+      std::string_view{reinterpret_cast<const char *>(aid.raw.data()),
+                       aid.raw.size()});
 
   auto jwt = helper::Jwt::create("HS256", payload);
 
@@ -395,29 +393,41 @@ std::string AuthorizeManager::get_jwt_token(UniversalId service_id,
   return token;
 }
 
-AuthorizeManager::Session *AuthorizeManager::get_current_session(SessionId id) {
-  return session_manager_.get_session(id);
-}
+std::vector<std::pair<std::string, SessionId>>
+AuthorizeManager::get_session_ids_cookies(const UniversalId &service_id,
+                                          http::Cookie *cookies) {
+  std::vector<std::pair<std::string, SessionId>> result;
+  Container handlers = get_supported_authentication_applications(service_id);
 
-AuthorizeManager::Session *AuthorizeManager::get_current_session(
-    ServiceId id, const HttpHeaders &input_headers, http::Cookie *cookies) {
-  auto session_cookie_key = get_session_cookie_key_name(id);
-  auto session_identifier = cookies->get(session_cookie_key);
+  for (const auto &h : handlers) {
+    const auto &session_cookie_key = get_session_cookie_key_name(h->get_id());
+    std::string session_identifier;
 
-  if (session_identifier.empty()) {
-    if (!jwt_secret_.empty()) {
-      auto jwt = get_bearer_token_jwt(input_headers);
-
-      auto jwt_session_id = authorize_jwt(id, jwt);
-      if (!jwt_session_id.has_value()) return nullptr;
-      session_identifier = jwt_session_id.value();
+    if (helper::container::get_value(cookies->direct(), session_cookie_key,
+                                     &session_identifier)) {
+      result.emplace_back(session_cookie_key, session_identifier);
     }
   }
 
-  auto session = session_manager_.get_session(session_identifier);
-  log_debug("get_current_session using-cookie-jwt session state:%i",
-            session ? session->state : -1);
-  return session;
+  return result;
+}
+
+std::vector<SessionId> AuthorizeManager::get_session_ids_from_cookies(
+    const UniversalId &service_id, http::Cookie *cookies) {
+  std::vector<SessionId> result;
+  Container handlers = get_supported_authentication_applications(service_id);
+
+  for (const auto &h : handlers) {
+    const auto session_cookie_key = get_session_cookie_key_name(h->get_id());
+    std::string session_identifier;
+
+    if (helper::container::get_value(cookies->direct(), session_cookie_key,
+                                     &session_identifier)) {
+      result.emplace_back(session_identifier);
+    }
+  }
+
+  return result;
 }
 
 AuthorizeManager::Container
@@ -425,59 +435,61 @@ AuthorizeManager::get_supported_authentication_applications(ServiceId id) {
   return get_handlers_by_service_id(id);
 }
 
-std::optional<std::string> AuthorizeManager::authorize_jwt(
-    const UniversalId service_id, const helper::Jwt &jwt) {
+Session *AuthorizeManager::authorize_jwt(const UniversalId service_id,
+                                         const helper::Jwt &jwt) {
   log_debug("Validating JWT token: %s", jwt.get_token().c_str());
   if (!jwt.is_valid()) {
     log_debug("JWT token is invalid");
-    return {};
+    return nullptr;
   }
   // We allow HS256, still it doesn't change much because
   // Jws supports only HS256 and none (just blocking use of none).
   if (jwt.get_header_claim_algorithm() != "HS256") {
     log_debug("JWT token not supported algorithm");
-    return {};
+    return nullptr;
   }
   if (!jwt.verify(jwt_secret_)) {
     log_debug("JWT token verification failed");
-    return {};
+    return nullptr;
   }
 
   auto claims = jwt.get_payload_claim_names();
-  if (!helper::container::has(claims, "user_id")) return {};
-  if (!helper::container::has(claims, "exp")) return {};
-  if (!helper::container::has(claims, "service_id")) return {};
+  if (!helper::container::has(claims, "user_id")) return nullptr;
+  if (!helper::container::has(claims, "exp")) return nullptr;
+  if (!helper::container::has(claims, "auth_app")) return nullptr;
 
   auto json_uid = jwt.get_payload_claim_custom("user_id");
   auto json_exp = jwt.get_payload_claim_custom("exp");
-  auto json_sid = jwt.get_payload_claim_custom("service_id");
+  auto json_aid = jwt.get_payload_claim_custom("auth_app");
 
-  if (!json_uid->IsString()) return {};
-  log_debug("JWT token supported algorithm");
-  if (!json_exp->IsString()) return {};
-  if (!json_sid->IsString()) return {};
+  if (!json_uid->IsString()) return nullptr;
+  if (!json_exp->IsString()) return nullptr;
+  if (!json_aid->IsString()) return nullptr;
 
   // TODO(lkotula): Change from_raw ? (Shouldn't be in review)
   auto user_id = helper::string::unhex<UserIdContainer>(json_uid->GetString())
                      .get_user_id();
   auto exp = json_exp->GetString();
-  auto sid = UniversalId::from_cstr(json_sid->GetString(),
-                                    json_sid->GetStringLength());
+  auto aid = UniversalId::from_cstr(json_aid->GetString(),
+                                    json_aid->GetStringLength());
 
-  if (sid != service_id) {
+  auto handlers = this->get_handlers_by_service_id(service_id);
+
+  if (!helper::container::get_if(
+          handlers, [&aid](auto &h) { return h->get_id() == aid; }, nullptr)) {
     log_debug("Wrong service id.");
-    return {};
+    return nullptr;
   }
 
   if (is_timestamp_in_past(exp)) {
     log_debug("Token expired.");
-    return {};
+    return nullptr;
   }
 
   std::string session_id = user_id.to_string() + "." + exp;
-  if (session_manager_.get_session(session_id)) {
+  if (auto session = session_manager_.get_session(session_id)) {
     log_debug("Session for token already exsits: %s", session_id.c_str());
-    return {session_id};
+    return session;
   }
 
   auto session = session_manager_.new_session(session_id);
@@ -485,12 +497,14 @@ std::optional<std::string> AuthorizeManager::authorize_jwt(
   auto instance = cache_manager_->get_instance(
       collector::kMySQLConnectionMetadataRW, false);
   if (user_manager_.user_get_by_id(user_id, &session->user, &instance)) {
-    log_debug("Found user %s", user_id.to_string().c_str());
     session->state = http::SessionManager::Session::kUserVerified;
-    return {session_id};
+    return session;
   }
+
   log_debug("User not found");
-  return {};
+  // User verification failed, remove just created session.
+  session_manager_.remove_session(session);
+  return nullptr;
 }
 
 AuthorizeHandlerPtr AuthorizeManager::choose_authentication_handler(
@@ -527,7 +541,7 @@ AuthorizeHandlerPtr AuthorizeManager::choose_authentication_handler(
           // Even if the handler can parse the request and it thinks
           // that its his payload, we need look a second time,
           // for the handler using handler-id.
-          // There may be a few different hanlders, with the same
+          // There may be a few different handlers, with the same
           // vendor-id.
           auto handler_id = session->get_authorization_handler_id();
           for (auto &handler : handlers) {
@@ -603,42 +617,50 @@ AuthorizeParameters get_authorize_parameters(::http::base::Request *request) {
   return extract_parameters(body_object_fields);
 }
 
-static void setup_ctxt_session_id_from_cookie(UniversalId service_id,
-                                              rest::RequestContext &ctxt) {
-  auto session_cookie_key = get_session_cookie_key_name(service_id);
-  auto session_identifier = ctxt.cookies.get(session_cookie_key);
+Session *AuthorizeManager::get_session_id_from_cookie(
+    const UniversalId &service_id, http::Cookie &cookies) {
+  auto session_ids = get_session_ids_from_cookies(service_id, &cookies);
 
-  if (!session_identifier.empty()) {
-    log_debug("SessionId source: cookie");
-    ctxt.session_id = session_identifier;
+  for (size_t index = 0; index < session_ids.size(); ++index) {
+    auto session = session_manager_.get_session(session_ids[index]);
+    if (session) {
+      return session;
+    }
   }
+
+  return nullptr;
 }
 
 bool AuthorizeManager::authorize(ServiceId service_id,
                                  rest::RequestContext &ctxt,
                                  AuthUser *out_user) {
-  setup_ctxt_session_id_from_cookie(service_id, ctxt);
+  if (auto session = get_session_id_from_cookie(service_id, ctxt.cookies);
+      session) {
+    log_debug("Session source: cookie");
+    ctxt.session = session;
+  }
 
   log_debug(
       "AuthorizeManager::authorize(service_id:%s, session_id:%s, "
       "can_use_jwt:%s)",
       service_id.to_string().c_str(),
-      ctxt.session_id.value_or("<NONE>").c_str(),
+      ctxt.session ? ctxt.session->get_session_id().c_str() : "<NONE>",
       (jwt_secret_.empty() ? "no" : "yes"));
 
   AuthorizeHandlerPtr selected_handler;
 
   auto [use_jwt, url_session_id, auth_app] =
       get_authorize_parameters(ctxt.request);
+
   log_debug(
       "AuthorizeManager::authorize - use_jwt:%s, url_session_id:%s, "
       "auth_app:%s",
       (use_jwt ? "yes" : "no"), url_session_id.value_or("<NONE>").c_str(),
       auth_app.value_or("<NONE>").c_str());
 
-  if (!ctxt.session_id.has_value() && url_session_id.has_value()) {
+  if (!ctxt.session && url_session_id.has_value()) {
     log_debug("SessionId source: URL parameter or json body");
-    ctxt.session_id = url_session_id;
+    ctxt.session = session_manager_.get_session(url_session_id.value());
   }
 
   if (use_jwt && jwt_secret_.empty()) {
@@ -659,66 +681,47 @@ bool AuthorizeManager::authorize(ServiceId service_id,
   assert(nullptr != selected_handler.get());
 
   ctxt.selected_handler = selected_handler;
-  if (ctxt.session_id.has_value()) {
-    auto session = session_manager_.get_session(ctxt.session_id.value());
-    if (session) {
-      if (session->get_authorization_handler_id() !=
-          selected_handler->get_id()) {
-        log_debug("SessionId source: resetting because of wrong handler id");
-        session_manager_.remove_session(ctxt.session_id.value());
-        ctxt.session_id.reset();
-      }
-    } else {
-      ctxt.session_id.reset();
+  if (ctxt.session) {
+    if (ctxt.session->get_authorization_handler_id() !=
+        selected_handler->get_id()) {
+      log_debug(
+          "SessionId source: resetting because of wrong handler "
+          "id");
+      session_manager_.remove_session(ctxt.session);
+      ctxt.session = nullptr;
     }
   }
 
   using namespace std::literals::string_literals;
-  Session *session{nullptr};
 
-  // TODO(alfredo) - looks duplicate with above?
-  if (ctxt.session_id.has_value()) {
-    session = session_manager_.get_session(ctxt.session_id.value());
-
-    if (!session) {
-      ctxt.session_id.reset();
-    }
-  }
-
-  if (!ctxt.session_id.has_value()) {
-    // TODO(lkotula): There might be a collision in handler specfic-ids,
-    //  this code needs some additional work.
+  if (!ctxt.session) {
     std::optional<std::string> handler_spcific_session_id =
         selected_handler->get_session_id_from_request_data(ctxt);
 
     if (handler_spcific_session_id.has_value()) {
-      session = session_manager_.get_session_secondary_id(
+      ctxt.session = session_manager_.get_session_secondary_id(
           handler_spcific_session_id.value());
-      if (session) {
-        ctxt.session_id = session->get_session_id();
+      if (ctxt.session) {
+        log_debug("SessionId source: from-handler id=%s",
+                  ctxt.session->get_session_id().c_str());
       }
-      log_debug("SessionId source: from-handler id=%s",
-                session->get_session_id().c_str());
     }
   }
 
-  if (!ctxt.session_id.has_value()) {
-    session = session_manager_.new_session(selected_handler->get_id());
-    session->generate_token = use_jwt;
+  if (!ctxt.session) {
+    ctxt.session = session_manager_.new_session(
+        selected_handler->get_id(),
+        get_session_cookie_key_name(selected_handler->get_id()));
+    ctxt.session->generate_token = use_jwt;
 
-    //    http::Cookie::SameSite same_site = http::Cookie::None;
-    //    ctxt.cookies.set(session_cookie_key, session->get_session_id(),
-    //                     http::Cookie::duration{0}, "/", &same_site, true,
-    //                     true,
-    //                     {});
-    ctxt.session_id = session->get_session_id();
-    log_debug("SessionId source: new id=%s", session->get_session_id().c_str());
+    log_debug("SessionId source: new id=%s",
+              ctxt.session->get_session_id().c_str());
   }
 
   assert(nullptr != session);
-  session->handler_name = selected_handler->get_entry().app_name;
+  ctxt.session->handler_name = selected_handler->get_entry().app_name;
 
-  if (selected_handler->authorize(ctxt, session, out_user)) {
+  if (selected_handler->authorize(ctxt, ctxt.session, out_user)) {
     return true;
   }
 
@@ -732,35 +735,35 @@ users::UserManager *AuthorizeManager::get_user_manager() {
 bool AuthorizeManager::is_authorized(ServiceId service_id,
                                      rest::RequestContext &ctxt,
                                      AuthUser *user) {
-  setup_ctxt_session_id_from_cookie(service_id, ctxt);
+  if (auto session = get_session_id_from_cookie(service_id, ctxt.cookies);
+      session) {
+    log_debug("Session source: cookie");
+    ctxt.session = session;
+  }
 
   log_debug(
       "AuthorizeManager::is_authorized(service_id:%s, session_id:%s, "
       "can_use_jwt:%s)",
       service_id.to_string().c_str(),
-      ctxt.session_id.value_or("<NONE>").c_str(),
+      (ctxt.session ? ctxt.session->get_session_id().c_str() : "<NONE>"),
       (jwt_secret_.empty() ? "no" : "yes"));
 
-  if (!ctxt.session_id.has_value()) {
+  if (!ctxt.session) {
     if (!jwt_secret_.empty()) {
       auto jwt = get_bearer_token_jwt(ctxt.get_in_headers());
 
-      ctxt.session_id = authorize_jwt(service_id, jwt);
+      ctxt.session = authorize_jwt(service_id, jwt);
     }
-
-    if (!ctxt.session_id.has_value()) return false;
   }
 
-  auto session = session_manager_.get_session(ctxt.session_id.value());
+  if (!ctxt.session) return false;
 
-  if (!session) return false;
-
-  if (session->state == Session::kUserVerified) {
-    *user = session->user;
+  if (ctxt.session->state == Session::kUserVerified) {
+    *user = ctxt.session->user;
     return true;
   }
 
-  ctxt.session_id.reset();
+  ctxt.session = nullptr;
 
   return false;
 }
@@ -773,11 +776,6 @@ void AuthorizeManager::discard_current_session(ServiceId id,
 }
 
 void AuthorizeManager::clear() { container_.clear(); }
-
-std::string AuthorizeManager::get_session_cookie_key_name(
-    const AuthorizeManager::ServiceId id) {
-  return ::mrs::authentication::get_session_cookie_key_name(id);
-}
 
 void AuthorizeManager::update_users_cache(
     const ChangedUsersIds &changed_users_ids) {

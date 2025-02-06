@@ -42,23 +42,14 @@ class MockAuthManager : public mrs::interface::AuthorizeManager {
               (ServiceId id, mrs::rest::RequestContext &ctxt, AuthUser *user),
               (override));
   MOCK_METHOD(bool, unauthorize,
-              (ServiceId id, mrs::http::Cookie *cookies,
-               const std::optional<SessionId> &session_id),
-              (override));
+              (Session * session, mrs::http::Cookie *cookies), (override));
 
-  MOCK_METHOD(Session *, get_current_session,
-              (ServiceId id, const HttpHeaders &input_headers,
-               mrs::http::Cookie *cookies),
-              (override));
   MOCK_METHOD(collector::MysqlCacheManager *, get_cache, (), (override));
   MOCK_METHOD(mrs::users::UserManager *, get_user_manager, (), (override));
   MOCK_METHOD(Container, get_supported_authentication_applications, (ServiceId),
               (override));
   MOCK_METHOD(void, clear, (), (override));
   MOCK_METHOD(void, update_users_cache, (const ChangedUsersIds &), (override));
-  MOCK_METHOD(Session *, get_current_session, (SessionId id), (override));
-  MOCK_METHOD(std::string, get_session_cookie_key_name,
-              (const AuthorizeManager::ServiceId id), (override));
 };
 
 #endif  // ROUTER_SRC_REST_MRS_TESTS_MOCK_MOCK_AUTH_MANAGER_H_

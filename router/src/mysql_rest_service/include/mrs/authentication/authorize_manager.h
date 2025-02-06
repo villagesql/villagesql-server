@@ -54,7 +54,6 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
 
   class ServiceAuthorize {
    public:
-    uint64_t references_{1};
     RestHandlerPtr authorize_handler_;
     RestHandlerPtr status_handler_;
     RestHandlerPtr unauthorize_handler_;
@@ -77,29 +76,29 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
   void update(const Entries &entries) override;
   void configure(const std::string &options) override;
 
-  bool unauthorize(ServiceId id, http::Cookie *cookies,
-                   const std::optional<SessionId> &session_id) override;
+  bool unauthorize(Session *session, http::Cookie *cookies) override;
   bool authorize(ServiceId id, rest::RequestContext &ctxt,
                  AuthUser *out_user) override;
   bool is_authorized(ServiceId id, rest::RequestContext &ctxt,
                      AuthUser *user) override;
 
   std::string get_jwt_token(UniversalId service_id, Session *s) override;
-  Session *get_current_session(SessionId id) override;
-  Session *get_current_session(ServiceId id, const HttpHeaders &input_headers,
-                               http::Cookie *cookies) override;
   void discard_current_session(ServiceId id, http::Cookie *cookies) override;
   users::UserManager *get_user_manager() override;
   collector::MysqlCacheManager *get_cache() override { return cache_manager_; }
   Container get_supported_authentication_applications(ServiceId id) override;
   void clear() override;
   void update_users_cache(const ChangedUsersIds &changed_users_ids) override;
-  std::string get_session_cookie_key_name(
-      const AuthorizeManager::ServiceId id) override;
 
  private:
   AuthorizeHandlerPtr make_auth(const AuthApp &entry);
   Container get_handlers_by_service_id(const UniversalId service_id);
+  Session *get_session_id_from_cookie(const UniversalId &service_id,
+                                      http::Cookie &cookies);
+  std::vector<std::pair<std::string, SessionId>> get_session_ids_cookies(
+      const UniversalId &service_id, http::Cookie *cookies);
+  std::vector<SessionId> get_session_ids_from_cookies(
+      const UniversalId &service_id, http::Cookie *cookies);
   bool get_handler_by_id(const UniversalId auth_id, Container::iterator *it);
   bool get_handler_by_id(const UniversalId auth_id,
                          AuthorizeHandlerPtr &out_it);
@@ -109,12 +108,11 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
       const std::optional<std::string> &app_name);
 
   /**
-   * Validate the jwt tokent, and get/create session_id for it.
+   * Validate the JWT token, and get/create session for it.
    *
-   * @returns session id, for found or just created session.
+   * @returns session pointer
    */
-  std::optional<std::string> authorize_jwt(const UniversalId service_id,
-                                           const helper::Jwt &jwt);
+  Session *authorize_jwt(const UniversalId service_id, const helper::Jwt &jwt);
 
  private:  // AuthorizeHandlerCallbacks
   void pre_authorize_account(interface::AuthorizeHandler *handler,

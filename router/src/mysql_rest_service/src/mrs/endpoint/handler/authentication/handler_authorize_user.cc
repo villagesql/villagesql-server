@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -59,22 +59,15 @@ HttpResult HandlerAuthorizeUser::handle_put(RequestContext *ctxt) {
 
   rapidjson::Document doc;
 
-  if (!ctxt->session_id.has_value()) {
+  if (!ctxt->session) {
     throw http::Error(HttpStatusCode::BadRequest,
                       "This endpoint requires authenticated user.");
-  }
-
-  auto session =
-      authorization_manager_->get_current_session(ctxt->session_id.value());
-
-  if (!session) {
-    throw http::Error(HttpStatusCode::BadRequest,
-                      "This endpoint requires unexpired session.");
   }
 
   if (!helper::json::text_to(&doc, input) || !doc.IsObject())
     throw http::Error(HttpStatusCode::BadRequest,
                       "PUT value isn't a JSON object.");
+
   const std::vector<std::string> allowed_members{"name", "email"};
   for (auto kv : helper::json::member_iterator(doc)) {
     if (!helper::container::has(allowed_members, kv.first))
@@ -99,7 +92,7 @@ HttpResult HandlerAuthorizeUser::handle_put(RequestContext *ctxt) {
     throw http::Error(HttpStatusCode::InternalError);
   }
 
-  session->user = ctxt->user;
+  ctxt->session->user = ctxt->user;
 
   return {};
 }

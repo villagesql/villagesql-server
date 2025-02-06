@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -35,6 +35,7 @@
 #include "mrs/database/entry/auth_user.h"
 #include "mrs/http/cookie.h"
 #include "mrs/http/header_accept.h"
+#include "mrs/http/session_manager.h"
 #include "mrs/interface/authorize_handler.h"
 #include "mrs/interface/authorize_manager.h"
 
@@ -48,6 +49,7 @@ struct RequestContext {
   using HeaderAccept = ::mrs::http::HeaderAccept;
   using Request = ::http::base::Request;
   using Headers = ::http::base::Headers;
+  using Session = ::mrs::http::SessionManager::Session;
 
   RequestContext(interface::AuthorizeManager *auth_manager = nullptr)
       : auth_manager_{auth_manager} {}
@@ -58,7 +60,7 @@ struct RequestContext {
         accepts{get_in_headers().find_cstr("Accept")} {}
 
   Request *request{nullptr};
-  std::optional<std::string> session_id;
+  Session *session{nullptr};
   http::Cookie cookies{request};
   SqlSessionCached sql_session_cache;
   interface::AuthorizeManager *auth_manager_;
