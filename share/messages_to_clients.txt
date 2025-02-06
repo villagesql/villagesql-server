@@ -10783,6 +10783,15 @@ ER_JDV_INVALID_BINARY_TYPE_HEADER
 ER_ETAG_NOT_SUPPORTED
    eng "ETAG is not supported with Vector/ Geometry types."
 
+ER_ENGINE_ATTRIBUTE_CONFLICT
+  eng "ENGINE_ATTRIBUTE conflicts with %s %s."
+
+ER_EXTERNAL_FORMAT_NOT_SUPPORTED
+  eng "Column '%-.192s': EXTERNAL_FORMAT is only supported for temporal data types."
+
+ER_EXTERNAL_TABLE_INVALID_OPTION
+  eng "Invalid option specified for %s of external table: %s"
+
 #
 #  End of 9.x error messages (server-to-client).
 #

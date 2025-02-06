@@ -83,6 +83,8 @@ class Item;
 class JOIN;
 class Json_dom;
 class Partition_handler;
+class PT_create_external_file_format;
+class PT_create_external_files;
 class Plugin_table;
 class Plugin_tablespace;
 class Record_buffer;
@@ -811,6 +813,15 @@ constexpr const uint64_t HA_CREATE_USED_READ_ONLY{1ULL << 34};
   specified in the CREATE TABLE statement
 */
 constexpr const uint64_t HA_CREATE_USED_AUTOEXTEND_SIZE{1ULL << 35};
+
+/** Table options for external tables */
+constexpr const uint64_t HA_CREATE_USED_FILE_FORMAT{1ULL << 36};
+constexpr const uint64_t HA_CREATE_USED_EXTERNAL_FILES{1ULL << 37};
+constexpr const uint64_t HA_CREATE_USED_ALLOW_MISSING_FILES{1ULL << 38};
+constexpr const uint64_t HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS{1ULL << 39};
+constexpr const uint64_t HA_CREATE_USED_STRICT_LOAD{1ULL << 40};
+constexpr const uint64_t HA_CREATE_USED_AUTO_REFRESH{1ULL << 41};
+constexpr const uint64_t HA_CREATE_USED_AUTO_REFRESH_SOURCE{1ULL << 42};
 
 /*
   End of bits used in used_fields
@@ -3294,7 +3305,7 @@ struct HA_CREATE_INFO {
   ulonglong max_rows{0};
   ulonglong min_rows{0};
   ulonglong auto_increment_value{0};
-  ulong table_options{0};
+  uint64_t table_options{0};
   ulong avg_row_length{0};
   uint64_t used_fields{0};
   // Can only be 1,2,4,8 or 16, but use uint32_t since that how it is
@@ -3339,6 +3350,10 @@ struct HA_CREATE_INFO {
   ulonglong m_implicit_tablespace_autoextend_size{0};
 
   bool m_implicit_tablespace_autoextend_size_change{true};
+
+  PT_create_external_file_format *file_format{nullptr};
+  PT_create_external_files *external_files{nullptr};
+  LEX_CSTRING auto_refresh_event_source = NULL_CSTR;
 
   /**
     Fill HA_CREATE_INFO to be used by ALTER as well as upgrade code.
