@@ -60,15 +60,17 @@
   set (the default constructor makes them inline and all-zero).
  */
 
-#include <assert.h>
-#include <limits.h>
-#include <stddef.h>
-#include <stdint.h>
-#include <string.h>
-
 #include <array>
 #include <bit>
+#include <cassert>
+#include <climits>
+#include <cstddef>
+#include <cstdint>
+#include <cstring>
+#include <functional>
+#include <iterator>
 #include <tuple>
+#include <utility>
 
 #include "my_alloc.h"
 #include "sql/join_optimizer/bit_utils.h"
@@ -459,19 +461,12 @@ class OverflowBitsetBitsIn {
   const Combine m_combine;
 };
 
-struct IdentityCombine {
-  uint64_t operator()(uint64_t x) const { return x; }
-};
 inline auto BitsSetIn(OverflowBitset bitset) {
-  return OverflowBitsetBitsIn<1, IdentityCombine>{{bitset}, IdentityCombine()};
+  return OverflowBitsetBitsIn{std::array{bitset}, std::identity{}};
 }
 
-struct AndCombine {
-  uint64_t operator()(uint64_t x, uint64_t y) const { return x & y; }
-};
 inline auto BitsSetInBoth(OverflowBitset bitset_a, OverflowBitset bitset_b) {
-  return OverflowBitsetBitsIn<2, AndCombine>{{bitset_a, bitset_b},
-                                             AndCombine()};
+  return OverflowBitsetBitsIn{std::array{bitset_a, bitset_b}, std::bit_and{}};
 }
 
 bool OverlapsOverflow(OverflowBitset a, OverflowBitset b);

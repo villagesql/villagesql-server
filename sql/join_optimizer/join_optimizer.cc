@@ -5495,11 +5495,10 @@ bool CostingReceiver::RedundantThroughSargable(
   };
   bool redundant_against_something_in_left = false;
   bool redundant_against_something_in_right = false;
-  for (size_t predicate_idx :
-       OverflowBitsetBitsIn<3, decltype(redundant_and_applied)>(
-           {redundant_against_sargable_predicates,
-            left_path->applied_sargable_join_predicates(),
-            right_path->applied_sargable_join_predicates()},
+  for (size_t predicate_idx : OverflowBitsetBitsIn(
+           std::array{redundant_against_sargable_predicates,
+                      left_path->applied_sargable_join_predicates(),
+                      right_path->applied_sargable_join_predicates()},
            redundant_and_applied)) {
     // The sargable condition must work as a join condition for this join
     // (not between tables we've already joined in). Note that the joining
