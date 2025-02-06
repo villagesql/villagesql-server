@@ -100,6 +100,7 @@
 #include "sql/discrete_interval.h"
 #include "sql/error_handler.h"  // Strict_error_handler
 #include "sql/events.h"         // Events
+#include "sql/external_table_const.h"
 #include "sql/field.h"
 #include "sql/gis/srid.h"
 #include "sql/item.h"
@@ -5668,6 +5669,37 @@ bool Alter_info::add_field(
 
   for (const auto &a : cf_appliers) {
     if (a(new_field, this)) return true;
+  }
+
+  if (new_field->m_external_format.length > 0) {
+    // Add format to m_engine_attribute if it is not already set
+    if (new_field->m_engine_attribute.length == 0) {
+      std::string json_key;
+      switch (type) {
+        case MYSQL_TYPE_DATE:
+          json_key = external_table::kDateFormatParam;
+          break;
+        case MYSQL_TYPE_TIME2:
+          json_key = external_table::kTimeFormatParam;
+          break;
+        case MYSQL_TYPE_TIMESTAMP2:
+        case MYSQL_TYPE_DATETIME2:
+          json_key = external_table::kTimestampFormatParam;
+          break;
+        default:
+          my_error(ER_EXTERNAL_FORMAT_NOT_SUPPORTED, MYF(0), field_name->str);
+          return true;
+      }
+      std::string format(new_field->m_external_format.str,
+                         new_field->m_external_format.length);
+      std::string json_obj = "{ \"" + json_key + "\": \"" + format + "\" }";
+      LEX_CSTRING engine_attribute = {.str = json_obj.data(),
+                                      .length = json_obj.length()};
+      new_field->m_engine_attribute = thd->strmake(engine_attribute);
+    } else {
+      my_error(ER_ENGINE_ATTRIBUTE_CONFLICT, MYF(0), "EXTERNAL_FORMAT",
+               "specification");
+    }
   }
 
   create_list.push_back(new_field);

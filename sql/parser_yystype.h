@@ -85,7 +85,10 @@ class PT_create_table_option;
 class PT_ddl_table_option;
 class PT_derived_table;
 class PT_exclusion;
+class PT_external_file_format;
+class PT_external_file_list;
 class PT_field_def_base;
+class PT_file_attributes;
 class PT_frame;
 class PT_group;
 class PT_tablesample;
@@ -735,6 +738,10 @@ union MY_SQL_PARSER_STYPE {
   PT_jdv_name_value_list *jdv_name_value_list;
 
   Json_constructor_null_clause json_constructor_null_clause;
+
+  PT_external_file_format *external_file_format;
+  PT_external_file_list *external_file_list;
+  PT_file_attributes *file_attributes;
 };
 
 static_assert(sizeof(MY_SQL_PARSER_STYPE) <= 32, "YYSTYPE is too big");

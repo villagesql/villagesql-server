@@ -2756,7 +2756,7 @@ typedef decltype(HA_CREATE_INFO::table_options) table_options_t;
   A template for options that set HA_CREATE_INFO::table_options and
   also records if the option was explicitly set.
 */
-template <ulong Property_flag, table_options_t Default, table_options_t Yes,
+template <uint64_t Property_flag, table_options_t Default, table_options_t Yes,
           table_options_t No>
 class PT_ternary_create_table_option : public PT_create_table_option {
   typedef PT_create_table_option super;
@@ -3033,6 +3033,156 @@ class PT_create_table_default_collation : public PT_create_table_option {
   }
 
   bool do_contextualize(Table_ddl_parse_context *pc) override;
+};
+
+class PT_create_external_file_format : public PT_create_table_option {
+  typedef PT_create_table_option super;
+
+ public:
+  PT_create_external_file_format(const POS &pos,
+                                 File_information *file_info_arg,
+                                 const Field_separators *field_term_arg,
+                                 const Line_separators *line_term_arg,
+                                 ulong ignore_lines_arg)
+      : super(pos),
+        file_info(file_info_arg),
+        field_term(field_term_arg),
+        line_term(line_term_arg),
+        ignore_lines(ignore_lines_arg) {}
+
+  bool do_contextualize(Table_ddl_parse_context *pc) override;
+
+  File_information *file_info;
+  const Field_separators *field_term;
+  const Line_separators *line_term;
+  ulong ignore_lines;
+};
+
+class PT_create_external_files : public PT_create_table_option {
+  typedef PT_create_table_option super;
+
+ public:
+  PT_create_external_files(const POS &pos,
+                           PT_external_file_list *external_files_arg)
+      : super(pos), external_files(external_files_arg) {}
+
+  bool do_contextualize(Table_ddl_parse_context *pc) override;
+
+  PT_external_file_list *external_files;
+};
+
+class PT_file_attributes {
+ public:
+  bool merge_attributes(PT_file_attributes *attr);
+
+  const String *uri{nullptr};
+  const String *name{nullptr};
+  const String *pattern{nullptr};
+  const String *prefix{nullptr};
+  Ternary_option allow_missing_files{Ternary_option::DEFAULT};
+  Ternary_option strict_load{Ternary_option::DEFAULT};
+};
+
+class PT_external_file_list {
+ public:
+  PT_external_file_list(THD *thd) : files(thd->mem_root) {}
+
+  bool push_back(PT_file_attributes *file_attributes) {
+    return files.push_back(file_attributes);
+  }
+
+  mem_root_deque<PT_file_attributes *> files;
+};
+
+/**
+  Node for the @SQL{ALLOW_MISSING_FILES [=] @B{1|0|DEFAULT}} table option
+
+  @ingroup ptn_create_or_alter_table_options
+
+  ALLOW_MISSING_FILES | Constructor parameter
+  --------------------|------------------------
+  1                   | Ternary_option::ON
+  0                   | Ternary_option::OFF
+  DEFAULT             | Ternary_option::DEFAULT
+*/
+typedef PT_ternary_create_table_option<
+    HA_CREATE_USED_ALLOW_MISSING_FILES,  // flag
+    0,                                   // DEFAULT
+    HA_OPTION_ALLOW_MISSING_FILES,       // ON
+    HA_OPTION_NO_ALLOW_MISSING_FILES>    // OFF
+    PT_create_allow_missing_files_option;
+
+/**
+  Node for the @SQL{VERIFY_KEY_CONSTRAINTS [=] @B{1|0|DEFAULT}} table option
+
+  @ingroup ptn_create_or_alter_table_options
+
+  VERIFY_KEY_CONSTRAINTS | Constructor parameter
+  -----------------------|------------------------
+  1                      | Ternary_option::ON
+  0                      | Ternary_option::OFF
+  DEFAULT                | Ternary_option::DEFAULT
+*/
+typedef PT_ternary_create_table_option<
+    HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS,  // flag
+    0,                                      // DEFAULT
+    HA_OPTION_VERIFY_KEY_CONSTRAINTS,       // ON
+    HA_OPTION_NO_VERIFY_KEY_CONSTRAINTS>    // OFF
+    PT_create_verify_key_constraints_option;
+
+/**
+  Node for the @SQL{STRICT_LOAD [=] @B{1|0|DEFAULT}} table option
+
+  @ingroup ptn_create_or_alter_table_options
+
+  STRICT_LOAD      | Constructor parameter
+  -----------------|------------------------
+  1                | Ternary_option::ON
+  0                | Ternary_option::OFF
+  DEFAULT          | Ternary_option::DEFAULT
+*/
+typedef PT_ternary_create_table_option<HA_CREATE_USED_STRICT_LOAD,  // flag
+                                       0,                           // DEFAULT
+                                       HA_OPTION_STRICT_LOAD,       // ON
+                                       HA_OPTION_NO_STRICT_LOAD>    // OFF
+    PT_create_strict_load_option;
+
+/**
+  Node for the @SQL{AUTO_REFRESH_MODE [=] @B{1|0|DEFAULT}} table option
+
+  @ingroup ptn_create_or_alter_table_options
+
+  AUTO_REFRESH     | Constructor parameter
+  -----------------|------------------------
+  1                | Ternary_option::ON
+  0                | Ternary_option::OFF
+  DEFAULT          | Ternary_option::DEFAULT
+*/
+typedef PT_ternary_create_table_option<HA_CREATE_USED_AUTO_REFRESH,  // flag
+                                       0,                            // DEFAULT
+                                       HA_OPTION_AUTO_REFRESH,       // ON
+                                       HA_OPTION_NO_AUTO_REFRESH>    // OFF
+    PT_create_auto_refresh_option;
+
+/**
+  Node for the @SQL{AUTO_REFRESH_SOURCE [=] @B{@<string@>|NULL}}
+  table option.
+
+  @ingroup ptn_create_or_alter_table_options
+*/
+class PT_create_auto_refresh_event_source : public PT_create_table_option {
+  using super = PT_create_table_option;
+
+ public:
+  explicit PT_create_auto_refresh_event_source(const POS &pos) : super(pos) {}
+  explicit PT_create_auto_refresh_event_source(
+      const POS &pos, const LEX_CSTRING &auto_refresh_source)
+      : super(pos), m_auto_refresh_source(auto_refresh_source) {}
+
+  bool do_contextualize(Table_ddl_parse_context *pc) override;
+
+ private:
+  const LEX_CSTRING m_auto_refresh_source{nullptr, 0};
 };
 
 class PT_check_constraint final : public PT_table_constraint_def {
@@ -5761,6 +5911,7 @@ PT_create_table_option *make_table_secondary_engine_attribute(MEM_ROOT *,
 PT_column_attr_base *make_column_engine_attribute(MEM_ROOT *, LEX_CSTRING);
 PT_column_attr_base *make_column_secondary_engine_attribute(MEM_ROOT *,
                                                             LEX_CSTRING);
+PT_column_attr_base *make_column_external_format(MEM_ROOT *, LEX_CSTRING);
 
 PT_base_index_option *make_index_engine_attribute(MEM_ROOT *, LEX_CSTRING);
 PT_base_index_option *make_index_secondary_engine_attribute(MEM_ROOT *,

@@ -1468,6 +1468,18 @@ void warn_on_deprecated_user_defined_collation(
 
 %token<lexer.keyword> ABSENT_SYM                  1223   /* SQL-2015-R */
 
+%token<lexer.keyword> FILE_FORMAT_SYM 1224     /* MYSQL */
+%token<lexer.keyword> FILES_SYM       1225     /* MYSQL */
+%token<lexer.keyword> FILE_NAME_SYM   1226     /* MYSQL */
+%token<lexer.keyword> FILE_PATTERN_SYM     1227     /* MYSQL */
+%token<lexer.keyword> FILE_PREFIX_SYM      1228     /* MYSQL */
+%token<lexer.keyword> ALLOW_MISSING_FILES_SYM    1229     /* MYSQL */
+%token<lexer.keyword> AUTO_REFRESH_SYM           1230     /* MYSQL */
+%token<lexer.keyword> AUTO_REFRESH_SOURCE_SYM    1231     /* MYSQL */
+%token<lexer.keyword> VERIFY_KEY_CONSTRAINTS_SYM      1232     /* MYSQL */
+%token<lexer.keyword> STRICT_LOAD_SYM 1233     /* MYSQL */
+%token<lexer.keyword> EXTERNAL_FORMAT_SYM  1234     /* MySQL */
+
 /*
   NOTE! When adding new non-standard keywords, make sure they are added to the
   list ident_keywords_unambiguous lest they become reserved keywords.
@@ -2309,6 +2321,10 @@ void warn_on_deprecated_user_defined_collation(
 
 %type <jdv_name_value>  jdv_name_value
 %type <jdv_name_value_list> jdv_name_value_list
+
+%type <external_file_list> external_files
+%type <file_attributes> file_attributes
+%type <file_attributes> file_attribute
 %%
 
 /*
@@ -6794,6 +6810,107 @@ create_table_option:
           {
             $$ = NEW_PTN PT_create_ts_autoextend_size_option(@$, $1);
           }
+        | FILE_FORMAT_SYM opt_equal '(' opt_outfile_file_info opt_field_term opt_line_term opt_ignore_lines ')'
+          {
+            $$ = NEW_PTN PT_create_external_file_format(@$, $4, $5, $6, $7);
+          }
+        | FILES_SYM opt_equal '(' external_files ')'
+          {
+            $$ = NEW_PTN PT_create_external_files(@$, $4);
+          }
+        | ALLOW_MISSING_FILES_SYM opt_equal ternary_option
+          {
+            $$= NEW_PTN PT_create_allow_missing_files_option(@$, $3);
+          }
+        | VERIFY_KEY_CONSTRAINTS_SYM opt_equal ternary_option
+          {
+            $$= NEW_PTN PT_create_verify_key_constraints_option(@$, $3);
+          }
+        | STRICT_LOAD_SYM opt_equal ternary_option
+          {
+            $$= NEW_PTN PT_create_strict_load_option(@$, $3);
+          }
+        | AUTO_REFRESH_SYM opt_equal ternary_option
+          {
+            $$= NEW_PTN PT_create_auto_refresh_option(@$, $3);
+          }
+        | AUTO_REFRESH_SOURCE_SYM opt_equal NONE_SYM
+          {
+            $$= NEW_PTN PT_create_auto_refresh_event_source(@$);
+          }
+        | AUTO_REFRESH_SOURCE_SYM opt_equal TEXT_STRING_sys
+          {
+            $$= NEW_PTN PT_create_auto_refresh_event_source(@$,
+                                                            to_lex_cstring($3));
+          }
+        ;
+
+external_files:
+          external_files ',' file_attributes
+          {
+            if ($1 == nullptr || $1->push_back($3))
+              MYSQL_YYABORT;
+            $$ = $1;
+          }
+        | file_attributes
+          {
+            $$ = NEW_PTN PT_external_file_list(YYTHD);
+            if ($$ == nullptr || $$->push_back($1))
+              MYSQL_YYABORT;
+          }
+        ;
+
+file_attributes:
+          file_attributes file_attribute
+          {
+            if ($1 == nullptr || $1->merge_attributes($2))
+              MYSQL_YYABORT;
+            $$ = $1;
+          }
+        | file_attribute
+          {
+            $$ = NEW_PTN PT_file_attributes();
+            if ($$ == nullptr || $$->merge_attributes($1))
+              MYSQL_YYABORT;
+          }
+        ;
+
+file_attribute:
+          URL_SYM opt_equal text_string
+          {
+            $$ = NEW_PTN PT_file_attributes();
+            $$->uri = $3;
+          }
+        | URI_SYM opt_equal text_string
+          {
+            $$ = NEW_PTN PT_file_attributes();
+            $$->uri = $3;
+          }
+        | FILE_NAME_SYM opt_equal text_string
+          {
+            $$ = NEW_PTN PT_file_attributes();
+            $$->name = $3;
+          }
+        | FILE_PATTERN_SYM opt_equal text_string
+          {
+            $$ = NEW_PTN PT_file_attributes();
+            $$->pattern = $3;
+          }
+        | FILE_PREFIX_SYM opt_equal text_string
+          {
+            $$ = NEW_PTN PT_file_attributes();
+            $$->prefix = $3;
+          }
+        | ALLOW_MISSING_FILES_SYM opt_equal ternary_option
+          {
+            $$ = NEW_PTN PT_file_attributes();
+            $$->allow_missing_files = $3;
+          }
+        | STRICT_LOAD_SYM opt_equal ternary_option
+          {
+            $$ = NEW_PTN PT_file_attributes();
+            $$->strict_load = $3;
+          }
         ;
 
 ternary_option:
@@ -7486,6 +7603,10 @@ column_attribute:
         | SECONDARY_ENGINE_ATTRIBUTE_SYM opt_equal json_attribute
           {
             $$ = make_column_secondary_engine_attribute(YYMEM_ROOT, $3);
+          }
+        | EXTERNAL_FORMAT_SYM TEXT_STRING_sys
+          {
+            $$ = make_column_external_format(YYMEM_ROOT, to_lex_cstring($2));
           }
         | visibility
           {
@@ -14831,6 +14952,11 @@ field_term:
             $$= NEW_PTN Field_separators();
             $$->time_format= $3;
           }
+        | DATETIME_SYM FORMAT_SYM text_string
+          {
+            $$= NEW_PTN Field_separators();
+            $$->datetime_format= $3;
+          }
         | NULL_SYM AS text_string
           {
             $$= NEW_PTN Field_separators();
@@ -15631,6 +15757,7 @@ ident_keywords_unambiguous:
         | AGAINST
         | AGGREGATE_SYM
         | ALGORITHM_SYM
+        | ALLOW_MISSING_FILES_SYM
         | ALWAYS_SYM
         | ANY_SYM
         | ARRAY_SYM
@@ -15640,6 +15767,8 @@ ident_keywords_unambiguous:
         | AUTOEXTEND_SIZE_SYM
         | AUTO_SYM
         | AUTO_INC
+        | AUTO_REFRESH_SYM
+        | AUTO_REFRESH_SOURCE_SYM
         | AVG_ROW_LENGTH
         | AVG_SYM
         | BACKUP_SYM
@@ -15722,11 +15851,17 @@ ident_keywords_unambiguous:
         | EXPORT_SYM
         | EXTENDED_SYM
         | EXTENT_SIZE_SYM
+        | EXTERNAL_FORMAT_SYM
         | FACTOR_SYM
         | FAILED_LOGIN_ATTEMPTS_SYM
         | FAST_SYM
         | FAULTS_SYM
+        | FILES_SYM
         | FILE_BLOCK_SIZE_SYM
+        | FILE_FORMAT_SYM
+        | FILE_NAME_SYM
+        | FILE_PATTERN_SYM
+        | FILE_PREFIX_SYM
         | FILTER_SYM
         | FINISH_SYM
         | FIRST_SYM
@@ -15980,6 +16115,7 @@ ident_keywords_unambiguous:
         | STATUS_SYM
         | STORAGE_SYM
         | STREAM_SYM
+        | STRICT_LOAD_SYM
         | STRING_SYM
         | ST_COLLECT_SYM
         | SUBCLASS_ORIGIN_SYM
@@ -16026,6 +16162,7 @@ ident_keywords_unambiguous:
         | VALUE_SYM
         | VARIABLES
         | VCPU_SYM
+        | VERIFY_KEY_CONSTRAINTS_SYM
         | VIEW_SYM
         | VISIBLE_SYM
         | WAIT_SYM

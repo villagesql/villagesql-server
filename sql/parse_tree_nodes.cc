@@ -2287,6 +2287,78 @@ bool PT_create_table_default_collation::do_contextualize(
           set_default_collation(pc->create_info, value));
 }
 
+bool PT_create_external_file_format::do_contextualize(
+    Table_ddl_parse_context *pc) {
+  if (super::do_contextualize(pc)) return true;
+
+  // Store in create_info
+  pc->create_info->file_format = this;
+  pc->create_info->used_fields |= HA_CREATE_USED_FILE_FORMAT;
+
+  return false;
+}
+
+bool PT_create_external_files::do_contextualize(Table_ddl_parse_context *pc) {
+  if (super::do_contextualize(pc)) return true;
+
+  // File URLs may contain secret ids
+  auto *const sp = pc->thd->lex->sphead;
+  if (sp != nullptr && sp->m_parser_data.get_top_lex() != nullptr) {
+    // The statement is inside a stored routine
+    sp->m_parser_data.get_top_lex()->set_rewrite_required();
+  } else {
+    pc->thd->lex->set_rewrite_required();
+  }
+
+  // Store in create_info
+  pc->create_info->external_files = this;
+  pc->create_info->used_fields |= HA_CREATE_USED_EXTERNAL_FILES;
+
+  return false;
+}
+
+bool PT_create_auto_refresh_event_source::do_contextualize(
+    Table_ddl_parse_context *pc) {
+  if (super::do_contextualize(pc)) return true;
+
+  pc->create_info->auto_refresh_event_source = m_auto_refresh_source;
+  pc->create_info->used_fields |= HA_CREATE_USED_AUTO_REFRESH_SOURCE;
+
+  return false;
+}
+
+bool PT_file_attributes::merge_attributes(PT_file_attributes *attr) {
+  if (attr == nullptr) {
+    return false;
+  }
+
+  if (attr->uri != nullptr) {
+    uri = attr->uri;
+  }
+
+  if (attr->name != nullptr) {
+    name = attr->name;
+  }
+
+  if (attr->pattern != nullptr) {
+    pattern = attr->pattern;
+  }
+
+  if (attr->prefix != nullptr) {
+    prefix = attr->prefix;
+  }
+
+  if (attr->allow_missing_files != Ternary_option::DEFAULT) {
+    allow_missing_files = attr->allow_missing_files;
+  }
+
+  if (attr->strict_load != Ternary_option::DEFAULT) {
+    strict_load = attr->strict_load;
+  }
+
+  return false;
+}
+
 bool PT_locking_clause::do_contextualize(Parse_context *pc) {
   LEX *lex = pc->thd->lex;
 
@@ -5193,6 +5265,36 @@ PT_column_attr_base *make_column_secondary_engine_attribute(MEM_ROOT *mem_root,
         // and not destroyed.
         pc->cf_appliers.emplace_back([=](Create_field *cf, Alter_info *) {
           cf->m_secondary_engine_attribute = a;
+          return false;
+        });
+        return false;
+      });
+}
+
+/**
+   Factory function which instantiates PT_attribute with suitable
+   parameters, allocates on the provided mem_root, and returns the
+   appropriate base pointer.
+
+   @param mem_root Memory arena.
+   @param attr     Attribute value from parser.
+
+   @return PT_create_table_option* to PT_attribute object.
+
+ */
+PT_column_attr_base *make_column_external_format(MEM_ROOT *mem_root,
+                                                 LEX_CSTRING attr) {
+  return new (mem_root) PT_attribute<LEX_CSTRING, PT_column_attr_base>(
+      attr, +[](LEX_CSTRING a, Column_parse_context *pc) {
+        // Note that a std::function is created from the lambda and constructed
+        // directly in the vector.
+        // This means it is necessary to ensure that the elements of the vector
+        // are destroyed. This will not happen automatically when the vector is
+        // moved to the Alter_info struct which is allocated on the mem_root
+        // and not destroyed.
+        pc->cf_appliers.emplace_back([=](Create_field *cf, Alter_info *ai) {
+          cf->m_external_format = a;
+          ai->flags |= Alter_info::ANY_ENGINE_ATTRIBUTE;
           return false;
         });
         return false;

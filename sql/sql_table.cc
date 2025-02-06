@@ -42,6 +42,7 @@
 #include <memory>
 #include <optional>
 #include <ranges>
+#include <regex>
 #include <string>
 #include <string_view>
 #include <type_traits>
@@ -96,6 +97,7 @@
 #include "pfs_table_provider.h"
 #include "prealloced_array.h"
 #include "scope_guard.h"
+#include "sql-common/json_dom.h"
 #include "sql-common/my_decimal.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_fk_parent_table_access
@@ -128,6 +130,7 @@
 #include "sql/derror.h"          // ER_THD
 #include "sql/enum_query_type.h"
 #include "sql/error_handler.h"  // Drop_table_error_handler
+#include "sql/external_table_const.h"
 #include "sql/field.h"
 #include "sql/field_common_properties.h"
 #include "sql/filesort.h"  // Filesort
@@ -148,6 +151,7 @@
 #include "sql/mdl.h"
 #include "sql/mem_root_array.h"
 #include "sql/mysqld.h"  // lower_case_table_names
+#include "sql/parse_tree_nodes.h"
 #include "sql/partition_element.h"
 #include "sql/partition_info.h"                  // partition_info
 #include "sql/partitioning/partition_handler.h"  // Partition_handler
@@ -8995,6 +8999,507 @@ bool validate_secondary_engine_temporary_table(THD *thd,
 }
 
 /**
+   If any table option for external tables have been specified,
+   return the text for one of them.
+
+   The text is for use in error messages.
+
+   @param  create_info          Create information
+   @param  dialect_options_only Only consider options that map to the dialect
+                                object.
+
+   @return The text for one of the specified table options
+*/
+static std::string find_one_external_table_option(HA_CREATE_INFO *create_info,
+                                                  bool dialect_options_only) {
+  if (create_info->file_format != nullptr) {
+    return "FILE_FORMAT";
+  }
+  if ((create_info->used_fields & HA_CREATE_USED_ALLOW_MISSING_FILES) != 0) {
+    return "ALLOW_MISSING_FILES";
+  }
+  if ((create_info->used_fields & HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS) != 0) {
+    return "VERIFY_KEY_CONSTRAINTS";
+  }
+  if ((create_info->used_fields & HA_CREATE_USED_STRICT_LOAD) != 0) {
+    return "STRICT_LOAD";
+  }
+  if (!dialect_options_only) {
+    if (create_info->external_files != nullptr) {
+      return "FILES";
+    }
+    if ((create_info->used_fields & HA_CREATE_USED_AUTO_REFRESH) != 0) {
+      return "AUTO_REFRESH";
+    }
+    if (create_info->auto_refresh_event_source.length > 0) {
+      return "AUTO_REFRESH_SOURCE";
+    }
+  }
+  return {};
+}
+
+static void add_ternary_option(Json_object *obj, HA_CREATE_INFO *ci,
+                               uint64_t used_flag, uint64_t option_flag,
+                               uint64_t no_option_flag, std::string_view key) {
+  if ((ci->used_fields & used_flag) != 0) {
+    if ((ci->table_options & option_flag) != 0) {
+      Json_boolean bool_value(true);
+      obj->add_clone(key, &bool_value);
+    } else if ((ci->table_options & no_option_flag) != 0) {
+      Json_boolean bool_value(false);
+      obj->add_clone(key, &bool_value);
+    }
+    // Clear the options since they should not be persisted as is
+    ci->table_options &= ~(option_flag | no_option_flag);
+  }
+}
+
+/**
+   Create a JSON object from the FILE_FORMAT clause.
+
+   @param file_format The parse tree object for the FILE_FORMAT clause.
+
+   @param[out] file_format_obj A JSON object to fill with the
+                               specified file format. If the statement
+                               does not contain a FILE_FORMAT clause,
+                               the object will be unchanged.
+*/
+static void create_file_format_object(
+    PT_create_external_file_format *file_format, Json_object &file_format_obj) {
+  if (file_format == nullptr) {
+    return;
+  }
+
+  // General options
+  File_information *file_info = file_format->file_info;
+  if (file_info != nullptr) {
+    if (file_info->filetype_str != nullptr) {
+      // Format name should be lower case
+      const auto max_format_length = 20;
+      char format[max_format_length + 1];
+      assert(strlen(file_info->filetype_str) <= max_format_length);
+      my_stpncpy(format, file_info->filetype_str, max_format_length);
+      my_casedn_str(system_charset_info, format);
+
+      Json_string str_value(format);
+      file_format_obj.add_clone(external_table::kFormatParam, &str_value);
+    }
+
+    if (file_info->compression != nullptr) {
+      Json_string str_value(file_info->compression->ptr());
+      file_format_obj.add_clone(external_table::kCompressionParam, &str_value);
+    }
+
+    if (file_info->cs != nullptr) {
+      Json_string str_value(file_info->cs->csname);
+      file_format_obj.add_clone(external_table::kEncodingParam, &str_value);
+    }
+
+    switch (file_info->with_header) {
+      case enum_with_header::WITHOUT_HEADER: {
+        Json_boolean bool_value(false);
+        file_format_obj.add_clone(external_table::kHasHeaderParam, &bool_value);
+        break;
+      }
+      case enum_with_header::WITH_HEADER: {
+        Json_boolean bool_value(true);
+        file_format_obj.add_clone(external_table::kHasHeaderParam, &bool_value);
+        break;
+      }
+      case enum_with_header::DEFAULT_HEADER:
+        break;
+    }
+  }
+
+  // Field options
+  const Field_separators *field_term = file_format->field_term;
+  if (field_term != nullptr) {
+    // DATE format
+    if (field_term->date_format != nullptr) {
+      Json_string str_value(field_term->date_format->ptr());
+      file_format_obj.add_clone(external_table::kDateFormatParam, &str_value);
+    }
+    // TIME format
+    if (field_term->time_format != nullptr) {
+      Json_string str_value(field_term->time_format->ptr());
+      file_format_obj.add_clone(external_table::kTimeFormatParam, &str_value);
+    }
+    // DATETIME format
+    if (field_term->datetime_format != nullptr) {
+      Json_string str_value(field_term->datetime_format->ptr());
+      file_format_obj.add_clone(external_table::kTimestampFormatParam,
+                                &str_value);
+    }
+
+    // NULL value
+    if (field_term->null_value != nullptr) {
+      Json_string str_value(field_term->null_value->ptr());
+      file_format_obj.add_clone(external_table::kNullValueParam, &str_value);
+    }
+    // EMPTY value
+    if (field_term->empty_value != nullptr) {
+      Json_string str_value(field_term->empty_value->ptr());
+      file_format_obj.add_clone(external_table::kEmptyValueParam, &str_value);
+    }
+    // TERMINATED BY
+    if (field_term->field_term != nullptr) {
+      Json_string str_value(field_term->field_term->ptr());
+      file_format_obj.add_clone(external_table::kFieldDelimiterParam,
+                                &str_value);
+    }
+    // [OPTIONALLY] ENCLOSED BY
+    if (field_term->enclosed != nullptr) {
+      Json_string str_value(field_term->enclosed->ptr());
+      file_format_obj.add_clone(external_table::kQuotationMarksParam,
+                                &str_value);
+    }
+    // NOT ENCLOSED is not supported
+    // ESCAPED BY
+    if (field_term->escaped != nullptr) {
+      Json_string str_value(field_term->escaped->ptr());
+      file_format_obj.add_clone(external_table::kEscapeCharacterParam,
+                                &str_value);
+    }
+  }
+  // LINES TERMINATED BY
+  const Line_separators *line_term = file_format->line_term;
+  if (line_term != nullptr && line_term->line_term != nullptr) {
+    Json_string str_value(line_term->line_term->ptr());
+    file_format_obj.add_clone(external_table::kRecordDelimiterParam,
+                              &str_value);
+  }
+  // STARTING BY is not supported
+  // IGNORE
+  ulong ignore_lines = file_format->ignore_lines;
+  if (ignore_lines > 0) {
+    Json_uint value(ignore_lines);
+    file_format_obj.add_clone(external_table::kSkipRowsParam, &value);
+  }
+}
+
+template <typename T>
+static void add_ternary_file_option(Json_object *obj, std::string_view key,
+                                    T option) {
+  if (option != Ternary_option::DEFAULT) {
+    Json_boolean bool_value(option == Ternary_option::ON);
+    obj->add_clone(key, &bool_value);
+  }
+}
+
+/**
+   Create a JSON array from the FILES clause.
+
+   @param files The parse tree object for the FILES clause.
+
+   @param[out] files_array A JSON array with the file
+                           specifications. If the statement does not
+                           contain a FILES clause, the array will be
+                           unchanged.
+*/
+static void create_files_array(PT_create_external_files *files,
+                               Json_array &files_array) {
+  if (files == nullptr) {
+    return;
+  }
+
+  for (auto *file : files->external_files->files) {
+    Json_object file_section;
+
+    // Check whether the uri/url contains the entire file spec
+    bool incomplete_uri = file->name != nullptr || file->pattern != nullptr ||
+                          file->prefix != nullptr;
+
+    if (file->uri != nullptr) {
+      Json_string str_value(file->uri->ptr());
+      // URI only supports complete file specs. If not, it must be a PAR.
+      if (incomplete_uri) {
+        file_section.add_clone(external_table::kParParam, &str_value);
+      } else {
+        file_section.add_clone(external_table::kUriParam, &str_value);
+      }
+    }
+
+    if (file->name != nullptr) {
+      Json_string str_value(file->name->ptr());
+      file_section.add_clone(external_table::kNameParam, &str_value);
+    }
+
+    if (file->pattern != nullptr) {
+      Json_string str_value(file->pattern->ptr());
+      file_section.add_clone(external_table::kPatternParam, &str_value);
+    }
+
+    if (file->prefix != nullptr) {
+      Json_string str_value(file->prefix->ptr());
+      file_section.add_clone(external_table::kPrefixParam, &str_value);
+    }
+
+    add_ternary_file_option(&file_section, external_table::kAllowMissingParam,
+                            file->allow_missing_files);
+    add_ternary_file_option(&file_section, external_table::kIsStrictModeParam,
+                            file->strict_load);
+
+    files_array.append_clone(&file_section);
+  }
+
+  return;
+}
+
+/**
+  Convert table options for external tables to settings in ENGINE_ATTRIBUTE
+
+  @param      thd                 Thread object
+  @param      create_info         Create information
+  @param[out] engine_attr_buffer  Buffer to store the ENINGE_ATTRIBUTE content
+
+  @return false on success, true, otherwise
+*/
+static bool convert_to_engine_attribute(THD *thd, HA_CREATE_INFO *create_info,
+                                        String &engine_attr_buffer) {
+  if (create_info->file_format != nullptr ||
+      create_info->external_files != nullptr ||
+      create_info->auto_refresh_event_source.length > 0 ||
+      (create_info->used_fields & HA_CREATE_USED_ALLOW_MISSING_FILES) != 0 ||
+      (create_info->used_fields & HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS) != 0 ||
+      (create_info->used_fields & HA_CREATE_USED_STRICT_LOAD) != 0 ||
+      (create_info->used_fields & HA_CREATE_USED_AUTO_REFRESH) != 0) {
+    // Verify that storage engine supports external tables and engine attributes
+    if ((create_info->db_type->flags & HTON_SUPPORTS_EXTERNAL_SOURCE) == 0 ||
+        (create_info->db_type->flags & HTON_SUPPORTS_ENGINE_ATTRIBUTE) == 0) {
+      my_error(ER_ILLEGAL_HA_CREATE_OPTION, MYF(0),
+               ha_resolve_storage_engine_name(create_info->db_type),
+               find_one_external_table_option(create_info, false).c_str());
+      return true;
+    }
+
+    Json_object *file_format_obj = nullptr;
+
+    // Declared here to avoid that the result of the parsing is deallocated too
+    // early.
+    Json_dom_ptr parsed_engine_attr;
+    Json_object *engine_attr_obj = nullptr;
+    // If there is an existing ENGINE_ATTRIBUTE option, it could either have
+    // been specified in this statement, or if this is ALTER TABLE,
+    // it may be the existing ENGINE_ATTRIBUTE for this table.
+    if (create_info->engine_attribute.length > 0) {
+      // For ALTER TABLE, we want to know if the statement contains a
+      // replacement for ENGINE_ATTRIBUTE or this is the existing one.
+      bool new_engine_attribute =
+          (create_info->used_fields & HA_CREATE_USED_ENGINE_ATTRIBUTE) != 0;
+      parsed_engine_attr = Json_dom::parse(
+          create_info->engine_attribute.str,
+          create_info->engine_attribute.length, [](const char *, size_t) {},
+          JsonDepthErrorHandler);
+      if (parsed_engine_attr == nullptr ||
+          parsed_engine_attr->json_type() != enum_json_type::J_OBJECT) {
+        // This is not a valid ENGINE_ATTRIBUTE object, but we will ignore
+        // this error here.  It will fail later when validated by the engine.
+        // So we will just ignore any SQL options and return.
+        return false;
+      }
+      engine_attr_obj = down_cast<Json_object *>(parsed_engine_attr.get());
+      if (create_info->file_format != nullptr ||
+          (create_info->used_fields & HA_CREATE_USED_ALLOW_MISSING_FILES) !=
+              0 ||
+          (create_info->used_fields & HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS) !=
+              0 ||
+          (create_info->used_fields & HA_CREATE_USED_STRICT_LOAD) != 0) {
+        // Check if engine attribute already contains a dialect object.
+        Json_dom *dialect_dom =
+            engine_attr_obj->get(external_table::kDialectParam);
+        if (dialect_dom != nullptr) {
+          if (!new_engine_attribute) {
+            // This is ALTER_TABLE. We will delete the existing parts,
+            // in order to replace it with a new one.
+            auto *dialect_obj = down_cast<Json_object *>(dialect_dom);
+
+            // We first need to record table options that are specified
+            // as stand-alone table options in SQL, and that are not
+            // redefined here. We do that by pretending they are set in
+            // this statement.
+            Json_wrapper dialect(dialect_dom, true);
+            if ((create_info->used_fields &
+                 HA_CREATE_USED_ALLOW_MISSING_FILES) == 0) {
+              Json_wrapper bool_value =
+                  dialect.lookup(external_table::kAllowMissingParam);
+              if (!bool_value.empty()) {
+                create_info->used_fields |= HA_CREATE_USED_ALLOW_MISSING_FILES;
+                if (bool_value.get_boolean()) {
+                  create_info->table_options |= HA_OPTION_ALLOW_MISSING_FILES;
+                } else {
+                  create_info->table_options |=
+                      HA_OPTION_NO_ALLOW_MISSING_FILES;
+                }
+              }
+            } else {  // Remove the existing setting since there is a new one
+              dialect_obj->remove(external_table::kAllowMissingParam);
+            }
+            if ((create_info->used_fields &
+                 HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS) == 0) {
+              Json_wrapper bool_value =
+                  dialect.lookup(external_table::kConstraintCheckParam);
+              if (!bool_value.empty()) {
+                create_info->used_fields |=
+                    HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS;
+                if (bool_value.get_boolean()) {
+                  create_info->table_options |=
+                      HA_OPTION_VERIFY_KEY_CONSTRAINTS;
+                } else {
+                  create_info->table_options |=
+                      HA_OPTION_NO_VERIFY_KEY_CONSTRAINTS;
+                }
+              }
+            } else {  // Remove the existing setting since there is a new one
+              dialect_obj->remove(external_table::kConstraintCheckParam);
+            }
+
+            if ((create_info->used_fields & HA_CREATE_USED_STRICT_LOAD) == 0) {
+              Json_wrapper bool_value =
+                  dialect.lookup(external_table::kIsStrictModeParam);
+              if (!bool_value.empty()) {
+                create_info->used_fields |= HA_CREATE_USED_STRICT_LOAD;
+                if (bool_value.get_boolean()) {
+                  create_info->table_options |= HA_OPTION_STRICT_LOAD;
+                } else {
+                  create_info->table_options |= HA_OPTION_NO_STRICT_LOAD;
+                }
+              }
+            } else {  // Remove the existing setting since there is a new one
+              dialect_obj->remove(external_table::kIsStrictModeParam);
+            }
+
+            if (create_info->file_format != nullptr ||
+                dialect_obj->cardinality() == 0) {
+              // If there is a FILE_FORMAT clause in the current ALTER
+              // statement, or the existing dialect object is empty, we can
+              // delete the existing one.
+              engine_attr_obj->remove(external_table::kDialectParam);
+            } else {
+              // There is no new FILE_FORMAT clause, use the existing dialect
+              // object.
+              file_format_obj = dialect_obj;
+            }
+          } else {
+            my_error(ER_ENGINE_ATTRIBUTE_CONFLICT, MYF(0), "table option",
+                     find_one_external_table_option(create_info, true).c_str());
+            return true;
+          }
+        }
+      }
+      if (create_info->external_files != nullptr) {
+        // Check if engine attribute already contains a file array.
+        if (engine_attr_obj->get(external_table::kFileParam) != nullptr) {
+          if (!new_engine_attribute) {
+            // This is ALTER_TABLE. We will delete the existing array,
+            // in order to replace it with a new one.
+            engine_attr_obj->remove(external_table::kFileParam);
+          } else {
+            my_error(ER_ENGINE_ATTRIBUTE_CONFLICT, MYF(0), "table option",
+                     "FILES");
+            return true;
+          }
+        }
+      }
+      if ((create_info->used_fields & HA_CREATE_USED_AUTO_REFRESH) != 0) {
+        // Check if engine attribute already contains this entry.
+        if (engine_attr_obj->get("auto_refresh") != nullptr) {
+          if (!new_engine_attribute) {
+            // This is ALTER_TABLE. We will delete the existing entry,
+            // in order to replace it with a new one.
+            engine_attr_obj->remove("auto_refresh");
+          } else {
+            my_error(ER_ENGINE_ATTRIBUTE_CONFLICT, MYF(0), "table option",
+                     "AUTO_REFRESH");
+            return true;
+          }
+        }
+      }
+      if (create_info->auto_refresh_event_source.length > 0) {
+        // Check if engine attribute already contains this entry.
+        if (engine_attr_obj->get("auto_refresh_event_source") != nullptr) {
+          if (!new_engine_attribute) {
+            // This is ALTER_TABLE. We will delete the existing entry,
+            // in order to replace it with a new one.
+            engine_attr_obj->remove("auto_refresh_event_source");
+          } else {
+            my_error(ER_ENGINE_ATTRIBUTE_CONFLICT, MYF(0), "table option",
+                     "AUTO_REFRESH_SOURCE");
+            return true;
+          }
+        }
+      }
+    }
+
+    Json_object dialect_obj;
+    create_file_format_object(create_info->file_format, dialect_obj);
+    if (file_format_obj == nullptr) {
+      file_format_obj = &dialect_obj;
+    }
+    // Add additional options to the file_format object
+    add_ternary_option(
+        file_format_obj, create_info, HA_CREATE_USED_ALLOW_MISSING_FILES,
+        HA_OPTION_ALLOW_MISSING_FILES, HA_OPTION_NO_ALLOW_MISSING_FILES,
+        external_table::kAllowMissingParam);
+    add_ternary_option(
+        file_format_obj, create_info, HA_CREATE_USED_VERIFY_KEY_CONSTRAINTS,
+        HA_OPTION_VERIFY_KEY_CONSTRAINTS, HA_OPTION_NO_VERIFY_KEY_CONSTRAINTS,
+        external_table::kConstraintCheckParam);
+    add_ternary_option(file_format_obj, create_info, HA_CREATE_USED_STRICT_LOAD,
+                       HA_OPTION_STRICT_LOAD, HA_OPTION_NO_STRICT_LOAD,
+                       external_table::kIsStrictModeParam);
+
+    Json_object engine_attr;
+    if (engine_attr_obj == nullptr) {
+      engine_attr_obj = &engine_attr;
+    }
+
+    if (file_format_obj->cardinality() > 0) {
+      engine_attr_obj->add_clone(external_table::kDialectParam,
+                                 file_format_obj);
+    }
+    if (create_info->external_files != nullptr) {
+      Json_array files_array;
+      create_files_array(create_info->external_files, files_array);
+      engine_attr_obj->add_clone(external_table::kFileParam, &files_array);
+    }
+    if ((create_info->used_fields & HA_CREATE_USED_AUTO_REFRESH) != 0) {
+      // TODO: See Bug#38068196
+      // WL#16513 will not support "auto_refresh" key.
+      // For now, we will just ignore this option.
+      // if ((create_info->table_options & HA_OPTION_AUTO_REFRESH) != 0) {
+      //   Json_boolean bool_value(true);
+      //   engine_attr_obj->add_clone("auto_refresh", &bool_value);
+      // } else if ((create_info->table_options & HA_OPTION_NO_AUTO_REFRESH) !=
+      //            0) {
+      //   Json_boolean bool_value(false);
+      //   engine_attr_obj->add_clone("auto_refresh", &bool_value);
+      // }
+      // Clear the options since they should not persisted separately
+      create_info->table_options &=
+          ~(HA_OPTION_AUTO_REFRESH | HA_OPTION_NO_AUTO_REFRESH);
+    }
+    if (create_info->auto_refresh_event_source.length > 0) {
+      Json_string str_value(create_info->auto_refresh_event_source.str,
+                            create_info->auto_refresh_event_source.length);
+      engine_attr_obj->add_clone("auto_refresh_event_source", &str_value);
+    }
+    // Convert JSON object to string
+    Json_wrapper wrapper(engine_attr_obj, true);
+    if (wrapper.to_string(&engine_attr_buffer, true, "create_table_impl()",
+                          JsonDepthErrorHandler)) {
+      return true;
+    }
+    // ENGINE_ATTRIBUTE should use system charset
+    LEX_STRING engine_attribute;
+    thd->convert_string(&engine_attribute, system_charset_info,
+                        engine_attr_buffer.ptr(), engine_attr_buffer.length(),
+                        thd->charset());
+    create_info->engine_attribute = to_lex_cstring(engine_attribute);
+  }
+  return false;
+}
+
+/**
   Create a table
 
   @param thd                 Thread object
@@ -9319,6 +9824,11 @@ static bool create_table_impl(
 
   if (thd->variables.keep_files_on_create)
     create_info->options |= HA_CREATE_KEEP_FILES;
+
+  StringBuffer<STRING_BUFFER_USUAL_SIZE> engine_attr_buffer;
+  if (convert_to_engine_attribute(thd, create_info, engine_attr_buffer)) {
+    return true;
+  }
 
   /*
     Create table definitions.
