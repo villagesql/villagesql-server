@@ -56,8 +56,8 @@ static bool get_dns_srv(Dns_srv_data &data, const char *dnsname, int &error) {
   int res = res_search(dnsname, ns_c_in, ns_t_srv, query_buffer,
                        sizeof(query_buffer));
 #else
-  int res = res_nsearch(&state, dnsname, ns_c_in, ns_t_srv, query_buffer,
-                        sizeof(query_buffer));
+  int const res = res_nsearch(&state, dnsname, ns_c_in, ns_t_srv, query_buffer,
+                              sizeof(query_buffer));
 #endif
   if (res >= 0) {
     ns_msg msg;

@@ -119,9 +119,9 @@ static bool process_options(int *argc, char ***argv, int &exit_code) {
   }
   my_getopt_use_args_separator = false;
 
-  bool save_skip_unknown = my_getopt_skip_unknown;
+  bool const save_skip_unknown = my_getopt_skip_unknown;
   my_getopt_skip_unknown = true;
-  bool ret = get_options(*argc, *argv, exit_code);
+  bool const ret = get_options(*argc, *argv, exit_code);
   my_getopt_skip_unknown = save_skip_unknown;
   return ret;
 }

@@ -110,7 +110,7 @@ size_t my_fwrite(FILE *stream, const uchar *Buffer, size_t Count, myf MyFlags) {
   seekptr = my_ftell(stream);
   for (;;) {
     errno = 0;
-    size_t written =
+    size_t const written =
         fwrite(pointer_cast<const char *>(Buffer), sizeof(char), Count, stream);
     if (written != Count) {
       set_my_errno(errno);

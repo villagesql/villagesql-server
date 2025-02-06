@@ -46,7 +46,7 @@ static DEFINE_BOOL_METHOD(create, (const char *service_names[],
   try {
     service_names_set<> refs;
     for (unsigned idx = 0; service_names[idx]; idx++) {
-      Service_name_entry entry{service_names[idx], 0};
+      Service_name_entry const entry{service_names[idx], 0};
       refs.insert(entry);
     }
 

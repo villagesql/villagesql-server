@@ -103,7 +103,7 @@ Event_reference_caching_channels::Event_mapping::Event_mapping() {
 bool Event_reference_caching_channels::Event_mapping::map(
     const std::string &event, std::pair<size_t, size_t> &index) {
   try {
-    size_t at = event_map_.at(event);
+    size_t const at = event_map_.at(event);
     index = channel_set_mapping[at];
     return false;
   } catch (...) {
@@ -194,7 +194,7 @@ bool Event_reference_caching_channels::create_cache(
 bool Event_reference_caching_channels::service_notification(const char *service,
                                                             bool load) {
   const char *dot = strchr(service, '.');
-  std::string service_name(service, static_cast<size_t>(dot - service));
+  std::string const service_name(service, static_cast<size_t>(dot - service));
   size_t index;
   if (!map(service_name, index)) {
     if (load) {

@@ -100,7 +100,7 @@ static bool my_coll_init_8bit_bin(CHARSET_INFO *cs, MY_CHARSET_LOADER *,
 static int my_strnncoll_binary(const CHARSET_INFO *cs [[maybe_unused]],
                                const uint8_t *s, size_t slen, const uint8_t *t,
                                size_t tlen, bool t_is_prefix) {
-  size_t len = std::min(slen, tlen);
+  size_t const len = std::min(slen, tlen);
   const int cmp = len == 0 ? 0 : memcmp(s, t, len);  // memcmp(a, b, 0) == 0
   return cmp ? cmp : (int)((t_is_prefix ? len : slen) - tlen);
 }
@@ -144,8 +144,8 @@ static int my_strnncoll_8bit_bin(const CHARSET_INFO *cs [[maybe_unused]],
                                  const uint8_t *s, size_t slen,
                                  const uint8_t *t, size_t tlen,
                                  bool t_is_prefix) {
-  size_t len = std::min(slen, tlen);
-  int cmp = memcmp(s, t, len);
+  size_t const len = std::min(slen, tlen);
+  int const cmp = memcmp(s, t, len);
   return cmp ? cmp : (int)((t_is_prefix ? len : slen) - tlen);
 }
 
@@ -174,7 +174,7 @@ static int my_strnncoll_8bit_bin(const CHARSET_INFO *cs [[maybe_unused]],
 static int my_strnncollsp_8bit_bin(const CHARSET_INFO *cs [[maybe_unused]],
                                    const uint8_t *a, size_t a_length,
                                    const uint8_t *b, size_t b_length) {
-  size_t length = std::min(a_length, b_length);
+  size_t const length = std::min(a_length, b_length);
   const uint8_t *end = a + length;
   while (a < end) {
     if (*a++ != *b++) return ((int)a[-1] - (int)b[-1]);
@@ -349,7 +349,7 @@ static int my_wildcmp_bin_impl(const CHARSET_INFO *cs, const char *str,
         while (str != str_end && (uint8_t)likeconv(cs, *str) != cmp) str++;
         if (str++ == str_end) return (-1);
         {
-          int tmp =
+          int const tmp =
               my_wildcmp_bin_impl(cs, str, str_end, wildstr, wildend, escape,
                                   w_one, w_many, recurse_level + 1);
           if (tmp <= 0) return (tmp);

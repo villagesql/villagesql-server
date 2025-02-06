@@ -84,7 +84,7 @@ Equi_height<T>::Equi_height(MEM_ROOT *mem_root, const Equi_height<T> &other,
     return;
   }
   for (const equi_height::Bucket<T> &other_bucket : other.m_buckets) {
-    equi_height::Bucket<T> bucket(
+    equi_height::Bucket<T> const bucket(
         DeepCopy(other_bucket.get_lower_inclusive(), mem_root, error),
         DeepCopy(other_bucket.get_upper_inclusive(), mem_root, error),
         other_bucket.get_cumulative_frequency(),
@@ -180,7 +180,8 @@ static ha_rows FindBucketMaxValues(const Value_map<T> &value_map,
   int search_step = 0;
   while (upper_bucket_values > lower_bucket_values + 1 &&
          search_step < max_search_steps) {
-    ha_rows bucket_values = (upper_bucket_values + lower_bucket_values) / 2;
+    ha_rows const bucket_values =
+        (upper_bucket_values + lower_bucket_values) / 2;
     if (FitsIntoBuckets(value_map, bucket_values, max_buckets)) {
       upper_bucket_values = bucket_values;
     } else {
@@ -414,7 +415,7 @@ bool Equi_height<T>::build_histogram(const Value_map<T> &value_map,
       (3) Adding the value does not cause the bucket to exceed its max size.
     */
     auto next = std::next(freq_it);
-    size_t empty_buckets_remaining = num_buckets - m_buckets.size() - 1;
+    size_t const empty_buckets_remaining = num_buckets - m_buckets.size() - 1;
     if (next != value_map.end() &&
         distinct_values_remaining > empty_buckets_remaining &&
         bucket_values + next->second <= bucket_max_values) {
@@ -422,16 +423,16 @@ bool Equi_height<T>::build_histogram(const Value_map<T> &value_map,
     }
 
     // Finalize the current bucket and add it to our collection of buckets.
-    double cumulative_frequency =
+    double const cumulative_frequency =
         cumulative_values / static_cast<double>(total_values);
-    ha_rows bucket_distinct_values_estimate =
+    ha_rows const bucket_distinct_values_estimate =
         EstimateDistinctValues(value_map.get_sampling_rate(),
                                bucket_distinct_values, bucket_unary_values);
 
     // Create deep copies of the bucket endpoints to ensure that the values are
     // allocated on the histogram's mem_root.
     bool value_copy_error = false;
-    equi_height::Bucket<T> bucket(
+    equi_height::Bucket<T> const bucket(
         DeepCopy(*bucket_lower_value, get_mem_root(), &value_copy_error),
         DeepCopy(freq_it->first, get_mem_root(), &value_copy_error),
         cumulative_frequency, bucket_distinct_values_estimate);
@@ -506,7 +507,7 @@ bool Equi_height<T>::json_to_histogram(const Json_object &json_object,
   // and should never have errors, so assert whenever an error is encountered.
   // If it is not already validated, it is a user-defined histogram and it may
   // have errors, which should be detected and reported.
-  bool already_validated [[maybe_unused]] = context->binary();
+  bool const already_validated [[maybe_unused]] = context->binary();
 
   const Json_dom *buckets_dom = json_object.get(buckets_str());
   assert(!already_validated ||
@@ -550,7 +551,7 @@ bool Equi_height<T>::json_to_histogram(const Json_object &json_object,
       return true;
     }
     equi_height::Bucket<T> *last_bucket = &m_buckets[m_buckets.size() - 1];
-    float sum =
+    float const sum =
         last_bucket->get_cumulative_frequency() + get_null_values_fraction();
     if (std::abs(sum - 1.0) > 0) {
       context->report_global(Message::JSON_INVALID_TOTAL_FREQUENCY);
@@ -643,8 +644,8 @@ bool Equi_height<T>::add_bucket_from_json(const Json_array *json_bucket,
       }
     }
   }
-  equi_height::Bucket<T> bucket(lower_value, upper_value,
-                                cumulative_frequency->value(), num_distinct_v);
+  equi_height::Bucket<T> const bucket(
+      lower_value, upper_value, cumulative_frequency->value(), num_distinct_v);
 
   return static_cast<bool>(m_buckets.push_back(bucket));
 }
@@ -783,7 +784,7 @@ double Equi_height<T>::get_greater_than_selectivity(const T &value) const {
     found_bucket_frequency = found->get_cumulative_frequency() -
                              previous->get_cumulative_frequency();
   }
-  double next_buckets_frequency =
+  double const next_buckets_frequency =
       get_non_null_values_fraction() - found->get_cumulative_frequency();
 
   /*

@@ -72,7 +72,7 @@ int main(int argc, const char *argv[]) {
 
   UErrorCode status = U_ZERO_ERROR;
 
-  UnicodeString rx(
+  UnicodeString const rx(
       "^%(token|left|right|nonassoc)[[:space:]]*"  // g.1: %token, %left etc.
       "(<[._[:alnum:]]+>)?[[:space:]]*"            // g.2: opt. '<' type '>'
       "([_[:alnum:]]+)"                            // g.3: token name
@@ -98,7 +98,7 @@ int main(int argc, const char *argv[]) {
     //
 
     input_line++;
-    UnicodeString sample(s.data(), s.length());
+    UnicodeString const sample(s.data(), s.length());
     match.reset(sample);
     if (match.matches(status)) {
       assert(match.groupCount() == 4);
@@ -107,7 +107,7 @@ int main(int argc, const char *argv[]) {
       // Check if %token definition contains an explicit token number
       //
 
-      UnicodeString uc_declaration = match.group(1, status);
+      UnicodeString const uc_declaration = match.group(1, status);
       if (icu_error(status)) {
         return EXIT_FAILURE;
       }
@@ -118,7 +118,7 @@ int main(int argc, const char *argv[]) {
         // This is %token ...
         //
 
-        UnicodeString uc_token_number = match.group(4, status);
+        UnicodeString const uc_token_number = match.group(4, status);
         if (icu_error(status)) {
           return EXIT_FAILURE;
         }
@@ -131,7 +131,7 @@ int main(int argc, const char *argv[]) {
           exit(EXIT_FAILURE);
         }
 
-        UnicodeString uc_semantic_type = match.group(2, status);
+        UnicodeString const uc_semantic_type = match.group(2, status);
         if (icu_error(status)) {
           return EXIT_FAILURE;
         }
@@ -159,7 +159,7 @@ int main(int argc, const char *argv[]) {
 
     if (!isalpha(sym->name[0])) continue;  // Operator.
 
-    bool is_reserved = !keyword_tokens.contains(sym->tok);
+    const bool is_reserved = !keyword_tokens.contains(sym->tok);
     if (!words.insert(std::make_pair(sym->name, is_reserved)).second) {
       fprintf(stderr,
               "This should not happen: \"%s\" has duplicates."

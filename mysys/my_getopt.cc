@@ -386,7 +386,7 @@ int my_handle_options2(int *argc, char ***argv,
          * instance name And for all other variable key_name will be 0.
          */
         if (*key_name) {
-          std::string tmp_name(opt_str, 0, length);
+          std::string const tmp_name(opt_str, 0, length);
 
           if (!is_key_cache_variable_suffix(tmp_name.c_str())) {
             opt_str = cur_arg;
@@ -741,7 +741,8 @@ static char *check_struct_option(char *cur_arg, char *key_name) {
      dot found, the option is not a struct option.
   */
   if ((equal_pos > dot_pos) && (space_pos > dot_pos)) {
-    size_t len = std::min(size_t(dot_pos - cur_arg), size_t(FN_REFLEN - 1));
+    size_t const len =
+        std::min(size_t(dot_pos - cur_arg), size_t(FN_REFLEN - 1));
     strmake(key_name, cur_arg, len);
     return ++dot_pos;
   }
@@ -1060,7 +1061,7 @@ LLorULL eval_num_suffix(const char *argument, int *error,
       num = -1 * num;
   }
 
-  unsigned long long ull_num = num;
+  unsigned long long const ull_num = num;
 
   const size_t num_input_bits = std::bitset<64>(ull_num).count();
 

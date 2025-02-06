@@ -43,8 +43,8 @@ bool symdifference(const dd::Spatial_reference_system *srs, const Geometry *g1,
            (srs && srs->is_geographic() &&
             g1->coordinate_system() == Coordinate_system::kGeographic));
 
-    SymDifference symdifference_func(srs ? srs->semi_major_axis() : 0.0,
-                                     srs ? srs->semi_minor_axis() : 0.0);
+    SymDifference const symdifference_func(srs ? srs->semi_major_axis() : 0.0,
+                                           srs ? srs->semi_minor_axis() : 0.0);
     *result = symdifference_func(g1, g2);
 
     if (result->get()->type() != Geometry_type::kGeometrycollection &&

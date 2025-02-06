@@ -191,7 +191,7 @@ static int run_query(const string &query) {
 
 static int rebuild_table(const string &name) {
   int rc = 0;
-  string query = "ALTER TABLE " + name + " FORCE";
+  string const query = "ALTER TABLE " + name + " FORCE";
   if (mysql_real_query(sock, query.c_str(), (ulong)query.length())) {
     fprintf(stderr, "Failed to %s\n", query.c_str());
     fprintf(stderr, "Error: %s\n", mysql_error(sock));
@@ -255,7 +255,7 @@ static int handle_request_for_tables(const string &tables) {
       break;
   }
 
-  string query = operation + " TABLE " + tables + " " + options;
+  string const query = operation + " TABLE " + tables + " " + options;
 
   if (mysql_real_query(sock, query.c_str(), (ulong)query.length())) {
     DBError(sock,
@@ -400,7 +400,7 @@ void mysql_check(MYSQL *connection, int what_to_do, bool opt_alldbs,
   if (::opt_alldbs) process_all_databases();
   /* Only one database and selected table(s) */
   else if (arguments.size() > 1 && !::opt_databases) {
-    string db_name = arguments[0];
+    string const db_name = arguments[0];
     arguments.erase(arguments.begin());
     process_selected_tables(db_name, arguments);
   }

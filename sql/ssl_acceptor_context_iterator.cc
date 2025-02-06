@@ -57,15 +57,15 @@ class Ssl_acceptor_context_iterator {
   Ssl_acceptor_context_iterator(Ssl_acceptor_context_container *context_type) {
     Lock_and_access_ssl_acceptor_context context(context_type);
     const std::string channel_name = context.channel_name();
-    Ssl_acceptor_context_iterator_data first_one(
+    Ssl_acceptor_context_iterator_data const first_one(
         channel_name, "Enabled", context.have_ssl() ? "Yes" : "No");
     data_.push_back(first_one);
     for (Ssl_acceptor_context_property_type type =
              Ssl_acceptor_context_property_type::accept_renegotiates;
          type != Ssl_acceptor_context_property_type::last; ++type) {
-      Ssl_acceptor_context_iterator_data one(channel_name,
-                                             Ssl_ctx_property_name(type),
-                                             context.show_property(type));
+      Ssl_acceptor_context_iterator_data const one(channel_name,
+                                                   Ssl_ctx_property_name(type),
+                                                   context.show_property(type));
       data_.push_back(one);
     }
     /* Now set the iterator to beginning */

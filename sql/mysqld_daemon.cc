@@ -57,7 +57,7 @@ int mysqld::runtime::mysqld_daemonize() {
   int pipe_fd[2];
   if (pipe(pipe_fd) < 0) return -2;
 
-  pid_t pid = fork();
+  pid_t const pid = fork();
   if (pid == -1) {
     // Error
     close(pipe_fd[0]);
@@ -111,7 +111,7 @@ int mysqld::runtime::mysqld_daemonize() {
 
   if (!(dup2(stdinfd, STDIN_FILENO) != STDIN_FILENO) && (setsid() > -1)) {
     close(stdinfd);
-    pid_t grand_child_pid = fork();
+    pid_t const grand_child_pid = fork();
     switch (grand_child_pid) {
       case 0:  // Grand child
         is_daemon_proc = true;

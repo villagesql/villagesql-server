@@ -107,7 +107,7 @@ bool cache_imp::get(unsigned service_name_index, const my_h_service **out_ref) {
           if (current_registry_query->get(iter, &implementation_name)) break;
 
           const char *dot = strchr(implementation_name, '.');
-          size_t service_name_length = (dot - implementation_name);
+          size_t const service_name_length = (dot - implementation_name);
 
           // not the same service
           if ((service_name_length != service_name.name_.length()) ||

@@ -98,9 +98,9 @@ static int build_id_callback(dl_phdr_info *info, size_t, void *data_) {
         return 1;
       }
       // Skip to the next note:
-      size_t offset = sizeof(elf_note_struct) +
-                      NOTE_ALIGN(note->nhdr.n_namesz) +
-                      NOTE_ALIGN(note->nhdr.n_descsz);
+      size_t const offset = sizeof(elf_note_struct) +
+                            NOTE_ALIGN(note->nhdr.n_namesz) +
+                            NOTE_ALIGN(note->nhdr.n_descsz);
       note = reinterpret_cast<elf_note *>(
           reinterpret_cast<unsigned char *>(note) + offset);
       segment_size -= offset;

@@ -154,7 +154,7 @@ result parse_options_string(String *str, char delimiter,
   }
 
   size_t substring_startpos = str_start_pos;
-  size_t delimiter_count =
+  size_t const delimiter_count =
       std::count(str_copy.begin(), str_copy.end(), delimiter);
   size_t substring_endpos = 0;
   size_t key_value_separator_pos = 0;
@@ -199,7 +199,7 @@ result parse_options_string(String *str, char delimiter,
                               // before delimiter.
     }
 
-    size_t key_value_separator_count =
+    size_t const key_value_separator_count =
         std::count(str_copy.begin() + substring_startpos,
                    str_copy.begin() + substring_endpos, key_value_separator);
 
@@ -241,9 +241,9 @@ result parse_options_string(String *str, char delimiter,
       return parser_result;
     }
 
-    std::string key =
+    std::string const key =
         str_copy.substr(key_startpos, key_endpos - key_startpos + 1);
-    std::string value =
+    std::string const value =
         str_copy.substr(value_startpos, value_endpos - value_startpos + 1);
     if (key_value_separator_count > 1) {
       parser_result.status = parser_status::MORE_THAN_ONE_SEPARATOR;

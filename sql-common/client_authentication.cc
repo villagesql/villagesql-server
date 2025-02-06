@@ -274,7 +274,7 @@ int sha256_password_auth_client(MYSQL_PLUGIN_VIO *vio, MYSQL *mysql) {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
       int cipher_length = EVP_PKEY_get_size(public_key);
 #else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-      int cipher_length = RSA_size(public_key);
+      int const cipher_length = RSA_size(public_key);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
       /*
         When using RSA_PKCS1_OAEP_PADDING the password length must be less
@@ -739,7 +739,7 @@ int caching_sha2_password_auth_client(MYSQL_PLUGIN_VIO *vio, MYSQL *mysql) {
 #if OPENSSL_VERSION_NUMBER >= 0x30000000L
         int cipher_length = EVP_PKEY_get_size(public_key);
 #else  /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
-        int cipher_length = RSA_size(public_key);
+        int const cipher_length = RSA_size(public_key);
 #endif /* OPENSSL_VERSION_NUMBER >= 0x30000000L */
         /*
            When using RSA_PKCS1_OAEP_PADDING the password length must be less

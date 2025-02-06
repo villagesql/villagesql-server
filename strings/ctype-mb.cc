@@ -153,11 +153,11 @@ static size_t my_casefold_mb_varlen(const CHARSET_INFO *cs, char *src,
   assert(cs->mbmaxlen == 2);
 
   while (src < srcend) {
-    size_t mblen = my_ismbchar(cs, src, srcend);
+    size_t const mblen = my_ismbchar(cs, src, srcend);
     if (mblen) {
       const MY_UNICASE_CHARACTER *ch;
       if ((ch = get_case_info_for_ch(cs, (uint8_t)src[0], (uint8_t)src[1]))) {
-        int code = is_upper ? ch->toupper : ch->tolower;
+        int const code = is_upper ? ch->toupper : ch->tolower;
         src += 2;
         if (code > 0xFF) *dst++ = code >> 8;
         *dst++ = code & 0xFF;
@@ -273,7 +273,7 @@ static int my_wildcmp_mb_impl(const CHARSET_INFO *cs, const char *str,
         cmp = *++wildstr;
 
       const uint8_t *mb = wildstr;
-      unsigned mb_len = my_ismbchar(cs, wildstr, wildend);
+      unsigned const mb_len = my_ismbchar(cs, wildstr, wildend);
       INC_PTR(cs, wildstr, wildend); /* This is compared through cmp */
       cmp = likeconv(cs, cmp);
       do {
@@ -292,7 +292,7 @@ static int my_wildcmp_mb_impl(const CHARSET_INFO *cs, const char *str,
           INC_PTR(cs, str, str_end);
         }
         {
-          int tmp = my_wildcmp_mb_impl(
+          int const tmp = my_wildcmp_mb_impl(
               cs, str, str_end, pointer_cast<const char *>(wildstr),
               wildend_arg, escape, w_one, w_many, recurse_level + 1);
           if (tmp <= 0) return (tmp);
@@ -394,8 +394,8 @@ bool my_instr_mb(const CHARSET_INFO *cs, const char *b, size_t b_length,
 int my_strnncoll_mb_bin(const CHARSET_INFO *cs [[maybe_unused]],
                         const uint8_t *s, size_t slen, const uint8_t *t,
                         size_t tlen, bool t_is_prefix) {
-  size_t len = std::min(slen, tlen);
-  int cmp = len == 0 ? 0 : memcmp(s, t, len);
+  size_t const len = std::min(slen, tlen);
+  int const cmp = len == 0 ? 0 : memcmp(s, t, len);
   return cmp ? cmp : (int)((t_is_prefix ? len : slen) - tlen);
 }
 
@@ -530,7 +530,7 @@ size_t my_strnxfrm_mb(const CHARSET_INFO *cs, uint8_t *dst, size_t dstlen,
       *dst++ = sort_order ? sort_order[*src++] : *src++;
     } else {
       /* Multi-byte character */
-      size_t len = (dst + chlen <= de) ? chlen : de - dst;
+      size_t const len = (dst + chlen <= de) ? chlen : de - dst;
       memcpy(dst, src, len);
       dst += len;
       src += len;
@@ -1017,7 +1017,7 @@ static int my_wildcmp_mb_bin_impl(const CHARSET_INFO *cs, const char *str,
           INC_PTR(cs, str, str_end);
         }
         {
-          int tmp = my_wildcmp_mb_bin_impl(
+          int const tmp = my_wildcmp_mb_bin_impl(
               cs, str, str_end, pointer_cast<const char *>(wildstr),
               wildend_arg, escape, w_one, w_many, recurse_level + 1);
           if (tmp <= 0) return (tmp);
@@ -1314,7 +1314,7 @@ size_t my_numcells_mb(const CHARSET_INFO *cs, const char *b, const char *e) {
 int my_mb_ctype_mb(const CHARSET_INFO *cs, int *ctype, const uint8_t *s,
                    const uint8_t *e) {
   my_wc_t wc;
-  int res = cs->cset->mb_wc(cs, &wc, s, e);
+  int const res = cs->cset->mb_wc(cs, &wc, s, e);
   if (res <= 0 || wc > 0xFFFF)
     *ctype = 0;
   else

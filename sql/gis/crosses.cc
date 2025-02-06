@@ -87,7 +87,7 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
             !g2_mls->empty()) {
           // Both g1 and g2 are of dimenision 1, so the common interior has to
           // be of dimension 0 for g1 and g2 to cross.
-          boost::geometry::de9im::mask mask("0********");
+          boost::geometry::de9im::mask const mask("0********");
           shared_interior = bg::relate(
               *down_cast<Cartesian_multipoint *>(g1_mpt.get()),
               *down_cast<Cartesian_multipoint *>(g2_mpt.get()), mask);
@@ -106,7 +106,7 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
                          mask)) {
             shared_interior = true;
           } else {
-            boost::geometry::de9im::mask line_mask("1********");
+            boost::geometry::de9im::mask const line_mask("1********");
             if (bg::relate(
                     *down_cast<Cartesian_multilinestring *>(g1_mls.get()),
                     *down_cast<Cartesian_multilinestring *>(g2_mls.get()),
@@ -118,7 +118,7 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
           // Either g1 or g2 are not of dimension 1. Therefore, it's enough to
           // have some common interior, there's no requirement on the
           // dimensionality.
-          boost::geometry::de9im::mask mask("T********");
+          boost::geometry::de9im::mask const mask("T********");
           shared_interior = bg::relate(
               *down_cast<Cartesian_multipoint *>(g1_mpt.get()),
               *down_cast<Cartesian_multipoint *>(g2_mpt.get()), mask);
@@ -150,7 +150,7 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
             !g2_mls->empty()) {
           // Both g1 and g2 are of dimenision 1, so the common interior has to
           // be of dimension 0 for g1 and g2 to cross.
-          boost::geometry::de9im::mask mask("0********");
+          boost::geometry::de9im::mask const mask("0********");
           shared_interior = bg::relate(
               *down_cast<Geographic_multipoint *>(g1_mpt.get()),
               *down_cast<Geographic_multipoint *>(g2_mpt.get()), mask);
@@ -169,7 +169,7 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
                          mask)) {
             shared_interior = true;
           } else {
-            boost::geometry::de9im::mask line_mask("1********");
+            boost::geometry::de9im::mask const line_mask("1********");
             if (bg::relate(
                     *down_cast<Geographic_multilinestring *>(g1_mls.get()),
                     *down_cast<Geographic_multilinestring *>(g2_mls.get()),
@@ -181,12 +181,12 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
           // Either g1 or g2 are not of dimension 1. Therefore, it's enough to
           // have some common interior, there's no requirement on the
           // dimensionality.
-          boost::geometry::de9im::mask mask("T********");
+          boost::geometry::de9im::mask const mask("T********");
           boost::geometry::strategy::within::geographic_winding<
-              Geographic_point>
+              Geographic_point> const
               geographic_pl_pa_strategy(
                   bg::srs::spheroid<double>(f.semi_major(), f.semi_minor()));
-          boost::geometry::strategy::intersection::geographic_segments<>
+          boost::geometry::strategy::intersection::geographic_segments<> const
               geographic_ll_la_aa_strategy(
                   bg::srs::spheroid<double>(f.semi_major(), f.semi_minor()));
 
@@ -221,7 +221,7 @@ static bool geometry_collection_apply_crosses(const Crosses &f,
 
       // At least one point of g1 must be in g2's exterior.
       std::unique_ptr<Geometry> pt_diff;
-      Difference d(f.semi_major(), f.semi_minor());
+      Difference const d(f.semi_major(), f.semi_minor());
       pt_diff = d(g1_mpt.get(), g2_mpt.get());
       pt_diff = d(pt_diff.get(), g2_mls.get());
       pt_diff = d(pt_diff.get(), g2_mpy.get());
@@ -395,8 +395,8 @@ bool Crosses::eval(const Cartesian_multipoint *,
 
 bool Crosses::eval(const Cartesian_multipoint *g1,
                    const Cartesian_linestring *g2) const {
-  Within within(m_semi_major, m_semi_minor);
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Within const within(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   bool found_within = false;
   bool found_disjoint = false;
 
@@ -420,8 +420,8 @@ bool Crosses::eval(const Cartesian_multipoint *g1,
 
 bool Crosses::eval(const Cartesian_multipoint *g1,
                    const Cartesian_polygon *g2) const {
-  Within within(m_semi_major, m_semi_minor);
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Within const within(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   bool found_within = false;
   bool found_disjoint = false;
 
@@ -457,8 +457,8 @@ bool Crosses::eval(const Cartesian_multipoint *,
 
 bool Crosses::eval(const Cartesian_multipoint *g1,
                    const Cartesian_multilinestring *g2) const {
-  Within within(m_semi_major, m_semi_minor);
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Within const within(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   bool found_within = false;
   bool found_disjoint = false;
 
@@ -482,8 +482,8 @@ bool Crosses::eval(const Cartesian_multipoint *g1,
 
 bool Crosses::eval(const Cartesian_multipoint *g1,
                    const Cartesian_multipolygon *g2) const {
-  Within within(m_semi_major, m_semi_minor);
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Within const within(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   bool found_within = false;
   bool found_disjoint = false;
 
@@ -674,8 +674,8 @@ bool Crosses::eval(const Geographic_multipoint *,
 
 bool Crosses::eval(const Geographic_multipoint *g1,
                    const Geographic_linestring *g2) const {
-  Within within(m_semi_major, m_semi_minor);
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Within const within(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   bool found_within = false;
   bool found_disjoint = false;
 
@@ -699,8 +699,8 @@ bool Crosses::eval(const Geographic_multipoint *g1,
 
 bool Crosses::eval(const Geographic_multipoint *g1,
                    const Geographic_polygon *g2) const {
-  Within within(m_semi_major, m_semi_minor);
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Within const within(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   bool found_within = false;
   bool found_disjoint = false;
 
@@ -736,8 +736,8 @@ bool Crosses::eval(const Geographic_multipoint *,
 
 bool Crosses::eval(const Geographic_multipoint *g1,
                    const Geographic_multilinestring *g2) const {
-  Within within(m_semi_major, m_semi_minor);
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Within const within(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   bool found_within = false;
   bool found_disjoint = false;
 
@@ -761,8 +761,8 @@ bool Crosses::eval(const Geographic_multipoint *g1,
 
 bool Crosses::eval(const Geographic_multipoint *g1,
                    const Geographic_multipolygon *g2) const {
-  Within within(m_semi_major, m_semi_minor);
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Within const within(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   bool found_within = false;
   bool found_disjoint = false;
 
@@ -850,8 +850,8 @@ bool crosses(const dd::Spatial_reference_system *srs, const Geometry *g1,
 
     if ((*null = (g1->is_empty() || g2->is_empty()))) return false;
 
-    Crosses crosses_func(srs ? srs->semi_major_axis() : 0.0,
-                         srs ? srs->semi_minor_axis() : 0.0);
+    Crosses const crosses_func(srs ? srs->semi_major_axis() : 0.0,
+                               srs ? srs->semi_minor_axis() : 0.0);
     *crosses = crosses_func(g1, g2);
   } catch (const null_value_exception &) {
     *null = true;

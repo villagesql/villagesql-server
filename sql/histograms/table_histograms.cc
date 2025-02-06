@@ -79,7 +79,7 @@ bool Table_histograms::insert_histogram(
   const histograms::Histogram *histogram_copy = histogram->clone(&m_mem_root);
   if (histogram_copy == nullptr) return true;
   try {
-    bool insertion_happened =
+    bool const insertion_happened =
         m_histograms->insert(std::make_pair(field_index, histogram_copy))
             .second;
     if (!insertion_happened) return true;  // Duplicate key.
@@ -121,7 +121,7 @@ const Table_histograms *Table_histograms_collection::acquire() {
 
 void Table_histograms_collection::release(const Table_histograms *histograms) {
   mysql_mutex_assert_owner(&LOCK_open);
-  size_t idx = histograms->get_index();
+  size_t const idx = histograms->get_index();
   assert(m_table_histograms[idx] == histograms);
   m_table_histograms[idx]->decrement_reference_counter();
   if (m_table_histograms[idx]->reference_count() == 0 &&

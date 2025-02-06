@@ -134,7 +134,7 @@ static long long message_replace(UDF_INIT *init [[maybe_unused]],
 
   if (args->arg_count == 2 && args->arg_type[0] == INT_RESULT &&
       args->arg_type[1] == STRING_RESULT) {
-    size_t pos = *reinterpret_cast<size_t *>(args->args[0]);
+    size_t const pos = *reinterpret_cast<size_t *>(args->args[0]);
     if (pos < no_args)
       emit_args[pos] = std::string(args->args[1]);
     else

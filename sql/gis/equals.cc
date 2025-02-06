@@ -114,22 +114,22 @@ static bool geometry_collection_apply_equals(const Equals &f,
     switch (g1->type()) {
       case Geometry_type::kPoint:
       case Geometry_type::kMultipoint: {
-        bool mls_empty = !g2_mls || g2_mls->empty();
-        bool mpy_empty = !g2_mpy || g2_mpy->empty();
+        bool const mls_empty = !g2_mls || g2_mls->empty();
+        bool const mpy_empty = !g2_mpy || g2_mpy->empty();
         if (!mls_empty || !mpy_empty) return false;
         return f(g1, g2_mpt.get());
       }
       case Geometry_type::kLinestring:
       case Geometry_type::kMultilinestring: {
-        bool mpt_empty = !g2_mpt || g2_mpt->empty();
-        bool mpy_empty = !g2_mpy || g2_mpy->empty();
+        bool const mpt_empty = !g2_mpt || g2_mpt->empty();
+        bool const mpy_empty = !g2_mpy || g2_mpy->empty();
         if (!mpt_empty || !mpy_empty) return false;
         return f(g1, g2_mls.get());
       }
       case Geometry_type::kPolygon:
       case Geometry_type::kMultipolygon: {
-        bool mpt_empty = !g2_mpt || g2_mpt->empty();
-        bool mls_empty = !g2_mls || g2_mls->empty();
+        bool const mpt_empty = !g2_mpt || g2_mpt->empty();
+        bool const mls_empty = !g2_mls || g2_mls->empty();
         if (!mpt_empty || !mls_empty) return false;
         return f(g1, g2_mpy.get());
       }
@@ -757,8 +757,8 @@ bool equals(const dd::Spatial_reference_system *srs, const Geometry *g1,
       return false;
     }
 
-    Equals equals_func(srs ? srs->semi_major_axis() : 0.0,
-                       srs ? srs->semi_minor_axis() : 0.0);
+    Equals const equals_func(srs ? srs->semi_major_axis() : 0.0,
+                             srs ? srs->semi_minor_axis() : 0.0);
     *equals = equals_func(g1, g2);
   } catch (...) {
     handle_gis_exception(func_name);
@@ -789,8 +789,8 @@ bool mbr_equals(const dd::Spatial_reference_system *srs, const Geometry *g1,
       return false;
     }
 
-    Equals equals_func(srs ? srs->semi_major_axis() : 0.0,
-                       srs ? srs->semi_minor_axis() : 0.0);
+    Equals const equals_func(srs ? srs->semi_major_axis() : 0.0,
+                             srs ? srs->semi_minor_axis() : 0.0);
 
     switch (g1->coordinate_system()) {
       case Coordinate_system::kCartesian: {

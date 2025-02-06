@@ -197,7 +197,7 @@ const char *common_fetch_order(char *out, int order_num) {
   };
 
   static const char *pk_order_name = "PRIMARY";
-  static size_t pk_order_name_length = 7;
+  static size_t const pk_order_name_length = 7;
   static const TA_index_field_def pk_order_cols[] = {{"ORDER_ID", 8, false}};
   static const size_t pk_order_numcol = 1;
 
@@ -214,7 +214,7 @@ const char *common_fetch_order(char *out, int order_num) {
       {ORDER_LINE_QTY, "QTY", 3, TA_TYPE_INTEGER, false, 0}};
 
   static const char *pk_order_line_name = "PRIMARY";
-  static size_t pk_order_line_name_length = 7;
+  static size_t const pk_order_line_name_length = 7;
   static const TA_index_field_def pk_order_line_cols[] = {
       {"ORDER_ID", 8, false},
       {"LINE_NUM", 8, false},
@@ -414,7 +414,7 @@ const char *common_index(char *out, bool scan, int min_capacity,
   static const size_t num_columns_warehouse = 5;
 
   static const char *key_shelves_name = "SHELVES";
-  static size_t key_shelves_name_length = 7;
+  static size_t const key_shelves_name_length = 7;
   static const TA_index_field_def key_shelves_cols[] = {
       {"BUILDING_ID", 11, true},
       {"FLOOR_NUMBER", 12, true},
@@ -792,7 +792,7 @@ static char *test_table_access_driver(UDF_INIT *, UDF_ARGS *args, char *result,
                                       unsigned char *is_null,
                                       unsigned char *error) {
   const char *p1 = args->args[0];
-  size_t len_p1 = args->lengths[0];
+  size_t const len_p1 = args->lengths[0];
 
   test_driver_t *entry;
   char output_message[255];

@@ -140,7 +140,7 @@ void key_copy(uchar *to_key, const uchar *from_record, const KEY *key_info,
   if (key_length == 0) key_length = key_info->key_length;
   for (key_part = key_info->key_part; (int)key_length > 0; key_part++) {
     if (key_part->null_bit) {
-      bool key_is_null =
+      bool const key_is_null =
           from_record[key_part->null_offset] & key_part->null_bit;
       *to_key++ = (key_is_null ? 1 : 0);
       key_length--;

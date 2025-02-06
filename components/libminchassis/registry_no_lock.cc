@@ -169,7 +169,7 @@ bool mysql_registry_no_lock_imp::register_service_nolock(
     }
 
     /* Register the implementation name. */
-    std::pair<my_service_registry::iterator, bool> addition_result =
+    std::pair<my_service_registry::iterator, bool> const addition_result =
         mysql_registry_no_lock_imp::service_registry.emplace(imp->name_c_str(),
                                                              imp.get());
 
@@ -327,7 +327,7 @@ DEFINE_BOOL_METHOD(mysql_registry_no_lock_imp::acquire_related,
     if (strchr(service_name, '.') != nullptr) {
       return true;
     }
-    my_string service_implementation_name =
+    my_string const service_implementation_name =
         my_string(service_name) + component_part;
     /* Try to acquire such Service. */
     if (mysql_registry_no_lock_imp::acquire_nolock(

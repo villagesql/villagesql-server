@@ -216,7 +216,7 @@ extern "C" void handle_signal(int sig, siginfo_t *si,
 
 int main(int argc, char *const argv[]) {
   char *const *child_argv = nullptr;
-  pid_t own_pid = getpid();
+  pid_t const own_pid = getpid();
   pid_t parent_pid = getppid();
   bool nocore = false;
   struct sigaction sa, sa_abort;
@@ -293,7 +293,7 @@ int main(int argc, char *const argv[]) {
     setpgid(0, 0);
 
     if (nocore) {
-      struct rlimit corelim = {0, 0};
+      struct rlimit const corelim = {0, 0};
       if (setrlimit(RLIMIT_CORE, &corelim) < 0) {
         message("setrlimit failed, errno=%d", errno);
       }

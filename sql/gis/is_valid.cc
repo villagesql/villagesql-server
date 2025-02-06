@@ -110,7 +110,7 @@ bool is_valid(const dd::Spatial_reference_system *srs, const Geometry *g,
       smajor = srs->semi_major_axis();
       sminor = srs->semi_minor_axis();
     }
-    Is_valid is_valid_functor(smajor, sminor);
+    Is_valid const is_valid_functor(smajor, sminor);
     *is_valid = is_valid_functor(*g);
     return false;
   } catch (...) {

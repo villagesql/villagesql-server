@@ -1213,7 +1213,7 @@ static void *test_thread(void *arg) {
     thr_multi_lock(multi_locks, lock_counts[param], &lock_info, TEST_TIMEOUT);
     mysql_mutex_lock(&LOCK_thread_count);
     {
-      int tmp = rand() & 7; /* Do something from 0-2 sec */
+      int const tmp = rand() & 7; /* Do something from 0-2 sec */
       if (tmp == 0)
         sleep(1);
       else if (tmp == 1)

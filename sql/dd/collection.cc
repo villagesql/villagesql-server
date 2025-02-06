@@ -131,7 +131,7 @@ bool Collection<T>::restore_items(Parent_item *parent,
 
   assert(empty());
 
-  std::unique_ptr<Object_key> key_holder(key);
+  std::unique_ptr<Object_key> const key_holder(key);
 
   std::unique_ptr<Raw_record_set> rs;
   if (table->open_record_set(key, rs)) return true;
@@ -228,7 +228,7 @@ bool Collection<T>::drop_items(Open_dictionary_tables_ctx *otx,
   DBUG_TRACE;
 
   // Make sure key gets deleted
-  std::unique_ptr<Object_key> key_holder(key);
+  std::unique_ptr<Object_key> const key_holder(key);
 
   if (empty()) return false;
 

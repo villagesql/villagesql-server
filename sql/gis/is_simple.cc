@@ -156,8 +156,8 @@ bool is_simple(const dd::Spatial_reference_system *srs, const Geometry *g,
 
     *result_null = false;
 
-    double semi_major = srs ? srs->semi_major_axis() : 0.0;
-    double semi_minor = srs ? srs->semi_minor_axis() : 0.0;
+    double const semi_major = srs ? srs->semi_major_axis() : 0.0;
+    double const semi_minor = srs ? srs->semi_minor_axis() : 0.0;
 
     *result = Is_simple{semi_major, semi_minor}(*g);
     return false;

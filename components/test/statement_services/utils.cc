@@ -225,7 +225,7 @@ auto handle_error(my_h_statement statement, unsigned char *error, char *result,
           ->sqlstate(statement, &sql_state)) {
     // Setting error = 0 so that the error message is displayed as result
     *error = 0;
-    std::string error_msg =
+    std::string const error_msg =
         "Error in getting the error from the DA. This probably means there is "
         "an error at the service layer.";
     return print_output(result, length, error_msg);

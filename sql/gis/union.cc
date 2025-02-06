@@ -43,8 +43,8 @@ bool union_(const dd::Spatial_reference_system *srs, const Geometry *g1,
            (srs && srs->is_geographic() &&
             g1->coordinate_system() == Coordinate_system::kGeographic));
 
-    Union union_func(srs ? srs->semi_major_axis() : 0.0,
-                     srs ? srs->semi_minor_axis() : 0.0);
+    Union const union_func(srs ? srs->semi_major_axis() : 0.0,
+                           srs ? srs->semi_minor_axis() : 0.0);
     *result = union_func(g1, g2);
 
     if ((*result)->type() != Geometry_type::kGeometrycollection &&

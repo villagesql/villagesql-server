@@ -51,8 +51,8 @@ unsigned long long my_physical_memory() {
   GlobalMemoryStatusEx(&ms);
   mem = ms.ullTotalPhys;
 #elif defined(HAVE_UNISTD_H) /* _WIN32 */
-  long pages = sysconf(_SC_PHYS_PAGES);
-  long pagesize = sysconf(_SC_PAGESIZE);
+  long const pages = sysconf(_SC_PHYS_PAGES);
+  long const pagesize = sysconf(_SC_PAGESIZE);
   if (pages > 0 && pagesize > 0) {
     mem = static_cast<unsigned long long>(pages * pagesize);
   }

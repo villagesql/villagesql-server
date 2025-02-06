@@ -132,7 +132,7 @@ void *Mysys_charset_loader::read_file(const char *path, size_t *size) {
     return nullptr;
   }
 
-  size_t len = stat_info.st_size;
+  size_t const len = stat_info.st_size;
   if (len > MY_MAX_ALLOWED_BUF) {
     return nullptr;
   }
@@ -143,12 +143,12 @@ void *Mysys_charset_loader::read_file(const char *path, size_t *size) {
     return nullptr;
   }
 
-  int fd = mysql_file_open(key_file_charset, path, O_RDONLY, 0);
+  int const fd = mysql_file_open(key_file_charset, path, O_RDONLY, 0);
   if (fd < 0) {
     return nullptr;
   }
 
-  size_t tmp_len = mysql_file_read(fd, buf.get(), len, 0);
+  size_t const tmp_len = mysql_file_read(fd, buf.get(), len, 0);
   mysql_file_close(fd, 0);
   if (tmp_len != len) {
     return nullptr;
@@ -198,13 +198,13 @@ static void init_available_charsets() {
 
 uint get_collation_number(const char *collation_name) {
   std::call_once(charsets_initialized, init_available_charsets);
-  mysql::collation::Name name{collation_name};
+  mysql::collation::Name const name{collation_name};
   return entry()->get_collation_id(name);
 }
 
 unsigned get_charset_number(const char *cs_name, uint cs_flags) {
   std::call_once(charsets_initialized, init_available_charsets);
-  mysql::collation::Name name{cs_name};
+  mysql::collation::Name const name{cs_name};
   if ((cs_flags & MY_CS_PRIMARY)) {
     return entry()->get_primary_collation_id(name);
   }
@@ -289,7 +289,7 @@ CHARSET_INFO *my_collation_get_by_name(const char *collation_name, myf flags,
     collation_name = collation_name_string.c_str();
   }
 
-  mysql::collation::Name name{collation_name};
+  mysql::collation::Name const name{collation_name};
   CHARSET_INFO *cs = entry()->find_by_name(name, flags, errmsg);
   if (cs == nullptr && (flags & MY_WME)) {
     char index_file[FN_REFLEN + sizeof(MY_CHARSET_INDEX)];
@@ -321,7 +321,7 @@ CHARSET_INFO *my_charset_get_by_name(const char *cs_name, uint cs_flags,
 
   std::call_once(charsets_initialized, init_available_charsets);
 
-  mysql::collation::Name name{cs_name};
+  mysql::collation::Name const name{cs_name};
   CHARSET_INFO *cs = nullptr;
   if (cs_flags & MY_CS_PRIMARY) {
     cs = entry()->find_primary(name, flags, errmsg);

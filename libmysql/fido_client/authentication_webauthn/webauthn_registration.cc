@@ -129,24 +129,24 @@ bool webauthn_registration::parse_challenge(const char *challenge) {
 bool webauthn_registration::make_challenge_response(
     unsigned char *&challenge_response) {
   /* copy client response into buf */
-  unsigned long authdata_len = get_authdata_len();
-  unsigned long sig_len = get_sig_len();
-  unsigned long cert_len = get_x5c_len();
-  unsigned long client_data_json_len = get_client_data_json_len();
+  unsigned long const authdata_len = get_authdata_len();
+  unsigned long const sig_len = get_sig_len();
+  unsigned long const cert_len = get_x5c_len();
+  unsigned long const client_data_json_len = get_client_data_json_len();
   unsigned short capability = 0;
-  unsigned short capability_len = 1;
-  unsigned long attstmt_len = get_attestation_statement_length();
+  unsigned short const capability_len = 1;
+  unsigned long const attstmt_len = get_attestation_statement_length();
   const char *fmt = get_fmt();
-  unsigned long fmt_len = strlen(fmt);
+  unsigned long const fmt_len = strlen(fmt);
 
   /* calculate total required buffer length */
-  size_t len = capability_len + net_length_size(authdata_len) +
-               net_length_size(sig_len) +
-               (cert_len ? net_length_size(cert_len) + cert_len : 0) +
-               authdata_len + sig_len + net_length_size(client_data_json_len) +
-               client_data_json_len + attstmt_len +
-               net_length_size(attstmt_len) + fmt_len +
-               net_length_size(fmt_len);
+  size_t const len =
+      capability_len + net_length_size(authdata_len) +
+      net_length_size(sig_len) +
+      (cert_len ? net_length_size(cert_len) + cert_len : 0) + authdata_len +
+      sig_len + net_length_size(client_data_json_len) + client_data_json_len +
+      attstmt_len + net_length_size(attstmt_len) + fmt_len +
+      net_length_size(fmt_len);
   auto *str = new (std::nothrow) unsigned char[len];
   if (!str) return true;
   unsigned char *pos = str;
@@ -194,7 +194,7 @@ bool webauthn_registration::make_challenge_response(
 
   /* base64 encode the whole thing */
   assert(len == (size_t)(pos - str));
-  uint64 needed = base64_needed_encoded_length((uint64)len);
+  uint64 const needed = base64_needed_encoded_length((uint64)len);
   auto *tmp_value = new unsigned char[needed];
   base64_encode(str, len, reinterpret_cast<char *>(tmp_value));
   /* Ensure caller will release this memory. */
@@ -229,7 +229,7 @@ void webauthn_registration::set_client_data(const unsigned char *salt,
                         base64_salt);
   unsigned char client_data_buf[512] = {0};
   /* construct client data JSON string */
-  size_t client_data_len = snprintf(
+  size_t const client_data_len = snprintf(
       reinterpret_cast<char *>(client_data_buf), sizeof(client_data_buf),
       "{\"type\":\"webauthn.create\",\"challenge\":"
       "\"%s\",\"origin\":\"https://%s\",\"crossOrigin\":false}",

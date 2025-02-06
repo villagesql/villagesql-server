@@ -205,8 +205,8 @@ void avgcost_add(UDF_INIT *initid, UDF_ARGS *args, unsigned char *,
                  unsigned char *) {
   if (args->args[0] && args->args[1]) {
     auto *data = (struct avgcost_data *)initid->ptr;
-    long long quantity = *((long long *)args->args[0]);
-    long long newquantity = data->totalquantity + quantity;
+    long long const quantity = *((long long *)args->args[0]);
+    long long const newquantity = data->totalquantity + quantity;
     double price = *((double *)args->args[1]);
 
     data->count++;

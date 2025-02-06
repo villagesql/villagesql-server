@@ -219,11 +219,12 @@ bool user_device_registration(MYSQL *mysql_handle, char *register_option,
     }
 
     /* execute FINISH REGISTRATION sql */
-    int n = snprintf(query, sizeof(query),
-                     "ALTER USER USER() %d FACTOR FINISH REGISTRATION SET "
-                     "CHALLENGE_RESPONSE AS ",
-                     f);
-    size_t tot_query_len =
+    int const n =
+        snprintf(query, sizeof(query),
+                 "ALTER USER USER() %d FACTOR FINISH REGISTRATION SET "
+                 "CHALLENGE_RESPONSE AS ",
+                 f);
+    size_t const tot_query_len =
         n + strlen(reinterpret_cast<char *>(server_challenge_response)) +
         2 /* quotes */;
     if (tot_query_len >= MAX_QUERY_LENGTH) {

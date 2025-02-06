@@ -480,7 +480,7 @@ static telemetry_locker_t *tm_stmt_notify_qa(telemetry_locker_t *locker,
   }
 
   // dump all received query attributes as JSON
-  std::set<std::string> dummy_filter;
+  std::set<std::string> const dummy_filter;
   std::string all_qa;
   if (!query_attrs_to_json(thd, dummy_filter, all_qa, g_log)) {
     g_log.write("> tm_stmt_notify_qa: all query attributes [%s]\n",

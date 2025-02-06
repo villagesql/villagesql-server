@@ -2492,7 +2492,7 @@ static void fprintf_string(char *row, ulong row_len, char quote,
   char *pbuffer;
   pbuffer = &buffer[0];
 
-  uint64_t curr_row_size = (static_cast<uint64_t>(row_len) * 2) + 1;
+  uint64_t const curr_row_size = (static_cast<uint64_t>(row_len) * 2) + 1;
 
   // We'll allocate dynamic memory only for huge rows
   if (curr_row_size > sizeof(buffer))
@@ -2786,7 +2786,7 @@ static uint dump_routines_for_db(char *db) {
 
   {
     /* First dump the libraries. They may be used by the routines. */
-    std::string query{
+    std::string const query{
         std::string{
             "SELECT LIBRARY_NAME FROM INFORMATION_SCHEMA.LIBRARIES WHERE "
             "LIBRARY_SCHEMA = '"} +
@@ -2799,8 +2799,8 @@ static uint dump_routines_for_db(char *db) {
       while ((routine_list_row = mysql_fetch_row(routine_list_res))) {
         routine_name = quote_name(routine_list_row[0], name_buff, false);
         DBUG_PRINT("info", ("retrieving CREATE LIBRARY for %s", name_buff));
-        std::string show_create_query{std::string{"SHOW CREATE LIBRARY "} +
-                                      routine_name};
+        std::string const show_create_query{
+            std::string{"SHOW CREATE LIBRARY "} + routine_name};
         if (mysql_query_with_error_report(mysql, &routine_res,
                                           show_create_query.c_str()))
           return 1;
@@ -5931,7 +5931,7 @@ static char *primary_key_fields(const char *table_name) {
    * the first key, not all keys.
    */
   while (nullptr != (row = mysql_fetch_row(res))) {
-    unsigned braces_length = 0;
+    unsigned const braces_length = 0;
     if (!row[3] || !*row[3]) {
       fprintf(stderr,
               "Warning: Couldn't read key column index from table %s. "
@@ -5974,7 +5974,7 @@ static char *primary_key_fields(const char *table_name) {
     }
     mysql_data_seek(res, 0);
     while (nullptr != (row = mysql_fetch_row(res))) {
-      unsigned braces_length = 0;
+      unsigned const braces_length = 0;
       if (!row[3] || !*row[3]) continue;
       if (atoi(row[3]) < 1) break;
       if (row[4] && *row[4]) order_by_part = quote_name(row[4], buff, false);

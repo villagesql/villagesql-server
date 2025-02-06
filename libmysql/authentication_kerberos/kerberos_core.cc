@@ -345,7 +345,7 @@ bool Kerberos::credential_valid() {
   krb5_timestamp krb_current_time;
   bool credentials_retrieve{false};
   krb5_creds matching_credential;
-  std::stringstream info_stream;
+  std::stringstream const info_stream;
 
   memset(&matching_credential, 0, sizeof(matching_credential));
   memset(&credentials, 0, sizeof(credentials));

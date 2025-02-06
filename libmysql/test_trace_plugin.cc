@@ -1007,7 +1007,7 @@ int check_event_WAIT_FOR_FIELD_DEF(MYSQL *conn, struct st_trace_data *data,
       const bool new_client =
           (conn->server_capabilities & CLIENT_DEPRECATE_EOF);
       const bool metadata_eof = (data->col_count == 1 && new_client);
-      bool eof_packet =
+      bool const eof_packet =
           (EOF_PACKET(args.pkt) && args.pkt_len < MAX_PACKET_LENGTH);
       if (!eof_packet && !metadata_eof) {
         data->col_count--;
@@ -1217,7 +1217,7 @@ int check_event_WAIT_FOR_PARAM_DEF(MYSQL *conn, struct st_trace_data *data,
       const bool new_client =
           (conn->server_capabilities & CLIENT_DEPRECATE_EOF);
       const bool param_eof = (data->param_count == 1 && new_client);
-      bool eof_packet =
+      bool const eof_packet =
           (EOF_PACKET(args.pkt) && args.pkt_len < 6 && !new_client);
 
       if (!eof_packet && !param_eof) {

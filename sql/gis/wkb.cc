@@ -234,7 +234,7 @@ class Wkb_parser {
       throw std::exception();
     }
 
-    std::uint32_t wkb_type = parse_uint32(bo);
+    std::uint32_t const wkb_type = parse_uint32(bo);
     auto type = static_cast<Geometry_type>(wkb_type);
 
     if (!is_valid_type_or_subtype(type, Geometry_type::kGeometry))
@@ -243,8 +243,8 @@ class Wkb_parser {
   }
 
   Point_t parse_point(Byte_order bo) {
-    double x = parse_double(bo);
-    double y = parse_double(bo);
+    double const x = parse_double(bo);
+    double const y = parse_double(bo);
     if (!std::isfinite(x) || !std::isfinite(y)) throw std::exception();
     if (m_swap_axes) return Point_t(transform_x(y), transform_y(x));
     return Point_t(transform_x(x), transform_y(y));
@@ -253,15 +253,15 @@ class Wkb_parser {
   Point_t parse_wkb_point() {
     if (m_thd != nullptr && check_stack_overrun(m_thd, STACK_MIN_SIZE, nullptr))
       throw std::exception();
-    Byte_order bo = parse_byte_order();
-    Geometry_type type = parse_geometry_type(bo);
+    Byte_order const bo = parse_byte_order();
+    Geometry_type const type = parse_geometry_type(bo);
     if (type != Geometry_type::kPoint) throw std::exception();
     return parse_point(bo);
   }
 
   Linestring_t parse_linestring(Byte_order bo) {
     Linestring_t ls;
-    std::uint32_t num_points = parse_uint32(bo);
+    std::uint32_t const num_points = parse_uint32(bo);
     if (num_points < 2) throw std::exception();
     for (std::uint32_t i = 0; i < num_points; i++) {
       ls.push_back(parse_point(bo));
@@ -272,19 +272,19 @@ class Wkb_parser {
   Linestring_t parse_wkb_linestring() {
     if (m_thd != nullptr && check_stack_overrun(m_thd, STACK_MIN_SIZE, nullptr))
       throw std::exception();
-    Byte_order bo = parse_byte_order();
-    Geometry_type type = parse_geometry_type(bo);
+    Byte_order const bo = parse_byte_order();
+    Geometry_type const type = parse_geometry_type(bo);
     if (type != Geometry_type::kLinestring) throw std::exception();
     return parse_linestring(bo);
   }
 
   Polygon_t parse_polygon(Byte_order bo) {
     Polygon_t py;
-    std::uint32_t num_rings = parse_uint32(bo);
+    std::uint32_t const num_rings = parse_uint32(bo);
     if (num_rings == 0) throw std::exception();
     for (std::uint32_t i = 0; i < num_rings; i++) {
       Linearring_t lr;
-      std::uint32_t num_points = parse_uint32(bo);
+      std::uint32_t const num_points = parse_uint32(bo);
       if (num_points < 4) throw std::exception();
       for (std::uint32_t j = 0; j < num_points; j++) {
         lr.push_back(parse_point(bo));
@@ -297,8 +297,8 @@ class Wkb_parser {
   Polygon_t parse_wkb_polygon() {
     if (m_thd != nullptr && check_stack_overrun(m_thd, STACK_MIN_SIZE, nullptr))
       throw std::exception();
-    Byte_order bo = parse_byte_order();
-    Geometry_type type = parse_geometry_type(bo);
+    Byte_order const bo = parse_byte_order();
+    Geometry_type const type = parse_geometry_type(bo);
 
     if (type != Geometry_type::kPolygon) throw std::exception();
     return parse_polygon(bo);
@@ -308,7 +308,7 @@ class Wkb_parser {
     if (m_thd != nullptr && check_stack_overrun(m_thd, STACK_MIN_SIZE, nullptr))
       throw std::exception();
     Multipoint_t mpt;
-    std::uint32_t num_points = parse_uint32(bo);
+    std::uint32_t const num_points = parse_uint32(bo);
     if (num_points == 0) throw std::exception();
     for (std::uint32_t i = 0; i < num_points; i++) {
       mpt.push_back(parse_wkb_point());
@@ -320,7 +320,7 @@ class Wkb_parser {
     if (m_thd != nullptr && check_stack_overrun(m_thd, STACK_MIN_SIZE, nullptr))
       throw std::exception();
     Multilinestring_t mls;
-    std::uint32_t num_linestrings = parse_uint32(bo);
+    std::uint32_t const num_linestrings = parse_uint32(bo);
     if (num_linestrings == 0) throw std::exception();
     for (std::uint32_t i = 0; i < num_linestrings; i++) {
       Linestring_t ls;
@@ -333,7 +333,7 @@ class Wkb_parser {
     if (m_thd != nullptr && check_stack_overrun(m_thd, STACK_MIN_SIZE, nullptr))
       throw std::exception();
     Multipolygon_t mpy;
-    std::uint32_t num_polygons = parse_uint32(bo);
+    std::uint32_t const num_polygons = parse_uint32(bo);
     if (num_polygons == 0) throw std::exception();
     for (std::uint32_t i = 0; i < num_polygons; i++) {
       mpy.push_back(parse_wkb_polygon());
@@ -345,7 +345,7 @@ class Wkb_parser {
     if (m_thd != nullptr && check_stack_overrun(m_thd, STACK_MIN_SIZE, nullptr))
       throw std::exception();
     Geometrycollection_t gc;
-    std::uint32_t num_geometries = parse_uint32(bo);
+    std::uint32_t const num_geometries = parse_uint32(bo);
     for (std::uint32_t i = 0; i < num_geometries; i++) {
       Geometry *g = parse_wkb();
       gc.push_back(std::move(*g));
@@ -355,8 +355,8 @@ class Wkb_parser {
   }
 
   Geometry *parse_wkb() {
-    Byte_order bo = parse_byte_order();
-    Geometry_type type = parse_geometry_type(bo);
+    Byte_order const bo = parse_byte_order();
+    Geometry_type const type = parse_geometry_type(bo);
 
     switch (type) {
       case Geometry_type::kPoint:
@@ -498,7 +498,7 @@ bool write_geometry(const dd::Spatial_reference_system *srs, Geometry &geometry,
                     String *str) {
   Wkb_size_visitor wkb_size;
   geometry.accept(&wkb_size);
-  size_t geometry_size =
+  size_t const geometry_size =
       sizeof(std::uint32_t) + wkb_size.size();  // SRID + WKB.
   str->set_charset(&my_charset_bin);
   if (str->reserve(geometry_size)) {

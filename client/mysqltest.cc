@@ -683,7 +683,7 @@ class AsyncTimer {
   ~AsyncTimer() {
     auto now = std::chrono::system_clock::now();
     auto delta = now - start_;
-    [[maybe_unused]] ulonglong micros =
+    [[maybe_unused]] ulonglong const micros =
         std::chrono::duration_cast<std::chrono::microseconds>(delta).count();
     DBUG_PRINT("async_timing",
                ("%s total micros: %llu", label_.c_str(), micros));
@@ -693,7 +693,7 @@ class AsyncTimer {
     auto now = std::chrono::system_clock::now();
     auto delta = now - time_;
     time_ = now;
-    [[maybe_unused]] ulonglong micros =
+    [[maybe_unused]] ulonglong const micros =
         std::chrono::duration_cast<std::chrono::microseconds>(delta).count();
     DBUG_PRINT("async_timing", ("%s op micros: %llu", label_.c_str(), micros));
   }
@@ -2955,13 +2955,13 @@ static void var_set_escape(struct st_command *command, VAR *dst) {
   auto end = chars.end();
   // Compute length of escaped string
   auto dst_len = src.length();
-  for (char c : src)
+  for (char const c : src)
     if (std::find(begin, end, c) != end) dst_len++;
   // Allocate space for escaped string
   alloc_var(dst, dst_len);
   auto *dst_char = dst->str_val;
   // Compute escaped string
-  for (char c : src) {
+  for (char const c : src) {
     if (std::find(begin, end, c) != end) *dst_char++ = '\\';
     *dst_char++ = c;
   }
@@ -3511,7 +3511,7 @@ static void do_exec(struct st_command *command, bool run_in_background) {
   }
 
   std::uint32_t status = 0;
-  int error = pclose(res_file);
+  int const error = pclose(res_file);
 
   if (error != 0) {
 #ifdef _WIN32
@@ -5925,7 +5925,7 @@ static bool check_and_filter_once_property(DYNAMIC_STRING ds_property,
           command_names[curr_command->type - 1]);
 
     // Filter out the keyword and save only the warnings.
-    std::size_t position = warn_argument->find(" ONCE");
+    std::size_t const position = warn_argument->find(" ONCE");
     assert(position != std::string::npos);
     warn_argument->erase(position, 5);
     return true;
@@ -7292,7 +7292,7 @@ bool match_delimiter(int c, const char *delim, size_t length) {
 bool check_delimiter_change(const char *str) {
   const char *line = str;
   const char *delimiter_string = "delimiter";
-  char next = my_getc(cur_file->file);
+  char const next = my_getc(cur_file->file);
   DBUG_TRACE;
   my_ungetc(next);
   if (*delimiter != ';' || next != '$') {
@@ -7323,7 +7323,7 @@ static bool end_of_query(int c) {
 bool check_dollar_quote(int c, const char *str) {
   if (c != '$') return false;
   const char *line = str;
-  char next_c = my_getc(cur_file->file);
+  char const next_c = my_getc(cur_file->file);
   my_ungetc(next_c);
   if (next_c == ' ' || next_c == '\n' || next_c == '\0') {
     if (std::isspace(*(--line))) return true;
@@ -7433,7 +7433,7 @@ static int read_line(char *buf, int size) {
           }
         } else if (c == '$' && !have_slash && !check_delimiter_change(p)) {
           /* Check for start of $$ quote */
-          char next = my_getc(cur_file->file);
+          char const next = my_getc(cur_file->file);
           if (check_dollar_quote(next, p)) {
             state = R_DOLLAR_QUOTED;
             *p++ = next;
@@ -7515,7 +7515,7 @@ static int read_line(char *buf, int size) {
           state = R_Q;
         } else if (c == '$' && !have_slash && !check_delimiter_change(p)) {
           /* Check for start of $$ quote */
-          char next = my_getc(cur_file->file);
+          char const next = my_getc(cur_file->file);
           if (check_dollar_quote(next, p)) {
             state = R_DOLLAR_QUOTED;
             *p++ = next;
@@ -7541,7 +7541,7 @@ static int read_line(char *buf, int size) {
 
       case R_DOLLAR_QUOTED:
         if (c == '$') {
-          char next = my_getc(cur_file->file);
+          char const next = my_getc(cur_file->file);
           if (next == '$') {
             *p++ = next;
             state = R_NORMAL;
@@ -8383,7 +8383,7 @@ static void append_field(DYNAMIC_STRING *ds, uint col_idx, MYSQL_FIELD *field,
   DYNAMIC_STRING ds_temp = {.str = nullptr, .length = 0, .max_length = 0};
   if (field->type == MYSQL_TYPE_VECTOR && !is_null) {
     /* Do a binary to hex conversion for vector type */
-    size_t orig_len = len;
+    size_t const orig_len = len;
     len = 2 + orig_len * 2;
     char *destination = temp_val;
     if (len > temp_val_max_width) {
@@ -11626,13 +11626,13 @@ void dynstr_append_sorted(DYNAMIC_STRING *ds, DYNAMIC_STRING *ds_input,
     while (*line_end != '\n') line_end++;
     *line_end = 0;
 
-    std::string result_row = std::string(start, line_end - start);
+    std::string const result_row = std::string(start, line_end - start);
     if (!sorted.empty() && start_sort_column > 0) {
       /*
         If doing partial sorting, and the prefix is different from that of the
         previous line, the group is done. Sort it and start another one.
        */
-      size_t prev_line_prefix_len =
+      size_t const prev_line_prefix_len =
           length_of_n_first_columns(sorted.back(), start_sort_column);
       if (sorted.back().compare(0, prev_line_prefix_len, result_row, 0,
                                 prev_line_prefix_len) != 0) {

@@ -693,7 +693,7 @@ long long configure_event_tracking_filter(UDF_INIT *, UDF_ARGS *args,
 
   if (!args->args[0] || !args->args[1]) return 0;
 
-  std::string event_name{args->args[0], args->lengths[0]};
+  std::string const event_name{args->args[0], args->lengths[0]};
   unsigned int index = 0;
 
   bool found = false;
@@ -708,7 +708,7 @@ long long configure_event_tracking_filter(UDF_INIT *, UDF_ARGS *args,
 
   if (!found) return 0;
 
-  unsigned long long new_filter =
+  unsigned long long const new_filter =
       *(reinterpret_cast<unsigned long long *>(args->args[1]));
 
   switch (static_cast<Event_types>(index)) {
@@ -810,7 +810,7 @@ char *display_session_data(UDF_INIT *initid, UDF_ARGS *, char *,
       mysql_thd_store_service->get(o_thd, g_slot));
   if (!session_data) return nullptr;
 
-  std::string last_trace = session_data->get_last_trace();
+  std::string const last_trace = session_data->get_last_trace();
 
   if (last_trace.empty() ||
       last_trace.length() > static_cast<size_t>(initid->max_length - 1))
@@ -850,7 +850,7 @@ long long reset_event_tracking_counter(UDF_INIT *, UDF_ARGS *args,
 
   if (!args->args[0]) return 0;
 
-  std::string event_name{args->args[0], args->lengths[0]};
+  std::string const event_name{args->args[0], args->lengths[0]};
 
   if (event_name == "all") {
     g_event_tracking_counters->reset_all();

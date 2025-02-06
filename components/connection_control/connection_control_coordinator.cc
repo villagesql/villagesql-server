@@ -94,7 +94,7 @@ bool Connection_event_coordinator::register_event_subscriber(
       initialize it with required details.
     */
     try {
-      Connection_event_subscriber subscriber_info(subscriber, sys_vars);
+      Connection_event_subscriber const subscriber_info(subscriber, sys_vars);
 
       /* Insert new entry in m_subscribers */
       m_subscribers.push_back(subscriber_info);

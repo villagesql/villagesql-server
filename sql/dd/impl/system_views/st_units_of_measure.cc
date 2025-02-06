@@ -68,7 +68,7 @@ St_units_of_measure::St_units_of_measure() {
   ss << "JSON_TABLE('[";
   collation_unordered_map<std::string, gis::Unit> units = gis::units();
   char buffer[FLOATING_POINT_BUFFER];
-  for (std::pair<const std::string, gis::Unit> &unit_conversion : units) {
+  for (std::pair<const std::string, gis::Unit> const &unit_conversion : units) {
     if (unit_conversion != *units.begin()) {
       ss << ",";
     }

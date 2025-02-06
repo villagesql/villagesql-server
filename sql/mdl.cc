@@ -961,7 +961,7 @@ class MDL_lock {
     */
     mysql_prlock_assert_write_owner(&m_rwlock);
 
-    fast_path_state_t old_state = m_fast_path_state.fetch_add(value);
+    fast_path_state_t const old_state = m_fast_path_state.fetch_add(value);
 
     /*
       We should not change state of destroyed object
@@ -1020,7 +1020,7 @@ class MDL_lock {
   */
   static bitmap_t object_lock_fast_path_granted_bitmap(const MDL_lock &lock) {
     bitmap_t result = 0;
-    fast_path_state_t fps = lock.m_fast_path_state;
+    fast_path_state_t const fps = lock.m_fast_path_state;
     if (fps & 0xFFFFFULL) result |= MDL_BIT(MDL_SHARED);
     if (fps & (0xFFFFFULL << 20)) result |= MDL_BIT(MDL_SHARED_READ);
     if (fps & (0xFFFFFULL << 40)) result |= MDL_BIT(MDL_SHARED_WRITE);
@@ -1259,7 +1259,7 @@ MDL_lock *MDL_map::find_or_insert(LF_PINS *pins, const MDL_key *mdl_key,
       MDL_lock for key isn't present in hash, try to insert new object.
       This can fail due to concurrent inserts.
     */
-    int rc = lf_hash_insert(&m_locks, pins, mdl_key);
+    int const rc = lf_hash_insert(&m_locks, pins, mdl_key);
     if (rc == -1) /* If OOM. */
       return nullptr;
     if (rc == 0) {
@@ -1391,7 +1391,7 @@ void MDL_map::remove_random_unused(MDL_context *ctx, LF_PINS *pins,
       first step and keeps pins until its end it is safe to use MDL_lock::key
       as parameter to lf_hash_delete().
     */
-    int rc =
+    int const rc =
         lf_hash_delete(&m_locks, pins, lock->key.ptr(), lock->key.length());
 
     /* The MDL_lock object must be present in the hash. */
@@ -2503,7 +2503,7 @@ void MDL_lock::remove_ticket(MDL_context *ctx, LF_PINS *pins,
     If both m_granted and m_waiting lists become empty as result we also
     need to clear HAS_SLOW_PATH flag in m_fast_path_state.
   */
-  bool last_slow_path = m_granted.is_empty() && m_waiting.is_empty();
+  bool const last_slow_path = m_granted.is_empty() && m_waiting.is_empty();
   bool last_use = false;
 
   if (last_slow_path || last_obtrusive) {
@@ -2720,7 +2720,7 @@ bool MDL_context::try_acquire_lock(MDL_request *mdl_request) {
     const bool last_obtrusive =
         lock->is_obtrusive_lock(mdl_request->type) &&
         ((--lock->m_obtrusive_locks_granted_waiting_count) == 0);
-    bool last_slow_path =
+    bool const last_slow_path =
         lock->m_granted.is_empty() && lock->m_waiting.is_empty();
 
     if (last_slow_path || last_obtrusive) {

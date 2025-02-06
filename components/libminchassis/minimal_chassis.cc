@@ -291,15 +291,15 @@ void minimal_chassis_services_refresh(bool use_related) {
     mysql_service_mysql_runtime_error =
         reinterpret_cast<SERVICE_TYPE(mysql_runtime_error) *>(h_err_service);
   } else {
-    my_service<SERVICE_TYPE(mysql_runtime_error)> error_service(
+    my_service<SERVICE_TYPE(mysql_runtime_error)> const error_service(
         "mysql_runtime_error", &imp_mysql_minimal_chassis_registry);
     mysql_service_mysql_runtime_error = error_service;
 
-    my_service<SERVICE_TYPE(mysql_rwlock_v1)> rwlock_service(
+    my_service<SERVICE_TYPE(mysql_rwlock_v1)> const rwlock_service(
         "mysql_rwlock_v1", &imp_mysql_minimal_chassis_registry);
     mysql_service_mysql_rwlock_v1 = rwlock_service;
 
-    my_service<SERVICE_TYPE(mysql_psi_system_v1)> psi_system_service(
+    my_service<SERVICE_TYPE(mysql_psi_system_v1)> const psi_system_service(
         "mysql_psi_system_v1", &imp_mysql_minimal_chassis_registry);
     mysql_service_mysql_psi_system_v1 = psi_system_service;
   }

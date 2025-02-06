@@ -71,7 +71,7 @@ void set_timespec_nsec(struct timespec *abstime, Timeout_type nsec) {
     return;
   }
   const unsigned long long int now = my_getsystime() + (nsec / 100);
-  unsigned long long int tv_sec = now / 10000000ULL;
+  unsigned long long int const tv_sec = now / 10000000ULL;
 #if SIZEOF_TIME_T < SIZEOF_LONG_LONG
   /* Ensure that the number of seconds don't overflow. */
   tv_sec = std::min(tv_sec, static_cast<unsigned long long int>(

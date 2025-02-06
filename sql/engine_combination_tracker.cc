@@ -36,11 +36,12 @@ bool Engine_combination_tracker::check_engine(std::string engine_name,
   }
   if (std::get<0>(m_known_engine) == engine_name) return false;
 
-  bool myisam_and_merge = ((engine_name == "MyISAM" &&
-                            std::get<0>(m_known_engine) == "MRG_MYISAM") ||
-                           (engine_name == "MRG_MYISAM" &&
-                            std::get<0>(m_known_engine) == "MyISAM"));
-  bool innodb_and_blackhole =
+  bool const myisam_and_merge =
+      ((engine_name == "MyISAM" &&
+        std::get<0>(m_known_engine) == "MRG_MYISAM") ||
+       (engine_name == "MRG_MYISAM" &&
+        std::get<0>(m_known_engine) == "MyISAM"));
+  bool const innodb_and_blackhole =
       ((engine_name == "InnoDB" &&
         std::get<0>(m_known_engine) == "BLACKHOLE") ||
        (engine_name == "BLACKHOLE" && std::get<0>(m_known_engine) == "InnoDB"));

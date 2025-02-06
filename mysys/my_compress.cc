@@ -112,7 +112,7 @@ uchar *zstd_compress_alloc(mysql_zstd_compress_context *comp_ctx,
     }
   }
 
-  size_t zstd_len = ZSTD_compressBound(*len);
+  size_t const zstd_len = ZSTD_compressBound(*len);
   void *compbuf;
   size_t zstd_res;
 

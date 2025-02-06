@@ -304,7 +304,7 @@ bool Filesort_buffer::preallocate_records(size_t num_records) {
     m_record_pointers.reserve(num_records);
   }
   while (m_record_pointers.size() < num_records) {
-    Bounds_checked_array<uchar> ptr =
+    Bounds_checked_array<uchar> const ptr =
         get_next_record_pointer(m_max_record_length);
     (void)ptr;
     assert(ptr.array() != nullptr);
@@ -359,7 +359,7 @@ bool Filesort_buffer::allocate_block(size_t num_bytes) {
     This means that, for smaller records, we could go above the maximum
     permitted total memory usage.
   */
-  size_t min_num_rows_capacity =
+  size_t const min_num_rows_capacity =
       m_record_pointers.size() +
       space_left /
           AddWithSaturate(m_max_record_length, sizeof(m_record_pointers[0]));
@@ -378,11 +378,11 @@ bool Filesort_buffer::allocate_block(size_t num_bytes) {
       sort huge rows that wouldn't fit in the buffer otherwise -- in other
       words, nearly never.
     */
-    size_t excess_bytes =
+    size_t const excess_bytes =
         (m_record_pointers.capacity() - m_record_pointers.size()) *
         sizeof(m_record_pointers[0]);
     if (excess_bytes >= 32768) {
-      size_t old_capacity = m_record_pointers.capacity();
+      size_t const old_capacity = m_record_pointers.capacity();
       m_record_pointers.shrink_to_fit();
       if (m_record_pointers.capacity() < old_capacity) {
         return allocate_block(num_bytes);

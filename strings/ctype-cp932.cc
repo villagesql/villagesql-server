@@ -2170,8 +2170,8 @@ static int my_strnncoll_cp932_internal(const CHARSET_INFO *cs,
                        pointer_cast<const char *>(a_end)) &&
         ismbchar_cp932(cs, pointer_cast<const char *>(b),
                        pointer_cast<const char *>(b_end))) {
-      unsigned a_char = cp932code(*a, *(a + 1));
-      unsigned b_char = cp932code(*b, *(b + 1));
+      unsigned const a_char = cp932code(*a, *(a + 1));
+      unsigned const b_char = cp932code(*b, *(b + 1));
       if (a_char != b_char) return a_char - b_char;
       a += 2;
       b += 2;
@@ -2191,7 +2191,7 @@ extern "C" {
 static int my_strnncoll_cp932(const CHARSET_INFO *cs, const uint8_t *a,
                               size_t a_length, const uint8_t *b,
                               size_t b_length, bool b_is_prefix) {
-  int res = my_strnncoll_cp932_internal(cs, &a, a_length, &b, b_length);
+  int const res = my_strnncoll_cp932_internal(cs, &a, a_length, &b, b_length);
   if (b_is_prefix && a_length > b_length) a_length = b_length;
   return res ? res : (int)(a_length - b_length);
 }
@@ -18647,7 +18647,7 @@ static int my_mb_wc_cp932(const CHARSET_INFO *cs [[maybe_unused]], my_wc_t *pwc,
                           const uint8_t *s, const uint8_t *e) {
   if (s >= e) return MY_CS_TOOSMALL;
 
-  int hi = s[0];
+  int const hi = s[0];
   if (hi < 0x80) /* ASCII: [00-7F] -> [U+0000..U+007F] */
   {
     *pwc = hi;

@@ -589,7 +589,7 @@ class Geometry_well_formed_checker : public WKB_scanner_event_handler {
       return;
     }
 
-    Geometry::wkbType outer_type = type[type.size() - 1];
+    Geometry::wkbType const outer_type = type[type.size() - 1];
 
     type.push_back(geotype);
     previous_type = geotype;
@@ -650,7 +650,7 @@ class Geometry_well_formed_checker : public WKB_scanner_event_handler {
   void on_wkb_end(const void *wkb) override {
     if (!is_ok) return;
 
-    Geometry::wkbType current_type = type[type.size() - 1];
+    Geometry::wkbType const current_type = type[type.size() - 1];
     type.pop_back();
     last_position = wkb;
 
@@ -1583,8 +1583,8 @@ bool Gis_line_string::reverse_coordinates() {
 
   for (uint32 i = 0; i < num_of_points; i++) {
     // +4 in below functions to skip numPoints field.
-    double x = float8get(get_cptr() + 4 + i * POINT_DATA_SIZE);
-    double y =
+    double const x = float8get(get_cptr() + 4 + i * POINT_DATA_SIZE);
+    double const y =
         float8get(get_cptr() + 4 + i * POINT_DATA_SIZE + SIZEOF_STORED_DOUBLE);
 
     float8store(get_cptr() + 4 + i * POINT_DATA_SIZE, y);
@@ -1608,8 +1608,8 @@ bool Gis_line_string::validate_coordinate_range(double srs_angular_unit,
 
   for (uint32 i = 0; i < num_of_points; i++) {
     // +4 in below functions to skip numPoints field.
-    double x = float8get(get_cptr() + 4 + i * POINT_DATA_SIZE);
-    double y =
+    double const x = float8get(get_cptr() + 4 + i * POINT_DATA_SIZE);
+    double const y =
         float8get(get_cptr() + 4 + i * POINT_DATA_SIZE + SIZEOF_STORED_DOUBLE);
 
     if (check_coordinate_range(x, y, srs_angular_unit, long_out_of_range,
@@ -1898,7 +1898,7 @@ bool Gis_polygon_ring::set_ring_order(bool want_ccw) {
     char *p = static_cast<char *>(ring.get_ptr()) + sizeof(uint32);
     char *q = nullptr, *p0;
     char pt[POINT_DATA_SIZE];
-    size_t s = ring.size();
+    size_t const s = ring.size();
 
     assert(ring.get_nbytes() == (s * POINT_DATA_SIZE + 4));
     p0 = p;
@@ -2139,7 +2139,7 @@ bool Gis_polygon::reverse_coordinates() {
   current_data_offset += 4;  // add numRings header size to data offset.
 
   for (uint32 i = 0; i < numrings; i++) {
-    uint32 num_of_points = uint4korr(get_ucptr() + current_data_offset);
+    uint32 const num_of_points = uint4korr(get_ucptr() + current_data_offset);
     current_data_offset += 4;  // add linear ring header size to data offset.
 
     for (uint32 j = 0; j < num_of_points; j++) {
@@ -2223,8 +2223,8 @@ void *get_packed_ptr(const Geometry *geo0, size_t *pnbytes) {
   // Inner rings may have out of line rings.
   if (inn_rings) inn_rings->reassemble();
 
-  size_t vallen = sizeof(uint32) + out_ring->get_nbytes() +
-                  (inn_rings ? inn_rings->get_nbytes() : 0);
+  size_t const vallen = sizeof(uint32) + out_ring->get_nbytes() +
+                        (inn_rings ? inn_rings->get_nbytes() : 0);
   void *src_val = gis_wkb_alloc(vallen);
   if (src_val == nullptr) {
     nbytes = 0;
@@ -2444,8 +2444,8 @@ bool Gis_multi_point::reverse_coordinates() {
     current_data_offset +=
         WKB_HEADER_SIZE;  // since each point includes a header.
 
-    double x = float8get(get_cptr() + current_data_offset);
-    double y =
+    double const x = float8get(get_cptr() + current_data_offset);
+    double const y =
         float8get(get_cptr() + current_data_offset + SIZEOF_STORED_DOUBLE);
 
     float8store(get_cptr() + current_data_offset, y);
@@ -2475,8 +2475,8 @@ bool Gis_multi_point::validate_coordinate_range(double srs_angular_unit,
     current_data_offset +=
         WKB_HEADER_SIZE;  // Since each point includes a header.
 
-    double x = float8get(get_cptr() + current_data_offset);
-    double y =
+    double const x = float8get(get_cptr() + current_data_offset);
+    double const y =
         float8get(get_cptr() + current_data_offset + SIZEOF_STORED_DOUBLE);
 
     if (check_coordinate_range(x, y, srs_angular_unit, long_out_of_range,
@@ -3368,7 +3368,7 @@ bool Gis_geometry_collection::get_data_as_wkt(String *txt,
   uint32 n_objects = 0;
   Geometry_buffer buffer;
   Geometry *geom;
-  size_t nback = 1;
+  size_t const nback = 1;
 
   /* Allow 0 components as an empty collection. */
   if (wkb->scan_non_zero_uint4(&n_objects) && n_objects != 0) return true;
@@ -3791,8 +3791,8 @@ void parse_wkb_data(Geometry *geom, const char *p, size_t num_geoms) {
   const char *q = nullptr;
   size_t nbytes = 0;
   const Geometry::wkbType geotype = geom->get_geotype();
-  Geometry::wkbByteOrder mybo = geom->get_byte_order();
-  char dim = geom->get_dimension();
+  Geometry::wkbByteOrder const mybo = geom->get_byte_order();
+  char const dim = geom->get_dimension();
 
   assert(geotype != Geometry::wkb_polygon_inner_rings ||
          (geotype == Geometry::wkb_polygon_inner_rings && num_geoms != 0));
@@ -4134,7 +4134,7 @@ const void *Geometry::normalize_ring_order() {
 template <typename T>
 void Gis_wkb_vector<T>::reassemble() {
   set_bg_adapter(true);
-  Geometry::wkbType geotype = get_geotype();
+  Geometry::wkbType const geotype = get_geotype();
   if (geotype == Geometry::wkb_point || geotype == Geometry::wkb_polygon ||
       geotype == Geometry::wkb_multipoint || m_geo_vect == nullptr ||
       geotype == Geometry::wkb_linestring || m_geo_vect->empty() ||
@@ -4150,7 +4150,7 @@ void Gis_wkb_vector<T>::reassemble() {
   const char *start = get_cptr(), *end = nullptr, *prev_start = get_cptr();
   std::map<size_t, std::pair<void *, size_t>> plgn_data;
   std::map<size_t, std::pair<void *, size_t>>::iterator plgn_data_itr;
-  bool is_inns = (geotype == Geometry::wkb_polygon_inner_rings);
+  bool const is_inns = (geotype == Geometry::wkb_polygon_inner_rings);
 
   // True if just passed by a geometry having its own memory and not stored
   // inside owner's memory during the scan.
@@ -4212,7 +4212,7 @@ void Gis_wkb_vector<T>::reassemble() {
         // geometrycollection. And multipoint components are already supported
         // so not forbidding them here.
 #if !defined(NDEBUG)
-        Geometry::wkbType veci_gt = veci->get_geotype();
+        Geometry::wkbType const veci_gt = veci->get_geotype();
 #endif
         assert(veci_gt != wkb_geometrycollection &&
                veci_gt != wkb_multilinestring && veci_gt != wkb_multipolygon);
@@ -4245,7 +4245,7 @@ void Gis_wkb_vector<T>::reassemble() {
     return;
   }
 
-  size_t nbytes = get_nbytes();
+  size_t const nbytes = get_nbytes();
   assert((nbytes == 0 && m_ptr == nullptr && num == segsz) ||
          (nbytes > 0 && num >= segsz));
 
@@ -4277,7 +4277,7 @@ void Gis_wkb_vector<T>::reassemble() {
   // Starting step two of the algorithm --- Reassembling.
   // Assemble the ins and outs into a single chunk.
   for (auto &seg : segs) {
-    size_t i = seg.first;
+    const size_t i = seg.first;
     start = seg.second.first;
     end = seg.second.second;
     const Geometry *veci = &(vec[i]);
@@ -4365,7 +4365,7 @@ Gis_wkb_vector<T>::Gis_wkb_vector(const void *ptr, size_t nbytes,
 
   std::unique_ptr<Geo_vector> guard;
 
-  wkbType geotype = get_geotype();
+  wkbType const geotype = get_geotype();
   // Points don't need it, polygon creates it when parsing.
   if (geotype != Geometry::wkb_point && geotype != Geometry::wkb_polygon &&
       ptr != nullptr)
@@ -4433,7 +4433,7 @@ Gis_wkb_vector<T> &Gis_wkb_vector<T>::operator=(const Gis_wkb_vector<T> &rhs) {
 
   if (m_owner == nullptr) m_owner = rhs.get_owner();
 
-  size_t nbytes_free = get_nbytes_free();
+  size_t const nbytes_free = get_nbytes_free();
   clear_wkb_data();
 
   if (rhs.get_ptr() == nullptr) {
@@ -4608,7 +4608,7 @@ template <typename T>
 size_t Gis_wkb_vector<T>::get_nbytes_free() const {
   assert((this->get_ownmem() && m_ptr) || (!get_ownmem() && !m_ptr));
 
-  size_t cap = current_size();
+  size_t const cap = current_size();
   if (cap == 0) {
     assert(m_ptr == nullptr);
     return 0;
@@ -4629,7 +4629,7 @@ size_t Gis_wkb_vector<T>::get_nbytes_free() const {
 
 template <typename T>
 void Gis_wkb_vector<T>::push_back(const T &val) {
-  Geometry::wkbType geotype = get_geotype();
+  Geometry::wkbType const geotype = get_geotype();
 
   assert(geotype != Geometry::wkb_polygon &&
          ((m_ptr && get_ownmem()) || (!m_ptr && !get_ownmem())));
@@ -4687,7 +4687,7 @@ void Gis_wkb_vector<T>::push_back(const T &val) {
     get_cptr()[nalloc - 1] = '\0';
     memset(get_cptr() + cap, 0, sizeof(uint32));
 
-    bool replaced = (ptr != m_ptr);
+    bool const replaced = (ptr != m_ptr);
     set_ownmem(true);
     if (m_owner && m_owner->get_geotype() == Geometry::wkb_polygon)
       m_owner->set_ownmem(true);
@@ -4703,7 +4703,7 @@ void Gis_wkb_vector<T>::push_back(const T &val) {
 
   size_t wkb_header_size = 0;
   /* Offset for obj count, if needed. */
-  size_t obj_count_len =
+  size_t const obj_count_len =
       ((cap == 0 && geotype != Geometry::wkb_polygon_inner_rings)
            ? sizeof(uint32)
            : 0);
@@ -4714,7 +4714,7 @@ void Gis_wkb_vector<T>::push_back(const T &val) {
       geotype == Geometry::wkb_multipolygon ||
       geotype == Geometry::wkb_multilinestring ||
       geotype == Geometry::wkb_geometrycollection) {
-    Geometry::wkbType vgt = val.get_geotype();
+    Geometry::wkbType const vgt = val.get_geotype();
     assert(
         (geotype == Geometry::wkb_multipoint && vgt == Geometry::wkb_point) ||
         (geotype == Geometry::wkb_multipolygon &&
@@ -4769,11 +4769,11 @@ void Gis_wkb_vector<T>::push_back(const T &val) {
 template <typename T>
 void Gis_wkb_vector<T>::resize(size_t sz) {
   if (m_geo_vect == nullptr) m_geo_vect = new Geo_vector;
-  Geometry::wkbType geotype = get_geotype();
-  size_t ngeo = m_geo_vect->size();
-  size_t dim = GEOM_DIM;
-  size_t ptsz = SIZEOF_STORED_DOUBLE * dim;
-  bool is_mpt = (geotype == Geometry::wkb_multipoint);
+  Geometry::wkbType const geotype = get_geotype();
+  size_t const ngeo = m_geo_vect->size();
+  size_t const dim = GEOM_DIM;
+  size_t const ptsz = SIZEOF_STORED_DOUBLE * dim;
+  bool const is_mpt = (geotype == Geometry::wkb_multipoint);
 
   // Can resize a topmost geometry or a out of line geometry which has
   // or will have its own memory(i.e. one that's not using others' memory).
@@ -4797,7 +4797,7 @@ void Gis_wkb_vector<T>::resize(size_t sz) {
     set_nbytes(get_nbytes() - sublen);
 
 #if !defined(NDEBUG)
-    bool rsz_ret = m_geo_vect->resize(sz);
+    bool const rsz_ret = m_geo_vect->resize(sz);
     assert(rsz_ret == false);
 #else
     m_geo_vect->resize(sz);

@@ -72,8 +72,8 @@ void notify_connect() {
 #endif /* WITH_SYSTEMD_DEBUG */
     return;
   }
-  size_t sockstrlen = strlen(sockstr);
-  size_t sunpathlen = sizeof(sockaddr_un::sun_path) - 1;
+  size_t const sockstrlen = strlen(sockstr);
+  size_t const sunpathlen = sizeof(sockaddr_un::sun_path) - 1;
   if (sockstrlen > sunpathlen) {
     LogErr(SYSTEM_LEVEL, ER_SYSTEMD_NOTIFY_PATH_TOO_LONG, sockstr, sockstrlen,
            sunpathlen);
@@ -114,7 +114,7 @@ void notify_connect() {
   string to notification socket.
  */
 void notify() {
-  std::string note = NotifyGlobals::fmt.str();
+  std::string const note = NotifyGlobals::fmt.str();
   const char *src = note.c_str();
   const char *end = src + note.size();
   ssize_t status = -1;
@@ -138,7 +138,7 @@ void notify() {
          "systemd notify: ", note.c_str());
 
   while (true) {
-    size_t remaining = end - src;
+    size_t const remaining = end - src;
     status = write(NotifyGlobals::socket, src, remaining);
     if (status == -1) {
       if (errno == EINTR) {
@@ -146,7 +146,7 @@ void notify() {
       }
       break;
     }
-    size_t written = status;
+    size_t const written = status;
     if (written == remaining) {
       break;
     }

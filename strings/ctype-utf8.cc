@@ -5036,7 +5036,7 @@ static inline size_t my_strnxfrm_unicode_tmpl(const CHARSET_INFO *cs,
         std::min<size_t>((de - dst) / 2, nweights);
     for (size_t i = 0; i < nweights_fast_path; ++i, --nweights) {
       my_wc_t wc;
-      int res = mb_wc(&wc, src, se);
+      int const res = mb_wc(&wc, src, se);
       if (res <= 0)  // End of string, or invalid character.
         goto pad;
       src += res;
@@ -5046,7 +5046,7 @@ static inline size_t my_strnxfrm_unicode_tmpl(const CHARSET_INFO *cs,
     // Leftover single byte, if any.
     if (dst < de && nweights) {
       my_wc_t wc;
-      int res = mb_wc(&wc, src, se);
+      int const res = mb_wc(&wc, src, se);
       if (res > 0) {
         src += res;
         *dst++ = (uint8_t)(wc >> 8);
@@ -5060,7 +5060,7 @@ static inline size_t my_strnxfrm_unicode_tmpl(const CHARSET_INFO *cs,
         std::min<size_t>((de - dst) / 2, nweights);
     for (size_t i = 0; i < nweights_fast_path; ++i, --nweights) {
       my_wc_t wc;
-      int res = mb_wc(&wc, src, se);
+      int const res = mb_wc(&wc, src, se);
       if (res <= 0)  // End of string, or invalid character.
         goto pad;
       src += res;
@@ -5073,7 +5073,7 @@ static inline size_t my_strnxfrm_unicode_tmpl(const CHARSET_INFO *cs,
     // Leftover single byte, if any.
     if (dst < de && nweights) {
       my_wc_t wc;
-      int res = mb_wc(&wc, src, se);
+      int const res = mb_wc(&wc, src, se);
       if (res > 0) {
         my_tosort_unicode(uni_plane, &wc, cs->state);
         src += res;
@@ -5110,7 +5110,7 @@ size_t my_strnxfrm_unicode(const CHARSET_INFO *cs, uint8_t *dst, size_t dstlen,
                                     src, srclen, flags);
   }  // Fallback using a function pointer (which the compiler is unlikely
   // to be able to optimize away).
-  Mb_wc_through_function_pointer mb_wc(cs);
+  Mb_wc_through_function_pointer const mb_wc(cs);
   return my_strnxfrm_unicode_tmpl(cs, mb_wc, dst, dstlen, nweights, src, srclen,
                                   flags);
 }
@@ -5238,8 +5238,8 @@ static const uint8_t to_upper_utf8mb3[] = {
 static inline int bincmp(const uint8_t *s, const uint8_t *se, const uint8_t *t,
                          const uint8_t *te) {
   int slen = (int)(se - s), tlen = (int)(te - t);
-  int len = std::min(slen, tlen);
-  int cmp = memcmp(s, t, len);
+  int const len = std::min(slen, tlen);
+  int const cmp = memcmp(s, t, len);
   return cmp ? cmp : slen - tlen;
 }
 
@@ -5656,8 +5656,8 @@ static int my_strcasecmp_utf8mb3(const CHARSET_INFO *cs, const char *s,
       t_wc = plane00[(uint8_t)t[0]].tolower;
       t++;
     } else {
-      int res = my_mb_wc_utf8mb3(&t_wc, pointer_cast<const uint8_t *>(t),
-                                 pointer_cast<const uint8_t *>(t) + 3);
+      int const res = my_mb_wc_utf8mb3(&t_wc, pointer_cast<const uint8_t *>(t),
+                                       pointer_cast<const uint8_t *>(t) + 3);
       if (res <= 0) return strcmp(s, t);
       t += res;
 
@@ -5710,8 +5710,8 @@ static size_t my_well_formed_len_utf8mb3(const CHARSET_INFO *, const char *b,
 
 static uint my_ismbchar_utf8mb3(const CHARSET_INFO *, const char *b,
                                 const char *e) {
-  int res = my_valid_mbcharlen_utf8mb3(pointer_cast<const uint8_t *>(b),
-                                       pointer_cast<const uint8_t *>(e));
+  int const res = my_valid_mbcharlen_utf8mb3(pointer_cast<const uint8_t *>(b),
+                                             pointer_cast<const uint8_t *>(e));
   return (res > 1) ? res : 0;
 }
 
@@ -6862,7 +6862,7 @@ static const uint16_t uni_FF20_FF5F[64] = {
 */
 
 static int hexlo(int x) {
-  static signed char hex_lo_digit[256] = {
+  static signed char const hex_lo_digit[256] = {
       -1, -1, -1, -1, -1, -1, -1, -1,
       -1, -1, -1, -1, -1, -1, -1, -1, /* ................ */
       -1, -1, -1, -1, -1, -1, -1, -1,
@@ -6940,7 +6940,7 @@ static int my_mb_wc_filename(const CHARSET_INFO *cs [[maybe_unused]],
   byte2 = s[2];
 
   if (byte1 >= 0x30 && byte1 <= 0x7F && byte2 >= 0x30 && byte2 <= 0x7F) {
-    int code = (byte1 - 0x30) * 80 + byte2 - 0x30;
+    int const code = (byte1 - 0x30) * 80 + byte2 - 0x30;
     if (code < 5994 && touni[code]) {
       *pwc = touni[code];
       return 3;
@@ -6954,8 +6954,8 @@ static int my_mb_wc_filename(const CHARSET_INFO *cs [[maybe_unused]],
   if (s + 4 > e) return MY_CS_TOOSMALL4;
 
   if ((byte1 = hexlo(byte1)) >= 0 && (byte2 = hexlo(byte2)) >= 0) {
-    int byte3 = hexlo(s[3]);
-    int byte4 = hexlo(s[4]);
+    int const byte3 = hexlo(s[3]);
+    int const byte4 = hexlo(s[4]);
     if (byte3 >= 0 && byte4 >= 0) {
       *pwc = (byte1 << 12) + (byte2 << 8) + (byte3 << 4) + byte4;
       return 5;
@@ -6968,7 +6968,7 @@ static int my_mb_wc_filename(const CHARSET_INFO *cs [[maybe_unused]],
 static int my_wc_mb_filename(const CHARSET_INFO *cs [[maybe_unused]],
                              my_wc_t wc, uint8_t *s, uint8_t *e) {
   int code;
-  char hex[] = "0123456789abcdef";
+  char const hex[] = "0123456789abcdef";
 
   if (s >= e) return MY_CS_TOOSMALL;
 
@@ -7148,8 +7148,8 @@ static const uint8_t to_upper_utf8mb4[] = {
 static inline int bincmp_utf8mb4(const uint8_t *s, const uint8_t *se,
                                  const uint8_t *t, const uint8_t *te) {
   int slen = (int)(se - s), tlen = (int)(te - t);
-  int len = std::min(slen, tlen);
-  int cmp = memcmp(s, t, len);
+  int const len = std::min(slen, tlen);
+  int const cmp = memcmp(s, t, len);
   return cmp ? cmp : slen - tlen;
 }
 
@@ -7456,8 +7456,8 @@ static int my_strnncoll_utf8mb4(const CHARSET_INFO *cs, const uint8_t *s,
   const MY_UNICASE_INFO *uni_plane = cs->caseinfo;
 
   while (s < se && t < te) {
-    int s_res = my_mb_wc_utf8mb4(&s_wc, s, se);
-    int t_res = my_mb_wc_utf8mb4(&t_wc, t, te);
+    int const s_res = my_mb_wc_utf8mb4(&s_wc, s, se);
+    int const t_res = my_mb_wc_utf8mb4(&t_wc, t, te);
 
     if (s_res <= 0 || t_res <= 0) {
       /* Incorrect string, compare bytewise */
@@ -7512,8 +7512,8 @@ static int my_strnncollsp_utf8mb4(const CHARSET_INFO *cs, const uint8_t *s,
   const MY_UNICASE_INFO *uni_plane = cs->caseinfo;
 
   while (s < se && t < te) {
-    int s_res = my_mb_wc_utf8mb4(&s_wc, s, se);
-    int t_res = my_mb_wc_utf8mb4(&t_wc, t, te);
+    int const s_res = my_mb_wc_utf8mb4(&s_wc, s, se);
+    int const t_res = my_mb_wc_utf8mb4(&t_wc, t, te);
 
     if (s_res <= 0 || t_res <= 0) {
       /* Incorrect string, compare bytewise */
@@ -7591,8 +7591,8 @@ static int my_strcasecmp_utf8mb4(const CHARSET_INFO *cs, const char *s,
       s_wc = plane00[(uint8_t)s[0]].tolower;
       s++;
     } else {
-      int res = my_mb_wc_utf8mb4_no_range(cs, &s_wc,
-                                          pointer_cast<const uint8_t *>(s));
+      int const res = my_mb_wc_utf8mb4_no_range(
+          cs, &s_wc, pointer_cast<const uint8_t *>(s));
 
       /*
          In the case of wrong multibyte sequence we will
@@ -7611,8 +7611,8 @@ static int my_strcasecmp_utf8mb4(const CHARSET_INFO *cs, const char *s,
       t_wc = plane00[(uint8_t)t[0]].tolower;
       t++;
     } else {
-      int res = my_mb_wc_utf8mb4_no_range(cs, &t_wc,
-                                          pointer_cast<const uint8_t *>(t));
+      int const res = my_mb_wc_utf8mb4_no_range(
+          cs, &t_wc, pointer_cast<const uint8_t *>(t));
       if (res <= 0) return strcmp(s, t);
       t += res;
 
@@ -7673,8 +7673,8 @@ static size_t my_well_formed_len_utf8mb4(const CHARSET_INFO *cs, const char *b,
 static uint ALWAYS_INLINE my_ismbchar_utf8mb4_inl(const CHARSET_INFO *cs,
                                                   const char *b,
                                                   const char *e) {
-  int res = my_valid_mbcharlen_utf8mb4(cs, pointer_cast<const uint8_t *>(b),
-                                       pointer_cast<const uint8_t *>(e));
+  int const res = my_valid_mbcharlen_utf8mb4(
+      cs, pointer_cast<const uint8_t *>(b), pointer_cast<const uint8_t *>(e));
   return (res > 1) ? res : 0;
 }
 
@@ -7686,7 +7686,7 @@ static uint my_ismbchar_utf8mb4(const CHARSET_INFO *cs, const char *b,
 size_t my_charpos_mb4(const CHARSET_INFO *cs, const char *pos, const char *end,
                       size_t length) {
   // Fast path as long as we see ASCII characters only.
-  size_t min_length = std::min<size_t>(end - pos, length);
+  size_t const min_length = std::min<size_t>(end - pos, length);
   const char *safe_end =
       std::min(end, pos + min_length) - std::min<size_t>(7, min_length);
   const char *start = pos;

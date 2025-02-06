@@ -426,7 +426,7 @@ Vio *internal_vio_create(uint flags) {
 Vio *mysql_socket_vio_new(MYSQL_SOCKET mysql_socket, enum_vio_type type,
                           uint flags) {
   Vio *vio;
-  my_socket sd = mysql_socket_getfd(mysql_socket);
+  my_socket const sd = mysql_socket_getfd(mysql_socket);
   DBUG_TRACE;
   DBUG_PRINT("enter", ("sd: " MY_SOCKET_FMT, sd));
 

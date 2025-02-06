@@ -143,7 +143,7 @@ uint64_t Event_reader::net_field_length_ll() {
   // It is safe to read the first byte of the transaction_length
   unsigned char *ptr_length;
   ptr_length = reinterpret_cast<unsigned char *>(const_cast<char *>(m_ptr));
-  unsigned int length_size = net_field_length_size(ptr_length);
+  unsigned int const length_size = net_field_length_size(ptr_length);
   BAPI_PRINT("debug", ("Event_reader::read_net_field_length_ll(): "
                        "expect to read length with %u byte(s)",
                        length_size));
@@ -152,7 +152,7 @@ uint64_t Event_reader::net_field_length_ll() {
     return 0;
   }
   // It is safe to read the full transaction_length from the buffer
-  uint64_t value = ::net_field_length_ll(&ptr_length);
+  uint64_t const value = ::net_field_length_ll(&ptr_length);
   m_ptr = m_ptr + length_size;
   return value;
 }
@@ -181,7 +181,7 @@ void Event_reader::read_data_map(uint32_t map_len,
       set_error("Cannot read from out of buffer bounds");
       break;
     }
-    std::string key(m_ptr, key_len);
+    std::string const key(m_ptr, key_len);
     m_ptr += key_len;
 
     auto value_len = read<uint32_t>();
@@ -190,7 +190,7 @@ void Event_reader::read_data_map(uint32_t map_len,
       set_error("Cannot read from out of buffer bounds");
       break;
     }
-    std::string value(m_ptr, value_len);
+    std::string const value(m_ptr, value_len);
     m_ptr += value_len;
 
     (*map)[key] = value;

@@ -713,7 +713,7 @@ size_t my_longlong10_to_str_8bit(const CHARSET_INFO *cs [[maybe_unused]],
   }
 
   while (uval > (unsigned long long)LONG_MAX) {
-    unsigned long long quo = uval / (unsigned)10;
+    unsigned long long const quo = uval / (unsigned)10;
     auto rem = (unsigned)(uval - quo * (unsigned)10);
     *--p = '0' + rem;
     uval = quo;
@@ -721,7 +721,7 @@ size_t my_longlong10_to_str_8bit(const CHARSET_INFO *cs [[maybe_unused]],
 
   long_val = (long)uval;
   while (long_val != 0) {
-    long quo = long_val / 10;
+    long const quo = long_val / 10;
     *--p = (char)('0' + (long_val - quo * 10));
     long_val = quo;
   }
@@ -795,7 +795,7 @@ static int my_wildcmp_8bit_impl(const CHARSET_INFO *cs, const char *str,
         while (str != str_end && (uint8_t)likeconv(cs, *str) != cmp) str++;
         if (str++ == str_end) return (-1);
         {
-          int tmp = my_wildcmp_8bit_impl(
+          int const tmp = my_wildcmp_8bit_impl(
               cs, str, str_end, pointer_cast<const char *>(wildstr),
               wildend_arg, escape, w_one, w_many, recurse_level + 1);
           if (tmp <= 0) return (tmp);
@@ -1024,8 +1024,8 @@ static bool create_fromuni(CHARSET_INFO *cs, MY_CHARSET_LOADER *loader) {
 
   /* Count number of characters in each plane */
   for (i = 0; i < 0x100; i++) {
-    uint16_t wc = cs->tab_to_uni[i];
-    int pl = PLANE_NUMBER(wc);
+    uint16_t const wc = cs->tab_to_uni[i];
+    int const pl = PLANE_NUMBER(wc);
 
     if (wc || !i) {
       if (!idx[pl].nchars) {
@@ -1057,9 +1057,9 @@ static bool create_fromuni(CHARSET_INFO *cs, MY_CHARSET_LOADER *loader) {
     memset(tab, 0, numchars * sizeof(*idx[i].uidx.tab));
 
     for (ch = 1; ch < PLANE_SIZE; ch++) {
-      uint16_t wc = cs->tab_to_uni[ch];
+      uint16_t const wc = cs->tab_to_uni[ch];
       if (wc >= idx[i].uidx.from && wc <= idx[i].uidx.to && wc) {
-        int ofs = wc - idx[i].uidx.from;
+        int const ofs = wc - idx[i].uidx.from;
         /*
           Character sets like armscii8 may have two code points for
           one character. When converting from UNICODE back to
@@ -1353,8 +1353,8 @@ exp: /* [ E [ <sign> ] <unsigned integer> ] */
         -shift >= DIGITS_IN_ULONGLONG)
       goto ret_zero; /* Exponent is a big negative number, return 0 */
 
-    uint64_t d = d10[-shift];
-    uint64_t r = ull % d;
+    uint64_t const d = d10[-shift];
+    uint64_t const r = ull % d;
     ull /= d;
     if (r >= d / 2) ull++;
     goto ret_sign;
@@ -1491,13 +1491,13 @@ size_t my_strxfrm_pad(const CHARSET_INFO *cs, uint8_t *str, uint8_t *frmend,
                       uint8_t *strend, unsigned nweights, unsigned flags) {
   if (nweights && frmend < strend) {
     // PAD SPACE behavior.
-    unsigned fill_length =
+    unsigned const fill_length =
         std::min<unsigned>(strend - frmend, nweights * cs->mbminlen);
     cs->cset->fill(cs, (char *)frmend, fill_length, cs->pad_char);
     frmend += fill_length;
   }
   if ((flags & MY_STRXFRM_PAD_TO_MAXLEN) && frmend < strend) {
-    size_t fill_length = strend - frmend;
+    size_t const fill_length = strend - frmend;
     cs->cset->fill(cs, (char *)frmend, fill_length, cs->pad_char);
     frmend = strend;
   }

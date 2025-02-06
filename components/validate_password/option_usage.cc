@@ -46,7 +46,7 @@ typedef weak_service_reference<SERVICE_TYPE(mysql_option_tracker_option),
     weak_option;
 
 bool validate_password_component_option_usage_init() {
-  bool ret = weak_option::init(
+  bool const ret = weak_option::init(
       SERVICE_PLACEHOLDER(registry), SERVICE_PLACEHOLDER(registry_registration),
       [&](SERVICE_TYPE(mysql_option_tracker_option) * opt) {
         return 0 != opt->define(c_option_name.c_str(), c_name.c_str(), 1) ||

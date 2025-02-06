@@ -1107,7 +1107,7 @@ static int search_default_file_with_ext(Process_option_func opt_handler,
     }
 
     /* Self freeing option buffer */
-    std::unique_ptr<char[]> optionBuffer{new char[strlen(linebuff) + 3]};
+    std::unique_ptr<char[]> const optionBuffer{new char[strlen(linebuff) + 3]};
     char *option = optionBuffer.get();
 
     if (!value) {
@@ -1396,9 +1396,9 @@ void print_defaults(const char *conf_file, const char **groups) {
 */
 void init_variable_default_paths() {
   char datadir[FN_REFLEN] = {0};
-  string extradir =
+  string const extradir =
       (my_defaults_extra_file ? my_defaults_extra_file : string());
-  string explicitdir = (my_defaults_file ? my_defaults_file : string());
+  string const explicitdir = (my_defaults_file ? my_defaults_file : string());
 
   string defsyscondir;
 #if defined(DEFAULT_SYSCONFDIR)

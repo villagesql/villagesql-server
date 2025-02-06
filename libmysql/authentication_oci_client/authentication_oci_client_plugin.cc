@@ -116,7 +116,7 @@ static int oci_authenticate_client_plugin(MYSQL_PLUGIN_VIO *vio,
    * Step 1: Receive the nonce from the server.
    */
   unsigned char *server_nonce = nullptr;
-  int server_nonce_length = vio->read_packet(vio, &server_nonce);
+  int const server_nonce_length = vio->read_packet(vio, &server_nonce);
   if (server_nonce_length <= 0) {
     log_error("An error occurred during the client server handshake.");
     return CR_AUTH_HANDSHAKE;
@@ -217,7 +217,7 @@ static int oci_authenticate_client_option(const char *option, const void *val) {
   if (strcmp(option, "oci-config-file") == 0) {
     free_plugin_option(s_oci_config_location);
     if (value == nullptr) return 0;
-    std::ifstream file(value);
+    std::ifstream const file(value);
     if (file.good()) {
       s_oci_config_location =
           my_strdup(PSI_NOT_INSTRUMENTED, value, MYF(MY_WME));

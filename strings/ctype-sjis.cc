@@ -1380,8 +1380,8 @@ static int my_strnncoll_sjis_internal(const CHARSET_INFO *cs,
                       pointer_cast<const char *>(a_end)) &&
         ismbchar_sjis(cs, pointer_cast<const char *>(b),
                       pointer_cast<const char *>(b_end))) {
-      unsigned a_char = sjiscode(*a, *(a + 1));
-      unsigned b_char = sjiscode(*b, *(b + 1));
+      unsigned const a_char = sjiscode(*a, *(a + 1));
+      unsigned const b_char = sjiscode(*b, *(b + 1));
       if (a_char != b_char) return (int)a_char - (int)b_char;
       a += 2;
       b += 2;
@@ -1401,7 +1401,7 @@ extern "C" {
 static int my_strnncoll_sjis(const CHARSET_INFO *cs, const uint8_t *a,
                              size_t a_length, const uint8_t *b, size_t b_length,
                              bool b_is_prefix) {
-  int res = my_strnncoll_sjis_internal(cs, &a, a_length, &b, b_length);
+  int const res = my_strnncoll_sjis_internal(cs, &a, a_length, &b, b_length);
   if (b_is_prefix && a_length > b_length) a_length = b_length;
   return res ? res : (int)(a_length - b_length);
 }

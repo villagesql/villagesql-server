@@ -400,7 +400,7 @@ bool Test_udf_charset_base::set_udf_init(UDF_INIT *initid, UDF_ARGS *args) {
     Max size of the converted string could be in charset utf16.
     Therefore, allocate the ample memory accordingly.
   */
-  size_t length = args->lengths[0] * 4 + 1;
+  size_t const length = args->lengths[0] * 4 + 1;
   try {
     initid->ptr = new char[length];
   } catch (...) {

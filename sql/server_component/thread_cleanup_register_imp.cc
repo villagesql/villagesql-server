@@ -46,7 +46,7 @@ class Thread_cleanup {
       // Invoke exit_handler for all the components, that requested
       // callback.
       for (const auto &component_name : requested_component_names) {
-        my_service<SERVICE_TYPE(thread_cleanup_handler)> service(
+        my_service<SERVICE_TYPE(thread_cleanup_handler)> const service(
             ("thread_cleanup_handler." + component_name).c_str(), srv_registry);
 
         // Ignore handler invocation if the component service is not installed

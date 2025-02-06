@@ -112,7 +112,7 @@ unsigned int max_display_length_for_field(enum_field_types sql_type,
       return metadata & 0x00ff;
 
     case MYSQL_TYPE_STRING: {
-      unsigned char type = metadata >> 8;
+      unsigned char const type = metadata >> 8;
       if (type == MYSQL_TYPE_SET || type == MYSQL_TYPE_ENUM)
         return metadata & 0xff;
       return (((metadata >> 4) & 0x300) ^ 0x300) + (metadata & 0x00ff);
@@ -229,7 +229,7 @@ uint32_t calc_field_size(unsigned char col, const unsigned char *master_data,
     case MYSQL_TYPE_SET:
     case MYSQL_TYPE_ENUM:
     case MYSQL_TYPE_STRING: {
-      unsigned char type = metadata >> 8U;
+      unsigned char const type = metadata >> 8U;
       if ((type == MYSQL_TYPE_SET) || (type == MYSQL_TYPE_ENUM))
         length = metadata & 0x00ff;
       else {
@@ -325,8 +325,8 @@ uint32_t calc_field_size(unsigned char col, const unsigned char *master_data,
         If from_bit_len is not 0, add 1 to the length to account for accurate
         number of bytes needed.
       */
-      unsigned int from_len = (metadata >> 8U) & 0x00ff;
-      unsigned int from_bit_len = metadata & 0x00ff;
+      unsigned int const from_len = (metadata >> 8U) & 0x00ff;
+      unsigned int const from_bit_len = metadata & 0x00ff;
       BAPI_ASSERT(from_bit_len <= 7);
       length = from_len + ((from_bit_len > 0) ? 1 : 0);
       break;

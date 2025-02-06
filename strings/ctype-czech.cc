@@ -367,7 +367,7 @@ static size_t my_strnxfrm_czech(const CHARSET_INFO *cs [[maybe_unused]],
     flags |= 0x0F;
 
   do {
-    int add = (1 << pass) & flags; /* If this level is needed */
+    int const add = (1 << pass) & flags; /* If this level is needed */
     NEXT_CMP_VALUE(src, p, store, pass, value, (int)srclen);
     if (add) ADD_TO_RESULT(dest, len, totlen, value);
   } while (value);

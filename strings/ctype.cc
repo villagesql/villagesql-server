@@ -371,7 +371,7 @@ static int fill_uint16(uint16_t *a, unsigned size, const char *str,
 static int tailoring_append(MY_XML_PARSER *st, const char *fmt, size_t len,
                             const char *attr) {
   auto *i = (struct my_cs_file_info *)st->user_data;
-  size_t newlen = i->tailoring_length + len + 64; /* 64 for format */
+  size_t const newlen = i->tailoring_length + len + 64; /* 64 for format */
   if (MY_XML_OK == my_charset_file_tailoring_realloc(i, newlen)) {
     char *dst = i->tailoring + i->tailoring_length;
     sprintf(dst, fmt, (int)len, attr);
@@ -385,7 +385,8 @@ static int tailoring_append2(MY_XML_PARSER *st, const char *fmt, size_t len1,
                              const char *attr1, size_t len2,
                              const char *attr2) {
   auto *i = (struct my_cs_file_info *)st->user_data;
-  size_t newlen = i->tailoring_length + len1 + len2 + 64; /* 64 for format */
+  size_t const newlen =
+      i->tailoring_length + len1 + len2 + 64; /* 64 for format */
   if (MY_XML_OK == my_charset_file_tailoring_realloc(i, newlen)) {
     char *dst = i->tailoring + i->tailoring_length;
     sprintf(dst, fmt, (int)len1, attr1, (int)len2, attr2);
@@ -413,8 +414,8 @@ static size_t scan_one_character(const char *s, const char *e, my_wc_t *wc) {
     return 1;
   } else /* Non-escaped character */
   {
-    int rc = cs->cset->mb_wc(cs, wc, pointer_cast<const uint8_t *>(s),
-                             pointer_cast<const uint8_t *>(e));
+    int const rc = cs->cset->mb_wc(cs, wc, pointer_cast<const uint8_t *>(s),
+                                   pointer_cast<const uint8_t *>(e));
     if (rc > 0) return (size_t)rc;
   }
   return 0;
@@ -437,7 +438,7 @@ extern "C" {
 static int cs_enter(MY_XML_PARSER *st, const char *attr, size_t len) {
   auto *i = (struct my_cs_file_info *)st->user_data;
   struct my_cs_file_section_st *s = cs_file_sec(attr, len);
-  int state = s ? s->state : 0;
+  int const state = s ? s->state : 0;
 
   switch (state) {
     case 0:
@@ -464,7 +465,7 @@ static int cs_enter(MY_XML_PARSER *st, const char *attr, size_t len) {
 static int cs_leave(MY_XML_PARSER *st, const char *attr, size_t len) {
   auto *i = (struct my_cs_file_info *)st->user_data;
   struct my_cs_file_section_st *s = cs_file_sec(attr, len);
-  int state = s ? s->state : 0;
+  int const state = s ? s->state : 0;
   int rc;
 
   switch (state) {
@@ -539,7 +540,7 @@ extern "C" {
 static int cs_value(MY_XML_PARSER *st, const char *attr, size_t len) {
   auto *i = (struct my_cs_file_info *)st->user_data;
   struct my_cs_file_section_st *s;
-  int state =
+  int const state =
       (int)((s = cs_file_sec(st->attr.start, st->attr.end - st->attr.start))
                 ? s->state
                 : 0);
@@ -963,7 +964,7 @@ size_t my_convert(char *to, size_t to_length, const CHARSET_INFO *to_cs,
     return length2;
   }
 
-  size_t copied_length = length2 - length;
+  size_t const copied_length = length2 - length;
   to_length -= copied_length;
   from_length -= copied_length;
   return copied_length + my_convert_internal(to, to_length, to_cs, from,
@@ -1125,7 +1126,7 @@ static bool cs_copy_data(MY_CHARSET_LOADER *loader, CHARSET_INFO *to,
   }
 
   if (from->tab_to_uni) {
-    size_t sz = MY_CS_TO_UNI_TABLE_SIZE * sizeof(uint16_t);
+    size_t const sz = MY_CS_TO_UNI_TABLE_SIZE * sizeof(uint16_t);
     to->tab_to_uni =
         static_cast<uint16_t *>(once_memdup(loader, from->tab_to_uni, sz));
     if (to->tab_to_uni == nullptr) return true;

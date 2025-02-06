@@ -75,7 +75,7 @@ static bool verify_individual_certificate(const char *ssl_cert,
   using raii_store_ctx =
       std::unique_ptr<X509_STORE_CTX, decltype(&X509_STORE_CTX_free)>;
   auto deleter = [&](FILE *ptr) { my_fclose(ptr, MYF(0)); };
-  std::unique_ptr<FILE, decltype(deleter)> fp(
+  std::unique_ptr<FILE, decltype(deleter)> const fp(
       my_fopen(ssl_cert, O_RDONLY | MY_FOPEN_BINARY, MYF(MY_WME)), deleter);
 
   if (!fp) {
@@ -83,7 +83,7 @@ static bool verify_individual_certificate(const char *ssl_cert,
     return true;
   }
 
-  raii_bio bio(BIO_new(BIO_s_file()), &BIO_free);
+  raii_bio const bio(BIO_new(BIO_s_file()), &BIO_free);
   if (!bio) {
     /* purecov: begin inspected */
     LogErr(ERROR_LEVEL, ER_TLS_LIBRARY_ERROR_INTERNAL);
@@ -93,14 +93,14 @@ static bool verify_individual_certificate(const char *ssl_cert,
   }
 
   BIO_set_fp(bio.get(), fp.get(), BIO_NOCLOSE);
-  raii_server_cert server_cert(
+  raii_server_cert const server_cert(
       PEM_read_bio_X509(bio.get(), nullptr, nullptr, nullptr), &X509_free);
   if (!server_cert) {
     /* We are not interested in anything other than X509 certificates */
     return false;
   }
 
-  raii_store store(X509_STORE_new(), &X509_STORE_free);
+  raii_store const store(X509_STORE_new(), &X509_STORE_free);
   if (!store) {
     /* purecov: begin inspected */
     LogErr(ERROR_LEVEL, ER_TLS_LIBRARY_ERROR_INTERNAL);
@@ -127,7 +127,7 @@ static bool verify_individual_certificate(const char *ssl_cert,
     }
   }
 
-  raii_store_ctx store_ctx(X509_STORE_CTX_new(), &X509_STORE_CTX_free);
+  raii_store_ctx const store_ctx(X509_STORE_CTX_new(), &X509_STORE_CTX_free);
   if (!store_ctx) {
     /* purecov: begin inspected */
     LogErr(ERROR_LEVEL, ER_TLS_LIBRARY_ERROR_INTERNAL);

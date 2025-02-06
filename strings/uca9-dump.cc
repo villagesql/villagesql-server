@@ -199,7 +199,7 @@ static int load_uca_file(MY_UCA *uca, int maxchar, int *pageloaded,
       int weight_of_ce = 0;
       for (s = weights[i]; *s;) {
         char *endptr;
-        int part = strtol(s + 1, &endptr, 16);
+        int const part = strtol(s + 1, &endptr, 16);
         if (i < MY_UCA_MAXCE_TO_DUMP) {
           item->weight[i * MY_UCA_CE_SIZE + weight_of_ce] = part;
         } else {
@@ -230,11 +230,12 @@ static int my_decompose_hangul_syllable(my_wc_t syllable, my_wc_t *jamo) {
   constexpr int trailingjamo_base = 0x11A7;
   constexpr int voweljamo_cnt = 21;
   constexpr int trailingjamo_cnt = 28;
-  int syllable_index = syllable - syllable_base;
-  int v_t_combination = voweljamo_cnt * trailingjamo_cnt;
-  int leadingjamo_index = syllable_index / v_t_combination;
-  int voweljamo_index = (syllable_index % v_t_combination) / trailingjamo_cnt;
-  int trailingjamo_index = syllable_index % trailingjamo_cnt;
+  int const syllable_index = syllable - syllable_base;
+  int const v_t_combination = voweljamo_cnt * trailingjamo_cnt;
+  int const leadingjamo_index = syllable_index / v_t_combination;
+  int const voweljamo_index =
+      (syllable_index % v_t_combination) / trailingjamo_cnt;
+  int const trailingjamo_index = syllable_index % trailingjamo_cnt;
   jamo[0] = leadingjamo_base + leadingjamo_index;
   jamo[1] = voweljamo_base + voweljamo_index;
   jamo[2] = trailingjamo_index ? (trailingjamo_base + trailingjamo_index) : 0;
@@ -418,7 +419,7 @@ int dump_ja_hans(MY_UCA *uca, FILE *infile, FILE *outfile) {
     fprintf(stderr, "Wrong UTF8 Han character bytes.\n");
     return 1;
   }
-  int han_cnt = ja_length / 3;
+  int const han_cnt = ja_length / 3;
   const int JA_CORE_HAN_BASE_WT = 0x54A4;
   const int ja_han_page_cnt = 0x9F - 0x4E + 1;
   // Set weight for Japanese Han characters.
@@ -427,10 +428,10 @@ int dump_ja_hans(MY_UCA *uca, FILE *infile, FILE *outfile) {
   int max_page = 0;
   for (int i = 0; i < han_cnt; i++) {
     my_wc_t ja_ch_u16 = 0;
-    int bytes = my_mb_wc_utf8mb4(&ja_ch_u16, ja_han, ja_han + ja_length);
+    int const bytes = my_mb_wc_utf8mb4(&ja_ch_u16, ja_han, ja_han + ja_length);
     if (bytes <= 0) break;
     ja_han += bytes;
-    int page [[maybe_unused]] = ja_ch_u16 >> 8;
+    int const page [[maybe_unused]] = ja_ch_u16 >> 8;
     assert(page >= 0x4E && page <= 0x9F);
     MY_UCA_ITEM *item = &uca->item[ja_ch_u16 - 0x4E00];
     item->num_of_ce = 1;
@@ -444,8 +445,8 @@ int dump_ja_hans(MY_UCA *uca, FILE *infile, FILE *outfile) {
   // Set implicit weight for non-Japanese characters.
   for (int page = min_page; page <= max_page; page++) {
     for (int offs = 0; offs < MY_UCA_CHARS_PER_PAGE; ++offs) {
-      int code = (page << 8) + offs;
-      int ind = code - 0x4E00;
+      int const code = (page << 8) + offs;
+      int const ind = code - 0x4E00;
       MY_UCA_ITEM *item = &uca->item[ind];
       if (item->num_of_ce == 0) set_implicit_weights(item, code);
     }
@@ -459,7 +460,7 @@ int dump_ja_hans(MY_UCA *uca, FILE *infile, FILE *outfile) {
     fprintf(outfile, "uint16_t ja_han_page%2X[]= {\n", min_page + page);
     fprintf(outfile, "  /* Number of CEs for each character. */\n");
     for (int offs = 0; offs < MY_UCA_CHARS_PER_PAGE; ++offs) {
-      int ind = (page << 8) + offs;
+      int const ind = (page << 8) + offs;
       MY_UCA_ITEM *item = &uca->item[ind];
       if ((offs % 16) == 0) fprintf(outfile, "  ");
       fprintf(outfile, "%d, ", item->num_of_ce);
@@ -582,15 +583,15 @@ int dump_zh_hans(MY_UCA *uca, int *pageloaded, FILE *infile, FILE *outfile) {
 
   std::map<int, int> zh_han_to_single_weight_map;
   unsigned char *zh_ch = zh_bytes;
-  int zh_len = strlen((char *)zh_bytes);
+  int const zh_len = strlen((char *)zh_bytes);
   int min_page = 0x1100;  // the max code point utf8mb4 supports is 0x10FFFF.
   int max_page = 0;
   for (int i = 0; i < ZH_HAN_CNT; i++) {
     my_wc_t ch = 0;
-    int bytes = my_mb_wc_utf8mb4(&ch, zh_ch, zh_ch + zh_len);
+    int const bytes = my_mb_wc_utf8mb4(&ch, zh_ch, zh_ch + zh_len);
     if (bytes <= 0) break;
     zh_ch += bytes;
-    int page = ch >> 8;
+    int const page = ch >> 8;
     uca->item[ch].num_of_ce = 1;
     uca->item[ch].weight[0] = ZH_CORE_HAN_BASE_WT + i;
     uca->item[ch].weight[1] = 0x20;
@@ -610,7 +611,7 @@ int dump_zh_hans(MY_UCA *uca, int *pageloaded, FILE *infile, FILE *outfile) {
       // There is same page in DUCET.
       if (uca900_weight[page]) {
         for (int off = 0; off < MY_UCA_CHARS_PER_PAGE; off++) {
-          int ch_off = (page << 8) + off;
+          int const ch_off = (page << 8) + off;
           // Copy other characters' weight from DUCET.
           if (uca->item[ch_off].num_of_ce == 0) {
             uca->item[ch_off].num_of_ce =
@@ -623,7 +624,7 @@ int dump_zh_hans(MY_UCA *uca, int *pageloaded, FILE *infile, FILE *outfile) {
                 if (*weight >= 0x1C47 && *weight <= 0x54A3) {
                   *dst = *weight + 0xBDC4 - 0x1C47;
                 } else if (*weight >= 0xFB00) {  // implicit weight
-                  uint16_t next_implicit =
+                  uint16_t const next_implicit =
                       *(weight + UCA900_DISTANCE_BETWEEN_WEIGHTS);
                   my_wc_t ch = convert_implicit_to_ch(*weight, next_implicit);
                   if (zh_han_to_single_weight_map.find(ch) !=
@@ -652,7 +653,7 @@ int dump_zh_hans(MY_UCA *uca, int *pageloaded, FILE *infile, FILE *outfile) {
         }
       } else {
         for (int off = 0; off < MY_UCA_CHARS_PER_PAGE; off++) {
-          int ch = (page << 8) + off;
+          int const ch = (page << 8) + off;
           if (uca->item[ch].num_of_ce == 0) {
             // calculate its implicit weight.
             set_implicit_weights(&uca->item[ch], ch);
@@ -729,7 +730,7 @@ OPT_DUMP handle_options(int ac, char **av, char **infilename,
 }
 
 int dump_ducet(MY_UCA *uca, int *pageloaded, FILE *infile, FILE *outfile) {
-  int maxchar = MY_UCA_MAXCHAR;
+  int const maxchar = MY_UCA_MAXCHAR;
   load_uca_file(uca, maxchar, pageloaded, infile);
 
   set_implicit_weights(uca, pageloaded);
@@ -776,7 +777,7 @@ int dump_ducet(MY_UCA *uca, int *pageloaded, FILE *infile, FILE *outfile) {
 int main(int ac, char **av) {
   char *infilename = nullptr;
   char *outfilename = nullptr;
-  OPT_DUMP od = handle_options(ac, av, &infilename, &outfilename);
+  OPT_DUMP const od = handle_options(ac, av, &infilename, &outfilename);
   if (od == DUMP_ERROR) {
     printf(
         "Usage: uca9dump [ducet|ja|zh] --in_file=[inputfile] "

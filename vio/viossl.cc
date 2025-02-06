@@ -636,7 +636,7 @@ static int ssl_do(struct st_VioSSLFd *ptr, Vio *vio, long timeout,
                   unsigned long *ssl_errno_holder, SSL **sslptr,
                   const char *sni_servername) {
   SSL *ssl = nullptr;
-  my_socket sd = mysql_socket_getfd(vio->mysql_socket);
+  my_socket const sd = mysql_socket_getfd(vio->mysql_socket);
 
   /* Declared here to make compiler happy */
 #if !defined(NDEBUG)
@@ -786,8 +786,8 @@ static int ssl_do(struct st_VioSSLFd *ptr, Vio *vio, long timeout,
 int sslaccept(struct st_VioSSLFd *ptr, Vio *vio, long timeout,
               unsigned long *ssl_errno_holder) {
   DBUG_TRACE;
-  int ret = ssl_do(ptr, vio, timeout, nullptr, SSL_accept, ssl_errno_holder,
-                   nullptr, nullptr);
+  int const ret = ssl_do(ptr, vio, timeout, nullptr, SSL_accept,
+                         ssl_errno_holder, nullptr, nullptr);
   return ret;
 }
 
@@ -795,8 +795,8 @@ int sslconnect(struct st_VioSSLFd *ptr, Vio *vio, long timeout,
                SSL_SESSION *session, unsigned long *ssl_errno_holder, SSL **ssl,
                const char *sni_servername) {
   DBUG_TRACE;
-  int ret = ssl_do(ptr, vio, timeout, session, SSL_connect, ssl_errno_holder,
-                   ssl, sni_servername);
+  int const ret = ssl_do(ptr, vio, timeout, session, SSL_connect,
+                         ssl_errno_holder, ssl, sni_servername);
   return ret;
 }
 

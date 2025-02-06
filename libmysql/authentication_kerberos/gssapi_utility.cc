@@ -36,7 +36,7 @@ static void gssapi_errmsg(OM_uint32 major, OM_uint32 minor, char *buf,
   gss_buffer_desc status{0, nullptr};
   char *t_message = buf;
   char *end = t_message + size - 1;
-  int types[] = {GSS_C_GSS_CODE, GSS_C_MECH_CODE};
+  int const types[] = {GSS_C_GSS_CODE, GSS_C_MECH_CODE};
 
   for (int type : types) {
     message_context = 0;

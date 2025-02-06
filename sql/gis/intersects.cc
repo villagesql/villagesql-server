@@ -213,7 +213,7 @@ bool Intersects::eval(const Cartesian_polygon *g1,
 
 bool Intersects::eval(const Cartesian_polygon *g1,
                       const Cartesian_multipoint *g2) const {
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   return !disjoint(g1, g2);
 }
 
@@ -253,7 +253,7 @@ bool Intersects::eval(const Cartesian_multipoint *g1,
 
 bool Intersects::eval(const Cartesian_multipoint *g1,
                       const Cartesian_polygon *g2) const {
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   return !disjoint(g1, g2);
 }
 
@@ -275,7 +275,7 @@ bool Intersects::eval(const Cartesian_multipoint *g1,
 
 bool Intersects::eval(const Cartesian_multipoint *g1,
                       const Cartesian_multipolygon *g2) const {
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   return !disjoint(g1, g2);
 }
 
@@ -346,7 +346,7 @@ bool Intersects::eval(const Cartesian_multipolygon *g1,
 
 bool Intersects::eval(const Cartesian_multipolygon *g1,
                       const Cartesian_multipoint *g2) const {
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   return !disjoint(g1, g2);
 }
 
@@ -471,7 +471,7 @@ bool Intersects::eval(const Geographic_polygon *g1,
 
 bool Intersects::eval(const Geographic_polygon *g1,
                       const Geographic_multipoint *g2) const {
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   return !disjoint(g1, g2);
 }
 
@@ -513,7 +513,7 @@ bool Intersects::eval(const Geographic_multipoint *g1,
 
 bool Intersects::eval(const Geographic_multipoint *g1,
                       const Geographic_polygon *g2) const {
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   return !disjoint(g1, g2);
 }
 
@@ -537,7 +537,7 @@ bool Intersects::eval(const Geographic_multipoint *g1,
 
 bool Intersects::eval(const Geographic_multipoint *g1,
                       const Geographic_multipolygon *g2) const {
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   return !disjoint(g1, g2);
 }
 
@@ -608,7 +608,7 @@ bool Intersects::eval(const Geographic_multipolygon *g1,
 
 bool Intersects::eval(const Geographic_multipolygon *g1,
                       const Geographic_multipoint *g2) const {
-  Disjoint disjoint(m_semi_major, m_semi_minor);
+  Disjoint const disjoint(m_semi_major, m_semi_minor);
   return !disjoint(g1, g2);
 }
 
@@ -650,8 +650,8 @@ bool intersects(const dd::Spatial_reference_system *srs, const Geometry *g1,
 
     if ((*null = (g1->is_empty() || g2->is_empty()))) return false;
 
-    Intersects intersects_func(srs ? srs->semi_major_axis() : 0.0,
-                               srs ? srs->semi_minor_axis() : 0.0);
+    Intersects const intersects_func(srs ? srs->semi_major_axis() : 0.0,
+                                     srs ? srs->semi_minor_axis() : 0.0);
     *intersects = intersects_func(g1, g2);
   } catch (...) {
     handle_gis_exception(func_name);
@@ -674,8 +674,8 @@ bool mbr_intersects(const dd::Spatial_reference_system *srs, const Geometry *g1,
 
     if ((*null = (g1->is_empty() || g2->is_empty()))) return false;
 
-    Intersects intersects_func(srs ? srs->semi_major_axis() : 0.0,
-                               srs ? srs->semi_minor_axis() : 0.0);
+    Intersects const intersects_func(srs ? srs->semi_major_axis() : 0.0,
+                                     srs ? srs->semi_minor_axis() : 0.0);
 
     switch (g1->coordinate_system()) {
       case Coordinate_system::kCartesian: {

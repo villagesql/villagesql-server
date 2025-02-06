@@ -238,8 +238,8 @@ void my_error(int nr, myf MyFlags, ...) {
   */
   for (char *ptr = ebuff, *end = ebuff + strlen(ebuff); ptr != end;) {
     my_wc_t ignored;
-    int len = my_mb_wc_utf8mb4(&ignored, pointer_cast<const uchar *>(ptr),
-                               pointer_cast<const uchar *>(end));
+    int const len = my_mb_wc_utf8mb4(&ignored, pointer_cast<const uchar *>(ptr),
+                                     pointer_cast<const uchar *>(end));
     if (len > 0) {
       ptr += len;
     } else {

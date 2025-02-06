@@ -79,8 +79,9 @@ Singleton<T>::Singleton(MEM_ROOT *mem_root, const Singleton<T> &other,
     return;  // OOM
   }
   for (const SingletonBucket<T> &other_bucket : other.m_buckets) {
-    SingletonBucket<T> bucket(DeepCopy(other_bucket.value, mem_root, error),
-                              other_bucket.cumulative_frequency);
+    SingletonBucket<T> const bucket(
+        DeepCopy(other_bucket.value, mem_root, error),
+        other_bucket.cumulative_frequency);
     if (*error) return;
     m_buckets.push_back(bucket);
   }
@@ -131,7 +132,7 @@ bool Singleton<T>::build_histogram(const Value_map<T> &value_map,
     const double cumulative_frequency =
         cumulative_sum / static_cast<double>(total_count);
     bool value_copy_error = false;
-    SingletonBucket<T> bucket(
+    SingletonBucket<T> const bucket(
         DeepCopy(node.first, get_mem_root(), &value_copy_error),
         cumulative_frequency);
     if (value_copy_error) return true;
@@ -342,9 +343,9 @@ bool Singleton<T>::json_to_histogram(const Json_object &json_object,
     m_buckets.push_back(
         SingletonBucket<T>(value, cumulative_frequency->value()));
   }
-  bool histogram_buckets_sorted = std::is_sorted(
+  bool const histogram_buckets_sorted = std::is_sorted(
       m_buckets.begin(), m_buckets.end(), Histogram_comparator());
-  bool already_validated [[maybe_unused]] = context->binary();
+  bool const already_validated [[maybe_unused]] = context->binary();
   assert(!already_validated || histogram_buckets_sorted);
   if (!histogram_buckets_sorted) {
     context->report_node(buckets_dom, Message::JSON_VALUE_NOT_ASCENDING_1);
@@ -365,7 +366,7 @@ bool Singleton<T>::json_to_histogram(const Json_object &json_object,
       }
     } else {
       SingletonBucket<T> *last_bucket = &m_buckets[m_buckets.size() - 1];
-      float sum =
+      float const sum =
           last_bucket->cumulative_frequency + get_null_values_fraction();
       if (std::abs(sum - 1.0) > 0) {
         context->report_global(Message::JSON_INVALID_TOTAL_FREQUENCY);

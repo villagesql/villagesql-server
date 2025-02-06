@@ -38,7 +38,7 @@ int GeometryIndexRangeScanIterator::Read() {
   for (;;) {
     if (last_range) {
       // Already read through key
-      int result = file->ha_index_next_same(
+      int const result = file->ha_index_next_same(
           table()->record[0], last_range->min_key, last_range->min_length);
       if (result == 0) {
         if (m_examined_rows != nullptr) {
@@ -57,7 +57,7 @@ int GeometryIndexRangeScanIterator::Read() {
     }
     last_range = *(cur_range++);
 
-    int result = file->ha_index_read_map(
+    int const result = file->ha_index_read_map(
         table()->record[0], last_range->min_key, last_range->min_keypart_map,
         last_range->rkey_func_flag);
     if (result == 0) {
@@ -66,7 +66,7 @@ int GeometryIndexRangeScanIterator::Read() {
       }
       return 0;
     }
-    if (int error_code = HandleError(result); error_code != -1) {
+    if (int const error_code = HandleError(result); error_code != -1) {
       return error_code;
     }
     last_range = nullptr;  // Not found, to next range

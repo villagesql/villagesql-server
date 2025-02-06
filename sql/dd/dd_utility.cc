@@ -40,7 +40,7 @@ size_t normalize_string(const CHARSET_INFO *cs, const String_type &src,
     size according to it to avoid my_strnxfrm() padding result buffer with
     spaces(sort weights corresponding to spaces).
   */
-  size_t len = cs->coll->strnxfrmlen(
+  size_t const len = cs->coll->strnxfrmlen(
       cs, (cs->mbmaxlen *
            cs->cset->numchars(cs, src.c_str(), src.c_str() + src.length())));
   if (len > normalized_str_buf_length) return 0;

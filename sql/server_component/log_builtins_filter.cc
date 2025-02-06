@@ -1009,7 +1009,7 @@ int log_builtins_filter_parse_suppression_list(char *list, bool update) {
       during assignment, but if we do it during the check phase, we protect the
       integrity of both the current rule-set and the variable's value.
     */
-    else if (uint32_t max_user_rules_in_list =
+    else if (uint32_t const max_user_rules_in_list =
                  log_filter_builtin_rules->alloc - builtin_count;
              ++list_len > max_user_rules_in_list)
       goto fail;

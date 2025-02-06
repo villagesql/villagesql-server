@@ -389,8 +389,8 @@ bool generate_sha256_scramble(unsigned char *scramble, size_t scramble_size,
                               const char *src, size_t src_size, const char *rnd,
                               size_t rnd_size) {
   DBUG_TRACE;
-  std::string source(src, src_size);
-  std::string random(rnd, rnd_size);
+  std::string const source(src, src_size);
+  std::string const random(rnd, rnd_size);
 
   sha2_password::Generate_scramble scramble_generator(source, random);
   if (scramble_generator.scramble(scramble, scramble_size)) {

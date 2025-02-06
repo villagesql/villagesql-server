@@ -47,7 +47,7 @@ Gssapi_client::~Gssapi_client() = default;
 
 bool Gssapi_client::authenticate() {
   bool rc_auth{false};
-  std::stringstream log_client_stream;
+  std::stringstream const log_client_stream;
   OM_uint32 major{0};
   OM_uint32 minor{0};
   gss_ctx_id_t ctxt{GSS_C_NO_CONTEXT};
@@ -57,7 +57,7 @@ bool Gssapi_client::authenticate() {
   gss_buffer_desc input{0, nullptr};
   gss_buffer_desc output{0, nullptr};
   gss_cred_id_t cred_id{GSS_C_NO_CREDENTIAL};
-  OM_uint32 req_flag{0};
+  OM_uint32 const req_flag{0};
   Kerberos_client_io m_io{m_vio};
   /* For making mutual flag, uncomment below line */
   // req_flag = {GSS_C_MUTUAL_FLAG};

@@ -107,7 +107,7 @@ std::unique_ptr<Geometry> Simplify::eval(
   // bg::simplify may create geometries with too few points. Filter out those.
   auto *mls_result = new Cartesian_multilinestring();
   std::unique_ptr<Geometry> result(mls_result);
-  for (Cartesian_linestring &ls : *unfiltered_result) {
+  for (Cartesian_linestring const &ls : *unfiltered_result) {
     if (ls.size() >= 2) mls_result->push_back(ls);
   }
 
@@ -148,7 +148,7 @@ bool simplify(const dd::Spatial_reference_system *srs, const Geometry &g,
       return true;
     }
 
-    Simplify simplify_func(max_distance);
+    Simplify const simplify_func(max_distance);
     *result = simplify_func(g);
     if ((*result)->is_empty()) result->reset();
   } catch (...) {

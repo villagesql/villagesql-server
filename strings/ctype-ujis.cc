@@ -35734,14 +35734,14 @@ static size_t my_casefold_ujis(const CHARSET_INFO *cs, char *src, size_t srclen,
   char *srcend = src + srclen, *dst0 = dst;
 
   while (src < srcend) {
-    size_t mblen = my_ismbchar(cs, src, srcend);
+    size_t const mblen = my_ismbchar(cs, src, srcend);
     if (mblen) {
       const MY_UNICASE_CHARACTER *ch;
       ch = (mblen == 2)
                ? get_case_info_for_ch(cs, 0, (uint8_t)src[0], (uint8_t)src[1])
                : get_case_info_for_ch(cs, 1, (uint8_t)src[1], (uint8_t)src[2]);
       if (ch) {
-        int code = is_upper ? ch->toupper : ch->tolower;
+        int const code = is_upper ? ch->toupper : ch->tolower;
         src += mblen;
         if (code > 0xFFFF) *dst++ = (char)(uint8_t)((code >> 16) & 0xFF);
         if (code > 0xFF) *dst++ = (char)(uint8_t)((code >> 8) & 0xFF);

@@ -290,24 +290,24 @@ double Bucket<String>::get_distance_from_lower(const String &value) const {
   if (values_are_equal(get_lower_inclusive(), get_upper_inclusive()))
     return 1.0;
 
-  uint max_strnxfrm_len = value.charset()->coll->strnxfrmlen(
+  uint const max_strnxfrm_len = value.charset()->coll->strnxfrmlen(
       value.charset(), HISTOGRAM_MAX_COMPARE_LENGTH);
 
-  std::unique_ptr<uchar[]> value_buf(new uchar[max_strnxfrm_len]());
-  std::unique_ptr<uchar[]> upper_buf(new uchar[max_strnxfrm_len]());
-  std::unique_ptr<uchar[]> lower_buf(new uchar[max_strnxfrm_len]());
+  std::unique_ptr<uchar[]> const value_buf(new uchar[max_strnxfrm_len]());
+  std::unique_ptr<uchar[]> const upper_buf(new uchar[max_strnxfrm_len]());
+  std::unique_ptr<uchar[]> const lower_buf(new uchar[max_strnxfrm_len]());
 
   const auto *ptr = pointer_cast<const uchar *>(value.ptr());
-  size_t value_len = my_strnxfrm(value.charset(), value_buf.get(),
-                                 max_strnxfrm_len, ptr, value.length());
+  size_t const value_len = my_strnxfrm(value.charset(), value_buf.get(),
+                                       max_strnxfrm_len, ptr, value.length());
 
   const auto *ptr2 = pointer_cast<const uchar *>(get_lower_inclusive().ptr());
-  size_t lower_len =
+  size_t const lower_len =
       my_strnxfrm(value.charset(), lower_buf.get(), max_strnxfrm_len, ptr2,
                   get_lower_inclusive().length());
 
   const auto *ptr3 = pointer_cast<const uchar *>(get_upper_inclusive().ptr());
-  size_t upper_len =
+  size_t const upper_len =
       my_strnxfrm(value.charset(), upper_buf.get(), max_strnxfrm_len, ptr3,
                   get_upper_inclusive().length());
 
@@ -321,9 +321,9 @@ double Bucket<String>::get_distance_from_lower(const String &value) const {
     start_index++;
   }
 
-  std::uint64_t lower_converted = uchar_array_to_64bit_unsigned(
+  std::uint64_t const lower_converted = uchar_array_to_64bit_unsigned(
       lower_buf.get() + start_index, lower_len - start_index);
-  std::uint64_t upper_converted = uchar_array_to_64bit_unsigned(
+  std::uint64_t const upper_converted = uchar_array_to_64bit_unsigned(
       upper_buf.get() + start_index, upper_len - start_index);
   if (upper_converted == lower_converted) {
     /*
@@ -333,7 +333,7 @@ double Bucket<String>::get_distance_from_lower(const String &value) const {
     return 1.0; /* purecov: deadcode */
   }
 
-  std::uint64_t value_converted = uchar_array_to_64bit_unsigned(
+  std::uint64_t const value_converted = uchar_array_to_64bit_unsigned(
       value_buf.get() + start_index, value_len - start_index);
 
   assert(lower_converted <= value_converted);
@@ -374,7 +374,7 @@ double Bucket<MYSQL_TIME>::get_distance_from_lower(
   int sign = lower_modified.neg != upper_modified.neg ? -1 : 1;
   calc_time_diff(lower_modified, upper_modified, sign,
                  &upper_lower_diff_seconds, &upper_lower_diff_microseconds);
-  double upper_lower_diff =
+  double const upper_lower_diff =
       upper_lower_diff_seconds + (upper_lower_diff_microseconds / 1000000.0);
 
   /*
@@ -386,7 +386,7 @@ double Bucket<MYSQL_TIME>::get_distance_from_lower(
   sign = lower_modified.neg != value_modified.neg ? -1 : 1;
   calc_time_diff(lower_modified, value_modified, sign,
                  &value_lower_diff_seconds, &value_lower_diff_microseconds);
-  double value_lower_diff =
+  double const value_lower_diff =
       value_lower_diff_seconds + (value_lower_diff_microseconds / 1000000.0);
 
   return value_lower_diff / upper_lower_diff;

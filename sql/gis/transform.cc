@@ -92,7 +92,7 @@ auto transform_gc_helper(const InputGeometryCollection &g,
       auto *gc_result = new Cartesian_geometrycollection();
       std::unique_ptr<Geometry> result(gc_result);
       for (std::size_t i = 0; i < g.size(); i++) {
-        std::unique_ptr<Geometry> geom_res(transform(g[i]));
+        std::unique_ptr<Geometry> const geom_res(transform(g[i]));
         gc_result->push_back(*geom_res);
       }
       return result;
@@ -103,7 +103,7 @@ auto transform_gc_helper(const InputGeometryCollection &g,
       auto *gc_result = new Geographic_geometrycollection();
       std::unique_ptr<Geometry> result(gc_result);
       for (std::size_t i = 0; i < g.size(); i++) {
-        std::unique_ptr<Geometry> geom_res(transform(g[i]));
+        std::unique_ptr<Geometry> const geom_res(transform(g[i]));
         gc_result->push_back(*geom_res);
       }
       return result;
@@ -227,8 +227,8 @@ bool transform(const dd::Spatial_reference_system *source_srs,
       return true;
     }
 
-    dd::String_type source_proj = source_srs->proj4_parameters();
-    dd::String_type target_proj = target_srs->proj4_parameters();
+    dd::String_type const source_proj = source_srs->proj4_parameters();
+    dd::String_type const target_proj = target_srs->proj4_parameters();
 
     if (source_proj.empty()) {
       assert(source_srs->is_projected());
@@ -241,8 +241,8 @@ bool transform(const dd::Spatial_reference_system *source_srs,
       return true;
     }
 
-    Transform transform(source_proj.c_str(), target_proj.c_str(),
-                        target_srs->cs_type());
+    Transform const transform(source_proj.c_str(), target_proj.c_str(),
+                              target_srs->cs_type());
     *out = transform(in);
 
     return false;

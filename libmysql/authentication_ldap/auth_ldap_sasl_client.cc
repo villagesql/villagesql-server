@@ -520,7 +520,7 @@ static int initialize_plugin(char *, size_t, int, va_list) {
   if (log_level_opt == nullptr) {
     Ldap_logger::create_logger(ldap_log_level::LDAP_LOG_LEVEL_NONE);
   } else {
-    int log_level_val = atoi(log_level_opt);
+    int const log_level_val = atoi(log_level_opt);
 
     if (log_level_val < ldap_log_level::LDAP_LOG_LEVEL_NONE ||
         log_level_val > ldap_log_level::LDAP_LOG_LEVEL_ALL) {

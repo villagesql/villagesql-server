@@ -3529,8 +3529,8 @@ static int my_strnncoll_gbk_internal(const uint8_t **a_res,
 
   while (length--) {
     if ((length > 0) && isgbkcode(*a, *(a + 1)) && isgbkcode(*b, *(b + 1))) {
-      unsigned a_char = gbkcode(*a, *(a + 1));
-      unsigned b_char = gbkcode(*b, *(b + 1));
+      unsigned const a_char = gbkcode(*a, *(a + 1));
+      unsigned const b_char = gbkcode(*b, *(b + 1));
       if (a_char != b_char)
         return ((int)gbksortorder((uint16_t)a_char) -
                 (int)gbksortorder((uint16_t)b_char));
@@ -3549,15 +3549,15 @@ extern "C" {
 static int my_strnncoll_gbk(const CHARSET_INFO *cs [[maybe_unused]],
                             const uint8_t *a, size_t a_length, const uint8_t *b,
                             size_t b_length, bool b_is_prefix) {
-  size_t length = std::min(a_length, b_length);
-  int res = my_strnncoll_gbk_internal(&a, &b, length);
+  size_t const length = std::min(a_length, b_length);
+  int const res = my_strnncoll_gbk_internal(&a, &b, length);
   return res ? res : (int)((b_is_prefix ? length : a_length) - b_length);
 }
 
 static int my_strnncollsp_gbk(const CHARSET_INFO *cs [[maybe_unused]],
                               const uint8_t *a, size_t a_length,
                               const uint8_t *b, size_t b_length) {
-  size_t length = std::min(a_length, b_length);
+  size_t const length = std::min(a_length, b_length);
   int res = my_strnncoll_gbk_internal(&a, &b, length);
 
   if (!res && a_length != b_length) {
@@ -3596,7 +3596,7 @@ static size_t my_strnxfrm_gbk(const CHARSET_INFO *cs, uint8_t *dst,
         in the code below, because ismbchar() would
         not return true if src was too short
       */
-      uint16_t e = gbksortorder((uint16_t)gbkcode(*src, *(src + 1)));
+      uint16_t const e = gbksortorder((uint16_t)gbkcode(*src, *(src + 1)));
       *dst++ = gbkhead(e);
       if (dst < de) *dst++ = gbktail(e);
       src += 2;

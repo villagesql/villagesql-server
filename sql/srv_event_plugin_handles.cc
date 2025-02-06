@@ -90,11 +90,11 @@ static struct s_state {
             stored_program.size() > 1 || table_access.size() > 1);
   }
   bool init() {
-    bool retval = authentication.init() || command.init() ||
-                  connection.init() || general.init() || global_var.init() ||
-                  message.init() || parse.init() || query.init() ||
-                  lifecycle.init() || stored_program.init() ||
-                  table_access.init();
+    bool const retval = authentication.init() || command.init() ||
+                        connection.init() || general.init() ||
+                        global_var.init() || message.init() || parse.init() ||
+                        query.init() || lifecycle.init() ||
+                        stored_program.init() || table_access.init();
     /* now assert that we have the component->plugin bridge for each class */
     assert(authentication.size() > 0);
     assert(command.size() > 0);

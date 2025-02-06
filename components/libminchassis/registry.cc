@@ -116,8 +116,8 @@ mysql_registry_imp::lock_registry_for_write() {
 */
 DEFINE_BOOL_METHOD(mysql_registry_imp::acquire,
                    (const char *service_name, my_h_service *out_service)) {
-  minimal_chassis::rwlock_scoped_lock lock(&LOCK_registry, false, __FILE__,
-                                           __LINE__);
+  minimal_chassis::rwlock_scoped_lock const lock(&LOCK_registry, false,
+                                                 __FILE__, __LINE__);
 
   return mysql_registry_no_lock_imp::acquire(service_name, out_service);
 }
@@ -138,8 +138,8 @@ DEFINE_BOOL_METHOD(mysql_registry_imp::acquire,
 DEFINE_BOOL_METHOD(mysql_registry_imp::acquire_related,
                    (const char *service_name, my_h_service service,
                     my_h_service *out_service)) {
-  minimal_chassis::rwlock_scoped_lock lock(&mysql_registry_imp::LOCK_registry,
-                                           false, __FILE__, __LINE__);
+  minimal_chassis::rwlock_scoped_lock const lock(
+      &mysql_registry_imp::LOCK_registry, false, __FILE__, __LINE__);
 
   return mysql_registry_no_lock_imp::acquire_related(service_name, service,
                                                      out_service);
@@ -156,8 +156,8 @@ DEFINE_BOOL_METHOD(mysql_registry_imp::acquire_related,
   @retval true failure
 */
 DEFINE_BOOL_METHOD(mysql_registry_imp::release, (my_h_service service)) {
-  minimal_chassis::rwlock_scoped_lock lock(&mysql_registry_imp::LOCK_registry,
-                                           false, __FILE__, __LINE__);
+  minimal_chassis::rwlock_scoped_lock const lock(
+      &mysql_registry_imp::LOCK_registry, false, __FILE__, __LINE__);
 
   return mysql_registry_no_lock_imp::release(service);
 }
@@ -176,8 +176,8 @@ DEFINE_BOOL_METHOD(mysql_registry_imp::release, (my_h_service service)) {
 DEFINE_BOOL_METHOD(mysql_registry_imp::register_service,
                    (const char *service_implementation_name,
                     my_h_service ptr)) {
-  minimal_chassis::rwlock_scoped_lock lock(&mysql_registry_imp::LOCK_registry,
-                                           true, __FILE__, __LINE__);
+  minimal_chassis::rwlock_scoped_lock const lock(
+      &mysql_registry_imp::LOCK_registry, true, __FILE__, __LINE__);
 
   return mysql_registry_no_lock_imp::register_service(
       service_implementation_name, ptr);
@@ -197,8 +197,8 @@ DEFINE_BOOL_METHOD(mysql_registry_imp::register_service,
 */
 DEFINE_BOOL_METHOD(mysql_registry_imp::unregister,
                    (const char *service_implementation_name)) {
-  minimal_chassis::rwlock_scoped_lock lock(&mysql_registry_imp::LOCK_registry,
-                                           true, __FILE__, __LINE__);
+  minimal_chassis::rwlock_scoped_lock const lock(
+      &mysql_registry_imp::LOCK_registry, true, __FILE__, __LINE__);
 
   return mysql_registry_no_lock_imp::unregister(service_implementation_name);
 }
@@ -214,8 +214,8 @@ DEFINE_BOOL_METHOD(mysql_registry_imp::unregister,
 */
 DEFINE_BOOL_METHOD(mysql_registry_imp::set_default,
                    (const char *service_implementation_name)) {
-  minimal_chassis::rwlock_scoped_lock lock(&mysql_registry_imp::LOCK_registry,
-                                           true, __FILE__, __LINE__);
+  minimal_chassis::rwlock_scoped_lock const lock(
+      &mysql_registry_imp::LOCK_registry, true, __FILE__, __LINE__);
 
   return mysql_registry_no_lock_imp::set_default(service_implementation_name);
 }
@@ -314,7 +314,7 @@ DEFINE_BOOL_METHOD(mysql_registry_imp::iterator_get,
 
     if (!iterator) return true;
 
-    my_service_registry::const_iterator &iter =
+    my_service_registry::const_iterator const &iter =
         reinterpret_cast<my_h_service_iterator_imp *>(iterator)->m_it;
 
     if (iter != mysql_registry_no_lock_imp::service_registry.cend()) {
@@ -368,7 +368,7 @@ DEFINE_BOOL_METHOD(mysql_registry_imp::iterator_is_valid,
   try {
     if (!iterator) return true;
 
-    my_service_registry::const_iterator &iter =
+    my_service_registry::const_iterator const &iter =
         reinterpret_cast<my_h_service_iterator_imp *>(iterator)->m_it;
 
     return iter == mysql_registry_no_lock_imp::service_registry.cend();

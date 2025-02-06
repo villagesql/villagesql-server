@@ -82,14 +82,14 @@ static void register_instruments() {
   PSI_MEMORY_CALL(register_memory)
   ("connection_control", all_connection_delay_memory_info, 1);
 
-  int count_mutex = array_elements(all_connection_delay_mutex_info);
+  int const count_mutex = array_elements(all_connection_delay_mutex_info);
   mysql_mutex_register(category, all_connection_delay_mutex_info, count_mutex);
 
-  int count_rwlock = array_elements(all_connection_delay_rwlock_info);
+  int const count_rwlock = array_elements(all_connection_delay_rwlock_info);
   mysql_rwlock_register(category, all_connection_delay_rwlock_info,
                         count_rwlock);
 
-  int count_cond = array_elements(all_connection_delay_cond_info);
+  int const count_cond = array_elements(all_connection_delay_cond_info);
   mysql_cond_register(category, all_connection_delay_cond_info, count_cond);
 }
 

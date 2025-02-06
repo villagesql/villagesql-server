@@ -62,7 +62,7 @@ bool Server_ids::pack_dynamic_ids(String *buffer) {
 
   if (buffer->set_int(dynamic_ids.size(), false, &my_charset_bin)) return true;
 
-  for (unsigned long s_id : dynamic_ids) {
+  for (const unsigned long s_id : dynamic_ids) {
     if (buffer->append(" ") || buffer->append_ulonglong(s_id)) return true;
   }
 

@@ -249,7 +249,7 @@ bool gis::srs::wkt_parser::parse_wkt(
   delimiter--;
   while (delimiter > begin && std::isspace(*delimiter)) delimiter--;
 
-  wp::Grammar<decltype(delimiter), boost::spirit::ascii::space_type> g(
+  wp::Grammar<decltype(delimiter), boost::spirit::ascii::space_type> const g(
       *delimiter);
 
   try {

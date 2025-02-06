@@ -109,7 +109,7 @@ void bootstrap_parser_state::report_error_details(log_function_t log) {
 int read_bootstrap_query(char *query, size_t *query_length, MYSQL_FILE *input,
                          fgets_fn_t fgets_fn, bootstrap_parser_state *state) {
   /* Allow for up to 3 extra characters in lookup. */
-  unique_ptr_free<char> line_buffer(
+  unique_ptr_free<char> const line_buffer(
       static_cast<char *>(malloc(MAX_BOOTSTRAP_LINE_SIZE + 3)));
   char *line;
   size_t len;

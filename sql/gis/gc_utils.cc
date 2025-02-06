@@ -126,8 +126,8 @@ void typed_gc_union(double semi_major, double semi_minor,
                     std::unique_ptr<Multipoint> *mpt,
                     std::unique_ptr<Multilinestring> *mls,
                     std::unique_ptr<Multipolygon> *mpy) {
-  Difference difference(semi_major, semi_minor);
-  Union union_(semi_major, semi_minor);
+  Difference const difference(semi_major, semi_minor);
+  Union const union_(semi_major, semi_minor);
 
   std::unique_ptr<MPy> polygons(new MPy());
   for (auto &py : *down_cast<MPy *>(mpy->get())) {

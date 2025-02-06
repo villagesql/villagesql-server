@@ -49,7 +49,7 @@ mysql::collation::Name::Name(const char *name, size_t size) {
   }
 
   // TODO(gleb): fail instead of truncating too long names?
-  size_t truncated_size = std::min(size, MY_CS_BUFFER_SIZE);
+  size_t const truncated_size = std::min(size, MY_CS_BUFFER_SIZE);
   char *normalized = new char[truncated_size + 1];
 
   for (size_t i = 0; i < truncated_size; i++) {
@@ -62,7 +62,7 @@ mysql::collation::Name::Name(const char *name, size_t size) {
 }
 
 mysql::collation::Name::Name(const mysql::collation::Name &name) {
-  size_t size = strlen(name.m_normalized);
+  size_t const size = strlen(name.m_normalized);
   char *normalized = new char[size + 1];
   memcpy(normalized, name.m_normalized, size + 1);
   m_normalized = normalized;

@@ -282,8 +282,9 @@ File create_temp_file(char *to, const char *dir, const char *prefix,
     convert_dirname(dirname_buf, dir, nullptr);
 
     // Verify that the generated filename will fit in a FN_REFLEN size buffer.
-    int max_filename_len = snprintf(to, FN_REFLEN, "%s%.20sfd=%d", dirname_buf,
-                                    prefix ? prefix : "tmp.", 4 * 1024 * 1024);
+    int const max_filename_len =
+        snprintf(to, FN_REFLEN, "%s%.20sfd=%d", dirname_buf,
+                 prefix ? prefix : "tmp.", 4 * 1024 * 1024);
     if (max_filename_len >= FN_REFLEN) {
       errno = ENAMETOOLONG;
       set_my_errno(ENAMETOOLONG);

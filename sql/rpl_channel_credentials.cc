@@ -51,7 +51,7 @@ int Rpl_channel_credentials::get_credentials(const char *channel_name,
   auth.second.clear();
   auto it = m_credential_set.find(channel_name);
   if (it != m_credential_set.end()) {
-    Channel_cred_param cred(m_credential_set.find(channel_name)->second);
+    Channel_cred_param const cred(m_credential_set.find(channel_name)->second);
     user = cred.username;
     pass = cred.password;
     auth = cred.plugin_auth;
@@ -68,7 +68,7 @@ int Rpl_channel_credentials::store_credentials(const char *channel_name,
   if (it != m_credential_set.end()) {
     return 1;
   } else {
-    Channel_cred_param cred(username, password, plugin_auth);
+    Channel_cred_param const cred(username, password, plugin_auth);
     m_credential_set.insert(channel_credential_pair(channel_name, cred));
   }
   return 0;

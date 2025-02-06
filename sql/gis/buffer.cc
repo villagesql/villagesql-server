@@ -221,7 +221,7 @@ std::unique_ptr<Geometry> Buffer::eval(
   }
 
   // Using gis::Union to merge the returned MultiPolygons into one.
-  Union un(0.0, 0.0);
+  Union const un(0.0, 0.0);
   std::unique_ptr<Geometry> tmp = un(tmp_pt.get(), tmp_ls.get());
   tmp = un(tmp.get(), tmp_py.get());
   std::unique_ptr<Geometry> result(tmp.release());
@@ -323,10 +323,10 @@ bool buffer(const dd::Spatial_reference_system *srs, const Geometry &g,
             std::unique_ptr<Geometry> *result) noexcept {
   try {
     if (srs && srs->is_geographic()) {
-      Buffer buffer_func(srs, strategies);
+      Buffer const buffer_func(srs, strategies);
       *result = buffer_func(g);
     } else {
-      Buffer buffer_func(strategies);
+      Buffer const buffer_func(strategies);
       *result = buffer_func(g);
     }
   } catch (...) {

@@ -66,7 +66,7 @@ static bool has_no_conflicting_authority(const T &element, const char *name,
   if (!my_strcasecmp(&my_charset_latin1, name,
                      element.authority.name.c_str())) {
     try {
-      int auth_code = std::stoi(element.authority.code);
+      int const auth_code = std::stoi(element.authority.code);
       if (auth_code == code) return true;  // Authority name and code matches.
     } catch (...) {
       // Code is invalid or out of range.
@@ -218,7 +218,7 @@ static bool set_parameters(gis::srid_t srid,
   // function. If any parameters are still NAN, raise an exception
   // condition.
   for (auto param : *params) {
-    int epsg_code = param.first;
+    int const epsg_code = param.first;
     double param_value = *(param.second);
     if (std::isnan(param_value)) {
       my_error(ER_SRS_PROJ_PARAMETER_MISSING, MYF(0), srid,
@@ -421,24 +421,24 @@ bool Geographic_srs::init(gis::srid_t srid,
   const double wgs84_semi_major_axis = 6378137.0;
   const double wgs84_inverse_flattening = 298.257223563;
   const double meter = 0.017453292519943278;
-  bool wgs84_spheroid =
+  bool const wgs84_spheroid =
       has_no_conflicting_authority(g->datum.spheroid, "EPSG", 7030) &&
       m_semi_major_axis == wgs84_semi_major_axis &&
       m_inverse_flattening == wgs84_inverse_flattening;
-  bool wgs84_datum =
+  bool const wgs84_datum =
       has_no_conflicting_authority(g->datum, "EPSG", 6326) && wgs84_spheroid;
-  bool wgs84_primem =
+  bool const wgs84_primem =
       has_no_conflicting_authority(g->prime_meridian, "EPSG", 8901) &&
       m_prime_meridian == 0.0;
-  bool wgs84_unit =
+  bool const wgs84_unit =
       has_no_conflicting_authority(g->angular_unit, "EPSG", 9122) &&
       m_angular_unit == meter;
-  bool wgs84_towgs84 =
+  bool const wgs84_towgs84 =
       !g->datum.towgs84.valid ||
       (m_towgs84[0] == 0.0 && m_towgs84[1] == 0.0 && m_towgs84[2] == 0.0 &&
        m_towgs84[3] == 0.0 && m_towgs84[4] == 0.0 && m_towgs84[5] == 0.0 &&
        m_towgs84[6] == 0.0);
-  bool wgs84_axes =
+  bool const wgs84_axes =
       m_axes[0] == Axis_direction::NORTH && m_axes[1] == Axis_direction::EAST;
   m_is_wgs84 = has_authority(*g, "EPSG", 4326) && wgs84_datum && wgs84_primem &&
                wgs84_unit && wgs84_towgs84 && wgs84_axes;
@@ -452,7 +452,7 @@ bool Geographic_srs::can_be_modified_to(
     const auto &that = static_cast<const Geographic_srs &>(srs);
 
     // The SRS is WGS 84 and we're adding a all-zero TOWGS84 clause.
-    bool wgs84_add_towgs84 =
+    bool const wgs84_add_towgs84 =
         m_is_wgs84 && !has_towgs84() && that.m_towgs84[0] == 0.0 &&
         that.m_towgs84[1] == 0.0 && that.m_towgs84[2] == 0.0 &&
         that.m_towgs84[3] == 0.0 && that.m_towgs84[4] == 0.0 &&
@@ -460,23 +460,23 @@ bool Geographic_srs::can_be_modified_to(
 
     // The SRS is WGS 84 and we're removing a TOWGS84 clause. The clause is
     // all-zero and redundant, otherwise m_is_wgs84 would be false.
-    bool wgs84_remove_towgs84 = m_is_wgs84 && !that.has_towgs84();
+    bool const wgs84_remove_towgs84 = m_is_wgs84 && !that.has_towgs84();
 
     // The SRS is not WGS 84 and doesn't have a TOWGS84 clause. We're allowed to
     // add a TOWGS84 clause since that doesn't change any currently allowed
     // computations -- it only enables more transformations.
-    bool non_wgs84_add_or_no_towgs84 = !m_is_wgs84 && !has_towgs84();
+    bool const non_wgs84_add_or_no_towgs84 = !m_is_wgs84 && !has_towgs84();
 
     // Both the current and the new SRS definitions have the same TOWGS84
     // clause.
-    bool has_same_towgs84 = has_towgs84() && that.has_towgs84() &&
-                            m_towgs84[0] == that.m_towgs84[0] &&
-                            m_towgs84[1] == that.m_towgs84[1] &&
-                            m_towgs84[2] == that.m_towgs84[2] &&
-                            m_towgs84[3] == that.m_towgs84[3] &&
-                            m_towgs84[4] == that.m_towgs84[4] &&
-                            m_towgs84[5] == that.m_towgs84[5] &&
-                            m_towgs84[6] == that.m_towgs84[6];
+    bool const has_same_towgs84 = has_towgs84() && that.has_towgs84() &&
+                                  m_towgs84[0] == that.m_towgs84[0] &&
+                                  m_towgs84[1] == that.m_towgs84[1] &&
+                                  m_towgs84[2] == that.m_towgs84[2] &&
+                                  m_towgs84[3] == that.m_towgs84[3] &&
+                                  m_towgs84[4] == that.m_towgs84[4] &&
+                                  m_towgs84[5] == that.m_towgs84[5] &&
+                                  m_towgs84[6] == that.m_towgs84[6];
 
     return m_semi_major_axis == that.m_semi_major_axis &&
            m_inverse_flattening == that.m_inverse_flattening &&

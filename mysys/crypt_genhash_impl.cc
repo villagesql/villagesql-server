@@ -324,7 +324,7 @@ char *my_crypt_genhash(char *ctbuffer, size_t ctbufflen, const char *plaintext,
   DIGESTFinal(DP, ctxDP);
 
   /* 16. */
-  std::unique_ptr<char[]> PPbuf(new char[plaintext_len]);
+  std::unique_ptr<char[]> const PPbuf(new char[plaintext_len]);
   Pp = P = PPbuf.get();
   for (i = plaintext_len; i >= MIXCHARS; i -= MIXCHARS) {
     Pp = (char *)(memcpy(Pp, DP, MIXCHARS)) + MIXCHARS;
@@ -337,7 +337,7 @@ char *my_crypt_genhash(char *ctbuffer, size_t ctbufflen, const char *plaintext,
   DIGESTFinal(DS, ctxDS);
 
   /* 20. */
-  std::unique_ptr<char[]> SSbuf(new char[salt_len]);
+  std::unique_ptr<char[]> const SSbuf(new char[salt_len]);
   Sp = S = SSbuf.get();
   for (i = salt_len; i >= MIXCHARS; i -= MIXCHARS) {
     Sp = (char *)(memcpy(Sp, DS, MIXCHARS)) + MIXCHARS;

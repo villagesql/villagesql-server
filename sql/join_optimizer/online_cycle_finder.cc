@@ -55,8 +55,8 @@ bool OnlineCycleFinder::EdgeWouldCreateCycle(int a_idx, int b_idx) {
   if (a_idx == b_idx) {
     return true;
   }
-  int pos_of_a = m_position_of_node[a_idx];
-  int pos_of_b = m_position_of_node[b_idx];
+  int const pos_of_a = m_position_of_node[a_idx];
+  int const pos_of_b = m_position_of_node[b_idx];
   if (pos_of_a < pos_of_b) {
     // Already in the topologically desired order,
     // so we don't need to do any checks.
@@ -119,7 +119,7 @@ bool OnlineCycleFinder::DepthFirstSearch(int node_idx, int upper_bound,
   auto first_and_last = m_edges.equal_range(node_idx);
   for (auto dest_node_it = first_and_last.first;
        dest_node_it != first_and_last.second; ++dest_node_it) {
-    int dest_node_idx = dest_node_it->second;
+    int const dest_node_idx = dest_node_it->second;
     assert(m_position_of_node[dest_node_idx] > m_position_of_node[node_idx]);
     if (DepthFirstSearch(dest_node_idx, upper_bound, node_idx_to_avoid)) {
       // We found a cycle, so abort.
@@ -133,7 +133,7 @@ void OnlineCycleFinder::MoveAllMarked(int start_pos, int new_pos) {
   m_to_shift.clear();
 
   for (int i = start_pos; i < new_pos; ++i) {
-    int node_idx = m_order[i];
+    int const node_idx = m_order[i];
     if (m_visited[node_idx]) {
       // Needs to move to the right (after upper_bound).
       m_to_shift.push_back(node_idx);

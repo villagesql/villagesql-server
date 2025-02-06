@@ -235,7 +235,7 @@ static int my_xml_value(MY_XML_PARSER *st, const char *str, size_t len) {
   @retval 0  success
 */
 static int my_xml_attr_ensure_space(MY_XML_PARSER *st, size_t len) {
-  size_t ofs = st->attr.end - st->attr.start;
+  size_t const ofs = st->attr.end - st->attr.start;
   len++;  // Add terminating zero.
   if (ofs + len > st->attr.buffer_size) {
     st->attr.buffer_size =

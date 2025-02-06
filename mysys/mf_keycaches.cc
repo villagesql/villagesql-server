@@ -172,7 +172,7 @@ static bool safe_hash_set(SAFE_HASH *hash, const uchar *key, uint length,
   bool error = false;
   DBUG_TRACE;
   DBUG_PRINT("enter", ("key: %.*s  data: %p", length, key, data));
-  string key_str(pointer_cast<const char *>(key), length);
+  string const key_str(pointer_cast<const char *>(key), length);
 
   mysql_rwlock_wrlock(&hash->lock);
   entry = find_or_nullptr(hash->hash, key_str);

@@ -165,7 +165,7 @@ void channel_imp::initialize_service_counts() {
       const char *dot = nullptr;
       if (!current_registry_query->get(iter, &implementation_name)) {
         dot = strchr(implementation_name, '.');
-        size_t service_name_length = (dot - implementation_name);
+        size_t const service_name_length = (dot - implementation_name);
         if ((service_name_length != service_name->name_.length()) ||
             strncmp(implementation_name, service_name->name_.c_str(),
                     service_name->name_.length()) != 0)
@@ -205,7 +205,7 @@ bool channel_imp::ignore_list_add(channel_imp *channel,
                                   std::string service_implementation) {
   if (!channel) return true;
   mysql_rwlock_rdlock(&LOCK_channels);
-  bool ret = channel->ignore_list_add(service_implementation);
+  bool const ret = channel->ignore_list_add(service_implementation);
   mysql_rwlock_unlock(&LOCK_channels);
   return ret;
 }
@@ -227,7 +227,7 @@ bool channel_imp::ignore_list_remove(channel_imp *channel,
                                      std::string service_implementation) {
   if (!channel) return true;
   mysql_rwlock_rdlock(&LOCK_channels);
-  bool ret = channel->ignore_list_remove(service_implementation);
+  bool const ret = channel->ignore_list_remove(service_implementation);
   mysql_rwlock_unlock(&LOCK_channels);
   return ret;
 }
@@ -247,7 +247,7 @@ bool channel_imp::ignore_list_clear() {
 bool channel_imp::ignore_list_clear(channel_imp *channel) {
   if (!channel) return true;
   mysql_rwlock_rdlock(&LOCK_channels);
-  bool ret = channel->ignore_list_clear();
+  bool const ret = channel->ignore_list_clear();
   mysql_rwlock_unlock(&LOCK_channels);
   return ret;
 }
@@ -279,9 +279,9 @@ bool channel_imp::service_notification(const char **services,
     if (!dot_location) continue;
 
     /* Format: <service_name>.<implementation_name> */
-    std::string service_name{
+    std::string const service_name{
         services[index], static_cast<size_t>(dot_location - services[index])};
-    std::string implementation{dot_location + 1};
+    std::string const implementation{dot_location + 1};
 
     auto it = service_to_implementation_map.find(service_name);
     if (it != service_to_implementation_map.end()) {
@@ -376,11 +376,11 @@ bool channel_imp::service_notification(const char **services,
     Note that this will not impact unload operations of services
     which are not served by reference caching component.
   */
-  my_service<SERVICE_TYPE(registry_query)> query("registry_query",
-                                                 mysql_service_registry);
+  my_service<SERVICE_TYPE(registry_query)> const query("registry_query",
+                                                       mysql_service_registry);
   if (query.is_valid()) {
     my_h_service_iterator iter;
-    std::string service_name =
+    std::string const service_name =
         unload ? "dynamic_loader_services_unload_notification"
                : "dynamic_loader_services_loaded_notification";
     if (!query->create(service_name.c_str(), &iter)) {
@@ -406,12 +406,14 @@ bool channel_imp::service_notification(const char **services,
         }
 
         if (unload) {
-          my_service<SERVICE_TYPE(dynamic_loader_services_unload_notification)>
+          my_service<SERVICE_TYPE(
+              dynamic_loader_services_unload_notification)> const
               unload_notification(implementation_name, mysql_service_registry);
           if (unload_notification.is_valid())
             (void)unload_notification->notify(services, count);
         } else {
-          my_service<SERVICE_TYPE(dynamic_loader_services_loaded_notification)>
+          my_service<SERVICE_TYPE(
+              dynamic_loader_services_loaded_notification)> const
               load_notification(implementation_name, mysql_service_registry);
           if (load_notification.is_valid())
             (void)load_notification->notify(services, count);

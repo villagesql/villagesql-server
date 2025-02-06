@@ -664,7 +664,7 @@ DEFINE_BOOL_METHOD(validate_password_changed_characters_imp::validate,
     }
 
     /* Determine number of characters required to be changed */
-    uint number_of_characters_to_be_changed =
+    uint const number_of_characters_to_be_changed =
         (std::max(static_cast<uint>(validate_password_length), current_length) *
          (static_cast<uint>(validate_password_changed_characters_percentage)) /
          100);

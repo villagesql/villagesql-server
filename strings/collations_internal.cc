@@ -578,7 +578,7 @@ static bool my_read_charset_file(MY_CHARSET_LOADER *loader,
                                  const char *filename) {
   size_t len = 0;
   auto deleter = [](void *p) { free(p); };
-  std::unique_ptr<void, decltype(deleter)> buf{
+  std::unique_ptr<void, decltype(deleter)> const buf{
       loader->read_file(filename, &len), deleter};
   if (buf == nullptr) {
     return true;
@@ -683,7 +683,7 @@ CHARSET_INFO *Collations::safe_init_when_necessary(CHARSET_INFO *cs, myf flags,
   if (cs == nullptr || cs->state & MY_CS_READY) {
     return cs;
   }
-  std::lock_guard<std::mutex> guard{m_mutex};
+  std::lock_guard<std::mutex> const guard{m_mutex};
   if (cs->state & MY_CS_READY) {
     return cs;
   }
@@ -701,7 +701,7 @@ CHARSET_INFO *Collations::unsafe_init(CHARSET_INFO *cs,
   assert(!(cs->state & MY_CS_READY));
   if (!m_charset_dir.empty() &&
       !(cs->state & (MY_CS_COMPILED | MY_CS_LOADED))) {  // CS is not in memory
-    std::string filename = concatenate(m_charset_dir, cs->csname, ".xml");
+    std::string const filename = concatenate(m_charset_dir, cs->csname, ".xml");
     my_read_charset_file(m_loader, filename.c_str());
   }
   if (!(cs->state & MY_CS_AVAILABLE)) {
@@ -719,7 +719,7 @@ CHARSET_INFO *Collations::unsafe_init(CHARSET_INFO *cs,
 bool Collations::add_internal_collation(CHARSET_INFO *cs) {
   assert(cs->number != 0);
 
-  std::string normalized_name{mysql::collation::Name{cs->m_coll_name}()};
+  std::string const normalized_name{mysql::collation::Name{cs->m_coll_name}()};
 
   if (add_to_hash(&m_all_by_collation_name, normalized_name, cs) ||
       add_to_hash(&m_all_by_id, cs->number, cs)) {

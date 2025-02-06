@@ -656,8 +656,8 @@ bool disjoint(const dd::Spatial_reference_system *srs, const Geometry *g1,
 
     if ((*null = (g1->is_empty() || g2->is_empty()))) return false;
 
-    Disjoint disjoint_func(srs ? srs->semi_major_axis() : 0.0,
-                           srs ? srs->semi_minor_axis() : 0.0);
+    Disjoint const disjoint_func(srs ? srs->semi_major_axis() : 0.0,
+                                 srs ? srs->semi_minor_axis() : 0.0);
     *disjoint = disjoint_func(g1, g2);
   } catch (...) {
     handle_gis_exception(func_name);
@@ -680,8 +680,8 @@ bool mbr_disjoint(const dd::Spatial_reference_system *srs, const Geometry *g1,
 
     if ((*null = (g1->is_empty() || g2->is_empty()))) return false;
 
-    Disjoint disjoint_func(srs ? srs->semi_major_axis() : 0.0,
-                           srs ? srs->semi_minor_axis() : 0.0);
+    Disjoint const disjoint_func(srs ? srs->semi_major_axis() : 0.0,
+                                 srs ? srs->semi_minor_axis() : 0.0);
 
     switch (g1->coordinate_system()) {
       case Coordinate_system::kCartesian: {

@@ -177,17 +177,17 @@ void thread_create_callback(int handle, const PSI_thread_attrs *thread_attrs) {
 }
 
 void thread_create_cb1(const PSI_thread_attrs *thread_attrs) {
-  int handle = 1;
+  int const handle = 1;
   thread_create_callback(handle, thread_attrs);
 }
 
 void thread_create_cb2(const PSI_thread_attrs *thread_attrs) {
-  int handle = 2;
+  int const handle = 2;
   thread_create_callback(handle, thread_attrs);
 }
 
 void thread_create_cb3(const PSI_thread_attrs *thread_attrs) {
-  int handle = 3;
+  int const handle = 3;
   thread_create_callback(handle, thread_attrs);
 }
 
@@ -199,17 +199,17 @@ void thread_destroy_callback(int handle, const PSI_thread_attrs *thread_attrs) {
 }
 
 void thread_destroy_cb1(const PSI_thread_attrs *thread_attrs) {
-  int handle = 1;
+  int const handle = 1;
   thread_destroy_callback(handle, thread_attrs);
 }
 
 void thread_destroy_cb2(const PSI_thread_attrs *thread_attrs) {
-  int handle = 2;
+  int const handle = 2;
   thread_destroy_callback(handle, thread_attrs);
 }
 
 void thread_destroy_cb3(const PSI_thread_attrs *thread_attrs) {
-  int handle = 3;
+  int const handle = 3;
   thread_destroy_callback(handle, thread_attrs);
 }
 
@@ -276,8 +276,9 @@ void session_connect_callback(int handle,
     */
     if (user == "PFS_MTR_UNREGISTER_INTERNAL") {
       if (internal_registration) {
-        int ret = mysql_service_pfs_notification_v3->unregister_notification(
-            internal_handle);
+        int const ret =
+            mysql_service_pfs_notification_v3->unregister_notification(
+                internal_handle);
         callback_print_log(handle, "unregister_notification_internal",
                            thread_attrs, ret);
         internal_registration = false;
@@ -362,7 +363,7 @@ void session_connect_callback(int handle,
   } else {
     /* Set resource group name. Do this once per connection. */
     if (handle == 1) {
-      std::string group = "RESOURCE_GROUP_" + std::to_string(handle);
+      std::string const group = "RESOURCE_GROUP_" + std::to_string(handle);
       if (mysql_service_pfs_resource_group_v3->set_thread_resource_group_by_id(
               nullptr, thread_attrs->m_thread_internal_id, group.c_str(),
               (int)group.length(), nullptr)) {
@@ -373,22 +374,22 @@ void session_connect_callback(int handle,
 }
 
 void session_connect_cb1(const PSI_thread_attrs *thread_attrs) {
-  int handle = 1;
+  int const handle = 1;
   session_connect_callback(handle, thread_attrs);
 }
 
 void session_connect_cb2(const PSI_thread_attrs *thread_attrs) {
-  int handle = 2;
+  int const handle = 2;
   session_connect_callback(handle, thread_attrs);
 }
 
 void session_connect_cb3(const PSI_thread_attrs *thread_attrs) {
-  int handle = 3;
+  int const handle = 3;
   session_connect_callback(handle, thread_attrs);
 }
 
 void session_connect_internal(const PSI_thread_attrs *thread_attrs) {
-  int handle = internal_seq;
+  int const handle = internal_seq;
   session_connect_callback(handle, thread_attrs);
 }
 
@@ -401,17 +402,17 @@ void session_disconnect_callback(int handle,
 }
 
 void session_disconnect_cb1(const PSI_thread_attrs *thread_attrs) {
-  int handle = 1;
+  int const handle = 1;
   session_disconnect_callback(handle, thread_attrs);
 }
 
 void session_disconnect_cb2(const PSI_thread_attrs *thread_attrs) {
-  int handle = 2;
+  int const handle = 2;
   session_disconnect_callback(handle, thread_attrs);
 }
 
 void session_disconnect_cb3(const PSI_thread_attrs *thread_attrs) {
-  int handle = 3;
+  int const handle = 3;
   session_disconnect_callback(handle, thread_attrs);
 }
 
@@ -424,17 +425,17 @@ void session_change_user_callback(int handle,
 }
 
 void session_change_user_cb1(const PSI_thread_attrs *thread_attrs) {
-  int handle = 1;
+  int const handle = 1;
   session_change_user_callback(handle, thread_attrs);
 }
 
 void session_change_user_cb2(const PSI_thread_attrs *thread_attrs) {
-  int handle = 2;
+  int const handle = 2;
   session_change_user_callback(handle, thread_attrs);
 }
 
 void session_change_user_cb3(const PSI_thread_attrs *thread_attrs) {
-  int handle = 3;
+  int const handle = 3;
   session_change_user_callback(handle, thread_attrs);
 }
 
@@ -444,7 +445,7 @@ void session_change_user_cb3(const PSI_thread_attrs *thread_attrs) {
   @return false for success
 */
 bool test_pfs_notification() {
-  bool result = false;
+  bool const result = false;
   std::stringstream ss;
   PSI_notification callbacks;
 

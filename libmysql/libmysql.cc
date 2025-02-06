@@ -773,7 +773,7 @@ int STDCALL mysql_kill(MYSQL *mysql, ulong pid) {
   */
   if (pid & (~0xffffffffUL)) return CR_INVALID_CONN_HANDLE;
   int4store(buff, pid);
-  std::string kill_stmt = "KILL " + std::to_string(pid);
+  std::string const kill_stmt = "KILL " + std::to_string(pid);
   return mysql_real_query(mysql, kill_stmt.c_str(), kill_stmt.length());
 }
 
@@ -1941,7 +1941,7 @@ int cli_stmt_execute(MYSQL_STMT *stmt) {
   MYSQL *mysql = stmt->mysql;
   const bool send_named_params =
       (mysql->server_capabilities & CLIENT_QUERY_ATTRIBUTES) != 0;
-  bool can_deal_with_flags =
+  bool const can_deal_with_flags =
       mysql->server_version && mysql_get_server_version(mysql) >= 80026;
   /*
     When the server can deal with flags properly we should send the 0 param
@@ -3516,7 +3516,7 @@ static void fetch_result_int64(MYSQL_BIND *param,
 static void fetch_result_float(MYSQL_BIND *param,
                                MYSQL_FIELD *field [[maybe_unused]],
                                uchar **row) {
-  float value = float4get(*row);
+  float const value = float4get(*row);
   floatstore(pointer_cast<uchar *>(param->buffer), value);
   *row += 4;
 }
@@ -3524,7 +3524,7 @@ static void fetch_result_float(MYSQL_BIND *param,
 static void fetch_result_double(MYSQL_BIND *param,
                                 MYSQL_FIELD *field [[maybe_unused]],
                                 uchar **row) {
-  double value = float8get(*row);
+  double const value = float8get(*row);
   doublestore(pointer_cast<uchar *>(param->buffer), value);
   *row += 8;
 }
@@ -3553,7 +3553,7 @@ static void fetch_result_datetime(MYSQL_BIND *param,
 static void fetch_result_bin(MYSQL_BIND *param,
                              MYSQL_FIELD *field [[maybe_unused]], uchar **row) {
   const ulong length = net_field_length(row);
-  ulong copy_length = std::min(length, param->buffer_length);
+  ulong const copy_length = std::min(length, param->buffer_length);
   memcpy(param->buffer, (char *)*row, copy_length);
   *param->length = length;
   *param->error = copy_length < length;
@@ -3563,7 +3563,7 @@ static void fetch_result_bin(MYSQL_BIND *param,
 static void fetch_result_str(MYSQL_BIND *param,
                              MYSQL_FIELD *field [[maybe_unused]], uchar **row) {
   const ulong length = net_field_length(row);
-  ulong copy_length = std::min(length, param->buffer_length);
+  ulong const copy_length = std::min(length, param->buffer_length);
   memcpy(param->buffer, (char *)*row, copy_length);
   /* Add an end null if there is room in the buffer */
   if (copy_length != param->buffer_length)

@@ -787,7 +787,7 @@ static void test_wl4435() {
       mct_log("Data:\n");
 
       while (true) {
-        int rc = mysql_stmt_fetch(stmt);
+        int const rc = mysql_stmt_fetch(stmt);
 
         if (rc == 1 || rc == MYSQL_NO_DATA) break;
 
@@ -3232,16 +3232,16 @@ static void test_time_zone() {
   myquery(mysql_query(mysql, "CREATE TABLE ttz ( a TIMESTAMP )"));
   myquery(mysql_query(mysql, "CREATE TABLE tdt ( a DATETIME )"));
 
-  MYSQL_TIME mt{2011,
-                02,
-                03,
-                04,
-                05,
-                06,
-                123456,
-                false,
-                MYSQL_TIMESTAMP_DATETIME_TZ,
-                12 * SECS_PER_HOUR + 34 * SECS_PER_MIN};
+  MYSQL_TIME const mt{2011,
+                      02,
+                      03,
+                      04,
+                      05,
+                      06,
+                      123456,
+                      false,
+                      MYSQL_TIMESTAMP_DATETIME_TZ,
+                      12 * SECS_PER_HOUR + 34 * SECS_PER_MIN};
 
   prepare_and_execute("INSERT INTO ttz ( a ) VALUES ( ? )", mt);
   prepare_and_execute("INSERT INTO tdt ( a ) VALUES ( ? )", mt);
@@ -3728,7 +3728,7 @@ static void bind_fetch(int row_count) {
     /* CHAR */
     {
       char buff[20];
-      long len = sprintf(buff, "%d", rc);
+      long const len = sprintf(buff, "%d", rc);
       DIE_UNLESS(strcmp(s_data, buff) == 0);
       DIE_UNLESS(length[6] == (ulong)len);
     }
@@ -16331,7 +16331,7 @@ static bool query_str_variable(MYSQL *con, const char *var_name, char *str,
 static bool query_int_variable(MYSQL *con, const char *var_name,
                                int *var_value) {
   char str[32];
-  bool is_null = query_str_variable(con, var_name, str, sizeof(str));
+  bool const is_null = query_str_variable(con, var_name, str, sizeof(str));
 
   if (!is_null) *var_value = atoi(str);
 
@@ -17857,7 +17857,7 @@ static void test_bug56976() {
   const char *query = "SELECT LENGTH(?)";
   char *long_buffer;
   unsigned long i, packet_len = 256 * 1024L;
-  unsigned long dos_len = 65 * 1024 * 1024L;
+  unsigned long const dos_len = 65 * 1024 * 1024L;
 
   DBUG_TRACE;
   myheader("test_bug56976");
@@ -19018,7 +19018,7 @@ static void test_bug20444737() {
 
 static void test_bug21199582() {
   int rc = 0;
-  int recCnt[] = {3, 4, 1};
+  int const recCnt[] = {3, 4, 1};
   int i = 0;
   char query[512] = {0};
   MYSQL_BIND in_param_bind;
@@ -19496,8 +19496,8 @@ static void test_mysql_binlog() {
   }
 
   for (;;) {
-    int rc1 = mysql_binlog_fetch(mysql1, &rpl1);
-    int rc2 = mysql_binlog_fetch(mysql2, &rpl2);
+    int const rc1 = mysql_binlog_fetch(mysql1, &rpl1);
+    int const rc2 = mysql_binlog_fetch(mysql2, &rpl2);
     if (rc1 != 0 || rc2 != 0)  // Error
       DIE_UNLESS(0);
     else if (rpl1.size != rpl2.size)
@@ -21096,8 +21096,8 @@ static void test_wl13510() {
   };
 
   size_t packet_size = 1 * 1024 * 1024;
-  unsigned long client_flag = 0;
-  unsigned int compress_level = 22;
+  unsigned long const client_flag = 0;
+  unsigned int const compress_level = 22;
   const char *compress_method = "zstd";
   test(packet_size, client_flag, compress_method);
   test(packet_size, client_flag, compress_method, compress_level);
@@ -21840,7 +21840,7 @@ static void test_bug32558782() {
   long int_data = 0;
   bool is_null = true;
   /* should be longer than initial NET buffer size of 8k */
-  unsigned long buflen = 20000;
+  unsigned long const buflen = 20000;
   unsigned long len = buflen;
   auto data_buf = std::make_unique<char[]>(buflen);
   memset(data_buf.get(), 'A', buflen);
@@ -22288,7 +22288,7 @@ static void test_wl13075() {
     FR4: test mysql_get_ssl_session_reused returning true on a successful reuse
   */
   {
-    bool is_reused = mysql_get_ssl_session_reused(&lmysql);
+    bool const is_reused = mysql_get_ssl_session_reused(&lmysql);
     DIE_UNLESS(is_reused);
   }
   mysql_close(&lmysql);
@@ -22320,7 +22320,7 @@ static void test_wl13075() {
     FR4: test mysql_get_ssl_session_reused returning false on a failed reuse
   */
   {
-    bool is_reused = mysql_get_ssl_session_reused(&lmysql);
+    bool const is_reused = mysql_get_ssl_session_reused(&lmysql);
     DIE_UNLESS(!is_reused);
   }
   mysql_close(&lmysql);
@@ -22776,7 +22776,7 @@ static void test_bug25584097() {
       }
 
       {
-        std::unique_lock lk(mtx);
+        std::unique_lock const lk(mtx);
         thread_id = mysql_thread_id(lmysql);
       }
       stmt = mysql_stmt_init(lmysql);
@@ -22806,7 +22806,7 @@ static void test_bug25584097() {
 
   std::thread thd(&test_bug25584097_thd::run, &foo);
   printf("Waiting for the child thread\n");
-  unsigned long thd_to_kill = foo.wait_to_kill();
+  unsigned long const thd_to_kill = foo.wait_to_kill();
   sleep(2);
 
   printf("Killing the child thread\n");
@@ -22830,7 +22830,8 @@ static void test_bug34869076() {
   params[1].buffer_type = MYSQL_TYPE_GEOMETRY;
 
   const char *names[2] = {"foo", "bar"};
-  bool err = mysql_bind_param(lmysql, 2, params, names);  // expected to fail
+  bool const err =
+      mysql_bind_param(lmysql, 2, params, names);  // expected to fail
   DIE_UNLESS(err == true);
 
   mysql_close(lmysql);
@@ -23097,7 +23098,7 @@ static void finish_with_error(MYSQL *con) {
 
 static bool send_query(MYSQL *mysql_con, const char *query) {
   printf("Sending query: %s\n", query);
-  int res = mysql_query(mysql_con, query);
+  int const res = mysql_query(mysql_con, query);
   if (res != 0) {
     fprintf(stderr, "mysql_query error: %i\n", res);
     return false;
@@ -23278,7 +23279,7 @@ static void test_wl16221_refresh() {
     DIE_UNLESS(0);
   }
 
-  int rc = mysql_refresh(mysql, REFRESH_GRANT | REFRESH_LOG);
+  int const rc = mysql_refresh(mysql, REFRESH_GRANT | REFRESH_LOG);
   if (!rc)
     printf("\nmysql_refresh passed!\n");
   else {
@@ -23300,7 +23301,7 @@ static void test_wl16221_reload() {
     DIE_UNLESS(0);
   }
 
-  int rc = mysql_reload(mysql);
+  int const rc = mysql_reload(mysql);
   if (!rc)
     printf("\nmysql_reload passed!\n");
   else {
@@ -23479,9 +23480,9 @@ static void test_bug36891894() {
   const char *user = "test";
   const char *passwd = "test";
   const char *db = nullptr;
-  unsigned int port = 0;
+  unsigned int const port = 0;
   const char *unix_socket = nullptr;
-  unsigned long clientflag = 0;
+  unsigned long const clientflag = 0;
   net_async_status status;
 
   do {
@@ -23636,7 +23637,7 @@ static void test_bug37202066() {
   long int_data = 0;
   bool is_null = true;
   /* should be longer than initial NET buffer size of 8k */
-  unsigned long buflen = 20000;
+  unsigned long const buflen = 20000;
   unsigned long len = buflen;
   auto data_buf = std::make_unique<char[]>(buflen);
   memset(data_buf.get(), 'A', buflen);

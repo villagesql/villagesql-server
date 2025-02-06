@@ -97,7 +97,7 @@ std::unordered_map<UErrorCode, int, UErrorCodeHash> error_map = {
 bool check_icu_status(UErrorCode status, const UParseError *parse_error) {
   if (status == U_ZERO_ERROR) return false;
 
-  int error_code = error_map[status];
+  int const error_code = error_map[status];
 
   // Add notification for select status codes.
   // E.g. we have lots of U_STRING_NOT_TERMINATED_WARNING,

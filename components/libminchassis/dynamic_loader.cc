@@ -547,7 +547,7 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_imp::iterator_get,
 
     if (!iterator) return true;
 
-    my_component_registry::const_iterator &iter =
+    my_component_registry::const_iterator const &iter =
         reinterpret_cast<my_h_component_iterator_imp *>(iterator)->m_it;
 
     if (iter != mysql_dynamic_loader_imp::components_list.cend()) {
@@ -605,7 +605,7 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_imp::iterator_is_valid,
   try {
     if (!iterator) return true;
 
-    my_component_registry::const_iterator &iter =
+    my_component_registry::const_iterator const &iter =
         reinterpret_cast<my_h_component_iterator_imp *>(iterator)->m_it;
 
     return iter == mysql_dynamic_loader_imp::components_list.cend();
@@ -714,12 +714,12 @@ bool mysql_dynamic_loader_imp::load_do_load_component_by_scheme(
   */
   std::vector<const char *> services;
 
-  bool res = mysql_dynamic_loader_imp::load_do_collect_services_provided(
+  bool const res = mysql_dynamic_loader_imp::load_do_collect_services_provided(
       loaded_components, services);
 
   if (!res) {
     /* Notify implementer of post_service_load_notification if any */
-    my_service<SERVICE_TYPE(dynamic_loader_services_loaded_notification)>
+    my_service<SERVICE_TYPE(dynamic_loader_services_loaded_notification)> const
         post_load_notification("dynamic_loader_services_loaded_notification",
                                &imp_mysql_minimal_chassis_registry);
     if (post_load_notification.is_valid()) {
@@ -861,7 +861,7 @@ bool mysql_dynamic_loader_imp::load_do_register_services(
     }
   }
 
-  bool res =
+  bool const res =
       mysql_dynamic_loader_imp::load_do_resolve_dependencies(loaded_components);
   if (!res) {
     guard.release();
@@ -907,7 +907,7 @@ bool mysql_dynamic_loader_imp::load_do_resolve_dependencies(
     }
   }
 
-  bool res = mysql_dynamic_loader_imp::load_do_initialize_components(
+  bool const res = mysql_dynamic_loader_imp::load_do_initialize_components(
       loaded_components);
   if (!res) {
     guard.release();
@@ -954,7 +954,7 @@ bool mysql_dynamic_loader_imp::load_do_initialize_components(
     initialized_components.push_back(loaded_component.get());
   }
 
-  bool res = mysql_dynamic_loader_imp::load_do_commit(loaded_components);
+  bool const res = mysql_dynamic_loader_imp::load_do_commit(loaded_components);
   if (!res) {
     guard.release();
   }
@@ -1165,7 +1165,7 @@ bool mysql_dynamic_loader_imp::unload_do_lock_provided_services(
       before unload continues. Otherwise, a component that provides
       dynamic_loader_services_unload_notification can never be unloaded.
     */
-    my_service<SERVICE_TYPE(dynamic_loader_services_unload_notification)>
+    my_service<SERVICE_TYPE(dynamic_loader_services_unload_notification)> const
         pre_unload_notification("dynamic_loader_services_unload_notification",
                                 &imp_mysql_minimal_chassis_registry);
 
@@ -1186,7 +1186,7 @@ bool mysql_dynamic_loader_imp::unload_do_lock_provided_services(
   /*
     We do lock the whole registry, as we don't have yet any better granulation.
   */
-  minimal_chassis::rwlock_scoped_lock lock =
+  minimal_chassis::rwlock_scoped_lock const lock =
       mysql_registry_imp::lock_registry_for_write();
   return mysql_dynamic_loader_imp::
       unload_do_check_provided_services_reference_count(
@@ -1222,7 +1222,7 @@ bool mysql_dynamic_loader_imp::
   for (mysql_component *component : components_to_unload) {
     for (const mysql_service_ref_t *service :
          component->get_provided_services()) {
-      uint64_t reference_count =
+      uint64_t const reference_count =
           mysql_registry_imp::get_service_implementation_reference_count(
               reinterpret_cast<my_h_service>(service->implementation));
       if (reference_count > 0) {
@@ -1389,7 +1389,7 @@ bool mysql_dynamic_loader_imp::unload_do_unload_components(
       continue;
     }
 
-    my_string component_urn = my_string(component->urn_c_str());
+    my_string const component_urn = my_string(component->urn_c_str());
 
     auto component_it =
         mysql_dynamic_loader_imp::components_list.find(component_urn.c_str());
@@ -1463,12 +1463,13 @@ bool mysql_dynamic_loader_imp::get_scheme_service_from_urn(
     SERVICE_TYPE(dynamic_loader_scheme) * *out_scheme_service,
     scheme_service_map &scheme_services) {
   /* Find scheme prefix. */
-  size_t scheme_end = urn.find("://");
+  size_t const scheme_end = urn.find("://");
   if (scheme_end == my_string::npos) {
     mysql_error_service_printf(ER_COMPONENTS_NO_SCHEME, MYF(0), urn.c_str());
     return true;
   }
-  my_string scheme(urn.begin(), urn.begin() + scheme_end, urn.get_allocator());
+  my_string const scheme(urn.begin(), urn.begin() + scheme_end,
+                         urn.get_allocator());
 
   /* Look for scheme loading service in cache. */
   auto scheme_it = scheme_services.find(scheme);

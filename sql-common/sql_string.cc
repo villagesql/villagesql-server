@@ -1150,7 +1150,8 @@ bool validate_string(const CHARSET_INFO *cs, const char *str, size_t length,
 
   while (from < from_end) {
     my_wc_t wc;
-    int cnvres = (*mb_wc)(cs, &wc, pointer_cast<const uchar *>(from), from_end);
+    int const cnvres =
+        (*mb_wc)(cs, &wc, pointer_cast<const uchar *>(from), from_end);
     if (cnvres <= 0) {
       *valid_length = from - reinterpret_cast<const uchar *>(str);
       return true;

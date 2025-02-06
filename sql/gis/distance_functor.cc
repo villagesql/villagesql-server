@@ -62,11 +62,11 @@ static double geometry_collection_apply_min(const Functor<double> *f,
       if (g2->type() == Geometry_type::kGeometrycollection) {
         const auto *const gc2 = down_cast<const GC *>(g2);
         for (const auto g2_j : *gc2) {
-          double res = geometry_collection_apply_min<GC>(f, g1_i, g2_j);
+          double const res = geometry_collection_apply_min<GC>(f, g1_i, g2_j);
           if (res < min) min = res;
         }
       } else {
-        double res = geometry_collection_apply_min<GC>(f, g1_i, g2);
+        double const res = geometry_collection_apply_min<GC>(f, g1_i, g2);
         if (res < min) min = res;
       }
     }
@@ -74,11 +74,11 @@ static double geometry_collection_apply_min(const Functor<double> *f,
     if (g2->type() == Geometry_type::kGeometrycollection) {
       const auto *const gc2 = down_cast<const GC *>(g2);
       for (const auto g2_j : *gc2) {
-        double res = geometry_collection_apply_min<GC>(f, g1, g2_j);
+        double const res = geometry_collection_apply_min<GC>(f, g1, g2_j);
         if (res < min) min = res;
       }
     } else {
-      double res = (*f)(g1, g2);
+      double const res = (*f)(g1, g2);
       if (res < min) min = res;
     }
   }

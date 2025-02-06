@@ -120,7 +120,7 @@ long long test_thd_store_service_function(UDF_INIT *, UDF_ARGS *,
 */
 
 static mysql_service_status_t init() {
-  std::string expected{"Quick Brown Fox Jumped Over The Lazy Dog."};
+  std::string const expected{"Quick Brown Fox Jumped Over The Lazy Dog."};
   MYSQL_THD o_thd{nullptr};
   if (thread_service->get(&o_thd)) return true;
 
@@ -155,7 +155,7 @@ static mysql_service_status_t init() {
       !retrieved_test_mysql_thd_data->sanity(expected))
     return true;
 
-  unsigned int first_slot = *(reinterpret_cast<unsigned int *>(g_slot));
+  unsigned int const first_slot = *(reinterpret_cast<unsigned int *>(g_slot));
 
   (void)mysql_thd_store_service->set(o_thd, g_slot, nullptr);
 
@@ -168,7 +168,7 @@ static mysql_service_status_t init() {
           &g_slot))
     return true;
 
-  unsigned int second_slot = *(reinterpret_cast<unsigned int *>(g_slot));
+  unsigned int const second_slot = *(reinterpret_cast<unsigned int *>(g_slot));
 
   if (first_slot == second_slot) return true;
 
@@ -185,7 +185,7 @@ static mysql_service_status_t deinit() {
   (void)mysql_udf_registration->udf_unregister(
       "test_thd_store_service_function", &was_present);
 
-  std::string expected{"Quick Brown Fox Jumped Over The Lazy Dog."};
+  std::string const expected{"Quick Brown Fox Jumped Over The Lazy Dog."};
   MYSQL_THD o_thd{nullptr};
   if (thread_service->get(&o_thd)) return true;
 

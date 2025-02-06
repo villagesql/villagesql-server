@@ -61,7 +61,7 @@ class Keyring_encryption_test_setup {
 
 int main(int argc, char **argv) {
   /* Initialization */
-  Keyring_encryption_test_setup keyring_encryption_test_setup(argv[0]);
+  Keyring_encryption_test_setup const keyring_encryption_test_setup(argv[0]);
   DBUG_TRACE;
   DBUG_PROCESS(argv[0]);
   constexpr int exit_status = EXIT_FAILURE;

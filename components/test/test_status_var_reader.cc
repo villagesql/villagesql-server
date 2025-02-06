@@ -113,7 +113,7 @@ static char *test_get_status_var(UDF_INIT *initid, UDF_ARGS *args,
                                  char * /* result */, unsigned long *length,
                                  unsigned char *is_null, unsigned char *error) {
   my_h_string str = nullptr;
-  bool get_global = *(reinterpret_cast<long long *>(args->args[1])) == 0;
+  bool const get_global = *(reinterpret_cast<long long *>(args->args[1])) == 0;
   MYSQL_THD thd = nullptr;
 
   if (!get_global && mysql_service_mysql_current_thread_reader->get(&thd)) {

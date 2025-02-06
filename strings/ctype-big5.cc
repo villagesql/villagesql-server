@@ -1221,8 +1221,8 @@ static int my_strnncoll_big5(const CHARSET_INFO *cs [[maybe_unused]],
                              const uint8_t *a, size_t a_length,
                              const uint8_t *b, size_t b_length,
                              bool b_is_prefix) {
-  size_t length = std::min(a_length, b_length);
-  int res = my_strnncoll_big5_internal(&a, &b, length);
+  size_t const length = std::min(a_length, b_length);
+  int const res = my_strnncoll_big5_internal(&a, &b, length);
   return res ? res : (int)((b_is_prefix ? length : a_length) - b_length);
 }
 
@@ -1231,7 +1231,7 @@ static int my_strnncoll_big5(const CHARSET_INFO *cs [[maybe_unused]],
 static int my_strnncollsp_big5(const CHARSET_INFO *cs [[maybe_unused]],
                                const uint8_t *a, size_t a_length,
                                const uint8_t *b, size_t b_length) {
-  size_t length = std::min(a_length, b_length);
+  size_t const length = std::min(a_length, b_length);
   int res = my_strnncoll_big5_internal(&a, &b, length);
 
   if (!res && a_length != b_length) {
@@ -1270,7 +1270,7 @@ static size_t my_strnxfrm_big5(const CHARSET_INFO *cs, uint8_t *dst,
         in the code below, because ismbchar() would
         not return TRUE if src was too short
       */
-      uint16_t e = big5strokexfrm((uint16_t)big5code(*src, *(src + 1)));
+      uint16_t const e = big5strokexfrm((uint16_t)big5code(*src, *(src + 1)));
       *dst++ = big5head(e);
       if (dst < de) *dst++ = big5tail(e);
       src += 2;

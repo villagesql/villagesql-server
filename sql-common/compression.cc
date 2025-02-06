@@ -110,7 +110,7 @@ bool validate_compression_attributes(std::string algorithm_names,
   std::vector<std::string> algorithm_name_list;
 
   parse_compression_algorithms_list(algorithm_names, algorithm_name_list);
-  unsigned int total_names = algorithm_name_list.size();
+  unsigned int const total_names = algorithm_name_list.size();
 
   if (!total_names) {
 #ifdef MYSQL_SERVER
@@ -134,7 +134,7 @@ bool validate_compression_attributes(std::string algorithm_names,
   auto name_it = algorithm_name_list.begin();
   enum_compression_algorithm method = enum_compression_algorithm::MYSQL_INVALID;
   while (name_it != algorithm_name_list.end()) {
-    std::string algorithm_name = *name_it;
+    std::string const algorithm_name = *name_it;
     /* validate algorithm name */
     method = get_compression_algorithm(algorithm_name);
     if (method == enum_compression_algorithm::MYSQL_INVALID) {

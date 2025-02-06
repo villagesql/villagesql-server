@@ -669,7 +669,7 @@ void keyring_lockable_deinit() {
 
 */
 void set_srv_keyring_implementation_as_default() {
-  my_service<SERVICE_TYPE(registry_registration)> registrator(
+  my_service<SERVICE_TYPE(registry_registration)> const registrator(
       "registry_registration", srv_registry);
 
   auto obtain_service_handles =
@@ -683,7 +683,7 @@ void set_srv_keyring_implementation_as_default() {
          SERVICE_TYPE(keyring_reader_with_status) * *reader,
          SERVICE_TYPE(keyring_load) * *load,
          SERVICE_TYPE(keyring_writer) * *writer) {
-        my_service<SERVICE_TYPE(registry_registration)> lamda_registrator(
+        my_service<SERVICE_TYPE(registry_registration)> const lamda_registrator(
             "registry_registration", srv_registry);
 
         std::string service_name;
@@ -890,7 +890,7 @@ void release_keyring_handles() {
          SERVICE_TYPE(keyring_reader_with_status) * *reader,
          SERVICE_TYPE(keyring_load) * *load,
          SERVICE_TYPE(keyring_writer) * *writer) {
-        my_service<SERVICE_TYPE(registry_registration)> registrator(
+        my_service<SERVICE_TYPE(registry_registration)> const registrator(
             "registry_registration", srv_registry);
         if (*aes_encryption)
           srv_registry->release(reinterpret_cast<my_h_service>(

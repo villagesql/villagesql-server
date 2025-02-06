@@ -74,10 +74,10 @@ bool Uuid::read_section(int section_len, const char **section_str,
   const auto **section_string =
       reinterpret_cast<const unsigned char **>(section_str);
   for (int j = 0; j < section_len; j++) {
-    int hi = hex_to_byte[**section_string];
+    int const hi = hex_to_byte[**section_string];
     if (hi == -1) return true;
     (*section_string)++;
-    int lo = hex_to_byte[**section_string];
+    int const lo = hex_to_byte[**section_string];
     if (lo == -1) return true;
     (*section_string)++;
     if (out_binary_str) {
@@ -102,7 +102,7 @@ size_t Uuid::to_string(const unsigned char *bytes_arg, char *buf) {
       buf++;
     }
     for (int j = 0; j < bytes_per_section[i]; j++) {
-      int byte = *u;
+      int const byte = *u;
       *buf = byte_to_hex[byte >> 4];
       buf++;
       *buf = byte_to_hex[byte & 0xf];

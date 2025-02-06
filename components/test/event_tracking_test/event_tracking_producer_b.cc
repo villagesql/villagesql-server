@@ -51,7 +51,7 @@ void print_info(const std::string &event) {
 }
 
 void print_result(const std::string &event, bool result) {
-  std::string retval = result ? "Error." : "Success.";
+  std::string const retval = result ? "Error." : "Success.";
   std::cout << "Component: " << event_tracking_producer::component_name
             << ". Event: " << event << ". Consumer returned: " << retval
             << std::endl;
@@ -91,11 +91,11 @@ bool Event_producer::generate_events() {
   */
   std::map<std::string, int> service_names;
   {
-    my_service<SERVICE_TYPE(registry_query)> query("registry_query",
-                                                   mysql_service_registry);
+    my_service<SERVICE_TYPE(registry_query)> const query(
+        "registry_query", mysql_service_registry);
     if (query.is_valid()) {
       my_h_service_iterator iter;
-      std::string service_name{"event_tracking_example"};
+      std::string const service_name{"event_tracking_example"};
       if (!query->create(service_name.c_str(), &iter)) {
         while (!query->is_valid(iter)) {
           const char *implementation_name;

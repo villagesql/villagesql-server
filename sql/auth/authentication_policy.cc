@@ -132,7 +132,7 @@ error:
 }
 
 bool Policy::validate(const char *new_policy_value) {
-  std::string new_policy_str(new_policy_value ? new_policy_value : "");
+  std::string const new_policy_str(new_policy_value ? new_policy_value : "");
   st_mysql_auth *auth(nullptr);
   bool ret(true);
   Factors parsed_factors;
@@ -194,7 +194,7 @@ end:
 }
 
 bool Policy::update(const char *new_policy_value) {
-  std::string new_policy_str(new_policy_value ? new_policy_value : "");
+  std::string const new_policy_str(new_policy_value ? new_policy_value : "");
   bool ret(true);
 
   /* Ensure the new policy was already verified */

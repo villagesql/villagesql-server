@@ -44,7 +44,7 @@ static bool report_warning_func(SERVICE_TYPE(registry) * registry,
                                 const char *option_name, const char *reason,
                                 const char *file, unsigned long line) {
   if (registry != nullptr) {
-    my_service<SERVICE_TYPE(mysql_simple_error_log)> errlog(
+    my_service<SERVICE_TYPE(mysql_simple_error_log)> const errlog(
         "mysql_simple_error_log", registry);
     if (errlog.is_valid()) {
       errlog->emit("option_usage_read_counter", file, line,
@@ -117,8 +117,8 @@ bool option_usage_register_callback(
     const char *option_name,
     mysql_option_tracker_usage_cache_update_callback cb,
     SERVICE_TYPE(registry) * registry) {
-  my_service<SERVICE_TYPE(mysql_option_tracker_usage_cache_callbacks)> cbsvc(
-      "mysql_option_tracker_usage_cache_callbacks", registry);
+  my_service<SERVICE_TYPE(mysql_option_tracker_usage_cache_callbacks)> const
+      cbsvc("mysql_option_tracker_usage_cache_callbacks", registry);
   if (!cbsvc.is_valid()) {
     return report_warning(registry, option_name,
                           "No mysql_option_tracker_usage_cache_callbacks "
@@ -131,8 +131,8 @@ bool option_usage_unregister_callback(
     const char *option_name,
     mysql_option_tracker_usage_cache_update_callback cb,
     SERVICE_TYPE(registry) * registry) {
-  my_service<SERVICE_TYPE(mysql_option_tracker_usage_cache_callbacks)> cbsvc(
-      "mysql_option_tracker_usage_cache_callbacks", registry);
+  my_service<SERVICE_TYPE(mysql_option_tracker_usage_cache_callbacks)> const
+      cbsvc("mysql_option_tracker_usage_cache_callbacks", registry);
   if (!cbsvc.is_valid()) {
     return report_warning(registry, option_name,
                           "No mysql_option_tracker_usage_cache_callbacks "
@@ -146,7 +146,7 @@ bool option_usage_read_counter(const char *option_name,
                                SERVICE_TYPE(registry) * registry) {
   assert(registry);
 
-  my_service<SERVICE_TYPE(mysql_option_tracker_usage)> usage(
+  my_service<SERVICE_TYPE(mysql_option_tracker_usage)> const usage(
       "mysql_option_tracker_usage", registry);
   if (!usage.is_valid()) {
     return report_warning(registry, option_name,

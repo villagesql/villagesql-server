@@ -142,13 +142,13 @@ std::unique_ptr<Geometry> symdifference_pointlike_geomcol(
   split_gc(g2, &mpt, &mls, &mpy);
   gc_union(f.semi_major(), f.semi_minor(), &mpt, &mls, &mpy);
 
-  std::unique_ptr<MptType> mpt_typed =
+  std::unique_ptr<MptType> const mpt_typed =
       std::make_unique<MptType>(*down_cast<MptType *>(mpt.get()));
 
   using GCType = typename std::decay<decltype(*g2)>::type;
   std::unique_ptr<GCType> result = std::make_unique<GCType>();
 
-  std::unique_ptr<MptType> mpt_result =
+  std::unique_ptr<MptType> const mpt_result =
       symdifference_pointlike_pointlike<MptType>(g1, mpt_typed.get());
 
   std::unique_ptr<MptType> mls_result = std::make_unique<MptType>();

@@ -292,7 +292,7 @@ static std::string expand_tilde(char **path) {
     if (!(str = strchr(*path, FN_LIBCHAR))) str = strend(*path);
     save = *str;
     *str = '\0';
-    PasswdValue user_entry = my_getpwnam(*path);
+    PasswdValue const user_entry = my_getpwnam(*path);
     *str = save;
     if (!user_entry.IsVoid()) {
       *path = str;

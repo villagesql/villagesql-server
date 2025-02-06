@@ -102,10 +102,10 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_scheme_file_imp::load,
       return true;
     }
 
-    std::string urn_string = urn;
+    std::string const urn_string = urn;
 
     /* Check if library is not already loaded, by comparing URNs. */
-    minimal_chassis::rwlock_scoped_lock lock(
+    minimal_chassis::rwlock_scoped_lock const lock(
         &mysql_dynamic_loader_scheme_file_imp::LOCK_dynamic_loader_scheme_file,
         true, __FILE__, __LINE__);
 
@@ -138,7 +138,7 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_scheme_file_imp::load,
 #endif
     if (handle == nullptr) {
       const char *errmsg;
-      int error_number = dlopen_errno;
+      int const error_number = dlopen_errno;
       DLERROR_GENERATE(errmsg, error_number);
       mysql_error_service_printf(ER_CANT_OPEN_LIBRARY, MYF(0),
                                  file_name.c_str(), error_number, errmsg);
@@ -204,7 +204,7 @@ DEFINE_BOOL_METHOD(mysql_dynamic_loader_scheme_file_imp::unload,
                    (const char *urn)) {
   try {
     /* Find library matching URN specified. */
-    minimal_chassis::rwlock_scoped_lock lock(
+    minimal_chassis::rwlock_scoped_lock const lock(
         &mysql_dynamic_loader_scheme_file_imp::LOCK_dynamic_loader_scheme_file,
         true, __FILE__, __LINE__);
 

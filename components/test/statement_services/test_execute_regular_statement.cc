@@ -95,7 +95,7 @@ static auto test_execute_regular_statement(UDF_INIT *, UDF_ARGS *arguments,
       mysql_cstring_with_length{arguments->args[0], strlen(arguments->args[0])};
   if (SERVICE_PLACEHOLDER(mysql_stmt_factory)->init(&statement) != 0) return {};
 
-  Scope_guard free_statement_guard(
+  Scope_guard const free_statement_guard(
       [&] { SERVICE_PLACEHOLDER(mysql_stmt_factory)->close(statement); });
 
   if (SERVICE_PLACEHOLDER(mysql_stmt_execute_direct)

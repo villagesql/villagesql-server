@@ -50,7 +50,7 @@ bool keyring_file_component_option_usage_init() {
     It's supposed to be added via the manifest file and if it was keeping a
     reference it would be impossible to unload the option tracker component.
   */
-  bool ret = weak_option::init(
+  bool const ret = weak_option::init(
       SERVICE_PLACEHOLDER(registry), SERVICE_PLACEHOLDER(registry_registration),
       [&](SERVICE_TYPE(mysql_option_tracker_option) * opt) {
         return 0 != opt->define(c_option_name.c_str(), c_name.c_str(), 1) ||

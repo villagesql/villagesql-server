@@ -55,7 +55,7 @@ bool bind_to_cpu(cpu_id_t cpu_id, my_thread_os_id_t thread_id) {
 
   CPU_ZERO(&cpu_set);
   CPU_SET(cpu_id, &cpu_set);
-  int rc = ::sched_setaffinity(thread_id, sizeof(cpu_set), &cpu_set);
+  int const rc = ::sched_setaffinity(thread_id, sizeof(cpu_set), &cpu_set);
   if (rc != 0) {
     char errbuf[MYSQL_ERRMSG_SIZE];
     LogErr(ERROR_LEVEL, ER_RES_GRP_SET_THR_AFFINITY_FAILED, thread_id, cpu_id,
@@ -79,7 +79,7 @@ bool bind_to_cpus(const std::vector<cpu_id_t> &cpu_ids,
 
   CPU_ZERO(&cpu_set);
   for (const auto &cpu_id : cpu_ids) CPU_SET(cpu_id, &cpu_set);
-  int rc = ::sched_setaffinity(thread_id, sizeof(cpu_set), &cpu_set);
+  int const rc = ::sched_setaffinity(thread_id, sizeof(cpu_set), &cpu_set);
   if (rc != 0) {
     char errbuf[MYSQL_ERRMSG_SIZE];
     LogErr(ERROR_LEVEL, ER_RES_GRP_SET_THR_AFFINITY_FAILED, thread_id,
@@ -97,7 +97,7 @@ bool unbind_thread(my_thread_os_id_t thread_id) {
   cpu_set_t cpu_set;
 
   CPU_ZERO(&cpu_set);
-  uint32_t num_cpus = num_vcpus_using_config();
+  uint32_t const num_cpus = num_vcpus_using_config();
   if (num_cpus == 0) {
     char errbuf[MYSQL_ERRMSG_SIZE];
     LogErr(ERROR_LEVEL, ER_RES_GRP_THD_UNBIND_FROM_CPU_FAILED, thread_id,
@@ -113,7 +113,7 @@ bool unbind_thread(my_thread_os_id_t thread_id) {
                   assert(num_cpus > 1););
   for (cpu_id_t cpu_id = 0; cpu_id < num_cpus; ++cpu_id)
     CPU_SET(cpu_id, &cpu_set);
-  int rc = sched_setaffinity(thread_id, sizeof(cpu_set), &cpu_set);
+  int const rc = sched_setaffinity(thread_id, sizeof(cpu_set), &cpu_set);
   if (rc != 0) {
     char errbuf[MYSQL_ERRMSG_SIZE];
     LogErr(ERROR_LEVEL, ER_RES_GRP_THD_UNBIND_FROM_CPU_FAILED, thread_id,

@@ -97,7 +97,7 @@ void Kerberos::set_user_and_password(const char *user, const char *password) {
 
 bool Kerberos::open_default_cache() {
   if (m_krb_credentials_cache != nullptr) return true;
-  krb5_error_code res_kerberos =
+  krb5_error_code const res_kerberos =
       krb5.krb5_cc_default()(m_context, &m_krb_credentials_cache);
   if (res_kerberos) {
     log_error("Failed to open default Kerberos credentials cache.");
@@ -111,7 +111,7 @@ bool Kerberos::open_default_cache() {
 
 void Kerberos::close_default_cache() {
   if (!m_krb_credentials_cache) return;
-  krb5_error_code res_kerberos =
+  krb5_error_code const res_kerberos =
       krb5.krb5_cc_close()(m_context, m_krb_credentials_cache);
   if (res_kerberos) {
     log_error("Failed to close Kerberos credentials cache.");
@@ -448,7 +448,7 @@ EXIT:
 void Kerberos::destroy_credentials() {
   if (!open_default_cache())
     log_error("Failed to destroy Kerberos TGT, cannot open credentials cache.");
-  krb5_error_code res_kerberos = krb5.krb5_cc_remove_cred()(
+  krb5_error_code const res_kerberos = krb5.krb5_cc_remove_cred()(
       m_context, m_krb_credentials_cache, 0, &m_credentials);
   if (res_kerberos) {
     log_error("Failed to destroy Kerberos TGT.");

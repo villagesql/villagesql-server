@@ -283,7 +283,7 @@ static int windows_eventlog_create_registry_entry(const char *key) {
 */
 int my_openlog(const char *name, int option, int facility) {
 #ifndef _WIN32
-  int opts = (option & MY_SYSLOG_PIDS) ? LOG_PID : 0;
+  int const opts = (option & MY_SYSLOG_PIDS) ? LOG_PID : 0;
 
   DBUG_TRACE;
   openlog(name, opts | LOG_NDELAY, facility);

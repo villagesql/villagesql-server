@@ -406,9 +406,9 @@ static int create_header_files(struct errors *error_head) {
 
   DBUG_TRACE;
 
-  std::string headerfile_tmp = std::string(HEADERFILE) + "_tmp";
-  std::string namefile_tmp = std::string(NAMEFILE) + "_tmp";
-  std::string msgfile_tmp = std::string(MSGFILE) + "_tmp";
+  std::string const headerfile_tmp = std::string(HEADERFILE) + "_tmp";
+  std::string const namefile_tmp = std::string(NAMEFILE) + "_tmp";
+  std::string const msgfile_tmp = std::string(MSGFILE) + "_tmp";
 
   if (!(er_definef = my_fopen(headerfile_tmp.c_str(), O_WRONLY, MYF(MY_WME)))) {
     return 1;
@@ -660,7 +660,7 @@ static int create_sys_files(struct languages *lang_head,
     if (my_fwrite(to, (uchar *)head, HEADER_LENGTH, MYF(MY_WME | MY_FNABP)))
       goto err;
 
-    for (uint pos : file_pos) {
+    for (uint const pos : file_pos) {
       int4store(head, pos);
       if (my_fwrite(to, (uchar *)head, 4, MYF(MY_WME | MY_FNABP))) goto err;
     }
@@ -690,7 +690,7 @@ static void clean_up(struct languages *lang_head, struct errors *error_head) {
 
   for (tmp_error = error_head; tmp_error; tmp_error = next_error) {
     next_error = tmp_error->next_error;
-    size_t count = (tmp_error->msg).size();
+    size_t const count = (tmp_error->msg).size();
     for (size_t i = 0; i < count; i++) {
       struct message *tmp;
       tmp = &tmp_error->msg[i];
@@ -937,7 +937,8 @@ static bool parse_reserved_error_section(char *str) {
 
   /* reading the section start number */
   if (!(offset = get_word(&str))) return true; /* OOM: Fatal error */
-  uint sec_start = static_cast<uint>(my_strtoll10(offset, nullptr, &error));
+  uint const sec_start =
+      static_cast<uint>(my_strtoll10(offset, nullptr, &error));
   my_free(offset);
   DBUG_PRINT("info", ("reserved_range_start: %u", sec_start));
 
@@ -948,7 +949,7 @@ static bool parse_reserved_error_section(char *str) {
 
   /* reading the section end number */
   if (!(offset = get_word(&str))) return true; /* OOM: Fatal error */
-  uint sec_end = static_cast<uint>(my_strtoll10(offset, nullptr, &error));
+  uint const sec_end = static_cast<uint>(my_strtoll10(offset, nullptr, &error));
   my_free(offset);
   DBUG_PRINT("info", ("reserved_range_end: %u", sec_end));
 
@@ -1053,7 +1054,7 @@ static struct message *find_message(struct errors *err, const char *lang,
   struct message *tmp, *return_val = nullptr;
   DBUG_TRACE;
 
-  size_t count = (err->msg).size();
+  size_t const count = (err->msg).size();
   for (size_t i = 0; i < count; i++) {
     tmp = &err->msg[i];
 
@@ -1288,7 +1289,7 @@ static struct errors *parse_error_string(char *str, int er_count,
 
   /* Check if code overlaps with any of the reserved error sections */
   for (auto section : reserved_sections) {
-    uint new_code = static_cast<uint>(er_offset + er_count);
+    uint const new_code = static_cast<uint>(er_offset + er_count);
     if (new_code >= section.first && new_code <= section.second) {
       fprintf(
           stderr,

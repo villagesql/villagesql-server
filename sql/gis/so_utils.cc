@@ -40,7 +40,7 @@ namespace gis {
 template <typename MPt, typename MLs, typename MPy, typename GC>
 static void typed_remove_duplicates(double semi_major, double semi_minor,
                                     std::unique_ptr<Geometry> *g) {
-  Equals equals(semi_major, semi_minor);
+  Equals const equals(semi_major, semi_minor);
   switch (g->get()->type()) {
     case Geometry_type::kPoint:
     case Geometry_type::kLinestring:

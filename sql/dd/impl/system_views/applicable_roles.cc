@@ -26,7 +26,7 @@
 namespace dd::system_views {
 
 const String_type &Applicable_roles::cte_expression() {
-  static String_type s_cte_expression(
+  static String_type const s_cte_expression(
       "WITH RECURSIVE role_graph (c_parent_user, c_parent_host,"
       "                                 c_from_user, c_from_host,"
       "                                 c_to_user, c_to_host, role_path,"
