@@ -63,9 +63,9 @@ bool Ssl_context::setup(const char *tls_version, const char *ssl_key,
                         const char *ssl_ca, const char *ssl_capath,
                         const char *ssl_cert, const char *ssl_cipher,
                         const char *ssl_crl, const char *ssl_crlpath) {
-  m_config =
-      std::make_unique<Config>(tls_version, ssl_key, ssl_ca, ssl_capath,
-                               ssl_cert, ssl_cipher, ssl_crl, ssl_crlpath);
+  m_config = std::make_unique<Config>(Config{tls_version, ssl_key, ssl_ca,
+                                             ssl_capath, ssl_cert, ssl_cipher,
+                                             ssl_crl, ssl_crlpath});
   return setup(*m_config);
 }
 
