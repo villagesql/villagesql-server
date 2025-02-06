@@ -68,14 +68,19 @@ bool option_usage_set_counter_from_json(SERVICE_TYPE(registry) * registry,
   assert(pCounter);
   assert(usage_data);
   try {
+    if (*usage_data == 0)
+      return report_warning(registry, option_name,
+                            "Option usage persisted data is empty");
     rapidjson::Document doc;
     if (doc.ParseInsitu(usage_data).HasParseError()) {
+      report_warning(registry, option_name, usage_data);
       return report_warning(registry, option_name,
                             "Option usage persisted data are not valid JSON");
     }
 
     // make sure it's an object
     if (!doc.IsObject()) {
+      report_warning(registry, option_name, usage_data);
       return report_warning(
           registry, option_name,
           "Option usage persisted data are not a JSON object");
@@ -93,6 +98,7 @@ bool option_usage_set_counter_from_json(SERVICE_TYPE(registry) * registry,
         return false;
       }
 
+      report_warning(registry, option_name, usage_data);
       return report_warning(
           registry, option_name,
           "Option usage persisted data do not contain usedCounter or used");
