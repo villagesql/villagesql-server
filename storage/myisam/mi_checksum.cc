@@ -47,7 +47,7 @@ ha_checksum mi_checksum(MI_INFO *info, const uchar *buf) {
         break;
       }
       case FIELD_VARCHAR: {
-        uint pack_length = HA_VARCHAR_PACKLENGTH(rec->length - 1);
+        uint const pack_length = HA_VARCHAR_PACKLENGTH(rec->length - 1);
         if (pack_length == 1)
           length = (ulong)*buf;
         else

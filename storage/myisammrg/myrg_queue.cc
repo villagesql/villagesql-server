@@ -34,8 +34,8 @@ static int queue_key_cmp(void *keyseg, uchar *a, uchar *b) {
   MI_INFO *aa = ma->table;
   MI_INFO *bb = mb->table;
   uint not_used[2];
-  int ret = ha_key_cmp((HA_KEYSEG *)keyseg, aa->lastkey, bb->lastkey,
-                       USE_WHOLE_KEY, SEARCH_FIND, not_used);
+  int const ret = ha_key_cmp((HA_KEYSEG *)keyseg, aa->lastkey, bb->lastkey,
+                             USE_WHOLE_KEY, SEARCH_FIND, not_used);
   if (ret < 0) return -1;
   if (ret > 0) return 1;
 

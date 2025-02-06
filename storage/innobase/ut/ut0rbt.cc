@@ -102,9 +102,9 @@ static ulint rbt_count_black_nodes(
   ulint result;
 
   if (node != tree->nil) {
-    ulint left_height = rbt_count_black_nodes(tree, node->left);
+    ulint const left_height = rbt_count_black_nodes(tree, node->left);
 
-    ulint right_height = rbt_count_black_nodes(tree, node->right);
+    ulint const right_height = rbt_count_black_nodes(tree, node->right);
 
     if (left_height == 0 || right_height == 0 || left_height != right_height) {
       result = 0;
@@ -425,7 +425,7 @@ static void rbt_replace_node(
     ib_rbt_node_t *replace, /*!< in: node to replace */
     ib_rbt_node_t *node)    /*!< in: node to replace with */
 {
-  ib_rbt_color_t color = node->color;
+  ib_rbt_color_t const color = node->color;
 
   /* Update the node pointers. */
   node->left = replace->left;

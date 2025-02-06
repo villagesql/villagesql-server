@@ -64,7 +64,7 @@ void ut_print_buf(FILE *file,      /*!< in: file where to print */
   data = (const byte *)buf;
 
   for (i = 0; i < len; i++) {
-    int c = (int)*data++;
+    int const c = (int)*data++;
     putc(isprint(c) ? c : ' ', file);
   }
 
@@ -98,7 +98,7 @@ void ut_print_buf(std::ostream &o, const void *buf, ulint len) {
   UNIV_MEM_ASSERT_RW(buf, len);
 
   for (data = static_cast<const byte *>(buf), i = 0; i < len; i++) {
-    int c = static_cast<int>(*data++);
+    int const c = static_cast<int>(*data++);
     o << (isprint(c) ? static_cast<char>(c) : ' ');
   }
 
@@ -164,10 +164,10 @@ ulint ut_strlcpy_rev(char *dst,       /*!< in: destination buffer */
                      const char *src, /*!< in: source buffer */
                      ulint size)      /*!< in: size of destination buffer */
 {
-  ulint src_size = strlen(src);
+  ulint const src_size = strlen(src);
 
   if (size != 0) {
-    ulint n = std::min(src_size, size - 1);
+    ulint const n = std::min(src_size, size - 1);
 
     memcpy(dst, src + src_size - n, n + 1);
   }

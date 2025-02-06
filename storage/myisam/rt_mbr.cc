@@ -696,8 +696,8 @@ Calculates key page total MBR = MBR(key1) + MBR(key2) + ...
 int rtree_page_mbr(MI_INFO *info, HA_KEYSEG *keyseg, uchar *page_buf, uchar *c,
                    uint key_length) {
   uint inc = 0;
-  uint k_len = key_length;
-  uint nod_flag = mi_test_if_nod(page_buf);
+  uint const k_len = key_length;
+  uint const nod_flag = mi_test_if_nod(page_buf);
   uchar *k;
   uchar *last = rt_PAGE_END(page_buf);
 

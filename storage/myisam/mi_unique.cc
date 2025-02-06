@@ -36,7 +36,7 @@
 
 bool mi_check_unique(MI_INFO *info, MI_UNIQUEDEF *def, uchar *record,
                      ha_checksum unique_hash, my_off_t disk_pos) {
-  my_off_t lastpos = info->lastpos;
+  my_off_t const lastpos = info->lastpos;
   MI_KEYDEF *key = &info->s->keyinfo[def->key];
   uchar *key_buff = info->lastkey2;
   DBUG_TRACE;
@@ -104,12 +104,12 @@ ha_checksum mi_unique_hash(MI_UNIQUEDEF *def, const uchar *record) {
     }
     pos = record + keyseg->start;
     if (keyseg->flag & HA_VAR_LENGTH_PART) {
-      uint pack_length = keyseg->bit_start;
-      uint tmp_length = (pack_length == 1 ? (uint)*pos : uint2korr(pos));
+      uint const pack_length = keyseg->bit_start;
+      uint const tmp_length = (pack_length == 1 ? (uint)*pos : uint2korr(pos));
       pos += pack_length; /* Skip VARCHAR length */
       length = std::min(length, tmp_length);
     } else if (keyseg->flag & HA_BLOB_PART) {
-      uint tmp_length = _mi_calc_blob_length(keyseg->bit_start, pos);
+      uint const tmp_length = _mi_calc_blob_length(keyseg->bit_start, pos);
       memcpy(&pos, pos + keyseg->bit_start, sizeof(char *));
       if (!length || length > tmp_length)
         length = tmp_length; /* The whole blob */
@@ -165,7 +165,7 @@ int mi_unique_comp(MI_UNIQUEDEF *def, const uchar *a, const uchar *b,
     pos_a = a + keyseg->start;
     pos_b = b + keyseg->start;
     if (keyseg->flag & HA_VAR_LENGTH_PART) {
-      uint pack_length = keyseg->bit_start;
+      uint const pack_length = keyseg->bit_start;
       if (pack_length == 1) {
         a_length = (uint)*pos_a++;
         b_length = (uint)*pos_b++;

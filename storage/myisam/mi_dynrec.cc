@@ -241,13 +241,13 @@ size_t mi_nommap_pwrite(MI_INFO *info, const uchar *Buffer, size_t Count,
 }
 
 int _mi_write_dynamic_record(MI_INFO *info, const uchar *record) {
-  ulong reclength = _mi_rec_pack(info, info->rec_buff, record);
+  ulong const reclength = _mi_rec_pack(info, info->rec_buff, record);
   return (write_dynamic_record(info, info->rec_buff, reclength));
 }
 
 int _mi_update_dynamic_record(MI_INFO *info, my_off_t pos,
                               const uchar *record) {
-  uint length = _mi_rec_pack(info, info->rec_buff, record);
+  uint const length = _mi_rec_pack(info, info->rec_buff, record);
   return (update_dynamic_record(info, pos, info->rec_buff, length));
 }
 
@@ -635,7 +635,7 @@ int _mi_write_part_record(MI_INFO *info,
   if (res_length) {
     /* Check first if we can join this block with the next one */
     MI_BLOCK_INFO del_block;
-    my_off_t next_block = filepos + length + extra_length + res_length;
+    my_off_t const next_block = filepos + length + extra_length + res_length;
 
     del_block.second_read = 0;
     if (next_block < info->state->data_file_length &&
@@ -874,7 +874,7 @@ uint _mi_rec_pack(MI_INFO *info, uchar *to, const uchar *from) {
           flag |= bit;
         else {
           char *temp_pos;
-          size_t tmp_length = length - portable_sizeof_char_ptr;
+          size_t const tmp_length = length - portable_sizeof_char_ptr;
           memcpy((uchar *)to, from, tmp_length);
           memcpy(&temp_pos, from + tmp_length, sizeof(char *));
           memcpy(to + tmp_length, temp_pos, (size_t)blob->length);
@@ -912,7 +912,7 @@ uint _mi_rec_pack(MI_INFO *info, uchar *to, const uchar *from) {
           to += length;
         }
       } else if (type == FIELD_VARCHAR) {
-        uint pack_length = HA_VARCHAR_PACKLENGTH(rec->length - 1);
+        uint const pack_length = HA_VARCHAR_PACKLENGTH(rec->length - 1);
         uint tmp_length;
         if (pack_length == 1) {
           tmp_length = (uint)*from;
@@ -968,7 +968,7 @@ bool _mi_rec_check(MI_INFO *info, const uchar *record, uchar *rec_buff,
     length = (uint)rec->length;
     if ((type = (enum en_fieldtype)rec->type) != FIELD_NORMAL) {
       if (type == FIELD_BLOB) {
-        uint blob_length =
+        uint const blob_length =
             _mi_calc_blob_length(length - portable_sizeof_char_ptr, record);
         if (!blob_length && !(flag & bit)) goto err;
         if (blob_length) to += length - portable_sizeof_char_ptr + blob_length;
@@ -1001,7 +1001,7 @@ bool _mi_rec_check(MI_INFO *info, const uchar *record, uchar *rec_buff,
         } else
           to += length;
       } else if (type == FIELD_VARCHAR) {
-        uint pack_length = HA_VARCHAR_PACKLENGTH(rec->length - 1);
+        uint const pack_length = HA_VARCHAR_PACKLENGTH(rec->length - 1);
         uint tmp_length;
         if (pack_length == 1) {
           tmp_length = (uint)*record;
@@ -1064,7 +1064,7 @@ size_t _mi_rec_unpack(MI_INFO *info, uchar *to, const uchar *from,
     if ((type = (enum en_fieldtype)rec->type) != FIELD_NORMAL &&
         (type != FIELD_CHECK)) {
       if (type == FIELD_VARCHAR) {
-        uint pack_length = HA_VARCHAR_PACKLENGTH(rec_length - 1);
+        uint const pack_length = HA_VARCHAR_PACKLENGTH(rec_length - 1);
         if (pack_length == 1) {
           length = (uint)*from;
           if (length > rec_length - 1) goto err;
@@ -1106,8 +1106,8 @@ size_t _mi_rec_unpack(MI_INFO *info, uchar *to, const uchar *from,
           from += length;
         }
       } else if (type == FIELD_BLOB) {
-        uint size_length = rec_length - portable_sizeof_char_ptr;
-        ulong blob_length = _mi_calc_blob_length(size_length, from);
+        uint const size_length = rec_length - portable_sizeof_char_ptr;
+        ulong const blob_length = _mi_calc_blob_length(size_length, from);
         auto from_left = (ulong)(from_end - from);
         if (from_left < size_length || from_left - size_length < blob_length ||
             from_left - size_length - blob_length < min_pack_length)
@@ -1270,7 +1270,7 @@ int _mi_read_dynamic_record(MI_INFO *info, my_off_t filepos, uchar *buf) {
         goto panic; /* Wrong linked record */
       /* copy information that is already read */
       {
-        uint offset = (uint)(block_info.filepos - filepos);
+        uint const offset = (uint)(block_info.filepos - filepos);
         uint prefetch_len = (sizeof(block_info.header) - offset);
         filepos += sizeof(block_info.header);
 
@@ -1570,7 +1570,7 @@ int _mi_read_rnd_dynamic_record(MI_INFO *info, uchar *buf, my_off_t filepos,
 
     /* copy information that is already read */
     {
-      uint offset = (uint)(block_info.filepos - filepos);
+      uint const offset = (uint)(block_info.filepos - filepos);
       uint tmp_length = (sizeof(block_info.header) - offset);
       filepos = block_info.filepos;
 

@@ -86,7 +86,8 @@ MYRG_INFO *myrg_open(const char *name, int mode, int handle_locking) {
     if (!buff[0]) continue; /* Skip empty lines */
     if (buff[0] == '#') {
       if (!strncmp(buff + 1, "INSERT_METHOD=", 14)) { /* Lookup insert method */
-        int tmp = find_type(buff + 15, &merge_insert_method, FIND_TYPE_BASIC);
+        int const tmp =
+            find_type(buff + 15, &merge_insert_method, FIND_TYPE_BASIC);
         found_merge_insert_method = (uint)(tmp >= 0 ? tmp : 0);
       }
       continue; /* Skip comments */

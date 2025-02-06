@@ -59,9 +59,9 @@ int mi_preload(MI_INFO *info, ulonglong key_map, bool ignore_leaves) {
   ulong length, block_length = 0;
   uchar *buff = nullptr;
   MYISAM_SHARE *share = info->s;
-  uint keys = share->state.header.keys;
+  uint const keys = share->state.header.keys;
   MI_KEYDEF *keyinfo = share->keyinfo;
-  my_off_t key_file_length = share->state.state.key_file_length;
+  my_off_t const key_file_length = share->state.state.key_file_length;
   my_off_t pos = share->base.keystart;
   DBUG_TRACE;
 

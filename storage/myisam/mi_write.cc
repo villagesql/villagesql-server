@@ -63,7 +63,7 @@ int mi_write(MI_INFO *info, uchar *record) {
   int save_errno;
   my_off_t filepos;
   uchar *buff;
-  bool lock_tree = share->concurrent_insert;
+  bool const lock_tree = share->concurrent_insert;
   DBUG_TRACE;
   DBUG_PRINT("enter", ("isam: %d  data: %d", info->s->kfile, info->dfile));
 
@@ -107,7 +107,7 @@ int mi_write(MI_INFO *info, uchar *record) {
   buff = info->lastkey2;
   for (i = 0; i < share->base.keys; i++) {
     if (mi_is_key_active(share->state.key_map, i)) {
-      bool local_lock_tree =
+      bool const local_lock_tree =
           (lock_tree &&
            !(info->bulk_insert && is_tree_inited(&info->bulk_insert[i])));
       if (local_lock_tree) {
@@ -172,7 +172,7 @@ err:
     info->errkey = (int)i;
     while (i-- > 0) {
       if (mi_is_key_active(share->state.key_map, i)) {
-        bool local_lock_tree =
+        bool const local_lock_tree =
             (lock_tree &&
              !(info->bulk_insert && is_tree_inited(&info->bulk_insert[i])));
         if (local_lock_tree) mysql_rwlock_wrlock(&share->key_root_lock[i]);
@@ -182,7 +182,7 @@ err:
             break;
           }
         } else {
-          uint key_length = _mi_make_key(info, i, buff, record, filepos);
+          uint const key_length = _mi_make_key(info, i, buff, record, filepos);
           if (share->keyinfo[i].ck_delete(info, i, buff, key_length)) {
             if (local_lock_tree) mysql_rwlock_unlock(&share->key_root_lock[i]);
             break;
@@ -468,7 +468,7 @@ int _mi_insert(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *key, uchar *anc_buff,
       /* the very first key on the page is always unpacked */
       assert((*b & 128) == 0);
       blen = *b++;
-      uint alen = get_key_length(&a);
+      uint const alen = get_key_length(&a);
       assert(info->ft1_to_ft2 == nullptr);
       if (alen == blen && ha_compare_text(keyinfo->seg->charset, a, alen, b,
                                           blen, false) == 0) {

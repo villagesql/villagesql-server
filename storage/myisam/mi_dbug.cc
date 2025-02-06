@@ -145,7 +145,7 @@ void _mi_print_key(FILE *stream, HA_KEYSEG *keyseg, const uchar *key,
       case HA_KEYTYPE_VARBINARY1: /* VARBINARY and BLOB */
       case HA_KEYTYPE_VARBINARY2: /* VARBINARY and BLOB */
       {
-        uint tmp_length = get_key_length(&key);
+        uint const tmp_length = get_key_length(&key);
         /*
           The following command sometimes gives a warning from valgrind.
           Not yet sure if the bug is in valgrind, glibc or mysqld

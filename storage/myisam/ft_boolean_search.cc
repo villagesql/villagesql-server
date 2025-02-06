@@ -174,7 +174,7 @@ static int ftb_query_add_word(MYSQL_FTPARSER_PARAM *param, char *word,
   FTB_EXPR *ftbe, *tmp_expr;
   FT_WORD *phrase_word;
   LIST *tmp_element;
-  int r = info->weight_adjust;
+  int const r = info->weight_adjust;
   auto weight =
       (float)(info->wasign ? nwghts : wghts)[(r > 5) ? 5 : ((r < -5) ? -5 : r)];
 
@@ -334,9 +334,10 @@ static int _ft2_search_no_lock(FTB *ftb, FTB_WORD *ftbw, bool init_search) {
   MI_INFO *info = ftb->info;
   uint off = 0, extra = HA_FT_WLEN + info->s->rec_reflength;
   uchar *lastkey_buf = ftbw->word + ftbw->off;
-  uint max_word_length = (ftbw->flags & FTB_FLAG_TRUNC)
-                             ? MI_MAX_KEY_BUFF
-                             : ((ftbw->len) * ftb->charset->mbmaxlen) + extra;
+  uint const max_word_length =
+      (ftbw->flags & FTB_FLAG_TRUNC)
+          ? MI_MAX_KEY_BUFF
+          : ((ftbw->len) * ftb->charset->mbmaxlen) + extra;
 
   if (ftbw->flags & FTB_FLAG_TRUNC) lastkey_buf += ftbw->len;
 
@@ -568,9 +569,9 @@ FT_INFO *ft_init_boolean_search(MI_INFO *info, uint keynr, uchar *query,
   std::sort(ftb->list, ftb->list + ftb->queue.elements,
             [ftb](FTB_WORD *a, FTB_WORD *b) {
               /* ORDER BY word, ndepth */
-              int i = ha_compare_text(ftb->charset, (uchar *)a->word + 1,
-                                      a->len - 1, (uchar *)b->word + 1,
-                                      b->len - 1, false);
+              int const i = ha_compare_text(ftb->charset, (uchar *)a->word + 1,
+                                            a->len - 1, (uchar *)b->word + 1,
+                                            b->len - 1, false);
               if (i != 0) return i < 0;
               return a->ndepth < b->ndepth;
             });
@@ -683,7 +684,7 @@ static int _ftb_climb_the_tree(FTB *ftb, FTB_WORD *ftbw,
   FTB_EXPR *ftbe;
   float weight = ftbw->weight;
   int yn_flag = ftbw->flags, ythresh, mode = (ftsi_orig != nullptr);
-  my_off_t curdoc = ftbw->docid[mode];
+  my_off_t const curdoc = ftbw->docid[mode];
   struct st_mysql_ftparser *parser =
       ftb->keynr == NO_SUCH_KEY ? &ft_default_parser
                                 : ftb->info->s->keyinfo[ftb->keynr].parser;
@@ -883,7 +884,7 @@ extern "C" float ft_boolean_find_relevance(FT_INFO *ftb_base, uchar *record,
   FTB *ftb = (FTB *)ftb_base;
   FTB_EXPR *ftbe;
   FT_SEG_ITERATOR ftsi, ftsi2;
-  my_off_t docid = ftb->info->lastpos;
+  my_off_t const docid = ftb->info->lastpos;
   MY_FTB_FIND_PARAM ftb_param;
   MYSQL_FTPARSER_PARAM *param;
   struct st_mysql_ftparser *parser =

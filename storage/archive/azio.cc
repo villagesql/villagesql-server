@@ -63,8 +63,8 @@ extern "C" PSI_file_key arch_key_file_data;
 */
 int az_open(azio_stream *s, const char *path, int Flags, File fd) {
   int err;
-  int level = Z_DEFAULT_COMPRESSION; /* compression level */
-  int strategy = Z_DEFAULT_STRATEGY; /* compression strategy */
+  int const level = Z_DEFAULT_COMPRESSION; /* compression level */
+  int const strategy = Z_DEFAULT_STRATEGY; /* compression strategy */
 
   memset(s, 0, sizeof(azio_stream));
   s->stream.next_in = s->inbuf;

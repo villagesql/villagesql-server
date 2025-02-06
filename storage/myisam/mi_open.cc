@@ -104,7 +104,7 @@ MI_INFO *mi_open_share(const char *name, MYISAM_SHARE *old_share, int mode,
   int lock_error, kfile, open_mode, save_errno, realpath_err;
   uint i, j, len, errpos, head_length, base_pos, offset, info_length, keys,
       key_parts, unique_key_parts, fulltext_keys, uniques;
-  uint internal_table = open_flags & HA_OPEN_INTERNAL_TABLE;
+  uint const internal_table = open_flags & HA_OPEN_INTERNAL_TABLE;
   char name_buff[FN_REFLEN], org_name[FN_REFLEN], index_name[FN_REFLEN],
       data_name[FN_REFLEN];
   uchar *disk_cache, *disk_pos, *end_pos;
@@ -377,7 +377,7 @@ MI_INFO *mi_open_share(const char *name, MYISAM_SHARE *old_share, int mode,
           }
         }
         if (share->keyinfo[i].flag & HA_SPATIAL) {
-          uint sp_segs = SPDIMS * 2;
+          uint const sp_segs = SPDIMS * 2;
           share->keyinfo[i].seg = pos - sp_segs;
           share->keyinfo[i].keysegs--;
         } else if (share->keyinfo[i].flag & HA_FULLTEXT) {
@@ -691,7 +691,7 @@ uchar *mi_alloc_rec_buff(MI_INFO *info, ulong length, uchar **buf) {
 }
 
 ulonglong mi_safe_mul(ulonglong a, ulonglong b) {
-  ulonglong max_val = ~(ulonglong)0; /* my_off_t is unsigned */
+  ulonglong const max_val = ~(ulonglong)0; /* my_off_t is unsigned */
 
   if (!a || max_val / a < b) return max_val;
   return a * b;
@@ -846,7 +846,7 @@ uint mi_state_info_write(File file, MI_STATE_INFO *state, uint pWrite) {
   }
   if (pWrite & 2) /* From isamchk */
   {
-    uint key_parts = mi_uint2korr(state->header.key_parts);
+    uint const key_parts = mi_uint2korr(state->header.key_parts);
     mi_int4store(ptr, state->sec_index_changed);
     ptr += 4;
     mi_int4store(ptr, state->sec_index_used);

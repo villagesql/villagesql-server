@@ -219,7 +219,7 @@ int _create_index_by_sort(MI_SORT_PARAM *info, bool no_messages,
 
   if (my_b_inited(&tempfile_for_exceptions)) {
     MI_INFO *idx = info->sort_info->info;
-    uint keyno = info->key;
+    uint const keyno = info->key;
     uint key_length, ref_length = idx->s->rec_reflength;
 
     if (!no_messages) printf("  - Adding exceptions\n"); /* purecov: tested */
@@ -296,7 +296,7 @@ static ha_rows find_all_keys(MI_SORT_PARAM *info, uint keys, uchar **sort_keys,
 static int write_keys(MI_SORT_PARAM *info, uchar **sort_keys, uint count,
                       BUFFPEK *buffpek, IO_CACHE *tempfile) {
   uchar **end;
-  uint sort_length = info->key_length;
+  uint const sort_length = info->key_length;
   DBUG_TRACE;
 
   std::sort(sort_keys, sort_keys + count, [info](uchar *a, uchar *b) {
@@ -573,7 +573,7 @@ static int merge_buffers(MI_SORT_PARAM *info, uint keys, IO_CACHE *from_file,
         if (!(error =
                   (int)info->read_to_buffer(from_file, buffpek, sort_length))) {
           uchar *base = buffpek->base;
-          uint max_keys = buffpek->max_keys;
+          uint const max_keys = buffpek->max_keys;
 
           (void)queue_remove(&queue, 0);
 

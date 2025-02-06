@@ -107,8 +107,8 @@ int mi_update(MI_INFO *info, const uchar *oldrec, uchar *newrec) {
           if (_mi_ft_update(info, i, old_key, oldrec, newrec, pos)) goto err;
         }
       } else {
-        uint new_length = _mi_make_key(info, i, new_key, newrec, pos);
-        uint old_length = _mi_make_key(info, i, old_key, oldrec, pos);
+        uint const new_length = _mi_make_key(info, i, new_key, newrec, pos);
+        uint const old_length = _mi_make_key(info, i, old_key, oldrec, pos);
 
         if (new_length != old_length ||
             memcmp((uchar *)old_key, (uchar *)new_key, new_length) != 0) {
@@ -193,8 +193,8 @@ err:
               _mi_ft_add(info, i, old_key, oldrec, pos))
             break;
         } else {
-          uint new_length = _mi_make_key(info, i, new_key, newrec, pos);
-          uint old_length = _mi_make_key(info, i, old_key, oldrec, pos);
+          uint const new_length = _mi_make_key(info, i, new_key, newrec, pos);
+          uint const old_length = _mi_make_key(info, i, old_key, oldrec, pos);
           if ((flag++ &&
                share->keyinfo[i].ck_delete(info, i, new_key, new_length)) ||
               share->keyinfo[i].ck_insert(info, i, old_key, old_length))

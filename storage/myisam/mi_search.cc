@@ -328,7 +328,7 @@ int _mi_prefix_search(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *page,
   len = 0;     /* length of previous key unpacked */
 
   while (page < end) {
-    uint packed = *page & 128;
+    uint const packed = *page & 128;
 
     vseg = page;
     if (keyinfo->seg->length >= 127) {
@@ -1055,7 +1055,7 @@ uint _mi_keylength(MI_KEYDEF *keyinfo, const uchar *key) {
     if (keyseg->flag & HA_NULL_PART)
       if (!*key++) continue;
     if (keyseg->flag & (HA_SPACE_PACK | HA_BLOB_PART | HA_VAR_LENGTH_PART)) {
-      uint length = get_key_length(&key);
+      uint const length = get_key_length(&key);
       key += length;
     } else
       key += keyseg->length;
@@ -1079,7 +1079,7 @@ uint _mi_keylength_part(MI_KEYDEF *keyinfo, const uchar *key, HA_KEYSEG *end) {
     if (keyseg->flag & HA_NULL_PART)
       if (!*key++) continue;
     if (keyseg->flag & (HA_SPACE_PACK | HA_BLOB_PART | HA_VAR_LENGTH_PART)) {
-      uint length = get_key_length(&key);
+      uint const length = get_key_length(&key);
       key += length;
     } else
       key += keyseg->length;
@@ -1090,7 +1090,7 @@ uint _mi_keylength_part(MI_KEYDEF *keyinfo, const uchar *key, HA_KEYSEG *end) {
 /* Move a key */
 
 uchar *_mi_move_key(MI_KEYDEF *keyinfo, uchar *to, const uchar *from) {
-  size_t length = _mi_keylength(keyinfo, from);
+  size_t const length = _mi_keylength(keyinfo, from);
   memcpy(to, from, length);
   return to + length;
 }
@@ -1134,7 +1134,7 @@ int _mi_search_next(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *key,
 
   if (nextflag & SEARCH_BIGGER) /* Next key */
   {
-    my_off_t tmp_pos = _mi_kpos(nod_flag, info->int_keypos);
+    my_off_t const tmp_pos = _mi_kpos(nod_flag, info->int_keypos);
     if (tmp_pos != HA_OFFSET_ERROR) {
       if ((error = _mi_search(info, keyinfo, key, USE_WHOLE_KEY,
                               nextflag | SEARCH_SAVE_BUFF, tmp_pos)) <= 0)
@@ -1492,7 +1492,7 @@ int _mi_calc_var_pack_key_length(MI_KEYDEF *keyinfo, uint nod_flag,
           return (int)length + ref_length - next_length_pack;
         }
         if (ref_length + pack_marker > new_ref_length) {
-          uint new_pack_length = new_ref_length - pack_marker;
+          uint const new_pack_length = new_ref_length - pack_marker;
           /* We must copy characters from the original key to the next key */
           s_temp->part_of_prev_key = new_ref_length;
           s_temp->prev_length = ref_length - new_pack_length;
@@ -1580,7 +1580,7 @@ int _mi_calc_bin_pack_key_length(MI_KEYDEF *keyinfo, uint nod_flag,
   {
     /* pack key against next key */
     uint next_length_pack;
-    uint next_length = get_key_pack_length(&next_key, &next_length_pack);
+    uint const next_length = get_key_pack_length(&next_key, &next_length_pack);
 
     /* If first key and next key is packed (only on delete) */
     if (!prev_key && org_key && next_length) {

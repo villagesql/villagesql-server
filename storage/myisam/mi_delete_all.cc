@@ -72,7 +72,7 @@ int mi_delete_all_rows(MI_INFO *info) {
   return 0;
 
 err : {
-  int save_errno = my_errno();
+  int const save_errno = my_errno();
   (void)_mi_writeinfo(info, WRITEINFO_UPDATE_KEYFILE);
   info->update |= HA_STATE_WRITTEN; /* Buffer changed */
   set_my_errno(save_errno);

@@ -83,7 +83,7 @@ uint _mi_ft_segiterator(FT_SEG_ITERATOR *ftsi) {
   }
   ftsi->pos = ftsi->rec + ftsi->seg->start;
   if (ftsi->seg->flag & HA_VAR_LENGTH_PART) {
-    uint pack_length = (ftsi->seg->bit_start);
+    uint const pack_length = (ftsi->seg->bit_start);
     ftsi->len = (pack_length == 1 ? (uint)*ftsi->pos : uint2korr(ftsi->pos));
     ftsi->pos += pack_length; /* Skip VARCHAR length */
     return 1;

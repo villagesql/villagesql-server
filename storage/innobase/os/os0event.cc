@@ -72,7 +72,7 @@ struct os_event {
   Destroys a condition variable */
   void destroy() UNIV_NOTHROW {
 #ifndef _WIN32
-    int ret = pthread_cond_destroy(&cond_var);
+    int const ret = pthread_cond_destroy(&cond_var);
     ut_a(ret == 0);
 #endif /* !_WIN32 */
 
@@ -113,7 +113,7 @@ struct os_event {
       m_set = false;
     }
 
-    int64_t ret = signal_count;
+    int64_t const ret = signal_count;
 
     mutex.exit();
 

@@ -40,7 +40,7 @@
 int rtree_add_key(MI_INFO *info, MI_KEYDEF *keyinfo, uchar *key,
                   uint key_length, uchar *page_buf, my_off_t *new_page) {
   uint page_size = mi_getint(page_buf);
-  uint nod_flag = mi_test_if_nod(page_buf);
+  uint const nod_flag = mi_test_if_nod(page_buf);
   DBUG_TRACE;
 
   if (page_size + key_length + info->s->base.rec_reflength <=

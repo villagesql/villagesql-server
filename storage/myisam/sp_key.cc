@@ -125,7 +125,7 @@ static int sp_add_point_to_mbr(uchar *(*wkb), uchar *end, uint n_dims,
 
   while (mbr < mbr_end) {
     if ((*wkb) > end - 8) return -1;
-    double ord = float8get((const uchar *)*wkb);
+    double const ord = float8get((const uchar *)*wkb);
     (*wkb) += 8;
     if (ord < *mbr) *mbr = ord;
     mbr++;

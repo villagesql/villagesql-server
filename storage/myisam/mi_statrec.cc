@@ -36,7 +36,7 @@ int _mi_write_static_record(MI_INFO *info, const uchar *record) {
   uchar temp[8]; /* max pointer length */
   if (info->s->state.dellink != HA_OFFSET_ERROR &&
       !info->append_insert_at_end) {
-    my_off_t filepos = info->s->state.dellink;
+    my_off_t const filepos = info->s->state.dellink;
     info->rec_cache.seek_not_done = true; /* We have done a seek */
     if (info->s->file_read(info, &temp[0], info->s->base.rec_reflength,
                            info->s->state.dellink + 1, MYF(MY_NABP)))
@@ -57,7 +57,8 @@ int _mi_write_static_record(MI_INFO *info, const uchar *record) {
       if (my_b_write(&info->rec_cache, record, info->s->base.reclength))
         goto err;
       if (info->s->base.pack_reclength != info->s->base.reclength) {
-        uint length = info->s->base.pack_reclength - info->s->base.reclength;
+        uint const length =
+            info->s->base.pack_reclength - info->s->base.reclength;
         memset(temp, 0, length);
         if (my_b_write(&info->rec_cache, temp, length)) goto err;
       }
@@ -68,7 +69,8 @@ int _mi_write_static_record(MI_INFO *info, const uchar *record) {
                               info->s->write_flag))
         goto err;
       if (info->s->base.pack_reclength != info->s->base.reclength) {
-        uint length = info->s->base.pack_reclength - info->s->base.reclength;
+        uint const length =
+            info->s->base.pack_reclength - info->s->base.reclength;
         memset(temp, 0, length);
         if (info->s->file_write(
                 info, temp, length,

@@ -87,7 +87,7 @@ static int walk_and_match(void *v_word, uint32 count, void *v_aio) {
   uchar *keybuff = aio->keybuff;
   MI_KEYDEF *keyinfo = info->s->keyinfo + aio->keynr;
   my_off_t key_root;
-  uint extra = HA_FT_WLEN + info->s->rec_reflength;
+  uint const extra = HA_FT_WLEN + info->s->rec_reflength;
   float tmp_weight;
 
   DBUG_TRACE;
@@ -213,7 +213,7 @@ static int walk_and_push(void *v_from, uint32, void *v_best) {
 static int FT_DOC_cmp(void *, uchar *a_arg, uchar *b_arg) {
   auto *a = (FT_DOC *)a_arg;
   auto *b = (FT_DOC *)b_arg;
-  double c = b->weight - a->weight;
+  double const c = b->weight - a->weight;
   return ((c < 0) ? -1 : (c > 0) ? 1 : 0);
 }
 
@@ -223,7 +223,7 @@ FT_INFO *ft_init_nlq_search(MI_INFO *info, uint keynr, uchar *query,
   ALL_IN_ONE aio;
   FT_DOC *dptr;
   st_ft_info_nlq *dlist = nullptr;
-  my_off_t saved_lastpos = info->lastpos;
+  my_off_t const saved_lastpos = info->lastpos;
   struct st_mysql_ftparser *parser;
   MYSQL_FTPARSER_PARAM *ftparser_param;
   DBUG_TRACE;
@@ -259,7 +259,7 @@ FT_INFO *ft_init_nlq_search(MI_INFO *info, uint keynr, uchar *query,
                &FT_DOC_cmp, nullptr);
     tree_walk(&aio.dtree, &walk_and_push, &best, left_root_right);
     while (best.elements) {
-      my_off_t docid = ((FT_DOC *)queue_remove(&best, 0))->dpos;
+      my_off_t const docid = ((FT_DOC *)queue_remove(&best, 0))->dpos;
       if (!(*info->read_record)(info, docid, record)) {
         info->update |= HA_STATE_AKTIV;
         ftparser_param->flags = MYSQL_FTFLAGS_NEED_COPY;
@@ -335,7 +335,7 @@ float ft_nlq_find_relevance(FT_INFO *handler_base,
   auto *handler = (st_ft_info_nlq *)handler_base;
   int a, b, c;
   FT_DOC *docs = handler->doc;
-  my_off_t docid = handler->info->lastpos;
+  my_off_t const docid = handler->info->lastpos;
 
   if (docid == HA_POS_ERROR) return -5.0;
 

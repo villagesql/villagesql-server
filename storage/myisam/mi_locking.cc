@@ -375,7 +375,7 @@ int _mi_readinfo(MI_INFO *info, int lock_type, int check_keybuffer) {
       if (my_lock(share->kfile, lock_type, info->lock_wait | MY_SEEK_NOT_DONE))
         return 1;
       if (mi_state_info_read_dsk(share->kfile, &share->state, true)) {
-        int error = my_errno() ? my_errno() : -1;
+        int const error = my_errno() ? my_errno() : -1;
         (void)my_lock(share->kfile, F_UNLCK, MYF(MY_SEEK_NOT_DONE));
         set_my_errno(error);
         return 1;
@@ -503,7 +503,7 @@ int _mi_decrement_open_count(MI_INFO *info) {
   MYISAM_SHARE *share = info->s;
   int lock_error = 0, write_error = 0;
   if (share->global_changed) {
-    uint old_lock = info->lock_type;
+    uint const old_lock = info->lock_type;
     share->global_changed = false;
     lock_error = mi_lock_database(info, F_WRLCK);
     /* Its not fatal even if we couldn't get the lock ! */

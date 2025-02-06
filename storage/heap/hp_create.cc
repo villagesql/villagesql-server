@@ -47,9 +47,9 @@ int heap_create(const char *name, HP_CREATE_INFO *create_info, HP_SHARE **res,
   HA_KEYSEG *keyseg;
   HP_KEYDEF *keydef = create_info->keydef;
   uint reclength = create_info->reclength;
-  uint keys = create_info->keys;
-  ulong min_records = create_info->min_records;
-  ulong max_records = create_info->max_records;
+  uint const keys = create_info->keys;
+  ulong const min_records = create_info->min_records;
+  ulong const max_records = create_info->max_records;
   DBUG_TRACE;
 
   if (!create_info->single_instance) {
@@ -310,7 +310,7 @@ void heap_drop_table(HP_INFO *info) {
 }
 
 void hp_free(HP_SHARE *share) {
-  bool not_internal_table = (share->open_list.data != nullptr);
+  bool const not_internal_table = (share->open_list.data != nullptr);
   if (not_internal_table) /* If not internal table */
     heap_share_list = list_delete(heap_share_list, &share->open_list);
   hp_clear(share); /* Remove blocks from memory */

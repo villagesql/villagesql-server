@@ -212,7 +212,7 @@ void _downheap(QUEUE *queue, uint idx) {
   uchar *element;
   uint elements, half_queue, offset_to_key, next_index;
   bool first = true;
-  uint start_idx = idx;
+  uint const start_idx = idx;
 
   offset_to_key = queue->offset_to_key;
   element = queue->root[idx];

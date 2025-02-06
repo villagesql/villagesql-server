@@ -952,14 +952,17 @@ static int get_statistic(PACK_MRG_INFO *mrg, HUFF_COUNTS *huff_counts) {
 
         /* Calculate pos, end_pos, and max_length for variable length fields. */
         if (count->field_type == FIELD_BLOB) {
-          uint field_length = count->field_length - portable_sizeof_char_ptr;
-          ulong blob_length = _mi_calc_blob_length(field_length, start_pos);
+          uint const field_length =
+              count->field_length - portable_sizeof_char_ptr;
+          ulong const blob_length =
+              _mi_calc_blob_length(field_length, start_pos);
           memcpy(&pos, start_pos + field_length, sizeof(char *));
           end_pos = pos + blob_length;
           tot_blob_length += blob_length;
           count->max_length = std::max(count->max_length, blob_length);
         } else if (count->field_type == FIELD_VARCHAR) {
-          uint pack_length = HA_VARCHAR_PACKLENGTH(count->field_length - 1);
+          uint const pack_length =
+              HA_VARCHAR_PACKLENGTH(count->field_length - 1);
           length = (pack_length == 1 ? (uint) * (uchar *)start_pos
                                      : uint2korr(start_pos));
           pos = start_pos + pack_length;
@@ -2188,7 +2191,7 @@ static uint *make_offset_code_tree(HUFF_TREE *huff_tree, HUFF_ELEMENT *element,
   Recursively traverse the tree to the right. Mark it as an offset to
   another tree node (in contrast to a byte code or column value index).
   */
-  uint temp = (uint)(offset - prev_offset - 1);
+  uint const temp = (uint)(offset - prev_offset - 1);
   prev_offset[1] = IS_OFFSET + temp;
   if (huff_tree->max_offset < temp) huff_tree->max_offset = temp;
   return make_offset_code_tree(huff_tree, element->a.nod.right, offset);
@@ -2215,7 +2218,7 @@ static int compress_isam_file(PACK_MRG_INFO *mrg, HUFF_COUNTS *huff_counts) {
   HUFF_COUNTS *count, *end_count;
   HUFF_TREE *tree;
   MI_INFO *isam_file = mrg->file[0];
-  uint pack_version = (uint)isam_file->s->pack.version;
+  uint const pack_version = (uint)isam_file->s->pack.version;
   DBUG_TRACE;
 
   /* Allocate a buffer for the records (excluding blobs). */
@@ -2432,7 +2435,7 @@ static int compress_isam_file(PACK_MRG_INFO *mrg, HUFF_COUNTS *huff_counts) {
             start_pos = end_pos;
             break;
           case FIELD_BLOB: {
-            ulong blob_length = _mi_calc_blob_length(
+            ulong const blob_length = _mi_calc_blob_length(
                 field_length - portable_sizeof_char_ptr, start_pos);
             /* Empty blobs are encoded with a single 1 bit. */
             if (!blob_length) {
@@ -2466,9 +2469,9 @@ static int compress_isam_file(PACK_MRG_INFO *mrg, HUFF_COUNTS *huff_counts) {
             break;
           }
           case FIELD_VARCHAR: {
-            uint var_pack_length =
+            uint const var_pack_length =
                 HA_VARCHAR_PACKLENGTH(count->field_length - 1);
-            ulong col_length =
+            ulong const col_length =
                 (var_pack_length == 1 ? (uint) * (uchar *)start_pos
                                       : uint2korr(start_pos));
             /* Empty varchar are encoded with a single 1 bit. */
