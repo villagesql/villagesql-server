@@ -2647,26 +2647,42 @@ bool BackupRestore::table_compatible_check(TableS &tableS) {
 
 bool BackupRestore::createSystable(const TableS &tables) {
   if (!m_restore && !m_metadata_work_requested) return true;
-  const char *tablename = tables.getTableName();
+  const char *tname = tables.getTableName();
+  const TableS *main = tables.getMainTable();
 
-  if (strcmp(tablename, NDB_REP_DB "/def/" NDB_APPLY_TABLE) != 0 &&
-      strcmp(tablename, NDB_REP_DB "/def/" NDB_SCHEMA_TABLE) != 0) {
+  bool do_restore = false;
+  // Might be an index to restore
+  if (m_rebuild_indexes && main != nullptr) {
+    const char *main_name = main->getTableName();
+    do_restore |=
+        m_with_sql_metadata &&
+        strcmp(main_name, NDB_REP_DB "/def/" NDB_SQL_METADATA_TABLE) == 0;
+  }
+
+  do_restore |= strcmp(tname, NDB_REP_DB "/def/" NDB_APPLY_TABLE) == 0;
+  do_restore |= strcmp(tname, NDB_REP_DB "/def/" NDB_SCHEMA_TABLE) == 0;
+  do_restore |= strcmp(tname, NDB_REP_DB "/def/" NDB_SQL_METADATA_TABLE) == 0;
+
+  if (!do_restore) {
     // Dont restore any other system table than those listed above
     return true;
   }
 
-  BaseString db_name, schema_name, table_name;
-  if (!dissect_table_name(tablename, db_name, schema_name, table_name)) {
-    return false;
+  BaseString db_name, schema_name, tabname;
+  const NdbTableImpl &tabimpl = NdbTableImpl::getImpl(*tables.m_dictTable);
+  if (static_cast<int>(tabimpl.m_indexType) !=
+      NdbDictionary::Index::Undefined) {
+    // is idx
+    dissect_index_name(tabimpl.getName(), db_name, schema_name, tabname);
+  } else {
+    dissect_table_name(tabimpl.getName(), db_name, schema_name, tabname);
   }
-  // do not rewrite database for system tables:
-  // check_rewrite_database(db_name);
 
   m_ndb->setDatabaseName(db_name.c_str());
   m_ndb->setSchemaName(schema_name.c_str());
 
   NdbDictionary::Dictionary *dict = m_ndb->getDictionary();
-  if (dict->getTable(table_name.c_str()) != NULL) {
+  if (dict->getTable(tabname.c_str()) != nullptr) {
     return true;
   }
   return table(tables);
