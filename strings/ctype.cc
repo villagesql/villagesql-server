@@ -66,12 +66,6 @@
 
 */
 
-template <size_t N>
-bool starts_with(std::string name, const char (&prefix)[N]) {
-  size_t len = N - 1;
-  return name.size() >= len && memcmp(name.data(), prefix, len) == 0;
-}
-
 extern CHARSET_INFO my_charset_ucs2_unicode_ci;
 extern CHARSET_INFO my_charset_utf16_unicode_ci;
 extern CHARSET_INFO my_charset_utf8mb4_unicode_ci;
@@ -567,8 +561,10 @@ static int cs_value(MY_XML_PARSER *st, const char *attr, size_t len) {
       break;
     case _CS_COLNAME: {
       // Replace "utf8_" with "utf8mb3_" for external character sets.
-      std::string collation_name_string(attr, len);
-      if (starts_with(collation_name_string, "utf8_")) {
+      // Convert to lowercase first.
+      mysql::collation::Name normalized_name(attr, len);
+      if (normalized_name().starts_with("utf8_")) {
+        std::string collation_name_string = normalized_name();
         // insert "mb3" to get "utf8mb3_xxx"
         collation_name_string.insert(4, "mb3");
         i->cs.m_coll_name =
@@ -578,15 +574,18 @@ static int cs_value(MY_XML_PARSER *st, const char *attr, size_t len) {
         i->cs.m_coll_name = mstr(i->name, attr, len, MY_CS_NAME_SIZE - 1);
       }
     } break;
-    case _CS_CSNAME:
+    case _CS_CSNAME: {
       // Replace "utf8" with "utf8mb3" for external character sets.
-      if (0 == strncmp(attr, "utf8", len))
+      // Convert to lowercase first.
+      mysql::collation::Name normalized_name(attr, len);
+      if (normalized_name() == "utf8") {
         i->cs.csname =
             mstr(i->csname, STRING_WITH_LEN("utf8mb3"), MY_CS_NAME_SIZE - 1);
-      else
+      } else {
         i->cs.csname = mstr(i->csname, attr, len, MY_CS_NAME_SIZE - 1);
+      }
       assert(0 != strcmp(i->cs.csname, "utf8"));
-      break;
+    } break;
     case _CS_CSDESCRIPT:
       i->cs.comment = mstr(i->comment, attr, len, MY_CS_CSDESCR_SIZE - 1);
       break;
