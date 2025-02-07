@@ -74,7 +74,6 @@
 #define MAX_ERROR_NAME_LENGTH 64
 #define HEADER_LENGTH 32 /* Length of header in errmsg.sys */
 #define ERRMSG_VERSION 3 /* Version number of errmsg.sys */
-#define DEFAULT_CHARSET_DIR "../share/charsets"
 #define ER_PREFIX "ER_"
 #define WARN_PREFIX "WARN_"
 #define OBSOLETE_ER_PREFIX "OBSOLETE_ER_"
@@ -201,8 +200,6 @@ static struct my_option my_long_options[] = {
      GET_NO_ARG, NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"version", 'V', "Prints version", nullptr, nullptr, nullptr, GET_NO_ARG,
      NO_ARG, 0, 0, 0, nullptr, 0, nullptr},
-    {"charset", 'C', "Charset dir", &charsets_dir, &charsets_dir, nullptr,
-     GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"in_file_errlog", 'e', "Input file", &MSGS_ERRLOG, &MSGS_ERRLOG, nullptr,
      GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"in_file_toclient", 'c', "Input file", &MSGS_TO_CLIENT, &MSGS_TO_CLIENT,
@@ -262,7 +259,6 @@ int my_main(int argc, char *argv[]) {
   {
     DBUG_TRACE;
 
-    charsets_dir = DEFAULT_CHARSET_DIR;
     my_umask_dir = 0777;
 
     if ((argc > 1) && get_options(&argc, &argv)) goto done;
