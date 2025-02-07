@@ -477,7 +477,7 @@ inline void Properties::writeAsciiEsc(streambuf &os, wchar_t c, bool rhs) {
     case L':':
     case L'=':
       if (rhs) return writeChar(os, static_cast<char>(c));
-      // fallthrough
+      [[fallthrough]];
     case L' ':  // SPACE
     case L'!':
     case L'#':
