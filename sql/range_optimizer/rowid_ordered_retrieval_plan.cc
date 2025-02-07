@@ -240,7 +240,7 @@ void find_intersect_order(Mem_root_array<ROR_SCAN_INFO *> *ror_scans,
     for (uint i : BitsSetIn((*ror_scans)[index]->covered_fields))
       fields_to_be_covered.ClearBit(i);
     needed_fields = std::move(fields_to_be_covered);
-    if (needed_fields.empty()) break;
+    if (IsEmpty(needed_fields)) break;
   }
 }
 

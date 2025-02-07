@@ -1560,7 +1560,7 @@ void ExpandSingleFilterAccessPath(THD *thd, AccessPath *path, const JOIN *join,
   // Expand join filters for nested loop joins.
   if (path->type == AccessPath::NESTED_LOOP_JOIN &&
       !path->nested_loop_join().already_expanded_predicates &&
-      !(path->nested_loop_join().equijoin_predicates.empty() &&
+      !(IsEmpty(path->nested_loop_join().equijoin_predicates) &&
         path->nested_loop_join()
             .join_predicate->expr->join_conditions.empty()) &&
       path->nested_loop_join().inner->type != AccessPath::ZERO_ROWS) {

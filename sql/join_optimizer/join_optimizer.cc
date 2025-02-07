@@ -2894,7 +2894,7 @@ void CostingReceiver::ProposeRowIdOrderedIntersect(
                                    INDEX_MERGE_HINT_ENUM)) {
       continue;
     }
-    if (cur_scan->covered_fields.empty() && cpk_scan != nullptr) {
+    if (IsEmpty(cur_scan->covered_fields) && cpk_scan != nullptr) {
       // There is no point in adding a ror scan if it covers
       // a subset of clustered primary index keyparts when a
       // clustered primary key can be used.
@@ -6667,8 +6667,9 @@ AccessPath MakeSortPathWithoutFilesort(THD *thd, AccessPath *child,
   AccessPath sort_path;
   sort_path.type = AccessPath::SORT;
   sort_path.ordering_state = ordering_state;
-  if (!child->applied_sargable_join_predicates()
-           .empty()) {  // Will be empty after grouping.
+  if (!child->applied_sargable_join_predicates().is_inline() ||
+      !IsEmpty(child->applied_sargable_join_predicates())) {  // Will be empty
+                                                              // after grouping.
     MutableOverflowBitset applied_sargable_join_predicates =
         child->applied_sargable_join_predicates().Clone(thd->mem_root);
     applied_sargable_join_predicates.ClearBits(0, num_where_predicates);

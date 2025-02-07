@@ -103,7 +103,6 @@ class OverflowBitset {
   inline OverflowBitset &operator=(MutableOverflowBitset &&);
 
   bool is_inline() const { return m_bits & 1; }
-  bool empty() { return m_bits == 1; }
 
   size_t capacity() const {
     if (is_inline()) {
