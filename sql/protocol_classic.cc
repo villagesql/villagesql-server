@@ -1506,7 +1506,7 @@ int Protocol_classic::read_packet() {
   <tr><td colspan="3">if new_params_bind_flag, for each parameter {</td></tr>
   <tr><td>@ref a_protocol_type_int2 "int&lt;2&gt;"</td>
       <td>param_type_and_flag</td>
-      <td>Parameter type (2 bytes). The MSB is reserved for unsigned flag</td></tr>
+      <td>Parameter type (2 bytes). The MSB is reserved for unsigned flag. See @ref enum_field_types </td></tr>
   <tr><td>@ref sect_protocol_basic_dt_string_le "string&lt;lenenc&gt;"</td>
     <td>parameter name</td>
     <td>String</td></tr>
@@ -2115,7 +2115,7 @@ int Protocol_classic::read_packet() {
   <tr><td colspan="3">if new_params_bind_flag, for each parameter {</td></tr>
   <tr><td>@ref a_protocol_type_int2 "int&lt;2&gt;"</td>
     <td>parameter_type</td>
-    <td>Type of the parameter value. See ::enum_field_type</td></tr>
+    <td>Type of the parameter value. See ::enum_field_types. The MSB is reserved for unsigned flag.</td></tr>
   <tr><td colspan="3">if ::CLIENT_QUERY_ATTRIBUTES is on {</td></tr>
   <tr><td>@ref sect_protocol_basic_dt_string_le "string&lt;lenenc&gt;"</td>
       <td>parameter_name</td>
@@ -3084,7 +3084,7 @@ bool Protocol_classic::end_result_metadata() {
       <td>maximum length of the field</td></tr>
   <tr><td>@ref a_protocol_type_int1 "int&lt;1&gt;"</td>
       <td>type</td>
-      <td>type of the column as defined in ::enum_field_types</td></tr>
+      <td>type of the column as defined in @ref enum_field_types</td></tr>
   <tr><td>@ref a_protocol_type_int1 "int&lt;2&gt;"</td>
       <td>flags</td>
       <td>Flags as defined in @ref group_cs_column_definition_flags</td></tr>
@@ -3120,7 +3120,7 @@ bool Protocol_classic::end_result_metadata() {
       <td>[01]</td></tr>
   <tr><td>@ref a_protocol_type_int1 "int&lt;1&gt;"</td>
       <td>type</td>
-      <td>type of the column as defined in ::enum_field_types</td></tr>
+      <td>type of the column as defined in @ref enum_field_types</td></tr>
   <tr><td colspan="3">if capabilities @& ::CLIENT_LONG_FLAG {</td></tr>
   <tr><td>@ref sect_protocol_basic_dt_int_le "int&lt;lenenc&gt;"</td>
       <td>length of flags + decimals fields</td>
