@@ -404,7 +404,7 @@ struct Builder {
   m_n_recs is 0 (no records are inserted yet).
   @param[in]  err    Error hit in online build
   @return the cursor error status. */
-  [[nodiscard]] dberr_t online_build_handle_error(dberr_t err) noexcept;
+  [[nodiscard]] dberr_t handle_error(dberr_t err) noexcept;
 
  private:
   /** Buffer ID. */
