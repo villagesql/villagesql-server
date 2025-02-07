@@ -82,6 +82,7 @@ TARGET_LINK_LIBRARIES(mysql_server_component_services
   PRIVATE
   extra::rapidjson
   ext::zlib
+  extra::unordered_dense
   )
 ADD_DEPENDENCIES(mysql_server_component_services GenError)
 

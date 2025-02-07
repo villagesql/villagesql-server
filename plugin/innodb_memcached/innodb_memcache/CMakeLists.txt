@@ -60,5 +60,5 @@ SET(INNODB_ENGINE_SOURCES
   cache-src/slabs.c)
 
 MYSQL_ADD_PLUGIN(innodb_engine ${INNODB_ENGINE_SOURCES}
-  LINK_LIBRARIES libmcd_util extra::rapidjson
+  LINK_LIBRARIES libmcd_util extra::rapidjson extra::unordered_dense
   MODULE_ONLY MODULE_OUTPUT_NAME "innodb_engine")

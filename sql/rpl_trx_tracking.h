@@ -31,6 +31,7 @@
 
 #include "libbinlogevents/include/binlog_event.h"
 
+#include <ankerl/unordered_dense.h>
 #include "my_inttypes.h"
 
 class THD;
@@ -160,7 +161,7 @@ class Writeset_trx_dependency_tracker {
     Track the last transaction sequence number that changed each row
     in the database, using row hashes from the writeset as the index.
   */
-  typedef std::map<uint64, int64> Writeset_history;
+  using Writeset_history = ankerl::unordered_dense::map<uint64, int64>;
   Writeset_history m_writeset_history;
 };
 

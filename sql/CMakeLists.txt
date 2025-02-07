@@ -841,11 +841,6 @@ IF(APPLE_ARM)
     )
 ENDIF()
 
-ADD_COMPILE_FLAGS(
-  iterators/hash_join_buffer.cc
-  COMPILE_FLAGS
-  -I${CMAKE_SOURCE_DIR}/extra/unordered_dense/unordered_dense-4.4.0/include
-  )
 
 # Fixes "C1128: number of sections exceeded object file format limit" in MSVC
 IF(WIN32)

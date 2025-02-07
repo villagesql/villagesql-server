@@ -368,7 +368,7 @@ table_binary_log_transaction_compression_stats.cc
 )
 MYSQL_ADD_PLUGIN(perfschema ${PERFSCHEMA_SOURCES}
   STORAGE_ENGINE MANDATORY STATIC_ONLY
-  LINK_LIBRARIES extra::rapidjson ext::zlib)
+  LINK_LIBRARIES extra::rapidjson ext::zlib extra::unordered_dense)
 
 IF(WITH_UNIT_TESTS)
   ADD_SUBDIRECTORY(unittest)

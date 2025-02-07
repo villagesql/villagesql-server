@@ -124,7 +124,7 @@ IF(NOT WITHOUT_SERVER)
   # unless it is explicitly disabled on the command line.
   MYSQL_ADD_PLUGIN(ndbcluster ${NDBCLUSTER_SOURCES} STORAGE_ENGINE
     DEFAULT STATIC_ONLY
-    LINK_LIBRARIES ndbclient_static extra::rapidjson)
+    LINK_LIBRARIES ndbclient_static extra::rapidjson extra::unordered_dense)
 
   # Sanity check that MYSQL_ADD_PLUGIN didn't decide to skip build
   IF (NOT WITH_NDBCLUSTER_STORAGE_ENGINE)
