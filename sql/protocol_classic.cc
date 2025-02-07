@@ -717,8 +717,8 @@ bool net_send_error(NET *net, uint sql_errno, const char *err) {
   </table>
 
   These rules distinguish whether the packet represents OK or EOF:
-  - OK: header = 0 and length of packet > 7
-  - EOF: header = 0xfe and length of packet < 9
+  - OK: header = 0 and length of packet >= 7
+  - EOF: header = 0xfe and length of packet < 8
 
   To ensure backward compatibility between old (prior to 5.7.5) and
   new (5.7.5 and up) versions of MySQL, new clients advertise
