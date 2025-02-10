@@ -351,6 +351,9 @@ class OverflowBitsetBitsIn {
     // end pointer.)
     std::array<const uint64_t *, N> m_next;
     const uint64_t *const m_end;
+    // The number of bits in the words preceding the current word (m_state). The
+    // bit index in the overflow bitset is found by adding m_base to the index
+    // of the bit inside the current word. m_base is always a multiple of 64.
     int m_base;
 
    public:
@@ -374,22 +377,12 @@ class OverflowBitsetBitsIn {
           m_next(begin),
           m_end(end),
           m_base(-64) {
-      while (m_state == 0 && m_next[0] != m_end) {
-        m_state = ReadAndCombine(m_next, m_combine);
-        for (size_t i = 0; i < N; ++i) {
-          ++m_next[i];
-        }
-        m_base += 64;
-      }
+      SkipEmptyWords();
     }
 
     bool operator==(const iterator &other) const {
       assert(m_end == other.m_end);
       return m_state == other.m_state && m_next[0] == other.m_next[0];
-    }
-    bool operator!=(const iterator &other) const {
-      assert(m_end == other.m_end);
-      return m_state != other.m_state || m_next[0] != other.m_next[0];
     }
     size_t operator*() const { return FindLowestBitSet(m_state) + m_base; }
     iterator &operator++() {
@@ -397,14 +390,33 @@ class OverflowBitsetBitsIn {
       assert(m_state != 0);
       m_state = m_state & (m_state - 1);
 
+      // If we've seen the last bit in the current word, move forward to the
+      // next non-empty word.
+      SkipEmptyWords();
+      return *this;
+    }
+
+   private:
+    // Skip past all empty words so that the iterator points into the first
+    // non-empty word.
+    void SkipEmptyWords() {
       while (m_state == 0 && m_next[0] != m_end) {
-        m_state = ReadAndCombine(m_next, m_combine);
+        m_state = ReadAndCombine();
         for (size_t i = 0; i < N; ++i) {
           ++m_next[i];
         }
         m_base += 64;
       }
-      return *this;
+    }
+
+    // Read the next word from each of the bitsets and combine them into a
+    // single word using the Combine functor.
+    uint64_t ReadAndCombine() const {
+      std::array<uint64_t, N> bits;
+      for (size_t i = 0; i < N; ++i) {
+        bits[i] = *m_next[i];
+      }
+      return std::apply(*m_combine, bits);
     }
   };
 
@@ -447,15 +459,6 @@ class OverflowBitsetBitsIn {
   }
 
  private:
-  static inline uint64_t ReadAndCombine(
-      const std::array<const uint64_t *, N> &ptrs, const Combine *combine) {
-    std::array<uint64_t, N> bits;
-    for (size_t i = 0; i < N; ++i) {
-      bits[i] = *ptrs[i];
-    }
-    return std::apply(*combine, bits);
-  }
-
   const std::array<OverflowBitset, N> m_bitsets;
   const Combine m_combine;
 };
