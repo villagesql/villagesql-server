@@ -234,7 +234,7 @@ void ConfigRetriever::setError(ErrorType et, const char *s) {
                       errorString.c_str()));
 }
 
-void ConfigRetriever::setError(ErrorType et, BaseString err) {
+void ConfigRetriever::setError(ErrorType et, const BaseString &err) {
   setError(et, err.c_str());
 }
 

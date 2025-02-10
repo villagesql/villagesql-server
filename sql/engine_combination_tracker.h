@@ -39,8 +39,10 @@ class Engine_combination_tracker {
   /// @retval true if engine is not compatible
   /// @retval false if engine is compatible
 
-  bool check_engine(std::string engine_name, std::string database_name,
-                    std::string table_name, std::string &prev_engine_name,
+  bool check_engine(const std::string &engine_name,
+                    const std::string &database_name,
+                    const std::string &table_name,
+                    std::string &prev_engine_name,
                     std::string &prev_database_name,
                     std::string &prev_table_name);
 

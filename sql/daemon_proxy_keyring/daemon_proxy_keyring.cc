@@ -23,6 +23,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <functional>
 #include <string>
+#include <utility>
 
 #include <mysql/components/component_implementation.h>
 #include <mysql/components/my_service.h>
@@ -152,7 +153,7 @@ static bool key_plugin_cb_fn(THD *, plugin_ref plugin, void *arg) {
   @return Result of the fn call.
 */
 static bool iterate_plugins(std::function<bool(st_mysql_keyring *keyring)> fn) {
-  Callback callback(fn);
+  Callback callback(std::move(fn));
   plugin_foreach(current_thd, key_plugin_cb_fn, MYSQL_KEYRING_PLUGIN,
                  &callback);
   return callback.result();

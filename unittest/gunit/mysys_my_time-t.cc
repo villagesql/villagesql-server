@@ -446,7 +446,7 @@ int TzDisplacementToSeconds(const char *s) {
   Convenience function checking the return value of
   time_zone_displacement_to_seconds().
 */
-bool CheckTimeZoneDisplacement(std::string s) {
+bool CheckTimeZoneDisplacement(const std::string &s) {
   int secs;
   return time_zone_displacement_to_seconds(s.c_str(), s.length(), &secs);
 }

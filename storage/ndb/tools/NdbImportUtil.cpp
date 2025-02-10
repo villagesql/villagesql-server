@@ -1401,7 +1401,7 @@ void NdbImportUtil::Range::copy(const Range &range2) {
  * private rowmap.  The row is likely to go near the end
  * so search is done backwards.
  */
-void NdbImportUtil::RowMap::add(Range range2) {
+void NdbImportUtil::RowMap::add(const Range &range2) {
   RangeList &ranges = m_ranges;
   Range *r2 = alloc_range();
   r2->copy(range2);

@@ -27,6 +27,7 @@
 #include <cstddef>
 #include <memory>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 #include "my_config.h"
@@ -62,7 +63,7 @@ struct My_fancy_sum {
 };
 struct Non_pod_type {
   Non_pod_type(int _x, int _y, std::string _s)
-      : x(_x), y(_y), s(_s), sum(x, y) {
+      : x(_x), y(_y), s(std::move(_s)), sum(x, y) {
     s_count++;
   }
   Non_pod_type(const Non_pod_type &other)

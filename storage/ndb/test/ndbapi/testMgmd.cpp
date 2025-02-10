@@ -336,12 +336,12 @@ class Ndbd : public Mgmd {
 
   NdbProcess::Args &args() { return m_args; }
 
-  void set_connect_string(BaseString connect_string) {
+  void set_connect_string(const BaseString &connect_string) {
     m_args.add("-c");
     m_args.add(connect_string.c_str());
   }
 
-  bool start(const char *working_dir, BaseString connect_string) {
+  bool start(const char *working_dir, const BaseString &connect_string) {
     set_connect_string(connect_string);
     return Mgmd::start(working_dir, m_args);
   }

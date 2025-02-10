@@ -31,7 +31,7 @@ static st_error global_error_names[] = {
 #endif /* IN_DOXYGEN */
     {nullptr, 0, nullptr, nullptr, nullptr, 0}};
 
-int get_errcode_from_name(std::string error_name) {
+int get_errcode_from_name(const std::string &error_name) {
   for (st_error *error = global_error_names; error->name; error++) {
     if (error_name == error->name) return error->error_code;
   }

@@ -372,7 +372,7 @@ static string shorten_query(MYSQL_LEX_STRING query) {
   rewritten. (Only if verbose level is high enough.)
 */
 static void log_nonrewritten_query(MYSQL_THD thd, const uchar *digest_buf,
-                                   Rewrite_result result) {
+                                   const Rewrite_result &result) {
   if (sys_var_verbose >= 2) {
     string const query = shorten_query(mysql_parser_get_query(thd));
     string const digest = services::print_digest(digest_buf);

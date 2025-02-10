@@ -745,7 +745,8 @@ class Compare_context {
 
  private:
   std::vector<std::string> diffs;
-  void add_diff(const char *property, std::string a, std::string b) {
+  void add_diff(const char *property, const std::string &a,
+                const std::string &b) {
     std::string diff;
     diff.append("Diff in '")
         .append(property)
@@ -758,7 +759,7 @@ class Compare_context {
   }
 
   void add_diff(object_type type, const char *name, const char *property,
-                std::string a, std::string b) {
+                const std::string &a, const std::string &b) {
     std::string object_type_string;
     switch (type) {
       case COLUMN:
@@ -789,7 +790,8 @@ class Compare_context {
   }
 
  public:
-  void compare(const char *property, dd::String_type a, dd::String_type b) {
+  void compare(const char *property, const dd::String_type &a,
+               const dd::String_type &b) {
     if (a == b) return;
     add_diff(property, a.c_str(), b.c_str());
   }
@@ -801,7 +803,7 @@ class Compare_context {
   }
 
   void compare(object_type type, const char *name, const char *property,
-               dd::String_type a, dd::String_type b) {
+               const dd::String_type &a, const dd::String_type &b) {
     if (a == b) return;
     add_diff(type, name, property, a.c_str(), b.c_str());
   }

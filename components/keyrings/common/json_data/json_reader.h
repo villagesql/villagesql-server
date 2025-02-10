@@ -127,7 +127,7 @@ class Json_reader {
 
     @returns value of the property
   */
-  std::string property(const std::string property_key) const;
+  std::string property(const std::string &property_key) const;
 
  private:
   /** Data in JSON DOM format */

@@ -114,7 +114,7 @@ Json_reader::Json_reader() : Json_reader(schema_version_1_0, "") {}
   @returns property value string in case property is present,
   empty string otherwise.
 */
-std::string Json_reader::property(const std::string property_key) const {
+std::string Json_reader::property(const std::string &property_key) const {
   if (!valid_) return {};
   return document_[property_key.c_str()].Get<std::string>();
 }

@@ -812,19 +812,19 @@ static std::unordered_map<string, string> compatibility_rpl_replica_commands = {
 static std::unordered_map<string, string> compatibility_rpl_source_commands = {
     {"SHOW BINARY LOG STATUS", "SHOW MASTER STATUS"}};
 
-static string get_compatible_rpl_source_query(string command) {
+static string get_compatible_rpl_source_query(const string &command) {
   return ((opt_server_version < FIRST_REPLICA_COMMAND_VERSION)
               ? compatibility_rpl_source_commands.at(command)
               : command);
 }
 
-static string get_compatible_rpl_replica_query(string command) {
+static string get_compatible_rpl_replica_query(const string &command) {
   return ((opt_server_version < FIRST_REPLICA_COMMAND_VERSION)
               ? compatibility_rpl_replica_commands.at(command)
               : command);
 }
 
-static string get_compatible_rpl_replica_command(string command) {
+static string get_compatible_rpl_replica_command(const string &command) {
   return ((opt_output_as_version_mode == Output_as_version_mode::BEFORE_8_0_23)
               ? compatibility_rpl_replica_commands.at(command)
               : command);

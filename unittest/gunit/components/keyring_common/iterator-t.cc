@@ -23,6 +23,8 @@
 
 #include <gtest/gtest.h>
 
+#include <utility>
+
 #include "components/keyrings/common/data/data_extension.h"
 #include "components/keyrings/common/memstore/iterator.h"
 
@@ -38,7 +40,7 @@ class KeyringCommonIterator_test : public ::testing::Test {};
 
 class Dummy_extension {
  public:
-  Dummy_extension(std::string ext_data) : ext_data_(ext_data) {}
+  Dummy_extension(std::string ext_data) : ext_data_(std::move(ext_data)) {}
   Dummy_extension() : Dummy_extension(std::string{""}) {}
   std::string ext_data() const { return ext_data_; }
 

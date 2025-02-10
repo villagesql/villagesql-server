@@ -376,7 +376,7 @@ static void print_escaped_string(FILE *f, const char *str) {
   }
 }
 
-std::string get_file_contents(std::string filename) {
+std::string get_file_contents(const std::string &filename) {
   std::ifstream ifs(filename);
   if (!ifs.good()) {
     return "";
@@ -385,8 +385,8 @@ std::string get_file_contents(std::string filename) {
                      std::istreambuf_iterator<char>());
 }
 
-static void compare_and_move_file(std::string source_filename,
-                                  std::string destination_filename) {
+static void compare_and_move_file(const std::string &source_filename,
+                                  const std::string &destination_filename) {
   const auto source_contents = get_file_contents(source_filename);
   const auto destination_contents = get_file_contents(destination_filename);
   if (source_contents == destination_contents) {

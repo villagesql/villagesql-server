@@ -104,7 +104,7 @@ class Replacement {
   */
   int number_parameters;
 
-  bool load(MYSQL_THD thd, const std::string replacement);
+  bool load(MYSQL_THD thd, const std::string &replacement);
 
   /**
     If any errors were raised during parsing, the first one is available here.

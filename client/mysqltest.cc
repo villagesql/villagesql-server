@@ -66,6 +66,7 @@
 #include <cstdarg>
 #include <cstdio>
 #include <cstdlib>
+#include <utility>
 #ifndef _WIN32
 #include <poll.h>
 #include <sys/time.h>
@@ -678,7 +679,9 @@ static void free_all_replace() {
 class AsyncTimer {
  public:
   explicit AsyncTimer(std::string label)
-      : label_(label), time_(std::chrono::system_clock::now()), start_(time_) {}
+      : label_(std::move(label)),
+        time_(std::chrono::system_clock::now()),
+        start_(time_) {}
 
   ~AsyncTimer() {
     auto now = std::chrono::system_clock::now();
@@ -5948,7 +5951,8 @@ static bool check_and_filter_once_property(DYNAMIC_STRING ds_property,
 /// @param once_prop    Flag specifying whether a property should be set
 ///                     for next statement only.
 static void handle_disable_warnings(std::uint32_t warning_code,
-                                    std::string warning, bool once_prop) {
+                                    const std::string &warning,
+                                    bool once_prop) {
   if (enabled_warnings->count()) {
     // Remove the warning from list of enabled warnings.
     enabled_warnings->remove_warning(warning_code, once_prop);
@@ -5973,7 +5977,7 @@ static void handle_disable_warnings(std::uint32_t warning_code,
 /// @param once_prop    Flag specifying whether a property should be set
 ///                     for next statement only.
 static void handle_enable_warnings(std::uint32_t warning_code,
-                                   std::string warning, bool once_prop) {
+                                   const std::string &warning, bool once_prop) {
   if (disabled_warnings->count()) {
     // Remove the warning from list of disabled warnings.
     disabled_warnings->remove_warning(warning_code, once_prop);
@@ -8641,7 +8645,7 @@ static bool match_warnings(Expected_warnings *warnings, std::uint32_t error,
 ///
 /// @retval True if a warning is found in the list of disabled or enabled
 ///         warnings, false otherwise.
-static bool handle_one_warning(DYNAMIC_STRING *ds, std::string warning) {
+static bool handle_one_warning(DYNAMIC_STRING *ds, const std::string &warning) {
   // Each line of show warnings output contains information about
   // error level, error code and the error/warning message separated
   // by '\t'. Parse each line from the show warnings output to
@@ -11584,7 +11588,7 @@ class Comp_lines {
   }
 };
 
-static size_t length_of_n_first_columns(std::string str,
+static size_t length_of_n_first_columns(const std::string &str,
                                         int start_sort_column) {
   std::stringstream columns(str);
   std::string temp;

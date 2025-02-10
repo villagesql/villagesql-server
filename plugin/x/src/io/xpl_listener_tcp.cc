@@ -31,6 +31,7 @@
 #endif
 
 #include <memory>
+#include <utility>
 
 #include "my_io.h"  // NOLINT(build/include_subdir)
 
@@ -92,8 +93,8 @@ class Tcp_creator {
   }
 
   std::shared_ptr<iface::Socket> create_and_bind_socket(
-      std::shared_ptr<addrinfo> ai, const uint32_t backlog, int &error_code,
-      std::string &error_message) {
+      const std::shared_ptr<addrinfo> &ai, const uint32_t backlog,
+      int &error_code, std::string &error_message) {
     addrinfo *used_ai = nullptr;
     std::string errstr;
 
@@ -228,7 +229,7 @@ class Tcp_creator {
   }
 
   struct addrinfo *resolve_addr_info(const std::string &address,
-                                     const std::string service) {
+                                     const std::string &service) {
     struct addrinfo hints;
     struct addrinfo *ai = nullptr;
     memset(&hints, 0, sizeof(hints));
@@ -255,7 +256,7 @@ Listener_tcp::Listener_tcp(Factory_ptr operations_factory,
                            const uint16_t port,
                            const uint32_t port_open_timeout,
                            iface::Socket_events &event, const uint32_t backlog)
-    : m_operations_factory(operations_factory),
+    : m_operations_factory(std::move(operations_factory)),
       m_state(iface::Listener::State::k_initializing,
               KEY_mutex_x_listener_tcp_sync, KEY_cond_x_listener_tcp_sync),
       m_bind_address(bind_address),

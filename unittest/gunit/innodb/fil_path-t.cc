@@ -45,7 +45,8 @@ TEST(fil_path, is_absolute_path) {
   EXPECT_EQ(abs_current_dir_str, abs_current_dir.abs_path());
 }
 
-void get_existing_path_subtest(std::string abs_path, std::string sub_path) {
+void get_existing_path_subtest(const std::string &abs_path,
+                               const std::string &sub_path) {
   std::string ghost;
   EXPECT_EQ(Fil_path::get_existing_path(abs_path + sub_path, ghost), abs_path);
   EXPECT_EQ(ghost, sub_path);
@@ -90,10 +91,12 @@ TEST(fil_path, get_existing_path) {
   get_existing_path_subtest(abs_current_dir_str, some_txt);
 }
 
-void get_real_path_subsubtest(std::string abs_path, std::string sub_path,
-                              std::string expect_path, bool expect_a_file) {
-  std::string const expected_suffix = expect_a_file ? "" : std::string{SEP};
-  std::string const relative_path = std::string{"."} + SEP;
+void get_real_path_subsubtest(const std::string &abs_path,
+                              const std::string &sub_path,
+                              const std::string &expect_path,
+                              bool expect_a_file) {
+  const std::string expected_suffix = expect_a_file ? "" : std::string{SEP};
+  const std::string relative_path = std::string{"."} + SEP;
 
   EXPECT_EQ(Fil_path::get_real_path(relative_path + sub_path, false),
             abs_path + expect_path + expected_suffix);
@@ -106,7 +109,7 @@ void get_real_path_subsubtest(std::string abs_path, std::string sub_path,
             abs_path + expect_path + expected_suffix);
 }
 
-void get_real_path_subtest(std::string abs_path,
+void get_real_path_subtest(const std::string &abs_path,
                            bool expect_ghost2_file = false,
                            bool expect_ibd_file = true,
                            bool expect_txt_file = true) {
@@ -129,14 +132,14 @@ void get_real_path_subtest(std::string abs_path,
   }
 }
 
-void mkdir(std::string path) {
+void mkdir(const std::string &path) {
   EXPECT_EQ(::my_mkdir(path.c_str(), 0777, MYF(0)), 0);
 }
 
-void rmdir(std::string path) { EXPECT_EQ(::rmdir(path.c_str()), 0); }
-void unlink(std::string path) { EXPECT_EQ(::unlink(path.c_str()), 0); }
+void rmdir(const std::string &path) { EXPECT_EQ(::rmdir(path.c_str()), 0); }
+void unlink(const std::string &path) { EXPECT_EQ(::unlink(path.c_str()), 0); }
 
-void create_file(std::string path) {
+void create_file(const std::string &path) {
   auto *f = fopen(path.c_str(), "w");
   EXPECT_NE(f, nullptr);
   fclose(f);

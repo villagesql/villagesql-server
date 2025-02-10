@@ -1501,8 +1501,8 @@ static int create_and_conditions(Item_cond *cond, List<Item> pushed_list,
   @return    '1' in case of failure, else '0'.
  */
 static int create_or_conditions(Item_cond *cond, List<Item> pushed_list,
-                                List<Item> remainder_list, Item *&pushed_cond,
-                                Item *&remainder_cond) {
+                                const List<Item> &remainder_list,
+                                Item *&pushed_cond, Item *&remainder_cond) {
   assert(pushed_list.elements == cond->argument_list()->elements);
 
   if (remainder_list.is_empty()) {

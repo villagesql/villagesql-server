@@ -646,7 +646,7 @@ bool Ndb_schema_dist_client::acl_notify(const char *database, const char *query,
 }
 
 /* SNAPSHOT-style ACL change distribution */
-bool Ndb_schema_dist_client::acl_notify(std::string user_list) {
+bool Ndb_schema_dist_client::acl_notify(const std::string &user_list) {
   DBUG_TRACE;
   assert(m_holding_acl_mutex);
   auto key = m_prepared_keys.keys()[0];

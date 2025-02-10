@@ -99,7 +99,7 @@ static bool negative_tests = false;
 /* Callback for special use case */
 void session_connect_internal(const PSI_thread_attrs *thread_attrs);
 
-void print_log(std::string msg);
+void print_log(const std::string &msg);
 
 /**
   Log file operations
@@ -119,7 +119,7 @@ void close_log() {
   if (log_outfile.is_open()) log_outfile.close();
 }
 
-void print_log(std::string msg) {
+void print_log(const std::string &msg) {
   if (!log_enabled) return;
 
   /* Write to both log file and stderr. */

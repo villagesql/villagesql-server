@@ -147,7 +147,7 @@ Pattern::Load_status Pattern::load(MYSQL_THD thd,
     - extract the position of the parameters in the query string
     - copy the replacement in the rewrite rule
 */
-bool Replacement::load(MYSQL_THD thd, const string replacement) {
+bool Replacement::load(MYSQL_THD thd, const string &replacement) {
   Parse_error_recorder recorder;
   if (services::parse(thd, replacement, true, &recorder)) {
     m_parse_error_message = recorder.first_parse_error_message();

@@ -82,7 +82,7 @@ static int handle = 0;
 static std::ofstream log_outfile;
 static std::string separator("===========================");
 
-void print_log(std::string msg) {
+void print_log(const std::string &msg) {
   log_outfile << msg << std::endl;
   fprintf(stderr, "%s\n", msg.c_str());
   fflush(stderr);

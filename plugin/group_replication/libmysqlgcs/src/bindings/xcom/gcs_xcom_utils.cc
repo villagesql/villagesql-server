@@ -262,7 +262,7 @@ void fix_parameters_syntax(Gcs_interface_parameters &interface_params) {
   }
 }
 
-static enum_gcs_error is_valid_flag(const std::string param,
+static enum_gcs_error is_valid_flag(const std::string &param,
                                     std::string &flag) {
   enum_gcs_error error = GCS_OK;
 

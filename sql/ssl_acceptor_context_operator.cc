@@ -29,6 +29,8 @@
 
 #include "sql/ssl_acceptor_context_operator.h"
 
+#include <utility>
+
 Ssl_acceptor_context_container *mysql_main;
 Ssl_acceptor_context_container *mysql_admin;
 
@@ -49,7 +51,7 @@ void Ssl_acceptor_context_container::switch_data(
 }
 
 bool TLS_channel::singleton_init(Ssl_acceptor_context_container **out,
-                                 std::string channel,
+                                 const std::string &channel,
                                  Ssl_init_callback *callbacks, bool db_init) {
   if (out == nullptr || callbacks == nullptr) return true;
   *out = nullptr;
@@ -99,7 +101,8 @@ void TLS_channel::singleton_flush(Ssl_acceptor_context_container *container,
                                   Ssl_init_callback *callbacks,
                                   enum enum_ssl_init_error *error, bool force) {
   if (container == nullptr) return;
-  auto *news = new Ssl_acceptor_context_data(channel, callbacks, false, error);
+  auto *news = new Ssl_acceptor_context_data(std::move(channel), callbacks,
+                                             false, error);
   if (*error != SSL_INITERR_NOERROR && !force) {
     delete news;
     return;

@@ -153,7 +153,7 @@ class NdbProcess {
   BaseString m_name;
   Pipes *m_pipes;
 
-  NdbProcess(BaseString name, Pipes *fds) : m_name(name), m_pipes(fds) {}
+  NdbProcess(const BaseString &name, Pipes *fds) : m_name(name), m_pipes(fds) {}
 
   /*
    * Quoting function to be used for passing program name and arguments to a

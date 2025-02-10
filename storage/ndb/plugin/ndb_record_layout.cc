@@ -108,7 +108,8 @@ void Ndb_record_layout::setValue(int idx, unsigned short value,
   *(reinterpret_cast<unsigned short *>(data)) = value;
 }
 
-void Ndb_record_layout::setValue(int idx, std::string value, char *data) const {
+void Ndb_record_layout::setValue(int idx, const std::string &value,
+                                 char *data) const {
   assert(idx < (int)m_columns);
   setNotNull(idx, data);
   ndb_pack_varchar(record_specs[idx].column, record_specs[idx].offset,
@@ -127,7 +128,7 @@ void Ndb_record_layout::setValue(int idx, unsigned int *value,
   }
 }
 
-void Ndb_record_layout::packValue(int idx, std::string value,
+void Ndb_record_layout::packValue(int idx, const std::string &value,
                                   char *data) const {
   ndb_pack_varchar(record_specs[idx].column, 0, value.c_str(), value.length(),
                    data);

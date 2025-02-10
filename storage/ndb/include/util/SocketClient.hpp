@@ -45,7 +45,7 @@ class SocketClient {
     m_connect_timeout_millisec = timeout_millisec;
   }
   int bind(ndb_sockaddr local);
-  NdbSocket connect(ndb_sockaddr server_addr);
+  NdbSocket connect(const ndb_sockaddr &server_addr);
   int authenticate(const NdbSocket &);
 
   ndb_socket_t m_sockfd;

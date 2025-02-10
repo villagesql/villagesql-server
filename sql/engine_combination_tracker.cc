@@ -24,9 +24,9 @@
 #include "sql/engine_combination_tracker.h"
 #include <iostream>
 
-bool Engine_combination_tracker::check_engine(std::string engine_name,
-                                              std::string database_name,
-                                              std::string table_name,
+bool Engine_combination_tracker::check_engine(const std::string &engine_name,
+                                              const std::string &database_name,
+                                              const std::string &table_name,
                                               std::string &prev_engine_name,
                                               std::string &prev_database_name,
                                               std::string &prev_table_name) {

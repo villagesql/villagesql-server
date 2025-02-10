@@ -101,7 +101,7 @@ class SHA256_digest : public Generate_digest {
 
 class Generate_scramble {
  public:
-  Generate_scramble(const std::string source, const std::string rnd,
+  Generate_scramble(const std::string &source, const std::string &rnd,
                     Digest_info digest_type = Digest_info::SHA256_DIGEST);
 
   ~Generate_scramble();

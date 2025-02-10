@@ -58,7 +58,7 @@ class Thread_cleanup {
   };
 
  public:
-  void setup_thread_exit_handler(std::string component_name) {
+  void setup_thread_exit_handler(const std::string &component_name) {
     thread_local ThreadExitHandler teh;
     teh.requested_component_names.push_back(component_name);
   }

@@ -53,9 +53,9 @@ class registration {
   virtual ~registration();
   bool make_credentials(const char *challenge);
   /* set rp id */
-  void set_rp_id(std::string rp_id);
+  void set_rp_id(const std::string &rp_id);
   /* set user name */
-  void set_user(std::string user);
+  void set_user(const std::string &user);
 
   /* get authenticator data details */
   size_t get_authdata_len();

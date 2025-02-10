@@ -24,6 +24,7 @@
 */
 #include <cassert>
 #include <cstdio>
+#include <utility>
 #include <vector>
 
 #include "openssl/err.h"
@@ -826,7 +827,7 @@ class WritevTest : public SendTest {
 
 WritevTest::WritevTest(NdbSocket &s, const char *name, size_t buff,
                        std::vector<int> dist)
-    : SendTest(s, name, buff), m_buffer_dist(dist) {
+    : SendTest(s, name, buff), m_buffer_dist(std::move(dist)) {
   size_t size = m_buff_size;
   int n = 0;
   for (n = 0; n < IovList::MaxBuffers; n++) m_iov.iov(n).iov_len = 0;

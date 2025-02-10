@@ -72,8 +72,8 @@ class TLS_channel {
     @retval false initialized ok
 */
   static bool singleton_init(Ssl_acceptor_context_container **out,
-                             std::string channel, Ssl_init_callback *callbacks,
-                             bool db_init);
+                             const std::string &channel,
+                             Ssl_init_callback *callbacks, bool db_init);
 
   /**
     De-initialize the single instance of the acceptor

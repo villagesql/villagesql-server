@@ -128,7 +128,7 @@ TEST_F(XcomStatisticsTest, SuspiciousCountTest) {
   ASSERT_EQ(suspicious_list_ret.size(), 3);
 
   uint32_t node_to_find = 0;
-  auto find_node_lambda = [&](Gcs_node_suspicious elem) {
+  auto find_node_lambda = [&](const Gcs_node_suspicious &elem) {
     return elem.m_node_address ==
            suspicious_list.at(node_to_find).m_node_address;
   };
@@ -141,7 +141,7 @@ TEST_F(XcomStatisticsTest, SuspiciousCountTest) {
               suspicious_list.at(node_to_find).m_node_suspicious_count);
   }
 
-  auto do_not_find_node_lambda = [](Gcs_node_suspicious elem) {
+  auto do_not_find_node_lambda = [](const Gcs_node_suspicious &elem) {
     return elem.m_node_address == "node6";
   };
 

@@ -467,7 +467,7 @@ class NdbImportUtil {
       r.m_reject = (uint)reject;
       add(r);
     }
-    void add(Range range2);
+    void add(const Range &range2);
     void add(const RowMap &map2);
     Range *find(uint64 rowid);
     bool remove(uint64 rowid);

@@ -98,7 +98,7 @@ class Rpl_sys_key_access {
     @retval 0     Success
     @retval !0    Error
   */
-  int init(TABLE *table, std::string pos);
+  int init(TABLE *table, const std::string &pos);
 
   /**
     Closes all initialized index or random scan during destruction.

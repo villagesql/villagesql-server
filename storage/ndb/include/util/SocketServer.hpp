@@ -99,7 +99,7 @@ class SocketServer {
    *  then  close the socket
    * Returns true if succeeding in binding
    */
-  static bool tryBind(ndb_sockaddr serv_addr, char *error = nullptr,
+  static bool tryBind(const ndb_sockaddr &serv_addr, char *error = nullptr,
                       size_t error_size = 0);
 
   /**

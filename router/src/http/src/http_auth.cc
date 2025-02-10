@@ -173,7 +173,7 @@ std::string HttpAuthCredentials::str() const {
 }
 
 bool HttpAuth::require_auth(http::base::Request &req,
-                            std::shared_ptr<HttpAuthRealm> realm) {
+                            const std::shared_ptr<HttpAuthRealm> &realm) {
   constexpr char kAuthorization[]{"Authorization"};
   constexpr char kWwwAuthenticate[]{"WWW-Authenticate"};
   constexpr char kMethodBasic[]{"Basic"};

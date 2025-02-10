@@ -164,7 +164,7 @@ void SHA256_digest::deinit() {
   @param [in] digest_type Digest type
 */
 Generate_scramble::Generate_scramble(
-    const std::string source, const std::string rnd,
+    const std::string &source, const std::string &rnd,
     Digest_info digest_type) /* = Digest_info::SHA256_DIGEST */
     : m_src(source), m_rnd(rnd), m_digest_type(digest_type) {
   switch (m_digest_type) {

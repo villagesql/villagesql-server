@@ -34,7 +34,7 @@
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_proxy.h"
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/xcom/synode_no.h"
 
-Gcs_xcom_node_address::Gcs_xcom_node_address(std::string member_address)
+Gcs_xcom_node_address::Gcs_xcom_node_address(const std::string &member_address)
     : m_member_address(member_address), m_member_ip(), m_member_port(0) {
   char address[IP_MAX_SIZE];
   xcom_port port;

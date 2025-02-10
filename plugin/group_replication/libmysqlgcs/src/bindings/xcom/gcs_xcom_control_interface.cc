@@ -113,7 +113,7 @@ map<int, const Gcs_control_event_listener &>
 Gcs_xcom_control::Gcs_xcom_control(
     Gcs_xcom_node_address *xcom_node_address,
     std::vector<Gcs_xcom_node_address *> &xcom_peers,
-    Gcs_group_identifier m_group_identifier, Gcs_xcom_proxy *xcom_proxy,
+    const Gcs_group_identifier &m_group_identifier, Gcs_xcom_proxy *xcom_proxy,
     Gcs_xcom_group_management *xcom_group_management,
     Gcs_xcom_engine *gcs_engine,
     Gcs_xcom_state_exchange_interface *state_exchange,
@@ -1979,10 +1979,10 @@ void Gcs_suspicions_manager::clear_suspicions() {
 
 void Gcs_suspicions_manager::process_view(
     synode_no const config_id, Gcs_xcom_nodes *xcom_nodes,
-    std::vector<Gcs_member_identifier *> alive_nodes,
-    std::vector<Gcs_member_identifier *> left_nodes,
-    std::vector<Gcs_member_identifier *> member_suspect_nodes,
-    std::vector<Gcs_member_identifier *> non_member_suspect_nodes,
+    const std::vector<Gcs_member_identifier *> &alive_nodes,
+    const std::vector<Gcs_member_identifier *> &left_nodes,
+    const std::vector<Gcs_member_identifier *> &member_suspect_nodes,
+    const std::vector<Gcs_member_identifier *> &non_member_suspect_nodes,
     bool is_killer_node, synode_no max_synode) {
   bool should_wake_up_manager = false;
   std::vector<Gcs_member_identifier *> back_to_healthy;

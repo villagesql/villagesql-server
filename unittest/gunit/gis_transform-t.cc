@@ -786,13 +786,13 @@ struct print {
 
 template <>
 struct print<gis::Cartesian_point> {
-  static void apply(gis::Cartesian_point p) {
+  static void apply(const gis::Cartesian_point &p) {
     std::cout << std::setprecision(20) << p.x() << " , " << p.y() << std::endl;
   }
 };
 template <>
 struct print<gis::Geographic_point> {
-  static void apply(gis::Geographic_point p) {
+  static void apply(const gis::Geographic_point &p) {
     const double to_rad = boost::geometry::math::pi<double>() / 180.0;
     std::cout << std::setprecision(20) << p.x() / to_rad << " , "
               << p.y() / to_rad << std::endl;

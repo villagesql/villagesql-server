@@ -34,9 +34,9 @@ using std::min;
 class Ssl_acceptor_context_iterator_data {
  public:
   Ssl_acceptor_context_iterator_data() = default;
-  Ssl_acceptor_context_iterator_data(const std::string interface,
-                                     const std::string property,
-                                     const std::string value)
+  Ssl_acceptor_context_iterator_data(const std::string &interface,
+                                     const std::string &property,
+                                     const std::string &value)
       : interface_(interface), property_(property), value_(value) {}
   std::string interface() const { return interface_; }
   std::string property() const { return property_; }

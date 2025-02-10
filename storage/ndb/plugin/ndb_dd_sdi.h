@@ -54,6 +54,6 @@ dd::sdi_t ndb_dd_sdi_serialize(class THD *thd, const dd::Table &table,
   @return pretty JSON string or empty string on failure.
 */
 
-dd::sdi_t ndb_dd_sdi_prettify(dd::sdi_t sdi);
+dd::sdi_t ndb_dd_sdi_prettify(const dd::sdi_t &sdi);
 
 #endif

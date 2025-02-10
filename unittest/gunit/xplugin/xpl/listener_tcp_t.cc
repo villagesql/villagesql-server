@@ -124,7 +124,7 @@ class Listener_tcp_testsuite : public Test {
 #endif
   }
 
-  void expect_listen_socket(std::shared_ptr<mock::Socket> mock_socket,
+  void expect_listen_socket(const std::shared_ptr<mock::Socket> &mock_socket,
                             addrinfo *ai,
                             const bool socket_events_listen = true) {
     EXPECT_CALL(*mock_socket, set_socket_thread_owner());

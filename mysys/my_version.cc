@@ -109,7 +109,8 @@ static ParseArray parse_version_string(std::string version, bool &is_valid) {
  @param ver2 version2 string
  @return true if cloning is allowed between ver1 and ver2, false otherwise
  */
-bool are_versions_clone_compatible(std::string ver1, std::string ver2) {
+bool are_versions_clone_compatible(const std::string &ver1,
+                                   const std::string &ver2) {
   if (ver1 == ver2) {
     return true;
   }

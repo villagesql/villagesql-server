@@ -68,7 +68,7 @@ SocketServer::~SocketServer() {
   }
 }
 
-bool SocketServer::tryBind(ndb_sockaddr servaddr, char *error,
+bool SocketServer::tryBind(const ndb_sockaddr &servaddr, char *error,
                            size_t error_size) {
   const ndb_socket_t sock = ndb_socket_create(servaddr.get_address_family());
 

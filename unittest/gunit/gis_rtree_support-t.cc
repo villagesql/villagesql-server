@@ -24,6 +24,8 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
    */
 #include <gtest/gtest.h>
+
+#include <utility>
 #include "sql/dd/dd.h"
 #include "sql/dd/impl/types/spatial_reference_system_impl.h"
 #include "sql/dd/types/spatial_reference_system.h"
@@ -45,7 +47,7 @@ gis::Geographic_linearring linearringFromVector(std::vector<double> data) {
 
 gis::Geographic_polygon polygonFromVector(std::vector<double> data) {
   gis::Geographic_polygon py;
-  py.push_back(linearringFromVector(data));
+  py.push_back(linearringFromVector(std::move(data)));
   return py;
 }
 

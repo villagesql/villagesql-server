@@ -1264,7 +1264,7 @@ class IndexStatsTable : public VirtualTable {
 /* If a column name contains a dot, backtick, or comma, then quote it in
    backticks, and escape ` within the name as ``.
 */
-static BaseString quoteColumnName(BaseString name) {
+static BaseString quoteColumnName(const BaseString &name) {
   Vector<BaseString> check(2);
   int split = name.split(check, "`,.", 2);
   if (likely(split == 1)) return name;

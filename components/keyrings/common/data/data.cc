@@ -22,6 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <functional>
+#include <utility>
 
 #include "data.h"
 
@@ -35,7 +36,7 @@ Data::Data(const Sensitive_data &data, Type type)
 
 /* Following constructors imply no data */
 Data::Data() : Data("", "") {}
-Data::Data(Type type) : Data("", type) {}
+Data::Data(Type type) : Data("", std::move(type)) {}
 
 /** Copy constructor */
 Data::Data(const Data &src) : Data(src.data_, src.type_) {}

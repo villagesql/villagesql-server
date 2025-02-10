@@ -49,7 +49,7 @@ class Ndb_schema_objects {
   std::unordered_map<std::string, NDB_SCHEMA_OBJECT *> m_hash;
   Ndb_schema_objects() {}
 
-  NDB_SCHEMA_OBJECT *find(std::string key) const {
+  NDB_SCHEMA_OBJECT *find(const std::string &key) const {
     const auto it = m_hash.find(key);
     if (it == m_hash.end()) return nullptr;
     return it->second;

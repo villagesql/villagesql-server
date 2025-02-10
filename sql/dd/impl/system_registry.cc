@@ -112,7 +112,7 @@ void register_table(dd::System_tables::Types type) {
   dd::System_tables::instance()->add(
       MYSQL_SCHEMA_NAME.str, X::instance().name(), type, &X::instance());
 }
-void register_table(const dd::String_type table,
+void register_table(const dd::String_type &table,
                     dd::System_tables::Types type) {
   dd::System_tables::instance()->add(MYSQL_SCHEMA_NAME.str, table, type,
                                      nullptr);

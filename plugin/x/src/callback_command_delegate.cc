@@ -28,6 +28,7 @@
 #include <cstddef>
 
 #include <string>
+#include <utility>
 
 #include "plugin/x/src/ngs/memory.h"
 #include "plugin/x/src/xpl_log.h"
@@ -117,12 +118,14 @@ Callback_command_delegate::Callback_command_delegate()
 
 Callback_command_delegate::Callback_command_delegate(
     Start_row_callback start_row, End_row_callback end_row)
-    : m_start_row(start_row), m_end_row(end_row), m_current_row(nullptr) {}
+    : m_start_row(std::move(start_row)),
+      m_end_row(std::move(end_row)),
+      m_current_row(nullptr) {}
 
 void Callback_command_delegate::set_callbacks(Start_row_callback start_row,
                                               End_row_callback end_row) {
-  m_start_row = start_row;
-  m_end_row = end_row;
+  m_start_row = std::move(start_row);
+  m_end_row = std::move(end_row);
 }
 
 void Callback_command_delegate::reset() {

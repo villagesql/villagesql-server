@@ -48,11 +48,11 @@ class Ndb_record_layout {
   void setNull(int idx, char *data) const;
   void setNotNull(int idx, char *data) const;
   void setValue(int idx, unsigned short, char *data) const;
-  void setValue(int idx, std::string, char *data) const;
+  void setValue(int idx, const std::string &, char *data) const;
   void setValue(int idx, unsigned int *, char *data) const;
 
   /* Encode value into a buffer for NdbScanFilter */
-  void packValue(int idx, std::string, char *data) const;
+  void packValue(int idx, const std::string &, char *data) const;
 
   bool isNull(const char *data, int idx) const;
 

@@ -22,6 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <algorithm>
+#include <utility>
 
 #ifdef _WIN32
 /* In OpenSSL before 1.1.0, we need this first. */
@@ -283,7 +284,9 @@ Ssl_acceptor_context_property_type &operator++(
 Ssl_acceptor_context_data::Ssl_acceptor_context_data(
     std::string channel, Ssl_init_callback *callbacks,
     bool report_ssl_error /* = true */, enum enum_ssl_init_error *out_error)
-    : channel_(channel), ssl_acceptor_fd_(nullptr), acceptor_(nullptr) {
+    : channel_(std::move(channel)),
+      ssl_acceptor_fd_(nullptr),
+      acceptor_(nullptr) {
   enum enum_ssl_init_error error_num = SSL_INITERR_NOERROR;
   {
     callbacks->read_parameters(

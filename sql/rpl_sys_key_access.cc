@@ -81,7 +81,7 @@ int Rpl_sys_key_access::init(TABLE *table, uint index, bool sorted,
   return m_error;
 }
 
-int Rpl_sys_key_access::init(TABLE *table, std::string pos) {
+int Rpl_sys_key_access::init(TABLE *table, const std::string &pos) {
   m_table = table;
   m_key_type = enum_key_type::RND_POS;
   table->use_all_columns();

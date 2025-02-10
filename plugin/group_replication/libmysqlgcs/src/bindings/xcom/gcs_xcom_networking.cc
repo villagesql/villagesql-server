@@ -27,6 +27,7 @@
 #include <cstring>
 #include <memory>
 #include <set>
+#include <utility>
 
 #ifndef _WIN32
 #include <netdb.h>
@@ -256,7 +257,7 @@ bool get_local_private_addresses(std::map<std::string, int> &out,
   return false;
 }
 
-bool resolve_ip_addr_from_hostname(std::string name,
+bool resolve_ip_addr_from_hostname(const std::string &name,
                                    std::vector<std::string> &ip) {
   int res = true;
   char cip[INET6_ADDRSTRLEN];
@@ -299,7 +300,8 @@ end:
 }
 
 bool resolve_all_ip_addr_from_hostname(
-    std::string name, std::vector<std::pair<sa_family_t, std::string>> &ips) {
+    const std::string &name,
+    std::vector<std::pair<sa_family_t, std::string>> &ips) {
   int res = true;
   char cip[INET6_ADDRSTRLEN];
   auto cip_len = static_cast<socklen_t>(sizeof(cip));
@@ -488,11 +490,11 @@ const std::string Gcs_ip_allowlist::DEFAULT_ALLOWLIST =
 
 Gcs_ip_allowlist_entry::Gcs_ip_allowlist_entry(std::string addr,
                                                std::string mask)
-    : m_addr(addr), m_mask(mask) {}
+    : m_addr(std::move(addr)), m_mask(std::move(mask)) {}
 
 Gcs_ip_allowlist_entry_ip::Gcs_ip_allowlist_entry_ip(std::string addr,
                                                      std::string mask)
-    : Gcs_ip_allowlist_entry(addr, mask) {}
+    : Gcs_ip_allowlist_entry(std::move(addr), std::move(mask)) {}
 
 bool Gcs_ip_allowlist_entry_ip::init_value() {
   bool const error = get_address_for_allowlist(get_addr(), get_mask(), m_value);
@@ -509,11 +511,11 @@ std::vector<std::pair<std::vector<unsigned char>, std::vector<unsigned char>>>
 
 Gcs_ip_allowlist_entry_hostname::Gcs_ip_allowlist_entry_hostname(
     std::string addr, std::string mask)
-    : Gcs_ip_allowlist_entry(addr, mask) {}
+    : Gcs_ip_allowlist_entry(std::move(addr), std::move(mask)) {}
 
 Gcs_ip_allowlist_entry_hostname::Gcs_ip_allowlist_entry_hostname(
     std::string addr)
-    : Gcs_ip_allowlist_entry(addr, "") {}
+    : Gcs_ip_allowlist_entry(std::move(addr), "") {}
 
 bool Gcs_ip_allowlist_entry_hostname::init_value() { return false; }
 
@@ -704,7 +706,7 @@ bool Gcs_ip_allowlist::configure(const std::string &the_list) {
 }
 
 bool get_address_for_allowlist(
-    std::string addr, std::string mask,
+    const std::string &addr, const std::string &mask,
     std::pair<std::vector<unsigned char>, std::vector<unsigned char>>
         &out_pair) {
   struct sockaddr_storage sa;
@@ -766,7 +768,8 @@ void Gcs_ip_allowlist::clear() {
 
 Gcs_ip_allowlist::~Gcs_ip_allowlist() { this->clear(); }
 
-bool Gcs_ip_allowlist::add_address(std::string addr, std::string mask) {
+bool Gcs_ip_allowlist::add_address(const std::string &addr,
+                                   const std::string &mask) {
   Gcs_ip_allowlist_entry *addr_for_wl;
   struct sockaddr_storage sa;
   if (!string_to_sockaddr(addr, &sa)) {

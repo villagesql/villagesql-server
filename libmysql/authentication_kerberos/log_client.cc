@@ -27,7 +27,7 @@ void Logger_client::set_log_level(log_client_level level) {
   m_log_level = level;
 }
 
-void Logger_client::write(std::string data) {
+void Logger_client::write(const std::string &data) {
   std::cerr << data << "\n";
   std::cerr.flush();
 }

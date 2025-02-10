@@ -296,7 +296,7 @@ result parse_options_string(String *str, char delimiter,
   @retval false parsing was successful
   @retval true parsing was ununsuccessful
 */
-bool resolve_parser_result(result result, const char *function_name) {
+bool resolve_parser_result(const result &result, const char *function_name) {
   switch (result.status) {
     case parser_status::STARTS_WITH_INVALID_CHARACTER: {
       my_error(ER_INVALID_OPTION_START_CHARACTER, MYF(0), function_name,

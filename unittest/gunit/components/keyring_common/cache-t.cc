@@ -22,6 +22,7 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <string>
+#include <utility>
 
 #include <gtest/gtest.h>
 
@@ -39,7 +40,7 @@ class KeyringCommonCache_test : public ::testing::Test {};
 
 class Dummy_extension {
  public:
-  Dummy_extension(std::string ext_data) : ext_data_(ext_data) {}
+  Dummy_extension(std::string ext_data) : ext_data_(std::move(ext_data)) {}
   Dummy_extension() : Dummy_extension(std::string{""}) {}
   std::string ext_data() const { return ext_data_; }
 

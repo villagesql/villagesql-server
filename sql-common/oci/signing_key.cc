@@ -111,7 +111,7 @@ Signing_Key::Signing_Key(const std::string &file_name)
  * Constructor.
  * Read the key from the memory string.
  */
-Signing_Key::Signing_Key(ssl::Key_Content key_content) {
+Signing_Key::Signing_Key(const ssl::Key_Content &key_content) {
   void *ptr;
   ptr = static_cast<void *>(const_cast<char *>(key_content.c_str()));
   oci::ssl::BIO_ptr const key_bio{BIO_new_mem_buf(ptr, key_content.size())};

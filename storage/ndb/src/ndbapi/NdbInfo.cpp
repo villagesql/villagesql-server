@@ -100,7 +100,7 @@ bool NdbInfo::load_hardcoded_tables() {
   return true;
 }
 
-bool NdbInfo::addColumn(Uint32 tableId, Column aCol) {
+bool NdbInfo::addColumn(Uint32 tableId, const Column &aCol) {
   // Find the table with correct id
   Table *table = nullptr;
   for (auto &key_and_value : m_tables) {
@@ -484,7 +484,7 @@ const char *NdbInfo::Table::getName() const { return m_name.c_str(); }
 
 Uint32 NdbInfo::Table::getTableId() const { return m_table_id; }
 
-bool NdbInfo::Table::addColumn(const NdbInfo::Column aCol) {
+bool NdbInfo::Table::addColumn(const NdbInfo::Column &aCol) {
   auto *col = new NdbInfo::Column(aCol);
   if (col == nullptr) {
     errno = ENOMEM;

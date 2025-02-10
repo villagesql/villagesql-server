@@ -390,7 +390,7 @@ void NdbImportCsv::Input::do_init() {
  * Adjust counters at resume.  Argument is first range in old
  * rowmap.  Input file seek is done by caller.
  */
-void NdbImportCsv::Input::do_resume(Range range_in) {
+void NdbImportCsv::Input::do_resume(const Range &range_in) {
   m_startpos = range_in.m_endpos;
   m_startlineno = range_in.m_end + m_ignore_lines;
 }

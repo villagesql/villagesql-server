@@ -48,7 +48,7 @@ class HTTP_SERVER_LIB_EXPORT HttpAuth {
    * @retval true request handled
    */
   static bool require_auth(http::base::Request &req,
-                           std::shared_ptr<HttpAuthRealm> realm);
+                           const std::shared_ptr<HttpAuthRealm> &realm);
 };
 
 #endif  // ROUTER_SRC_HTTP_INCLUDE_MYSQLROUTER_COMPONENT_HTTP_SERVER_AUTH_H_

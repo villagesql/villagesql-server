@@ -26,6 +26,7 @@
 #include <gtest/gtest.h>
 #include <list>
 #include <stdexcept>
+#include <utility>
 
 #include "plugin/x/src/ngs/error_code.h"
 #include "plugin/x/src/query_string_builder.h"
@@ -109,7 +110,9 @@ TEST_F(Query_string_builder_testsuite, format_fillNumericValues) {
 
 struct Query_and_expected {
   Query_and_expected(std::string query, std::string expected, std::string value)
-      : m_query(query), m_expected(expected), m_value(value) {}
+      : m_query(std::move(query)),
+        m_expected(std::move(expected)),
+        m_value(std::move(value)) {}
 
   std::string m_query;
   std::string m_expected;
@@ -156,7 +159,9 @@ INSTANTIATE_TEST_SUITE_P(
 struct Query_and_expected_values {
   Query_and_expected_values(std::string query, std::string expected,
                             std::list<std::string> values)
-      : m_query(query), m_expected(expected), m_values(values) {}
+      : m_query(std::move(query)),
+        m_expected(std::move(expected)),
+        m_values(std::move(values)) {}
 
   std::string m_query;
   std::string m_expected;

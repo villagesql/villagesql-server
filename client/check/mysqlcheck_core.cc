@@ -27,6 +27,7 @@
 #include <mysqld_error.h>
 #include <sys/types.h>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "client/check/mysqlcheck.h"
@@ -387,7 +388,7 @@ void mysql_check(MYSQL *connection, int what_to_do, bool opt_alldbs,
   ::opt_upgrade = opt_upgrade;
   ::opt_write_binlog = opt_write_binlog;
   ::verbose = verbose;
-  ::opt_skip_database = opt_skip_database;
+  ::opt_skip_database = std::move(opt_skip_database);
   ::DBError = dberror;
 
   if (!::opt_write_binlog) {

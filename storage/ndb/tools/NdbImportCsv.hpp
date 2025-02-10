@@ -247,7 +247,7 @@ class NdbImportCsv {
           RowMap &rowmap_in, Stats &stats);
     ~Input();
     void do_init();
-    void do_resume(Range range_in);
+    void do_resume(const Range &range_in);
     void do_parse();
     void do_eval();
     void do_send(uint &curr, uint &left);

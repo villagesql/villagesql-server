@@ -50,7 +50,7 @@ class Logger_client {
   template <log_client_type::log_type type>
   void log(std::string msg);
   void set_log_level(log_client_level level);
-  void write(std::string data);
+  void write(const std::string &data);
   void log_client_plugin_data_exchange(const unsigned char *buffer,
                                        unsigned int length);
 

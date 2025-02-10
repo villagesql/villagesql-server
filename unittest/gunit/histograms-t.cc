@@ -1297,7 +1297,7 @@ void VerifySingletonBucketContentsUInt(Json_array *singleton_buckets,
 void VerifySingletonBucketContentsString(Json_array *singleton_buckets,
                                          int bucket_index,
                                          double cumulative_frequency,
-                                         String value,
+                                         const String &value,
                                          const CHARSET_INFO *charset) {
   auto *json_bucket =
       down_cast<Json_array *>((*singleton_buckets)[bucket_index]);
@@ -1338,7 +1338,7 @@ void VerifySingletonBucketContentsDouble(Json_array *singleton_buckets,
 void VerifySingletonBucketContentsDecimal(Json_array *singleton_buckets,
                                           int bucket_index,
                                           double cumulative_frequency,
-                                          my_decimal value) {
+                                          const my_decimal &value) {
   auto *json_bucket =
       down_cast<Json_array *>((*singleton_buckets)[bucket_index]);
 

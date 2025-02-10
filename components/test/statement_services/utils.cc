@@ -177,7 +177,7 @@ auto parse_rows(my_h_statement statement, size_t fields_count,
 
 // Make a string where values are separated by separator
 auto string_from_vector(const std::vector<std::string> &values,
-                        const std::string separator) -> std::string {
+                        const std::string &separator) -> std::string {
   auto temp = std::string{};
   auto first = true;
   for (const auto &header : values) {

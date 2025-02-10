@@ -37,7 +37,7 @@
   @retval  an enum to represents what algorithm is specified in case it is
            a valid algorithm else return INVALID.
 */
-enum_compression_algorithm get_compression_algorithm(std::string name) {
+enum_compression_algorithm get_compression_algorithm(const std::string &name) {
   if (name.empty() || name.c_str() == nullptr)
     return enum_compression_algorithm::MYSQL_INVALID;
   if (!my_strcasecmp(&my_charset_latin1, name.c_str(),
@@ -59,7 +59,7 @@ enum_compression_algorithm get_compression_algorithm(std::string name) {
   @param       name    comma separated list of compression algorithm names
   @param[out]  list    list containing algorithm names
 */
-void parse_compression_algorithms_list(std::string name,
+void parse_compression_algorithms_list(const std::string &name,
                                        std::vector<std::string> &list) {
   std::string token;
   std::stringstream str(name);
@@ -90,8 +90,9 @@ bool is_zstd_compression_level_valid(uint level) {
   @retval 0  success
   @retval 1  error or warnings
 */
-bool validate_compression_attributes(std::string algorithm_names,
-                                     std::string channel_name [[maybe_unused]],
+bool validate_compression_attributes(const std::string &algorithm_names,
+                                     const std::string &channel_name
+                                     [[maybe_unused]],
                                      bool ignore_errors [[maybe_unused]]) {
   DBUG_TRACE;
   /*

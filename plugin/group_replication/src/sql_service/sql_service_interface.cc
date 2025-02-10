@@ -189,7 +189,7 @@ long Sql_service_interface::execute_internal(
   return err;
 }
 
-long Sql_service_interface::execute_query(std::string sql_string) {
+long Sql_service_interface::execute_query(const std::string &sql_string) {
   DBUG_TRACE;
   assert(sql_string.length() <= UINT_MAX);
   COM_DATA cmd;
@@ -205,7 +205,7 @@ long Sql_service_interface::execute_query(std::string sql_string) {
   return err;
 }
 
-long Sql_service_interface::execute_query(std::string sql_string,
+long Sql_service_interface::execute_query(const std::string &sql_string,
                                           Sql_resultset *rset,
                                           enum cs_text_or_binary cs_txt_or_bin,
                                           const CHARSET_INFO *cs_charset) {

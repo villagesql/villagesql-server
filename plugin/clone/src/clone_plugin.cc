@@ -182,7 +182,7 @@ using Donor_Callback = std::function<bool(std::string &, uint32_t)>;
 @param[in]	callback	callback function
 @return true, if scan is successful or match is found. */
 static bool scan_donor_list(const std::string &donor_list,
-                            Donor_Callback callback) {
+                            const Donor_Callback &callback) {
   size_t comma_pos = 0;
   size_t begin_pos = 0;
 
@@ -318,7 +318,9 @@ static int check_donor_addr_format(MYSQL_THD thd, SYS_VAR *var [[maybe_unused]],
 
   const std::string addrs(addrs_cstring);
 
-  Donor_Callback const callback = [](std::string, uint32_t) { return (false); };
+  const Donor_Callback callback = [](const std::string &, uint32_t) {
+    return (false);
+  };
 
   bool const success = scan_donor_list(addrs_cstring, callback);
 

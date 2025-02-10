@@ -463,7 +463,7 @@ static struct my_option my_long_options[] = {
      0, 0, 0},
     NdbStdOpt::end_of_options};
 
-static bool parse_remap_option(const BaseString option, BaseString &db_name,
+static bool parse_remap_option(const BaseString &option, BaseString &db_name,
                                BaseString &tab_name, BaseString &col_name,
                                BaseString &func_name, BaseString &func_args,
                                BaseString &error_msg) {
@@ -1026,7 +1026,8 @@ static void save_include_exclude(int optid, char *argument) {
     g_include_exclude.push_back(option);
   }
 }
-static bool check_include_exclude(BaseString database, BaseString table) {
+static bool check_include_exclude(const BaseString &database,
+                                  const BaseString &table) {
   const char *db = database.c_str();
   const char *tbl = table.c_str();
   bool do_include = true;
@@ -1164,8 +1165,9 @@ static inline bool checkDbAndTableName(const TableS *table) {
   return false;
 }
 
-static void exclude_missing_tables(const RestoreMetaData &metaData,
-                                   const Vector<BackupConsumer *> g_consumers) {
+static void exclude_missing_tables(
+    const RestoreMetaData &metaData,
+    const Vector<BackupConsumer *> &g_consumers) {
   Uint32 i, j;
   bool isMissing;
   Vector<BaseString> missingTables;

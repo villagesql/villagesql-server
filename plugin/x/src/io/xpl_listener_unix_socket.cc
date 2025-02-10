@@ -43,6 +43,7 @@
 #include <sys/types.h>
 #include <sys/un.h>
 #include <csignal>
+#include <utility>
 #endif
 
 namespace xpl {
@@ -331,7 +332,7 @@ Listener_unix_socket::Listener_unix_socket(
     std::shared_ptr<iface::Operations_factory> operations_factory,
     const std::string &unix_socket_path, iface::Socket_events &event,
     const uint32_t backlog)
-    : m_operations_factory(operations_factory),
+    : m_operations_factory(std::move(operations_factory)),
       m_unix_socket_path(unix_socket_path),
       m_backlog(backlog),
       m_state(iface::Listener::State::k_initializing,

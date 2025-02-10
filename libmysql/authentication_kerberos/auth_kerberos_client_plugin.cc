@@ -34,6 +34,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <utility>
 
 #include <mysql.h>
 #include <mysql/client_plugin.h>
@@ -81,7 +82,7 @@ bool Kerberos_plugin_client::obtain_store_credentials() {
 }
 
 void Kerberos_plugin_client::set_mysql_account_name(
-    std::string mysql_account_name) {
+    const std::string &mysql_account_name) {
   std::string cc_user_name;
   std::stringstream log_client_stream;
 
@@ -141,17 +142,18 @@ void Kerberos_plugin_client::set_mysql_account_name(
   }
 }
 
-void Kerberos_plugin_client::set_upn_info(std::string name, std::string pwd) {
+void Kerberos_plugin_client::set_upn_info(const std::string &name,
+                                          std::string pwd) {
   /*
     Setting UPN using MySQL account name + user realm.
   */
-  m_password = pwd;
+  m_password = std::move(pwd);
   if (!name.empty()) {
     create_upn(name);
   }
 }
 
-void Kerberos_plugin_client::create_upn(std::string account_name) {
+void Kerberos_plugin_client::create_upn(const std::string &account_name) {
   if (!m_as_user_relam.empty()) {
     m_user_principal_name = account_name + "@" + m_as_user_relam;
   }

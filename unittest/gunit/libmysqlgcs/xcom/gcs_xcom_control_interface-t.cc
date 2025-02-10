@@ -24,6 +24,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "plugin/group_replication/libmysqlgcs/src/bindings/xcom/gcs_xcom_control_interface.h"
@@ -526,9 +527,10 @@ class mock_gcs_xcom_control : public Gcs_xcom_control {
       My_xp_socket_util *socket_util,
       std::unique_ptr<Network_provider_operations_interface> network_ops,
       Gcs_xcom_statistics_manager_interface *stats_mgr)
-      : Gcs_xcom_control(xcom_node_address, xcom_peers, group_identifier,
-                         xcom_proxy, xcom_group_management, gcs_engine,
-                         state_exchange, view_control, boot, socket_util,
+      : Gcs_xcom_control(xcom_node_address, xcom_peers,
+                         std::move(group_identifier), xcom_proxy,
+                         xcom_group_management, gcs_engine, state_exchange,
+                         view_control, boot, socket_util,
                          std::move(network_ops), stats_mgr) {}
 
   enum_gcs_error join() override { return join(nullptr); }
@@ -861,7 +863,7 @@ TEST_F(XComControlTest, JoinTestSkipOwnNodeAndCycleThroughPeerNodes) {
       (connection_descriptor *)malloc(sizeof(connection_descriptor *));
   failed_con->fd = -1;*/
 
-  auto create_failed_con_lambda = [](std::string a, xcom_port b) {
+  auto create_failed_con_lambda = [](const std::string &a, xcom_port b) {
     (void)a;
     (void)b;
 
@@ -872,7 +874,7 @@ TEST_F(XComControlTest, JoinTestSkipOwnNodeAndCycleThroughPeerNodes) {
     return failed_con;
   };
 
-  auto create_good_con_lambda = [](std::string a, xcom_port b) {
+  auto create_good_con_lambda = [](const std::string &a, xcom_port b) {
     (void)a;
     (void)b;
 
@@ -927,7 +929,7 @@ TEST_F(XComControlTest, JoinTestSkipOwnNodeAndCycleThroughPeerNodes) {
 }
 
 TEST_F(XComControlTest, JoinTestAllPeersUnavailable) {
-  auto create_failed_con_lambda = [](std::string a, xcom_port b) {
+  auto create_failed_con_lambda = [](const std::string &a, xcom_port b) {
     (void)a;
     (void)b;
 
