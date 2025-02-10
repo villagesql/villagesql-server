@@ -1217,78 +1217,61 @@ int MY_CHARSET_LOADER::add_collation(CHARSET_INFO *cs) {
     dst->state |= MY_CS_BINSORT;
   }
 
-  if (!(dst->state & MY_CS_COMPILED)) {
-    if (cs_copy_data(this, dst, cs)) return MY_XML_ERROR;
+  if (cs_copy_data(this, dst, cs)) return MY_XML_ERROR;
 
-    dst->caseup_multiply = dst->casedn_multiply = 1;
-    dst->levels_for_compare = 1;
+  dst->caseup_multiply = dst->casedn_multiply = 1;
+  dst->levels_for_compare = 1;
 
-    if (!strcmp(cs->csname, "ucs2")) {
-      copy_uca_collation(dst, &my_charset_ucs2_unicode_ci);
-      dst->state |= MY_CS_LOADED | MY_CS_NONASCII;
-    } else if (!strcmp(cs->csname, "utf8") || !strcmp(cs->csname, "utf8mb3")) {
-      copy_uca_collation(dst, &my_charset_utf8mb3_unicode_ci);
-      dst->ctype = my_charset_utf8mb3_unicode_ci.ctype;
-      dst->state |= MY_CS_LOADED;
-    } else if (!strcmp(cs->csname, "utf8mb4")) {
-      copy_uca_collation(dst, &my_charset_utf8mb4_unicode_ci);
-      dst->ctype = my_charset_utf8mb4_unicode_ci.ctype;
-      dst->state |= MY_CS_LOADED;
-    } else if (!strcmp(cs->csname, "utf16")) {
-      copy_uca_collation(dst, &my_charset_utf16_unicode_ci);
-      dst->state |= MY_CS_LOADED | MY_CS_NONASCII;
-    } else if (!strcmp(cs->csname, "utf32")) {
-      copy_uca_collation(dst, &my_charset_utf32_unicode_ci);
-      dst->state |= MY_CS_LOADED | MY_CS_NONASCII;
-    } else {
-      const uint8_t *sort_order = dst->sort_order;
-      simple_cs_init_functions(dst);
-      dst->mbminlen = 1;
-      dst->mbmaxlen = 1;
-      if (simple_cs_is_full(dst)) {
-        dst->state |= MY_CS_LOADED;
-      }
-
-      /*
-        Check if case sensitive sort order: A < a < B.
-        We need MY_CS_FLAG for regex library, and for
-        case sensitivity flag for 5.0 client protocol,
-        to support isCaseSensitive() method in JDBC driver
-      */
-      if (sort_order &&
-          sort_order[static_cast<int>('A')] <
-              sort_order[static_cast<int>('a')] &&
-          sort_order[static_cast<int>('a')] < sort_order[static_cast<int>('B')])
-        dst->state |= MY_CS_CSSORT;
-
-      if (my_charset_is_8bit_pure_ascii(dst)) {
-        dst->state |= MY_CS_PUREASCII;
-      }
-      if (!my_charset_is_ascii_compatible(cs)) {
-        dst->state |= MY_CS_NONASCII;
-      }
-    }
-    if (dst->ctype && is_supported_parser_charset(dst) &&
-        init_state_maps(this, dst)) {
-      return MY_XML_ERROR;
-    }
-    dst->state |= MY_CS_AVAILABLE;
+  if (!strcmp(cs->csname, "ucs2")) {
+    copy_uca_collation(dst, &my_charset_ucs2_unicode_ci);
+    dst->state |= MY_CS_LOADED | MY_CS_NONASCII;
+  } else if (!strcmp(cs->csname, "utf8") || !strcmp(cs->csname, "utf8mb3")) {
+    copy_uca_collation(dst, &my_charset_utf8mb3_unicode_ci);
+    dst->ctype = my_charset_utf8mb3_unicode_ci.ctype;
+    dst->state |= MY_CS_LOADED;
+  } else if (!strcmp(cs->csname, "utf8mb4")) {
+    copy_uca_collation(dst, &my_charset_utf8mb4_unicode_ci);
+    dst->ctype = my_charset_utf8mb4_unicode_ci.ctype;
+    dst->state |= MY_CS_LOADED;
+  } else if (!strcmp(cs->csname, "utf16")) {
+    copy_uca_collation(dst, &my_charset_utf16_unicode_ci);
+    dst->state |= MY_CS_LOADED | MY_CS_NONASCII;
+  } else if (!strcmp(cs->csname, "utf32")) {
+    copy_uca_collation(dst, &my_charset_utf32_unicode_ci);
+    dst->state |= MY_CS_LOADED | MY_CS_NONASCII;
   } else {
+    const uint8_t *sort_order = dst->sort_order;
+    simple_cs_init_functions(dst);
+    dst->mbminlen = 1;
+    dst->mbmaxlen = 1;
+    if (simple_cs_is_full(dst)) {
+      dst->state |= MY_CS_LOADED;
+    }
+
     /*
-      We need the below to make get_collation_name()
-      and get_charset_number() working even if a
-      character set has not been really incompiled.
-      The above functions are used for example
-      in error message compiler utilities/comp_err.cc.
+      Check if case sensitive sort order: A < a < B.
+      We need MY_CS_FLAG for regex library, and for
+      case sensitivity flag for 5.0 client protocol,
+      to support isCaseSensitive() method in JDBC driver
     */
-    if (cs->comment)
-      if (!(dst->comment = once_strdup(this, cs->comment))) return MY_XML_ERROR;
-    if (cs->csname)
-      if (!(dst->csname = once_strdup(this, cs->csname))) return MY_XML_ERROR;
-    if (cs->m_coll_name)
-      if (!(dst->m_coll_name = once_strdup(this, cs->m_coll_name)))
-        return MY_XML_ERROR;
+    if (sort_order &&
+        sort_order[static_cast<int>('A')] < sort_order[static_cast<int>('a')] &&
+        sort_order[static_cast<int>('a')] < sort_order[static_cast<int>('B')])
+      dst->state |= MY_CS_CSSORT;
+
+    if (my_charset_is_8bit_pure_ascii(dst)) {
+      dst->state |= MY_CS_PUREASCII;
+    }
+    if (!my_charset_is_ascii_compatible(cs)) {
+      dst->state |= MY_CS_NONASCII;
+    }
   }
+  if (dst->ctype && is_supported_parser_charset(dst) &&
+      init_state_maps(this, dst)) {
+    return MY_XML_ERROR;
+  }
+  dst->state |= MY_CS_AVAILABLE;
+
   clear_cs_info(cs);
   if (mysql::collation_internals::entry->add_internal_collation(dst)) {
     return MY_XML_ERROR;  // TODO: error message on duplicates?
