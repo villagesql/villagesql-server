@@ -578,7 +578,11 @@ from (select * from t11 union
 select * from t11_c) a;
 count(*)
 1
-drop table t1_c,t2_c,t3_c,t4_c,t5_c,t6_c,t7_c,t8_c,t9_c,t10_c,t11_c;
+drop table t1_c,t3_c,t4_c,t5_c,t6_c,t7_c,t8_c,t9_c,t10_c,t11_c;
+select output_line from ndb_restore_output where output_line like '%t2_c%' order by output_line;
+output_line
+Create table `test/def/t2_c` failed: 721: Schema object with given name already exists
+Restore: Failed to restore table: `test/def/t2_c` ... Exiting 
 CREATE TABLE t11_c (
 c1 int primary key, c2 char(10), c3 varchar(10)
 ) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
@@ -587,7 +591,7 @@ c1 int primary key, c2 char(10), c3 varchar(10)
 ) ENGINE=ndbcluster DEFAULT CHARSET=latin1;
 INSERT INTO t11_c VALUES(1, "aaaaa", "bbbbb"), (2, "ccccc", "ddddd"), (3, "eeeee","fffff");
 INSERT INTO t12_c VALUES(4, "ggggg", "hhhhh"), (5, "iiiii", "jjjjj"), (6, "kkkkk","lllll");
-drop table t11_c,t12_c;
+drop table t2_c,t11_c,t12_c;
 SELECT * FROM t11_c ORDER BY c1;
 c1	c2	c3
 1	aaaaa	bbbbb
