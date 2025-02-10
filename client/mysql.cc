@@ -3640,7 +3640,8 @@ static int com_go_impl(String *buffer, char *line [[maybe_unused]]) {
   char buff[200];             /* about 110 chars used so far */
   char time_buff[52 + 3 + 1]; /* time max + space&parens + NUL */
   MYSQL_RES *result;
-  ulong timer, warnings = 0;
+  ulong warnings = 0;
+  ulonglong timer;
   uint error = 0;
   int err = 0;
 
@@ -5677,7 +5678,9 @@ static void nice_time(double sec, char *buff, bool part_second) {
 }
 
 static void end_timer(ulonglong start_time, char *buff) {
-  nice_time((double)(my_timer_microseconds() - start_time) / (double)(1000000),
+  ulonglong end_time = my_timer_microseconds();
+  nice_time((double)(end_time > start_time ? end_time - start_time : 0) /
+                (double)(1000000),
             buff, true);
 }
 
