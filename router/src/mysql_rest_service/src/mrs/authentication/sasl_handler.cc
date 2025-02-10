@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2023, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2023, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -77,7 +77,9 @@ SaslHandler::SaslHandler(const AuthApp &entry) : entry_{entry} {
   log_debug("SaslHandler for service %s", to_string(entry_).c_str());
 }
 
-UniversalId SaslHandler::get_service_id() const { return entry_.service_id; }
+std::set<UniversalId> SaslHandler::get_service_ids() const {
+  return entry_.service_ids;
+}
 
 const AuthApp &SaslHandler::get_entry() const { return entry_; }
 

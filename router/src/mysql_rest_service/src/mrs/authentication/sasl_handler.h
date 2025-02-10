@@ -78,7 +78,7 @@ class SaslHandler : public interface::AuthorizeHandler {
   SaslHandler(const AuthApp &entry);
 
   const AuthApp &get_entry() const override;
-  UniversalId get_service_id() const override;
+  std::set<UniversalId> get_service_ids() const override;
   UniversalId get_id() const override;
 
   virtual SessionData *allocate_session_data() = 0;

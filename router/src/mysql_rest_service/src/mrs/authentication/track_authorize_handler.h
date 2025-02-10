@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -44,8 +44,8 @@ class TrackAuthorizeHandler : public Handler {
   template <typename... T>
   TrackAuthorizeHandler(Callback *cb, T... t) : Handler(t...), cb_{cb} {}
 
-  UniversalId get_service_id() const override {
-    return Handler::get_service_id();
+  std::set<UniversalId> get_service_ids() const override {
+    return Handler::get_service_ids();
   }
 
   bool redirects(RequestContext &ctxt) const override {

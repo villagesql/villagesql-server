@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -59,14 +59,14 @@ Oauth2GoogleHandler::~Oauth2GoogleHandler() {
   log_debug("~Oauth2GoogleHandler for service %s", to_string(entry_).c_str());
 }
 
-std::string Oauth2GoogleHandler::get_url_location(GenericSessionData *,
+std::string Oauth2GoogleHandler::get_url_location(GenericSessionData *session,
                                                   Url *url) const {
   ::http::base::Uri result{
       !entry_.url.empty() ? entry_.url
                           : "https://accounts.google.com/o/oauth2/v2/auth"};
 
   auto &requests_uri = url->uri_;
-  std::string redirect_uri = entry_.host + requests_uri.get_path();
+  std::string redirect_uri = session->redirection_host;
 
   if (requests_uri.get_query().length()) {
     redirect_uri += "?" + requests_uri.get_query();

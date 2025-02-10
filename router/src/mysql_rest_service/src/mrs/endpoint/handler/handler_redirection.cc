@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -48,11 +48,13 @@ static std::string as_string(const std::vector<T> &v) {
 }
 
 HandlerRedirection::HandlerRedirection(
-    const UniversalId &service_id, bool requires_authentication,
-    const std::string &url_host, const std::string &path,
-    const std::string &file_name, const std::string &file_new_location,
+    const Protocol protocol, const UniversalId &service_id,
+    bool requires_authentication, const std::string &url_host,
+    const std::string &path, const std::string &file_name,
+    const std::string &file_new_location,
     mrs::interface::AuthorizeManager *auth_manager, bool pernament)
-    : Handler(url_host, {"^"s + path + "$"}, std::string{}, auth_manager),
+    : Handler(protocol, url_host, {"^"s + path + "$"}, std::string{},
+              auth_manager),
       service_id_{service_id},
       requires_authentication_{requires_authentication},
       path_{path},

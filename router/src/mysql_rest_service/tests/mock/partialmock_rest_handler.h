@@ -31,7 +31,11 @@ class PartialMockRestHandler : public mrs::rest::Handler {
  public:
   PartialMockRestHandler(const std::string &rest_path_matcher,
                          mrs::interface::AuthorizeManager *auth_manager)
-      : Handler{"", {rest_path_matcher}, std::string{}, auth_manager} {}
+      : Handler{mrs::endpoint::handler::k_protocolHttp,
+                "",
+                {rest_path_matcher},
+                std::string{},
+                auth_manager} {}
 
   MOCK_METHOD(bool, may_check_access, (), (const, override));
   MOCK_METHOD(Authorization, requires_authentication, (), (const, override));

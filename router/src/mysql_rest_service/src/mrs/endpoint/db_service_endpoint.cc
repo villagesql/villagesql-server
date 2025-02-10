@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -30,6 +30,7 @@
 #include <string>
 
 #include "mrs/endpoint/content_set_endpoint.h"
+#include "mrs/endpoint/handler/helper/utils_proto.h"
 #include "mrs/endpoint/url_host_endpoint.h"
 #include "mrs/file_system/db_service_file_system.h"
 #include "mrs/router_observation_entities.h"
@@ -45,44 +46,6 @@ using DbServicePtr = DbServiceEndpoint::DbServicePtr;
 using UniversalId = DbServiceEndpoint::UniversalId;
 using EndpointConfiguration = DbServiceEndpoint::EndpointConfiguration;
 using EnabledType = DbServiceEndpoint::EnabledType;
-
-namespace {
-
-enum UsedProtocol {
-  k_usedProtocolNone,
-  k_usedProtocolHttp,
-  k_usedProtocolHttps
-};
-
-const std::string k_http = "HTTP";
-const std::string k_https = "HTTPS";
-
-UsedProtocol get_properly_configured_protocol(
-    const std::set<std::string> &protocols,
-    const EndpointConfiguration *configuration) {
-  if (0 == protocols.count(configuration->does_server_support_https() ? k_https
-                                                                      : k_http))
-    return k_usedProtocolNone;
-
-  if (configuration->does_server_support_https()) return k_usedProtocolHttps;
-
-  return k_usedProtocolHttp;
-}
-
-void add_protocol_to_host(UsedProtocol protocol, ::http::base::Uri *uri) {
-  switch (protocol) {
-    case k_usedProtocolHttp:
-      uri->set_scheme("http");
-      return;
-    case k_usedProtocolHttps:
-      uri->set_scheme("https");
-      return;
-    default:
-      return;
-  }
-}
-
-}  // namespace
 
 DbServiceEndpoint::DbServiceEndpoint(const DbService &entry,
                                      EndpointConfigurationPtr configuration,
@@ -203,12 +166,13 @@ std::string DbServiceEndpoint::get_my_url_part() const {
 }
 
 DbServiceEndpoint::Uri DbServiceEndpoint::get_url() const {
+  using namespace ::mrs::endpoint::handler;
   auto parent = get_parent_ptr();
   if (parent) {
     auto parent_url = parent->get_url();
     if (!parent_url.empty()) {
-      auto protocol = get_properly_configured_protocol(entry_->url_protocols,
-                                                       configuration_.get());
+      auto protocol = get_properly_configured_used_protocol(
+          entry_->url_protocols, configuration_.get());
       add_protocol_to_host(protocol, &parent_url);
 
       parent_url.set_path(parent_url.get_path() + get_my_url_part());

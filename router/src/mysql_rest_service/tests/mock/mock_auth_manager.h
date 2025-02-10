@@ -35,8 +35,8 @@ class MockAuthManager : public mrs::interface::AuthorizeManager {
 
   MOCK_METHOD(void, configure, (const std::string &), (override));
   MOCK_METHOD(bool, authorize,
-              (ServiceId id, mrs::rest::RequestContext &ctxt,
-               AuthUser *out_user),
+              (const std::string &proto, const std::string &host, ServiceId id,
+               mrs::rest::RequestContext &ctxt, AuthUser *out_user),
               (override));
   MOCK_METHOD(bool, is_authorized,
               (ServiceId id, mrs::rest::RequestContext &ctxt, AuthUser *user),

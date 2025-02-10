@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -40,7 +40,7 @@
 #include "mrs/database/helper/bind.h"
 #include "mrs/database/query_rest_sp.h"
 #include "mrs/database/query_rest_sp_media.h"
-#include "mrs/endpoint/handler/utilities.h"
+#include "mrs/endpoint/handler/helper/utilities.h"
 #include "mrs/http/error.h"
 #include "mrs/rest/request_context.h"
 #include "mrs/router_observation_entities.h"

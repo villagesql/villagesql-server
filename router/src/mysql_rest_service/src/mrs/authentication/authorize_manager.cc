@@ -240,7 +240,7 @@ AuthorizeManager::Container AuthorizeManager::get_handlers_by_service_id(
   helper::container::copy_if(
       container_,
       [service_id](auto &element) {
-        return element->get_service_id() == service_id;
+        return element->get_service_ids().contains(service_id);
       },
       out_result);
 
@@ -631,7 +631,8 @@ Session *AuthorizeManager::get_session_id_from_cookie(
   return nullptr;
 }
 
-bool AuthorizeManager::authorize(ServiceId service_id,
+bool AuthorizeManager::authorize(const std::string &proto,
+                                 const std::string &host, ServiceId service_id,
                                  rest::RequestContext &ctxt,
                                  AuthUser *out_user) {
   if (auto session = get_session_id_from_cookie(service_id, ctxt.cookies);
@@ -713,6 +714,13 @@ bool AuthorizeManager::authorize(ServiceId service_id,
         selected_handler->get_id(),
         get_session_cookie_key_name(selected_handler->get_id()));
     ctxt.session->generate_token = use_jwt;
+    // For now we set in only in case of authentication,
+    // Its needed for building full-urls for redirection authentication-server.
+    //
+    // We do not set it for sessions created from JWT tokens (received from
+    // other MRS instances).
+    ctxt.session->proto = proto;
+    ctxt.session->host = host;
 
     log_debug("SessionId source: new id=%s",
               ctxt.session->get_session_id().c_str());

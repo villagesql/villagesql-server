@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -82,7 +82,9 @@ bool Oauth2Handler::RequestHandlerJsonSimpleObject::response(
   return true;
 }
 
-UniversalId Oauth2Handler::get_service_id() const { return entry_.service_id; }
+std::set<UniversalId> Oauth2Handler::get_service_ids() const {
+  return entry_.service_ids;
+}
 
 const AuthApp &Oauth2Handler::get_entry() const { return entry_; }
 
@@ -186,15 +188,16 @@ void Oauth2Handler::new_session_start_login(RequestContext &ctxt,
                                             Session *session) {
   auto url = ctxt.get_http_url();
 
-  log_debug("entry_.url_host = %s", entry_.url_host.c_str());
-  log_debug("entry_.host = %s", entry_.host.c_str());
+  log_debug("session.proto = %s", session->proto.c_str());
+  log_debug("session.host = %s", session->host.c_str());
 
   std::string uri;
-  if (!entry_.url_host.empty()) {
-    uri = entry_.host + url.get_path();
+  if (!session->host.empty()) {
+    uri = session->proto + "://" + session->host + url.get_path();
   } else {
     auto host_cstr = ctxt.get_in_headers().find_cstr(":authority");
-    uri = entry_.host + (host_cstr ? host_cstr : "localhost") + url.get_path();
+    uri = session->proto + "://" + (host_cstr ? host_cstr : "localhost") +
+          url.get_path();
   }
   auto data = new GenericSessionData();
   session->set_data(data);
@@ -230,10 +233,10 @@ bool Oauth2Handler::authorize(RequestContext &ctxt, Session *session,
   const bool code_in_parameters = 0 != query_parameters.count(kCode);
 
   log_debug(
-      "Oauth2Handler::authorize(id=%s, service_id=%s, session_id=%s) "
+      "Oauth2Handler::authorize(id=%s, session_id=%s) "
       "=> "
       "%s",
-      entry_.id.to_string().c_str(), entry_.service_id.to_string().c_str(),
+      entry_.id.to_string().c_str(),
       session_data ? session_data->internal_session->get_session_id().c_str()
                    : "null",
       helper::json::to_string(query_parameters).c_str());
@@ -321,12 +324,6 @@ bool Oauth2Handler::http_verify_account(Session *session,
   session->user.app_id = entry_.id;
 
   return um_.user_get(&session->user, sql_session);
-}
-
-const std::string &Oauth2Handler::get_host_alias() const {
-  if (!entry_.host_alias.empty()) return entry_.host_alias;
-
-  return entry_.host;
 }
 
 }  // namespace authentication

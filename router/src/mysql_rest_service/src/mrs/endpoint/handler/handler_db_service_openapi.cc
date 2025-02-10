@@ -30,8 +30,9 @@
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
 
-#include "mrs/endpoint/handler/url_paths.h"
-#include "mrs/endpoint/handler/utilities.h"
+#include "mrs/endpoint/handler/helper/url_paths.h"
+#include "mrs/endpoint/handler/helper/utilities.h"
+#include "mrs/endpoint/handler/helper/utils_proto.h"
 #include "mrs/http/error.h"
 #include "mrs/rest/openapi_object_creator.h"
 #include "mrs/rest/request_context.h"
@@ -59,7 +60,8 @@ auto get_regex_path_service_openapi(std::weak_ptr<DbServiceEndpoint> endpoint) {
 HandlerDbServiceOpenAPI::HandlerDbServiceOpenAPI(
     std::weak_ptr<DbServiceEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager)
-    : mrs::rest::Handler(get_endpoint_host(endpoint),
+    : mrs::rest::Handler(handler::get_protocol(endpoint),
+                         get_endpoint_host(endpoint),
                          /*regex-path: ^/service/open-api-catalog$*/
                          {get_regex_path_service_openapi(endpoint)},
                          get_endpoint_options(lock(endpoint)), auth_manager),

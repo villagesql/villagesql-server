@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -33,14 +33,25 @@ IMPORT_LOG_FUNCTIONS()
 namespace mrs {
 namespace authentication {
 
+std::string to_string(const std::set<UniversalId> &ids) {
+  std::string result;
+  for (const auto &id : ids) {
+    if (!result.empty()) result += ",";
+    result += id.to_string();
+  }
+  return result;
+}
+
 MysqlHandler::MysqlHandler(const AuthApp &entry,
                            collector::MysqlCacheManager *cache_manager)
     : WwwAuthenticationHandler(entry), cache_manager_{cache_manager} {
-  log_debug("MysqlHandler for service %s, %s",
-            entry.service_id.to_string().c_str(), to_string(entry).c_str());
+  log_debug("MysqlHandler for services [%s], %s",
+            to_string(entry.service_ids).c_str(), to_string(entry).c_str());
 }
 
-UniversalId MysqlHandler::get_service_id() const { return entry_.service_id; }
+std::set<UniversalId> MysqlHandler::get_service_ids() const {
+  return entry_.service_ids;
+}
 
 UniversalId MysqlHandler::get_id() const { return entry_.id; }
 

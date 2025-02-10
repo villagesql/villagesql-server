@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
+  Copyright (c) 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -22,37 +22,29 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_REST_MRS_SRC_MRS_AUTHENTICATION_BASIC_HANDLER_H_
-#define ROUTER_SRC_REST_MRS_SRC_MRS_AUTHENTICATION_BASIC_HANDLER_H_
+#ifndef ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_HELPER_PROTOCOL_H_
+#define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_HELPER_PROTOCOL_H_
 
-#include "collector/mysql_cache_manager.h"
-#include "mrs/authentication/www_authentication_handler.h"
-#include "mrs/database/entry/auth_app.h"
-#include "mrs/users/user_manager.h"
+#include <string>
 
 namespace mrs {
-namespace authentication {
+namespace endpoint {
+namespace handler {
 
-class MysqlHandler : public WwwAuthenticationHandler {
- public:
-  using AuthApp = database::entry::AuthApp;
+enum Protocol { k_protocolHttp, k_protocolHttps };
 
- public:
-  MysqlHandler(const AuthApp &entry,
-               collector::MysqlCacheManager *cache_manager);
-
-  std::set<UniversalId> get_service_ids() const override;
-  UniversalId get_id() const override;
-
-  bool verify_credential(const Credentials &credentials,
-                         SqlSessionCached *out_cache,
-                         AuthUser *out_user) override;
-
- private:
-  collector::MysqlCacheManager *cache_manager_;
+enum UsedProtocol {
+  k_usedProtocolNone,
+  k_usedProtocolHttp,
+  k_usedProtocolHttps
 };
 
-}  // namespace authentication
+const std::string k_http = "HTTP";
+const std::string k_https = "HTTPS";
+
+}  // namespace handler
+}  // namespace endpoint
 }  // namespace mrs
 
-#endif  // ROUTER_SRC_REST_MRS_SRC_MRS_AUTHENTICATION_BASIC_HANDLER_H_
+#endif /* ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_HANDLER_HELPER_PROTOCOL_H_ \
+        */

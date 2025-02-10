@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -32,7 +32,7 @@
 #include "mysql/harness/string_utils.h"
 
 #include "helper/media_type.h"
-#include "mrs/endpoint/handler/url_paths.h"
+#include "mrs/endpoint/handler/helper/url_paths.h"
 #include "mrs/http/error.h"
 #include "mrs/rest/request_context.h"
 #include "mysqlrouter/base64.h"
@@ -51,14 +51,13 @@ static std::string as_string(const std::vector<T> &v) {
 }
 const std::string k_slash{"/"};
 
-HandlerString::HandlerString(const UniversalId &service_id,
-                             bool requires_authentication,
-                             const std::string &path,
-                             const std::string &file_name,
-                             const std::string &file_content,
-                             const bool is_index,
-                             mrs::interface::AuthorizeManager *auth_manager)
-    : Handler("", regex_path_file(path, k_slash + file_name, is_index),
+HandlerString::HandlerString(
+    const Protocol protocol, const UniversalId &service_id,
+    bool requires_authentication, const std::string &path,
+    const std::string &file_name, const std::string &file_content,
+    const bool is_index, mrs::interface::AuthorizeManager *auth_manager)
+    : Handler(protocol, "",
+              regex_path_file(path, k_slash + file_name, is_index),
               std::string{}, auth_manager),
       service_id_{service_id},
       requires_authentication_{requires_authentication},

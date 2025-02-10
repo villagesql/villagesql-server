@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -46,8 +46,9 @@
 #include "mrs/endpoint/handler/handler_db_service_openapi.h"
 #include "mrs/endpoint/handler/handler_redirection.h"
 #include "mrs/endpoint/handler/handler_string.h"
+#include "mrs/endpoint/handler/helper/utilities.h"
+#include "mrs/endpoint/handler/helper/utils_proto.h"
 #include "mrs/endpoint/handler/persistent/persistent_data_content_file.h"
-#include "mrs/endpoint/handler/utilities.h"
 #include "mrs/endpoint/url_host_endpoint.h"
 
 namespace mrs {
@@ -56,6 +57,7 @@ namespace endpoint {
 using namespace mrs::endpoint::handler;
 
 using HandlerPtr = std::unique_ptr<HandlerFactory::Handler>;
+using EndpointBase = mrs::interface::EndpointBase;
 
 static std::string get_regex_path_authnetication(
     const std::shared_ptr<mrs::database::entry::DbService> &service) {
@@ -77,6 +79,51 @@ static std::string get_path_redirect(
                               : "/authentication";
 
   return service->url_context_root + auth_path + "/completed";
+}
+
+static std::shared_ptr<DbServiceEndpoint> get_endpoint_db_service(
+    std::shared_ptr<EndpointBase> endpoint) {
+  auto db_service_endpoint =
+      std::dynamic_pointer_cast<DbServiceEndpoint>(endpoint);
+
+  if (db_service_endpoint) return db_service_endpoint;
+
+  auto db_schema_endpoint =
+      std::dynamic_pointer_cast<DbSchemaEndpoint>(endpoint);
+  if (db_schema_endpoint) {
+    return lock_parent(db_schema_endpoint);
+  }
+
+  auto db_object_endpoint =
+      std::dynamic_pointer_cast<DbObjectEndpoint>(endpoint);
+  if (db_object_endpoint) {
+    return lock_parent(lock_parent(db_object_endpoint));
+  }
+
+  auto content_set_endpoint =
+      std::dynamic_pointer_cast<ContentSetEndpoint>(endpoint);
+  if (content_set_endpoint) {
+    return lock_parent(content_set_endpoint);
+  }
+
+  auto content_file_endpoint =
+      std::dynamic_pointer_cast<ContentFileEndpoint>(endpoint);
+  if (content_file_endpoint) {
+    return lock_parent(lock_parent(content_file_endpoint));
+  }
+
+  return {};
+}
+
+handler::Protocol get_protocol(std::shared_ptr<EndpointBase> endpoint) {
+  if (auto service_ep = get_endpoint_db_service(endpoint); service_ep.get())
+    return handler::get_protocol(service_ep);
+
+  // Endpoint is UrlHost, on this level we do not have any information
+  // about the protocol. Let try to go forward with http_plugin configuration.
+  return endpoint->get_configuration()->does_server_support_https()
+             ? handler::k_protocolHttps
+             : handler::k_protocolHttp;
 }
 
 HandlerFactory::HandlerFactory(AuthorizeManager *auth_manager,
@@ -231,25 +278,31 @@ HandlerPtr HandlerFactory::create_content_file(
 }
 
 HandlerPtr HandlerFactory::create_string_handler(
-    const UniversalId &service_id, bool requires_authentication, const Uri &,
-    const std::string &path, const std::string &file_name,
-    const std::string &file_content, bool is_index) {
-  return std::make_unique<HandlerString>(service_id, requires_authentication,
-                                         path, file_name, file_content,
-                                         is_index, auth_manager_);
+    EndpointBasePtr endpoint, const UniversalId &service_id,
+    bool requires_authentication, const Uri &, const std::string &path,
+    const std::string &file_name, const std::string &file_content,
+    bool is_index) {
+  auto protocol = get_protocol(endpoint);
+
+  return std::make_unique<HandlerString>(
+      protocol, service_id, requires_authentication, path, file_name,
+      file_content, is_index, auth_manager_);
 }
 
 HandlerPtr HandlerFactory::create_redirection_handler(
-    const UniversalId &service_id, bool requires_authentication, const Uri &url,
-    const std::string &path, const std::string &file_name,
-    const std::string &redirection_path, const bool pernament) {
+    EndpointBasePtr endpoint, const UniversalId &service_id,
+    bool requires_authentication, const Uri &url, const std::string &path,
+    const std::string &file_name, const std::string &redirection_path,
+    const bool pernament) {
+  auto protocol = get_protocol(endpoint);
+
   std::string whole_path = path;
   if (!file_name.empty()) {
     whole_path += "/" + file_name;
   }
   return std::make_unique<HandlerRedirection>(
-      service_id, requires_authentication, get_endpoint_host(url), whole_path,
-      file_name, redirection_path, auth_manager_, pernament);
+      protocol, service_id, requires_authentication, get_endpoint_host(url),
+      whole_path, file_name, redirection_path, auth_manager_, pernament);
 }
 
 HandlerPtr HandlerFactory::create_authentication_login(
@@ -273,8 +326,9 @@ HandlerPtr HandlerFactory::create_authentication_login(
   auto redirect_path = get_path_redirect(entry);
 
   return std::make_unique<HandlerAuthorizeLogin>(
-      url_host_entry->name, entry->id, regex_path,
-      entry->options.value_or(std::string{}), redirect_path, auth_manager_);
+      handler::get_protocol(db_service_endpoint), url_host_entry->name,
+      entry->id, regex_path, entry->options.value_or(std::string{}),
+      redirect_path, auth_manager_);
 }
 
 HandlerPtr HandlerFactory::create_authentication_logout(
@@ -297,8 +351,9 @@ HandlerPtr HandlerFactory::create_authentication_logout(
   auto regex_path = get_regex_path_authnetication(entry) + "/logout$";
 
   return std::make_unique<HandlerAuthorizeLogout>(
-      url_host_entry->name, entry->id, regex_path,
-      entry->options.value_or(std::string{}), auth_manager_);
+      handler::get_protocol(db_service_endpoint), url_host_entry->name,
+      entry->id, regex_path, entry->options.value_or(std::string{}),
+      auth_manager_);
 }
 
 HandlerPtr HandlerFactory::create_authentication_completed(
@@ -321,8 +376,8 @@ HandlerPtr HandlerFactory::create_authentication_completed(
   auto regex_path = get_regex_path_authnetication(entry) + "/completed";
 
   return std::make_unique<HandlerAuthorizeCompleted>(
-      url_host_entry->name, entry->id, regex_path,
-      entry->options.value_or(std::string{}),
+      handler::get_protocol(db_service_endpoint), url_host_entry->name,
+      entry->id, regex_path, entry->options.value_or(std::string{}),
       entry->auth_completed_page_content.value_or(std::string{}),
       auth_manager_);
 }
@@ -347,8 +402,9 @@ HandlerPtr HandlerFactory::create_authentication_user(
   auto regex_path = get_regex_path_authnetication(entry) + "/user";
 
   return std::make_unique<HandlerAuthorizeUser>(
-      url_host_entry->name, entry->id, regex_path,
-      entry->options.value_or(std::string{}), auth_manager_);
+      handler::get_protocol(db_service_endpoint), url_host_entry->name,
+      entry->id, regex_path, entry->options.value_or(std::string{}),
+      auth_manager_);
 }
 
 HandlerPtr HandlerFactory::create_authentication_auth_apps(
@@ -372,8 +428,9 @@ HandlerPtr HandlerFactory::create_authentication_auth_apps(
   auto redirect_path = get_path_redirect(entry);
 
   return std::make_unique<HandlerAuthorizeAuthApps>(
-      url_host_entry->name, entry->id, regex_path,
-      entry->options.value_or(std::string{}), redirect_path, auth_manager_);
+      handler::get_protocol(db_service_endpoint), url_host_entry->name,
+      entry->id, regex_path, entry->options.value_or(std::string{}),
+      redirect_path, auth_manager_);
 }
 
 HandlerPtr HandlerFactory::create_authentication_status(
@@ -396,8 +453,9 @@ HandlerPtr HandlerFactory::create_authentication_status(
   auto regex_path = get_regex_path_authnetication(entry) + "/status$";
 
   return std::make_unique<HandlerAuthorizeStatus>(
-      url_host_entry->name, entry->id, regex_path,
-      entry->options.value_or(std::string{}), auth_manager_);
+      handler::get_protocol(db_service_endpoint), url_host_entry->name,
+      entry->id, regex_path, entry->options.value_or(std::string{}),
+      auth_manager_);
 }
 
 }  // namespace endpoint

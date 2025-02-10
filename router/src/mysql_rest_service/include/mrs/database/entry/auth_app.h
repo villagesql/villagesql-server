@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,6 +25,7 @@
 #ifndef ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_AUTH_APP_H_
 #define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_AUTH_APP_H_
 
+#include <set>
 #include <vector>
 
 #include "mrs/database/entry/universal_id.h"
@@ -39,9 +40,8 @@ namespace entry {
 class AuthApp {
  public:
   UniversalId id;
-  UniversalId service_id;
+  std::set<UniversalId> service_ids;
   UniversalId vendor_id;
-  std::string service_name;
   std::string vendor_name;
   std::string app_name;
   bool active;
@@ -50,18 +50,9 @@ class AuthApp {
   std::string url_validation;
   std::string app_id;
   std::string app_token;
-  std::string url_host;  // direct value from the table, without a protocol
-                         // prefix as stored in .host field
-  // TODO(lkotula): Remove ? (Shouldn't be in review)
-  std::string host;
-  std::string host_alias;
   std::string url_access_token;
   bool limit_to_registered_users;
   helper::Optional<UniversalId> default_role_id;
-  std::string auth_path;
-  std::string options;
-  std::string auth_completed_url;
-  std::string redirection_default_page;
 };
 
 inline helper::json::SerializerToText &operator<<(
@@ -77,7 +68,12 @@ inline std::string to_string(const AuthApp &entry) {
   {
     auto obj = stt.add_object();
     stt.member_add_value("id", "0x" + entry.id.to_string());
-    stt.member_add_value("service_id", "0x" + entry.service_id.to_string());
+    {
+      auto arr = stt.member_add_array("service_id");
+      for (const auto &id : entry.service_ids) {
+        *arr << ("0x" + id.to_string());
+      }
+    }
     stt.member_add_value("name", entry.vendor_name);
     stt.member_add_value("limit_to_registered_users",
                          entry.limit_to_registered_users);

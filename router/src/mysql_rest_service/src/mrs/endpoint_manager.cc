@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -43,18 +43,10 @@
 #include "mrs/endpoint/db_object_endpoint.h"
 #include "mrs/endpoint/db_schema_endpoint.h"
 #include "mrs/endpoint/handler_factory.h"
-#include "mrs/rest/handler_string.h"
 
 IMPORT_LOG_FUNCTIONS()
 
 namespace mrs {
-
-namespace cvt {
-
-using std::to_string;
-static const std::string &to_string(const std::string &str) { return str; }
-
-}  // namespace cvt
 
 namespace {
 
@@ -64,50 +56,6 @@ class PluginOptions {
  public:
   std::map<std::string, std::string> default_content;
 };
-
-class ParsePluginOptions
-    : public helper::json::RapidReaderHandlerToStruct<PluginOptions> {
- public:
-  template <typename ValueType>
-  void handle_object_value(const std::string &key, const ValueType &vt) {
-    //    log_debug("handle_object_value key:%s, v:%s", key.c_str(),
-    //              cvt::to_string(vt).c_str());
-    static const std::string kHttpContent = "defaultContent.";
-    using std::to_string;
-
-    if (helper::starts_with(key, kHttpContent)) {
-      result_.default_content[key.substr(kHttpContent.length())] =
-          cvt::to_string(vt);
-    }
-  }
-
-  template <typename ValueType>
-  void handle_value(const ValueType &vt) {
-    const auto &key = get_current_key();
-    if (is_object_path()) {
-      handle_object_value(key, vt);
-    }
-  }
-
-  bool String(const Ch *v, rapidjson::SizeType v_len, bool) override {
-    handle_value(std::string{v, v_len});
-    return true;
-  }
-
-  bool RawNumber(const Ch *v, rapidjson::SizeType v_len, bool) override {
-    handle_value(std::string{v, v_len});
-    return true;
-  }
-
-  bool Bool(bool v) override {
-    handle_value(v);
-    return true;
-  }
-};
-
-PluginOptions parse_json_options(const std::string &options) {
-  return helper::json::text_to_handler<ParsePluginOptions>(options);
-}
 
 class EndpointConfiguration : public mrs::interface::EndpointConfiguration {
  public:
@@ -159,9 +107,6 @@ EndpointManager::EndpointManager(collector::MysqlCacheManager *cache,
 }
 
 void EndpointManager::configure(const std::optional<std::string> &options) {
-  update_options(options.value_or("{}"));
-
-  // std::map<UniversalId, EndpointBasePtr>
   for (auto &[_, endpoint] : hold_host_endpoints_) {
     auto url_host_ep =
         std::dynamic_pointer_cast<mrs::endpoint::UrlHostEndpoint>(endpoint);
@@ -383,17 +328,6 @@ void EndpointManager::update(const std::vector<ContentFile> &files) {
   }
   process_endpoints<IdType::IdContentFile, mrs::endpoint::ContentFileEndpoint>(
       endpoint_factory_.get(), files, &endpoints_, nullptr);
-}
-
-void EndpointManager::update_options(const std::string &options) {
-  auto opt = parse_json_options(options);
-
-  custom_paths_.clear();
-
-  for (auto [k, v] : opt.default_content) {
-    custom_paths_.push_back(
-        std::make_shared<rest::HandlerString>(k, v, auth_manager_));
-  }
 }
 
 void EndpointManager::clear() {

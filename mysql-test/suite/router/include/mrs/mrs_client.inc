@@ -111,8 +111,17 @@ if ($mrs_client_arg_request_header_host)
 {
   --let $mrs_escape_query=$mrs_client_arg_request_header_host
   --source escape_url_query.inc
-  --let $mrs_client_cmd=$mrs_client_cmd --encoded-host=$mrs_escape_query
+  --let $mrs_client_cmd=$mrs_client_cmd --encoded-request-header-host=$mrs_escape_query
 }
+
+if ($mrs_client_arg_request_header_authorization)
+{
+  --let $mrs_escape_query=$mrs_client_arg_request_header_authorization
+  --source escape_url_query.inc
+  --let $mrs_client_cmd=$mrs_client_cmd --encoded-request-header-authorization=$mrs_escape_query
+}
+
+
 
 if ($mrs_client_replace_regexp)
 {
@@ -121,6 +130,8 @@ if ($mrs_client_replace_regexp)
 
 exec $mrs_client_cmd;
 
+--let $mrs_client_arg_request_header_authorization=
+--let $mrs_client_arg_request_header_host=
 --let $mrs_client_exe_args=
 --let $mrs_client_arg_path=
 --let $mrs_client_arg_payload=
@@ -139,5 +150,4 @@ exec $mrs_client_cmd;
 --let $mrs_client_arg_json_schema=
 --let $mrs_client_arg_expect_header=
 --let $mrs_client_arg_expect_header_value=
---let mrs_client_arg_request_header_host=
 --let $mrs_client_replace_regexp=

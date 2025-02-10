@@ -118,7 +118,7 @@ class SchemaMonitorFactory : public mrs::interface::QueryMonitorFactory {
 
   std::unique_ptr<database::QueryEntriesAuthApp> create_authentication_monitor(
       const uint64_t last_audit_log_id) override {
-    return std::make_unique<QueryChangesAuthApp<v2::QueryEntriesAuthApp>>(
+    return std::make_unique<QueryChangesAuthApp<v2::QueryEntriesAuthApp, 2>>(
         last_audit_log_id);
   }
 
@@ -155,7 +155,7 @@ class SchemaMonitorFactory : public v2::SchemaMonitorFactory {
 
   std::unique_ptr<database::QueryEntriesAuthApp> create_authentication_monitor(
       const uint64_t last_audit_log_id) override {
-    return std::make_unique<QueryChangesAuthApp<v3::QueryEntriesAuthApp>>(
+    return std::make_unique<QueryChangesAuthApp<v3::QueryEntriesAuthApp, 3>>(
         last_audit_log_id);
   }
 

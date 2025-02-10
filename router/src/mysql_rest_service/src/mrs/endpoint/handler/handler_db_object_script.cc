@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2024, Oracle and/or its affiliates.
+ Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -42,7 +42,7 @@
 #include "mrs/database/query_rest_sp_media.h"
 #include "mrs/endpoint/content_set_endpoint.h"
 #include "mrs/endpoint/db_service_endpoint.h"
-#include "mrs/endpoint/handler/utilities.h"
+#include "mrs/endpoint/handler/helper/utilities.h"
 #include "mrs/http/error.h"
 #include "mrs/rest/request_context.h"
 #include "mrs/rest/response_cache.h"

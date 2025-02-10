@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -35,7 +35,7 @@ namespace handler {
 
 class HandlerRedirection : public mrs::rest::Handler {
  public:
-  HandlerRedirection(const UniversalId &service_id,
+  HandlerRedirection(const Protocol protocol, const UniversalId &service_id,
                      bool requires_authentication, const std::string &url_host,
                      const std::string &path, const std::string &file_name,
                      const std::string &file_new_location,

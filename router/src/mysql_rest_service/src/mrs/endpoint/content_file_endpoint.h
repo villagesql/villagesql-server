@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -45,7 +45,7 @@ class ContentFileEndpoint : public mrs::interface::EndpointBase {
       std::shared_ptr<PersistentDataContentFile>;
   using ContentFile = mrs::database::entry::ContentFile;
   using ContentFilePtr = std::shared_ptr<ContentFile>;
-  using HandlerFactoryPtr = std::shared_ptr<mrs::interface::HandlerFactory>;
+  using HandlerFactoryPtr = std::shared_ptr<::mrs::interface::HandlerFactory>;
   using DataType = ContentFile;
 
  public:

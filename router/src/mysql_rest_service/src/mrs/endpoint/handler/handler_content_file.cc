@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -32,8 +32,9 @@
 #include "helper/string/hex.h"
 
 #include "mrs/database/query_factory.h"
-#include "mrs/endpoint/handler/url_paths.h"
-#include "mrs/endpoint/handler/utilities.h"
+#include "mrs/endpoint/handler/helper/url_paths.h"
+#include "mrs/endpoint/handler/helper/utilities.h"
+#include "mrs/endpoint/handler/helper/utils_proto.h"
 #include "mrs/http/error.h"
 #include "mrs/rest/request_context.h"
 
@@ -69,7 +70,8 @@ HandlerContentFile::HandlerContentFile(
     std::weak_ptr<ContentFileEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager,
     std::shared_ptr<PersistentDataContentFile> persistent_data_content_file)
-    : Handler(get_endpoint_host(endpoint), regex_path_for_db_object(endpoint),
+    : Handler(handler::get_protocol(endpoint), get_endpoint_host(endpoint),
+              regex_path_for_db_object(endpoint),
               get_endpoint_options(lock(endpoint)), auth_manager),
       endpoint_{endpoint},
       persistent_data_content_file_{persistent_data_content_file} {

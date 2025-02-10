@@ -406,7 +406,9 @@ class RestRequestHandler : public ::http::base::RequestHandler {
       // request_ctxt.user is valid after success of this call
       if (Handler::Authorization::kRequires == required_auth) {
         try {
-          if (!auth_manager_->authorize(service_id, ctxt, &ctxt.user)) {
+          if (!auth_manager_->authorize(rest_handler_->get_protocol(),
+                                        rest_handler_->get_url_host(),
+                                        service_id, ctxt, &ctxt.user)) {
             logger_.debug("Authentication handler fails");
             throw http::Error(HttpStatusCode::Unauthorized);
           }
@@ -853,14 +855,7 @@ mrs::interface::Options parse_json_options(
   return helper::json::text_to_handler<ParseOptions>(options.value());
 }
 
-Handler::Handler(const std::string &url_host,
-                 const std::vector<std::string> &rest_path_matcher,
-                 const std::string &options,
-                 mrs::interface::AuthorizeManager *auth_manager)
-    : Handler(url_host, rest_path_matcher, std::optional<std::string>(options),
-              auth_manager) {}
-
-Handler::Handler(const std::string &url_host,
+Handler::Handler(const Protocol protocol, const std::string &url_host,
                  const std::vector<std::string> &rest_path_matcher,
                  const std::optional<std::string> &options,
                  mrs::interface::AuthorizeManager *auth_manager)
@@ -868,6 +863,8 @@ Handler::Handler(const std::string &url_host,
       url_host_{url_host},
       rest_path_matcher_{rest_path_matcher},
       authorization_manager_{auth_manager},
+      protocol_{protocol == endpoint::handler::k_protocolHttp ? "http"
+                                                              : "https"},
       log_level_is_debug_(mysql_harness::logging::log_level_is_handled(
           mysql_harness::logging::LogLevel::kDebug)),
       log_level_is_info_(mysql_harness::logging::log_level_is_handled(
@@ -951,6 +948,8 @@ void Handler::throw_unauthorize_when_check_auth_fails(RequestContext *ctxt) {
 void Handler::authorization(RequestContext *) {}
 
 const std::string &Handler::get_url_host() const { return url_host_; }
+
+const std::string &Handler::get_protocol() const { return protocol_; }
 
 bool Handler::may_check_access() const { return true; }
 

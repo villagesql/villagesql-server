@@ -30,8 +30,9 @@
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
 
-#include "mrs/endpoint/handler/url_paths.h"
-#include "mrs/endpoint/handler/utilities.h"
+#include "mrs/endpoint/handler/helper/url_paths.h"
+#include "mrs/endpoint/handler/helper/utilities.h"
+#include "mrs/endpoint/handler/helper/utils_proto.h"
 #include "mrs/http/error.h"
 #include "mrs/rest/openapi_object_creator.h"
 #include "mrs/rest/request_context.h"
@@ -76,7 +77,8 @@ auto get_regex_path_schema_openapi_alias(
 HandlerDbSchemaOpenAPI::HandlerDbSchemaOpenAPI(
     std::weak_ptr<DbSchemaEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager)
-    : mrs::rest::Handler(get_endpoint_host(endpoint),
+    : mrs::rest::Handler(handler::get_protocol(endpoint),
+                         get_endpoint_host(endpoint),
                          /*regex-path: ^/service/schema/open-api-catalog$*/
                          /*regex-path: ^/service/open-api-catalog/schema/$*/
                          {get_regex_path_schema_openapi(endpoint),

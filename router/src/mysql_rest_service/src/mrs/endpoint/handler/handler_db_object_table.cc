@@ -54,8 +54,9 @@
 #include "mrs/database/query_rest_table_single_row.h"
 #include "mrs/database/query_rest_table_updater.h"
 #include "mrs/endpoint/db_schema_endpoint.h"
-#include "mrs/endpoint/handler/url_paths.h"
-#include "mrs/endpoint/handler/utilities.h"
+#include "mrs/endpoint/handler/helper/url_paths.h"
+#include "mrs/endpoint/handler/helper/utilities.h"
+#include "mrs/endpoint/handler/helper/utils_proto.h"
 #include "mrs/endpoint/url_host_endpoint.h"
 #include "mrs/http/error.h"
 #include "mrs/monitored/gtid_functions.h"
@@ -273,7 +274,7 @@ HandlerDbObjectTable::HandlerDbObjectTable(
     mrs::GtidManager *gtid_manager, collector::MysqlCacheManager *cache,
     mrs::ResponseCache *response_cache,
     mrs::database::SlowQueryMonitor *slow_monitor)
-    : Handler(get_endpoint_host(endpoint),
+    : Handler(handler::get_protocol(endpoint), get_endpoint_host(endpoint),
               /*regex-path: ^/service/schema/object(/...)?$*/
               regex_path_for_db_object(endpoint),
               get_endpoint_options(lock(endpoint)), auth_manager),

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -29,8 +29,9 @@
 #include "helper/http/url.h"
 #include "helper/json/serializer_to_text.h"
 #include "mrs/endpoint/db_object_endpoint.h"
-#include "mrs/endpoint/handler/url_paths.h"
-#include "mrs/endpoint/handler/utilities.h"
+#include "mrs/endpoint/handler/helper/url_paths.h"
+#include "mrs/endpoint/handler/helper/utilities.h"
+#include "mrs/endpoint/handler/helper/utils_proto.h"
 #include "mrs/http/error.h"
 #include "mrs/json/response_json_template.h"
 #include "mrs/rest/request_context.h"
@@ -100,6 +101,7 @@ HandlerDbSchemaMetadataCatalog::HandlerDbSchemaMetadataCatalog(
     std::weak_ptr<DbSchemaEndpoint> schema_endpoint,
     mrs::interface::AuthorizeManager *auth_manager)
     : Handler(
+          handler::get_protocol(schema_endpoint),
           get_endpoint_host(schema_endpoint),
           /*regex-path: ^/service/schema/metadata-catalog/? $*/
           {regex_path_schema_catalog(lock(schema_endpoint)->get_url_path())},

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -114,8 +114,6 @@ class EndpointManager : public mrs::interface::EndpointManager {
   void clear() override;
 
  private:
-  void update_options(const std::string &options);
-
   // Keep shared ownership of Hosts.
   std::map<UniversalId, EndpointBasePtr> hold_host_endpoints_;
 

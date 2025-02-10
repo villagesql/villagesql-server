@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -31,8 +31,9 @@
 #include <rapidjson/document.h>
 #include <rapidjson/writer.h>
 
-#include "mrs/endpoint/handler/url_paths.h"
-#include "mrs/endpoint/handler/utilities.h"
+#include "mrs/endpoint/handler/helper/url_paths.h"
+#include "mrs/endpoint/handler/helper/utilities.h"
+#include "mrs/endpoint/handler/helper/utils_proto.h"
 #include "mrs/http/error.h"
 #include "mrs/rest/request_context.h"
 
@@ -66,7 +67,7 @@ auto get_regex_path_object_metadata_catalog(
 HandlerDbObjectMetadataCatalog::HandlerDbObjectMetadataCatalog(
     std::weak_ptr<DbObjectEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager)
-    : Handler(get_endpoint_host(endpoint),
+    : Handler(handler::get_protocol(endpoint), get_endpoint_host(endpoint),
               /*regex-path: ^/service/schema/metadata-catalog/object$*/
               {get_regex_path_object_metadata_catalog(endpoint)},
               get_endpoint_options(lock(endpoint)), auth_manager),

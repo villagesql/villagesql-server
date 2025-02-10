@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -43,10 +43,10 @@ namespace handler {
 using HttpResult = HandlerAuthorizeStatus::HttpResult;
 
 HandlerAuthorizeStatus::HandlerAuthorizeStatus(
-    const std::string &url_host, const UniversalId service_id,
-    const std::string &rest_path_matcher, const std::string &options,
-    interface::AuthorizeManager *auth_manager)
-    : Handler(url_host, {rest_path_matcher}, options, auth_manager),
+    const Protocol protocol, const std::string &url_host,
+    const UniversalId service_id, const std::string &rest_path_matcher,
+    const std::string &options, interface::AuthorizeManager *auth_manager)
+    : Handler(protocol, url_host, {rest_path_matcher}, options, auth_manager),
       service_id_{service_id} {}
 
 mrs::rest::Handler::Authorization

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -28,6 +28,7 @@
 #include <cassert>
 #include <memory>
 #include <optional>
+#include <set>
 #include <string>
 
 #include "mrs/endpoint/content_file_endpoint.h"
@@ -40,6 +41,8 @@
 namespace mrs {
 namespace endpoint {
 namespace handler {
+
+using Protocols = std::set<std::string>;
 
 const uint64_t k_default_items_on_page = 25;
 
@@ -63,6 +66,12 @@ std::shared_ptr<Type> lock(std::weak_ptr<Type> &endpoint) {
   return result;
 }
 
+template <typename Type>
+const std::shared_ptr<Type> &lock(std::shared_ptr<Type> &endpoint) {
+  // Nothing to lock
+  return endpoint;
+}
+
 inline std::string get_endpoint_host(const ::http::base::Uri &url) {
   auto result = url.get_host();
   if (!result.empty()) {
@@ -82,16 +91,8 @@ inline std::string get_endpoint_host(
   return get_endpoint_host(endpoint->get_url());
 }
 
-// inline std::string get_endpoint_host(
-//     std::weak_ptr<mrs::endpoint::DbObjectEndpoint> wp) {
-//   auto endpoint = lock(wp);
-//   if (!endpoint) return {};
-//
-//   return get_endpoint_host(endpoint->get_url());
-// }
-
 inline std::shared_ptr<DbSchemaEndpoint> lock_parent(
-    std::shared_ptr<DbObjectEndpoint> &endpoint) {
+    const std::shared_ptr<DbObjectEndpoint> &endpoint) {
   auto parent = endpoint->get_parent_ptr();
   if (!parent) return {};
 
@@ -99,7 +100,7 @@ inline std::shared_ptr<DbSchemaEndpoint> lock_parent(
 }
 
 inline std::shared_ptr<DbServiceEndpoint> lock_parent(
-    std::shared_ptr<DbSchemaEndpoint> &endpoint) {
+    const std::shared_ptr<DbSchemaEndpoint> &endpoint) {
   auto parent = endpoint->get_parent_ptr();
   if (!parent) return {};
 
@@ -115,8 +116,19 @@ inline std::shared_ptr<ContentSetEndpoint> lock_parent(
 }
 
 inline std::shared_ptr<ContentSetEndpoint> lock_parent(
-    std::shared_ptr<ContentFileEndpoint> &endpoint) {
-  return lock_parent(endpoint.get());
+    const std::shared_ptr<ContentFileEndpoint> &endpoint) {
+  auto parent = endpoint->get_parent_ptr();
+  if (!parent) return {};
+
+  return std::dynamic_pointer_cast<ContentSetEndpoint>(parent);
+}
+
+inline std::shared_ptr<DbServiceEndpoint> lock_parent(
+    const std::shared_ptr<ContentSetEndpoint> &endpoint) {
+  auto parent = endpoint->get_parent_ptr();
+  if (!parent) return {};
+
+  return std::dynamic_pointer_cast<DbServiceEndpoint>(parent);
 }
 
 inline std::optional<std::string> get_endpoint_options(
@@ -170,6 +182,21 @@ inline std::optional<std::string> get_endpoint_options(
   if (!parent) return {};
 
   return get_endpoint_options(parent);
+}
+
+inline Protocols get_endpoint_protocol(
+    std::shared_ptr<DbServiceEndpoint> &endpoint) {
+  auto entry = endpoint->get();
+
+  return entry->url_protocols;
+}
+
+template <typename Endpoint>
+Protocols get_endpoint_protocol(std::shared_ptr<Endpoint> &endpoint) {
+  auto parent = lock_parent(endpoint);
+  if (!parent) return {};
+
+  return get_endpoint_protocol(parent);
 }
 
 }  // namespace handler

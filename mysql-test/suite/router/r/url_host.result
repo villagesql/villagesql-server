@@ -21,6 +21,8 @@ SET @service_id1=@service_id;
 SET @service_id2=@service_id;
 # Registred SERVICE at path: /svc
 SET @service_id3=@service_id;
+# Registred SERVICE at path: /svc
+SET @service_id4=@service_id;
 ##########################################
 # Add our test schema to each service
 ##########################################
@@ -30,9 +32,12 @@ SET @schema_id1=@schema_id;
 SET @schema_id2=@schema_id;
 # Registred DB_SCHEMA at path: /svc/hostTests
 SET @schema_id3=@schema_id;
+# Registred DB_SCHEMA at path: /svc/hostTests
+SET @schema_id4=@schema_id;
 ##########################################
 # Expose the table objects
 ##########################################
+# Registred DB_OBJECT at path: /svc/hostTests/tab
 # Registred DB_OBJECT at path: /svc/hostTests/tab
 # Registred DB_OBJECT at path: /svc/hostTests/tab
 # Registred DB_OBJECT at path: /svc/hostTests/tab
@@ -48,28 +53,6 @@ SET @schema_id3=@schema_id;
 # Registred DB_OBJECT at path: /svc/hostTests/func
 # Registred DB_OBJECT at path: /svc/hostTests/func
 # Registred DB_OBJECT at path: /svc/hostTests/func
-GET /svc/hostTests/proc
-{
-    "resultSets": [
-        {
-            "type": "items0",
-            "items": [
-                {
-                    "PROCEDURE1": "PROCEDURE1"
-                }
-            ],
-            "_metadata": {
-                "columns": [
-                    {
-                        "name": "PROCEDURE1",
-                        "type": "VARCHAR(10)"
-                    }
-                ]
-            }
-        }
-    ]
-}
-OK
 "Default host - should use "svc" with url_host="" that exposes table1/procedure1/function1
 GET /svc/hostTests/tab
 {
@@ -128,6 +111,7 @@ GET /svc/hostTests/func
 }
 OK
 Force host=HOST1 for the request - should use "svc" configured for HOST1 that exposes table2/procedure2/function2
+verifies that protocol in links is HTTPS
 GET /svc/hostTests/tab
 {
     "items": [
@@ -182,6 +166,37 @@ OK
 GET /svc/hostTests/func
 {
     "result": "FUNCTION2"
+}
+OK
+Force host=HOST3 for the request - should use "svc" configured for HOST3 that exposes table2
+verifies that protocol in links is is HTTP
+GET /svc/hostTests/tab
+{
+    "items": [
+        {
+            "id": 1,
+            "links": [
+                {
+                    "rel": "self",
+                    "href": "http://HOST3/svc/hostTests/tab/1"
+                }
+            ],
+            "value": "TABLE2",
+            "_metadata": {
+                "etag": "2197BBAE19076C0F7B258934FD0500A0F1A31D32FD7B47478E87AFEAC704544A"
+            }
+        }
+    ],
+    "limit": 25,
+    "offset": 0,
+    "hasMore": false,
+    "count": 1,
+    "links": [
+        {
+            "rel": "self",
+            "href": "http://HOST3/svc/hostTests/tab/"
+        }
+    ]
 }
 OK
 Force host=HOST2:<numeric_port> for the request - should use "svc" configured for HOST2 that exposes function3

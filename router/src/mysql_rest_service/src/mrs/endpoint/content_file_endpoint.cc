@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,8 @@
 #include "mrs/endpoint/content_file_endpoint.h"
 
 #include "mrs/endpoint/content_set_endpoint.h"
-#include "mrs/endpoint/handler/url_paths.h"
-#include "mrs/endpoint/handler/utilities.h"
+#include "mrs/endpoint/handler/helper/url_paths.h"
+#include "mrs/endpoint/handler/helper/utilities.h"
 #include "mrs/observability/entity.h"
 #include "mrs/router_observation_entities.h"
 
@@ -98,9 +98,10 @@ void ContentFileEndpoint::activate_public() {
 
   if (is_index_) {
     handler_redirection_ = factory_->create_redirection_handler(
-        parent->get()->service_id, parent->required_authentication(),
-        parent->get_url(), parent->get_url_path(), "",
-        parent->get_url_path() + "/", k_redirect_pernament);
+        shared_from_this(), parent->get()->service_id,
+        parent->required_authentication(), parent->get_url(),
+        parent->get_url_path(), "", parent->get_url_path() + "/",
+        k_redirect_pernament);
   }
 }
 

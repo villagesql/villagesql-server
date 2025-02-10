@@ -77,7 +77,8 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
   void configure(const std::string &options) override;
 
   bool unauthorize(Session *session, http::Cookie *cookies) override;
-  bool authorize(ServiceId id, rest::RequestContext &ctxt,
+  bool authorize(const std::string &proto, const std::string &host,
+                 ServiceId id, rest::RequestContext &ctxt,
                  AuthUser *out_user) override;
   bool is_authorized(ServiceId id, rest::RequestContext &ctxt,
                      AuthUser *user) override;

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -177,6 +177,8 @@ class EndpointBase : public std::enable_shared_from_this<EndpointBase> {
 
     parent_ = parent_new;
   }
+
+  EndpointConfigurationPtr get_configuration() const { return configuration_; }
 
   const EndpointBasePtr get_parent_ptr() const { return parent_.lock(); }
   EndpointBasePtr get_parent_ptr() { return parent_.lock(); }

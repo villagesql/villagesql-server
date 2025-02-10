@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -34,7 +34,7 @@
 namespace mrs {
 namespace database {
 
-template <typename QueryForAuthApps = v2::QueryEntriesAuthApp>
+template <typename QueryForAuthApps = v2::QueryEntriesAuthApp, int version = 2>
 class QueryChangesAuthApp : public QueryForAuthApps {
  public:
   using Parent = QueryForAuthApps;
@@ -53,17 +53,22 @@ class QueryChangesAuthApp : public QueryForAuthApps {
 
     entries_fetched.clear();
 
-    audit_entries.query_entries(
-        session, {"service", "url_host", "auth_app", "auth_vendor"},
-        Parent::audit_log_id_);
+    std::vector<std::string> allowed_changes{"auth_app", "auth_vendor",
+                                             "service_has_auth_app"};
+
+    if (version == 3) allowed_changes.push_back("service_has_auth_app");
+
+    audit_entries.query_entries(session, allowed_changes,
+                                Parent::audit_log_id_);
 
     for (const auto &audit_entry : audit_entries.entries) {
+      auto table = audit_entry.table;
       if (audit_entry.old_table_id.has_value())
-        query_auth_entries(session, &local_entries, audit_entry.table,
+        query_auth_entries(session, &local_entries, table,
                            audit_entry.old_table_id.value());
 
       if (audit_entry.new_table_id.has_value())
-        query_auth_entries(session, &local_entries, audit_entry.table,
+        query_auth_entries(session, &local_entries, table,
                            audit_entry.new_table_id.value());
 
       if (max_audit_log_id < audit_entry.id) max_audit_log_id = audit_entry.id;
@@ -98,8 +103,17 @@ class QueryChangesAuthApp : public QueryForAuthApps {
     }
   }
 
-  std::string build_query(const std::string &table_name,
+  std::string build_query(std::string table_name,
                           const entry::UniversalId &id) {
+    if ("service_has_auth_app" == table_name) {
+      mysqlrouter::sqlstring where{
+          " WHERE subtable.auth_app_id in (SELECT shaa.`auth_app_id`  FROM "
+          "`mysql_rest_service_metadata`.`service_has_auth_app` as shaa "
+          " WHERE `shaa`.`service_id`=? ) "};
+      where << id;
+      return Parent::query_.str() + where.str();
+    }
+
     mysqlrouter::sqlstring where{" WHERE !=? "};
     where << (table_name + "_id") << id;
 

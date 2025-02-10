@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -75,8 +75,8 @@ void OptionEndpoint::update() {
     for (const auto &[k, v] : fs.default_static_content_) {
       const bool is_index = helper::container::has(directory_indexes, k);
       handlers_.push_back(factory_->create_string_handler(
-          service_id_, required_authentication(), get_url(), get_url_path(), k,
-          v, is_index));
+          shared_from_this(), service_id_, required_authentication(), get_url(),
+          get_url_path(), k, v, is_index));
 
       // When the url path is empty, its root path, which
       // http plugin processes as "", instead "/".
@@ -85,15 +85,16 @@ void OptionEndpoint::update() {
       // by http server.
       if (!get_url_path().empty() && is_index) {
         handlers_.push_back(factory_->create_redirection_handler(
-            service_id_, required_authentication(), get_url(), get_url_path(),
-            "", get_url_path() + "/", k_redirect_pernament));
+            shared_from_this(), service_id_, required_authentication(),
+            get_url(), get_url_path(), "", get_url_path() + "/",
+            k_redirect_pernament));
       }
     }
 
     for (const auto &[k, v] : fs.default_redirects_) {
       handlers_.push_back(factory_->create_redirection_handler(
-          service_id_, required_authentication(), get_url(), get_url_path(), k,
-          v, k_redirect_temporary));
+          shared_from_this(), service_id_, required_authentication(), get_url(),
+          get_url_path(), k, v, k_redirect_temporary));
     }
   }
 }

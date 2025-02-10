@@ -26,6 +26,7 @@
 #define ROUTER_SRC_REST_MRS_SRC_MRS_INTERFACE_AUTHENTICATION_HANDLER_H_
 
 #include <optional>
+#include <set>
 #include <string>
 
 #include "collector/mysql_cache_manager.h"
@@ -61,7 +62,7 @@ class AuthorizeHandler {
   virtual ~AuthorizeHandler() = default;
 
   virtual bool redirects(RequestContext &ctxt) const = 0;
-  virtual UniversalId get_service_id() const = 0;
+  virtual std::set<UniversalId> get_service_ids() const = 0;
   virtual UniversalId get_id() const = 0;
 
   virtual const AuthApp &get_entry() const = 0;

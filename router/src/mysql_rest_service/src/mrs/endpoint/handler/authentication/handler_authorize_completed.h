@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -39,7 +39,8 @@ namespace handler {
 
 class HandlerAuthorizeCompleted : public mrs::rest::Handler {
  public:
-  HandlerAuthorizeCompleted(const std::string &url_host,
+  HandlerAuthorizeCompleted(const Protocol protocol,
+                            const std::string &url_host,
                             const UniversalId service_id,
                             const std::string &rest_path_matcher,
                             const std::string &options,

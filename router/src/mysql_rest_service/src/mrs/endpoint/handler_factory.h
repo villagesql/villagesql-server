@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -29,6 +29,7 @@
 
 #include "collector/mysql_cache_manager.h"
 #include "mrs/database/slow_query_monitor.h"
+#include "mrs/endpoint/handler/helper/protocol.h"
 #include "mrs/interface/authorize_manager.h"
 #include "mrs/interface/handler_factory.h"
 #include "mrs/rest/response_cache.h"
@@ -78,13 +79,15 @@ class HandlerFactory : public mrs::interface::HandlerFactory {
       override;
 
   std::unique_ptr<Handler> create_string_handler(
-      const UniversalId &service_id, bool requires_authentication,
-      const Uri &url, const std::string &path, const std::string &file_name,
-      const std::string &file_content, bool is_index) override;
+      EndpointBasePtr endpoint, const UniversalId &service_id,
+      bool requires_authentication, const Uri &url, const std::string &path,
+      const std::string &file_name, const std::string &file_content,
+      bool is_index) override;
   std::unique_ptr<Handler> create_redirection_handler(
-      const UniversalId &service_id, bool requires_authentication,
-      const Uri &url, const std::string &path, const std::string &file_name,
-      const std::string &redirection_path, const bool pernament) override;
+      EndpointBasePtr endpoint, const UniversalId &service_id,
+      bool requires_authentication, const Uri &url, const std::string &path,
+      const std::string &file_name, const std::string &redirection_path,
+      const bool pernament) override;
 
   std::unique_ptr<Handler> create_authentication_login(
       EndpointBasePtr db_service_endpoint) override;

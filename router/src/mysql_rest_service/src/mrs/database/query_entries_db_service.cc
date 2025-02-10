@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -90,23 +90,18 @@ void QueryEntriesDbService::query_entries(MySQLSession *session) {
 }
 
 void QueryEntriesDbService::on_row(const ResultRow &row) {
+  using MySQLRow = helper::MySQLRow;
   entries.emplace_back();
 
   helper::MySQLRow mysql_row(row, metadata_, num_of_metadata_);
   DbService &entry = entries.back();
 
-  auto set_from_string = [](std::set<std::string> *out, const char *in) {
-    out->clear();
-    for (const auto &s : mysql_harness::split_string(in, ',', false)) {
-      out->insert(s);
-    }
-  };
-
   mysql_row.unserialize_with_converter(&entry.id, entry::UniversalId::from_raw);
   mysql_row.unserialize_with_converter(&entry.url_host_id,
                                        entry::UniversalId::from_raw);
   mysql_row.unserialize(&entry.url_context_root);
-  mysql_row.unserialize_with_converter(&entry.url_protocols, set_from_string);
+  mysql_row.unserialize_with_converter(&entry.url_protocols,
+                                       MySQLRow::set_from_string);
   mysql_row.unserialize(&entry.enabled);
   mysql_row.unserialize(&entry.comment);
   mysql_row.unserialize(&entry.options);

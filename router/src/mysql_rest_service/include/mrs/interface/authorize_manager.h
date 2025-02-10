@@ -26,6 +26,7 @@
 #define ROUTER_SRC_REST_MRS_SRC_MRS_INTERFACE_AUTHORIZE_MANAGER_H_
 
 #include <memory>
+#include <string>
 #include <vector>
 
 #include "helper/mysql_time.h"
@@ -72,7 +73,8 @@ class AuthorizeManager {
 
   virtual void update(const Entries &entries) = 0;
 
-  virtual bool authorize(ServiceId id, rest::RequestContext &ctxt,
+  virtual bool authorize(const std::string &proto, const std::string &host,
+                         ServiceId id, rest::RequestContext &ctxt,
                          AuthUser *out_user) = 0;
   virtual bool is_authorized(ServiceId id, rest::RequestContext &ctxt,
                              AuthUser *user) = 0;

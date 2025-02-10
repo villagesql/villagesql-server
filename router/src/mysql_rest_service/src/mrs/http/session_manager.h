@@ -103,6 +103,8 @@ class SessionManager {
     std::string handler_name;
     std::string handler_secondary_id;
     AuthUser user;
+    std::string proto;
+    std::string host;
 
    private:
     std::unique_ptr<SessionData> data_;

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -68,6 +68,15 @@ class HandleObjectTests : public Test {
  public:
   void SetUp() override {
     EXPECT_CALL(mock_request_, get_uri()).WillRepeatedly(ReturnRef(uri_));
+    EXPECT_CALL(*mock_configuratation, does_server_support_https())
+        .WillRepeatedly(Return(true));
+
+    mock_db_object_endpoint = std::make_shared<Mock<DbObjectEndpoint>>(
+        db_object, mock_configuratation.copy_base(),
+        mock_handler_factory.copy_base());
+    mock_db_schema_endpoint = std::make_shared<Mock<DbSchemaEndpoint>>(
+        db_schema, mock_configuratation.copy_base(),
+        mock_handler_factory.copy_base());
   }
 
   class GeneralExpectations {
@@ -139,8 +148,8 @@ class HandleObjectTests : public Test {
       EXPECT_CALL(*parent_.mock_db_schema_endpoint, get_id())
           .WillRepeatedly(Return(parent_.db_schema.id));
 
-      parent_.mock_db_object_endpoint->set(
-          parent_.db_object, parent_.mock_db_schema_endpoint.copy_base());
+      parent_.mock_db_object_endpoint->set(parent_.db_object,
+                                           parent_.mock_db_schema_endpoint);
 
       using ConnParam = collector::CountedMySQLSession::ConnectionParameters;
       EXPECT_CALL(parent_.mock_session, get_connection_parameters())
@@ -158,6 +167,10 @@ class HandleObjectTests : public Test {
     std::vector<helper::Column> cached_columns_;
     std::shared_ptr<mrs::database::entry::Object> cached_object_;
   };
+  template <typename T>
+  using Mock = StrictMock<MockEndpoint<T>>;
+  template <typename T>
+  using SharedPtrMock = std::shared_ptr<StrictMock<MockEndpoint<T>>>;
 
   http::base::Uri uri_{""};
   mrs::database::entry::DbSchema db_schema;
@@ -169,12 +182,8 @@ class HandleObjectTests : public Test {
   StrictMock<MockMySQLSession> mock_session;
   MakeMockPtr<MockHandlerFactory> mock_handler_factory;
   MakeMockPtr<MockEndpointConfiguration> mock_configuratation;
-  MakeMockPtr<MockEndpoint<DbObjectEndpoint>> mock_db_object_endpoint{
-      db_object, mock_configuratation.copy_base(),
-      mock_handler_factory.copy_base()};
-  MakeMockPtr<MockEndpoint<DbSchemaEndpoint>> mock_db_schema_endpoint{
-      db_schema, mock_configuratation.copy_base(),
-      mock_handler_factory.copy_base()};
+  SharedPtrMock<DbObjectEndpoint> mock_db_object_endpoint;
+  SharedPtrMock<DbSchemaEndpoint> mock_db_schema_endpoint;
 };
 
 TEST_F(HandleObjectTests, fetch_object_feed) {
@@ -192,11 +201,11 @@ TEST_F(HandleObjectTests, fetch_object_feed) {
                                    {"column2", "column3"}};
 
   RequestContext ctxt{&mock_request_};
-  HandlerDbObjectTable object{std::dynamic_pointer_cast<DbObjectEndpoint>(
-                                  mock_db_object_endpoint.copy_base()),
-                              &mock_auth_manager,
-                              {},
-                              &mysql_cache};
+  HandlerDbObjectTable object{
+      std::dynamic_pointer_cast<DbObjectEndpoint>(mock_db_object_endpoint),
+      &mock_auth_manager,
+      {},
+      &mysql_cache};
 
   EXPECT_CALL(
       mock_session,
@@ -224,11 +233,11 @@ TEST_F(HandleObjectTests, fetch_object_single) {
                                    {"column2", "column3"}};
 
   RequestContext ctxt{&mock_request_};
-  HandlerDbObjectTable object{std::dynamic_pointer_cast<DbObjectEndpoint>(
-                                  mock_db_object_endpoint.copy_base()),
-                              &mock_auth_manager,
-                              {},
-                              &mysql_cache};
+  HandlerDbObjectTable object{
+      std::dynamic_pointer_cast<DbObjectEndpoint>(mock_db_object_endpoint),
+      &mock_auth_manager,
+      {},
+      &mysql_cache};
 
   EXPECT_CALL(
       mock_session,
@@ -257,11 +266,11 @@ TEST_F(HandleObjectTests, delete_single_object_throws_without_filter) {
                                    collector::kMySQLConnectionUserdataRW};
 
   RequestContext ctxt{&mock_request_};
-  HandlerDbObjectTable object{std::dynamic_pointer_cast<DbObjectEndpoint>(
-                                  mock_db_object_endpoint.copy_base()),
-                              &mock_auth_manager,
-                              {},
-                              &mysql_cache};
+  HandlerDbObjectTable object{
+      std::dynamic_pointer_cast<DbObjectEndpoint>(mock_db_object_endpoint),
+      &mock_auth_manager,
+      {},
+      &mysql_cache};
 
   //  EXPECT_CALL(mock_session,
   //              query(StartsWith("SELECT "
@@ -290,11 +299,11 @@ TEST_F(HandleObjectTests, delete_single_object) {
                                    collector::kMySQLConnectionUserdataRW};
 
   RequestContext ctxt{&mock_request_};
-  HandlerDbObjectTable object{std::dynamic_pointer_cast<DbObjectEndpoint>(
-                                  mock_db_object_endpoint.copy_base()),
-                              &mock_auth_manager,
-                              {},
-                              &mysql_cache};
+  HandlerDbObjectTable object{
+      std::dynamic_pointer_cast<DbObjectEndpoint>(mock_db_object_endpoint),
+      &mock_auth_manager,
+      {},
+      &mysql_cache};
 
   //  EXPECT_CALL(mock_session,
   //              query(StartsWith("SELECT "

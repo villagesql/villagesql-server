@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -44,10 +44,11 @@ namespace handler {
 using HttpResult = HandlerAuthorizeAuthApps::HttpResult;
 
 HandlerAuthorizeAuthApps::HandlerAuthorizeAuthApps(
-    const std::string &url_host, const UniversalId service_id,
-    const std::string &rest_path_matcher, const std::string &options,
-    const std::string &redirection, interface::AuthorizeManager *auth_manager)
-    : Handler(url_host, {rest_path_matcher}, options, auth_manager),
+    const Protocol protocol, const std::string &url_host,
+    const UniversalId service_id, const std::string &rest_path_matcher,
+    const std::string &options, const std::string &redirection,
+    interface::AuthorizeManager *auth_manager)
+    : Handler(protocol, url_host, {rest_path_matcher}, options, auth_manager),
       service_id_{service_id},
       redirection_{redirection} {}
 
@@ -78,10 +79,18 @@ uint32_t HandlerAuthorizeAuthApps::get_access_rights() const {
 HttpResult HandlerAuthorizeAuthApps::handle_get(RequestContext *) {
   helper::json::SerializerToText serializer;
   using namespace std::string_literals;
+  using AuthorizeHandlerPtr =
+      ::mrs::interface::AuthorizeManager::AuthorizeHandlerPtr;
   auto auth_apps =
       authorization_manager_->get_supported_authentication_applications(
           service_id_);
 
+  // Stabilize the output
+  std::sort(
+      auth_apps.begin(), auth_apps.end(),
+      [](const AuthorizeHandlerPtr &lhs, const AuthorizeHandlerPtr &rhs) {
+        return lhs->get_entry().app_name.compare(rhs->get_entry().app_name) < 0;
+      });
   {
     auto arr = serializer.add_array();
     for (auto &app : auth_apps) {

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -29,9 +29,11 @@
 #include <cstdlib>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <type_traits>
 
+#include "mysql/harness/string_utils.h"
 #include "mysqlrouter/mysql_session.h"
 
 #include "helper/mysql_time.h"
@@ -166,6 +168,16 @@ class MySQLRow {
     }
   }
 
+  static void set_from_string(std::set<std::string> *out, const char *in) {
+    out->clear();
+
+    if (!in) return;
+
+    for (const auto &s : mysql_harness::split_string(in, ',', false)) {
+      out->insert(s);
+    }
+  }
+
  private:
   template <typename T>
   typename std::enable_if<std::is_enum<T>::value>::type convert(
@@ -245,8 +257,6 @@ class MySQLRow {
                helper::DateTime *out_value, const char *in_value) {
     out_value->from_string(in_value);
   }
-
-  //  void convert(void * /*out_value*/, const char * /*in_value*/) {}
 
  public:
   uint32_t field_index_{0};

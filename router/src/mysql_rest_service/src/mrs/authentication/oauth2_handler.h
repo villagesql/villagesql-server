@@ -84,7 +84,7 @@ class Oauth2Handler : public interface::AuthorizeHandler {
   Oauth2Handler(const AuthApp &entry) : entry_{entry} {}
 
   const AuthApp &get_entry() const override;
-  UniversalId get_service_id() const override;
+  std::set<UniversalId> get_service_ids() const override;
   UniversalId get_id() const override;
 
   bool redirects(RequestContext &ctxt) const override;
@@ -122,7 +122,6 @@ class Oauth2Handler : public interface::AuthorizeHandler {
       GenericSessionData *session_data) const = 0;
 
  protected:
-  const std::string &get_host_alias() const;
   std::string get_cookie_session_id(Request *request) const;
   void set_cookie_session_id(Request *request,
                              SessionManager::Session *session);

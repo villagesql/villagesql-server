@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -92,13 +92,15 @@ class HandlerFactory {
       EndpointBasePtr db_service_endpoint) = 0;
 
   virtual std::unique_ptr<Handler> create_string_handler(
-      const UniversalId &service_id, bool requires_authentication,
-      const Uri &url, const std::string &path, const std::string &file_name,
-      const std::string &file_content, bool is_index) = 0;
+      EndpointBasePtr endpoint, const UniversalId &service_id,
+      bool requires_authentication, const Uri &url, const std::string &path,
+      const std::string &file_name, const std::string &file_content,
+      bool is_index) = 0;
   virtual std::unique_ptr<Handler> create_redirection_handler(
-      const UniversalId &service_id, bool requires_authentication,
-      const Uri &url, const std::string &path, const std::string &file_name,
-      const std::string &redirection_path, const bool pernament) = 0;
+      EndpointBasePtr endpoint, const UniversalId &service_id,
+      bool requires_authentication, const Uri &url, const std::string &path,
+      const std::string &file_name, const std::string &redirection_path,
+      const bool pernament) = 0;
 };
 
 }  // namespace interface

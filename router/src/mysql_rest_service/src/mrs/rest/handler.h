@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +31,7 @@
 
 #include "helper/media_type.h"
 #include "http/base/uri.h"
+#include "mrs/endpoint/handler/helper/protocol.h"
 #include "mrs/interface/authorize_manager.h"
 #include "mrs/interface/rest_handler.h"
 
@@ -40,21 +41,18 @@ namespace rest {
 class Handler : public interface::RestHandler {
  public:
   using HttpUri = ::http::base::Uri;
+  using Protocol = ::mrs::endpoint::handler::Protocol;
 
  public:
-  Handler(const std::string &url_host,
+  Handler(const Protocol protocol, const std::string &url_host,
           const std::vector<std::string> &rest_path_matcher,
           const std::optional<std::string> &options,
           interface::AuthorizeManager *auth_manager);
 
-  // TODO(lkotula): remove this after switching to new handlers
-  Handler(const std::string &url_host,
-          const std::vector<std::string> &rest_path_matcher,
-          const std::string &options,
-          interface::AuthorizeManager *auth_manager);
   ~Handler() override;
 
   const std::string &get_url_host() const override;
+  const std::string &get_protocol() const override;
   bool may_check_access() const override;
   void authorization(RequestContext *ctxt) override;
   bool request_begin(RequestContext *ctxt) override;
@@ -85,6 +83,7 @@ class Handler : public interface::RestHandler {
   const std::vector<std::string> rest_path_matcher_;
   std::vector<void *> handler_id_;
   interface::AuthorizeManager *authorization_manager_;
+  const std::string protocol_;
 
   bool log_level_is_debug_;
   bool log_level_is_info_;

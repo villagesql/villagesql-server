@@ -76,8 +76,9 @@ class HandlerAuthorizeTests : public Test {
               request_handler_ = std::move(handler);
               return request_handler_.get();
             }));
-    sut_ = std::make_unique<HandlerAuthorizeLogin>("", service_id, rest_path,
-                                                   "", "", &mock_auth_);
+    sut_ = std::make_unique<HandlerAuthorizeLogin>(
+        mrs::endpoint::handler::k_protocolHttp, "", service_id, rest_path, "",
+        "", &mock_auth_);
     ASSERT_NE(nullptr, request_handler_.get());
   }
 
@@ -165,14 +166,14 @@ TEST_F(HandlerAuthorizeTests, do_the_authentication_get) {
   mrs::authentication::AuthorizeManager::Session session{
       k_session_id, {}, k_cookie_name};
 
-  EXPECT_CALL(mock_auth_, authorize(_, _, _))
-      .WillOnce(
-          Invoke([this, &session](ServiceId, mrs::rest::RequestContext &ctxt,
-                                  AuthUser *) -> bool {
-            ctxt.selected_handler = mock_auth_handler_;
-            ctxt.session = &session;
-            return true;
-          }));
+  EXPECT_CALL(mock_auth_, authorize(_, _, _, _, _))
+      .WillOnce(Invoke([this, &session](std::string, std::string, ServiceId,
+                                        mrs::rest::RequestContext &ctxt,
+                                        AuthUser *) -> bool {
+        ctxt.selected_handler = mock_auth_handler_;
+        ctxt.session = &session;
+        return true;
+      }));
 
   EXPECT_CALL(*mock_auth_handler_, redirects(_)).WillOnce(Return(true));
 
@@ -200,15 +201,15 @@ TEST_F(HandlerAuthorizeTests, do_the_authentication_post) {
   mrs::authentication::AuthorizeManager::Session session{
       k_session_id, {}, k_cookie_name};
 
-  EXPECT_CALL(mock_auth_, authorize(_, _, _))
-      .WillOnce(
-          Invoke([this, &session](ServiceId, mrs::rest::RequestContext &ctxt,
-                                  AuthUser *) -> bool {
-            ctxt.selected_handler = mock_auth_handler_;
-            ctxt.post_authentication = true;
-            ctxt.session = &session;
-            return true;
-          }));
+  EXPECT_CALL(mock_auth_, authorize(_, _, _, _, _))
+      .WillOnce(Invoke([this, &session](std::string, std::string, ServiceId,
+                                        mrs::rest::RequestContext &ctxt,
+                                        AuthUser *) -> bool {
+        ctxt.selected_handler = mock_auth_handler_;
+        ctxt.post_authentication = true;
+        ctxt.session = &session;
+        return true;
+      }));
   EXPECT_CALL(*mock_auth_handler_, redirects(_)).WillOnce(Return(true));
 
   EXPECT_CALL(mock_input_buffer_, length()).WillRepeatedly(Return(0));
@@ -235,12 +236,13 @@ TEST_F(HandlerAuthorizeTests, do_the_authentication_fails) {
 
   //  EXPECT_CALL(mock_auth_, get_current_session(_, _, _))
   //      .WillRepeatedly(Return(nullptr));
-  EXPECT_CALL(mock_auth_, authorize(_, _, _))
-      .WillOnce(Invoke([this](ServiceId, mrs::rest::RequestContext &ctxt,
-                              AuthUser *) -> bool {
-        ctxt.selected_handler = mock_auth_handler_;
-        return false;
-      }));
+  EXPECT_CALL(mock_auth_, authorize(_, _, _, _, _))
+      .WillOnce(
+          Invoke([this](std::string, std::string, ServiceId,
+                        mrs::rest::RequestContext &ctxt, AuthUser *) -> bool {
+            ctxt.selected_handler = mock_auth_handler_;
+            return false;
+          }));
 
   EXPECT_CALL(mock_input_buffer_, length()).WillRepeatedly(Return(0));
   EXPECT_CALL(mock_output_headers_,

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -24,8 +24,9 @@
 
 #include "mrs/endpoint/handler/handler_db_schema_metadata.h"
 
-#include "mrs/endpoint/handler/url_paths.h"
-#include "mrs/endpoint/handler/utilities.h"
+#include "mrs/endpoint/handler/helper/url_paths.h"
+#include "mrs/endpoint/handler/helper/utilities.h"
+#include "mrs/endpoint/handler/helper/utils_proto.h"
 #include "mrs/http/error.h"
 
 namespace mrs {
@@ -51,7 +52,7 @@ auto get_regex_path_schema_metadata(std::weak_ptr<DbSchemaEndpoint> endpoint) {
 HandlerDbSchemaMetadata::HandlerDbSchemaMetadata(
     std::weak_ptr<DbSchemaEndpoint> endpoint,
     mrs::interface::AuthorizeManager *auth_manager)
-    : Handler(get_endpoint_host(endpoint),
+    : Handler(handler::get_protocol(endpoint), get_endpoint_host(endpoint),
               /*regex-path: ^/service/schema/_metadata$*/
               {get_regex_path_schema_metadata(endpoint)},
               get_endpoint_options(lock(endpoint)), auth_manager),

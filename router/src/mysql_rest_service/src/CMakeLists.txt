@@ -233,7 +233,6 @@ ADD_STATIC_LIBRARY(mysql_rest_service_impl
   mrs/endpoint_manager.cc
   mrs/router_observation_entities.cc
   mrs/rest/handler.cc
-  mrs/rest/handler_string.cc
   mrs/rest/response_cache.cc
   mrs/rest/openapi_object_creator.cc
   mrs/monitored/gtid_functions.cc

@@ -404,6 +404,17 @@ std::vector<CmdOption> g_options{
      },
      [](const std::string &) {}},
 
+    {{"--encoded-request-header-authorization"},
+     "Set the value in the 'Authorization' header of the request. The value "
+     "must be "
+     "encoded using url-parameter encoding.",
+     CmdOptionValueReq::required,
+     "authorization",
+     [](const std::string &value) {
+       g_configuration.authorization = decode_from_url_query_escaping(value);
+     },
+     [](const std::string &) {}},
+
     {{"--payload-file"},
      "Set the request body for POST, PUT requests.",
      CmdOptionValueReq::required,
@@ -1000,6 +1011,11 @@ int main_app(int argc, char *argv[]) {
 
     if (!g_configuration.accept.empty()) {
       request.add_header("Accept", g_configuration.accept.c_str());
+    }
+
+    if (!g_configuration.authorization.empty()) {
+      request.add_header("Authorization",
+                         g_configuration.authorization.c_str());
     }
 
     if (!g_configuration.host.empty()) {

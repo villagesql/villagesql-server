@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -25,7 +25,9 @@
 #include "mrs/database/query_entries_auth_app.h"
 
 #include "helper/mysql_row.h"
+#include "helper/string/hex.h"
 #include "mrs/database/helper/query_audit_log_maxid.h"
+#include "mysql/harness/string_utils.h"
 
 namespace mrs {
 namespace database {
@@ -38,26 +40,17 @@ uint64_t QueryEntriesAuthApp::get_last_update() { return audit_log_id_; }
 
 QueryEntriesAuthApp::QueryEntriesAuthApp() {
   query_ =
-      "SELECT * FROM (SELECT a.id, service_id, s.url_context_root, v.name, "
-      "a.name as app_name,  "
+      "SELECT * FROM (SELECT a.id, HEX(service_id),"
+      "v.name, "
+      "a.name as app_name, "
       "  a.enabled and "
       "    v.enabled, a.url, v.validation_url,  a.access_token, a.app_id, "
-      "   h.name as url_host, "
-      "  CONCAT(IF(s.url_protocol=\"HTTPS\",\"https://\",\"http://\"),h.name) "
-      "    as host, "
-      "  CONCAT(IF(s.url_protocol=\"HTTPS\",\"https://\",\"http://\"),(select "
-      "  a.alias from mysql_rest_service_metadata.`url_host_alias` as a where "
-      "    h.id=a.url_host_id limit 1)) as host_alias,"
       "  a.url_direct_auth,"
       "  a.limit_to_registered_users, a.default_role_id,"
-      "  s.auth_path, s.options, s.auth_completed_url, "
-      "s.auth_completed_page_content, "
-      "  a.id as auth_app_id, auth_vendor_id, h.id as url_host_id"
+      "  a.id as auth_app_id, auth_vendor_id "
       " FROM mysql_rest_service_metadata.auth_app as a "
       "JOIN mysql_rest_service_metadata.`auth_vendor` as v on a.auth_vendor_id "
       "= v.id "
-      "JOIN mysql_rest_service_metadata.service as s on a.service_id = s.id "
-      "JOIN mysql_rest_service_metadata.url_host as h on s.url_host_id = h.id "
       ") as subtable ";
 }
 
@@ -77,10 +70,22 @@ void QueryEntriesAuthApp::on_row(const ResultRow &row) {
   helper::MySQLRow mysql_row(row, metadata_, num_of_metadata_);
   AuthApp &entry = entries_.back();
 
+  auto set_from_string = [](std::set<entry::UniversalId> *out, const char *in) {
+    std::set<std::string> result;
+    helper::MySQLRow::set_from_string(&result, in);
+
+    out->clear();
+    for (const auto &s : result) {
+      auto binary =
+          helper::string::unhex<std::string,
+                                helper::string::get_unhex_character>(s);
+      auto id = entry::UniversalId::from_cstr(binary.c_str(), binary.length());
+      if (!id.empty()) out->insert(id);
+    }
+  };
+
   mysql_row.unserialize_with_converter(&entry.id, entry::UniversalId::from_raw);
-  mysql_row.unserialize_with_converter(&entry.service_id,
-                                       entry::UniversalId::from_raw);
-  mysql_row.unserialize(&entry.service_name);
+  mysql_row.unserialize_with_converter(&entry.service_ids, set_from_string);
   mysql_row.unserialize(&entry.vendor_name);
   mysql_row.unserialize(&entry.app_name);
   mysql_row.unserialize(&entry.active);
@@ -88,25 +93,14 @@ void QueryEntriesAuthApp::on_row(const ResultRow &row) {
   mysql_row.unserialize(&entry.url_validation);
   mysql_row.unserialize(&entry.app_token);
   mysql_row.unserialize(&entry.app_id);
-  mysql_row.unserialize(&entry.url_host);
-  // TODO(lkotula): Take the host from SERVICE instance! (Shouldn't be in
-  // review)
-  mysql_row.unserialize(&entry.host);
-  mysql_row.unserialize(&entry.host_alias);
   mysql_row.unserialize(&entry.url_access_token);
   mysql_row.unserialize(&entry.limit_to_registered_users);
   mysql_row.unserialize_with_converter(&entry.default_role_id,
                                        entry::UniversalId::from_raw);
-  mysql_row.unserialize(&entry.auth_path);
-  mysql_row.unserialize(&entry.options);
-  mysql_row.unserialize(&entry.auth_completed_url);
-  mysql_row.unserialize(&entry.redirection_default_page);
   // Field used for audit_log matching
   mysql_row.skip(/*a.id as auth_app_id*/);
   mysql_row.unserialize_with_converter(&entry.vendor_id,
                                        entry::UniversalId::from_raw);
-  // Field used for audti_log matching
-  mysql_row.skip(/*h.id as url_host_id*/);
 
   entry.deleted = false;
 }
@@ -118,29 +112,29 @@ const Entries &QueryEntriesAuthApp::get_entries() { return entries_; }
 namespace v3 {
 
 QueryEntriesAuthApp::QueryEntriesAuthApp() {
+  mysqlrouter::sqlstring select_services{
+      "(SELECT GROUP_CONCAT(DISTINCT HEX(`shaa`.`service_id`) ORDER BY "
+      "auth_app_id ASC "
+      "SEPARATOR ',')  FROM "
+      "`mysql_rest_service_metadata`.`service_has_auth_app` as `shaa` "
+      " WHERE `shaa`.`auth_app_id`=a.id "
+      " GROUP BY `shaa`.`auth_app_id`)"};
+
   query_ =
-      "SELECT * FROM (SELECT a.id, service_id, s.url_context_root, v.name, "
+      "SELECT * FROM (SELECT a.id,  ! ,"
+      "v.name, "
       "a.name as app_name,  "
       "  a.enabled and "
       "    v.enabled, a.url, v.validation_url,  a.access_token, a.app_id, "
-      "    h.name as url_host, "
-      "  CONCAT(IF(s.url_protocol=\"HTTPS\",\"https://\",\"http://\"),h.name) "
-      "    as host, "
-      "  CONCAT(IF(s.url_protocol=\"HTTPS\",\"https://\",\"http://\"),(select "
-      "  a.alias from mysql_rest_service_metadata.`url_host_alias` as a where "
-      "    h.id=a.url_host_id limit 1)) as host_alias,"
       "  a.url_direct_auth,"
       "  a.limit_to_registered_users, a.default_role_id,"
-      "  s.auth_path, s.options, s.auth_completed_url, "
-      "s.auth_completed_page_content, "
-      "  a.id as auth_app_id, auth_vendor_id, h.id as url_host_id"
-      " FROM mysql_rest_service_metadata.service_has_auth_app as has "
-      "JOIN mysql_rest_service_metadata.auth_app as a on has.auth_app_id=a.id "
+      "  a.id as auth_app_id, auth_vendor_id"
+      " FROM mysql_rest_service_metadata.auth_app as a "
       "JOIN mysql_rest_service_metadata.`auth_vendor` as v on a.auth_vendor_id "
       "= v.id "
-      "JOIN mysql_rest_service_metadata.service as s on has.service_id = s.id "
-      "JOIN mysql_rest_service_metadata.url_host as h on s.url_host_id = h.id "
       ") as subtable ";
+
+  query_ << select_services;
 }
 
 }  // namespace v3
