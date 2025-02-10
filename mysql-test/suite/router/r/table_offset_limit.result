@@ -1068,6 +1068,18 @@ GET /svc/test/id_bigint?offset=18446744073709551614&limit=18446744073709551615
     ]
 }
 OK
+GET /svc/test/id_bigint?limit=a
+{
+    "message": "Invalid value for 'limit' parameter",
+    "status": 400
+}
+OK
+GET /svc/test/id_bigint?limit=2&offset=a
+{
+    "message": "Invalid value for 'offset' parameter",
+    "status": 400
+}
+OK
 DROP TABLE test.id_unsigned_int;
 DROP TABLE test.id_unsigned_bigint;
 DROP TABLE test.id_bigint;

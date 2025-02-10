@@ -123,6 +123,15 @@ INSERT INTO test.id_bigint(id, value)
 --let $mrs_client_arg_path='/svc/test/id_bigint?offset=18446744073709551614&limit=18446744073709551615'
 --source ../include/mrs/mrs_client.inc
 
+--let $mrs_client_arg_path='/svc/test/id_bigint?limit=a'
+--let $mrs_client_arg_expected_status='BadRequest'
+--source ../include/mrs/mrs_client.inc
+
+--let $mrs_client_arg_path='/svc/test/id_bigint?limit=2&offset=a'
+--let $mrs_client_arg_expected_status='BadRequest'
+--source ../include/mrs/mrs_client.inc
+
+
 # Cleanup
 DROP TABLE test.id_unsigned_int;
 DROP TABLE test.id_unsigned_bigint;
