@@ -70,6 +70,7 @@
 #include <functional>
 #include <iterator>
 #include <tuple>
+#include <type_traits>
 #include <utility>
 
 #include "my_alloc.h"
@@ -161,9 +162,14 @@ class OverflowBitset {
   friend class OverflowBitsetBitsIn;
   friend class MutableOverflowBitset;
 };
+
+// Because OverflowBitset is designed for value semantics, it should be cheap to
+// pass by value, so we want it to be small and trivially copyable.
 static_assert(
     sizeof(OverflowBitset) <= sizeof(uint64_t),
     "OverflowBitset is intended to be as compact as a regular 64-bit set.");
+static_assert(std::is_trivially_copyable_v<OverflowBitset>,
+              "OverflowBitset is intended to be trivally copyable.");
 
 // Private inheritance, so that the only way of converting to OverflowBitset
 // for external callers is by a move-convert.
@@ -463,10 +469,13 @@ class OverflowBitsetBitsIn {
   const Combine m_combine;
 };
 
+/// Get a container-like interface of an OverflowBitset, to allow passing it to
+/// algorithms that work on iterators.
 inline auto BitsSetIn(OverflowBitset bitset) {
   return OverflowBitsetBitsIn{std::array{bitset}, std::identity{}};
 }
 
+/// Get a container-like interface for the bits set in both of the two bitsets.
 inline auto BitsSetInBoth(OverflowBitset bitset_a, OverflowBitset bitset_b) {
   return OverflowBitsetBitsIn{std::array{bitset_a, bitset_b}, std::bit_and{}};
 }
@@ -503,6 +512,7 @@ inline bool Overlaps(const MutableOverflowBitset &a, OverflowBitset b) {
   return Overlaps(static_cast<const OverflowBitset &>(a), b);
 }
 
+/// Is 'a' a subset of 'b'?
 inline bool IsSubset(OverflowBitset a, OverflowBitset b) {
   assert(a.is_inline() == b.is_inline());
   assert(a.capacity() == b.capacity());
@@ -528,16 +538,19 @@ inline bool IsBitSet(int bit_num, const MutableOverflowBitset &x) {
   return IsBitSet(bit_num, static_cast<const OverflowBitset &>(x));
 }
 
+/// Is 'a' a subset of 'b'?
 inline bool IsSubset(OverflowBitset a, const MutableOverflowBitset &b) {
   return IsSubset(a, static_cast<const OverflowBitset &>(b));
 }
 
+/// Is 'a' a subset of 'b'?
 inline bool IsSubset(const MutableOverflowBitset &a,
                      const MutableOverflowBitset &b) {
   return IsSubset(static_cast<const OverflowBitset &>(a),
                   static_cast<const OverflowBitset &>(b));
 }
 
+/// Is 'a' a subset of 'b'?
 inline bool IsSubset(const MutableOverflowBitset &a, OverflowBitset b) {
   return IsSubset(static_cast<const OverflowBitset &>(a), b);
 }
@@ -562,6 +575,7 @@ inline bool IsEmpty(const MutableOverflowBitset &x) {
   return IsEmpty(static_cast<const OverflowBitset &>(x));
 }
 
+/// Find the nuber of bits set in 'x'.
 inline int PopulationCount(OverflowBitset x) {
   if (x.is_inline()) {
     return std::popcount(x.m_bits) - 1;
