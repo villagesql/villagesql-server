@@ -88,9 +88,11 @@ static bool open_network_namespace(const std::string &network_namespace,
     return false;
   }
 #endif
+  // Note that /var/run is deprecated, use /run instead.
+  // See https://lwn.net/Articles/436012/
   char path_to_ns_file[PATH_MAX];
   int requested_len = snprintf(path_to_ns_file, sizeof(path_to_ns_file),
-                               "/var/run/netns/%s", network_namespace.c_str());
+                               "/run/netns/%s", network_namespace.c_str());
   if (requested_len + 1 > PATH_MAX) {
 #ifdef MYSQL_SERVER
     LogErr(ERROR_LEVEL, ER_NETWORK_NAMESPACE_FILE_PATH_TOO_LONG, requested_len,
