@@ -4240,7 +4240,9 @@ int RemoveDuplicatesOnIndexIterator::Read() {
       return 1;
     }
 
-    if (!m_first_row && key_cmp(m_key->key_part, m_key_buf, m_key_len) == 0) {
+    if (!m_first_row &&
+        key_cmp(m_key->key_part, m_key_buf, m_key_len,
+                /*is_reverse_multi_valued_index_scan=*/false) == 0) {
       // Same as previous row, so keep scanning.
       continue;
     }
@@ -4292,7 +4294,8 @@ int NestedLoopSemiJoinWithDuplicateRemovalIterator::Read() {
       }
 
       if (m_deduplicate_against_previous_row &&
-          key_cmp(m_key->key_part, m_key_buf, m_key_len) == 0) {
+          key_cmp(m_key->key_part, m_key_buf, m_key_len,
+                  /*is_reverse_multi_valued_index_scan=*/false) == 0) {
         // Same as previous row, so keep scanning.
         continue;
       }

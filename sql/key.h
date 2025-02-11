@@ -367,7 +367,8 @@ bool key_cmp_if_same(const TABLE *table, const uchar *key, uint index,
 void key_unpack(String *to, TABLE *table, KEY *key);
 void field_unpack(String *to, Field *field, uint max_length, bool prefix_key);
 bool is_key_used(TABLE *table, uint idx, const MY_BITMAP *fields);
-int key_cmp(KEY_PART_INFO *key_part, const uchar *key, uint key_length);
+int key_cmp(KEY_PART_INFO *key_part, const uchar *key, uint key_length,
+            bool is_reverse_multi_valued_index_scan);
 int key_cmp2(KEY_PART_INFO *key_part, const uchar *key1, uint key1_length,
              const uchar *key2, uint key2_length);
 int key_rec_cmp(KEY **key_info, uchar *a, uchar *b);

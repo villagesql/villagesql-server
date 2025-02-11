@@ -1361,7 +1361,8 @@ int index_next_different(bool is_index_scan, handler *file,
   if (is_index_scan) {
     int result = 0;
 
-    while (!key_cmp(key_part, group_prefix, group_prefix_len)) {
+    while (!key_cmp(key_part, group_prefix, group_prefix_len,
+                    /*is_reverse_multi_valued_index_scan=*/false)) {
       result = file->ha_index_next(record);
       if (result) return (result);
     }

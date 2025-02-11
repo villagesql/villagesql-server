@@ -7561,7 +7561,8 @@ int handler::compare_key(key_range *range) {
     assert(range_scan_direction == RANGE_SCAN_ASC);
     return -1;
   }
-  cmp = key_cmp(range_key_part, range->key, range->length);
+  cmp = key_cmp(range_key_part, range->key, range->length,
+                /*is_reverse_multi_valued_index_scan=*/false);
   if (!cmp) cmp = key_compare_result_on_equal;
   return cmp;
 }
@@ -7589,7 +7590,8 @@ int handler::compare_key(key_range *range) {
 int handler::compare_key_icp(const key_range *range) const {
   int cmp;
   if (!range) return 0;  // no max range
-  cmp = key_cmp(range_key_part, range->key, range->length);
+  cmp = key_cmp(range_key_part, range->key, range->length,
+                /*is_reverse_multi_valued_index_scan=*/false);
   if (!cmp) cmp = key_compare_result_on_equal;
   if (range_scan_direction == RANGE_SCAN_DESC) cmp = -cmp;
   return cmp;
@@ -7636,7 +7638,8 @@ int handler::compare_key_in_buffer(const uchar *buf) const {
   if (diff != 0) move_key_field_offsets(end_range, range_key_part, diff);
 
   // Compare the key in buf against end_range.
-  int cmp = key_cmp(range_key_part, end_range->key, end_range->length);
+  int cmp = key_cmp(range_key_part, end_range->key, end_range->length,
+                    /*is_reverse_multi_valued_index_scan=*/false);
   if (cmp == 0) cmp = key_compare_result_on_equal;
 
   // Reset the field offsets.

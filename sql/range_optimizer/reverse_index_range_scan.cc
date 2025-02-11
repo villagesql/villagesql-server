@@ -60,10 +60,11 @@ ReverseIndexRangeScanIterator::ReverseIndexRangeScanIterator(
   }
 
   key_part_info = table->key_info[m_index].key_part;
+  m_multi_valued_index = table->key_info[m_index].flags & HA_MULTI_VALUED_KEY;
 }
 
 ReverseIndexRangeScanIterator::~ReverseIndexRangeScanIterator() {
-  if (table()->key_info[m_index].flags & HA_MULTI_VALUED_KEY && table()->file) {
+  if (m_multi_valued_index && table()->file) {
     table()->file->ha_extra(HA_EXTRA_DISABLE_UNIQUE_RECORD_FILTER);
   }
 }
@@ -273,7 +274,8 @@ int ReverseIndexRangeScanIterator::cmp_prev(QUICK_RANGE *range_arg) {
   int cmp;
   if (range_arg->flag & NO_MIN_RANGE) return 0; /* key can't be to small */
 
-  cmp = key_cmp(key_part_info, range_arg->min_key, range_arg->min_length);
+  cmp = key_cmp(key_part_info, range_arg->min_key, range_arg->min_length,
+                /*is_reverse_multi_valued_index_scan*/ m_multi_valued_index);
   if (cmp > 0 || (cmp == 0 && !(range_arg->flag & NEAR_MIN))) return 0;
   return 1;  // outside of range
 }

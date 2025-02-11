@@ -79,6 +79,9 @@ class ReverseIndexRangeScanIterator : public TableRowIterator {
   // secondary index is extended to include primary key).
   bool m_using_extended_key_parts{false};
 
+  // To check if the index is a multi-valued index.
+  bool m_multi_valued_index;
+
   bool range_reads_after_key(QUICK_RANGE *range);
   int cmp_prev(QUICK_RANGE *range);
 };
