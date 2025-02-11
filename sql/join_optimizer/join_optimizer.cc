@@ -6504,10 +6504,19 @@ AccessPath *CostingReceiver::ProposeAccessPath(
   assert(path->init_cost() >= 0.0);
   assert(path->cost() >= path->init_cost());
   assert(path->num_output_rows() >= 0.0);
-  if (!IsEmpty(path->filter_predicates)) {
+#ifndef NDEBUG
+  /*
+   If the path has unexpanded filters, also ensure that the estimates before
+   filtering are consistent with the estimates after filtering. (Cost should
+   not decrease, and number of rows should not increase.)
+  */
+  if (auto filters = BitsSetIn(path->filter_predicates);
+      filters.begin() != filters.end() &&
+      *filters.begin() < m_graph->num_where_predicates) {
     assert(path->num_output_rows() <= path->num_output_rows_before_filter);
     assert(path->cost_before_filter() <= path->cost());
   }
+#endif
 
   DBUG_EXECUTE_IF("subplan_tokens", {
     string token =
