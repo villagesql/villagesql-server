@@ -649,9 +649,8 @@ static void row_vers_build_clust_v_col(dtuple_t *row, dict_index_t *clust_index,
 
       col = reinterpret_cast<const dict_v_col_t *>(ind_field->col);
 
-      innobase_get_computed_value(row, col, clust_index, &local_heap, heap,
-                                  nullptr, current_thd, nullptr, nullptr,
-                                  nullptr, nullptr);
+      innobase_get_computed_value(row, col, clust_index->table, &local_heap,
+                                  heap, current_thd, nullptr);
     }
   }
 
