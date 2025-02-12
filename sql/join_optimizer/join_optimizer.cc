@@ -7626,15 +7626,21 @@ void SetGroupSkipScanCardinality(AccessPath *path, double output_rows) {
   path->set_num_output_rows(output_rows);
   // For display only: When the new estimate is higher than the old one, make
   // sure it doesn't look like the steps after the group skip scan, such as
-  // filtering and windowing, add any rows.
+  // filtering and windowing, add any rows. Update recursively down the tree,
+  // but stop at the first join, since joins can legitimately increase the
+  // number of rows.
   if (output_rows > old_output_rows) {
+    int children = 0;
+    AccessPath *found_child = nullptr;
     ForEachChild(path, /*join=*/nullptr,
                  WalkAccessPathPolicy::STOP_AT_MATERIALIZATION,
-                 [output_rows](AccessPath *child, const JOIN *) {
-                   if (output_rows > child->num_output_rows()) {
-                     SetGroupSkipScanCardinality(child, output_rows);
-                   }
+                 [&](AccessPath *child, const JOIN *) {
+                   found_child = child;
+                   ++children;
                  });
+    if (children == 1 && output_rows > found_child->num_output_rows()) {
+      SetGroupSkipScanCardinality(found_child, output_rows);
+    }
   }
 }
 
