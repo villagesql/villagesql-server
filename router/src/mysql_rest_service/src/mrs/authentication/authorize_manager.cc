@@ -726,7 +726,7 @@ bool AuthorizeManager::authorize(const std::string &proto,
               ctxt.session->get_session_id().c_str());
   }
 
-  assert(nullptr != session);
+  assert(nullptr != ctxt.session);
   ctxt.session->handler_name = selected_handler->get_entry().app_name;
 
   if (selected_handler->authorize(ctxt, ctxt.session, out_user)) {
