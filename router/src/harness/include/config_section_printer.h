@@ -28,6 +28,7 @@
 
 #include <algorithm>
 #include <map>
+#include <ostream>
 #include <set>
 #include <string>
 #include <utility>
