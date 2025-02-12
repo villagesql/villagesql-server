@@ -29,6 +29,7 @@
 #include <cstdlib>
 #include <memory>
 #include <new>
+#include <string_view>
 
 #include "mysql/my_loglevel.h"
 #include "mysql/strings/collations.h"
@@ -545,28 +546,36 @@ class Charset_loader : public MY_CHARSET_LOADER {
   void *read_file(const char *, size_t *) override { return nullptr; }
 };
 
-template <typename Key>
-using Hash = std::unordered_map<Key, CHARSET_INFO *>;
+using id_hash_map = mysql::collation_internals::id_hash_map;
+using sv_hash_map = mysql::collation_internals::sv_hash_map;
 
-template <typename Key>
-CHARSET_INFO *find_in_hash(const Hash<Key> &hash, Key key) {
+CHARSET_INFO *find_in_hash(const sv_hash_map &hash, std::string_view key) {
+  auto it = hash.find((key));
+  return it == hash.end() ? nullptr : it->second;
+}
+
+CHARSET_INFO *find_in_hash(const id_hash_map &hash, unsigned key) {
   auto it = hash.find(key);
   return it == hash.end() ? nullptr : it->second;
 }
 
-CHARSET_INFO *find_collation_in_hash(const Hash<std::string> &hash,
-                                     const std::string &key) {
+CHARSET_INFO *find_collation_in_hash(const sv_hash_map &hash,
+                                     std::string_view key) {
   return find_in_hash(hash, key);
 }
 
-CHARSET_INFO *find_cs_in_hash(const Hash<std::string> &hash,
-                              const mysql::collation::Name &key) {
-  auto it = hash.find(key());
+CHARSET_INFO *find_cs_in_hash(const sv_hash_map &hash, std::string_view key) {
+  auto it = hash.find(key);
   return it == hash.end() ? nullptr : it->second;
 }
 
-template <typename Key>
-bool add_to_hash(Hash<Key> *hash, Key key, CHARSET_INFO *cs) {
+bool add_to_hash(id_hash_map *hash, unsigned key, CHARSET_INFO *cs) {
+  //  return !hash->insert({key, cs}).second;
+  (*hash)[key] = cs;
+  return false;
+}
+
+bool add_to_hash(sv_hash_map *hash, std::string key, CHARSET_INFO *cs) {
   //  return !hash->insert({key, cs}).second;
   (*hash)[key] = cs;
   return false;
@@ -639,7 +648,8 @@ Collations::~Collations() {
 CHARSET_INFO *Collations::find_by_name(const mysql::collation::Name &name,
                                        myf flags, MY_CHARSET_ERRMSG *errmsg) {
   return safe_init_when_necessary(
-      find_collation_in_hash(m_all_by_collation_name, name()), flags, errmsg);
+      find_collation_in_hash(m_all_by_collation_name, name.to_string_view()),
+      flags, errmsg);
 }
 
 CHARSET_INFO *Collations::find_by_id(unsigned id, myf flags,
@@ -650,31 +660,36 @@ CHARSET_INFO *Collations::find_by_id(unsigned id, myf flags,
 CHARSET_INFO *Collations::find_primary(const mysql::collation::Name &cs_name,
                                        myf flags, MY_CHARSET_ERRMSG *errmsg) {
   return safe_init_when_necessary(
-      find_cs_in_hash(m_primary_by_cs_name, cs_name), flags, errmsg);
+      find_cs_in_hash(m_primary_by_cs_name, cs_name.to_string_view()), flags,
+      errmsg);
 }
 
 CHARSET_INFO *Collations::find_default_binary(
     const mysql::collation::Name &cs_name, myf flags,
     MY_CHARSET_ERRMSG *errmsg) {
-  return safe_init_when_necessary(find_cs_in_hash(m_binary_by_cs_name, cs_name),
-                                  flags, errmsg);
+  return safe_init_when_necessary(
+      find_cs_in_hash(m_binary_by_cs_name, cs_name.to_string_view()), flags,
+      errmsg);
 }
 
 unsigned Collations::get_collation_id(
     const mysql::collation::Name &name) const {
-  CHARSET_INFO *cs = find_collation_in_hash(m_all_by_collation_name, name());
+  CHARSET_INFO *cs =
+      find_collation_in_hash(m_all_by_collation_name, name.to_string_view());
   return cs ? cs->number : 0;
 }
 
 unsigned Collations::get_primary_collation_id(
     const mysql::collation::Name &name) const {
-  CHARSET_INFO *cs = find_cs_in_hash(m_primary_by_cs_name, name);
+  CHARSET_INFO *cs =
+      find_cs_in_hash(m_primary_by_cs_name, name.to_string_view());
   return cs ? cs->number : 0;
 }
 
 unsigned Collations::get_default_binary_collation_id(
     const mysql::collation::Name &name) const {
-  CHARSET_INFO *cs = find_cs_in_hash(m_binary_by_cs_name, name);
+  CHARSET_INFO *cs =
+      find_cs_in_hash(m_binary_by_cs_name, name.to_string_view());
   return cs ? cs->number : 0;
 }
 
@@ -719,7 +734,8 @@ CHARSET_INFO *Collations::unsafe_init(CHARSET_INFO *cs,
 bool Collations::add_internal_collation(CHARSET_INFO *cs) {
   assert(cs->number != 0);
 
-  std::string const normalized_name{mysql::collation::Name{cs->m_coll_name}()};
+  const std::string normalized_name{
+      mysql::collation::Name{cs->m_coll_name}.to_string_view()};
 
   if (add_to_hash(&m_all_by_collation_name, normalized_name, cs) ||
       add_to_hash(&m_all_by_id, cs->number, cs)) {
@@ -746,7 +762,7 @@ bool Collations::add_internal_collation(CHARSET_INFO *cs) {
 
 CHARSET_INFO *Collations::find_by_name_unsafe(
     const mysql::collation::Name &name) {
-  return find_collation_in_hash(m_all_by_collation_name, name());
+  return find_collation_in_hash(m_all_by_collation_name, name.to_string_view());
 }
 
 }  // namespace mysql::collation_internals

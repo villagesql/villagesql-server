@@ -564,8 +564,9 @@ static int cs_value(MY_XML_PARSER *st, const char *attr, size_t len) {
       // Replace "utf8_" with "utf8mb3_" for external character sets.
       // Convert to lowercase first.
       mysql::collation::Name normalized_name(attr, len);
-      if (normalized_name().starts_with("utf8_")) {
-        std::string collation_name_string = normalized_name();
+      if (normalized_name.to_string_view().starts_with("utf8_")) {
+        std::string collation_name_string =
+            std::string(normalized_name.to_string_view());
         // insert "mb3" to get "utf8mb3_xxx"
         collation_name_string.insert(4, "mb3");
         i->cs.m_coll_name =
@@ -579,7 +580,7 @@ static int cs_value(MY_XML_PARSER *st, const char *attr, size_t len) {
       // Replace "utf8" with "utf8mb3" for external character sets.
       // Convert to lowercase first.
       mysql::collation::Name normalized_name(attr, len);
-      if (normalized_name() == "utf8") {
+      if (normalized_name.to_string_view() == "utf8") {
         i->cs.csname =
             mstr(i->csname, STRING_WITH_LEN("utf8mb3"), MY_CS_NAME_SIZE - 1);
       } else {

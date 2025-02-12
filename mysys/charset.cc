@@ -294,7 +294,8 @@ CHARSET_INFO *my_collation_get_by_name(const char *collation_name, myf flags,
   if (cs == nullptr && (flags & MY_WME)) {
     char index_file[FN_REFLEN + sizeof(MY_CHARSET_INDEX)];
     my_stpcpy(get_charsets_dir(index_file), MY_CHARSET_INDEX);
-    my_error(EE_UNKNOWN_COLLATION, MYF(0), name().c_str(), index_file);
+    my_error(EE_UNKNOWN_COLLATION, MYF(0),
+             std::string(name.to_string_view()).c_str(), index_file);
   }
   return cs;
 }
@@ -325,7 +326,7 @@ CHARSET_INFO *my_charset_get_by_name(const char *cs_name, uint cs_flags,
   CHARSET_INFO *cs = nullptr;
   if (cs_flags & MY_CS_PRIMARY) {
     cs = entry()->find_primary(name, flags, errmsg);
-    if (cs == nullptr && name() == "utf8") {
+    if (cs == nullptr && name.to_string_view() == "utf8") {
       // The parser does get_charset_by_csname().
       // Also needed for e.g. SET character_set_client= 'utf8'.
       // Also needed by the lexer for: "select _utf8 0xD0B0D0B1D0B2;"
@@ -334,7 +335,7 @@ CHARSET_INFO *my_charset_get_by_name(const char *cs_name, uint cs_flags,
     }
   } else if (cs_flags & MY_CS_BINSORT) {
     cs = entry()->find_default_binary(name, flags, errmsg);
-    if (cs == nullptr && name() == "utf8") {
+    if (cs == nullptr && name.to_string_view() == "utf8") {
       cs = entry()->find_default_binary(mysql::collation::Name("utf8mb3"),
                                         flags, errmsg);
     }
