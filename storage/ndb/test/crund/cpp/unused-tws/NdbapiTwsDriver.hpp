@@ -138,15 +138,15 @@ class NdbapiTwsDriver : public TwsDriver {
   // NDB API initializers/finalizers
   virtual void init();
   virtual void close();
-  virtual void initProperties();
-  virtual void printProperties();
+  void initProperties() override;
+  void printProperties() override;
 
   // NDB API operations
-  virtual void runOperations(int nOps);
-  virtual void runInserts(XMode mode, int nOps);
-  virtual void runLookups(XMode mode, int nOps);
-  virtual void runUpdates(XMode mode, int nOps);
-  virtual void runDeletes(XMode mode, int nOps);
+  void runOperations(int nOps) override;
+  void runInserts(XMode mode, int nOps) override;
+  void runLookups(XMode mode, int nOps) override;
+  void runUpdates(XMode mode, int nOps) override;
+  void runDeletes(XMode mode, int nOps) override;
   void initNdbapiBuffers(int nOps);
   void closeNdbapiBuffers(int nOps);
   void ndbapiInsert(int c0);
@@ -160,13 +160,13 @@ class NdbapiTwsDriver : public TwsDriver {
   void ndbapiCloseTransaction();
   static void ndbapiToBuffer1blp(void *to, const char *from, size_t width);
   static void ndbapiToString1blp(char *to, const void *from, size_t width);
-  virtual void initOperations();
-  virtual void closeOperations();
+  void initOperations() override;
+  void closeOperations() override;
 
   // NDB API datastore operations
-  virtual void initConnection();
-  virtual void closeConnection();
-  virtual void clearData();
+  void initConnection() override;
+  void closeConnection() override;
+  void clearData() override;
 };
 
 #endif  // NdbapiTwsDriver_hpp

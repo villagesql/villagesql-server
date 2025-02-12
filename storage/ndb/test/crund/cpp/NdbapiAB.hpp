@@ -42,11 +42,11 @@ class NdbapiAB : public CrundLoad {
   // usage
   NdbapiAB(CrundDriver &_driver)
       : CrundLoad("ndbapi", _driver),
-        mgmd(NULL),
-        ndb(NULL),
-        tx(NULL),
-        model(NULL) {}
-  virtual ~NdbapiAB() {
+        mgmd(nullptr),
+        ndb(nullptr),
+        tx(nullptr),
+        model(nullptr) {}
+  ~NdbapiAB() override {
     assert(mgmd == NULL);
     assert(ndb == NULL);
     assert(tx == NULL);
@@ -72,19 +72,19 @@ class NdbapiAB : public CrundLoad {
   typedef CrundDriver::XMode XMode;
 
   // intializers/finalizers
-  virtual void initProperties();
-  virtual void printProperties();
-  virtual void init();
-  virtual void close();
+  void initProperties() override;
+  void printProperties() override;
+  void init() override;
+  void close() override;
 
   // datastore operations
-  virtual void initConnection();
-  virtual void closeConnection();
-  virtual void clearData();
+  void initConnection() override;
+  void closeConnection() override;
+  void clearData() override;
 
   // benchmark operations
-  virtual void initOperations();
-  virtual void closeOperations();
+  void initOperations() override;
+  void closeOperations() override;
   virtual void buildOperations();
   template <XMode::E xMode>
   void addOperations();

@@ -97,7 +97,7 @@ void Driver::parseArguments(int argc, const char *argv[]) {
     char dest[size];
 
     // get time, convert to timeinfo (statically allocated) then to string
-    const time_t now = time(0);
+    const time_t now = time(nullptr);
     const int nchars = strftime(dest, size, format, localtime(&now));
     assert(nchars == size - 1);
     (void)nchars;

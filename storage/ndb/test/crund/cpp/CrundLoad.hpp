@@ -47,16 +47,16 @@ class CrundLoad : public Load {
       : Load(_name), driver(_driver), sdata(nullptr), bdata(nullptr) {
     driver.addLoad(*this);
   }
-  virtual ~CrundLoad() {}
+  ~CrundLoad() override {}
 
   // initializers/finalizers
-  virtual void init();
-  virtual void close();
+  void init() override;
+  void close() override;
 
   // datastore operations
-  virtual void initConnection() = 0;
-  virtual void closeConnection() = 0;
-  virtual void clearData() = 0;
+  void initConnection() override = 0;
+  void closeConnection() override = 0;
+  void clearData() override = 0;
 
  protected:
   // resources
@@ -87,7 +87,7 @@ class CrundLoad : public Load {
   virtual void initOperations() = 0;
   virtual void closeOperations() = 0;
   virtual void clearPersistenceContext() {}
-  virtual void runOperations(int nOps);
+  void runOperations(int nOps) override;
   virtual void runOperation(Op &op, const vector<int> &id);
   virtual bool excludedOperation(const string &name);
 

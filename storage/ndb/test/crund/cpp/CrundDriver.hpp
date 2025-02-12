@@ -41,7 +41,7 @@ class CrundDriver : public Driver {
  public:
   // usage
   CrundDriver() {}
-  virtual ~CrundDriver() {}
+  ~CrundDriver() override {}
 
   // operation execution and lock modes
   struct XMode {
@@ -78,14 +78,14 @@ class CrundDriver : public Driver {
   Loads myLoads;
 
   // initializers/finalizers
-  virtual void init();
-  virtual void close();
-  virtual void initProperties();
-  virtual void printProperties();
-  virtual bool createLoad(const string &name);
+  void init() override;
+  void close() override;
+  void initProperties() override;
+  void printProperties() override;
+  bool createLoad(const string &name) override;
 
   // operations
-  virtual void runLoad(Load &load);
+  void runLoad(Load &load) override;
   virtual void connectDB(Load &load);
   virtual void disconnectDB(Load &load);
   virtual void reconnectDB(Load &load);

@@ -27,6 +27,7 @@
 #error CMAKE_BINARY_DIR must be defined
 #endif
 
+#include <stdlib.h>
 #include <string>
 #include <vector>
 
@@ -41,6 +42,7 @@
 #ifdef _WIN32
 #include <direct.h>
 #define CLASS_PATH_SEP ";"
+#define setenv(a, b, c) _putenv_s(a, b)
 #else
 #include <unistd.h>
 #define CLASS_PATH_SEP ":"
@@ -166,7 +168,7 @@ class Paths {
 
   static const std::string generateLogFileName() {
     char timestamp[dateFormatSize];
-    const time_t now = time(0);
+    const time_t now = time(nullptr);
     (void)strftime(timestamp, dateFormatSize, dateFormat, localtime(&now));
     return logPrefix() + timestamp + "_";
   }

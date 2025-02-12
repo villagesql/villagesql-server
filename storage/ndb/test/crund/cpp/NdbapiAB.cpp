@@ -126,21 +126,21 @@ struct Model {
 
   static const D::Table *getTable(const D::Dictionary *d, const char *t) {
     const D::Table *r = d->getTable(t);
-    if (r == NULL) ABORT_NDB_ERROR(d->getNdbError());
+    if (r == nullptr) ABORT_NDB_ERROR(d->getNdbError());
     return r;
   }
 
   static const D::Column *getColumn(const D::Dictionary *d, const D::Table *t,
                                     const char *c) {
     const D::Column *r = t->getColumn(c);
-    if (r == NULL) ABORT_NDB_ERROR(d->getNdbError());
+    if (r == nullptr) ABORT_NDB_ERROR(d->getNdbError());
     return r;
   }
 
   static const D::Index *getIndex(const D::Dictionary *d, const char *n,
                                   const char *c) {
     const D::Index *r = d->getIndex(n, c);
-    if (r == NULL) ABORT_NDB_ERROR(d->getNdbError());
+    if (r == nullptr) ABORT_NDB_ERROR(d->getNdbError());
     return r;
   }
 
@@ -258,7 +258,7 @@ void NdbapiAB::close() {
   // release NDB cluster singleton
   cout << endl << "closing cluster connection ..." << flush;
   delete mgmd;
-  mgmd = NULL;
+  mgmd = nullptr;
   cout << "  [ok]" << endl;
 
   // ndb_close must be called last
@@ -394,13 +394,13 @@ void NdbapiAB::closeConnection() {
 
   cout << "clearing metadata cache ..." << flush;
   delete model;
-  model = NULL;
+  model = nullptr;
   cout << "     [ok]" << endl;
 
   cout << "closing database connection ..." << flush;
   // no ndb->close();
   delete ndb;
-  ndb = NULL;
+  ndb = nullptr;
   cout << " [ok]" << endl;
 }
 
@@ -439,14 +439,14 @@ struct NdbapiAB::NdbapiOp : Op {
 
   NdbapiOp(const string &_name, NdbapiAB &_load)
       : Op(_name + "," + XMode::toString(xMode)), load(_load), tx(_load.tx) {}
-  virtual ~NdbapiOp() { assert(tx == NULL); }
+  ~NdbapiOp() override { assert(tx == NULL); }
 
   virtual void init() {}
   virtual void close() {}
 
   void beginTransaction() {
     assert(tx == NULL);
-    if ((tx = load.ndb->startTransaction()) == NULL)
+    if ((tx = load.ndb->startTransaction()) == nullptr)
       ABORT_NDB_ERROR(load.ndb->getNdbError());
   }
   void executeOperations() {
@@ -470,7 +470,7 @@ struct NdbapiAB::NdbapiOp : Op {
   void closeTransaction() {
     assert(tx != NULL);
     load.ndb->closeTransaction(tx);
-    tx = NULL;
+    tx = nullptr;
   }
 };
 
@@ -481,9 +481,9 @@ struct NdbapiAB::WriteOp : NdbapiOp<xMode> {
   NdbOperation *op;
 
   WriteOp(string _name, NdbapiAB &ab, const D::Table *tab)
-      : super(_name, ab), table(tab), op(NULL) {}
+      : super(_name, ab), table(tab), op(nullptr) {}
 
-  virtual void run(const Ids &id) {
+  void run(const Ids &id) override {
     switch (xMode) {
       case XMode::indy:
         for (Ids::const_iterator i = id.begin(); i != id.end(); ++i) {
@@ -545,9 +545,9 @@ struct NdbapiAB::UpdateOp : WriteOp<xMode> {
   UpdateOp(string _name, NdbapiAB &ab, const D::Table *tab)
       : super(_name, ab, tab) {}
 
-  void setOp() {  // final
+  void setOp() final {
     super::op = super::tx->getNdbOperation(super::table);
-    if (super::op == NULL) ABORT_NDB_ERROR(super::tx->getNdbError());
+    if (super::op == nullptr) ABORT_NDB_ERROR(super::tx->getNdbError());
     if (super::op->updateTuple() != 0)
       ABORT_NDB_ERROR(super::tx->getNdbError());
   }
@@ -560,9 +560,9 @@ struct NdbapiAB::InsertOp : WriteOp<xMode> {
   InsertOp(string _name, NdbapiAB &ab, const D::Table *tab)
       : super(_name, ab, tab) {}
 
-  void setOp() {  // final
+  void setOp() final {
     super::op = super::tx->getNdbOperation(super::table);
-    if (super::op == NULL) ABORT_NDB_ERROR(super::tx->getNdbError());
+    if (super::op == nullptr) ABORT_NDB_ERROR(super::tx->getNdbError());
     if (super::op->insertTuple() != 0)
       ABORT_NDB_ERROR(super::tx->getNdbError());
   }
@@ -574,9 +574,9 @@ struct NdbapiAB::DeleteOp : WriteOp<xMode> {
 
   DeleteOp(string nm, NdbapiAB &ab, const D::Table *tab) : super(nm, ab, tab) {}
 
-  void setOp() {  // final
+  void setOp() final {
     super::op = super::tx->getNdbOperation(super::table);
-    if (super::op == NULL) ABORT_NDB_ERROR(super::tx->getNdbError());
+    if (super::op == nullptr) ABORT_NDB_ERROR(super::tx->getNdbError());
     if (super::op->deleteTuple() != 0)
       ABORT_NDB_ERROR(super::tx->getNdbError());
   }
@@ -589,9 +589,9 @@ struct NdbapiAB::ReadOp : NdbapiOp<xMode> {
   NdbOperation *op;
 
   ReadOp(string _name, NdbapiAB &ab, const D::Table *tab)
-      : super(_name, ab), table(tab), op(NULL) {}
+      : super(_name, ab), table(tab), op(nullptr) {}
 
-  virtual void run(const Ids &id) {
+  void run(const Ids &id) override {
     switch (xMode) {
       case XMode::indy:
         for (Ids::const_iterator i = id.begin(); i != id.end(); ++i) {
@@ -647,7 +647,7 @@ struct NdbapiAB::ReadOp : NdbapiOp<xMode> {
 
   void setOp() {  // final
     op = super::tx->getNdbOperation(table);
-    if (op == NULL) ABORT_NDB_ERROR(super::tx->getNdbError());
+    if (op == nullptr) ABORT_NDB_ERROR(super::tx->getNdbError());
     if (op->readTuple(super::load.ndbOpLockMode) != 0)
       ABORT_NDB_ERROR(super::tx->getNdbError());
   }
@@ -658,7 +658,7 @@ struct NdbapiAB::ReadOp : NdbapiOp<xMode> {
 
   virtual void getValues(int id) = 0;
 
-  virtual void check(const Ids &id) {
+  void check(const Ids &id) {  // final
     for (Ids::const_iterator i = id.begin(); i != id.end(); ++i) check(*i);
   }
   virtual void check(int id) = 0;
@@ -674,13 +674,13 @@ struct NdbapiAB::IndexScanOp : NdbapiOp<xMode> {
   IndexScanOp(string _name, NdbapiAB &abLoad, const D::Index *idx)
       : super(_name, abLoad), index(idx), forceSend(true), op(0) {}
 
-  virtual void run(const Ids &id) {
+  void run(const Ids &id) override {
     switch (xMode) {
       case XMode::indy: {
         for (Ids::const_iterator i = id.begin(); i != id.end(); ++i) {
           super::beginTransaction();
-          op.assign(1, NULL);  // space for 1 scan op
-          const int o = 0;     // scan op index
+          op.assign(1, nullptr);  // space for 1 scan op
+          const int o = 0;        // scan op index
           alloc(1);
           rewind();  // not needed
           read(o, *i);
@@ -697,8 +697,8 @@ struct NdbapiAB::IndexScanOp : NdbapiOp<xMode> {
       }
       case XMode::each: {
         super::beginTransaction();
-        op.assign(1, NULL);  // space for 1 scan op
-        const int o = 0;     // scan op index
+        op.assign(1, nullptr);  // space for 1 scan op
+        const int o = 0;        // scan op index
         for (Ids::const_iterator i = id.begin(); i != id.end(); ++i) {
           alloc(1);
           rewind();
@@ -717,7 +717,7 @@ struct NdbapiAB::IndexScanOp : NdbapiOp<xMode> {
       case XMode::bulk: {
         super::beginTransaction();
         const unsigned int bs = super::load.nConcScans;  // batch size
-        op.assign(bs, NULL);                             // scan ops
+        op.assign(bs, nullptr);                          // scan ops
         const Ids::const_iterator ee = id.end();
         for (Ids::const_iterator b = id.begin(); b < ee; b += bs) {
           const Ids::const_iterator e = (b + bs < ee ? b + bs : ee);
@@ -743,7 +743,7 @@ struct NdbapiAB::IndexScanOp : NdbapiOp<xMode> {
   void setOp(int o) {  // final
     NdbIndexScanOperation *const iso =
         super::tx->getNdbIndexScanOperation(index);
-    if (iso == NULL) ABORT_NDB_ERROR(super::tx->getNdbError());
+    if (iso == nullptr) ABORT_NDB_ERROR(super::tx->getNdbError());
     op[o] = iso;
 
     // define a read scan
@@ -798,7 +798,7 @@ struct NdbapiAB::IndexScanOp : NdbapiOp<xMode> {
 
   virtual void getValues(int o, int id) = 0;  // sets bounds, filter etc
 
-  virtual void check(const Ids &id) {
+  void check(const Ids &id) {  // final
     // ok to traverse scan results in order and not sort/group them
     // (scan ops are pulled in order, pattern assumes 1:1 relationship)
     for (Ids::const_iterator i = id.begin(); i != id.end(); ++i) check(*i);
@@ -828,17 +828,17 @@ struct NdbapiAB::BufUpdateOp : UpdateOp<xMode> {
   ElementT *pos;
 
   BufUpdateOp(string _name, NdbapiAB &ab, const D::Table *tab, int w)
-      : UpdateOp<xMode>(_name, ab, tab), width(w), buf(NULL), pos(NULL) {}
+      : UpdateOp<xMode>(_name, ab, tab), width(w), buf(nullptr), pos(nullptr) {}
 
-  virtual void alloc(int n) { pos = buf = new ElementT[n * width]; }
+  void alloc(int n) override { pos = buf = new ElementT[n * width]; }
 
-  virtual void rewind() {
+  void rewind() override {
     pos = buf;  // prepare buffer for writing
   }
 
-  virtual void free() {
+  void free() override {
     delete[] buf;
-    pos = buf = NULL;
+    pos = buf = nullptr;
   }
 };
 
@@ -851,17 +851,17 @@ struct NdbapiAB::BufReadOp : ReadOp<xMode> {
   ElementT *pos;
 
   BufReadOp(string _name, NdbapiAB &ab, const D::Table *tab, int w)
-      : ReadOp<xMode>(_name, ab, tab), width(w), buf(NULL), pos(NULL) {}
+      : ReadOp<xMode>(_name, ab, tab), width(w), buf(nullptr), pos(nullptr) {}
 
-  virtual void alloc(int n) { pos = buf = new ElementT[n * width]; }
+  void alloc(int n) override { pos = buf = new ElementT[n * width]; }
 
-  virtual void rewind() {
+  void rewind() override {
     pos = buf;  // prepare buffer for reading
   }
 
-  virtual void free() {
+  void free() override {
     delete[] buf;
-    pos = buf = NULL;
+    pos = buf = nullptr;
   }
 };
 
@@ -879,23 +879,23 @@ struct NdbapiAB::BufIndexScanOp : IndexScanOp<xMode> {
   BufIndexScanOp(string nm, NdbapiAB &abLoad, const D::Index *idx, int w)
       : IndexScanOp<xMode>(nm, abLoad, idx), width(w) {}
 
-  virtual void alloc(int n) {
+  void alloc(int n) override {
     assert(0 <= n && n <= super::load.nConcScans);
     obuf.assign(n * width, ElementT());
     pos = buf.begin();
   }
 
-  virtual void copy(int o) {
+  void copy(int o) override {
     // store copy of obuf[o] as overwritten by next scan result
     buf.push_back(ElementT());
     buf.back().assignClone(obuf[o]);
   }
 
-  virtual void rewind() {
+  void rewind() override {
     pos = buf.begin();  // prepare buffer for reading
   }
 
-  virtual void free() {
+  void free() override {
     for (ElementIterator i = buf.begin(); i != buf.end(); ++i)
       i->deleteClone();  // clone()'d NdbRecAttrs managed by app
     buf.clear();
@@ -912,9 +912,9 @@ struct NdbapiAB::TableScanDeleteOp : NdbapiOp<XMode::bulk> {
   int nDeleted;
 
   TableScanDeleteOp(string _name, NdbapiAB &ab, const D::Table *tab)
-      : super(_name, ab), table(tab), op(NULL), nDeleted(0) {}
+      : super(_name, ab), table(tab), op(nullptr), nDeleted(0) {}
 
-  virtual void run(const Ids &id) {
+  void run(const Ids &id) override {
     (void)id;  // ignored
     super::beginTransaction();
     setOp();
@@ -928,7 +928,7 @@ struct NdbapiAB::TableScanDeleteOp : NdbapiOp<XMode::bulk> {
   void setOp() {  // final
     // get a full table scan operation (no scan filter defined)
     op = tx->getNdbScanOperation(table);
-    if (op == NULL) ABORT_NDB_ERROR(tx->getNdbError());
+    if (op == nullptr) ABORT_NDB_ERROR(tx->getNdbError());
 
     // define a read scan with exclusive locks
     const NdbOperation::LockMode lock_mode = NdbOperation::LM_Exclusive;
@@ -971,7 +971,7 @@ struct NdbapiAB::TableScanDeleteOp : NdbapiOp<XMode::bulk> {
     const bool forceSend_ = false;
     const bool releaseOp = false;
     op->close(forceSend_, releaseOp);
-    op = NULL;
+    op = nullptr;
   }
 };
 
@@ -999,7 +999,7 @@ struct NdbapiAB::ValAttrHolder : ValIdHolder {
 struct NdbapiAB::RecIdHolder : Holder {
   NdbRecAttr *id;
 
-  RecIdHolder() : id(NULL) {}
+  RecIdHolder() : id(nullptr) {}
   Int32 getId() {  // uniform Id access
     return id->int32_value();
   }
@@ -1009,7 +1009,7 @@ struct NdbapiAB::RecIdHolder : Holder {
   }
   void deleteClone() {  // requires assignClone()
     delete id;
-    id = NULL;
+    id = nullptr;
   }
 };
 
@@ -1019,7 +1019,8 @@ struct NdbapiAB::RecAttrHolder : RecIdHolder {
   NdbRecAttr *cfloat;
   NdbRecAttr *cdouble;
 
-  RecAttrHolder() : cint(NULL), clong(NULL), cfloat(NULL), cdouble(NULL) {}
+  RecAttrHolder()
+      : cint(nullptr), clong(nullptr), cfloat(nullptr), cdouble(nullptr) {}
   void assignClone(const RecAttrHolder &that) {  // requires deleteClone()
     RecIdHolder::assignClone(that);
     assert(cint == NULL);
@@ -1036,10 +1037,10 @@ struct NdbapiAB::RecAttrHolder : RecIdHolder {
     delete clong;
     delete cfloat;
     delete cdouble;
-    cint = NULL;
-    clong = NULL;
-    cfloat = NULL;
-    cdouble = NULL;
+    cint = nullptr;
+    clong = nullptr;
+    cfloat = nullptr;
+    cdouble = nullptr;
     RecIdHolder::deleteClone();
   }
 };
@@ -1049,7 +1050,7 @@ struct NdbapiAB::AB_insAttr : InsertOp<xMode> {
   typedef InsertOp<xMode> super;
   AB_insAttr(string nm, NdbapiAB &ab, const D::Table *tab)
       : super(nm + (setAttr ? "Attr" : ""), ab, tab) {}
-  virtual void setValues(int id) {
+  void setValues(int id) override {
     super::load.setKeyAB(super::op, id);  // set first
     if (setAttr) super::load.setAttrAB(super::op, -id);
   }
@@ -1072,7 +1073,7 @@ struct NdbapiAB::AB_setAttr : UpdateOp<xMode> {
   typedef UpdateOp<xMode> super;
   AB_setAttr(string _name, NdbapiAB &ab, const D::Table *tab)
       : super(_name, ab, tab) {}
-  virtual void setValues(int id) {
+  void setValues(int id) override {
     super::load.setKeyAB(super::op, id);  // set first
     super::load.setAttrAB(super::op, id);
   }
@@ -1095,7 +1096,7 @@ struct NdbapiAB::AB_del : DeleteOp<xMode> {
   typedef DeleteOp<xMode> super;
   AB_del(string _name, NdbapiAB &ab, const D::Table *_table)
       : super(_name, ab, _table) {}
-  virtual void setValues(int id) { super::load.setKeyAB(super::op, id); }
+  void setValues(int id) override { super::load.setKeyAB(super::op, id); }
 };
 
 template <XMode::E xMode>
@@ -1115,13 +1116,13 @@ struct NdbapiAB::AB_getAttr : BufReadOp<xMode, HolderT> {
   typedef BufReadOp<xMode, HolderT> super;
   AB_getAttr(string _name, NdbapiAB &ab, const D::Table *tab)
       : super(_name, ab, tab, 1) {}
-  virtual void getValues(int id) {
+  void getValues(int id) override {
     super::load.setKeyAB(super::op, id);  // set first
     super::load.getKeyAB(super::op, super::pos);
     super::load.getAttrAB(super::op, super::pos);
     super::pos++;  // consumed
   }
-  virtual void check(int id) {
+  void check(int id) override {
     super::load.checkKeyAB(id, super::pos);
     super::load.checkAttrAB(id, super::pos);
     super::pos++;  // consumed
@@ -1160,7 +1161,7 @@ struct NdbapiAB::B_setVarbinary : BufUpdateOp<xMode, char> {
       : super(string("B_setVarbin_") + toString(_buf.size()), ab,
               ab.model->table_B, ab.model->width_B_cvarbinary_def),
         buf(_buf) {}
-  virtual void setValues(int id) {
+  void setValues(int id) override {
     super::load.setKeyAB(super::op, id);  // set first
     super::load.setVarbinaryB(super::op, super::pos, &buf);
   }
@@ -1172,9 +1173,9 @@ struct NdbapiAB::B_clearVarbinary : BufUpdateOp<xMode, char> {
   B_clearVarbinary(NdbapiAB &ab, const bytes &str)
       : super(string("B_clearVarbin_") + toString(str.size()), ab,
               ab.model->table_B, ab.model->width_B_cvarbinary_def) {}
-  virtual void setValues(int id) {
+  void setValues(int id) override {
     super::load.setKeyAB(super::op, id);  // set first
-    super::load.setVarbinaryB(super::op, super::pos, NULL);
+    super::load.setVarbinaryB(super::op, super::pos, nullptr);
   }
 };
 
@@ -1186,12 +1187,12 @@ struct NdbapiAB::B_getVarbinary : BufReadOp<xMode, char> {
       : super(string("B_getVarbin_") + toString(_buf.size()), ab,
               ab.model->table_B, ab.model->width_B_cvarbinary_def),
         buf(_buf) {}
-  virtual void getValues(int id) {
+  void getValues(int id) override {
     super::load.setKeyAB(super::op, id);  // set first
     super::load.getVarbinaryB(super::op, super::pos);
     super::pos += super::width;  // consumed
   }
-  virtual void check(int id) {
+  void check(int id) override {
     super::load.checkVarbinaryB(&buf, super::pos);
     super::pos += super::width;  // consumed
   }
@@ -1205,7 +1206,7 @@ struct NdbapiAB::B_setVarchar : BufUpdateOp<xMode, char> {
       : super(string("B_setVarchar_") + toString(str.size()), ab,
               ab.model->table_B, ab.model->width_B_cvarchar_def),
         str(str) {}
-  virtual void setValues(int id) {
+  void setValues(int id) override {
     super::load.setKeyAB(super::op, id);  // set first
     super::load.setVarcharB(super::op, super::pos, &str);
   }
@@ -1217,9 +1218,9 @@ struct NdbapiAB::B_clearVarchar : BufUpdateOp<xMode, char> {
   B_clearVarchar(NdbapiAB &ab, const string &str)
       : super(string("B_clearVarchar_") + toString(str.size()), ab,
               ab.model->table_B, ab.model->width_B_cvarchar_def) {}
-  virtual void setValues(int id) {
+  void setValues(int id) override {
     super::load.setKeyAB(super::op, id);  // set first
-    super::load.setVarcharB(super::op, super::pos, NULL);
+    super::load.setVarcharB(super::op, super::pos, nullptr);
   }
 };
 
@@ -1231,12 +1232,12 @@ struct NdbapiAB::B_getVarchar : BufReadOp<xMode, char> {
       : super(string("B_getVarchar_") + toString(str.size()), ab,
               ab.model->table_B, ab.model->width_B_cvarchar_def),
         str(str) {}
-  virtual void getValues(int id) {
+  void getValues(int id) override {
     super::load.setKeyAB(super::op, id);  // set first
     super::load.getVarcharB(super::op, super::pos);
     super::pos += super::width;  // consumed
   }
-  virtual void check(int id) {
+  void check(int id) override {
     super::load.checkVarcharB(&str, super::pos);
     super::pos += super::width;  // consumed
   }
@@ -1246,7 +1247,7 @@ template <XMode::E xMode>
 struct NdbapiAB::B_setA : UpdateOp<xMode> {
   typedef UpdateOp<xMode> super;
   B_setA(NdbapiAB &ab) : super(string("B_setA"), ab, ab.model->table_B) {}
-  virtual void setValues(int id) {
+  void setValues(int id) override {
     super::load.setKeyAB(super::op, id);  // set first
     const int aid = id;
     super::load.setAIdB(super::op, aid);
@@ -1262,28 +1263,28 @@ struct NdbapiAB::B_getA : BufReadOp<xMode, HolderT> {
     typedef BufReadOp<xMode, HolderT> super;
     B_getAId(NdbapiAB &ab)
         : super(string("B_getAId"), ab, ab.model->table_B, 1) {}
-    virtual void getValues(int id) {
+    void getValues(int id) override {
       super::load.setKeyAB(super::op, id);  // set first
       super::load.getAIdB(super::op, super::pos);
       super::pos++;  // consumed
     }
-    virtual void check(int id) {}  // results traversed within outer query
+    void check(int id) override {}  // results traversed within outer query
   };
   B_getAId getAId;
 
   B_getA(string _name, NdbapiAB &ab, const D::Table *tab)
       : super(_name, ab, tab, 1), getAId(ab) {}
 
-  virtual void alloc(int n) {
+  void alloc(int n) override {
     super::alloc(n);
     getAId.alloc(n);
   }
-  virtual void free() {
+  void free() override {
     getAId.free();
     super::free();
   }
 
-  virtual void read(const Ids &id) {
+  void read(const Ids &id) override {
     // run sub-query
     getAId.rewind();
     getAId.read(id);
@@ -1299,7 +1300,7 @@ struct NdbapiAB::B_getA : BufReadOp<xMode, HolderT> {
       super::read(aid);
     }
   }
-  virtual void read(int id) {
+  void read(int id) override {
     // run sub-query
     getAId.rewind();
     getAId.read(id);
@@ -1313,13 +1314,13 @@ struct NdbapiAB::B_getA : BufReadOp<xMode, HolderT> {
   }
 
   // same as in AB_getAttr...
-  virtual void getValues(int id) {
+  void getValues(int id) override {
     super::load.setKeyAB(super::op, id);  // set first
     super::load.getKeyAB(super::op, super::pos);
     super::load.getAttrAB(super::op, super::pos);
     super::pos++;  // consumed
   }
-  virtual void check(int id) {
+  void check(int id) override {
     super::load.checkKeyAB(id, super::pos);
     super::load.checkAttrAB(id, super::pos);
     super::pos++;  // consumed
@@ -1343,12 +1344,12 @@ struct NdbapiAB::A_getBs : BufIndexScanOp<xMode, HolderT> {
   typedef BufIndexScanOp<xMode, HolderT> super;
   A_getBs(string _name, NdbapiAB &ab, const D::Index *_index)
       : super(_name, ab, _index, 1) {}
-  virtual void getValues(int o, int id) {
+  void getValues(int o, int id) override {
     super::load.setBoundEqAIdB(super::op[o], id);
     super::load.getKeyAB(super::op[o], &super::obuf[o]);
     super::load.getAttrAB(super::op[o], &super::obuf[o]);
   }
-  virtual void check(int id) {
+  void check(int id) override {
     super::load.checkKeyAB(id, &(*super::pos));   // deref needed for type
     super::load.checkAttrAB(id, &(*super::pos));  // deref needed for type
     super::pos++;                                 // consumed
@@ -1471,12 +1472,12 @@ void NdbapiAB::setKeyAB(NdbOperation *op, int id) {
 }
 
 void NdbapiAB::getKeyAB(NdbOperation *op, ValIdHolder *vh) {
-  if (op->getValue(model->attr_id, (char *)&vh->id) == NULL)
+  if (op->getValue(model->attr_id, (char *)&vh->id) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
 }
 
 void NdbapiAB::getKeyAB(NdbOperation *op, RecIdHolder *rh) {
-  if ((rh->id = op->getValue(model->attr_id, NULL)) == NULL)
+  if ((rh->id = op->getValue(model->attr_id, nullptr)) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
 }
 
@@ -1500,24 +1501,24 @@ void NdbapiAB::setAttrAB(NdbOperation *op, int i) {
 }
 
 void NdbapiAB::getAttrAB(NdbOperation *op, ValAttrHolder *vh) {
-  if (op->getValue(model->attr_cint, (char *)&vh->cint) == NULL)
+  if (op->getValue(model->attr_cint, (char *)&vh->cint) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
-  if (op->getValue(model->attr_clong, (char *)&vh->clong) == NULL)
+  if (op->getValue(model->attr_clong, (char *)&vh->clong) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
-  if (op->getValue(model->attr_cfloat, (char *)&vh->cfloat) == NULL)
+  if (op->getValue(model->attr_cfloat, (char *)&vh->cfloat) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
-  if (op->getValue(model->attr_cdouble, (char *)&vh->cdouble) == NULL)
+  if (op->getValue(model->attr_cdouble, (char *)&vh->cdouble) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
 }
 
 void NdbapiAB::getAttrAB(NdbOperation *op, RecAttrHolder *rh) {
-  if ((rh->cint = op->getValue(model->attr_cint, NULL)) == NULL)
+  if ((rh->cint = op->getValue(model->attr_cint, nullptr)) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
-  if ((rh->clong = op->getValue(model->attr_clong, NULL)) == NULL)
+  if ((rh->clong = op->getValue(model->attr_clong, nullptr)) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
-  if ((rh->cfloat = op->getValue(model->attr_cfloat, NULL)) == NULL)
+  if ((rh->cfloat = op->getValue(model->attr_cfloat, nullptr)) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
-  if ((rh->cdouble = op->getValue(model->attr_cdouble, NULL)) == NULL)
+  if ((rh->cdouble = op->getValue(model->attr_cdouble, nullptr)) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
 }
 
@@ -1538,8 +1539,8 @@ void NdbapiAB::checkAttrAB(int i, RecAttrHolder *rh) {
 // ----------------------------------------------------------------------
 
 void NdbapiAB::setVarbinaryB(NdbOperation *op, char *&pos, const bytes *data) {
-  char *to = NULL;
-  if (data != NULL) {
+  char *to = nullptr;
+  if (data != nullptr) {
     const int lpw = model->wprefix_B_cvarbinary_def;
     to = writeBytes(pos, *data, lpw);
   }
@@ -1548,12 +1549,12 @@ void NdbapiAB::setVarbinaryB(NdbOperation *op, char *&pos, const bytes *data) {
 }
 
 void NdbapiAB::getVarbinaryB(NdbOperation *op, char *pos) {
-  if (op->getValue(model->attr_B_cvarbinary_def, pos) == NULL)
+  if (op->getValue(model->attr_B_cvarbinary_def, pos) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
 }
 
 void NdbapiAB::checkVarbinaryB(const bytes *data, char *pos) {
-  if (data != NULL) {
+  if (data != nullptr) {
     const int w = model->width_B_cvarbinary_def;
     const int lpw = model->wprefix_B_cvarbinary_def;
     bytes to;
@@ -1564,8 +1565,8 @@ void NdbapiAB::checkVarbinaryB(const bytes *data, char *pos) {
 }
 
 void NdbapiAB::setVarcharB(NdbOperation *op, char *&pos, const string *data) {
-  char *to = NULL;
-  if (data != NULL) {
+  char *to = nullptr;
+  if (data != nullptr) {
     const int lpw = model->wprefix_B_cvarchar_def;
     to = writeString(pos, *data, lpw);
   }
@@ -1574,12 +1575,12 @@ void NdbapiAB::setVarcharB(NdbOperation *op, char *&pos, const string *data) {
 }
 
 void NdbapiAB::getVarcharB(NdbOperation *op, char *pos) {
-  if (op->getValue(model->attr_B_cvarchar_def, pos) == NULL)
+  if (op->getValue(model->attr_B_cvarchar_def, pos) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
 }
 
 void NdbapiAB::checkVarcharB(const string *data, char *pos) {
-  if (data != NULL) {
+  if (data != nullptr) {
     const int w = model->width_B_cvarchar_def;
     const int lpw = model->wprefix_B_cvarchar_def;
     string to;
@@ -1597,12 +1598,12 @@ void NdbapiAB::setAIdB(NdbOperation *op, int aid) {
 }
 
 void NdbapiAB::getAIdB(NdbOperation *op, ValIdHolder *vh) {
-  if (op->getValue(model->attr_B_aid, (char *)&vh->id) == NULL)
+  if (op->getValue(model->attr_B_aid, (char *)&vh->id) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
 }
 
 void NdbapiAB::getAIdB(NdbOperation *op, RecIdHolder *rh) {
-  if ((rh->id = op->getValue(model->attr_B_aid, NULL)) == NULL)
+  if ((rh->id = op->getValue(model->attr_B_aid, nullptr)) == nullptr)
     ABORT_NDB_ERROR(tx->getNdbError());
 }
 
