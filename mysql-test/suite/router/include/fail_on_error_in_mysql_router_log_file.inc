@@ -10,7 +10,7 @@
 # --let $grep_pattern = PERL_REGEX
 # --let $grep_file = FILENAME
 # [--let $wait_timeout = SECONDS]
-# --source include/wait_for_pattern_in_file.inc
+# --source ../include/fail_on_error_in_mysql_router_log_file.inc
 #
 # Parameters:
 #

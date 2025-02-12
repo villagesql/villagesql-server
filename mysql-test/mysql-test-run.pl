@@ -1,7 +1,7 @@
 #!/usr/bin/perl
 # -*- cperl -*-
 
-# Copyright (c) 2004, 2024, Oracle and/or its affiliates.
+# Copyright (c) 2004, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -125,6 +125,7 @@ my $opt_sp_protocol;
 my $opt_start;
 my $opt_start_dirty;
 my $opt_start_exit;
+my $opt_strace_router;
 my $opt_strace_client;
 my $opt_strace_server;
 my @opt_perf_servers;
@@ -1797,6 +1798,7 @@ sub command_line_setup {
     'max-save-core=i'      => \$opt_max_save_core,
     'max-save-datadir=i'   => \$opt_max_save_datadir,
     'max-test-fail=i'      => \$opt_max_test_fail,
+    'strace-router'        => \$opt_strace_router,
     'strace-client'        => \$opt_strace_client,
     'strace-server'        => \$opt_strace_server,
     'perf:s'               => \@opt_perf_servers,
@@ -2387,6 +2389,11 @@ sub command_line_setup {
   if ($opt_debug_common) {
     $opt_debug = 1;
     $debug_d   = "d,query,info,error,enter,exit";
+  }
+
+  if ($opt_strace_router && ($^O ne "linux")) {
+    $opt_strace_router = 0;
+    mtr_warning("Strace only supported in Linux ");
   }
 
   if ($opt_strace_server && ($^O ne "linux")) {
@@ -6639,7 +6646,7 @@ sub mysqld_start ($$$$) {
 
   # Implementation for strace-server
   if ($opt_strace_server) {
-    strace_server_arguments($args, \$exe, $mysqld->name());
+    strace_server_or_router_arguments($args, \$exe, $mysqld->name());
   }
 
   foreach my $arg (@$extra_opts) {
@@ -6901,8 +6908,14 @@ sub router_start ($$$) {
 
   my $pid_file = $router->value('pid_file');
 
+  my $exe = $exe_mysqlrouter;
   my $args;
   mtr_init_args(\$args);
+
+  # Implementation for strace-router
+  if ($opt_strace_router) {
+    strace_server_or_router_arguments($args, \$exe, $router->name());
+  }
 
   if (!$opt_skip_core) {
     mtr_add_arg($args, "--core-file");
@@ -6944,10 +6957,10 @@ sub router_start ($$$) {
   # Remember this log file for valgrind/shutdown error report search.
   $logs{$output} = 1;
 
-  if (defined $exe_mysqlrouter) {
+  if (defined $exe) {
     $router->{'proc'} =
       My::SafeProcess->new(name        => $router->name(),
-                           path        => $exe_mysqlrouter,
+                           path        => $exe,
                            args        => \$args,
                            output      => $output,
                            error       => $output,
@@ -8013,7 +8026,7 @@ sub perf_arguments {
 }
 
 # Modify the exe and args so that program is run in strace
-sub strace_server_arguments {
+sub strace_server_or_router_arguments {
   my $args = shift;
   my $exe  = shift;
   my $type = shift;
@@ -8477,6 +8490,7 @@ Options for debugging the product
   max-test-fail         Limit the number of test failurs before aborting the
                         current test run. Defaults to $opt_max_test_fail, set to
                         0 for no limit. Set it's default with MTR_MAX_TEST_FAIL.
+  strace-router         Create strace output for mysqltest router.
   strace-client         Create strace output for mysqltest client.
   strace-server         Create strace output for mysqltest server.
   perf[=<mysqld_name>]  Run mysqld with "perf record" saving profile data

@@ -2,4 +2,4 @@
 --let $grep_pattern = .*Potential changes detected in cluster after metadata refresh.*
 --let $grep_file = $MYSQLROUTER_LOGFILE
 --let $wait_timeout = 60
---source include/wait_for_pattern_in_file.inc
+--source ../wait_for_pattern_in_file.inc
