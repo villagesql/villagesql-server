@@ -658,7 +658,7 @@ struct NdbapiAB::ReadOp : NdbapiOp<xMode> {
 
   virtual void getValues(int id) = 0;
 
-  virtual void check(const Ids &id) {
+  void check(const Ids &id) {  // final
     for (Ids::const_iterator i = id.begin(); i != id.end(); ++i) check(*i);
   }
   virtual void check(int id) = 0;
@@ -798,7 +798,7 @@ struct NdbapiAB::IndexScanOp : NdbapiOp<xMode> {
 
   virtual void getValues(int o, int id) = 0;  // sets bounds, filter etc
 
-  virtual void check(const Ids &id) {
+  void check(const Ids &id) {  // final
     // ok to traverse scan results in order and not sort/group them
     // (scan ops are pulled in order, pattern assumes 1:1 relationship)
     for (Ids::const_iterator i = id.begin(); i != id.end(); ++i) check(*i);
