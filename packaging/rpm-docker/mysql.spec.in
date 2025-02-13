@@ -446,6 +446,7 @@ rm -r $(readlink var) var
 
 %post -n mysql%{?cluster:-cluster}-%{product_suffix}-server-minimal
 [ -e /var/log/mysqld.log ] || install /dev/null -m0640 -omysql -gmysql /var/log/mysqld.log || :
+[ -e /var/log/mysqld.log.00.json ] || install /dev/null -m0640 -omysql -gmysql /var/log/mysqld.log.00.json || :
 
 %files -n mysql%{?cluster:-cluster}-%{product_suffix}-server-minimal
 %defattr(-, root, root, -)

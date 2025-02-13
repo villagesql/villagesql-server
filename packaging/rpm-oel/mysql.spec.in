@@ -1073,6 +1073,7 @@ rm -r $(readlink var) var
 
 %post server
 [ -e /var/log/mysqld.log ] || install -m0640 -omysql -gmysql /dev/null /var/log/mysqld.log >/dev/null 2>&1 || :
+[ -e /var/log/mysqld.log.00.json ] || install -m0640 -omysql -gmysql /dev/null /var/log/mysqld.log.00.json >/dev/null 2>&1 || :
 %systemd_post mysqld.service
 if [ $1 -eq 1 ]; then
     /usr/bin/systemctl enable mysqld >/dev/null 2>&1 || :
