@@ -216,6 +216,7 @@ class Item_func_to_base64 final : public Item_str_ascii_func {
 
  public:
   Item_func_to_base64(const POS &pos, Item *a) : Item_str_ascii_func(pos, a) {}
+  explicit Item_func_to_base64(Item *a) : Item_str_ascii_func(a) {}
   String *val_str_ascii(String *) override;
   bool resolve_type(THD *) override;
   const char *func_name() const override { return "to_base64"; }
