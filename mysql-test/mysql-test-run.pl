@@ -299,6 +299,7 @@ our $opt_gcov_err                  = "mysql-test-gcov.err";
 our $opt_gcov_exe                  = "gcov";
 our $opt_gcov_msg                  = "mysql-test-gcov.msg";
 our $opt_hypergraph                = 0;
+our $opt_hypergraph_off            = 0;
 our $opt_keep_ndbfs                = 0;
 our $opt_mem                       = $ENV{'MTR_MEM'} ? 1 : 0;
 our $opt_only_big_test             = 0;
@@ -1675,6 +1676,7 @@ sub print_global_resfile {
   resfile_global("gprof",            $opt_gprof            ? 1 : 0);
   resfile_global("helgrind",         $opt_helgrind         ? 1 : 0);
   resfile_global("hypergraph",       $opt_hypergraph       ? 1 : 0);
+  resfile_global("hypergraph-off",   $opt_hypergraph_off   ? 1 : 0);
   resfile_global("initialize",       \@opt_extra_bootstrap_opt);
   resfile_global("max-connections",  $opt_max_connections);
   resfile_global("mem",              $opt_mem              ? 1 : 0);
@@ -1733,6 +1735,7 @@ sub command_line_setup {
     'cursor-protocol'       => \$opt_cursor_protocol,
     'explain-protocol'      => \$opt_explain_protocol,
     'hypergraph'            => \$opt_hypergraph,
+    'hypergraph-off'        => \$opt_hypergraph_off,
     'json-explain-protocol' => \$opt_json_explain_protocol,
     'opt-trace-protocol'    => \$opt_trace_protocol,
     'ps-protocol'           => \$opt_ps_protocol,
@@ -3581,10 +3584,6 @@ sub environment_setup {
   my $exe_mysql_tzinfo_to_sql =
     mtr_exe_exists("$path_client_bindir/mysql_tzinfo_to_sql");
   $ENV{'MYSQL_TZINFO_TO_SQL'} = native_path($exe_mysql_tzinfo_to_sql);
-
-  # Create an environment variable to make it possible
-  # to detect that the hypergraph optimizer is being used from test cases
-  $ENV{'HYPERGRAPH_TEST'} = $opt_hypergraph;
 
   # Create an environment variable to make it possible
   # to detect that valgrind is being used from test cases
@@ -7637,8 +7636,14 @@ sub start_check_testcase ($$$) {
   mtr_add_arg($args, "--verbose");
   mtr_add_arg($args, "--logdir=%s/tmp",  $opt_vardir);
 
+  if ($opt_hypergraph && $opt_hypergraph_off) {
+    die "Cannot specify both hypergraph and hypergraph-off";
+  }
   if ($opt_hypergraph) {
     mtr_add_arg($args, "--hypergraph");
+  }
+  if ($opt_hypergraph_off) {
+    mtr_add_arg($args, "--hypergraph-off");
   }
 
   if (IS_WINDOWS) {
@@ -7765,8 +7770,14 @@ sub start_mysqltest ($) {
     mtr_add_arg($args, "--colored-diff", $opt_colored_diff);
   }
 
+  if ($opt_hypergraph && $opt_hypergraph_off) {
+    die "Cannot specify both hypergraph and hypergraph-off";
+  }
   if ($opt_hypergraph) {
     mtr_add_arg($args, "--hypergraph");
+  }
+  if ($opt_hypergraph_off) {
+    mtr_add_arg($args, "--hypergraph-off");
   }
 
   foreach my $arg (@opt_extra_mysqltest_opt) {
@@ -8357,6 +8368,7 @@ Options to control what engine/variation to run
   explain-protocol      Run 'EXPLAIN EXTENDED' on all SELECT, INSERT,
                         REPLACE, UPDATE and DELETE queries.
   hypergraph            Set the 'hypergraph_optimizer=on' optimizer switch.
+  hypergraph-off        Set the 'hypergraph_optimizer=off' optimizer switch.
   json-explain-protocol Run 'EXPLAIN FORMAT=JSON' on all SELECT, INSERT,
                         REPLACE, UPDATE and DELETE queries.
   opt-trace-protocol    Print optimizer trace.

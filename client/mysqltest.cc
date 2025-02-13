@@ -172,6 +172,7 @@ enum {
   OPT_CURSOR_PROTOCOL,
   OPT_EXPLAIN_PROTOCOL,
   OPT_HYPERGRAPH,
+  OPT_HYPERGRAPH_OFF,
   OPT_JSON_EXPLAIN_PROTOCOL,
   OPT_LOG_DIR,
   OPT_MARK_PROGRESS,
@@ -239,6 +240,10 @@ static const char *load_default_groups[] = {"mysqltest", "client", nullptr};
 static char line_buffer[MAX_DELIMITER_LENGTH], *line_buffer_pos = line_buffer;
 static bool can_handle_expired_passwords = true;
 static bool opt_hypergraph = false;
+static bool opt_hypergraph_off = false;
+static bool hypergraph_enabled = false;
+
+bool hypergraph_is_active() { return opt_hypergraph || hypergraph_enabled; }
 
 /*
   These variables control the behavior of the asynchronous operations for
@@ -1311,7 +1316,7 @@ void handle_error(struct st_command *command, std::uint32_t err_errno,
                   const char *interpolated_query = nullptr) {
   DBUG_TRACE;
 
-  if (opt_hypergraph && err_errno == ER_HYPERGRAPH_NOT_SUPPORTED_YET) {
+  if (hypergraph_is_active() && err_errno == ER_HYPERGRAPH_NOT_SUPPORTED_YET) {
     const char errstr[] = "<ignored hypergraph optimizer error: ";
     dynstr_append_mem(ds, errstr, sizeof(errstr) - 1);
     replace_dynstr_append(ds, err_error);
@@ -2082,7 +2087,7 @@ static bool show_diff(DYNAMIC_STRING *ds, const char *filename1,
                                "2>&1", nullptr);
           if (exit_code > 1) diff_name = nullptr;
         }
-      } else if (exit_code == 1 && opt_hypergraph &&
+      } else if (exit_code == 1 && hypergraph_is_active() &&
                  is_diff_clean_except_hypergraph(&ds_diff)) {
         dynstr_free(&ds_diff);
         return true;
@@ -6631,6 +6636,18 @@ static bool enable_hypergraph_optimizer(st_connection *con) {
   return mysql_query_wrapper(&con->mysql, set_stmt) != 0;
 }
 
+/**
+   Disable the hypergraph optimizer in a connection. This allows you to test
+   the traditional optimizer in a mysqld server configured with
+   hypergraph_optimizer default ON.
+ */
+static bool disable_hypergraph_optimizer(st_connection *con) {
+  const char *set_stmt =
+      "SET @@session.optimizer_switch='hypergraph_optimizer=off', "
+      "@@global.optimizer_switch='hypergraph_optimizer=off';";
+  return mysql_query_wrapper(&con->mysql, set_stmt) != 0;
+}
+
 /*
   Open a new connection to MySQL Server with the parameters
   specified. Make the new connection the current connection.
@@ -6741,6 +6758,8 @@ static void do_connect(struct st_command *command) {
       assert(con_slot != next_con);
       if (opt_hypergraph) {
         enable_hypergraph_optimizer(con_slot);
+      } else if (opt_hypergraph_off) {
+        disable_hypergraph_optimizer(con_slot);
       }
     }
     /* mysql_reconnect changes this setting to true. We really want it to be
@@ -7870,9 +7889,15 @@ static struct my_option my_long_options[] = {
     {"host", 'h', "Connect to host.", &opt_host, &opt_host, nullptr, GET_STR,
      REQUIRED_ARG, 0, 0, 0, nullptr, 0, nullptr},
     {"hypergraph", OPT_HYPERGRAPH,
-     "Force all queries to be run under the hypergraph optimizer.",
+     "Force all queries to be run under the hypergraph optimizer. "
+     "SET @@optimizer_switch='hypergraph_optimizer=ON",
      &opt_hypergraph, &opt_hypergraph, nullptr, GET_BOOL, NO_ARG, 0, 0, 0,
      nullptr, 0, nullptr},
+    {"hypergraph-off", OPT_HYPERGRAPH_OFF,
+     "Force all queries to be run under the old optimizer. "
+     "SET @@optimizer_switch='hypergraph_optimizer=OFF",
+     &opt_hypergraph_off, &opt_hypergraph_off, nullptr, GET_BOOL, NO_ARG, 0, 0,
+     0, nullptr, 0, nullptr},
     {"include", 'i', "Include SQL before each test case.", &opt_include,
      &opt_include, nullptr, GET_STR, REQUIRED_ARG, 0, 0, 0, nullptr, 0,
      nullptr},
@@ -9161,7 +9186,7 @@ static void run_query(struct st_connection *cn, struct st_command *command,
     dynstr_append_mem(ds, "\n", 1);
   }
 
-  if (skip_if_hypergraph && opt_hypergraph) {
+  if (skip_if_hypergraph && hypergraph_is_active()) {
     constexpr char message[] =
         "<ignored hypergraph optimizer error: statement skipped by "
         "test>\n";
@@ -9699,6 +9724,10 @@ int main(int argc, char **argv) {
 
   parse_args(argc, argv);
 
+  if (opt_hypergraph && opt_hypergraph_off) {
+    die("Cannot specify both hypergraph and hypergraph-off");
+  }
+
 #ifdef _WIN32
   // Create an event to request stack trace when timeout occurs
   if (opt_safe_process_pid) create_stacktrace_collector_event();
@@ -9854,6 +9883,28 @@ int main(int argc, char **argv) {
       die("--hypergraph was given, but the server does not support the "
           "hypergraph optimizer. (errno=%d)",
           my_errno());
+    }
+  } else if (opt_hypergraph_off) {
+    if (disable_hypergraph_optimizer(con)) {
+      die("--hypergraph-off was given, (errno=%d)", my_errno());
+    }
+  } else {
+    // No explicit hypergraph option? Ask the server hypergraph is enabled.
+    std::string optimizer_switch;
+    if (query_get_string(&con->mysql, "SHOW VARIABLES LIKE 'optimizer_switch'",
+                         1, &optimizer_switch)) {
+      die("Failed to get optimizer_switch from server");
+    }
+    // It is tempting to FLUSH STATUS, but this modifies the database, and will
+    // cause misc tests (with implicit assumptions about database state)
+    // to fail. The query above will create a temporary table, so mtr tests
+    // making assumptions about 'Created_tmp_tables' must FLUSH STATUS.
+    //     if (mysql_query(&con->mysql, "FLUSH STATUS")) {
+    //       die("Failed to FLUSH STATUS");
+    //     }
+    const size_t found_hyper = optimizer_switch.find("hypergraph_optimizer=on");
+    if (found_hyper != std::string::npos) {
+      hypergraph_enabled = true;
     }
   }
 
