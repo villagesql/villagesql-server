@@ -26,6 +26,8 @@
 #ifndef MYSQLROUTER_CONFIG_SECTION_PRINTER_INCLUDED
 #define MYSQLROUTER_CONFIG_SECTION_PRINTER_INCLUDED
 
+#include "harness_export.h"
+
 #include <algorithm>
 #include <map>
 #include <ostream>
@@ -38,7 +40,7 @@
 
 namespace mysql_harness {
 
-class ConfigSectionPrinter {
+class HARNESS_EXPORT ConfigSectionPrinter {
  public:
   ConfigSectionPrinter(
       std::ostream &ostream,
