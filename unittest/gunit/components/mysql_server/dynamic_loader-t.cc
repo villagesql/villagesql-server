@@ -152,8 +152,8 @@ TEST_F(dynamic_loader, load_different_components) {
   std::string path1, path2, path3;
   const char *absolute_urn;
   const char *absolute_urns[2];
-  for (auto &absolute_urn : absolute_urns)
-    absolute_urn = (char *)malloc(2046 * sizeof(char));
+  for (auto &loop_absolute_urn : absolute_urns)
+    loop_absolute_urn = (char *)malloc(2046 * sizeof(char));
   make_absolute_urn(*urns1, &path1);
   absolute_urn = path1.c_str();
   {
@@ -180,8 +180,8 @@ TEST_F(dynamic_loader, load_different_components) {
     my_service<SERVICE_TYPE(example_math)> service("example_math", reg);
     ASSERT_TRUE((bool)service);
   }
-  for (auto &absolute_urn : absolute_urns)
-    free(const_cast<char *>(absolute_urn));
+  for (auto &loop_absolute_urn : absolute_urns)
+    free(const_cast<char *>(loop_absolute_urn));
 }
 
 TEST_F(dynamic_loader, dependencies) {
@@ -191,8 +191,8 @@ TEST_F(dynamic_loader, dependencies) {
   std::string path1, path2;
   const char *absolute_urn;
   const char *absolute_urns[2];
-  for (auto &absolute_urn : absolute_urns)
-    absolute_urn = (char *)malloc(2046 * sizeof(char));
+  for (auto &loop_absolute_urn : absolute_urns)
+    loop_absolute_urn = (char *)malloc(2046 * sizeof(char));
   make_absolute_urn(*urns1, &path1);
   absolute_urn = path1.c_str();
   {
@@ -214,8 +214,8 @@ TEST_F(dynamic_loader, dependencies) {
     my_service<SERVICE_TYPE(example_math)> service("example_math", reg);
     ASSERT_TRUE((bool)service);
   }
-  for (auto &absolute_urn : absolute_urns)
-    free(const_cast<char *>(absolute_urn));
+  for (auto &loop_absolute_urn : absolute_urns)
+    free(const_cast<char *>(loop_absolute_urn));
 }
 
 TEST_F(dynamic_loader, cyclic_dependencies) {
