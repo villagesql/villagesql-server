@@ -64,7 +64,9 @@ namespace endpoint {
 namespace handler {
 
 namespace {
+#ifdef HAVE_GRAALVM_PLUGIN
 constexpr const int k_default_request_timeout{1000};
+#endif
 }  // namespace
 
 using namespace std::string_literals;
@@ -339,7 +341,7 @@ HttpResult HandlerDbObjectScript::handle_script(
       response.type_text = *entry_->media_type;
     }
     return response;
-  } catch (const graalvm::Timeout_error &error) {
+  } catch (const graalvm::Timeout_error &) {
     throw http::Error(HttpStatusCode::RequestTimeout);
   }
 #else

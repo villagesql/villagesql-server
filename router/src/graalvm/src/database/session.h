@@ -41,6 +41,7 @@
 #include <string_view>
 #include <vector>
 
+#include "mysqlrouter/graalvm_plugin_export.h"
 #include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
 #include "router/src/graalvm/src/database/query_attributes.h"
 #include "router/src/graalvm/src/database/result.h"
@@ -53,7 +54,9 @@ namespace database {
 using graalvm::db::IResult;
 using graalvm::db::ISession;
 
-class Session : public ISession, public std::enable_shared_from_this<Session> {
+class GRAALVM_PLUGIN_EXPORT Session
+    : public ISession,
+      public std::enable_shared_from_this<Session> {
   friend class Result;  // The Result class uses some functions of this class
  public:
   Session(MYSQL *mysql);

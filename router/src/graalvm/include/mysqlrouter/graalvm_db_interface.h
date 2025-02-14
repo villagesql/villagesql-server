@@ -29,12 +29,12 @@
 #include <memory>
 #include <string>
 
+#include "mysqlrouter/graalvm_plugin_export.h"
 #include "router/src/graalvm/src/utils/utils_string.h"
-
 namespace graalvm {
 namespace db {
 
-enum class Type {
+enum class GRAALVM_PLUGIN_EXPORT Type {
   Null,
   String,
   Integer,
@@ -54,7 +54,7 @@ enum class Type {
   Vector
 };
 
-class IColumn {
+class GRAALVM_PLUGIN_EXPORT IColumn {
  public:
   virtual const std::string &get_catalog() const = 0;
   virtual const std::string &get_schema() const = 0;
@@ -79,7 +79,7 @@ class IColumn {
   virtual ~IColumn() = default;
 };
 
-class IRow {
+class GRAALVM_PLUGIN_EXPORT IRow {
  public:
   IRow() = default;
   IRow(const IRow &other) = delete;
@@ -143,14 +143,14 @@ class IRow {
   virtual ~IRow() = default;
 };
 
-struct Warning {
+struct GRAALVM_PLUGIN_EXPORT Warning {
   enum class Level { Note, Warn, Error };
   Level level;
   std::string msg;
   uint32_t code;
 };
 
-class IResult {
+class GRAALVM_PLUGIN_EXPORT IResult {
  public:
   IResult() = default;
   double get_execution_time() const { return m_execution_time; }
@@ -185,7 +185,7 @@ class IResult {
   double m_execution_time = 0.0;
 };
 
-class ISession {
+class GRAALVM_PLUGIN_EXPORT ISession {
  public:
   virtual std::shared_ptr<IResult> run_sql(const std::string &sql) = 0;
 

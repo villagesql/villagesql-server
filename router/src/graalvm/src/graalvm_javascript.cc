@@ -25,6 +25,7 @@
 
 #include "mysqlrouter/graalvm_javascript.h"
 
+#include <array>
 #include <chrono>
 #include <condition_variable>
 #include <memory>
@@ -478,7 +479,7 @@ poly_value GraalVMJavaScript::synch_error(const std::vector<poly_value> &args) {
 }
 
 void GraalVMJavaScript::resolve_promise(poly_value promise) {
-  std::array args{promise};
+  std::array<poly_value, 1> args{promise};
 
   if (const auto rc = poly_value_execute(thread(), m_promise_resolver,
                                          args.data(), args.size(), nullptr);
