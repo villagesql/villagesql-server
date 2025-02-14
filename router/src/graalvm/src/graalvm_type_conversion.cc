@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -27,6 +27,7 @@
 
 #include <cerrno>
 #include <fstream>
+#include <stdexcept>
 
 #include "router/src/graalvm/src/utils/polyglot_utils.h"
 
@@ -34,6 +35,7 @@
 
 #include "router/src/graalvm/src/native_wrappers/polyglot_array_wrapper.h"
 #include "router/src/graalvm/src/native_wrappers/polyglot_map_wrapper.h"
+#include "router/src/graalvm/src/native_wrappers/polyglot_object_wrapper.h"
 #include "router/src/graalvm/src/utils/native_value.h"
 #include "router/src/graalvm/src/utils/polyglot_error.h"
 
@@ -90,6 +92,14 @@ bool is_array_buffer(poly_thread thread, poly_value value) {
   return result;
 }
 
+bool is_exception(poly_thread thread, poly_value value) {
+  bool result{false};
+
+  throw_if_error(poly_value_is_exception, thread, value, &result);
+
+  return result;
+}
+
 }  // namespace
 
 Polyglot_type_bridger::Polyglot_type_bridger(
@@ -99,6 +109,8 @@ Polyglot_type_bridger::Polyglot_type_bridger(
 void Polyglot_type_bridger::init() {
   map_wrapper = new Polyglot_map_wrapper(owner);
   array_wrapper = new Polyglot_array_wrapper(owner);
+  object_wrapper = new Polyglot_object_wrapper(owner);
+  indexed_object_wrapper = new Polyglot_object_wrapper(owner, true);
 }
 
 void Polyglot_type_bridger::dispose() {
@@ -111,10 +123,19 @@ void Polyglot_type_bridger::dispose() {
     delete array_wrapper;
     array_wrapper = nullptr;
   }
+
+  if (object_wrapper) {
+    delete object_wrapper;
+    object_wrapper = nullptr;
+  }
+
+  if (indexed_object_wrapper) {
+    delete indexed_object_wrapper;
+    indexed_object_wrapper = nullptr;
+  }
 }
 
-Polyglot_type_bridger::~Polyglot_type_bridger() { /*dispose();*/
-}
+Polyglot_type_bridger::~Polyglot_type_bridger() {}
 
 Value Polyglot_type_bridger::poly_value_to_native_value(
     const poly_value &value) const {
@@ -169,6 +190,12 @@ Value Polyglot_type_bridger::poly_value_to_native_value(
   } else if (Dictionary_t map;
              Polyglot_map_wrapper::unwrap(ctx->thread(), value, &map)) {
     return Value(std::move(map));
+  } else if (Object_bridge_t object;
+             Polyglot_object_wrapper::unwrap(ctx->thread(), value, &object)) {
+    return Value(std::move(map));
+  } else if (is_exception(ctx->thread(), value)) {
+    throw Polyglot_error(ctx->thread(),
+                         poly_value_throw_exception(ctx->thread(), value));
   } else {
     std::string description{"Cannot convert value to native value: "};
     try {
@@ -207,6 +234,20 @@ poly_value Polyglot_type_bridger::native_value_to_poly_value(
       return poly_double(ctx->thread(), ctx->context(), value.as_double());
     case Object:
       return value.as_object().get();
+    case ObjectBridge: {
+      auto object_bridge = value.as_object_bridge();
+      auto value = ctx->from_native_object(object_bridge);
+
+      if (value) {
+        return value;
+      }
+
+      if (object_bridge->is_indexed()) {
+        return indexed_object_wrapper->wrap(object_bridge);
+      } else {
+        return object_wrapper->wrap(object_bridge);
+      }
+    }
     case Array:
       return array_wrapper->wrap(value.as_array());
     case Map:

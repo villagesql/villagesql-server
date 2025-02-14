@@ -31,6 +31,7 @@
 #include "router/src/graalvm/include/mysqlrouter/graalvm_common.h"
 #include "router/src/graalvm/include/mysqlrouter/graalvm_common_context.h"
 #include "router/src/graalvm/include/mysqlrouter/graalvm_context.h"
+#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
 #include "router/src/graalvm/include/mysqlrouter/graalvm_javascript.h"
 
 namespace graalvm {
@@ -45,10 +46,13 @@ class GraalVMJavaScriptContext : public IGraalVMContext {
                            const Dictionary_t &globals = {});
   ~GraalVMJavaScriptContext() override { m_language->stop(); }
 
-  std::string execute(const std::string &module, const std::string &object,
-                      const std::string &function,
-                      const std::vector<Value> &parameters, int timeout,
-                      ResultType result_type) override;
+  std::string execute(
+      const std::string &module, const std::string &object,
+      const std::string &function, const std::vector<Value> &parameters,
+      int timeout, ResultType result_type,
+      const std::function<std::shared_ptr<db::ISession>(const std::string &)>
+          &session_callback = {},
+      const std::function<void()> &interrupt_callback = {}) override;
 
  private:
   std::shared_ptr<GraalVMJavaScript> m_language;

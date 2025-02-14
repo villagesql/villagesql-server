@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -31,8 +31,10 @@
 #include <cmath>
 #include <cstring>
 #include <sstream>
+#include <stdexcept>
 
 #include "include/mysql/strings/dtoa.h"
+#include "router/src/graalvm/src/native_wrappers/polyglot_object_bridge.h"
 #include "router/src/graalvm/src/polyglot_wrappers/types_polyglot.h"
 #include "router/src/graalvm/src/utils/utils_json.h"
 #include "router/src/graalvm/src/utils/utils_string.h"
@@ -1048,6 +1050,13 @@ Value::Value(const std::shared_ptr<polyglot::Polyglot_object> &n) {
     m_value = null_value{};
 }
 
+Value::Value(const std::shared_ptr<polyglot::Object_bridge> &n) {
+  if (n)
+    m_value = n;
+  else
+    m_value = null_value{};
+}
+
 // Value::Value(std::shared_ptr<Object_bridge> &&n) {
 //   if (n)
 //     m_value = std::move(n);
@@ -1467,10 +1476,9 @@ Value_type Value::get_type() const noexcept {
                                  T,
                                  std::shared_ptr<polyglot::Polyglot_object>>) {
           return Value_type::Object;
-          // } else if constexpr (std::is_same_v<T,
-          //                                     std::shared_ptr<Object_bridge>>)
-          //                                     {
-          //   return Value_type::Object;
+        } else if constexpr (std::is_same_v<
+                                 T, std::shared_ptr<polyglot::Object_bridge>>) {
+          return Value_type::ObjectBridge;
         } else if constexpr (std::is_same_v<T, std::shared_ptr<Array_type>>) {
           return Value_type::Array;
         } else if constexpr (std::is_same_v<T, std::shared_ptr<Map_type>>) {
@@ -1638,6 +1646,13 @@ std::string Value::as_string() const {
 }
 
 std::wstring Value::as_wstring() const { return utf8_to_wide(as_string()); }
+
+std::shared_ptr<polyglot::Object_bridge> Value::as_object_bridge() const {
+  check_type(ObjectBridge);
+
+  if (is_null()) return nullptr;
+  return std::get<std::shared_ptr<polyglot::Object_bridge>>(m_value);
+}
 
 std::shared_ptr<polyglot::Polyglot_object> Value::as_object() const {
   check_type(Object);

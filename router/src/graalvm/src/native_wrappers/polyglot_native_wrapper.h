@@ -294,7 +294,8 @@ class Polyglot_native_wrapper {
       // });
 
       language = collectable->language();
-      const auto v = Config::callback(language, collectable->data(), argv);
+      const auto v =
+          Config::callback(collectable->data(), language->convert_args(argv));
 
       // if (interrupted) {
       //   throw std::runtime_error(k_interrupted_error);

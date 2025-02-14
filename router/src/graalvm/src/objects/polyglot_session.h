@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
+ * Copyright (c) 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -23,31 +23,42 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_H_
-#define ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_H_
+#ifndef MYSQLSHDK_SCRIPTING_POLYGLOT_OBJECTS_POLYGLOT_SESSION_H_
+#define MYSQLSHDK_SCRIPTING_POLYGLOT_OBJECTS_POLYGLOT_SESSION_H_
 
-#include <functional>
 #include <string>
 #include <vector>
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_common.h"
 #include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
+#include "router/src/graalvm/src/native_wrappers/polyglot_object_bridge.h"
+#include "router/src/graalvm/src/objects/polyglot_result.h"
 #include "router/src/graalvm/src/utils/native_value.h"
 
-namespace graalvm {
+namespace shcore {
+namespace polyglot {
 
-class IGraalVMContext {
+class Session : public Object_bridge {
  public:
-  virtual ~IGraalVMContext() = default;
-  virtual std::string execute(
-      const std::string &module, const std::string &object,
-      const std::string &function, const std::vector<shcore::Value> &parameters,
-      int timeout, ResultType result_type,
-      const std::function<std::shared_ptr<db::ISession>(const std::string &)>
-          &session_callback = {},
-      const std::function<void()> &interrupt_callback = {}) = 0;
+  explicit Session(const std::shared_ptr<graalvm::db::ISession> &session);
+  ~Session() override = default;
+
+  std::string class_name() const override { return "Session"; }
+
+  //! Calls the named method with the given args
+  Value call(const std::string &name, const Argument_list &args) override;
+
+  std::shared_ptr<Result> run_sql(const Argument_list &args);
+
+  void reset();
+
+ private:
+  static std::vector<std::string> m_methods;
+  std::shared_ptr<graalvm::db::ISession> m_session;
+
+  std::vector<std::string> *methods() const override { return &m_methods; }
 };
 
-}  // namespace graalvm
+}  // namespace polyglot
+}  // namespace shcore
 
-#endif  // ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_H_
+#endif  // MYSQLSHDK_SCRIPTING_POLYGLOT_OBJECTS_POLYGLOT_SESSION_H_

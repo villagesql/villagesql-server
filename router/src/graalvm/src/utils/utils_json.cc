@@ -40,6 +40,7 @@
 // #include "mysqlshdk/libs/utils/utils_encoding.h"
 #include "router/src/graalvm/src/utils/utils_encoding.h"
 //  #include "mysqlshdk/libs/utils/utils_string.h"
+#include "router/src/graalvm/src/native_wrappers/polyglot_object_bridge.h"
 #include "router/src/graalvm/src/polyglot_wrappers/types_polyglot.h"
 #include "router/src/graalvm/src/utils/utils_string.h"
 
@@ -227,6 +228,13 @@ void JSON_dumper::append_value(const Value &value) {
       break;
     case Object: {
       auto object = value.as_object();
+      if (object)
+        object->append_json(*this);
+      else
+        _writer->append_null();
+    } break;
+    case ObjectBridge: {
+      auto object = value.as_object_bridge();
       if (object)
         object->append_json(*this);
       else

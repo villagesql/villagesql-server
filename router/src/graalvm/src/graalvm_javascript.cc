@@ -32,14 +32,23 @@
 #include <string>
 
 #include "include/my_thread.h"
+#include "mysql/harness/logging/logging.h"
 #include "router/src/graalvm/include/mysqlrouter/graalvm_common.h"
+#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
 #include "router/src/graalvm/src/file_system/polyglot_file_system.h"
 #include "router/src/graalvm/src/languages/polyglot_javascript.h"
+#include "router/src/graalvm/src/objects/polyglot_date.h"
+#include "router/src/graalvm/src/objects/polyglot_session.h"
+#include "router/src/graalvm/src/utils/polyglot_error.h"
 #include "router/src/graalvm/src/utils/polyglot_utils.h"
+#include "router/src/graalvm/src/utils/utils_general.h"
 #include "router/src/graalvm/src/utils/utils_string.h"
 
 namespace graalvm {
 
+IMPORT_LOG_FUNCTIONS()
+
+using shcore::polyglot::Date;
 using Value_type = shcore::Value_type;
 using Scoped_global = shcore::polyglot::Scoped_global;
 
@@ -186,6 +195,12 @@ void GraalVMJavaScript::run() {
                                                     Synch_error>,
       this);
 
+  set_global_function(
+      "getSession",
+      shcore::polyglot::polyglot_handler_no_args<GraalVMJavaScript,
+                                                 Get_session>,
+      this);
+
   if (const auto rc = Java_script_interface::eval(
           "(internal)::resolver",
           R"(new Function ("prom", "prom.then(value => synch_return(value)).catch(error => synch_error(error));");)",
@@ -308,11 +323,42 @@ Value GraalVMJavaScript::to_native_object(poly_value object,
 }
 
 void GraalVMJavaScript::output_handler(const char *bytes, size_t length) {
-  std::cout << std::string(bytes, length);
+  log_info("%.*s", length, bytes);
 }
 
 void GraalVMJavaScript::error_handler(const char *bytes, size_t length) {
-  std::cerr << std::string(bytes, length);
+  log_error("%.*s", length, bytes);
+}
+
+poly_value GraalVMJavaScript::from_native_object(
+    const Object_bridge_t &object) const {
+  poly_value result = nullptr;
+  if (object && object->class_name() == "Date") {
+    std::shared_ptr<Date> date = std::static_pointer_cast<Date>(object);
+
+    // 0 date values can come from MySQL but they're not supported by the JS
+    // Date object, so we convert them to null
+    if (date->has_date() && date->get_year() == 0 && date->get_month() == 0 &&
+        date->get_day() == 0) {
+      shcore::polyglot::throw_if_error(poly_create_null, thread(), context(),
+                                       &result);
+    } else if (!date->has_date()) {
+      // there's no Time object in JS and we can't use Date to represent time
+      // only
+      std::string t;
+      result = poly_string(date->append_descr(t));
+    } else {
+      auto source = shcore::str_format(
+          "new Date(%d, %d, %d, %d, %d, %d, %d)", date->get_year(),
+          date->get_month() - 1, date->get_day(), date->get_hour(),
+          date->get_min(), date->get_sec(), date->get_usec() / 1000);
+
+      Scoped_global builder(this);
+      result = builder.execute(source);
+    }
+  }
+
+  return result;
 }
 
 std::string GraalVMJavaScript::get_parameter_string(
@@ -343,8 +389,11 @@ std::string GraalVMJavaScript::get_parameter_string(
   return parameter_string;
 }
 
-std::string GraalVMJavaScript::execute(const std::string &code, int timeout,
-                                       ResultType result_type) {
+std::string GraalVMJavaScript::execute(
+    const std::string &code, int timeout, ResultType result_type,
+    const std::function<std::shared_ptr<db::ISession>(const std::string &)>
+        &session_callback,
+    const std::function<void()> &interrupt_callback) {
   clear_is_terminating();
 
   auto ms_timeout = std::chrono::milliseconds{timeout};
@@ -353,10 +402,20 @@ std::string GraalVMJavaScript::execute(const std::string &code, int timeout,
   m_result.reset();
 
   {
+    m_get_session_callback = session_callback;
     std::lock_guard lock(m_process_mutex);
     m_result_type = result_type;
     m_code = code;
   }
+
+  shcore::Scoped_callback clean_resources([this]() {
+    if (m_session) {
+      m_session->reset();
+    }
+    m_session.reset();
+    m_get_session_callback = {};
+  });
+
   m_process_condition.notify_one();
 
   {
@@ -368,6 +427,9 @@ std::string GraalVMJavaScript::execute(const std::string &code, int timeout,
   }
 
   // Timeout ocurred, the termination logic should be executed
+  if (interrupt_callback) {
+    interrupt_callback();
+  }
   terminate();
 
   // Now we wait for the termination to be complete
@@ -423,6 +485,27 @@ void GraalVMJavaScript::resolve_promise(poly_value promise) {
       rc != poly_ok) {
     throw Polyglot_error(thread(), rc);
   }
+}
+
+poly_value GraalVMJavaScript::get_session() {
+  assert(m_get_session_callback);
+
+  std::lock_guard lock(m_result_mutex);
+  try {
+    if (m_get_session_callback) {
+      m_session = std::make_shared<shcore::polyglot::Session>(
+          m_get_session_callback("ro"));
+    }
+
+    return convert(Value(m_session));
+  } catch (const Polyglot_error &error) {
+    create_result(error);
+  } catch (const std::exception &error) {
+    create_result(Value(error.what()), "error");
+  }
+  m_result_condition.notify_one();
+
+  return nullptr;
 }
 
 }  // namespace graalvm

@@ -36,8 +36,11 @@
 #include <vector>
 
 #include "router/src/graalvm/include/mysqlrouter/graalvm_common.h"
+#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
 #include "router/src/graalvm/src/file_system/polyglot_file_system.h"
 #include "router/src/graalvm/src/languages/polyglot_javascript.h"
+#include "router/src/graalvm/src/native_wrappers/polyglot_object_bridge.h"
+#include "router/src/graalvm/src/objects/polyglot_session.h"
 #include "router/src/graalvm/src/utils/native_value.h"
 
 namespace graalvm {
@@ -46,6 +49,7 @@ using Value = shcore::Value;
 using Dictionary_t = shcore::Dictionary_t;
 using Polyglot_error = shcore::polyglot::Polyglot_error;
 using IFile_system = shcore::polyglot::IFile_system;
+using shcore::polyglot::Object_bridge_t;
 /**
  * MRS JavaScript Implementation
  *
@@ -67,8 +71,11 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
              const Dictionary_t &predefined_globals = {});
   void stop();
 
-  std::string execute(const std::string &code, int timeout,
-                      ResultType result_type);
+  std::string execute(
+      const std::string &code, int timeout, ResultType result_type,
+      const std::function<std::shared_ptr<db::ISession>(const std::string &)>
+          &session_callback = {},
+      const std::function<void()> &interrupt_callback = {});
 
   std::string get_parameter_string(const std::vector<Value> &parameters) const;
 
@@ -92,6 +99,7 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
                          const std::string &class_name) override;
   void output_handler(const char *bytes, size_t length) override;
   void error_handler(const char *bytes, size_t length) override;
+  poly_value from_native_object(const Object_bridge_t &object) const override;
 
   void create_result(const Value &result, const std::string &status = "ok");
   void create_result(const shcore::polyglot::Polyglot_error &error);
@@ -114,6 +122,11 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
   };
 
   void resolve_promise(poly_value promise);
+  poly_value get_session();
+  struct Get_session {
+    static const constexpr char *name = "getSession";
+    static const constexpr auto callback = &GraalVMJavaScript::get_session;
+  };
 
   // To control the statement execution, the execution thread will be in wait
   // state until a statement arrives
@@ -133,6 +146,10 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
 
   ResultType m_result_type;
   poly_value m_promise_resolver;
+
+  std::function<std::shared_ptr<db::ISession>(const std::string &)>
+      m_get_session_callback;
+  std::shared_ptr<shcore::polyglot::Session> m_session;
 };
 
 }  // namespace graalvm

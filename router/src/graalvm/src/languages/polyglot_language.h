@@ -38,6 +38,7 @@
 #include "router/src/graalvm/src/file_system/polyglot_file_system.h"
 #include "router/src/graalvm/src/graalvm_type_conversion.h"
 #include "router/src/graalvm/src/languages/polyglot_common_context.h"
+#include "router/src/graalvm/src/native_wrappers/polyglot_object_bridge.h"
 #include "router/src/graalvm/src/polyglot_wrappers/types_polyglot.h"
 #include "router/src/graalvm/src/utils/graalvm_exceptions.h"
 #include "router/src/graalvm/src/utils/polyglot_scope.h"
@@ -228,8 +229,8 @@ class Polyglot_language
    * Converts a C++ object into a representation of the object in the guest
    * language
    */
-  // virtual poly_value from_native_object(
-  //     const Object_bridge_ref &object) const = 0;
+  virtual poly_value from_native_object(
+      const Object_bridge_t &object) const = 0;
 
   /**
    * Converts a guest language object into its C++ representation

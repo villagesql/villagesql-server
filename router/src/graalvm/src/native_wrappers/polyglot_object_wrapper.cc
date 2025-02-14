@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "mysqlshdk/scripting/polyglot/native_wrappers/polyglot_object_wrapper.h"
+#include "router/src/graalvm/src/native_wrappers/polyglot_object_wrapper.h"
 
 #include <algorithm>
 #include <cassert>
@@ -34,16 +34,16 @@
 #include <utility>
 #include <vector>
 
-#include "mysqlshdk/scripting/polyglot/utils/polyglot_api_clean.h"
+#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
 
-#include "mysqlshdk/include/shellcore/interrupt_handler.h"
-#include "mysqlshdk/libs/db/session.h"  // mysqlshdk::db::Error
-#include "mysqlshdk/libs/utils/debug.h"
-#include "mysqlshdk/scripting/polyglot/languages/polyglot_language.h"
-#include "mysqlshdk/scripting/polyglot/native_wrappers/polyglot_collectable.h"
-#include "mysqlshdk/scripting/polyglot/native_wrappers/polyglot_iterator_wrapper.h"
-#include "mysqlshdk/scripting/polyglot/utils/polyglot_utils.h"
+// #include "mysqlshdk/include/shellcore/interrupt_handler.h"
+// #include "mysqlshdk/libs/db/session.h"  // mysqlshdk::db::Error
+// #include "mysqlshdk/libs/utils/debug.h"
+#include "router/src/graalvm/src/languages/polyglot_language.h"
+#include "router/src/graalvm/src/native_wrappers/polyglot_collectable.h"
+#include "router/src/graalvm/src/native_wrappers/polyglot_iterator_wrapper.h"
 #include "router/src/graalvm/src/utils/polyglot_error.h"
+#include "router/src/graalvm/src/utils/polyglot_utils.h"
 
 namespace shcore {
 namespace polyglot {
@@ -70,7 +70,7 @@ class Object_iterator : public IPolyglot_iterator {
     }
 
     return shcore::Value(item);
-  };
+  }
 
  private:
   std::vector<std::string> m_members;

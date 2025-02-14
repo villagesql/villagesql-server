@@ -23,6 +23,47 @@
 INCLUDE(GenerateExportHeader)
 
 SET(graalvm_plugin_SOURCE
+  database/column.cc
+  database/query_attributes.cc
+  database/result.cc
+  database/row_copy.cc
+  database/row.cc
+  database/session.cc
+
+  languages/polyglot_common_context.cc
+  languages/polyglot_garbage_collector.cc
+  languages/polyglot_javascript.cc
+  languages/polyglot_language.cc
+
+  native_wrappers/polyglot_array_wrapper.cc
+  native_wrappers/polyglot_collectable.cc
+  native_wrappers/polyglot_file_system_wrapper.cc
+  native_wrappers/polyglot_iterator_wrapper.cc
+  native_wrappers/polyglot_map_wrapper.cc
+  native_wrappers/polyglot_object_bridge.cc
+  native_wrappers/polyglot_object_wrapper.cc
+  native_wrappers/polyglot_seekable_channel_wrapper.cc
+
+  objects/polyglot_column.cc
+  objects/polyglot_date.cc
+  objects/polyglot_result.cc
+  objects/polyglot_row.cc
+  objects/polyglot_session.cc
+
+  polyglot_wrappers/types_polyglot.cc
+
+  utils/native_value.cc
+  utils/polyglot_error.cc
+  utils/polyglot_scope.cc
+  utils/polyglot_store.cc
+  utils/polyglot_utils.cc
+  utils/profiling.cc
+  utils/utils_encoding.cc
+  utils/utils_general.cc
+  utils/utils_json.cc
+  utils/utils_path.cc
+  utils/utils_string.cc
+
   graalvm_common_context.cc
   graalvm_plugin.cc
   graalvm_javascript_context.cc
@@ -30,28 +71,7 @@ SET(graalvm_plugin_SOURCE
   graalvm_component.cc
   graalvm_type_conversion.cc
   graalvm_context_pool.cc
-  polyglot_wrappers/types_polyglot.cc
-  native_wrappers/polyglot_array_wrapper.cc
-  native_wrappers/polyglot_collectable.cc
-  native_wrappers/polyglot_file_system_wrapper.cc
-  native_wrappers/polyglot_iterator_wrapper.cc
-  native_wrappers/polyglot_map_wrapper.cc
-  native_wrappers/polyglot_seekable_channel_wrapper.cc
-  languages/polyglot_language.cc
-  languages/polyglot_javascript.cc
-  languages/polyglot_common_context.cc
-  languages/polyglot_garbage_collector.cc
-  utils/polyglot_store.cc
-  utils/polyglot_error.cc
-  utils/polyglot_utils.cc
-  utils/native_value.cc
-  utils/polyglot_store.cc
-  utils/utils_json.cc
-  utils/utils_string.cc
-  utils/utils_path.cc
-  utils/utils_encoding.cc
-  utils/polyglot_scope.cc
-  utils/profiling.cc
+
   )
 
 IF(UNIX)
@@ -73,13 +93,15 @@ GET_FILENAME_COMPONENT(LIBPOLYGLOT_NAME "${POLYGLOT_LIBRARY}" NAME)
 ADD_HARNESS_PLUGIN(graalvm_plugin
   OUTPUT_NAME "graalvm"
   SOURCES ${graalvm_plugin_SOURCE}
-  REQUIRES harness_stdx ${POLYGLOT_LIBRARY}
+  REQUIRES harness_stdx router_mysql ${POLYGLOT_LIBRARY}
   DESTINATION "${ROUTER_INSTALL_PLUGINDIR}"
   )
 
 TARGET_INCLUDE_DIRECTORIES(graalvm_plugin PRIVATE
   ${CMAKE_CURRENT_SOURCE_DIR}
   PUBLIC
+  ${PROJECT_SOURCE_DIR}/src/router/include/
+  ${PROJECT_SOURCE_DIR}/src/mysql_rest_service/include/
   ${CMAKE_CURRENT_SOURCE_DIR}/../include/
   ${CMAKE_CURRENT_BINARY_DIR}/../include/
   ${BUNDLED_POLYGLOT_DIR}

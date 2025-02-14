@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -39,7 +39,8 @@ namespace shcore {
 
 namespace polyglot {
 class Polyglot_object;
-}
+class Object_bridge;
+}  // namespace polyglot
 
 class Parser_error : public std::runtime_error {
   using std::runtime_error::runtime_error;
@@ -60,7 +61,8 @@ enum Value_type {
 
   //  Object,     //! Native/bridged C++ object refs, may or may not be
   //  serializable
-  Object,  //! Polyglot object of any type
+  Object,        //! Polyglot object of any type
+  ObjectBridge,  //! C++ Object
 
   Array,  //! Array/List container
   Map,    //! Dictionary/Map/Object container
@@ -250,7 +252,7 @@ struct GRAALVM_PLUGIN_EXPORT Value final {
   //   explicit Value(const std::shared_ptr<Function_base> &f);
   //   explicit Value(std::shared_ptr<Function_base> &&f);
   explicit Value(const std::shared_ptr<polyglot::Polyglot_object> &o);
-  //   explicit Value(const std::shared_ptr<Object_bridge> &o);
+  explicit Value(const std::shared_ptr<polyglot::Object_bridge> &o);
   //   explicit Value(std::shared_ptr<Object_bridge> &&o);
   explicit Value(const Map_type_ref &n);
   explicit Value(Map_type_ref &&n);
@@ -340,15 +342,16 @@ struct GRAALVM_PLUGIN_EXPORT Value final {
     return std::get<std::string>(m_value);
   }
 
-  // template <class C>
-  // std::shared_ptr<C> as_object() const {
-  //   check_type(Object);
+  template <class C>
+  std::shared_ptr<C> as_object_bridge() const {
+    check_type(ObjectBridge);
 
-  //   if (is_null()) return nullptr;
-  //   return std::dynamic_pointer_cast<C>(
-  //       std::get<std::shared_ptr<Object_bridge>>(m_value));
-  // }
+    if (is_null()) return nullptr;
+    return std::dynamic_pointer_cast<C>(
+        std::get<std::shared_ptr<polyglot::Object_bridge>>(m_value));
+  }
 
+  std::shared_ptr<polyglot::Object_bridge> as_object_bridge() const;
   std::shared_ptr<polyglot::Polyglot_object> as_object() const;
 
   std::shared_ptr<Map_type> as_map() const {
@@ -416,6 +419,7 @@ struct GRAALVM_PLUGIN_EXPORT Value final {
 
   std::variant < std::monostate, null_value, bool, std::string, binary_string,
       int64_t, uint64_t, double,  std::shared_ptr<polyglot::Polyglot_object>,
+      std::shared_ptr<polyglot::Object_bridge>,
       std::shared_ptr<Array_type>,
       std::shared_ptr<Map_type> /*,
 std::shared_ptr<Function_base>*/>

@@ -151,6 +151,7 @@ void Polyglot_language::initialize(const std::shared_ptr<IFile_system> &fs) {
   }
 
   m_types = std::make_unique<Polyglot_type_bridger>(shared_from_this());
+  m_types->init();
 
   // NOTE: The file system is a weird citizen, because it is a ProxyObject,
   // which means it requires to be created using a specific context, however,
@@ -180,6 +181,7 @@ void Polyglot_language::initialize(const std::shared_ptr<IFile_system> &fs) {
 
 void Polyglot_language::finalize() {
   m_globals.reset();
+  m_types->dispose();
 
   if (const auto rc = poly_context_close(thread(), context(), true);
       rc != poly_ok) {

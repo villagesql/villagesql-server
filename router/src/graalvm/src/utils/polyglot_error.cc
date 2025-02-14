@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -200,6 +200,10 @@ Polyglot_error::Polyglot_error(poly_thread thread, int64_t rc) {
   } else {
     initialize(thread);
   }
+}
+
+Polyglot_error::Polyglot_error(poly_thread thread, poly_exception exc) {
+  initialize(thread, exc);
 }
 
 void Polyglot_error::initialize(poly_thread thread, poly_exception exc) {
