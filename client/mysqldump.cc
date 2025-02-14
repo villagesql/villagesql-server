@@ -195,12 +195,14 @@ const char *set_gtid_purged_mode_names[] = {"OFF", "AUTO", "ON", "COMMENTED",
 static TYPELIB set_gtid_purged_mode_typelib = {
     array_elements(set_gtid_purged_mode_names) - 1, "",
     set_gtid_purged_mode_names, nullptr};
-static enum enum_set_gtid_purged_mode {
+enum enum_set_gtid_purged_mode {
   SET_GTID_PURGED_OFF = 0,
   SET_GTID_PURGED_AUTO = 1,
   SET_GTID_PURGED_ON = 2,
   SET_GTID_PURGED_COMMENTED = 3
-} opt_set_gtid_purged_mode = SET_GTID_PURGED_AUTO;
+};
+static enum enum_set_gtid_purged_mode opt_set_gtid_purged_mode =
+    SET_GTID_PURGED_AUTO;
 
 #if defined(_WIN32)
 static char *shared_memory_base_name = nullptr;
@@ -221,7 +223,10 @@ enum class Output_as_version_mode {
   SERVER = 0,         /// Output command terminology matching the dumped server
   BEFORE_8_0_23 = 1,  /// Output command terminology for servers below 8.0.23
   BEFORE_8_2_0 = 2    /// Output command terminology for servers below 8.2.0
-} opt_output_as_version_mode = Output_as_version_mode::SERVER;
+};
+
+enum Output_as_version_mode opt_output_as_version_mode =
+    Output_as_version_mode::SERVER;
 
 Prealloced_array<uint, 12> ignore_error(PSI_NOT_INSTRUMENTED);
 static int parse_ignore_error();
@@ -6292,6 +6297,8 @@ static bool get_view_structure(char *table, char *db) {
   char *result_table, *opt_quoted_table;
   char table_buff[NAME_LEN * 2 + 3];
   char table_buff2[NAME_LEN * 2 + 3];
+  char table_string_buff[NAME_LEN * 2 + 3];
+  char db_string_buff[NAME_LEN * 2 + 3];
   char query[QUERY_LENGTH];
   FILE *sql_file = md_result_file;
   DBUG_TRACE;
@@ -6303,6 +6310,15 @@ static bool get_view_structure(char *table, char *db) {
 
   result_table = quote_name(table, table_buff, true);
   opt_quoted_table = quote_name(table, table_buff2, false);
+  if (((ulong)-1 == mysql_real_escape_string_quote(mysql, table_string_buff,
+                                                   table, strlen(table),
+                                                   '\'')) ||
+      ((ulong)-1 == mysql_real_escape_string_quote(mysql, db_string_buff, db,
+                                                   strlen(db), '\''))) {
+    DB_error(mysql,
+             "when trying to quote table and db names when dumping views.");
+    return true;
+  }
 
   if (switch_character_set_results(mysql, "binary")) return true;
 
@@ -6345,8 +6361,8 @@ static bool get_view_structure(char *table, char *db) {
            "SELECT CHECK_OPTION, DEFINER, SECURITY_TYPE, "
            "       CHARACTER_SET_CLIENT, COLLATION_CONNECTION "
            "FROM information_schema.views "
-           "WHERE table_name=\"%s\" AND table_schema=\"%s\"",
-           table, db);
+           "WHERE table_name='%s' AND table_schema='%s'",
+           table_string_buff, db_string_buff);
 
   if (mysql_query(mysql, query)) {
     /*
