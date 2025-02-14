@@ -794,6 +794,7 @@ void Certifier::update_transaction_dependency_timestamps(
     Gtid_log_event &gle, bool has_write_set, bool has_write_set_large_size,
     int64 transaction_last_committed) {
   bool update_parallel_applier_last_committed_global = false;
+  bool is_empty_transaction = false;
 
   /*
     'CREATE TABLE ... AS SELECT' is considered a DML, though in reality it
@@ -806,8 +807,19 @@ void Certifier::update_transaction_dependency_timestamps(
     update_parallel_applier_last_committed_global = true;
   }
 
-  if (!has_write_set || has_write_set_large_size ||
-      update_parallel_applier_last_committed_global) {
+  /*
+    Empty transactions, despite not having write-set, can be
+    applied in parallel with any other transaction.
+    Empty transactions are assigned `last_committed = -1` by GR
+    before send.
+  */
+  else if (!has_write_set && -1 == gle.last_committed) {
+    is_empty_transaction = true;
+  }
+
+  if (!is_empty_transaction &&
+      (!has_write_set || has_write_set_large_size ||
+       update_parallel_applier_last_committed_global)) {
     /*
       DDL does not have write-set, so we need to ensure that it
       is applied without any other transaction in parallel.
@@ -822,8 +834,9 @@ void Certifier::update_transaction_dependency_timestamps(
   assert(gle.last_committed < gle.sequence_number);
 
   update_parallel_applier_indexes(
-      !has_write_set || has_write_set_large_size ||
-          update_parallel_applier_last_committed_global,
+      (!is_empty_transaction &&
+       (!has_write_set || has_write_set_large_size ||
+        update_parallel_applier_last_committed_global)),
       true);
 
   /*
