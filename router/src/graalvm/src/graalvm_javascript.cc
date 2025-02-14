@@ -323,11 +323,11 @@ Value GraalVMJavaScript::to_native_object(poly_value object,
 }
 
 void GraalVMJavaScript::output_handler(const char *bytes, size_t length) {
-  log_info("%.*s", length, bytes);
+  log_info("%.*s", static_cast<int>(length), bytes);
 }
 
 void GraalVMJavaScript::error_handler(const char *bytes, size_t length) {
-  log_error("%.*s", length, bytes);
+  log_error("%.*s", static_cast<int>(length), bytes);
 }
 
 poly_value GraalVMJavaScript::from_native_object(
