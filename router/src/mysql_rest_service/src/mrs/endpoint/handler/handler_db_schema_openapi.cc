@@ -104,6 +104,9 @@ HttpResult HandlerDbSchemaOpenAPI::handle_get(rest::RequestContext *ctxt) {
   rapidjson::Value items(rapidjson::kObjectType);
   rapidjson::Value schema_properties(rapidjson::kObjectType);
 
+  std::string full_service_path =
+      get_url_host() + service_entry_->url_context_root;
+
   bool add_procedure_metadata{false};
   auto ep = lock(endpoint_);
   const auto &db_endpoints = ep->get_children();
@@ -118,7 +121,8 @@ HttpResult HandlerDbSchemaOpenAPI::handle_get(rest::RequestContext *ctxt) {
         (!authorization_manager_->is_authorized(service_entry_->id, *ctxt,
                                                 &ctxt->user) ||
          check_privileges(ctxt->user.privileges, service_entry_->id,
-                          ep->get_id(), db_object->id) == 0)) {
+                          full_service_path, entry_->id, entry_->request_path,
+                          db_object->id, db_object->request_path) == 0)) {
       continue;
     }
 
@@ -202,6 +206,18 @@ UniversalId HandlerDbSchemaOpenAPI::get_service_id() const {
 UniversalId HandlerDbSchemaOpenAPI::get_db_object_id() const { return {}; }
 
 UniversalId HandlerDbSchemaOpenAPI::get_schema_id() const { return entry_->id; }
+
+const std::string &HandlerDbSchemaOpenAPI::get_service_path() const {
+  return service_entry_->url_context_root;
+}
+
+const std::string &HandlerDbSchemaOpenAPI::get_db_object_path() const {
+  return empty_path();
+}
+
+const std::string &HandlerDbSchemaOpenAPI::get_schema_path() const {
+  return entry_->request_path;
+}
 
 uint32_t HandlerDbSchemaOpenAPI::get_access_rights() const {
   using Operation = mrs::database::entry::Operation;

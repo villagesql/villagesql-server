@@ -127,6 +127,13 @@ handler::Protocol get_protocol(std::shared_ptr<EndpointBase> endpoint) {
              : handler::k_protocolHttp;
 }
 
+std::string get_service_path(std::shared_ptr<EndpointBase> endpoint) {
+  if (auto service_ep = get_endpoint_db_service(endpoint); service_ep.get())
+    return service_ep->get()->url_context_root;
+
+  return "";
+}
+
 HandlerFactory::HandlerFactory(AuthorizeManager *auth_manager,
                                GtidManager *gtid_manager,
                                MysqlCacheManager *cache_manager,
@@ -298,8 +305,8 @@ HandlerPtr HandlerFactory::create_string_handler(
   auto protocol = get_protocol(endpoint);
 
   return std::make_unique<HandlerString>(
-      protocol, service_id, requires_authentication, path, file_name,
-      file_content, is_index, auth_manager_);
+      protocol, service_id, get_service_path(endpoint), requires_authentication,
+      path, file_name, file_content, is_index, auth_manager_);
 }
 
 HandlerPtr HandlerFactory::create_redirection_handler(
@@ -314,8 +321,9 @@ HandlerPtr HandlerFactory::create_redirection_handler(
     whole_path += "/" + file_name;
   }
   return std::make_unique<HandlerRedirection>(
-      protocol, service_id, requires_authentication, get_endpoint_host(url),
-      whole_path, file_name, redirection_path, auth_manager_, pernament);
+      protocol, service_id, get_service_path(endpoint), requires_authentication,
+      get_endpoint_host(url), whole_path, file_name, redirection_path,
+      auth_manager_, pernament);
 }
 
 HandlerPtr HandlerFactory::create_authentication_login(
@@ -340,8 +348,8 @@ HandlerPtr HandlerFactory::create_authentication_login(
 
   return std::make_unique<HandlerAuthorizeLogin>(
       handler::get_protocol(db_service_endpoint), url_host_entry->name,
-      entry->id, regex_path, entry->options.value_or(std::string{}),
-      redirect_path, auth_manager_);
+      entry->id, entry->url_context_root, regex_path,
+      entry->options.value_or(std::string{}), redirect_path, auth_manager_);
 }
 
 HandlerPtr HandlerFactory::create_authentication_logout(
@@ -365,8 +373,8 @@ HandlerPtr HandlerFactory::create_authentication_logout(
 
   return std::make_unique<HandlerAuthorizeLogout>(
       handler::get_protocol(db_service_endpoint), url_host_entry->name,
-      entry->id, regex_path, entry->options.value_or(std::string{}),
-      auth_manager_);
+      entry->id, entry->url_context_root, regex_path,
+      entry->options.value_or(std::string{}), auth_manager_);
 }
 
 HandlerPtr HandlerFactory::create_authentication_completed(
@@ -390,7 +398,8 @@ HandlerPtr HandlerFactory::create_authentication_completed(
 
   return std::make_unique<HandlerAuthorizeCompleted>(
       handler::get_protocol(db_service_endpoint), url_host_entry->name,
-      entry->id, regex_path, entry->options.value_or(std::string{}),
+      entry->id, entry->url_context_root, regex_path,
+      entry->options.value_or(std::string{}),
       entry->auth_completed_page_content.value_or(std::string{}),
       auth_manager_);
 }
@@ -416,8 +425,8 @@ HandlerPtr HandlerFactory::create_authentication_user(
 
   return std::make_unique<HandlerAuthorizeUser>(
       handler::get_protocol(db_service_endpoint), url_host_entry->name,
-      entry->id, regex_path, entry->options.value_or(std::string{}),
-      auth_manager_);
+      entry->id, entry->url_context_root, regex_path,
+      entry->options.value_or(std::string{}), auth_manager_);
 }
 
 HandlerPtr HandlerFactory::create_authentication_auth_apps(
@@ -442,8 +451,8 @@ HandlerPtr HandlerFactory::create_authentication_auth_apps(
 
   return std::make_unique<HandlerAuthorizeAuthApps>(
       handler::get_protocol(db_service_endpoint), url_host_entry->name,
-      entry->id, regex_path, entry->options.value_or(std::string{}),
-      redirect_path, auth_manager_);
+      entry->id, entry->url_context_root, regex_path,
+      entry->options.value_or(std::string{}), redirect_path, auth_manager_);
 }
 
 HandlerPtr HandlerFactory::create_authentication_status(
@@ -467,8 +476,8 @@ HandlerPtr HandlerFactory::create_authentication_status(
 
   return std::make_unique<HandlerAuthorizeStatus>(
       handler::get_protocol(db_service_endpoint), url_host_entry->name,
-      entry->id, regex_path, entry->options.value_or(std::string{}),
-      auth_manager_);
+      entry->id, entry->url_context_root, regex_path,
+      entry->options.value_or(std::string{}), auth_manager_);
 }
 
 }  // namespace endpoint

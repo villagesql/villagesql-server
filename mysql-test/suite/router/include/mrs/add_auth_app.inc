@@ -16,7 +16,16 @@ if (!$mrs_add_auth_vendor)
 
 if (!$mrs_add_auth_service)
 {
-  --die 'mrs_add_auth_vendor' variable is required.
+  if (!$mrs_add_auth_services)
+  {
+    --die 'mrs_add_auth_service' or '$mrs_add_auth_services' variable is required.
+  }
+}
+if (!$mrs_add_auth_service) {
+  --let $mrs_add_auth_service=NULL
+}
+if (!$mrs_add_auth_services) {
+  --let $mrs_add_auth_services=(NULL)
 }
 
 if (!$mrs_add_auth_registered_users_only)
@@ -39,11 +48,10 @@ if (!$mrs_add_auth_role_name)
   --let $mrs_add_auth_role_name=Full Access
 }
 
-
 --disable_query_log
 --disable_result_log
 eval  SET $mrs_sql_id_variable=mysql_rest_service_metadata.get_sequence_id();
- 
+
 if ($mrs_schema_version > 2)
 {
   eval INSERT INTO mysql_rest_service_metadata.auth_app
@@ -59,7 +67,7 @@ if ($mrs_schema_version > 2)
     $mrs_add_auth_client_secret
     );
   eval INSERT INTO mysql_rest_service_metadata.service_has_auth_app(service_id, auth_app_id)
-    SELECT id,$mrs_sql_id_variable FROM mysql_rest_service_metadata.service WHERE url_context_root rlike "$mrs_add_auth_service"
+    SELECT id,$mrs_sql_id_variable FROM mysql_rest_service_metadata.service WHERE url_context_root in $mrs_add_auth_services OR url_context_root rlike "$mrs_add_auth_service"
          ;
 }
 if ($mrs_schema_version == 2)
@@ -87,6 +95,7 @@ if ($mrs_schema_version == 2)
 --let $mrs_sql_id_variable=
 --let $mrs_add_auth_registered_users_only=
 --let $mrs_add_auth_service=
+--let $mrs_add_auth_services=
 --let $mrs_add_auth_vendor=
 --let $mrs_add_auth_app=
 --let $mrs_add_auth_client_id=

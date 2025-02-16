@@ -72,10 +72,11 @@ class Handler : public interface::RestHandler {
 
   void throw_unauthorize_when_check_auth_fails(RequestContext *);
 
-  static uint32_t check_privileges(
+  uint32_t check_privileges(
       const std::vector<database::entry::AuthPrivilege> &privileges,
-      const UniversalId &service_id, const UniversalId &schema_id,
-      const UniversalId &db_object_id);
+      const UniversalId &service_id, const std::string &service_path,
+      const UniversalId &schema_id, const std::string &schema_path,
+      const UniversalId &db_object_id, const std::string &db_object_path);
 
  protected:
   interface::Options options_;
@@ -87,6 +88,8 @@ class Handler : public interface::RestHandler {
 
   bool log_level_is_debug_;
   bool log_level_is_info_;
+
+  const std::string &empty_path() const;
 };
 
 }  // namespace rest

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -29,6 +29,7 @@
 #include <string>
 
 #include "mrs/database/entry/db_schema.h"
+#include "mrs/database/entry/db_service.h"
 #include "mrs/endpoint/db_schema_endpoint.h"
 #include "mrs/gtid_manager.h"
 #include "mrs/rest/handler.h"
@@ -40,7 +41,9 @@ namespace handler {
 class HandlerDbSchemaMetadata : public mrs::rest::Handler {
  public:
   using DbSchema = mrs::database::entry::DbSchema;
+  using DbService = mrs::database::entry::DbService;
   using DbSchemaPtr = std::shared_ptr<DbSchema>;
+  using DbServicePtr = std::shared_ptr<DbService>;
   using DbSchemaEndpoint = mrs::endpoint::DbSchemaEndpoint;
 
  public:
@@ -59,11 +62,15 @@ class HandlerDbSchemaMetadata : public mrs::rest::Handler {
   UniversalId get_service_id() const override;
   UniversalId get_db_object_id() const override;
   UniversalId get_schema_id() const override;
+  const std::string &get_service_path() const override;
+  const std::string &get_schema_path() const override;
+  const std::string &get_db_object_path() const override;
 
   void authorization(rest::RequestContext *ctxt) override;
 
   std::weak_ptr<DbSchemaEndpoint> endpoint_;
   DbSchemaPtr entry_;
+  DbServicePtr service_entry_;
 };
 
 }  // namespace handler

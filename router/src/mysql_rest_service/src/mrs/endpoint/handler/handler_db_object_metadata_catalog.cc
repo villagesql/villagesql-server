@@ -75,8 +75,11 @@ HandlerDbObjectMetadataCatalog::HandlerDbObjectMetadataCatalog(
   auto ep = lock(endpoint_);
   auto ep_parent = lock_parent(ep);
   assert(ep_parent);
+  auto ep_service = lock_parent(ep_parent);
+  assert(ep_service);
   entry_ = ep->get();
   schema_entry_ = ep_parent->get();
+  service_entry_ = ep_service->get();
   url_obj_ = ep->get_url().join();
   url_obj_metadata_catalog_ =
       url_obj_metadata_catalog(ep_parent->get_url(), entry_->request_path);
@@ -186,6 +189,18 @@ UniversalId HandlerDbObjectMetadataCatalog::get_db_object_id() const {
 
 UniversalId HandlerDbObjectMetadataCatalog::get_schema_id() const {
   return schema_entry_->id;
+}
+
+const std::string &HandlerDbObjectMetadataCatalog::get_service_path() const {
+  return service_entry_->url_context_root;
+}
+
+const std::string &HandlerDbObjectMetadataCatalog::get_db_object_path() const {
+  return entry_->request_path;
+}
+
+const std::string &HandlerDbObjectMetadataCatalog::get_schema_path() const {
+  return schema_entry_->request_path;
 }
 
 void HandlerDbObjectMetadataCatalog::authorization(rest::RequestContext *ctxt) {

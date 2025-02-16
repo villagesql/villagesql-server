@@ -151,12 +151,24 @@ UniversalId HandlerDbObjectOpenAPI::get_service_id() const {
   return schema_entry_->service_id;
 }
 
+UniversalId HandlerDbObjectOpenAPI::get_schema_id() const {
+  return schema_entry_->id;
+}
+
 UniversalId HandlerDbObjectOpenAPI::get_db_object_id() const {
   return entry_->id;
 }
 
-UniversalId HandlerDbObjectOpenAPI::get_schema_id() const {
-  return schema_entry_->id;
+const std::string &HandlerDbObjectOpenAPI::get_service_path() const {
+  return service_entry_->url_context_root;
+}
+
+const std::string &HandlerDbObjectOpenAPI::get_schema_path() const {
+  return schema_entry_->request_path;
+}
+
+const std::string &HandlerDbObjectOpenAPI::get_db_object_path() const {
+  return entry_->request_path;
 }
 
 uint32_t HandlerDbObjectOpenAPI::get_access_rights() const {

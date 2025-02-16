@@ -88,6 +88,8 @@ HttpResult HandlerDbServiceOpenAPI::handle_get(rest::RequestContext *ctxt) {
 
   auto ep = lock_or_throw_unavail(endpoint_);
 
+  std::string full_service_path = get_url_host() + entry_->url_context_root;
+
   bool add_procedure_metadata{false};
   const auto &schemas = ep->get_children();
   for (const auto &schema_endpoint :
@@ -106,8 +108,10 @@ HttpResult HandlerDbServiceOpenAPI::handle_get(rest::RequestContext *ctxt) {
           (!authorization_manager_->is_authorized(entry_->id, *ctxt,
                                                   &ctxt->user) ||
            check_privileges(ctxt->user.privileges, entry_->id,
-                            schema_endpoint->get_id(),
-                            db_endpoint->get_id()) == 0)) {
+                            full_service_path, schema_endpoint->get()->id,
+                            schema_endpoint->get()->request_path,
+                            db_endpoint->get()->id,
+                            db_endpoint->get()->request_path) == 0)) {
         continue;
       }
 
@@ -191,9 +195,21 @@ UniversalId HandlerDbServiceOpenAPI::get_service_id() const {
   return entry_->id;
 }
 
+UniversalId HandlerDbServiceOpenAPI::get_schema_id() const { return {}; }
+
 UniversalId HandlerDbServiceOpenAPI::get_db_object_id() const { return {}; }
 
-UniversalId HandlerDbServiceOpenAPI::get_schema_id() const { return {}; }
+const std::string &HandlerDbServiceOpenAPI::get_service_path() const {
+  return entry_->url_context_root;
+}
+
+const std::string &HandlerDbServiceOpenAPI::get_db_object_path() const {
+  return empty_path();
+}
+
+const std::string &HandlerDbServiceOpenAPI::get_schema_path() const {
+  return empty_path();
+}
 
 uint32_t HandlerDbServiceOpenAPI::get_access_rights() const {
   using Operation = mrs::database::entry::Operation;

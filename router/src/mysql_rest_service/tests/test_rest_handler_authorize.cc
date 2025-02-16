@@ -77,8 +77,8 @@ class HandlerAuthorizeTests : public Test {
               return request_handler_.get();
             }));
     sut_ = std::make_unique<HandlerAuthorizeLogin>(
-        mrs::endpoint::handler::k_protocolHttp, "", service_id, rest_path, "",
-        "", &mock_auth_);
+        mrs::endpoint::handler::k_protocolHttp, "", service_id, rest_path,
+        rest_path, "", "", &mock_auth_);
     ASSERT_NE(nullptr, request_handler_.get());
   }
 

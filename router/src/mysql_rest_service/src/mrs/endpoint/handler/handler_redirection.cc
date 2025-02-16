@@ -49,13 +49,14 @@ static std::string as_string(const std::vector<T> &v) {
 
 HandlerRedirection::HandlerRedirection(
     const Protocol protocol, const UniversalId &service_id,
-    bool requires_authentication, const std::string &url_host,
-    const std::string &path, const std::string &file_name,
-    const std::string &file_new_location,
+    const std::string &service_path, bool requires_authentication,
+    const std::string &url_host, const std::string &path,
+    const std::string &file_name, const std::string &file_new_location,
     mrs::interface::AuthorizeManager *auth_manager, bool pernament)
     : Handler(protocol, url_host, {"^"s + path + "$"}, std::string{},
               auth_manager),
       service_id_{service_id},
+      service_path_{service_path},
       requires_authentication_{requires_authentication},
       path_{path},
       file_name_{file_name},
@@ -63,8 +64,22 @@ HandlerRedirection::HandlerRedirection(
       pernament_{pernament} {}
 
 UniversalId HandlerRedirection::get_service_id() const { return service_id_; }
-UniversalId HandlerRedirection::get_db_object_id() const { return {}; }
+
 UniversalId HandlerRedirection::get_schema_id() const { return {}; }
+
+UniversalId HandlerRedirection::get_db_object_id() const { return {}; }
+
+const std::string &HandlerRedirection::get_service_path() const {
+  return service_path_;
+}
+
+const std::string &HandlerRedirection::get_schema_path() const {
+  return empty_path();
+}
+
+const std::string &HandlerRedirection::get_db_object_path() const {
+  return empty_path();
+}
 
 HandlerRedirection::Authorization HandlerRedirection::requires_authentication()
     const {

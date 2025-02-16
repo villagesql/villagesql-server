@@ -44,6 +44,7 @@ class HandlerAuthorizeStatus : public mrs::rest::Handler {
  public:
   HandlerAuthorizeStatus(const Protocol protocol, const std::string &url_host,
                          const UniversalId service_id,
+                         const std::string &service_path,
                          const std::string &rest_path_matcher,
                          const std::string &options,
                          interface::AuthorizeManager *auth_manager);
@@ -54,6 +55,10 @@ class HandlerAuthorizeStatus : public mrs::rest::Handler {
   UniversalId get_service_id() const override;
   UniversalId get_db_object_id() const override;
   UniversalId get_schema_id() const override;
+  const std::string &get_service_path() const override;
+  const std::string &get_schema_path() const override;
+  const std::string &get_db_object_path() const override;
+
   uint32_t get_access_rights() const override;
 
   bool request_begin(RequestContext *ctxt) override;
@@ -79,6 +84,7 @@ class HandlerAuthorizeStatus : public mrs::rest::Handler {
       const std::string &redirection_url, const http::Error &error);
 
   UniversalId service_id_;
+  const std::string service_path_;
   std::string copy_url_;
   std::string copy_path_;
 };

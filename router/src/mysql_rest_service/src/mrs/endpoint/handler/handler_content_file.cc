@@ -78,9 +78,12 @@ HandlerContentFile::HandlerContentFile(
   auto endpoint_file = lock(endpoint);
   auto endpoint_set = lock_parent(endpoint_file);
   assert(endpoint_set && "Parent must be available.");
+  auto service = lock_parent(endpoint_set);
+  assert(service && "Parent must be available.");
 
   entry_file_ = endpoint_file->get();
   entry_set_ = endpoint_set->get();
+  entry_service_ = service->get();
 
   helper::digester::Md5Digest version_calculation;
   version_calculation.update(std::to_string(time(nullptr)));
@@ -93,9 +96,21 @@ UniversalId HandlerContentFile::get_service_id() const {
   return entry_set_->service_id;
 }
 
+UniversalId HandlerContentFile::get_schema_id() const { return {}; }
+
 UniversalId HandlerContentFile::get_db_object_id() const { return {}; }
 
-UniversalId HandlerContentFile::get_schema_id() const { return {}; }
+const std::string &HandlerContentFile::get_service_path() const {
+  return entry_service_->url_context_root;
+}
+
+const std::string &HandlerContentFile::get_schema_path() const {
+  return empty_path();
+}
+
+const std::string &HandlerContentFile::get_db_object_path() const {
+  return empty_path();
+}
 
 Authorization HandlerContentFile::requires_authentication() const {
   bool auth = entry_file_->requires_authentication ||

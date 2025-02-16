@@ -40,8 +40,12 @@ class PartialMockRestHandler : public mrs::rest::Handler {
   MOCK_METHOD(bool, may_check_access, (), (const, override));
   MOCK_METHOD(Authorization, requires_authentication, (), (const, override));
   MOCK_METHOD(mrs::UniversalId, get_service_id, (), (const, override));
-  MOCK_METHOD(mrs::UniversalId, get_db_object_id, (), (const, override));
   MOCK_METHOD(mrs::UniversalId, get_schema_id, (), (const, override));
+  MOCK_METHOD(mrs::UniversalId, get_db_object_id, (), (const, override));
+  MOCK_METHOD(const std::string &, get_service_path, (), (const override));
+  MOCK_METHOD(const std::string &, get_schema_path, (), (const override));
+  MOCK_METHOD(const std::string &, get_db_object_path, (), (const override));
+
   MOCK_METHOD(uint32_t, get_access_rights, (), (const, override));
 
   MOCK_METHOD(HttpResult, handle_get, (mrs::rest::RequestContext * ctxt),

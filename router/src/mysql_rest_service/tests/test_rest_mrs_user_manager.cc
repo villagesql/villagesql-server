@@ -94,7 +94,7 @@ class UserManagerFixture : public Test {
         .RetiresOnSaturation();
 
     std::string query_user_privileges{
-        "SELECT p.service_id, p.db_schema_id, p.db_object_id, "
+        "SELECT p.service_path, p.db_schema_path, p.db_object_path, "
         "BIT_OR\\(p.crud_operations\\) as crud FROM.* user_id="};
     query_user_privileges.append(u.sql_id).append("\\)");
 
@@ -138,9 +138,8 @@ class UserManagerFixture : public Test {
                                          "1",
                                          "{}",
                                          nullptr};
-  const mrs::UniversalId k_user_4000040400004_priv_service_id{1};
-  const std::vector<Row> k_row_for_user_4000040400004_privs{Row{
-      k_user_4000040400004_priv_service_id.to_raw(), nullptr, nullptr, "2"}};
+  const std::vector<Row> k_row_for_user_4000040400004_privs{
+      Row{"*", "*", "*", "2"}};
   const AuthUser k_user_4000040400004{
       get_user_from_row(k_row_for_user_4000040400004, false)};
 };

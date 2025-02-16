@@ -58,10 +58,12 @@ static HttpResult get_json_response_ok() {
 
 HandlerAuthorizeLogout::HandlerAuthorizeLogout(
     const Protocol protocol, const std::string &url_host,
-    const UniversalId service_id, const std::string &rest_path_matcher,
-    const std::string &options, interface::AuthorizeManager *auth_manager)
+    const UniversalId service_id, const std::string &service_path,
+    const std::string &rest_path_matcher, const std::string &options,
+    interface::AuthorizeManager *auth_manager)
     : Handler(protocol, url_host, {rest_path_matcher}, options, auth_manager),
       service_id_{service_id},
+      service_path_{service_path},
       auth_manager_{auth_manager} {}
 
 mrs::rest::Handler::Authorization
@@ -73,14 +75,22 @@ UniversalId HandlerAuthorizeLogout::get_service_id() const {
   return service_id_;
 }
 
-UniversalId HandlerAuthorizeLogout::get_db_object_id() const {
-  assert(0 && "is_object returns false, it is not allowed to call this method");
-  return {};
+UniversalId HandlerAuthorizeLogout::get_schema_id() const { return {}; }
+
+UniversalId HandlerAuthorizeLogout::get_db_object_id() const { return {}; }
+
+const std::string &HandlerAuthorizeLogout::get_service_path() const {
+  return service_path_;
 }
 
-UniversalId HandlerAuthorizeLogout::get_schema_id() const {
+const std::string &HandlerAuthorizeLogout::get_schema_path() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
-  return {};
+  return empty_path();
+}
+
+const std::string &HandlerAuthorizeLogout::get_db_object_path() const {
+  assert(0 && "is_object returns false, it is not allowed to call this method");
+  return empty_path();
 }
 
 uint32_t HandlerAuthorizeLogout::get_access_rights() const {

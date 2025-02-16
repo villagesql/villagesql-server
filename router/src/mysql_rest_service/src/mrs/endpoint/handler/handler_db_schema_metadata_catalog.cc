@@ -121,6 +121,10 @@ HandlerDbSchemaMetadataCatalog::HandlerDbSchemaMetadataCatalog(
   entry_ = ep->get();
   required_authnetication_ = ep->required_authentication();
   url_path_ = ep->get_url_path();
+
+  auto sp = lock_parent(ep);
+  assert(sp);
+  service_entry_ = sp->get();
 }
 
 void HandlerDbSchemaMetadataCatalog::authorization(rest::RequestContext *ctxt) {
@@ -189,6 +193,18 @@ UniversalId HandlerDbSchemaMetadataCatalog::get_db_object_id() const {
 
 UniversalId HandlerDbSchemaMetadataCatalog::get_schema_id() const {
   return entry_->id;
+}
+
+const std::string &HandlerDbSchemaMetadataCatalog::get_service_path() const {
+  return service_entry_->url_context_root;
+}
+
+const std::string &HandlerDbSchemaMetadataCatalog::get_schema_path() const {
+  return entry_->request_path;
+}
+
+const std::string &HandlerDbSchemaMetadataCatalog::get_db_object_path() const {
+  return empty_path();
 }
 
 uint32_t HandlerDbSchemaMetadataCatalog::get_access_rights() const {

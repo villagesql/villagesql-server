@@ -47,11 +47,12 @@ using Url = helper::http::Url;
 
 HandlerAuthorizeLogin::HandlerAuthorizeLogin(
     const Protocol protocol, const std::string &url_host,
-    const UniversalId service_id, const std::string &rest_path_matcher,
-    const std::string &options, const std::string &redirection,
-    interface::AuthorizeManager *auth_manager)
+    const UniversalId service_id, const std::string &service_path,
+    const std::string &rest_path_matcher, const std::string &options,
+    const std::string &redirection, interface::AuthorizeManager *auth_manager)
     : Handler(protocol, url_host, {rest_path_matcher}, options, auth_manager),
       service_id_{service_id},
+      service_path_{service_path},
       redirection_{redirection} {}
 
 mrs::rest::Handler::Authorization
@@ -63,14 +64,22 @@ UniversalId HandlerAuthorizeLogin::get_service_id() const {
   return service_id_;
 }
 
-UniversalId HandlerAuthorizeLogin::get_db_object_id() const {
-  assert(0 && "is_object returns false, it is not allowed to call this method");
-  return {};
+UniversalId HandlerAuthorizeLogin::get_schema_id() const { return {}; }
+
+UniversalId HandlerAuthorizeLogin::get_db_object_id() const { return {}; }
+
+const std::string &HandlerAuthorizeLogin::get_service_path() const {
+  return service_path_;
 }
 
-UniversalId HandlerAuthorizeLogin::get_schema_id() const {
+const std::string &HandlerAuthorizeLogin::get_db_object_path() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
-  return {};
+  return empty_path();
+}
+
+const std::string &HandlerAuthorizeLogin::get_schema_path() const {
+  assert(0 && "is_object returns false, it is not allowed to call this method");
+  return empty_path();
 }
 
 uint32_t HandlerAuthorizeLogin::get_access_rights() const {

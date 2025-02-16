@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -160,8 +160,9 @@ TEST_F(RestHandlerObjectTests, forwards_data_from_endpoints_set1) {
 
   make_sut(k_default);
   ASSERT_EQ(k_default.service_id, sut_->get_service_id());
-  ASSERT_EQ(k_default.schema_id, sut_->get_schema_id());
-  ASSERT_EQ(k_default.object_id, sut_->get_db_object_id());
+  ASSERT_EQ(k_default.service, sut_->get_service_path());
+  ASSERT_EQ(k_default.schema, sut_->get_schema_path());
+  ASSERT_EQ(k_default.object, sut_->get_db_object_path());
   ASSERT_EQ(k_auth_check, sut_->requires_authentication());
   ASSERT_EQ(k_default.access_rights, sut_->get_access_rights());
   delete_sut();
@@ -184,8 +185,9 @@ TEST_F(RestHandlerObjectTests, forwards_data_from_endpoints_set2) {
       false};
   make_sut(k_other_data);
   ASSERT_EQ(k_other_data.service_id, sut_->get_service_id());
-  ASSERT_EQ(k_other_data.schema_id, sut_->get_schema_id());
-  ASSERT_EQ(k_other_data.object_id, sut_->get_db_object_id());
+  ASSERT_EQ(k_other_data.service, sut_->get_service_path());
+  ASSERT_EQ(k_other_data.schema, sut_->get_schema_path());
+  ASSERT_EQ(k_other_data.object, sut_->get_db_object_path());
   ASSERT_EQ(k_other_data.access_rights, sut_->get_access_rights());
   ASSERT_EQ(k_auth_none, sut_->requires_authentication());
   delete_sut();

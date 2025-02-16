@@ -83,10 +83,16 @@ eval INSERT INTO `mysql_rest_service_metadata`.`mrs_user` (
 
 --let $mrs_add_user_role_id=`SELECT IFNULL(default_role_id,"") FROM mysql_rest_service_metadata.auth_app WHERE id=$mrs_sql_app_id_variable`
 
-if (`SELECT LENGTH("$mrs_add_user_role_id")`)
+if (`SELECT LENGTH("$mrs_add_user_role_id") and LENGTH("$mrs_add_user_role")=0`)
 {
   eval INSERT INTO mysql_rest_service_metadata.mrs_user_has_role(user_id,role_id, comments)
            VALUES($mrs_sql_id_variable, "$mrs_add_user_role_id","Default role");
+}
+
+if (`SELECT LENGTH("$mrs_add_user_role")`)
+{
+  eval INSERT INTO mysql_rest_service_metadata.mrs_user_has_role(user_id,role_id, comments)
+           VALUES($mrs_sql_id_variable, (select id from mysql_rest_service_metadata.mrs_role where caption rlike "$mrs_add_user_role"),"Assigned role");
 }
 
 --echo # Registred MRS USER: $mrs_add_user_name

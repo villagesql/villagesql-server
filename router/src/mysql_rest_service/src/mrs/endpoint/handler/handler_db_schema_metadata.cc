@@ -58,7 +58,10 @@ HandlerDbSchemaMetadata::HandlerDbSchemaMetadata(
               get_endpoint_options(lock(endpoint)), auth_manager),
       endpoint_{endpoint} {
   auto ep = lock(endpoint_);
+  auto ep_service = lock_parent(ep);
+  assert(ep_service);
   entry_ = ep->get();
+  service_entry_ = ep_service->get();
 }
 
 HttpResult HandlerDbSchemaMetadata::handle_get(rest::RequestContext *) {
@@ -101,12 +104,22 @@ UniversalId HandlerDbSchemaMetadata::get_service_id() const {
   return entry_->service_id;
 }
 
-UniversalId HandlerDbSchemaMetadata::get_db_object_id() const {
-  return UniversalId{};
-}
+UniversalId HandlerDbSchemaMetadata::get_db_object_id() const { return {}; }
 
 UniversalId HandlerDbSchemaMetadata::get_schema_id() const {
   return entry_->id;
+}
+
+const std::string &HandlerDbSchemaMetadata::get_service_path() const {
+  return service_entry_->url_context_root;
+}
+
+const std::string &HandlerDbSchemaMetadata::get_schema_path() const {
+  return entry_->request_path;
+}
+
+const std::string &HandlerDbSchemaMetadata::get_db_object_path() const {
+  return empty_path();
 }
 
 void HandlerDbSchemaMetadata::authorization(rest::RequestContext *ctxt) {

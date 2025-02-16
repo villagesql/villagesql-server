@@ -35,6 +35,7 @@
 #include "mysql/harness/logging/logging.h"
 #include "mysql/harness/string_utils.h"
 #include "mysqlrouter/component/http_server_component.h"
+#include "router/src/graalvm/src/utils/utils_general.h"
 
 #include "mrs/authentication/www_authentication_handler.h"
 #include "mrs/database/json_mapper/errors.h"
@@ -55,6 +56,65 @@ IMPORT_LOG_FUNCTIONS()
 
 namespace mrs {
 namespace rest {
+
+namespace {
+
+bool _match_glob(const std::string &pat, size_t ppos, const std::string &str,
+                 size_t spos) {
+  size_t pend = pat.length();
+  size_t send = str.length();
+  // we allow the string to be matched up to the \0
+  while (ppos < pend && spos <= send) {
+    int sc = str[spos];
+    int pc = pat[ppos];
+    switch (pc) {
+      case '*':
+        // skip multiple consecutive *
+        while (ppos < pend && pat[ppos + 1] == '*') ++ppos;
+
+        // match * by trying every substring of str with the rest of the pattern
+        for (size_t sp = spos; sp <= send; ++sp) {
+          // if something matched, we're fine
+          if (_match_glob(pat, ppos + 1, str, sp)) return true;
+        }
+        // if there were no matches, then give up
+        return false;
+      case '\\':
+        ++ppos;
+        if (ppos >= pend)  // can't have an escape at the end of the pattern
+          throw std::logic_error("Invalid pattern " + pat);
+        pc = pat[ppos];
+        if (sc != pc) return false;
+        ++ppos;
+        ++spos;
+        break;
+      case '?':
+        ++ppos;
+        ++spos;
+        break;
+      default:
+        if (sc != pc) return false;
+        ++ppos;
+        ++spos;
+        break;
+    }
+  }
+  return ppos == pend && spos == send;
+}
+
+/**
+ * Match a string against a glob-like pattern.
+ *
+ * Allowed wildcard characters: '*', '?'.
+ * Supports escaping wildcards via '\\' character.
+ *
+ * Note: works with ASCII only, no UTF8 support
+ */
+bool match_glob(const std::string &pattern, const std::string &s) {
+  return _match_glob(pattern, 0, s, 0);
+}
+
+}  // namespace
 
 using RestError = mrs::interface::RestError;
 using ETagMismatch = mrs::interface::ETagMismatch;
@@ -107,15 +167,27 @@ static bool check_privileges_v3(const ApplyToV3 &p,
   return (p.service_id.has_value() && service_id == *p.service_id);
 }
 
-static bool check_privileges_v4(const ApplyToV4 &p, const UniversalId &,
-                                const UniversalId &, const UniversalId &) {
-  return p.service_name == "*" && p.object_name == "*" && p.schema_name == "*";
+static bool check_privileges_v4(const ApplyToV4 &p,
+                                const std::string &service_path,
+                                const std::string &schema_path,
+                                const std::string &db_object_path) {
+  if (p.service_name != "*" && !match_glob(p.service_name, service_path))
+    return false;
+
+  if (p.schema_name != "*" && !match_glob(p.schema_name, schema_path))
+    return false;
+
+  if (p.object_name != "*" && !match_glob(p.object_name, db_object_path))
+    return false;
+
+  return true;
 }
 
 uint32_t Handler::check_privileges(
     const std::vector<database::entry::AuthPrivilege> &privileges,
-    const UniversalId &service_id, const UniversalId &schema_id,
-    const UniversalId &db_object_id) {
+    const UniversalId &service_id, const std::string &service_path,
+    const UniversalId &schema_id, const std::string &schema_path,
+    const UniversalId &db_object_id, const std::string &db_object_path) {
   uint32_t aggregated_privileges = 0;
 
   const bool log_level_is_debug = mysql_harness::logging::log_level_is_handled(
@@ -123,8 +195,8 @@ uint32_t Handler::check_privileges(
 
   if (log_level_is_debug) {
     log_debug("RestRequestHandler: look for service:%s, schema:%s, obj:%s",
-              service_id.to_string().c_str(), schema_id.to_string().c_str(),
-              db_object_id.to_string().c_str());
+              service_path.c_str(), get_schema_path().c_str(),
+              get_db_object_path().c_str());
   }
 
   for (const auto &p : privileges) {
@@ -135,7 +207,7 @@ uint32_t Handler::check_privileges(
                                     service_id, schema_id, db_object_id);
     } else {
       matches = check_privileges_v4(std::get<ApplyToV4>(p.select_by),
-                                    service_id, schema_id, db_object_id);
+                                    service_path, schema_path, db_object_path);
     }
 
     if (matches) {
@@ -310,6 +382,9 @@ class RestRequestHandler : public ::http::base::RequestHandler {
     const auto service_id = rest_handler_->get_service_id();
     const auto method = ctxt.request->get_method();
 
+    std::string full_service_path =
+        rest_handler_->get_url_host() + rest_handler_->get_service_path();
+
     logger_.debug([&]() {
       return std::string("handle_request(service_id:")
           .append(service_id.to_string())
@@ -460,9 +535,12 @@ class RestRequestHandler : public ::http::base::RequestHandler {
               .append(std::to_string(required_access));
         });
         if (!(required_access &
-              Handler::check_privileges(ctxt.user.privileges, service_id,
-                                        rest_handler_->get_schema_id(),
-                                        rest_handler_->get_db_object_id()))) {
+              rest_handler_->check_privileges(
+                  ctxt.user.privileges, rest_handler_->get_service_id(),
+                  full_service_path, rest_handler_->get_schema_id(),
+                  rest_handler_->get_schema_path(),
+                  rest_handler_->get_db_object_id(),
+                  rest_handler_->get_db_object_path()))) {
           throw http::Error{HttpStatusCode::Forbidden};
         }
       }
@@ -1001,6 +1079,11 @@ const std::string &Handler::get_url_host() const { return url_host_; }
 const std::string &Handler::get_protocol() const { return protocol_; }
 
 bool Handler::may_check_access() const { return true; }
+
+const std::string &Handler::empty_path() const {
+  static std::string k_empty;
+  return k_empty;
+}
 
 }  // namespace rest
 }  // namespace mrs

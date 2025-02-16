@@ -287,6 +287,9 @@ HandlerDbObjectTable::HandlerDbObjectTable(
   assert(ep_parent);
   entry_ = ep->get();
   schema_entry_ = ep_parent->get();
+  auto ep_service = lock_parent(ep_parent);
+  assert(ep_service);
+  service_entry_ = ep_service->get();
   ownership_ = get_user_ownership(entry_->name, entry_->object_description);
 
   if (get_options().result.cache_ttl_ms > 0 && response_cache) {
@@ -719,12 +722,24 @@ UniversalId HandlerDbObjectTable::get_service_id() const {
   return schema_entry_->service_id;
 }
 
+UniversalId HandlerDbObjectTable::get_schema_id() const {
+  return schema_entry_->id;
+}
+
 UniversalId HandlerDbObjectTable::get_db_object_id() const {
   return entry_->id;
 }
 
-UniversalId HandlerDbObjectTable::get_schema_id() const {
-  return schema_entry_->id;
+const std::string &HandlerDbObjectTable::get_service_path() const {
+  return service_entry_->url_context_root;
+}
+
+const std::string &HandlerDbObjectTable::get_db_object_path() const {
+  return entry_->request_path;
+}
+
+const std::string &HandlerDbObjectTable::get_schema_path() const {
+  return schema_entry_->request_path;
 }
 
 uint32_t HandlerDbObjectTable::get_access_rights() const {

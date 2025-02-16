@@ -26,6 +26,7 @@
 #define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_AUTH_PRIVILEGE_H_
 
 #include <cstdint>
+#include <string>
 #include <variant>
 
 #include "mrs/database/entry/set_operation.h"

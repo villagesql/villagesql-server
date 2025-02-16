@@ -44,10 +44,12 @@ using HttpResult = HandlerAuthorizeStatus::HttpResult;
 
 HandlerAuthorizeStatus::HandlerAuthorizeStatus(
     const Protocol protocol, const std::string &url_host,
-    const UniversalId service_id, const std::string &rest_path_matcher,
-    const std::string &options, interface::AuthorizeManager *auth_manager)
+    const UniversalId service_id, const std::string &service_path,
+    const std::string &rest_path_matcher, const std::string &options,
+    interface::AuthorizeManager *auth_manager)
     : Handler(protocol, url_host, {rest_path_matcher}, options, auth_manager),
-      service_id_{service_id} {}
+      service_id_{service_id},
+      service_path_{service_path} {}
 
 mrs::rest::Handler::Authorization
 HandlerAuthorizeStatus::requires_authentication() const {
@@ -58,14 +60,28 @@ UniversalId HandlerAuthorizeStatus::get_service_id() const {
   return service_id_;
 }
 
+UniversalId HandlerAuthorizeStatus::get_schema_id() const {
+  assert(0 && "is_object returns false, it is not allowed to call this method");
+  return {};
+}
+
 UniversalId HandlerAuthorizeStatus::get_db_object_id() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
   return {};
 }
 
-UniversalId HandlerAuthorizeStatus::get_schema_id() const {
+const std::string &HandlerAuthorizeStatus::get_service_path() const {
+  return service_path_;
+}
+
+const std::string &HandlerAuthorizeStatus::get_schema_path() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
-  return {};
+  return empty_path();
+}
+
+const std::string &HandlerAuthorizeStatus::get_db_object_path() const {
+  assert(0 && "is_object returns false, it is not allowed to call this method");
+  return empty_path();
 }
 
 uint32_t HandlerAuthorizeStatus::get_access_rights() const {

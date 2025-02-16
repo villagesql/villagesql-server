@@ -56,7 +56,7 @@ std::shared_ptr<Type> lock_or_throw_unavail(std::weak_ptr<Type> &endpoint) {
 }
 
 template <typename Type>
-std::shared_ptr<Type> lock(std::weak_ptr<Type> &endpoint) {
+std::shared_ptr<Type> lock(const std::weak_ptr<Type> &endpoint) {
   auto result = endpoint.lock();
 
   assert(result &&

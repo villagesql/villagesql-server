@@ -1,0 +1,888 @@
+--source include/have_router.inc
+
+--let $extra_mrs_router_id=1
+--source ../include/predefined_setup/configure_router_mrs_root.inc
+
+create schema test_schema;
+use test_schema;
+create table test_schema.tbl (id int primary key);
+insert into test_schema.tbl values (1), (2), (3), (4), (5);
+create procedure test_schema.sp() begin end;
+create function test_schema.fn() returns int return 42;
+
+--source ../include/mrs/start_object_definition.inc
+
+--let $mrs_add_service_path="/svc"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_schema=test_schema
+--let $mrs_add_schema_path=/db
+--let $mrs_add_schema_auth=1
+--source ../include/mrs/db_schema/add.inc
+
+--let $mrs_add_db_object=tbl
+--let $mrs_add_db_object_path=/tbl
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_db_object_type=PROCEDURE
+--let $mrs_add_db_object=sp
+--let $mrs_add_db_object_path=/sp
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_db_object_type=FUNCTION
+--let $mrs_add_db_object_format=ITEM
+--let $mrs_add_db_object=fn
+--let $mrs_add_db_object_path=/fn
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_schema=test_schema
+--let $mrs_add_schema_path=/db2
+--let $mrs_add_schema_auth=1
+--source ../include/mrs/db_schema/add.inc
+
+--let $mrs_add_db_object=tbl
+--let $mrs_add_db_object_path=/tbl
+--source ../include/mrs/db_object/add.inc
+
+
+--let $mrs_add_service_path="/svc2"
+--let $mrs_add_host_name=""
+--source ../include/mrs/service/add.inc
+
+--let $mrs_add_schema=test_schema
+--let $mrs_add_schema_path=/db
+--let $mrs_add_schema_auth=1
+--source ../include/mrs/db_schema/add.inc
+
+--let $mrs_add_db_object=tbl
+--let $mrs_add_db_object_path=/tbl
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_db_object_type=PROCEDURE
+--let $mrs_add_db_object=sp
+--let $mrs_add_db_object_path=/sp
+--source ../include/mrs/db_object/add.inc
+
+--let $mrs_add_db_object_type=FUNCTION
+--let $mrs_add_db_object_format=ITEM
+--let $mrs_add_db_object=fn
+--let $mrs_add_db_object_path=/fn
+--source ../include/mrs/db_object/add.inc
+
+# create roles
+--let $mrs_add_role_caption=Nothing
+--source ../include/mrs/role/add.inc
+#
+--let $mrs_add_role_caption=Svc2Only
+--source ../include/mrs/role/add.inc
+
+--let $mrs_grant_privilege_service_path=/svc2
+--let $mrs_grant_privilege_schema_path=*
+--let $mrs_grant_privilege_object_path=*
+--let $mrs_grant_privilege_crud_operations=READ,CREATE,UPDATE,DELETE
+--source ../include/mrs/role/grant_privilege.inc
+#
+--let $mrs_add_role_caption=AnySvc
+--source ../include/mrs/role/add.inc
+
+--let $mrs_grant_privilege_service_path=*
+--let $mrs_grant_privilege_schema_path=*
+--let $mrs_grant_privilege_object_path=*
+--let $mrs_grant_privilege_crud_operations=READ,CREATE,UPDATE,DELETE
+--source ../include/mrs/role/grant_privilege.inc
+#
+--let $mrs_add_role_caption=Db2
+--source ../include/mrs/role/add.inc
+
+--let $mrs_grant_privilege_service_path=/svc
+--let $mrs_grant_privilege_schema_path=/db2
+--let $mrs_grant_privilege_object_path=/t*
+--let $mrs_grant_privilege_crud_operations=READ,CREATE,UPDATE,DELETE
+--source ../include/mrs/role/grant_privilege.inc
+#
+--let $mrs_add_role_caption=TablesOnly
+--source ../include/mrs/role/add.inc
+
+--let $mrs_grant_privilege_service_path=*
+--let $mrs_grant_privilege_schema_path=*
+--let $mrs_grant_privilege_object_path=/t*
+--let $mrs_grant_privilege_crud_operations=READ,CREATE,UPDATE,DELETE
+--source ../include/mrs/role/grant_privilege.inc
+#
+--let $mrs_add_role_caption=TableInsertOnly
+--source ../include/mrs/role/add.inc
+
+--let $mrs_grant_privilege_service_path=*
+--let $mrs_grant_privilege_schema_path=*
+--let $mrs_grant_privilege_object_path=/t*
+--let $mrs_grant_privilege_crud_operations=CREATE
+--source ../include/mrs/role/grant_privilege.inc
+#
+--let $mrs_add_role_caption=TableReadOnly
+--source ../include/mrs/role/add.inc
+
+--let $mrs_grant_privilege_service_path=*
+--let $mrs_grant_privilege_schema_path=*
+--let $mrs_grant_privilege_object_path=/t*
+--let $mrs_grant_privilege_crud_operations=READ
+--source ../include/mrs/role/grant_privilege.inc
+
+# create users
+--let $k_password_pwd='JEEkMDA1JGI2amJJam9BZmdNS1kwWlFJVUVRZmg1d2UxVT0kVHVkYUQvandPNHB4QSttSVZQT2Q2\nQTlna1g2OUEyMVVpWEl4ajdrcG1Taz0='
+
+--let $mrs_add_auth_app=any service auth
+--let $mrs_add_auth_registered_users_only=1
+--let $mrs_add_auth_vendor=MRS
+--let $mrs_add_auth_services=('/svc', '/svc2')
+--source ../include/mrs/add_auth_app.inc
+
+--let $mrs_add_user_ext_uid="USER0"
+--let $mrs_add_user_name='nobody'
+--let $mrs_add_user_auth_string=$k_password_pwd
+--let $mrs_add_user_role=Nothing
+--source ../include/mrs/user/add.inc
+
+--let $mrs_add_user_ext_uid="USER1"
+--let $mrs_add_user_name='AanySvc'
+--let $mrs_add_user_auth_string=$k_password_pwd
+--let $mrs_add_user_role=AnySvc
+--source ../include/mrs/user/add.inc
+
+--let $mrs_add_user_ext_uid="USER2"
+--let $mrs_add_user_name='Asvc2Only'
+--let $mrs_add_user_auth_string=$k_password_pwd
+--let $mrs_add_user_role=Svc2Only
+--source ../include/mrs/user/add.inc
+
+--let $mrs_add_user_ext_uid="USER3"
+--let $mrs_add_user_name='AtablesOnly'
+--let $mrs_add_user_auth_string=$k_password_pwd
+--let $mrs_add_user_role=TablesOnly
+--source ../include/mrs/user/add.inc
+
+--let $mrs_add_user_ext_uid="USER4"
+--let $mrs_add_user_name='AinsertOnly'
+--let $mrs_add_user_auth_string=$k_password_pwd
+--let $mrs_add_user_role=TableInsertOnly
+--source ../include/mrs/user/add.inc
+
+--let $mrs_add_user_ext_uid="USER5"
+--let $mrs_add_user_name='AreadOnly'
+--let $mrs_add_user_auth_string=$k_password_pwd
+--let $mrs_add_user_role=TableReadOnly
+--source ../include/mrs/user/add.inc
+
+--let $mrs_add_auth_app=svc auth
+--let $mrs_add_auth_registered_users_only=1
+--let $mrs_add_auth_vendor=MRS
+--let $mrs_add_auth_services=('/svc')
+--source ../include/mrs/add_auth_app.inc
+
+--let $mrs_add_user_ext_uid="BUSER1"
+--let $mrs_add_user_name='BanySvc'
+--let $mrs_add_user_auth_string=$k_password_pwd
+--let $mrs_add_user_role=AnySvc
+--source ../include/mrs/user/add.inc
+
+# account is for svc but trying to grant for svc2
+--let $mrs_add_user_ext_uid="BUSER2"
+--let $mrs_add_user_name='Bsvc2Only'
+--let $mrs_add_user_auth_string=$k_password_pwd
+--let $mrs_add_user_role=Svc2Only
+--source ../include/mrs/user/add.inc
+
+--source ../include/mrs/end_object_definition.inc
+
+
+# Begin tests
+#############
+
+## Not authenticated
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/tbl
+  --expected-status 401;
+
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc2/db/tbl
+  --expected-status 401;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/tbl
+  --expected-status 401;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{}'
+  --path /svc/db/tbl/1
+  --expected-status 401;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc/db/tbl/1
+  --expected-status 401;
+
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/sp
+  --expected-status 401;
+
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/fn
+  --expected-status 401;
+
+## No privileges
+
+exec $MRS_CLIENT_ARGS
+  -a scram_post --auth-app 'any service auth' --session-type jwt
+  -t PUT
+  --path /svc/authentication/login
+  -u nobody
+  -p pwd
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/tbl
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+  
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc2/db/tbl
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/tbl
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{}'
+  --path /svc/db/tbl/1
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc/db/tbl/1
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/sp
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/db/fn
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+## All privs
+
+exec $MRS_CLIENT_ARGS
+  -a scram_post --auth-app 'any service auth' --session-type jwt
+  -t PUT
+  --path /svc/authentication/login
+  -u AanySvc
+  -p pwd
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 10}'
+  --path /svc/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 10}'
+  --path /svc/db/tbl/10
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc/db/tbl/10
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/sp
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/fn
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+#
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc2/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 20}'
+  --path /svc2/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 20}'
+  --path /svc2/db/tbl/20
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc2/db/tbl/20
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/sp
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/fn
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+## All on svc2
+
+exec $MRS_CLIENT_ARGS
+  -a scram_post --auth-app 'any service auth' --session-type jwt
+  -t PUT
+  --path /svc2/authentication/login
+  -u Asvc2Only
+  -p pwd
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc2/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 10}'
+  --path /svc2/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 10}'
+  --path /svc2/db/tbl/10
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc2/db/tbl/10
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/sp
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/fn
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+#
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/tbl
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 20}'
+  --path /svc/db/tbl
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 20}'
+  --path /svc/db/tbl/20
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc/db/tbl/20
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/sp
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/fn
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+## All tbl on any svc
+
+# account is valid in both svc and svc2, so it should be authenticatable through either
+exec $MRS_CLIENT_ARGS
+  -a scram_post --auth-app 'any service auth' --session-type jwt
+  -t PUT
+  --path /svc2/authentication/login
+  -u AtablesOnly
+  -p pwd
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc2/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 10}'
+  --path /svc2/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 10}'
+  --path /svc2/db/tbl/10
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc2/db/tbl/10
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/sp
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/fn
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+#
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 20}'
+  --path /svc/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 20}'
+  --path /svc/db/tbl/20
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc/db/tbl/20
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/sp
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/fn
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+
+## Read only on tables
+
+exec $MRS_CLIENT_ARGS
+  -a scram_post --auth-app 'any service auth' --session-type jwt
+  -t PUT
+  --path /svc2/authentication/login
+  -u AreadOnly
+  -p pwd
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc2/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 10}'
+  --path /svc2/db/tbl
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 10}'
+  --path /svc2/db/tbl/10
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc2/db/tbl/10
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/sp
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/fn
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+#
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 20}'
+  --path /svc/db/tbl
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 20}'
+  --path /svc/db/tbl/20
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc/db/tbl/20
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/sp
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/fn
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+## Insert only on tables
+
+exec $MRS_CLIENT_ARGS
+  -a scram_post --auth-app 'any service auth' --session-type jwt
+  -t PUT
+  --path /svc2/authentication/login
+  -u AinsertOnly
+  -p pwd
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc2/db/tbl
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 10}'
+  --path /svc2/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 10}'
+  --path /svc2/db/tbl/10
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc2/db/tbl/10
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/sp
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/fn
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+#
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/tbl
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 20}'
+  --path /svc/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 20}'
+  --path /svc/db/tbl/20
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc/db/tbl/20
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/sp
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/fn
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+## AnySvc on account thats not valid on svc2
+
+# returns 400 but test client doesn't like it
+#exec $MRS_CLIENT_ARGS
+#  -a scram_post --auth-app 'svc auth' --session-type jwt
+#  -t PUT
+#  --path /svc2/authentication/login
+#  -u BanySvc
+#  -p pwd
+#  --expected-status 400
+#  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -a scram_post --auth-app 'svc auth' --session-type jwt
+  -t PUT
+  --path /svc/authentication/login
+  -u BanySvc
+  -p pwd
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc2/db/tbl
+  --expected-status 401
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 10}'
+  --path /svc2/db/tbl
+  --expected-status 401
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 10}'
+  --path /svc2/db/tbl/10
+  --expected-status 401
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc2/db/tbl/10
+  --expected-status 401
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/sp
+  --expected-status 401
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/fn
+  --expected-status 401
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+#
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 30}'
+  --path /svc/db/tbl
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 30}'
+  --path /svc/db/tbl/30
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc/db/tbl/30
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/sp
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/fn
+  --expected-status 200
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+
+## account is for svc but has grants only for svc2.. login should pass but deny requests
+
+exec $MRS_CLIENT_ARGS
+  -a scram_post --auth-app 'svc auth' --session-type jwt
+  -t PUT
+  --path /svc/authentication/login
+  -u Bsvc2Only
+  -p pwd
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+# has grants on svc2 but the account is not for svc2
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc2/db/tbl
+  --expected-status 401
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 10}'
+  --path /svc2/db/tbl
+  --expected-status 401
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 10}'
+  --path /svc2/db/tbl/10
+  --expected-status 401
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc2/db/tbl/10
+  --expected-status 401
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/sp
+  --expected-status 401
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc2/db/fn
+  --expected-status 401
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+# account is for svc but does not have grants on svc
+exec $MRS_CLIENT_ARGS
+  -t GET
+  --path /svc/db/tbl
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{"id": 30}'
+  --path /svc/db/tbl
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t PUT --payload '{"id": 30}'
+  --path /svc/db/tbl/30
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t DELETE
+  --path /svc/db/tbl/30
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/sp
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST --payload '{}'
+  --path /svc/db/fn
+  --expected-status 403
+  --session-file $MYSQL_TMP_DIR/user_session.dat;
+
+
+# Cleanup
+--source ../include/mrs/cleanup.inc
+drop schema test_schema;
+remove_file $MYSQL_TMP_DIR/user_session.dat;

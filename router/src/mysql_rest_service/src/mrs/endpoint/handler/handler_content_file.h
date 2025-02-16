@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -29,6 +29,7 @@
 #include <string>
 #include <vector>
 
+#include "mrs/database/entry/db_service.h"
 #include "mrs/endpoint/content_file_endpoint.h"
 #include "mrs/endpoint/content_set_endpoint.h"
 #include "mrs/endpoint/handler/persistent/persistent_data_content_file.h"
@@ -45,9 +46,11 @@ class HandlerContentFile : public mrs::rest::Handler {
  public:
   using MySQLSession = Handler::SqlSession;
   using ContentFileEndpoint = mrs::endpoint::ContentFileEndpoint;
+  using DbService = mrs::database::entry::DbService;
   using QueryFactory = mrs::interface::QueryFactory;
   using ContentFilePtr = ContentFileEndpoint::ContentFilePtr;
   using ContentSetPtr = ContentSetEndpoint::ContentSetPtr;
+  using DbServicePtr = std::shared_ptr<DbService>;
 
  public:
   HandlerContentFile(
@@ -58,6 +61,9 @@ class HandlerContentFile : public mrs::rest::Handler {
   UniversalId get_service_id() const override;
   UniversalId get_db_object_id() const override;
   UniversalId get_schema_id() const override;
+  const std::string &get_service_path() const override;
+  const std::string &get_schema_path() const override;
+  const std::string &get_db_object_path() const override;
 
   uint32_t get_access_rights() const override;
   Authorization requires_authentication() const override;
@@ -74,6 +80,7 @@ class HandlerContentFile : public mrs::rest::Handler {
   std::weak_ptr<ContentFileEndpoint> endpoint_;
   ContentFilePtr entry_file_;
   ContentSetPtr entry_set_;
+  DbServicePtr entry_service_;
   std::string version_;
   std::shared_ptr<PersistentDataContentFile> persistent_data_content_file_;
 };

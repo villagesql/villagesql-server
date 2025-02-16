@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -71,10 +71,6 @@ HandlerFile::HandlerFile(Route *route,
 UniversalId HandlerFile::get_service_id() const {
   return route_->get_service_id();
 }
-
-UniversalId HandlerFile::get_db_object_id() const { return {}; }
-
-UniversalId HandlerFile::get_schema_id() const { return {}; }
 
 Handler::Authorization HandlerFile::requires_authentication() const {
   return route_->requires_authentication() ? Authorization::kRequires

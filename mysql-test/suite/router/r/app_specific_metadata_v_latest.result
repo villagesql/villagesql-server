@@ -22,7 +22,7 @@ Create a schema endpoint with metadata defined on the schema level
 # Registred DB_OBJECT at path: /svc_md/basic_schema_md/proc_int_no_md
 # Create a procedure endpoint with metadata defined on the object level
 # Registred DB_OBJECT at path: /svc_md/basic_schema_md/proc_int_md
-POST /svc_md/basic_schema_md/proc_int_md (payload-size:2)
+GET /svc_md/basic_schema_md/proc_int_md
 
 Check the _metadata on service level
 

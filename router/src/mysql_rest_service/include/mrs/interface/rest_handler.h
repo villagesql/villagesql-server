@@ -147,6 +147,9 @@ class RestHandler {
 
   virtual const std::string &get_url_host() const = 0;
   virtual const std::string &get_protocol() const = 0;
+  virtual const std::string &get_service_path() const = 0;
+  virtual const std::string &get_schema_path() const = 0;
+  virtual const std::string &get_db_object_path() const = 0;
   virtual UniversalId get_service_id() const = 0;
   virtual UniversalId get_db_object_id() const = 0;
   virtual UniversalId get_schema_id() const = 0;

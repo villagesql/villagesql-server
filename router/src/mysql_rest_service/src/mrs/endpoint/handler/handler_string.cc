@@ -53,13 +53,15 @@ const std::string k_slash{"/"};
 
 HandlerString::HandlerString(
     const Protocol protocol, const UniversalId &service_id,
-    bool requires_authentication, const std::string &path,
-    const std::string &file_name, const std::string &file_content,
-    const bool is_index, mrs::interface::AuthorizeManager *auth_manager)
+    const std::string &service_path, bool requires_authentication,
+    const std::string &path, const std::string &file_name,
+    const std::string &file_content, const bool is_index,
+    mrs::interface::AuthorizeManager *auth_manager)
     : Handler(protocol, "",
               regex_path_file(path, k_slash + file_name, is_index),
               std::string{}, auth_manager),
       service_id_{service_id},
+      service_path_{service_path},
       requires_authentication_{requires_authentication},
       path_{path},
       file_name_{file_name},
@@ -80,8 +82,22 @@ HandlerString::HandlerString(
 }
 
 UniversalId HandlerString::get_service_id() const { return service_id_; }
-UniversalId HandlerString::get_db_object_id() const { return {}; }
+
 UniversalId HandlerString::get_schema_id() const { return {}; }
+
+UniversalId HandlerString::get_db_object_id() const { return {}; }
+
+const std::string &HandlerString::get_service_path() const {
+  return service_path_;
+}
+
+const std::string &HandlerString::get_schema_path() const {
+  return empty_path();
+}
+
+const std::string &HandlerString::get_db_object_path() const {
+  return empty_path();
+}
 
 HandlerString::Authorization HandlerString::requires_authentication() const {
   return requires_authentication_ ? Authorization::kCheck

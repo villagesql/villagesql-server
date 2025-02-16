@@ -101,12 +101,20 @@ UniversalId HandlerDbServiceMetadata::get_service_id() const {
   return entry_->id;
 }
 
-UniversalId HandlerDbServiceMetadata::get_db_object_id() const {
-  return UniversalId{};
+UniversalId HandlerDbServiceMetadata::get_schema_id() const { return {}; }
+
+UniversalId HandlerDbServiceMetadata::get_db_object_id() const { return {}; }
+
+const std::string &HandlerDbServiceMetadata::get_service_path() const {
+  return entry_->url_context_root;
 }
 
-UniversalId HandlerDbServiceMetadata::get_schema_id() const {
-  return UniversalId{};
+const std::string &HandlerDbServiceMetadata::get_schema_path() const {
+  return empty_path();
+}
+
+const std::string &HandlerDbServiceMetadata::get_db_object_path() const {
+  return empty_path();
 }
 
 }  // namespace handler

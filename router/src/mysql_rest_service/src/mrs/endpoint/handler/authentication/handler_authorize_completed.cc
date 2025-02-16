@@ -136,11 +136,13 @@ const std::string k_page_content_default = R"HEREDOC(
 
 HandlerAuthorizeCompleted::HandlerAuthorizeCompleted(
     const Protocol protocol, const std::string &url_host,
-    const UniversalId service_id, const std::string &rest_path_matcher,
-    const std::string &options, const std::string &page_content_custom,
+    const UniversalId service_id, const std::string &service_path,
+    const std::string &rest_path_matcher, const std::string &options,
+    const std::string &page_content_custom,
     interface::AuthorizeManager *auth_manager)
     : Handler(protocol, url_host, {rest_path_matcher}, options, auth_manager),
       service_id_{service_id},
+      service_path_{service_path},
       page_content_custom_{page_content_custom} {}
 
 mrs::rest::Handler::Authorization
@@ -152,14 +154,22 @@ UniversalId HandlerAuthorizeCompleted::get_service_id() const {
   return service_id_;
 }
 
-UniversalId HandlerAuthorizeCompleted::get_db_object_id() const {
-  assert(0 && "is_object returns false, it is not allowed to call this method");
-  return {};
+UniversalId HandlerAuthorizeCompleted::get_schema_id() const { return {}; }
+
+UniversalId HandlerAuthorizeCompleted::get_db_object_id() const { return {}; }
+
+const std::string &HandlerAuthorizeCompleted::get_service_path() const {
+  return service_path_;
 }
 
-UniversalId HandlerAuthorizeCompleted::get_schema_id() const {
+const std::string &HandlerAuthorizeCompleted::get_schema_path() const {
   assert(0 && "is_object returns false, it is not allowed to call this method");
-  return {};
+  return empty_path();
+}
+
+const std::string &HandlerAuthorizeCompleted::get_db_object_path() const {
+  assert(0 && "is_object returns false, it is not allowed to call this method");
+  return empty_path();
 }
 
 uint32_t HandlerAuthorizeCompleted::get_access_rights() const {

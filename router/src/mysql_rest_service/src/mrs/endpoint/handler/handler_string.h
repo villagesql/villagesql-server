@@ -35,14 +35,17 @@ namespace handler {
 class HandlerString : public mrs::rest::Handler {
  public:
   HandlerString(const Protocol protocol, const UniversalId &service_id,
-                bool requires_authentication, const std::string &path,
-                const std::string &file_name, const std::string &file_content,
-                const bool is_index,
+                const std::string &service_path, bool requires_authentication,
+                const std::string &path, const std::string &file_name,
+                const std::string &file_content, const bool is_index,
                 mrs::interface::AuthorizeManager *auth_manager);
 
   UniversalId get_service_id() const override;
   UniversalId get_db_object_id() const override;
   UniversalId get_schema_id() const override;
+  const std::string &get_service_path() const override;
+  const std::string &get_schema_path() const override;
+  const std::string &get_db_object_path() const override;
 
   uint32_t get_access_rights() const override;
   Authorization requires_authentication() const override;
@@ -58,6 +61,7 @@ class HandlerString : public mrs::rest::Handler {
  private:
   mrs::interface::RestHandler::HttpResult::Type type_;
   UniversalId service_id_;
+  std::string service_path_;
   bool requires_authentication_;
   std::string path_;
   std::string file_name_;
