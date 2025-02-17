@@ -2733,15 +2733,21 @@ GET /svc/open-api-catalog/
                         "description": "blob"
                     },
                     "geo0": {
-                        "type": "string",
+                        "type": "object",
                         "description": "geometry"
                     },
                     "geo4326": {
-                        "type": "string",
+                        "type": "object",
                         "description": "geometry"
                     },
                     "vec": {
-                        "type": "string",
+                        "type": "array",
+                        "items": {
+                            "type": "number",
+                            "format": "float"
+                        },
+                        "minItems": "2048",
+                        "maxItems": "2048",
                         "description": "vector(2048)"
                     }
                 }

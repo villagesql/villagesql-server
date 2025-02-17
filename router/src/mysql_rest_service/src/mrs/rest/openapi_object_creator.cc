@@ -620,7 +620,26 @@ rapidjson::Value OpenApiCreator::add_type_constraints(
           allocator_);
     }
     property_details.AddMember("enum", values_array, allocator_);
+  } else if (helper::starts_with(datatype, "vector")) {
+    size_t start_pos = datatype.find('(');
+    size_t end_pos = datatype.find(')');
+    const std::string vec_len_str =
+        datatype.substr(start_pos + 1, end_pos - start_pos - 1);
 
+    property_details.AddMember("type", "array", allocator_);
+    property_details.AddMember("items",
+                               rapidjson::Value(rapidjson::kObjectType)
+                                   .AddMember("type", "number", allocator_)
+                                   .AddMember("format", "float", allocator_),
+                               allocator_);
+
+    property_details.AddMember("minItems", vec_len_str, allocator_);
+    property_details.AddMember("maxItems", vec_len_str, allocator_);
+  } else if (datatype == "geometry" || datatype == "geomcollection" ||
+             datatype == "point" || datatype == "linestring" ||
+             datatype == "polygon" || datatype == "multipoint" ||
+             datatype == "multilinestring" || datatype == "multipolygon") {
+    property_details.AddMember("type", "object", allocator_);
   } else {
     property_details.AddMember(
         "type",
