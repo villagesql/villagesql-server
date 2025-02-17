@@ -3514,7 +3514,7 @@ static void do_exec(struct st_command *command, bool run_in_background) {
   }
 
   std::uint32_t status = 0;
-  int const error = pclose(res_file);
+  int error = pclose(res_file);
 
   if (error != 0) {
 #ifdef _WIN32
