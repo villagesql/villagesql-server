@@ -1661,10 +1661,9 @@ void ExpandSingleFilterAccessPath(THD *thd, AccessPath *path, const JOIN *join,
   path->filter().materialize_subqueries = false;
 
   // Clear filter_predicates, but keep applied_sargable_join_predicates.
-  MutableOverflowBitset applied_sargable_join_predicates =
-      path->applied_sargable_join_predicates().Clone(thd->mem_root);
-  applied_sargable_join_predicates.ClearBits(0, num_where_predicates);
-  path->filter_predicates = std::move(applied_sargable_join_predicates);
+  path->applied_sargable_join_predicates() =
+      ClearFilterPredicates(path->applied_sargable_join_predicates(),
+                            num_where_predicates, thd->mem_root);
 }
 
 void ExpandFilterAccessPaths(THD *thd, AccessPath *path_arg, const JOIN *join,
@@ -1677,6 +1676,15 @@ void ExpandFilterAccessPaths(THD *thd, AccessPath *path_arg, const JOIN *join,
                         thd, path, sub_join, predicates, num_where_predicates);
                     return false;
                   });
+}
+
+MutableOverflowBitset ClearFilterPredicates(OverflowBitset predicates,
+                                            int num_where_predicates,
+                                            MEM_ROOT *mem_root) {
+  MutableOverflowBitset applied_sargable_join_predicates =
+      predicates.Clone(mem_root);
+  applied_sargable_join_predicates.ClearBits(0, num_where_predicates);
+  return applied_sargable_join_predicates;
 }
 
 table_map GetHashJoinTables(AccessPath *path) {

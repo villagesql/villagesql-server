@@ -3570,19 +3570,10 @@ void CostingReceiver::ProposeAccessPathForIndex(
     OverflowBitset subsumed_predicates,
     double force_num_output_rows_after_filter,
     const char *description_for_trace, AccessPath *path) {
-  MutableOverflowBitset applied_sargable_join_predicates_tmp =
-      applied_predicates.Clone(m_thd->mem_root);
-  applied_sargable_join_predicates_tmp.ClearBits(0,
-                                                 m_graph->num_where_predicates);
-  OverflowBitset applied_sargable_join_predicates =
-      std::move(applied_sargable_join_predicates_tmp);
-
-  MutableOverflowBitset subsumed_sargable_join_predicates_tmp =
-      subsumed_predicates.Clone(m_thd->mem_root);
-  subsumed_sargable_join_predicates_tmp.ClearBits(
-      0, m_graph->num_where_predicates);
-  OverflowBitset subsumed_sargable_join_predicates =
-      std::move(subsumed_sargable_join_predicates_tmp);
+  OverflowBitset applied_sargable_join_predicates = ClearFilterPredicates(
+      applied_predicates, m_graph->num_where_predicates, m_thd->mem_root);
+  OverflowBitset subsumed_sargable_join_predicates = ClearFilterPredicates(
+      subsumed_predicates, m_graph->num_where_predicates, m_thd->mem_root);
   for (bool materialize_subqueries : {false, true}) {
     FunctionalDependencySet new_fd_set;
     ApplyPredicatesForBaseTable(node_idx, applied_predicates,
@@ -4795,12 +4786,9 @@ bool CostingReceiver::FoundSubgraphPair(NodeMap left, NodeMap right,
       // the right-hand ordering properties through joins.
       AccessPath *zero_path = NewZeroRowsAccessPath(
           m_thd, right_path, "Join condition rejects all rows");
-      MutableOverflowBitset applied_sargable_join_predicates =
-          right_path->applied_sargable_join_predicates().Clone(m_thd->mem_root);
-      applied_sargable_join_predicates.ClearBits(0,
-                                                 m_graph->num_where_predicates);
-      zero_path->filter_predicates =
-          std::move(applied_sargable_join_predicates);
+      zero_path->applied_sargable_join_predicates() =
+          ClearFilterPredicates(right_path->applied_sargable_join_predicates(),
+                                m_graph->num_where_predicates, m_thd->mem_root);
       zero_path->delayed_predicates = right_path->delayed_predicates;
       right_path = zero_path;
     }
@@ -4907,13 +4895,9 @@ bool CostingReceiver::FoundSubgraphPair(NodeMap left, NodeMap right,
       AccessPath *first_candidate = it->second.paths.front();
       AccessPath *zero_path =
           NewZeroRowsAccessPath(m_thd, first_candidate, "impossible WHERE");
-      MutableOverflowBitset applied_sargable_join_predicates =
-          first_candidate->applied_sargable_join_predicates().Clone(
-              m_thd->mem_root);
-      applied_sargable_join_predicates.ClearBits(0,
-                                                 m_graph->num_where_predicates);
-      zero_path->filter_predicates =
-          std::move(applied_sargable_join_predicates);
+      zero_path->applied_sargable_join_predicates() = ClearFilterPredicates(
+          first_candidate->applied_sargable_join_predicates(),
+          m_graph->num_where_predicates, m_thd->mem_root);
       zero_path->delayed_predicates = first_candidate->delayed_predicates;
       zero_path->ordering_state = first_candidate->ordering_state;
       ProposeAccessPathWithOrderings(
@@ -6661,21 +6645,11 @@ AccessPath *CostingReceiver::ProposeAccessPath(
 }
 
 AccessPath MakeSortPathWithoutFilesort(THD *thd, AccessPath *child,
-                                       ORDER *order, int ordering_state,
-                                       int num_where_predicates) {
+                                       ORDER *order, int ordering_state) {
   assert(order != nullptr);
   AccessPath sort_path;
   sort_path.type = AccessPath::SORT;
   sort_path.ordering_state = ordering_state;
-  if (!child->applied_sargable_join_predicates().is_inline() ||
-      !IsEmpty(child->applied_sargable_join_predicates())) {  // Will be empty
-                                                              // after grouping.
-    MutableOverflowBitset applied_sargable_join_predicates =
-        child->applied_sargable_join_predicates().Clone(thd->mem_root);
-    applied_sargable_join_predicates.ClearBits(0, num_where_predicates);
-    sort_path.applied_sargable_join_predicates() =
-        std::move(applied_sargable_join_predicates);
-  }
   sort_path.delayed_predicates = child->delayed_predicates;
   sort_path.sort().child = child;
   sort_path.sort().filesort = nullptr;
@@ -6781,9 +6755,13 @@ void CostingReceiver::ProposeAccessPathWithOrderings(
       continue;
     }
 
-    AccessPath sort_path =
-        MakeSortPathWithoutFilesort(m_thd, path, sort_ahead_ordering.order,
-                                    new_state, m_graph->num_where_predicates);
+    AccessPath sort_path = MakeSortPathWithoutFilesort(
+        m_thd, path, sort_ahead_ordering.order, new_state);
+
+    sort_path.applied_sargable_join_predicates() =
+        ClearFilterPredicates(path->applied_sargable_join_predicates(),
+                              m_graph->num_where_predicates, m_thd->mem_root);
+    sort_path.delayed_predicates = path->delayed_predicates;
 
     char buf[256];
     if (TraceStarted(m_thd)) {
@@ -8263,12 +8241,11 @@ AccessPath *MakeSortPathAndApplyWindows(
     THD *thd, JOIN *join, AccessPath *root_path, int ordering_idx, ORDER *order,
     const LogicalOrderings &orderings,
     Bounds_checked_array<bool> windows_this_iteration,
-    FunctionalDependencySet fd_set, int num_where_predicates,
-    bool need_rowid_for_window, int single_window_idx,
-    Bounds_checked_array<bool> finished_windows, int *num_windows_left) {
-  AccessPath sort_path =
-      MakeSortPathWithoutFilesort(thd, root_path, order,
-                                  /*ordering_state=*/0, num_where_predicates);
+    FunctionalDependencySet fd_set, bool need_rowid_for_window,
+    int single_window_idx, Bounds_checked_array<bool> finished_windows,
+    int *num_windows_left) {
+  AccessPath sort_path = MakeSortPathWithoutFilesort(thd, root_path, order,
+                                                     /*ordering_state=*/0);
   sort_path.ordering_state =
       orderings.ApplyFDs(orderings.SetOrder(ordering_idx), fd_set);
   root_path = new (thd->mem_root) AccessPath(sort_path);
@@ -8370,8 +8347,8 @@ static AccessPathArray ApplyWindowFunctions(
     bool aggregation_is_unordered, int order_by_ordering_idx,
     int distinct_ordering_idx, const JoinHypergraph &graph,
     const Mem_root_array<SortAheadOrdering> &sort_ahead_orderings,
-    Query_block *query_block, int num_where_predicates, bool need_rowid,
-    AccessPathArray root_candidates) {
+    Query_block *query_block, bool need_rowid,
+    const AccessPathArray &root_candidates) {
   JOIN *join = query_block->join;
 
   // Figure out if windows need row IDs or not; we won't create
@@ -8482,9 +8459,8 @@ static AccessPathArray ApplyWindowFunctions(
           thd, join, root_path,
           sort_ahead_orderings[sort_ahead_ordering_idx].ordering_idx,
           sort_ahead_orderings[sort_ahead_ordering_idx].order, orderings,
-          windows_this_iteration, fd_set, num_where_predicates,
-          need_rowid_for_window, /*single_window_idx*/ -1, finished_windows,
-          &num_windows_left);
+          windows_this_iteration, fd_set, need_rowid_for_window,
+          /*single_window_idx*/ -1, finished_windows, &num_windows_left);
     }
     // The remaining windows (if any) have orderings which are not present in
     // the interesting orders bitmap, e.g. when the number of orders in the
@@ -8500,9 +8476,8 @@ static AccessPathArray ApplyWindowFunctions(
       root_path = MakeSortPathAndApplyWindows(
           thd, join, root_path, join->m_windows[window_idx]->m_ordering_idx,
           clone(thd, join->m_windows[window_idx]->sorting_order(thd)),
-          orderings, windows_this_iteration, fd_set, num_where_predicates,
-          need_rowid_for_window, window_idx, finished_windows,
-          &num_windows_left);
+          orderings, windows_this_iteration, fd_set, need_rowid_for_window,
+          window_idx, finished_windows, &num_windows_left);
     }
 
     assert(num_windows_left == 0);
@@ -9351,8 +9326,7 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
     root_candidates = ApplyWindowFunctions(
         thd, receiver, orderings, fd_set, aggregation_is_unordered,
         order_by_ordering_idx, distinct_ordering_idx, graph,
-        sort_ahead_orderings, query_block, graph.num_where_predicates,
-        need_rowid, std::move(root_candidates));
+        sort_ahead_orderings, query_block, need_rowid, root_candidates);
   }
 
   // A filter node has to be added for window functions.
