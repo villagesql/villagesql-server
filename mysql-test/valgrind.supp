@@ -2774,3 +2774,14 @@
    fun:_ZN4absl12lts_2023080212log_internal10LogMessageD1Ev
    ...
 }
+
+{
+   mysqltest_do_shutdown_timeout
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:allocate
+   ...
+   fun:_ZL18do_shutdown_serverP10st_command
+   fun:main
+}
