@@ -2744,3 +2744,14 @@
    fun:_dl_catch_exception
    ...
 }
+
+{
+   mysqltest_do_shutdown_timeout
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   ...
+   fun:allocate
+   ...
+   fun:_ZL18do_shutdown_serverP10st_command
+   fun:main
+}
