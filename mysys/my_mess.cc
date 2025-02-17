@@ -70,7 +70,7 @@ void my_message_stderr(uint error [[maybe_unused]], const char *str,
       if (is_directory_separator(*s)) r = s + 1;
       s++;
     }
-    size_t const l = s - r;
+    size_t l = s - r;
 
 #ifdef _WIN32
     if ((l > 4) && !strcmp(&r[l - 4], ".exe"))
