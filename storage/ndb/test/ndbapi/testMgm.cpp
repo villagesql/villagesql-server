@@ -3302,6 +3302,55 @@ static int runStartNodes(NDBT_Context *ctx, NDBT_Step *step) {
   return NDBT_OK;
 }
 
+static int runReportCommandsUntilStopped(NDBT_Context *ctx, NDBT_Step *step) {
+  constexpr int numEventTypes = 3;
+  Ndb_logevent_type types[numEventTypes] = {
+      NDB_LE_BackupStatus, NDB_LE_MemoryUsage, NDB_LE_SavedEvent};
+  NdbMgmd mgmd;
+  struct ndb_mgm_events *events;
+  mgmd.use_tls(opt_tls_search_path, opt_mgm_tls);
+  if (!mgmd.connect()) return NDBT_FAILED;
+  int result = NDBT_OK;
+  while (!ctx->isTestStopped() && result == NDBT_OK) {
+    for (int i = 0; i < numEventTypes; i++) {
+      events = ndb_mgm_dump_events(mgmd.handle(), types[i], 0, nullptr);
+      if (!events) {
+        ndbout_c("Failed to get events");
+        result = NDBT_FAILED;
+        continue;
+      }
+      free(events);
+    }
+  }
+  return result;
+}
+static int restartDataNode(NDBT_Context *ctx, NDBT_Step *step) {
+  NdbRestarter restarter;
+  int result = NDBT_FAILED;
+  const int nodeId = restarter.getNode(NdbRestarter::NS_RANDOM);
+  ndbout_c("Restarting node %u", nodeId);
+  do {
+    if (restarter.restartOneDbNode(nodeId,
+                                   false,  // initial
+                                   true)   // nostart
+        != NDBT_OK) {
+      ndbout_c("Failed to restart node %u", nodeId);
+      break;
+    }
+    if (restarter.waitNodesNoStart(&nodeId, 1) != NDBT_OK) {
+      ndbout_c("Node failed to enter NOT STARTED state");
+      break;
+    }
+    if ((restarter.startNodes(&nodeId, 1) != NDBT_OK) ||
+        (restarter.waitNodesStarted(&nodeId, 1) != NDBT_OK)) {
+      ndbout_c("Node failed to start");
+      break;
+    }
+    result = NDBT_OK;
+  } while (0);
+  ctx->stopTest();
+  return result;
+}
 NDBT_TESTSUITE(testMgm);
 DRIVER(DummyDriver); /* turn off use of NdbApi */
 TESTCASE("ApiSessionFailure", "Test failures in MGMAPI session") {
@@ -3438,6 +3487,11 @@ TESTCASE("TestConcurrentGracefulStop",
   STEPS(runGracefulStopRestartNodesInNG0, 4);
   VERIFIER(runCheckOutcome);
   FINALIZER(runStartNodes);
+}
+TESTCASE("TestReportCommandsRestart",
+         "Test report commands work over node restarts") {
+  STEP(runReportCommandsUntilStopped);
+  STEP(restartDataNode);
 }
 
 NDBT_TESTSUITE_END(testMgm)

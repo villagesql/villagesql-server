@@ -16021,6 +16021,8 @@ bool Backup::get_backup_record(BackupRecordPtr &ptr) {
    * return true if a backup record is found and false otherwise.
    */
   c_backups.first(ptr);
+  if (ptr.i == RNIL) return false;
+
   if (ptr.p->is_lcp()) {
     ptr.i = RNIL;
     ptr.p = 0;
