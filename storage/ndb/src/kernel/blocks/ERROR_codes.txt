@@ -21,15 +21,15 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-Next QMGR 950
+Next QMGR 962
 Next NDBCNTR 1030
 Next NDBFS 2002
 Next DBACC 3007
 Next DBTUP 4040
 Next DBLQH 5113
-Next DBDICT 6227
+Next DBDICT 6228
 Next DBDIH 7251
-Next DBTC 8125
+Next DBTC 8127
 Next TRPMAN 9007
 Next CMVMI 9993              Note: CMVMI grows downwards
 Next BACKUP 10057

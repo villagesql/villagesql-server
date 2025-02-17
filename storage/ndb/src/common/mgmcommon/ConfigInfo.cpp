@@ -1385,6 +1385,13 @@ const ConfigInfo::ParamInfo ConfigInfo::m_ParamInfo[] = {
      "0",  // "256K",
      "0", STR_VALUE(MAX_INT_RNIL)},
 
+    {CFG_DB_API_FAILURE_HANDLING_TIMEOUT, "ApiFailureHandlingTimeout", DB_TOKEN,
+     "Maximum allowed duration of Api failure handling before escalating "
+     "handling.  0 implies no time limit, minimum usable value is 10.",
+     ConfigInfo::CI_USED, false, ConfigInfo::CI_INT,
+     "600",  // 10 minutes
+     "0", STR_VALUE(MAX_INT_RNIL)},
+
     /***************************************************************************
      * API
      ***************************************************************************/

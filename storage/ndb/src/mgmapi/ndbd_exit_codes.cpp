@@ -178,6 +178,11 @@ static const ErrStruct errArray[] = {
     {NDBD_EXIT_LCP_SCAN_WATCHDOG_FAIL, XIE,
      "LCP fragment scan watchdog detected a problem.  Please report a bug."},
 
+    /* QMGR */
+    {NDBD_EXIT_API_FAIL_HANDLING_TIMEOUT, XIE,
+     "Timeout handling Api failure.  Please check ApiFailureHandlingTimeout "
+     "config or report a bug."},
+
     /* Ndbfs error messages */
     /* Most codes will have additional info, such as OS error code */
     {NDBD_EXIT_AFS_NOPATH, XIE, "No file system path"},

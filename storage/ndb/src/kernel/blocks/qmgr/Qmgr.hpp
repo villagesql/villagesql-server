@@ -571,6 +571,7 @@ class Qmgr : public SimulatedBlock {
   Uint32 c_restartFailureTimeout;
   Uint32 c_restartNoNodegroupTimeout;
   NDB_TICKS c_start_election_time;
+  Uint32 c_apiFailureTimeoutSecs;
 
   Uint16 creadyDistCom;
 

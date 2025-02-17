@@ -4990,6 +4990,15 @@ void Dbdict::execAPI_FAILREQ(Signal *signal) {
   Uint32 failedApiNode = signal->theData[0];
   BlockReference retRef = signal->theData[1];
 
+  if (ERROR_INSERTED(6227)) {
+    jam();
+    g_eventLogger->info("Delaying failure handling of node %u for 5 seconds",
+                        failedApiNode);
+    sendSignalWithDelay(reference(), GSN_API_FAILREQ, signal, 5000,
+                        signal->getLength());
+    return;
+  }
+
   ndbrequire(retRef == QMGR_REF);  // As callback hard-codes QMGR_REF
 #if 0
   Uint32 userNode = refToNode(c_connRecord.userBlockRef);
