@@ -800,7 +800,10 @@ rapidjson::Value OpenApiCreator::create_get_by_key_method() const {
   std::string summary{"Get " + entry_->name + " contents"};
   get.AddMember("summary", rapidjson::Value(summary.c_str(), allocator_),
                 allocator_)
-      .AddMember("parameters", get_parameters, allocator_)
+      .AddMember("parameters",
+                 get_parameters.PushBack(
+                     get_filter_parameter(/*is_required*/ false), allocator_),
+                 allocator_)
       .AddMember("tags", get_tag(), allocator_)
       .AddMember("responses", responses, allocator_);
 

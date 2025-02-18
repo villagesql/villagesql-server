@@ -165,6 +165,15 @@ GET /svc/different_types_as_pk/open-api-catalog/t_decimal
                         "schema": {
                             "type": "number"
                         }
+                    },
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "description": "filter object",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "tags": [
@@ -388,6 +397,15 @@ GET /svc/different_types_as_pk/open-api-catalog/t_set
                         "in": "path",
                         "name": "id",
                         "required": true,
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "description": "filter object",
+                        "required": false,
                         "schema": {
                             "type": "string"
                         }
@@ -621,6 +639,15 @@ GET /svc/different_types_as_pk/open-api-catalog/t_timestamp
                         "schema": {
                             "type": "string"
                         }
+                    },
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "description": "filter object",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "tags": [
@@ -845,6 +872,15 @@ GET /svc/different_types_as_pk/open-api-catalog/t_bin
                         "required": true,
                         "schema": {
                             "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "description": "filter object",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 ],
@@ -1102,6 +1138,15 @@ GET /svc/different_types/open-api-catalog/all_types
                         "required": true,
                         "schema": {
                             "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "description": "filter object",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 ],
@@ -1439,6 +1484,15 @@ GET /svc/crud_operations/open-api-catalog/t1
                         "schema": {
                             "type": "integer"
                         }
+                    },
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "description": "filter object",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
+                        }
                     }
                 ],
                 "tags": [
@@ -1757,6 +1811,15 @@ GET /svc/crud_operations/open-api-catalog/t3
                         "required": true,
                         "schema": {
                             "type": "integer"
+                        }
+                    },
+                    {
+                        "in": "query",
+                        "name": "q",
+                        "description": "filter object",
+                        "required": false,
+                        "schema": {
+                            "type": "string"
                         }
                     }
                 ],
