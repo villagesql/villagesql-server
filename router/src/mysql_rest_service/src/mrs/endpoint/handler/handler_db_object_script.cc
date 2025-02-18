@@ -247,7 +247,6 @@ HttpResult HandlerDbObjectScript::handle_script(
     auto entry =
         response_cache_->lookup_routine(get_endpoint_url(endpoint_), body);
     if (entry) {
-      Counter<kEntityCounterRestReturnedItems>::increment(entry->items);
       return cached_response(entry);
     }
   }
@@ -322,7 +321,7 @@ HttpResult HandlerDbObjectScript::handle_script(
 
     if (response_cache_) {
       auto entry = response_cache_->create_routine_entry(
-          get_endpoint_url(endpoint_), body, result, 0,
+          get_endpoint_url(endpoint_), body, result,
           entry_->media_type.value_or(""));
 
       if (entry) {
