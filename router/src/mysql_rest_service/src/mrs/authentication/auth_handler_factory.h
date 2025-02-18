@@ -30,6 +30,7 @@
 #include "mrs/http/session_manager.h"
 #include "mrs/interface/auth_handler_factory.h"
 #include "mrs/interface/authorize_handler.h"
+#include "mrs/interface/query_factory.h"
 
 namespace mrs {
 namespace authentication {
@@ -37,8 +38,11 @@ namespace authentication {
 class AuthHandlerFactory : public interface::AuthHandlerFactory {
  public:
   using MysqlCacheManager = collector::MysqlCacheManager;
+  using QueryFactory = mrs::interface::QueryFactory;
 
  public:
+  AuthHandlerFactory(QueryFactory *qf);
+
   AuthHandlerPtr create_basic_auth_handler(
       AuthorizeHandlerCallbakcs *cb, const AuthApp &entry,
       MysqlCacheManager *cache_manager) const override;
@@ -51,6 +55,9 @@ class AuthHandlerFactory : public interface::AuthHandlerFactory {
   AuthHandlerPtr create_scram_auth_handler(
       AuthorizeHandlerCallbakcs *cb, const AuthApp &entry,
       const std::string &rd) const override;
+
+ private:
+  QueryFactory *qf_;
 };
 
 }  // namespace authentication

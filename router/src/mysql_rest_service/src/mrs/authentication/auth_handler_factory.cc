@@ -36,39 +36,41 @@ namespace authentication {
 
 using AuthHandlerPtr = AuthHandlerFactory::AuthHandlerPtr;
 
+AuthHandlerFactory::AuthHandlerFactory(QueryFactory *qf) : qf_{qf} {}
+
 AuthHandlerPtr AuthHandlerFactory::create_basic_auth_handler(
     AuthorizeHandlerCallbakcs *cb, const AuthApp &entry,
     MysqlCacheManager *cache_manager) const {
   using Obj = TrackAuthorizeHandler<AuthorizeHandlerCallbakcs, MysqlHandler>;
-  return std::make_shared<Obj>(cb, entry, cache_manager);
+  return std::make_shared<Obj>(cb, entry, cache_manager, qf_);
 }
 
 AuthHandlerPtr AuthHandlerFactory::create_facebook_auth_handler(
     AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const {
   using Obj =
       TrackAuthorizeHandler<AuthorizeHandlerCallbakcs, Oauth2FacebookHandler>;
-  return std::make_shared<Obj>(cb, entry);
+  return std::make_shared<Obj>(cb, entry, qf_);
 }
 
 AuthHandlerPtr AuthHandlerFactory::create_google_auth_handler(
     AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const {
   using Obj =
       TrackAuthorizeHandler<AuthorizeHandlerCallbakcs, Oauth2GoogleHandler>;
-  return std::make_shared<Obj>(cb, entry);
+  return std::make_shared<Obj>(cb, entry, qf_);
 }
 
 AuthHandlerPtr AuthHandlerFactory::create_oidc_auth_handler(
     AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const {
   using Obj =
       TrackAuthorizeHandler<AuthorizeHandlerCallbakcs, Oauth2OidcHandler>;
-  return std::make_shared<Obj>(cb, entry);
+  return std::make_shared<Obj>(cb, entry, qf_);
 }
 
 AuthHandlerPtr AuthHandlerFactory::create_scram_auth_handler(
     AuthorizeHandlerCallbakcs *cb, const AuthApp &entry,
     const std::string &rd) const {
   using Obj = TrackAuthorizeHandler<AuthorizeHandlerCallbakcs, ScramHandler>;
-  return std::make_shared<Obj>(cb, entry, rd);
+  return std::make_shared<Obj>(cb, entry, rd, qf_);
 }
 
 }  // namespace authentication

@@ -119,7 +119,11 @@ class MySQLRow {
 
     out_field->reset();
 
-    if (in_value) converter(out_field, in_value);
+    if (in_value) {
+      FieldType v;
+      converter(&v, in_value);
+      *out_field = v;
+    }
   }
 
   template <typename FieldType, typename Converter>

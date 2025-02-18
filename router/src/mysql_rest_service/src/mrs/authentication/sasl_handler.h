@@ -37,6 +37,7 @@
 #include "mrs/database/entry/auth_app.h"
 #include "mrs/interface/authorize_handler.h"
 #include "mrs/interface/http_result.h"
+#include "mrs/interface/query_factory.h"
 #include "mrs/users/user_manager.h"
 
 namespace mrs {
@@ -56,6 +57,7 @@ class SaslHandler : public interface::AuthorizeHandler {
   using VariantPointer = helper::VariantPointer;
   using UrlParameters = helper::http::Url::Parameters;
   using SessionData = http::SessionManager::Session::SessionData;
+  using QueryFactory = mrs::interface::QueryFactory;
 
  public:
   enum AuthenticationState {
@@ -75,7 +77,7 @@ class SaslHandler : public interface::AuthorizeHandler {
   };
 
  public:
-  SaslHandler(const AuthApp &entry);
+  SaslHandler(const AuthApp &entry, QueryFactory *qf);
 
   const AuthApp &get_entry() const override;
   std::set<UniversalId> get_service_ids() const override;
@@ -124,7 +126,7 @@ class SaslHandler : public interface::AuthorizeHandler {
  protected:
   SaslData get_authorize_data(RequestContext &ctxt);
   AuthApp entry_;
-  UserManager um_{entry_.limit_to_registered_users, entry_.default_role_id};
+  UserManager um_;
 };
 
 }  // namespace authentication

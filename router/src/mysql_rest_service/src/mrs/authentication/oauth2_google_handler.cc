@@ -50,8 +50,8 @@ const std::string k_oauth_scope =
     "https://www.googleapis.com/auth/userinfo.email "
     "https://www.googleapis.com/auth/userinfo.profile";
 
-Oauth2GoogleHandler::Oauth2GoogleHandler(const AuthApp &entry)
-    : Oauth2Handler{entry} {
+Oauth2GoogleHandler::Oauth2GoogleHandler(const AuthApp &entry, QueryFactory *qf)
+    : Oauth2Handler{entry, qf} {
   log_debug("Oauth2GoogleHandler for service %s", to_string(entry_).c_str());
 }
 

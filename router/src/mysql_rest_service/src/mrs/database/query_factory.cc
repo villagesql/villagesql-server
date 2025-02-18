@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -56,7 +56,7 @@ std::shared_ptr<QueryAuditLogEntries> QueryFactory::create_query_audit_log() {
 
 std::shared_ptr<QueryEntriesAuthPrivileges>
 QueryFactory::create_query_auth_privileges() {
-  return std::make_shared<QueryEntriesAuthPrivileges>();
+  return std::make_shared<v_2_3::QueryEntriesAuthPrivileges>();
 }
 
 std::shared_ptr<QueryRestSPMedia> QueryFactory::create_query_sp_media() {
@@ -74,7 +74,7 @@ QueryFactory::create_query_content_file() {
 }
 
 std::shared_ptr<QueryEntryAuthUser> QueryFactory::create_query_auth_user() {
-  return std::make_shared<QueryEntryAuthUser>();
+  return std::make_shared<QueryEntryAuthUser>(std::make_shared<QueryFactory>());
 }
 
 std::shared_ptr<QueryEntryObjectBase> QueryFactory::create_query_object() {
@@ -112,7 +112,24 @@ std::shared_ptr<QueryEntryObjectBase> QueryFactory::create_query_object() {
   return std::make_shared<QueryEntryObject>();
 }
 
+std::shared_ptr<QueryEntryAuthUser> QueryFactory::create_query_auth_user() {
+  return std::make_shared<QueryEntryAuthUser>(std::make_shared<QueryFactory>());
+}
+
 }  // namespace v3
+
+namespace v4 {
+
+std::shared_ptr<mrs::database::QueryEntriesAuthPrivileges>
+QueryFactory::create_query_auth_privileges() {
+  return std::make_shared<v4::QueryEntriesAuthPrivileges>();
+}
+
+std::shared_ptr<QueryEntryAuthUser> QueryFactory::create_query_auth_user() {
+  return std::make_shared<QueryEntryAuthUser>(std::make_shared<QueryFactory>());
+}
+
+}  // namespace v4
 
 }  // namespace database
 }  // namespace mrs

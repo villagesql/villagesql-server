@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +26,7 @@
 #define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_FACTORY_PROXY_H_
 
 #include <memory>
+#include <shared_mutex>
 
 #include "mrs/database/query_factory.h"
 #include "mrs/interface/query_monitor_factory.h"
@@ -41,59 +42,75 @@ class QueryFactoryProxy : public mrs::interface::QueryFactory {
  public:
   QueryFactoryProxy(QueryFactoryPtr subject) : subject_{subject} {}
 
-  void change_subject(QueryFactoryPtr subject) { subject_ = subject; }
+  void change_subject(QueryFactoryPtr subject) {
+    auto lock = std::unique_lock(mutex_);
+    subject_ = subject;
+  }
 
   std::shared_ptr<QueryAuditLogEntries> create_query_audit_log() override {
+    auto lock = std::shared_lock(mutex_);
     return subject_->create_query_audit_log();
   }
 
   std::shared_ptr<QueryEntriesAuthPrivileges> create_query_auth_privileges()
       override {
+    auto lock = std::shared_lock(mutex_);
     return subject_->create_query_auth_privileges();
   }
 
   std::shared_ptr<QueryEntryContentFile> create_query_content_file() override {
+    auto lock = std::shared_lock(mutex_);
     return subject_->create_query_content_file();
   }
 
   std::shared_ptr<QueryRestSPMedia> create_query_sp_media() override {
+    auto lock = std::shared_lock(mutex_);
     return subject_->create_query_sp_media();
   }
 
   std::shared_ptr<QueryEntryGroupRowSecurity> create_query_group_row_security()
       override {
+    auto lock = std::shared_lock(mutex_);
     return subject_->create_query_group_row_security();
   }
   std::shared_ptr<QueryEntryAuthUser> create_query_auth_user() override {
+    auto lock = std::shared_lock(mutex_);
     return subject_->create_query_auth_user();
   }
 
   std::shared_ptr<QueryEntryObject> create_query_object() override {
+    auto lock = std::shared_lock(mutex_);
     return subject_->create_query_object();
   }
 
   std::shared_ptr<QueryUserGroups> create_query_user_groups() override {
+    auto lock = std::shared_lock(mutex_);
     return subject_->create_query_user_groups();
   }
 
   std::shared_ptr<QueryRestTable> create_query_table() override {
+    auto lock = std::shared_lock(mutex_);
     return subject_->create_query_table();
   }
 
   std::shared_ptr<QueryRestTableSingleRow> create_query_table_single_row(
       bool encode_bigints_as_string) override {
+    auto lock = std::shared_lock(mutex_);
     return subject_->create_query_table_single_row(encode_bigints_as_string);
   }
 
   std::shared_ptr<QueryRestSP> create_query_sp() override {
+    auto lock = std::shared_lock(mutex_);
     return subject_->create_query_sp();
   }
 
   std::shared_ptr<database::QueryEntryFields> create_query_fields() override {
+    auto lock = std::shared_lock(mutex_);
     return subject_->create_query_fields();
   }
 
  private:
+  std::shared_mutex mutex_;
   QueryFactoryPtr subject_;
 };
 

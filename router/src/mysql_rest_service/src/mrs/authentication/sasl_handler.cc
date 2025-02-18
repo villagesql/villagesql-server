@@ -73,7 +73,9 @@ using AuthenticationState = SaslHandler::AuthenticationState;
 using SaslData = SaslHandler::SaslData;
 using Url = helper::http::Url;
 
-SaslHandler::SaslHandler(const AuthApp &entry) : entry_{entry} {
+SaslHandler::SaslHandler(const AuthApp &entry, QueryFactory *qf)
+    : entry_{entry},
+      um_{entry_.limit_to_registered_users, entry_.default_role_id, qf} {
   log_debug("SaslHandler for service %s", to_string(entry_).c_str());
 }
 

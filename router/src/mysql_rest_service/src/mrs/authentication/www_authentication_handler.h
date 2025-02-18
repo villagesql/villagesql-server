@@ -30,6 +30,7 @@
 #include <optional>
 
 #include "mrs/database/entry/auth_app.h"
+#include "mrs/interface/query_factory.h"
 #include "mrs/users/user_manager.h"
 
 #include "mysql/harness/string_utils.h"
@@ -41,10 +42,11 @@ class WwwAuthenticationHandler : public interface::AuthorizeHandler {
  protected:
   using SessionManager = mrs::http::SessionManager;
   using UserManager = mrs::users::UserManager;
+  using QueryFactory = mrs::interface::QueryFactory;
   using Session = mrs::http::SessionManager::Session;
 
   AuthApp entry_;
-  UserManager um_{entry_.limit_to_registered_users, entry_.default_role_id};
+  UserManager um_;
 
   struct Credentials {
     std::string user;
@@ -72,7 +74,9 @@ class WwwAuthenticationHandler : public interface::AuthorizeHandler {
   const AuthApp &get_entry() const override;
 
  public:
-  WwwAuthenticationHandler(const AuthApp &entry) : entry_{entry} {}
+  WwwAuthenticationHandler(const AuthApp &entry, QueryFactory *qf)
+      : entry_{entry},
+        um_{entry_.limit_to_registered_users, entry_.default_role_id, qf} {}
   UserManager &get_user_manager() override { return um_; }
 
   constexpr static char kAuthorization[] = "Authorization";

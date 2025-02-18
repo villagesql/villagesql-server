@@ -27,7 +27,7 @@ if ($mrs_schema_version == 2)
   INSERT INTO `object` (`id`,`db_object_id`,`name`,`kind`,`position`,`sdk_options`,`comments`) VALUES (2,1,'MyServiceMrsNotesNote','RESULT',0,NULL,NULL);
 }
 
-if ($mrs_schema_version == 3)
+if ($mrs_schema_version > 2)
 {
   INSERT INTO `db_object` (`id`,`db_schema_id`,`name`,`request_path`,`enabled`,`object_type`,`crud_operations`,`format`,`items_per_page`,`media_type`,`auto_detect_media_type`,`requires_auth`,`auth_stored_procedure`, `options`,`details`,`comments`) VALUES (1,@schema_id,'note','/note',1,'TABLE','CREATE,READ,UPDATE,DELETE','FEED',NULL,NULL,0,1,'',NULL,NULL,'');
   INSERT INTO `object` (`id`,`db_object_id`,`name`,`kind`,`position`,`sdk_options`,`comments`, `row_ownership_field_id`,`options`) VALUES (2,1,'MyServiceMrsNotesNote','RESULT',0,NULL,NULL, 9, '{"dataMappingViewInsert":true, "dataMappingViewUpdate":true, "dataMappingViewDelete":true}');

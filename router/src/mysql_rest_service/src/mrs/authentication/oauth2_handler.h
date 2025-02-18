@@ -37,6 +37,7 @@
 #include "http/base/request.h"
 #include "mrs/database/entry/auth_app.h"
 #include "mrs/interface/authorize_handler.h"
+#include "mrs/interface/query_factory.h"
 #include "mrs/users/user_manager.h"
 
 namespace mrs {
@@ -56,6 +57,7 @@ class Oauth2Handler : public interface::AuthorizeHandler {
   using SessionManager = ::mrs::http::SessionManager;
   using VariantPointer = ::helper::VariantPointer;
   using Url = ::helper::http::Url;
+  using QueryFactory = mrs::interface::QueryFactory;
 
  public:
   class RequestHandler {
@@ -81,7 +83,9 @@ class Oauth2Handler : public interface::AuthorizeHandler {
   };
 
  public:
-  Oauth2Handler(const AuthApp &entry) : entry_{entry} {}
+  Oauth2Handler(const AuthApp &entry, QueryFactory *qf)
+      : entry_{entry},
+        um_{entry_.limit_to_registered_users, entry_.default_role_id, qf} {}
 
   const AuthApp &get_entry() const override;
   std::set<UniversalId> get_service_ids() const override;
@@ -137,7 +141,7 @@ class Oauth2Handler : public interface::AuthorizeHandler {
                                 RequestHandler *request_handler = nullptr);
 
   AuthApp entry_;
-  UserManager um_{entry_.limit_to_registered_users, entry_.default_role_id};
+  UserManager um_;
 };
 
 }  // namespace authentication

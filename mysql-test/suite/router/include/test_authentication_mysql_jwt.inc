@@ -74,7 +74,7 @@
 --let $mrs_add_db_object_path=/o2
 --source ../include/mrs/db_object/add.inc
 
---let $mrs_add_auth_app=default authentication
+--let $mrs_add_auth_app=default authentication-1
 --let $mrs_add_auth_vendor=MySQL Internal
 --let $mrs_add_auth_service=/svc1
 --source ../include/mrs/add_auth_app.inc
@@ -100,7 +100,7 @@
 --let $mrs_add_db_object_path=/o4
 --source ../include/mrs/db_object/add.inc
 
---let $mrs_add_auth_app=default authentication
+--let $mrs_add_auth_app=default authentication-2
 --let $mrs_add_auth_vendor=MySQL Internal
 --let $mrs_add_auth_service=/svc2
 --source ../include/mrs/add_auth_app.inc

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -27,6 +27,7 @@
 
 #include "helper/make_shared_ptr.h"
 #include "mrs/authentication/authorize_manager.h"
+#include "mrs/database/query_factory.h"
 
 #include "mock/mock_auth_handler_factory.h"
 #include "mock/mock_mysqlcachemanager.h"
@@ -42,7 +43,7 @@ class RouteManagerTests : public Test {
  public:
   void SetUp() override {
     sut_.reset(new mrs::authentication::AuthorizeManager(
-        &mock_mysqlcache_, jwt_secret_, mock_factory_));
+        &mock_mysqlcache_, jwt_secret_, &qf_, mock_factory_));
   }
 
   void verifyAndClearMocks(const std::vector<void *> &mocks) {
@@ -53,6 +54,7 @@ class RouteManagerTests : public Test {
   }
 
   std::string jwt_secret_{"Sshhhh do not tell anyone !"};
+  mrs::database::v3::QueryFactory qf_;
   StrictMock<MockMysqlCacheManager> mock_mysqlcache_;
   MakeSharedPtr<StrictMock<MockAuthHandlerFactory>> mock_factory_;
   std::unique_ptr<mrs::interface::AuthorizeManager> sut_;

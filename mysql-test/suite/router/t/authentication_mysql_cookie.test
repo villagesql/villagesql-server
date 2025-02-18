@@ -79,7 +79,7 @@ create function basic_schema.whoami() returns text deterministic return current_
 --let $mrs_add_db_object_path=/whoami
 --source ../include/mrs/db_object/add.inc
 
---let $mrs_add_auth_app=default authentication
+--let $mrs_add_auth_app=default authentication1
 --let $mrs_add_auth_vendor=MySQL Internal
 --let $mrs_add_auth_service=/svc1
 --source ../include/mrs/add_auth_app.inc
@@ -105,7 +105,7 @@ create function basic_schema.whoami() returns text deterministic return current_
 --let $mrs_add_db_object_path=/o4
 --source ../include/mrs/db_object/add.inc
 
---let $mrs_add_auth_app=default authentication
+--let $mrs_add_auth_app=default authentication2
 --let $mrs_add_auth_vendor=MySQL Internal
 --let $mrs_add_auth_service=/svc2
 --source ../include/mrs/add_auth_app.inc

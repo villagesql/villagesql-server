@@ -39,7 +39,7 @@ class MysqlHandler : public WwwAuthenticationHandler {
 
  public:
   MysqlHandler(const AuthApp &entry,
-               collector::MysqlCacheManager *cache_manager);
+               collector::MysqlCacheManager *cache_manager, QueryFactory *qf);
 
   std::set<UniversalId> get_service_ids() const override;
   UniversalId get_id() const override;

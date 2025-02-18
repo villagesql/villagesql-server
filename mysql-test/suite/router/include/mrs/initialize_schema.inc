@@ -12,9 +12,16 @@
 
 --source ./check_mrs_schema_version.inc
 
+if ($mrs_schema_version == 4)
+{
+  --source ../schema/mrs_metadata_schema-version4.sql
+  --let $_mrs_schema_version_supported=1
+}
+
+
 if ($mrs_schema_version == 3)
 {
-  --source ../schema/mrs_metadata_schema.sql
+  --source ../schema/mrs_metadata_schema-version3.sql
   --let $_mrs_schema_version_supported=1
 }
 

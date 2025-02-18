@@ -8,13 +8,13 @@ CREATE USER 'admin'@'%' IDENTIFIED BY 'admin_pass';
 GRANT ALL PRIVILEGES ON *.* TO 'admin'@'%' WITH GRANT OPTION;
 FLUSH PRIVILEGES;
 
---let $mrs_schema_version=1,0,12
+--let $overwrite_schema_version=1,0,12
 --source ../include/test/bootstrap_mrs_schema_version.inc
 
---let $mrs_schema_version=1,0,50
+--let $overwrite_schema_version=1,0,50
 --source ../include/test/bootstrap_mrs_schema_version.inc
 
---let $mrs_schema_version=1,1,0
+--let $overwrite_schema_version=1,1,0
 --source ../include/test/bootstrap_mrs_schema_version.inc
 
 # Cleanup

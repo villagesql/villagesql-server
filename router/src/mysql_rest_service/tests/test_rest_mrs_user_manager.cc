@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +26,7 @@
 #include <gtest/gtest.h>
 
 #include "mock/mock_session.h"
+#include "mrs/database/query_factory.h"
 #include "mrs/users/user_manager.h"
 
 #include "mysql/harness/logging/logging.h"
@@ -39,6 +40,8 @@ using mysqlrouter::MySQLSession;
 using RowProcessor = MySQLSession::RowProcessor;
 using Row = MySQLSession::Row;
 using FieldValidator = MySQLSession::FieldValidator;
+using ApplyToV3 = mrs::database::entry::AuthPrivilege::ApplyToV3;
+using ApplyToV4 = mrs::database::entry::AuthPrivilege::ApplyToV4;
 
 class UserManagerFixture : public Test {
  public:
@@ -145,7 +148,8 @@ class UserManagerFixture : public Test {
 TEST_F(UserManagerFixture, fetch_user_from_database) {
   const mrs::UniversalId k_app_id{2};
   SqlSessionCache cache{nullptr, false, &session_};
-  UserManager um{false, mrs::UniversalId{3}};
+  mrs::database::v3::QueryFactory qf;
+  UserManager um{false, mrs::UniversalId{3}, &qf};
 
   AuthUser user;
   user.app_id = k_app_id;
@@ -165,14 +169,16 @@ TEST_F(UserManagerFixture, fetch_user_from_database) {
   ASSERT_EQ(k_user_4000040400004_id, user.user_id);
 
   ASSERT_EQ(1, user.privileges.size());
-  ASSERT_EQ(1, user.privileges[0].service_id);
+  ASSERT_EQ(mrs::UniversalId{1},
+            std::get<ApplyToV3>(user.privileges[0].select_by).service_id);
   ASSERT_EQ(2, user.privileges[0].crud);
 }
 
 TEST_F(UserManagerFixture, fetch_user_from_database_once) {
   const mrs::UniversalId k_app_id{2};
   SqlSessionCache cache{nullptr, false, &session_};
-  UserManager um{false, mrs::UniversalId{3}};
+  mrs::database::v3::QueryFactory qf;
+  UserManager um{false, mrs::UniversalId{3}, &qf};
 
   AuthUser user1;
   user1.app_id = k_app_id;
@@ -194,7 +200,8 @@ TEST_F(UserManagerFixture, fetch_user_from_database_once) {
   ASSERT_TRUE(user1.has_user_id);
   ASSERT_EQ(k_user_4000040400004_id, user1.user_id);
   ASSERT_EQ(1, user1.privileges.size());
-  ASSERT_EQ(1, user1.privileges[0].service_id);
+  ASSERT_EQ(mrs::UniversalId{1},
+            std::get<ApplyToV3>(user1.privileges[0].select_by).service_id);
   ASSERT_EQ(2, user1.privileges[0].crud);
 
   AuthUser user2;
@@ -211,7 +218,8 @@ TEST_F(UserManagerFixture, fetch_user_from_database_once) {
   ASSERT_TRUE(user2.has_user_id);
   ASSERT_EQ(k_user_4000040400004_id, user2.user_id);
   ASSERT_EQ(1, user2.privileges.size());
-  ASSERT_EQ(1, user2.privileges[0].service_id);
+  ASSERT_EQ(mrs::UniversalId{1},
+            std::get<ApplyToV3>(user2.privileges[0].select_by).service_id);
   ASSERT_EQ(2, user2.privileges[0].crud);
 }
 
@@ -225,7 +233,8 @@ TEST_F(UserManagerFixture, fetch_user_from_db_and_update) {
   using namespace std::string_literals;
   const mrs::UniversalId k_app_id{2};
   SqlSessionCache cache{nullptr, false, &session_};
-  UserManager um{false, mrs::UniversalId{3}};
+  mrs::database::v3::QueryFactory qf;
+  UserManager um{false, mrs::UniversalId{3}, &qf};
 
   // The user has different mail, than in representation in DB.
   AuthUser user;
@@ -255,6 +264,7 @@ TEST_F(UserManagerFixture, fetch_user_from_db_and_update) {
   ASSERT_TRUE(user.has_user_id);
   ASSERT_EQ(k_user_4000040400004_id, user.user_id);
   ASSERT_EQ(1, user.privileges.size());
-  ASSERT_EQ(mrs::UniversalId{1}, user.privileges[0].service_id);
+  ASSERT_EQ(mrs::UniversalId{1},
+            std::get<ApplyToV3>(user.privileges[0].select_by).service_id);
   ASSERT_EQ(2, user.privileges[0].crud);
 }

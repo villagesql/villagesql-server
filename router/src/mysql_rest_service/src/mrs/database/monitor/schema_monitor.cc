@@ -79,6 +79,9 @@ mrs::database::MrsSchemaVersion query_schema_version(
 mrs::interface::SupportedMrsMetadataVersion check_supported_mrs_version(
     const mrs::database::MrsSchemaVersion &mrs_version) {
   if (mrs_version.is_compatible({mrs::database::kCurrentMrsMetadataVersion}))
+    return mrs::interface::kSupportedMrsMetadataVersion_4;
+
+  if (mrs_version.is_compatible({{3, 0, 2}}))
     return mrs::interface::kSupportedMrsMetadataVersion_3;
 
   if (mrs_version.is_compatible({{2, 2, 0}}))

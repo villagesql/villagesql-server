@@ -184,20 +184,16 @@ std::string get_session_cookie_key_name(const UniversalId &id) {
 
 AuthorizeManager::AuthorizeManager(collector::MysqlCacheManager *cache_manager,
                                    const std::string &jwt_secret,
+                                   QueryFactory *query_factory,
                                    AuthHandlerFactoryPtr factory)
     : cache_manager_{cache_manager},
+      user_manager_{true, {}, query_factory},
       jwt_secret_{jwt_secret},
       factory_{factory},
       random_data_{
           helper::generate_string<64, helper::Generator8bitsValues>()} {
   log_info("JWT bearer authorization disabled, the signing secret is empty.");
 }
-
-AuthorizeManager::AuthorizeManager(collector::MysqlCacheManager *cache_manager,
-                                   const std::string &jwt_secret)
-    : cache_manager_{cache_manager},
-      jwt_secret_{jwt_secret},
-      factory_{std::make_shared<AuthHandlerFactory>()} {}
 
 void AuthorizeManager::configure(const std::string &options) {
   auto cnf = parse_json_options(options);

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -37,8 +37,8 @@ namespace v2 {
 class QueryFactory : public mrs::interface::QueryFactory {
  public:
   std::shared_ptr<QueryAuditLogEntries> create_query_audit_log() override;
-  std::shared_ptr<QueryEntriesAuthPrivileges> create_query_auth_privileges()
-      override;
+  std::shared_ptr<mrs::database::QueryEntriesAuthPrivileges>
+  create_query_auth_privileges() override;
   std::shared_ptr<QueryEntryContentFile> create_query_content_file() override;
   std::shared_ptr<QueryRestSPMedia> create_query_sp_media() override;
   std::shared_ptr<QueryEntryGroupRowSecurity> create_query_group_row_security()
@@ -61,9 +61,22 @@ namespace v3 {
 class QueryFactory : public v2::QueryFactory {
  public:
   std::shared_ptr<QueryEntryObjectBase> create_query_object() override;
+  std::shared_ptr<QueryEntryAuthUser> create_query_auth_user() override;
 };
 
 }  // namespace v3
+
+namespace v4 {
+
+class QueryFactory : public v3::QueryFactory {
+ public:
+  std::shared_ptr<mrs::database::QueryEntriesAuthPrivileges>
+  create_query_auth_privileges() override;
+
+  std::shared_ptr<QueryEntryAuthUser> create_query_auth_user() override;
+};
+
+}  // namespace v4
 }  // namespace database
 }  // namespace mrs
 

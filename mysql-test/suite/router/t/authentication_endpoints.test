@@ -50,7 +50,7 @@
 --let $mrs_add_host_name=""
 --source ../include/mrs/service/add.inc
 
---let $mrs_add_auth_app=one
+--let $mrs_add_auth_app=b_one
 --let $mrs_add_auth_vendor=MySQL Internal
 --let $mrs_add_auth_service=/b
 --source ../include/mrs/add_auth_app.inc
@@ -60,12 +60,12 @@
 --let $mrs_add_host_name=""
 --source ../include/mrs/service/add.inc
 
---let $mrs_add_auth_app=one-of-two
+--let $mrs_add_auth_app=c_one-of-two
 --let $mrs_add_auth_vendor=MySQL Internal
 --let $mrs_add_auth_service=/c
 --source ../include/mrs/add_auth_app.inc
 
---let $mrs_add_auth_app=two-of-two
+--let $mrs_add_auth_app=c_two-of-two
 --let $mrs_add_auth_vendor=MRS
 --let $mrs_add_auth_service=/c
 --source ../include/mrs/add_auth_app.inc
@@ -96,7 +96,7 @@
 --let $mrs_add_db_object_path=/t
 --source ../include/mrs/db_object/add.inc
 
---let $mrs_add_auth_app=one
+--let $mrs_add_auth_app=e_one
 --let $mrs_add_auth_vendor=MySQL Internal
 --let $mrs_add_auth_service=/e
 --source ../include/mrs/add_auth_app.inc
@@ -114,12 +114,12 @@
 --let $mrs_add_db_object_path=/t
 --source ../include/mrs/db_object/add.inc
 
---let $mrs_add_auth_app=one-of-two
+--let $mrs_add_auth_app=f_one-of-two
 --let $mrs_add_auth_vendor=MySQL Internal
 --let $mrs_add_auth_service=/f
 --source ../include/mrs/add_auth_app.inc
 
---let $mrs_add_auth_app=two-of-two
+--let $mrs_add_auth_app=f_two-of-two
 --let $mrs_add_auth_vendor=MRS
 --let $mrs_add_auth_service=/f
 --source ../include/mrs/add_auth_app.inc
@@ -152,7 +152,7 @@
 --let $mrs_add_db_object_auth=1
 --source ../include/mrs/db_object/add.inc
 
---let $mrs_add_auth_app=one
+--let $mrs_add_auth_app=h_one
 --let $mrs_add_auth_vendor=MySQL Internal
 --let $mrs_add_auth_service=/h
 --source ../include/mrs/add_auth_app.inc
@@ -171,12 +171,12 @@
 --let $mrs_add_db_object_auth=1
 --source ../include/mrs/db_object/add.inc
 
---let $mrs_add_auth_app=one-of-two
+--let $mrs_add_auth_app=i_one-of-two
 --let $mrs_add_auth_vendor=MySQL Internal
 --let $mrs_add_auth_service=/i
 --source ../include/mrs/add_auth_app.inc
 
---let $mrs_add_auth_app=two-of-two
+--let $mrs_add_auth_app=i_two-of-two
 --let $mrs_add_auth_vendor=MRS
 --let $mrs_add_auth_service=/i
 --source ../include/mrs/add_auth_app.inc
@@ -194,7 +194,7 @@
 
 --let $mrs_client_arg_path='/c/authentication/authApps'
 --let $mrs_client_arg_dispaly=request,status
---let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/two_authentication_apps.sch
+--let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/two_authentication_apps_c.sch
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/d/authentication/authApps'
@@ -205,7 +205,7 @@
 
 --let $mrs_client_arg_path='/f/authentication/authApps'
 --let $mrs_client_arg_dispaly=request,status
---let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/two_authentication_apps.sch
+--let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/two_authentication_apps_f.sch
 --source ../include/mrs/mrs_client.inc
 
 --let $mrs_client_arg_path='/g/authentication/authApps'
@@ -216,7 +216,7 @@
 
 --let $mrs_client_arg_path='/i/authentication/authApps'
 --let $mrs_client_arg_dispaly=request,status
---let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/two_authentication_apps.sch
+--let $mrs_client_arg_json_schema_file=$SCHEMA_DIR/two_authentication_apps_i.sch
 --source ../include/mrs/mrs_client.inc
 
 
@@ -318,7 +318,7 @@
 --let $mrs_client_arg_expect_header_value="/c/authentication/completed?login=fail"
 --source ../include/mrs/mrs_client.inc
 
---let $mrs_client_arg_path='/c/authentication/login?app=one-of-two'
+--let $mrs_client_arg_path='/c/authentication/login?app=c_one-of-two'
 --let $mrs_client_arg_response_type=raw
 --let $mrs_client_arg_expected_status=Unauthorized
 --let $mrs_client_arg_expect_header=WWW-Authenticate
@@ -349,7 +349,7 @@
 --let $mrs_client_arg_expect_header_value="/f/authentication/completed?login=fail"
 --source ../include/mrs/mrs_client.inc
 
---let $mrs_client_arg_path='/f/authentication/login?app=one-of-two'
+--let $mrs_client_arg_path='/f/authentication/login?app=f_one-of-two'
 --let $mrs_client_arg_response_type=raw
 --let $mrs_client_arg_expected_status=Unauthorized
 --let $mrs_client_arg_expect_header=WWW-Authenticate
@@ -379,7 +379,7 @@
 --let $mrs_client_arg_expect_header_value="/i/authentication/completed?login=fail"
 --source ../include/mrs/mrs_client.inc
 
---let $mrs_client_arg_path='/i/authentication/login?app=one-of-two'
+--let $mrs_client_arg_path='/i/authentication/login?app=i_one-of-two'
 --let $mrs_client_arg_response_type=raw
 --let $mrs_client_arg_expected_status=Unauthorized
 --let $mrs_client_arg_expect_header=WWW-Authenticate

@@ -45,6 +45,7 @@
 
 #include "collector/mysql_cache_manager.h"
 #include "helper/plugin_monitor.h"
+#include "mrs/authentication/auth_handler_factory.h"
 #include "mrs/database/query_factory_proxy.h"
 #include "mrs/database/schema_monitor.h"
 #include "mrs/database/slow_query_monitor.h"
@@ -155,14 +156,20 @@ struct MrdsModule {
     mrds_monitor.stop();
   }
 
+  using AuthHandlerFactory = mrs::authentication::AuthHandlerFactory;
+  using AuthorizeManager = mrs::authentication::AuthorizeManager;
+
   const ::mrs::Configuration &configuration;
   const std::string jwt_secret;
   mrs::database::QueryFactoryProxy query_factory{
       std::make_shared<mrs::database::v2::QueryFactory>()};
   collector::MysqlCacheManager mysql_connection_cache{configuration};
   mrs::GtidManager gtid_manager;
-  mrs::authentication::AuthorizeManager authentication{
-      &mysql_connection_cache, configuration.jwt_secret_};
+  std::shared_ptr<AuthHandlerFactory> auth_handler_factory{
+      std::make_shared<AuthHandlerFactory>(&query_factory)};
+  AuthorizeManager authentication{&mysql_connection_cache,
+                                  configuration.jwt_secret_, &query_factory,
+                                  auth_handler_factory};
   mrs::ResponseCache response_cache{"responseCache"};
   mrs::ResponseCache file_cache{"fileCache"};
   mrs::database::SlowQueryMonitor slow_monitor{configuration,

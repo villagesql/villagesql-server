@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,8 +25,10 @@
 #ifndef ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_ENTRY_AUTH_USER_H_
 #define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_ENTRY_AUTH_USER_H_
 
+#include "helper/optional.h"
 #include "mrs/database/entry/auth_user.h"
 #include "mrs/database/helper/query.h"
+#include "mrs/interface/query_factory.h"
 
 namespace mrs {
 namespace database {
@@ -38,6 +40,8 @@ class QueryEntryAuthUser : private QueryLog {
   using UniversalId = entry::UniversalId;
 
  public:
+  QueryEntryAuthUser(std::shared_ptr<mrs::interface::QueryFactory> qf);
+
   virtual bool query_user(MySQLSession *session, const AuthUser *user);
   virtual AuthUser::UserId insert_user(
       MySQLSession *session, const AuthUser *user,
@@ -51,6 +55,7 @@ class QueryEntryAuthUser : private QueryLog {
 
   int loaded_{0};
   AuthUser user_data_;
+  std::shared_ptr<mrs::interface::QueryFactory> qf_;
 };
 
 }  // namespace database

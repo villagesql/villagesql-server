@@ -5,7 +5,7 @@
     "properties": {
       "name": {
         "type": "string",
-        "enum": ["one-of-two", "two-of-two"]
+        "enum": ["i_one-of-two", "i_two-of-two"]
       },
       "vendorId": {
         "type": "string",

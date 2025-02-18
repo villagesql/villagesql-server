@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -175,7 +175,7 @@ void QueryEntryFields::on_row_params(const ResultRow &row) {
 
   mysql_row.unserialize_with_converter(&entry.id, entry::UniversalId::from_raw);
   mysql_row.unserialize_with_converter(&represents_reference_id,
-                                       entry::UniversalId::from_raw_optional);
+                                       entry::UniversalId::from_raw);
   mysql_row.unserialize(&entry.name);
   mysql_row.unserialize(&param_in);
   mysql_row.unserialize(&param_out);

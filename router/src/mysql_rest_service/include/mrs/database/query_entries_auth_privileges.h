@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -40,7 +40,16 @@ class QueryEntriesAuthPrivileges : public Query {
 
   virtual void query_user(MySQLSession *session,
                           const entry::AuthUser::UserId &user_id,
-                          Privileges *out_privileges);
+                          Privileges *out_privileges) = 0;
+};
+
+namespace v_2_3 {
+
+class QueryEntriesAuthPrivileges
+    : public mrs::database::QueryEntriesAuthPrivileges {
+ public:
+  void query_user(MySQLSession *session, const entry::AuthUser::UserId &user_id,
+                  Privileges *out_privileges) override;
 
  private:
   void on_row(const ResultRow &r) override;
@@ -48,8 +57,24 @@ class QueryEntriesAuthPrivileges : public Query {
   Privileges *privileges_{nullptr};
 };
 
-}  // namespace database
+}  // namespace v_2_3
 
+namespace v4 {
+
+class QueryEntriesAuthPrivileges
+    : public mrs::database::QueryEntriesAuthPrivileges {
+ public:
+  void query_user(MySQLSession *session, const entry::AuthUser::UserId &user_id,
+                  Privileges *out_privileges) override;
+
+ private:
+  void on_row(const ResultRow &r) override;
+
+  Privileges *privileges_{nullptr};
+};
+
+}  // namespace v4
+}  // namespace database
 }  // namespace mrs
 
 #endif  // ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_QUERY_ENTRIES_AUTH_PRIVILEGES_H_

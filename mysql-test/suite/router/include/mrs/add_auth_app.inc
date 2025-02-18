@@ -44,7 +44,7 @@ if (!$mrs_add_auth_role_name)
 --disable_result_log
 eval  SET $mrs_sql_id_variable=mysql_rest_service_metadata.get_sequence_id();
  
-if ($mrs_schema_version == 3)
+if ($mrs_schema_version > 2)
 {
   eval INSERT INTO mysql_rest_service_metadata.auth_app
     (id, auth_vendor_id, name, enabled, limit_to_registered_users,

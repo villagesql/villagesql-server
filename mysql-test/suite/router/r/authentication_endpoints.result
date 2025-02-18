@@ -66,7 +66,7 @@ OK
 GET /b/authentication/authApps
 [
     {
-        "name": "one",
+        "name": "b_one",
         "vendorId": "0x31000000000000000000000000000000"
     }
 ]
@@ -79,7 +79,7 @@ OK
 GET /e/authentication/authApps
 [
     {
-        "name": "one",
+        "name": "e_one",
         "vendorId": "0x31000000000000000000000000000000"
     }
 ]
@@ -92,7 +92,7 @@ OK
 GET /h/authentication/authApps
 [
     {
-        "name": "one",
+        "name": "h_one",
         "vendorId": "0x31000000000000000000000000000000"
     }
 ]
@@ -132,7 +132,7 @@ OK
 GET /c/authentication/login
 
 OK
-GET /c/authentication/login?app=one-of-two
+GET /c/authentication/login?app=c_one-of-two
 
 OK
 GET /d/authentication/login
@@ -144,7 +144,7 @@ OK
 GET /f/authentication/login
 
 OK
-GET /f/authentication/login?app=one-of-two
+GET /f/authentication/login?app=f_one-of-two
 
 OK
 GET /g/authentication/login
@@ -156,7 +156,7 @@ OK
 GET /i/authentication/login
 
 OK
-GET /i/authentication/login?app=one-of-two
+GET /i/authentication/login?app=i_one-of-two
 
 OK
 

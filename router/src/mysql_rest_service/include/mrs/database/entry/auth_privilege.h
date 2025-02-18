@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -26,11 +26,10 @@
 #define ROUTER_SRC_REST_MRS_SRC_MRS_DATABASE_ENTRY_AUTH_PRIVILEGE_H_
 
 #include <cstdint>
+#include <variant>
 
 #include "mrs/database/entry/set_operation.h"
 #include "mrs/database/entry/universal_id.h"
-
-#include "helper/optional.h"
 
 namespace mrs {
 namespace database {
@@ -44,9 +43,21 @@ namespace entry {
  */
 class AuthPrivilege {
  public:
-  helper::Optional<UniversalId> service_id;
-  helper::Optional<UniversalId> schema_id;
-  helper::Optional<UniversalId> object_id;
+  class ApplyToV3 {
+   public:
+    std::optional<UniversalId> service_id;
+    std::optional<UniversalId> schema_id;
+    std::optional<UniversalId> object_id;
+  };
+
+  class ApplyToV4 {
+   public:
+    std::string service_name;
+    std::string schema_name;
+    std::string object_name;
+  };
+
+  std::variant<ApplyToV4, ApplyToV3> select_by;
 
   Operation::ValueType crud;
 };

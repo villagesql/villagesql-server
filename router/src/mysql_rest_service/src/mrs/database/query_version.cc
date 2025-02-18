@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -27,6 +27,8 @@
 
 #include "mrs/database/query_version.h"
 
+#include "mysqld_error.h"
+
 namespace mrs {
 namespace database {
 
@@ -37,9 +39,21 @@ static void throw_invalid_function_result() {
 }
 
 MrsSchemaVersion QueryVersion::query_version(MySQLSession *session) {
-  query(session,
-        "SELECT `major`,`minor`,`patch` FROM "
-        "mysql_rest_service_metadata.schema_version;");
+  // Todo change order
+  try {
+    query(session,
+          "SELECT `major`,`minor`,`patch` FROM "
+          "mysql_rest_service_metadata.schema_version;");
+  } catch (const mysqlrouter::MySQLSession::Error &error) {
+    if (error.code() != ER_NO_SUCH_TABLE &&
+        error.code() != ER_TABLEACCESS_DENIED_ERROR) {
+      throw;
+    }
+    // Lets try the old name for version view.
+    query(session,
+          "SELECT `major`,`minor`,`patch` FROM "
+          "mysql_rest_service_metadata.msm_schema_version;");
+  }
   return v_;
 }
 

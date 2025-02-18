@@ -85,15 +85,14 @@ using ModeType = entry::ModeType;
 
 namespace {
 
-void from_optional_user_ownership_field_id(
-    std::optional<entry::OwnerUserField> *out, const char *value) {
+void from_user_ownership_field_id(entry::OwnerUserField *out,
+                                  const char *value) {
   if (!value) {
-    out->reset();
+    *out = {};
     return;
   }
 
-  out->emplace();
-  entry::UniversalId::from_raw(&(*out)->uid, value);
+  entry::UniversalId::from_raw(&out->uid, value);
 }
 
 }  // namespace
@@ -123,7 +122,12 @@ QueryEntryObject::UniversalId QueryEntryObject::query_object(
   entry::UniversalId::from_raw(&object_id, (*res)[0]);
   obj->crud_operations = std::stoi((*res)[2]);
 
-  from_optional_user_ownership_field_id(&obj->user_ownership_field, (*res)[3]);
+  obj->user_ownership_field.reset();
+  if ((*res)[3]) {
+    mrs::database::entry::OwnerUserField value;
+    from_user_ownership_field_id(&value, (*res)[3]);
+    obj->user_ownership_field = value;
+  }
 
   KindTypeConverter()(&obj->kind, (*res)[1]);
 
@@ -275,7 +279,7 @@ void QueryEntryObject::on_field_row(const ResultRow &r) {
   row.unserialize_with_converter(&parent_reference_id,
                                  entry::UniversalId::from_raw_zero_on_null);
   row.unserialize_with_converter(&represents_reference_id,
-                                 entry::UniversalId::from_raw_optional);
+                                 entry::UniversalId::from_raw);
 
   std::shared_ptr<ForeignKeyReference> parent_ref;
   std::shared_ptr<Table> table;
@@ -417,7 +421,7 @@ QueryEntryObject::UniversalId QueryEntryObject::query_object(
   row.unserialize_with_converter(&object_id, entry::UniversalId::from_raw);
   row.unserialize_with_converter(&obj->kind, KindTypeConverter());
   row.unserialize_with_converter(&obj->user_ownership_field,
-                                 from_optional_user_ownership_field_id);
+                                 from_user_ownership_field_id);
   bool with_insert = false, with_update = false, with_delete = false,
        with_no_check = false;
   row.unserialize(&with_insert);

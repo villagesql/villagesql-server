@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2024, Oracle and/or its affiliates.
+ Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -63,8 +63,8 @@ void Oauth2OidcHandler::RequestHandlerJsonSimpleObjectWithBearer::before_send(
   request->get_output_headers().add("Authorization", bearer.c_str());
 }
 
-Oauth2OidcHandler::Oauth2OidcHandler(const AuthApp &entry)
-    : Oauth2Handler{entry} {
+Oauth2OidcHandler::Oauth2OidcHandler(const AuthApp &entry, QueryFactory *qf)
+    : Oauth2Handler{entry, qf} {
   log_debug("Oauth2OidcHandler for service %s", to_string(entry_).c_str());
 }
 

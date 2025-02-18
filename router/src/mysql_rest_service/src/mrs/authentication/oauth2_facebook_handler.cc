@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -46,8 +46,9 @@ using RequestHandlerPtr = Oauth2Handler::RequestHandlerPtr;
 using std::chrono::seconds;
 using std::chrono::steady_clock;
 
-Oauth2FacebookHandler::Oauth2FacebookHandler(const AuthApp &entry)
-    : Oauth2Handler{entry} {
+Oauth2FacebookHandler::Oauth2FacebookHandler(const AuthApp &entry,
+                                             QueryFactory *qf)
+    : Oauth2Handler{entry, qf} {
   log_debug("Oauth2FacebookHandler for service %s", to_string(entry_).c_str());
 }
 

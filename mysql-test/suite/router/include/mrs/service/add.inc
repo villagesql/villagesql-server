@@ -77,7 +77,7 @@ if ($mrs_schema_version == 2)
     VALUES($mrs_sql_id_variable, unhex("$mrs_host_id"),  $mrs_add_service_path, $mrs_add_service_protocol, $mrs_add_service_options $mrs_add_service_custom_values);
 }
 
-if ($mrs_schema_version == 3)
+if ($mrs_schema_version > 2)
 {
   eval INSERT INTO mysql_rest_service_metadata.service(id, url_host_id,
     url_context_root, url_protocol, options, published, in_development,

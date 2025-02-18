@@ -112,8 +112,9 @@ inline AuthApp limit_users(const AuthApp &a) {
   return result;
 }
 
-ScramHandler::ScramHandler(const AuthApp &entry, const std::string &random_data)
-    : SaslHandler{limit_users(entry)}, random_data_{random_data} {
+ScramHandler::ScramHandler(const AuthApp &entry, const std::string &random_data,
+                           QueryFactory *qf)
+    : SaslHandler{limit_users(entry), qf}, random_data_{random_data} {
   log_debug("ScramHandler for service %s", to_string(entry_).c_str());
 }
 

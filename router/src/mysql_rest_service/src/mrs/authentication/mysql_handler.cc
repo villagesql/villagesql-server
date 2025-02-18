@@ -43,8 +43,9 @@ std::string to_string(const std::set<UniversalId> &ids) {
 }
 
 MysqlHandler::MysqlHandler(const AuthApp &entry,
-                           collector::MysqlCacheManager *cache_manager)
-    : WwwAuthenticationHandler(entry), cache_manager_{cache_manager} {
+                           collector::MysqlCacheManager *cache_manager,
+                           QueryFactory *qf)
+    : WwwAuthenticationHandler(entry, qf), cache_manager_{cache_manager} {
   log_debug("MysqlHandler for services [%s], %s",
             to_string(entry.service_ids).c_str(), to_string(entry).c_str());
 }

@@ -34,7 +34,7 @@ if ($mrs_sql_id_variable_ob)
   {
     eval SET $mrs_sql_id_variable_ob=mysql_rest_service_metadata.get_sequence_id();
     
-    if ($mrs_schema_version == 3)
+    if ($mrs_schema_version > 2)
     {
       let $_object_options=`SELECT JSON_MERGE_PATCH(JSON_OBJECT(), IF(FIND_IN_SET("CREATE","$mrs_add_db_object_op"),'{"dataMappingViewInsert":true}',"{}"), IF(FIND_IN_SET("UPDATE","$mrs_add_db_object_op"),'{"dataMappingViewUpdate":true}',"{}"), IF(FIND_IN_SET("UPDATE","$mrs_add_db_object_op"),'{"dataMappingViewDelete":true}',"{}"))`;
       eval INSERT INTO mysql_rest_service_metadata.object(id, db_object_id, name, options) VALUES($mrs_sql_id_variable_ob, $mrs_sql_id_variable, "$mrs_add_db_object", '$_object_options');
@@ -65,7 +65,7 @@ eval INSERT INTO mysql_rest_service_metadata.object_field
                  "$.srid", SRS_ID) as js
                  FROM information_schema.columns where TABLE_SCHEMA="$_schema_name" and TABLE_NAME="$mrs_add_db_object" $mrs_add_db_object_table_filter) as z;
 
-if ($mrs_schema_version == 3)
+if ($mrs_schema_version >2)
 {
   if ($mrs_add_db_object_user_ownership_column)
   {

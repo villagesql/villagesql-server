@@ -670,7 +670,7 @@ void BootstrapConfigurator::check_mrs_metadata(
 
     auto version = q.query_version(session);
 
-    if (!version.is_compatible({{3}, {2, 2}})) {
+    if (!version.is_compatible({{4}, {3}, {2, 2}})) {
       std::stringstream ss;
       ss << "Unsupported MRS metadata version (" << version.str() << ")";
       throw std::runtime_error(ss.str());

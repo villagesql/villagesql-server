@@ -71,7 +71,7 @@ class QueryVersion : private Query {
   MrsSchemaVersion v_;
 };
 
-constexpr MrsSchemaVersion kCurrentMrsMetadataVersion{3, 0, 2};
+constexpr MrsSchemaVersion kCurrentMrsMetadataVersion{4, 0, 0};
 
 constexpr MrsSchemaVersion kSchemaUpgradeMrsMetadataVersion{0, 0, 0};
 

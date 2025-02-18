@@ -32,6 +32,7 @@
 #include "mrs/database/entry/auth_user.h"
 #include "mrs/database/query_entry_auth_user.h"
 #include "mrs/interface/authorize_handler.h"
+#include "mrs/interface/query_factory.h"
 
 namespace mrs {
 namespace users {
@@ -45,15 +46,17 @@ class UserManager {
   using Cache = helper::cache::Cache<UserIndex, AuthUser, 100, PolicyLru>;
   using Handler = mrs::interface::AuthorizeHandler;
   using SqlSessionCache = Handler::SqlSessionCached;
-  // std::pair<UUID, operation{INSERT|UPDATE|DELETE}>
   using ChangedUsersIds =
       std::vector<std::pair<database::entry::UniversalId, std::string>>;
+  using QueryFactory = mrs::interface::QueryFactory;
 
  public:
   UserManager(const bool limit_to_existing_users,
-              const helper::Optional<UniversalId> &default_role_id)
+              const helper::Optional<UniversalId> &default_role_id,
+              QueryFactory *query_factory)
       : limit_to_existing_users_{limit_to_existing_users},
-        default_role_id_{default_role_id} {}
+        default_role_id_{default_role_id},
+        query_factory_{query_factory} {}
 
   bool user_get_by_id(UserId user_id, AuthUser *out_user,
                       SqlSessionCache *out_cache);
@@ -84,6 +87,7 @@ class UserManager {
   Cache user_cache_;
   bool limit_to_existing_users_;
   const helper::Optional<UniversalId> default_role_id_;
+  QueryFactory *query_factory_;
 };
 
 }  // namespace users

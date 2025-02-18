@@ -206,14 +206,14 @@ bool UserManager::user_get(AuthUser *out_user, SqlSessionCache *out_cache,
 
 AuthUser *UserManager::query_user(SqlSessionCache *out_cache,
                                   AuthUser *out_user, bool *is_different) {
-  database::QueryEntryAuthUser user_query;
-  if (!user_query.query_user(out_cache->get(), out_user)) return nullptr;
+  auto user_query = query_factory_->create_query_auth_user();
+  if (!user_query->query_user(out_cache->get(), out_user)) return nullptr;
 
-  auto &user = user_query.get_user();
+  auto &user = user_query->get_user();
   auto result = user_cache_.set(user, user);
 
   if (is_different)
-    *is_different = should_update_db_entry(*out_user, user_query.get_user());
+    *is_different = should_update_db_entry(*out_user, user_query->get_user());
 
   return result;
 }
@@ -223,15 +223,15 @@ bool UserManager::query_update_user(SqlSessionCache *out_cache, const UserId id,
   user->has_user_id = true;
   user->user_id = id;
 
-  database::QueryEntryAuthUser user_query;
-  return user_query.update_user(out_cache->get(), user);
+  auto user_query = query_factory_->create_query_auth_user();
+  return user_query->update_user(out_cache->get(), user);
 }
 
 bool UserManager::query_insert_user(SqlSessionCache *out_cache,
                                     AuthUser *user) {
-  database::QueryEntryAuthUser user_query;
+  auto user_query = query_factory_->create_query_auth_user();
   auto user_id =
-      user_query.insert_user(out_cache->get(), user, default_role_id_);
+      user_query->insert_user(out_cache->get(), user, default_role_id_);
   user->has_user_id = true;
   user->user_id = user_id;
 

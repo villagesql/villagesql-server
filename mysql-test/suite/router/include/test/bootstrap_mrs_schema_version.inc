@@ -3,19 +3,19 @@
 #
 ## Example
 #  =======
-# --let $mrs_schema_version=1,0,12
+# --let $overwrite_schema_version=1,0,12
 # --source ../include/test/bootstrap_mrs_schema_version.inc
 #
 
-if (!$mrs_schema_version)
+if (!$overwrite_schema_version)
 {
-  --die The 'mrs_schema_version' veriable is required by the script.
+  --die The 'overwrite_schema_version' veriable is required by the script.
 }
 
-echo # Checking that version=$mrs_schema_version is incompatible for bootstrap;
+echo # Checking that version=$overwrite_schema_version is incompatible for bootstrap;
 eval CREATE OR REPLACE SQL SECURITY INVOKER VIEW
     mysql_rest_service_metadata.schema_version (major, minor, patch)
-    AS SELECT $mrs_schema_version;
+    AS SELECT $overwrite_schema_version;
 
 replace_regex
    / Bootstrapping MySQL Router.* instance at \'.*/ Bootstrapping MySQL Router instance at 'DIRECTORY'/

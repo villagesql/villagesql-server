@@ -68,7 +68,7 @@ if ($mrs_schema_version == 2)
   }
 }
 
-if ($mrs_schema_version == 3)
+if ($mrs_schema_version > 2)
 {
   --let $_mrs_tmp_columns=$_mrs_tmp_columns ,metadata
   --let $_mrs_tmp_values=$_mrs_tmp_values ,$mrs_add_db_object_metadata

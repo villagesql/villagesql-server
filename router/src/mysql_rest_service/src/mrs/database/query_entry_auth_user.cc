@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -48,11 +48,13 @@ mysqlrouter::sqlstring value_or_empty_is_null(const std::string &value) {
 
 using AuthUser = QueryEntryAuthUser::AuthUser;
 
+QueryEntryAuthUser::QueryEntryAuthUser(
+    std::shared_ptr<mrs::interface::QueryFactory> qf)
+    : qf_{qf} {}
+
 bool QueryEntryAuthUser::query_user(MySQLSession *session,
                                     const AuthUser *user_data) {
   loaded_ = 0;
-  // TODO(lkotula): do a proper Query building, that resistant to SQL injection
-  // (Shouldn't be in review)
   query_ = {
       "SELECT id, auth_app_id, name, email, vendor_user_id, login_permitted, "
       "app_options, auth_string FROM mysql_rest_service_metadata.mrs_user "
@@ -65,11 +67,6 @@ bool QueryEntryAuthUser::query_user(MySQLSession *session,
     query_ << user_data->app_id;
 
   do {
-    //    if (user_data->has_user_id) {
-    //      query_ << (mysqlrouter::sqlstring("and id=? ") <<
-    //      user_data->user_id); break;
-    //    }
-
     if (!user_data->vendor_user_id.empty()) {
       query_ << (mysqlrouter::sqlstring("and vendor_user_id=? ")
                  << user_data->vendor_user_id);
@@ -97,9 +94,9 @@ bool QueryEntryAuthUser::query_user(MySQLSession *session,
   /* What do do when loaded_ is greater than 1 ?*/
   if (loaded_ == 0) return false;
 
-  QueryEntriesAuthPrivileges auth_privileges;
-  auth_privileges.query_user(session, user_data_.user_id,
-                             &user_data_.privileges);
+  auto auth_privileges = qf_->create_query_auth_privileges();
+  auth_privileges->query_user(session, user_data_.user_id,
+                              &user_data_.privileges);
 
   QueryUserGroups groups;
   groups.query_groups(session, user_data_.user_id, &user_data_.groups);

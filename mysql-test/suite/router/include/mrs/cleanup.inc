@@ -43,6 +43,20 @@ DROP ROLE mysql_rest_service_meta_provider;
 DROP ROLE mysql_rest_service_data_provider;
 DROP ROLE mysql_rest_service_dev;
 
+if ($mrs_schema_version >= 4)
+{
+# This may be executed on tests that run schema 2,3,4 and it
+# would produce the difference in `result` file.
+# This output must be silenced.
+
+--disable_query_log
+--disable_result_log
+DROP ROLE mysql_rest_service_user;
+--enable_result_log
+--enable_query_log
+}
+
+
 if ($router_config_to_remove1)
 {
   --remove_file $router_config_to_remove1

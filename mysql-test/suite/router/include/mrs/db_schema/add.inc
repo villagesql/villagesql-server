@@ -56,7 +56,7 @@ if ($mrs_schema_version == 2)
               $mrs_add_schema_options);
 }
 
-if ($mrs_schema_version == 3)
+if ($mrs_schema_version > 2)
 {
   eval INSERT INTO mysql_rest_service_metadata.db_schema(
                 id, service_id, name, request_path,

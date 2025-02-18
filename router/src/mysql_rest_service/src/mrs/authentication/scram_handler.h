@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2023, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2023, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -33,7 +33,8 @@ namespace authentication {
 
 class ScramHandler : public SaslHandler {
  public:
-  ScramHandler(const AuthApp &entry, const std::string &random_data);
+  ScramHandler(const AuthApp &entry, const std::string &random_data,
+               QueryFactory *qf);
 
   bool redirects(RequestContext &ctxt) const override;
   std::optional<std::string> get_session_id_from_request_data(

@@ -38,6 +38,7 @@
 #include "mrs/database/entry/auth_app.h"
 #include "mrs/interface/auth_handler_factory.h"
 #include "mrs/interface/authorize_manager.h"
+#include "mrs/interface/query_factory.h"
 #include "mrs/interface/rest_handler.h"
 #include "mrs/users/user_manager.h"
 
@@ -51,6 +52,7 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
   using AuthHandlerFactoryPtr =
       std::shared_ptr<mrs::interface::AuthHandlerFactory>;
   using RestHandlerPtr = std::shared_ptr<RestHandler>;
+  using QueryFactory = mrs::interface::QueryFactory;
 
   class ServiceAuthorize {
    public:
@@ -68,9 +70,7 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
 
  public:
   AuthorizeManager(collector::MysqlCacheManager *cache_manager,
-                   const std::string &jwt_secret);
-  AuthorizeManager(collector::MysqlCacheManager *cache_manager,
-                   const std::string &jwt_secret,
+                   const std::string &jwt_secret, QueryFactory *query_factory,
                    AuthHandlerFactoryPtr factory);
 
   void update(const Entries &entries) override;
@@ -120,7 +120,7 @@ class AuthorizeManager : public mrs::interface::AuthorizeManager,
                              const std::string &account) override;
 
   collector::MysqlCacheManager *cache_manager_;
-  users::UserManager user_manager_{true, {}};
+  users::UserManager user_manager_;
   http::SessionManager session_manager_;
   Container container_;
   std::string jwt_secret_;

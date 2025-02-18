@@ -233,6 +233,8 @@ create_schema_monitor_factory(
     case mrs::interface::kSupportedMrsMetadataVersion_2:
       return std::make_unique<mrs::database::v2::SchemaMonitorFactory>();
     case mrs::interface::kSupportedMrsMetadataVersion_3:
+      [[fallthrough]];
+    case mrs::interface::kSupportedMrsMetadataVersion_4:
       return std::make_unique<mrs::database::v3::SchemaMonitorFactory>();
     default:
       assert(false && "Unsupported MRS schema version.");
@@ -247,6 +249,8 @@ std::unique_ptr<mrs::interface::QueryFactory> create_query_factory(
       return std::make_unique<mrs::database::v2::QueryFactory>();
     case mrs::interface::kSupportedMrsMetadataVersion_3:
       return std::make_unique<mrs::database::v3::QueryFactory>();
+    case mrs::interface::kSupportedMrsMetadataVersion_4:
+      return std::make_unique<mrs::database::v4::QueryFactory>();
     default:
       assert(false && "Unsupported MRS schema version.");
   }
