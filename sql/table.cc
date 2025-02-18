@@ -6554,12 +6554,19 @@ bool Table_ref::is_mergeable() const {
   return derived->is_mergeable();
 }
 
-bool Table_ref::materializable_is_const() const {
+bool Table_ref::has_stored_program() const {
+  assert(derived != nullptr);
+  return derived->has_stored_program();
+}
+
+bool Table_ref::materializable_is_const(THD *thd) const {
   assert(uses_materialization());
   const Query_expression *unit = derived_query_expression();
+  const bool explain_mode = thd->lex->is_explain();
   return unit->query_result()->estimated_rowcount <= 1 &&
          (unit->first_query_block()->active_options() &
-          OPTION_NO_SUBQUERY_DURING_OPTIMIZATION) == 0;
+          OPTION_NO_SUBQUERY_DURING_OPTIMIZATION) == 0 &&
+         !(explain_mode && has_stored_program());
 }
 
 /**

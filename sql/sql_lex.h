@@ -741,6 +741,8 @@ class Query_expression {
   bool prepared;   ///< All query blocks in query expression are prepared
   bool optimized;  ///< All query blocks in query expression are optimized
   bool executed;   ///< Query expression has been executed
+  ///< Explain mode: query expression refers stored function
+  bool m_has_stored_program{false};
 
   /// Object to which the result for this query expression is sent.
   /// Not used if we materialize directly into a parent query expression's
@@ -784,6 +786,8 @@ class Query_expression {
   /// @return true for a query expression without UNION/INTERSECT/EXCEPT or
   /// multi-level ORDER, i.e. we have a "simple table".
   bool is_simple() const { return m_query_term->term_type() == QT_QUERY_BLOCK; }
+
+  bool has_stored_program() const { return m_has_stored_program; }
 
   /// Values for Query_expression::cleaned
   enum enum_clean_state {
@@ -5218,4 +5222,12 @@ class Change_current_query_block {
 };
 
 void get_select_options_str(ulonglong options, std::string *str);
+
+template <typename T>
+inline bool WalkQueryExpression(Query_expression *query_expr, enum_walk walk,
+                                T &&functor) {
+  return query_expr->walk(&Item::walk_helper_thunk<T>, walk,
+                          reinterpret_cast<uchar *>(&functor));
+}
+
 #endif /* SQL_LEX_INCLUDED */
