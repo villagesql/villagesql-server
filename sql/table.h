@@ -3230,7 +3230,10 @@ class Table_ref {
     during execution. The hypergraph optimizer does not care about const tables,
     so such tables are not executed during optimization time when it is active.
   */
-  bool materializable_is_const() const;
+  bool materializable_is_const(THD *thd) const;
+
+  /// @returns true if this is a derived table containing a stored function.
+  bool has_stored_program() const;
 
   /// Return true if this is a derived table or view that is merged
   bool is_merged() const { return effective_algorithm == VIEW_ALGORITHM_MERGE; }

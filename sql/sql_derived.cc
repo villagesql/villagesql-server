@@ -1676,7 +1676,7 @@ bool Table_ref::optimize_derived(THD *thd) {
   // at execution time (in fact, it will get confused and crash if it has
   // already been materialized).
   if (!thd->lex->using_hypergraph_optimizer()) {
-    if (materializable_is_const() &&
+    if (materializable_is_const(thd) &&
         (create_materialized_table(thd) || materialize_derived(thd)))
       return true;
   }
