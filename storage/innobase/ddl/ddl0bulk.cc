@@ -473,6 +473,8 @@ dberr_t Loader::Thread_data::fill_tuple(const row_prebuilt_t *prebuilt,
           [[fallthrough]];
         case MYSQL_TYPE_JSON:
           [[fallthrough]];
+        case MYSQL_TYPE_VECTOR:
+          [[fallthrough]];
         case MYSQL_TYPE_LONG_BLOB:
           length_size = 4;
           break;

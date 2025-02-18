@@ -60,6 +60,7 @@ struct Bulk_load_error_location_details {
   std::string m_error_mesg{};
   std::string m_table_name{};
   size_t m_bytes;
+  size_t m_column_length;
 
   std::ostream &print(std::ostream &out) const;
 };
@@ -626,6 +627,7 @@ inline bool Column_meta::can_be_stored_externally() const {
     case MYSQL_TYPE_GEOMETRY:
     case MYSQL_TYPE_VARCHAR:
     case MYSQL_TYPE_TINY_BLOB:
+    case MYSQL_TYPE_VECTOR:
     case MYSQL_TYPE_BLOB:
     case MYSQL_TYPE_MEDIUM_BLOB:
     case MYSQL_TYPE_LONG_BLOB: {
