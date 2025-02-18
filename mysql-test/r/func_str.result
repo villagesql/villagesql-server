@@ -6006,3 +6006,18 @@ SELECT "hello" COLLATE UTF8_bin;
 "hello" COLLATE UTF8_bin
 hello
 SET NAMES default;
+#
+# Bug#37601389 Assertion `!thd->is_error()' failed|sql_resolver.cc
+#
+CREATE TABLE customer_demographics (
+cd_demo_sk int NOT NULL,
+cd_purchase_estimate int DEFAULT NULL,
+PRIMARY KEY (cd_demo_sk)
+);
+INSERT INTO customer_demographics VALUES (1,500) ;
+SELECT * FROM  customer_demographics
+WHERE CEILING( customer_demographics.cd_purchase_estimate )
+BETWEEN '2037' AND ( -71 * ( -1552207807 * 440370369 ) )
+COLLATE utf8mb4_et_0900_as_cs;
+ERROR 22003: BIGINT value is out of range in '(-(71) * (-(1552207807) * 440370369))'
+DROP TABLE customer_demographics;

@@ -1703,7 +1703,7 @@ String *Item_func_numhybrid::val_str(String *str) {
     }
     case INT_RESULT: {
       const longlong nr = int_op();
-      if (null_value) return nullptr; /* purecov: inspected */
+      if (null_value || current_thd->is_error()) return error_str();
       str->set_int(nr, unsigned_flag, collation.collation);
       break;
     }

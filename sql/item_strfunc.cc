@@ -3117,7 +3117,8 @@ bool Item_func_set_collation::do_itemize(Parse_context *pc, Item **res) {
 String *Item_func_set_collation::val_str(String *str) {
   assert(fixed);
   str = args[0]->val_str(str);
-  if ((null_value = args[0]->null_value)) return nullptr;
+  null_value = args[0]->null_value;
+  if (null_value || current_thd->is_error()) return error_str();
   str->set_charset(collation.collation);
   return str;
 }
