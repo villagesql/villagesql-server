@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2024, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -11945,8 +11945,8 @@ Dblqh::scanMarkers(Signal* signal,
       lqhTransConf->transId2 = iter.curr.p->transid2;
       lqhTransConf->apiRef   = iter.curr.p->apiRef;
       lqhTransConf->apiOpRec = iter.curr.p->apiOprec;
-      sendSignal(tcNodeFailPtr.p->newTcBlockref, GSN_LQH_TRANSCONF, 
-		 signal, 7, JBB);
+      sendSignal(tcNodeFailPtr.p->newTcBlockref, GSN_LQH_TRANSCONF, signal,
+                 LqhTransConf::MarkerSignalLength, JBB);
       
       signal->theData[0] = ZSCAN_MARKERS;
       signal->theData[1] = tcNodeFailPtr.i;
