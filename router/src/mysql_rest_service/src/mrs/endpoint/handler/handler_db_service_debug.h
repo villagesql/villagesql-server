@@ -59,6 +59,9 @@ class HandlerDbServiceDebug : public mrs::rest::Handler {
   UniversalId get_service_id() const override;
   UniversalId get_db_object_id() const override;
   UniversalId get_schema_id() const override;
+  const std::string &get_service_path() const override;
+  const std::string &get_db_object_path() const override;
+  const std::string &get_schema_path() const override;
 
   // void authorization(rest::RequestContext *ctxt) override;
 

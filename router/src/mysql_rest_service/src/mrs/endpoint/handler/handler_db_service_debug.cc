@@ -81,8 +81,7 @@ HttpResult HandlerDbServiceDebug::handle_delete(
   throw http::Error(HttpStatusCode::Forbidden);
 }
 
-HttpResult HandlerDbServiceDebug::handle_put(
-    [[maybe_unused]] rest::RequestContext *ctxt) {
+HttpResult HandlerDbServiceDebug::handle_put(rest::RequestContext *ctxt) {
   // Get the request body for cache lookup or normal processing
   auto &input_buffer = ctxt->request->get_input_buffer();
   auto size = input_buffer.length();
@@ -122,6 +121,17 @@ UniversalId HandlerDbServiceDebug::get_schema_id() const {
   return UniversalId{};
 }
 
+const std::string &HandlerDbServiceDebug::get_service_path() const {
+  return entry_->url_context_root;
+}
+
+const std::string &HandlerDbServiceDebug::get_db_object_path() const {
+  return empty_path();
+}
+
+const std::string &HandlerDbServiceDebug::get_schema_path() const {
+  return empty_path();
+}
 }  // namespace handler
 }  // namespace endpoint
 }  // namespace mrs
