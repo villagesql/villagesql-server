@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -25,6 +25,8 @@
 #ifndef ROUTER_SRC_MYSQL_REST_SERVICE_INCLUDE_MRS_INTERFACE_ENDPOINT_CONFIGURATION_H_
 #define ROUTER_SRC_MYSQL_REST_SERVICE_INCLUDE_MRS_INTERFACE_ENDPOINT_CONFIGURATION_H_
 
+#include <string>
+
 namespace mrs {
 namespace interface {
 
@@ -34,6 +36,7 @@ class EndpointConfiguration {
 
  public:
   virtual bool does_server_support_https() const = 0;
+  virtual std::string get_debug_port() const = 0;
 };
 
 }  // namespace interface

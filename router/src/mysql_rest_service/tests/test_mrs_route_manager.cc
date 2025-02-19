@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +31,7 @@
 #include "mock/mock_auth_manager.h"
 #include "mock/mock_endpoint_factory.h"
 #include "mock/mock_mysqlcachemanager.h"
+#include "mrs/configuration.h"
 
 using mrs::database::entry::DbObject;
 using EnabledType = mrs::database::entry::EnabledType;
@@ -68,8 +69,8 @@ MATCHER_P(ById, id, "") { return id == arg.id; }
 class BaseEndpointManagerTests : public Test {
  public:
   void SetUp() override {
-    const bool k_is_ssl = true;
-    sut_.reset(new mrs::EndpointManager(&mock_mysqlcache_, k_is_ssl,
+    configuration_.is_https_ = true;
+    sut_.reset(new mrs::EndpointManager(configuration_, &mock_mysqlcache_,
                                         &mock_auth_manager_, nullptr,
                                         mock_endpoint_factory_.copy_base()));
   }
@@ -173,6 +174,7 @@ class BaseEndpointManagerTests : public Test {
   StrictMock<MockAuthManager> mock_auth_manager_;
   StrictMock<MockMysqlCacheManager> mock_mysqlcache_;
   std::unique_ptr<mrs::EndpointManager> sut_;
+  ::mrs::Configuration configuration_;
 };
 
 TEST_F(BaseEndpointManagerTests, sut_does_nothing) {}

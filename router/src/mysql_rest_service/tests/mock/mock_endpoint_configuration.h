@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -34,6 +34,7 @@ class MockEndpointConfiguration : public mrs::interface::EndpointConfiguration {
   MockEndpointConfiguration() = default;
 
   MOCK_METHOD(bool, does_server_support_https, (), (const, override));
+  MOCK_METHOD(std::string, get_debug_port, (), (const, override));
 };
 
 #endif  // ROUTER_SRC_REST_MRS_TESTS_MOCK_MOCK_ENDPOINT_CONFIGURATION_H_

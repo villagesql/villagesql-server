@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -319,6 +319,8 @@ PluginConfig::PluginConfig(const ConfigSection *section,
       get_option(section, "wait_for_metadata_schema_access", SecondsOption{});
 
   developer_ = get_option(section, "developer", StringOption{});
+  developer_debug_port_ =
+      get_option(section, "developer_debug_port", StringOption{});
 }
 
 std::set<std::string> PluginConfig::get_waiting_for_routing_plugins() {

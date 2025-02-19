@@ -412,6 +412,28 @@ void BootstrapConfigurator::prepare_command_options(
 
         bootstrap_mrs_developer_ = developer_name;
       });
+  arg_handler_.add_option(
+      OptionNames({"--mrs-developer-debug-port"}),
+      "TCP Port to be used to start a debug server to debug JavaScript "
+      "MRS endpoints.",
+      CmdOptionValueReq::required, "developer-debug-port",
+      [this](const std::string &port) {
+        if (port.empty()) {
+          throw std::runtime_error(
+              "Value for --mrs-developer-debug-port option cannot be empty");
+        }
+
+        std::string::const_iterator it = port.begin();
+        while (it != port.end() && std::isdigit(*it)) ++it;
+
+        if (it != port.end()) {
+          throw std::runtime_error(
+              "Value for --mrs-developer-debug-port option should be a numeric "
+              "value");
+        }
+
+        bootstrap_mrs_developer_debug_port_ = port;
+      });
 
   arg_handler_.add_option(
       OptionNames({"-V", "--version"}), "Display version information and exit.",
@@ -761,6 +783,10 @@ void BootstrapConfigurator::store_mrs_configuration(
     mrs_section.add_line("router_id", std::to_string(mrs_router_id));
     if (!bootstrap_mrs_developer_.empty()) {
       mrs_section.add_line("developer", bootstrap_mrs_developer_);
+      if (!bootstrap_mrs_developer_debug_port_.empty()) {
+        mrs_section.add_line("developer_debug_port",
+                             bootstrap_mrs_developer_debug_port_);
+      }
     }
   }
   os.close();

@@ -126,6 +126,7 @@ class BootstrapConfigurator {
   BootstrapCredentials mrs_data_account_;
   std::string mrs_secret_;
   std::string bootstrap_mrs_developer_;
+  std::string bootstrap_mrs_developer_debug_port_;
   bool bootstrap_mrs_{false};
   bool is_legacy_{true};
   bool showing_info_{false};

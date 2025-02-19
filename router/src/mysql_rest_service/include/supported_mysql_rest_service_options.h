@@ -36,6 +36,7 @@ static constexpr std::array mysql_rest_service_supported_options{
     "router_id",
     "metadata_refresh_interval",
     "developer",
+    "developer_debug_port",
     "wait_for_metadata_schema_access"};
 
 #endif /* MYSQL_REST_SERVICE_SUPPORTED_OPTIONS_INCLUDED */

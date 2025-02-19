@@ -31,6 +31,7 @@
 #include <vector>
 
 #include "collector/mysql_cache_manager.h"
+#include "mrs/configuration.h"
 #include "mrs/database/entry/content_file.h"
 #include "mrs/database/entry/content_set.h"
 #include "mrs/database/entry/db_object.h"
@@ -96,7 +97,8 @@ class EndpointManager : public mrs::interface::EndpointManager {
   };
 
  public:
-  EndpointManager(collector::MysqlCacheManager *cache, const bool is_ssl,
+  EndpointManager(const mrs::Configuration &configuration,
+                  collector::MysqlCacheManager *cache,
                   mrs::interface::AuthorizeManager *auth_manager,
                   mrs::GtidManager *gtid_manager,
                   EndpointFactoryPtr endpoint_factory = {},

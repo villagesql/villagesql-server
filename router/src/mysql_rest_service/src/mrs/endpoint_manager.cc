@@ -59,12 +59,19 @@ class PluginOptions {
 
 class EndpointConfiguration : public mrs::interface::EndpointConfiguration {
  public:
-  EndpointConfiguration(const bool is_ssl) : is_ssl_{is_ssl} {}
+  EndpointConfiguration(const mrs::Configuration &configuration)
+      : configuration_{configuration} {}
 
-  bool does_server_support_https() const override { return is_ssl_; }
+  bool does_server_support_https() const override {
+    return configuration_.is_https_;
+  }
+
+  std::string get_debug_port() const override {
+    return configuration_.developer_debug_port_;
+  }
 
  private:
-  bool is_ssl_;
+  const mrs::Configuration &configuration_;
 };
 
 }  // namespace
@@ -83,14 +90,17 @@ using ResponseCache = mrs::ResponseCache;
 using EndpointId = EndpointManager::EndpointId;
 using IdType = EndpointManager::EndpointId::IdType;
 
-EndpointManager::EndpointManager(
-    collector::MysqlCacheManager *cache, const bool is_ssl,
-    mrs::interface::AuthorizeManager *auth_manager,
-    mrs::GtidManager *gtid_manager, EndpointFactoryPtr endpoint_factory,
-    ResponseCache *response_cache, ResponseCache *file_cache,
-    SlowQueryMonitor *slow_query_monitor, MysqlTaskMonitor *task_monitor)
+EndpointManager::EndpointManager(const mrs::Configuration &configuration,
+                                 collector::MysqlCacheManager *cache,
+                                 mrs::interface::AuthorizeManager *auth_manager,
+                                 mrs::GtidManager *gtid_manager,
+                                 EndpointFactoryPtr endpoint_factory,
+                                 ResponseCache *response_cache,
+                                 ResponseCache *file_cache,
+                                 SlowQueryMonitor *slow_query_monitor,
+                                 MysqlTaskMonitor *task_monitor)
     : cache_{cache},
-      is_ssl_{is_ssl},
+      is_ssl_{configuration.is_https_},
       auth_manager_{auth_manager},
       gtid_manager_{gtid_manager},
       endpoint_factory_{endpoint_factory} {
@@ -98,9 +108,9 @@ EndpointManager::EndpointManager(
     auto handler_factory = std::make_shared<mrs::endpoint::HandlerFactory>(
         auth_manager_, gtid_manager_, cache_, response_cache, file_cache,
         slow_query_monitor, task_monitor);
-    auto configuration = std::make_shared<EndpointConfiguration>(is_ssl);
-    endpoint_factory_ =
-        std::make_shared<EndpointFactory>(handler_factory, configuration);
+    endpoint_factory_ = std::make_shared<EndpointFactory>(
+        handler_factory,
+        std::make_shared<EndpointConfiguration>(configuration));
   }
 }
 

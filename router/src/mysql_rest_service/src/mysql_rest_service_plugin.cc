@@ -176,15 +176,10 @@ struct MrdsModule {
                                                &mysql_connection_cache};
   mrs::database::MysqlTaskMonitor task_monitor;
 
-  mrs::EndpointManager mrds_object_manager{&mysql_connection_cache,
-                                           configuration.is_https_,
-                                           &authentication,
-                                           &gtid_manager,
-                                           nullptr,
-                                           &response_cache,
-                                           &file_cache,
-                                           &slow_monitor,
-                                           &task_monitor};
+  mrs::EndpointManager mrds_object_manager{
+      configuration, &mysql_connection_cache, &authentication, &gtid_manager,
+      nullptr,       &response_cache,         &file_cache,     &slow_monitor,
+      &task_monitor};
   mrs::observability::EntitiesManager entities_manager;
 
   /**

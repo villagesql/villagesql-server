@@ -63,6 +63,8 @@ class HandlerFactory {
       EndpointBasePtr db_object_endpoint) = 0;
   virtual std::unique_ptr<Handler> create_db_object_metadata_handler(
       EndpointBasePtr db_object_endpoint) = 0;
+  virtual std::unique_ptr<Handler> create_db_service_debug_handler(
+      EndpointBasePtr db_service_endpoint) = 0;
   virtual std::unique_ptr<Handler> create_db_service_metadata_handler(
       EndpointBasePtr db_service_endpoint) = 0;
 

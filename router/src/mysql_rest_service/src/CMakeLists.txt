@@ -213,6 +213,7 @@ ADD_STATIC_LIBRARY(mysql_rest_service_impl
   mrs/endpoint/handler/authentication/handler_authorize_user.cc
   mrs/endpoint/handler/persistent/persistent_data_content_file.cc
   mrs/endpoint/handler/handler_content_file.cc
+  mrs/endpoint/handler/handler_db_service_debug.cc
   mrs/endpoint/handler/handler_db_service_metadata.cc
   mrs/endpoint/handler/handler_db_schema_metadata_catalog.cc
   mrs/endpoint/handler/handler_db_schema_metadata.cc

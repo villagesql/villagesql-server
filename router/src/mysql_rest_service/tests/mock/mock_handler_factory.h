@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -37,6 +37,8 @@ class MockHandlerFactory : public mrs::interface::HandlerFactory {
       create_persisten_content_file,
       (EndpointBasePtr, const OptionalIndexNames &index_names), (override));
 
+  MOCK_METHOD(std::unique_ptr<Handler>, create_db_service_debug_handler,
+              (EndpointBasePtr db_service_endpoint), (override));
   MOCK_METHOD(std::unique_ptr<Handler>, create_db_service_metadata_handler,
               (EndpointBasePtr db_service_endpoint), (override));
   MOCK_METHOD(std::unique_ptr<Handler>,

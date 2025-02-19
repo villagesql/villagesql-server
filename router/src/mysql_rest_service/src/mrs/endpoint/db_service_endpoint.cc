@@ -61,6 +61,12 @@ UniversalId DbServiceEndpoint::get_parent_id() const {
 
 const DbServicePtr DbServiceEndpoint::get() const { return entry_; }
 
+void DbServiceEndpoint::set_debug_enabled(bool value) {
+  debug_enabled_ = value;
+}
+
+bool DbServiceEndpoint::is_debug_enabled() const { return debug_enabled_; }
+
 void DbServiceEndpoint::set(const DbService &entry, EndpointBasePtr parent) {
   auto lock = std::unique_lock<std::shared_mutex>(endpoints_access_);
   entry_ = std::make_shared<DbService>(entry);
@@ -161,6 +167,9 @@ void DbServiceEndpoint::activate_public() {
 
   url_handlers_.push_back(
       factory_->create_db_service_metadata_handler(this_ep));
+  if (!get_configuration()->get_debug_port().empty()) {
+    url_handlers_.push_back(factory_->create_db_service_debug_handler(this_ep));
+  }
   url_handlers_.push_back(factory_->create_authentication_login(this_ep));
   url_handlers_.push_back(factory_->create_authentication_logout(this_ep));
   url_handlers_.push_back(factory_->create_authentication_completed(this_ep));

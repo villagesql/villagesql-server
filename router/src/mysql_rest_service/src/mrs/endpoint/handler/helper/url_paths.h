@@ -39,6 +39,7 @@ const std::string k_path_metadata_catalog = "metadata-catalog";
 const std::string k_path_id_or_query =
     "(/([0-9]|[a-z]|[A-Z]|[-._~!$&'()*+,;=:@%]| )*/?)?";
 const std::string k_metadata = "_metadata";
+const std::string k_debug = "_debug";
 
 inline std::string regex_path_schema_catalog(
     const std::string &service_schema_path) {
@@ -70,6 +71,11 @@ inline std::string regex_path_obj_metadata_catalog(
   const std::string k_metadata_catalog = "/metadata-catalog";
   using namespace std::string_literals;
   return "^"s + service_schema_path + k_metadata_catalog + obj_name + "/?$"s;
+}
+
+inline std::string regex_path_service_debug(const std::string &service_path) {
+  using namespace std::string_literals;
+  return "^"s + service_path + "/"s + k_debug + "/?$"s;
 }
 
 inline std::string regex_path_service_metadata(

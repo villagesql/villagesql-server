@@ -64,6 +64,10 @@ class DbServiceEndpoint : public OptionEndpoint {
 
   const DbServicePtr get() const;
   void set(const DbService &entry, EndpointBasePtr parent);
+
+  void set_debug_enabled(bool value);
+  bool is_debug_enabled() const;
+
 #ifdef HAVE_GRAALVM_PLUGIN
   std::shared_ptr<graalvm::Pooled_context> get_scripting_context();
 #endif
@@ -85,6 +89,7 @@ class DbServiceEndpoint : public OptionEndpoint {
 
   DbServicePtr entry_;
   std::vector<HandlerPtr> url_handlers_;
+  bool debug_enabled_ = false;
 
 #ifdef HAVE_GRAALVM_PLUGIN
   std::shared_ptr<file_system::DbServiceFileSystem> file_system_;
