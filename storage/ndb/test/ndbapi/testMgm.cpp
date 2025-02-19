@@ -3264,8 +3264,7 @@ static int runGracefulStopRestartNodesInNG0(NDBT_Context *ctx,
   ctx->incProperty("ReplicasReady");
   ctx->getPropertyWait("ReplicasReady", numReplicas);
 
-  int res =
-      restarter.restartOneDbNode(myNodeId, false, true, false, false, false);
+  int res = restarter.restartOneDbNode(myNodeId, false, true, false, false);
 
   ndbout_c("restart node %u result : %d", myNodeId, res);
 
@@ -3275,6 +3274,10 @@ static int runGracefulStopRestartNodesInNG0(NDBT_Context *ctx,
     ndbout_c("ndb_mgm_restart failed %s %d",
              ndb_mgm_get_latest_error_msg(restarter.handle),
              ndb_mgm_get_latest_error(restarter.handle));
+    if (res == -2) {
+      // Timeout, unknown state of restart
+      return NDBT_FAILED;
+    }
   }
 
   return NDBT_OK;
