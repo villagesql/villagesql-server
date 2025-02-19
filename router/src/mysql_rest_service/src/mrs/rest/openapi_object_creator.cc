@@ -24,6 +24,7 @@
 
 #include "mrs/rest/openapi_object_creator.h"
 
+#include <charconv>
 #include <chrono>
 #include <iomanip>
 #include <sstream>
