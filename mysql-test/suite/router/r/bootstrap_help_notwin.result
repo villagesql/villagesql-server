@@ -244,6 +244,9 @@ mysqlrouter_bootstrap [--mrs]
   --mrs-developer <developer>
         Expose the services that are in development by the developer
         provided as a parameter.
+  --mrs-developer-debug-port <developer-debug-port>
+        TCP Port to be used to start a debug server to debug JavaScript
+        MRS endpoints.
   -V, --version
         Display version information and exit.
   -?, --help
