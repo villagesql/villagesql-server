@@ -94,7 +94,6 @@ struct ApplicationConfiguration {
   std::string content_type;
   HttpStatusCode::key_type expected_status{HttpStatusCode::Ok};
   std::map<std::string, std::string> expected_headers;
-  std::optional<Seconds> wait_until_found;
   std::optional<Seconds> wait_until_status;
 };
 

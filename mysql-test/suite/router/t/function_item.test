@@ -214,7 +214,7 @@
 --echo # I.1
 exec $MRS_CLIENT_ARGS
   --path /svc/func/nothing -t POST
-  --wait-until-found 60
+  --wait-until-status 60
   --expected-status BadRequest;
 
 --echo

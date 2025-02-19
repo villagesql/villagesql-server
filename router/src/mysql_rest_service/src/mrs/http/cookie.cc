@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -82,24 +82,6 @@ void Cookie::clear(Request *request, const char *cookie_name) {
 std::string Cookie::get(const std::string &key) {
   return helper::container::get_value_default(cookies_, key, {});
 }
-
-// std::string Cookie::get(HttpRequest *request, const char *cookie_name) {
-//  auto value = request->get_input_headers().get(kHttpParameterNameCookie);
-//
-//  if (value == nullptr) return {};
-//
-//  std::string result;
-//  enum_key_values(value,
-//                  [&result, cookie_name](auto &key, std::string_view value) {
-//                    if (key == cookie_name) {
-//                      result = value;
-//                      return false;
-//                    }
-//                    return true;
-//                  });
-//
-//  return result;
-//}
 
 void Cookie::set(Request *request, const std::string &cookie_name,
                  const std::string &value, const duration duration,

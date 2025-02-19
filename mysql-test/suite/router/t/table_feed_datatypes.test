@@ -46,7 +46,7 @@
 
 let $MRS_CLIENT_EXC=$MRS_CLIENT_ARGS
      --exclude-json-pointer /items/*/links,/links,/limit,/offset,/hasMore,/count;
---exec $MRS_CLIENT_ARGS --path /svc/basic/t3/1 --wait-until-found 60 --display none
+--exec $MRS_CLIENT_ARGS --path /svc/basic/t3/1 --wait-until-status 60 --display none
 
 --echo
 --echo #

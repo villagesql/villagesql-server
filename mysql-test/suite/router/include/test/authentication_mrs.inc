@@ -149,7 +149,7 @@ if ($test_second_handler)
 --echo #
 --echo # II.1
 exec $MRS_CLIENT_ARGS
-  --wait-until-found 60
+  --wait-until-status 60
   --exclude-json-pointer  "/*"
   --path /svc2/basic2/o4;
 

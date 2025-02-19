@@ -77,7 +77,7 @@ let $MRS_CLIENT_ITEMS=$MRS_CLIENT_ARGS
      --exclude-json-pointer /limit,/offset,/hasMore,/count --json-schema-file $SCHEMA_DIR/items_without_links.sch;
      
 let $MRS_CLIENT_OBJECT=$MRS_CLIENT_ARGS --json-schema-file $SCHEMA_DIR/object_without_links.sch;
---exec $MRS_CLIENT_ARGS --path /svc/basic/t_disabled/1 --wait-until-found 60 --display none
+--exec $MRS_CLIENT_ARGS --path /svc/basic/t_disabled/1 --wait-until-status 60 --display none
 
 --echo
 --echo #

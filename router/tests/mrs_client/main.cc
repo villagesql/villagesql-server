@@ -464,23 +464,6 @@ std::vector<CmdOption> g_options{
      [](const std::string &value) { g_configuration.write_to_file = value; },
      [](const std::string &) {}},
 
-    {{"--wait-until-found"},
-     "In case when the request fails with code 'NOT-FOUND', this means that"
-     "mysqlrouter might not fetch the data. The refresh timeout is configurable"
-     "in router. Value for this parameter, specifies number of seconds, how "
-     "long the tool should wait"
-     "until the object becomes available.",
-     CmdOptionValueReq::required,
-     "meta_wait",
-     [](const std::string &value) {
-       auto i = atoi(value.c_str());
-       if (i <= 0)
-         throw std::invalid_argument(
-             "Wait timeout should be greater than zero.");
-       g_configuration.wait_until_found = Seconds(i);
-     },
-     [](const std::string &) {}},
-
     {{"--wait-until-status"},
      "Wait until server returns status-code specified in `expected-status` "
      "parameter. "
@@ -783,19 +766,8 @@ std::vector<CmdOption> g_options{
 
 template <typename Duration>
 bool should_retry(Duration start, const Result &r) {
-  auto not_found = r.status == HttpStatusCode::NotFound;
   auto expected_status = r.status == g_configuration.expected_status;
   auto waiting_for = Duration::clock::now() - start;
-
-  // TODO(lkotula): Should we remove the wait_unitl_found parameter.
-  // It is similar to `wait_until_status`, with the difference that
-  // its more strict (expecting either Ok or NotFound).
-  if (g_configuration.wait_until_found.has_value() && not_found) {
-    if (waiting_for < g_configuration.wait_until_found.value()) {
-      std::this_thread::sleep_for(Seconds(1));
-      return true;
-    }
-  }
 
   if (g_configuration.wait_until_status.has_value() && !expected_status) {
     if (waiting_for < g_configuration.wait_until_status.value()) {

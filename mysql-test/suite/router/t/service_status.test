@@ -73,7 +73,7 @@ SET @service_id4=@service_id;
 --let $mrs_host_and_port=127.0.0.1:$HTTP_SERVER_PORT
 --let MRS_CLIENT_ARGS=$MRS_CLIENT --url https://$mrs_host_and_port --display none
 
---exec $MRS_CLIENT_ARGS --path /svc2/basic/t1/1 --wait-until-found 60
+--exec $MRS_CLIENT_ARGS --path /svc2/basic/t1/1 --wait-until-status 60
 
 
 --echo *******************************************************

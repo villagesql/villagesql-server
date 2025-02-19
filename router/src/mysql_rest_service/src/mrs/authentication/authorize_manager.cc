@@ -466,7 +466,6 @@ Session *AuthorizeManager::authorize_jwt(const UniversalId service_id,
   if (!json_exp->IsString()) return nullptr;
   if (!json_aid->IsString()) return nullptr;
 
-  // TODO(lkotula): Change from_raw ? (Shouldn't be in review)
   auto user_id = helper::string::unhex<UserIdContainer>(json_uid->GetString())
                      .get_user_id();
   auto exp = json_exp->GetString();

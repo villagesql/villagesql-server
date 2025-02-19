@@ -57,7 +57,7 @@
 --echo
 --echo #
 --echo # I.1
---exec $MRS_CLIENT_ARGS --path /svc/basic/t2/1 --wait-until-found=60
+--exec $MRS_CLIENT_ARGS --path /svc/basic/t2/1 --wait-until-status=60
 
 --echo
 --echo #

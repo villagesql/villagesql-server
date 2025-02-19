@@ -64,7 +64,7 @@
 
 exec $MRS_CLIENT_ARGS
   --path /svc/paging/m2
-  --wait-until-found 60
+  --wait-until-status 60
   --json-pointer /limit,/offset,/count,/hasMore;
 
 
@@ -80,7 +80,7 @@ UPDATE `mysql_rest_service_metadata`.`db_object`
 
 exec $MRS_CLIENT_ARGS
   --path /svc/paging/m25
-  --wait-until-found 60
+  --wait-until-status 60
   --json-pointer /limit,/offset,/count,/hasMore;
 
 
@@ -94,7 +94,7 @@ exec $MRS_CLIENT_ARGS
 
 exec $MRS_CLIENT_ARGS
   --path /svc/paging/l101
-  --wait-until-found 60
+  --wait-until-status 60
   --json-pointer /limit,/offset,/count,/hasMore;
 
 

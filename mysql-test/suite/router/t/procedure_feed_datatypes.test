@@ -151,7 +151,7 @@
 --let MRS_CLIENT_ARGS=$MRS_CLIENT --url https://$mrs_host_and_port
 
 let $MRS_CLIENT_EXC=$MRS_CLIENT_ARGS;
---exec $MRS_CLIENT_ARGS --path /svc/basic/bit --wait-until-found 60 --display none
+--exec $MRS_CLIENT_ARGS --path /svc/basic/bit --wait-until-status 60 --display none
 
 --echo
 --echo #

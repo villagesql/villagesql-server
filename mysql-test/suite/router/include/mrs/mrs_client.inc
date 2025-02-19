@@ -71,7 +71,7 @@ if ($mrs_client_arg_session_file)
 
 if ($mrs_client_arg_wait_until_found)
 {
-  --let $mrs_client_cmd=$mrs_client_cmd --wait-until-found=$mrs_client_arg_wait_until_found
+  --let $mrs_client_cmd=$mrs_client_cmd --wait-until-status=$mrs_client_arg_wait_until_found
 }
 
 if ($mrs_client_arg_wait_until_status)

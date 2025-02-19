@@ -90,7 +90,7 @@
 --echo # I.1
 # Wait until the DB_OBJECTS are fetched by router.
 exec $MRS_CLIENT_ARGS
-  --wait-until-found 60 -t PUT --payload "{}"
+  --wait-until-status 60 -t PUT --payload "{}"
   --path /svc/proc/one;
 
 --echo

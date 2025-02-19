@@ -34,7 +34,7 @@ insert into test_schema.tab values(1, "Andresh");
 --echo # Wait until MySQLRouter fetches db-object.
 exec $MRS_CLIENT_ARGS
   --path /svc/test_schema/tab
-  --wait-until-found 60;
+  --wait-until-status 60;
 
 --echo # Set the server to super_read_only, wait for the REST service to return 404
 SET GLOBAL super_read_only = 1;

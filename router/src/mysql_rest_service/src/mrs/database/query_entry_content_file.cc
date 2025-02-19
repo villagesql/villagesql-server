@@ -1,5 +1,5 @@
 /*
- Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+ Copyright (c) 2021, 2025, Oracle and/or its affiliates.
 
  This program is free software; you can redistribute it and/or modify
  it under the terms of the GNU General Public License, version 2.0,
@@ -26,11 +26,16 @@
 
 #include <stdexcept>
 
+#include "mysql/harness/logging/logging.h"
+
+IMPORT_LOG_FUNCTIONS();
+
 namespace mrs {
 namespace database {
 
 void QueryEntryContentFile::query_file(MySQLSession *session,
                                        const entry::UniversalId &file_id) {
+  file_id_ = file_id;
   query_ = {
       "SELECT size,content FROM mysql_rest_service_metadata.content_file WHERE "
       "id=?"};
@@ -45,9 +50,13 @@ void QueryEntryContentFile::query_file(MySQLSession *session,
 }
 
 void QueryEntryContentFile::on_row(const ResultRow &r) {
-  // TODO(lkotula): Should we report an error in case below ? (Shouldn't be in
-  // review)
-  if (r.size() < 2) return;
+  if (r.size() != 2) {
+    log_error(
+        "While querying for content_file, the result set has unexpected number "
+        "of columns: %zu",
+        r.size());
+    return;
+  }
   auto data = r[1];
   int data_length = atoi(r[0]);
 

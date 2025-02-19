@@ -76,7 +76,7 @@ INSERT INTO test.geo4326(g)
 
 --source ../include/mrs/end_object_definition.inc
 
---exec $MRS_CLIENT_ARGS --path /svc/test/geo0/1 --wait-until-found 60 --display none
+--exec $MRS_CLIENT_ARGS --path /svc/test/geo0/1 --wait-until-status 60 --display none
 
 --let $MRS_CLIENT_ARGS_LIST=$MRS_CLIENT_ARGS --json-pointer /items/*/g
 --let $MRS_CLIENT_ARGS_OBJ=$MRS_CLIENT_ARGS --json-pointer /g

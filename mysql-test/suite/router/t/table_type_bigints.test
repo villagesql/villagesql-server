@@ -115,7 +115,7 @@ EOF
 
 --source ../include/mrs/end_object_definition.inc
 
---exec $MRS_CLIENT_ARGS --path /svc/test/num/1 --wait-until-found 60 --display none
+--exec $MRS_CLIENT_ARGS --path /svc/test/num/1 --wait-until-status 60 --display none
 
 --let $MRS_CLIENT_ARGS_LIST=$MRS_CLIENT_ARGS  --json-schema-file $sch_asojson_file
 --let $MRS_CLIENT_ARGS_OBJ=$MRS_CLIENT_ARGS  --json-schema-file $sch_asjson_file

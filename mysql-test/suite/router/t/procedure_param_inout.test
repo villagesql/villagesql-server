@@ -218,7 +218,7 @@
 # Wait until MySQLRouter fetches db-object.
 exec $MRS_CLIENT_ARGS
   --path /svc/proc/nothing
-  --wait-until-found 60;
+  --wait-until-status 60;
 
 --echo
 --echo #

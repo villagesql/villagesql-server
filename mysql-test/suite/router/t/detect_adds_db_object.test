@@ -44,7 +44,7 @@
 --let MRS_CLIENT_ARGS=$MRS_CLIENT --url https://$mrs_host_and_port
 --let MRS_CLIENT_ARGS_404=$MRS_CLIENT_ARGS --expected-status 404 --response-type raw --display request,status
 
---exec $MRS_CLIENT_ARGS --path /svc/basic/t/1 --wait-until-found=60
+--exec $MRS_CLIENT_ARGS --path /svc/basic/t/1 --wait-until-status=60
 
 --echo
 --echo #

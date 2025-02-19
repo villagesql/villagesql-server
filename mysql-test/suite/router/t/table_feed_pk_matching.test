@@ -121,7 +121,7 @@ let $MRS_CLIENT_EXC=$MRS_CLIENT_ARGS
      --exclude-json-pointer /links,/hasMore,/limit,/offset,/items/*/links/*/rel;
 let $MRS_CLIENT_EXC1=$MRS_CLIENT_ARGS
      --exclude-json-pointer /links/*/rel;
---exec $MRS_CLIENT_ARGS --path /svc/pk/year --wait-until-found 60 --display none
+--exec $MRS_CLIENT_ARGS --path /svc/pk/year --wait-until-status 60 --display none
 
 --echo
 --echo #

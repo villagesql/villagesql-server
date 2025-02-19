@@ -47,7 +47,7 @@ AS SELECT $ver_major, $ver_minor, $ver_patch;
 echo Make sure the MRS starts the service despite the fact
       that minor and patch version is highier than expected;
 
-exec $MRS_CLIENT_ARGS --wait-until-found 60 --path /svc/basic/tab
+exec $MRS_CLIENT_ARGS --wait-until-status 60 --path /svc/basic/tab
       --display none;
 
 # Cleanup

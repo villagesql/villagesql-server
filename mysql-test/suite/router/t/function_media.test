@@ -148,7 +148,7 @@
 --echo #
 --echo # I.1
 exec $MRS_CLIENT_ARGS
-  --wait-until-found 60
+  --wait-until-status 60
   --path /svc/func/func_media
   -t POST
   --expected-status BadRequest;

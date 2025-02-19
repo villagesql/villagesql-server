@@ -67,7 +67,7 @@ SET @schema_id2=@content_set_id;
 # wait for the creation
 exec $MRS_CLIENT_ARGS
   --path /svc2/sch2/obj2
-  --wait-until-found 60
+  --wait-until-status 60
   --response-type RAW
   --display none;
 

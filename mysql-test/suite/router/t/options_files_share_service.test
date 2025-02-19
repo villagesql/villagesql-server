@@ -67,7 +67,7 @@ SET @service_id2=@service_id;
 # wait for the creation
 exec $MRS_CLIENT_ARGS
   --path /svc2/sch2/obj2
-  --wait-until-found 60
+  --wait-until-status 60
   --exclude-json-pointer '*'
   --display none;
 

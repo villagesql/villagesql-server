@@ -57,7 +57,7 @@ INSERT INTO `test`.`datetime_values` (id, dt) VALUES
 
 --source ../mrs/end_object_definition.inc
 
---exec $MRS_CLIENT_ARGS --path /svc/test/datetime/1 --wait-until-found 60 --display none
+--exec $MRS_CLIENT_ARGS --path /svc/test/datetime/1 --wait-until-status 60 --display none
 
 --let $MRS_CLIENT_ARGS_LIST=$MRS_CLIENT_ARGS --json-pointer /items/*/dt
 --let $MRS_CLIENT_ARGS_OBJ=$MRS_CLIENT_ARGS --json-pointer /dt

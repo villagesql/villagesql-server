@@ -44,7 +44,7 @@
 exec $MRS_CLIENT_ARGS
   --path /svc/sch/t1
   --display none
-  --wait-until-found 60;
+  --wait-until-status 60;
 
 --echo
 --echo #

@@ -474,8 +474,13 @@ Result Authentication::do_scram_post_flow(
     request_data["authApp"] = auth_app.value();
   }
 
-  // TODO(lkotula): check if response has expected number of cookies or bearers
-  // (depending on options)
+  // Deadening on this parameter, we will check if there is
+  // either the cookie or JWT set. Its done in following calls:
+  //
+  //     check_bearer_cookies(result, false, false);
+  // ..
+  //     check_bearer_cookies(result, set_new_cookies, !set_new_cookies);
+  //
   bool set_new_cookies = st == SessionType::kCookie;
   auto result = request->do_request(HttpMethod::Post, url,
                                     helper::json::to_string(request_data),
@@ -545,8 +550,13 @@ Result Authentication::do_scram_get_flow(
     url_init = url_init + "&app=" + auth_app.value();
   }
 
-  // TODO(lkotula): check if response has expected number of cookies or bearers
-  // (depending on options)
+  // Deadening on this parameter, we will check if there is
+  // either the cookie or JWT set. Its done in following calls:
+  //
+  //     check_bearer_cookies(result, false, false);
+  // ..
+  //     check_bearer_cookies(result, set_new_cookies, !set_new_cookies);
+  //
   bool set_new_cookies = st == SessionType::kCookie;
   auto result =
       request->do_request(HttpMethod::Get, url_init, {}, set_new_cookies);

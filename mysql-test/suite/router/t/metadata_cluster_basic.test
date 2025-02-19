@@ -40,9 +40,9 @@
 --let MRS_CLIENT_ARGS=$MRS_CLIENT --url https://$mrs_host_and_port
 
 #TODO investigate, change of behavior from NULL to existing object.
-#--exec $MRS_CLIENT_ARGS --path /svc/basic/t1 --wait-until-found=60  --request-type post --payload '{"id":1010}'
+#--exec $MRS_CLIENT_ARGS --path /svc/basic/t1 --wait-until-status=60  --request-type post --payload '{"id":1010}'
 
---exec $MRS_CLIENT_ARGS --path /svc/basic/t1 --wait-until-found=60
+--exec $MRS_CLIENT_ARGS --path /svc/basic/t1 --wait-until-status=60
 --exec $MRS_CLIENT_ARGS --path /svc/basic/t1/1
 --exec $MRS_CLIENT_ARGS --path /svc/basic/t1/20
 --exec $MRS_CLIENT_ARGS --path /svc/basic/t1/2 --expected-status 404

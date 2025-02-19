@@ -295,11 +295,6 @@ static std::array<const char *, 5> required = {
     {"logger", "http_server", "rest_api", "io", "graalvm"}};
 #endif
 
-// TODO(lkotula): Consider renaming the plugin from rest_mrds to mrds or
-// something other if it already changed in DB schema, consult with router
-// guys if such change would break their feelings (Shouldn't be in review)
-// TODO(lkotula): also rename the namespace mrds + file names (Shouldn't be in
-// review)
 extern "C" {
 mysql_harness::Plugin MYSQL_REST_SERVICE_EXPORT
     harness_plugin_mysql_rest_service = {

@@ -51,7 +51,7 @@
 # wait for the creation
 exec $MRS_CLIENT_ARGS
   --path /svc/test_between/table
-  --wait-until-found 60
+  --wait-until-status 60
   --exclude-json-pointer '*'
   --display none;
 

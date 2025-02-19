@@ -28,9 +28,7 @@
 
 #include "mrs/database/query_entries_db_object.h"
 
-// TODO(lkotula): wrong class name, it should be entries (Shouldn't be in
-// review)
-class MockQueryEntryDbObject : public mrs::database::QueryEntriesDbObject {
+class MockQueryEntriesDbObject : public mrs::database::QueryEntriesDbObject {
  public:
   MOCK_METHOD(uint64_t, get_last_update, (), (override));
   MOCK_METHOD(void, query_entries, (MySQLSession * session), (override));

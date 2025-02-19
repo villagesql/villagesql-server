@@ -46,7 +46,7 @@ INSERT INTO test.id_bigint(id, value)
 
 --source ../include/mrs/end_object_definition.inc
 
---exec $MRS_CLIENT_ARGS --path /svc/test/id_unsigned_int/1 --wait-until-found 60 --display none
+--exec $MRS_CLIENT_ARGS --path /svc/test/id_unsigned_int/1 --wait-until-status 60 --display none
 --let $MRS_CLIENT_ARGS_LIST=$MRS_CLIENT_ARGS --json-pointer /items/*/id,/items/*/value
 
 --let $mrs_client_arg_path='/svc/test/id_unsigned_int?offset=0&limit=1'
@@ -70,7 +70,7 @@ INSERT INTO test.id_bigint(id, value)
 
 --echo # Check the limit on table with BIGINT UNSIGNED PK field
 
---exec $MRS_CLIENT_ARGS --path /svc/test/id_unsigned_bigint/1 --wait-until-found 60 --display none
+--exec $MRS_CLIENT_ARGS --path /svc/test/id_unsigned_bigint/1 --wait-until-status 60 --display none
 --let $MRS_CLIENT_ARGS_LIST=$MRS_CLIENT_ARGS --json-pointer /items/*/id,/items/*/value
 
 --let $mrs_client_arg_path='/svc/test/id_unsigned_bigint?offset=0&limit=1'
@@ -99,7 +99,7 @@ INSERT INTO test.id_bigint(id, value)
 --let $mrs_add_db_object_path=/id_bigint
 --source ../include/mrs/db_object/add.inc
 
---exec $MRS_CLIENT_ARGS --path /svc/test/id_bigint/1 --wait-until-found 60 --display none
+--exec $MRS_CLIENT_ARGS --path /svc/test/id_bigint/1 --wait-until-status 60 --display none
 --let $MRS_CLIENT_ARGS_LIST=$MRS_CLIENT_ARGS --json-pointer /items/*/id,/items/*/value
 
 --let $mrs_client_arg_path='/svc/test/id_bigint?offset=0&limit=1'

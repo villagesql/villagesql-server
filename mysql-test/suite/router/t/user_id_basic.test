@@ -82,7 +82,7 @@ INSERT INTO `test`.`user2`(user_id, nickname, email) VALUES(0, "none", "no-email
 # Wait for data create in `test_table_note.inc`
 exec $MRS_CLIENT_ARGS
   --path /svc/basic/note
-  --wait-until-found=60
+  --wait-until-status=60
    --expected-status Unauthorized;
 
 exec $MRS_CLIENT_ARGS
