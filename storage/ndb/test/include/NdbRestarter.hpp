@@ -48,13 +48,11 @@ class NdbRestarter {
   };
 
   int restartOneDbNode(int _nodeId, bool initial = false, bool nostart = false,
-                       bool abort = false, bool force = false,
-                       bool captureError = false);
+                       bool abort = false, bool force = false);
 
-  int restartOneDbNode2(int _nodeId, Uint32 flags, bool captureError = false) {
+  int restartOneDbNode2(int _nodeId, Uint32 flags) {
     return restartOneDbNode(_nodeId, flags & NRRF_INITIAL, flags & NRRF_NOSTART,
-                            flags & NRRF_ABORT, flags & NRRF_FORCE,
-                            captureError);
+                            flags & NRRF_ABORT, flags & NRRF_FORCE);
   }
 
   int restartAll(bool initial = false, bool nostart = false, bool abort = false,
@@ -68,8 +66,7 @@ class NdbRestarter {
   int restartAll3(bool initial = false, bool nostart = false,
                   bool abort = false, bool force = false);
 
-  int restartNodes(int *nodes, int num_nodes, Uint32 flags,
-                   bool captureError = false);
+  int restartNodes(int *nodes, int num_nodes, Uint32 flags);
 
   int startAll();
   int startNodes(const int *_nodes, int _num_nodes);
