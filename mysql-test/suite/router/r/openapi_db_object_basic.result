@@ -1402,8 +1402,8 @@ GET /svc/different_types/open-api-catalog/all_types
                             "type": "number",
                             "format": "float"
                         },
-                        "minItems": "2048",
-                        "maxItems": "2048",
+                        "minItems": 2048,
+                        "maxItems": 2048,
                         "description": "vector(2048)"
                     }
                 }

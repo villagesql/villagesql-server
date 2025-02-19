@@ -5442,8 +5442,8 @@ GET /svc/open-api-catalog/
                             "type": "number",
                             "format": "float"
                         },
-                        "minItems": "2048",
-                        "maxItems": "2048",
+                        "minItems": 2048,
+                        "maxItems": 2048,
                         "description": "vector(2048)"
                     }
                 }

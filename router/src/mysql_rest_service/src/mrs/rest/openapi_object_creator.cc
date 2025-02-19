@@ -427,6 +427,23 @@ rapidjson::Value OpenApiCreator::get_tag() const {
               allocator_));
 }
 
+static std::optional<int> get_type_size(std::string_view datatype) {
+  size_t start_pos = datatype.find('(');
+  size_t end_pos = datatype.find(')');
+  if (start_pos == std::string_view::npos ||
+      end_pos == std::string_view::npos || start_pos + 1 >= end_pos) {
+    return std::nullopt;
+  }
+
+  const std::string_view num_str =
+      datatype.substr(start_pos + 1, end_pos - start_pos - 1);
+  int value = 0;
+  auto [ptr, ec] =
+      std::from_chars(num_str.data(), num_str.data() + num_str.size(), value);
+
+  return (ec != std::errc()) ? std::nullopt : std::optional<int>{value};
+}
+
 rapidjson::Value OpenApiCreator::add_type_constraints(
     const std::string &datatype,
     const mrs::database::entry::ColumnType type) const {
@@ -452,23 +469,16 @@ rapidjson::Value OpenApiCreator::add_type_constraints(
 
   } else if (helper::starts_with(datatype, "varchar")) {
     property_details.AddMember("type", "string", allocator_);
-    size_t start_pos = datatype.find('(');
-    size_t end_pos = datatype.find(')');
-    if (start_pos != std::string::npos && end_pos != std::string::npos) {
-      property_details.AddMember(
-          "maxLength",
-          std::stoi(datatype.substr(start_pos + 1, end_pos - start_pos - 1)),
-          allocator_);
+    const auto max_maybe = get_type_size(datatype);
+    if (max_maybe) {
+      property_details.AddMember("maxLength", *max_maybe, allocator_);
     }
   } else if (helper::starts_with(datatype, "char")) {
     property_details.AddMember("type", "string", allocator_);
-    size_t start_pos = datatype.find('(');
-    size_t end_pos = datatype.find(')');
-    if (start_pos != std::string::npos && end_pos != std::string::npos) {
-      const auto len =
-          std::stoi(datatype.substr(start_pos + 1, end_pos - start_pos - 1));
-      property_details.AddMember("minLength", len, allocator_);
-      property_details.AddMember("maxLength", len, allocator_);
+    const auto length_maybe = get_type_size(datatype);
+    if (length_maybe) {
+      property_details.AddMember("minLength", *length_maybe, allocator_);
+      property_details.AddMember("maxLength", *length_maybe, allocator_);
     }
   } else if (datatype == "tinytext") {
     property_details.AddMember("type", "string", allocator_);
@@ -548,15 +558,11 @@ rapidjson::Value OpenApiCreator::add_type_constraints(
         .AddMember("format", "decimal", allocator_);
   } else if (helper::starts_with(datatype, "bit")) {
     property_details.AddMember("type", "integer", allocator_);
-    size_t start_pos = datatype.find('(');
-    size_t end_pos = datatype.find(')');
-    if (start_pos != std::string::npos && end_pos != std::string::npos) {
-      const auto shift =
-          std::stoi(datatype.substr(start_pos + 1, end_pos - start_pos - 1));
-      property_details.AddMember("format", shift > 32 ? "int64" : "int32",
-                                 allocator_);
+    const auto shift_maybe = get_type_size(datatype);
+    if (shift_maybe) {
+      property_details.AddMember(
+          "format", *shift_maybe > 32 ? "int64" : "int32", allocator_);
     }
-
   } else if (datatype == "bool" || datatype == "boolean" ||
              datatype == "tinyint(1)") {
     property_details.AddMember("type", "boolean", allocator_);
@@ -567,24 +573,17 @@ rapidjson::Value OpenApiCreator::add_type_constraints(
   } else if (datatype == "binary") {
     property_details.AddMember("type", "string", allocator_);
     property_details.AddMember("format", "binary", allocator_);
-    size_t start_pos = datatype.find('(');
-    size_t end_pos = datatype.find(')');
-    if (start_pos != std::string::npos && end_pos != std::string::npos) {
-      const auto len =
-          std::stoi(datatype.substr(start_pos + 1, end_pos - start_pos - 1));
-      property_details.AddMember("minLength", len, allocator_);
-      property_details.AddMember("maxLength", len, allocator_);
+    const auto length_maybe = get_type_size(datatype);
+    if (length_maybe) {
+      property_details.AddMember("minLength", *length_maybe, allocator_);
+      property_details.AddMember("maxLength", *length_maybe, allocator_);
     }
   } else if (datatype == "varbinary") {
     property_details.AddMember("type", "string", allocator_);
     property_details.AddMember("format", "binary", allocator_);
-    size_t start_pos = datatype.find('(');
-    size_t end_pos = datatype.find(')');
-    if (start_pos != std::string::npos && end_pos != std::string::npos) {
-      property_details.AddMember(
-          "maxLength",
-          std::stoi(datatype.substr(start_pos + 1, end_pos - start_pos - 1)),
-          allocator_);
+    const auto length_maybe = get_type_size(datatype);
+    if (length_maybe) {
+      property_details.AddMember("maxLength", *length_maybe, allocator_);
     }
   } else if (datatype == "tinyblob") {
     property_details.AddMember("type", "string", allocator_);
@@ -621,11 +620,6 @@ rapidjson::Value OpenApiCreator::add_type_constraints(
     }
     property_details.AddMember("enum", values_array, allocator_);
   } else if (helper::starts_with(datatype, "vector")) {
-    size_t start_pos = datatype.find('(');
-    size_t end_pos = datatype.find(')');
-    const std::string vec_len_str =
-        datatype.substr(start_pos + 1, end_pos - start_pos - 1);
-
     property_details.AddMember("type", "array", allocator_);
     property_details.AddMember("items",
                                rapidjson::Value(rapidjson::kObjectType)
@@ -633,8 +627,11 @@ rapidjson::Value OpenApiCreator::add_type_constraints(
                                    .AddMember("format", "float", allocator_),
                                allocator_);
 
-    property_details.AddMember("minItems", vec_len_str, allocator_);
-    property_details.AddMember("maxItems", vec_len_str, allocator_);
+    const auto length_maybe = get_type_size(datatype);
+    if (length_maybe) {
+      property_details.AddMember("minItems", *length_maybe, allocator_);
+      property_details.AddMember("maxItems", *length_maybe, allocator_);
+    }
   } else if (datatype == "geometry" || datatype == "geomcollection" ||
              datatype == "point" || datatype == "linestring" ||
              datatype == "polygon" || datatype == "multipoint" ||
