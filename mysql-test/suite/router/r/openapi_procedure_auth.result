@@ -79,6 +79,24 @@ GET /svc/open-api-catalog/
                                 }
                             }
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -937,6 +937,24 @@ rapidjson::Value OpenApiCreator::create_put_method() const {
   return put_method;
 }
 
+static rapidjson::Value get_http_500_schema(
+    rapidjson::Document::AllocatorType &allocator) {
+  rapidjson::Value result{rapidjson::kObjectType};
+  result.AddMember("type", "object", allocator)
+      .AddMember("properties",
+                 rapidjson::Value(rapidjson::kObjectType)
+                     .AddMember("message",
+                                rapidjson::Value(rapidjson::kObjectType)
+                                    .AddMember("type", "string", allocator),
+                                allocator)
+                     .AddMember("status",
+                                rapidjson::Value(rapidjson::kObjectType)
+                                    .AddMember("type", "integer", allocator),
+                                allocator),
+                 allocator);
+  return result;
+}
+
 rapidjson::Value OpenApiCreator::get_procedure_items() const {
   rapidjson::Value input_properties(rapidjson::kObjectType);
   for (const auto &p : entry_->fields.parameters.fields) {
@@ -999,7 +1017,25 @@ rapidjson::Value OpenApiCreator::get_procedure_items() const {
                                         entry_->name + " results", allocator_)
                              .AddMember("content", get_content_schema_single(),
                                         allocator_),
-                         allocator_),
+                         allocator_)
+              .AddMember(
+                  "500",
+                  rapidjson::Value(rapidjson::kObjectType)
+                      .AddMember("description", "Internal Server Error",
+                                 allocator_)
+                      .AddMember(
+                          "content",
+                          rapidjson::Value(rapidjson::kObjectType)
+                              .AddMember(
+                                  "application/json",
+                                  rapidjson::Value(rapidjson::kObjectType)
+                                      .AddMember(
+                                          "schema",
+                                          get_http_500_schema(allocator_),
+                                          allocator_),
+                                  allocator_),
+                          allocator_),
+                  allocator_),
           allocator_);
 
   rapidjson::Value function_item(rapidjson::kObjectType);

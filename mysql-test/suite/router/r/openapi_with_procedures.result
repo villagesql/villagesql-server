@@ -66,6 +66,24 @@ GET /svc/open-api-catalog/
                                 }
                             }
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -106,6 +124,24 @@ GET /svc/open-api-catalog/
                                 }
                             }
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -134,6 +170,24 @@ GET /svc/open-api-catalog/
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/proc_schema_no_resultset_out_param"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -168,6 +222,24 @@ GET /svc/open-api-catalog/
                                 }
                             }
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -196,6 +268,24 @@ GET /svc/open-api-catalog/
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/proc_schema_proc_do_nothing"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer"
+                                        }
+                                    }
                                 }
                             }
                         }
@@ -234,6 +324,24 @@ GET /svc/open-api-catalog/
                                 }
                             }
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -265,6 +373,24 @@ GET /svc/open-api-catalog/
                                 }
                             }
                         }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer"
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -293,6 +419,24 @@ GET /svc/open-api-catalog/
                             "application/json": {
                                 "schema": {
                                     "$ref": "#/components/schemas/proc_schema_two_resultsets"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "type": "object",
+                                    "properties": {
+                                        "message": {
+                                            "type": "string"
+                                        },
+                                        "status": {
+                                            "type": "integer"
+                                        }
+                                    }
                                 }
                             }
                         }
