@@ -29,7 +29,7 @@
 #ifndef MYSQLSHDK_LIBS_DB_MYSQL_RESULT_H_
 #define MYSQLSHDK_LIBS_DB_MYSQL_RESULT_H_
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
+#include "mysqlrouter/graalvm_db_interface.h"
 
 #include <atomic>
 #include <deque>
@@ -41,11 +41,11 @@
 
 #include <mysql.h>
 
-#include "router/src/graalvm/src/database/column.h"
-#include "router/src/graalvm/src/database/row_by_name.h"
-#include "router/src/graalvm/src/database/row_copy.h"
+#include "database/column.h"
+#include "database/row_by_name.h"
+#include "database/row_copy.h"
 
-#include "router/src/graalvm/src/utils/atomic_flag.h"
+#include "utils/atomic_flag.h"
 
 namespace shcore {
 namespace polyglot {

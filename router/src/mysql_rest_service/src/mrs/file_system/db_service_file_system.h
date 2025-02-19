@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -30,9 +30,9 @@
 #include <memory>
 #include <string>
 
+#include "collector/mysql_cache_manager.h"
 #include "mrs/rest/response_cache.h"
-#include "router/src/graalvm/src/file_system/polyglot_file_system.h"
-#include "router/src/mysql_rest_service/include/collector/mysql_cache_manager.h"
+#include "mysqlrouter/polyglot_file_system.h"
 
 namespace mrs {
 

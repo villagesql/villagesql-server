@@ -62,7 +62,9 @@ SET(mysql_rest_service_db_includes
 )
 
 IF(BUNDLED_POLYGLOT_DIR)
-  list(APPEND mysql_rest_service_db_includes ${CMAKE_CURRENT_BINARY_DIR}/../../graalvm/include/)
+  list(APPEND mysql_rest_service_db_includes
+    ${CMAKE_CURRENT_BINARY_DIR}/../../graalvm/include/
+    ${PROJECT_SOURCE_DIR}/src/graalvm/include/)
 ENDIF()
 
 ADD_STATIC_LIBRARY(mysql_rest_service_db
@@ -177,10 +179,10 @@ SET(mysql_rest_service_includes
 
 IF(BUNDLED_POLYGLOT_DIR)
   list(APPEND mysql_rest_service_impl_libs graalvm_plugin)
-  list(APPEND mysql_rest_service_includes ${CMAKE_CURRENT_BINARY_DIR}/../../graalvm/include/)
+  list(APPEND mysql_rest_service_includes ${PROJECT_SOURCE_DIR}/src/graalvm/include/)
 ENDIF()
 
-ADD_STATIC_LIBRARY(mysql_rest_service_impl
+SET(mysql_rest_service_impl_SRC
   collector/counted_mysql_session.cc
   collector/mysql_cache_manager.cc
   mrs/authentication/helper/crypto.cc
@@ -241,7 +243,15 @@ ADD_STATIC_LIBRARY(mysql_rest_service_impl
   mrs/rest/openapi_object_creator.cc
   mrs/monitored/gtid_functions.cc
   mrs/monitored/query_retry_on_ro.cc
-  mrs/file_system/db_service_file_system.cc
+)
+
+IF(BUNDLED_POLYGLOT_DIR)
+  list(APPEND mysql_rest_service_impl_SRC mrs/file_system/db_service_file_system.cc)
+ENDIF()
+
+
+ADD_STATIC_LIBRARY(mysql_rest_service_impl
+  ${mysql_rest_service_impl_SRC}
 
   INCLUDE_DIRECTORIES
   PRIVATE
@@ -249,7 +259,7 @@ ADD_STATIC_LIBRARY(mysql_rest_service_impl
 
   LINK_LIBRARIES
   ${mysql_rest_service_impl_libs}
-  
+
   COMPILE_DEFINITIONS
   PRIVATE MYSQL_ROUTER_LOG_DOMAIN="mrs_endpoint"
   )

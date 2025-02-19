@@ -31,12 +31,12 @@
 #include <memory>
 #include <type_traits>
 
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
+#include "utils/polyglot_api_clean.h"
 
-#include "router/src/graalvm/src/languages/polyglot_language.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_collectable.h"
-#include "router/src/graalvm/src/utils/graalvm_exceptions.h"
-#include "router/src/graalvm/src/utils/polyglot_error.h"
+#include "languages/polyglot_language.h"
+#include "mysqlrouter/graalvm_exceptions.h"
+#include "native_wrappers/polyglot_collectable.h"
+#include "utils/polyglot_error.h"
 
 namespace shcore {
 namespace polyglot {

@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/utils/polyglot_error.h"
+#include "utils/polyglot_error.h"
 
 #include <limits>
 #include <numeric>
@@ -32,11 +32,11 @@
 #include <sstream>
 #include <vector>
 
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
+#include "utils/polyglot_api_clean.h"
 
-#include "router/src/graalvm/src/native_wrappers/polyglot_collectable.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_map_wrapper.h"
-#include "router/src/graalvm/src/utils/utils_string.h"
+#include "native_wrappers/polyglot_collectable.h"
+#include "native_wrappers/polyglot_map_wrapper.h"
+#include "utils/utils_string.h"
 
 namespace shcore {
 namespace polyglot {

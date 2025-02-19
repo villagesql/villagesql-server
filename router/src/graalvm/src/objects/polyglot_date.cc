@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/objects/polyglot_date.h"
+#include "objects/polyglot_date.h"
 
 #include <time.h>
 #include <cstdio>

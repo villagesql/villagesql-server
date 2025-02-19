@@ -23,11 +23,11 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/utils/polyglot_scope.h"
+#include "utils/polyglot_scope.h"
 
 #include "mysql/harness/logging/logging.h"
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
-#include "router/src/graalvm/src/utils/polyglot_error.h"
+#include "utils/polyglot_api_clean.h"
+#include "utils/polyglot_error.h"
 
 namespace shcore {
 namespace polyglot {

@@ -23,8 +23,8 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_JAVASCRIPT_H_
-#define ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_JAVASCRIPT_H_
+#ifndef ROUTER_SRC_GRAALVM_SRC_GRAALVM_JAVASCRIPT_H_
+#define ROUTER_SRC_GRAALVM_SRC_GRAALVM_JAVASCRIPT_H_
 
 #include <condition_variable>
 #include <memory>  // shared_ptr
@@ -35,13 +35,13 @@
 #include <unordered_map>
 #include <vector>
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_common.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
-#include "router/src/graalvm/src/file_system/polyglot_file_system.h"
-#include "router/src/graalvm/src/languages/polyglot_javascript.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_object_bridge.h"
-#include "router/src/graalvm/src/objects/polyglot_session.h"
-#include "router/src/graalvm/src/utils/native_value.h"
+#include "languages/polyglot_javascript.h"
+#include "mysqlrouter/graalvm_common.h"
+#include "mysqlrouter/graalvm_db_interface.h"
+#include "mysqlrouter/graalvm_value.h"
+#include "mysqlrouter/polyglot_file_system.h"
+#include "native_wrappers/polyglot_object_bridge.h"
+#include "objects/polyglot_session.h"
 
 namespace graalvm {
 
@@ -154,4 +154,4 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
 
 }  // namespace graalvm
 
-#endif  // ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_JAVASCRIPT_H_
+#endif  // ROUTER_SRC_GRAALVM_SRC_GRAALVM_JAVASCRIPT_H_

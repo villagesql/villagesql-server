@@ -29,10 +29,12 @@
 #include <mutex>
 #include <string>
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_common_context.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_javascript_context.h"
-#include "router/src/graalvm/src/file_system/polyglot_file_system.h"
-#include "router/src/graalvm/src/utils/polyglot_utils.h"
+#include "graalvm_common_context.h"
+#include "graalvm_javascript_context.h"
+#include "graalvm_service_handlers.h"
+#include "mysqlrouter/graalvm_context_handle.h"
+#include "mysqlrouter/polyglot_file_system.h"
+#include "utils/polyglot_utils.h"
 
 namespace graalvm {
 
@@ -44,24 +46,29 @@ GraalVMComponent &GraalVMComponent::get_instance() {
 
 GraalVMComponent::~GraalVMComponent() { m_service_context_handlers.clear(); }
 
-std::shared_ptr<Pooled_context> GraalVMComponent::get_context(
+void GraalVMComponent::stop_debug_context(const std::string &service_id) {
+  auto it = m_service_context_handlers.find(service_id);
+  if (it != m_service_context_handlers.end()) {
+    it->second->release_debug_context();
+  }
+}
+
+std::shared_ptr<IGraalvm_context_handle> GraalVMComponent::get_context(
     const std::string &service_id, size_t context_pool_size,
     const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
     const std::vector<std::string> &module_files,
-    const shcore::Dictionary_t &globals) {
+    const shcore::Dictionary_t &globals, const std::string &debug_port) {
   std::unique_lock<std::mutex> lock(m_context_creation);
   auto it = m_service_context_handlers.find(service_id);
-  if (it != m_service_context_handlers.end()) {
-    return it->second->get_context();
+  if (it == m_service_context_handlers.end()) {
+    it = m_service_context_handlers
+             .emplace(service_id,
+                      std::make_shared<Graalvm_service_handlers>(
+                          context_pool_size, fs, module_files, globals))
+             .first;
   }
 
-  it = m_service_context_handlers
-           .emplace(service_id,
-                    std::make_shared<Context_pool>(context_pool_size, fs,
-                                                   module_files, globals))
-           .first;
-
-  return it->second->get_context();
+  return it->second->get_context(debug_port);
 }
 
 }  // namespace graalvm

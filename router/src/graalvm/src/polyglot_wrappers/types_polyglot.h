@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -28,14 +28,14 @@
 
 #include <memory>
 
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
+#include "utils/polyglot_api_clean.h"
 
-#include "router/src/graalvm/src/graalvm_type_conversion.h"
-#include "router/src/graalvm/src/utils/native_value.h"
-#include "router/src/graalvm/src/utils/polyglot_store.h"
-#include "router/src/graalvm/src/utils/polyglot_utils.h"
+#include "graalvm_type_conversion.h"
+#include "mysqlrouter/graalvm_value.h"
+#include "utils/polyglot_store.h"
+#include "utils/polyglot_utils.h"
 
-#include "router/src/graalvm/src/utils/utils_json.h"
+#include "utils/utils_json.h"
 
 namespace shcore {
 namespace polyglot {

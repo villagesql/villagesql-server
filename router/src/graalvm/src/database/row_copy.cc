@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/database/row_copy.h"
+#include "database/row_copy.h"
 
 #include <bitset>
 #include <cassert>
@@ -34,7 +34,7 @@
 #include <stdexcept>
 #include <utility>
 
-#include "router/src/graalvm/src/utils/utils_string.h"
+#include "utils/utils_string.h"
 
 namespace shcore {
 namespace polyglot {

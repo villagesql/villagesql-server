@@ -23,14 +23,14 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_common_context.h"
+#include "graalvm_common_context.h"
 
 #include <iostream>
 
+#include "graalvm_javascript.h"
 #include "mysql/harness/logging/logging.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_javascript.h"
-#include "router/src/graalvm/src/file_system/polyglot_file_system.h"
-#include "router/src/graalvm/src/utils/polyglot_utils.h"
+#include "mysqlrouter/polyglot_file_system.h"
+#include "utils/polyglot_utils.h"
 
 IMPORT_LOG_FUNCTIONS()
 

@@ -23,14 +23,14 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/database/column.h"
+#include "database/column.h"
 
 #include <cassert>
 #include <sstream>
 #include <stdexcept>
 
 // #include "mysqlshdk/libs/db/charset.h"
-#include "router/src/graalvm/src/utils/utils_string.h"
+#include "utils/utils_string.h"
 
 namespace shcore {
 namespace polyglot {

@@ -23,21 +23,21 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/graalvm_type_conversion.h"
+#include "graalvm_type_conversion.h"
 
 #include <cerrno>
 #include <fstream>
 #include <stdexcept>
 
-#include "router/src/graalvm/src/utils/polyglot_utils.h"
+#include "utils/polyglot_utils.h"
 
-#include "router/src/graalvm/src/languages/polyglot_language.h"
+#include "languages/polyglot_language.h"
 
-#include "router/src/graalvm/src/native_wrappers/polyglot_array_wrapper.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_map_wrapper.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_object_wrapper.h"
-#include "router/src/graalvm/src/utils/native_value.h"
-#include "router/src/graalvm/src/utils/polyglot_error.h"
+#include "mysqlrouter/graalvm_value.h"
+#include "native_wrappers/polyglot_array_wrapper.h"
+#include "native_wrappers/polyglot_map_wrapper.h"
+#include "native_wrappers/polyglot_object_wrapper.h"
+#include "utils/polyglot_error.h"
 
 namespace shcore {
 namespace polyglot {

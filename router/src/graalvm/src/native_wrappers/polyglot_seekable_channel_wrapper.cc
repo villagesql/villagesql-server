@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/native_wrappers/polyglot_seekable_channel_wrapper.h"
+#include "native_wrappers/polyglot_seekable_channel_wrapper.h"
 
 #include <algorithm>
 #include <cassert>
@@ -34,7 +34,7 @@
 #include <utility>
 #include <vector>
 
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
+#include "utils/polyglot_api_clean.h"
 
 namespace shcore {
 namespace polyglot {

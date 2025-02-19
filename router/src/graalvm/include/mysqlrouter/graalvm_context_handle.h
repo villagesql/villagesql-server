@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -23,34 +23,24 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef MYSQLSHDK_SCRIPTING_POLYGLOT_UTILS_POLYGLOT_EXCEPTIONS_H_
-#define MYSQLSHDK_SCRIPTING_POLYGLOT_UTILS_POLYGLOT_EXCEPTIONS_H_
+#ifndef ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_HANDLER_H_
+#define ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_HANDLER_H_
 
-#include <stdexcept>
-#include <string>
+#include "mysqlrouter/graalvm_context.h"
 
-namespace shcore {
-namespace polyglot {
+namespace graalvm {
 
-class Graalvm_exception : public std::runtime_error {
+/**
+ * Base handler for GraalVM Context instances
+ */
+class IGraalvm_context_handle {
  public:
-  const char *id() const { return m_id; }
+  IGraalvm_context_handle() = default;
+  virtual ~IGraalvm_context_handle() = default;
 
- protected:
-  Graalvm_exception(const char *id, const char *msg)
-      : std::runtime_error(msg), m_id{id} {}
-
- private:
-  const char *m_id;
+  virtual IGraalVMContext *get() = 0;
 };
 
-class Unsupported_operation_exception : public Graalvm_exception {
- public:
-  Unsupported_operation_exception(const char *msg)
-      : Graalvm_exception("UnsupportedOperationException", msg) {}
-};
+}  // namespace graalvm
 
-}  // namespace polyglot
-}  // namespace shcore
-
-#endif  // MYSQLSHDK_SCRIPTING_POLYGLOT_UTILS_POLYGLOT_EXCEPTIONS_H_
+#endif  // ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_HANDLER_H_

@@ -23,16 +23,16 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_JAVASCRIPT_CONTEXT_H_
-#define ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_JAVASCRIPT_CONTEXT_H_
+#ifndef ROUTER_SRC_GRAALVM_SRC_GRAALVM_JAVASCRIPT_CONTEXT_H_
+#define ROUTER_SRC_GRAALVM_SRC_GRAALVM_JAVASCRIPT_CONTEXT_H_
 
 #include <string>
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_common.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_common_context.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_context.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_javascript.h"
+#include "graalvm_common_context.h"
+#include "graalvm_javascript.h"
+#include "mysqlrouter/graalvm_common.h"
+#include "mysqlrouter/graalvm_context.h"
+#include "mysqlrouter/graalvm_db_interface.h"
 
 namespace graalvm {
 
@@ -42,8 +42,7 @@ using Dictionary_t = shcore::Dictionary_t;
 class GraalVMJavaScriptContext : public IGraalVMContext {
  public:
   GraalVMJavaScriptContext(GraalVMCommonContext *common_context,
-                           const std::shared_ptr<IFile_system> &fs,
-                           const Dictionary_t &globals = {});
+                           const std::string &debug_port = "");
   ~GraalVMJavaScriptContext() override { m_language->stop(); }
 
   std::string execute(
@@ -60,4 +59,4 @@ class GraalVMJavaScriptContext : public IGraalVMContext {
 
 }  // namespace graalvm
 
-#endif  // ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_H_
+#endif  // ROUTER_SRC_GRAALVM_SRC_GRAALVM_JAVASCRIPT_CONTEXT_H_

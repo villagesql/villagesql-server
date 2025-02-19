@@ -23,14 +23,14 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef ROUTER_SRC_GRAALVM_SRC_GRAALVM_CONTEXT_HANDLER_H_
-#define ROUTER_SRC_GRAALVM_SRC_GRAALVM_CONTEXT_HANDLER_H_
+#ifndef ROUTER_SRC_GRAALVM_SRC_GRAALVM_COMMON_CONTEXT_H_
+#define ROUTER_SRC_GRAALVM_SRC_GRAALVM_COMMON_CONTEXT_H_
 
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
+#include "utils/polyglot_api_clean.h"
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_javascript.h"
-#include "router/src/graalvm/src/file_system/polyglot_file_system.h"
-#include "router/src/graalvm/src/languages/polyglot_common_context.h"
+#include "graalvm_javascript.h"
+#include "languages/polyglot_common_context.h"
+#include "mysqlrouter/polyglot_file_system.h"
 
 namespace graalvm {
 
@@ -55,6 +55,11 @@ class GraalVMCommonContext : public shcore::polyglot::Polyglot_common_context {
   void finalize() override;
   void start();
   bool got_fatal_error() const { return m_fatal_error; }
+
+  const std::shared_ptr<shcore::polyglot::IFile_system> &file_system() const {
+    return m_file_system;
+  }
+  const shcore::Dictionary_t &globals() const { return m_globals; }
 
  private:
   void life_cycle_thread();
@@ -96,4 +101,4 @@ class GraalVMCommonContext : public shcore::polyglot::Polyglot_common_context {
 
 }  // namespace graalvm
 
-#endif  // ROUTER_SRC_GRAALVM_SRC_GRAALVM_CONTEXT_HANDLER_H_
+#endif  // ROUTER_SRC_GRAALVM_SRC_GRAALVM_COMMON_CONTEXT_H_

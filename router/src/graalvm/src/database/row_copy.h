@@ -35,9 +35,9 @@
 #include <utility>
 #include <vector>
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
-#include "router/src/graalvm/src/database/column.h"
-#include "router/src/graalvm/src/database/row.h"
+#include "database/column.h"
+#include "database/row.h"
+#include "mysqlrouter/graalvm_db_interface.h"
 
 namespace shcore {
 namespace polyglot {

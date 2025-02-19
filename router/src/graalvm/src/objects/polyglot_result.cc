@@ -22,15 +22,15 @@
  * along with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
-#include "router/src/graalvm/src/objects/polyglot_result.h"
+#include "objects/polyglot_result.h"
 
 #include <iostream>
 #include <string>
 #include <vector>
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
-#include "router/src/graalvm/src/database/column.h"
-#include "router/src/graalvm/src/objects/polyglot_column.h"
+#include "database/column.h"
+#include "mysqlrouter/graalvm_db_interface.h"
+#include "objects/polyglot_column.h"
 
 namespace shcore {
 namespace polyglot {

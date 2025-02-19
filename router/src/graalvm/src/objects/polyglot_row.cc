@@ -23,16 +23,16 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/objects/polyglot_row.h"
+#include "objects/polyglot_row.h"
 
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
-#include "router/src/graalvm/src/objects/polyglot_date.h"
-#include "router/src/graalvm/src/utils/graalvm_exceptions.h"
-#include "router/src/graalvm/src/utils/utils_general.h"
+#include "mysqlrouter/graalvm_db_interface.h"
+#include "mysqlrouter/graalvm_exceptions.h"
+#include "objects/polyglot_date.h"
+#include "utils/utils_general.h"
 
 namespace shcore {
 namespace polyglot {

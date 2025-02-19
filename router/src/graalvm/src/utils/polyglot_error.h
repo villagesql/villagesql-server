@@ -26,7 +26,7 @@
 #ifndef MYSQLSHDK_SCRIPTING_POLYGLOT_UTILS_POLYGLOT_ERROR_H_
 #define MYSQLSHDK_SCRIPTING_POLYGLOT_UTILS_POLYGLOT_ERROR_H_
 
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
+#include "utils/polyglot_api_clean.h"
 
 #include <exception>
 #include <optional>
@@ -34,8 +34,8 @@
 #include <utility>
 #include <vector>
 
-#include "router/src/graalvm/src/utils/native_value.h"
-#include "router/src/graalvm/src/utils/polyglot_store.h"
+#include "mysqlrouter/graalvm_value.h"
+#include "utils/polyglot_store.h"
 
 namespace shcore {
 namespace polyglot {

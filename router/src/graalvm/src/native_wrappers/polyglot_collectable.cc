@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/native_wrappers/polyglot_collectable.h"
+#include "native_wrappers/polyglot_collectable.h"
 
 #include <algorithm>
 #include <functional>
@@ -34,7 +34,7 @@
 #include <unordered_set>
 #include <utility>
 
-#include "router/src/graalvm/src/languages/polyglot_language.h"
+#include "languages/polyglot_language.h"
 
 namespace shcore {
 namespace polyglot {

@@ -23,7 +23,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "mysqlrouter/graalvm_javascript.h"
+#include "graalvm_javascript.h"
 
 #include <array>
 #include <chrono>
@@ -33,17 +33,17 @@
 #include <string>
 
 #include "include/my_thread.h"
+#include "languages/polyglot_javascript.h"
 #include "mysql/harness/logging/logging.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_common.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
-#include "router/src/graalvm/src/file_system/polyglot_file_system.h"
-#include "router/src/graalvm/src/languages/polyglot_javascript.h"
-#include "router/src/graalvm/src/objects/polyglot_date.h"
-#include "router/src/graalvm/src/objects/polyglot_session.h"
-#include "router/src/graalvm/src/utils/polyglot_error.h"
-#include "router/src/graalvm/src/utils/polyglot_utils.h"
-#include "router/src/graalvm/src/utils/utils_general.h"
-#include "router/src/graalvm/src/utils/utils_string.h"
+#include "mysqlrouter/graalvm_common.h"
+#include "mysqlrouter/graalvm_db_interface.h"
+#include "mysqlrouter/polyglot_file_system.h"
+#include "objects/polyglot_date.h"
+#include "objects/polyglot_session.h"
+#include "utils/polyglot_error.h"
+#include "utils/polyglot_utils.h"
+#include "utils/utils_general.h"
+#include "utils/utils_string.h"
 
 namespace graalvm {
 
@@ -421,9 +421,15 @@ std::string GraalVMJavaScript::execute(
 
   {
     std::unique_lock<std::mutex> lock(m_result_mutex);
-    if (m_result_condition.wait_for(
-            lock, ms_timeout, [this]() { return m_result.has_value(); })) {
+
+    if (!m_debug_port.empty()) {
+      m_result_condition.wait(lock, [this]() { return m_result.has_value(); });
       return *m_result;
+    } else {
+      if (m_result_condition.wait_for(
+              lock, ms_timeout, [this]() { return m_result.has_value(); })) {
+        return *m_result;
+      }
     }
   }
 

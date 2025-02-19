@@ -32,10 +32,10 @@
 #include "mrs/endpoint/content_set_endpoint.h"
 #include "mrs/endpoint/handler/helper/utils_proto.h"
 #include "mrs/endpoint/url_host_endpoint.h"
-#include "mrs/file_system/db_service_file_system.h"
 #include "mrs/router_observation_entities.h"
 #ifdef HAVE_GRAALVM_PLUGIN
-#include "router/src/graalvm/include/mysqlrouter/graalvm_component.h"
+#include "mrs/file_system/db_service_file_system.h"
+#include "mysqlrouter/graalvm_component.h"
 #endif
 
 namespace mrs {
@@ -63,6 +63,15 @@ const DbServicePtr DbServiceEndpoint::get() const { return entry_; }
 
 void DbServiceEndpoint::set_debug_enabled(bool value) {
   debug_enabled_ = value;
+
+#ifdef HAVE_GRAALVM_PLUGIN
+  if (debug_enabled_) {
+    get_scripting_context();
+  } else {
+    auto &instance = graalvm::GraalVMComponent::get_instance();
+    instance.stop_debug_context(get()->id.to_string());
+  }
+#endif
 }
 
 bool DbServiceEndpoint::is_debug_enabled() const { return debug_enabled_; }
@@ -143,7 +152,7 @@ const std::vector<std::string> &DbServiceEndpoint::get_content_set_scripts() {
   return *content_set_scripts_;
 }
 
-std::shared_ptr<graalvm::Pooled_context>
+std::shared_ptr<graalvm::IGraalvm_context_handle>
 DbServiceEndpoint::get_scripting_context() {
   auto &instance = graalvm::GraalVMComponent::get_instance();
   const auto id = get()->id.to_string();
@@ -151,8 +160,9 @@ DbServiceEndpoint::get_scripting_context() {
   auto globals = shcore::make_dict();
   globals->emplace("contentSetPath", shcore::Value(content_set_path_));
 
-  return instance.get_context(id, context_pool_size_, get_file_system(),
-                              get_content_set_scripts(), globals);
+  return instance.get_context(
+      id, context_pool_size_, get_file_system(), get_content_set_scripts(),
+      globals, debug_enabled_ ? get_configuration()->get_debug_port() : "");
 }
 #endif
 

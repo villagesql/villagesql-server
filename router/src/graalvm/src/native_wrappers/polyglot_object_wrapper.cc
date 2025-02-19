@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/native_wrappers/polyglot_object_wrapper.h"
+#include "native_wrappers/polyglot_object_wrapper.h"
 
 #include <algorithm>
 #include <cassert>
@@ -34,16 +34,16 @@
 #include <utility>
 #include <vector>
 
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
+#include "utils/polyglot_api_clean.h"
 
 // #include "mysqlshdk/include/shellcore/interrupt_handler.h"
 // #include "mysqlshdk/libs/db/session.h"  // mysqlshdk::db::Error
 // #include "mysqlshdk/libs/utils/debug.h"
-#include "router/src/graalvm/src/languages/polyglot_language.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_collectable.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_iterator_wrapper.h"
-#include "router/src/graalvm/src/utils/polyglot_error.h"
-#include "router/src/graalvm/src/utils/polyglot_utils.h"
+#include "languages/polyglot_language.h"
+#include "native_wrappers/polyglot_collectable.h"
+#include "native_wrappers/polyglot_iterator_wrapper.h"
+#include "utils/polyglot_error.h"
+#include "utils/polyglot_utils.h"
 
 namespace shcore {
 namespace polyglot {

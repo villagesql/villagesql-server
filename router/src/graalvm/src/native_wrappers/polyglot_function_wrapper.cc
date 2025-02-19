@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -34,7 +34,7 @@
 #include "mysqlshdk/scripting/polyglot/languages/polyglot_language.h"
 #include "mysqlshdk/scripting/polyglot/native_wrappers/polyglot_collectable.h"
 #include "mysqlshdk/scripting/polyglot/utils/polyglot_utils.h"
-#include "router/src/graalvm/src/utils/polyglot_error.h"
+#include "utils/polyglot_error.h"
 
 namespace shcore {
 namespace polyglot {

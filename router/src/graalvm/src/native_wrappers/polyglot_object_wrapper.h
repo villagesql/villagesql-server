@@ -29,11 +29,11 @@
 #include <memory>
 #include <string>
 
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
+#include "utils/polyglot_api_clean.h"
 
-#include "router/src/graalvm/src/native_wrappers/polyglot_native_wrapper.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_object_bridge.h"
-#include "router/src/graalvm/src/utils/native_value.h"
+#include "mysqlrouter/graalvm_value.h"
+#include "native_wrappers/polyglot_native_wrapper.h"
+#include "native_wrappers/polyglot_object_bridge.h"
 
 namespace shcore {
 namespace polyglot {

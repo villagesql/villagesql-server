@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2017, 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2017, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -478,7 +478,7 @@ inline std::string str_rjust(const std::string &s, size_t width,
 
   Throws invalid_argument on encoding error
 */
-#if __GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ > 4)
+#if defined(__GNUC__) && (__GNUC__ > 2 || (__GNUC__ == 2 && __GNUC_MINOR__ > 4))
 std::string str_format(const char *formats, ...)
     __attribute__((__format__(__printf__, 1, 2)));
 #elif _MSC_VER

@@ -23,8 +23,8 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef ROUTER_SRC_GRAALVM_SRC_NATIVE_VALUE_H_
-#define ROUTER_SRC_GRAALVM_SRC_NATIVE_VALUE_H_
+#ifndef ROUTER_SRC_INCLUDE_MYSQLROUTER_GRAALVM_VALUE_H_
+#define ROUTER_SRC_INCLUDE_MYSQLROUTER_GRAALVM_VALUE_H_
 
 #include <map>
 #include <memory>
@@ -462,4 +462,4 @@ inline Array_t make_array(C<T> &&container) {
 
 }  // namespace shcore
 
-#endif  // ROUTER_SRC_GRAALVM_SRC_NATIVE_VALUE_H_
+#endif  // ROUTER_SRC_INCLUDE_MYSQLROUTER_GRAALVM_VALUE_H_

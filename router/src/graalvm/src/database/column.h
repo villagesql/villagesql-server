@@ -31,7 +31,7 @@
 #include <cstdint>
 #include <string>
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
+#include "mysqlrouter/graalvm_db_interface.h"
 
 namespace shcore {
 namespace polyglot {

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
+ * Copyright (c) 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -23,31 +23,20 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_H_
-#define ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_H_
+#include "graalvm_debug_context_handle.h"
 
-#include <functional>
-#include <string>
-#include <vector>
+#include "graalvm_javascript_context.h"
 
-#include "mysqlrouter/graalvm_common.h"
-#include "mysqlrouter/graalvm_db_interface.h"
-#include "mysqlrouter/graalvm_value.h"
+#include <memory>
 
 namespace graalvm {
 
-class IGraalVMContext {
- public:
-  virtual ~IGraalVMContext() = default;
-  virtual std::string execute(
-      const std::string &module, const std::string &object,
-      const std::string &function, const std::vector<shcore::Value> &parameters,
-      int timeout, ResultType result_type,
-      const std::function<std::shared_ptr<db::ISession>(const std::string &)>
-          &session_callback = {},
-      const std::function<void()> &interrupt_callback = {}) = 0;
-};
+Debug_context_handle::Debug_context_handle(
+    const std::string &debug_port, GraalVMCommonContext *common_context) {
+  assert(!debug_port.empty());
+  assert(common_context);
+  m_ctx =
+      std::make_unique<GraalVMJavaScriptContext>(common_context, debug_port);
+}
 
 }  // namespace graalvm
-
-#endif  // ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_H_

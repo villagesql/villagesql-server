@@ -23,15 +23,15 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/utils/polyglot_store.h"
+#include "utils/polyglot_store.h"
 
 #include <functional>
 #include <utility>
 
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
+#include "utils/polyglot_api_clean.h"
 
-#include "router/src/graalvm/src/utils/polyglot_error.h"
-#include "router/src/graalvm/src/utils/polyglot_utils.h"
+#include "utils/polyglot_error.h"
+#include "utils/polyglot_utils.h"
 
 #include "mysql/harness/logging/logging.h"
 

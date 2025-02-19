@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/database/query_attributes.h"
+#include "database/query_attributes.h"
 
 #include <field_types.h>
 #include <mysql_com.h>
@@ -33,8 +33,8 @@
 #include <utility>
 
 #include "mysql/harness/logging/logging.h"
-#include "router/src/graalvm/src/objects/polyglot_date.h"
-#include "router/src/graalvm/src/utils/utils_string.h"
+#include "objects/polyglot_date.h"
+#include "utils/utils_string.h"
 
 namespace shcore {
 namespace polyglot {

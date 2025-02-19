@@ -29,8 +29,8 @@
 #include <string>
 #include <vector>
 
-#include "router/src/graalvm/src/utils/native_value.h"
-#include "router/src/graalvm/src/utils/utils_json.h"
+#include "mysqlrouter/graalvm_value.h"
+#include "utils/utils_json.h"
 
 namespace shcore {
 namespace polyglot {

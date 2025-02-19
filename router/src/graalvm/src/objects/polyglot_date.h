@@ -28,8 +28,8 @@
 
 #include <string>
 
-#include "router/src/graalvm/src/native_wrappers/polyglot_object_bridge.h"
-#include "router/src/graalvm/src/utils/native_value.h"
+#include "mysqlrouter/graalvm_value.h"
+#include "native_wrappers/polyglot_object_bridge.h"
 
 namespace shcore {
 namespace polyglot {

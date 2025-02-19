@@ -52,7 +52,6 @@ SET(graalvm_plugin_SOURCE
 
   polyglot_wrappers/types_polyglot.cc
 
-  utils/native_value.cc
   utils/polyglot_error.cc
   utils/polyglot_scope.cc
   utils/polyglot_store.cc
@@ -67,10 +66,14 @@ SET(graalvm_plugin_SOURCE
   graalvm_common_context.cc
   graalvm_plugin.cc
   graalvm_javascript_context.cc
+  graalvm_debug_context_handle.cc
+  graalvm_service_handlers.cc
   graalvm_javascript.cc
   graalvm_component.cc
   graalvm_type_conversion.cc
   graalvm_context_pool.cc
+  graalvm_value.cc
+  graalvm_db_interface.cc
 
   )
 
@@ -103,6 +106,7 @@ TARGET_INCLUDE_DIRECTORIES(graalvm_plugin PRIVATE
   ${PROJECT_SOURCE_DIR}/src/router/include/
   ${PROJECT_SOURCE_DIR}/src/mysql_rest_service/include/
   ${CMAKE_CURRENT_SOURCE_DIR}/../include/
+  ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}/../include/
   ${BUNDLED_POLYGLOT_DIR}
   )

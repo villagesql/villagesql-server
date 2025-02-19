@@ -33,16 +33,16 @@
 #include <string>
 #include <vector>
 
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
+#include "utils/polyglot_api_clean.h"
 
-#include "router/src/graalvm/src/file_system/polyglot_file_system.h"
-#include "router/src/graalvm/src/graalvm_type_conversion.h"
-#include "router/src/graalvm/src/languages/polyglot_common_context.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_object_bridge.h"
-#include "router/src/graalvm/src/polyglot_wrappers/types_polyglot.h"
-#include "router/src/graalvm/src/utils/graalvm_exceptions.h"
-#include "router/src/graalvm/src/utils/polyglot_scope.h"
-#include "router/src/graalvm/src/utils/polyglot_store.h"
+#include "graalvm_type_conversion.h"
+#include "languages/polyglot_common_context.h"
+#include "mysqlrouter/graalvm_exceptions.h"
+#include "mysqlrouter/polyglot_file_system.h"
+#include "native_wrappers/polyglot_object_bridge.h"
+#include "polyglot_wrappers/types_polyglot.h"
+#include "utils/polyglot_scope.h"
+#include "utils/polyglot_store.h"
 
 namespace shcore {
 namespace polyglot {
@@ -160,7 +160,8 @@ class Polyglot_language
     std::stack<std::string> m_scripts;
   };
 
-  explicit Polyglot_language(Polyglot_common_context *common_context);
+  explicit Polyglot_language(Polyglot_common_context *common_context,
+                             const std::string &debug_port = "");
 
   Polyglot_language(const Polyglot_language &) = delete;
   Polyglot_language &operator=(const Polyglot_language &) = delete;
@@ -259,6 +260,13 @@ class Polyglot_language
   int64_t eval(const std::string &source, const std::string &code_str,
                poly_value *result) const;
 
+  poly_value create_source(const std::string &path) const;
+
+  /**
+   * Debugs the given script
+   */
+  std::pair<Value, bool> debug(const std::string &path);
+
   /**
    * Executes the given script
    */
@@ -326,6 +334,9 @@ class Polyglot_language
   std::unique_ptr<Polyglot_storage> m_storage;
   std::shared_ptr<IFile_system> m_file_system;
 
+ protected:
+  std::string m_debug_port;
+
  private:
   std::unique_ptr<Polyglot_scope> m_scope;
   bool m_terminating = false;
@@ -338,6 +349,8 @@ class Polyglot_language
       const std::string &error, poly_value exception_object) const = 0;
   virtual void output_handler(const char *bytes, size_t length) = 0;
   virtual void error_handler(const char *bytes, size_t length) = 0;
+  void enable_debug();
+  virtual std::optional<std::string> get_debug_port() const { return {}; }
 };
 
 }  // namespace polyglot

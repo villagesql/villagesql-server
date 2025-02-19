@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2014, 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2014, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/native_wrappers/polyglot_map_wrapper.h"
+#include "native_wrappers/polyglot_map_wrapper.h"
 
 #include <cassert>
 #include <exception>
@@ -31,11 +31,11 @@
 #include <stdexcept>
 #include <vector>
 
-#include "router/src/graalvm/src/languages/polyglot_language.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_collectable.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_iterator_wrapper.h"
-#include "router/src/graalvm/src/utils/polyglot_error.h"
-#include "router/src/graalvm/src/utils/polyglot_utils.h"
+#include "languages/polyglot_language.h"
+#include "native_wrappers/polyglot_collectable.h"
+#include "native_wrappers/polyglot_iterator_wrapper.h"
+#include "utils/polyglot_error.h"
+#include "utils/polyglot_utils.h"
 
 namespace shcore {
 namespace polyglot {

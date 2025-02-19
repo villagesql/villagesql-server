@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/utils/utils_general.h"
+#include "utils/utils_general.h"
 
 #include <regex>
 #include <string_view>

@@ -23,11 +23,11 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/languages/polyglot_common_context.h"
+#include "languages/polyglot_common_context.h"
 
-#include "router/src/graalvm/src/native_wrappers/polyglot_collectable.h"
-#include "router/src/graalvm/src/utils/polyglot_scope.h"
-#include "router/src/graalvm/src/utils/polyglot_utils.h"
+#include "native_wrappers/polyglot_collectable.h"
+#include "utils/polyglot_scope.h"
+#include "utils/polyglot_utils.h"
 
 namespace shcore {
 namespace polyglot {

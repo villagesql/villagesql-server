@@ -23,18 +23,18 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/database/result.h"
+#include "database/result.h"
 
 #include <cstdlib>
 #include <string>
 #include <utility>
 
 // #include "mysqlshdk/libs/db/charset.h"
-#include "router/src/graalvm/src/database/row.h"
-#include "router/src/graalvm/src/database/session.h"
+#include "database/row.h"
+#include "database/session.h"
 // #include "shellcore/interrupt_handler.h"
 // #include "utils/utils_general.h"
-#include "router/src/graalvm/src/utils/utils_string.h"
+#include "utils/utils_string.h"
 
 #include "router/src/router/include/mysqlrouter/mysql_session.h"
 

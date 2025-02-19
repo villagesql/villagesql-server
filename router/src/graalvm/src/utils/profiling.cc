@@ -24,11 +24,11 @@
  */
 
 // #include "mysqlshdk/libs/utils/profiling.h"
-#include "router/src/graalvm/src/utils/profiling.h"
+#include "utils/profiling.h"
 #include <cassert>
 #include <iostream>
 
-#include "router/src/graalvm/src/utils/utils_string.h"
+#include "utils/utils_string.h"
 
 namespace shcore {
 

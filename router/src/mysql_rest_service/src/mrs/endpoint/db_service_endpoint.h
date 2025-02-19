@@ -32,7 +32,7 @@
 #include "mrs/interface/handler_factory.h"
 
 #ifdef HAVE_GRAALVM_PLUGIN
-#include "router/src/graalvm/include/mysqlrouter/graalvm_context_pool.h"
+#include "mysqlrouter/graalvm_context_handle.h"
 #endif
 
 namespace mrs {
@@ -69,7 +69,7 @@ class DbServiceEndpoint : public OptionEndpoint {
   bool is_debug_enabled() const;
 
 #ifdef HAVE_GRAALVM_PLUGIN
-  std::shared_ptr<graalvm::Pooled_context> get_scripting_context();
+  std::shared_ptr<graalvm::IGraalvm_context_handle> get_scripting_context();
 #endif
 
  private:

@@ -41,10 +41,10 @@
 #include <string_view>
 #include <vector>
 
+#include "database/query_attributes.h"
+#include "database/result.h"
+#include "mysqlrouter/graalvm_db_interface.h"
 #include "mysqlrouter/graalvm_plugin_export.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
-#include "router/src/graalvm/src/database/query_attributes.h"
-#include "router/src/graalvm/src/database/result.h"
 #include "router/src/router/include/mysqlrouter/mysql_session.h"
 
 namespace shcore {

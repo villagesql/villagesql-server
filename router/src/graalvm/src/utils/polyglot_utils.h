@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -35,11 +35,11 @@
 #include <unordered_map>
 #include <vector>
 
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
+#include "utils/polyglot_api_clean.h"
 
-#include "router/src/graalvm/src/native_wrappers/polyglot_collectable.h"
-#include "router/src/graalvm/src/utils/native_value.h"
-#include "router/src/graalvm/src/utils/polyglot_error.h"
+#include "mysqlrouter/graalvm_value.h"
+#include "native_wrappers/polyglot_collectable.h"
+#include "utils/polyglot_error.h"
 
 namespace shcore {
 namespace polyglot {

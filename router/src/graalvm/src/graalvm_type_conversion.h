@@ -26,8 +26,8 @@
 #ifndef _MYSQLSHDK_SCRIPTING_POLYGLOT_GRAALVM_TYPE_CONVERSIONS_
 #define _MYSQLSHDK_SCRIPTING_POLYGLOT_GRAALVM_TYPE_CONVERSIONS_
 
-#include "router/src/graalvm/src/utils/native_value.h"
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
+#include "mysqlrouter/graalvm_value.h"
+#include "utils/polyglot_api_clean.h"
 
 namespace shcore {
 namespace polyglot {

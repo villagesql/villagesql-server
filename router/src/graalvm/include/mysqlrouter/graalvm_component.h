@@ -27,16 +27,30 @@
 #define ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_COMPONENT_H_
 
 #include <memory>
+#include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
+#include "mysqlrouter/graalvm_context_handle.h"
 #include "mysqlrouter/graalvm_plugin_export.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_context.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_context_pool.h"
-#include "router/src/graalvm/src/file_system/polyglot_file_system.h"
-#include "router/src/graalvm/src/utils/native_value.h"
+#include "mysqlrouter/graalvm_value.h"
+#include "mysqlrouter/polyglot_file_system.h"
 
 namespace graalvm {
+
+/** Interface defining central location for the handlers associated to a
+ * database service
+ */
+class IGraalvm_service_handlers {
+ public:
+  virtual ~IGraalvm_service_handlers() = default;
+  virtual std::shared_ptr<IGraalvm_context_handle> get_context(
+      const std::string &debug_port = "") = 0;
+
+  virtual void release_debug_context() = 0;
+};
+
 /**
  * Registry of graal contexts to be used by each service.
  *
@@ -73,17 +87,20 @@ class GRAALVM_PLUGIN_EXPORT GraalVMComponent {
   GraalVMComponent(GraalVMComponent &&) = delete;
   void operator=(GraalVMComponent &&) = delete;
 
-  std::shared_ptr<Pooled_context> get_context(
+  void stop_debug_context(const std::string &service_id);
+
+  std::shared_ptr<IGraalvm_context_handle> get_context(
       const std::string &service_id, size_t context_pool_size,
       const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
       const std::vector<std::string> &module_files,
-      const shcore::Dictionary_t &globals = {});
+      const shcore::Dictionary_t &globals = {},
+      const std::string &debug_port = "");
 
  private:
   GraalVMComponent() = default;
   std::mutex m_context_creation;
 
-  std::unordered_map<std::string, std::shared_ptr<Context_pool>>
+  std::unordered_map<std::string, std::shared_ptr<IGraalvm_service_handlers>>
       m_service_context_handlers;
 };
 

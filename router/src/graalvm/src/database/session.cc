@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/database/session.h"
+#include "database/session.h"
 
 #include <mysql_version.h>
 
@@ -35,10 +35,10 @@
 // #include "mysqlshdk/libs/utils/debug.h"
 // #include "mysqlshdk/libs/utils/fault_injection.h"
 // #include "mysqlshdk/libs/utils/log_sql.h"
-#include "router/src/graalvm/src/objects/polyglot_date.h"
-#include "router/src/graalvm/src/utils/profiling.h"
-#include "router/src/graalvm/src/utils/utils_general.h"
+#include "objects/polyglot_date.h"
 #include "router/src/router/include/mysqlrouter/mysql_session.h"
+#include "utils/profiling.h"
+#include "utils/utils_general.h"
 
 namespace shcore {
 namespace polyglot {

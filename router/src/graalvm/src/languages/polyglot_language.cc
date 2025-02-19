@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/languages/polyglot_language.h"
+#include "languages/polyglot_language.h"
 
 #include <algorithm>
 #include <cassert>
@@ -35,15 +35,15 @@
 #include <string>
 #include <vector>
 
+#include "languages/polyglot_common_context.h"
 #include "mysql/harness/logging/logging.h"
-#include "router/src/graalvm/src/languages/polyglot_common_context.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_file_system_wrapper.h"
-#include "router/src/graalvm/src/utils/polyglot_error.h"
-#include "router/src/graalvm/src/utils/polyglot_scope.h"
-#include "router/src/graalvm/src/utils/utils_path.h"
-#include "router/src/graalvm/src/utils/utils_string.h"
+#include "native_wrappers/polyglot_file_system_wrapper.h"
+#include "utils/polyglot_error.h"
+#include "utils/polyglot_scope.h"
+#include "utils/utils_path.h"
+#include "utils/utils_string.h"
 
-#include "router/src/graalvm/src/native_wrappers/polyglot_collectable.h"
+#include "native_wrappers/polyglot_collectable.h"
 
 namespace shcore {
 namespace polyglot {
@@ -101,15 +101,27 @@ Scoped_global::~Scoped_global() {
   }
 }
 
-Polyglot_language::Polyglot_language(Polyglot_common_context *common_context)
-    : m_common_context{common_context} {}
+Polyglot_language::Polyglot_language(Polyglot_common_context *common_context,
+                                     const std::string &debug_port)
+    : m_common_context{common_context}, m_debug_port{debug_port} {}
+
+void Polyglot_language::enable_debug() {
+  throw_if_error(poly_context_builder_option, thread(), m_context_builder,
+                 "inspect", m_debug_port.c_str());
+
+  throw_if_error(poly_context_builder_option, thread(), m_context_builder,
+                 "inspect.Suspend", "false");
+
+  throw_if_error(poly_context_builder_option, thread(), m_context_builder,
+                 "inspect.WaitAttached", "false");
+}
 
 void Polyglot_language::init_context_builder() {
   m_context_builder = NULL;
   throw_if_error(poly_create_context_builder, thread(), nullptr, 0,
                  &m_context_builder);
 
-  auto engine = m_common_context->engine();
+  auto engine = !m_debug_port.empty() ? nullptr : m_common_context->engine();
 
   if (engine) {
     throw_if_error(poly_context_builder_engine, m_thread, m_context_builder,
@@ -143,6 +155,11 @@ void Polyglot_language::initialize(const std::shared_ptr<IFile_system> &fs) {
   init_context_builder();
 
   {
+    // If there's no file system and debug should be enabled, we should do it
+    // here, otherwise we need to wait until the file system is set
+    if (!m_debug_port.empty() && !m_file_system) {
+      enable_debug();
+    }
     poly_context context;
     throw_if_error(poly_context_builder_build, thread(), m_context_builder,
                    &context);
@@ -161,8 +178,9 @@ void Polyglot_language::initialize(const std::shared_ptr<IFile_system> &fs) {
   // The context builder is initialized and a context is created (lines above
   // this comment). If a custom file system is specified then the
   // set_file_system function will update the context builder to specify the
-  // proxy file system and a new context will be created, to finally update the
-  // context in the file system to the one that will be used in the language.
+  // proxy file system and a new context will be created, to finally update
+  // the context in the file system to the one that will be used in the
+  // language.
   if (m_file_system) {
     set_file_system();
   }
@@ -224,6 +242,27 @@ int64_t Polyglot_language::eval(const std::string &source,
       Garbage_collector::Event::EXECUTED_STATEMENT);
 
   return ret_val;
+}
+
+poly_value Polyglot_language::create_source(const std::string &path) const {
+  poly_value source;
+  shcore::polyglot::throw_if_error(poly_create_source, thread(),
+                                   get_language_id(), path.c_str(), &source);
+
+  return source;
+}
+
+std::pair<Value, bool> Polyglot_language::debug(const std::string &path) {
+  poly_value source = create_source(path);
+
+  poly_value result;
+  if (const auto rc =
+          poly_context_eval_source(thread(), context(), source, &result);
+      rc != poly_ok) {
+    throw Polyglot_error(thread(), rc);
+  }
+
+  return {convert(result), false};
 }
 
 std::pair<Value, bool> Polyglot_language::execute(const std::string &code_str,
@@ -422,6 +461,10 @@ void Polyglot_language::set_file_system() {
 
   throw_if_error(poly_context_builder_set_file_system, thread(),
                  m_context_builder, poly_fs);
+
+  if (!m_debug_port.empty()) {
+    enable_debug();
+  }
 
   poly_context context;
   throw_if_error(poly_context_builder_build, thread(), m_context_builder,

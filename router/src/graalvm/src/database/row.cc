@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/database/row.h"
+#include "database/row.h"
 
 #include <cerrno>
 #include <climits>  // C limit constants
@@ -32,8 +32,8 @@
 #include <string>
 #include <utility>
 
-#include "router/src/graalvm/src/database/result.h"
-#include "router/src/graalvm/src/utils/utils_string.h"
+#include "database/result.h"
+#include "utils/utils_string.h"
 
 #define bit_uint1korr(A) (*(((uint8_t *)(A))))
 

@@ -23,28 +23,26 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_javascript_context.h"
+#include "graalvm_javascript_context.h"
 
 #include <functional>
 #include <memory>
 #include <mutex>
 #include <string>
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_common.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_common_context.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_javascript.h"
-#include "router/src/graalvm/src/file_system/polyglot_file_system.h"
-#include "router/src/graalvm/src/utils/polyglot_utils.h"
+#include "graalvm_common_context.h"
+#include "graalvm_javascript.h"
+#include "mysqlrouter/graalvm_common.h"
+#include "mysqlrouter/polyglot_file_system.h"
+#include "utils/polyglot_utils.h"
 
 namespace graalvm {
 
 GraalVMJavaScriptContext::GraalVMJavaScriptContext(
-    GraalVMCommonContext *common_context,
-    const std::shared_ptr<IFile_system> &fs, const Dictionary_t &globals)
+    GraalVMCommonContext *common_context, const std::string &debug_port)
     : m_language{
-          std::make_shared<GraalVMJavaScript>(common_context),
-      } {
-  m_language->start(fs, globals);
+          std::make_shared<GraalVMJavaScript>(common_context, debug_port)} {
+  m_language->start(common_context->file_system(), common_context->globals());
 }
 
 std::string GraalVMJavaScriptContext::execute(

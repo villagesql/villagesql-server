@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -26,14 +26,14 @@
 #ifndef MYSQLSHDK_SCRIPTING_POLYGLOT_LANGUAGES_POLYGLOT_COMMON_CONTEXT_H_
 #define MYSQLSHDK_SCRIPTING_POLYGLOT_LANGUAGES_POLYGLOT_COMMON_CONTEXT_H_
 
-#include "router/src/graalvm/src/utils/polyglot_api_clean.h"
+#include "utils/polyglot_api_clean.h"
 
 #include <memory>
 
-#include "router/src/graalvm/src/languages/polyglot_garbage_collector.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_collectable.h"
-#include "router/src/graalvm/src/utils/polyglot_scope.h"
-#include "router/src/graalvm/src/utils/polyglot_store.h"
+#include "languages/polyglot_garbage_collector.h"
+#include "native_wrappers/polyglot_collectable.h"
+#include "utils/polyglot_scope.h"
+#include "utils/polyglot_store.h"
 
 namespace shcore {
 namespace polyglot {

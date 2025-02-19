@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/native_wrappers/polyglot_object_bridge.h"
+#include "native_wrappers/polyglot_object_bridge.h"
 
 #include <algorithm>
 

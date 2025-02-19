@@ -34,9 +34,10 @@
 #include <string>
 #include <vector>
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_context.h"
-#include "router/src/graalvm/src/file_system/polyglot_file_system.h"
-#include "router/src/graalvm/src/utils/native_value.h"
+#include "mysqlrouter/graalvm_context.h"
+#include "mysqlrouter/graalvm_context_handle.h"
+#include "mysqlrouter/graalvm_value.h"
+#include "mysqlrouter/polyglot_file_system.h"
 
 namespace graalvm {
 
@@ -115,10 +116,7 @@ class Pooled_context;
 class GraalVMCommonContext;
 class Context_pool final {
  public:
-  Context_pool(size_t size,
-               const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
-               const std::vector<std::string> &module_files,
-               const shcore::Dictionary_t &globals = {});
+  Context_pool(size_t size, GraalVMCommonContext *common_context);
 
   ~Context_pool();
 
@@ -127,23 +125,20 @@ class Context_pool final {
   void teardown() { m_pool->teardown(); }
 
  private:
-  std::unique_ptr<GraalVMCommonContext> m_common_context;
+  GraalVMCommonContext *m_common_context;
   std::unique_ptr<Pool<IGraalVMContext *>> m_pool;
-  std::shared_ptr<shcore::polyglot::IFile_system> m_fs;
-  std::vector<std::string> m_module_files;
-  shcore::Dictionary_t m_globals;
 };
 
 /**
  * A wrapper that will return a context to the pool as soon as it is released
  */
-class Pooled_context {
+class Pooled_context : public IGraalvm_context_handle {
  public:
   Pooled_context(Context_pool *pool, IGraalVMContext *ctx)
       : m_pool{pool}, m_context{ctx} {}
-  ~Pooled_context() { m_pool->release(m_context); }
+  ~Pooled_context() override { m_pool->release(m_context); }
 
-  IGraalVMContext *get() { return m_context; }
+  IGraalVMContext *get() override { return m_context; }
 
  private:
   Context_pool *m_pool;

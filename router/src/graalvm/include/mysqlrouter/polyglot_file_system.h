@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -23,13 +23,13 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef MYSQLSHDK_SCRIPTING_POLYGLOT_FILE_SYSTEM_POLYGLOT_FILE_SYSTEM_H_
-#define MYSQLSHDK_SCRIPTING_POLYGLOT_FILE_SYSTEM_POLYGLOT_FILE_SYSTEM_H_
+#ifndef ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_POLYGLOT_FILE_SYSTEM_H_
+#define ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_POLYGLOT_FILE_SYSTEM_H_
 
 #include <memory>
 #include <string>
 
-#include "router/src/graalvm/src/file_system/file_system_exceptions.h"
+#include "mysqlrouter/file_system_exceptions.h"
 
 namespace shcore {
 namespace polyglot {
@@ -313,4 +313,4 @@ class IFile_system {
 }  // namespace polyglot
 }  // namespace shcore
 
-#endif  // MYSQLSHDK_SCRIPTING_POLYGLOT_FILE_SYSTEM_POLYGLOT_FILE_SYSTEM_H_
+#endif  // ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_POLYGLOT_FILE_SYSTEM_H_

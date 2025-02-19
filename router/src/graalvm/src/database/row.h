@@ -33,9 +33,9 @@
 #include <set>
 #include <vector>
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
-#include "router/src/graalvm/src/database/column.h"
-#include "router/src/graalvm/src/database/row.h"
+#include "database/column.h"
+#include "database/row.h"
+#include "mysqlrouter/graalvm_db_interface.h"
 
 #include <mysql.h>
 #include <memory>

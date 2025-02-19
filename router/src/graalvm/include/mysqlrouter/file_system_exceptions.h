@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -23,13 +23,13 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef MYSQLSHDK_SCRIPTING_POLYGLOT_FILE_SYSTEM_FILE_SYSTEM_EXCEPTIONS_H_
-#define MYSQLSHDK_SCRIPTING_POLYGLOT_FILE_SYSTEM_FILE_SYSTEM_EXCEPTIONS_H_
+#ifndef ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_FILE_SYSTEM_EXCEPTIONS_H_
+#define ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_FILE_SYSTEM_EXCEPTIONS_H_
 
 #include <stdexcept>
 #include <string>
 
-#include "router/src/graalvm/src/utils/graalvm_exceptions.h"
+#include "mysqlrouter/graalvm_exceptions.h"
 
 namespace shcore {
 namespace polyglot {
@@ -89,4 +89,4 @@ class Closed_channel_exception : public File_system_exception {
 }  // namespace polyglot
 }  // namespace shcore
 
-#endif  // MYSQLSHDK_SCRIPTING_POLYGLOT_FILE_SYSTEM_FILE_SYSTEM_EXCEPTIONS_H_
+#endif  // ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_FILE_SYSTEM_EXCEPTIONS_H_

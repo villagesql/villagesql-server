@@ -33,7 +33,7 @@
 #include <string>
 #include <vector>
 
-#include "router/src/graalvm/src/utils/native_value.h"
+#include "mysqlrouter/graalvm_value.h"
 
 namespace shcore {
 namespace polyglot {

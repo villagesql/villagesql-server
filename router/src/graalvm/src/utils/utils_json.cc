@@ -23,7 +23,7 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/src/utils/utils_json.h"
+#include "utils/utils_json.h"
 // #include "mysqlshdk/libs/utils/utils_json.h"
 
 #include <rapidjson/error/en.h>
@@ -34,15 +34,15 @@
 #include <cstring>
 
 // #include "mysqlshdk/include/scripting/types.h"
-#include "router/src/graalvm/src/utils/native_value.h"
+#include "mysqlrouter/graalvm_value.h"
 // #include "mysqlshdk/libs/utils/dtoa.h"
 #include "mysql/strings/dtoa.h"
 // #include "mysqlshdk/libs/utils/utils_encoding.h"
-#include "router/src/graalvm/src/utils/utils_encoding.h"
+#include "utils/utils_encoding.h"
 //  #include "mysqlshdk/libs/utils/utils_string.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_object_bridge.h"
-#include "router/src/graalvm/src/polyglot_wrappers/types_polyglot.h"
-#include "router/src/graalvm/src/utils/utils_string.h"
+#include "native_wrappers/polyglot_object_bridge.h"
+#include "polyglot_wrappers/types_polyglot.h"
+#include "utils/utils_string.h"
 
 namespace shcore {
 

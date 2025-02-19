@@ -22,32 +22,34 @@
  * along with this program; if not, write to the Free Software Foundation, Inc.,
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
+#ifndef ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_EXCEPTIONS_H_
+#define ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_EXCEPTIONS_H_
 
-#ifndef ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_H_
-#define ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_H_
-
-#include <functional>
+#include <stdexcept>
 #include <string>
-#include <vector>
 
-#include "mysqlrouter/graalvm_common.h"
-#include "mysqlrouter/graalvm_db_interface.h"
-#include "mysqlrouter/graalvm_value.h"
+namespace shcore {
+namespace polyglot {
 
-namespace graalvm {
-
-class IGraalVMContext {
+class Graalvm_exception : public std::runtime_error {
  public:
-  virtual ~IGraalVMContext() = default;
-  virtual std::string execute(
-      const std::string &module, const std::string &object,
-      const std::string &function, const std::vector<shcore::Value> &parameters,
-      int timeout, ResultType result_type,
-      const std::function<std::shared_ptr<db::ISession>(const std::string &)>
-          &session_callback = {},
-      const std::function<void()> &interrupt_callback = {}) = 0;
+  const char *id() const { return m_id; }
+
+ protected:
+  Graalvm_exception(const char *id, const char *msg)
+      : std::runtime_error(msg), m_id{id} {}
+
+ private:
+  const char *m_id;
 };
 
-}  // namespace graalvm
+class Unsupported_operation_exception : public Graalvm_exception {
+ public:
+  Unsupported_operation_exception(const char *msg)
+      : Graalvm_exception("UnsupportedOperationException", msg) {}
+};
 
-#endif  // ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_CONTEXT_H_
+}  // namespace polyglot
+}  // namespace shcore
+
+#endif  // ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_EXCEPTIONS_H_

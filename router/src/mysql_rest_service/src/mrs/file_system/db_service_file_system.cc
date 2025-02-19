@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, Oracle and/or its affiliates.
+ * Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License, version 2.0,
@@ -23,16 +23,16 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/mysql_rest_service/src/mrs/file_system/db_service_file_system.h"
-#include "router/src/graalvm/src/file_system/file_system_exceptions.h"
+#include "mrs/file_system/db_service_file_system.h"
+#include "mrs/database/entry/entry.h"
+#include "mrs/database/query_entry_content_file.h"
+#include "mrs/endpoint/content_file_endpoint.h"
+#include "mrs/endpoint/content_set_endpoint.h"
+#include "mrs/endpoint/db_service_endpoint.h"
+#include "mrs/http/error.h"
+#include "mrs/rest/request_context.h"
+#include "mysqlrouter/file_system_exceptions.h"
 #include "router/src/http/include/http/client/request.h"
-#include "router/src/mysql_rest_service/include/mrs/database/entry/entry.h"
-#include "router/src/mysql_rest_service/include/mrs/database/query_entry_content_file.h"
-#include "router/src/mysql_rest_service/include/mrs/http/error.h"
-#include "router/src/mysql_rest_service/src/mrs/endpoint/content_file_endpoint.h"
-#include "router/src/mysql_rest_service/src/mrs/endpoint/content_set_endpoint.h"
-#include "router/src/mysql_rest_service/src/mrs/endpoint/db_service_endpoint.h"
-#include "router/src/mysql_rest_service/src/mrs/rest/request_context.h"
 
 #include <iostream>
 #include <vector>

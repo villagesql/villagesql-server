@@ -29,10 +29,10 @@
 #include <string>
 #include <vector>
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_db_interface.h"
-#include "router/src/graalvm/src/native_wrappers/polyglot_object_bridge.h"
-#include "router/src/graalvm/src/objects/polyglot_row.h"
-#include "router/src/graalvm/src/utils/native_value.h"
+#include "mysqlrouter/graalvm_db_interface.h"
+#include "mysqlrouter/graalvm_value.h"
+#include "native_wrappers/polyglot_object_bridge.h"
+#include "objects/polyglot_row.h"
 
 namespace shcore {
 namespace polyglot {

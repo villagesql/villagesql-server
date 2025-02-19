@@ -23,50 +23,31 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "router/src/graalvm/include/mysqlrouter/graalvm_context_pool.h"
+#include "graalvm_context_pool.h"
+#include "graalvm_common_context.h"
+#include "graalvm_javascript_context.h"
 
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "mysql/harness/logging/logging.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_common_context.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_javascript_context.h"
+#include "graalvm_common_context.h"
+#include "graalvm_javascript_context.h"
 
 namespace graalvm {
 
-IMPORT_LOG_FUNCTIONS()
-
-Context_pool::Context_pool(
-    size_t size, const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
-    const std::vector<std::string> &module_files,
-    const shcore::Dictionary_t &globals)
-    : m_fs{fs}, m_module_files{module_files}, m_globals{globals} {
-  m_common_context =
-      std::make_unique<GraalVMCommonContext>(fs, module_files, globals);
-
-  m_common_context->start();
-
+Context_pool::Context_pool(size_t size, GraalVMCommonContext *common_context)
+    : m_common_context{common_context} {
   m_pool = std::make_unique<Pool<IGraalVMContext *>>(
       size,
       [this]() -> GraalVMJavaScriptContext * {
-        if (m_common_context->got_fatal_error()) {
-          log_error("A fatal error prevents the usage of scripting endpoints");
-          return nullptr;
-        }
-
-        return std::make_unique<GraalVMJavaScriptContext>(
-                   m_common_context.get(), m_fs, m_globals)
+        return std::make_unique<GraalVMJavaScriptContext>(m_common_context)
             .release();
       },
       [](IGraalVMContext *ctx) { delete ctx; });
 }
 
-Context_pool::~Context_pool() {
-  teardown();
-
-  m_common_context.reset();
-}
+Context_pool::~Context_pool() { teardown(); }
 
 std::shared_ptr<Pooled_context> Context_pool::get_context() {
   auto ctx = m_pool->get();

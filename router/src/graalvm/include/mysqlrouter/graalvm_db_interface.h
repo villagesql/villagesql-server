@@ -28,13 +28,13 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "mysqlrouter/graalvm_plugin_export.h"
-#include "router/src/graalvm/src/utils/utils_string.h"
 namespace graalvm {
 namespace db {
 
-enum class GRAALVM_PLUGIN_EXPORT Type {
+enum class Type {
   Null,
   String,
   Integer,
@@ -94,9 +94,7 @@ class GRAALVM_PLUGIN_EXPORT IRow {
   virtual std::string get_as_string(uint32_t index) const = 0;
 
   virtual std::string get_string(uint32_t index) const = 0;
-  virtual std::wstring get_wstring(uint32_t index) const {
-    return shcore::utf8_to_wide(get_string(index));
-  }
+  virtual std::wstring get_wstring(uint32_t index) const;
   virtual int64_t get_int(uint32_t index) const = 0;
   virtual uint64_t get_uint(uint32_t index) const = 0;
   virtual float get_float(uint32_t index) const = 0;

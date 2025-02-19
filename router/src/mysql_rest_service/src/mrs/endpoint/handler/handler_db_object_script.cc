@@ -51,11 +51,11 @@
 #include "router/src/mysql_rest_service/include/collector/mysql_cache_manager.h"
 
 #ifdef HAVE_GRAALVM_PLUGIN
-#include "router/src/graalvm/include/mysqlrouter/graalvm_common.h"
-#include "router/src/graalvm/include/mysqlrouter/graalvm_component.h"
-#include "router/src/graalvm/src/database/session.h"
-#include "router/src/graalvm/src/utils/native_value.h"
-#include "router/src/graalvm/src/utils/utils_string.h"
+#include "database/session.h"
+#include "mysqlrouter/graalvm_common.h"
+#include "mysqlrouter/graalvm_component.h"
+#include "mysqlrouter/graalvm_value.h"
+#include "utils/utils_string.h"
 #endif
 
 IMPORT_LOG_FUNCTIONS()
