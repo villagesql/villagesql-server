@@ -269,6 +269,11 @@ class MYSQL_BIN_LOG : public TC_LOG {
   inline uint get_sync_period() { return *sync_period_ptr; }
 
  public:
+  /**
+    Wait until the number of prepared XIDs are zero.
+   */
+  void wait_for_prep_xids();
+
   /*
     This is used to start writing to a new log file. The difference from
     new_file() is locking. new_file_without_locking() does not acquire
