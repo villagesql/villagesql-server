@@ -75,6 +75,7 @@ INSERT INTO `basic_schema`.`table3`
     32767, 9223372036854775807, b'111', 999.9999, 999.9999, 999.99, "value3", "value1,value2,value3"
     , b'1', b'1', b'1111111111',127, 8388607, x'0011ab0000122333', ST_GeomFromText('POINT(110 100)'), ST_GeomFromText('POINT(90 90)', 4326),STRING_TO_VECTOR("[1,0]"));
 
+CREATE FULLTEXT INDEX FTIndex ON `basic_schema`.`table3` (cvarchar, ctext);
 
 CREATE TABLE IF NOT EXISTS `basic_schema`.`table4`(
   `id` INTEGER NOT NULL AUTO_INCREMENT PRIMARY KEY,
