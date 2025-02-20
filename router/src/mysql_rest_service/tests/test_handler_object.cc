@@ -77,6 +77,9 @@ class HandleObjectTests : public Test {
     mock_db_schema_endpoint = std::make_shared<Mock<DbSchemaEndpoint>>(
         db_schema, mock_configuratation.copy_base(),
         mock_handler_factory.copy_base());
+    mock_db_service_endpoint = std::make_shared<Mock<DbServiceEndpoint>>(
+        db_service, mock_configuratation.copy_base(),
+        mock_handler_factory.copy_base());
   }
 
   class GeneralExpectations {
@@ -147,9 +150,13 @@ class HandleObjectTests : public Test {
               Return(mrs::database::entry::EnabledType::EnabledType_public));
       EXPECT_CALL(*parent_.mock_db_schema_endpoint, get_id())
           .WillRepeatedly(Return(parent_.db_schema.id));
+      EXPECT_CALL(*parent_.mock_db_schema_endpoint, update()).Times(AtLeast(1));
 
       parent_.mock_db_object_endpoint->set(parent_.db_object,
                                            parent_.mock_db_schema_endpoint);
+
+      parent_.mock_db_schema_endpoint->set(parent_.db_schema,
+                                           parent_.mock_db_service_endpoint);
 
       using ConnParam = collector::CountedMySQLSession::ConnectionParameters;
       EXPECT_CALL(parent_.mock_session, get_connection_parameters())
@@ -173,6 +180,7 @@ class HandleObjectTests : public Test {
   using SharedPtrMock = std::shared_ptr<StrictMock<MockEndpoint<T>>>;
 
   http::base::Uri uri_{""};
+  mrs::database::entry::DbService db_service;
   mrs::database::entry::DbSchema db_schema;
   mrs::database::entry::DbObject db_object;
   StrictMock<MockHttpHeaders> mock_input_headers;
@@ -184,6 +192,7 @@ class HandleObjectTests : public Test {
   MakeMockPtr<MockEndpointConfiguration> mock_configuratation;
   SharedPtrMock<DbObjectEndpoint> mock_db_object_endpoint;
   SharedPtrMock<DbSchemaEndpoint> mock_db_schema_endpoint;
+  SharedPtrMock<DbServiceEndpoint> mock_db_service_endpoint;
 };
 
 TEST_F(HandleObjectTests, fetch_object_feed) {

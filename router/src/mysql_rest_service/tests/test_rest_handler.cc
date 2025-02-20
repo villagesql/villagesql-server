@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2022, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2022, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -120,6 +120,14 @@ TEST_F(RestHandlerTests, handle_request_calls_handle_get) {
               get_empty(collector::kMySQLConnectionMetadataRO, false));
   EXPECT_CALL(*sut_, get_service_id())
       .WillRepeatedly(Return(mrs::UniversalId{1}));
+  std::string service_path{"/mrs"};
+  std::string schema_path{"/schema"};
+  std::string table_path{"/table"};
+  EXPECT_CALL(*sut_, get_service_path())
+      .WillRepeatedly(ReturnRef(service_path));
+  EXPECT_CALL(*sut_, get_schema_path()).WillRepeatedly(ReturnRef(schema_path));
+  EXPECT_CALL(*sut_, get_db_object_path())
+      .WillRepeatedly(ReturnRef(table_path));
   EXPECT_CALL(*sut_, requires_authentication())
       .WillRepeatedly(
           Return(mrs::interface::RestHandler::Authorization::kNotNeeded));
