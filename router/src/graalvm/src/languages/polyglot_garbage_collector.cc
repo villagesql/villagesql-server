@@ -46,8 +46,10 @@ void Garbage_collector::start(Config &&config, poly_isolate isolate) {
 
 void Garbage_collector::stop() {
   notify(Event::TERMINATE);
-  m_thread->join();
-  m_thread.reset();
+  if (m_thread) {
+    m_thread->join();
+    m_thread.reset();
+  }
 }
 
 void Garbage_collector::notify(Event event) {

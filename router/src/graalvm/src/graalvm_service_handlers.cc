@@ -34,14 +34,18 @@ IMPORT_LOG_FUNCTIONS()
 Graalvm_service_handlers::Graalvm_service_handlers(
     size_t size, const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
     const std::vector<std::string> &module_files,
-    const shcore::Dictionary_t &globals)
+    const shcore::Dictionary_t &globals,
+    const std::vector<std::string> &isolate_args)
     : m_fs{fs}, m_module_files{module_files}, m_globals{globals} {
-  m_common_context =
-      std::make_unique<GraalVMCommonContext>(m_fs, m_module_files, m_globals);
+  m_common_context = std::make_unique<GraalVMCommonContext>(
+      m_fs, m_module_files, m_globals, isolate_args);
 
-  m_common_context->start();
-
-  m_context_pool = std::make_shared<Context_pool>(size, m_common_context.get());
+  if (m_common_context->start()) {
+    m_context_pool =
+        std::make_shared<Context_pool>(size, m_common_context.get());
+  } else {
+    throw std::runtime_error(m_common_context->error());
+  }
 }
 
 Graalvm_service_handlers::~Graalvm_service_handlers() {

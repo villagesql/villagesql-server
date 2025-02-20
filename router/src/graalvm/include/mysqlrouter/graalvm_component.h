@@ -94,7 +94,8 @@ class GRAALVM_PLUGIN_EXPORT GraalVMComponent {
       const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
       const std::vector<std::string> &module_files,
       const shcore::Dictionary_t &globals = {},
-      const std::string &debug_port = "");
+      const std::string &debug_port = "",
+      const std::vector<std::string> &isolate_args = {});
 
  private:
   GraalVMComponent() = default;

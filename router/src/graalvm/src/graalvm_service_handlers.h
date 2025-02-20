@@ -43,7 +43,8 @@ class Graalvm_service_handlers : public IGraalvm_service_handlers {
   Graalvm_service_handlers(
       size_t size, const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
       const std::vector<std::string> &module_files,
-      const shcore::Dictionary_t &globals = {});
+      const shcore::Dictionary_t &globals = {},
+      const std::vector<std::string> &isolate_args = {});
   ~Graalvm_service_handlers() override;
 
   std::shared_ptr<IGraalvm_context_handle> get_context(

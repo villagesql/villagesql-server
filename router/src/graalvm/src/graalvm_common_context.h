@@ -48,13 +48,19 @@ class GraalVMCommonContext : public shcore::polyglot::Polyglot_common_context {
   GraalVMCommonContext(
       const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
       const std::vector<std::string> &module_files,
-      const shcore::Dictionary_t &globals);
+      const shcore::Dictionary_t &globals,
+      const std::vector<std::string> &isolate_args);
   ~GraalVMCommonContext() override;
 
-  void initialize() override;
+  void initialize(const std::vector<std::string> &isolate_args) override;
   void finalize() override;
-  void start();
+  bool start();
   bool got_fatal_error() const { return m_fatal_error; }
+  std::string error() const {
+    return m_fatal_error_description.empty()
+               ? "Got fatal error initializing GraalVM"
+               : m_fatal_error_description;
+  }
 
   const std::shared_ptr<shcore::polyglot::IFile_system> &file_system() const {
     return m_file_system;
@@ -97,6 +103,8 @@ class GraalVMCommonContext : public shcore::polyglot::Polyglot_common_context {
 
   // Global fatal error flag to indicate when the VM was ended
   static bool m_fatal_error;
+  static std::string m_fatal_error_description;
+  std::vector<std::string> m_isolate_args;
 };
 
 }  // namespace graalvm

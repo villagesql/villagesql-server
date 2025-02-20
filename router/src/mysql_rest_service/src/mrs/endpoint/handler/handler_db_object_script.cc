@@ -270,14 +270,9 @@ HttpResult HandlerDbObjectScript::handle_script(
     result_type = graalvm::ResultType::Raw;
   }
 
-  auto context = service_ep->get_scripting_context();
-
-  if (!context) {
-    throw http::Error(HttpStatusCode::InternalError);
-  }
-
   try {
     int timeout = m_impl->get_timeout(entry_->options.value_or(""));
+    auto context = service_ep->get_scripting_context();
 
     HandlerDbObjectTable::CachedSession session;
     auto result = context->get()->execute(
@@ -337,6 +332,8 @@ HttpResult HandlerDbObjectScript::handle_script(
     return response;
   } catch (const graalvm::Timeout_error &) {
     throw http::Error(HttpStatusCode::RequestTimeout);
+  } catch (const std::runtime_error &error) {
+    throw http::Error(HttpStatusCode::InternalError, error.what());
   }
 #else
   throw http::Error(HttpStatusCode::NotImplemented);

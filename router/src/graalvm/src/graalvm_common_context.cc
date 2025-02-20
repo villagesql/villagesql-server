@@ -30,6 +30,7 @@
 #include "graalvm_javascript.h"
 #include "mysql/harness/logging/logging.h"
 #include "mysqlrouter/polyglot_file_system.h"
+#include "utils/polyglot_error.h"
 #include "utils/polyglot_utils.h"
 
 IMPORT_LOG_FUNCTIONS()
@@ -37,16 +38,20 @@ IMPORT_LOG_FUNCTIONS()
 namespace graalvm {
 
 bool GraalVMCommonContext::m_fatal_error = false;
+std::string GraalVMCommonContext::m_fatal_error_description;
 
 GraalVMCommonContext::GraalVMCommonContext(
     const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
     const std::vector<std::string> &module_files,
-    const shcore::Dictionary_t &globals)
-    : m_file_system{fs}, m_module_files{module_files}, m_globals{globals} {}
+    const shcore::Dictionary_t &globals,
+    const std::vector<std::string> &isolate_args)
+    : m_file_system{fs},
+      m_module_files{module_files},
+      m_globals{globals},
+      m_isolate_args{isolate_args} {}
 
 GraalVMCommonContext::~GraalVMCommonContext() {
   // We are done
-  { std::lock_guard<std::mutex> lock(m_finish_mutex); }
   m_finish_condition.notify_one();
   m_life_cycle_thread->join();
   m_life_cycle_thread.reset();
@@ -113,8 +118,9 @@ poly_engine GraalVMCommonContext::create_engine() {
   return engine;
 }
 
-void GraalVMCommonContext::initialize() {
-  Polyglot_common_context::initialize();
+void GraalVMCommonContext::initialize(
+    const std::vector<std::string> &isolate_args) {
+  Polyglot_common_context::initialize(isolate_args);
 
   m_base_context = std::make_shared<GraalVMJavaScript>(this);
   m_base_context->initialize(m_file_system);
@@ -128,7 +134,7 @@ void GraalVMCommonContext::initialize() {
   }
 }
 
-void GraalVMCommonContext::start() {
+bool GraalVMCommonContext::start() {
   m_life_cycle_thread = std::make_unique<std::thread>(
       &GraalVMCommonContext::life_cycle_thread, this);
 
@@ -137,6 +143,8 @@ void GraalVMCommonContext::start() {
     std::unique_lock<std::mutex> lock(m_init_mutex);
     m_init_condition.wait(lock, [this]() { return m_initialized; });
   }
+
+  return !m_fatal_error;
 }
 
 /**
@@ -148,7 +156,14 @@ void GraalVMCommonContext::start() {
  * above condition.
  */
 void GraalVMCommonContext::life_cycle_thread() {
-  initialize();
+  try {
+    initialize(m_isolate_args);
+  } catch (const shcore::polyglot::Polyglot_generic_error &error) {
+    // This error is not reported by graal but it is a fatal error!
+    m_fatal_error = true;
+    m_fatal_error_description = error.message();
+  }
+
   m_initialized = true;
 
   // Tell the constructor we are done

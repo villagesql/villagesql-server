@@ -59,7 +59,7 @@ class Polyglot_common_context {
   Polyglot_common_context() = default;
   virtual ~Polyglot_common_context() = default;
 
-  virtual void initialize();
+  virtual void initialize(const std::vector<std::string> &isolate_args);
   virtual void finalize();
 
   poly_reference engine() const { return m_engine.get(); }
