@@ -10563,6 +10563,12 @@ ER_LIBRARY_INVALID
 ER_LH_AVRO_INVALID_RECORD
   eng "Column %d in %s: Invalid Avro record encountered. Nested records are not supported."
 
+ER_LH_INVALID_VALUE_IN_VECTOR
+  eng "Column %d in %s: Invalid vector: contains a value %s."
+
+ER_LH_WARN_VECTOR_LOSSY_CONVERSION
+  eng "Column %d in %s: Conversion from type Int to type Float could result in loss of precision."
+
 #
 #  End of 9.x error messages (server-to-client).
 #
