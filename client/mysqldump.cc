@@ -5816,6 +5816,8 @@ static bool get_view_structure(char *table, char *db) {
   char *result_table, *opt_quoted_table;
   char table_buff[NAME_LEN * 2 + 3];
   char table_buff2[NAME_LEN * 2 + 3];
+  char table_string_buff[NAME_LEN * 2 + 3];
+  char db_string_buff[NAME_LEN * 2 + 3];
   char query[QUERY_LENGTH];
   FILE *sql_file = md_result_file;
   DBUG_TRACE;
@@ -5827,6 +5829,15 @@ static bool get_view_structure(char *table, char *db) {
 
   result_table = quote_name(table, table_buff, true);
   opt_quoted_table = quote_name(table, table_buff2, false);
+  if (((ulong)-1 == mysql_real_escape_string_quote(mysql, table_string_buff,
+                                                   table, strlen(table),
+                                                   '\'')) ||
+      ((ulong)-1 == mysql_real_escape_string_quote(mysql, db_string_buff, db,
+                                                   strlen(db), '\''))) {
+    DB_error(mysql,
+             "when trying to quote table and db names when dumping views.");
+    return true;
+  }
 
   if (switch_character_set_results(mysql, "binary")) return true;
 
@@ -5869,8 +5880,8 @@ static bool get_view_structure(char *table, char *db) {
            "SELECT CHECK_OPTION, DEFINER, SECURITY_TYPE, "
            "       CHARACTER_SET_CLIENT, COLLATION_CONNECTION "
            "FROM information_schema.views "
-           "WHERE table_name=\"%s\" AND table_schema=\"%s\"",
-           table, db);
+           "WHERE table_name='%s' AND table_schema='%s'",
+           table_string_buff, db_string_buff);
 
   if (mysql_query(mysql, query)) {
     /*
