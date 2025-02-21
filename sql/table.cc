@@ -7565,7 +7565,9 @@ AccessPath *MaterializedPathCache::LookupPath(
     case AccessPath::REF: {
       const auto equal_ref{[&](const RefPath &existing) {
         return table_path->ref().ref->key == existing.ref->key &&
-               table_path->ref().ref->key_parts == existing.ref->key_parts;
+               table_path->ref().ref->key_parts == existing.ref->key_parts &&
+               table_path->parameter_tables ==
+                   existing.materialize_path->parameter_tables;
       }};
 
       const auto iter{
