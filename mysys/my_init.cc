@@ -92,6 +92,8 @@ static void my_win_init();
 #define SCALE_SEC 100
 #define SCALE_USEC 10000
 
+extern void my_main_thread_end();
+
 bool my_init_done = false;
 ulong my_thread_stack_size = 65536;
 
@@ -243,6 +245,9 @@ Voluntary context switches %ld, Involuntary context switches %ld\n",
     DBUG_END(); /* Must be done before my_thread_end */
   }
 
+#ifndef NDEBUG
+  if (infoflag & MY_END_PROXY_MAIN_THD) my_main_thread_end();
+#endif
   my_thread_end();
   my_thread_global_end();
 

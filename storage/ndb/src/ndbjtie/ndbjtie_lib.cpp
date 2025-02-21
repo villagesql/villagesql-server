@@ -43,6 +43,9 @@
 #include "mysql_utils_jtie.hpp"
 #include "ndbapi_jtie.hpp"
 
+// mysys, for MY_END_PROXY_MAIN_THD
+#include "my_sys.h"
+
 // ---------------------------------------------------------------------------
 // API Global Symbol Definitions & Template Instantiations
 // ---------------------------------------------------------------------------
@@ -238,7 +241,7 @@ class JTie_NdbInit {
       VERBOSE("... released the MySQL Utilities resources");
 
       VERBOSE("releasing NDBAPI resources ...");
-      ndb_end(0);
+      ndb_end(MY_END_PROXY_MAIN_THD);
       VERBOSE("... released NDBAPI resources");
       is_init = false;
     }
