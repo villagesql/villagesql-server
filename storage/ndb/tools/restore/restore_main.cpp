@@ -1185,6 +1185,16 @@ static inline bool checkDbAndTableName(const TableS *table) {
   return false;
 }
 
+static inline bool rebuildSysTableIdx(const TableS *table) {
+  const char *table_name = table->getTableName();
+  bool res = false;
+
+  res |= opt_include_stored_grants &&
+         strcmp(table_name, NDB_REP_DB "/def/" NDB_SQL_METADATA_TABLE) == 0;
+  res |= checkSysTable(table) && checkDbAndTableName(table);
+  return res;
+}
+
 static void exclude_missing_tables(const RestoreMetaData &metaData,
                                    const Vector<BackupConsumer *> g_consumers) {
   Uint32 i, j;
@@ -2415,7 +2425,7 @@ int do_restore(RestoreThreadData *thrdata) {
 
     for (i = 0; i < metaData.getNoOfTables(); i++) {
       const TableS *table = metaData[i];
-      if (!(checkSysTable(table) && checkDbAndTableName(table))) continue;
+      if (!rebuildSysTableIdx(table)) continue;
       if (isBlobTable(table) || isIndex(table)) continue;
       for (Uint32 j = 0; j < g_consumers.size(); j++) {
         if (!g_consumers[j]->rebuild_indexes(*table)) {
