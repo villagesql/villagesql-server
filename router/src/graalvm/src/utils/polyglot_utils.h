@@ -118,6 +118,11 @@ int64_t to_int(poly_thread thread, poly_value obj);
 double to_double(poly_thread thread, poly_value obj);
 
 /**
+ * Converts a polyglot string into a C++ double
+ */
+double to_boolean(poly_thread thread, poly_value obj);
+
+/**
  * Converts a bool into a polyglot boolean
  */
 poly_value poly_bool(poly_thread thread, poly_context context, bool value);

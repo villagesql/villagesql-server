@@ -36,6 +36,7 @@
 #include <vector>
 
 #include "languages/polyglot_javascript.h"
+#include "mysqlrouter/graalvm_callbacks.h"
 #include "mysqlrouter/graalvm_common.h"
 #include "mysqlrouter/graalvm_db_interface.h"
 #include "mysqlrouter/graalvm_value.h"
@@ -71,11 +72,9 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
              const Dictionary_t &predefined_globals = {});
   void stop();
 
-  std::string execute(
-      const std::string &code, int timeout, ResultType result_type,
-      const std::function<std::shared_ptr<db::ISession>(const std::string &)>
-          &session_callback = {},
-      const std::function<void()> &interrupt_callback = {});
+  std::string execute(const std::string &code, int timeout,
+                      ResultType result_type,
+                      const Global_callbacks &callbacks);
 
   std::string get_parameter_string(const std::vector<Value> &parameters) const;
 
@@ -122,10 +121,19 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
   };
 
   void resolve_promise(poly_value promise);
-  poly_value get_session();
+  shcore::Value get_session(const std::vector<shcore::Value> &args);
+
   struct Get_session {
     static const constexpr char *name = "getSession";
+    static const constexpr std::size_t argc = 1;
     static const constexpr auto callback = &GraalVMJavaScript::get_session;
+  };
+
+  poly_value get_current_mrs_user_id();
+  struct Get_current_mrs_user_id {
+    static const constexpr char *name = "getCurrentMrsUserId";
+    static const constexpr auto callback =
+        &GraalVMJavaScript::get_current_mrs_user_id;
   };
 
   // To control the statement execution, the execution thread will be in wait
@@ -147,8 +155,7 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
   ResultType m_result_type;
   poly_value m_promise_resolver;
 
-  std::function<std::shared_ptr<db::ISession>(const std::string &)>
-      m_get_session_callback;
+  const Global_callbacks *m_global_callbacks = nullptr;
   std::shared_ptr<shcore::polyglot::Session> m_session;
 };
 

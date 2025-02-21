@@ -27,9 +27,11 @@
 #define ROUTER_SRC_GRAALVM_SRC_GRAALVM_JAVASCRIPT_CONTEXT_H_
 
 #include <string>
+#include <vector>
 
 #include "graalvm_common_context.h"
 #include "graalvm_javascript.h"
+#include "mysqlrouter/graalvm_callbacks.h"
 #include "mysqlrouter/graalvm_common.h"
 #include "mysqlrouter/graalvm_context.h"
 #include "mysqlrouter/graalvm_db_interface.h"
@@ -45,13 +47,11 @@ class GraalVMJavaScriptContext : public IGraalVMContext {
                            const std::string &debug_port = "");
   ~GraalVMJavaScriptContext() override { m_language->stop(); }
 
-  std::string execute(
-      const std::string &module, const std::string &object,
-      const std::string &function, const std::vector<Value> &parameters,
-      int timeout, ResultType result_type,
-      const std::function<std::shared_ptr<db::ISession>(const std::string &)>
-          &session_callback = {},
-      const std::function<void()> &interrupt_callback = {}) override;
+  std::string execute(const std::string &module, const std::string &object,
+                      const std::string &function,
+                      const std::vector<Value> &parameters, int timeout,
+                      ResultType result_type,
+                      const Global_callbacks &global_callbacks) override;
 
  private:
   std::shared_ptr<GraalVMJavaScript> m_language;

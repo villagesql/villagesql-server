@@ -29,6 +29,7 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "graalvm_common_context.h"
 #include "graalvm_javascript.h"
@@ -49,16 +50,13 @@ std::string GraalVMJavaScriptContext::execute(
     const std::string &module, const std::string &object,
     const std::string &function, const std::vector<Value> &parameters,
     int timeout, ResultType result_type,
-    const std::function<std::shared_ptr<db::ISession>(const std::string &)>
-        &session_callback,
-    const std::function<void()> &interrupt_callback) {
+    const Global_callbacks &global_callbacks) {
   std::string code = "import('" + module + "').then((m) => m." + object + "." +
                      function + "(" +
                      m_language->get_parameter_string(parameters) +
                      ")).catch(error=>synch_error(error))";
 
-  return m_language->execute(code, timeout, result_type, session_callback,
-                             interrupt_callback);
+  return m_language->execute(code, timeout, result_type, global_callbacks);
 }
 
 }  // namespace graalvm

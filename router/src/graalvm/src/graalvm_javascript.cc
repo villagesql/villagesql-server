@@ -30,7 +30,9 @@
 #include <condition_variable>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
+#include <vector>
 
 #include "include/my_thread.h"
 #include "languages/polyglot_javascript.h"
@@ -198,8 +200,14 @@ void GraalVMJavaScript::run() {
 
   set_global_function(
       "getSession",
+      shcore::polyglot::native_handler_variable_args<GraalVMJavaScript,
+                                                     Get_session>,
+      this);
+
+  set_global_function(
+      "getCurrentMrsUserId",
       shcore::polyglot::polyglot_handler_no_args<GraalVMJavaScript,
-                                                 Get_session>,
+                                                 Get_current_mrs_user_id>,
       this);
 
   if (const auto rc = Java_script_interface::eval(
@@ -392,9 +400,7 @@ std::string GraalVMJavaScript::get_parameter_string(
 
 std::string GraalVMJavaScript::execute(
     const std::string &code, int timeout, ResultType result_type,
-    const std::function<std::shared_ptr<db::ISession>(const std::string &)>
-        &session_callback,
-    const std::function<void()> &interrupt_callback) {
+    const Global_callbacks &global_callbacks) {
   clear_is_terminating();
 
   auto ms_timeout = std::chrono::milliseconds{timeout};
@@ -403,7 +409,7 @@ std::string GraalVMJavaScript::execute(
   m_result.reset();
 
   {
-    m_get_session_callback = session_callback;
+    m_global_callbacks = &global_callbacks;
     std::lock_guard lock(m_process_mutex);
     m_result_type = result_type;
     m_code = code;
@@ -414,7 +420,7 @@ std::string GraalVMJavaScript::execute(
       m_session->reset();
     }
     m_session.reset();
-    m_get_session_callback = {};
+    m_global_callbacks = nullptr;
   });
 
   m_process_condition.notify_one();
@@ -434,8 +440,8 @@ std::string GraalVMJavaScript::execute(
   }
 
   // Timeout ocurred, the termination logic should be executed
-  if (interrupt_callback) {
-    interrupt_callback();
+  if (global_callbacks.interrupt) {
+    global_callbacks.interrupt();
   }
   terminate();
 
@@ -494,17 +500,46 @@ void GraalVMJavaScript::resolve_promise(poly_value promise) {
   }
 }
 
-poly_value GraalVMJavaScript::get_session() {
-  assert(m_get_session_callback);
+shcore::Value GraalVMJavaScript::get_session(
+    const std::vector<shcore::Value> &args) {
+  assert(m_global_callbacks->get_session);
 
   std::lock_guard lock(m_result_mutex);
   try {
-    if (m_get_session_callback) {
-      m_session = std::make_shared<shcore::polyglot::Session>(
-          m_get_session_callback("ro"));
+    bool read_only = true;
+    if (args.size() > 1) {
+      throw std::runtime_error(shcore::str_format(
+          "getSession(bool readOnly) takes up to 1 argument"));
+    } else if (!args.empty()) {
+      read_only = args[0].as_bool();
     }
 
-    return convert(Value(m_session));
+    return shcore::Value(std::make_shared<shcore::polyglot::Session>(
+        m_global_callbacks->get_session(read_only)));
+
+  } catch (const Polyglot_error &error) {
+    create_result(error);
+  } catch (const std::exception &error) {
+    create_result(Value(error.what()), "error");
+  }
+  m_result_condition.notify_one();
+
+  return shcore::Value();
+}
+
+poly_value GraalVMJavaScript::get_current_mrs_user_id() {
+  assert(m_global_callbacks->get_current_mrs_user_id);
+
+  std::lock_guard lock(m_result_mutex);
+  try {
+    std::optional<std::string> user_id;
+    user_id = m_global_callbacks->get_current_mrs_user_id();
+
+    if (user_id.has_value()) {
+      return convert(Value(*user_id));
+    } else {
+      return undefined();
+    }
   } catch (const Polyglot_error &error) {
     create_result(error);
   } catch (const std::exception &error) {

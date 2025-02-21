@@ -24,6 +24,7 @@
 
 #include "mrs/endpoint/handler/handler_db_object_script.h"
 
+#include <stdexcept>
 #include <string>
 
 #include "mysql/harness/logging/logging.h"
@@ -278,41 +279,47 @@ HttpResult HandlerDbObjectScript::handle_script(
     auto result = context->get()->execute(
         m_impl->entry_script(), entry_->content_set_def->class_name,
         entry_->content_set_def->name, parameters, timeout, result_type,
-        // Get Session Callback
-        [&, this](
-            const std::string &type) -> std::shared_ptr<graalvm::db::ISession> {
-          collector::MySQLConnection session_type =
-              collector::MySQLConnection::kMySQLConnectionUserdataRO;
-          if (type == "rw") {
-            session_type =
-                collector::MySQLConnection::kMySQLConnectionUserdataRW;
-          } else if (type != "ro") {
-            // TODO (rennox): error
-          }
+        {// Get Session Callback
+         [&, this](bool read_only) -> std::shared_ptr<graalvm::db::ISession> {
+           collector::MySQLConnection session_type =
+               collector::MySQLConnection::kMySQLConnectionUserdataRO;
+           if (!read_only) {
+             session_type =
+                 collector::MySQLConnection::kMySQLConnectionUserdataRW;
+           }
 
-          session = get_session(ctxt, session_type);
-          session->connection_id();
+           session = get_session(ctxt, session_type);
+           session->connection_id();
 
-          return std::make_shared<shcore::polyglot::database::Session>(
-              session.get()->get_handle());
-        },
-        // Timeout Callback: to be executed in case the script timeout is
-        // reached...
-        [&]() {
-          if (!session.empty()) {
-            std::string q = "KILL " + std::to_string(session->connection_id());
+           return std::make_shared<shcore::polyglot::database::Session>(
+               session.get()->get_handle());
+         },
+         // Get current MRS User ID Callback
+         [&, ctxt]() -> std::optional<std::string> {
+           if (ctxt->session) {
+             return ctxt->session->user.user_id.to_string();
+           }
 
-            auto params = session->get_connection_parameters();
-            try {
-              auto killer_session = cache_->clone_instance(params);
+           return {};
+         },
+         // Timeout Callback: to be executed in case the script timeout is
+         // reached...
+         [&]() {
+           if (!session.empty()) {
+             std::string q = "KILL " + std::to_string(session->connection_id());
 
-              killer_session->execute(q);
-            } catch (const std::exception &e) {
-              log_warning("Error killing connection at %s: %s",
-                          params.conn_opts.destination.str().c_str(), e.what());
-            }
-          }
-        });
+             auto params = session->get_connection_parameters();
+             try {
+               auto killer_session = cache_->clone_instance(params);
+
+               killer_session->execute(q);
+             } catch (const std::exception &e) {
+               log_warning("Error killing connection at %s: %s",
+                           params.conn_opts.destination.str().c_str(),
+                           e.what());
+             }
+           }
+         }});
 
     if (response_cache_) {
       auto entry = response_cache_->create_routine_entry(

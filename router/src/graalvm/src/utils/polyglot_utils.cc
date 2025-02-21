@@ -160,6 +160,13 @@ double to_double(poly_thread thread, poly_value obj) {
   return value;
 }
 
+double to_boolean(poly_thread thread, poly_value obj) {
+  bool value = false;
+  throw_if_error(poly_value_as_boolean, thread, obj, &value);
+
+  return value;
+}
+
 poly_value poly_string(poly_thread thread, poly_context context,
                        std::string_view data) {
   return poly_string(thread, context, data.data(), data.length());
