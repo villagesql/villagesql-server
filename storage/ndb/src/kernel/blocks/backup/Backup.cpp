@@ -14201,7 +14201,7 @@ void Backup::start_execute_lcp(Signal *signal, BackupRecordPtr ptr,
        " prev_row_count: %llu,"
        " memory_used_in_bytes: %llu, max_page_cnt: %u, LCP lsn: %llu",
        instance(), tabPtr.p->tableId, fragPtr.p->fragmentId,
-       c_lqh->getCreateSchemaVersion(ttabPtr.p->tableId), ptr.p->m_row_count,
+       c_lqh->getCreateSchemaVersion(tabPtr.p->tableId), ptr.p->m_row_count,
        ptr.p->m_row_change_count, ptr.p->m_prev_row_count,
        ptr.p->m_memory_used_in_bytes, ptr.p->m_lcp_max_page_cnt,
        ptr.p->m_current_lcp_lsn));
