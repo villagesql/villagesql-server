@@ -1856,7 +1856,14 @@ int NDBT_Tables::dropAllTables(Ndb *pNdb) {
     }
 
     if (pNdb->getDictionary()->dropTable(tab->getName()) == -1) {
-      g_err << "Failed to drop a table" << endl;
+      g_err << "Failed to drop table " << tab->getName() << " ("
+            << pNdb->getDictionary()->getNdbError() << ")" << endl;
+
+      // If dropTable fails with error 723: No such table existed,
+      // continue dropping the remaining tables.
+      if (pNdb->getDictionary()->getNdbError().code == 723) {
+        continue;
+      }
       return NDBT_FAILED;
     }
   }
