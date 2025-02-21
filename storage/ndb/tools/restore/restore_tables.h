@@ -25,3 +25,4 @@
 #define NDB_REP_DB "mysql"
 #define NDB_APPLY_TABLE "ndb_apply_status"
 #define NDB_SCHEMA_TABLE "ndb_schema"
+#define NDB_SQL_METADATA_TABLE "ndb_sql_metadata"
