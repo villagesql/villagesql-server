@@ -128,7 +128,7 @@ bool Rpl_async_conn_failover_add_source::add_source_init(UDF_INIT *init_id,
     return true;
   }
 
-  if (args->arg_type[2] != INT_RESULT) {
+  if (args->arg_type[2] != INT_RESULT || args->args[2] == nullptr) {
     my_stpcpy(message, "Wrong arguments: You need to specify value for port.");
     return true;
   }
@@ -141,7 +141,8 @@ bool Rpl_async_conn_failover_add_source::add_source_init(UDF_INIT *init_id,
   }
 
   if (args->arg_count == 5 &&
-      (args->arg_type[4] != INT_RESULT || (*((long long *)args->args[4]) < 1) ||
+      (args->arg_type[4] != INT_RESULT || args->args[4] == nullptr ||
+       (*((long long *)args->args[4]) < 1) ||
        (*((long long *)args->args[4]) > 100))) {
     my_stpcpy(message,
               "Wrong arguments: The weight argument value should be integer "
