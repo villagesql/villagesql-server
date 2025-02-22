@@ -147,7 +147,8 @@ bool Rpl_async_conn_failover_add_managed::add_managed_init(UDF_INIT *init_id,
     return true;
   }
 
-  if (args->arg_type[4] != INT_RESULT || (*((long long *)args->args[4]) < 1) ||
+  if (args->arg_type[4] != INT_RESULT || args->args[4] == nullptr ||
+      (*((long long *)args->args[4]) < 1) ||
       (*((long long *)args->args[4]) > 65535)) {
     my_stpcpy(message,
               "Wrong arguments: The port argument should be integer between "
@@ -162,7 +163,8 @@ bool Rpl_async_conn_failover_add_managed::add_managed_init(UDF_INIT *init_id,
     return true;
   }
 
-  if (args->arg_type[6] != INT_RESULT || (*((long long *)args->args[6]) < 1) ||
+  if (args->arg_type[6] != INT_RESULT || args->args[6] == nullptr ||
+      (*((long long *)args->args[6]) < 1) ||
       (*((long long *)args->args[6]) > 100)) {
     my_stpcpy(message,
               "Wrong arguments: The primary_weight argument should be "
@@ -170,7 +172,8 @@ bool Rpl_async_conn_failover_add_managed::add_managed_init(UDF_INIT *init_id,
     return true;
   }
 
-  if (args->arg_type[7] != INT_RESULT || (*((long long *)args->args[7]) < 1) ||
+  if (args->arg_type[7] != INT_RESULT || args->args[7] == nullptr ||
+      (*((long long *)args->args[7]) < 1) ||
       (*((long long *)args->args[7]) > 100)) {
     my_stpcpy(message,
               "Wrong arguments: The secondary_weight argument should be "
