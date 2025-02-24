@@ -69,6 +69,7 @@ class Pool {
       }
     }
 
+    m_active_items++;
     return m_item_factory();
   }
 
@@ -82,6 +83,8 @@ class Pool {
       }
     }
 
+    m_active_items--;
+    m_teared_down.notify_one();
     if (m_item_destructor) {
       m_item_destructor(ctx);
     }
@@ -97,19 +100,31 @@ class Pool {
       auto item = m_items.front();
       m_items.pop_front();
 
+      m_active_items--;
       if (m_item_destructor) {
         m_item_destructor(item);
       }
     }
+
+    // Waits until all the contexts created by the pool get released
+    std::unique_lock<std::mutex> lock(m_mutex);
+    m_teared_down.wait(lock, [this]() { return m_active_items == 0; });
+  }
+
+  size_t active_items() const {
+    std::scoped_lock lock(m_mutex);
+    return m_active_items;
   }
 
  private:
   std::mutex m_mutex;
+  std::condition_variable m_teared_down;
   bool m_teardown = false;
   size_t m_pool_size;
   std::deque<T> m_items;
   std::function<T()> m_item_factory;
   std::function<void(T)> m_item_destructor;
+  size_t m_active_items = 0;
 };
 
 class Pooled_context;

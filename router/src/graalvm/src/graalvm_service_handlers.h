@@ -31,6 +31,7 @@
 #include "mysqlrouter/graalvm_component.h"
 
 #include <memory>
+#include <vector>
 
 namespace graalvm {
 
@@ -52,6 +53,9 @@ class Graalvm_service_handlers : public IGraalvm_service_handlers {
 
   void release_debug_context() override;
 
+  void init() override;
+  void teardown() override;
+
   const std::shared_ptr<shcore::polyglot::IFile_system> &file_system() const {
     return m_fs;
   }
@@ -63,13 +67,17 @@ class Graalvm_service_handlers : public IGraalvm_service_handlers {
   const shcore::Dictionary_t &globals() const { return m_globals; }
 
  private:
+  void init_common_context();
+
   std::unique_ptr<GraalVMCommonContext> m_common_context;
   std::shared_ptr<IGraalvm_context_handle> m_debug_context;
   std::shared_ptr<Context_pool> m_context_pool;
 
+  size_t m_pool_size;
   std::shared_ptr<shcore::polyglot::IFile_system> m_fs;
   std::vector<std::string> m_module_files;
   shcore::Dictionary_t m_globals;
+  std::vector<std::string> m_isolate_args;
 };
 
 }  // namespace graalvm

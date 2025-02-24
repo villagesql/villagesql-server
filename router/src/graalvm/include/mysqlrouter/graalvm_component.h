@@ -49,6 +49,9 @@ class IGraalvm_service_handlers {
       const std::string &debug_port = "") = 0;
 
   virtual void release_debug_context() = 0;
+
+  virtual void init() = 0;
+  virtual void teardown() = 0;
 };
 
 /**

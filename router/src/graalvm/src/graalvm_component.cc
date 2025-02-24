@@ -67,6 +67,8 @@ std::shared_ptr<IGraalvm_context_handle> GraalVMComponent::get_context(
                                       context_pool_size, fs, module_files,
                                       globals, isolate_args))
              .first;
+
+    it->second->init();
   }
 
   return it->second->get_context(debug_port);

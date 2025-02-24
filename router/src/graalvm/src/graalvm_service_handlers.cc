@@ -25,6 +25,8 @@
 
 #include "graalvm_service_handlers.h"
 
+#include <memory>
+
 #include "mysql/harness/logging/logging.h"
 
 namespace graalvm {
@@ -36,19 +38,33 @@ Graalvm_service_handlers::Graalvm_service_handlers(
     const std::vector<std::string> &module_files,
     const shcore::Dictionary_t &globals,
     const std::vector<std::string> &isolate_args)
-    : m_fs{fs}, m_module_files{module_files}, m_globals{globals} {
-  m_common_context = std::make_unique<GraalVMCommonContext>(
-      m_fs, m_module_files, m_globals, isolate_args);
+    : m_pool_size{size},
+      m_fs{fs},
+      m_module_files{module_files},
+      m_globals{globals},
+      m_isolate_args{isolate_args} {}
+
+void Graalvm_service_handlers::init() {
+  init_common_context();
 
   if (m_common_context->start()) {
     m_context_pool =
-        std::make_shared<Context_pool>(size, m_common_context.get());
+        std::make_shared<Context_pool>(m_pool_size, m_common_context.get());
   } else {
     throw std::runtime_error(m_common_context->error());
   }
 }
 
-Graalvm_service_handlers::~Graalvm_service_handlers() {
+void Graalvm_service_handlers::init_common_context() {
+  m_common_context = std::make_unique<GraalVMCommonContext>(
+      m_fs, m_module_files, m_globals, m_isolate_args);
+}
+
+Graalvm_service_handlers::~Graalvm_service_handlers() { teardown(); }
+
+void Graalvm_service_handlers::teardown() {
+  m_context_pool->teardown();
+  m_context_pool.reset();
   m_common_context.reset();
 }
 
