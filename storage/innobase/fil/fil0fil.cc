@@ -10961,7 +10961,6 @@ static bool fil_op_replay_rename(const page_id_t &page_id,
 }
 
 space_id_t Fil_system::get_tablespace_id(const std::string &filename) {
-  constexpr size_t read_size = UNIV_SECTOR_SIZE;
   pfs_os_file_t file;
   bool success;
 
@@ -10994,19 +10993,23 @@ space_id_t Fil_system::get_tablespace_id(const std::string &filename) {
 
   space_id_t space_id = dict_sys_t::s_invalid_space_id;
 
-  auto buf = ut::make_unique_aligned<byte[]>(read_size, read_size);
+  auto buf = ut::make_unique_aligned<byte[]>(srv_page_size, srv_page_size);
 
   IORequest request(IORequest::READ);
   ulint bytes_read = 0;
+  /* Disable the warning if we try to read compressed tablespace which has
+  data less than the read size i.e., srv_page_size */
+  request.disable_partial_io_warnings();
 
-  dberr_t err = os_file_read_no_error_handling(
-      request, filename.c_str(), file, buf.get(), 0, read_size, &bytes_read);
+  dberr_t err =
+      os_file_read_no_error_handling(request, filename.c_str(), file, buf.get(),
+                                     0, srv_page_size, &bytes_read);
 
   os_file_close(file);
 
   DBUG_EXECUTE_IF("invalid_header", bytes_read = 0;);
 
-  if (err != DB_SUCCESS || (bytes_read != read_size)) {
+  if (err != DB_SUCCESS || (bytes_read != srv_page_size)) {
     /* Reading from the first page failed, falling back to heavy duty method */
     return find_space_id_reliably();
   }
