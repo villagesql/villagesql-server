@@ -90,6 +90,7 @@
 
 %{?el8:                          %global with_debuginfo 1}
 %{?el9:                          %global with_debuginfo 1}
+%{?el10:                         %global with_debuginfo 1}
 %{!?with_debuginfo:              %global without_debuginfo 1}
 
 %ifarch aarch64
@@ -116,7 +117,7 @@
 %global compatsrc             https://cdn.mysql.com/Downloads/MySQL-5.6/mysql-%{compatver}.tar.gz
 %endif
 
-%if 0%{?rhel} > 7
+%if 0%{?rhel} == 8 || 0%{?rhel} == 9
 %global compatver             8.0.37
 %global compatlib             21
 %global compatsrc             https://cdn.mysql.com/Downloads/MySQL-8.0/mysql-boost-%{compatver}.tar.gz
@@ -175,27 +176,35 @@ BuildRequires:  cmake3 >= 3.14.6
 %{?el7:BuildRequires:  devtoolset-11-gcc-c++}
 %{?el7:BuildRequires:  devtoolset-11-binutils}
 %{?el7:BuildRequires:  devtoolset-11-dwz}
-%endif
-%if 0%{?rhel} > 7
+%endif # aarch64
+%if 0%{?rhel} == 8 || 0%{?rhel} == 9
+%if 0%{?compatlib}
 BuildRequires:  gcc-toolset-12-annobin-annocheck
 BuildRequires:  gcc-toolset-12-annobin-plugin-gcc
 BuildRequires:  gcc-toolset-12-binutils
 BuildRequires:  gcc-toolset-12-dwz
 BuildRequires:  gcc-toolset-12-gcc-c++
 BuildRequires:  gcc-toolset-12-gcc
+%endif # compatlib
 BuildRequires:  gcc-toolset-13-annobin-annocheck
 BuildRequires:  gcc-toolset-13-annobin-plugin-gcc
 BuildRequires:  gcc-toolset-13-binutils
 BuildRequires:  gcc-toolset-13-dwz
 BuildRequires:  gcc-toolset-13-gcc-c++
 BuildRequires:  gcc-toolset-13-gcc
-%endif
+%endif # el8 / el9
+%if 0%{?rhel} == 10
+BuildRequires:  annobin-annocheck
+BuildRequires:  annobin-plugin-gcc
+BuildRequires:  binutils
+BuildRequires:  dwz
+BuildRequires:  gcc-c++
+BuildRequires:  gcc
+%endif # el10
 BuildRequires:  bison >= 3.0.4
 BuildRequires:  elfutils
 BuildRequires:  perl
-%{?el7:BuildRequires: perl(Env)}
-%{?el8:BuildRequires: perl(Env)}
-%{?el9:BuildRequires: perl(Env)}
+BuildRequires:  perl(Env)
 BuildRequires:  perl(Carp)
 BuildRequires:  perl(Config)
 BuildRequires:  perl(Cwd)
@@ -228,9 +237,7 @@ BuildRequires:  time
 BuildRequires:  libaio-devel
 %if 0%{?commercial}
 BuildRequires:  cyrus-sasl-gssapi
-%{?el7:BuildRequires: cyrus-sasl-scram}
-%{?el8:BuildRequires: cyrus-sasl-scram}
-%{?el9:BuildRequires: cyrus-sasl-scram}
+BuildRequires:  cyrus-sasl-scram
 BuildRequires:  libcurl-devel
 %endif
 BuildRequires:  krb5-devel
@@ -844,7 +851,11 @@ mkdir debug
 (
   cd debug
   # Attempt to remove any optimisation flags from the debug build
+%if 0%{?rhel} == 10
+  optflags=$(echo "%{optflags}" | sed -e 's/-O2 / /' -e 's/-Wp,-U_FORTIFY_SOURCE,-D_FORTIFY_SOURCE=[0-9]/ /' -e 's/%{_lto_cflags}/ /')
+%else
   optflags=$(echo "%{optflags}" | sed -e 's/-O2 / /' -e 's/-Wp,-D_FORTIFY_SOURCE=2/ /' -e 's/%{_lto_cflags}/ /')
+%endif
   %{cmake3} ../%{src_dir} \
            -DBUILD_CONFIG=mysql_release \
            -DINSTALL_LAYOUT=RPM \
