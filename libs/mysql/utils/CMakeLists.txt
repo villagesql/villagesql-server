@@ -23,6 +23,7 @@
 
 SET(TARGET_HEADERS
   call_and_catch.h
+  concat.h
   deprecate_header.h
   enumeration_utils.h
   error.h
