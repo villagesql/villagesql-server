@@ -58,9 +58,17 @@ std::shared_ptr<IGraalvm_context_handle> GraalVMComponent::get_context(
     const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
     const std::vector<std::string> &module_files,
     const shcore::Dictionary_t &globals, const std::string &debug_port,
-    const std::vector<std::string> &isolate_args) {
+    const std::vector<std::string> &isolate_args, bool reset_context) {
   std::unique_lock<std::mutex> lock(m_context_creation);
   auto it = m_service_context_handlers.find(service_id);
+
+  if (it != m_service_context_handlers.end() && reset_context) {
+    it->second->teardown();
+    m_inactive_context_handlers.push_back(it->second);
+    m_service_context_handlers.erase(it);
+    it = m_service_context_handlers.end();
+  }
+
   if (it == m_service_context_handlers.end()) {
     it = m_service_context_handlers
              .emplace(service_id, std::make_shared<Graalvm_service_handlers>(

@@ -68,6 +68,7 @@ class Graalvm_service_handlers : public IGraalvm_service_handlers {
 
  private:
   void init_common_context();
+  void do_tear_down();
 
   std::unique_ptr<GraalVMCommonContext> m_common_context;
   std::shared_ptr<IGraalvm_context_handle> m_debug_context;
@@ -78,6 +79,7 @@ class Graalvm_service_handlers : public IGraalvm_service_handlers {
   std::vector<std::string> m_module_files;
   shcore::Dictionary_t m_globals;
   std::vector<std::string> m_isolate_args;
+  std::unique_ptr<std::thread> m_teardown_thread;
 };
 
 }  // namespace graalvm

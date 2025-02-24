@@ -67,6 +67,7 @@ class DbServiceEndpoint : public OptionEndpoint {
 
   void set_debug_enabled(bool value);
   bool is_debug_enabled() const;
+  void on_updated_content_set();
 
 #ifdef HAVE_GRAALVM_PLUGIN
   std::shared_ptr<graalvm::IGraalvm_context_handle> get_scripting_context();
@@ -84,7 +85,7 @@ class DbServiceEndpoint : public OptionEndpoint {
 
 #ifdef HAVE_GRAALVM_PLUGIN
   std::shared_ptr<file_system::DbServiceFileSystem> get_file_system();
-  const std::vector<std::string> &get_content_set_scripts();
+  bool get_content_set_scripts();
   const std::vector<std::string> &get_isolate_params();
 #endif
 
@@ -96,7 +97,6 @@ class DbServiceEndpoint : public OptionEndpoint {
   std::shared_ptr<file_system::DbServiceFileSystem> file_system_;
   std::optional<std::vector<std::string>> content_set_scripts_;
   std::optional<std::vector<std::string>> isolate_args_;
-  size_t context_pool_size_ = 8;
   std::string content_set_path_;
 #endif
 };

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -23,6 +23,8 @@
 */
 
 #include "mrs/endpoint/content_set_endpoint.h"
+
+#include <vector>
 
 #include "mrs/endpoint/db_service_endpoint.h"
 #include "mrs/observability/entity.h"
@@ -58,6 +60,12 @@ void ContentSetEndpoint::set(const ContentSet &entry, EndpointBasePtr parent) {
 }
 
 void ContentSetEndpoint::update() {
+  auto service_ep =
+      std::dynamic_pointer_cast<DbServiceEndpoint>(get_parent_ptr());
+  if (service_ep) {
+    service_ep->on_updated_content_set();
+  }
+
   Parent::update();
   observability::EntityCounter<kEntityCounterUpdatesContentSets>::increment();
 }
@@ -79,6 +87,32 @@ std::string ContentSetEndpoint::get_my_url_part() const {
 
 std::optional<std::string> ContentSetEndpoint::get_options() const {
   return entry_->options;
+}
+
+void ContentSetEndpoint::get_content_set_scripts(
+    std::vector<std::string> *out_scripts) {
+  assert(out_scripts);
+
+  auto cset = get();
+  if (cset->options) {
+    rapidjson::Document doc;
+    doc.Parse((*cset->options).data(), (*cset->options).size());
+
+    if (doc.IsObject()) {
+      if (doc.HasMember("script_module_files") &&
+          doc["script_module_files"].IsArray()) {
+        auto array = doc["script_module_files"].GetArray();
+
+        for (rapidjson::Value::ConstValueIterator itr = array.Begin();
+             itr != array.End(); ++itr) {
+          if (itr->HasMember("file_to_load") &&
+              (*itr)["file_to_load"].IsString()) {
+            out_scripts->push_back((*itr)["file_to_load"].GetString());
+          }
+        }
+      }
+    }
+  }
 }
 
 }  // namespace endpoint

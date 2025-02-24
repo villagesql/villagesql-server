@@ -83,6 +83,12 @@ void DbServiceEndpoint::set(const DbService &entry, EndpointBasePtr parent) {
   changed();
 }
 
+void DbServiceEndpoint::on_updated_content_set() {
+#ifdef HAVE_GRAALVM_PLUGIN
+  content_set_scripts_.reset();
+#endif
+}
+
 #ifdef HAVE_GRAALVM_PLUGIN
 std::shared_ptr<file_system::DbServiceFileSystem>
 DbServiceEndpoint::get_file_system() {
@@ -93,64 +99,52 @@ DbServiceEndpoint::get_file_system() {
   return file_system_;
 }
 
-const std::vector<std::string> &DbServiceEndpoint::get_content_set_scripts() {
-  // TODO(rennox): the content_set_scripts_ should be reset if the content set
-  // is updated, probably makes more sense to move this to the content_set
-  // endpoint??
+bool DbServiceEndpoint::get_content_set_scripts() {
+  bool updated = false;
   if (!content_set_scripts_.has_value()) {
-    std::vector<std::string> files_to_load;
+    updated = true;
+    std::vector<std::string> scripts;
+
     for (const auto &child : get_children()) {
       auto content_set_ep =
           std::dynamic_pointer_cast<ContentSetEndpoint>(child);
 
       // We only care about content set childs
-      if (!content_set_ep) {
+      if (!content_set_ep || !content_set_ep->get_options().has_value()) {
         continue;
       }
 
-      auto cset = content_set_ep->get();
-      if (!cset->options) {
-        continue;
-      }
+      content_set_ep->get_content_set_scripts(&scripts);
 
+      // TODO(rennox): this should be turned int a global function if multiple
+      // content sets per service are allowed
       content_set_path_ = content_set_ep->get_url().join();
-
-      rapidjson::Document doc;
-      doc.Parse((*cset->options).data(), (*cset->options).size());
-
-      // TODO (rennox) : Should we just ignore??
-      if (!doc.IsObject()) {
-        continue;
-      }
-
-      if (!doc.HasMember("script_module_files") ||
-          !doc["script_module_files"].IsArray()) {
-        continue;
-      }
-
-      // TODO(rennox): review the final location for this configurable item
-      if (doc.HasMember("context_pool_size") &&
-          doc["context_pool_size"].IsUint()) {
-        context_pool_size_ =
-            static_cast<size_t>(doc["context_pool_size"].GetUint());
-      }
-
-      auto array = doc["script_module_files"].GetArray();
-
-      for (rapidjson::Value::ConstValueIterator itr = array.Begin();
-           itr != array.End(); ++itr) {
-        if (itr->HasMember("file_to_load") &&
-            (*itr)["file_to_load"].IsString()) {
-          files_to_load.push_back((*itr)["file_to_load"].GetString());
-        }
-      }
     }
 
-    content_set_scripts_ = files_to_load;
+    content_set_scripts_ = std::move(scripts);
   }
 
-  return *content_set_scripts_;
+  return updated;
 }
+
+namespace {
+std::optional<uint64_t> get_pool_size(const std::string &options) {
+  if (!options.empty()) {
+    rapidjson::Document doc;
+    doc.Parse(options.data(), options.size());
+
+    if (doc.IsObject() && doc.HasMember("jitExecutor")) {
+      const auto &node = doc["jitExecutor"];
+
+      if (node.HasMember("poolSize")) {
+        return node["poolSize"].GetUint();
+      }
+    }
+  }
+
+  return {};
+}
+}  // namespace
 
 const std::vector<std::string> &DbServiceEndpoint::get_isolate_params() {
   std::vector<std::string> params;
@@ -185,10 +179,13 @@ DbServiceEndpoint::get_scripting_context() {
   auto globals = shcore::make_dict();
   globals->emplace("contentSetPath", shcore::Value(content_set_path_));
 
+  auto reset_context = get_content_set_scripts();
+
   return instance.get_context(
-      id, context_pool_size_, get_file_system(), get_content_set_scripts(),
-      globals, debug_enabled_ ? get_configuration()->get_debug_port() : "",
-      get_isolate_params());
+      id, get_pool_size(get_options().value_or("")).value_or(8),
+      get_file_system(), *content_set_scripts_, globals,
+      debug_enabled_ ? get_configuration()->get_debug_port() : "",
+      get_isolate_params(), reset_context);
 }
 #endif
 

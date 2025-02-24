@@ -60,9 +60,21 @@ void Graalvm_service_handlers::init_common_context() {
       m_fs, m_module_files, m_globals, m_isolate_args);
 }
 
-Graalvm_service_handlers::~Graalvm_service_handlers() { teardown(); }
+Graalvm_service_handlers::~Graalvm_service_handlers() {
+  if (m_teardown_thread) {
+    m_teardown_thread->join();
+    m_teardown_thread.reset();
+  } else {
+    do_tear_down();
+  }
+}
 
 void Graalvm_service_handlers::teardown() {
+  m_teardown_thread = std::make_unique<std::thread>(
+      &Graalvm_service_handlers::do_tear_down, this);
+}
+
+void Graalvm_service_handlers::do_tear_down() {
   m_context_pool->teardown();
   m_context_pool.reset();
   m_common_context.reset();

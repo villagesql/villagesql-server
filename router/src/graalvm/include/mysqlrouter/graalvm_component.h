@@ -98,7 +98,8 @@ class GRAALVM_PLUGIN_EXPORT GraalVMComponent {
       const std::vector<std::string> &module_files,
       const shcore::Dictionary_t &globals = {},
       const std::string &debug_port = "",
-      const std::vector<std::string> &isolate_args = {});
+      const std::vector<std::string> &isolate_args = {},
+      bool reset_context = false);
 
  private:
   GraalVMComponent() = default;
@@ -106,6 +107,9 @@ class GRAALVM_PLUGIN_EXPORT GraalVMComponent {
 
   std::unordered_map<std::string, std::shared_ptr<IGraalvm_service_handlers>>
       m_service_context_handlers;
+
+  std::vector<std::shared_ptr<IGraalvm_service_handlers>>
+      m_inactive_context_handlers;
 };
 
 }  // namespace graalvm
