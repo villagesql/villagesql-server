@@ -10590,6 +10590,9 @@ ER_LH_UNSTRUCTURED_TOO_MANY_CHUNKS
 ER_ACCESS_DENIED_FIREWALL 28000
   eng "Access denied."
 
+ER_LH_DECOMPRESSION_ERR
+ eng "Failed to extract from %s: corrupted file, wrong compression format, or multiple files in archive."
+
 #
 #  End of 9.x error messages (server-to-client).
 #
