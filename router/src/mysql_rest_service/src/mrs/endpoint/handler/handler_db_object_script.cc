@@ -271,76 +271,86 @@ HttpResult HandlerDbObjectScript::handle_script(
     result_type = graalvm::ResultType::Raw;
   }
 
-  try {
-    int timeout = m_impl->get_timeout(entry_->options.value_or(""));
-    auto context = service_ep->get_scripting_context();
+  while (true) {
+    try {
+      int timeout = m_impl->get_timeout(entry_->options.value_or(""));
+      auto context = service_ep->get_scripting_context();
 
-    HandlerDbObjectTable::CachedSession session;
-    auto result = context->get()->execute(
-        m_impl->entry_script(), entry_->content_set_def->class_name,
-        entry_->content_set_def->name, parameters, timeout, result_type,
-        {// Get Session Callback
-         [&, this](bool read_only) -> std::shared_ptr<graalvm::db::ISession> {
-           collector::MySQLConnection session_type =
-               collector::MySQLConnection::kMySQLConnectionUserdataRO;
-           if (!read_only) {
-             session_type =
-                 collector::MySQLConnection::kMySQLConnectionUserdataRW;
-           }
-
-           session = get_session(ctxt, session_type);
-           session->connection_id();
-
-           return std::make_shared<shcore::polyglot::database::Session>(
-               session.get()->get_handle());
-         },
-         // Get current MRS User ID Callback
-         [&, ctxt]() -> std::optional<std::string> {
-           if (ctxt->session) {
-             return ctxt->session->user.user_id.to_string();
-           }
-
-           return {};
-         },
-         // Timeout Callback: to be executed in case the script timeout is
-         // reached...
-         [&]() {
-           if (!session.empty()) {
-             std::string q = "KILL " + std::to_string(session->connection_id());
-
-             auto params = session->get_connection_parameters();
-             try {
-               auto killer_session = cache_->clone_instance(params);
-
-               killer_session->execute(q);
-             } catch (const std::exception &e) {
-               log_warning("Error killing connection at %s: %s",
-                           params.conn_opts.destination.str().c_str(),
-                           e.what());
-             }
-           }
-         }});
-
-    if (response_cache_) {
-      auto entry = response_cache_->create_routine_entry(
-          get_endpoint_url(endpoint_), body, result,
-          entry_->media_type.value_or(""));
-
-      if (entry) {
-        return cached_response(entry);
+      if (!context) {
+        throw std::runtime_error(
+            "Unable to satisfy the request, no scripting contexts available.");
       }
-    }
 
-    // Builds the response when no Cache is used
-    auto response = HttpResult(std::move(result));
-    if (entry_->media_type.has_value()) {
-      response.type_text = *entry_->media_type;
+      HandlerDbObjectTable::CachedSession session;
+      auto result = context->get()->execute(
+          m_impl->entry_script(), entry_->content_set_def->class_name,
+          entry_->content_set_def->name, parameters, timeout, result_type,
+          {// Get Session Callback
+           [&, this](bool read_only) -> std::shared_ptr<graalvm::db::ISession> {
+             collector::MySQLConnection session_type =
+                 collector::MySQLConnection::kMySQLConnectionUserdataRO;
+             if (!read_only) {
+               session_type =
+                   collector::MySQLConnection::kMySQLConnectionUserdataRW;
+             }
+
+             session = get_session(ctxt, session_type);
+             session->connection_id();
+
+             return std::make_shared<shcore::polyglot::database::Session>(
+                 session.get()->get_handle());
+           },
+           // Get current MRS User ID Callback
+           [&, ctxt]() -> std::optional<std::string> {
+             if (ctxt->session) {
+               return ctxt->session->user.user_id.to_string();
+             }
+
+             return {};
+           },
+           // Timeout Callback: to be executed in case the script timeout is
+           // reached...
+           [&]() {
+             if (!session.empty()) {
+               std::string q =
+                   "KILL " + std::to_string(session->connection_id());
+
+               auto params = session->get_connection_parameters();
+               try {
+                 auto killer_session = cache_->clone_instance(params);
+
+                 killer_session->execute(q);
+               } catch (const std::exception &e) {
+                 log_warning("Error killing connection at %s: %s",
+                             params.conn_opts.destination.str().c_str(),
+                             e.what());
+               }
+             }
+           }});
+
+      if (response_cache_) {
+        auto entry = response_cache_->create_routine_entry(
+            get_endpoint_url(endpoint_), body, result,
+            entry_->media_type.value_or(""));
+
+        if (entry) {
+          return cached_response(entry);
+        }
+      }
+
+      // Builds the response when no Cache is used
+      auto response = HttpResult(std::move(result));
+      if (entry_->media_type.has_value()) {
+        response.type_text = *entry_->media_type;
+      }
+      return response;
+    } catch (const graalvm::Timeout_error &) {
+      throw http::Error(HttpStatusCode::RequestTimeout);
+    } catch (const graalvm::Memory_error &) {
+      // NO-OP: a retry will be done
+    } catch (const std::runtime_error &error) {
+      throw http::Error(HttpStatusCode::InternalError, error.what());
     }
-    return response;
-  } catch (const graalvm::Timeout_error &) {
-    throw http::Error(HttpStatusCode::RequestTimeout);
-  } catch (const std::runtime_error &error) {
-    throw http::Error(HttpStatusCode::InternalError, error.what());
   }
 #else
   throw http::Error(HttpStatusCode::NotImplemented);

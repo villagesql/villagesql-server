@@ -89,6 +89,8 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
   poly_value create_source(const std::string &source,
                            const std::string &code_str) const;
 
+  bool got_memory_error() const { return m_memory_error; }
+
  private:
   void run();
 
@@ -151,12 +153,16 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
 
   std::optional<std::string> m_code;
   std::optional<std::string> m_result;
+  bool m_is_error = false;
+  bool m_memory_error = false;
 
   ResultType m_result_type;
   poly_value m_promise_resolver;
 
   const Global_callbacks *m_global_callbacks = nullptr;
   std::shared_ptr<shcore::polyglot::Session> m_session;
+  bool m_initialized = false;
+  std::string m_initialization_error;
 };
 
 }  // namespace graalvm

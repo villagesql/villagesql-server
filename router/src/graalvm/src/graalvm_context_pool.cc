@@ -59,6 +59,12 @@ std::shared_ptr<Pooled_context> Context_pool::get_context() {
   return {};
 }
 
-void Context_pool::release(IGraalVMContext *ctx) { m_pool->release(ctx); }
+void Context_pool::release(IGraalVMContext *ctx) {
+  if (ctx->got_memory_error()) {
+    m_pool->on_memory_error(ctx);
+  } else {
+    m_pool->release(ctx);
+  }
+}
 
 }  // namespace graalvm

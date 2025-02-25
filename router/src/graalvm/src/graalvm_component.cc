@@ -31,6 +31,7 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -158,15 +159,31 @@ std::shared_ptr<IGraalvm_context_handle> GraalVMComponent::get_context(
     const std::string &debug_port, bool reset_context) {
   std::unique_lock<std::mutex> lock(m_context_creation);
 
-  auto it = m_service_context_handlers.find(service_id);
-  if (it == m_service_context_handlers.end() || reset_context) {
-    update_active_contexts(
-        {service_id, std::make_shared<Graalvm_service_handlers>(config)});
+  while (true) {
+    try {
+      auto it = m_service_context_handlers.find(service_id);
+      if (it == m_service_context_handlers.end() || reset_context) {
+        update_active_contexts(
+            {service_id, std::make_shared<Graalvm_service_handlers>(config)});
 
-    return m_service_context_handlers.at(service_id)->get_context(debug_port);
+        return m_service_context_handlers.at(service_id)
+            ->get_context(debug_port);
+      }
+
+      return it->second->get_context(debug_port);
+    } catch (const std::runtime_error &) {
+      // If failed to create a context, then let's try re-creating the whole
+      // pool, if this failed on a brand new pool, then there's nothing else to
+      // be done
+      if (!reset_context) {
+        reset_context = true;
+      } else {
+        break;
+      }
+    }
   }
 
-  return it->second->get_context(debug_port);
+  return {};
 }
 
 }  // namespace graalvm

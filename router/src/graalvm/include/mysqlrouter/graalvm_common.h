@@ -35,6 +35,10 @@ class Timeout_error : public std::runtime_error {
   using std::runtime_error::runtime_error;
 };
 
+class Memory_error : public std::runtime_error {
+  using std::runtime_error::runtime_error;
+};
+
 }  // namespace graalvm
 
 #endif  // ROUTER_SRC_GRAALVM_INCLUDE_MYSQLROUTER_GRAALVM_COMMON_H_

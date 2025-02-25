@@ -89,6 +89,12 @@ void GraalVMJavaScript::create_result(const Value &result,
 
 void GraalVMJavaScript::create_result(const Polyglot_error &error) {
   std::string result;
+  if (shcore::str_beginswith(error.message(),
+                             "Garbage-collected heap size exceeded")) {
+    m_memory_error = true;
+  } else {
+    m_is_error = true;
+  }
   if (m_result_type == ResultType::Json) {
     shcore::JSON_dumper dumper;
     dumper.start_object();
@@ -143,6 +149,14 @@ void GraalVMJavaScript::start(const std::shared_ptr<IFile_system> &fs,
   m_file_system = fs;
   m_predefined_globals = predefined_globals;
   m_execution_thread = std::thread(&GraalVMJavaScript::run, this);
+  std::unique_lock<std::mutex> lock(m_process_mutex);
+  m_process_condition.wait(lock, [this]() {
+    return m_initialized || !m_initialization_error.empty();
+  });
+
+  if (!m_initialization_error.empty()) {
+    throw std::runtime_error(m_initialization_error);
+  }
 }
 
 void GraalVMJavaScript::stop() {
@@ -178,45 +192,53 @@ poly_value GraalVMJavaScript::create_source(const std::string &source,
 
 void GraalVMJavaScript::run() {
   my_thread_self_setname("GraalVM-Proc");
-  initialize(m_file_system);
+  try {
+    initialize(m_file_system);
+    m_initialized = true;
 
-  if (m_predefined_globals) {
-    for (const auto &it : (*m_predefined_globals)) {
-      set_global(it.first, it.second);
+    if (m_predefined_globals) {
+      for (const auto &it : (*m_predefined_globals)) {
+        set_global(it.first, it.second);
+      }
     }
+
+    set_global_function(
+        "synch_return",
+        shcore::polyglot::polyglot_handler_fixed_args<GraalVMJavaScript,
+                                                      Synch_return>,
+        this);
+
+    set_global_function(
+        "synch_error",
+        shcore::polyglot::polyglot_handler_fixed_args<GraalVMJavaScript,
+                                                      Synch_error>,
+        this);
+
+    set_global_function(
+        "getSession",
+        shcore::polyglot::native_handler_variable_args<GraalVMJavaScript,
+                                                       Get_session>,
+        this);
+
+    set_global_function(
+        "getCurrentMrsUserId",
+        shcore::polyglot::polyglot_handler_no_args<GraalVMJavaScript,
+                                                   Get_current_mrs_user_id>,
+        this);
+
+    if (const auto rc = Java_script_interface::eval(
+            "(internal)::resolver",
+            R"(new Function ("prom", "prom.then(value => synch_return(value)).catch(error => synch_error(error));");)",
+            &m_promise_resolver);
+        rc != poly_ok) {
+      throw Polyglot_error(thread(), rc);
+    }
+  } catch (const Polyglot_error &err) {
+    m_done = true;
+    m_initialization_error = err.format(true);
   }
 
-  set_global_function(
-      "synch_return",
-      shcore::polyglot::polyglot_handler_fixed_args<GraalVMJavaScript,
-                                                    Synch_return>,
-      this);
-
-  set_global_function(
-      "synch_error",
-      shcore::polyglot::polyglot_handler_fixed_args<GraalVMJavaScript,
-                                                    Synch_error>,
-      this);
-
-  set_global_function(
-      "getSession",
-      shcore::polyglot::native_handler_variable_args<GraalVMJavaScript,
-                                                     Get_session>,
-      this);
-
-  set_global_function(
-      "getCurrentMrsUserId",
-      shcore::polyglot::polyglot_handler_no_args<GraalVMJavaScript,
-                                                 Get_current_mrs_user_id>,
-      this);
-
-  if (const auto rc = Java_script_interface::eval(
-          "(internal)::resolver",
-          R"(new Function ("prom", "prom.then(value => synch_return(value)).catch(error => synch_error(error));");)",
-          &m_promise_resolver);
-      rc != poly_ok) {
-    throw Polyglot_error(thread(), rc);
-  }
+  m_process_condition.notify_one();
 
   while (!m_done) {
     std::unique_lock<std::mutex> lock(m_process_mutex);
@@ -254,7 +276,9 @@ void GraalVMJavaScript::run() {
     m_code.reset();
   }
 
-  finalize();
+  if (m_initialized) {
+    finalize();
+  }
 }
 
 Value GraalVMJavaScript::native_array(poly_value object) {
@@ -407,6 +431,7 @@ std::string GraalVMJavaScript::execute(
 
   // Ensures a clean result...
   m_result.reset();
+  m_is_error = false;
 
   {
     m_global_callbacks = &global_callbacks;
@@ -430,10 +455,20 @@ std::string GraalVMJavaScript::execute(
 
     if (!m_debug_port.empty()) {
       m_result_condition.wait(lock, [this]() { return m_result.has_value(); });
+      if (m_memory_error) {
+        throw Memory_error(*m_result);
+      } else if (m_is_error) {
+        throw std::runtime_error(*m_result);
+      }
       return *m_result;
     } else {
       if (m_result_condition.wait_for(
               lock, ms_timeout, [this]() { return m_result.has_value(); })) {
+        if (m_memory_error) {
+          throw Memory_error(*m_result);
+        } else if (m_is_error) {
+          throw std::runtime_error(*m_result);
+        }
         return *m_result;
       }
     }

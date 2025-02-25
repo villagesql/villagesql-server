@@ -46,6 +46,7 @@ class IGraalVMContext {
                               const std::vector<shcore::Value> &parameters,
                               int timeout, ResultType result_type,
                               const Global_callbacks &global_callbacks) = 0;
+  virtual bool got_memory_error() const = 0;
 };
 
 }  // namespace graalvm

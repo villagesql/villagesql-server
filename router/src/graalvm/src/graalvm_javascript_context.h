@@ -53,6 +53,8 @@ class GraalVMJavaScriptContext : public IGraalVMContext {
                       ResultType result_type,
                       const Global_callbacks &global_callbacks) override;
 
+  bool got_memory_error() const override;
+
  private:
   std::shared_ptr<GraalVMJavaScript> m_language;
 };

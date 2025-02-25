@@ -59,4 +59,8 @@ std::string GraalVMJavaScriptContext::execute(
   return m_language->execute(code, timeout, result_type, global_callbacks);
 }
 
+bool GraalVMJavaScriptContext::got_memory_error() const {
+  return m_language->got_memory_error();
+}
+
 }  // namespace graalvm

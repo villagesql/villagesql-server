@@ -31,6 +31,7 @@
 #include <functional>
 #include <memory>
 #include <mutex>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -55,11 +56,24 @@ class Pool {
 
   T get() {
     {
-      std::scoped_lock lock(m_mutex);
+      std::unique_lock lock(m_mutex);
 
       if (m_teardown) return {};
 
       T item = {};
+
+      // Contention mode is turned ON when a memory error happened, for that
+      // reason creating new contexts is a no-go so we should wait for a context
+      // from the pool to get released
+      if (m_contention_mode && m_items.empty()) {
+        m_item_availability.wait(
+            lock, [this]() { return m_active_items == 0 || !m_items.empty(); });
+
+        if (m_active_items == 0) {
+          throw std::runtime_error(
+              "All the contexts on the pool have been released.");
+        }
+      }
 
       if (!m_items.empty()) {
         // Pop a resource from the pool
@@ -79,12 +93,14 @@ class Pool {
 
       if (!m_teardown && m_items.size() < m_pool_size) {
         m_items.push_back(ctx);
+        m_item_availability.notify_one();
         return;
       }
     }
 
     m_active_items--;
     m_teared_down.notify_one();
+    m_item_availability.notify_one();
     if (m_item_destructor) {
       m_item_destructor(ctx);
     }
@@ -116,15 +132,32 @@ class Pool {
     return m_active_items;
   }
 
+  /**
+   * Discards the affected context and turns ON contention mode for the pool
+   */
+  void on_memory_error(T ctx) {
+    std::scoped_lock lock(m_mutex);
+    m_contention_mode = true;
+
+    m_active_items--;
+    m_teared_down.notify_one();
+    m_item_availability.notify_one();
+    if (m_item_destructor) {
+      m_item_destructor(ctx);
+    }
+  }
+
  private:
   std::mutex m_mutex;
   std::condition_variable m_teared_down;
+  std::condition_variable m_item_availability;
   bool m_teardown = false;
   size_t m_pool_size;
   std::deque<T> m_items;
   std::function<T()> m_item_factory;
   std::function<void(T)> m_item_destructor;
   size_t m_active_items = 0;
+  bool m_contention_mode = false;
 };
 
 class Pooled_context;
