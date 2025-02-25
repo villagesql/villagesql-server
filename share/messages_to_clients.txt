@@ -10578,6 +10578,9 @@ ER_LH_UNSTRUCTURED_PAGE_CHUNK_WARN
 ER_LH_UNSTRUCTURED_TOO_MANY_CHUNKS
   eng "Too many chunks for file: %.*s"
 
+ER_LH_DECOMPRESSION_ERR
+ eng "Failed to extract from %s: corrupted file, wrong compression format, or multiple files in archive."
+
 #
 #  End of 9.x error messages (server-to-client).
 #
