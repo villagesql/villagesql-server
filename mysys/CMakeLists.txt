@@ -95,7 +95,6 @@ SET(MYSYS_SOURCES
   my_symlink.cc
   my_sync.cc
   my_syslog.cc
-  my_system.cc
   my_thread.cc
   my_thr_init.cc
   my_user.cc

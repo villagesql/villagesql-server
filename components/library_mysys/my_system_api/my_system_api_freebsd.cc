@@ -1,4 +1,4 @@
-/* Copyright (c) 2024, 2025, Oracle and/or its affiliates.
+/* Copyright (c) 2025 Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -12,11 +12,6 @@
    separately licensed software that they have either included with
    the program or referenced in the documentation.
 
-   Without limiting anything contained in the foregoing, this file,
-   which is part of C Driver for MySQL (Connector/C), is also subject to the
-   Universal FOSS Exception, version 1.0, a copy of which can be found at
-   http://oss.oracle.com/licenses/universal-foss-exception.
-
    This program is distributed in the hope that it will be useful,
    but WITHOUT ANY WARRANTY; without even the implied warranty of
    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
@@ -26,39 +21,37 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#include <cstdint>
+
+#include <unistd.h>  // getpid
+/* sys/cpuset.h requires sys/types.h which is included in unistd.h */
+#include <sys/cpuset.h>  // cpuset_t
+#include <sys/sysctl.h>  // sysctlbyname
+
+#include "my_system_api.h"
+
 /**
-  @file mysys/my_system.cc Functions to retrieve system information like total
-  Physical memory
+  @file components/library_mysys/my_system_api/my_system_api_apple.cc
+  Functions to fetch the number of VCPUs from the system. APIs retrieve this
+  information using the affinity between the process and the VCPU or by reading
+  the system configuration
 */
 
-#include <cassert>
-#include "my_config.h"
-#include "my_dbug.h"
-
-#ifdef _WIN32
-#include <windows.h>
-#endif
-
-#ifdef HAVE_UNISTD_H
-#include <unistd.h>
-#endif
-
-unsigned long long my_physical_memory() {
-  unsigned long long mem = 0ULL;
-#ifdef _WIN32
-  MEMORYSTATUSEX ms;
-  ms.dwLength = sizeof(ms);
-  GlobalMemoryStatusEx(&ms);
-  mem = ms.ullTotalPhys;
-#elif defined(HAVE_UNISTD_H) /* _WIN32 */
-  long const pages = sysconf(_SC_PHYS_PAGES);
-  long const pagesize = sysconf(_SC_PAGESIZE);
-  if (pages > 0 && pagesize > 0) {
-    mem = static_cast<unsigned long long>(pages * pagesize);
+uint32_t num_vcpus_using_affinity() {
+  cpuset_t cs;
+  CPU_ZERO(&cs);
+  if (cpuset_getaffinity(CPU_LEVEL_WHICH, CPU_WHICH_PID, getpid(), sizeof(cs),
+                         &cs) != 0) {
+    return 0;
   }
-#else
-#error "Missing implementation of sysconf or GlobalMemoryStatusEx"
-#endif /* HAVE_UNISTD_H */
-  assert(mem != 0);
-  return mem;
+  return CPU_COUNT(&cs);
+}
+
+uint32_t num_vcpus_using_config() {
+  uint32_t num_vcpus = 0;
+  size_t num_vcpus_size = sizeof(uint32_t);
+  if (sysctlbyname("hw.ncpu", &num_vcpus, &num_vcpus_size, nullptr, 0) != 0) {
+    num_vcpus = 0;
+  }
+  return num_vcpus;
 }

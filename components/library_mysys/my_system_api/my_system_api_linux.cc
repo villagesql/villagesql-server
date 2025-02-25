@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2025, Oracle and/or its affiliates.
+/* Copyright (c) 2025 Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -21,16 +21,38 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#include <sched.h>
+#include <unistd.h>
 #include <cstdint>
 
-#include "sql/resourcegroups/platform/thread_attrs_api.h"
+#include "my_system_api.h"
 
-namespace resourcegroups::platform {
-bool is_valid_thread_priority(int priority) {
-  return (priority >= -20 && priority <= 19);
+/**
+  @file components/library_mysys/my_system_api/my_system_api_linux.cc
+  Functions to fetch the number of VCPUs from the system. APIs retrieve this
+  information using the affinity between the process and the VCPU or by reading
+  the system configuration
+*/
+
+uint32_t num_vcpus_using_affinity() {
+  cpu_set_t cs;
+  CPU_ZERO(&cs);
+
+  if (sched_getaffinity(getpid(), sizeof(cs), &cs) != 0) {
+    return 0;
+  }
+
+  return CPU_COUNT(&cs);
 }
 
-int min_thread_priority_value() { return -20; }
+uint32_t num_vcpus_using_config() {
+  uint32_t num_vcpus = 0;
 
-int max_thread_priority_value() { return 19; }
-}  // namespace resourcegroups::platform
+#ifdef _SC_NPROCESSORS_ONLN
+  num_vcpus = sysconf(_SC_NPROCESSORS_ONLN);
+#elif defined(_SC_NPROCESSORS_CONF)
+  num_vcpus = sysconf(_SC_NPROCESSORS_CONF);
+#endif
+
+  return num_vcpus;
+}

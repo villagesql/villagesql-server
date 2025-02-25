@@ -46,6 +46,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "fsp0sysspace.h"
 #include "log0recv.h"
 #include "mtr0log.h"
+#include "mysql/components/library_mysys/my_system.h"  // my_num_vcpus
 #include "os0file.h"
 #include "read0read.h"
 #include "srv0srv.h"
@@ -509,8 +510,7 @@ purge_pq_t *trx_sys_init_at_db_start(void) {
     /* Create the memory objects for all the rollback segments
     referred to in the TRX_SYS page or any undo tablespace
     RSEG_ARRAY page. */
-    srv_rseg_init_threads =
-        std::min(std::thread::hardware_concurrency(), max_rseg_init_threads);
+    srv_rseg_init_threads = std::min(my_num_vcpus(), max_rseg_init_threads);
 
     /* Test hook to initialize the rollback segments using a single
     thread. */

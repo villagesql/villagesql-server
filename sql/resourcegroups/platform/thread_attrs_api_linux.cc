@@ -37,6 +37,7 @@
 #include "thread_attrs_api.h"
 
 #include "my_dbug.h"  // DBUG_*
+#include "mysql/components/library_mysys/my_system.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysqld_error.h"
 
@@ -97,7 +98,7 @@ bool unbind_thread(my_thread_os_id_t thread_id) {
   cpu_set_t cpu_set;
 
   CPU_ZERO(&cpu_set);
-  uint32_t const num_cpus = num_vcpus_using_config();
+  uint32_t num_cpus = my_num_vcpus();
   if (num_cpus == 0) {
     char errbuf[MYSQL_ERRMSG_SIZE];
     LogErr(ERROR_LEVEL, ER_RES_GRP_THD_UNBIND_FROM_CPU_FAILED, thread_id,
@@ -148,31 +149,6 @@ bool set_thread_priority(int priority, my_thread_os_id_t thread_id) {
     return true;
   }
   return false;
-}
-
-uint32_t num_vcpus_using_affinity() {
-  uint32_t num_vcpus = 0;
-
-#ifdef HAVE_PTHREAD_GETAFFINITY_NP
-  cpu_set_t set;
-
-  if (pthread_getaffinity_np(pthread_self(), sizeof(set), &set) == 0)
-    num_vcpus = CPU_COUNT(&set);
-#endif  // HAVE_PTHREAD_GETAFFINITY_NP
-
-  return num_vcpus;
-}
-
-uint32_t num_vcpus_using_config() {
-  cpu_id_t num_vcpus = 0;
-
-#ifdef _SC_NPROCESSORS_ONLN
-  num_vcpus = sysconf(_SC_NPROCESSORS_ONLN);
-#elif defined(_SC_NPROCESSORS_CONF)
-  num_vcpus = sysconf(_SC_NPROCESSORS_CONF);
-#endif
-
-  return num_vcpus;
 }
 
 bool can_thread_priority_be_set() {

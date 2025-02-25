@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2025, Oracle and/or its affiliates.
+/* Copyright (c) 2025 Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,14 +23,19 @@
 
 #include <cstdint>
 
-#include "sql/resourcegroups/platform/thread_attrs_api.h"
+#include "my_system_api.h"
 
-namespace resourcegroups::platform {
-bool is_valid_thread_priority(int priority) {
-  return (priority >= -20 && priority <= 19);
+/**
+  @file components/library_mysys/my_system_api/my_system_api_common.cc
+  Functions to fetch the number of VCPUs from the system. APIs retrieve this
+  information using the affinity between the process and the VCPU or by reading
+  the system configuration
+*/
+
+uint32_t my_system_num_vcpus() {
+  uint32_t nprocs = num_vcpus_using_affinity();
+  if (nprocs == 0) {
+    nprocs = num_vcpus_using_config();
+  }
+  return nprocs;
 }
-
-int min_thread_priority_value() { return -20; }
-
-int max_thread_priority_value() { return 19; }
-}  // namespace resourcegroups::platform

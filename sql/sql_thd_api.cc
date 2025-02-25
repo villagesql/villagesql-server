@@ -50,7 +50,6 @@
 #include "sql/mysqld_thd_manager.h"  // Global_THD_manager
 #include "sql/protocol_classic.h"
 #include "sql/query_options.h"
-#include "sql/resourcegroups/platform/thread_attrs_api.h"  // num_vcpus
 #include "sql/rpl_replica_commit_order_manager.h"  // check_and_report_deadlock
 #include "sql/rpl_rli.h"                           // is_mts_worker
 #include "sql/sql_alter.h"
@@ -728,10 +727,6 @@ void remove_ssl_err_thread_state() {
 #if !defined(HAVE_OPENSSL11)
   ERR_remove_thread_state(nullptr);
 #endif
-}
-
-unsigned int thd_get_num_vcpus() {
-  return resourcegroups::platform::num_vcpus();
 }
 
 bool thd_check_connection_admin_privilege(MYSQL_THD thd) {

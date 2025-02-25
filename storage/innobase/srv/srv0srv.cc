@@ -85,6 +85,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "debug_sync.h" /* CONDITIONAL_SYNC_POINT */
 #include "my_dbug.h"
 #include "my_psi_config.h"
+#include "mysql/components/library_mysys/my_system.h" /* my_num_vcpus */
 
 #endif /* !UNIV_HOTBACKUP */
 #include "srv0srv.h"
@@ -2132,15 +2133,7 @@ static void srv_update_cpu_usage() {
   srv_cpu_usage.stime_abs = cpu_stime;
 
   /* Calculate relative. */
-
-  cpu_set_t cs;
-  CPU_ZERO(&cs);
-  if (sched_getaffinity(0, sizeof(cs), &cs) != 0) {
-    return;
-  }
-
-  const int n_cpu = CPU_COUNT(&cs);
-
+  const int n_cpu = my_num_vcpus();
   srv_cpu_usage.n_cpu = n_cpu;
   MONITOR_SET(MONITOR_CPU_N, int64_t(n_cpu));
 
@@ -2228,32 +2221,7 @@ static void srv_update_cpu_usage() {
   srv_cpu_usage.stime_abs = cpu_stime;
 
   /* Calculate relative. */
-
-  DWORD_PTR process_affinity_mask;
-  DWORD_PTR system_affinity_mask;
-  if (!GetProcessAffinityMask(GetCurrentProcess(), &process_affinity_mask,
-                              &system_affinity_mask)) {
-    return;
-  }
-
-  /* If the system has more than 64 processors and the current process
-     contains threads in multiple groups, GetProcessAffinityMask returns
-     zero for both affinity masks.
-  */
-  if ((process_affinity_mask == 0) && (system_affinity_mask == 0)) {
-    return;
-  }
-
-  int n_cpu = 0;
-  constexpr int MAX_CPU_N = 64;
-  uint64_t j = 1;
-  for (int i = 0; i < MAX_CPU_N; ++i) {
-    if (j & process_affinity_mask) {
-      ++n_cpu;
-    }
-    j = j << 1;
-  }
-
+  const int n_cpu = my_num_vcpus();
   srv_cpu_usage.n_cpu = n_cpu;
   MONITOR_SET(MONITOR_CPU_N, int64_t(n_cpu));
 
@@ -2275,7 +2243,7 @@ static void srv_update_cpu_usage() {
   srv_cpu_usage.utime_abs = 0;
   srv_cpu_usage.stime_pct = 0;
   srv_cpu_usage.stime_abs = 0;
-  srv_cpu_usage.n_cpu = 1;
+  srv_cpu_usage.n_cpu = my_num_vcpus();
 }
 #endif
 

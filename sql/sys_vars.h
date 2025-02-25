@@ -50,7 +50,6 @@
 #include "my_dbug.h"
 #include "my_getopt.h"
 #include "my_inttypes.h"
-#include "my_sys.h"
 #include "mysql/plugin.h"
 #include "mysql/service_mysql_alloc.h"
 #include "mysql/status_var.h"

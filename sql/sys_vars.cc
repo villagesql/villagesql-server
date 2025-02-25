@@ -54,6 +54,7 @@
 
 #include "include/compression.h"
 
+#include "mysql/components/library_mysys/my_system.h"  // my_physical_memory
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
 #include "mysql/my_loglevel.h"

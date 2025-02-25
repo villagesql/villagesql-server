@@ -1,4 +1,4 @@
-/* Copyright (c) 2017, 2025, Oracle and/or its affiliates.
+/* Copyright (c) 2025 Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -21,16 +21,36 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#include <cstdint>
+#pragma once
 
-#include "sql/resourcegroups/platform/thread_attrs_api.h"
+/**
+  Read the memory limit set by the container. Try cgroup v2, and then cgroup v1
+  @return memory limit set by cgroup v2 or cgroup v1; or 0
+  @note Return value of 0 implies either no limits are set or server is not
+  running in a container
+*/
+uint64_t my_cgroup_mem_limit();
 
-namespace resourcegroups::platform {
-bool is_valid_thread_priority(int priority) {
-  return (priority >= -20 && priority <= 19);
-}
+/**
+  Read the CPU limit set by the container. Try cgroup v2, and then cgroup v1
+  @return CPU limit set by cgroup v2 or cgroup v1; or 0
+  @note Return value of 0 implies either no limits are set or server is not
+  running in a container
+*/
+uint32_t my_cgroup_vcpu_limit();
 
-int min_thread_priority_value() { return -20; }
+/**
+  Find number of VCPUs as seen by the current process based on the
+  affinity between each process and VCPU.
+*/
+uint32_t num_vcpus_using_affinity();
 
-int max_thread_priority_value() { return 19; }
-}  // namespace resourcegroups::platform
+/**
+  Get the number of VCPUS based on system configuration.
+*/
+uint32_t num_vcpus_using_config();
+
+/**
+  Get the number of VCPU.
+*/
+uint32_t my_system_num_vcpus();

@@ -71,6 +71,7 @@ The tablespace memory cache */
 #ifndef UNIV_HOTBACKUP
 #include "buf0lru.h"
 #include "ibuf0ibuf.h"
+#include "mysql/components/library_mysys/my_system.h"  // my_num_vcpus
 #include "os0event.h"
 #include "row0mysql.h"
 #include "sql_backup_lock.h"
@@ -130,6 +131,7 @@ struct Moved {
 using Tablespaces = std::vector<Moved>;
 }  // namespace dd_fil
 
+#ifndef UNIV_HOTBACKUP
 size_t fil_get_scan_threads(size_t num_files) {
   /* Number of additional threads required to scan all the files.
   n_threads == 0 means that the main thread itself will do all the
@@ -142,8 +144,7 @@ size_t fil_get_scan_threads(size_t num_files) {
   }
 
   /* Number of concurrent threads supported by the host machine. */
-  size_t max_threads =
-      FIL_SCAN_THREADS_PER_CORE * std::thread::hardware_concurrency();
+  size_t max_threads = FIL_SCAN_THREADS_PER_CORE * my_num_vcpus();
 
   /* If the number of concurrent threads supported by the host
   machine could not be calculated, assume the supported threads
@@ -162,6 +163,7 @@ size_t fil_get_scan_threads(size_t num_files) {
 
   return n_threads;
 }
+#endif /* !UNIV_HOTBACKUP */
 
 /* uint16_t is the index into Tablespace_dirs::m_dirs */
 using Scanned_files = std::vector<std::pair<uint16_t, std::string>>;
@@ -498,9 +500,11 @@ class Tablespace_dirs {
   @param[in]  directories  Directories to scan for ibd and ibu files */
   void set_scan_dirs(const std::string &directories);
 
+#ifndef UNIV_HOTBACKUP
   /** Discover tablespaces by reading the header from .ibd files.
   @return DB_SUCCESS if all goes well */
   [[nodiscard]] dberr_t scan();
+#endif /* !UNIV_HOTBACKUP */
 
   /** Clear all the tablespace file data but leave the list of
   scanned directories in place. */
@@ -1620,9 +1624,11 @@ class Fil_system {
     m_dirs.set_scan_dirs(directories);
   }
 
+#ifndef UNIV_HOTBACKUP
   /** Scan the directories to build the tablespace ID to file name
   mapping table. */
   dberr_t scan() { return m_dirs.scan(); }
+#endif /* !UNIV_HOTBACKUP */
 
   /** Get the tablespace ID from an .ibd and/or an undo tablespace. If the
   read failed or the ID is 0 on the first page or there is a mismatch of
@@ -11133,9 +11139,12 @@ void Tablespace_dirs::print_duplicates(const Space_id_set &duplicates) {
   }
 }
 
-static bool fil_get_partition_file(const std::string &old_path [[maybe_unused]],
-                                   ib_file_suffix extn [[maybe_unused]],
-                                   std::string &new_path [[maybe_unused]]) {
+[[maybe_unused]] static bool fil_get_partition_file(const std::string &old_path
+                                                    [[maybe_unused]],
+                                                    ib_file_suffix extn
+                                                    [[maybe_unused]],
+                                                    std::string &new_path
+                                                    [[maybe_unused]]) {
   /* Safe check. Never needed on Windows. */
 #ifdef _WIN32
   return false;
@@ -11268,6 +11277,7 @@ void Tablespace_dirs::set_scan_dirs(const std::string &in_directories) {
   add_paths(directories, separators);
 }
 
+#ifndef UNIV_HOTBACKUP
 /** Discover tablespaces by reading the header from .ibd files.
 @return DB_SUCCESS if all goes well */
 dberr_t Tablespace_dirs::scan() {
@@ -11397,6 +11407,11 @@ dberr_t Tablespace_dirs::scan() {
   return err;
 }
 
+/** Discover tablespaces by reading the header from .ibd files.
+@return DB_SUCCESS if all goes well */
+dberr_t fil_scan_for_tablespaces() { return fil_system->scan(); }
+#endif /* !UNIV_HOTBACKUP */
+
 void fil_set_scan_dir(const std::string &directory, bool is_undo_dir) {
   fil_system->set_scan_dir(directory, is_undo_dir);
 }
@@ -11404,10 +11419,6 @@ void fil_set_scan_dir(const std::string &directory, bool is_undo_dir) {
 void fil_set_scan_dirs(const std::string &directories) {
   fil_system->set_scan_dirs(directories);
 }
-
-/** Discover tablespaces by reading the header from .ibd files.
-@return DB_SUCCESS if all goes well */
-dberr_t fil_scan_for_tablespaces() { return fil_system->scan(); }
 
 /** Check if a path is known to InnoDB meaning that it is in or under
 one of the four path settings scanned at startup for file discovery.

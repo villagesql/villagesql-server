@@ -150,6 +150,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "my_io.h"
 #include "my_macros.h"
 #include "my_psi_config.h"
+#include "mysql/components/library_mysys/my_system.h"  // my_num_vcpus
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/plugin.h"
 #include "mysql/psi/mysql_data_lock.h"
@@ -1101,7 +1102,7 @@ static MYSQL_THDVAR_STR(tmpdir, PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_MEMALLOC,
 static MYSQL_THDVAR_ULONG(
     parallel_read_threads, PLUGIN_VAR_RQCMDARG,
     "Number of threads to do parallel read.", nullptr, nullptr,
-    std::clamp(ulong{std::thread::hardware_concurrency() / 8}, 4UL,
+    std::clamp(ulong{my_num_vcpus() / 8}, 4UL,
                ulong{Parallel_reader::MAX_THREADS}), /* Default. */
     1,                                               /* Minimum. */
     Parallel_reader::MAX_THREADS,                    /* Maximum. */
@@ -4592,7 +4593,7 @@ static void innodb_buffer_pool_size_init() {
     ulong bp_hint = bp_hint_ull > std::numeric_limits<ulong>::max()
                         ? std::numeric_limits<ulong>::max()
                         : static_cast<ulong>(bp_hint_ull);
-    ulong cpu_hint = ulong{std::thread::hardware_concurrency() / 4};
+    ulong cpu_hint = ulong{my_num_vcpus() / 4};
 
     srv_buf_pool_instances = std::clamp(std::min(bp_hint, cpu_hint), 1UL, 64UL);
   }
@@ -4642,9 +4643,8 @@ static void innodb_redo_log_capacity_init() {
     if (!capacity_set) {
       /* Growth of REDO has high correlation with num of concurrent users which
       depends on num of CPUs */
-      srv_redo_log_capacity = std::clamp(
-          std::min(std::thread::hardware_concurrency() / 2, 16U) * GB,
-          LOG_CAPACITY_MIN, LOG_CAPACITY_MAX);
+      srv_redo_log_capacity = std::clamp(std::min(my_num_vcpus() / 2, 16U) * GB,
+                                         LOG_CAPACITY_MIN, LOG_CAPACITY_MAX);
       srv_redo_log_capacity_used = srv_redo_log_capacity;
       innodb_redo_log_capacity_update_default(srv_redo_log_capacity);
     } else {
@@ -22304,11 +22304,9 @@ static MYSQL_SYSVAR_ULONG(
     PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
     "Purge threads can be from 1 to 32. Default is 1 if number of available "
     "CPUs is 16 or less, 4 otherwise.",
-    nullptr, nullptr,
-    (std::thread::hardware_concurrency() <= 16 ? 1UL
-                                               : 4UL), /* Default setting */
-    1,                                                 /* Minimum value */
-    MAX_PURGE_THREADS, 0);                             /* Maximum value */
+    nullptr, nullptr, (my_num_vcpus() <= 16 ? 1UL : 4UL), /* Default setting */
+    1,                                                    /* Minimum value */
+    MAX_PURGE_THREADS, 0);                                /* Maximum value */
 
 static MYSQL_SYSVAR_ULONG(sync_array_size, srv_sync_array_size,
                           PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
@@ -22778,11 +22776,11 @@ static MYSQL_SYSVAR_BOOL(optimize_fulltext_only, innodb_optimize_fulltext_only,
                          "Only optimize the Fulltext index of the table",
                          nullptr, nullptr, false);
 
-static MYSQL_SYSVAR_ULONG(
-    read_io_threads, srv_n_read_io_threads,
-    PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
-    "Number of background read I/O threads in InnoDB.", nullptr, nullptr,
-    std::clamp(std::thread::hardware_concurrency() / 2, 4U, 64U), 1, 64, 0);
+static MYSQL_SYSVAR_ULONG(read_io_threads, srv_n_read_io_threads,
+                          PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
+                          "Number of background read I/O threads in InnoDB.",
+                          nullptr, nullptr,
+                          std::clamp(my_num_vcpus() / 2, 4U, 64U), 1, 64, 0);
 
 static MYSQL_SYSVAR_ULONG(write_io_threads, srv_n_write_io_threads,
                           PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
@@ -22845,15 +22843,14 @@ static MYSQL_SYSVAR_ULONG(log_write_ahead_size, srv_log_write_ahead_size,
                           INNODB_LOG_WRITE_AHEAD_SIZE_MAX,
                           OS_FILE_LOG_BLOCK_SIZE);
 
-/* The `thd_get_num_vcpus() >= 32` was derived from performance testing results
+/* The `my_num_vcpus() >= 32` was derived from performance testing results
   and relate to the `Bug #113485 Let innodb_dedicated_server set
   innodb_log_writer_threads based on server size` feature request. */
 static MYSQL_SYSVAR_BOOL(
     log_writer_threads, srv_log_writer_threads, PLUGIN_VAR_RQCMDARG,
     "Whether the log writer threads should be activated (ON), or write/flush "
     "of the redo log should be done by each thread individually (OFF).",
-    nullptr, innodb_log_writer_threads_update,
-    std::thread::hardware_concurrency() >= 32);
+    nullptr, innodb_log_writer_threads_update, my_num_vcpus() >= 32);
 
 static MYSQL_SYSVAR_UINT(
     log_spin_cpu_abs_lwm, srv_log_spin_cpu_abs_lwm, PLUGIN_VAR_RQCMDARG,

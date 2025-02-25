@@ -23,11 +23,35 @@
 
 DISABLE_MISSING_PROFILE_WARNING()
 
+SET(MY_SYSTEM_SOURCES
+  my_system.cc
+  my_system_api/my_system_api_cgroup.cc
+  my_system_api/my_system_api_common.cc
+)
+
+IF(LINUX)
+  LIST(APPEND MY_SYSTEM_SOURCES
+    my_system_api/my_system_api_linux.cc)
+ELSEIF(APPLE)
+  LIST(APPEND MY_SYSTEM_SOURCES
+    my_system_api/my_system_api_apple.cc)
+ELSEIF(FREEBSD)
+  LIST(APPEND MY_SYSTEM_SOURCES
+    my_system_api/my_system_api_freebsd.cc)
+ELSEIF(SOLARIS)
+  LIST(APPEND MY_SYSTEM_SOURCES
+    my_system_api/my_system_api_solaris.cc)
+ELSEIF(WIN32)
+  LIST(APPEND MY_SYSTEM_SOURCES
+    my_system_api/my_system_api_win.cc)
+ENDIF()
+
 ADD_LIBRARY(library_mysys STATIC
   my_memory.cc
   my_hex_tools.cc
   my_base64_encode.cc
   option_tracker_usage.cc
+  ${MY_SYSTEM_SOURCES}
 )
 ADD_DEPENDENCIES(library_mysys GenError)
 
