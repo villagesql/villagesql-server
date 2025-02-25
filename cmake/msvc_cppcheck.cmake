@@ -51,6 +51,11 @@ MACRO(MSVC_CPPCHECK_ADD_SUPPRESSIONS)
       STRING_APPEND(suppress_warnings " /wd26860") # Potentially empty optional ''...'' is unwrapped, may throw exception.: Lines: ...
     ENDIF()
 
+    IF((NOT FORCE_UNSUPPORTED_COMPILER) AND MSVC_VERSION GREATER_EQUAL 1943)
+      STRING_APPEND(suppress_warnings " /wd26838") # Allocation size is the result of a signed to unsigned conversion that could overflow if negative
+      STRING_APPEND(suppress_warnings " /wd26839") # Array new allocation size is the result of a signed to unsigned conversion that could overflow if
+    ENDIF()
+
     IF((NOT FORCE_UNSUPPORTED_COMPILER) AND MSVC_VERSION GREATER_EQUAL 1937)
       STRING_APPEND(suppress_warnings " /wd26831") # Allocation size might be the result of a numerical overflow
       STRING_APPEND(suppress_warnings " /wd26832") # Allocation size is the result of a narrowing conversion that could result in overflow
