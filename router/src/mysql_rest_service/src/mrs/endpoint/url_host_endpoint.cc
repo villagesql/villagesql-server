@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, Oracle and/or its affiliates.
+  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -31,6 +31,10 @@
 #include "mrs/endpoint/url_host_endpoint.h"
 #include "mrs/router_observation_entities.h"
 
+#ifdef HAVE_GRAALVM_PLUGIN
+#include "mysqlrouter/graalvm_component.h"
+#endif
+
 namespace mrs {
 namespace endpoint {
 
@@ -47,6 +51,12 @@ UrlHostEndpoint::UrlHostEndpoint(const UrlHost &entry,
 
 void UrlHostEndpoint::update() {
   Parent::update();
+
+#ifdef HAVE_GRAALVM_PLUGIN
+  graalvm::GraalVMComponent::get_instance().update_global_config(
+      get_options().value_or(""));
+#endif
+
   observability::EntityCounter<kEntityCounterUpdatesHosts>::increment();
 }
 UniversalId UrlHostEndpoint::get_id() const { return entry_->id; }

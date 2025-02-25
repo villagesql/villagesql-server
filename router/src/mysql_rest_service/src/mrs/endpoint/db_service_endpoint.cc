@@ -146,31 +146,6 @@ std::optional<uint64_t> get_pool_size(const std::string &options) {
 }
 }  // namespace
 
-const std::vector<std::string> &DbServiceEndpoint::get_isolate_params() {
-  std::vector<std::string> params;
-  if (!isolate_args_.has_value()) {
-    if (entry_->options.has_value()) {
-      rapidjson::Document doc;
-      doc.Parse((*entry_->options).data(), (*entry_->options).size());
-
-      if (doc.IsObject()) {
-        if (doc.HasMember("polyglotIsolateParams") &&
-            doc["polyglotIsolateParams"].IsArray()) {
-          for (auto &item : doc["polyglotIsolateParams"].GetArray()) {
-            if (item.IsString()) {
-              params.push_back(item.GetString());
-            }
-          }
-        }
-      }
-    }
-  }
-
-  isolate_args_ = params;
-
-  return *isolate_args_;
-}
-
 std::shared_ptr<graalvm::IGraalvm_context_handle>
 DbServiceEndpoint::get_scripting_context() {
   auto &instance = graalvm::GraalVMComponent::get_instance();
@@ -181,11 +156,16 @@ DbServiceEndpoint::get_scripting_context() {
 
   auto reset_context = get_content_set_scripts();
 
+  graalvm::Graalvm_service_handler_config config = {
+      get_file_system(),
+      *content_set_scripts_,
+      globals,
+      get_pool_size(get_options().value_or("")),
+      {}};
+
   return instance.get_context(
-      id, get_pool_size(get_options().value_or("")).value_or(8),
-      get_file_system(), *content_set_scripts_, globals,
-      debug_enabled_ ? get_configuration()->get_debug_port() : "",
-      get_isolate_params(), reset_context);
+      id, config, debug_enabled_ ? get_configuration()->get_debug_port() : "",
+      reset_context);
 }
 #endif
 

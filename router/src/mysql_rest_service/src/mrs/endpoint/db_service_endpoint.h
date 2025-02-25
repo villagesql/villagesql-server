@@ -86,7 +86,6 @@ class DbServiceEndpoint : public OptionEndpoint {
 #ifdef HAVE_GRAALVM_PLUGIN
   std::shared_ptr<file_system::DbServiceFileSystem> get_file_system();
   bool get_content_set_scripts();
-  const std::vector<std::string> &get_isolate_params();
 #endif
 
   DbServicePtr entry_;
@@ -96,7 +95,6 @@ class DbServiceEndpoint : public OptionEndpoint {
 #ifdef HAVE_GRAALVM_PLUGIN
   std::shared_ptr<file_system::DbServiceFileSystem> file_system_;
   std::optional<std::vector<std::string>> content_set_scripts_;
-  std::optional<std::vector<std::string>> isolate_args_;
   std::string content_set_path_;
 #endif
 };

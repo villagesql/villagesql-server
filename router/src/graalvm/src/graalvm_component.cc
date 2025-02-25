@@ -25,9 +25,15 @@
 
 #include "mysqlrouter/graalvm_component.h"
 
+#include "my_rapidjson_size_t.h"
+
+#include <rapidjson/document.h>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
+#include <unordered_map>
+#include <utility>
 
 #include "graalvm_common_context.h"
 #include "graalvm_javascript_context.h"
@@ -44,7 +50,44 @@ GraalVMComponent &GraalVMComponent::get_instance() {
   return instance;
 }
 
-GraalVMComponent::~GraalVMComponent() { m_service_context_handlers.clear(); }
+GraalVMComponent::~GraalVMComponent() {
+  m_inactive_context_handlers.clear();
+  m_service_context_handlers.clear();
+}
+
+namespace {
+std::optional<uint64_t> get_value(const rapidjson::Value &value,
+                                  const char *name) {
+  if (value.HasMember(name) && value[name].IsUint64()) {
+    return value[name].GetUint64();
+  }
+
+  return {};
+}
+
+}  // namespace
+
+void GraalVMComponent::update_global_config(const std::string &options) {
+  Global_config config;
+  if (!options.empty()) {
+    rapidjson::Document doc;
+    doc.Parse(options.data(), options.size());
+    if (doc.IsObject() && doc.HasMember("jitExecutor")) {
+      const auto &jit_executor = doc["jitExecutor"];
+      if (jit_executor.IsObject()) {
+        config.maximum_ram_size = get_value(jit_executor, "maximumRamUsage");
+        config.maximum_idle_time = get_value(jit_executor, "maximumIdleTime");
+        config.default_pool_size = get_value(jit_executor, "defaultPoolSize");
+      }
+    }
+  }
+
+  if (m_global_config != config) {
+    std::unique_lock<std::mutex> lock(m_context_creation);
+    m_global_config = config;
+    update_active_contexts();
+  }
+}
 
 void GraalVMComponent::stop_debug_context(const std::string &service_id) {
   auto it = m_service_context_handlers.find(service_id);
@@ -53,30 +96,74 @@ void GraalVMComponent::stop_debug_context(const std::string &service_id) {
   }
 }
 
-std::shared_ptr<IGraalvm_context_handle> GraalVMComponent::get_context(
-    const std::string &service_id, size_t context_pool_size,
-    const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
-    const std::vector<std::string> &module_files,
-    const shcore::Dictionary_t &globals, const std::string &debug_port,
-    const std::vector<std::string> &isolate_args, bool reset_context) {
-  std::unique_lock<std::mutex> lock(m_context_creation);
-  auto it = m_service_context_handlers.find(service_id);
+void GraalVMComponent::update_active_contexts(
+    const std::pair<std::string, std::shared_ptr<IGraalvm_service_handlers>>
+        &replacement) {
+  auto get_pool_size =
+      [this](const std::shared_ptr<IGraalvm_service_handlers> &handler) {
+        return handler->pool_size().value_or(
+            m_global_config.default_pool_size.value_or(8));
+      };
 
-  if (it != m_service_context_handlers.end() && reset_context) {
-    it->second->teardown();
-    m_inactive_context_handlers.push_back(it->second);
-    m_service_context_handlers.erase(it);
-    it = m_service_context_handlers.end();
+  std::unordered_map<std::string, std::shared_ptr<IGraalvm_service_handlers>>
+      all_context_handlers = std::move(m_service_context_handlers);
+
+  uint64_t total_pool = 0;
+  for (const auto &it : all_context_handlers) {
+    // Adds the existing context handler to be discarded
+    it.second->teardown();
+    m_inactive_context_handlers.push_back(it.second);
+
+    // Creates an updated context handler if applicable
+    if (replacement.first != it.first &&
+        (!m_global_config.maximum_idle_time.has_value() ||
+         static_cast<uint64_t>(it.second->idle_time().count()) <
+             *m_global_config.maximum_idle_time)) {
+      // Adds to the global count of pool items
+      total_pool += get_pool_size(it.second);
+
+      // Creates a new handler from the existing one
+      auto source_handler =
+          std::dynamic_pointer_cast<Graalvm_service_handlers>(it.second);
+      m_service_context_handlers.emplace(
+          it.first,
+          std::make_shared<Graalvm_service_handlers>(*source_handler.get()));
+    }
   }
 
-  if (it == m_service_context_handlers.end()) {
-    it = m_service_context_handlers
-             .emplace(service_id, std::make_shared<Graalvm_service_handlers>(
-                                      context_pool_size, fs, module_files,
-                                      globals, isolate_args))
-             .first;
+  // Adds the replacement handler to the total pool size
+  if (!replacement.first.empty()) {
+    total_pool += get_pool_size(replacement.second);
 
-    it->second->init();
+    m_service_context_handlers.emplace(std::move(replacement));
+  }
+
+  // Now updates the memory limit for each active handler and starts it
+  if (m_global_config.maximum_ram_size.has_value()) {
+    uint64_t mem_per_pool_item = *m_global_config.maximum_ram_size / total_pool;
+
+    for (const auto &it : m_service_context_handlers) {
+      it.second->set_max_heap_size(mem_per_pool_item *
+                                   get_pool_size(it.second));
+    }
+  }
+
+  for (const auto &it : m_service_context_handlers) {
+    it.second->init();
+  }
+}
+
+std::shared_ptr<IGraalvm_context_handle> GraalVMComponent::get_context(
+    const std::string &service_id, const Graalvm_service_handler_config &config,
+    const std::string &debug_port, bool reset_context) {
+  std::unique_lock<std::mutex> lock(m_context_creation);
+
+  auto it = m_service_context_handlers.find(service_id);
+  if (it == m_service_context_handlers.end() || reset_context) {
+    update_active_contexts(
+        {service_id, std::make_shared<Graalvm_service_handlers>(config)});
+
+    return m_service_context_handlers.at(service_id)->get_context(debug_port);
   }
 
   return it->second->get_context(debug_port);

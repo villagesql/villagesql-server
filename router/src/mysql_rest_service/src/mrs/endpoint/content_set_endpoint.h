@@ -26,6 +26,9 @@
 #define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_CONTENT_SET_ENDPOINT_H_
 
 #include <memory>
+#include <optional>
+#include <string>
+#include <vector>
 
 #include "mrs/database/entry/content_set.h"
 #include "mrs/endpoint/option_endpoint.h"

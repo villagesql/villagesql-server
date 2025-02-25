@@ -26,6 +26,7 @@
 #include "graalvm_service_handlers.h"
 
 #include <memory>
+#include <vector>
 
 #include "mysql/harness/logging/logging.h"
 
@@ -34,30 +35,32 @@ namespace graalvm {
 IMPORT_LOG_FUNCTIONS()
 
 Graalvm_service_handlers::Graalvm_service_handlers(
-    size_t size, const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
-    const std::vector<std::string> &module_files,
-    const shcore::Dictionary_t &globals,
-    const std::vector<std::string> &isolate_args)
-    : m_pool_size{size},
-      m_fs{fs},
-      m_module_files{module_files},
-      m_globals{globals},
-      m_isolate_args{isolate_args} {}
+    const Graalvm_service_handler_config &config)
+    : m_config{config} {}
+
+Graalvm_service_handlers::Graalvm_service_handlers(
+    const Graalvm_service_handlers &other)
+    : Graalvm_service_handlers(other.m_config) {}
 
 void Graalvm_service_handlers::init() {
   init_common_context();
 
   if (m_common_context->start()) {
-    m_context_pool =
-        std::make_shared<Context_pool>(m_pool_size, m_common_context.get());
+    m_context_pool = std::make_shared<Context_pool>(*m_config.pool_size,
+                                                    m_common_context.get());
   } else {
     throw std::runtime_error(m_common_context->error());
   }
 }
 
 void Graalvm_service_handlers::init_common_context() {
+  std::vector<std::string> isolate_args;
+  if (m_config.max_heap_size.has_value()) {
+    isolate_args.push_back("-Xmx" + std::to_string(*m_config.max_heap_size) +
+                           "m");
+  }
   m_common_context = std::make_unique<GraalVMCommonContext>(
-      m_fs, m_module_files, m_globals, m_isolate_args);
+      m_config.fs, m_config.module_files, m_config.globals, isolate_args);
 }
 
 Graalvm_service_handlers::~Graalvm_service_handlers() {
@@ -80,12 +83,28 @@ void Graalvm_service_handlers::do_tear_down() {
   m_common_context.reset();
 }
 
+std::chrono::seconds Graalvm_service_handlers::idle_time() const {
+  auto now = std::chrono::system_clock::now();
+  auto diff = m_last_used_time - now;
+  return std::chrono::duration_cast<std::chrono::seconds>(diff);
+}
+
+std::optional<uint64_t> Graalvm_service_handlers::pool_size() const {
+  return m_config.pool_size;
+}
+
+void Graalvm_service_handlers::set_max_heap_size(uint64_t size) {
+  m_config.max_heap_size = size;
+}
+
 std::shared_ptr<IGraalvm_context_handle> Graalvm_service_handlers::get_context(
     const std::string &debug_port) {
   if (m_common_context->got_fatal_error()) {
     log_error("A fatal error prevents the usage of scripting endpoints");
     return nullptr;
   }
+
+  m_last_used_time = std::chrono::system_clock::now();
 
   if (debug_port.empty()) {
     return m_context_pool->get_context();

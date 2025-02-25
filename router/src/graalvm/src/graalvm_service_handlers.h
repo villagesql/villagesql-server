@@ -30,7 +30,9 @@
 #include "graalvm_debug_context_handle.h"
 #include "mysqlrouter/graalvm_component.h"
 
+#include <chrono>
 #include <memory>
+#include <string>
 #include <vector>
 
 namespace graalvm {
@@ -41,11 +43,8 @@ namespace graalvm {
  */
 class Graalvm_service_handlers : public IGraalvm_service_handlers {
  public:
-  Graalvm_service_handlers(
-      size_t size, const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
-      const std::vector<std::string> &module_files,
-      const shcore::Dictionary_t &globals = {},
-      const std::vector<std::string> &isolate_args = {});
+  Graalvm_service_handlers(const Graalvm_service_handler_config &config);
+  Graalvm_service_handlers(const Graalvm_service_handlers &other);
   ~Graalvm_service_handlers() override;
 
   std::shared_ptr<IGraalvm_context_handle> get_context(
@@ -56,29 +55,20 @@ class Graalvm_service_handlers : public IGraalvm_service_handlers {
   void init() override;
   void teardown() override;
 
-  const std::shared_ptr<shcore::polyglot::IFile_system> &file_system() const {
-    return m_fs;
-  }
+  std::chrono::seconds idle_time() const override;
+  std::optional<uint64_t> pool_size() const override;
 
-  const std::vector<std::string> &module_files() const {
-    return m_module_files;
-  }
-
-  const shcore::Dictionary_t &globals() const { return m_globals; }
+  void set_max_heap_size(uint64_t) override;
 
  private:
   void init_common_context();
   void do_tear_down();
-
+  Graalvm_service_handler_config m_config;
   std::unique_ptr<GraalVMCommonContext> m_common_context;
   std::shared_ptr<IGraalvm_context_handle> m_debug_context;
   std::shared_ptr<Context_pool> m_context_pool;
+  std::chrono::time_point<std::chrono::system_clock> m_last_used_time;
 
-  size_t m_pool_size;
-  std::shared_ptr<shcore::polyglot::IFile_system> m_fs;
-  std::vector<std::string> m_module_files;
-  shcore::Dictionary_t m_globals;
-  std::vector<std::string> m_isolate_args;
   std::unique_ptr<std::thread> m_teardown_thread;
 };
 
