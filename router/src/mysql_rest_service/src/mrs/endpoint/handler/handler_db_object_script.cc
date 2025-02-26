@@ -223,6 +223,15 @@ class HandlerDbObjectScript::Impl {
 
 HttpResult HandlerDbObjectScript::handle_script(
     [[maybe_unused]] rest::RequestContext *ctxt) {
+  auto &input_buffer = ctxt->request->get_input_buffer();
+  auto size = input_buffer.length();
+  auto document = input_buffer.pop_front(size);
+  return handle_script(ctxt, document);
+}
+
+HttpResult HandlerDbObjectScript::handle_script(
+    [[maybe_unused]] rest::RequestContext *ctxt,
+    const std::vector<uint8_t> &document) {
 #ifdef HAVE_GRAALVM_PLUGIN
   if (m_impl->entry_script().empty()) {
     throw http::Error(HttpStatusCode::InternalError,
@@ -237,12 +246,8 @@ HttpResult HandlerDbObjectScript::handle_script(
     }
   };
 
-  // Get the request body for cache lookup or normal processing
-  auto &input_buffer = ctxt->request->get_input_buffer();
-  auto size = input_buffer.length();
-  auto request_body = input_buffer.pop_front(size);
-  std::string_view body{reinterpret_cast<const char *>(request_body.data()),
-                        request_body.size()};
+  std::string_view body{reinterpret_cast<const char *>(document.data()),
+                        document.size()};
 
   if (response_cache_) {
     auto entry =
@@ -384,7 +389,7 @@ HttpResult HandlerDbObjectScript::handle_put(
 HttpResult HandlerDbObjectScript::handle_post(
     [[maybe_unused]] rest::RequestContext *ctxt,
     [[maybe_unused]] const std::vector<uint8_t> &document) {
-  throw http::Error(HttpStatusCode::NotImplemented);
+  return handle_script(ctxt, document);
 }
 
 HttpResult HandlerDbObjectScript::handle_get(
