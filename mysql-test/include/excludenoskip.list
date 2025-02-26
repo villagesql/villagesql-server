@@ -347,3 +347,6 @@ have_log_diagnostic.inc
 
 # 40. Skip tests which expect the Group Replication resource manager component
 have_group_replication_resource_manager.inc
+
+# 41. Skip tests which expect the Group Replication primary election prefer most updated
+have_gr_replication_primary_elect_prefer_most_updated.inc

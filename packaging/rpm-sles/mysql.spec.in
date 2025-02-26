@@ -957,6 +957,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_group_replication_flow_control_stats.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_group_replication_resource_manager.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_replication_applier_metrics.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_group_replication_elect_prefers_most_updated.so
 %if 0%{?aws_sdk}
 %attr(755, root, root) %{_libdir}/mysql/plugin/keyring_aws.so
 %endif # aws
@@ -1043,6 +1044,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_group_replication_flow_control_stats.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_group_replication_resource_manager.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_replication_applier_metrics.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_group_replication_elect_prefers_most_updated.so
 %if 0%{?aws_sdk}
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/keyring_aws.so
 %endif # aws_sdk
@@ -1552,6 +1554,9 @@ fi
 %endif # with_router
 
 %changelog
+* Fri Jan 10 2025 Anibal Pinto <anibal.pinto@oracle.com> - 9.3.0-1
+- Added component_group_replication_elect_prefers_most_updated
+
 * Fri Nov 29 2024 Jaideep Karande <jaideep.karande@oracle.com> - 9.2.0-1
 - Added component_group_replication_resource_manager
 

@@ -77,6 +77,7 @@ SET(GROUP_REPLICATION_SOURCES
   src/plugin_handlers/metrics_handler.cc
   src/plugin_handlers/offline_mode_handler.cc
   src/plugin_handlers/primary_election_invocation_handler.cc
+  src/plugin_handlers/primary_election_most_uptodate.cc
   src/plugin_handlers/primary_election_primary_process.cc
   src/plugin_handlers/primary_election_secondary_process.cc
   src/plugin_handlers/primary_election_utils.cc

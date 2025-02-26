@@ -28,8 +28,10 @@
 #include "mutex_lock.h"
 #include "my_byteorder.h"
 #include "my_dbug.h"
+#include "my_systime.h"
 
 #include "plugin/group_replication/include/plugin_constants.h"
+#include "plugin/group_replication/include/plugin_handlers/metrics_handler.h"
 
 using std::map;
 using std::string;
@@ -54,6 +56,7 @@ Group_member_info::Group_member_info(PSI_mutex_key psi_mutex_key_arg)
       m_view_change_uuid("AUTOMATIC"),
       m_allow_single_leader(false),
       m_preemptive_garbage_collection(PREEMPTIVE_GARBAGE_COLLECTION_DEFAULT),
+      m_component_primary_election_enabled(false),
 #ifndef NDEBUG
       skip_encode_default_table_encryption(false),
       m_skip_encode_view_change_uuid(false),
@@ -74,7 +77,7 @@ Group_member_info::Group_member_info(
     uint lower_case_table_names_arg, bool default_table_encryption_arg,
     const char *recovery_endpoints_arg, const char *view_change_uuid_arg,
     bool allow_single_leader, bool preemptive_garbage_collection,
-    PSI_mutex_key psi_mutex_key_arg)
+    bool component_primary_election_enabled, PSI_mutex_key psi_mutex_key_arg)
     : Plugin_gcs_message(CT_MEMBER_INFO_MESSAGE),
       hostname(hostname_arg),
       port(port_arg),
@@ -97,6 +100,7 @@ Group_member_info::Group_member_info(
                                               : "AUTOMATIC"),
       m_allow_single_leader(allow_single_leader),
       m_preemptive_garbage_collection(preemptive_garbage_collection),
+      m_component_primary_election_enabled(component_primary_election_enabled),
 #ifndef NDEBUG
       skip_encode_default_table_encryption(false),
       m_skip_encode_view_change_uuid(false),
@@ -143,6 +147,8 @@ Group_member_info::Group_member_info(Group_member_info &other)
           other.get_group_action_running_description()),
       m_preemptive_garbage_collection(
           other.get_preemptive_garbage_collection()),
+      m_component_primary_election_enabled(
+          other.get_component_primary_election_enabled()),
 #ifndef NDEBUG
       skip_encode_default_table_encryption(false),
       m_skip_encode_view_change_uuid(false),
@@ -168,6 +174,7 @@ Group_member_info::Group_member_info(const uchar *data, size_t len,
       m_view_change_uuid("AUTOMATIC"),
       m_allow_single_leader(false),
       m_preemptive_garbage_collection(PREEMPTIVE_GARBAGE_COLLECTION_DEFAULT),
+      m_component_primary_election_enabled(false),
 #ifndef NDEBUG
       skip_encode_default_table_encryption(false),
       m_skip_encode_view_change_uuid(false),
@@ -194,7 +201,8 @@ void Group_member_info::update(
     bool has_enforces_update_everywhere_checks, uint member_weight_arg,
     uint lower_case_table_names_arg, bool default_table_encryption_arg,
     const char *recovery_endpoints_arg, const char *view_change_uuid_arg,
-    bool allow_single_leader, bool preemptive_garbage_collection) {
+    bool allow_single_leader, bool preemptive_garbage_collection,
+    bool component_primary_election_enabled) {
   MUTEX_LOCK(lock, &update_lock);
 
   hostname.assign(hostname_arg);
@@ -233,6 +241,7 @@ void Group_member_info::update(
   m_view_change_uuid.assign(view_change_uuid_arg);
   m_allow_single_leader = allow_single_leader;
   m_preemptive_garbage_collection = preemptive_garbage_collection;
+  m_component_primary_election_enabled = component_primary_election_enabled;
 }
 
 void Group_member_info::update(Group_member_info &other) {
@@ -267,6 +276,8 @@ void Group_member_info::update(Group_member_info &other) {
   m_group_action_running_description.assign(
       other.get_group_action_running_description());
   m_preemptive_garbage_collection = other.get_preemptive_garbage_collection();
+  m_component_primary_election_enabled =
+      other.get_component_primary_election_enabled();
 #ifndef NDEBUG
   skip_encode_default_table_encryption =
       other.skip_encode_default_table_encryption;
@@ -393,6 +404,11 @@ void Group_member_info::encode_payload(
       m_preemptive_garbage_collection ? '1' : '0';
   encode_payload_item_char(buffer, PIT_PREEMPTIVE_GARBAGE_COLLECTION,
                            preemptive_garbage_collection_aux);
+
+  char component_primary_election_enabled_aux =
+      m_component_primary_election_enabled ? '1' : '0';
+  encode_payload_item_char(buffer, PIT_COMPONENT_PRIMARY_ELECTION_ENABLED,
+                           component_primary_election_enabled_aux);
 }
 
 void Group_member_info::decode_payload(const unsigned char *buffer,
@@ -554,6 +570,13 @@ void Group_member_info::decode_payload(const unsigned char *buffer,
           unsigned char const preemptive_garbage_collection_aux = *slider;
           m_preemptive_garbage_collection =
               preemptive_garbage_collection_aux == '1';
+        }
+        break;
+      case PIT_COMPONENT_PRIMARY_ELECTION_ENABLED:
+        if (slider + payload_item_length <= end) {
+          unsigned char component_primary_election_enabled_aux = *slider;
+          m_component_primary_election_enabled =
+              (component_primary_election_enabled_aux == '1') ? true : false;
         }
         break;
     }
@@ -895,6 +918,16 @@ void Group_member_info::set_view_change_uuid(const char *view_change_cnf) {
 bool Group_member_info::get_preemptive_garbage_collection() {
   MUTEX_LOCK(lock, &update_lock);
   return m_preemptive_garbage_collection;
+}
+
+bool Group_member_info::get_component_primary_election_enabled() {
+  MUTEX_LOCK(lock, &update_lock);
+  return m_component_primary_election_enabled;
+}
+
+void Group_member_info::set_component_primary_election_enabled(bool enabled) {
+  MUTEX_LOCK(lock, &update_lock);
+  m_component_primary_election_enabled = enabled;
 }
 
 bool Group_member_info::comparator_group_member_uuid(Group_member_info *m1,
@@ -1242,6 +1275,8 @@ void Group_member_info_manager::update_gtid_sets(const string &uuid,
   }
 
   mysql_mutex_unlock(&update_lock);
+
+  view_change_timestamp = Metrics_handler::get_current_time();
 }
 
 void Group_member_info_manager::update_member_role(
@@ -1481,6 +1516,35 @@ std::string Group_member_info_manager::get_string_current_view_active_hosts()
   }
 
   return hosts_string.str();
+}
+
+void Group_member_info_manager::update_component_primary_election_enabled(
+    const std::string &uuid, bool enabled) {
+  MUTEX_LOCK(lock, &update_lock);
+
+  map<string, Group_member_info *>::iterator it;
+
+  it = members->find(uuid);
+
+  if (it != members->end()) {
+    (*it).second->set_component_primary_election_enabled(enabled);
+  }
+}
+
+bool Group_member_info_manager::
+    is_group_replication_elect_prefers_most_updated_enabled() {
+  MUTEX_LOCK(lock, &update_lock);
+  bool enabled = true;
+
+  for (auto it = members->begin(); it != members->end() && enabled; it++) {
+    enabled &= (*it).second->get_component_primary_election_enabled();
+  }
+
+  return enabled;
+}
+
+uint64_t Group_member_info_manager::get_timestamp_last_view_change() {
+  return view_change_timestamp;
 }
 
 Group_member_info_manager_message::Group_member_info_manager_message()
