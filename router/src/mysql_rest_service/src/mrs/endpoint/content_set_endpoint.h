@@ -59,7 +59,8 @@ class ContentSetEndpoint : public OptionEndpoint {
   const ContentSetPtr get() const;
   void set(const ContentSet &schema, EndpointBasePtr parent);
 
-  void get_content_set_scripts(std::vector<std::string> *out_scripts);
+  void get_content_set_data(std::vector<std::string> *out_scripts,
+                            std::vector<std::string> *out_module_classes);
 
  protected:
   void update() override;

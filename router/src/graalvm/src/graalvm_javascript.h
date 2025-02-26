@@ -138,6 +138,14 @@ class GraalVMJavaScript : public shcore::polyglot::Java_script_interface {
         &GraalVMJavaScript::get_current_mrs_user_id;
   };
 
+  shcore::Value get_content_set_path(const std::vector<shcore::Value> &args);
+  struct Get_content_set_path {
+    static const constexpr char *name = "getContentSetPath";
+    static const constexpr std::size_t argc = 1;
+    static const constexpr auto callback =
+        &GraalVMJavaScript::get_content_set_path;
+  };
+
   // To control the statement execution, the execution thread will be in wait
   // state until a statement arrives
   std::thread m_execution_thread;

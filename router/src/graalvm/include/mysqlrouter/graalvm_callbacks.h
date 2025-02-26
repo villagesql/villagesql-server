@@ -38,6 +38,7 @@ namespace graalvm {
 struct Global_callbacks {
   std::function<std::shared_ptr<db::ISession>(bool read_only)> get_session;
   std::function<std::optional<std::string>()> get_current_mrs_user_id;
+  std::function<std::string(const std::string &)> get_content_set_path;
   std::function<void()> interrupt;
 };
 

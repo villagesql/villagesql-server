@@ -89,9 +89,11 @@ std::optional<std::string> ContentSetEndpoint::get_options() const {
   return entry_->options;
 }
 
-void ContentSetEndpoint::get_content_set_scripts(
-    std::vector<std::string> *out_scripts) {
+void ContentSetEndpoint::get_content_set_data(
+    std::vector<std::string> *out_scripts,
+    std::vector<std::string> *out_module_classes) {
   assert(out_scripts);
+  assert(out_module_classes);
 
   auto cset = get();
   if (cset->options) {
@@ -108,6 +110,10 @@ void ContentSetEndpoint::get_content_set_scripts(
           if (itr->HasMember("file_to_load") &&
               (*itr)["file_to_load"].IsString()) {
             out_scripts->push_back((*itr)["file_to_load"].GetString());
+          }
+
+          if (itr->HasMember("class_name") && (*itr)["class_name"].IsString()) {
+            out_module_classes->push_back((*itr)["class_name"].GetString());
           }
         }
       }

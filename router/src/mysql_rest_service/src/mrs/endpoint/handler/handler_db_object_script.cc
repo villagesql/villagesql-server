@@ -308,6 +308,10 @@ HttpResult HandlerDbObjectScript::handle_script(
 
              return {};
            },
+           // Get Content Set
+           [&](const std::string &module_class_name) {
+             return service_ep->get_content_set_path(module_class_name);
+           },
            // Timeout Callback: to be executed in case the script timeout is
            // reached...
            [&]() {

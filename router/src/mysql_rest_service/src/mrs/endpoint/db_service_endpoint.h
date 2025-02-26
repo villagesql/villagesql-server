@@ -26,6 +26,8 @@
 #define ROUTER_SRC_MYSQL_REST_SERVICE_SRC_MRS_ENDPOINT_DB_SERVICE_ENDPOINT_H_
 
 #include <memory>
+#include <string>
+#include <unordered_map>
 
 #include "mrs/database/entry/db_service.h"
 #include "mrs/endpoint/option_endpoint.h"
@@ -71,6 +73,7 @@ class DbServiceEndpoint : public OptionEndpoint {
 
 #ifdef HAVE_GRAALVM_PLUGIN
   std::shared_ptr<graalvm::IGraalvm_context_handle> get_scripting_context();
+  std::string get_content_set_path(const std::string &module_class_name);
 #endif
 
  private:
@@ -85,7 +88,7 @@ class DbServiceEndpoint : public OptionEndpoint {
 
 #ifdef HAVE_GRAALVM_PLUGIN
   std::shared_ptr<file_system::DbServiceFileSystem> get_file_system();
-  bool get_content_set_scripts();
+  bool get_content_set_data();
 #endif
 
   DbServicePtr entry_;
@@ -95,7 +98,7 @@ class DbServiceEndpoint : public OptionEndpoint {
 #ifdef HAVE_GRAALVM_PLUGIN
   std::shared_ptr<file_system::DbServiceFileSystem> file_system_;
   std::optional<std::vector<std::string>> content_set_scripts_;
-  std::string content_set_path_;
+  std::unordered_map<std::string, std::string> content_set_paths_;
 #endif
 };
 

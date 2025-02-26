@@ -86,6 +86,7 @@ void DbServiceEndpoint::set(const DbService &entry, EndpointBasePtr parent) {
 void DbServiceEndpoint::on_updated_content_set() {
 #ifdef HAVE_GRAALVM_PLUGIN
   content_set_scripts_.reset();
+  content_set_paths_.clear();
 #endif
 }
 
@@ -99,7 +100,16 @@ DbServiceEndpoint::get_file_system() {
   return file_system_;
 }
 
-bool DbServiceEndpoint::get_content_set_scripts() {
+std::string DbServiceEndpoint::get_content_set_path(
+    const std::string &module_class_name) {
+  if (content_set_paths_.find(module_class_name) != content_set_paths_.end()) {
+    return content_set_paths_.at(module_class_name);
+  }
+
+  return "";
+}
+
+bool DbServiceEndpoint::get_content_set_data() {
   bool updated = false;
   if (!content_set_scripts_.has_value()) {
     updated = true;
@@ -114,11 +124,12 @@ bool DbServiceEndpoint::get_content_set_scripts() {
         continue;
       }
 
-      content_set_ep->get_content_set_scripts(&scripts);
+      std::vector<std::string> module_classes;
+      content_set_ep->get_content_set_data(&scripts, &module_classes);
 
-      // TODO(rennox): this should be turned int a global function if multiple
-      // content sets per service are allowed
-      content_set_path_ = content_set_ep->get_url().join();
+      for (const auto &name : module_classes) {
+        content_set_paths_[name] = content_set_ep->get_url().join();
+      }
     }
 
     content_set_scripts_ = std::move(scripts);
@@ -151,15 +162,12 @@ DbServiceEndpoint::get_scripting_context() {
   auto &instance = graalvm::GraalVMComponent::get_instance();
   const auto id = get()->id.to_string();
 
-  auto globals = shcore::make_dict();
-  globals->emplace("contentSetPath", shcore::Value(content_set_path_));
-
-  auto reset_context = get_content_set_scripts();
+  auto reset_context = get_content_set_data();
 
   graalvm::Graalvm_service_handler_config config = {
       get_file_system(),
       *content_set_scripts_,
-      globals,
+      shcore::make_dict(),
       get_pool_size(get_options().value_or("")),
       {}};
 

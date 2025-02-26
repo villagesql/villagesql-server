@@ -226,6 +226,12 @@ void GraalVMJavaScript::run() {
                                                    Get_current_mrs_user_id>,
         this);
 
+    set_global_function(
+        "getContentSetPath",
+        shcore::polyglot::native_handler_fixed_args<GraalVMJavaScript,
+                                                    Get_content_set_path>,
+        this);
+
     if (const auto rc = Java_script_interface::eval(
             "(internal)::resolver",
             R"(new Function ("prom", "prom.then(value => synch_return(value)).catch(error => synch_error(error));");)",
@@ -583,6 +589,14 @@ poly_value GraalVMJavaScript::get_current_mrs_user_id() {
   m_result_condition.notify_one();
 
   return nullptr;
+}
+
+shcore::Value GraalVMJavaScript::get_content_set_path(
+    const std::vector<shcore::Value> &args) {
+  assert(m_global_callbacks->get_content_set_path);
+
+  return shcore::Value(
+      m_global_callbacks->get_content_set_path(args[0].as_string()));
 }
 
 }  // namespace graalvm
