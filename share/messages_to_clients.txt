@@ -10556,6 +10556,10 @@ ER_LH_WARN_SUMMARY
 
 ER_LH_WARN_INFER_USE_DEFAULT_DELIMITERS
   eng "Feature Auto delimiter detection is skipped (%s)."
+
+ER_LIBRARY_INVALID
+        eng "The routine '%-.192s' references a missing library '%-.192s.%-.192s' or definer/invoker of the routine lack rights to use it."
+
 #
 #  End of 9.x error messages (server-to-client).
 #

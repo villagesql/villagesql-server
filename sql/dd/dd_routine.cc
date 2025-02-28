@@ -536,6 +536,10 @@ static bool fill_dd_library_info(sp_head *sp, const LEX_USER *definer,
   // Set sql_mode.
   library->set_sql_mode(sql_mode);
 
+  // Set comment.
+  library->set_comment(sp->m_chistics->comment.str ? sp->m_chistics->comment.str
+                                                   : "");
+
   return false;
 }
 
@@ -658,6 +662,21 @@ bool alter_routine(THD *thd, Routine *routine, st_sp_chistics *chistics) {
   // Set comment.
   if (chistics->comment.str) routine->set_comment(chistics->comment.str);
 
+  // The list of the imported libraries.
+  const mem_root_deque<sp_name_with_alias> *imported_libraries =
+      chistics->get_imported_libraries();
+  if (imported_libraries) {
+    dd::Properties &routine_options = routine->options();
+    if (imported_libraries->empty()) {
+      // Remove the list of the imported libraries.
+      routine_options.remove("libraries");
+    } else {
+      // Replace the list of the imported libraries.
+      std::string options = create_options_string(imported_libraries);
+      if (routine_options.set("libraries", {options.c_str(), options.length()}))
+        return false;
+    }
+  }
   // Update routine.
   return thd->dd_client()->update(routine);
 }

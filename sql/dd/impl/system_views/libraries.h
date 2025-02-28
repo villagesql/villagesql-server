@@ -45,6 +45,7 @@ class Libraries : public System_view_impl<System_view_select_definition_impl> {
     FIELD_CREATED,
     FIELD_LAST_ALTERED,
     FIELD_SQL_MODE,
+    FIELD_LIBRARY_COMMENT,
     FIELD_CREATOR
   };
 

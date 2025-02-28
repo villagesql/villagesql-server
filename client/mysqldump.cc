@@ -2732,6 +2732,39 @@ static void print_blob_as_hex(FILE *output_file, const char *str, ulong len) {
 }
 
 /*
+  has_missing_import
+  -- Checks if all the libraries imported by a routine are present.
+
+  A function/procedure that has one or more of the libraries it imports,
+  deleted, it cannot be re-created.
+  Having such routines in the dump makes it invalid.
+
+  RETURN
+    false All the libraries imported by the routine exists.
+    true  The routine has missing imports.
+*/
+static bool has_missing_import(const char *schema, const char *name) {
+  MYSQL_RES *routine_list_res;
+  std::string query{
+      std::string{
+          "SELECT rl.LIBRARY_SCHEMA, rl.LIBRARY_NAME, rl.ROUTINE_SCHEMA, "
+          "rl.ROUTINE_NAME, rl.ROUTINE_TYPE "
+          "FROM INFORMATION_SCHEMA.ROUTINE_LIBRARIES rl "
+          "LEFT JOIN INFORMATION_SCHEMA.LIBRARIES lib ON "
+          "rl.LIBRARY_CATALOG  = lib.LIBRARY_CATALOG AND "
+          "rl.LIBRARY_SCHEMA = lib.LIBRARY_SCHEMA AND "
+          "rl.LIBRARY_NAME = lib.LIBRARY_NAME "
+          "WHERE lib.LIBRARY_NAME IS NULL AND rl.ROUTINE_SCHEMA = '"} +
+      schema + "' AND rl.ROUTINE_NAME = '" + name + '\''};
+  if (mysql_query_with_error_report(mysql, &routine_list_res, query.c_str()))
+    return true;
+  if (mysql_num_rows(routine_list_res))
+    return true;  // There are imported libraries that do NOT exist.
+  mysql_free_result(routine_list_res);
+  return false;  // All the libraries that this routine imports, are present.
+}
+
+/*
   dump_routines_for_db
   -- retrieves list of routines for a given db, and prints out
   the CREATE PROCEDURE definition into the output (the dump).
@@ -2748,13 +2781,11 @@ static uint dump_routines_for_db(char *db) {
   char query_buff[QUERY_LENGTH];
   const char *routine_type[] = {"FUNCTION", "PROCEDURE"};
   char db_name_buff[NAME_LEN * 2 + 3], name_buff[NAME_LEN * 2 + 3];
-  char escaped_name[NAME_LEN * 2 + 3];
-  char lib_schema_buff[NAME_LEN * 2 + 3], lib_name_buff[NAME_LEN * 2 + 3];
   char *routine_name;
   int i;
   FILE *sql_file = md_result_file;
-  MYSQL_RES *routine_res, *routine_list_res, *import_res, *imported_library_res;
-  MYSQL_ROW row, routine_list_row, import_list_row;
+  MYSQL_RES *routine_res, *routine_list_res;
+  MYSQL_ROW row, routine_list_row;
 
   char db_cl_name[MY_CS_NAME_SIZE];
   int db_cl_altered = false;
@@ -2870,65 +2901,25 @@ static uint dump_routines_for_db(char *db) {
 
     if (mysql_num_rows(routine_list_res)) {
       while ((routine_list_row = mysql_fetch_row(routine_list_res))) {
-        routine_name = quote_name(routine_list_row[1], name_buff, false);
+        mysql_real_escape_string_quote(
+            mysql, name_buff, routine_list_row[1],
+            static_cast<ulong>(strlen(routine_list_row[1])), '\'');
 
-        /**
-         * TODO: this is a temporary fix until Bug#37375233 is properly
-         * resolved. For each SP, check if libraries in "USING" clause actually
-         * exist. If not, exit with error because such dump would not be
-         * restorable. However, with proper fix, simply treat warnings from SHOW
-         * CREATE SP as errors here.
-         */
-        mysql_real_escape_string_quote(mysql, escaped_name, routine_list_row[1],
-                                       (ulong)strlen(routine_list_row[1]),
-                                       '\'');
-
-        // 1st step: get all imports for the SP
-        snprintf(query_buff, sizeof(query_buff),
-                 "SELECT LIBRARY_SCHEMA, LIBRARY_NAME FROM "
-                 "INFORMATION_SCHEMA.ROUTINE_LIBRARIES WHERE "
-                 "ROUTINE_SCHEMA = '%s' AND ROUTINE_NAME = '%s' AND "
-                 "ROUTINE_TYPE = '%s'",
-                 db_name_buff, escaped_name, routine_type[i]);
-        if (mysql_query_with_error_report(mysql, &import_res, query_buff))
+        if (has_missing_import(db_name_buff, name_buff)) {
+          // Any of the imported libraries does NOT exist.
+          print_comment(
+              sql_file, true,
+              "\n-- One or more of the libraries used by %s.%s routine, do "
+              "not exist. \n",
+              db_name_buff, name_buff);
+          maybe_die(
+              EX_MYSQLERR,
+              "Routine %s.%s is missing one or more of its imported libraries.",
+              db_name_buff, name_buff);
           return 1;
-
-        // 2nd step: iterate these imports and query I_S.LIBRARIES to check if
-        // they exist and if the current user has access to them
-        if (mysql_num_rows(import_res)) {
-          while ((import_list_row = mysql_fetch_row(import_res))) {
-            mysql_real_escape_string_quote(
-                mysql, lib_schema_buff, import_list_row[0],
-                (ulong)strlen(import_list_row[0]), '\'');
-            mysql_real_escape_string_quote(
-                mysql, lib_name_buff, import_list_row[1],
-                (ulong)strlen(import_list_row[1]), '\'');
-
-            snprintf(query_buff, sizeof(query_buff),
-                     "SELECT * FROM "
-                     "INFORMATION_SCHEMA.LIBRARIES WHERE "
-                     "LIBRARY_SCHEMA = '%s' AND LIBRARY_NAME = '%s'",
-                     lib_schema_buff, lib_name_buff);
-
-            if (mysql_query_with_error_report(mysql, &imported_library_res,
-                                              query_buff))
-              return 1;
-
-            if (mysql_num_rows(imported_library_res) == 0) {
-              // imported library does NOT exist
-              print_comment(
-                  sql_file, true,
-                  "\n-- Library used by %s does not exist: '%s'.'%s'\n",
-                  escaped_name, lib_schema_buff, lib_name_buff);
-              maybe_die(EX_MYSQLERR, "Missing library: %s.%s", lib_schema_buff,
-                        lib_name_buff);
-            }
-            mysql_free_result(imported_library_res);
-          }
         }
-        mysql_free_result(import_res);
-        // End of temp code until Bug#37375233 is done.
 
+        routine_name = quote_name(routine_list_row[1], name_buff, false);
         DBUG_PRINT("info",
                    ("retrieving CREATE %s for %s", routine_type[i], name_buff));
         snprintf(query_buff, sizeof(query_buff), "SHOW CREATE %s %s",

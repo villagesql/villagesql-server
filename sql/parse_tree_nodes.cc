@@ -2992,6 +2992,19 @@ Sql_cmd *PT_show_status::make_cmd(THD *thd) {
   return &m_sql_cmd;
 }
 
+Sql_cmd *PT_show_status_library::make_cmd(THD *thd) {
+  LEX *lex = thd->lex;
+  lex->sql_command = m_sql_command;
+
+  if (m_wild.str && lex->set_wild(m_wild)) return nullptr;  // OOM
+
+  if (dd::info_schema::build_show_library_query(m_pos, thd, lex->wild,
+                                                m_where) == nullptr)
+    return nullptr;
+
+  return &m_sql_cmd;
+}
+
 Sql_cmd *PT_show_status_func::make_cmd(THD *thd) {
   LEX *lex = thd->lex;
   lex->sql_command = m_sql_command;

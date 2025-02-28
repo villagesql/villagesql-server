@@ -1377,6 +1377,7 @@ static bool is_show_status(enum_sql_command sql_command) {
     case SQLCOM_SHOW_PRIVILEGES:
     case SQLCOM_SHOW_STATUS_PROC:
     case SQLCOM_SHOW_STATUS_FUNC:
+    case SQLCOM_SHOW_STATUS_LIBRARY:
     case SQLCOM_SHOW_PLUGINS:
     case SQLCOM_SHOW_EVENTS:
     case SQLCOM_SHOW_PROFILE:

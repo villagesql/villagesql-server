@@ -3986,6 +3986,19 @@ class PT_show_status final : public PT_show_filter_base {
   enum_var_type m_var_type;
 };
 
+/// Parse tree node for SHOW STATUS LIBRARY statement
+
+class PT_show_status_library final : public PT_show_filter_base {
+ public:
+  PT_show_status_library(const POS &pos, const LEX_STRING &wild, Item *where)
+      : PT_show_filter_base(pos, SQLCOM_SHOW_STATUS_LIBRARY, wild, where) {}
+
+  Sql_cmd *make_cmd(THD *thd) override;
+
+ private:
+  Sql_cmd_show_status_library m_sql_cmd;
+};
+
 /// Parse tree node for SHOW STATUS FUNCTION statement
 
 class PT_show_status_func final : public PT_show_filter_base {
@@ -5591,15 +5604,27 @@ class PT_load_table final : public Parse_tree_root {
 class PT_create_library_stmt final : public Parse_tree_root {
  public:
   PT_create_library_stmt(const POS &pos, THD *thd, bool if_not_exists,
-                         sp_name *lib_name, LEX_STRING language,
-                         LEX_STRING lib_source)
+                         sp_name *lib_name, LEX_CSTRING comment,
+                         LEX_CSTRING language, LEX_STRING lib_source)
       : Parse_tree_root(pos),
-        m_cmd(thd, if_not_exists, lib_name, language, lib_source) {}
+        m_cmd(thd, if_not_exists, lib_name, comment, language, lib_source) {}
 
   Sql_cmd *make_cmd(THD *) override { return &m_cmd; }
 
  private:
   Sql_cmd_create_library m_cmd;
+};
+
+class PT_alter_library_stmt final : public Parse_tree_root {
+ public:
+  PT_alter_library_stmt(const POS &pos, THD *thd, sp_name *name,
+                        LEX_STRING comment)
+      : Parse_tree_root(pos), m_cmd(thd, name, comment) {}
+
+  Sql_cmd *make_cmd(THD *) override { return &m_cmd; }
+
+ private:
+  Sql_cmd_alter_library m_cmd;
 };
 
 class PT_drop_library_stmt final : public Parse_tree_root {

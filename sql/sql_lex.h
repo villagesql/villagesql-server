@@ -2646,6 +2646,7 @@ struct st_sp_chistics {
 
     if (m_imported_libraries != nullptr) return true;  // Allow a single USING.
 
+    if (libs.empty()) return false;  // Nothing to do.
     if (create_imported_libraries_deque(mem_root)) return true;
 
     while (!libs.empty()) {
@@ -2667,7 +2668,8 @@ struct st_sp_chistics {
   */
   bool add_imported_library(std::string_view database, std::string_view name,
                             std::string_view alias, MEM_ROOT *mem_root) {
-    if (create_imported_libraries_deque(mem_root)) return true;
+    if (m_imported_libraries == nullptr)
+      if (create_imported_libraries_deque(mem_root)) return true;
 
     return m_imported_libraries->push_back({
         {strmake_root(mem_root, database.data(), database.length()),
@@ -2680,7 +2682,7 @@ struct st_sp_chistics {
   }
 
   bool create_imported_libraries_deque(MEM_ROOT *mem_root) {
-    if (m_imported_libraries != nullptr) return false;  // Already allocated.
+    if (m_imported_libraries != nullptr) return true;  // Already allocated.
     m_imported_libraries =
         new (mem_root) mem_root_deque<sp_name_with_alias>(mem_root);
     return m_imported_libraries == nullptr;

@@ -561,6 +561,13 @@ class Sql_cmd_show_status : public Sql_cmd_show {
   bool execute(THD *thd) override;
 };
 
+/// Represents SHOW STATUS LIBRARY statement.
+
+class Sql_cmd_show_status_library : public Sql_cmd_show {
+ public:
+  Sql_cmd_show_status_library() : Sql_cmd_show(SQLCOM_SHOW_STATUS_LIBRARY) {}
+};
+
 /// Represents SHOW STATUS FUNCTION statement.
 
 class Sql_cmd_show_status_func : public Sql_cmd_show {

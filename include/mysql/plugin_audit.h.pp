@@ -344,6 +344,8 @@ enum enum_sql_command {
   SQLCOM_CREATE_LIBRARY,
   SQLCOM_DROP_LIBRARY,
   SQLCOM_SHOW_CREATE_LIBRARY,
+  SQLCOM_ALTER_LIBRARY,
+  SQLCOM_SHOW_STATUS_LIBRARY,
   SQLCOM_END
 };
 #include "plugin_audit_message_types.h"
