@@ -162,6 +162,9 @@ not_valgrind.inc
 not_ubsan.inc
 have_asan.inc
 not_asan.inc
+no_valgrind_without_big.inc
+not_ubsan_without_big.inc
+not_asan_without_big.inc
 
 # 7.0 Few skipped test-cases
 mysql_tzinfo_to_sql_sys.test

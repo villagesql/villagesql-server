@@ -1443,8 +1443,30 @@ sub collect_one_test_case {
   if ($tinfo->{'no_valgrind_without_big'} and $::opt_valgrind) {
     if (!$::opt_big_test and !$::opt_only_big_test) {
       skip_test($tinfo,
-                "Need '--big-test' or '--only-big-test' when running " .
-                  "with Valgrind.");
+                "Test needs '--big-test' or '--only-big-test' option when running " .
+                "with Valgrind.");
+      return $tinfo;
+    }
+  }
+
+  # Tests having not_asan_without_big.inc include file needs either
+  # big-test or only-big-test option to run in ASAN environment.
+  if ($tinfo->{'not_asan_without_big'} &&
+      ($::opt_sanitize || $::mysql_version_extra =~ /asan/)) {
+    if (!$::opt_big_test and !$::opt_only_big_test) {
+      skip_test($tinfo,
+                "Test needs '--big-test' or '--only-big-test' option when running with ASAN.");
+      return $tinfo;
+    }
+  }
+
+  # Tests having not_ubsan_without_big.inc include file needs either
+  # big-test or only-big-test option to run in UBSAN environment.
+  if ($tinfo->{'not_ubsan_without_big'} &&
+      ($::opt_sanitize || $::mysql_version_extra =~ /ubsan/)) {
+    if (!$::opt_big_test and !$::opt_only_big_test) {
+      skip_test($tinfo,
+                "Test needs '--big-test' or '--only-big-test' option when running with UBSAN.");
       return $tinfo;
     }
   }
@@ -1467,7 +1489,7 @@ sub collect_one_test_case {
     return $tinfo;
   }
   if ($tinfo->{'not_ubsan'} &&
-      ($::opt_sanitize || $::mysql_version_extra =~ /asan/)) {
+      ($::opt_sanitize || $::mysql_version_extra =~ /ubsan/)) {
     skip_test($tinfo, "Test should not run with UBSAN.");
     return $tinfo;
   }
@@ -1688,8 +1710,10 @@ my @tags = (
   [ "have_router_bootstrap.inc",  "router_bootstrap_test", 1 ],
 
   # Tests with below .inc file needs either big-test or only-big-test
-  # option along with valgrind option.
-  [ "include/no_valgrind_without_big.inc", "no_valgrind_without_big", 1 ]);
+  # option along with valgrind/asan/ubsan option.
+  [ "include/no_valgrind_without_big.inc", "no_valgrind_without_big", 1 ],
+  [ "include/not_asan_without_big.inc", "not_asan_without_big", 1 ],
+  [ "include/not_ubsan_without_big.inc", "not_ubsan_without_big", 1 ]);
 
 if ($secondary_engine_support) {
   push(@tags, get_secondary_engine_tags());
