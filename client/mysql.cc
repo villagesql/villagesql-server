@@ -3224,14 +3224,8 @@ You can turn off this feature to get a quicker startup with -A\n\n");
   }
   i = 0;
   while ((table_row = mysql_fetch_row(tables))) {
-    char quoted_table_name[2 * NAME_LEN + 2];
-    char query[2 * NAME_LEN + 100];
-    mysql_real_escape_string_quote(&mysql_handle, quoted_table_name,
-                                   table_row[0], strlen(table_row[0]), '`');
-    snprintf(query, sizeof(query), "SELECT * FROM `%s` LIMIT 0",
-             quoted_table_name);
-    if (!mysql_query(&mysql_handle, query) &&
-        (fields = mysql_store_result(&mysql_handle))) {
+    if ((fields = mysql_list_fields(&mysql_handle, (const char *)table_row[0],
+                                    NullS))) {
       num_fields = mysql_num_fields(fields);
       field_names[i] =
           (char **)hash_mem_root.Alloc(sizeof(char *) * (num_fields * 2 + 1));
