@@ -83,7 +83,7 @@ class ScanFilterImpl implements ScanFilter {
         Utility.convertValue(buffer, storeColumn, value);
         int returnCode = ndbScanFilter.cmp(convertCondition(condition),
                 storeColumn.getColumnId(), buffer, buffer.limit());
-        bufferManager.returnBuffer(100, buffer);
+        bufferManager.returnBuffer(buffer);
         handleError(returnCode, ndbScanFilter);
     }
 
@@ -98,7 +98,7 @@ class ScanFilterImpl implements ScanFilter {
         Utility.convertValue(buffer, storeColumn, value);
         int returnCode = ndbScanFilter.cmp(convertCondition(condition),
                 storeColumn.getColumnId(), buffer, buffer.limit());
-        bufferManager.returnBuffer(4, buffer);
+        bufferManager.returnBuffer(buffer);
         handleError(returnCode, ndbScanFilter);
     }
 
@@ -112,7 +112,7 @@ class ScanFilterImpl implements ScanFilter {
         }
         int returnCode = ndbScanFilter.cmp(convertCondition(condition),
                 storeColumn.getColumnId(), buffer, buffer.limit());
-        bufferManager.returnBuffer(columnSpace, buffer);
+        bufferManager.returnBuffer(buffer);
         handleError(returnCode, ndbScanFilter);
     }
 
@@ -121,7 +121,7 @@ class ScanFilterImpl implements ScanFilter {
         Utility.convertValue(buffer, storeColumn, value);
         int returnCode = ndbScanFilter.cmp(convertCondition(condition),
                 storeColumn.getColumnId(), buffer, buffer.limit());
-        bufferManager.returnBuffer(100, buffer);
+        bufferManager.returnBuffer(buffer);
         handleError(returnCode, ndbScanFilter);
     }
 
@@ -130,7 +130,7 @@ class ScanFilterImpl implements ScanFilter {
         Utility.convertValue(buffer, storeColumn, value);
         int returnCode = ndbScanFilter.cmp(convertCondition(condition),
                 storeColumn.getColumnId(), buffer, buffer.limit());
-        bufferManager.returnBuffer(8, buffer);
+        bufferManager.returnBuffer(buffer);
         handleError(returnCode, ndbScanFilter);
     }
 
@@ -139,7 +139,7 @@ class ScanFilterImpl implements ScanFilter {
         Utility.convertValue(buffer, storeColumn, value);
         int returnCode = ndbScanFilter.cmp(convertCondition(condition),
                 storeColumn.getColumnId(), buffer, buffer.limit());
-        bufferManager.returnBuffer(4, buffer);
+        bufferManager.returnBuffer(buffer);
         handleError(returnCode, ndbScanFilter);
     }
 
@@ -149,7 +149,7 @@ class ScanFilterImpl implements ScanFilter {
         Utility.convertValue(buffer, storeColumn, value);
         int returnCode = ndbScanFilter.cmp(convertCondition(condition),
                 storeColumn.getColumnId(), buffer, buffer.limit());
-        bufferManager.returnBuffer(4, buffer);
+        bufferManager.returnBuffer(buffer);
         handleError(returnCode, ndbScanFilter);
     }
 
@@ -158,7 +158,7 @@ class ScanFilterImpl implements ScanFilter {
         Utility.convertValue(buffer, storeColumn, value);
         int returnCode = ndbScanFilter.cmp(convertCondition(condition),
                 storeColumn.getColumnId(), buffer, buffer.limit());
-        bufferManager.returnBuffer(4, buffer);
+        bufferManager.returnBuffer(buffer);
         handleError(returnCode, ndbScanFilter);
     }
 

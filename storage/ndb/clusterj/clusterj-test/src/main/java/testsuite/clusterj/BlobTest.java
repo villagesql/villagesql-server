@@ -150,7 +150,7 @@ public class BlobTest extends AbstractClusterJModelTest {
      * @param size the length of the returned byte[]
      * @return the byte[] filled with the pattern
      */
-    protected byte[] getBlobBytes(int size) {
+    static byte[] getBlobBytes(int size) {
         byte[] result = new byte[size];
         for (int i = 0; i < size; ++i) {
             result[i] = (byte)((i % 256) - 128);
