@@ -285,7 +285,7 @@ class PartitionKeyImpl implements PartitionKey {
         public void addKeyPart(BufferManager bufferManager) {}
         public void release() {
             if (this.bufferManager != null && this.buffer != null && this.length != 0) {
-                this.bufferManager.returnPartitionKeyPartBuffer(this.length, this.buffer);
+                this.bufferManager.returnPartitionKeyPartBuffer(this.buffer);
             }
         }
     }

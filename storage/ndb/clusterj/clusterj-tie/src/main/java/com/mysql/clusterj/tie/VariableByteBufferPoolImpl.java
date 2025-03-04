@@ -33,6 +33,8 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
+import com.mysql.clusterj.ClusterJFatalInternalException;
+
 import com.mysql.clusterj.core.util.I18NHelper;
 import com.mysql.clusterj.core.util.Logger;
 import com.mysql.clusterj.core.util.LoggerFactoryService;
@@ -53,7 +55,7 @@ class VariableByteBufferPoolImpl {
             .getInstance(VariableByteBufferPoolImpl.class);
 
     /** The queues of ByteBuffer */
-    TreeMap<Integer, ConcurrentLinkedQueue<ByteBuffer>> queues;
+    final TreeMap<Integer, ConcurrentLinkedQueue<ByteBuffer>> queues;
 
     /** The biggest size of any queue */
     int biggest = 0;
@@ -190,6 +192,7 @@ class VariableByteBufferPoolImpl {
      // the buffer has guard.length extra bytes in it, initialized with the guard bytes
         buffer.position(buffer.capacity() - guard.length);
         buffer.put(guard);
+        buffer.position(0);
     }
 
     /** Check the guard bytes which immediately follow the data in the buffer. */
@@ -211,7 +214,7 @@ class VariableByteBufferPoolImpl {
     public VariableByteBufferPoolImpl(int[] bufferSizes) {
         queues = new TreeMap<Integer, ConcurrentLinkedQueue<ByteBuffer>>();
         for (int bufferSize: bufferSizes) {
-            queues.put(bufferSize + 1, new ConcurrentLinkedQueue<ByteBuffer>());
+            queues.put(bufferSize, new ConcurrentLinkedQueue<ByteBuffer>());
             if (biggest < bufferSize) {
                 biggest = bufferSize;
             }
@@ -219,24 +222,22 @@ class VariableByteBufferPoolImpl {
         logger.info(local.message("MSG_ByteBuffer_Pools_Initialized", Arrays.toString(bufferSizes)));
     }
 
-    /** Borrow a buffer from the pool. The pool is the smallest that has buffers of the size needed.
-     * The buffer size is one less than the key because higherEntry is strictly higher.
-     * There is no method that returns the entry equal to or higher which is what we really want.
-     * If no buffer is in the pool, create a new one.
+    /** Borrow a buffer from the pool. The pool is the smallest that has buffers
+     *  of the size needed. If no buffer is in the pool, create a new one.
      */
     public ByteBuffer borrowBuffer(int sizeNeeded) {
-        Map.Entry<Integer, ConcurrentLinkedQueue<ByteBuffer>> entry = queues.higherEntry(sizeNeeded);
+        Map.Entry<Integer, ConcurrentLinkedQueue<ByteBuffer>> entry = queues.ceilingEntry(sizeNeeded);
         ByteBuffer buffer = null;
         if (entry == null) {
             // oh no, we need a bigger size than any buffer pool, so log a message and direct allocate a buffer
             if (logger.isDetailEnabled())
-                logger.detail(local.message("MSG_Cannot_allocate_byte_buffer_from_pool", sizeNeeded, this.biggest));
+                logger.warn(local.message("MSG_Cannot_allocate_byte_buffer_from_pool", sizeNeeded, this.biggest));
             buffer = ByteBuffer.allocateDirect(sizeNeeded + guard.length);
             initializeGuard(buffer);
             return buffer;
         }
         ConcurrentLinkedQueue<ByteBuffer>pool = entry.getValue();
-        int bufferSize = entry.getKey() - 1;
+        int bufferSize = entry.getKey();
         buffer = pool.poll();
         if (buffer == null) {
             // no buffer currently in the pool, so allocate a new one
@@ -249,24 +250,25 @@ class VariableByteBufferPoolImpl {
         return buffer;
     }
 
-    /** Return a buffer to the pool. The sizeNeeded is the original size requested, which
-     * is needed to decide which pool the buffer originally came from. If it did not come from
-     * a pool (requested size too big for an existing pool) then clean it.
+    /** Return a buffer to the pool. The appropriate pool is determined using
+     *  buffer.capacity(). If the buffer did not come from a pool (because the
+     *  requested size too big for any pool) then attempt to clean it. An
+     *  exception in the try block would result from a buffer whose size is
+     *  mismatched with all of the pools managed here.
      */
-    public void returnBuffer(int sizeNeeded, ByteBuffer buffer) {
-        checkGuard(buffer);
-        Map.Entry<Integer, ConcurrentLinkedQueue<ByteBuffer>> entry = this.queues.higherEntry(sizeNeeded);
-        // if this buffer came from a pool, return it
-        if (entry != null) {
-            int bufferSize = entry.getKey() - 1;
-            ConcurrentLinkedQueue<ByteBuffer> pool = entry.getValue();
-            pool.add(buffer);
-        } else {
+    public void returnBuffer(ByteBuffer buffer) {
+        int key = buffer.capacity() - guard.length;
+        if(key > biggest) {
             // mark this buffer as unusable in case we ever see it again
             buffer.limit(0);
             // clean (deallocate memory) the buffer
             clean(buffer);
+        } else {
+            try {
+                queues.get(key).add(buffer);
+            } catch(NullPointerException npe) {
+                throw new ClusterJFatalInternalException(npe);
+            }
         }
     }
-
 }
