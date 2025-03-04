@@ -5249,7 +5249,7 @@ longlong Item_source_pos_wait::val_int() {
       return 0;
     }
 
-    mi = channel_map.get_mi(channel_str->ptr());
+    mi = channel_map.get_mi(channel_str->c_ptr_safe());
 
   } else {
     if (channel_map.get_num_instances() > 1) {
