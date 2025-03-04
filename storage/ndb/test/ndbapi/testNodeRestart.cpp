@@ -1392,8 +1392,7 @@ int runBug16772(NDBT_Context *ctx, NDBT_Step *step) {
                                  /** initial       */ false,
                                  /** nostart       */ true,
                                  /** abort         */ true,
-                                 /** force         */ false,
-                                 /** capture error */ true) == 0) {
+                                 /** force         */ false) == 0) {
     g_err << "Restart of node " << deadNodeId << " succeeded when it should "
           << "have failed";
     return NDBT_FAILED;
@@ -7664,8 +7663,7 @@ int runArbitrationWithApiNodeFailure(NDBT_Context *ctx, NDBT_Step *step) {
    * 3. kill master
    */
   if (restarter.restartOneDbNode2(
-          master, NdbRestarter::NRRF_NOSTART | NdbRestarter::NRRF_ABORT,
-          true) == 0) {
+          master, NdbRestarter::NRRF_NOSTART | NdbRestarter::NRRF_ABORT) == 0) {
     g_err << "ERROR: Old master " << master << " reached not started state "
           << "before arbitration win" << endl;
     return NDBT_FAILED;
@@ -7861,7 +7859,7 @@ int runTestStartNode(NDBT_Context *ctx, NDBT_Step *step) {
 
   ndbout << "Trigger restart of node " << nodeId << " which should fail"
          << endl;
-  if (restarter.restartOneDbNode(nodeId, false, true, true, false, true) == 0) {
+  if (restarter.restartOneDbNode(nodeId, false, true, true, false) == 0) {
     g_err << "ERROR: Restart of node " << nodeId
           << " succeeded instead of failing" << endl;
     return NDBT_FAILED;
@@ -7891,7 +7889,7 @@ int runTestStartNode(NDBT_Context *ctx, NDBT_Step *step) {
   }
   ndbout << "Trigger restart of node " << nodeId << " which should fail"
          << endl;
-  if (restarter.restartOneDbNode(nodeId, false, true, true, false, true) == 0) {
+  if (restarter.restartOneDbNode(nodeId, false, true, true, false) == 0) {
     g_err << "ERROR: Restart of node " << nodeId
           << " succeeded instead of failing" << endl;
     return NDBT_FAILED;
