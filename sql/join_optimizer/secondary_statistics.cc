@@ -43,9 +43,11 @@ double NumDistinctValues(THD *thd, const Field &field) {
       EligibleSecondaryEngineHandlerton(thd, &ts->secondary_engine);
   if (secondary_engine != nullptr &&
       secondary_engine->get_column_statistics != nullptr) {
+    const auto rows_in_table =
+        static_cast<double>(field.table->file->stats.records);
     auto column_stats = secondary_engine->get_column_statistics(
-        field.table->s->db.str, field.table->s->table_name.str,
-        field.field_name);
+        thd, field.table->s->db.str, field.table->s->table_name.str,
+        field.field_name, rows_in_table);
     if (column_stats.has_value() && column_stats->num_distinct_values > 0) {
       const double distinct_values = column_stats->num_distinct_values;
       if (TraceStarted(thd)) {

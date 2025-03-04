@@ -2121,15 +2121,17 @@ typedef bool (*get_table_statistics_t)(
 
 /**
   Retrieve column_statistics from SE.
-
+  @param THD                      Current THD
   @param db_name                  Name of schema
   @param table_name               Name of table
   @param column_name              Name of column
+  @param rows_in_table            Nrows in table
 
   @returns The statistics if available, empty value otherwise.
 */
 typedef std::optional<ha_column_statistics> (*get_column_statistics_t)(
-    const char *db_name, const char *table_name, const char *column_name);
+    THD *thd, const char *db_name, const char *table_name,
+    const char *column_name, double rows_in_table);
 
 /**
   @brief
