@@ -182,8 +182,9 @@ void print_fatal_signal(int sig) {
         "Some pointers may be invalid and cause the dump to abort.\n");
 
     my_safe_printf_stderr("Query (%p): ", thd->query().str);
-    my_safe_puts_stderr(thd->query().str,
-                        std::min(size_t{1024}, thd->query().length));
+    // 1024 * 1024 * 1024 is the limit for max_allowed_packet
+    my_safe_puts_stderr(thd->query().str, std::min(size_t{1024 * 1024 * 1024},
+                                                   thd->query().length));
     my_safe_printf_stderr("Connection ID (thread ID): %u\n", thd->thread_id());
     my_safe_printf_stderr("Status: %s\n\n", kreason);
   }
