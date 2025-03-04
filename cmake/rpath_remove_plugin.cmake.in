@@ -50,6 +50,8 @@ IF(NOT DEBUG_PLUGIN)
   RETURN()
 ENDIF()
 
+SET(AWS_SDK_ROOT_DIR @AWS_SDK_ROOT_DIR@)
+
 # Use patchelf to see if patching already done,
 # and to find the RPATH to remove.
 FIND_PROGRAM(PATCHELF_EXECUTABLE patchelf)
@@ -63,6 +65,20 @@ EXECUTE_PROCESS(COMMAND ${PATCHELF_EXECUTABLE} --print-rpath ${DEBUG_PLUGIN}
   OUTPUT_STRIP_TRAILING_WHITESPACE
   RESULT_VARIABLE PATCHELF_RESULT
   )
+
+# Special handling of keyring_aws and component_keyring_aws:
+IF(${DEBUG_PLUGIN} MATCHES "keyring_aws")
+  # There are only static libraries in the AWS SDK anyways,
+  # Strip away the library path.
+  IF(${PATCHELF_PATH} MATCHES "${AWS_SDK_ROOT_DIR}/lib64:")
+    FILE(RPATH_CHANGE
+      FILE "${DEBUG_PLUGIN}"
+      OLD_RPATH "${AWS_SDK_ROOT_DIR}/lib64:"
+      NEW_RPATH ""
+      )
+  ENDIF()
+  RETURN()
+ENDIF()
 
 IF(NOT PATCHELF_PATH MATCHES "debug/library_output_directory:")
   MESSAGE(STATUS "RPATH_CHANGE already done for ${DEBUG_PLUGIN}")
