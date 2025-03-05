@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2024, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -5395,6 +5395,15 @@ void Dbdict::execAPI_FAILREQ(Signal* signal)
   jamEntry();
   Uint32 failedApiNode = signal->theData[0];
   BlockReference retRef = signal->theData[1];
+
+  if (ERROR_INSERTED(6227)) {
+    jam();
+    g_eventLogger->info("Delaying failure handling of node %u for 5 seconds",
+                        failedApiNode);
+    sendSignalWithDelay(reference(), GSN_API_FAILREQ, signal, 5000,
+                        signal->getLength());
+    return;
+  }
 
   ndbrequire(retRef == QMGR_REF); // As callback hard-codes QMGR_REF
 #if 0

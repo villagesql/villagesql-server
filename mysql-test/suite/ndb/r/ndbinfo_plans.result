@@ -50,8 +50,8 @@ ndb$acc_operations	15	64
 ndb$blocks	23	20
 ndb$columns	445	44
 ndb$config_nodes	34	28
-ndb$config_params	152	120
-ndb$config_values	288	24
+ndb$config_params	153	120
+ndb$config_values	290	24
 ndb$counters	104	24
 ndb$dblqh_tcconnect_state	25	52
 ndb$dbtc_apiconnect_state	25	52
@@ -60,7 +60,7 @@ ndb$dict_obj_types	20	20
 ndb$disk_write_speed_aggregate	8	120
 ndb$disk_write_speed_base	488	48
 ndb$diskpagebuffer	10	64
-ndb$error_messages	768	52
+ndb$error_messages	769	52
 ndb$frag_locks	344	96
 ndb$frag_mem_use	344	100
 ndb$frag_operations	344	192

@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2009, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2009, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -624,7 +624,7 @@ DECLARE_NDBINFO_TABLE(TC_TIME_TRACK_STATS, 15) =
 };
 
 Uint32 CONFIG_VALUES_fn(const Ndbinfo::Counts &c) {
-  return c.data_nodes * 144;  // 144 = current number of config parameters
+  return c.data_nodes * 145;  // 145 = current number of config parameters
 };
 DECLARE_NDBINFO_TABLE(CONFIG_VALUES,12) =
 { { "config_values", 3, 0, CONFIG_VALUES_fn, "Configuration parameter values" },

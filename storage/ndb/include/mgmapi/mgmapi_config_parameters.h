@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2004, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2004, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -239,6 +239,8 @@
 #define CFG_DB_INSERT_RECOVERY_WORK   656
 #define CFG_DB_WATCHDOG_IMMEDIATE_KILL 657
 #define CFG_DB_ENABLE_REDO_CONTROL    658
+
+#define CFG_DB_API_FAILURE_HANDLING_TIMEOUT 682
 
 #define CFG_NODE_ARBIT_RANK           200
 #define CFG_NODE_ARBIT_DELAY          201
