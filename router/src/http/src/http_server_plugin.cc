@@ -262,8 +262,9 @@ static void init(mysql_harness::PluginFuncEnv *env) {
       // one.
       http_servers.emplace(section->name, HttpServerFactory::create(config));
 
-      log_info("listening on %s:%u", config.srv_address.c_str(),
-               config.srv_port);
+      log_info("listening on %s%s:%u",
+               (config.with_ssl ? "https://" : "http://"),
+               config.srv_address.c_str(), config.srv_port);
 
       auto srv = http_servers.at(section->name);
 
@@ -273,8 +274,9 @@ static void init(mysql_harness::PluginFuncEnv *env) {
       HttpServerComponent::get_instance().init(srv);
 
       if (!config.static_basedir.empty()) {
-        srv->add_route("", std::make_unique<HttpStaticFolderHandler>(
-                               config.static_basedir, config.require_realm));
+        srv->add_route("", "",
+                       std::make_unique<HttpStaticFolderHandler>(
+                           config.static_basedir, config.require_realm));
       }
     }
   } catch (const std::invalid_argument &exc) {

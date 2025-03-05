@@ -10,3 +10,9 @@ protocol=classic
 client_ssl_mode=PREFERRED
 server_ssl_mode=PREFERRED
 server_ssl_verify=DISABLED
+
+[http_server]
+
+[mysql_rest_service]
+mysql_read_write_route=static
+wait_for_metadata_schema_access=320

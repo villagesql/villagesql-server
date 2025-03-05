@@ -61,8 +61,8 @@ class InvalidGuidelinesTest : public RouterComponentTest {
                           create_state_file_content("", "", {server_port_}, 0));
     default_section["dynamic_state"] = state_file;
 
-    init_keyring(default_section, get_test_temp_dir_name(), user_,
-                 "mysql_test_password");
+    init_keyring(default_section, get_test_temp_dir_name(),
+                 {KeyringEntry{user_, "password", "mysql_test_password"}});
 
     const std::string conf_file = create_config_file(
         get_test_temp_dir_name(), metadata_cache_section + routing_section,

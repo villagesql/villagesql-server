@@ -26,6 +26,7 @@
 #include "mysql/harness/string_utils.h"
 
 #include <algorithm>
+#include <cctype>
 #include <optional>
 #include <sstream>
 #include <string>
@@ -79,6 +80,26 @@ bool ieq(const std::string_view &a, const std::string_view &b) {
                     [](char lhs, char rhs) {
                       return std::tolower(lhs) == std::tolower(rhs);
                     });
+}
+
+void upper(std::string &s) {
+  std::transform(s.begin(), s.end(), s.begin(), ::toupper);
+}
+
+std::string make_upper(std::string s) {
+  upper(s);
+
+  return s;
+}
+
+void lower(std::string &s) {
+  std::transform(s.begin(), s.end(), s.begin(), ::tolower);
+}
+
+std::string make_lower(std::string s) {
+  lower(s);
+
+  return s;
 }
 
 namespace {

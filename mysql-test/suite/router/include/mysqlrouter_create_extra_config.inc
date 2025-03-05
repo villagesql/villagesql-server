@@ -89,6 +89,37 @@ if ($extra_logger_info)
 }
 
 
+if ($extra_mrs_meta_user) {
+    SET @variable_extra_config = CONCAT(@variable_extra_config,"[mysql_rest_service]\n");
+    --eval SET @variable_extra_config = CONCAT(@variable_extra_config,"mysql_user=$extra_mrs_meta_user\n");
+    if ($extra_mrs_data_user) {
+        --eval SET @variable_extra_config = CONCAT(@variable_extra_config,"mysql_user_data_access=$extra_mrs_data_user\n");
+    }
+    
+    if ($extra_mrs_router_id) {
+        --eval SET @variable_extra_config = CONCAT(@variable_extra_config,"router_id=$extra_mrs_router_id\n");
+    }
+    
+    if (!$extra_mrs_read_write_route)
+    {
+        --die Missing $extra_mrs_read_write_route, this parameter is required.
+    }
+    
+    --eval SET @variable_extra_config = CONCAT(@variable_extra_config,"mysql_read_write_route=$extra_mrs_read_write_route\n");
+    
+    if ($extra_mrs_read_only_route)
+    {
+        --eval SET @variable_extra_config = CONCAT(@variable_extra_config,"mysql_read_only_route=$extra_mrs_read_only_route\n");
+    }
+    
+    if ($extra_mrs_metadata_refresh_interval)
+    {
+        --eval SET @variable_extra_config = CONCAT(@variable_extra_config,"metadata_refresh_interval=$extra_mrs_metadata_refresh_interval\n");
+    }
+
+    --echo #  * MySQL Rest Service
+}
+
 --let $router_config_to_remove=$MYSQL_TMP_DIR/$extra_generated_file
 --source ../include/mysqlrouter_remember_file_for_removal.inc
 

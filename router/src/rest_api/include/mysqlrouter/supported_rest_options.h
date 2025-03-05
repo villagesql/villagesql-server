@@ -28,7 +28,7 @@
 
 #include <array>
 
-static constexpr std::array rest_plugin_supported_options = {
+static constexpr std::array plugin_supported_options = {
     "require_realm",
 };
 

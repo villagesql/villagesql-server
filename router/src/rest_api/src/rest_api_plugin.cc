@@ -252,14 +252,14 @@ static void start(mysql_harness::PluginFuncEnv *env) {
 
     rest_api_srv.init(rest_api);
 
-    http_srv.add_route(rest_api->uri_prefix_regex(),
+    http_srv.add_route("", rest_api->uri_prefix_regex(),
                        std::make_unique<RestApiHttpRequestHandler>(rest_api));
 
     mysql_harness::on_service_ready(env);
 
     wait_for_stop(env, 0);
 
-    http_srv.remove_route(rest_api->uri_prefix_regex());
+    http_srv.remove_route("", rest_api->uri_prefix_regex());
     rest_api->remove_path("/swagger.json$");
   } catch (const std::runtime_error &exc) {
     set_error(env, mysql_harness::kRuntimeError, "%s", exc.what());

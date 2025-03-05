@@ -78,6 +78,26 @@ void DestinationNodesStateNotifier::unregister_md_refresh_callback() {
   md_refresh_callback_ = nullptr;
 }
 
+void DestinationNodesStateNotifier::register_query_quarantined_destinations(
+    const QueryQuarantinedDestinationsCallback &callback) {
+  std::lock_guard<std::mutex> lock(
+      query_quarantined_destinations_callback_mtx_);
+  query_quarantined_destinations_callback_ = callback;
+}
+
+void DestinationNodesStateNotifier::
+    unregister_query_quarantined_destinations() {
+  std::lock_guard<std::mutex> lock(
+      query_quarantined_destinations_callback_mtx_);
+  query_quarantined_destinations_callback_ = nullptr;
+}
+
+bool DestinationNodesStateNotifier::is_dynamic() { return false; }
+
+std::string DestinationNodesStateNotifier::get_dynamic_plugin_name() {
+  return {};
+}
+
 mysqlrouter::ServerMode Destination::server_mode() const {
   if (mysql_harness::ieq(server_info_.member_role, "PRIMARY"))
     return mysqlrouter::ServerMode::ReadWrite;

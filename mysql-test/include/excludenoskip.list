@@ -348,3 +348,8 @@ have_group_replication_resource_manager.inc
 
 # 41. Skip tests which expect the Group Replication primary election prefer most updated
 have_gr_replication_primary_elect_prefer_most_updated.inc
+
+# 42. Skip router/mrs tests requring specific metadata version
+is_mrs_schema_v2.inc
+is_mrs_schema_v3.inc
+is_mrs_schema_v4.inc

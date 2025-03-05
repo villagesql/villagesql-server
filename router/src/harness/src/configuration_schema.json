@@ -110,7 +110,8 @@
                         "router_require_enforce": { "type": "boolean" },
                         "access_mode": { "type": "string" },
                         "wait_for_my_writes": { "type": "boolean" },
-                        "wait_for_my_writes_timeout": { "type": "number" }
+                        "wait_for_my_writes_timeout": { "type": "number" },
+                        "accept_external_connections": { "type": "boolean" }
                     },
                     "required": ["destinations", "routing_strategy"]
                 }

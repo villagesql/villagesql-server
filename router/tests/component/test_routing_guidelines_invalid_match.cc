@@ -59,8 +59,8 @@ class InvalidGuidelinesTest : public RouterComponentTest {
   auto &launch_router(const std::string &routing_section,
                       const std::string &metadata_cache_section) {
     auto default_section = get_DEFAULT_defaults();
-    init_keyring(default_section, get_test_temp_dir_name(), user_,
-                 "mysql_test_password");
+    init_keyring(default_section, get_test_temp_dir_name(),
+                 {KeyringEntry{user_, "password", "mysql_test_password"}});
 
     const auto state_file =
         create_state_file(get_test_temp_dir_name(),

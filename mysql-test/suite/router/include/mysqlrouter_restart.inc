@@ -48,7 +48,6 @@ if ($router_restart_do_not_echo_parameters) {
 # it until it's told to
 --let $_expect_file_name= $MYSQLTEST_VARDIR/tmp/mysqlrouter.expect
 
-
 --exec echo "wait" > $_expect_file_name
 
 # Send shutdown to the connected Router.
@@ -82,6 +81,13 @@ if ($have_sparc)
 
 # Call script that will poll the router waiting for it to be back online again
 --source include/wait_until_connected_again.inc
+
+
+if ($_mrs_started)
+{
+  --exec $MRS_CLIENT_ARGS --path /debug?do=start --wait-until-status=60 --display none
+}
+
 
 --let $router_restart_parameters=
 --let $router_shutdown_timeout=

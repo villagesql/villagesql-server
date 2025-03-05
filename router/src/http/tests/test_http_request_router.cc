@@ -51,23 +51,27 @@ class MockRequestHandler : public http::base::RequestHandler {
 class HttpRequestRouterTest : public ::testing::Test {
  public:
   void SetUp() override {
-    rtr_.append("substr", std::make_unique<MockRequestHandler>(
-                              [&](http::base::Request &req [[maybe_unused]]) {
-                                substr_is_matched_ = true;
-                              }));
-    rtr_.append("^/prefix", std::make_unique<MockRequestHandler>(
-                                [&](http::base::Request &req [[maybe_unused]]) {
-                                  prefix_is_matched_ = true;
-                                }));
-    rtr_.append("/suffix$", std::make_unique<MockRequestHandler>(
-                                [&](http::base::Request &req [[maybe_unused]]) {
-                                  suffix_is_matched_ = true;
-                                }));
-    rtr_.append("^/exact$", std::make_unique<MockRequestHandler>(
-                                [&](http::base::Request &req [[maybe_unused]]) {
-                                  exact_is_matched_ = true;
-                                }));
-    rtr_.append("^/r[eE]gex$",
+    rtr_.append("", "substr",
+                std::make_unique<MockRequestHandler>(
+                    [&](http::base::Request &req [[maybe_unused]]) {
+                      substr_is_matched_ = true;
+                    }));
+    rtr_.append("", "^/prefix",
+                std::make_unique<MockRequestHandler>(
+                    [&](http::base::Request &req [[maybe_unused]]) {
+                      prefix_is_matched_ = true;
+                    }));
+    rtr_.append("", "/suffix$",
+                std::make_unique<MockRequestHandler>(
+                    [&](http::base::Request &req [[maybe_unused]]) {
+                      suffix_is_matched_ = true;
+                    }));
+    rtr_.append("", "^/exact$",
+                std::make_unique<MockRequestHandler>(
+                    [&](http::base::Request &req [[maybe_unused]]) {
+                      exact_is_matched_ = true;
+                    }));
+    rtr_.append("", "^/r[eE]gex$",
                 std::make_unique<MockRequestHandler>(
                     [&](http::base::Request &req [[maybe_unused]]) {
                       regex_is_matched_ = true;

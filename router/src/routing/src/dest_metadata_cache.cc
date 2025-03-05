@@ -468,6 +468,10 @@ void DestMetadataCacheManager::subscribe_for_md_refresh_handler() {
   cache_api_->add_md_refresh_listener(this);
 }
 
+std::string DestMetadataCacheManager::get_dynamic_plugin_name() {
+  return cache_api_->instance_name();
+}
+
 DestMetadataCacheManager::~DestMetadataCacheManager() {
   if (subscribed_for_metadata_cache_changes_) {
     cache_api_->remove_state_listener(this);

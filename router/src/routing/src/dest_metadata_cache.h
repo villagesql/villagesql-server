@@ -124,6 +124,9 @@ class DestMetadataCacheManager final
    */
   void clear_internal_state();
 
+  bool is_dynamic() override { return true; }
+  std::string get_dynamic_plugin_name() override;
+
  private:
   /**
    * Resolve hostnames used in routing guidelines document.

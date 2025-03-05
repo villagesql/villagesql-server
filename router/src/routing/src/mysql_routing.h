@@ -264,7 +264,7 @@ class ROUTING_EXPORT MySQLRouting : public MySQLRoutingBase {
 
   MySQLRoutingConnectionBase *get_connection(const std::string &) override;
 
-  DestinationManager *destination_manager() {
+  DestinationManager *destination_manager() override {
     return destination_manager_.get();
   }
 
@@ -342,6 +342,9 @@ class ROUTING_EXPORT MySQLRouting : public MySQLRoutingBase {
   stdx::expected<void, std::string> run_acceptor(
       mysql_harness::PluginFuncEnv *env);
 
+  stdx::expected<void, std::string> run_with_no_acceptor(
+      mysql_harness::PluginFuncEnv *env);
+
  public:
   MySQLRoutingContext &get_context() override { return context_; }
 
@@ -367,6 +370,8 @@ class ROUTING_EXPORT MySQLRouting : public MySQLRoutingBase {
   mysqlrouter::ServerMode purpose() const override;
 
  private:
+  bool accept_connections_{true};
+
   /** Monitor for notifying socket acceptor */
   WaitableMonitor<Nothing> acceptor_waitable_{Nothing{}};
 

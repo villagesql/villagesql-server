@@ -1347,7 +1347,9 @@ fi
 %config(noreplace) %{_sysconfdir}/mysqlrouter/mysqlrouter.conf
 %attr(644, root, root) %config(noreplace,missingok) %{_sysconfdir}/logrotate.d/mysqlrouter
 %{_bindir}/mysqlrouter
+%{_bindir}/mysqlrouter_bootstrap
 %{_bindir}/mysqlrouter_keyring
+%{_bindir}/mysqlrouter_mrs_client
 %{_bindir}/mysqlrouter_passwd
 %{_bindir}/mysqlrouter_plugin_info
 %attr(644, root, root) %{_mandir}/man1/mysqlrouter.1*
@@ -1355,6 +1357,7 @@ fi
 %attr(644, root, root) %{_mandir}/man1/mysqlrouter_plugin_info.1*
 %{_unitdir}/mysqlrouter.service
 %{_tmpfilesdir}/mysqlrouter.conf
+%{_libdir}/mysqlrouter/private/libmysqlrouter_http_client.so.*
 %{_libdir}/mysqlrouter/private/libmysqlharness.so.*
 %{_libdir}/mysqlrouter/private/libmysqlharness_stdx.so.*
 %{_libdir}/mysqlrouter/private/libmysqlharness_tls.so.*
