@@ -10569,6 +10569,15 @@ ER_LH_INVALID_VALUE_IN_VECTOR
 ER_LH_WARN_VECTOR_LOSSY_CONVERSION
   eng "Column %d in %s: Conversion from type Int to type Float could result in loss of precision."
 
+ER_LH_UNSTRUCTURED_TRUNCATION_ERROR
+  eng "Vector chunks are truncated for file: %.*s"
+
+ER_LH_UNSTRUCTURED_PAGE_CHUNK_WARN
+  eng "Split by 'page' chunking is changed to 'document' chunking for %.*s because split by 'page' is not possible for docx, doc, html, or txt formats."
+
+ER_LH_UNSTRUCTURED_TOO_MANY_CHUNKS
+  eng "Too many chunks for file: %.*s"
+
 #
 #  End of 9.x error messages (server-to-client).
 #
