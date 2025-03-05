@@ -2489,8 +2489,7 @@ static void clone_init_compression(THD *thd) {
   ib::info(ER_IB_CLONE_SQL) << "Clone: Finished initializing compressed tables";
 }
 
-Clone_notify::Clone_notify(Clone_notify::Type type, space_id_t space,
-                           bool no_wait)
+Clone_notify::Clone_notify(Type type, space_id_t space, bool no_wait)
     : m_space_id(space),
       m_type(type),
       m_wait(Wait_at::NONE),

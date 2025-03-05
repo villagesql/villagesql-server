@@ -2625,7 +2625,7 @@ dberr_t Compression::validate(const char *algorithm) {
   return (check(algorithm, &compression));
 }
 
-bool Compression::validate(const Compression::Type type) {
+bool Compression::validate(const Type type) {
   bool ret = true;
 
   switch (type) {
