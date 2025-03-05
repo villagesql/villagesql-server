@@ -141,6 +141,17 @@ ADD_STATIC_LIBRARY(mysql_rest_service_db
   ${mysql_rest_service_db_includes}
 )
 
+# Downgrade -Werror to warning for gcc
+IF(MY_COMPILER_IS_GNU)
+  MY_CHECK_CXX_COMPILER_WARNING("error=maybe-uninitialized" HAS_WARN_FLAG)
+  IF(HAS_WARN_FLAG)
+    ADD_COMPILE_FLAGS(
+      mrs/database/query_entries_object.cc
+      COMPILE_FLAGS ${HAS_WARN_FLAG}
+      )
+  ENDIF()
+ENDIF()
+
 ADD_STATIC_LIBRARY(mysql_rest_service_json
   mrs/json/response_json_template.cc
   mrs/json/json_template_factory.cc
