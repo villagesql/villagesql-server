@@ -35,6 +35,8 @@
 
 #include "mysqlrouter/utils_sqlstring.h"
 
+#include "my_compiler.h"
+
 namespace mrs {
 namespace database {
 namespace entry {
@@ -64,6 +66,9 @@ struct UniversalId {
   auto begin() const { return std::begin(raw); }
   auto end() const { return std::end(raw); }
 
+  MY_COMPILER_DIAGNOSTIC_PUSH()
+  MY_COMPILER_GCC_DIAGNOSTIC_IGNORE("-Wzero-as-null-pointer-constant")
+  MY_COMPILER_CLANG_DIAGNOSTIC_IGNORE("-Wzero-as-null-pointer-constant")
   std::strong_ordering operator<=>(const UniversalId &rhs) const {
     for (size_t ndx = raw.size() - 1; ndx > 0; --ndx) {
       auto cmp_res = raw[ndx] <=> rhs.raw[ndx];
@@ -73,6 +78,7 @@ struct UniversalId {
 
     return raw[0] <=> rhs.raw[0];
   }
+  MY_COMPILER_DIAGNOSTIC_POP()
 
   bool operator==(const UniversalId &rhs) const = default;
 
