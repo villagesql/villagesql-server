@@ -47,6 +47,7 @@
 #include "mrs/interface/endpoint_base.h"
 #include "mrs/interface/endpoint_manager.h"
 #include "mrs/rest/response_cache.h"
+#include "my_compiler.h"
 
 namespace mrs {
 
@@ -84,12 +85,16 @@ class EndpointManager : public mrs::interface::EndpointManager {
     EndpointId(const IdType p_type, const UniversalId &p_id)
         : type{p_type}, id{p_id} {}
 
+    MY_COMPILER_DIAGNOSTIC_PUSH()
+    MY_COMPILER_GCC_DIAGNOSTIC_IGNORE("-Wzero-as-null-pointer-constant")
+    MY_COMPILER_CLANG_DIAGNOSTIC_IGNORE("-Wzero-as-null-pointer-constant")
     std::strong_ordering operator<=>(const EndpointId &rhs) const {
       const auto cmp_res = type <=> rhs.type;
       if (cmp_res != 0) return cmp_res;
 
       return id <=> rhs.id;
     }
+    MY_COMPILER_DIAGNOSTIC_POP()
 
    public:
     IdType type;

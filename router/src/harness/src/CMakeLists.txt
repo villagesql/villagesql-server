@@ -167,7 +167,7 @@ IF(WIN32)
     my_init
     my_end
     my_free
-    my_progname
+    ?my_progname@@3PEBDEB  # char const * const my_progname
 
     set_fips_mode
   )
