@@ -13230,8 +13230,8 @@ void Dblqh::scanMarkers(Signal *signal, Uint32 tcNodeFail,
         lqhTransConf->transId2 = commitAckMarkerPtr.p->transid2;
         lqhTransConf->apiRef = commitAckMarkerPtr.p->apiRef;
         lqhTransConf->apiOpRec = commitAckMarkerPtr.p->apiOprec;
-        sendSignal(tcNodeFailPtr.p->newTcBlockref, GSN_LQH_TRANSCONF, signal, 7,
-                   JBB);
+        sendSignal(tcNodeFailPtr.p->newTcBlockref, GSN_LQH_TRANSCONF, signal,
+                   LqhTransConf::MarkerSignalLength, JBB);
 
         signal->theData[0] = ZSCAN_MARKERS;
         signal->theData[1] = tcNodeFailPtr.i;
