@@ -39,14 +39,39 @@
 
 --disable_query_log
 --disable_result_log
---eval INSERT INTO mysql_innodb_cluster_metadata.clusters() VALUES(1,"my_cluster", null, null, '{"group_replication_group_name": "$group_replication_group_name"}', "gr","pm","{}", 1);
---eval INSERT INTO mysql_innodb_cluster_metadata.instances() VALUES(1,1,"127.0.0.1:$s1_port", "$s1_uuid", "local_i1", '{"mysqlClassic": "127.0.0.1:$s1_port"}', null, null);
---eval INSERT INTO mysql_innodb_cluster_metadata.instances() VALUES(2,1,"127.0.0.1:$s2_port", "$s2_uuid", "local_i2", '{"mysqlClassic": "127.0.0.1:$s2_port"}', null, null);
---eval INSERT INTO mysql_innodb_cluster_metadata.instances() VALUES(3,1,"127.0.0.1:$s3_port", "$s3_uuid", "local_i3", '{"mysqlClassic": "127.0.0.1:$s3_port"}', null, null);
-INSERT INTO mysql_innodb_cluster_metadata.async_cluster_views(cluster_id, view_id, topology_type, view_change_reason, view_change_time, view_change_info, attributes)
-    VALUES(1,1,'SINGLE-PRIMARY-TREE', "", NOW(), "{}", "{}");
-INSERT INTO mysql_innodb_cluster_metadata.async_cluster_members() VALUES(1,1,1,1,true,"{}");
 
+eval INSERT INTO mysql_innodb_cluster_metadata.clusters(cluster_id,
+        cluster_name, description, options, attributes, cluster_type,
+        primary_mode, router_options, clusterset_id)
+      VALUES(1, "my_cluster", null, null,
+      '{"group_replication_group_name": "$group_replication_group_name"}', "gr",
+      "pm","{}", NULL);
+
+eval INSERT INTO mysql_innodb_cluster_metadata.instances(instance_id,
+        cluster_id, address, mysql_server_uuid, instance_name, addresses,
+        attributes, description)
+       VALUES(1, 1, "127.0.0.1:$s1_port", "$s1_uuid", "local_i1",
+       '{"mysqlClassic": "127.0.0.1:$s1_port"}', null, null);
+
+eval INSERT INTO mysql_innodb_cluster_metadata.instances(instance_id,
+        cluster_id, address, mysql_server_uuid, instance_name, addresses,
+        attributes, description)
+       VALUES(2,1,"127.0.0.1:$s2_port", "$s2_uuid", "local_i2",
+       '{"mysqlClassic": "127.0.0.1:$s2_port"}', null, null);
+
+eval INSERT INTO mysql_innodb_cluster_metadata.instances(instance_id,
+        cluster_id, address, mysql_server_uuid, instance_name, addresses,
+        attributes, description)
+      VALUES(3,1,"127.0.0.1:$s3_port", "$s3_uuid", "local_i3",
+      '{"mysqlClassic": "127.0.0.1:$s3_port"}', null, null);
+
+INSERT INTO mysql_innodb_cluster_metadata.async_cluster_views(cluster_id,
+        view_id, topology_type, view_change_reason, view_change_time,
+        view_change_info, attributes)
+       VALUES(1, 1, 'SINGLE-PRIMARY-TREE', "", NOW(), "{}", "{}");
+
+INSERT INTO mysql_innodb_cluster_metadata.async_cluster_members()
+        VALUES(1, 1, 1, 1,true,"{}");
 
 --source ../innodb_cluster/create_mysqlrouter_user.inc
 

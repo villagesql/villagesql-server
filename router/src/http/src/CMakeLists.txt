@@ -45,6 +45,9 @@ ROUTER_ADD_SHARED_LIBRARY(http_common
 
   OUTPUT_NAME "mysqlrouter_http"
 
+  COMPILE_DEFINITIONS
+  MYSQL_ROUTER_LOG_DOMAIN="http_common"
+
   LINK_LIBRARIES
   PUBLIC
   harness_tls
@@ -130,12 +133,16 @@ ROUTER_ADD_SHARED_LIBRARY(http_server_lib
   http/server/bind.cc
   http/server/request.cc
   http/server/server.cc
+  http/server/regex_matcher.cc
   http/http_server_context.cc
   http_auth.cc
   http_server_component.cc
   http_request_router.cc
 
   OUTPUT_NAME "mysqlrouter_http_server"
+
+  COMPILE_DEFINITIONS
+  MYSQL_ROUTER_LOG_DOMAIN="http_server"
 
   LINK_LIBRARIES
   PUBLIC
@@ -179,7 +186,7 @@ ROUTER_ADD_SHARED_LIBRARY(http_client
   http/client/error_code.cc
   http/client/request.cc
 
-  OUTPUT_NAME "http_client"
+  OUTPUT_NAME "mysqlrouter_http_client"
 
   SKIP_INSTALL
 
@@ -187,6 +194,12 @@ ROUTER_ADD_SHARED_LIBRARY(http_client
   ${LIBRT}
   http_common
   )
+
+INSTALL(TARGETS http_client
+  RUNTIME DESTINATION ${ROUTER_INSTALL_BINDIR} COMPONENT Router
+  ARCHIVE DESTINATION ${ROUTER_INSTALL_LIBDIR} COMPONENT Router
+  LIBRARY DESTINATION ${ROUTER_INSTALL_LIBDIR} COMPONENT Router
+  NAMELINK_SKIP)
 
 MYSQL_ADD_EXECUTABLE(rest_cli
   rest_cli.cc

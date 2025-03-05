@@ -80,7 +80,7 @@ bool get_if(const Container &c, Find_if &&find_if,
             const typename Container::value_type *out) {
   auto it = std::find_if(c.begin(), c.end(), std::forward<Find_if>(find_if));
   if (c.end() == it) return false;
-  *out = (*it);
+  if (out) *out = (*it);
   return true;
 }
 
@@ -89,7 +89,7 @@ bool get_if(Container &c, Find_if &&find_if,
             typename Container::value_type *out) {
   auto it = std::find_if(c.begin(), c.end(), std::forward<Find_if>(find_if));
   if (c.end() == it) return false;
-  *out = (*it);
+  if (out) *out = (*it);
   return true;
 }
 

@@ -115,6 +115,13 @@ sub fix_host {
 
  sub fix_bind_port {
   my ($self, $config, $group_name, $group, $option) = @_;
+
+  if (defined $group->if_exist('accept_external_connections')) {
+    if ($group->value('accept_external_connections') == 0) {
+      return undef;
+    }
+  }
+
   my $hostname = fix_host(@_);
   my $variable_name = (uc $group_name . "_" . $option) =~ s/:/_/r;
 
@@ -124,8 +131,13 @@ sub fix_host {
 
 sub fix_destinations {
   my ($self, $config, $group_name, $group) = @_;
+  if (defined $group->if_exist('use_socket_as_destination')) {
+    my $endpoint_socket = $self->{ARGS}->{endpoint_socket};
+    return "local:$endpoint_socket";
+  }
+
   my $hostname = fix_host(@_);
-  my $endpoint = $self->{ARGS}->{endpoint};
+  my $endpoint = $self->{ARGS}->{endpoint_tcp};
 
   return "$hostname:$endpoint";
 }
@@ -149,6 +161,22 @@ sub fix_dynamic_state {
   my $dir= $self->{ARGS}->{vardir};
 
   return "$dir/state.json";
+}
+
+sub fix_http_ssl {
+  # TODO : implement this!
+  my ($self, $config, $group_name, $group) = @_;
+  $self->push_env_variable("HTTP_SERVER_SSL", 1);
+  $self->{HTTPS}=1;
+  return 1;
+}
+
+sub fix_http_server_static_folder {
+  # TODO : implement this!
+  my ($self, $config, $group_name, $group) = @_;
+  my $dir = $self->{ARGS}->{vardir};
+
+  return $dir;
 }
 
 sub fix_pid_file {
@@ -178,6 +206,24 @@ my @DEFAULT_rules = (
 my @routing_rules = (
   { 'bind_port' => \&fix_bind_port },
   { 'destinations' => \&fix_destinations },
+  );
+
+my @http_server_rules = (
+  { 'port' => \&fix_bind_port },
+  { 'ssl' => \&fix_http_ssl },
+  { 'ssl_cert' => \&fix_client_ssl_cert },
+  { 'ssl_key' => \&fix_client_ssl_key },
+#  { 'static_folder' => \&fix_http_server_static_folder },
+  { 'static_folder' => "" },
+  );
+
+my @mrs_rules = (
+  { 'mysql_user' => "root" },
+  { 'mysql_user_data_access' => "root" },
+  { 'router_id' => 1 },
+  { 'mysql_read_write_route' => "undertest" },
+  #{ 'mysql_read_only_route' => "TODO" },
+  { 'metadata_refresh_interval' => 1 },
   );
 
 sub push_env_variable {
@@ -247,10 +293,17 @@ sub new_config {
   $class->{HOSTS}=$hosts;
   $class->{NEXT_HOST}=0;
   $class->{ENV}=();
+  $class->{HTTPS}=0;
 
   $class->run_section_rules($config, 'DEFAULT', @DEFAULT_rules);
   $class->run_section_rules($config, 'routing', @routing_rules);
 
+  $class->run_section_rules($config, 'http_server', @http_server_rules);
+  $class->run_section_rules($config, 'mysql_rest_service', @mrs_rules);
+
+  if (0==$class->{HTTPS}) {
+    $class->push_env_variable("HTTP_SERVER_SSL", 0);
+  }
   return $config;
 }
 

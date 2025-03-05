@@ -79,6 +79,12 @@ SET(TESTS
   test_destination.cc
 )
 
+IF(NOT SOLARIS)
+  LIST(APPEND TESTS
+    test_secure_memory_pool.cc
+  )
+ENDIF()
+
 FOREACH(TEST ${TESTS})
   ADD_HARNESS_TEST_FILE(${TEST} MODULE ${TEST_MODULE}
     INCLUDE_DIRS ${MySQLRouter_SOURCE_DIR}/src/harness/shared/include/
@@ -91,6 +97,7 @@ ENDFOREACH()
 SET(TESTS
   test_keyring.cc
   test_keyring_manager.cc
+  test_secure_string.cc
 )
 
 FOREACH(TEST ${TESTS})

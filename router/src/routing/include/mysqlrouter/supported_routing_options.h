@@ -86,6 +86,7 @@ static constexpr const char kWaitForMyWrites[]{"wait_for_my_writes"};
 static constexpr const char kWaitForMyWritesTimeout[]{
     "wait_for_my_writes_timeout"};
 static constexpr const char kRouterRequireEnforce[]{"router_require_enforce"};
+static constexpr const char kAcceptConnections[]{"accept_external_connections"};
 }  // namespace options
 }  // namespace routing
 
@@ -135,6 +136,7 @@ static constexpr std::array routing_supported_options{
     routing::options::kWaitForMyWrites,
     routing::options::kWaitForMyWritesTimeout,
     routing::options::kRouterRequireEnforce,
+    routing::options::kAcceptConnections,
 };
 
 #endif /* MYSQLROUTER_ROUTING_SUPPORTED_ROUTING_INCLUDED */

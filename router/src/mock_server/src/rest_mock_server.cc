@@ -316,12 +316,12 @@ static void init(mysql_harness::PluginFuncEnv *env) {
 static void run(mysql_harness::PluginFuncEnv *env) {
   auto &srv = HttpServerComponent::get_instance();
 
-  srv.add_route(kRestGlobalsUri,
+  srv.add_route("", kRestGlobalsUri,
                 std::make_unique<RestApiV1MockServerGlobals>());
   Scope_guard global_route_guard(
       [&srv]() { srv.remove_route(kRestGlobalsUri); });
 
-  srv.add_route(kRestConnectionsUri,
+  srv.add_route("", kRestConnectionsUri,
                 std::make_unique<RestApiV1MockServerConnections>());
   Scope_guard connection_route_guard(
       [&srv]() { srv.remove_route(kRestConnectionsUri); });

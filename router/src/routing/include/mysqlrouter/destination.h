@@ -40,7 +40,7 @@
  *
  * It is used between the DestinationManager implementations and MySQLRouting
  */
-class Destination {
+class ROUTING_EXPORT Destination {
  public:
   Destination(
       mysql_harness::Destination dest,

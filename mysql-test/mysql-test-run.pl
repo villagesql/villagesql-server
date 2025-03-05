@@ -126,6 +126,7 @@ my $opt_start;
 my $opt_start_dirty;
 my $opt_start_exit;
 my $opt_start_test;
+my $opt_strace_router;
 my $opt_strace_client;
 my $opt_strace_server;
 my @opt_perf_servers;
@@ -327,6 +328,7 @@ our @opt_extra_bootstrap_opt;
 our @opt_extra_mysqld_opt;
 our @opt_extra_mysqltest_opt;
 our @opt_mysqld_envs;
+our @opt_mysqltest_envs;
 
 our $basedir;
 our $bindir;
@@ -335,6 +337,7 @@ our $build_thread_id_file;
 our $config;    # The currently running config
 our $config_router;
 our $config_router_filename;
+our $current_router_template;
 our $debug_compiled_binaries;
 our $default_vardir;
 our $excluded_string;
@@ -360,11 +363,13 @@ our $path_testlog;
 our $secondary_engine_plugin_dir;
 our $start_only;
 our $exe_mysqlrouter;
+our $exe_mysqlrouter_mrs_client;
 our $exe_mysqlrouter_keyring;
 
 our $glob_debugger       = 0;
 our $group_replication   = 0;
-our $router_test         = 0;
+our $router_test           = 0;
+our $router_bootstrap_test = 0;
 our $ndbcluster_enabled  = 0;
 our $ndbcluster_only     = $ENV{'MTR_NDB_ONLY'} || 0;
 our $mysqlbackup_enabled = 0;
@@ -1791,6 +1796,7 @@ sub command_line_setup {
 
     # Extra options used when running test clients
     'mysqltest=s' => \@opt_extra_mysqltest_opt,
+    'mysqltest-env=s' => \@opt_mysqltest_envs,
 
     # Debugging
     'boot-dbx'             => \$opt_boot_dbx,
@@ -1819,6 +1825,7 @@ sub command_line_setup {
     'max-save-core=i'      => \$opt_max_save_core,
     'max-save-datadir=i'   => \$opt_max_save_datadir,
     'max-test-fail=i'      => \$opt_max_test_fail,
+    'strace-router'        => \$opt_strace_router,
     'strace-client'        => \$opt_strace_client,
     'strace-server'        => \$opt_strace_server,
     'perf:s'               => \@opt_perf_servers,
@@ -2400,6 +2407,11 @@ sub command_line_setup {
     $debug_d   = "d,query,info,error,enter,exit";
   }
 
+  if ($opt_strace_router && ($^O ne "linux")) {
+    $opt_strace_router = 0;
+    mtr_warning("Strace only supported in Linux ");
+  }
+
   if ($opt_strace_server && ($^O ne "linux")) {
     $opt_strace_server = 0;
     mtr_warning("Strace only supported in Linux ");
@@ -2967,6 +2979,11 @@ sub executable_setup () {
     my_find_bin($bindir,
               [ "runtime_output_directory", "libexec", "sbin", "bin" ],
               "mysqlrouter_keyring", NOT_REQUIRED);
+
+  $exe_mysqlrouter_mrs_client =
+    my_find_bin($bindir,
+              [ "runtime_output_directory", "libexec", "sbin", "bin" ],
+              "mysqlrouter_mrs_client", NOT_REQUIRED);
 }
 
 sub client_debug_arg($$) {
@@ -3092,6 +3109,15 @@ sub mysqlxtest_arguments() {
   mtr_add_arg($args, "--port=%d", $mysqlx_baseport);
   return mtr_args2str($exe, @$args);
 }
+sub mysqlrouter_bootstrap_arguments() {
+  my $exe;
+  # mysqlrouter_bootstrap executable may _not_ exist
+  $exe = mtr_exe_maybe_exists("$path_client_bindir/mysqlrouter_bootstrap");
+  return "" unless $exe;
+
+  return $exe;
+}
+
 
 sub mysqlbackup_arguments () {
   my $exe =
@@ -3140,6 +3166,22 @@ sub find_plugin($$) {
                     "$basedir/lib64/mysqlrouter/plugin/" . $plugin_filename,
                     "$basedir/lib/" . $plugin_filename,);
   return $lib_plugin;
+}
+
+# Separates functionality for router binaries and generic binaries.
+sub find_router_plugin_in_package($) {
+  my ($plugin) = @_;
+  my $plugin_filename;
+
+  if (IS_WINDOWS) {
+    $plugin_filename = $plugin . ".dll";
+  } else {
+    $plugin_filename = $plugin . ".so";
+  }
+
+  return mtr_file_exists("$basedir/lib64/mysqlrouter/" . $plugin_filename,
+                         "$basedir/lib/mysqlrouter/" . $plugin_filename,
+                         "$basedir/lib/" . $plugin_filename);
 }
 
 # Read plugin defintions file
@@ -3426,7 +3468,9 @@ sub environment_setup {
   $ENV{'MYSQLADMIN'}          = native_path($exe_mysqladmin);
   $ENV{'MYSQLXTEST'}          = mysqlxtest_arguments();
   $ENV{'MYSQLROUTER'}         = $exe_mysqlrouter;
+  $ENV{'MRS_CLIENT'}          = $exe_mysqlrouter_mrs_client;
   $ENV{'MYSQLROUTER_KEYRING'} = $exe_mysqlrouter_keyring;
+  $ENV{'MYSQLROUTER_BOOTSTRAP'} = mysqlrouter_bootstrap_arguments();
 
   $ENV{'MYSQL_MIGRATE_KEYRING'} = $exe_mysql_migrate_keyring;
   $ENV{'MYSQL_KEYRING_ENCRYPTION_TEST'} = $exe_mysql_keyring_encryption_test;
@@ -5183,6 +5227,7 @@ sub run_testcase ($) {
         $config_router = $r_config;
 
         foreach my $option (@r_env) {
+          $old_env_router{ $option->name() } = $ENV{ $option->name() };
           $ENV{ $option->name() } = $option->value();
         }
       }
@@ -5197,18 +5242,40 @@ sub run_testcase ($) {
     }
 
     if ($tinfo->{router_test} && !$config_router) {
+      # Restore old ENV
+      while (my ($option, $value) = each(%old_env_router)) {
+        if (defined $value) {
+          mtr_verbose("Restoring $option to $value");
+          $ENV{$option} = $value;
+
+        } else {
+          mtr_verbose("Removing $option");
+          delete($ENV{$option});
+        }
+      }
+
+      %old_env_router = ();
+
       my ($r_config,@r_env) = create_router_config($tinfo, $opt_vardir);
       $config_router = $r_config;
       # Set variables in the ENV section
       foreach my $option (@r_env) {
         # Save old value to restore it before next time
-        $old_env{ $option->name() } = $ENV{ $option->name() };
+        $old_env_router{ $option->name() } = $ENV{ $option->name() };
         mtr_verbose($option->name(), "=", $option->value());
         $ENV{ $option->name() } = $option->value();
       }
     }
     if (!$tinfo->{router_test}) {
       $config_router = ();
+      if ($tinfo->{router_bootstrap_test}) {
+        my $routing_plugin = find_plugin("routing", "plugin_output_directory");
+        if (!$routing_plugin) {
+          $routing_plugin = find_router_plugin_in_package("routing") or die();
+        }
+        my $plugin_dir = dirname($routing_plugin);
+        $ENV{"ROUTER_PLUGIN_DIRECTORY"} = $plugin_dir;
+      }
     }
 
     # Write start of testcase to log
@@ -6630,7 +6697,7 @@ sub mysqld_start ($$$$) {
 
   # Implementation for strace-server
   if ($opt_strace_server) {
-    strace_server_arguments($args, \$exe, $mysqld->name());
+    strace_server_or_router_arguments($args, \$exe, $mysqld->name());
   }
 
   foreach my $arg (@$extra_opts) {
@@ -6776,7 +6843,7 @@ sub mysqld_start ($$$$) {
   return;
 }
 
-sub run_msyqlrouter_keyring_util($$$) {
+sub run_mysqlrouter_keyring_util($$$) {
   my $keyring_directory = shift;
   my $operation = shift;
   my $additional_args = shift;
@@ -6784,6 +6851,11 @@ sub run_msyqlrouter_keyring_util($$$) {
   my $exe_mysqlrouter_keyring = $ENV{'MYSQLROUTER_KEYRING'};
   my $keyring_file="$keyring_directory/keyring";
   my $keyring_master_file="$keyring_directory/mysqlrouter.key";
+
+  if ($operation eq 'init') {
+    unlink($keyring_file) if -e $keyring_file;
+    unlink($keyring_master_file) if -e $keyring_master_file;
+  }
 
   my $args;
   mtr_init_args(\$args);
@@ -6802,11 +6874,21 @@ sub run_msyqlrouter_keyring_util($$$) {
 sub router_create_keyring($) {
   my $keyring_directory = shift;
 
-  run_msyqlrouter_keyring_util($keyring_directory, "init", []);
-  run_msyqlrouter_keyring_util($keyring_directory, "set",
+  run_mysqlrouter_keyring_util($keyring_directory, "init", []);
+  run_mysqlrouter_keyring_util($keyring_directory, "set",
                       ["mysqlrouter", "password", "mysqlrouter"]);
-  run_msyqlrouter_keyring_util($keyring_directory, "set",
+  run_mysqlrouter_keyring_util($keyring_directory, "set",
+                      ["root", "password", ""]);
+  run_mysqlrouter_keyring_util($keyring_directory, "set",
+                      ["mrs_user", "password", ""]);
+  run_mysqlrouter_keyring_util($keyring_directory, "set",
                       ["rest-user", "jwt_secret", "secret12345"]);
+  run_mysqlrouter_keyring_util($keyring_directory, "set",
+                      ["account_with_auth_socket", "password", ""]);
+  run_mysqlrouter_keyring_util($keyring_directory, "set",
+                      ["account1", "password", "pwd1"]);
+  run_mysqlrouter_keyring_util($keyring_directory, "set",
+                      ["account2", "password", "pwd2"]);
 }
 
 sub router_create_dynamic_state_file($) {
@@ -6835,26 +6917,27 @@ sub create_router_config($$) {
   my $tinfo = shift;
   my $vardir = shift;
 
-  my $template_path = $tinfo->{router_template_path};
-  if (!$template_path) {
-    $template_path = "include/default_my-router.cnf";
+  $current_router_template= $tinfo->{router_template_path};
+  if (!$current_router_template) {
+    $current_router_template= "include/default_my-router.cnf";
   }
 
   my $factory = My::RouterConfigFactory->new();
   my $router_config =
      $factory->new_config({ basedir       => $basedir,
                             testdir        => $glob_mysql_test_dir,
-                            template_path  => $template_path,
+                            template_path  => $current_router_template,
                             vardir        =>  $vardir,
                             plugin_folder  => $router_plugin_dir,
                             baseport       => $router_baseport,
-                            endpoint       => $config->group('mysqld.1')->value('port')
+                            endpoint_tcp   => $config->group('mysqld.1')->value('port'),
+                            endpoint_socket => $config->group('mysqld.1')->value('socket')
                           });
   $factory->push_env_variable('MYSQLROUTER_LOGFILE', $router_config->value("DEFAULT", "#log-error"));
   $factory->push_env_variable('MYSQLROUTER_PIDFILE', $router_config->value("DEFAULT", "pid_file"));
 
-  # only needed if metadata_cache is configured
-  if ($router_config->like("metadata_cache")) {
+  # only needed if metadata_cache and/or mysql_rest_service is configured
+  if ($router_config->like("metadata_cache") || $router_config->like("mysql_rest_service")) {
     router_create_keyring($vardir);
     router_create_dynamic_state_file($vardir);
   }
@@ -6879,8 +6962,14 @@ sub router_start ($$$) {
 
   my $pid_file = $router->value('pid_file');
 
+  my $exe = $exe_mysqlrouter;
   my $args;
   mtr_init_args(\$args);
+
+  # Implementation for strace-router
+  if ($opt_strace_router) {
+    strace_server_or_router_arguments($args, \$exe, $router->name());
+  }
 
   if (!$opt_skip_core) {
     mtr_add_arg($args, "--core-file");
@@ -6922,10 +7011,10 @@ sub router_start ($$$) {
   # Remember this log file for valgrind/shutdown error report search.
   $logs{$output} = 1;
 
-  if (defined $exe_mysqlrouter) {
+  if (defined $exe) {
     $router->{'proc'} =
       My::SafeProcess->new(name        => $router->name(),
-                           path        => $exe_mysqlrouter,
+                           path        => $exe,
                            args        => \$args,
                            output      => $output,
                            error       => $output,
@@ -7113,6 +7202,22 @@ sub server_need_restart {
     if (is_slave($server) && $master_restarted) {
       # At least one master restarted and this is a slave, restart
       mtr_verbose_restart($server, " master restarted");
+      return 1;
+    }
+  }
+
+  my $is_router = $server->name() eq "DEFAULT";
+  if ($is_router) {
+    if (!$tinfo->{router_test}) {
+      # This is not a router test, we want Router to be stopped if it is running
+      mtr_verbose_restart($server, "Router restarted");
+      $config_router = ();
+      return 1;
+    }
+
+    if ($tinfo->{router_template_path} ne $current_router_template) {
+      mtr_verbose_restart($server, "using different Router config file");
+      $config_router = ();
       return 1;
     }
   }
@@ -7741,6 +7846,7 @@ sub start_mysqltest ($) {
                                   append => 1,
                                   @redirect_output,
                                   error   => $path_current_testlog,
+                                  envs    => \@opt_mysqltest_envs,
                                   verbose => $opt_verbose,);
   mtr_verbose("Started $proc");
   return $proc;
@@ -7971,7 +8077,7 @@ sub perf_arguments {
 }
 
 # Modify the exe and args so that program is run in strace
-sub strace_server_arguments {
+sub strace_server_or_router_arguments {
   my $args = shift;
   my $exe  = shift;
   my $type = shift;
@@ -8380,6 +8486,7 @@ Options that pass on options (these may be repeated)
 
 Options for mysqltest
   mysqltest=ARGS        Extra options used when running test clients.
+  mysqltest-env=VAR=VAL Specify additional environment settings for "mysqltest"
 
 Options to run test on running server
 
@@ -8434,6 +8541,7 @@ Options for debugging the product
   max-test-fail         Limit the number of test failurs before aborting the
                         current test run. Defaults to $opt_max_test_fail, set to
                         0 for no limit. Set it's default with MTR_MAX_TEST_FAIL.
+  strace-router         Create strace output for mysqltest router.
   strace-client         Create strace output for mysqltest client.
   strace-server         Create strace output for mysqltest server.
   perf[=<mysqld_name>]  Run mysqld with "perf record" saving profile data

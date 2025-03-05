@@ -23,7 +23,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "cluster_metadata.h"
+#include "mysqlrouter/cluster_metadata.h"
 
 #include <cstring>  // strcmp
 #include <stdexcept>
@@ -47,6 +47,7 @@
 #include "mysqld_error.h"
 #include "mysqlrouter/cluster_metadata_instance_attributes.h"
 #include "mysqlrouter/routing_guidelines_version.h"
+#include "mysqlrouter/uri.h"
 #include "mysqlrouter/utils.h"  // strtoui_checked
 #include "mysqlrouter/utils_sqlstring.h"
 #include "router_config.h"  // MYSQL_ROUTER_VERSION
@@ -174,9 +175,9 @@ class ConfigurationDefaults {
  private:
   bool is_stored() {
     sqlstring query(
-        "select JSON_EXTRACT(router_options, '$.Configuration.\"!\"') IS NULL "
+        "select JSON_EXTRACT(router_options, '$.Configuration.?') IS NULL "
         "from mysql_innodb_cluster_metadata.! where ! = ?",
-        {mysqlrouter::QuoteOnlyIfNeeded});
+        {mysqlrouter::QuoteOnlyIfNeeded | mysqlrouter::UseAnsiQuotes});
 
     query << MYSQL_ROUTER_VERSION << table_name_ << id_field_ << id_
           << sqlstring::end;
@@ -520,7 +521,7 @@ MetadataSchemaVersion get_metadata_schema_version(MySQLSession *mysql) {
      */
     if (e.code() == ER_NO_SUCH_TABLE || e.code() == ER_BAD_DB_ERROR) {
       // unknown database mysql_innodb_cluster_metata
-      throw std::runtime_error(
+      throw metadata_missing(
           std::string("Expected MySQL Server '") + mysql->get_address() +
           "' to contain the metadata of MySQL InnoDB Cluster, but the schema "
           "does not exist.\n" +

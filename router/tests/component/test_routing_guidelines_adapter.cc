@@ -52,8 +52,8 @@ class RoutingGuidelinesAdapterTest : public RouterComponentTest {
                       const std::string &metadata_cache_section,
                       const unsigned exit_code = EXIT_SUCCESS) {
     auto default_section = get_DEFAULT_defaults();
-    init_keyring(default_section, get_test_temp_dir_name(), user_,
-                 "mysql_test_password");
+    init_keyring(default_section, get_test_temp_dir_name(),
+                 {KeyringEntry{user_, "password", "mysql_test_password"}});
 
     const auto state_file = create_state_file(
         get_test_temp_dir_name(),

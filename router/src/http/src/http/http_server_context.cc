@@ -65,20 +65,21 @@ void HttpServerContext::stop() { http.stop(); }
 void HttpServerContext::join_all() {}
 
 void HttpServerContext::add_route(
-    const std::string &url_regex,
+    const std::string &url_host, const std::string &url_regex,
     std::unique_ptr<http::base::RequestHandler> cb) {
   if (url_regex.empty()) {
     request_handler_.set_default_route(std::move(cb));
   } else {
-    request_handler_.append(url_regex, std::move(cb));
+    request_handler_.append(url_host, url_regex, std::move(cb));
   }
 }
 
-void HttpServerContext::remove_route(const std::string &url_regex) {
+void HttpServerContext::remove_route(const std::string &url_host,
+                                     const std::string &url_regex) {
   if (url_regex.empty()) {
     request_handler_.clear_default_route();
   } else {
-    request_handler_.remove(url_regex);
+    request_handler_.remove(url_host, url_regex);
   }
 }
 

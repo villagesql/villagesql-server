@@ -85,6 +85,7 @@ our $default_myisam = 0;
 
 our $group_replication;
 our $router_test;
+our $router_bootstrap_test;
 
 sub collect_option {
   my ($opt, $value) = @_;
@@ -1684,6 +1685,7 @@ my @tags = (
   [ "include/not_asan.inc", "not_asan", 1 ],
   [ "include/not_ubsan.inc", "not_ubsan", 1 ],
   [ "have_router.inc",      "router_test", 1 ],
+  [ "have_router_bootstrap.inc",  "router_bootstrap_test", 1 ],
 
   # Tests with below .inc file needs either big-test or only-big-test
   # option along with valgrind option.

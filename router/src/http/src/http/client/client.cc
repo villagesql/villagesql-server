@@ -237,7 +237,7 @@ void Client::async_send_request(http::client::Request *request) {
     request->holder_->status = 0;
     request->holder_->status_text.clear();
 
-    if (!url) throw make_error_code(FailureCode::kInvalidUrl);
+    if (url.empty()) throw make_error_code(FailureCode::kInvalidUrl);
 
     auto endpoint = impl::get_endpoint_from(url);
 
@@ -245,7 +245,7 @@ void Client::async_send_request(http::client::Request *request) {
       throw make_error_code(FailureCode::kInvalidHostname);
 
     auto &headers = request->get_output_headers();
-    headers.add("Host", std::string(endpoint.host));
+    impl::headers_add_if_not_present(&headers, "Host", endpoint.host.c_str());
     impl::headers_add_if_not_present(
         &headers, "User-Agent", "router-http-client/" MYSQL_ROUTER_VERSION);
     impl::headers_add_if_not_present(&headers, "Accept", "*/*");

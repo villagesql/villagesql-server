@@ -67,6 +67,7 @@ ADD_HARNESS_TEST_FILE(test_utils.cc
   MODULE ${TEST_MODULE}
   LIB_DEPENDS
     test-helpers
+    router_mysql
     router_utils
   SYSTEM_INCLUDE_DIRS ${GMOCK_INCLUDE_DIRS})
 

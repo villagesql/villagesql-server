@@ -5,13 +5,12 @@
   it under the terms of the GNU General Public License, version 2.0,
   as published by the Free Software Foundation.
 
-  This program is designed to work with certain software (including
+  This program is also distributed with certain software (including
   but not limited to OpenSSL) that is licensed under separate terms,
   as designated in a particular file or component or in included license
   documentation.  The authors of MySQL hereby grant you an additional
   permission to link the program and your derivative works with the
-  separately licensed software that they have either included with
-  the program or referenced in the documentation.
+  separately licensed software that they have included with MySQL.
 
   This program is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
@@ -26,14 +25,21 @@
 #ifndef ROUTER_SRC_OPENSSL_INCLUDE_TLS_TLS_KEYLOG_DUMPER_H_
 #define ROUTER_SRC_OPENSSL_INCLUDE_TLS_TLS_KEYLOG_DUMPER_H_
 
+#include <openssl/opensslv.h>
 #include <openssl/ssl.h>
 #include <fstream>
+
+#include "openssl_version.h"
 
 namespace tls {
 
 class TlsKeylogDumper {
  public:
-  explicit TlsKeylogDumper(SSL_CTX *ctx) {
+  explicit TlsKeylogDumper([[maybe_unused]] SSL_CTX *ctx) {
+#if OPENSSL_VERSION_NUMBER < ROUTER_OPENSSL_VERSION(1, 1, 0)
+  }
+};
+#else
     auto env_logfile = getenv("SSLKEYLOGFILE");
     auto &stream = get_stream();
 
@@ -72,6 +78,8 @@ class TlsKeylogDumper {
 
   bool release_{false};
 };
+
+#endif  // OPENSSL_VERSION_NUMBER < ROUTER_OPENSSL_VERSION(1, 1, 0)
 
 }  // namespace tls
 
