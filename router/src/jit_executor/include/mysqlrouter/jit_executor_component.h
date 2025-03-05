@@ -77,7 +77,7 @@ class IServiceHandlers {
 
   virtual void release_debug_context() = 0;
 
-  virtual void init() = 0;
+  virtual bool init() = 0;
   virtual void teardown() = 0;
 
   virtual std::chrono::seconds idle_time() const = 0;

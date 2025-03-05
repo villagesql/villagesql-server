@@ -33,9 +33,11 @@
 #include <string>
 #include <thread>
 #include <unordered_map>
+#include <variant>
 #include <vector>
 
 #include "languages/polyglot_javascript.h"
+#include "mysql/harness/mpsc_queue.h"
 #include "mysqlrouter/jit_executor_callbacks.h"
 #include "mysqlrouter/jit_executor_common.h"
 #include "mysqlrouter/jit_executor_db_interface.h"
@@ -51,6 +53,24 @@ using Dictionary_t = shcore::Dictionary_t;
 using Polyglot_error = shcore::polyglot::Polyglot_error;
 using IFile_system = shcore::polyglot::IFile_system;
 using shcore::polyglot::Object_bridge_t;
+
+enum class ProcessingState { Ok, Error, ResourceExhausted };
+
+struct Result {
+  std::optional<ProcessingState> state;
+  std::optional<std::string> data;
+
+  void reset() {
+    state.reset();
+    data.reset();
+  }
+};
+
+struct Code {
+  std::string source;
+  ResultType result_type;
+};
+
 /**
  * MRS JavaScript Implementation
  *
@@ -88,10 +108,15 @@ class JavaScript : public shcore::polyglot::Java_script_interface {
   poly_value create_source(const std::string &source,
                            const std::string &code_str) const;
 
-  bool got_memory_error() const { return m_memory_error; }
+  bool got_resources_error() const { return m_got_resources_error; }
+
+  bool got_initialization_error() const {
+    return !m_init_error.value_or("").empty();
+  }
 
  private:
   void run();
+  void stop_run_thread();
 
   Value native_object(poly_value object);
   Value native_array(poly_value object);
@@ -101,7 +126,8 @@ class JavaScript : public shcore::polyglot::Java_script_interface {
   void error_handler(const char *bytes, size_t length) override;
   poly_value from_native_object(const Object_bridge_t &object) const override;
 
-  void create_result(const Value &result, const std::string &status = "ok");
+  void create_result(const Value &result,
+                     ProcessingState state = ProcessingState::Ok);
   void create_result(const shcore::polyglot::Polyglot_error &error);
 
   // Every global function exposed to JavaScript requires:
@@ -143,31 +169,26 @@ class JavaScript : public shcore::polyglot::Java_script_interface {
     static const constexpr auto callback = &JavaScript::get_content_set_path;
   };
 
+  void set_initialized(const std::string &error = "");
+
   // To control the statement execution, the execution thread will be in wait
   // state until a statement arrives
-  std::thread m_execution_thread;
-  std::mutex m_process_mutex;
-  std::condition_variable m_process_condition;
-
-  // The caller thread will be waiting for the final response to be available
-  std::mutex m_result_mutex;
-  std::condition_variable m_result_condition;
-  bool m_done = false;
+  std::unique_ptr<std::thread> m_execution_thread;
+  std::mutex m_init_mutex;
+  std::condition_variable m_init_condition;
 
   Dictionary_t m_predefined_globals;
 
-  std::optional<std::string> m_code;
-  std::optional<std::string> m_result;
-  bool m_is_error = false;
-  bool m_memory_error = false;
+  mysql_harness::WaitingMPSCQueue<std::variant<std::monostate, Code>> m_code;
+  mysql_harness::WaitingMPSCQueue<Result> m_result;
+  std::optional<std::string> m_init_error;
+  bool m_got_resources_error = false;
 
   ResultType m_result_type;
   poly_value m_promise_resolver;
 
   const GlobalCallbacks *m_global_callbacks = nullptr;
   std::shared_ptr<shcore::polyglot::Session> m_session;
-  bool m_initialized = false;
-  std::string m_initialization_error;
 };
 
 }  // namespace jit_executor

@@ -33,6 +33,7 @@
 
 #include "utils/polyglot_api_clean.h"
 
+#include "mysql/harness/logging/logging.h"
 #include "mysqlrouter/jit_executor_value.h"
 #include "native_wrappers/polyglot_collectable.h"
 #include "utils/polyglot_error.h"
@@ -40,6 +41,8 @@
 
 namespace shcore {
 namespace polyglot {
+
+IMPORT_LOG_FUNCTIONS()
 
 namespace {
 
@@ -63,20 +66,24 @@ size_t parse_callback_args(poly_thread thread, poly_callback_info args,
   void *tmp_data = nullptr;
   void **target_data = data ? data : &tmp_data;
 
-  if (const auto rc =
-          poly_get_callback_info(thread, args, &argc, nullptr, target_data);
-      rc != poly_ok) {
-    throw std::runtime_error(Polyglot_error(thread, rc).message());
-  }
-
-  if (argc != 0 && argv != nullptr) {
-    argv->resize(argc);
-
-    if (const auto rc = poly_get_callback_info(thread, args, &argc, &(*argv)[0],
-                                               target_data);
+  try {
+    if (const auto rc =
+            poly_get_callback_info(thread, args, &argc, nullptr, target_data);
         rc != poly_ok) {
       throw std::runtime_error(Polyglot_error(thread, rc).message());
     }
+
+    if (argc != 0 && argv != nullptr) {
+      argv->resize(argc);
+
+      if (const auto rc = poly_get_callback_info(thread, args, &argc,
+                                                 &(*argv)[0], target_data);
+          rc != poly_ok) {
+        throw std::runtime_error(Polyglot_error(thread, rc).message());
+      }
+    }
+  } catch (const Polyglot_generic_error &error) {
+    throw std::runtime_error(error.message());
   }
 
   return argc;
@@ -242,7 +249,11 @@ std::vector<std::string> get_member_keys(poly_thread thread,
 }
 
 void throw_callback_exception(poly_thread thread, const char *error) {
-  throw_if_error(poly_throw_exception, thread, error);
+  try {
+    throw_if_error(poly_throw_exception, thread, error);
+  } catch (const std::exception &err) {
+    log_error("Error while throwing exception on C callback: %s", err.what());
+  }
 }
 
 poly_value get_member(poly_thread thread, poly_value object,

@@ -83,8 +83,14 @@ class Pool {
       }
     }
 
-    m_active_items++;
-    return m_item_factory();
+    try {
+      T item = m_item_factory();
+      increase_active_items();
+      return item;
+    } catch (const std::runtime_error &err) {
+      // An initialization failure would raise this exception
+      return {};
+    }
   }
 
   void release(T ctx) {
@@ -93,17 +99,15 @@ class Pool {
 
       if (!m_teardown && m_items.size() < m_pool_size) {
         m_items.push_back(ctx);
-        m_item_availability.notify_one();
+        m_item_availability.notify_all();
         return;
       }
     }
 
-    m_active_items--;
-    m_teared_down.notify_one();
-    m_item_availability.notify_one();
     if (m_item_destructor) {
       m_item_destructor(ctx);
     }
+    decrease_active_items();
   }
 
   void teardown() {
@@ -116,15 +120,15 @@ class Pool {
       auto item = m_items.front();
       m_items.pop_front();
 
-      m_active_items--;
       if (m_item_destructor) {
         m_item_destructor(item);
       }
+      decrease_active_items();
     }
 
     // Waits until all the contexts created by the pool get released
     std::unique_lock<std::mutex> lock(m_mutex);
-    m_teared_down.wait(lock, [this]() { return m_active_items == 0; });
+    m_item_availability.wait(lock, [this]() { return m_active_items == 0; });
   }
 
   size_t active_items() const {
@@ -135,21 +139,34 @@ class Pool {
   /**
    * Discards the affected context and turns ON contention mode for the pool
    */
-  void on_memory_error(T ctx) {
-    std::scoped_lock lock(m_mutex);
-    m_contention_mode = true;
-
-    m_active_items--;
-    m_teared_down.notify_one();
-    m_item_availability.notify_one();
+  void on_resources_error(T ctx) {
     if (m_item_destructor) {
       m_item_destructor(ctx);
     }
+    decrease_active_items(true);
   }
 
  private:
+  void increase_active_items() {
+    {
+      std::scoped_lock lock(m_mutex);
+      m_active_items++;
+    }
+  }
+
+  void decrease_active_items(bool set_contention_mode = false) {
+    {
+      std::scoped_lock lock(m_mutex);
+      m_active_items--;
+
+      if (set_contention_mode) {
+        m_contention_mode = true;
+      }
+    }
+    m_item_availability.notify_all();
+  }
+
   std::mutex m_mutex;
-  std::condition_variable m_teared_down;
   std::condition_variable m_item_availability;
   bool m_teardown = false;
   size_t m_pool_size;

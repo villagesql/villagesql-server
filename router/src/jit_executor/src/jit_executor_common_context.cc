@@ -27,6 +27,7 @@
 
 #include <iostream>
 
+#include "include/my_thread.h"
 #include "jit_executor_javascript.h"
 #include "mysql/harness/logging/logging.h"
 #include "mysqlrouter/polyglot_file_system.h"
@@ -37,8 +38,7 @@ IMPORT_LOG_FUNCTIONS()
 
 namespace jit_executor {
 
-bool CommonContext::m_fatal_error = false;
-std::string CommonContext::m_fatal_error_description;
+bool CommonContext::m_global_fatal_error = false;
 
 CommonContext::CommonContext(
     const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
@@ -52,9 +52,16 @@ CommonContext::CommonContext(
 
 CommonContext::~CommonContext() {
   // We are done
+  {
+    std::scoped_lock lock(m_mutex);
+    m_terminated = true;
+  }
+
   m_finish_condition.notify_one();
-  m_life_cycle_thread->join();
-  m_life_cycle_thread.reset();
+  if (m_life_cycle_thread) {
+    m_life_cycle_thread->join();
+    m_life_cycle_thread.reset();
+  }
 }
 
 void CommonContext::fatal_error() {
@@ -65,7 +72,7 @@ void CommonContext::fatal_error() {
 
   // In our case, we simply set a flag indicating to log further attempts to use
   // JavaScript contexts
-  m_fatal_error = true;
+  m_global_fatal_error = true;
 }
 
 void CommonContext::flush() {}
@@ -139,8 +146,9 @@ bool CommonContext::start() {
 
   // Now waits for the destruction indication
   {
-    std::unique_lock<std::mutex> lock(m_init_mutex);
-    m_init_condition.wait(lock, [this]() { return m_initialized; });
+    std::unique_lock<std::mutex> lock(m_mutex);
+    m_init_condition.wait(lock,
+                          [this]() { return m_initialized || m_fatal_error; });
   }
 
   return !m_fatal_error;
@@ -155,23 +163,33 @@ bool CommonContext::start() {
  * above condition.
  */
 void CommonContext::life_cycle_thread() {
+  my_thread_self_setname("Jit-Common");
+  std::optional<std::string> init_error;
+
   try {
     initialize(m_isolate_args);
   } catch (const shcore::polyglot::Polyglot_generic_error &error) {
     // This error is not reported by graal but it is a fatal error!
-    m_fatal_error = true;
-    m_fatal_error_description = error.message();
+    init_error = error.message();
   }
 
-  m_initialized = true;
+  {
+    std::scoped_lock lock(m_mutex);
+    if (init_error.has_value()) {
+      m_fatal_error = true;
+      m_fatal_error_description = *init_error;
+    } else {
+      m_initialized = true;
+    }
+  }
 
   // Tell the constructor we are done
   m_init_condition.notify_one();
 
   // Now waits for the finalization indication
   {
-    std::unique_lock<std::mutex> lock(m_finish_mutex);
-    m_finish_condition.wait(lock);
+    std::unique_lock<std::mutex> lock(m_mutex);
+    m_finish_condition.wait(lock, [this]() { return m_terminated; });
   }
 
   finalize();

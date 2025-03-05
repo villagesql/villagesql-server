@@ -40,6 +40,7 @@
 #include "native_wrappers/polyglot_file_system_wrapper.h"
 #include "utils/polyglot_error.h"
 #include "utils/polyglot_scope.h"
+#include "utils/utils_general.h"
 #include "utils/utils_path.h"
 #include "utils/utils_string.h"
 
@@ -201,19 +202,16 @@ void Polyglot_language::finalize() {
   m_globals.reset();
   m_types->dispose();
 
+  shcore::Scoped_callback cleanup{[this]() {
+    m_context.reset();
+    m_storage->clear();
+    m_scope->close();
+  }};
+
   if (const auto rc = poly_context_close(thread(), context(), true);
       rc != poly_ok) {
-    log_error("polyglot error while closing the context: %s",
-              Polyglot_error(thread(), rc).format().c_str());
+    throw Polyglot_error(thread(), rc);
   }
-
-  m_context.reset();
-
-  m_storage->clear();
-  m_scope->close();
-
-  m_common_context->garbage_collector().notify(
-      Garbage_collector::Event::TERMINATED_LANGUAGE);
 
   m_common_context->clean_collectables();
 }
@@ -237,9 +235,6 @@ int64_t Polyglot_language::eval(const std::string &source,
       poly_context_eval(thread(), context(), get_language_id(),
                         source.empty() ? k_origin_shell : source.c_str(),
                         code_str.c_str(), result);
-
-  m_common_context->garbage_collector().notify(
-      Garbage_collector::Event::EXECUTED_STATEMENT);
 
   return ret_val;
 }

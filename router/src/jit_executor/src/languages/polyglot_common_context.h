@@ -66,15 +66,13 @@ class Polyglot_common_context {
   poly_isolate isolate() const { return m_isolate; }
   poly_thread thread() const { return m_thread; }
 
-  Garbage_collector &garbage_collector() { return m_garbage_collector; }
-
   void clean_collectables();
 
   Collectable_registry *collectable_registry() { return &m_registry; }
 
  protected:
-  poly_isolate m_isolate;
-  poly_thread m_thread;
+  poly_isolate m_isolate = nullptr;
+  poly_thread m_thread = nullptr;
 
  private:
   void init_engine();
@@ -89,7 +87,6 @@ class Polyglot_common_context {
 
   Store m_engine;
   std::unique_ptr<Polyglot_scope> m_scope;
-  Garbage_collector m_garbage_collector;
   Collectable_registry m_registry;
 };
 

@@ -30,6 +30,10 @@
 #include <string>
 #include <unordered_map>
 
+#ifdef HAVE_JIT_EXECUTOR_PLUGIN
+#include <mutex>
+#endif
+
 #include "mrs/database/entry/db_service.h"
 #include "mrs/endpoint/option_endpoint.h"
 #include "mrs/interface/handler_factory.h"
@@ -100,6 +104,7 @@ class DbServiceEndpoint : public OptionEndpoint {
   std::shared_ptr<file_system::DbServiceFileSystem> file_system_;
   std::optional<std::vector<std::string>> content_set_scripts_;
   std::unordered_map<std::string, std::string> content_set_paths_;
+  std::mutex m_scripting_context_mutex;
 #endif
 };
 

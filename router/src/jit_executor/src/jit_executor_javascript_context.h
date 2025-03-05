@@ -53,7 +53,9 @@ class JavaScriptContext : public IContext {
                       ResultType result_type,
                       const GlobalCallbacks &global_callbacks) override;
 
-  bool got_memory_error() const override;
+  bool got_resources_error() const override;
+
+  bool got_initialization_error() const;
 
  private:
   std::shared_ptr<JavaScript> m_language;
