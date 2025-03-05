@@ -3241,8 +3241,15 @@ int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
       {
         Field *field= key_part->field= outparam->field[key_part->fieldnr-1];
 
+        /*
+          For spatial indexes, the key parts are assigned the length (4 *
+          sizeof(double)) in mysql_prepare_create_table() and the
+          field->key_length() is set to 0. This makes it appear like a prefixed
+          index. However, prefixed indexes are not allowed on Geometric columns.
+          Hence skipping new field creation for Geometric columns.
+        */
         if (field->key_length() != key_part->length &&
-            !(field->flags & BLOB_FLAG))
+            field->type() != MYSQL_TYPE_GEOMETRY)
         {
           /*
             We are using only a prefix of the column as a key:
