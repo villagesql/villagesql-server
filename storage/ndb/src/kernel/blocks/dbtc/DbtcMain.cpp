@@ -1,4 +1,4 @@
-/* Copyright (c) 2003, 2024, Oracle and/or its affiliates.
+/* Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1219,6 +1219,7 @@ void Dbtc::execAPI_FAILREQ(Signal* signal)
    **************************************************************************/
   jamEntry();  
 
+  const Uint32 apiNodeId = signal->theData[0];
   if (ERROR_INSERTED(8056))
   {
     CLEAR_ERROR_INSERT_VALUE;
@@ -1227,15 +1228,16 @@ void Dbtc::execAPI_FAILREQ(Signal* signal)
 #ifdef ERROR_INSERT
   if (ERROR_INSERTED(8078))
   {
-    c_lastFailedApi = signal->theData[0];
+    c_lastFailedApi = apiNodeId;
     SET_ERROR_INSERT_VALUE(8079);
   }
 #endif
 
   capiFailRef = signal->theData[1];
-  arrGuard(signal->theData[0], MAX_NODES);
-  capiConnectClosing[signal->theData[0]] = 1;
-  handleFailedApiNode(signal, signal->theData[0], (UintR)0);
+
+  arrGuard(apiNodeId, MAX_NODES);
+  capiConnectClosing[apiNodeId] = 1;
+  handleFailedApiNode(signal, apiNodeId, (UintR)0);
 }
 
 /**
@@ -1425,8 +1427,13 @@ Dbtc::handleFailedApiNode(Signal* signal,
 {
   UintR TloopCount = 0;
   arrGuard(TapiFailedNode, MAX_NODES);
+  hostptr.i = TapiFailedNode;
+  ptrCheckGuard(hostptr, chostFilesize, hostRecord);
+  /* Mark progress */
+  hostptr.p->m_af_state = HostRecord::AF_CHECK_TRANS;
   apiConnectptr.i = TapiConnectPtr;
-  do {
+  while (TloopCount++ <= 256 && !ERROR_INSERTED(8125))
+  {
     ptrCheckGuard(apiConnectptr, capiConnectFilesize, apiConnectRecord);
     const UintR TapiNode = refToNode(apiConnectptr.p->ndbapiBlockref);
     if (TapiNode == TapiFailedNode)
@@ -1456,7 +1463,7 @@ Dbtc::handleFailedApiNode(Signal* signal,
       removeMarkerForFailedAPI(signal, TapiFailedNode, 0);
       return;
     }//if
-  } while (TloopCount++ < 256);
+  }
   signal->theData[0] = TcContinueB::ZHANDLE_FAILED_API_NODE;
   signal->theData[1] = TapiFailedNode;
   signal->theData[2] = apiConnectptr.i;
@@ -1471,8 +1478,16 @@ Dbtc::removeMarkerForFailedAPI(Signal* signal,
   TcFailRecordPtr node_fail_ptr;
   node_fail_ptr.i = 0;
   ptrAss(node_fail_ptr, tcFailRecord);
-  if(node_fail_ptr.p->failStatus != FS_IDLE) {
+  HostRecordPtr myHostPtr;
+  myHostPtr.i = nodeId;
+  ptrCheckGuard(myHostPtr, chostFilesize, hostRecord);
+  /* Mark progress */
+  myHostPtr.p->m_af_state = HostRecord::AF_CHECK_MARKERS;
+
+  if(node_fail_ptr.p->failStatus != FS_IDLE || ERROR_INSERTED(8126)) {
     jam();
+    /* Mark progress */
+    myHostPtr.p->m_af_state = HostRecord::AF_CHECK_MARKERS_WAIT_TC_TAKEOVER;
     DEBUG("Restarting removeMarkerForFailedAPI");
     /**
      * TC take-over in progress
@@ -1501,6 +1516,8 @@ Dbtc::removeMarkerForFailedAPI(Signal* signal,
       capiConnectClosing[nodeId]--;
       if (capiConnectClosing[nodeId] == 0) {
         jam();
+        /* Mark progress */
+        myHostPtr.p->m_af_state = HostRecord::AF_IDLE;
 
         /********************************************************************/
         // No outstanding ABORT or COMMIT's of this failed API node. 
@@ -1538,6 +1555,9 @@ Dbtc::removeMarkerForFailedAPI(Signal* signal,
          *
          * Don't remove it, but continueb retry with a short delay
          */
+        /* Mark progress */
+        myHostPtr.p->m_af_state = HostRecord::AF_CHECK_MARKERS_WAIT_TRANS;
+
         signal->theData[0] = TcContinueB::ZHANDLE_FAILED_API_NODE_REMOVE_MARKERS;
         signal->theData[1] = nodeId;
         signal->theData[2] = iter.bucket;
@@ -1587,6 +1607,11 @@ void Dbtc::handleApiFailState(Signal* signal, UintR TapiConnectptr)
     if (capiConnectClosing[TfailedApiNode] == 0)
     {
       jam();
+
+      /* Mark progress */
+      hostptr.i = TfailedApiNode;
+      ptrCheckGuard(hostptr, chostFilesize, hostRecord);
+      hostptr.p->m_af_state = HostRecord::AF_IDLE;
 
       /**
        * Perform block-level cleanups (e.g assembleFragments...)
@@ -15343,6 +15368,7 @@ void Dbtc::inithost(Signal* signal)
       container->noOfPackedWords = 0;
       container->hostBlockRef = numberToRef(DBLQH, i, hostptr.i);
     }
+    hostptr.p->m_af_state = HostRecord::AF_IDLE;
     hostptr.p->m_nf_bits = 0;
   }//for
   c_alive_nodes.clear();
@@ -16617,7 +16643,7 @@ Dbtc::execDUMP_STATE_ORD(Signal* signal)
     if (len + 2 > 25)
     {
       jam();
-      infoEvent("Too long filter");
+      infoEvent("DBTC %u: Too long filter", instance());
       return;
     }
     if (validate_filter(signal))
@@ -16628,7 +16654,7 @@ Dbtc::execDUMP_STATE_ORD(Signal* signal)
       signal->theData[1] = 0;    // record
       sendSignal(reference(), GSN_DUMP_STATE_ORD, signal, len + 2, JBB);
       
-      infoEvent("Starting dump of transactions");
+      infoEvent("DBTC %u: Starting dump of transactions", instance());
     }
     return;
   }
@@ -16663,7 +16689,7 @@ Dbtc::execDUMP_STATE_ORD(Signal* signal)
     if (ap.i == capiConnectFilesize)
     {
       jam();
-      infoEvent("End of transaction dump");
+      infoEvent("DBTC %u: End of transaction dump", instance());
       return;
     }
     
@@ -16695,12 +16721,30 @@ Dbtc::execDUMP_STATE_ORD(Signal* signal)
     NodeId nodeId = signal->theData[1];
     if (nodeId < MAX_NODES && nodeId < NDB_ARRAY_SIZE(capiConnectClosing))
     {
-      warningEvent(" DBTC: capiConnectClosing[%u]: %u",
-                   nodeId, capiConnectClosing[nodeId]);
+      if (getNodeInfo(nodeId).getType() == NODE_TYPE_API) {
+        jam();
+        hostptr.i = nodeId;
+        ptrCheckGuard(hostptr, chostFilesize, hostRecord);
+        warningEvent(" DBTC %u: capiConnectClosing[%u]: %u", instance(), nodeId,
+                     capiConnectClosing[nodeId]);
+        warningEvent(" DBTC %u: apiFailState[%u]: %u", instance(), nodeId,
+                     hostptr.p->m_af_state);
+
+        if (capiConnectClosing[nodeId] > 0) {
+          jam();
+          /* Dump all transactions with given nodeid as client */
+          signal->theData[0] = 2550;
+          signal->theData[1] = 1;
+          signal->theData[2] = nodeId;
+          sendSignal(reference(), GSN_DUMP_STATE_ORD, signal, 3, JBB);
+        }
+      }
+      // Could add more info for Data node failure handling delay
     }
     else
     {
-      warningEvent(" DBTC: dump-%u to unknown node: %u", arg, nodeId);
+      warningEvent(" DBTC %u: dump-%u to unknown node: %u", instance(), arg,
+                   nodeId);
     }
   }
 
@@ -17268,19 +17312,18 @@ Dbtc::match_and_print(Signal* signal, ApiConnectRecordPtr apiPtr)
     break;
   }
 
-  char buf[100];
-  BaseString::snprintf(buf, sizeof(buf),
-		       "TRX[%u]: API: %d(0x%x)"
-		       "transid: 0x%x 0x%x inactive: %u(%d) state: %s",
-		       apiPtr.i,
-		       refToNode(apiPtr.p->ndbapiBlockref),
-		       refToBlock(apiPtr.p->ndbapiBlockref),
-		       apiPtr.p->transid[0],
-		       apiPtr.p->transid[1],
-		       apiTimer ? (ctcTimer - apiTimer) / 100 : 0,
-		       c_apiConTimer_line[apiPtr.i],
-		       stateptr);
+  char buf[150];
+  BaseString::snprintf(
+      buf, sizeof(buf),
+      "DBTC %u TRX[%u] API %d(0x%x)"
+      "trid 0x%x 0x%x inact %u(%d) state %s nodes %s",
+      instance(), apiPtr.i, refToNode(apiPtr.p->ndbapiBlockref),
+      refToBlock(apiPtr.p->ndbapiBlockref), apiPtr.p->transid[0],
+      apiPtr.p->transid[1], apiTimer ? (ctcTimer - apiTimer) / 100 : 0,
+      c_apiConTimer_line[apiPtr.i], stateptr,
+      BaseString::getPrettyText(apiPtr.p->m_transaction_nodes).c_str());
   infoEvent("%s", buf);
+  g_eventLogger->info("%s", buf);
   
   memcpy(signal->theData, temp, 4*len);
   return true;

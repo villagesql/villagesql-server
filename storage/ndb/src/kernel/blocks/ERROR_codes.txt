@@ -1,4 +1,4 @@
-# Copyright (c) 2003, 2024, Oracle and/or its affiliates.
+# Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -29,7 +29,7 @@ Next DBTUP 4040
 Next DBLQH 5113
 Next DBDICT 6227
 Next DBDIH 7251
-Next DBTC 8125
+Next DBTC 8127
 Next TRPMAN 9007
 Next CMVMI 9993              Note: CMVMI grows downwards
 Next BACKUP 10057
