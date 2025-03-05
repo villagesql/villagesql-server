@@ -50,6 +50,7 @@ class LqhTransConf {
 
  public:
   static constexpr Uint32 SignalLength = 18;
+  static constexpr Uint32 MarkerSignalLength = 7;
 
   /**
    * Upgrade
