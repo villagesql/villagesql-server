@@ -41,7 +41,12 @@ ContextPool::ContextPool(size_t size, CommonContext *common_context)
   m_pool = std::make_unique<Pool<IContext *>>(
       size,
       [this]() -> JavaScriptContext * {
-        return std::make_unique<JavaScriptContext>(m_common_context).release();
+        auto context = std::make_unique<JavaScriptContext>(m_common_context);
+        if (context->got_initialization_error()) {
+          return nullptr;
+        }
+
+        return context.release();
       },
       [](IContext *ctx) { delete ctx; });
 }
@@ -59,8 +64,8 @@ std::shared_ptr<PooledContextHandle> ContextPool::get_context() {
 }
 
 void ContextPool::release(IContext *ctx) {
-  if (ctx->got_memory_error()) {
-    m_pool->on_memory_error(ctx);
+  if (ctx->got_resources_error()) {
+    m_pool->on_resources_error(ctx);
   } else {
     m_pool->release(ctx);
   }

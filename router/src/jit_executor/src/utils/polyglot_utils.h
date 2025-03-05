@@ -188,18 +188,20 @@ static poly_value polyglot_handler_fixed_args(poly_thread thread,
   std::vector<poly_value> argv;
   void *data = nullptr;
   poly_value value = nullptr;
-  if (get_args_and_data(thread, args, Config::name, &data, Config::argc,
-                        &argv)) {
-    assert(data);
-    const auto instance = static_cast<Target *>(data);
-    const auto language = instance->language();
-    try {
-      value = (instance->*Config::callback)(argv);
-    } catch (const Polyglot_error &exc) {
-      language->throw_exception_object(exc);
-    } catch (const std::exception &e) {
-      throw_callback_exception(thread, e.what());
+  try {
+    if (get_args_and_data(thread, args, Config::name, &data, Config::argc,
+                          &argv)) {
+      assert(data);
+      const auto instance = static_cast<Target *>(data);
+      const auto language = instance->language();
+      try {
+        value = (instance->*Config::callback)(argv);
+      } catch (const Polyglot_error &exc) {
+        language->throw_exception_object(exc);
+      }
     }
+  } catch (const std::exception &e) {
+    throw_callback_exception(thread, e.what());
   }
   return value;
 }
@@ -217,19 +219,21 @@ static poly_value native_handler_fixed_args(poly_thread thread,
   std::vector<poly_value> argv;
   void *data = nullptr;
   poly_value value = nullptr;
-  if (get_args_and_data(thread, args, Config::name, &data, Config::argc,
-                        &argv)) {
-    assert(data);
-    const auto instance = static_cast<Target *>(data);
-    const auto language = instance->language();
-    try {
-      value = language->convert(
-          (instance->*Config::callback)(language->convert_args(argv)));
-    } catch (const Polyglot_error &exc) {
-      language->throw_exception_object(exc);
-    } catch (const std::exception &e) {
-      throw_callback_exception(thread, e.what());
+  try {
+    if (get_args_and_data(thread, args, Config::name, &data, Config::argc,
+                          &argv)) {
+      assert(data);
+      const auto instance = static_cast<Target *>(data);
+      const auto language = instance->language();
+      try {
+        value = language->convert(
+            (instance->*Config::callback)(language->convert_args(argv)));
+      } catch (const Polyglot_error &exc) {
+        language->throw_exception_object(exc);
+      }
     }
+  } catch (const std::exception &e) {
+    throw_callback_exception(thread, e.what());
   }
   return value;
 }

@@ -52,7 +52,7 @@ class ServiceHandlers : public IServiceHandlers {
 
   void release_debug_context() override;
 
-  void init() override;
+  bool init() override;
   void teardown() override;
 
   std::chrono::seconds idle_time() const override;

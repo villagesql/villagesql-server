@@ -32,6 +32,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "include/my_thread.h"
@@ -55,7 +56,7 @@ using shcore::polyglot::Date;
 using Value_type = shcore::Value_type;
 using Scoped_global = shcore::polyglot::Scoped_global;
 
-void JavaScript::create_result(const Value &result, const std::string &status) {
+void JavaScript::create_result(const Value &result, ProcessingState state) {
   // If it is a native object, it could well be a wrapper for an language
   // exception, so it is thrown, processed and handled as such
   if (result.get_type() == Value_type::Object) {
@@ -73,26 +74,25 @@ void JavaScript::create_result(const Value &result, const std::string &status) {
     shcore::JSON_dumper dumper;
     dumper.start_object();
     dumper.append_string("status");
-    dumper.append_string(status);
+    if (state == ProcessingState::Ok) {
+      dumper.append_string("ok");
+    } else {
+      dumper.append_string("error");
+    }
     dumper.append_value("result", result);
     dumper.end_object();
 
-    std::lock_guard lock(m_result_mutex);
-    m_result = dumper.str();
+    m_result.push({state, dumper.str()});
   } else {
-    std::lock_guard lock(m_result_mutex);
-    m_result = result.descr(true);
+    m_result.push({state, result.descr(true)});
   }
-  m_result_condition.notify_one();
 }
 
 void JavaScript::create_result(const Polyglot_error &error) {
   std::string result;
-  if (shcore::str_beginswith(error.message(),
-                             "Garbage-collected heap size exceeded")) {
-    m_memory_error = true;
-  } else {
-    m_is_error = true;
+  auto state = ProcessingState::Error;
+  if (error.is_resource_exhausted()) {
+    state = ProcessingState::ResourceExhausted;
   }
   if (m_result_type == ResultType::Json) {
     shcore::JSON_dumper dumper;
@@ -134,37 +134,38 @@ void JavaScript::create_result(const Polyglot_error &error) {
 
     dumper.end_object();
 
-    std::lock_guard lock(m_result_mutex);
-    m_result = dumper.str();
+    if (state == ProcessingState::ResourceExhausted) {
+      stop_run_thread();
+    }
+    m_result.push({state, dumper.str()});
   } else {
-    std::lock_guard lock(m_result_mutex);
-    m_result = error.format(true);
+    if (state == ProcessingState::ResourceExhausted) {
+      stop_run_thread();
+    }
+    m_result.push({state, error.format(true)});
   }
-  m_result_condition.notify_one();
 }
 
 void JavaScript::start(const std::shared_ptr<IFile_system> &fs,
                        const Dictionary_t &predefined_globals) {
   m_file_system = fs;
   m_predefined_globals = predefined_globals;
-  m_execution_thread = std::thread(&JavaScript::run, this);
-  std::unique_lock<std::mutex> lock(m_process_mutex);
-  m_process_condition.wait(lock, [this]() {
-    return m_initialized || !m_initialization_error.empty();
-  });
+  m_execution_thread = std::make_unique<std::thread>(&JavaScript::run, this);
+  std::unique_lock<std::mutex> lock(m_init_mutex);
+  m_init_condition.wait(lock, [this]() { return m_init_error.has_value(); });
+}
 
-  if (!m_initialization_error.empty()) {
-    throw std::runtime_error(m_initialization_error);
-  }
+void JavaScript::stop_run_thread() {
+  // Pushes an empty code to indicate the running thread it should exit
+  m_code.push({});
 }
 
 void JavaScript::stop() {
-  {
-    std::lock_guard lock(m_process_mutex);
-    m_done = true;
+  stop_run_thread();
+  if (m_execution_thread) {
+    m_execution_thread->join();
+    m_execution_thread.reset();
   }
-  m_process_condition.notify_one();
-  m_execution_thread.join();
 }
 
 int64_t JavaScript::eval(poly_reference source, poly_value *result) const {
@@ -188,11 +189,22 @@ poly_value JavaScript::create_source(const std::string &source,
   return poly_source;
 }
 
+void JavaScript::set_initialized(const std::string &error) {
+  {
+    std::scoped_lock lock(m_init_mutex);
+    m_init_error = error;
+  }
+
+  m_init_condition.notify_one();
+}
+
 void JavaScript::run() {
-  my_thread_self_setname("JitExecutor-Proc");
+  my_thread_self_setname("Jit-Run");
+  bool initialized = false;
+  std::string init_error;
   try {
     initialize(m_file_system);
-    m_initialized = true;
+    initialized = true;
 
     if (m_predefined_globals) {
       for (const auto &it : (*m_predefined_globals)) {
@@ -235,27 +247,40 @@ void JavaScript::run() {
       throw Polyglot_error(thread(), rc);
     }
   } catch (const Polyglot_error &err) {
-    m_done = true;
-    m_initialization_error = err.format(true);
+    init_error = "Error initializing JavaScript context: " + err.format(true);
   }
 
-  m_process_condition.notify_one();
+  shcore::Scoped_callback terminate([this, &initialized]() {
+    if (initialized) {
+      try {
+        finalize();
+      } catch (const std::exception &error) {
+        log_error("Error finalizing JavaScript context: %s", error.what());
+      }
+    }
+  });
 
-  while (!m_done) {
-    std::unique_lock<std::mutex> lock(m_process_mutex);
-    m_process_condition.wait(lock,
-                             [this]() { return m_code.has_value() || m_done; });
+  // Initialization finished!
+  set_initialized(init_error);
 
-    if (m_done) {
-      continue;
+  if (!init_error.empty()) {
+    return;
+  }
+
+  while (true) {
+    auto entry = m_code.pop();
+
+    if (!std::holds_alternative<Code>(entry)) {
+      break;
     }
 
-    m_result.reset();
+    const auto &code = std::get<Code>(entry);
+
     poly_value result = nullptr;
 
     try {
       if (const auto rc =
-              Java_script_interface::eval("(internal)", *m_code, &result);
+              Java_script_interface::eval("(internal)", code.source, &result);
           rc != poly_ok) {
         throw Polyglot_error(thread(), rc);
       }
@@ -271,14 +296,8 @@ void JavaScript::run() {
     } catch (const Polyglot_error &error) {
       create_result(error);
     } catch (const std::exception &error) {
-      create_result(Value(error.what()), "error");
+      create_result(Value(error.what()), ProcessingState::Error);
     }
-
-    m_code.reset();
-  }
-
-  if (m_initialized) {
-    finalize();
   }
 }
 
@@ -429,16 +448,8 @@ std::string JavaScript::execute(const std::string &code, int timeout,
 
   auto ms_timeout = std::chrono::milliseconds{timeout};
 
-  // Ensures a clean result...
-  m_result.reset();
-  m_is_error = false;
-
-  {
-    m_global_callbacks = &global_callbacks;
-    std::lock_guard lock(m_process_mutex);
-    m_result_type = result_type;
-    m_code = code;
-  }
+  m_global_callbacks = &global_callbacks;
+  m_code.push(Code{code, result_type});
 
   shcore::Scoped_callback clean_resources([this]() {
     if (m_session) {
@@ -448,41 +459,56 @@ std::string JavaScript::execute(const std::string &code, int timeout,
     m_global_callbacks = nullptr;
   });
 
-  m_process_condition.notify_one();
+  Result result;
+  if (!m_debug_port.empty()) {
+    // We don't want timeouts when debugging...
+    result = m_result.pop();
+  } else {
+    m_result.try_pop(result, ms_timeout);
+  }
 
-  {
-    std::unique_lock<std::mutex> lock(m_result_mutex);
-
-    if (!m_debug_port.empty()) {
-      m_result_condition.wait(lock, [this]() { return m_result.has_value(); });
-      if (m_memory_error) {
-        throw MemoryError(*m_result);
-      } else if (m_is_error) {
-        throw std::runtime_error(*m_result);
-      }
-      return *m_result;
-    } else {
-      if (m_result_condition.wait_for(
-              lock, ms_timeout, [this]() { return m_result.has_value(); })) {
-        if (m_memory_error) {
-          throw MemoryError(*m_result);
-        } else if (m_is_error) {
-          throw std::runtime_error(*m_result);
-        }
-        return *m_result;
-      }
+  if (result.state.has_value()) {
+    switch (*result.state) {
+      case ProcessingState::Ok:
+        return *result.data;
+      case ProcessingState::Error:
+        throw std::runtime_error(*result.data);
+      case ProcessingState::ResourceExhausted:
+        m_got_resources_error = true;
+        throw MemoryError(*result.data);
     }
   }
 
-  // Timeout ocurred, the termination logic should be executed
+  // This logic is reached if a Timeout occurred, the time out handling
+  // includes:
+  // - Calling the interrupt callback which may release resources being used
+  // during the code execution.
+  // - calling terminate() which will tell the JavaScript context to terminate
+  // any code in execution.
+
+  // NOTE that at this point, there's still a result pending and the actions
+  // listed above will make that result to come up, most probably with an error,
+  // which will be simply ignored as we will raise Time-Out error for the
+  // client.
   if (global_callbacks.interrupt) {
     global_callbacks.interrupt();
   }
-  terminate();
 
-  // Now we wait for the termination to be complete
-  std::unique_lock<std::mutex> lock(m_result_mutex);
-  m_result_condition.wait(lock, [this]() { return m_result.has_value(); });
+  // We will wait for the result, unless the context is in an invalid state
+  // (i.e. OOM) which will cause the terminate() call to fail.
+  bool wait_for_termination = true;
+  try {
+    terminate();
+  } catch (const std::exception &error) {
+    // To be ignored, TimeOut error will be raised below
+    wait_for_termination = false;
+  }
+
+  // If all ok, we wait for the pending result to ensure this context is in the
+  // correct state before being released
+  if (wait_for_termination) {
+    m_result.pop();
+  }
 
   throw TimeoutError("Timeout");
 }
@@ -505,7 +531,7 @@ poly_value JavaScript::synch_return(const std::vector<poly_value> &args) {
     } catch (const Polyglot_error &error) {
       create_result(error);
     } catch (const std::exception &error) {
-      create_result(Value(error.what()), "error");
+      create_result(Value(error.what()), ProcessingState::Error);
     }
   }
 
@@ -514,11 +540,11 @@ poly_value JavaScript::synch_return(const std::vector<poly_value> &args) {
 
 poly_value JavaScript::synch_error(const std::vector<poly_value> &args) {
   try {
-    create_result(convert(args[0]), "error");
+    create_result(convert(args[0]), ProcessingState::Error);
   } catch (const Polyglot_error &error) {
     create_result(error);
   } catch (const std::exception &error) {
-    create_result(Value(error.what()), "error");
+    create_result(Value(error.what()), ProcessingState::Error);
   }
 
   return nullptr;
@@ -535,57 +561,42 @@ void JavaScript::resolve_promise(poly_value promise) {
 }
 
 shcore::Value JavaScript::get_session(const std::vector<shcore::Value> &args) {
-  assert(m_global_callbacks->get_session);
-
-  std::lock_guard lock(m_result_mutex);
-  try {
-    bool read_only = true;
-    if (args.size() > 1) {
-      throw std::runtime_error(shcore::str_format(
-          "getSession(bool readOnly) takes up to 1 argument"));
-    } else if (!args.empty()) {
-      read_only = args[0].as_bool();
-    }
-
-    return shcore::Value(std::make_shared<shcore::polyglot::Session>(
-        m_global_callbacks->get_session(read_only)));
-
-  } catch (const Polyglot_error &error) {
-    create_result(error);
-  } catch (const std::exception &error) {
-    create_result(Value(error.what()), "error");
+  if (!m_global_callbacks) {
+    throw std::runtime_error("Missing callbacks...");
   }
-  m_result_condition.notify_one();
 
-  return shcore::Value();
+  bool read_only = true;
+  if (args.size() > 1) {
+    throw std::runtime_error(
+        shcore::str_format("getSession(bool readOnly) takes up to 1 argument"));
+  } else if (!args.empty()) {
+    read_only = args[0].as_bool();
+  }
+
+  return shcore::Value(std::make_shared<shcore::polyglot::Session>(
+      m_global_callbacks->get_session(read_only)));
 }
 
 poly_value JavaScript::get_current_mrs_user_id() {
-  assert(m_global_callbacks->get_current_mrs_user_id);
-
-  std::lock_guard lock(m_result_mutex);
-  try {
-    std::optional<std::string> user_id;
-    user_id = m_global_callbacks->get_current_mrs_user_id();
-
-    if (user_id.has_value()) {
-      return convert(Value(*user_id));
-    } else {
-      return undefined();
-    }
-  } catch (const Polyglot_error &error) {
-    create_result(error);
-  } catch (const std::exception &error) {
-    create_result(Value(error.what()), "error");
+  if (!m_global_callbacks) {
+    throw std::runtime_error("Missing callbacks...");
   }
-  m_result_condition.notify_one();
 
-  return nullptr;
+  std::optional<std::string> user_id;
+  user_id = m_global_callbacks->get_current_mrs_user_id();
+
+  if (user_id.has_value()) {
+    return convert(Value(*user_id));
+  } else {
+    return undefined();
+  }
 }
 
 shcore::Value JavaScript::get_content_set_path(
     const std::vector<shcore::Value> &args) {
-  assert(m_global_callbacks->get_content_set_path);
+  if (!m_global_callbacks) {
+    throw std::runtime_error("Missing callbacks...");
+  }
 
   return shcore::Value(
       m_global_callbacks->get_content_set_path(args[0].as_string()));

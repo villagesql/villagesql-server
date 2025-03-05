@@ -354,9 +354,10 @@ HttpResult HandlerDbObjectScript::handle_script(
       return response;
     } catch (const jit_executor::TimeoutError &) {
       throw http::Error(HttpStatusCode::RequestTimeout);
-    } catch (const jit_executor::MemoryError &) {
+    } catch (const jit_executor::MemoryError &error) {
+      log_debug("%s", error.what());
       // NO-OP: a retry will be done
-    } catch (const std::runtime_error &error) {
+    } catch (const std::exception &error) {
       throw http::Error(HttpStatusCode::InternalError, error.what());
     }
   }

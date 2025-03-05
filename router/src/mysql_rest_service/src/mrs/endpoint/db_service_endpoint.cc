@@ -160,6 +160,7 @@ std::optional<uint64_t> get_pool_size(const std::string &options) {
 
 std::shared_ptr<jit_executor::IContextHandle>
 DbServiceEndpoint::get_scripting_context() {
+  std::scoped_lock lock(m_scripting_context_mutex);
   auto &instance = jit_executor::JitExecutorComponent::get_instance();
   const auto id = get()->id.to_string();
 

@@ -110,6 +110,9 @@ void JitExecutorComponent::update_active_contexts(
   std::unordered_map<std::string, std::shared_ptr<IServiceHandlers>>
       all_context_handlers = std::move(m_service_context_handlers);
 
+  std::unordered_map<std::string, std::shared_ptr<IServiceHandlers>>
+      candidate_context_handlers;
+
   uint64_t total_pool = 0;
   for (const auto &it : all_context_handlers) {
     // Adds the existing context handler to be discarded
@@ -127,7 +130,7 @@ void JitExecutorComponent::update_active_contexts(
       // Creates a new handler from the existing one
       auto source_handler =
           std::dynamic_pointer_cast<ServiceHandlers>(it.second);
-      m_service_context_handlers.emplace(
+      candidate_context_handlers.emplace(
           it.first, std::make_shared<ServiceHandlers>(*source_handler.get()));
     }
   }
@@ -139,20 +142,22 @@ void JitExecutorComponent::update_active_contexts(
 
     total_pool += replacement.second->pool_size();
 
-    m_service_context_handlers.emplace(std::move(replacement));
+    candidate_context_handlers.emplace(std::move(replacement));
   }
 
   // Now updates the memory limit for each active handler and starts it
   if (m_global_config.maximum_ram_size.has_value()) {
     uint64_t mem_per_pool_item = *m_global_config.maximum_ram_size / total_pool;
 
-    for (const auto &it : m_service_context_handlers) {
+    for (const auto &it : candidate_context_handlers) {
       it.second->set_max_heap_size(mem_per_pool_item * it.second->pool_size());
     }
   }
 
-  for (const auto &it : m_service_context_handlers) {
-    it.second->init();
+  for (const auto &it : candidate_context_handlers) {
+    if (it.second->init()) {
+      m_service_context_handlers.emplace(it.first, it.second);
+    }
   }
 }
 
@@ -168,11 +173,14 @@ std::shared_ptr<IContextHandle> JitExecutorComponent::get_context(
         update_active_contexts(
             {service_id, std::make_shared<ServiceHandlers>(config)});
 
-        return m_service_context_handlers.at(service_id)
-            ->get_context(debug_port);
+        it = m_service_context_handlers.find(service_id);
       }
 
-      return it->second->get_context(debug_port);
+      if (it != m_service_context_handlers.end()) {
+        return it->second->get_context(debug_port);
+      } else {
+        throw std::runtime_error("error to go below..., needed?");
+      }
     } catch (const std::runtime_error &) {
       // If failed to create a context, then let's try re-creating the whole
       // pool, if this failed on a brand new pool, then there's nothing else to

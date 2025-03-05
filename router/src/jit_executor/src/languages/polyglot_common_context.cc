@@ -78,8 +78,6 @@ void Polyglot_common_context::initialize(
     }
   }
 
-  m_garbage_collector.start(gc_config(), m_isolate);
-
   m_scope = std::make_unique<Polyglot_scope>(m_thread);
 
   if (const auto rc = poly_register_log_handler_callbacks(
@@ -101,12 +99,12 @@ void Polyglot_common_context::finalize() {
 
   m_scope.reset();
 
-  m_garbage_collector.stop();
-
-  if (const auto rc = poly_detach_all_threads_and_tear_down_isolate(m_thread);
-      rc != poly_ok) {
-    std::string error{"polyglot error while tearing down the isolate"};
-    log(error.data(), error.size());
+  if (m_isolate && m_thread) {
+    if (const auto rc = poly_detach_all_threads_and_tear_down_isolate(m_thread);
+        rc != poly_ok) {
+      std::string error{"polyglot error while tearing down the isolate"};
+      log(error.data(), error.size());
+    }
   }
 
   clean_collectables();

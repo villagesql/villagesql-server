@@ -92,17 +92,19 @@ class CommonContext : public shcore::polyglot::Polyglot_common_context {
   shcore::Dictionary_t m_globals;
 
   std::unique_ptr<std::thread> m_life_cycle_thread;
-  std::mutex m_init_mutex;
+  std::mutex m_mutex;
   std::condition_variable m_init_condition;
 
   bool m_initialized = false;
+  bool m_terminated = false;
 
   std::mutex m_finish_mutex;
   std::condition_variable m_finish_condition;
 
   // Global fatal error flag to indicate when the VM was ended
-  static bool m_fatal_error;
-  static std::string m_fatal_error_description;
+  static bool m_global_fatal_error;
+  bool m_fatal_error;
+  std::string m_fatal_error_description;
   std::vector<std::string> m_isolate_args;
 };
 

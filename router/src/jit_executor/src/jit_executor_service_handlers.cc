@@ -40,21 +40,23 @@ ServiceHandlers::ServiceHandlers(const ServiceHandlerConfig &config)
 ServiceHandlers::ServiceHandlers(const ServiceHandlers &other)
     : ServiceHandlers(other.m_config) {}
 
-void ServiceHandlers::init() {
+bool ServiceHandlers::init() {
   init_common_context();
 
   if (m_common_context->start()) {
     m_context_pool =
         std::make_shared<ContextPool>(pool_size(), m_common_context.get());
-  } else {
-    throw std::runtime_error(m_common_context->error());
+
+    return true;
   }
+
+  return false;
 }
 
 void ServiceHandlers::init_common_context() {
   std::vector<std::string> isolate_args;
-  // Using a default of 50 MB if nothing else is configured
-  auto max_heap_size = m_config.max_heap_size.value_or(50);
+  // Using a default of 1024 MB if nothing else is configured
+  auto max_heap_size = m_config.max_heap_size.value_or(1024);
   isolate_args.push_back("-Xmx" + std::to_string(max_heap_size) + "m");
   m_common_context = std::make_unique<CommonContext>(
       m_config.fs, m_config.module_files, m_config.globals, isolate_args);
@@ -75,8 +77,10 @@ void ServiceHandlers::teardown() {
 }
 
 void ServiceHandlers::do_tear_down() {
-  m_context_pool->teardown();
-  m_context_pool.reset();
+  if (m_context_pool) {
+    m_context_pool->teardown();
+    m_context_pool.reset();
+  }
   m_common_context.reset();
 }
 
@@ -101,8 +105,8 @@ void ServiceHandlers::set_default_pool_size(uint64_t size) {
 std::shared_ptr<IContextHandle> ServiceHandlers::get_context(
     const std::string &debug_port) {
   if (m_common_context->got_fatal_error()) {
-    log_error("A fatal error prevents the usage of scripting endpoints");
-    return nullptr;
+    throw std::runtime_error(
+        "A fatal error prevents the usage of scripting endpoints");
   }
 
   m_last_used_time = std::chrono::system_clock::now();
