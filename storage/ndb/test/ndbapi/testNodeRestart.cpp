@@ -9053,56 +9053,64 @@ int runWatchdogSlowShutdown(NDBT_Context *ctx, NDBT_Step *step) {
    * 3 Trigger shutdown
    *
    * Expectation
-   * - Shutdown triggered, but slow
+   * - Shutdown triggered, but very slow
    * - Watchdog detects and also attempts shutdown
    * - No crash results, shutdown completes eventually
    */
 
   NdbRestarter restarter;
 
-  /* 1 Set low watchdog threshold */
-  {
-    const int dumpVals[] = {DumpStateOrd::CmvmiSetWatchdogInterval, 2000};
-    CHECK((restarter.dumpStateAllNodes(dumpVals, 2) == NDBT_OK),
-          "Failed to set watchdog thresh");
-  }
-
-  /* 2 Use error insert to get error reporter to be slow
-   *   during shutdown
+  /* Scenarios
+   *  1 : Stall during error reporting after releasing lock
+   *  2 : Stall during error reporting before releasing lock
    */
-  {
-    const int dumpVals[] = {DumpStateOrd::CmvmiSetErrorHandlingError, 1};
-    CHECK((restarter.dumpStateAllNodes(dumpVals, 2) == NDBT_OK),
-          "Failed to set error handling mode");
+  for (int scenario = 1; scenario < 3; scenario++) {
+    g_err << "Scenario " << scenario << endl;
+    /* 1 Set low watchdog threshold */
+    {
+      const int dumpVals[] = {DumpStateOrd::CmvmiSetWatchdogInterval, 2000};
+      CHECK((restarter.dumpStateAllNodes(dumpVals, 2) == NDBT_OK),
+            "Failed to set watchdog thresh");
+    }
+
+    /* 2 Use error insert to get error reporter to be slow
+     *   during shutdown
+     */
+    {
+      int dumpVals[] = {DumpStateOrd::CmvmiSetErrorHandlingError, 0};
+      dumpVals[1] = scenario;
+      CHECK((restarter.dumpStateAllNodes(dumpVals, 2) == NDBT_OK),
+            "Failed to set error handling mode");
+    }
+
+    /* 3 Trigger shutdown */
+    const int nodeId = restarter.getNode(NdbRestarter::NS_RANDOM);
+    g_err << "Injecting crash in node " << nodeId << endl;
+    /* First request a 'NOSTART' restart on error insert */
+    {
+      const int dumpVals[] = {DumpStateOrd::CmvmiSetRestartOnErrorInsert, 1};
+      CHECK((restarter.dumpStateOneNode(nodeId, dumpVals, 2) == NDBT_OK),
+            "Failed to request error insert restart");
+    }
+
+    /* Next cause an error insert failure */
+    CHECK((restarter.insertErrorInNode(nodeId, 9999) == NDBT_OK),
+          "Failed to request node crash");
+
+    /* Expect shutdown to be stalled, and shortly after, watchdog
+     * to detect this and act
+     */
+    g_err << "Waiting for node " << nodeId << " to stop." << endl;
+    CHECK((restarter.waitNodesNoStart(&nodeId, 1) == NDBT_OK),
+          "Timeout waiting for node to stop");
+
+    g_err << "Waiting for node " << nodeId << " to start." << endl;
+    CHECK((restarter.startNodes(&nodeId, 1) == NDBT_OK),
+          "Timeout waiting for node to start");
+
+    CHECK((restarter.waitClusterStarted() == NDBT_OK),
+          "Timeout waiting for cluster to start");
   }
-
-  /* 3 Trigger shutdown */
-  const int nodeId = restarter.getNode(NdbRestarter::NS_RANDOM);
-  g_err << "Injecting crash in node " << nodeId << endl;
-  /* First request a 'NOSTART' restart on error insert */
-  {
-    const int dumpVals[] = {DumpStateOrd::CmvmiSetRestartOnErrorInsert, 1};
-    CHECK((restarter.dumpStateOneNode(nodeId, dumpVals, 2) == NDBT_OK),
-          "Failed to request error insert restart");
-  }
-
-  /* Next cause an error insert failure */
-  CHECK((restarter.insertErrorInNode(nodeId, 9999) == NDBT_OK),
-        "Failed to request node crash");
-
-  /* Expect shutdown to be stalled, and shortly after, watchdog
-   * to detect this and act
-   */
-  g_err << "Waiting for node " << nodeId << " to stop." << endl;
-  CHECK((restarter.waitNodesNoStart(&nodeId, 1) == NDBT_OK),
-        "Timeout waiting for node to stop");
-
-  g_err << "Waiting for node " << nodeId << " to start." << endl;
-  CHECK((restarter.startNodes(&nodeId, 1) == NDBT_OK),
-        "Timeout waiting for node to start");
-
-  CHECK((restarter.waitClusterStarted() == NDBT_OK),
-        "Timeout waiting for cluster to start");
 
   g_err << "Success" << endl;
   return NDBT_OK;

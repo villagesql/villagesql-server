@@ -4964,6 +4964,8 @@ void ErrorReporter::prepare_to_crash(bool first_phase,
   (void)first_phase;
   (void)error_insert_crash;
 
+  globalData.incrementWatchDogCounter(22);  // Handling node stop
+
   static bool crash_handling_started = false;
   if (!first_phase) {
     if (crash_handling_started) {

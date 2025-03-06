@@ -9264,6 +9264,13 @@ static bool crash_started = false;
 
 void ErrorReporter::prepare_to_crash(bool first_phase,
                                      bool error_insert_crash) {
+  {
+    thr_data *selfptr = NDB_THREAD_TLS_THREAD;
+    if (selfptr != NULL) {
+      selfptr->m_watchdog_counter = 22;
+    }
+  }
+
   if (first_phase) {
     NdbMutex_Lock(&g_thr_repository->stop_for_crash_mutex);
     if (crash_started && error_insert_crash) {

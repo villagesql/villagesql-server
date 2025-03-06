@@ -1317,8 +1317,6 @@ extern bool opt_core;
 // instantiated and updated in NdbcntrMain.cpp
 extern Uint32 g_currentStartPhase;
 
-int simulate_error_during_shutdown = 0;
-
 void NdbShutdown(int error_code, NdbShutdownType type,
                  NdbRestartType restartType) {
   if (type == NST_ErrorInsert) {
@@ -1384,6 +1382,19 @@ void NdbShutdown(int error_code, NdbShutdownType type,
        * Very serious, don't attempt to free, just die!!
        */
       g_eventLogger->info("Watchdog shutdown completed - %s", exitAbort);
+#ifdef ERROR_INSERT
+      const Uint32 shf =
+          globalEmulatorData.theConfiguration->getShutdownHandlingFault();
+      if (shf != 0) {
+        if (shf == Configuration::SHF_DELAY_AFTER_WRITING_ERRORLOG ||
+            shf == Configuration::SHF_DELAY_WHILE_WRITING_ERRORLOG) {
+          g_eventLogger->info(
+              "ERROR_INSERT : Watchdog choosing restart rather than hard exit "
+              "for test pass");
+          childExit(error_code, NRT_NoStart_Restart, g_currentStartPhase);
+        }
+      }
+#endif
       if (opt_core) {
         childAbort(error_code, -1, g_currentStartPhase);
       } else {
@@ -1391,11 +1402,18 @@ void NdbShutdown(int error_code, NdbShutdownType type,
       }
     }
 
+#ifdef ERROR_INSERT
 #ifndef _WIN32
-    if (simulate_error_during_shutdown) {
-      kill(getpid(), simulate_error_during_shutdown);
+    if (globalEmulatorData.theConfiguration->getShutdownHandlingFault() ==
+        Configuration::SHF_UNIX_SIGNAL) {
+      const Uint32 sigId =
+          globalEmulatorData.theConfiguration->getShutdownHandlingFaultExtra();
+      g_eventLogger->info("ERROR_INSERT : Raising unix signal %u to self",
+                          sigId);
+      kill(getpid(), sigId);
       while (true) NdbSleep_MilliSleep(10);
     }
+#endif
 #endif
 
     globalEmulatorData.theWatchDog->doStop();
