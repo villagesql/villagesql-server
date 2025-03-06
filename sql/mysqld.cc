@@ -813,9 +813,10 @@ MySQL clients support the protocol:
 #include "sql/mdl.h"
 #include "sql/mdl_context_backup.h"  // mdl_context_backup_manager
 #include "sql/mysqld_daemon.h"
-#include "sql/mysqld_thd_manager.h"              // Global_THD_manager
-#include "sql/opt_costconstantcache.h"           // delete_optimizer_cost_module
-#include "sql/options_mysqld.h"                  // OPT_THREAD_CACHE_SIZE
+#include "sql/mysqld_thd_manager.h"     // Global_THD_manager
+#include "sql/opt_costconstantcache.h"  // delete_optimizer_cost_module
+#include "sql/opt_option_usage.h"       // Option tracker for optimizer usage
+#include "sql/options_mysqld.h"         // OPT_THREAD_CACHE_SIZE
 #include "sql/partitioning/partition_handler.h"  // partitioning_init
 #include "sql/persisted_variable.h"              // Persisted_variables_cache
 #include "sql/plugin_table.h"
@@ -2132,7 +2133,8 @@ static void server_component_init() {
   srv_weak_option_option::init(
       srv_registry, srv_registry_registration,
       [&](SERVICE_TYPE(mysql_option_tracker_option) * opt) {
-        return 0 != opt->define("MySQL Server", "mysql_server", 1);
+        return 0 != opt->define("MySQL Server", "mysql_server", 1) ||
+               optimizer_options_usage_init(opt, srv_registry);
       },
       false);
 }
@@ -2193,7 +2195,8 @@ static bool component_infrastructure_deinit(bool print_message) {
   srv_weak_option_option::deinit(
       srv_registry_no_lock, srv_registry_registration_no_lock,
       [&](SERVICE_TYPE(mysql_option_tracker_option) * opt) {
-        return 0 != opt->undefine("MySQL Server");
+        return 0 != opt->undefine("MySQL Server") ||
+               optimizer_options_usage_deinit(opt, srv_registry_no_lock);
       });
   persistent_dynamic_loader_deinit();
   bool retval = false;
@@ -12041,6 +12044,13 @@ SHOW_VAR status_vars[] = {
     {"option_tracker_usage:Replication Replica",
      reinterpret_cast<char *>(
          &Rpl_opt_tracker::m_opt_option_tracker_usage_replication_replica),
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
+    {"option_tracker_usage:Traditional Optimizer",
+     reinterpret_cast<char *>(
+         &option_tracker_traditional_optimizer_usage_count),
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
+    {"option_tracker_usage:Hypergraph Optimizer",
+     reinterpret_cast<char *>(&option_tracker_hypergraph_optimizer_usage_count),
      SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_FUNC, SHOW_SCOPE_ALL}};
 

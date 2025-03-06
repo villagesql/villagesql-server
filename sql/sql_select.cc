@@ -95,6 +95,7 @@
 #include "sql/opt_explain.h"
 #include "sql/opt_explain_format.h"
 #include "sql/opt_hints.h"  // hint_key_state()
+#include "sql/opt_option_usage.h"
 #include "sql/opt_trace.h"
 #include "sql/opt_trace_context.h"
 #include "sql/parse_tree_node_base.h"
@@ -794,6 +795,19 @@ bool Sql_cmd_dml::execute(THD *thd) {
     ++thd->status_var.secondary_engine_execution_count;
     global_aggregated_stats.get_shard(thd->thread_id())
         .secondary_engine_execution_count++;
+  }
+
+  // Count usage of Traditional or Hypergraph Optimizer
+  // Using is_explainable_query() as there is almost complete overlap between
+  // explainable queries and queries for which we want to count the optimizer
+  // used.
+  if (!using_secondary_storage_engine() &&
+      is_explainable_query(sql_command_code())) {
+    if (lex->using_hypergraph_optimizer()) {
+      ++option_tracker_hypergraph_optimizer_usage_count;
+    } else {
+      ++option_tracker_traditional_optimizer_usage_count;
+    }
   }
 
   assert(!thd->is_error());
