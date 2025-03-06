@@ -146,7 +146,9 @@ void JitExecutorComponent::update_active_contexts(
   }
 
   // Now updates the memory limit for each active handler and starts it
-  if (m_global_config.maximum_ram_size.has_value()) {
+  // Total pool is verified here as it could be 0, meaning, no active context
+  // handlers will be left after this update
+  if (total_pool != 0 && m_global_config.maximum_ram_size.has_value()) {
     uint64_t mem_per_pool_item = *m_global_config.maximum_ram_size / total_pool;
 
     for (const auto &it : candidate_context_handlers) {
