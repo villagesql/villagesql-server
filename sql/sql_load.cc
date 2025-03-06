@@ -566,6 +566,8 @@ bool Sql_cmd_load_table::bulk_driver_service(THD *thd, const TABLE *table,
     return false;
   }
 
+  DEBUG_SYNC(thd, "bulk_load_inuse");
+
   auto load_driver = reinterpret_cast<SERVICE_TYPE(bulk_load_driver) *>(svc);
 
   auto load_handle = load_driver->create_bulk_loader(
