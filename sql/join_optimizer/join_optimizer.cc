@@ -4139,6 +4139,15 @@ bool CostingReceiver::ProposeFullTextIndexScan(
 void CostingReceiver::ProposeAccessPathForBaseTable(
     int node_idx, double force_num_output_rows_after_filter,
     const char *description_for_trace, AccessPath *path) {
+  // Sorting using row-ids is not safe when a performance schema table
+  // is part of the plan. So we mark it as UNSAFE which forces the
+  // results to be materialized before the sort is done.
+  TABLE *table = m_graph->nodes[node_idx].table();
+  if (table->s != nullptr &&
+      table->s->table_category == TABLE_CATEGORY_PERFORMANCE) {
+    path->safe_for_rowid = AccessPath::UNSAFE;
+  }
+
   for (bool materialize_subqueries : {false, true}) {
     FunctionalDependencySet new_fd_set;
     ApplyPredicatesForBaseTable(
