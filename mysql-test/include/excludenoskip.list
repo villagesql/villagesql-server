@@ -293,6 +293,11 @@ not_partial_revokes.inc
 have_hypergraph.inc
 not_hypergraph.inc
 
+# Must be skipped when the server is built without the Hypergraph Optimizer.
+# This is different to not_hypergraph in that not_hypergraph skips if the
+# Hypergraph is OFF, while this skips if the Hypergraph is unavailable.
+not_built_with_hypergraph.inc
+
 # 30. Keyring_file component - can be skipped based on cmake configuration
 have_component_keyring_file.inc
 
