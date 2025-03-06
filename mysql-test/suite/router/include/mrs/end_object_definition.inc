@@ -4,6 +4,18 @@
 # tests starts
 INSERT INTO mysql_rest_service_metadata.audit_log(id, table_name,
             changed_by, changed_at) VALUES(1000, '', '', NOW());
+
+if (!$PB2WORKDIR)
+{
+  # Lets run sanity checks @ local machines.
+  --let $is_transaction_active=`SELECT count(*) FROM INFORMATION_SCHEMA.INNODB_TRX WHERE trx_mysql_thread_id = CONNECTION_ID()`
+
+  if ($is_transaction_active == 0)
+  {
+    --die Transaction was closed in middle of object definition, please review scripts/sql used between start/end object definition.
+  }
+}
+
 COMMIT;
 --enable_query_log
 --enable_result_log

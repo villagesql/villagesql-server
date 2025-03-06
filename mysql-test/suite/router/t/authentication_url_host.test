@@ -45,8 +45,6 @@ grant all on *.* to mrsuser@'%';
 --echo #
 
 
---source ../include/mrs/start_object_definition.inc
-
 create database host_tests;
 create table host_tests.table1(id int unsigned NOT NULL AUTO_INCREMENT, value VARCHAR(30), PRIMARY KEY (id));
 create table host_tests.table2(id int unsigned NOT NULL AUTO_INCREMENT, value VARCHAR(30), PRIMARY KEY (id));
@@ -54,6 +52,9 @@ create table host_tests.table3(id int unsigned NOT NULL AUTO_INCREMENT, value VA
 insert into host_tests.table1 values(1, "TABLE1");
 insert into host_tests.table2 values(2, "TABLE2");
 insert into host_tests.table3 values(3, "TABLE3");
+
+
+--source ../include/mrs/start_object_definition.inc
 
 ############################
 ## Create Services
