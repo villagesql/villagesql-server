@@ -75,7 +75,7 @@ class ConfigGenerator {
    * This function does a lot of initialisation before bootstrap starts making
    * changes.
    *
-   * @throws std::runtime_error
+   * @throws std::runtime_error TODO
    */
   void init(const std::map<std::string, std::string> &bootstrap_options,
             const mysqlrouter::URI &uri, mysqlrouter::MySQLSession *session,
@@ -496,7 +496,7 @@ class ConfigGenerator {
   URI target_uri_;
   std::string bootstrap_socket_;
 
-  MySQLSession* mysql_;
+  MySQLSession *mysql_;
   std::unique_ptr<ClusterMetadata> metadata_;
   int connect_timeout_;
   int read_timeout_;
