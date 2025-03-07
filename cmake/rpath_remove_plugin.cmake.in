@@ -70,6 +70,20 @@ EXECUTE_PROCESS(COMMAND ${PATCHELF_EXECUTABLE} --print-rpath ${DEBUG_PLUGIN}
 IF(${DEBUG_PLUGIN} MATCHES "keyring_aws")
   # There are only static libraries in the AWS SDK anyways,
   # Strip away the library path.
+  STRING(REGEX MATCH
+    ":${AWS_SDK_ROOT_DIR}/lib64:(.*)/library_output_directory:"
+    UNUSED ${PATCHELF_PATH})
+  # -DWITH_AWS_SDK=.... -DWITH_SSL=....
+  IF(CMAKE_MATCH_1)
+    FILE(RPATH_CHANGE
+      FILE "${DEBUG_PLUGIN}"
+      OLD_RPATH
+      "${AWS_SDK_ROOT_DIR}/lib64:${CMAKE_MATCH_1}/library_output_directory:"
+      NEW_RPATH ""
+      )
+    RETURN()
+  ENDIF()
+  # -DWITH_AWS_SDK=.... and system openssl
   IF(${PATCHELF_PATH} MATCHES "${AWS_SDK_ROOT_DIR}/lib64:")
     FILE(RPATH_CHANGE
       FILE "${DEBUG_PLUGIN}"
