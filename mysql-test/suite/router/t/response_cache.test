@@ -1,7 +1,3 @@
-# This test stores etags in the result file. The result etag is different on
-# Solaris so we disable it until this is further investigated.
---source include/not_solaris.inc
-
 --source include/have_router.inc
 
 --source ../include/mrs/is_mrs_schema_v3_or_v4.inc
