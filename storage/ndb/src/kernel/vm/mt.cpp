@@ -8049,6 +8049,14 @@ static bool crash_started = false;
 void
 ErrorReporter::prepare_to_crash(bool first_phase, bool error_insert_crash)
 {
+  {
+    void *value= NdbThread_GetTlsKey(NDB_THREAD_TLS_THREAD);
+    thr_data *selfptr = reinterpret_cast<thr_data *>(value);
+    if (selfptr != NULL) {
+      selfptr->m_watchdog_counter = 22;
+    }
+  }
+
   if (first_phase)
   {
     NdbMutex_Lock(&g_thr_repository->stop_for_crash_mutex);
