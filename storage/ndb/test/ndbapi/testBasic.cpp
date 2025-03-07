@@ -3162,6 +3162,7 @@ int runRefreshLocking(NDBT_Context *ctx, NDBT_Step *step) {
           case OP_LAST:
             abort();
         }
+        if (res) g_err << "  (Note: operation failed: " << res << ")" << endl;
 
         hugoOps.execute_Commit(ndb);
 

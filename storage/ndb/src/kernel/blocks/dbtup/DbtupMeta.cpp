@@ -1905,14 +1905,12 @@ void Dbtup::releaseFragment(Signal *signal, Uint32 tableId,
   tabPtr.i = tableId;
   ptrCheckGuard(tabPtr, cnoOfTablerec, tablerec);
   Uint32 fragIndex = RNIL;
-  Uint32 fragId = RNIL;
   Uint32 i = 0;
   for (i = 0; i < NDB_ARRAY_SIZE(tabPtr.p->fragid); i++) {
     jam();
     if (tabPtr.p->fragid[i] != RNIL) {
       jam();
       fragIndex = tabPtr.p->fragrec[i];
-      fragId = tabPtr.p->fragid[i];
       break;
     }
   }

@@ -4007,21 +4007,17 @@ static int testOpBatchLimits(OpTypes opType, unsigned numOps, int sz,
   /* Test RTs when executing certain number of ops of given
    * type, with size given
    */
-  unsigned k = 0;
+  unsigned k;
   Uint32 opTimeoutRetries = g_opt.m_timeout_retries;
 
   do {
     CHK((g_con = g_ndb->startTransaction()) != 0);
-    unsigned r = 0;
 
-    for (; k < numOps;) {
+    for (k = 0; k < numOps; k++) {
       Tup &tup = g_tups[k];
       setBvals(tup, sz);
       DBG(operationName(opType) << " pk1=" << hex << tup.m_pk1);
       CHK(setupOperation(g_opr, opType, tup) == 0);
-
-      r++;
-      k++;
     }
 
     DBG("commit "

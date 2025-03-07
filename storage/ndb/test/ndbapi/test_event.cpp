@@ -2912,7 +2912,6 @@ int errorInjectStalling(NDBT_Context *ctx, NDBT_Step *step) {
 
   if (res > 0) {
     NdbEventOperation *tmp;
-    int count = 0;
     while (connected && (tmp = ndb->nextEvent())) {
       if (tmp != pOp) {
         printf("Found stray NdbEventOperation\n");
@@ -2925,7 +2924,6 @@ int errorInjectStalling(NDBT_Context *ctx, NDBT_Step *step) {
           connected = false;
           break;
         default:
-          count++;
           break;
       }
     }
@@ -5739,8 +5737,7 @@ int runTardyEventListener(NDBT_Context *ctx, NDBT_Step *step) {
 
   char buf[1024];
   sprintf(buf, "%s_EVENT", table->getName());
-  NdbEventOperation *pOp, *pCreate = 0;
-  pCreate = pOp = ndb->createEventOperation(buf);
+  NdbEventOperation *pOp = ndb->createEventOperation(buf);
   CHK(pOp != NULL, "Event operation creation failed");
   CHK(pOp->execute() == 0, "Execute operation execution failed");
 
@@ -6803,6 +6800,10 @@ end_test:
 
   if (unknown_ops > 0) {
     g_err << "NOTE: Unknown ops " << unknown_ops << endl;
+  }
+
+  if (node_failures > 0) {
+    g_err << "NOTE: Node failures " << node_failures << endl;
   }
 
   if (round < no_of_err_ins) {

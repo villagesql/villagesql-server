@@ -2577,8 +2577,8 @@ bool BackupRestore::table_compatible_check(TableS &tableS) {
       stagingTable->setFragmentData(0, 0);
     }
 
-    // if kernel is DD, staging will be too
-    bool kernel_is_dd = false;
+    // If table uses disk data, getTablespace() returns true, and staging
+    // table should use the same tablespace
     Uint32 ts_id = ~(Uint32)0;
     if (tab->getTablespace(&ts_id)) {
       // must be an initialization
@@ -2596,7 +2596,6 @@ bool BackupRestore::table_compatible_check(TableS &tableS) {
       restoreLogger.log_info("Kernel table %s tablespace %s", tablename,
                              ts_name);
       stagingTable->setTablespaceName(ts_name);
-      kernel_is_dd = true;
     }
 
     /*

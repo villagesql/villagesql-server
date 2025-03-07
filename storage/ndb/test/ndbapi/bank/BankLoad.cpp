@@ -345,11 +345,9 @@ int Bank::getBalanceForAccountType(const Uint32 accountType, Uint32 &balance) {
   }
 
   int eof;
-  int rows = 0;
   eof = pOp->nextResult();
 
   while (eof == 0) {
-    rows++;
     Uint32 a = accountTypeRec->u_32_value();
     Uint32 b = balanceRec->u_32_value();
 

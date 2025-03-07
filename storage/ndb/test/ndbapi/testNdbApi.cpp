@@ -204,7 +204,6 @@ int runTestMaxTransaction(NDBT_Context *ctx, NDBT_Step *step) {
 }
 
 int runTestMaxOperations(NDBT_Context *ctx, NDBT_Step *step) {
-  Uint32 l = 1;
   int result = NDBT_OK;
   int maxOpsLimit = 1;
   const NdbDictionary::Table *pTab = ctx->getTab();
@@ -320,8 +319,6 @@ int runTestMaxOperations(NDBT_Context *ctx, NDBT_Step *step) {
     }
 
     hugoOps.closeTransaction(pNdb);
-
-    l++;
   }
   maxOpsLimit = lower_max_ops;
   ndbout << "Found max operations limit " << maxOpsLimit << endl;

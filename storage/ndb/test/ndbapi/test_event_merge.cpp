@@ -1577,7 +1577,6 @@ static int runops() {
 // move com chains with same gci under same gci entry
 static void mergeops(Run &r) {
   ll2("mergeops: " << r.tabname);
-  uint mergecnt = 0;
   Uint32 pk1;
   for (pk1 = 0; pk1 < g_opts.maxpk; pk1++) {
     Op *tot_op = r.pk_op[pk1];
@@ -1603,7 +1602,6 @@ static void mergeops(Run &r) {
         Op *tmp_op = gci_op2;
         gci_op2 = gci_op2->next_gci;
         freeop(tmp_op);
-        mergecnt++;
         require(r.gciops != 0 && g_gciops != 0);
         r.gciops--;
         g_gciops--;
