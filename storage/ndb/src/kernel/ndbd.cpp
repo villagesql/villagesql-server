@@ -883,11 +883,8 @@ void *async_log_func(void *args) {
   const size_t get_bytes = 512;
   char buf[get_bytes + 1];
   size_t bytes;
-  int part_bytes = 0, bytes_printed = 0;
 
   while (!data->stop) {
-    part_bytes = 0;
-    bytes_printed = 0;
     if ((bytes = logBuf->get(buf, get_bytes))) {
       fwrite(buf, bytes, 1, f);
       fflush(f);
