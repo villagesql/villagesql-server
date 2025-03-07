@@ -23,6 +23,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
+#include <bit>  // bit_cast
 #include <list>
 #include <memory>
 #include <optional>
@@ -38,6 +39,7 @@
 #include "helper/digester/sha256_digest.h"
 #include "helper/json/rapid_json_to_text.h"
 #include "mrs/database/helper/object_checksum.h"
+#include "mysql/harness/stdx/bit.h"  // byteswap
 
 namespace mrs {
 namespace database {
@@ -523,6 +525,11 @@ struct ChecksumHandler
   bool Int(int i) {
     rapidjson::Value value;
     value.Set(i);
+
+    if constexpr (std::endian::native == std::endian::big) {
+      i = stdx::byteswap(i);
+    }
+
     push_value(std::move(value),
                {reinterpret_cast<const char *>(&i), sizeof(i)});
     return true;
@@ -531,6 +538,11 @@ struct ChecksumHandler
   bool Uint(unsigned u) {
     rapidjson::Value value;
     value.Set(u);
+
+    if constexpr (std::endian::native == std::endian::big) {
+      u = stdx::byteswap(u);
+    }
+
     push_value(std::move(value),
                {reinterpret_cast<const char *>(&u), sizeof(u)});
     return true;
@@ -539,6 +551,11 @@ struct ChecksumHandler
   bool Int64(int64_t i) {
     rapidjson::Value value;
     value.Set(i);
+
+    if constexpr (std::endian::native == std::endian::big) {
+      i = stdx::byteswap(i);
+    }
+
     push_value(std::move(value),
                {reinterpret_cast<const char *>(&i), sizeof(i)});
     return true;
@@ -547,6 +564,11 @@ struct ChecksumHandler
   bool Uint64(uint64_t u) {
     rapidjson::Value value;
     value.Set(u);
+
+    if constexpr (std::endian::native == std::endian::big) {
+      u = stdx::byteswap(u);
+    }
+
     push_value(std::move(value),
                {reinterpret_cast<const char *>(&u), sizeof(u)});
     return true;
@@ -555,6 +577,11 @@ struct ChecksumHandler
   bool Double(double d) {
     rapidjson::Value value;
     value.Set(d);
+
+    if constexpr (std::endian::native == std::endian::big) {
+      d = std::bit_cast<double>(stdx::byteswap(std::bit_cast<uint64_t>(d)));
+    }
+
     push_value(std::move(value),
                {reinterpret_cast<const char *>(&d), sizeof(d)});
     return true;

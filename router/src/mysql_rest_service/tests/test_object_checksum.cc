@@ -52,10 +52,6 @@ class TestDigest : public helper::interface::Digester {
   std::string updates_;
 };
 
-// TODO: remove once we figure out why the etags computed on Solaris are
-// different than on other platforms
-#ifndef __sun
-
 TEST(ObjectChecksum, plain) {
   auto root = JsonMappingBuilder("mrstestdb", "actor")
                   .field("field1")
@@ -525,5 +521,3 @@ TEST(ObjectChecksum, column_filter) {
         << doc;
   }
 }
-
-#endif
