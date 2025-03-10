@@ -1565,8 +1565,33 @@ sub collect_one_test_case {
       skip_test($tinfo, "No router executable available.");
       return $tinfo;
     }
+
+    if ($::plugin_mysqlrouter_routing eq "") {
+      # Packaging problem, must be deployed with MySQLRouter
+      skip_test($tinfo, "No routing plugin available.");
+      return $tinfo;
+    }
   }
   $router_test = 1 if ($tinfo->{'router_test'});
+
+  # Check for router-jit-executor tests
+  if ($tinfo->{'router_jit_executor_test'}) {
+    # check if the router executable was found (built)
+    if ($::plugin_mysqlrouter_jit_executor eq "") {
+      skip_test($tinfo, "No jit_executor plugin available.");
+      return $tinfo;
+    }
+  }
+
+  # Check for MySQL Router bootstrap tests
+  if ($tinfo->{'router_bootstrap_test'}) {
+    # check if the routing plugin was found (built)
+    if ($::plugin_mysqlrouter_routing eq "") {
+      # Packaging problem, must be deployed with MySQLRouter
+      skip_test($tinfo, "No routing plugin available.");
+      return $tinfo;
+    }
+  }
 
   if ($tinfo->{'not_windows'} && IS_WINDOWS) {
     skip_test($tinfo, "Test not supported on Windows");
@@ -1706,7 +1731,10 @@ my @tags = (
 
   [ "include/not_asan.inc", "not_asan", 1 ],
   [ "include/not_ubsan.inc", "not_ubsan", 1 ],
+
+  # Tests with below .inc files are considered to be MySQL Router tests.
   [ "have_router.inc",      "router_test", 1 ],
+  [ "have_jit_executor.inc",      "router_jit_executor_test", 1 ],
   [ "have_router_bootstrap.inc",  "router_bootstrap_test", 1 ],
 
   # Tests with below .inc file needs either big-test or only-big-test
