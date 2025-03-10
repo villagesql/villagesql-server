@@ -366,6 +366,8 @@ our $start_only;
 our $exe_mysqlrouter;
 our $exe_mysqlrouter_mrs_client;
 our $exe_mysqlrouter_keyring;
+our $plugin_mysqlrouter_jit_executor;
+our $plugin_mysqlrouter_routing;
 
 our $glob_debugger       = 0;
 our $group_replication   = 0;
@@ -2987,6 +2989,9 @@ sub executable_setup () {
     my_find_bin($bindir,
               [ "runtime_output_directory", "libexec", "sbin", "bin" ],
               "mysqlrouter_mrs_client", NOT_REQUIRED);
+
+  $plugin_mysqlrouter_jit_executor = find_router_plugin("jit_executor");
+  $plugin_mysqlrouter_routing = find_router_plugin("routing");
 }
 
 sub client_debug_arg($$) {
@@ -3186,6 +3191,16 @@ sub find_router_plugin_in_package($) {
                          "$basedir/lib/mysqlrouter/" . $plugin_filename,
                          "$basedir/lib/" . $plugin_filename);
 }
+
+sub find_router_plugin($) {
+  my ($plugin) = @_;
+  my $router_plugin = find_plugin($plugin, "plugin_output_directory");
+  if (!$router_plugin) {
+    $router_plugin = find_router_plugin_in_package($plugin);
+  }
+  return $router_plugin;
+}
+
 
 # Read plugin defintions file
 sub read_plugin_defs($$) {
@@ -5268,11 +5283,7 @@ sub run_testcase ($) {
     if (!$tinfo->{router_test}) {
       $config_router = ();
       if ($tinfo->{router_bootstrap_test}) {
-        my $routing_plugin = find_plugin("routing", "plugin_output_directory");
-        if (!$routing_plugin) {
-          $routing_plugin = find_router_plugin_in_package("routing") or die();
-        }
-        my $plugin_dir = dirname($routing_plugin);
+        my $plugin_dir = dirname($plugin_mysqlrouter_routing);
         $ENV{"ROUTER_PLUGIN_DIRECTORY"} = $plugin_dir;
       }
     }
