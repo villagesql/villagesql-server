@@ -491,7 +491,7 @@ Result Authentication::do_scram_post_flow(
 
   JsonObject request_data{
       {"sessionType", (st == SessionType::kJWT ? "bearer" : "cookie")},
-      {"user", user},
+      {"username", user},
       {"nonce", scram.initial_nonce_}};
 
   if (auth_app.has_value()) {
