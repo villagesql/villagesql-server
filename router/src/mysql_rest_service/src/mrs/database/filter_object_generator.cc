@@ -232,6 +232,15 @@ class tosDate {
   }
 };
 
+class tosNull {
+ public:
+  bool acceptable(entry::Column *, Value *v) const { return v->IsNull(); }
+
+  mysqlrouter::sqlstring to_sqlstring(entry::Column *, Value *) const {
+    return {"NULL"};
+  }
+};
+
 class Result {
  public:
   explicit Result(entry::Column *dfield, Value *v) : dfield_{dfield}, v_{v} {}
@@ -490,15 +499,15 @@ std::optional<std::string> FilterObjectGenerator::parse_simple_operator_object(
       throw RestError("Between operator, requires an array field.");
     if (value->Size() != 2)
       throw RestError("Between field, requires array with size of two.");
-    // TODO(lkotula): Support of NULL values with different types of `tos-es`
-    // (Shouldn't be in review)
     result.append_preformatted(db_name)
         .append_preformatted(" BETWEEN ")
-        .append_preformatted(to_sqlstring<tosString, tosNumber, tosDate>(
-            dfield.get(), &(*value)[0]))
+        .append_preformatted(
+            to_sqlstring<tosString, tosNumber, tosDate, tosNull>(dfield.get(),
+                                                                 &(*value)[0]))
         .append_preformatted(" AND ")
-        .append_preformatted(to_sqlstring<tosString, tosNumber, tosDate>(
-            dfield.get(), &(*value)[1]));
+        .append_preformatted(
+            to_sqlstring<tosString, tosNumber, tosDate, tosNull>(dfield.get(),
+                                                                 &(*value)[1]));
   } else {
     return {};
   }
