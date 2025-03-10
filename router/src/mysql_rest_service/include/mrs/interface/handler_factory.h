@@ -35,7 +35,6 @@
 #include "mrs/interface/query_factory.h"
 #include "mrs/interface/rest_handler.h"
 
-// TODO move to new factory
 #include "mrs/endpoint/handler/persistent/persistent_data_content_file.h"
 
 namespace mrs {

@@ -141,10 +141,17 @@ class RestHandler : public std::enable_shared_from_this<RestHandler> {
 
   enum class Authorization { kNotNeeded, kRequires, kCheck };
 
+  class Configuration {
+   public:
+    virtual ~Configuration() = default;
+
+    virtual bool may_log_request() const { return false; }
+  };
+
  public:
   virtual ~RestHandler() = default;
 
-  virtual void initialize() = 0;
+  virtual void initialize(const Configuration &configuration) = 0;
   virtual bool may_check_access() const = 0;
   virtual Authorization requires_authentication() const = 0;
 

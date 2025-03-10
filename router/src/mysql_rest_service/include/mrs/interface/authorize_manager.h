@@ -89,7 +89,6 @@ class AuthorizeManager {
   virtual users::UserManager *get_user_manager() = 0;
   virtual Container get_supported_authentication_applications(ServiceId id) = 0;
 
-  // TODO(lkotula): = 0 (Shouldn't be in review)
   virtual void discard_current_session(ServiceId, http::Cookie *) {}
 
   virtual collector::MysqlCacheManager *get_cache() = 0;

@@ -58,7 +58,7 @@ class RestHandlerTests : public Test {
             }));
     sut_ = std::make_shared<StrictMock<PartialMockRestHandler>>(
         rest_path, &mock_auth_manager_);
-    sut_->initialize();
+    sut_->initialize(mrs::interface::RestHandler::Configuration());
     ASSERT_NE(nullptr, request_handler_.get());
   }
 

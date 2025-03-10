@@ -134,20 +134,39 @@ std::string get_service_path(std::shared_ptr<EndpointBase> endpoint) {
   return "";
 }
 
+class HandlerConfiguration : public mrs::rest::Handler::Configuration {
+ public:
+  using EndpointConfigurationPtr = HandlerFactory::EndpointConfigurationPtr;
+
+ public:
+  HandlerConfiguration(
+      const HandlerFactory::EndpointConfigurationPtr &configuration)
+      : configuration_{configuration} {}
+
+  bool may_log_request() const override {
+    return configuration_->get_developer().has_value();
+  }
+
+ public:
+  EndpointConfigurationPtr configuration_;
+};
+
 HandlerFactory::HandlerFactory(AuthorizeManager *auth_manager,
                                GtidManager *gtid_manager,
                                MysqlCacheManager *cache_manager,
                                ResponseCache *response_cache,
                                ResponseCache *file_cache,
                                SlowQueryMonitor *slow_query_monitor,
-                               MysqlTaskMonitor *task_monitor)
+                               MysqlTaskMonitor *task_monitor,
+                               const EndpointConfigurationPtr &configuration)
     : auth_manager_{auth_manager},
       gtid_manager_{gtid_manager},
       cache_manager_{cache_manager},
       response_cache_{response_cache},
       file_cache_{file_cache},
       slow_query_monitor_(slow_query_monitor),
-      task_monitor_(task_monitor) {}
+      task_monitor_(task_monitor),
+      configuration_{configuration} {}
 
 HandlerPtr HandlerFactory::create_db_schema_metadata_catalog_handler(
     EndpointBasePtr endpoint) {
@@ -159,7 +178,7 @@ HandlerPtr HandlerFactory::create_db_schema_metadata_catalog_handler(
   auto result = std::make_shared<HandlerDbSchemaMetadataCatalog>(
       db_schema_endpoint, auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -174,7 +193,7 @@ HandlerPtr HandlerFactory::create_db_schema_openapi_handler(
   auto result = std::make_shared<HandlerDbSchemaOpenAPI>(db_schema_endpoint,
                                                          auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -189,7 +208,7 @@ HandlerPtr HandlerFactory::create_db_service_openapi_handler(
   auto result = std::make_shared<HandlerDbServiceOpenAPI>(db_service_endpoint,
                                                           auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -228,7 +247,7 @@ HandlerPtr HandlerFactory::create_db_object_handler(EndpointBasePtr endpoint) {
       break;
   }
 
-  if (result) result->initialize();
+  if (result) result->initialize(HandlerConfiguration{configuration_});
 
   assert(result.get() && "all cases must be handled inside the switch.");
   return result;
@@ -242,7 +261,7 @@ HandlerPtr HandlerFactory::create_db_service_debug_handler(
   auto result = std::make_shared<HandlerDbServiceDebug>(db_service_endpoint,
                                                         auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -256,7 +275,7 @@ HandlerPtr HandlerFactory::create_db_service_metadata_handler(
   auto result = std::make_shared<HandlerDbServiceMetadata>(db_service_endpoint,
                                                            auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -270,7 +289,7 @@ HandlerPtr HandlerFactory::create_db_schema_metadata_handler(
   auto result = std::make_shared<HandlerDbSchemaMetadata>(db_schema_endpoint,
                                                           auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -284,7 +303,7 @@ HandlerPtr HandlerFactory::create_db_object_metadata_handler(
   auto result = std::make_shared<HandlerDbObjectMetadata>(db_object_endpoint,
                                                           auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -298,7 +317,7 @@ HandlerPtr HandlerFactory::create_db_object_openapi_handler(
   auto result = std::make_shared<HandlerDbObjectOpenAPI>(db_object_endpoint,
                                                          auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -324,7 +343,7 @@ HandlerPtr HandlerFactory::create_content_file(
   auto result = std::make_shared<HandlerContentFile>(
       content_file_endpoint, auth_manager_, persistent_data);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -340,7 +359,7 @@ HandlerPtr HandlerFactory::create_string_handler(
       protocol, service_id, get_service_path(endpoint), requires_authentication,
       path, file_name, file_content, is_index, auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -361,7 +380,7 @@ HandlerPtr HandlerFactory::create_redirection_handler(
       get_endpoint_host(url), whole_path, file_name, redirection_path,
       auth_manager_, pernament);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -392,7 +411,7 @@ HandlerPtr HandlerFactory::create_authentication_login(
       entry->options.value_or(std::string{}), redirect_path,
       entry->auth_completed_url_validation, auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -421,7 +440,7 @@ HandlerPtr HandlerFactory::create_authentication_logout(
       entry->id, entry->url_context_root, regex_path,
       entry->options.value_or(std::string{}), auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -452,7 +471,7 @@ HandlerPtr HandlerFactory::create_authentication_completed(
       entry->auth_completed_page_content.value_or(std::string{}),
       auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -481,7 +500,7 @@ HandlerPtr HandlerFactory::create_authentication_user(
       entry->id, entry->url_context_root, regex_path,
       entry->options.value_or(std::string{}), auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -511,7 +530,7 @@ HandlerPtr HandlerFactory::create_authentication_auth_apps(
       entry->id, entry->url_context_root, regex_path,
       entry->options.value_or(std::string{}), redirect_path, auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }
@@ -540,7 +559,7 @@ HandlerPtr HandlerFactory::create_authentication_status(
       entry->id, entry->url_context_root, regex_path,
       entry->options.value_or(std::string{}), auth_manager_);
 
-  result->initialize();
+  result->initialize(HandlerConfiguration{configuration_});
 
   return result;
 }

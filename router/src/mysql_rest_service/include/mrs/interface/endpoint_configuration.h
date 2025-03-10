@@ -26,6 +26,7 @@
 #ifndef ROUTER_SRC_MYSQL_REST_SERVICE_INCLUDE_MRS_INTERFACE_ENDPOINT_CONFIGURATION_H_
 #define ROUTER_SRC_MYSQL_REST_SERVICE_INCLUDE_MRS_INTERFACE_ENDPOINT_CONFIGURATION_H_
 
+#include <optional>
 #include <string>
 
 namespace mrs {
@@ -41,6 +42,7 @@ class EndpointConfiguration {
   virtual const std::string &get_mysql_user_data_access() const = 0;
   virtual const std::string &get_mysql_user() const = 0;
   virtual uint64_t get_router_id() const = 0;
+  virtual std::optional<std::string> get_developer() const = 0;
 };
 
 }  // namespace interface

@@ -286,8 +286,11 @@ class RestRequestHandler : public ::http::base::RequestHandler {
 
  public:
   RestRequestHandler(HandlerPtr rest_handler,
-                     mrs::interface::AuthorizeManager *auth_manager)
-      : rest_handler_{rest_handler}, auth_manager_{auth_manager} {}
+                     mrs::interface::AuthorizeManager *auth_manager,
+                     const bool may_log_requests)
+      : rest_handler_{rest_handler},
+        auth_manager_{auth_manager},
+        may_log_requests_{may_log_requests} {}
 
   void trace_error(const http::ErrorChangeResponse &e) {
     logger_.debug([&]() {
@@ -349,6 +352,7 @@ class RestRequestHandler : public ::http::base::RequestHandler {
   void trace_http(const char *type, interface::ReqRes &options,
                   HttpMethod::key_type method, const std::string &path,
                   const HttpHeaders &headers, HttpBuffer &buffer) const {
+    if (!may_log_requests_) return;
     if (!options.header_) return;
 
     logger_.info([&]() {
@@ -873,6 +877,7 @@ class RestRequestHandler : public ::http::base::RequestHandler {
 
   HandlerPtr rest_handler_;
   mrs::interface::AuthorizeManager *auth_manager_;
+  const bool may_log_requests_;
 };
 
 namespace cvt {
@@ -1075,10 +1080,12 @@ Handler::~Handler() {
   }
 }
 
-void Handler::initialize() {
+void Handler::initialize(const Configuration &configuration) {
+  const bool may_log_requests = configuration.may_log_request();
+
   for (auto &path : rest_path_matcher_) {
-    auto handler = std::make_unique<RestRequestHandler>(weak_from_this(),
-                                                        authorization_manager_);
+    auto handler = std::make_unique<RestRequestHandler>(
+        weak_from_this(), authorization_manager_, may_log_requests);
 
     if (log_level_is_debug_) {
       log_debug("router-add: '%s' on host '%s'", path.c_str(),

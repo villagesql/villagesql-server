@@ -44,13 +44,16 @@ class HandlerFactory : public mrs::interface::HandlerFactory {
   using MysqlCacheManager = collector::MysqlCacheManager;
   using SlowQueryMonitor = mrs::database::SlowQueryMonitor;
   using MysqlTaskMonitor = mrs::database::MysqlTaskMonitor;
+  using EndpointConfigurationPtr =
+      std::shared_ptr<mrs::interface::EndpointConfiguration>;
 
  public:
   HandlerFactory(AuthorizeManager *auth_manager, GtidManager *gtid_manager,
                  MysqlCacheManager *cache_manager,
                  ResponseCache *response_cache, ResponseCache *file_cache,
                  SlowQueryMonitor *slow_query_monitor,
-                 MysqlTaskMonitor *task_monitor);
+                 MysqlTaskMonitor *task_monitor,
+                 const EndpointConfigurationPtr &configuration);
 
   std::shared_ptr<handler::PersistentDataContentFile>
   create_persisten_content_file(EndpointBasePtr conent_file_endpoint,
@@ -115,6 +118,7 @@ class HandlerFactory : public mrs::interface::HandlerFactory {
   ResponseCache *file_cache_;
   SlowQueryMonitor *slow_query_monitor_;
   MysqlTaskMonitor *task_monitor_;
+  EndpointConfigurationPtr configuration_;
 };
 
 }  // namespace endpoint
