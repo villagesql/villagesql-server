@@ -7,7 +7,10 @@ if (!$mrs_sql_id_variable)
 
 if (!$mrs_db_schema_requires_auth)
 {
-  --die `mrs_db_schema_requires_auth` variable is required.
+  if ($mrs_db_schema_requires_auth!=0)
+  {
+    --die `mrs_db_schema_requires_auth` variable is required.
+  }
 }
 
 --disable_query_log

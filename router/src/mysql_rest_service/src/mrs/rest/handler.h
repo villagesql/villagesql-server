@@ -52,7 +52,7 @@ class Handler : public interface::RestHandler {
 
   ~Handler() override;
 
-  void initialize() override;
+  void initialize(const Configuration &configuration) override;
 
   const std::string &get_url_host() const override;
   const std::string &get_protocol() const override;
@@ -88,6 +88,7 @@ class Handler : public interface::RestHandler {
   std::vector<void *> handler_id_;
   interface::AuthorizeManager *authorization_manager_;
   const std::string protocol_;
+  std::shared_ptr<Configuration> configuration_;
 
   bool log_level_is_debug_;
   bool log_level_is_info_;

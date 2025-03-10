@@ -40,6 +40,7 @@ class MockEndpointConfiguration : public mrs::interface::EndpointConfiguration {
               (const, override));
   MOCK_METHOD(const std::string &, get_mysql_user, (), (const, override));
   MOCK_METHOD(uint64_t, get_router_id, (), (const, override));
+  MOCK_METHOD(std::optional<std::string>, get_developer, (), (const, override));
 };
 
 #endif  // ROUTER_SRC_REST_MRS_TESTS_MOCK_MOCK_ENDPOINT_CONFIGURATION_H_

@@ -55,6 +55,11 @@ class EndpointConfiguration : public mrs::interface::EndpointConfiguration {
 
   uint64_t get_router_id() const override { return configuration_.router_id_; }
 
+  std::optional<std::string> get_developer() const override {
+    if (configuration_.developer_.empty()) return {};
+    return configuration_.developer_;
+  }
+
  private:
   const mrs::Configuration &configuration_;
 };

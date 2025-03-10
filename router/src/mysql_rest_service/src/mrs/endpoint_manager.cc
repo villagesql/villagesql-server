@@ -88,7 +88,7 @@ EndpointManager::EndpointManager(
   if (!endpoint_factory_) {
     auto handler_factory = std::make_shared<mrs::endpoint::HandlerFactory>(
         auth_manager_, gtid_manager_, cache_, response_cache, file_cache,
-        slow_query_monitor, task_monitor);
+        slow_query_monitor, task_monitor, configuration);
     endpoint_factory_ =
         std::make_shared<EndpointFactory>(handler_factory, configuration);
   }

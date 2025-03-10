@@ -221,6 +221,7 @@ class MrsModule {
 
 using HandlerDebug = mrs::endpoint::handler::HandlerDebug;
 using HandlerCallback = mrs::endpoint::handler::HandlerCallback;
+using HandlerConfiguration = mrs::interface::RestHandler::Configuration;
 
 template <typename T>
 class HttpControl : public T, HandlerCallback {
@@ -229,7 +230,7 @@ class HttpControl : public T, HandlerCallback {
   HttpControl(Args &&...args) : T(std::forward<Args>(args)...) {
     handler_debug = std::make_shared<mrs::endpoint::handler::HandlerDebug>(
         static_cast<HandlerCallback *>(this));
-    handler_debug->initialize();
+    handler_debug->initialize(HandlerConfiguration());
   }
 
   void handler_start() override { T::task_resume(); }

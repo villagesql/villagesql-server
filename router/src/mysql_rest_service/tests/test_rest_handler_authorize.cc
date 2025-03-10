@@ -58,6 +58,7 @@ using UniversalId = mrs::UniversalId;
 using ServiceId = mrs::authentication::AuthorizeManager::ServiceId;
 using AuthUser = mrs::database::entry::AuthUser;
 using Session = mrs::authentication::AuthorizeManager::Session;
+using HandlerConfiguration = mrs::interface::RestHandler::Configuration;
 
 const mrs::UniversalId k_service_id{101};
 
@@ -82,7 +83,7 @@ class HandlerAuthorizeTests : public Test {
     sut_ = std::make_shared<HandlerAuthorizeLogin>(
         mrs::endpoint::handler::k_protocolHttp, "", service_id, rest_path,
         rest_path, "", "", std::optional<std::string>(), &mock_auth_);
-    sut_->initialize();
+    sut_->initialize(HandlerConfiguration());
     ASSERT_NE(nullptr, request_handler_.get());
   }
 

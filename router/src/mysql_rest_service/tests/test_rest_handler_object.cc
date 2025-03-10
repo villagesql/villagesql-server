@@ -51,6 +51,7 @@ using DbService = mrs::database::entry::DbService;
 using DbSchema = mrs::database::entry::DbSchema;
 using DbObject = mrs::database::entry::DbObject;
 using DbHost = mrs::rest::entry::AppUrlHost;
+using HandlerConfiguration = mrs::interface::RestHandler::Configuration;
 using testing::_;
 using testing::Invoke;
 using testing::Mock;
@@ -136,7 +137,7 @@ class RestHandlerObjectTests : public Test {
     endpoint_db_obj_->change_parent(endpoint_db_sch_);
     sut_ = std::make_shared<HandlerDbObjectTable>(endpoint_db_obj_,
                                                   &mock_auth_manager_);
-    sut_->initialize();
+    sut_->initialize(HandlerConfiguration());
   }
 
   void delete_sut() {

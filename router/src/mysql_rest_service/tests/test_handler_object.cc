@@ -64,6 +64,7 @@ using MakeMockPtr = helper::MakeSharedPtr<StrictMock<T>>;
 using RowUserOwnership = mrs::database::entry::RowUserOwnership;
 using RowGroupOwnership = mrs::database::entry::RowGroupOwnership;
 using VectorOfRowGroupOwnership = std::vector<RowGroupOwnership>;
+using HandlerConfiguration = mrs::interface::RestHandler::Configuration;
 
 class HandleObjectTests : public Test {
  public:
@@ -216,7 +217,7 @@ TEST_F(HandleObjectTests, fetch_object_feed) {
       &mock_auth_manager,
       {},
       &mysql_cache};
-  object.initialize();
+  object.initialize(HandlerConfiguration());
 
   EXPECT_CALL(
       mock_session,
@@ -249,7 +250,7 @@ TEST_F(HandleObjectTests, fetch_object_single) {
       &mock_auth_manager,
       {},
       &mysql_cache};
-  object.initialize();
+  object.initialize(HandlerConfiguration());
 
   EXPECT_CALL(
       mock_session,
@@ -283,7 +284,7 @@ TEST_F(HandleObjectTests, delete_single_object_throws_without_filter) {
       &mock_auth_manager,
       {},
       &mysql_cache};
-  object.initialize();
+  object.initialize(HandlerConfiguration());
 
   //  EXPECT_CALL(mock_session,
   //              query(StartsWith("SELECT "
@@ -317,7 +318,7 @@ TEST_F(HandleObjectTests, delete_single_object) {
       &mock_auth_manager,
       {},
       &mysql_cache};
-  object.initialize();
+  object.initialize(HandlerConfiguration());
 
   //  EXPECT_CALL(mock_session,
   //              query(StartsWith("SELECT "
