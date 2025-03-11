@@ -2121,7 +2121,7 @@ typedef bool (*get_table_statistics_t)(
 
 /**
   Retrieve column_statistics from SE.
-  @param THD                      Current THD
+  @param thd                      Current THD
   @param db_name                  Name of schema
   @param table_name               Name of table
   @param column_name              Name of column
