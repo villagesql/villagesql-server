@@ -33,8 +33,11 @@
 #include <mutex>
 #include <stdexcept>
 #include <string>
+#include <thread>
 #include <vector>
 
+#include "mysql/harness/logging/logging.h"
+#include "mysql/harness/mpsc_queue.h"
 #include "mysqlrouter/jit_executor_context.h"
 #include "mysqlrouter/jit_executor_context_handle.h"
 #include "mysqlrouter/jit_executor_value.h"
@@ -42,13 +45,15 @@
 
 namespace jit_executor {
 
+IMPORT_LOG_FUNCTIONS()
+
 /**
  * Generic implementation of a pool
  */
 template <class T>
 class Pool {
  public:
-  explicit Pool(size_t size, const std::function<T()> &factory,
+  explicit Pool(size_t size, const std::function<T(size_t)> &factory,
                 const std::function<void(T)> &destructor = {})
       : m_pool_size{size},
         m_item_factory{factory},
@@ -84,7 +89,7 @@ class Pool {
     }
 
     try {
-      T item = m_item_factory();
+      T item = m_item_factory(m_created_items);
       increase_active_items();
       return item;
     } catch (const std::runtime_error &err) {
@@ -99,15 +104,12 @@ class Pool {
 
       if (!m_teardown && m_items.size() < m_pool_size) {
         m_items.push_back(ctx);
-        m_item_availability.notify_all();
+        m_item_availability.notify_one();
         return;
       }
     }
 
-    if (m_item_destructor) {
-      m_item_destructor(ctx);
-    }
-    decrease_active_items();
+    discard(ctx, false);
   }
 
   void teardown() {
@@ -120,10 +122,7 @@ class Pool {
       auto item = m_items.front();
       m_items.pop_front();
 
-      if (m_item_destructor) {
-        m_item_destructor(item);
-      }
-      decrease_active_items();
+      discard(item, false);
     }
 
     // Waits until all the contexts created by the pool get released
@@ -139,11 +138,16 @@ class Pool {
   /**
    * Discards the affected context and turns ON contention mode for the pool
    */
-  void on_resources_error(T ctx) {
+  void discard(T ctx, bool set_contention_mode) {
+    decrease_active_items(set_contention_mode);
+
     if (m_item_destructor) {
-      m_item_destructor(ctx);
+      try {
+        m_item_destructor(ctx);
+      } catch (const std::exception &e) {
+        log_error("%s", e.what());
+      }
     }
-    decrease_active_items(true);
   }
 
  private:
@@ -151,6 +155,7 @@ class Pool {
     {
       std::scoped_lock lock(m_mutex);
       m_active_items++;
+      m_created_items++;
     }
   }
 
@@ -171,9 +176,10 @@ class Pool {
   bool m_teardown = false;
   size_t m_pool_size;
   std::deque<T> m_items;
-  std::function<T()> m_item_factory;
+  std::function<T(size_t id)> m_item_factory;
   std::function<void(T)> m_item_destructor;
   size_t m_active_items = 0;
+  size_t m_created_items = 0;
   bool m_contention_mode = false;
 };
 
@@ -187,11 +193,15 @@ class ContextPool final {
 
   std::shared_ptr<PooledContextHandle> get_context();
   void release(IContext *ctx);
-  void teardown() { m_pool->teardown(); }
+  void teardown();
 
  private:
+  void release_thread();
+
   CommonContext *m_common_context;
   std::unique_ptr<Pool<IContext *>> m_pool;
+  mysql_harness::WaitingMPSCQueue<IContext *> m_release_queue;
+  std::unique_ptr<std::thread> m_release_thread;
 };
 
 /**

@@ -54,10 +54,14 @@ using Polyglot_error = shcore::polyglot::Polyglot_error;
 using IFile_system = shcore::polyglot::IFile_system;
 using shcore::polyglot::Object_bridge_t;
 
-enum class ProcessingState { Ok, Error, ResourceExhausted };
+// To be used to determine the actual state of the produced result
+enum class ResultState { Ok, Error, ResourceExhausted };
+
+// To be used to determine the processing state
+enum class ProcessingState { Idle, Processing, Finished };
 
 struct Result {
-  std::optional<ProcessingState> state;
+  std::optional<ResultState> state;
   std::optional<std::string> data;
 
   void reset() {
@@ -88,7 +92,7 @@ class JavaScript : public shcore::polyglot::Java_script_interface {
   using Java_script_interface::Java_script_interface;
   ~JavaScript() override = default;
 
-  void start(const std::shared_ptr<IFile_system> &fs = {},
+  bool start(size_t id, const std::shared_ptr<IFile_system> &fs = {},
              const Dictionary_t &predefined_globals = {});
   void stop();
 
@@ -108,11 +112,9 @@ class JavaScript : public shcore::polyglot::Java_script_interface {
   poly_value create_source(const std::string &source,
                            const std::string &code_str) const;
 
-  bool got_resources_error() const { return m_got_resources_error; }
+  bool wait_for_idle();
 
-  bool got_initialization_error() const {
-    return !m_init_error.value_or("").empty();
-  }
+  size_t id() { return m_id; }
 
  private:
   void run();
@@ -126,8 +128,7 @@ class JavaScript : public shcore::polyglot::Java_script_interface {
   void error_handler(const char *bytes, size_t length) override;
   poly_value from_native_object(const Object_bridge_t &object) const override;
 
-  void create_result(const Value &result,
-                     ProcessingState state = ProcessingState::Ok);
+  void create_result(const Value &result, ResultState state = ResultState::Ok);
   void create_result(const shcore::polyglot::Polyglot_error &error);
 
   // Every global function exposed to JavaScript requires:
@@ -169,26 +170,27 @@ class JavaScript : public shcore::polyglot::Java_script_interface {
     static const constexpr auto callback = &JavaScript::get_content_set_path;
   };
 
-  void set_initialized(const std::string &error = "");
+  void set_processing_state(ProcessingState state);
 
-  // To control the statement execution, the execution thread will be in wait
-  // state until a statement arrives
+  // To control the statement execution, the execution thread will be in
+  // wait state until a statement arrives
   std::unique_ptr<std::thread> m_execution_thread;
-  std::mutex m_init_mutex;
-  std::condition_variable m_init_condition;
 
   Dictionary_t m_predefined_globals;
 
   mysql_harness::WaitingMPSCQueue<std::variant<std::monostate, Code>> m_code;
   mysql_harness::WaitingMPSCQueue<Result> m_result;
-  std::optional<std::string> m_init_error;
-  bool m_got_resources_error = false;
 
   ResultType m_result_type;
   poly_value m_promise_resolver;
 
   const GlobalCallbacks *m_global_callbacks = nullptr;
   std::shared_ptr<shcore::polyglot::Session> m_session;
+
+  std::optional<ProcessingState> m_processing_state;
+  std::condition_variable m_processing_state_condition;
+  std::mutex m_processing_state_mutex;
+  size_t m_id = 0;
 };
 
 }  // namespace jit_executor

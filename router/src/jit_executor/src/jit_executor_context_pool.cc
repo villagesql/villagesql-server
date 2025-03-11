@@ -31,6 +31,7 @@
 #include <string>
 #include <vector>
 
+#include "include/my_thread.h"
 #include "jit_executor_common_context.h"
 #include "jit_executor_javascript_context.h"
 
@@ -40,10 +41,12 @@ ContextPool::ContextPool(size_t size, CommonContext *common_context)
     : m_common_context{common_context} {
   m_pool = std::make_unique<Pool<IContext *>>(
       size,
-      [this]() -> JavaScriptContext * {
-        auto context = std::make_unique<JavaScriptContext>(m_common_context);
-        if (context->got_initialization_error()) {
-          return nullptr;
+      [this](size_t id) -> JavaScriptContext * {
+        auto context =
+            std::make_unique<JavaScriptContext>(id, m_common_context);
+        if (!context->started()) {
+          // The factory function should throw runtime exception if fails
+          throw std::runtime_error("Failed initializing JavaScriptContext");
         }
 
         return context.release();
@@ -53,21 +56,49 @@ ContextPool::ContextPool(size_t size, CommonContext *common_context)
 
 ContextPool::~ContextPool() { teardown(); }
 
+void ContextPool::teardown() {
+  m_pool->teardown();
+
+  // Tear down the releaser thread
+  release(nullptr);
+
+  if (m_release_thread) {
+    m_release_thread->join();
+    m_release_thread.reset();
+  }
+}
+
 std::shared_ptr<PooledContextHandle> ContextPool::get_context() {
   auto ctx = m_pool->get();
 
   if (ctx) {
+    if (!m_release_thread) {
+      m_release_thread =
+          std::make_unique<std::thread>(&ContextPool::release_thread, this);
+    }
+
     return std::make_shared<PooledContextHandle>(this, ctx);
   }
 
   return {};
 }
 
-void ContextPool::release(IContext *ctx) {
-  if (ctx->got_resources_error()) {
-    m_pool->on_resources_error(ctx);
-  } else {
-    m_pool->release(ctx);
+void ContextPool::release(IContext *ctx) { m_release_queue.push(ctx); }
+
+void ContextPool::release_thread() {
+  my_thread_self_setname("Jit-CtxDispose");
+  while (true) {
+    auto ctx = m_release_queue.pop();
+    if (ctx) {
+      if (ctx->wait_for_idle()) {
+        m_pool->release(ctx);
+      } else {
+        m_pool->discard(ctx, true);
+      }
+    } else {
+      // nullptr arrived, meaning we are done
+      break;
+    }
   }
 }
 

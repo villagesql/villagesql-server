@@ -146,7 +146,7 @@ void Polyglot_language::initialize(const std::shared_ptr<IFile_system> &fs) {
   if (const auto rc =
           poly_attach_thread(m_common_context->isolate(), &m_thread);
       rc != poly_ok) {
-    throw Polyglot_error(thread(), rc);
+    throw Polyglot_generic_error("error attaching thread to isolate");
   }
 
   m_scope = std::make_unique<Polyglot_scope>(thread());
@@ -190,9 +190,11 @@ void Polyglot_language::initialize(const std::shared_ptr<IFile_system> &fs) {
     Polyglot_scope context_creation_scope(thread());
 
     poly_value globals;
-    throw_if_error(poly_context_get_bindings, thread(), context(),
-                   get_language_id(), &globals);
-
+    if (const auto rc = poly_context_get_bindings(thread(), context(),
+                                                  get_language_id(), &globals);
+        rc != poly_ok) {
+      throw Polyglot_generic_error("error getting context bindings");
+    }
     m_globals = std::make_shared<Polyglot_object>(m_types.get(), thread(),
                                                   context(), globals, "");
   }
@@ -385,8 +387,11 @@ poly_context Polyglot_language::copy_global_context() const {
                  &new_context);
 
   poly_value new_globals;
-  throw_if_error(poly_context_get_bindings, thread(), new_context,
-                 get_language_id(), &new_globals);
+  if (const auto rc = poly_context_get_bindings(
+          thread(), new_context, get_language_id(), &new_globals);
+      rc != poly_ok) {
+    throw Polyglot_generic_error("error getting context bindings");
+  }
 
   auto members = m_globals->get_members();
   for (const auto &member : members) {

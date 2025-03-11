@@ -35,7 +35,7 @@ DebugContextHandle::DebugContextHandle(const std::string &debug_port,
                                        CommonContext *common_context) {
   assert(!debug_port.empty());
   assert(common_context);
-  m_ctx = std::make_unique<JavaScriptContext>(common_context, debug_port);
+  m_ctx = std::make_unique<JavaScriptContext>(0, common_context, debug_port);
 }
 
 }  // namespace jit_executor
