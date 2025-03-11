@@ -1453,16 +1453,12 @@ INSTANTIATE_TEST_SUITE_P(
       return info.param.test_name;
     });
 
-static constexpr const unsigned long max_supported_version =
-    MYSQL_ROUTER_VERSION_MAJOR * 10000 + MYSQL_ROUTER_VERSION_MINOR * 100 + 99;
-
 struct ServerCompatTestParam {
   std::string description;
   ClusterType cluster_type;
   std::string tracefile;
   std::string server_version;
-  bool expect_failure;
-  std::string expected_error_msg;
+  std::string expected_warning_msg;
 };
 
 class CheckServerCompatibilityTest
@@ -1544,23 +1540,20 @@ TEST_P(CheckServerCompatibilityTest, Spec) {
   EXPECT_TRUE(
       wait_for_transaction_count_increase(md_servers_http_ports[0], 5, 5s));
 
-  if (GetParam().expect_failure) {
-    EXPECT_NO_FATAL_FAILURE(verify_new_connection_fails(router_rw_port));
-    EXPECT_NO_FATAL_FAILURE(verify_new_connection_fails(router_ro_port));
-
-    EXPECT_TRUE(wait_log_contains(router, GetParam().expected_error_msg, 5s))
-        << GetParam().expected_error_msg;
-  } else {
-    auto conn_res = make_new_connection(router_rw_port);
-    ASSERT_NO_ERROR(conn_res);
-    ASSERT_NO_FATAL_FAILURE(
-        verify_port(conn_res->get(), md_servers_classic_ports[0]));
-
-    conn_res = make_new_connection(router_ro_port);
-    ASSERT_NO_ERROR(conn_res);
-    ASSERT_NO_FATAL_FAILURE(
-        verify_port(conn_res->get(), md_servers_classic_ports[1]));
+  if (!GetParam().expected_warning_msg.empty()) {
+    EXPECT_TRUE(wait_log_contains(router, GetParam().expected_warning_msg, 5s))
+        << GetParam().expected_warning_msg;
   }
+
+  auto conn_res = make_new_connection(router_rw_port);
+  ASSERT_NO_ERROR(conn_res);
+  ASSERT_NO_FATAL_FAILURE(
+      verify_port(conn_res->get(), md_servers_classic_ports[0]));
+
+  conn_res = make_new_connection(router_ro_port);
+  ASSERT_NO_ERROR(conn_res);
+  ASSERT_NO_FATAL_FAILURE(
+      verify_port(conn_res->get(), md_servers_classic_ports[1]));
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -1572,54 +1565,51 @@ INSTANTIATE_TEST_SUITE_P(
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            false, ""},
+            ""},
         ServerCompatTestParam{
             "Replica Set; Server is the same version as Router - OK",
             ClusterType::RS_V2, "metadata_dynamic_nodes_v2_ar.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            false, ""},
+            ""},
         ServerCompatTestParam{
-            "GR Cluster; Server major version is highier than Router - "
-            "we should reject the metadata",
+            "GR Cluster; Server major version is higher than Router - "
+            "we should log a warning",
             ClusterType::GR_V2, "metadata_dynamic_nodes_v2_gr.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR + 1) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            true,
-            "WARNING .* Unsupported MySQL Server version '.*'. Maximal "
-            "supported version is '" +
-                std::to_string(max_supported_version) + "'."},
+            "WARNING .* MySQL Server version .* is higher than the Router "
+            "version. You should upgrade the Router to match the MySQL Server "
+            "version."},
         ServerCompatTestParam{
-            "GR Cluster; Server minor version is highier than Router - "
-            "we should reject the metadata",
+            "GR Cluster; Server minor version is higher than Router - "
+            "we should log a warning",
             ClusterType::GR_V2, "metadata_dynamic_nodes_v2_gr.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR + 1) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            true,
-            "WARNING .* Unsupported MySQL Server version '.*'. Maximal "
-            "supported version is '" +
-                std::to_string(max_supported_version) + "'."},
+            "WARNING .* MySQL Server version .* is higher than the Router "
+            "version. You should upgrade the Router to match the MySQL Server "
+            "version."},
         ServerCompatTestParam{
-            "GR Cluster; Server patch version is highier than Router - OK",
+            "GR Cluster; Server patch version is higher than Router - OK",
             ClusterType::GR_V2, "metadata_dynamic_nodes_v2_gr.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH + 1),
-            false, ""},
+            ""},
         ServerCompatTestParam{
-            "Replica Set; Server minor version is highier than Router - "
-            "we should reject the metadata",
+            "Replica Set; Server minor version is higher than Router - "
+            "we should log a warning",
             ClusterType::RS_V2, "metadata_dynamic_nodes_v2_ar.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR + 1) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            true,
-            "WARNING .* Unsupported MySQL Server version '.*'. Maximal "
-            "supported version is '" +
-                std::to_string(max_supported_version) + "'."}));
+            "WARNING .* MySQL Server version .* is higher than the Router "
+            "version. You should upgrade the Router to match the MySQL Server "
+            "version."}));
 
 int main(int argc, char *argv[]) {
   init_windows_sockets();

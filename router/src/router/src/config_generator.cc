@@ -384,8 +384,9 @@ void ConfigGenerator::init(
 void ConfigGenerator::check_target(
     const std::map<std::string, std::string> &bootstrap_options,
     bool allow_no_metadata) {
-  if (!is_server_version_supported(mysql_)) {
-    throw std::runtime_error(get_unsupported_server_version_msg(mysql_));
+  if (!is_server_version_compatible(mysql_)) {
+    log_warning("WARNING: %s",
+                get_incompatible_server_version_msg(mysql_).c_str());
   }
 
   try {

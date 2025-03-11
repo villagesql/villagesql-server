@@ -4401,15 +4401,11 @@ TEST_P(CrossExeRouterBootstrapTest, BootstrapRemoveServerAddressesOption) {
       ::testing::Not(::testing::HasSubstr("bootstrap_server_addresses")));
 }
 
-static constexpr const unsigned long max_supported_version =
-    MYSQL_ROUTER_VERSION_MAJOR * 10000 + MYSQL_ROUTER_VERSION_MINOR * 100 + 99;
-
 struct ServerCompatTestParam {
   std::string description;
   std::string tracefile;
   std::string server_version;
-  bool expect_failure;
-  std::string expected_error_msg;
+  std::string expected_warning_msg;
 };
 
 class CheckServerCompatibilityTest
@@ -4446,15 +4442,13 @@ TEST_P(CheckServerCompatibilityTest, Spec) {
                                              std::to_string(classic_port),
                                          "-d", bootstrap_dir.name()};
 
-  const auto expected_exit_code =
-      GetParam().expect_failure ? EXIT_FAILURE : EXIT_SUCCESS;
-  auto &router = launch_router_for_bootstrap(cmdline_bs, expected_exit_code);
-  check_exit_code(router, expected_exit_code);
+  auto &router = launch_router_for_bootstrap(cmdline_bs, EXIT_SUCCESS);
+  check_exit_code(router, EXIT_SUCCESS);
 
-  if (GetParam().expect_failure) {
+  if (!GetParam().expected_warning_msg.empty()) {
     const std::string router_console_output = router.get_full_output();
     EXPECT_TRUE(
-        pattern_found(router_console_output, GetParam().expected_error_msg))
+        pattern_found(router_console_output, GetParam().expected_warning_msg))
         << router_console_output;
   }
 }
@@ -4468,55 +4462,52 @@ INSTANTIATE_TEST_SUITE_P(
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            false, ""},
+            ""},
         ServerCompatTestParam{
             "Replica Set; Server is the same version as Router - bootstrap OK",
             "bootstrap_ar.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            false, ""},
+            ""},
         ServerCompatTestParam{
-            "GR Cluster; Server major version is highier than Router - "
-            "bootstrap should fail",
+            "GR Cluster; Server major version is higher than Router - "
+            "bootstrap should issue a warning",
             "bootstrap_gr.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR + 1) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            true,
-            "Error: Unsupported MySQL Server version '.*'. Maximal supported "
-            "version is '" +
-                std::to_string(max_supported_version) + "'."},
+            "WARNING: MySQL Server version .* is higher than the Router "
+            "version. You should upgrade the Router to match the MySQL Server "
+            "version."},
         ServerCompatTestParam{
-            "GR Cluster; Server minor version is highier than Router - "
-            "bootstrap should fail",
+            "GR Cluster; Server minor version is higher than Router - "
+            "bootstrap should issue a warning",
             "bootstrap_gr.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR + 1) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            true,
-            "Error: Unsupported MySQL Server version '.*'. Maximal supported "
-            "version is '" +
-                std::to_string(max_supported_version) + "'."},
+            "WARNING: MySQL Server version .* is higher than the Router "
+            "version. You should upgrade the Router to match the MySQL Server "
+            "version."},
         ServerCompatTestParam{
-            "GR Cluster; Server patch version is highier than Router - "
+            "GR Cluster; Server patch version is higher than Router - "
             "bootstrap OK",
             "bootstrap_gr.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH + 1),
-            false, ""},
+            ""},
         ServerCompatTestParam{
-            "Replica Set; Server major version is highier than Router - "
-            "bootstrap should fail",
+            "Replica Set; Server major version is higher than Router - "
+            "bootstrap should issue a warning",
             "bootstrap_ar.js",
             std::to_string(MYSQL_ROUTER_VERSION_MAJOR) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_MINOR + 1) + "." +
                 std::to_string(MYSQL_ROUTER_VERSION_PATCH),
-            true,
-            "Error: Unsupported MySQL Server version '.*'. Maximal supported "
-            "version is '" +
-                std::to_string(max_supported_version) + "'."}));
+            "WARNING: MySQL Server version .* is higher than the Router "
+            "version. You should upgrade the Router to match the MySQL Server "
+            "version."}));
 
 TEST_P(CrossExeRouterBootstrapTest, LocalClusterFromClusterName) {
   // launch our Cluster mock
