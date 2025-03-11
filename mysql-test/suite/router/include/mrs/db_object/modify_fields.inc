@@ -21,6 +21,8 @@ if (!$mrs_modify_fields)
 let $_columns=$mrs_modify_columns;
 let $_fileds=$mrs_modify_fields;
 
+START TRANSACTION;
+
 while($_columns)
 {
 
@@ -40,6 +42,8 @@ while($_columns)
      SET name="$_fileds_element"
      WHERE db_column->>"\$.name"="$_column_element";
 }
+
+COMMIT;
 
 --enable_query_log
 --enable_result_log
