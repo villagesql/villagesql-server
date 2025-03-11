@@ -3099,6 +3099,11 @@ bool Protocol_classic::end_result_metadata() {
   <tr><td>@ref sect_protocol_basic_dt_string_fix "string[2]"</td>
       <td>reserved</td>
       <td>reserved for future use.</td></tr>
+  <tr><td colspan="3">if command was COM_FIELD_LIST {</td></tr>
+  <tr><td>@ref sect_protocol_basic_dt_string_le "string&lt;lenenc&gt;"</td>
+      <td>default value</td>
+      <td>NULL if 0xFB</td></tr>
+  <tr><td colspan="3">}</td></tr>
   </table>
 
   @note `decimals` and `column_length` can be used for text output formatting
@@ -3143,12 +3148,9 @@ bool Protocol_classic::end_result_metadata() {
       <td>number of decimal digits</td></tr>
   <tr><td colspan="3">}</td></tr>
   <tr><td colspan="3">if command was COM_FIELD_LIST {</td></tr>
-  <tr><td>@ref sect_protocol_basic_dt_int_le "int&lt;lenenc&gt;"</td>
-      <td>length of default values</td>
-      <td>[02]</td></tr>
   <tr><td>@ref sect_protocol_basic_dt_string_le "string&lt;lenenc&gt;"</td>
-      <td>default_values</td>
-      <td></td></tr>
+      <td>default_value</td>
+      <td>NULL if 0xFB</td></tr>
   <tr><td colspan="3">}</td></tr>
   </table>
 
