@@ -912,11 +912,10 @@ GRClusterMetadata::fetch_cluster_topology(
 
         MySQLSession::Transaction transaction(metadata_connection_.get());
 
-        if (!is_server_version_supported(metadata_connection_.get())) {
-          log_warning("%s - skipping", get_unsupported_server_version_msg(
-                                           metadata_connection_.get())
-                                           .c_str());
-          continue;
+        if (!is_server_version_compatible(metadata_connection_.get())) {
+          log_warning("%s", get_incompatible_server_version_msg(
+                                metadata_connection_.get())
+                                .c_str());
         }
 
         // throws metadata_cache::metadata_error and

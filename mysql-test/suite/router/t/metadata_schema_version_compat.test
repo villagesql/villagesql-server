@@ -1,5 +1,5 @@
 # Checks that the Router still accepts metadata when minor and patch version
-# is highier than the version it has embedded (knows)
+# is higher than the version it has embedded (knows)
 
 --source include/have_router.inc
 
@@ -52,7 +52,7 @@ AS SELECT $ver_major, $ver_minor, $ver_patch;
 --let MRS_CLIENT_ARGS=$MRS_CLIENT --url https://$mrs_host_and_port
 
 echo Make sure the MRS starts the service despite the fact
-      that minor and patch version is highier than expected;
+      that minor and patch version is higher than expected;
 
 exec $MRS_CLIENT_ARGS --wait-until-status 60 --path /svc/basic/tab
       --display none;

@@ -78,7 +78,7 @@ inline const std::error_category &metadata_cache_category() noexcept {
         case metadata_errc::invalid_cluster_type:
           return "unexpected cluster type";
         case metadata_errc::outdated_view_id:
-          return "highier view_id seen";
+          return "higher view_id seen";
         case metadata_errc::schema_version_too_low:
           return "metadata schema version not supported";
         default:
