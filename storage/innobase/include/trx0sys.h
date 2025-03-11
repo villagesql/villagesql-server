@@ -580,7 +580,7 @@ class Trx_by_id_with_min {
   The reason we don't use an std::mutex, is that we don't wish to wait, nor
   spin, we just want to give up when somebody else already works on it. */
   static std::atomic<bool> s_updating_lower_bound;
-  /** Performs an equivalent of if(upper_bound<a)a=upper_bound atomically,
+  /** Performs an equivalent of if(upper_bound < a) a=upper_bound atomically,
   ignoring, but preserving the UPDATING_LOWER_BOUND flag.
   @param[in] a           The atomic we want to limit to upper_bound
   @param[in] upper_bound The upper_bound we want to impose on a */
