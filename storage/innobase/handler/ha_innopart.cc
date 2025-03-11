@@ -3215,6 +3215,12 @@ int ha_innopart::records(ha_rows *num_rows) {
         return (HA_ERR_NO_SUCH_TABLE);
       }
 
+      m_prebuilt->index_usable = m_prebuilt->index->is_usable(trx);
+      if (!m_prebuilt->index_usable) {
+        *num_rows = HA_POS_ERROR;
+        return HA_ERR_TABLE_DEF_CHANGED;
+      }
+
       build_template(true);
 
       indexes.push_back(m_prebuilt->table->first_index());
