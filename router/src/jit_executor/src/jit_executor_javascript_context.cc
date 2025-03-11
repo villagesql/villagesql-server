@@ -39,14 +39,11 @@
 
 namespace jit_executor {
 
-JavaScriptContext::JavaScriptContext(CommonContext *common_context,
+JavaScriptContext::JavaScriptContext(size_t id, CommonContext *common_context,
                                      const std::string &debug_port) {
   m_language = std::make_shared<JavaScript>(common_context, debug_port);
-  m_language->start(common_context->file_system(), common_context->globals());
-
-  if (m_language->got_initialization_error()) {
-    m_language->stop();
-  }
+  m_language_started = m_language->start(id, common_context->file_system(),
+                                         common_context->globals());
 }
 
 std::string JavaScriptContext::execute(
@@ -62,12 +59,10 @@ std::string JavaScriptContext::execute(
   return m_language->execute(code, timeout, result_type, global_callbacks);
 }
 
-bool JavaScriptContext::got_resources_error() const {
-  return m_language->got_resources_error();
-}
+bool JavaScriptContext::wait_for_idle() { return m_language->wait_for_idle(); }
 
-bool JavaScriptContext::got_initialization_error() const {
-  return m_language->got_initialization_error();
-}
+size_t JavaScriptContext::id() { return m_language->id(); }
+
+bool JavaScriptContext::started() const { return m_language_started; }
 
 }  // namespace jit_executor

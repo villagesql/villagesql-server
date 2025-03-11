@@ -187,8 +187,8 @@ void CommonContext::life_cycle_thread() {
   m_init_condition.notify_one();
 
   // Now waits for the finalization indication
-  {
-    std::unique_lock<std::mutex> lock(m_mutex);
+  if (m_initialized) {
+    std::unique_lock<std::mutex> lock(m_finish_mutex);
     m_finish_condition.wait(lock, [this]() { return m_terminated; });
   }
 

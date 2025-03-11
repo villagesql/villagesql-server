@@ -43,7 +43,7 @@ using Dictionary_t = shcore::Dictionary_t;
 
 class JavaScriptContext : public IContext {
  public:
-  JavaScriptContext(CommonContext *common_context,
+  JavaScriptContext(size_t id, CommonContext *common_context,
                     const std::string &debug_port = "");
   ~JavaScriptContext() override { m_language->stop(); }
 
@@ -53,12 +53,15 @@ class JavaScriptContext : public IContext {
                       ResultType result_type,
                       const GlobalCallbacks &global_callbacks) override;
 
-  bool got_resources_error() const override;
+  bool wait_for_idle() override;
 
-  bool got_initialization_error() const;
+  size_t id() override;
+
+  bool started() const;
 
  private:
   std::shared_ptr<JavaScript> m_language;
+  bool m_language_started = false;
 };
 
 }  // namespace jit_executor

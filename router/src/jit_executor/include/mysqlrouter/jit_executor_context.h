@@ -46,7 +46,9 @@ class IContext {
                               const std::vector<shcore::Value> &parameters,
                               int timeout, ResultType result_type,
                               const GlobalCallbacks &global_callbacks) = 0;
-  virtual bool got_resources_error() const = 0;
+
+  virtual bool wait_for_idle() = 0;
+  virtual size_t id() = 0;
 };
 
 }  // namespace jit_executor

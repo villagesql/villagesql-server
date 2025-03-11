@@ -28,6 +28,7 @@
 #include <memory>
 #include <vector>
 
+#include "include/my_thread.h"
 #include "mysql/harness/logging/logging.h"
 
 namespace jit_executor {
@@ -77,6 +78,7 @@ void ServiceHandlers::teardown() {
 }
 
 void ServiceHandlers::do_tear_down() {
+  my_thread_self_setname("Jit-TearDown");
   if (m_context_pool) {
     m_context_pool->teardown();
     m_context_pool.reset();
