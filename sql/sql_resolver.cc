@@ -5263,6 +5263,43 @@ bool validate_gc_assignment(const mem_root_deque<Item *> &fields,
   return false;
 }
 
+/// Minion of prune_sj_exprs, q.v.
+static void prune_sj_exprs_from_nest(Item_func_eq *item, Table_ref *nest) {
+  auto it1 = nest->nested_join->sj_outer_exprs.begin();
+  auto it2 = nest->nested_join->sj_inner_exprs.begin();
+  while (it1 != nest->nested_join->sj_outer_exprs.end() &&
+         it2 != nest->nested_join->sj_inner_exprs.end()) {
+    Item *outer = *it1;
+    Item *inner = *it2;
+    if ((outer == item->arguments()[0] && inner == item->arguments()[1]) ||
+        (outer == item->arguments()[1] && inner == item->arguments()[0])) {
+      nest->nested_join->sj_outer_exprs.erase(it1);
+      nest->nested_join->sj_inner_exprs.erase(it2);
+      break;
+    }
+    it1++;
+    it2++;
+  }
+}
+
+/**
+  Recursively look for removed item inside any nested joins'
+  sj_{inner,outer}_exprs. If target for removal is found, remove such entries
+  because the corresponding equality condition has been eliminated.
+
+  @param item   the equality which is being removed.
+  @param nest   the table nest (nullptr means top nest)
+*/
+void Query_block::prune_sj_exprs(Item_func_eq *item,
+                                 mem_root_deque<Table_ref *> *nest) {
+  if (nest == nullptr) nest = &m_table_nest;
+  for (Table_ref *table : *nest) {
+    if (table->nested_join == nullptr) continue;
+    prune_sj_exprs_from_nest(item, table);
+    prune_sj_exprs(item, &table->nested_join->m_tables);
+  }
+}
+
 /**
   Delete unused columns from merged tables.
 

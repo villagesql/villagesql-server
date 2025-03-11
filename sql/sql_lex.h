@@ -1777,6 +1777,8 @@ class Query_block : public Query_term {
   */
   bool accept(Select_lex_visitor *visitor);
 
+  void prune_sj_exprs(Item_func_eq *item, mem_root_deque<Table_ref *> *nest);
+
   /**
     Cleanup this subtree (this Query_block and all nested Query_blockes and
     Query_expressions).
