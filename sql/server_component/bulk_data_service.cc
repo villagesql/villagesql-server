@@ -174,54 +174,6 @@ static int format_blob_column(Field *field, const CHARSET_INFO *from_cs,
       break;
   }
 
-  if (sql_col.m_type == MYSQL_TYPE_VECTOR) {
-    const size_t len = text_col.m_data_len;
-
-    uint32 input_dims = get_dimensions(len, Field_vector::precision);
-    if (input_dims > Field_vector::max_dimensions) {
-      error_details.m_column_length = len;
-      error_details.column_input_data = text_col.m_data_ptr;
-      return ER_TO_VECTOR_CONVERSION;
-    }
-
-    assert(input_dims != 0);
-
-    /* Refer to Item_func_from_vector::per_value_chars */
-    const uint32 per_value_chars = 16;
-    uint32 out_length = input_dims * per_value_chars;
-
-#ifndef NDEBUG
-    const uint32 max_output_bytes =
-        (Field_vector::max_dimensions * per_value_chars);
-    assert(out_length <= max_output_bytes);
-#endif /* NDEBUG */
-
-    if (text_col.m_data_len > sql_col.m_data_len) {
-      error_details.m_column_length = sql_col.m_data_len;
-      return ER_TOO_BIG_FIELDLENGTH;
-    }
-
-    /* Refer to Field_vector::store(). */
-    const char *from = text_col.m_data_ptr;
-    for (uint32 i = 0; i < input_dims; i++) {
-      float to_store = 0;
-      memcpy(&to_store, from + sizeof(float) * i, sizeof(float));
-      if (std::isnan(to_store) || std::isinf(to_store)) {
-        error_details.m_column_length = len;
-        error_details.column_input_data = text_col.m_data_ptr;
-        return ER_TO_VECTOR_CONVERSION;
-      }
-    }
-
-    auto ptr = std::make_unique<char[]>(out_length);
-    if (from_vector_to_string(text_col.m_data_ptr, input_dims, ptr.get(),
-                              &out_length)) {
-      error_details.m_column_length = len;
-      error_details.column_input_data = text_col.m_data_ptr;
-      return ER_TO_VECTOR_CONVERSION;
-    }
-  }
-
   char *field_begin = sql_col.get_data();
   char *field_data = field_begin + length_size;
 
@@ -237,6 +189,50 @@ static int format_blob_column(Field *field, const CHARSET_INFO *from_cs,
     const char *end_pos = nullptr;
     const size_t nchars = text_col.m_data_len;
     auto field_size = sql_col.m_data_len;
+
+    if (sql_col.m_type == MYSQL_TYPE_VECTOR) {
+      assert(!text_col.is_ext());
+      const size_t len = text_col.m_data_len;
+
+      uint32 input_dims = get_dimensions(len, Field_vector::precision);
+      if (input_dims > Field_vector::max_dimensions) {
+        error_details.m_column_length = len;
+        error_details.column_input_data = text_col.m_data_ptr;
+        return ER_TO_VECTOR_CONVERSION;
+      }
+
+      assert(input_dims != 0);
+
+      /* Refer to Item_func_from_vector::per_value_chars */
+      const uint32 per_value_chars = 16;
+      uint32 out_length = input_dims * per_value_chars;
+
+#ifndef NDEBUG
+      const uint32 max_output_bytes =
+          (Field_vector::max_dimensions * per_value_chars);
+      assert(out_length <= max_output_bytes);
+#endif /* NDEBUG */
+
+      /* Refer to Field_vector::store(). */
+      const char *from = text_col.m_data_ptr;
+      for (uint32 i = 0; i < input_dims; i++) {
+        float to_store = 0;
+        memcpy(&to_store, from + sizeof(float) * i, sizeof(float));
+        if (std::isnan(to_store) || std::isinf(to_store)) {
+          error_details.m_column_length = len;
+          error_details.column_input_data = text_col.m_data_ptr;
+          return ER_TO_VECTOR_CONVERSION;
+        }
+      }
+
+      auto ptr = std::make_unique<char[]>(out_length);
+      if (from_vector_to_string(text_col.m_data_ptr, input_dims, ptr.get(),
+                                &out_length)) {
+        error_details.m_column_length = len;
+        error_details.column_input_data = text_col.m_data_ptr;
+        return ER_TO_VECTOR_CONVERSION;
+      }
+    }
 
     if (field_charset == &my_charset_bin) {
       /* If the charset of the field is binary, then the column data in the CSV
