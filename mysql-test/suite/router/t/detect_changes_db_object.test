@@ -109,6 +109,7 @@
 --let $mrs_sql_id_variable=@db_obj2
 --let $mrs_modify_columns=id, name, comments, date
 --let $mrs_modify_fields=my_id, my_name, my_comments, my_date
+--let $mrs_modify_use_transaction=1
 --source ../include/mrs/db_object/modify_fields.inc
 
 

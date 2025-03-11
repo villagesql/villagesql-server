@@ -21,7 +21,9 @@ if (!$mrs_modify_fields)
 let $_columns=$mrs_modify_columns;
 let $_fileds=$mrs_modify_fields;
 
-START TRANSACTION;
+if ($mrs_modify_use_transaction) {
+  START TRANSACTION;
+}
 
 while($_columns)
 {
@@ -43,12 +45,15 @@ while($_columns)
      WHERE db_column->>"\$.name"="$_column_element";
 }
 
-COMMIT;
+if ($mrs_modify_use_transaction) {
+  COMMIT;
+}
 
 --enable_query_log
 --enable_result_log
 
 --let $$mrs_modify_columns=
 --let $mrs_modify_fields=
+--let $mrs_modify_use_transaction=
 
 
