@@ -341,6 +341,9 @@ void QueryRestMysqlTask::execute_at_router(
     query_ << task_options.status_data_json_schema;
   execute(session.get());
 
+  query_ = "SET @mysql_tasks_initiated = 'MRS'";
+  execute(session.get());
+
   query_ = {"CALL `mysql_tasks`.`start_task_monitor`(?, ?, ?, NULL)"};
   query_ << progress_event_name << task_id;
   if (task_options.monitoring_sql.empty())
@@ -376,6 +379,8 @@ void QueryRestMysqlTask::execute_at_router(
   mysqlrouter::sqlstring query{"CALL `mysql_tasks`.`stop_task_monitor`(?, ?)"};
   query << progress_event_name << task_id;
   postamble.emplace_back(query.str());
+
+  postamble.emplace_back("SET @mysql_tasks_initiated = NULL");
 
   query = {
       "CALL `mysql_tasks`.`add_task_log`(?, 'Execution finished.',"
