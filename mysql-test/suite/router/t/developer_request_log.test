@@ -66,6 +66,7 @@ EOF
 --source ../include/mrs/wait_mrs_read_metadata.inc
 
 --let $mrs_client_arg_path='/svc/basic/tab/1'
+--let $mrs_client_arg_wait_until_status=60
 --let $mrs_client_arg_display=none
 --source ../include/mrs/mrs_client.inc
 
@@ -81,6 +82,13 @@ EOF
 --source ../include/mysqlrouter_restart.inc
 --source ../include/mrs/wait_mrs_read_metadata.inc
 --connection default
+
+# Next step makes sure that we are synced with HTTP state (all endpoints are exposed).
+# Its needed for cleanup.
+--let $mrs_client_arg_path='/svc/basic/tab/1'
+--let $mrs_client_arg_wait_until_status=60
+--let $mrs_client_arg_display=none
+--source ../include/mrs/mrs_client.inc
 
 remove_file $MYSQL_TMP_DIR/extra_router_config.cnf;
 --source ../include/mrs/cleanup.inc
