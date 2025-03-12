@@ -78,6 +78,7 @@ class HttpClientRequest {
                     const http::base::Uri &uri);
 
   void add_header(const char *name, const char *value);
+  const Headers &get_input_headers() const;
   Result do_request(http::base::method::key_type type, const std::string &path,
                     const std::string &body, bool set_new_cookies = true);
 
@@ -91,6 +92,7 @@ class HttpClientRequest {
   std::unique_ptr<http::client::Client> client_;
   std::string response_;
   Headers one_shot_headers_;
+  Headers input_headers_;
 };
 
 }  // namespace mrs_client

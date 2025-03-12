@@ -118,6 +118,7 @@ if ($mrs_client_arg_expect_header)
     --die "mrs_client_arg_expect_header" requires mrs_client_arg_expect_header_value parameter.
   }
   --let $mrs_escape_query=$mrs_client_arg_expect_header_value
+  --let $mrs_include_character_and=1
   --source escape_url_query.inc
   --let $mrs_client_cmd=$mrs_client_cmd --encoded-expected-header=$mrs_client_arg_expect_header=$mrs_escape_query
 }

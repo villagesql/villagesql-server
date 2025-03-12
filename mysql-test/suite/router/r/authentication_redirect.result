@@ -27,6 +27,10 @@ grant all on *.* to mrsuser@'%';
 # 7. path part contains control characters
 # 8. relative path, directory traversing
 #
+## III. Execute user redirection, but change the target URL
+#
+# 1. all fragments must be reseted
+#
 # Registred SERVICE at path: /svc_no_valid
 # Registred SERVICE at path: /svc_open_valid
 # Registred AUTH APP at path: NULL
@@ -220,6 +224,12 @@ OK
 #
 # II.8
 GET /svc_open_valid/authentication/login?onCompletionRedirect=../../admin
+
+OK
+
+#
+# III.1
+GET /svc_no_valid/authentication/login?onCompletionRedirect=/path1/#fragment
 
 OK
 drop user mrsuser@'%';

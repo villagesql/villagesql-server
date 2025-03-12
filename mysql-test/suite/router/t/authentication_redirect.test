@@ -34,6 +34,10 @@ grant all on *.* to mrsuser@'%';
 --echo # 7. path part contains control characters
 --echo # 8. relative path, directory traversing
 --echo #
+--echo ## III. Execute user redirection, but change the target URL
+--echo #
+--echo # 1. all fragments must be reseted
+--echo #
 
 
 --source ../include/mrs/start_object_definition.inc
@@ -61,6 +65,17 @@ grant all on *.* to mrsuser@'%';
 
 --let $test_service=svc_open_valid
 --source ../include/test/authentication_redirect.inc
+
+--echo
+--echo #
+--echo # III.1
+--let $mrs_client_arg_path='/svc_no_valid/authentication/login?onCompletionRedirect=/path1/#fragment'
+--let $mrs_client_arg_authentication=basic
+--let $mrs_client_arg_user=mrsuser
+--let $mrs_client_arg_password=S3kre7
+--let $mrs_client_arg_expect_header=Location
+--let $mrs_client_arg_expect_header_value="/path1/?authApp=Internal&login=success"
+--source ../include/mrs/mrs_client.inc
 
 # Cleanup
 drop user mrsuser@'%';
