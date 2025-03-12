@@ -115,8 +115,10 @@ inline AuthApp limit_users(const AuthApp &a) {
 }
 
 ScramHandler::ScramHandler(const AuthApp &entry, const std::string &random_data,
-                           QueryFactory *qf)
-    : SaslHandler{limit_users(entry), qf}, random_data_{random_data} {
+                           QueryFactory *qf, SessionManager *session_manager)
+    : SaslHandler{limit_users(entry), qf},
+      random_data_{random_data},
+      session_manager_{session_manager} {
   log_debug("ScramHandler for service %s", to_string(entry_).c_str());
 }
 
@@ -187,9 +189,15 @@ SaslResult ScramHandler::client_initial_response(RequestContext &ctxt,
   } else {
     session_data->ksi = UserOptionsParser(session->user.auth_string).decode();
   }
-  session_data->nonce +=
-      helper::generate_string<kServerNonceLength, GeneratorNonceCharacters>();
-  session->handler_secondary_id = session_data->nonce;
+
+  session_manager_->set_unique_session_secondary_id(
+      session, [&session_data]() -> auto{
+        return session_data->nonce +
+               helper::generate_string<kServerNonceLength,
+                                       GeneratorNonceCharacters>();
+      });
+
+  session_data->nonce = session->handler_secondary_id;
 
   if (!session_data->ksi.is_valid)
     return SaslResult(get_problem_description(HttpStatusCode::Unauthorized,

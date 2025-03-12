@@ -42,6 +42,7 @@ class AuthHandlerFactory {
   using AuthApp = mrs::database::entry::AuthApp;
   using AuthHandlerPtr = std::shared_ptr<AuthorizeHandler>;
   using AuthorizeHandlerCallbakcs = helper::AuthorizeHandlerCallbakcs;
+  using SessionManager = http::SessionManager;
 
  public:
   virtual ~AuthHandlerFactory() = default;
@@ -57,7 +58,7 @@ class AuthHandlerFactory {
       AuthorizeHandlerCallbakcs *cb, const AuthApp &entry) const = 0;
   virtual AuthHandlerPtr create_scram_auth_handler(
       AuthorizeHandlerCallbakcs *cb, const AuthApp &entry,
-      const std::string &rd) const = 0;
+      const std::string &rd, SessionManager *session_manager) const = 0;
 };
 
 }  // namespace interface

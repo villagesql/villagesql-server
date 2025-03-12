@@ -68,10 +68,10 @@ AuthHandlerPtr AuthHandlerFactory::create_oidc_auth_handler(
 }
 
 AuthHandlerPtr AuthHandlerFactory::create_scram_auth_handler(
-    AuthorizeHandlerCallbakcs *cb, const AuthApp &entry,
-    const std::string &rd) const {
+    AuthorizeHandlerCallbakcs *cb, const AuthApp &entry, const std::string &rd,
+    SessionManager *session_manager) const {
   using Obj = TrackAuthorizeHandler<AuthorizeHandlerCallbakcs, ScramHandler>;
-  return std::make_shared<Obj>(cb, entry, rd, qf_);
+  return std::make_shared<Obj>(cb, entry, rd, qf_, session_manager);
 }
 
 }  // namespace authentication
