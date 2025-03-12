@@ -61,7 +61,6 @@ class ParseCacheOptions
   void handle_object_value(const std::string &key, const ValueType &vt) {
     //    log_debug("handle_object_value key:%s, v:%s", key.c_str(),
     //              cvt::to_string(vt).c_str());
-    static const std::string kHttpContent = "defaultContent.";
     using std::to_string;
 
     if (key == "mysql.cache.userdata.ro_instances") {
