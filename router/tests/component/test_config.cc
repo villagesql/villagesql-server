@@ -802,15 +802,26 @@ INSTANTIATE_TEST_SUITE_P(
                              {"metadata_refresh_interval", "0"}},
                             "main ERROR .* Error: `metadata_refresh_interval` "
                             "option, must be greater than zero."),
-        MRSConfigErrorParam("metadata_refresh_interval_nan",
-                            {{"mysql_user", "mysql_user_mrs"},
-                             {"mysql_read_write_route", "rw"},
-                             {"mysql_read_only_route", "ro"},
-                             {"router_id", "1"},
-                             {"metadata_refresh_interval", "nan"}},
-                            "main ERROR .* Error: `metadata_refresh_interval` "
-                            "option, must be greater than zero."),
-
+        MRSConfigErrorParam(
+            "metadata_refresh_interval_nan",
+            {{"mysql_user", "mysql_user_mrs"},
+             {"mysql_read_write_route", "rw"},
+             {"mysql_read_only_route", "ro"},
+             {"router_id", "1"},
+             {"metadata_refresh_interval", "nan"}},
+            "Configuration error: option metadata_refresh_interval in "
+            "\\[mysql_rest_service\\] needs value between 0 and "
+            "1\\.79769e\\+308 inclusive, was 'nan'"),
+        MRSConfigErrorParam(
+            "metadata_refresh_interval_foo",
+            {{"mysql_user", "mysql_user_mrs"},
+             {"mysql_read_write_route", "rw"},
+             {"mysql_read_only_route", "ro"},
+             {"router_id", "1"},
+             {"metadata_refresh_interval", "foo"}},
+            "Configuration error: option metadata_refresh_interval in "
+            "\\[mysql_rest_service\\] needs value between 0 and "
+            "1\\.79769e\\+308 inclusive, was 'foo'"),
         MRSConfigErrorParam("unknown_option",
                             {{"mysql_user", "mysql_user_mrs"},
                              {"mysql_read_write_route", "rw"},
