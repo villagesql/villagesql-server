@@ -62,6 +62,9 @@ class JIT_EXECUTOR_PLUGIN_EXPORT Session
   Session(MYSQL *mysql);
   ~Session() override;
 
+  // Ensures the connection is ready for the next query execution
+  void reset() override;
+
  private:
   std::shared_ptr<IResult> query(
       const char *sql, size_t len, bool buffered,
@@ -133,9 +136,6 @@ class JIT_EXECUTOR_PLUGIN_EXPORT Session
   // TODO(rennox): these functions go on the high level object
   void set_query_attributes(const shcore::Dictionary_t &args);
   std::vector<Query_attribute> query_attributes() const;
-
-  // Ensures the connection is ready for the next query execution
-  void reset() override;
 
   std::shared_ptr<IResult> run_sql(const std::string &sql) override;
 

@@ -33,7 +33,6 @@
 #include "mysqlrouter/jit_executor_db_interface.h"
 #include "mysqlrouter/jit_executor_exceptions.h"
 #include "objects/polyglot_date.h"
-#include "utils/utils_general.h"
 
 namespace shcore {
 namespace polyglot {
