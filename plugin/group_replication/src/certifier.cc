@@ -92,8 +92,11 @@ int Certifier_broadcast_thread::initialize() {
   if ((mysql_thread_create(key_GR_THD_cert_broadcast, &broadcast_pthd,
                            get_connection_attrib(), launch_broadcast_thread,
                            (void *)this))) {
-    mysql_mutex_unlock(&broadcast_run_lock); /* purecov: inspected */
-    return 1;                                /* purecov: inspected */
+    /* purecov: begin inspected */
+    mysql_mutex_unlock(&broadcast_run_lock);
+    LogPluginErr(ERROR_LEVEL, ER_GRP_RPL_CERT_BROADCAST_THREAD_CREATE_FAILED);
+    return 1;
+    /* purecov: end */
   }
   broadcast_thd_state.set_created();
 
@@ -108,13 +111,13 @@ int Certifier_broadcast_thread::initialize() {
   return 0;
 }
 
-int Certifier_broadcast_thread::terminate() {
+void Certifier_broadcast_thread::terminate() {
   DBUG_TRACE;
 
   mysql_mutex_lock(&broadcast_run_lock);
   if (broadcast_thd_state.is_thread_dead()) {
     mysql_mutex_unlock(&broadcast_run_lock);
-    return 0;
+    return;
   }
 
   aborted = true;
@@ -135,8 +138,6 @@ int Certifier_broadcast_thread::terminate() {
     mysql_cond_timedwait(&broadcast_run_cond, &broadcast_run_lock, &abstime);
   }
   mysql_mutex_unlock(&broadcast_run_lock);
-
-  return 0;
 }
 
 void Certifier_broadcast_thread::dispatcher() {
@@ -155,6 +156,8 @@ void Certifier_broadcast_thread::dispatcher() {
   broadcast_thd_state.set_running();
   mysql_cond_broadcast(&broadcast_run_cond);
   mysql_mutex_unlock(&broadcast_run_lock);
+
+  LogPluginErr(SYSTEM_LEVEL, ER_GRP_RPL_CERT_BROADCAST_THREAD_STARTED);
 
   while (!aborted) {
     // Increase Group Replication feature usage every 10 minutes.
@@ -215,6 +218,8 @@ void Certifier_broadcast_thread::dispatcher() {
   broadcast_thd_state.set_terminated();
   mysql_cond_broadcast(&broadcast_run_cond);
   mysql_mutex_unlock(&broadcast_run_lock);
+
+  LogPluginErr(SYSTEM_LEVEL, ER_GRP_RPL_CERT_BROADCAST_THREAD_STOPPED);
 
   my_thread_exit(nullptr);
 }
@@ -324,6 +329,10 @@ Certifier::Certifier()
 Certifier::~Certifier() {
   mysql_mutex_lock(&LOCK_certification_info);
   initialized = false;
+
+  broadcast_thread->terminate();
+  delete broadcast_thread;
+
   clear_certification_info();
   delete certification_info_tsid_map;
 
@@ -334,7 +343,6 @@ Certifier::~Certifier() {
   delete group_gtid_extracted;
   delete group_gtid_tsid_map;
   mysql_mutex_unlock(&LOCK_certification_info);
-  delete broadcast_thread;
 
   mysql_mutex_lock(&LOCK_members);
   clear_members();
@@ -563,15 +571,6 @@ int Certifier::initialize(ulonglong gtid_assignment_block_size) {
 
   error = broadcast_thread->initialize();
   initialized = !error;
-  return error;
-}
-
-int Certifier::terminate() {
-  DBUG_TRACE;
-  int error = 0;
-
-  if (is_initialized()) error = broadcast_thread->terminate();
-
   return error;
 }
 
