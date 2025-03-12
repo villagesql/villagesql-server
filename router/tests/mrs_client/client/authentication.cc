@@ -306,7 +306,7 @@ Result Authentication::do_basic_flow(
           "Response doesn't contains Set-Cookie with proper value.");
   }
 
-  return {HttpStatusCode::Ok, {}, {}};
+  return {HttpStatusCode::Ok, request->get_input_headers(), {}};
 }
 
 Result Authentication::do_basic_json_flow(
@@ -363,7 +363,7 @@ Result Authentication::do_basic_json_flow(
   // The session_id - cookie name is service dependent, thus we would also need
   // to transfer service_id.
 
-  return {HttpStatusCode::Ok, {}, {}};
+  return {HttpStatusCode::Ok, request->get_input_headers(), {}};
 }
 
 class Scram {
@@ -556,7 +556,7 @@ Result Authentication::do_scram_post_flow(
     request->get_session()->add_header(&header[0]);
   }
 
-  return {HttpStatusCode::Ok, {}, {}};
+  return {HttpStatusCode::Ok, request->get_input_headers(), {}};
 }
 
 Result Authentication::do_scram_get_flow(
@@ -619,7 +619,7 @@ Result Authentication::do_scram_get_flow(
     request->get_session()->add_header(&header[0]);
   }
 
-  return {HttpStatusCode::Ok, {}, {}};
+  return {HttpStatusCode::Ok, request->get_input_headers(), {}};
 }
 
 }  // namespace mrs_client

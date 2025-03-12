@@ -32,16 +32,6 @@
 
 namespace mrs_client {
 
-static Headers get_headers(const ::http::base::Request *request) {
-  Headers result;
-  auto &headers = request->get_input_headers();
-  for (const auto &h : headers) {
-    result.push_back(h);
-  }
-
-  return result;
-}
-
 HttpClientRequest::HttpClientRequest(net::io_context *context,
                                      HttpClientSession *session,
                                      const http::base::Uri &uri)
@@ -54,6 +44,20 @@ HttpClientRequest::HttpClientRequest(net::io_context *context,
 
 void HttpClientRequest::add_header(const char *name, const char *value) {
   one_shot_headers_.emplace_back(name, value);
+}
+
+static Headers get_headers(const ::http::base::Request *request) {
+  Headers result;
+  auto &headers = request->get_input_headers();
+  for (const auto &h : headers) {
+    result.push_back(h);
+  }
+
+  return result;
+}
+
+const Headers &HttpClientRequest::get_input_headers() const {
+  return input_headers_;
 }
 
 Result HttpClientRequest::do_request(http::base::method::key_type method,
@@ -96,8 +100,8 @@ Result HttpClientRequest::do_request(http::base::method::key_type method,
   auto &ib = request.get_input_buffer();
   auto array = ib.pop_front(ib.length());
 
-  return Result{code, get_headers(&request),
-                std::string(array.begin(), array.end())};
+  input_headers_ = get_headers(&request);
+  return Result{code, input_headers_, std::string(array.begin(), array.end())};
 }
 
 }  // namespace mrs_client

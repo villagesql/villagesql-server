@@ -200,6 +200,11 @@ std::string HandlerAuthorizeLogin::append_status_parameters(
   Url::append_query_parameter(uri, "login",
                               get_authentication_status(error.status));
 
+  // Best practices of handling URL redirection point that
+  // fragment should be blocked in some way.
+  // We are not forwarding it.
+  uri.set_fragment({});
+
   return uri.join();
 }
 
