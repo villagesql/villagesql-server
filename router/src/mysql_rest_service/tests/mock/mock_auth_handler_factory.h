@@ -45,7 +45,7 @@ class MockAuthHandlerFactory : public mrs::interface::AuthHandlerFactory {
               (const, override));
   MOCK_METHOD(AuthHandlerPtr, create_scram_auth_handler,
               (AuthorizeHandlerCallbakcs * cb, const AuthApp &entry,
-               const std::string &rd),
+               const std::string &rd, SessionManager *session_manager),
               (const, override));
 };
 

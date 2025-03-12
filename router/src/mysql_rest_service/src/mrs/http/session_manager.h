@@ -153,6 +153,17 @@ class SessionManager {
                          const std::string &holder_name);
   SessionPtr new_session(const SessionId &session_id);
 
+  template <class Generator>
+  void set_unique_session_secondary_id(Session *session, const Generator &g) {
+    std::lock_guard<std::mutex> lck{mutex_};
+    std::string id;
+    do {
+      id = g();
+    } while (get_session_handler_specific_id_impl(id));
+
+    session->handler_secondary_id = id;
+  }
+
   void remove_session(const Session::SessionData *session_data);
   bool remove_session(const SessionPtr &session);
   bool remove_session(const SessionId session);

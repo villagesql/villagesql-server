@@ -40,6 +40,7 @@ class AuthHandlerFactory : public interface::AuthHandlerFactory {
  public:
   using MysqlCacheManager = collector::MysqlCacheManager;
   using QueryFactory = mrs::interface::QueryFactory;
+  using SessionManager = http::SessionManager;
 
  public:
   AuthHandlerFactory(QueryFactory *qf);
@@ -55,7 +56,7 @@ class AuthHandlerFactory : public interface::AuthHandlerFactory {
                                           const AuthApp &entry) const override;
   AuthHandlerPtr create_scram_auth_handler(
       AuthorizeHandlerCallbakcs *cb, const AuthApp &entry,
-      const std::string &rd) const override;
+      const std::string &rd, SessionManager *session_manager) const override;
 
  private:
   QueryFactory *qf_;

@@ -333,7 +333,8 @@ AuthorizeHandlerPtr AuthorizeManager::create_authentication_application(
   } else if (entry.vendor_id == k_vendor_google) {
     return factory_->create_google_auth_handler(this, entry);
   } else if (entry.vendor_id == k_vendor_mrs) {
-    return factory_->create_scram_auth_handler(this, entry, random_data_);
+    return factory_->create_scram_auth_handler(this, entry, random_data_,
+                                               &session_manager_);
   } else if (entry.vendor_id == k_vendor_oidc) {
     if (entry.url.empty()) {
       log_error(
