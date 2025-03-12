@@ -759,7 +759,8 @@ class RestRequestHandler : public ::http::base::RequestHandler {
           }
           [[fallthrough]];
         default:
-          if (handler->get_options().debug.http.response.detailed_errors_)
+          if (handler->get_options().debug.http.response.detailed_errors_ &&
+              may_log_requests_)
             send_rfc7807_error(*ctxt->request, e.status,
                                responose_encode_error(e, err));
           else
