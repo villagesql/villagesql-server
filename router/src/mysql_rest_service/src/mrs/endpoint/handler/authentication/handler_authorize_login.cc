@@ -118,8 +118,7 @@ void HandlerAuthorizeLogin::set_session_cookie(RequestContext *ctxt) const {
 }
 
 HttpResult HandlerAuthorizeLogin::handle_get(RequestContext *ctxt) {
-  log_debug("HandlerAuthorizeLogin::handle_get - before redirects %s",
-            ctxt->session ? ctxt->session->get_session_id().c_str() : "(null)");
+  log_debug("HandlerAuthorizeLogin::handle_get - before redirects");
 
   if (!ctxt->session) {
     throw http::Error(HttpStatusCode::Unauthorized);
@@ -133,9 +132,9 @@ HttpResult HandlerAuthorizeLogin::handle_get(RequestContext *ctxt) {
   }
 
   log_debug(
-      "HandlerAuthorizeLogin::handle_get - no redirects (session:%p, "
+      "HandlerAuthorizeLogin::handle_get - no redirects ("
       "generate_token:%s)",
-      ctxt->session.get(), (ctxt->session->generate_token ? "yes" : "no"));
+      ctxt->session->generate_token ? "yes" : "no");
 
   if (!ctxt->session->generate_token) {
     set_session_cookie(ctxt);

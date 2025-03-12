@@ -136,6 +136,46 @@ static std::string find_header_or(const ::http::base::Headers &headers,
   return *result;
 }
 
+bool WwwAuthenticationHandler::validate_redirection_url(
+    const std::optional<std::string> &redirect) {
+  if (!redirect.has_value()) return true;
+
+  const auto &v = redirect.value();
+  try {
+    // 1. Relative protocol check
+    if (v.length() > 2 && v[0] == '/' && v[1] == '/') return false;
+
+    // 2. Forbids %0A %0B %00 %20 etc various others
+    auto u = mysqlrouter::URIParser::parse(
+        redirect.value(), /*allow_path_rootless*/ true,
+        /*allow_schemeless*/ true, /*path_keep_last_slash*/ true,
+        /*query_single_parameter_when_cant_parse*/ true,
+        /*keep_empty_root*/ true);
+
+    // 3. Lets be strict forbid URL with credentials
+    if (!u.username.empty() || !u.password.empty()) return false;
+
+    // 4. Only know protocols, this check is complementary to 1.
+    if (!u.scheme.empty()) {
+      if (u.scheme != "http" && u.scheme != "https") return false;
+    }
+
+    // 5. double slashes in path & path traversing
+    const auto k_count = u.path.size();
+    for (size_t i = 0; i < k_count; ++i) {
+      const auto &p = u.path[i];
+      // Double slash is not allowed
+      if (p.empty() && i != k_count - 1) return false;
+      if (p == ".." || p == ".") return false;
+    }
+
+  } catch (const std::exception &) {
+    return false;
+  }
+
+  return true;
+}
+
 std::optional<WwwAuthenticationHandler::Credentials>
 WwwAuthenticationHandler::authorize_method_get(RequestContext &ctxt,
                                                Session *session) {
@@ -146,33 +186,33 @@ WwwAuthenticationHandler::authorize_method_get(RequestContext &ctxt,
   url.get_if_query_parameter("onCompletionClose",
                              &session->users_on_complete_timeout);
 
+  if (!validate_redirection_url(session->users_on_complete_url_redirection)) {
+    log_debug("URL redirection is invalid.");
+    // Ignore the error, but the redirection URL is not usable, lets fail the
+    // authentication.
+    session->users_on_complete_url_redirection.reset();
+
+    throw http::Error{HttpStatusCode::Unauthorized};
+  }
+
   if (ctxt.redirection_validator &&
       session->users_on_complete_url_redirection.has_value()) {
     if (!ctxt.redirection_validator->is_valid()) {
+      log_debug("URL validation pattern is invalid.");
       session->users_on_complete_url_redirection.reset();
       throw http::Error{HttpStatusCode::Unauthorized};
     }
 
     if (!ctxt.redirection_validator->matches(
             session->users_on_complete_url_redirection.value())) {
+      log_debug("URL validation pattern doesn't match '%s'.",
+                session->users_on_complete_url_redirection.value().c_str());
       session->users_on_complete_url_redirection.reset();
-
       throw http::Error{HttpStatusCode::Unauthorized};
     }
   }
 
   if (session->users_on_complete_url_redirection.has_value()) {
-    try {
-      mysqlrouter::URIParser::parse(
-          session->users_on_complete_url_redirection.value(), true, true, true,
-          true);
-    } catch (const std::exception &) {
-      // Ignore the error, but the redirection URL is not usable, lets fail the
-      // authentication.
-      session->users_on_complete_url_redirection.reset();
-
-      throw http::Error{HttpStatusCode::Unauthorized};
-    }
   }
 
   auto authorization =
