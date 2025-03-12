@@ -247,16 +247,6 @@ SaslResult ScramHandler::client_response(RequestContext &ctxt, Session *session,
   auto client_key = crypto_xor(client_sig, auth_continue.client_proof);
   auto stored_key_from_client = crypto_sha256(client_key);
 
-  log_debug("c:client_proof:      %s",
-            string_array(auth_continue.client_proof).c_str());
-  log_debug("s:client_sig:        %s", string_array(client_sig).c_str());
-  log_debug("s:ksi.salt:          %s",
-            string_array(session_data->ksi.salt).c_str());
-  log_debug("s:ksi.stored_key:    %s",
-            string_array(session_data->ksi.stored_key).c_str());
-  log_debug("x:client_key:        %s", string_array(client_key).c_str());
-  log_debug("x:authe_message:     %s", string_array(authe_message).c_str());
-
   if (stored_key_from_client != session_data->ksi.stored_key)
     return SaslResult(get_problem_description(HttpStatusCode::Unauthorized));
 
