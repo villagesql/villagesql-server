@@ -82,8 +82,9 @@ bool QueryEntryAuthUser::query_user(MySQLSession *session,
     }
 
     if (!user_data->name.empty()) {
+      // we force a case-sensitive comparison here
       query_ << (mysqlrouter::sqlstring("and convert(name using utf8)=? "
-                                        "COLLATE \"utf8mb4_general_ci\"")
+                                        "COLLATE \"utf8mb4_bin\"")
                  << user_data->name);
       break;
     }

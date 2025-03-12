@@ -215,6 +215,7 @@ exec $MRS_CLIENT_ARGS
 --echo
 --echo #
 --echo # III.1
+--echo Check no access for non existing user
 exec $MRS_CLIENT_ARGS
   -a $test_scram
   --path /svc1/authentication/login
@@ -223,6 +224,17 @@ exec $MRS_CLIENT_ARGS
   --expected-status Unauthorized
   --session-type $test_session_type;
 
+--echo Check the username is case-sensitive
+exec $MRS_CLIENT_ARGS
+  -a $test_scram
+  --path /svc1/authentication/login
+  -u Svc1_usr
+  -p test
+  $_test_auth_app
+  --expected-status Unauthorized
+  --session-type $test_session_type;
+
+--echo Check no access with bad password
 exec $MRS_CLIENT_ARGS
   -a $test_scram
   --path /svc1/authentication/login

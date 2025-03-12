@@ -90,9 +90,15 @@ OK
 
 #
 # III.1
+Check no access for non existing user
 GET /svc1/authentication/login
 {"message":"Unauthorized","status":"401"}
 OK
+Check the username is case-sensitive
+GET /svc1/authentication/login
+{"message":"Unauthorized","status":"401"}
+OK
+Check no access with bad password
 GET /svc1/authentication/login
 {"message":"Unauthorized","status":"401"}
 OK
