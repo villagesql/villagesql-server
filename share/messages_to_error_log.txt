@@ -12330,6 +12330,15 @@ ER_CHECK_TABLE_FUNCTIONS
 ER_CHECK_TABLE_FUNCTIONS_DETAIL
   eng "%s"
 
+ER_GRP_RPL_CERT_BROADCAST_THREAD_CREATE_FAILED
+  eng "Failed to create the Group Replication certifier broadcast thread (THD_certifier_broadcast)."
+
+ER_GRP_RPL_CERT_BROADCAST_THREAD_STARTED
+  eng "The Group Replication certifier broadcast thread (THD_certifier_broadcast) started."
+
+ER_GRP_RPL_CERT_BROADCAST_THREAD_STOPPED
+  eng "The Group Replication certifier broadcast thread (THD_certifier_broadcast) stopped."
+
 #
 # End of 8.0 error messages intended to be written to the server error log.
 #
