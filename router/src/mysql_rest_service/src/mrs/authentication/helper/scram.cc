@@ -191,7 +191,9 @@ class JsonAuthInitRequest
  public:
   bool String(const Ch *cstr, rapidjson::SizeType clength, bool) override {
     if (!is_object_path()) return true;
-    if ("username" == get_current_key())
+    if ("user" == get_current_key() && result_.user.empty())
+      result_.user.assign(cstr, clength);
+    else if ("username" == get_current_key())
       result_.user.assign(cstr, clength);
     else if ("nonce" == get_current_key())
       result_.nonce.assign(cstr, clength);
