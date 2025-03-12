@@ -50,6 +50,7 @@
 #include "mrs/rest/request_context.h"
 #include "mrs/rest/response_cache.h"
 #include "mrs/router_observation_entities.h"
+#include "mysql/harness/scoped_callback.h"
 #include "router/src/mysql_rest_service/include/collector/mysql_cache_manager.h"
 
 #ifdef HAVE_JIT_EXECUTOR_PLUGIN
@@ -144,7 +145,7 @@ class HandlerDbObjectScript::Impl {
 
       if (params.get_type() != shcore::Map) {
         throw http::Error(HttpStatusCode::BadRequest,
-                          "Invalid parameters format");
+                          "Invalid parameters format.");
       }
 
       auto params_map = params.as_map();
@@ -166,12 +167,16 @@ class HandlerDbObjectScript::Impl {
           allowed_params.push_back(it.name);
         }
 
-        auto allowed_str = shcore::str_join(allowed_params, ", ");
+        std::string allowed_str{"The function accepts no parameters."};
+        if (!allowed_params.empty()) {
+          allowed_str =
+              "Allowed: " + shcore::str_join(allowed_params, ", ") + ".";
+        }
         auto invalid_str = shcore::str_join(invalid_params, ", ");
 
-        throw http::Error(HttpStatusCode::BadRequest,
-                          "Not allowed parameter:"s + invalid_str +
-                              ". Allowed: " + allowed_str);
+        throw http::Error(
+            HttpStatusCode::BadRequest,
+            "Not allowed parameter:"s + invalid_str + ". " + allowed_str);
       }
 
       for (auto &el : fields) {
@@ -285,6 +290,15 @@ HttpResult HandlerDbObjectScript::handle_script(
       }
 
       HandlerDbObjectTable::CachedSession session;
+      std::shared_ptr<shcore::polyglot::database::Session> be_session;
+
+      mysql_harness::ScopedCallback reset_session([&be_session]() {
+        // This reset ensures the session is left in a usable state
+        if (be_session) {
+          be_session->reset();
+        }
+      });
+
       auto result = context->get()->execute(
           m_impl->entry_script(), entry_->content_set_def->class_name,
           entry_->content_set_def->name, parameters, timeout, result_type,
@@ -301,8 +315,10 @@ HttpResult HandlerDbObjectScript::handle_script(
              session = get_session(ctxt, session_type);
              session->connection_id();
 
-             return std::make_shared<shcore::polyglot::database::Session>(
+             be_session = std::make_shared<shcore::polyglot::database::Session>(
                  session.get()->get_handle());
+
+             return be_session;
            },
            // Get current MRS User ID Callback
            [&, ctxt]() -> std::optional<std::string> {

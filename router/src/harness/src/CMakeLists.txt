@@ -262,6 +262,7 @@ SET(harness_source
   log_reopen.cc
   random_generator.cc
   signal_handler.cc
+  scoped_callback.cc
   sd_notify.cc
   socket_operations.cc
   tls_cipher.cc

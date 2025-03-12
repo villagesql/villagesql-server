@@ -37,10 +37,10 @@
 
 #include "languages/polyglot_common_context.h"
 #include "mysql/harness/logging/logging.h"
+#include "mysql/harness/scoped_callback.h"
 #include "native_wrappers/polyglot_file_system_wrapper.h"
 #include "utils/polyglot_error.h"
 #include "utils/polyglot_scope.h"
-#include "utils/utils_general.h"
 #include "utils/utils_path.h"
 #include "utils/utils_string.h"
 
@@ -204,7 +204,7 @@ void Polyglot_language::finalize() {
   m_globals.reset();
   m_types->dispose();
 
-  shcore::Scoped_callback cleanup{[this]() {
+  mysql_harness::ScopedCallback cleanup{[this]() {
     m_context.reset();
     m_storage->clear();
     m_scope->close();

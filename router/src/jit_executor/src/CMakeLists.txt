@@ -59,7 +59,6 @@ SET(jit_executor_plugin_SOURCE
   utils/polyglot_utils.cc
   utils/profiling.cc
   utils/utils_encoding.cc
-  utils/utils_general.cc
   utils/utils_json.cc
   utils/utils_path.cc
   utils/utils_string.cc

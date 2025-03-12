@@ -23,46 +23,22 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef MYSQLSHDK_LIBS_UTILS_UTILS_GENERAL_H_
-#define MYSQLSHDK_LIBS_UTILS_UTILS_GENERAL_H_
+#include "mysql/harness/scoped_callback.h"
 
-#include <functional>
-#include <stdexcept>
-#include <string_view>
-#include <utility>
+#include <exception>
 
-namespace shcore {
+#include "mysql/harness/logging/logging.h"
 
-class Scoped_callback {
- public:
-  explicit Scoped_callback(std::function<void()> c) noexcept
-      : m_callback{std::move(c)} {}
+namespace mysql_harness {
 
-  Scoped_callback() = default;
-  Scoped_callback(const Scoped_callback &) = delete;
-  Scoped_callback &operator=(const Scoped_callback &) = delete;
+IMPORT_LOG_FUNCTIONS()
 
-  Scoped_callback(Scoped_callback &&o) noexcept { *this = std::move(o); }
-  Scoped_callback &operator=(Scoped_callback &&o) noexcept {
-    if (this != &o) std::swap(m_callback, o.m_callback);
-    return *this;
+ScopedCallback::~ScopedCallback() noexcept {
+  try {
+    call();
+  } catch (const std::exception &e) {
+    log_error("Unexpected exception: %s", e.what());
   }
+}
 
-  ~Scoped_callback() noexcept;
-
-  void call() {
-    if (!m_callback) return;
-    std::exchange(m_callback, nullptr)();
-  }
-
-  void cancel() { m_callback = nullptr; }
-
- private:
-  std::function<void()> m_callback;
-};
-
-bool is_valid_identifier(std::string_view name);
-
-}  // namespace shcore
-
-#endif  // MYSQLSHDK_LIBS_UTILS_UTILS_GENERAL_H_
+}  // namespace mysql_harness

@@ -38,6 +38,7 @@
 #include "include/my_thread.h"
 #include "languages/polyglot_javascript.h"
 #include "mysql/harness/logging/logging.h"
+#include "mysql/harness/scoped_callback.h"
 #include "mysqlrouter/jit_executor_common.h"
 #include "mysqlrouter/jit_executor_db_interface.h"
 #include "mysqlrouter/polyglot_file_system.h"
@@ -45,7 +46,6 @@
 #include "objects/polyglot_session.h"
 #include "utils/polyglot_error.h"
 #include "utils/polyglot_utils.h"
-#include "utils/utils_general.h"
 #include "utils/utils_string.h"
 
 namespace jit_executor {
@@ -257,7 +257,7 @@ void JavaScript::run() {
     set_processing_state(ProcessingState::Finished);
   }
 
-  shcore::Scoped_callback terminate([this, &initialized]() {
+  mysql_harness::ScopedCallback terminate([this, &initialized]() {
     if (initialized) {
       try {
         finalize();
@@ -516,7 +516,7 @@ std::string JavaScript::execute(const std::string &code, int timeout,
   m_global_callbacks = &global_callbacks;
   m_code.push(Code{code, result_type});
 
-  shcore::Scoped_callback clean_resources([this]() {
+  mysql_harness::ScopedCallback clean_resources([this]() {
     if (m_session) {
       m_session->reset();
     }

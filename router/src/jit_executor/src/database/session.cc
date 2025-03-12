@@ -35,10 +35,10 @@
 // #include "mysqlshdk/libs/utils/debug.h"
 // #include "mysqlshdk/libs/utils/fault_injection.h"
 // #include "mysqlshdk/libs/utils/log_sql.h"
+#include "mysql/harness/scoped_callback.h"
 #include "objects/polyglot_date.h"
 #include "router/src/router/include/mysqlrouter/mysql_session.h"
 #include "utils/profiling.h"
-#include "utils/utils_general.h"
 
 namespace shcore {
 namespace polyglot {
@@ -150,7 +150,7 @@ void Session::reset() {
 std::shared_ptr<IResult> Session::run_sql(const std::string &sql) {
   auto attributes = query_attributes();
 
-  shcore::Scoped_callback clean_query_attributes(
+  mysql_harness::ScopedCallback clean_query_attributes(
       [this]() { m_query_attributes.clear(); });
 
   return run_sql(sql.c_str(), sql.size(), false, false, attributes);

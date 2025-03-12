@@ -27,10 +27,10 @@
 
 #include <cstring>
 
+#include "mysql/harness/scoped_callback.h"
 #include "native_wrappers/polyglot_collectable.h"
 #include "utils/polyglot_scope.h"
 #include "utils/polyglot_utils.h"
-#include "utils/utils_general.h"
 
 namespace shcore {
 namespace polyglot {
@@ -60,7 +60,7 @@ void Polyglot_common_context::initialize(
     const std::vector<std::string> &isolate_args) {
   if (!isolate_args.empty()) {
     char **params = get_char_ptr(isolate_args);
-    shcore::Scoped_callback release([&]() { delete[] params; });
+    mysql_harness::ScopedCallback release([&]() { delete[] params; });
 
     poly_isolate_params isolate_params;
     if (poly_ok != poly_set_isolate_params(&isolate_params,

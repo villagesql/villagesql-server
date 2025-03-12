@@ -23,36 +23,42 @@
  * 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#include "utils/utils_general.h"
+#ifndef ROUTER_SRC_HARNESS_INCLUDE_MYSQL_HARNESS_SCOPED_CALLBACK_H_
+#define ROUTER_SRC_HARNESS_INCLUDE_MYSQL_HARNESS_SCOPED_CALLBACK_H_
 
-#include <regex>
-#include <string_view>
+#include <functional>
 #include <utility>
 
-#include "mysql/harness/logging/logging.h"
+namespace mysql_harness {
 
-namespace shcore {
+class ScopedCallback {
+ public:
+  explicit ScopedCallback(std::function<void()> c) noexcept
+      : callback_{std::move(c)} {}
 
-Scoped_callback::~Scoped_callback() noexcept {
-  try {
-    call();
-  } catch (const std::exception &e) {
-    mysql_harness::logging::log_error("Unexpected exception: %s", e.what());
+  ScopedCallback() = default;
+  ScopedCallback(const ScopedCallback &) = delete;
+  ScopedCallback &operator=(const ScopedCallback &) = delete;
+
+  ScopedCallback(ScopedCallback &&o) noexcept { *this = std::move(o); }
+  ScopedCallback &operator=(ScopedCallback &&o) noexcept {
+    if (this != &o) std::swap(callback_, o.callback_);
+    return *this;
   }
-}
 
-bool is_valid_identifier(std::string_view name) {
-  if (name.empty()) return false;
+  ~ScopedCallback() noexcept;
 
-  std::locale locale;
+  void call() {
+    if (!callback_) return;
+    std::exchange(callback_, nullptr)();
+  }
 
-  if (!std::isalpha(name.front(), locale) && (name.front() != '_'))
-    return false;
+  void cancel() { callback_ = nullptr; }
 
-  return std::all_of(
-      std::next(name.begin()), name.end(), [&locale](auto cur_char) {
-        return std::isalnum(cur_char, locale) || (cur_char == '_');
-      });
-}
+ private:
+  std::function<void()> callback_;
+};
 
-}  // namespace shcore
+}  // namespace mysql_harness
+
+#endif  // ROUTER_SRC_HARNESS_INCLUDE_MYSQL_HARNESS_SCOPED_CALLBACK_H_
