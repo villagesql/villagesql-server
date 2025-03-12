@@ -40,6 +40,7 @@ ADD_STATIC_LIBRARY(mysql_rest_service_helper
   helper/json/to_string.cc
   helper/json/to_sqlstring.cc
   helper/json/jvalue.cc
+  helper/json/merge.cc
   helper/token/jwt.cc
   helper/mysql_column_types.cc
   helper/mysql_numeric_value.cc

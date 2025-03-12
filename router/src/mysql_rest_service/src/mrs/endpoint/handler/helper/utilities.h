@@ -32,6 +32,7 @@
 #include <set>
 #include <string>
 
+#include "helper/json/merge.h"
 #include "mrs/endpoint/content_file_endpoint.h"
 #include "mrs/endpoint/content_set_endpoint.h"
 #include "mrs/endpoint/db_object_endpoint.h"
@@ -132,6 +133,15 @@ inline std::shared_ptr<DbServiceEndpoint> lock_parent(
   return std::dynamic_pointer_cast<DbServiceEndpoint>(parent);
 }
 
+inline std::optional<std::string> merge_options(
+    std::optional<std::string> options,
+    std::optional<std::string> parent_options) {
+  static const std::set<std::string> k_non_inherited_options{
+      "directoryIndexDirective", "defaultStaticContent", "defaultRedirects"};
+  return helper::json::merge_objects(options, parent_options,
+                                     k_non_inherited_options);
+}
+
 inline std::optional<std::string> get_endpoint_options(
     const std::shared_ptr<DbServiceEndpoint> &endpoint) {
   return endpoint->get()->options;
@@ -140,49 +150,49 @@ inline std::optional<std::string> get_endpoint_options(
 inline std::optional<std::string> get_endpoint_options(
     const std::shared_ptr<DbSchemaEndpoint> &endpoint) {
   const auto &option = endpoint->get()->options;
-  if (option.has_value()) return option;
 
   auto parent =
       std::dynamic_pointer_cast<DbServiceEndpoint>(endpoint->get_parent_ptr());
-  if (!parent) return {};
+  if (!parent) return option;
 
-  return get_endpoint_options(parent);
+  const auto &parent_options = get_endpoint_options(parent);
+  return merge_options(option, parent_options);
 }
 
 inline std::optional<std::string> get_endpoint_options(
     const std::shared_ptr<DbObjectEndpoint> &endpoint) {
   const auto &option = endpoint->get()->options;
-  if (option.has_value()) return option;
 
   auto parent =
       std::dynamic_pointer_cast<DbSchemaEndpoint>(endpoint->get_parent_ptr());
-  if (!parent) return {};
+  if (!parent) return option;
 
-  return get_endpoint_options(parent);
+  const auto &parent_options = get_endpoint_options(parent);
+  return merge_options(option, parent_options);
 }
 
 inline std::optional<std::string> get_endpoint_options(
     const std::shared_ptr<ContentSetEndpoint> &endpoint) {
   const auto &option = endpoint->get()->options;
-  if (option.has_value()) return option;
 
   auto parent =
       std::dynamic_pointer_cast<DbServiceEndpoint>(endpoint->get_parent_ptr());
-  if (!parent) return {};
+  if (!parent) return option;
 
-  return get_endpoint_options(parent);
+  const auto &parent_options = get_endpoint_options(parent);
+  return merge_options(option, parent_options);
 }
 
 inline std::optional<std::string> get_endpoint_options(
     const std::shared_ptr<ContentFileEndpoint> &endpoint) {
   const auto &option = endpoint->get()->options;
-  if (option.has_value()) return option;
 
   auto parent =
       std::dynamic_pointer_cast<ContentSetEndpoint>(endpoint->get_parent_ptr());
-  if (!parent) return {};
+  if (!parent) return option;
 
-  return get_endpoint_options(parent);
+  const auto &parent_options = get_endpoint_options(parent);
+  return merge_options(option, parent_options);
 }
 
 inline Protocols get_endpoint_protocol(
