@@ -1750,6 +1750,19 @@ int set_var::check(THD *thd) {
   }
 
   auto f = [this, thd](const System_variable_tracker &, sys_var *var) -> int {
+    if (var->is_readonly()) {
+      if (type != OPT_PERSIST_ONLY) {
+        my_error(ER_INCORRECT_GLOBAL_LOCAL_VAR, MYF(0), var->name.str,
+                 "read only");
+        return -1;
+      }
+      if (type == OPT_PERSIST_ONLY && var->is_non_persistent() &&
+          !can_persist_non_persistent_var(thd, var, type)) {
+        my_error(ER_INCORRECT_GLOBAL_LOCAL_VAR, MYF(0), var->name.str,
+                 "non persistent read only");
+        return -1;
+      }
+    }
     if (var->check_update_type(value->result_type())) {
       my_error(ER_WRONG_TYPE_FOR_VAR, MYF(0), var->name.str);
       return -1;
