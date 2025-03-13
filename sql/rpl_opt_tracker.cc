@@ -95,25 +95,6 @@ Rpl_opt_tracker::~Rpl_opt_tracker() {
       });
 }
 
-bool Rpl_opt_tracker::acquire_option_tracker_service() {
-  if (srv_registry->acquire("mysql_option_tracker_option",
-                            &m_option_tracker_handle)) {
-    return true;
-  }
-  m_option_tracker_service =
-      reinterpret_cast<SERVICE_TYPE(mysql_option_tracker_option) *>(
-          m_option_tracker_handle);
-  return false;
-}
-
-void Rpl_opt_tracker::release_option_tracker_service() {
-  m_option_tracker_service = nullptr;
-  if (nullptr != m_option_tracker_handle) {
-    srv_registry->release(m_option_tracker_handle);
-    m_option_tracker_handle = nullptr;
-  }
-}
-
 bool Rpl_opt_tracker::is_replication_replica_enabled() {
   bool replication_replica_enabled = false;
 
@@ -129,31 +110,32 @@ bool Rpl_opt_tracker::is_replication_replica_enabled() {
   return replication_replica_enabled;
 }
 
-void Rpl_opt_tracker::track_binary_log_internal(bool enabled) {
-  m_option_tracker_service->set_enabled(s_f_name_binary_log.c_str(),
-                                        enabled ? 1 : 0);
-
-  if (enabled) {
-    ++m_opt_option_tracker_usage_binary_log;
+void Rpl_opt_tracker::track(Tracker_service_guard &service_guard, bool enabled,
+                            const std::string &fname,
+                            unsigned long long &usage_counter) {
+  if (service_guard.is_valid()) {
+    service_guard->set_enabled(fname.c_str(), enabled ? 1 : 0);
+    if (enabled) {
+      ++usage_counter;
+    }
   }
 }
 
-void Rpl_opt_tracker::track_replication_replica(bool enabled) {
-  if (acquire_option_tracker_service()) {
-    return;
-  }
-
-  track_replication_replica_internal(enabled);
-  release_option_tracker_service();
+void Rpl_opt_tracker::track_binary_log(Tracker_service_guard &service_guard,
+                                       bool enabled) const {
+  track(service_guard, enabled, s_f_name_binary_log,
+        m_opt_option_tracker_usage_binary_log);
 }
 
-void Rpl_opt_tracker::track_replication_replica_internal(bool enabled) {
-  m_option_tracker_service->set_enabled(s_f_name_replication_replica.c_str(),
-                                        enabled ? 1 : 0);
+void Rpl_opt_tracker::track_replication_replica(
+    Tracker_service_guard &service_guard, bool enabled) const {
+  track(service_guard, enabled, s_f_name_replication_replica,
+        m_opt_option_tracker_usage_replication_replica);
+}
 
-  if (enabled) {
-    ++m_opt_option_tracker_usage_replication_replica;
-  }
+void Rpl_opt_tracker::track_replication_replica(bool enabled) const {
+  Tracker_service_guard service_guard(m_service_name, srv_registry);
+  track_replication_replica(service_guard, enabled);
 }
 
 void Rpl_opt_tracker::worker() {
@@ -172,19 +154,19 @@ void Rpl_opt_tracker::worker() {
       Only track features if the option tracker service is
       installed.
     */
-    if (!acquire_option_tracker_service()) {
+    {
+      Tracker_service_guard service_guard(m_service_name, srv_registry);
+
       /*
         Binary Log
       */
-      rpl_opt_tracker->track_binary_log_internal(opt_bin_log);
+      track_binary_log(service_guard, opt_bin_log);
 
       /*
         Replication Replica
       */
-      rpl_opt_tracker->track_replication_replica_internal(
-          is_replication_replica_enabled());
-
-      release_option_tracker_service();
+      track_replication_replica(service_guard,
+                                is_replication_replica_enabled());
     }
 
     mysql_mutex_lock(&LOCK_rpl_opt_tracker);
