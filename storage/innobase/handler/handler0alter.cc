@@ -1038,6 +1038,10 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
   ha_alter_info->handler_trivial_ctx =
       instant_type_to_int(Instant_Type::INSTANT_IMPOSSIBLE);
 
+  const bool is_instant_requested =
+      ha_alter_info->alter_info->requested_algorithm ==
+      Alter_info::ALTER_TABLE_ALGORITHM_INSTANT;
+
   if (!dict_table_is_partition(m_prebuilt->table)) {
     switch (instant_type) {
       case Instant_Type::INSTANT_IMPOSSIBLE:
@@ -1054,9 +1058,9 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
           /* No records: prefer INPLACE to prevent bumping row version */
           break;
         } else if (!((m_prebuilt->table->n_def +
-                      get_num_cols_added(ha_alter_info)) < REC_MAX_N_FIELDS)) {
-          if (ha_alter_info->alter_info->requested_algorithm ==
-              Alter_info::ALTER_TABLE_ALGORITHM_INSTANT) {
+                      get_num_cols_added(ha_alter_info)) <=
+                     REC_MAX_N_USER_FIELDS + DATA_N_SYS_COLS)) {
+          if (is_instant_requested) {
             my_error(ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS, MYF(0),
                      m_prebuilt->table->name.m_name);
             return HA_ALTER_ERROR;
@@ -1066,8 +1070,7 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
         } else if (!is_valid_row_version(
                        m_prebuilt->table->current_row_version + 1)) {
           ut_ad(is_valid_row_version(m_prebuilt->table->current_row_version));
-          if (ha_alter_info->alter_info->requested_algorithm ==
-              Alter_info::ALTER_TABLE_ALGORITHM_INSTANT) {
+          if (is_instant_requested) {
             my_error(ER_INNODB_MAX_ROW_VERSION, MYF(0),
                      m_prebuilt->table->name.m_name);
             return HA_ALTER_ERROR;
@@ -1078,8 +1081,7 @@ enum_alter_inplace_result ha_innobase::check_if_supported_inplace_alter(
         } else if (!Instant_ddl_impl<dd::Table>::is_instant_add_drop_possible(
                        ha_alter_info, table, altered_table,
                        m_prebuilt->table)) {
-          if (ha_alter_info->alter_info->requested_algorithm ==
-              Alter_info::ALTER_TABLE_ALGORITHM_INSTANT) {
+          if (is_instant_requested) {
             /* Return error if either max possible row size already crosses max
             permissible row size or may cross it after add. */
             my_error(ER_INNODB_INSTANT_ADD_DROP_NOT_SUPPORTED_MAX_SIZE, MYF(0));
@@ -10195,8 +10197,13 @@ enum_alter_inplace_result ha_innopart::check_if_supported_inplace_alter(
 
   Instant_Type instant_type = innopart_support_instant(
       ha_alter_info, m_tot_parts, m_part_share, this->table, altered_table);
+
   ha_alter_info->handler_trivial_ctx =
       instant_type_to_int(Instant_Type::INSTANT_IMPOSSIBLE);
+
+  const bool is_instant_requested =
+      ha_alter_info->alter_info->requested_algorithm ==
+      Alter_info::ALTER_TABLE_ALGORITHM_INSTANT;
 
   switch (instant_type) {
     case Instant_Type::INSTANT_IMPOSSIBLE:
@@ -10206,19 +10213,30 @@ enum_alter_inplace_result ha_innopart::check_if_supported_inplace_alter(
           Alter_info::ALTER_TABLE_ALGORITHM_INPLACE) {
         break;
       } else if (!((m_prebuilt->table->n_def +
-                    get_num_cols_added(ha_alter_info)) < REC_MAX_N_FIELDS)) {
-        if (ha_alter_info->alter_info->requested_algorithm ==
-            Alter_info::ALTER_TABLE_ALGORITHM_INSTANT) {
+                    get_num_cols_added(ha_alter_info)) <=
+                   REC_MAX_N_USER_FIELDS + DATA_N_SYS_COLS)) {
+        if (is_instant_requested) {
+          /* Following is the case when no more columns can be added to the
+          table becuase it has reached maximum allowed user columns */
+          if (altered_table->s->fields > REC_MAX_N_USER_FIELDS) {
+            ha_alter_info->unsupported_reason =
+                innobase_get_err_msg(ER_TOO_MANY_FIELDS);
+            return HA_ALTER_INPLACE_NOT_SUPPORTED;
+          }
+
+          /* In followin case, columns can't be added with INSTANT but if tried
+          with INPLACE/COPY, it is possible to add more columns */
           my_error(ER_INNODB_INSTANT_ADD_NOT_SUPPORTED_MAX_FIELDS, MYF(0),
                    m_prebuilt->table->name.m_name);
           return HA_ALTER_ERROR;
         }
         /* INSTANT can't be done any more. Fall back to INPLACE. */
         break;
-      } else if (std::cmp_equal(m_prebuilt->table->current_row_version,
-                                MAX_ROW_VERSION)) {
-        if (ha_alter_info->alter_info->requested_algorithm ==
-            Alter_info::ALTER_TABLE_ALGORITHM_INSTANT) {
+      } else if (!is_valid_row_version(m_prebuilt->table->current_row_version +
+                                       1)) {
+        ut_ad(is_valid_row_version(m_prebuilt->table->current_row_version));
+
+        if (is_instant_requested) {
           my_error(ER_INNODB_MAX_ROW_VERSION, MYF(0),
                    m_prebuilt->table->name.m_name);
           return HA_ALTER_ERROR;
@@ -10227,8 +10245,7 @@ enum_alter_inplace_result ha_innopart::check_if_supported_inplace_alter(
         break;
       } else if (!Instant_ddl_impl<dd::Table>::is_instant_add_drop_possible(
                      ha_alter_info, table, altered_table, m_prebuilt->table)) {
-        if (ha_alter_info->alter_info->requested_algorithm ==
-            Alter_info::ALTER_TABLE_ALGORITHM_INSTANT) {
+        if (is_instant_requested) {
           /* Return error if either max possible row size already crosses max
           permissible row size or may cross it after add. */
           my_error(ER_INNODB_INSTANT_ADD_DROP_NOT_SUPPORTED_MAX_SIZE, MYF(0));
