@@ -731,19 +731,6 @@ sub main {
   }
 
   if ($secondary_engine_support) {
-    # Enable mTLS in Heatwave-AutoML by setting up certificates and keys.
-    # - Paths are pre-set in the environment for accurate server initialization.
-    # - Certificates and keys are generated after the Python virtual environment
-    #   setup.
-    my $oci_instance_id    = $ENV{'OCI_INSTANCE_ID'} || "";
-    # Configuration for ml
-    # 20240613: temporary disabled for MTR until find a solution for SSL3
-    my $ml_encryption_enabled = 0; # Replace with $oci_instance_id?1:0 to enable
-    $ml_encryption_enabled?mtr_report("ML encryption enabled"):mtr_report("ML encryption disabled");
-    if ($ml_encryption_enabled) {
-      $ENV{'ML_CERTIFICATES'} = "$::opt_vardir/" . "hwaml_cert_files/";
-      $ENV{'ML_ENABLE_ENCRYPTION'} = "1";
-    }
     # Setting the number of ML workers per driver
     set_ml_workers_for_suite($opt_suites);
   }
@@ -805,23 +792,7 @@ sub main {
     secondary_engine_offload_count_report_init();
     # Create virtual environment
     find_ml_driver($bindir);
-
-    # Generate mTLS certificates & keys for Heatwave-AutoML post Python
-    # virtual environment setup and path pre-setting (referenced earlier).
-    my $oci_instance_id    = $ENV{'OCI_INSTANCE_ID'} || "";
-    my $aws_key_store      = $ENV{'OLRAPID_KEYSTORE'} || "";
-    my $ml_encryption_enabled = $ENV{'ML_ENABLE_ENCRYPTION'} || "";
-    if ($ml_encryption_enabled) {
-      if($aws_key_store)
-      {
-        extract_certs_from_pfx($aws_key_store, $ENV{'ML_CERTIFICATES'});
-      }
-      else
-      {
-        create_cert_keys($ENV{'ML_CERTIFICATES'});
-      }
-    }
-    
+    configure_encryption();
     reserve_secondary_ports();
   }
 
