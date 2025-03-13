@@ -77,7 +77,6 @@ if (!$test_scram)
 
 --let $mrs_add_service_path="/svc1"
 --let $mrs_add_host_name=""
---let $mrs_add_service_options='{"cache_ttl":15,"logging":{"exceptions":true, "request":{"headers":true, "body":true}, "response":{"headers":true, "body":true}}}'
 --source ../mrs/service/add.inc
 
 --let $mrs_add_schema=basic_schema
@@ -132,7 +131,6 @@ if ($test_second_handler)
 --echo # I.2
 --let $mrs_add_service_path="/svc2"
 --let $mrs_add_host_name=""
---let $mrs_add_service_options='{"cache_ttl":15,"logging":{"exceptions":true, "request":{"headers":true, "body":true}, "response":{"headers":true, "body":true}}}'
 --source ../mrs/service/add.inc
 
 --let $mrs_add_schema=basic_schema

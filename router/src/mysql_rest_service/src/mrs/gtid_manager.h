@@ -212,9 +212,9 @@ class GtidManager {
       using std::to_string;
       if (key == "gtid.cache.enable") {
         result_.enable = to_bool(vt);
-      } else if (key == "gtid.cache.refresh_rate") {
+      } else if (key == "gtid.cache.refreshRate") {
         result_.d = std::chrono::seconds{to_uint(vt)};
-      } else if (key == "gtid.cache.refresh_when_increases_by") {
+      } else if (key == "gtid.cache.refreshWhenIncreasesBy") {
         result_.refresh_after = to_uint(vt);
       }
     }
