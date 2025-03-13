@@ -44,6 +44,8 @@
 #include "mysqld_error.h"
 #include "mysqlrouter/config_files.h"
 #include "mysqlrouter/default_paths.h"
+#include "mysqlrouter/http_constants.h"
+#include "mysqlrouter/router_config_utils.h"
 #include "mysqlrouter/server_compatibility.h"
 #include "mysqlrouter/sys_user_operations.h"
 #include "mysqlrouter/uri.h"
@@ -729,14 +731,6 @@ bool BootstrapConfigurator::can_configure_mrs(
   return true;
 }
 
-std::string BootstrapConfigurator::get_configured_router_name() const {
-  auto section = config_.get_default_section();
-  if (section.has("name")) {
-    return section.get("name");
-  }
-  return "";
-}
-
 std::string BootstrapConfigurator::get_configured_rest_endpoint() const {
   auto sections = config_.get("http_server");
   for (auto s : sections) {
@@ -812,14 +806,14 @@ static bool starts_with(const std::string &value, const std::string &&sst) {
 
 std::pair<BootstrapConfigurator::RoutingConfig,
           BootstrapConfigurator::RoutingConfig>
-BootstrapConfigurator::get_config_classic_sections() {
+BootstrapConfigurator::get_config_classic_sections() const {
   std::string kOptionProtocol = "protocol";
   std::string kOptionRouting = "routing";
   auto routing_sections = config_.get(kOptionRouting);
-  mysql_harness::ConfigSection *rw{nullptr};
-  mysql_harness::ConfigSection *ro{nullptr};
+  const mysql_harness::ConfigSection *rw{nullptr};
+  const mysql_harness::ConfigSection *ro{nullptr};
 
-  for (auto &section : routing_sections) {
+  for (const auto &section : routing_sections) {
     if (!section->has(kOptionProtocol)) continue;
 
     if (section->get(kOptionProtocol) != "classic") continue;
@@ -848,7 +842,8 @@ uint64_t BootstrapConfigurator::register_mrs_router_instance(
     mysqlrouter::MySQLSession *session) {
   auto socket_ops = mysql_harness::SocketOperations::instance();
 
-  std::string router_name = get_configured_router_name();
+  const std::string router_name =
+      get_configured_router_name(config_, kDefaultHttpPort);
   std::string report_host;
 
   if (auto rh = bootstrapper_.bootstrap_options().find("report-host");
@@ -875,7 +870,8 @@ uint64_t BootstrapConfigurator::register_mrs_router_instance(
       session->quote(MYSQL_ROUTER_PACKAGE_NAME) + ", " +
       session->quote(MYSQL_ROUTER_VERSION) +
       ", '{}', '{}') ON DUPLICATE KEY UPDATE version=" +
-      session->quote(MYSQL_ROUTER_VERSION) + ", last_check_in=NOW()");
+      session->quote(MYSQL_ROUTER_VERSION) +
+      ", router_name=" + session->quote(router_name) + ", last_check_in=NOW()");
 
   // return id of the row we just inserted or updated
   auto result_id{session->query_one(

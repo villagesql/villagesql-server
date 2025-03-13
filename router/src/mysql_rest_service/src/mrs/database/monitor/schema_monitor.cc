@@ -332,7 +332,7 @@ void SchemaMonitor::run() {
               " (id, router_name, address, product_name, version, attributes, "
               "options)"
               " VALUES (?,?,?,?,?,?,'{}') ON DUPLICATE KEY UPDATE "
-              "version=?, last_check_in=NOW()"};
+              "version=?, router_name=?, last_check_in=NOW()"};
 
           update << configuration_.router_id_ << configuration_.router_name_
                  << socket_ops->get_local_hostname()
@@ -341,7 +341,7 @@ void SchemaMonitor::run() {
                          ? "{}"
                          : "{\"developer\": \"" + configuration_.developer_ +
                                "\"}")
-                 << MYSQL_ROUTER_VERSION;
+                 << MYSQL_ROUTER_VERSION << configuration_.router_name_;
           session->execute(update.str());
 
           try {

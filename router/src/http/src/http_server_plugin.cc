@@ -74,7 +74,6 @@ IMPORT_LOG_FUNCTIONS()
 
 static constexpr const char kHttpServerSectionName[]{"http_server"};
 static constexpr const char kDefaultBindAddress[]{"0.0.0.0"};
-static constexpr const uint16_t kDefaultPort{8081};
 static constexpr const unsigned kDefaultSsl{0};
 
 using mysql_harness::IntOption;
@@ -120,7 +119,7 @@ class HttpServerPluginConfig : public mysql_harness::BasePluginConfig {
   std::string get_default(std::string_view option) const override {
     const std::map<std::string_view, std::string> defaults{
         {"bind_address", kDefaultBindAddress},
-        {"port", std::to_string(kDefaultPort)},
+        {"port", std::to_string(kDefaultHttpPort)},
         {"ssl", std::to_string(kDefaultSsl)},
         {"ssl_cipher", get_default_ciphers()},
     };

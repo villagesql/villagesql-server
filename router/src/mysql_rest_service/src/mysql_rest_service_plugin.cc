@@ -60,6 +60,9 @@
 #include "mrs/observability/entities_manager.h"
 #include "mrs/router_observation_entities.h"
 #include "mysql_rest_service_plugin_config.h"
+#include "mysqlrouter/http_constants.h"
+#include "mysqlrouter/router_config_utils.h"
+
 #include "supported_mysql_rest_service_options.h"
 
 IMPORT_LOG_FUNCTIONS()
@@ -263,14 +266,6 @@ class HttpControl : public T, HandlerCallback {
   std::shared_ptr<mrs::endpoint::handler::HandlerDebug> handler_debug;
 };
 
-static std::string get_router_name(const mysql_harness::Config *config) {
-  auto section = config->get_default_section();
-  if (section.has("name")) {
-    return section.get("name");
-  }
-  return "";
-}
-
 static std::unique_ptr<mrs::PluginConfig> g_mrs_configuration;
 static std::unique_ptr<MrsModule> g_mrds_module;
 
@@ -306,7 +301,8 @@ static void init(mysql_harness::PluginFuncEnv *env) {
           "', only one allowed");
 
     g_mrs_configuration.reset(new mrs::PluginConfig(
-        sections.front(), routing_instances, get_router_name(info->config)));
+        sections.front(), routing_instances,
+        get_configured_router_name(*info->config, kDefaultHttpPort)));
 
   } catch (const std::invalid_argument &exc) {
     set_error(env, mysql_harness::kConfigInvalidArgument, "%s", exc.what());

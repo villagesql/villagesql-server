@@ -137,7 +137,7 @@ class BootstrapConfigurator {
     std::string key;
     bool is_metadata_cache;
   };
-  std::pair<RoutingConfig, RoutingConfig> get_config_classic_sections();
+  std::pair<RoutingConfig, RoutingConfig> get_config_classic_sections() const;
 
   mysql_harness::Config config_{mysql_harness::Config::allow_keys};
 
@@ -166,7 +166,6 @@ class BootstrapConfigurator {
       const std::map<std::string, std::string> &config_cmdln_options);
   uint64_t register_mrs_router_instance(mysqlrouter::MySQLSession *session);
 
-  std::string get_configured_router_name() const;
   std::string get_configured_rest_endpoint() const;
 
   void store_mrs_developer(mysqlrouter::MySQLSession *session,
