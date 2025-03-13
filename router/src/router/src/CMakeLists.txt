@@ -34,6 +34,7 @@ ROUTER_ADD_SHARED_LIBRARY(router_utils
   utils.cc
   uri.cc
   routing_guidelines_version.cc
+  router_config_utils.cc
 
   OUTPUT_NAME "mysqlrouter_utils"
 

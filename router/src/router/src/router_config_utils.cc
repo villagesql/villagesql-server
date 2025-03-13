@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
+  Copyright (c) 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -23,21 +23,27 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef MYSQLROUTER_HTTP_CONSTANTS_INCLUDED
-#define MYSQLROUTER_HTTP_CONSTANTS_INCLUDED
+#include "mysqlrouter/router_config_utils.h"
 
-#include <string_view>
+#include "mysql/harness/config_parser.h"
+#include "socket_operations.h"
 
-constexpr const std::string_view kHttpAuthPluginDefaultBackend{
-    "metadata_cache"};
-constexpr const std::string_view kHttpDefaultAuthBackendName{
-    "default_auth_backend"};
-constexpr const std::string_view kHttpDefaultAuthRealmName{
-    "default_auth_realm"};
-constexpr const std::string_view kHttpDefaultAuthMethod{"basic"};
+std::string get_configured_router_name(const mysql_harness::Config &config,
+                                       const uint32_t default_port) {
+  auto section = config.get_default_section();
+  if (section.has("name")) {
+    return section.get("name");
+  }
 
-constexpr const uint16_t kHttpPluginDefaultPortBootstrap{8443};
-constexpr const unsigned kHttpPluginDefaultSslBootstrap{1};
-constexpr const uint16_t kDefaultHttpPort{8081};
+  std::string port_str = std::to_string(default_port);
+  for (const mysql_harness::ConfigSection *section : config.sections()) {
+    if (section->name == "http_server" && section->has("port")) {
+      port_str = section->get("port");
+      break;
+    }
+  }
 
-#endif  // MYSQLROUTER_HTTP_CONSTANTS_INCLUDED
+  auto socket_ops = mysql_harness::SocketOperations::instance();
+
+  return socket_ops->get_local_hostname() + ":" + port_str;
+}
