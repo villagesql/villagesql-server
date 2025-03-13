@@ -2841,15 +2841,8 @@ bool create_key_part_field_with_prefix_length(TABLE *table, MEM_ROOT *root) {
          key_part < key_part_end; key_part++) {
       Field *field = key_part->field = table->field[key_part->fieldnr - 1];
 
-      /*
-        For spatial indexes, the key parts are assigned the length (4 *
-        sizeof(double)) in prepare_key_column() and the field->key_length() is
-        set to 0. This makes it appear like a prefixed index. However, prefixed
-        indexes are not allowed on Geometric columns. Hence skipping new field
-        creation for Geometric columns.
-      */
       if (field->key_length() != key_part->length &&
-          field->type() != MYSQL_TYPE_GEOMETRY) {
+          !field->is_flag_set(BLOB_FLAG)) {
         /*
           We are using only a prefix of the column as a key:
           Create a new field for the key part that matches the index
