@@ -28,6 +28,7 @@
 #include <gtest/gtest.h>
 
 #include "config_builder.h"
+#include "mock_server_rest_client.h"
 #include "mock_server_testutils.h"
 #include "mysqlrouter/mysql_session.h"
 #include "router_component_test.h"
@@ -39,23 +40,43 @@ using namespace std::chrono_literals;
 
 class RouterMrsConfig : public RouterComponentTest {
  protected:
-  void SetUp() override { RouterComponentTest::SetUp(); }
+  void SetUp() override {
+    for (int i = 0; i < kClusterSize; i++) {
+      cluster_nodes_ports.push_back(port_pool_.get_next_available());
+      cluster_nodes_http_ports.push_back(port_pool_.get_next_available());
+    }
+    RouterComponentTest::SetUp();
+  }
 
-  ProcessWrapper &launch_router(const std::string &conf_dir,
-                                const std::string &mrs_section,
-                                bool expect_error = false) {
-    auto def_section = get_DEFAULT_defaults();
-    init_keyring(def_section, conf_dir);
+  auto &launch_router(const std::string &config, const int expected_exit_code) {
+    auto default_section = get_DEFAULT_defaults();
+    init_keyring(
+        default_section, get_test_temp_dir_name(),
+        {KeyringEntry{user_, "password", "mysql_test_password"},
+         KeyringEntry{"rest-user", "jwt_secret", "mysql_test_password"}});
 
-    // launch the router with mrs section
+    const auto state_file = create_state_file(
+        get_test_temp_dir_name(),
+        create_state_file_content("", "", cluster_nodes_ports, 0));
+    default_section["dynamic_state"] = state_file;
+
     const std::string conf_file =
-        create_config_file(conf_dir, mrs_section, &def_section);
-    const int expected_exit_code = expect_error ? EXIT_FAILURE : EXIT_SUCCESS;
-    auto &router =
-        ProcessManager::launch_router({"-c", conf_file}, expected_exit_code,
-                                      true, false, expect_error ? -1s : 5s);
+        create_config_file(get_test_temp_dir_name(), config, &default_section);
 
-    return router;
+    const auto wait_for = expected_exit_code == EXIT_FAILURE ? -1s : 5s;
+    return ProcessManager::launch_router({"-c", conf_file}, expected_exit_code,
+                                         true, false, wait_for);
+  }
+
+  std::string get_routing_section(const uint16_t port, const std::string &role,
+                                  const std::string &name) {
+    std::map<std::string, std::string> options{
+        {"bind_port", std::to_string(port)},
+        {"destinations", "metadata-cache://test/default?role=" + role},
+        {"protocol", "classic"}};
+
+    return mysql_harness::ConfigBuilder::build_section("routing:" + name,
+                                                       options);
   }
 
   std::string get_mrs_section(
@@ -72,7 +93,7 @@ class RouterMrsConfig : public RouterComponentTest {
     }
     if (mysql_read_write_route) {
       options.emplace_back("mysql_read_write_route",
-                           mysql_read_only_route.value());
+                           mysql_read_write_route.value());
     }
     if (mysql_user) {
       options.emplace_back("mysql_user", mysql_user.value());
@@ -88,20 +109,83 @@ class RouterMrsConfig : public RouterComponentTest {
     return mysql_harness::ConfigBuilder::build_section("mysql_rest_service",
                                                        options);
   }
+
+  std::string get_metadata_cache_section(
+      mysqlrouter::ClusterType cluster_type = mysqlrouter::ClusterType::GR_V2) {
+    const std::string cluster_type_str =
+        (cluster_type == mysqlrouter::ClusterType::RS_V2) ? "rs" : "gr";
+
+    std::map<std::string, std::string> options{
+        {"cluster_type", cluster_type_str},
+        {"router_id", std::to_string(router_id_)},
+        {"user", user_},
+        {"connect_timeout", "1"},
+        {"metadata_cluster", cluster_name_},
+        {"ttl", "0.1"}};
+
+    return mysql_harness::ConfigBuilder::build_section(
+        "metadata_cache:bootstrap", options);
+  }
+
+  void setup_cluster(const std::string &mock_file,
+                     const uint64_t mrs_router_id = 1) {
+    const auto http_port = cluster_nodes_http_ports[0];
+    auto mock_server_cmdline_args = mock_server_cmdline(mock_file)
+                                        .port(cluster_nodes_ports[0])
+                                        .http_port(http_port)
+                                        .args();
+
+    auto &primary_node = mock_server_spawner().spawn(mock_server_cmdline_args);
+
+    ASSERT_NO_FATAL_FAILURE(
+        check_port_ready(primary_node, cluster_nodes_ports[0]));
+
+    EXPECT_TRUE(MockServerRestClient(http_port).wait_for_rest_endpoint_ready());
+    auto json_doc = mock_GR_metadata_as_json(
+        "", classic_ports_to_gr_nodes(cluster_nodes_ports), 0,
+        classic_ports_to_cluster_nodes(cluster_nodes_ports), /*view_id*/ 0,
+        /*error_on_md_quert*/ false, "127.0.0.1", /*router_options*/ "",
+        mysqlrouter::MetadataSchemaVersion{(2), (3), (0)}, cluster_name_);
+
+    JsonAllocator allocator;
+    json_doc.AddMember("mrs_router_id", mrs_router_id, allocator);
+
+    const auto json_str = json_to_string(json_doc);
+
+    ASSERT_NO_THROW(MockServerRestClient(http_port).set_globals(json_str));
+
+    // launch the secondary cluster nodes
+    for (unsigned port = 1; port < cluster_nodes_ports.size(); ++port) {
+      auto &secondary_node = mock_server_spawner().spawn(
+          mock_server_cmdline("my_port.js")
+              .port(cluster_nodes_ports[port])
+              .http_port(cluster_nodes_http_ports[port])
+              .args());
+      ASSERT_NO_FATAL_FAILURE(
+          check_port_ready(secondary_node, cluster_nodes_ports[port]));
+    }
+  }
+
+  const uint16_t kClusterSize = 6;
+  const uint16_t router_port_rw{port_pool_.get_next_available()};
+
+  uint64_t router_id_{1};
+  std::vector<uint16_t> cluster_nodes_ports;
+  std::vector<uint16_t> cluster_nodes_http_ports;
+  const std::string user_{"mysql_test_user"};
+  const std::string cluster_name_{"clusterA"};
 };
 
 /**
  * @test Checks that the Router refuses to start if
- * [mysql_rest_service].router_id si not configured
+ * [mysql_rest_service].router_id is not configured
  */
 TEST_F(RouterMrsConfig, RouterComponentBootstrapWithDefaultCertsTest) {
-  TempDirectory conf_dir("conf");
-
   const std::string mrs_section =
       get_mrs_section("bootstrap_ro", "bootstrap_rw",
                       "mysql_router_mrs1_ie9u74n75rsb", "", std::nullopt);
 
-  auto &router = launch_router(conf_dir.name(), mrs_section,
+  auto &router = launch_router(mrs_section,
                                /*expect_error=*/true);
 
   check_exit_code(router, EXIT_FAILURE);
@@ -109,6 +193,30 @@ TEST_F(RouterMrsConfig, RouterComponentBootstrapWithDefaultCertsTest) {
                                 "Configuration error: option router_id in "
                                 "\\[mysql_rest_service\\] is required",
                                 500ms));
+}
+
+/**
+ * @test Check that if Router detects that there is the same Router registered
+ * but with different router_id it fails to start.
+ */
+TEST_F(RouterMrsConfig, id_mismatch) {
+  router_id_ = 1;
+  // Use different id
+  setup_cluster("metadata_dynamic_nodes_v2_gr_mrs.js",
+                /*mrs_router_id*/ router_id_ + 1);
+
+  const auto rw_route_name = "rw_route";
+  const auto mrs_section = get_mrs_section(std::nullopt, rw_route_name, user_,
+                                           std::nullopt, router_id_);
+  auto &router = launch_router(
+      get_routing_section(router_port_rw, "PRIMARY", rw_route_name) +
+          get_metadata_cache_section() + mrs_section,
+      EXIT_FAILURE);
+
+  EXPECT_TRUE(wait_log_contains(router,
+                                "Metadata already contains Router registered "
+                                "as '.*' at '.*' with id: \\d+, new id: \\d+",
+                                5s));
 }
 
 int main(int argc, char *argv[]) {

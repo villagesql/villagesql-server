@@ -36,6 +36,7 @@
 #include "my_sys.h"
 #include "my_thread.h"     // NOLINT(build/include_subdir)
 #include "mysqld_error.h"  // NOLINT(build/include_subdir)
+#include "socket_operations.h"
 
 #include "keyring/keyring_manager.h"
 #include "mysql/harness/loader.h"
@@ -49,6 +50,7 @@
 #include "helper/task_control.h"
 #include "mrs/authentication/auth_handler_factory.h"
 #include "mrs/database/query_factory_proxy.h"
+#include "mrs/database/query_router_info.h"
 #include "mrs/database/schema_monitor.h"
 #include "mrs/database/slow_query_monitor.h"
 #include "mrs/endpoint/handler/handler_debug.cc"
@@ -85,6 +87,13 @@ void trace_error(const char *variable_user, const char *access,
       variable_user, e.code(), e.message().c_str());
 }
 
+std::optional<uint64_t> find_existing_routers(
+    mysqlrouter::MySQLSession *session, const std::string &router_name,
+    const std::string &address) {
+  mrs::database::QueryRouterInfo q;
+  return q.find_existing_router_instances(session, router_name, address);
+}
+
 }  // namespace
 
 class MrsModule {
@@ -112,8 +121,10 @@ class MrsModule {
     // TODO(areliga): remove that when rebased to the Router version that fixes
     // ODR issues
     my_init();
+    collector::MysqlCacheManager::CachedObject conn1;
+
     try {
-      auto conn1 = mysql_connection_cache.get_instance(
+      conn1 = mysql_connection_cache.get_instance(
           collector::kMySQLConnectionMetadataRO, true);
 
       check_version_compatibility(conn1.get());
@@ -148,6 +159,18 @@ class MrsModule {
       throw std::runtime_error(
           "Can't start MySQL REST Service, because connection to MySQL server "
           "failed. For more informations look at previous error messages.");
+    }
+
+    auto socket_ops = mysql_harness::SocketOperations::instance();
+    const auto name = configuration.router_name_;
+    const auto address = socket_ops->get_local_hostname();
+    const auto existing_id_maybe =
+        find_existing_routers(conn1.get(), name, address);
+    if (existing_id_maybe && *existing_id_maybe != configuration.router_id_) {
+      throw std::runtime_error(
+          "Metadata already contains Router registered as '" + name + "' at '" +
+          address + "' with id: " + std::to_string(*existing_id_maybe) +
+          ", new id: " + std::to_string(configuration.router_id_));
     }
 
     return true;

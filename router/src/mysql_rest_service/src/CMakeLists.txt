@@ -106,6 +106,7 @@ ADD_STATIC_LIBRARY(mysql_rest_service_db
   mrs/database/query_rest_task.cc
   mrs/database/query_rest_task_status.cc
   mrs/database/query_rest_table_updater.cc
+  mrs/database/query_router_info.cc
   mrs/database/query_state.cc
   mrs/database/query_statistics.cc
   mrs/database/query_version.cc
