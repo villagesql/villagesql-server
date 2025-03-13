@@ -177,6 +177,7 @@ MYSQL_ADD_EXECUTABLE(json_client_library_main
   LINK_LIBRARIES json_client_library  strings mysys decimal
   SKIP_INSTALL
   )
+DOWNGRADE_STRINGOP_WARNINGS(json_client_library_main)
 
 # A test executable which does nothing, except verify that symbols are visible.
 # To test standalone build:

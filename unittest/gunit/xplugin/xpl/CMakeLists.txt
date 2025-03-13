@@ -42,6 +42,13 @@ IF(MSVC)
     )
 ENDIF()
 
+# Warnings from googlemock
+IF(MY_COMPILER_IS_GNU AND FPROFILE_USE)
+  IF(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 14)
+    STRING_APPEND(CMAKE_CXX_FLAGS " -Wno-error=maybe-uninitialized")
+  ENDIF()
+ENDIF()
+
 MYSQL_ADD_EXECUTABLE(xplugin_unit_tests
   ../test_main.cc
   ${XPL_TEST_SRC}
