@@ -149,10 +149,13 @@ void JitExecutorComponent::update_active_contexts(
   // Total pool is verified here as it could be 0, meaning, no active context
   // handlers will be left after this update
   if (total_pool != 0 && m_global_config.maximum_ram_size.has_value()) {
-    uint64_t mem_per_pool_item = *m_global_config.maximum_ram_size / total_pool;
+    // Use double to get the most accurate value per pool item
+    double mem_per_pool_item =
+        *m_global_config.maximum_ram_size / static_cast<double>(total_pool);
 
     for (const auto &it : candidate_context_handlers) {
-      it.second->set_max_heap_size(mem_per_pool_item * it.second->pool_size());
+      it.second->set_max_heap_size(
+          static_cast<uint64_t>(mem_per_pool_item * it.second->pool_size()));
     }
   }
 
