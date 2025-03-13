@@ -25,11 +25,13 @@
 
 #include "jit_executor_service_handlers.h"
 
+#include <cinttypes>
 #include <memory>
 #include <vector>
 
 #include "include/my_thread.h"
 #include "mysql/harness/logging/logging.h"
+#include "utils/utils_system.h"
 
 namespace jit_executor {
 
@@ -56,9 +58,52 @@ bool ServiceHandlers::init() {
 
 void ServiceHandlers::init_common_context() {
   std::vector<std::string> isolate_args;
+
+  // System memory in MB
+  static const auto total_memory =
+      shcore::getPhysicalMemorySize() / 1024 / 1024;
+
+  // Default: 25% of the system memory
+  static const uint64_t default_max_heap_size = total_memory * 0.25;
+
   // Using a default of 1024 MB if nothing else is configured
-  auto max_heap_size = m_config.max_heap_size.value_or(1024);
-  isolate_args.push_back("-Xmx" + std::to_string(max_heap_size) + "m");
+  auto max_heap_size = m_config.max_heap_size.value_or(default_max_heap_size);
+
+  if (total_memory > 0) {
+    // Serial GC would use max 80% of system memory
+    auto graal_default_max_heap_size =
+        static_cast<uint64_t>(total_memory * 0.8);
+
+    // 10 MB is the minimum allowed
+    if (max_heap_size < 10) {
+      log_warning(
+          "The configured maximumRamUsage=%" PRIu64
+          " is lower than the minimum allowed value of 10MB, ignoring "
+          "configuration, using default (25%% of the system memory: %" PRIu64
+          "MB).",
+          max_heap_size, default_max_heap_size);
+      max_heap_size = default_max_heap_size;
+    }
+
+    if (max_heap_size < graal_default_max_heap_size) {
+      isolate_args.push_back("-Xmx" + std::to_string(max_heap_size) + "m");
+    } else {
+      // Convert the value to gigabytes
+      log_warning("The configured maximumRamUsage=%" PRIu64
+                  " exceeds the maximum allowed value %" PRIu64
+                  " (80%% of the system memory %" PRIu64
+                  "GB) ignoring configuration, using max RAM possible.",
+                  max_heap_size, graal_default_max_heap_size,
+                  total_memory / 1024);
+    }
+  } else {
+    // Not expected to happen, just in case!
+    log_warning(
+        "Unable to retrieve the available system memory, using the configured "
+        "value of maximumRamUsage=%" PRIu64,
+        max_heap_size);
+  }
+
   m_common_context = std::make_unique<CommonContext>(
       m_config.fs, m_config.module_files, m_config.globals, isolate_args);
 }

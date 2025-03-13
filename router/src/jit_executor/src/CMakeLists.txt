@@ -62,6 +62,7 @@ SET(jit_executor_plugin_SOURCE
   utils/utils_json.cc
   utils/utils_path.cc
   utils/utils_string.cc
+  utils/utils_system.cc
 
   jit_executor_common_context.cc
   jit_executor_plugin.cc
