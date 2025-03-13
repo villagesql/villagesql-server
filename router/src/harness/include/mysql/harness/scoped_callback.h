@@ -29,9 +29,11 @@
 #include <functional>
 #include <utility>
 
+#include "harness_export.h"
+
 namespace mysql_harness {
 
-class ScopedCallback {
+class HARNESS_EXPORT ScopedCallback {
  public:
   explicit ScopedCallback(std::function<void()> c) noexcept
       : callback_{std::move(c)} {}

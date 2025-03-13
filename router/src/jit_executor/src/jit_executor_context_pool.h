@@ -92,8 +92,9 @@ class Pool {
       T item = m_item_factory(m_created_items);
       increase_active_items();
       return item;
-    } catch (const std::runtime_error &err) {
-      // An initialization failure would raise this exception
+    } catch (const std::runtime_error &) {
+      // An initialization failure would raise this exception, no action is
+      // needed
       return {};
     }
   }
