@@ -361,8 +361,9 @@ void FilterObjectGenerator::parse_orderby_asof_wmember(Object object) {
  *  2) complexOperatorObject
  *  3) columnObject
  */
-std::optional<std::string> FilterObjectGenerator::parse_complex_value(
-    const std::string_view &column_name, Value *value) {
+std::optional<mysqlrouter::sqlstring>
+FilterObjectGenerator::parse_complex_value(const std::string_view &column_name,
+                                           Value *value) {
   log_debug("parse_complex_value %s", column_name.data());
   if (!value->IsObject()) return {};
   if (value->MemberCount() != 1) return {};
@@ -387,7 +388,8 @@ std::optional<std::string> FilterObjectGenerator::parse_complex_value(
  *  1) complexKey : [complexValues]
  *  2) complexKey : simpleOperatorObject
  */
-std::optional<std::string> FilterObjectGenerator::parse_complex_operator_object(
+std::optional<mysqlrouter::sqlstring>
+FilterObjectGenerator::parse_complex_operator_object(
     const std::string_view &column_name, Value *value,
     const std::string_view &complex_key) {
   log_debug("parse_complex_operator_object, column=%s, operator=%s",
@@ -407,7 +409,8 @@ std::optional<std::string> FilterObjectGenerator::parse_complex_operator_object(
   return {};
 }
 
-std::optional<std::string> FilterObjectGenerator::parse_simple_operator_object(
+std::optional<mysqlrouter::sqlstring>
+FilterObjectGenerator::parse_simple_operator_object(
     const std::string_view &column_name, Value *object) {
   log_debug("parse_simple_operator_object %s", column_name.data());
   if (column_name.empty()) return {};
@@ -512,10 +515,11 @@ std::optional<std::string> FilterObjectGenerator::parse_simple_operator_object(
     return {};
   }
 
-  return result.str();
+  return result;
 }
 
-std::optional<std::string> FilterObjectGenerator::parse_match(Value *value) {
+std::optional<mysqlrouter::sqlstring> FilterObjectGenerator::parse_match(
+    Value *value) {
   log_debug("parse_complex_match");
   if (!value->IsObject())
     throw RestError("Match operator, requires JSON object as value.");
@@ -566,7 +570,7 @@ std::optional<std::string> FilterObjectGenerator::parse_match(Value *value) {
   mysqlrouter::sqlstring v{"MATCH (!) AGAINST(? ?) "};
   v << fields << against_expr->value.GetString() << selected_modifier;
 
-  return v.str();
+  return v;
 }
 
 /*
@@ -576,7 +580,7 @@ std::optional<std::string> FilterObjectGenerator::parse_match(Value *value) {
  *   columnName : date
  *   columnName : <other types>
  */
-std::optional<std::string> FilterObjectGenerator::parse_direct_value(
+std::optional<mysqlrouter::sqlstring> FilterObjectGenerator::parse_direct_value(
     const std::string_view &column_name, Value *value) {
   log_debug("parse_direct_value %s", column_name.data());
 
@@ -606,14 +610,15 @@ std::optional<std::string> FilterObjectGenerator::parse_direct_value(
     throw;
   }
 
-  return result.str();
+  return result;
 }
 
 /*
  * complexValues
  *   complexValue , complexValues
  */
-std::optional<std::string> FilterObjectGenerator::parse_complex_values(
+std::optional<mysqlrouter::sqlstring>
+FilterObjectGenerator::parse_complex_values(
     const std::string_view &column_name, Value *value,
     const std::string_view &complex_key) {
   log_debug("parse_complex_values %s", column_name.data());
@@ -629,7 +634,7 @@ std::optional<std::string> FilterObjectGenerator::parse_complex_values(
     throw RestError("parse_complex_values: array can't be empty");
   }
 
-  std::string result_str;
+  mysqlrouter::sqlstring output;
   bool first = true;
   for (auto &el : helper::json::array_iterator(arr)) {
     auto result = parse_complex_value(column_name, &el);
@@ -638,15 +643,19 @@ std::optional<std::string> FilterObjectGenerator::parse_complex_values(
     }
 
     if (!first) {
-      result_str += " " + sql_operator + " ";
+      output.append_preformatted(" ");
+      output.append_preformatted(sql_operator.c_str());
+      output.append_preformatted(" ");
     } else {
       first = false;
     }
 
-    result_str += "(" + *result + ")";
+    output.append_preformatted("(");
+    output.append_preformatted(*result);
+    output.append_preformatted(")");
   }
 
-  return result_str;
+  return output;
 }
 
 namespace {
@@ -678,8 +687,9 @@ bool is_valid_column_name(const std::string_view &str) {
  *   3) columnName : complexOperatorObject
  *   4) columnName : [complexValues]
  */
-std::optional<std::string> FilterObjectGenerator::parse_column_object(
-    const std::string_view &column_name, Value *value) {
+std::optional<mysqlrouter::sqlstring>
+FilterObjectGenerator::parse_column_object(const std::string_view &column_name,
+                                           Value *value) {
   log_debug("parse_column_object %s", column_name.data());
   if (!is_valid_column_name(column_name)) return {};
 
@@ -734,7 +744,7 @@ bool FilterObjectGenerator::parse_wmember(const std::string_view &name,
 
   if (result) {
     where_.append_preformatted("(")
-        .append_preformatted((*result).c_str())
+        .append_preformatted(*result)
         .append_preformatted(")");
     return true;
   }

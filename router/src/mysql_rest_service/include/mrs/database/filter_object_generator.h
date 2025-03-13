@@ -66,21 +66,21 @@ class FilterObjectGenerator {
  private:
   void parse(const Document &doc);
 
-  std::optional<std::string> parse_simple_operator_object(
+  std::optional<mysqlrouter::sqlstring> parse_simple_operator_object(
       const std::string_view &column_name, Value *value);
-  std::optional<std::string> parse_complex_operator_object(
+  std::optional<mysqlrouter::sqlstring> parse_complex_operator_object(
       const std::string_view &column_name, Value *value,
       const std::string_view &complex_key);
-  std::optional<std::string> parse_complex_value(
+  std::optional<mysqlrouter::sqlstring> parse_complex_value(
       const std::string_view &column_name, Value *value);
-  std::optional<std::string> parse_complex_values(
+  std::optional<mysqlrouter::sqlstring> parse_complex_values(
       const std::string_view &column_name, Value *value,
       const std::string_view &complex_key);
-  std::optional<std::string> parse_column_object(
+  std::optional<mysqlrouter::sqlstring> parse_column_object(
       const std::string_view &column_name, Value *value);
-  std::optional<std::string> parse_direct_value(
+  std::optional<mysqlrouter::sqlstring> parse_direct_value(
       const std::string_view &column_name, Value *value);
-  std::optional<std::string> parse_match(Value *value);
+  std::optional<mysqlrouter::sqlstring> parse_match(Value *value);
   void parse_orderby_asof_wmember(Object object);
   void parse_order(Object object);
   void parse_asof(Value *value);

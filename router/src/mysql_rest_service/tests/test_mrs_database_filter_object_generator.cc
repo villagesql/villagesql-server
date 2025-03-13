@@ -117,8 +117,8 @@ TEST_F(FilterObjectsTest, match_field_by_int_value) {
 }
 
 TEST_F(FilterObjectsTest, match_field_by_string_value) {
-  sut_.parse(R"({"f1": "abc123"})");
-  ASSERT_EQ("(`f1`='abc123')", sut_.get_result().str());
+  sut_.parse(R"({"f1": "abc123!"})");
+  ASSERT_EQ("(`f1`='abc123!')", sut_.get_result().str());
 }
 
 TEST_F(FilterObjectsTest, match_field_by_binary_value) {
@@ -134,8 +134,8 @@ TEST_F(FilterObjectsTest, match_field_by_binary_value) {
 }
 
 TEST_F(FilterObjectsTest, match_fields) {
-  sut_.parse(R"({"f1":"abc123", "f2":10})");
-  ASSERT_EQ("(`f1`='abc123') AND (`f2`=10)", sut_.get_result().str());
+  sut_.parse(R"({"f1":"abc123!", "f2":10})");
+  ASSERT_EQ("(`f1`='abc123!') AND (`f2`=10)", sut_.get_result().str());
 }
 
 TEST_F(FilterObjectsTest, match_field_simple_operator_equal) {
@@ -225,8 +225,8 @@ TEST_F(FilterObjectsTest, match_expression_without_modifiers) {
   EXPECT_EQ("(MATCH (`c1`) AGAINST('q1' ) )", sut_.get_result().str());
 
   sut_.parse(
-      R"({"$match":{"$params":["c1", "c2"], "$against":{"$expr":"q1"}}})");
-  EXPECT_EQ("(MATCH (`c1`,`c2`) AGAINST('q1' ) )", sut_.get_result().str());
+      R"({"$match":{"$params":["c1", "c2"], "$against":{"$expr":"q1!"}}})");
+  EXPECT_EQ("(MATCH (`c1`,`c2`) AGAINST('q1!' ) )", sut_.get_result().str());
 }
 
 TEST_F(FilterObjectsTest, match_expression_invalid_modifier) {
@@ -265,8 +265,8 @@ TEST_F(FilterObjectsTest, match_expression_with_modifier) {
 
 TEST_F(FilterObjectsTest, complex_and_two_columns) {
   sut_.parse(
-      R"({"$and": [{"SALARY":{"$gt": 1000}}, {"ENAME":{"$like":"S%"}}]})");
-  ASSERT_EQ("((`SALARY` > 1000) AND (`ENAME` like 'S%'))",
+      R"({"$and": [{"SALARY":{"$gt": 1000}}, {"ENAME":{"$like":"!S?%"}}]})");
+  ASSERT_EQ("((`SALARY` > 1000) AND (`ENAME` like '!S?%'))",
             sut_.get_result().str());
 }
 
