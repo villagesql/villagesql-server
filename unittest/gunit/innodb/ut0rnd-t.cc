@@ -369,7 +369,7 @@ static void test_interval_fast_distribution(uint64_t n) {
   const uint64_t max_score = 17000;
 
   for (uint64_t i = 0; i < max_count; i++) {
-    const auto value = ut::random_from_interval_fast(0, n - 1);
+    const auto value = ut::random_from_interval_fast(0, n);
     for (auto target : target_score) {
       if (value == target[0]) {
         target[1]++;
