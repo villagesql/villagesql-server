@@ -26,6 +26,7 @@
 
 #include <my_systime.h>
 #include <mysql/components/minimal_chassis.h>
+#include <mysql/components/my_service.h>
 #include <mysql/components/services/bits/psi_thread_bits.h>
 #include <mysql/components/services/mysql_option_tracker.h>
 #include <string>
@@ -70,19 +71,12 @@ class Rpl_opt_tracker {
     @param enabled  true:  tracks as enabled
                     false: tracks as disabled
   */
-  void track_replication_replica(bool enabled);
+  void track_replication_replica(bool enabled) const;
 
  private:
-  /**
-    Tracks the Binary Log feature, including the usage data.
-    It only updates usage data if the feature is enabled.
-    Internal method to be used after the mysql_option_tracker_option
-    service is acquired.
-
-    @param enabled  true:  tracks as enabled
-                    false: tracks as disabled
-  */
-  void track_binary_log_internal(bool enabled);
+  using Service_type = SERVICE_TYPE(mysql_option_tracker_option);
+  using Tracker_service_guard = my_service<Service_type>;
+  static constexpr auto m_service_name = "mysql_option_tracker_option";
 
   /**
     Helper method to get Replication Replica feature status.
@@ -94,36 +88,47 @@ class Rpl_opt_tracker {
   static bool is_replication_replica_enabled();
 
   /**
-    Tracks the Replication Replica feature, including the usage data.
+    Tracks a feature, including the usage data.
     It only updates usage data if the feature is enabled.
     Internal method to be used after the mysql_option_tracker_option
     service is acquired.
 
+    @param service_guard acquired service guard
+    @param enabled  true:  tracks as enabled
+                    false: tracks as disabled
+    @param fname feature name
+    @param usage_counter feature usage counter
+  */
+  static void track(Tracker_service_guard &service_guard, bool enabled,
+                    const std::string &fname,
+                    unsigned long long &usage_counter);
+
+  /**
+    Tracks the Binary Log feature, including the usage data.
+    It only updates usage data if the feature is enabled.
+    Internal method to be used after the mysql_option_tracker_option
+    service is acquired.
+
+    @param service_guard acquired service guard
     @param enabled  true:  tracks as enabled
                     false: tracks as disabled
   */
-  void track_replication_replica_internal(bool enabled);
+  void track_binary_log(Tracker_service_guard &service_guard,
+                        bool enabled) const;
 
   /**
-    Helper method to acquire the mysql_option_tracker_option
-    service.
+    Tracks the Replication Replica feature, including the usage data.
+    It only updates usage data if the feature is enabled.
 
-    @return the operation status
-      @retval false  Successful
-      @retval true   Error
+    @param service_guard acquired service guard
+    @param enabled  true:  tracks as enabled
+                    false: tracks as disabled
   */
-  bool acquire_option_tracker_service();
-
-  /**
-    Helper method to release the mysql_option_tracker_option
-    service.
-  */
-  void release_option_tracker_service();
+  void track_replication_replica(Tracker_service_guard &service_guard,
+                                 bool enabled) const;
 
   SERVICE_TYPE_NO_CONST(registry_registration) *
       m_srv_registry_registration_no_lock{nullptr};
-  SERVICE_TYPE(mysql_option_tracker_option) * m_option_tracker_service{nullptr};
-  my_h_service m_option_tracker_handle{nullptr};
 
   my_thread_handle m_thread_id;
   bool m_stop_worker{false};
