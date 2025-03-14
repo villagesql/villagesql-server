@@ -3139,10 +3139,25 @@ inline constexpr const decltype(handlerton::flags) HTON_SUPPORTS_DISTANCE_SCAN{
 inline constexpr const decltype(handlerton::flags)
     HTON_NO_DEFAULT_ENGINE_SUPPORT{1 << 24};
 
+/** Whether the secondary engine supports creation of temporary tables. */
+inline constexpr const decltype(handlerton::flags)
+    HTON_SECONDARY_SUPPORTS_TEMPORARY_TABLE(1 << 25);
+
+/* Whether the handlerton is a secondary engine. */
+inline bool hton_is_secondary_engine(const handlerton *hton) {
+  return hton != nullptr && (hton->flags & HTON_IS_SECONDARY_ENGINE) != 0U;
+}
+
+/* Whether the secondary engine handlerton supports DDLs */
 inline bool secondary_engine_supports_ddl(const handlerton *hton) {
   assert(hton->flags & HTON_IS_SECONDARY_ENGINE);
-
   return (hton->flags & HTON_SECONDARY_ENGINE_SUPPORTS_DDL) != 0;
+}
+
+/* Whether the secondary engine handlerton supports temporary tables. */
+inline bool secondary_engine_supports_temporary_tables(const handlerton *hton) {
+  assert(hton->flags & HTON_IS_SECONDARY_ENGINE);
+  return (hton->flags & HTON_SECONDARY_SUPPORTS_TEMPORARY_TABLE) != 0U;
 }
 
 inline bool ddl_is_atomic(const handlerton *hton) {
@@ -3339,6 +3354,13 @@ struct HA_CREATE_INFO {
 
   void init_create_options_from_share(const TABLE_SHARE *share,
                                       uint64_t used_fields);
+
+  /**
+    Populate the db_type member depending on internal state and thd variables.
+
+    @param[in] thd user session
+   */
+  bool set_db_type(THD *thd);
 };
 
 /**
@@ -7448,6 +7470,7 @@ class DsMrr_impl {
 
 /* lookups */
 handlerton *ha_default_handlerton(THD *thd);
+plugin_ref ha_default_temp_plugin(THD *thd);
 handlerton *ha_default_temp_handlerton(THD *thd);
 /**
   Resolve handlerton plugin by name, without checking for "DEFAULT" or

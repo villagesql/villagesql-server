@@ -8904,6 +8904,17 @@ void THD ::check_and_emit_warning_for_non_composable_engines(
       continue;
     // Skip secondary engines like RAPID
     if (!table->table->s->is_primary_engine()) continue;
+    if (is_temporary_table(table) &&
+        hton_is_secondary_engine(table->table->s->db_type())) {
+      /// If a temporary table exists on a secondary engine, it is guarantee
+      /// that the engine must support temporary tables.
+      assert(secondary_engine_supports_temporary_tables(
+          table->table->s->db_type()));
+      /// Note that temporary tables can only have a single engine. Both the
+      /// TABLE_SHARE::db_type() and TABLE_SHARE::secondary_engine will point to
+      /// that same engine.
+      continue;
+    }
     handlerton *engine = table->table->file->ht;
     std::string engine_name(ha_resolve_storage_engine_name(engine));
     std::string database_name(table->db);

@@ -1896,6 +1896,32 @@ class Drop_tables_ctx {
   bool has_gtid_single_table_group() const {
     return gtid_and_table_groups_state == GTID_SINGLE_TABLE_GROUP;
   }
+
+  bool drop_tmp_tables(THD *thd, bool trans_tables) {
+    const auto table_list =
+        trans_tables ? tmp_trans_tables : tmp_non_trans_tables;
+    for (auto *tr : table_list) {
+      auto *table = tr->table;
+      if (table->s->has_secondary_engine()) {
+        if (secondary_engine_unload_table_inner(
+                thd, table->s->db.str, table->s->path.str,
+                table->s->secondary_engine, false, false)) {
+          return true;
+        }
+      }
+
+      /*
+        Don't check THD::killed flag. We can't rollback deletion of
+        temporary table, so aborting on KILL will make DROP TABLES
+        less atomic.
+        OTOH it is unlikely that we have many temporary tables to drop
+        so being immune to KILL is not that horrible in most cases.
+      */
+      drop_temporary_table(thd, tr);
+    }
+    thd->get_transaction()->mark_dropped_temp_table(Transaction_ctx::STMT);
+    return false;
+  }
 };
 
 /**
@@ -2696,8 +2722,9 @@ static bool validate_secondary_engine_option(THD *thd,
   }
 
   if (table.s->tmp_table != NO_TMP_TABLE) {
-    my_error(ER_SECONDARY_ENGINE, MYF(0),
-             "Cannot alter temporary table with secondary engine defined");
+    my_printf_error(ER_SECONDARY_ENGINE,
+                    "Cannot alter temporary table with engine: %s", MYF(0),
+                    table.s->secondary_engine.str);
     return true;
   }
 
@@ -3673,17 +3700,9 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
     should be binlogged as part of transaction.
   */
   if (drop_ctx.has_tmp_non_trans_tables()) {
-    for (auto *table : drop_ctx.tmp_non_trans_tables) {
-      /*
-        Don't check THD::killed flag. We can't rollback deletion of
-        temporary table, so aborting on KILL will make DROP TABLES
-        less atomic.
-        OTOH it is unlikely that we have many temporary tables to drop
-        so being immune to KILL is not that horrible in most cases.
-      */
-      drop_temporary_table(thd, table);
+    if (drop_ctx.drop_tmp_tables(thd, false)) {
+      return true;
     }
-    thd->get_transaction()->mark_dropped_temp_table(Transaction_ctx::STMT);
   }
 
   if (drop_ctx.has_tmp_non_trans_tables_to_binlog()) {
@@ -3780,26 +3799,9 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
   }
 
   if (drop_ctx.has_tmp_trans_tables()) {
-    for (auto *table : drop_ctx.tmp_trans_tables) {
-      auto *table_obj = table->table;
-      if (table_obj->s->has_secondary_engine()) {
-        if (secondary_engine_unload_table_inner(
-                thd, table_obj->s->db.str, table_obj->s->path.str,
-                table_obj->s->secondary_engine, false, false)) {
-          return true;
-        }
-      }
-
-      /*
-        Don't check THD::killed flag. We can't rollback deletion of
-        temporary table, so aborting on KILL will make DROP TABLES
-        less atomic.
-        OTOH it is unlikely that we have many temporary tables to drop
-        so being immune to KILL is not that horrible in most cases.
-      */
-      drop_temporary_table(thd, table);
+    if (drop_ctx.drop_tmp_tables(thd, true)) {
+      return true;
     }
-    thd->get_transaction()->mark_dropped_temp_table(Transaction_ctx::STMT);
   }
 
   if (drop_ctx.has_tmp_trans_tables_to_binlog() ||
@@ -8966,23 +8968,27 @@ bool validate_secondary_engine_temporary_table(THD *thd,
     Secondary engine for temporary tables leads to materialized
     temporary table creation.
   */
-  if (create_info != nullptr && create_info->secondary_engine.str != nullptr &&
-      ((create_info->options & HA_LEX_CREATE_TMP_TABLE) != 0U)) {
-    const plugin_ref secondary_engine_plugin =
-        ha_resolve_by_name(thd, &create_info->secondary_engine, false);
-    if (secondary_engine_plugin == nullptr) {
+  assert(create_info != nullptr && create_info->db_type != nullptr);
+
+  if (is_temp_table(*create_info) &&
+      hton_is_secondary_engine(create_info->db_type)) {
+    if (!secondary_engine_supports_temporary_tables(create_info->db_type)) {
       my_error(ER_SECONDARY_ENGINE, MYF(0),
                "Temporary table creation with unsupported secondary engine");
       return true;
+    } else {
+      LEX *const lex = thd->lex;
+      if (lex->query_block->field_list_is_empty()) {
+        // Temporary table with a secondary engine requires a select query.
+        my_error(ER_SECONDARY_ENGINE, MYF(0),
+                 "Temporary tables without a SELECT query are not supported");
+        return true;
+      }
+      lex->set_execute_only_in_secondary_engine(true, TEMPORARY_TABLE_CREATION);
+      const auto *pname = ha_resolve_storage_engine_name(create_info->db_type);
+      create_info->secondary_engine = {.str = pname, .length = strlen(pname)};
+      lex->create_info->secondary_engine = create_info->secondary_engine;
     }
-    LEX *const lex = thd->lex;
-    if (lex->query_block->field_list_is_empty()) {
-      // Temporary table with a secondary engine requires a select query.
-      my_error(ER_SECONDARY_ENGINE, MYF(0),
-               "Temporary tables without a SELECT query are not supported");
-      return true;
-    }
-    lex->set_execute_only_in_secondary_engine(true, TEMPORARY_TABLE_CREATION);
   }
 
   return false;
@@ -9072,7 +9078,12 @@ static bool create_table_impl(
 
   if (check_engine(db, table_name, create_info)) return true;
 
-  if (validate_secondary_engine_temporary_table(thd, create_info)) {
+  if (is_temp_table(*create_info) &&
+      create_info->secondary_engine.str != nullptr &&
+      !hton_is_secondary_engine(create_info->db_type)) {
+    my_printf_error(ER_SECONDARY_ENGINE,
+                    "Secondary engine %s cannot be set for temporary table.",
+                    MYF(0), create_info->secondary_engine.str);
     return true;
   }
 
@@ -19332,7 +19343,8 @@ static bool check_engine(const char *db_name, const char *table_name,
 
   // The storage engine must support secondary engines.
   if (create_info->used_fields & HA_CREATE_USED_SECONDARY_ENGINE &&
-      !((*new_engine)->flags & HTON_SUPPORTS_SECONDARY_ENGINE)) {
+      !(((*new_engine)->flags & HTON_SUPPORTS_SECONDARY_ENGINE) ||
+        ((*new_engine)->flags & HTON_IS_SECONDARY_ENGINE))) {
     my_error(ER_CHECK_NOT_IMPLEMENTED, MYF(0), "SECONDARY_ENGINE");
     return true;
   }

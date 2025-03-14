@@ -156,10 +156,6 @@ bool Sql_cmd_create_table::execute(THD *thd) {
     return true;
   }
 
-  if (validate_secondary_engine_temporary_table(thd, &create_info)) {
-    return true;
-  }
-
   if (((lex->create_info->used_fields & HA_CREATE_USED_DATADIR) != 0 ||
        (lex->create_info->used_fields & HA_CREATE_USED_INDEXDIR) != 0) &&
       check_access(thd, FILE_ACL, any_db, nullptr, nullptr, false, false)) {
@@ -179,10 +175,11 @@ bool Sql_cmd_create_table::execute(THD *thd) {
     If no engine type was given, work out the default now
     rather than at parse-time.
   */
-  if (!(create_info.used_fields & HA_CREATE_USED_ENGINE))
-    create_info.db_type = create_info.options & HA_LEX_CREATE_TMP_TABLE
-                              ? ha_default_temp_handlerton(thd)
-                              : ha_default_handlerton(thd);
+  if ((create_info.used_fields & HA_CREATE_USED_ENGINE) == 0U) {
+    if (create_info.set_db_type(thd)) {
+      return true;
+    }
+  }
 
   assert(create_info.db_type != nullptr);
   if ((m_alter_info->flags & Alter_info::ANY_ENGINE_ATTRIBUTE) != 0 &&
@@ -190,6 +187,10 @@ bool Sql_cmd_create_table::execute(THD *thd) {
        DBUG_EVALUATE_IF("simulate_engine_attribute_support", false, true))) {
     my_error(ER_ENGINE_ATTRIBUTE_NOT_SUPPORTED, MYF(0),
              ha_resolve_storage_engine_name(create_info.db_type));
+    return true;
+  }
+
+  if (validate_secondary_engine_temporary_table(thd, &create_info)) {
     return true;
   }
 

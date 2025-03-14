@@ -60,6 +60,7 @@
 #include "mysql/my_loglevel.h"
 #include "mysql_com.h"
 #include "sql/auth/authentication_policy.h"
+#include "sql/handler.h"
 #include "sql/protocol.h"
 #include "sql/rpl_trx_tracking.h"
 #ifdef HAVE_SYS_TIME_H
@@ -5155,7 +5156,7 @@ static Sys_var_ulong Sys_net_wait_timeout(
 static Sys_var_plugin Sys_default_storage_engine(
     "default_storage_engine", "The default storage engine for new tables",
     SESSION_VAR(table_plugin), NO_CMD_LINE, MYSQL_STORAGE_ENGINE_PLUGIN,
-    DEFAULT(&default_storage_engine), NO_MUTEX_GUARD, NOT_IN_BINLOG,
+    DEFAULT(&default_storage_engine), false, NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(check_storage_engine));
 
 const char *internal_tmp_mem_storage_engine_names[] = {"MEMORY", "TempTable",
@@ -5201,7 +5202,7 @@ static Sys_var_plugin Sys_default_tmp_storage_engine(
     "default_tmp_storage_engine",
     "The default storage engine for new explicit temporary tables",
     HINT_UPDATEABLE SESSION_VAR(temp_table_plugin), NO_CMD_LINE,
-    MYSQL_STORAGE_ENGINE_PLUGIN, DEFAULT(&default_tmp_storage_engine),
+    MYSQL_STORAGE_ENGINE_PLUGIN, DEFAULT(&default_tmp_storage_engine), true,
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_storage_engine));
 
 #if defined(ENABLED_DEBUG_SYNC)

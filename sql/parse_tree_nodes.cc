@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "field_types.h"
+#include "lex_string.h"
 #include "mem_root_deque.h"
 #include "my_alloc.h"
 #include "my_dbug.h"
@@ -2167,6 +2168,11 @@ bool PT_create_table_engine_option::do_contextualize(
 
 bool PT_create_table_secondary_engine_option::do_contextualize(
     Table_ddl_parse_context *pc) {
+  if ((pc->create_info->options & HA_LEX_CREATE_TMP_TABLE) != 0U) {
+    my_error(ER_SECONDARY_ENGINE, MYF(0),
+             "Temporary table cannot have a secondary engine");
+    return true;
+  }
   if (super::do_contextualize(pc)) return true;
 
   pc->create_info->used_fields |= HA_CREATE_USED_SECONDARY_ENGINE;
@@ -2463,12 +2469,11 @@ Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
   }
 
   lex->set_current_query_block(pc.select);
-  if ((pc2.create_info->used_fields & HA_CREATE_USED_ENGINE) &&
-      !pc2.create_info->db_type) {
-    pc2.create_info->db_type =
-        pc2.create_info->options & HA_LEX_CREATE_TMP_TABLE
-            ? ha_default_temp_handlerton(thd)
-            : ha_default_handlerton(thd);
+  if (((pc2.create_info->used_fields & HA_CREATE_USED_ENGINE) != 0U) &&
+      (pc2.create_info->db_type == nullptr)) {
+    if (pc2.create_info->set_db_type(thd)) {
+      return nullptr;
+    }
     push_warning_printf(
         thd, Sql_condition::SL_WARNING, ER_WARN_USING_OTHER_HANDLER,
         ER_THD(thd, ER_WARN_USING_OTHER_HANDLER),
