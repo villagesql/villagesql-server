@@ -99,7 +99,7 @@ class Rpl_opt_tracker {
     @param fname feature name
     @param usage_counter feature usage counter
   */
-  static void track(Tracker_service_guard &service_guard, bool enabled,
+  static void track(const Tracker_service_guard &service_guard, bool enabled,
                     const std::string &fname,
                     unsigned long long &usage_counter);
 
@@ -113,7 +113,7 @@ class Rpl_opt_tracker {
     @param enabled  true:  tracks as enabled
                     false: tracks as disabled
   */
-  void track_binary_log(Tracker_service_guard &service_guard,
+  void track_binary_log(const Tracker_service_guard &service_guard,
                         bool enabled) const;
 
   /**
@@ -124,7 +124,7 @@ class Rpl_opt_tracker {
     @param enabled  true:  tracks as enabled
                     false: tracks as disabled
   */
-  void track_replication_replica(Tracker_service_guard &service_guard,
+  void track_replication_replica(const Tracker_service_guard &service_guard,
                                  bool enabled) const;
 
   SERVICE_TYPE_NO_CONST(registry_registration) *
