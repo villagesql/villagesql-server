@@ -9112,7 +9112,9 @@ class Manifest_file_option_parser_helper final {
     else if (basedir)
       convert_dirname(
           local_plugindir_buffer,
-          (std::string{basedir} + get_relative_path(PLUGINDIR)).c_str(), NullS);
+          (std::string{local_basedir_buffer} + get_relative_path(PLUGINDIR))
+              .c_str(),
+          NullS);
     else
       convert_dirname(local_plugindir_buffer, get_relative_path(PLUGINDIR),
                       NullS);
