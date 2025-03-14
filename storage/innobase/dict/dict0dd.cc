@@ -443,6 +443,7 @@ int dd_table_open_on_dd_obj(THD *thd, dd::cache::Dictionary_client *client,
   }
 
   const char *table_name = tbl_name;
+  char tmp_name[FN_REFLEN + 1];
   if (!tbl_name) {
     dd::Schema *schema;
     error = client->acquire_uncached<dd::Schema>(dd_table.schema_id(), &schema);
@@ -451,7 +452,6 @@ int dd_table_open_on_dd_obj(THD *thd, dd::cache::Dictionary_client *client,
     }
 
     bool truncated;
-    char tmp_name[FN_REFLEN + 1];
     build_table_filename(tmp_name, sizeof(tmp_name) - 1, schema->name().c_str(),
                          dd_table.name().c_str(), nullptr, 0, &truncated);
 
