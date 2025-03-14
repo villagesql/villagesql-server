@@ -110,8 +110,8 @@ bool Rpl_opt_tracker::is_replication_replica_enabled() {
   return replication_replica_enabled;
 }
 
-void Rpl_opt_tracker::track(Tracker_service_guard &service_guard, bool enabled,
-                            const std::string &fname,
+void Rpl_opt_tracker::track(const Tracker_service_guard &service_guard,
+                            bool enabled, const std::string &fname,
                             unsigned long long &usage_counter) {
   if (service_guard.is_valid()) {
     service_guard->set_enabled(fname.c_str(), enabled ? 1 : 0);
@@ -121,14 +121,14 @@ void Rpl_opt_tracker::track(Tracker_service_guard &service_guard, bool enabled,
   }
 }
 
-void Rpl_opt_tracker::track_binary_log(Tracker_service_guard &service_guard,
-                                       bool enabled) const {
+void Rpl_opt_tracker::track_binary_log(
+    const Tracker_service_guard &service_guard, bool enabled) const {
   track(service_guard, enabled, s_f_name_binary_log,
         m_opt_option_tracker_usage_binary_log);
 }
 
 void Rpl_opt_tracker::track_replication_replica(
-    Tracker_service_guard &service_guard, bool enabled) const {
+    const Tracker_service_guard &service_guard, bool enabled) const {
   track(service_guard, enabled, s_f_name_replication_replica,
         m_opt_option_tracker_usage_replication_replica);
 }
