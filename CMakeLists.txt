@@ -788,11 +788,13 @@ INCLUDE(install_macros)
 INCLUDE(mysql_add_executable)
 INCLUDE(curl)
 INCLUDE(rapidjson)
-INCLUDE(fprofile)
 INCLUDE(fido2)
 INCLUDE(win_jemalloc)
 INCLUDE(libs_mysql_create_library)
 INCLUDE(libcno)
+# Do this last, so that most feature checks are done, and not affected by
+# -fprofile-use or -fprofile-generate
+INCLUDE(fprofile) # Do this last !!
 
 # To simplify building of JET, skip all dependencies for other targets.
 IF(EXISTS ${CMAKE_SOURCE_DIR}/internal/CMakeLists.txt)
