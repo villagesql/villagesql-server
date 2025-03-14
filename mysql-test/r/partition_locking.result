@@ -4784,7 +4784,7 @@ FLUSH STATUS;
 EXPLAIN INSERT INTO t2 VALUES ((SELECT max(a) FROM t1),
 (SELECT min(a) FROM t1));
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	INSERT	t2	p0,p1,p2	ALL	NULL	NULL	NULL	NULL	#	NULL	NULL
+1	INSERT	t2	p2	ALL	NULL	NULL	NULL	NULL	#	NULL	NULL
 3	SUBQUERY	t1	p0,p1,p2	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
 2	SUBQUERY	t1	p0,p1,p2	ALL	NULL	NULL	NULL	NULL	#	100.00	NULL
 Warnings:
@@ -4792,6 +4792,9 @@ Note	1003	insert into `test`.`t2` values ((/* select#2 */ select max(`test`.`t1`
 VARIABLE_NAME	VARIABLE_VALUE
 Handler_commit	1
 Handler_external_lock	6
+Handler_read_first	3
+Handler_read_key	3
+Handler_read_rnd_next	8
 # I.e. No lock pruning possible
 FLUSH STATUS;
 INSERT INTO t2 VALUES ((SELECT a FROM t1 WHERE a = 1),
@@ -4809,7 +4812,7 @@ FLUSH STATUS;
 EXPLAIN INSERT INTO t2 VALUES ((SELECT a FROM t1 WHERE a = 1),
 (SELECT b FROM t1 WHERE a = 2));
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	INSERT	t2	p0,p1,p2	ALL	NULL	NULL	NULL	NULL	#	NULL	NULL
+1	INSERT	t2	p1	ALL	NULL	NULL	NULL	NULL	#	NULL	NULL
 3	SUBQUERY	t1	p2	ALL	NULL	NULL	NULL	NULL	#	25.00	Using where
 2	SUBQUERY	t1	p1	ALL	NULL	NULL	NULL	NULL	#	25.00	Using where
 Warnings:
@@ -4817,6 +4820,9 @@ Note	1003	insert into `test`.`t2` values ((/* select#2 */ select `test`.`t1`.`a`
 VARIABLE_NAME	VARIABLE_VALUE
 Handler_commit	1
 Handler_external_lock	6
+Handler_read_first	1
+Handler_read_key	1
+Handler_read_rnd_next	4
 # I.e. No lock pruning possible on insert table
 SELECT * FROM t2 ORDER BY a, b;
 a	b

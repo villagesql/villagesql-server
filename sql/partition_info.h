@@ -511,7 +511,8 @@ class partition_info {
   void report_part_expr_error(bool use_subpart_expr);
   bool set_used_partition(THD *thd, const mem_root_deque<Item *> &fields,
                           const mem_root_deque<Item *> &values, COPY_INFO &info,
-                          bool copy_default_values, MY_BITMAP *used_partitions);
+                          bool copy_default_values, MY_BITMAP *used_partitions,
+                          bool tables_locked);
   /**
     PRUNE_NO - Unable to prune.
     PRUNE_DEFAULTS - Partitioning field is only set to
