@@ -1002,6 +1002,9 @@ mkdir release
            -DMYSQLX_UNIX_ADDR="/var/run/mysqld/mysqlx.sock" \
            -DWITH_NUMA=1 \
            %{?mecab_option} \
+%if 0%{?mrs_jit_executor_lib:1}
+    -DMRS_JIT_EXECUTOR_LIB="%{mrs_jit_executor_lib}" \
+%endif
            -DCOMPILATION_COMMENT="%{compilation_comment_release}" \
            -DCOMPILATION_COMMENT_SERVER="%{compilation_comment_server_release}" \
            -DMYSQL_SERVER_SUFFIX="%{?server_suffix}"
