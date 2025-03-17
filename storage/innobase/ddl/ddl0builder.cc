@@ -896,10 +896,11 @@ dberr_t Builder::copy_columns(Copy_ctx &ctx, size_t &mv_rows_added,
                               doc_id_t &write_doc_id) noexcept {
   auto &fts = m_ctx.m_fts;
   auto key_buffer = m_thread_ctxs[ctx.m_thread_id]->m_key_buffer;
-  auto &fields = key_buffer->m_dtuples[key_buffer->size()];
 
+  dfield_t *fields;
   const dict_field_t *ifield = m_index->get_field(0);
   auto field = fields = key_buffer->alloc(ctx.m_n_fields);
+  key_buffer->m_dtuples.push_back(fields);
   const auto page_size = dict_table_page_size(m_ctx.m_old_table);
 
   for (size_t i = 0; i < ctx.m_n_fields; ++i, ++field, ++ifield) {
@@ -1040,10 +1041,6 @@ dberr_t Builder::copy_row(Copy_ctx &ctx, size_t &mv_rows_added) noexcept {
 
   ut_a(ctx.m_n_rows_added == 0);
 
-  if (unlikely(key_buffer->full())) {
-    return DB_OVERFLOW;
-  }
-
   // clang-format off
   DBUG_EXECUTE_IF(
       "ddl_buf_add_two",
@@ -1058,10 +1055,6 @@ dberr_t Builder::copy_row(Copy_ctx &ctx, size_t &mv_rows_added) noexcept {
   doc_id_t write_doc_id{};
 
   for (;;) {
-    if (unlikely(key_buffer->full())) {
-      return ctx.m_n_rows_added == 0 ? DB_OVERFLOW : DB_SUCCESS;
-    }
-
     // clang-format off
     DBUG_EXECUTE_IF(
         "ddl_add_multi_value",
