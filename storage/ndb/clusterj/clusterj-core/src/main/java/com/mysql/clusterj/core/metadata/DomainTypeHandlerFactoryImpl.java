@@ -59,9 +59,9 @@ public class DomainTypeHandlerFactoryImpl implements DomainTypeHandlerFactory {
                 DomainTypeHandlerFactory.class, 
                 DOMAIN_TYPE_HANDLER_FACTORY_IMPL_CLASS_LOADER,
                 domainTypeHandlerFactoryErrorMessages);
-        logger.info("Found " + domainTypeHandlerFactories.size() + " DomainTypeHandlerFactories");
+        logger.info( () -> "Found " + domainTypeHandlerFactories.size() + " DomainTypeHandlerFactories");
         for (DomainTypeHandlerFactory factory: domainTypeHandlerFactories) {
-            logger.info(factory.toString());
+            logger.info(() -> factory.toString());
         }
     }
 
@@ -101,8 +101,9 @@ public class DomainTypeHandlerFactoryImpl implements DomainTypeHandlerFactory {
             if (handler == null && domainClass != null) {
                 String tableName = DomainTypeHandlerImpl.getTableName(domainClass);
                 if (tableName != null) {
-                    logger.info(local.message("MSG_Removing_Schema", tableName, domainClass.getName()));
-                    dictionary.removeCachedTable(tableName);                    
+                    logger.info(() -> local.message("MSG_Removing_Schema",
+                                          tableName, domainClass.getName()));
+                    dictionary.removeCachedTable(tableName);
                 }
             }
         }

@@ -810,7 +810,8 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
             while (!done && iterations-- > 0) {
                 done = countSessions(sessionCounts) == 0;
                 if (!done) {
-                    logger.info(local.message("INFO_Reconnect_wait", sessionCounts.toString()));
+                    if(logger.isInfoEnabled()) logger.info(
+                        local.message("INFO_Reconnect_wait", sessionCounts.toString()));
                     sleep(1000);
                     sessionCounts = factory.getConnectionPoolSessionCounts();
                 }

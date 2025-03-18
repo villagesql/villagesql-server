@@ -2460,7 +2460,8 @@ public class Utility {
         }
         for (int peer: collations) {
             // for each collation that shares the same charset name, set the charset converter
-            logger.debug("Adding charset converter " + charsetName + " for collation " + peer);
+            logger.debug( () -> "Adding charset converter " + charsetName +
+                                " for collation " + peer);
             charsetConverters[peer] = charsetConverter;
         }
         return charsetConverter;

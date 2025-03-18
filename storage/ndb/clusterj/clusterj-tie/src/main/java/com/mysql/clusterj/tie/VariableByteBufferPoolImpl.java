@@ -219,7 +219,8 @@ class VariableByteBufferPoolImpl {
                 biggest = bufferSize;
             }
         }
-        logger.info(local.message("MSG_ByteBuffer_Pools_Initialized", Arrays.toString(bufferSizes)));
+        logger.info(() -> local.message("MSG_ByteBuffer_Pools_Initialized",
+                                        Arrays.toString(bufferSizes)));
     }
 
     /** Borrow a buffer from the pool. The pool is the smallest that has buffers
@@ -230,8 +231,7 @@ class VariableByteBufferPoolImpl {
         ByteBuffer buffer = null;
         if (entry == null) {
             // oh no, we need a bigger size than any buffer pool, so log a message and direct allocate a buffer
-            if (logger.isDetailEnabled())
-                logger.warn(local.message("MSG_Cannot_allocate_byte_buffer_from_pool", sizeNeeded, this.biggest));
+            logger.warn(local.message("MSG_Cannot_allocate_byte_buffer_from_pool", sizeNeeded, this.biggest));
             buffer = ByteBuffer.allocateDirect(sizeNeeded + guard.length);
             initializeGuard(buffer);
             return buffer;

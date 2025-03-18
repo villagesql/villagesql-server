@@ -135,7 +135,8 @@ public class ClusterConnectionImpl
         handleError(clusterConnection, connectString, nodeId);
         int timeoutError = clusterConnection.set_timeout(connectTimeoutMgm);
         handleError(timeoutError, connectString, nodeId, connectTimeoutMgm);
-        logger.info(local.message("INFO_Create_Cluster_Connection", connectString, nodeId, connectTimeoutMgm));
+        logger.info(() -> local.message("INFO_Create_Cluster_Connection",
+                                        connectString, nodeId, connectTimeoutMgm));
     }
 
     public void connect(int connectRetries, int connectDelay, boolean verbose) {
@@ -236,7 +237,8 @@ public class ClusterConnectionImpl
     public void closing() {
         this.isClosing = true;
         if (clusterConnection != null) {
-            logger.info(local.message("INFO_Close_Cluster_Connection", connectString, nodeId));
+            logger.info(() -> local.message("INFO_Close_Cluster_Connection",
+                                            connectString, nodeId));
             if (dbs.size() > 0) {
                 for (DbImpl db: dbs.keySet()) {
                     // mark all dbs as closing so no more operations will start

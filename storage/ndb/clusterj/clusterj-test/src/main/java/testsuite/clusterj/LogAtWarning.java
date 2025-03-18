@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,25 +23,34 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-package com.mysql.clusterj.core.util;
+package testsuite.clusterj;
 
-import java.util.function.Supplier;
+import java.io.IOException;
+import java.lang.SecurityException;
+import java.io.ByteArrayInputStream;
+import java.util.logging.LogManager;
 
-public interface Logger {
+/*
+  Use:
+   java -Djava.util.logging.config.class=testsuite.clusterj.LogAtWarning
+*/
 
-    void detail(String message);
-    void detail(Supplier<String> generator);
-    void debug(String message);
-    void debug(Supplier<String> generator);
-    void trace(String message);
-    void trace(Supplier<String> generator);
-    void info(String message);
-    void info(Supplier<String> generator);
-    void warn(String message);
-    void error(String message);
-    void fatal(String message);
-    boolean isDetailEnabled();
-    boolean isDebugEnabled();
-    boolean isTraceEnabled();
-    boolean isInfoEnabled();
+public class LogAtWarning {
+
+    static String[] allDomains= {  "core", "core.metadata", "core.query",
+                                   "core.util", "test", "tie" };
+
+    static String configAllAtLevel(String level) {
+        String r = "handlers=java.util.logging.ConsoleHandler\n";
+        for(String d : allDomains)
+            r += "com.mysql.clusterj." + d + ".level=" + level + "\n";
+
+        return r;
+    }
+
+    public LogAtWarning() throws IOException, SecurityException {
+        LogManager logManager = LogManager.getLogManager();
+        String config = configAllAtLevel("WARNING");
+        logManager.readConfiguration(new ByteArrayInputStream(config.getBytes()));
+    }
 }
