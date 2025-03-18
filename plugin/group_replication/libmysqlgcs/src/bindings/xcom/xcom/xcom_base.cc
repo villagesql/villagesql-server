@@ -2279,6 +2279,8 @@ static bool check_delivery_timeout(site_def *site, double start_propose,
 static int reserve_synode_number(synode_allocation_type *synode_allocation,
                                  site_def **site, synode_no *msgno,
                                  int *remote_retry, app_data *a,
+                                 double start_propose [[maybe_unused]],
+                                 int self [[maybe_unused]],
                                  synode_reservation_status *ret) {
   *ret = synode_reservation_status::number_ok;  // Optimistic, will be reset if
                                                 // necessary
@@ -2287,6 +2289,9 @@ static int reserve_synode_number(synode_allocation_type *synode_allocation,
   ENV_INIT
   END_ENV_INIT
   END_ENV;
+#if TASK_DBUG_ON
+  node_no allocator_node;
+#endif
 
   TASK_BEGIN
   do {
@@ -2295,7 +2300,7 @@ static int reserve_synode_number(synode_allocation_type *synode_allocation,
     *site = find_site_def_rw(current_message);
     if (is_leader(*site)) {  // Use local synode allocator
       *msgno = local_synode_allocator(current_message);
-      XCOM_IFDBG(D_CONS, FN; SYCEXP(outer_ep->msgno));
+      XCOM_IFDBG(D_CONS, FN; SYCEXP(*msgno));
       *synode_allocation = synode_allocation_type::local;
     } else {  // Cannot use local, try remote
               // Get synode number from another leader
@@ -2308,15 +2313,15 @@ static int reserve_synode_number(synode_allocation_type *synode_allocation,
           TASK_RETURN(synode_reservation_status::no_nodes);
         }
 #if TASK_DBUG_ON
-        node_no allocator_node =
+        allocator_node =
 #endif
             remote_synode_allocator(get_site_def_rw(),
                                     *a);  // Send request for synode, use
                                           // latest config
         if (*remote_retry > 10) {
-          XCOM_IFDBG(D_BUG, FN; NUMEXP(outer_ep->self); NUMEXP(allocator_node);
+          XCOM_IFDBG(D_BUG, FN; NUMEXP(self); NUMEXP(allocator_node);
                      SYCEXP(executed_msg); SYCEXP(current_message);
-                     SYCEXP(outer_ep->msgno); SYCEXP(get_site_def_rw()->start));
+                     SYCEXP(*msgno); SYCEXP(get_site_def_rw()->start));
         }
         if (synode_number_pool.empty()) {  // Only wait if still empty
           TIMED_TASK_WAIT(&synode_number_pool.queue,
@@ -2325,7 +2330,7 @@ static int reserve_synode_number(synode_allocation_type *synode_allocation,
         (*remote_retry)++;
       }
       std::tie(*msgno, *synode_allocation) = synode_number_pool.get();
-      XCOM_IFDBG(D_CONS, FN; SYCEXP(outer_ep->msgno));
+      XCOM_IFDBG(D_CONS, FN; SYCEXP(*msgno));
     }
 
     // Update site to match synode
@@ -2336,14 +2341,12 @@ static int reserve_synode_number(synode_allocation_type *synode_allocation,
 
     while (too_far(*msgno)) { /* Too far ahead of executor */
       TIMED_TASK_WAIT(&exec_wait, 0.2);
-      XCOM_IFDBG(D_NONE, FN; SYCEXP(ep->msgno); TIMECEXP(ep->start_propose);
-                 TIMECEXP(outer_ep->client_msg->p->a->expiry_time);
-                 TIMECEXP(task_now());
-                 NDBG(enough_live_nodes(outer_ep->site), d));
+      XCOM_IFDBG(D_NONE, FN; SYCEXP(*msgno); TIMECEXP(start_propose);
+                 TIMECEXP(a->expiry_time); TIMECEXP(task_now());
+                 NDBG(enough_live_nodes(*site), d));
 #ifdef DELIVERY_TIMEOUT
-      if (check_delivery_timeout(outer_ep->site, outer_ep->start_propose,
-                                 outer_ep->client_msg->p->a)) {
-        TASK_RETURN(delivery_timeout);
+      if (check_delivery_timeout(*site, start_propose, a)) {
+        TASK_RETURN(synode_reservation_status::delivery_timeout);
       }
 #endif
     }
@@ -2484,7 +2487,8 @@ static int proposer_task(task_arg arg) {
     /* Find a free slot */
     TASK_CALL(reserve_synode_number(&ep->synode_allocation, &ep->site,
                                     &ep->msgno, &ep->remote_retry,
-                                    ep->client_msg->p->a, &reservation_status));
+                                    ep->client_msg->p->a, ep->start_propose,
+                                    ep->self, &reservation_status));
 
     // Check result of reservation
     if (reservation_status == synode_reservation_status::no_nodes) {
@@ -3031,7 +3035,7 @@ synode_no set_current_message(synode_no msgno) {
 static void update_max_synode(pax_msg *p);
 
 #if TASK_DBUG_ON
-static void perf_dbg(int *_n, int *_old_n, double *_old_t) [[maybe_unused]];
+[[maybe_unused]] static void perf_dbg(int *_n, int *_old_n, double *_old_t);
 static void perf_dbg(int *_n, int *_old_n, double *_old_t) {
   int n = *_n;
   int old_n = *_old_n;
@@ -4157,7 +4161,7 @@ struct execute_context {
 };
 
 static void dump_exec_state(execute_context *xc [[maybe_unused]],
-                            long dbg [[maybe_unused]]);
+                            xcom_dbg_type dbg [[maybe_unused]]);
 static int x_check_exit(execute_context *xc);
 static int x_check_execute_inform(execute_context *xc);
 static void x_fetch(execute_context *xc);
@@ -4395,7 +4399,7 @@ static void x_execute(execute_context *xc) {
 static execute_context *debug_xc;
 
 static void dump_exec_state(execute_context *xc [[maybe_unused]],
-                            long dbg [[maybe_unused]]) {
+                            xcom_dbg_type dbg [[maybe_unused]]) {
   XCOM_IFDBG(dbg, FN; SYCEXP(executed_msg); SYCEXP(delivered_msg);
              SYCEXP(max_synode); SYCEXP(last_delivered_msg);
              NDBG(delay_fifo.n, d); NDBG(delay_fifo.front, d);
@@ -6501,16 +6505,16 @@ pax_msg *dispatch_op(site_def const *site, pax_msg *p, linkage *reply_queue) {
   msg->max_synode = get_max_synode();       \
   serialize_msg(msg, ep->rfd->x_proto, &ep->buflen, &ep->buf);
 
-#define WRITE_REPLY                                                         \
-  if (ep->buflen) {                                                         \
-    int64_t sent;                                                           \
-    XCOM_IFDBG(D_TRANSPORT, FN; STRLIT("task_write "); NDBG(ep->rfd.fd, d); \
-               NDBG(ep->buflen, u));                                        \
-    TASK_CALL(task_write(ep->rfd, ep->buf, ep->buflen, &sent));             \
-    send_count[ep->p->op]++;                                                \
-    send_bytes[ep->p->op] += ep->buflen;                                    \
-    X_FREE(ep->buf);                                                        \
-  }                                                                         \
+#define WRITE_REPLY                                                          \
+  if (ep->buflen) {                                                          \
+    int64_t sent;                                                            \
+    XCOM_IFDBG(D_TRANSPORT, FN; STRLIT("task_write "); NDBG(ep->rfd->fd, d); \
+               NDBG(ep->buflen, u));                                         \
+    TASK_CALL(task_write(ep->rfd, ep->buf, ep->buflen, &sent));              \
+    send_count[ep->p->op]++;                                                 \
+    send_bytes[ep->p->op] += ep->buflen;                                     \
+    X_FREE(ep->buf);                                                         \
+  }                                                                          \
   ep->buf = NULL;
 
 static inline void update_srv(server **target, server *srv) {
@@ -6695,7 +6699,7 @@ again:
     */
     update_srv(&ep->srv, get_server(ep->site, ep->p->from));
     ep->p->refcnt = 1; /* Refcnt from other end is void here */
-    XCOM_IFDBG(D_NONE, FN; NDBG(ep->rfd.fd, d); NDBG(task_now(), f);
+    XCOM_IFDBG(D_NONE, FN; NDBG(ep->rfd->fd, d); NDBG(task_now(), f);
                COPY_AND_FREE_GOUT(dbg_pax_msg(ep->p)););
     receive_count[ep->p->op]++;
     receive_bytes[ep->p->op] += (uint64_t)n + MSG_HDR_SIZE;
@@ -6809,7 +6813,7 @@ again:
   }
 
   FINALLY
-  XCOM_IFDBG(D_BUG, FN; STRLIT(" shutdown "); NDBG(ep->rfd.fd, d);
+  XCOM_IFDBG(D_BUG, FN; STRLIT(" shutdown "); NDBG(ep->rfd->fd, d);
              NDBG(task_now(), f));
   if (ep->reply_queue.suc && !link_empty(&ep->reply_queue))
     empty_msg_list(&ep->reply_queue);
@@ -6823,7 +6827,7 @@ again:
   /* Unref srv to avoid leak */
   update_srv(&ep->srv, nullptr);
 
-  XCOM_IFDBG(D_BUG, FN; STRLIT(" shutdown completed"); NDBG(ep->rfd.fd, d);
+  XCOM_IFDBG(D_BUG, FN; STRLIT(" shutdown completed"); NDBG(ep->rfd->fd, d);
              NDBG(task_now(), f));
   TASK_END;
 }
@@ -6879,7 +6883,7 @@ int reply_handler_task(task_arg arg) {
       }
       receive_bytes[ep->reply->op] += (uint64_t)n + MSG_HDR_SIZE;
     }
-    XCOM_IFDBG(D_NONE, FN; NDBG(ep->s->con.fd, d); NDBG(task_now(), f);
+    XCOM_IFDBG(D_NONE, FN; NDBG(ep->s->con->fd, d); NDBG(task_now(), f);
                COPY_AND_FREE_GOUT(dbg_pax_msg(ep->reply)););
     receive_count[ep->reply->op]++;
 
@@ -6920,7 +6924,7 @@ int reply_handler_task(task_arg arg) {
 
   shutdown_connection(ep->s->con);
   ep->s->reply_handler = nullptr;
-  XCOM_IFDBG(D_BUG, FN; STRLIT(" shutdown "); NDBG(ep->s->con.fd, d);
+  XCOM_IFDBG(D_BUG, FN; STRLIT(" shutdown "); NDBG(ep->s->con->fd, d);
              NDBG(task_now(), f));
   srv_unref(ep->s);
 

@@ -318,7 +318,7 @@ static int _send_msg(server *s, pax_msg *p, node_no to, int64_t *ret) {
   TASK_BEGIN
   p->to = to;
   XCOM_IFDBG(D_NONE, FN; PTREXP(stack); PTREXP(s); PTREXP(p);
-             NDBG(s->con.fd, d));
+             NDBG(s->con->fd, d));
   XCOM_IFDBG(D_NONE, FN; STREXP(s->srv); NDBG(s->port, d); NDBG(task_now(), f);
              COPY_AND_FREE_GOUT(dbg_pax_msg(p)););
   if (to == p->from) {
