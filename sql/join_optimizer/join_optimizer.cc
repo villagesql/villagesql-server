@@ -5220,7 +5220,7 @@ void CostingReceiver::ProposeHashJoin(
         we never need to rebuild the hash table. build_cost should
         then be counted as init_once_cost. Otherwise, build_cost will
         be incurred for each re-scan. To get a good estimate of
-        init_once_cost we therefor need to estimate the chance of
+        init_once_cost we therefore need to estimate the chance of
         exceeding the join buffer size. We estimate this probability as:
 
         (expected_data_volume / join_buffer_size)^2
@@ -5234,10 +5234,11 @@ void CostingReceiver::ProposeHashJoin(
     }
   }();
 
+  assert(reuse_buffer_probability >= 0);
+  assert(reuse_buffer_probability <= 1);
   join_path.set_init_once_cost(outer->init_once_cost() +
-                               (1.0 - reuse_buffer_probability) *
-                                   right_path->init_once_cost() +
-                               reuse_buffer_probability * build_cost);
+                               std::lerp(right_path->init_once_cost(),
+                                         build_cost, reuse_buffer_probability));
 
   join_path.set_cost(cost);
 

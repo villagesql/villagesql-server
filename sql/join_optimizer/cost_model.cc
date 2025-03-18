@@ -268,8 +268,8 @@ static double AddInnodbEngineCostOverhead(
 
   double innodb_engine_cost =
       kInnoDBTemptableAggregationOverhead * temptable_engine_cost;
-  return (1 - probability_innodb_engine) * temptable_engine_cost +
-         probability_innodb_engine * innodb_engine_cost;
+  return std::lerp(temptable_engine_cost, innodb_engine_cost,
+                   probability_innodb_engine);
 }
 
 /**
@@ -1366,12 +1366,10 @@ double SmoothTransition(FunctionLow function_low, FunctionHigh function_high,
     return function_high(argument);
 
   } else {
-    // Might use std::lerp() in C++ 20.
     const double high_fraction =
         (argument - lower_limit) / (upper_limit - lower_limit);
-
-    return function_low(argument) * (1.0 - high_fraction) +
-           function_high(argument) * high_fraction;
+    return std::lerp(function_low(argument), function_high(argument),
+                     high_fraction);
   }
 }
 
@@ -1636,11 +1634,10 @@ void EstimateLimitOffsetCost(AccessPath *path) {
         std::min(1.0, double(lim.offset) / child->num_output_rows());
     const double fraction_full_read =
         std::min(1.0, double(lim.limit) / child->num_output_rows());
-    path->set_cost(child->init_cost() +
-                   fraction_full_read * (child->cost() - child->init_cost()));
-    path->set_init_cost(child->init_cost() +
-                        fraction_start_read *
-                            (child->cost() - child->init_cost()));
+    path->set_cost(
+        std::lerp(child->init_cost(), child->cost(), fraction_full_read));
+    path->set_init_cost(
+        std::lerp(child->init_cost(), child->cost(), fraction_start_read));
   }
 }
 
