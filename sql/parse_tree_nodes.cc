@@ -4310,7 +4310,12 @@ bool PT_into_destination_outfile::do_contextualize(Parse_context *pc) {
       relevant portions of the query.
     */
     auto *const sp = lex->sphead;
-    if (sp != nullptr) {
+
+    /*
+      For unknown reasons, get_top_lex() may be nullptr for a stored procedure.
+      Compensate for this with a nullptr check.
+    */
+    if (sp != nullptr && sp->m_parser_data.get_top_lex() != nullptr) {
       /*
         If the export query is part of a stored procedure/routine, then call
         rewrite on the topmost lex.
