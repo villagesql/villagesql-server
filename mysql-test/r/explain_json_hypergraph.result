@@ -306,8 +306,10 @@ pk INT NOT NULL,
 PRIMARY KEY (pk),
 KEY (col_int_key)
 ) ENGINE=InnoDB STATS_PERSISTENT=0;
-INSERT INTO t2 VALUES
-(1,"GOOD",1),(100,"",2),(200,"",3),(300,"",4),(400,"",5),(500,"",8);
+INSERT INTO t2
+WITH RECURSIVE qn(n) AS
+(SELECT 0 UNION ALL SELECT n+1 FROM qn WHERE n<99)
+SELECT n, "XXX", n FROM qn;
 EXPLAIN FORMAT=TREE SELECT t1.*,t2.* FROM t1 straight_join t2
 ON t2.col_int_key = t1.col_int WHERE t2.pk < t1.pk;
 EXPLAIN
@@ -1395,7 +1397,11 @@ DROP TABLE t;
 #
 SET @v1 = NULL;
 CREATE TABLE t (pk INT PRIMARY KEY AUTO_INCREMENT, i INT DEFAULT NULL, INDEX idx(i));
-INSERT INTO t(i) VALUES (3), (2), (1), (NULL);
+INSERT INTO t(i)
+WITH RECURSIVE qn(n) AS
+(SELECT 0 UNION ALL SELECT n+1 FROM qn WHERE n<19)
+SELECT 19 - n FROM qn;
+INSERT INTO t(i) VALUES (NULL);
 ANALYZE TABLE t;
 Table	Op	Msg_type	Msg_text
 test.t	analyze	status	OK
@@ -1414,7 +1420,8 @@ FROM (SELECT JSON_UNQUOTE(JSON_SEARCH(@v1, 'one', 'index_lookup')) AS index_acce
 index_lookup_references_const
 1
 SET @v1 = NULL;
-EXPLAIN FORMAT=JSON INTO @v1 SELECT t1.i FROM t t1, t t2 WHERE t1.i = t2.i + 1;
+EXPLAIN FORMAT=JSON INTO @v1 SELECT t1.i FROM t t1, t t2
+WHERE t1.i = t2.i + 1 LIMIT 1;
 SELECT JSON_EXTRACT(@v1,
 CONCAT(
 SUBSTRING_INDEX(index_access_type_path, '.',
@@ -1428,7 +1435,8 @@ FROM (SELECT JSON_UNQUOTE(JSON_SEARCH(@v1, 'one', 'index_lookup')) AS index_acce
 index_lookup_references_func
 1
 SET @v1 = NULL;
-EXPLAIN FORMAT=JSON INTO @v1 SELECT t1.pk FROM t t1, t t2 WHERE t1.pk = t2.pk;
+EXPLAIN FORMAT=JSON INTO @v1 SELECT t1.pk FROM t t1, t t2
+WHERE t1.pk = t2.pk LIMIT 1;
 SELECT JSON_EXTRACT(@v1,
 CONCAT(
 SUBSTRING_INDEX(index_access_type_path, '.',

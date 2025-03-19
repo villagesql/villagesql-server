@@ -523,8 +523,8 @@ where p_pkey = l_pkey and
 l_quantity < (select 0.9 * avg(l_quantity)
 from l where l_pkey = p_pkey);
 l_pkey	l_quantity	p_pkey
-10	10	10
 10	1	10
+10	10	10
 EXPLAIN select * from l, p
 where p_pkey = l_pkey and
 l_quantity < (select 0.9 * avg(l_quantity)

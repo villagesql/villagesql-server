@@ -1797,21 +1797,21 @@ Will now use materialization
 No effect for Hypergraph
 EXECUTE stmt1;
 EXPLAIN
--> Nested loop semijoin (FirstMatch)  (cost=12.2..12.2 rows=0.866)
-    -> Nested loop semijoin (FirstMatch)  (cost=5.11..8.86 rows=1.73)
-        -> Table scan on t1  (cost=0.359..1.44 rows=4)
-        -> Covering index lookup on t3 using a (a = t1.a)  (cost=1.86..1.86 rows=0.75)
-    -> Covering index lookup on t2 using a (a = t1.b)  (cost=1.93..1.93 rows=1)
+-> Nested loop semijoin (FirstMatch)  (...)
+    -> Nested loop semijoin (FirstMatch)  (...)
+        -> Table scan on t1  (...)
+        -> Covering index lookup on t3 using a (a = t1.a)  (...)
+    -> Covering index lookup on t2 using a (a = t1.b)  (...)
 
 SET optimizer_switch = 'duplicateweedout=on';
 Turn DuplicateWeedout back on
 EXECUTE stmt1;
 EXPLAIN
--> Nested loop semijoin (FirstMatch)  (cost=12.2..12.2 rows=0.866)
-    -> Nested loop semijoin (FirstMatch)  (cost=5.11..8.86 rows=1.73)
-        -> Table scan on t1  (cost=0.359..1.44 rows=4)
-        -> Covering index lookup on t3 using a (a = t1.a)  (cost=1.86..1.86 rows=0.75)
-    -> Covering index lookup on t2 using a (a = t1.b)  (cost=1.93..1.93 rows=1)
+-> Nested loop semijoin (FirstMatch)  (...)
+    -> Nested loop semijoin (FirstMatch)  (...)
+        -> Table scan on t1  (...)
+        -> Covering index lookup on t3 using a (a = t1.a)  (...)
+    -> Covering index lookup on t2 using a (a = t1.b)  (...)
 
 DEALLOCATE PREPARE stmt1;
 SET optimizer_switch = default;

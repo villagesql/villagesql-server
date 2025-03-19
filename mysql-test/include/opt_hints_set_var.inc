@@ -258,15 +258,15 @@ INSERT INTO t2 VALUES (2), (3), (4), (5);
 INSERT INTO t3 VALUES (10,3), (20,4), (30,5);
 ANALYZE TABLE t1, t2, t3;
 
---replace_regex $elide_costs
+--replace_regex $elide_costs_and_rows
 EXPLAIN SELECT * FROM t1 JOIN t2 ON t1.b = t2.a WHERE
 t2.a IN (SELECT t3.b FROM t3 JOIN t1 t4 ON t3.b = t4.b);
 
---replace_regex $elide_costs
+--replace_regex $elide_costs_and_rows
 EXPLAIN SELECT /*+ SET_VAR(optimizer_search_depth=1) */ * FROM t1 JOIN t2 ON t1.b = t2.a WHERE
 t2.a IN (SELECT t3.b FROM t3 JOIN t1 t4 ON t3.b = t4.b);
 
---replace_regex $elide_costs
+--replace_regex $elide_costs_and_rows
 EXPLAIN SELECT /*+ SET_VAR(optimizer_prune_level=0) */ * FROM t1 JOIN t2 ON t1.b = t2.a WHERE
 t2.a IN (SELECT t3.b FROM t3 JOIN t1 t4 ON t3.b = t4.b);
 
