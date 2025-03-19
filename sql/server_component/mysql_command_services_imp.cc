@@ -61,8 +61,9 @@ struct Error_handler {
 DEFINE_BOOL_METHOD(mysql_command_services_imp::init, (MYSQL_H * mysql_h)) {
   bool ret = false;
   try {
+    THD *thd = current_thd;
     /* Not supposed to work recursively */
-    if (current_thd->is_a_srv_session()) {
+    if (thd != nullptr && thd->is_a_srv_session()) {
       my_error(ER_CANT_RUN_COMMAND_SERVICES_RECURSIVELY, MYF(0));
       return true;
     }
