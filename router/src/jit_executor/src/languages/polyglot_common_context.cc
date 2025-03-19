@@ -35,33 +35,15 @@
 namespace shcore {
 namespace polyglot {
 
-namespace {
-// Function to convert a vector of strings to an array of character pointers
-char **get_char_ptr(const std::vector<std::string> &vec) {
-  if (vec.empty()) {
-    return nullptr;
-  }
-
-  // Allocate memory for the array of character pointers
-  char **arr = new char *[vec.size() + 1];
-  arr[0] = nullptr;
-
-  // Copy each string from the vector into the array
-  for (size_t i = 0; i < vec.size(); ++i) {
-    arr[i + 1] = new char[vec[i].length() + 1];
-    strcpy(arr[i + 1], vec[i].c_str());
-  }
-
-  return arr;
-}
-}  // namespace
-
 void Polyglot_common_context::initialize(
     const std::vector<std::string> &isolate_args) {
   if (!isolate_args.empty()) {
-    char **params = get_char_ptr(isolate_args);
-    mysql_harness::ScopedCallback release([&]() { delete[] params; });
+    std::vector<char *> raw_isolate_args = {nullptr};
+    for (const auto &arg : isolate_args) {
+      raw_isolate_args.push_back(const_cast<char *>(arg.data()));
+    }
 
+    auto params = raw_isolate_args.data();
     poly_isolate_params isolate_params;
     if (poly_ok != poly_set_isolate_params(&isolate_params,
                                            isolate_args.size() + 1, params)) {
