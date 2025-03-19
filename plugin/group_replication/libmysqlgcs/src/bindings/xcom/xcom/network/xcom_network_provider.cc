@@ -144,7 +144,7 @@ void xcom_tcp_server_startup(Xcom_network_provider *net_provider) {
   return;
 }
 
-void ssl_shutdown_con(connection_descriptor *con) {
+void ssl_shutdown_con(connection_descriptor *con [[maybe_unused]]) {
 #ifndef XCOM_WITHOUT_OPENSSL
   if (con->fd >= 0 && con->ssl_fd != nullptr) {
     SSL_shutdown(con->ssl_fd);

@@ -240,10 +240,11 @@ connection_descriptor *Network_provider_manager::open_xcom_connection(
     auto connection = provider.get()->open_connection(
         server, port, credentials, connection_timeout, log_level);
 
-    xcom_connection = new_connection(connection->fd
+    xcom_connection = new_connection(connection->fd,
 #ifndef XCOM_WITHOUT_OPENSSL
-                                     ,
                                      connection->ssl_fd
+#else
+                                     nullptr
 #endif
     );
 
@@ -282,10 +283,11 @@ connection_descriptor *Network_provider_manager::incoming_connection() {
     auto incoming_new_connection = provider->get_new_connection();
 
     if (incoming_new_connection != nullptr) {
-      xcom_connection = new_connection(incoming_new_connection->fd
+      xcom_connection = new_connection(incoming_new_connection->fd,
 #ifndef XCOM_WITHOUT_OPENSSL
-                                       ,
                                        incoming_new_connection->ssl_fd
+#else
+                                       nullptr
 #endif
       );
       set_connected(xcom_connection, CON_FD);
