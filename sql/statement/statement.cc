@@ -342,6 +342,7 @@ bool Regular_statement_handle::execute(Server_runnable *server_runnable) {
     Prepared_statement stmt(m_thd);
     while (true) {
       error = stmt.execute_server_runnable(m_thd, server_runnable);
+      DEBUG_SYNC(m_thd, "regular_statement_execute_after");
 
       /*
         Re-enable the general log if it was temporarily disabled while
