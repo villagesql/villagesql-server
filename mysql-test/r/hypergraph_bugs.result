@@ -2170,3 +2170,18 @@ SELECT f1 FROM t1 WHERE (f1,f1) IN
 (SELECT f1,f2 FROM t2 WHERE f1 >= 1) GROUP BY f1;
 f1
 DROP TABLE t1,t2;
+#
+# Bug#37667970: Hypergraph assertion failure - 'false && Inconsistent
+#               row counts for different AccessPath objects'
+#
+CREATE TABLE t (a INT, b INT, c INT, KEY (c));
+INSERT INTO t VALUES (1, 1, 1);
+EXPLAIN FORMAT=TREE
+SELECT 1
+FROM t AS t1 JOIN t AS t2 ON t1.c = t2.b AND t1.c = t2.c
+LEFT OUTER JOIN t AS t3 ON FALSE
+WHERE t3.a = t2.a OR t2.b > t2.b;
+EXPLAIN
+-> Zero rows (impossible WHERE)  (cost=0..0 rows=0)
+
+DROP TABLE t;

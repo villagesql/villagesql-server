@@ -1782,4 +1782,27 @@ SELECT f1 FROM t1 WHERE (f1,f1) IN
     (SELECT f1,f2 FROM t2 WHERE f1 >= 1) GROUP BY f1;
 DROP TABLE t1,t2;
 
+--echo #
+--echo # Bug#37667970: Hypergraph assertion failure - 'false && Inconsistent
+--echo #               row counts for different AccessPath objects'
+--echo #
+
+CREATE TABLE t (a INT, b INT, c INT, KEY (c));
+INSERT INTO t VALUES (1, 1, 1);
+
+# An assertion failure was seen in debug builds. In release builds, a
+# join plan was chosen. Now we expect the entire join to be optimized
+# away, so that the plan is simply "Zero rows". It is known to return
+# zero rows because ON FALSE makes the join return only
+# NULL-complemented rows, and the WHERE clause rejects all the
+# NULL-complemented rows.
+EXPLAIN FORMAT=TREE
+SELECT 1
+FROM t AS t1 JOIN t AS t2 ON t1.c = t2.b AND t1.c = t2.c
+     LEFT OUTER JOIN t AS t3 ON FALSE
+WHERE t3.a = t2.a OR t2.b > t2.b;
+
+DROP TABLE t;
+
+
 --source include/disable_hypergraph.inc

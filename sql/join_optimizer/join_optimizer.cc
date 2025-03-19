@@ -4508,15 +4508,17 @@ bool DisallowParameterizedJoinPath(AccessPath *left_path,
   Checks if the result of a join is empty, given that it is known that one or
   both of the join legs always produces an empty result.
  */
-bool IsEmptyJoin(const RelationalExpression::Type join_type, bool left_is_empty,
+bool IsEmptyJoin(const RelationalExpression &expr, bool left_is_empty,
                  bool right_is_empty) {
-  switch (join_type) {
+  switch (expr.type) {
     case RelationalExpression::INNER_JOIN:
     case RelationalExpression::STRAIGHT_INNER_JOIN:
     case RelationalExpression::SEMIJOIN:
       // If either side of an inner join or a semijoin is empty, the result of
-      // the join is also empty.
-      return left_is_empty || right_is_empty;
+      // the join is also empty. If the join condition rejects all rows, it is
+      // also empty.
+      return left_is_empty || right_is_empty ||
+             expr.join_conditions_reject_all_rows;
     case RelationalExpression::LEFT_JOIN:
     case RelationalExpression::ANTIJOIN:
       // If the outer side of a left join or an antijoin is empty, the result of
@@ -4763,9 +4765,8 @@ bool CostingReceiver::FoundSubgraphPair(NodeMap left, NodeMap right,
   // yet. We need to create the join path first and attach it to the ZERO_ROWS
   // path, in case a join higher up in the join tree needs to know which tables
   // are pruned away (typically for null-complementing in outer joins).
-  const bool always_empty =
-      IsEmptyJoin(edge->expr->type, left_it->second.always_empty,
-                  right_it->second.always_empty);
+  const bool always_empty = IsEmptyJoin(
+      *edge->expr, left_it->second.always_empty, right_it->second.always_empty);
 
   // If the join is known to produce an empty result, and will be replaced by a
   // ZERO_ROWS path further down, temporarily disable the secondary engine cost
@@ -4789,8 +4790,9 @@ bool CostingReceiver::FoundSubgraphPair(NodeMap left, NodeMap right,
       // right side. For inner joins and semijoins, we can actually just skip
       // reading the left side as well, but if so, the join condition would
       // normally be pulled up into a WHERE condition (or into the join
-      // condition of the next higher non-inner join), so we'll never see that
-      // in practice, and thus, don't care particularly about the case. We also
+      // condition of the next higher non-inner join), so we won't see that so
+      // often in practice. It is handled by the IsEmptyJoin() check above if it
+      // happens, and the join is replaced by a ZERO_ROWS path further down. We
       // don't need to care much about the ordering, since we don't propagate
       // the right-hand ordering properties through joins.
       AccessPath *zero_path = NewZeroRowsAccessPath(
