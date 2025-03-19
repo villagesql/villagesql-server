@@ -112,6 +112,7 @@ INCLUDE(cmake/configure.cmake)
 INCLUDE(cmake/packaging.cmake)
 INCLUDE(cmake/Plugin.cmake)
 INCLUDE(cmake/fuzzer.cmake)
+INCLUDE(cmake/install_macros.cmake)
 
 INCLUDE_DIRECTORIES(${PROJECT_BINARY_DIR}/include)
 
