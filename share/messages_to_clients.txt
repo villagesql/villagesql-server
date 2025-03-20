@@ -10587,6 +10587,9 @@ ER_LH_UNSTRUCTURED_PAGE_CHUNK_WARN
 ER_LH_UNSTRUCTURED_TOO_MANY_CHUNKS
   eng "Too many chunks for file: %.*s"
 
+ER_ACCESS_DENIED_FIREWALL 28000
+  eng "Access denied."
+
 #
 #  End of 9.x error messages (server-to-client).
 #

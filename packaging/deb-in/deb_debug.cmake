@@ -239,6 +239,7 @@ usr/lib/mysql/plugin/debug/component_group_replication_flow_control_stats.so
 usr/lib/mysql/plugin/debug/component_group_replication_elect_prefers_most_updated.so
 usr/lib/mysql/plugin/debug/component_group_replication_resource_manager.so
 usr/lib/mysql/plugin/debug/component_replication_applier_metrics.so
+usr/lib/mysql/plugin/debug/component_firewall.so
 usr/lib/mysql/plugin/debug/authentication_webauthn.so
 ")
   ENDIF()

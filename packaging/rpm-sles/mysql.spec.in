@@ -935,6 +935,10 @@ fi
 %attr(644, root, root) %{_datadir}/mysql-*/masking_functions_uninstall.sql
 %attr(644, root, root) %{_datadir}/mysql-*/option_tracker_install.sql
 %attr(644, root, root) %{_datadir}/mysql-*/option_tracker_uninstall.sql
+%attr(644, root, root) %{_datadir}/mysql-*/install_component_firewall.sql
+%attr(644, root, root) %{_datadir}/mysql-*/uninstall_component_firewall.sql
+%attr(644, root, root) %{_datadir}/mysql-*/firewall_component_to_plugin.sql
+%attr(644, root, root) %{_datadir}/mysql-*/firewall_plugin_to_component.sql
 %if 0%{?add_fido_plugins}
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_webauthn.so
 %endif # add_fido_plugins
@@ -966,6 +970,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_group_replication_resource_manager.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_replication_applier_metrics.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_group_replication_elect_prefers_most_updated.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_firewall.so
 %if 0%{?aws_sdk}
 %attr(755, root, root) %{_libdir}/mysql/plugin/keyring_aws.so
 %endif # aws
@@ -1054,6 +1059,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_group_replication_resource_manager.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_replication_applier_metrics.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_group_replication_elect_prefers_most_updated.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_firewall.so
 %if 0%{?aws_sdk}
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/keyring_aws.so
 %endif # aws_sdk
@@ -1569,6 +1575,9 @@ fi
 %endif # with_router
 
 %changelog
+* Tue May 27 2025 Michal Jankowski <michal.jankowski@oracle.com> - 9.4.0-1
+- Added component_firewall.so
+
 * Fri Jan 10 2025 Anibal Pinto <anibal.pinto@oracle.com> - 9.3.0-1
 - Added component_group_replication_elect_prefers_most_updated
 
