@@ -256,6 +256,7 @@ static int format_blob_column(Field *field, const CHARSET_INFO *from_cs,
       }
 
       if (end_pos < text_col.m_data_ptr + text_col.m_data_len) {
+        error_details.m_column_length = sql_col.m_data_len;
         return ER_TOO_BIG_FIELDLENGTH;
       }
     }
@@ -387,6 +388,7 @@ static int format_char_column(const Column_text &text_col,
       such limit here which is possible for multi-byte character set. We
       return from here and retry with variable length format - mysql_format() */
       if (fixed_length && single_byte) {
+        error_details.m_column_length = sql_col.m_data_len;
         return ER_TOO_BIG_FIELDLENGTH;
       }
       error_details.column_type = "string";
