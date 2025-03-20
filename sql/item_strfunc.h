@@ -1296,6 +1296,9 @@ class Item_func_from_vector final : public Item_str_func {
   Item_func_from_vector(const POS &pos, Item *a) : Item_str_func(pos, a) {
     collation.set(&my_charset_utf8mb4_0900_bin);
   }
+  Item_func_from_vector(Item *a) : Item_str_func(a) {
+    collation.set(&my_charset_utf8mb4_0900_bin);
+  }
   bool resolve_type(THD *thd) override;
   const char *func_name() const override { return "from_vector"; }
   String *val_str(String *str) override;
