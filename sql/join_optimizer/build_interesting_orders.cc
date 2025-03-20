@@ -249,39 +249,60 @@ static void CollectFunctionalDependenciesFromUniqueIndexes(
     TABLE *table = node.table();
     for (unsigned key_idx = 0; key_idx < table->s->keys; ++key_idx) {
       KEY *key = &table->key_info[key_idx];
-      if (!Overlaps(actual_key_flags(key), HA_NOSAME)) {
+
+      // We only care about the user-defined key flags and the user-defined key
+      // parts. When including extended key parts, even non-unique secondary
+      // indexes become unique. But they only become unique because they include
+      // the primary key columns, and we will anyway collect functional
+      // dependencies from the primary key. Since {pk}->col1 implies
+      // {col2,pk}->col1, there is no point in collecting the latter FD from a
+      // non-unique index on col2, as it provides no new information.
+      if (!Overlaps(key->flags, HA_NOSAME)) {
         // Not a unique index.
         continue;
       }
-      if (Overlaps(actual_key_flags(key), HA_NULL_PART_KEY)) {
+      if (Overlaps(key->flags, HA_NULL_PART_KEY)) {
         // Some part of the index could be NULL,
         // with special semantics; so ignore it.
         continue;
       }
 
+      const unsigned num_key_parts = key->user_defined_key_parts;
+
+      if (!std::all_of(key->key_part, key->key_part + num_key_parts,
+                       [&](const KEY_PART_INFO &key_part) {
+                         return bitmap_is_set(&table->read_set_internal,
+                                              key_part.fieldnr - 1);
+                       })) {
+        // If the key has columns that are not used in the query, the
+        // corresponding functional dependency is not useful to us. We could be
+        // even stricter and skip keys with columns not referenced by any of the
+        // collected orderings, but it is more complicated to check for, so
+        // we'll leave it to PruneFDs() remove those for us.
+        continue;
+      }
+
       FunctionalDependency fd;
       fd.type = FunctionalDependency::FD;
-      fd.head = Bounds_checked_array<ItemHandle>::Alloc(thd->mem_root,
-                                                        actual_key_parts(key));
-      for (unsigned keypart_idx = 0; keypart_idx < actual_key_parts(key);
+      fd.head =
+          Bounds_checked_array<ItemHandle>::Alloc(thd->mem_root, num_key_parts);
+      for (unsigned keypart_idx = 0; keypart_idx < fd.head.size();
            ++keypart_idx) {
-        fd.head[keypart_idx] = orderings->GetHandle(
-            new Item_field(key->key_part[keypart_idx].field));
+        Field *field = key->key_part[keypart_idx].field;
+        fd.head[keypart_idx] = orderings->GetHandle(new Item_field(field));
       }
       fd.always_active = true;
 
       // Add a FD for each field in the table that is not part of the key.
       for (unsigned field_idx = 0; field_idx < table->s->fields; ++field_idx) {
-        Field *field = table->field[field_idx];
-        bool in_key = false;
-        for (unsigned keypart_idx = 0; keypart_idx < actual_key_parts(key);
-             ++keypart_idx) {
-          if (field->eq(key->key_part[keypart_idx].field)) {
-            in_key = true;
-            break;
-          }
+        if (!bitmap_is_set(&table->read_set_internal, field_idx)) {
+          // We don't care about functional dependencies of columns that are not
+          // used in the query. Those will be pruned away later, but not adding
+          // them in the first place is cheaper.
+          continue;
         }
-        if (!in_key) {
+        Field *field = table->field[field_idx];
+        if (!field->part_of_key_not_extended.is_set(key_idx)) {
           fd.tail = orderings->GetHandle(new Item_field(field));
           orderings->AddFunctionalDependency(thd, fd);
         }

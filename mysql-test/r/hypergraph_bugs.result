@@ -2185,3 +2185,32 @@ EXPLAIN
 -> Zero rows (impossible WHERE)  (cost=0..0 rows=0)
 
 DROP TABLE t;
+#
+# Bug#37733272: Planning overhead for ordered range queries in hypergraph
+#
+CREATE TABLE t (
+pk INT PRIMARY KEY,
+a INT NOT NULL,
+b INT NOT NULL,
+c INT NOT NULL,
+UNIQUE KEY k1(a),
+KEY k2(b)
+);
+INSERT INTO t VALUES (1,1,1,1), (2,2,2,2), (3,3,3,3);
+ANALYZE TABLE t;
+Table	Op	Msg_type	Msg_text
+test.t	analyze	status	OK
+SET optimizer_trace='enabled=on';
+EXPLAIN FORMAT=TREE SELECT a, b FROM t ORDER BY a, b;
+EXPLAIN
+-> Sort: t.a  (rows=3)
+    -> Table scan on t  (rows=3)
+
+SET optimizer_trace='enabled=off';
+SELECT REGEXP_SUBSTR(TRACE, '(?s)Functional dependencies.*?""') AS dependencies
+FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
+dependencies
+Functional dependencies (after pruning):",
+              " - {t.a} -> t.b [always active]",
+              ""
+DROP TABLE t;
