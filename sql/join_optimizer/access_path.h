@@ -439,6 +439,9 @@ struct AccessPath {
   /// in the code.
   double rescan_cost() const { return cost() - init_once_cost(); }
 
+  /// Return true if costs and row counts are consistent.
+  bool HasConsistentCostsAndRows(const JoinHypergraph &graph) const;
+
   /// If no filter, identical to num_output_rows.
   double num_output_rows_before_filter{kUnknownRowCount};
 

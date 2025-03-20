@@ -1967,3 +1967,22 @@ void CollectStatusVariables(THD *thd, const JOIN *top_join,
         return true;
       });
 }
+
+bool AccessPath::HasConsistentCostsAndRows(const JoinHypergraph &graph) const {
+  /*
+   If the path has unexpanded filters, also ensure that the estimates before
+   filtering are consistent with the estimates after filtering. (Cost should
+   not decrease, and number of rows should not increase.)
+  */
+  if (auto filters = BitsSetIn(filter_predicates);
+      filters.begin() != filters.end() &&
+      *filters.begin() < graph.num_where_predicates) {
+    if (num_output_rows() > num_output_rows_before_filter ||
+        cost_before_filter() > cost()) {
+      return false;
+    }
+  }
+
+  return init_once_cost() >= 0.0 && init_once_cost() <= init_cost() &&
+         init_cost() <= cost() && num_output_rows() >= 0;
+}

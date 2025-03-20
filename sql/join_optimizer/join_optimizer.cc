@@ -6543,22 +6543,7 @@ AccessPath *CostingReceiver::ProposeAccessPath(
     assert(!m_thd->is_error());
   }
 
-  assert(path->init_cost() >= 0.0);
-  assert(path->cost() >= path->init_cost());
-  assert(path->num_output_rows() >= 0.0);
-#ifndef NDEBUG
-  /*
-   If the path has unexpanded filters, also ensure that the estimates before
-   filtering are consistent with the estimates after filtering. (Cost should
-   not decrease, and number of rows should not increase.)
-  */
-  if (auto filters = BitsSetIn(path->filter_predicates);
-      filters.begin() != filters.end() &&
-      *filters.begin() < m_graph->num_where_predicates) {
-    assert(path->num_output_rows() <= path->num_output_rows_before_filter);
-    assert(path->cost_before_filter() <= path->cost());
-  }
-#endif
+  assert(path->HasConsistentCostsAndRows(*m_graph));
 
   DBUG_EXECUTE_IF("subplan_tokens", {
     string token =
@@ -9379,6 +9364,7 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
     assert(root_candidates.empty());
     AccessPath *path = NewTableValueConstructorAccessPath(thd, join);
     path->set_num_output_rows(query_block->row_value_list->size());
+    path->num_output_rows_before_filter = path->num_output_rows();
     path->set_cost(0.0);
     path->set_init_cost(0.0);
     path->set_cost_before_filter(0.0);
@@ -9746,8 +9732,7 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
       [&secondary_engine_cost_hook, &thd, &graph](AccessPath *path,
                                                   const JOIN *) {
         if (!IsSecondaryEngineNrowsHookApplicable(path, thd, &graph)) {
-          assert(path->cost() >= path->init_cost());
-          assert(path->init_cost() >= path->init_once_cost());
+          assert(path->HasConsistentCostsAndRows(graph));
           // For RAPID, these row counts may not be consistent at this
           // point, see PopulateNrowsStatisticFromQkrnToAp().
           assert(secondary_engine_cost_hook != nullptr ||
