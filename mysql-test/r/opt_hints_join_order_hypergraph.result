@@ -172,11 +172,11 @@ JOIN_SUFFIX hint
 EXPLAIN FORMAT=JSON INTO @expl SELECT /*+ JOIN_SUFFIX(t1,t2,t6) */ COUNT(*) FROM t1 JOIN t2 USING(val) JOIN t3 USING(val) JOIN t4 USING(val) JOIN t5 USING(val) JOIN t6 USING(val);
 SELECT join_order(@expl) join_order;
 join_order
-"t5", "t3", "t4", "t1", "t2", "t6"
+"t4", "t3", "t5", "t1", "t2", "t6"
 EXPLAIN FORMAT=JSON INTO @expl SELECT /*+ JOIN_SUFFIX(t6,t3) */ COUNT(*) FROM t1 JOIN t2 USING(val) JOIN t3 USING(val) JOIN t4 USING(val) JOIN t5 USING(val) JOIN t6 USING(val);
 SELECT join_order(@expl) join_order;
 join_order
-"t5", "t2", "t4", "t1", "t6", "t3"
+"t4", "t2", "t5", "t1", "t6", "t3"
 EXPLAIN FORMAT=JSON INTO @expl SELECT /*+ JOIN_SUFFIX(t5,t4,t3,t6,t1) */ COUNT(*) FROM t1 JOIN t2 USING(val) JOIN t3 USING(val) JOIN t4 USING(val) JOIN t5 USING(val) JOIN t6 USING(val);
 SELECT join_order(@expl) join_order;
 join_order
@@ -554,7 +554,7 @@ JOIN t10 AS alias10 JOIN t11 AS alias11 ON alias10.f1 = alias11.f1
 ON alias4.f2 = alias11.f2;
 SELECT join_order(@expl) join_order;
 join_order
-"alias8", "alias7", "alias6", "alias5", "alias11", "alias4", "alias10"
+"alias8", "alias7", "alias11", "alias6", "alias5", "alias4", "alias10"
 DROP TABLES t2, t4, t5, t6, t7, t10, t11;
 DROP FUNCTION join_order;
 DROP PROCEDURE build_join_order;

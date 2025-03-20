@@ -728,10 +728,11 @@ EXPLAIN
     -> Table scan on <temporary>
         -> Temporary table
             -> Group aggregate: group_concat(t2.b separator ',')
-                -> Nested loop left join
-                    -> Sort: t1.a
+                -> Sort: t1.a
+                    -> Left hash join (t1.a = t2.a)
                         -> Table scan on t1
-                    -> Covering index lookup on t2 using PRIMARY (a = t1.a)
+                        -> Hash
+                            -> Table scan on t2
 
 EXPLAIN FORMAT=JSON SELECT t1.a, GROUP_CONCAT(t2.b) AS b FROM t1 LEFT JOIN t2 ON t1.a=t2.a GROUP BY t1.a ORDER BY t1.b;
 EXPLAIN
@@ -761,46 +762,44 @@ EXPLAIN
                             "estimated_rows": "elided",
                             "estimated_total_cost": "elided",
                             "estimated_first_row_cost": "elided"
+                          },
+                          {
+                            "heading": "Hash",
+                            "operation": "Table scan on t2",
+                            "table_name": "t2",
+                            "access_type": "table",
+                            "schema_name": "test",
+                            "used_columns": [
+                              "a",
+                              "b"
+                            ],
+                            "estimated_rows": "elided",
+                            "estimated_total_cost": "elided",
+                            "estimated_first_row_cost": "elided"
                           }
                         ],
-                        "operation": "Sort: t1.a",
-                        "access_type": "sort",
-                        "sort_fields": [
-                          "t1.a"
+                        "join_type": "left join",
+                        "operation": "Left hash join (t1.a = t2.a)",
+                        "access_type": "join",
+                        "join_columns": [
+                          "test.t1.a",
+                          "test.t2.a"
                         ],
                         "estimated_rows": "elided",
-                        "estimated_total_cost": "elided",
-                        "estimated_first_row_cost": "elided"
-                      },
-                      {
-                        "covering": true,
-                        "operation": "Covering index lookup on t2 using PRIMARY (a = t1.a)",
-                        "index_name": "PRIMARY",
-                        "table_name": "t2",
-                        "access_type": "index",
-                        "key_columns": [
-                          "a"
+                        "hash_condition": [
+                          "(t1.a = t2.a)"
                         ],
-                        "schema_name": "test",
-                        "used_columns": [
-                          "a",
-                          "b"
-                        ],
-                        "estimated_rows": "elided",
-                        "lookup_condition": "a = t1.a",
-                        "index_access_type": "index_lookup",
-                        "lookup_references": [
-                          "test.t1.a"
-                        ],
+                        "join_algorithm": "hash",
                         "estimated_total_cost": "elided",
                         "estimated_first_row_cost": "elided"
                       }
                     ],
-                    "join_type": "left join",
-                    "operation": "Nested loop left join",
-                    "access_type": "join",
+                    "operation": "Sort: t1.a",
+                    "access_type": "sort",
+                    "sort_fields": [
+                      "t1.a"
+                    ],
                     "estimated_rows": "elided",
-                    "join_algorithm": "nested_loop",
                     "estimated_total_cost": "elided",
                     "estimated_first_row_cost": "elided"
                   }

@@ -404,12 +404,14 @@ first_match	operation_contains_firstmatch
 EXPLAIN FORMAT=tree SELECT * FROM t WHERE a IN
 (SELECT /*+ SEMIJOIN(LOOSESCAN) */ t1.a FROM t AS t1 JOIN t AS t2 ON t1.a=t2.b);
 EXPLAIN
--> Nested loop inner join (LooseScan)  (rows=20)
-    -> Remove duplicates from input grouped on t2.b  (rows=20)
-        -> Nested loop inner join  (rows=20)
-            -> Covering index scan on t2 using b  (rows=20)
-            -> Covering index lookup on t1 using a (a = t2.b)  (rows=1)
-    -> Covering index lookup on t using a (a = t2.b)  (rows=1)
+-> Inner hash join (LooseScan) (t.a = t2.b)  (rows=20)
+    -> Sort with duplicate removal: t1.a  (rows=20)
+        -> Inner hash join (t1.a = t2.b)  (rows=20)
+            -> Covering index scan on t1 using a  (rows=20)
+            -> Hash
+                -> Covering index scan on t2 using b  (rows=20)
+    -> Hash
+        -> Covering index scan on t using a  (rows=20)
 
 EXPLAIN FORMAT=JSON INTO @var SELECT * FROM t WHERE a IN
 (SELECT /*+ SEMIJOIN(LOOSESCAN) */ t1.a FROM t AS t1 JOIN t AS t2 ON t1.a=t2.b);

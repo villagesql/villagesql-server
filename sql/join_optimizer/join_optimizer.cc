@@ -5237,6 +5237,20 @@ bool CostingReceiver::AllowHashJoin(NodeMap left, NodeMap right,
   return true;
 }
 
+int64_t GetJoinRowWidth(const AccessPath *path) {
+  int64_t width{0};
+
+  WalkTablesUnderAccessPath(
+      path,
+      [&](const TABLE *table) {
+        width += GetReadSetWidth(table);
+        return false;
+      },
+      /*include_pruned_tables=*/true);
+
+  return width;
+}
+
 void CostingReceiver::ProposeHashJoin(
     NodeMap left, NodeMap right, AccessPath *left_path, AccessPath *right_path,
     const JoinPredicate *edge, FunctionalDependencySet new_fd_set,
@@ -5332,86 +5346,77 @@ void CostingReceiver::ProposeHashJoin(
   // join_path.
   const AccessPath *outer = join_path.hash_join().outer;
 
-  // TODO(sgunders): Add estimates for spill-to-disk costs.
-  // NOTE: Keep this in sync with SimulateJoin().
-  const double build_cost =
-      right_path->cost() + right_path->num_output_rows() * kHashBuildOneRowCost;
-  double cost = outer->cost() + build_cost +
-                outer->num_output_rows() * kHashProbeOneRowCost +
-                num_output_rows * kHashReturnOneRowCost;
+  const double key_width{[&]() {
+    double width{static_cast<double>(EstimateHashJoinKeyWidth(edge->expr))};
+
+    // If the edge is part of a cycle in the hypergraph, there may be other
+    // usable join predicates in other edges.
+    // MoveFilterPredicatesIntoHashJoinCondition() will widen the hash join
+    // predicate in that case, so account for that here. Only relevant when
+    // joining more than two tables. Say {t1,t2} HJ {t3}, which could be joined
+    // both along a t1-t3 edge and a t2-t3 edge.
+    //
+    // TODO(khatlen): The cost is still calculated as if the hash join only uses
+    // "edge", and that the alternative edges are put in filters on top of the
+    // join.
+    if (edge->expr->join_predicate_first != edge->expr->join_predicate_last &&
+        popcount(left | right) > 2) {
+      // Only inner joins are part of cycles.
+      assert(edge->expr->type == RelationalExpression::INNER_JOIN);
+      for (size_t edge_idx = 0; edge_idx < m_graph->graph.edges.size();
+           ++edge_idx) {
+        Hyperedge hyperedge = m_graph->graph.edges[edge_idx];
+        if (IsSubset(hyperedge.left, left) &&
+            IsSubset(hyperedge.right, right)) {
+          const JoinPredicate *other_edge = &m_graph->edges[edge_idx / 2];
+          assert(other_edge->expr->type == RelationalExpression::INNER_JOIN);
+          if (other_edge != edge &&
+              PassesConflictRules(left | right, other_edge->expr)) {
+            width += EstimateHashJoinKeyWidth(other_edge->expr);
+          }
+        }
+      }
+    }
+    return width;
+  }()};
+
+  const HashJoinCost join_cost{
+      m_thd,
+      HashJoinMetrics{
+          .build_rows = right_path->num_output_rows(),
+          .build_row_size = static_cast<double>(GetJoinRowWidth(right_path)),
+          .key_size = key_width,
+          .probe_rows = left_path->num_output_rows(),
+          .probe_row_size = static_cast<double>(GetJoinRowWidth(left_path)),
+          .result_rows = num_output_rows}};
 
   // Note: This isn't strictly correct if the non-equijoin conditions
   // have selectivities far from 1.0; the cost should be calculated
   // on the number of rows after the equijoin conditions, but before
   // the non-equijoin conditions.
-  cost += num_output_rows * edge->expr->join_conditions.size() *
-          kApplyOneFilterCost;
+  // NOTE: Keep this in sync with SimulateJoin().
+  const double cost{join_cost.cost() + right_path->cost() + outer->cost() +
+                    num_output_rows * edge->expr->join_conditions.size() *
+                        kApplyOneFilterCost};
 
   join_path.num_output_rows_before_filter = num_output_rows;
   join_path.set_cost_before_filter(cost);
-  join_path.set_num_output_rows(num_output_rows);
-  join_path.set_init_cost(build_cost + outer->init_cost());
-
-  double estimated_bytes_per_row = edge->estimated_bytes_per_row;
-
-  // If the edge is part of a cycle in the hypergraph, there may be other usable
-  // join predicates in other edges. MoveFilterPredicatesIntoHashJoinCondition()
-  // will widen the hash join predicate in that case, so account for that here.
-  // Only relevant when joining more than two tables. Say {t1,t2} HJ {t3}, which
-  // could be joined both along a t1-t3 edge and a t2-t3 edge.
-  //
-  // TODO(khatlen): The cost is still calculated as if the hash join only uses
-  // "edge", and that the alternative edges are put in filters on top of the
-  // join.
-  if (edge->expr->join_predicate_first != edge->expr->join_predicate_last &&
-      popcount(left | right) > 2) {
-    // Only inner joins are part of cycles.
-    assert(edge->expr->type == RelationalExpression::INNER_JOIN);
-    for (size_t edge_idx = 0; edge_idx < m_graph->graph.edges.size();
-         ++edge_idx) {
-      Hyperedge hyperedge = m_graph->graph.edges[edge_idx];
-      if (IsSubset(hyperedge.left, left) && IsSubset(hyperedge.right, right)) {
-        const JoinPredicate *other_edge = &m_graph->edges[edge_idx / 2];
-        assert(other_edge->expr->type == RelationalExpression::INNER_JOIN);
-        if (other_edge != edge &&
-            PassesConflictRules(left | right, other_edge->expr)) {
-          estimated_bytes_per_row += EstimateHashJoinKeyWidth(other_edge->expr);
-        }
-      }
-    }
-  }
-
-  const double reuse_buffer_probability = [&]() {
-    if (right_path->parameter_tables > 0) {
-      // right_path has external dependencies, so the buffer cannot be reused.
-      return 0.0;
-    } else {
-      /*
-        If the full data set from right_path fits in the join buffer,
-        we never need to rebuild the hash table. build_cost should
-        then be counted as init_once_cost. Otherwise, build_cost will
-        be incurred for each re-scan. To get a good estimate of
-        init_once_cost we therefore need to estimate the chance of
-        exceeding the join buffer size. We estimate this probability as:
-
-        (expected_data_volume / join_buffer_size)^2
-
-        for expected_data_volume < join_buffer_size and 1.0 otherwise.
-      */
-      const double buffer_usage = std::min(
-          1.0, estimated_bytes_per_row * right_path->num_output_rows() /
-                   m_thd->variables.join_buff_size);
-      return 1.0 - buffer_usage * buffer_usage;
-    }
-  }();
-
-  assert(reuse_buffer_probability >= 0);
-  assert(reuse_buffer_probability <= 1);
-  join_path.set_init_once_cost(outer->init_once_cost() +
-                               std::lerp(right_path->init_once_cost(),
-                                         build_cost, reuse_buffer_probability));
-
   join_path.set_cost(cost);
+  join_path.set_num_output_rows(num_output_rows);
+  join_path.set_init_cost(join_cost.init_cost() + right_path->cost() +
+                          outer->init_cost());
+
+  const double reuse_buffer_probability{
+      // right_path has external dependencies, so the buffer cannot be reused.
+      right_path->parameter_tables > 0
+          ? 0.0
+          : 1.0 - join_cost.spill_to_disk_probability()};
+
+  join_path.set_init_once_cost(
+      outer->init_once_cost() +
+      std::lerp(right_path->init_once_cost(),
+                join_cost.init_cost() + right_path->cost(),
+                reuse_buffer_probability));
 
   // For each scan, hash join will read the left side once and the right side
   // once, so we are as safe as the least safe of the two. (This isn't true

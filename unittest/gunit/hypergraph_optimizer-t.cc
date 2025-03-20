@@ -243,19 +243,6 @@ int CreateOrderedCoveringIndex(std::initializer_list<Field *> columns,
   return key_idx;
 }
 
-// Create a covering index. Note that this function modifies
-// table->covering_keys and table->s->key_info so it is incompatible with having
-// multiple indexes on the Fake_TABLE.
-int CreateCoveringIndex(std::initializer_list<Field *> columns,
-                        ulong key_flags = 0) {
-  Fake_TABLE *table = pointer_cast<Fake_TABLE *>((*columns.begin())->table);
-  const int key_idx = table->create_index(columns, key_flags);
-  table->covering_keys.clear_all();
-  table->covering_keys.set_bit(key_idx);
-  table->s->key_info = table->key_info;
-  return key_idx;
-}
-
 // Returns true if and only if the access path tree contains at least one access
 // path of the supplied type.
 bool ContainsAccessPath(const AccessPath *root, AccessPath::Type type) {
@@ -2291,7 +2278,8 @@ TEST_F(HypergraphOptimizerTest, MultiEqualitySargable) {
 
 TEST_F(HypergraphOptimizerTest, DoNotApplyBothSargableJoinAndFilterJoin) {
   Query_block *query_block = ParseAndResolve(
-      "SELECT 1 FROM t1, t2, t3, t4 WHERE t1.x = t2.x AND t2.x = t3.x",
+      "SELECT /*+ JOIN_ORDER(t3, t2, t1) */ 1 "
+      "FROM t1, t2, t3, t4 WHERE t1.x = t2.x AND t2.x = t3.x",
       /*nullable=*/true);
   Fake_TABLE *t1 = m_fake_tables["t1"];
   t1->create_index(t1->field[0]);
@@ -2366,7 +2354,7 @@ TEST_F(HypergraphOptimizerTest, DoNotApplyBothSargableJoinAndFilterJoin) {
   ASSERT_EQ(AccessPath::REF, inner_inner->type);
   EXPECT_STREQ("t1", inner_inner->ref().table->alias);
   EXPECT_EQ(0, inner_inner->ref().ref->key);
-  EXPECT_EQ("t2.x", ItemToString(inner_inner->ref().ref->items[0]));
+  EXPECT_EQ("t3.x", ItemToString(inner_inner->ref().ref->items[0]));
 }
 
 // The selectivity of sargable join predicates could in some cases be
@@ -6684,64 +6672,6 @@ TEST_F(HypergraphOptimizerTest, DeleteFromTwoTables) {
   query_block->cleanup(/*full=*/true);
 }
 
-// For some DELETE statements the optimizer can choose between deleting rows
-// immediately as they are scanned, or storing identifiers of rows to be deleted
-// while processing the query, and instead deleting them towards the end of
-// execution (see the comment on AccessPath::immediate_update_delete_table for
-// more details). An example of such a DELETE statement is:
-//
-//              DELETE t1 FROM t1, t2 WHERE t1.x = t2.x
-//
-// This statement deletes rows from t1 where t1.x = t2.x. If the optimizer joins
-// t1 and t2 while keeping t1 as the outer table then the matching rows from t1
-// can be deleted immediately. On the other hand, if t1 is the inner table in
-// the join then identifiers for the rows to delete are stored and the actual
-// rows are deleted after performing the join. This test verifies that this
-// additional cost is taken into account. Note: The cost model for deletes is
-// not calibrated, so the test only verifies that the cost is taken into
-// account, not that it is reasonable.
-TEST_F(HypergraphOptimizerTest, DeletePreferImmediate) {
-  // Delete from one table (t1), but read from one additional table (t2).
-  Query_block *query_block =
-      ParseAndResolve("DELETE t1 FROM t1, t2 WHERE t1.x = t2.x",
-                      /*nullable=*/false);
-  ASSERT_NE(nullptr, query_block);
-
-  // Add indexes so that a nested loop join with an index lookup on the inner
-  // side is preferred. Make t1 larger, so that the join order (t2, t1)
-  // is considered cheaper than (t1, t2) before the cost of buffered deletes is
-  // taken into consideration.
-  Fake_TABLE *t1 = m_fake_tables["t1"];
-  CreateCoveringIndex({t1->field[0]}, HA_NOSAME);
-  t1->file->stats.records = 110;
-
-  Fake_TABLE *t2 = m_fake_tables["t2"];
-  CreateCoveringIndex({t2->field[0]}, HA_NOSAME);
-  t2->file->stats.records = 100;
-
-  TraceGuard trace(m_thd);
-  AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
-  SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
-  ASSERT_NE(nullptr, root);
-  // Prints out the query plan on failure.
-  SCOPED_TRACE(PrintQueryPlan(0, root, query_block->join,
-                              /*is_root_of_join=*/true));
-  ASSERT_EQ(AccessPath::DELETE_ROWS, root->type);
-  ASSERT_EQ(AccessPath::NESTED_LOOP_JOIN, root->delete_rows().child->type);
-  const auto &nested_loop_join = root->delete_rows().child->nested_loop_join();
-
-  // Even though joining (t2, t1) is cheaper, it should choose the order (t1,
-  // t2) to allow immediate deletes from t1, which gives a lower total cost for
-  // the delete operation.
-  EXPECT_EQ(t1->pos_in_table_list->map(), root->delete_rows().immediate_tables);
-  ASSERT_EQ(AccessPath::TABLE_SCAN, nested_loop_join.outer->type);
-  EXPECT_STREQ("t1", nested_loop_join.outer->table_scan().table->alias);
-  ASSERT_EQ(AccessPath::EQ_REF, nested_loop_join.inner->type);
-  EXPECT_STREQ("t2", nested_loop_join.inner->eq_ref().table->alias);
-
-  query_block->cleanup(/*full=*/true);
-}
-
 TEST_F(HypergraphOptimizerTest, ImmedateDeleteFromRangeScan) {
   Query_block *query_block =
       ParseAndResolve("DELETE t1 FROM t1 WHERE t1.x < 100",
@@ -6789,46 +6719,6 @@ TEST_F(HypergraphOptimizerTest, ImmedateDeleteFromIndexMerge) {
   EXPECT_EQ(t1->pos_in_table_list->map(), root->delete_rows().immediate_tables);
 
   query_block->cleanup(/*full=*/true);
-}
-
-TEST_F(HypergraphOptimizerTest, UpdatePreferImmediate) {
-  // Update one table (t1), but read from one additional table (t2).
-  Query_block *query_block =
-      ParseAndResolve("UPDATE t1, t2 SET t1.x = t1.x + 1 WHERE t1.x = t2.x",
-                      /*nullable=*/false);
-  ASSERT_NE(nullptr, query_block);
-
-  // Add indexes so that a nested loop join with an index lookup on the inner
-  // side is preferred. Make t1 slightly larger, so that the join order (t2, t1)
-  // is considered cheaper than (t1, t2) before the cost of buffered updates is
-  // taken into consideration.
-  Fake_TABLE *t1 = m_fake_tables["t1"];
-  CreateCoveringIndex({t1->field[0]}, HA_NOSAME);
-  t1->file->stats.records = 110;
-
-  Fake_TABLE *t2 = m_fake_tables["t2"];
-  CreateCoveringIndex({t2->field[0]}, HA_NOSAME);
-  t2->file->stats.records = 100;
-
-  TraceGuard trace(m_thd);
-  AccessPath *root = FindBestQueryPlan(m_thd, query_block);
-  SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
-  ASSERT_NE(nullptr, root);
-  // Prints out the query plan on failure.
-  SCOPED_TRACE(PrintQueryPlan(0, root, query_block->join,
-                              /*is_root_of_join=*/true));
-  ASSERT_EQ(AccessPath::UPDATE_ROWS, root->type);
-  ASSERT_EQ(AccessPath::NESTED_LOOP_JOIN, root->update_rows().child->type);
-  const auto &nested_loop_join = root->update_rows().child->nested_loop_join();
-
-  // Even though joining (t2, t1) is cheaper, it should choose the order (t1,
-  // t2) to allow immediate update of t1, which gives a lower total cost for
-  // the update operation.
-  EXPECT_EQ(t1->pos_in_table_list->map(), root->update_rows().immediate_tables);
-  ASSERT_EQ(AccessPath::TABLE_SCAN, nested_loop_join.outer->type);
-  EXPECT_STREQ("t1", nested_loop_join.outer->table_scan().table->alias);
-  ASSERT_EQ(AccessPath::EQ_REF, nested_loop_join.inner->type);
-  EXPECT_STREQ("t2", nested_loop_join.inner->eq_ref().table->alias);
 }
 
 TEST_F(HypergraphOptimizerTest, UpdateHashJoin) {
@@ -7069,7 +6959,7 @@ TEST_F(HypergraphOptimizerTest, EstimateBytesPerRowTable1) {
   bitmap_clear_all(t1->read_set);
   bitmap_set_bit(t1->read_set, 0);  // i1.
   bitmap_set_bit(t1->read_set, 4);  // i2.
-  constexpr int64_t kRecordSize{4114};
+  constexpr int64_t kRecordSize{4108};
   {
     const BytesPerTableRow row{EstimateBytesPerRowTable(t1)};
     EXPECT_EQ(row.record_bytes, kRecordSize);
@@ -7080,21 +6970,21 @@ TEST_F(HypergraphOptimizerTest, EstimateBytesPerRowTable1) {
   {
     const BytesPerTableRow row{EstimateBytesPerRowTable(t1)};
     EXPECT_EQ(row.record_bytes, kRecordSize);
-    EXPECT_EQ(row.overflow_bytes, 8194);
+    EXPECT_EQ(row.overflow_bytes, 8196);
     EXPECT_EQ(row.overflow_probability, 1.0);
   }
   bitmap_set_bit(t1->read_set, 3);  // b2.
   {
     const BytesPerTableRow row{EstimateBytesPerRowTable(t1)};
     EXPECT_EQ(row.record_bytes, kRecordSize);
-    EXPECT_EQ(row.overflow_bytes, 526328);
+    EXPECT_EQ(row.overflow_bytes, 526332);
     EXPECT_EQ(row.overflow_probability, 1.0);
   }
   bitmap_set_bit(t1->read_set, 1);  // b1.
   {
     const BytesPerTableRow row{EstimateBytesPerRowTable(t1)};
     EXPECT_EQ(row.record_bytes, kRecordSize);
-    EXPECT_EQ(row.overflow_bytes, 1044462);
+    EXPECT_EQ(row.overflow_bytes, 1044468);
     EXPECT_EQ(row.overflow_probability, 1.0);
   }
   bitmap_clear_all(t1->read_set);
@@ -8571,3 +8461,48 @@ static void BM_FindBestQueryPlanPointSelect(size_t num_iterations) {
   DestroyFakeTables(fake_tables);
 }
 BENCHMARK(BM_FindBestQueryPlanPointSelect)
+
+/**
+   Test the performace of the FieldSizeEstimator class on a table with
+   lots of columns.
+*/
+static void BM_EstimateFieldSizes(size_t num_iterations) {
+  StopBenchmarkTiming();
+  constexpr int kNumFields{256};
+  Server_initializer initializer;
+  initializer.SetUp();
+  THD *const thd = initializer.thd();
+  List<Field> fields;
+  for (int i = 0; i < kNumFields; i++) {
+    fields.push_back(new (thd->mem_root) Mock_field_long(
+        "x" + std::to_string(i), false, false));
+  }
+  Fake_TABLE *table = new (thd->mem_root) Fake_TABLE(fields);
+  table->set_created();
+
+  {
+    // Use a separate MEM_ROOT for the allocations done by the hypergraph
+    // optimizer, so that this memory can be freed after each iteration without
+    // interfering with the data structures allocated above.
+    MEM_ROOT optimize_mem_root;
+    Query_arena arena_backup;
+    Query_arena arena{&optimize_mem_root, Query_arena::STMT_PREPARED};
+    thd->swap_query_arena(arena, &arena_backup);
+
+    StartBenchmarkTiming();
+    for (size_t i = 0; i < num_iterations; ++i) {
+      // This uses FieldSizeEstimator.
+      GetReadSetWidth(table);
+
+      cleanup_items(arena.item_list());
+      arena.free_items();
+      optimize_mem_root.ClearForReuse();
+    }
+
+    StopBenchmarkTiming();
+
+    thd->swap_query_arena(arena_backup, &arena);
+  }
+  ::destroy_at(table);
+}
+BENCHMARK(BM_EstimateFieldSizes)

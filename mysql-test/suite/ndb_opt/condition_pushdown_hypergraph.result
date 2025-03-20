@@ -2392,11 +2392,13 @@ EXPLAIN
         -> Inner hash join (tx.d = t3.b), (t3.a = tx.c)  (rows=800e-6)
             -> Table scan on t3  (rows=2)
             -> Hash
-                -> Nested loop inner join  (rows=0.04)
-                    -> Table scan on tx, activating pushed join of 2 tables  (rows=2)
-                    -> Single-row index lookup on t2 using PRIMARY (a = tx.a, b = tx.b), child of tx in pushed join  (rows=0.02)
+                -> Inner hash join (t2.a = tx.a), (t2.b = tx.b)  (rows=0.04)
+                    -> Table scan on t2  (rows=2)
+                    -> Hash
+                        -> Table scan on tx  (rows=2)
 
 Warnings:
+Note	1003	Can't push table 't2' as child, 'type' must be a 'ref' access
 Note	1003	Can't push table 't3' as child, 'type' must be a 'ref' access
 Note	1003	Can't push table 't4' as child, 'type' must be a 'ref' access
 explain
@@ -2408,10 +2410,13 @@ group by t2.c;
 EXPLAIN
 -> Group aggregate: count(distinct t2.a)  (rows=0.04)
     -> Sort: tx.a  (rows=0.04)
-        -> Nested loop inner join  (rows=0.04)
-            -> Table scan on t2, activating pushed join of 2 tables, with pushed condition: (t2.a = 4)  (rows=2)
-            -> Single-row index lookup on tx using PRIMARY (a = t2.c, b = t2.d), child of t2 in pushed join  (rows=0.02)
+        -> Inner hash join (tx.a = t2.c), (tx.b = t2.d)  (rows=0.04)
+            -> Table scan on tx  (rows=2)
+            -> Hash
+                -> Table scan on t2, with pushed condition: (t2.a = 4)  (rows=2)
 
+Warnings:
+Note	1003	Can't push table 'tx' as child, 'type' must be a 'ref' access
 explain select * from tx join tx as t2 on tx.c=1 where t2.c=1;
 EXPLAIN
 -> Inner hash join (no condition)  (rows=0.04)
@@ -2430,10 +2435,13 @@ group by t2.c;
 EXPLAIN
 -> Group aggregate: count(distinct t2.a)  (rows=0.04)
     -> Sort: tx.a  (rows=0.04)
-        -> Nested loop inner join  (rows=0.04)
-            -> Table scan on t2, activating pushed join of 2 tables, with pushed condition: (t2.a = 4)  (rows=2)
-            -> Single-row index lookup on tx using PRIMARY (a = t2.c, b = t2.d), child of t2 in pushed join  (rows=0.02)
+        -> Inner hash join (tx.a = t2.c), (tx.b = t2.d)  (rows=0.04)
+            -> Table scan on tx  (rows=2)
+            -> Hash
+                -> Table scan on t2, with pushed condition: (t2.a = 4)  (rows=2)
 
+Warnings:
+Note	1003	Can't push table 'tx' as child, 'type' must be a 'ref' access
 drop table tx;
 set @@optimizer_switch = 'engine_condition_pushdown=on';
 create table t (pk int, i int) engine = ndb

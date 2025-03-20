@@ -344,6 +344,11 @@ struct BytesPerTableRow {
 };
 
 /**
+   Get an estimate of the row size of the read set of 'table'.
+*/
+int64_t GetReadSetWidth(const TABLE *table);
+
+/**
    Estimate the average number of bytes that we need to read from the
    storage engine when reading a row from 'table'. This is the size of
    the (b-tree) record and the overflow pages of any field that is
@@ -358,11 +363,9 @@ struct BytesPerTableRow {
    engines as well.
 
    @param table The target table
-   @param max_row_size The row size if all variable-sized fields are full.
    @returns The estimated row size.
 */
-BytesPerTableRow EstimateBytesPerRowWideTable(const TABLE *table,
-                                              int64_t max_row_size);
+BytesPerTableRow EstimateBytesPerRowWideTable(const TABLE *table);
 
 /// We clamp the block size to lie in the interval between the max and min
 /// allowed block size for InnoDB (2^12 to 2^16). Ideally we would have a
@@ -412,8 +415,8 @@ inline BytesPerTableRow EstimateBytesPerRowTable(const TABLE *table) {
   int64_t max_bytes{0};
 
   for (uint i = 0; i < table->s->fields; i++) {
-    // field_length is the maximal size (in bytes) of this field.
-    max_bytes += table->field[i]->field_length;
+    // max_data_length() is the maximal size (in bytes) of this field.
+    max_bytes += table->field[i]->max_data_length();
   }
 
   if (max_bytes < ClampedBlockSize(table) / 2) {
@@ -427,7 +430,7 @@ inline BytesPerTableRow EstimateBytesPerRowTable(const TABLE *table) {
 
   // Make a more sophisticated estimate for tables that may have very
   // large rows.
-  return EstimateBytesPerRowWideTable(table, max_bytes);
+  return EstimateBytesPerRowWideTable(table);
 }
 
 /**
@@ -714,5 +717,47 @@ inline double EstimateRefAccessCost(const TABLE *table, unsigned key_idx,
          EstimateIndexRangeScanCost(table, key_idx, RangeScanType::kSingleRange,
                                     1.0, num_output_rows);
 }
+
+/**
+   Input to HashJoinCost, for calculating the cost of a hash join.
+*/
+struct HashJoinMetrics final {
+  /// The number of rows in the 'build' input.
+  double build_rows;
+  /// The average size of rows in the 'build' input (in bytes).
+  double build_row_size;
+  /// The size of the join key, in bytes.
+  double key_size;
+  /// The number of rows in the 'probe' input.
+  double probe_rows;
+  /// The average size of rows in the 'probe' input (in bytes).
+  double probe_row_size;
+  /// The number of rows in the result set.
+  double result_rows;
+};
+
+/** This class represents the cost of a hash join (excluding the cost
+    of sub-paths).
+*/
+class HashJoinCost final {
+ public:
+  HashJoinCost(THD *thd, const HashJoinMetrics &metrics);
+
+  double spill_to_disk_probability() const {
+    return m_spill_to_disk_probability;
+  }
+
+  double init_cost() const { return m_init_cost; }
+
+  double cost() const { return m_cost; }
+
+ private:
+  /// The probability (range [0.0, 1.0]) of needing spill to disk.
+  double m_spill_to_disk_probability;
+  /// The cost of preparing to produce the first result row.
+  double m_init_cost;
+  /// The cost of the hash join.
+  double m_cost;
+};
 
 #endif  // SQL_JOIN_OPTIMIZER_COST_MODEL_H_

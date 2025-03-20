@@ -1310,9 +1310,10 @@ EXPLAIN
 -> Aggregate: count(0)  (rows=1)
     -> Inner hash join (no condition)  (rows=2.94)
         -> Inner hash join (no condition)  (rows=2.94)
-            -> Nested loop semijoin (FirstMatch)  (rows=2.94)
+            -> Hash semijoin (FirstMatch) (ta3.f2 = t2.f2)  (rows=2.94)
                 -> Covering index scan on ta3 using f2  (rows=6)
-                -> Covering index lookup on t2 using f2 (f2 = ta3.f2)  (rows=1.2)
+                -> Hash
+                    -> Covering index scan on t2 using f2  (rows=6)
             -> Hash
                 -> Table scan on t1  (rows=1)
         -> Hash
@@ -1724,9 +1725,10 @@ EXPLAIN
                             -> Table scan on alias1  (rows=26.7)
                                 -> Materialize  (rows=26.7)
                                     -> Limit: 100 row(s)  (rows=26.7)
-                                        -> Nested loop left join  (rows=26.7)
+                                        -> Left hash join (sq1_alias2.col_varchar_key = sq1_alias1.col_varchar_key)  (rows=26.7)
                                             -> Table scan on sq1_alias2  (rows=20)
-                                            -> Covering index lookup on sq1_alias1 using col_varchar_key (col_varchar_key = sq1_alias2.col_varchar_key)  (rows=1.33)
+                                            -> Hash
+                                                -> Covering index scan on sq1_alias1 using col_varchar_key  (rows=20)
                         -> Inner hash join (no condition)  (rows=26.7)
                             -> Covering index lookup on sq2_alias1 using col_varchar_key (col_varchar_key = alias1.col_varchar_key)  (rows=1.33)
                             -> Hash
@@ -2492,11 +2494,10 @@ SET optimizer_switch="materialization=off";
 EXPLAIN FORMAT=tree SELECT COUNT(*) FROM probe WHERE col1 IN (SELECT col1 FROM build);
 EXPLAIN
 -> Aggregate: count(0)  (rows=1)
-    -> Inner hash join (LooseScan) (probe.col1 = build.col1)  (rows=256)
-        -> Sort with duplicate removal: build.col1  (rows=27.7)
-            -> Table scan on build  (rows=768)
+    -> Hash semijoin (FirstMatch) (probe.col1 = build.col1)  (rows=256)
+        -> Table scan on probe  (rows=256)
         -> Hash
-            -> Table scan on probe  (rows=256)
+            -> Table scan on build  (rows=768)
 
 SELECT COUNT(*) FROM probe WHERE col1 IN (SELECT col1 FROM build);
 COUNT(*)
