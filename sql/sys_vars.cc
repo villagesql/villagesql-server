@@ -7540,7 +7540,7 @@ static Sys_var_ulonglong Sys_set_operations_buffer_size(
     "The maximum size of the buffer used for hash based set operations ",
     HINT_UPDATEABLE SESSION_VAR(set_operations_buffer_size),
     CMD_LINE(REQUIRED_ARG), VALID_RANGE(16384 /* 16*1024 */, max_mem_sz),
-    DEFAULT(256ULL * 1024), BLOCK_SIZE(128));
+    DEFAULT(256ULL * 1024), BLOCK_SIZE(1024));
 
 #ifndef NDEBUG
 // If this variable is set, it will inject a secondary overflow in spill to
