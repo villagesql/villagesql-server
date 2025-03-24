@@ -367,6 +367,7 @@ MYSQL_ADD_EXECUTABLE(merge_large_tests-t ${ALL_LARGE_TESTS}
 IF(MY_COMPILER_IS_GNU)
   MY_TARGET_LINK_OPTIONS(merge_large_tests-t "-Wno-alloc-size-larger-than")
 ENDIF()
+DOWNGRADE_STRINGOP_WARNINGS(merge_large_tests-t)
 
 FOREACH(test ${TESTS})
   MYSQL_ADD_EXECUTABLE(${test}-t ${test}-t.cc
