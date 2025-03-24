@@ -727,8 +727,9 @@ exec $MRS_CLIENT_ARGS
   --session-file $MYSQL_TMP_DIR/user1_session.dat;
 
 do release_lock('testlock');
---source wait_task_completed.inc
 
+--let $wait_timeout=120
+--source wait_task_completed.inc
 ## query completed status of the task
 --replace_result $task_id TASK_ID
 exec $MRS_CLIENT_ARGS
@@ -841,8 +842,22 @@ exec $MRS_CLIENT_ARGS
   --expected-status 200
   --session-file $MYSQL_TMP_DIR/user1_session.dat;
 
+# Pre-cleanup
+# logout explicitly, so that passthroughDbUser pool gets closed
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/authentication/logout
+  --session-file $MYSQL_TMP_DIR/user1_session.dat;
+
+exec $MRS_CLIENT_ARGS
+  -t POST
+  --path /svc/authentication/logout
+  --session-file $MYSQL_TMP_DIR/user2_session.dat;
+
+
 --let $wait_condition=SELECT count(*)=0 FROM information_schema.processlist where USER = "user1"
 --source include/wait_condition.inc
+
 
 # Cleanup
 remove_file $MYSQL_TMP_DIR/user1_session.dat;

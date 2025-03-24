@@ -171,11 +171,12 @@ TEST_F(HandlerAuthorizeTests, do_the_authentication_get) {
   expectGeneric(HttpMethod::Get);
   const std::string k_session_id{"session_id_text"};
   const std::string k_cookie_name{"session_cookie"};
-  MakeSharedPtr<Session> session(k_session_id, UniversalId{}, k_cookie_name);
+  MakeSharedPtr<Session> session(nullptr, k_session_id, UniversalId{},
+                                 k_cookie_name);
 
-  EXPECT_CALL(mock_auth_, authorize(_, _, _, _, _))
+  EXPECT_CALL(mock_auth_, authorize(_, _, _, _, _, _))
       .WillOnce(Invoke([this, &session](std::string, std::string, ServiceId,
-                                        mrs::rest::RequestContext &ctxt,
+                                        bool, mrs::rest::RequestContext &ctxt,
                                         AuthUser *) -> bool {
         ctxt.selected_handler = mock_auth_handler_;
         ctxt.session = session.copy_base();
@@ -205,11 +206,12 @@ TEST_F(HandlerAuthorizeTests, do_the_authentication_post) {
   expectGeneric(HttpMethod::Post);
   const std::string k_session_id{"session_id_text"};
   const std::string k_cookie_name{"session_cookie"};
-  MakeSharedPtr<Session> session(k_session_id, UniversalId{}, k_cookie_name);
+  MakeSharedPtr<Session> session(nullptr, k_session_id, UniversalId{},
+                                 k_cookie_name);
 
-  EXPECT_CALL(mock_auth_, authorize(_, _, _, _, _))
+  EXPECT_CALL(mock_auth_, authorize(_, _, _, _, _, _))
       .WillOnce(Invoke([this, &session](std::string, std::string, ServiceId,
-                                        mrs::rest::RequestContext &ctxt,
+                                        bool, mrs::rest::RequestContext &ctxt,
                                         AuthUser *) -> bool {
         ctxt.selected_handler = mock_auth_handler_;
         ctxt.post_authentication = true;
@@ -242,9 +244,9 @@ TEST_F(HandlerAuthorizeTests, do_the_authentication_fails) {
 
   //  EXPECT_CALL(mock_auth_, get_current_session(_, _, _))
   //      .WillRepeatedly(Return(nullptr));
-  EXPECT_CALL(mock_auth_, authorize(_, _, _, _, _))
+  EXPECT_CALL(mock_auth_, authorize(_, _, _, _, _, _))
       .WillOnce(
-          Invoke([this](std::string, std::string, ServiceId,
+          Invoke([this](std::string, std::string, ServiceId, bool,
                         mrs::rest::RequestContext &ctxt, AuthUser *) -> bool {
             ctxt.selected_handler = mock_auth_handler_;
             return false;

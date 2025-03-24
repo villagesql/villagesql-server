@@ -112,6 +112,9 @@ class Options {
     uint64_t wait{1};
     bool embed_wait{false};
     uint64_t timeout{0};
+
+    // query db with MySQL Internal auth user
+    bool passthrough_db_user{false};
   } query;
 
   class MysqlTask {

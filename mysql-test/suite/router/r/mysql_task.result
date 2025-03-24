@@ -441,6 +441,18 @@ GET /svc/db/fRouter/TASK_ID
     "progress": 100
 }
 OK
+POST /svc/authentication/logout
+{
+    "message": "Logged out successfully",
+    "status": 200
+}
+OK
+POST /svc/authentication/logout
+{
+    "message": "Logged out successfully",
+    "status": 200
+}
+OK
 drop user user1@'%';
 drop user user2@'%';
 drop user nocreate@'%';

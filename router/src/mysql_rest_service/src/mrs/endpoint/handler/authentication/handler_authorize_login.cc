@@ -184,7 +184,7 @@ std::string HandlerAuthorizeLogin::append_status_parameters(
     jwt_token =
         authorization_manager_->get_jwt_token(get_service_id(), session);
   }
-  http::SessionManager::Session dummy{"", UniversalId{}, ""};
+  http::SessionManager::Session dummy{nullptr, "", UniversalId{}, ""};
   auto session_ptr = session ? session.get() : &dummy;
 
   ::http::base::Uri uri(
