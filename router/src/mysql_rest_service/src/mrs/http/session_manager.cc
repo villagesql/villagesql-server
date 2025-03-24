@@ -40,18 +40,28 @@ using Session = SessionManager::Session;
 using SessionIdType = SessionManager::SessionId;
 using SessionPtr = SessionManager::SessionPtr;
 
-SessionManager::Session::Session(const SessionId id,
+SessionManager::Session::Session(SessionManager *session_manager,
+                                 const SessionId id,
                                  const AuthorizationHandlerId &authorization_id,
                                  const std::string &holder_name)
-    : id_{id},
+    : owner{session_manager},
+      id_{id},
       access_time_{system_clock::now()},
       create_time_{access_time_},
       authorization_handler_id_{authorization_id},
       holder_name_{holder_name} {}
 
+void SessionManager::Session::enable_db_session_pool(
+    uint32_t passthrough_pool_size) {
+  db_session_pool =
+      std::make_unique<collector::MysqlFixedPoolManager>(passthrough_pool_size);
+}
+
 SessionManager::SessionManager()
     : oldest_inactive_session_{system_clock::now()},
-      oldest_session_{oldest_inactive_session_} {}
+      oldest_session_{oldest_inactive_session_} {
+  on_session_delete = [](const SessionPtr &) {};
+}
 
 void SessionManager::configure(const Configuration &config) {
   std::lock_guard<std::mutex> lck{mutex_};
@@ -63,14 +73,14 @@ SessionPtr SessionManager::new_session(
     const std::string &holder_name) {
   std::lock_guard<std::mutex> lck{mutex_};
   sessions_.push_back(std::make_unique<Session>(
-      generate_session_id_impl(), authorize_handler_id, holder_name));
+      this, generate_session_id_impl(), authorize_handler_id, holder_name));
   return sessions_.back();
 }
 
 SessionPtr SessionManager::new_session(const SessionId &session_id) {
   std::lock_guard<std::mutex> lck{mutex_};
   sessions_.push_back(std::make_unique<Session>(
-      session_id, AuthorizationHandlerId{}, std::string()));
+      this, session_id, AuthorizationHandlerId{}, std::string()));
   return sessions_.back();
 }
 
@@ -100,6 +110,7 @@ bool SessionManager::remove_session(const SessionId session_id) {
                          });
 
   if (it != sessions_.end()) {
+    on_session_delete(*it);
     sessions_.erase(it);
     return true;
   }
@@ -128,6 +139,7 @@ bool SessionManager::remove_session_impl(const Session *session) {
       [session](const auto &item) { return item.get() == session; });
 
   if (it != sessions_.end()) {
+    on_session_delete(*it);
     sessions_.erase(it);
     return true;
   }
@@ -183,6 +195,7 @@ void SessionManager::remove_inactive_impl(const system_clock::time_point &now) {
       auto it = sessions_.begin();
       while (it != sessions_.end()) {
         if ((*it)->has_access_timeout(config_.inactivity_timeout.value())) {
+          on_session_delete(*it);
           it = sessions_.erase(it);
           continue;
         }
@@ -205,6 +218,7 @@ void SessionManager::remove_expired_impl(const system_clock::time_point &now) {
     auto it = sessions_.begin();
     while (it != sessions_.end()) {
       if ((*it)->is_expired(config_.expire_timeout)) {
+        on_session_delete(*it);
         it = sessions_.erase(it);
         continue;
       }

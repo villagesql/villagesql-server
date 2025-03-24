@@ -243,6 +243,9 @@ void SchemaMonitor::run() {
           throw MetadataSchemaVersionChange();
         }
 
+        // Delete expired sessions etc
+        auth_manager_->collect_garbage();
+
         // Detect the inconsistency between audit_log table content and our
         // state. This only does a basic check to detect a scenario where the
         // max(id) is lower than what we have already seen. This should be good

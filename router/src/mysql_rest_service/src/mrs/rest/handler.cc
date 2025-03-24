@@ -530,13 +530,13 @@ class RestRequestHandler : public ::http::base::RequestHandler {
       // request_ctxt.user is valid after success of this call
       if (Handler::Authorization::kRequires == required_auth) {
         try {
-          if (!auth_manager_->authorize(handler->get_protocol(),
-                                        handler->get_url_host(), service_id,
-                                        ctxt, &ctxt.user)) {
+          if (!auth_manager_->authorize(
+                  handler->get_protocol(), handler->get_url_host(), service_id,
+                  handler->get_options().query.passthrough_db_user, ctxt,
+                  &ctxt.user)) {
             logger_.debug("Authentication handler fails");
             throw http::Error(HttpStatusCode::Unauthorized);
           }
-
         } catch (const Handler::HttpResult &force_result) {
           if (handler->get_options().debug.log_exceptions)
             trace_error(force_result);
@@ -939,6 +939,8 @@ class ParseOptions
       result_.debug.http.response.detailed_errors_ = to_bool(vt);
     } else if (key == "metadata.gtid") {
       result_.metadata.gtid = to_bool(vt);
+    } else if (key == "passthroughDbUser") {
+      result_.query.passthrough_db_user = to_bool(vt);
     } else if (key == "sqlQuery.wait") {
       result_.query.wait = to_uint(vt);
     } else if (key == "sqlQuery.embedWait") {

@@ -107,7 +107,6 @@ class HandlerDbObjectTable : public mrs::rest::Handler {
   mrs::database::entry::RowUserOwnership ownership_;
   EndpointResponseCachePtr response_cache_;
   mrs::database::SlowQueryMonitor *slow_monitor_;
-  bool passthrough_db_user_{false};
 };
 
 }  // namespace handler

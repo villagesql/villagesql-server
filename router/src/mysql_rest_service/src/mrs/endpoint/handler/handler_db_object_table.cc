@@ -297,17 +297,6 @@ HandlerDbObjectTable::HandlerDbObjectTable(
     response_cache_ = std::make_shared<ItemEndpointResponseCache>(
         response_cache, get_options().result.cache_ttl_ms);
   }
-
-  if (auto parent_db_service = lock_parent(ep_parent)) {
-    if (auto parent_host = std::dynamic_pointer_cast<UrlHostEndpoint>(
-            parent_db_service->get_parent_ptr())) {
-      auto host_entry = parent_host->get();
-      auto db_service_entry = parent_db_service->get();
-      if (host_entry && db_service_entry) {
-        passthrough_db_user_ = db_service_entry->passthrough_db_user;
-      }
-    }
-  }
 }
 
 void HandlerDbObjectTable::authorization(rest::RequestContext *ctxt) {
@@ -772,15 +761,13 @@ mrs::database::ObjectRowOwnership HandlerDbObjectTable::row_ownership_info(
 
 HandlerDbObjectTable::CachedSession HandlerDbObjectTable::get_session(
     rest::RequestContext *ctxt, collector::MySQLConnection type) {
-  HandlerDbObjectTable::CachedSession tmp;
-
-  tmp = cache_->get_instance(type, false);
-
-  if (passthrough_db_user_) {
-    if (!ctxt->user.is_mysql_auth) {
+  if (get_options().query.passthrough_db_user &&
+      (type == collector::kMySQLConnectionUserdataRW ||
+       type == collector::kMySQLConnectionUserdataRO)) {
+    if (!ctxt->session->db_session_pool) {
       log_debug(
-          "Request to service with passthroughDbUser from non-mysql auth user "
-          "'%s'",
+          "Request to service with passthroughDbUser from a user authenticated "
+          " through auth app '%s', which does not support it",
           ctxt->user.name.c_str());
       throw http::Error(HttpStatusCode::BadRequest,
                         "Service requires authentication with "
@@ -789,19 +776,17 @@ HandlerDbObjectTable::CachedSession HandlerDbObjectTable::get_session(
     }
 
     try {
-      // Following SQL, ensure proper behavior in test:
-      // "SET ROLE NONE" - should be removed in future.
-      tmp->execute("SET ROLE NONE");
-      tmp->change_user(ctxt->user.name, ctxt->user.mysql_password, "");
-      tmp->execute("SET ROLE ALL");
+      return ctxt->session->db_session_pool->get_instance();
+    } catch (const collector::db_pool_exhausted &) {
+      throw http::Error(HttpStatusCode::TooManyRequests);
     } catch (const std::exception &e) {
-      log_error("Could not switch to user '%s' for service: %s",
+      log_error("Could not get DB session for user '%s' for service: %s",
                 ctxt->user.name.c_str(), e.what());
       throw;
     }
   }
 
-  return tmp;
+  return cache_->get_instance(type, false);
 }
 
 }  // namespace handler

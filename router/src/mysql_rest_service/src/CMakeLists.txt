@@ -199,6 +199,7 @@ ENDIF()
 SET(mysql_rest_service_impl_SRC
   collector/counted_mysql_session.cc
   collector/mysql_cache_manager.cc
+  collector/mysql_fixed_pool_manager.cc
   mrs/authentication/helper/crypto.cc
   mrs/authentication/helper/http_result.cc
   mrs/authentication/helper/scram.cc

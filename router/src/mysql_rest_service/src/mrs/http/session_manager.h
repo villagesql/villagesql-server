@@ -27,12 +27,14 @@
 #define ROUTER_SRC_REST_MRS_SRC_MRS_REST_SESSION_MANAGER_H_
 
 #include <chrono>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <type_traits>
 #include <vector>
 
+#include "collector/mysql_fixed_pool_manager.h"
 #include "mrs/database/entry/auth_user.h"
 #include "mrs/database/entry/universal_id.h"
 
@@ -41,7 +43,9 @@ namespace mrs {
 // The following timeout constants are expressed in minutes.
 const uint64_t k_maximum_expire_timeout{43200};
 const uint64_t k_maximum_inactivity_timeout{43200};
-const uint64_t k_defulat_expire_timeout{15};
+const uint64_t k_default_expire_timeout{15};
+
+const uint32_t k_default_passthrough_max_sessions_per_user{10};
 
 namespace http {
 
@@ -52,11 +56,15 @@ class SessionManager {
   using system_clock = std::chrono::system_clock;
   using AuthorizationHandlerId = mrs::database::entry::UniversalId;
   using minutes = std::chrono::minutes;
+  using CachedSession = collector::MysqlFixedPoolManager::CachedObject;
 
   class Configuration {
    public:
-    minutes expire_timeout{k_defulat_expire_timeout};
+    minutes expire_timeout{k_default_expire_timeout};
     std::optional<minutes> inactivity_timeout{};
+
+    uint32_t max_passthrough_sessions_per_user{
+        k_default_passthrough_max_sessions_per_user};
   };
 
   enum Allocation { OnlyExisting = 0, CreateWhenNotExisting = 1 };
@@ -78,7 +86,8 @@ class SessionManager {
     };
 
    public:
-    Session(const SessionId id, const AuthorizationHandlerId &authorization,
+    Session(SessionManager *owner, const SessionId id,
+            const AuthorizationHandlerId &authorization,
             const std::string &holder_name);
 
     template <typename Derived>
@@ -121,6 +130,9 @@ class SessionManager {
       return create_time_ + timeout <= system_clock::now();
     }
 
+    void enable_db_session_pool(uint32_t passthrough_pool_size);
+
+    SessionManager *owner{nullptr};
     bool generate_token{false};
     State state{kUninitialized};
     std::optional<std::string> users_on_complete_url_redirection;
@@ -130,6 +142,8 @@ class SessionManager {
     AuthUser user;
     std::string proto;
     std::string host;
+
+    std::unique_ptr<collector::MysqlFixedPoolManager> db_session_pool;
 
    private:
     std::unique_ptr<SessionData> data_;
@@ -146,6 +160,7 @@ class SessionManager {
   SessionManager();
 
   void configure(const Configuration &config);
+  const Configuration &configuration() const { return config_; }
 
   SessionPtr get_session_secondary_id(const SessionId &id);
   SessionPtr get_session(const SessionId &id);
@@ -168,6 +183,8 @@ class SessionManager {
   bool remove_session(const SessionPtr &session);
   bool remove_session(const SessionId session);
   void remove_timeouted();
+
+  std::function<void(const SessionPtr &)> on_session_delete;
 
  private:
   bool remove_session_impl(const Session *session);
