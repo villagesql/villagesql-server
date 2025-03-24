@@ -289,7 +289,7 @@ static void CollectFunctionalDependenciesFromUniqueIndexes(
       for (unsigned keypart_idx = 0; keypart_idx < fd.head.size();
            ++keypart_idx) {
         Field *field = key->key_part[keypart_idx].field;
-        fd.head[keypart_idx] = orderings->GetHandle(new Item_field(field));
+        fd.head[keypart_idx] = orderings->GetHandle(field);
       }
       fd.always_active = true;
 
@@ -303,7 +303,7 @@ static void CollectFunctionalDependenciesFromUniqueIndexes(
         }
         Field *field = table->field[field_idx];
         if (!field->part_of_key_not_extended.is_set(key_idx)) {
-          fd.tail = orderings->GetHandle(new Item_field(field));
+          fd.tail = orderings->GetHandle(field);
           orderings->AddFunctionalDependency(thd, fd);
         }
       }
@@ -749,8 +749,7 @@ void BuildInterestingOrders(
         Ordering::Elements::Alloc(thd->mem_root, sortable_key_parts);
     for (int keypart_idx = 0; keypart_idx < sortable_key_parts; ++keypart_idx) {
       const KEY_PART_INFO &key_part = key->key_part[keypart_idx];
-      elements[keypart_idx].item =
-          orderings->GetHandle(new Item_field(key_part.field));
+      elements[keypart_idx].item = orderings->GetHandle(key_part.field);
       elements[keypart_idx].direction =
           Overlaps(key_part.key_part_flag, HA_REVERSE_SORT) ? ORDER_DESC
                                                             : ORDER_ASC;
