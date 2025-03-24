@@ -1032,6 +1032,12 @@ void LogicalOrderings::CreateHomogenizedOrderings(THD *thd) {
   }
   seen_tables &= ~PSEUDO_TABLE_BITS;
 
+  if (std::popcount(seen_tables) <= 1) {
+    // Since homogenization is about reducing the number of tables in the
+    // orderings, there's nothing to do if we haven't seen more than one table.
+    return;
+  }
+
   // Build a reverse table of canonical items to items,
   // and sort it, so that we can fairly efficiently make lookups into it.
   auto reverse_canonical =
