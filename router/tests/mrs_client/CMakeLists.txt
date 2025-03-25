@@ -26,7 +26,7 @@ MYSQL_ADD_EXECUTABLE(mysqlrouter_mrs_client
   client/http_client_request.cc
   client/session.cc
   client/authentication.cc
-  COMPONENT Test
+  COMPONENT Router
   LINK_LIBRARIES
   PUBLIC http_client
   PUBLIC harness-library
