@@ -61,6 +61,7 @@ ELSE()
   RETURN()
 ENDIF()
 
+# Only for WIN32
 IF(KERBEROS_LIB_SSPI)
   LIST(APPEND AUTH_CLIENT "sspi_authentication_client.cc")
   LIST(APPEND UTILITY "sspi_utility.cc")
@@ -89,6 +90,10 @@ MYSQL_ADD_PLUGIN(authentication_kerberos_client
 
 IF(KERBEROS_LIB_SSPI)
   ADD_DEPENDENCIES(authentication_kerberos_client copy_kerberos_dlls)
+ENDIF()
+
+IF(APPLE_WITH_CUSTOM_KERBEROS)
+  ADD_DEPENDENCIES(authentication_kerberos_client copy_custom_libraries)
 ENDIF()
 
 # MYSQL_ADD_PLUGIN may have decided not to build it.
