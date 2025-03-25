@@ -120,12 +120,11 @@ exec $MRS_CLIENT_ARGS
 --source ../include/mrs/wait_mrs_read_metadata.inc
 
 --let $mrs_client_arg_path='/svc1/set/first.html?q1=a&q2=b&q3=c'
+--let $mrs_client_arg_display=header,body
+--let $mrs_client_arg_response_type=RAW
+--let $mrs_client_arg_expected_status=307
 --replace_regex /^Date.*/Date -> %DATE%/
-exec $MRS_CLIENT_ARGS
-  --path $mrs_client_arg_path
-  --display HEADER,BODY
-  --response-type RAW
-  --expected-status 307;
+--source ../include/mrs/mrs_client.inc
 
 
 --echo #
@@ -136,12 +135,12 @@ exec $MRS_CLIENT_ARGS
 --source ../include/mrs/content_set/modify_options.inc
 --source ../include/mrs/wait_mrs_read_metadata.inc
 
+--let $mrs_client_arg_path='/svc1/set/first.html#fragment'
+--let $mrs_client_arg_display=header,body
+--let $mrs_client_arg_response_type=RAW
+--let $mrs_client_arg_expected_status=307
 --replace_regex /^Date.*/Date -> %DATE%/
-exec $MRS_CLIENT_ARGS
-  --path /svc1/set/first.html#fragment
-  --display HEADER,BODY
-  --response-type RAW
-  --expected-status 307;
+--source ../include/mrs/mrs_client.inc
 
 
 --echo #
@@ -153,12 +152,11 @@ exec $MRS_CLIENT_ARGS
 --source ../include/mrs/wait_mrs_read_metadata.inc
 
 --let $mrs_client_arg_path='/svc1/set/first.html?q1=a&q2=b#fragment'
+--let $mrs_client_arg_display=header,body
+--let $mrs_client_arg_response_type=RAW
+--let $mrs_client_arg_expected_status=307
 --replace_regex /^Date.*/Date -> %DATE%/
-exec $MRS_CLIENT_ARGS
-  --path $mrs_client_arg_path
-  --display HEADER,BODY
-  --response-type RAW
-  --expected-status 307;
+--source ../include/mrs/mrs_client.inc
 
 
 # Cleanup
