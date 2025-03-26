@@ -225,6 +225,9 @@ class MysqlCacheManager {
         return callbacks_metadata_rw_.get_connection_configuration();
       case collector::kMySQLConnectionUserdataRW:
         return callbacks_userdata_rw_.get_connection_configuration();
+      default:
+        assert(nullptr && "Shouldn't happen");
+        throw std::logic_error("internal error");
     }
   }
 

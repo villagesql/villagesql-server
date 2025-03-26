@@ -360,6 +360,9 @@ void QueryRestMysqlTask::execute_at_router(
   std::list<std::string> preamble;
   std::string script;
   std::list<std::string> postamble;
+
+  preamble.emplace_back("SET @task_result = NULL");
+
   if (is_procedure)
     query_ =
         build_procedure_call(schema, object, user_id, user_ownership_column, rs,
