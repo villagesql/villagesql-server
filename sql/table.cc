@@ -4239,10 +4239,9 @@ void TABLE::reset() {
   memset(const_key_parts, 0, sizeof(key_part_map) * s->keys);
   insert_values = nullptr;
   autoinc_field_has_explicit_non_null_value = false;
-
   file->ft_handler = nullptr;
-
   pos_in_table_list = nullptr;
+  m_bytes_per_row = nullptr;
 }
 
 /**

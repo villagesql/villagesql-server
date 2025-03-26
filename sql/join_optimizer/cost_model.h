@@ -467,7 +467,7 @@ inline unsigned EstimateBytesPerRowIndex(const TABLE *table, unsigned key_idx) {
 inline int IndexHeight(const TABLE *table, unsigned key_idx) {
   unsigned block_size = ClampedBlockSize(table);
   unsigned bytes_per_row = IsClusteredPrimaryKey(table, key_idx)
-                               ? EstimateBytesPerRowTable(table).record_bytes
+                               ? table->bytes_per_row()->record_bytes
                                : EstimateBytesPerRowIndex(table, key_idx);
 
   // Ideally we should always have that block_size >= bytes_per_row, but since
@@ -542,7 +542,7 @@ inline double RowReadCost(double num_rows, double fields_read_per_row,
 */
 inline double RowReadCostTable(const TABLE *table, double num_rows) {
   double fields_read_per_row = bitmap_bits_set(table->read_set);
-  BytesPerTableRow bytes_per_row = EstimateBytesPerRowTable(table);
+  const BytesPerTableRow &bytes_per_row = *table->bytes_per_row();
   return RowReadCost(
              num_rows, fields_read_per_row,
              bytes_per_row.record_bytes + bytes_per_row.overflow_bytes) +

@@ -112,6 +112,7 @@ enum enum_stats_auto_recalc : int;
 enum Value_generator_source : short;
 enum row_type : int;
 struct AccessPath;
+struct BytesPerTableRow;
 struct COND_EQUAL;
 struct HA_CREATE_INFO;
 struct LEX;
@@ -1968,6 +1969,11 @@ struct TABLE {
  private:
   /// Cost model object for operations on this table
   Cost_model_table m_cost_model;
+
+  /// Estimate for the amount of data to read per row fetched from this table.
+  /// The estimate is only calculated when using the hypergraph optimizer.
+  const BytesPerTableRow *m_bytes_per_row{nullptr};
+
 #ifndef NDEBUG
   /**
     Internal tmp table sequential number. Increased in the order of
@@ -2227,6 +2233,14 @@ struct TABLE {
     Return the cost model object for this table.
   */
   const Cost_model_table *cost_model() const { return &m_cost_model; }
+
+  /// Set the estimate for the number of bytes to read per row in this table.
+  void set_bytes_per_row(const BytesPerTableRow *bytes_per_row) {
+    m_bytes_per_row = bytes_per_row;
+  }
+
+  /// Get the estimate for the number of bytes to read per row in this table.
+  const BytesPerTableRow *bytes_per_row() const { return m_bytes_per_row; }
 
   /**
     Bind all the table's value generator columns in all the forms:

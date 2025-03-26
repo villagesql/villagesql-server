@@ -312,7 +312,7 @@ static double TempTableAggregationCost(
 // also cannot be less than the temp table creation cost, hence always add this
 // cost.  The value was derived by checking actual materialization cost
 // involving one or two rows.
-constexpr double kTempTableCreationCost = 3;
+static constexpr double kTempTableCreationCost = 3;
 
 BytesPerTableRow EstimateBytesPerRowWideTable(const TABLE *table,
                                               int64_t max_row_size) {
@@ -567,7 +567,7 @@ double EstimateIndexRangeScanCost(const TABLE *table, unsigned key_idx,
           single-range scans will be cheaper if the base table is fully cached.
        */
       const uint fields_read_per_row{bitmap_bits_set(table->read_set)};
-      const BytesPerTableRow bytes_per_row{EstimateBytesPerRowTable(table)};
+      const BytesPerTableRow &bytes_per_row = *table->bytes_per_row();
 
       // Cost of reading single row from base table, except IO cost.
       const double row_cost{RowReadCost(
