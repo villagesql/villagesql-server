@@ -75,8 +75,6 @@ FUNCTION(ROUTER_COPY_CUSTOM_SHARED_LIBRARY library_full_filename
     CACHE INTERNAL "SONAME for ${library_name_we}" FORCE)
   SET(NEEDED_${library_name_we} "${library_dependencies}"
     CACHE INTERNAL "" FORCE)
-  SET(KNOWN_CUSTOM_LIBRARIES
-    ${KNOWN_CUSTOM_LIBRARIES} ${library_name_we} CACHE INTERNAL "" FORCE)
 
   # Do copying and patching in a sub-process, so that we can skip it if
   # already done. The BYPRODUCTS arguments is needed by Ninja, and is
