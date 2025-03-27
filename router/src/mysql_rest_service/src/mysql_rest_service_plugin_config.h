@@ -49,6 +49,7 @@ class PluginConfig : public ::mysql_harness::BasePluginConfig,
                      public ::mrs::Configuration {
  public:
   using ConfigSection = mysql_harness::ConfigSection;
+  using MilliSecondsOption = mysql_harness::MilliSecondsOption;
   using SecondsOption = mysql_harness::SecondsOption;
   using StringOption = mysql_harness::StringOption;
   template <typename T>
