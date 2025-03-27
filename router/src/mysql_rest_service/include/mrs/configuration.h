@@ -51,7 +51,7 @@ class Configuration {
   std::string mysql_user_data_access_;
   mysql_harness::SecureString mysql_user_data_access_password_;
 
-  std::chrono::seconds metadata_refresh_interval_;
+  std::chrono::milliseconds metadata_refresh_interval_;
 
   std::string routing_ro_;
   std::string routing_rw_;

@@ -289,7 +289,7 @@ PluginConfig::PluginConfig(const ConfigSection *section,
   routing_ro_ = get_option(section, "mysql_read_only_route", StringOption{});
   router_id_ = get_option(section, "router_id", IntOption<uint64_t>{});
   metadata_refresh_interval_ =
-      get_option(section, k_option_metadata_refresh, SecondsOption{});
+      get_option(section, k_option_metadata_refresh, MilliSecondsOption{});
   router_name_ = router_name;
 
   if (mysql_user_data_access_.empty()) {

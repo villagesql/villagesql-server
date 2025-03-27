@@ -380,7 +380,7 @@ void SchemaMonitor::run() {
 
 bool SchemaMonitor::wait_until_next_refresh() {
   waitable_.wait_for(
-      std::chrono::seconds(configuration_.metadata_refresh_interval_),
+      std::chrono::milliseconds(configuration_.metadata_refresh_interval_),
       [this](void *) { return !state_.is(k_running); });
   return state_.is(k_running);
 }
