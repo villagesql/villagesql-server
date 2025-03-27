@@ -60,7 +60,8 @@ class PluginConfig : public ::mysql_harness::BasePluginConfig,
  public:
   explicit PluginConfig(const ConfigSection *section,
                         const std::vector<std::string> &routing_sections,
-                        const std::string &router_name);
+                        const std::optional<std::string> &router_name,
+                        const uint32_t http_port);
 
   bool init_runtime_configuration();
   std::set<std::string> get_waiting_for_routing_plugins();
