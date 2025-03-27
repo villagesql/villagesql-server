@@ -1885,11 +1885,11 @@ Field *Item_sum_hybrid::create_tmp_field(bool group, TABLE *table) {
       break;
     case MYSQL_TYPE_TIMESTAMP:
       field = new (*THR_MALLOC)
-          Field_timestampf(is_nullable(), item_name.ptr(), decimals);
+          Field_timestamp(is_nullable(), item_name.ptr(), decimals);
       break;
     case MYSQL_TYPE_DATETIME:
       field = new (*THR_MALLOC)
-          Field_datetimef(is_nullable(), item_name.ptr(), decimals);
+          Field_datetime(is_nullable(), item_name.ptr(), decimals);
       break;
     default:
       return Item_sum::create_tmp_field(group, table);

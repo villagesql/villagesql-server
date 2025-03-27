@@ -6576,11 +6576,11 @@ Field *Item::tmp_table_field_from_field_type(TABLE *table,
       break;
     case MYSQL_TYPE_TIMESTAMP:
       field = new (*THR_MALLOC)
-          Field_timestampf(m_nullable, item_name.ptr(), decimals);
+          Field_timestamp(m_nullable, item_name.ptr(), decimals);
       break;
     case MYSQL_TYPE_DATETIME:
       field = new (*THR_MALLOC)
-          Field_datetimef(m_nullable, item_name.ptr(), decimals);
+          Field_datetime(m_nullable, item_name.ptr(), decimals);
       break;
     case MYSQL_TYPE_YEAR:
       assert(max_length == 4);  // Field_year is only for length 4.

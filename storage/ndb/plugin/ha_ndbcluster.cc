@@ -8338,11 +8338,11 @@ static int create_ndb_column(THD *thd, NDBCOL &col, Field *field,
     } break;
     // Date types
     case MYSQL_TYPE_DATETIME:
-      col.setType(NDBCOL::Datetime);
-      col.setLength(1);
-      break;
+      // Unreachable, unused type
+      assert(false);
+      return HA_ERR_UNSUPPORTED;
     case MYSQL_TYPE_DATETIME2: {
-      Field_datetimef *f = (Field_datetimef *)field;
+      Field_datetime *f = (Field_datetime *)field;
       uint prec = f->decimals();
       col.setType(NDBCOL::Datetime2);
       col.setLength(1);
@@ -8357,9 +8357,9 @@ static int create_ndb_column(THD *thd, NDBCOL &col, Field *field,
       col.setLength(1);
       break;
     case MYSQL_TYPE_TIME:
-      col.setType(NDBCOL::Time);
-      col.setLength(1);
-      break;
+      // Unreachable, unused type
+      assert(false);
+      return HA_ERR_UNSUPPORTED;
     case MYSQL_TYPE_TIME2: {
       Field_time *f = down_cast<Field_time *>(field);
       uint prec = f->decimals();
@@ -8372,11 +8372,11 @@ static int create_ndb_column(THD *thd, NDBCOL &col, Field *field,
       col.setLength(1);
       break;
     case MYSQL_TYPE_TIMESTAMP:
-      col.setType(NDBCOL::Timestamp);
-      col.setLength(1);
-      break;
+      // Unreachable, unused type
+      assert(false);
+      return HA_ERR_UNSUPPORTED;
     case MYSQL_TYPE_TIMESTAMP2: {
-      Field_timestampf *f = (Field_timestampf *)field;
+      Field_timestamp *f = (Field_timestamp *)field;
       uint prec = f->decimals();
       col.setType(NDBCOL::Timestamp2);
       col.setLength(1);
@@ -8708,9 +8708,9 @@ static void create_ndb_fk_fake_column(NDBCOL &col,
     } break;
     // Date types
     case dd::enum_column_types::DATETIME:
-      col.setType(NDBCOL::Datetime);
-      col.setLength(1);
-      break;
+      // Unreachable, unused type
+      assert(false);
+      [[fallthrough]];
     case dd::enum_column_types::DATETIME2: {
       uint prec = (fk_col_type.char_length > MAX_DATETIME_WIDTH)
                       ? fk_col_type.char_length - 1 - MAX_DATETIME_WIDTH
@@ -8724,9 +8724,9 @@ static void create_ndb_fk_fake_column(NDBCOL &col,
       col.setLength(1);
       break;
     case dd::enum_column_types::TIME:
-      col.setType(NDBCOL::Time);
-      col.setLength(1);
-      break;
+      // Unreachable, unused type
+      assert(false);
+      [[fallthrough]];
     case dd::enum_column_types::TIME2: {
       uint prec = (fk_col_type.char_length > MAX_TIME_WIDTH)
                       ? fk_col_type.char_length - 1 - MAX_TIME_WIDTH
@@ -8740,9 +8740,9 @@ static void create_ndb_fk_fake_column(NDBCOL &col,
       col.setLength(1);
       break;
     case dd::enum_column_types::TIMESTAMP:
-      col.setType(NDBCOL::Timestamp);
-      col.setLength(1);
-      break;
+      // Unreachable, unused type
+      assert(false);
+      [[fallthrough]];
     case dd::enum_column_types::TIMESTAMP2: {
       uint prec = (fk_col_type.char_length > MAX_DATETIME_WIDTH)
                       ? fk_col_type.char_length - 1 - MAX_DATETIME_WIDTH
@@ -12147,8 +12147,8 @@ static int ndbcluster_discover(handlerton *, THD *thd, const char *db,
     // Run metadata check except if this is discovery during a DROP TABLE
     if (thd_ndb->sql_command() != SQLCOM_DROP_TABLE) {
       const dd::Table *dd_table;
-      assert(dd_client.get_table(db, name, &dd_table) &&
-             Ndb_metadata::compare(thd_ndb->get_thd(), thd_ndb->ndb, db, ndbtab,
+      assert(dd_client.get_table(db, name, &dd_table));
+      assert(Ndb_metadata::compare(thd_ndb->get_thd(), thd_ndb->ndb, db, ndbtab,
                                    dd_table));
     }
 #endif

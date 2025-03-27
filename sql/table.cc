@@ -1309,6 +1309,12 @@ static int make_field_from_frm(THD *thd, TABLE_SHARE *share,
     memset(&comment, 0, sizeof(comment));
   }
 
+  if (field_type == MYSQL_TYPE_TIME || field_type == MYSQL_TYPE_DATETIME ||
+      field_type == MYSQL_TYPE_TIMESTAMP) {
+    /* The old temporal types are no longer supported in FRM file. */
+    return 10;
+  }
+
   if (interval_nr && charset->mbminlen > 1) {
     /* Unescape UCS2 intervals from HEX notation */
     TYPELIB *interval = share->intervals + interval_nr - 1;
@@ -2884,6 +2890,7 @@ bool create_key_part_field_with_prefix_length(TABLE *table, MEM_ROOT *root) {
   @retval 4    Error (see open_table_error)
   @retval 7    Table definition has changed in engine
   @retval 8    Table row format has changed in engine
+  @retval 10   Error (see open_table_error)
 */
 
 int open_table_from_share(THD *thd, TABLE_SHARE *share, const char *alias,
@@ -3485,6 +3492,12 @@ static void open_table_error(THD *thd, TABLE_SHARE *share, int error,
       ::destroy_at(file);
       break;
     }
+    case 10:
+      /*
+       * Old unsupported temporal types used. Let calling NDB code do error and
+       * logging.
+       */
+      break;
     default: /* Better wrong error than none */
     case 4:
       strxmov(buff, share->normalized_path.str, reg_ext, NullS);
@@ -8135,7 +8148,7 @@ const histograms::Histogram *TABLE::find_histogram(uint field_index) const {
   @retval  false  Success
 
   @retval  0      Sucess
-  @retval  -1     Error
+  @retval  >0,-1  Error
   @retval  -2     Less severe error, file can safely be ignored (used for
                   ndbinfo tables when ndbinfo storage engine is not enabled)
 */
@@ -8146,6 +8159,7 @@ static int read_frm_file(THD *thd, TABLE_SHARE *share, FRM_context *frm_context,
   uchar head[64];
   char path[FN_REFLEN + 1];
   MEM_ROOT **root_ptr, *old_root;
+  int error = -1;
 
   strxnmov(path, sizeof(path) - 1, share->normalized_path.str, reg_ext, NullS);
   const LEX_STRING pathstr = {path, strlen(path)};
@@ -8176,7 +8190,6 @@ static int read_frm_file(THD *thd, TABLE_SHARE *share, FRM_context *frm_context,
         mysql_file_close(file, MYF(MY_WME));
         return 0;
       }
-      int error;
       root_ptr = THR_MALLOC;
       old_root = *root_ptr;
       *root_ptr = &share->mem_root;
@@ -8186,6 +8199,10 @@ static int read_frm_file(THD *thd, TABLE_SHARE *share, FRM_context *frm_context,
       *root_ptr = old_root;
       if (error == 9) {
         goto ignore_file;
+      }
+      if (error == 10) {
+        // Let caller do error and logging
+        goto err;
       }
       if (error) {
         LogErr(ERROR_LEVEL, ER_CANT_READ_FRM_FILE, path);
@@ -8226,7 +8243,7 @@ static int read_frm_file(THD *thd, TABLE_SHARE *share, FRM_context *frm_context,
 
 err:
   mysql_file_close(file, MYF(MY_WME));
-  return -1;
+  return error;
 
 ignore_file:
   mysql_file_close(file, MYF(MY_WME));
