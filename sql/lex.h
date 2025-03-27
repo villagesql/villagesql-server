@@ -764,6 +764,7 @@ static const SYMBOL symbols[] = {
     {SYM("UNSIGNED", UNSIGNED_SYM)},
     {SYM("UNTIL", UNTIL_SYM)},
     {SYM("UPGRADE", UPGRADE_SYM)},
+    {SYM("URI", URI_SYM)},
     {SYM("URL", URL_SYM)},
     {SYM("USAGE", USAGE)},
     {SYM("USE", USE_SYM)},

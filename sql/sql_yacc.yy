@@ -1459,6 +1459,7 @@ void warn_on_deprecated_user_defined_collation(
 %token<lexer.keyword> PARAMETERS_SYM  1216     /* MYSQL */
 %token<lexer.keyword> HEADER_SYM      1217     /* MYSQL */
 %token                LIBRARY_SYM     1218     /* MYSQL */
+%token<lexer.keyword> URI_SYM         1219     /* MYSQL */
 
 /*
   NOTE! When adding new non-standard keywords, make sure they are added to the
@@ -12789,6 +12790,11 @@ outfile_uri:
             $$= NEW_PTN URI_information();
             $$->uri= $2;
           }
+        | URI_SYM text_string
+          {
+            $$= NEW_PTN URI_information();
+            $$->uri= $2;
+          }
           ;
 
 opt_outfile_file_info:
@@ -14639,6 +14645,7 @@ load_data_lock:
 load_source_type:
           INFILE_SYM { $$ = LOAD_SOURCE_FILE; }
         | URL_SYM    { $$ = LOAD_SOURCE_URL; }
+        | URI_SYM    { $$ = LOAD_SOURCE_URL; }
         | S3_SYM     { $$ = LOAD_SOURCE_S3; }
         ;
 
@@ -15910,6 +15917,7 @@ ident_keywords_unambiguous:
         | UNREGISTER_SYM
         | UNTIL_SYM
         | UPGRADE_SYM
+        | URI_SYM
         | URL_SYM
         | USER
         | USE_FRM

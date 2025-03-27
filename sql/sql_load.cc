@@ -2639,7 +2639,7 @@ bool Sql_cmd_load_table::execute(THD *thd) {
     }
     if (m_bulk_source == LOAD_SOURCE_URL) {
       my_error(ER_WRONG_USAGE, MYF(0), "LOAD DATA without BULK Algorithm",
-               "URL source");
+               "URI/URL source");
       return true;
     }
     if (m_compression_algorithm_string.length != 0) {
