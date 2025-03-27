@@ -89,6 +89,7 @@ class SchemaMonitor {
 
   void run();
   bool wait_until_next_refresh();
+  std::pair<std::string, std::string> get_router_name_and_address();
 
   class Waitable : public WaitableMonitor<void *> {
    public:
@@ -99,6 +100,7 @@ class SchemaMonitor {
   enum State { k_initializing, k_running, k_stopped };
 
   const mrs::Configuration configuration_;
+  std::optional<std::string> router_name_;
   collector::MysqlCacheManager *cache_;
   mrs::EndpointManager *dbobject_manager_;
   mrs::authentication::AuthorizeManager *auth_manager_;

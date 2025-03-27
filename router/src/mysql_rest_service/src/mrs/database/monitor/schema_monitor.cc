@@ -142,6 +142,7 @@ SchemaMonitor::SchemaMonitor(
     mrs::ResponseCache *response_cache, mrs::ResponseCache *file_cache,
     SlowQueryMonitor *slow_query_monitor)
     : configuration_{configuration},
+      router_name_{configuration_.router_name_},
       cache_{cache},
       dbobject_manager_{dbobject_manager},
       auth_manager_{auth_manager},
@@ -328,8 +329,6 @@ void SchemaMonitor::run() {
         fetcher.update_access_factory_if_needed();
 
         if (fetcher.get_state().service_enabled) {
-          auto socket_ops = mysql_harness::SocketOperations::instance();
-
           mysqlrouter::sqlstring update{
               "INSERT INTO mysql_rest_service_metadata.router"
               " (id, router_name, address, product_name, version, attributes, "
@@ -337,14 +336,14 @@ void SchemaMonitor::run() {
               " VALUES (?,?,?,?,?,?,'{}') ON DUPLICATE KEY UPDATE "
               "version=?, router_name=?, last_check_in=NOW()"};
 
-          update << configuration_.router_id_ << configuration_.router_name_
-                 << socket_ops->get_local_hostname()
+          const auto [name, address] = get_router_name_and_address();
+          update << configuration_.router_id_ << name << address
                  << MYSQL_ROUTER_PACKAGE_NAME << MYSQL_ROUTER_VERSION
                  << (configuration_.developer_.empty()
                          ? "{}"
                          : "{\"developer\": \"" + configuration_.developer_ +
                                "\"}")
-                 << MYSQL_ROUTER_VERSION << configuration_.router_name_;
+                 << MYSQL_ROUTER_VERSION << name;
           session->execute(update.str());
 
           try {
@@ -383,6 +382,33 @@ bool SchemaMonitor::wait_until_next_refresh() {
       std::chrono::milliseconds(configuration_.metadata_refresh_interval_),
       [this](void *) { return !state_.is(k_running); });
   return state_.is(k_running);
+}
+
+std::pair<std::string, std::string>
+SchemaMonitor::get_router_name_and_address() {
+  auto socket_ops = mysql_harness::SocketOperations::instance();
+
+  bool get_hostname_successful{true};
+  std::string address;
+  try {
+    address = socket_ops->get_local_hostname();
+  } catch (
+      const mysql_harness::SocketOperations::LocalHostnameResolutionError &) {
+    address = mrs::kHostOnResolveFailed;
+    get_hostname_successful = false;
+  }
+
+  std::string name;
+  if (!router_name_) {
+    name = address + ":" + std::to_string(configuration_.http_port_);
+    if (get_hostname_successful) {
+      router_name_ = name;
+    }
+  } else {
+    name = *router_name_;
+  }
+
+  return {name, address};
 }
 
 std::optional<collector::MysqlCacheManager::CachedObject>

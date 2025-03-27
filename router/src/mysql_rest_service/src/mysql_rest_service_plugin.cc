@@ -165,8 +165,21 @@ class MrsModule {
     }
 
     auto socket_ops = mysql_harness::SocketOperations::instance();
-    const auto name = configuration.router_name_;
-    const auto address = socket_ops->get_local_hostname();
+    std::string address;
+    try {
+      address = socket_ops->get_local_hostname();
+    } catch (
+        const mysql_harness::SocketOperations::LocalHostnameResolutionError &) {
+      address = mrs::kHostOnResolveFailed;
+    }
+
+    std::string name;
+    if (configuration.router_name_) {
+      name = *configuration.router_name_;
+    } else {
+      name = address + ":" + std::to_string(configuration.http_port_);
+    }
+
     const auto existing_id_maybe =
         find_existing_routers(conn1.get(), name, address);
     if (existing_id_maybe && *existing_id_maybe != configuration.router_id_) {
@@ -302,7 +315,8 @@ static void init(mysql_harness::PluginFuncEnv *env) {
 
     g_mrs_configuration.reset(new mrs::PluginConfig(
         sections.front(), routing_instances,
-        get_configured_router_name(*info->config, kDefaultHttpPort)));
+        get_configured_router_name(*info->config, kDefaultHttpPort),
+        get_configured_http_port(*info->config, kDefaultHttpPort)));
 
   } catch (const std::invalid_argument &exc) {
     set_error(env, mysql_harness::kConfigInvalidArgument, "%s", exc.what());
