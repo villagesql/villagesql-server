@@ -465,7 +465,7 @@ void ReadView::prepare(trx_id_t id) {
 
   ut_a(m_up_limit_id <= m_low_limit_id);
 
-  m_closed = false;
+  m_closed.store(false);
 }
 
 /**
@@ -506,7 +506,7 @@ void MVCC::view_open(ReadView *&view, trx_t *trx) {
 
     view = reinterpret_cast<ReadView *>(p & ~1);
 
-    ut_ad(view->m_closed);
+    ut_ad(view->m_closed.load());
 
     /* The following method of reopening views, makes following assumptions:
         * view->empty() == true
@@ -568,12 +568,7 @@ void MVCC::view_open(ReadView *&view, trx_t *trx) {
     an older state of trx_sys->rw_trx_ids than V2, and thus V1 is-subset-of V2,
     as needed.
 
-    The proof that P1 holds works only if we pretend that instead of non-atomic
-    view->m_closed = false, we have view->m_closed.store(false, seq_cst). Later,
-    we will show why in practice it works with non-atomic variable and no memory
-    barrier.
-
-    The proof is by contradiction:
+    The proof of P1 is by contradiction:
     Assume that someone sees "purge_sys->view is-subset-of the view" doesn't
     hold and we did reopen. This means purge_sys->view can see an ID which view
     can't. Observers of purge_sys->view hold purge_sys->latch, so this
@@ -592,7 +587,7 @@ void MVCC::view_open(ReadView *&view, trx_t *trx) {
     view->m_low_limit_id, so <= ID, which implies the `S-order` relation between
     our load() and fetch_add() in the following timeline:
 
-    view->m_closed = false `sequenced-before`
+    view->m_closed = false `S-ordered-before`
     trx_sys->next_trx_id_or_no.load() == view->m_low_limit_id `S-ordered-before`
     ID=trx_sys->next_trx_id_or_no.fetch_add() `sequenced-before`
     trx_sys->mutex.exit() in commit of ID `happens-before`
@@ -600,38 +595,21 @@ void MVCC::view_open(ReadView *&view, trx_t *trx) {
     purge coordinator reads view->m_closed `sequenced-before`
     purge coordinator selects purge_sys->view which sees ID.
 
-    If accesses to view->m_closed were std::memory_order_seq_cst, then the first
-    `sequenced-before` becomes `S-ordered-before` and `S-order` must be
-    consistent with `happens-before` and modification order of view->m_closed,
-    so to avoid a cycle it has to be that purge coordinator sees either the
-    false stored by us to view->m_closed, or some later store, which could
-    happen if we closed it again. But, seeing view->m_closed == false, the
+    `S-order` must be consistent with `happens-before` and modification order of
+    view->m_closed, so to avoid a cycle it has to be that purge coordinator sees
+    either the false stored by us to view->m_closed, or some later store, which
+    could happen if we closed it again. But, seeing view->m_closed == false, the
     purge coordinator should either select our view as V2, or keep the old V1,
     both of which contradict definition of V2 as first such that it sees ID.
-
-    Above proof relies on the assumption that view->m_closed=false becomes
-    visible to purge coordinator before we load next_trx_id_or_no. For,
-    consider:
-    1. putting m_closed = false in store buffer, but not flushing it yet
-    2. seeing trx_sys->next_trx_id_or_no == view->m_low_limit_id
-    3. another thread doing ID=trx_sys->next_trx_id_or_no.fetch_add(), adding
-       ID to trx_sys->rw_trx_ids, then commits, removing ID from
-       trx_sys->rw_trx_ids under trx_sys->mutex
-    4. purge coordinator acquires trx_sys->mutex released by trx from step 3
-    5. purge coordinator still does not see our m_closed=false and thus
-       selects a purge_sys->view which sees ID
-    This was never seen to happen in practice - probably because x64 CPUs keep
-    writing from store buffer ASAP and context-switch is a memory barrier, uet
-    somehow whole step 3 has to happen before store gets published. Moreover, to
-    really cause a crash the transaction has to produce undo logs. */
+    */
 
     if (trx_is_autocommit_non_locking(trx) && view->empty()) {
-      view->m_closed = false;
+      view->m_closed.store(false);
       DEBUG_SYNC_C("after_setting_m_closed_false");
       if (view->m_low_limit_id == trx_sys_get_next_trx_id_or_no()) {
         return;
       } else {
-        view->m_closed = true;
+        view->m_closed.store(true);
       }
     }
   }
@@ -774,9 +752,10 @@ void MVCC::view_close(ReadView *&view, bool own_mutex) {
     /* Sanitise the pointer first. */
     ReadView *ptr = reinterpret_cast<ReadView *>(p & ~1);
 
-    /* Note this can be called for a read view that
-    was already closed. */
-    ptr->m_closed = true;
+    /* Note this can be called for a read view that was already closed. */
+    if (!ptr->m_closed.load()) {
+      ptr->m_closed.store(true);
+    }
 
     /* Set the view as closed. */
     view = reinterpret_cast<ReadView *>(p | 0x1);

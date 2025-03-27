@@ -196,7 +196,7 @@ class ReadView {
 
   /**
   @return true if the view is closed */
-  bool is_closed() const { return (m_closed); }
+  bool is_closed() const { return m_closed.load(); }
 
   /**
   Write the limits to the file.
@@ -287,7 +287,7 @@ class ReadView {
   trx_id_t m_low_limit_no;
 
   /** AC-NL-RO transaction view that has been "closed". */
-  bool m_closed;
+  std::atomic_bool m_closed;
 
   typedef UT_LIST_NODE_T(ReadView) node_t;
 
