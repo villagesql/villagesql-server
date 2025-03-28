@@ -2625,6 +2625,8 @@ bool unpack_value_generator(THD *thd, TABLE *table,
 
   const CHARSET_INFO *save_character_set_client =
       thd->variables.character_set_client;
+  thd->variables.character_set_client = system_charset_info;
+  thd->update_charset();
   // Subquery is not allowed in generated expression
   const bool save_allows_subquery = thd->lex->expr_allows_subquery;
   thd->lex->expr_allows_subquery = false;
@@ -2661,6 +2663,7 @@ bool unpack_value_generator(THD *thd, TABLE *table,
     thd->stmt_arena = save_stmt_arena_ptr;
     thd->swap_query_arena(save_arena, &val_generator_arena);
     thd->variables.character_set_client = save_character_set_client;
+    thd->update_charset();
     thd->want_privilege = save_old_privilege;
     thd->lex->expr_allows_subquery = save_allows_subquery;
   };

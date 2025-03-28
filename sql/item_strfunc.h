@@ -1157,7 +1157,7 @@ class Item_func_set_collation final : public Item_str_func {
   bool do_itemize(Parse_context *pc, Item **res) override;
   String *val_str(String *) override;
   bool resolve_type(THD *) override;
-  bool eq_specific(const Item *item) const override;
+  bool eq(const Item *item) const override;
   const char *func_name() const override { return "collate"; }
   enum Functype functype() const override { return COLLATE_FUNC; }
   void print(const THD *thd, String *str,

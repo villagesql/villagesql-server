@@ -3153,11 +3153,17 @@ bool Item_func_set_collation::resolve_type(THD *thd) {
   return false;
 }
 
-bool Item_func_set_collation::eq_specific(const Item *item) const {
+bool Item_func_set_collation::eq(const Item *item) const {
+  if (this == item) return true;
+  if (item->type() != FUNC_ITEM) return false;
+  const Item_func *item_func = down_cast<const Item_func *>(item);
+  if (functype() != item_func->functype()) return false;
+
   const Item_func_set_collation *item_func_sc =
       down_cast<const Item_func_set_collation *>(item);
-  if (collation.collation != item_func_sc->collation.collation) return false;
-  return true;
+  // Second argument is collation, which is checked as the resolved member
+  return collation.collation == item_func_sc->collation.collation &&
+         args[0]->eq(item_func_sc->args[0]);
 }
 
 void Item_func_set_collation::print(const THD *thd, String *str,
