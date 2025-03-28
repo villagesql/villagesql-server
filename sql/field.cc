@@ -4939,53 +4939,6 @@ longlong Field_temporal_with_date::val_time_temporal_at_utc() const {
                                           : TIME_to_longlong_time_packed(ltime);
 }
 
-/**
-  Convert a number in format YYMMDDhhmmss to string.
-  Straight coded to avoid problem with slow longlong arithmetic and sprintf.
-
-  @param[out] pos      pointer to convert to.
-  @param      tmp      number with datetime value.
-*/
-static inline int my_datetime_number_to_str(char *pos, longlong tmp) {
-  long part1 = (long)(tmp / 1000000LL);
-  long part2 = (long)(tmp - (ulonglong)part1 * 1000000LL);
-  int part3;
-  pos += MAX_DATETIME_WIDTH; /* Start from the end */
-  *pos-- = 0;
-  *pos-- = (char)('0' + (char)(part2 % 10)); /* Seconds */
-  part2 /= 10;
-  *pos-- = (char)('0' + (char)(part2 % 10));
-  part3 = (int)(part2 / 10);
-  *pos-- = ':';
-  *pos-- = (char)('0' + (char)(part3 % 10)); /* Minutes */
-  part3 /= 10;
-  *pos-- = (char)('0' + (char)(part3 % 10));
-  part3 /= 10;
-  *pos-- = ':';
-  *pos-- = (char)('0' + (char)(part3 % 10)); /* Hours */
-  part3 /= 10;
-  *pos-- = (char)('0' + (char)part3);
-  *pos-- = ' ';
-  *pos-- = (char)('0' + (char)(part1 % 10)); /* Day */
-  part1 /= 10;
-  *pos-- = (char)('0' + (char)(part1 % 10));
-  part1 /= 10;
-  *pos-- = '-';
-  *pos-- = (char)('0' + (char)(part1 % 10)); /* Month */
-  part1 /= 10;
-  *pos-- = (char)('0' + (char)(part1 % 10));
-  part3 = (int)(part1 / 10);
-  *pos-- = '-';
-  *pos-- = (char)('0' + (char)(part3 % 10)); /* Year */
-  part3 /= 10;
-  *pos-- = (char)('0' + (char)(part3 % 10));
-  part3 /= 10;
-  *pos-- = (char)('0' + (char)(part3 % 10));
-  part3 /= 10;
-  *pos = (char)('0' + (char)part3);
-  return MAX_DATETIME_WIDTH;
-}
-
 String *Field_temporal_with_date::val_str(String *val_buffer, String *) const {
   ASSERT_COLUMN_MARKED_FOR_READ;
   MYSQL_TIME ltime;
