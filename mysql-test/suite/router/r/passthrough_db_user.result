@@ -347,6 +347,15 @@ GET /svc/db/tbl
 }
 OK
 overload user1
+POST /svc/authentication/logout
+{
+    "message": "Logged out successfully",
+    "status": 200
+}
+OK
+GET /svc/authentication/login
+
+OK
 LOCK TABLE db1.tbl WRITE;
 GET /svc/db/tbl
 {
