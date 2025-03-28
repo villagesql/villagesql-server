@@ -385,7 +385,8 @@ void mysql_rewrite_query(THD *thd, Consumer_type type,
   assert(thd->rewritten_query().length() == 0);
 
   if (thd->lex->contains_plaintext_password ||
-      thd->lex->is_rewrite_required()) {
+      thd->lex->is_rewrite_required() ||
+      thd->lex->export_result_to_object_storage()) {
     rewrite_query(thd, type, params, rlb);
     if (rlb.length() > 0) thd->swap_rewritten_query(rlb);
     // The previous rewritten query is in rlb now, which now goes out of scope.
