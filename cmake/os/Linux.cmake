@@ -42,6 +42,12 @@ ENDIF()
 
 IF(EXISTS "/etc/fedora-release")
   SET(LINUX_FEDORA 1)
+  IF(IS_SYMLINK "/usr/sbin")
+    FILE(READ_SYMLINK "/usr/sbin" USR_SBIN)
+    IF(USR_SBIN STREQUAL "bin")
+      SET(LINUX_FEDORA_SBIN_MERGE 1)
+    ENDIF()
+  ENDIF()
 ENDIF()
 
 # Use dpkg-buildflags --get CPPFLAGS | CFLAGS | CXXFLAGS | LDFLAGS
