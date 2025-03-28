@@ -3252,7 +3252,9 @@ void AddCycleEdges(THD *thd, const Mem_root_array<Item *> &cycle_inducing_edges,
     }
     if (cond->type() == Item::FUNC_ITEM &&
         down_cast<Item_func *>(cond)->contains_only_equi_join_condition()) {
-      expr->equijoin_conditions.push_back(down_cast<Item_eq_base *>(cond));
+      auto *eq_item = down_cast<Item_eq_base *>(cond);
+      expr->equijoin_conditions.push_back(eq_item);
+      expr->companion_set->AddEquijoinCondition(thd, *eq_item);
     } else {
       expr->join_conditions.push_back(cond);
     }

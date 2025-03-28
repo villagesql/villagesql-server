@@ -27,6 +27,7 @@
 #include <math.h>
 #include <string.h>
 
+#include <algorithm>
 #include <bit>
 #include <initializer_list>
 #include <iterator>
@@ -7043,6 +7044,132 @@ TEST_F(HypergraphOptimizerTest, EstimateBytesPerRowTable2) {
   EXPECT_GT(row.overflow_probability, 0.28);
   EXPECT_LT(row.overflow_probability, 0.29);
 }
+
+// Test that multi-column index statistics for an index on t1(x, y) is used for
+// a query such as:
+//
+//     SELECT t1.z FROM t1, t2, t3
+//     WHERE t1.x = t2.x AND t1.y = t3.x AND t1.y = t2.y AND t2.y = t3.y
+//
+// Previously, before bug#34479495, the index statistics on t1(x, y) were used
+// sometimes, but not always. Depending on the textual ordering of the FROM list
+// and the predicates in the WHERE clause, the optimizer might or might not use
+// the multi-column statistics.
+//
+// This test case tries the above query with all permutations of the FROM list
+// and the WHERE clause, to verify that the use of multi-column statistics no
+// longer depends on the order in which the tables and predicates are specified.
+class MultiColumnIndexStatisticsForRefTest : public HypergraphOptimizerTestBase,
+                                             public WithParamInterface<string> {
+ public:
+  // Returns a vector of all the query permutations to test.
+  static vector<string> QueryPermutations() {
+    std::array tables{"t1", "t2", "t3"};
+    std::array predicates{"t1.x = t2.x", "t1.y = t3.x", "t1.y = t2.y",
+                          "t2.y = t3.y"};
+    vector<string> params;
+    do {
+      do {
+        params.push_back(CreateQueryText(tables, predicates));
+      } while (std::ranges::next_permutation(predicates).found);
+    } while (std::ranges::next_permutation(tables).found);
+
+    return params;
+  }
+
+ private:
+  static string CreateQueryText(std::span<const char *> tables,
+                                std::span<const char *> predicates) {
+    string query = "SELECT t1.z FROM ";
+
+    for (bool first = true; const char *table : tables) {
+      if (!first) {
+        query += ", ";
+      }
+      query += table;
+      first = false;
+    }
+
+    query += " WHERE ";
+
+    for (bool first = true; const char *predicate : predicates) {
+      if (!first) {
+        query += " AND ";
+      }
+      query += predicate;
+      first = false;
+    }
+
+    return query;
+  }
+};
+
+TEST_P(MultiColumnIndexStatisticsForRefTest, UseMultiColumnStatistics) {
+  const string &query = GetParam();
+  SCOPED_TRACE(query);
+  Query_block *query_block = ParseAndResolve(query.c_str(),
+                                             /*nullable=*/true);
+
+  // Build multiple equalities from the WHERE condition.
+  COND_EQUAL *cond_equal = nullptr;
+  EXPECT_FALSE(optimize_cond(m_thd, query_block->where_cond_ref(), &cond_equal,
+                             &query_block->m_table_nest,
+                             &query_block->cond_value));
+
+  // Make table t1 big to make an index lookup preferable when the index
+  // condition is selective.
+  Fake_TABLE *t1 = m_fake_tables["t1"];
+  t1->file->stats.records = 100000;
+  t1->file->stats.data_file_length = 10000000;
+  // Add an index on t1(x, y). Set rec_per_key so that a join predicate on only
+  // the first column is not very selective, but a predicate on both columns is
+  // very selective.
+  const int t1_idx = t1->create_index({t1->field[0], t1->field[1]});
+  ulong rec_per_key_int[] = {1000, 2};
+  rec_per_key_t rec_per_key[] = {1000.0, 2.0};
+  t1->key_info[t1_idx].set_rec_per_key_array(rec_per_key_int, rec_per_key);
+
+  Fake_TABLE *t2 = m_fake_tables["t2"];
+  t2->file->stats.records = 1000;
+  t2->file->stats.data_file_length = 100000;
+
+  Fake_TABLE *t3 = m_fake_tables["t3"];
+  t3->file->stats.records = 1000;
+  t3->file->stats.data_file_length = 100000;
+
+  TraceGuard trace(m_thd);
+  AccessPath *root = FindBestQueryPlan(m_thd, query_block);
+  SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
+  // Prints out the query plan on failure.
+  SCOPED_TRACE(PrintQueryPlan(0, root, query_block->join,
+                              /*is_root_of_join=*/true));
+
+  // We expect the query to use an index lookup to access t1. We also expect the
+  // rec_per_key of the full key is taken into account, so that the row count
+  // estimate for the index lookup is 2. Before the fix for bug#34479495, some
+  // variants of the query did not use an index lookup at all, and some variants
+  // of the query had an incorrect estimate of 10 rows for the index lookup,
+  // instead of the correct estimate of 2 rows given by rec_per_key[].
+  const AccessPath *index_lookup = nullptr;
+  WalkAccessPaths(root, query_block->join,
+                  WalkAccessPathPolicy::ENTIRE_QUERY_BLOCK,
+                  [&](const AccessPath *path, const JOIN *) {
+                    if (path->type == AccessPath::REF) {
+                      EXPECT_EQ(nullptr, index_lookup);
+                      index_lookup = path;
+                    }
+                    return false;
+                  });
+
+  ASSERT_NE(nullptr, index_lookup);
+  EXPECT_STREQ("t1", index_lookup->ref().table->alias);
+  EXPECT_FLOAT_EQ(2, index_lookup->num_output_rows());
+}
+
+INSTANTIATE_TEST_SUITE_P(
+    AllPermutations, MultiColumnIndexStatisticsForRefTest,
+    ::testing::ValuesIn(
+        MultiColumnIndexStatisticsForRefTest::QueryPermutations()));
 
 /// Test the TraceBuffer class.
 TEST_F(MakeHypergraphTest, TraceBuffer) {
