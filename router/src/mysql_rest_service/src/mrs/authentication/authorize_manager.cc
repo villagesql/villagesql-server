@@ -247,7 +247,9 @@ AuthorizeManager::AuthorizeManager(
       factory_{factory},
       random_data_{
           helper::generate_string<64, helper::Generator8bitsValues>()} {
-  log_info("JWT bearer authorization disabled, the signing secret is empty.");
+  if (jwt_secret.empty()) {
+    log_info("JWT bearer authorization disabled, the signing secret is empty.");
+  }
 }
 
 void AuthorizeManager::configure(const std::string &options) {
