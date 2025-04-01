@@ -61,6 +61,8 @@ void MysqlTaskMonitor::reset() {
 void MysqlTaskMonitor::run() {
   using namespace std::chrono_literals;
 
+  mysql_thread_init();
+
   state_.exchange(k_initializing, k_running);
 
   my_thread_self_setname("Task monitor");
@@ -90,6 +92,8 @@ void MysqlTaskMonitor::run() {
   }
 
   log_system("Stopping task monitor");
+
+  mysql_thread_end();
 }
 
 void MysqlTaskMonitor::call_async(
@@ -124,6 +128,13 @@ bool MysqlTaskMonitor::update_task(Task &task) {
         return false;
       }
       task.script.clear();
+    } catch (const mysqlrouter::MySQLSession::Error &e) {
+      task.script.clear();
+      task.failed = true;
+      // client errors are fatal (disconnection etc), so we can't cleanup
+      if (e.code() >= CR_ERROR_FIRST && e.code() <= CR_ERROR_LAST) return true;
+      task.error = task.on_error(e);
+      return false;
     } catch (const std::exception &e) {
       task.script.clear();
       task.error = task.on_error(e);
