@@ -233,6 +233,7 @@ static const std::map<std::string, HttpStatusCode::key_type>
       HTTP_STATUS_ENTRY(NotFound),
       HTTP_STATUS_ENTRY(MethodNotAllowed),
       HTTP_STATUS_ENTRY(InternalError),
+      HTTP_STATUS_ENTRY(TooManyRequests),
       HTTP_STATUS_ENTRY(NotImplemented),
   };
   return map;

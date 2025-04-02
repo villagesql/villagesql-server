@@ -105,7 +105,7 @@ GET /svc/basic/t1
 {
     "message": "Unknown database 'basic_schema'",
     "sqlcode": "1049",
-    "what": "Error executing MySQL query \"SELECT /*+ MAX_EXECUTION_TIME(2000) */ JSON_OBJECT('id', `t`.`id`,'links', JSON_ARRAY(JSON_OBJECT('rel','self','href',CONCAT('/svc/basic/t1','/',CONCAT_WS(',',`t`.`id`))))) as doc FROM `basic_schema`.`table1` as `t`  LIMIT 0,26\": Unknown database 'basic_schema' (1049)",
+    "what": "Error executing MySQL query \"SELECT /*+ MAX_EXECUTION_TIME(60000) */ JSON_OBJECT('id', `t`.`id`,'links', JSON_ARRAY(JSON_OBJECT('rel','self','href',CONCAT('/svc/basic/t1','/',CONCAT_WS(',',`t`.`id`))))) as doc FROM `basic_schema`.`table1` as `t`  LIMIT 0,26\": Unknown database 'basic_schema' (1049)",
     "status": 500
 }
 OK
@@ -130,7 +130,7 @@ GET /svc/basic/t2
 {
     "message": "Unknown database 'basic_schema'",
     "sqlcode": "1049",
-    "what": "Error executing MySQL query \"SELECT /*+ MAX_EXECUTION_TIME(2000) */ JSON_OBJECT('id', `t`.`id`,'links', JSON_ARRAY(JSON_OBJECT('rel','self','href',CONCAT('/svc/basic/t2','/',CONCAT_WS(',',`t`.`id`))))) as doc FROM `basic_schema`.`table1` as `t`  LIMIT 0,26\": Unknown database 'basic_schema' (1049)",
+    "what": "Error executing MySQL query \"SELECT /*+ MAX_EXECUTION_TIME(60000) */ JSON_OBJECT('id', `t`.`id`,'links', JSON_ARRAY(JSON_OBJECT('rel','self','href',CONCAT('/svc/basic/t2','/',CONCAT_WS(',',`t`.`id`))))) as doc FROM `basic_schema`.`table1` as `t`  LIMIT 0,26\": Unknown database 'basic_schema' (1049)",
     "status": 500
 }
 OK
@@ -175,7 +175,7 @@ GET /svc/basic/t1
 {
     "message": "Unknown database 'basic_schema'",
     "sqlcode": "1049",
-    "what": "Error executing MySQL query \"SELECT /*+ MAX_EXECUTION_TIME(2000) */ JSON_OBJECT('id', `t`.`id`,'links', JSON_ARRAY(JSON_OBJECT('rel','self','href',CONCAT('/svc/basic/t1','/',CONCAT_WS(',',`t`.`id`))))) as doc FROM `basic_schema`.`table1` as `t`  LIMIT 0,26\": Unknown database 'basic_schema' (1049)",
+    "what": "Error executing MySQL query \"SELECT /*+ MAX_EXECUTION_TIME(60000) */ JSON_OBJECT('id', `t`.`id`,'links', JSON_ARRAY(JSON_OBJECT('rel','self','href',CONCAT('/svc/basic/t1','/',CONCAT_WS(',',`t`.`id`))))) as doc FROM `basic_schema`.`table1` as `t`  LIMIT 0,26\": Unknown database 'basic_schema' (1049)",
     "status": 500
 }
 OK
@@ -200,7 +200,7 @@ GET /svc/basic/t2
 {
     "message": "Unknown database 'basic_schema'",
     "sqlcode": "1049",
-    "what": "Error executing MySQL query \"SELECT /*+ MAX_EXECUTION_TIME(2000) */ JSON_OBJECT('id', `t`.`id`,'links', JSON_ARRAY(JSON_OBJECT('rel','self','href',CONCAT('/svc/basic/t2','/',CONCAT_WS(',',`t`.`id`))))) as doc FROM `basic_schema`.`table1` as `t`  LIMIT 0,26\": Unknown database 'basic_schema' (1049)",
+    "what": "Error executing MySQL query \"SELECT /*+ MAX_EXECUTION_TIME(60000) */ JSON_OBJECT('id', `t`.`id`,'links', JSON_ARRAY(JSON_OBJECT('rel','self','href',CONCAT('/svc/basic/t2','/',CONCAT_WS(',',`t`.`id`))))) as doc FROM `basic_schema`.`table1` as `t`  LIMIT 0,26\": Unknown database 'basic_schema' (1049)",
     "status": 500
 }
 OK
@@ -341,7 +341,7 @@ GET /svc/basic/t3
 {
     "message": "Unknown database 'basic_schema'",
     "sqlcode": "1049",
-    "what": "Error executing MySQL query \"SELECT /*+ MAX_EXECUTION_TIME(2000) */ JSON_OBJECT('id', `t`.`id`,'links', JSON_ARRAY(JSON_OBJECT('rel','self','href',CONCAT('/svc/basic/t3','/',CONCAT_WS(',',`t`.`id`))))) as doc FROM `basic_schema`.`table1` as `t`  LIMIT 0,26\": Unknown database 'basic_schema' (1049)",
+    "what": "Error executing MySQL query \"SELECT /*+ MAX_EXECUTION_TIME(60000) */ JSON_OBJECT('id', `t`.`id`,'links', JSON_ARRAY(JSON_OBJECT('rel','self','href',CONCAT('/svc/basic/t3','/',CONCAT_WS(',',`t`.`id`))))) as doc FROM `basic_schema`.`table1` as `t`  LIMIT 0,26\": Unknown database 'basic_schema' (1049)",
     "status": 500
 }
 OK
