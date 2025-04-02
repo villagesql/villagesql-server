@@ -714,6 +714,10 @@ static bool dd_upgrade_ensure_has_dd_space_id(THD *thd,
 @return false on success, true on error */
 static bool dd_upgrade_partitions(THD *thd, const char *norm_name,
                                   dd::Table *dd_table, TABLE *srv_table) {
+  /* TODO: This function is not needed in the mysql-9.* versions
+  since database migrating from mysql-8.4.* versions already have the
+  new data dictionary. */
+
   /* Check for auto inc */
   const char *auto_inc_index_name = nullptr;
   const char *auto_inc_col_name = nullptr;
@@ -726,7 +730,8 @@ static bool dd_upgrade_partitions(THD *thd, const char *norm_name,
   for (dd::Partition *part_obj : *dd_table->leaf_partitions()) {
     /* Build the partition name. */
     std::string part_str;
-    dict_name::build_57_partition(part_obj, part_str);
+
+    dict_name::build_partition(part_obj, part_str);
 
     /* Build the partitioned table name. */
     std::string table_name;
