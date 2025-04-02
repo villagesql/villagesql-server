@@ -950,6 +950,7 @@ FUNCTION(COPY_CUSTOM_SHARED_LIBRARY_APPLE library_full_filename subdir
   SET(LINK_TARGET_NAME "link_${library_name_we}_dylib")
 
   # This will also do create_symlink in plugin_output_directory
+  # The BYPRODUCTS arguments are important for building with Ninja.
   ADD_CUSTOM_TARGET(${COPY_TARGET_NAME} ALL
     COMMAND ${CMAKE_COMMAND}
     -Dlibrary_full_filename="${library_full_filename}"
@@ -962,7 +963,9 @@ FUNCTION(COPY_CUSTOM_SHARED_LIBRARY_APPLE library_full_filename subdir
 
     -P ${CMAKE_SOURCE_DIR}/cmake/copy_custom_dylib.cmake
 
-    BYPRODUCTS ${COPIED_LIBRARY_NAME}
+    BYPRODUCTS
+    ${CMAKE_BINARY_DIR}/library_output_directory/${subdir}/${library_name}
+    ${CMAKE_BINARY_DIR}/library_output_directory/${subdir}/${SYMLINK_TARGET}
 
     WORKING_DIRECTORY
     "${CMAKE_BINARY_DIR}/library_output_directory/${subdir}"
@@ -979,7 +982,9 @@ FUNCTION(COPY_CUSTOM_SHARED_LIBRARY_APPLE library_full_filename subdir
   ADD_DEPENDENCIES(symlink_custom_libraries ${LINK_TARGET_NAME})
 
   # See INSTALL_DEBUG_TARGET used for installing debug versions of plugins.
-  IF(EXISTS ${DEBUGBUILDDIR})
+  IF(BUILD_IS_SINGLE_CONFIG AND
+      NOT CMAKE_BUILD_TYPE_UPPER STREQUAL "DEBUG" AND
+      EXISTS ${DEBUGBUILDDIR})
     FILE(MAKE_DIRECTORY
       "${CMAKE_BINARY_DIR}/plugin_output_directory/plugin/debug")
     SET(LINK_TARGET_NAME_DEBUG "${LINK_TARGET_NAME}_debug")

@@ -56,7 +56,9 @@ ENDIF()
 DISABLE_MISSING_PROFILE_WARNING()
 
 IF(SASL_WITHOUT_KERBEROS)
-  MESSAGE(WARNING "Bad custom SASL library")
+  IF(NOT WITH_SASL STREQUAL "system")
+    MESSAGE(WARNING "Bad custom SASL library")
+  ENDIF()
   MESSAGE(STATUS
     "Building authentication_ldap_sasl_client WITHOUT Kerberos")
 ELSEIF(KERBEROS_FOUND)

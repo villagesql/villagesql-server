@@ -28,12 +28,14 @@ ENDIF()
 EXECUTE_PROCESS(
   COMMAND ${CMAKE_COMMAND} -E copy
   "${library_directory}/${library_version}" "./${library_version}"
+  COMMAND_ECHO STDOUT
   )
 
 IF(NOT "${library_version}" STREQUAL "${library_name}")
   EXECUTE_PROCESS(
     COMMAND ${CMAKE_COMMAND} -E create_symlink
     "${library_version}" "${library_name}"
+    COMMAND_ECHO STDOUT
     )
 ENDIF()
 
@@ -42,6 +44,7 @@ IF(NOT subdir)
   EXECUTE_PROCESS(
     COMMAND ${CMAKE_COMMAND} -E create_symlink
     "../lib/${library_version}" "${library_version}"
+    COMMAND_ECHO STDOUT
     WORKING_DIRECTORY ${PLUGIN_DIR}
     )
 ENDIF()
@@ -49,6 +52,7 @@ ENDIF()
 EXECUTE_PROCESS(
   COMMAND install_name_tool -id
   "@rpath/${library_version}" "./${library_version}"
+  COMMAND_ECHO STDOUT
   )
 
 # Convert it back to a list
@@ -65,11 +69,13 @@ FOREACH(dep ${LIBRARY_DEPS})
         "/usr/local/mysql/lib/${CMAKE_MATCH_1}"
         "@loader_path/../${CMAKE_MATCH_1}"
         "./${library_version}"
+        COMMAND_ECHO STDOUT
         )
     ELSE()
       EXECUTE_PROCESS(COMMAND install_name_tool -change
         "/usr/local/mysql/lib/${CMAKE_MATCH_1}" "@loader_path/${CMAKE_MATCH_1}"
         "./${library_version}"
+        COMMAND_ECHO STDOUT
         )
     ENDIF()
   ENDIF()

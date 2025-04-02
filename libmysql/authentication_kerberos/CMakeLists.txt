@@ -36,8 +36,10 @@ ENDIF()
 
 IF(KERBEROS_LIB_SSPI)
   MESSAGE(STATUS "Building KERBEROS client authentication plug-in for windows.")
-ELSE()
+ELSEIF(LINUX)
   MESSAGE(STATUS "Building KERBEROS client authentication plug-in for linux.")
+ELSEIF(APPLE)
+  MESSAGE(STATUS "Building KERBEROS client authentication plug-in for macOS.")
 ENDIF()
 
 IF((KERBEROS_INCLUDE_DIR AND GSSAPI_INCLUDE_DIR))
