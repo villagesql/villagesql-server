@@ -4374,6 +4374,10 @@ struct LEX : public Query_tables_list {
   uint8 create_view_algorithm;
   uint8 create_view_check;
   enum_view_type create_view_type;
+  /// This flag indicates that the CREATE VIEW statement contains the
+  /// MATERIALIZED keyword.
+  bool create_view_materialization;
+
   /**
     @todo ensure that correct CONTEXT_ANALYSIS_ONLY is set for all preparation
           code, so we can fully rely on this field.

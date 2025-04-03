@@ -247,8 +247,12 @@ bool Query_result_union::reset() {
 }
 
 void Query_result_union::set_limit(ha_rows limit_rows) {
-  table->m_limit_rows = limit_rows;
+  if (table != nullptr) {
+    assert(!table->s->is_mv_se_materialized);
+    table->m_limit_rows = limit_rows;
+  }
 }
+
 /**
   This class is effectively dead. It was used for non-DISTINCT UNIONs
   in the pre-iterator executor. Now it exists only as a shell for certain
@@ -1385,6 +1389,20 @@ static void cleanup_tmp_tables(Table_ref *list) {
       tl->table_function->cleanup();
     }
     if (tl->table == nullptr) continue;  // Not materialized
+    if (tl->is_mv_se_available()) {
+      // Materialized view directly in storage engine
+      if (tl->derived_result != nullptr &&
+          tl->derived_result->table != nullptr) {
+        /* In case of prepared statements, the derived result table can be
+         * populated with a temporary table, before we make a decision on
+         * whether a storage-engine materialized view will be used or not.
+         * Perform a cleanup for that temporary table here. */
+        close_tmp_table(tl->derived_result->table);
+        free_tmp_table(tl->derived_result->table);
+        tl->derived_result->table = nullptr;
+      }
+      continue;
+    }
     if ((tl->is_view_or_derived() || tl->is_recursive_reference() ||
          tl->schema_table || tl->is_table_function())) {
       close_tmp_table(tl->table);
@@ -1425,6 +1443,10 @@ static void destroy_tmp_tables(Table_ref *list) {
       tl->common_table_expr()->references.erase_value(tl);
     }
     if (tl->table == nullptr) continue;  // Not materialized
+    if (tl->is_mv_se_available()) {
+      // Materialized view directly in storage engine
+      continue;
+    }
     assert(tl->schema_table == nullptr);
     if (tl->is_view_or_derived() || tl->is_recursive_reference() ||
         tl->schema_table || tl->is_table_function()) {

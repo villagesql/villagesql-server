@@ -1666,10 +1666,12 @@ bool Table_ref::optimize_derived(THD *thd) {
     }
   }
 
-  if (unit->optimize(thd, table,
+  TABLE *materialization_destination = is_mv_se_available() ? nullptr : table;
+  if (unit->optimize(thd, materialization_destination,
                      /*finalize_access_paths=*/true) ||
-      thd->is_error())
+      thd->is_error()) {
     return true;
+  }
 
   // If the table is const, materialize it now. The hypergraph optimizer
   // doesn't care about const tables, though, so it prefers to do this

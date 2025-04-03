@@ -306,8 +306,7 @@ bool has_secondary_engine_defined(const LEX *lex, const Table_ref **tref) {
 }  // namespace
 
 // Compare two engine names using the system collation.
-static bool equal_engines(const LEX_CSTRING &engine1,
-                          const LEX_CSTRING &engine2) {
+bool equal_engines(const LEX_CSTRING &engine1, const LEX_CSTRING &engine2) {
   return system_charset_info->coll->strnncollsp(
              system_charset_info,
              pointer_cast<const unsigned char *>(engine1.str), engine1.length,
@@ -364,9 +363,13 @@ const MYSQL_LEX_CSTRING *get_eligible_secondary_engine_from(const LEX *lex) {
 }
 
 const handlerton *get_secondary_engine_handlerton(const LEX *lex) {
-  if (const handlerton *hton = lex->m_sql_cmd->secondary_engine();
-      hton != nullptr) {
-    return hton;
+  /* m_sql_cmd could be nullptr when we call this from mysql_register_view to
+   * get the materialization engine for the particular materialized view. */
+  if (lex->m_sql_cmd != nullptr) {
+    if (const handlerton *hton = lex->m_sql_cmd->secondary_engine();
+        hton != nullptr) {
+      return hton;
+    }
   }
   const LEX_CSTRING *storage_engine = get_eligible_secondary_engine_from(lex);
   if (storage_engine != nullptr) {

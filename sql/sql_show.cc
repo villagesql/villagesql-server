@@ -3187,6 +3187,12 @@ static void store_key_options(THD *thd, String *packet, TABLE *table,
 
 void view_store_options(const THD *thd, Table_ref *table, String *buff) {
   append_algorithm(table, buff);
+  if (table->is_mv_se_materialized()) {
+    buff->append(STRING_WITH_LEN("MATERIALIZED /*(BY ENGINE="));
+    const auto mv_engine = table->get_mv_se_name();
+    buff->append(mv_engine.str, mv_engine.length);
+    buff->append(STRING_WITH_LEN(")*/ "));
+  }
   append_definer(thd, buff, table->definer.user, table->definer.host);
   if (table->view_suid)
     buff->append(STRING_WITH_LEN("SQL SECURITY DEFINER "));

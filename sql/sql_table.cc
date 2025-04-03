@@ -2838,6 +2838,22 @@ static bool secondary_engine_unload_table(THD *thd, const char *db_name,
                                              error_if_not_loaded);
 }
 
+bool secondary_engine_unload_materialized_view(THD *thd, const Table_ref *view,
+                                               const dd::View *view_def) {
+  const dd::Properties &table_options = view_def->options();
+  if (table_options.exists("materialization_engine")) {
+    // If a materialization_engine exists for the view, unload it before the
+    // update.
+    LEX_CSTRING value{};
+    table_options.get("materialization_engine", &value, thd->mem_root);
+    if (secondary_engine_unload_table_inner(thd, view->db, view->table_name,
+                                            value, false, false)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool secondary_engine_unload_table_inner(THD *thd, const char *db_name,
                                          const char *table_name,
                                          LEX_CSTRING secondary_engine,
@@ -3522,6 +3538,10 @@ bool mysql_rm_table_no_locks(THD *thd, Table_ref *tables, bool if_exists,
         - No need to log anything.
       */
       assert(drop_ctx.drop_database);
+
+      if (secondary_engine_unload_materialized_view(thd, table, view)) {
+        goto err_with_rollback;
+      }
 
       if (thd->dd_client()->drop(view) ||
           mark_referencing_views_invalid(thd, table, true, false,

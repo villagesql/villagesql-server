@@ -1481,6 +1481,7 @@ void warn_on_deprecated_user_defined_collation(
 %token<lexer.keyword> EXTERNAL_FORMAT_SYM  1234     /* MySQL */
 
 %token<lexer.keyword> EXTERNAL_SYM    1235     /* MYSQL */
+%token<lexer.keyword> MATERIALIZED_SYM      1236     /* MYSQL */
 
 /*
   NOTE! When adding new non-standard keywords, make sure they are added to the
@@ -8261,7 +8262,7 @@ alter_library_stmt:
         ;
 
 alter_view_stmt:
-          ALTER view_algorithm definer_opt
+          ALTER view_algorithm_or_materialization definer_opt
           {
             LEX *lex= Lex;
 
@@ -15935,6 +15936,7 @@ ident_keywords_unambiguous:
         | LOG_SYM
         | NETWORK_NAMESPACE_SYM
         | MASTER_SYM
+        | MATERIALIZED_SYM
         | MAX_CONNECTIONS_PER_HOUR
         | MAX_QUERIES_PER_HOUR
         | MAX_ROWS
@@ -17862,7 +17864,7 @@ view_or_trigger_or_sp_or_event:
           {}
         | no_definer init_lex_create_info no_definer_tail
           {}
-        | view_replace_or_algorithm definer_opt init_lex_create_info view_tail
+        | view_prefix definer_opt init_lex_create_info view_tail
           {}
         ;
 
@@ -17921,12 +17923,34 @@ definer:
 
 **************************************************************************/
 
+view_prefix:
+          view_replace_or_algorithm
+          {}
+        |
+          view_replace_or_algorithm view_materialization
+          {}
+        |
+          view_materialization
+          {}
+        ;
+
 view_replace_or_algorithm:
           view_replace
           {}
         | view_replace view_algorithm
           {}
         | view_algorithm
+          {}
+        ;
+
+view_algorithm_or_materialization:
+          view_algorithm
+          {}
+        |
+          view_algorithm view_materialization
+          {}
+        |
+          view_materialization
           {}
         ;
 
@@ -17942,6 +17966,11 @@ view_algorithm:
           { Lex->create_view_algorithm= VIEW_ALGORITHM_MERGE; }
         | ALGORITHM_SYM EQ TEMPTABLE_SYM
           { Lex->create_view_algorithm= VIEW_ALGORITHM_TEMPTABLE; }
+        ;
+
+view_materialization:
+        MATERIALIZED_SYM
+          { Lex->create_view_materialization=true; }
         ;
 
 view_suid:

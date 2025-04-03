@@ -4485,7 +4485,7 @@ bool Table_ref::merge_underlying_tables(Query_block *select) {
 */
 void Table_ref::reset() {
   // Reset connection to TABLE
-  if (is_base_table()) table = nullptr;
+  if (is_base_table() || is_mv_se_available()) table = nullptr;
 
   // Needed for I_S tables.
   schema_table_filled = false;
@@ -6584,7 +6584,8 @@ void init_mdl_requests(Table_ref *table_list) {
   technical constraints.
 */
 bool Table_ref::is_mergeable() const {
-  if (!is_view_or_derived() || algorithm == VIEW_ALGORITHM_TEMPTABLE)
+  if (!is_view_or_derived() || algorithm == VIEW_ALGORITHM_TEMPTABLE ||
+      is_mv_se_available())
     return false;
   /*
     If the table's content is non-deterministic and the query references it

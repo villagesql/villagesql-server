@@ -3436,9 +3436,10 @@ bool Query_block::merge_derived(THD *thd, Table_ref *derived_table) {
     A view is updatable if any underlying table is updatable.
     A view is insertable-into if all underlying tables are insertable.
     A view is not updatable nor insertable if it contains an outer join
+    A view is not updatable nor insertable if it is a materialized view
     @see mysql_register_view()
   */
-  if (derived_table->is_view()) {
+  if (derived_table->is_view() && !derived_table->is_mv_se_materialized()) {
     bool updatable = false;
     bool insertable = true;
     bool outer_joined = false;
