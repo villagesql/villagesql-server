@@ -54,7 +54,7 @@ SessionManager::Session::Session(SessionManager *session_manager,
 void SessionManager::Session::enable_db_session_pool(
     uint32_t passthrough_pool_size) {
   db_session_pool =
-      std::make_unique<collector::MysqlFixedPoolManager>(passthrough_pool_size);
+      std::make_shared<collector::MysqlFixedPoolManager>(passthrough_pool_size);
 }
 
 SessionManager::SessionManager()

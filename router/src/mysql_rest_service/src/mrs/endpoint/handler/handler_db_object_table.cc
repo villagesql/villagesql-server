@@ -760,7 +760,8 @@ mrs::database::ObjectRowOwnership HandlerDbObjectTable::row_ownership_info(
 }
 
 HandlerDbObjectTable::CachedSession HandlerDbObjectTable::get_session(
-    rest::RequestContext *ctxt, collector::MySQLConnection type) {
+    rest::RequestContext *ctxt, collector::MySQLConnection type,
+    PoolManagerRef *out_pool) {
   if (get_options().query.passthrough_db_user &&
       (type == collector::kMySQLConnectionUserdataRW ||
        type == collector::kMySQLConnectionUserdataRO)) {
@@ -768,7 +769,7 @@ HandlerDbObjectTable::CachedSession HandlerDbObjectTable::get_session(
       log_debug(
           "Request to service with passthroughDbUser from a user authenticated "
           " through auth app '%s', which does not support it",
-          ctxt->user.name.c_str());
+          ctxt->user.app_id.to_string().c_str());
       throw http::Error(HttpStatusCode::BadRequest,
                         "Service requires authentication with "
                         "MySQL Internal, but user is authenticated with "
@@ -776,6 +777,8 @@ HandlerDbObjectTable::CachedSession HandlerDbObjectTable::get_session(
     }
 
     try {
+      if (out_pool) *out_pool = ctxt->session->db_session_pool;
+
       return ctxt->session->db_session_pool->get_instance();
     } catch (const collector::db_pool_exhausted &) {
       throw http::Error(HttpStatusCode::TooManyRequests);

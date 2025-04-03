@@ -136,9 +136,7 @@ static void on_session_created(const MysqlHandler::SessionPtr &session) {
 }
 
 static void on_session_destroyed(const MysqlHandler::SessionPtr &session) {
-  if (session->db_session_pool) {
-    assert(!session->user.user_id.empty());
-
+  if (session->db_session_pool && !session->user.user_id.empty()) {
     std::lock_guard<std::mutex> lck{s_passthrough_sessions_by_user_mutex};
     if (auto it = s_passthrough_sessions_by_user.find(session->user.user_id);
         it != s_passthrough_sessions_by_user.end()) {

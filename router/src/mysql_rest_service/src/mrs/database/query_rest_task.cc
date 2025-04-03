@@ -217,14 +217,16 @@ void QueryRestMysqlTask::execute_procedure_at_server(
 }
 
 void QueryRestMysqlTask::execute_procedure_at_router(
-    CachedSession session, const mysqlrouter::sqlstring &user_id,
+    CachedSession session, PoolManagerRef pool_ref,
+    const mysqlrouter::sqlstring &user_id,
     std::optional<std::string> user_ownership_column, const std::string &schema,
     const std::string &object, const std::string &url,
     const MysqlTaskOptions &task_options, const rapidjson::Document &doc,
     const ResultSets &rs) {
   url_ = url;
-  execute_at_router(std::move(session), user_id, user_ownership_column, true,
-                    schema, object, task_options, doc, rs);
+  execute_at_router(std::move(session), std::move(pool_ref), user_id,
+                    user_ownership_column, true, schema, object, task_options,
+                    doc, rs);
 }
 
 void QueryRestMysqlTask::execute_function_at_server(
@@ -241,14 +243,16 @@ void QueryRestMysqlTask::execute_function_at_server(
 }
 
 void QueryRestMysqlTask::execute_function_at_router(
-    CachedSession session, const mysqlrouter::sqlstring &user_id,
+    CachedSession session, PoolManagerRef pool_ref,
+    const mysqlrouter::sqlstring &user_id,
     std::optional<std::string> user_ownership_column, const std::string &schema,
     const std::string &object, const std::string &url,
     const MysqlTaskOptions &task_options, const rapidjson::Document &doc,
     const ResultSets &rs) {
   url_ = url;
-  execute_at_router(std::move(session), user_id, user_ownership_column, false,
-                    schema, object, task_options, doc, rs);
+  execute_at_router(std::move(session), std::move(pool_ref), user_id,
+                    user_ownership_column, false, schema, object, task_options,
+                    doc, rs);
 }
 
 void QueryRestMysqlTask::execute_at_server(
@@ -293,7 +297,8 @@ void QueryRestMysqlTask::execute_at_server(
 }
 
 void QueryRestMysqlTask::execute_at_router(
-    CachedSession session, const mysqlrouter::sqlstring &user_id,
+    CachedSession session, PoolManagerRef pool_ref,
+    const mysqlrouter::sqlstring &user_id,
     std::optional<std::string> user_ownership_column, bool is_procedure,
     const std::string &schema, const std::string &object,
     const MysqlTaskOptions &task_options, const rapidjson::Document &doc,
@@ -389,8 +394,8 @@ void QueryRestMysqlTask::execute_at_router(
   postamble.emplace_back(query.str());
 
   task_monitor_->call_async(
-      std::move(session), std::move(preamble), std::move(script),
-      std::move(postamble),
+      std::move(session), std::move(pool_ref), std::move(preamble),
+      std::move(script), std::move(postamble),
       [task_id, progress_event_name](const std::exception &e) {
         return on_task_error(e, task_id, progress_event_name);
       },

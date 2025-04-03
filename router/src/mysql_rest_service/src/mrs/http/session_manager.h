@@ -143,7 +143,7 @@ class SessionManager {
     std::string proto;
     std::string host;
 
-    std::unique_ptr<collector::MysqlFixedPoolManager> db_session_pool;
+    std::shared_ptr<collector::MysqlFixedPoolManager> db_session_pool;
 
    private:
     std::unique_ptr<SessionData> data_;

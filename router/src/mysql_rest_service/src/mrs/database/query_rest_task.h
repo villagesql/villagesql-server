@@ -50,7 +50,9 @@ class QueryRestMysqlTask : private Query {
   using Row = Query::Row;
   using ResultSets = entry::ResultSets;
   using MysqlTaskOptions = interface::Options::MysqlTask;
-  using CachedSession = collector::MysqlCacheManager::CachedObject;
+  using CachedSession = collector::MysqlFixedPoolManager::CachedObject;
+  using PoolManager = collector::MysqlFixedPoolManager;
+  using PoolManagerRef = std::shared_ptr<PoolManager>;
 
  public:
   explicit QueryRestMysqlTask(mrs::database::MysqlTaskMonitor *task_monitor);
@@ -64,7 +66,8 @@ class QueryRestMysqlTask : private Query {
       const rapidjson::Document &doc, const ResultSets &rs);
 
   void execute_procedure_at_router(
-      CachedSession session, const mysqlrouter::sqlstring &user_id,
+      CachedSession session, PoolManagerRef pool_ref,
+      const mysqlrouter::sqlstring &user_id,
       std::optional<std::string> user_ownership_column,
       const std::string &schema, const std::string &object,
       const std::string &url, const MysqlTaskOptions &task_options,
@@ -79,7 +82,8 @@ class QueryRestMysqlTask : private Query {
       const rapidjson::Document &doc, const ResultSets &rs);
 
   void execute_function_at_router(
-      CachedSession session, const mysqlrouter::sqlstring &user_id,
+      CachedSession session, PoolManagerRef pool_ref,
+      const mysqlrouter::sqlstring &user_id,
       std::optional<std::string> user_ownership_column,
       const std::string &schema, const std::string &object,
       const std::string &url, const MysqlTaskOptions &task_options,
@@ -98,7 +102,7 @@ class QueryRestMysqlTask : private Query {
   std::string url_;
   mrs::database::MysqlTaskMonitor *task_monitor_;
 
-  void execute_at_router(CachedSession session,
+  void execute_at_router(CachedSession session, PoolManagerRef pool_ref,
                          const mysqlrouter::sqlstring &user_id,
                          std::optional<std::string> user_ownership_column,
                          bool is_procedure, const std::string &schema,

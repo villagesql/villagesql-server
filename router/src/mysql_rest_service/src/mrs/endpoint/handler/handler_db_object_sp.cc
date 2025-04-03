@@ -202,9 +202,12 @@ HttpResult HandlerDbObjectSP::call_async(rest::RequestContext *ctxt,
                                          rapidjson::Document doc) {
   using namespace helper::json::sql;
 
+  mrs::database::MysqlTaskMonitor::PoolManagerRef pool;
+
   // only authenticated users can start async tasks
   auto user_id = get_user_id(ctxt, true);
-  auto session = get_session(ctxt, collector::kMySQLConnectionUserdataRW);
+  auto session =
+      get_session(ctxt, collector::kMySQLConnectionUserdataRW, &pool);
 
   // Stored procedures may change the state of the SQL session,
   // we need ensure that its going to be reset.
@@ -228,9 +231,10 @@ HttpResult HandlerDbObjectSP::call_async(rest::RequestContext *ctxt,
                 get_options().mysql_task, doc, entry_->fields);
           else
             db.execute_procedure_at_router(
-                std::move(session), user_id, user_ownership_column,
-                schema_entry_->name, entry_->name, get_endpoint_url(endpoint_),
-                get_options().mysql_task, doc, entry_->fields);
+                std::move(session), std::move(pool), user_id,
+                user_ownership_column, schema_entry_->name, entry_->name,
+                get_endpoint_url(endpoint_), get_options().mysql_task, doc,
+                entry_->fields);
         },
         session.get(), get_options().query.timeout);
   } catch (const mysqlrouter::MySQLSession::Error &e) {
