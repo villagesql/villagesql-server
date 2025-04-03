@@ -1223,7 +1223,7 @@ NULL	NULL	NULL
 Warnings:
 Warning	1235	This version of MySQL doesn't yet support 'sorting of non-scalar JSON values'
 SELECT j, JSON_TYPE(j), JSON_TYPE(MIN(j) OVER (ORDER BY j RANGE 3 PRECEDING)) FROM tj;
-ERROR HY000: Window '<unnamed window>' with RANGE N PRECEDING/FOLLOWING frame requires exactly one ORDER BY expression, of numeric or temporal type
+ERROR HY000: Window '<unnamed window>' with RANGE N PRECEDING/FOLLOWING frame requires exactly one deterministic ORDER BY expression, of numeric or temporal type
 INSERT INTO tj(j) VALUES ('3.14');
 SELECT j, JSON_TYPE(j), JSON_TYPE(MAX(j) OVER (ORDER BY j ROWS 3 PRECEDING)) FROM tj;
 j	JSON_TYPE(j)	JSON_TYPE(MAX(j) OVER (ORDER BY j ROWS 3 PRECEDING))

@@ -8196,7 +8196,7 @@ ER_WINDOW_FRAME_ILLEGAL
   eng "Window '%s': frame start or end is negative, NULL or of non-integral type"
 
 ER_WINDOW_RANGE_FRAME_ORDER_TYPE
-  eng "Window '%s' with RANGE N PRECEDING/FOLLOWING frame requires exactly one ORDER BY expression, of numeric or temporal type"
+  eng "Window '%s' with RANGE N PRECEDING/FOLLOWING frame requires exactly one deterministic ORDER BY expression, of numeric or temporal type"
 
 ER_WINDOW_RANGE_FRAME_TEMPORAL_TYPE
   eng "Window '%s' with RANGE frame has ORDER BY expression of datetime type. Only INTERVAL bound value allowed."
