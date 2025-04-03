@@ -97,17 +97,15 @@ void MysqlTaskMonitor::run() {
 }
 
 void MysqlTaskMonitor::call_async(
-    CachedSession session, std::list<std::string> preamble, std::string script,
+    CachedSession session, PoolManagerRef session_pool,
+    std::list<std::string> preamble, std::string script,
     std::list<std::string> postamble,
     std::function<std::list<std::string>(const std::exception &)> on_error,
     const std::string &task_id) {
-  Task task{std::move(session),
-            std::move(preamble),
-            std::move(script),
-            std::move(postamble),
-            {},
-            std::move(on_error),
-            task_id};
+  Task task{std::move(session_pool), std::move(session),
+            std::move(preamble),     std::move(script),
+            std::move(postamble),    {},
+            std::move(on_error),     task_id};
   std::lock_guard<std::mutex> lock(tasks_mutex_);
   tasks_.emplace_back(std::move(task));
 }
