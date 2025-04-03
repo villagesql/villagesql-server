@@ -911,12 +911,6 @@ class ShareConnectionTest : public ShareConnectionTestBase,
                             public ::testing::WithParamInterface<
                                 std::tuple<ShareConnectionParam, bool>> {
  public:
-#if 0
-#define TRACE(desc) trace(__func__, __LINE__, (desc))
-#else
-#define TRACE(desc)
-#endif
-
   void SetUp() override {
 #ifdef _WIN32
     auto is_tcp = std::get<1>(GetParam());
@@ -925,8 +919,6 @@ class ShareConnectionTest : public ShareConnectionTestBase,
       GTEST_SKIP() << "unix-sockets are not supported on windows.";
     }
 #endif
-
-    TRACE("");
 
     for (auto [ndx, s] : stdx::views::enumerate(shared_servers())) {
       // shared_server_ may be null if TestWithSharedServer::SetUpTestSuite
@@ -941,16 +933,6 @@ class ShareConnectionTest : public ShareConnectionTestBase,
         SharedServer::reset_to_defaults(*cli);
       }
     }
-    TRACE("");
-  }
-
-  void trace(std::string_view func_name, int line, std::string_view desc) {
-    std::ostringstream oss;
-
-    oss << func_name << "." << line << ": " << (clock_type::now() - started_)
-        << ": " << desc << "\n";
-
-    std::cerr << oss.str();
   }
 
   static bool can_auth(const SharedServer::Account &account,
