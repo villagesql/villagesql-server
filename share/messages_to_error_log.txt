@@ -12339,6 +12339,9 @@ ER_GRP_RPL_CERT_BROADCAST_THREAD_STARTED
 ER_GRP_RPL_CERT_BROADCAST_THREAD_STOPPED
   eng "The Group Replication certifier broadcast thread (THD_certifier_broadcast) stopped."
 
+ER_GRP_RPL_APPLIER_THD_KILLED_BY_SQL_KILL
+   eng "The group replication applier thread has received KILL request."
+
 #
 # End of 8.0 error messages intended to be written to the server error log.
 #
