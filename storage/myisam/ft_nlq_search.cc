@@ -240,7 +240,7 @@ FT_INFO *ft_init_nlq_search(MI_INFO *info, uint keynr, uchar *query,
   parser = info->s->keyinfo[keynr].parser;
   if (!(ftparser_param = ftparser_call_initializer(info, keynr, 0))) goto err;
 
-  memset(&wtree, 0, sizeof(wtree));
+  memset((void *)&wtree, 0, sizeof(wtree));
 
   init_tree(&aio.dtree, 0, sizeof(FT_SUPERDOC), &FT_SUPERDOC_cmp, false,
             nullptr, nullptr);
