@@ -10300,19 +10300,8 @@ const byte *fil_tablespace_redo_create(const byte *ptr, const byte *end,
   std::string space_name;
   fil_update_partition_name(page_id.space(), 0, false, space_name, name);
 
-  auto abs_name = Fil_path::get_real_path(name);
-
   /* Duplicates should have been sorted out before we get here. */
   ut_a(result.second->size() == 1);
-
-  /* It's possible that the tablespace file was renamed later. */
-  if (result.second->front().compare(abs_name) == 0) {
-    dberr_t success = fil_tablespace_open_for_recovery(page_id.space());
-
-    if (success != DB_SUCCESS) {
-      ib::info(ER_IB_MSG_356) << "Create '" << abs_name << "' failed!";
-    }
-  }
 #endif /* UNIV_HOTBACKUP */
 
   return ptr;
