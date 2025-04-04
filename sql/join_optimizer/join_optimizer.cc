@@ -4722,9 +4722,9 @@ bool CostingReceiver::FoundSubgraphPair(NodeMap left, NodeMap right,
       // Do not allow the rewrite if firstmatch or loose scan
       // strategy is disabled.
       (((edge->expr->sj_enabled_strategies & OPTIMIZER_SWITCH_FIRSTMATCH) &&
-        !edge->semijoin_group_size) ||
+        edge->semijoin_group.empty()) ||
        (edge->expr->sj_enabled_strategies & OPTIMIZER_SWITCH_LOOSE_SCAN &&
-        edge->semijoin_group_size));
+        !edge->semijoin_group.empty()));
 
   // Enforce that recursive references need to be leftmost.
   if (Overlaps(right, forced_leftmost_table)) {
@@ -4929,23 +4929,20 @@ bool CostingReceiver::FoundSubgraphPair(NodeMap left, NodeMap right,
   empty, all rows are the same, and we make a simple LIMIT 1 instead.
  */
 AccessPath *DeduplicateForSemijoin(THD *thd, AccessPath *path,
-                                   Item **semijoin_group,
-                                   int semijoin_group_size,
+                                   std::span<Item *> semijoin_group,
                                    RelationalExpression *expr) {
   AccessPath *dedup_path = nullptr;
-  if (semijoin_group_size == 0 &&
+  if (semijoin_group.empty() &&
       (expr->sj_enabled_strategies & OPTIMIZER_SWITCH_FIRSTMATCH)) {
     dedup_path = NewLimitOffsetAccessPath(thd, path, /*limit=*/1, /*offset=*/0,
                                           /*count_all_rows=*/false,
                                           /*reject_multiple_rows=*/false,
                                           /*send_records_override=*/nullptr);
   } else if (expr->sj_enabled_strategies & OPTIMIZER_SWITCH_LOOSE_SCAN) {
-    dedup_path = NewRemoveDuplicatesAccessPath(thd, path, semijoin_group,
-                                               semijoin_group_size);
+    dedup_path = NewRemoveDuplicatesAccessPath(thd, path, semijoin_group);
     CopyBasicProperties(*path, dedup_path);
-    dedup_path->set_num_output_rows(EstimateDistinctRows(
-        thd, path->num_output_rows(),
-        {semijoin_group, static_cast<size_t>(semijoin_group_size)}));
+    dedup_path->set_num_output_rows(
+        EstimateDistinctRows(thd, path->num_output_rows(), semijoin_group));
     dedup_path->set_cost(dedup_path->cost() +
                          (kDedupOneRowCost * path->num_output_rows()));
   }
@@ -5087,7 +5084,7 @@ void CostingReceiver::ProposeHashJoin(
       edge->expr->sj_enabled_strategies & OPTIMIZER_SWITCH_LOOSE_SCAN &&
       !(edge->expr->sj_enabled_strategies & OPTIMIZER_SWITCH_FIRSTMATCH);
   if (!rewrite_semi_to_inner &&
-      (forced_loose_scan && edge->semijoin_group_size)) {
+      (forced_loose_scan && !edge->semijoin_group.empty())) {
     return;
   }
 
@@ -5125,9 +5122,8 @@ void CostingReceiver::ProposeHashJoin(
     // NOTE: We purposefully don't overwrite left_path here, so that we
     // don't have to worry about copying ordering_state etc.
     CommitBitsetsToHeap(left_path);
-    join_path.hash_join().outer =
-        DeduplicateForSemijoin(m_thd, left_path, edge->semijoin_group,
-                               edge->semijoin_group_size, edge->expr);
+    join_path.hash_join().outer = DeduplicateForSemijoin(
+        m_thd, left_path, edge->semijoin_group, edge->expr);
   }
 
   // TODO(sgunders): Consider removing redundant join conditions.
@@ -5693,7 +5689,7 @@ void CostingReceiver::ProposeNestedLoopJoin(
       edge->expr->sj_enabled_strategies & OPTIMIZER_SWITCH_LOOSE_SCAN &&
       !(edge->expr->sj_enabled_strategies & OPTIMIZER_SWITCH_FIRSTMATCH);
   if (!rewrite_semi_to_inner &&
-      (forced_loose_scan && edge->semijoin_group_size)) {
+      (forced_loose_scan && !edge->semijoin_group.empty())) {
     return;
   }
 
@@ -5736,9 +5732,8 @@ void CostingReceiver::ProposeNestedLoopJoin(
 
     // NOTE: We purposefully don't overwrite left_path here, so that we
     // don't have to worry about copying ordering_state etc.
-    join_path.nested_loop_join().outer =
-        DeduplicateForSemijoin(m_thd, left_path, edge->semijoin_group,
-                               edge->semijoin_group_size, edge->expr);
+    join_path.nested_loop_join().outer = DeduplicateForSemijoin(
+        m_thd, left_path, edge->semijoin_group, edge->expr);
   } else if (edge->expr->type == RelationalExpression::STRAIGHT_INNER_JOIN) {
     join_path.nested_loop_join().join_type = JoinType::INNER;
   } else {
@@ -7864,8 +7859,8 @@ void ApplyDistinctParameters::ProposeDistinctPaths(
     Bounds_checked_array<Item *> group_items_copy{
         group_items.Clone(thd->mem_root)};
 
-    AccessPath *dedup_path = NewRemoveDuplicatesAccessPath(
-        thd, root_path, group_items_copy.data(), group_items_copy.size());
+    AccessPath *dedup_path =
+        NewRemoveDuplicatesAccessPath(thd, root_path, group_items_copy);
 
     CopyBasicProperties(*root_path, dedup_path);
     dedup_path->set_num_output_rows(output_rows);
@@ -7953,8 +7948,7 @@ AccessPathArray ApplyDistinctParameters::ApplyDistinct() const {
       ++iter;
     }
 
-    return EstimateDistinctRows(thd, (*iter)->num_output_rows(),
-                                {group_items.data(), group_items.size()});
+    return EstimateDistinctRows(thd, (*iter)->num_output_rows(), group_items);
   }()};
 
   AccessPathArray new_root_candidates(PSI_NOT_INSTRUMENTED);

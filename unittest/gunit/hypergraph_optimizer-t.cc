@@ -5346,7 +5346,7 @@ TEST_F(HypergraphOptimizerTest, SemiJoinThroughLooseScan) {
   // a duplicate removal on the join key...
   AccessPath *outer = root->nested_loop_join().outer;
   ASSERT_EQ(AccessPath::REMOVE_DUPLICATES, outer->type);
-  ASSERT_EQ(1, outer->remove_duplicates().group_items_size);
+  ASSERT_EQ(1, outer->remove_duplicates().group_items.size());
   EXPECT_EQ("t2.x", ItemToString(outer->remove_duplicates().group_items[0]));
 
   // ...then a sort to get the grouping...

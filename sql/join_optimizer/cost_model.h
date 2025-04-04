@@ -25,6 +25,7 @@
 #define SQL_JOIN_OPTIMIZER_COST_MODEL_H_
 
 #include <algorithm>  // std::clamp
+#include <span>
 
 #include "my_base.h"
 #include "my_bitmap.h"  // bitmap_bits_set
@@ -155,6 +156,9 @@ void EstimateSortCost(THD *thd, AccessPath *path,
 
 void EstimateMaterializeCost(THD *thd, AccessPath *path);
 
+/// Array of aggregation terms.
+using TermArray = std::span<const Item *const>;
+
 /**
    Estimate the number of rows with a distinct combination of values for
    'terms'. @see EstimateDistinctRowsFromStatistics for additional details.
@@ -164,8 +168,7 @@ void EstimateMaterializeCost(THD *thd, AccessPath *path);
                 combinations.
    @returns The estimated number of output rows.
 */
-double EstimateDistinctRows(THD *thd, double child_rows,
-                            Bounds_checked_array<const Item *const> terms);
+double EstimateDistinctRows(THD *thd, double child_rows, TermArray terms);
 /**
    Estimate costs and result row count for an aggregate operation.
    @param[in,out] thd The current thread.

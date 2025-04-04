@@ -4275,11 +4275,11 @@ int WeedoutIterator::Read() {
 
 RemoveDuplicatesIterator::RemoveDuplicatesIterator(
     THD *thd, unique_ptr_destroy_only<RowIterator> source, JOIN *join,
-    Item **group_items, int group_items_size)
+    std::span<Item *> group_items)
     : RowIterator(thd), m_source(std::move(source)) {
   m_caches = Bounds_checked_array<Cached_item *>::Alloc(thd->mem_root,
-                                                        group_items_size);
-  for (int i = 0; i < group_items_size; ++i) {
+                                                        group_items.size());
+  for (size_t i = 0; i < group_items.size(); ++i) {
     m_caches[i] = new_Cached_item(thd, group_items[i]);
     join->semijoin_deduplication_fields.push_back(m_caches[i]);
   }

@@ -941,9 +941,6 @@ void EstimateMaterializeCost(THD *thd, AccessPath *path) {
 
 namespace {
 
-/// Array of aggregation terms.
-using TermArray = Bounds_checked_array<const Item *const>;
-
 /**
    This class finds disjoint sets of aggregation terms that form prefixes of
    some non-hash index, and makes row estimates for those sets based on index
@@ -1016,9 +1013,9 @@ class AggregateRowEstimator {
   /// @param field The field we look for.
   /// @returns An iterator to the position of 'field' in m_terms, or
   /// m_terms.cend().
-  TermArray::const_iterator FindField(const Field *field) const {
+  TermArray::iterator FindField(const Field *field) const {
     return std::find_if(
-        m_terms.cbegin(), m_terms.cend(), [field](const Item *item) {
+        m_terms.begin(), m_terms.end(), [field](const Item *item) {
           assert(field != nullptr);
           return item->type() == Item::FIELD_ITEM &&
                  down_cast<const Item_field *>(item)->field == field;
@@ -1099,7 +1096,7 @@ double AggregateRowEstimator::MakeNextEstimate(THD *thd) {
         For each KEY_PART, check if there is still a corresponding aggregation
         item in m_terms.
       */
-      if (IsBitSet(FindField(field) - m_terms.cbegin(), m_consumed_terms)) {
+      if (IsBitSet(FindField(field) - m_terms.begin(), m_consumed_terms)) {
         // We did not find it, so it must have been removed when we examined
         // some earlier key. We can thus only use the prefix 0..key_part_no of
         // this key.
@@ -1257,9 +1254,8 @@ double EstimateDistinctRowsFromStatistics(THD *thd, TermArray terms,
 
   // Loop over the remaining terms, i.e. those that were not part of
   // a key prefix. Make row estimates for those that are fields.
-  for (TermArray::const_iterator term = terms.cbegin(); term < terms.cend();
-       term++) {
-    if (!IsBitSet(term - terms.cbegin(), index_estimator.GetConsumedTerms()) &&
+  for (TermArray::iterator term = terms.begin(); term < terms.end(); term++) {
+    if (!IsBitSet(term - terms.begin(), index_estimator.GetConsumedTerms()) &&
         (*term)->type() == Item::FIELD_ITEM) {
       const Field *const field = down_cast<const Item_field *>(*term)->field;
 
@@ -1426,7 +1422,7 @@ double EstimateRollupRowsAdvanced(THD *thd, double aggregate_rows,
   // Make a more accurate rollup row calculation for larger sets.
   double rollup_rows = 1.0;
   while (terms.size() > 1) {
-    terms.resize(terms.size() - 1);
+    terms = terms.first(terms.size() - 1);
 
     if (TraceStarted(thd)) {
       Trace(thd) << StringPrintf(

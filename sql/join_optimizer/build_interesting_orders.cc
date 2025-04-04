@@ -923,14 +923,13 @@ void BuildInterestingOrders(
       Ordering::Elements grouping =
           orderings->ordering(pred.ordering_idx_needed_for_semijoin_rewrite)
               .GetElements();
-      pred.semijoin_group_size = grouping.size();
-      if (!grouping.empty()) {
-        pred.semijoin_group =
-            thd->mem_root->ArrayAlloc<Item *>(grouping.size());
-        for (size_t i = 0; i < grouping.size(); ++i) {
-          pred.semijoin_group[i] = orderings->item(grouping[i].item);
-        }
-      }
+
+      pred.semijoin_group = AllocSpan<Item *>(thd->mem_root, grouping.size());
+
+      std::ranges::transform(grouping, pred.semijoin_group.begin(),
+                             [&](const OrderElement &element) {
+                               return orderings->item(element.item);
+                             });
     }
   }
 

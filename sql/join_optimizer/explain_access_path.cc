@@ -1916,10 +1916,9 @@ static unique_ptr<Json_object> SetObjectMembers(
       description = "Remove duplicates from input grouped on ";
       unique_ptr<Json_array> group_items(new (std::nothrow) Json_array());
       if (group_items == nullptr) return nullptr;
-      for (int i = 0; i < path->remove_duplicates().group_items_size; ++i) {
-        string group_item =
-            ItemToString(path->remove_duplicates().group_items[i]);
-        if (i != 0) {
+      for (Item *item : path->remove_duplicates().group_items) {
+        string group_item = ItemToString(item);
+        if (item != path->remove_duplicates().group_items.front()) {
           description += ", ";
         }
         description += group_item;
