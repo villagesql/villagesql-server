@@ -35,6 +35,8 @@
 
 namespace jit_executor {
 
+static const size_t k_max_heap_address_space = 32768;
+
 IMPORT_LOG_FUNCTIONS()
 
 ServiceHandlers::ServiceHandlers(const ServiceHandlerConfig &config)
@@ -44,6 +46,8 @@ ServiceHandlers::ServiceHandlers(const ServiceHandlers &other)
     : ServiceHandlers(other.m_config) {}
 
 bool ServiceHandlers::init() {
+  m_error.clear();
+
   init_common_context();
 
   if (m_common_context->start()) {
@@ -51,6 +55,8 @@ bool ServiceHandlers::init() {
         std::make_shared<ContextPool>(pool_size(), m_common_context.get());
 
     return true;
+  } else {
+    m_error = m_common_context->error();
   }
 
   return false;
@@ -65,8 +71,6 @@ void ServiceHandlers::init_common_context() {
 
   // Default: 25% of the system memory
   static const uint64_t default_max_heap_size = total_memory * 0.25;
-
-  // Using a default of 1024 MB if nothing else is configured
   auto max_heap_size = m_config.max_heap_size.value_or(default_max_heap_size);
 
   if (total_memory > 0) {
@@ -74,15 +78,25 @@ void ServiceHandlers::init_common_context() {
     auto graal_default_max_heap_size =
         static_cast<uint64_t>(total_memory * 0.8);
 
-    // 10 MB is the minimum allowed
-    if (max_heap_size < 10) {
+    // 256 MB is the minimum allowed
+    if (max_heap_size < 256) {
       log_warning(
           "The configured maximumRamUsage=%" PRIu64
-          " is lower than the minimum allowed value of 10MB, ignoring "
+          " is lower than the minimum allowed value of 256MB, ignoring "
           "configuration, using default (25%% of the system memory: %" PRIu64
           "MB).",
           max_heap_size, default_max_heap_size);
       max_heap_size = default_max_heap_size;
+    } else if (max_heap_size > k_max_heap_address_space) {
+      // The specified maximum heap size (64g) must not be larger than the
+      // largest possible heap address space (32g). To allow larger values, we
+      // should disable compressed references when building the image by adding
+      // the option '-H:-UseCompressedReferences'
+
+      log_warning(
+          "Limiting the maximumRamUsage to the largest possible heap space of "
+          "32GB.");
+      max_heap_size = k_max_heap_address_space;
     }
 
     if (max_heap_size < graal_default_max_heap_size) {
@@ -121,6 +135,8 @@ void ServiceHandlers::teardown() {
   m_teardown_thread =
       std::make_unique<std::thread>(&ServiceHandlers::do_tear_down, this);
 }
+
+std::string ServiceHandlers::error() { return m_error; }
 
 void ServiceHandlers::do_tear_down() {
   my_thread_self_setname("Jit-TearDown");

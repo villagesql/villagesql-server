@@ -103,6 +103,8 @@ void JitExecutorComponent::stop_debug_context(const std::string &service_id) {
 void JitExecutorComponent::update_active_contexts(
     const std::pair<std::string, std::shared_ptr<IServiceHandlers>>
         &replacement) {
+  m_handler_errors.clear();
+
   for (const auto &it : m_service_context_handlers) {
     it.second->set_default_pool_size(m_global_config.default_pool_size);
   }
@@ -162,6 +164,8 @@ void JitExecutorComponent::update_active_contexts(
   for (const auto &it : candidate_context_handlers) {
     if (it.second->init()) {
       m_service_context_handlers.emplace(it.first, it.second);
+    } else {
+      m_handler_errors.emplace(it.first, it.second->error());
     }
   }
 }
@@ -183,22 +187,34 @@ std::shared_ptr<IContextHandle> JitExecutorComponent::get_context(
 
       if (it != m_service_context_handlers.end()) {
         return it->second->get_context(debug_port);
+      } else if (auto error_it = m_handler_errors.find(service_id);
+                 error_it != m_handler_errors.end()) {
+        throw std::runtime_error(error_it->second);
       } else {
         throw std::runtime_error("error to go below..., needed?");
       }
-    } catch (const std::runtime_error &) {
+    } catch (...) {
       // If failed to create a context, then let's try re-creating the whole
       // pool, if this failed on a brand new pool, then there's nothing else to
       // be done
       if (!reset_context) {
         reset_context = true;
       } else {
-        break;
+        throw;
       }
     }
   }
 
   return {};
+}
+
+void JitExecutorComponent::delete_context(const std::string &service_id) {
+  auto it = m_service_context_handlers.find(service_id);
+
+  if (it != m_service_context_handlers.end()) {
+    it->second->teardown();
+    m_service_context_handlers.erase(it);
+  }
 }
 
 }  // namespace jit_executor

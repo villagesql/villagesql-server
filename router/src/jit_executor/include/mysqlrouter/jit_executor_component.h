@@ -78,6 +78,7 @@ class IServiceHandlers {
   virtual void release_debug_context() = 0;
 
   virtual bool init() = 0;
+  virtual std::string error() = 0;
   virtual void teardown() = 0;
 
   virtual std::chrono::seconds idle_time() const = 0;
@@ -129,6 +130,8 @@ class JIT_EXECUTOR_PLUGIN_EXPORT JitExecutorComponent {
       const std::string &service_id, const ServiceHandlerConfig &config,
       const std::string &debug_port = "", bool reset_context = false);
 
+  void delete_context(const std::string &service_id);
+
   void update_global_config(const std::string &options);
 
  private:
@@ -142,6 +145,8 @@ class JIT_EXECUTOR_PLUGIN_EXPORT JitExecutorComponent {
 
   std::unordered_map<std::string, std::shared_ptr<IServiceHandlers>>
       m_service_context_handlers;
+
+  std::unordered_map<std::string, std::string> m_handler_errors;
 
   std::vector<std::shared_ptr<IServiceHandlers>> m_inactive_context_handlers;
 };

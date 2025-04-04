@@ -31,6 +31,7 @@
 #include "native_wrappers/polyglot_collectable.h"
 #include "utils/polyglot_scope.h"
 #include "utils/polyglot_utils.h"
+#include "utils/utils_string.h"
 
 namespace shcore {
 namespace polyglot {
@@ -50,13 +51,18 @@ void Polyglot_common_context::initialize(
       throw Polyglot_generic_error("Error creating polyglot isolate params");
     }
 
-    if (poly_ok !=
-        poly_create_isolate(&isolate_params, &m_isolate, &m_thread)) {
-      throw Polyglot_generic_error("Error creating polyglot isolate");
+    if (const auto rc =
+            poly_create_isolate(&isolate_params, &m_isolate, &m_thread);
+        rc != poly_ok) {
+      throw Polyglot_generic_error(
+          shcore::str_format("Error creating polyglot isolate: %d (%s)", rc,
+                             shcore::str_join(isolate_args, " ").c_str()));
     }
   } else {
-    if (poly_ok != poly_create_isolate(NULL, &m_isolate, &m_thread)) {
-      throw Polyglot_generic_error("Error creating polyglot isolate");
+    if (const auto rc = poly_create_isolate(NULL, &m_isolate, &m_thread);
+        rc != poly_ok) {
+      throw Polyglot_generic_error(
+          shcore::str_format("Error creating polyglot isolate: %d", rc));
     }
   }
 

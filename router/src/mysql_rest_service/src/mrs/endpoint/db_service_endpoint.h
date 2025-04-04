@@ -64,6 +64,8 @@ class DbServiceEndpoint : public OptionEndpoint {
                     EndpointConfigurationPtr configuration,
                     HandlerFactoryPtr factory);
 
+  ~DbServiceEndpoint() override;
+
   UniversalId get_id() const override;
   UniversalId get_parent_id() const override;
   Uri get_url() const override;

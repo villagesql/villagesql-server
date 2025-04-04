@@ -54,6 +54,13 @@ DbServiceEndpoint::DbServiceEndpoint(const DbService &entry,
     : OptionEndpoint(entry.id, configuration, factory),
       entry_{std::make_shared<DbService>(entry)} {}
 
+DbServiceEndpoint::~DbServiceEndpoint() {
+#ifdef HAVE_JIT_EXECUTOR_PLUGIN
+  auto &instance = jit_executor::JitExecutorComponent::get_instance();
+  instance.delete_context(get()->id.to_string());
+#endif
+}
+
 UniversalId DbServiceEndpoint::get_id() const { return entry_->id; }
 
 UniversalId DbServiceEndpoint::get_parent_id() const {
