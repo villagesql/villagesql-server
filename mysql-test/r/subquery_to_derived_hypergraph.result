@@ -6017,9 +6017,8 @@ EXPLAIN
     -> Table scan on t1  (rows=1)
     -> Hash
         -> Nested loop inner join (LooseScan)  (rows=0.1)
-            -> Remove duplicates from input grouped on t1.b  (rows=1)
-                -> Sort: t1.b  (rows=1)
-                    -> Table scan on t1  (rows=1)
+            -> Sort with duplicate removal: t1.b  (rows=1)
+                -> Table scan on t1  (rows=1)
             -> Filter: (derived_1_2.`SUM(a)` = t1.b)  (rows=0.01)
                 -> Covering index lookup on derived_1_2 using <auto_key0> (SUM(a) = t1.b)  (rows=0.1)
                     -> Materialize  (rows=1)

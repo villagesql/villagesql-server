@@ -4939,6 +4939,41 @@ AccessPath *DeduplicateForSemijoin(THD *thd, AccessPath *path,
                                           /*reject_multiple_rows=*/false,
                                           /*send_records_override=*/nullptr);
   } else if (expr->sj_enabled_strategies & OPTIMIZER_SWITCH_LOOSE_SCAN) {
+    /*
+      The semijoin group is non-empty, and we need to remove duplicates.
+      Note that the access paths have no cost dimension that expresses
+      the set of fields (if any) on which the path is deduplicated.
+      If there was such a dimension, we would only add deduplication where
+      actually needed. And at lower levels in the bottom-up planning,
+      we could propose alternative paths with and without deduplication
+      (sort with deduplication vs. plain sort, group skip scan vs. index
+      scan). But having an extra cost dimension would make planning more
+      expensive, even if it could potentially give better plans.
+     */
+    if (path->type == AccessPath::SORT) {
+      /*
+        Make the sort path do the deduplication instead of adding a
+        REMOVE_DUPLICATES path on top of it. We handle this as a special
+        case to get a somewhat cheaper plan.
+      */
+      assert(!path->sort().remove_duplicates);
+      // The 'sort' should be there to allow deduplication. So the number of
+      // elements should be the same. Note that the Items may not be identical.
+      // If there is a predicate t1.f1=t2.f2, it may be that we sort on f1 but
+      // deduplicate on f2.
+      assert(semijoin_group.size() == CountOrderElements(path->sort().order));
+      dedup_path = new (thd->mem_root) AccessPath(*path);
+      dedup_path->sort().remove_duplicates = true;
+
+      // Doing deduplication is likely to alter the costs.
+      EstimateSortCost(
+          thd, dedup_path,
+          EstimateDistinctRows(thd, path->sort().child->num_output_rows(),
+                               semijoin_group));
+
+      return dedup_path;
+    }
+
     dedup_path = NewRemoveDuplicatesAccessPath(thd, path, semijoin_group);
     CopyBasicProperties(*path, dedup_path);
     dedup_path->set_num_output_rows(

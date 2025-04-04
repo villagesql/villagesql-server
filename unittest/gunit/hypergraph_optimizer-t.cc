@@ -2843,7 +2843,8 @@ TEST_F(HypergraphOptimizerTest, UseIndexesInInnerJoinOutsideSemijoin) {
   // It used to do a full table scan on t1 instead of an index lookup.
   ASSERT_EQ(AccessPath::NESTED_LOOP_JOIN, root->type);
   const auto &outer_join = root->nested_loop_join();
-  EXPECT_EQ(AccessPath::REMOVE_DUPLICATES, outer_join.outer->type);
+  EXPECT_EQ(AccessPath::SORT, outer_join.outer->type);
+  EXPECT_TRUE(outer_join.outer->sort().remove_duplicates);
 
   // The exact placement of the t1.y=t3.y filter is not important. It could also
   // have been pushed down directly on top of the index lookup on t1(x). See
@@ -5342,23 +5343,13 @@ TEST_F(HypergraphOptimizerTest, SemiJoinThroughLooseScan) {
   ASSERT_EQ(AccessPath::EQ_REF, inner->type);
   EXPECT_STREQ("t1", inner->eq_ref().table->alias);
 
-  // The outer side is slightly trickier. There should first be
-  // a duplicate removal on the join key...
-  AccessPath *outer = root->nested_loop_join().outer;
-  ASSERT_EQ(AccessPath::REMOVE_DUPLICATES, outer->type);
-  ASSERT_EQ(1, outer->remove_duplicates().group_items.size());
-  EXPECT_EQ("t2.x", ItemToString(outer->remove_duplicates().group_items[0]));
-
-  // ...then a sort to get the grouping...
-  AccessPath *sort = outer->remove_duplicates().child;
+  // The outer side should be a sort on the join key with duplicate removal.
+  AccessPath *sort = root->nested_loop_join().outer;
   ASSERT_EQ(AccessPath::SORT, sort->type);
+  EXPECT_TRUE(sort->sort().remove_duplicates);
   Filesort *filesort = sort->sort().filesort;
   ASSERT_EQ(1, filesort->sort_order_length());
   EXPECT_EQ("t2.x", ItemToString(filesort->sortorder[0].item));
-
-  // Note that ideally, we'd have true here instead of the duplicate removal,
-  // but we can't track duplicates-removed status through AccessPaths yet.
-  EXPECT_FALSE(filesort->m_remove_duplicates);
 
   // ...and then finally a table scan.
   AccessPath *t2 = sort->sort().child;
