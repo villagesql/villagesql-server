@@ -216,7 +216,8 @@ exec $MRS_CLIENT_ARGS
 
 # Testing missing parameters in backend exposed function
 exec $MRS_CLIENT_ARGS
-  --path /svc1/basic_schema/errorCCallbackMissingParams;
+  --path /svc1/basic_schema/errorCCallbackMissingParams
+  --json-pointer /status,/message;
 
 # Cleanup
 

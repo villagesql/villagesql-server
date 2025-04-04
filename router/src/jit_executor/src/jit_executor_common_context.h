@@ -28,6 +28,8 @@
 
 #include "utils/polyglot_api_clean.h"
 
+#include <atomic>
+
 #include "jit_executor_javascript.h"
 #include "languages/polyglot_common_context.h"
 #include "mysqlrouter/polyglot_file_system.h"
@@ -103,7 +105,7 @@ class CommonContext : public shcore::polyglot::Polyglot_common_context {
 
   // Global fatal error flag to indicate when the VM was ended
   static bool m_global_fatal_error;
-  bool m_fatal_error;
+  std::atomic_bool m_fatal_error = false;
   std::string m_fatal_error_description;
   std::vector<std::string> m_isolate_args;
 };

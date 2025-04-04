@@ -96,8 +96,7 @@ OK
 GET /svc1/basic_schema/errorCCallbackMissingParams
 {
     "status": "error",
-    "message": "getContentSetPath(...) takes 1 argument",
-    "line": 25
+    "message": "getContentSetPath(...) takes 1 argument"
 }
 OK
 drop user user1@'%';
