@@ -3674,6 +3674,7 @@ void BackupRestore::cback(int result, restore_callback_t *cb) {
     if (errorHandler(cb))
       tuple_a(cb);  // retry
     else {
+      set_fatal_error(true);
       restoreLogger.log_error(
           "Restore: Failed to restore data due to a unrecoverable error. "
           "Exiting...");
