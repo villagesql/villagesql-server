@@ -25,19 +25,24 @@ along with this program; if not, write to the Free Software Foundation, Inc.,
 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 -->
 
-
 <!--
-MySQL Containers Library
-========================
+MySQL Library: Containers
+=========================
 -->
 
 Code documentation: @ref GroupLibsMysqlContainers.
 
 ## Summary
 
-This library contains the following types of containers:
+This library provides the following container types and container helpers:
 
-### Buffers
+- buffers: Growable sequences of buffers of raw bytes. See details below.
+
+- map_or_set_assign.h: The function `map_or_set_assign` overwrites a
+  `[unordered_][multi]{map|set}` by a given range of values, reusing existing
+  node objects in order to minimize allocations and copy operations.
+
+## Buffers
 
 Provides two types of containers. Both containers are used to store sequences of
 bytes, and both have the following two properties:
