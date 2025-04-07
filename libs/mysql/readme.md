@@ -40,6 +40,7 @@ Libraries defined on this level:
 - \subpage PageLibsMysqlAllocators
 - \subpage PageLibsMysqlBinlog
 - \subpage PageLibsMysqlContainers
+- \subpage PageLibsMysqlDebugging
 - \subpage PageLibsMysqlGtid
 - \subpage PageLibsMysqlMath
 - \subpage PageLibsMysqlMeta
@@ -56,6 +57,8 @@ Libraries defined on this level:
 \defgroup GroupLibsMysqlBinlogEvent Binlog Event
 \ingroup GroupLibsMysql
 \defgroup GroupLibsMysqlContainers Containers
+\ingroup GroupLibsMysql
+\defgroup GroupLibsMysqlDebugging Debugging
 \ingroup GroupLibsMysql
 \defgroup GroupLibsMysqlGtid GTID
 \ingroup GroupLibsMysql

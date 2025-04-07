@@ -1,4 +1,4 @@
-# Copyright (c) 2023, 2025, Oracle and/or its affiliates.
+# Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -21,13 +21,8 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-ADD_SUBDIRECTORY(abi_helpers)
-ADD_SUBDIRECTORY(allocators)
-ADD_SUBDIRECTORY(binlog)
-ADD_SUBDIRECTORY(containers)
-ADD_SUBDIRECTORY(debugging)
-ADD_SUBDIRECTORY(gtid)
-ADD_SUBDIRECTORY(math)
-ADD_SUBDIRECTORY(meta)
-ADD_SUBDIRECTORY(serialization)
-ADD_SUBDIRECTORY(utils)
+SET(TARGET_HEADERS
+)
+
+SET(TARGET_SRCS
+)
