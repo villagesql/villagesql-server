@@ -90,6 +90,12 @@ FOREACH(TEST ${TESTS})
     LIB_DEPENDS test-helpers;harness_stdx)
 ENDFOREACH()
 
+# Warning at googletest-1.14.0/googletest/include/gtest/gtest.h:1379
+IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 15)
+  ROUTERTEST_GET_TARGET(T "test_config.cc" "${TEST_MODULE}")
+  TARGET_LINK_OPTIONS(${T} PRIVATE "-Wno-error=free-nonheap-object")
+ENDIF()
+
 SET(TESTS
   test_keyring.cc
   test_keyring_manager.cc
