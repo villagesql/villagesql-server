@@ -31,6 +31,7 @@ INCLUDE_DIRECTORIES(SYSTEM ${GMOCK_INCLUDE_DIRS})
 # Add tests
 SET(TESTS
   int_pow
+  kahan_sum
 )
 
 FOREACH(test ${TESTS})

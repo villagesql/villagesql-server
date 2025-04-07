@@ -56,3 +56,9 @@ has the following headers:
 
   - `int_log_max<T>()` reduces to a compile-time constant, which is the floor
     of the logarithm of the maximum value representable in type T.
+
+- summation.h: Two algorithms to compute the sums of sequences: `kahan_sum` uses
+  the Kahan summation algorithm to compute the sum of floating-point numbers
+  with very low numeric error. `sequence_sum_difference` computes the difference
+  of the sums of two sequences of nonnegative integers, guaranteeing exact
+  results when the sums are close to each other, even if each sum is huge.
