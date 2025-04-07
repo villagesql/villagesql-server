@@ -59,7 +59,7 @@ class QueryRestMysqlTask : private Query {
 
   void execute_procedure_at_server(
       collector::CountedMySQLSession *session,
-      const mysqlrouter::sqlstring &user_id,
+      const mysqlrouter::sqlstring &user_id, const std::string &user_name,
       std::optional<std::string> user_ownership_column,
       const std::string &schema, const std::string &object,
       const std::string &url, const MysqlTaskOptions &task_options,
@@ -75,7 +75,7 @@ class QueryRestMysqlTask : private Query {
 
   void execute_function_at_server(
       collector::CountedMySQLSession *session,
-      const mysqlrouter::sqlstring &user_id,
+      const mysqlrouter::sqlstring &user_id, const std::string &user_name,
       std::optional<std::string> user_ownership_column,
       const std::string &schema, const std::string &object,
       const std::string &url, const MysqlTaskOptions &task_options,
@@ -112,6 +112,7 @@ class QueryRestMysqlTask : private Query {
 
   void execute_at_server(collector::CountedMySQLSession *session,
                          const mysqlrouter::sqlstring &user_id,
+                         const std::string &user_name,
                          std::optional<std::string> user_ownership_column,
                          bool is_procedure, const std::string &schema,
                          const std::string &object, const std::string &url,
@@ -133,8 +134,9 @@ class QueryRestMysqlTask : private Query {
 
   mysqlrouter::sqlstring wrap_async_server_call(
       const std::string &schema, const mysqlrouter::sqlstring &user_id,
-      const MysqlTaskOptions &task_options, mysqlrouter::sqlstring query,
-      std::list<std::string> preamble, std::list<std::string> postamble);
+      const std::string &user_name, const MysqlTaskOptions &task_options,
+      mysqlrouter::sqlstring query, std::list<std::string> preamble,
+      std::list<std::string> postamble);
 
   static std::list<std::string> on_task_error(
       const std::exception &e, const std::string &task_id,
