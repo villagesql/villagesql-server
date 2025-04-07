@@ -298,9 +298,10 @@ HttpResult HandlerDbObjectFunction::call_async(rest::RequestContext *ctxt,
           if (get_options().mysql_task.driver ==
               interface::Options::MysqlTask::DriverType::kDatabase)
             db.execute_function_at_server(
-                session.get(), user_id, user_ownership_column,
-                schema_entry_->name, entry_->name, get_endpoint_url(endpoint_),
-                get_options().mysql_task, doc, entry_->fields);
+                session.get(), user_id, get_user_name(ctxt),
+                user_ownership_column, schema_entry_->name, entry_->name,
+                get_endpoint_url(endpoint_), get_options().mysql_task, doc,
+                entry_->fields);
           else
             db.execute_function_at_router(
                 std::move(session), std::move(pool_ref), user_id,

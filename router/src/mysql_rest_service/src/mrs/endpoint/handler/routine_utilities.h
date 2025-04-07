@@ -133,6 +133,16 @@ inline mysqlrouter::sqlstring get_user_id(rest::RequestContext *ctxt,
   return sql;
 }
 
+inline std::string get_user_name(rest::RequestContext *ctxt) {
+  // this will not be set if the endpoint does not require auth, even if the
+  // request IS authenticated
+  if (!ctxt->user.has_user_id) {
+    throw http::Error(HttpStatusCode::Forbidden);
+  }
+
+  return ctxt->user.name;
+}
+
 }  // namespace handler
 }  // namespace endpoint
 }  // namespace mrs

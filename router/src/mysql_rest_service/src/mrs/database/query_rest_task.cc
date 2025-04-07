@@ -25,12 +25,14 @@
 
 #include "mrs/database/query_rest_task.h"
 #include <map>
+#include <vector>
 #include "helper/container/generic.h"
 #include "helper/json/rapid_json_iterator.h"
 #include "helper/json/to_sqlstring.h"
 #include "helper/json/to_string.h"
 #include "mrs/database/helper/sp_function_query.h"
 #include "mrs/http/error.h"
+#include "mysql/harness/string_utils.h"
 #include "mysql/harness/utility/string.h"
 #include "mysqlrouter/utils_sqlstring.h"
 
@@ -49,6 +51,23 @@ inline std::string join_script(const std::vector<std::string> &script) {
   }
   return r;
 }
+
+std::string prepare_monitor_script(const std::vector<std::string> &script,
+                                   const std::string &quoted_user_id,
+                                   const std::string &connection_id,
+                                   const std::string &thread_id) {
+  std::string sql;
+  // @task_id is by the monitoring event in mysql_tasks
+  sql.append("SET @task_app_user_id=" + quoted_user_id + "; ");
+  sql.append("SET @task_connection_id=" + connection_id + "; ");
+  sql.append("SET @task_thread_id=" + thread_id + ";\n");
+  // monitor thread starts before query, so it's ok for start time to be earlier
+  sql.append("SET @task_start_time=NOW(6);\n");
+  sql.append(join_script(script));
+
+  return sql;
+}
+
 }  // namespace
 
 QueryRestMysqlTask::QueryRestMysqlTask(
@@ -168,8 +187,9 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_function_call(
 
 mysqlrouter::sqlstring QueryRestMysqlTask::wrap_async_server_call(
     const std::string &schema, const mysqlrouter::sqlstring &user_id,
-    const MysqlTaskOptions &task_options, mysqlrouter::sqlstring query,
-    std::list<std::string> preamble, std::list<std::string> postamble) {
+    const std::string &user_name, const MysqlTaskOptions &task_options,
+    mysqlrouter::sqlstring query, std::list<std::string> preamble,
+    std::list<std::string> postamble) {
   std::string task_sql;
   {
     for (const auto &s : preamble) {
@@ -189,8 +209,10 @@ mysqlrouter::sqlstring QueryRestMysqlTask::wrap_async_server_call(
       0);
 
   sql << task_sql << user_id
-      << (task_options.event_schema.empty() ? schema
-                                            : task_options.event_schema)
+      << (task_options.event_schema.empty()
+              ? schema
+              : mysql_harness::replace(task_options.event_schema, "$username",
+                                       user_name))
       << nullptr  // task_type
       << (task_options.name.empty() ? "REST:" + url_ : task_options.name)
       << nullptr   // task_data
@@ -206,14 +228,14 @@ mysqlrouter::sqlstring QueryRestMysqlTask::wrap_async_server_call(
 
 void QueryRestMysqlTask::execute_procedure_at_server(
     collector::CountedMySQLSession *session,
-    const mysqlrouter::sqlstring &user_id,
+    const mysqlrouter::sqlstring &user_id, const std::string &user_name,
     std::optional<std::string> user_ownership_column, const std::string &schema,
     const std::string &object, const std::string &url,
     const MysqlTaskOptions &task_options, const rapidjson::Document &doc,
     const ResultSets &rs) {
   url_ = url;
-  execute_at_server(session, user_id, user_ownership_column, true, schema,
-                    object, url, task_options, doc, rs);
+  execute_at_server(session, user_id, user_name, user_ownership_column, true,
+                    schema, object, url, task_options, doc, rs);
 }
 
 void QueryRestMysqlTask::execute_procedure_at_router(
@@ -231,15 +253,15 @@ void QueryRestMysqlTask::execute_procedure_at_router(
 
 void QueryRestMysqlTask::execute_function_at_server(
     collector::CountedMySQLSession *session,
-    const mysqlrouter::sqlstring &user_id,
+    const mysqlrouter::sqlstring &user_id, const std::string &user_name,
     std::optional<std::string> user_ownership_column, const std::string &schema,
     const std::string &object, const std::string &url,
     const MysqlTaskOptions &task_options, const rapidjson::Document &doc,
     const ResultSets &rs) {
   url_ = url;
 
-  execute_at_server(session, user_id, user_ownership_column, false, schema,
-                    object, url, task_options, doc, rs);
+  execute_at_server(session, user_id, user_name, user_ownership_column, false,
+                    schema, object, url, task_options, doc, rs);
 }
 
 void QueryRestMysqlTask::execute_function_at_router(
@@ -257,7 +279,7 @@ void QueryRestMysqlTask::execute_function_at_router(
 
 void QueryRestMysqlTask::execute_at_server(
     collector::CountedMySQLSession *session,
-    const mysqlrouter::sqlstring &user_id,
+    const mysqlrouter::sqlstring &user_id, const std::string &user_name,
     std::optional<std::string> user_ownership_column, bool is_procedure,
     const std::string &schema, const std::string &object,
     const std::string &url, const MysqlTaskOptions &task_options,
@@ -276,9 +298,9 @@ void QueryRestMysqlTask::execute_at_server(
     call_sql = build_function_call(schema, object, user_id,
                                    user_ownership_column, rs, doc, &postamble);
 
-  query_ =
-      wrap_async_server_call(schema, user_id, task_options, std::move(call_sql),
-                             std::move(preamble), std::move(postamble));
+  query_ = wrap_async_server_call(schema, user_id, user_name, task_options,
+                                  std::move(call_sql), std::move(preamble),
+                                  std::move(postamble));
   execute(session);
 
   std::string task_id;
@@ -306,14 +328,24 @@ void QueryRestMysqlTask::execute_at_router(
   using namespace std::string_literals;
   using namespace helper::json::sql;
 
+  std::string connection_id;
+  std::string thread_id;
   std::string task_id;
+  std::string user_name;
   std::string progress_event_name;
-  auto row = session->query_one("select uuid(), replace(uuid(), '-', '')");
+  auto row = session->query_one(
+      "select uuid(), replace(uuid(), '-', ''), connection_id(),"
+      "  ps_current_thread_id(), mysql_tasks.extract_username(current_user())");
   if (row && (*row)[0]) {
     task_id = (*row)[0];
+    connection_id = (*row)[2] ? (*row)[2] : "NULL";
+    thread_id = (*row)[3] ? (*row)[3] : "NULL";
+    user_name = (*row)[4] ? (*row)[4] : "";
     mysqlrouter::sqlstring tmp("!.!");
-    tmp << (task_options.event_schema.empty() ? schema
-                                              : task_options.event_schema);
+    tmp << (task_options.event_schema.empty()
+                ? schema
+                : mysql_harness::replace(task_options.event_schema, "$username",
+                                         user_name));
     tmp << (*row)[1];
     progress_event_name = tmp.str();
   } else {
@@ -354,7 +386,8 @@ void QueryRestMysqlTask::execute_at_router(
   if (task_options.monitoring_sql.empty())
     query_ << nullptr;
   else
-    query_ << join_script(task_options.monitoring_sql);
+    query_ << prepare_monitor_script(task_options.monitoring_sql, user_id,
+                                     connection_id, thread_id);
   execute(session.get());
 
   query_ = {
