@@ -35,6 +35,8 @@ Code documentation: @ref GroupLibsMysqlUtils.
 
 This is a header-only library, containing various utility functions, such as:
 
+- call_and_catch.h: protect function calls from exceptions, returning a status
+  instead.
 - concat.h: vararg function to concatenate many values to a string
 - deprecate_header.h: macro deprecating a header
 - enumeration_utils.h: to_underlying (backported from C++23), to_enumeration

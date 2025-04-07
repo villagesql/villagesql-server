@@ -30,6 +30,7 @@ INCLUDE_DIRECTORIES(SYSTEM ${GMOCK_INCLUDE_DIRS})
 
 # Add tests
 SET(TESTS
+  call_and_catch
   enumerations
 )
 
