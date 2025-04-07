@@ -34,13 +34,12 @@
 
 namespace mysql::utils {
 
-namespace detail {
 /// Primary template for helper struct used to define Tuple_find_index.
 ///
 /// This has the member constant `value` set to the smallest number N >= index
 /// such that the type of the Nth component satisfies the predicate, or no such
 /// member constant if there is no such component.
-template <class Tuple, template <class> class Pred, std::size_t index>
+template <class Tuple, template <class> class Pred, std::size_t index = 0>
 struct Tuple_find_helper {};
 
 /// Specialization of Tuple_find_helper to the case where the component at
@@ -63,7 +62,7 @@ struct Tuple_find_helper<Tuple, Pred, index>
 ///
 /// This has the member constant `value` set to the number of positions N >=
 /// index such that the type of the Nth component satisfies the predicate.
-template <class Tuple, template <class> class Pred, std::size_t index>
+template <class Tuple, template <class> class Pred, std::size_t index = 0>
 struct Tuple_count_helper : public std::integral_constant<std::size_t, 0> {};
 
 /// Specialization of Tuple_count_helper to the case where index is in range.
@@ -77,6 +76,7 @@ struct Tuple_count_helper<Tuple, Pred, index>
               // Increment by 1 if the predicate matches.
               (Pred<std::tuple_element_t<index, Tuple>>::value ? 1 : 0)> {};
 
+namespace detail {
 /// Struct template with with one template argument, having a member type
 /// Predicate, which is a type predicate that holds for types that are equal to
 /// the template argument of the (outer) struct.
@@ -107,7 +107,7 @@ struct Is_same_helper {
 /// @endcode
 template <class Tuple, template <class> class Pred>
 constexpr std::size_t Tuple_find_index =
-    detail::Tuple_find_helper<Tuple, Pred, 0>::value;
+    Tuple_find_helper<Tuple, Pred, 0>::value;
 
 /// The first element type in the tuple-like type that matches the type
 /// predicate.
@@ -129,7 +129,7 @@ constexpr std::size_t Tuple_find_index =
 ///   short>);
 /// @endcode
 template <class Tuple, template <class> class Pred>
-using Tuple_find = std::tuple_element_t<Tuple_find_index<Tuple, Pred>, Tuple>;
+using Tuple_find = Tuple_find_helper<Tuple, Pred>::type;
 
 /// True if at least one element type in the tuple-like type mathes the type
 /// predicate.
@@ -153,8 +153,8 @@ using Tuple_find = std::tuple_element_t<Tuple_find_index<Tuple, Pred>, Tuple>;
 ///                                    std::tuple<std::string, float>>);
 /// @endcode
 template <class Tuple, template <class> class Pred>
-concept Tuple_has_matching_element_type = requires(
-    detail::Tuple_find_helper<Tuple, Pred, 0> helper) { helper.value; };
+concept Tuple_has_matching_element_type =
+    requires { typename Tuple_find_helper<Tuple, Pred, 0>::value; };
 
 /// Return the value of the first component of the tuple-like object whose type
 /// matches the given type predicate.
@@ -197,7 +197,7 @@ concept Tuple_has_element_type = Tuple_has_matching_element_type<
 /// (https://en.cppreference.com/w/cpp/named_req/UnaryTypeTrait.html)
 template <class Tuple, template <class> class Pred>
 constexpr std::size_t Tuple_matching_element_type_count =
-    detail::Tuple_count_helper<Tuple, Pred, 0>::value;
+    Tuple_count_helper<Tuple, Pred>::value;
 
 }  // namespace mysql::utils
 

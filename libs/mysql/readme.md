@@ -47,6 +47,7 @@ Libraries defined on this level:
 - \subpage PageLibsMysqlMeta
 - \subpage PageLibsMysqlRanges
 - \subpage PageLibsMysqlSerialization
+- \subpage PageLibsMysqlStrconv
 - \subpage PageLibsMysqlUtils
 
 
@@ -72,6 +73,8 @@ Libraries defined on this level:
 \defgroup GroupLibsMysqlRanges Ranges
 \ingroup GroupLibsMysql
 \defgroup GroupLibsMysqlSerialization Serialization
+\ingroup GroupLibsMysql
+\defgroup GroupLibsMysqlStrconv Strconv
 \ingroup GroupLibsMysql
 \defgroup GroupLibsMysqlUtils Utils
 \ingroup GroupLibsMysql
