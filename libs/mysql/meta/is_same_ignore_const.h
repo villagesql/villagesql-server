@@ -1,4 +1,4 @@
-// Copyright (c) 2025, Oracle and/or its affiliates.
+// Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 //
 // This program is free software; you can redistribute it and/or modify
 // it under the terms of the GNU General Public License, version 2.0,
@@ -19,24 +19,28 @@
 //
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, write to the Free Software
-// Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
+// Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA.
 
-#ifndef MYSQL_META_META_H
-#define MYSQL_META_META_H
+#ifndef MYSQL_META_IS_SAME_IGNORE_CONST_H
+#define MYSQL_META_IS_SAME_IGNORE_CONST_H
 
 /// @file
 /// Experimental API header
 
-// Is_const_ref<T> is true if T has const and reference qualifiers.
-#include "mysql/meta/is_const_ref.h"
+#include <concepts>  // same_as
 
-// Is_same_ignore_const<T, U> is true if T and U are the same or differ only in
-// const-ness.
-#include "mysql/meta/is_same_ignore_const.h"
+/// @addtogroup GroupLibsMysqlMeta
+/// @{
 
-// Is_specialization<T, U> is true if class T is a specialization of class
-// template U, where U takes type template arguments. Is_nontype_specialization
-// is the same, but works when U takes non-type template arguments.
-#include "mysql/meta/is_specialization.h"
+namespace mysql::meta {
 
-#endif  // ifndef MYSQL_META_META_H
+/// true if Type1 and Type2 are equal, const-ness ignored
+template <class Type1, class Type2>
+concept Is_same_ignore_const = std::same_as<const Type1, const Type2>;
+
+}  // namespace mysql::meta
+
+// addtogroup GroupLibsMysqlMeta
+/// @}
+
+#endif  // ifndef MYSQL_META_IS_SAME_IGNORE_CONST_H

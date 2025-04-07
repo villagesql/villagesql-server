@@ -22,6 +22,7 @@
 # 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 SET(TARGET_HEADERS
   is_const_ref.h
+  is_same_ignore_const.h
   is_specialization.h
   meta.h
 )

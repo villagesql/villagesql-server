@@ -47,6 +47,9 @@ Currently, it contains the following:
 
 - is_const_ref.h: concept that is true for types that are const ref.
 
+- is_same_ignore_const.h: metaprogramming utility to determine if two types are
+  equal, ignoring const-ness.
+
 - is_specialization.h: utility to determine if a template is a specialization
   of another.
 
