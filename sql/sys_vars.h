@@ -1545,7 +1545,7 @@ class Sys_var_flagset : public Sys_var_typelib {
     char buff[STRING_BUFFER_USUAL_SIZE];
     String str(buff, sizeof(buff), system_charset_info), *res;
     ulonglong default_value, current_value;
-    if (var->type == OPT_GLOBAL) {
+    if (var->is_global_persist() || scope() == GLOBAL) {
       default_value = option.def_value;
       current_value = global_var(ulonglong);
     } else {

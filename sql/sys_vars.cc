@@ -7591,3 +7591,21 @@ Sys_var_bool Sys_restrict_fk_on_non_standard_key(
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(restrict_fk_on_non_standard_key_check), ON_UPDATE(nullptr));
 }  // namespace
+
+#ifndef NDEBUG
+namespace {
+ulonglong debug_a_global_flagset;
+constexpr const uint64_t DEBUG_A_GLOBAL_FLAGSET_F1{1ULL << 0};
+constexpr const uint64_t DEBUG_A_GLOBAL_FLAGSET_F2{1ULL << 1};
+constexpr const uint64_t DEBUG_A_GLOBAL_FLAGSET_LAST{1ULL << 2};
+constexpr uint64_t DEBUG_A_GLOBAL_FLAGSET_DEFAULT{DEBUG_A_GLOBAL_FLAGSET_F1 |
+                                                  DEBUG_A_GLOBAL_FLAGSET_F2};
+const char *debug_a_global_flagset_names[] = {"f1", "f2", "default", NullS};
+Sys_var_flagset Sys_debug_a_global_flagset(
+    "debug_a_global_flagset",
+    "Debug variable to test a global persistable flagset variable.",
+    GLOBAL_VAR(debug_a_global_flagset), CMD_LINE(REQUIRED_ARG),
+    debug_a_global_flagset_names, DEFAULT(DEBUG_A_GLOBAL_FLAGSET_DEFAULT),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+}  // namespace
+#endif /* NDEBUG */
