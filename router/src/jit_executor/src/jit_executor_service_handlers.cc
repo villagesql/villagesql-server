@@ -51,8 +51,7 @@ bool ServiceHandlers::init() {
   init_common_context();
 
   if (m_common_context->start()) {
-    m_context_pool =
-        std::make_shared<ContextPool>(pool_size(), m_common_context.get());
+    m_context_pool = std::make_shared<ContextPool>(m_common_context.get());
 
     return true;
   } else {
@@ -153,16 +152,12 @@ std::chrono::seconds ServiceHandlers::idle_time() const {
   return std::chrono::duration_cast<std::chrono::seconds>(diff);
 }
 
-uint64_t ServiceHandlers::pool_size() const {
-  return m_config.pool_size.value_or(m_config.default_pool_size);
+uint64_t ServiceHandlers::memory_units() const {
+  return m_config.memory_units.value_or(k_default_memory_units);
 }
 
 void ServiceHandlers::set_max_heap_size(uint64_t size) {
   m_config.max_heap_size = size;
-}
-
-void ServiceHandlers::set_default_pool_size(uint64_t size) {
-  m_config.default_pool_size = size;
 }
 
 std::shared_ptr<IContextHandle> ServiceHandlers::get_context(

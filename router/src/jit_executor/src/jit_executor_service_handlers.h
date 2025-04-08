@@ -57,10 +57,9 @@ class ServiceHandlers : public IServiceHandlers {
   std::string error() override;
 
   std::chrono::seconds idle_time() const override;
-  uint64_t pool_size() const override;
+  uint64_t memory_units() const override;
 
   void set_max_heap_size(uint64_t) override;
-  void set_default_pool_size(uint64_t) override;
 
  private:
   void init_common_context();
