@@ -78,10 +78,6 @@ void JitExecutorComponent::update_global_config(const std::string &options) {
       if (jit_executor.IsObject()) {
         config.maximum_ram_size = get_value(jit_executor, "maximumRamUsage");
         config.maximum_idle_time = get_value(jit_executor, "maximumIdleTime");
-        if (auto pool_size = get_value(jit_executor, "defaultPoolSize");
-            pool_size.has_value()) {
-          config.default_pool_size = *pool_size;
-        }
       }
     }
   }
@@ -103,19 +99,13 @@ void JitExecutorComponent::stop_debug_context(const std::string &service_id) {
 void JitExecutorComponent::update_active_contexts(
     const std::pair<std::string, std::shared_ptr<IServiceHandlers>>
         &replacement) {
-  m_handler_errors.clear();
-
-  for (const auto &it : m_service_context_handlers) {
-    it.second->set_default_pool_size(m_global_config.default_pool_size);
-  }
-
   std::unordered_map<std::string, std::shared_ptr<IServiceHandlers>>
       all_context_handlers = std::move(m_service_context_handlers);
 
   std::unordered_map<std::string, std::shared_ptr<IServiceHandlers>>
       candidate_context_handlers;
 
-  uint64_t total_pool = 0;
+  uint64_t total_memory_units = 0;
   for (const auto &it : all_context_handlers) {
     // Adds the existing context handler to be discarded
     it.second->teardown();
@@ -127,7 +117,7 @@ void JitExecutorComponent::update_active_contexts(
          static_cast<uint64_t>(it.second->idle_time().count()) <
              *m_global_config.maximum_idle_time)) {
       // Adds to the global count of pool items
-      total_pool += it.second->pool_size();
+      total_memory_units += it.second->memory_units();
 
       // Creates a new handler from the existing one
       auto source_handler =
@@ -139,10 +129,7 @@ void JitExecutorComponent::update_active_contexts(
 
   // Adds the replacement handler to the total pool size
   if (!replacement.first.empty()) {
-    replacement.second->set_default_pool_size(
-        m_global_config.default_pool_size);
-
-    total_pool += replacement.second->pool_size();
+    total_memory_units += replacement.second->memory_units();
 
     candidate_context_handlers.emplace(std::move(replacement));
   }
@@ -150,14 +137,14 @@ void JitExecutorComponent::update_active_contexts(
   // Now updates the memory limit for each active handler and starts it
   // Total pool is verified here as it could be 0, meaning, no active context
   // handlers will be left after this update
-  if (total_pool != 0 && m_global_config.maximum_ram_size.has_value()) {
+  if (total_memory_units != 0 && m_global_config.maximum_ram_size.has_value()) {
     // Use double to get the most accurate value per pool item
-    double mem_per_pool_item =
-        *m_global_config.maximum_ram_size / static_cast<double>(total_pool);
+    double mem_per_pool_item = *m_global_config.maximum_ram_size /
+                               static_cast<double>(total_memory_units);
 
     for (const auto &it : candidate_context_handlers) {
       it.second->set_max_heap_size(
-          static_cast<uint64_t>(mem_per_pool_item * it.second->pool_size()));
+          static_cast<uint64_t>(mem_per_pool_item * it.second->memory_units()));
     }
   }
 

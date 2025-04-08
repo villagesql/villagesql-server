@@ -70,6 +70,9 @@ class Polyglot_common_context {
 
   Collectable_registry *collectable_registry() { return &m_registry; }
 
+  double get_heap_usage_percent();
+  std::string get_gc_status();
+
  protected:
   poly_isolate m_isolate = nullptr;
   poly_thread m_thread = nullptr;
@@ -88,6 +91,11 @@ class Polyglot_common_context {
   Store m_engine;
   std::unique_ptr<Polyglot_scope> m_scope;
   Collectable_registry m_registry;
+  int64_t m_max_heap_size = 0;
+  int64_t *m_heap_status = nullptr;
+
+  // Holds the used capacity for each generation
+  std::vector<int64_t *> m_generation_used;
 };
 
 }  // namespace polyglot

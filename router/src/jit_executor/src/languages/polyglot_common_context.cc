@@ -26,6 +26,7 @@
 #include "languages/polyglot_common_context.h"
 
 #include <cstring>
+#include <numeric>
 
 #include "mysql/harness/scoped_callback.h"
 #include "native_wrappers/polyglot_collectable.h"
@@ -80,6 +81,72 @@ void Polyglot_common_context::initialize(
   // on GraalVM which is triggers the creation of a custom engine per created
   // context.
   init_engine();
+
+  // Registers long constant address to be able to poll the garbage collector
+  // status.
+  std::string heap_status_key = "com.oracle.svm.gcInProgress";
+  poly_perf_data_get_address_of_int64_t(thread(), heap_status_key.data(),
+                                        &m_heap_status);
+
+  // Registers long constant to identify the number of generations being used
+  int64_t *generations_ptr = nullptr;
+  std::string generations_key = "sun.gc.policy.generations";
+  poly_perf_data_get_address_of_int64_t(thread(), generations_key.data(),
+                                        &generations_ptr);
+
+  if (generations_ptr != nullptr) {
+    const auto generations = *generations_ptr;
+
+    m_generation_used.resize(generations);
+
+    for (auto generation = 0; generation < generations; generation++) {
+      m_generation_used[generation] = nullptr;
+
+      const auto str_generation = std::to_string(generation);
+
+      // Registers long constant to identify the max capacity of the generation
+      int64_t *generation_max_ptr = nullptr;
+      auto max_capacity_key =
+          "sun.gc.generation." + str_generation + ".maxCapacity";
+      if (poly_ok ==
+          poly_perf_data_get_address_of_int64_t(
+              thread(), max_capacity_key.data(), &generation_max_ptr)) {
+        // Sometimes the performance counter initialization is delayed,
+        // returning 0 as value, we need to wait until it is initialized to
+        // properly get the amount memory capacity
+        do {
+          m_max_heap_size += *generation_max_ptr;
+        } while (0 == *generation_max_ptr);
+
+        // Registers long constant to enable polling the actual use of the
+        // generation
+        auto capacity_key = "sun.gc.generation." + str_generation + ".capacity";
+        poly_perf_data_get_address_of_int64_t(thread(), capacity_key.data(),
+                                              &m_generation_used[generation]);
+      }
+    }
+  }
+}
+
+double Polyglot_common_context::get_heap_usage_percent() {
+  auto used =
+      std::accumulate(m_generation_used.cbegin(), m_generation_used.cend(),
+                      uint64_t{0}, [](auto a, const auto generation) {
+                        return a + (generation ? *generation : 0);
+                      });
+
+  return (100.0 * used) / m_max_heap_size;
+}
+
+std::string Polyglot_common_context::get_gc_status() {
+  if (m_heap_status != nullptr) {
+    if (*m_heap_status == 1)
+      return "Running";
+    else if (*m_heap_status == 0)
+      return "Idle";
+  }
+
+  return "Unknown";
 }
 
 void Polyglot_common_context::finalize() {

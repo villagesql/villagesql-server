@@ -26,11 +26,13 @@
 #ifndef ROUTER_SRC_JIT_EXECUTOR_INCLUDE_MYSQLROUTER_JIT_EXECUTOR_COMPONENT_H_
 #define ROUTER_SRC_JIT_EXECUTOR_INCLUDE_MYSQLROUTER_JIT_EXECUTOR_COMPONENT_H_
 
+#include <algorithm>
 #include <chrono>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <unordered_map>
 #include <utility>
@@ -43,26 +45,22 @@
 
 namespace jit_executor {
 
-static const uint64_t k_default_pool_size = 8;
-
+static const uint64_t k_default_memory_units = 10;
 struct GlobalConfig {
   bool operator==(const GlobalConfig &o) const {
-    return std::tie(maximum_ram_size, maximum_idle_time, default_pool_size) ==
-           std::tie(o.maximum_ram_size, o.maximum_idle_time,
-                    o.default_pool_size);
+    return std::tie(maximum_ram_size, maximum_idle_time) ==
+           std::tie(o.maximum_ram_size, o.maximum_idle_time);
   }
 
   std::optional<uint64_t> maximum_ram_size;
   std::optional<uint64_t> maximum_idle_time;
-  uint64_t default_pool_size = k_default_pool_size;
 };
 
 struct ServiceHandlerConfig {
   std::shared_ptr<shcore::polyglot::IFile_system> fs;
   std::vector<std::string> module_files;
   shcore::Dictionary_t globals;
-  std::optional<uint64_t> pool_size;
-  uint64_t default_pool_size = k_default_pool_size;
+  std::optional<uint64_t> memory_units;
   std::optional<uint64_t> max_heap_size;
 };
 
@@ -82,10 +80,9 @@ class IServiceHandlers {
   virtual void teardown() = 0;
 
   virtual std::chrono::seconds idle_time() const = 0;
-  virtual uint64_t pool_size() const = 0;
+  virtual uint64_t memory_units() const = 0;
 
   virtual void set_max_heap_size(uint64_t) = 0;
-  virtual void set_default_pool_size(uint64_t) = 0;
 };
 
 /**

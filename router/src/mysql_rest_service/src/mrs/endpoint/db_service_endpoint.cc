@@ -148,7 +148,7 @@ void DbServiceEndpoint::update_content_set_data() {
 }
 
 namespace {
-std::optional<uint64_t> get_pool_size(const std::string &options) {
+std::optional<uint64_t> get_memory_units(const std::string &options) {
   if (!options.empty()) {
     rapidjson::Document doc;
     doc.Parse(options.data(), options.size());
@@ -156,8 +156,8 @@ std::optional<uint64_t> get_pool_size(const std::string &options) {
     if (doc.IsObject() && doc.HasMember("jitExecutor")) {
       const auto &node = doc["jitExecutor"];
 
-      if (node.HasMember("poolSize")) {
-        return node["poolSize"].GetUint();
+      if (node.HasMember("memoryUnits") && node.IsUint()) {
+        return node["memoryUnits"].GetUint();
       }
     }
   }
@@ -184,6 +184,10 @@ DbServiceEndpoint::get_scripting_context() {
 
 void DbServiceEndpoint::update() {
   Parent::update();
+#ifdef HAVE_JIT_EXECUTOR_PLUGIN
+  jit_executor_config_.memory_units =
+      get_memory_units(get_options().value_or(""));
+#endif
   observability::EntityCounter<kEntityCounterUpdatesServices>::increment();
 }
 
