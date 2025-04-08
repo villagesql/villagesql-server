@@ -32,6 +32,10 @@
 # when set, WITH_KERBEROS is set to WITH_KERBEROS_WIN
 # and KERBEROS_LIB_SSPI is set to 1
 
+# cmake -DWITH_KERBEROS_MAC=<path/to/custom/installation>|none
+# ignored when not on APPLE
+# when set, WITH_KERBEROS is set to WITH_KERBEROS_MAC
+
 INCLUDE (CheckIncludeFile)
 INCLUDE (CheckIncludeFiles)
 
@@ -327,6 +331,14 @@ MACRO(MYSQL_CHECK_KERBEROS)
   ENDIF()
 
   IF(APPLE)
+    # Add option WITH_KERBEROS_MAC which will be ignored on older branches.
+    IF(WITH_KERBEROS_MAC)
+      MESSAGE(STATUS "WITH_KERBEROS_MAC is specified. \
+        Setting WITH_KERBEROS=${WITH_KERBEROS_MAC}.")
+      SET(WITH_KERBEROS ${WITH_KERBEROS_MAC})
+      SET(WITH_KERBEROS ${WITH_KERBEROS_MAC}
+        CACHE STRING "Custom kerberos library" FORCE)
+    ENDIF()
     IF(WITH_KERBEROS)
       SET(APPLE_WITH_CUSTOM_KERBEROS 1)
       SET(APPLE_WITH_CUSTOM_KERBEROS 1 CACHE INTERNAL "" FORCE)
