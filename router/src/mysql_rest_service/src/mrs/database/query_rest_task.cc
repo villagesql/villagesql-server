@@ -55,14 +55,15 @@ inline std::string join_script(const std::vector<std::string> &script) {
 std::string prepare_monitor_script(const std::vector<std::string> &script,
                                    const std::string &quoted_user_id,
                                    const std::string &connection_id,
-                                   const std::string &thread_id) {
+                                   const std::string &thread_id,
+                                   const std::string &start_time) {
   std::string sql;
   // @task_id is by the monitoring event in mysql_tasks
   sql.append("SET @task_app_user_id=" + quoted_user_id + "; ");
   sql.append("SET @task_connection_id=" + connection_id + "; ");
-  sql.append("SET @task_thread_id=" + thread_id + ";\n");
+  sql.append("SET @task_thread_id=" + thread_id + "; ");
   // monitor thread starts before query, so it's ok for start time to be earlier
-  sql.append("SET @task_start_time=NOW(6);\n");
+  sql.append("SET @task_start_time='" + start_time + "';\n");
   sql.append(join_script(script));
 
   return sql;
@@ -333,14 +334,17 @@ void QueryRestMysqlTask::execute_at_router(
   std::string task_id;
   std::string user_name;
   std::string progress_event_name;
+  std::string start_time;
   auto row = session->query_one(
       "select uuid(), replace(uuid(), '-', ''), connection_id(),"
-      "  ps_current_thread_id(), mysql_tasks.extract_username(current_user())");
+      "  ps_current_thread_id(), mysql_tasks.extract_username(current_user()),"
+      "  now(6)");
   if (row && (*row)[0]) {
     task_id = (*row)[0];
     connection_id = (*row)[2] ? (*row)[2] : "NULL";
     thread_id = (*row)[3] ? (*row)[3] : "NULL";
     user_name = (*row)[4] ? (*row)[4] : "";
+    start_time = (*row)[5] ? (*row)[5] : "";
     mysqlrouter::sqlstring tmp("!.!");
     tmp << (task_options.event_schema.empty()
                 ? schema
@@ -387,7 +391,7 @@ void QueryRestMysqlTask::execute_at_router(
     query_ << nullptr;
   else
     query_ << prepare_monitor_script(task_options.monitoring_sql, user_id,
-                                     connection_id, thread_id);
+                                     connection_id, thread_id, start_time);
   execute(session.get());
 
   query_ = {
