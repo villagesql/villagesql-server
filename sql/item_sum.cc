@@ -2940,7 +2940,7 @@ bool Item_sum_hybrid::compute() {
          ((m_window->rowno_in_frame() == 1) ||
           (null_value && m_window->rowno_in_frame() > 1) ||
           m_window->rowno_being_visited() == 0 /* No FROM; one const row */)) ||
-        (!m_window->needs_buffering() && m_cnt == 1)) {
+        (!m_window->needs_buffering() && (null_value || m_cnt == 1))) {
       assert(m_nulls_first);
       value->store_and_cache(args[0]);
       null_value = value->null_value;
