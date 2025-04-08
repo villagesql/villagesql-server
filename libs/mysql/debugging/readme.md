@@ -35,6 +35,8 @@ Code documentation: @ref GroupLibsMysqlDebugging.
 This library provides general-purpose debugging tools.  Currently, it contains
 the following:
 
+- oom_test.h: This is a test utility to test out-of-memory handling.
+
 - unittest_assertions.h: The following test assertions:
 
   - macro ASSERT_VOID(x): assert at compile-time that the result type from
