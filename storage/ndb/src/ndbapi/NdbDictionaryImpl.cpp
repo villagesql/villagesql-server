@@ -5588,8 +5588,11 @@ NdbEventImpl *NdbDictionaryImpl::getEvent(const char *eventName,
     DBUG_PRINT("error", ("Unexpected number of blob events "
                          "present Expect : %d Actual : %d",
                          blob_count, blob_event_count));
-    m_error.code = 241; /* Invalid schema object version */
-    DBUG_RETURN(nullptr);
+    if (ndb_dictionary_is_mysqld) {
+      m_error.code = 241; /* Invalid schema object version */
+      DBUG_RETURN(nullptr);
+    }
+    DBUG_PRINT("error", ("Blob event mismatch, but not MySQLD so ignoring"));
   }
 
   // Return the successfully created event
