@@ -7810,7 +7810,7 @@ bool Item_func_match::fix_fields(THD *thd, Item **ref) {
     }
   }
   return agg_item_collations_for_comparison(cmp_collation, func_name(), args,
-                                            arg_count, 0);
+                                            arg_count);
 }
 
 void Item_func_match::update_used_tables() {

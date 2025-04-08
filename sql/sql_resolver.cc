@@ -5436,7 +5436,7 @@ bool Query_block::resolve_table_value_constructor_values(THD *thd) {
       } else {
         Item_values_column *column = down_cast<Item_values_column *>(
             GetNthVisibleField(fields, item_index));
-        if (column->unify_types(thd, item)) return true;
+        if (column->unify_types(item)) return true;
         column->add_used_tables(item);
         column->fixed = true;  // Does not have regular fix_fields()
       }

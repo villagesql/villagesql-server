@@ -170,12 +170,13 @@ enum enum_check_fields : int {
 
 /// For use @see DTCollation::aggregate()
 enum Derivation {
-  DERIVATION_IGNORABLE = 6,
+  DERIVATION_NONE = 7,
+  DERIVATION_NULL = 6,
   DERIVATION_NUMERIC = 5,
   DERIVATION_COERCIBLE = 4,
   DERIVATION_SYSCONST = 3,
   DERIVATION_IMPLICIT = 2,
-  DERIVATION_NONE = 1,
+  DERIVATION_UNUSED = 1,  // Avoids changes in COERCIBILITY() results
   DERIVATION_EXPLICIT = 0
 };
 

@@ -1349,10 +1349,10 @@ bool Arg_comparator::set_cmp_func(Item_func *owner_arg, Item **left_arg,
       Note this may be considered redundant for non-row arguments but necessary
       for row arguments.
      */
-    if (convert_const_strings(coll, left, 1, 1)) {
+    if (convert_const_strings(coll, left, 1)) {
       return true;
     }
-    if (convert_const_strings(coll, right, 1, 1)) {
+    if (convert_const_strings(coll, right, 1)) {
       return true;
     }
   } else if (try_year_cmp_func(type)) {

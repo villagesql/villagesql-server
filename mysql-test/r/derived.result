@@ -4791,7 +4791,7 @@ SELECT * FROM (SELECT _utf8mb4 'a' AS a) AS dt UNION SELECT c FROM t;
 a
 a
 SELECT _utf8mb4 'Â±' AS a UNION SELECT c FROM t;
-ERROR HY000: Cannot convert string '\xC2\xB1' from utf8mb4 to latin2
+ERROR HY000: Cannot convert string '\xC3\x82\xC2\xB1' from utf8mb4 to latin2
 SELECT * FROM (SELECT _utf8mb4 'Â±' AS a) AS dt UNION SELECT c FROM t;
 ERROR HY000: Cannot convert string '\xC2\xB1' from utf8mb4 to latin2
 SELECT _utf8mb4 'a' AS a UNION SELECT d FROM t;
