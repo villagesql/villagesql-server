@@ -254,6 +254,7 @@ Requires:       mysql-commercial-libs%{?_isa} >= %{min}
 Requires:       %{name}-libs%{?_isa} >= %{min}
 %endif
 Obsoletes:      mariadb
+Obsoletes:      mariadb-client-utils
 Obsoletes:      community-mysql < %{version}-%{release}
 Obsoletes:      mysql < %{version}-%{release}
 Provides:       mysql = %{version}-%{release}
