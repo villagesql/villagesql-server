@@ -5055,7 +5055,6 @@ ST_SCHEMA_TABLE *get_schema_table(enum enum_schema_tables schema_table_idx) {
 
 static TABLE *create_schema_table(THD *thd, Table_ref *table_list) {
   int field_count = 0;
-  Item *item;
   TABLE *table;
   mem_root_deque<Item *> fields(thd->mem_root);
   ST_SCHEMA_TABLE *schema_table = table_list->schema_table;
@@ -5064,6 +5063,7 @@ static TABLE *create_schema_table(THD *thd, Table_ref *table_list) {
   DBUG_TRACE;
 
   for (; fields_info->field_name; fields_info++) {
+    Item *item = nullptr;
     switch (fields_info->field_type) {
       case MYSQL_TYPE_TINY:
       case MYSQL_TYPE_LONG:
@@ -5077,8 +5077,10 @@ static TABLE *create_schema_table(THD *thd, Table_ref *table_list) {
         }
         item->unsigned_flag = (fields_info->field_flags & MY_I_S_UNSIGNED);
         break;
-      case MYSQL_TYPE_DATE:
       case MYSQL_TYPE_TIME:
+        assert(false);
+        return nullptr;
+      case MYSQL_TYPE_DATE:
       case MYSQL_TYPE_TIMESTAMP:
       case MYSQL_TYPE_DATETIME: {
         const Name_string field_name(fields_info->field_name,

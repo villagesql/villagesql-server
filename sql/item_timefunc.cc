@@ -79,6 +79,24 @@ using std::max;
 using std::min;
 
 /**
+  INVALID_VALUE  - Temporal value could not be evaluated
+  TIME_VALUE     - Temporal value of type TIME was evaluated
+  DATE_VALUE     - Temporal value of type DATE was evaluated (UNUSED)
+  DATETIME_VALUE - Temporal value of type DATE or DATETIME was evaluated
+*/
+enum class Temporal_type {
+  INVALID_VALUE = 0,
+  TIME_VALUE = 1,
+  DATE_VALUE = 2,
+  DATETIME_VALUE = 4
+};
+struct Temporal_val {
+  Temporal_type which;
+  Time_val time;
+  MYSQL_TIME datetime;
+};
+
+/**
   Check and adjust a time value with a warning.
 
   @param ltime    Time variable.
@@ -98,54 +116,52 @@ static bool adjust_time_range_with_warn(MYSQL_TIME *ltime, uint8 decimals) {
   return false;
 }
 
-/*
-  Convert seconds to MYSQL_TIME value with overflow checking.
+/**
+  Convert seconds to time value with overflow checking.
 
-  SYNOPSIS:
-    sec_to_time()
-    seconds          number of seconds
-    ltime            output MYSQL_TIME value
+  @param      seconds  number of seconds
+  @param[out] time     output time value
 
-  DESCRIPTION
-    If the 'seconds' argument is inside MYSQL_TIME data range, convert it to a
-    corresponding value.
-    Otherwise, truncate the resulting value to the nearest endpoint.
-    Note: Truncation in this context means setting the result to the MAX/MIN
-          value of TIME type if value is outside the allowed range.
-          If the number of decimals exceeds what is supported, the value
-          is rounded to the supported number of decimals.
+  If the 'seconds' argument is inside MYSQL_TIME data range, convert it to a
+  corresponding value.
+  Otherwise, truncate the resulting value to the nearest endpoint.
+  Note: Truncation in this context means setting the result to the MAX/MIN
+        value of TIME type if value is outside the allowed range.
+        If the number of decimals exceeds what is supported, the value
+        is rounded to the supported number of decimals.
 
-  RETURN
-    1                if the value was truncated during conversion
-    0                otherwise
+  @returns true if the value was truncated, otherwise false
 */
 
-static bool sec_to_time(lldiv_t seconds, MYSQL_TIME *ltime) {
-  int warning = 0;
-
-  set_zero_time(ltime, MYSQL_TIMESTAMP_TIME);
-
-  if (seconds.quot < 0 || seconds.rem < 0) {
-    ltime->neg = true;
-    seconds.quot = -seconds.quot;
-    seconds.rem = -seconds.rem;
-  }
-
+static bool sec_to_time(lldiv_t seconds, Time_val *time) {
   if (seconds.quot > TIME_MAX_VALUE_SECONDS) {
-    set_max_hhmmss(ltime);
+    time->set_extreme_value(false);
+    return true;
+  }
+  if (seconds.quot < -TIME_MAX_VALUE_SECONDS) {
+    time->set_extreme_value(true);
     return true;
   }
 
-  ltime->hour = (uint)(seconds.quot / 3600);
-  const uint sec = (uint)(seconds.quot % 3600);
-  ltime->minute = sec / 60;
-  ltime->second = sec % 60;
-  time_add_nanoseconds_adjust_frac(ltime, static_cast<uint>(seconds.rem),
-                                   &warning,
-                                   current_thd->is_fsp_truncate_mode());
+  bool negative = seconds.quot < 0 || seconds.rem < 0;
+  uint32_t second = std::abs(seconds.quot);
+  uint32_t fraction = std::abs(seconds.rem) / 1000;
+  uint32_t remainder = std::abs(seconds.rem) % 1000;
 
-  adjust_time_range(ltime, &warning);
-  return warning ? true : false;
+  if (!current_thd->is_fsp_truncate_mode() && remainder >= 500) {
+    if (++fraction == 1000000) {
+      second++;
+      fraction = 0;
+      if (second > TIME_MAX_VALUE_SECONDS) {
+        time->set_extreme_value(negative);
+        return true;
+      }
+    }
+  }
+
+  *time = Time_val(negative, second, fraction);
+
+  return false;
 }
 
 /** Array of known date_time formats */
@@ -336,22 +352,20 @@ static bool extract_date_time(const Date_time_format *format, const char *val,
 
           /* Exotic things */
         case 'W':
-          if ((weekday = check_word(my_locale_en_US.day_names, val, val_end,
-                                    &val)) <= 0)
-            goto err;
+          weekday = check_word(my_locale_en_US.day_names, val, val_end, &val);
+          if (weekday <= 0) goto err;
           break;
         case 'a':
-          if ((weekday = check_word(my_locale_en_US.ab_day_names, val, val_end,
-                                    &val)) <= 0)
-            goto err;
+          weekday =
+              check_word(my_locale_en_US.ab_day_names, val, val_end, &val);
+          if (weekday <= 0) goto err;
           break;
         case 'w':
           tmp = val + 1;
-          if ((weekday = (int)my_strtoll10(val, &tmp, &error)) < 0 ||
-              weekday >= 7)
-            goto err;
+          weekday = (int)my_strtoll10(val, &tmp, &error);
+          if (weekday < 0 || weekday >= 7) goto err;
           /* We should use the same 1 - 7 scale for %w as for %W */
-          if (!weekday) weekday = 7;
+          if (weekday == 0) weekday = 7;
           val = tmp;
           break;
         case 'j':
@@ -368,8 +382,9 @@ static bool extract_date_time(const Date_time_format *format, const char *val,
           sunday_first_n_first_week_non_iso = (*ptr == 'U' || *ptr == 'V');
           strict_week_number = (*ptr == 'V' || *ptr == 'v');
           tmp = val + min(val_len, 2);
-          if ((week_number = (int)my_strtoll10(val, &tmp, &error)) < 0 ||
-              (strict_week_number && !week_number) || week_number > 53)
+          week_number = (int)my_strtoll10(val, &tmp, &error);
+          if (week_number < 0 || (strict_week_number && !week_number) ||
+              week_number > 53)
             goto err;
           val = tmp;
           break;
@@ -503,14 +518,13 @@ static bool extract_date_time(const Date_time_format *format, const char *val,
   }
   return false;
 
-err : {
+err:
   char buff[128];
   strmake(buff, val_begin, min<size_t>(length, sizeof(buff) - 1));
   push_warning_printf(current_thd, Sql_condition::SL_WARNING,
                       ER_WRONG_VALUE_FOR_TYPE,
                       ER_THD(current_thd, ER_WRONG_VALUE_FOR_TYPE),
                       date_time_type, buff, "str_to_date");
-}
   return true;
 }
 
@@ -847,85 +861,163 @@ void Item_temporal_func::print(const THD *thd, String *str,
 
 type_conversion_status Item_temporal_hybrid_func::save_in_field_inner(
     Field *field, bool no_conversions) {
-  if (data_type() == MYSQL_TYPE_TIME) return save_time_in_field(field);
-  if (is_temporal_type_with_date(data_type())) return save_date_in_field(field);
-  return Item_str_func::save_in_field_inner(field, no_conversions);
+  switch (data_type()) {
+    case MYSQL_TYPE_TIME:
+      return save_time_in_field(field);
+    case MYSQL_TYPE_DATE:
+    case MYSQL_TYPE_DATETIME:
+    case MYSQL_TYPE_TIMESTAMP:
+      return save_date_in_field(field);
+    case MYSQL_TYPE_STRING:
+      return Item_str_func::save_in_field_inner(field, no_conversions);
+    default:
+      assert(false);
+  }
+  return TYPE_OK;
 }
 
 my_decimal *Item_temporal_hybrid_func::val_decimal(my_decimal *decimal_value) {
   assert(fixed);
-  if (data_type() == MYSQL_TYPE_TIME)
-    return val_decimal_from_time(decimal_value);
-  else if (data_type() == MYSQL_TYPE_DATETIME)
-    return val_decimal_from_date(decimal_value);
-  else {
-    MYSQL_TIME ltime;
-    my_time_flags_t flags = TIME_FUZZY_DATE;
-    if (sql_mode & MODE_NO_ZERO_IN_DATE) flags |= TIME_NO_ZERO_IN_DATE;
-    if (sql_mode & MODE_NO_ZERO_DATE) flags |= TIME_NO_ZERO_DATE;
-    if (sql_mode & MODE_INVALID_DATES) flags |= TIME_INVALID_DATES;
+  switch (data_type()) {
+    case MYSQL_TYPE_TIME:
+      return val_decimal_from_time(decimal_value);
+    case MYSQL_TYPE_DATETIME:
+    case MYSQL_TYPE_TIMESTAMP:
+      return val_decimal_from_date(decimal_value);
+    case MYSQL_TYPE_DATE:
+    case MYSQL_TYPE_STRING: {
+      MYSQL_TIME ltime;
+      my_time_flags_t flags = TIME_FUZZY_DATE;
+      if (sql_mode & MODE_NO_ZERO_IN_DATE) flags |= TIME_NO_ZERO_IN_DATE;
+      if (sql_mode & MODE_NO_ZERO_DATE) flags |= TIME_NO_ZERO_DATE;
+      if (sql_mode & MODE_INVALID_DATES) flags |= TIME_INVALID_DATES;
 
-    val_datetime(&ltime, flags);
-    return null_value ? nullptr
-           : ltime.time_type == MYSQL_TIMESTAMP_TIME
-               ? time2my_decimal(&ltime, decimal_value)
-               : date2my_decimal(&ltime, decimal_value);
+      if (eval_datetime(&ltime, flags)) return nullptr;
+      if (ltime.time_type == MYSQL_TIMESTAMP_TIME) {
+        Time_val time{ltime};
+        return time2my_decimal(&time, decimal_value);
+      } else {
+        return date2my_decimal(&ltime, decimal_value);
+      }
+    }
+    default:
+      assert(false);
   }
+  return nullptr;
 }
 
 bool Item_temporal_hybrid_func::get_date(MYSQL_TIME *ltime,
                                          my_time_flags_t fuzzy_date) {
   MYSQL_TIME tm;
-  if (val_datetime(&tm, fuzzy_date)) {
-    assert(null_value == true);
-    return true;
+  switch (data_type()) {
+    case MYSQL_TYPE_TIME: {
+      Time_val time;
+      if (val_time(&time)) return true;
+      tm = MYSQL_TIME(time);
+      time_to_datetime(current_thd, &tm, ltime);
+      return false;
+    }
+    case MYSQL_TYPE_DATE:
+    case MYSQL_TYPE_DATETIME:
+    case MYSQL_TYPE_TIMESTAMP:
+      if (eval_datetime(&tm, fuzzy_date)) return true;
+      if (data_type() == MYSQL_TYPE_DATETIME &&
+          tm.time_type == MYSQL_TIMESTAMP_TIME) {
+        time_to_datetime(current_thd, &tm, ltime);
+      } else {
+        *ltime = tm;
+      }
+      return false;
+    case MYSQL_TYPE_STRING:
+      if (eval_datetime(&tm, fuzzy_date)) return true;
+      if (tm.time_type == MYSQL_TIMESTAMP_TIME) {
+        time_to_datetime(current_thd, &tm, ltime);
+      } else {
+        *ltime = tm;
+      }
+      return false;
+    default:
+      assert(false);
   }
-  if (data_type() == MYSQL_TYPE_TIME || tm.time_type == MYSQL_TIMESTAMP_TIME)
-    time_to_datetime(current_thd, &tm, ltime);
-  else
-    *ltime = tm;
   return false;
 }
 
-bool Item_temporal_hybrid_func::get_time(MYSQL_TIME *ltime) {
-  if (val_datetime(ltime, TIME_FUZZY_DATE)) {
-    assert(null_value == true);
-    return true;
+bool Item_temporal_hybrid_func::val_time(Time_val *time) {
+  MYSQL_TIME mtime;
+
+  null_value = false;
+
+  switch (data_type()) {
+    case MYSQL_TYPE_TIME:
+      if (eval_time(time)) return true;
+      return false;
+    case MYSQL_TYPE_DATE:
+      // Result is either zero or NULL
+      if (eval_datetime(&mtime, TIME_FUZZY_DATE)) return true;
+      time->set_zero();
+      return false;
+    case MYSQL_TYPE_DATETIME:
+    case MYSQL_TYPE_TIMESTAMP:
+      if (eval_datetime(&mtime, TIME_FUZZY_DATE)) return true;
+      *time = Time_val::strip_date(mtime);
+      return false;
+    case MYSQL_TYPE_STRING:
+      if (eval_datetime(&mtime, TIME_FUZZY_DATE)) return true;
+      if (mtime.time_type == MYSQL_TIMESTAMP_TIME) {
+        *time = Time_val(mtime);
+      } else if (mtime.time_type == MYSQL_TIMESTAMP_DATE) {
+        time->set_zero();
+      } else {
+        assert(mtime.time_type == MYSQL_TIMESTAMP_DATETIME);
+        *time = Time_val::strip_date(mtime);
+      }
+      return false;
+    default:
+      assert(false);
   }
-  if (data_type() == MYSQL_TYPE_TIME &&
-      ltime->time_type != MYSQL_TIMESTAMP_TIME)
-    datetime_to_time(ltime);
+
   return false;
 }
 
 String *Item_temporal_hybrid_func::val_str_ascii(String *str) {
   assert(fixed);
-  MYSQL_TIME ltime;
 
-  if (val_datetime(&ltime, TIME_FUZZY_DATE) ||
-      (null_value =
-           my_TIME_to_str(&ltime, str,
-                          data_type() == MYSQL_TYPE_STRING
-                              ? ltime.second_part ? DATETIME_MAX_DECIMALS : 0
-                              : decimals)))
-    return nullptr;
-
-  /* Check that the returned timestamp type matches to the function type */
-  assert((data_type() == MYSQL_TYPE_TIME &&
-          ltime.time_type == MYSQL_TIMESTAMP_TIME) ||
-         (data_type() == MYSQL_TYPE_DATE &&
-          ltime.time_type == MYSQL_TIMESTAMP_DATE) ||
-         (data_type() == MYSQL_TYPE_DATETIME &&
-          ltime.time_type == MYSQL_TIMESTAMP_DATETIME) ||
-         data_type() == MYSQL_TYPE_STRING ||
-         ltime.time_type == MYSQL_TIMESTAMP_NONE);
+  switch (data_type()) {
+    case MYSQL_TYPE_TIME: {
+      Time_val time;
+      if (eval_time(&time)) return nullptr;
+      MYSQL_TIME ltime = MYSQL_TIME(time);
+      null_value = my_TIME_to_str(
+          &ltime, str, time.microsecond() != 0 ? DATETIME_MAX_DECIMALS : 0);
+      if (null_value) return nullptr;
+      break;
+    }
+    case MYSQL_TYPE_DATE:
+    case MYSQL_TYPE_DATETIME:
+    case MYSQL_TYPE_TIMESTAMP:
+    case MYSQL_TYPE_STRING: {
+      MYSQL_TIME ltime;
+      if (eval_datetime(&ltime, TIME_FUZZY_DATE) ||
+          (null_value = my_TIME_to_str(
+               &ltime, str,
+               data_type() == MYSQL_TYPE_STRING
+                   ? ltime.second_part ? DATETIME_MAX_DECIMALS : 0
+                   : decimals))) {
+        return nullptr;
+      }
+      /* Check that the returned timestamp type matches to the function type */
+      assert((data_type() == MYSQL_TYPE_DATE &&
+              ltime.time_type == MYSQL_TIMESTAMP_DATE) ||
+             (data_type() == MYSQL_TYPE_DATETIME &&
+              ltime.time_type == MYSQL_TIMESTAMP_DATETIME) ||
+             data_type() == MYSQL_TYPE_STRING ||
+             ltime.time_type == MYSQL_TIMESTAMP_NONE);
+      break;
+    }
+    default:
+      assert(false);
+  }
   return str;
-}
-
-longlong Item_time_func::val_time_temporal() {
-  assert(fixed);
-  MYSQL_TIME ltime;
-  return get_time(&ltime) ? 0LL : TIME_to_longlong_time_packed(ltime);
 }
 
 longlong Item_date_func::val_date_temporal() {
@@ -968,13 +1060,16 @@ void Item_datetime_literal::print(const THD *, String *str,
 }
 
 bool Item_time_literal::eq_specific(const Item *item) const {
-  return cached_time.eq(
-      down_cast<const Item_time_literal *>(item)->cached_time);
+  return m_time.compare(down_cast<const Item_time_literal *>(item)->m_time) ==
+         0;
 }
 
 void Item_time_literal::print(const THD *, String *str, enum_query_type) const {
+  StringBuffer<STRING_BUFFER_USUAL_SIZE> buffer;
   str->append("TIME'");
-  str->append(cached_time.cptr());
+  String *const s = const_cast<Item_time_literal *>(this)->val_str(&buffer);
+  assert(s != nullptr);
+  str->append(*s);
   str->append('\'');
 }
 
@@ -1266,6 +1361,164 @@ longlong Item_func_dayofmonth::val_int() {
   return get_arg0_date(&ltime, TIME_FUZZY_DATE) ? 0 : (longlong)ltime.day;
 }
 
+/**
+  Get a "best fit" temporal value from an item, using data type of the item
+  and possibly its value.
+  @param[in]  item        An item to extract a temporal value from.
+  @param[in]  fuzzy_date  Date flags.
+  @param[out] val         Returned temporal value
+
+  @returns false if temporal value was successfully evaluated,
+           true if unsuccessful, which must be followed by an error or warning
+ */
+
+static bool eval_temporal(Item *item, my_time_flags_t fuzzy_date,
+                          Temporal_val *val) {
+  THD *thd = current_thd;
+
+  switch (item->data_type()) {
+    case MYSQL_TYPE_DATE:
+      if (item->get_date(&val->datetime, fuzzy_date)) return true;
+      val->which = Temporal_type::DATETIME_VALUE;
+      return false;
+    case MYSQL_TYPE_TIME:
+      if (item->val_time(&val->time)) return true;
+      val->which = Temporal_type::TIME_VALUE;
+      return false;
+    case MYSQL_TYPE_DATETIME:
+    case MYSQL_TYPE_TIMESTAMP:
+      if (item->get_date(&val->datetime, fuzzy_date)) return true;
+      val->which = Temporal_type::DATETIME_VALUE;
+      return false;
+    case MYSQL_TYPE_TINY:
+    case MYSQL_TYPE_SHORT:
+    case MYSQL_TYPE_INT24:
+    case MYSQL_TYPE_LONG:
+    case MYSQL_TYPE_LONGLONG: {
+      int64_t intval = item->val_int();
+      // A TIME value can maximum have 7 digits, thus this is a valid test:
+      if (intval >= 10000000LL) {
+        if (item->get_date(&val->datetime, fuzzy_date)) return true;
+        val->which = Temporal_type::DATETIME_VALUE;
+        return false;
+      } else {
+        if (item->val_time(&val->time)) return true;
+        val->which = Temporal_type::TIME_VALUE;
+        return false;
+      }
+    }
+    case MYSQL_TYPE_NEWDECIMAL:
+    case MYSQL_TYPE_FLOAT:
+    case MYSQL_TYPE_DOUBLE: {
+      my_decimal buf;
+      my_decimal *res = item->val_decimal(&buf);
+      if (res == nullptr) return true;
+      double doublerep;
+      if (my_decimal2double(0, res, &doublerep)) return true;
+      // A TIME value can maximum have 7 digits, thus this is a valid test:
+      if (abs(doublerep) >= 10000000) {
+        if (item->get_date(&val->datetime, fuzzy_date)) return true;
+        val->which = Temporal_type::DATETIME_VALUE;
+        return false;
+      } else {
+        if (item->val_time(&val->time)) return true;
+        val->which = Temporal_type::TIME_VALUE;
+        return false;
+      }
+    }
+    default: {
+      /*
+        Process item as a string value
+        Try to interpret the string value as a time or a date/datetime value.
+        Then choose the proper value based on warnings and deprecations.
+      */
+      char buff[MAX_DATE_STRING_REP_LENGTH];
+      String tmp(buff, sizeof(buff), &my_charset_bin);
+      String *res = item->val_str(&tmp);
+      if (res == nullptr) return true;
+
+      Time_val ttime;
+      MYSQL_TIME time;
+      MYSQL_TIME_STATUS timestatus;
+      MYSQL_TIME date;
+      MYSQL_TIME_STATUS datestatus;
+      (void)str_to_time(res, &time, fuzzy_date, &timestatus);
+      (void)str_to_datetime(res, &date, fuzzy_date, &datestatus);
+
+      bool valid_time = timestatus.warnings == 0 &&
+                        timestatus.m_deprecation.m_kind ==
+                            MYSQL_TIME_STATUS::DEPRECATION::DP_NONE &&
+                        time.time_type == MYSQL_TIMESTAMP_TIME;
+      bool valid_dt = datestatus.warnings == 0 &&
+                      datestatus.m_deprecation.m_kind ==
+                          MYSQL_TIME_STATUS::DEPRECATION::DP_NONE &&
+                      (date.time_type == MYSQL_TIMESTAMP_DATE ||
+                       date.time_type == MYSQL_TIMESTAMP_DATETIME);
+
+      if (valid_dt) {
+        // Valid date or datetime value, with standard format
+        // A valid datetime is preferred over a time value.
+        val->datetime = date;
+        val->which = Temporal_type::DATETIME_VALUE;
+        return false;
+      }
+      if (valid_time) {
+        // Valid time value, with standard format
+        val->time = Time_val(time);
+        val->which = Temporal_type::TIME_VALUE;
+        return false;
+      }
+      if ((time.time_type == MYSQL_TIMESTAMP_ERROR ||
+           time.time_type == MYSQL_TIMESTAMP_NONE) &&
+          date.time_type != MYSQL_TIMESTAMP_ERROR &&
+          date.time_type != MYSQL_TIMESTAMP_NONE) {
+        // A recognized date or datetime, with warning or deprecated format
+        assert(date.time_type != MYSQL_TIMESTAMP_TIME);
+        val->datetime = date;
+        val->which = Temporal_type::DATETIME_VALUE;
+        (void)make_truncated_value_warning(thd, Sql_condition::SL_WARNING,
+                                           ErrConvString(res),
+                                           MYSQL_TIMESTAMP_DATETIME, NullS);
+        return false;
+      }
+      if ((date.time_type == MYSQL_TIMESTAMP_ERROR ||
+           date.time_type == MYSQL_TIMESTAMP_NONE) &&
+          time.time_type != MYSQL_TIMESTAMP_ERROR &&
+          time.time_type != MYSQL_TIMESTAMP_NONE) {
+        // A recognized time value, with warning or deprecated format
+        assert(time.time_type == MYSQL_TIMESTAMP_TIME);
+        val->time = Time_val(time);
+        val->which = Temporal_type::TIME_VALUE;
+        (void)make_truncated_value_warning(thd, Sql_condition::SL_WARNING,
+                                           ErrConvString(res),
+                                           MYSQL_TIMESTAMP_TIME, NullS);
+        return false;
+      }
+      if (date.time_type != MYSQL_TIMESTAMP_ERROR &&
+          date.time_type != MYSQL_TIMESTAMP_NONE) {
+        /*
+          Recognized as date, datetime or time value, but with warnings or
+          deprecated format. Pick the date/datetime value heuristically.
+        */
+        assert(date.time_type != MYSQL_TIMESTAMP_TIME);
+        val->datetime = date;
+        val->which = Temporal_type::DATETIME_VALUE;
+        return false;
+      }
+      assert((time.time_type == MYSQL_TIMESTAMP_ERROR ||
+              time.time_type == MYSQL_TIMESTAMP_NONE) &&
+             (date.time_type == MYSQL_TIMESTAMP_ERROR ||
+              date.time_type == MYSQL_TIMESTAMP_NONE));
+      // Value could not be read as either date, time or datetime
+      (void)make_truncated_value_warning(thd, Sql_condition::SL_WARNING,
+                                         ErrConvString(res), date.time_type,
+                                         NullS);
+      return true;
+    }
+  }
+  return false;
+}
+
 bool Item_func_month::resolve_type(THD *thd) {
   if (param_type_is_default(thd, 0, -1, MYSQL_TYPE_DATETIME)) return true;
   if (reject_vector_args()) return true;
@@ -1343,8 +1596,8 @@ bool Item_func_hour::resolve_type(THD *thd) {
 
 longlong Item_func_hour::val_int() {
   assert(fixed);
-  MYSQL_TIME ltime;
-  return get_arg0_time(&ltime) ? 0 : ltime.hour;
+  Time_val time;
+  return val_arg0_time(&time) ? 0 : time.hour();
 }
 
 bool Item_func_minute::resolve_type(THD *thd) {
@@ -1359,8 +1612,8 @@ bool Item_func_minute::resolve_type(THD *thd) {
 
 longlong Item_func_minute::val_int() {
   assert(fixed);
-  MYSQL_TIME ltime;
-  return get_arg0_time(&ltime) ? 0 : ltime.minute;
+  Time_val time;
+  return val_arg0_time(&time) ? 0 : time.minute();
 }
 
 bool Item_func_second::resolve_type(THD *thd) {
@@ -1378,8 +1631,8 @@ bool Item_func_second::resolve_type(THD *thd) {
 */
 longlong Item_func_second::val_int() {
   assert(fixed);
-  MYSQL_TIME ltime;
-  return get_arg0_time(&ltime) ? 0 : ltime.second;
+  Time_val time;
+  return val_arg0_time(&time) ? 0 : time.second();
 }
 
 static uint week_mode(uint mode) {
@@ -1742,11 +1995,9 @@ bool Item_func_time_to_sec::resolve_type(THD *thd) {
 
 longlong Item_func_time_to_sec::val_int() {
   assert(fixed);
-  MYSQL_TIME ltime;
-  longlong seconds;
-  if (get_arg0_time(&ltime)) return 0;
-  seconds = ltime.hour * 3600L + ltime.minute * 60 + ltime.second;
-  return ltime.neg ? -seconds : seconds;
+  Time_val time;
+  if (val_arg0_time(&time)) return 0;
+  return time.to_seconds();
 }
 
 /**
@@ -1930,14 +2181,6 @@ bool Item_func_from_days::get_date(MYSQL_TIME *ltime,
   return false;
 }
 
-void MYSQL_TIME_cache::set_time(MYSQL_TIME *ltime, uint8 dec_arg) {
-  assert(ltime->time_type == MYSQL_TIMESTAMP_TIME);
-  time = *ltime;
-  time_packed = TIME_to_longlong_time_packed(time);
-  dec = dec_arg;
-  string_length = my_TIME_to_str(time, string_buff, decimals());
-}
-
 void MYSQL_TIME_cache::set_date(MYSQL_TIME *ltime) {
   assert(ltime->time_type == MYSQL_TIMESTAMP_DATE);
   time = *ltime;
@@ -1978,19 +2221,11 @@ void MYSQL_TIME_cache::set_date(my_timeval tv, Time_zone *tz) {
   string_length = my_TIME_to_str(time, string_buff, decimals());
 }
 
-void MYSQL_TIME_cache::set_time(my_timeval tv, uint8 dec_arg, Time_zone *tz) {
-  tz->gmt_sec_to_TIME(&time, tv);
-  datetime_to_time(&time);
-  time_packed = TIME_to_longlong_time_packed(time);
-  dec = dec_arg;
-  string_length = my_TIME_to_str(time, string_buff, decimals());
-}
-
 bool MYSQL_TIME_cache::get_date(MYSQL_TIME *ltime,
-                                my_time_flags_t fuzzydate) const {
+                                my_time_flags_t flags) const {
   int warnings;
   get_TIME(ltime);
-  return check_date(*ltime, non_zero_date(*ltime), fuzzydate, &warnings);
+  return check_date(*ltime, non_zero_date(*ltime), flags, &warnings);
 }
 
 String *MYSQL_TIME_cache::val_str(String *str) {
@@ -2029,7 +2264,7 @@ bool Item_func_curdate::get_date(MYSQL_TIME *res, my_time_flags_t) {
   assert(fixed);
   MYSQL_TIME_cache tm;
   tm.set_date(current_thd->query_start_timeval_trunc(decimals), time_zone());
-  return tm.get_time(res);
+  return tm.get_date(res);
 }
 
 String *Item_func_curdate::val_str(String *str) {
@@ -2068,33 +2303,13 @@ bool Item_func_curtime::resolve_type(THD *) {
   return false;
 }
 
-longlong Item_func_curtime::val_time_temporal() {
+bool Item_func_curtime::val_time(Time_val *time) {
   assert(fixed);
-  MYSQL_TIME_cache tm;
-  tm.set_time(current_thd->query_start_timeval_trunc(decimals), decimals,
-              time_zone());
-  return tm.val_packed();
-}
-
-bool Item_func_curtime::get_time(MYSQL_TIME *ltime) {
-  assert(fixed);
-  MYSQL_TIME_cache tm;
-  tm.set_time(current_thd->query_start_timeval_trunc(decimals), decimals,
-              time_zone());
-  return tm.get_time(ltime);
-}
-
-String *Item_func_curtime::val_str(String *str) {
-  assert(fixed);
-  MYSQL_TIME_cache tm;
-  tm.set_time(current_thd->query_start_timeval_trunc(decimals), decimals,
-              time_zone());
-  if (str->alloc(15)) return nullptr;
-
-  str->set_charset(&my_charset_numeric);
-  str->length(my_TIME_to_str(*tm.get_TIME_ptr(), (char *)str->ptr(), decimals));
-
-  return str;
+  MYSQL_TIME mtime;
+  Time_zone *tz = time_zone();
+  tz->gmt_sec_to_TIME(&mtime, current_thd->query_start_timeval_trunc(decimals));
+  *time = Time_val::strip_date(mtime);
+  return false;
 }
 
 Time_zone *Item_func_curtime_local::time_zone() {
@@ -2144,7 +2359,7 @@ bool Item_func_now::get_date(MYSQL_TIME *res, my_time_flags_t) {
   MYSQL_TIME_cache tm;
   tm.set_datetime(current_thd->query_start_timeval_trunc(decimals), decimals,
                   time_zone());
-  return tm.get_time(res);
+  return tm.get_date(res);
 }
 
 String *Item_func_now::val_str(String *str) {
@@ -2192,22 +2407,24 @@ bool Item_func_sysdate_local::resolve_type(THD *) {
   return false;
 }
 
-bool Item_func_sec_to_time::get_time(MYSQL_TIME *ltime) {
-  my_decimal tmp, *val = args[0]->val_decimal(&tmp);
+bool Item_func_sec_to_time::val_time(Time_val *time) {
+  my_decimal tmp;
+  my_decimal *val = args[0]->val_decimal(&tmp);
   if (val == nullptr) return (null_value = true);
   if ((null_value = args[0]->null_value)) return true;
 
   lldiv_t seconds;
   if (my_decimal2lldiv_t(0, val, &seconds)) {
-    set_max_time(ltime, val->sign());
+    time->set_extreme_value(val->sign());
     return make_truncated_value_warning(current_thd, Sql_condition::SL_WARNING,
                                         ErrConvString(val),
                                         MYSQL_TIMESTAMP_TIME, NullS);
   }
-  if (sec_to_time(seconds, ltime))
+  if (sec_to_time(seconds, time)) {
     return make_truncated_value_warning(current_thd, Sql_condition::SL_WARNING,
                                         ErrConvString(val),
                                         MYSQL_TIMESTAMP_TIME, NullS);
+  }
   return false;
 }
 
@@ -2330,30 +2547,48 @@ uint Item_func_date_format::format_length(const String *format) {
 }
 
 String *Item_func_date_format::val_str(String *str) {
-  String *format;
-  MYSQL_TIME l_time;
-  uint size;
   assert(fixed);
+  Time_val time;
+  MYSQL_TIME mtime;
+  String *format;
+  uint size;
+
+  null_value = false;
 
   if (!is_time_format) {
-    if (get_arg0_date(&l_time, TIME_FUZZY_DATE)) return nullptr;
+    if (args[0]->get_date(&mtime, TIME_FUZZY_DATE)) {
+      return error_str();
+    }
   } else {
-    if (get_arg0_time(&l_time)) return nullptr;
-    l_time.year = l_time.month = l_time.day = 0;
+    Temporal_val tv;
+    if (eval_temporal(args[0], TIME_FUZZY_DATE, &tv)) {
+      null_value = true;
+      return nullptr;
+    }
+    switch (tv.which) {
+      case Temporal_type::TIME_VALUE:
+        mtime = static_cast<MYSQL_TIME>(tv.time);
+        break;
+      case Temporal_type::DATETIME_VALUE:
+        mtime = tv.datetime;
+        break;
+      default:
+        return error_str();
+    }
   }
 
-  if (!(format = args[1]->val_str(str)) || !format->length()) goto null_date;
+  format = args[1]->val_str(str);
+  if (format == nullptr || format->length() == 0) {
+    null_value = true;
+    return nullptr;
+  }
 
-  if (fixed_length)
-    size = max_length;
-  else
-    size = format_length(format);
-
+  size = fixed_length ? max_length : format_length(format);
   if (size < MAX_DATE_STRING_REP_LENGTH) size = MAX_DATE_STRING_REP_LENGTH;
 
   // If format uses the buffer provided by 'str' then store result locally.
   if (format == str || format->uses_buffer_owned_by(str)) str = &value;
-  if (str->alloc(size)) goto null_date;
+  if (str->alloc(size)) return nullptr;
 
   Date_time_format date_time_format;
   date_time_format.format.str = format->ptr();
@@ -2361,14 +2596,14 @@ String *Item_func_date_format::val_str(String *str) {
 
   /* Create the result string */
   str->set_charset(collation.collation);
-  if (!make_date_time(
-          &date_time_format, &l_time,
-          is_time_format ? MYSQL_TIMESTAMP_TIME : MYSQL_TIMESTAMP_DATE, str))
-    return str;
 
-null_date:
-  null_value = true;
-  return nullptr;
+  if (make_date_time(
+          &date_time_format, &mtime,
+          is_time_format ? MYSQL_TIMESTAMP_TIME : MYSQL_TIMESTAMP_DATE, str)) {
+    null_value = true;
+    return nullptr;
+  }
+  return str;
 }
 
 bool Item_func_from_unixtime::resolve_type(THD *thd) {
@@ -2613,64 +2848,28 @@ bool Item_date_add_interval::get_date_internal(MYSQL_TIME *ltime,
   return false;
 }
 
-bool Item_date_add_interval::get_time_internal(MYSQL_TIME *ltime) {
+bool Item_date_add_interval::eval_time(Time_val *time) {
   Interval interval;
-
-  null_value = args[0]->get_time(ltime) ||
+  null_value = args[0]->val_time(time) ||
                get_interval_value(args[1], m_interval_type, &value, &interval);
   if (null_value) {
     return true;
   }
-  if (m_subtract) interval.neg = !interval.neg;
-
-  assert(!check_time_range_quick(*ltime));
-
-  const longlong usec1 =
-      ((((ltime->day * 24 + ltime->hour) * 60 + ltime->minute) * 60 +
-        ltime->second) *
-           1000000LL +
-       ltime->second_part) *
-      (ltime->neg ? -1 : 1);
-  const longlong usec2 =
-      ((((interval.day * 24 + interval.hour) * 60 + interval.minute) * 60 +
-        interval.second) *
-           1000000LL +
-       interval.second_part) *
-      (interval.neg ? -1 : 1);
-
-  // Possible overflow adding date and interval values below.
-  if ((usec1 > 0 && usec2 > 0) || (usec1 < 0 && usec2 < 0)) {
-    lldiv_t usec2_as_seconds;
-    usec2_as_seconds.quot = usec2 / 1000000;
-    usec2_as_seconds.rem = 0;
-    MYSQL_TIME unused;
-    if ((null_value = sec_to_time(usec2_as_seconds, &unused))) {
-      push_warning_printf(
-          current_thd, Sql_condition::SL_WARNING, ER_DATETIME_FUNCTION_OVERFLOW,
-          ER_THD(current_thd, ER_DATETIME_FUNCTION_OVERFLOW), "time");
-      return true;
-    }
-  }
-
-  const longlong diff = usec1 + usec2;
-  lldiv_t seconds;
-  seconds.quot = diff / 1000000;
-  seconds.rem = diff % 1000000 * 1000; /* time->second_part= lldiv.rem / 1000 */
-  if ((null_value =
-           (interval.year || interval.month || sec_to_time(seconds, ltime)))) {
+  if (time->add(interval, m_subtract)) {
     push_warning_printf(
         current_thd, Sql_condition::SL_WARNING, ER_DATETIME_FUNCTION_OVERFLOW,
         ER_THD(current_thd, ER_DATETIME_FUNCTION_OVERFLOW), "time");
+    null_value = true;
     return true;
   }
+
   return false;
 }
 
-bool Item_date_add_interval::val_datetime(MYSQL_TIME *ltime,
-                                          my_time_flags_t fuzzy_date) {
-  if (data_type() != MYSQL_TYPE_TIME)
-    return get_date_internal(ltime, fuzzy_date | TIME_NO_ZERO_DATE);
-  return get_time_internal(ltime);
+bool Item_date_add_interval::eval_datetime(MYSQL_TIME *ltime,
+                                           my_time_flags_t flags) {
+  assert(data_type() != MYSQL_TYPE_TIME);
+  return get_date_internal(ltime, flags | TIME_NO_ZERO_DATE);
 }
 
 bool Item_date_add_interval::eq_specific(const Item *item) const {
@@ -2831,13 +3030,43 @@ longlong Item_extract::val_int() {
   uint year;
   ulong week_format;
   long neg;
-  if (date_value) {
+  if (date_value) {  // if we are going to extract date components, require full
+                     // date or datetime.
     if (get_arg0_date(&ltime, TIME_FUZZY_DATE)) return 0;
     neg = 1;
   } else {
-    if (get_arg0_time(&ltime)) return 0;
-    neg = ltime.neg ? -1 : 1;
+    // Because str_to_time reads dates as well, and the refactoring of
+    // Item::get_time now can't handle dates, this try to check if it is a
+    // datetime approach is used to preserve behaviour in the case of
+    // "EXTRACT(DAY_HOUR FROM '<datetimelikestring>')"
+    Time_val time;
+    MYSQL_TIME_STATUS status;
+    MYSQL_TIME date;
+    char buff[MAX_DATE_STRING_REP_LENGTH];
+    String tmp(buff, sizeof(buff), &my_charset_bin), *res;
+    res = args[0]->val_str(&tmp);
+    if (res == nullptr) {
+      return error_int();
+    }
+    str_to_datetime(res, &date, TIME_FUZZY_DATE, &status);
+    if (status.warnings != 0 || status.m_deprecation.m_kind !=
+                                    MYSQL_TIME_STATUS::DEPRECATION::DP_NONE) {
+      if (val_arg0_time(&time)) {
+        return 0;
+      }
+      ltime = MYSQL_TIME(time);
+    } else {  // no warnings, or deprecations on trying to read a date, read it
+              // as date and do side effects.
+      if (get_arg0_date(&ltime,
+                        TIME_FUZZY_DATE | (current_thd->is_fsp_truncate_mode()
+                                               ? TIME_FRAC_TRUNCATE
+                                               : 0))) {
+        return 0;
+      }
+    }
   }
+  neg = ltime.neg ? -1 : 1;
+
   switch (int_type) {
     case INTERVAL_YEAR:
       return ltime.year;
@@ -2957,15 +3186,9 @@ void Item_typecast_time::print(const THD *thd, String *str,
   str->append(')');
 }
 
-bool Item_typecast_time::get_time(MYSQL_TIME *ltime) {
-  if (get_arg0_time(ltime)) return true;
-  my_time_adjust_frac(ltime, decimals, current_thd->is_fsp_truncate_mode());
-
-  /*
-    For MYSQL_TIMESTAMP_TIME value we can have non-zero day part,
-    which we should not lose.
-  */
-  if (ltime->time_type != MYSQL_TIMESTAMP_TIME) datetime_to_time(ltime);
+bool Item_typecast_time::val_time(Time_val *time) {
+  if (val_arg0_time(time)) return true;
+  time->adjust_fraction(decimals, !current_thd->is_fsp_truncate_mode());
   return false;
 }
 
@@ -3084,42 +3307,82 @@ bool Item_func_add_time::resolve_type(THD *thd) {
   time/datetime value
 
   @param time       time or datetime_expression.
-  @param fuzzy_date flags that control temporal operation.
+  @param flags      that control temporal operation.
 
   @returns false on success, true on error or NULL value return.
 */
 
-bool Item_func_add_time::val_datetime(MYSQL_TIME *time,
-                                      my_time_flags_t fuzzy_date) {
+bool Item_func_add_time::eval_datetime(MYSQL_TIME *time,
+                                       my_time_flags_t flags) {
   assert(fixed);
-  MYSQL_TIME l_time1, l_time2;
+  assert(data_type() == MYSQL_TYPE_DATETIME ||
+         data_type() == MYSQL_TYPE_STRING);
+
+  THD *thd = current_thd;
+
+  MYSQL_TIME l_time1;
   bool is_time = false;
-  long days, microseconds;
-  longlong seconds;
-  int l_sign = m_sign;
+  Time_val time1, time2;
 
   null_value = false;
-  if (data_type() == MYSQL_TYPE_DATETIME)  // TIMESTAMP function
-  {
-    if (get_arg0_date(&l_time1, fuzzy_date) || args[1]->get_time(&l_time2) ||
-        l_time1.time_type == MYSQL_TIMESTAMP_TIME ||
-        l_time2.time_type != MYSQL_TIMESTAMP_TIME)
-      goto null_date;
-  } else  // ADDTIME function
-  {
-    if (args[0]->get_time(&l_time1) || args[1]->get_time(&l_time2) ||
-        l_time2.time_type == MYSQL_TIMESTAMP_DATETIME ||
-        l_time2.time_type == MYSQL_TIMESTAMP_DATETIME_TZ)
-      goto null_date;
-    is_time = (l_time1.time_type == MYSQL_TIMESTAMP_TIME);
+
+  if (data_type() == MYSQL_TYPE_DATETIME) {  // DATETIME function
+    if (get_arg0_date(&l_time1, flags)) {
+      null_value = true;
+      return true;
+    }
+  } else {  // STRING result - need to detect data type
+    Temporal_val tv;
+    if (eval_temporal(args[0], TIME_FUZZY_DATE, &tv)) {
+      null_value = true;
+      return true;
+    }
+    switch (tv.which) {
+      case Temporal_type::DATETIME_VALUE:
+        l_time1 = tv.datetime;
+        break;
+      case Temporal_type::TIME_VALUE:
+        time1 = tv.time;
+        is_time = true;
+        break;
+      default:
+        null_value = true;
+        return true;
+    }
   }
+  if (args[1]->val_time(&time2)) {
+    null_value = true;
+    return true;
+  }
+  if (is_time) {
+    if (time1.add(time2, m_subtract)) {
+      time1.set_extreme_value(time1.is_negative());
+      push_warning_printf(
+          thd, Sql_condition::SL_WARNING, ER_DATETIME_FUNCTION_OVERFLOW,
+          ER_THD(thd, ER_DATETIME_FUNCTION_OVERFLOW), func_name());
+    }
+    *time = MYSQL_TIME(time1);
+    return false;
+  }
+
+  assert(l_time1.time_type == MYSQL_TIMESTAMP_DATETIME ||
+         l_time1.time_type == MYSQL_TIMESTAMP_DATETIME_TZ ||
+         l_time1.time_type == MYSQL_TIMESTAMP_DATE);
+
+  if (convert_time_zone_displacement(thd->time_zone(), &l_time1)) return true;
+
+  MYSQL_TIME l_time2 = MYSQL_TIME(time2);
+
+  int l_sign = m_subtract ? -1 : 1;
   if (l_time1.neg != l_time2.neg) l_sign = -l_sign;
 
   memset(time, 0, sizeof(MYSQL_TIME));
 
+  long microseconds;
+  longlong seconds;
+
   time->neg =
       calc_time_diff(l_time1, l_time2, -l_sign, &seconds, &microseconds);
-
   /*
     If first argument was negative and diff between arguments
     is non-zero we need to swap sign to get proper result.
@@ -3127,47 +3390,66 @@ bool Item_func_add_time::val_datetime(MYSQL_TIME *time,
   if (l_time1.neg && (seconds || microseconds))
     time->neg = 1 - time->neg;  // Swap sign of result
 
-  if (!is_time && time->neg) goto null_date;
-
-  days = (long)(seconds / SECONDS_IN_24H);
+  if (time->neg) {
+    null_value = true;
+    return true;
+  }
+  long days = (long)(seconds / SECONDS_IN_24H);
 
   calc_time_from_sec(time, seconds % SECONDS_IN_24H, microseconds);
 
-  if (!is_time) {
-    get_date_from_daynr(days, &time->year, &time->month, &time->day);
-    time->time_type = MYSQL_TIMESTAMP_DATETIME;
+  get_date_from_daynr(days, &time->year, &time->month, &time->day);
+  time->time_type = MYSQL_TIMESTAMP_DATETIME;
 
-    if (check_datetime_range(*time)) {
-      // Value is out of range, cannot use our printing functions to output it.
-      push_warning_printf(
-          current_thd, Sql_condition::SL_WARNING, ER_DATETIME_FUNCTION_OVERFLOW,
-          ER_THD(current_thd, ER_DATETIME_FUNCTION_OVERFLOW), func_name());
-      goto null_date;
-    }
-
-    if (time->day) return false;
-    goto null_date;
+  if (check_datetime_range(*time)) {
+    // Value is out of range, cannot use our printing functions to output it.
+    push_warning_printf(
+        thd, Sql_condition::SL_WARNING, ER_DATETIME_FUNCTION_OVERFLOW,
+        ER_THD(thd, ER_DATETIME_FUNCTION_OVERFLOW), func_name());
+    null_value = true;
+    return true;
   }
-  time->time_type = MYSQL_TIMESTAMP_TIME;
-  time->hour += days * 24;
-  if (adjust_time_range_with_warn(time, 0)) goto null_date;
+  // The date 0000-00-00 is not valid
+  if (time->day == 0) {
+    null_value = true;
+    return true;
+  }
   return false;
+}
 
-null_date:
-  null_value = true;
-  return true;
+bool Item_func_add_time::eval_time(Time_val *time) {
+  assert(data_type() == MYSQL_TYPE_TIME);
+  Time_val time1, time2;
+  if (args[0]->val_time(&time1)) {
+    null_value = true;
+    return true;
+  }
+  if (args[1]->val_time(&time2)) {
+    null_value = true;
+    return true;
+  }
+  if (time1.add(time2, m_subtract)) {
+    push_warning_printf(
+        current_thd, Sql_condition::SL_WARNING, ER_DATETIME_FUNCTION_OVERFLOW,
+        ER_THD(current_thd, ER_DATETIME_FUNCTION_OVERFLOW), func_name());
+    null_value = true;
+    return true;
+  }
+  *time = time1;
+  return false;
 }
 
 void Item_func_add_time::print(const THD *thd, String *str,
                                enum_query_type query_type) const {
   if (m_datetime) {
-    assert(m_sign > 0);
+    assert(!m_subtract);
     str->append(STRING_WITH_LEN("timestamp("));
   } else {
-    if (m_sign > 0)
+    if (!m_subtract) {
       str->append(STRING_WITH_LEN("addtime("));
-    else
+    } else {
       str->append(STRING_WITH_LEN("subtime("));
+    }
   }
   args[0]->print(thd, str, query_type);
   str->append(',');
@@ -3180,44 +3462,63 @@ void Item_func_add_time::print(const THD *thd, String *str,
   time value between a start and end time.
 
   t and s: time_or_datetime_expression
-  @param[out]  l_time3   Result is stored here.
-
-  @retval   false  On success
-  @retval   true   On error
 */
-
-bool Item_func_timediff::get_time(MYSQL_TIME *l_time3) {
+bool Item_func_timediff::val_time(Time_val *time) {
   assert(fixed);
   longlong seconds;
   long microseconds;
   int l_sign = 1;
   MYSQL_TIME l_time1, l_time2;
+  Time_val ttime1, ttime2;
+
+  THD *thd = current_thd;
 
   null_value = false;
 
-  if ((args[0]->is_temporal_with_date() &&
-       args[1]->data_type() == MYSQL_TYPE_TIME) ||
-      (args[1]->is_temporal_with_date() &&
-       args[0]->data_type() == MYSQL_TYPE_TIME))
-    goto null_date;  // Incompatible types
-
-  if (args[0]->is_temporal_with_date() || args[1]->is_temporal_with_date()) {
-    if (args[0]->get_date(&l_time1, TIME_FUZZY_DATE) ||
-        args[1]->get_date(&l_time2, TIME_FUZZY_DATE))
-      goto null_date;
+  Temporal_val tv;
+  if (eval_temporal(args[0], TIME_FUZZY_DATE, &tv)) {
+    null_value = true;
+    return true;
+  }
+  switch (tv.which) {
+    case Temporal_type::DATETIME_VALUE:
+      l_time1 = tv.datetime;
+      break;
+    case Temporal_type::TIME_VALUE:
+      l_time1 = static_cast<MYSQL_TIME>(tv.time);
+      break;
+    default:
+      null_value = true;
+      return true;
+  }
+  if (tv.which == Temporal_type::TIME_VALUE) {
+    if (args[1]->val_time(&ttime2)) {
+      null_value = true;
+      return true;
+    }
+    l_time2 = static_cast<MYSQL_TIME>(ttime2);
   } else {
-    if (args[0]->get_time(&l_time1) || args[1]->get_time(&l_time2))
-      goto null_date;
+    if (args[1]->get_date(&l_time2, TIME_FUZZY_DATE)) {
+      null_value = true;
+      return true;
+    }
   }
 
-  if (l_time1.time_type != l_time2.time_type)
-    goto null_date;  // Incompatible types
+  if (convert_time_zone_displacement(thd->time_zone(), &l_time1)) return true;
+  if (convert_time_zone_displacement(thd->time_zone(), &l_time2)) return true;
+
+  if (l_time1.time_type != l_time2.time_type) {
+    // Incompatible types
+    null_value = true;
+    return true;
+  }
 
   if (l_time1.neg != l_time2.neg) l_sign = -l_sign;
 
-  memset(l_time3, 0, sizeof(*l_time3));
+  time->set_zero();
 
-  l_time3->neg =
+  MYSQL_TIME m_time3;
+  m_time3.neg =
       calc_time_diff(l_time1, l_time2, l_sign, &seconds, &microseconds);
 
   /*
@@ -3226,14 +3527,15 @@ bool Item_func_timediff::get_time(MYSQL_TIME *l_time3) {
       is non-zero we need to swap sign to get proper result.
   */
   if (l_time1.neg && (seconds || microseconds))
-    l_time3->neg = 1 - l_time3->neg;  // Swap sign of result
+    m_time3.neg = !m_time3.neg;  // Swap sign of result
 
-  calc_time_from_sec(l_time3, seconds, microseconds);
-  if (adjust_time_range_with_warn(l_time3, decimals)) goto null_date;
+  calc_time_from_sec(&m_time3, seconds, microseconds);
+  if (adjust_time_range_with_warn(&m_time3, decimals)) {
+    null_value = true;
+    return true;
+  }
+  *time = Time_val{m_time3};
   return false;
-
-null_date:
-  return (null_value = true);
 }
 
 /**
@@ -3242,16 +3544,18 @@ null_date:
   Result: Time value
 */
 
-bool Item_func_maketime::get_time(MYSQL_TIME *ltime) {
+bool Item_func_maketime::val_time(Time_val *time) {
   assert(fixed);
   bool overflow = false;
-  const longlong hour = args[0]->val_int();
+  bool negative = false;
+  longlong hour = args[0]->val_int();
   if ((null_value = args[0]->null_value)) return true;
 
   const longlong minute = args[1]->val_int();
   if ((null_value = args[1]->null_value)) return true;
 
-  my_decimal tmp, *sec = args[2]->val_decimal(&tmp);
+  my_decimal tmp;
+  my_decimal *sec = args[2]->val_decimal(&tmp);
   if (sec == nullptr) return (null_value = true);
   if ((null_value = args[2]->null_value)) return true;
 
@@ -3261,32 +3565,52 @@ bool Item_func_maketime::get_time(MYSQL_TIME *ltime) {
                      second.quot > 59 || second.rem < 0)))
     return true;
 
-  set_zero_time(ltime, MYSQL_TIMESTAMP_TIME);
-
-  /* Check for integer overflows */
+  // Check for integer overflows
+  longlong uint_max = static_cast<longlong>(UINT_MAX);
   if (hour < 0) {
     if (args[0]->unsigned_flag)
       overflow = true;
     else
-      ltime->neg = true;
+      negative = true;
+    if (hour < -uint_max) overflow = true;
+  } else {
+    if (hour > uint_max) overflow = true;
   }
-  if (-hour > UINT_MAX || hour > UINT_MAX) overflow = true;
-
   if (!overflow) {
-    ltime->hour = (uint)((hour < 0 ? -hour : hour));
-    ltime->minute = (uint)minute;
-    ltime->second = (uint)second.quot;
-    int warnings = 0;
-    ltime->second_part = static_cast<ulong>(second.rem / 1000);
-    if (adjust_time_range_with_warn(ltime, decimals)) return true;
-    time_add_nanoseconds_adjust_frac(ltime, second.rem % 1000, &warnings,
-                                     current_thd->is_fsp_truncate_mode());
+    if (negative) hour = -hour;
 
+    bool warnings = false;
+
+    uint32_t fraction = static_cast<uint32_t>(second.rem / 1000);
+
+    if (Time_val::make_time(negative, static_cast<uint32_t>(hour),
+                            static_cast<uint32_t>(minute),
+                            static_cast<uint32_t>(second.quot), fraction,
+                            time)) {
+      time->set_extreme_value(negative);
+      warnings = true;
+    }
+    int32_t nano_sec = second.rem % 1000;
+    if (!current_thd->is_fsp_truncate_mode() && nano_sec >= 500) {
+      if (negative) {
+        if (!time->is_extreme_value(false)) {
+          time->add_nanoseconds_round(-nano_sec);
+        } else {
+          warnings = true;
+        }
+      } else {
+        if (!time->is_extreme_value(true)) {
+          time->add_nanoseconds_round(nano_sec);
+        } else {
+          warnings = true;
+        }
+      }
+    }
     if (!warnings) return false;
+  } else {
+    time->set_extreme_value(negative);
   }
 
-  // Return maximum value (positive or negative)
-  set_max_hhmmss(ltime);
   char
       buf[MAX_BIGINT_WIDTH /* hh */ + 6 /* :mm:ss */ + 10 /* .fffffffff */ + 1];
   char *ptr = longlong10_to_str(hour, buf, args[0]->unsigned_flag ? 10 : -10);
@@ -3317,8 +3641,8 @@ bool Item_func_maketime::get_time(MYSQL_TIME *ltime) {
 
 longlong Item_func_microsecond::val_int() {
   assert(fixed);
-  MYSQL_TIME ltime;
-  return get_arg0_time(&ltime) ? 0 : ltime.second_part;
+  Time_val time;
+  return val_arg0_time(&time) ? 0 : time.microsecond();
 }
 
 bool Item_func_microsecond::resolve_type(THD *thd) {
@@ -3616,16 +3940,16 @@ static bool date_should_be_null(enum_field_types target_type,
          (time.year == 0 || time.month == 0 || time.day == 0);
 }
 
-bool Item_func_str_to_date::val_datetime(MYSQL_TIME *ltime,
-                                         my_time_flags_t fuzzy_date) {
+bool Item_func_str_to_date::eval_datetime(MYSQL_TIME *ltime,
+                                          my_time_flags_t flags) {
   Date_time_format date_time_format;
   char val_buff[64], format_buff[64];
   String val_string(val_buff, sizeof(val_buff), &my_charset_bin), *val;
   String format_str(format_buff, sizeof(format_buff), &my_charset_bin), *format;
 
-  if (sql_mode & MODE_NO_ZERO_IN_DATE) fuzzy_date |= TIME_NO_ZERO_IN_DATE;
-  if (sql_mode & MODE_NO_ZERO_DATE) fuzzy_date |= TIME_NO_ZERO_DATE;
-  if (sql_mode & MODE_INVALID_DATES) fuzzy_date |= TIME_INVALID_DATES;
+  if (sql_mode & MODE_NO_ZERO_IN_DATE) flags |= TIME_NO_ZERO_IN_DATE;
+  if (sql_mode & MODE_NO_ZERO_DATE) flags |= TIME_NO_ZERO_DATE;
+  if (sql_mode & MODE_INVALID_DATES) flags |= TIME_INVALID_DATES;
 
   val = args[0]->val_str(&val_string);
   format = args[1]->val_str(&format_str);
@@ -3637,9 +3961,10 @@ bool Item_func_str_to_date::val_datetime(MYSQL_TIME *ltime,
   date_time_format.format.length = format->length();
   if (extract_date_time(&date_time_format, val->ptr(), val->length(), ltime,
                         cached_timestamp_type, nullptr, "datetime", data_type(),
-                        fuzzy_date))
+                        flags)) {
     goto null_date;
-  if (date_should_be_null(data_type(), *ltime, fuzzy_date)) {
+  }
+  if (date_should_be_null(data_type(), *ltime, flags)) {
     char buff[128];
     strmake(buff, val->ptr(), min<size_t>(val->length(), sizeof(buff) - 1));
     push_warning_printf(current_thd, Sql_condition::SL_WARNING,

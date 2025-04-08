@@ -302,7 +302,7 @@ class Item_singlerow_subselect : public Item_subselect {
   my_decimal *val_decimal(my_decimal *) override;
   bool val_json(Json_wrapper *result) override;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_time(Time_val *time) override;
   bool val_bool() override;
   enum Item_result result_type() const override;
   bool resolve_type(THD *) override;
@@ -571,7 +571,7 @@ class Item_exists_subselect : public Item_subselect {
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
     return get_date_from_int(ltime, fuzzydate);
   }
-  bool get_time(MYSQL_TIME *ltime) override { return get_time_from_int(ltime); }
+  bool val_time(Time_val *time) override { return get_time_from_int(time); }
   bool resolve_type(THD *thd) override;
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;

@@ -979,8 +979,8 @@ class Item_sum_num : public Item_sum {
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
     return get_date_from_numeric(ltime, fuzzydate); /* Decimal or real */
   }
-  bool get_time(MYSQL_TIME *ltime) override {
-    return get_time_from_numeric(ltime); /* Decimal or real */
+  bool val_time(Time_val *time) override {
+    return get_time_from_numeric(time); /* Decimal or real */
   }
   void reset_field() override;
 };
@@ -1014,7 +1014,7 @@ class Item_sum_int : public Item_sum_num {
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
     return get_date_from_int(ltime, fuzzydate);
   }
-  bool get_time(MYSQL_TIME *ltime) override { return get_time_from_int(ltime); }
+  bool val_time(Time_val *time) override { return get_time_from_int(time); }
   enum Item_result result_type() const override { return INT_RESULT; }
 };
 
@@ -1183,8 +1183,8 @@ class Item_aggr_numeric_field : public Item_aggregate_field {
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
     return get_date_from_numeric(ltime, fuzzydate); /* Decimal or real */
   }
-  bool get_time(MYSQL_TIME *ltime) override {
-    return get_time_from_numeric(ltime); /* Decimal or real */
+  bool val_time(Time_val *time) override {
+    return get_time_from_numeric(time); /* Decimal or real */
   }
   bool is_null() override { return update_null_value() || null_value; }
 };
@@ -1213,7 +1213,7 @@ class Item_aggr_bit_field : public Item_aggregate_field {
   my_decimal *val_decimal(my_decimal *) override;
   String *val_str(String *) override;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_time(Time_val *time) override;
   enum Type type() const override { return AGGR_FIELD_ITEM; }
 
  private:
@@ -1267,7 +1267,7 @@ class Item_sum_json : public Item_sum {
   bool val_json(Json_wrapper *wr) override;
   my_decimal *val_decimal(my_decimal *decimal_buffer) override;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_time(Time_val *time) override;
 
   void reset_field() override;
   void update_field() override;
@@ -1687,11 +1687,10 @@ class Item_sum_hybrid : public Item_sum {
                       mem_root_deque<Item *> *fields) override;
   double val_real() override;
   longlong val_int() override;
-  longlong val_time_temporal() override;
   longlong val_date_temporal() override;
   my_decimal *val_decimal(my_decimal *) override;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_time(Time_val *time) override;
   void reset_field() override;
   String *val_str(String *) override;
   bool val_json(Json_wrapper *wr) override;
@@ -1719,6 +1718,7 @@ class Item_sum_hybrid : public Item_sum {
     result_field, if needed.
   */
   void min_max_update_str_field();
+  void min_max_update_time_field();
   void min_max_update_temporal_field();
   void min_max_update_json_field();
   void min_max_update_real_field();
@@ -1863,7 +1863,7 @@ class Item_sum_bit : public Item_sum {
   String *val_str(String *str) override;
   my_decimal *val_decimal(my_decimal *decimal_value) override;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_time(Time_val *time) override;
   void reset_field() override;
   void update_field() override;
   bool resolve_type(THD *) override;
@@ -2012,9 +2012,7 @@ class Item_sum_udf_float final : public Item_udf_sum {
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
     return get_date_from_real(ltime, fuzzydate);
   }
-  bool get_time(MYSQL_TIME *ltime) override {
-    return get_time_from_real(ltime);
-  }
+  bool val_time(Time_val *time) override { return get_time_from_real(time); }
   bool resolve_type(THD *) override {
     set_data_type(MYSQL_TYPE_DOUBLE);
     fix_num_length_and_dec();
@@ -2039,7 +2037,7 @@ class Item_sum_udf_int final : public Item_udf_sum {
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
     return get_date_from_int(ltime, fuzzydate);
   }
-  bool get_time(MYSQL_TIME *ltime) override { return get_time_from_int(ltime); }
+  bool val_time(Time_val *time) override { return get_time_from_int(time); }
   enum Item_result result_type() const override { return INT_RESULT; }
   bool resolve_type(THD *) override {
     set_data_type_longlong();
@@ -2078,9 +2076,7 @@ class Item_sum_udf_str final : public Item_udf_sum {
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
     return get_date_from_string(ltime, fuzzydate);
   }
-  bool get_time(MYSQL_TIME *ltime) override {
-    return get_time_from_string(ltime);
-  }
+  bool val_time(Time_val *time) override { return get_time_from_string(time); }
   enum Item_result result_type() const override { return STRING_RESULT; }
   bool resolve_type(THD *) override;
   Item *copy_or_same(THD *thd) override;
@@ -2100,9 +2096,7 @@ class Item_sum_udf_decimal final : public Item_udf_sum {
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
     return get_date_from_decimal(ltime, fuzzydate);
   }
-  bool get_time(MYSQL_TIME *ltime) override {
-    return get_time_from_decimal(ltime);
-  }
+  bool val_time(Time_val *time) override { return get_time_from_decimal(time); }
   enum Item_result result_type() const override { return DECIMAL_RESULT; }
   bool resolve_type(THD *) override {
     set_data_type(MYSQL_TYPE_NEWDECIMAL);
@@ -2212,9 +2206,7 @@ class Item_func_group_concat final : public Item_sum {
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
     return get_date_from_string(ltime, fuzzydate);
   }
-  bool get_time(MYSQL_TIME *ltime) override {
-    return get_time_from_string(ltime);
-  }
+  bool val_time(Time_val *time) override { return get_time_from_string(time); }
 
   bool has_distinct() const noexcept { return distinct; }
   const String *get_separator_str() const noexcept { return separator; }
@@ -2266,9 +2258,7 @@ class Item_non_framing_wf : public Item_sum {
     return get_date_from_numeric(ltime, fuzzydate);
   }
 
-  bool get_time(MYSQL_TIME *ltime) override {
-    return get_time_from_numeric(ltime);
-  }
+  bool val_time(Time_val *time) override { return get_time_from_numeric(time); }
 
   void reset_field() override { assert(false); }
   void update_field() override { assert(false); }
@@ -2535,7 +2525,7 @@ class Item_lead_lag final : public Item_non_framing_wf {
   my_decimal *val_decimal(my_decimal *decimal_buffer) override;
 
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_time(Time_val *time) override;
   bool val_json(Json_wrapper *wr) override;
 
   bool needs_partition_cardinality() const override {
@@ -2611,7 +2601,7 @@ class Item_first_last_value : public Item_sum {
   my_decimal *val_decimal(my_decimal *decimal_buffer) override;
 
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_time(Time_val *time) override;
   bool val_json(Json_wrapper *wr) override;
 
   void reset_field() override { assert(false); }
@@ -2682,7 +2672,7 @@ class Item_nth_value : public Item_sum {
   my_decimal *val_decimal(my_decimal *decimal_buffer) override;
 
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_time(Time_val *time) override;
   bool val_json(Json_wrapper *wr) override;
 
   void reset_field() override { assert(false); }
@@ -2764,7 +2754,7 @@ class Item_rollup_sum_switcher final : public Item_sum {
   bool val_json(Json_wrapper *result) override;
   bool is_null() override;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_time(Time_val *time) override;
   const char *func_name() const override { return "rollup_sum_switcher"; }
   table_map used_tables() const override { return master()->used_tables(); }
   Item_result result_type() const override { return master()->result_type(); }
@@ -2855,7 +2845,7 @@ class Item_sum_collect : public Item_sum {
   longlong val_int() override { return val_int_from_string(); }
   double val_real() override { return val_real_from_string(); }
   bool get_date(MYSQL_TIME *, my_time_flags_t) override { return true; }
-  bool get_time(MYSQL_TIME *) override { return true; }
+  bool val_time(Time_val *) override { return true; }
   enum Sumfunctype sum_func() const override { return GEOMETRY_AGGREGATE_FUNC; }
   Item_result result_type() const override { return STRING_RESULT; }
   int set_aggregator(Aggregator::Aggregator_type) override {

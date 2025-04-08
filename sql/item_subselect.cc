@@ -1297,11 +1297,11 @@ bool Item_singlerow_subselect::get_date(MYSQL_TIME *ltime,
   }
 }
 
-bool Item_singlerow_subselect::get_time(MYSQL_TIME *ltime) {
+bool Item_singlerow_subselect::val_time(Time_val *time) {
   assert(fixed);
   if (!m_no_rows && !exec(current_thd) && !m_value->null_value) {
     null_value = false;
-    return m_value->get_time(ltime);
+    return m_value->val_time(time);
   } else {
     reset();
     return true;

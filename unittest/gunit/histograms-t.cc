@@ -57,7 +57,7 @@ class HistogramsTest : public ::testing::Test {
   Value_map<my_decimal> decimal_values;
   Value_map<MYSQL_TIME> datetime_values;
   Value_map<MYSQL_TIME> date_values;
-  Value_map<MYSQL_TIME> time_values;
+  Value_map<Time_val> time_values;
   Value_map<String> blob_values;
 
   /*
@@ -203,29 +203,20 @@ class HistogramsTest : public ::testing::Test {
       Do not test negative values, since negative DATETIME is not supported by
       MySQL.
     */
-    MYSQL_TIME time1;
-    set_zero_time(&time1, MYSQL_TIMESTAMP_TIME);
-    set_max_time(&time1, false);
+    Time_val time1;
+    time1.set_extreme_value(false);
     time_values.add_values(time1, 10);
 
-    MYSQL_TIME time2;
-    set_zero_time(&time2, MYSQL_TIMESTAMP_TIME);
-    TIME_from_longlong_time_packed(&time2, 12);
+    Time_val time2(false, 0, 0, 12, 0);
     time_values.add_values(time2, 10);
 
-    MYSQL_TIME time3;
-    set_zero_time(&time3, MYSQL_TIMESTAMP_TIME);
-    TIME_from_longlong_time_packed(&time3, 0);
+    Time_val time3;
     time_values.add_values(time3, 10);
 
-    MYSQL_TIME time4;
-    set_zero_time(&time4, MYSQL_TIMESTAMP_TIME);
-    TIME_from_longlong_time_packed(&time4, 42);
+    Time_val time4(false, 0, 0, 42, 0);
     time_values.add_values(time4, 10);
 
-    MYSQL_TIME time5;
-    set_zero_time(&time5, MYSQL_TIMESTAMP_TIME);
-    TIME_from_longlong_time_packed(&time5, 100000);
+    Time_val time5(false, 0, 0, 0, 100000);
     time_values.add_values(time5, 10);
 
     // Blob values.
@@ -454,6 +445,37 @@ void VerifySingletonBucketConstraintsDecimal(Histogram *histogram) {
     const my_decimal *current_value = json_decimal->value();
     if (i > 0) {
       EXPECT_TRUE(Histogram_comparator()(*previous_value, *current_value));
+      EXPECT_LT(previous_cumulative_frequency, current_cumulative_frequency);
+    }
+    previous_value = current_value;
+    previous_cumulative_frequency = current_cumulative_frequency;
+  }
+}
+
+void VerifySingletonBucketConstraintsTime(Histogram *histogram) {
+  ASSERT_TRUE(histogram != nullptr);
+
+  Json_object json_object;
+  EXPECT_FALSE(histogram->histogram_to_json(&json_object));
+
+  Json_dom *buckets_dom = json_object.get("buckets");
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
+
+  Time_val previous_value;
+  double previous_cumulative_frequency = 0.0;
+  for (size_t i = 0; i < buckets->size(); ++i) {
+    Json_dom *bucket_dom = (*buckets)[i];
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
+
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[1]);
+    double const current_cumulative_frequency = json_frequency->value();
+    EXPECT_GT(current_cumulative_frequency, 0.0);
+    EXPECT_LE(current_cumulative_frequency, 1.0);
+
+    auto *json_time = down_cast<Json_time *>((*bucket)[0]);
+    const Time_val current_value = json_time->value();
+    if (i > 0) {
+      EXPECT_TRUE(Histogram_comparator()(previous_value, current_value));
       EXPECT_LT(previous_cumulative_frequency, current_cumulative_frequency);
     }
     previous_value = current_value;
@@ -742,6 +764,53 @@ void VerifyEquiHeightBucketConstraintsDecimal(Histogram *histogram) {
   }
 }
 
+void VerifyEquiHeightBucketConstraintsTime(Histogram *histogram) {
+  ASSERT_TRUE(histogram != nullptr);
+
+  Json_object json_object;
+  EXPECT_FALSE(histogram->histogram_to_json(&json_object));
+
+  Json_dom *buckets_dom = json_object.get("buckets");
+  auto *buckets = down_cast<Json_array *>(buckets_dom);
+
+  Time_val previous_upper_value;
+  double previous_cumulative_frequency = 0.0;
+  for (size_t i = 0; i < buckets->size(); ++i) {
+    Json_dom *bucket_dom = (*buckets)[i];
+    auto *bucket = static_cast<Json_array *>(bucket_dom);
+
+    auto *json_frequency = down_cast<Json_double *>((*bucket)[2]);
+    double const current_cumulative_frequency = json_frequency->value();
+    EXPECT_GT(current_cumulative_frequency, 0.0);
+    EXPECT_LE(current_cumulative_frequency, 1.0);
+
+    auto *json_num_distinct = down_cast<Json_uint *>((*bucket)[3]);
+    EXPECT_GE(json_num_distinct->value(), 1ULL);
+
+    /*
+      Index 1 should be lower inclusive value, and index 2 should be upper
+      inclusive value.
+    */
+    auto *json_time_lower = down_cast<Json_time *>((*bucket)[0]);
+    auto *json_time_upper = down_cast<Json_time *>((*bucket)[1]);
+
+    const Time_val current_lower_value(json_time_lower->value());
+    const Time_val current_upper_value(json_time_upper->value());
+
+    if (i > 0) {
+      EXPECT_TRUE(
+          Histogram_comparator()(previous_upper_value, current_lower_value));
+      EXPECT_LT(previous_cumulative_frequency, current_cumulative_frequency);
+    }
+
+    EXPECT_FALSE(
+        Histogram_comparator()(current_upper_value, current_lower_value));
+
+    previous_upper_value = current_upper_value;
+    previous_cumulative_frequency = current_cumulative_frequency;
+  }
+}
+
 void VerifyEquiHeightBucketConstraintsTemporal(Histogram *histogram) {
   ASSERT_TRUE(histogram != nullptr);
 
@@ -983,7 +1052,7 @@ TEST_F(HistogramsTest, DateSingletonToJSON) {
 }
 
 TEST_F(HistogramsTest, TimeSingletonToJSON) {
-  Singleton<MYSQL_TIME> *histogram = Singleton<MYSQL_TIME>::create(
+  Singleton<Time_val> *histogram = Singleton<Time_val>::create(
       &m_mem_root, "db1", "tbl1", "col1", Value_map_type::TIME);
   ASSERT_TRUE(histogram != nullptr);
 
@@ -992,7 +1061,7 @@ TEST_F(HistogramsTest, TimeSingletonToJSON) {
   EXPECT_EQ(time_values.size(), histogram->get_num_distinct_values());
 
   VerifySingletonJSONStructure(histogram, enum_json_type::J_TIME);
-  VerifySingletonBucketConstraintsTemporal(histogram);
+  VerifySingletonBucketConstraintsTime(histogram);
 }
 
 /*
@@ -1110,7 +1179,7 @@ TEST_F(HistogramsTest, DateEquiHeightToJSON) {
 }
 
 TEST_F(HistogramsTest, TimeEquiHeightToJSON) {
-  Equi_height<MYSQL_TIME> *histogram = Equi_height<MYSQL_TIME>::create(
+  Equi_height<Time_val> *histogram = Equi_height<Time_val>::create(
       &m_mem_root, "db1", "tbl1", "col1", Value_map_type::TIME);
   ASSERT_TRUE(histogram != nullptr);
 
@@ -1119,7 +1188,7 @@ TEST_F(HistogramsTest, TimeEquiHeightToJSON) {
   EXPECT_EQ(time_values.size(), histogram->get_num_distinct_values());
 
   VerifyEquiHeightJSONStructure(histogram, enum_json_type::J_TIME);
-  VerifyEquiHeightBucketConstraintsTemporal(histogram);
+  VerifyEquiHeightBucketConstraintsTime(histogram);
 }
 
 /*
@@ -1201,13 +1270,13 @@ TEST_F(HistogramsTest, DateEquiHeightFewBuckets) {
 }
 
 TEST_F(HistogramsTest, TimeEquiHeightFewBuckets) {
-  Equi_height<MYSQL_TIME> *histogram = Equi_height<MYSQL_TIME>::create(
+  Equi_height<Time_val> *histogram = Equi_height<Time_val>::create(
       &m_mem_root, "db1", "tbl1", "col1", Value_map_type::TIME);
   ASSERT_TRUE(histogram != nullptr);
 
   EXPECT_FALSE(histogram->build_histogram(time_values, 2U));
   VerifyEquiHeightJSONStructure(histogram, enum_json_type::J_TIME);
-  VerifyEquiHeightBucketConstraintsTemporal(histogram);
+  VerifyEquiHeightBucketConstraintsTime(histogram);
 }
 
 /*

@@ -44,6 +44,7 @@
 #include "my_dbug.h"
 #include "my_double2ulonglong.h"
 #include "my_inttypes.h"
+#include "my_temporal.h"
 #include "my_time.h"  // MYSQL_TIME_NOTE_TRUNCATED
 #include "mysql/binlog/event/export/binary_log_funcs.h"  // my_time_binary_length
 #include "mysql/strings/dtoa.h"
@@ -917,10 +918,12 @@ class Field {
                                        const CHARSET_INFO *cs) = 0;
   virtual type_conversion_status store(double nr) = 0;
   virtual type_conversion_status store(longlong nr, bool unsigned_val) = 0;
+  virtual type_conversion_status store_time(Time_val time, uint8 dec_arg);
+
   /**
     Store a temporal value in packed longlong format into a field.
-    The packed value is compatible with TIME_to_longlong_time_packed(),
-    TIME_to_longlong_date_packed() or TIME_to_longlong_datetime_packed().
+    The packed value is compatible with TIME_to_longlong_date_packed() or
+    TIME_to_longlong_datetime_packed().
     Note, the value must be properly rounded or truncated according
     according to field->decimals().
 
@@ -965,15 +968,6 @@ class Field {
   virtual double val_real() const = 0;
   virtual longlong val_int() const = 0;
   /**
-    Returns TIME value in packed longlong format.
-    This method should not be called for non-temporal types.
-    Temporal field types override the default method.
-  */
-  virtual longlong val_time_temporal() const {
-    assert(0);
-    return 0;
-  }
-  /**
     Returns DATE/DATETIME value in packed longlong format.
     This method should not be called for non-temporal types.
     Temporal field types override the default method.
@@ -983,25 +977,10 @@ class Field {
     return 0;
   }
 
-  virtual longlong val_time_temporal_at_utc() const {
-    return val_time_temporal();
-  }
-
   virtual longlong val_date_temporal_at_utc() const {
     return val_date_temporal();
   }
 
-  /**
-    Returns "native" packed longlong representation of
-    a TIME or DATE/DATETIME field depending on field type.
-  */
-  longlong val_temporal_by_field_type() const {
-    // Return longlong TIME or DATETIME representation, depending on field type
-    const enum_field_types field_type = type();
-    if (field_type == MYSQL_TYPE_TIME) return val_time_temporal();
-    assert(is_temporal_type_with_date(field_type));
-    return val_date_temporal();
-  }
   virtual my_decimal *val_decimal(my_decimal *) const = 0;
   String *val_str(String *str) const { return val_str(str, str); }
   /*
@@ -1585,7 +1564,7 @@ class Field {
 
   virtual bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const;
 
-  virtual bool get_time(MYSQL_TIME *ltime) const;
+  virtual bool val_time(Time_val *time) const;
 
   virtual const CHARSET_INFO *charset() const { return &my_charset_bin; }
 
@@ -1908,6 +1887,14 @@ class Create_field_wrapper final : public Field {
     assert(false);
     return TYPE_ERR_BAD_VALUE;
   }
+  type_conversion_status store_time(Time_val, uint8) final {
+    assert(false);
+    return TYPE_ERR_BAD_VALUE;
+  }
+  type_conversion_status store_time(MYSQL_TIME *, uint8) final {
+    assert(false);
+    return TYPE_ERR_BAD_VALUE;
+  }
   double val_real(void) const final {
     assert(false);
     return 0.0;
@@ -1970,10 +1957,11 @@ class Field_num : public Field {
   uint decimals() const final { return (uint)dec; }
   bool eq_def(const Field *field) const final;
   type_conversion_status store_decimal(const my_decimal *) override;
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) override;
   type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec) override;
   my_decimal *val_decimal(my_decimal *) const override;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const override;
-  bool get_time(MYSQL_TIME *ltime) const override;
+  bool val_time(Time_val *time) const override;
   uint is_equal(const Create_field *new_field) const override;
   uint row_pack_length() const final { return pack_length(); }
   uint32 pack_length_from_metadata(uint) const override {
@@ -2077,11 +2065,12 @@ class Field_real : public Field_num {
       : Field_num(ptr_arg, len_arg, null_ptr_arg, null_bit_arg, auto_flags_arg,
                   field_name_arg, dec_arg, zero_arg, unsigned_arg),
         not_fixed(dec_arg >= DECIMAL_NOT_SPECIFIED) {}
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) final;
   type_conversion_status store_decimal(const my_decimal *) final;
   type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec) final;
   my_decimal *val_decimal(my_decimal *) const final;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
-  bool get_time(MYSQL_TIME *ltime) const final;
+  bool val_time(Time_val *time) const final;
   Truncate_result truncate(double *nr, double max_length);
   Truncate_result truncate(double *nr, double max_length) const;
   uint32 max_display_length() const final { return field_length; }
@@ -2170,13 +2159,14 @@ class Field_new_decimal : public Field_num {
                                const CHARSET_INFO *charset) final;
   type_conversion_status store(double nr) final;
   type_conversion_status store(longlong nr, bool unsigned_val) final;
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) final;
   type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec) final;
   type_conversion_status store_decimal(const my_decimal *) final;
   double val_real() const final;
   longlong val_int() const final;
   my_decimal *val_decimal(my_decimal *) const final;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
-  bool get_time(MYSQL_TIME *ltime) const final;
+  bool val_time(Time_val *time) const final;
   String *val_str(String *, String *) const final;
   int cmp(const uchar *, const uchar *) const final;
   using Field_num::make_sort_key;
@@ -2854,15 +2844,12 @@ class Field_temporal_with_date : public Field_temporal {
       : Field_temporal(ptr_arg, null_ptr_arg, null_bit_arg, auto_flags_arg,
                        field_name_arg, int_length_arg, dec_arg) {}
   bool send_to_protocol(Protocol *protocol) const override;
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) override;
   type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec) final;
   String *val_str(String *, String *) const override;
-  longlong val_time_temporal() const override;
   longlong val_date_temporal() const override;
-  longlong val_time_temporal_at_utc() const override;
   longlong val_date_temporal_at_utc() const override;
-  bool get_time(MYSQL_TIME *ltime) const final {
-    return get_date(ltime, TIME_FUZZY_DATE);
-  }
+  bool val_time(Time_val *time) const final;
   /* Validate the value stored in a field */
   type_conversion_status validate_stored_val(THD *thd) override;
 };
@@ -3017,6 +3004,7 @@ class Field_year final : public Field_tiny {
                                const CHARSET_INFO *charset) final;
   type_conversion_status store(double nr) final;
   type_conversion_status store(longlong nr, bool unsigned_val) final;
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) final;
   type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec) final;
   double val_real() const final;
   longlong val_int() const final;
@@ -3053,7 +3041,6 @@ class Field_date : public Field_temporal_with_date {
   enum ha_base_keytype key_type() const final { return HA_KEYTYPE_UINT24; }
   type_conversion_status store_packed(longlong nr) final;
   longlong val_int() const final;
-  longlong val_time_temporal() const final;
   longlong val_date_temporal() const final;
   String *val_str(String *, String *) const final;
   bool send_to_protocol(Protocol *protocol) const final;
@@ -3137,7 +3124,7 @@ class Field_time final : public Field_temporal {
   enum_field_types type() const final { return MYSQL_TYPE_TIME; }
   enum_field_types real_type() const final { return MYSQL_TYPE_TIME2; }
   enum_field_types binlog_type() const final { return MYSQL_TYPE_TIME2; }
-  type_conversion_status store_packed(longlong nr) final;
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) final;
   type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec) final;
   type_conversion_status reset() final;
   double val_real() const final;
@@ -3146,8 +3133,7 @@ class Field_time final : public Field_temporal {
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
   longlong val_date_temporal() const final;
   bool send_to_protocol(Protocol *protocol) const final;
-  longlong val_time_temporal() const final;
-  bool get_time(MYSQL_TIME *ltime) const final;
+  bool val_time(Time_val *time) const final;
   my_decimal *val_decimal(my_decimal *) const final;
   uint32 pack_length() const final { return my_time_binary_length(dec); }
   uint pack_length_from_metadata(uint field_metadata) const final {
@@ -3879,6 +3865,7 @@ class Field_json : public Field_blob {
   type_conversion_status store(longlong nr, bool unsigned_val) override;
   type_conversion_status store_decimal(const my_decimal *) final;
   type_conversion_status store_json(const Json_wrapper *json);
+  type_conversion_status store_time(Time_val time, uint8 dec_arg) final;
   type_conversion_status store_time(MYSQL_TIME *ltime, uint8 dec_arg) final;
   type_conversion_status store(const Field_json *field);
 
@@ -3956,7 +3943,7 @@ class Field_json : public Field_blob {
   */
   String *val_str(String *buf1, String *buf2) const final;
   my_decimal *val_decimal(my_decimal *m) const final;
-  bool get_time(MYSQL_TIME *ltime) const final;
+  bool val_time(Time_val *time) const final;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const final;
   Field_json *clone(MEM_ROOT *mem_root) const override;
   uint is_equal(const Create_field *new_field) const final;

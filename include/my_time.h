@@ -365,11 +365,9 @@ inline long long int my_packed_time_get_frac_part(long long int i) {
 long long int year_to_longlong_datetime_packed(long year);
 long long int TIME_to_longlong_datetime_packed(const MYSQL_TIME &my_time);
 long long int TIME_to_longlong_date_packed(const MYSQL_TIME &my_time);
-long long int TIME_to_longlong_time_packed(const MYSQL_TIME &my_time);
 long long int TIME_to_longlong_packed(const MYSQL_TIME &my_time);
 
 void TIME_from_longlong_datetime_packed(MYSQL_TIME *ltime, long long int nr);
-void TIME_from_longlong_time_packed(MYSQL_TIME *ltime, long long int nr);
 void TIME_from_longlong_date_packed(MYSQL_TIME *ltime, long long int nr);
 void TIME_set_yymmdd(MYSQL_TIME *ltime, unsigned int yymmdd);
 void TIME_set_hhmmss(MYSQL_TIME *ltime, unsigned int hhmmss);
@@ -378,11 +376,6 @@ void my_datetime_packed_to_binary(long long int nr, unsigned char *ptr,
                                   unsigned int dec);
 long long int my_datetime_packed_from_binary(const unsigned char *ptr,
                                              unsigned int dec);
-
-void my_time_packed_to_binary(long long int nr, unsigned char *ptr,
-                              unsigned int dec);
-long long int my_time_packed_from_binary(const unsigned char *ptr,
-                                         unsigned int dec);
 
 void my_timestamp_to_binary(const my_timeval *tm, unsigned char *ptr,
                             unsigned int dec);

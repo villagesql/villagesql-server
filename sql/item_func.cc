@@ -1877,20 +1877,20 @@ bool Item_func_numhybrid::get_date(MYSQL_TIME *ltime,
   }
 }
 
-bool Item_func_numhybrid::get_time(MYSQL_TIME *ltime) {
+bool Item_func_numhybrid::val_time(Time_val *time) {
   assert(fixed);
   switch (data_type()) {
     case MYSQL_TYPE_TIME:
-      return time_op(ltime);
+      return time_op(time);
     case MYSQL_TYPE_DATE:
-      return get_time_from_date(ltime);
+      return get_time_from_date(time);
     case MYSQL_TYPE_DATETIME:
     case MYSQL_TYPE_TIMESTAMP:
-      return get_time_from_datetime(ltime);
+      return get_time_from_datetime(time);
     case MYSQL_TYPE_YEAR:
-      return get_time_from_int(ltime);
+      return get_time_from_int(time);
     default:
-      return Item::get_time_from_non_temporal(ltime);
+      return Item::get_time_from_non_temporal(time);
   }
 }
 
@@ -1907,32 +1907,30 @@ bool Item_typecast_signed::resolve_type(THD *thd) {
   return args[0]->propagate_type(thd, MYSQL_TYPE_LONGLONG, false, true);
 }
 
-static longlong val_int_from_str(Item *item, bool unsigned_flag,
-                                 bool *null_value) {
-  /*
-    For a string result, we must first get the string and then convert it
-    to a longlong
-  */
+static bool val_int_from_str(Item *item, bool unsigned_flag, longlong *value) {
+  // First evaluate the string and then convert it to a longlong
   StringBuffer<MAX_FIELD_WIDTH> tmp;
   const String *res = item->val_str(&tmp);
-  *null_value = item->null_value;
-  if (*null_value) return 0;
+  if (res == nullptr) return true;
+  if (item->null_value) return true;
 
   const size_t length = res->length();
   const char *start = res->ptr();
   const char *end = start + length;
-  return longlong_from_string_with_check(res->charset(), start, end,
-                                         unsigned_flag);
+  *value = longlong_from_string_with_check(res->charset(), start, end,
+                                           static_cast<int>(unsigned_flag));
+  return false;  // NOTE: warnings are never checked by callers
 }
 
 longlong Item_typecast_signed::val_int() {
-  longlong value;
+  longlong value{0};
 
   if (args[0]->cast_to_int_type() != STRING_RESULT || args[0]->is_temporal()) {
     value = args[0]->val_int();
     null_value = args[0]->null_value;
   } else {
-    value = val_int_from_str(args[0], unsigned_flag, &null_value);
+    (void)val_int_from_str(args[0], unsigned_flag, &value);
+    null_value = args[0]->null_value;
   }
 
 #ifndef NDEBUG
@@ -1980,7 +1978,8 @@ longlong Item_typecast_unsigned::val_int() {
     value = args[0]->val_int();
     null_value = args[0]->null_value;
   } else {
-    value = val_int_from_str(args[0], unsigned_flag, &null_value);
+    (void)val_int_from_str(args[0], unsigned_flag, &value);
+    null_value = args[0]->null_value;
   }
 
   assert(!null_value || is_nullable());
@@ -1990,7 +1989,9 @@ longlong Item_typecast_unsigned::val_int() {
 }
 
 String *Item_typecast_decimal::val_str(String *str) {
-  my_decimal tmp_buf, *tmp = val_decimal(&tmp_buf);
+  my_decimal tmp_buf;
+  my_decimal *tmp = val_decimal(&tmp_buf);
+  if (tmp == nullptr) return nullptr;
   if (null_value) return nullptr;
   my_decimal2string(E_DEC_FATAL_ERROR, tmp, str);
   return str;
@@ -2013,13 +2014,15 @@ longlong Item_typecast_decimal::val_int() {
 }
 
 my_decimal *Item_typecast_decimal::val_decimal(my_decimal *dec) {
-  my_decimal tmp_buf, *tmp = args[0]->val_decimal(&tmp_buf);
-  bool sign;
   uint precision;
+  my_decimal tmp_buf;
+  my_decimal *tmp = args[0]->val_decimal(&tmp_buf);
+  null_value = args[0]->null_value;
+  if (tmp == nullptr) return nullptr;
 
-  if ((null_value = args[0]->null_value)) return nullptr;
+  if (null_value) return nullptr;
   my_decimal_round(E_DEC_FATAL_ERROR, tmp, decimals, false, dec);
-  sign = dec->sign();
+  bool sign = dec->sign();
   if (unsigned_flag) {
     if (sign) {
       my_decimal_set_zero(dec);
@@ -2103,8 +2106,8 @@ bool Item_typecast_real::get_date(MYSQL_TIME *ltime,
   return my_double_to_datetime_with_warn(val_real(), ltime, fuzzydate);
 }
 
-bool Item_typecast_real::get_time(MYSQL_TIME *ltime) {
-  return my_double_to_time_with_warn(val_real(), ltime);
+bool Item_typecast_real::val_time(Time_val *time) {
+  return my_double_to_time_with_warn(val_real(), time);
 }
 
 my_decimal *Item_typecast_real::val_decimal(my_decimal *decimal_value) {
@@ -3931,14 +3934,19 @@ bool Item_func_min_max::cmp_datetimes(longlong *value) {
   return false;
 }
 
-bool Item_func_min_max::cmp_times(longlong *value) {
-  longlong res = 0;
+bool Item_func_min_max::cmp_times(Time_val *value) {
+  Time_val result;
   for (uint i = 0; i < arg_count; i++) {
-    const longlong tmp = args[i]->val_time_temporal();
+    Time_val time;
+    if (args[i]->val_time(&time)) {
+      if (current_thd->is_error()) return true;
+    }
     if ((null_value = args[i]->null_value)) return true;
-    if (i == 0 || (tmp < res) == m_is_least_func) res = tmp;
+    if (i == 0 || (time.compare(result) < 0) == m_is_least_func) {
+      result = time;
+    }
   }
-  *value = res;
+  *value = result;
   return false;
 }
 
@@ -4011,18 +4019,19 @@ bool Item_func_min_max::date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
   return check_date(*ltime, non_zero_date(*ltime), fuzzydate, &warnings);
 }
 
-bool Item_func_min_max::time_op(MYSQL_TIME *ltime) {
+bool Item_func_min_max::time_op(Time_val *time) {
   assert(fixed);
   longlong result = 0;
   if (compare_as_dates()) {
     if (cmp_datetimes(&result)) return true;
-    TIME_from_longlong_packed(ltime, data_type(), result);
-    datetime_to_time(ltime);
+    MYSQL_TIME mtime;
+    TIME_from_longlong_packed(&mtime, data_type(), result);
+    datetime_to_time(&mtime);
+    *time = Time_val{mtime};
     return false;
   }
 
-  if (cmp_times(&result)) return true;
-  TIME_from_longlong_time_packed(ltime, result);
+  if (cmp_times(time)) return true;
   return false;
 }
 
@@ -4127,13 +4136,13 @@ bool Item_rollup_group_item::get_date(MYSQL_TIME *ltime,
   return (null_value = args[0]->get_date(ltime, fuzzydate));
 }
 
-bool Item_rollup_group_item::get_time(MYSQL_TIME *ltime) {
+bool Item_rollup_group_item::val_time(Time_val *time) {
   assert(fixed);
   if (rollup_null()) {
     null_value = true;
     return true;
   }
-  return (null_value = args[0]->get_time(ltime));
+  return (null_value = args[0]->val_time(time));
 }
 
 double Item_rollup_group_item::val_real() {
@@ -7301,7 +7310,8 @@ longlong Item_func_get_system_var::val_int() {
       if (!null_value)
         cached_llval = longlong_from_string_with_check(
             cached_strval.charset(), cached_strval.c_ptr(),
-            cached_strval.c_ptr() + cached_strval.length(), unsigned_flag);
+            cached_strval.c_ptr() + cached_strval.length(),
+            static_cast<int>(unsigned_flag));
       else
         cached_llval = 0;
       cache_present |= GET_SYS_VAR_CACHE_LONG;
@@ -7343,11 +7353,12 @@ longlong Item_func_get_system_var::val_int() {
       case SHOW_LEX_STRING: {
         String *str_val = val_str(nullptr);
         // Treat empty strings as NULL, like val_real() does.
-        if (str_val && str_val->length())
+        if (str_val && str_val->length()) {
           cached_llval = longlong_from_string_with_check(
               system_charset_info, str_val->c_ptr(),
-              str_val->c_ptr() + str_val->length(), unsigned_flag);
-        else {
+              str_val->c_ptr() + str_val->length(),
+              static_cast<int>(unsigned_flag));
+        } else {
           null_value = true;
           cached_llval = 0;
         }
@@ -8333,9 +8344,9 @@ bool Item_func_sp::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
   return sp_result_field->get_date(ltime, fuzzydate);
 }
 
-bool Item_func_sp::get_time(MYSQL_TIME *ltime) {
+bool Item_func_sp::val_time(Time_val *time) {
   if (execute() || null_value) return true;
-  return sp_result_field->get_time(ltime);
+  return sp_result_field->val_time(time);
 }
 
 my_decimal *Item_func_sp::val_decimal(my_decimal *dec_buf) {

@@ -1736,7 +1736,8 @@ void Acl_table_user_reader::read_password_last_changed(ACL_USER &user) {
       if (password_last_changed &&
           memcmp(password_last_changed, INVALID_DATE, sizeof(INVALID_DATE))) {
         String str(password_last_changed, &my_charset_bin);
-        str_to_time_with_warn(&str, &(user.password_last_changed));
+        str_to_datetime_with_warn(&str, &user.password_last_changed,
+                                  TIME_DATETIME_ONLY);
       }
     }
   }

@@ -937,10 +937,7 @@ TEST_F(JsonDomTest, AttemptBinaryUpdate_AllTypes) {
   EXPECT_FALSE(str_to_datetime(&my_charset_utf8mb4_bin, "20170223", 8, &dt,
                                static_cast<my_time_flags_t>(0), &status));
 
-  MYSQL_TIME tm;
-  std::memset(&dt, 0, sizeof(tm));
-  EXPECT_FALSE(str_to_time(&my_charset_utf8mb4_bin, "17:28:25", 8, &tm,
-                           static_cast<my_time_flags_t>(0), &status));
+  Time_val time{false, 17, 28, 25, 0};
 
   Json_dom *doms[] = {
       new (std::nothrow) Json_null,
@@ -961,7 +958,7 @@ TEST_F(JsonDomTest, AttemptBinaryUpdate_AllTypes) {
       new (std::nothrow) Json_datetime(dt, MYSQL_TYPE_DATETIME),
       new (std::nothrow) Json_datetime(dt, MYSQL_TYPE_DATE),
       new (std::nothrow) Json_datetime(dt, MYSQL_TYPE_TIMESTAMP),
-      new (std::nothrow) Json_datetime(tm, MYSQL_TYPE_TIME),
+      new (std::nothrow) Json_time(time),
       new (std::nothrow) Json_opaque(MYSQL_TYPE_BLOB, 5, 'x'),
       new (std::nothrow) Json_array(),
       parse_json("[1,2,3]").release(),

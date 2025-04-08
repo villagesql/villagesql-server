@@ -3033,18 +3033,6 @@ longlong Item_sum_hybrid::val_int() {
   return retval;
 }
 
-longlong Item_sum_hybrid::val_time_temporal() {
-  assert(fixed);
-  if (m_is_window_function) {
-    if (wf_common_init()) return 0;
-    if (m_optimize ? compute() : add()) return 0;
-  }
-  if (null_value) return 0;
-  longlong retval = value->val_time_temporal();
-  if ((null_value = value->null_value)) assert(retval == 0);
-  return retval;
-}
-
 longlong Item_sum_hybrid::val_date_temporal() {
   assert(fixed);
   if (m_is_window_function) {
@@ -3084,14 +3072,14 @@ bool Item_sum_hybrid::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
   return (null_value = value->get_date(ltime, fuzzydate));
 }
 
-bool Item_sum_hybrid::get_time(MYSQL_TIME *ltime) {
+bool Item_sum_hybrid::val_time(Time_val *time) {
   assert(fixed);
   if (m_is_window_function) {
     if (wf_common_init()) return true;
     if (m_optimize ? compute() : add()) return true;
   }
   if (null_value) return true;
-  return (null_value = value->get_time(ltime));
+  return (null_value = value->val_time(time));
 }
 
 String *Item_sum_hybrid::val_str(String *str) {
@@ -3240,11 +3228,11 @@ bool Item_sum_bit::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
     return get_date_from_string(ltime, fuzzydate);
 }
 
-bool Item_sum_bit::get_time(MYSQL_TIME *ltime) {
+bool Item_sum_bit::val_time(Time_val *time) {
   if (hybrid_type == INT_RESULT)
-    return get_time_from_int(ltime);
+    return get_time_from_int(time);
   else
-    return get_time_from_string(ltime);
+    return get_time_from_string(time);
 }
 
 my_decimal *Item_sum_bit::val_decimal(my_decimal *dec_buf) {
@@ -3368,31 +3356,50 @@ void Item_sum_num::reset_field() {
 }
 
 void Item_sum_hybrid::reset_field() {
+  assert(is_nullable());
   switch (hybrid_type) {
     case STRING_RESULT: {
-      if (args[0]->is_temporal()) {
-        longlong nr = args[0]->val_temporal_by_field_type();
-        if (is_nullable()) {
+      switch (data_type()) {
+        case MYSQL_TYPE_TIME: {
+          Time_val time;
+          (void)args[0]->val_time(&time);
           if (args[0]->null_value) {
-            nr = 0;
             result_field->set_null();
-          } else
+          } else {
             result_field->set_notnull();
+          }
+          result_field->store_time(time, decimals);
+          break;
         }
-        result_field->store_packed(nr);
-        break;
-      }
+        case MYSQL_TYPE_DATE:
+        case MYSQL_TYPE_DATETIME:
+        case MYSQL_TYPE_TIMESTAMP: {
+          longlong nr = args[0]->val_date_temporal();
+          if (is_nullable()) {
+            if (args[0]->null_value) {
+              nr = 0;
+              result_field->set_null();
+            } else {
+              result_field->set_notnull();
+            }
+          }
+          result_field->store_packed(nr);
+          break;
+        }
+        default: {
+          char buff[MAX_FIELD_WIDTH];
+          String tmp(buff, sizeof(buff), result_field->charset()), *res;
 
-      char buff[MAX_FIELD_WIDTH];
-      String tmp(buff, sizeof(buff), result_field->charset()), *res;
-
-      res = args[0]->val_str(&tmp);
-      if (args[0]->null_value) {
-        result_field->set_null();
-        result_field->reset();
-      } else {
-        result_field->set_notnull();
-        result_field->store(res->ptr(), res->length(), tmp.charset());
+          res = args[0]->val_str(&tmp);
+          if (args[0]->null_value) {
+            result_field->set_null();
+            result_field->reset();
+          } else {
+            result_field->set_notnull();
+            result_field->store(res->ptr(), res->length(), tmp.charset());
+          }
+          break;
+        }
       }
       break;
     }
@@ -3403,8 +3410,9 @@ void Item_sum_hybrid::reset_field() {
         if (args[0]->null_value) {
           nr = 0;
           result_field->set_null();
-        } else
+        } else {
           result_field->set_notnull();
+        }
       }
       result_field->store(nr, unsigned_flag);
       break;
@@ -3416,8 +3424,9 @@ void Item_sum_hybrid::reset_field() {
         if (args[0]->null_value) {
           nr = 0.0;
           result_field->set_null();
-        } else
+        } else {
           result_field->set_notnull();
+        }
       }
       result_field->store(nr);
       break;
@@ -3427,10 +3436,11 @@ void Item_sum_hybrid::reset_field() {
       my_decimal *arg_dec = args[0]->val_decimal(&value_buff);
 
       if (is_nullable()) {
-        if (args[0]->null_value)
+        if (args[0]->null_value) {
           result_field->set_null();
-        else
+        } else {
           result_field->set_notnull();
+        }
       }
       /*
         We must store zero in the field as we will use the field value in
@@ -3619,12 +3629,22 @@ void Item_sum_avg::update_field() {
 void Item_sum_hybrid::update_field() {
   switch (hybrid_type) {
     case STRING_RESULT:
-      if (args[0]->is_temporal())
-        min_max_update_temporal_field();
-      else if (data_type() == MYSQL_TYPE_JSON)
-        min_max_update_json_field();
-      else
-        min_max_update_str_field();
+      switch (data_type()) {
+        case MYSQL_TYPE_TIME:
+          min_max_update_time_field();
+          break;
+        case MYSQL_TYPE_DATE:
+        case MYSQL_TYPE_DATETIME:
+        case MYSQL_TYPE_TIMESTAMP:
+          min_max_update_temporal_field();
+          break;
+        case MYSQL_TYPE_JSON:
+          min_max_update_json_field();
+          break;
+        default:
+          min_max_update_str_field();
+          break;
+      }
       break;
     case INT_RESULT:
       min_max_update_int_field();
@@ -3637,14 +3657,34 @@ void Item_sum_hybrid::update_field() {
   }
 }
 
+void Item_sum_hybrid::min_max_update_time_field() {
+  Time_val time;
+  if (args[0]->val_time(&time)) {
+    return;
+  }
+  if (result_field->is_null()) {
+    result_field->set_notnull();
+  } else {
+    Time_val old_time;
+    (void)result_field->val_time(&old_time);
+    if (!min_max_best_so_far(
+            compare_numbers(time.for_comparison(), old_time.for_comparison()),
+            m_is_min)) {
+      return;
+    }
+  }
+  result_field->store_time(time, decimals);
+}
+
 void Item_sum_hybrid::min_max_update_temporal_field() {
-  const longlong nr = args[0]->val_temporal_by_field_type();
+  assert(data_type() != MYSQL_TYPE_TIME);
+  const longlong nr = args[0]->val_date_temporal();
   if (args[0]->null_value) return;
 
   if (result_field->is_null()) {
     result_field->set_notnull();
   } else {
-    const longlong old_nr = result_field->val_temporal_by_field_type();
+    const longlong old_nr = result_field->val_date_temporal();
     if (!min_max_best_so_far(
             unsigned_flag ? compare_numbers(ulonglong(nr), ulonglong(old_nr))
                           : compare_numbers(nr, old_nr),
@@ -3868,11 +3908,11 @@ bool Item_aggr_bit_field::get_date(MYSQL_TIME *ltime,
   else
     return get_date_from_string(ltime, fuzzydate);
 }
-bool Item_aggr_bit_field::get_time(MYSQL_TIME *ltime) {
+bool Item_aggr_bit_field::val_time(Time_val *time) {
   if (m_result_type == INT_RESULT)
-    return get_time_from_numeric(ltime);
+    return get_time_from_numeric(time);
   else
-    return get_time_from_string(ltime);
+    return get_time_from_string(time);
 }
 
 Item_aggr_std_field::Item_aggr_std_field(Item_sum_std *item)
@@ -5281,12 +5321,12 @@ bool Item_first_last_value::get_date(MYSQL_TIME *ltime,
   return retval;
 }
 
-bool Item_first_last_value::get_time(MYSQL_TIME *ltime) {
+bool Item_first_last_value::val_time(Time_val *time) {
   if (wf_common_init()) return true;
 
   if (compute()) return true;
 
-  bool retval = m_value->get_time(ltime);
+  bool retval = m_value->val_time(time);
   null_value = m_value->null_value;
   return retval;
 }
@@ -5518,12 +5558,12 @@ bool Item_nth_value::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
   return retval;
 }
 
-bool Item_nth_value::get_time(MYSQL_TIME *ltime) {
+bool Item_nth_value::val_time(Time_val *time) {
   if (wf_common_init()) return true;
 
   if (compute()) return true;
 
-  bool retval = m_value->get_time(ltime);
+  bool retval = m_value->val_time(time);
   null_value = m_value->null_value;
   return retval;
 }
@@ -5750,12 +5790,12 @@ bool Item_lead_lag::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
                        : m_value->get_date(ltime, fuzzydate);
 }
 
-bool Item_lead_lag::get_time(MYSQL_TIME *ltime) {
+bool Item_lead_lag::val_time(Time_val *time) {
   if (wf_common_init()) return true;
 
   if (compute()) return true;
 
-  return m_use_default ? m_default->get_time(ltime) : m_value->get_time(ltime);
+  return m_use_default ? m_default->val_time(time) : m_value->val_time(time);
 }
 
 bool Item_lead_lag::val_json(Json_wrapper *jw) {
@@ -6009,11 +6049,11 @@ bool Item_sum_json::get_date(MYSQL_TIME *ltime, my_time_flags_t) {
                                 DatetimeConversionFlags(current_thd));
 }
 
-bool Item_sum_json::get_time(MYSQL_TIME *ltime) {
+bool Item_sum_json::val_time(Time_val *time) {
   if (null_value || m_wrapper->empty()) return true;
 
   return m_wrapper->coerce_time(JsonCoercionWarnHandler{func_name()},
-                                JsonCoercionDeprecatedDefaultHandler{}, ltime);
+                                JsonCoercionDeprecatedDefaultHandler{}, time);
 }
 
 void Item_sum_json::reset_field() {
@@ -6465,9 +6505,9 @@ bool Item_rollup_sum_switcher::get_date(MYSQL_TIME *ltime,
   return (null_value = current_arg()->get_date(ltime, fuzzydate));
 }
 
-bool Item_rollup_sum_switcher::get_time(MYSQL_TIME *ltime) {
+bool Item_rollup_sum_switcher::val_time(Time_val *time) {
   assert(fixed);
-  return (null_value = current_arg()->get_time(ltime));
+  return (null_value = current_arg()->val_time(time));
 }
 
 double Item_rollup_sum_switcher::val_real() {

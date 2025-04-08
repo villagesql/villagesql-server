@@ -320,7 +320,7 @@ int main() {
     {
       Json_wrapper jw = Json_wrapper(
           create_dom_ptr<Json_string>("2015-01-15 23:24:25.000000"));
-      MYSQL_TIME ltime;
+      Time_val ltime;
       bool res = jw.coerce_time(
           [](const char *, int) { std::cout << "9.6. ERROR \n"; },
           [](MYSQL_TIME_STATUS &) { std::cout << "9.6. checking \n"; }, &ltime);

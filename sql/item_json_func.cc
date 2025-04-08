@@ -1111,16 +1111,16 @@ bool Item_json_func::get_date(MYSQL_TIME *ltime, my_time_flags_t flags) {
   return get_date_from_json(this, ltime, flags);
 }
 
-static bool get_time_from_json(Item_func *item, MYSQL_TIME *ltime) {
+static bool get_time_from_json(Item_func *item, Time_val *time) {
   Json_wrapper wr;
   if (item->val_json(&wr)) return true;
   if (item->null_value) return true;
   return wr.coerce_time(JsonCoercionWarnHandler{item->func_name()},
-                        JsonCoercionDeprecatedDefaultHandler{}, ltime);
+                        JsonCoercionDeprecatedDefaultHandler{}, time);
 }
 
-bool Item_json_func::get_time(MYSQL_TIME *ltime) {
-  return get_time_from_json(this, ltime);
+bool Item_json_func::val_time(Time_val *time) {
+  return get_time_from_json(this, time);
 }
 
 longlong val_int_from_json(Item_func *item) {
@@ -1244,9 +1244,8 @@ bool sql_scalar_to_json(Item *arg, const char *calling_function, String *value,
     }
     case MYSQL_TYPE_DATE:
     case MYSQL_TYPE_DATETIME:
-    case MYSQL_TYPE_TIMESTAMP:
-    case MYSQL_TYPE_TIME: {
-      const longlong dt = arg->val_temporal_by_field_type();
+    case MYSQL_TYPE_TIMESTAMP: {
+      const longlong dt = arg->val_date_temporal();
       if (current_thd->is_error()) return true;
       if (arg->null_value) return false;
 
@@ -1256,6 +1255,16 @@ bool sql_scalar_to_json(Item *arg, const char *calling_function, String *value,
       if (create_scalar<Json_datetime>(scalar, &dom, t, field_type))
         return true; /* purecov: inspected */
 
+      break;
+    }
+    case MYSQL_TYPE_TIME: {
+      Time_val time;
+      if (arg->val_time(&time)) {
+        return current_thd->is_error();
+      }
+      if (create_scalar<Json_time>(scalar, &dom, time)) {
+        return true; /* purecov: inspected */
+      }
       break;
     }
     case MYSQL_TYPE_NEWDECIMAL: {
@@ -4125,8 +4134,10 @@ bool save_json_to_field(THD *thd, Field *field, const Json_wrapper *w,
       } else if (field->type() == MYSQL_TYPE_TIME &&
                  w->type() == enum_json_type::J_TIME) {
         date_time_handled = true;
+        Time_val time;
         err = w->coerce_time(error_handler,
-                             JsonCoercionDeprecatedDefaultHandler{}, &ltime);
+                             JsonCoercionDeprecatedDefaultHandler{}, &time);
+        ltime = MYSQL_TIME(time);
       }
       if (date_time_handled) {
         err = err || field->store_time(&ltime);
@@ -4325,15 +4336,17 @@ Item_func_json_value::create_json_value_default(THD *thd, Item *item) {
       break;
     }
     case ITEM_CAST_TIME: {
-      MYSQL_TIME *ltime = new (mem_root) MYSQL_TIME;
-      if (ltime == nullptr) return nullptr;
-      if (item->get_time(ltime)) return nullptr;
+      Time_val time;
+      MYSQL_TIME *mtime = new (mem_root) MYSQL_TIME;
+      if (mtime == nullptr) return nullptr;
+      if (item->val_time(&time)) return nullptr;
       assert(!thd->is_error());
-      if (actual_decimals(ltime) > decimals) {
+      if (time.actual_decimals() > decimals) {
         my_error(ER_DATA_OUT_OF_RANGE, MYF(0), "TIME DEFAULT", func_name());
         return nullptr;
       }
-      default_value->temporal_default = ltime;
+      *mtime = MYSQL_TIME(time);
+      default_value->temporal_default = mtime;
       break;
     }
     case ITEM_CAST_DATETIME: {
@@ -4964,28 +4977,28 @@ bool Item_func_json_value::get_date(MYSQL_TIME *ltime, my_time_flags_t flags) {
   return true;
 }
 
-bool Item_func_json_value::get_time(MYSQL_TIME *ltime) {
+bool Item_func_json_value::val_time(Time_val *time) {
   assert(fixed);
   switch (m_cast_target) {
     case ITEM_CAST_SIGNED_INT:
     case ITEM_CAST_YEAR:
     case ITEM_CAST_UNSIGNED_INT:
-      return get_time_from_int(ltime);
+      return get_time_from_int(time);
     case ITEM_CAST_DATE:
-      return get_time_from_date(ltime);
+      return get_time_from_date(time);
     case ITEM_CAST_TIME:
-      return extract_time_value(ltime);
+      return extract_time_value(time);
     case ITEM_CAST_DATETIME:
-      return get_time_from_datetime(ltime);
+      return get_time_from_datetime(time);
     case ITEM_CAST_CHAR:
-      return get_time_from_string(ltime);
+      return get_time_from_string(time);
     case ITEM_CAST_DECIMAL:
-      return get_time_from_decimal(ltime);
+      return get_time_from_decimal(time);
     case ITEM_CAST_JSON:
-      return get_time_from_json(this, ltime);
+      return get_time_from_json(this, time);
     case ITEM_CAST_FLOAT:
     case ITEM_CAST_DOUBLE:
-      return get_time_from_real(ltime);
+      return get_time_from_real(time);
     /* purecov: begin inspected */
     case ITEM_CAST_POINT:
       my_error(ER_INVALID_CAST_TO_GEOMETRY, MYF(0), "JSON", "POINT");
@@ -5110,30 +5123,30 @@ bool Item_func_json_value::extract_date_value(MYSQL_TIME *ltime) {
   return false;
 }
 
-bool Item_func_json_value::extract_time_value(MYSQL_TIME *ltime) {
+bool Item_func_json_value::extract_time_value(Time_val *time) {
   assert(m_cast_target == ITEM_CAST_TIME);
   Json_wrapper wr;
   const Default_value *return_default = nullptr;
   if (extract_json_value(&wr, &return_default) || null_value) {
-    set_zero_time(ltime, MYSQL_TIMESTAMP_TIME);
+    time->set_zero();
     return true;
   }
 
   if (return_default != nullptr) {
-    *ltime = *return_default->temporal_default;
+    *time = Time_val{*return_default->temporal_default};
     return false;
   }
   if (!wr.coerce_time([](const char *, int) {},
-                      JsonCoercionDeprecatedDefaultHandler{}, ltime))
+                      JsonCoercionDeprecatedDefaultHandler{}, time)) {
     return false;
-
+  }
   if (handle_json_value_conversion_error(m_on_error, "TIME", this) ||
       null_value) {
-    set_zero_time(ltime, MYSQL_TIMESTAMP_TIME);
+    time->set_zero();
     return true;
   }
 
-  *ltime = *m_default_error->temporal_default;
+  *time = Time_val{*m_default_error->temporal_default};
   return false;
 }
 

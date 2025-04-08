@@ -200,7 +200,7 @@ class Item_json_func : public Item_func {
   enum Item_result result_type() const override { return STRING_RESULT; }
   String *val_str(String *arg) override;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_time(Time_val *time) override;
   longlong val_int() override;
   double val_real() override;
   my_decimal *val_decimal(my_decimal *decimal_value) override;
@@ -1121,7 +1121,7 @@ class Item_func_array_cast final : public Item_func {
     assert(false);
     return true;
   }
-  bool get_time(MYSQL_TIME *) override {
+  bool val_time(Time_val *) override {
     assert(false);
     return true;
   }
@@ -1197,7 +1197,7 @@ class Item_func_json_value final : public Item_func {
   longlong val_int() override;
   my_decimal *val_decimal(my_decimal *value) override;
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t flags) override;
-  bool get_time(MYSQL_TIME *ltime) override;
+  bool val_time(Time_val *time) override;
   Json_on_response_type on_empty_response_type() const;
   Json_on_response_type on_error_response_type() const;
 
@@ -1249,8 +1249,8 @@ class Item_func_json_value final : public Item_func {
   int64_t extract_year_value();
   /// Implements get_date() for RETURNING DATE.
   bool extract_date_value(MYSQL_TIME *ltime);
-  /// Implements get_time() for RETURNING TIME.
-  bool extract_time_value(MYSQL_TIME *ltime);
+  /// Implements val_time() for RETURNING TIME.
+  bool extract_time_value(Time_val *time);
   /// Implements get_date() for RETURNING DATETIME.
   bool extract_datetime_value(MYSQL_TIME *ltime);
   /// Implements val_decimal() for RETURNING DECIMAL.

@@ -269,7 +269,7 @@ class Item_func_regexp_instr : public Item_func_regexp {
     return get_date_from_int(ltime, fuzzydate);
   }
 
-  bool get_time(MYSQL_TIME *t) override { return get_time_from_int(t); }
+  bool val_time(Time_val *time) override { return get_time_from_int(time); }
   /// @}
 
  protected:
@@ -313,7 +313,7 @@ class Item_func_regexp_like : public Item_func_regexp {
     return get_date_from_int(ltime, fuzzydate);
   }
 
-  bool get_time(MYSQL_TIME *t) override { return get_time_from_int(t); }
+  bool val_time(Time_val *time) override { return get_time_from_int(time); }
   /// @}
 
  protected:
@@ -355,7 +355,7 @@ class Item_func_regexp_replace : public Item_func_regexp {
     return get_date_from_string(ltime, fuzzydate);
   }
 
-  bool get_time(MYSQL_TIME *t) override { return get_time_from_string(t); }
+  bool val_time(Time_val *time) override { return get_time_from_string(time); }
   /// @}
 
  protected:
@@ -392,7 +392,7 @@ class Item_func_regexp_substr : public Item_func_regexp {
     return get_date_from_string(ltime, fuzzydate);
   }
 
-  bool get_time(MYSQL_TIME *t) override { return get_time_from_string(t); }
+  bool val_time(Time_val *time) override { return get_time_from_string(time); }
   /// @}
 
  protected:

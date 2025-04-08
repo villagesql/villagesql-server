@@ -25,6 +25,7 @@
 #include <cstring>
 
 #include "my_inttypes.h"
+#include "my_temporal.h"
 #include "sql/dd/impl/dictionary_impl.h"
 #include "sql/dd/impl/raw/raw_record.h"
 #include "sql/dd/impl/types/column_statistics_impl.h"
@@ -63,6 +64,11 @@ void add_values(histograms::Value_map<double> &value_map) {
 
 void add_values(histograms::Value_map<String> &value_map) {
   value_map.add_values(String(), 10);
+}
+
+void add_values(histograms::Value_map<Time_val> &value_map) {
+  Time_val time{false, 10, 0, 0, 0};
+  value_map.add_values(time, 10);
 }
 
 void add_values(histograms::Value_map<MYSQL_TIME> &value_map) {
@@ -367,7 +373,7 @@ TEST(ColumnStatisticsTest, StoreAndRestoreAttributesEquiHeight) {
   equi_height_test<String>(histograms::Value_map_type::STRING);
   equi_height_test<my_decimal>(histograms::Value_map_type::DECIMAL);
   equi_height_test<MYSQL_TIME>(histograms::Value_map_type::DATE);
-  equi_height_test<MYSQL_TIME>(histograms::Value_map_type::TIME);
+  equi_height_test<Time_val>(histograms::Value_map_type::TIME);
   equi_height_test<MYSQL_TIME>(histograms::Value_map_type::DATETIME);
   equi_height_test<double>(histograms::Value_map_type::DOUBLE);
   m_init.TearDown();
@@ -383,7 +389,7 @@ TEST(ColumnStatisticsTest, StoreAndRestoreAttributesSingleton) {
   singleton_test<String>(histograms::Value_map_type::STRING);
   singleton_test<my_decimal>(histograms::Value_map_type::DECIMAL);
   singleton_test<MYSQL_TIME>(histograms::Value_map_type::DATE);
-  singleton_test<MYSQL_TIME>(histograms::Value_map_type::TIME);
+  singleton_test<Time_val>(histograms::Value_map_type::TIME);
   singleton_test<MYSQL_TIME>(histograms::Value_map_type::DATETIME);
   singleton_test<double>(histograms::Value_map_type::DOUBLE);
   m_init.TearDown();

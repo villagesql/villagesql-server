@@ -124,7 +124,7 @@ class Item_row : public Item {
     illegal_method_call("get_date");
     return true;
   }
-  bool get_time(MYSQL_TIME *) override {
+  bool val_time(Time_val *) override {
     illegal_method_call("get_time");
     return true;
   }

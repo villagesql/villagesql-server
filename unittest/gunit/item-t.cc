@@ -56,6 +56,7 @@
 #include "sql/tztime.h"
 #include "sql_string.h"
 #include "string_with_len.h"
+#include "unittest/gunit/benchmark.h"
 #include "unittest/gunit/fake_table.h"
 #include "unittest/gunit/mock_field_long.h"
 #include "unittest/gunit/mock_field_timestamp.h"
@@ -779,29 +780,6 @@ TEST_F(ItemTest, MysqlTimeCache) {
   EXPECT_STREQ("2011-11-07 10:20:30.123456", cache.cptr());
 
   /*
-    Testing TIME(6).
-    Initializing from MYSQL_TIME.
-  */
-  cache.set_time(&time6, 6);
-  EXPECT_EQ(709173043776LL, cache.val_packed());
-  EXPECT_EQ(6, cache.decimals());
-  // Call val_str() then cptr()
-  str = cache.val_str(&str_buff);
-  EXPECT_STREQ("10:20:30.123456", str->c_ptr_safe());
-  EXPECT_STREQ("10:20:30.123456", cache.cptr());
-
-  /*
-    Testing TIME(6).
-    Initializing from "struct timeval".
-  */
-  cache.set_time(tv6, 6, my_tz_UTC);
-  EXPECT_EQ(709173043776LL, cache.val_packed());
-  EXPECT_EQ(6, cache.decimals());
-  str = cache.val_str(&str_buff);
-  EXPECT_STREQ("10:20:30.123456", str->c_ptr_safe());
-  EXPECT_STREQ("10:20:30.123456", cache.cptr());
-
-  /*
     Testing DATETIME(5)
   */
   MysqlTime datetime5 = {
@@ -991,26 +969,58 @@ TEST_F(ItemTest, ItemJson) {
           mem_root, std::unique_ptr<Json_dom>(new (std::nothrow) Json_datetime(
                         date, MYSQL_TYPE_DATE))),
       name);
-  MYSQL_TIME time_result;
-  EXPECT_FALSE(item->get_date(&time_result, 0));
-  EXPECT_EQ(date.time_type, time_result.time_type);
-  EXPECT_EQ(date.year, time_result.year);
-  EXPECT_EQ(date.month, time_result.month);
-  EXPECT_EQ(date.day, time_result.day);
+  Time_val time_result;
+  MYSQL_TIME date_result;
+  EXPECT_FALSE(item->get_date(&date_result, 0));
+  EXPECT_EQ(date.time_type, date_result.time_type);
+  EXPECT_EQ(date.year, date_result.year);
+  EXPECT_EQ(date.month, date_result.month);
+  EXPECT_EQ(date.day, date_result.day);
 
-  const MysqlTime time(0, 0, 0, 10, 20, 30, 40, false, MYSQL_TIMESTAMP_TIME);
-  item = new Item_json(
-      make_unique_destroy_only<Json_wrapper>(
-          mem_root, std::unique_ptr<Json_dom>(new (std::nothrow) Json_datetime(
-                        time, MYSQL_TYPE_TIME))),
-      name);
-  EXPECT_FALSE(item->get_time(&time_result));
-  EXPECT_EQ(time.time_type, time_result.time_type);
-  EXPECT_EQ(time.hour, time_result.hour);
-  EXPECT_EQ(time.minute, time_result.minute);
-  EXPECT_EQ(time.second, time_result.second);
-  EXPECT_EQ(time.second_part, time_result.second_part);
-  EXPECT_EQ(time.neg, time_result.neg);
+  const Time_val time(false, 10, 20, 30, 40);
+  item = new Item_json(make_unique_destroy_only<Json_wrapper>(
+                           mem_root, std::unique_ptr<Json_dom>(
+                                         new (std::nothrow) Json_time(time))),
+                       name);
+  EXPECT_FALSE(item->val_time(&time_result));
+  EXPECT_EQ(time.hour(), time_result.hour());
+  EXPECT_EQ(time.minute(), time_result.minute());
+  EXPECT_EQ(time.second(), time_result.second());
+  EXPECT_EQ(time.microsecond(), time_result.microsecond());
+  EXPECT_EQ(time.is_negative(), time_result.is_negative());
 }
+
+static void BM_store_time(size_t iters) {
+  StopBenchmarkTiming();
+
+  my_testing::Server_initializer initializer;
+  initializer.SetUp();
+
+  uchar field_buffer[7];
+  Field_time *field = pointer_cast<Field_time *>(
+      my_malloc(PSI_NOT_INSTRUMENTED, sizeof(Field_time), MYF(0)));
+  new (field)
+      Field_time(field_buffer + 1, field_buffer, 0, Field::NONE, "tm", 6);
+  Time_val time = Time_val(false, 12, 23, 45, 123456);
+  Item *literal = new Item_time_literal(&time, 6);
+  (void)field->store_time(time, 6);
+
+  StartBenchmarkTiming();
+
+  Time_val tv;
+  int dummy = 0;
+  for (size_t i = 0; i < iters; ++i) {
+    (void)literal->save_in_field(field, true);
+    dummy += tv.second();
+  }
+
+  ASSERT_NE(0, dummy);  // To keep the optimizer from removing the loop.
+  MysqlTime timex;
+  *implicit_cast<MYSQL_TIME *>(&timex) = MYSQL_TIME(tv);
+  my_free(field);
+
+  initializer.TearDown();
+}
+BENCHMARK(BM_store_time)
 
 }  // namespace item_unittest

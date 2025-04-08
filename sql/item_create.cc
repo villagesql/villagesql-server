@@ -2217,15 +2217,16 @@ Item *create_temporal_literal(THD *thd, const char *str, size_t length,
       if (!str_to_time(cs, str, length, &ltime, 0, &status) &&
           ltime.time_type == MYSQL_TIMESTAMP_TIME && !status.warnings) {
         check_deprecated_datetime_format(thd, cs, status);
+        Time_val time = Time_val(ltime);
         item = new (thd->mem_root)
-            Item_time_literal(&ltime, status.fractional_digits);
+            Item_time_literal(&time, status.fractional_digits);
       }
       break;
     default:
       assert(0);
   }
 
-  if (item) return item;
+  if (item != nullptr) return item;
 
   if (send_error) {
     const char *typestr = (type == MYSQL_TYPE_DATE)   ? "DATE"

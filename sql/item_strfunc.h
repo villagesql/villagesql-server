@@ -120,9 +120,7 @@ class Item_str_func : public Item_func {
   bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
     return get_date_from_string(ltime, fuzzydate);
   }
-  bool get_time(MYSQL_TIME *ltime) override {
-    return get_time_from_string(ltime);
-  }
+  bool val_time(Time_val *time) override { return get_time_from_string(time); }
   enum Item_result result_type() const override { return STRING_RESULT; }
   void left_right_max_length(THD *thd);
   bool fix_fields(THD *thd, Item **ref) override;

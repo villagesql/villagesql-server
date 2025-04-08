@@ -52,6 +52,7 @@
 #include "my_macros.h"
 #include "my_systime.h"
 #include "my_table_map.h"
+#include "my_temporal.h"
 #include "my_time.h"  // MAX_DATE_STRING_REP_LENGTH
 #include "mysql.h"    // MYSQL_OPT_MAX_ALLOWED_PACKET
 #include "mysql/binlog/event/debug_vars.h"
@@ -1958,9 +1959,9 @@ static size_t log_event_print_value(IO_CACHE *file, const uchar *ptr, uint type,
       snprintf(typestr, typestr_length, "TIME(%d)", meta);
       if (!ptr) return my_b_printf(file, "NULL");
       char buf[MAX_DATE_STRING_REP_LENGTH];
-      MYSQL_TIME ltime;
-      const longlong packed = my_time_packed_from_binary(ptr, meta);
-      TIME_from_longlong_time_packed(&ltime, packed);
+      Time_val time;
+      Time_val::load_time(ptr, meta, &time);
+      MYSQL_TIME ltime = MYSQL_TIME(time);
       const int buflen = my_time_to_str(ltime, buf, meta);
       my_b_write_quoted(file, (uchar *)buf, buflen);
       return my_time_binary_length(meta);

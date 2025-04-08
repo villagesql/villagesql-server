@@ -676,43 +676,27 @@ static bool convert_constant_item(THD *thd, Item_field *field_item, Item **item,
       }
 
       // @todo it is not correct, in time_col = datetime_const_function,
-      // to convert the latter to Item_time_with_ref below. Time_col should
+      // to convert the latter to Item_time_literal below. Time_col should
       // rather be cast to datetime. WL#6570 check if the "fix temporals"
       // patch fixes this.
       if (0 == field_cmp) {
-        Item *tmp =
-            field->type() == MYSQL_TYPE_TIME
-                ?
-#define OLD_CMP
-#ifdef OLD_CMP
-                new Item_time_with_ref(field->decimals(),
-                                       field->val_time_temporal(), *item)
-                :
-#else
-                new Item_time_with_ref(
-                    max((*item)->time_precision(), field->decimals()),
-                    (*item)->val_time_temporal(), *item)
-                :
-#endif
-                is_temporal_type_with_date(field->type())
-                    ?
-#ifdef OLD_CMP
-                    new Item_datetime_with_ref(field->type(), field->decimals(),
-                                               field->val_date_temporal(),
-                                               *item)
-                    :
-#else
-                    new Item_datetime_with_ref(
-                        field->type(),
-                        max((*item)->datetime_precision(), field->decimals()),
-                        (*item)->val_date_temporal(), *item)
-                    :
-#endif
-                    field->type() == MYSQL_TYPE_YEAR
-                        ? make_year_constant(field)
-                        : new Item_int_with_ref(
-                              field->type(), field->val_int(), *item,
-                              field->is_flag_set(UNSIGNED_FLAG));
+        Item *tmp;
+        if (field->type() == MYSQL_TYPE_TIME) {
+          Time_val time;
+          if (field->val_time(&time)) {
+            assert(thd->is_error());
+            return true;
+          }
+          tmp = new Item_time_literal(&time, field->decimals());
+        } else if (is_temporal_type_with_date(field->type())) {
+          tmp = new Item_datetime_with_ref(field->type(), field->decimals(),
+                                           field->val_date_temporal(), *item);
+        } else if (field->type() == MYSQL_TYPE_YEAR) {
+          tmp = make_year_constant(field);
+        } else {
+          tmp = new Item_int_with_ref(field->type(), field->val_int(), *item,
+                                      field->is_flag_set(UNSIGNED_FLAG));
+        }
         if (tmp == nullptr) return true;
 
         if (thd->lex->is_exec_started())
@@ -974,9 +958,8 @@ bool Arg_comparator::set_compare_func(Item_func *item, Item_result type) {
       break;
     }
     case INT_RESULT: {
-      if ((*left)->is_temporal() && (*right)->is_temporal()) {
-        func = &Arg_comparator::compare_time_packed;
-      } else if (func == &Arg_comparator::compare_int_signed) {
+      assert(!(*left)->is_temporal() || !(*right)->is_temporal());
+      if (func == &Arg_comparator::compare_int_signed) {
         if ((*left)->unsigned_flag)
           func = (((*right)->unsigned_flag)
                       ? &Arg_comparator::compare_int_unsigned
@@ -1228,16 +1211,21 @@ bool Arg_comparator::can_compare_as_dates(const Item *left, const Item *right) {
   and a value returned by get_time function is used otherwise.
 */
 
-static longlong get_time_value(THD *, Item ***item_arg, Item **, const Item *,
-                               bool *is_null) {
+static longlong get_time_internal(THD *, Item ***item_arg, Item **,
+                                  const Item *, bool *is_null) {
   longlong value = 0;
   Item *item = **item_arg;
   String buf, *str = nullptr;
 
   if (item->data_type() == MYSQL_TYPE_TIME ||
       item->data_type() == MYSQL_TYPE_NULL) {
-    value = item->val_time_temporal();
-    *is_null = item->null_value;
+    Time_val time;
+    if (item->val_time(&time)) {
+      *is_null = item->null_value;
+    } else {
+      value = time.for_comparison();
+      *is_null = false;
+    }
   } else {
     str = item->val_str(&buf);
     *is_null = item->null_value;
@@ -1247,13 +1235,14 @@ static longlong get_time_value(THD *, Item ***item_arg, Item **, const Item *,
   /*
     Convert strings to the integer TIME representation.
   */
-  if (str) {
-    MYSQL_TIME l_time;
-    if (str_to_time_with_warn(str, &l_time)) {
+  if (str != nullptr) {
+    Time_val time;
+    if (str_to_time_with_warn(str, &time)) {
+      item->null_value = true;
       *is_null = true;
       return ~(ulonglong)0;
     }
-    value = TIME_to_longlong_datetime_packed(l_time);
+    value = time.for_comparison();
   }
 
   return value;
@@ -1293,11 +1282,20 @@ bool Arg_comparator::set_cmp_func(Item_func *owner_arg, Item **left_arg,
     return false;
   }
 
-  /*
-    Checks whether at least one of the arguments is DATE/DATETIME/TIMESTAMP
-    and the other one is also DATE/DATETIME/TIMESTAMP or a constant string.
-  */
-  if (can_compare_as_dates(*left, *right)) {
+  if ((*left)->data_type() == MYSQL_TYPE_TIME &&
+      (*right)->data_type() == MYSQL_TYPE_TIME) {
+    // Compare TIME values
+    left_cache = nullptr;
+    right_cache = nullptr;
+    func = &Arg_comparator::compare_time;
+    get_value_a_func = &get_time_value;
+    get_value_b_func = &get_time_value;
+    return false;
+  } else if (can_compare_as_dates(*left, *right)) {
+    /*
+      At least one of the arguments is DATE/DATETIME/TIMESTAMP and the other
+      one is also DATE/DATETIME/TIMESTAMP or a constant string.
+    */
     left_cache = nullptr;
     right_cache = nullptr;
     ulonglong numeric_datetime = static_cast<ulonglong>(MYSQL_TIMESTAMP_ERROR);
@@ -1336,19 +1334,6 @@ bool Arg_comparator::set_cmp_func(Item_func *owner_arg, Item **left_arg,
     get_value_a_func = &get_datetime_value;
     get_value_b_func = &get_datetime_value;
     cmp_collation.set(&my_charset_numeric);
-    set_cmp_context_for_datetime();
-    return false;
-  } else if ((type == STRING_RESULT ||
-              // When comparing time field and cached/converted time constant
-              type == REAL_RESULT) &&
-             (*left)->data_type() == MYSQL_TYPE_TIME &&
-             (*right)->data_type() == MYSQL_TYPE_TIME) {
-    /* Compare TIME values as integers. */
-    left_cache = nullptr;
-    right_cache = nullptr;
-    func = &Arg_comparator::compare_datetime;
-    get_value_a_func = &get_time_value;
-    get_value_b_func = &get_time_value;
     set_cmp_context_for_datetime();
     return false;
   } else if (type == STRING_RESULT && (*left)->result_type() == STRING_RESULT &&
@@ -1633,6 +1618,29 @@ void Arg_comparator::set_datetime_cmp_func(Item_func *owner_arg,
   get_value_a_func = &get_datetime_value;
   get_value_b_func = &get_datetime_value;
   set_cmp_context_for_datetime();
+}
+
+/**
+  Retrieve TIME value for comparison from given item.
+
+  Retrieves TIME value from given item for comparison by the compare_time()
+  function, or as used in hash join.
+  Time values are converted to longlong before comparison.
+
+  @returns the TIME value, all ones if Item is NULL
+*/
+
+longlong get_time_value(THD *, Item ***item_arg, Item **, const Item *,
+                        bool *is_null) {
+  Time_val time;
+  Item *item = **item_arg;
+
+  if (item->val_time(&time)) {
+    *is_null = item->null_value;
+    return ~(ulonglong)0;
+  }
+
+  return time.for_comparison();
 }
 
 /**
@@ -2000,9 +2008,9 @@ int Arg_comparator::compare_int_signed() {
 }
 
 /**
-  Compare arguments using numeric packed temporal representation.
+  Compare TIME values.
 */
-int Arg_comparator::compare_time_packed() {
+int Arg_comparator::compare_time() {
   /*
     Note, we cannot do this:
     assert((*left)->data_type() == MYSQL_TYPE_TIME);
@@ -2022,16 +2030,23 @@ int Arg_comparator::compare_time_packed() {
     AND
       col_time_key = MAKEDATE(43, -2852);
   */
-  const longlong val1 = (*left)->val_time_temporal();
-  if (!(*left)->null_value) {
-    const longlong val2 = (*right)->val_time_temporal();
-    if (!(*right)->null_value) {
-      if (set_null) owner->null_value = false;
-      return val1 < val2 ? -1 : val1 > val2 ? 1 : 0;
-    }
+  // Items may have been substituted with NULL values
+  assert((*left)->data_type() == MYSQL_TYPE_TIME ||
+         (*left)->data_type() == MYSQL_TYPE_NULL);
+  assert((*right)->data_type() == MYSQL_TYPE_TIME ||
+         (*right)->data_type() == MYSQL_TYPE_NULL);
+
+  Time_val time1, time2;
+  if ((*left)->val_time(&time1)) {
+    if (set_null) owner->null_value = true;
+    return -1;
   }
-  if (set_null) owner->null_value = true;
-  return -1;
+  if ((*right)->val_time(&time2)) {
+    if (set_null) owner->null_value = true;
+    return -1;
+  }
+  if (set_null) owner->null_value = false;
+  return time1.compare(time2);
 }
 
 /**
@@ -3318,8 +3333,8 @@ bool Item_func_between::resolve_type(THD *thd) {
               AND     const_number_or_time_or_datetime_expr2
           was rewritten to:
             time_field
-              BETWEEN Item_time_with_ref1
-              AND     Item_time_with_ref2
+              BETWEEN Item_time_literal1
+              AND     Item_time_literal2
           or
             datetime_field
               BETWEEN Item_datetime_with_ref1
@@ -3387,13 +3402,31 @@ static inline longlong compare_between_int_result(
     bool negated, Item **args, bool *null_value) {
   {
     LLorULL a, b, value;
-    value = compare_as_temporal_times   ? args[0]->val_time_temporal()
-            : compare_as_temporal_dates ? args[0]->val_date_temporal()
-                                        : args[0]->val_int();
+    if (compare_as_temporal_times) {
+      Time_val time;
+      (void)args[0]->val_time(&time);
+      value = 0;
+      if (!args[0]->null_value) {
+        value = time.for_comparison();
+      }
+    } else if (compare_as_temporal_dates) {
+      value = args[0]->val_date_temporal();
+    } else {
+      value = args[0]->val_int();
+    }
     if ((*null_value = args[0]->null_value)) return 0; /* purecov: inspected */
     if (compare_as_temporal_times) {
-      a = args[1]->val_time_temporal();
-      b = args[2]->val_time_temporal();
+      Time_val time;
+      (void)args[1]->val_time(&time);
+      a = 0;
+      if (!args[1]->null_value) {
+        a = time.for_comparison();
+      }
+      (void)args[2]->val_time(&time);
+      b = 0;
+      if (!args[2]->null_value) {
+        b = time.for_comparison();
+      }
     } else if (compare_as_temporal_dates) {
       a = args[1]->val_date_temporal();
       b = args[2]->val_date_temporal();
@@ -3632,10 +3665,10 @@ bool Item_func_ifnull::date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
   return (null_value = args[1]->get_date(ltime, fuzzydate));
 }
 
-bool Item_func_ifnull::time_op(MYSQL_TIME *ltime) {
+bool Item_func_ifnull::time_op(Time_val *time) {
   assert(fixed);
-  if (!args[0]->get_time(ltime)) return (null_value = false);
-  return (null_value = args[1]->get_time(ltime));
+  if (!args[0]->val_time(time)) return (null_value = false);
+  return (null_value = args[1]->val_time(time));
 }
 
 String *Item_func_ifnull::str_op(String *str) {
@@ -3814,10 +3847,10 @@ bool Item_func_if::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
   return false;
 }
 
-bool Item_func_if::get_time(MYSQL_TIME *ltime) {
+bool Item_func_if::val_time(Time_val *time) {
   assert(fixed);
   Item *arg = args[0]->val_bool() ? args[1] : args[2];
-  if (arg->get_time(ltime)) return error_time();
+  if (arg->val_time(time)) return error_time();
   null_value = arg->null_value;
   return false;
 }
@@ -4113,16 +4146,16 @@ bool Item_func_case::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
   return false;
 }
 
-bool Item_func_case::get_time(MYSQL_TIME *ltime) {
+bool Item_func_case::val_time(Time_val *time) {
   assert(fixed);
   char buff[MAX_FIELD_WIDTH];
   String dummy_str(buff, sizeof(buff), default_charset());
   Item *item = find_item(&dummy_str);
-  if (!item) {
+  if (item == nullptr) {
     null_value = is_nullable();
     return true;
   }
-  if (item->get_time(ltime)) return error_time();
+  if (item->val_time(time)) return error_time();
   null_value = item->null_value;
   return false;
 }
@@ -4463,10 +4496,10 @@ bool Item_func_coalesce::date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
   return (null_value = true);
 }
 
-bool Item_func_coalesce::time_op(MYSQL_TIME *ltime) {
+bool Item_func_coalesce::time_op(Time_val *time) {
   assert(fixed);
   for (uint i = 0; i < arg_count; i++) {
-    if (!args[i]->get_time(ltime)) return (null_value = false);
+    if (!args[i]->val_time(time)) return (null_value = false);
   }
   return (null_value = true);
 }
@@ -4773,7 +4806,9 @@ void in_longlong::val_item(Item *item, packed_longlong *result) {
 }
 
 void in_time_as_longlong::val_item(Item *item, packed_longlong *result) {
-  result->val = item->val_time_temporal();
+  Time_val time;
+  (void)item->val_time(&time);
+  result->val = time.for_comparison();
   result->unsigned_flag = item->unsigned_flag;
 }
 
@@ -5086,7 +5121,7 @@ void cmp_item_datetime::store_value(Item *item) {
   if (has_date)
     value = get_datetime_value(current_thd, &p, nullptr, warn_item, &is_null);
   else
-    value = get_time_value(current_thd, &p, nullptr, nullptr, &is_null);
+    value = get_time_internal(current_thd, &p, nullptr, nullptr, &is_null);
   set_null_value(item->null_value);
 }
 
@@ -5097,8 +5132,7 @@ int cmp_item_datetime::cmp(Item *item) {
   if (has_date)
     value2 = get_datetime_value(current_thd, &p, nullptr, warn_item, &is_null);
   else
-    value2 = get_time_value(current_thd, &p, nullptr, nullptr, &is_null);
-
+    value2 = get_time_internal(current_thd, &p, nullptr, nullptr, &is_null);
   const bool rc = (value != value2);
   return (m_null_value || item->null_value) ? UNKNOWN : rc;
 }
@@ -8023,7 +8057,7 @@ static bool extract_value_for_hash_join(THD *thd,
     // the function pointer given by "get_value_[a|b]_func", so let us do the
     // same. This can happen for DATE, DATETIME and YEAR, and there are separate
     // function pointers for each side of the argument.
-    bool is_null;
+    bool is_null = false;
     longlong value = comparator->extract_value_from_argument(
         thd, comparand, is_left_argument, &is_null);
     if (is_null) {

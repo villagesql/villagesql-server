@@ -287,6 +287,7 @@ SET(SERVER_TESTS
   tc_log_mmap
   temptable_allocator
   temptable_storage
+  temporal
   thd_manager
   union_syntax
   unique

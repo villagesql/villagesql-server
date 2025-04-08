@@ -9159,7 +9159,12 @@ static void innobase_store_multi_value_low(json_binary::Value *bv,
                             dfield->type.len);
             break;
           }
-          case MYSQL_TYPE_TIME:
+          case MYSQL_TYPE_TIME: {
+            Json_time::from_packed_to_key(elt.get_data(), buf, fld->decimals());
+
+            dfield_set_data(dfield, buf, dfield->type.len);
+            break;
+          }
           case MYSQL_TYPE_DATE:
           case MYSQL_TYPE_DATETIME:
           case MYSQL_TYPE_TIMESTAMP: {

@@ -877,13 +877,13 @@ static int format_time_column(THD *thd, const Column_text &text_col,
     return ER_LOAD_BULK_DATA_WRONG_VALUE_FOR_FIELD;
   }
 
-  MYSQL_TIME *time = &ltime;
+  MYSQL_TIME *my_time = &ltime;
   MYSQL_TIME tz_ltime;
   my_timeval tm;
 
   if (ltime.time_type == MYSQL_TIMESTAMP_DATETIME_TZ) {
     tz_ltime = ltime;
-    time = &tz_ltime;
+    my_time = &tz_ltime;
 
     const Time_zone *tz = thd->time_zone();
 
@@ -903,17 +903,16 @@ static int format_time_column(THD *thd, const Column_text &text_col,
     }
   }
 
-  if (non_zero_date(*time)) {
+  if (non_zero_date(*my_time)) {
     error_details.column_type = "time";
     log_conversion_error(text_col, "TIME includes DATE: ");
     return ER_LOAD_BULK_DATA_WRONG_VALUE_FOR_FIELD;
   }
 
-  auto packed = TIME_to_longlong_time_packed(*time);
+  Time_val time = Time_val(*my_time);
   /* Convert to storage format. */
   auto field_begin = (unsigned char *)sql_col.get_data();
-  my_time_packed_to_binary(packed, field_begin,
-                           field_date->get_fractional_digits());
+  time.store_time(field_begin, field_date->get_fractional_digits());
 
   return 0;
 }

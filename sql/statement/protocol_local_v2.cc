@@ -188,8 +188,9 @@ bool Protocol_local_v2::store_date(const MYSQL_TIME &time) {
   return store_temporal(time);
 }
 
-bool Protocol_local_v2::store_time(const MYSQL_TIME &time, uint) {
-  return store_temporal(time);
+bool Protocol_local_v2::store_time(const Time_val &time, uint) {
+  MYSQL_TIME tm = MYSQL_TIME(time);
+  return store_temporal(tm);
 }
 
 bool Protocol_local_v2::store_floating_type(double value) {
