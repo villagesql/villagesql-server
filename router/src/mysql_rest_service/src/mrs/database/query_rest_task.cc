@@ -69,6 +69,25 @@ std::string prepare_monitor_script(const std::vector<std::string> &script,
   return sql;
 }
 
+mysqlrouter::sqlstring cast_as_json(const mysqlrouter::sqlstring &sql,
+                                    mrs::database::entry::ColumnType type) {
+  switch (type) {
+    case mrs::database::entry::ColumnType::JSON: {
+      mysqlrouter::sqlstring res("CAST((?) AS JSON)");
+      res << sql;
+      return res;
+    }
+    case mrs::database::entry::ColumnType::VECTOR: {
+      mysqlrouter::sqlstring res(
+          "CAST(CONVERT(VECTOR_TO_STRING((?)) USING utf8mb4) AS JSON)");
+      res << sql;
+      return res;
+    }
+    default:
+      return sql;
+  }
+}
+
 }  // namespace
 
 QueryRestMysqlTask::QueryRestMysqlTask(
@@ -114,14 +133,18 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_procedure_call(
         query.append_preformatted("NULL");
       }
     } else {
-      std::string var = "@__" + el.bind_name;
-      query.append_preformatted(var.c_str());
-      mysqlrouter::sqlstring item(("?, " + var).c_str());
+      mysqlrouter::sqlstring var{"@!", mysqlrouter::QuoteOnlyIfNeeded};
+      var << "__" + el.bind_name;
+
+      query.append_preformatted(var);
+      mysqlrouter::sqlstring item(
+          ("?, " + cast_as_json(var, el.data_type).str()).c_str());
       item << el.name;
       result.append_preformatted_sep(", ", item);
 
       if (el.mode == mrs::database::entry::Field::Mode::modeInOut) {
-        mysqlrouter::sqlstring set_var{("SET " + var + " = ?").c_str()};
+        mysqlrouter::sqlstring set_var{"SET ? = ?"};
+        set_var << var;
         auto it = doc.FindMember(el.name.c_str());
         if (it != doc.MemberEnd()) {
           mysqlrouter::sqlstring sql = get_sql_format(el.data_type);
@@ -147,7 +170,8 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_function_call(
     const std::string &schema, const std::string &object,
     const mysqlrouter::sqlstring &user_id,
     std::optional<std::string> user_ownership_column, const ResultSets &rs,
-    const rapidjson::Document &doc, std::list<std::string> *out_postamble) {
+    const rapidjson::Document &doc,
+    [[maybe_unused]] std::list<std::string> *out_postamble) {
   using namespace std::string_literals;
   using namespace helper::json::sql;
 
@@ -177,13 +201,18 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_function_call(
       }
     }
   }
-  query.append_preformatted(") INTO @__result");
+  query.append_preformatted(")");
 
-  out_postamble->emplace_back(
+  if (rs.results.size() == 1 && rs.results[0].fields.size() == 1) {
+    query = cast_as_json(query, rs.results[0].fields[0].data_type);
+  }
+
+  mysqlrouter::sqlstring wrapper{
       "SET @task_result = JSON_OBJECT(\"taskResult\", @task_result, "
-      "\"result\", @__result)");
+      "\"result\", (?))"};
+  wrapper << query;
 
-  return query;
+  return wrapper;
 }
 
 mysqlrouter::sqlstring QueryRestMysqlTask::wrap_async_server_call(
