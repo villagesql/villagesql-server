@@ -66,6 +66,7 @@
 #include "sql/join_optimizer/walk_access_paths.h"
 #include "sql/join_type.h"
 #include "sql/mem_root_array.h"
+#include "sql/range_optimizer/index_skip_scan_plan.h"
 #include "sql/sort_param.h"
 #include "sql/sql_class.h"
 #include "sql/sql_const.h"
@@ -6884,13 +6885,16 @@ TEST_F(HypergraphOptimizerTest, IndexSkipScanMultiPredicate) {
   SCOPED_TRACE(PrintQueryPlan(0, root, query_block->join,
                               /*is_root_of_join=*/true));
 
-  ASSERT_EQ(AccessPath::FILTER, root->type);
-  EXPECT_EQ("((t1.x = 5) and (t1.z > 10))",
-            ItemToString(root->filter().condition));
-  AccessPath *child = root->filter().child;
-  ASSERT_EQ(AccessPath::INDEX_SKIP_SCAN, child->type);
-  ASSERT_EQ(0, child->index_skip_scan().index);
-  ASSERT_EQ(3, child->index_skip_scan().num_used_key_parts);
+  // Expect the skip scan to subsume both of the predicates in the WHERE clause,
+  // and have no filter on top.
+  ASSERT_EQ(AccessPath::INDEX_SKIP_SCAN, root->type);
+  EXPECT_EQ(0, root->index_skip_scan().index);
+  EXPECT_EQ(3, root->index_skip_scan().num_used_key_parts);
+  // The x = 5 predicate is used as equality prefix.
+  EXPECT_EQ(1, root->index_skip_scan().param->eq_prefix_key_parts);
+  // The z > 10 predicate is the range condition.
+  EXPECT_STREQ(
+      "z", root->index_skip_scan().param->range_key_part->field->field_name);
 
   query_block->cleanup(/*full=*/true);
 }

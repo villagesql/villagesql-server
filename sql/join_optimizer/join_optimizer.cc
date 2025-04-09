@@ -665,7 +665,6 @@ class CostingReceiver {
                        Mem_root_array<PossibleRangeScan> *possible_scans,
                        Mem_root_array<PossibleIndexMerge> *index_merges,
                        Mem_root_array<PossibleIndexSkipScan> *index_skip_scans,
-                       MutableOverflowBitset *all_predicates,
                        AbsorbedPredicates *tree_predicates_out);
   void ProposeRangeScans(int node_idx, double num_output_rows_after_filter,
                          RANGE_OPT_PARAM *param, SEL_TREE *tree,
@@ -704,13 +703,13 @@ class CostingReceiver {
       OverflowBitset needed_fields, bool *found_imerge);
   void ProposeAllSkipScans(
       int node_idx, double num_output_rows_after_filter, RANGE_OPT_PARAM *param,
-      SEL_TREE *tree, Mem_root_array<PossibleIndexSkipScan> *index_skip_scans,
-      MutableOverflowBitset *all_predicates, bool *found_skip_scan);
+      SEL_TREE *tree, AbsorbedPredicates tree_predicates,
+      Mem_root_array<PossibleIndexSkipScan> *index_skip_scans,
+      bool *found_skip_scan);
   void ProposeIndexSkipScan(int node_idx, RANGE_OPT_PARAM *param,
                             AccessPath *skip_scan_path, TABLE *table,
-                            OverflowBitset all_predicates,
-                            size_t num_where_predicates, size_t predicate_idx,
-                            double num_output_rows_after_filter, bool inexact);
+                            AbsorbedPredicates predicates,
+                            double num_output_rows_after_filter);
 
   void TraceAccessPaths(NodeMap nodes);
   void ProposeAccessPathForBaseTable(int node_idx,
@@ -2340,12 +2339,10 @@ bool CostingReceiver::FindIndexRangeScans(int node_idx, bool *impossible,
   Mem_root_array<PossibleIndexMerge> index_merges(&m_range_optimizer_mem_root);
   Mem_root_array<PossibleIndexSkipScan> index_skip_scans(
       &m_range_optimizer_mem_root);
-  MutableOverflowBitset all_predicates{m_thd->mem_root,
-                                       m_graph->predicates.size()};
   AbsorbedPredicates tree_predicates;
   if (SetUpRangeScans(node_idx, impossible, num_output_rows_after_filter,
                       &param, &tree, &possible_scans, &index_merges,
-                      &index_skip_scans, &all_predicates, &tree_predicates)) {
+                      &index_skip_scans, &tree_predicates)) {
     return true;
   }
   if (*impossible) {
@@ -2367,7 +2364,7 @@ bool CostingReceiver::FindIndexRangeScans(int node_idx, bool *impossible,
   }
   if (force_skip_scan) {
     ProposeAllSkipScans(node_idx, *num_output_rows_after_filter, &param, tree,
-                        &index_skip_scans, &all_predicates, found_forced_plan);
+                        tree_predicates, &index_skip_scans, found_forced_plan);
     if (*found_forced_plan) {
       return false;
     }
@@ -2384,7 +2381,7 @@ bool CostingReceiver::FindIndexRangeScans(int node_idx, bool *impossible,
   }
   if (!force_skip_scan) {
     ProposeAllSkipScans(node_idx, *num_output_rows_after_filter, &param, tree,
-                        &index_skip_scans, &all_predicates, &found_range_scan);
+                        tree_predicates, &index_skip_scans, &found_range_scan);
   }
   if (force_imerge || force_skip_scan) {
     *found_forced_plan = false;
@@ -2400,7 +2397,6 @@ bool CostingReceiver::SetUpRangeScans(
     Mem_root_array<PossibleRangeScan> *possible_scans,
     Mem_root_array<PossibleIndexMerge> *index_merges,
     Mem_root_array<PossibleIndexSkipScan> *index_skip_scans,
-    MutableOverflowBitset *all_predicates,
     AbsorbedPredicates *tree_predicates_out) {
   *impossible = false;
   *num_output_rows_after_filter = -1.0;
@@ -2421,6 +2417,8 @@ bool CostingReceiver::SetUpRangeScans(
 
   // For each predicate touching this table only, try to include it into our
   // tree of ranges if we can.
+  MutableOverflowBitset all_predicates{m_thd->mem_root,
+                                       m_graph->predicates.size()};
   MutableOverflowBitset tree_applied_predicates{m_thd->mem_root,
                                                 m_graph->predicates.size()};
   MutableOverflowBitset tree_subsumed_predicates{m_thd->mem_root,
@@ -2432,7 +2430,7 @@ bool CostingReceiver::SetUpRangeScans(
       // Only base predicates are eligible for being pushed into range scans.
       continue;
     }
-    (*all_predicates).SetBit(i);
+    all_predicates.SetBit(i);
 
     SEL_TREE *new_tree = get_mm_tree(
         m_thd, param, INNER_TABLE_BIT, INNER_TABLE_BIT,
@@ -2532,7 +2530,7 @@ bool CostingReceiver::SetUpRangeScans(
   }
   assert((*tree)->type == SEL_TREE::KEY);
 
-  OverflowBitset all_predicates_fixed = std::move(*all_predicates);
+  OverflowBitset all_predicates_fixed = std::move(all_predicates);
   AbsorbedPredicates tree_predicates{std::move(tree_applied_predicates),
                                      std::move(tree_subsumed_predicates)};
   if (CollectPossibleRangeScans(m_thd, *tree, param, tree_predicates, *m_graph,
@@ -2755,17 +2753,55 @@ void CostingReceiver::ProposeAllIndexMergeScans(
   }
 }
 
+/**
+  Find the set of fields for which the given skip scan applies predicates, and
+  the subset of fields for which predicates can be subsumed.
+
+  @param thd Thread handle.
+  @param table The table to access.
+  @param key The index to scan.
+  @param tree The range tree for the WHERE clause.
+  @param param Scan parameters.
+  @return a pair of bitsets representing the applied and subsumed fields.
+ */
+AbsorbedFields FindAbsorbedFieldsForSkipScan(
+    THD *thd, const TABLE &table, const KEY &key, const SEL_TREE &tree,
+    const IndexSkipScanParameters &param) {
+  MutableOverflowBitset applied_fields{thd->mem_root, table.s->fields};
+
+  for (const KEY_PART_INFO &keyinfo :
+       std::span{key.key_part, param.eq_prefix_key_parts}) {
+    applied_fields.SetBit(keyinfo.fieldnr - 1);
+  }
+
+  applied_fields.SetBit(param.range_key_part->fieldnr - 1);
+
+  OverflowBitset applied_fields_fixed = std::move(applied_fields);
+
+  if (tree.inexact) {
+    // If the tree is inexact, we need to check the predicates in a filter after
+    // the skip scan, so we return an empty set for "subsumed fields". This is a
+    // bit pessimistic. The tree could be exact for some fields even though it's
+    // inexact for some. For now, err on the side of caution, and handle all of
+    // them as inexact.
+    return {applied_fields_fixed,
+            OverflowBitset::EmptySet(thd->mem_root, table.s->fields)};
+  }
+
+  // If the tree is exact, all applied fields are subsumed.
+  return {applied_fields_fixed, applied_fields_fixed};
+}
+
 void CostingReceiver::ProposeAllSkipScans(
     int node_idx, double num_output_rows_after_filter, RANGE_OPT_PARAM *param,
-    SEL_TREE *tree, Mem_root_array<PossibleIndexSkipScan> *index_skip_scans,
-    MutableOverflowBitset *all_predicates, bool *found_skip_scan) {
+    SEL_TREE *tree, AbsorbedPredicates tree_predicates,
+    Mem_root_array<PossibleIndexSkipScan> *index_skip_scans,
+    bool *found_skip_scan) {
   TABLE *table = m_graph->nodes[node_idx].table();
   const bool force_skip_scan =
       hint_table_state(m_thd, table->pos_in_table_list, SKIP_SCAN_HINT_ENUM, 0);
   const bool allow_skip_scan =
       force_skip_scan || m_thd->optimizer_switch_flag(OPTIMIZER_SKIP_SCAN);
-
-  OverflowBitset all_predicates_fixed = std::move(*all_predicates);
 
   if (tree != nullptr && allow_skip_scan &&
       (m_graph->num_where_predicates > 1)) {
@@ -2774,7 +2810,7 @@ void CostingReceiver::ProposeAllSkipScans(
     PossibleIndexSkipScan index_skip;
     index_skip.skip_scan_paths =
         get_all_skip_scans(m_thd, param, tree, ORDER_NOT_RELEVANT,
-                           /*use_records_in_range=*/false, allow_skip_scan);
+                           /*skip_records_in_range=*/false, allow_skip_scan);
     index_skip.tree = tree;
     // Set predicate index to #predicates to indicate all predicates applied
     index_skip.predicate_idx = m_graph->num_where_predicates;
@@ -2783,12 +2819,34 @@ void CostingReceiver::ProposeAllSkipScans(
 
   // Propose all index skip scans
   for (const PossibleIndexSkipScan &iskip_scan : *index_skip_scans) {
+    const size_t pred_idx = iskip_scan.predicate_idx;
     for (AccessPath *skip_scan_path : iskip_scan.skip_scan_paths) {
-      size_t pred_idx = iskip_scan.predicate_idx;
-      ProposeIndexSkipScan(node_idx, param, skip_scan_path, table,
-                           all_predicates_fixed, m_graph->num_where_predicates,
-                           pred_idx, num_output_rows_after_filter,
-                           iskip_scan.tree->inexact);
+      const auto &path_param = skip_scan_path->index_skip_scan();
+      const KEY &key = table->key_info[param->real_keynr[path_param.index]];
+
+      AbsorbedPredicates predicates;
+      if (pred_idx < m_graph->num_where_predicates) {
+        // This index skip scan is for a single predicate. Mark that predicate
+        // as applied, and, if the range tree is exact, also as subsumed.
+        predicates = SingleAppliedPredicate(m_thd->mem_root, pred_idx,
+                                            !iskip_scan.tree->inexact,
+                                            m_graph->predicates.size());
+      } else {
+        // This index skip scan is created from the range tree for the entire
+        // WHERE clause. Find out which predicates it applies and subsumes.
+        predicates = FindAbsorbedPredicatesForRangeScan(
+            m_thd,
+            // Silence false positive from clang-tidy about "tree" possibly
+            // being nullptr. If it had been nullptr, no skip scan path would
+            // have been found, and we couldn't possibly be here.
+            // NOLINTNEXTLINE(clang-analyzer-core.NonNullParamChecker)
+            FindAbsorbedFieldsForSkipScan(m_thd, *table, key, *tree,
+                                          *path_param.param),
+            tree_predicates, *m_graph);
+      }
+
+      ProposeIndexSkipScan(node_idx, param, skip_scan_path, table, predicates,
+                           num_output_rows_after_filter);
       *found_skip_scan = true;
     }
   }
@@ -2803,24 +2861,28 @@ void CostingReceiver::ProposeAllSkipScans(
           /*skip_records_in_range=*/false, cost_est.total_cost());
       for (AccessPath *group_skip_scan_path : skip_scan_paths) {
         ProposeIndexSkipScan(
-            node_idx, param, group_skip_scan_path, table, all_predicates_fixed,
-            m_graph->num_where_predicates, m_graph->num_where_predicates,
-            group_skip_scan_path->num_output_rows(), /*inexact=*/true);
+            node_idx, param, group_skip_scan_path, table,
+            NoAppliedPredicates(m_thd->mem_root, m_graph->predicates.size()),
+            group_skip_scan_path->num_output_rows());
       }
       return;
     }
 
     // Propose group index skip scans for whole predicate
+    // For now, we don't make any attempt to avoid redundant filters on top of
+    // group index skip scans, so subsumed_predicates is an empty set.
+    AbsorbedPredicates absorbed_predicates{
+        tree_predicates.applied(),
+        OverflowBitset::EmptySet(m_thd->mem_root, m_graph->predicates.size())};
     Cost_estimate cost_est = table->file->table_scan_cost();
     Mem_root_array<AccessPath *> group_skip_scan_paths =
         get_all_group_skip_scans(m_thd, param, tree, ORDER_NOT_RELEVANT,
                                  /*skip_records_in_range=*/false,
                                  cost_est.total_cost());
     for (AccessPath *group_skip_scan_path : group_skip_scan_paths) {
-      ProposeIndexSkipScan(
-          node_idx, param, group_skip_scan_path, table, all_predicates_fixed,
-          m_graph->num_where_predicates, m_graph->num_where_predicates,
-          group_skip_scan_path->num_output_rows(), tree->inexact);
+      ProposeIndexSkipScan(node_idx, param, group_skip_scan_path, table,
+                           absorbed_predicates,
+                           group_skip_scan_path->num_output_rows());
     }
   }
 }
@@ -3456,48 +3518,24 @@ void CostingReceiver::ProposeIndexMerge(
   @param param                  RANGE_OPT_PARAM
   @param skip_scan_path         INDEX_SKIP_SCAN AccessPath to propose
   @param table                  Base table
-  @param all_predicates         Bitset of all predicates for this join
-  @param num_where_predicates   Total number of predicates in WHERE clause
-  @param predicate_idx          Index of predicate applied to this skip scan, if
-  predicate_idx = num_where_predicates, then all predicates are applied
+  @param predicates             Bitsets of all predicates applied or subsumed by
+                                this skip scan.
   @param num_output_rows_after_filter Row count output
-  @param inexact                Whether the predicate is an exact match for the
-  skip scan index
-
 */
 void CostingReceiver::ProposeIndexSkipScan(
     int node_idx, RANGE_OPT_PARAM *param, AccessPath *skip_scan_path,
-    TABLE *table, OverflowBitset all_predicates, size_t num_where_predicates,
-    size_t predicate_idx, double num_output_rows_after_filter, bool inexact) {
+    TABLE *table, AbsorbedPredicates predicates,
+    double num_output_rows_after_filter) {
   skip_scan_path->set_init_cost(0.0);
   skip_scan_path->set_cost_before_filter(skip_scan_path->cost());
   skip_scan_path->num_output_rows_before_filter =
       skip_scan_path->num_output_rows();
-  MutableOverflowBitset applied_predicates{param->temp_mem_root,
-                                           num_where_predicates};
-  MutableOverflowBitset subsumed_predicates{param->temp_mem_root,
-                                            num_where_predicates};
+
   FunctionalDependencySet new_fd_set;
-  if (predicate_idx < num_where_predicates) {
-    applied_predicates.SetBit(predicate_idx);
-    if (!inexact) {
-      subsumed_predicates.SetBit(predicate_idx);
-    }
-    ApplyPredicatesForBaseTable(
-        node_idx,
-        {std::move(applied_predicates), std::move(subsumed_predicates)},
-        /*materialize_subqueries*/ false, num_output_rows_after_filter,
-        skip_scan_path, &new_fd_set);
-  } else {
-    // Subsumed predicates cannot be reliably calculated, so, for safety,
-    // no predicates are marked as subsumed. This may result in a FILTER
-    // with redundant predicates.
-    assert(IsEmpty(subsumed_predicates));
-    ApplyPredicatesForBaseTable(
-        node_idx, {all_predicates, std::move(subsumed_predicates)},
-        /*materialize_subqueries*/ false, num_output_rows_after_filter,
-        skip_scan_path, &new_fd_set);
-  }
+  ApplyPredicatesForBaseTable(node_idx, predicates,
+                              /*materialize_subqueries=*/false,
+                              num_output_rows_after_filter, skip_scan_path,
+                              &new_fd_set);
 
   uint keynr =
       skip_scan_path->type == AccessPath::INDEX_SKIP_SCAN
