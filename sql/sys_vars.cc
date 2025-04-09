@@ -5215,6 +5215,57 @@ static Sys_var_plugin Sys_default_tmp_storage_engine(
     MYSQL_STORAGE_ENGINE_PLUGIN, DEFAULT(&default_tmp_storage_engine), true,
     NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(check_storage_engine));
 
+static bool check_external_table_storage_engine(sys_var *self [[maybe_unused]],
+                                                THD *thd [[maybe_unused]],
+                                                set_var *var) {
+  if (var->value == nullptr) {
+    return false;  // Setting to DEFAULT
+  }
+  if (var->value->is_null()) {
+    return false;  // Allow NULL values
+  }
+
+  char buff[STRING_BUFFER_USUAL_SIZE];
+  String str(buff, sizeof(buff), system_charset_info);
+  LEX_CSTRING engine_name;
+  String *res = var->value->val_str(&str);
+  lex_cstring_set(&engine_name, res->ptr());
+
+  if ((DEFAULT_EXTERNAL_TABLE_ENGINE) != nullptr &&
+      my_strcasecmp(system_charset_info, engine_name.str,
+                    DEFAULT_EXTERNAL_TABLE_ENGINE) == 0)
+    return false;
+
+  plugin_ref plugin = ha_resolve_by_name(nullptr, &engine_name, false);
+  if (plugin == nullptr) {
+    my_error(ER_UNKNOWN_STORAGE_ENGINE, MYF(0), engine_name.str);
+    return true;
+  }
+
+  handlerton *hton = plugin_data<handlerton *>(plugin);
+  if ((hton->flags & HTON_SUPPORTS_EXTERNAL_SOURCE) == 0) {
+    my_error(ER_EXTERNAL_TABLE_ENGINE_NOT_SUPPORTED, MYF(0), engine_name.str);
+    plugin_unlock(nullptr, plugin);
+    return true;
+  }
+  plugin_unlock(nullptr, plugin);
+  return false;
+}
+
+static Sys_var_charptr Sys_external_table_storage_engine(
+    "external_table_storage_engine",
+    "Default storage engine for external tables",
+    SESSION_VAR(external_table_storage_engine), CMD_LINE(REQUIRED_ARG),
+    IN_SYSTEM_CHARSET, DEFAULT(DEFAULT_EXTERNAL_TABLE_ENGINE), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(check_external_table_storage_engine));
+
+static Sys_var_charptr Sys_external_table_secondary_storage_engine(
+    "external_table_secondary_storage_engine",
+    "Default secondary storage engine for external tables",
+    SESSION_VAR(external_table_secondary_storage_engine),
+    CMD_LINE(REQUIRED_ARG), IN_SYSTEM_CHARSET,
+    DEFAULT(DEFAULT_EXTERNAL_TABLE_SECONDARY_ENGINE));
+
 #if defined(ENABLED_DEBUG_SYNC)
 /*
   Variable can be set for the session only.

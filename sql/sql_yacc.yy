@@ -1480,6 +1480,8 @@ void warn_on_deprecated_user_defined_collation(
 %token<lexer.keyword> STRICT_LOAD_SYM 1233     /* MYSQL */
 %token<lexer.keyword> EXTERNAL_FORMAT_SYM  1234     /* MySQL */
 
+%token<lexer.keyword> EXTERNAL_SYM    1235     /* MYSQL */
+
 /*
   NOTE! When adding new non-standard keywords, make sure they are added to the
   list ident_keywords_unambiguous lest they become reserved keywords.
@@ -1818,6 +1820,7 @@ void warn_on_deprecated_user_defined_collation(
 %type <xa_option_type> opt_suspend;
 %type <xa_option_type> opt_one_phase;
 
+%type <table_type> opt_temporary_or_external;
 %type <is_not_empty> opt_convert_xid opt_ignore opt_linear opt_bin_mod
         opt_if_not_exists opt_temporary
         opt_grant_option opt_with_admin_option
@@ -3270,7 +3273,7 @@ opt_channel:
         ;
 
 create_table_stmt:
-          CREATE opt_temporary TABLE_SYM opt_if_not_exists table_ident
+          CREATE opt_temporary_or_external TABLE_SYM opt_if_not_exists table_ident
           '(' table_element_list ')' opt_create_table_options_etc
           {
             $$= NEW_PTN PT_create_table_stmt(@$, YYMEM_ROOT, $2, $4, $5,
@@ -3280,7 +3283,7 @@ create_table_stmt:
                                              $9.on_duplicate,
                                              $9.opt_query_expression);
           }
-        | CREATE opt_temporary TABLE_SYM opt_if_not_exists table_ident
+        | CREATE opt_temporary_or_external TABLE_SYM opt_if_not_exists table_ident
           opt_create_table_options_etc
           {
             $$= NEW_PTN PT_create_table_stmt(@$, YYMEM_ROOT, $2, $4, $5,
@@ -3290,12 +3293,12 @@ create_table_stmt:
                                              $6.on_duplicate,
                                              $6.opt_query_expression);
           }
-        | CREATE opt_temporary TABLE_SYM opt_if_not_exists table_ident
+        | CREATE opt_temporary_or_external TABLE_SYM opt_if_not_exists table_ident
           LIKE table_ident
           {
             $$= NEW_PTN PT_create_table_stmt(@$, YYMEM_ROOT, $2, $4, $5, $7);
           }
-        | CREATE opt_temporary TABLE_SYM opt_if_not_exists table_ident
+        | CREATE opt_temporary_or_external TABLE_SYM opt_if_not_exists table_ident
           '(' LIKE table_ident ')'
           {
             $$= NEW_PTN PT_create_table_stmt(@$, YYMEM_ROOT, $2, $4, $5, $8);
@@ -13405,6 +13408,12 @@ opt_ignore_unknown_user:
 opt_temporary:
           %empty { $$= false; }
         | TEMPORARY   { $$= true; }
+        ;
+
+opt_temporary_or_external:
+          %empty { $$= 0; }
+        | TEMPORARY { $$= TABLE_TYPE_TEMPORARY; }
+        | EXTERNAL_SYM { $$= TABLE_TYPE_EXTERNAL; }
         ;
 
 opt_drop_ts_options:

@@ -2162,8 +2162,18 @@ bool PT_create_table_engine_option::do_contextualize(
 
   pc->create_info->used_fields |= HA_CREATE_USED_ENGINE;
   const bool is_temp_table = pc->create_info->options & HA_LEX_CREATE_TMP_TABLE;
-  return resolve_engine(pc->thd, engine, is_temp_table, false,
-                        &pc->create_info->db_type);
+  if (resolve_engine(pc->thd, engine, is_temp_table, false,
+                     &pc->create_info->db_type)) {
+    return true;
+  }
+  if ((pc->create_info->options & HA_LEX_CREATE_EXTERNAL_TABLE) != 0U) {
+    handlerton *hton = pc->create_info->db_type;
+    if ((hton->flags & HTON_SUPPORTS_EXTERNAL_SOURCE) == 0) {
+      my_error(ER_EXTERNAL_TABLE_ENGINE_NOT_SUPPORTED, MYF(0), engine.str);
+      return true;
+    }
+  }
+  return false;
 }
 
 bool PT_create_table_secondary_engine_option::do_contextualize(
@@ -2451,7 +2461,10 @@ Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
   Table_ddl_parse_context pc2(thd, pc.select, &m_alter_info);
 
   pc2.create_info->options = 0;
-  if (is_temporary) pc2.create_info->options |= HA_LEX_CREATE_TMP_TABLE;
+  if ((table_type & TABLE_TYPE_TEMPORARY) != 0)
+    pc2.create_info->options |= HA_LEX_CREATE_TMP_TABLE;
+  if ((table_type & TABLE_TYPE_EXTERNAL) != 0)
+    pc2.create_info->options |= HA_LEX_CREATE_EXTERNAL_TABLE;
   if (only_if_not_exists)
     pc2.create_info->options |= HA_LEX_CREATE_IF_NOT_EXISTS;
 
@@ -2541,6 +2554,39 @@ Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
   }
 
   lex->set_current_query_block(pc.select);
+  if (((table_type & TABLE_TYPE_EXTERNAL) != 0) &&
+      ((pc2.create_info->used_fields & HA_CREATE_USED_ENGINE) == 0)) {
+    pc2.create_info->used_fields |= HA_CREATE_USED_ENGINE;
+    const char *engine_name = thd->variables.external_table_storage_engine;
+    if (engine_name == nullptr) {
+      my_error(ER_EXTERNAL_TABLE_ENGINE_NOT_SPECIFIED, MYF(0));
+      return nullptr;
+    }
+
+    MYSQL_LEX_CSTRING engine_name_str = {.str = engine_name,
+                                         .length = strlen(engine_name)};
+    if (resolve_engine(thd, engine_name_str, false, false,
+                       &pc2.create_info->db_type)) {
+      return nullptr;  // Error in resolving engine
+    }
+    handlerton *hton = pc2.create_info->db_type;
+    if ((hton->flags & HTON_SUPPORTS_EXTERNAL_SOURCE) == 0) {
+      my_error(ER_EXTERNAL_TABLE_ENGINE_NOT_SUPPORTED, MYF(0), engine_name);
+      return nullptr;
+    }
+  }
+  if (((table_type & TABLE_TYPE_EXTERNAL) != 0) &&
+      ((pc2.create_info->used_fields & HA_CREATE_USED_SECONDARY_ENGINE) == 0)) {
+    const char *secondary_engine_name =
+        thd->variables.external_table_secondary_storage_engine;
+    if (secondary_engine_name != nullptr) {
+      size_t len = strlen(secondary_engine_name);
+      pc2.create_info->secondary_engine = {
+          thd->strmake(secondary_engine_name, len), len};
+      pc2.create_info->used_fields |= HA_CREATE_USED_SECONDARY_ENGINE;
+    }
+  }
+
   if (((pc2.create_info->used_fields & HA_CREATE_USED_ENGINE) != 0U) &&
       (pc2.create_info->db_type == nullptr)) {
     if (pc2.create_info->set_db_type(thd)) {

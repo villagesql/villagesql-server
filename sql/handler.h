@@ -626,6 +626,7 @@ enum class SelectExecutedIn : bool { kPrimaryEngine, kSecondaryEngine };
 #define HA_LEX_CREATE_IF_NOT_EXISTS 2
 #define HA_LEX_CREATE_TABLE_LIKE 4
 #define HA_LEX_CREATE_INTERNAL_TMP_TABLE 8
+#define HA_LEX_CREATE_EXTERNAL_TABLE 16
 #define HA_MAX_REC_LENGTH 65535U
 
 /**
