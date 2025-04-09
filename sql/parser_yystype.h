@@ -425,6 +425,7 @@ union MY_SQL_PARSER_STYPE {
   Condition_information_item::Name cond_info_item_name;
   List<Condition_information_item> *cond_info_list;
   bool is_not_empty;
+  uint table_type;
   Set_signal_information *signal_item_list;
   enum_trigger_order_type trigger_action_order_type;
   struct {

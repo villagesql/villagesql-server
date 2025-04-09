@@ -10564,7 +10564,7 @@ ER_LH_WARN_INFER_USE_DEFAULT_DELIMITERS
   eng "Feature Auto delimiter detection is skipped (%s)."
 
 ER_LIBRARY_INVALID
-        eng "The routine '%-.192s' references a missing library '%-.192s.%-.192s' or definer/invoker of the routine lack rights to use it."
+  eng "The routine '%-.192s' references a missing library '%-.192s.%-.192s' or definer/invoker of the routine lack rights to use it."
 
 ER_CANNOT_PERSIST_TRANSACTION_ISOLATION
   eng "Cannot persist transaction isolation."
@@ -10791,6 +10791,12 @@ ER_EXTERNAL_FORMAT_NOT_SUPPORTED
 
 ER_EXTERNAL_TABLE_INVALID_OPTION
   eng "Invalid option specified for %s of external table: %s"
+
+ER_EXTERNAL_TABLE_ENGINE_NOT_SUPPORTED
+  eng "The '%s' storage engine does not support external tables"
+
+ER_EXTERNAL_TABLE_ENGINE_NOT_SPECIFIED
+  eng "External storage engine is not specified"
 
 #
 #  End of 9.x error messages (server-to-client).

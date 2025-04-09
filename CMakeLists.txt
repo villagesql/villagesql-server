@@ -1555,6 +1555,10 @@ ENDIF()
 
 SET(DEFAULT_BASEDIR "${DEFAULT_MYSQL_HOME}")
 
+# Set default engine values for external tables
+SET(DEFAULT_EXTERNAL_TABLE_ENGINE "" CACHE STRING "Default engine for external tables")
+SET(DEFAULT_EXTERNAL_TABLE_SECONDARY_ENGINE "" CACHE STRING "Default secondary engine for external tables")
+
 IF(IS_ABSOLUTE ${INSTALL_MYSQLDATADIR})
   SET(MYSQL_DATADIR ${INSTALL_MYSQLDATADIR} CACHE PATH
     "default MySQL data directory")

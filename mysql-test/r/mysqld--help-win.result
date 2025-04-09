@@ -394,6 +394,10 @@ The following options may be given as the first argument:
  With this option enabled you can run myisamchk to test
  (not repair) tables while the MySQL server is running.
  Disable with --skip-external-locking.
+ --external-table-secondary-storage-engine=name 
+ Default secondary storage engine for external tables
+ --external-table-storage-engine=name 
+ Default storage engine for external tables
  --flush             Flush MyISAM tables to disk between SQL commands
  --flush-time=#      A dedicated thread is created to flush all tables at the
  given interval

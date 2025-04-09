@@ -2325,6 +2325,8 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
 
   if (share->tmp_table)
     packet->append(STRING_WITH_LEN("CREATE TEMPORARY TABLE "));
+  else if (share->db_create_options & HA_OPTION_CREATE_EXTERNAL_TABLE)
+    packet->append(STRING_WITH_LEN("CREATE EXTERNAL TABLE "));
   else
     packet->append(STRING_WITH_LEN("CREATE TABLE "));
   if (create_info_arg &&

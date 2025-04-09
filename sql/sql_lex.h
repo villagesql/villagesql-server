@@ -286,6 +286,10 @@ const LEX_CSTRING sp_data_access_name[] = {
     {STRING_WITH_LEN("READS SQL DATA")},
     {STRING_WITH_LEN("MODIFIES SQL DATA")}};
 
+/* Table type flags for the CREATE TABLE statement */
+#define TABLE_TYPE_TEMPORARY 1 /* 1 << 0 */
+#define TABLE_TYPE_EXTERNAL 2  /* 1 << 1 */
+
 enum class enum_view_create_mode {
   VIEW_CREATE_NEW,        // check that there are not such VIEW/table
   VIEW_ALTER,             // check that VIEW with such name exists

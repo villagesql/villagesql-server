@@ -718,6 +718,12 @@ is the global server default. */
   HA_CREATE_INFO::table_options. Not persisted in data-dictionary.
 */
 #define HA_OPTION_NO_DELAY_KEY_WRITE (1L << 18)
+/**
+  Table was created with CREATE EXTERNAL TABLE syntax.
+  Used in TABLE_SHARE::db_create_options to preserve EXTERNAL keyword
+  for SHOW CREATE TABLE output.
+*/
+#define HA_OPTION_CREATE_EXTERNAL_TABLE (1L << 19)
 
 /**
   ALLOW_MISSING_FILES=1 has been specified in the SQL command

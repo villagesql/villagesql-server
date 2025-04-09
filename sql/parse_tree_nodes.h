@@ -35,7 +35,6 @@
 #include "lex_string.h"
 #include "my_alloc.h"
 #include "my_base.h"
-
 #include "my_inttypes.h"  // TODO: replace with cstdint
 #include "my_list.h"
 #include "my_sqlcommand.h"
@@ -3230,7 +3229,7 @@ class PT_column_def : public PT_table_element {
   @ingroup ptn_create_table
 */
 class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
-  bool is_temporary;
+  unsigned int table_type;
   bool only_if_not_exists;
   Table_ident *table_name;
   const Mem_root_array<PT_table_element *> *opt_table_element_list;
@@ -3247,7 +3246,8 @@ class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
     @param pos                        Position of this clause in the SQL
                                       statement.
     @param mem_root                   MEM_ROOT to use for allocation
-    @param is_temporary               True if @SQL{CREATE @B{TEMPORARY} %TABLE}
+    @param table_type                 TABLE_TYPE_NORMAL, TABLE_TYPE_TEMPORARY or
+    TABLE_TYPE_EXTERNAL
     @param only_if_not_exists  True if @SQL{CREATE %TABLE ... @B{IF NOT EXISTS}}
     @param table_name                 @SQL{CREATE %TABLE ... @B{@<table name@>}}
     @param opt_table_element_list     NULL or a list of table column and
@@ -3263,14 +3263,14 @@ class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
     @param opt_query_expression       NULL or the @SQL{@B{SELECT}} clause.
   */
   PT_create_table_stmt(
-      const POS &pos, MEM_ROOT *mem_root, bool is_temporary,
+      const POS &pos, MEM_ROOT *mem_root, uint table_type,
       bool only_if_not_exists, Table_ident *table_name,
       const Mem_root_array<PT_table_element *> *opt_table_element_list,
       const Mem_root_array<PT_create_table_option *> *opt_create_table_options,
       PT_partition *opt_partitioning, On_duplicate on_duplicate,
       PT_query_expression_body *opt_query_expression)
       : PT_table_ddl_stmt_base(pos, mem_root),
-        is_temporary(is_temporary),
+        table_type(table_type),
         only_if_not_exists(only_if_not_exists),
         table_name(table_name),
         opt_table_element_list(opt_table_element_list),
@@ -3282,16 +3282,17 @@ class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
   /**
     @param pos                Position of this clause in the SQL statement.
     @param mem_root           MEM_ROOT to use for allocation
-    @param is_temporary       True if @SQL{CREATE @B{TEMPORARY} %TABLE}.
+    @param table_type         TABLE_TYPE_NORMAL, TABLE_TYPE_TEMPORARY or
+    TABLE_TYPE_EXTERNAL.
     @param only_if_not_exists True if @SQL{CREATE %TABLE ... @B{IF NOT EXISTS}}.
     @param table_name         @SQL{CREATE %TABLE ... @B{@<table name@>}}.
     @param opt_like_clause    NULL or the @SQL{@B{LIKE @<table name@>}} clause.
   */
-  PT_create_table_stmt(const POS &pos, MEM_ROOT *mem_root, bool is_temporary,
+  PT_create_table_stmt(const POS &pos, MEM_ROOT *mem_root, uint table_type,
                        bool only_if_not_exists, Table_ident *table_name,
                        Table_ident *opt_like_clause)
       : PT_table_ddl_stmt_base(pos, mem_root),
-        is_temporary(is_temporary),
+        table_type(table_type),
         only_if_not_exists(only_if_not_exists),
         table_name(table_name),
         opt_table_element_list(nullptr),

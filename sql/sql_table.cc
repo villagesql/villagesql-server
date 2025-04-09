@@ -8337,6 +8337,9 @@ bool mysql_prepare_create_table(
   if (create_info->row_type == ROW_TYPE_DYNAMIC)
     create_info->table_options |= HA_OPTION_PACK_RECORD;
 
+  if (create_info->options & HA_LEX_CREATE_EXTERNAL_TABLE)
+    create_info->table_options |= HA_OPTION_CREATE_EXTERNAL_TABLE;
+
   /*
     Prepare fields, which must be done before calling
     add_functional_index_to_create_list(). The reason is that
