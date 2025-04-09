@@ -66,6 +66,8 @@ Libraries defined on this level:
 \ingroup GroupLibsMysql
 \defgroup GroupLibsMysqlGtid GTID
 \ingroup GroupLibsMysql
+\defgroup GroupLibsMysqlGtids Gtids
+\ingroup GroupLibsMysql
 \defgroup GroupLibsMysqlIterators Iterators
 \ingroup GroupLibsMysql
 \defgroup GroupLibsMysqlMath Math

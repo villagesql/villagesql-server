@@ -1,4 +1,4 @@
-# Copyright (c) 2023, 2025, Oracle and/or its affiliates.
+# Copyright (c) 2024, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -21,19 +21,28 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-ADD_SUBDIRECTORY(abi_helpers)
-ADD_SUBDIRECTORY(allocators)
-ADD_SUBDIRECTORY(binlog)
-ADD_SUBDIRECTORY(containers)
-ADD_SUBDIRECTORY(debugging)
-ADD_SUBDIRECTORY(gtid)
-ADD_SUBDIRECTORY(gtids)
-ADD_SUBDIRECTORY(iterators)
-ADD_SUBDIRECTORY(math)
-ADD_SUBDIRECTORY(meta)
-ADD_SUBDIRECTORY(ranges)
-ADD_SUBDIRECTORY(serialization)
-ADD_SUBDIRECTORY(sets)
-ADD_SUBDIRECTORY(strconv)
-ADD_SUBDIRECTORY(utils)
-ADD_SUBDIRECTORY(uuids)
+INCLUDE_DIRECTORIES(SYSTEM ${GMOCK_INCLUDE_DIRS})
+
+# Add tests
+SET(TESTS
+  gtid
+  gtids_example
+)
+
+FOREACH(test ${TESTS})
+  MYSQL_ADD_EXECUTABLE(${test}-t ${test}-t.cc
+    ADD_TEST ${test}
+    LINK_LIBRARIES gunit_small
+    COMPILE_DEFINITIONS "${DISABLE_PSI_DEFINITIONS}")
+ENDFOREACH()
+
+# Tests that need to link with part of server
+SET(SRC_FILES
+  # Tests the legacy Gtid_set data structure which is defined in the server.
+  gtid_set-t.cc
+)
+
+MYSQL_ADD_EXECUTABLE(gtid_set-t ${SRC_FILES}
+  ADD_TEST gtid_set
+  LINK_LIBRARIES gunit_large server_unittest_library
+  COMPILE_DEFINITIONS "${DISABLE_PSI_DEFINITIONS}")
