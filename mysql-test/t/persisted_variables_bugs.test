@@ -578,3 +578,18 @@ SET GLOBAL ssl_crl = DEFAULT;
 
 
 --echo # End of the 8.0 tests
+
+
+--echo #
+--echo # Bug #36854635: Invalid variable error on restart
+--echo #
+
+RESET PERSIST;
+--error ER_CANNOT_PERSIST_TRANSACTION_ISOLATION
+SET PERSIST_ONLY TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+
+--echo # Should be empty
+SELECT VARIABLE_VALUE FROM performance_schema.persisted_variables;
+
+
+--echo # End of the 9.0 tests

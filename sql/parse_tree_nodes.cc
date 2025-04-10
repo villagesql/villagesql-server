@@ -4246,6 +4246,11 @@ bool PT_start_option_value_list_following_option_type_transaction::
   if (super::do_contextualize(pc) || characteristics->contextualize(pc))
     return true;
 
+  if (pc->thd->lex->option_type == OPT_PERSIST ||
+      pc->thd->lex->option_type == OPT_PERSIST_ONLY) {
+    my_error(ER_CANNOT_PERSIST_TRANSACTION_ISOLATION, MYF(0));
+    return true;
+  }
   if (sp_create_assignment_instr(pc->thd, characteristics_pos.raw.end))
     return true;
   assert(pc->thd->lex->query_block == pc->thd->lex->current_query_block());

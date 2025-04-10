@@ -528,3 +528,13 @@ SET PERSIST ssl_crl = NULL;
 RESET PERSIST ssl_crl;
 SET GLOBAL ssl_crl = DEFAULT;
 # End of the 8.0 tests
+#
+# Bug #36854635: Invalid variable error on restart
+#
+RESET PERSIST;
+SET PERSIST_ONLY TRANSACTION ISOLATION LEVEL SERIALIZABLE;
+ERROR HY000: Cannot persist transaction isolation.
+# Should be empty
+SELECT VARIABLE_VALUE FROM performance_schema.persisted_variables;
+VARIABLE_VALUE
+# End of the 9.0 tests

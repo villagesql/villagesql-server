@@ -10563,6 +10563,8 @@ ER_LH_WARN_INFER_USE_DEFAULT_DELIMITERS
 ER_LIBRARY_INVALID
         eng "The routine '%-.192s' references a missing library '%-.192s.%-.192s' or definer/invoker of the routine lack rights to use it."
 
+ER_CANNOT_PERSIST_TRANSACTION_ISOLATION
+  eng "Cannot persist transaction isolation."
 #
 #  End of 9.x error messages (server-to-client).
 #
