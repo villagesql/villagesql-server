@@ -4526,6 +4526,13 @@ class Item_field : public Item_ident {
   */
   Item_multi_eq *m_multi_equality{nullptr};
 
+  /**
+    Indicates whether this field should be treated as an outer reference due to
+    being the result of inlining a local variable within a stored program
+    (currently applicable only to stored functions).
+  */
+  bool m_was_sp_local_variable{false};
+
  public:
   /**
     Index for this field in table->field array. Holds NO_FIELD_INDEX
@@ -4538,6 +4545,11 @@ class Item_field : public Item_ident {
     assert(item_equal != nullptr);
     item_equal_all_join_nests = item_equal;
   }
+
+  /**
+    Sets m_was_sp_local_variable to true.
+  */
+  void set_item_was_sp_local_variable() { m_was_sp_local_variable = true; }
 
   // A list of fields that are considered "equal" to this field. E.g., a query
   // on the form "a JOIN b ON a.i = b.i JOIN c ON b.i = c.i" would consider

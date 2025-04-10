@@ -2171,6 +2171,9 @@ class Query_block : public Query_term {
   /// replaced by a field during scalar_to_derived transformation
   uint n_scalar_subqueries{0};
 
+  /// Number of stored function calls in this query block
+  uint n_stored_func_calls{0};
+
   /// Number of materialized derived tables and views in this query block.
   uint materialized_derived_table_count{0};
   /// Number of partitioned tables

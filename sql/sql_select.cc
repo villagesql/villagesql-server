@@ -318,9 +318,6 @@ bool equal_engines(const LEX_CSTRING &engine1, const LEX_CSTRING &engine2) {
 // and if that's true returns the name of that eligible secondary storage
 // engine.
 const MYSQL_LEX_CSTRING *get_eligible_secondary_engine_from(const LEX *lex) {
-  // Don't use secondary storage engines for statements that call stored
-  // functions.
-  if (lex->has_stored_functions) return nullptr;
   // Now check if the opened tables are available in a secondary
   // storage engine. Only use the secondary tables if all the tables
   // have a secondary tables, and they are all in the same secondary
@@ -440,16 +437,9 @@ void find_and_set_offload_fail_reason(const LEX *lex) {
   // check known unsupported features and raise a specific offload error.
   std::string err_msg{};
   const Table_ref *tref = nullptr;
-  if (lex->has_stored_functions) {
-    // We don't support secondary storage engine execution,
-    // if the query has statements that call stored functions.
-    err_msg =
-        "Statements that reference stored functions are not supported in "
-        "secondary engines.";
-  } else if ((lex->thd->get_transaction() != nullptr &&
-              lex->thd->get_transaction()->is_active(
-                  Transaction_ctx::SESSION)) ||
-             lex->thd->in_active_multi_stmt_transaction()) {
+  if ((lex->thd->get_transaction() != nullptr &&
+       lex->thd->get_transaction()->is_active(Transaction_ctx::SESSION)) ||
+      lex->thd->in_active_multi_stmt_transaction()) {
     // We don't support secondary storage engine execution,
     // if the query is part of a multi-statement transaction
     err_msg =
@@ -679,8 +669,9 @@ bool Sql_cmd_select::prepare_inner(THD *thd) {
     // Unlock the table as soon as possible, so don't set SELECT_NO_UNLOCK.
     select->make_active_options(0, 0);
 
-    if (select->prepare(thd, nullptr)) return true;
-
+    if (select->prepare(thd, nullptr)) {
+      return true;
+    }
     unit->set_prepared();
   } else {
     // If we have multiple query blocks, don't unlock and re-lock

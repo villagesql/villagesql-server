@@ -7262,9 +7262,9 @@ static bool query_block_contains_subquery(Query_block *select,
   return false;
 }
 
-static bool walk_join_conditions(mem_root_deque<Table_ref *> &list,
-                                 std::function<bool(Item **expr_p)> action,
-                                 Item::Collect_scalar_subquery_info *info) {
+bool walk_join_conditions(mem_root_deque<Table_ref *> &list,
+                          std::function<bool(Item **expr_p)> action,
+                          Item::Collect_scalar_subquery_info *info) {
   for (Table_ref *tl : list) {
     if (tl->join_cond() != nullptr) {
       info->m_join_condition_context = tl->join_cond();

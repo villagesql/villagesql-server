@@ -1404,9 +1404,10 @@ bool Arg_comparator::set_cmp_func(Item_func *owner_arg, Item **left_arg,
    Wraps the item into a CAST function to the type provided as argument
    @param item - the item to be wrapped
    @param type - the type to wrap the item to
+   @param fix_new_item - should fix_fields be called on the newly added item
    @returns true if error (OOM), false otherwise.
  */
-inline bool wrap_in_cast(Item **item, enum_field_types type) {
+bool wrap_in_cast(Item **item, enum_field_types type, bool fix_new_item) {
   THD *thd = current_thd;
   Item *cast = nullptr;
   switch (type) {
@@ -1418,7 +1419,8 @@ inline bool wrap_in_cast(Item **item, enum_field_types type) {
       cast = new Item_typecast_date(*item, false);
       break;
     }
-    case MYSQL_TYPE_TIME: {
+    case MYSQL_TYPE_TIME:
+    case MYSQL_TYPE_TIME2: {
       cast = new Item_typecast_time(*item);
       break;
     }
@@ -1433,7 +1435,51 @@ inline bool wrap_in_cast(Item **item, enum_field_types type) {
   }
   if (cast == nullptr) return true;
 
-  if (cast->fix_fields(thd, item)) return true;
+  if (fix_new_item && cast->fix_fields(thd, item)) {
+    return true;
+  }
+  thd->change_item_tree(item, cast);
+
+  return false;
+}
+
+/**
+   Wraps the item into a DECIMAL CAST
+   @param item - the item to be wrapped
+   @param precision - number of digits of precision
+   @param scale - number of digits after decimal point
+   @param fix_new_item - should fix_fields be called on the newly added item
+   @returns true if an error occurs, false otherwise.
+ */
+bool wrap_in_decimal_cast(Item **item, int precision, int scale,
+                          bool fix_new_item) {
+  THD *thd = current_thd;
+  Item *cast = new Item_typecast_decimal(POS(), *item, precision, scale);
+  if (cast == nullptr) return true;
+  if (fix_new_item && cast->fix_fields(thd, item)) return true;
+  thd->change_item_tree(item, cast);
+
+  return false;
+}
+
+/**
+   Wraps the item into a INTEGER CAST
+   @param item - the item to be wrapped
+   @param is_unsigned - is the target type unsigned
+   @param fix_new_item - should fix_fields be called on the newly added item
+   @returns true if an error occurs, false otherwise.
+ */
+bool wrap_in_int_cast(Item **item, bool is_unsigned, bool fix_new_item) {
+  THD *thd = current_thd;
+  Item *cast = nullptr;
+  if (is_unsigned) {
+    cast = new Item_typecast_unsigned(POS(), *item);
+  } else {
+    cast = new Item_typecast_signed(POS(), *item);
+  }
+  if (cast == nullptr) return true;
+
+  if (fix_new_item && cast->fix_fields(thd, item)) return true;
   thd->change_item_tree(item, cast);
 
   return false;

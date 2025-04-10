@@ -72,6 +72,10 @@ struct Parse_context;
 
 Item *make_condition(Parse_context *pc, Item *item);
 
+bool wrap_in_cast(Item **item, enum_field_types type, bool fix_new_item = true);
+bool wrap_in_decimal_cast(Item **a, int len, int dec, bool fix_new_item = true);
+bool wrap_in_int_cast(Item **a, bool is_unsigned, bool fix_new_item = true);
+
 typedef int (Arg_comparator::*arg_cmp_func)();
 
 /// A class that represents a join condition in a hash join. The class holds an

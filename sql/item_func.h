@@ -69,6 +69,7 @@ class Protocol;
 class Query_block;
 class THD;
 class sp_rcontext;
+class sp_instr;
 struct MY_BITMAP;
 struct Parse_context;
 struct TYPELIB;
@@ -4041,6 +4042,8 @@ class Item_func_sp final : public Item_func {
   }
 
   bool sp_check_access(THD *thd);
+  sp_head *get_sp() { return m_sp; }
+  const sp_name *get_name() { return m_name; }
   enum Functype functype() const override { return FUNC_SP; }
 
   bool fix_fields(THD *thd, Item **ref) override;

@@ -120,15 +120,16 @@
 #include "sql/resourcegroups/resource_group_basic_types.h"
 #include "sql/resourcegroups/resource_group_mgr.h"
 #include "sql/rpl_gtid.h"
-#include "sql/rpl_mi.h"       // Master_info
-#include "sql/rpl_msr.h"      // channel_map
-#include "sql/rpl_rli.h"      // Relay_log_info
-#include "sql/sp.h"           // sp_setup_routine
-#include "sql/sp_head.h"      // sp_name
-#include "sql/sp_pcontext.h"  // sp_variable
-#include "sql/sql_array.h"    // just to keep clang happy
-#include "sql/sql_audit.h"    // audit_global_variable
-#include "sql/sql_base.h"     // Internal_error_handler_holder
+#include "sql/rpl_mi.h"           // Master_info
+#include "sql/rpl_msr.h"          // channel_map
+#include "sql/rpl_rli.h"          // Relay_log_info
+#include "sql/sp.h"               // sp_setup_routine
+#include "sql/sp_head.h"          // sp_name
+#include "sql/sp_instr_inline.h"  // inline_stored_function
+#include "sql/sp_pcontext.h"      // sp_variable
+#include "sql/sql_array.h"        // just to keep clang happy
+#include "sql/sql_audit.h"        // audit_global_variable
+#include "sql/sql_base.h"         // Internal_error_handler_holder
 #include "sql/sql_bitmap.h"
 #include "sql/sql_class.h"  // THD
 #include "sql/sql_cmd.h"
@@ -8669,6 +8670,72 @@ bool Item_func_sp::fix_fields(THD *thd, Item **ref) {
   */
   if (init_result_field(thd)) return true;
 
+  const bool needs_inlining = sp_inl::needs_stored_function_inlining(thd);
+
+  if (needs_inlining || thd->lex->is_view_context_analysis()) {
+    /*
+      If we don't need stored function inlining, here we check privileges of the
+      stored routine only during view creation, in order to validate the view.
+      A runtime check is performed in Item_func_sp::execute(), and this method
+      is not called during context analysis. Notice, that during view creation
+      we do not infer into stored routine bodies and do not check privileges of
+      its statements, which would probably be a good idea especially if the view
+      has SQL SECURITY DEFINER and the used stored procedure has SQL SECURITY
+      DEFINER.
+      When we require stored function inlining the check in execute is
+      not performed so we check it here.
+    */
+    if (sp_check_access(thd)) return true;
+    /*
+      Try to set and restore the security context to see whether it's valid
+    */
+    Security_context *save_security_context;
+    if (m_sp->set_security_ctx(thd, &save_security_context)) {
+      return true;
+    }
+    m_sp->m_security_ctx.restore_security_context(thd, save_security_context);
+  }
+
+  /*
+    This is the entry point for stored function inlining. Currently it's done
+    only for the secondary engine and for a subset of stored functions (see
+    sp_inl::can_inline_stored_function).
+  */
+  if (needs_inlining) {
+    std::unordered_set<sp_head *> used_sp_functions;
+    auto guard = create_scope_guard([this, &used_sp_functions] {
+      m_sp->m_recursion_level = 0;
+      for (auto used_sp : used_sp_functions) {
+        used_sp->m_recursion_level = 0;
+      }
+    });
+
+    if (!sp_inl::can_inline_stored_function(thd, m_sp, arg_count)) {
+      return true;
+    }
+    Mem_root_array<sp_inl::sp_inline_instr *> *prepared_inline_instrs =
+        sp_inl::prepare(thd, m_sp, used_sp_functions);
+
+    if (prepared_inline_instrs == nullptr) {
+      return true;
+    }
+
+    Item *inlined_expression =
+        sp_inl::inline_stored_function(thd, prepared_inline_instrs, args,
+                                       arg_count, m_sp, m_name_resolution_ctx);
+    if (inlined_expression == nullptr) {
+      return true;
+    }
+
+    if (!inlined_expression->fixed &&
+        inlined_expression->fix_fields(thd, &inlined_expression)) {
+      return true;
+    }
+    inlined_expression->item_name.set(item_name.ptr(), item_name.length());
+    *ref = inlined_expression;
+    return false;
+  }
+
   sp_pcontext *sp_ctx = m_sp->get_root_parsing_context();
 
   if (arg_count != sp_ctx->context_var_count()) {
@@ -8691,27 +8758,6 @@ bool Item_func_sp::fix_fields(THD *thd, Item **ref) {
         return true;
     }
   }
-
-  if (thd->lex->is_view_context_analysis()) {
-    /*
-      Here we check privileges of the stored routine only during view
-      creation, in order to validate the view.  A runtime check is
-      performed in Item_func_sp::execute(), and this method is not
-      called during context analysis.  Notice, that during view
-      creation we do not infer into stored routine bodies and do not
-      check privileges of its statements, which would probably be a
-      good idea especially if the view has SQL SECURITY DEFINER and
-      the used stored procedure has SQL SECURITY DEFINER.
-    */
-    if (sp_check_access(thd)) return true;
-    /*
-      Try to set and restore the security context to see whether it's valid
-    */
-    Security_context *save_security_context;
-    if (m_sp->set_security_ctx(thd, &save_security_context)) return true;
-    m_sp->m_security_ctx.restore_security_context(thd, save_security_context);
-  }
-
   // Cleanup immediately, thus execute() will always attach to the routine.
   cleanup();
 

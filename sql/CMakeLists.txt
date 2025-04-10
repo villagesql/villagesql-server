@@ -541,6 +541,7 @@ SET(SQL_SHARED_SOURCES
   sp_cache.cc
   sp_head.cc
   sp_instr.cc
+  sp_instr_inline.cc
   sp_pcontext.cc
   sp_rcontext.cc
   spatial.cc

@@ -601,23 +601,8 @@ bool copy_field_info(THD *thd, Item *orig_expr, Item *cloned_expr) {
   return false;
 }
 
-/**
-  Given an item and a query block, this function creates a clone of the
-  item (unresolved) by reparsing the item. Used during condition pushdown
-  to derived tables.
-
-  @param thd            Current thread.
-  @param item           Item to be reparsed to get a clone.
-  @param query_block    query block where expression is being parsed
-  @param derived_table  derived table to which the item belongs to.
-                        "nullptr" when cloning to make a copy of the
-                        original condition to be pushed down
-                        to a derived table that has SET operations.
-
-  @returns A copy of the original item (unresolved) on success else nullptr.
-*/
-static Item *parse_expression(THD *thd, Item *item, Query_block *query_block,
-                              Table_ref *derived_table) {
+Item *parse_expression(THD *thd, Item *item, Query_block *query_block,
+                       Table_ref *derived_table) {
   // Set up for parsing item
   LEX *const old_lex = thd->lex;
   LEX new_lex;

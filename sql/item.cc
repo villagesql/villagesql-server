@@ -81,9 +81,10 @@
 #include "sql/protocol.h"
 #include "sql/query_options.h"
 #include "sql/select_lex_visitor.h"
-#include "sql/sp.h"           // sp_prepare_func_item
-#include "sql/sp_rcontext.h"  // sp_rcontext
-#include "sql/sql_base.h"     // find_field_in_tables
+#include "sql/sp.h"               // sp_prepare_func_item
+#include "sql/sp_instr_inline.h"  // needs_stored_function_inlining
+#include "sql/sp_rcontext.h"      // sp_rcontext
+#include "sql/sql_base.h"         // find_field_in_tables
 #include "sql/sql_bitmap.h"
 #include "sql/sql_class.h"    // THD
 #include "sql/sql_derived.h"  // Condition_pushdown
@@ -1860,7 +1861,14 @@ bool Item::is_blob_field() const {
 Item_sp_variable::Item_sp_variable(const Name_string sp_var_name)
     : m_name(sp_var_name) {}
 
-bool Item_sp_variable::fix_fields(THD *, Item **) {
+bool Item_sp_variable::fix_fields(THD *thd, Item **) {
+  if (sp_inl::needs_stored_function_inlining(thd)) {
+    std::string err_reason{"Cannot inline stored function variable"};
+    err_reason.append(" [").append(m_name.ptr()).append("].");
+    sp_inl::report_stored_function_inlining_error(thd, nullptr, err_reason);
+    return true;
+  }
+
   Item *it = this_item();
 
   assert(it->fixed);
@@ -6108,6 +6116,27 @@ bool Item_field::fix_fields(THD *thd, Item **reference) {
     return false;
   }
   assert(field == nullptr);
+
+  if (m_was_sp_local_variable) {
+    // If a stored function is inlined (in case of secondary engine),
+    // any column reference used as an argument to such a stored function
+    // must be resolved in the context of the *outer* query block.
+    // The column should then be marked as an outer reference.
+    //
+    // Example:
+    //   SELECT some_function(t1.col1) FROM t1 WHERE ...;
+    // If 'some_function' is inlined and refers to 't1.col1',
+    // 't1.col1' must be resolved with respect to the outer SELECT's context,
+    // and treated as an outer reference after inlining.
+    bool complete;
+    if (fix_outer_field(thd, &base_field, &ref_field, &complete)) {
+      return true;
+    }
+    if (complete && ref_field != nullptr) {
+      *reference = ref_field;
+    }
+    return false;
+  }
 
   Find_field_result result;
   int report_error =
