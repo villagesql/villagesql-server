@@ -1288,7 +1288,8 @@ unique_ptr_destroy_only<RowIterator> CreateIteratorFromAccessPath(
           continue;
         }
         iterator = NewIterator<RemoveDuplicatesIterator>(
-            thd, mem_root, std::move(job.children[0]), join, param.group_items);
+            thd, mem_root, std::move(job.children[0]), join,
+            param.group_items());
         break;
       }
       case AccessPath::REMOVE_DUPLICATES_ON_INDEX: {

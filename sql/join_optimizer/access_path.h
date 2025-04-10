@@ -1291,8 +1291,21 @@ struct AccessPath {
       table_map tables_to_get_rowid_for;
     } weedout;
     struct {
+      using ItemSpan = std::span<Item *>;
       AccessPath *child;
-      std::span<Item *> group_items;
+
+      ItemSpan &group_items() {
+        return reinterpret_cast<ItemSpan &>(m_group_items);
+      }
+
+      const ItemSpan &group_items() const {
+        return reinterpret_cast<const ItemSpan &>(m_group_items);
+      }
+
+     private:
+      // gcc 11 does not support a span as a union member. Replace this
+      // with "std::span<Item *> group_items" when we move to newer gcc version.
+      char m_group_items[sizeof(ItemSpan)];
     } remove_duplicates;
     struct {
       AccessPath *child;
@@ -1802,7 +1815,7 @@ inline AccessPath *NewRemoveDuplicatesAccessPath(
   AccessPath *path = new (thd->mem_root) AccessPath;
   path->type = AccessPath::REMOVE_DUPLICATES;
   path->remove_duplicates().child = child;
-  path->remove_duplicates().group_items = group_items;
+  path->remove_duplicates().group_items() = group_items;
   path->has_group_skip_scan = child->has_group_skip_scan;
   return path;
 }

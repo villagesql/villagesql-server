@@ -611,7 +611,7 @@ bool UpdateReferencesToMaterializedItems(
           need_exact_match);
     }
   } else if (path->type == AccessPath::REMOVE_DUPLICATES) {
-    for (Item *&group_item : path->remove_duplicates().group_items) {
+    for (Item *&group_item : path->remove_duplicates().group_items()) {
       for (const Func_ptr_array *earlier_replacement : *applied_replacements) {
         group_item = FindReplacementOrReplaceMaterializedItems(
             thd, group_item, *earlier_replacement,
