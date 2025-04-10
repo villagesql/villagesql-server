@@ -7597,7 +7597,7 @@ namespace {
 ulonglong debug_a_global_flagset;
 constexpr const uint64_t DEBUG_A_GLOBAL_FLAGSET_F1{1ULL << 0};
 constexpr const uint64_t DEBUG_A_GLOBAL_FLAGSET_F2{1ULL << 1};
-constexpr const uint64_t DEBUG_A_GLOBAL_FLAGSET_LAST{1ULL << 2};
+// constexpr const uint64_t DEBUG_A_GLOBAL_FLAGSET_LAST{1ULL << 2};
 constexpr uint64_t DEBUG_A_GLOBAL_FLAGSET_DEFAULT{DEBUG_A_GLOBAL_FLAGSET_F1 |
                                                   DEBUG_A_GLOBAL_FLAGSET_F2};
 const char *debug_a_global_flagset_names[] = {"f1", "f2", "default", NullS};
