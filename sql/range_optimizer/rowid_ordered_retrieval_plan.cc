@@ -250,7 +250,7 @@ ROR_intersect_plan::ROR_intersect_plan(const RANGE_OPT_PARAM *param,
       m_ror_scans(param->return_mem_root, 0),
       m_out_rows(m_param->table->file->stats.records),
       m_covered_fields(
-          MutableOverflowBitset(param->temp_mem_root, num_fields)) {}
+          OverflowBitset::EmptySet(param->temp_mem_root, num_fields)) {}
 
 ROR_intersect_plan &ROR_intersect_plan::operator=(
     const ROR_intersect_plan &plan) {

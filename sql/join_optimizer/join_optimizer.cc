@@ -158,6 +158,33 @@ AccessPath *CreateMaterializationPath(
     MaterializePathParameters::DedupType dedup_reason =
         MaterializePathParameters::NO_DEDUP);
 
+/**
+  A pair of bitsets representing the predicates applied by an index access, and
+  which of the predicates are applied fully. The bits map to the predicate with
+  the same index in JoinHypergraph::predicates.
+ */
+class AbsorbedPredicates {
+ public:
+  AbsorbedPredicates() = default;
+
+  AbsorbedPredicates(OverflowBitset applied, OverflowBitset subsumed)
+      : m_applied{applied}, m_subsumed{subsumed} {
+    assert(IsSubset(subsumed, applied));
+  }
+
+  /// The predicates that are applied by an index access.
+  [[nodiscard]] OverflowBitset applied() const { return m_applied; }
+
+  /// The predicates that are fully applied by an index access, and which don't
+  /// need to be checked again in a FILTER access path. This is a subset of the
+  /// predicates in the "applied" bitset.
+  [[nodiscard]] OverflowBitset subsumed() const { return m_subsumed; }
+
+ private:
+  OverflowBitset m_applied;
+  OverflowBitset m_subsumed;
+};
+
 struct PossibleRangeScan {
   unsigned idx;
   unsigned mrr_flags;
@@ -167,8 +194,7 @@ struct PossibleRangeScan {
   ha_rows num_rows;
   bool is_ror_scan;
   bool is_imerge_scan;
-  OverflowBitset applied_predicates;
-  OverflowBitset subsumed_predicates;
+  AbsorbedPredicates predicates;
   Quick_ranges ranges;
 };
 
@@ -239,8 +265,7 @@ int WasPushedDownToRef(Item *condition, const KeypartForRef *keyparts,
 // range scan, it stores the applied and subsumed predicates.
 struct PossibleRORScan {
   unsigned idx;
-  OverflowBitset applied_predicates;
-  OverflowBitset subsumed_predicates;
+  AbsorbedPredicates predicates;
 };
 
 using AccessPathArray = Prealloced_array<AccessPath *, 4>;
@@ -640,7 +665,8 @@ class CostingReceiver {
                        Mem_root_array<PossibleRangeScan> *possible_scans,
                        Mem_root_array<PossibleIndexMerge> *index_merges,
                        Mem_root_array<PossibleIndexSkipScan> *index_skip_scans,
-                       MutableOverflowBitset *all_predicates);
+                       MutableOverflowBitset *all_predicates,
+                       AbsorbedPredicates *tree_predicates_out);
   void ProposeRangeScans(int node_idx, double num_output_rows_after_filter,
                          RANGE_OPT_PARAM *param, SEL_TREE *tree,
                          Mem_root_array<PossibleRangeScan> *possible_scans,
@@ -692,8 +718,7 @@ class CostingReceiver {
                                      const char *description_for_trace,
                                      AccessPath *path);
   void ProposeAccessPathForIndex(int node_idx,
-                                 OverflowBitset applied_predicates,
-                                 OverflowBitset subsumed_predicates,
+                                 AbsorbedPredicates absorbed_predicates,
                                  double force_num_output_rows_after_filter,
                                  const char *description_for_trace,
                                  AccessPath *path);
@@ -796,8 +821,7 @@ class CostingReceiver {
                      const AccessPath &right_path,
                      const JoinPredicate &edge) const;
   void ApplyPredicatesForBaseTable(int node_idx,
-                                   OverflowBitset applied_predicates,
-                                   OverflowBitset subsumed_predicates,
+                                   AbsorbedPredicates absorbed_predicates,
                                    bool materialize_subqueries,
                                    double force_num_output_rows_after_filter,
                                    AccessPath *path,
@@ -954,6 +978,24 @@ bool CheckKilledOrError(THD *thd) {
   return thd->is_error();
 }
 
+/// Returns bitsets representing that there is no applied predicate.
+AbsorbedPredicates NoAppliedPredicates(MEM_ROOT *mem_root, size_t size) {
+  const OverflowBitset empty = OverflowBitset::EmptySet(mem_root, size);
+  return {empty, empty};
+}
+
+/// Returns bitsets representing a single applied predicate, which is possibly
+/// also subsumed.
+AbsorbedPredicates SingleAppliedPredicate(MEM_ROOT *mem_root, int predicate_idx,
+                                          bool subsumed, size_t size) {
+  MutableOverflowBitset this_predicate{mem_root, size};
+  this_predicate.SetBit(predicate_idx);
+  OverflowBitset this_predicate_fixed = std::move(this_predicate);
+  return {this_predicate_fixed, subsumed
+                                    ? this_predicate_fixed
+                                    : OverflowBitset::EmptySet(mem_root, size)};
+}
+
 /**
    A builder class for constructing REF (or EQ_REF) AccessPath
    objects. Doing so in a single function would give an excessively
@@ -1084,12 +1126,9 @@ class RefAccessBuilder final {
     /// The combined selectivity of the conditions refering to the target table.
     double join_condition_selectivity;
 
-    /// Predicates promoted from a join condition to a WHERE predicate,
-    /// since they were part of cycles.
-    MutableOverflowBitset applied_predicates;
-
-    /// Predicates subsumed by the index access.
-    MutableOverflowBitset subsumed_predicates;
+    /// The predicates that are applied, and possibly also subsumed, by the
+    /// given index lookup.
+    AbsorbedPredicates predicates;
   };
 
   /// Find which predicates that are covered by this index access.
@@ -1255,9 +1294,11 @@ RefAccessBuilder::AnalyzePredicates(
     }
   }
 
-  return PredicateAnalysis{selectivity, join_condition_selectivity,
-                           std::move(applied_predicates),
-                           std::move(subsumed_predicates)};
+  return PredicateAnalysis{
+      .selectivity = selectivity,
+      .join_condition_selectivity = join_condition_selectivity,
+      .predicates{std::move(applied_predicates),
+                  std::move(subsumed_predicates)}};
 }
 
 AccessPath RefAccessBuilder::MakePath(
@@ -1461,9 +1502,7 @@ RefAccessBuilder::ProposeResult RefAccessBuilder::ProposePath() const {
   }
 
   m_receiver->ProposeAccessPathForIndex(
-      m_node_idx, std::move(predicate_analysis.value().applied_predicates),
-      std::move(predicate_analysis.value().subsumed_predicates), row_count,
-      key->name, &path);
+      m_node_idx, predicate_analysis->predicates, row_count, key->name, &path);
 
   return ProposeResult::kPathsFound;
 }
@@ -1523,15 +1562,12 @@ CostingReceiver::FindRangeScansResult CostingReceiver::FindRangeScans(
   FunctionalDependencySet new_fd_set;
   ApplyPredicatesForBaseTable(
       node_idx,
-      /*applied_predicates=*/
-      MutableOverflowBitset{m_thd->mem_root, m_graph->predicates.size()},
-      /*subsumed_predicates=*/
-      MutableOverflowBitset{m_thd->mem_root, m_graph->predicates.size()},
+      NoAppliedPredicates(m_thd->mem_root, m_graph->predicates.size()),
       /*materialize_subqueries=*/false, kUnknownRowCount, zero_path,
       &new_fd_set);
 
   zero_path->filter_predicates =
-      MutableOverflowBitset{m_thd->mem_root, m_graph->predicates.size()};
+      OverflowBitset::EmptySet(m_thd->mem_root, m_graph->predicates.size());
 
   zero_path->ordering_state =
       m_orderings->ApplyFDs(zero_path->ordering_state, new_fd_set);
@@ -1788,6 +1824,68 @@ bool CostingReceiver::FoundSingleNode(int node_idx) {
   return false;
 }
 
+/**
+  A pair of bitsets representing the fields for which an index access applies
+  predicates, and for which of those fields the predicates are applied fully.
+  The bits map to the field with the same index in the TABLE::field array.
+ */
+class AbsorbedFields {
+ public:
+  AbsorbedFields(OverflowBitset applied, OverflowBitset subsumed)
+      : m_applied{applied}, m_subsumed{subsumed} {
+    assert(IsSubset(subsumed, applied));
+  }
+
+  /// The fields whose predicates are applied by an index access.
+  [[nodiscard]] OverflowBitset applied() const { return m_applied; }
+
+  /// The fields whose predicates are fully applied by an index access. Those
+  /// predicates do not have to be applied again in a FILTER access path. This
+  /// is a subset of the fields in the "applied" bitset.
+  [[nodiscard]] OverflowBitset subsumed() const { return m_subsumed; }
+
+ private:
+  OverflowBitset m_applied;
+  OverflowBitset m_subsumed;
+};
+
+/**
+  Find the set of fields that are part of the used prefix of a given key
+  ("applied fields"), and the subset for which the ranges can be applied fully
+  ("subsumed fields").
+
+  @param thd Thread handle.
+  @param table The table to access.
+  @param key The index to scan.
+  @param used_key_parts The number of key parts used.
+  @param num_exact_key_parts
+                        The number of key parts for which we were able to
+                        apply the ranges fully (never higher than
+                        used_key_parts), subsuming conditions touching
+                        that key part.
+  @return a pair of bitsets representing the applied and subsumed fields.
+ */
+AbsorbedFields FindAbsorbedFieldsForRangeScan(THD *thd, const TABLE &table,
+                                              const KEY &key,
+                                              unsigned used_key_parts,
+                                              unsigned num_exact_key_parts) {
+  MutableOverflowBitset applied_fields{thd->mem_root, table.s->fields};
+  MutableOverflowBitset subsumed_fields{thd->mem_root, table.s->fields};
+
+  for (unsigned keypart_idx = 0; keypart_idx < used_key_parts; ++keypart_idx) {
+    const KEY_PART_INFO &keyinfo = key.key_part[keypart_idx];
+    const unsigned field_idx = keyinfo.fieldnr - 1;
+    assert(field_idx == keyinfo.field->field_index());
+    applied_fields.SetBit(field_idx);
+    if (keypart_idx < num_exact_key_parts &&
+        !Overlaps(keyinfo.key_part_flag, HA_PART_KEY_SEG)) {
+      subsumed_fields.SetBit(field_idx);
+    }
+  }
+
+  return {std::move(applied_fields), std::move(subsumed_fields)};
+}
+
 // Figure out which predicates we have that are not applied/subsumed
 // by scanning this specific index; we already did a check earlier,
 // but that was on predicates applied by scanning _any_ index.
@@ -1805,59 +1903,44 @@ bool CostingReceiver::FoundSingleNode(int node_idx) {
 // We use this information to build up sets of which fields an
 // applied or subsumed predicate is allowed to reference,
 // then check each predicate against those lists.
-void FindAppliedAndSubsumedPredicatesForRangeScan(
-    THD *thd, KEY *key, unsigned used_key_parts, unsigned num_exact_key_parts,
-    TABLE *table, OverflowBitset tree_applied_predicates,
-    OverflowBitset tree_subsumed_predicates, const JoinHypergraph &graph,
-    OverflowBitset *applied_predicates_out,
-    OverflowBitset *subsumed_predicates_out) {
-  MutableOverflowBitset applied_fields{thd->mem_root, table->s->fields};
-  MutableOverflowBitset subsumed_fields{thd->mem_root, table->s->fields};
+AbsorbedPredicates FindAbsorbedPredicatesForRangeScan(
+    THD *thd, AbsorbedFields fields, AbsorbedPredicates tree_predicates,
+    const JoinHypergraph &graph) {
   MutableOverflowBitset applied_predicates(thd->mem_root,
                                            graph.predicates.size());
   MutableOverflowBitset subsumed_predicates(thd->mem_root,
                                             graph.predicates.size());
-  for (unsigned keypart_idx = 0; keypart_idx < used_key_parts; ++keypart_idx) {
-    const KEY_PART_INFO &keyinfo = key->key_part[keypart_idx];
-    applied_fields.SetBit(keyinfo.field->field_index());
-    if (keypart_idx < num_exact_key_parts &&
-        !Overlaps(keyinfo.key_part_flag, HA_PART_KEY_SEG)) {
-      subsumed_fields.SetBit(keyinfo.field->field_index());
-    }
-  }
-  for (int predicate_idx : BitsSetIn(tree_applied_predicates)) {
+  for (int predicate_idx : BitsSetIn(tree_predicates.applied())) {
     Item *condition = graph.predicates[predicate_idx].condition;
     bool any_not_applied =
-        WalkItem(condition, enum_walk::POSTFIX, [&applied_fields](Item *item) {
+        WalkItem(condition, enum_walk::POSTFIX, [fields](Item *item) {
           return item->type() == Item::FIELD_ITEM &&
                  !IsBitSet(down_cast<Item_field *>(item)->field->field_index(),
-                           applied_fields);
+                           fields.applied());
         });
     if (any_not_applied) {
       continue;
     }
     applied_predicates.SetBit(predicate_idx);
-    if (IsBitSet(predicate_idx, tree_subsumed_predicates)) {
-      bool any_not_subsumed = WalkItem(
-          condition, enum_walk::POSTFIX, [&subsumed_fields](Item *item) {
+    if (IsBitSet(predicate_idx, tree_predicates.subsumed())) {
+      bool any_not_subsumed =
+          WalkItem(condition, enum_walk::POSTFIX, [fields](Item *item) {
             return item->type() == Item::FIELD_ITEM &&
                    !IsBitSet(
                        down_cast<Item_field *>(item)->field->field_index(),
-                       subsumed_fields);
+                       fields.subsumed());
           });
       if (!any_not_subsumed) {
         subsumed_predicates.SetBit(predicate_idx);
       }
     }
   }
-  *applied_predicates_out = std::move(applied_predicates);
-  *subsumed_predicates_out = std::move(subsumed_predicates);
+  return {std::move(applied_predicates), std::move(subsumed_predicates)};
 }
 
 bool CollectPossibleRangeScans(
     THD *thd, SEL_TREE *tree, RANGE_OPT_PARAM *param,
-    OverflowBitset tree_applied_predicates,
-    OverflowBitset tree_subsumed_predicates, const JoinHypergraph &graph,
+    AbsorbedPredicates tree_predicates, const JoinHypergraph &graph,
     Mem_root_array<PossibleRangeScan> *possible_scans) {
   for (unsigned idx = 0; idx < param->keys; idx++) {
     SEL_ROOT *root = tree->keys[idx];
@@ -1912,10 +1995,11 @@ bool CollectPossibleRangeScans(
     }
     scan.is_imerge_scan = is_imerge_scan;
     scan.ranges = std::move(ranges);
-    FindAppliedAndSubsumedPredicatesForRangeScan(
-        thd, key, used_key_parts, num_exact_key_parts, param->table,
-        tree_applied_predicates, tree_subsumed_predicates, graph,
-        &scan.applied_predicates, &scan.subsumed_predicates);
+    scan.predicates = FindAbsorbedPredicatesForRangeScan(
+        thd,
+        FindAbsorbedFieldsForRangeScan(thd, *param->table, *key, used_key_parts,
+                                       num_exact_key_parts),
+        tree_predicates, graph);
     possible_scans->push_back(std::move(scan));
   }
   return false;
@@ -2026,11 +2110,11 @@ double EstimateOutputRowsFromRangeTree(
     double best_selectivity = -1.0;  // Same.
 
     for (const PossibleRangeScan &scan : possible_scans) {
-      if (IsEmpty(scan.applied_predicates) ||
-          !IsSubset(scan.applied_predicates, remaining_predicates)) {
+      if (IsEmpty(scan.predicates.applied()) ||
+          !IsSubset(scan.predicates.applied(), remaining_predicates)) {
         continue;
       }
-      int cover_size = PopulationCount(scan.applied_predicates);
+      int cover_size = PopulationCount(scan.predicates.applied());
       // NOTE: The check for num_rows >= total_rows is because total_rows may be
       // outdated, and we wouldn't want to have selectivities above 1.0, or NaN
       // or Inf if total_rows is zero.
@@ -2056,7 +2140,7 @@ double EstimateOutputRowsFromRangeTree(
     selectivity *= best_selectivity;
 
     // Mark these predicates as being dealt with.
-    for (int predicate_idx : BitsSetIn(best_scan->applied_predicates)) {
+    for (int predicate_idx : BitsSetIn(best_scan->predicates.applied())) {
       remaining_predicates.ClearBit(predicate_idx);
     }
 
@@ -2068,7 +2152,7 @@ double EstimateOutputRowsFromRangeTree(
           "to cover ",
           best_selectivity, best_scan->num_rows, key->name);
       bool first = true;
-      for (int predicate_idx : BitsSetIn(best_scan->applied_predicates)) {
+      for (int predicate_idx : BitsSetIn(best_scan->predicates.applied())) {
         if (!first) {
           Trace(thd) << " AND ";
         }
@@ -2258,9 +2342,10 @@ bool CostingReceiver::FindIndexRangeScans(int node_idx, bool *impossible,
       &m_range_optimizer_mem_root);
   MutableOverflowBitset all_predicates{m_thd->mem_root,
                                        m_graph->predicates.size()};
+  AbsorbedPredicates tree_predicates;
   if (SetUpRangeScans(node_idx, impossible, num_output_rows_after_filter,
                       &param, &tree, &possible_scans, &index_merges,
-                      &index_skip_scans, &all_predicates)) {
+                      &index_skip_scans, &all_predicates, &tree_predicates)) {
     return true;
   }
   if (*impossible) {
@@ -2315,7 +2400,8 @@ bool CostingReceiver::SetUpRangeScans(
     Mem_root_array<PossibleRangeScan> *possible_scans,
     Mem_root_array<PossibleIndexMerge> *index_merges,
     Mem_root_array<PossibleIndexSkipScan> *index_skip_scans,
-    MutableOverflowBitset *all_predicates) {
+    MutableOverflowBitset *all_predicates,
+    AbsorbedPredicates *tree_predicates_out) {
   *impossible = false;
   *num_output_rows_after_filter = -1.0;
   TABLE *table = m_graph->nodes[node_idx].table();
@@ -2447,20 +2533,17 @@ bool CostingReceiver::SetUpRangeScans(
   assert((*tree)->type == SEL_TREE::KEY);
 
   OverflowBitset all_predicates_fixed = std::move(*all_predicates);
-  OverflowBitset tree_applied_predicates_fixed =
-      std::move(tree_applied_predicates);
-  OverflowBitset tree_subsumed_predicates_fixed =
-      std::move(tree_subsumed_predicates);
-  if (CollectPossibleRangeScans(
-          m_thd, *tree, param, tree_applied_predicates_fixed,
-          tree_subsumed_predicates_fixed, *m_graph, possible_scans)) {
+  AbsorbedPredicates tree_predicates{std::move(tree_applied_predicates),
+                                     std::move(tree_subsumed_predicates)};
+  if (CollectPossibleRangeScans(m_thd, *tree, param, tree_predicates, *m_graph,
+                                possible_scans)) {
     return true;
   }
   *num_output_rows_after_filter = EstimateOutputRowsFromRangeTree(
       m_thd, *param, table->file->stats.records, *possible_scans, *index_merges,
       *m_graph, all_predicates_fixed);
-  *all_predicates = all_predicates_fixed.Clone(m_thd->mem_root);
 
+  *tree_predicates_out = tree_predicates;
   return false;
 }
 
@@ -2512,9 +2595,8 @@ void CostingReceiver::ProposeRangeScans(
       AccessPath new_path = path;
       FunctionalDependencySet new_fd_set;
       ApplyPredicatesForBaseTable(
-          node_idx, scan.applied_predicates, scan.subsumed_predicates,
-          materialize_subqueries, num_output_rows_after_filter, &new_path,
-          &new_fd_set);
+          node_idx, scan.predicates, materialize_subqueries,
+          num_output_rows_after_filter, &new_path, &new_fd_set);
 
       string description_for_trace;
       if (TraceStarted(m_thd)) {
@@ -2587,9 +2669,8 @@ void CostingReceiver::ProposeRangeScans(
         AccessPath new_path = path;
         FunctionalDependencySet new_fd_set;
         ApplyPredicatesForBaseTable(
-            node_idx, scan.applied_predicates, scan.subsumed_predicates,
-            materialize_subqueries, num_output_rows_after_filter, &new_path,
-            &new_fd_set);
+            node_idx, scan.predicates, materialize_subqueries,
+            num_output_rows_after_filter, &new_path, &new_fd_set);
 
         string description_for_trace;
         if (TraceStarted(m_thd)) {
@@ -2638,8 +2719,7 @@ void CostingReceiver::ProposeAllIndexMergeScans(
     if (tree->ror_scans_map.is_set(scan.idx)) {
       PossibleRORScan ror_scan;
       ror_scan.idx = scan.idx;
-      ror_scan.applied_predicates = scan.applied_predicates;
-      ror_scan.subsumed_predicates = scan.subsumed_predicates;
+      ror_scan.predicates = scan.predicates;
       possible_ror_scans.push_back(ror_scan);
     }
   }
@@ -2745,20 +2825,18 @@ void CostingReceiver::ProposeAllSkipScans(
   }
 }
 
-// Used by ProposeRowIdOrderedIntersect() to update the applied_predicates
-// and subsumed_predicates when a new scan is added to a plan.
-void UpdateAppliedAndSubsumedPredicates(
+// Used by ProposeRowIdOrderedIntersect() to update the absorbed predicates
+// when a new scan is added to a plan.
+AbsorbedPredicates UpdateAbsorbedPredicates(
     const uint idx, const Mem_root_array<PossibleRORScan> &possible_ror_scans,
-    const RANGE_OPT_PARAM *param, OverflowBitset *applied_predicates,
-    OverflowBitset *subsumed_predicates) {
+    const RANGE_OPT_PARAM *param, AbsorbedPredicates predicates) {
   const auto s_it =
-      find_if(possible_ror_scans.begin(), possible_ror_scans.end(),
-              [idx](const PossibleRORScan &scan) { return scan.idx == idx; });
+      std::ranges::find(possible_ror_scans, idx, &PossibleRORScan::idx);
   assert(s_it != possible_ror_scans.end());
-  *applied_predicates = OverflowBitset::Or(
-      param->temp_mem_root, *applied_predicates, s_it->applied_predicates);
-  *subsumed_predicates = OverflowBitset::Or(
-      param->temp_mem_root, *subsumed_predicates, s_it->subsumed_predicates);
+  return {OverflowBitset::Or(param->temp_mem_root, predicates.applied(),
+                             s_it->predicates.applied()),
+          OverflowBitset::Or(param->temp_mem_root, predicates.subsumed(),
+                             s_it->predicates.subsumed())};
 }
 
 // An ROR-Intersect plan is proposed when there are atleast two
@@ -2880,12 +2958,8 @@ void CostingReceiver::ProposeRowIdOrderedIntersect(
     double num_output_rows_after_filter, const RANGE_OPT_PARAM *param,
     OverflowBitset needed_fields, bool *found_imerge) {
   ROR_intersect_plan plan(param, needed_fields.capacity());
-  MutableOverflowBitset ap_mutable(param->return_mem_root,
-                                   num_where_predicates);
-  OverflowBitset applied_predicates(std::move(ap_mutable));
-  MutableOverflowBitset sp_mutable(param->return_mem_root,
-                                   num_where_predicates);
-  OverflowBitset subsumed_predicates(std::move(sp_mutable));
+  AbsorbedPredicates absorbed_predicates =
+      NoAppliedPredicates(param->return_mem_root, num_where_predicates);
   uint index = 0;
   bool cpk_scan_used = false;
   for (index = 0; index < ror_scans.size() && !plan.m_is_covering; ++index) {
@@ -2902,9 +2976,8 @@ void CostingReceiver::ProposeRowIdOrderedIntersect(
     }
     if (plan.add(needed_fields, cur_scan, /*is_cpk_scan=*/false,
                  /*trace_idx=*/nullptr, /*ignore_cost=*/false)) {
-      UpdateAppliedAndSubsumedPredicates(cur_scan->idx, possible_ror_scans,
-                                         param, &applied_predicates,
-                                         &subsumed_predicates);
+      absorbed_predicates = UpdateAbsorbedPredicates(
+          cur_scan->idx, possible_ror_scans, param, absorbed_predicates);
     } else {
       return;
     }
@@ -2922,9 +2995,8 @@ void CostingReceiver::ProposeRowIdOrderedIntersect(
                  /*trace_idx=*/nullptr, /*ignore_cost=*/true)) {
       cpk_scan_used = true;
     }
-    UpdateAppliedAndSubsumedPredicates(cpk_scan->idx, possible_ror_scans, param,
-                                       &applied_predicates,
-                                       &subsumed_predicates);
+    absorbed_predicates = UpdateAbsorbedPredicates(
+        cpk_scan->idx, possible_ror_scans, param, absorbed_predicates);
   }
 
   if (plan.num_scans() == 1 && !cpk_scan_used) {
@@ -3000,10 +3072,9 @@ void CostingReceiver::ProposeRowIdOrderedIntersect(
   for (bool materialize_subqueries : {false, true}) {
     AccessPath new_path = ror_intersect_path;
     FunctionalDependencySet new_fd_set;
-    ApplyPredicatesForBaseTable(node_idx, applied_predicates,
-                                subsumed_predicates, materialize_subqueries,
-                                num_output_rows_after_filter, &new_path,
-                                &new_fd_set);
+    ApplyPredicatesForBaseTable(
+        node_idx, absorbed_predicates, materialize_subqueries,
+        num_output_rows_after_filter, &new_path, &new_fd_set);
 
     ProposeAccessPathWithOrderings(
         TableBitmap(node_idx), new_fd_set,
@@ -3125,14 +3196,8 @@ void CostingReceiver::ProposeRowIdOrderedUnion(
   // An index merge corresponds to one predicate (see comment on
   // PossibleIndexMerge), and subsumes that predicate if and only if it is a
   // faithful representation of everything in it.
-  MutableOverflowBitset this_predicate(param->temp_mem_root,
-                                       num_where_predicates);
-  this_predicate.SetBit(pred_idx);
-  OverflowBitset applied_predicates(std::move(this_predicate));
-  OverflowBitset subsumed_predicates =
-      inexact ? OverflowBitset{MutableOverflowBitset(param->temp_mem_root,
-                                                     num_where_predicates)}
-              : applied_predicates;
+  AbsorbedPredicates absorbed_predicates = SingleAppliedPredicate(
+      param->temp_mem_root, pred_idx, !inexact, num_where_predicates);
   const bool contains_subqueries = Overlaps(ror_union_path.filter_predicates,
                                             m_graph->materializable_predicates);
   // Add some trace info.
@@ -3161,10 +3226,9 @@ void CostingReceiver::ProposeRowIdOrderedUnion(
   for (bool materialize_subqueries : {false, true}) {
     AccessPath new_path = ror_union_path;
     FunctionalDependencySet new_fd_set;
-    ApplyPredicatesForBaseTable(node_idx, applied_predicates,
-                                subsumed_predicates, materialize_subqueries,
-                                num_output_rows_after_filter, &new_path,
-                                &new_fd_set);
+    ApplyPredicatesForBaseTable(
+        node_idx, absorbed_predicates, materialize_subqueries,
+        num_output_rows_after_filter, &new_path, &new_fd_set);
 
     ProposeAccessPathWithOrderings(
         TableBitmap(node_idx), new_fd_set,
@@ -3351,14 +3415,8 @@ void CostingReceiver::ProposeIndexMerge(
   // An index merge corresponds to one predicate (see comment on
   // PossibleIndexMerge), and subsumes that predicate if and only if it is a
   // faithful representation of everything in it.
-  MutableOverflowBitset this_predicate(param->temp_mem_root,
-                                       num_where_predicates);
-  this_predicate.SetBit(pred_idx);
-  OverflowBitset applied_predicates(std::move(this_predicate));
-  OverflowBitset subsumed_predicates =
-      inexact ? OverflowBitset(MutableOverflowBitset(param->temp_mem_root,
-                                                     num_where_predicates))
-              : applied_predicates;
+  AbsorbedPredicates absorbed_predicates = SingleAppliedPredicate(
+      param->temp_mem_root, pred_idx, !inexact, num_where_predicates);
   const bool contains_subqueries = Overlaps(imerge_path.filter_predicates,
                                             m_graph->materializable_predicates);
   // Add some trace info.
@@ -3374,10 +3432,9 @@ void CostingReceiver::ProposeIndexMerge(
   for (bool materialize_subqueries : {false, true}) {
     AccessPath new_path = imerge_path;
     FunctionalDependencySet new_fd_set;
-    ApplyPredicatesForBaseTable(node_idx, applied_predicates,
-                                subsumed_predicates, materialize_subqueries,
-                                num_output_rows_after_filter, &new_path,
-                                &new_fd_set);
+    ApplyPredicatesForBaseTable(
+        node_idx, absorbed_predicates, materialize_subqueries,
+        num_output_rows_after_filter, &new_path, &new_fd_set);
 
     ProposeAccessPathWithOrderings(
         TableBitmap(node_idx), new_fd_set,
@@ -3427,8 +3484,8 @@ void CostingReceiver::ProposeIndexSkipScan(
       subsumed_predicates.SetBit(predicate_idx);
     }
     ApplyPredicatesForBaseTable(
-        node_idx, OverflowBitset(std::move(applied_predicates)),
-        OverflowBitset(std::move(subsumed_predicates)),
+        node_idx,
+        {std::move(applied_predicates), std::move(subsumed_predicates)},
         /*materialize_subqueries*/ false, num_output_rows_after_filter,
         skip_scan_path, &new_fd_set);
   } else {
@@ -3437,8 +3494,7 @@ void CostingReceiver::ProposeIndexSkipScan(
     // with redundant predicates.
     assert(IsEmpty(subsumed_predicates));
     ApplyPredicatesForBaseTable(
-        node_idx, all_predicates,  // all predicates applied
-        OverflowBitset(std::move(subsumed_predicates)),
+        node_idx, {all_predicates, std::move(subsumed_predicates)},
         /*materialize_subqueries*/ false, num_output_rows_after_filter,
         skip_scan_path, &new_fd_set);
   }
@@ -3566,20 +3622,20 @@ bool CostingReceiver::ProposeAllUniqueIndexLookupsWithConstantKey(int node_idx,
 }
 
 void CostingReceiver::ProposeAccessPathForIndex(
-    int node_idx, OverflowBitset applied_predicates,
-    OverflowBitset subsumed_predicates,
+    int node_idx, AbsorbedPredicates absorbed_predicates,
     double force_num_output_rows_after_filter,
     const char *description_for_trace, AccessPath *path) {
-  OverflowBitset applied_sargable_join_predicates = ClearFilterPredicates(
-      applied_predicates, m_graph->num_where_predicates, m_thd->mem_root);
-  OverflowBitset subsumed_sargable_join_predicates = ClearFilterPredicates(
-      subsumed_predicates, m_graph->num_where_predicates, m_thd->mem_root);
+  OverflowBitset applied_sargable_join_predicates =
+      ClearFilterPredicates(absorbed_predicates.applied(),
+                            m_graph->num_where_predicates, m_thd->mem_root);
+  OverflowBitset subsumed_sargable_join_predicates =
+      ClearFilterPredicates(absorbed_predicates.subsumed(),
+                            m_graph->num_where_predicates, m_thd->mem_root);
   for (bool materialize_subqueries : {false, true}) {
     FunctionalDependencySet new_fd_set;
-    ApplyPredicatesForBaseTable(node_idx, applied_predicates,
-                                subsumed_predicates, materialize_subqueries,
-                                force_num_output_rows_after_filter, path,
-                                &new_fd_set);
+    ApplyPredicatesForBaseTable(
+        node_idx, absorbed_predicates, materialize_subqueries,
+        force_num_output_rows_after_filter, path, &new_fd_set);
 
     path->ordering_state =
         m_orderings->ApplyFDs(path->ordering_state, new_fd_set);
@@ -4131,7 +4187,7 @@ bool CostingReceiver::ProposeFullTextIndexScan(
   }
 
   ProposeAccessPathForIndex(
-      node_idx, std::move(applied_predicates), std::move(subsumed_predicates),
+      node_idx, {std::move(applied_predicates), std::move(subsumed_predicates)},
       force_num_output_rows_after_filter, table->key_info[key_idx].name, path);
   return false;
 }
@@ -4152,10 +4208,7 @@ void CostingReceiver::ProposeAccessPathForBaseTable(
     FunctionalDependencySet new_fd_set;
     ApplyPredicatesForBaseTable(
         node_idx,
-        /*applied_predicates=*/
-        MutableOverflowBitset{m_thd->mem_root, m_graph->predicates.size()},
-        /*subsumed_predicates=*/
-        MutableOverflowBitset{m_thd->mem_root, m_graph->predicates.size()},
+        NoAppliedPredicates(m_thd->mem_root, m_graph->predicates.size()),
         materialize_subqueries, force_num_output_rows_after_filter, path,
         &new_fd_set);
     path->ordering_state =
@@ -4213,12 +4266,10 @@ std::optional<double> GetTableAfterFiltersCardinalityFromHypergraph(
   right away, some require other tables first and must be delayed.
 
   @param node_idx Index of the base table in the nodes array.
-  @param applied_predicates Bitmap of predicates that are already
-    applied by means of ref access, and should not be recalculated selectivity
-    for.
-  @param subsumed_predicates Bitmap of predicates that are applied
-    by means of ref access and do not need to rechecked. Overrides
-    applied_predicates.
+  @param absorbed_predicates Bitmap of predicates that are already
+    applied or subsumed by means of index access, and should not be recalculated
+    selectivity for, and possibly not be rechecked in filters (in the case of
+    subsumed predicates).
   @param materialize_subqueries If true, any subqueries in the
     predicate should be materialized. (If there are multiple ones,
     this is an all-or-nothing decision, for simplicity.)
@@ -4232,10 +4283,9 @@ std::optional<double> GetTableAfterFiltersCardinalityFromHypergraph(
     non-materialized subqueries.
  */
 void CostingReceiver::ApplyPredicatesForBaseTable(
-    int node_idx, OverflowBitset applied_predicates,
-    OverflowBitset subsumed_predicates, bool materialize_subqueries,
-    double force_num_output_rows_after_filter, AccessPath *path,
-    FunctionalDependencySet *new_fd_set) {
+    int node_idx, AbsorbedPredicates absorbed_predicates,
+    bool materialize_subqueries, double force_num_output_rows_after_filter,
+    AccessPath *path, FunctionalDependencySet *new_fd_set) {
   double materialize_cost = 0.0;
 
   const NodeMap my_map = TableBitmap(node_idx);
@@ -4250,7 +4300,7 @@ void CostingReceiver::ApplyPredicatesForBaseTable(
   for (size_t i = 0; i < m_graph->num_where_predicates; ++i) {
     const Predicate &predicate = m_graph->predicates[i];
     const NodeMap total_eligibility_set = predicate.total_eligibility_set;
-    if (IsBitSet(i, subsumed_predicates)) {
+    if (IsBitSet(i, absorbed_predicates.subsumed())) {
       // Apply functional dependencies for the base table, but no others;
       // this ensures we get the same functional dependencies set no matter what
       // access path we choose. (The ones that refer to multiple tables,
@@ -4284,7 +4334,7 @@ void CostingReceiver::ApplyPredicatesForBaseTable(
         path->set_init_cost(path->init_cost() +
                             cost.init_cost_if_not_materialized);
       }
-      if (IsBitSet(i, applied_predicates)) {
+      if (IsBitSet(i, absorbed_predicates.applied())) {
         // We already factored in this predicate when calculating
         // the selectivity of the ref access, so don't do it again.
       } else {
@@ -4305,8 +4355,8 @@ void CostingReceiver::ApplyPredicatesForBaseTable(
 
   /* Use the node cardinality estimated during hypergraph generation, if any. */
   force_num_output_rows_after_filter =
-      GetTableAfterFiltersCardinalityFromHypergraph(node_idx,
-                                                    applied_predicates, m_graph)
+      GetTableAfterFiltersCardinalityFromHypergraph(
+          node_idx, absorbed_predicates.applied(), m_graph)
           .value_or(force_num_output_rows_after_filter);
   if (force_num_output_rows_after_filter >= 0.0) {
     SetNumOutputRowsAfterFilter(path, force_num_output_rows_after_filter);
@@ -8767,8 +8817,8 @@ static void CacheCostInfoForJoinConditions(THD *thd,
       CachedPropertiesForPredicate properties;
       properties.selectivity = EstimateSelectivity(thd, cond, CompanionSet());
       properties.contained_subqueries.init(thd->mem_root);
-      properties.redundant_against_sargable_predicates = {
-          thd->mem_root, graph->predicates.size()};
+      properties.redundant_against_sargable_predicates =
+          OverflowBitset::EmptySet(thd->mem_root, graph->predicates.size());
       FindContainedSubqueries(
           cond, query_block, [&properties](const ContainedSubquery &subquery) {
             properties.contained_subqueries.push_back(subquery);
