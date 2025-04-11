@@ -10591,7 +10591,7 @@ ER_ACCESS_DENIED_FIREWALL 28000
   eng "Access denied."
 
 ER_LH_DECOMPRESSION_ERR
- eng "Failed to extract from %s: corrupted file, wrong compression format, or multiple files in archive."
+  eng "Failed to extract from %s: corrupted file, wrong compression format, or multiple files in archive."
 
 ER_JDV_INVALID_DEFINITION_WRONG_ANNOTATIONS
   eng "Invalid JSON duality view definition: Invalid, Duplicate or Conflicting annotations for the JSON field."
@@ -10797,6 +10797,8 @@ ER_EXTERNAL_TABLE_ENGINE_NOT_SUPPORTED
 
 ER_EXTERNAL_TABLE_ENGINE_NOT_SPECIFIED
   eng "External storage engine is not specified"
+ER_LH_NO_FILES_FOUND_NO_SECURE_FILE_PRIV
+  eng "No files found or files provided not under secure-file-priv."
 
 #
 #  End of 9.x error messages (server-to-client).
