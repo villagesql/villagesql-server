@@ -838,6 +838,7 @@ MySQL clients support the protocol:
 #include "my_openssl_fips.h"  // OPENSSL_ERROR_LENGTH, set_fips_mode
 #include "pfs_metric_provider.h"
 #include "pfs_telemetry_logs_client_provider.h"
+#include "secure_file.h"
 #include "sql/binlog/services/iterator/file_storage.h"
 #include "sql/rpl_async_conn_failover_configuration_propagation.h"
 #include "sql/rpl_filter.h"
@@ -13488,42 +13489,8 @@ static const char *get_relative_path(const char *path) {
 */
 
 bool is_secure_file_path(const char *path) {
-  char buff1[FN_REFLEN], buff2[FN_REFLEN];
-  size_t opt_secure_file_priv_len;
-  /*
-    All paths are secure if opt_secure_file_priv is 0
-  */
-  if (!opt_secure_file_priv[0]) return true;
-
-  opt_secure_file_priv_len = strlen(opt_secure_file_priv);
-
-  if (strlen(path) >= FN_REFLEN) return false;
-
-  if (!my_strcasecmp(system_charset_info, opt_secure_file_priv, "NULL"))
-    return false;
-
-  if (my_realpath(buff1, path, 0)) {
-    /*
-      The supplied file path might have been a file and not a directory.
-    */
-    const int length = (int)dirname_length(path);
-    if (length >= FN_REFLEN) return false;
-    memcpy(buff2, path, length);
-    buff2[length] = '\0';
-    if (length == 0 || my_realpath(buff1, buff2, 0)) return false;
-  }
-  convert_dirname(buff2, buff1, NullS);
-  if (!lower_case_file_system) {
-    if (strncmp(opt_secure_file_priv, buff2, opt_secure_file_priv_len))
-      return false;
-  } else {
-    assert(opt_secure_file_priv_len < FN_REFLEN);
-    buff2[opt_secure_file_priv_len] = '\0';
-    if (files_charset_info->coll->strcasecmp(files_charset_info, buff2,
-                                             opt_secure_file_priv))
-      return false;
-  }
-  return true;
+  return is_secure_file_path(path, opt_secure_file_priv, system_charset_info,
+                             files_charset_info, lower_case_file_system);
 }
 
 /**
