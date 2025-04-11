@@ -1294,6 +1294,9 @@ struct AccessPath {
       using ItemSpan = std::span<Item *>;
       AccessPath *child;
 
+      /// @cond IGNORE
+      // These functions somehow triggers a doxygen warning. (Presumably
+      // a doxygen bug.)
       ItemSpan &group_items() {
         return reinterpret_cast<ItemSpan &>(m_group_items);
       }
@@ -1301,11 +1304,12 @@ struct AccessPath {
       const ItemSpan &group_items() const {
         return reinterpret_cast<const ItemSpan &>(m_group_items);
       }
+      /// @endcond
 
      private:
       // gcc 11 does not support a span as a union member. Replace this
       // with "std::span<Item *> group_items" when we move to newer gcc version.
-      char m_group_items[sizeof(ItemSpan)];
+      alignas(alignof(ItemSpan)) std::byte m_group_items[sizeof(ItemSpan)];
     } remove_duplicates;
     struct {
       AccessPath *child;
