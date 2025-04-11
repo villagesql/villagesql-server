@@ -81,3 +81,5 @@ Libraries defined on this level:
 \ingroup GroupLibsMysql
 \defgroup GroupLibsMysqlUtils Utils
 \ingroup GroupLibsMysql
+\defgroup GroupLibsMysqlUuids Uuids
+\ingroup GroupLibsMysql
