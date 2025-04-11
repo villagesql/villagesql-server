@@ -271,18 +271,6 @@ struct PossibleRORScan {
 using AccessPathArray = Prealloced_array<AccessPath *, 4>;
 
 /**
-  Represents a candidate index skip scan, i.e. a scan on a multi-column
-  index which uses some of, but not all, the columns of the index. Each
-  index skip scan is associated with a predicate. All candidate skip
-  scans are calculated and saved in skip_scan_paths for later proposal.
-*/
-struct PossibleIndexSkipScan {
-  SEL_TREE *tree;
-  size_t predicate_idx;  // = num_where_predicates if scan covers all predicates
-  Mem_root_array<AccessPath *> skip_scan_paths;
-};
-
-/**
   CostingReceiver contains the main join planning logic, selecting access paths
   based on cost. It receives subplans from DPhyp (see enumerate_subgraph.h),
   assigns them costs based on a cost model, and keeps the ones that are
@@ -664,7 +652,6 @@ class CostingReceiver {
                        RANGE_OPT_PARAM *param, SEL_TREE **tree,
                        Mem_root_array<PossibleRangeScan> *possible_scans,
                        Mem_root_array<PossibleIndexMerge> *index_merges,
-                       Mem_root_array<PossibleIndexSkipScan> *index_skip_scans,
                        AbsorbedPredicates *tree_predicates_out);
   void ProposeRangeScans(int node_idx, double num_output_rows_after_filter,
                          RANGE_OPT_PARAM *param, SEL_TREE *tree,
@@ -701,11 +688,10 @@ class CostingReceiver {
       const Mem_root_array<ROR_SCAN_INFO *> &ror_scans, ROR_SCAN_INFO *cpk_scan,
       double num_output_rows_after_filter, const RANGE_OPT_PARAM *param,
       OverflowBitset needed_fields, bool *found_imerge);
-  void ProposeAllSkipScans(
-      int node_idx, double num_output_rows_after_filter, RANGE_OPT_PARAM *param,
-      SEL_TREE *tree, AbsorbedPredicates tree_predicates,
-      Mem_root_array<PossibleIndexSkipScan> *index_skip_scans,
-      bool *found_skip_scan);
+  void ProposeAllSkipScans(int node_idx, double num_output_rows_after_filter,
+                           RANGE_OPT_PARAM *param, SEL_TREE *tree,
+                           AbsorbedPredicates tree_predicates,
+                           bool *found_skip_scan);
   void ProposeIndexSkipScan(int node_idx, RANGE_OPT_PARAM *param,
                             AccessPath *skip_scan_path, TABLE *table,
                             AbsorbedPredicates predicates,
@@ -2337,12 +2323,10 @@ bool CostingReceiver::FindIndexRangeScans(int node_idx, bool *impossible,
   SEL_TREE *tree = nullptr;
   Mem_root_array<PossibleRangeScan> possible_scans(&m_range_optimizer_mem_root);
   Mem_root_array<PossibleIndexMerge> index_merges(&m_range_optimizer_mem_root);
-  Mem_root_array<PossibleIndexSkipScan> index_skip_scans(
-      &m_range_optimizer_mem_root);
   AbsorbedPredicates tree_predicates;
   if (SetUpRangeScans(node_idx, impossible, num_output_rows_after_filter,
                       &param, &tree, &possible_scans, &index_merges,
-                      &index_skip_scans, &tree_predicates)) {
+                      &tree_predicates)) {
     return true;
   }
   if (*impossible) {
@@ -2364,7 +2348,7 @@ bool CostingReceiver::FindIndexRangeScans(int node_idx, bool *impossible,
   }
   if (force_skip_scan) {
     ProposeAllSkipScans(node_idx, *num_output_rows_after_filter, &param, tree,
-                        tree_predicates, &index_skip_scans, found_forced_plan);
+                        tree_predicates, found_forced_plan);
     if (*found_forced_plan) {
       return false;
     }
@@ -2381,7 +2365,7 @@ bool CostingReceiver::FindIndexRangeScans(int node_idx, bool *impossible,
   }
   if (!force_skip_scan) {
     ProposeAllSkipScans(node_idx, *num_output_rows_after_filter, &param, tree,
-                        tree_predicates, &index_skip_scans, &found_range_scan);
+                        tree_predicates, &found_range_scan);
   }
   if (force_imerge || force_skip_scan) {
     *found_forced_plan = false;
@@ -2396,16 +2380,10 @@ bool CostingReceiver::SetUpRangeScans(
     RANGE_OPT_PARAM *param, SEL_TREE **tree,
     Mem_root_array<PossibleRangeScan> *possible_scans,
     Mem_root_array<PossibleIndexMerge> *index_merges,
-    Mem_root_array<PossibleIndexSkipScan> *index_skip_scans,
     AbsorbedPredicates *tree_predicates_out) {
   *impossible = false;
   *num_output_rows_after_filter = -1.0;
   TABLE *table = m_graph->nodes[node_idx].table();
-  const bool skip_scan_hint =
-      hint_table_state(m_thd, table->pos_in_table_list, SKIP_SCAN_HINT_ENUM, 0);
-  const bool allow_skip_scan =
-      skip_scan_hint || m_thd->optimizer_switch_flag(OPTIMIZER_SKIP_SCAN);
-
   if (setup_range_optimizer_param(
           m_thd, m_thd->mem_root, &m_range_optimizer_mem_root,
           table->keys_in_use_for_query, table, m_query_block, param)) {
@@ -2495,19 +2473,6 @@ bool CostingReceiver::SetUpRangeScans(
       assert(merge.inexact || new_tree->keys_map.is_clear_all());
 
       index_merges->push_back(merge);
-    }
-
-    if (allow_skip_scan && (new_tree != nullptr) &&
-        (new_tree->type != SEL_TREE::IMPOSSIBLE)) {
-      PossibleIndexSkipScan index_skip;
-      // get all index skip scan access paths before tree is modified by AND-ing
-      // of trees
-      index_skip.skip_scan_paths = get_all_skip_scans(
-          m_thd, param, new_tree, ORDER_NOT_RELEVANT,
-          /*skip_records_in_range=*/false, /*skip_scan_hint=*/skip_scan_hint);
-      index_skip.tree = new_tree;
-      index_skip.predicate_idx = i;
-      index_skip_scans->push_back(std::move(index_skip));
     }
 
     if (*tree == nullptr) {
@@ -2794,56 +2759,26 @@ AbsorbedFields FindAbsorbedFieldsForSkipScan(
 
 void CostingReceiver::ProposeAllSkipScans(
     int node_idx, double num_output_rows_after_filter, RANGE_OPT_PARAM *param,
-    SEL_TREE *tree, AbsorbedPredicates tree_predicates,
-    Mem_root_array<PossibleIndexSkipScan> *index_skip_scans,
-    bool *found_skip_scan) {
+    SEL_TREE *tree, AbsorbedPredicates tree_predicates, bool *found_skip_scan) {
   TABLE *table = m_graph->nodes[node_idx].table();
   const bool force_skip_scan =
       hint_table_state(m_thd, table->pos_in_table_list, SKIP_SCAN_HINT_ENUM, 0);
   const bool allow_skip_scan =
       force_skip_scan || m_thd->optimizer_switch_flag(OPTIMIZER_SKIP_SCAN);
 
-  if (tree != nullptr && allow_skip_scan &&
-      (m_graph->num_where_predicates > 1)) {
-    // Multiple predicates, check for index skip scan which can be used to
-    // evaluate entire WHERE condition
-    PossibleIndexSkipScan index_skip;
-    index_skip.skip_scan_paths =
-        get_all_skip_scans(m_thd, param, tree, ORDER_NOT_RELEVANT,
-                           /*skip_records_in_range=*/false, allow_skip_scan);
-    index_skip.tree = tree;
-    // Set predicate index to #predicates to indicate all predicates applied
-    index_skip.predicate_idx = m_graph->num_where_predicates;
-    index_skip_scans->push_back(std::move(index_skip));
-  }
-
-  // Propose all index skip scans
-  for (const PossibleIndexSkipScan &iskip_scan : *index_skip_scans) {
-    const size_t pred_idx = iskip_scan.predicate_idx;
-    for (AccessPath *skip_scan_path : iskip_scan.skip_scan_paths) {
+  if (tree != nullptr && allow_skip_scan) {
+    // Propose all index skip scans.
+    for (AccessPath *skip_scan_path :
+         get_all_skip_scans(m_thd, param, tree, ORDER_NOT_RELEVANT,
+                            /*skip_records_in_range=*/false, allow_skip_scan)) {
       const auto &path_param = skip_scan_path->index_skip_scan();
       const KEY &key = table->key_info[param->real_keynr[path_param.index]];
 
-      AbsorbedPredicates predicates;
-      if (pred_idx < m_graph->num_where_predicates) {
-        // This index skip scan is for a single predicate. Mark that predicate
-        // as applied, and, if the range tree is exact, also as subsumed.
-        predicates = SingleAppliedPredicate(m_thd->mem_root, pred_idx,
-                                            !iskip_scan.tree->inexact,
-                                            m_graph->predicates.size());
-      } else {
-        // This index skip scan is created from the range tree for the entire
-        // WHERE clause. Find out which predicates it applies and subsumes.
-        predicates = FindAbsorbedPredicatesForRangeScan(
-            m_thd,
-            // Silence false positive from clang-tidy about "tree" possibly
-            // being nullptr. If it had been nullptr, no skip scan path would
-            // have been found, and we couldn't possibly be here.
-            // NOLINTNEXTLINE(clang-analyzer-core.NonNullParamChecker)
-            FindAbsorbedFieldsForSkipScan(m_thd, *table, key, *tree,
-                                          *path_param.param),
-            tree_predicates, *m_graph);
-      }
+      AbsorbedPredicates predicates = FindAbsorbedPredicatesForRangeScan(
+          m_thd,
+          FindAbsorbedFieldsForSkipScan(m_thd, *table, key, *tree,
+                                        *path_param.param),
+          tree_predicates, *m_graph);
 
       ProposeIndexSkipScan(node_idx, param, skip_scan_path, table, predicates,
                            num_output_rows_after_filter);
