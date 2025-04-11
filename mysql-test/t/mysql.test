@@ -791,5 +791,12 @@ remove_file $MYSQLTEST_VARDIR/tmp/bug35290350.sql;
 
 --remove_file $MYSQLTEST_VARDIR/tmp/bug37510263.output
 
+--echo #
+--echo # Bug#37765445:  Mysql client confused if an extra semicolon is used with "use database;;" 
+--echo #
+
+--echo # Test: should not produce an error
+--exec $MYSQL test -e "use test;;"
+
 --echo
 --echo End of tests

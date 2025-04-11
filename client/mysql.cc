@@ -2858,9 +2858,13 @@ static bool add_line(String &buffer, char *line, size_t line_length,
 
       pos--;
 
-      char *skip_comments_start =
-          skip_over_comments_and_space(buffer.ptr(), buffer.length());
-      com = find_command(skip_comments_start);
+      char *skip_comments_start = nullptr;
+      if (buffer.length()) {
+        skip_comments_start =
+            skip_over_comments_and_space(buffer.ptr(), buffer.length());
+        com = find_command(skip_comments_start);
+      } else
+        com = nullptr;
       if (nullptr != com) {
         trim_leading_comments_and_space(&buffer, skip_comments_start);
         if ((*com->func)(&buffer, buffer.c_ptr()) > 0) return true;  // Quit
