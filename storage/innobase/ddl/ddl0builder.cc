@@ -793,7 +793,6 @@ dberr_t Builder::get_virtual_column(Copy_ctx &ctx, const dict_field_t *ifield,
                                     size_t &mv_rows_added) noexcept {
   const auto n_added = mv_rows_added;
   auto v_col = reinterpret_cast<const dict_v_col_t *>(col);
-  const auto clust_index = m_ctx.m_new_table->first_index();
   auto key_buffer = m_thread_ctxs[ctx.m_thread_id]->m_key_buffer;
 
   if (col->is_multi_value()) {
@@ -807,8 +806,8 @@ dberr_t Builder::get_virtual_column(Copy_ctx &ctx, const dict_field_t *ifield,
       auto p = m_v_heap.is_null() ? nullptr : m_v_heap.get();
 
       src_field = innobase_get_computed_value(
-          ctx.m_row.m_ptr, v_col, clust_index, &p, key_buffer->heap(), ifield,
-          m_ctx.thd(), ctx.m_my_table, m_ctx.m_old_table, nullptr, nullptr);
+          ctx.m_row.m_ptr, v_col, m_ctx.m_new_table, &p, key_buffer->heap(),
+          m_ctx.thd(), ctx.m_my_table, ifield, m_ctx.m_old_table);
 
       m_v_heap.reset(p);
 
@@ -838,8 +837,8 @@ dberr_t Builder::get_virtual_column(Copy_ctx &ctx, const dict_field_t *ifield,
     auto p = m_v_heap.is_null() ? nullptr : m_v_heap.get();
 
     src_field = innobase_get_computed_value(
-        ctx.m_row.m_ptr, v_col, clust_index, &p, nullptr, ifield, m_ctx.thd(),
-        ctx.m_my_table, m_ctx.m_old_table, nullptr, nullptr);
+        ctx.m_row.m_ptr, v_col, m_ctx.m_new_table, &p, nullptr, m_ctx.thd(),
+        ctx.m_my_table, ifield, m_ctx.m_old_table);
 
     m_v_heap.reset(p);
 
