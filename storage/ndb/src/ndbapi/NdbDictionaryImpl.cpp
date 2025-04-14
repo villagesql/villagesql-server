@@ -7923,6 +7923,9 @@ int NdbDictInterface::create_filegroup(const NdbFilegroupImpl &group,
           fg.TS_LogfileGroupVersion = tmp.m_version;
         } else  // error set by get filegroup
         {
+          DBUG_PRINT("info",
+                     ("Remapping error 723 on create Tablespace to 789"));
+          m_error.code = 789; /* Logfile group not found */
           DBUG_RETURN(-1);
         }
       }
