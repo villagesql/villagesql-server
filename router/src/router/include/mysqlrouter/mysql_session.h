@@ -249,9 +249,10 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
 
     Transaction(MySQLSession *session, const bool consisten_snapshot = false)
         : session_(session) {
-      session_->execute(consisten_snapshot
-                            ? "START TRANSACTION WITH CONSISTENT SNAPSHOT"
-                            : "START TRANSACTION");
+      if (session_)
+        session_->execute(consisten_snapshot
+                              ? "START TRANSACTION WITH CONSISTENT SNAPSHOT"
+                              : "START TRANSACTION");
     }
 
     ~Transaction() {
