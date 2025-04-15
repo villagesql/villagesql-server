@@ -65,30 +65,6 @@ inline std::string get_path_after_object_name(
   return get_path_after_object_name(endpoint->get_url(), requests_uri);
 }
 
-using DataType = mrs::database::entry::ColumnType;
-
-inline mysqlrouter::sqlstring get_sql_format(DataType type) {
-  using namespace helper;
-  switch (type) {
-    case DataType::BINARY:
-      return mysqlrouter::sqlstring("FROM_BASE64(?)");
-
-    case DataType::GEOMETRY:
-      return mysqlrouter::sqlstring("ST_GeomFromGeoJSON(?)");
-
-    case DataType::VECTOR:
-      return mysqlrouter::sqlstring("STRING_TO_VECTOR(?)");
-
-    case DataType::JSON:
-      return mysqlrouter::sqlstring("CAST(? as JSON)");
-
-    default: {
-    }
-  }
-
-  return mysqlrouter::sqlstring("?");
-}
-
 inline HttpResult handler_mysqlerror(const mysqlrouter::MySQLSession::Error &e,
                                      const char *sql_state) {
   static const std::string k_state_with_user_defined_error = "45000";

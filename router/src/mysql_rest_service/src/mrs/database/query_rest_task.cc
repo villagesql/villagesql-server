@@ -126,7 +126,7 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_procedure_call(
     } else if (el.mode == mrs::database::entry::Field::Mode::modeIn) {
       auto it = doc.FindMember(el.name.c_str());
       if (it != doc.MemberEnd()) {
-        mysqlrouter::sqlstring sql = get_sql_format(el.data_type);
+        mysqlrouter::sqlstring sql = get_sql_format(el.data_type, it->value);
         sql << it->value;
         query.append_preformatted(sql);
       } else {
@@ -147,7 +147,7 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_procedure_call(
         set_var << var;
         auto it = doc.FindMember(el.name.c_str());
         if (it != doc.MemberEnd()) {
-          mysqlrouter::sqlstring sql = get_sql_format(el.data_type);
+          mysqlrouter::sqlstring sql = get_sql_format(el.data_type, it->value);
           sql << it->value;
           set_var << sql;
         } else {
@@ -193,7 +193,7 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_function_call(
     } else if (el.mode == mrs::database::entry::Field::Mode::modeIn) {
       auto it = doc.FindMember(el.name.c_str());
       if (it != doc.MemberEnd()) {
-        mysqlrouter::sqlstring sql = get_sql_format(el.data_type);
+        mysqlrouter::sqlstring sql = get_sql_format(el.data_type, it->value);
         sql << it->value;
         query.append_preformatted(sql);
       } else {

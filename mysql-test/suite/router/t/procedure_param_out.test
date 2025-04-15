@@ -76,7 +76,8 @@
 --echo # 9. Verify if input FLOAT value is the same at output of stored procedure
 --echo # 10. Verify if input DOUBLE value is the same at output of stored procedure
 --echo # 11. Verify if input VECTOR value is the same at output of stored procedure
---echo # 12. Verify if input GEOMETRY value is the same at output of stored procedure
+--echo # 12. Verify if input GEOMETRY (GeoJSON) value is the same at output of stored procedure
+--echo # 12.1. Verify if input GEOMETRY (WKT) value is the same at output of stored procedure
 --echo # 13. Verify if input BLOB value is the same at output of stored procedure
 --echo # 14. Verify if input TIMESTAMP value is the same at output of stored procedure
 --echo # 15. Verify if input JSON value is the same at output of stored procedure
@@ -544,6 +545,14 @@ exec $MRS_CLIENT_ARGS
 --echo # IV.12
 --let $mrs_client_arg_path='/svc/proc/move_geometry'
 --let $mrs_client_arg_payload='{"a":{"type":"Point", "coordinates":[100,0]}}'
+--let $mrs_client_arg_request_type='PUT'
+--source ../include/mrs/mrs_client.inc
+
+--echo
+--echo #
+--echo # IV.12.1
+--let $mrs_client_arg_path='/svc/proc/move_geometry'
+--let $mrs_client_arg_payload='{"a":"POINT(20 30)"}'
 --let $mrs_client_arg_request_type='PUT'
 --source ../include/mrs/mrs_client.inc
 
