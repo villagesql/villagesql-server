@@ -26,6 +26,7 @@
 #include "mrs/endpoint/handler/handler_db_object_table.h"
 
 #include <algorithm>
+#include <map>
 #include <set>
 #include <string>
 #include <string_view>
@@ -46,6 +47,7 @@
 #include "helper/media_detector.h"
 #include "helper/mysql_numeric_value.h"
 #include "mrs/database/filter_object_generator.h"
+#include "mrs/database/helper/object_checksum.h"
 #include "mrs/database/helper/object_row_ownership.h"
 #include "mrs/database/helper/query_gtid_executed.h"
 #include "mrs/database/helper/query_retry_on_ro.h"
@@ -510,6 +512,7 @@ HttpResult HandlerDbObjectTable::handle_post(
   database::dv::JsonMappingUpdater updater(object,
                                            row_ownership_info(ctxt, object));
 
+  mysqlrouter::MySQLSession::Transaction transaction{session.get(), false};
   mrs::database::PrimaryKeyColumnValues pk;
 
   slow_monitor_->execute(
@@ -520,28 +523,36 @@ HttpResult HandlerDbObjectTable::handle_post(
 
   Counter<kEntityCounterRestAffectedItems>::increment();
 
-  auto gtid = mrs::monitored::get_session_tracked_gtids_for_metadata_response(
-      session.get(), gtid_manager_);
-
   if (!pk.empty()) {
     database::QueryRestTableSingleRow fetch_one(
         nullptr, false, true, mrs::database::RowLockType::NONE,
         get_options().query.timeout > 0 ? get_options().query.timeout
                                         : slow_monitor_->default_timeout());
-    std::string response_gtid{get_options().metadata.gtid ? gtid : ""};
 
     execute_and_handle_timeout([&]() {
       fetch_one.query_entry(
           session.get(), object, pk,
           database::dv::ObjectFieldFilter::from_object(*object),
           endpoint->get_url().join(), row_ownership_info(ctxt, object), {},
-          true, response_gtid);
+          true, [&]() {
+            // commit needs to happen after reading back the posted row
+            transaction.commit();
+
+            if (get_options().metadata.gtid)
+              return mrs::monitored::
+                  get_session_tracked_gtids_for_metadata_response(
+                      session.get(), gtid_manager_);
+            else
+              return std::string{};
+          });
     });
     Counter<kEntityCounterRestReturnedItems>::increment(fetch_one.items);
 
     return std::move(fetch_one.response);
+  } else {
+    transaction.commit();
+    return {};
   }
-  return {};
 }
 
 HttpResult HandlerDbObjectTable::handle_delete(rest::RequestContext *ctxt) {
@@ -677,27 +688,38 @@ HttpResult HandlerDbObjectTable::handle_put(rest::RequestContext *ctxt) {
   auto json_obj = json_doc.GetObject();
   auto session = get_session(ctxt, MySQLConnection::kMySQLConnectionUserdataRW);
 
+  mysqlrouter::MySQLSession::Transaction transaction{session.get(), false};
+
   slow_monitor_->execute(
       [&]() { pk = updater.update(session.get(), pk, json_doc, true); },
       session.get(), get_options().query.timeout);
 
   Counter<kEntityCounterRestAffectedItems>::increment(updater.affected());
 
-  auto gtid = mrs::monitored::get_session_tracked_gtids_for_metadata_response(
-      session.get(), gtid_manager_);
-
   database::QueryRestTableSingleRow fetch_one(nullptr, false, true,
                                               mrs::database::RowLockType::NONE,
                                               slow_query_timeout());
-  std::string response_gtid{get_options().metadata.gtid ? gtid : ""};
 
   execute_and_handle_timeout([&]() {
-    fetch_one.query_entry(session.get(), object, pk,
-                          database::dv::ObjectFieldFilter::from_object(*object),
-                          endpoint->get_url().join(),
-                          row_ownership_info(ctxt, object), {}, true,
-                          response_gtid);
+    fetch_one.query_entry(
+        session.get(), object, pk,
+        database::dv::ObjectFieldFilter::from_object(*object),
+        endpoint->get_url().join(), row_ownership_info(ctxt, object), {}, true,
+        [&]() {
+          // commit needs to happen after reading back the posted row
+          transaction.commit();
+
+          if (get_options().metadata.gtid)
+            return mrs::monitored::
+                get_session_tracked_gtids_for_metadata_response(session.get(),
+                                                                gtid_manager_);
+          else
+            return std::string{};
+        });
   });
+
+  transaction.commit();
+
   Counter<kEntityCounterRestReturnedItems>::increment(fetch_one.items);
   return std::move(fetch_one.response);
 }
