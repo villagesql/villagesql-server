@@ -62,7 +62,8 @@
 # 9. Verify if input FLOAT value is the same at output of stored procedure
 # 10. Verify if input DOUBLE value is the same at output of stored procedure
 # 11. Verify if input VECTOR value is the same at output of stored procedure
-# 12. Verify if input GEOMETRY value is the same at output of stored procedure
+# 12. Verify if input GEOMETRY (GeoJSON) value is the same at output of stored procedure
+# 12.1. Verify if input GEOMETRY (WKT) value is the same at output of stored procedure
 # 13. Verify if input BLOB value is the same at output of stored procedure
 # 14. Verify if input TIMESTAMP value is the same at output of stored procedure
 # 15. Verify if input JSON value is the same at output of stored procedure
@@ -643,6 +644,17 @@ PUT /svc/proc/move_geometry (payload-size:45)
     "resultSets": [],
     "outParameters": {
         "result": "5hAAAAEBAAAAAAAAAAAAWUAAAAAAAAAAAA=="
+    }
+}
+OK
+
+#
+# IV.12.1
+PUT /svc/proc/move_geometry (payload-size:20)
+{
+    "resultSets": [],
+    "outParameters": {
+        "result": "AAAAAAEBAAAAAAAAAAAANEAAAAAAAAA+QA=="
     }
 }
 OK
