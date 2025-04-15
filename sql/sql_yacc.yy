@@ -1541,6 +1541,7 @@ void warn_on_deprecated_user_defined_collation(
         opt_binlog_in
         persisted_variable_ident
         routine_string
+        library_string
         opt_explain_into
         opt_library_alias
 
@@ -18229,12 +18230,36 @@ lib_chistic:
           { Lex->sp_chistics.comment = to_lex_cstring($2); }
         ;
 
+library_string:
+          routine_string
+        | HEX_NUM
+          {
+            Lex->sp_chistics.is_binary = true;
+            $$= to_lex_string(Item_hex_string::make_hex_str($1.str, $1.length));
+          }
+        | BIN_NUM
+          {
+            Lex->sp_chistics.is_binary = true;
+            $$= to_lex_string(Item_bin_string::make_bin_str($1.str, $1.length));
+          }
+        | UNDERSCORE_CHARSET HEX_NUM
+          {
+            Lex->sp_chistics.is_binary = true;
+            $$= to_lex_string(Item_hex_string::make_hex_str($2.str, $2.length));
+          }
+        | UNDERSCORE_CHARSET BIN_NUM
+          {
+            Lex->sp_chistics.is_binary = true;
+            $$= to_lex_string(Item_bin_string::make_bin_str($2.str, $2.length));
+          }
+        ;
+
 create_library_stmt:
           CREATE LIBRARY_SYM
           opt_if_not_exists     /*$3*/
           sp_name               /*$4*/
           lib_chistics          /*$5*/
-          AS routine_string     /*$7*/
+          AS library_string     /*$7*/
           {
             Lex->sql_command = SQLCOM_CREATE_LIBRARY;
             if (Lex->sp_chistics.language.str == nullptr) {
@@ -18243,7 +18268,8 @@ create_library_stmt:
             }
             $$ = NEW_PTN
               PT_create_library_stmt(@$, YYTHD, $3, $4, Lex->sp_chistics.comment,
-                                     Lex->sp_chistics.language, $7);
+                                     Lex->sp_chistics.language, $7,
+                                     Lex->sp_chistics.is_binary);
           }
         ;
 

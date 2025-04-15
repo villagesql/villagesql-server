@@ -2629,6 +2629,7 @@ struct st_sp_chistics {
   bool detistic = false;
   enum enum_sp_data_access daccess = SP_DEFAULT_ACCESS;
   LEX_CSTRING language = NULL_CSTR;  ///< CREATE|ALTER ... LANGUAGE <language>
+  bool is_binary = false;
 
   /**
     List of imported libraries for this routine
@@ -2712,6 +2713,7 @@ struct st_sp_chistics {
     detistic = false;
     daccess = SP_DEFAULT_ACCESS;
     language = NULL_CSTR;
+    is_binary = false;
     m_imported_libraries = nullptr;
   }
 };

@@ -5605,9 +5605,11 @@ class PT_create_library_stmt final : public Parse_tree_root {
  public:
   PT_create_library_stmt(const POS &pos, THD *thd, bool if_not_exists,
                          sp_name *lib_name, LEX_CSTRING comment,
-                         LEX_CSTRING language, LEX_STRING lib_source)
+                         LEX_CSTRING language, LEX_STRING lib_source,
+                         bool is_binary)
       : Parse_tree_root(pos),
-        m_cmd(thd, if_not_exists, lib_name, comment, language, lib_source) {}
+        m_cmd(thd, if_not_exists, lib_name, comment, language, lib_source,
+              is_binary) {}
 
   Sql_cmd *make_cmd(THD *) override { return &m_cmd; }
 
