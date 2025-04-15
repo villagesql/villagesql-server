@@ -260,6 +260,11 @@ uint64_t JsonMappingUpdater::delete_(MySQLSession *session,
   return del->affected();
 }
 
+bool JsonMappingUpdater::has_references() const {
+  return view_->foreach_field<ForeignKeyReference, bool>(
+      [](const ForeignKeyReference &) { return true; });
+}
+
 void JsonMappingUpdater::check(const rapidjson::Document &doc,
                                bool for_update) const {
   if (!doc.IsObject()) throw_invalid_type(view_->table);

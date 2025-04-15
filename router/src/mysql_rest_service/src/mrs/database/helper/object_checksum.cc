@@ -922,6 +922,7 @@ std::string compute_checksum(std::shared_ptr<entry::Object> object,
  * - unnest references
  * - exclude fields that are disabled
  * - calculate checksum and embed the etag field
+ *
  */
 std::string post_process_json(std::shared_ptr<entry::Object> view,
                               const dv::ObjectFieldFilter &filter,

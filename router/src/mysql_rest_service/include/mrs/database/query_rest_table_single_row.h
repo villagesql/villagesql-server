@@ -65,6 +65,9 @@ class QueryRestTableSingleRow : public QueryRestTable {
 
   bool is_owned() const { return is_owned_; }
 
+  static std::string make_short_response(const PrimaryKeyColumnValues &pk,
+                                         const std::string &response_gtid);
+
  private:
   bool is_owned_ = true;
   RowLockType lock_rows_ = RowLockType::NONE;

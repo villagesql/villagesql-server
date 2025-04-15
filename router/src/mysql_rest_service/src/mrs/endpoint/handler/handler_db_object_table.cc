@@ -318,8 +318,9 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
   database::dv::ObjectFieldFilter field_filter;
   std::optional<std::string> target_field;
   auto endpoint = lock_or_throw_unavail(endpoint_);
-  auto pk = get_rest_pk_parameter(object, endpoint->get_url(),
-                                  ctxt->request->get_uri());
+  auto endpoint_url = endpoint->get_url();
+  auto pk =
+      get_rest_pk_parameter(object, endpoint_url, ctxt->request->get_uri());
   const auto accepted_content_type =
       validate_content_type_encoding(&ctxt->accepts);
   const bool opt_sp_include_links = get_options().result.include_links;
@@ -392,7 +393,7 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
         execute_and_handle_timeout([&]() {
           rest.query_entries(
               query_retry.get_session(), object, field_filter, offset, limit,
-              endpoint->get_url().join(), is_default_limit, row_ownership,
+              endpoint_url.join(), is_default_limit, row_ownership,
               query_retry.get_fog(), !field_filter.is_filter_configured());
         });
       } while (query_retry.should_retry(rest.items));
@@ -445,7 +446,7 @@ HttpResult HandlerDbObjectTable::handle_get(rest::RequestContext *ctxt) {
         query_retry.before_query();
         execute_and_handle_timeout([&]() {
           rest.query_entry(session.get(), object, pk, field_filter,
-                           endpoint->get_url().join(), row_ownership,
+                           endpoint_url.join(), row_ownership,
                            query_retry.get_fog(), true);
         });
       } while (query_retry.should_retry(rest.items));
@@ -488,9 +489,10 @@ HttpResult HandlerDbObjectTable::handle_post(
   auto endpoint = lock_or_throw_unavail(endpoint_);
   auto object = entry_->object_description;
   auto session = get_session(ctxt, MySQLConnection::kMySQLConnectionUserdataRW);
+  auto endpoint_url = endpoint->get_url();
 
   auto last_path =
-      get_path_after_object_name(endpoint->get_url(), ctxt->request->get_uri());
+      get_path_after_object_name(endpoint_url, ctxt->request->get_uri());
 
   if (!last_path.empty())
     throw http::Error(HttpStatusCode::BadRequest,
@@ -546,6 +548,7 @@ HttpResult HandlerDbObjectTable::handle_post(
               return std::string{};
           });
     });
+
     Counter<kEntityCounterRestReturnedItems>::increment(fetch_one.items);
 
     return std::move(fetch_one.response);
@@ -558,8 +561,8 @@ HttpResult HandlerDbObjectTable::handle_post(
 HttpResult HandlerDbObjectTable::handle_delete(rest::RequestContext *ctxt) {
   auto &requests_uri = ctxt->request->get_uri();
   auto endpoint = lock_or_throw_unavail(endpoint_);
-  auto last_path =
-      get_path_after_object_name(endpoint->get_url(), requests_uri);
+  auto endpoint_url = endpoint->get_url();
+  auto last_path = get_path_after_object_name(endpoint_url, requests_uri);
   auto object = entry_->object_description;
   auto session = get_session(ctxt, MySQLConnection::kMySQLConnectionUserdataRW);
   auto addr = session->get_connection_parameters().conn_opts.destination;
@@ -572,7 +575,7 @@ HttpResult HandlerDbObjectTable::handle_delete(rest::RequestContext *ctxt) {
                                         row_ownership_info(ctxt, object));
 
   if (!last_path.empty()) {
-    auto pk = get_rest_pk_parameter(object, endpoint->get_url(), requests_uri);
+    auto pk = get_rest_pk_parameter(object, endpoint_url, requests_uri);
 
     slow_monitor_->execute([&rest, &count, &session,
                             pk]() { count = rest.delete_(session.get(), pk); },
@@ -658,9 +661,10 @@ HttpResult HandlerDbObjectTable::handle_put(rest::RequestContext *ctxt) {
   auto size = input_buffer.length();
   auto document = input_buffer.pop_front(size);
   auto object = entry_->object_description;
+  auto endpoint_url = endpoint->get_url();
 
-  auto pk = get_rest_pk_parameter(object, endpoint->get_url(),
-                                  ctxt->request->get_uri());
+  auto pk =
+      get_rest_pk_parameter(object, endpoint_url, ctxt->request->get_uri());
 
   rapidjson::Document json_doc;
 
@@ -704,8 +708,7 @@ HttpResult HandlerDbObjectTable::handle_put(rest::RequestContext *ctxt) {
     fetch_one.query_entry(
         session.get(), object, pk,
         database::dv::ObjectFieldFilter::from_object(*object),
-        endpoint->get_url().join(), row_ownership_info(ctxt, object), {}, true,
-        [&]() {
+        endpoint_url.join(), row_ownership_info(ctxt, object), {}, true, [&]() {
           // commit needs to happen after reading back the posted row
           transaction.commit();
 
