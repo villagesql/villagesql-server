@@ -146,6 +146,7 @@ class SessionManager {
     std::shared_ptr<collector::MysqlFixedPoolManager> db_session_pool;
 
    private:
+    friend class SessionManager;
     std::unique_ptr<SessionData> data_;
     SessionId id_;
     system_clock::time_point access_time_;
@@ -167,6 +168,7 @@ class SessionManager {
   SessionPtr new_session(const AuthorizationHandlerId id,
                          const std::string &holder_name);
   SessionPtr new_session(const SessionId &session_id);
+  bool change_session_id(SessionPtr session, const SessionId &new_session_id);
 
   template <class Generator>
   void set_unique_session_secondary_id(Session *session, const Generator &g) {

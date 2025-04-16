@@ -84,6 +84,17 @@ SessionPtr SessionManager::new_session(const SessionId &session_id) {
   return sessions_.back();
 }
 
+bool SessionManager::change_session_id(SessionPtr session,
+                                       const SessionId &new_session_id) {
+  std::lock_guard<std::mutex> lck{mutex_};
+
+  if (get_session_impl(new_session_id)) return false;
+
+  session->id_ = new_session_id;
+
+  return true;
+}
+
 SessionPtr SessionManager::get_session_secondary_id(const SessionId &id) {
   std::lock_guard<std::mutex> lck{mutex_};
   auto result = get_session_handler_specific_id_impl(id);

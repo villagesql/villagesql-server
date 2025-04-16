@@ -465,6 +465,45 @@ POST /svc/authentication/logout
     "status": 200
 }
 OK
+try with jwt session
+GET /svc/authentication/login
+
+OK
+GET /svc/db/tbl
+{
+    "items": [
+        {
+            "a": 1,
+            "user": "user1@%",
+            "links": [
+                {
+                    "rel": "self",
+                    "href": "/svc/db/tbl/1"
+                }
+            ],
+            "_metadata": {
+                "etag": "25591F89F39622F6E0BD50A86D2DA7CE261538EEB40E258422A8D53C8A484743"
+            }
+        }
+    ],
+    "limit": 25,
+    "offset": 0,
+    "hasMore": false,
+    "count": 1,
+    "links": [
+        {
+            "rel": "self",
+            "href": "/svc/db/tbl/"
+        }
+    ]
+}
+OK
+POST /svc/authentication/logout
+{
+    "message": "Logged out successfully",
+    "status": 200
+}
+OK
 shrink limits and see if it refreshes
 update mysql_rest_service_metadata.config set data = json_merge_patch(data, '{"passthroughDbUser": {"poolSize": 2, "maxSessionsPerUser": 1}}');
 GET /svc/authentication/login
