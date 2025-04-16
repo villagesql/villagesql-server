@@ -453,8 +453,8 @@ static std::string generate_uuid() {
   return helper::to_uuid_string(uuid);
 }
 
-std::string AuthorizeManager::get_jwt_token(UniversalId service_id,
-                                            const SessionPtr &s) {
+std::string AuthorizeManager::get_jwt_token(
+    [[maybe_unused]] UniversalId service_id, const SessionPtr &s) {
   using namespace rapidjson;
   Document payload;
   auto exp = expire_timestamp(jwt_expire_timeout);
@@ -478,13 +478,10 @@ std::string AuthorizeManager::get_jwt_token(UniversalId service_id,
 
   auto token = jwt.sign(jwt_secret_);
 
-  std::string session_id =
-      service_id.to_string() + "." + s->user.user_id.to_string() + "." + exp;
-  if (session_manager_.get_session(session_id)) return token;
+  std::string session_id = s->user.user_id.to_string() + "." + exp;
+  if (!session_manager_.change_session_id(s, session_id)) return token;
 
-  auto session = session_manager_.new_session(session_id);
-  session->user = s->user;
-  session->state = http::SessionManager::Session::kUserVerified;
+  s->state = http::SessionManager::Session::kUserVerified;
 
   return token;
 }
