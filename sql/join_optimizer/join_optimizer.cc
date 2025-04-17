@@ -2319,6 +2319,12 @@ bool CostingReceiver::FindIndexRangeScans(int node_idx, bool *impossible,
                                           bool *found_forced_plan) {
   // Range scans on derived tables are not (yet) supported.
   assert(!m_graph->nodes[node_idx].table()->pos_in_table_list->is_derived());
+
+  TABLE *table = m_graph->nodes[node_idx].table();
+  // Check if any indexes are defined at all for the range
+  // optimizer to work with.
+  if (table->keys_in_use_for_query.is_clear_all()) return false;
+
   RANGE_OPT_PARAM param;
   SEL_TREE *tree = nullptr;
   Mem_root_array<PossibleRangeScan> possible_scans(&m_range_optimizer_mem_root);
@@ -2786,7 +2792,7 @@ void CostingReceiver::ProposeAllSkipScans(
     }
   }
 
-  if (!force_skip_scan || !found_skip_scan) {
+  if (!force_skip_scan || !*found_skip_scan) {
     if (tree == nullptr) {
       // The only possible range scan for a NULL tree is a group index skip
       // scan. Collect and propose all group skip scans
