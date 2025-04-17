@@ -7585,8 +7585,9 @@ int ha_innobase::open(const char *name, int, uint open_flags,
 
   /* For encrypted table, check if the encryption info in data
   file can't be retrieved properly, mark it as corrupted. */
-  if (ib_table != nullptr && dd_is_table_in_encrypted_tablespace(ib_table) &&
-      ib_table->ibd_file_missing && !dict_table_is_discarded(ib_table)) {
+  if (ib_table != nullptr && ib_table->ibd_file_missing &&
+      !dict_table_is_discarded(ib_table) &&
+      dd_is_table_in_encrypted_tablespace(ib_table)) {
     /* Mark this table as corrupted, so the drop table
     or force recovery can still use it, but not others. */
 
