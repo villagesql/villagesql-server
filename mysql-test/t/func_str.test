@@ -3015,3 +3015,11 @@ SELECT IFNULL(name, CAST(t1.id AS CHAR(38))) LIKE 'Vision Operations'
 FROM t1 LEFT JOIN t2 ON TRUE;
 
 DROP TABLE t1, t2;
+
+--echo #
+--echo # Bug37815490 - vector_to_string returns data in non-standard collation
+--echo #
+
+select CHARSET(vector_to_string(string_to_vector('[1,2]')));
+select COLLATION(vector_to_string(string_to_vector('[1,2]')));
+select JSON_OBJECT('a', vector_to_string(string_to_vector('[1,2]')));

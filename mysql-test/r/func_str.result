@@ -6177,3 +6177,15 @@ SELECT IFNULL(name, CAST(t1.id AS CHAR(38))) LIKE 'Vision Operations'
 FROM t1 LEFT JOIN t2 ON TRUE;
 IFNULL(name, CAST(t1.id AS CHAR(38))) LIKE 'Vision Operations'
 DROP TABLE t1, t2;
+#
+# Bug37815490 - vector_to_string returns data in non-standard collation
+#
+select CHARSET(vector_to_string(string_to_vector('[1,2]')));
+CHARSET(vector_to_string(string_to_vector('[1,2]')))
+utf8mb4
+select COLLATION(vector_to_string(string_to_vector('[1,2]')));
+COLLATION(vector_to_string(string_to_vector('[1,2]')))
+utf8mb4_0900_ai_ci
+select JSON_OBJECT('a', vector_to_string(string_to_vector('[1,2]')));
+JSON_OBJECT('a', vector_to_string(string_to_vector('[1,2]')))
+{"a": "[1.00000e+00,2.00000e+00]"}

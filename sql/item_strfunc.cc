@@ -4193,11 +4193,12 @@ bool Item_func_from_vector::resolve_type(THD *thd) {
     my_error(ER_WRONG_ARGUMENTS, MYF(0), func_name());
     return true;
   }
+  collation.set(default_charset(), DERIVATION_COERCIBLE, MY_REPERTOIRE_ASCII);
   set_data_type_string(Item_func_from_vector::max_output_bytes);
   return false;
 }
 
-String *Item_func_from_vector::val_str(String *str) {
+String *Item_func_from_vector::val_str_ascii(String *str) {
   assert(fixed);
   null_value = false;
   String *res = args[0]->val_str(str);
