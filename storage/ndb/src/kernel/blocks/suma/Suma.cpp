@@ -5755,7 +5755,8 @@ void Suma::execSUB_GCP_COMPLETE_ACK(Signal *signal) {
         "Simulating exceeding the MaxBufferedEpochs, ignoring ack");
     return;
   }
-  if (ERROR_INSERTED(13052) || ERROR_INSERTED(13060) || ERROR_INSERTED(13061)) {
+  if (ERROR_INSERTED(13052) || ERROR_INSERTED(13060) || ERROR_INSERTED(13061) ||
+      ERROR_INSERTED(13063)) {
     jam();
     /**
      * g_eventLogger->info("Simulating many unacked epochs by ignoring ack "
