@@ -765,7 +765,7 @@ HandlerDbObjectTable::CachedSession HandlerDbObjectTable::get_session(
   if (get_options().query.passthrough_db_user &&
       (type == collector::kMySQLConnectionUserdataRW ||
        type == collector::kMySQLConnectionUserdataRO)) {
-    if (!ctxt->session->db_session_pool) {
+    if (!ctxt->session || !ctxt->session->db_session_pool) {
       log_debug(
           "Request to service with passthroughDbUser from a user authenticated "
           " through auth app '%s', which does not support it",
