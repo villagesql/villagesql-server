@@ -1405,9 +1405,12 @@ dberr_t Builder::add_to_key_buffer(Copy_ctx &ctx,
     ut_ad(m_id == 0);
     ut_ad(key_buffer->is_clustered());
 
-    /* Detect duplicates by comparing the current record with previous record.*/
+    /* Detect duplicates by comparing the current record with previous record.
+    The current record will be used to report duplicates. m_prev_fields cannot
+    be used for it, because contrary to current record it contains only unique
+    fields. Which is fine for key comparison, but not enough for reporting. */
     if (m_prev_fields != nullptr &&
-        Key_sort_buffer::compare(m_prev_fields, fields, &m_clust_dup) == 0) {
+        Key_sort_buffer::compare(fields, m_prev_fields, &m_clust_dup) == 0) {
       set_error(DB_DUPLICATE_KEY);
       return get_error();
     }
