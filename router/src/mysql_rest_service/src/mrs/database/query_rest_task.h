@@ -130,7 +130,8 @@ class QueryRestMysqlTask : private Query {
       const std::string &schema, const std::string &object,
       const mysqlrouter::sqlstring &user_id,
       std::optional<std::string> user_ownership_column, const ResultSets &rs,
-      const rapidjson::Document &doc, std::list<std::string> *out_postamble);
+      const rapidjson::Document &doc, std::list<std::string> *out_preamble,
+      std::list<std::string> *out_postamble);
 
   mysqlrouter::sqlstring wrap_async_server_call(
       const std::string &schema, const mysqlrouter::sqlstring &user_id,

@@ -544,9 +544,11 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
   using mysql_result_type = std::unique_ptr<MYSQL_RES, MYSQL_RES_Deleter>;
 
   enum class AsyncQueryState {
-    kNone,        // no async query active
-    kQuery,       // waiting query to finish
-    kStoreResult  // waiting store result to finish
+    kNone,             // no async query active
+    kQuery,            // waiting query to finish
+    kStoreResult,      // waiting store_result to finish
+    kNextResult,       // waiting next_result to finish
+    kStoreNextResult,  // waiting store_result after next_result to finish
   };
   AsyncQueryState async_state_ = AsyncQueryState::kNone;
   bool async_query_logged_ = false;
@@ -569,6 +571,8 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
 
   stdx::expected<mysql_result_type, MysqlError> real_query_nb(
       const std::string &q);
+
+  stdx::expected<mysql_result_type, MysqlError> next_result_nb();
 
   /**
    * log query after running it.

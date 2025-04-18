@@ -28,6 +28,7 @@
 
 #include <memory>
 #include <string>
+#include <vector>
 #include "helper/http/url.h"
 #include "mrs/endpoint/handler/helper/utilities.h"
 #include "mrs/http/error.h"
@@ -117,6 +118,20 @@ inline std::string get_user_name(rest::RequestContext *ctxt) {
   }
 
   return ctxt->user.name;
+}
+
+inline void check_input_parameters(
+    const std::vector<database::entry::Field> &param_fields,
+    const rapidjson::Document &doc) {
+  for (auto el : helper::json::member_iterator(doc)) {
+    auto key = el.first;
+    if (!helper::container::has_if(param_fields, [key](const auto &v) {
+          return v.mode != database::entry::Field::modeOut && v.name == key;
+        })) {
+      throw http::Error(HttpStatusCode::BadRequest,
+                        "Not allowed parameter:" + std::string{key});
+    }
+  }
 }
 
 }  // namespace handler
