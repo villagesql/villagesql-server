@@ -576,14 +576,57 @@ MySQLSession::real_query_nb(const std::string &q) {
   if (store_res == NET_ASYNC_NOT_READY) {
     return stdx::unexpected(make_mysql_error_code(0U));
   }
-  async_state_ = AsyncQueryState::kNone;
+
   async_query_logged_ = false;
 
   if (!res) {
+    async_state_ = AsyncQueryState::kNone;
+
     // no error, but also no resultset
     if (mysql_errno(connection_) == 0) return {};
 
     return stdx::unexpected(make_mysql_error_code(connection_));
+  } else {
+    async_state_ = AsyncQueryState::kNextResult;
+  }
+
+  return mysql_result_type{res};
+}
+
+stdx::expected<MySQLSession::mysql_result_type, MysqlError>
+MySQLSession::next_result_nb() {
+  if (async_state_ == AsyncQueryState::kNextResult) {
+    auto store_res = mysql_next_result_nonblocking(connection_);
+    if (store_res == NET_ASYNC_ERROR) {
+      async_state_ = AsyncQueryState::kNone;
+      return stdx::unexpected(make_mysql_error_code(connection_));
+    }
+    if (store_res == NET_ASYNC_NOT_READY) {
+      return stdx::unexpected(make_mysql_error_code(0U));
+    }
+
+    async_state_ = AsyncQueryState::kStoreResult;
+  }
+
+  MYSQL_RES *res;
+  auto store_res = mysql_store_result_nonblocking(connection_, &res);
+  if (store_res == NET_ASYNC_ERROR) {
+    async_state_ = AsyncQueryState::kNone;
+    return stdx::unexpected(make_mysql_error_code(connection_));
+  }
+  if (store_res == NET_ASYNC_NOT_READY) {
+    return stdx::unexpected(make_mysql_error_code(0U));
+  }
+
+  if (!res) {
+    async_state_ = AsyncQueryState::kNone;
+
+    // no error, but also no resultset
+    if (mysql_errno(connection_) == 0) return {};
+
+    return stdx::unexpected(make_mysql_error_code(connection_));
+  } else {
+    async_state_ = AsyncQueryState::kNextResult;
   }
 
   return mysql_result_type{res};
@@ -913,19 +956,42 @@ std::unique_ptr<MySQLSession::ResultRow> MySQLSession::query_one(
 }
 
 bool MySQLSession::execute_nb(const std::string &q) {
-  auto query_res = log_queries_ ? logged_real_query_nb(q) : real_query_nb(q);
+  stdx::expected<mysql_result_type, MysqlError> query_res;
 
-  if (!query_res) {
-    auto ec = query_res.error();
-    if (ec.value() == 0) return false;  // ASYNC_NOT_READY
+  if (async_state_ != AsyncQueryState::kNextResult &&
+      async_state_ != AsyncQueryState::kStoreNextResult) {
+    query_res = log_queries_ ? logged_real_query_nb(q) : real_query_nb(q);
 
-    std::stringstream ss;
-    ss << "Error executing \"" << log_filter_.filter(q);
-    ss << "\": " << ec.message() << " (" << ec.value() << ")";
-    throw Error(ss.str(), ec.value(), ec.message());
+    if (!query_res) {
+      auto ec = query_res.error();
+      if (ec.value() == 0) return false;  // ASYNC_NOT_READY
+
+      std::stringstream ss;
+      ss << "Error executing \"" << log_filter_.filter(q);
+      ss << "\": " << ec.message() << " (" << ec.value() << ")";
+      throw Error(ss.str(), ec.value(), ec.message());
+    }
   }
 
-  // in case we got a result, just let it get freed.
+  while (async_state_ == AsyncQueryState::kNextResult ||
+         async_state_ == AsyncQueryState::kStoreNextResult) {
+    query_res = next_result_nb();
+
+    if (!query_res) {
+      auto ec = query_res.error();
+      if (ec.value() == 0) return false;  // ASYNC_NOT_READY
+
+      std::stringstream ss;
+      ss << "Error executing \"" << log_filter_.filter(q);
+      ss << "\": " << ec.message() << " (" << ec.value() << ")";
+      throw Error(ss.str(), ec.value(), ec.message());
+    } else {
+      break;
+    }
+
+    // in case we got resultsets, we consume and discard everything
+  }
+
   return true;
 }
 

@@ -38,6 +38,7 @@
 #include "helper/json/to_string.h"
 #include "helper/media_detector.h"
 #include "helper/mysql_numeric_value.h"
+#include "helper/sqlstring_utils.h"
 #include "mrs/database/helper/bind.h"
 #include "mrs/database/helper/sp_function_query.h"
 #include "mrs/database/query_rest_sp.h"
@@ -256,16 +257,7 @@ HttpResult HandlerDbObjectSP::handle_post(
   if (!doc.IsObject()) throw http::Error(HttpStatusCode::BadRequest);
 
   auto &rs = entry_->fields;
-  auto &param_fields = rs.parameters.fields;
-  for (auto el : helper::json::member_iterator(doc)) {
-    auto key = el.first;
-    const database::entry::Field *param;
-    if (!helper::container::get_ptr_if(
-            param_fields, [key](auto &v) { return v.name == key; }, &param)) {
-      throw http::Error(HttpStatusCode::BadRequest,
-                        "Not allowed parameter:"s + key);
-    }
-  }
+  check_input_parameters(rs.parameters.fields, doc);
 
   // Execute the SP. If it's an async task, then start the task and return 202
   if (get_options().mysql_task.driver !=

@@ -33,6 +33,7 @@
 #include <utility>
 #include <vector>
 
+#include "mrs/database/entry/column_type.h"
 #include "mrs/interface/http_result.h"
 #include "mrs/interface/universal_id.h"
 
@@ -119,6 +120,8 @@ class Options {
 
   class MysqlTask {
    public:
+    using ColumnType = mrs::database::entry::ColumnType;
+
     enum class DriverType { kNone, kDatabase, kRouter };
 
     std::string name;

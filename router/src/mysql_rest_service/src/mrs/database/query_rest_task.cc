@@ -30,6 +30,7 @@
 #include "helper/json/rapid_json_iterator.h"
 #include "helper/json/to_sqlstring.h"
 #include "helper/json/to_string.h"
+#include "helper/sqlstring_utils.h"
 #include "mrs/database/helper/sp_function_query.h"
 #include "mrs/http/error.h"
 #include "mysql/harness/string_utils.h"
@@ -88,6 +89,13 @@ mysqlrouter::sqlstring cast_as_json(const mysqlrouter::sqlstring &sql,
   }
 }
 
+inline void sql_append_item(mysqlrouter::sqlstring *q, bool *first,
+                            const mysqlrouter::sqlstring &item) {
+  if (!*first) q->append_preformatted(",");
+  *first = false;
+  q->append_preformatted(item);
+}
+
 }  // namespace
 
 QueryRestMysqlTask::QueryRestMysqlTask(
@@ -116,30 +124,38 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_procedure_call(
   auto result = mysqlrouter::sqlstring("");
   bool first = true;
   for (auto &el : param_fields) {
-    if (!first) {
-      query.append_preformatted(",");
-    }
-    first = false;
     if (user_ownership_column.has_value() &&
         (*user_ownership_column == el.bind_name)) {
-      query.append_preformatted(user_id);
+      sql_append_item(&query, &first, user_id);
     } else if (el.mode == mrs::database::entry::Field::Mode::modeIn) {
       auto it = doc.FindMember(el.name.c_str());
       if (it != doc.MemberEnd()) {
-        mysqlrouter::sqlstring sql = get_sql_format(el.data_type, it->value);
-        sql << it->value;
-        query.append_preformatted(sql);
+        if (el.is_user_variable) {
+          mysqlrouter::sqlstring sql("SET @!=?",
+                                     mysqlrouter::QuoteOnlyIfNeeded);
+          sql << el.bind_name;
+          sql << helper::get_sql_formatted(it->value, el.data_type);
+          out_preamble->emplace_back(std::move(sql));
+        } else {
+          mysqlrouter::sqlstring sql = get_sql_format(el.data_type, it->value);
+          sql << it->value;
+          sql_append_item(&query, &first, sql);
+        }
       } else {
-        query.append_preformatted("NULL");
+        if (!el.is_user_variable) sql_append_item(&query, &first, "NULL");
       }
     } else {
       mysqlrouter::sqlstring var{"@!", mysqlrouter::QuoteOnlyIfNeeded};
-      var << "__" + el.bind_name;
+      if (el.is_user_variable) {
+        var << el.bind_name;
+      } else {
+        var << "__" + el.bind_name;
 
-      query.append_preformatted(var);
-      mysqlrouter::sqlstring item(
-          ("?, " + cast_as_json(var, el.data_type).str()).c_str());
+        sql_append_item(&query, &first, var);
+      }
+      mysqlrouter::sqlstring item("?, ?");
       item << el.name;
+      item << cast_as_json(var, el.data_type);
       result.append_preformatted_sep(", ", item);
 
       if (el.mode == mrs::database::entry::Field::Mode::modeInOut) {
@@ -160,7 +176,7 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_procedure_call(
   query.append_preformatted(")");
 
   out_postamble->emplace_back(
-      "SET @task_result = JSON_OBJECT(\"taskResult\", @task_result, " +
+      "SET @task_result = JSON_OBJECT('taskResult', @task_result, " +
       result.str() + ")");
 
   return query;
@@ -170,7 +186,7 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_function_call(
     const std::string &schema, const std::string &object,
     const mysqlrouter::sqlstring &user_id,
     std::optional<std::string> user_ownership_column, const ResultSets &rs,
-    const rapidjson::Document &doc,
+    const rapidjson::Document &doc, std::list<std::string> *out_preamble,
     [[maybe_unused]] std::list<std::string> *out_postamble) {
   using namespace std::string_literals;
   using namespace helper::json::sql;
@@ -183,21 +199,26 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_function_call(
   auto result = mysqlrouter::sqlstring("");
   bool first = true;
   for (auto &el : param_fields) {
-    if (!first) {
-      query.append_preformatted(",");
-    }
-    first = false;
     if (user_ownership_column.has_value() &&
         (*user_ownership_column == el.bind_name)) {
-      query.append_preformatted(user_id);
-    } else if (el.mode == mrs::database::entry::Field::Mode::modeIn) {
+      sql_append_item(&query, &first, user_id);
+    } else if (el.mode == mrs::database::entry::Field::Mode::modeIn ||
+               el.mode == mrs::database::entry::Field::Mode::modeInOut) {
       auto it = doc.FindMember(el.name.c_str());
       if (it != doc.MemberEnd()) {
-        mysqlrouter::sqlstring sql = get_sql_format(el.data_type, it->value);
-        sql << it->value;
-        query.append_preformatted(sql);
+        if (el.is_user_variable) {
+          mysqlrouter::sqlstring sql("SET @!=?",
+                                     mysqlrouter::QuoteOnlyIfNeeded);
+          sql << el.bind_name;
+          sql << helper::get_sql_formatted(it->value, el.data_type);
+          out_preamble->emplace_back(std::move(sql));
+        } else {
+          mysqlrouter::sqlstring sql = get_sql_format(el.data_type, it->value);
+          sql << it->value;
+          sql_append_item(&query, &first, sql);
+        }
       } else {
-        query.append_preformatted("NULL");
+        if (!el.is_user_variable) sql_append_item(&query, &first, "NULL");
       }
     }
   }
@@ -208,9 +229,27 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_function_call(
   }
 
   mysqlrouter::sqlstring wrapper{
-      "SET @task_result = JSON_OBJECT(\"taskResult\", @task_result, "
-      "\"result\", (?))"};
+      "SET @task_result = JSON_OBJECT('taskResult', @task_result, "
+      "'result', (?)"};
   wrapper << query;
+
+  for (auto &el : param_fields) {
+    if ((el.mode == mrs::database::entry::Field::modeOut ||
+         el.mode == mrs::database::entry::Field::modeInOut) &&
+        el.is_user_variable) {
+      mysqlrouter::sqlstring uvar{"@!", mysqlrouter::QuoteOnlyIfNeeded};
+      uvar << el.bind_name;
+
+      mysqlrouter::sqlstring item("?, ?");
+
+      item << el.name;
+      item << cast_as_json(uvar, el.data_type);
+
+      wrapper.append_preformatted_sep(", ", item);
+    }
+  }
+
+  wrapper.append_preformatted(")");
 
   return wrapper;
 }
@@ -325,8 +364,9 @@ void QueryRestMysqlTask::execute_at_server(
         build_procedure_call(schema, object, user_id, user_ownership_column, rs,
                              doc, &preamble, &postamble);
   else
-    call_sql = build_function_call(schema, object, user_id,
-                                   user_ownership_column, rs, doc, &postamble);
+    call_sql =
+        build_function_call(schema, object, user_id, user_ownership_column, rs,
+                            doc, &preamble, &postamble);
 
   query_ = wrap_async_server_call(schema, user_id, user_name, task_options,
                                   std::move(call_sql), std::move(preamble),
@@ -443,13 +483,13 @@ void QueryRestMysqlTask::execute_at_router(
                              doc, &preamble, &postamble);
   else
     query_ = build_function_call(schema, object, user_id, user_ownership_column,
-                                 rs, doc, &postamble);
+                                 rs, doc, &preamble, &postamble);
 
   script = query_.str();
 
   mysqlrouter::sqlstring query{"CALL `mysql_tasks`.`stop_task_monitor`(?, ?)"};
   query << progress_event_name << task_id;
-  postamble.emplace_back(query.str());
+  postamble.emplace_front(query.str());
 
   postamble.emplace_back("SET @mysql_tasks_initiated = NULL");
 
