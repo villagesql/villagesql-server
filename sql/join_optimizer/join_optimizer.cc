@@ -1575,12 +1575,15 @@ std::optional<CostingReceiver::ProposeRefsResult> CostingReceiver::ProposeRefs(
   const int reverse_order =
       m_orderings->RemapOrderingIndex(order_info.reverse_order);
 
+  const int key_idx = order_info.key_idx;
+
   ProposeRefsResult result;
 
   RefAccessBuilder ref_builder;
   ref_builder.set_receiver(this)
       .set_table(order_info.table)
       .set_node_idx(node_idx)
+      .set_key_idx(key_idx)
       .set_force_num_output_rows_after_filter(row_estimate);
 
   for (bool reverse : {false, true}) {
@@ -1588,26 +1591,11 @@ std::optional<CostingReceiver::ProposeRefsResult> CostingReceiver::ProposeRefs(
       continue;
     }
     const int order = reverse ? reverse_order : forward_order;
-    const int key_idx = order_info.key_idx;
-    // An index scan is more interesting than a table scan if it follows an
-    // interesting order that can be used to avoid a sort later, or if it is
-    // covering so that it can reduce the volume of data to read. A scan of a
-    // clustered primary index reads as much data as a table scan, so it is
-    // not considered unless it follows an interesting order.
-    if (order != 0 || (order_info.table->covering_keys.is_set(key_idx) &&
-                       !IsClusteredPrimaryKey(order_info.table, key_idx))) {
-      if (ProposeIndexScan(order_info.table, node_idx, row_estimate, key_idx,
-                           reverse, order)) {
-        return {};
-      }
-      result.index_scan = true;
-    }
 
     // Propose ref access using only sargable predicates that reference no
     // other table.
     ref_builder.set_reverse(reverse)
         .set_ordering_idx(order)
-        .set_key_idx(key_idx)
         .set_allowed_parameter_tables(0);
 
     switch (ref_builder.ProposePath()) {
@@ -1619,6 +1607,19 @@ std::optional<CostingReceiver::ProposeRefsResult> CostingReceiver::ProposeRefs(
         break;
 
       case RefAccessBuilder::ProposeResult::kNoPathFound:
+        // An index scan is more interesting than a table scan if it follows an
+        // interesting order that can be used to avoid a sort later, or if it is
+        // covering so that it can reduce the volume of data to read. A scan of
+        // a clustered primary index reads as much data as a table scan, so it
+        // is not considered unless it follows an interesting order.
+        if (order != 0 || (order_info.table->covering_keys.is_set(key_idx) &&
+                           !IsClusteredPrimaryKey(order_info.table, key_idx))) {
+          if (ProposeIndexScan(order_info.table, node_idx, row_estimate,
+                               key_idx, reverse, order)) {
+            return {};
+          }
+          result.index_scan = true;
+        }
         break;
     }
 

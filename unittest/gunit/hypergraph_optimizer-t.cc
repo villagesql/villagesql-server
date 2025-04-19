@@ -65,6 +65,7 @@
 #include "sql/join_optimizer/subgraph_enumeration.h"
 #include "sql/join_optimizer/walk_access_paths.h"
 #include "sql/join_type.h"
+#include "sql/key.h"
 #include "sql/mem_root_array.h"
 #include "sql/range_optimizer/index_skip_scan_plan.h"
 #include "sql/sort_param.h"
@@ -4060,6 +4061,59 @@ TEST_F(HypergraphOptimizerTest, HashJoinWithLimit) {
   EXPECT_STREQ(
       "t1",
       root->limit_offset().child->hash_join().inner->table_scan().table->alias);
+}
+
+TEST_F(HypergraphOptimizerTest, DontConsiderFullScanForIndexLookup) {
+  Query_block *query_block = ParseAndResolve("SELECT 1 FROM t1 WHERE t1.x = 1",
+                                             /*nullable=*/true);
+
+  Fake_TABLE *t1 = m_fake_tables["t1"];
+  t1->file->stats.records = 1000000;
+  t1->file->stats.data_file_length = 10e9;
+  const int key_idx = CreateOrderedCoveringIndex({t1->field[0]});
+
+  // Set a low rec_per_key so that an index lookup is preferred.
+  ulong rec_per_key = 1;
+  rec_per_key_t rec_per_key_float = rec_per_key;
+  t1->key_info[key_idx].set_rec_per_key_array(&rec_per_key, &rec_per_key_float);
+
+  // Enable secondary engine in order to use a hook to track which subplans are
+  // considered.
+  handlerton *hton = EnableSecondaryEngine(/*aggregation_is_unordered=*/false);
+  thread_local vector<AccessPath::Type> path_types;
+  path_types.clear();
+  hton->secondary_engine_modify_view_ap_cost = [](THD *, const JoinHypergraph &,
+                                                  AccessPath *path) {
+    path_types.push_back(path->type);
+    return false;
+  };
+
+  TraceGuard trace(m_thd);
+  AccessPath *root = FindBestQueryPlan(m_thd, query_block);
+  SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
+  // Prints out the query plan on failure.
+  SCOPED_TRACE(PrintQueryPlan(0, root, query_block->join,
+                              /*is_root_of_join=*/true));
+
+  // Expect an index lookup to be chosen as the final plan.
+  EXPECT_EQ(root->type, AccessPath::REF);
+
+  // Inspect which subplans were considered. We specifically don't want
+  // INDEX_SCAN or TABLE_SCAN to be considered, since they cannot possibly beat
+  // a covering index lookup. An INDEX_RANGE_SCAN is more or less equivalent to
+  // an index lookup in this query, so ideally we shouldn't have spent time on
+  // investigating it as an alternative, but accept it for now.
+  //
+  // The index lookup subplan (REF) is considered twice because the subplans
+  // that win the tournament for the base table access, have to go through the
+  // tournament again after the final predicates have been applied. Since there
+  // are no final predicates to apply in this query, the second tournament could
+  // have been avoided.
+  //
+  // TODO(khatlen): TABLE_SCAN is still considered.
+  EXPECT_THAT(path_types, UnorderedElementsAre(AccessPath::REF, AccessPath::REF,
+                                               AccessPath::INDEX_RANGE_SCAN,
+                                               AccessPath::TABLE_SCAN));
 }
 
 namespace {
