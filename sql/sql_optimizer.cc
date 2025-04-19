@@ -4416,6 +4416,13 @@ static bool build_equal_items_for_cond(THD *thd, Item *cond, Item **retcond,
     }
 
     if (do_inherit) {
+      // Range optimizer expects the LHS of an IN predicate to be columns
+      // from a table. Doing constant propagation for these columns would
+      // skip the range analysis leading to less performant queries.
+      // So we disable constant propagation for this case.
+      if (is_function_of_type(cond, Item_func::IN_FUNC)) {
+        down_cast<Item_func_in *>(cond)->set_no_constant_propagation();
+      }
       /*
         For each field reference in cond, not from equal item predicates,
         set a pointer to the multiple equality it belongs to (if there is any)
