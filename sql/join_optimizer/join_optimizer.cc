@@ -6222,150 +6222,16 @@ string PrintAccessPath(const AccessPath &path, const JoinHypergraph &graph,
   string join_order;
 
   switch (path.type) {
-    case AccessPath::TABLE_SCAN:
-      str += "TABLE_SCAN";
-      break;
-    case AccessPath::SAMPLE_SCAN:
-      str += "SAMPLE_SCAN";
-      break;
-    case AccessPath::INDEX_SCAN:
-      str += "INDEX_SCAN";
-      break;
-    case AccessPath::INDEX_DISTANCE_SCAN:
-      str += "INDEX_DISTANCE_SCAN";
-      break;
-    case AccessPath::REF:
-      str += "REF";
-      break;
-    case AccessPath::REF_OR_NULL:
-      str += "REF_OR_NULL";
-      break;
-    case AccessPath::EQ_REF:
-      str += "EQ_REF";
-      break;
-    case AccessPath::PUSHED_JOIN_REF:
-      str += "PUSHED_JOIN_REF";
-      break;
-    case AccessPath::FULL_TEXT_SEARCH:
-      str += "FULL_TEXT_SEARCH";
-      break;
-    case AccessPath::CONST_TABLE:
-      str += "CONST_TABLE";
-      break;
-    case AccessPath::MRR:
-      str += "MRR";
-      break;
-    case AccessPath::FOLLOW_TAIL:
-      str += "FOLLOW_TAIL";
-      break;
-    case AccessPath::INDEX_RANGE_SCAN:
-      str += "INDEX_RANGE_SCAN";
-      break;
-    case AccessPath::INDEX_MERGE:
-      str += "INDEX_MERGE";
-      break;
-    case AccessPath::ROWID_INTERSECTION:
-      str += "ROWID_INTERSECTION";
-      break;
-    case AccessPath::ROWID_UNION:
-      str += "ROWID_UNION";
-      break;
-    case AccessPath::INDEX_SKIP_SCAN:
-      str += "INDEX_SKIP_SCAN";
-      break;
-    case AccessPath::GROUP_INDEX_SKIP_SCAN:
-      str += "GROUP_INDEX_SKIP_SCAN";
-      break;
-    case AccessPath::DYNAMIC_INDEX_RANGE_SCAN:
-      str += "DYNAMIC_INDEX_RANGE_SCAN";
-      break;
-    case AccessPath::TABLE_VALUE_CONSTRUCTOR:
-      str += "TABLE_VALUE_CONSTRUCTOR";
-      break;
-    case AccessPath::FAKE_SINGLE_ROW:
-      str += "FAKE_SINGLE_ROW";
-      break;
-    case AccessPath::ZERO_ROWS:
-      str += "ZERO_ROWS";
-      break;
-    case AccessPath::ZERO_ROWS_AGGREGATED:
-      str += "ZERO_ROWS_AGGREGATED";
-      break;
-    case AccessPath::MATERIALIZED_TABLE_FUNCTION:
-      str += "MATERIALIZED_TABLE_FUNCTION";
-      break;
-    case AccessPath::UNQUALIFIED_COUNT:
-      str += "UNQUALIFIED_COUNT";
-      break;
     case AccessPath::NESTED_LOOP_JOIN:
-      str += "NESTED_LOOP_JOIN";
-      PrintJoinOrder(&path, &join_order);
-      break;
     case AccessPath::NESTED_LOOP_SEMIJOIN_WITH_DUPLICATE_REMOVAL:
-      str += "NESTED_LOOP_SEMIJOIN_WITH_DUPLICATE_REMOVAL";
-      PrintJoinOrder(&path, &join_order);
-      break;
     case AccessPath::BKA_JOIN:
-      str += "BKA_JOIN";
-      PrintJoinOrder(&path, &join_order);
-      break;
     case AccessPath::HASH_JOIN:
-      str += "HASH_JOIN";
       PrintJoinOrder(&path, &join_order);
       break;
-    case AccessPath::FILTER:
-      str += "FILTER";
-      break;
-    case AccessPath::SORT:
-      str += "SORT";
-      break;
-    case AccessPath::AGGREGATE:
-      str += "AGGREGATE";
-      break;
-    case AccessPath::TEMPTABLE_AGGREGATE:
-      str += "TEMPTABLE_AGGREGATE";
-      break;
-    case AccessPath::LIMIT_OFFSET:
-      str += "LIMIT_OFFSET";
-      break;
-    case AccessPath::STREAM:
-      str += "STREAM";
-      break;
-    case AccessPath::MATERIALIZE:
-      str += "MATERIALIZE";
-      break;
-    case AccessPath::MATERIALIZE_INFORMATION_SCHEMA_TABLE:
-      str += "MATERIALIZE_INFORMATION_SCHEMA_TABLE";
-      break;
-    case AccessPath::APPEND:
-      str += "APPEND";
-      break;
-    case AccessPath::WINDOW:
-      str += "WINDOW";
-      break;
-    case AccessPath::WEEDOUT:
-      str += "WEEDOUT";
-      break;
-    case AccessPath::REMOVE_DUPLICATES:
-      str += "REMOVE_DUPLICATES";
-      break;
-    case AccessPath::REMOVE_DUPLICATES_ON_INDEX:
-      str += "REMOVE_DUPLICATES_ON_INDEX";
-      break;
-    case AccessPath::ALTERNATIVE:
-      str += "ALTERNATIVE";
-      break;
-    case AccessPath::CACHE_INVALIDATOR:
-      str += "CACHE_INVALIDATOR";
-      break;
-    case AccessPath::DELETE_ROWS:
-      str += "DELETE_ROWS";
-      break;
-    case AccessPath::UPDATE_ROWS:
-      str += "UPDATE_ROWS";
-      break;
+    default:;
   }
 
+  str += AccessPathTypeName(path.type);
   str += ", cost=" + FormatNumberReadably(path.cost()) +
          ", init_cost=" + FormatNumberReadably(path.init_cost());
 

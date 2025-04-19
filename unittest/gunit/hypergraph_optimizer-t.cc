@@ -281,6 +281,11 @@ vector<string> GetOrderItems(const ORDER *order) {
 
 }  // namespace
 
+// Pretty print an AccessPath::Type enumerator.
+static std::ostream &operator<<(std::ostream &os, AccessPath::Type type) {
+  return os << AccessPathTypeName(type);
+}
+
 using MakeHypergraphTest = HypergraphOptimizerTestBase;
 
 TEST_F(MakeHypergraphTest, SingleTable) {

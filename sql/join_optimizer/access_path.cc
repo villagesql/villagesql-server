@@ -269,6 +269,105 @@ TABLE *GetBasicTable(const AccessPath *path) {
   }
 }
 
+std::string_view AccessPathTypeName(AccessPath::Type type) {
+  switch (type) {
+    case AccessPath::TABLE_SCAN:
+      return "TABLE_SCAN";
+    case AccessPath::SAMPLE_SCAN:
+      return "SAMPLE_SCAN";
+    case AccessPath::INDEX_SCAN:
+      return "INDEX_SCAN";
+    case AccessPath::INDEX_DISTANCE_SCAN:
+      return "INDEX_DISTANCE_SCAN";
+    case AccessPath::REF:
+      return "REF";
+    case AccessPath::REF_OR_NULL:
+      return "REF_OR_NULL";
+    case AccessPath::EQ_REF:
+      return "EQ_REF";
+    case AccessPath::PUSHED_JOIN_REF:
+      return "PUSHED_JOIN_REF";
+    case AccessPath::FULL_TEXT_SEARCH:
+      return "FULL_TEXT_SEARCH";
+    case AccessPath::CONST_TABLE:
+      return "CONST_TABLE";
+    case AccessPath::MRR:
+      return "MRR";
+    case AccessPath::FOLLOW_TAIL:
+      return "FOLLOW_TAIL";
+    case AccessPath::INDEX_RANGE_SCAN:
+      return "INDEX_RANGE_SCAN";
+    case AccessPath::INDEX_MERGE:
+      return "INDEX_MERGE";
+    case AccessPath::ROWID_INTERSECTION:
+      return "ROWID_INTERSECTION";
+    case AccessPath::ROWID_UNION:
+      return "ROWID_UNION";
+    case AccessPath::INDEX_SKIP_SCAN:
+      return "INDEX_SKIP_SCAN";
+    case AccessPath::GROUP_INDEX_SKIP_SCAN:
+      return "GROUP_INDEX_SKIP_SCAN";
+    case AccessPath::DYNAMIC_INDEX_RANGE_SCAN:
+      return "DYNAMIC_INDEX_RANGE_SCAN";
+    case AccessPath::TABLE_VALUE_CONSTRUCTOR:
+      return "TABLE_VALUE_CONSTRUCTOR";
+    case AccessPath::FAKE_SINGLE_ROW:
+      return "FAKE_SINGLE_ROW";
+    case AccessPath::ZERO_ROWS:
+      return "ZERO_ROWS";
+    case AccessPath::ZERO_ROWS_AGGREGATED:
+      return "ZERO_ROWS_AGGREGATED";
+    case AccessPath::MATERIALIZED_TABLE_FUNCTION:
+      return "MATERIALIZED_TABLE_FUNCTION";
+    case AccessPath::UNQUALIFIED_COUNT:
+      return "UNQUALIFIED_COUNT";
+    case AccessPath::NESTED_LOOP_JOIN:
+      return "NESTED_LOOP_JOIN";
+    case AccessPath::NESTED_LOOP_SEMIJOIN_WITH_DUPLICATE_REMOVAL:
+      return "NESTED_LOOP_SEMIJOIN_WITH_DUPLICATE_REMOVAL";
+    case AccessPath::BKA_JOIN:
+      return "BKA_JOIN";
+    case AccessPath::HASH_JOIN:
+      return "HASH_JOIN";
+    case AccessPath::FILTER:
+      return "FILTER";
+    case AccessPath::SORT:
+      return "SORT";
+    case AccessPath::AGGREGATE:
+      return "AGGREGATE";
+    case AccessPath::TEMPTABLE_AGGREGATE:
+      return "TEMPTABLE_AGGREGATE";
+    case AccessPath::LIMIT_OFFSET:
+      return "LIMIT_OFFSET";
+    case AccessPath::STREAM:
+      return "STREAM";
+    case AccessPath::MATERIALIZE:
+      return "MATERIALIZE";
+    case AccessPath::MATERIALIZE_INFORMATION_SCHEMA_TABLE:
+      return "MATERIALIZE_INFORMATION_SCHEMA_TABLE";
+    case AccessPath::APPEND:
+      return "APPEND";
+    case AccessPath::WINDOW:
+      return "WINDOW";
+    case AccessPath::WEEDOUT:
+      return "WEEDOUT";
+    case AccessPath::REMOVE_DUPLICATES:
+      return "REMOVE_DUPLICATES";
+    case AccessPath::REMOVE_DUPLICATES_ON_INDEX:
+      return "REMOVE_DUPLICATES_ON_INDEX";
+    case AccessPath::ALTERNATIVE:
+      return "ALTERNATIVE";
+    case AccessPath::CACHE_INVALIDATOR:
+      return "CACHE_INVALIDATOR";
+    case AccessPath::DELETE_ROWS:
+      return "DELETE_ROWS";
+    case AccessPath::UPDATE_ROWS:
+      return "UPDATE_ROWS";
+  }
+  assert(false);
+  return {};
+}
+
 table_map GetUsedTableMap(const AccessPath *path, bool include_pruned_tables) {
   table_map tmap = 0;
   WalkTablesUnderAccessPath(

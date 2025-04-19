@@ -1361,6 +1361,9 @@ inline void CopyBasicProperties(const AccessPath &from, AccessPath *to) {
   to->has_group_skip_scan = from.has_group_skip_scan;
 }
 
+/// Return the name of an AccessPath::Type enumerator.
+std::string_view AccessPathTypeName(AccessPath::Type type);
+
 // Trivial factory functions for all of the types of access paths above.
 
 inline AccessPath *NewTableScanAccessPath(THD *thd, TABLE *table,
