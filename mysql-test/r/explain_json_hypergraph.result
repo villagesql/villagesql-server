@@ -409,12 +409,12 @@ EXPLAIN
 -> Group (no aggregates)  (rows=1.95)
     -> Sort: t1.col_varchar_key  (rows=3.8)
         -> Inner hash join (no condition)  (rows=3.8)
-            -> Table scan on alias1  (rows=3)
+            -> Covering index scan on alias1 using idx_CC_col_varchar_key  (rows=3)
             -> Hash
                 -> Hash antijoin (no condition), extra conditions: (alias2.col_varchar_key >= t1.col_varchar)  (rows=1.27)
                     -> Table scan on t1  (rows=3)
                     -> Hash
-                        -> Table scan on alias2  (rows=3)
+                        -> Covering index scan on alias2 using idx_CC_col_varchar_key  (rows=3)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.col_varchar' of SELECT #2 was resolved in SELECT #1
@@ -434,11 +434,14 @@ EXPLAIN
             "inputs": [
               {
                 "alias": "alias1",
-                "operation": "Table scan on alias1",
+                "covering": true,
+                "operation": "Covering index scan on alias1 using idx_CC_col_varchar_key",
+                "index_name": "idx_CC_col_varchar_key",
                 "table_name": "t1",
-                "access_type": "table",
+                "access_type": "index",
                 "schema_name": "test",
                 "estimated_rows": "elided",
+                "index_access_type": "index_scan",
                 "estimated_total_cost": "elided",
                 "estimated_first_row_cost": "elided"
               },
@@ -460,14 +463,17 @@ EXPLAIN
                   {
                     "alias": "alias2",
                     "heading": "Hash",
-                    "operation": "Table scan on alias2",
+                    "covering": true,
+                    "operation": "Covering index scan on alias2 using idx_CC_col_varchar_key",
+                    "index_name": "idx_CC_col_varchar_key",
                     "table_name": "t1",
-                    "access_type": "table",
+                    "access_type": "index",
                     "schema_name": "test",
                     "used_columns": [
                       "col_varchar_key"
                     ],
                     "estimated_rows": "elided",
+                    "index_access_type": "index_scan",
                     "estimated_total_cost": "elided",
                     "estimated_first_row_cost": "elided"
                   }

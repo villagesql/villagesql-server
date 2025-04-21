@@ -4109,11 +4109,8 @@ TEST_F(HypergraphOptimizerTest, DontConsiderFullScanForIndexLookup) {
   // tournament again after the final predicates have been applied. Since there
   // are no final predicates to apply in this query, the second tournament could
   // have been avoided.
-  //
-  // TODO(khatlen): TABLE_SCAN is still considered.
   EXPECT_THAT(path_types, UnorderedElementsAre(AccessPath::REF, AccessPath::REF,
-                                               AccessPath::INDEX_RANGE_SCAN,
-                                               AccessPath::TABLE_SCAN));
+                                               AccessPath::INDEX_RANGE_SCAN));
 }
 
 namespace {

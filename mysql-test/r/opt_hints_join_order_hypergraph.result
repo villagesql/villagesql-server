@@ -896,7 +896,7 @@ EXPLAIN
             -> Hash
                 -> Table scan on t4  (rows=2)
         -> Hash
-            -> Table scan on t5  (rows=1)
+            -> Covering index scan on t5 using PRIMARY  (rows=1)
 
 EXPLAIN FORMAT=TREE SELECT /*+ JOIN_ORDER(t3,t2) JOIN_SUFFIX(t2) */ count(*) FROM t1 JOIN t2 JOIN t3 WHERE t1.f1 IN (SELECT f1 FROM t4) AND t2.f1 IN (SELECT f1 FROM t5);
 EXPLAIN
@@ -911,7 +911,7 @@ EXPLAIN
                 -> Hash
                     -> Table scan on t4  (rows=2)
             -> Hash
-                -> Table scan on t5  (rows=1)
+                -> Covering index scan on t5 using PRIMARY  (rows=1)
         -> Hash
             -> Table scan on t3  (rows=5)
 
@@ -930,7 +930,7 @@ EXPLAIN
                         -> Hash
                             -> Table scan on t3  (rows=5)
                     -> Hash
-                        -> Table scan on t5  (rows=1)
+                        -> Covering index scan on t5 using PRIMARY  (rows=1)
         -> Hash
             -> Table scan on t4  (rows=2)
 
@@ -949,7 +949,7 @@ EXPLAIN
                     -> Hash
                         -> Table scan on t4  (rows=2)
         -> Hash
-            -> Table scan on t5  (rows=1)
+            -> Covering index scan on t5 using PRIMARY  (rows=1)
 
 EXPLAIN FORMAT=TREE SELECT /*+ JOIN_ORDER(t1,t2,t4) JOIN_SUFFIX(t2,t3,t4) */ count(*) FROM t1 JOIN t2 JOIN t3 WHERE t1.f1 IN (SELECT f1 FROM t4) AND t2.f1 IN (SELECT f1 FROM t5);
 EXPLAIN
@@ -966,7 +966,7 @@ EXPLAIN
             -> Hash
                 -> Table scan on t4  (rows=2)
         -> Hash
-            -> Table scan on t5  (rows=1)
+            -> Covering index scan on t5 using PRIMARY  (rows=1)
 
 Warnings:
 Warning	3515	Hints aren't supported in hypergraph: semijoin/antijoin table precedes a table which it depends on
@@ -986,7 +986,7 @@ EXPLAIN
             -> Hash
                 -> Table scan on t4  (rows=2)
         -> Hash
-            -> Table scan on t5  (rows=1)
+            -> Covering index scan on t5 using PRIMARY  (rows=1)
 
 EXPLAIN FORMAT=TREE SELECT /*+ JOIN_ORDER(t3,t2) JOIN_SUFFIX(t3) */ count(*) FROM t1 JOIN t2 JOIN t3 WHERE t1.f1 IN (SELECT f1 FROM t4) AND t2.f1 IN (SELECT f1 FROM t5);
 EXPLAIN
@@ -1003,7 +1003,7 @@ EXPLAIN
             -> Hash
                 -> Table scan on t4  (rows=2)
         -> Hash
-            -> Table scan on t5  (rows=1)
+            -> Covering index scan on t5 using PRIMARY  (rows=1)
 
 EXPLAIN FORMAT=TREE SELECT /*+ JOIN_ORDER(t3,t2,t4) JOIN_PREFIX(t1,t2) */ count(*) FROM t1 JOIN t2 JOIN t3 WHERE t1.f1 IN (SELECT f1 FROM t4) AND t2.f1 IN (SELECT f1 FROM t5);
 EXPLAIN
@@ -1020,7 +1020,7 @@ EXPLAIN
             -> Hash
                 -> Table scan on t4  (rows=2)
         -> Hash
-            -> Table scan on t5  (rows=1)
+            -> Covering index scan on t5 using PRIMARY  (rows=1)
 
 EXPLAIN FORMAT=TREE SELECT /*+ JOIN_ORDER(t3,t2,t4) JOIN_SUFFIX(t1,t2) */ count(*) FROM t1 JOIN t2 JOIN t3 WHERE t1.f1 IN (SELECT f1 FROM t4) AND t2.f1 IN (SELECT f1 FROM t5);
 EXPLAIN
@@ -1035,7 +1035,7 @@ EXPLAIN
                         -> Hash
                             -> Table scan on t4  (rows=2)
             -> Hash
-                -> Table scan on t5  (rows=1)
+                -> Covering index scan on t5 using PRIMARY  (rows=1)
         -> Hash
             -> Table scan on t3  (rows=5)
 
@@ -1054,7 +1054,7 @@ EXPLAIN
                 -> Hash
                     -> Table scan on t4  (rows=2)
             -> Hash
-                -> Table scan on t5  (rows=1)
+                -> Covering index scan on t5 using PRIMARY  (rows=1)
         -> Hash
             -> Table scan on t3  (rows=5)
 
@@ -1071,7 +1071,7 @@ EXPLAIN
                 -> Hash
                     -> Table scan on t4  (rows=2)
             -> Hash
-                -> Table scan on t5  (rows=1)
+                -> Covering index scan on t5 using PRIMARY  (rows=1)
         -> Hash
             -> Table scan on t3  (rows=5)
 
@@ -1117,7 +1117,7 @@ EXPLAIN
             -> Hash
                 -> Table scan on t4  (rows=2)
         -> Hash
-            -> Table scan on t5  (rows=1)
+            -> Covering index scan on t5 using PRIMARY  (rows=1)
 
 DROP TABLE t1, t2, t3, t4, t5;
 Bug#36533931 WL#15853: Result diff seen when using join_prefix hint
@@ -1255,7 +1255,7 @@ JOIN t10 AS alias10 JOIN t11 AS alias11 ON alias10.f1 = alias11.f1
 ON alias4.f2 = alias11.f2;
 EXPLAIN
 -> Inner hash join (alias10.f1 = alias11.f1)  (rows=1)
-    -> Table scan on alias10  (rows=1)
+    -> Covering index scan on alias10 using f2  (rows=1)
     -> Hash
         -> Left hash join (alias4.f2 = alias5.f2)  (rows=1)
             -> Inner hash join (cast(alias4.f2 as double) = cast(alias11.f2 as double))  (rows=1)

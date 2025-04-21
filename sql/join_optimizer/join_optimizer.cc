@@ -37,6 +37,7 @@
 #include <initializer_list>
 #include <iterator>
 #include <limits>
+#include <optional>
 #include <ostream>
 #include <string>
 #include <string_view>
@@ -266,6 +267,18 @@ int WasPushedDownToRef(Item *condition, const KeypartForRef *keyparts,
 struct PossibleRORScan {
   unsigned idx;
   AbsorbedPredicates predicates;
+};
+
+/// Return value of functions that propose a path.
+enum class ProposeResult {
+  /// No path was proposed.
+  kNoPathFound,
+
+  /// One or more paths were proposed.
+  kPathsFound,
+
+  /// There was an error.
+  kError
 };
 
 using AccessPathArray = Prealloced_array<AccessPath *, 4>;
@@ -723,9 +736,10 @@ class CostingReceiver {
 
   bool ProposeTableScan(TABLE *table, int node_idx,
                         double force_num_output_rows_after_filter);
-  bool ProposeIndexScan(TABLE *table, int node_idx,
-                        double force_num_output_rows_after_filter,
-                        unsigned key_idx, bool reverse, int ordering_idx);
+  ProposeResult ProposeIndexScan(TABLE *table, int node_idx,
+                                 double force_num_output_rows_after_filter,
+                                 unsigned key_idx, bool reverse,
+                                 int ordering_idx);
 
   /// Return type for FindRangeScans().
   struct FindRangeScansResult final {
@@ -755,9 +769,12 @@ class CostingReceiver {
   struct ProposeRefsResult final {
     /// True if one or more index scans were proposed.
     bool index_scan{false};
-    /// True if one or more REF access paths *not* refering other tables
-    /// were proposed.
+    /// True if one or more non-parameterized index lookups (REF access paths
+    /// *not* refering other tables) were proposed.
     bool ref_without_parameters{false};
+    /// True if some covering index scan or some non-parameterized covering
+    /// index lookup was proposed.
+    bool covering{false};
   };
 
   /// Propose REF access paths for a single node and particular index.
@@ -1023,20 +1040,8 @@ class RefAccessBuilder final {
     return *this;
   }
 
-  /// Return value of ProposePath().
-  enum class ProposeResult {
-    /// No path was proposed.
-    kNoPathFound,
-
-    /// One or more paths were proposed.
-    kPathsFound,
-
-    /// There was an error.
-    kError
-  };
-
   /**
-     Popose an AccessPath if we found a suitable match betweeen the key
+     Propose an AccessPath if we found a suitable match betweeen the key
      and the sargable predicates.
   */
   ProposeResult ProposePath() const;
@@ -1374,7 +1379,7 @@ AccessPath RefAccessBuilder::MakePath(
   return path;
 }
 
-RefAccessBuilder::ProposeResult RefAccessBuilder::ProposePath() const {
+ProposeResult RefAccessBuilder::ProposePath() const {
   if (!m_table->keys_in_use_for_query.is_set(m_key_idx)) {
     return ProposeResult::kNoPathFound;
   }
@@ -1575,13 +1580,16 @@ std::optional<CostingReceiver::ProposeRefsResult> CostingReceiver::ProposeRefs(
   const int reverse_order =
       m_orderings->RemapOrderingIndex(order_info.reverse_order);
 
+  TABLE *const table = order_info.table;
   const int key_idx = order_info.key_idx;
+  const bool covering =
+      !table->no_keyread && table->covering_keys.is_set(key_idx);
 
   ProposeRefsResult result;
 
   RefAccessBuilder ref_builder;
   ref_builder.set_receiver(this)
-      .set_table(order_info.table)
+      .set_table(table)
       .set_node_idx(node_idx)
       .set_key_idx(key_idx)
       .set_force_num_output_rows_after_filter(row_estimate);
@@ -1599,26 +1607,33 @@ std::optional<CostingReceiver::ProposeRefsResult> CostingReceiver::ProposeRefs(
         .set_allowed_parameter_tables(0);
 
     switch (ref_builder.ProposePath()) {
-      case RefAccessBuilder::ProposeResult::kError:
+      case ProposeResult::kError:
         return {};
 
-      case RefAccessBuilder::ProposeResult::kPathsFound:
+      case ProposeResult::kPathsFound:
         result.ref_without_parameters = true;
+        result.covering |= covering;
         break;
 
-      case RefAccessBuilder::ProposeResult::kNoPathFound:
+      case ProposeResult::kNoPathFound:
         // An index scan is more interesting than a table scan if it follows an
         // interesting order that can be used to avoid a sort later, or if it is
         // covering so that it can reduce the volume of data to read. A scan of
         // a clustered primary index reads as much data as a table scan, so it
         // is not considered unless it follows an interesting order.
-        if (order != 0 || (order_info.table->covering_keys.is_set(key_idx) &&
-                           !IsClusteredPrimaryKey(order_info.table, key_idx))) {
-          if (ProposeIndexScan(order_info.table, node_idx, row_estimate,
-                               key_idx, reverse, order)) {
-            return {};
+        if (order != 0 ||
+            (covering && !IsClusteredPrimaryKey(table, key_idx))) {
+          switch (ProposeIndexScan(table, node_idx, row_estimate, key_idx,
+                                   reverse, order)) {
+            case ProposeResult::kNoPathFound:
+              break;
+            case ProposeResult::kPathsFound:
+              result.index_scan = true;
+              result.covering |= covering;
+              break;
+            case ProposeResult::kError:
+              return {};
           }
-          result.index_scan = true;
         }
         break;
     }
@@ -1639,18 +1654,16 @@ std::optional<CostingReceiver::ProposeRefsResult> CostingReceiver::ProposeRefs(
     table_map want_parameter_tables = 0;
     for (const SargablePredicate &sp :
          m_graph->nodes[node_idx].sargable_predicates()) {
-      if (sp.field->table == order_info.table &&
-          sp.field->part_of_key.is_set(key_idx) &&
-          !Overlaps(
-              sp.other_side->used_tables(),
-              PSEUDO_TABLE_BITS | order_info.table->pos_in_table_list->map())) {
+      if (sp.field->table == table && sp.field->part_of_key.is_set(key_idx) &&
+          !Overlaps(sp.other_side->used_tables(),
+                    PSEUDO_TABLE_BITS | table->pos_in_table_list->map())) {
         want_parameter_tables |= sp.other_side->used_tables();
       }
     }
     for (table_map allowed_parameter_tables :
          NonzeroSubsetsOf(want_parameter_tables)) {
       if (ref_builder.set_allowed_parameter_tables(allowed_parameter_tables)
-              .ProposePath() == RefAccessBuilder::ProposeResult::kError) {
+              .ProposePath() == ProposeResult::kError) {
         return {};
       }
     }
@@ -1758,6 +1771,7 @@ bool CostingReceiver::FoundSingleNode(int node_idx) {
   // for the others, we don't even need to create the access path and go
   // through the tournament. However, if a force index is specified, then
   // we propose index scans.
+  bool found_covering_index_scan = false;
   for (const ActiveIndexInfo &order_info : *m_active_indexes) {
     if (order_info.table == table) {
       const std::optional<ProposeRefsResult> propose_result{
@@ -1770,6 +1784,7 @@ bool CostingReceiver::FoundSingleNode(int node_idx) {
       if (propose_result.value().index_scan ||
           propose_result.value().ref_without_parameters) {
         found_index_scan = true;
+        found_covering_index_scan |= propose_result->covering;
       }
     }
   }
@@ -1796,9 +1811,19 @@ bool CostingReceiver::FoundSingleNode(int node_idx) {
       return true;
     }
   }
-  if (!(table->force_index || table->force_index_order ||
-        table->force_index_group) ||
-      !found_index_scan) {
+
+  // If we have found a covering index scan or covering index lookup, a table
+  // scan will not be a better alternative, so we don't spend time evaluating
+  // that alternative. Unless we have specified subplan tokens, in which case
+  // we'll have to check all alternatives to see if they match the tokens.
+  //
+  // If we have hints for forcing the use of an index, we propose a table scan
+  // only if no index scan was found.
+  if ((!found_covering_index_scan ||
+       DBUG_EVALUATE_IF("subplan_tokens", true, false)) &&
+      (!(table->force_index || table->force_index_order ||
+         table->force_index_group) ||
+       !found_index_scan)) {
     if (ProposeTableScan(table, node_idx, range_result.row_estimate)) {
       return true;
     }
@@ -3585,14 +3610,14 @@ bool CostingReceiver::ProposeAllUniqueIndexLookupsWithConstantKey(int node_idx,
                   .set_ordering_idx(
                       m_orderings->RemapOrderingIndex(index_info.forward_order))
                   .ProposePath()) {
-        case RefAccessBuilder::ProposeResult::kError:
+        case ProposeResult::kError:
           return true;
 
-        case RefAccessBuilder::ProposeResult::kPathsFound:
+        case ProposeResult::kPathsFound:
           *found = true;
           break;
 
-        case RefAccessBuilder::ProposeResult::kNoPathFound:
+        case ProposeResult::kNoPathFound:
           break;
       }
     }
@@ -3806,13 +3831,13 @@ bool CostingReceiver::ProposeTableScan(
   return false;
 }
 
-bool CostingReceiver::ProposeIndexScan(
+ProposeResult CostingReceiver::ProposeIndexScan(
     TABLE *table, int node_idx, double force_num_output_rows_after_filter,
     unsigned key_idx, bool reverse, int ordering_idx) {
   if (table->pos_in_table_list->uses_materialization() ||
       (table->key_info[key_idx].flags & HA_FULLTEXT) != 0) {
     // Not yet implemented.
-    return false;
+    return ProposeResult::kNoPathFound;
   }
 
   AccessPath path;
@@ -3841,7 +3866,7 @@ bool CostingReceiver::ProposeIndexScan(
 
   ProposeAccessPathForBaseTable(node_idx, force_num_output_rows_after_filter,
                                 table->key_info[key_idx].name, &path);
-  return false;
+  return ProposeResult::kPathsFound;
 }
 
 bool CostingReceiver::ProposeDistanceIndexScan(

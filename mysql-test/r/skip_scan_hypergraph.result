@@ -1727,7 +1727,7 @@ EXPLAIN
 EXPLAIN FORMAT=tree SELECT /*+NO_SKIP_SCAN(t1)*/  c1, c2 FROM t1 WHERE c2 > 40;
 EXPLAIN
 -> Filter: (t1.c2 > 40)  (rows=53.3)
-    -> Table scan on t1  (rows=160)
+    -> Covering index scan on t1 using i1_t1  (rows=160)
 
 EXPLAIN FORMAT=tree SELECT /*+SKIP_SCAN(t1 i2_t1)*/  c1, c2 FROM t1 WHERE c2 > 40;
 EXPLAIN
@@ -1737,7 +1737,7 @@ SET OPTIMIZER_SWITCH = 'skip_scan=off';
 EXPLAIN FORMAT=tree SELECT c1, c2 FROM t1 WHERE c2 > 40;
 EXPLAIN
 -> Filter: (t1.c2 > 40)  (rows=53.3)
-    -> Table scan on t1  (rows=160)
+    -> Covering index scan on t1 using i1_t1  (rows=160)
 
 DROP TABLE t1;
 SET OPTIMIZER_SWITCH = default;

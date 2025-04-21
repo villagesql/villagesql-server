@@ -386,7 +386,7 @@ EXPLAIN FORMAT=tree SELECT b FROM t WHERE a IN
 (SELECT /*+ SEMIJOIN(FIRSTMATCH) */t1.b FROM t AS t1);
 EXPLAIN
 -> Nested loop semijoin (FirstMatch)  (rows=1.41)
-    -> Table scan on t  (rows=2)
+    -> Covering index scan on t using a  (rows=2)
     -> Covering index lookup on t1 using b (b = t.a)  (rows=1)
 
 EXPLAIN FORMAT=JSON INTO @var SELECT b FROM t WHERE a IN
@@ -403,9 +403,8 @@ EXPLAIN
 -> Nested loop inner join (LooseScan)  (rows=1.41)
     -> Remove duplicates from input grouped on t2.b  (rows=1.41)
         -> Nested loop inner join  (rows=2)
-            -> Sort: t1.a  (rows=2)
-                -> Table scan on t1  (rows=2)
-            -> Covering index lookup on t2 using b (b = t1.a)  (rows=1)
+            -> Covering index scan on t2 using b  (rows=2)
+            -> Covering index lookup on t1 using a (a = t2.b)  (rows=1)
     -> Covering index lookup on t using a (a = t2.b)  (rows=1)
 
 EXPLAIN FORMAT=JSON INTO @var SELECT * FROM t WHERE a IN

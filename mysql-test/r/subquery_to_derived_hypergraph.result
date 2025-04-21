@@ -3467,7 +3467,7 @@ EXPLAIN
                         -> Inner hash join (no condition), extra conditions: (s1.avg_us <= s2.avg_us)
                             -> Table scan on s1
                             -> Hash
-                                -> Table scan on s2
+                                -> Covering index scan on s2 using PRIMARY
                         -> Hash
                             -> Table scan on derived_1_2
                                 -> Materialize
@@ -3539,17 +3539,17 @@ EXPLAIN
             -> Table scan on derived_1_2  (rows=1)
                 -> Materialize  (rows=1)
                     -> Aggregate: count(t1.col_int_key)  (rows=1)
-                        -> Table scan on t1  (rows=4)
+                        -> Covering index scan on t1 using col_int_key  (rows=4)
     -> Hash
         -> Inner hash join (no condition)  (rows=5.33)
             -> Nested loop inner join  (rows=5.33)
-                -> Table scan on table2  (rows=4)
+                -> Covering index scan on table2 using col_int_key  (rows=4)
                 -> Covering index lookup on table1 using col_int_key (col_int_key = table2.col_int_key)  (rows=1.33)
             -> Hash
                 -> Table scan on derived_3_4  (rows=1)
                     -> Materialize  (rows=1)
                         -> Aggregate: count(t1.col_int_key)  (rows=1)
-                            -> Table scan on t1  (rows=4)
+                            -> Covering index scan on t1 using col_int_key  (rows=4)
 
 DROP TABLE t1, where_subselect_20070;
 Bug 5
@@ -4832,7 +4832,7 @@ EXPLAIN
                 -> Materialize  (rows=1)
                     -> Aggregate: count(subquery1_t1.col_varchar_key)  (rows=1)
                         -> Inner hash join (no condition), extra conditions: (subquery1_t1.col_varchar_key <> subquery1_t2.col_varchar)  (rows=23.4)
-                            -> Table scan on subquery1_t1  (rows=20)
+                            -> Covering index scan on subquery1_t1 using idx_cc_col_varchar_key  (rows=20)
                             -> Hash
                                 -> Inner hash join (cc.col_int_key = subquery1_t2.col_int), (cc.col_varchar = subquery1_t2.col_varchar_key)  (rows=1.25)
                                     -> Table scan on subquery1_t2  (rows=20)
@@ -5029,7 +5029,7 @@ EXPLAIN
             -> Aggregate: min(table2.col_int), sum(table2.col_int)  (rows=1)
                 -> Inner hash join (no condition), extra conditions: (table1.col_varchar_key <> table2.col_varchar_key)  (rows=58.8)
                     -> Inner hash join (no condition)  (rows=14)
-                        -> Table scan on table3  (rows=14)
+                        -> Covering index scan on table3 using idx_c_col_int_key  (rows=14)
                         -> Hash
                             -> Filter: ((table2.col_varchar_key = table2.col_varchar) and (table2.pk = table2.col_int))  (rows=1)
                                 -> Table scan on table2  (rows=1)
@@ -5231,7 +5231,7 @@ EXPLAIN
                                 -> Left hash join (child_subquery1_t2.pk = cc.col_int_key)  (rows=20)
                                     -> Table scan on cc  (rows=20)
                                     -> Hash
-                                        -> Table scan on child_subquery1_t2  (rows=1)
+                                        -> Covering index scan on child_subquery1_t2 using idx_b_col_int_key  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.subquery1_t1.pk' of SELECT #3 was resolved in SELECT #2
@@ -5401,7 +5401,7 @@ EXPLAIN
         -> Inner hash join (no condition)  (rows=1)
             -> Table scan on alias1  (rows=1)
             -> Hash
-                -> Table scan on alias3  (rows=1)
+                -> Covering index scan on alias3 using idx_cc_col_date_key  (rows=1)
         -> Hash
             -> Inner hash join (no condition), extra conditions: (alias2.col_int >= derived_2_4.sq1_field1)  (rows=0.333)
                 -> Table scan on derived_2_4  (rows=1)
@@ -5410,7 +5410,7 @@ EXPLAIN
                             -> Inner hash join (no condition)  (rows=1)
                                 -> Table scan on sq1_alias1  (rows=1)
                                 -> Hash
-                                    -> Table scan on sq1_alias2  (rows=1)
+                                    -> Covering index scan on sq1_alias2 using idx_cc_col_date_key  (rows=1)
                 -> Hash
                     -> Table scan on alias2  (rows=1)
 

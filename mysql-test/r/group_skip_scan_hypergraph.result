@@ -2359,14 +2359,12 @@ BB
 EXPLAIN FORMAT=TREE SELECT a FROM t1 WHERE a='AA' GROUP BY a;
 EXPLAIN
 -> Group (no aggregates)  (rows=1)
-    -> Filter: (t1.a = 'AA')  (rows=3)
-        -> Table scan on t1  (rows=5)
+    -> Covering index lookup on t1 using PRIMARY (a = 'AA')  (rows=3)
 
 EXPLAIN FORMAT=TREE SELECT a FROM t1 WHERE a='BB' GROUP BY a;
 EXPLAIN
 -> Group (no aggregates)  (rows=1)
-    -> Filter: (t1.a = 'BB')  (rows=1)
-        -> Table scan on t1  (rows=5)
+    -> Covering index range scan on t1 using PRIMARY over (a = 'BB')  (rows=1)
 
 SELECT DISTINCT a FROM t1 WHERE a='BB';
 a
@@ -2582,7 +2580,7 @@ EXPLAIN
 EXPLAIN FORMAT=TREE SELECT (SELECT max(b) FROM t1 GROUP BY a HAVING a < 2) x
 FROM t1 AS t1_outer;
 EXPLAIN
--> Table scan on t1_outer  (rows=20)
+-> Covering index scan on t1_outer using a  (rows=20)
 -> Select #2 (subquery in projection; run only once)
     -> Filter: (t1.a < 2)  (rows=1.05)
         -> Covering index skip scan for grouping on t1 using a  (rows=3.16)
@@ -2591,7 +2589,7 @@ EXPLAIN FORMAT=TREE SELECT 1 FROM t1 AS t1_outer WHERE EXISTS
 (SELECT max(b) FROM t1 GROUP BY a HAVING a < 2);
 EXPLAIN
 -> Filter: exists(select #2)  (rows=20)
-    -> Table scan on t1_outer  (rows=20)
+    -> Covering index scan on t1_outer using a  (rows=20)
     -> Select #2 (subquery in condition; run only once)
         -> Limit: 1 row(s)  (rows=1)
             -> Filter: (t1.a < 2)  (rows=1.05)
@@ -2601,7 +2599,7 @@ EXPLAIN FORMAT=TREE SELECT 1 FROM t1 AS t1_outer WHERE
 (SELECT max(b) FROM t1 GROUP BY a HAVING a < 2) > 12;
 EXPLAIN
 -> Filter: <cache>(((select #2) > 12))  (rows=20)
-    -> Table scan on t1_outer  (rows=20)
+    -> Covering index scan on t1_outer using a  (rows=20)
     -> Select #2 (subquery in condition; run only once)
         -> Filter: (t1.a < 2)  (rows=1.05)
             -> Covering index skip scan for grouping on t1 using a  (rows=3.16)
@@ -2610,7 +2608,7 @@ EXPLAIN FORMAT=TREE SELECT 1 FROM t1 AS t1_outer WHERE
 a IN (SELECT max(b) FROM t1 GROUP BY a HAVING a < 2);
 EXPLAIN
 -> Filter: <in_optimizer>(t1_outer.a,t1_outer.a in (select #2))  (rows=20)
-    -> Table scan on t1_outer  (rows=20)
+    -> Covering index scan on t1_outer using a  (rows=20)
     -> Select #2 (subquery in condition; run only once)
         -> Filter: ((t1_outer.a = `<materialized_subquery>`.`max(b)`))  (rows=1)
             -> Limit: 1 row(s)  (rows=1)
@@ -2633,7 +2631,7 @@ ON t1_outer1.a = (SELECT max(b) FROM t1 GROUP BY a HAVING a < 2)
 AND t1_outer1.b = t1_outer2.b;
 EXPLAIN
 -> Inner hash join (t1_outer1.b = t1_outer2.b)  (rows=4)
-    -> Table scan on t1_outer2  (rows=20)
+    -> Covering index scan on t1_outer2 using a  (rows=20)
     -> Hash
         -> Filter: (t1_outer1.a = (select #2))  (rows=2)
             -> Covering index lookup on t1_outer1 using a (a = (select #2))  (rows=2)
@@ -2644,9 +2642,9 @@ EXPLAIN
 EXPLAIN FORMAT=TREE SELECT (SELECT (SELECT max(b) FROM t1 GROUP BY a HAVING a < 2) x
 FROM t1 AS t1_outer) x2 FROM t1 AS t1_outer2;
 EXPLAIN
--> Table scan on t1_outer2  (rows=20)
+-> Covering index scan on t1_outer2 using a  (rows=20)
 -> Select #2 (subquery in projection; run only once)
-    -> Table scan on t1_outer  (rows=20)
+    -> Covering index scan on t1_outer using a  (rows=20)
     -> Select #3 (subquery in projection; run only once)
         -> Filter: (t1.a < 2)  (rows=1.05)
             -> Covering index skip scan for grouping on t1 using a  (rows=3.16)
@@ -2680,7 +2678,7 @@ ERROR 21000: Subquery returns more than 1 row
 SHOW STATUS LIKE 'handler_read__e%';
 Variable_name	Value
 Handler_read_key	10
-Handler_read_next	0
+Handler_read_next	1
 DROP TABLE t1,t2,t3;
 CREATE TABLE t1 (a int, INDEX idx(a));
 INSERT INTO t1 VALUES
@@ -3010,7 +3008,7 @@ COUNT(DISTINCT b,a)
 EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT b) FROM t1;
 EXPLAIN
 -> Aggregate: count(distinct t1.b)  (rows=1)
-    -> Table scan on t1  (rows=32)
+    -> Covering index scan on t1 using a  (rows=32)
 
 SELECT COUNT(DISTINCT b) FROM t1;
 COUNT(DISTINCT b)
@@ -3041,7 +3039,7 @@ EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT a) FROM t1 GROUP BY b;
 EXPLAIN
 -> Group aggregate: count(distinct t1.a)  (rows=5.66)
     -> Sort: t1.b  (rows=32)
-        -> Table scan on t1  (rows=32)
+        -> Covering index scan on t1 using a  (rows=32)
 
 SELECT COUNT(DISTINCT a) FROM t1 GROUP BY b;
 COUNT(DISTINCT a)
@@ -3072,7 +3070,7 @@ COUNT(DISTINCT a)
 EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT a, b + 0) FROM t1;
 EXPLAIN
 -> Aggregate: count(distinct t1.a,(t1.b + 0))  (rows=1)
-    -> Table scan on t1  (rows=32)
+    -> Covering index scan on t1 using a  (rows=32)
 
 SELECT COUNT(DISTINCT a, b + 0) FROM t1;
 COUNT(DISTINCT a, b + 0)
@@ -3081,7 +3079,7 @@ EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT a) FROM t1 HAVING COUNT(DISTINCT b) < 
 EXPLAIN
 -> Filter: (count(distinct t1.b) < 20)  (rows=1)
     -> Aggregate: count(distinct t1.b), count(distinct t1.a)  (rows=1)
-        -> Table scan on t1  (rows=32)
+        -> Covering index scan on t1 using a  (rows=32)
 
 SELECT COUNT(DISTINCT a) FROM t1 HAVING COUNT(DISTINCT b) < 20;
 COUNT(DISTINCT a)
@@ -3121,9 +3119,9 @@ EXPLAIN
 -> Group aggregate: count(distinct t1_1.a)  (rows=5.66)
     -> Sort: t1_1.a  (rows=1024)
         -> Inner hash join (no condition)  (rows=1024)
-            -> Table scan on t1_1  (rows=32)
+            -> Covering index scan on t1_1 using a  (rows=32)
             -> Hash
-                -> Table scan on t1_2  (rows=32)
+                -> Covering index scan on t1_2 using a  (rows=32)
 
 SELECT COUNT(DISTINCT t1_1.a) FROM t1 t1_1, t1 t1_2 GROUP BY t1_1.a;
 COUNT(DISTINCT t1_1.a)
@@ -3292,7 +3290,7 @@ EXPLAIN FORMAT=TREE SELECT COUNT(DISTINCT a, b), SUM(DISTINCT a) FROM t2 WHERE b
 EXPLAIN
 -> Aggregate: count(distinct t2.a,t2.b), sum(distinct t2.a)  (rows=1)
     -> Filter: (t2.b = 42)  (rows=3.2)
-        -> Table scan on t2  (rows=32)
+        -> Covering index scan on t2 using a  (rows=32)
 
 SELECT COUNT(DISTINCT a, b), SUM(DISTINCT a) FROM t2 WHERE b = 42;
 COUNT(DISTINCT a, b)	SUM(DISTINCT a)
@@ -3479,7 +3477,7 @@ SUM(DISTINCT a)	MIN(b)	MAX(b)
 EXPLAIN FORMAT=TREE SELECT SUM(DISTINCT a), MIN(b), MAX(b) FROM t;
 EXPLAIN
 -> Aggregate: sum(distinct t.a), min(t.b), max(t.b)  (rows=1)
-    -> Table scan on t  (rows=7)
+    -> Covering index scan on t using a  (rows=7)
 
 SELECT TRACE RLIKE 'have_both_agg_distinct_and_min_max' AS OK
 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
@@ -3512,8 +3510,8 @@ CREATE TABLE t(a INT PRIMARY KEY)
 ENGINE = MERGE;
 EXPLAIN FORMAT=TREE SELECT DISTINCT(a) FROM t;
 EXPLAIN
--> Sort with duplicate removal: t.a  (rows=0)
-    -> Table scan on t  (rows=0)
+-> Remove duplicates from input grouped on t.a  (rows=0)
+    -> Covering index scan on t using PRIMARY  (rows=0)
 
 SELECT DISTINCT(a) FROM t;
 a
@@ -3591,8 +3589,8 @@ EXPLAIN FORMAT=TREE SELECT a, MAX(b) FROM t1 WHERE a = 1 AND b between 0 and 199
 GROUP BY a;
 EXPLAIN
 -> Group aggregate: max(t1.b)  (rows=1)
-    -> Filter: ((t1.b between 0 and 1999.5) and (t1.a = 1))  (rows=2)
-        -> Table scan on t1  (rows=6)
+    -> Filter: (t1.b between 0 and 1999.5)  (rows=2)
+        -> Covering index range scan on t1 using a over (a = 1 AND 0 <= b < 2000)  (rows=2)
 
 SELECT a, MAX(b) FROM t1 WHERE a = 1 AND b between 0 and 1999.5
 GROUP BY a;
@@ -3601,8 +3599,7 @@ a	MAX(b)
 EXPLAIN FORMAT=TREE SELECT a, MIN(b) FROM t1 WHERE a = 1 AND b > 2000.1 GROUP BY a;
 EXPLAIN
 -> Group aggregate: min(t1.b)  (rows=1)
-    -> Filter: ((t1.b > 2000) and (t1.a = 1))  (rows=3)
-        -> Table scan on t1  (rows=6)
+    -> Covering index range scan on t1 using a over (a = 1 AND 2000 < b)  (rows=3)
 
 SELECT a, MIN(b) FROM t1 WHERE a = 1 AND b > 2000.1 GROUP BY a;
 a	MIN(b)
@@ -3610,8 +3607,7 @@ a	MIN(b)
 EXPLAIN FORMAT=TREE SELECT a, MIN(b) FROM t1 WHERE a = 1 AND b >= 2000.1 GROUP BY a;
 EXPLAIN
 -> Group aggregate: min(t1.b)  (rows=1)
-    -> Filter: ((t1.b > 2000) and (t1.a = 1))  (rows=3)
-        -> Table scan on t1  (rows=6)
+    -> Covering index range scan on t1 using a over (a = 1 AND 2000 < b)  (rows=3)
 
 SELECT a, MIN(b) FROM t1 WHERE a = 1 AND b >= 2000.1 GROUP BY a;
 a	MIN(b)
@@ -3638,7 +3634,7 @@ EXPLAIN
         -> Table scan on out1  (rows=3)
         -> Select #2 (subquery in condition; dependent)
             -> Aggregate: max(out1.k)  (rows=1)
-                -> Table scan on t1  (rows=3)
+                -> Covering index scan on t1 using PRIMARY  (rows=3)
     -> Hash
         -> Table scan on t2  (rows=3)
 
@@ -3662,7 +3658,7 @@ EXPLAIN
             -> Table scan on out1  (rows=3)
             -> Select #2 (subquery in condition; dependent)
                 -> Aggregate: max(out1.k)  (rows=1)
-                    -> Table scan on t1  (rows=3)
+                    -> Covering index scan on t1 using PRIMARY  (rows=3)
 
 Warnings:
 Note	1276	Field or reference 'test.out1.k' of SELECT #2 was resolved in SELECT #1
@@ -3681,7 +3677,7 @@ EXPLAIN
         -> Single-row index lookup on out1 using PRIMARY (pk = (select #2))  (rows=1)
         -> Select #2 (subquery in condition; run only once)
             -> Aggregate: max(t1.k)  (rows=1)
-                -> Table scan on t1  (rows=3)
+                -> Covering index scan on t1 using k  (rows=3)
     -> Filter: (t2.k = out1.k)  (rows=1)
         -> Table scan on t2  (rows=3)
 
@@ -3697,7 +3693,7 @@ EXPLAIN
         -> Single-row index lookup on out1 using PRIMARY (pk = (select #2))  (rows=1)
         -> Select #2 (subquery in condition; run only once)
             -> Aggregate: min(t1.k)  (rows=1)
-                -> Table scan on t1  (rows=3)
+                -> Covering index scan on t1 using k  (rows=3)
     -> Filter: (t2.k = out1.k)  (rows=1)
         -> Table scan on t2  (rows=3)
 
@@ -3713,7 +3709,7 @@ EXPLAIN
         -> Single-row index lookup on out1 using PRIMARY (pk = (select #2))  (rows=1)
         -> Select #2 (subquery in condition; run only once)
             -> Aggregate: count(t1.k), sum(t1.k)  (rows=1)
-                -> Table scan on t1  (rows=3)
+                -> Covering index scan on t1 using k  (rows=3)
     -> Filter: (t2.k = out1.k)  (rows=1)
         -> Table scan on t2  (rows=3)
 
@@ -3732,7 +3728,7 @@ EXPLAIN
             -> Table scan on out1  (rows=3)
             -> Select #2 (subquery in condition; dependent)
                 -> Aggregate: min((out1.k + t1.k))  (rows=1)
-                    -> Table scan on t1  (rows=3)
+                    -> Covering index scan on t1 using k  (rows=3)
 
 Warnings:
 Note	1276	Field or reference 'test.out1.k' of SELECT #2 was resolved in SELECT #1
@@ -3752,7 +3748,7 @@ EXPLAIN
             -> Table scan on out1  (rows=3)
             -> Select #2 (subquery in condition; dependent)
                 -> Aggregate: min(t1.k)  (rows=1)
-                    -> Table scan on t1  (rows=3)
+                    -> Covering index scan on t1 using k  (rows=3)
 
 Warnings:
 Note	1276	Field or reference 'test.out1.k' of SELECT #2 was resolved in SELECT #1
@@ -3772,7 +3768,7 @@ EXPLAIN
             -> Table scan on out1  (rows=3)
             -> Select #2 (subquery in condition; dependent)
                 -> Aggregate: min(t1.k), min(out1.k)  (rows=1)
-                    -> Table scan on t1  (rows=3)
+                    -> Covering index scan on t1 using k  (rows=3)
 
 Warnings:
 Note	1276	Field or reference 'test.out1.k' of SELECT #2 was resolved in SELECT #1
@@ -3792,7 +3788,7 @@ EXPLAIN
             -> Table scan on out1  (rows=3)
             -> Select #2 (subquery in condition; dependent)
                 -> Aggregate: count(t1.k), sum(out1.k)  (rows=1)
-                    -> Table scan on t1  (rows=3)
+                    -> Covering index scan on t1 using k  (rows=3)
 
 Warnings:
 Note	1276	Field or reference 'test.out1.k' of SELECT #2 was resolved in SELECT #1
@@ -3812,7 +3808,7 @@ EXPLAIN
             -> Table scan on out1  (rows=3)
             -> Select #2 (subquery in condition; dependent)
                 -> Aggregate: count(0), sum(out1.k)  (rows=1)
-                    -> Table scan on t1  (rows=3)
+                    -> Covering index scan on t1 using PRIMARY  (rows=3)
 
 Warnings:
 Note	1276	Field or reference 'test.out1.k' of SELECT #2 was resolved in SELECT #1
@@ -3832,7 +3828,7 @@ EXPLAIN
             -> Table scan on out1  (rows=3)
             -> Select #2 (subquery in condition; dependent)
                 -> Aggregate: avg(out1.k)  (rows=1)
-                    -> Table scan on t1  (rows=3)
+                    -> Covering index scan on t1 using PRIMARY  (rows=3)
 
 Warnings:
 Note	1276	Field or reference 'test.out1.k' of SELECT #2 was resolved in SELECT #1
@@ -3855,7 +3851,7 @@ INSERT INTO t2 VALUES (3);
 explain format=tree SELECT * FROM t1 WHERE (SELECT MIN(t1.k) FROM t2);
 EXPLAIN
 -> Filter: (0 <> (select #2))  (rows=1)
-    -> Table scan on t1  (rows=1)
+    -> Covering index scan on t1 using k  (rows=1)
     -> Select #2 (subquery in condition; dependent)
         -> Aggregate: min(t1.k)  (rows=1)
             -> Table scan on t2  (rows=1)
@@ -3868,11 +3864,11 @@ k
 explain format=tree SELECT * FROM t1 WHERE EXISTS (SELECT MIN(t1.k) FROM t1 s1);
 EXPLAIN
 -> Filter: exists(select #2)  (rows=1)
-    -> Table scan on t1  (rows=1)
+    -> Covering index scan on t1 using k  (rows=1)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (rows=1)
             -> Aggregate: min(t1.k)  (rows=1)
-                -> Table scan on s1  (rows=1)
+                -> Covering index scan on s1 using k  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
@@ -3882,7 +3878,7 @@ k
 explain format=tree SELECT * FROM t1 WHERE EXISTS (SELECT MIN(t1.k) FROM t2);
 EXPLAIN
 -> Filter: exists(select #2)  (rows=1)
-    -> Table scan on t1  (rows=1)
+    -> Covering index scan on t1 using k  (rows=1)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (rows=1)
             -> Aggregate: min(t1.k)  (rows=1)
@@ -3897,7 +3893,7 @@ UPDATE t1 SET k=0;
 explain format=tree SELECT * FROM t1 WHERE (SELECT MIN(t1.k) FROM t2);
 EXPLAIN
 -> Filter: (0 <> (select #2))  (rows=1)
-    -> Table scan on t1  (rows=1)
+    -> Covering index scan on t1 using k  (rows=1)
     -> Select #2 (subquery in condition; dependent)
         -> Aggregate: min(t1.k)  (rows=1)
             -> Table scan on t2  (rows=1)
@@ -3909,11 +3905,11 @@ k
 explain format=tree SELECT * FROM t1 WHERE EXISTS (SELECT MIN(t1.k) FROM t1 s1);
 EXPLAIN
 -> Filter: exists(select #2)  (rows=1)
-    -> Table scan on t1  (rows=1)
+    -> Covering index scan on t1 using k  (rows=1)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (rows=1)
             -> Aggregate: min(t1.k)  (rows=1)
-                -> Table scan on s1  (rows=1)
+                -> Covering index scan on s1 using k  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
@@ -3923,7 +3919,7 @@ k
 explain format=tree SELECT * FROM t1 WHERE EXISTS (SELECT MIN(t1.k) FROM t2);
 EXPLAIN
 -> Filter: exists(select #2)  (rows=1)
-    -> Table scan on t1  (rows=1)
+    -> Covering index scan on t1 using k  (rows=1)
     -> Select #2 (subquery in condition; dependent)
         -> Limit: 1 row(s)  (rows=1)
             -> Aggregate: min(t1.k)  (rows=1)
@@ -3943,7 +3939,7 @@ EXPLAIN
     -> Table scan on t1  (rows=1)
     -> Select #2 (subquery in condition; dependent)
         -> Aggregate: min(t1.k)  (rows=1)
-            -> Table scan on s1  (rows=1)
+            -> Covering index scan on s1 using k  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
@@ -3970,7 +3966,7 @@ EXPLAIN
     -> Table scan on t1  (rows=1)
     -> Select #2 (subquery in condition; dependent)
         -> Aggregate: min(t1.k)  (rows=1)
-            -> Table scan on s1  (rows=1)
+            -> Covering index scan on s1 using k  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.k' of SELECT #2 was resolved in SELECT #1
@@ -4056,9 +4052,8 @@ EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col) FROM a
 WHERE (group_by_col IN (70, 9)) OR (aggr_col > 2) GROUP BY group_by_col;
 EXPLAIN
 -> Group aggregate: min(a.aggr_col)  (rows=1.67)
-    -> Sort: a.group_by_col  (rows=2.8)
-        -> Filter: ((a.group_by_col in (70,9)) or (a.aggr_col > 2))  (rows=2.8)
-            -> Table scan on a  (rows=6)
+    -> Filter: ((a.group_by_col in (70,9)) or (a.aggr_col > 2))  (rows=2.8)
+        -> Covering index scan on a using group_by_col_key  (rows=6)
 
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
@@ -4074,9 +4069,8 @@ EXPLAIN FORMAT=TREE SELECT group_by_col, MAX(aggr_col) FROM a
 WHERE (group_by_col IN (70, 9)) OR (aggr_col < 9) GROUP BY group_by_col;
 EXPLAIN
 -> Group aggregate: max(a.aggr_col)  (rows=1.67)
-    -> Sort: a.group_by_col  (rows=2.8)
-        -> Filter: ((a.group_by_col in (70,9)) or (a.aggr_col < 9))  (rows=2.8)
-            -> Table scan on a  (rows=6)
+    -> Filter: ((a.group_by_col in (70,9)) or (a.aggr_col < 9))  (rows=2.8)
+        -> Covering index scan on a using group_by_col_key  (rows=6)
 
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
@@ -4092,9 +4086,8 @@ EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE (group_by_col IN (3, 9)) OR (aggr_col = 9) GROUP BY group_by_col;
 EXPLAIN
 -> Group aggregate: min(a.aggr_col), max(a.aggr_col)  (rows=1.61)
-    -> Sort: a.group_by_col  (rows=2.59)
-        -> Filter: ((a.group_by_col in (3,9)) or (a.aggr_col = 9))  (rows=2.59)
-            -> Table scan on a  (rows=6)
+    -> Filter: ((a.group_by_col in (3,9)) or (a.aggr_col = 9))  (rows=2.59)
+        -> Covering index scan on a using group_by_col_key  (rows=6)
 
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
@@ -4111,9 +4104,8 @@ EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE (group_by_col = 3) OR (aggr_col > 8) GROUP BY group_by_col;
 EXPLAIN
 -> Group aggregate: min(a.aggr_col), max(a.aggr_col)  (rows=1.83)
-    -> Sort: a.group_by_col  (rows=3.33)
-        -> Filter: ((a.group_by_col = 3) or (a.aggr_col > 8))  (rows=3.33)
-            -> Table scan on a  (rows=6)
+    -> Filter: ((a.group_by_col = 3) or (a.aggr_col > 8))  (rows=3.33)
+        -> Covering index scan on a using group_by_col_key  (rows=6)
 
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
@@ -4175,9 +4167,8 @@ EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE aggr_col = group_by_col GROUP BY group_by_col;
 EXPLAIN
 -> Group aggregate: min(a.aggr_col), max(a.aggr_col)  (rows=1.34)
-    -> Sort: a.group_by_col  (rows=1.8)
-        -> Filter: (a.aggr_col = a.group_by_col)  (rows=1.8)
-            -> Table scan on a  (rows=12)
+    -> Filter: (a.aggr_col = a.group_by_col)  (rows=1.8)
+        -> Covering index scan on a using group_by_col_key  (rows=12)
 
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
@@ -4195,9 +4186,8 @@ EXPLAIN FORMAT=TREE SELECT group_by_col, MIN(aggr_col), MAX(aggr_col) FROM a
 WHERE aggr_col < group_by_col GROUP BY group_by_col;
 EXPLAIN
 -> Group aggregate: min(a.aggr_col), max(a.aggr_col)  (rows=2)
-    -> Sort: a.group_by_col  (rows=4)
-        -> Filter: (a.aggr_col < a.group_by_col)  (rows=4)
-            -> Table scan on a  (rows=12)
+    -> Filter: (a.aggr_col < a.group_by_col)  (rows=4)
+        -> Covering index scan on a using group_by_col_key  (rows=12)
 
 SELECT TRACE RLIKE 'minmax_keypart_in_disjunctive_query' AS OK
 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
@@ -4320,7 +4310,7 @@ EXPLAIN
     -> Select #2 (subquery in condition; dependent)
         -> Filter: (<cache>(t1.a) = <ref_null_helper>(max(t1.b)))  (rows=1)
             -> Aggregate: max(t1.b)  (rows=1)
-                -> Table scan on t2  (rows=1)
+                -> Covering index scan on t2 using id1  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.b' of SELECT #2 was resolved in SELECT #1
@@ -4342,7 +4332,7 @@ EXPLAIN
     -> Select #2 (subquery in condition; dependent)
         -> Filter: (<cache>(t1.a) = <ref_null_helper>(max(t1.b)))  (rows=1)
             -> Aggregate: max(t1.b)  (rows=1)
-                -> Table scan on t2  (rows=1)
+                -> Covering index scan on t2 using id1  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.b' of SELECT #2 was resolved in SELECT #1
@@ -4361,7 +4351,7 @@ EXPLAIN
     -> Select #2 (subquery in condition; dependent)
         -> Filter: (<cache>(t1.a) = <ref_null_helper>(max(t1.b)))  (rows=1)
             -> Aggregate: max(t1.b)  (rows=1)
-                -> Table scan on t2  (rows=1)
+                -> Covering index scan on t2 using id1  (rows=1)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.b' of SELECT #2 was resolved in SELECT #1
