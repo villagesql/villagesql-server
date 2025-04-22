@@ -6967,8 +6967,7 @@ bool IsImmediateUpdateCandidate(const Table_ref *table_ref, int node_idx,
     // clause (typically degenerate join conditions stemming from single-table
     // filters that can't be pushed down due to pseudo-table bits in
     // used_tables()).
-    for (unsigned i = 0; i < graph.num_where_predicates; ++i) {
-      const Predicate &predicate = graph.predicates[i];
+    for (const Predicate &predicate : graph.filter_predicates()) {
       if (IsProperSubset(TableBitmap(node_idx), predicate.used_nodes)) {
         AddFieldsToTmpSet(predicate.condition, table);
       }
@@ -7332,24 +7331,6 @@ bool IsFinalPredicate(const Predicate &predicate) {
          Overlaps(predicate.total_eligibility_set, RAND_TABLE_BIT);
 }
 
-/**
-  Can we skip the ApplyFinalPredicatesAndExpandFilters() step?
-
-  It is an unnecessary step if there are no FILTER access paths to expand. It's
-  not so expensive that it's worth spending a lot of effort to find out if it
-  can be skipped, but let's skip it if our only candidate is an EQ_REF with no
-  filter predicates, so that we don't waste time in point selects.
- */
-bool SkipFinalPredicates(const AccessPathArray &candidates,
-                         const JoinHypergraph &graph) {
-  return candidates.size() == 1 &&
-         candidates.front()->type == AccessPath::EQ_REF &&
-         IsEmpty(candidates.front()->filter_predicates) &&
-         none_of(graph.predicates.begin(),
-                 graph.predicates.begin() + graph.num_where_predicates,
-                 [](const Predicate &pred) { return IsFinalPredicate(pred); });
-}
-
 /*
   Apply final predicates after all tables have been joined together, and expand
   FILTER access paths for all predicates (not only the final ones) in the entire
@@ -7366,9 +7347,9 @@ void ApplyFinalPredicatesAndExpandFilters(THD *thd,
   }
 
   // Add any functional dependencies that are activated by the predicate.
-  for (size_t i = 0; i < graph.num_where_predicates; ++i) {
-    if (IsFinalPredicate(graph.predicates[i])) {
-      *fd_set |= graph.predicates[i].functional_dependencies;
+  for (const Predicate &predicate : graph.filter_predicates()) {
+    if (IsFinalPredicate(predicate)) {
+      *fd_set |= predicate.functional_dependencies;
     }
   }
 
@@ -9235,9 +9216,14 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
   // Add the final predicates to the root candidates, and expand FILTER access
   // paths for all predicates (not only the final ones) in the entire access
   // path tree of the candidates.
-  if (!SkipFinalPredicates(root_candidates, graph)) {
+  if (std::ranges::any_of(graph.filter_predicates(), IsFinalPredicate)) {
     ApplyFinalPredicatesAndExpandFilters(thd, receiver, graph, orderings,
                                          &fd_set, &root_candidates);
+  } else {
+    for (AccessPath *root_path : root_candidates) {
+      ExpandFilterAccessPaths(thd, root_path, join, graph.predicates,
+                              graph.num_where_predicates);
+    }
   }
 
   // Apply GROUP BY, if applicable.

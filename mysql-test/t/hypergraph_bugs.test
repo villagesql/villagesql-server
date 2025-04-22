@@ -1183,7 +1183,7 @@ SELECT REGEXP_SUBSTR(trace, " - \\{HASH_JOIN[^\n]*keeping",1,1,'n')
 --replace_regex $elide_costs
 EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE a=5 AND b=5;
 
-SELECT REGEXP_SUBSTR(trace, " - \\{FILTER[^\n]*keeping",1,1,'n')
+SELECT REGEXP_SUBSTR(trace, " - \\{EQ_REF[^\n]*keeping",1,1,'n')
   FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
 SET SESSION OPTIMIZER_TRACE="enabled=off";

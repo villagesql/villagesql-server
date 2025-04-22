@@ -30,6 +30,7 @@
 #include <array>
 #include <cstddef>
 #include <optional>
+#include <span>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -232,6 +233,18 @@ struct JoinHypergraph {
   // How many of the predicates in "predicates" are filter predicates. The rest
   // of them are sargable join predicates.
   unsigned num_where_predicates = 0;
+
+  /// Returns an immutable view of the filter predicates portion of the
+  /// predicates array.
+  std::span<const Predicate> filter_predicates() const {
+    return {predicates.data(), num_where_predicates};
+  }
+
+  /// Returns a mutable view of the filter predicates portion of the predicates
+  /// array.
+  std::span<Predicate> filter_predicates() {
+    return {predicates.data(), num_where_predicates};
+  }
 
   // A bitmap over predicates that are, or contain, at least one
   // materializable subquery.

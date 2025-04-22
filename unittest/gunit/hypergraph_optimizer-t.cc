@@ -207,8 +207,7 @@ void SortNodes(JoinHypergraph *graph) {
 
 vector<Item *> GetWhereConditions(const JoinHypergraph &graph) {
   vector<Item *> where_conditions;
-  for (const Predicate &predicate :
-       make_array(graph.predicates.data(), graph.num_where_predicates)) {
+  for (const Predicate &predicate : graph.filter_predicates()) {
     if (!predicate.was_join_condition) {
       where_conditions.push_back(predicate.condition);
     }
@@ -4103,13 +4102,7 @@ TEST_F(HypergraphOptimizerTest, DontConsiderFullScanForIndexLookup) {
   // a covering index lookup. An INDEX_RANGE_SCAN is more or less equivalent to
   // an index lookup in this query, so ideally we shouldn't have spent time on
   // investigating it as an alternative, but accept it for now.
-  //
-  // The index lookup subplan (REF) is considered twice because the subplans
-  // that win the tournament for the base table access, have to go through the
-  // tournament again after the final predicates have been applied. Since there
-  // are no final predicates to apply in this query, the second tournament could
-  // have been avoided.
-  EXPECT_THAT(path_types, UnorderedElementsAre(AccessPath::REF, AccessPath::REF,
+  EXPECT_THAT(path_types, UnorderedElementsAre(AccessPath::REF,
                                                AccessPath::INDEX_RANGE_SCAN));
 }
 

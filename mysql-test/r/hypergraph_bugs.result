@@ -1470,10 +1470,10 @@ EXPLAIN
 -> Filter: (t1.b = 5)  (rows=0.0099)
     -> Single-row index lookup on t1 using PRIMARY (a = 5)  (rows=1)
 
-SELECT REGEXP_SUBSTR(trace, " - \\{FILTER[^\n]*keeping",1,1,'n')
+SELECT REGEXP_SUBSTR(trace, " - \\{EQ_REF[^\n]*keeping",1,1,'n')
 FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
-REGEXP_SUBSTR(trace, " - \\{FILTER[^\n]*keeping",1,1,'n')
- - {FILTER, cost=2.04, init_cost=0, rows=0.0099} is first alternative, keeping
+REGEXP_SUBSTR(trace, " - \\{EQ_REF[^\n]*keeping",1,1,'n')
+ - {EQ_REF, cost=2.04, init_cost=0, rows=0.0099} [PRIMARY] is first alternative, keeping
 SET SESSION OPTIMIZER_TRACE="enabled=off";
 DROP TABLE t1;
 #

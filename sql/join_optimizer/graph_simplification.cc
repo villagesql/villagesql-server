@@ -268,8 +268,7 @@ double GetCardinality(THD *thd, NodeMap tables_to_join,
   // our heuristics, but if it turns out to be critical, we could
   // arrange for all single tables to be run before simplification
   // (on the old graph), and then reuse that information.
-  for (size_t i = 0; i < graph.num_where_predicates; ++i) {
-    const Predicate &pred = graph.predicates[i];
+  for (const Predicate &pred : graph.filter_predicates()) {
     if (pred.total_eligibility_set == 0) {
       // Just put them on node 0 for simplicity;
       // we only care about the total selectivity,
@@ -304,8 +303,7 @@ double GetCardinality(THD *thd, NodeMap tables_to_join,
     }
 
     // Apply all newly applicable WHERE predicates.
-    for (size_t i = 0; i < graph.num_where_predicates; ++i) {
-      const Predicate &where_pred = graph.predicates[i];
+    for (const Predicate &where_pred : graph.filter_predicates()) {
       if (IsSubset(where_pred.total_eligibility_set, tables_to_join) &&
           Overlaps(where_pred.total_eligibility_set,
                    components[left_component]) &&
@@ -369,8 +367,7 @@ double GetCardinalitySingleJoin(THD *thd, NodeMap left, NodeMap right,
   }
 
   // Apply all newly applicable WHERE predicates.
-  for (size_t i = 0; i < graph.num_where_predicates; ++i) {
-    const Predicate &where_pred = graph.predicates[i];
+  for (const Predicate &where_pred : graph.filter_predicates()) {
     if (IsSubset(where_pred.total_eligibility_set, left | right) &&
         Overlaps(where_pred.total_eligibility_set, left) &&
         Overlaps(where_pred.total_eligibility_set, right) &&
