@@ -111,6 +111,7 @@ ADD_STATIC_LIBRARY(mysql_rest_service_db
   mrs/database/query_statistics.cc
   mrs/database/query_version.cc
   mrs/database/query_warnings.cc
+  mrs/database/metadata_logger.cc
   mrs/database/mysql_task_monitor.cc
   mrs/database/helper/query.cc
   mrs/database/helper/bind.cc

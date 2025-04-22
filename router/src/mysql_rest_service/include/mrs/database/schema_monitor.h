@@ -35,6 +35,7 @@
 #include "mrs/authentication/authorize_manager.h"
 #include "mrs/configuration.h"
 #include "mrs/database/entry/db_object.h"
+#include "mrs/database/metadata_logger.h"
 #include "mrs/database/monitor/schema_monitor_factory.h"
 #include "mrs/database/query_factory_proxy.h"
 #include "mrs/database/slow_query_monitor.h"
@@ -58,7 +59,8 @@ class SchemaMonitor {
                 mrs::database::QueryFactoryProxy *query_factory,
                 mrs::ResponseCache *response_cache,
                 mrs::ResponseCache *file_cache,
-                SlowQueryMonitor *slow_query_monitor);
+                SlowQueryMonitor *slow_query_monitor,
+                MetadataLogger *metadata_logger);
   ~SchemaMonitor();
 
   void start();
@@ -112,6 +114,7 @@ class SchemaMonitor {
   mrs::ResponseCache *response_cache_;
   mrs::ResponseCache *file_cache_;
   SlowQueryMonitor *slow_query_monitor_;
+  MetadataLogger *metadata_logger_;
   MetadataSourceDestination md_source_destination_;
 };
 

@@ -361,3 +361,5 @@ have_gr_replication_primary_elect_prefer_most_updated.inc
 is_mrs_schema_v2.inc
 is_mrs_schema_v3.inc
 is_mrs_schema_v4.inc
+is_mrs_schema_v2_or_v3.inc
+is_mrs_schema_v3_or_v4.inc

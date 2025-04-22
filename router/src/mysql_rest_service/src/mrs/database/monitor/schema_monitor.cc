@@ -140,7 +140,7 @@ SchemaMonitor::SchemaMonitor(
     mrs::GtidManager *gtid_manager,
     mrs::database::QueryFactoryProxy *query_factory,
     mrs::ResponseCache *response_cache, mrs::ResponseCache *file_cache,
-    SlowQueryMonitor *slow_query_monitor)
+    SlowQueryMonitor *slow_query_monitor, MetadataLogger *metadata_logger)
     : configuration_{configuration},
       router_name_{configuration_.router_name_},
       cache_{cache},
@@ -152,6 +152,7 @@ SchemaMonitor::SchemaMonitor(
       response_cache_{response_cache},
       file_cache_{file_cache},
       slow_query_monitor_{slow_query_monitor},
+      metadata_logger_{metadata_logger},
       md_source_destination_{cache, configuration_.provider_rw_->is_dynamic()} {
 }
 
@@ -241,8 +242,12 @@ void SchemaMonitor::run() {
 
         const auto schema_version = query_schema_version(session.get());
         if (schema_version != current_schema_version) {
+          metadata_logger_->on_metadata_version_change(schema_version);
+
           throw MetadataSchemaVersionChange();
         }
+
+        metadata_logger_->on_metadata_available(schema_version, session.get());
 
         // Delete expired sessions etc
         auth_manager_->collect_garbage();
@@ -366,6 +371,7 @@ void SchemaMonitor::run() {
     if (force_clear) {
       dbobject_manager_->clear();
       auth_manager_->clear();
+      metadata_logger_->stop();
       force_clear = false;
     }
   } while (wait_until_next_refresh());

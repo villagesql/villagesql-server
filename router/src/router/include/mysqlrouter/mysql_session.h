@@ -514,6 +514,9 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
 
   MYSQL *get_handle() { return connection_; }
 
+  void log_queries(bool log) { log_queries_ = log; }
+  bool log_queries() const { return log_queries_; }
+
  private:
   // stores selected parameters that were passed to the last successful call to
   // connect()
@@ -579,6 +582,8 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
   void throw_mysqlerror(MYSQL_STMT *stmt, uint64_t ps_id);
   // if query be timed and sent to the sql-log.
   mysql_harness::logging::DomainLogger logger_{"sql"};
+
+  bool log_queries_{true};
 };
 
 }  // namespace mysqlrouter
