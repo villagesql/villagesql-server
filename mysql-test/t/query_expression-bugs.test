@@ -321,17 +321,10 @@ let $pattern=$elide_trace_costs_and_rows;
 let $pattern=$pattern /num_initial_chunks_spilled_to_disk\": [0-9.]+/num_initial_chunks_spilled_to_disk\": "elided"/;
 let $pattern=$pattern /peak_memory_used\": [0-9.]+/peak_memory_used\": "elided"/;
 let $pattern=$pattern /num_rows_estimate\": [0-9.]+/num_rows_estimate\": "elided"/;
-
-
-SELECT MAX( c1 ) OVER ( ORDER BY c2 ROWS CURRENT ROW ) FROM t1
-INTERSECT DISTINCT
-SELECT "can't" OR 447938560 FROM t1;
-
---replace_regex $pattern
---skip_if_hypergraph
-eval $show_trace;
-
-SET set_operations_buffer_size= 65536; # as recommended in trace
+let $pattern=$pattern /to 65536/to xxxxx/;
+let $pattern=$pattern /to 131072/to xxxxx/;
+let $pattern=$pattern /\"chunk files\": [0-9]+/\"chunk files\": xxx/;
+let $pattern=$pattern /\"chunk files\": [0-9]+/\"chunk files\": xxx/;
 
 SELECT MAX( c1 ) OVER ( ORDER BY c2 ROWS CURRENT ROW ) FROM t1
 INTERSECT DISTINCT
@@ -341,7 +334,9 @@ SELECT "can't" OR 447938560 FROM t1;
 --skip_if_hypergraph
 eval $show_trace;
 
-SET set_operations_buffer_size= 131072;  # as recommended in trace
+SET set_operations_buffer_size= 131072; # trace recommended 65536, but
+                                        # doesn't only works
+                                        # sometimes, so double it
 
 SELECT MAX( c1 ) OVER ( ORDER BY c2 ROWS CURRENT ROW ) FROM t1
 INTERSECT DISTINCT

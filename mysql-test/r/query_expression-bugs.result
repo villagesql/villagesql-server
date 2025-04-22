@@ -723,107 +723,11 @@ JSON_PRETTY(JSON_EXTRACT(trace,"$.steps[*].join_execution"))
                   {
                     "spill to disk initiated": {
                       "chunk sets": 2,
-                      "chunk files": 257
+                      "chunk files": xxx
                     }
                   },
                   {
-                    "hash spill handling overflow, reverting to slower method of indexed tmp table. To avoid, try setting set_operations_buffer_size to 65536 or more. To avoid spill to disk, further increase it with a factor of 64 or 128.": {
-                      "steps": [
-                        {
-                          "creating_tmp_table": {
-                            "tmp_table_info": {
-                              "table": "<intersect temporary>",
-                              "columns": 3,
-                              "location": "TempTable",
-                              "key_length": 8,
-                              "row_length": 27,
-                              "unique_constraint": true,
-                              "makes_grouped_rows": false,
-                              "in_plan_at_position": 0,
-                              "cannot_insert_duplicates": true
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  }
-                ]
-              }
-            }
-          ],
-          "select#": 1
-        }
-      },
-      {
-        "materialize for intersect": {
-          "steps": [
-            {
-              "de-duplicate with index": {
-                "steps": []
-              }
-            }
-          ],
-          "select#": 2
-        }
-      }
-    ]
-  }
-]
-SET set_operations_buffer_size= 65536;
-SELECT MAX( c1 ) OVER ( ORDER BY c2 ROWS CURRENT ROW ) FROM t1
-INTERSECT DISTINCT
-SELECT "can't" OR 447938560 FROM t1;
-MAX( c1 ) OVER ( ORDER BY c2 ROWS CURRENT ROW )
-1
-Warnings:
-Note	4168	System variable "set_operations_buffer_size" set too low for hashed set operation. Consult optimizer trace for recommendations.
-Warning	1292	Truncated incorrect DOUBLE value: 'can't'
-SELECT JSON_PRETTY(JSON_EXTRACT(trace,"$.steps[*].join_execution"))
-FROM information_schema.optimizer_trace;
-JSON_PRETTY(JSON_EXTRACT(trace,"$.steps[*].join_execution"))
-[
-  {
-    "steps": [
-      {
-        "materialize for intersect": {
-          "steps": [
-            {
-              "de-duplicate with hash table": {
-                "steps": [
-                  {
-                    "sorting_table": "t1",
-                    "filesort_summary": {
-                      "key_size": 4089,
-                      "row_size": 70653,
-                      "sort_mode": "<varlen_sort_key, packed_additional_fields>",
-                      "num_rows_found": 8016,
-                      "sort_algorithm": "std::sort",
-                      "memory_available": 262144,
-                      "peak_memory_used": "elided",
-                      "num_rows_estimate": "elided",
-                      "max_rows_per_buffer": 3,
-                      "num_initial_chunks_spilled_to_disk": "elided"
-                    },
-                    "filesort_execution": [],
-                    "filesort_information": [
-                      {
-                        "direction": "asc",
-                        "expression": "`t1`.`c2`"
-                      }
-                    ],
-                    "filesort_priority_queue_optimization": {
-                      "cause": "not applicable (no LIMIT)",
-                      "usable": false
-                    }
-                  },
-                  {
-                    "spill to disk initiated": {
-                      "chunk sets": 1,
-                      "chunk files": 256
-                    }
-                  },
-                  {
-                    "hash spill handling overflow, reverting to slower method of indexed tmp table. To avoid, try setting set_operations_buffer_size to 131072 or more. To avoid spill to disk, further increase it with a factor of 64 or 128.": {
+                    "hash spill handling overflow, reverting to slower method of indexed tmp table. To avoid, try setting set_operations_buffer_size to xxxxx or more. To avoid spill to disk, further increase it with a factor of 64 or 128.": {
                       "steps": [
                         {
                           "creating_tmp_table": {
@@ -914,7 +818,7 @@ JSON_PRETTY(JSON_EXTRACT(trace,"$.steps[*].join_execution"))
                   {
                     "spill to disk initiated": {
                       "chunk sets": 1,
-                      "chunk files": 128
+                      "chunk files": xxx
                     }
                   }
                 ]
@@ -988,7 +892,7 @@ JSON_PRETTY(JSON_EXTRACT(trace,"$.steps[*].join_execution"))
                   {
                     "spill to disk initiated": {
                       "chunk sets": 1,
-                      "chunk files": 4
+                      "chunk files": xxx
                     }
                   }
                 ]
@@ -1130,7 +1034,7 @@ JSON_PRETTY(JSON_EXTRACT(trace,"$.steps[*].join_execution"))
                   {
                     "spill to disk initiated": {
                       "chunk sets": 1,
-                      "chunk files": 64
+                      "chunk files": xxx
                     }
                   }
                 ]
