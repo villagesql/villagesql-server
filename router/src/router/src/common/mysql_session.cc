@@ -785,7 +785,7 @@ void MySQLSession::prepare_remove(uint64_t ps_id) {
 }
 
 void MySQLSession::execute(const std::string &q) {
-  auto query_res = logged_real_query(q);
+  auto query_res = log_queries_ ? logged_real_query(q) : real_query(q);
 
   if (!query_res) {
     auto ec = query_res.error();
@@ -838,7 +838,7 @@ class RealResultRow : public MySQLSession::ResultRow {
 void MySQLSession::query(const std::string &q,
                          const ResultRowProcessor &processor,
                          const FieldValidator &validator) {
-  auto query_res = logged_real_query(q);
+  auto query_res = log_queries_ ? logged_real_query(q) : real_query(q);
 
   if (!query_res) {
     auto ec = query_res.error();
@@ -875,7 +875,7 @@ void MySQLSession::query(const std::string &q,
 std::unique_ptr<MySQLSession::ResultRow> MySQLSession::query_one(
     const std::string &q,
     const FieldValidator &validator /*= null_field_validator*/) {
-  auto query_res = logged_real_query(q);
+  auto query_res = log_queries_ ? logged_real_query(q) : real_query(q);
 
   if (!query_res) {
     auto ec = query_res.error();
@@ -913,7 +913,7 @@ std::unique_ptr<MySQLSession::ResultRow> MySQLSession::query_one(
 }
 
 bool MySQLSession::execute_nb(const std::string &q) {
-  auto query_res = logged_real_query_nb(q);
+  auto query_res = log_queries_ ? logged_real_query_nb(q) : real_query_nb(q);
 
   if (!query_res) {
     auto ec = query_res.error();
