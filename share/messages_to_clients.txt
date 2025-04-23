@@ -10248,7 +10248,7 @@ ER_LH_AVRO_FILE_DATA_CORRUPT
   eng "File %.*s: File data might be corrupt."
 
 ER_LH_AVRO_INVALID_UNION
-  eng "Column %d in %s: Invalid union encountered. Unions are only supported to represent nullable columns. One of the two types of the union must be null."
+  eng "Column %d in %s: Invalid Avro union encountered. Unions are only supported to represent nullable columns. One of the two types of the union must be null."
 
 ER_LH_AVRO_INVALID_BLOCK_SIZE
   eng "File %.*s: Invalid avro block size."
@@ -10568,6 +10568,10 @@ ER_LIBRARY_INVALID
 
 ER_CANNOT_PERSIST_TRANSACTION_ISOLATION
   eng "Cannot persist transaction isolation."
+
+ER_LH_AVRO_INVALID_RECORD
+  eng "Column %d in %s: Invalid Avro record encountered. Nested records are not supported."
+
 #
 #  End of 9.x error messages (server-to-client).
 #
