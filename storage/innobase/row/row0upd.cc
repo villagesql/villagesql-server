@@ -43,7 +43,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0upd.h"
 #include "trx0undo.h"
 #ifndef UNIV_HOTBACKUP
-#include <algorithm>
 
 #include <debug_sync.h>
 #include "btr0btr.h"
@@ -55,7 +54,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "eval0eval.h"
 #include "fts0fts.h"
 #include "fts0types.h"
-#include "lob0lob.h"
 #include "lock0lock.h"
 #include "log0chkp.h"
 #include "mach0data.h"
@@ -67,8 +65,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "row0ins.h"
 #include "row0log.h"
 #ifndef UNIV_HOTBACKUP
-#include "fts0fts.h"
-#include "fts0types.h"
 #include "row0row.h"
 #include "row0sel.h"
 #include "trx0rec.h"
@@ -76,7 +72,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <algorithm>
 #include "lob0lob.h"
 #ifndef UNIV_HOTBACKUP
-#include "current_thd.h"
 #include "dict0dd.h"
 #endif /* !UNIV_HOTBACKUP */
 

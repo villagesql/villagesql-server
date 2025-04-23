@@ -80,13 +80,11 @@ The tablespace memory cache */
 #include "trx0purge.h"
 #else /* !UNIV_HOTBACKUP */
 #include <cstring>
-#include "srv0srv.h"
 #endif /* !UNIV_HOTBACKUP */
 
 #include "os0thread-create.h"
 
 #include "current_thd.h"
-#include "ha_prototypes.h"
 
 #include <array>
 #include <fstream>

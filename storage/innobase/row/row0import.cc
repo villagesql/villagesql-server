@@ -63,9 +63,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ut0new.h"
 #include "zlob0first.h"
 
-#include <vector>
-
-#include "my_aes.h"
 #include "my_dbug.h"
 
 /** The size of the buffer to use for IO. Note: os_file_read() doesn't expect

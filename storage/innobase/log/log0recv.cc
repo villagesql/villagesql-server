@@ -52,7 +52,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "clone0api.h"
 #include "dict0dd.h"
 #include "fil0fil.h"
-#include "ha_prototypes.h"
 #include "ibuf0ibuf.h"
 #include "log0chkp.h"       /* log_next_checkpoint_header */
 #include "log0encryption.h" /* log_encryption_read */

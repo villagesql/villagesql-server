@@ -69,7 +69,6 @@ double fseg_reserve_pct = FSEG_RESERVE_PCT_DFLT;
 #ifndef UNIV_HOTBACKUP
 
 #include "dd/types/tablespace.h"
-#include "dict0dd.h"
 #include "mysqld.h"
 #include "sql/dd/dictionary.h"
 #include "sql_backup_lock.h"

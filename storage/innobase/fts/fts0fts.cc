@@ -51,7 +51,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql/strings/m_ctype.h"
 
 #include "dict0dd.h"
-#include "lob0lob.h"
 #include "row0mysql.h"
 #include "row0sel.h"
 #include "row0upd.h"

@@ -75,7 +75,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mem0mem.h"
 #include "mtr0mtr.h"
 
-#include "my_dbug.h"
 #include "my_psi_config.h"
 #include "mysql/psi/mysql_stage.h"
 #include "mysqld.h"
@@ -92,8 +91,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0sys.h"
 #include "trx0trx.h"
 #include "ut0mem.h"
-
-#include <zlib.h>
 
 #include "arch0arch.h"
 #include "arch0recv.h"

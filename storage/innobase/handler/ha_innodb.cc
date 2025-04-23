@@ -63,7 +63,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <time.h>
 
 #include <algorithm>
-#include <cstdint>
 #include <memory>
 
 #include <sql_table.h>
@@ -143,7 +142,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "log0write.h"
 #include "mem0mem.h"
 #include "mtr0mtr.h"
-#include "my_compare.h"
 #include "my_compiler.h"
 #include "my_dbug.h"
 #include "my_double2ulonglong.h"
@@ -184,8 +182,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "dict0priv.h"
 #include "dict0sdi.h"
 #include "dict0upgrade.h"
-#include "os0thread-create.h"
-#include "os0thread.h"
 #include "sql/item.h"
 #include "sql_base.h"
 #include "srv0tmp.h"

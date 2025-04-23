@@ -54,7 +54,6 @@ Data dictionary interface */
 #include "dict0stats.h"
 #endif /* !UNIV_HOTBACKUP */
 #include "data0type.h"
-#include "dict0dict.h"
 #include "fil0fil.h"
 #include "mach0data.h"
 #include "rem0rec.h"

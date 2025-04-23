@@ -75,7 +75,6 @@ dict_index_t *dict_ind_redundant;
 extern uint ibuf_debug;
 #endif /* UNIV_DEBUG || UNIV_IBUF_DEBUG */
 
-#include <algorithm>
 #include <vector>
 
 #include "btr0btr.h"
@@ -95,7 +94,6 @@ extern uint ibuf_debug;
 #endif /* !UNIV_HOTBACKUP */
 #include "fsp0sysspace.h"
 #ifndef UNIV_HOTBACKUP
-#include "fts0fts.h"
 #include "fts0types.h"
 #include "lock0lock.h"
 #endif /* !UNIV_HOTBACKUP */
