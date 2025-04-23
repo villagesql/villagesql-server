@@ -324,9 +324,23 @@ bool Sql_cmd_create_table::execute(THD *thd) {
     if (query_expression->is_prepared()) {
       cleanup(thd);
     }
+
+    const bool prepared_for_secondary_engine =
+        query_expression->is_prepared() && lex->using_secondary_engine();
+
     auto cleanup_se_guard = create_scope_guard(
         [lex] { lex->set_secondary_engine_execution_context(nullptr); });
     if (open_tables_for_query(thd, lex->query_tables, false)) return true;
+
+    // If the query was prepared for execution on a different engine than the
+    // engine chosen at execution, it must be reprepared.
+    if (is_prepared() &&
+        (prepared_for_secondary_engine != lex->using_secondary_engine()) &&
+        ask_to_reprepare(thd)) {
+      return true;
+    }
+    assert(!is_prepared() ||
+           prepared_for_secondary_engine == lex->using_secondary_engine());
 
     // Use the hypergraph optimizer for the SELECT statement, if enabled.
     const bool need_hypergraph_optimizer =
