@@ -35,8 +35,8 @@
 #include <mysql.h>
 
 #include "collector/destination_provider.h"
-#include "helper/make_shared_ptr.h"
 #include "helper/plugin_monitor.h"
+#include "mysql/harness/make_shared_ptr.h"
 
 #include "secure_string.h"  // NOLINT(build/include_subdir)
 
@@ -76,7 +76,7 @@ class Configuration {
   std::shared_ptr<collector::DestinationProvider> provider_rw_;
   std::shared_ptr<collector::DestinationProvider> provider_ro_;
   std::string jwt_secret_;
-  helper::MakeSharedPtr<helper::PluginMonitor> service_monitor_;
+  mysql_harness::MakeSharedPtr<helper::PluginMonitor> service_monitor_;
 };
 
 }  // namespace mrs

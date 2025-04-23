@@ -77,6 +77,7 @@ SET(TESTS
   test_configuration_update_schema.cc
   test_dynamic_config.cc
   test_destination.cc
+  test_plugin_state.cc
 )
 
 IF(NOT SOLARIS)

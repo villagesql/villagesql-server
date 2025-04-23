@@ -27,12 +27,12 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-#include "helper/make_shared_ptr.h"
 #include "helper/set_http_component.h"
 #include "http/base/uri_path_matcher.h"
 #include "mrs/endpoint/handler/authentication/handler_authorize_login.h"
 #include "mrs/interface/universal_id.h"
 #include "mrs/rest/request_context.h"
+#include "mysql/harness/make_shared_ptr.h"
 
 #include "mock/mock_auth_handler.h"
 #include "mock/mock_auth_manager.h"
@@ -40,11 +40,11 @@
 #include "mock/mock_http_server_component.h"
 #include "mock/mock_mysqlcachemanager.h"
 
-using helper::MakeSharedPtr;
 using helper::SetHttpComponent;
 using ::http::base::UriPathMatcher;
 using mrs::endpoint::handler::HandlerAuthorizeLogin;
 using mrs::interface::AuthorizeManager;
+using mysql_harness::MakeSharedPtr;
 using testing::_;
 using testing::AllOf;
 using testing::DoAll;
