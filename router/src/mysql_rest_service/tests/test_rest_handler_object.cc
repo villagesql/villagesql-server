@@ -27,7 +27,6 @@
 #include <gtest/gtest.h>
 #include <memory>
 
-#include "helper/make_shared_ptr.h"
 #include "helper/set_http_component.h"
 #include "http/base/uri_path_matcher.h"
 #include "mrs/endpoint/db_object_endpoint.h"
@@ -35,14 +34,15 @@
 #include "mrs/endpoint/db_service_endpoint.h"
 #include "mrs/endpoint/handler/handler_db_object_table.h"
 #include "mrs/endpoint/url_host_endpoint.h"
+#include "mysql/harness/make_shared_ptr.h"
 
 #include "mock/mock_auth_manager.h"
 #include "mock/mock_endpoint_configuration.h"
 #include "mock/mock_http_server_component.h"
 #include "mock/mock_mysqlcachemanager.h"
 
-using helper::MakeSharedPtr;
 using helper::SetHttpComponent;
+using mysql_harness::MakeSharedPtr;
 using HandlerDbObjectTable = mrs::endpoint::handler::HandlerDbObjectTable;
 using DbObjectEndpoint = mrs::endpoint::DbObjectEndpoint;
 using DbSchemaEndpoint = mrs::endpoint::DbSchemaEndpoint;

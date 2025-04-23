@@ -50,7 +50,6 @@
 #include "helper/json/rapid_json_to_map.h"
 #include "helper/json/rapid_json_to_struct.h"
 #include "helper/json/text_to.h"
-#include "helper/make_shared_ptr.h"
 #include "helper/string/hex.h"  // unhex
 #include "helper/string/random.h"
 #include "helper/string/replace.h"

@@ -23,13 +23,13 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_REST_MRS_SRC_HELPER_MAKE_SHARED_PTR_H_
-#define ROUTER_SRC_REST_MRS_SRC_HELPER_MAKE_SHARED_PTR_H_
+#ifndef MYSQL_HARNESS_MAKE_SHARED_PTR_INCLUDED
+#define MYSQL_HARNESS_MAKE_SHARED_PTR_INCLUDED
 
 #include <memory>
 #include <utility>
 
-namespace helper {
+namespace mysql_harness {
 
 template <typename T>
 class MakeSharedPtr {
@@ -69,6 +69,6 @@ class MakeSharedPtr {
   shared_ptr ptr;
 };
 
-}  // namespace helper
+}  // namespace mysql_harness
 
-#endif  // ROUTER_SRC_REST_MRS_SRC_HELPER_MAKE_SHARED_PTR_H_
+#endif  // MYSQL_HARNESS_MAKE_SHARED_PTR_INCLUDED

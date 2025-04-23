@@ -27,9 +27,9 @@
 #include <gtest/gtest.h>
 #include <vector>
 
-#include "helper/make_shared_ptr.h"
 #include "mrs/database/entry/entry.h"
 #include "mrs/database/query_rest_sp.h"
+#include "mysql/harness/make_shared_ptr.h"
 #include "test_mrs_object_utils.h"
 
 #include "mock/mock_json_template_factory.h"
@@ -79,7 +79,7 @@ class QueryRestSpTests : public Test {
   const std::string kUrl{"host/srv/sch/obj"};
   StrictMock<MockMySQLSession> mock_session_;
   InjectMockJsonTemplateFactory json_template_;
-  helper::MakeSharedPtr<QueryRestSpUnderTest> sut_{&json_template_};
+  mysql_harness::MakeSharedPtr<QueryRestSpUnderTest> sut_{&json_template_};
 };
 
 MATCHER_P2(MatchFields, fields, s, "") {
