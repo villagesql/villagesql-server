@@ -6993,6 +6993,10 @@ bool open_tables_for_query(THD *thd, Table_ref *tables, uint flags) {
                                     OPTION_NO_SUBQUERY_DURING_OPTIMIZATION);
   }
 
+  thd->lex->set_using_secondary_engine(
+      thd->secondary_engine_optimization() ==
+      Secondary_engine_optimization::SECONDARY);
+
   return false;
 end:
   /*

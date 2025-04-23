@@ -731,6 +731,7 @@ bool Sql_cmd_dml::execute(THD *thd) {
       privileges for it.
     */
     cleanup(thd);
+    const bool prepared_for_secondary_engine = lex->using_secondary_engine();
     if (open_tables_for_query(thd, lex->query_tables, 0)) goto err;
 #ifndef NDEBUG
     if (sql_command_code() == SQLCOM_SELECT)
@@ -740,11 +741,16 @@ bool Sql_cmd_dml::execute(THD *thd) {
     const bool need_hypergraph_optimizer =
         thd->optimizer_switch_flag(OPTIMIZER_SWITCH_HYPERGRAPH_OPTIMIZER);
 
-    if (need_hypergraph_optimizer != lex->using_hypergraph_optimizer() &&
+    // If the query was prepared for execution on a different engine than the
+    // engine chosen at execution, or the query was prepared for a different
+    // optimizer, it must be reprepared.
+    if ((prepared_for_secondary_engine != lex->using_secondary_engine() ||
+         need_hypergraph_optimizer != lex->using_hypergraph_optimizer()) &&
         ask_to_reprepare(thd)) {
       goto err;
     }
     assert(need_hypergraph_optimizer == lex->using_hypergraph_optimizer());
+    assert(prepared_for_secondary_engine == lex->using_secondary_engine());
 
     // Bind table and field information
     if (restore_cmd_properties(thd)) goto err;

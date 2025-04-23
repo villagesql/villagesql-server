@@ -4054,6 +4054,17 @@ struct LEX : public Query_tables_list {
     m_using_hypergraph_optimizer = use_hypergraph;
   }
 
+  /**
+    Returns true if the statement is executed on a secondary engine. The flag is
+    set when the query tables are opened and keeps its value until the beginning
+    of the next execution.
+   */
+  bool using_secondary_engine() const { return m_using_secondary_engine; }
+
+  void set_using_secondary_engine(bool flag) {
+    m_using_secondary_engine = flag;
+  }
+
   /// RAII class to set state \c m_splitting_window_expression for a scope
   class Splitting_window_expression {
    private:
@@ -4079,6 +4090,7 @@ struct LEX : public Query_tables_list {
 
  private:
   bool m_using_hypergraph_optimizer{false};
+  bool m_using_secondary_engine{false};
 
  public:
   LEX_STRING name;

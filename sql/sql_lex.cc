@@ -462,6 +462,7 @@ void LEX::reset() {
   explain_format = nullptr;
   is_explain_analyze = false;
   set_using_hypergraph_optimizer(false);
+  m_using_secondary_engine = false;
   is_lex_started = true;
   reset_replica_info.all = false;
   mi.channel = nullptr;
