@@ -10242,7 +10242,7 @@ ER_LH_AVRO_FILE_DATA_CORRUPT
   eng "File %.*s: File data might be corrupt."
 
 ER_LH_AVRO_INVALID_UNION
-  eng "Column %d in %s: Invalid union encountered. Unions are only supported to represent nullable columns. One of the two types of the union must be null."
+  eng "Column %d in %s: Invalid Avro union encountered. Unions are only supported to represent nullable columns. One of the two types of the union must be null."
 
 ER_LH_AVRO_INVALID_BLOCK_SIZE
   eng "File %.*s: Invalid avro block size."
@@ -10559,6 +10559,9 @@ ER_LH_WARN_INFER_USE_DEFAULT_DELIMITERS
 
 ER_LIBRARY_INVALID
         eng "The routine '%-.192s' references a missing library '%-.192s.%-.192s' or definer/invoker of the routine lack rights to use it."
+
+ER_LH_AVRO_INVALID_RECORD
+  eng "Column %d in %s: Invalid Avro record encountered. Nested records are not supported."
 
 #
 #  End of 9.x error messages (server-to-client).
