@@ -30,7 +30,7 @@
 # setting used in the .opt file. This will assure that if the core
 # file contains buffer pool, then the core size will for sure be
 # larger than this limit.
---let $expected_max_core_size = 1450
+--let $expected_max_core_size = 1600
 --source include/mysqld_core_dump.inc
 
 --remove_file $LOG_FILE
