@@ -6669,6 +6669,7 @@ AccessPath MakeSortPathWithoutFilesort(THD *thd, AccessPath *child,
   sort_path.sort().limit = HA_POS_ERROR;
   sort_path.sort().force_sort_rowids = false;
   sort_path.has_group_skip_scan = child->has_group_skip_scan;
+  sort_path.count_examined_rows = true;
   EstimateSortCost(thd, &sort_path);
   return sort_path;
 }
@@ -7782,6 +7783,7 @@ AccessPath ApplyDistinctParameters::MakeSortPathForDistinct(
   sort_path.sort().limit = HA_POS_ERROR;
   sort_path.sort().force_sort_rowids = false;
   sort_path.has_group_skip_scan = root_path->has_group_skip_scan;
+  sort_path.count_examined_rows = true;
 
   if (aggregation_is_unordered) {
     // Even though we create a sort node for the distinct operation,
@@ -8052,6 +8054,7 @@ AccessPathArray ApplyOrderBy(THD *thd, const CostingReceiver &receiver,
           push_limit_to_filesort ? limit_rows : HA_POS_ERROR;
       sort_path->sort().order = join->order.order;
       sort_path->has_group_skip_scan = root_path->has_group_skip_scan;
+      sort_path->count_examined_rows = true;
       EstimateSortCost(thd, sort_path);
       root_path = sort_path;
     }
@@ -8902,6 +8905,7 @@ bool ApplyAggregation(
       sort_path->sort().force_sort_rowids = false;
       sort_path->sort().order = sort_ahead_ordering.order;
       sort_path->has_group_skip_scan = root_path->has_group_skip_scan;
+      sort_path->count_examined_rows = true;
       EstimateSortCost(thd, sort_path);
       assert(!aggregation_is_unordered);
       sort_path->ordering_state = ordering_state;
