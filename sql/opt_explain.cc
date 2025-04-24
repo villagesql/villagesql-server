@@ -2294,6 +2294,7 @@ bool explain_query(THD *explain_thd, const THD *query_thd,
       my_error(ER_NOT_SUPPORTED_YET, MYF(0),
                "EXPLAIN ANALYZE with TRADITIONAL format");
     }
+    return true;
   }
 
   // Non-iterator-based formats are not supported with the hypergraph
