@@ -2772,6 +2772,31 @@ static bool row_upd_check_autoinc_counter(const upd_node_t *node, mtr_t *mtr) {
   return persist_autoinc;
 }
 
+void upd_t::append(const upd_field_t &field) {
+  if (static_cast<size_t>(n_fields) < n_capacity) {
+    fields[n_fields++] = field;
+    return;
+  }
+
+  /*
+    Extend the fields array to accommodate new field. Size is doubled due to the
+    following reasons::
+    1. We want to avoid frequent memory reallocations
+    2. We cannot allocate lot of space upfront as upd_create is called in
+    frequent code path, and append is called rarely
+  */
+  n_capacity = n_capacity * 2;
+  upd_field_t *temp_fields = static_cast<upd_field_t *>(
+      mem_heap_zalloc(heap, sizeof(upd_field_t) * n_capacity));
+  ut_ad(temp_fields);
+
+  memcpy(temp_fields, fields, sizeof(upd_field_t) * n_fields);
+  temp_fields[n_fields++] = field;
+
+  /* Fields array is allocated on heap and will be freed with the heap */
+  fields = temp_fields;
+}
+
 /** Updates a clustered index record of a row when the ordering fields do
  not change.
  @param[in]      flags         undo logging and locking flags
