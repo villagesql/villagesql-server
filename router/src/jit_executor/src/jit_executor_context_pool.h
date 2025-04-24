@@ -26,6 +26,7 @@
 #ifndef ROUTER_SRC_JIT_EXECUTOR_INCLUDE_MYSQLROUTER_JIT_EXECUTOR_CONTEXT_POOL_H_
 #define ROUTER_SRC_JIT_EXECUTOR_INCLUDE_MYSQLROUTER_JIT_EXECUTOR_CONTEXT_POOL_H_
 
+#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <functional>
@@ -87,6 +88,8 @@ class ContextPool final {
   std::deque<IContext *> m_items;
   size_t m_active_items = 0;
   size_t m_created_items = 0;
+
+  std::atomic_bool m_forbid_context_creation = false;
 };
 
 /**

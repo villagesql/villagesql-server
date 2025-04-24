@@ -29,6 +29,7 @@
 #include "utils/polyglot_api_clean.h"
 
 #include <memory>
+#include <optional>
 
 #include "languages/polyglot_garbage_collector.h"
 #include "native_wrappers/polyglot_collectable.h"
@@ -37,6 +38,13 @@
 
 namespace shcore {
 namespace polyglot {
+
+struct IsolateArgs {
+ public:
+  std::optional<uint64_t> min_heap_size;
+  std::optional<uint64_t> max_heap_size;
+  std::optional<uint64_t> max_new_size;
+};
 
 /**
  * Common context for GraalVM Languages
@@ -59,7 +67,7 @@ class Polyglot_common_context {
   Polyglot_common_context() = default;
   virtual ~Polyglot_common_context() = default;
 
-  virtual void initialize(const std::vector<std::string> &isolate_args);
+  virtual void initialize(const IsolateArgs &isolate_args);
   virtual void finalize();
 
   poly_reference engine() const { return m_engine.get(); }

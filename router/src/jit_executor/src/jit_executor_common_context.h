@@ -50,10 +50,10 @@ class CommonContext : public shcore::polyglot::Polyglot_common_context {
   CommonContext(const std::shared_ptr<shcore::polyglot::IFile_system> &fs,
                 const std::vector<std::string> &module_files,
                 const shcore::Dictionary_t &globals,
-                const std::vector<std::string> &isolate_args);
+                const shcore::polyglot::IsolateArgs &isolate_args);
   ~CommonContext() override;
 
-  void initialize(const std::vector<std::string> &isolate_args) override;
+  void initialize(const shcore::polyglot::IsolateArgs &isolate_args) override;
   void finalize() override;
   bool start();
   bool got_fatal_error() const { return m_fatal_error; }
@@ -107,7 +107,7 @@ class CommonContext : public shcore::polyglot::Polyglot_common_context {
   static bool m_global_fatal_error;
   std::atomic_bool m_fatal_error = false;
   std::string m_fatal_error_description;
-  std::vector<std::string> m_isolate_args;
+  shcore::polyglot::IsolateArgs m_isolate_args;
 };
 
 }  // namespace jit_executor

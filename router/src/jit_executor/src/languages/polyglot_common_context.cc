@@ -37,18 +37,42 @@
 namespace shcore {
 namespace polyglot {
 
-void Polyglot_common_context::initialize(
-    const std::vector<std::string> &isolate_args) {
-  if (!isolate_args.empty()) {
+namespace {
+std::vector<std::string> format_isolate_args(const IsolateArgs &args) {
+  std::vector<std::string> str_isolate_args;
+
+  if (args.min_heap_size.has_value()) {
+    str_isolate_args.push_back("-Xms" + std::to_string(*args.min_heap_size) +
+                               "m");
+  }
+
+  if (args.max_heap_size.has_value()) {
+    str_isolate_args.push_back("-Xmx" + std::to_string(*args.max_heap_size) +
+                               "m");
+  }
+
+  if (args.max_new_size.has_value()) {
+    str_isolate_args.push_back("-Xmn" + std::to_string(*args.max_new_size) +
+                               "m");
+  }
+
+  return str_isolate_args;
+}
+}  // namespace
+
+void Polyglot_common_context::initialize(const IsolateArgs &isolate_args) {
+  auto str_isolate_args = format_isolate_args(isolate_args);
+
+  if (!str_isolate_args.empty()) {
     std::vector<char *> raw_isolate_args = {nullptr};
-    for (const auto &arg : isolate_args) {
+    for (const auto &arg : str_isolate_args) {
       raw_isolate_args.push_back(const_cast<char *>(arg.data()));
     }
 
     auto params = raw_isolate_args.data();
     poly_isolate_params isolate_params;
-    if (poly_ok != poly_set_isolate_params(&isolate_params,
-                                           isolate_args.size() + 1, params)) {
+    if (poly_ok != poly_set_isolate_params(
+                       &isolate_params, str_isolate_args.size() + 1, params)) {
       throw Polyglot_generic_error("Error creating polyglot isolate params");
     }
 
@@ -57,7 +81,7 @@ void Polyglot_common_context::initialize(
         rc != poly_ok) {
       throw Polyglot_generic_error(
           shcore::str_format("Error creating polyglot isolate: %d (%s)", rc,
-                             shcore::str_join(isolate_args, " ").c_str()));
+                             shcore::str_join(str_isolate_args, " ").c_str()));
     }
   } else {
     if (const auto rc = poly_create_isolate(NULL, &m_isolate, &m_thread);
@@ -82,6 +106,13 @@ void Polyglot_common_context::initialize(
   // context.
   init_engine();
 
+#ifdef _WIN32
+  // The performance monitoring is not available in windows
+  // so we take the configured max heap size
+  if (isolate_args.max_heap_size.has_value()) {
+    m_max_heap_size = *isolate_args.max_heap_size;
+  }
+#else
   // Registers long constant address to be able to poll the garbage collector
   // status.
   std::string heap_status_key = "com.oracle.svm.gcInProgress";
@@ -126,9 +157,11 @@ void Polyglot_common_context::initialize(
       }
     }
   }
+#endif
 }
 
 double Polyglot_common_context::get_heap_usage_percent() {
+#ifndef _WIN32
   auto used =
       std::accumulate(m_generation_used.cbegin(), m_generation_used.cend(),
                       uint64_t{0}, [](auto a, const auto generation) {
@@ -136,6 +169,9 @@ double Polyglot_common_context::get_heap_usage_percent() {
                       });
 
   return (100.0 * used) / m_max_heap_size;
+#else
+  return 0.0;
+#endif
 }
 
 std::string Polyglot_common_context::get_gc_status() {
