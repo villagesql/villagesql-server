@@ -3033,8 +3033,6 @@ func_exit:
 
   index = node->table->first_index();
 
-  auto referenced = row_upd_index_is_referenced(index);
-
   pcur = node->pcur;
 
   /* We have to restore the cursor to its position */
@@ -3107,7 +3105,7 @@ func_exit:
 
   if (node->is_delete) {
     err = row_upd_del_mark_clust_rec(flags, node, index, offsets, thr,
-                                     referenced, &mtr);
+                                     row_upd_index_is_referenced(index), &mtr);
 
     if (err == DB_SUCCESS) {
       node->state = UPD_NODE_UPDATE_ALL_SEC;
@@ -3148,8 +3146,8 @@ func_exit:
     choosing records to update. MySQL solves now the problem
     externally! */
 
-    err =
-        row_upd_clust_rec_by_insert(flags, node, index, thr, referenced, &mtr);
+    err = row_upd_clust_rec_by_insert(flags, node, index, thr,
+                                      row_upd_index_is_referenced(index), &mtr);
 
     if (err != DB_SUCCESS) {
       goto exit_func;
