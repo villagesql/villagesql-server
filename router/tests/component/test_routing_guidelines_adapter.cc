@@ -534,7 +534,7 @@ TEST_F(RoutingGuidelinesAdapterTest, SecondaryModeNoFallback) {
                 }
             ])_");
 
-  SCOPED_TRACE("There is no fallback, connection should fail")
+  SCOPED_TRACE("There is no fallback, connection should fail");
   ASSERT_FALSE(make_new_connection(router_port));
 }
 
