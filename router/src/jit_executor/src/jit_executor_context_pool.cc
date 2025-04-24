@@ -87,7 +87,8 @@ void ContextPool::release_thread() {
 }
 
 bool ContextPool::can_create() {
-  return m_common_context->get_heap_usage_percent() < 95;
+  return !m_forbid_context_creation &&
+         m_common_context->get_heap_usage_percent() < 95;
 }
 
 IContext *ContextPool::create(size_t id) {
@@ -151,9 +152,13 @@ IContext *ContextPool::get() {
     increase_active_items();
     return item;
   } catch (...) {
-    // An initialization failure would raise this exception, no action is
-    // needed
-    return {};
+    // An initialization failure would raise this exception, not seen in Linux
+    // as creation is done only when heap is above 95%, otoh in windows, the
+    // heap monitoring is not available and the creation is done in the pool, so
+    // we need to handle this case, so when this point is reached, no new
+    // context is created and existing ones are reused
+    m_forbid_context_creation = true;
+    return get();
   }
 }
 
