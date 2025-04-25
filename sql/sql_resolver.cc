@@ -806,17 +806,22 @@ bool Query_block::apply_local_transforms(THD *thd, bool prune) {
   DBUG_TRACE;
 
   assert(first_execution);
-
+  assert(thd->lex->current_query_block() == this);
   /*
     If query block contains one or more merged derived tables/views,
     walk through lists of columns in select lists and remove unused columns.
   */
-  if (derived_table_count) delete_unused_merged_columns(&m_table_nest);
-
+  if (derived_table_count != 0) {
+    delete_unused_merged_columns(&m_table_nest);
+  }
   for (Query_expression *unit = first_inner_query_expression(); unit;
-       unit = unit->next_query_expression())
-    for (auto qt : unit->query_terms<>())
+       unit = unit->next_query_expression()) {
+    for (auto qt : unit->query_terms<>()) {
+      thd->lex->set_current_query_block(qt->query_block());
       if (qt->query_block()->apply_local_transforms(thd, true)) return true;
+    }
+  }
+  thd->lex->set_current_query_block(this);
 
   // Convert all outer joins to inner joins if possible
   if (simplify_joins(thd, &m_table_nest, true, false, &m_where_cond))
