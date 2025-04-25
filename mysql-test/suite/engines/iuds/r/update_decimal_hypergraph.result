@@ -52,7 +52,7 @@ c1	c2
 99999.99999	99999.99999
 UPDATE t1 SET c1=c2+c3 WHERE c3 < 10000;
 Warnings:
-Warning	1264	Out of range value for column 'c1' at row 8
+Warning	1264	Out of range value for column 'c1' at row 3
 SELECT * FROM t1;
 c1	c2	c3	c4
 0.00000	-0.10000	0	8
@@ -106,10 +106,10 @@ c1	c2	c3	c4
 99999.99999	99999.99999	111111111	9
 UPDATE t1 SET c1=-1.0e+2 WHERE c4=2;
 Warnings:
-Warning	1264	Out of range value for column 'c1' at row 2
+Warning	1264	Out of range value for column 'c1' at row 1
 SHOW WARNINGS;
 Level	Code	Message
-Warning	1264	Out of range value for column 'c1' at row 2
+Warning	1264	Out of range value for column 'c1' at row 1
 SELECT * FROM t1;
 c1	c2	c3	c4
 0.00000	-0.10000	0	8
@@ -124,10 +124,10 @@ c1	c2	c3	c4
 99999.99999	99999.99999	111111111	9
 UPDATE t1 SET c1=1.0e+20 WHERE c4=2;
 Warnings:
-Warning	1264	Out of range value for column 'c1' at row 2
+Warning	1264	Out of range value for column 'c1' at row 1
 SHOW WARNINGS;
 Level	Code	Message
-Warning	1264	Out of range value for column 'c1' at row 2
+Warning	1264	Out of range value for column 'c1' at row 1
 SELECT * FROM t1;
 c1	c2	c3	c4
 0.00000	-0.10000	0	8
@@ -172,7 +172,7 @@ c1	c2	c3	c4
 99999.99999	99999.99999	111111111	9
 UPDATE t1 SET c1=99999.999999 WHERE c4=7;
 Warnings:
-Warning	1264	Out of range value for column 'c1' at row 7
+Warning	1264	Out of range value for column 'c1' at row 1
 SELECT c1,c4 FROM t1;
 c1	c4
 0.00000	6
@@ -352,7 +352,7 @@ c3
 9999999999
 UPDATE t1 SET c2="1 e 1" WHERE c4=2;
 Warnings:
-Note	1265	Data truncated for column 'c2' at row 2
+Note	1265	Data truncated for column 'c2' at row 1
 SELECT c2 FROM t1;
 c2
 -100.00000
@@ -441,7 +441,7 @@ c1	c2
 11111.00000	-10000.00000
 UPDATE t1 SET c1=c2+c3 WHERE c3 < 10000;
 Warnings:
-Warning	1264	Out of range value for column 'c1' at row 8
+Warning	1264	Out of range value for column 'c1' at row 3
 SELECT * FROM t1;
 c1	c2	c3	c4
 0.00000	-0.10000	-0.1	8
@@ -495,10 +495,10 @@ c1	c2	c3	c4
 2.00000	1.00000	1	7
 UPDATE t1 SET c1=-1.0e+2 WHERE c4=2;
 Warnings:
-Warning	1264	Out of range value for column 'c1' at row 2
+Warning	1264	Out of range value for column 'c1' at row 1
 SHOW WARNINGS;
 Level	Code	Message
-Warning	1264	Out of range value for column 'c1' at row 2
+Warning	1264	Out of range value for column 'c1' at row 1
 SELECT * FROM t1;
 c1	c2	c3	c4
 0.00000	-0.10000	-0.1	8
@@ -513,10 +513,10 @@ c1	c2	c3	c4
 2.00000	1.00000	1	7
 UPDATE t1 SET c1=1.0e+20 WHERE c4=2;
 Warnings:
-Warning	1264	Out of range value for column 'c1' at row 2
+Warning	1264	Out of range value for column 'c1' at row 1
 SHOW WARNINGS;
 Level	Code	Message
-Warning	1264	Out of range value for column 'c1' at row 2
+Warning	1264	Out of range value for column 'c1' at row 1
 SELECT * FROM t1;
 c1	c2	c3	c4
 0.00000	-0.10000	-0.1	8
@@ -560,7 +560,7 @@ c1	c2	c3	c4
 10001.00000	NULL	1234570000	4
 UPDATE t1 SET c1=99999.999999 WHERE c4=7;
 Warnings:
-Warning	1264	Out of range value for column 'c1' at row 7
+Warning	1264	Out of range value for column 'c1' at row 1
 SELECT c1,c4 FROM t1;
 c1	c4
 0.00000	6
@@ -752,7 +752,7 @@ c3
 8888890000
 UPDATE t1 SET c2="1 e 1" WHERE c4=2;
 Warnings:
-Warning	1366	Incorrect FLOAT value: '1 e 1' for column 'c2' at row 2
+Warning	1366	Incorrect FLOAT value: '1 e 1' for column 'c2' at row 1
 SELECT c2 FROM t1;
 c2
 -100.00000
@@ -841,7 +841,7 @@ c1	c2
 99999.99999	99999.99999
 UPDATE t1 SET c1=c2+c3 WHERE c3 < 10000;
 Warnings:
-Warning	1264	Out of range value for column 'c1' at row 8
+Warning	1264	Out of range value for column 'c1' at row 4
 SELECT * FROM t1;
 c1	c2	c3	c4
 0.00000	-0.10000	-0.1	8
@@ -895,10 +895,10 @@ c1	c2	c3	c4
 99999.99999	99999.99999	111111111.11	9
 UPDATE t1 SET c1=-1.0e+2 WHERE c4=2;
 Warnings:
-Warning	1264	Out of range value for column 'c1' at row 2
+Warning	1264	Out of range value for column 'c1' at row 1
 SHOW WARNINGS;
 Level	Code	Message
-Warning	1264	Out of range value for column 'c1' at row 2
+Warning	1264	Out of range value for column 'c1' at row 1
 SELECT * FROM t1;
 c1	c2	c3	c4
 0.00000	-0.10000	-0.1	8
@@ -913,10 +913,10 @@ c1	c2	c3	c4
 99999.99999	99999.99999	111111111.11	9
 UPDATE t1 SET c1=1.0e+20 WHERE c4=2;
 Warnings:
-Warning	1264	Out of range value for column 'c1' at row 2
+Warning	1264	Out of range value for column 'c1' at row 1
 SHOW WARNINGS;
 Level	Code	Message
-Warning	1264	Out of range value for column 'c1' at row 2
+Warning	1264	Out of range value for column 'c1' at row 1
 SELECT * FROM t1;
 c1	c2	c3	c4
 0.00000	-0.10000	-0.1	8
@@ -961,7 +961,7 @@ c1	c2	c3	c4
 99999.99999	99999.99999	111111111.11	9
 UPDATE t1 SET c1=99999.999999 WHERE c4=7;
 Warnings:
-Warning	1264	Out of range value for column 'c1' at row 7
+Warning	1264	Out of range value for column 'c1' at row 1
 SELECT c1,c4 FROM t1;
 c1	c4
 0.00000	6
@@ -1151,7 +1151,7 @@ c3
 9999999999
 UPDATE t1 SET c2="1 e 1" WHERE c4=2;
 Warnings:
-Warning	1366	Incorrect DOUBLE value: '1 e 1' for column 'c2' at row 2
+Warning	1366	Incorrect DOUBLE value: '1 e 1' for column 'c2' at row 1
 SELECT c2 FROM t1;
 c2
 -100.00000
