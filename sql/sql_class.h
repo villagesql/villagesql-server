@@ -4864,6 +4864,7 @@ class THD : public MDL_context_owner,
 
   Event_reference_caching_cache *events_cache_{nullptr};
   Event_tracking_data_stack event_tracking_data_;
+  bool audit_plugins_present;
 
  public:
   /// Flag indicating whether this session incremented the number of sessions

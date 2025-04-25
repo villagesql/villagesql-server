@@ -647,7 +647,6 @@ SET(SQL_SHARED_SOURCES
   reference_caching_setup.cc
   sql_event_tracking_to_audit_event_mapping.cc
   command_mapping.cc
-  srv_event_plugin_handles.cc
   )
 
 IF(BUILD_IS_SINGLE_CONFIG)

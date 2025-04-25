@@ -881,7 +881,6 @@ MySQL clients support the protocol:
 #include "sql/sql_show.h"
 #include "sql/sql_table.h"  // build_table_filename
 #include "sql/sql_udf.h"
-#include "sql/srv_event_plugin_handles.h"
 #include "sql/ssl_acceptor_context_iterator.h"
 #include "sql/ssl_acceptor_context_operator.h"
 #include "sql/ssl_acceptor_context_status.h"
@@ -2816,7 +2815,6 @@ static void clean_up(bool print_message) {
   if (!opt_noacl) udf_unload_udfs();
   table_def_start_shutdown();
   delegates_shutdown();
-  srv_event_release_plugin_handles();
   plugin_shutdown();
   // needs to be done after plugin shutdown, since plugins can still
   // hold references to the service
@@ -2880,6 +2878,7 @@ static void clean_up(bool print_message) {
   deinitialize_manifest_file_components();
   if (g_event_channels != nullptr) delete g_event_channels;
   g_event_channels = nullptr;
+  deinit_srv_event_tracking_handles();
   Singleton_event_tracking_service_to_plugin_mapping::remove_instance();
   component_infrastructure_deinit(print_message);
   /*
@@ -8054,6 +8053,7 @@ static int init_server_components() {
     dynamic_loader_srv->load(component_urns, NUMBER_OF_COMPONENTS);
     g_event_channels = Event_reference_caching_channels::create();
   }
+  init_srv_event_tracking_handles();
 
   auto instance =
       Singleton_event_tracking_service_to_plugin_mapping::create_instance();
@@ -8521,14 +8521,6 @@ static int init_server_components() {
 
       if (!opt_validate_config)
         LogErr(ERROR_LEVEL, ER_CANT_INITIALIZE_DYNAMIC_PLUGINS);
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    }
-    /*
-     This call needs to stay after the plugins are initialized but before the
-     components are loaded. The idea is to catch all of the services registered
-     by the server component itself (core and plugins).
-    */
-    if (srv_event_acquire_plugin_handles()) {
       unireg_abort(MYSQLD_ABORT_EXIT);
     }
     if (!opt_initialize)

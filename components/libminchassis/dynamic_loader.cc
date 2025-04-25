@@ -838,7 +838,7 @@ bool mysql_dynamic_loader_imp::load_do_register_services(
   std::vector<const char *> registered_services;
   auto guard = create_scope_guard([&registered_services]() {
     for (const char *service_name : registered_services) {
-      mysql_registry_imp::unregister(service_name);
+      mysql_registry_imp::unregister_sans_notify(service_name);
     }
   });
 
@@ -848,7 +848,7 @@ bool mysql_dynamic_loader_imp::load_do_register_services(
     /* Register all services from component. */
     for (const mysql_service_ref_t *implementation_it :
          loaded_component->get_provided_services()) {
-      if (mysql_registry_imp::register_service(
+      if (mysql_registry_imp::register_service_sans_notify(
               implementation_it->name,
               reinterpret_cast<my_h_service>(
                   implementation_it->implementation))) {

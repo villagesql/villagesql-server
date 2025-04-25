@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#include <mysql/components/services/dynamic_loader_service_notification.h>
 #include "component_common.h"
 #include "registry_imp.h"
 
@@ -162,20 +163,8 @@ DEFINE_BOOL_METHOD(mysql_registry_imp::release, (my_h_service service)) {
   return mysql_registry_no_lock_imp::release(service);
 }
 
-/**
-  Registers a new Service Implementation. If it is the first Service
-  Implementation for the specified Service then it is made a default one.
-
-  @param service_implementation_name Name of the Service Implementation to
-    register.
-  @param ptr Pointer to the Service Implementation structure.
-  @return Status of performed operation
-  @retval false success
-  @retval true failure
-*/
-DEFINE_BOOL_METHOD(mysql_registry_imp::register_service,
-                   (const char *service_implementation_name,
-                    my_h_service ptr)) {
+bool mysql_registry_imp::register_service_sans_notify(
+    const char *service_implementation_name, my_h_service ptr) {
   minimal_chassis::rwlock_scoped_lock const lock(
       &mysql_registry_imp::LOCK_registry, true, __FILE__, __LINE__);
 
@@ -183,24 +172,52 @@ DEFINE_BOOL_METHOD(mysql_registry_imp::register_service,
       service_implementation_name, ptr);
 }
 
-/**
-  Removes previously registered Service Implementation from registry. If it is
-  the default one for specified Service then any one still registered is made
-  default. If there is no other, the default entry is removed from the
-  Registry too.
+DEFINE_BOOL_METHOD(mysql_registry_imp::register_service,
+                   (const char *service_implementation_name,
+                    my_h_service ptr)) {
+  bool ret = mysql_registry_imp::register_service_sans_notify(
+      service_implementation_name, ptr);
 
-  @param service_implementation_name Name of the Service Implementation to
-    unregister.
-  @return Status of performed operation
-  @retval false success
-  @retval true Failure. May happen when Service is still being referenced.
-*/
-DEFINE_BOOL_METHOD(mysql_registry_imp::unregister,
-                   (const char *service_implementation_name)) {
+  if (!ret) {
+    /* notify about the new service, if registered */
+    my_h_service hsvc = nullptr;
+    if (0 == mysql_registry_imp::acquire(
+                 "dynamic_loader_services_loaded_notification", &hsvc) &&
+        hsvc != nullptr) {
+      reinterpret_cast<SERVICE_TYPE(
+          dynamic_loader_services_loaded_notification) *>(hsvc)
+          ->notify(&service_implementation_name, 1);
+      mysql_registry_imp::release(hsvc);
+    }
+  }
+  return ret;
+}
+
+bool mysql_registry_imp::unregister_sans_notify(
+    const char *service_implementation_name) {
   minimal_chassis::rwlock_scoped_lock const lock(
       &mysql_registry_imp::LOCK_registry, true, __FILE__, __LINE__);
 
   return mysql_registry_no_lock_imp::unregister(service_implementation_name);
+}
+
+DEFINE_BOOL_METHOD(mysql_registry_imp::unregister,
+                   (const char *service_implementation_name)) {
+  /* notify about the service being removed */
+  {
+    my_h_service hsvc = nullptr;
+    if (0 == mysql_registry_imp::acquire(
+                 "dynamic_loader_services_unload_notification", &hsvc) &&
+        hsvc != nullptr) {
+      reinterpret_cast<SERVICE_TYPE(
+          dynamic_loader_services_unload_notification) *>(hsvc)
+          ->notify(&service_implementation_name, 1);
+      mysql_registry_imp::release(hsvc);
+    }
+  }
+
+  return mysql_registry_imp::unregister_sans_notify(
+      service_implementation_name);
 }
 
 /**
