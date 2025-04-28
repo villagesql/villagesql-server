@@ -2007,6 +2007,7 @@ struct Purge_groups_t {
   void assign(que_thr_t **thrs) {
     const std::size_t n_purge_threads = m_groups.size();
     for (std::size_t grpid = 0; grpid < n_purge_threads; ++grpid) {
+      ut_ad(thrs[grpid] != nullptr);
       purge_node_t *node = static_cast<purge_node_t *>(thrs[grpid]->child);
       ut_a(que_node_get_type(node) == QUE_NODE_PURGE);
       ut_ad(node->recs == nullptr);

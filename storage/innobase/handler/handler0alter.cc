@@ -9614,6 +9614,7 @@ bool alter_part_factory::create_for_reorg(alter_part_array &to_drop,
 
       case PART_NORMAL:
 
+        ut_ad(old_part_elem != nullptr);
         ut_ad(strcmp(part_elem->partition_name,
                      old_part_elem->partition_name) == 0);
 

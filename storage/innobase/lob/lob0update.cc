@@ -100,6 +100,7 @@ dberr_t update(InsertContext &ctx, trx_t *trx, dict_index_t *index,
   dberr_t err = DB_SUCCESS;
   mtr_t *mtr = ctx.get_mtr();
   const undo_no_t undo_no = (trx == nullptr ? 0 : trx->undo_no - 1);
+  const trx_id_t trxid = (trx == nullptr ? 0 : trx->id);
 
   const Binary_diff_vector *bdiff_vector =
       upd->get_binary_diff_by_field_no(field_no);
@@ -127,7 +128,7 @@ dberr_t update(InsertContext &ctx, trx_t *trx, dict_index_t *index,
 
   first_page_t first_page(mtr, index);
   first_page.load_x(first_page_id, page_size);
-  first_page.set_last_trx_id(trx->id);
+  first_page.set_last_trx_id(trxid);
   first_page.set_last_trx_undo_no(undo_no);
   uint32_t lob_version = 0;
 

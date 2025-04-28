@@ -1134,6 +1134,7 @@ void fts_cache_node_add_positions(
   ptr_start = ptr;
 
   /* Encode the new fragment. */
+  ut_ad(ptr != nullptr);
   ptr += fts_encode_int(doc_id_delta, ptr);
 
   last_pos = 0;
@@ -2528,7 +2529,9 @@ static fts_trx_table_t *fts_trx_table_create(
   ftt = static_cast<fts_trx_table_t *>(
       mem_heap_alloc(fts_trx->heap, sizeof(*ftt)));
 
-  if (ftt != nullptr) memset(ftt, 0x0, sizeof(*ftt));
+  ut_a(ftt);
+
+  memset(ftt, 0x0, sizeof(*ftt));
 
   ftt->table = table;
   ftt->fts_trx = fts_trx;

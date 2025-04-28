@@ -817,6 +817,7 @@ static void fts_query_intersect_doc_id(
 
         query->total_size += RANKING_WORDS_INIT_LEN;
       } else {
+        ut_ad(ranking != nullptr);
         /* Note that the intersection has taken
         ownership of the ranking data. */
         ranking->words = nullptr;
@@ -1086,7 +1087,7 @@ static ulint fts_cache_find_wildcard(
   }
 
   /* The size can't increase. */
-  ut_a(rbt_size(query->doc_ids) <= n_doc_ids);
+  ut_a(!query->doc_ids || rbt_size(query->doc_ids) <= n_doc_ids);
 
   return (query->error);
 }

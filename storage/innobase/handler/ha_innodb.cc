@@ -18654,9 +18654,11 @@ int ha_innobase::extra(enum ha_extra_function operation)
       m_prebuilt->no_read_locking = true;
       break;
     case HA_EXTRA_BEGIN_ALTER_COPY:
+      ut_ad(m_prebuilt->table != nullptr);
       m_prebuilt->table->skip_alter_undo = 1;
       break;
     case HA_EXTRA_END_ALTER_COPY:
+      ut_ad(m_prebuilt->table != nullptr);
       alter_stats_rebuild(m_prebuilt->table, m_prebuilt->table->name.m_name,
                           m_user_thd);
       m_prebuilt->table->skip_alter_undo = 0;

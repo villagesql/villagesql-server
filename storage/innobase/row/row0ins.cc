@@ -3418,6 +3418,7 @@ dberr_t row_ins_index_entry_set_vals(const dict_index_t *index, dtuple_t *entry,
       ut_ad(dtuple_get_n_fields(row) == index->table->get_n_cols());
       row_field = dtuple_get_nth_v_field(row, v_col->v_pos);
     } else {
+      ut_ad(ind_field != nullptr);
       row_field = dtuple_get_nth_field(row, ind_field->col->ind);
     }
 

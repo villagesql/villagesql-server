@@ -200,7 +200,7 @@ static dberr_t z_replace(InsertContext &ctx, trx_t *trx, dict_index_t *index,
   space_id_t space_id = ref.space_id();
   const page_id_t first_page_id(space_id, first_page_no);
 
-  first_page.set_last_trx_id(trx->id);
+  first_page.set_last_trx_id(trxid);
   first_page.set_last_trx_undo_no(undo_no);
 
   ut_ad(first_page.get_page_type() == FIL_PAGE_TYPE_ZLOB_FIRST);

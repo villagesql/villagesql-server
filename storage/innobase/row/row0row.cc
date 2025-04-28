@@ -396,6 +396,7 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
   if (n_ext_cols) {
     ext_cols = static_cast<ulint *>(
         mem_heap_alloc(heap, n_ext_cols * sizeof *ext_cols));
+    ut_ad(ext_cols != nullptr);
   }
 
   /* Avoid a debug assertion in rec_offs_validate(). */
@@ -478,6 +479,7 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
 
       col = col_table->get_col(col_no);
 
+      ut_ad(n_ext_cols > 0);
       if (col->ord_part) {
         /* We will have to fetch prefixes of
         externally stored columns that are
