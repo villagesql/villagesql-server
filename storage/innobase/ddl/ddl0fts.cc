@@ -1416,7 +1416,7 @@ dberr_t FTS::Inserter::insert(Builder *builder,
       auto err = cursor.add_file(file, io_buffer_size);
 
       if (err != DB_SUCCESS) {
-        return err;
+        return func_exit(err);
       }
       total_rows += file.m_n_recs;
     }

@@ -2629,7 +2629,6 @@ static int i_s_fts_index_cache_fill_one_index(
   Field **fields;
   CHARSET_INFO *index_charset;
   const ib_rbt_node_t *rbt_node;
-  fts_string_t conv_str;
   uint dummy_errors;
   char *word_str;
 
@@ -2638,10 +2637,8 @@ static int i_s_fts_index_cache_fill_one_index(
   fields = table->field;
 
   index_charset = index_cache->charset;
-  conv_str.f_len = system_charset_info->mbmaxlen * FTS_MAX_WORD_LEN_IN_CHAR;
-  conv_str.f_str = static_cast<byte *>(
-      ut::malloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, conv_str.f_len));
-  conv_str.f_n_char = 0;
+  ut::vector<char> conv_str(
+      system_charset_info->mbmaxlen * FTS_MAX_WORD_LEN_IN_CHAR + 1);
 
   /* Go through each word in the index cache */
   for (rbt_node = rbt_first(index_cache->words); rbt_node;
@@ -2652,14 +2649,13 @@ static int i_s_fts_index_cache_fill_one_index(
 
     /* Convert word from index charset to system_charset_info */
     if (index_charset->cset != system_charset_info->cset) {
-      conv_str.f_n_char = my_convert(
-          reinterpret_cast<char *>(conv_str.f_str),
-          static_cast<uint32>(conv_str.f_len), system_charset_info,
+      const size_t f_n_char = my_convert(
+          conv_str.data(), conv_str.size() - 1, system_charset_info,
           reinterpret_cast<char *>(word->text.f_str),
           static_cast<uint32>(word->text.f_len), index_charset, &dummy_errors);
-      ut_ad(conv_str.f_n_char <= conv_str.f_len);
-      conv_str.f_str[conv_str.f_n_char] = 0;
-      word_str = reinterpret_cast<char *>(conv_str.f_str);
+      ut_a(f_n_char < conv_str.size());
+      conv_str[f_n_char] = 0;
+      word_str = conv_str.data();
     } else {
       word_str = reinterpret_cast<char *>(word->text.f_str);
     }
@@ -2707,8 +2703,6 @@ static int i_s_fts_index_cache_fill_one_index(
       }
     }
   }
-
-  ut::free(conv_str.f_str);
 
   return 0;
 }
@@ -2994,16 +2988,17 @@ static int i_s_fts_index_table_fill_one_fetch(
 
     word = static_cast<fts_word_t *>(ib_vector_get(words, i));
 
+    ut_ad(word->text.f_str[word->text.f_len] == 0);
     word->text.f_str[word->text.f_len] = 0;
 
     /* Convert word from index charset to system_charset_info */
     if (index_charset->cset != system_charset_info->cset) {
       conv_str->f_n_char = my_convert(
           reinterpret_cast<char *>(conv_str->f_str),
-          static_cast<uint32>(conv_str->f_len), system_charset_info,
+          static_cast<uint32>(conv_str->f_len - 1), system_charset_info,
           reinterpret_cast<char *>(word->text.f_str),
           static_cast<uint32>(word->text.f_len), index_charset, &dummy_errors);
-      ut_ad(conv_str->f_n_char <= conv_str->f_len);
+      ut_a(conv_str->f_n_char < conv_str->f_len);
       conv_str->f_str[conv_str->f_n_char] = 0;
       word_str = reinterpret_cast<char *>(conv_str->f_str);
     } else {
@@ -3083,7 +3078,7 @@ static int i_s_fts_index_table_fill_one_index(
       ib_vector_create(ib_heap_allocator_create(heap), sizeof(fts_word_t), 256);
 
   index_charset = fts_index_get_charset(index);
-  conv_str.f_len = system_charset_info->mbmaxlen * FTS_MAX_WORD_LEN_IN_CHAR;
+  conv_str.f_len = system_charset_info->mbmaxlen * FTS_MAX_WORD_LEN_IN_CHAR + 1;
   conv_str.f_str = static_cast<byte *>(
       ut::malloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, conv_str.f_len));
   conv_str.f_n_char = 0;

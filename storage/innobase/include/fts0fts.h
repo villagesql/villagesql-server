@@ -290,7 +290,7 @@ we have to implement our own. We use UTF-16 without surrogate processing
 as our in-memory format. This typedef is a single such character. */
 typedef unsigned short ib_uc_t;
 
-/** An UTF-16 ro UTF-8 string. */
+/** An UTF-16 or UTF-8 string. */
 struct fts_string_t {
   byte *f_str;    /*!< string, not necessary terminated in
                   any way */
