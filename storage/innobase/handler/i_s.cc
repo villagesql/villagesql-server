@@ -381,19 +381,10 @@ static int field_store_index_name(
 
   ut_ad(index_name != nullptr);
   ut_ad(field->real_type() == MYSQL_TYPE_VARCHAR);
+  ut_ad(*index_name != *TEMP_INDEX_PREFIX_STR);
 
-  /* Since TEMP_INDEX_PREFIX is not a valid UTF8MB3, we need to convert
-  it to something else. */
-  if (*index_name == *TEMP_INDEX_PREFIX_STR) {
-    char buf[NAME_LEN + 1];
-    buf[0] = '?';
-    memcpy(buf + 1, index_name + 1, strlen(index_name));
-    ret =
-        field->store(buf, static_cast<uint>(strlen(buf)), system_charset_info);
-  } else {
-    ret = field->store(index_name, static_cast<uint>(strlen(index_name)),
-                       system_charset_info);
-  }
+  ret = field->store(index_name, static_cast<uint>(strlen(index_name)),
+                     system_charset_info);
 
   field->set_notnull();
 

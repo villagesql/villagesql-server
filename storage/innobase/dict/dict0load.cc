@@ -1878,14 +1878,7 @@ loading the index definition */
       field = rec_get_nth_field_old(nullptr, rec, DICT_FLD__SYS_INDEXES__NAME,
                                     &len);
 
-      if (len != UNIV_SQL_NULL &&
-          static_cast<char>(*field) ==
-              static_cast<char>(*TEMP_INDEX_PREFIX_STR)) {
-        /* Skip indexes whose name starts with
-        TEMP_INDEX_PREFIX, because they will
-        be dropped during crash recovery. */
-        goto next_rec;
-      }
+      ut_ad(!(len != UNIV_SQL_NULL && field[0] == TEMP_INDEX_PREFIX_STR[0]));
     }
 
     err_msg =
