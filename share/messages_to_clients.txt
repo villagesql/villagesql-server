@@ -10278,7 +10278,7 @@ ER_LH_PARQUET_NON_UTF8_FILE_ENC
   eng "Column %d in %s: String with non-utf8 file encoding."
 
 ER_LH_PARQUET_SCHEMA_MISMATCH
-  eng "Difference in schema among Parquet files."
+  eng "Column %d in %s: Difference in column type among Parquet files."
 
 ER_LH_PARQUET_ROW_GROUP_SIZE_EXCEEDS_MAX
   eng "File %s: Size of row group %ld is larger than maximum allowed size (%d)."
@@ -10287,7 +10287,7 @@ ER_LH_PARQUET_CANNOT_LOCATE_OFFSET
   eng "File %s: Cannot locate offset of row group %ld in metadata."
 
 ER_LH_PARQUET_TYPE_CANNOT_CONVERT
-  eng "Column %d in parquet table cannot be converted to mysql format."
+  eng "Column %d in %s: Parquet type cannot be converted to mysql %s."
 
 ER_LH_PARQUET_CANNOT_LOCATE_SCHEMA
   eng "Cannot locate schema in %s."
@@ -10799,6 +10799,12 @@ ER_EXTERNAL_TABLE_ENGINE_NOT_SPECIFIED
   eng "External storage engine is not specified"
 ER_LH_NO_FILES_FOUND_NO_SECURE_FILE_PRIV
   eng "No files found or files provided not under secure-file-priv."
+
+ER_LH_COL_NAME_MISSING
+  eng "Column %d of %s: Column name is not present in the file header or metadata."
+
+ER_LH_COL_NAME_DUPLICATE
+  eng "File %s: Duplicate column name in the file header or metadata."
 
 #
 #  End of 9.x error messages (server-to-client).
