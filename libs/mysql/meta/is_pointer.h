@@ -21,34 +21,32 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#ifndef MYSQL_META_META_H
-#define MYSQL_META_META_H
+#ifndef MYSQL_META_IS_POINTER_H
+#define MYSQL_META_IS_POINTER_H
 
 /// @file
 /// Experimental API header
 
-// Is_same_as_all<T, U, ...> is true if all the given types are the same type.
-#include "mysql/meta/is_same_as_all.h"
+#include <concepts>     // same_as
+#include <type_traits>  // is_pointer_v
 
-// Is_const_ref<T> is true if T has const and reference qualifiers.
-#include "mysql/meta/is_const_ref.h"
+/// @addtogroup GroupLibsMysqlMeta
+/// @{
 
-// Is_pointer<T> is equivalent to std::is_pointer_v<T>, but it is a concept,
-// which is sometimes needed. Is_pointer_to<T, U> is true if T is a pointer and
-// the pointed-to type is U.
-#include "mysql/meta/is_pointer.h"
+namespace mysql::meta {
 
-// Is_same_ignore_const<T, U> is true if T and U are the same or differ only in
-// const-ness.
-#include "mysql/meta/is_same_ignore_const.h"
+// Concept equivalent to std::is_pointer_v
+template <class Test>
+concept Is_pointer = std::is_pointer_v<Test>;
 
-// Is_specialization<T, U> is true if class T is a specialization of class
-// template U, where U takes type template arguments. Is_nontype_specialization
-// is the same, but works when U takes non-type template arguments.
-#include "mysql/meta/is_specialization.h"
+// True if Pointer is Element *.
+template <class Pointer, class Element>
+concept Is_pointer_to =
+    std::is_pointer_v<Pointer> && std::same_as<Pointer, Element *>;
 
-// Optional_is_same<T[, U]> is true if U is omitted or void, or T and U are the
-// same type.
-#include "mysql/meta/optional_is_same.h"
+}  // namespace mysql::meta
 
-#endif  // ifndef MYSQL_META_META_H
+// addtogroup GroupLibsMysqlMeta
+/// @}
+
+#endif  // ifndef MYSQL_META_IS_POINTER_H
