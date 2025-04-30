@@ -46,7 +46,8 @@ namespace {
 
 TcpPortPool tcp_port_pool;
 
-stdx::expected<void, std::error_code> socket_is_alive(int native_handle) {
+stdx::expected<void, std::error_code> socket_is_alive(
+    net::impl::socket::native_handle_type native_handle) {
   std::array<net::impl::poll::poll_fd, 1> fds{{{native_handle, POLLIN, 0}}};
   auto poll_res = net::impl::poll::poll(fds.data(), fds.size(),
                                         std::chrono::milliseconds(0));
