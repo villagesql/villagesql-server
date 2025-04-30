@@ -1867,20 +1867,6 @@ loading the index definition */
 
     rec = pcur.get_rec();
 
-    if ((ignore_err & DICT_ERR_IGNORE_RECOVER_LOCK) &&
-        (rec_get_n_fields_old_raw(rec) == DICT_NUM_FIELDS__SYS_INDEXES
-         /* a record for older SYS_INDEXES table
-         (missing merge_threshold column) is acceptable. */
-         ||
-         rec_get_n_fields_old_raw(rec) == DICT_NUM_FIELDS__SYS_INDEXES - 1)) {
-      const byte *field;
-      ulint len;
-      field = rec_get_nth_field_old(nullptr, rec, DICT_FLD__SYS_INDEXES__NAME,
-                                    &len);
-
-      ut_ad(!(len != UNIV_SQL_NULL && field[0] == TEMP_INDEX_PREFIX_STR[0]));
-    }
-
     err_msg =
         dict_load_index_low(buf, table->name.m_name, heap, rec, true, &index);
     ut_ad((index == nullptr && err_msg != nullptr) ||

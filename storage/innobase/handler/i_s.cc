@@ -374,14 +374,12 @@ static int field_store_index_name(
     Field *field,           /*!< in/out: target field for
                             storage */
     const char *index_name) /*!< in: NUL-terminated utf-8
-                            index name, possibly starting with
-                            TEMP_INDEX_PREFIX */
+                            index name */
 {
   int ret;
 
   ut_ad(index_name != nullptr);
   ut_ad(field->real_type() == MYSQL_TYPE_VARCHAR);
-  ut_ad(*index_name != *TEMP_INDEX_PREFIX_STR);
 
   ret = field->store(index_name, static_cast<uint>(strlen(index_name)),
                      system_charset_info);
