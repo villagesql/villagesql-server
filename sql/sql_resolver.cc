@@ -5509,6 +5509,8 @@ bool Query_block::transform_table_subquery_to_join_with_derived(
 
   assert(inner_qe->query_term()->term_type() == QT_QUERY_BLOCK);
 
+  Change_current_query_block save_query_block(thd);
+
   subq_pred->strategy = Subquery_strategy::DERIVED_TABLE;
 
   const int hidden_fields = CountHiddenFields(inner_qb->fields);
