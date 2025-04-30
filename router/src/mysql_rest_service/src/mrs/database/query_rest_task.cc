@@ -176,8 +176,10 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_procedure_call(
   query.append_preformatted(")");
 
   out_postamble->emplace_back(
-      "SET @task_result = JSON_OBJECT('taskResult', @task_result, " +
-      result.str() + ")");
+      "SET @task_result = JSON_MERGE_PATCH(JSON_OBJECT(" + result.str() +
+      "), IF(JSON_VALID(@task_result),"
+      " JSON_SET('{}', '$.taskResult', CAST(@task_result AS JSON)),"
+      " JSON_SET('{}', '$.taskResult', @task_result)))");
 
   return query;
 }
@@ -229,8 +231,7 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_function_call(
   }
 
   mysqlrouter::sqlstring wrapper{
-      "SET @task_result = JSON_OBJECT('taskResult', @task_result, "
-      "'result', (?)"};
+      "SET @task_result = JSON_MERGE_PATCH(JSON_OBJECT('result', (?)"};
   wrapper << query;
 
   for (auto &el : param_fields) {
@@ -249,7 +250,10 @@ mysqlrouter::sqlstring QueryRestMysqlTask::build_function_call(
     }
   }
 
-  wrapper.append_preformatted(")");
+  wrapper.append_preformatted(
+      "), IF(JSON_VALID(@task_result),"
+      " JSON_SET('{}', '$.taskResult', CAST(@task_result AS JSON)),"
+      " JSON_SET('{}', '$.taskResult', @task_result)))");
 
   return wrapper;
 }
