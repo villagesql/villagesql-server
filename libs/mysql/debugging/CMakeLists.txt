@@ -22,6 +22,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 SET(TARGET_HEADERS
+  object_lifetime_tracker.h
   oom_test.h
   unittest_assertions.h
 )

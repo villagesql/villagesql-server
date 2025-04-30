@@ -35,6 +35,10 @@ Code documentation: @ref GroupLibsMysqlDebugging.
 This library provides general-purpose debugging tools.  Currently, it contains
 the following:
 
+- object_lifetime_tracker.h: Classes that inherit from `Object_lifetime_tracker`
+  will have all invocations of constructors, assignments, and destructors logged
+  to stdout. This is useful when analysing memory bugs.
+
 - oom_test.h: This is a test utility to test out-of-memory handling.
 
 - unittest_assertions.h: The following test assertions:
