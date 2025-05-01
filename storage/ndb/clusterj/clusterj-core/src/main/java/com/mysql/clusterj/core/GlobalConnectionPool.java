@@ -138,8 +138,8 @@ class GlobalConnectionPool {
             conn().setRecvThreadActivationThreshold(t);
         }
 
-        public DbFactory createDbFactory(String databaseName) {
-            return conn().createDbFactory(databaseName);
+        public DbFactory createDbFactory(String databaseName, int[] bufferSizes) {
+            return conn().createDbFactory(databaseName, bufferSizes);
         }
     }
 
@@ -217,7 +217,6 @@ class GlobalConnectionPool {
         final String CONNECTION_SERVICE;
         final String CONNECT_STRING;
         final String NODE_ID_LIST;
-        final String BUFFER_POOL_SIZE_LIST;
         final String BOUND_CPU_LIST;
         final String TLS_SEARCH_PATH;
         final int STRICT_TLS;
@@ -231,7 +230,6 @@ class GlobalConnectionPool {
         final int CONNECT_AUTO_INCREMENT_BATCH_SIZE;
         final long CONNECT_AUTO_INCREMENT_STEP;
         final long CONNECT_AUTO_INCREMENT_START;
-        final int[] BYTE_BUFFER_POOL_SIZES;
         final int RECV_THREAD_ACTIVATION_THRESHOLD;
         final int RECONNECT_TIMEOUT;
 
@@ -245,8 +243,6 @@ class GlobalConnectionPool {
             CONNECTION_SERVICE = getStringProperty(props, PROPERTY_CLUSTER_CONNECTION_SERVICE);
             CONNECT_STRING = getRequiredStringProperty(props, PROPERTY_CLUSTER_CONNECTSTRING);
             NODE_ID_LIST = getStringProperty(props, PROPERTY_CONNECTION_POOL_NODEIDS);
-            BUFFER_POOL_SIZE_LIST = getStringProperty(props, PROPERTY_CLUSTER_BYTE_BUFFER_POOL_SIZES,
-                                                      DEFAULT_PROPERTY_CLUSTER_BYTE_BUFFER_POOL_SIZES);
             BOUND_CPU_LIST = getStringProperty(props, PROPERTY_CONNECTION_POOL_RECV_THREAD_CPUIDS);
             TLS_SEARCH_PATH = getStringProperty(props, PROPERTY_TLS_SEARCH_PATH,
                                                 DEFAULT_PROPERTY_TLS_SEARCH_PATH);
@@ -281,7 +277,6 @@ class GlobalConnectionPool {
             poolSize = configureConnectionPool();
             poolDisabled = checkPoolDisabled();
             boundCpu = new short[poolSize];
-            BYTE_BUFFER_POOL_SIZES = getByteBufferPoolSizes();
             verifyProperties();
         }
 
@@ -329,24 +324,6 @@ class GlobalConnectionPool {
                 fail(local.message("ERR_Multiple_Node_Ids_For_Disabled_Connection_Pool",
                                    NODE_ID_LIST));
             return true;
-        }
-
-        /** Get the byteBufferPoolSizes from properties */
-        private int[] getByteBufferPoolSizes() {
-            int[] result;
-            // separators are any combination of white space, commas, and semicolons
-            String[] byteBufferPoolSizesList = BUFFER_POOL_SIZE_LIST.split("[,; \t\n\r]+", 48);
-            int count = byteBufferPoolSizesList.length;
-            result = new int[count];
-            for (int i = 0; i < count; ++i) {
-                try {
-                    result[i] = Integer.parseInt(byteBufferPoolSizesList[i]);
-                } catch (NumberFormatException ex) {
-                    fail(local.message("ERR_Byte_Buffer_Pool_Sizes_Format",
-                                       BUFFER_POOL_SIZE_LIST), ex);
-                }
-            }
-            return result;
         }
 
         void verifyProperties() {
@@ -452,7 +429,6 @@ class GlobalConnectionPool {
         boolean connected = false;
         try {
             result = service.create(spec.CONNECT_STRING, nodeId, spec.CONNECT_TIMEOUT_MGM);
-            result.setByteBufferPoolSizes(spec.BYTE_BUFFER_POOL_SIZES);
             result.configureTls(spec.TLS_SEARCH_PATH, spec.STRICT_TLS);
             result.connect(spec.CONNECT_RETRIES, spec.CONNECT_DELAY, true);
             result.waitUntilReady(spec.CONNECT_TIMEOUT_BEFORE, spec.CONNECT_TIMEOUT_AFTER);

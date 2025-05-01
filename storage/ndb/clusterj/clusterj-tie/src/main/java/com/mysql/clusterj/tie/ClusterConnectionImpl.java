@@ -67,12 +67,6 @@ public class ClusterConnectionImpl
     /** The timeout value to connect to mgm */
     final int connectTimeoutMgm;
 
-    /** The sizes of the byte buffer pool. Set from SessionFactoryImpl after construction, before connect. */
-    private int[] byteBufferPoolSizes;
-
-    /** The byte buffer pool */
-    protected VariableByteBufferPoolImpl byteBufferPool;
-
     /** A "big enough" size for error information */
     private int errorBufferSize = 300;
 
@@ -120,12 +114,11 @@ public class ClusterConnectionImpl
                                          connectString, connectTimeoutMgm));
     }
 
-    public DbFactory createDbFactory(String databaseName) {
-        return new DbFactoryImpl(this, databaseName);
+    public DbFactory createDbFactory(String databaseName, int[] bufferSizes) {
+        return new DbFactoryImpl(this, databaseName, bufferSizes);
     }
 
     public void connect(int connectRetries, int connectDelay, boolean verbose) {
-        byteBufferPool = new VariableByteBufferPoolImpl(byteBufferPoolSizes);
         checkConnection();
         int returnCode = clusterConnection.connect(connectRetries, connectDelay, verbose?1:0);
         handleError(returnCode, clusterConnection, connectString, nodeId);
@@ -243,20 +236,8 @@ public class ClusterConnectionImpl
         return result;
     }
 
-    public NdbRecordOperationImpl newNdbRecordOperationImpl(DbImpl db, Table storeTable) {
-        return new NdbRecordOperationImpl(this, db, storeTable);
-    }
-
     public void initializeAutoIncrement(long[] autoIncrement) {
         this.autoIncrement = autoIncrement;
-    }
-
-    public VariableByteBufferPoolImpl getByteBufferPool() {
-        return byteBufferPool;
-    }
-
-    public void setByteBufferPoolSizes(int[] poolSizes) {
-        this.byteBufferPoolSizes = poolSizes;
     }
 
     public short getRecvThreadCPUid() {

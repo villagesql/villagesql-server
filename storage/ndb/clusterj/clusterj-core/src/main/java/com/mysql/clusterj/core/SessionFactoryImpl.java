@@ -81,6 +81,8 @@ public class SessionFactoryImpl implements SessionFactory {
         final int MAX_TRANSACTIONS;
         final int RECONNECT_TIMEOUT;
         final int RECV_THREAD_ACTIVATION_THRESHOLD;
+        final String BUFFER_POOL_SIZE_LIST;
+        final int[] BYTE_BUFFER_POOL_SIZES;
 
         Spec(Map<?, ?> props) {
             CONNECTION_POOL_SIZE = getIntProperty(props, PROPERTY_CONNECTION_POOL_SIZE,
@@ -94,6 +96,32 @@ public class SessionFactoryImpl implements SessionFactory {
                                                DEFAULT_PROPERTY_CONNECTION_RECONNECT_TIMEOUT);
             RECV_THREAD_ACTIVATION_THRESHOLD = getIntProperty(props, PROPERTY_CONNECTION_POOL_RECV_THREAD_ACTIVATION_THRESHOLD,
                                                               DEFAULT_PROPERTY_CONNECTION_POOL_RECV_THREAD_ACTIVATION_THRESHOLD);
+            BUFFER_POOL_SIZE_LIST = getStringProperty(props, PROPERTY_CLUSTER_BYTE_BUFFER_POOL_SIZES,
+                                                      DEFAULT_PROPERTY_CLUSTER_BYTE_BUFFER_POOL_SIZES);
+            BYTE_BUFFER_POOL_SIZES = getByteBufferPoolSizes();
+        }
+
+        /** Get the byteBufferPoolSizes from properties */
+        private int[] getByteBufferPoolSizes() {
+            int[] result;
+            // separators are any combination of white space, commas, and semicolons
+            String[] byteBufferPoolSizesList = BUFFER_POOL_SIZE_LIST.split("[,; \t\n\r]+", 48);
+            int count = byteBufferPoolSizesList.length;
+            result = new int[count];
+            for (int i = 0; i < count; ++i) {
+                try {
+                    result[i] = Integer.parseInt(byteBufferPoolSizesList[i]);
+                } catch (NumberFormatException ex) {
+                    fail(local.message("ERR_Byte_Buffer_Pool_Sizes_Format",
+                                       BUFFER_POOL_SIZE_LIST), ex);
+                }
+            }
+            return result;
+        }
+
+        private static void fail(String msg, Throwable ex) {
+            logger.warn(msg);
+            throw new ClusterJFatalUserException(msg, ex);
         }
     }
 
@@ -113,9 +141,10 @@ public class SessionFactoryImpl implements SessionFactory {
          final ConnectionHandle connection;
          final DbFactory dbFactory;
 
-        PooledConnection(ConnectionHandle c, String database) {
+        PooledConnection(ConnectionHandle c, Spec spec) {
             connection = c;
-            dbFactory = connection.createDbFactory(database);
+            dbFactory = connection.createDbFactory(spec.DATABASE,
+                                                   spec.BYTE_BUFFER_POOL_SIZES);
         }
 
         Db createDb(int maxTransactions) {
@@ -211,7 +240,10 @@ public class SessionFactoryImpl implements SessionFactory {
     }
 
     private static String getSessionFactoryKey(Spec spec) {
-        return spec.CONNECT_STRING + "+" + spec.DATABASE;
+        String key = spec.CONNECT_STRING
+                   + "+" + spec.DATABASE
+                   + "+Bbp" + Arrays.hashCode(spec.BYTE_BUFFER_POOL_SIZES);
+        return key;
     }
 
     /* Returns a ConnectionHandle to SessionImpl for session.getConnection() */
@@ -244,7 +276,7 @@ public class SessionFactoryImpl implements SessionFactory {
 
        // Move the handles into PooledConnections
         for(ConnectionHandle handle : handles)
-            pooledConnections.add(new PooledConnection(handle, spec.DATABASE));
+            pooledConnections.add(new PooledConnection(handle, spec));
 
         // get the smart value handler factory (it will be the same for all connections)
         smartValueHandlerFactory = pooledConnections.get(0).getSmartValueHandlerFactory();

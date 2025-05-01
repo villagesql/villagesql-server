@@ -50,5 +50,5 @@ public interface ConnectionHandle extends Connection {
 
     void setRecvThreadActivationThreshold(int threshold);
 
-    DbFactory createDbFactory(String databaseName);
+    DbFactory createDbFactory(String databaseName, int[] bufferSizes);
 }

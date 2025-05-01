@@ -137,7 +137,7 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
                 clusterConnection.byteBufferPoolForDBImplError.borrowBuffer();
         this.partitionKeyScratchBuffer =
                 clusterConnection.byteBufferPoolForPartitionKey.borrowBuffer();
-        this.bufferManager = new BufferManager(clusterConnection.getByteBufferPool());
+        this.bufferManager = new BufferManager(factory.getByteBufferPool());
         int returnCode = ndb.init(maxTransactions);
         handleError(returnCode, ndb);
         ndbDictionary = ndb.getDictionary();
@@ -355,6 +355,10 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
             this.stringCharBuffer = stringByteBuffer.asCharBuffer();
         }
 
+        public VariableByteBufferPoolImpl getPool() {
+            return pool;
+        }
+
         /** Release resources for this buffer manager. */
         protected void release() {
             if (this.resultDataBuffer != null) {
@@ -487,7 +491,7 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
     }
 
     public NdbRecordOperationImpl newNdbRecordOperationImpl(Table storeTable) {
-        return clusterConnection.newNdbRecordOperationImpl(this, storeTable);
+        return new NdbRecordOperationImpl(this, storeTable);
     }
 
     public IndexBound createIndexBound() {

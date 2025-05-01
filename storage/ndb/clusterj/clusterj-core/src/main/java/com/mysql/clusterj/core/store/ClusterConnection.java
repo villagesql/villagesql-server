@@ -48,8 +48,6 @@ public interface ClusterConnection {
 
     public void initializeAutoIncrement(long[] autoIncrement);
 
-    public void setByteBufferPoolSizes(int[] poolSizes);
-
     public void setRecvThreadCPUid(short cpuid);
 
     public void unsetRecvThreadCPUid();
@@ -58,5 +56,5 @@ public interface ClusterConnection {
 
     public void setRecvThreadActivationThreshold(int threshold);
 
-    DbFactory createDbFactory(String databaseName);
+    DbFactory createDbFactory(String databaseName, int[] bufferSizes);
 }

@@ -37,16 +37,15 @@ public class SessionFactoryTest extends AbstractClusterJTest {
 
     @Override
     protected void localSetUp() {
-        loadProperties();
-        // close any existing session factory
-        closeAllExistingSessionFactories();
+        createSessionFactory();
     }
 
     /**
      * Test that the DomainTypeHandler are properly cleared when the SessionFactory
      * and the related connections are closed.
-     *   a) Create two unique SessionFactories by disabling connection pool. Both will start
-     *      separate new connections to the data nodes.
+     *   a) Create a new unique SessionFactory by disabling connection pool. This
+     *      factory and the exitsing factory will have separate new connections
+     *      to the data nodes.
      *   b) Insert into autopkint table using both SessionFactories and
      *      verify that the underlying DomainTypeHandler are not shared.
      *   c) Delete all tuples from autopkint table.
@@ -59,7 +58,7 @@ public class SessionFactoryTest extends AbstractClusterJTest {
         // Disable connection pool and create two separate session factories
         modifiedProperties.put(Constants.PROPERTY_CONNECTION_POOL_SIZE, 0);
         SessionFactory sessionFactory1 = ClusterJHelper.getSessionFactory(modifiedProperties);
-        SessionFactory sessionFactory2 = ClusterJHelper.getSessionFactory(modifiedProperties);
+        SessionFactory sessionFactory2 = sessionFactory;
 
         try {
             // Write a row into AutoPKInt using sessionFactory1 and then close it
@@ -81,16 +80,12 @@ public class SessionFactoryTest extends AbstractClusterJTest {
             session2.makePersistent(obj2);
             session2.deletePersistentAll(AutoPKInt.class);
             session2.close();
-            sessionFactory2.close();
 
         } catch (Exception ex) {
             ex.printStackTrace();
             // close the session factories and fail the test
             if (sessionFactory1.currentState() != SessionFactory.State.Closed) {
                 sessionFactory1.close();
-            }
-            if (sessionFactory2.currentState() != SessionFactory.State.Closed) {
-                sessionFactory2.close();
             }
             fail(ex.getMessage());
         }

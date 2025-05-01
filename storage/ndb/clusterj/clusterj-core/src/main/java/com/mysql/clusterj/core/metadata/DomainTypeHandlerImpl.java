@@ -65,10 +65,6 @@ import java.util.Map;
  */
 public class DomainTypeHandlerImpl<T> extends AbstractDomainTypeHandlerImpl<T> {
 
-    public interface Finalizable {
-        void finalize() throws Throwable;
-    }
-
     /** The domain class. */
     Class<T> cls;
 
@@ -128,7 +124,7 @@ public class DomainTypeHandlerImpl<T> extends AbstractDomainTypeHandlerImpl<T> {
                 throw new ClusterJUserException(local.message(
                         "ERR_Not_Persistence_Capable_Type", name));
             }
-            proxyInterfaces = new Class<?>[] {cls, Finalizable.class};
+            proxyInterfaces = new Class<?>[] { cls };
             proxyClass = (Class<T>)
                 Proxy.getProxyClass(cls.getClassLoader(), proxyInterfaces);
             // Get the table name from Persistence Capable annotation

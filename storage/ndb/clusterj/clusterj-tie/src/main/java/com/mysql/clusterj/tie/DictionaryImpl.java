@@ -56,12 +56,9 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
 
     private DbFactoryImpl dbFactory;
 
-    private ClusterConnectionImpl clusterConnection;
-
     public DictionaryImpl(Dictionary ndbDictionary, DbFactoryImpl dbConnection) {
         this.ndbDictionary = ndbDictionary;
         this.dbFactory = dbConnection;
-        this.clusterConnection = dbConnection.connectionImpl;
     }
 
     public Table getTable(String tableName) {

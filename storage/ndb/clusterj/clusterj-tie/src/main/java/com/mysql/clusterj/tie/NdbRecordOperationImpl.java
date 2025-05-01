@@ -143,8 +143,7 @@ public class NdbRecordOperationImpl implements Operation {
      * @param db the Db
      * @param storeTable the store table
      */
-    public NdbRecordOperationImpl(ClusterConnectionImpl clusterConnection, Db db, Table storeTable) {
-        byteBufferPool = clusterConnection.getByteBufferPool();
+    public NdbRecordOperationImpl(Db db, Table storeTable) {
         this.db = (DbImpl)db;
         this.storeTable = storeTable;
         Column autoIncrementColumn = storeTable.getAutoIncrementColumn();
@@ -165,6 +164,7 @@ public class NdbRecordOperationImpl implements Operation {
         this.numberOfColumns = storeColumns.length;
         this.blobs = new NdbRecordBlobImpl[this.numberOfColumns];
         this.bufferManager = ((DbImpl)db).getBufferManager();
+        this.byteBufferPool = bufferManager.getPool();
         resetMask();
     }
 
@@ -173,10 +173,10 @@ public class NdbRecordOperationImpl implements Operation {
      * @param clusterTransaction the cluster transaction
      */
     public NdbRecordOperationImpl(ClusterTransactionImpl clusterTransaction, Table storeTable) {
-        this.byteBufferPool = clusterTransaction.getClusterConnection().getByteBufferPool();
         this.clusterTransaction = clusterTransaction;
         this.db = clusterTransaction.db;
         this.bufferManager = clusterTransaction.getBufferManager();
+        this.byteBufferPool = bufferManager.getPool();
         this.storeTable = storeTable;
         Column autoIncrementColumn = storeTable.getAutoIncrementColumn();
         if (autoIncrementColumn != null) {

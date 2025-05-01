@@ -81,19 +81,6 @@ public class NdbRecordSmartValueHandlerImpl implements SmartValueHandler {
     /** My logger */
     static final Logger logger = LoggerFactoryService.getFactory().getInstance(InvocationHandlerImpl.class);
 
-    /** Finalize this object. This method is called by the garbage collector
-     * when the proxy that delegates to this object is no longer reachable.
-     */
-    @SuppressWarnings("deprecation")
-    protected void finalize() throws Throwable {
-        if (logger.isDetailEnabled()) logger.detail("NdbRecordSmartValueHandler.finalize");
-        try {
-            release();
-        } finally {
-            super.finalize();
-        }
-    }
-
     /** Release any resources associated with this object.
      * This method is called by the owner of this object.
      */

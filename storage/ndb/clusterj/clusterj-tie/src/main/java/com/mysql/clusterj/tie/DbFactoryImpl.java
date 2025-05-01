@@ -69,10 +69,19 @@ public class DbFactoryImpl implements DbFactory {
     /** The dictionary used to create NdbRecords */
     NdbDictionary.Dictionary dictionaryForNdbRecord = null;
 
-    protected DbFactoryImpl(ClusterConnectionImpl conn, String dbName) {
+    /** The byte buffer pool */
+    private VariableByteBufferPoolImpl byteBufferPool;
+
+    protected DbFactoryImpl(ClusterConnectionImpl conn, String dbName,
+                            int[] byteBufferPoolSizes) {
         connectionImpl = conn;
         isClosing = false;
         databaseName = dbName;
+        byteBufferPool = VariableByteBufferPoolImpl.getPool(byteBufferPoolSizes);
+    }
+
+    public VariableByteBufferPoolImpl getByteBufferPool() {
+        return byteBufferPool;
     }
 
     public Db createDb(int maxTransactions) {
