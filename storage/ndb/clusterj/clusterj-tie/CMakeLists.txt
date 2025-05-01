@@ -32,6 +32,7 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_TIE_PREFIX}/ColumnImpl.java
   ${CLUSTERJ_TIE_PREFIX}/DbFactoryImpl.java
   ${CLUSTERJ_TIE_PREFIX}/DbImpl.java
+  ${CLUSTERJ_TIE_PREFIX}/DbImplCore.java
   ${CLUSTERJ_TIE_PREFIX}/DbImplForNdbRecord.java
   ${CLUSTERJ_TIE_PREFIX}/DbugImpl.java
   ${CLUSTERJ_TIE_PREFIX}/DictionaryImpl.java

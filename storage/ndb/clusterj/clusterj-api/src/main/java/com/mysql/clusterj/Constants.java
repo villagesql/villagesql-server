@@ -179,6 +179,32 @@ public interface Constants {
     /** The default value of the database property */
     static final String DEFAULT_PROPERTY_CLUSTER_DATABASE = "test";
 
+    /**
+     * Each Cluster/J session uses an Ndb object that holds a connection record.
+     * Obtaining these objects requires a network round-trip between the
+     * Cluster/J application and an NDB data node. To eliminate that network
+     * overhead in getSession(), these Ndb objects can be cached. Each cached
+     * object, in addition to a small amount of memory used inside Cluster/J,
+     * also consumes about 1KB of memory on each data node.
+     *
+     * This SessionFactory property is used to determine the size and behavior
+     * of the cache. If set to zero, the session cache will not be enabled for
+     * this SessionFactory. If set to some value greater than zero, the session
+     * cache will be enabled, with its size limited to the value given.
+     *
+     * Users should generally not expect the cache in a SessionFactory to grow
+     * to this maximum size, but rather to remain roughly equal to the number
+     * of threads using the SessionFactory.
+     *
+     * The total size of all session caches will not exceed the largest size
+     * requested for any one SessionFactory.
+     */
+    static final String PROPERTY_CLUSTER_MAX_CACHED_SESSIONS =
+        "com.mysql.clusterj.max.cached.sessions";
+
+    /** The default size of the global session cache. */
+    static final int DEFAULT_PROPERTY_CLUSTER_MAX_CACHED_SESSIONS = 100;
+
     /** The name of the maximum number of transactions property. For details, see
      * <a href="http://dev.mysql.com/doc/ndbapi/en/ndb-ndb.html#ndb-ndb-init">Ndb::init()</a>
      */

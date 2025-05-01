@@ -26,6 +26,7 @@
 package com.mysql.clusterj.tie;
 
 import com.mysql.ndbjtie.ndbapi.Ndb;
+import com.mysql.ndbjtie.ndbapi.NdbConst;
 import com.mysql.ndbjtie.ndbapi.Ndb_cluster_connection;
 
 import com.mysql.clusterj.ClusterJDatastoreException;
@@ -141,6 +142,10 @@ public class ClusterConnectionImpl
         DbImpl result = new DbImpl(factory, ndb, maxTransactions);
         result.initializeAutoIncrement(autoIncrement);
         return result;
+    }
+
+    protected void initializeAutoIncrement(DbImpl db) {
+        db.initializeAutoIncrement(autoIncrement);
     }
 
     protected DbImplForNdbRecord createDbForNdbRecord(DbFactoryImpl dbc) {

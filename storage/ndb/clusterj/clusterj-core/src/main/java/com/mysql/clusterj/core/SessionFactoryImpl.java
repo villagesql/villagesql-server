@@ -83,6 +83,7 @@ public class SessionFactoryImpl implements SessionFactory {
         final int RECV_THREAD_ACTIVATION_THRESHOLD;
         final String BUFFER_POOL_SIZE_LIST;
         final int[] BYTE_BUFFER_POOL_SIZES;
+        final int SESSION_CACHE_SIZE;
 
         Spec(Map<?, ?> props) {
             CONNECTION_POOL_SIZE = getIntProperty(props, PROPERTY_CONNECTION_POOL_SIZE,
@@ -99,6 +100,8 @@ public class SessionFactoryImpl implements SessionFactory {
             BUFFER_POOL_SIZE_LIST = getStringProperty(props, PROPERTY_CLUSTER_BYTE_BUFFER_POOL_SIZES,
                                                       DEFAULT_PROPERTY_CLUSTER_BYTE_BUFFER_POOL_SIZES);
             BYTE_BUFFER_POOL_SIZES = getByteBufferPoolSizes();
+            SESSION_CACHE_SIZE = getIntProperty(props, PROPERTY_CLUSTER_MAX_CACHED_SESSIONS,
+                                                DEFAULT_PROPERTY_CLUSTER_MAX_CACHED_SESSIONS);
         }
 
         /** Get the byteBufferPoolSizes from properties */
@@ -145,6 +148,7 @@ public class SessionFactoryImpl implements SessionFactory {
             connection = c;
             dbFactory = connection.createDbFactory(spec.DATABASE,
                                                    spec.BYTE_BUFFER_POOL_SIZES);
+            dbFactory.useSessionCache(spec.SESSION_CACHE_SIZE);
         }
 
         Db createDb(int maxTransactions) {
@@ -242,6 +246,7 @@ public class SessionFactoryImpl implements SessionFactory {
     private static String getSessionFactoryKey(Spec spec) {
         String key = spec.CONNECT_STRING
                    + "+" + spec.DATABASE
+                   + "+Csz" + spec.SESSION_CACHE_SIZE
                    + "+Bbp" + Arrays.hashCode(spec.BYTE_BUFFER_POOL_SIZES);
         return key;
     }

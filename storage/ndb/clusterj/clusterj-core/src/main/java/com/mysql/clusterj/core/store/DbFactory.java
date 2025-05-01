@@ -35,6 +35,8 @@ package com.mysql.clusterj.core.store;
 
 public interface DbFactory {
 
+    public void useSessionCache(int cacheSize);
+
     public Db createDb(int maxTransactions);
 
     public void closeDb(Db db);

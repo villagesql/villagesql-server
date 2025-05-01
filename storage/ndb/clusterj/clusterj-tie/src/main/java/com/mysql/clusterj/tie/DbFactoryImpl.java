@@ -36,7 +36,10 @@ import com.mysql.clusterj.core.util.LoggerFactoryService;
 import com.mysql.ndbjtie.ndbapi.Ndb;
 import com.mysql.ndbjtie.ndbapi.NdbDictionary;
 
+import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.IdentityHashMap;
@@ -72,6 +75,16 @@ public class DbFactoryImpl implements DbFactory {
     /** The byte buffer pool */
     private VariableByteBufferPoolImpl byteBufferPool;
 
+    /* The session cache is a queue of DbImplCore items */
+    final private ArrayDeque<DbImplCore> sessionCache =
+        new ArrayDeque<DbImplCore>();
+
+    /* Maximum size of this instance's session cache */
+    int localMaxCacheSize;
+
+    /* Current target size of the session cache */
+    int targetCacheSize;
+
     protected DbFactoryImpl(ClusterConnectionImpl conn, String dbName,
                             int[] byteBufferPoolSizes) {
         connectionImpl = conn;
@@ -84,8 +97,22 @@ public class DbFactoryImpl implements DbFactory {
         return byteBufferPool;
     }
 
+    public void useSessionCache(int size) {
+        localMaxCacheSize = size;
+        GlobalCacheRegistry.increaseLimit(size);
+    }
+
     public Db createDb(int maxTransactions) {
-        DbImpl db = connectionImpl.createDbImplForFactory(this, maxTransactions);
+        DbImpl db;
+        DbImplCore item = getCachedNdb(maxTransactions);
+
+        if(item == null)
+            db = connectionImpl.createDbImplForFactory(this, maxTransactions);
+        else {
+            db = new DbImpl(this, item);
+            connectionImpl.initializeAutoIncrement(db);
+        }
+
         if (dictionaryForNdbRecord == null) {
             dbForNdbRecord = connectionImpl.createDbForNdbRecord(this);
             dbForNdbRecord.initializeQueryObjects();
@@ -265,6 +292,7 @@ public class DbFactoryImpl implements DbFactory {
         if (dbForNdbRecord != null) {
             dbForNdbRecord.closing();
         }
+        closeSessionCache();
         this.isClosing = true;
     }
 
@@ -289,6 +317,8 @@ public class DbFactoryImpl implements DbFactory {
             dbForNdbRecord = null;
         }
         ndbRecordImplMap.clear();
+        GlobalCacheRegistry.returnLease(targetCacheSize);
+        targetCacheSize = 0;
     }
 
     public void closeDb(Db db) {
@@ -300,5 +330,140 @@ public class DbFactoryImpl implements DbFactory {
         return dbs.size();
     }
 
-  }
+    private boolean cacheEnabled() {
+        return localMaxCacheSize > 0;
+    }
 
+    /* Get an Ndb object from the cache */
+    private DbImplCore getCachedNdb(int maxTransactions) {
+        DbImplCore node = null;
+        synchronized (sessionCache) {
+            if(cacheEnabled()) {
+                node = sessionCache.pollFirst();
+                if(node == null) {
+                    /* After a miss, ask for one more cache space */
+                    if(targetCacheSize < localMaxCacheSize)
+                        targetCacheSize = GlobalCacheRegistry.requestLease(targetCacheSize, 1);
+                } else if(node.maxTransactions < maxTransactions) {
+                    node.delete(); // just discard it
+                    node = null;
+                }
+            }
+        }
+        return node;
+    }
+
+    /* Return an Ndb object to the cache */
+    void returnNdb(DbImpl db) {
+        if(! cacheEnabled()) {
+            db.delete();
+            return;
+        }
+
+        // Construct a little DbImplCore for the cache
+        DbImplCore item = new DbImplCore(db);
+
+        // Put items on a list to avoid calling into NDBAPI with lock held
+        ArrayList<DbImplCore> itemsToDelete = new ArrayList<DbImplCore>();
+
+        synchronized (sessionCache) {
+            /* Push item onto queue */
+            if(sessionCache.size() <= targetCacheSize) {
+                sessionCache.push(item);
+            } else {
+                itemsToDelete.add(item);
+            }
+
+            /* Possibly adjust the target size */
+            if(GlobalCacheRegistry.shouldShrinkCache(targetCacheSize))
+                targetCacheSize = GlobalCacheRegistry.requestLease(targetCacheSize, -1);
+
+            /* Expire off the end of the queue */
+            while(sessionCache.size() > targetCacheSize) {
+                itemsToDelete.add(sessionCache.pollLast());
+            }
+        }
+
+        itemsToDelete.forEach((i) -> i.delete());
+        itemsToDelete.clear();
+    }
+
+    /* Purge the cache */
+    private void closeSessionCache() {
+        synchronized(sessionCache) {
+            localMaxCacheSize = 0;  // disable the cache
+            logger.debug(() -> "Purging " + sessionCache.size() + " Ndb objects from cache");
+            DbImplCore node = sessionCache.pollLast();
+            while(node != null) {
+                node.delete();
+                node = sessionCache.pollLast();
+            }
+        }
+    }
+}
+
+
+/* Singleton class GlobalCacheRegistry maintains the global limit on the
+   number of cached sessions by giving out leases to each DbFactoryImpl
+*/
+class GlobalCacheRegistry {
+
+    /* The size limit */
+    static private int sizeLimit = 0;
+
+    /* The current total allocation */
+    static private AtomicInteger currentTotalSize = new AtomicInteger();
+
+    /* Counter used in shouldShrinkCache() */
+    static private AtomicInteger counter = new AtomicInteger();
+
+    /* Set the limit */
+    static synchronized void increaseLimit(int n) {
+        if(sizeLimit < n) sizeLimit = n;
+    }
+
+    /* Request a lease */
+    static int requestLease(int currentLeaseSize, int difference) {
+        assert sizeLimit > 0;
+
+        int allocation = currentLeaseSize + difference;  // optimistic
+        int newSize = currentTotalSize.addAndGet(difference);
+        if(newSize < 0) {
+            assert false;
+            currentTotalSize.set(0);
+            allocation = 0;
+        } else if(newSize > sizeLimit) {
+            currentTotalSize.set(sizeLimit);
+            allocation -= (newSize - sizeLimit);
+        }
+        assert allocation >= 0;
+        return allocation;
+    }
+
+    /* Return an allocation; called when closing */
+    static void returnLease(int size) {
+        int newSize = currentTotalSize.addAndGet(-size);
+        assert newSize >= 0;
+    }
+
+    /* Heuristically check whether a current lease could be smaller.
+       Returns true if the DbFactory should decrement its lease size.
+
+       The algorithm for local cache management is implemented here,
+       in getCachedNdb(), and in returnNdb(). In summary:
+
+        * Each DbFactory begins with a lease of 0.
+        * On a cache miss, in getCachedNdb(), if the lease is less than the
+          local max, increment the lease.
+        * In releaseNdb(), if the lease is greater than 3 and also greater
+          than twice the number of active threads in the ThreadGroup,
+          decrement the lease. However, getting the thread count is
+          expensive, so sometimes skip this test.
+    */
+    static boolean shouldShrinkCache(int currentLeaseSize) {
+        if (currentLeaseSize <= 3) return false;
+        if ((counter.incrementAndGet() & 0x7) != 0) return false;
+        if (Thread.activeCount() * 2 < currentLeaseSize) return true;
+        return false;
+    }
+}
