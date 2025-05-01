@@ -56,6 +56,7 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_TESTSUITE_PREFIX}/ConnectionPoolTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/DateAsSqlDateTypesTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/DateAsUtilDateTypesTest.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/DateAsPkSqlDateTypesTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/DatetimeAsSqlTimestampTypesTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/DatetimeAsUtilDateTypesTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/DbugTest.java
@@ -80,6 +81,7 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_TESTSUITE_PREFIX}/LongIntStringPKTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/LongLongStringPKTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/LongvarbinaryPKTest.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/LongvarcharPKTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/MediumIntegerTypesTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/MediumUnsignedTypesTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/MultiplePKTest.java
@@ -149,6 +151,7 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_TESTSUITE_PREFIX}/UpdateTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/VarbinaryPKTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/VarbinaryTypesTest.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/VarcharPKTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/VarcharStringLengthTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/domaintypehandler/CrazyDomainTypeHandlerFactoryImpl.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/AllPrimitives.java
@@ -182,6 +185,8 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/Customer.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/DateAsSqlDateTypes.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/DateAsUtilDateTypes.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/model/DateAsPkSqlDateTypes.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/model/DateIdBase.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/DatetimeAsSqlTimestampTypes.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/DatetimeAsUtilDateTypes.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/DecimalTypes.java
@@ -199,6 +204,7 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/LongIntStringPK.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/LongLongStringPK.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/LongvarbinaryPK.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/model/LongvarcharPK.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/MediumIntegerTypes.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/MediumUnsignedTypes.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/NotPersistentTypes.java
@@ -214,6 +220,7 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/TimestampAsUtilDateTypes.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/VarbinaryPK.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/VarbinaryTypes.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/model/VarcharPK.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/YearTypes.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/util/MgmClient.java
 
