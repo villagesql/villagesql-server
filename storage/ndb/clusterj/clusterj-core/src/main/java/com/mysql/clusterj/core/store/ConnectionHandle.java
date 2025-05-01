@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+ *  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License, version 2.0,
@@ -25,38 +25,30 @@
 
 package com.mysql.clusterj.core.store;
 
+import com.mysql.clusterj.Connection;
 import com.mysql.clusterj.core.spi.ValueHandlerFactory;
+import com.mysql.clusterj.SessionFactory.State;
 
 /**
- *
+ * ConnectionHandle extends the public interface (Connection) into an
+ * interface that a SessionFactoryImpl can use to manage a handle
+ * on a shared connection from the global connection pool.
  */
-public interface ClusterConnection {
+public interface ConnectionHandle extends Connection {
 
-    public void connect(int connectRetries, int connectDelay, boolean verbose);
+    void close();
 
-    public void configureTls(String searchPath, int requirement);
+    void reconnect(int timeout);
 
-    public void waitUntilReady(int connectTimeoutBefore, int connectTimeoutAfter);
+    State currentState();
 
-    public void close();
+    ValueHandlerFactory getSmartValueHandlerFactory();
 
-    public int nodeId();
+    short getRecvThreadCPUid();
 
-    public String systemName();
+    void setRecvThreadCPUid(short cpuid);
 
-    public ValueHandlerFactory getSmartValueHandlerFactory();
-
-    public void initializeAutoIncrement(long[] autoIncrement);
-
-    public void setByteBufferPoolSizes(int[] poolSizes);
-
-    public void setRecvThreadCPUid(short cpuid);
-
-    public void unsetRecvThreadCPUid();
-
-    public short getRecvThreadCPUid();
-
-    public void setRecvThreadActivationThreshold(int threshold);
+    void setRecvThreadActivationThreshold(int threshold);
 
     DbFactory createDbFactory(String databaseName);
 }

@@ -260,4 +260,7 @@ public interface Session  extends AutoCloseable {
      * or if the object is used after calling this method.
      */
     <T> T release(T obj);
+
+   /** Get the underlying database connection used by this session */
+   Connection getConnection();
 }

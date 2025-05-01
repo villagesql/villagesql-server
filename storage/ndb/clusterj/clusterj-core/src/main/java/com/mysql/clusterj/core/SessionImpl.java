@@ -30,6 +30,7 @@ import com.mysql.clusterj.ClusterJDatastoreException.Classification;
 import com.mysql.clusterj.ClusterJException;
 import com.mysql.clusterj.ClusterJFatalInternalException;
 import com.mysql.clusterj.ClusterJUserException;
+import com.mysql.clusterj.Connection;
 import com.mysql.clusterj.DynamicObject;
 import com.mysql.clusterj.DynamicObjectDelegate;
 import com.mysql.clusterj.LockMode;
@@ -109,9 +110,6 @@ public class SessionImpl implements SessionSPI, CacheManager, StoreManager {
     /** The underlying ClusterTransaction */
     protected ClusterTransaction clusterTransaction;
 
-    /** The properties for this session */
-    protected Map properties;
-
     /** Flags for iterating a scan */
     protected final int RESULT_READY = 0;
     protected final int SCAN_FINISHED = 1;
@@ -134,22 +132,25 @@ public class SessionImpl implements SessionSPI, CacheManager, StoreManager {
     /** Nested auto transaction counter. */
     protected int nestedAutoTransactionCounter = 0;
 
-    /** Number of retries for retriable exceptions */
-    // TODO get this from properties
-    protected int numberOfRetries = 5;
-
     /** The lock mode for read operations */
     private LockMode lockmode = LockMode.READ_COMMITTED;
 
-    /** Create a SessionImpl with factory, properties, Db, and dictionary
+    /** Index of the underlying connection in the SesssionFactory's pool */
+    private final int connPoolIndex;
+
+    /** Create a SessionImpl with factory, connection number, and Db
      */
-    SessionImpl(SessionFactoryImpl factory, Map properties, Db db, Dictionary dictionary) {
+    SessionImpl(SessionFactoryImpl factory, int idx, Db db) {
         this.factory = factory;
         this.db = db;
-        this.dictionary = dictionary;
-        this.properties = properties;
+        this.dictionary = db.getDictionary();
+        this.connPoolIndex = idx;
         transactionImpl = new TransactionImpl(this);
         transactionState = transactionStateNotActive;
+    }
+
+    public Connection getConnection() {
+        return factory.getConnectionHandle(connPoolIndex);
     }
 
     /** Create a query from a query definition.

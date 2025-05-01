@@ -34,6 +34,7 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_API_PREFIX}/ClusterJUserException.java
   ${CLUSTERJ_API_PREFIX}/ColumnMetadata.java
   ${CLUSTERJ_API_PREFIX}/ColumnType.java
+  ${CLUSTERJ_API_PREFIX}/Connection.java
   ${CLUSTERJ_API_PREFIX}/Constants.java
   ${CLUSTERJ_API_PREFIX}/Dbug.java
   ${CLUSTERJ_API_PREFIX}/DynamicObject.java

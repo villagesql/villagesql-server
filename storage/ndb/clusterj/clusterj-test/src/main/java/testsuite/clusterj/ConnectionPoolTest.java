@@ -82,6 +82,15 @@ public class ConnectionPoolTest extends AbstractClusterJTest {
             verifyException(msg, ex, ".*No free node id found.*");
         }
         errorIfNotEqual(msg, null, sessionFactory3);
+
+        // The two sessions use different underlying connections
+        Session s1 = sessionFactory1.getSession();
+        Session s2 = sessionFactory2.getSession();
+        errorIfEqual("With pooling disabled, two session factories use different underlying connections",
+                     s1.getConnection().nodeId(), s2.getConnection().nodeId());
+        s1.close();
+        s2.close();
+
         sessionFactory1.close();
         sessionFactory2.close();
         errorIfNotEqual("With no connection pooling, SessionFactory1 should not be the same object as SessionFactory2",
@@ -255,6 +264,24 @@ public class ConnectionPoolTest extends AbstractClusterJTest {
             }
         }
         failOnError();
+    }
+
+    public void testPoolEnabledDifferentDatabases() {
+        Properties modifiedProperties = new Properties();
+        modifiedProperties.putAll(props);
+        modifiedProperties.put(Constants.PROPERTY_CLUSTER_DATABASE, "test2");
+        SessionFactory sessionFactory1 = ClusterJHelper.getSessionFactory(props);
+        SessionFactory sessionFactory2 = ClusterJHelper.getSessionFactory(modifiedProperties);
+
+        Session session1 = sessionFactory1.getSession();
+        Session session2 = sessionFactory2.getSession();
+
+        errorIfNotEqual("Two session factories with different database use the same connection",
+                        session1.getConnection().nodeId(), session2.getConnection().nodeId());
+        session2.close();
+        session1.close();
+        sessionFactory2.close();
+        sessionFactory1.close();
     }
 
     private void checkSessions(String where, SessionFactory sessionFactory, Integer[] expected) {

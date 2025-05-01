@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+ *  Copyright (c) 2025, Oracle and/or its affiliates.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License, version 2.0,
@@ -23,40 +23,20 @@
  *  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-package com.mysql.clusterj.core.store;
+package com.mysql.clusterj;
 
-import com.mysql.clusterj.core.spi.ValueHandlerFactory;
 
-/**
- *
+/** Connection represents a shared cluster connection from the
+ *  global connection pool.
  */
-public interface ClusterConnection {
+public interface Connection {
 
-    public void connect(int connectRetries, int connectDelay, boolean verbose);
+    /** System Name of the connected cluster. */
+    String systemName();
 
-    public void configureTls(String searchPath, int requirement);
+    /** Node id of this connection. */
+    int nodeId();
 
-    public void waitUntilReady(int connectTimeoutBefore, int connectTimeoutAfter);
-
-    public void close();
-
-    public int nodeId();
-
-    public String systemName();
-
-    public ValueHandlerFactory getSmartValueHandlerFactory();
-
-    public void initializeAutoIncrement(long[] autoIncrement);
-
-    public void setByteBufferPoolSizes(int[] poolSizes);
-
-    public void setRecvThreadCPUid(short cpuid);
-
-    public void unsetRecvThreadCPUid();
-
-    public short getRecvThreadCPUid();
-
-    public void setRecvThreadActivationThreshold(int threshold);
-
-    DbFactory createDbFactory(String databaseName);
+    /** Currect state of this connection */
+    SessionFactory.State currentState();
 }

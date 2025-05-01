@@ -85,6 +85,9 @@ public class ClusterConnectionImpl
     /** The byte buffer pool for DbImpl error buffers */
     FixedByteBufferPoolImpl byteBufferPoolForPartitionKey;
 
+    /** Bound CPU thread ID for receive thread. -1 means not bound to a CPU. */
+    private short recvThdCpu = -1;
+
     private boolean isClosing = false;
 
     private long[] autoIncrement;
@@ -113,8 +116,8 @@ public class ClusterConnectionImpl
         handleError(clusterConnection, connectString, nodeId);
         int timeoutError = clusterConnection.set_timeout(connectTimeoutMgm);
         handleError(timeoutError, connectString, nodeId, connectTimeoutMgm);
-        logger.info(() -> local.message("INFO_Create_Cluster_Connection",
-                                        connectString, nodeId, connectTimeoutMgm));
+        logger.trace(() -> local.message("TRACE_Create_Cluster_Connection",
+                                         connectString, connectTimeoutMgm));
     }
 
     public DbFactory createDbFactory(String databaseName) {
@@ -161,6 +164,14 @@ public class ClusterConnectionImpl
         checkConnection();
         int returnCode = clusterConnection.wait_until_ready(connectTimeoutBefore, connectTimeoutAfter);
         handleError(returnCode, clusterConnection, connectString, nodeId);
+    }
+
+    public String systemName() {
+        return clusterConnection.get_system_name();
+    }
+
+    public int nodeId() {
+        return nodeId;
     }
 
     protected void checkConnection() {
@@ -248,15 +259,21 @@ public class ClusterConnectionImpl
         this.byteBufferPoolSizes = poolSizes;
     }
 
+    public short getRecvThreadCPUid() {
+        return recvThdCpu;
+    }
+
     public void setRecvThreadCPUid(short cpuid) {
         int ret = 0;
-        if (cpuid < 0) {
-            // Invalid cpu id
-            throw new ClusterJUserException(
-                    local.message("ERR_Invalid_CPU_Id", cpuid));
+        if (cpuid == -1) {
+            unsetRecvThreadCPUid();
+            return;
+        } else if (cpuid < 0) {
+            throw new ClusterJUserException(local.message("ERR_Invalid_CPU_Id", cpuid));
         }
         ret = clusterConnection.set_recv_thread_cpu(cpuid);
-        if (ret != 0) {
+        if (ret == 0) recvThdCpu = cpuid;
+        else {
             // Error in binding cpu
             switch (ret) {
             case 22:    /* EINVAL - Invalid CPU id error in Linux/FreeBSD */
@@ -284,6 +301,7 @@ public class ClusterConnectionImpl
             throw new ClusterJFatalInternalException(
                     local.message("ERR_Unbinding_Recv_Thread_From_CPU", ret));
         }
+        recvThdCpu = -1;
     }
 
     public void setRecvThreadActivationThreshold(int threshold) {
