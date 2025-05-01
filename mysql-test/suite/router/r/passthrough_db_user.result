@@ -322,6 +322,13 @@ GET /svc/db/tbl
     ]
 }
 OK
+POST /svc/authentication/logout
+{
+    "message": "Logged out successfully",
+    "status": 200
+}
+OK
+Timeout in wait_condition.inc for SELECT count(*)=0 FROM performance_schema.processlist where USER = 'user1'
 # switch off restriction to registered users and try again with user3
 update mysql_rest_service_metadata.auth_app set limit_to_registered_users=0;
 GET /svc/authentication/login
@@ -368,7 +375,7 @@ GET /svc/authentication/login
 OK
 LOCK TABLE db1.tbl WRITE;
 # 8th attempt, out of sessions
-GET /svc/db/tbl
+GET /svc/db/tbl?1
 {
     "message": "Too Many Requests",
     "status": 429
@@ -376,12 +383,6 @@ GET /svc/db/tbl
 OK
 UNLOCK TABLES;
 # after log out, there should be no more pooled sessions
-POST /svc/authentication/logout
-{
-    "message": "Logged out successfully",
-    "status": 200
-}
-OK
 POST /svc/authentication/logout
 {
     "message": "Logged out successfully",
