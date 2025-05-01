@@ -75,11 +75,15 @@ class DbImplForNdbRecord implements com.mysql.clusterj.core.store.Db {
     /** The ClusterConnection */
     private ClusterConnectionImpl clusterConnection;
 
+    /** The DbFactory */
+    private DbFactoryImpl parentFactory;
+
     /** This db is closing */
     private boolean closing = false;
 
-    public DbImplForNdbRecord(ClusterConnectionImpl clusterConnection, Ndb ndb) {
-        this.clusterConnection = clusterConnection;
+    public DbImplForNdbRecord(DbFactoryImpl factory, Ndb ndb) {
+        this.parentFactory = factory;
+        this.clusterConnection = factory.connectionImpl;
         this.ndb = ndb;
         this.errorBuffer = this.clusterConnection.byteBufferPoolForDBImplError.borrowBuffer();
         int returnCode = ndb.init(1);
@@ -101,7 +105,7 @@ class DbImplForNdbRecord implements com.mysql.clusterj.core.store.Db {
     public void close() {
         this.clusterConnection.byteBufferPoolForDBImplError.returnBuffer(this.errorBuffer);
         Ndb.delete(ndb);
-        clusterConnection.close(this);
+        parentFactory.closeDb(this);
     }
 
     public com.mysql.clusterj.core.store.Dictionary getDictionary() {

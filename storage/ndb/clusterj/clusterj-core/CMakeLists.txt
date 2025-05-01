@@ -85,6 +85,7 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_CORE_PREFIX}/store/ClusterTransaction.java
   ${CLUSTERJ_CORE_PREFIX}/store/Column.java
   ${CLUSTERJ_CORE_PREFIX}/store/Db.java
+  ${CLUSTERJ_CORE_PREFIX}/store/DbFactory.java
   ${CLUSTERJ_CORE_PREFIX}/store/Dictionary.java
   ${CLUSTERJ_CORE_PREFIX}/store/Index.java
   ${CLUSTERJ_CORE_PREFIX}/store/IndexOperation.java

@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2010, 2025, Oracle and/or its affiliates.
+ *  Copyright (c) 2024, 2025, Oracle and/or its affiliates.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License, version 2.0,
@@ -25,32 +25,25 @@
 
 package com.mysql.clusterj.core.store;
 
-import com.mysql.clusterj.core.spi.ValueHandlerFactory;
+/*
+   A DbFactory can create Db objects for a single MySQL database and a
+   single ClusterConnection.
 
-/**
- *
- */
-public interface ClusterConnection {
+   DbFactory consists of members that have been moved out of ClusterConnection,
+   and that were implicitly valid for just a single database.
+*/
 
-    public void connect(int connectRetries, int connectDelay, boolean verbose);
+public interface DbFactory {
 
-    public void configureTls(String searchPath, int requirement);
+    public Db createDb(int maxTransactions);
 
-    public void waitUntilReady(int connectTimeoutBefore, int connectTimeoutAfter);
+    public void closeDb(Db db);
+
+    public int dbCount();
+
+    public void unloadSchema(String tableName);
+
+    public void closing();
 
     public void close();
-
-    public ValueHandlerFactory getSmartValueHandlerFactory();
-
-    public void initializeAutoIncrement(long[] autoIncrement);
-
-    public void setByteBufferPoolSizes(int[] poolSizes);
-
-    public void setRecvThreadCPUid(short cpuid);
-
-    public void unsetRecvThreadCPUid();
-
-    public void setRecvThreadActivationThreshold(int threshold);
-
-    DbFactory createDbFactory(String databaseName);
 }

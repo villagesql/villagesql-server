@@ -678,7 +678,7 @@ class ClusterTransactionImpl implements ClusterTransaction {
      * @return
      */
     protected NdbRecordImpl getCachedNdbRecordImpl(Table storeTable) {
-        return clusterConnectionImpl.getCachedNdbRecordImpl(storeTable);
+        return db.getCachedNdbRecordImpl(storeTable);
     }
 
     /** Get the cached NdbRecordImpl for this index and table. The NdbRecordImpl is cached in the
@@ -688,7 +688,7 @@ class ClusterTransactionImpl implements ClusterTransaction {
      * @return
      */
     protected NdbRecordImpl getCachedNdbRecordImpl(Index storeIndex, Table storeTable) {
-        return clusterConnectionImpl.getCachedNdbRecordImpl(storeIndex, storeTable);
+        return db.getCachedNdbRecordImpl(storeIndex, storeTable);
     }
 
     /** 

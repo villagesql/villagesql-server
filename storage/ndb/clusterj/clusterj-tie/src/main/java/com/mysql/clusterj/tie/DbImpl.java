@@ -47,6 +47,7 @@ import com.mysql.clusterj.ClusterJDatastoreException;
 import com.mysql.clusterj.ClusterJFatalInternalException;
 import com.mysql.clusterj.ClusterJUserException;
 import com.mysql.clusterj.core.store.ClusterTransaction;
+import com.mysql.clusterj.core.store.Index;
 import com.mysql.clusterj.core.store.Table;
 
 import com.mysql.clusterj.core.util.I18NHelper;
@@ -85,6 +86,9 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
 
     /** The ClusterConnection */
     private ClusterConnectionImpl clusterConnection;
+
+    /** The DbFactory */
+    private DbFactoryImpl parentFactory;
 
     /** This db is closing */
     private boolean closing = false;
@@ -125,19 +129,20 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
     /** The autoincrement start */
     private long autoIncrementStart;
 
-    public DbImpl(ClusterConnectionImpl clusterConnection, Ndb ndb, int maxTransactions) {
-        this.clusterConnection = clusterConnection;
+    public DbImpl(DbFactoryImpl factory, Ndb ndb, int maxTransactions) {
+        this.parentFactory = factory;
+        this.clusterConnection = factory.connectionImpl;
         this.ndb = ndb;
         this.errorBuffer =
-                this.clusterConnection.byteBufferPoolForDBImplError.borrowBuffer();
+                clusterConnection.byteBufferPoolForDBImplError.borrowBuffer();
         this.partitionKeyScratchBuffer =
-                this.clusterConnection.byteBufferPoolForPartitionKey.borrowBuffer();
-        this.bufferManager = new BufferManager(this.clusterConnection.byteBufferPool);
+                clusterConnection.byteBufferPoolForPartitionKey.borrowBuffer();
+        this.bufferManager = new BufferManager(clusterConnection.getByteBufferPool());
         int returnCode = ndb.init(maxTransactions);
         handleError(returnCode, ndb);
         ndbDictionary = ndb.getDictionary();
         handleError(ndbDictionary, ndb);
-        this.dictionary = new DictionaryImpl(ndbDictionary, clusterConnection);
+        this.dictionary = new DictionaryImpl(ndbDictionary, factory);
     }
 
     public void assertNotClosed(String where) {
@@ -176,10 +181,12 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
             Ndb.delete(ndb);
             ndb = null;
         }
-        this.clusterConnection.byteBufferPoolForDBImplError.returnBuffer(this.errorBuffer);
-        this.clusterConnection.byteBufferPoolForPartitionKey.returnBuffer(this.partitionKeyScratchBuffer);
-        this.bufferManager.release();
-        clusterConnection.close(this);
+        clusterConnection.byteBufferPoolForDBImplError.returnBuffer(errorBuffer);
+        clusterConnection.byteBufferPoolForPartitionKey.returnBuffer(partitionKeyScratchBuffer);
+        bufferManager.release();
+        parentFactory.closeDb(this);
+        parentFactory = null;
+        clusterConnection = null;
     }
 
     public com.mysql.clusterj.core.store.Dictionary getDictionary() {
@@ -629,6 +636,14 @@ class DbImpl implements com.mysql.clusterj.core.store.Db {
         this.autoIncrementBatchSize = (int)autoIncrement[0];
         this.autoIncrementStep = autoIncrement[1];
         this.autoIncrementStart = autoIncrement[2];
+    }
+
+    protected NdbRecordImpl getCachedNdbRecordImpl(Table storeTable) {
+        return this.parentFactory.getCachedNdbRecordImpl(storeTable);
+    }
+
+    protected NdbRecordImpl getCachedNdbRecordImpl(Index storeIndex, Table storeTable) {
+        return this.parentFactory.getCachedNdbRecordImpl(storeIndex, storeTable);
     }
 
 }

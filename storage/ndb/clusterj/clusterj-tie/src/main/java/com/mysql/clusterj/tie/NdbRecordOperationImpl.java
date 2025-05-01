@@ -155,7 +155,7 @@ public class NdbRecordOperationImpl implements Operation {
         if (logger.isDetailEnabled())
             logger.detail("autoIncrement for " + storeTable.getName() + " is: " + autoIncrement);
         this.tableName = storeTable.getName();
-        this.ndbRecordValues = clusterConnection.getCachedNdbRecordImpl(storeTable);
+        this.ndbRecordValues = this.db.getCachedNdbRecordImpl(storeTable);
         this.ndbRecordKeys = ndbRecordValues;
         this.valueBufferSize = ndbRecordValues.getBufferSize();
         this.keyBufferSize = ndbRecordKeys.getBufferSize();

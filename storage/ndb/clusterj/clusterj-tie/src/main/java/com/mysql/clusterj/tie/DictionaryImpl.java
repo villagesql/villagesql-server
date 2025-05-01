@@ -54,11 +54,14 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
 
     private Dictionary ndbDictionary;
 
+    private DbFactoryImpl dbFactory;
+
     private ClusterConnectionImpl clusterConnection;
 
-    public DictionaryImpl(Dictionary ndbDictionary, ClusterConnectionImpl clusterConnection) {
+    public DictionaryImpl(Dictionary ndbDictionary, DbFactoryImpl dbConnection) {
         this.ndbDictionary = ndbDictionary;
-        this.clusterConnection = clusterConnection;
+        this.dbFactory = dbConnection;
+        this.clusterConnection = dbConnection.connectionImpl;
     }
 
     public Table getTable(String tableName) {
@@ -141,7 +144,7 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
         // remove the cached table from this dictionary
         ndbDictionary.removeCachedTable(tableName);
         // also remove the cached NdbRecord associated with this table
-        clusterConnection.unloadSchema(tableName);
+        dbFactory.unloadSchema(tableName);
     }
 
     public Dictionary getNdbDictionary() {

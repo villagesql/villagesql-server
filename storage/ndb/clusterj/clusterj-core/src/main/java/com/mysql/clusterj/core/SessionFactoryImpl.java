@@ -41,6 +41,7 @@ import com.mysql.clusterj.core.spi.ValueHandlerFactory;
 import com.mysql.clusterj.core.metadata.DomainTypeHandlerFactoryImpl;
 
 import com.mysql.clusterj.core.store.Db;
+import com.mysql.clusterj.core.store.DbFactory;
 import com.mysql.clusterj.core.store.ClusterConnection;
 import com.mysql.clusterj.core.store.ClusterConnectionService;
 import com.mysql.clusterj.core.store.Dictionary;
@@ -101,6 +102,45 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
     /** Connection pool size obtained from the property PROPERTY_CONNECTION_POOL_SIZE */
     int connectionPoolSize;
 
+    /** Internal class of one-per-connection data members.
+    */
+    static class PooledConnection {
+         final ClusterConnection connection;
+         final DbFactory dbFactory;
+
+        PooledConnection(ClusterConnection c, String database) {
+            connection = c;
+            dbFactory = connection.createDbFactory(database);
+        }
+
+        Db createDb(int maxTransactions) {
+            return dbFactory.createDb(maxTransactions);
+        }
+
+        void unloadSchema(String table)   { dbFactory.unloadSchema(table); }
+
+        int dbCount()                     { return dbFactory.dbCount(); }
+
+        ValueHandlerFactory getSmartValueHandlerFactory() {
+            return connection.getSmartValueHandlerFactory();
+        }
+
+        void setClosing()                 { dbFactory.closing(); }
+
+        void close() {
+            dbFactory.close();
+            connection.close();
+        }
+
+        void setRecvThreadCPUid(short id) { connection.setRecvThreadCPUid(id); }
+
+        void unsetRecvThreadCPUid()       { connection.unsetRecvThreadCPUid(); }
+
+        void setRecvThreadActivationThreshold(int t) {
+            connection.setRecvThreadActivationThreshold(t);
+        }
+    }
+
     /** Boolean flag indicating if connection pool is disabled or not */
     boolean connectionPoolDisabled = false;
 
@@ -123,7 +163,7 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
     final String key;
 
     /** Cluster connections that together can be used to manage sessions */
-    private List<ClusterConnection> pooledConnections = new ArrayList<ClusterConnection>();
+    private List<PooledConnection> pooledConnections = new ArrayList<PooledConnection>();
 
     /** Get a cluster connection service.
      * @return the cluster connection service
@@ -363,7 +403,7 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
         }
     }
 
-    protected ClusterConnection createClusterConnection(
+    protected void createClusterConnection(
             ClusterConnectionService service, Map<?, ?> props, int nodeId, int connectionId) {
         ClusterConnection result = null;
         boolean connected = false;
@@ -388,24 +428,22 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
         } catch (Exception ex) {
             // close result if it has connected already
             if (connected) {
-                result.closing();
                 result.close();
             }
             // need to clean up if some connections succeeded
-            for (ClusterConnection connection: pooledConnections) {
+            for (PooledConnection connection: pooledConnections) {
                 connection.close();
             }
             pooledConnections.clear();
             throw new ClusterJFatalUserException(
                     local.message("ERR_Connecting", props), ex);
         }
-        this.pooledConnections.add(result);
         result.initializeAutoIncrement(new long[] {
                 CLUSTER_CONNECT_AUTO_INCREMENT_BATCH_SIZE,
                 CLUSTER_CONNECT_AUTO_INCREMENT_STEP,
                 CLUSTER_CONNECT_AUTO_INCREMENT_START
         });
-        return result;
+        this.pooledConnections.add(new PooledConnection(result, CLUSTER_DATABASE));
     }
 
     /** Get the byteBufferPoolSizes from properties */
@@ -453,9 +491,9 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
                 if (!(State.Open.equals(state)) && !internal) {
                     throw new ClusterJUserException(local.message("ERR_SessionFactory_not_open"));
                 }
-                ClusterConnection clusterConnection = getClusterConnectionFromPool();
-                checkConnection(clusterConnection);
-                db = clusterConnection.createDb(CLUSTER_DATABASE, CLUSTER_MAX_TRANSACTIONS);
+                PooledConnection connection = getClusterConnectionFromPool();
+                checkConnection(connection);
+                db = connection.createDb(CLUSTER_MAX_TRANSACTIONS);
             }
             Dictionary dictionary = db.getDictionary();
             return new SessionImpl(this, properties, db, dictionary);
@@ -467,16 +505,16 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
         }
     }
 
-    private ClusterConnection getClusterConnectionFromPool() {
+    private PooledConnection getClusterConnectionFromPool() {
         if (connectionPoolSize == 1) {
             return pooledConnections.get(0);
         }
         // find the best pooled connection (the connection with the least active sessions)
         // this is not perfect without synchronization since a connection might close sessions
         // after getting the dbCount but we don't care about perfection here. 
-        ClusterConnection result = null;
+        PooledConnection result = null;
         int bestCount = Integer.MAX_VALUE;
-        for (ClusterConnection pooledConnection: pooledConnections ) {
+        for (PooledConnection pooledConnection: pooledConnections ) {
             int count = pooledConnection.dbCount();
             if (count < bestCount) {
                 bestCount = count;
@@ -486,8 +524,8 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
         return result;
     }
 
-    private void checkConnection(ClusterConnection clusterConnection) {
-        if (clusterConnection == null) {
+    private void checkConnection(PooledConnection connection) {
+        if (connection == null) {
             throw new ClusterJUserException(local.message("ERR_Session_Factory_Closed"));
         }
     }
@@ -671,8 +709,8 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
 
     public synchronized void close() {
         // close all of the cluster connections
-        for (ClusterConnection clusterConnection: pooledConnections) {
-            clusterConnection.close();
+        for (PooledConnection connection: pooledConnections) {
+            connection.close();
         }
         pooledConnections.clear();
         synchronized(sessionFactoryMap) {
@@ -692,7 +730,7 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
 
     public List<Integer> getConnectionPoolSessionCounts() {
         List<Integer> result = new ArrayList<Integer>();
-        for (ClusterConnection connection: pooledConnections) {
+        for (PooledConnection connection: pooledConnections) {
             result.add(connection.dbCount());
         }
         return result;
@@ -709,8 +747,8 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
                     if (logger.isDebugEnabled())logger.debug("Removing dictionary entry for table " + tableName
                             + " for class " + cls.getName());
                     dictionary.removeCachedTable(tableName);
-                    for (ClusterConnection clusterConnection: pooledConnections) {
-                        clusterConnection.unloadSchema(tableName);
+                    for (PooledConnection connection: pooledConnections) {
+                        connection.unloadSchema(tableName);
                     }
                 }
             }
@@ -822,14 +860,14 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
             }
             logger.warn(local.message("WARN_Reconnect_closing"));
             // mark all cluster connections as closing
-            for (ClusterConnection clusterConnection: factory.pooledConnections) {
-                clusterConnection.closing();
+            for (PooledConnection connection: factory.pooledConnections) {
+                connection.setClosing();
             }
             // wait for connections to close on their own
             sleep(1000);
             // hard close connections that didn't close on their own
-            for (ClusterConnection clusterConnection: factory.pooledConnections) {
-                clusterConnection.close();
+            for (PooledConnection connection: factory.pooledConnections) {
+                connection.close();
             }
             factory.pooledConnections.clear();
             // remove all DomainTypeHandlers, as they embed references to
@@ -857,14 +895,14 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
         short newRecvThreadCPUids[] = new short[cpuids.length];
         try {
             int i = 0;
-            for (ClusterConnection clusterConnection: pooledConnections) {
+            for (PooledConnection connection: pooledConnections) {
                 // No need to bind if the thread is already bound to same cpuid.
                 if (cpuids[i] != recvThreadCPUids[i]){
                     if (cpuids[i] != -1) {
-                        clusterConnection.setRecvThreadCPUid(cpuids[i]);
+                        connection.setRecvThreadCPUid(cpuids[i]);
                     } else {
                         // cpu id is -1 which is a request for unlocking the thread from cpu
-                        clusterConnection.unsetRecvThreadCPUid();
+                        connection.unsetRecvThreadCPUid();
                     }
                 }
                 newRecvThreadCPUids[i] = cpuids[i];
@@ -876,12 +914,12 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
             // Binding cpuid failed.
             // To avoid partial settings, restore back the cpu bindings to the old values.
             for (int i = 0; newRecvThreadCPUids[i] != 0 && i < newRecvThreadCPUids.length; i++) {
-                ClusterConnection clusterConnection = pooledConnections.get(i);
+                PooledConnection connection = pooledConnections.get(i);
                 if (recvThreadCPUids[i] != newRecvThreadCPUids[i]) {
                     if (recvThreadCPUids[i] == -1) {
-                        clusterConnection.unsetRecvThreadCPUid();
+                        connection.unsetRecvThreadCPUid();
                     } else {
-                        clusterConnection.setRecvThreadCPUid(recvThreadCPUids[i]);
+                        connection.setRecvThreadCPUid(recvThreadCPUids[i]);
                     }
                 }
             }
@@ -901,8 +939,8 @@ public class SessionFactoryImpl implements SessionFactory, Constants {
         }
         // any threshold above 15 is interpreted as 256 internally
         CLUSTER_RECV_THREAD_ACTIVATION_THRESHOLD = (threshold >= 16)?256:threshold;
-        for (ClusterConnection clusterConnection: pooledConnections) {
-            clusterConnection.setRecvThreadActivationThreshold(threshold);
+        for (PooledConnection connection: pooledConnections) {
+            connection.setRecvThreadActivationThreshold(threshold);
         }
     }
 
