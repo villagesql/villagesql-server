@@ -62,6 +62,18 @@ public class PropertyReader implements com.mysql.clusterj.Constants {
         return result;
     }
 
+    /** Get the property from the properties map as a Boolean.
+     */
+    static boolean getBooleanProperty(Map<?, ?> props,
+                                      String propertyName,
+                                      String defaultValue) {
+        String result = (String)props.get(propertyName);
+        if (result == null) {
+            result = defaultValue;
+        }
+        return Boolean.parseBoolean(result);
+    }
+
     /** Get the property from the properties map as a String. If the user has not
      * provided a value in the props, throw an exception.
      * @param props the properties

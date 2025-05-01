@@ -74,7 +74,7 @@ public class SessionFactoryImpl implements SessionFactory {
     private final Map<?, ?> props;
 
     /** NdbCluster connect properties */
-    private static class Spec extends PropertyReader {
+    static class Spec extends PropertyReader {
         final int CONNECTION_POOL_SIZE;
         final String CONNECT_STRING;
         final String DATABASE;
@@ -84,6 +84,7 @@ public class SessionFactoryImpl implements SessionFactory {
         final String BUFFER_POOL_SIZE_LIST;
         final int[] BYTE_BUFFER_POOL_SIZES;
         final int SESSION_CACHE_SIZE;
+        final boolean MULTI_DB;
 
         Spec(Map<?, ?> props) {
             CONNECTION_POOL_SIZE = getIntProperty(props, PROPERTY_CONNECTION_POOL_SIZE,
@@ -102,6 +103,21 @@ public class SessionFactoryImpl implements SessionFactory {
             BYTE_BUFFER_POOL_SIZES = getByteBufferPoolSizes();
             SESSION_CACHE_SIZE = getIntProperty(props, PROPERTY_CLUSTER_MAX_CACHED_SESSIONS,
                                                 DEFAULT_PROPERTY_CLUSTER_MAX_CACHED_SESSIONS);
+            MULTI_DB = getBooleanProperty(props, PROPERTY_CLUSTER_MULTI_DB,
+                                          DEFAULT_PROPERTY_CLUSTER_MULTI_DB);
+        }
+
+        Spec(Spec other, String database) {
+            CONNECTION_POOL_SIZE = other.CONNECTION_POOL_SIZE;
+            CONNECT_STRING = other.CONNECT_STRING;
+            MAX_TRANSACTIONS = other.MAX_TRANSACTIONS;
+            RECONNECT_TIMEOUT = other.RECONNECT_TIMEOUT;
+            RECV_THREAD_ACTIVATION_THRESHOLD = other.RECV_THREAD_ACTIVATION_THRESHOLD;
+            BUFFER_POOL_SIZE_LIST = other.BUFFER_POOL_SIZE_LIST;
+            BYTE_BUFFER_POOL_SIZES = other.BYTE_BUFFER_POOL_SIZES;
+            SESSION_CACHE_SIZE = other.SESSION_CACHE_SIZE;
+            MULTI_DB = other.MULTI_DB;
+            DATABASE = database;
         }
 
         /** Get the byteBufferPoolSizes from properties */
@@ -204,8 +220,8 @@ public class SessionFactoryImpl implements SessionFactory {
     DomainTypeHandlerFactory domainTypeHandlerFactory = new DomainTypeHandlerFactoryImpl();
 
     /** The session factories. */
-    static final protected Map<String, SessionFactoryImpl> sessionFactoryMap =
-            new HashMap<String, SessionFactoryImpl>();
+    static final protected Map<String, SessionFactory> sessionFactoryMap =
+            new HashMap<String, SessionFactory>();
 
     /** The key for this factory */
     final private String key;
@@ -223,8 +239,8 @@ public class SessionFactoryImpl implements SessionFactory {
      * @param props properties of the session factory
      * @return the session factory
      */
-    static public SessionFactoryImpl getSessionFactory(Map<?, ?> props) {
-        SessionFactoryImpl result = null;
+    static public SessionFactory getSessionFactory(Map<?, ?> props) {
+        SessionFactory result = null;
         Spec spec = new Spec(props);
 
         if(spec.CONNECTION_POOL_SIZE > 0) {
@@ -232,22 +248,37 @@ public class SessionFactoryImpl implements SessionFactory {
             synchronized(sessionFactoryMap) {
                 result = sessionFactoryMap.get(sessionFactoryKey);
                 if (result == null) {
-                    result = new SessionFactoryImpl(spec, props);
+                    if(spec.MULTI_DB) {
+                        result = new MultiDbSessionFactory(spec, props);
+                    } else {
+                        result = new SessionFactoryImpl(spec, props);
+                    }
                     sessionFactoryMap.put(sessionFactoryKey, result);
                 }
             }
         } else {
-            // if not using connection pooling, create a new session factory
+            if(spec.MULTI_DB) {
+                throw new ClusterJFatalUserException(local.message("ERR_multidb_no_pool"));
+            }
+            // if not using connection pooling or multidb, create a new session factory
             result = new SessionFactoryImpl(spec, props);
         }
         return result;
     }
 
+    static void removeFactoryFromMap(Spec spec) {
+        assert spec.MULTI_DB;
+        synchronized(sessionFactoryMap) {
+            sessionFactoryMap.remove(getSessionFactoryKey(spec));
+        }
+    }
+
     private static String getSessionFactoryKey(Spec spec) {
-        String key = spec.CONNECT_STRING
-                   + "+" + spec.DATABASE
-                   + "+Csz" + spec.SESSION_CACHE_SIZE
-                   + "+Bbp" + Arrays.hashCode(spec.BYTE_BUFFER_POOL_SIZES);
+        String key = spec.CONNECT_STRING;
+        key += spec.MULTI_DB ? "+.MultiDB."
+                             : "+" + spec.DATABASE;
+        key = key + "+Csz" + spec.SESSION_CACHE_SIZE
+                  + "+Bbp" + Arrays.hashCode(spec.BYTE_BUFFER_POOL_SIZES);
         return key;
     }
 
@@ -261,7 +292,7 @@ public class SessionFactoryImpl implements SessionFactory {
      *
      * @param props the properties for the factory
      */
-    private SessionFactoryImpl(Spec spec, Map<?, ?> props) {
+    SessionFactoryImpl(Spec spec, Map<?, ?> props) {
         this.spec = spec;
         this.props = props;
         key = getSessionFactoryKey(spec);
@@ -328,6 +359,13 @@ public class SessionFactoryImpl implements SessionFactory {
      */
     public Session getSession() {
         return getSession(null, false);
+    }
+
+    public Session getSession(String database) {
+        if(database == null) return getSession();
+        if(database.equals(spec.DATABASE)) return getSession();
+
+        throw new ClusterJUserException(local.message("ERR_Not_MultiDB"));
     }
 
     public Session getSession(Map properties) {
@@ -472,9 +510,12 @@ public class SessionFactoryImpl implements SessionFactory {
             connection.close();
         }
         pooledConnections.clear();
-        synchronized(sessionFactoryMap) {
-            // now remove this from the map
-            sessionFactoryMap.remove(key);
+
+        // remove this from the map
+        if(! spec.MULTI_DB) {
+            synchronized(sessionFactoryMap) {
+                sessionFactoryMap.remove(key);
+            }
         }
         state = State.Closed;
         GlobalConnectionPool.closeSessionFactory(spec.CONNECT_STRING, this);

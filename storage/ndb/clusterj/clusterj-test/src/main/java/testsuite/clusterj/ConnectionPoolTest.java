@@ -68,6 +68,7 @@ public class ConnectionPoolTest extends AbstractClusterJTest {
 
         // with connection.pool.size set to 0 each session factory should be unique
         modifiedProperties.put(Constants.PROPERTY_CONNECTION_POOL_SIZE, 0);
+        modifiedProperties.put(Constants.PROPERTY_CLUSTER_MULTI_DB, "false");
         sessionFactory1 = ClusterJHelper.getSessionFactory(modifiedProperties);
         sessionFactory2 = ClusterJHelper.getSessionFactory(modifiedProperties);
         SessionFactory sessionFactory3 = null;

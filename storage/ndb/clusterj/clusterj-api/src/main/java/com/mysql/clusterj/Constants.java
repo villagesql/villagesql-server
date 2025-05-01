@@ -198,12 +198,42 @@ public interface Constants {
      *
      * The total size of all session caches will not exceed the largest size
      * requested for any one SessionFactory.
+     *
+     * @since 9.4.0
      */
     static final String PROPERTY_CLUSTER_MAX_CACHED_SESSIONS =
         "com.mysql.clusterj.max.cached.sessions";
 
     /** The default size of the global session cache. */
     static final int DEFAULT_PROPERTY_CLUSTER_MAX_CACHED_SESSIONS = 100;
+
+    /*
+     * Enable or disable MultiDB SessionFactory behavior.
+     *
+     * For MultiDB behavior to be enabled, this property must be set to
+     * the string value "true".
+     *
+     * When this property is true in getSessionFactory(), the returned
+     * SesssionFactory will be an "umbrella" MutliDB session factory -- an
+     * abstraction over a set of SessionFactory objects that all share a common
+     * connection (or pool of connections) to NDB, but each serves a different
+     * database. On creation, only an underlying SessionFactory for the default
+     * database is instantiated; other underlying SessionFactories will be
+     * created on demand the first time a call to getSession() requests a
+     * particular database.
+     *
+     * When set to false in getSessionFactory(), the returned SessionFactory is
+     * capable of handling only a single database.
+     *
+     * If PROPERTY_CLUSTER_MULTI_DB is set to true, PROPERTY_CONNECTION_POOL_SIZE
+     * must not be zero.
+     *
+     * @since 9.4.0
+     */
+    static final String PROPERTY_CLUSTER_MULTI_DB = "com.mysql.clusterj.multi.database";
+
+    /** The default value of the MultiDB property */
+    static final String DEFAULT_PROPERTY_CLUSTER_MULTI_DB = "false";
 
     /** The name of the maximum number of transactions property. For details, see
      * <a href="http://dev.mysql.com/doc/ndbapi/en/ndb-ndb.html#ndb-ndb-init">Ndb::init()</a>

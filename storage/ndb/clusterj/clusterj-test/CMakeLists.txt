@@ -84,9 +84,15 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_TESTSUITE_PREFIX}/LongvarcharPKTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/MediumIntegerTypesTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/MediumUnsignedTypesTest.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/MultiDBHelper.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/MultiplePKTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/MultithreadedFindTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/MultithreadedTest.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/MultiDBLoad1Test.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/MultiDBScan1Test.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/MultiDBUpdate1Test.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/MultiDBUpdate2Test.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/MultiDBUpdate3Test.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/NegativeMetadataTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/NotPersistentTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/NullValuesTest.java

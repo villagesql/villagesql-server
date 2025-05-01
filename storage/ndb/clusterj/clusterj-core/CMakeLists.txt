@@ -35,6 +35,7 @@ SET ( BROKEN_JAVAC
 SET(JAVA_SOURCES
   ${CLUSTERJ_CORE_PREFIX}/CacheManager.java
   ${CLUSTERJ_CORE_PREFIX}/GlobalConnectionPool.java
+  ${CLUSTERJ_CORE_PREFIX}/MultiDbSessionFactory.java
   ${CLUSTERJ_CORE_PREFIX}/PropertyReader.java
   ${CLUSTERJ_CORE_PREFIX}/SessionFactoryImpl.java
   ${CLUSTERJ_CORE_PREFIX}/SessionFactoryServiceImpl.java

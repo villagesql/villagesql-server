@@ -61,6 +61,7 @@ public class AllTests {
         System.out.println("     --gc=<n>             : Run <n> GC iterations after tests");
         System.out.println("     --hprof              : Create heap dump at exit");
         System.out.println("     -n TestName [...]    : Run named tests");
+        System.out.println("     --stop-on-error      : Stop after first failure");
         System.exit(2);
     }
 

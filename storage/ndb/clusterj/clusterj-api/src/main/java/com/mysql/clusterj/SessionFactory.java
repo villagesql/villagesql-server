@@ -34,15 +34,36 @@ import java.util.Map;
 public interface SessionFactory {
 
     /** Create a Session to use with the cluster, using all the
-     * properties of the SessionFactory.
+     * properties of the SessionFactory, including the default database.
      * @return the session
      */
     Session getSession();
 
-    /** Create a session to use with the cluster, overriding some properties.
-     * Properties PROPERTY_CLUSTER_CONNECTSTRING, PROPERTY_CLUSTER_DATABASE,
-     * and PROPERTY_CLUSTER_MAX_TRANSACTIONS may not be overridden.
-     * @param properties overriding some properties for this session
+    /** Create a Session to use with the cluster, using the default
+     * properties of the SessionFactory except for the database name.
+     *
+     * This requires the property com.mysql.clusterj.multidb to have been
+     * set to true when the SessionFactory was created.
+     *
+     * @param database name of the database to use for this session.
+     *
+     * If database is null, the default database is used.
+     *
+     * @return the session
+     #
+     * @throws ClusterJUserException if SessionFactory is not a multi-db
+     *         SessionFactory, and database is not its configured database
+     *         and is not null.
+     * @since 9.4.0
+     */
+    Session getSession(String database);
+
+    /** Create a session to use with the cluster, overriding some default
+     * properties with the properties supplied in the map.
+     * The property com.mysql.clusterj.connectstring may not be overridden.
+     * @param properties map overriding some properties for this session
+     * @throws ClusterJUserException if properties contains an unexpected
+     *         value for com.mysql.clusterj.connectstring
      * @return the session
      */
     Session getSession(Map properties);
