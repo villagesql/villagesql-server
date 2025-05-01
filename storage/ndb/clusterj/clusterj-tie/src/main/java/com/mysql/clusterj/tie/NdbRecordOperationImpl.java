@@ -139,7 +139,6 @@ public class NdbRecordOperationImpl implements Operation {
      * NdbRecord and one buffer, so all operations result in using
      * the same buffer.
      * 
-     * @param clusterConnection the cluster connection
      * @param db the Db
      * @param storeTable the store table
      */

@@ -55,6 +55,9 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
 
     private final DbFactoryImpl dbFactory;
 
+    /* If true, prefer getTable() over getTableGlobal() */
+    private final boolean preferThreadLocal;
+
     /* waitMsec in nanos; max allowed execution time */
     private final long maxNanos;
 
@@ -62,9 +65,11 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
     private final int[] configWaitTimes;
 
     public DictionaryImpl(NdbDictionary.Dictionary ndbDictionary,
-                          DbFactoryImpl dbFactory) {
+                          DbFactoryImpl dbFactory,
+                          boolean preferThreadLocal) {
         this.ndbDictionary = ndbDictionary;
         this.dbFactory = dbFactory;
+        this.preferThreadLocal = preferThreadLocal;
 
         /* Configure the wait loop in getTable().
         */
@@ -84,6 +89,18 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
         }
     }
 
+    private TableConst getNdbTable(String tableName) {
+        return preferThreadLocal ?
+            ndbDictionary.getTable(tableName) :
+            ndbDictionary.getTableGlobal(tableName);
+    }
+
+    private IndexConst getNdbIndex(String indexName, String tableName) {
+        return preferThreadLocal ?
+            ndbDictionary.getIndex(indexName, tableName) :
+            ndbDictionary.getIndexGlobal(indexName, tableName);
+    }
+
     public Table getTable(String tableName) {
         final long startNanos = System.nanoTime();
         final long breakTime = startNanos + maxNanos;
@@ -92,10 +109,10 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
         TableConst ndbTable = null;
 
         for(int iter = 0; iter <= retries ; iter++) {
-            ndbTable = ndbDictionary.getTable(tableName);
+            ndbTable = getNdbTable(tableName);
             if (ndbTable == null && ! lowerCaseName.equals(tableName)) {
                 // try the lower case table name
-                ndbTable = ndbDictionary.getTable(tableName.toLowerCase());
+                ndbTable = getNdbTable(tableName.toLowerCase());
             }
 
             if (ndbTable == null && iter < retries) {
@@ -116,24 +133,29 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
                 error.status(), error.classification());
         }
 
+        if (ndbTable.getObjectStatus() != NdbDictionary.ObjectConst.Status.Retrieved)
+            throw new ClusterJTableException(
+                tableName, startNanos, System.nanoTime(),
+                "Invalid table in local dictionary", -1, 159, 2, 5);
+
         return new TableImpl(ndbTable, getIndexNames(ndbTable.getName()));
     }
 
     public Index getIndex(String indexName, String tableName, String indexAlias) {
         if ("PRIMARY$KEY".equals(indexName)) {
             // create a pseudo index for the primary key hash
-            TableConst ndbTable = ndbDictionary.getTable(tableName);
+            TableConst ndbTable = getNdbTable(tableName);
             if (ndbTable == null) {
                 // try the lower case table name
-                ndbTable = ndbDictionary.getTable(tableName.toLowerCase());
+                ndbTable = getNdbTable(tableName.toLowerCase());
             }
             handleError(ndbTable, ndbDictionary, "");
             return new IndexImpl(ndbTable);
         }
-        IndexConst ndbIndex = ndbDictionary.getIndex(indexName, tableName);
+        IndexConst ndbIndex = getNdbIndex(indexName, tableName);
         if (ndbIndex == null) {
             // try the lower case table name
-            ndbIndex = ndbDictionary.getIndex(indexName, tableName.toLowerCase());
+            ndbIndex = getNdbIndex(indexName, tableName.toLowerCase());
         }
         handleError(ndbIndex, ndbDictionary, indexAlias);
         return new IndexImpl(ndbIndex, indexAlias);
@@ -182,15 +204,11 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
     /** Remove cached table from this ndb dictionary. This allows schema change to work.
      * @param tableName the name of the table
      */
-    public void removeCachedTable(String tableName) {
-        // remove the cached table from this dictionary
-        ndbDictionary.removeCachedTable(tableName);
-        // also remove the cached NdbRecord associated with this table
-        dbFactory.unloadSchema(tableName);
+    public void invalidateTable(String tableName) {
+        ndbDictionary.invalidateTable(tableName);
     }
 
     public NdbDictionary.Dictionary getNdbDictionary() {
         return ndbDictionary;
     }
-
 }

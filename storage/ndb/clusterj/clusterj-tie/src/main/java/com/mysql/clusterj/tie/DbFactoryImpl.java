@@ -44,6 +44,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 
 public class DbFactoryImpl implements DbFactory {
@@ -65,7 +66,10 @@ public class DbFactoryImpl implements DbFactory {
     private ConcurrentMap<String, NdbRecordImpl> ndbRecordImplMap =
         new ConcurrentHashMap<String, NdbRecordImpl>();
 
-   /** All regular dbs (not dbForNdbRecord) given out */
+    /** List of obsolete NdbRecordImpl to be cleaned upon close() */
+    private List<NdbRecordImpl> deadNdbRecords = new ArrayList<NdbRecordImpl>();
+
+    /** All regular dbs (not dbForNdbRecord) given out */
     private Map<DbImpl, Object> dbs =
         Collections.synchronizedMap(new IdentityHashMap<DbImpl, Object>());
 
@@ -191,10 +195,10 @@ public class DbFactoryImpl implements DbFactory {
      * Only the key columns are included in the NdbRecord.
      * Use a ConcurrentHashMap for best multithread performance.
      * There are three possibilities:
-     * <ul><li>Case 1: return the already-cached NdbRecord
-     * </li><li>Case 2: return a new instance created by this method
-     * </li><li>Case 3: return the winner of a race with another thread
-     * </li></ul>
+     *  - Case 1: return the already-cached NdbRecord
+     *  - Case 2: return a new instance created by this method
+     *  - Case 3: return the winner of a race with another thread
+     *
      * @param storeTable the store table
      * @param storeIndex the store index
      * @return the NdbRecordImpl for the index
@@ -244,11 +248,8 @@ public class DbFactoryImpl implements DbFactory {
      * @param tableName the name of the table
      */
     public void unloadSchema(String tableName) {
-        // synchronize to avoid multiple threads unloading schema simultaneously
-        // it is possible although unlikely that another thread is adding an entry while
-        // we are removing entries; if this occurs an error will be signaled here
         boolean haveCachedTable = false;
-        synchronized(dictionaryForNdbRecord) {
+        synchronized(connectionImpl) {
             Iterator<Map.Entry<String, NdbRecordImpl>> iterator = ndbRecordImplMap.entrySet().iterator();
             while (iterator.hasNext()) {
                 Map.Entry<String, NdbRecordImpl> entry = iterator.next();
@@ -272,7 +273,7 @@ public class DbFactoryImpl implements DbFactory {
                     NdbRecordImpl record = entry.getValue();
                     iterator.remove();
                     if (record != null) {
-                        record.releaseNdbRecord();
+                        deadNdbRecords.add(record);
                     }
                 }
             }
@@ -280,7 +281,6 @@ public class DbFactoryImpl implements DbFactory {
             if (haveCachedTable) {
                 if (logger.isDebugEnabled())logger.debug("Removing dictionary entry for cached table " + tableName);
                 dictionaryForNdbRecord.invalidateTable(tableName);
-                dictionaryForNdbRecord.removeCachedTable(tableName);
             }
         }
     }
@@ -323,11 +323,15 @@ public class DbFactoryImpl implements DbFactory {
         for (NdbRecordImpl ndbRecord: ndbRecordImplMap.values()) {
             ndbRecord.releaseNdbRecord();
         }
+        for (NdbRecordImpl ndbRecord: deadNdbRecords) {
+            ndbRecord.releaseNdbRecord();
+        }
         if (dbForNdbRecord != null) {
             dbForNdbRecord.close();
             dbForNdbRecord = null;
         }
         ndbRecordImplMap.clear();
+        deadNdbRecords.clear();
         GlobalCacheRegistry.returnLease(targetCacheSize);
         targetCacheSize = 0;
     }

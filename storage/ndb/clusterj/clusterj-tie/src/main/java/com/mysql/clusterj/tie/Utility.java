@@ -140,6 +140,17 @@ public class Utility {
         NonSevereErrorCodes.add(DUPLICATE_UNIQUE_KEY); // Duplicate unique key on insert
         NonSevereErrorCodes.add(FOREIGN_KEY_NO_PARENT); // Foreign key violation; no parent exists
         NonSevereErrorCodes.add(FOREIGN_KEY_REFERENCED_ROW_EXISTS); // Foreign key violation; referenced row exists
+
+        /* In 9.4.0 we add API handling for schema changes, so schema errors are no longer severe. */
+        NonSevereErrorCodes.add(709);   // No such table
+        NonSevereErrorCodes.add(723);   // No such table
+        NonSevereErrorCodes.add(241);   // Table definition has changed
+        NonSevereErrorCodes.add(284);   // Table definition has changed
+        NonSevereErrorCodes.add(283);   // Table is being dropped
+        NonSevereErrorCodes.add(1226);  // Table is being dropped
+        NonSevereErrorCodes.add(910);   // Index is being dropped
+        NonSevereErrorCodes.add(785);   // Schema object is busy with another transaction
+        NonSevereErrorCodes.add(4292);  // NdbRecord out of date
     }
 
     // TODO: this is intended to investigate a class loader issue with Sparc java

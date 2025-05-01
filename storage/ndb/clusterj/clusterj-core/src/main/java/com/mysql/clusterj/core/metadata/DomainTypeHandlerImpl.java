@@ -28,6 +28,7 @@ package com.mysql.clusterj.core.metadata;
 import com.mysql.clusterj.core.spi.DomainFieldHandler;
 import com.mysql.clusterj.core.spi.ValueHandlerFactory;
 import com.mysql.clusterj.core.spi.ValueHandler;
+import com.mysql.clusterj.ClusterJDatastoreException;
 import com.mysql.clusterj.ClusterJException;
 import com.mysql.clusterj.ClusterJFatalInternalException;
 import com.mysql.clusterj.ClusterJUserException;
@@ -69,23 +70,30 @@ public class DomainTypeHandlerImpl<T> extends AbstractDomainTypeHandlerImpl<T> {
     Class<T> cls;
 
     /** Dynamic class indicator */
-    boolean dynamic = false;
+    final boolean dynamic;
 
     /** The methods of the properties. */
     private Map<String, Method> unmatchedGetMethods = new HashMap<String, Method>();
     private Map<String, Method> unmatchedSetMethods = new HashMap<String, Method>();
 
     /** The Proxy class for the Domain Class. */
-    private Class<T> proxyClass;
+    final private Class<T> proxyClass;
 
     /** The proxy interfaces implemented by the domain object */
-    Class<?>[] proxyInterfaces = null;
+    final Class<?>[] proxyInterfaces;
 
     /** The PersistenceCapable annotation for this class. */
-    PersistenceCapable persistenceCapable;
+    final PersistenceCapable persistenceCapable;
 
     /** The smart value handler factory */
-    ValueHandlerFactory valueHandlerFactory;
+    final ValueHandlerFactory valueHandlerFactory;
+
+    /** Set when schema change has made this DomainTypeHandler invalid,
+        and schema change processing in progress */
+    volatile boolean isClosing;
+
+    /** Set after schema change processing is complete */
+    volatile boolean isClosed;
 
     /* The column number is the entry indexed by field number */
     private int[] fieldNumberToColumnNumberMap;
@@ -117,7 +125,11 @@ public class DomainTypeHandlerImpl<T> extends AbstractDomainTypeHandlerImpl<T> {
             this.dynamic = true;
             // Dynamic object has a handler but no proxy
             this.tableName = getTableNameForDynamicObject((Class<DynamicObject>)cls);
+            proxyClass = null;
+            proxyInterfaces = null;
+            persistenceCapable = null;
         } else {
+            this.dynamic = false;
             if (!cls.isInterface()) {
                 // Only interfaces or subclasses of DynamicObject
                 // can be persistence-capable.
@@ -696,4 +708,16 @@ public class DomainTypeHandlerImpl<T> extends AbstractDomainTypeHandlerImpl<T> {
         return result;
     }
 
+    public String getTableVersion() {
+        if(table == null) return "(unknown)";
+        return table.getVersion();
+    }
+
+    public boolean isClosing()  { return this.isClosing; }
+
+    public void setClosing()    { this.isClosing = true; }
+
+    public boolean isClosed()   { return this.isClosed;  }
+
+    public void setClosed()     { this.isClosed = true;  }
 }

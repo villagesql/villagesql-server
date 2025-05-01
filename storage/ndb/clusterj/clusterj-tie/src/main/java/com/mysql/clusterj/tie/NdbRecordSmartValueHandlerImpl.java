@@ -34,6 +34,7 @@ import java.sql.Date;
 import java.sql.Time;
 import java.sql.Timestamp;
 
+import com.mysql.clusterj.ClusterJDatastoreException;
 import com.mysql.clusterj.ClusterJFatalInternalException;
 import com.mysql.clusterj.ClusterJUserException;
 import com.mysql.clusterj.ColumnMetadata;
@@ -712,6 +713,15 @@ public class NdbRecordSmartValueHandlerImpl implements SmartValueHandler {
         this.found = found;
     }
 
+    private DomainFieldHandler getDomainFieldHandler(int index) {
+        try {
+            return domainFieldHandlers[index];
+        } catch (Throwable t) {
+            throw ClusterJDatastoreException.forSchemaChange(
+                "Obsolete schema in ValueHandler", -3, t);
+        }
+    }
+
     /** Return the value of a dynamic field stored in the NdbRecord buffer.
      * @param fieldNumber the field number
      * @return the value from data storage
@@ -722,7 +732,7 @@ public class NdbRecordSmartValueHandlerImpl implements SmartValueHandler {
         if (columnId < 0) {
             return transientValues[-1 - columnId];
         }
-        return domainFieldHandlers[fieldNumber].objectGetValue(this);
+        return getDomainFieldHandler(fieldNumber).objectGetValue(this);
     }
 
     public void set(int fieldNumber, Object value) {
@@ -732,7 +742,7 @@ public class NdbRecordSmartValueHandlerImpl implements SmartValueHandler {
             transientValues[-1 - columnId] = value;
             transientModified[-1 - columnId] = true;
         } else {
-            domainFieldHandlers[fieldNumber].objectSetValue(value, this);
+            getDomainFieldHandler(fieldNumber).objectSetValue(value, this);
         }
     }
 

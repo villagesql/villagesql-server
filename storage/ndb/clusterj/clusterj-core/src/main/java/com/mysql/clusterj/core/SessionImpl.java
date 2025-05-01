@@ -29,6 +29,7 @@ import com.mysql.clusterj.ClusterJDatastoreException;
 import com.mysql.clusterj.ClusterJDatastoreException.Classification;
 import com.mysql.clusterj.ClusterJException;
 import com.mysql.clusterj.ClusterJFatalInternalException;
+import com.mysql.clusterj.ClusterJTableException;
 import com.mysql.clusterj.ClusterJUserException;
 import com.mysql.clusterj.Connection;
 import com.mysql.clusterj.DynamicObject;
@@ -464,11 +465,11 @@ public class SessionImpl implements SessionSPI, CacheManager, StoreManager {
             setPartitionKey(domainTypeHandler, valueHandler);
             if (valueHandler instanceof SmartValueHandler) {
                 try {
-                SmartValueHandler smartValueHandler = (SmartValueHandler)valueHandler;
-                Operation result = smartValueHandler.insert(clusterTransaction);
-                valueHandler.resetModified();
-                endAutoTransaction();
-                return result;
+                    SmartValueHandler smartValueHandler = (SmartValueHandler)valueHandler;
+                    Operation result = smartValueHandler.insert(clusterTransaction);
+                    valueHandler.resetModified();
+                    endAutoTransaction();
+                    return result;
                 } catch (ClusterJException cjex) {
                     failAutoTransaction();
                     throw cjex;
@@ -559,10 +560,10 @@ public class SessionImpl implements SessionSPI, CacheManager, StoreManager {
             setPartitionKey(domainTypeHandler, valueHandler);
             if (valueHandler instanceof SmartValueHandler) {
                 try {
-                SmartValueHandler smartValueHandler = (SmartValueHandler)valueHandler;
-                Operation result = smartValueHandler.delete(clusterTransaction);
-                endAutoTransaction();
-                return result;
+                    SmartValueHandler smartValueHandler = (SmartValueHandler)valueHandler;
+                    Operation result = smartValueHandler.delete(clusterTransaction);
+                    endAutoTransaction();
+                    return result;
                 } catch (ClusterJException cjex) {
                     failAutoTransaction();
                     throw cjex;
@@ -728,10 +729,10 @@ public class SessionImpl implements SessionSPI, CacheManager, StoreManager {
             setPartitionKey(domainTypeHandler, valueHandler);
             if (valueHandler instanceof SmartValueHandler) {
                 try {
-                SmartValueHandler smartValueHandler = (SmartValueHandler)valueHandler;
-                Operation result = smartValueHandler.update(clusterTransaction);
-                endAutoTransaction();
-                return result;
+                    SmartValueHandler smartValueHandler = (SmartValueHandler)valueHandler;
+                    Operation result = smartValueHandler.update(clusterTransaction);
+                    endAutoTransaction();
+                    return result;
                 } catch (ClusterJException cjex) {
                     failAutoTransaction();
                     throw cjex;
@@ -789,11 +790,11 @@ public class SessionImpl implements SessionSPI, CacheManager, StoreManager {
             }
             if (valueHandler instanceof SmartValueHandler) {
                 try {
-                SmartValueHandler smartValueHandler = (SmartValueHandler)valueHandler;
-                smartValueHandler.write(clusterTransaction);
-                valueHandler.resetModified();
-                endAutoTransaction();
-                return instance;
+                    SmartValueHandler smartValueHandler = (SmartValueHandler)valueHandler;
+                    smartValueHandler.write(clusterTransaction);
+                    valueHandler.resetModified();
+                    endAutoTransaction();
+                    return instance;
                 } catch (ClusterJException cjex) {
                     failAutoTransaction();
                     throw cjex;
@@ -1594,7 +1595,15 @@ public class SessionImpl implements SessionSPI, CacheManager, StoreManager {
      */
     public String unloadSchema(Class<?> cls) {
         assertNotClosed();
-        return factory.unloadSchema(cls, dictionary);
+        String tableName = factory.unloadSchema(cls, dictionary);
+        if(tableName == null) {
+            try {
+                var instance = newInstance(cls);
+                tableName = factory.unloadSchema(cls, dictionary);
+            } catch (ClusterJTableException tableNotFound) {
+            }
+        }
+        return tableName;
     }
 
     /** Release resources associated with an instance. The instance must be a domain object obtained via

@@ -107,6 +107,7 @@ class DbImpl extends DbImplCore implements Db {
     /** The autoincrement start */
     private long autoIncrementStart;
 
+    /* New DbImpl from freshly created Ndb (dictionary prefers local cache) */
     public DbImpl(DbFactoryImpl factory, Ndb ndb, int maxTransactions) {
         super(ndb, maxTransactions); // calls init(), sets maxTransactions and ndbDictionary
         handleInitError();
@@ -118,9 +119,10 @@ class DbImpl extends DbImplCore implements Db {
         this.partitionKeyScratchBuffer =
                 clusterConnection.byteBufferPoolForPartitionKey.borrowBuffer();
         this.bufferManager = new BufferManager(factory.getByteBufferPool());
-        this.dictionary = new DictionaryImpl(ndbDictionary, factory);
+        this.dictionary = new DictionaryImpl(ndbDictionary, factory, true);
     }
 
+    /* New DbImpl from cached Ndb (dictionary skips local cache) */
     public DbImpl(DbFactoryImpl factory, DbImplCore item) {
         super(item); // sets maxTransactions and ndbDictionary
         this.parentFactory = factory;
@@ -130,7 +132,7 @@ class DbImpl extends DbImplCore implements Db {
         this.partitionKeyScratchBuffer =
                 clusterConnection.byteBufferPoolForPartitionKey.borrowBuffer();
         this.bufferManager = new BufferManager(factory.getByteBufferPool());
-        this.dictionary = new DictionaryImpl(ndbDictionary, factory);
+        this.dictionary = new DictionaryImpl(ndbDictionary, factory, false);
     }
 
     public void close() {
@@ -193,7 +195,16 @@ class DbImpl extends DbImplCore implements Db {
         return ndb.getNdbErrorDetail(ndbError, errorBuffer, errorBuffer.capacity());
     }
 
-    /** Enlist an NdbTransaction using table and key data to specify 
+    Key_part_ptrArray createKeyPartPtrArray(int size) {
+        Key_part_ptrArray result = null;
+        int attempts = 0;
+        while (result == null && attempts++ < 10) {
+            result = Key_part_ptrArray.create(size);
+        }
+        return result;
+    }
+
+    /** Enlist an NdbTransaction using table and key data to specify
      * the transaction coordinator.
      * 
      * @param tableName the name of the table
@@ -209,8 +220,8 @@ class DbImpl extends DbImplCore implements Db {
         int keyPartsSize = keyParts.size();
         NdbTransaction ndbTransaction = null;
         TableConst table = ndbDictionary.getTable(tableName);
-        Key_part_ptrArray key_part_ptrArray = null;
-        key_part_ptrArray = Key_part_ptrArray.create(keyPartsSize + 1);
+        Key_part_ptrArray key_part_ptrArray;
+        key_part_ptrArray = createKeyPartPtrArray(keyPartsSize + 1);
         try {
             // the key part pointer array has one entry for each key part
             // plus one extra for "null-terminated array concept"
@@ -230,9 +241,15 @@ class DbImpl extends DbImplCore implements Db {
                 partitionKeyScratchBuffer, partitionKeyScratchBuffer.capacity());
             handleError (ndbTransaction, ndb);
             return ndbTransaction;
+        } catch (ClusterJDatastoreException dse) {
+            throw dse;
+        } catch (Throwable t) {
+            throw new ClusterJDatastoreException(
+                local.message("ERR_Transaction_Start_Failed", t));
         } finally {
             // even if error, delete the key part array to avoid memory leaks
-            Key_part_ptrArray.delete(key_part_ptrArray);
+            if(key_part_ptrArray != null)
+                Key_part_ptrArray.delete(key_part_ptrArray);
             // return the borrowed buffers for the partition key
             for (int i = 0; i < keyPartsSize; ++i) {
                 KeyPart keyPart = keyParts.get(i);

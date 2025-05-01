@@ -25,6 +25,7 @@
 
 package com.mysql.clusterj.core;
 
+import com.mysql.clusterj.annotation.PersistenceCapable;
 import com.mysql.clusterj.ClusterJDatastoreException;
 import com.mysql.clusterj.ClusterJException;
 import com.mysql.clusterj.ClusterJFatalException;
@@ -32,6 +33,7 @@ import com.mysql.clusterj.ClusterJFatalInternalException;
 import com.mysql.clusterj.ClusterJFatalUserException;
 import com.mysql.clusterj.ClusterJUserException;
 import com.mysql.clusterj.Connection;
+import com.mysql.clusterj.DynamicObject;
 import com.mysql.clusterj.Session;
 import com.mysql.clusterj.SessionFactory;
 import com.mysql.clusterj.core.spi.DomainTypeHandler;
@@ -51,6 +53,7 @@ import com.mysql.clusterj.core.util.LoggerFactoryService;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -226,8 +229,12 @@ public class SessionFactoryImpl implements SessionFactory {
     static private Map<Class<?>, Class<?>> proxyClassToDomainClass =
             new ConcurrentHashMap<>();
 
-    /** Map of Domain Class to DomainTypeHandler. */
-    final private Map<Class<?>, DomainTypeHandler<?>> typeToHandlerMap =
+    /** Main map of Domain Class to DomainTypeHandler */
+    final private ConcurrentMap<Class<?>, DomainTypeHandler<?>> typeToHandlerMap =
+            new ConcurrentHashMap<Class<?>, DomainTypeHandler<?>>();
+
+    /** DomainTypeHandler map used only during schema change handling */
+    final private Map<Class<?>, DomainTypeHandler<?>> schemaLocks =
             new HashMap<Class<?>, DomainTypeHandler<?>>();
 
     /** DomainTypeHandlerFactory for this session factory. */
@@ -447,12 +454,11 @@ public class SessionFactoryImpl implements SessionFactory {
      * @return the DomainTypeHandler or null if not available
      */
     <T> DomainTypeHandler<T> getDomainTypeHandler(Class<T> cls) {
-        // synchronize here because the map is not synchronized
-        synchronized(typeToHandlerMap) {
-            @SuppressWarnings( "unchecked" )
-            DomainTypeHandler<T> domainTypeHandler = (DomainTypeHandler<T>) typeToHandlerMap.get(cls);
-            return domainTypeHandler;
-        }
+        @SuppressWarnings( "unchecked" )
+        DomainTypeHandler<T> domainTypeHandler = (DomainTypeHandler<T>) typeToHandlerMap.get(cls);
+        if(domainTypeHandler.isClosing())
+            throw ClusterJDatastoreException.forSchemaChange(domainTypeHandler);
+        return domainTypeHandler;
     }
 
     /** Create or get the DomainTypeHandler for a class.
@@ -462,25 +468,45 @@ public class SessionFactoryImpl implements SessionFactory {
      * @return the type handler
      */
     public <T> DomainTypeHandler<T> getDomainTypeHandler(Class<T> cls, Dictionary dictionary) {
-        // synchronize here because the map is not synchronized
-        synchronized(typeToHandlerMap) {
-            @SuppressWarnings("unchecked")
-            DomainTypeHandler<T> domainTypeHandler = (DomainTypeHandler<T>) typeToHandlerMap.get(cls);
-            if (logger.isDetailEnabled()) logger.detail("DomainTypeToHandler for "
-                    + cls.getName() + "(" + cls + ") returned " + domainTypeHandler);
-            if (domainTypeHandler == null) {
-                domainTypeHandler = domainTypeHandlerFactory.createDomainTypeHandler(cls,
-                        dictionary, smartValueHandlerFactory);
-                if (logger.isDetailEnabled()) logger.detail("createDomainTypeHandler for "
-                        + cls.getName() + "(" + cls + ") returned " + domainTypeHandler);
-                typeToHandlerMap.put(cls, domainTypeHandler);
-                Class<?> proxyClass = domainTypeHandler.getProxyClass();
-                if (proxyClass != null) {
-                    proxyClassToDomainClass.put(proxyClass, cls);
-                }
-            }
-            return domainTypeHandler;
+        @SuppressWarnings("unchecked")
+        DomainTypeHandler<T> domainTypeHandler = (DomainTypeHandler<T>) typeToHandlerMap.get(cls);
+
+        if (domainTypeHandler == null) {
+            domainTypeHandler = createTypeHandlerInMaps(cls, dictionary);
+        } else if(domainTypeHandler.isClosing()) {
+            throw ClusterJDatastoreException.forSchemaChange(domainTypeHandler);
         }
+
+        return domainTypeHandler;
+    }
+
+    /* Creation of DomainTypeHandlers must be serialized, because there are
+       components (possibly gcreate() in jtie, possibly in NdbDictionary...) that
+       misbehave under concurrent use. After failing in getDomainTypeHandler()
+       above, a thread will wait for the lock here, and then check again in the
+       map, and, failing again, will create the DomainTypeHandler.
+
+       Some threads might delete an entry from typeToHandlerMap from outside this
+       function (and not holding the SessionFactoryImpl intrinsic lock), but no
+       thread may insert a value into the map except from this function.
+    */
+    synchronized <T> DomainTypeHandler<T> createTypeHandlerInMaps(Class<T> cls, Dictionary dictionary) {
+        @SuppressWarnings("unchecked")
+        DomainTypeHandler<T> domainTypeHandler = (DomainTypeHandler<T>) typeToHandlerMap.get(cls);
+
+        if(domainTypeHandler != null) return domainTypeHandler;
+
+        domainTypeHandler = domainTypeHandlerFactory.createDomainTypeHandler(
+            cls, dictionary, smartValueHandlerFactory);
+        typeToHandlerMap.put(cls, domainTypeHandler);
+        logger.detail(() -> "Created DomainTypeHandler for class " + cls.getName());
+
+        Class<?> proxyClass = domainTypeHandler.getProxyClass();
+        if (proxyClass != null) {
+            proxyClassToDomainClass.put(proxyClass, cls);
+        }
+
+        return domainTypeHandler;
     }
 
     /** Create or get the DomainTypeHandler for an instance.
@@ -545,24 +571,128 @@ public class SessionFactoryImpl implements SessionFactory {
         return result;
     }
 
-    public String unloadSchema(Class<?> cls, Dictionary dictionary) {
-        synchronized(typeToHandlerMap) {
-            String tableName = null;
-            DomainTypeHandler<?> domainTypeHandler = typeToHandlerMap.remove(cls);
-            if (domainTypeHandler != null) {
-                // remove the ndb dictionary cached table definition
-                tableName = domainTypeHandler.getTableName();
-                if (tableName != null) {
-                    if (logger.isDebugEnabled())logger.debug("Removing dictionary entry for table " + tableName
-                            + " for class " + cls.getName());
-                    dictionary.removeCachedTable(tableName);
-                    for (PooledConnection connection: pooledConnections) {
-                        connection.unloadSchema(tableName);
+    /*                    == Schema Change Handling ==
+
+       When stale metadata has caused a DomainTypeHandler to become unusable,
+       set the DomainTypeHandler to closing, copy it into the schemaLocks map,
+       and then use its intrinsic lock to ensure that schema change handling is
+       properly serialized. Handling consists of removing cached objects that
+       depend on the metadata, purging the metadata from the local dictionary,
+       and then reloading fresh metadata over the network.
+
+       getSchemaLock() is only called from unloadSchema().
+
+       After stale-metadata errors (like 241, 284...) the first thread
+       to call unloadSchema() creates the schema lock. Other threads in
+       getDomainTypeHandler() will see that the TypeHandler is closing and
+       throw a "schema change in progress" exception. Subsequent threads
+       that call into unloadSchema() and fetch the same schema lock will
+       block, waiting for the change to complete. The first thread completes
+       the schema change handling, sets the TypeHandler to closed, removes
+       it from the main map, and then releases the lock.
+    */
+    private DomainTypeHandler<?> getSchemaLock(Class<?> cls) {
+        synchronized(schemaLocks) {
+            DomainTypeHandler<?> handler = schemaLocks.get(cls);
+
+            if(handler == null) {
+                handler = typeToHandlerMap.get(cls);
+                if(handler == null) {
+                    String tableName = getTableNameForClass(cls);
+                    if(tableName != null) {
+                        for (DomainTypeHandler<?> entry : typeToHandlerMap.values()) {
+                            if(entry.getTableName().equals(tableName)) {
+                                handler = entry;
+                                break;
+                            }
+                        }
                     }
                 }
+                if(handler == null) {
+                    // The table has yet not been mapped to any class. The first
+                    // time here, SessionImpl will create a DomainTypeHandler
+                    // by calling newInstance(cls), and then retry.
+                    return null;
+                }
+                logger.debug(() -> "Creating schema lock");
+                handler.setClosing();
+                schemaLocks.put(cls, handler);
             }
+
+            return handler;
+        }
+    }
+
+    public String unloadSchema(Class<?> cls, Dictionary dictionary) {
+        DomainTypeHandler<?> typeHandler = getSchemaLock(cls);
+        if(typeHandler == null)
+            return null;
+
+        // Threads wait here, then run the following block one at a time
+        synchronized(typeHandler) {
+            cls = typeHandler.getDomainClass();
+            if(typeHandler.isClosed()) {
+                // Some other thread has done the work
+                return typeHandler.getTableName();
+            }
+
+            // The first thread to get here handles the schema change
+            String tableName = typeHandler.getTableName();
+            assert tableName != null;
+            String oldVer = typeHandler.getTableVersion();
+
+            // The DbFactories will remove cached NdbRecords, and
+            // flush the stale table from the global dictionary cache
+            for (PooledConnection connection: pooledConnections) {
+                connection.unloadSchema(tableName);
+            }
+
+            // Also remove the table from the session's local dictionary cache
+            dictionary.invalidateTable(tableName);
+
+            // Try to create a new DomainTypeHandler now, to force the metadata
+            // to be refreshed over the network; ignore any errors.
+            try {
+                DomainTypeHandler<?> dummy = domainTypeHandlerFactory
+                    .createDomainTypeHandler(cls, dictionary, smartValueHandlerFactory);
+                String newVer = dummy.getTableVersion();
+                logger.info(() -> "Schema change - replaced DomainTypeHandler for " +
+                            tableName + " version " + oldVer + " with version " + newVer);
+            } catch (ClusterJDatastoreException ex) {
+                logger.info(() -> "Schema change - removed DomainTypeHandler for " +
+                            tableName + " version " + oldVer);
+            }
+
+            // Remove the old handler from the main map
+            typeToHandlerMap.remove(cls);
+
+            // Close the old DomainTypeHandler
+            typeHandler.setClosed();
+
+            // Remove the schema lock
+            schemaLocks.remove(cls);
+
             return tableName;
         }
+    }
+
+    private <T> String getTableNameForClass(Class<T> cls) {
+        String tableName = null;
+        if (DynamicObject.class.isAssignableFrom(cls)) {
+            try {
+                DynamicObject test = (DynamicObject) cls.getDeclaredConstructor().newInstance();
+                tableName = test.table();
+            } catch (Exception e) {
+                logger.warn(local.message("ERR_Create_Instance", cls.toString()));
+                return null;
+            }
+        } else {
+            PersistenceCapable persistenceCapable = cls.getAnnotation(PersistenceCapable.class);
+            if (persistenceCapable != null) {
+                tableName = persistenceCapable.table();
+            }
+        }
+        return tableName;
     }
 
     /** Shut down the session factory by closing all pooled cluster connections
@@ -660,19 +790,18 @@ public class SessionFactoryImpl implements SessionFactory {
         }
     }
 
-    void do_reconnect() {
+    synchronized void do_reconnect() {
         pooledConnections.clear();
         // remove all DomainTypeHandlers, as they embed references to
         // Ndb dictionary objects which have been removed
         typeToHandlerMap.clear();
+        schemaLocks.clear();
 
         logger.warn(local.message("WARN_Reconnect_creating"));
         createClusterConnectionPool();
         verifyConnectionPool();
         logger.warn(local.message("WARN_Reconnect_reopening"));
-        synchronized(this) {
-            state = State.Open;
-        }
+        state = State.Open;
     }
 
     public void setRecvThreadCPUids(short[] newCpuId) {

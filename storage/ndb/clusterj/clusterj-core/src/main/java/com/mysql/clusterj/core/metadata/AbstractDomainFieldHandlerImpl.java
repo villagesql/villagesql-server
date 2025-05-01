@@ -282,11 +282,18 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         objectOperationHandlerDelegate.objectSetValue(this, key, handler);
     }
 
+    private ClusterJDatastoreException exceptionForDelegate(String operation, Exception cause) {
+        return ClusterJDatastoreException.forSchemaChange(
+            local.message("ERR_Value_Delegate", name, columnName,
+                objectOperationHandlerDelegate.handler(), operation),
+            -4, cause);
+    }
+
     public void objectSetValue(ResultData rs, ValueHandler handler) {
         try {
             objectOperationHandlerDelegate.objectSetValue(this, rs, handler);
         } catch (Exception ex) {
-            throw new ClusterJDatastoreException(local.message("ERR_Value_Delegate", name, columnName, objectOperationHandlerDelegate.handler(), "objectSetValue"), ex);
+            throw exceptionForDelegate("objectSetValue", ex);
         }
     }
 
@@ -294,7 +301,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         try {
             objectOperationHandlerDelegate.objectSetValue(this, value, handler);
         } catch (Exception ex) {
-            throw new ClusterJDatastoreException(local.message("ERR_Value_Delegate", name, columnName, objectOperationHandlerDelegate.handler(), "objectSetValue"), ex);
+            throw exceptionForDelegate("objectSetValue", ex);
         }
     }
 
@@ -302,7 +309,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         try {
             return objectOperationHandlerDelegate.objectGetValue(this, handler);
         } catch (Exception ex) {
-            throw new ClusterJDatastoreException(local.message("ERR_Value_Delegate", name, columnName, objectOperationHandlerDelegate.handler(), "objectGetValue"), ex);
+            throw exceptionForDelegate("objectGetValue", ex);
         }
     }
 
@@ -312,7 +319,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
                 objectOperationHandlerDelegate.objectSetValue(this, rs, handler);
             }
         } catch (Exception ex) {
-            throw new ClusterJDatastoreException(local.message("ERR_Value_Delegate", name, columnName, objectOperationHandlerDelegate.handler(), "objectSetValueExcept"), ex);
+            throw exceptionForDelegate("objectSetValueExcept", ex);
         }
     }
 
@@ -327,8 +334,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         try {
             objectOperationHandlerDelegate.operationEqual(this, value, op);
         } catch (Exception ex) {
-            ex.printStackTrace();
-            throw new ClusterJDatastoreException(local.message("ERR_Value_Delegate", name, columnName, objectOperationHandlerDelegate.handler(), "operationEqual"), ex);
+            throw exceptionForDelegate("operationEqual", ex);
         }
     }
 
@@ -343,7 +349,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         try {
             objectOperationHandlerDelegate.operationGetValue(this, op);
         } catch (Exception ex) {
-            throw new ClusterJDatastoreException(local.message("ERR_Value_Delegate", name, columnName, objectOperationHandlerDelegate.handler(), "operationGetValue"), ex);
+            throw exceptionForDelegate("operationGetValue", ex);
         }
     }
 
@@ -354,7 +360,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         try {
             objectOperationHandlerDelegate.operationSetBounds(this, value, type, op);
         } catch (Exception ex) {
-            throw new ClusterJDatastoreException(local.message("ERR_Value_Delegate", name, columnName, objectOperationHandlerDelegate.handler(), "operationSetBounds"), ex);
+            throw exceptionForDelegate("operationSetBounds", ex);
         }
     }
 
@@ -372,7 +378,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         try {
             objectOperationHandlerDelegate.operationSetValue(this, handler, op);
         } catch (ClusterJDatastoreException ex) {
-            throw new ClusterJDatastoreException(local.message("ERR_Value_Delegate", name, columnName, objectOperationHandlerDelegate.handler(), "operationSetValue"), ex);
+            throw exceptionForDelegate("operationSetValue", ex);
         }
     }
 
@@ -383,7 +389,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         try {
             objectOperationHandlerDelegate.operationSetValue(this, value, op);
         } catch (ClusterJDatastoreException ex) {
-            throw new ClusterJDatastoreException(local.message("ERR_Value_Delegate", name, columnName, objectOperationHandlerDelegate.handler(), "operationSetValue"), ex);
+            throw exceptionForDelegate("operationSetValue", ex);
         }
     }
 
@@ -391,7 +397,7 @@ public abstract class AbstractDomainFieldHandlerImpl implements DomainFieldHandl
         try {
             objectOperationHandlerDelegate.operationSetValue(fmd, value, op);
         } catch (Exception ex) {
-            throw new ClusterJDatastoreException(local.message("ERR_Value_Delegate", name, columnName, objectOperationHandlerDelegate.handler(), "operationSetValue"), ex);
+            throw exceptionForDelegate("operationSetValue", ex);
         }
     }
 

@@ -262,7 +262,7 @@ public class NdbRecordImpl {
         for (String projectedColumnName: storeTable.getProjectedColumnNames()) {
             this.projectedColumnSet.add(projectedColumnName);
         }
-        this.recordSpecificationArray = RecordSpecificationArray.create(numberOfIndexColumns);
+        this.recordSpecificationArray = createRecordSpecificationArray(numberOfIndexColumns);
         try {
             this.ndbRecord = createNdbRecord(storeIndex, storeTable, ndbDictionary);
             if (logger.isDetailEnabled()) logger.detail(storeIndex.getInternalName() + " " + dumpDefinition());
@@ -325,6 +325,15 @@ public class NdbRecordImpl {
     /** Check the NdbRecord buffer guard */
     protected void checkGuard(ByteBuffer buffer, String where) {
         bufferPool.checkGuard(buffer, where);
+    }
+
+    RecordSpecificationArray createRecordSpecificationArray(int size) {
+        RecordSpecificationArray result = null;
+        int attempts = 0;
+        while (result == null && attempts++ < 10) {
+            result = RecordSpecificationArray.create(size);
+        }
+        return result;
     }
 
     /** Make a buffer ready for use and optionally initialize it with default values for all columns.
@@ -790,7 +799,7 @@ public class NdbRecordImpl {
 
     protected NdbRecord createNdbRecord(Index storeIndex, Table storeTable, Dictionary ndbDictionary) {
         String[] columnNames = storeIndex.getColumnNames();
-        this.recordSpecificationArray = RecordSpecificationArray.create(columnNames.length);
+        this.recordSpecificationArray = createRecordSpecificationArray(columnNames.length);
         // analyze columns; sort into alignment buckets, allocate space in the buffer
         // and build the record specification array
         analyzeColumns(storeTable, columnNames);
@@ -813,7 +822,7 @@ public class NdbRecordImpl {
         // only allocate space in the NdbRecord for projected columns
         String[] columnNames = storeTable.getColumnNames();
         String[] projectedColumnNames = storeTable.getProjectedColumnNames();
-        this.recordSpecificationArray = RecordSpecificationArray.create(projectedColumnNames.length);
+        this.recordSpecificationArray = createRecordSpecificationArray(projectedColumnNames.length);
         // analyze columns; sort into alignment buckets, allocate space in the buffer,
         // and build the record specification array
         analyzeColumns(storeTable, columnNames);
