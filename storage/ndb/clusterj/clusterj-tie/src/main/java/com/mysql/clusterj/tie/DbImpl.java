@@ -209,7 +209,6 @@ class DbImpl extends DbImplCore implements Db {
         int keyPartsSize = keyParts.size();
         NdbTransaction ndbTransaction = null;
         TableConst table = ndbDictionary.getTable(tableName);
-        handleError(table, ndbDictionary);
         Key_part_ptrArray key_part_ptrArray = null;
         key_part_ptrArray = Key_part_ptrArray.create(keyPartsSize + 1);
         try {

@@ -85,6 +85,9 @@ public class DbFactoryImpl implements DbFactory {
     /* Current target size of the session cache */
     int targetCacheSize;
 
+    /* Dictionary wait/retry time for table not found in getTable() */
+    int tableWaitMsec;
+
     protected DbFactoryImpl(ClusterConnectionImpl conn, String dbName,
                             int[] byteBufferPoolSizes) {
         connectionImpl = conn;
@@ -100,6 +103,14 @@ public class DbFactoryImpl implements DbFactory {
     public void useSessionCache(int size) {
         localMaxCacheSize = size;
         GlobalCacheRegistry.increaseLimit(size);
+    }
+
+    public void setTableWaitTime(int waitMsec) {
+        tableWaitMsec = waitMsec;
+    }
+
+    public int getTableWaitTime() {
+        return tableWaitMsec;
     }
 
     public Db createDb(int maxTransactions) {

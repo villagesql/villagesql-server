@@ -37,6 +37,8 @@ public interface DbFactory {
 
     public void useSessionCache(int cacheSize);
 
+    public void setTableWaitTime(int waitMsec);
+
     public Db createDb(int maxTransactions);
 
     public void closeDb(Db db);

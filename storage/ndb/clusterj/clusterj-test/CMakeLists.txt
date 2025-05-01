@@ -146,6 +146,7 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_TESTSUITE_PREFIX}/SerialTransactionsTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/SessionFactoryTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/StressTest.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/TableNotFoundTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/TableWithoutPKTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/TimeAsSqlTimeTypesTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/TimeAsUtilDateTypesTest.java

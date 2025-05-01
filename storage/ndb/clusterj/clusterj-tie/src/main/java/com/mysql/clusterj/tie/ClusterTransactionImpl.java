@@ -220,7 +220,6 @@ class ClusterTransactionImpl implements ClusterTransaction {
             return new NdbRecordDeleteOperationImpl(this, storeTable);
         }
         TableConst ndbTable = ndbDictionary.getTable(storeTable.getName());
-        handleError(ndbTable, ndbDictionary);
         NdbOperation ndbOperation = ndbTransaction.getNdbOperation(ndbTable);
         handleError(ndbOperation, ndbTransaction);
         int returnCode = ndbOperation.deleteTuple();
@@ -235,7 +234,6 @@ class ClusterTransactionImpl implements ClusterTransaction {
             return new NdbRecordInsertOperationImpl(this, storeTable);
         }
         TableConst ndbTable = ndbDictionary.getTable(storeTable.getName());
-        handleError(ndbTable, ndbDictionary);
         NdbOperation ndbOperation = ndbTransaction.getNdbOperation(ndbTable);
         handleError(ndbOperation, ndbTransaction);
         int returnCode = ndbOperation.insertTuple();
@@ -310,7 +308,6 @@ class ClusterTransactionImpl implements ClusterTransaction {
             return new NdbRecordKeyOperationImpl(this, storeTable);
         }
         TableConst ndbTable = ndbDictionary.getTable(storeTable.getName());
-        handleError(ndbTable, ndbDictionary);
         NdbOperation ndbOperation = ndbTransaction.getNdbOperation(ndbTable);
         handleError(ndbOperation, ndbTransaction);
         int lockMode = findLockMode;
@@ -326,7 +323,6 @@ class ClusterTransactionImpl implements ClusterTransaction {
             return new NdbRecordTableScanOperationImpl(this, storeTable, tableScanLockMode);
         }
         TableConst ndbTable = ndbDictionary.getTable(storeTable.getName());
-        handleError(ndbTable, ndbDictionary);
         NdbScanOperation ndbScanOperation = ndbTransaction.getNdbScanOperation(ndbTable);
         handleError(ndbScanOperation, ndbTransaction);
         int lockMode = tableScanLockMode;
@@ -345,7 +341,6 @@ class ClusterTransactionImpl implements ClusterTransaction {
     public ScanOperation getTableScanOperationLockModeExclusiveScanFlagKeyInfo(Table storeTable) {
         enlist();
         TableConst ndbTable = ndbDictionary.getTable(storeTable.getName());
-        handleError(ndbTable, ndbDictionary);
         NdbScanOperation ndbScanOperation = ndbTransaction.getNdbScanOperation(ndbTable);
         handleError(ndbScanOperation, ndbTransaction);
         int lockMode = com.mysql.ndbjtie.ndbapi.NdbOperationConst.LockMode.LM_Exclusive;
@@ -389,7 +384,6 @@ class ClusterTransactionImpl implements ClusterTransaction {
     public Operation getUpdateOperation(Table storeTable) {
         enlist();
         TableConst ndbTable = ndbDictionary.getTable(storeTable.getName());
-        handleError(ndbTable, ndbDictionary);
         NdbOperation ndbOperation = ndbTransaction.getNdbOperation(ndbTable);
         handleError(ndbOperation, ndbTransaction);
         int returnCode = ndbOperation.updateTuple();
@@ -413,7 +407,6 @@ class ClusterTransactionImpl implements ClusterTransaction {
     public Operation getWriteOperation(Table storeTable) {
         enlist();
         TableConst ndbTable = ndbDictionary.getTable(storeTable.getName());
-        handleError(ndbTable, ndbDictionary);
         NdbOperation ndbOperation = ndbTransaction.getNdbOperation(ndbTable);
         handleError(ndbOperation, ndbTransaction);
         int returnCode = ndbOperation.writeTuple();
@@ -672,8 +665,8 @@ class ClusterTransactionImpl implements ClusterTransaction {
         return bufferManager;
     }
 
-    /** Get the cached NdbRecordImpl for this table. The NdbRecordImpl is cached in the
-     * cluster connection.
+    /** Get the cached NdbRecordImpl for this table.
+     * The NdbRecordImpl is cached in the DbFactory.
      * @param storeTable the table
      * @return
      */
@@ -681,8 +674,8 @@ class ClusterTransactionImpl implements ClusterTransaction {
         return db.getCachedNdbRecordImpl(storeTable);
     }
 
-    /** Get the cached NdbRecordImpl for this index and table. The NdbRecordImpl is cached in the
-     * cluster connection.
+    /** Get the cached NdbRecordImpl for this index and table.
+     * The NdbRecordImpl is cached in the DbFactory.
      * @param storeTable the table
      * @param storeIndex the index
      * @return

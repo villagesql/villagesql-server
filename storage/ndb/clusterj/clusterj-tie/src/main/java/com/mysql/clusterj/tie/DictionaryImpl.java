@@ -25,12 +25,15 @@
 
 package com.mysql.clusterj.tie;
 
-import com.mysql.ndbjtie.ndbapi.NdbDictionary.Dictionary;
+import com.mysql.clusterj.ClusterJTableException;
+
+import com.mysql.ndbjtie.ndbapi.NdbDictionary;
 import com.mysql.ndbjtie.ndbapi.NdbDictionary.DictionaryConst;
 import com.mysql.ndbjtie.ndbapi.NdbDictionary.DictionaryConst.ListConst.Element;
 import com.mysql.ndbjtie.ndbapi.NdbDictionary.DictionaryConst.ListConst.ElementArray;
 import com.mysql.ndbjtie.ndbapi.NdbDictionary.IndexConst;
 import com.mysql.ndbjtie.ndbapi.NdbDictionary.TableConst;
+import com.mysql.ndbjtie.ndbapi.NdbErrorConst;
 
 import com.mysql.clusterj.core.store.Index;
 import com.mysql.clusterj.core.store.Table;
@@ -44,32 +47,75 @@ import com.mysql.clusterj.core.util.LoggerFactoryService;
  */
 class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
 
-    /** My message translator */
-    static final I18NHelper local = I18NHelper
-            .getInstance(DictionaryImpl.class);
-
     /** My logger */
     static final Logger logger = LoggerFactoryService.getFactory()
             .getInstance(DictionaryImpl.class);
 
-    private Dictionary ndbDictionary;
+    private final NdbDictionary.Dictionary ndbDictionary;
 
-    private DbFactoryImpl dbFactory;
+    private final DbFactoryImpl dbFactory;
 
-    public DictionaryImpl(Dictionary ndbDictionary, DbFactoryImpl dbConnection) {
+    /* waitMsec in nanos; max allowed execution time */
+    private final long maxNanos;
+
+    /* Set of wait times per iteration in the getTable() wait loop */
+    private final int[] configWaitTimes;
+
+    public DictionaryImpl(NdbDictionary.Dictionary ndbDictionary,
+                          DbFactoryImpl dbFactory) {
         this.ndbDictionary = ndbDictionary;
-        this.dbFactory = dbConnection;
+        this.dbFactory = dbFactory;
+
+        /* Configure the wait loop in getTable().
+        */
+        int waitMsec = dbFactory.getTableWaitTime();
+        maxNanos = waitMsec * 1000000;
+        if(waitMsec == 0) {
+            configWaitTimes = new int[0];
+        } else if(waitMsec <= 5) {
+            configWaitTimes = new int[1];
+            configWaitTimes[0] = waitMsec;
+        } else {
+            configWaitTimes = new int[4];
+            configWaitTimes[0] = waitMsec / 10;         // 1 tenth
+            configWaitTimes[1] = (waitMsec * 2) / 10;   // 2 tenths
+            configWaitTimes[2] = (waitMsec * 3) / 10;   // 3 tenths
+            configWaitTimes[3] = (waitMsec * 4) / 10;   // 4 tenths
+        }
     }
 
     public Table getTable(String tableName) {
-        TableConst ndbTable = ndbDictionary.getTable(tableName);
-        if (ndbTable == null) {
-            // try the lower case table name
-            ndbTable = ndbDictionary.getTable(tableName.toLowerCase());
+        final long startNanos = System.nanoTime();
+        final long breakTime = startNanos + maxNanos;
+        final int retries = configWaitTimes.length;
+        final String lowerCaseName = tableName.toLowerCase();
+        TableConst ndbTable = null;
+
+        for(int iter = 0; iter <= retries ; iter++) {
+            ndbTable = ndbDictionary.getTable(tableName);
+            if (ndbTable == null && ! lowerCaseName.equals(tableName)) {
+                // try the lower case table name
+                ndbTable = ndbDictionary.getTable(tableName.toLowerCase());
+            }
+
+            if (ndbTable == null && iter < retries) {
+                if(System.nanoTime() > breakTime) break;
+                try {
+                    Thread.sleep(configWaitTimes[iter]);
+                } catch (InterruptedException e) {
+                    break;
+                }
+            }
         }
+
         if (ndbTable == null) {
-            return null;
+            NdbErrorConst error = ndbDictionary.getNdbError();
+            throw new ClusterJTableException(
+                tableName, startNanos, System.nanoTime(),
+                error.message(), error.code(), error.mysql_code(),
+                error.status(), error.classification());
         }
+
         return new TableImpl(ndbTable, getIndexNames(ndbTable.getName()));
     }
 
@@ -95,8 +141,7 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
 
     public String[] getIndexNames(String tableName) {
         // get all indexes for this table including ordered PRIMARY
-        com.mysql.ndbjtie.ndbapi.NdbDictionary.DictionaryConst.List indexList = 
-            com.mysql.ndbjtie.ndbapi.NdbDictionary.DictionaryConst.List.create();
+        DictionaryConst.List indexList = DictionaryConst.List.create();
         final String[] result;
         try {
             int returnCode = ndbDictionary.listIndexes(indexList, tableName);
@@ -144,7 +189,7 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
         dbFactory.unloadSchema(tableName);
     }
 
-    public Dictionary getNdbDictionary() {
+    public NdbDictionary.Dictionary getNdbDictionary() {
         return ndbDictionary;
     }
 

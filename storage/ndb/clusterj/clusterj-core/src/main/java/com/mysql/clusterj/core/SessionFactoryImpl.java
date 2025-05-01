@@ -38,7 +38,6 @@ import com.mysql.clusterj.core.spi.DomainTypeHandler;
 import com.mysql.clusterj.core.spi.DomainTypeHandlerFactory;
 import com.mysql.clusterj.core.spi.ValueHandlerFactory;
 import com.mysql.clusterj.core.metadata.DomainTypeHandlerFactoryImpl;
-
 import com.mysql.clusterj.core.store.Db;
 import com.mysql.clusterj.core.store.DbFactory;
 import com.mysql.clusterj.core.store.ConnectionHandle;
@@ -84,6 +83,7 @@ public class SessionFactoryImpl implements SessionFactory {
         final String BUFFER_POOL_SIZE_LIST;
         final int[] BYTE_BUFFER_POOL_SIZES;
         final int SESSION_CACHE_SIZE;
+        final int TABLE_WAIT_MSEC;
         final boolean MULTI_DB;
 
         Spec(Map<?, ?> props) {
@@ -103,8 +103,20 @@ public class SessionFactoryImpl implements SessionFactory {
             BYTE_BUFFER_POOL_SIZES = getByteBufferPoolSizes();
             SESSION_CACHE_SIZE = getIntProperty(props, PROPERTY_CLUSTER_MAX_CACHED_SESSIONS,
                                                 DEFAULT_PROPERTY_CLUSTER_MAX_CACHED_SESSIONS);
+            TABLE_WAIT_MSEC = getIntProperty(props, PROPERTY_TABLE_WAIT_MSEC,
+                                             DEFAULT_PROPERTY_TABLE_WAIT_MSEC);
             MULTI_DB = getBooleanProperty(props, PROPERTY_CLUSTER_MULTI_DB,
                                           DEFAULT_PROPERTY_CLUSTER_MULTI_DB);
+
+            if(SESSION_CACHE_SIZE < 0)
+                throw new ClusterJFatalUserException(
+                    local.message("ERR_value_low", PROPERTY_CLUSTER_MAX_CACHED_SESSIONS, 0));
+            if(TABLE_WAIT_MSEC < 0)
+                throw new ClusterJFatalUserException(
+                    local.message("ERR_value_low", PROPERTY_TABLE_WAIT_MSEC, 0));
+            if(TABLE_WAIT_MSEC > 1000)
+                throw new ClusterJFatalUserException(
+                    local.message("ERR_value_high", PROPERTY_TABLE_WAIT_MSEC, 1000));
         }
 
         Spec(Spec other, String database) {
@@ -116,6 +128,7 @@ public class SessionFactoryImpl implements SessionFactory {
             BUFFER_POOL_SIZE_LIST = other.BUFFER_POOL_SIZE_LIST;
             BYTE_BUFFER_POOL_SIZES = other.BYTE_BUFFER_POOL_SIZES;
             SESSION_CACHE_SIZE = other.SESSION_CACHE_SIZE;
+            TABLE_WAIT_MSEC = other.TABLE_WAIT_MSEC;
             MULTI_DB = other.MULTI_DB;
             DATABASE = database;
         }
@@ -165,6 +178,7 @@ public class SessionFactoryImpl implements SessionFactory {
             dbFactory = connection.createDbFactory(spec.DATABASE,
                                                    spec.BYTE_BUFFER_POOL_SIZES);
             dbFactory.useSessionCache(spec.SESSION_CACHE_SIZE);
+            dbFactory.setTableWaitTime(spec.TABLE_WAIT_MSEC);
         }
 
         Db createDb(int maxTransactions) {
@@ -278,6 +292,7 @@ public class SessionFactoryImpl implements SessionFactory {
         key += spec.MULTI_DB ? "+.MultiDB."
                              : "+" + spec.DATABASE;
         key = key + "+Csz" + spec.SESSION_CACHE_SIZE
+                  + "+wait" + spec.TABLE_WAIT_MSEC
                   + "+Bbp" + Arrays.hashCode(spec.BYTE_BUFFER_POOL_SIZES);
         return key;
     }
@@ -494,14 +509,7 @@ public class SessionFactoryImpl implements SessionFactory {
     }
 
     public Table getTable(String tableName, Dictionary dictionary) {
-        Table result;
-        try {
-            result = dictionary.getTable(tableName);
-        } catch(Exception ex) {
-            throw new ClusterJFatalInternalException(
-                        local.message("ERR_Get_Table"), ex);
-        }
-        return result;
+        return dictionary.getTable(tableName);
     }
 
     public synchronized void close() {

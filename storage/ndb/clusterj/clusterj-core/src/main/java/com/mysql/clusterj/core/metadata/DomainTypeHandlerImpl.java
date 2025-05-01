@@ -141,9 +141,6 @@ public class DomainTypeHandlerImpl<T> extends AbstractDomainTypeHandlerImpl<T> {
         }
         List<String> columnNamesUsed = new ArrayList<String>();
         this.table = getTable(dictionary);
-        if (table == null) {
-            throw new ClusterJUserException(local.message("ERR_Get_NdbTable", name, tableName));
-        }
         if (logger.isDebugEnabled()) logger.debug("Found Table for " + tableName);
 
         // the id field handlers will be initialized via registerPrimaryKeyColumn

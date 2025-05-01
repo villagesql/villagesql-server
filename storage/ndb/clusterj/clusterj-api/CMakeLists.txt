@@ -31,6 +31,7 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_API_PREFIX}/ClusterJFatalInternalException.java
   ${CLUSTERJ_API_PREFIX}/ClusterJFatalUserException.java
   ${CLUSTERJ_API_PREFIX}/ClusterJHelper.java
+  ${CLUSTERJ_API_PREFIX}/ClusterJTableException.java
   ${CLUSTERJ_API_PREFIX}/ClusterJUserException.java
   ${CLUSTERJ_API_PREFIX}/ColumnMetadata.java
   ${CLUSTERJ_API_PREFIX}/ColumnType.java

@@ -33,7 +33,17 @@ public class ClusterJDatastoreException extends ClusterJException {
 
     private static final long serialVersionUID = 2208896230646592560L;
 
-    private int code = 0;
+    protected static final int HA_ERR_NO_SUCH_TABLE = 155;
+
+    protected static final int HA_ERR_TABLE_DEF_CHANGED = 159;
+
+    protected int code = 0;
+
+    protected int mysqlCode = 0;
+
+    protected int status = 0;
+
+    protected int classification = 0;
 
     /** Get the code
      @since 7.3.15, 7.4.13, 7.5.4
@@ -42,8 +52,6 @@ public class ClusterJDatastoreException extends ClusterJException {
         return code;
     }
 
-    private int mysqlCode = 0;
-
     /** Get the mysql code
      @since 7.3.15, 7.4.13, 7.5.4
      */
@@ -51,15 +59,11 @@ public class ClusterJDatastoreException extends ClusterJException {
         return mysqlCode;
     }
 
-    private int status = 0;
-
     /** Get the status
      */
     public int getStatus() {
         return status;
     }
-
-    private int classification = 0;
 
     /** Get the classification
      */
@@ -67,6 +71,15 @@ public class ClusterJDatastoreException extends ClusterJException {
         return classification;
     }
 
+    /** tableNotFound()
+     *  @return true if the error is a "Table Not Found" condition
+     *  @since 9.4.0
+     */
+    public boolean tableNotFound() {
+        return (mysqlCode == HA_ERR_NO_SUCH_TABLE);
+    }
+
+    /* Constructors*/
     public ClusterJDatastoreException(String message) {
         super(message);
     }

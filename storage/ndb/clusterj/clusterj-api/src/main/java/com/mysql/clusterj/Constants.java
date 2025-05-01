@@ -235,6 +235,20 @@ public interface Constants {
     /** The default value of the MultiDB property */
     static final String DEFAULT_PROPERTY_CLUSTER_MULTI_DB = "false";
 
+    /** The name of the table wait retry time property.
+     *  The property denotes a value from 0 to 1000 milliseconds, and specifies
+     *  the behavior whenever Cluster/J attempts to open a table and the table
+     *  is not found. If non-zero, it will try again to open the table, waiting
+     *  up to the configured maximum number of milliseconds. If set to 0, it
+     *  will immediately give up, and throw ClusterJTableException.
+     *
+     *  @since 9.4.0
+     */
+    static final String PROPERTY_TABLE_WAIT_MSEC = "com.mysql.clusterj.table.wait.msec";
+
+    /** The default value of the table wait retry time property. */
+    static final int DEFAULT_PROPERTY_TABLE_WAIT_MSEC = 50;
+
     /** The name of the maximum number of transactions property. For details, see
      * <a href="http://dev.mysql.com/doc/ndbapi/en/ndb-ndb.html#ndb-ndb-init">Ndb::init()</a>
      */
