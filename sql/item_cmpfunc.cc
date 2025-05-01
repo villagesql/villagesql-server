@@ -4706,7 +4706,7 @@ void in_string::set(uint pos, Item *item) {
   if (item->type() == Item::FUNC_ITEM)
     str->copy(*res);
   else
-    *str = *res;
+    str->set(res->ptr(), res->length(), res->charset());
 }
 
 static int srtcmp_in(const CHARSET_INFO *cs, const String *x, const String *y) {

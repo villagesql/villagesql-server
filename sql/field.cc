@@ -8272,24 +8272,20 @@ type_conversion_status Field_set::store(longlong nr, bool) {
 }
 
 String *Field_set::val_str(String *val_buffer, String *) const {
-  ulonglong tmp = (ulonglong)Field_enum::val_int();
-  uint bitnr = 0;
+  ulonglong tmp = static_cast<ulonglong>(Field_enum::val_int());
 
-  /*
-    Some callers expect *val_buffer to contain the result,
-    so we assign to it, rather than doing 'return &empty_set_string.
-  */
-  *val_buffer = empty_set_string;
   if (tmp == 0) {
+    val_buffer->set("", 0, charset());
     return val_buffer;
   }
 
   val_buffer->set_charset(field_charset);
   val_buffer->length(0);
 
-  while (tmp && bitnr < typelib->count) {
-    if (tmp & 1) {
-      if (val_buffer->length())
+  uint bitnr = 0;
+  while (tmp != 0 && bitnr < typelib->count) {
+    if ((tmp & 1) != 0) {
+      if (val_buffer->length() != 0)
         val_buffer->append(&field_separator, 1, &my_charset_latin1);
       const String str(typelib->type_names[bitnr], typelib->type_lengths[bitnr],
                        field_charset);
@@ -8297,6 +8293,11 @@ String *Field_set::val_str(String *val_buffer, String *) const {
     }
     tmp >>= 1;
     bitnr++;
+  }
+  // Some callers depend on ptr() being non-null.
+  if (val_buffer->ptr() == nullptr) {
+    assert(val_buffer->length() == 0);
+    val_buffer->set("", 0, field_charset);
   }
   return val_buffer;
 }

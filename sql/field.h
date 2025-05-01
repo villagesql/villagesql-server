@@ -4258,8 +4258,7 @@ class Field_set final : public Field_enum {
             const char *field_name_arg, uint32 packlength_arg,
             TYPELIB *typelib_arg, const CHARSET_INFO *charset_arg)
       : Field_enum(ptr_arg, len_arg, null_ptr_arg, null_bit_arg, auto_flags_arg,
-                   field_name_arg, packlength_arg, typelib_arg, charset_arg),
-        empty_set_string("", 0, charset_arg) {
+                   field_name_arg, packlength_arg, typelib_arg, charset_arg) {
     clear_flag(ENUM_FLAG);
     set_flag(SET_FLAG);
   }
@@ -4288,9 +4287,6 @@ class Field_set final : public Field_enum {
     assert(real_type() == MYSQL_TYPE_SET);
     return new (mem_root) Field_set(*this);
   }
-
- private:
-  const String empty_set_string;
 };
 
 /*

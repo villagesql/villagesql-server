@@ -3562,9 +3562,10 @@ String *Item_charset_conversion::val_str(String *str) {
       snprintf(char_type, sizeof(char_type), "%s(%lu)",
                m_cast_cs == &my_charset_bin ? "BINARY" : "CHAR", (ulong)length);
 
-      if (!res->alloced_length()) {  // Don't change const str
+      if (res->alloced_length() == 0) {  // Don't change const str
         assert(res != &m_tmp_value);
-        m_tmp_value = *res;  // Not malloced string
+        // Not malloced string
+        m_tmp_value.set(res->ptr(), res->length(), res->charset());
         res = &m_tmp_value;
       }
       const ErrConvString err(res);

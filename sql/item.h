@@ -3868,7 +3868,13 @@ class Item_basic_constant : public Item {
     Item::cleanup();
   }
   bool basic_const_item() const override { return true; }
-  void set_str_value(String *str) { str_value = *str; }
+  /**
+    Note that str_value.ptr() will now point to a string owned by some
+    other object.
+   */
+  void set_str_value(String *str) {
+    str_value.set(str->ptr(), str->length(), str->charset());
+  }
 };
 
 /*****************************************************************************

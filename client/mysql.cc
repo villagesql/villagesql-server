@@ -3481,8 +3481,7 @@ static int com_server_help(String *buffer [[maybe_unused]],
   server_cmd = cmd_buf;
 
   if (!status.batch) {
-    old_buffer = *buffer;
-    old_buffer.copy();
+    old_buffer.copy(*buffer);
   }
 
   if (!connected && reconnect()) return 1;
@@ -3645,8 +3644,7 @@ static int com_go_impl(String *buffer, char *line [[maybe_unused]]) {
 
   interrupted_query = false;
   if (!status.batch) {
-    old_buffer = *buffer;  // Save for edit command
-    old_buffer.copy();
+    old_buffer.copy(*buffer);  // Save for edit command
   }
 
   /* Remove garbage for nicer messages */

@@ -4016,11 +4016,11 @@ void Item_param::sync_clones() {
     // Class-type members:
     c->decimal_value = decimal_value;
     /*
-      Note that String's assignment op properly sets m_is_alloced to 'false',
-      which is correct here: c->str_value doesn't own anything.
+      Note that we use String::set() here, c->str_value does not own anything.
     */
-    c->str_value = str_value;
-    c->str_value_ptr = str_value_ptr;
+    c->str_value.set(str_value.ptr(), str_value.length(), str_value.charset());
+    c->str_value_ptr.set(str_value_ptr.ptr(), str_value_ptr.length(),
+                         str_value_ptr.charset());
     c->collation = collation;
   }
 }
