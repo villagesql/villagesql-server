@@ -90,7 +90,7 @@ public class SessionImpl implements SessionSPI, CacheManager, StoreManager {
     static final Logger logger = LoggerFactoryService.getFactory().getInstance(SessionImpl.class);
 
     /** My Factory. */
-    protected SessionFactoryImpl factory;
+    protected final SessionFactoryImpl factory;
 
     /** Db: one per session. */
     protected Db db;
@@ -111,9 +111,9 @@ public class SessionImpl implements SessionSPI, CacheManager, StoreManager {
     protected ClusterTransaction clusterTransaction;
 
     /** Flags for iterating a scan */
-    protected final int RESULT_READY = 0;
-    protected final int SCAN_FINISHED = 1;
-    protected final int CACHE_EMPTY = 2;
+    protected final static int RESULT_READY = 0;
+    protected final static int SCAN_FINISHED = 1;
+    protected final static int CACHE_EMPTY = 2;
 
     /** The list of objects changed since the last flush */
     protected List<StateManager> changeList = new ArrayList<StateManager>();
@@ -304,7 +304,8 @@ public class SessionImpl implements SessionSPI, CacheManager, StoreManager {
      */
     public <T> T newInstance(Class<T> cls) {
         assertNotClosed();
-        return factory.newInstance(cls, dictionary, db);
+        DomainTypeHandler<T> domainTypeHandler = getDomainTypeHandler(cls);
+        return domainTypeHandler.newInstance(db);
     }
 
     /** Create an instance of a class to be persisted and set the primary key.
@@ -316,7 +317,7 @@ public class SessionImpl implements SessionSPI, CacheManager, StoreManager {
     public <T> T newInstance(Class<T> cls, Object key) {
         assertNotClosed();
         DomainTypeHandler<T> domainTypeHandler = getDomainTypeHandler(cls);
-        T instance = factory.newInstance(cls, dictionary, db);
+        T instance = domainTypeHandler.newInstance(db);
         domainTypeHandler.objectSetKeys(key, instance);
         return instance;
     }
