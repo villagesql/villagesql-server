@@ -168,6 +168,11 @@ class Arg_comparator {
   String value1, value2;
 
   Arg_comparator() = default;
+  Arg_comparator(const Arg_comparator &) = delete;
+  Arg_comparator &operator=(const Arg_comparator &) = delete;
+
+  Arg_comparator(Arg_comparator &&) = default;
+  Arg_comparator &operator=(Arg_comparator &&) = default;
 
   Arg_comparator(Item **left, Item **right) : left(left), right(right) {}
 
