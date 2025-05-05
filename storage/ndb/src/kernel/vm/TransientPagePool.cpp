@@ -115,11 +115,11 @@ bool TransientPagePool::getPtr(Ptr<Page> &p) const {
   }
   if (unlikely(!(p.p != NULL && Magic::match(p.p->m_magic, m_type_id)))) {
     g_eventLogger->info(
-        "Magic::match failed in %s: "
+        "Magic::match failed in TransientPagePool::getPtr: "
         "type_id %08x rg %u tid %u: "
         "slot_size -: ptr.i %u: ptr.p %p: "
         "magic %08x expected %08x",
-        __func__, m_type_id, GET_RG(m_type_id), GET_TID(m_type_id), p.i, p.p,
+        m_type_id, GET_RG(m_type_id), GET_TID(m_type_id), p.i, p.p,
         p.p->m_magic, Magic::make(m_type_id));
     require(p.p != NULL && Magic::match(p.p->m_magic, m_type_id));
   }
