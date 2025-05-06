@@ -207,8 +207,9 @@ class MrsModule {
   virtual void stop() {
     slow_monitor.stop();
     task_monitor.stop();
-    metadata_logger.stop();
     mrs_monitor.stop();
+    // metadata_logger has to be stopped after mrs_monitor
+    metadata_logger.stop();
   }
 
   void reset() {
