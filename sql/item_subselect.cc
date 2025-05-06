@@ -160,6 +160,7 @@ static Item_bool_func *new_comparison_func(const POS &pos, Comp_creator *func,
                                            bool negate) {
   Item_bool_func *comp = func->create(pos, left, right);
   if (comp == nullptr) return nullptr;
+  current_thd->add_item(comp);
   if (negate) {
     comp = down_cast<Item_func_comparison *>(comp)->negate_item();
   }

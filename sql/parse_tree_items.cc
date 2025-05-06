@@ -163,6 +163,7 @@ static Item *handle_sql2003_note184_exception(Parse_context *pc, Item *left,
 #ifndef NDEBUG
   result->set_contextualized();
 #endif
+  pc->thd->add_item(result);
   return result;
 }
 
