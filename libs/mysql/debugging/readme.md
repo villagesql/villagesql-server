@@ -35,6 +35,9 @@ Code documentation: @ref GroupLibsMysqlDebugging.
 This library provides general-purpose debugging tools.  Currently, it contains
 the following:
 
+- my_scoped_trace.h: The macro MY_SCOPED_TRACE, which can be used as a
+  thread-safe alternative to SCOPED_TRACE in unittests.
+
 - object_lifetime_tracker.h: Classes that inherit from `Object_lifetime_tracker`
   will have all invocations of constructors, assignments, and destructors logged
   to stdout. This is useful when analysing memory bugs.

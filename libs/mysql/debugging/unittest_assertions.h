@@ -27,8 +27,9 @@
 /// @file
 /// Experimental API header
 
-#include <gtest/gtest.h>                // ASSERT_EQ
-#include "mysql/utils/return_status.h"  // Return_status
+#include <gtest/gtest.h>                      // ASSERT_EQ
+#include "mysql/debugging/my_scoped_trace.h"  // MY_SCOPED_TRACE
+#include "mysql/utils/return_status.h"        // Return_status
 
 /// @addtogroup GroupLibsMysqlDebugging
 /// @{
@@ -84,11 +85,11 @@ void test_eq_one_way(const auto &left, const auto &right, bool equal = true) {
 /// right are swapped).
 void test_eq(const auto &left, const auto &right, bool equal = true) {
   {
-    SCOPED_TRACE("left OP right");
+    MY_SCOPED_TRACE("left OP right");
     test_eq_one_way(left, right, equal);
   }
   {
-    SCOPED_TRACE("right OP left");
+    MY_SCOPED_TRACE("right OP left");
     test_eq_one_way(right, left, equal);
   }
 }
@@ -102,7 +103,7 @@ void test_eq(const auto &left, const auto &right, bool equal = true) {
 /// @param cmp Expected outcome. This must be of a type that can be compared
 /// with `0`: typically either `int` or `std::strong_ordering`.
 void test_cmp_one_way(const auto &left, const auto &right, auto cmp) {
-  SCOPED_TRACE(cmp < 0 ? "lt" : cmp == 0 ? "eq" : "gt");
+  MY_SCOPED_TRACE(cmp < 0 ? "lt" : cmp == 0 ? "eq" : "gt");
   test_eq_one_way(left, right, cmp == 0);
   ASSERT_EQ(left < right, cmp < 0);
   ASSERT_EQ(left > right, cmp > 0);
@@ -124,11 +125,11 @@ void test_cmp_one_way(const auto &left, const auto &right, auto cmp) {
 /// right are swapped and cmp reversed).
 void test_cmp(const auto &left, const auto &right, std::strong_ordering cmp) {
   {
-    SCOPED_TRACE("left OP right");
+    MY_SCOPED_TRACE("left OP right");
     test_cmp_one_way(left, right, cmp);
   }
   {
-    SCOPED_TRACE("right OP left");
+    MY_SCOPED_TRACE("right OP left");
     test_cmp_one_way(right, left, cmp < 0 ? 1 : cmp == 0 ? 0 : -1);
   }
 }
