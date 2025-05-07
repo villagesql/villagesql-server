@@ -92,3 +92,27 @@ Count of error message 3
 select * from ndb_restore_output where @msgcount != 1;
 a
 drop table test.t1;
+Test that a temporary error applying
+log eventually results in failure
+create table test.t1 (a int primary key, b int) engine=ndb;
+Cause backup stall while log open
+Starting backup
+Backup started
+insert into t1 values(1,1);
+Waiting for backup to complete
+Backup completed
+Take a row lock to block restore
+begin;
+select * from test.t1 where a=1 for update;
+a	b
+1	1
+Test restore failure handling for log apply failure
+after retries
+Expect error message
+select count(*) into @msgcount from ndb_restore_output where a like "%Error restoring the data log%";
+select @msgcount as 'Count of error message 1';
+Count of error message 1
+1
+select * from ndb_restore_output where @msgcount != 1;
+a
+drop table test.t1;

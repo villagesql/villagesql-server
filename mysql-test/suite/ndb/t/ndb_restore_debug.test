@@ -240,5 +240,82 @@ select * from ndb_restore_output where @msgcount != 1;
 drop table test.t1;
 
 
+--echo Test that a temporary error applying
+--echo log eventually results in failure
+
+create table test.t1 (a int primary key, b int) engine=ndb;
+
+--echo Cause backup stall while log open
+--exec $NDB_MGM -e "all error 10040" >> $NDB_TOOLS_OUTPUT
+
+# Backup
+--source suite/ndb/t/ndb_backup_nowait_start.inc
+
+# Give some time for data without extra row
+# to be captured
+--sleep 4
+
+# Insert extra row, should be placed in log only
+insert into t1 values(1,1);
+
+--exec $NDB_MGM -e "all error 0" >> $NDB_TOOLS_OUTPUT
+--source suite/ndb/t/ndb_backup_nowait_wait.inc
+
+
+--echo Take a row lock to block restore
+begin;
+select * from test.t1 where a=1 for update;
+
+
+# Restore backup - should fail on temporary error
+# during log restore
+# Check process exit code shows failure
+--disable_query_log
+--echo Test restore failure handling for log apply failure
+--echo after retries
+--let dump_file = $MYSQLTEST_VARDIR/tmp/restore.out
+let $error_result = 0;
+--error 0,1
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 1 -r $NDB_BACKUPS-$the_backup_id >> $dump_file 2>&1
+if ($__error)
+{
+  let $error_result = 1;
+}
+--error 0,1
+--exec $NDB_RESTORE --show-part-id -b $the_backup_id -n 2 -r $NDB_BACKUPS-$the_backup_id >> $dump_file 2>&1
+if ($__error)
+{
+  let $error_result = 1;
+}
+
+if (!$error_result)
+{
+  --die One ndb_restore invocation should have failed
+}
+
+rollback;
+
+# Load the file into a temporary table
+truncate table ndb_restore_output;
+
+eval LOAD DATA INFILE '$dump_file' INTO TABLE ndb_restore_output
+  FIELDS TERMINATED BY '\n';
+--remove_file $dump_file
+
+# Remove Windows line feeds
+UPDATE ndb_restore_output SET a = TRIM(TRAILING "\r" FROM a);
+--enable_query_log
+
+# Check output contains useful messages
+--echo Expect error message
+select count(*) into @msgcount from ndb_restore_output where a like "%Error restoring the data log%";
+select @msgcount as 'Count of error message 1';
+select * from ndb_restore_output where @msgcount != 1;
+
+#select * from ndb_restore_output;
+
+drop table test.t1;
+
+
 --source suite/ndb/include/backup_restore_cleanup.inc
 --remove_file $NDB_TOOLS_OUTPUT

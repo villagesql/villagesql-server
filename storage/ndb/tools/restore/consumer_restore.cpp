@@ -4191,8 +4191,10 @@ retry:
   }
 #endif
 
-  if (cb->retries == MAX_RETRIES) {
-    restoreLogger.log_error("execute failed");
+  if (++cb->retries >= MAX_RETRIES) {
+    restoreLogger.log_error(
+        "Attempted transaction %u times.  Unable to recover from errors.",
+        cb->retries);
     set_fatal_error(true);
     return;
   }
