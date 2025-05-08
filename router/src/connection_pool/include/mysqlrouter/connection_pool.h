@@ -82,6 +82,9 @@ class PooledConnection {
   const connection_type &connection() const { return conn_; }
 
   connection_type release() {
+    (void)idle_timer_.cancel();
+    (void)conn_.cancel();
+
     std::lock_guard lk(mtx());
 
     pool_remover_ = nullptr;
