@@ -4381,7 +4381,7 @@ PSI_file_locker *pfs_get_thread_file_name_locker_vc(
   if (op == PSI_FILE_DELETE) {
     const uint len = (uint)strlen(name);
     PFS_file *pfs_file = find_file(pfs_thread, nullptr, name, len);
-    /* For other operations, state->m_file is set by start_file_open_wait(). */
+    /* For other operations, state->m_file is set by end_file_open_wait(). */
     state->m_file = reinterpret_cast<PSI_file *>(pfs_file);
 
     if (pfs_file) {
@@ -4453,7 +4453,7 @@ PSI_file_locker *pfs_get_thread_file_name_locker_vc(
 
   state->m_flags = flags;
   if (op != PSI_FILE_DELETE) {
-    /* Set by start_file_open_wait(). */
+    /* Set by end_file_open_wait(). */
     state->m_file = nullptr;
   }
   state->m_name = name;
