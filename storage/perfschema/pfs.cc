@@ -6357,10 +6357,10 @@ PSI_statement_locker *pfs_get_thread_statement_locker_vc(
   assert(state != nullptr);
   assert(charset != nullptr);
 
-#ifndef DBUG_OFF
+#ifndef NDEBUG
   /* Detect uses of uninitialized data. */
   memset(state, 0xFF, sizeof(PSI_statement_locker_state));
-#endif /* DBUG_OFF */
+#endif /* NDEBUG */
 
   /*
     Required for both pfs and telemetry:
