@@ -1471,10 +1471,6 @@ int dd_upgrade_finish(THD *, bool failed_upgrade) {
     srv_downgrade_logs = true;
     srv_downgrade_partition_files = true;
   } else {
-    /* Delete the old undo tablespaces and the references to them
-    in the TRX_SYS page. */
-    srv_undo_tablespaces_upgrade();
-
     /* Drop InnoDB Dictionary tables (SYS_*) */
     dd_upgrade_drop_sys_tables();
 

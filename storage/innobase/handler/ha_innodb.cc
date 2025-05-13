@@ -734,7 +734,6 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(recv_writer_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(temp_space_rseg_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(undo_space_rseg_mutex, 0, 0, PSI_DOCUMENT_ME),
-    PSI_MUTEX_KEY(trx_sys_rseg_mutex, 0, 0, PSI_DOCUMENT_ME),
 #ifdef UNIV_DEBUG
     PSI_MUTEX_KEY(rw_lock_debug_mutex, 0, 0, PSI_DOCUMENT_ME),
 #endif /* UNIV_DEBUG */

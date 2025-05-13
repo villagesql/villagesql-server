@@ -1251,10 +1251,6 @@ void dict_table_add_to_cache(dict_table_t *table, bool can_be_evicted) {
 
   dict_sys->size +=
       mem_heap_get_size(table->heap) + strlen(table->name.m_name) + 1;
-  DBUG_EXECUTE_IF(
-      "dd_upgrade", if (srv_is_upgrade_mode && srv_upgrade_old_undo_found) {
-        ib::info(ER_IB_MSG_176) << "Adding table to cache: " << table->name;
-      });
 }
 
 /** Test whether a table can be evicted from the LRU cache.

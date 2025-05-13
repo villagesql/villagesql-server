@@ -2375,7 +2375,7 @@ err_exit:
     bool is_temp)        /*!< in: true if temp undo rec. */
 {
   trx_undo_rec_t *undo_rec;
-  ulint rseg_id;
+  ulint undo_num;
   space_id_t space_id;
   page_no_t page_no;
   ulint offset;
@@ -2383,8 +2383,8 @@ err_exit:
   bool is_insert;
   mtr_t mtr;
 
-  trx_undo_decode_roll_ptr(roll_ptr, &is_insert, &rseg_id, &page_no, &offset);
-  space_id = trx_rseg_id_to_space_id(rseg_id, is_temp);
+  trx_undo_decode_roll_ptr(roll_ptr, &is_insert, &undo_num, &page_no, &offset);
+  space_id = trx_undo_num_to_space_id(undo_num, is_temp);
 
   bool found;
   const page_size_t &page_size = fil_space_get_page_size(space_id, &found);

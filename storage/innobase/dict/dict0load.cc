@@ -2437,8 +2437,7 @@ static dict_table_t *dict_load_table_one(table_name_t &name, bool cached,
   err = dict_load_indexes(table, heap, index_load_err);
 
   if (err == DB_SUCCESS) {
-    if (srv_is_upgrade_mode && !srv_upgrade_old_undo_found &&
-        !dict_load_is_system_table(table->name.m_name)) {
+    if (srv_is_upgrade_mode && !dict_load_is_system_table(table->name.m_name)) {
       table->id = table->id + DICT_MAX_DD_TABLES;
     }
     if (cached) {

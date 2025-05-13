@@ -6060,7 +6060,7 @@ ER_IB_MSG_174
 ER_IB_MSG_175
   eng "%s"
 
-ER_IB_MSG_176
+OBSOLETE_ER_IB_MSG_176
   eng "%s"
 
 ER_IB_MSG_177
@@ -8784,11 +8784,11 @@ ER_IB_MSG_1082
 ER_IB_MSG_1083
   eng "Error reading encryption for %s"
 
-ER_IB_MSG_CANNOT_OPEN_57_UNDO
+OBSOLETE_ER_IB_MSG_CANNOT_OPEN_57_UNDO
   eng "Unable to open undo tablespace number %lu"
 
-ER_IB_MSG_1085
-  eng "Opened %llu existing undo tablespaces."
+ER_IB_MSG_OPENED_N_UNDO_TS
+  eng "Opened %zu existing undo tablespaces."
 
 ER_IB_MSG_1086
   eng "Cannot create undo tablespaces since innodb_%s has been set. Using %llu existing undo tablespaces."
@@ -8814,13 +8814,13 @@ ER_IB_MSG_1092
 ER_IB_MSG_1093
   eng "Unable to initialize the header page in undo tablespace number %lu."
 
-ER_IB_MSG_1094
+OBSOLETE_ER_IB_MSG_1094
   eng "Cannot delete old undo tablespaces because they contain undo logs for XA PREPARED transactions."
 
-ER_IB_MSG_1095
+OBSOLETE_ER_IB_MSG_1095
   eng "Upgrading %zu existing undo tablespaces that were tracked in the system tablespace to %lu new independent undo tablespaces."
 
-ER_IB_MSG_1096
+OBSOLETE_ER_IB_MSG_1096
   eng "Deleting %llu new independent undo tablespaces that we just created."
 
 ER_IB_MSG_1097
@@ -8964,7 +8964,7 @@ ER_IB_MSG_1142
 ER_IB_MSG_LOG_FILES_REWRITING
   eng "Starting to delete and rewrite redo log files."
 
-ER_IB_MSG_1144
+OBSOLETE_ER_IB_MSG_1144
   eng "Undo from 5.7 found. It will be purged"
 
 ER_IB_MSG_1145
@@ -9177,8 +9177,8 @@ ER_IB_MSG_1213
 ER_IB_MSG_1214
   eng "Can't create UNDO tablespace %s %s"
 
-ER_IB_MSG_1215
-  eng "%s"
+ER_IB_MSG_WILL_CREATE_N_UNDO_TS
+  eng "Will create %zu new undo tablespaces."
 
 ER_IB_MSG_LOG_FILES_RESIZE_ON_START
   eng "Resizing redo log from %lluM to %lluM (LSN=%llu) synchronously. If this takes too long, consider starting the server with large --innodb_redo_log_capacity, and resizing the redo log online using SET."
@@ -9844,7 +9844,7 @@ ER_IB_MSG_SDI_Z_STREAM_ERROR
 ER_IB_MSG_SDI_Z_UNKNOWN_ERROR
   eng "%s"
 
-ER_IB_MSG_FOUND_WRONG_UNDO_SPACE
+OBSOLETE_ER_IB_MSG_FOUND_WRONG_UNDO_SPACE
   eng "Expected to find undo tablespace '%s' for Space ID=%lu, but found '%s' instead!  Did you change innodb_undo_directory?"
 
 ER_IB_MSG_NOT_END_WITH_IBU
@@ -10663,7 +10663,7 @@ ER_MIGRATE_TABLE_TO_DD_OOM
 ER_RPL_RELAY_LOG_RECOVERY_INFO_AFTER_CLONE
   eng "Applier metadata information for channel '%s' was found after a clone operation. Relay log recovery will be executed to adjust positions and file information for this new server. Should that automatic procedure fail please adjust the positions through 'CHANGE REPLICATION SOURCE TO'"
 
-ER_IB_MSG_57_UNDO_SPACE_DELETE_FAIL
+OBSOLETE_ER_IB_MSG_57_UNDO_SPACE_DELETE_FAIL
   eng "Failed to delete 5.7 undo tablespace: %s during upgrade"
 
 ER_IB_MSG_DBLWR_1285

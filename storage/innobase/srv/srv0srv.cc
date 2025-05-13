@@ -114,7 +114,6 @@ Srv_cpu_usage srv_cpu_usage;
 /* TODO To be removed in WL#16210 */
 bool srv_is_upgrade_mode = false;
 bool srv_downgrade_logs = false;
-bool srv_upgrade_old_undo_found = false;
 #endif /* INNODB_DD_TABLE */
 
 /* Revert to old partition file name if upgrade fails. */
@@ -158,7 +157,7 @@ char *srv_undo_dir = nullptr;
 
 #ifndef UNIV_HOTBACKUP
 /* The number of rollback segments per tablespace */
-ulong srv_rollback_segments = TRX_SYS_N_RSEGS;
+ulong srv_rollback_segments = FSP_MAX_ROLLBACK_SEGMENTS;
 
 /* Used for the deprecated setting innodb_undo_logs. This will still get
 put into srv_rollback_segments if it is set to a non-default value. */

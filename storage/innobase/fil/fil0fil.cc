@@ -883,6 +883,10 @@ class Fil_shard {
     mutex_acquire();
 
     for (auto deleted : m_deleted_spaces) {
+      if (!fsp_is_undo_tablespace(deleted.first)) {
+        continue;
+      }
+
       if (undo::id2num(deleted.first) == undo_num) {
         count++;
       }
@@ -1308,26 +1312,6 @@ class Fil_system {
   [[nodiscard]] Tablespace_dirs::Result get_scanned_filename_by_space_num(
       space_id_t space_num, space_id_t &space_id) {
     return (m_dirs.find_by_num(space_num, space_id));
-  }
-
-  /** Fetch the file name opened for a space_id from the file map.
-  @param[in]   space_id  tablespace ID
-  @param[out]  name      the scanned filename
-  @return true if the space_id is found. The name is set to an
-  empty string if the space_id is not found. */
-  [[nodiscard]] bool get_file_by_space_id(space_id_t space_id,
-                                          std::string &name) {
-    auto result = get_scanned_filename_by_space_id(space_id);
-
-    if (result.second != nullptr) {
-      /* Duplicates should have been sorted out by now. */
-      ut_a(result.second->size() == 1);
-      name = result.first + result.second->front();
-      return true;
-    }
-
-    name = "";
-    return false;
   }
 
   /** Fetch the file name opened for an undo space number.
@@ -4434,12 +4418,6 @@ static void fil_op_write_log(mlog_id_t type, space_id_t space_id,
     default:
       ut_d(ut_error);
   }
-}
-
-bool fil_system_get_file_by_space_id(space_id_t space_id, std::string &name) {
-  ut_a(dict_sys_t::is_reserved(space_id) || srv_is_upgrade_mode);
-
-  return fil_system->get_file_by_space_id(space_id, name);
 }
 
 bool fil_system_get_file_by_space_num(space_id_t space_num,
