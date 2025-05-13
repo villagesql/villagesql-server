@@ -37,9 +37,6 @@ class MockHttpServerComponent : public HttpServerComponent {
               (const std::string &url_host, const std::string &url_regex,
                std::unique_ptr<http::base::RequestHandler> cb),
               (override));
-  MOCK_METHOD(void, remove_route,
-              (const std::string &url_host, const std::string &url_regex),
-              (override));
   MOCK_METHOD(void, remove_route, (const void *handler), (override));
   MOCK_METHOD(bool, is_ssl_configured, (), (override));
 };

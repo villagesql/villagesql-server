@@ -136,33 +136,6 @@ void HttpRequestRouter::remove(const void *handler_id) {
   }
 }
 
-void HttpRequestRouter::remove(const std::string &url_host,
-                               const std::string &url_regex_str) {
-  log_debug("removing route for regex: %s, url_host: '%s'",
-            url_regex_str.c_str(), url_host.c_str());
-
-  std::unique_lock lock(route_mtx_);
-
-  const auto req_it = request_handlers_.find(url_host);
-  if (req_it == request_handlers_.end()) return;
-
-  auto &request_handlers = req_it->second;
-
-  for (auto it = request_handlers.begin(); it != request_handlers.end();) {
-    if (it->url_pattern() == url_host && it->url_pattern() == url_regex_str) {
-      it = request_handlers.erase(it);
-    } else {
-      it++;
-    }
-  }
-
-  if (request_handlers.empty()) {
-    // if there are no more request-handlers for a hostname, remove the entry in
-    // the hostname map.
-    request_handlers_.erase(req_it);
-  }
-}
-
 // if no routes are specified, return 404
 void HttpRequestRouter::handler_not_found(http::base::Request &req) {
   if (!require_realm_.empty()) {

@@ -43,8 +43,6 @@ class SetHttpComponent {
                         std::default_delete<http::base::RequestHandler>>
             cb) override;
     void remove_route(const void *handler) override;
-    void remove_route(const std::string &url_host,
-                      const std::string &url_regex) override;
     void init(HttpServerCtxtPtr srv) override;
     bool is_ssl_configured() override;
 
