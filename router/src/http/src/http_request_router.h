@@ -50,7 +50,6 @@ class HTTP_SERVER_LIB_EXPORT HttpRequestRouter
               const std::string &url_regex_str,
               std::unique_ptr<RequestHandler> cb);
   void remove(const void *handler_id);
-  void remove(const std::string &url_host, const std::string &url_regex_str);
 
   void set_default_route(std::unique_ptr<RequestHandler> cb);
   void clear_default_route();

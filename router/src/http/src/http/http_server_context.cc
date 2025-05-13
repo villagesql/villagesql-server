@@ -74,15 +74,6 @@ void HttpServerContext::add_route(
   }
 }
 
-void HttpServerContext::remove_route(const std::string &url_host,
-                                     const std::string &url_regex) {
-  if (url_regex.empty()) {
-    request_handler_.clear_default_route();
-  } else {
-    request_handler_.remove(url_host, url_regex);
-  }
-}
-
 void HttpServerContext::remove_route(const void *handler_id) {
   request_handler_.remove(handler_id);
 }

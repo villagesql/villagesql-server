@@ -42,8 +42,6 @@ class HTTP_SERVER_LIB_EXPORT HttpServerComponentImpl
 
   void *add_route(const std::string &url_host, const std::string &url_regex,
                   std::unique_ptr<http::base::RequestHandler> cb) override;
-  void remove_route(const std::string &url_host,
-                    const std::string &url_regex) override;
   void remove_route(const void *handler) override;
 
   bool is_ssl_configured() override;
@@ -84,25 +82,6 @@ void *HttpServerComponentImpl::add_route(
   }
 
   return result_id;
-}
-
-void HttpServerComponentImpl::remove_route(const std::string &url_regex,
-                                           const std::string &url_host) {
-  std::lock_guard<std::mutex> lock(rh_mu);
-
-  // if srv_ already points to the http_server forward the
-  // route directly, otherwise add it to the delayed backlog
-  if (auto srv = srv_.lock()) {
-    srv->remove_route(url_regex, url_host);
-  } else {
-    for (auto it = request_handlers_.begin(); it != request_handlers_.end();) {
-      if (it->url_regex_str == url_regex && it->url_host == url_host) {
-        it = request_handlers_.erase(it);
-      } else {
-        it++;
-      }
-    }
-  }
 }
 
 void HttpServerComponentImpl::remove_route(const void *handler) {

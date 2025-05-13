@@ -45,11 +45,6 @@ void SetHttpComponent::HttpWrapperHttpServerComponent::remove_route(
   other_->remove_route(handler);
 }
 
-void SetHttpComponent::HttpWrapperHttpServerComponent::remove_route(
-    const std::string &url_host, const std::string &url_regex) {
-  other_->remove_route(url_host, url_regex);
-}
-
 void SetHttpComponent::HttpWrapperHttpServerComponent::init(
     HttpServerCtxtPtr srv) {
   other_->init(srv);
