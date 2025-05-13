@@ -188,7 +188,7 @@ class Item_func_md5 final : public Item_str_ascii_func {
   String tmp_value;
 
  public:
-  Item_func_md5(const POS &pos, Item *a) : Item_str_ascii_func(pos, a) {}
+  Item_func_md5(const POS &pos, Item *a);
   String *val_str_ascii(String *) override;
   bool resolve_type(THD *thd) override;
   const char *func_name() const override { return "md5"; }
@@ -196,7 +196,7 @@ class Item_func_md5 final : public Item_str_ascii_func {
 
 class Item_func_sha : public Item_str_ascii_func {
  public:
-  Item_func_sha(const POS &pos, Item *a) : Item_str_ascii_func(pos, a) {}
+  Item_func_sha(const POS &pos, Item *a);
   String *val_str_ascii(String *) override;
   bool resolve_type(THD *thd) override;
   const char *func_name() const override { return "sha"; }

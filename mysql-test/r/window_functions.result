@@ -9062,6 +9062,8 @@ OVER(),SHA(''))));
 ((NTILE(70)OVER())<<(FROM_UNIXTIME(LEAD('',67) RESPECT NULLS
 OVER(),SHA(''))))
 NULL
+Warnings:
+Warning	1287	'SHA1' is deprecated and will be removed in a future release. Please use SHA2 instead
 SELECT FROM_UNIXTIME(LAG('-778:36:16.905133',246) RESPECT NULLS OVER(),
 REPLACE('%M%V   ','',''));
 FROM_UNIXTIME(LAG('-778:36:16.905133',246) RESPECT NULLS OVER(),

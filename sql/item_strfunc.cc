@@ -233,12 +233,26 @@ static CHARSET_INFO *get_checksum_charset(const char *csname) {
   return cs;
 }
 
+Item_func_md5::Item_func_md5(const POS &pos, Item *a)
+    : Item_str_ascii_func(pos, a) {
+  THD *thd = current_thd;
+  push_warning_printf(thd, Sql_condition::SL_WARNING, ER_WARN_DEPRECATED_SYNTAX,
+                      ER_THD(thd, ER_WARN_DEPRECATED_SYNTAX), "MD5", "SHA2");
+}
+
 bool Item_func_md5::resolve_type(THD *thd) {
   if (param_type_is_default(thd, 0, -1)) return true;
   CHARSET_INFO *cs = get_checksum_charset(args[0]->collation.collation->csname);
   args[0]->collation.set(cs, DERIVATION_COERCIBLE);
   set_data_type_string(32, default_charset());
   return false;
+}
+
+Item_func_sha::Item_func_sha(const POS &pos, Item *a)
+    : Item_str_ascii_func(pos, a) {
+  THD *thd = current_thd;
+  push_warning_printf(thd, Sql_condition::SL_WARNING, ER_WARN_DEPRECATED_SYNTAX,
+                      ER_THD(thd, ER_WARN_DEPRECATED_SYNTAX), "SHA1", "SHA2");
 }
 
 String *Item_func_sha::val_str_ascii(String *str) {

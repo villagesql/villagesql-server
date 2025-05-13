@@ -273,9 +273,13 @@ crc32("123")
 select sha('abc');
 sha('abc')
 a9993e364706816aba3e25717850c26c9cd0d89d
+Warnings:
+Warning	1287	'SHA1' is deprecated and will be removed in a future release. Please use SHA2 instead
 select sha1('abc');
 sha1('abc')
 a9993e364706816aba3e25717850c26c9cd0d89d
+Warnings:
+Warning	1287	'SHA1' is deprecated and will be removed in a future release. Please use SHA2 instead
 select aes_decrypt(aes_encrypt('abc','1'),'1');
 aes_decrypt(aes_encrypt('abc','1'),'1')
 abc
@@ -935,11 +939,13 @@ explain select sha('abc');
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
 Warnings:
+Warning	1287	'SHA1' is deprecated and will be removed in a future release. Please use SHA2 instead
 Note	1003	/* select#1 */ select sha('abc') AS `sha('abc')`
 explain select sha1('abc');
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
 1	SIMPLE	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	NULL	No tables used
 Warnings:
+Warning	1287	'SHA1' is deprecated and will be removed in a future release. Please use SHA2 instead
 Note	1003	/* select#1 */ select sha('abc') AS `sha1('abc')`
 explain select soundex('');
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
