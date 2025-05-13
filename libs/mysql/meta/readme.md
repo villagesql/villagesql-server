@@ -48,6 +48,9 @@ Currently, it contains the following:
 - all_same.h: vararg version of the std::same_as concept, true if N types are
   equal.
 
+- is_charlike.h: concepts to identify that a type is char, unsigned char, or
+  std::byte.
+
 - is_const_ref.h: concept that is true for types that are const ref.
 
 - is_pointer.h: concepts to identify that a type is a pointer.

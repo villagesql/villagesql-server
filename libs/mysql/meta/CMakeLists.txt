@@ -21,6 +21,7 @@
 # along with this program; if not, write to the Free Software Foundation, Inc.,
 # 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
 SET(TARGET_HEADERS
+  is_charlike.h
   is_const_ref.h
   is_pointer.h
   is_same_as_all.h
