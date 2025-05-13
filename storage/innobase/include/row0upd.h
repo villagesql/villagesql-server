@@ -599,9 +599,13 @@ struct upd_t {
   /** Array of update fields. */
   upd_field_t *fields;
 
-  /** Append an update field to the end of array
+  /** Capacity of the fields array */
+  size_t n_capacity;
+
+  /** Append an update field to the end of array. If fields array is full, more
+  space is allocated on the heap.
   @param[in]    field   an update field */
-  void append(const upd_field_t &field) { fields[n_fields++] = field; }
+  void append(const upd_field_t &field);
 
   /** Determine if the given field_no is modified.
   @return true if modified, false otherwise.  */
