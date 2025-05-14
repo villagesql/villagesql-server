@@ -107,6 +107,7 @@ DROP TABLE varbinarypk;
 DROP TABLE varbinarytypes;
 DROP TABLE varcharpk;
 DROP TABLE fgtest;
+DROP TABLE notnulltable;
 DROP TABLE IF EXISTS test2.t_basic2;
 DROP TABLE IF EXISTS test2.same_table;
 DROP DATABASE IF EXISTS test2;
