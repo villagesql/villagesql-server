@@ -119,6 +119,8 @@ class ClusterTransactionImpl implements ClusterTransaction {
 
     private List<Operation> operationsToCheck = new ArrayList<Operation>();
 
+    private boolean isPartitionKeySet = false;
+
     public ClusterTransactionImpl(ClusterConnectionImpl clusterConnectionImpl,
             DbImpl db, Dictionary ndbDictionary) {
         this.db = db;
@@ -135,6 +137,7 @@ class ClusterTransactionImpl implements ClusterTransaction {
         if (ndbTransaction != null) {
             ndbTransaction.close();
             ndbTransaction = null;
+            isPartitionKeySet = false;
         }
     }
 
@@ -548,6 +551,8 @@ class ClusterTransactionImpl implements ClusterTransaction {
     private void performPostExecuteCallbacks() {
         // check completed operations
         StringBuilder exceptionMessages = new StringBuilder();
+        ClusterJDatastoreException firstDSException = null;
+        int noOfExceptions = 0;
         for (Operation op: operationsToCheck) {
             int code = op.getErrorCode();
             int classification = op.getClassification();
@@ -562,6 +567,10 @@ class ClusterTransactionImpl implements ClusterTransaction {
                         op.toString());
                 exceptionMessages.append(message);
                 exceptionMessages.append('\n');
+                if (firstDSException == null) {
+                    firstDSException = new ClusterJDatastoreException(message, code, mysqlCode, status, classification);
+                }
+                noOfExceptions++;
             }
         }
         operationsToCheck.clear();
@@ -571,15 +580,24 @@ class ClusterTransactionImpl implements ClusterTransaction {
                 try {
                     runnable.run();
                 } catch (Throwable t) {
-                    t.printStackTrace();
                     exceptionMessages.append(t.getMessage());
                     exceptionMessages.append('\n');
+                    noOfExceptions++;
                 }
             }
         } finally {
             clearPostExecuteCallbacks();
         }
-        if (exceptionMessages.length() > 0) {
+
+        if (firstDSException != null) {
+            if (noOfExceptions > 1) {
+                firstDSException = new ClusterJDatastoreException(
+                    exceptionMessages.toString(), firstDSException.getCode(),
+                    firstDSException.getMysqlCode(), firstDSException.getStatus(),
+                    firstDSException.getClassification());
+            }
+            throw firstDSException;
+        } else if (exceptionMessages.length() > 0) {
             throw new ClusterJDatastoreException(exceptionMessages.toString());
         }
     }
@@ -634,7 +652,10 @@ class ClusterTransactionImpl implements ClusterTransaction {
             throw new ClusterJFatalInternalException(
                     local.message("ERR_Partition_Key_Null"));
         }
-        this.partitionKey = (PartitionKeyImpl)partitionKey;
+        if (! isPartitionKeySet) {
+            this.partitionKey = (PartitionKeyImpl)partitionKey;
+            isPartitionKeySet = true;
+        }
     }
 
     public void setLockMode(LockMode lockmode) {

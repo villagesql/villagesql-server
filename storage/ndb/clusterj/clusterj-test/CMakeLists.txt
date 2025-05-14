@@ -141,6 +141,7 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_TESTSUITE_PREFIX}/ReconnectTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/RecvThreadCPUTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/ReleaseTest.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/ReleaseWithCacheTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/SaveTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/SchemaChangeTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/SerialTransactionsTest.java
@@ -156,6 +157,9 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_TESTSUITE_PREFIX}/TransactionErrorSetPartitionKeyTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/TransactionStateTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/UpdateTest.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/UnloadSchemaTest.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/UnloadSchemaAfterRecreateTest.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/UnloadSchemaAfterDeleteWithCacheTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/VarbinaryPKTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/VarbinaryTypesTest.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/VarcharPKTest.java
@@ -203,6 +207,7 @@ SET(JAVA_SOURCES
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/DynamicStringPKs.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/Employee.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/Employee2.java
+  ${CLUSTERJ_TESTSUITE_PREFIX}/model/Employee3.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/FloatTypes.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/HashOnlyLongIntStringPK.java
   ${CLUSTERJ_TESTSUITE_PREFIX}/model/IdBase.java

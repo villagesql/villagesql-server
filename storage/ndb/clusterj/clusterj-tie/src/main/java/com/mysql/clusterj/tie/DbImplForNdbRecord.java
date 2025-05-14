@@ -82,10 +82,6 @@ class DbImplForNdbRecord extends DbImplCore implements Db {
         throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
     }
 
-    public boolean isRetriable(ClusterJDatastoreException ex) {
-        throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
-    }
-
     public NdbTransaction enlist(String tableName, List<KeyPart> keyParts) {
         throw new ClusterJFatalInternalException(local.message("ERR_Implementation_Should_Not_Occur"));
     }

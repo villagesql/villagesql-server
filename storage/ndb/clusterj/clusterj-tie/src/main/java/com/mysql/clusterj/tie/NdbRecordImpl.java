@@ -224,18 +224,13 @@ public class NdbRecordImpl {
         for (String projectedColumnName: storeTable.getProjectedColumnNames()) {
             this.projectedColumnSet.add(projectedColumnName);
         }
-        try {
-           this.autoIncrementColumn = storeTable.getAutoIncrementColumn();
-            if (this.autoIncrementColumn != null) {
-                chooseAutoIncrementValueSetter();
-            }
-            this.ndbRecord = createNdbRecord(storeTable, ndbDictionary);
-            if (logger.isDetailEnabled()) logger.detail(storeTable.getName() + " " + dumpDefinition());
-            initializeDefaultBuffer();
-        } finally {
-            // delete the RecordSpecificationArray since it is no longer needed
-            RecordSpecificationArray.delete(this.recordSpecificationArray);
+        this.autoIncrementColumn = storeTable.getAutoIncrementColumn();
+        if (this.autoIncrementColumn != null) {
+            chooseAutoIncrementValueSetter();
         }
+        this.ndbRecord = createNdbRecord(storeTable, ndbDictionary);
+        if (logger.isDetailEnabled()) logger.detail(storeTable.getName() + " " + dumpDefinition());
+        initializeDefaultBuffer();
     }
 
     /** Constructor for index operations. The NdbRecord has columns just for
@@ -319,7 +314,9 @@ public class NdbRecordImpl {
 
     /** Return the buffer to the buffer pool */
     protected void returnBuffer(ByteBuffer buffer) {
-        bufferPool.returnBuffer(buffer);
+        // bufferPool may be null after unloadSchema()
+        if (bufferPool != null)
+            bufferPool.returnBuffer(buffer);
     }
 
     /** Check the NdbRecord buffer guard */

@@ -77,6 +77,15 @@ public class ClusterJDatastoreException extends ClusterJException {
         return classification;
     }
 
+    /** canRetry()
+     * @return true if the error is an Ndb temporary error,
+     * and the operation can be retried.
+     * @since 9.4.0
+     */
+    public boolean canRetry() {
+        return (status == ndberror_st_temporary);
+    }
+
     /** tableNotFound()
      *  @return true if the error is a "Table Not Found" condition
      *  @since 9.4.0
@@ -173,8 +182,9 @@ public class ClusterJDatastoreException extends ClusterJException {
         return ex;
     }
 
-    void setRetriable() {
+    public ClusterJDatastoreException setRetriable() {
         status = ndberror_st_temporary;
+        return this;
     }
 
     /** Helper class for getClassification().

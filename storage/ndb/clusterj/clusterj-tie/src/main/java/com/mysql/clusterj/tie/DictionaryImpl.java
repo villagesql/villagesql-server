@@ -164,6 +164,7 @@ class DictionaryImpl implements com.mysql.clusterj.core.store.Dictionary {
     public String[] getIndexNames(String tableName) {
         // get all indexes for this table including ordered PRIMARY
         DictionaryConst.List indexList = DictionaryConst.List.create();
+        handleError(indexList, ndbDictionary, tableName);
         final String[] result;
         try {
             int returnCode = ndbDictionary.listIndexes(indexList, tableName);

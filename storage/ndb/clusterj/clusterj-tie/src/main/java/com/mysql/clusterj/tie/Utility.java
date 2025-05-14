@@ -264,14 +264,6 @@ public class Utility {
         addCollation(collationLatin1);
     }
 
-    /** Determine if the exception is retriable
-     * @param ex the exception
-     * @return if the status is retriable
-     */
-    public static boolean isRetriable(ClusterJDatastoreException ex) {
-        return NdbErrorConst.Status.TemporaryError == ex.getStatus();
-    }
-
     private final static EndianManager endianManager = ByteOrder.BIG_ENDIAN.equals(ByteOrder.nativeOrder())?
         /*
          * Big Endian algorithms to convert NdbRecAttr buffer into primitive types

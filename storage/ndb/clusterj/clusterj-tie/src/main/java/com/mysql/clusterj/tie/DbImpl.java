@@ -187,10 +187,6 @@ class DbImpl extends DbImplCore implements Db {
         }
     }
 
-    public boolean isRetriable(ClusterJDatastoreException ex) {
-        return Utility.isRetriable(ex);
-    }
-
     public String getNdbErrorDetail(NdbErrorConst ndbError) {
         return ndb.getNdbErrorDetail(ndbError, errorBuffer, errorBuffer.capacity());
     }
@@ -244,8 +240,8 @@ class DbImpl extends DbImplCore implements Db {
         } catch (ClusterJDatastoreException dse) {
             throw dse;
         } catch (Throwable t) {
-            throw new ClusterJDatastoreException(
-                local.message("ERR_Transaction_Start_Failed", t));
+            throw ClusterJDatastoreException.forSchemaChange(
+                local.message("ERR_Transaction_Start_Failed"), -5, t).setRetriable();
         } finally {
             // even if error, delete the key part array to avoid memory leaks
             if(key_part_ptrArray != null)
