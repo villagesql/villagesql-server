@@ -3195,6 +3195,9 @@ bool Item_func_between::fix_fields(THD *thd, Item **ref) {
   if (args[1]->result_type() == STRING_RESULT &&
       args[2]->result_type() == STRING_RESULT) {
     if (simplify_string_args(thd, args[0]->collation, args + 1, 2)) return true;
+    // Errors may have gone unnoticed:
+    if (thd->is_error()) return true;
+
     if (!args[1]->eq_by_collation(args[2], args[0]->collation.collation))
       return false;
   } else {
