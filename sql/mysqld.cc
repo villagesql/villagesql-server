@@ -6865,9 +6865,6 @@ int init_common_variables() {
       (host_cache_size = 628 + ((max_connections - 500) / 20)) > 2000)
     host_cache_size = 2000;
 
-  /* Fix back_log */
-  if (back_log == 0 && (back_log = max_connections) > 65535) back_log = 65535;
-
   unireg_init(opt_specialflag); /* Set up extern variables */
   while (!(my_default_lc_messages =
                my_locale_by_name(nullptr, lc_messages, strlen(lc_messages)))) {

@@ -1639,7 +1639,7 @@ auto-increment-increment 1
 auto-increment-offset 1
 autocommit TRUE
 automatic-sp-privileges TRUE
-back-log 151
+back-log 10000
 big-tables FALSE
 bind-address *
 binlog-cache-size 32768
