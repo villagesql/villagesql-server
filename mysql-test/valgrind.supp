@@ -2785,3 +2785,32 @@
    fun:_ZL18do_shutdown_serverP10st_command
    fun:main
 }
+
+# This leak occurs when 3. party lib linked with plugin or component uses TLS
+{
+   supress_tls_allocations
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:malloc
+   fun:UnknownInlinedFun
+   fun:allocate_dtv_entry
+   fun:allocate_and_init
+   fun:tls_get_addr_tail.isra.0
+   fun:__tls_get_addr
+   obj:*
+   obj:*
+   obj:*
+   ...
+}
+# This leak occurs in mysqltest, so it is not relevant for mysqld, its plugins and components
+{
+   supress_shutdown_from_mysqltest
+   Memcheck:Leak
+   match-leak-kinds: reachable
+   fun:_Znwm
+   fun:_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE9_M_mutateEmmPKcm
+   fun:_ZNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEE10_M_replaceEmmPKcm.isra.0
+   fun:_Z16query_get_stringP5MYSQLPKciPNSt7__cxx1112basic_stringIcSt11char_traitsIcESaIcEEE
+   fun:_ZL18do_shutdown_serverP10st_command
+   fun:main
+}
