@@ -3675,7 +3675,7 @@ static dberr_t recv_recovery_begin(log_t &log, const lsn_t checkpoint_lsn) {
 
   bool finished = false;
 
-  while (!finished) {
+  while (!finished && !recv_sys->found_corrupt_log) {
     const lsn_t end_lsn =
         recv_read_log_seg(log, log.buf, start_lsn, start_lsn + RECV_SCAN_SIZE);
 
@@ -3705,6 +3705,17 @@ static dberr_t recv_recovery_begin(log_t &log, const lsn_t checkpoint_lsn) {
   }
 
   DBUG_PRINT("ib_log", ("scan " LSN_PF " completed", log.m_scanned_lsn));
+  DBUG_EXECUTE_IF("stop_scan_on_corrupt_log", {
+    if (recv_sys->found_corrupt_log) {
+      lsn_t recv_start_lsn =
+          ut_uint64_align_down(checkpoint_lsn, OS_FILE_LOG_BLOCK_SIZE);
+      ib::info(ER_IB_MSG_725, ulonglong(log.m_scanned_lsn))
+          << " start_lsn:" << recv_start_lsn
+          << " end_lsn:" << start_lsn /* end_lsn after procesing each segment */
+          << " log_segments_read:"
+          << (start_lsn - recv_start_lsn + RECV_SCAN_SIZE - 1) / RECV_SCAN_SIZE;
+    }
+  });
   return DB_SUCCESS;
 }
 
