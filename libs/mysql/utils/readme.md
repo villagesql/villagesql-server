@@ -35,7 +35,6 @@ Code documentation: @ref GroupLibsMysqlUtils.
 
 This is a header-only library, containing various utility functions, such as:
 
-- bounded_arithmetic.h: multiplication and addition, capped at a max value
 - concat.h: vararg function to concatenate many values to a string
 - deprecate_header.h: macro deprecating a header
 - enumeration_utils.h: to_underlying (backported from C++23), to_enumeration

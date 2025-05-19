@@ -27,10 +27,6 @@
 /// @file
 /// Experimental API header
 
-#include <memory>
-#include <sstream>
-#include <string>
-
 /// @addtogroup GroupLibsMysqlUtils
 /// @{
 
