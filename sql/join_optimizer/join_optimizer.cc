@@ -4332,13 +4332,18 @@ void CostingReceiver::ApplyPredicatesForBaseTable(
   path->filter_predicates = std::move(filter_predicates);
   path->delayed_predicates = std::move(delayed_predicates);
 
-  /* Use the node cardinality estimated during hypergraph generation, if any. */
-  force_num_output_rows_after_filter =
-      GetTableAfterFiltersCardinalityFromHypergraph(
-          node_idx, absorbed_predicates.applied(), m_graph)
-          .value_or(force_num_output_rows_after_filter);
   if (force_num_output_rows_after_filter >= 0.0) {
     SetNumOutputRowsAfterFilter(path, force_num_output_rows_after_filter);
+  }
+  /* Use the node cardinality estimated during hypergraph generation, if any. */
+  auto hg_cardinality = GetTableAfterFiltersCardinalityFromHypergraph(
+      node_idx, absorbed_predicates.applied(), m_graph);
+  if (hg_cardinality) {
+    /* Since MySQL code generally tends to underestimate join sizes, we prefer
+    to take the maximum between these two estimates, even though we expect
+    `hg_cardinality` to be more accurate. */
+    double nrows = std::max(path->num_output_rows(), hg_cardinality.value());
+    SetNumOutputRowsAfterFilter(path, nrows);
   }
 
   if (materialize_subqueries) {
