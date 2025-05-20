@@ -29,6 +29,7 @@
 
 #include "helper/make_shared_ptr.h"
 #include "helper/set_http_component.h"
+#include "http/base/uri_path_matcher.h"
 #include "mrs/endpoint/handler/authentication/handler_authorize_login.h"
 #include "mrs/interface/universal_id.h"
 #include "mrs/rest/request_context.h"
@@ -41,6 +42,7 @@
 
 using helper::MakeSharedPtr;
 using helper::SetHttpComponent;
+using ::http::base::UriPathMatcher;
 using mrs::endpoint::handler::HandlerAuthorizeLogin;
 using mrs::interface::AuthorizeManager;
 using testing::_;
@@ -71,17 +73,17 @@ class HandlerAuthorizeTests : public Test {
   }
 
   void make_sut(const mrs::UniversalId service_id,
-                const std::string &rest_path) {
-    EXPECT_CALL(mock_http_component_, add_route(_, rest_path, _))
+                const UriPathMatcher &rest_path) {
+    EXPECT_CALL(mock_http_component_, add_direct_match_route(_, rest_path, _))
         .WillOnce(Invoke(
             [this](
-                const ::std::string &, const ::std::string &,
+                const ::std::string &, const UriPathMatcher &,
                 std::unique_ptr<http::base::RequestHandler> handler) -> void * {
               request_handler_ = std::move(handler);
               return request_handler_.get();
             }));
     sut_ = std::make_shared<HandlerAuthorizeLogin>(
-        mrs::endpoint::handler::k_protocolHttp, "", service_id, rest_path,
+        mrs::endpoint::handler::k_protocolHttp, "", service_id, rest_path.path,
         rest_path, "", "", std::optional<std::string>(), &mock_auth_);
     sut_->initialize(HandlerConfiguration());
     ASSERT_NE(nullptr, request_handler_.get());
@@ -116,7 +118,7 @@ class HandlerAuthorizeTests : public Test {
   }
 
   const std::string k_url{"some_url"};
-  const std::string k_rest_path{"some_rest_path"};
+  const UriPathMatcher k_rest_path{"some_rest_path", false, false};
   const std::string k_empty{};
 
   StrictMock<MockHttpUri> mock_uri_;

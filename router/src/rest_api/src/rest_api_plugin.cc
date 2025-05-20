@@ -252,7 +252,7 @@ static void start(mysql_harness::PluginFuncEnv *env) {
 
     rest_api_srv.init(rest_api);
 
-    const auto *route_id = http_srv.add_route(
+    const auto *route_id = http_srv.add_regex_route(
         "", rest_api->uri_prefix_regex(),
         std::make_unique<RestApiHttpRequestHandler>(rest_api));
 

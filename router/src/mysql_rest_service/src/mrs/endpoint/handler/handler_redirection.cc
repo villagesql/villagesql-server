@@ -54,7 +54,7 @@ HandlerRedirection::HandlerRedirection(
     const std::string &url_host, const std::string &path,
     const std::string &file_name, const std::string &file_new_location,
     mrs::interface::AuthorizeManager *auth_manager, bool pernament)
-    : Handler(protocol, url_host, {"^"s + path + "$"}, std::string{},
+    : Handler(protocol, url_host, {{path, false, false}}, std::string{},
               auth_manager),
       service_id_{service_id},
       service_path_{service_path},
