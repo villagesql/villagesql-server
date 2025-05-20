@@ -4363,11 +4363,6 @@ void CostingReceiver::ApplyPredicatesForBaseTable(
   path->filter_predicates = std::move(filter_predicates);
   path->delayed_predicates = std::move(delayed_predicates);
 
-  /* Use the node cardinality estimated during hypergraph generation, if any. */
-  force_num_output_rows_after_filter =
-      GetTableAfterFiltersCardinalityFromHypergraph(
-          node_idx, absorbed_predicates.applied(), m_graph)
-          .value_or(force_num_output_rows_after_filter);
   if (force_num_output_rows_after_filter >= 0.0) {
     SetNumOutputRowsAfterFilter(path, force_num_output_rows_after_filter);
   }
@@ -4381,6 +4376,7 @@ void CostingReceiver::ApplyPredicatesForBaseTable(
     double nrows = std::max(path->num_output_rows(), hg_cardinality.value());
     SetNumOutputRowsAfterFilter(path, nrows);
   }
+
   SecondaryEngineNrowsParameters secondary_engine_nrows_params{m_thd, path,
                                                                m_graph};
   secondary_engine_nrows_params.to_force_resign =
