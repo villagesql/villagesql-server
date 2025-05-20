@@ -227,7 +227,7 @@ mrs::database::entry::RowUserOwnership get_user_ownership(
   return result;
 }
 
-std::vector<std::string> regex_path_for_db_object(
+auto get_path_for_db_object(
     std::weak_ptr<mrs::endpoint::DbObjectEndpoint> endpoint) {
   auto ep = mrs::endpoint::handler::lock(endpoint);
   auto parent_ep = ep->get_parent_ptr();
@@ -236,7 +236,7 @@ std::vector<std::string> regex_path_for_db_object(
   const std::string &service_schema_path = parent_ep->get_url_path();
   const bool is_index = ep->is_index();
 
-  return mrs::endpoint::handler::regex_path_db_object_with_index(
+  return mrs::endpoint::handler::path_db_object_with_index(
       object_path, service_schema_path, is_index);
 }
 
@@ -276,8 +276,8 @@ HandlerDbObjectTable::HandlerDbObjectTable(
     mrs::ResponseCache *response_cache,
     mrs::database::SlowQueryMonitor *slow_monitor)
     : Handler(handler::get_protocol(endpoint), get_endpoint_host(endpoint),
-              /*regex-path: ^/service/schema/object(/...)?$*/
-              regex_path_for_db_object(endpoint),
+              /* path: /service/schema/object[/...] */
+              get_path_for_db_object(endpoint),
               get_endpoint_options(lock(endpoint)), auth_manager),
       gtid_manager_{gtid_manager},
       cache_{cache},

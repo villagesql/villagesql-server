@@ -1028,7 +1028,7 @@ mrs::interface::Options parse_json_options(
 }
 
 Handler::Handler(const Protocol protocol, const std::string &url_host,
-                 const std::vector<std::string> &rest_path_matcher,
+                 const std::vector<UriPathMatcher> &rest_path_matcher,
                  const std::optional<std::string> &options,
                  mrs::interface::AuthorizeManager *auth_manager)
     : options_{parse_json_options(options)},
@@ -1066,12 +1066,11 @@ Handler::~Handler() {
       if (log_level_is_info_) {
         log_info(
             "Removing Url-Handler that processes requests on host: '%s' and "
-            "path "
-            "that matches regex: '%s'",
-            url_host_.c_str(), path.c_str());
+            "path that matches path: '%s'",
+            url_host_.c_str(), path.path.c_str());
       }
       if (log_level_is_debug_) {
-        log_debug("route-remove: '%s' on host '%s'", path.c_str(),
+        log_debug("route-remove: '%s' on host '%s'", path.path.c_str(),
                   url_host_.c_str());
       }
     }
@@ -1092,19 +1091,20 @@ void Handler::initialize(const Configuration &configuration) {
         weak_from_this(), authorization_manager_, may_log_requests);
 
     if (log_level_is_debug_) {
-      log_debug("router-add: '%s' on host '%s'", path.c_str(),
+      log_debug("route-add: '%s' on host '%s'", path.path.c_str(),
                 url_host_.c_str());
     }
 
     if (log_level_is_info_) {
       log_info(
           "Adding Url-Handler that processes requests on host '%s' and path "
-          "that matches regex: '%s'",
-          url_host_.c_str(), path.c_str());
+          "that matches: '%s'",
+          url_host_.c_str(), path.path.c_str());
     }
 
-    handler_id_.emplace_back(HttpServerComponent::get_instance().add_route(
-        url_host_, path, std::move(handler)));
+    handler_id_.emplace_back(
+        HttpServerComponent::get_instance().add_direct_match_route(
+            url_host_, path, std::move(handler)));
   }
 }
 

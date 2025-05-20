@@ -47,13 +47,17 @@ using Authorization = mrs::rest::Handler::Authorization;
 
 namespace {
 
-auto get_regex_path_service_openapi(std::weak_ptr<DbServiceEndpoint> endpoint) {
+auto get_path_service_openapi(std::weak_ptr<DbServiceEndpoint> endpoint) {
   using namespace std::string_literals;
+  std::vector<::http::base::UriPathMatcher> result;
 
   auto endpoint_service = lock(endpoint);
-  if (!endpoint_service) return ""s;
+  if (!endpoint_service) return result;
 
-  return regex_path_service_openapi_swagger(endpoint_service->get_url_path());
+  result.push_back(
+      path_service_openapi_swagger(endpoint_service->get_url_path()));
+
+  return result;
 }
 
 }  // namespace
@@ -63,8 +67,8 @@ HandlerDbServiceOpenAPI::HandlerDbServiceOpenAPI(
     mrs::interface::AuthorizeManager *auth_manager)
     : mrs::rest::Handler(handler::get_protocol(endpoint),
                          get_endpoint_host(endpoint),
-                         /*regex-path: ^/service/open-api-catalog$*/
-                         {get_regex_path_service_openapi(endpoint)},
+                         /* path: /service/open-api-catalog */
+                         get_path_service_openapi(endpoint),
                          get_endpoint_options(lock(endpoint)), auth_manager),
       endpoint_{endpoint} {
   auto ep = lock(endpoint_);

@@ -1,5 +1,5 @@
 /*
-  Copyright (c) 2021, 2024, Oracle and/or its affiliates.
+  Copyright (c) 2025, Oracle and/or its affiliates.
 
   This program is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License, version 2.0,
@@ -23,27 +23,34 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_REST_MRS_TESTS_MOCK_MOCK_HTTP_SERVER_COMPONENT_H_
-#define ROUTER_SRC_REST_MRS_TESTS_MOCK_MOCK_HTTP_SERVER_COMPONENT_H_
+#ifndef ROUTER_SRC_HTTP_INCLUDE_HTTP_BASE_URI_PATH_MATCHER_H_
+#define ROUTER_SRC_HTTP_INCLUDE_HTTP_BASE_URI_PATH_MATCHER_H_
 
-#include <memory>
+#include <map>
+#include <string>
+#include <vector>
 
-#include "mysqlrouter/component/http_server_component.h"
+#include "mysqlrouter/uri.h"
 
-class MockHttpServerComponent : public HttpServerComponent {
- public:
-  MOCK_METHOD(void, init, (HttpServerCtxtPtr srv), (override));
-  MOCK_METHOD(void *, add_regex_route,
-              (const std::string &url_host, const std::string &url_regex,
-               std::unique_ptr<http::base::RequestHandler> cb),
-              (override));
-  MOCK_METHOD(void *, add_direct_match_route,
-              (const std::string &url_host,
-               const ::http::base::UriPathMatcher &url_path,
-               std::unique_ptr<http::base::RequestHandler> cb),
-              (override));
-  MOCK_METHOD(void, remove_route, (const void *handler), (override));
-  MOCK_METHOD(bool, is_ssl_configured, (), (override));
+#include "mysqlrouter/http_common_export.h"
+
+namespace http {
+namespace base {
+
+struct UriPathMatcher {
+  std::string path;
+  bool allow_id_element;
+  bool allow_trailing_slash;
+
+  std::string str() const {
+    return path + (allow_trailing_slash ? "/" : "") +
+           (allow_id_element ? "[*]" : "");
+  }
+
+  auto operator<=>(const UriPathMatcher &) const = default;
 };
 
-#endif  // ROUTER_SRC_REST_MRS_TESTS_MOCK_MOCK_HTTP_SERVER_COMPONENT_H_
+}  // namespace base
+}  // namespace http
+
+#endif  // ROUTER_SRC_HTTP_INCLUDE_HTTP_BASE_URI_PATH_MATCHER_H_
