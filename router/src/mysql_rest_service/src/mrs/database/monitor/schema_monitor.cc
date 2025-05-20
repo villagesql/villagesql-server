@@ -25,6 +25,8 @@
 
 #include "mrs/database/schema_monitor.h"
 
+#include <chrono>
+
 #include "helper/string/contains.h"
 #include "helper/string/generic.h"
 
@@ -233,6 +235,9 @@ void SchemaMonitor::run() {
       log_system("Monitoring MySQL REST metadata (version: %s)",
                  to_string(supported_schema_version).c_str());
 
+      auto last_stored_time = std::chrono::system_clock::now();
+      bool initial_run = true;
+
       do {
         using namespace observability;
         auto session = (*session_check_version).empty()
@@ -352,11 +357,22 @@ void SchemaMonitor::run() {
           session->execute(update.str());
 
           try {
+            const auto actual_stored_time = std::chrono::system_clock::now();
+            auto status_time =
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    actual_stored_time - last_stored_time)
+                    .count();
+
+            if (initial_run) {
+              status_time += configuration_.metadata_refresh_interval_.count();
+              initial_run = false;
+            }
+
             QueryStatistics store_stats;
             store_stats.update_statistics(
-                session.get(), configuration_.router_id_,
-                configuration_.metadata_refresh_interval_.count(),
+                session.get(), configuration_.router_id_, status_time,
                 entities_manager_->fetch_counters());
+            last_stored_time = actual_stored_time;
           } catch (const std::exception &exc) {
             log_error(
                 "Storing statistics failed, because of the following error:%s.",
