@@ -1130,6 +1130,8 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_system_variable_set.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_table_access.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_deinit.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_deinit_no_deadlock.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_init_then_register.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_command_services.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/test_services_command_services.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_execute_prepared_statement.so
@@ -1238,6 +1240,8 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_mysql_system_variable_set.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_table_access.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_deinit.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_deinit_no_deadlock.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_init_then_register.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_mysql_command_services.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/test_services_command_services.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_execute_prepared_statement.so
@@ -1399,6 +1403,13 @@ fi
 %endif # with_router
 
 %changelog
+
+* Wed Apr 30 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.4.0
+- Added component_test_component_deinit_no_deadlock
+
+* Wed Apr 30 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.4.0
+- Added component_test_component_init_then_register
+
 * Wed Nov 13 2024 Samar Pratap Singh <samar.pratap.singh@oracle.com> - 9.2.0-1
 - Added component_connection_control
 

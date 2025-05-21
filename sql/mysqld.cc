@@ -2020,8 +2020,6 @@ SERVICE_TYPE_NO_CONST(registry) * srv_registry;
 SERVICE_TYPE_NO_CONST(registry) * srv_registry_no_lock;
 SERVICE_TYPE_NO_CONST(registry_registration) * srv_registry_registration{
                                                    nullptr};
-SERVICE_TYPE_NO_CONST(registry_registration) *
-    srv_registry_registration_no_lock{nullptr};
 SERVICE_TYPE_NO_CONST(registry_query) * srv_registry_query{nullptr};
 SERVICE_TYPE(dynamic_loader_scheme_file) * scheme_file_srv;
 using loader_type_t = SERVICE_TYPE_NO_CONST(dynamic_loader);
@@ -2056,6 +2054,8 @@ static bool component_infrastructure_init() {
     LogErr(ERROR_LEVEL, ER_COMPONENTS_INFRASTRUCTURE_BOOTSTRAP);
     return true;
   }
+  // We still need this because _no_lock registry API variant introduced by
+  // Bug#34741098 is not removed yet.
   srv_registry->acquire(
       "registry.mysql_minimal_chassis_no_lock",
       reinterpret_cast<my_h_service *>(&srv_registry_no_lock));
@@ -2074,10 +2074,6 @@ static bool component_infrastructure_init() {
   srv_registry->acquire(
       "registry_registration",
       reinterpret_cast<my_h_service *>(&srv_registry_registration));
-
-  srv_registry->acquire(
-      "registry_registration.mysql_minimal_chassis_no_lock",
-      reinterpret_cast<my_h_service *>(&srv_registry_registration_no_lock));
 
   srv_registry->acquire("registry_query",
                         reinterpret_cast<my_h_service *>(&srv_registry_query));
@@ -2191,10 +2187,10 @@ static bool component_infrastructure_deinit(bool print_message) {
   }
 
   srv_weak_option_option::deinit(
-      srv_registry_no_lock, srv_registry_registration_no_lock,
+      srv_registry, srv_registry_registration,
       [&](SERVICE_TYPE(mysql_option_tracker_option) * opt) {
         return 0 != opt->undefine("MySQL Server") ||
-               optimizer_options_usage_deinit(opt, srv_registry_no_lock);
+               optimizer_options_usage_deinit(opt, srv_registry);
       });
   persistent_dynamic_loader_deinit();
   bool retval = false;
@@ -2212,8 +2208,6 @@ static bool component_infrastructure_deinit(bool print_message) {
       const_cast<rwlock_type_t *>(rwlock_service)));
   srv_registry->release(
       reinterpret_cast<my_h_service>(srv_registry_registration));
-  srv_registry->release(
-      reinterpret_cast<my_h_service>(srv_registry_registration_no_lock));
   srv_registry->release(reinterpret_cast<my_h_service>(srv_registry_query));
 
   if (deinitialize_minimal_chassis(srv_registry)) {
@@ -10171,8 +10165,7 @@ int mysqld_main(int argc, char **argv)
     Delay replication feature tracking to after components are
     initialized.
   */
-  rpl_opt_tracker = new Rpl_opt_tracker(srv_registry_registration,
-                                        srv_registry_registration_no_lock);
+  rpl_opt_tracker = new Rpl_opt_tracker();
   rpl_opt_tracker->start_worker();
 
   /*

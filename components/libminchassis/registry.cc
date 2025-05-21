@@ -40,6 +40,30 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
   For each Service a default Service Implementation is distinguished, the first
   one to be added, but it is possible to change it at will at any point.
 
+  @section registry_no_lock_deprecated Registry _no_lock deprecation note
+
+  Dynamic Loader unload operation order is altered and does not require _no_lock
+  variant of registry API. For more information on dynamic loader unload
+  operation see @ref dynamic_loader_unload_order.
+
+  The following registry API functions are depreceated:
+
+    - mysql_registry_no_lock_imp::acquire()
+    - mysql_registry_no_lock_imp::acquire_related()
+    - mysql_registry_no_lock_imp::release()
+    - mysql_registry_no_lock_imp::register_service()
+    - mysql_registry_no_lock_imp::unregister()
+    - mysql_registry_no_lock_imp::set_default()
+
+  It is recommended to use synchronized variant of registry API instead:
+
+    - mysql_registry_imp::acquire()
+    - mysql_registry_imp::acquire_related()
+    - mysql_registry_imp::release()
+    - mysql_registry_imp::register_service()
+    - mysql_registry_imp::unregister()
+    - mysql_registry_imp::set_default()
+
   A convenient RAII-style wrapper on Service acquisition and automatic release
   is provided, the my_service<T> class.
 */

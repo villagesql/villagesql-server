@@ -345,6 +345,8 @@ for p in \
          component_test_mysql_runtime_error.so \
          component_test_mysql_system_variable_set.so \
          component_test_component_deinit.so \
+         component_test_component_deinit_no_deadlock.so \
+         component_test_component_init_then_register.so \
          component_test_global_priv_registration.so \
          component_test_mysql_command_services.so \
          component_test_mysql_thd_store_service.so \
@@ -730,6 +732,12 @@ rm -r $(readlink var) var
 %changelog
 * Tue May 27 2025 Michal Jankowski <michal.jankowski@oracle.com> - 9.4.0-1
 - Added component_firewall.so
+
+* Wed Apr 30 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.4.0-1
+- Added component_test_component_deinit_no_deadlock
+
+* Wed Apr 30 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.4.0-1
+- Added component_test_component_init_then_register
 
 * Fri Jan 10 2025 Anibal Pinto <anibal.pinto@oracle.com> - 9.3.0-1
 - Added component_group_replication_elect_prefers_most_updated
