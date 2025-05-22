@@ -2777,12 +2777,11 @@ static bool has_missing_import(const char *schema, const char *name,
     return true;  // Error executing the query.
   }
 
-  if (mysql_query_with_error_report(mysql, &routine_list_res, query.c_str()))
-    return true;
+  bool result = false;
   if (mysql_num_rows(routine_list_res))
-    return true;  // There are imported libraries that do NOT exist.
+    result = true;  // There are imported libraries that do NOT exist.
   mysql_free_result(routine_list_res);
-  return false;  // All the libraries that this routine imports, are present.
+  return result;  // All the libraries that this routine imports, are present.
 }
 
 /*
