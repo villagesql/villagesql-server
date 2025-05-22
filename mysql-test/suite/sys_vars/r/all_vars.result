@@ -169,8 +169,6 @@ sync_master_info
 sync_master_info
 temptable_max_mmap
 temptable_max_mmap
-temptable_use_mmap
-temptable_use_mmap
 terminology_use_previous
 terminology_use_previous
 tls_certificates_enforced_validation

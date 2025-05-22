@@ -233,7 +233,6 @@ extern const char *default_storage_engine;
 extern const char *default_tmp_storage_engine;
 extern ulonglong temptable_max_ram;
 extern ulonglong temptable_max_mmap;
-extern bool temptable_use_mmap;
 extern bool using_udf_functions;
 extern bool locked_in_memory;
 extern bool opt_using_transactions;

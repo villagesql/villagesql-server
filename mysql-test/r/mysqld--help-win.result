@@ -1539,9 +1539,6 @@ The following options may be given as the first argument:
  Maximum amount of memory (in bytes) the TempTable storage
  engine is allowed to allocate from the main memory (RAM)
  before starting to store data on disk.
- --temptable-use-mmap 
- Use mmap files for temptables. This variable is
- deprecated and will be removed in a future release.
  --terminology-use-previous=name 
  Make monitoring tables and statements use the identifiers
  that were in use before they were changed in a given
@@ -2034,7 +2031,6 @@ table-open-cache-triggers 524288
 tablespace-definition-cache 256
 tc-heuristic-recover OFF
 temptable-max-mmap 0
-temptable-use-mmap FALSE
 terminology-use-previous NONE
 thread-cache-size 9
 thread-handling one-thread-per-connection
