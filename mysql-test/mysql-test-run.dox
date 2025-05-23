@@ -4003,7 +4003,10 @@ server_ssl_verify=DISABLED
     <tr>
       <td><tt>MYSQL_TMP_DIR</tt></td>
       <td>
-        Path to temp directory used for temporary files during tests
+        Path to temp directory used for temporary files during tests.
+        Avoid using MYSQL_TMP_DIR for files that need to be imported or exported
+        by the server. When --parallel > 1, MYSQL_TMP_DIR does not fall
+        within secure-file-priv, which will cause access failures.
       </td>
     </tr>
     <tr>
@@ -4035,8 +4038,11 @@ server_ssl_verify=DISABLED
     <tr>
       <td><tt>MYSQLTEST_VARDIR</tt></td>
       <td>
-        Path name to the <b>var</b> directory that is used for logs,
-        temporary files, and so forth
+        Path to the <b>var</b> directory used for logs, temporary files,
+        and other test-related data.
+        For temporary files that need to be imported or exported by the server,
+        strictly use MYSQLTEST_VARDIR/tmp, as secure-file-priv is set
+        to MYSQLTEST_VARDIR by default.
       </td>
     </tr>
     <tr>
