@@ -1078,7 +1078,7 @@ void notify_plugins_after_select(THD *thd, const Sql_cmd *cmd) {
    * overhead. */
   bool is_secondary_engine_not_forced =
       thd->variables.use_secondary_engine != SECONDARY_ENGINE_FORCED;
-  if (is_secondary_engine_not_forced &&
+  if (is_secondary_engine_not_forced && !thd->lex->has_external_tables() &&
       ((thd->secondary_engine_statement_context() == nullptr &&
         thd->m_current_query_cost <=
             thd->variables.secondary_engine_cost_threshold) ||
