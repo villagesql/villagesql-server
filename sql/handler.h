@@ -824,6 +824,13 @@ constexpr const uint64_t HA_CREATE_USED_STRICT_LOAD{1ULL << 40};
 constexpr const uint64_t HA_CREATE_USED_AUTO_REFRESH{1ULL << 41};
 constexpr const uint64_t HA_CREATE_USED_AUTO_REFRESH_SOURCE{1ULL << 42};
 
+/**
+  These flags indicate that ENGINE/SECONDARY_ENGINE were set explicitly
+  (not by EXTERNAL keyword defaults)
+*/
+constexpr const uint64_t HA_CREATE_USED_EXPLICIT_ENGINE{1ULL << 43};
+constexpr const uint64_t HA_CREATE_USED_EXPLICIT_SECONDARY_ENGINE{1ULL << 44};
+
 /*
   End of bits used in used_fields
 */
@@ -3355,6 +3362,9 @@ struct HA_CREATE_INFO {
   PT_create_external_file_format *file_format{nullptr};
   PT_create_external_files *external_files{nullptr};
   LEX_CSTRING auto_refresh_event_source = NULL_CSTR;
+
+  // Position in query text where column definitions end and table options start
+  size_t create_table_columns_end_pos{0};
 
   /**
     Fill HA_CREATE_INFO to be used by ALTER as well as upgrade code.

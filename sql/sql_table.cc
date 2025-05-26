@@ -182,6 +182,7 @@
 #include "sql/sql_plugin.h"
 #include "sql/sql_plugin_ref.h"
 #include "sql/sql_resolver.h"  // setup_order
+#include "sql/sql_rewrite.h"   // Consumer_type
 #include "sql/sql_show.h"
 #include "sql/sql_tablespace.h"  // validate_tablespace_name
 #include "sql/sql_time.h"        // make_truncated_value_warning
@@ -11076,8 +11077,19 @@ bool mysql_create_table(THD *thd, Table_ref *create_table,
           }
         }
       } else {
-        result = write_bin_log(thd, true, thd->query().str, thd->query().length,
-                               is_trans);
+        const char *query_str = thd->query().str;
+        size_t query_length = thd->query().length;
+
+        // if CREATE EXTERNAL TABLE, then rewrite for binlog
+        if ((create_info->options & HA_LEX_CREATE_EXTERNAL_TABLE) != 0) {
+          mysql_rewrite_query_for_binlog(thd);
+          const String &rewritten_query = thd->rewritten_query();
+          if (rewritten_query.length() > 0) {
+            query_str = rewritten_query.ptr();
+            query_length = rewritten_query.length();
+          }
+        }
+        result = write_bin_log(thd, true, query_str, query_length, is_trans);
       }
     }
   }
@@ -11966,6 +11978,7 @@ bool mysql_create_like_table(THD *thd, Table_ref *table, Table_ref *src_table,
             must force the ENGINE to be present into CREATE TABLE.
           */
           create_info->used_fields |= HA_CREATE_USED_ENGINE;
+          create_info->used_fields |= HA_CREATE_USED_EXPLICIT_ENGINE;
 
           const bool result [[maybe_unused]] = store_create_info(
               thd, table, &query, create_info, true /* show_database */,

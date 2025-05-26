@@ -3281,7 +3281,8 @@ create_table_stmt:
                                              $9.opt_create_table_options,
                                              $9.opt_partitioning,
                                              $9.on_duplicate,
-                                             $9.opt_query_expression);
+                                             $9.opt_query_expression,
+                                             @8);
           }
         | CREATE opt_temporary_or_external TABLE_SYM opt_if_not_exists table_ident
           opt_create_table_options_etc
