@@ -2161,6 +2161,7 @@ bool PT_create_table_engine_option::do_contextualize(
   if (super::do_contextualize(pc)) return true;
 
   pc->create_info->used_fields |= HA_CREATE_USED_ENGINE;
+  pc->create_info->used_fields |= HA_CREATE_USED_EXPLICIT_ENGINE;
   const bool is_temp_table = pc->create_info->options & HA_LEX_CREATE_TMP_TABLE;
   if (resolve_engine(pc->thd, engine, is_temp_table, false,
                      &pc->create_info->db_type)) {
@@ -2186,6 +2187,7 @@ bool PT_create_table_secondary_engine_option::do_contextualize(
   if (super::do_contextualize(pc)) return true;
 
   pc->create_info->used_fields |= HA_CREATE_USED_SECONDARY_ENGINE;
+  pc->create_info->used_fields |= HA_CREATE_USED_EXPLICIT_SECONDARY_ENGINE;
   pc->create_info->secondary_engine = m_secondary_engine;
   return false;
 }
@@ -2460,11 +2462,19 @@ Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
   lex->create_info = &m_create_info;
   Table_ddl_parse_context pc2(thd, pc.select, &m_alter_info);
 
+  // Transfer position where column definitions end and table options start
+  if (m_columns_end_pos.raw.end) {
+    pc2.create_info->create_table_columns_end_pos =
+        m_columns_end_pos.raw.end - thd->m_parser_state->m_lip.get_buf();
+  } else {
+    pc2.create_info->create_table_columns_end_pos = 0;
+  }
   pc2.create_info->options = 0;
   if ((table_type & TABLE_TYPE_TEMPORARY) != 0)
     pc2.create_info->options |= HA_LEX_CREATE_TMP_TABLE;
-  if ((table_type & TABLE_TYPE_EXTERNAL) != 0)
+  if ((table_type & TABLE_TYPE_EXTERNAL) != 0) {
     pc2.create_info->options |= HA_LEX_CREATE_EXTERNAL_TABLE;
+  }
   if (only_if_not_exists)
     pc2.create_info->options |= HA_LEX_CREATE_IF_NOT_EXISTS;
 
@@ -2557,6 +2567,10 @@ Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
   if (((table_type & TABLE_TYPE_EXTERNAL) != 0) &&
       ((pc2.create_info->used_fields & HA_CREATE_USED_ENGINE) == 0)) {
     pc2.create_info->used_fields |= HA_CREATE_USED_ENGINE;
+    // We do NOT set HA_CREATE_USED_EXPLICIT_ENGINE here because
+    // EXTERNAL implicitly sets the engine from session variable.
+    // HA_CREATE_USED_EXPLICIT_ENGINE is only set when ENGINE is
+    // explicitly specified in the CREATE TABLE statement.
     const char *engine_name = thd->variables.external_table_storage_engine;
     if (engine_name == nullptr) {
       my_error(ER_EXTERNAL_TABLE_ENGINE_NOT_SPECIFIED, MYF(0));
@@ -2584,6 +2598,10 @@ Sql_cmd *PT_create_table_stmt::make_cmd(THD *thd) {
       pc2.create_info->secondary_engine = {
           thd->strmake(secondary_engine_name, len), len};
       pc2.create_info->used_fields |= HA_CREATE_USED_SECONDARY_ENGINE;
+      // We do NOT set HA_CREATE_USED_EXPLICIT_SECONDARY_ENGINE here because
+      // EXTERNAL implicitly sets the secondary engine from session variable.
+      // HA_CREATE_USED_EXPLICIT_SECONDARY_ENGINE is only set when
+      // SECONDARY_ENGINE is explicitly specified in the CREATE TABLE statement.
     }
   }
 

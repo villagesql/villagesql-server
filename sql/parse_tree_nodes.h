@@ -3238,6 +3238,7 @@ class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
   On_duplicate on_duplicate;
   PT_query_expression_body *opt_query_expression;
   Table_ident *opt_like_clause;
+  POS m_columns_end_pos;
 
   HA_CREATE_INFO m_create_info;
 
@@ -3261,6 +3262,8 @@ class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
                                       for @SQL{CREATE TABLE ... SELECT}
                                       statements).
     @param opt_query_expression       NULL or the @SQL{@B{SELECT}} clause.
+    @param columns_end_pos            Position after column definitions end.
+                                      Used for CREATE EXTERNAL TABLE rewriting.
   */
   PT_create_table_stmt(
       const POS &pos, MEM_ROOT *mem_root, uint table_type,
@@ -3268,7 +3271,8 @@ class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
       const Mem_root_array<PT_table_element *> *opt_table_element_list,
       const Mem_root_array<PT_create_table_option *> *opt_create_table_options,
       PT_partition *opt_partitioning, On_duplicate on_duplicate,
-      PT_query_expression_body *opt_query_expression)
+      PT_query_expression_body *opt_query_expression,
+      const POS &columns_end_pos = POS())
       : PT_table_ddl_stmt_base(pos, mem_root),
         table_type(table_type),
         only_if_not_exists(only_if_not_exists),
@@ -3278,7 +3282,8 @@ class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
         opt_partitioning(opt_partitioning),
         on_duplicate(on_duplicate),
         opt_query_expression(opt_query_expression),
-        opt_like_clause(nullptr) {}
+        opt_like_clause(nullptr),
+        m_columns_end_pos(columns_end_pos) {}
   /**
     @param pos                Position of this clause in the SQL statement.
     @param mem_root           MEM_ROOT to use for allocation
@@ -3300,7 +3305,8 @@ class PT_create_table_stmt final : public PT_table_ddl_stmt_base {
         opt_partitioning(nullptr),
         on_duplicate(On_duplicate::ERROR),
         opt_query_expression(nullptr),
-        opt_like_clause(opt_like_clause) {}
+        opt_like_clause(opt_like_clause),
+        m_columns_end_pos(POS()) {}
 
   Sql_cmd *make_cmd(THD *thd) override;
 };
