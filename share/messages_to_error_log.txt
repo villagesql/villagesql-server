@@ -13137,6 +13137,9 @@ ER_VAR_REGISTRATION
 ER_VAR_DEREGISTRATION
   eng "Cannot unregister variable '%s.%s'. Please check if it was registered properly in the first place."
 
+ER_SERVER_STARTING_WITH_RESOURCE
+   eng "MySQL Server has access to %llu %s."
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

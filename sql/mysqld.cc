@@ -721,6 +721,7 @@ MySQL clients support the protocol:
 #include "myisam.h"
 #include "mysql/binlog/event/binlog_event.h"
 #include "mysql/binlog/event/control_events.h"
+#include "mysql/components/library_mysys/my_system.h"  // my_num_vcpus
 #include "mysql/components/services/bits/psi_bits.h"
 #include "mysql/components/services/log_builtins.h"
 #include "mysql/components/services/log_shared.h"
@@ -6579,6 +6580,20 @@ void unregister_server_telemetry_loggers() {
   mysql_log_client_unregister(err_loggers, std::size(err_loggers));
 }
 
+/**
+  Log the system resources available to the server. The resources includes the
+number of logical CPUs and total physical memory.
+*/
+static inline void print_available_resources() {
+  if (!(opt_help || opt_validate_config || opt_initialize ||
+        opt_initialize_insecure)) {
+    LogErr(SYSTEM_LEVEL, ER_SERVER_STARTING_WITH_RESOURCE, my_num_vcpus(),
+           "logical CPUs");
+    LogErr(SYSTEM_LEVEL, ER_SERVER_STARTING_WITH_RESOURCE, my_physical_memory(),
+           "bytes of physical memory");
+  }
+}
+
 int init_common_variables() {
 #if defined(HAVE_BUILD_ID_SUPPORT)
   my_find_build_id(server_build_id);
@@ -6778,6 +6793,8 @@ int init_common_variables() {
 
   DBUG_PRINT("info", ("%s  Ver %s for %s on %s\n", my_progname, server_version,
                       SYSTEM_TYPE, MACHINE_TYPE));
+
+  print_available_resources();
 
 #ifdef HAVE_LINUX_LARGE_PAGES
   /* Initialize large page size */
