@@ -3443,19 +3443,16 @@ std::string get_x509_name(X509_NAME *name) {
   return std::string(buffer);
 }
 
-class BootstrapCertTest : public RouterComponentBootstrapTest {
- public:
-  BootstrapCertTest() : RouterComponentBootstrapTest(false) {}
-};
+class BootstrapCertTest : public RouterComponentBootstrapTest {};
 
 TEST_F(BootstrapCertTest, CheckGeneratedCertDetails) {
   const auto server_port = port_pool_.get_next_available();
   const auto http_port = port_pool_.get_next_available();
 
-  mock_server_spawner().spawn(mock_server_cmdline("bootstrap_gr.js")
-                                  .port(server_port)
-                                  .http_port(http_port)
-                                  .args());
+  const std::string tracefile = "bootstrap_gr.js";
+  const std::string json_stmts = get_data_dir().join(tracefile).str();
+  launch_mysql_server_mock(json_stmts, server_port, EXIT_SUCCESS, false,
+                           http_port);
 
   set_mock_metadata(http_port, "00000000-0000-0000-0000-0000000000g1",
                     classic_ports_to_gr_nodes({server_port}), 0, {server_port});
