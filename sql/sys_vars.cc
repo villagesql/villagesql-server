@@ -1191,6 +1191,13 @@ static Sys_var_bool Sys_use_separate_thread_for_admin(
     READ_ONLY NON_PERSIST GLOBAL_VAR(listen_admin_interface_in_separate_thread),
     CMD_LINE(OPT_ARG), DEFAULT(false));
 
+static Sys_var_ulonglong Sys_server_memory(
+    "server_memory",
+    "Memory (in bytes) used by the MySQL Server when auto-tuning the default "
+    "values of the configuration parameters which depend on memory",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(server_memory), CMD_LINE(REQUIRED_ARG),
+    VALID_RANGE(0, ULLONG_MAX), DEFAULT(0), BLOCK_SIZE(1));
+
 static Sys_var_bool Sys_password_require_current(
     "password_require_current",
     "Current password is needed to be specified in order to change it",
@@ -5173,6 +5180,25 @@ static Sys_var_ulonglong Sys_temptable_max_ram(
     DEFAULT(std::clamp(ulonglong{3 * (my_physical_memory() / 100)},
                        1ULL << 30 /* 1 GiB */, 1ULL << 32 /* 4 GiB */)),
     BLOCK_SIZE(1));
+
+void update_temptable_max_ram_default() {
+  mysql_mutex_lock(&LOCK_global_system_variables);
+
+  assert(server_memory > 0);
+
+  /* Auto tune default value based on "server_memory" */
+  const ulonglong new_default =
+      std::clamp(ulonglong{3 * (my_physical_memory() / 100)},
+                 1ULL << 30 /* 1 GiB */, 1ULL << 32 /* 4 GiB */);
+  Sys_temptable_max_ram.update_default(new_default);
+
+  /* If "temptable_max_ram" is not set explicitly, update the default value */
+  if (Sys_temptable_max_ram.get_source() == COMPILED) {
+    temptable_max_ram = new_default;
+  }
+
+  mysql_mutex_unlock(&LOCK_global_system_variables);
+}
 
 static Sys_var_ulonglong Sys_temptable_max_mmap(
     "temptable_max_mmap",

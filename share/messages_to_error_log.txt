@@ -13143,6 +13143,9 @@ ER_SERVER_STARTING_WITH_RESOURCE
 ER_INFO_AUTHENTICATION_OCI
    eng "authentication_oci plugin reported: %s."
 
+ER_SERVER_MEMORY_OPTION_INVALID
+   eng "MySQL Server configured to use %llu bytes but can only access %llu bytes."
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.

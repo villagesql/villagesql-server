@@ -1331,6 +1331,9 @@ The following options may be given as the first argument:
  --server-id=#       Uniquely identifies the server instance in the community
  of replication partners
  --server-id-bits=#  Set number of significant bits in server-id
+ --server-memory=#   Memory (in bytes) used by the MySQL Server when
+ auto-tuning the default values of the configuration
+ parameters which depend on memory
  --session-track-gtids=name 
  Controls the amount of global transaction ids to be
  included in the response packet sent by the
@@ -1972,6 +1975,7 @@ select-into-disk-sync FALSE
 select-into-disk-sync-delay 0
 server-id 1
 server-id-bits 32
+server-memory 0
 session-track-gtids OFF
 session-track-schema TRUE
 session-track-state-change FALSE

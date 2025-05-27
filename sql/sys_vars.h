@@ -2833,6 +2833,7 @@ class Sys_var_binlog_encryption : public Sys_var_bool {
   bool global_update(THD *thd, set_var *var) override;
 };
 
+void update_temptable_max_ram_default();
 void update_parser_max_mem_size();
 void update_optimizer_switch();
 

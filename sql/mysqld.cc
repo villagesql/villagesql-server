@@ -1191,6 +1191,7 @@ char *my_bind_addr_str;
 char *my_admin_bind_addr_str;
 uint mysqld_admin_port;
 bool listen_admin_interface_in_separate_thread;
+ulonglong server_memory;
 static const char *default_collation_name;
 const char *default_storage_engine;
 const char *default_tmp_storage_engine;
@@ -6742,6 +6743,21 @@ int init_common_variables() {
 #endif
 
   if (get_options(&remaining_argc, &remaining_argv)) return 1;
+
+  /* Adjust memory to be used based on "server_memory" iff explicitly provided
+   */
+  if (server_memory > 0) {
+    if (!init_my_physical_memory(server_memory)) {
+      LogErr(ERROR_LEVEL, ER_SERVER_MEMORY_OPTION_INVALID, server_memory,
+             my_physical_memory());
+      return 1;
+    }
+
+    /* temptable_max_ram default is set according physical memory, needs to be
+  updated based on "server_memory" now */
+    update_temptable_max_ram_default();
+  }
+
   /*
     The opt_bin_log can be false (binary log is disabled) only if
     --skip-log-bin/--disable-log-bin is configured or while the
