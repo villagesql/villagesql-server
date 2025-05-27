@@ -315,12 +315,7 @@ IF(CMAKE_HOST_UNIX AND NOT FORCE_UNSUPPORTED_COMPILER
     IF(LINUX_RHEL AND NOT LINUX_RHEL10)
       MESSAGE(STATUS "Looking for a devtoolset compiler")
       IF(LINUX_RHEL7)
-        # gcc11 not available yet
-        IF(MY_HOST_MACHINE_NAME MATCHES "aarch64")
-          SET(ALTERNATIVE_PATHS "/opt/rh/devtoolset-10")
-        ELSE()
-          SET(ALTERNATIVE_PATHS "/opt/rh/devtoolset-11")
-        ENDIF()
+        SET(ALTERNATIVE_PATHS "/opt/rh/devtoolset-11")
       ELSEIF(LINUX_RHEL8)
         SET(ALTERNATIVE_PATHS "/opt/rh/gcc-toolset-13")
       ELSEIF(LINUX_RHEL9)
@@ -379,13 +374,8 @@ IF(CMAKE_HOST_UNIX AND NOT FORCE_UNSUPPORTED_COMPILER
         MESSAGE(STATUS "Using ${ALTERNATIVE_GPP}")
       ELSE()
         IF(LINUX_RHEL7)
-          IF(MY_HOST_MACHINE_NAME MATCHES "aarch64")
-            SET(DEV_PACKAGES
-              "devtoolset-10-gcc devtoolset-10-gcc-c++ devtoolset-10-binutils")
-          ELSE()
-            SET(DEV_PACKAGES
-              "devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-binutils")
-          ENDIF()
+          SET(DEV_PACKAGES
+            "devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-binutils")
         ELSEIF(LINUX_RHEL8)
           SET(DEV_PACKAGES
             "gcc-toolset-13-gcc gcc-toolset-13-gcc-c++ gcc-toolset-13-binutils")
