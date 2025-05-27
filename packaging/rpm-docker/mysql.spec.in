@@ -48,11 +48,7 @@
 # Regression tests may take a long time, override the default to skip them
 %{!?runselftest:%global runselftest 0}
 
-%ifarch aarch64
-%{?el7:%global __strip /opt/rh/devtoolset-10/root/usr/bin/strip}
-%else
 %{?el7:%global __strip /opt/rh/devtoolset-11/root/usr/bin/strip}
-%endif
 %{?el8:%global __strip /opt/rh/gcc-toolset-13/root/usr/bin/strip}
 %{?el9:%global __strip /opt/rh/gcc-toolset-14/root/usr/bin/strip}
 %global __brp_strip_static_archive %{nil}
@@ -93,17 +89,10 @@ BuildRequires:  rpcgen
 %else
 BuildRequires:  cmake3 >= 3.14.6
 %endif
-%ifarch aarch64
-%{?el7:BuildRequires:  devtoolset-10-gcc}
-%{?el7:BuildRequires:  devtoolset-10-gcc-c++}
-%{?el7:BuildRequires:  devtoolset-10-binutils}
-%{?el7:BuildRequires:  devtoolset-10-dwz}
-%else
 %{?el7:BuildRequires:  devtoolset-11-gcc}
 %{?el7:BuildRequires:  devtoolset-11-gcc-c++}
 %{?el7:BuildRequires:  devtoolset-11-binutils}
 %{?el7:BuildRequires:  devtoolset-11-dwz}
-%endif
 %{?el8:BuildRequires:  gcc-toolset-13-annobin-annocheck}
 %{?el8:BuildRequires:  gcc-toolset-13-annobin-plugin-gcc}
 %{?el8:BuildRequires:  gcc-toolset-13-binutils}

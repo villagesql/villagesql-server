@@ -889,7 +889,7 @@ IF(MY_COMPILER_IS_GNU_OR_CLANG)
                       COMPILE_FLAGS "-Wno-unused-but-set-variable")
   ENDIF()
   # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753
-  IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 11)
+  IF(MY_COMPILER_IS_GNU)
     ADD_COMPILE_FLAGS(
       ${CMAKE_CURRENT_BINARY_DIR}/sql_yacc.cc
       ${CMAKE_CURRENT_BINARY_DIR}/sql_hints.yy.cc
