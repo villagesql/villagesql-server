@@ -29,6 +29,7 @@ SET(TARGET_HEADERS
   enumeration_utils.h
   error.h
   return_status.h
+  tuple_find.h
 )
 
 SET(TARGET_SRCS

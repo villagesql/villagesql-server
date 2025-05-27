@@ -46,3 +46,5 @@ This is a header-only library, containing various utility functions, such as:
 - enumeration_utils.h: to_underlying (backported from C++23), to_enumeration
 - error.h: definition of Error - base class for (C++) error handling
 - return_status.h: enum { ok, error }
+- tuple_find.h: using type predicates to locate and count matching elements in
+  a tuple
