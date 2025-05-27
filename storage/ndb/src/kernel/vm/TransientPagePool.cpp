@@ -57,7 +57,8 @@ void TransientPagePool::init(Uint32 type_id, Ndbd_mem_manager *mem_manager,
   assert(m_top == RNIL);
   assert(m_type_id == 0);
   require(max_page_id < RNIL);
-  require(max_page_id <= MapPage::MAX_PAGE_ID_2L);
+  if (max_page_id > MapPage::MAX_PAGE_ID_2L)
+    max_page_id = MapPage::MAX_PAGE_ID_2L;
 
   m_type_id = type_id;
   m_mem_manager = mem_manager;
