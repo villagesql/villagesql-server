@@ -5066,6 +5066,7 @@ constexpr PSI_metric_info_v1 simple(const char *name, const char *unit,
 // description of the matching counters in srv/srv0mon.cc
 
 // clang-format off
+#ifdef HAVE_PSI_METRICS_INTERFACE
 static PSI_metric_info_v1 inno_metrics[] = {
     simple("dblwr_pages_written",
      "",
@@ -5367,6 +5368,7 @@ static PSI_meter_info_v1 inno_meter[] = {
      buffer_metrics, std::size(buffer_metrics)},
     {"mysql.inno.data", "MySql InnoDB data metrics", 10, 0, 0, data_metrics,
      std::size(data_metrics)}};
+#endif /* HAVE_PSI_METRICS_INTERFACE */
 
 /** Initialize the InnoDB storage engine plugin.
 @param[in,out]  p       InnoDB handlerton
@@ -5641,15 +5643,18 @@ static int innodb_init(void *p) {
     return innodb_init_abort();
   }
 
+#ifdef HAVE_PSI_METRICS_INTERFACE
   mysql_meter_register(inno_meter, std::size(inno_meter));
-
+#endif /* HAVE_PSI_METRICS_INTERFACE */
   return 0;
 }
 
 /** De initialize the InnoDB storage engine plugin. */
 static int innodb_deinit(MYSQL_PLUGIN plugin_info [[maybe_unused]]) {
   release_plugin_services();
+#ifdef HAVE_PSI_METRICS_INTERFACE
   mysql_meter_unregister(inno_meter, std::size(inno_meter));
+#endif /* HAVE_PSI_METRICS_INTERFACE */
   return 0;
 }
 
