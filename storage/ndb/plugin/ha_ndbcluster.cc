@@ -18357,6 +18357,41 @@ static MYSQL_SYSVAR_BOOL(log_transaction_dependency,   /* name */
                          0        /* default */
 );
 
+uint opt_ndb_log_row_slice_count;
+constexpr uint MAX_ROW_SLICE_COUNT = 256;
+static MYSQL_SYSVAR_UINT(
+    log_row_slice_count,         /* name */
+    opt_ndb_log_row_slice_count, /* var */
+    PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
+    "Sets the slicing factor used by this Server when subscribing to NDB table "
+    "change event streams used for writing Binlogs.  If count > 1 then the "
+    "stream of change events for a table is logically sliced into 1/count "
+    "slices.  Each Binlogging MySQLD can subscribe to one slice, receiving "
+    "100/count percent of the changes for each affected table. Max count value "
+    "is 256.",
+    nullptr,             /* check func */
+    nullptr,             /* update func */
+    1,                   /* default */
+    1,                   /* min */
+    MAX_ROW_SLICE_COUNT, /* max */
+    0);
+
+uint opt_ndb_log_row_slice_id;
+constexpr uint MAX_ROW_SLICE_ID = 255;
+static MYSQL_SYSVAR_UINT(
+    log_row_slice_id,                          /* name */
+    opt_ndb_log_row_slice_id,                  /* var */
+    PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY, /* opts */
+    "Specifies the identity of the virtual slice of the NDB table change event "
+    "streams this Server subscribes to. Valid identities are 0 to "
+    "ndb_log_row_slice_count - 1.",
+    nullptr,          /* check */
+    nullptr,          /* update */
+    0,                /* default */
+    0,                /* min */
+    MAX_ROW_SLICE_ID, /* max */
+    0);
+
 static MYSQL_SYSVAR_STR(mgmd_host,             /* name */
                         opt_ndb_connectstring, /* var */
                         PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
@@ -18672,6 +18707,8 @@ static SYS_VAR *system_variables[] = {
     MYSQL_SYSVAR(log_cache_size),
     MYSQL_SYSVAR(log_fail_terminate),
     MYSQL_SYSVAR(log_transaction_dependency),
+    MYSQL_SYSVAR(log_row_slice_count),
+    MYSQL_SYSVAR(log_row_slice_id),
     MYSQL_SYSVAR(clear_apply_status),
     MYSQL_SYSVAR(schema_dist_upgrade_allowed),
     MYSQL_SYSVAR(schema_dist_timeout),
