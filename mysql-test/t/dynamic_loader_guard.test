@@ -1,3 +1,7 @@
+--source include/have_debug.inc
+--source include/not_windows.inc
+--source include/not_ubuntu.inc
+--source include/not_mac_os.inc
 --source include/have_component_init_then_register.inc
 
 --echo #
@@ -7,7 +11,7 @@
 
 --echo
 --echo # force the component init() to fail and expect an error
-SET GLOBAL DEBUG = '+d,force_component_init_failure';
+SET DEBUG = '+d,force_component_init_failure';
 --error ER_COMPONENTS_LOAD_CANT_INITIALIZE
 INSTALL COMPONENT "file://component_test_component_init_then_register";
 
