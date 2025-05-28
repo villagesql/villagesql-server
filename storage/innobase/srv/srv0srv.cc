@@ -1183,10 +1183,10 @@ static void srv_init(void) {
   /* page_zip_stat_per_index_mutex is acquired from:
   1. page_zip_compress() (after SYNC_FSP)
   2. page_zip_decompress()
-  3. i_s_cmp_per_index_fill_low() (where SYNC_DICT is acquired)
+  3. i_s_cmp_per_index_fill_low() (after SYNC_DICT is acquired)
   4. innodb_cmp_per_index_update(), no other latches
-  since we do not acquire any other latches while holding this mutex,
-  it can have very low level. We pick SYNC_ANY_LATCH for it. */
+  5. dict_index_remove_from_cache_low(),
+  6. btr_free_if_exists() (after SYNC_DICT) */
   mutex_create(LATCH_ID_PAGE_ZIP_STAT_PER_INDEX,
                &page_zip_stat_per_index_mutex);
 

@@ -2667,7 +2667,7 @@ static void dict_index_remove_from_cache_low(
       !index->table->discard_after_ddl) {
     index_id_t id(index->space, index->id);
     mutex_enter(&page_zip_stat_per_index_mutex);
-    page_zip_stat_per_index.erase(id);
+    page_zip_stat_per_index[id].dropped = true;
     mutex_exit(&page_zip_stat_per_index_mutex);
   }
 

@@ -541,6 +541,7 @@ LatchDebug::LatchDebug() {
   LEVEL_MAP_INSERT(SYNC_TRX_I_S_RWLOCK);
   LEVEL_MAP_INSERT(SYNC_LEVEL_VARYING);
   LEVEL_MAP_INSERT(SYNC_NO_ORDER_CHECK);
+  LEVEL_MAP_INSERT(SYNC_PAGE_ZIP_STAT);
 
   /* Enum count starts from 0 */
   ut_ad(m_levels.size() == SYNC_LEVEL_MAX + 1);
@@ -766,6 +767,7 @@ Latches *LatchDebug::check_order(const latch_t *latch,
     case SYNC_DICT:
     case SYNC_AHI_ENABLED:
     case SYNC_ALTER_STAGE:
+    case SYNC_PAGE_ZIP_STAT:
 
       /* This is the most typical case, in which we expect requested<held. */
       assert_requested_is_lower_than_held(level, latches);
@@ -1386,7 +1388,7 @@ static void sync_latch_meta_init() UNIV_NOTHROW {
 
   LATCH_ADD_MUTEX(SRV_SYS_TASKS, SYNC_ANY_LATCH, srv_threads_mutex_key);
 
-  LATCH_ADD_MUTEX(PAGE_ZIP_STAT_PER_INDEX, SYNC_ANY_LATCH,
+  LATCH_ADD_MUTEX(PAGE_ZIP_STAT_PER_INDEX, SYNC_PAGE_ZIP_STAT,
                   page_zip_stat_per_index_mutex_key);
 
 #ifndef PFS_SKIP_EVENT_MUTEX

@@ -66,6 +66,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "mysql/strings/m_ctype.h"
 #include "page0zip.h"
 #include "pars0pars.h"
+#include "scope_guard.h"
 #include "sql/sql_class.h" /* For THD */
 #include "srv0mon.h"
 #include "srv0start.h"
@@ -1178,6 +1179,145 @@ static ST_FIELD_INFO i_s_cmp_per_index_fields_info[] = {
 
     END_OF_ST_FIELD_INFO};
 
+static void i_s_cmp_per_index_store(Field **fields,
+                                    const page_zip_stat_t &stats,
+                                    const dict_index_t *index) {
+  char db_utf8mb3[dict_name::MAX_DB_UTF8MB3_LEN];
+  char table_utf8mb3[dict_name::MAX_TABLE_UTF8MB3_LEN];
+
+  dict_fs2utf8(index->table_name, db_utf8mb3, sizeof(db_utf8mb3), table_utf8mb3,
+               sizeof(table_utf8mb3));
+
+  field_store_string(fields[IDX_DATABASE_NAME], db_utf8mb3);
+  field_store_string(fields[IDX_TABLE_NAME], table_utf8mb3);
+  field_store_index_name(fields[IDX_INDEX_NAME], index->name);
+
+  fields[IDX_COMPRESS_OPS]->store(stats.compressed, true);
+
+  fields[IDX_COMPRESS_OPS_OK]->store(stats.compressed_ok, true);
+
+  fields[IDX_COMPRESS_TIME]->store(
+      std::chrono::duration_cast<std::chrono::seconds>(stats.compress_time)
+          .count(),
+      true);
+
+  fields[IDX_UNCOMPRESS_OPS]->store(stats.decompressed, true);
+
+  fields[IDX_UNCOMPRESS_TIME]->store(
+      std::chrono::duration_cast<std::chrono::seconds>(stats.decompress_time)
+          .count(),
+      true);
+}
+
+/** Fill the dynamic table innodb_cmp_per_index based on compression statistics
+ * snapshot and names of indexes and tables from DD tables. The algorithm for
+ * doing that is a fallback from i_s_cmp_per_index_fill_low when not all the
+ * data is available in dict_sys->table* lists. This function assumes that
+ * dict_sys->mutex is already acquired before it is called. It will release it
+ * but only in case of errors.
+@param[in]      thd                      thread
+@param[in,out]  innodb_cmp_per_index_ref table to fill
+@param[in]      snap                     snapshot of (de)compression stats
+@return true on success, false on failure */
+static bool i_s_cmp_per_index_fill_low_slow(THD *thd,
+                                            Table_ref *innodb_cmp_per_index_ref,
+                                            page_zip_stat_per_index_t &snap) {
+  DBUG_TRACE;
+
+  Scoped_heap scoped_heap{100, UT_LOCATION_HERE};
+  mem_heap_t *heap = scoped_heap.get();
+
+  mtr_t mtr;
+  mtr_start(&mtr);
+
+  /* Start scan of the mysql.indexes */
+  dict_table_t *dd_indexes;
+  MDL_ticket *mdl = nullptr;
+  btr_pcur_t pcur;
+  const rec_t *rec = dd_startscan_system(thd, &mdl, &pcur, &mtr,
+                                         dd_indexes_name.c_str(), &dd_indexes);
+
+  /* Process each record in the table describing each index */
+  while (rec) {
+    const dict_index_t *index_rec = nullptr;
+    MDL_ticket *mdl_on_tab = nullptr;
+    dict_table_t *parent = nullptr;
+    MDL_ticket *mdl_on_parent = nullptr;
+
+    /* Populate a dict_index_t structure with information from
+    a INNODB_INDEXES row */
+    bool ret =
+        dd_process_dd_indexes_rec(heap, rec, &index_rec, &mdl_on_tab, &parent,
+                                  &mdl_on_parent, dd_indexes, &mtr);
+
+    ut_ad_eq(ret, index_rec != nullptr);
+    ut_ad(!parent || ret);
+    ut_ad(mtr.has_committed());
+    ut_ad_eq(heap, scoped_heap.get());
+
+    if (ret && !dict_index_is_sdi(index_rec)) {
+      index_id_t index_id{index_rec->space_id(), index_rec->id};
+      auto snap_it = snap.find(index_id);
+      if (snap_it != snap.end() && !snap_it->second.dropped) {
+        TABLE *table = innodb_cmp_per_index_ref->table;
+        Field **fields = table->field;
+
+        i_s_cmp_per_index_store(fields, snap_it->second, index_rec);
+
+        int error = schema_table_store_record2(thd, table, false);
+
+        DBUG_EXECUTE_IF("cmp_per_index_store_error", error = 1;);
+        DBUG_EXECUTE_IF("cmp_per_index_out_of_memory",
+                        error = HA_ERR_RECORD_FILE_FULL;);
+
+        if (error) {
+          dict_sys_mutex_exit();
+
+          if (convert_heap_table_to_ondisk(thd, table, error) != 0) {
+            if (index_rec != nullptr) {
+              dd_table_close(index_rec->table, thd, &mdl_on_tab, false);
+
+              /* Close parent table */
+              if (parent) {
+                dd_table_close(parent, thd, &mdl_on_parent, false);
+              }
+            }
+            dd_table_close(dd_indexes, thd, &mdl, false);
+
+            return false;
+          }
+
+          DBUG_EXECUTE_IF("cmp_per_index_out_of_memory",
+                          DBUG_SET("-d,cmp_per_index_out_of_memory"););
+
+          dict_sys_mutex_enter();
+        }
+      }
+    }
+
+    mem_heap_empty(heap);
+
+    if (index_rec != nullptr) {
+      dd_table_close(index_rec->table, thd, &mdl_on_tab, true);
+
+      /* Close parent table */
+      if (parent) {
+        dd_table_close(parent, thd, &mdl_on_parent, true);
+      }
+    }
+
+    mtr_start(&mtr);
+
+    /* Get the next record */
+    rec = dd_getnext_system_rec(&pcur, &mtr);
+  }
+
+  mtr_commit(&mtr);
+  dd_table_close(dd_indexes, thd, &mdl, true);
+
+  return true;
+}
+
 /** Fill the dynamic table
  information_schema.innodb_cmp_per_index or
  information_schema.innodb_cmp_per_index_reset.
@@ -1199,60 +1339,65 @@ static int i_s_cmp_per_index_fill_low(
     return 0;
   }
 
-  /* Create a snapshot of the stats so we do not bump into lock
-  order violations with dict_sys->mutex below. */
+  DEBUG_SYNC_C("innodb_stat_per_index_ready");
+
+  dict_sys_mutex_enter();
+
+  /* Create a snapshot of the stats after acquiring dict sys mutex. */
   mutex_enter(&page_zip_stat_per_index_mutex);
   page_zip_stat_per_index_t snap(page_zip_stat_per_index);
   mutex_exit(&page_zip_stat_per_index_mutex);
 
-  dict_sys_mutex_enter();
-
   page_zip_stat_per_index_t::iterator iter;
   ulint i;
 
-  for (iter = snap.begin(), i = 0; iter != snap.end(); iter++, i++) {
-    char name[NAME_LEN];
-    const dict_index_t *index = dict_index_find(iter->first);
-
-    if (index != nullptr) {
-      if (dict_index_is_sdi(index)) {
-        continue;
-      }
-      char db_utf8mb3[dict_name::MAX_DB_UTF8MB3_LEN];
-      char table_utf8mb3[dict_name::MAX_TABLE_UTF8MB3_LEN];
-
-      dict_fs2utf8(index->table_name, db_utf8mb3, sizeof(db_utf8mb3),
-                   table_utf8mb3, sizeof(table_utf8mb3));
-
-      field_store_string(fields[IDX_DATABASE_NAME], db_utf8mb3);
-      field_store_string(fields[IDX_TABLE_NAME], table_utf8mb3);
-      field_store_index_name(fields[IDX_INDEX_NAME], index->name);
-    } else {
-      /* index not found */
-      snprintf(name, sizeof(name), "index_id:" IB_ID_FMT,
-               iter->first.m_index_id);
-      field_store_string(fields[IDX_DATABASE_NAME], "unknown");
-      field_store_string(fields[IDX_TABLE_NAME], "unknown");
-      field_store_string(fields[IDX_INDEX_NAME], name);
+  /*To output compression statistics together with
+    information about the index we need to find dict_index_t
+    for each entry in the snapshot. To achieve that
+    the following algorithm is used:
+    1. We iterate over the entries in the snapshot.
+    2. For each entry we look for corresponding index in
+       dict_sys->table_LRU and dict_sys->table_non_LRU
+       and use it to output requested statistics and information
+       about the index. If all entries were processed then
+       it's the end. But if index is in the snapshot, but it is
+       missing in the dict_sys tables then go to point 3.
+    3. Stop the iteration over the entries in the snapshot
+       and discard entries for stats that were already
+       processed from it.
+    4. Start the iteration over the list of DD entries for
+       indexes.
+    5. For each of the index DD entry check if there is a
+       matching entry with statistics in the snapshot. If
+       found then send those stats with index data to output.*/
+  for (iter = snap.begin(), i = 0; iter != snap.end(); iter++) {
+    if (iter->second.dropped) {
+      continue;
     }
 
-    fields[IDX_COMPRESS_OPS]->store(iter->second.compressed, true);
+    const dict_index_t *index = dict_index_find(iter->first);
 
-    fields[IDX_COMPRESS_OPS_OK]->store(iter->second.compressed_ok, true);
+    DBUG_EXECUTE_IF("missing_index_in_dict", index = nullptr;);
 
-    fields[IDX_COMPRESS_TIME]->store(
-        std::chrono::duration_cast<std::chrono::seconds>(
-            iter->second.compress_time)
-            .count(),
-        true);
+    if (index == nullptr) {
+      snap.erase(snap.begin(), iter);
 
-    fields[IDX_UNCOMPRESS_OPS]->store(iter->second.decompressed, true);
+      /* If index not found in LRU list then for the rest of the indexes
+       try to find their names etc. by scanning DD tables and matching
+       stats to it. */
+      if (!i_s_cmp_per_index_fill_low_slow(thd, tables, snap)) {
+        status = 1;
+        goto err;
+      }
 
-    fields[IDX_UNCOMPRESS_TIME]->store(
-        std::chrono::duration_cast<std::chrono::seconds>(
-            iter->second.decompress_time)
-            .count(),
-        true);
+      break;
+    }
+
+    if (dict_index_is_sdi(index)) {
+      continue;
+    }
+
+    i_s_cmp_per_index_store(fields, iter->second, index);
 
     auto error = schema_table_store_record2(thd, table, false);
     if (error) {
@@ -1268,7 +1413,7 @@ static int i_s_cmp_per_index_fill_low(
     threads to proceed. This could eventually result in the
     contents of INFORMATION_SCHEMA.innodb_cmp_per_index being
     inconsistent, but it is an acceptable compromise. */
-    if (i % 1000 == 0) {
+    if (++i % 1000 == 0) {
       dict_sys_mutex_exit();
       std::this_thread::yield();
       dict_sys_mutex_enter();
