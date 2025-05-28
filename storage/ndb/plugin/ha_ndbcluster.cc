@@ -9669,20 +9669,16 @@ int ha_ndbcluster::create(const char *path [[maybe_unused]],
   }
 
   // Read mysql.ndb_replication settings for this table, if any
-  uint32 binlog_flags;
-  const st_conflict_fn_def *conflict_fn = nullptr;
-  st_conflict_fn_arg args[MAX_CONFLICT_ARGS];
-  uint num_args = MAX_CONFLICT_ARGS;
-
   Ndb_binlog_client binlog_client(thd, dbname, tabname);
-  if (binlog_client.read_replication_info(ndb, dbname, tabname, ::server_id,
-                                          &binlog_flags, &conflict_fn, args,
-                                          &num_args)) {
+  if (binlog_client.read_replication_info(ndb, dbname, tabname, ::server_id)) {
     return HA_WRONG_CREATE_OPTION;
   }
 
   // Use mysql.ndb_replication settings when creating table
+  const st_conflict_fn_def *conflict_fn = binlog_client.get_conflict_fn();
   if (conflict_fn != nullptr) {
+    const st_conflict_fn_arg *args = binlog_client.get_conflict_fn_args();
+    uint num_args = binlog_client.get_conflict_fn_num_args();
     switch (conflict_fn->type) {
       case CFT_NDB_EPOCH:
       case CFT_NDB_EPOCH_TRANS:
@@ -10204,8 +10200,7 @@ int ha_ndbcluster::create(const char *path [[maybe_unused]],
   assert(Ndb_metadata::compare(thd, ndb, dbname, ndbtab, table_def));
 
   // Apply the mysql.ndb_replication settings
-  if (binlog_client.apply_replication_info(ndb, share, ndbtab, conflict_fn,
-                                           args, num_args, binlog_flags) != 0) {
+  if (binlog_client.apply_replication_info(ndb, share, ndbtab) != 0) {
     // Failed to apply replication settings
     return create.failed_warning_already_pushed();
   }

@@ -4806,10 +4806,9 @@ void NDB_SHARE::set_binlog_flags(Ndb_binlog_type ndb_binlog_type) {
   If the table is not found, or the table does not exist,
   then defaults are returned.
 */
-bool Ndb_binlog_client::read_replication_info(
-    Ndb *ndb, const char *db, const char *table_name, uint server_id,
-    uint32 *binlog_flags, const st_conflict_fn_def **conflict_fn,
-    st_conflict_fn_arg *args, uint *num_args) {
+bool Ndb_binlog_client::read_replication_info(Ndb *ndb, const char *db,
+                                              const char *table_name,
+                                              uint server_id) {
   DBUG_TRACE;
 
   if (opt_ndb_log_apply_status &&
@@ -4819,9 +4818,11 @@ bool Ndb_binlog_client::read_replication_info(
     // updated and those changes should be logged as WRITE to the binlog.
     // NOTE! The table is always subscribed, but these updates are only written
     // to binlog when --ndb-log-apply-status is ON.
-    *binlog_flags = NBT_FULL;
-    *conflict_fn = nullptr;
-    *num_args = 0;
+    m_rpl_info.binlog_flags = NBT_FULL;
+    m_rpl_info.binlog_row_slice_id = 0;
+    m_rpl_info.binlog_row_slice_count = 0;
+    m_rpl_info.conflict_fn = nullptr;
+    m_rpl_info.conflict_num_args = 0;
     return false;
   }
 
@@ -4848,13 +4849,19 @@ bool Ndb_binlog_client::read_replication_info(
     return true;
   }
 
-  *binlog_flags = rep_tab_reader.get_binlog_flags();
+  m_rpl_info.binlog_flags = rep_tab_reader.get_binlog_flags();
+  m_rpl_info.binlog_row_slice_id = rep_tab_reader.get_binlog_row_slice_id();
+  m_rpl_info.binlog_row_slice_count =
+      rep_tab_reader.get_binlog_row_slice_count();
   const char *conflict_fn_spec = rep_tab_reader.get_conflict_fn_spec();
 
   if (conflict_fn_spec != nullptr) {
     char msgbuf[FN_REFLEN];
-    if (parse_conflict_fn_spec(conflict_fn_spec, conflict_fn, args, num_args,
-                               msgbuf, sizeof(msgbuf)) != 0) {
+    if (parse_conflict_fn_spec(
+            conflict_fn_spec,
+            const_cast<const st_conflict_fn_def **>(&(m_rpl_info.conflict_fn)),
+            m_rpl_info.conflict_args, &(m_rpl_info.conflict_num_args), msgbuf,
+            sizeof(msgbuf)) != 0) {
       my_error(ER_CONFLICT_FN_PARSE_ERROR, MYF(0), msgbuf);
 
       /*
@@ -4868,21 +4875,24 @@ bool Ndb_binlog_client::read_replication_info(
     }
   } else {
     /* No conflict function specified */
-    conflict_fn = nullptr;
-    num_args = nullptr;
+    m_rpl_info.conflict_fn = nullptr;
+    m_rpl_info.conflict_num_args = 0;
   }
 
   return false;
 }
 
 int Ndb_binlog_client::apply_replication_info(
-    Ndb *ndb, NDB_SHARE *share, const NdbDictionary::Table *ndbtab,
-    const st_conflict_fn_def *conflict_fn, const st_conflict_fn_arg *args,
-    uint num_args, uint32 binlog_flags) {
+    Ndb *ndb, NDB_SHARE *share, const NdbDictionary::Table *ndbtab) {
   DBUG_TRACE;
 
-  DBUG_PRINT("info", ("Setting binlog flags to %u", binlog_flags));
-  share->set_binlog_flags((enum Ndb_binlog_type)binlog_flags);
+  const st_conflict_fn_def *conflict_fn = m_rpl_info.conflict_fn;
+  st_conflict_fn_arg *conflict_args = m_rpl_info.conflict_args;
+  uint conflict_num_args = m_rpl_info.conflict_num_args;
+
+  DBUG_PRINT("info", ("Setting binlog flags to %u", m_rpl_info.binlog_flags));
+  share->set_binlog_flags(
+      static_cast<enum Ndb_binlog_type>(m_rpl_info.binlog_flags));
 
   // Configure the NDB_SHARE to subscribe to changes for constrained
   // columns when calculating transaction dependencies and table has unique
@@ -4903,8 +4913,8 @@ int Ndb_binlog_client::apply_replication_info(
     char tmp_buf[FN_REFLEN];
     if (setup_conflict_fn(ndb, &share->m_cfn_share, share->db,
                           share->table_name, share->get_binlog_use_update(),
-                          ndbtab, tmp_buf, sizeof(tmp_buf), conflict_fn, args,
-                          num_args) == 0) {
+                          ndbtab, tmp_buf, sizeof(tmp_buf), conflict_fn,
+                          conflict_args, conflict_num_args) == 0) {
       ndb_log_verbose(1, "Replica: %s", tmp_buf);
     } else {
       /*
@@ -4933,18 +4943,10 @@ int Ndb_binlog_client::read_and_apply_replication_info(
     Ndb *ndb, NDB_SHARE *share, const NdbDictionary::Table *ndbtab,
     uint server_id) {
   DBUG_TRACE;
-  uint32 binlog_flags;
-  const st_conflict_fn_def *conflict_fn = nullptr;
-  st_conflict_fn_arg args[MAX_CONFLICT_ARGS];
-  uint num_args = MAX_CONFLICT_ARGS;
-
-  if (read_replication_info(ndb, share->db, share->table_name, server_id,
-                            &binlog_flags, &conflict_fn, args, &num_args) ||
-      apply_replication_info(ndb, share, ndbtab, conflict_fn, args, num_args,
-                             binlog_flags)) {
+  if (read_replication_info(ndb, share->db, share->table_name, server_id) ||
+      apply_replication_info(ndb, share, ndbtab) != 0) {
     return -1;
   }
-
   return 0;
 }
 
@@ -5330,33 +5332,46 @@ NdbEventOperation *Ndb_binlog_client::create_event_op_in_NDB(
       }
     }
 
-    // Setup row-hash filtering in NDB
-    if (opt_ndb_log_row_slice_count > 1 && !skip_filters) {
-      if (event_data->have_blobs) {
-        ndb_log_error(
-            "Binlog: cannot log row slice because table has BLOB columns");
-        mysql_mutex_assert_owner(&injector_event_mutex);
-        op->setCustomData(nullptr);
-        ndb->dropEventOperation(op);
-        return nullptr;
+    /*
+     * Setup row-hash filtering in NDB. Use ndb_replication
+     * first, else use server parameters
+     */
+    if (!skip_filters) {
+      uint slice_count = 0;
+      uint slice_id = 0;
+      if (m_rpl_info.binlog_row_slice_count > 0) {
+        slice_count = m_rpl_info.binlog_row_slice_count;
+        slice_id = m_rpl_info.binlog_row_slice_id;
+      } else {
+        slice_count = opt_ndb_log_row_slice_count;
+        slice_id = opt_ndb_log_row_slice_id;
       }
+      if (slice_count > 1) {
+        if (event_data->have_blobs) {
+          ndb_log_error(
+              "Binlog: cannot log row slice because table has BLOB columns");
+          mysql_mutex_assert_owner(&injector_event_mutex);
+          op->setCustomData(nullptr);
+          ndb->dropEventOperation(op);
+          return nullptr;
+        }
 
-      // all good
-      int ret = op->setFilterRowSlice(opt_ndb_log_row_slice_count,
-                                      opt_ndb_log_row_slice_id);
-      if (ret != 0) {
-        ndb_log_error(
-            "Binlog: invalid row slice parameters (slice_id: %u, "
-            "slice_count: %u)",
-            opt_ndb_log_row_slice_id, opt_ndb_log_row_slice_count);
-        mysql_mutex_assert_owner(&injector_event_mutex);
-        op->setCustomData(nullptr);
-        ndb->dropEventOperation(op);
-        return nullptr;
+        // all good
+        int ret = op->setFilterRowSlice(slice_count, slice_id);
+        if (ret != 0) {
+          ndb_log_error(
+              "Binlog: invalid row slice parameters (slice_id: %u, "
+              "slice_count: %u)",
+              slice_id, slice_count);
+          mysql_mutex_assert_owner(&injector_event_mutex);
+          op->setCustomData(nullptr);
+          ndb->dropEventOperation(op);
+          return nullptr;
+        }
+        ndbcluster::ndbrequire(ret == 0);
+        ndb_log_info("Binlog: logging row slice id %u (total of %u)", slice_id,
+                     slice_count);
       }
-      ndbcluster::ndbrequire(ret == 0);
-      ndb_log_info("Binlog: logging row slice id %u (total of %u)",
-                   opt_ndb_log_row_slice_id, opt_ndb_log_row_slice_count);
     }
 
     /*
