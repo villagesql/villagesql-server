@@ -17,7 +17,7 @@ INSTALL COMPONENT "file://component_test_component_init_then_register";
 
 --echo
 --echo # unset debug flag for cleanup
-SET GLOBAL DEBUG = '-d,force_component_init_failure';
+SET DEBUG = '-d,force_component_init_failure';
 
 --echo
 --echo # check the component is not installed
