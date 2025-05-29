@@ -13140,6 +13140,9 @@ ER_VAR_DEREGISTRATION
 ER_SERVER_STARTING_WITH_RESOURCE
    eng "MySQL Server has access to %llu %s."
 
+ER_INFO_AUTHENTICATION_OCI
+   eng "authentication_oci plugin reported: %s."
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
