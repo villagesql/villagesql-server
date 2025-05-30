@@ -65,7 +65,6 @@ ERROR at line 1: Unknown command '\u'.
 # FR1.2.22: charset disabled
 ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'charset latin1' at line 1
 # FR1.2.22.1: \c enabled
-mysql: Character set 'latin1;' is not a compiled character set and is not specified in the '/usr/local/mysql/share/charsets/Index.xml' file
 # FR1.2.23: warnings disabled
 ERROR 1064 (42000) at line 1: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near 'warnings' at line 1
 # FR1.2.24: nowarning disabled

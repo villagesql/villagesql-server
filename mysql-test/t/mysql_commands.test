@@ -240,8 +240,9 @@ EOF
 --write_file $filename
 \C latin1;
 EOF
---exec $MYSQL < $filename 2>&1
+--exec $MYSQL < $filename 2>$filename.2
 --remove_file $filename
+--remove_file $filename.2
 
 
 --echo # FR1.2.23: warnings disabled
