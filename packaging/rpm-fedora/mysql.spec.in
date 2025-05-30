@@ -202,6 +202,7 @@ Provides:       mysql-server = %{version}-%{release}
 Provides:       mysql-server%{?_isa} = %{version}-%{release}
 Provides:       mysql-compat-server = %{version}-%{release}
 Provides:       mysql-compat-server%{?_isa} = %{version}-%{release}
+Obsoletes:      mysql8.4-server < %{version}-%{release}
 Requires(post):   systemd
 Requires(preun):  systemd
 Requires(postun): systemd
@@ -259,6 +260,8 @@ Obsoletes:      community-mysql < %{version}-%{release}
 Obsoletes:      mysql < %{version}-%{release}
 Provides:       mysql = %{version}-%{release}
 Provides:       mysql%{?_isa} = %{version}-%{release}
+Obsoletes:      mysql8.4 < %{version}-%{release}
+Obsoletes:      mysql8.4-server < %{version}-%{release}
 
 %description    client
 This package contains the standard MySQL clients and administration
@@ -282,6 +285,8 @@ Obsoletes:      mysql-errmsg < %{version}-%{release}
 Obsoletes:      mysql-common < %{version}-%{release}
 Provides:       mysql-common = %{version}-%{release}
 Provides:       mysql-common%{?_isa} = %{version}-%{release}
+Obsoletes:      mysql8.4-common < %{version}-%{release}
+Obsoletes:      mysql8.4-errmsg < %{version}-%{release}
 
 %description    common
 This packages contains common files needed by MySQL client library and
@@ -406,6 +411,7 @@ Obsoletes:      mysql-commercial-client-plugins < %{version}-%{release}
 Conflicts:      mysql-community-server < 8.0.21
 Conflicts:      mysql-community-client < 8.0.22
 %endif
+Obsoletes:      mysql8.4-server < %{version}-%{release}
 
 %description    client-plugins
 This package contains the client-plugins libraries used by MySQL client applications.
