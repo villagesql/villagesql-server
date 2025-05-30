@@ -2667,6 +2667,10 @@ DEFINE_METHOD(bool, is_table_supported, (THD * thd, const TABLE *table)) {
     }
   }
 
+#ifdef MYSQL_AI
+  size_t n_vector_fields = 0;
+#endif /* MYSQL_AI */
+
   for (size_t index = 0; index < share->fields; ++index) {
     auto field = share->field[index];
     if (field->is_gcol()) {
@@ -2680,6 +2684,11 @@ DEFINE_METHOD(bool, is_table_supported, (THD * thd, const TABLE *table)) {
     }
 
     switch (field->real_type()) {
+      case MYSQL_TYPE_VECTOR:
+#ifdef MYSQL_AI
+        ++n_vector_fields;
+        [[fallthrough]];
+#endif /* MYSQL_AI */
       case MYSQL_TYPE_TINY:
       case MYSQL_TYPE_SHORT:
       case MYSQL_TYPE_INT24:
@@ -2701,7 +2710,6 @@ DEFINE_METHOD(bool, is_table_supported, (THD * thd, const TABLE *table)) {
       case MYSQL_TYPE_TIMESTAMP2:
       case MYSQL_TYPE_ENUM:
       case MYSQL_TYPE_SET:
-      case MYSQL_TYPE_VECTOR:
         if (!check_for_deprecated_use(field)) {
           return false;
         }
@@ -2730,6 +2738,17 @@ DEFINE_METHOD(bool, is_table_supported, (THD * thd, const TABLE *table)) {
     LogErr(INFORMATION_LEVEL, ER_BULK_LOADER_INFO, err_strm.str().c_str());
     return false;
   }
+
+#ifdef MYSQL_AI
+  if (n_vector_fields == 0) {
+    LogErr(INFORMATION_LEVEL, ER_BULK_LOADER_INFO,
+           "LOAD DATA ALGORITHM=BULK not supported for tables without VECTOR "
+           "columns");
+    my_error(ER_FEATURE_UNSUPPORTED, MYF(0), "Table without VECTOR columns",
+             "LOAD DATA ALGORITHM=BULK");
+    return false;
+  }
+#endif /* MYSQL_AI */
 
   if (!table->file->bulk_load_check(thd)) {
     /* Innodb already raises the error. */
