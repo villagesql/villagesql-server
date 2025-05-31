@@ -11118,11 +11118,6 @@ bool ha_innobase::bulk_load_check(THD *) const {
     return false;
   }
 
-  if (!table->has_pk()) {
-    my_error(ER_TABLE_NO_PRIMARY_KEY, MYF(0), table->name.m_name);
-    return false;
-  }
-
   if (dict_table_in_shared_tablespace(table)) {
     my_error(ER_TABLE_IN_SHARED_TABLESPACE, MYF(0), table->name.m_name);
     return false;
@@ -11173,9 +11168,18 @@ void *ha_innobase::bulk_load_begin(THD *thd, size_t keynr, size_t data_size,
     build_template(true);
   }
 
-  index_init(keynr, false);
+  size_t real_keynr = keynr;
+  if (m_prebuilt->clust_index_was_generated) {
+    if (keynr == 0) {
+      real_keynr = MAX_KEY;
+    } else {
+      real_keynr--;
+    }
+  }
 
-  if (keynr == 0) {
+  index_init(real_keynr, false);
+
+  if (trx->flush_observer == nullptr) {
     innobase_register_trx(ht, ha_thd(), trx);
     trx_start_if_not_started_xa(trx, true, UT_LOCATION_HERE);
 
