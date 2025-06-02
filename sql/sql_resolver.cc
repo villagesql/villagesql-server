@@ -2434,23 +2434,24 @@ void Query_block::clear_sj_expressions(NESTED_JOIN *nested_join) {
 }
 
 /**
-  Build equality conditions using outer expressions and inner
-  expressions. If the equality condition is not constant, add
-  it to the semi-join condition. Otherwise, evaluate it and
-  remove the constant expressions from the
-  outer/inner expressions list if the result is true. If the
-  result is false, remove all the expressions in outer/inner
-  expression list and attach an always false condition
-  to semijoin condition.
+  Build equality predicates using outer expressions and inner expressions.
+  If an equality predicate is not constant, add it to the semi-join condition.
+  Otherwise, evaluate the predicate. If the result of the predicate is true,
+  remove the expressions of the constant predicate from the outer/inner
+  expressions list. If the result is false, remove all the expressions in
+  outer/inner expression list and attach an always false condition to
+  semijoin condition.
 
-  @param thd            Thread context
-  @param nested_join    Join nest
-  @param subq_query_block    Query block for the subquery
+  @param thd               Thread context
+  @param nested_join       Join nest
+  @param subq_query_block  Query block for the subquery
+  @param outer_tables_map  Map of tables from original outer query block
   @param outer_tables_map Map of tables from original outer query block
   @param[out]    sj_cond   Semi-join condition to be constructed
                            Contains non-equalities on input.
-  @param[out]    simple_const true if the returned semi-join condition is
-                              a simple true or false predicate, false otherwise.
+  @param[out] simple_const true if the returned semi-join condition is
+                           a simple true or false predicate, false otherwise.
+
   @return false if success, true if error
 */
 bool Query_block::build_sj_cond(THD *thd, NESTED_JOIN *nested_join,
@@ -2460,12 +2461,13 @@ bool Query_block::build_sj_cond(THD *thd, NESTED_JOIN *nested_join,
   *simple_const = false;
 
   Item *new_cond = nullptr;
+  bool remove_condition = false;
 
   auto ii = nested_join->sj_inner_exprs.begin();
   auto oi = nested_join->sj_outer_exprs.begin();
   while (ii != nested_join->sj_inner_exprs.end() &&
          oi != nested_join->sj_outer_exprs.end()) {
-    bool should_remove = false;
+    bool remove_predicate = false;
     Item *inner = *ii;
     Item *outer = *oi;
     /*
@@ -2480,7 +2482,7 @@ bool Query_block::build_sj_cond(THD *thd, NESTED_JOIN *nested_join,
     Item *predicate = item_eq;
     if (!item_eq->fixed && item_eq->fix_fields(thd, &predicate)) return true;
 
-    // Evaluate if the condition is on const expressions
+    // Evaluate if the predicate is a const value:
     if (predicate->const_item() &&
         !(predicate)->walk(&Item::is_non_const_over_literals,
                            enum_walk::POSTFIX, nullptr)) {
@@ -2507,20 +2509,14 @@ bool Query_block::build_sj_cond(THD *thd, NESTED_JOIN *nested_join,
           const condition evaluates to true as Item_cond::fix_fields will
           remove the condition later.
         */
-        should_remove = true;
+        remove_predicate = true;
       } else {
         /*
-          Remove all the expressions in inner/outer expression list if
-          one of condition evaluates to always false. Add an always false
-          condition to semi-join condition.
+          Predicate is false, and thus condition is false. However, generate
+          the full condition so that it can be removed completely when all
+          predicates have been processed.
         */
-        nested_join->sj_inner_exprs.clear();
-        nested_join->sj_outer_exprs.clear();
-        Item *new_item = new Item_func_false();
-        if (new_item == nullptr) return true;
-        (*sj_cond) = new_item;
-        *simple_const = true;
-        return false;
+        remove_condition = true;
       }
     }
     /*
@@ -2538,7 +2534,7 @@ bool Query_block::build_sj_cond(THD *thd, NESTED_JOIN *nested_join,
     */
     nested_join->sj_corr_tables |= inner->used_tables() & outer_tables_map;
 
-    if (should_remove) {
+    if (remove_predicate) {
       ii = nested_join->sj_inner_exprs.erase(ii);
       oi = nested_join->sj_outer_exprs.erase(oi);
     } else {
@@ -2547,6 +2543,25 @@ bool Query_block::build_sj_cond(THD *thd, NESTED_JOIN *nested_join,
 
       ++ii, ++oi;
     }
+  }
+  if (remove_condition) {
+    /*
+      Condition is false.
+      Clean up the synthesized condition.
+      Remove all the expressions in inner/outer expression list.
+      Add an always false predicate to semi-join condition.
+    */
+    Item::Cleanup_after_removal_context ctx(this);
+    new_cond->walk(&Item::clean_up_after_removal, walk_options,
+                   pointer_cast<uchar *>(&ctx));
+
+    nested_join->sj_inner_exprs.clear();
+    nested_join->sj_outer_exprs.clear();
+    Item *new_item = new Item_func_false();
+    if (new_item == nullptr) return true;
+    (*sj_cond) = new_item;
+    *simple_const = true;
+    return false;
   }
   /*
     Semijoin processing expects at least one inner/outer expression
