@@ -4395,8 +4395,6 @@ int mysql_execute_command(THD *thd, bool first_level) {
 
       assert(lex->sphead != nullptr);
 
-      bool library_import_supported =
-          native_strcasecmp(lex->sp_chistics.language.str, "JAVASCRIPT") == 0;
       auto imported_libraries = lex->sp_chistics.get_imported_libraries();
       bool imports_library =
           imported_libraries != nullptr && !imported_libraries->empty();
@@ -4422,13 +4420,6 @@ int mysql_execute_command(THD *thd, bool first_level) {
             goto error;
           }
 
-          // Check that libraries are supported before parsing the code
-          if (!library_import_supported && imports_library) {
-            my_error(ER_LIBRARIES_NOT_SUPPORTED, MYF(0),
-                     lex->sp_chistics.language.str);
-            goto error;
-          }
-
           my_service<SERVICE_TYPE(external_program_execution)> sp_service(
               "external_program_execution", srv_registry);
           if (!sp_service.is_valid())
@@ -4438,13 +4429,14 @@ int mysql_execute_command(THD *thd, bool first_level) {
         } else {
           push_warning(thd, ER_LANGUAGE_COMPONENT_NOT_AVAILABLE);
         }
-      }
-
-      // Also do this check for SQL and when language service is not available
-      if (!library_import_supported && imports_library) {
-        my_error(ER_LIBRARIES_NOT_SUPPORTED, MYF(0),
-                 lex->sp_chistics.language.str);
-        goto error;
+      } else {
+        // Also do this check for SQL and when language service is not
+        // available
+        if (imports_library) {
+          my_error(ER_LIBRARIES_NOT_SUPPORTED, MYF(0),
+                   lex->sp_chistics.language.str);
+          goto error;
+        }
       }
 
       assert(lex->sphead->m_db.str); /* Must be initialized in the parser */
