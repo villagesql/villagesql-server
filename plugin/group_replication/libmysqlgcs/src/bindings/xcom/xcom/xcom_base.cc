@@ -2338,8 +2338,10 @@ static int reserve_synode_number(synode_allocation_type *synode_allocation,
     *site = proposer_site = find_site_def_rw(*msgno);
 
     // Update node set get the latest state
-    if (is_view(a->body.c_t))
+    if (is_view(a->body.c_t)) {
+      free_node_set(&a->body.app_u_u.present);
       a->body.app_u_u.present = detector_node_set(*site);
+    }
 
     // Set the global current message for all number allocators
     set_current_message(incr_synode(*msgno));
