@@ -11319,7 +11319,9 @@ int ha_innobase::bulk_load_end(THD *thd, void *load_ctx, bool is_error) {
   auto db_err = loader->end(is_error);
 
   auto is_last_index = [this, loader]() {
-    return loader->get_keynr() == this->table->s->keys - 1;
+    return loader->get_keynr() ==
+           this->table->s->keys -
+               (table_share->is_missing_primary_key() ? 0 : 1);
   };
 
   report_error(loader, db_err, 0);
@@ -11327,7 +11329,7 @@ int ha_innobase::bulk_load_end(THD *thd, void *load_ctx, bool is_error) {
     is_error = true;
   }
 
-  if (is_last_index()) {
+  if (is_last_index() || is_error) {
     auto observer = trx->flush_observer;
     ut_a(observer != nullptr);
 
