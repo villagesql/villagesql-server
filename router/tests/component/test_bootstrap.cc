@@ -304,6 +304,18 @@ class RouterBootstrapOkTest
   RouterBootstrapOkTest()
       : RouterComponentBootstrapWithDefaultCertsTest(
             GetParam().new_executable) {}
+
+  void verify_password_not_logged(const std::string &console_output) {
+    const auto lines = mysql_harness::split_string(console_output, '\n');
+    size_t found_create_statements{0};
+    for (const auto &line : lines) {
+      if (line.find("CREATE USER") != std::string::npos) {
+        EXPECT_THAT(line, ::testing::HasSubstr("***"));
+        ++found_create_statements;
+      }
+    }
+    EXPECT_GT(found_create_statements, 0);
+  }
 };
 
 /**
@@ -340,7 +352,7 @@ TEST_P(RouterBootstrapOkTest, BootstrapOk) {
 
   std::vector<std::string> bootstrap_params{
       "--bootstrap=127.0.0.1:" + std::to_string(server_port), "-d",
-      bootstrap_dir.name()};
+      bootstrap_dir.name(), "--logger.level=debug"};
 
   auto &router = launch_router_for_bootstrap(bootstrap_params);
 
@@ -355,6 +367,8 @@ TEST_P(RouterBootstrapOkTest, BootstrapOk) {
     EXPECT_TRUE(pattern_found(router_console_output, expected_output_string))
         << router_console_output;
   }
+
+  verify_password_not_logged(router_console_output);
 
   const std::string conf_file = bootstrap_dir.name() + "/mysqlrouter.conf";
   // 'config_file' is set as side-effect of bootstrap_failover()
@@ -4215,7 +4229,7 @@ INSTANTIATE_TEST_SUITE_P(
              "Failed changing the authentication plugin for account "
              "'.*'@'localhost': Error executing MySQL query \"alter user "
              "'.*'@'localhost' identified with `caching_sha2_password` by "
-             "'.*'\": Unexpected error .*"},
+             "\\*\\*\\*\": Unexpected error .*"},
             /*unexpected_output_strings*/
             {"Successfully changed the authentication plugin for .*"},
             /*test_description*/
@@ -4339,7 +4353,7 @@ INSTANTIATE_TEST_SUITE_P(
              "Failed changing the authentication plugin for account "
              "'.*'@'localhost': Error executing MySQL query \"alter user "
              "'.*'@'localhost' identified with `caching_sha2_password` by "
-             "'.*'\": Unexpected error .*"},
+             "\\*\\*\\*\": Unexpected error .*"},
             /*unexpected_output_strings*/
             {"Successfully changed the authentication plugin for .*"},
             /*test_description*/
