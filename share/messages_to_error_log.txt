@@ -13251,6 +13251,9 @@ ER_KEYRING_COMPONENT_KMIP_FAILED_TO_ACTIVATE_KEYS
 ER_KEYRING_COMPONENT_KMIP_FAILED_TO_STORE_OR_GENERATE_KEY
   eng "Could not store/generate the key - failed to set key attribute x-key-ready"
 
+ER_WARN_DEPRECATED_SASL_MECHANISM
+  eng "Value '%s' of variable authentication_ldap_sasl_auth_method_name is deprecated and will be removed in future. Consider using more secure '%s'."
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
