@@ -42,6 +42,7 @@ Libraries defined on this level:
 - \subpage PageLibsMysqlContainers
 - \subpage PageLibsMysqlGtid
 - \subpage PageLibsMysqlMath
+- \subpage PageLibsMysqlMeta
 - \subpage PageLibsMysqlSerialization
 - \subpage PageLibsMysqlUtils
 
@@ -59,6 +60,8 @@ Libraries defined on this level:
 \defgroup GroupLibsMysqlGtid GTID
 \ingroup GroupLibsMysql
 \defgroup GroupLibsMysqlMath Math
+\ingroup GroupLibsMysql
+\defgroup GroupLibsMysqlMeta Meta
 \ingroup GroupLibsMysql
 \defgroup GroupLibsMysqlSerialization Serialization
 \ingroup GroupLibsMysql

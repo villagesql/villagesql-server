@@ -42,4 +42,3 @@ This is a header-only library, containing various utility functions, such as:
 - is_specialization.h: utility to determine if a template is a specialization
   of another.
 - return_status.h: enum { ok, error }
-- type_traits.h: general-purpose type traits and concepts

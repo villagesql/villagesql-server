@@ -21,12 +21,21 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-ADD_SUBDIRECTORY(abi_helpers)
-ADD_SUBDIRECTORY(allocators)
-ADD_SUBDIRECTORY(binlog)
-ADD_SUBDIRECTORY(containers)
-ADD_SUBDIRECTORY(gtid)
-ADD_SUBDIRECTORY(math)
-ADD_SUBDIRECTORY(meta)
-ADD_SUBDIRECTORY(serialization)
-ADD_SUBDIRECTORY(utils)
+MY_CHECK_CXX_COMPILER_WARNING("-Wno-unused-local-typedefs" HAS_WARN_FLAG)
+IF(HAS_WARN_FLAG)
+  STRING_APPEND(CMAKE_CXX_FLAGS " ${HAS_WARN_FLAG}")
+ENDIF()
+
+INCLUDE_DIRECTORIES(SYSTEM ${GMOCK_INCLUDE_DIRS})
+
+# Add tests
+SET(TESTS
+)
+
+FOREACH(test ${TESTS})
+  MYSQL_ADD_EXECUTABLE(${test}-t ${test}-t.cc
+    ADD_TEST ${test}
+    LINK_LIBRARIES gunit_small
+    COMPILE_DEFINITIONS "${DISABLE_PSI_DEFINITIONS}")
+ENDFOREACH()
+

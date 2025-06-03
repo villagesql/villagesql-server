@@ -27,7 +27,6 @@ SET(TARGET_HEADERS
   error.h
   is_specialization.h
   return_status.h
-  type_traits.h
 )
 
 SET(TARGET_SRCS

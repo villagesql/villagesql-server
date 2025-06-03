@@ -21,25 +21,27 @@
 // along with this program; if not, write to the Free Software
 // Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
-#ifndef MYSQL_UTILS_TYPE_TRAITS_H
-#define MYSQL_UTILS_TYPE_TRAITS_H
+#ifndef MYSQL_META_IS_CONST_REF_H
+#define MYSQL_META_IS_CONST_REF_H
 
 /// @file
 /// Experimental API header
 
-/// @addtogroup GroupLibsMysqlUtils
+#include <type_traits>  // is_reference_v
+
+/// @addtogroup GroupLibsMysqlMeta
 /// @{
 
-namespace mysql::utils {
+namespace mysql::meta {
 
 /// True if Type is a const reference.
 template <class Type>
 concept Is_const_ref =
     std::is_reference_v<Type> && std::is_const_v<std::remove_reference_t<Type>>;
 
-}  // namespace mysql::utils
+}  // namespace mysql::meta
 
-// addtogroup GroupLibsMysqlUtils
+// addtogroup GroupLibsMysqlMeta
 /// @}
 
-#endif  // ifndef MYSQL_UTILS_TYPE_TRAITS_H
+#endif  // ifndef MYSQL_META_IS_CONST_REF_H
