@@ -40,6 +40,9 @@
 namespace mrs {
 namespace rest {
 
+mrs::interface::Options parse_json_options(
+    const std::optional<std::string> &options);
+
 class Handler : public interface::RestHandler {
  public:
   using HttpUri = ::http::base::Uri;
