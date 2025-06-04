@@ -111,6 +111,7 @@ std::optional<uint64_t> cgroup_v1_memory() {
     return std::nullopt;
   }
 
+#ifdef HAVE_UNISTD_H
   const long page_size = sysconf(_SC_PAGESIZE);
   assert(page_size > 0);
 
@@ -119,6 +120,8 @@ std::optional<uint64_t> cgroup_v1_memory() {
 
   /* Treat default value as no limits and return 0 */
   return (memory == default_limit) ? 0 : memory;
+#endif
+  return memory;
 }
 
 /**
