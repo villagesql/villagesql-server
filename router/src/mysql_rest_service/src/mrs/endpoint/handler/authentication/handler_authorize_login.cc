@@ -29,11 +29,11 @@
 
 #include "helper/http/url.h"
 #include "helper/json/to_string.h"
-#include "http/server/regex_matcher.h"
 #include "mrs/http/cookie.h"
 #include "mrs/http/error.h"
 #include "mrs/http/utilities.h"
 #include "mrs/rest/request_context.h"
+#include "mysql/harness/regex_matcher.h"
 
 #include "mysql/harness/logging/logging.h"
 
@@ -60,7 +60,7 @@ HandlerAuthorizeLogin::HandlerAuthorizeLogin(
       service_path_{service_path},
       redirection_{redirection} {
   if (redirection_validator.has_value()) {
-    redirection_validator_ = std::make_shared<::http::server::RegexMatcher>(
+    redirection_validator_ = std::make_shared<mysql_harness::RegexMatcher>(
         redirection_validator.value());
     const auto is_valid = redirection_validator_->is_valid();
     if (!is_valid) {

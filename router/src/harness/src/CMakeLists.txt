@@ -282,6 +282,7 @@ SET(harness_source
   destination_endpoint.cc
   destination_socket.cc
   secure_string.cc
+  regex_matcher.cc
   )
 
 IF(NOT SOLARIS)
@@ -351,6 +352,7 @@ ROUTER_ADD_SHARED_LIBRARY(harness-library
   ${common_libraries}
   router_mysqlclient
   extra::rapidjson
+  ext::icu
   )
 
 TARGET_INCLUDE_DIRECTORIES(harness-library PUBLIC
