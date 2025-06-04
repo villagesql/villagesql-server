@@ -109,9 +109,25 @@ HttpResult HandlerDbObjectOpenAPI::handle_get(rest::RequestContext *ctxt) {
                                   entry_->request_path);
   }
 
+  const bool is_async =
+      get_options().mysql_task.driver ==
+          interface::Options::MysqlTask::DriverType::kDatabase ||
+      get_options().mysql_task.driver ==
+          interface::Options::MysqlTask::DriverType::kRouter;
   rapidjson::Value items(rapidjson::kObjectType);
   items = rest::get_route_openapi_schema_path(privileges, entry_, url_obj_,
-                                              allocator);
+                                              is_async, allocator);
+
+  if (is_async &&
+      (entry_->type ==
+           mrs::database::entry::DbObject::ObjectType::k_objectTypeProcedure ||
+       entry_->type ==
+           mrs::database::entry::DbObject::ObjectType::k_objectTypeFunction)) {
+    const std::string task_id_path = url_obj_ + "/{taskId}";
+    items.AddMember(rapidjson::Value(task_id_path, allocator),
+                    rest::add_task_id_endpoint(privileges, entry_, allocator),
+                    allocator);
+  }
 
   auto schema_properties = rest::get_route_openapi_component(entry_, allocator);
   if (entry_->type ==

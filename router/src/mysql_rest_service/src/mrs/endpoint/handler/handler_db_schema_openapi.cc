@@ -131,13 +131,29 @@ HttpResult HandlerDbSchemaOpenAPI::handle_get(rest::RequestContext *ctxt) {
                            db_object->id, db_object->request_path);
     }
 
+    const auto is_async = mrs::rest::async_enabled(
+        get_endpoint_options(std::dynamic_pointer_cast<DbObjectEndpoint>(
+            db_endpoint->shared_from_this())));
+
     const auto path = url_obj_ + db_object->request_path;
-    auto path_obj = rest::get_route_openapi_schema_path(privileges, db_object,
-                                                        path, allocator);
+    auto path_obj = rest::get_route_openapi_schema_path(
+        privileges, db_object, path, is_async, allocator);
 
     for (auto path = path_obj.MemberBegin(); path < path_obj.MemberEnd();
          ++path) {
       items.AddMember(path->name, path->value, allocator);
+    }
+
+    if (is_async && (db_object->type == mrs::database::entry::DbObject::
+                                            ObjectType::k_objectTypeProcedure ||
+                     db_object->type == mrs::database::entry::DbObject::
+                                            ObjectType::k_objectTypeFunction)) {
+      const std::string task_id_path =
+          url_obj_ + db_object->request_path + "/{taskId}";
+      items.AddMember(
+          rapidjson::Value(task_id_path, allocator),
+          rest::add_task_id_endpoint(privileges, db_object, allocator),
+          allocator);
     }
 
     if (db_object->type ==
