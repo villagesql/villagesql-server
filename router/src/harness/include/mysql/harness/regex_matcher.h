@@ -23,34 +23,32 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_SRC_HTTP_SRC_HTTP_SERVER_MATCHER_H_
-#define ROUTER_SRC_HTTP_SRC_HTTP_SERVER_MATCHER_H_
+#ifndef ROUTER_SRC_HARNESS_INCLUDE_MYSQL_HARNESS_REGEX_MATCHER_H_
+#define ROUTER_SRC_HARNESS_INCLUDE_MYSQL_HARNESS_REGEX_MATCHER_H_
 
-#include <string>
+#include "matcher_interface.h"
 
-#include "mysql/harness/stdx/expected.h"
-#include "mysqlrouter/http_server_lib_export.h"
+#include <memory>
 
-namespace http {
-namespace server {
+#include "harness_export.h"
 
-/*
- * Abstract wrapper on Regexp matching.
- *
- * Please note, that proper place for this class should be
- * in harness, but http-server already uses ICU and it would
- * be a bigger effort to move the ICU.
- */
+namespace mysql_harness {
 
-class HTTP_SERVER_LIB_EXPORT MatcherInterface {
+class HARNESS_EXPORT RegexMatcher : public MatcherInterface {
  public:
-  virtual ~MatcherInterface();
+  RegexMatcher(const std::string &pattern);
 
-  virtual stdx::expected<void, std::string> is_valid() const = 0;
-  virtual bool matches(const std::string &input) const = 0;
+  stdx::expected<void, std::string> is_valid() const override;
+  bool matches(const std::string &input) const override;
+  bool find(const std::string &input) const override;
+  std::string replace_all(std::string input,
+                          const std::string &replacement) const override;
+
+ private:
+  class Impl;
+  std::shared_ptr<Impl> impl_;
 };
 
-}  // namespace server
-}  // namespace http
+}  // namespace mysql_harness
 
-#endif /* ROUTER_SRC_HTTP_SRC_HTTP_SERVER_MATCHER_H_ */
+#endif /* ROUTER_SRC_HARNESS_INCLUDE_MYSQL_HARNESS_REGEX_MATCHER_H_ */

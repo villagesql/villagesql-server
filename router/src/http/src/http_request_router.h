@@ -26,8 +26,6 @@
 #ifndef ROUTER_SRC_HTTP_SRC_HTTP_REQUEST_ROUTER_H_
 #define ROUTER_SRC_HTTP_SRC_HTTP_REQUEST_ROUTER_H_
 
-#include <unicode/regex.h>
-
 #include <map>
 #include <memory>
 #include <optional>
@@ -39,6 +37,7 @@
 #include "http/base/request_handler.h"
 #include "http/base/uri_path_matcher.h"
 #include "http/server/request_handler_interface.h"
+#include "mysql/harness/regex_matcher.h"
 #include "mysql/harness/stdx/expected.h"
 #include "mysqlrouter/http_server_lib_export.h"
 
@@ -67,23 +66,19 @@ class HTTP_SERVER_LIB_EXPORT HttpRequestRouter
   class RouteRegexMatcher {
    public:
     RouteRegexMatcher(std::string url_pattern, BaseRequestHandlerPtr handler)
-        : url_pattern_(std::move(url_pattern)), handler_(std::move(handler)) {}
+        : matcher_(std::make_unique<mysql_harness::RegexMatcher>(url_pattern)),
+          url_pattern_(std::move(url_pattern)),
+          handler_(std::move(handler)) {}
 
-    stdx::expected<void, UErrorCode> compile();
-
-    stdx::expected<void, UErrorCode> matches(std::string_view input) const;
-
-    stdx::expected<void, UErrorCode> matches(
-        const icu::UnicodeString &input) const;
+    bool matches(std::string_view input) const;
 
     const std::string &url_pattern() const { return url_pattern_; }
 
     BaseRequestHandlerPtr handler() const { return handler_; }
 
    private:
+    std::unique_ptr<mysql_harness::RegexMatcher> matcher_;
     std::string url_pattern_;
-
-    std::unique_ptr<icu::RegexPattern> regex_pattern_;
     BaseRequestHandlerPtr handler_;
   };
 

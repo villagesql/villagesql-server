@@ -40,8 +40,6 @@
 
 #include <sys/types.h>  // timeval
 
-#include <unicode/uclean.h>  // u_cleanup
-
 #include "my_thread.h"  // my_thread_self_setname
 #include "mysql/harness/config_option.h"
 #include "mysql/harness/config_parser.h"
@@ -294,8 +292,6 @@ static void deinit(mysql_harness::PluginFuncEnv *) {
   http_servers.clear();
 
   io_context_work_guards.clear();
-
-  u_cleanup();
 }
 
 static void start(mysql_harness::PluginFuncEnv *env) {

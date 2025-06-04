@@ -23,14 +23,15 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "http/server/regex_matcher.h"
+#include "mysql/harness/regex_matcher.h"
 
 #include <unicode/regex.h>
 #include <unicode/unistr.h>
 #include <unicode/utypes.h>
 
-namespace http {
-namespace server {
+namespace mysql_harness {
+
+MatcherInterface::~MatcherInterface() = default;
 
 class RegexMatcher::Impl {
  public:
@@ -39,7 +40,8 @@ class RegexMatcher::Impl {
     pattern_ = pattern;
 
     std::unique_ptr<icu::RegexPattern> regex_pattern(icu::RegexPattern::compile(
-        icu::UnicodeString::fromUTF8(pattern_.c_str()), 0, status_));
+        icu::UnicodeString::fromUTF8(pattern_.c_str()),
+        URegexpFlag::UREGEX_CASE_INSENSITIVE, status_));
 
     if (U_FAILURE(status_)) {
       return;
@@ -60,6 +62,33 @@ class RegexMatcher::Impl {
     return regex_matcher->matches(out_status) != 0;
   }
 
+  bool find(const icu::UnicodeString &input) const {
+    if (U_FAILURE(status_)) {
+      return false;
+    }
+
+    UErrorCode out_status = U_ZERO_ERROR;
+    std::unique_ptr<icu::RegexMatcher> regex_matcher(
+        regex_pattern_->matcher(input, out_status));
+
+    return regex_matcher->find(out_status) != 0;
+  }
+
+  std::string replace_all(icu::UnicodeString &input,
+                          const icu::UnicodeString &replacement) const {
+    if (!U_FAILURE(status_)) {
+      UErrorCode out_status = U_ZERO_ERROR;
+      std::unique_ptr<icu::RegexMatcher> regex_matcher(
+          regex_pattern_->matcher(input, out_status));
+
+      input = regex_matcher->replaceAll(replacement, out_status);
+    }
+
+    std::string result;
+    input.toUTF8String(result);
+    return result;
+  }
+
   UErrorCode status_;
   std::string pattern_;
   std::unique_ptr<icu::RegexPattern> regex_pattern_;
@@ -77,6 +106,14 @@ stdx::expected<void, std::string> RegexMatcher::is_valid() const {
   return {};
 }
 
+bool RegexMatcher::find(const std::string &input) const {
+  if (!impl_) return false;
+
+  const icu::UnicodeString us_input(input.data(), input.size());
+
+  return impl_->find(us_input);
+}
+
 bool RegexMatcher::matches(const std::string &input) const {
   if (!impl_) return false;
 
@@ -85,5 +122,19 @@ bool RegexMatcher::matches(const std::string &input) const {
   return impl_->matches(us_input);
 }
 
-}  // namespace server
-}  // namespace http
+std::string RegexMatcher::replace_all(std::string input,
+                                      const std::string &replacement) const {
+  if (!impl_) return input;
+
+  icu::UnicodeString us_input(input.data(), input.size());
+  const icu::UnicodeString us_replacement(replacement.data(),
+                                          replacement.size());
+
+  if (impl_->find(us_input)) {
+    return impl_->replace_all(us_input, us_replacement);
+  }
+
+  return input;
+}
+
+}  // namespace mysql_harness

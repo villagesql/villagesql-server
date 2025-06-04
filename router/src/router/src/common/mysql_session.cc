@@ -132,8 +132,6 @@ MySQLSession::MySQLSession() {
     // not supposed to happen
     throw std::logic_error("Error initializing MySQL connection structure");
   }
-
-  log_filter_.add_default_sql_patterns();
 }
 
 MySQLSession::~MySQLSession() {
@@ -645,7 +643,7 @@ MySQLSession::logged_real_query(const std::string &q) {
                std::to_string(
                    std::chrono::duration_cast<std::chrono::microseconds>(dur)
                        .count()) +
-               " us)> " + log_filter_.filter(q);
+               " us)> " + get_log_filter().filter(q);
 
     if (query_res) {
       auto const *res = query_res.value().get();
@@ -680,7 +678,7 @@ MySQLSession::logged_real_query_nb(const std::string &q) {
                  std::to_string(
                      std::chrono::duration_cast<std::chrono::microseconds>(dur)
                          .count()) +
-                 " us)> " + log_filter_.filter(q);
+                 " us)> " + get_log_filter().filter(q);
 
       if (query_res) {
         auto const *res = query_res.value().get();
@@ -716,7 +714,7 @@ uint64_t MySQLSession::prepare(const std::string &query) {
     auto err_no = mysql_stmt_errno(stmt);
     std::string err_msg = mysql_stmt_error(stmt);
     std::stringstream ss;
-    ss << "Error preparing MySQL query \"" << log_filter_.filter(query);
+    ss << "Error preparing MySQL query \"" << get_log_filter().filter(query);
     ss << "\": " << err_msg << " (" << err_no << ")";
     prepare_remove(current);
     throw Error(ss.str(), err_no, err_msg);
@@ -834,7 +832,7 @@ void MySQLSession::execute(const std::string &q) {
     auto ec = query_res.error();
 
     std::stringstream ss;
-    ss << "Error executing MySQL query \"" << log_filter_.filter(q);
+    ss << "Error executing MySQL query \"" << get_log_filter().filter(q);
     ss << "\": " << ec.message() << " (" << ec.value() << ")";
     throw Error(ss.str(), ec.value(), ec.message());
   }
@@ -887,7 +885,7 @@ void MySQLSession::query(const std::string &q,
     auto ec = query_res.error();
 
     std::stringstream ss;
-    ss << "Error executing MySQL query \"" << log_filter_.filter(q);
+    ss << "Error executing MySQL query \"" << get_log_filter().filter(q);
     ss << "\": " << ec.message() << " (" << ec.value() << ")";
     throw Error(ss.str(), ec.value(), ec.message());
   }
@@ -924,7 +922,7 @@ std::unique_ptr<MySQLSession::ResultRow> MySQLSession::query_one(
     auto ec = query_res.error();
 
     std::stringstream ss;
-    ss << "Error executing MySQL query \"" << log_filter_.filter(q);
+    ss << "Error executing MySQL query \"" << get_log_filter().filter(q);
     ss << "\": " << ec.message() << " (" << ec.value() << ")";
     throw Error(ss.str(), ec.value(), ec.message());
   }
@@ -967,7 +965,7 @@ bool MySQLSession::execute_nb(const std::string &q) {
       if (ec.value() == 0) return false;  // ASYNC_NOT_READY
 
       std::stringstream ss;
-      ss << "Error executing \"" << log_filter_.filter(q);
+      ss << "Error executing \"" << get_log_filter().filter(q);
       ss << "\": " << ec.message() << " (" << ec.value() << ")";
       throw Error(ss.str(), ec.value(), ec.message());
     }
@@ -982,7 +980,7 @@ bool MySQLSession::execute_nb(const std::string &q) {
       if (ec.value() == 0) return false;  // ASYNC_NOT_READY
 
       std::stringstream ss;
-      ss << "Error executing \"" << log_filter_.filter(q);
+      ss << "Error executing \"" << get_log_filter().filter(q);
       ss << "\": " << ec.message() << " (" << ec.value() << ")";
       throw Error(ss.str(), ec.value(), ec.message());
     } else {
@@ -1061,4 +1059,9 @@ bool MySQLSession::is_ssl_session_reused() {
 
 unsigned long MySQLSession::server_version() {
   return connection_ ? mysql_get_server_version(connection_) : 0;
+}
+
+/*static*/ SQLLogFilter &MySQLSession::get_log_filter() {
+  static SQLLogFilter filter;
+  return filter;
 }

@@ -532,7 +532,6 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
   MYSQL *connection_;
   bool connected_;
   std::string connection_address_;
-  SQLLogFilter log_filter_;
   unsigned long extra_client_flags_{0};
   uint64_t connection_id_{0};
 
@@ -586,6 +585,8 @@ class ROUTER_MYSQL_EXPORT MySQLSession {
   void throw_mysqlerror(MYSQL_STMT *stmt, uint64_t ps_id);
   // if query be timed and sent to the sql-log.
   mysql_harness::logging::DomainLogger logger_{"sql"};
+
+  static SQLLogFilter &get_log_filter();
 
   bool log_queries_{true};
 };

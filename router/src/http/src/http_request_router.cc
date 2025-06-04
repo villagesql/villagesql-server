@@ -25,10 +25,6 @@
 
 #include "http_request_router.h"
 
-#include <unicode/regex.h>
-#include <unicode/unistr.h>
-#include <unicode/utypes.h>
-
 #include <algorithm>
 #include <memory>
 #include <stdexcept>
@@ -47,35 +43,9 @@ IMPORT_LOG_FUNCTIONS()
 
 using BaseRequestHandlerPtr = HttpRequestRouter::BaseRequestHandlerPtr;
 
-stdx::expected<void, UErrorCode>
-HttpRequestRouter::RouteRegexMatcher::compile() {
-  UErrorCode out_status = U_ZERO_ERROR;
-
-  std::unique_ptr<icu::RegexPattern> pattern(
-      icu::RegexPattern::compile(url_pattern_.c_str(), 0, out_status));
-  if (out_status != U_ZERO_ERROR) return stdx::unexpected(out_status);
-
-  regex_pattern_ = std::move(pattern);
-
-  return {};
-}
-
-stdx::expected<void, UErrorCode> HttpRequestRouter::RouteRegexMatcher::matches(
+bool HttpRequestRouter::RouteRegexMatcher::matches(
     std::string_view input) const {
-  return matches(icu::UnicodeString(input.data(), input.size()));
-}
-
-stdx::expected<void, UErrorCode> HttpRequestRouter::RouteRegexMatcher::matches(
-    const icu::UnicodeString &input) const {
-  UErrorCode out_status = U_ZERO_ERROR;
-
-  std::unique_ptr<icu::RegexMatcher> regex_matcher(
-      regex_pattern_->matcher(input, out_status));
-
-  const auto find_res = regex_matcher->find(out_status);
-  if (find_res == 0) return stdx::unexpected(out_status);
-
-  return {};
+  return matcher_->find(std::string(input));
 }
 
 /*static*/ HttpRequestRouter::RouteDirectMatcher::UrlPathKey
@@ -151,13 +121,6 @@ void HttpRequestRouter::register_regex_handler(
             url_host.c_str());
 
   RouteRegexMatcher matcher(url_regex_str, std::move(cb));
-
-  auto compile_res = matcher.compile();
-  if (!compile_res) {
-    throw std::runtime_error("compile of " + url_regex_str +
-                             "failed with status " +
-                             std::to_string(compile_res.error()));
-  }
 
   std::unique_lock lock(route_mtx_);
   auto req_it = request_regex_handlers_.find(url_host);
@@ -457,12 +420,6 @@ BaseRequestHandlerPtr HttpRequestRouter::find_direct_match_route_handler(
 
 BaseRequestHandlerPtr HttpRequestRouter::find_regex_route_handler(
     std::string_view url_host, std::string_view path) {
-  // as .matches() is called in a loop on the same string,
-  // convert it to UnicodeString upfront.
-  //
-  // That saves doing the same conversion for each path under a lock.
-  icu::UnicodeString uni_path(path.data(), path.size());
-
   std::shared_lock lock(route_mtx_);
 
   if (!url_host.empty()) {
@@ -487,7 +444,7 @@ BaseRequestHandlerPtr HttpRequestRouter::find_regex_route_handler(
       auto &request_handlers = req_it->second;
 
       for (auto &request_handler : request_handlers) {
-        if (request_handler.matches(uni_path)) {
+        if (request_handler.matches(path)) {
           return request_handler.handler();
         }
       }
@@ -500,7 +457,7 @@ BaseRequestHandlerPtr HttpRequestRouter::find_regex_route_handler(
     auto &request_handlers = req_it->second;
 
     for (auto &request_handler : request_handlers) {
-      if (request_handler.matches(uni_path)) {
+      if (request_handler.matches(path)) {
         return request_handler.handler();
       }
     }
