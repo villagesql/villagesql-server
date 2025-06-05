@@ -4879,7 +4879,7 @@ bool udf_handler::get_arguments() {
 double udf_handler::val_real(bool *null_value) {
   assert(is_initialized());
   is_null = 0;
-  if (get_arguments()) {
+  if (u_d->type != UDFTYPE_AGGREGATE && get_arguments()) {
     *null_value = true;
     return 0.0;
   }
@@ -4896,7 +4896,7 @@ double udf_handler::val_real(bool *null_value) {
 longlong udf_handler::val_int(bool *null_value) {
   assert(is_initialized());
   is_null = 0;
-  if (get_arguments()) {
+  if (u_d->type != UDFTYPE_AGGREGATE && get_arguments()) {
     *null_value = true;
     return 0LL;
   }
@@ -4921,7 +4921,7 @@ String *udf_handler::val_str(String *str, String *save_str) {
   DBUG_TRACE;
   assert(is_initialized());
 
-  if (get_arguments()) return nullptr;
+  if (u_d->type != UDFTYPE_AGGREGATE && get_arguments()) return nullptr;
   Udf_func_string func = reinterpret_cast<Udf_func_string>(u_d->func);
 
   if ((res_length = str->alloced_length()) <
@@ -4955,7 +4955,7 @@ my_decimal *udf_handler::val_decimal(bool *null_value, my_decimal *dec_buf) {
 
   assert(is_initialized());
 
-  if (get_arguments()) {
+  if (u_d->type != UDFTYPE_AGGREGATE && get_arguments()) {
     *null_value = true;
     return nullptr;
   }
