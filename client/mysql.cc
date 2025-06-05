@@ -192,6 +192,7 @@ static char *opt_mysql_unix_port = nullptr;
 static char *opt_bind_addr = nullptr;
 static int connect_flag = CLIENT_INTERACTIVE;
 static bool opt_binary_mode = false;
+static bool opt_commands = true;
 static bool opt_connect_expired_password = false;
 static char *current_host;
 static char *dns_srv_name;
@@ -1264,7 +1265,7 @@ inline int get_command_index(char cmd_char) {
 
 static int delimiter_index = -1;
 static int charset_index = -1;
-static bool real_binary_mode = false;
+static bool disable_commands = false;
 
 #ifdef _WIN32
 BOOL windows_ctrl_handler(DWORD fdwCtrlType) {
@@ -1796,6 +1797,9 @@ static struct my_option my_long_options[] = {
     {"column-type-info", OPT_COLUMN_TYPES, "Display column type information.",
      &column_types_flag, &column_types_flag, nullptr, GET_BOOL, NO_ARG, 0, 0, 0,
      nullptr, 0, nullptr},
+    {"commands", OPT_MYSQL_COMMANDS,
+     "Enable or disable processing of local mysql commands.", &opt_commands,
+     &opt_commands, nullptr, GET_BOOL, NO_ARG, 1, 0, 0, nullptr, 0, nullptr},
     {"comments", 'c',
      "Preserve comments. Send comments to the server."
      " The default is --comments (keep comments), disable with "
@@ -2321,7 +2325,7 @@ static int read_and_execute(bool interactive) {
   size_t line_length = 0;
   status.exit_status = 1;
 
-  real_binary_mode = !interactive && opt_binary_mode;
+  disable_commands = !interactive && (opt_binary_mode || !opt_commands);
   for (;;) {
     /* Reset as SIGINT has already got handled. */
     sigint_received = false;
@@ -2332,7 +2336,7 @@ static int read_and_execute(bool interactive) {
         In that case, we need to double check that we have a valid
         line before actually setting line_length to read_length.
         */
-      line = batch_readline(status.line_buff, real_binary_mode);
+      line = batch_readline(status.line_buff, opt_binary_mode);
       if (line) {
         line_length = status.line_buff->read_length;
 
@@ -2340,7 +2344,7 @@ static int read_and_execute(bool interactive) {
           ASCII 0x00 is not allowed appearing in queries if it is not in
           binary mode.
         */
-        if (!real_binary_mode && strlen(line) != line_length) {
+        if (!opt_binary_mode && strlen(line) != line_length) {
           status.exit_status = 1;
           String msg;
           msg.append(
@@ -2523,10 +2527,10 @@ static int read_and_execute(bool interactive) {
 
   /*
     If the function is called by 'source' command, it will return to
-    interactive mode, so real_binary_mode should be false. Otherwise, it will
-    exit the program, it is safe to set real_binary_mode to false.
+    interactive mode, so disable_commands should be false. Otherwise, it will
+    exit the program, it is safe to set disable_commands to false.
   */
-  real_binary_mode = false;
+  disable_commands = false;
   return status.exit_status;
 }
 
@@ -2553,10 +2557,10 @@ static COMMANDS *find_command(char cmd_char) {
   int index = -1;
 
   /*
-    In binary-mode, we disallow all mysql commands except '\C'
+    If specified, we disallow all mysql commands except '\C'
     and DELIMITER.
   */
-  if (real_binary_mode) {
+  if (disable_commands) {
     if (cmd_char == 'C') index = charset_index;
   } else
     index = get_command_index(cmd_char);
@@ -2657,7 +2661,7 @@ static COMMANDS *find_command(char *name) {
     this is not a delimiter command, let add_line() take care of
     parsing the row and calling find_command().
   */
-  if ((!real_binary_mode && strstr(name, "\\g")) ||
+  if ((!disable_commands && strstr(name, "\\g")) ||
       (strstr(name, delimiter) &&
        !is_delimiter_command(name, DELIMITER_NAME_LEN)))
     return (COMMANDS *)nullptr;
@@ -2671,7 +2675,7 @@ static COMMANDS *find_command(char *name) {
     len = (uint)strlen(name);
 
   int index = -1;
-  if (real_binary_mode) {
+  if (disable_commands) {
     if (is_delimiter_command(name, len)) index = delimiter_index;
   } else {
     /*
