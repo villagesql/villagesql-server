@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -192,6 +192,16 @@ IF(MY_COMPILER_IS_GNU AND NOT CMAKE_CXX_COMPILER_VERSION VERSION_LESS 11)
   ADD_COMPILE_FLAGS(
     pars/pars0grm.cc
     COMPILE_FLAGS "-Wno-free-nonheap-object")
+ENDIF()
+
+# On linux: /usr/include/stdio.h:#define BUFSIZ 8192
+# On Solaris: /usr/include/iso/stdio_iso.h:#define    BUFSIZ  1024
+IF(SOLARIS AND MY_COMPILER_IS_GNU)
+  ADD_COMPILE_FLAGS(
+    row/row0import.cc
+    row/row0quiesce.cc
+    COMPILE_FLAGS "-Wno-format-truncation"
+    )
 ENDIF()
 
 MY_CHECK_CXX_COMPILER_FLAG("-Wcast-function-type" HAVE_CAST_FUNCTION_TYPE)

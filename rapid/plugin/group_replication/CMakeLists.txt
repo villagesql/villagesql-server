@@ -1,4 +1,4 @@
-# Copyright (c) 2014, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2014, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -212,6 +212,14 @@ ELSEIF(CMAKE_CXX_COMPILER_ID MATCHES "GNU" OR
   ADD_COMPILE_FLAGS(${XCOM_SUN_RPCS} ${XCOM_RPCGEN_SOURCES}
     COMPILE_FLAGS
     "-Wno-unused-variable -Wno-unused-function -Wno-conversion -Wno-switch")
+ENDIF()
+
+IF(SOLARIS AND MY_COMPILER_IS_GNU)
+  # rpcgen generates 'void bzero();'
+  ADD_COMPILE_FLAGS(${XCOM_RPCGEN_SOURCES}
+    COMPILE_FLAGS
+    "-Wno-builtin-declaration-mismatch"
+    )
 ENDIF()
 
 IF (WIN32)
