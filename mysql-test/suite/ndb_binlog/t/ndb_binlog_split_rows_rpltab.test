@@ -83,14 +83,15 @@ eval UPDATE mysql.ndb_replication
 CREATE TABLE t1 (k INT PRIMARY KEY) ENGINE = NDB;
 DROP TABLE t1;
 # Reason: If there is incorrect NULL assignment and bogus data exist,
-# set_filter function will abort the server
+# set_filter function will fail Ndb binlog setup
+--echo ## Using a BLOB column to assess that it must not fail table creation
 eval UPDATE mysql.ndb_replication
      SET binlog_type = 2, binlog_row_slice_count = NULL, binlog_row_slice_id = NULL
      WHERE table_name = "t1" AND server_id = $server4_id;
-CREATE TABLE t1 (k INT PRIMARY KEY) ENGINE = NDB;
+CREATE TABLE t1 (k INT PRIMARY KEY, b BLOB) ENGINE = NDB;
 DROP TABLE t1;
 
---echo # If values are over maximum allowed, schema check fails
+--echo # If values are over maximum allowed, schema check and table creation fail
 eval UPDATE mysql.ndb_replication
      SET binlog_type = 2, binlog_row_slice_count = 257, binlog_row_slice_id = 0
      WHERE table_name = "t1" AND server_id = $server4_id;
@@ -99,6 +100,22 @@ CREATE TABLE t1 (k INT PRIMARY KEY) ENGINE = NDB;
 SHOW WARNINGS;
 eval UPDATE mysql.ndb_replication
      SET binlog_type = 2, binlog_row_slice_count = 256, binlog_row_slice_id = 256
+     WHERE table_name = "t1" AND server_id = $server4_id;
+--error ER_CANT_CREATE_TABLE
+CREATE TABLE t1 (k INT PRIMARY KEY) ENGINE = NDB;
+SHOW WARNINGS;
+
+--echo # If one of the binlog_row_slice parameters isn't set, schema check fails
+--echo # and table creation fails
+eval UPDATE mysql.ndb_replication
+     SET binlog_type = 2, binlog_row_slice_count = 2, binlog_row_slice_id = NULL
+     WHERE table_name = "t1" AND server_id = $server4_id;
+--error ER_CANT_CREATE_TABLE
+CREATE TABLE t1 (k INT PRIMARY KEY) ENGINE = NDB;
+SHOW WARNINGS;
+
+eval UPDATE mysql.ndb_replication
+     SET binlog_type = 2, binlog_row_slice_count = NULL, binlog_row_slice_id = 0
      WHERE table_name = "t1" AND server_id = $server4_id;
 --error ER_CANT_CREATE_TABLE
 CREATE TABLE t1 (k INT PRIMARY KEY) ENGINE = NDB;
