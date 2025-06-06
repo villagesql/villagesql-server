@@ -153,6 +153,19 @@ ELSE()
   )
 ENDIF()
 
+# for SecureMemoryPool
+IF(MSVC)
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    my_aligned_malloc
+    my_aligned_free
+  )
+ELSE()
+  LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
+    _Z17my_aligned_mallocmm
+    _Z15my_aligned_freePv
+  )
+ENDIF()
+
 # charset stuff for SqlLexer.cc
 IF(WIN32)
   LIST(APPEND ROUTER_MYSQLCLIENT_EXPORTS
