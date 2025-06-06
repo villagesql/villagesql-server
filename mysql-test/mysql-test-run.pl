@@ -731,8 +731,7 @@ sub main {
   }
 
   if ($secondary_engine_support) {
-    # Setting the number of ML workers per driver
-    set_ml_workers_for_suite($opt_suites);
+    secondary_drivers_setup($opt_suites, $bindir);
   }
 
   initialize_servers();
@@ -790,10 +789,8 @@ sub main {
 
   if ($secondary_engine_support) {
     secondary_engine_offload_count_report_init();
-    # Create virtual environment
-    find_ml_driver($bindir);
     configure_encryption();
-    reserve_secondary_ports();
+    reserve_secondary_ports($bindir);
   }
 
   if ($opt_summary_report) {
