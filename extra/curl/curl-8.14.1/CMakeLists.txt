@@ -23,7 +23,7 @@
 ###########################################################################
 # by Tetetest and Sukender (Benoit Neil)
 
-cmake_minimum_required(VERSION 3.7...3.16 FATAL_ERROR)
+# cmake_minimum_required(VERSION 3.7...3.16 FATAL_ERROR)
 message(STATUS "Using CMake version ${CMAKE_VERSION}")
 
 # Collect command-line arguments for buildinfo.txt.
@@ -313,7 +313,7 @@ endif()
 
 # For debug libs and exes, add "-d" postfix
 if(NOT DEFINED CMAKE_DEBUG_POSTFIX)
-  set(CMAKE_DEBUG_POSTFIX "-d")
+#  set(CMAKE_DEBUG_POSTFIX "-d")
 endif()
 
 set(LIB_STATIC "libcurl_static")
@@ -491,7 +491,7 @@ mark_as_advanced(HTTP_ONLY)
 
 if(HTTP_ONLY)
   set(CURL_DISABLE_DICT ON)
-  set(CURL_DISABLE_FILE ON)
+# set(CURL_DISABLE_FILE ON)   Keep the FILE protocol
   set(CURL_DISABLE_FTP ON)
   set(CURL_DISABLE_GOPHER ON)
   set(CURL_DISABLE_IMAP ON)
@@ -776,7 +776,7 @@ if(_use_core_foundation_and_core_services)
 endif()
 
 if(CURL_USE_OPENSSL)
-  find_package(OpenSSL REQUIRED)
+#  find_package(OpenSSL REQUIRED)
   set(_ssl_enabled ON)
   set(USE_OPENSSL ON)
 
@@ -960,7 +960,8 @@ endif()
 # and before calling curl_openssl_check_exists().
 
 set(HAVE_LIBZ OFF)
-curl_dependency_option(CURL_ZLIB ZLIB "ZLIB")
+# Use result from cmake/zlib.cmake
+# curl_dependency_option(CURL_ZLIB ZLIB "ZLIB")
 if(ZLIB_FOUND)
   set(HAVE_LIBZ ON)
   # Depend on ZLIB via imported targets. This allows our dependents to
@@ -970,7 +971,7 @@ if(ZLIB_FOUND)
 endif()
 
 set(HAVE_BROTLI OFF)
-curl_dependency_option(CURL_BROTLI Brotli "brotli")
+# curl_dependency_option(CURL_BROTLI Brotli "brotli")
 if(BROTLI_FOUND)
   set(HAVE_BROTLI ON)
   list(APPEND CURL_LIBS ${BROTLI_LIBRARIES})
@@ -984,7 +985,7 @@ if(BROTLI_FOUND)
 endif()
 
 set(HAVE_ZSTD OFF)
-curl_dependency_option(CURL_ZSTD Zstd "zstd")
+# curl_dependency_option(CURL_ZSTD Zstd "zstd")
 if(ZSTD_FOUND)
   if(ZSTD_VERSION VERSION_GREATER_EQUAL 1.0.0)
     set(HAVE_ZSTD ON)
@@ -1008,7 +1009,9 @@ macro(curl_openssl_check_exists)
     list(APPEND CMAKE_REQUIRED_LIBRARIES OpenSSL::SSL OpenSSL::Crypto)
     list(APPEND CMAKE_REQUIRED_DEFINITIONS "-DOPENSSL_SUPPRESS_DEPRECATED")  # for SSL_CTX_set_srp_username deprecated since 3.0.0
     if(HAVE_LIBZ)
-      list(APPEND CMAKE_REQUIRED_LIBRARIES ZLIB::ZLIB)
+    # Looking for SSL_CTX_set_srp_username ....
+    # Target "cmTC_e783c" links to target "ZLIB::ZLIB" but the target was not found.
+    # list(APPEND CMAKE_REQUIRED_LIBRARIES ZLIB::ZLIB)
     endif()
     if(WIN32 AND NOT WINCE)
       list(APPEND CMAKE_REQUIRED_LIBRARIES "bcrypt")  # for OpenSSL/LibreSSL
