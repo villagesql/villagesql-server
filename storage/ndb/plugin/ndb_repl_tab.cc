@@ -25,6 +25,7 @@
 
 #include "storage/ndb/plugin/ndb_repl_tab.h"
 
+#include <climits>
 #include <cstdio>
 
 #include "mf_wcomp.h"
@@ -295,10 +296,10 @@ int Ndb_rep_tab_reader::scan_candidates(Ndb *ndb,
         row.binlog_type = NBT_DEFAULT;
       }
       if (!ra_binlog_row_slice_count || ra_binlog_row_slice_count->isNULL()) {
-        row.binlog_row_slice_count = 0;
+        row.binlog_row_slice_count = UINT_MAX;
       }
       if (!ra_binlog_row_slice_id || ra_binlog_row_slice_id->isNULL()) {
-        row.binlog_row_slice_id = 0;
+        row.binlog_row_slice_id = UINT_MAX;
       }
       if (ra_conflict_fn_spec) {
         row.set_conflict_fn_spec_null(ra_conflict_fn_spec->isNULL() == 1);
@@ -438,21 +439,33 @@ int Ndb_rep_tab_reader::lookup(Ndb *ndb,
       binlog_row_slice_count = best_match_row.binlog_row_slice_count;
       binlog_row_slice_id = best_match_row.binlog_row_slice_id;
 
-      // Row slice values were read. Validate values
-      if (binlog_row_slice_count > 0) {
-        // Maximum count is 256
+      // Validate row slice values if one of the members is not null
+      if (binlog_row_slice_count != UINT_MAX ||
+          binlog_row_slice_id != UINT_MAX) {
+        // At least one parameters is specified
+        if (binlog_row_slice_count == UINT_MAX) {
+          // Count must not be NULL when slice-id is set
+          error_str = "NULL binlog_row_slice_count.";
+          error = -2;
+          break;
+        }
         if (binlog_row_slice_count > 256) {
-          error_str = "Invalid binlog_row_slice_count value (> 256)";
+          // Maximum count is 256
+          error_str = "Invalid binlog_row_slice_count value. Range: [1,256].";
           error = -2;
           break;
         }
-        // Maximum id is count - 1
         if (binlog_row_slice_id >= binlog_row_slice_count) {
+          // Maximum id is count - 1
           error_str =
-              "Invalid binlog_row_slice_id value (>= binlog_row_slice_count)";
+              "Invalid binlog_row_slice_id value. Range: [0, slice_count).";
           error = -2;
           break;
         }
+      } else {
+        // defaults
+        binlog_row_slice_count = 1;
+        binlog_row_slice_id = 0;
       }
 
       if (best_match_row.cfs_is_null) {

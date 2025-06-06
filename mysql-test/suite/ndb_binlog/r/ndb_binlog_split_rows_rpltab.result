@@ -54,12 +54,13 @@ SET binlog_type = 2, binlog_row_slice_count = 2, binlog_row_slice_id = 1
 WHERE table_name = "t1" AND server_id = 4;
 CREATE TABLE t1 (k INT PRIMARY KEY) ENGINE = NDB;
 DROP TABLE t1;
+## Using a BLOB column to assess that it must not fail table creation
 UPDATE mysql.ndb_replication
 SET binlog_type = 2, binlog_row_slice_count = NULL, binlog_row_slice_id = NULL
 WHERE table_name = "t1" AND server_id = 4;
-CREATE TABLE t1 (k INT PRIMARY KEY) ENGINE = NDB;
+CREATE TABLE t1 (k INT PRIMARY KEY, b BLOB) ENGINE = NDB;
 DROP TABLE t1;
-# If values are over maximum allowed, schema check fails
+# If values are over maximum allowed, schema check and table creation fail
 UPDATE mysql.ndb_replication
 SET binlog_type = 2, binlog_row_slice_count = 257, binlog_row_slice_id = 0
 WHERE table_name = "t1" AND server_id = 4;
@@ -67,7 +68,7 @@ CREATE TABLE t1 (k INT PRIMARY KEY) ENGINE = NDB;
 ERROR HY000: Can't create table 't1' (use SHOW WARNINGS for more info).
 SHOW WARNINGS;
 Level	Code	Message
-Warning	1625	Bad schema for mysql.ndb_replication table. Message: Invalid binlog_row_slice_count value (> 256)
+Warning	1625	Bad schema for mysql.ndb_replication table. Message: Invalid binlog_row_slice_count value. Range: [1,256].
 Warning	1815	Failed to create event operation
 Error	1005	Can't create table 't1' (use SHOW WARNINGS for more info).
 UPDATE mysql.ndb_replication
@@ -77,7 +78,29 @@ CREATE TABLE t1 (k INT PRIMARY KEY) ENGINE = NDB;
 ERROR HY000: Can't create table 't1' (use SHOW WARNINGS for more info).
 SHOW WARNINGS;
 Level	Code	Message
-Warning	1625	Bad schema for mysql.ndb_replication table. Message: Invalid binlog_row_slice_id value (>= binlog_row_slice_count)
+Warning	1625	Bad schema for mysql.ndb_replication table. Message: Invalid binlog_row_slice_id value. Range: [0, slice_count).
+Warning	1815	Failed to create event operation
+Error	1005	Can't create table 't1' (use SHOW WARNINGS for more info).
+# If one of the binlog_row_slice parameters isn't set, schema check fails
+# and table creation fails
+UPDATE mysql.ndb_replication
+SET binlog_type = 2, binlog_row_slice_count = 2, binlog_row_slice_id = NULL
+WHERE table_name = "t1" AND server_id = 4;
+CREATE TABLE t1 (k INT PRIMARY KEY) ENGINE = NDB;
+ERROR HY000: Can't create table 't1' (use SHOW WARNINGS for more info).
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1625	Bad schema for mysql.ndb_replication table. Message: Invalid binlog_row_slice_id value. Range: [0, slice_count).
+Warning	1815	Failed to create event operation
+Error	1005	Can't create table 't1' (use SHOW WARNINGS for more info).
+UPDATE mysql.ndb_replication
+SET binlog_type = 2, binlog_row_slice_count = NULL, binlog_row_slice_id = 0
+WHERE table_name = "t1" AND server_id = 4;
+CREATE TABLE t1 (k INT PRIMARY KEY) ENGINE = NDB;
+ERROR HY000: Can't create table 't1' (use SHOW WARNINGS for more info).
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1625	Bad schema for mysql.ndb_replication table. Message: NULL binlog_row_slice_count.
 Warning	1815	Failed to create event operation
 Error	1005	Can't create table 't1' (use SHOW WARNINGS for more info).
 # #######################################################################
