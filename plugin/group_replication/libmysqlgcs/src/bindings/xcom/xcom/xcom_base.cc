@@ -6879,11 +6879,11 @@ int reply_handler_task(task_arg arg) {
     {
       unchecked_replace_pax_msg(&ep->reply, pax_msg_new_0(null_synode));
 
-      ADD_DBG(D_NONE, add_event(EVENT_DUMP_PAD, string_arg("ep->s->con.fd"));
-              add_event(EVENT_DUMP_PAD, int_arg(ep->s->con.fd)););
+      ADD_DBG(D_NONE, add_event(EVENT_DUMP_PAD, string_arg("ep->s->con->fd"));
+              add_event(EVENT_DUMP_PAD, int_arg(ep->s->con->fd)););
       TASK_CALL(read_msg(ep->s->con, ep->reply, ep->s, &n));
-      ADD_DBG(D_NONE, add_event(EVENT_DUMP_PAD, string_arg("ep->s->con.fd"));
-              add_event(EVENT_DUMP_PAD, int_arg(ep->s->con.fd)););
+      ADD_DBG(D_NONE, add_event(EVENT_DUMP_PAD, string_arg("ep->s->con->fd"));
+              add_event(EVENT_DUMP_PAD, int_arg(ep->s->con->fd)););
       ep->reply->refcnt = 1; /* Refcnt from other end is void here */
       if (n <= 0) {
         shutdown_connection(ep->s->con);

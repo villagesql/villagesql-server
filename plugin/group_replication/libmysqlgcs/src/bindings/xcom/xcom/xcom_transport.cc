@@ -1690,7 +1690,7 @@ int sender_task(task_arg arg) {
               D_TRANSPORT,
               add_event(EVENT_DUMP_PAD, string_arg("will use protocol"));
               add_event(EVENT_DUMP_PAD,
-                        string_arg(xcom_proto_to_str(ep->s->con.x_proto))););
+                        string_arg(xcom_proto_to_str(ep->s->con->x_proto))););
         }
       }
     next:
