@@ -89,6 +89,12 @@ void Dup::report(const dfield_t *dfield) noexcept {
   }
 }
 
+void Dup::report() noexcept {
+  if (m_entry != nullptr) {
+    innobase_fields_to_mysql(m_table, m_index, m_entry);
+  }
+}
+
 dberr_t pread(os_fd_t fd, void *ptr, size_t len, os_offset_t offset) noexcept {
   IF_ENABLED("ddl_read_failure", return DB_IO_ERROR;)
 
