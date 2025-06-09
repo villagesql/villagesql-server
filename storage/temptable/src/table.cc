@@ -39,6 +39,7 @@ TempTable Table implementation. */
 #include "mysqld_error.h"
 #include "sql/field.h"
 #include "sql/key.h"
+#include "sql/sql_class.h"
 #include "sql/table.h"
 #include "storage/temptable/include/temptable/allocator.h"
 #include "storage/temptable/include/temptable/block.h"
