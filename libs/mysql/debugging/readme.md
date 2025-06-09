@@ -34,3 +34,17 @@ Code documentation: @ref GroupLibsMysqlDebugging.
 
 This library provides general-purpose debugging tools.  Currently, it contains
 the following:
+
+- unittest_assertions.h: The following test assertions:
+
+  - macro ASSERT_VOID(x): assert at compile-time that the result type from
+    expression `x` is void, and execute `x`.
+
+  - macro ASSERT_OK(x): assert that x == mysql::utils::Return_status::ok
+
+  - macro ASSERT_ERROR(x): assert that x == mysql::utils::Return_status::error
+
+  - test_eq(x, y): assert that x==y, y==x, !(x!=y), !(y!=x)
+
+  - test_cmp(x, y, OP): assert that (x OP y)==(n OP 0), where OP is one
+    of ==, !=, <, <=, >, >=, or <=>.

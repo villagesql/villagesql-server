@@ -22,6 +22,7 @@
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 
 SET(TARGET_HEADERS
+  unittest_assertions.h
 )
 
 SET(TARGET_SRCS
