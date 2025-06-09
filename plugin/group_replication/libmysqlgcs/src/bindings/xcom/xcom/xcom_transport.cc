@@ -605,7 +605,7 @@ static server *mksrv(char *srv, xcom_port port) {
 
   XCOM_IFDBG(D_NONE, FN; PTREXP(s); STREXP(srv));
   if (s == nullptr) {
-    g_critical("out of memory");
+    G_FATAL("out of memory");
     abort();
   }
   s->garbage = 0;

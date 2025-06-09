@@ -1476,9 +1476,9 @@ int xcom_taskmain2(xcom_port listen_port) {
         net_manager.start_active_network_provider();
     if (error_starting_network_provider) {
       /* purecov: begin inspected */
-      g_critical("Unable to start %s Network Provider",
-                 Communication_stack_to_string::to_string(
-                     net_manager.get_running_protocol()));
+      G_FATAL("Unable to start %s Network Provider",
+              Communication_stack_to_string::to_string(
+                  net_manager.get_running_protocol()));
       if (xcom_comms_cb) {
         xcom_comms_cb(XCOM_COMMS_ERROR);
       }
@@ -1496,7 +1496,7 @@ int xcom_taskmain2(xcom_port listen_port) {
       {
         if (pipe(pipe_signal_connections) == -1) {
           /* purecov: begin inspected */
-          g_critical("Unable to start local signaling mechanism");
+          G_FATAL("Unable to start local signaling mechanism");
           if (xcom_comms_cb) {
             xcom_comms_cb(XCOM_COMMS_ERROR);
           }
@@ -2541,7 +2541,7 @@ static int proposer_task(task_arg arg) {
       assert(ep->client_msg->p);
       replace_pax_msg(&ep->p->proposer.msg, clone_pax_msg(ep->client_msg->p));
       if (ep->p->proposer.msg == nullptr) {
-        g_critical(
+        G_FATAL(
             "Node %u has run out of memory while sending a message and "
             "will now exit.",
             get_nodeno(proposer_site));
@@ -6316,10 +6316,10 @@ static void process_die_op(site_def const *site, pax_msg *p,
   */
   if (!synode_lt(p->synode, executed_msg)) {
     ADD_DBG(D_FSM, add_event(EVENT_DUMP_PAD, string_arg("terminating"));)
-    g_critical("Node %u is unable to get message {%x %" PRIu64
-               " %u}, since the group is too far "
-               "ahead. Node will now exit.",
-               get_nodeno(site), SY_MEM(p->synode));
+    G_FATAL("Node %u is unable to get message {%x %" PRIu64
+            " %u}, since the group is too far "
+            "ahead. Node will now exit.",
+            get_nodeno(site), SY_MEM(p->synode));
     terminate_and_exit();
   }
 }
@@ -6498,8 +6498,8 @@ pax_msg *dispatch_op(site_def const *site, pax_msg *p, linkage *reply_queue) {
   }
 
   if (oom_abort) {
-    g_critical("Node %u has run out of memory and will now exit.",
-               get_nodeno(site));
+    G_FATAL("Node %u has run out of memory and will now exit.",
+            get_nodeno(site));
     terminate_and_exit();
   }
   return (p);
