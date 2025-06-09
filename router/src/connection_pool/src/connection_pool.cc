@@ -192,8 +192,9 @@ ConnectionPool::add_if_not_full(ConnectionPool::ServerSideConnection conn) {
 
         conn.prepare_for_pool();
 
+        auto endpoint = conn.endpoint();
         auto it = pool.emplace(
-            conn.endpoint(),
+            std::move(endpoint),
             std::make_shared<PooledConnection<ServerSideConnection>>(
                 std::move(conn)));
 
