@@ -23789,18 +23789,11 @@ number.
 @return the field's new value if it's updated, otherwise nullptr */
 static const dfield_t *innobase_get_field_from_update_vector(
     const upd_t *update, uint32_t col_no) {
-  const dict_table_t *const table = update->table;
-  const dict_index_t *const clustered_index = table->first_index();
+  const dict_index_t *const clustered_index = update->table->first_index();
   const auto index_field_pos = clustered_index->get_col_pos(col_no);
-
-  for (uint32_t j = 0; j < update->n_fields; j++) {
-    const upd_field_t *const ufield = &update->fields[j];
-    if (ufield->field_no == index_field_pos) {
-      return &ufield->new_val;
-    }
-  }
-
-  return (nullptr);
+  const upd_field_t *const upd_field =
+      upd_get_field_by_field_no(update, index_field_pos, false);
+  return upd_field ? &upd_field->new_val : nullptr;
 }
 
 dfield_t *innobase_get_computed_value(
