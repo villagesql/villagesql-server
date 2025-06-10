@@ -13152,6 +13152,15 @@ ER_SERVER_MEMORY_OPTION_INVALID
 ER_WARN_KEYRING_PLUGIN_DEPRECTED
   eng "Plugin %s is of the deprecated keyring plugin type. Please use the corresponding keyring component instead."
 
+ER_AUDIT_LOG_OFFLOAD_INFO
+  eng "%s"
+
+ER_AUDIT_LOG_OFFLOAD_WARNING
+  eng "%s"
+
+ER_AUDIT_LOG_OFFLOAD_ERROR
+  eng "%s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
