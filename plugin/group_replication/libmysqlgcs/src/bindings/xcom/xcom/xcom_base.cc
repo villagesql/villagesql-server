@@ -2524,8 +2524,8 @@ static int proposer_task(task_arg arg) {
 
       TASK_CALL(wait_for_cache(&ep->p, ep->msgno, 60));
       if (!ep->p) {
-        G_MESSAGE("Could not get a pax_machine for msgno %lu. Retrying",
-                  (unsigned long)ep->msgno.msgno);
+        G_INFO("Could not get a pax_machine for msgno %lu. Retrying",
+               (unsigned long)ep->msgno.msgno);
         goto retry_new;
       }
 
@@ -5634,7 +5634,7 @@ static u_int allow_add_node(app_data_ptr a) {
   }
 
   if (add_node_unsafe_against_ipv4_old_nodes(a)) {
-    G_MESSAGE(
+    G_INFO(
         "This server is unable to join the group as the NIC used is "
         "configured "
         "with IPv6 only and there are members in the group that are unable "
@@ -5710,14 +5710,14 @@ static u_int allow_remove_node(app_data_ptr a) {
         We also cannot allow an upper-layer to remove a new incarnation
         of a node when it tries to remove an old one.
         */
-        G_MESSAGE(
+        G_INFO(
             "New incarnation found while trying to "
             "remove node %s %.*s.",
             nodes_to_change[i].address, nodes_to_change[i].uuid.data.data_len,
             nodes_to_change[i].uuid.data.data_val);
       } else {
         /* The node has already been removed, so we block the request */
-        G_MESSAGE(
+        G_INFO(
             "Node has already been removed: "
             "%s %.*s.",
             nodes_to_change[i].address, nodes_to_change[i].uuid.data.data_len,
@@ -8426,8 +8426,7 @@ static xcom_send_app_wait_result xcom_send_app_wait_and_get(
     }
   } while (--retry_count);
   /* Timeout after REQUEST_RETRY has been received 'retry_count' times */
-  G_MESSAGE(
-      "Request failed: maximum number of retries (10) has been exhausted.");
+  G_INFO("Request failed: maximum number of retries (10) has been exhausted.");
   return RETRIES_EXCEEDED;
 }
 
