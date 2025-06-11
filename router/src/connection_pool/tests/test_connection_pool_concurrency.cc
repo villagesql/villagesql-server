@@ -29,6 +29,7 @@
 #include "mysql/harness/net_ts/socket.h"
 #include "mysql/harness/net_ts/timer.h"
 #include "mysqlrouter/connection_pool.h"
+#include "router_test_helpers.h"  // init_windows_sockets
 
 #include <gtest/gtest.h>
 
@@ -85,7 +86,9 @@ class PoolAdder {
 
     if (!connect_res) {
       auto ec = connect_res.error();
-      ASSERT_EQ(ec, std::errc::operation_in_progress) << ec.message();
+      ASSERT_TRUE(ec == std::errc::operation_in_progress ||
+                  ec == std::errc::operation_would_block)
+          << ec.message();
 
       auto wait_res = sock.wait(net::socket_base::wait_write);
       ASSERT_NO_ERROR(wait_res);
@@ -148,7 +151,9 @@ class StashAdder {
 
     if (!connect_res) {
       auto ec = connect_res.error();
-      ASSERT_EQ(ec, std::errc::operation_in_progress) << ec.message();
+      ASSERT_TRUE(ec == std::errc::operation_in_progress ||
+                  ec == std::errc::operation_would_block)
+          << ec.message();
 
       auto wait_res = sock.wait(net::socket_base::wait_write);
       ASSERT_NO_ERROR(wait_res);
@@ -248,9 +253,7 @@ TEST(ConnectionPoolTest, concurrent_pool_access) {
       // cleanup the closed client connections.
 
       auto cur = client_sockets.begin();
-      auto end = client_sockets.end();
-
-      for (; cur != end;) {
+      for (; cur != client_sockets.end();) {
         if (socket_is_alive(cur->native_handle())) {
           ++cur;
         } else {
@@ -365,9 +368,8 @@ TEST(ConnectionPoolTest, concurrent_stash_access) {
       // cleanup the closed client connections.
 
       auto cur = client_sockets.begin();
-      auto end = client_sockets.end();
 
-      for (; cur != end;) {
+      for (; cur != client_sockets.end();) {
         if (socket_is_alive(cur->native_handle())) {
           ++cur;
         } else {
@@ -439,6 +441,7 @@ TEST(ConnectionPoolTest, concurrent_stash_access) {
 
 int main(int argc, char *argv[]) {
   TlsLibraryContext lib_ctx;
+  init_windows_sockets();
 
   ::testing::InitGoogleTest(&argc, argv);
 
