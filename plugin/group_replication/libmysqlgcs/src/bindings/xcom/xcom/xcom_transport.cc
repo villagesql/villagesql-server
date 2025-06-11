@@ -1511,7 +1511,7 @@ int sender_task(task_arg arg) {
 
   while (!xcom_shutdown) {
     /* Loop until connected */
-    G_MESSAGE("Connecting to %s:%d", ep->s->srv, ep->s->port);
+    G_INFO("Connecting to %s:%d", ep->s->srv, ep->s->port);
     for (;;) {
       if (ep->attempt_connect) {
 #if defined(_WIN32)
@@ -1538,7 +1538,7 @@ int sender_task(task_arg arg) {
         if (ep->dtime < MAX_CONNECT_WAIT) {
           if (ep->dial_call_log_level !=
               network_provider_dynamic_log_level::DEBUG) {
-            G_MESSAGE("Connection to %s:%d failed", ep->s->srv, ep->s->port);
+            G_INFO("Connection to %s:%d failed", ep->s->srv, ep->s->port);
           }
         }
 
@@ -1558,7 +1558,7 @@ int sender_task(task_arg arg) {
             ep->s->reconnect = false;
 #endif
 
-            G_MESSAGE(
+            G_INFO(
                 "Connection attempts to %s:%d stopped because this server "
                 "belongs to a previous connfiguration",
                 ep->s->srv, ep->s->port);
@@ -1577,7 +1577,7 @@ int sender_task(task_arg arg) {
           ep->s->reconnect = true;
 #endif
 
-          G_MESSAGE(
+          G_INFO(
               "Connection attempts to %s:%d resumed because this server "
               "belongs to the current connfiguration",
               ep->s->srv, ep->s->port);
@@ -1598,7 +1598,7 @@ int sender_task(task_arg arg) {
       }
     }
 
-    G_MESSAGE("Connected to %s:%d", ep->s->srv, ep->s->port);
+    G_INFO("Connected to %s:%d", ep->s->srv, ep->s->port);
     ep->dtime = INITIAL_CONNECT_WAIT;
 #if defined(_WIN32)
     ep->was_connected = true;
@@ -1697,7 +1697,7 @@ int sender_task(task_arg arg) {
       msg_link_delete(&ep->link);
       /* TASK_YIELD; */
     }
-    G_MESSAGE("Sender task disconnected from %s:%d", ep->s->srv, ep->s->port);
+    G_INFO("Sender task disconnected from %s:%d", ep->s->srv, ep->s->port);
   }
   FINALLY
   empty_msg_channel(&ep->s->outgoing);
