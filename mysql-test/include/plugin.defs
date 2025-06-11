@@ -207,3 +207,6 @@ component_test_component_init_then_register     plugin_output_directory  no  COM
 
 # deinit no deadlock test component
 component_test_component_deinit_no_deadlock     plugin_output_directory  no  COMPONENT_TEST_COMPONENT_DEINIT_NO_DEADLOCK
+
+# init fail test component
+component_test_component_init_fail     plugin_output_directory  no  COMPONENT_TEST_COMPONENT_INIT_FAIL

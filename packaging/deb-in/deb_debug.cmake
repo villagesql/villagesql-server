@@ -123,6 +123,7 @@ usr/lib/mysql/plugin/debug/component_test_mysql_current_thread_reader.so
 usr/lib/mysql/plugin/debug/component_test_mysql_runtime_error.so
 usr/lib/mysql/plugin/debug/component_test_component_deinit.so
 usr/lib/mysql/plugin/debug/component_test_component_deinit_no_deadlock.so
+usr/lib/mysql/plugin/debug/component_test_component_init_fail.so
 usr/lib/mysql/plugin/debug/component_test_component_init_then_register.so
 usr/lib/mysql/plugin/debug/component_test_mysql_command_services.so
 usr/lib/mysql/plugin/debug/test_services_command_services.so

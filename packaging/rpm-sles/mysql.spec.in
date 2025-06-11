@@ -1286,6 +1286,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_table_access.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_deinit.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_deinit_no_deadlock.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_init_fail.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_init_then_register.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_command_services.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_execute_prepared_statement.so
@@ -1402,6 +1403,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_table_access.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_deinit.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_deinit_no_deadlock.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_init_fail.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_init_then_register.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_mysql_command_services.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/test_services_command_services.so
@@ -1579,6 +1581,9 @@ fi
 %endif # with_router
 
 %changelog
+* Wed Jun 11 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.5.0-1
+- Added component_test_component_init_fail
+
 * Tue May 27 2025 Michal Jankowski <michal.jankowski@oracle.com> - 9.4.0-1
 - Added component_firewall.so
 
