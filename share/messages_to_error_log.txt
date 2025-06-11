@@ -13161,6 +13161,9 @@ ER_AUDIT_LOG_OFFLOAD_WARNING
 ER_AUDIT_LOG_OFFLOAD_ERROR
   eng "%s"
 
+ER_WARN_SERVER_MEMORY_INIT_FAIL
+  eng "Failed to read or validate server_memory, and falling back to total physical memory."
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
