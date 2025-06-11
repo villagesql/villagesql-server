@@ -335,6 +335,7 @@ for p in \
          component_test_mysql_system_variable_set.so \
          component_test_component_deinit.so \
          component_test_component_deinit_no_deadlock.so \
+         component_test_component_init_fail.so \
          component_test_component_init_then_register.so \
          component_test_global_priv_registration.so \
          component_test_mysql_command_services.so \
@@ -719,6 +720,9 @@ rm -r $(readlink var) var
 %dir %attr(750, mysql, mysql) /var/lib/mysql-keyring
 
 %changelog
+* Wed Jun 11 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.5.0-1
+- Added component_test_component_init_fail
+
 * Tue May 27 2025 Michal Jankowski <michal.jankowski@oracle.com> - 9.4.0-1
 - Added component_firewall.so
 

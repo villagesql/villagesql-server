@@ -1,7 +1,3 @@
---source include/have_debug.inc
---source include/not_windows.inc
---source include/not_ubuntu.inc
---source include/not_mac_os.inc
 --source include/have_component_init_then_register.inc
 
 --echo #
@@ -10,16 +6,11 @@
 --echo #
 
 --echo
---echo # force the component init() to fail and expect an error
-SET DEBUG = '+d,force_component_init_failure';
+--echo # load the component with init() which allways fails
 --error ER_COMPONENTS_LOAD_CANT_INITIALIZE
-INSTALL COMPONENT "file://component_test_component_init_then_register";
-
---echo
---echo # unset debug flag for cleanup
-SET DEBUG = '-d,force_component_init_failure';
+INSTALL COMPONENT "file://component_test_component_init_fail";
 
 --echo
 --echo # check the component is not installed
-SELECT COUNT(component_urn) FROM mysql.component WHERE component_urn='file://component_test_component_init_then_register';
+SELECT COUNT(component_urn) FROM mysql.component WHERE component_urn='file://component_test_component_init_fail';
 

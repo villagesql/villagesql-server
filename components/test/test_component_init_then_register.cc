@@ -23,7 +23,6 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include <mysql/components/component_implementation.h>
 
-#include "my_dbug.h"  // DBUG_EXECUTE_IF
 /**
   This file contains a definition of the test_component_init_then_register.
   This component is used to test a dynamic loader bahavior, which is altered
@@ -58,7 +57,6 @@ static bool component_is_initialized = false;
   @retval non-zero failure
 */
 mysql_service_status_t test_init() {
-  DBUG_EXECUTE_IF("force_component_init_failure", return (1););
   if (component_is_initialized) return 1;
 
   // we register the service which is also a PROVIDED service.

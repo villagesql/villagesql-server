@@ -3,15 +3,11 @@
 # for case when component's init() fails.
 #
 
-# force the component init() to fail and expect an error
-SET DEBUG = '+d,force_component_init_failure';
-INSTALL COMPONENT "file://component_test_component_init_then_register";
-ERROR HY000: Initialization method provided by component 'mysql:test_component_init_then_register' failed.
-
-# unset debug flag for cleanup
-SET DEBUG = '-d,force_component_init_failure';
+# load the component with init() which allways fails
+INSTALL COMPONENT "file://component_test_component_init_fail";
+ERROR HY000: Initialization method provided by component 'mysql:test_component_init_fail' failed.
 
 # check the component is not installed
-SELECT COUNT(component_urn) FROM mysql.component WHERE component_urn='file://component_test_component_init_then_register';
+SELECT COUNT(component_urn) FROM mysql.component WHERE component_urn='file://component_test_component_init_fail';
 COUNT(component_urn)
 0
