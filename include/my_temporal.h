@@ -32,16 +32,13 @@
   Server classes for temporal handling (DATE, TIME, DATETIME)
 */
 
-class Time_val;
-struct Interval;
+#include <stdint.h>  // for uint32_t, uint64_t, int64_t, int32_t, uint8_t
+#include <stdlib.h>  // for abs, size_t
+#include <cassert>   // for assert
+#include <string>    // for string
 
-#include "my_time.h"
-#include "mysql_time.h"
-
-#include <sys/types.h>
-#include <cassert>
-#include <iostream>
-#include <limits>
+#include "my_time.h"     // for SECS_PER_MIN, SECS_PER_HOUR, Interval (ptr o...
+#include "mysql_time.h"  // for MYSQL_TIME, enum_mysql_timestamp_type
 
 /**
   Time_val is a temporal type that represents only time.

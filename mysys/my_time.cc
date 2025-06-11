@@ -45,18 +45,25 @@
 
 #include "my_time.h"
 
+#include <sys/types.h>
+#include <time.h>
 #include <algorithm>  // std::max
-#include <cassert>    // assert
-#include <cctype>     // std::isspace
-#include <climits>    // UINT_MAX
-#include <cstdio>     // std::sprintf
-#include <cstring>    // std::memset
+#include <cassert>
+#include <cctype>   // std::isspace
+#include <climits>  // UINT_MAX
+#include <cstdint>
+#include <cstdio>   // std::sprintf
+#include <cstdlib>  // std::for abs
+#include <cstring>  // std::memset
 
 #include "field_types.h"     // enum_field_types
 #include "integer_digits.h"  // count_digits, write_digits, write_two_digits
 #include "my_byteorder.h"    // int3store
-#include "my_systime.h"      // localtime_r
-#include "myisampack.h"      // mi_int2store
+#include "my_inttypes.h"     // longlong, ulonglong, uchar
+#include "my_systime.h"      // IWYU pragma: keep localtime_r
+#include "my_time_t.h"
+#include "myisampack.h"  // mi_int2store
+#include "mysql_time.h"
 #include "template_utils.h"  // pointer_cast
 
 const ulonglong log_10_int[20] = {1,

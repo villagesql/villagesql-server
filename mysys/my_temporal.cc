@@ -31,10 +31,11 @@
 */
 
 #include "my_temporal.h"
-#include <sstream>
 
-#include "myisampack.h"  // mi_int2store
-#include "mysql_time.h"
+#include <stdio.h>       // for sprintf
+#include <sys/types.h>   // for uint
+#include "myisampack.h"  // for mi_uint3korr, mi_int3store, mi_uint2korr
+#include "mysql_time.h"  // for MYSQL_TIME, enum_mysql_timestamp_type
 
 using namespace std;
 

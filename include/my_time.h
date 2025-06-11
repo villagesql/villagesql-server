@@ -33,21 +33,12 @@
   Interface for low level time utilities.
 */
 
-#include "my_config.h"
-
-#include <assert.h>  // assert
+#include <time.h>  // time_t
 #include <algorithm>
-#include <cstddef>  // std::size_t
+#include <cassert>  // assert
 #include <cstdint>  // std::int32_t
 #include <cstring>  // strncpy
 #include <limits>   // std::numeric_limits
-
-#ifdef HAVE_SYS_TIME_H
-#include <sys/time.h>  // struct timeval
-#endif                 /* HAVE_SYS_TIME_H */
-#ifdef _WIN32
-#include <winsock2.h>  // struct timeval
-#endif                 /* _WIN32 */
 
 #include "field_types.h"
 #include "my_time_t.h"
