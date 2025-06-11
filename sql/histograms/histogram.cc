@@ -1258,12 +1258,21 @@ static bool fill_value_maps(const Mem_root_array<HistogramSetting> &settings,
 
     res = table->file->ha_sample_next(scan_ctx, table->record[0]);
 
-    DBUG_EXECUTE_IF(
-        "sample_read_sample_half", static uint count = 1;
-        if (count == std::max(1ULL, table->file->stats.records) / 2) {
-          res = HA_ERR_END_OF_FILE;
-          break;
-        } ++count;);
+    DBUG_EXECUTE_IF("sample_read_sample_five", {
+      // Use thread_local not to have interference from background threads.
+      static thread_local uint count = 1;
+
+      // Decided to use a constant value instead of stats. That's because
+      // stats values are estimates. Sometimes they are updated during the
+      // iteration over records.
+      if (count == 5) {
+        res = HA_ERR_END_OF_FILE;
+        count = 1;  // reset count to have the same effect in every call of
+                    // fill_value_maps
+        break;
+      }
+      ++count;
+    });
   }
 
   if (res != HA_ERR_END_OF_FILE) return true; /* purecov: deadcode */
