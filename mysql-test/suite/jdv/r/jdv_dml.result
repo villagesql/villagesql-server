@@ -8,9 +8,9 @@ WITH (INSERT, UPDATE, DELETE)
 FROM t1;
 SELECT * FROM dv0;
 data
-{"_id": 0, "kt1c2": 0, "_metadata": {"etag": "7120281344652076322"}}
-{"_id": 1, "kt1c2": 1, "_metadata": {"etag": "16927677231443708220"}}
-{"_id": 2, "kt1c2": 2, "_metadata": {"etag": "13004248409575512764"}}
+{"_id": 0, "kt1c2": 0, "_metadata": {"etag": "ec974eef84da06c8fc225f21ea139b79"}}
+{"_id": 1, "kt1c2": 1, "_metadata": {"etag": "6966e3323782195471df738f91d8a3b1"}}
+{"_id": 2, "kt1c2": 2, "_metadata": {"etag": "e612272fdb58935f3d593e83c7719385"}}
 INSERT INTO dv0 VALUES ('{ "_id": 3, "kt1c2": 3}');
 ERROR HY000: Feature not available in this edition.
 UPDATE dv0 SET data = JSON_REPLACE(data, '$."kt1c2"', 6)

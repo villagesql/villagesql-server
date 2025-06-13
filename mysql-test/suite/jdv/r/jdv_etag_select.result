@@ -29,9 +29,9 @@ JSON_DUALITY_OBJECT(
 "way-1:  Explicit function call"
 SELECT data FROM dv_float;
 data
-{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
-{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
-{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}
 "way-2: Make above function implicit during JDV SELECT callflow"
 CREATE TABLE t1 (f1 INT PRIMARY KEY, f2 int);
 INSERT INTO t1 VALUES (0, 0), (1, 10), (2, 20);
@@ -39,64 +39,64 @@ CREATE JSON DUALITY VIEW dv_test AS SELECT JSON_DUALITY_OBJECT(WITH (INSERT, UPD
 Query with single duality view.
 SELECT * FROM dv_test;
 data
-{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
-{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
-{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
+{"_id": 0, "_metadata": {"etag": "61f0413df077b44a2e4ccd9f59c9c223"}}
+{"_id": 1, "_metadata": {"etag": "5d8117b25a3d3a4bbaba1ef5aa787145"}}
+{"_id": 2, "_metadata": {"etag": "69770f38c13625a1a3ce1549ee5a878c"}}
 Query with two duality view.
 SELECT * FROM dv_test a, dv_test b;
 data	data
-{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}	{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
-{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}	{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
-{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}	{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
-{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}	{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
-{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}	{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
-{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}	{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
-{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}	{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
-{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}	{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
-{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}	{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
+{"_id": 0, "_metadata": {"etag": "61f0413df077b44a2e4ccd9f59c9c223"}}	{"_id": 0, "_metadata": {"etag": "61f0413df077b44a2e4ccd9f59c9c223"}}
+{"_id": 0, "_metadata": {"etag": "61f0413df077b44a2e4ccd9f59c9c223"}}	{"_id": 1, "_metadata": {"etag": "5d8117b25a3d3a4bbaba1ef5aa787145"}}
+{"_id": 0, "_metadata": {"etag": "61f0413df077b44a2e4ccd9f59c9c223"}}	{"_id": 2, "_metadata": {"etag": "69770f38c13625a1a3ce1549ee5a878c"}}
+{"_id": 1, "_metadata": {"etag": "5d8117b25a3d3a4bbaba1ef5aa787145"}}	{"_id": 0, "_metadata": {"etag": "61f0413df077b44a2e4ccd9f59c9c223"}}
+{"_id": 1, "_metadata": {"etag": "5d8117b25a3d3a4bbaba1ef5aa787145"}}	{"_id": 1, "_metadata": {"etag": "5d8117b25a3d3a4bbaba1ef5aa787145"}}
+{"_id": 1, "_metadata": {"etag": "5d8117b25a3d3a4bbaba1ef5aa787145"}}	{"_id": 2, "_metadata": {"etag": "69770f38c13625a1a3ce1549ee5a878c"}}
+{"_id": 2, "_metadata": {"etag": "69770f38c13625a1a3ce1549ee5a878c"}}	{"_id": 0, "_metadata": {"etag": "61f0413df077b44a2e4ccd9f59c9c223"}}
+{"_id": 2, "_metadata": {"etag": "69770f38c13625a1a3ce1549ee5a878c"}}	{"_id": 1, "_metadata": {"etag": "5d8117b25a3d3a4bbaba1ef5aa787145"}}
+{"_id": 2, "_metadata": {"etag": "69770f38c13625a1a3ce1549ee5a878c"}}	{"_id": 2, "_metadata": {"etag": "69770f38c13625a1a3ce1549ee5a878c"}}
 Query with duality view in sub-query.
 SELECT * FROM dv_test a, dv_test b WHERE EXISTS (SELECT * FROM dv_test);
 data	data
-{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}	{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
-{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}	{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
-{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}	{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
-{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}	{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
-{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}	{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
-{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}	{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
-{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}	{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
-{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}	{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
-{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}	{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
+{"_id": 0, "_metadata": {"etag": "61f0413df077b44a2e4ccd9f59c9c223"}}	{"_id": 0, "_metadata": {"etag": "61f0413df077b44a2e4ccd9f59c9c223"}}
+{"_id": 0, "_metadata": {"etag": "61f0413df077b44a2e4ccd9f59c9c223"}}	{"_id": 1, "_metadata": {"etag": "5d8117b25a3d3a4bbaba1ef5aa787145"}}
+{"_id": 0, "_metadata": {"etag": "61f0413df077b44a2e4ccd9f59c9c223"}}	{"_id": 2, "_metadata": {"etag": "69770f38c13625a1a3ce1549ee5a878c"}}
+{"_id": 1, "_metadata": {"etag": "5d8117b25a3d3a4bbaba1ef5aa787145"}}	{"_id": 0, "_metadata": {"etag": "61f0413df077b44a2e4ccd9f59c9c223"}}
+{"_id": 1, "_metadata": {"etag": "5d8117b25a3d3a4bbaba1ef5aa787145"}}	{"_id": 1, "_metadata": {"etag": "5d8117b25a3d3a4bbaba1ef5aa787145"}}
+{"_id": 1, "_metadata": {"etag": "5d8117b25a3d3a4bbaba1ef5aa787145"}}	{"_id": 2, "_metadata": {"etag": "69770f38c13625a1a3ce1549ee5a878c"}}
+{"_id": 2, "_metadata": {"etag": "69770f38c13625a1a3ce1549ee5a878c"}}	{"_id": 0, "_metadata": {"etag": "61f0413df077b44a2e4ccd9f59c9c223"}}
+{"_id": 2, "_metadata": {"etag": "69770f38c13625a1a3ce1549ee5a878c"}}	{"_id": 1, "_metadata": {"etag": "5d8117b25a3d3a4bbaba1ef5aa787145"}}
+{"_id": 2, "_metadata": {"etag": "69770f38c13625a1a3ce1549ee5a878c"}}	{"_id": 2, "_metadata": {"etag": "69770f38c13625a1a3ce1549ee5a878c"}}
 "Way-2: Contd. In case of multi-level JDV, etag isn't calculated and injected"
 Query with single duality view.
 SELECT * FROM dv_float;
 data
-{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
-{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
-{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}
 Query with two duality view.
 SELECT * FROM dv_float a, dv_float b;
 data	data
-{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
-{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
-{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
-{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
-{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
-{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
-{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
-{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
-{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}
 Query with duality view in sub-query.
 SELECT * FROM dv_float a, dv_float b WHERE EXISTS (SELECT * FROM dv_float);
 data	data
-{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
-{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
-{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
-{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
-{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
-{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
-{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
-{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
-{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "0f47634725c56d6cc1f0cfcd287448e1"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "d450ba1c414a4201eb83c17d74797ff3"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "71bba5cfe50a93126e31596223e317ec"}}
 DROP VIEW dv_float;
 DROP VIEW dv_test;
 DROP DATABASE DB1;

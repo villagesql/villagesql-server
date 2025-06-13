@@ -413,7 +413,7 @@ bool Item_sum::check_sum_func(THD *thd, Item **ref) {
   }
 
   aggr_query_block->set_agg_func_used(true);
-  if (sum_func() == JSON_AGG_FUNC)
+  if (sum_func() == JSON_OBJECTAGG_FUNC || sum_func() == JSON_ARRAYAGG_FUNC)
     aggr_query_block->set_json_agg_func_used(true);
   update_used_tables();
   thd->lex->in_sum_func = in_sum_func;
