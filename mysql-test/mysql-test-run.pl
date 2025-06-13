@@ -284,6 +284,7 @@ our @DEFAULT_SUITES = qw(
   x
   component_keyring_file
   component_connection_control
+  jdv
 );
 
 our $DEFAULT_SUITES = join ',', @DEFAULT_SUITES;

@@ -5671,6 +5671,60 @@ class PT_library_list final : public Parse_tree_node {
   mem_root_deque<sp_name_with_alias> &get_libraries() { return m_libraries; }
 };
 
+class PT_jdv_name_value : public Parse_tree_node {
+  typedef Parse_tree_node super;
+
+  LEX_STRING m_name{nullptr, 0};
+  Item *m_value{nullptr};
+  uint m_col_tags{0};
+
+ public:
+  explicit PT_jdv_name_value(const POS &pos, LEX_STRING &name, Item *value,
+                             int col_tags)
+      : super(pos), m_name(name), m_value(value), m_col_tags(col_tags) {}
+
+  LEX_STRING name() { return m_name; }
+  Item *value() { return m_value; }
+  uint col_tags() { return m_col_tags; }
+};
+
+class PT_jdv_name_value_list : public Parse_tree_node {
+  typedef Parse_tree_node super;
+
+  THD *m_thd{nullptr};
+  PT_item_list *m_name_value_list{nullptr};
+  Mem_root_array<LEX_STRING> m_name_list;
+  Mem_root_array<uint> m_jdv_col_tags_list;
+
+ public:
+  explicit PT_jdv_name_value_list(const POS &pos, THD *thd)
+      : super(pos),
+        m_thd(thd),
+        m_name_list(thd->mem_root),
+        m_jdv_col_tags_list(thd->mem_root) {}
+
+  bool push_back(PT_jdv_name_value *jdv_name_value) {
+    if (m_name_value_list == nullptr) {
+      m_name_value_list = new (m_thd->mem_root) PT_item_list(m_pos);
+      if (m_name_value_list == nullptr) return true;
+    }
+
+    Item_string *name = new (m_thd->mem_root)
+        Item_string(jdv_name_value->name().str, jdv_name_value->name().length,
+                    m_thd->charset());
+    if (name == nullptr) return true;
+
+    return (m_name_value_list->push_back(name) ||
+            m_name_value_list->push_back(jdv_name_value->value()) ||
+            m_name_list.push_back(jdv_name_value->name()) ||
+            m_jdv_col_tags_list.push_back(jdv_name_value->col_tags()));
+  }
+
+  Mem_root_array<LEX_STRING> *name_list() { return &m_name_list; }
+  PT_item_list *name_value_list() { return m_name_value_list; }
+  Mem_root_array<uint> *col_tags_list() { return &m_jdv_col_tags_list; }
+};
+
 /**
   Top-level node for the SHUTDOWN statement
 

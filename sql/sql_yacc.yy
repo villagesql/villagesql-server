@@ -1458,8 +1458,15 @@ void warn_on_deprecated_user_defined_collation(
 %token<lexer.keyword> VECTOR_SYM      1215     /* MYSQL */
 %token<lexer.keyword> PARAMETERS_SYM  1216     /* MYSQL */
 %token<lexer.keyword> HEADER_SYM      1217     /* MYSQL */
+
 %token                LIBRARY_SYM     1218     /* MYSQL */
 %token<lexer.keyword> URI_SYM         1219     /* MYSQL */
+
+%token<lexer.keyword> DUALITY_SYM                 1220   /* MYSQL */
+%token<lexer.keyword> RELATIONAL_SYM              1221   /* MYSQL */
+%token<lexer.keyword> JSON_DUALITY_OBJECT_SYM     1222   /* MYSQL */
+
+%token<lexer.keyword> ABSENT_SYM                  1223   /* SQL-2015-R */
 
 /*
   NOTE! When adding new non-standard keywords, make sure they are added to the
@@ -1583,6 +1590,7 @@ void warn_on_deprecated_user_defined_collation(
         signed_num
         opt_ignore_unknown_user
         opt_histogram_num_buckets
+        opt_jdv_table_tags jdv_table_tags jdv_table_tag
 
 
 %type <order_direction>
@@ -1873,6 +1881,8 @@ void warn_on_deprecated_user_defined_collation(
   windowing_clause   ///< Definition of unnamed window near the window function.
   opt_windowing_clause ///< For functions which can be either set or window
                        ///< functions (e.g. SUM), non-empty clause makes the difference.
+
+%type <json_constructor_null_clause> opt_json_constructor_null_clause
 
 %type <window_frame> opt_window_frame_clause
 
@@ -2296,6 +2306,9 @@ void warn_on_deprecated_user_defined_collation(
 
 %type <library_list> library_list
 %type <library_with_alias> library_name
+
+%type <jdv_name_value>  jdv_name_value
+%type <jdv_name_value_list> jdv_name_value_list
 %%
 
 /*
@@ -10620,6 +10633,27 @@ function_call_keyword:
           {
             $$= NEW_PTN Item_func_interval(@$, YYMEM_ROOT, $3, $5, $7);
           }
+        | JSON_DUALITY_OBJECT_SYM '(' opt_jdv_table_tags jdv_name_value_list ')'
+          {
+            /**
+              JSON_DUALITY_OBJECT() is a specialized version of JSON_OBJECT() and
+              used by only JSON duality view. Unlike JSON_OBJECT()'s  standard
+              definition, global attributes are listed at the beginning for
+              JSON_DUALITY_OBJECT(). This distinction is necessary to accommodate
+              attributes such as table annotations for a duality view.
+            */
+            THD *thd = YYTHD;
+            if (!((thd->lex->create_view_type ==
+                   enum_view_type::JSON_DUALITY_VIEW) || 
+                   thd->parsing_json_duality_view)) {
+              my_error(ER_JDV_INVALID_JSON_DUALITY_OBJECT_USAGE, MYF(0));
+              MYSQL_YYABORT;
+            }
+
+            $$= NEW_PTN Item_func_json_duality_object(thd, @$, $3, $4);
+            if ($$ == nullptr)
+              MYSQL_YYABORT;
+          }
         | JSON_VALUE_SYM '(' simple_expr ',' text_literal
           opt_returning_type opt_on_empty_or_error ')'
           {
@@ -10704,6 +10738,54 @@ function_call_keyword:
             $$= NEW_PTN Item_func_year(@$, $3);
           }
         ;
+
+opt_jdv_table_tags:
+          %empty { $$ = 0; }
+        | WITH jdv_table_tag { $$ = $2; }
+        | WITH '(' jdv_table_tags ')' { $$ = $3; }
+        ;
+
+jdv_table_tag:
+          INSERT_SYM           { $$ = jdv::DVT_INSERT; }
+        | UPDATE_SYM           { $$ = jdv::DVT_UPDATE; }
+        | DELETE_SYM           { $$ = jdv::DVT_DELETE; }
+        ;
+
+jdv_table_tags:
+        jdv_table_tag { $$= $1; }
+      | jdv_table_tags ',' jdv_table_tag
+        {
+          if ($$ & $3) {
+            my_error(ER_JDV_INVALID_DEFINITION_WRONG_ANNOTATIONS, MYF(0));
+            MYSQL_YYABORT;
+          }
+          $$ |= $3;
+        }
+      ;
+
+jdv_name_value_list:
+        jdv_name_value
+        {
+          $$= NEW_PTN PT_jdv_name_value_list(@$, YYTHD);
+          if ($$ == nullptr || $$->push_back($1))
+            MYSQL_YYABORT;
+        }
+      | jdv_name_value_list ',' jdv_name_value
+        {
+          if ($1 == nullptr || $1->push_back($3))
+            MYSQL_YYABORT;
+          $$= $1;
+        }
+      ;
+
+jdv_name_value:
+        TEXT_STRING_sys ':' expr  // [ jdv_column_tags ]
+        {
+          $$= NEW_PTN PT_jdv_name_value(@$, $1, $3, 0);
+          if ($$ == nullptr)
+            MYSQL_YYABORT;
+        }
+      ;
 
 /*
   Function calls using non reserved keywords, with special syntaxic forms.
@@ -11071,14 +11153,14 @@ sum_expr:
           {
             $$= NEW_PTN Item_sum_or(@$, $3, $5);
           }
-        | JSON_ARRAYAGG '(' in_sum_expr ')' opt_windowing_clause
+        | JSON_ARRAYAGG '(' in_sum_expr opt_json_constructor_null_clause ')' opt_windowing_clause
           {
             auto wrapper = make_unique_destroy_only<Json_wrapper>(YYMEM_ROOT);
             if (wrapper == nullptr) YYABORT;
             unique_ptr_destroy_only<Json_array> array{::new (YYMEM_ROOT)
                                                           Json_array};
             if (array == nullptr) YYABORT;
-            $$ = NEW_PTN Item_sum_json_array(@$, $3, $5, std::move(wrapper),
+            $$ = NEW_PTN Item_sum_json_array(@$, $3, $4, $6, std::move(wrapper),
                                              std::move(array));
           }
         | JSON_OBJECTAGG '(' in_sum_expr ',' in_sum_expr ')' opt_windowing_clause
@@ -11324,6 +11406,21 @@ opt_from_first_last:
         | FROM LAST_SYM
           {
             $$= NFL_FROM_LAST;
+          }
+        ;
+
+opt_json_constructor_null_clause:
+          %empty
+          {
+            $$= Json_constructor_null_clause::NULL_ON_NULL;
+          }
+        | NULL_SYM ON_SYM NULL_SYM
+          {
+            $$= Json_constructor_null_clause::NULL_ON_NULL;
+          }
+        | ABSENT_SYM ON_SYM NULL_SYM
+          {
+            $$= Json_constructor_null_clause::ABSENT_ON_NULL;
           }
         ;
 
@@ -15524,7 +15621,8 @@ ident_keywords_ambiguous_3_roles:
   identifiers everywhere without introducing grammar conflicts:
 */
 ident_keywords_unambiguous:
-          ACTION
+          ABSENT_SYM
+        | ACTION
         | ACCOUNT_SYM
         | ACTIVE_SYM
         | ADDDATE_SYM
@@ -15600,6 +15698,7 @@ ident_keywords_unambiguous:
         | DISABLE_SYM
         | DISCARD_SYM
         | DISK_SYM
+        | DUALITY_SYM
         | DUMPFILE
         | DUPLICATE_SYM
         | DYNAMIC_SYM
@@ -15786,6 +15885,7 @@ ident_keywords_unambiguous:
         | RELAY_THREAD
         | REMOVE_SYM
         | ASSIGN_GTIDS_TO_ANONYMOUS_TRANSACTIONS_SYM
+        | RELATIONAL_SYM
         | REORGANIZE_SYM
         | REPEATABLE_SYM
         | REPLICAS_SYM
@@ -17705,36 +17805,64 @@ view_suid:
           { Lex->create_view_suid= VIEW_SUID_INVOKER; }
         ;
 
+opt_relational:
+          %empty {}
+        | RELATIONAL_SYM {}
+        ;
+
+opt_json_duality:
+          %empty {}
+        | JSON_SYM opt_relational DUALITY_SYM
+          {
+            THD *thd= YYTHD;
+            thd->lex->create_view_type = enum_view_type::JSON_DUALITY_VIEW;
+          }
+        ;
+
 view_tail:
-          view_suid VIEW_SYM opt_if_not_exists table_ident
+          view_suid opt_json_duality VIEW_SYM opt_if_not_exists table_ident
           opt_derived_column_list
           {
             THD *thd= YYTHD;
             LEX *lex= thd->lex;
             lex->sql_command= SQLCOM_CREATE_VIEW;
-            if ($3)
+            if ($4)
             {
               if ((lex->create_view_mode ==
                    enum_view_create_mode::VIEW_ALTER) ||
                   (lex->create_view_mode ==
                    enum_view_create_mode::VIEW_CREATE_OR_REPLACE))
               {
-                YYTHD->syntax_error_at(@3);
+                YYTHD->syntax_error_at(@4);
                 MYSQL_YYABORT;
               }
               lex->create_info->options= HA_LEX_CREATE_IF_NOT_EXISTS;
             }
             /* first table in list is target VIEW name */
-            if (!lex->query_block->add_table_to_list(thd, $4, nullptr,
+            if (!lex->query_block->add_table_to_list(thd, $5, nullptr,
                                                     TL_OPTION_UPDATING,
                                                     TL_IGNORE,
                                                     MDL_EXCLUSIVE))
               MYSQL_YYABORT;
             lex->query_tables->open_strategy= Table_ref::OPEN_STUB;
             thd->parsing_system_view= lex->query_tables->is_system_view;
-            if ($5.size())
+
+            if (lex->create_view_type == enum_view_type::UNDEFINED)
+              lex->create_view_type = enum_view_type::SQL_VIEW;
+
+            if (thd->lex->create_view_type == enum_view_type::JSON_DUALITY_VIEW) {
+              if ($6.size() > 0) {
+                my_error(ER_JDV_INVALID_DEFINITION_COLUMN_LIST_NOT_SUPPORTED, MYF(0));
+                MYSQL_YYABORT;
+              } else {
+                if ($6.push_back(to_lex_cstring("data")))
+                  MYSQL_YYABORT; /* purecov: inspected */
+              }
+            }
+
+            if ($6.size())
             {
-              for (auto column_alias : $5)
+              for (auto column_alias : $6)
               {
                 // Report error if the column name/length is incorrect.
                 if (check_column_name(column_alias))
@@ -17744,11 +17872,11 @@ view_tail:
                 }
               }
               /*
-                The $5 object is short-lived (its 'm_array' is not);
+                The $6 object is short-lived (its 'm_array' is not);
                 so we have to duplicate it, and then we can store a
                 pointer.
               */
-              void *rawmem= thd->memdup(&($5), sizeof($5));
+              void *rawmem= thd->memdup(&($6), sizeof($6));
               if (!rawmem)
                 MYSQL_YYABORT; /* purecov: inspected */
               lex->query_tables->
@@ -17790,6 +17918,13 @@ view_query_block:
               is created correctly in this case
             */
             save_query_block->m_table_list.push_front(&save_list);
+
+            if (thd->lex->create_view_type == enum_view_type::JSON_DUALITY_VIEW) {
+                if ( $2 ) {
+                  my_error(ER_JDV_WITH_CHECK_OPTION_NOT_SUPPORTED, MYF(0));
+                  MYSQL_YYABORT;
+                }
+            }
 
             Lex->create_view_check= $2;
 

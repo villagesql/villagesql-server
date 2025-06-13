@@ -3391,8 +3391,10 @@ bool Query_block::merge_derived(THD *thd, Table_ref *derived_table) {
     const bool merge_heuristic =
         (derived_table->is_view() || allow_merge_derived) &&
         derived_query_expression->merge_heuristic(thd->lex);
-    if (!hint_table_state(thd, derived_table, DERIVED_MERGE_HINT_ENUM,
-                          merge_heuristic ? OPTIMIZER_SWITCH_DERIVED_MERGE : 0))
+    if (!hint_table_state(
+            thd, derived_table, DERIVED_MERGE_HINT_ENUM,
+            merge_heuristic ? OPTIMIZER_SWITCH_DERIVED_MERGE : 0) &&
+        !derived_table->is_json_duality_view())
       return false;
   }
 

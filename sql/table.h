@@ -48,6 +48,7 @@
 #include "sql/auth/auth_acls.h"        // Access_bitmask
 #include "sql/dd/types/foreign_key.h"  // dd::Foreign_key::enum_rule
 #include "sql/enum_query_type.h"       // enum_query_type
+#include "sql/json_duality_view/dml.h"
 #include "sql/key.h"
 #include "sql/key_spec.h"
 #include "sql/mdl.h"  // MDL_wait_for_subgraph
@@ -140,6 +141,10 @@ class Sql_check_constraint_share;
 using Sql_check_constraint_share_list =
     Mem_root_array<Sql_check_constraint_share>;
 
+namespace jdv {
+class Content_tree_node;
+}  // namespace jdv
+
 typedef Mem_root_array_YY<LEX_CSTRING> Create_col_name_list;
 
 typedef int64 query_id_t;
@@ -151,6 +156,8 @@ bool assert_ref_count_is_locked(const TABLE_SHARE *);
 bool assert_invalid_dict_is_locked(const TABLE *);
 
 bool assert_invalid_stats_is_locked(const TABLE *);
+
+[[nodiscard]] const Table_ref *jdv_root_base_table(const Table_ref *);
 
 #define store_record(A, B) \
   memcpy((A)->B, (A)->record[0], (size_t)(A)->s->reclength)
@@ -2601,6 +2608,12 @@ enum enum_view_algorithm {
   VIEW_ALGORITHM_MERGE = 2
 };
 
+enum class enum_view_type {
+  UNDEFINED,
+  SQL_VIEW,          // Traditional SQL VIEW
+  JSON_DUALITY_VIEW  // JSON Duality view
+};
+
 #define VIEW_SUID_INVOKER 0
 #define VIEW_SUID_DEFINER 1
 #define VIEW_SUID_DEFAULT 2
@@ -3546,6 +3559,10 @@ class Table_ref {
   */
   const Table_ref *updatable_base_table() const {
     const Table_ref *tbl = this;
+    // For JDVs we return the root (outermost) base table
+    if (tbl->is_json_duality_view()) {
+      return jdv_root_base_table(tbl);
+    }
     assert(tbl->is_updatable() && !tbl->is_multiple_tables());
     while (tbl->is_view_or_derived()) {
       tbl = tbl->merge_underlying_list;
@@ -4015,6 +4032,12 @@ class Table_ref {
   // True, If this is a system view
   bool is_system_view{false};
 
+  /// If view, then type of a view.
+  enum_view_type view_type{enum_view_type::UNDEFINED};
+
+  /// If json duality view, then represents duality view content tree node.
+  jdv::Content_tree_node *jdv_content_tree{nullptr};
+
   /*
     Set to 'true' if this is a DD table being opened in the context of a
     dictionary operation. Note that when 'false', this may still be a DD
@@ -4068,6 +4091,16 @@ class Table_ref {
   }
   void set_derived_column_names(const Create_col_name_list *d) {
     m_derived_column_names = d;
+  }
+
+  /**
+   * @brief  If view, then check if view is JSON duality view.
+   *
+   * @return true   If view is JSON duality view.
+   * @return false  Otherwise.
+   */
+  bool is_json_duality_view() const {
+    return (view_type == enum_view_type::JSON_DUALITY_VIEW);
   }
 
  private:

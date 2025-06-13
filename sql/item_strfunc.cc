@@ -107,11 +107,13 @@
 #include "sql/events.h"          // Events::reconstruct_interval_expression
 #include "sql/filesort.h"
 #include "sql/handler.h"
+#include "sql/json_duality_view/i_s.h"  // get_json_duality_view_property
 #include "sql/mysqld.h"
 #include "sql/parse_tree_node_base.h"               // Parse_context
 #include "sql/resourcegroups/resource_group_mgr.h"  // num_vcpus
 #include "sql/rpl_gtid.h"
 #include "sql/sort_param.h"
+#include "sql/sql_base.h"
 #include "sql/sql_class.h"          // THD
 #include "sql/sql_digest.h"         // get_max_digest_length
 #include "sql/sql_digest_stream.h"  // sql_digest_state
@@ -5327,6 +5329,91 @@ String *Item_func_get_dd_property_key_value::val_str(String *str) {
   }
 
   str->copy(oss.str().c_str(), oss.str().length(), system_charset_info);
+
+  return str;
+}
+
+/**
+  @brief
+    This function prepares a string representing the value
+    associated with the logical key that is supplied. The
+    logical key is the name of the I_S view.
+
+    Syntax:
+      string get_jdv_property_key_value(jdv_name, key)
+ */
+String *Item_func_get_jdv_property_key_value::val_str(String *str) {
+  THD *thd = current_thd;
+  if (thd == nullptr) {
+    assert(false);
+    return nullptr;
+  }
+
+  String sch;  // JSON duality view schema.
+  String tab;  // JSON duality view name.
+  String val;  // Validity of the view.
+  String key;  // Key for what info to retrieve - name of the I_S view.
+
+  /*
+    Store arguments, check that they are not null. Also check that the
+    view is valid. No need to emit warning if the view is invalid since
+    this has already been done when checking access to the view.
+  */
+  String *sch_ptr = args[0]->val_str(&sch);
+  String *tab_ptr = args[1]->val_str(&tab);
+  String *val_ptr = args[2]->val_str(&val);
+  String *key_ptr = args[3]->val_str(&key);
+
+  null_value = true;
+  if (sch_ptr == nullptr || tab_ptr == nullptr || val_ptr == nullptr ||
+      key_ptr == nullptr || strcmp(val_ptr->c_ptr_safe(), "1") != 0)
+    return nullptr;
+
+  /*
+    Wih lower-case-table-names == 2 we store the original versions of table
+    and db names in the data dictionary. Hence they need to be lowercased
+    to produce the correct MDL key and for other usages.
+  */
+  char buff_db[NAME_LEN + 1];
+  char buff_tb[NAME_LEN + 1];
+
+  my_stpncpy(buff_db, sch_ptr->c_ptr_safe(), NAME_LEN);
+  my_stpncpy(buff_tb, tab_ptr->c_ptr_safe(), NAME_LEN);
+  if (lower_case_table_names == 2) {
+    my_casedn_str(system_charset_info, buff_db);
+    my_casedn_str(system_charset_info, buff_tb);
+  }
+  MDL_request table_request;
+  MDL_REQUEST_INIT(&table_request, MDL_key::TABLE, buff_db, buff_tb, MDL_SHARED,
+                   MDL_TRANSACTION);
+
+  Table_ref *trp = new (thd->mem_root) Table_ref(buff_db, buff_tb, TL_READ);
+  if (trp == nullptr) {
+    assert(false);
+    return nullptr;
+  }
+
+  // Backup open tables and mdl savepoint.
+  Open_tables_backup backup;
+  thd->reset_n_backup_open_tables_state(&backup, 0);
+
+  // Acquire MDL and open table.
+  uint nt = 0;
+  if (!thd->mdl_context.acquire_lock(&table_request,
+                                     thd->variables.lock_wait_timeout) &&
+      !open_tables(thd, &trp, &nt, MYSQL_OPEN_FORCE_SHARED_MDL)) {
+    assert(trp->jdv_content_tree != nullptr);
+    null_value = false;
+    jdv::get_i_s_properties(trp->jdv_content_tree, key_ptr->c_ptr_safe(), str);
+    jdv::destroy_content_tree(trp->jdv_content_tree);
+    trp->jdv_content_tree = nullptr;
+  } else {
+    str = nullptr;
+  }
+
+  // Close opened tables, restore open table backup and mdl savepoint.
+  close_thread_tables(thd);
+  thd->restore_backup_open_tables_state(&backup);
 
   return str;
 }

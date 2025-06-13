@@ -90,7 +90,8 @@ static const std::set<String_type> default_valid_option_keys = {
     "tablespace",
     "timestamp",
     "view_valid",
-    "gipk"};
+    "gipk",
+    "view_type"};
 
 ///////////////////////////////////////////////////////////////////////////
 // Abstract_table_impl implementation.

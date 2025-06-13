@@ -8400,4 +8400,16 @@ bool assert_invalid_stats_is_locked(const TABLE *table) {
 }
 #endif
 
+/**
+  Returns the Table_ref of the root (outermost) base table of the JDV.
+
+  @param view to get base table for
+  @return Table_ref of base table
+ */
+const Table_ref *jdv_root_base_table(const Table_ref *view) {
+  assert(view != nullptr && view->is_json_duality_view() &&
+         view->jdv_content_tree != nullptr);
+  return view->jdv_content_tree->table_ref();
+}
+
 //////////////////////////////////////////////////////////////////////////

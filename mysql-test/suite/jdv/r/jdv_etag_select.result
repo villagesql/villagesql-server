@@ -1,0 +1,102 @@
+CREATE DATABASE DB1;
+USE DB1;
+CREATE TABLE `t1x` (
+`T1C1` int NOT NULL AUTO_INCREMENT,
+`T1C2` float DEFAULT NULL,
+PRIMARY KEY (`T1C1`)
+);
+CREATE TABLE `t2x` (
+`T2C1` int NOT NULL,
+`T2C2` double DEFAULT NULL,
+PRIMARY KEY (`T2C1`),
+CONSTRAINT `t2x_ibfk_1` FOREIGN KEY (`T2C1`) REFERENCES `t1x` (`T1C1`)
+);
+INSERT INTO t1x VALUES (1, 1.1), (2, 2.1), (3, 3.1);
+INSERT INTO t2x VALUES (1, 1.1), (2, 2.1), (3, 3.1);
+CREATE JSON RELATIONAL DUALITY VIEW `dv_float`
+AS SELECT JSON_DUALITY_OBJECT(
+'_id':`t1x`.`T1C1`,
+'T1C2':`t1x`.`T1C2`,
+'T2X':(
+SELECT JSON_ARRAYAGG(
+JSON_DUALITY_OBJECT(
+'T2C1':`t2x`.`T2C1`,
+'T2C2':`t2x`.`T2C2`
+                )
+) FROM `t2x` WHERE (`t2x`.`T2C1` = `t1x`.`T1C1`)
+)
+) AS `Name_exp_1` from `t1x`;
+"way-1:  Explicit function call"
+SELECT data FROM dv_float;
+data
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
+"way-2: Make above function implicit during JDV SELECT callflow"
+CREATE TABLE t1 (f1 INT PRIMARY KEY, f2 int);
+INSERT INTO t1 VALUES (0, 0), (1, 10), (2, 20);
+CREATE JSON DUALITY VIEW dv_test AS SELECT JSON_DUALITY_OBJECT(WITH (INSERT, UPDATE, DELETE) "_id": t1.f1) FROM t1;
+Query with single duality view.
+SELECT * FROM dv_test;
+data
+{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
+{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
+{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
+Query with two duality view.
+SELECT * FROM dv_test a, dv_test b;
+data	data
+{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}	{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
+{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}	{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
+{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}	{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
+{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}	{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
+{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}	{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
+{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}	{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
+{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}	{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
+{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}	{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
+{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}	{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
+Query with duality view in sub-query.
+SELECT * FROM dv_test a, dv_test b WHERE EXISTS (SELECT * FROM dv_test);
+data	data
+{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}	{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
+{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}	{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
+{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}	{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
+{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}	{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
+{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}	{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
+{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}	{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
+{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}	{"_id": 0, "_metadata": {"etag": "5631603775668932191"}}
+{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}	{"_id": 1, "_metadata": {"etag": "10792866646887509753"}}
+{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}	{"_id": 2, "_metadata": {"etag": "13647057490375175604"}}
+"Way-2: Contd. In case of multi-level JDV, etag isn't calculated and injected"
+Query with single duality view.
+SELECT * FROM dv_float;
+data
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
+Query with two duality view.
+SELECT * FROM dv_float a, dv_float b;
+data	data
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
+Query with duality view in sub-query.
+SELECT * FROM dv_float a, dv_float b WHERE EXISTS (SELECT * FROM dv_float);
+data	data
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
+{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
+{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}	{"T2X": [{"T2C1": 1, "T2C2": 1.1}], "_id": 1, "T1C2": 1.100000023841858, "_metadata": {"etag": "15044137258542924868"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}	{"T2X": [{"T2C1": 2, "T2C2": 2.1}], "_id": 2, "T1C2": 2.0999999046325684, "_metadata": {"etag": "6853536288757443536"}}
+{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}	{"T2X": [{"T2C1": 3, "T2C2": 3.1}], "_id": 3, "T1C2": 3.0999999046325684, "_metadata": {"etag": "1212972071371095630"}}
+DROP VIEW dv_float;
+DROP VIEW dv_test;
+DROP DATABASE DB1;

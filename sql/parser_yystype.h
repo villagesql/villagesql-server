@@ -92,6 +92,8 @@ class PT_tablesample;
 class PT_insert_values_list;
 class PT_into_destination;
 class PT_isolation_level;
+class PT_jdv_name_value;
+class PT_jdv_name_value_list;
 class PT_item_list;
 class PT_joined_table;
 class PT_json_table_column;
@@ -157,6 +159,7 @@ struct LEX;
 struct Sql_cmd_srs_attributes;
 struct udf_func;
 struct PT_install_component_set_element;
+enum class Json_constructor_null_clause;
 
 template <class T>
 class List;
@@ -727,6 +730,11 @@ union MY_SQL_PARSER_STYPE {
 
   PT_library_list *library_list;
   PT_library_with_alias *library_with_alias;
+
+  PT_jdv_name_value *jdv_name_value;
+  PT_jdv_name_value_list *jdv_name_value_list;
+
+  Json_constructor_null_clause json_constructor_null_clause;
 };
 
 static_assert(sizeof(MY_SQL_PARSER_STYPE) <= 32, "YYSTYPE is too big");

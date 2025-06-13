@@ -5826,10 +5826,13 @@ bool Item_lead_lag::compute() {
 }
 
 template <typename... Args>
-Item_sum_json::Item_sum_json(unique_ptr_destroy_only<Json_wrapper> wrapper,
-                             Args &&...parent_args)
+Item_sum_json::Item_sum_json(
+    unique_ptr_destroy_only<Json_wrapper> wrapper,
+    Json_constructor_null_clause json_constructor_null_clause,
+    Args &&...parent_args)
     : Item_sum(std::forward<Args>(parent_args)...),
-      m_wrapper(std::move(wrapper)) {
+      m_wrapper(std::move(wrapper)),
+      m_json_constructor_null_clause(json_constructor_null_clause) {
   set_data_type_json();
 }
 
@@ -5866,6 +5869,43 @@ bool Item_sum_json::fix_fields(THD *thd, Item **ref) {
   return false;
 }
 
+bool Item_sum_json::do_itemize(Parse_context *pc, Item **res) {
+  THD *thd = pc->thd;
+  LEX *lex = thd->lex;
+
+  if (m_json_constructor_null_clause ==
+          Json_constructor_null_clause::ABSENT_ON_NULL &&
+      !(lex->create_view_type == enum_view_type::JSON_DUALITY_VIEW ||
+        thd->parsing_json_duality_view)) {
+    my_error(ER_NOT_SUPPORTED_YET, MYF(0),
+             "JSON constructor null clause ABSENT ON NULL in JSON_ARRAYAGG");
+    return true;
+  }
+
+  return super::do_itemize(pc, res);
+}
+
+void Item_sum_json::print(const THD *thd, String *str,
+                          enum_query_type query_type) const {
+  str->append(func_name());
+  str->append('(');
+
+  for (uint i = 0; i < arg_count; i++) {
+    if (i) str->append(',');
+    args[i]->print(thd, str, query_type);
+  }
+  if (m_json_constructor_null_clause ==
+      Json_constructor_null_clause::ABSENT_ON_NULL) {
+    str->append(" ABSENT ON NULL");
+  }
+  str->append(')');
+
+  if (m_window) {
+    str->append(" OVER ");
+    m_window->print(thd, str, query_type, false);
+  }
+}
+
 String *Item_sum_json::val_str(String *str) {
   assert(fixed);
   if (m_is_window_function) {
@@ -5898,7 +5938,12 @@ bool Item_sum_json::val_json(Json_wrapper *wr) {
 
   assert(!m_wrapper->empty());
 
-  if (null_value) return false;
+  if (m_json_constructor_null_clause ==
+      Json_constructor_null_clause::ABSENT_ON_NULL) {
+    null_value = false;
+  } else if (null_value) {
+    return false;
+  }
 
   /*
     val_* functions are called more than once in aggregates and
@@ -6014,14 +6059,17 @@ void Item_sum_json::update_field() {
 Item_sum_json_array::Item_sum_json_array(
     THD *thd, Item_sum *item, unique_ptr_destroy_only<Json_wrapper> wrapper,
     unique_ptr_destroy_only<Json_array> array)
-    : Item_sum_json(std::move(wrapper), thd, item),
+    : Item_sum_json(std::move(wrapper),
+                    Json_constructor_null_clause::NULL_ON_NULL, thd, item),
       m_json_array(std::move(array)) {}
 
 Item_sum_json_array::Item_sum_json_array(
-    const POS &pos, Item *a, PT_window *w,
+    const POS &pos, Item *a,
+    Json_constructor_null_clause json_constructor_null_clause, PT_window *w,
     unique_ptr_destroy_only<Json_wrapper> wrapper,
     unique_ptr_destroy_only<Json_array> array)
-    : Item_sum_json(std::move(wrapper), pos, a, w),
+    : Item_sum_json(std::move(wrapper), json_constructor_null_clause, pos, a,
+                    w),
       m_json_array(std::move(array)) {}
 
 Item_sum_json_array::~Item_sum_json_array() = default;
@@ -6038,14 +6086,16 @@ void Item_sum_json_array::clear() {
 Item_sum_json_object::Item_sum_json_object(
     THD *thd, Item_sum *item, unique_ptr_destroy_only<Json_wrapper> wrapper,
     unique_ptr_destroy_only<Json_object> object)
-    : Item_sum_json(std::move(wrapper), thd, item),
+    : Item_sum_json(std::move(wrapper),
+                    Json_constructor_null_clause::NULL_ON_NULL, thd, item),
       m_json_object(std::move(object)) {}
 
 Item_sum_json_object::Item_sum_json_object(
     const POS &pos, Item *a, Item *b, PT_window *w,
     unique_ptr_destroy_only<Json_wrapper> wrapper,
     unique_ptr_destroy_only<Json_object> object)
-    : Item_sum_json(std::move(wrapper), pos, a, b, w),
+    : Item_sum_json(std::move(wrapper),
+                    Json_constructor_null_clause::NULL_ON_NULL, pos, a, b, w),
       m_json_object(std::move(object)) {}
 
 Item_sum_json_object::~Item_sum_json_object() = default;

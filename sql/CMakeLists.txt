@@ -174,6 +174,10 @@ SET(DD_SOURCES
   dd/impl/system_views/innodb_foreign_cols.cc
   dd/impl/system_views/innodb_fields.cc
   dd/impl/system_views/innodb_tablespaces_brief.cc
+  dd/impl/system_views/json_duality_view_columns.cc
+  dd/impl/system_views/json_duality_view_links.cc
+  dd/impl/system_views/json_duality_view_tables.cc
+  dd/impl/system_views/json_duality_views.cc
   dd/impl/system_views/key_column_usage.cc
   dd/impl/system_views/keywords.cc
   dd/impl/system_views/libraries.cc
@@ -417,6 +421,12 @@ SET(SQL_SHARED_SOURCES
   iterators/ref_row_iterators.cc
   iterators/sorting_iterator.cc
   iterators/window_iterators.cc
+  json_duality_view/content_tree.cc
+  json_duality_view/ddl.cc
+  json_duality_view/dml.cc
+  json_duality_view/i_s.cc
+  json_duality_view/option_usage.cc
+  json_duality_view/utils.cc
   join_optimizer/access_path.cc
   join_optimizer/build_interesting_orders.cc
   join_optimizer/common_subexpression_elimination.cc
@@ -659,6 +669,12 @@ IF(BUILD_IS_SINGLE_CONFIG)
       debug_sync.cc
       )
   ENDIF()
+ENDIF()
+
+IF (WITH_INTERNAL)
+  LIST(REMOVE_ITEM SQL_SHARED_SOURCES
+      json_duality_view/dml.cc
+      )
 ENDIF()
 
 # BISON_TARGET(<Name> <YaccInput> <CodeOutput>

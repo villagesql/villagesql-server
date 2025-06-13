@@ -2781,13 +2781,18 @@ static void view_store_create_info(const THD *thd, Table_ref *table,
   if (!foreign_db_mode) {
     view_store_options(thd, table, buff);
   }
+  if (table->is_json_duality_view()) {
+    buff->append("JSON RELATIONAL DUALITY ");
+  }
   buff->append(STRING_WITH_LEN("VIEW "));
   if (!compact_view_name) {
     append_identifier(thd, buff, table->db, table->db_length);
     buff->append('.');
   }
   append_identifier(thd, buff, table->table_name, table->table_name_length);
-  print_derived_column_names(thd, buff, table->derived_column_names());
+
+  if (!table->is_json_duality_view())
+    print_derived_column_names(thd, buff, table->derived_column_names());
 
   buff->append(STRING_WITH_LEN(" AS "));
 

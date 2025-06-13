@@ -1764,6 +1764,8 @@ static const std::pair<const char *, Create_func *> func_array[] = {
      SQL_FN_INTERNAL(Item_func_internal_tablespace_extra, 4)},
     {"GET_DD_PROPERTY_KEY_VALUE",
      SQL_FN_INTERNAL(Item_func_get_dd_property_key_value, 2)},
+    {"GET_JDV_PROPERTY_KEY_VALUE",
+     SQL_FN_INTERNAL(Item_func_get_jdv_property_key_value, 4)},
     {"REMOVE_DD_PROPERTY_KEY",
      SQL_FN_INTERNAL(Item_func_remove_dd_property_key, 2)},
     {"CONVERT_INTERVAL_TO_USER_INTERVAL",
