@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2025, Oracle and/or its affiliates.
+﻿# Copyright (c) 2006, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -807,6 +807,7 @@ SET(SQL_SOURCE
   ../sql-common/my_decimal.cc
   ../sql-common/json_diff.cc
   ../sql-common/json_dom.cc
+  ../sql-common/json_hash.cc
   ../sql-common/json_error_handler.cc
   ../sql-common/json_path.cc
   ../sql-common/json_schema.cc

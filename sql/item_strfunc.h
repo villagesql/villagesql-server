@@ -410,6 +410,31 @@ class Item_func_concat_ws : public Item_str_func {
   const char *func_name() const override { return "concat_ws"; }
 };
 
+/**
+  This class represents the function ETAG which is used to traverse the input
+  arguments and compute a 128 bits hash value.
+ */
+class Item_func_etag : public Item_str_func {
+  String m_tmp_value{"", 0, collation.collation};
+
+ public:
+  Item_func_etag(const POS &pos, PT_item_list *opt_list)
+      : Item_str_func(pos, opt_list) {}
+  Item_func_etag(Item *a, Item *b) : Item_str_func(a, b) {}
+
+  String *val_str(String *) override;
+  bool resolve_type(THD *thd) override;
+  const char *func_name() const override { return "etag"; }
+  bool check_function_as_value_generator(uchar *checker_args) override {
+    Check_function_as_value_generator_parameters *func_arg =
+        pointer_cast<Check_function_as_value_generator_parameters *>(
+            checker_args);
+    func_arg->banned_function_name = func_name();
+    return ((func_arg->source == VGS_GENERATED_COLUMN) ||
+            (func_arg->source == VGS_CHECK_CONSTRAINT));
+  }
+};
+
 class Item_func_reverse : public Item_str_func {
   String tmp_value;
 
@@ -1884,5 +1909,13 @@ class Item_func_internal_get_dd_column_extra final : public Item_str_func {
 
   String *val_str(String *) override;
 };
+
+inline void tohex(char *to, uint64_t from, uint len) {
+  to += len;
+  while (len--) {
+    *--to = dig_vec_lower[from & 15];
+    from >>= 4;
+  }
+}
 
 #endif /* ITEM_STRFUNC_INCLUDED */

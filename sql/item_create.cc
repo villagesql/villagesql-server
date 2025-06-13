@@ -1399,6 +1399,7 @@ static const std::pair<const char *, Create_func *> func_array[] = {
     {"DAYOFYEAR", SQL_FN(Item_func_dayofyear, 1)},
     {"DEGREES", SQL_FN(Item_func_degrees, 1)},
     {"ELT", SQL_FN_V(Item_func_elt, 2, MAX_ARGLIST_SIZE)},
+    {"ETAG", SQL_FN_V(Item_func_etag, 1, MAX_ARGLIST_SIZE)},
     {"EXP", SQL_FN(Item_func_exp, 1)},
     {"EXPORT_SET", SQL_FN_V(Item_func_export_set, 3, 5)},
     {"EXTRACTVALUE", SQL_FN(Item_func_xml_extractvalue, 2)},

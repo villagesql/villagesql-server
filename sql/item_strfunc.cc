@@ -55,8 +55,10 @@
 #include "base64.h"  // base64_encode_max_arg_length
 #include "decimal.h"
 #include "dig_vec.h"
+#include "extra/xxhash/my_xxhash.h"
 #include "field_types.h"  // MYSQL_TYPE_BIT
-#include "lex_string.h"   // LEX_CSTRING
+#include "item_json_func.h"
+#include "lex_string.h"  // LEX_CSTRING
 #include "m_string.h"
 #include "my_aes.h"    // MY_AES_IV_SIZE
 #include "my_alloc.h"  // MEM_ROOT
@@ -88,6 +90,7 @@
 #include "nulls.h"
 #include "sha1.h"  // SHA1_HASH_SIZE
 #include "sha2.h"
+#include "sql-common/json_hash.h"
 #include "sql-common/my_decimal.h"
 #include "sql/auth/auth_acls.h"
 #include "sql/auth/auth_common.h"  // check_password_policy
@@ -1245,6 +1248,82 @@ bool Item_func_concat_ws::resolve_type(THD *thd) {
   }
   set_data_type_string(char_length);
   set_nullable(is_nullable() || max_length > thd->variables.max_allowed_packet);
+  return false;
+}
+
+String *Item_func_etag::val_str(String *str) {
+  assert(fixed);
+
+  THD *thd = current_thd;
+  m_tmp_value.length(0);
+  XXH128_hash_t final_hash{0, 0};
+
+  for (uint i = 0; i < arg_count; i++) {
+    Json_wrapper_xxh_hasher hash_key;
+    switch (args[i]->data_type()) {
+      case MYSQL_TYPE_JSON: {
+        Json_wrapper wr;
+        if (get_json_wrapper(args, i, str, func_name(), &wr)) {
+          return error_str();
+        }
+        if (args[i]->null_value) {
+          /* Adding the null_value to the hash calculation to distiguish between
+           * NULL and 'NULL as JSON'. */
+          hash_key.add_character(args[i]->null_value);
+          hash_key.add_character(0);
+        } else {
+          if (calculate_etag_for_json(
+                  wr, hash_key,
+                  JsonSerializationDefaultErrorHandler(current_thd))) {
+            return error_str();
+          }
+        }
+      } break;
+      case MYSQL_TYPE_GEOMETRY:
+      case MYSQL_TYPE_VECTOR: {
+        my_error(ER_ETAG_NOT_SUPPORTED, MYF(0), func_name());
+        return error_str();
+      } break;
+      default: {
+        String *sptr = args[i]->val_str(str);
+        if (sptr == nullptr && !args[i]->null_value) {
+          assert(thd->is_error());
+          return error_str();
+        }
+        if (args[i]->null_value) {
+          /* Adding the null_value to the hash calculation to distiguish between
+           * NULL and '\0'*/
+          hash_key.add_character(args[i]->null_value);
+          hash_key.add_character(0);
+        } else {
+          hash_key.add_string(sptr->ptr(), sptr->length());
+        }
+
+        if (thd->is_error()) {
+          return error_str();
+        }
+      } break;
+    }
+    final_hash = add_xxh128_hash(final_hash, hash_key.get_digest());
+  }
+  str->length(0);
+
+  String res;
+  XXH128_hash_hex(final_hash, &res);
+  if (m_tmp_value.append(res)) {
+    return error_str();
+  }
+  m_tmp_value.set_charset(collation.collation);
+  return &m_tmp_value;
+}
+
+bool Item_func_etag::resolve_type(THD *thd) {
+  if (param_type_is_default(thd, 0, -1)) {
+    return true;
+  }
+
+  set_data_type_string(32U, default_charset());
+  set_nullable(false);
   return false;
 }
 
@@ -4318,14 +4397,6 @@ static char clock_seq_and_node_str[] = "-0000-000000000000";
 
 #define UUID_VERSION 0x1000
 #define UUID_VARIANT 0x8000
-
-static void tohex(char *to, uint from, uint len) {
-  to += len;
-  while (len--) {
-    *--to = dig_vec_lower[from & 15];
-    from >>= 4;
-  }
-}
 
 static void set_clock_seq_str() {
   const uint16 clock_seq = ((uint)(my_rnd(&uuid_rand) * 16383)) | UUID_VARIANT;

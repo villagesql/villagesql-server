@@ -32,6 +32,7 @@
 #include <limits>
 #include <memory>
 #include <new>
+#include <stack>
 #include <string>
 #include <utility>
 #include <vector>
@@ -49,6 +50,7 @@
 #include "scope_guard.h"
 #include "sql-common/json_diff.h"
 #include "sql-common/json_dom.h"
+#include "sql-common/json_hash.h"
 #include "sql-common/json_path.h"
 #include "sql-common/json_schema.h"
 #include "sql-common/json_syntax_check.h"
@@ -60,6 +62,7 @@
 #include "sql/field_common_properties.h"
 #include "sql/item_cmpfunc.h"  // Item_func_like
 #include "sql/item_create.h"
+#include "sql/item_sum.h"  // Item_sum_json_array
 #include "sql/parse_tree_nodes.h"
 #include "sql/parser_yystype.h"
 #include "sql/psi_memory_key.h"  // key_memory_JSON
@@ -1993,50 +1996,6 @@ bool Item_func_json_insert::val_json(Json_wrapper *wr) {
   return false;
 }
 
-void calculate_etag(Json_object *obj, std::string &etag_hash) {
-  etag_hash = "";
-  ankerl::unordered_dense::hash<std::string> hash_fn;
-
-  for (auto it = obj->begin(); it != obj->end(); it++) {
-    std::string key = it->first;
-
-    Json_dom *value = (it->second).get();
-    Json_wrapper value_jw(value, true);
-
-    std::string str_rep;
-
-    switch (value_jw.type()) {
-      case enum_json_type::J_INT:
-        str_rep = std::to_string(value_jw.get_int());
-        etag_hash = std::to_string(hash_fn(str_rep + etag_hash));
-        break;
-
-      case enum_json_type::J_DOUBLE:
-        str_rep = std::to_string(value_jw.get_double());
-        etag_hash = std::to_string(hash_fn(str_rep + etag_hash));
-        break;
-
-      case enum_json_type::J_STRING:
-        str_rep = std::string(value_jw.get_data(), value_jw.get_data_length());
-        etag_hash = std::to_string(hash_fn(str_rep + etag_hash));
-        break;
-
-      case enum_json_type::J_OBJECT:
-        calculate_etag(down_cast<Json_object *>(value), etag_hash);
-        break;
-
-      case enum_json_type::J_ARRAY:
-        for (uint i = 0; i < value_jw.length(); i++)
-          calculate_etag(down_cast<Json_object *>(value_jw[i].to_dom()),
-                         etag_hash);
-        break;
-
-      default:
-        break;
-    }
-  }
-}
-
 bool Item_func_json_array_insert::val_json(Json_wrapper *wr) {
   assert(fixed);
 
@@ -2108,8 +2067,7 @@ bool Item_func_json_array_insert::val_json(Json_wrapper *wr) {
       size_t pos = leg->first_array_index(arr->size()).position();
       if (arr->insert_alias(pos, valuew.clone_dom()))
         return error_json(); /* purecov: inspected */
-
-    }  // end of loop through paths
+    }                        // end of loop through paths
     // docw still owns the augmented doc, so hand it over to result
     *wr = std::move(docw);
 
@@ -2517,27 +2475,144 @@ bool Item_func_json_duality_object::resolve_type(THD *thd) {
   Table_ref *tr = master_query_expression->derived_table;
   if (tr != nullptr && tr->is_view() && tr->is_json_duality_view()) {
     m_inject_object_hash = true;
+    set_json_arrayagg_keys(thd);
   }
+  return false;
+}
 
+/*
+This function will add full path to the JSON_ARRAYAGG() keys to ignore order of
+elements as MySQL doesn't guarantee order in this case.
+The keys in the path will contain double quotes to avoid conflicts when there
+are other datatypes which can produce Json array i.e. JSON, Geometry etc. The
+below example shows one such case.
+
+CREATE TABLE `t1` (
+  `T1C1` int,
+  `T1C2` JSON DEFAULT NULL,
+  PRIMARY KEY (`T1C1`)
+);
+
+CREATE TABLE `t2` (
+  `T2C1` int,
+  `T2C2` int DEFAULT NULL,
+  PRIMARY KEY (`T1C1`)
+);
+
+CREATE JSON RELATIONAL DUALITY VIEW `dv_keytest`
+AS SELECT JSON_DUALITY_OBJECT(
+    '_id':`t1`.`T1C1`,
+    'T1.C2':`t1`.`T1C2`,
+    'T1' : (SELECT JSON_DUALITY_VIEW(
+          '_id':`t2`.`T2C1`,
+          'C2' : (SELECT JSON_ARRAYAGG(T2C2) FROM t2)
+          ) FROM t2;
+) from `t1x`;
+
+The m_json_arrayagg_keys will contains $."T1.C2". This will help ignore the
+order only for JSON_ARRAYGAGG() case and not for Json arrays in $."T1.C1".
+*/
+bool Item_func_json_duality_object::set_json_arrayagg_keys(THD *thd) {
+  std::stack<std::pair<Item_func_json_duality_object *, std::string>>
+      duality_object_stack;
+
+  duality_object_stack.emplace(std::make_pair(this, std::string("$")));
+
+  while (!duality_object_stack.empty()) {
+    auto *node = duality_object_stack.top().first;
+    auto path = duality_object_stack.top().second;
+    duality_object_stack.pop();
+
+    /* Traversing over arguments looking for JSONARRAY_AGG item */
+    uint32 arg_count = node->argument_count();
+    for (uint32 i = 0; i < arg_count; ++i) {
+      /*
+        Arguments are in pairs. There will be an even number of args.
+      */
+      assert(arg_count % 2 == 0);
+      const uint32 key_idx = i++;
+      const uint32 value_idx = i;
+
+      /* Since JSONARRAY_AGG in JSON_DUALITY_OBJECT shall be part of subquery
+         others are ignored */
+      if (node->arguments()[value_idx]->type() != Item::SUBQUERY_ITEM) {
+        continue;
+      }
+
+      /* key */
+      Item *key_item = node->arguments()[key_idx];
+      char buff[MAX_FIELD_WIDTH];
+      String utf8_res(buff, sizeof(buff), &my_charset_utf8mb4_bin);
+      const char *safep;   // contents of key_item, possibly converted
+      size_t safe_length;  // length of safep
+      String tmp_key_value;
+
+      if (get_json_object_member_name(thd, key_item, &tmp_key_value, &utf8_res,
+                                      &safep, &safe_length)) {
+        return true;
+      }
+
+      std::string key(safep, safe_length);
+      std::string full_path = path + ".\"" + key + "\"";
+
+      auto *subquery_item =
+          down_cast<Item_subselect *>(node->arguments()[value_idx]);
+      Query_block *sl =
+          subquery_item->query_expr()->query_term()->query_block();
+
+      for (Item *it : sl->visible_fields()) {
+        if (it->type() == Item::SUM_FUNC_ITEM &&
+            (down_cast<Item_sum_json_array *>(it)->sum_func() ==
+             Item_sum::JSON_ARRAYAGG_FUNC)) {
+          /* JSON_ARRAYAGG item is found. Add existing keys to path and
+           add current full path to array agg keys */
+          m_json_arrayagg_keys.insert(full_path);
+          auto *json_aragg = down_cast<Item_sum_json_array *>(it);
+          auto *arg1 = json_aragg->get_arg(0);
+
+          if (arg1->type() == Item::FUNC_ITEM &&
+              down_cast<Item_func *>(arg1)->functype() ==
+                  JSON_DUALITY_OBJECT_FUNC) {
+            duality_object_stack.emplace(
+                std::make_pair(down_cast<Item_func_json_duality_object *>(arg1),
+                               full_path + "[*]"));
+          }
+        } else if (it->type() == Item::FUNC_ITEM &&
+                   down_cast<Item_func *>(it)->functype() ==
+                       JSON_DUALITY_OBJECT_FUNC) {
+          duality_object_stack.emplace(std::make_pair(
+              down_cast<Item_func_json_duality_object *>(it), full_path));
+        }
+      }
+    }
+  }
   return false;
 }
 
 bool Item_func_json_duality_object::val_json(Json_wrapper *wr) {
+  assert(fixed);
+
   if (super::val_json(wr)) return true;
 
   if (m_inject_object_hash) {
+    Json_wrapper_xxh_hasher hash_key;
+    std::string root("$");
+    if (calculate_etag_for_json(
+            *wr, hash_key, JsonSerializationDefaultErrorHandler(current_thd),
+            &m_json_arrayagg_keys, &root)) {
+      return error_json();
+    }
     Json_object *object = down_cast<Json_object *>(wr->to_dom());
     assert(object != nullptr);
-
-    std::string etag_hash;
-    calculate_etag(object, etag_hash);
 
     Json_object *metadata = new (std::nothrow) Json_object();
     if (metadata == nullptr) {
       return true;
     }
+    String etag_hash;
+    XXH128_hash_hex(hash_key.get_digest(), &etag_hash);
     if (metadata->add_alias("etag", create_dom_ptr<Json_string>(
-                                        etag_hash.c_str(), etag_hash.size()))) {
+                                        etag_hash.ptr(), etag_hash.length()))) {
       return error_json();
     }
     if (object->add_alias("_metadata", metadata)) return error_json();

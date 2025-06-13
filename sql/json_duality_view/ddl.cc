@@ -151,7 +151,7 @@ namespace jdv {
         Item_sum_json_array *json_array_func =
             dynamic_cast<Item_sum_json_array *>(it);
         if (!json_array_func ||
-            strcmp(json_array_func->func_name(), "json_arrayagg") != 0) {
+            json_array_func->sum_func() != Item_sum::JSON_ARRAYAGG_FUNC) {
           my_error(ER_JDV_INVALID_DEFINITION_MUSTBE_JSON_OBJECT_FOR_NESTED,
                    MYF(0), object_name);
           return true;

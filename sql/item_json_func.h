@@ -792,6 +792,8 @@ class Item_func_json_duality_object final : public Item_func_json_row_object {
   jdv::Duality_view_tags m_table_tags{0};
   PT_jdv_name_value_list *m_jdv_name_value_list{nullptr};
   bool m_inject_object_hash{false};
+  std::unordered_set<std::string> m_json_arrayagg_keys;
+  bool get_inject_object_hash() const { return m_inject_object_hash; }
 
  public:
   Item_func_json_duality_object(THD *thd, const POS &pos, int table_tags,
@@ -806,9 +808,15 @@ class Item_func_json_duality_object final : public Item_func_json_row_object {
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
 
+  bool set_json_arrayagg_keys(THD *thd);
+
   jdv::Duality_view_tags table_tags() const { return m_table_tags; }
   Mem_root_array<LEX_STRING> *name_list();
   Mem_root_array<uint> *col_tags_list();
+
+  std::unordered_set<std::string> get_json_arrayagg_keys() {
+    return m_json_arrayagg_keys;
+  }
 };
 
 /**

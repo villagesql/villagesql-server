@@ -451,7 +451,8 @@ class Item_sum : public Item_func {
     SUM_BIT_FUNC,         // BIT_AND, BIT_OR and BIT_XOR
     UDF_SUM_FUNC,         // user defined functions
     GROUP_CONCAT_FUNC,    // GROUP_CONCAT
-    JSON_AGG_FUNC,        // JSON_ARRAYAGG and JSON_OBJECTAGG
+    JSON_OBJECTAGG_FUNC,  // JSON_OBJECTAGG
+    JSON_ARRAYAGG_FUNC,   // JSON_ARRAYAGG
     ROW_NUMBER_FUNC,      // Window functions
     RANK_FUNC,
     DENSE_RANK_FUNC,
@@ -1256,7 +1257,6 @@ class Item_sum_json : public Item_sum {
  public:
   ~Item_sum_json() override;
   bool fix_fields(THD *thd, Item **pItem) override;
-  enum Sumfunctype sum_func() const override { return JSON_AGG_FUNC; }
   Item_result result_type() const override { return STRING_RESULT; }
 
   bool do_itemize(Parse_context *pc, Item **res) override;
@@ -1295,6 +1295,7 @@ class Item_sum_json_array final : public Item_sum_json {
                       unique_ptr_destroy_only<Json_array> array);
   ~Item_sum_json_array() override;
   const char *func_name() const override { return "json_arrayagg"; }
+  enum Sumfunctype sum_func() const override { return JSON_ARRAYAGG_FUNC; }
   void clear() override;
   bool add() override;
   Item *copy_or_same(THD *thd) override;
@@ -1331,6 +1332,7 @@ class Item_sum_json_object final : public Item_sum_json {
                        unique_ptr_destroy_only<Json_object> object);
   ~Item_sum_json_object() override;
   const char *func_name() const override { return "json_objectagg"; }
+  enum Sumfunctype sum_func() const override { return JSON_OBJECTAGG_FUNC; }
   void clear() override;
   bool add() override;
   Item *copy_or_same(THD *thd) override;
