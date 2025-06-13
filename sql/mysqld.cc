@@ -806,8 +806,9 @@ MySQL clients support the protocol:
 #include "sql/item_cmpfunc.h"  // Arg_comparator
 #include "sql/item_create.h"
 #include "sql/item_func.h"
-#include "sql/item_strfunc.h"  // Item_func_uuid
-#include "sql/keycaches.h"     // get_or_create_key_cache
+#include "sql/item_strfunc.h"                    // Item_func_uuid
+#include "sql/json_duality_view/option_usage.h"  // Option tracker for JDV
+#include "sql/keycaches.h"                       // get_or_create_key_cache
 #include "sql/log.h"
 #include "sql/log_event.h"  // Rows_log_event
 #include "sql/log_resource.h"
@@ -2130,7 +2131,8 @@ static void server_component_init() {
       srv_registry, srv_registry_registration,
       [&](SERVICE_TYPE(mysql_option_tracker_option) * opt) {
         return 0 != opt->define("MySQL Server", "mysql_server", 1) ||
-               optimizer_options_usage_init(opt, srv_registry);
+               optimizer_options_usage_init(opt, srv_registry) ||
+               jdv_options_usage_init(opt, srv_registry);
       },
       false);
 }
@@ -2192,7 +2194,8 @@ static bool component_infrastructure_deinit(bool print_message) {
       srv_registry, srv_registry_registration,
       [&](SERVICE_TYPE(mysql_option_tracker_option) * opt) {
         return 0 != opt->undefine("MySQL Server") ||
-               optimizer_options_usage_deinit(opt, srv_registry);
+               optimizer_options_usage_deinit(opt, srv_registry) ||
+               jdv_options_usage_deinit(opt, srv_registry);
       });
   persistent_dynamic_loader_deinit();
   bool retval = false;
@@ -12076,6 +12079,9 @@ SHOW_VAR status_vars[] = {
      SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
     {"option_tracker_usage:Hypergraph Optimizer",
      reinterpret_cast<char *>(&option_tracker_hypergraph_optimizer_usage_count),
+     SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
+    {"option_tracker_usage:JSON Duality View",
+     reinterpret_cast<char *>(&option_tracker_json_duality_view_usage_count),
      SHOW_LONGLONG, SHOW_SCOPE_GLOBAL},
     {NullS, NullS, SHOW_FUNC, SHOW_SCOPE_ALL}};
 

@@ -270,7 +270,7 @@ class Item_func_statement_digest_text final : public Item_str_func {
   uchar *m_token_buffer{nullptr};
 };
 
-class Item_func_from_base64 final : public Item_str_func {
+class Item_func_from_base64 : public Item_str_func {
   String tmp_value;
 
  public:
@@ -1714,6 +1714,28 @@ class Item_func_get_dd_property_key_value final : public Item_str_func {
   }
 
   const char *func_name() const override { return "get_dd_property_key_value"; }
+
+  String *val_str(String *) override;
+};
+
+class Item_func_get_jdv_property_key_value final : public Item_str_func {
+ public:
+  Item_func_get_jdv_property_key_value(const POS &pos, Item *a, Item *b,
+                                       Item *c, Item *d)
+      : Item_str_func(pos, a, b, c, d) {}
+
+  enum Functype functype() const override { return DD_INTERNAL_FUNC; }
+  bool resolve_type(THD *) override {
+    set_data_type_string(MAX_BLOB_WIDTH, system_charset_info);
+    set_nullable(true);
+    null_on_null = false;
+
+    return false;
+  }
+
+  const char *func_name() const override {
+    return "get_jdv_property_key_value";
+  }
 
   String *val_str(String *) override;
 };

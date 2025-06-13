@@ -739,6 +739,7 @@ enum class Secondary_engine_optimization {
 
 #define SUB_STMT_TRIGGER 1
 #define SUB_STMT_FUNCTION 2
+#define SUB_STMT_DUALITY_VIEW 3
 
 class Sub_statement_state {
  public:
@@ -2844,6 +2845,8 @@ class THD : public MDL_context_owner,
   bool derived_tables_processing;
   // Set while parsing INFORMATION_SCHEMA system views.
   bool parsing_system_view;
+  // Set while parsing JSON duality view.
+  bool parsing_json_duality_view{false};
 
   /** Current SP-runtime context. */
   sp_rcontext *sp_runtime_ctx;

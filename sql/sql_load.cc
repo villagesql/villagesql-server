@@ -721,6 +721,11 @@ bool Sql_cmd_load_table::execute_inner(THD *thd,
           table_list->updatable_base_table()
           : nullptr;
 
+  if (table_list->is_json_duality_view()) {
+    my_error(ER_JDV_CANNOT_BE_USED_WITH, MYF(0), table_list->alias, "LOAD");
+    return true;
+  }
+
   if (insert_table_ref == nullptr ||
       check_key_in_view(thd, table_list, insert_table_ref)) {
     my_error(ER_NON_UPDATABLE_TABLE, MYF(0), table_list->alias, "LOAD");

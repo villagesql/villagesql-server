@@ -5241,6 +5241,7 @@ void THD::reset_for_next_command() {
   thd->set_trans_pos(nullptr, 0);
   thd->derived_tables_processing = false;
   thd->parsing_system_view = false;
+  thd->parsing_json_duality_view = false;
 
   // Need explicit setting, else demand all privileges to a table.
   thd->want_privilege = ALL_ACCESS;

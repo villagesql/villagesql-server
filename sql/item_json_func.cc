@@ -25,6 +25,7 @@
 
 #include "sql/item_json_func.h"
 
+#include <ankerl/unordered_dense.h>
 #include <assert.h>
 #include <algorithm>  // std::fill
 #include <cstring>
@@ -59,6 +60,7 @@
 #include "sql/field_common_properties.h"
 #include "sql/item_cmpfunc.h"  // Item_func_like
 #include "sql/item_create.h"
+#include "sql/parse_tree_nodes.h"
 #include "sql/parser_yystype.h"
 #include "sql/psi_memory_key.h"  // key_memory_JSON
 #include "sql/sql_class.h"       // THD
@@ -1991,6 +1993,50 @@ bool Item_func_json_insert::val_json(Json_wrapper *wr) {
   return false;
 }
 
+void calculate_etag(Json_object *obj, std::string &etag_hash) {
+  etag_hash = "";
+  ankerl::unordered_dense::hash<std::string> hash_fn;
+
+  for (auto it = obj->begin(); it != obj->end(); it++) {
+    std::string key = it->first;
+
+    Json_dom *value = (it->second).get();
+    Json_wrapper value_jw(value, true);
+
+    std::string str_rep;
+
+    switch (value_jw.type()) {
+      case enum_json_type::J_INT:
+        str_rep = std::to_string(value_jw.get_int());
+        etag_hash = std::to_string(hash_fn(str_rep + etag_hash));
+        break;
+
+      case enum_json_type::J_DOUBLE:
+        str_rep = std::to_string(value_jw.get_double());
+        etag_hash = std::to_string(hash_fn(str_rep + etag_hash));
+        break;
+
+      case enum_json_type::J_STRING:
+        str_rep = std::string(value_jw.get_data(), value_jw.get_data_length());
+        etag_hash = std::to_string(hash_fn(str_rep + etag_hash));
+        break;
+
+      case enum_json_type::J_OBJECT:
+        calculate_etag(down_cast<Json_object *>(value), etag_hash);
+        break;
+
+      case enum_json_type::J_ARRAY:
+        for (uint i = 0; i < value_jw.length(); i++)
+          calculate_etag(down_cast<Json_object *>(value_jw[i].to_dom()),
+                         etag_hash);
+        break;
+
+      default:
+        break;
+    }
+  }
+}
+
 bool Item_func_json_array_insert::val_json(Json_wrapper *wr) {
   assert(fixed);
 
@@ -2451,6 +2497,106 @@ bool Item_func_json_row_object::val_json(Json_wrapper *wr) {
 
   null_value = false;
   return false;
+}
+
+Item_func_json_duality_object::Item_func_json_duality_object(
+    THD *thd, const POS &pos, int table_tags,
+    PT_jdv_name_value_list *jdv_name_value_list)
+    : super(thd, pos, jdv_name_value_list->name_value_list()),
+      m_jdv_name_value_list(jdv_name_value_list) {
+  m_table_tags = static_cast<jdv::Duality_view_tags>(table_tags);
+}
+
+bool Item_func_json_duality_object::resolve_type(THD *thd) {
+  if (super::resolve_type(thd)) return true;
+
+  // Set m_inject_object_hash only in the first JDO instance of JSON duality
+  // view.
+  Query_expression *master_query_expression =
+      thd->lex->current_query_block()->master_query_expression();
+  Table_ref *tr = master_query_expression->derived_table;
+  if (tr != nullptr && tr->is_view() && tr->is_json_duality_view()) {
+    m_inject_object_hash = true;
+  }
+
+  return false;
+}
+
+bool Item_func_json_duality_object::val_json(Json_wrapper *wr) {
+  if (super::val_json(wr)) return true;
+
+  if (m_inject_object_hash) {
+    Json_object *object = down_cast<Json_object *>(wr->to_dom());
+    assert(object != nullptr);
+
+    std::string etag_hash;
+    calculate_etag(object, etag_hash);
+
+    Json_object *metadata = new (std::nothrow) Json_object();
+    if (metadata == nullptr) {
+      return true;
+    }
+    if (metadata->add_alias("etag", create_dom_ptr<Json_string>(
+                                        etag_hash.c_str(), etag_hash.size()))) {
+      return error_json();
+    }
+    if (object->add_alias("_metadata", metadata)) return error_json();
+  }
+
+  return false;
+}
+
+void Item_func_json_duality_object::print(const THD *thd, String *str,
+                                          enum_query_type query_type) const {
+  str->append(func_name());
+  str->append('(');
+
+  if (table_tags() != 0) {
+    bool first_tag = true;
+    str->append(" WITH (");
+    if (table_tags() & jdv::DVT_INSERT) {
+      first_tag = false;
+      str->append("INSERT");
+    }
+
+    if (table_tags() & jdv::DVT_UPDATE) {
+      if (first_tag) {
+        first_tag = false;
+      } else {
+        str->append(",");
+      }
+      str->append("UPDATE");
+    }
+
+    if (table_tags() & jdv::DVT_DELETE) {
+      if (first_tag) {
+        first_tag = false;
+      } else {
+        str->append(",");
+      }
+      str->append("DELETE");
+    }
+    str->append(") ");
+  }
+
+  for (uint i = 0; i < arg_count; i++) {
+    if ((i != 0) && (i % 2) == 0)
+      str->append(',');
+    else if ((i % 2))
+      str->append(':');
+
+    args[i]->print(thd, str, query_type);
+  }
+
+  str->append(')');
+}
+
+Mem_root_array<LEX_STRING> *Item_func_json_duality_object::name_list() {
+  return m_jdv_name_value_list->name_list();
+}
+
+Mem_root_array<uint> *Item_func_json_duality_object::col_tags_list() {
+  return m_jdv_name_value_list->col_tags_list();
 }
 
 bool Item_func_json_search::fix_fields(THD *thd, Item **items) {

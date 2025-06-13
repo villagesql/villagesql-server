@@ -343,6 +343,7 @@ class Item_func : public Item_result_field {
     JSON_DEPTH_FUNC,
     JSON_EXTRACT_FUNC,
     JSON_OBJECT_FUNC,
+    JSON_DUALITY_OBJECT_FUNC,
     JSON_ARRAY_FUNC,
     JSON_VALID_FUNC,
     JSON_TYPE_FUNC,

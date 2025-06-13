@@ -70,7 +70,8 @@
 #include "sql/iterators/row_iterator.h"
 #include "sql/join_optimizer/access_path.h"
 #include "sql/join_optimizer/materialize_path_parameters.h"
-#include "sql/key_spec.h"  // KEY_CREATE_INFO
+#include "sql/json_duality_view/content_tree.h"  // destroy
+#include "sql/key_spec.h"                        // KEY_CREATE_INFO
 #include "sql/mdl.h"
 #include "sql/mem_root_array.h"  // Mem_root_array
 #include "sql/parse_location.h"
@@ -4368,6 +4369,7 @@ struct LEX : public Query_tables_list {
   int select_number;  ///< Number of query block (by EXPLAIN)
   uint8 create_view_algorithm;
   uint8 create_view_check;
+  enum_view_type create_view_type;
   /**
     @todo ensure that correct CONTEXT_ANALYSIS_ONLY is set for all preparation
           code, so we can fully rely on this field.
@@ -4515,6 +4517,14 @@ struct LEX : public Query_tables_list {
 
   void cleanup(bool full) {
     unit->cleanup(full);
+    if (query_tables != nullptr) {
+      for (Table_ref *tr = query_tables; tr != nullptr; tr = tr->next_global) {
+        if (tr->jdv_content_tree != nullptr) {
+          jdv::destroy_content_tree(tr->jdv_content_tree);
+          tr->jdv_content_tree = nullptr;
+        }
+      }
+    }
     if (full) {
       m_IS_table_stats.invalidate_cache();
       m_IS_tablespace_stats.invalidate_cache();
