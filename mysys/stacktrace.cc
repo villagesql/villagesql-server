@@ -36,10 +36,7 @@
 #include <sys/types.h>
 #include <cerrno>
 #include <cstdarg>
-#include <cstdint>
 #include <cstdio>
-#include <cstdlib>
-#include <cstring>
 #include <string_view>
 #if defined(__linux__) || defined(__sun) || defined(__FreeBSD__)
 #include <sys/syscall.h>
@@ -51,11 +48,11 @@
 
 #include <algorithm>
 #include <cinttypes>
+#include <iterator>
 
 #include "my_inttypes.h"
-#include "my_macros.h"
 #include "my_stacktrace.h"
-#include "template_utils.h"
+#include "template_utils.h"  // IWYU pragma: keep
 
 #ifndef _WIN32
 #include <csignal>
@@ -71,7 +68,7 @@
 #endif
 
 #ifdef HAVE_EXECINFO_H
-#include <execinfo.h>
+#include <execinfo.h>  // IWYU pragma: keep
 #endif
 
 #ifdef __FreeBSD__

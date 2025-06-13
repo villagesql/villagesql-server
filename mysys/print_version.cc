@@ -36,7 +36,6 @@
 #include "my_config.h"
 
 #include <cstdio>
-#include <cstring>
 #include <sstream>
 
 #include "my_sys.h"

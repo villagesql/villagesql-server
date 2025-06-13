@@ -31,13 +31,15 @@
 */
 
 #include <fcntl.h>
+#include <stdlib.h>
+#include <sys/stat.h>
 #include <sys/types.h>
 
 #include <cassert>
 #include <cstdarg>
 #include <cstdint>
 #include <cstring>
-#include <deque>
+#include <functional>
 #include <memory>
 #include <mutex>
 #include <new>

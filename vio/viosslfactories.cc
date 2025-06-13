@@ -32,6 +32,7 @@
 #include "m_string.h"
 #include "my_dbug.h"
 #include "my_inttypes.h"
+#include "my_thread.h"
 #include "mysql/my_loglevel.h"
 #include "mysql/strings/m_ctype.h"
 #if !defined(HAVE_PSI_INTERFACE)
