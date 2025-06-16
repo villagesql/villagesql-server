@@ -21,6 +21,24 @@
 # along with this program; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
+
+# Build idc_metadata_schema.h
+ADD_CUSTOM_COMMAND(
+  OUTPUT ${CMAKE_CURRENT_BINARY_DIR}/idc_metadata_schema.h
+  COMMAND comp_sql
+  idc_metadata_schema
+  ${CMAKE_SOURCE_DIR}/router/tests/component/data/metadata-model-2.1.0.sql
+  idc_metadata_schema.h
+  WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}
+  DEPENDS comp_sql
+  ${CMAKE_SOURCE_DIR}/router/tests/component/data/metadata-model-2.1.0.sql
+)
+# Add target for the above to be built
+MY_ADD_CUSTOM_TARGET(RouterIdcMetadataSchema
+ ALL
+ DEPENDS ${CMAKE_CURRENT_BINARY_DIR}/idc_metadata_schema.h
+)
+
 ADD_DEFINITIONS(-DSSL_TEST_DATA_DIR="${CMAKE_SOURCE_DIR}/mysql-test/std_data/")
 ADD_DEFINITIONS(-DCMAKE_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 FOREACH(test_file
@@ -40,6 +58,10 @@ FOREACH(test_file
     router_mysqlxclient
     router_mysqlxmessages
     mysql_protocol
+    DEPENDS
+    RouterIdcMetadataSchema
+    INCLUDE_DIRS
+    ${CMAKE_CURRENT_BINARY_DIR}
     )
 ENDFOREACH()
 
