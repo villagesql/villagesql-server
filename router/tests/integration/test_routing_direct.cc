@@ -3666,7 +3666,8 @@ TEST_P(ConnectionTest, classic_protocol_replay_session_trackers) {
     oss << "SET @@SESSION." << std::quoted(var[0], '`') << "=";
 
     if (var[1].empty()) {
-      if (var[0] == "innodb_ft_user_stopword_table") {
+      if (var[0] == "innodb_ft_user_stopword_table" ||
+          var[0] == "external_table_storage_engine") {
         oss << "NULL";
       } else {
         oss << "''";
@@ -3777,7 +3778,9 @@ TEST_P(ConnectionTest, classic_protocol_session_vars_nullable) {
                          "character_set_results",                       //
                          "innodb_ft_user_stopword_table",               //
                          "innodb_interpreter_output",                   // debug
-                         "session_track_system_variables"));
+                         "session_track_system_variables",
+                         "external_table_storage_engine",
+                         "external_table_secondary_storage_engine"));
     }
   }
 }
