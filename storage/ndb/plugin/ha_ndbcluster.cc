@@ -1851,6 +1851,34 @@ int ha_ndbcluster::get_metadata(Ndb *ndb, const char *dbname,
       // the table definition will be correct
       return HA_ERR_TABLE_DEF_CHANGED;
     }
+#ifndef NDEBUG
+    /* Light check of table_def versus Server's table_share schema info */
+    // Num columns
+    {
+      const int table_def_cols = ndb_dd_table_get_num_columns(table_def);
+      const int table_share_cols = table_share->fields;
+      if (table_def_cols != table_share_cols) {
+        ndb_log_error(
+            "Schema mismatch : Table def cols %u Table share cols %u for table "
+            "%s.%s",
+            table_def_cols, table_share_cols, dbname, tabname);
+        ndbcluster::ndbrequire(false);
+      }
+    }
+    // Num indexes
+    {
+      const int table_def_idxs = ndb_dd_table_get_num_indexes(table_def);
+      const int table_share_idxs = table_share->keys;
+      if (table_def_idxs != table_share_idxs) {
+        ndb_log_error(
+            "Schema mismatch : Table def idxs %u Table share idxs %u for table "
+            "%s.%s",
+            table_def_idxs, table_share_idxs, dbname, tabname);
+        ndbcluster::ndbrequire(false);
+      }
+    }
+    // Todo : other attributes
+#endif
   }
 
   if (DBUG_EVALUATE_IF("ndb_get_metadata_fail", true, false)) {
