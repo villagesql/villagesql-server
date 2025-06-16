@@ -2339,6 +2339,13 @@ class Ndb_schema_event_handler {
       return false;
     }
     dd_client.commit();
+
+    /**
+     * table_share may cache old schema, clear it out with atomicity
+     * wrt DD changes via MDL Exclusive lock
+     */
+    ndb_tdc_close_cached_table(m_thd, schema_name, table_name);
+
     return true;
   }
 
