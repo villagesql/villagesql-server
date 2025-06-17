@@ -201,12 +201,19 @@ TEST_P(MetadataServerInvalidGRState, InvalidGRState) {
       wait_for_transaction_count_increase(md_servers_http_ports[1], 2, 5s));
 
   // check that Router refused to use metadata from former PRIMARY (only once,
-  // then should stop using it)
-  check_log_contains(router,
-                     "Metadata server 127.0.0.1:" +
-                         std::to_string(md_servers_classic_ports[0]) +
-                         " is not an online GR member - skipping.",
-                     1);
+  // then should stop using it).
+  // The presence of the error "Metadata server 127.0.0.1:11000 is not an online
+  // GR member - skipping" in the log will depend on when the mock metadata was
+  // changed. If the Router is in the process of refreshing the metadata it
+  // could already query the member state and still see the node ONLINE, but
+  // later on, checking the other members state, it will disocver that there is
+  // no quorum. Because of that, we check for the "no quorum" error message,
+  // which gets logged in both cases.
+  check_log_contains(
+      router,
+      "127.0.0.1:" + std::to_string(md_servers_classic_ports[0]) +
+          " is not part of quorum for cluster",
+      1);
 
   // new connections are now handled by new primary and the secon secondary
   {
