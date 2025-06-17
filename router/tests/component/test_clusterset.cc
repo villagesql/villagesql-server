@@ -1740,8 +1740,10 @@ TEST_P(PrimaryTargetClusterMarkedInvalidInTheMetadataTest,
 
   ClusterSetOptions cs_options;
   cs_options.tracefile = "metadata_clusterset.js";
-  cs_options.router_options = R"({"target_cluster" : "primary",
-        "stats_updates_frequency": 1})";
+  cs_options.router_options =
+      R"({"target_cluster" : "primary", "stats_updates_frequency": 1,
+      "invalidated_cluster_policy" : ")" +
+      policy + "\" }";
   create_clusterset(cs_options);
 
   /* auto &router = */ launch_router(cs_options.topology);
@@ -1772,10 +1774,6 @@ TEST_P(PrimaryTargetClusterMarkedInvalidInTheMetadataTest,
 
   cs_options.view_id = ++view_id;
   cs_options.target_cluster_id = kPrimaryClusterId;
-  cs_options.router_options =
-      R"({"target_cluster" : "primary", "stats_updates_frequency": 1,
-      "invalidated_cluster_policy" : ")" +
-      policy + "\" }";
 
   set_mock_metadata_on_all_cs_nodes(cs_options);
 
