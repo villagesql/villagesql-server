@@ -213,7 +213,7 @@ TEST_P(MetadataServerInvalidGRState, InvalidGRState) {
           " is not part of quorum for cluster",
       1);
 
-  // new connections are now handled by new primary and the secon secondary
+  // new connections are now handled by new primary and the second secondary
   {
     auto conn_res = make_new_connection(router_rw_port);
     ASSERT_NO_ERROR(conn_res);
@@ -328,12 +328,11 @@ TEST_P(MetadataServerNoQuorum, NoQuorum) {
 
   // check that Router refused to use metadata from former PRIMARY (only once,
   // then should stop using it)
-  EXPECT_NO_FATAL_FAILURE(
-      check_log_contains(router,
-                         "Metadata server 127.0.0.1:" +
-                             std::to_string(md_servers_classic_ports[0]) +
-                             " is not a member of quorum group - skipping.",
-                         1));
+  EXPECT_NO_FATAL_FAILURE(check_log_contains(
+      router,
+      "127.0.0.1:" + std::to_string(md_servers_classic_ports[0]) +
+          " is not part of quorum for cluster",
+      1));
 
   // new connections are now handled by new primary and the second secondary
   {
