@@ -1845,7 +1845,9 @@ TEST_P(ReplicaTargetClusterMarkedInvalidInTheMetadataTest,
   cs_options.tracefile = "metadata_clusterset.js";
   cs_options.router_options =
       R"({"target_cluster" : "00000000-0000-0000-0000-0000000000g2",
-          "stats_updates_frequency": 1})";
+          "stats_updates_frequency": 1,
+          "invalidated_cluster_policy" : ")" +
+      policy + "\" }";
   create_clusterset(cs_options);
 
   /* auto &router = */ launch_router(cs_options.topology);
