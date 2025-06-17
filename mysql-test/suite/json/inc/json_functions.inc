@@ -4207,6 +4207,26 @@ SELECT * FROM t1 LEFT JOIN t2 ON x=y WHERE JSON_SET('{}', '$.a', y) <> 3;
 SELECT * FROM t1 LEFT JOIN t2 ON x=y WHERE JSON_REPLACE('{}', '$.a', y) <> 3;
 DROP TABLE t1, t2;
 
+--echo #
+--echo # Bug#337458212: Extreme TIME value magically appear smaller when
+--echo #                converted to JSON
+--echo #
+
+CREATE TABLE times (t TIME(6));
+
+INSERT INTO times VALUES
+('-838:59:59'),
+('838:59:59'),
+('-00:00:00.000001'),
+('-00:00:00'),
+('24:00:00'),
+('-12:00:00'),
+('-24:00:00');
+
+SELECT CAST(t AS JSON) FROM times;
+
+DROP TABLE times;
+
 # Local Variables:
 # mode: sql
 # sql-product: mysql

@@ -605,3 +605,70 @@ SELECT CAST(70503052756.0E0 AS TIME);
 SELECT CAST(70503052756.123456E0 AS TIME(6));
 SELECT CAST(20250101.0E0 AS TIME);
 SELECT CAST(20250101.123456E0 AS TIME(6));
+
+--echo #
+--echo # Bug#36065557: using preparation statement to query the time type
+--echo #               some data not found.
+--echo #
+
+CREATE TABLE t1(
+  id_col INTEGER,
+  time_6 TIME(6) DEFAULT '01:01:01.000000',
+  time_0 TIME
+);
+
+INSERT INTO t1(id_col, time_6, time_0) VALUES
+(31,'07:59:59.000000', '07:59:59'),
+(32,'07:59:59.000000', '07:59:59'),
+(51,'00:00:00.000000', '00:00:00'),
+(52,'00:00:00.000000', '00:00:00'),
+(71,'06:06:06.000000', '06:06:06'),
+(72,'06:06:06.000000', '06:06:06');
+
+prepare stmt from
+"SELECT id_col, time_6, time_0
+ FROM t1
+ WHERE time_6 IN (?, '06:06:06.000000','00:00:00');";
+
+set @time_val='07:59:59';
+
+execute stmt USING @time_val;
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#35500028: Incorrect result when select time col use
+--echo #               WHERE IN (NULL, 'xx:xx:xx.xxxxxx')
+--echo #
+
+CREATE TABLE t1 (
+  id INTEGER NOT NULL,
+  tm TIME(6) DEFAULT NULL,
+  PRIMARY KEY (id)
+);
+
+INSERT INTO t1(id) VALUES (1), (2);
+INSERT INTO t1 VALUES (3, '00:00:00.000000'), (4, '00:00:00.000000');
+
+SELECT COUNT(*) FROM t1 WHERE tm IN ('00:00:00.000000', NULL) ORDER BY 1;
+SELECT COUNT(*) FROM t1 WHERE tm IN ('00:00:00.000000') ORDER BY 1;
+SELECT COUNT(*) FROM t1 WHERE tm IN ('00:00:00.000000', NULL);
+SELECT COUNT(*) FROM t1 WHERE tm IN ('00:00:00.000000');
+
+DROP TABLE t1;
+
+--echo #
+--echo # Bug#34188599: IN() does not work correctly for TIME columns
+--echo #
+
+CREATE TABLE t (a TIME);
+
+INSERT INTO t VALUES ('08:00:00');
+
+SELECT * FROM t WHERE a IN ('08:00:00', NULL);
+
+SELECT * FROM t WHERE a IN ('08:00:00', '');
+
+SELECT * FROM t WHERE a IN ('08:00:00', '07:59:59');
+
+DROP TABLE t;

@@ -11123,3 +11123,26 @@ SELECT * FROM t1 LEFT JOIN t2 ON x=y WHERE JSON_REPLACE('{}', '$.a', y) <> 3;
 x	y
 a	NULL
 DROP TABLE t1, t2;
+#
+# Bug#337458212: Extreme TIME value magically appear smaller when
+#                converted to JSON
+#
+CREATE TABLE times (t TIME(6));
+INSERT INTO times VALUES
+('-838:59:59'),
+('838:59:59'),
+('-00:00:00.000001'),
+('-00:00:00'),
+('24:00:00'),
+('-12:00:00'),
+('-24:00:00');
+SELECT CAST(t AS JSON) FROM times;
+CAST(t AS JSON)
+"-838:59:59.000000"
+"838:59:59.000000"
+"-00:00:00.000001"
+"00:00:00.000000"
+"24:00:00.000000"
+"-12:00:00.000000"
+"-24:00:00.000000"
+DROP TABLE times;
