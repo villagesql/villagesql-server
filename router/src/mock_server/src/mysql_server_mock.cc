@@ -92,6 +92,8 @@ void MySQLServerMock::close_all_connections() {
 
 class Acceptor {
  public:
+  using protocol_type = net::ip::tcp;
+
   Acceptor(net::io_context &io_ctx, std::string protocol_name,
            WaitableMonitor<std::list<std::unique_ptr<MySQLServerMockSession>>>
                &client_sessions,
