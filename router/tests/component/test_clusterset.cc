@@ -2047,11 +2047,6 @@ TEST_P(ReplicaTargetClusterMarkedInvalidInTheMetadataTest,
   size_t node_id = 0;
   cs_options.view_id = ++view_id;
   cs_options.target_cluster_id = kFirstReplicaClusterId;
-  cs_options.router_options =
-      R"({"target_cluster" : "00000000-0000-0000-0000-0000000000g2",
-          "stats_updates_frequency": 1,
-          "invalidated_cluster_policy" : ")" +
-      policy + "\" }";
   for (const auto &node : second_replica.nodes) {
     const auto http_port = node.http_port;
     set_mock_clusterset_metadata(http_port,
@@ -3165,8 +3160,10 @@ TEST_P(InvalidClusterSetTest, MatchInvalidatedCluster) {
   ClusterSetOptions cs_options;
   cs_options.target_cluster_id = target_cluster_id;
   cs_options.tracefile = "metadata_clusterset.js";
-  cs_options.router_options =
-      R"({"target_cluster" : ")" + target_cluster + "\" }";
+  const std::string policy = GetParam();
+  cs_options.router_options = R"({"target_cluster" : ")" + target_cluster +
+                              R"(", "invalidated_cluster_policy" : ")" +
+                              policy + "\" }";
   create_clusterset(cs_options);
 
   SCOPED_TRACE("// Launch the Router");
@@ -3177,7 +3174,6 @@ TEST_P(InvalidClusterSetTest, MatchInvalidatedCluster) {
       "the selected invalidatedClusterRoutingPolicy");
   cs_options.topology.clusters[kPrimaryClusterId].invalid = true;
 
-  const std::string policy = GetParam();
   cs_options.view_id = ++view_id;
   cs_options.target_cluster_id = kPrimaryClusterId;
   cs_options.router_options =
