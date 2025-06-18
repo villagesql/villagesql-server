@@ -10359,7 +10359,7 @@ ER_LANGUAGE_COMPONENT_TIMEZONE
   eng "%s> Time zone %s is not supported."
 
 ER_LANGUAGE_COMPONENT_KEYWORD
-  eng "%s> The identifier '%s' is a reserved word."
+  eng "%s> The identifier '%s' is not valid."
 
 ER_LANGUAGE_COMPONENT_SET_SYSTEM_VARIABLE
   eng "Language component: System variable '%s' cannot be configured when component is active."
