@@ -69,8 +69,8 @@ ELSEIF(APPLE)
   CMAKE_MINIMUM_REQUIRED(VERSION 3.19)
 ELSEIF(UNIX)
   # This is currently minimum version on all supported platforms.
-  IF(CMAKE_VERSION VERSION_LESS 3.14.6)
-    # Default cmake is 2.8.12.2 on RedHat
+  IF(CMAKE_VERSION VERSION_LESS 3.17.5)
+    # Default cmake is 2.8.12.2 on RedHat 7
     IF(EXISTS "/etc/redhat-release")
       MESSAGE(WARNING "Please use cmake3 rather than cmake on this platform")
       FIND_PROGRAM(MY_CMAKE3 cmake3 /bin /usr/bin /usr/local/bin)
@@ -85,7 +85,7 @@ ELSEIF(UNIX)
       IF(MY_UNAME)
         EXECUTE_PROCESS(COMMAND uname -s OUTPUT_VARIABLE MY_HOST_SYSTEM_NAME)
         IF(MY_HOST_SYSTEM_NAME MATCHES "SunOS")
-          FIND_PROGRAM(MY_CMAKE cmake /usr/bin
+          FIND_PROGRAM(MY_CMAKE cmake /usr/bin /bin
             NO_CMAKE_ENVIRONMENT_PATH
             NO_SYSTEM_ENVIRONMENT_PATH
             )
@@ -104,7 +104,7 @@ ENDIF()
 # CMake 3.5 is needed for TARGET_SOURCES(... $<TARGET_OBJECTS:${LIB}_objlib>)
 # CMake 3.7 is needeed for VERSION_GREATER_EQUAL
 # For the set of currently supported platforms, we can bump up to:
-CMAKE_MINIMUM_REQUIRED(VERSION 3.14.6)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.17.5)
 
 # Will set GIT_EXECUTABLE and GIT_FOUND
 FIND_PACKAGE(Git)
@@ -229,8 +229,8 @@ IF(APPLE)
 ENDIF()
 
 # Add all policies *after* CMAKE_MINIMUM_REQUIRED
-# Repeating CMAKE_MINIMUM_REQUIRED here will load defaults for 3.14.6
-CMAKE_MINIMUM_REQUIRED(VERSION 3.14.6)
+# Repeating CMAKE_MINIMUM_REQUIRED here will load defaults for 3.17.5
+CMAKE_MINIMUM_REQUIRED(VERSION 3.17.5)
 INCLUDE(cmake_policies NO_POLICY_SCOPE)
 
 MACRO(STRING_APPEND STRING_VAR INPUT)
