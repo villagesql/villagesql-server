@@ -416,7 +416,7 @@ static const char *const jamFileNames[] = {
     "SuperPool.hpp",                      // 281 DELETED FILE
     "pc.hpp",                             // 282
     "LockQueue.hpp",                      // 283
-    "ClusterConfiguration.hpp",           // 284
+    "ClusterConfiguration.hpp",           // 284 DELETED FILE
     "SimulatedBlock_nonmt.cpp",           // 285
     "SafeCounter.hpp",                    // 286
     "ndbd_malloc.cpp",                    // 287
