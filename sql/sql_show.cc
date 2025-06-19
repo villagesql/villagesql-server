@@ -36,6 +36,7 @@
 #include <memory>
 #include <new>
 #include <optional>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -2115,6 +2116,78 @@ static bool generate_sql_from_file_format_object(
 }
 
 /**
+  Check if all parts of the engine attribute object can be expressed
+  with SQL syntax.
+
+  Iterates through all JSON keys of the engine attribute and checks whether
+  there is a key that does not have a mapping to SQL syntax.
+
+  @param engine_attr_obj The json_object that represents the parsed
+                         engine attribute string.
+  @returns false if an unsupported JSON key is found, true, otherwise.
+ */
+static bool can_use_sql_for_engine_attribute(Json_object *engine_attr_obj) {
+  using namespace external_table;
+
+  const std::set<std::string_view> supported_top_level_params = {
+      kFileParam, kDialectParam, "auto_refresh"sv,
+      "auto_refresh_event_source"sv};
+  for (const auto &iter : *engine_attr_obj) {
+    if (!supported_top_level_params.contains(iter.first)) {
+      return false;
+    }
+  }
+
+  const std::set<std::string_view> supported_file_params = {
+      kUriParam,     kParParam,          kNameParam,        kPrefixParam,
+      kPatternParam, kIsStrictModeParam, kAllowMissingParam};
+  auto *files_dom = engine_attr_obj->get(kFileParam);
+  if (files_dom != nullptr) {
+    if (files_dom->json_type() != enum_json_type::J_ARRAY) {
+      return false;
+    }
+
+    Json_wrapper files_array(files_dom, true);
+    for (size_t i = 0; i < files_array.length(); ++i) {
+      Json_wrapper file_object(files_array[i]);
+      if (file_object.type() != enum_json_type::J_OBJECT) {
+        return false;
+      }
+
+      Json_object_wrapper object_wrapper(file_object);
+      for (const auto &iter : object_wrapper) {
+        if (!supported_file_params.contains(iter.first)) {
+          return false;
+        }
+      }
+    }
+  }
+
+  const std::set<std::string_view> supported_dialect_params = {
+      kFormatParam,          kQuotationMarksParam,  kEscapeCharacterParam,
+      kSkipRowsParam,        kRecordDelimiterParam, kFieldDelimiterParam,
+      kEncodingParam,        kDateFormatParam,      kTimeFormatParam,
+      kTimestampFormatParam, kIsStrictModeParam,    kConstraintCheckParam,
+      kHasHeaderParam,       kAllowMissingParam,    kNullValueParam,
+      kEmptyValueParam,      kCompressionParam};
+  auto *file_format_dom = engine_attr_obj->get(kDialectParam);
+  if (file_format_dom != nullptr) {
+    if (file_format_dom->json_type() != enum_json_type::J_OBJECT) {
+      return false;
+    }
+    Json_wrapper file_format_obj(file_format_dom, true);
+    Json_object_wrapper object_wrapper(file_format_obj);
+    for (const auto &iter : object_wrapper) {
+      if (!supported_dialect_params.contains(iter.first)) {
+        return false;
+      }
+    }
+  }
+
+  return true;
+}
+
+/**
   Generate SQL clauses that match the content of ENGINE_ATTRIBUTE
 
   @param thd             The thread.
@@ -2172,78 +2245,59 @@ static bool generate_sql_from_engine_attribute(THD *thd, String *packet,
       files_dom->json_type() == enum_json_type::J_ARRAY) {
     Json_wrapper files_array(files_dom, true);
 
-    // If any of the file specs use Resource Principals
-    // (region/namespace/bucket), output ENGINE_ATTRIBUTE instead
-    // since it is not supported in SQL.
-    bool resource_principals_found = false;
-    for (size_t i = 0; i < files_array.length() && !resource_principals_found;
-         ++i) {
-      for (auto key :
-           {external_table::kRegionParam, external_table::kNamespaceParam,
-            external_table::kBucketParam}) {
-        Json_wrapper val = files_array[i].lookup(key);
-        if (!val.empty()) {
-          resource_principals_found = true;
-          break;
-        }
+    packet->append(STRING_WITH_LEN(" /*!90400 FILES = ( "));
+
+    bool warning_pushed = false;
+    for (size_t i = 0; i < files_array.length(); ++i) {
+      if (i > 0) {
+        packet->append(", ");
       }
+      if (redact_par) {
+        Json_wrapper url = files_array[i].lookup(external_table::kParParam);
+        if (url.empty()) {
+          // A PAR added with SQL syntax will not be stored as "uri",
+          // but an explicit ENGINE_ATTRIBUTE may contain a PAR in "uri"
+          url = files_array[i].lookup(external_table::kUriParam);
+        }
+        if (!url.empty()) {
+          packet->append(STRING_WITH_LEN("URL = "));
+          String original_url(url.get_data(), url.get_data_length(),
+                              system_charset_info);
+          String rlb;
+          redact_par_url(original_url, rlb);
+          append_unescaped(packet, rlb.ptr(), rlb.length());
+          packet->append(STRING_WITH_LEN(" "));
+          if (!warning_pushed) {
+            push_warning_printf(
+                thd, Sql_condition::SL_WARNING, ER_WARN_REDACTED_PRIVILEGES,
+                ER_THD(thd, ER_WARN_REDACTED_PRIVILEGES), table_name.str);
+            warning_pushed = true;
+          }
+        }
+      } else {
+        append_string_option(packet, files_array[i], "URL",
+                             external_table::kParParam);
+        append_string_option(packet, files_array[i], "URI",
+                             external_table::kUriParam);
+      }
+      append_string_option(packet, files_array[i], "FILE_NAME",
+                           external_table::kNameParam);
+      append_string_option(packet, files_array[i], "FILE_PATTERN",
+                           external_table::kPatternParam);
+      append_string_option(packet, files_array[i], "FILE_PREFIX",
+                           external_table::kPrefixParam);
+
+      append_bool_option(packet, files_array[i], "STRICT_LOAD",
+                         external_table::kIsStrictModeParam);
+      append_bool_option(packet, files_array[i], "ALLOW_MISSING_FILES",
+                         external_table::kAllowMissingParam);
     }
+    packet->append(STRING_WITH_LEN(") */"));
 
-    if (!resource_principals_found) {
-      packet->append(STRING_WITH_LEN(" /*!90400 FILES = ( "));
-
-      bool warning_pushed = false;
-      for (size_t i = 0; i < files_array.length(); ++i) {
-        if (i > 0) {
-          packet->append(", ");
-        }
-        if (redact_par) {
-          Json_wrapper url = files_array[i].lookup(external_table::kParParam);
-          if (url.empty()) {
-            // A PAR added with SQL syntax will not be stored as "uri",
-            // but an explicit ENGINE_ATTRIBUTE may contain a PAR in "uri"
-            url = files_array[i].lookup(external_table::kUriParam);
-          }
-          if (!url.empty()) {
-            packet->append(STRING_WITH_LEN("URL = "));
-            String original_url(url.get_data(), url.get_data_length(),
-                                system_charset_info);
-            String rlb;
-            redact_par_url(original_url, rlb);
-            append_unescaped(packet, rlb.ptr(), rlb.length());
-            packet->append(STRING_WITH_LEN(" "));
-            if (!warning_pushed) {
-              push_warning_printf(
-                  thd, Sql_condition::SL_WARNING, ER_WARN_REDACTED_PRIVILEGES,
-                  ER_THD(thd, ER_WARN_REDACTED_PRIVILEGES), table_name.str);
-              warning_pushed = true;
-            }
-          }
-        } else {
-          append_string_option(packet, files_array[i], "URL",
-                               external_table::kParParam);
-          append_string_option(packet, files_array[i], "URI",
-                               external_table::kUriParam);
-        }
-        append_string_option(packet, files_array[i], "FILE_NAME",
-                             external_table::kNameParam);
-        append_string_option(packet, files_array[i], "FILE_PATTERN",
-                             external_table::kPatternParam);
-        append_string_option(packet, files_array[i], "FILE_PREFIX",
-                             external_table::kPrefixParam);
-
-        append_bool_option(packet, files_array[i], "STRICT_LOAD",
-                           external_table::kIsStrictModeParam);
-        append_bool_option(packet, files_array[i], "ALLOW_MISSING_FILES",
-                           external_table::kAllowMissingParam);
-      }
-      packet->append(STRING_WITH_LEN(") */"));
-
-      // Remove file array from ENGINE_ATTRIBUTE unless it is requested to
-      // show the original version
-      if (DBUG_EVALUATE_IF("print_engine_attribute", false, true)) {
-        engine_attr_obj->remove(external_table::kFileParam);
-      }
+    // Remove file array from ENGINE_ATTRIBUTE unless it is requested to
+    // show the original version
+    if (DBUG_EVALUATE_IF("print_engine_attribute", false, true)) {
+      engine_attr_obj->remove(external_table::kFileParam);
     }
   }
 
@@ -2986,12 +3040,12 @@ bool store_create_info(THD *thd, Table_ref *table_list, String *packet,
         if (parsed_engine_attr != nullptr &&
             parsed_engine_attr->json_type() == enum_json_type::J_OBJECT) {
           engine_attr_obj = down_cast<Json_object *>(parsed_engine_attr.get());
-          // We have verified above that engine attribute is a json object
-          assert(engine_attr_obj != nullptr);
-          if (generate_sql_from_engine_attribute(thd, packet, engine_attr_obj,
-                                                 share->table_name,
-                                                 redact_par)) {
-            return true;
+          if (can_use_sql_for_engine_attribute(engine_attr_obj)) {
+            if (generate_sql_from_engine_attribute(thd, packet, engine_attr_obj,
+                                                   share->table_name,
+                                                   redact_par)) {
+              return true;
+            }
           }
         }
       }
