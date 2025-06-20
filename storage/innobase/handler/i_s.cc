@@ -1283,7 +1283,7 @@ static bool i_s_cmp_per_index_fill_low_slow(THD *thd,
               }
             }
             dd_table_close(dd_indexes, thd, &mdl, false);
-
+            pcur.close();
             return false;
           }
 
