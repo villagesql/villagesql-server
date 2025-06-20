@@ -9,6 +9,10 @@
   path restriction.
 
   @param path null terminated character string
+  @param opt_secure_file_priv secure_file_priv content
+  @param system_charset_info system charset
+  @param files_charset_info files charset
+  @param lower_case_file_system true if lower case file system, false otherwise
 
   @retval true The path is secure
   @retval false The path isn't secure
