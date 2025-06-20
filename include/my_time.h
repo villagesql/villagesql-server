@@ -485,8 +485,15 @@ inline long my_time_fraction_remainder(long nr, unsigned int decimals) {
    @param decimals desired precision
 */
 inline void my_time_trunc(MYSQL_TIME *ltime, unsigned int decimals) {
+  assert(ltime->time_type == MYSQL_TIMESTAMP_TIME || !ltime->neg);
   ltime->second_part -=
       my_time_fraction_remainder(ltime->second_part, decimals);
+  // "Negative zero" time is not defined:
+  if (ltime->time_type == MYSQL_TIMESTAMP_TIME && ltime->neg &&
+      ltime->hour == 0 && ltime->minute == 0 && ltime->second == 0 &&
+      ltime->second_part == 0) {
+    ltime->neg = false;
+  }
 }
 
 /**

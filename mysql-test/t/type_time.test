@@ -589,6 +589,7 @@ SELECT * FROM t WHERE a = CURRENT_TIMESTAMP;
 SELECT * FROM t WHERE a = CURRENT_DATE;
 SET timestamp = DEFAULT;
 DROP TABLE t;
+
 --echo #
 --echo # Bug#37907697: Assertion `mtime.time_type == MYSQL_TIMESTAMP_TIME'
 --echo #
@@ -672,3 +673,22 @@ SELECT * FROM t WHERE a IN ('08:00:00', '');
 SELECT * FROM t WHERE a IN ('08:00:00', '07:59:59');
 
 DROP TABLE t;
+
+--echo #
+--echo # Bug#38095630: Assertion `hour != 0 || minute |= 0 || second != 0'
+--echo #
+
+CREATE TABLE t1(t TIME PRIMARY KEY);
+
+SELECT table1.t
+FROM t1 AS table1,
+     (WITH RECURSIVE cte1 AS
+      (SELECT * FROM t1 WHERE t <> TAN(-1677610521))
+      SELECT * FROM cte1
+     ) AS table2;
+
+INSERT INTO t1 VALUES(TIME'-00:00:00.000001');
+
+SELECT * FROM t1;
+
+DROP TABLE t1;

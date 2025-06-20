@@ -72,6 +72,10 @@ void Time_val::adjust_fraction(uint32_t decimals, bool round) {
   } else {
     set_microsecond(fraction - remainder);
   }
+  // Negative zero is converted to positive zero:
+  if (m_value == 0x7fffffffffff) {
+    m_value = BITS_SIGN;
+  }
   assert(is_valid());
 }
 

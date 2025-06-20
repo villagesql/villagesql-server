@@ -270,7 +270,8 @@ class Time_val {
   bool is_valid() const {
     return hour() <= TIME_MAX_HOUR && minute() <= TIME_MAX_MINUTE &&
            second() <= TIME_MAX_SECOND && microsecond() <= TIME_MAX_MICROSEC &&
-           m_value <= MAX_TIME_VALUE && m_value >= MIN_TIME_VALUE;
+           m_value <= MAX_TIME_VALUE && m_value >= MIN_TIME_VALUE &&
+           m_value != 0x7fffffffffff;
   }
 
   static uint32_t unsigned_seconds(uint32_t hour, uint32_t minute,
