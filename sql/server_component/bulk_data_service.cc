@@ -1344,6 +1344,9 @@ static int format_row(THD *thd, const TABLE_SHARE *table_share,
     sql_col.m_is_null =
         (field == nullptr) ? false : (text_col.m_data_ptr == nullptr);
 
+    assert(!is_rowid || !sql_col.m_is_null);
+    assert(!is_rowid || field == nullptr);
+
     /* If field is a nullptr, then it is generated rowid column */
     sql_col.m_type = (field == nullptr) ? MYSQL_TYPE_LONGLONG
                                         : static_cast<int>(field->type());
@@ -1564,6 +1567,7 @@ static int fill_column_data(char *row_begin, char *buffer, size_t buffer_length,
 #endif /* NDEBUG */
 
   if (sql_col.m_is_null) {
+    assert(col_meta.m_is_nullable);
     sql_col.row(row_begin);
     return 0;
   }
@@ -2203,6 +2207,8 @@ static bool add_index_columns(TABLE_SHARE *table_share, const KEY &key,
     Column_meta col_meta;
     col_meta.m_field_name = "DB_ROW_ID";
     col_meta.m_is_pk = false;
+    col_meta.m_is_key = true;
+    col_meta.m_is_prefix_key = false;
     col_meta.m_index = col_index++;
     col_meta.m_is_nullable = false;
     col_meta.m_is_unsigned = true;
@@ -2211,6 +2217,8 @@ static bool add_index_columns(TABLE_SHARE *table_share, const KEY &key,
     col_meta.m_max_len = 8;   /* Refer to DATA_ROW_ID_LEN */
     col_meta.m_compare = Column_meta::Compare::INTEGER_UNSIGNED;
     col_meta.m_is_desc_key = false;
+    col_meta.m_null_byte = col_meta.m_index / 8;
+    col_meta.m_null_bit = col_meta.m_index % 8;
     all_key_int_signed_asc = false;
     row_meta.m_approx_row_len += col_meta.m_fixed_len;
     columns.push_back(col_meta);

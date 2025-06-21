@@ -489,13 +489,13 @@ struct Column_meta {
   bool m_is_pk{false};
 
   /** true if column is a key for primary or secondary index. */
-  bool m_is_key;
+  bool m_is_key{false};
 
   /** If the key is descending. */
   bool m_is_desc_key;
 
   /** If the key is prefix of the column. */
-  bool m_is_prefix_key;
+  bool m_is_prefix_key{false};
 
   /** If it is fixed length type. */
   bool m_is_fixed_len;
@@ -656,7 +656,8 @@ inline std::string Column_meta::to_string() const {
       << ", m_is_fixed_len=" << m_is_fixed_len
       << ", m_fixed_len=" << m_fixed_len << ", m_null_byte=" << m_null_byte
       << ", m_null_bit=" << m_null_bit << ", m_compare=" << get_compare_string()
-      << ", m_is_desc_key=" << m_is_desc_key << "]";
+      << ", m_is_desc_key=" << m_is_desc_key << ", m_is_key=" << m_is_key
+      << ", m_is_prefix_key=" << m_is_prefix_key << "]";
   return out.str();
 }
 
