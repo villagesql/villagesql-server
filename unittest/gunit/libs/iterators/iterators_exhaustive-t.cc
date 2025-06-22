@@ -317,7 +317,7 @@ class Iterator_checker {
                         int v2,
                         [[maybe_unused]] std::source_location source_location =
                             std::source_location::current()) const {
-    MY_SCOPED_TRACE(source_location.line());
+    MY_SCOPED_TRACE(source_location);
     assert_iterators_one_way(it1, v1, it2, v2);
     // NOLINTNEXTLINE(readability-suspicious-call-argument): args are in order
     assert_iterators_one_way(it2, v2, it1, v1);
@@ -359,7 +359,7 @@ class Iterator_checker {
   void assert_sentinel(Iterator_t &it, int v,
                        [[maybe_unused]] std::source_location source_location =
                            std::source_location::current()) {
-    MY_SCOPED_TRACE(source_location.line());
+    MY_SCOPED_TRACE(source_location);
     const auto &s = iterators::default_sentinel;
     debugging::test_eq(it, s, v == 10);
     if constexpr (random_access_concept) {

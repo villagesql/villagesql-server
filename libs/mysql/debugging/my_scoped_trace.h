@@ -28,7 +28,7 @@
 /// Experimental API header
 
 #include <gtest/gtest.h>  // SCOPED_TRACE
-#include "mysql/utils/concat.h"
+#include "mysql/strconv/strconv.h"
 
 /// @addtogroup GroupLibsMysqlDebugging
 /// @{
@@ -50,15 +50,15 @@
 ///
 /// SCOPED_TRACE only takes one argument. Sometimes it is convenient to pass
 /// multiple arguments. This macro accepts multiple arguments and concatenates
-/// them using mysql::utils::concat.
+/// them using mysql::strconv::throwing::concat.
 #ifdef GTEST_IS_THREADSAFE
-#define MY_SCOPED_TRACE(...) \
-  SCOPED_TRACE(mysql::utils::throwing::concat(__VA_ARGS__))
+#define MY_SCOPED_TRACE(...)                     \
+  SCOPED_TRACE(mysql::strconv::throwing::concat( \
+      mysql::strconv::Debug_format{}, __VA_ARGS__))
 #else
-// "make use" of value x, so that we do not get -Werror=unused-parameter errors
-// in functions where `SCOPED_TRACE(x)` is the only use of `x`.
-#define MY_SCOPED_TRACE(...) \
-  (std::ignore = mysql::utils::throwing::concat(__VA_ARGS__))
+// "make use" of the parameters, so that we do not get -Werror=unused-parameter
+// errors in functions where `SCOPED_TRACE(x)` is the only use of `x`.
+#define MY_SCOPED_TRACE(...) ([](auto &&...) {}(__VA_ARGS__))
 #endif
 
 // NOLINTEND(cppcoreguidelines-macro-usage)
