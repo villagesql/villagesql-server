@@ -4548,16 +4548,16 @@ TYPELIB *Item_func_coalesce::get_typelib() const {
  Classes and function for the IN operator
 ****************************************************************************/
 
-bool in_vector::fill(Item **items, uint item_count) {
+bool In_vector::fill(Item **items, uint item_count) {
   m_used_size = 0;
   for (uint i = 0; i < item_count; i++) {
-    set(m_used_size, items[i]);
-    if (current_thd->is_error()) return true;
-    /*
-      We don't put NULL values in array, to avoid erroneous matches in
-      bisection.
-    */
-    if (!items[i]->null_value) m_used_size++;  // include this cell in array.
+    if (set(m_used_size, items[i])) {
+      if (current_thd->is_error()) return true;
+      // NULL values need not be handled by bisection operation
+      assert(items[i]->null_value);
+    } else {
+      m_used_size++;  // include this cell in array.
+    }
   }
   assert(m_used_size <= m_size);
 
@@ -4642,8 +4642,8 @@ static inline int cmp_ulongs(ulonglong a_val, ulonglong b_val) {
     0           left argument is equal to the right argument.
     1           left argument is greater than the right argument.
 */
-static int cmp_longlong(const in_longlong::packed_longlong *a,
-                        const in_longlong::packed_longlong *b) {
+static int cmp_longlong(const In_vector_int::packed_longlong *a,
+                        const In_vector_int::packed_longlong *b) {
   if (a->unsigned_flag != b->unsigned_flag) {
     /*
       One of the args is unsigned and is too big to fit into the
@@ -4666,26 +4666,25 @@ static int cmp_longlong(const in_longlong::packed_longlong *a,
 
 class Cmp_longlong {
  public:
-  bool operator()(const in_longlong::packed_longlong &a,
-                  const in_longlong::packed_longlong &b) {
+  bool operator()(const In_vector_int::packed_longlong &a,
+                  const In_vector_int::packed_longlong &b) {
     return cmp_longlong(&a, &b) < 0;
   }
 };
 
-void in_longlong::sort_array() {
+void In_vector_int::sort_array() {
   std::sort(base.begin(), base.begin() + m_used_size, Cmp_longlong());
 }
 
-bool in_longlong::find_item(Item *item) {
+bool In_vector_int::find_item(Item *item) {
   if (m_used_size == 0) return false;
   packed_longlong result;
-  val_item(item, &result);
-  if (item->null_value) return false;
+  if (val_item(item, &result)) return false;
   return std::binary_search(base.begin(), base.begin() + m_used_size, result,
                             Cmp_longlong());
 }
 
-bool in_longlong::compare_elems(uint pos1, uint pos2) const {
+bool In_vector_int::compare_elems(uint pos1, uint pos2) const {
   return cmp_longlong(&base[pos1], &base[pos2]) != 0;
 }
 
@@ -4714,8 +4713,9 @@ bool in_row::compare_elems(uint pos1, uint pos2) const {
   return base_pointers[pos1]->compare(base_pointers[pos2]) != 0;
 }
 
-in_string::in_string(MEM_ROOT *mem_root, uint elements, const CHARSET_INFO *cs)
-    : in_vector(elements),
+In_vector_string::In_vector_string(MEM_ROOT *mem_root, uint elements,
+                                   const CHARSET_INFO *cs)
+    : In_vector(elements),
       tmp(buff, sizeof(buff), &my_charset_bin),
       base_objects(mem_root, elements),
       base_pointers(mem_root, elements),
@@ -4725,7 +4725,7 @@ in_string::in_string(MEM_ROOT *mem_root, uint elements, const CHARSET_INFO *cs)
   }
 }
 
-void in_string::cleanup() {
+void In_vector_string::cleanup() {
   // Clear reference pointers and free any memory allocated for holding data.
   for (uint i = 0; i < m_used_size; i++) {
     String *str = base_pointers[i];
@@ -4733,16 +4733,18 @@ void in_string::cleanup() {
   }
 }
 
-void in_string::set(uint pos, Item *item) {
+bool In_vector_string::set(uint pos, Item *item) {
   String *str = base_pointers[pos];
   String *res = eval_string_arg(collation, item, str);
-  if (res == nullptr || res == str) return;
+  if (res == nullptr) return true;
+  if (res == str) return false;
 
   if (res->uses_buffer_owned_by(str)) res->copy();
   if (item->type() == Item::FUNC_ITEM)
     str->copy(*res);
   else
     str->set(res->ptr(), res->length(), res->charset());
+  return false;
 }
 
 static int srtcmp_in(const CHARSET_INFO *cs, const String *x, const String *y) {
@@ -4765,12 +4767,12 @@ class Cmp_string {
 }  // namespace
 
 // Sort string pointers, not string objects.
-void in_string::sort_array() {
+void In_vector_string::sort_array() {
   std::sort(base_pointers.begin(), base_pointers.begin() + m_used_size,
             Cmp_string(collation));
 }
 
-bool in_string::find_item(Item *item) {
+bool In_vector_string::find_item(Item *item) {
   if (m_used_size == 0) return false;
   const String *str = eval_string_arg(collation, item, &tmp);
   if (str == nullptr) return false;
@@ -4780,12 +4782,12 @@ bool in_string::find_item(Item *item) {
                             Cmp_string(collation));
 }
 
-bool in_string::compare_elems(uint pos1, uint pos2) const {
+bool In_vector_string::compare_elems(uint pos1, uint pos2) const {
   return srtcmp_in(collation, base_pointers[pos1], base_pointers[pos2]) != 0;
 }
 
 in_row::in_row(MEM_ROOT *mem_root, uint elements, cmp_item_row *cmp)
-    : in_vector(elements),
+    : In_vector(elements),
       tmp(cmp),
       base_objects(mem_root, elements),
       base_pointers(mem_root, elements) {
@@ -4794,76 +4796,88 @@ in_row::in_row(MEM_ROOT *mem_root, uint elements, cmp_item_row *cmp)
   }
 }
 
-void in_row::set(uint pos, Item *item) {
+bool in_row::set(uint pos, Item *item) {
   DBUG_TRACE;
   DBUG_PRINT("enter", ("pos: %u  item: %p", pos, item));
   base_pointers[pos]->store_value_by_template(tmp.get(), item);
+  return current_thd->is_error() || item->null_value;
 }
 
-void in_longlong::val_item(Item *item, packed_longlong *result) {
+bool In_vector_int::val_item(Item *item, packed_longlong *result) {
   result->val = item->val_int();
   result->unsigned_flag = item->unsigned_flag;
+  return current_thd->is_error() || item->null_value;
 }
 
-void in_time_as_longlong::val_item(Item *item, packed_longlong *result) {
+bool In_vector_time::val_item(Item *item, packed_longlong *result) {
   Time_val time;
-  (void)item->val_time(&time);
+  if (item->val_time(&time)) return true;
   result->val = time.for_comparison();
   result->unsigned_flag = item->unsigned_flag;
+  return false;
 }
 
-void in_datetime_as_longlong::val_item(Item *item, packed_longlong *result) {
+bool in_datetime_as_longlong::val_item(Item *item, packed_longlong *result) {
   result->val = item->val_date_temporal();
   result->unsigned_flag = item->unsigned_flag;
+  return current_thd->is_error() || item->null_value;
 }
 
-void in_datetime::set(uint pos, Item *item) {
+bool in_datetime::set(uint pos, Item *item) {
   Item **p = &item;
   bool is_null;
   struct packed_longlong *buff = &base[pos];
 
   buff->val = get_datetime_value(current_thd, &p, nullptr, warn_item, &is_null);
   buff->unsigned_flag = true;
+
+  return is_null || current_thd->is_error();
 }
 
-void in_datetime::val_item(Item *item, packed_longlong *result) {
+bool in_datetime::val_item(Item *item, packed_longlong *result) {
   bool is_null;
   Item **p = &item;
   result->val =
       get_datetime_value(current_thd, &p, nullptr, warn_item, &is_null);
   result->unsigned_flag = true;
+  return is_null || current_thd->is_error();
 }
 
-void in_double::set(uint pos, Item *item) { base[pos] = item->val_real(); }
+bool In_vector_double::set(uint pos, Item *item) {
+  base[pos] = item->val_real();
+  return current_thd->is_error() || item->null_value;
+}
 
-void in_double::sort_array() {
+void In_vector_double::sort_array() {
   std::sort(base.begin(), base.begin() + m_used_size);
 }
 
-bool in_double::find_item(Item *item) {
+bool In_vector_double::find_item(Item *item) {
   if (m_used_size == 0) return false;
   const double dbl = item->val_real();
   if (item->null_value) return false;
   return std::binary_search(base.begin(), base.begin() + m_used_size, dbl);
 }
 
-bool in_double::compare_elems(uint pos1, uint pos2) const {
+bool In_vector_double::compare_elems(uint pos1, uint pos2) const {
   return base[pos1] != base[pos2];
 }
 
-void in_decimal::set(uint pos, Item *item) {
+bool In_vector_decimal::set(uint pos, Item *item) {
   /* as far as 'item' is constant, we can store reference on my_decimal */
   my_decimal *dec = &base[pos];
   my_decimal *res = item->val_decimal(dec);
   /* if item->val_decimal() is evaluated to NULL then res == 0 */
-  if (!item->null_value && res != dec) my_decimal2decimal(res, dec);
+  if (res == nullptr) return true;
+  my_decimal2decimal(res, dec);
+  return false;
 }
 
-void in_decimal::sort_array() {
+void In_vector_decimal::sort_array() {
   std::sort(base.begin(), base.begin() + m_used_size);
 }
 
-bool in_decimal::find_item(Item *item) {
+bool In_vector_decimal::find_item(Item *item) {
   if (m_used_size == 0) return false;
   my_decimal val;
   const my_decimal *dec = item->val_decimal(&val);
@@ -4871,7 +4885,7 @@ bool in_decimal::find_item(Item *item) {
   return std::binary_search(base.begin(), base.begin() + m_used_size, *dec);
 }
 
-bool in_decimal::compare_elems(uint pos1, uint pos2) const {
+bool In_vector_decimal::compare_elems(uint pos1, uint pos2) const {
   return base[pos1] != base[pos2];
 }
 
@@ -5563,25 +5577,25 @@ bool Item_func_in::resolve_type(THD *thd) {
       }
       switch (cmp_type) {
         case STRING_RESULT:
-          m_const_array = new (thd->mem_root)
-              in_string(thd->mem_root, arg_count - 1, cmp_collation.collation);
+          m_const_array = new (thd->mem_root) In_vector_string(
+              thd->mem_root, arg_count - 1, cmp_collation.collation);
           break;
         case INT_RESULT:
           m_const_array =
               datetime_as_longlong
                   ? args[0]->data_type() == MYSQL_TYPE_TIME
-                        ? static_cast<in_vector *>(
-                              new (thd->mem_root) in_time_as_longlong(
-                                  thd->mem_root, arg_count - 1))
-                        : static_cast<in_vector *>(
+                        ? static_cast<In_vector *>(
+                              new (thd->mem_root)
+                                  In_vector_time(thd->mem_root, arg_count - 1))
+                        : static_cast<In_vector *>(
                               new (thd->mem_root) in_datetime_as_longlong(
                                   thd->mem_root, arg_count - 1))
-                  : static_cast<in_vector *>(new (thd->mem_root) in_longlong(
+                  : static_cast<In_vector *>(new (thd->mem_root) In_vector_int(
                         thd->mem_root, arg_count - 1));
           break;
         case REAL_RESULT:
-          m_const_array =
-              new (thd->mem_root) in_double(thd->mem_root, arg_count - 1);
+          m_const_array = new (thd->mem_root)
+              In_vector_double(thd->mem_root, arg_count - 1);
           break;
         case ROW_RESULT:
           /*
@@ -5589,8 +5603,8 @@ bool Item_func_in::resolve_type(THD *thd) {
           */
           break;
         case DECIMAL_RESULT:
-          m_const_array =
-              new (thd->mem_root) in_decimal(thd->mem_root, arg_count - 1);
+          m_const_array = new (thd->mem_root)
+              In_vector_decimal(thd->mem_root, arg_count - 1);
           break;
         default:
           assert(0);
