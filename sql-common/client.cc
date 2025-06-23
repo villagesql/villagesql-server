@@ -4065,7 +4065,7 @@ extern "C" auth_plugin_t win_auth_client_plugin;
 
 #if defined(CLIENT_PROTOCOL_TRACING) && defined(TEST_TRACE_PLUGIN) && \
     !defined(NDEBUG)
-extern auth_plugin_t test_trace_plugin;
+extern "C" auth_plugin_t test_trace_plugin;
 #endif
 
 struct st_mysql_client_plugin *mysql_client_builtins[] = {
