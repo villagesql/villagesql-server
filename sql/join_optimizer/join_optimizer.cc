@@ -4986,11 +4986,6 @@ AccessPath *DeduplicateForSemijoin(THD *thd, AccessPath *path,
         case to get a somewhat cheaper plan.
       */
       assert(!path->sort().remove_duplicates);
-      // The 'sort' should be there to allow deduplication. So the number of
-      // elements should be the same. Note that the Items may not be identical.
-      // If there is a predicate t1.f1=t2.f2, it may be that we sort on f1 but
-      // deduplicate on f2.
-      assert(semijoin_group.size() == CountOrderElements(path->sort().order));
       dedup_path = new (thd->mem_root) AccessPath(*path);
       dedup_path->sort().remove_duplicates = true;
 
