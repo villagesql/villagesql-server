@@ -1675,6 +1675,22 @@ ORDER BY t1.a;
 DROP TABLE small, big;
 
 --echo #
+--echo # Bug#37826935 Assertion `semijoin_group.size() ==
+--echo # CountOrderElements(path->sort().order)' failed.
+--echo #
+
+CREATE TABLE t1 (pk int NOT NULL PRIMARY KEY, i1 int);
+
+--echo # Should not trigger assert.
+SELECT x2.i1 FROM t1 AS x1 , t1 AS x2
+  WHERE ((x2.pk , x2.i1) IN
+    (SELECT y1.i1, y1.pk FROM
+      (t1 AS y1 JOIN t1 AS y2 ON y2.i1 = y1.pk AND y2.pk = y1.i1)))
+  GROUP BY x2.i1;
+
+DROP TABLE t1;
+
+--echo #
 --echo # Bug#36997713: Hypergraph : Result set mismatch (1 row vs empty set)
 --echo #
 
