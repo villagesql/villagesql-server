@@ -100,6 +100,6 @@ ENDIF()
 # like ``/W3`` are added to ``CMAKE_<LANG>_FLAGS`` by default.
 # TODO(tdidriks) convert to NEW, and verify build flags for all targets.
 # Also verify flags in cmake/os/Windows.cmake and cmake/msvc_cppcheck.cmake.
-IF(POLICY CMP0092)
+IF(WIN32 AND POLICY CMP0092)
   CMAKE_POLICY(SET CMP0092 OLD)
 ENDIF()
