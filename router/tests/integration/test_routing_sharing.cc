@@ -950,6 +950,14 @@ class ShareConnectionTestBase : public RouterComponentTest {
     }
   }
 
+  static void reset_router_connection_pool(
+      const std::vector<std::string> &usernames) {
+    for (auto *cli : admin_clis()) {  // reset the router's connection-pool
+      ASSERT_NO_FATAL_FAILURE(
+          SharedServer::close_all_connections(*cli, usernames));
+    }
+  }
+
   SharedRouter *shared_router() { return TestWithSharedRouter::router(); }
 
   ~ShareConnectionTestBase() override {
@@ -7073,9 +7081,18 @@ class ShareConnectionReconnectTest
       SharedServer::grant_access(*cli, account, "SELECT", "testing");
     }
 
-    // ASSERT_NO_FATAL_FAILURE(reset_router_connection_pool());
-    // ASSERT_NO_ERROR(shared_router()->wait_for_idle_server_connections(0,
-    // 10s));
+    // close all connections between router and server as the test assumes that
+    // connections are stolen from the stash.
+    auto usernames = SharedServer::default_usernames();
+    usernames.emplace_back(account.username);
+
+    auto idle_res = shared_router()->idle_server_connections();
+    ASSERT_NO_ERROR(idle_res);
+    if (*idle_res > 0) {
+      ASSERT_NO_FATAL_FAILURE(reset_router_connection_pool(usernames));
+      ASSERT_NO_ERROR(
+          shared_router()->wait_for_idle_server_connections(0, 10s));
+    }
 
     const bool can_share = param.can_share();
 
@@ -7089,12 +7106,13 @@ class ShareConnectionReconnectTest
       ASSERT_NO_ERROR(cli.connect(shared_router()->host(),
                                   shared_router()->port(param, is_tcp)));
 
-      // wait until the connection is in the pool.
       if (can_share) {
-        size_t expected_pooled_connections = ndx < 3 ? ndx + 1 : 3;
+        // the 4th connection will steal the 1st connection.
+        size_t expected_stashed_connections = ndx < 3 ? ndx + 1 : 3;
 
+        // wait until the connection is stashed.
         ASSERT_NO_ERROR(shared_router()->wait_for_stashed_server_connections(
-            expected_pooled_connections, 10s));
+            expected_stashed_connections, 10s));
       }
     }
 
