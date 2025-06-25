@@ -701,6 +701,13 @@ ELSE()
   SET(WITH_SOME_SANITIZER OFF)
 ENDIF()
 
+OPTION(WITH_IWYU "Run include-what-you-use" OFF)
+IF(WITH_IWYU)
+  SET(CMAKE_CXX_INCLUDE_WHAT_YOU_USE
+    include-what-you-use
+    -Xiwyu --mapping_file=${CMAKE_SOURCE_DIR}/iwyu_mappings.imp
+    )
+ENDIF()
 
 # Add RPM or DEB platform flags for STANDALONE build.
 # Not for DEBUG builds, since both platforms use -O2 and _FORTIFY_SOURCE.

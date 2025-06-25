@@ -69,7 +69,6 @@
 #include "mysql/components/services/bits/psi_error_bits.h"
 #include "mysql/components/services/bits/psi_idle_bits.h"
 #include "mysql/components/services/bits/psi_mdl_bits.h"
-#include "mysql/components/services/bits/psi_socket_bits.h"
 #include "mysql/components/services/bits/psi_statement_bits.h"
 #include "mysql/components/services/bits/psi_tls_channel_bits.h"
 #include "mysql/components/services/bits/psi_transaction_bits.h"
