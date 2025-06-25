@@ -441,7 +441,7 @@ std::vector<CmdOption> g_options{
      [](const std::string &value) {
        std::ifstream file{value};
        if (!file.is_open()) {
-         std::runtime_error("File with `payload`, cannot be opened.");
+         throw std::runtime_error("File with `payload`, cannot be opened.");
        }
 
        g_configuration.payload =
