@@ -4223,6 +4223,7 @@ INSERT INTO times VALUES
 ('-12:00:00'),
 ('-24:00:00');
 
+--sorted_result
 SELECT CAST(t AS JSON) FROM times;
 
 DROP TABLE times;
