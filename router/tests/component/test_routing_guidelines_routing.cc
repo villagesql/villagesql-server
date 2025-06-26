@@ -1815,11 +1815,12 @@ TEST_P(MatchConnectionAttributesTest, MatchConnectionAttributes) {
 
 INSTANTIATE_TEST_SUITE_P(
     MatchConnectionAttributes, MatchConnectionAttributesTest,
-    ::testing::Values("$.session.connectAttrs._client_name = 'libmysql'",
-                      "NUMBER($.session.connectAttrs._pid) > 1000",
-                      "$.session.connectAttrs._client_version <> ''",
-                      "$.session.connectAttrs._os <> ''",
-                      "$.session.connectAttrs._platform <> ''"),
+    ::testing::Values(
+        "$.session.connectAttrs._client_name = 'libmysql'",
+        "NUMBER($.session.connectAttrs._pid) > 1",  // 0 is not used, 1 is init
+        "$.session.connectAttrs._client_version <> ''",
+        "$.session.connectAttrs._os <> ''",
+        "$.session.connectAttrs._platform <> ''"),
     [](const auto &arg) {
       // Extract connection attribute name from matching condition
       const std::string connect_attrs = "connectAttrs.";
