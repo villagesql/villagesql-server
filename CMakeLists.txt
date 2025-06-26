@@ -536,6 +536,18 @@ IF(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY)
   SET(CMAKE_SKIP_INSTALL_ALL_DEPENDENCY OFF CACHE INTERNAL "" FORCE)
 ENDIF()
 
+# We have our own WITH_UNIT_TESTS option, and call ENABLE_TESTING() accordingly.
+# We do not INCLUDE(CTest) here.
+# Various 3rd party libraries use this option, so set it to OFF.
+OPTION(BUILD_TESTING "See <cmake root>/Modules/CTest.cmake" OFF)
+IF(BUILD_TESTING)
+  MESSAGE(WARNING "Do not set BUILD_TESTING to ON/TRUE, "
+    "use the cmake option WITH_UNIT_TESTS instead."
+    )
+  SET(BUILD_TESTING OFF)
+  SET(BUILD_TESTING OFF CACHE INTERNAL "" FORCE)
+ENDIF()
+
 # Ninja only: List of available pools.
 SET_PROPERTY(GLOBAL PROPERTY JOB_POOLS one_job=1)
 
