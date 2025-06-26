@@ -327,7 +327,7 @@ static const char *const jamFileNames[] = {
     "TransIdAI.hpp",                      // 192
     "IndexStatSignal.hpp",                // 193
     "FsRef.hpp",                          // 194
-    "SetLogLevelOrd.hpp",                 // 195
+    "SetLogLevelOrd.hpp",                 // 195 DELETED FILE
     "TestOrd.hpp",                        // 196
     "TupFrag.hpp",                        // 197
     "RelTabMem.hpp",                      // 198

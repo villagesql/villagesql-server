@@ -51,7 +51,6 @@
 #include <signaldata/EventSubscribeReq.hpp>
 #include <signaldata/GetConfig.hpp>
 #include <signaldata/NodeStateSignalData.hpp>
-#include <signaldata/SetLogLevelOrd.hpp>
 #include <signaldata/StartOrd.hpp>
 #include <signaldata/Sync.hpp>
 #include <signaldata/TamperOrd.hpp>
@@ -108,7 +107,7 @@ Cmvmi::Cmvmi(Block_context &ctx)
 
   // Add received signals
   addRecSignal(GSN_NDB_TAMPER, &Cmvmi::execNDB_TAMPER, true);
-  addRecSignal(GSN_SET_LOGLEVELORD, &Cmvmi::execSET_LOGLEVELORD);
+  addRecSignal(GSN_SET_LOGLEVELORD_v9_4_0, &Cmvmi::execSET_LOGLEVELORD);
   addRecSignal(GSN_EVENT_REP, &Cmvmi::execEVENT_REP);
   addRecSignal(GSN_STTOR, &Cmvmi::execSTTOR);
   addRecSignal(GSN_READ_CONFIG_REQ, &Cmvmi::execREAD_CONFIG_REQ);
@@ -324,19 +323,13 @@ void Cmvmi::sendSYNC_REP(Signal *signal, Ptr<SyncRecord> ptr) {
 }
 
 void Cmvmi::execSET_LOGLEVELORD(Signal *signal) {
-  SetLogLevelOrd *const llOrd = (SetLogLevelOrd *)&signal->theData[0];
-  LogLevel::EventCategory category;
-  Uint32 level;
   jamEntry();
-
-  ndbrequire(llOrd->noOfEntries <= LogLevel::LOGLEVEL_CATEGORIES);
-
-  for (unsigned int i = 0; i < llOrd->noOfEntries; i++) {
-    category = (LogLevel::EventCategory)(llOrd->theData[i] >> 16);
-    level = llOrd->theData[i] & 0xFFFF;
-
-    clogLevel.setLogLevel(category, level);
-  }
+  /*
+   * Version 9.4.0 was the highest version supporting this signal.
+   * We still need to ignore it in newer versions as long as we support 9.4.0
+   * or lower version nodes to connect.
+   */
+  return;
 }  // execSET_LOGLEVELORD()
 
 struct SavedEvent {
@@ -598,15 +591,8 @@ void Cmvmi::execEVENT_REP(Signal *signal) {
     saveBuf = NDB_ARRAY_SIZE(m_saved_event_buffer) - 1;
   m_saved_event_buffer[saveBuf].save(data, sz);
 
-  if (clogLevel.getLogLevel(eventCategory) < threshold) {
-    if (num_sections > 0) {
-      releaseSections(handle);
-    }
-    return;
-  }
-
   // Print the event info
-  g_eventLogger->log(eventReport->getEventType(), data, sz, 0, 0);
+  g_eventLogger->log(eventReport->getEventType(), data, sz, 0, &clogLevel);
 
   if (num_sections > 0) {
     releaseSections(handle);
