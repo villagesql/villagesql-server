@@ -79,16 +79,16 @@ bool ARMetadataCache::refresh(bool needs_writable_node) {
         "Potential changes detected in cluster '%s' after metadata refresh",
         target_cluster_.c_str());
     // dump some debugging info about the cluster
-    if (cluster_members.empty())
+    if (cluster_members.empty()) {
       log_error("Metadata for cluster '%s' is empty!", target_cluster_.c_str());
-    else {
+    } else {
       view_id = cluster_topology_.view_id;
       log_info("view_id = %" PRIu64 ", (%i members)", view_id,
                (int)cluster_members.size());
       for (const auto &mi : cluster_members) {
-        log_info("    %s:%i / %i - mode=%s%s", mi.host.c_str(), mi.port,
-                 mi.xport, to_string(mi.mode).c_str(),
-                 get_hidden_info(mi).c_str());
+        log_info("    %s / %i - mode=%s%s",
+                 mi.classic_destination().str().c_str(), mi.xport,
+                 to_string(mi.mode).c_str(), get_hidden_info(mi).c_str());
       }
     }
 

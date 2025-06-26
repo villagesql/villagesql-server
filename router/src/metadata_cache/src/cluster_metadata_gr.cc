@@ -33,6 +33,7 @@
 #include "dim.h"
 #include "group_replication_metadata.h"
 #include "log_suppressor.h"
+#include "mysql/harness/destination.h"
 #include "mysql/harness/event_state_tracker.h"
 #include "mysql/harness/logging/logging.h"
 #include "mysql/harness/stdx/ranges.h"  // enumerate
@@ -318,7 +319,7 @@ void GRClusterMetadata::update_cluster_status_from_gr(
   bool single_primary_mode = true, metadata_gr_discrepancy = false;
   bool found_quorum = false;
   for (const metadata_cache::ManagedInstance *mi : gr_members) {
-    const std::string mi_addr = mi->host + ":" + std::to_string(mi->port);
+    const std::string mi_addr = mi->classic_destination().str();
 
     auto connection = get_connection();
 
@@ -552,9 +553,9 @@ GRClusterStatus GRClusterMetadata::check_cluster_status_in_gr(
       const auto log_level =
           node_in_metadata_changed ? LogLevel::kWarning : LogLevel::kDebug;
       log_custom(log_level,
-                 "GR member %s:%d (%s), state: '%s' missing in the metadata, "
+                 "GR member %s (%s), state: '%s' missing in the metadata, "
                  "ignoring",
-                 status_node.second.host.c_str(), status_node.second.port,
+                 status_node.second.dest.str().c_str(),
                  status_node.first.c_str(),
                  to_string(status_node.second.state));
 
@@ -575,8 +576,10 @@ GRClusterStatus GRClusterMetadata::check_cluster_status_in_gr(
     if (node_in_gr) {
       auto version_res = parse_server_version(status->second.version);
       if (!version_res) {
-        log_warning("Member %s:%d (%s): invalid member version format '%s'",
-                    member->host.c_str(), member->port,
+        log_warning("Member %s (%s): invalid member version format '%s'",
+                    mysql_harness::TcpDestination(member->host, member->port)
+                        .str()
+                        .c_str(),
                     member->mysql_server_uuid.c_str(),
                     status->second.version.c_str());
       } else {
