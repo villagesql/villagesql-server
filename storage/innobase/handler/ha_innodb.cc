@@ -23189,7 +23189,7 @@ static MYSQL_SYSVAR_ENUM(
     change_buffering, innodb_change_buffering, PLUGIN_VAR_RQCMDARG,
     "Buffer changes to reduce random access:"
     " OFF (default), ON, inserting, deleting, changing, or purging.",
-    nullptr, nullptr, IBUF_USE_NONE, &innodb_change_buffering_typelib);
+    nullptr, nullptr, IBUF_USE_ALL, &innodb_change_buffering_typelib);
 
 static MYSQL_SYSVAR_UINT(
     change_buffer_max_size, srv_change_buffer_max_size, PLUGIN_VAR_RQCMDARG,
