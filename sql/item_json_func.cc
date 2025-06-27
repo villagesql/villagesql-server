@@ -1312,7 +1312,7 @@ bool sql_scalar_to_json(Item *arg, const char *calling_function, String *value,
       if (arg->null_value) return false;
       const bool retval =
           geometry_to_json(wr, swkb, calling_function, INT_MAX32, false, false,
-                           false, &geometry_srid);
+                           true, &geometry_srid);
 
       /**
         Scalar processing is irrelevant. Geometry types are converted
