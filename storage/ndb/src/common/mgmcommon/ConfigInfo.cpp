@@ -838,6 +838,14 @@ const ConfigInfo::ParamInfo ConfigInfo::m_ParamInfo[] = {
      "Heartbeat and log info printed on stdout", ConfigInfo::CI_USED, false,
      ConfigInfo::CI_INT, "0", "0", "15"},
 
+    {CFG_LOGLEVEL_BACKUP, "LogLevelBackup", DB_TOKEN,
+     "Backup info printed on stdout", ConfigInfo::CI_USED, false,
+     ConfigInfo::CI_INT, "0", "0", "15"},
+
+    {CFG_LOGLEVEL_SCHEMA, "LogLevelSchema", DB_TOKEN,
+     "Schema changes info printed on stdout", ConfigInfo::CI_USED, false,
+     ConfigInfo::CI_INT, "0", "0", "15"},
+
     /**
      * Backup
      */
