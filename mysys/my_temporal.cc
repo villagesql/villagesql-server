@@ -63,9 +63,14 @@ void Time_val::adjust_fraction(uint32_t decimals, bool round) {
   if (round && remainder >= divisor / 2) {
     fraction = fraction + divisor - remainder;
     if (fraction == 1000000) {
+      bool negative = is_negative();
       set_microsecond(0);
+      // Avoid possible negative zero
+      if (m_value == 0x7FFFFFFFFFFF) {
+        m_value = BITS_SIGN;
+      }
       // Max value is 838:59:59.000000, thus rounding can never overflow
-      (void)add_seconds(is_negative() ? -1 : 1);
+      (void)add_seconds(negative ? -1 : 1);
     } else {
       set_microsecond(fraction);
     }
@@ -73,7 +78,7 @@ void Time_val::adjust_fraction(uint32_t decimals, bool round) {
     set_microsecond(fraction - remainder);
   }
   // Negative zero is converted to positive zero:
-  if (m_value == 0x7fffffffffff) {
+  if (m_value == 0x7FFFFFFFFFFF) {
     m_value = BITS_SIGN;
   }
   assert(is_valid());

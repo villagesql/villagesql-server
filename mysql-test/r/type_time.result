@@ -3035,3 +3035,10 @@ SELECT * FROM t1;
 t
 00:00:00
 DROP TABLE t1;
+#
+# Bug#38111130: mysqld crash - Assertion `is_valid() && tv.is_valid()'
+#               fails in my_temporal.cc
+#
+SELECT CAST(-0.971042 AS TIME);
+CAST(-0.971042 AS TIME)
+-00:00:01

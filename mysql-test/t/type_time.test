@@ -692,3 +692,10 @@ INSERT INTO t1 VALUES(TIME'-00:00:00.000001');
 SELECT * FROM t1;
 
 DROP TABLE t1;
+
+--echo #
+--echo # Bug#38111130: mysqld crash - Assertion `is_valid() && tv.is_valid()'
+--echo #               fails in my_temporal.cc
+--echo #
+
+SELECT CAST(-0.971042 AS TIME);
