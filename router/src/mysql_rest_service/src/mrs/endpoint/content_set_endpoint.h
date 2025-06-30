@@ -63,7 +63,8 @@ class ContentSetEndpoint : public OptionEndpoint {
   void get_content_set_data(std::vector<std::string> *out_scripts,
                             std::vector<std::string> *out_module_classes);
 
- protected:
+  void disable_handler(std::string_view handler_path);
+
   void update() override;
 
  private:

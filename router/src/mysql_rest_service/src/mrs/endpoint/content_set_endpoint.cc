@@ -25,6 +25,7 @@
 
 #include "mrs/endpoint/content_set_endpoint.h"
 
+#include <algorithm>
 #include <vector>
 
 #include "mrs/endpoint/db_service_endpoint.h"
@@ -58,6 +59,12 @@ void ContentSetEndpoint::set(const ContentSet &entry, EndpointBasePtr parent) {
   entry_ = std::make_shared<ContentSet>(entry);
   change_parent(parent);
   changed();
+}
+
+void ContentSetEndpoint::disable_handler(std::string_view handler_path) {
+  std::erase_if(handlers_, [&handler_path](const auto &h) {
+    return h->get_db_object_path() == handler_path;
+  });
 }
 
 void ContentSetEndpoint::update() {
