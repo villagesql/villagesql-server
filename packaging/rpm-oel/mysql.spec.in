@@ -867,6 +867,7 @@ mkdir debug
            -DWITH_AUTHENTICATION_LDAP=0 \
            -DWITH_AUTHENTICATION_OCI=0 \
            -DWITH_COMPONENT_KEYRING_HASHICORP=0 \
+           -DWITH_COMPONENT_KEYRING_KMIP=0 \
            -DWITH_COMPONENT_KEYRING_OCI=0 \
            -DWITH_CURL=0 \
            -DWITH_KEYRING_HASHICORP=0 \
@@ -918,6 +919,7 @@ mkdir release
            -DWITH_AUTHENTICATION_LDAP=0 \
            -DWITH_AUTHENTICATION_OCI=0 \
            -DWITH_COMPONENT_KEYRING_HASHICORP=0 \
+           -DWITH_COMPONENT_KEYRING_KMIP=0 \
            -DWITH_COMPONENT_KEYRING_OCI=0 \
            -DWITH_CURL=0 \
            -DWITH_KEYRING_HASHICORP=0 \
@@ -976,6 +978,7 @@ mkdir release
            -DWITH_AUTHENTICATION_LDAP=0 \
            -DWITH_AUTHENTICATION_OCI=0 \
            -DWITH_COMPONENT_KEYRING_HASHICORP=0 \
+           -DWITH_COMPONENT_KEYRING_KMIP=0 \
            -DWITH_COMPONENT_KEYRING_OCI=0 \
            -DWITH_CURL=0 \
            -DWITH_KEYRING_HASHICORP=0 \
@@ -1311,6 +1314,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_sasl.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/authentication_ldap_simple.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_hashicorp.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_kmip.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_keyring_oci.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/keyring_hashicorp.so
 %endif # ssl_default
@@ -1415,6 +1419,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/authentication_ldap_sasl.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/authentication_ldap_simple.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_keyring_hashicorp.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_keyring_kmip.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_keyring_oci.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/keyring_hashicorp.so
 %endif # ssl_default
@@ -2022,6 +2027,9 @@ fi
 %endif # with_router
 
 %changelog
+* Fri Jun 27 2025 Murthy Sidagam <venkata.sidagam@oracle.com> - 9.5.0-1
+- Added component_keyring_kmip.so component
+
 * Wed Jun 11 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.5.0-1
 - Added component_test_component_init_fail
 
