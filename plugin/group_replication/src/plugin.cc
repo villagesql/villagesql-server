@@ -4575,7 +4575,7 @@ static MYSQL_SYSVAR_BOOL(recovery_use_ssl,        /* name */
                          "Replication recovery process.",
                          check_sysvar_bool, /* check func*/
                          update_ssl_use,    /* update func*/
-                         0);                /* default*/
+                         1);                /* default*/
 
 static MYSQL_SYSVAR_STR(
     recovery_ssl_ca,        /* name */
@@ -4826,10 +4826,10 @@ static MYSQL_SYSVAR_ENUM(
     ov.ssl_mode_var,                                       /* var */
     PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_PERSIST_AS_READ_ONLY, /* optional var */
     "Specifies the security state of the connection between Group "
-    "Replication members. Default: DISABLED",
+    "Replication members. Default: REQUIRED",
     nullptr,                      /* check func. */
     nullptr,                      /* update func. */
-    0,                            /* default */
+    1,                            /* default */
     &ov.ssl_mode_values_typelib_t /* type lib */
 );
 

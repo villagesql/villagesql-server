@@ -275,13 +275,13 @@ SET @@SESSION.group_replication_consistency= default;
 --source include/assert.inc
 
 # group_replication_recovery_use_ssl
---let $assert_text= Default group_replication_recovery_use_ssl is OFF/0
---let $assert_cond= "[SELECT @@GLOBAL.group_replication_recovery_use_ssl]" = 0
+--let $assert_text= Default group_replication_recovery_use_ssl is ON/1
+--let $assert_cond= "[SELECT @@GLOBAL.group_replication_recovery_use_ssl]" = 1
 --source include/assert.inc
 
 # group_replication_ssl_mode
---let $assert_text= Default group_replication_ssl_mode is DISABLED
---let $assert_cond= "[SELECT @@GLOBAL.group_replication_ssl_mode]" = "DISABLED"
+--let $assert_text= Default group_replication_ssl_mode is REQUIRED
+--let $assert_cond= "[SELECT @@GLOBAL.group_replication_ssl_mode]" = "REQUIRED"
 --source include/assert.inc
 
 # group_replication_start_on_boot
