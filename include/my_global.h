@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2001, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2001, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -214,7 +214,7 @@ typedef int	my_socket;	/* File descriptor for sockets */
 #define INVALID_SOCKET -1
 #endif
 C_MODE_START
-typedef void	(*sig_return)();/* Returns type from signal */
+typedef void	(*sig_return)(int);/* Returns type from signal */
 C_MODE_END
 #if defined(__GNUC__)
 typedef char	pchar;		/* Mixed prototypes can take char */

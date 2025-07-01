@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2025, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -25,3 +25,7 @@ SET(ARCHIVE_SOURCES  azio.c ha_archive.cc ha_archive.h)
 MYSQL_ADD_PLUGIN(archive ${ARCHIVE_SOURCES}
   STORAGE_ENGINE RECOMPILE_FOR_EMBEDDED LINK_LIBRARIES ${ZLIB_LIBRARY})
 
+MY_CHECK_C_COMPILER_FLAG("-Wold-style-definition" HAVE_OLD_STYLE_DEFINITION)
+IF(HAVE_OLD_STYLE_DEFINITION)
+  ADD_COMPILE_FLAGS(azio.c COMPILE_FLAGS "-Wno-old-style-definition")
+ENDIF()

@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2025, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -84,6 +84,11 @@ ENDIF()
 
 MYSQL_ADD_EXECUTABLE(replace replace.c)
 TARGET_LINK_LIBRARIES(replace mysys)
+
+MY_CHECK_C_COMPILER_FLAG("-Wold-style-definition" HAVE_OLD_STYLE_DEFINITION)
+IF(HAVE_OLD_STYLE_DEFINITION)
+  ADD_COMPILE_FLAGS(replace.c COMPILE_FLAGS "-Wno-old-style-definition")
+ENDIF()
 
 MYSQL_ADD_EXECUTABLE(lz4_decompress lz4_decompress.cc)
 TARGET_LINK_LIBRARIES(lz4_decompress ${LZ4_LIBRARY})
