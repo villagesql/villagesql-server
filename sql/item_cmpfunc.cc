@@ -4809,12 +4809,23 @@ bool In_vector_int::val_item(Item *item, packed_longlong *result) {
   return current_thd->is_error() || item->null_value;
 }
 
-bool In_vector_time::val_item(Item *item, packed_longlong *result) {
+bool In_vector_time::find_item(Item *item) {
+  if (m_used_size == 0) return false;
   Time_val time;
   if (item->val_time(&time)) return true;
-  result->val = time.for_comparison();
-  result->unsigned_flag = item->unsigned_flag;
-  return false;
+  return std::binary_search(base.begin(), base.begin() + m_used_size, time);
+}
+
+bool In_vector_time::compare_elems(uint pos1, uint pos2) const {
+  return base[pos1] != base[pos2];
+}
+
+bool In_vector_time::set(uint pos, Item *item) {
+  return item->val_time(&base[pos]);
+}
+
+void In_vector_time::sort_array() {
+  std::sort(base.begin(), base.begin() + m_used_size);
 }
 
 bool in_datetime_as_longlong::val_item(Item *item, packed_longlong *result) {
@@ -5581,17 +5592,16 @@ bool Item_func_in::resolve_type(THD *thd) {
               thd->mem_root, arg_count - 1, cmp_collation.collation);
           break;
         case INT_RESULT:
-          m_const_array =
-              datetime_as_longlong
-                  ? args[0]->data_type() == MYSQL_TYPE_TIME
-                        ? static_cast<In_vector *>(
-                              new (thd->mem_root)
-                                  In_vector_time(thd->mem_root, arg_count - 1))
-                        : static_cast<In_vector *>(
-                              new (thd->mem_root) in_datetime_as_longlong(
-                                  thd->mem_root, arg_count - 1))
-                  : static_cast<In_vector *>(new (thd->mem_root) In_vector_int(
-                        thd->mem_root, arg_count - 1));
+          if (!datetime_as_longlong) {
+            m_const_array =
+                new (thd->mem_root) In_vector_int(thd->mem_root, arg_count - 1);
+          } else if (args[0]->data_type() == MYSQL_TYPE_TIME) {
+            m_const_array = new (thd->mem_root)
+                In_vector_time(thd->mem_root, arg_count - 1);
+          } else {
+            m_const_array = new (thd->mem_root)
+                in_datetime_as_longlong(thd->mem_root, arg_count - 1);
+          }
           break;
         case REAL_RESULT:
           m_const_array = new (thd->mem_root)

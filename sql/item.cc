@@ -9873,6 +9873,13 @@ bool Item_cache_time::cache_value() {
   return true;
 }
 
+void Item_cache_time::store_value(Time_val time) {
+  assert(example == nullptr);
+  time_value = time;
+  null_value = false;
+  value_cached = true;
+}
+
 String *Item_cache_time::val_str(String *string) {
   assert(fixed);
   assert(data_type() == MYSQL_TYPE_TIME);

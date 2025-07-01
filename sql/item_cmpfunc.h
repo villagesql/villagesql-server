@@ -1813,16 +1813,24 @@ class in_datetime_as_longlong final : public In_vector_int {
   bool val_item(Item *item, packed_longlong *result) override;
 };
 
-class In_vector_time final : public In_vector_int {
+class In_vector_time final : public In_vector {
  public:
   In_vector_time(MEM_ROOT *mem_root, uint elements)
-      : In_vector_int(mem_root, elements) {}
+      : In_vector(elements), base(mem_root, elements) {}
   Item *create_item(MEM_ROOT *mem_root) const override {
-    return new (mem_root) Item_int(0LL);
+    return new (mem_root) Item_cache_time();
   }
+  void value_to_item(uint pos, Item *item) const override {
+    down_cast<Item_cache_time *>(item)->store_value(base[pos]);
+  }
+  bool find_item(Item *item) override;
+  bool compare_elems(uint pos1, uint pos2) const override;
 
  private:
-  bool val_item(Item *item, packed_longlong *result) override;
+  Mem_root_array<Time_val> base;
+
+  bool set(uint pos, Item *item) override;
+  void sort_array() override;
 };
 
 /*

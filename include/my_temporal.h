@@ -129,6 +129,7 @@ class Time_val {
 
   bool operator==(const Time_val rhs) const { return m_value == rhs.m_value; }
 
+  bool operator<(const Time_val rhs) const { return m_value < rhs.m_value; }
   /**
     Add a time value to another time value, or subtract it
 

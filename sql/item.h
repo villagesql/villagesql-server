@@ -7106,6 +7106,12 @@ class Item_cache_time : public Item_cache {
   bool val_time(Time_val *time) override;
   Item_result result_type() const override { return STRING_RESULT; }
   bool cache_value() override;
+  /**
+    Cache a single non-NULL time value. Requires that "example" is not set.
+
+    @param time   Time value to cache
+  */
+  void store_value(Time_val time);
 
  private:
   Time_val time_value;
