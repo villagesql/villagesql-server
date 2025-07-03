@@ -7676,7 +7676,7 @@ Item *Item_multi_eq::equality_substitution_transformer(uchar *arg) {
     // Iterate over the fields selected from the subquery
     uint fieldno = 0;
     for (Item *existing : sj_nest->nested_join->sj_inner_exprs) {
-      if (existing->real_item()->eq(item))
+      if (existing->real_item()->eq(item->real_item()))
         added_fields.push_back(sj_nest->nested_join->sjm.mat_fields[fieldno]);
       fieldno++;
     }
@@ -7707,7 +7707,7 @@ Item *Item_func_eq::equality_substitution_transformer(uchar *arg) {
   // Iterate over the fields selected from the subquery
   uint fieldno = 0;
   for (Item *existing : sj_nest->nested_join->sj_inner_exprs) {
-    if (existing->real_item()->eq(args[1]) &&
+    if (existing->real_item()->eq(args[1]->real_item()) &&
         (args[0]->used_tables() & ~sj_nest->sj_inner_tables))
       current_thd->change_item_tree(
           args + 1, sj_nest->nested_join->sjm.mat_fields[fieldno]);
