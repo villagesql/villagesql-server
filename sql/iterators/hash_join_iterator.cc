@@ -208,7 +208,9 @@ bool HashJoinIterator::InitHashTable() {
   return false;
 }
 
-bool HashJoinIterator::Init() {
+bool HashJoinIterator::Reset() {
+  assert(m_needs_reset);
+  m_needs_reset = false;
   // If Init() is called multiple times (e.g., if hash join is inside a
   // dependent subquery), we must clear the NULL row flag, as it may have been
   // set by the previous execution of this hash join.
@@ -1121,6 +1123,18 @@ int HashJoinIterator::ReadNextJoinedRowFromHashTable() {
 }
 
 int HashJoinIterator::Read() {
+  /*
+    We do lazy initialization here instead of calling Reset() from Init().
+    Reset() may read a probe-row, and a parent iterator may overwrite the
+    record buffer(s) of the probe table(s) between calling Init() and Read().
+    (See comment in BuildHashTable().) We thus delay the call to Reset() until
+    the first time we call Read() after Init(). See also Bug#30579922 and
+    Bug#37746132 for additional context.
+  */
+  if (m_needs_reset && Reset()) {
+    return 1;
+  }
+
   for (;;) {
     if (thd()->killed) {  // Aborted by user.
       thd()->send_kill_message();

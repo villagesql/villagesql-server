@@ -2042,6 +2042,43 @@ b	b	b
 2	2	2
 DROP TABLE small, big;
 #
+# Bug#37746132 Result mismatch seen with Old Optimizer and Hypergraph
+#
+CREATE TABLE t1 (
+pk INT PRIMARY KEY,
+a INT,
+b INT
+);
+INSERT INTO t1 VALUES (1,1,1), (2,2,2);
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+# These two queries should give the same result.
+SELECT COUNT(*) FROM t1 x4 WHERE EXISTS
+(SELECT 1 FROM (SELECT x1.* FROM t1 x1 LEFT JOIN
+t1 x2 ON x1.a=x2.a AND x2.b > -x4.a) d1 STRAIGHT_JOIN t1 x3 ON d1.b < x3.b);
+COUNT(*)
+2
+SELECT COUNT(*) FROM t1 x4 WHERE EXISTS
+(SELECT 1 FROM (SELECT x1.* FROM t1 x1 LEFT JOIN
+t1 x2 ON x1.a=x2.a AND x2.b > -x4.a) d1 JOIN t1 x3 ON d1.b < x3.b);
+COUNT(*)
+2
+DROP TABLE t1;
+#
+# Bug#37826935 Assertion `semijoin_group.size() ==
+# CountOrderElements(path->sort().order)' failed.
+#
+CREATE TABLE t1 (pk int NOT NULL PRIMARY KEY, i1 int);
+# Should not trigger assert.
+SELECT x2.i1 FROM t1 AS x1 , t1 AS x2
+WHERE ((x2.pk , x2.i1) IN
+(SELECT y1.i1, y1.pk FROM
+(t1 AS y1 JOIN t1 AS y2 ON y2.i1 = y1.pk AND y2.pk = y1.i1)))
+GROUP BY x2.i1;
+i1
+DROP TABLE t1;
+#
 # Bug#36997713: Hypergraph : Result set mismatch (1 row vs empty set)
 #
 CREATE TABLE t1 (f1 INTEGER, f2 VARCHAR(10));
