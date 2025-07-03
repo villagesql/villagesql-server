@@ -49,7 +49,7 @@ static void copy_tree(const mysql_harness::Directory &from_dir,
       mysql_harness::mkdir(to.str(), mysql_harness::kStrictDirectoryPerm);
       copy_tree(from, to);
     } else {
-      mysqlrouter::copy_file(from.str(), to.str());
+      mysql_harness::copy_file(from.str(), to.str());
     }
   }
 }

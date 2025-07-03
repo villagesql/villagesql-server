@@ -23,7 +23,7 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#include "auto_cleaner.h"
+#include "mysql/harness/auto_cleaner.h"
 
 #include <algorithm>
 #include <exception>
@@ -31,11 +31,10 @@
 
 #include "mysql/harness/filesystem.h"
 #include "mysql/harness/logging/logging.h"
-#include "mysqlrouter/utils.h"  // copy_file
 
 IMPORT_LOG_FUNCTIONS()
 
-namespace mysqlrouter {
+namespace mysql_harness {
 
 void AutoCleaner::add_file_delete(const std::string &file) {
   files_.push_back(std::make_pair(file, std::make_pair(File, "")));
@@ -164,4 +163,4 @@ AutoCleaner::~AutoCleaner() {
   }
 }
 
-}  // namespace mysqlrouter
+}  // namespace mysql_harness

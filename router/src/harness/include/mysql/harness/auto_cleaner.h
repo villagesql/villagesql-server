@@ -23,17 +23,17 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#ifndef ROUTER_AUTO_CLEANER_INCLUDED
-#define ROUTER_AUTO_CLEANER_INCLUDED
+#ifndef MYSQL_HARNESS_AUTO_CLEANER_INCLUDED
+#define MYSQL_HARNESS_AUTO_CLEANER_INCLUDED
 
 #include <functional>
 #include <map>
 #include <string>
 #include <vector>
 
-#include "mysqlrouter/router_export.h"
+#include "harness_export.h"
 
-namespace mysqlrouter {
+namespace mysql_harness {
 
 /**
  * Automatic cleanup on scope exit utility class.
@@ -59,7 +59,7 @@ namespace mysqlrouter {
  * action will not be affected). Adding a revert file action may fail if initial
  * or backup files could not be opened.
  */
-class ROUTER_LIB_EXPORT AutoCleaner {
+class HARNESS_EXPORT AutoCleaner {
  public:
   void add_file_delete(const std::string &file);
   void add_directory_delete(const std::string &d, bool recursive = false);
@@ -97,5 +97,5 @@ class ROUTER_LIB_EXPORT AutoCleaner {
   std::vector<std::function<void()>> callbacks_;
 };
 
-}  // namespace mysqlrouter
-#endif  // ROUTER_AUTO_CLEANER_INCLUDED
+}  // namespace mysql_harness
+#endif  // MYSQL_HARNESS_AUTO_CLEANER_INCLUDED
