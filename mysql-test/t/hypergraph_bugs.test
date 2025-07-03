@@ -1675,6 +1675,30 @@ ORDER BY t1.a;
 DROP TABLE small, big;
 
 --echo #
+--echo # Bug#37746132 Result mismatch seen with Old Optimizer and Hypergraph
+--echo #
+
+CREATE TABLE t1 (
+  pk INT PRIMARY KEY,
+  a INT,
+  b INT
+);
+
+INSERT INTO t1 VALUES (1,1,1), (2,2,2);
+ANALYZE TABLE t1;
+
+--echo # These two queries should give the same result.
+SELECT COUNT(*) FROM t1 x4 WHERE EXISTS
+(SELECT 1 FROM (SELECT x1.* FROM t1 x1 LEFT JOIN
+ t1 x2 ON x1.a=x2.a AND x2.b > -x4.a) d1 STRAIGHT_JOIN t1 x3 ON d1.b < x3.b);
+
+SELECT COUNT(*) FROM t1 x4 WHERE EXISTS
+(SELECT 1 FROM (SELECT x1.* FROM t1 x1 LEFT JOIN
+ t1 x2 ON x1.a=x2.a AND x2.b > -x4.a) d1 JOIN t1 x3 ON d1.b < x3.b);
+
+DROP TABLE t1;
+
+--echo #
 --echo # Bug#37826935 Assertion `semijoin_group.size() ==
 --echo # CountOrderElements(path->sort().order)' failed.
 --echo #

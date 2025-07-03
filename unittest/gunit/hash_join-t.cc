@@ -533,23 +533,26 @@ TEST(HashJoinTest, HashTableCaching) {
   Field *const probe_field = test_helper.left_qep_tab->table()->field[0];
 
   ASSERT_FALSE(hash_join_iterator.Init());
+  // No reads yet, due to lazy initialization.
+  EXPECT_EQ(0, build_iterator->num_read_calls());
+
+  EXPECT_THAT(CollectIntResults(&hash_join_iterator, probe_field),
+              ElementsAre(2, 3));
+
+  EXPECT_EQ(3, build_iterator->num_read_calls());
+  ASSERT_FALSE(hash_join_iterator.Init());
+  // Unchanged due to lazy initialization.
   EXPECT_EQ(3, build_iterator->num_read_calls());
 
   EXPECT_THAT(CollectIntResults(&hash_join_iterator, probe_field),
               ElementsAre(2, 3));
-
-  ASSERT_FALSE(hash_join_iterator.Init());
   EXPECT_EQ(3, build_iterator->num_read_calls());  // Unchanged due to caching.
-
-  EXPECT_THAT(CollectIntResults(&hash_join_iterator, probe_field),
-              ElementsAre(2, 3));
 
   hash_table_generation = 1;
   ASSERT_FALSE(hash_join_iterator.Init());
-  EXPECT_EQ(6, build_iterator->num_read_calls());
-
   EXPECT_THAT(CollectIntResults(&hash_join_iterator, probe_field),
               ElementsAre(2, 3));
+  EXPECT_EQ(6, build_iterator->num_read_calls());
 }
 
 // Do a benchmark of HashJoinIterator::Init(). This function is responsible for
@@ -842,13 +845,13 @@ TEST(HashJoinTest, AntiJoinIntSpillToDisk) {
 
   ASSERT_FALSE(hash_join_iterator.Init());
 
-  EXPECT_GT(hash_join_iterator.ChunkCount(), 0)
-      << "The hash table didn't spill to disk.";
-
   EXPECT_THAT(CollectIntResults(&hash_join_iterator,
                                 test_helper.right_qep_tab->table()->field[0]),
               UnorderedElementsAre(nullopt, nullopt, -1, -2, 1, 3, 3, 1999,
                                    2000, 2001));
+
+  EXPECT_GT(hash_join_iterator.ChunkCount(), 0)
+      << "The hash table didn't spill to disk.";
 }
 
 TEST(HashJoinTest, LeftHashJoinInt) {
@@ -942,6 +945,7 @@ TEST(HashJoinTest, HashJoinChunkFiles) {
       /*probe_input_batch_mode=*/false, nullptr);
 
   ASSERT_FALSE(hash_join_iterator.Init());
+  ASSERT_FALSE(hash_join_iterator.Read());
 
   // We hash 1000 rows (64-bit arch) or 2000 rows (32-bit arch). The hash
   // table can normally hold about 410 rows on 64-bit machines and 820 rows on
