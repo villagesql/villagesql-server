@@ -1483,6 +1483,8 @@ void warn_on_deprecated_user_defined_collation(
 %token<lexer.keyword> EXTERNAL_SYM    1235     /* MYSQL */
 %token<lexer.keyword> MATERIALIZED_SYM      1236     /* MYSQL */
 
+%token<lexer.keyword> GUIDED_SYM      1237     /* MYSQL */
+
 /*
   NOTE! When adding new non-standard keywords, make sure they are added to the
   list ident_keywords_unambiguous lest they become reserved keywords.
@@ -2249,7 +2251,7 @@ void warn_on_deprecated_user_defined_collation(
 
 %type <role_or_privilege_list> role_or_privilege_list
 
-%type <with_validation> with_validation opt_with_validation
+%type <with_validation> with_validation opt_with_validation opt_guided
 /*%type <ts_access_mode> ts_access_mode*/
 
 %type <alter_table_action> alter_list_item alter_table_partition_options
@@ -8967,9 +8969,9 @@ standalone_alter_commands:
           {
             $$= NEW_PTN PT_alter_table_import_partition_tablespace(@$, $3);
           }
-        | SECONDARY_LOAD_SYM opt_use_partition
+        | SECONDARY_LOAD_SYM opt_use_partition opt_guided
           {
-            $$= NEW_PTN PT_alter_table_secondary_load(@$, $2);
+            $$= NEW_PTN PT_alter_table_secondary_load(@$, $3, $2);
           }
         | SECONDARY_UNLOAD_SYM opt_use_partition
           {
@@ -8996,6 +8998,18 @@ with_validation:
 all_or_alt_part_name_list:
           ALL                   { $$= nullptr; }
         | ident_string_list
+        ;
+
+opt_guided:
+          %empty { $$= Alter_info::ALTER_VALIDATION_DEFAULT; }
+        | GUIDED_SYM ON_SYM
+          {
+            $$= Alter_info::ALTER_WITH_VALIDATION;
+          }
+        | GUIDED_SYM OFF_SYM
+          {
+            $$= Alter_info::ALTER_WITHOUT_VALIDATION;
+          }
         ;
 
 /*
@@ -15897,6 +15911,7 @@ ident_keywords_unambiguous:
         | GROUP_REPLICATION
         | GTIDS_SYM
         | GTID_ONLY_SYM
+        | GUIDED_SYM
         | HASH_SYM
         | HEADER_SYM
         | HISTOGRAM_SYM

@@ -315,6 +315,7 @@ static const SYMBOL symbols[] = {
     {SYM("GROUPS", GROUPS_SYM)},
     {SYM("GTIDS", GTIDS_SYM)},
     {SYM("GTID_ONLY", GTID_ONLY_SYM)},
+    {SYM("GUIDED", GUIDED_SYM)},
     {SYM("HANDLER", HANDLER_SYM)},
     {SYM("HASH", HASH_SYM)},
     {SYM("HAVING", HAVING)},
