@@ -3209,6 +3209,9 @@ bool Item_func_between::fix_fields(THD *thd, Item **ref) {
   // Ensure that string values are compared using BETWEEN's effective collation
   if (args[1]->result_type() == STRING_RESULT &&
       args[2]->result_type() == STRING_RESULT) {
+    // Do not evaluate arguments during resolving of CREATE VIEW.
+    if (thd->lex->is_view_context_analysis()) return false;
+
     if (simplify_string_args(thd, args[0]->collation, args + 1, 2)) return true;
     // Errors may have gone unnoticed:
     if (thd->is_error()) return true;
