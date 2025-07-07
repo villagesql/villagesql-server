@@ -5387,19 +5387,8 @@ static void btr_record_not_null_field_in_rec(const dict_index_t *index,
   }
 }
 
-/** Estimates the number of different key values in a given index, for
- each n-column prefix of the index where 1 <= n <=
- dict_index_get_n_unique(index). The estimates are stored in the array
- index->stat_n_diff_key_vals[] (indexed 0..n_uniq-1) and the number of pages
- that were sampled is saved in index->stat_n_sample_sizes[]. If
- innodb_stats_method is nulls_ignored, we also record the number of non-null
- values for each prefix and stored the estimates in array
- index->stat_n_non_null_key_vals.
- @return true if the index is available and we get the estimated numbers,
- false if the index is unavailable. */
 bool btr_estimate_number_of_different_key_vals(
-    dict_index_t *index) /*!< in: index */
-{
+    dict_index_t *index, dict_index_stats_t *index_stats) {
   btr_cur_t cursor;
   page_t *page;
   rec_t *rec;
@@ -5580,7 +5569,7 @@ bool btr_estimate_number_of_different_key_vals(
   included in index->stat_n_leaf_pages) */
 
   for (j = 0; j < n_cols; j++) {
-    index->stat_n_diff_key_vals[j] = BTR_TABLE_STATS_FROM_SAMPLE(
+    index_stats->n_diff_key_vals[j] = BTR_TABLE_STATS_FROM_SAMPLE(
         n_diff[j], index, n_sample_pages, total_external_size, not_empty_flag);
 
     /* If the tree is small, smaller than
@@ -5591,23 +5580,23 @@ bool btr_estimate_number_of_different_key_vals(
     different key values, or even more. Let us try to approximate
     that: */
 
-    add_on = index->stat_n_leaf_pages /
+    add_on = index_stats->n_leaf_pages /
              (10 * (n_sample_pages + total_external_size));
 
     if (add_on > n_sample_pages) {
       add_on = n_sample_pages;
     }
 
-    index->stat_n_diff_key_vals[j] += add_on;
+    index_stats->n_diff_key_vals[j] += add_on;
 
-    index->stat_n_sample_sizes[j] = n_sample_pages;
+    index_stats->n_sample_sizes[j] = n_sample_pages;
 
-    /* Update the stat_n_non_null_key_vals[] with our
-    sampled result. stat_n_non_null_key_vals[] is created
+    /* Update the n_non_null_key_vals[] with our
+    sampled result. n_non_null_key_vals[] is created
     and initialized to zero in dict_index_add_to_cache(),
-    along with stat_n_diff_key_vals[] array */
+    along with n_diff_key_vals[] array */
     if (n_not_null != nullptr) {
-      index->stat_n_non_null_key_vals[j] =
+      index_stats->n_non_null_key_vals[j] =
           BTR_TABLE_STATS_FROM_SAMPLE(n_not_null[j], index, n_sample_pages,
                                       total_external_size, not_empty_flag);
     }

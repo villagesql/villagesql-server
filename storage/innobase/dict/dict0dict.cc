@@ -325,6 +325,20 @@ static void dict_table_stats_latch_alloc(void *table_void) {
                  LATCH_ID_DICT_TABLE_STATS);
 }
 
+/** Allocate and init a dict_table_t's stats compute mutex.
+This function must not be called concurrently on the same table object.
+@param[in,out]  table_void      table whose stats compute mutex to create */
+static void dict_table_stats_compute_mutex_alloc(void *table_void) {
+  dict_table_t *table = static_cast<dict_table_t *>(table_void);
+
+  table->stats_compute_mutex =
+      ut::new_withkey<ib_mutex_t>(UT_NEW_THIS_FILE_PSI_KEY);
+
+  ut_a(table->stats_compute_mutex != nullptr);
+
+  mutex_create(LATCH_ID_DICT_TABLE_STATS_COMPUTE, table->stats_compute_mutex);
+}
+
 /** Deinit and free a dict_table_t's stats latch.
 This function must not be called concurrently on the same table object.
 @param[in,out]  table   table whose stats latch to free */
@@ -333,13 +347,21 @@ static void dict_table_stats_latch_free(dict_table_t *table) {
   ut::free(table->stats_latch);
 }
 
+/** Deinit and free a dict_table_t's stats compute mutex.
+This function must not be called concurrently on the same table object.
+@param[in,out]  table   table whose stats compute mutex to free */
+static void dict_table_stats_compute_mutex_free(dict_table_t *table) {
+  mutex_free(table->stats_compute_mutex);
+  ut::delete_(table->stats_compute_mutex);
+}
+
 /** Create a dict_table_t's stats latch or delay for lazy creation.
 This function is only called from either single threaded environment
 or from a thread that has not shared the table object with other threads.
 @param[in,out]  table   table whose stats latch to create
 @param[in]      enabled if false then the latch is disabled
 and dict_table_stats_lock()/unlock() become noop on this table. */
-void dict_table_stats_latch_create(dict_table_t *table, bool enabled) {
+void dict_table_stats_latch_create_lazy(dict_table_t *table, bool enabled) {
   if (!enabled) {
     table->stats_latch = nullptr;
     table->stats_latch_created = os_once::DONE;
@@ -351,6 +373,25 @@ void dict_table_stats_latch_create(dict_table_t *table, bool enabled) {
   table->stats_latch_created = os_once::NEVER_DONE;
 }
 
+/** Create a dict_table_t's stats compute mutex or delay for lazy creation.
+This function is only called from either single threaded environment
+or from a thread that has not shared the table object with other threads.
+@param[in,out]  table   table whose stats compute mutex to create
+@param[in]      enabled if false then the latch is disabled
+and dict_table_stats_compute_lock()/unlock() become noop on this table. */
+void dict_table_stats_compute_mutex_create_lazy(dict_table_t *table,
+                                                bool enabled) {
+  if (!enabled) {
+    table->stats_compute_mutex = nullptr;
+    table->stats_compute_mutex_created = os_once::DONE;
+    return;
+  }
+
+  /* We create this lazily the first time it is used. */
+  table->stats_compute_mutex = nullptr;
+  table->stats_compute_mutex_created = os_once::NEVER_DONE;
+}
+
 /** Destroy a dict_table_t's stats latch.
 This function is only called from either single threaded environment
 or from a thread that has not shared the table object with other threads.
@@ -359,6 +400,17 @@ void dict_table_stats_latch_destroy(dict_table_t *table) {
   if (table->stats_latch_created == os_once::DONE &&
       table->stats_latch != nullptr) {
     dict_table_stats_latch_free(table);
+  }
+}
+
+/** Destroy a dict_table_t's stats compute mutex.
+This function is only called from either single threaded environment
+or from a thread that has not shared the table object with other threads.
+@param[in,out]  table   table whose stats compute mutex to destroy */
+void dict_table_stats_compute_mutex_destroy(dict_table_t *table) {
+  if (table->stats_compute_mutex_created == os_once::DONE &&
+      table->stats_compute_mutex != nullptr) {
+    dict_table_stats_compute_mutex_free(table);
   }
 }
 
@@ -419,6 +471,37 @@ void dict_table_stats_unlock(dict_table_t *table, ulint latch_mode) {
     default:
       ut_error;
   }
+}
+
+void dict_table_stats_compute_lock(dict_table_t *table) {
+  ut_ad(table != nullptr);
+  ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
+
+  os_once::do_or_wait_for_done(&table->stats_compute_mutex_created,
+                               dict_table_stats_compute_mutex_alloc, table);
+
+  if (table->stats_compute_mutex == nullptr) {
+    /* This is a dummy table object that is private in the current
+    thread and is not shared between multiple threads, thus we
+    skip any locking. */
+    return;
+  }
+
+  mutex_enter(table->stats_compute_mutex);
+}
+
+void dict_table_stats_compute_unlock(dict_table_t *table) {
+  ut_ad(table != nullptr);
+  ut_ad(table->magic_n == DICT_TABLE_MAGIC_N);
+
+  if (table->stats_compute_mutex == nullptr) {
+    /* This is a dummy table object that is private in the current
+    thread and is not shared between multiple threads, thus we
+    skip any locking. */
+    return;
+  }
+
+  mutex_exit(table->stats_compute_mutex);
 }
 
 /** Try to drop any indexes after an aborted index creation.

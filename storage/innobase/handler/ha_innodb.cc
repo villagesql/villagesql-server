@@ -791,7 +791,8 @@ static PSI_mutex_info all_innodb_mutexes[] = {
     PSI_MUTEX_KEY(sync_array_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(row_drop_list_mutex, 0, 0, PSI_DOCUMENT_ME),
     PSI_MUTEX_KEY(ahi_enabled_mutex, 0, 0,
-                  "Mutex used for AHI disabling and enabling.")};
+                  "Mutex used for AHI disabling and enabling."),
+    PSI_MUTEX_KEY(dict_table_stats_compute_mutex, 0, 0, PSI_DOCUMENT_ME)};
 #endif /* UNIV_PFS_MUTEX */
 
 #ifdef UNIV_PFS_RWLOCK
@@ -17477,12 +17478,19 @@ inline double index_pct_cached(const dict_index_t *index) {
 
 /** Returns statistics information of the table to the MySQL interpreter, in
 various fields of the handle object.
-@param[in]      flag            what information is requested
-@param[in]      is_analyze      True if called from "::analyze()".
+@param[in]    flag            what information is requested
+                              HA_STATUS_NO_LOCK is supported only for:
+                              ha_statistics::delete_length
+                              it is not supported for others like:
+                              ha_statistics::records
+                              But it will not lock for the duration of stats
+                              calculation. Only during copy to make sure
+                              stats are consistent.
+@param[in]      is_analyze    True if called from "::analyze()".
 @return HA_ERR_* error code or 0 */
 int ha_innobase::info_low(uint flag, bool is_analyze) {
   dict_table_t *ib_table;
-  uint64_t n_rows;
+  uint64_t n_rows{0};
 
   DBUG_TRACE;
 
@@ -17537,26 +17545,21 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
         ib_table->update_time.load());
   }
 
+  ulint stat_clustered_index_size{0};
+  ulint stat_sum_of_other_index_sizes{0};
+
+  if (flag & (HA_STATUS_VARIABLE | HA_STATUS_CONST)) {
+    dict_table_stats_lock(ib_table, RW_S_LATCH);
+
+    info_low_table_stats(flag, ib_table, n_rows, stat_clustered_index_size,
+                         stat_sum_of_other_index_sizes);
+
+    info_low_key(flag, ib_table);
+
+    dict_table_stats_unlock(ib_table, RW_S_LATCH);
+  }
+
   if (flag & HA_STATUS_VARIABLE) {
-    ulint stat_clustered_index_size;
-    ulint stat_sum_of_other_index_sizes;
-
-    if (!(flag & HA_STATUS_NO_LOCK)) {
-      dict_table_stats_lock(ib_table, RW_S_LATCH);
-    }
-
-    ut_a(ib_table->stat_initialized);
-
-    n_rows = ib_table->stat_n_rows;
-
-    stat_clustered_index_size = ib_table->stat_clustered_index_size;
-
-    stat_sum_of_other_index_sizes = ib_table->stat_sum_of_other_index_sizes;
-
-    if (!(flag & HA_STATUS_NO_LOCK)) {
-      dict_table_stats_unlock(ib_table, RW_S_LATCH);
-    }
-
     /*
     The MySQL optimizer seems to assume in a left join that n_rows
     is an accurate estimate if it is zero. Of course, it is not,
@@ -17641,116 +17644,6 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
                ib_table->name.m_name, num_innodb_index, table->s->keys);
   }
 
-  if (!(flag & HA_STATUS_NO_LOCK)) {
-    dict_table_stats_lock(ib_table, RW_S_LATCH);
-  }
-
-  ut_a(ib_table->stat_initialized);
-
-  const dict_index_t *pk = UT_LIST_GET_FIRST(ib_table->indexes);
-
-  for (uint i = 0; i < table->s->keys; i++) {
-    ulong j;
-    /* We could get index quickly through internal
-    index mapping with the index translation table.
-    The identity of index (match up index name with
-    that of table->key_info[i]) is already verified in
-    innobase_get_index().  */
-    dict_index_t *index = innobase_get_index(i);
-
-    if (index == nullptr) {
-      log_errlog(ERROR_LEVEL, ER_INNODB_IDX_CNT_FEWER_THAN_DEFINED_IN_MYSQL,
-                 ib_table->name.m_name, TROUBLESHOOTING_MSG);
-      break;
-    }
-
-    KEY *key = &table->key_info[i];
-
-    double pct_cached;
-
-    /* We do not maintain stats for fulltext or spatial indexes.
-    Thus, we can't calculate pct_cached below because we need
-    dict_index_t::stat_n_leaf_pages for that. See
-    dict_stats_should_ignore_index(). */
-    if ((key->flags & HA_FULLTEXT) || (key->flags & HA_SPATIAL)) {
-      pct_cached = IN_MEMORY_ESTIMATE_UNKNOWN;
-    } else {
-      pct_cached = index_pct_cached(index);
-    }
-
-    key->set_in_memory_estimate(pct_cached);
-
-    if (index == pk) {
-      stats.table_in_mem_estimate = pct_cached;
-    }
-
-    if (flag & HA_STATUS_CONST) {
-      if (!key->supports_records_per_key()) {
-        continue;
-      }
-
-      for (j = 0; j < key->actual_key_parts; j++) {
-        if ((key->flags & HA_FULLTEXT) || (key->flags & HA_SPATIAL)) {
-          /* The record per key does not apply to
-          FTS or Spatial indexes. */
-          key->set_records_per_key(j, 1.0f);
-          continue;
-        }
-
-        if (j + 1 > index->n_uniq) {
-          log_errlog(ERROR_LEVEL, ER_INNODB_IDX_COLUMN_CNT_DIFF, index->name(),
-                     ib_table->name.m_name, (unsigned long)index->n_uniq, j + 1,
-                     TROUBLESHOOTING_MSG);
-          break;
-        }
-
-        /* innodb_rec_per_key() will use
-        index->stat_n_diff_key_vals[] and the value we
-        pass index->table->stat_n_rows. Both are
-        calculated by ANALYZE and by the background
-        stats gathering thread (which kicks in when too
-        much of the table has been changed). In
-        addition table->stat_n_rows is adjusted with
-        each DML (e.g. ++ on row insert). Those
-        adjustments are not MVCC'ed and not even
-        reversed on rollback. So,
-        index->stat_n_diff_key_vals[] and
-        index->table->stat_n_rows could have been
-        calculated at different time. This is
-        acceptable. */
-        const rec_per_key_t rec_per_key =
-            innodb_rec_per_key(index, (ulint)j, index->table->stat_n_rows);
-
-        key->set_records_per_key(j, rec_per_key);
-
-        /* The code below is legacy and should be
-        removed together with this comment once we
-        are sure the new floating point rec_per_key,
-        set via set_records_per_key(), works fine. */
-
-        ulong rec_per_key_int = static_cast<ulong>(
-            innodb_rec_per_key(index, (ulint)j, stats.records));
-
-        /* Since MySQL seems to favor table scans
-        too much over index searches, we pretend
-        index selectivity is 2 times better than
-        our estimate: */
-
-        rec_per_key_int = rec_per_key_int / 2;
-
-        if (rec_per_key_int == 0) {
-          rec_per_key_int = 1;
-        }
-
-        key->rec_per_key[j] = rec_per_key_int;
-      }
-    }
-  }
-
-  if (!(flag & HA_STATUS_NO_LOCK)) {
-    dict_table_stats_unlock(ib_table, RW_S_LATCH);
-  }
-
   if (srv_force_recovery >= SRV_FORCE_NO_IBUF_MERGE) {
     goto func_exit;
 
@@ -17790,6 +17683,108 @@ func_exit:
   m_prebuilt->trx->op_info = (char *)"";
 
   return 0;
+}
+
+void ha_innobase::info_low_key(uint flag, const dict_table_t *ib_table) {
+  ut_a(ib_table->stat_initialized);
+
+  const dict_index_t *pk = UT_LIST_GET_FIRST(ib_table->indexes);
+
+  for (uint i = 0; i < table->s->keys; i++) {
+    DEBUG_SYNC_C("begin_of_index_stats_read");
+    /* We could get index quickly through internal index mapping with the index
+    translation table. The identity of index (match up index name with that of
+    table->key_info[i]) is already verified in innobase_get_index(). */
+    dict_index_t *index = innobase_get_index(i);
+
+    if (index == nullptr) {
+      log_errlog(ERROR_LEVEL, ER_INNODB_IDX_CNT_FEWER_THAN_DEFINED_IN_MYSQL,
+                 ib_table->name.m_name, TROUBLESHOOTING_MSG);
+      break;
+    }
+
+    KEY *key = &table->key_info[i];
+
+    double pct_cached;
+
+    /* We do not maintain stats for fulltext or spatial indexes. Thus, we can't
+    calculate pct_cached below because we need dict_index_t::stat_n_leaf_pages
+    for that. See dict_stats_should_ignore_index(). */
+    if ((key->flags & HA_FULLTEXT) || (key->flags & HA_SPATIAL)) {
+      pct_cached = IN_MEMORY_ESTIMATE_UNKNOWN;
+    } else {
+      pct_cached = index_pct_cached(index);
+    }
+
+    key->set_in_memory_estimate(pct_cached);
+
+    if (index == pk) {
+      stats.table_in_mem_estimate = pct_cached;
+    }
+
+    if (flag & HA_STATUS_CONST) {
+      if (!key->supports_records_per_key()) {
+        continue;
+      }
+
+      for (ulong j = 0; j < key->actual_key_parts; j++) {
+        if ((key->flags & HA_FULLTEXT) || (key->flags & HA_SPATIAL)) {
+          /* The record per key does not apply to FTS or Spatial indexes. */
+          key->set_records_per_key(j, 1.0f);
+          continue;
+        }
+
+        if (j + 1 > index->n_uniq) {
+          log_errlog(ERROR_LEVEL, ER_INNODB_IDX_COLUMN_CNT_DIFF, index->name(),
+                     ib_table->name.m_name, (unsigned long)index->n_uniq, j + 1,
+                     TROUBLESHOOTING_MSG);
+          break;
+        }
+
+        /* innodb_rec_per_key() will use index->stat_n_diff_key_vals[] and the
+        value we pass index->table->stat_n_rows. Both are calculated by ANALYZE
+        and by the background stats gathering thread (which kicks in when too
+        much of the table has been changed). In addition, table->stat_n_rows is
+        adjusted with each DML (e.g. ++ on row insert). Those adjustments are
+        not MVCC'ed and not even reversed on rollback.
+        So, index->stat_n_diff_key_vals[] and index->table->stat_n_rows could
+        have been calculated at different time. This is acceptable. */
+        const rec_per_key_t rec_per_key =
+            innodb_rec_per_key(index, (ulint)j, index->table->stat_n_rows);
+
+        key->set_records_per_key(j, rec_per_key);
+
+        /* The code below is legacy and should be removed together with this
+        comment once we are sure the new floating point rec_per_key, set via
+        set_records_per_key(), works fine. */
+        ulong rec_per_key_int = static_cast<ulong>(
+            innodb_rec_per_key(index, (ulint)j, stats.records));
+
+        /* Since MySQL seems to favor table scans too much over index searches,
+        we pretend index selectivity is 2 times better than our estimate: */
+        rec_per_key_int = rec_per_key_int / 2;
+
+        if (rec_per_key_int == 0) {
+          rec_per_key_int = 1;
+        }
+
+        key->rec_per_key[j] = rec_per_key_int;
+      }
+    }
+  }
+}
+
+void ha_innobase::info_low_table_stats(
+    uint flag, const dict_table_t *ib_table, uint64_t &n_rows,
+    ulint &stat_clustered_index_size,
+    ulint &stat_sum_of_other_index_sizes) const {
+  if (flag & HA_STATUS_VARIABLE) {
+    ut_a(ib_table->stat_initialized);
+
+    n_rows = ib_table->stat_n_rows;
+    stat_clustered_index_size = ib_table->stat_clustered_index_size;
+    stat_sum_of_other_index_sizes = ib_table->stat_sum_of_other_index_sizes;
+  }
 }
 
 /** Returns statistics information of the table to the MySQL interpreter,
@@ -17985,15 +17980,19 @@ static bool innobase_get_table_statistics(
   if (stat_flags & HA_STATUS_VARIABLE) {
     dict_stats_init(ib_table);
 
-    ut_a(ib_table->stat_initialized);
+    dict_table_stats_lock(ib_table, RW_S_LATCH);
 
-    /* Note it may look like ib_table->* arguments are
-    redundant. If you see the usage of this call in info_low(),
-    the stats can be retrieved while holding a latch if
-    !HA_STATUS_NO_LOCK is passed. */
+    ut_a(ib_table->stat_initialized);
+    /* Note it may look like ib_table->* arguments are redundant. If you see
+    the usage of this call in info_low(), the stats can be retrieved while
+    holding a latch if !HA_STATUS_NO_LOCK is passed. This function is for
+    getting table statistics for i.e. INFORMATION_SCHEMA.TABLE table,
+    so no need for adjustment of values like is done in info_low. */
     calculate_index_size_stats(ib_table, ib_table->stat_n_rows,
                                ib_table->stat_clustered_index_size,
                                ib_table->stat_sum_of_other_index_sizes, stats);
+
+    dict_table_stats_unlock(ib_table, RW_S_LATCH);
   }
 
   dd_table_close(ib_table, thd, &mdl, false);

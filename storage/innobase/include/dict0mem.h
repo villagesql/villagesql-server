@@ -2222,6 +2222,12 @@ struct dict_table_t {
   performance reasons. */
   rw_lock_t *stats_latch;
 
+  /** Creation state of 'stats_compute_mutex'. */
+  std::atomic<os_once::state_t> stats_compute_mutex_created;
+
+  /** Mutex protecting table and index statistics calculation process. */
+  ib_mutex_t *stats_compute_mutex;
+
   /** true if statistics have been calculated the first time after
   database startup or table creation. */
   unsigned stat_initialized : 1;
@@ -3103,6 +3109,25 @@ inline bool dict_table_autoinc_own(const dict_table_t *table) {
   return (mutex_own(table->autoinc_mutex));
 }
 #endif /* UNIV_DEBUG */
+
+/* Data structure storing index statistics. Used as temporary state during
+statistics calculation. The final version of statistics for reading by
+optimizer are stored in dict_index_t.*/
+struct dict_index_stats_t {
+  /*----------------------*/
+  /** Statistics for query optimization */
+  /** @{ */
+  uint64_t *n_diff_key_vals;
+  uint64_t *n_sample_sizes;
+  uint64_t *n_non_null_key_vals;
+  ulint index_size;
+  ulint n_leaf_pages;
+  /** @} */
+
+  unsigned type : DICT_IT_BITS;
+
+  unsigned n_uniq : 10;
+};
 
 #include "dict0mem.ic"
 
