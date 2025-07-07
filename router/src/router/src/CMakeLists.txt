@@ -86,7 +86,6 @@ ELSE()
 ENDIF()
 
 ROUTER_ADD_SHARED_LIBRARY(router_lib
-  auto_cleaner.cc
   certificate_generator.cc
   certificate_handler.cc
   config_files.cc

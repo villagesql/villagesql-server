@@ -26,6 +26,7 @@
 #include "mysql/harness/filesystem.h"
 
 #include <algorithm>
+#include <fstream>
 #include <functional>
 #include <iterator>
 #include <ostream>
@@ -374,6 +375,28 @@ void check_file_access_rights(const std::string &file_name) {
 
     throw std::system_error(ec, "'" + file_name + "' has insecure permissions");
   }
+}
+
+void copy_file(const std::string &from, const std::string &to) {
+  std::ofstream ofile;
+  std::ifstream ifile;
+
+  ofile.open(to,
+             std::ofstream::out | std::ofstream::binary | std::ofstream::trunc);
+  if (ofile.fail()) {
+    throw std::system_error(errno, std::generic_category(),
+                            "Could not create file '" + to + "'");
+  }
+  ifile.open(from, std::ofstream::in | std::ofstream::binary);
+  if (ifile.fail()) {
+    throw std::system_error(errno, std::generic_category(),
+                            "Could not open file '" + from + "'");
+  }
+
+  ofile << ifile.rdbuf();
+
+  ofile.close();
+  ifile.close();
 }
 
 }  // namespace mysql_harness

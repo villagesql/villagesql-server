@@ -308,8 +308,8 @@ TEST_P(StateFileMetadataServersChangedInRuntimeTest,
       router_port, "PRIMARY", "first-available");
 
   SCOPED_TRACE("// Launch ther router with the initial state file");
-  launch_router(temp_test_dir.name(), metadata_cache_section, routing_section,
-                state_file);
+  auto &router = launch_router(temp_test_dir.name(), metadata_cache_section,
+                               routing_section, state_file);
 
   SCOPED_TRACE(
       "// Check our state file content, it should not change yet, there is "
@@ -374,6 +374,16 @@ TEST_P(StateFileMetadataServersChangedInRuntimeTest,
   check_state_file(state_file, param.cluster_type, kGroupId,
                    {cluster_nodes_ports[1], cluster_nodes_ports[2]}, 0,
                    node_host, 10000ms);
+
+  router.kill();
+  check_exit_code(router, EXIT_SUCCESS, 5s);
+
+  // check that the state.json.tmp was not left behind
+  Path tmp_file(temp_test_dir.file("state.json.tmp"));
+  EXPECT_FALSE(tmp_file.exists());
+
+  Path dynamic_state_file(temp_test_dir.file("state.json"));
+  EXPECT_TRUE(dynamic_state_file.exists());
 }
 
 INSTANTIATE_TEST_SUITE_P(
@@ -961,14 +971,18 @@ INSTANTIATE_TEST_SUITE_P(
 #ifndef _WIN32
 
 struct StateFileAccessRightsTestParams {
-  bool read_access;
-  bool write_access;
+  bool read_access;             // read access to state file
+  bool write_access_tmp_file;   // write access to tmp state file
+  bool write_access_directory;  // write access to the state file dir
   std::string expected_error;
 
-  StateFileAccessRightsTestParams(bool read_access_, bool write_access_,
+  StateFileAccessRightsTestParams(bool read_access_,
+                                  bool write_access_tmp_file_,
+                                  bool write_access_directory_,
                                   const std::string &expected_error_)
       : read_access(read_access_),
-        write_access(write_access_),
+        write_access_tmp_file(write_access_tmp_file_),
+        write_access_directory(write_access_directory_),
         expected_error(expected_error_) {}
 };
 
@@ -988,6 +1002,7 @@ TEST_P(StateFileAccessRightsTest, ParametrizedStateFileSchemaTest) {
   auto test_params = GetParam();
 
   TempDirectory temp_test_dir;
+  TempDirectory temp_test_dir_data;
 
   const uint16_t router_port = port_pool_.get_next_available();
 
@@ -995,11 +1010,25 @@ TEST_P(StateFileAccessRightsTest, ParametrizedStateFileSchemaTest) {
   // dynamic state file configured via test parameter
 
   const std::string state_file = create_state_file(
-      temp_test_dir.name(), create_state_file_content("000-000", {10000}));
+      temp_test_dir_data.name(), create_state_file_content("000-000", {10000}));
   mode_t file_mode = 0;
   if (test_params.read_access) file_mode |= S_IRUSR;
-  if (test_params.write_access) file_mode |= S_IWUSR;
   chmod(state_file.c_str(), file_mode);
+
+  // create empty temp state file with no write access
+  if (!test_params.write_access_tmp_file) {
+    const std::string tmp_state_file = [&]() {
+      Path file_path = Path(temp_test_dir_data.name()).join("state.json.tmp");
+      std::ofstream ofs_config(file_path.str());
+
+      return file_path.str();
+    }();
+    chmod(tmp_state_file.c_str(), S_IRUSR);
+  }
+
+  if (!test_params.write_access_directory) {
+    chmod(temp_test_dir_data.name().c_str(), S_IRUSR | S_IXUSR);
+  }
 
   auto writer = config_writer(temp_test_dir.name())
                     .section(metadata_cache_section())
@@ -1028,12 +1057,17 @@ TEST_P(StateFileAccessRightsTest, ParametrizedStateFileSchemaTest) {
 INSTANTIATE_TEST_SUITE_P(
     StateFileTests, StateFileAccessRightsTest,
     ::testing::Values(
-        // no read, nor write access
-        StateFileAccessRightsTestParams(false, false,
+        // no read for state file
+        StateFileAccessRightsTestParams(false, true, true,
                                         "Could not open dynamic state file"),
-        // read access, no write access
-        StateFileAccessRightsTestParams(true, false,
-                                        "Could not open dynamic state file")));
+
+        // read access, no write access to temporary file
+        StateFileAccessRightsTestParams(
+            true, false, true, "Could not open temporary dynamic state file"),
+
+        // read access, no write access to directory
+        StateFileAccessRightsTestParams(
+            true, true, false, "Could not open temporary dynamic state file")));
 
 #endif
 
