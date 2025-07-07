@@ -1873,5 +1873,18 @@ FROM INFORMATION_SCHEMA.OPTIMIZER_TRACE;
 
 DROP TABLE t;
 
+--echo #
+--echo # Bug#38021487: Assertion `false && "Inconsistent row counts for
+--echo #               different AccessPath objects."' failed.
+--echo #
+
+CREATE TABLE t (pk INT PRIMARY KEY, f1 INT, f2 INT);
+INSERT INTO t VALUES (1, 1, 1), (2, 2, 2);
+SELECT 1
+FROM t AS t1
+     JOIN t AS t2 ON t1.f1 = t2.f1 AND t2.f1 = t2.f2
+     LEFT JOIN t AS t3 ON FALSE
+WHERE t3.pk = t2.pk OR t2.f1 <> t2.f1;
+DROP TABLE t;
 
 --source include/disable_hypergraph.inc

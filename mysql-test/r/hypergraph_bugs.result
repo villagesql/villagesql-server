@@ -2246,3 +2246,16 @@ Functional dependencies (after pruning):",
               " - {t.a} -> t.b [always active]",
               ""
 DROP TABLE t;
+#
+# Bug#38021487: Assertion `false && "Inconsistent row counts for
+#               different AccessPath objects."' failed.
+#
+CREATE TABLE t (pk INT PRIMARY KEY, f1 INT, f2 INT);
+INSERT INTO t VALUES (1, 1, 1), (2, 2, 2);
+SELECT 1
+FROM t AS t1
+JOIN t AS t2 ON t1.f1 = t2.f1 AND t2.f1 = t2.f2
+LEFT JOIN t AS t3 ON FALSE
+WHERE t3.pk = t2.pk OR t2.f1 <> t2.f1;
+1
+DROP TABLE t;

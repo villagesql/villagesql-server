@@ -3162,10 +3162,21 @@ bool IsPartOfCycle(const JoinHypergraph *graph, int edge_idx) {
  */
 void AddCycleEdges(THD *thd, const Mem_root_array<Item *> &cycle_inducing_edges,
                    CompanionSetCollection &companion_collection,
-                   JoinHypergraph *graph) {
-  for (Item *cond : cycle_inducing_edges) {
-    const NodeMap used_nodes = GetNodeMapFromTableMap(
-        cond->used_tables(), graph->table_num_to_node_num);
+                   table_map pruned_tables, JoinHypergraph *graph) {
+  for (Item *const cond : cycle_inducing_edges) {
+    const table_map used_tables = cond->used_tables();
+    // Pseudo tables are not accepted by IsCandidateForCycle(), so we can safely
+    // assume that the join condition references regular tables only.
+    assert(!Overlaps(used_tables, PSEUDO_TABLE_BITS));
+
+    if (IsSubset(used_tables, pruned_tables)) {
+      // This part of the join tree is pruned away, so considering more join
+      // orders for these tables is a waste of time.
+      continue;
+    }
+
+    const NodeMap used_nodes =
+        GetNodeMapFromTableMap(used_tables, graph->table_num_to_node_num);
     RelationalExpression *expr = nullptr;
     JoinPredicate *pred = nullptr;
 
@@ -3189,18 +3200,14 @@ void AddCycleEdges(THD *thd, const Mem_root_array<Item *> &cycle_inducing_edges,
 
       expr = new (thd->mem_root) RelationalExpression(thd);
       expr->type = RelationalExpression::INNER_JOIN;
+      expr->tables_in_subtree = used_tables;
+      expr->nodes_in_subtree = used_nodes;
+      expr->companion_set = companion_collection.Find(used_tables);
 
       // TODO(sgunders): This does not really make much sense, but
       // estimated_bytes_per_row doesn't make that much sense to begin with; it
       // will depend on the join order. See if we can replace it with a
       // per-table width calculation that we can sum up in the join optimizer.
-      expr->tables_in_subtree = cond->used_tables();
-      expr->nodes_in_subtree =
-          GetNodeMapFromTableMap(cond->used_tables() & ~PSEUDO_TABLE_BITS,
-                                 graph->table_num_to_node_num);
-
-      expr->companion_set = companion_collection.Find(expr->tables_in_subtree);
-
       double selectivity = EstimateSelectivity(thd, cond, *expr->companion_set);
       const size_t estimated_bytes_per_row =
           EstimateRowWidthForJoin(*graph, expr);
@@ -3483,10 +3490,17 @@ void AddMultipleEqualityPredicate(THD *thd,
  */
 void CompleteFullMeshForMultipleEqualities(
     THD *thd, const Mem_root_array<Item_multi_eq *> &multiple_equalities,
-    CompanionSetCollection &companion_collection, JoinHypergraph *graph) {
+    CompanionSetCollection &companion_collection, table_map pruned_tables,
+    JoinHypergraph *graph) {
   for (Item_multi_eq *item_equal : multiple_equalities) {
+    const table_map used_tables = item_equal->used_tables();
+    if (IsSubset(used_tables, pruned_tables)) {
+      // This part of the join tree is pruned away, so considering more join
+      // orders for these tables is a waste of time.
+      continue;
+    }
     double selectivity = EstimateSelectivity(
-        thd, item_equal, *companion_collection.Find(item_equal->used_tables()));
+        thd, item_equal, *companion_collection.Find(used_tables));
 
     for (Item_field &left_field : item_equal->get_fields()) {
       const int left_table_idx = left_field.m_table_ref->tableno();
@@ -3910,8 +3924,10 @@ bool MakeJoinHypergraph(THD *thd, JoinHypergraph *graph,
 
   // Add cycles.
   size_t old_graph_edges = graph->graph.edges.size();
+  const table_map pruned_tables = FindNullGuaranteedTables(root);
   if (!cycle_inducing_edges.empty()) {
-    AddCycleEdges(thd, cycle_inducing_edges, companion_collection, graph);
+    AddCycleEdges(thd, cycle_inducing_edges, companion_collection,
+                  pruned_tables, graph);
   }
   // Now that all trivial conditions have been removed and all equijoin
   // conditions extracted, go ahead and extract all the multiple
@@ -3929,8 +3945,8 @@ bool MakeJoinHypergraph(THD *thd, JoinHypergraph *graph,
   multiple_equalities.erase(
       std::unique(multiple_equalities.begin(), multiple_equalities.end()),
       multiple_equalities.end());
-  CompleteFullMeshForMultipleEqualities(thd, multiple_equalities,
-                                        companion_collection, graph);
+  CompleteFullMeshForMultipleEqualities(
+      thd, multiple_equalities, companion_collection, pruned_tables, graph);
   if (graph->graph.edges.size() != old_graph_edges) {
     // We added at least one cycle-inducing edge.
     PromoteCycleJoinPredicates(thd, root, multiple_equalities, graph);
