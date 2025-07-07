@@ -37,6 +37,7 @@
 #include <cerrno>
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 #include <string_view>
 #if defined(__linux__) || defined(__sun) || defined(__FreeBSD__)
 #include <sys/syscall.h>
