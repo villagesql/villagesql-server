@@ -11124,6 +11124,12 @@ bool ha_innobase::bulk_load_check(THD *) const {
     return false;
   }
 
+  if (dict_table_has_fts_index(table)) {
+    my_error(ER_FEATURE_UNSUPPORTED, MYF(0), "Full-Text Index",
+             "LOAD DATA ALGORITHM = BULK");
+    return false;
+  }
+
   if (dict_table_in_shared_tablespace(table)) {
     my_error(ER_TABLE_IN_SHARED_TABLESPACE, MYF(0), table->name.m_name);
     return false;

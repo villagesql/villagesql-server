@@ -1627,6 +1627,10 @@ struct dict_index_t {
   /** Get the space id of the tablespace to which this index belongs.
   @return the space id. */
   space_id_t space_id() const { return space; }
+
+  /** Check if it is a full-text search (FTS) index
+  @return true if this is a FTS index, false otherwise. */
+  bool is_fts_index() const { return type & DICT_FTS; }
 };
 
 /** The status of online index creation */

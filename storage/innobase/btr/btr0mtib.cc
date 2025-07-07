@@ -1638,6 +1638,7 @@ Btree_load::Btree_load(dict_index_t *index, trx_t *trx, size_t loader_num,
       m_full_blob_inserter(*this) {
   ut_d(fil_space_inc_redo_skipped_count(m_index->space));
   ut_d(m_index_online = m_index->online_status);
+  ut_ad(!index->is_fts_index());
   m_bulk_flusher.start(m_index->space, m_loader_num, flush_queue_size);
 }
 
