@@ -247,11 +247,14 @@ bool DynamicState::save(bool is_clusterset, bool pretty) {
   std::unique_lock<std::mutex> const lock(pimpl_->json_file_lock_);
   mysql_harness::AutoCleaner auto_cleaner;
 
-  auto output_file = open_for_write();
-  auto_cleaner.add_file_delete(tmp_file_name_);
+  bool saved{false};
+  {
+    auto output_file = open_for_write();
+    auto_cleaner.add_file_delete(tmp_file_name_);
+    saved = save_to_stream(output_file, is_clusterset, pretty);
+  }
 
-  const bool result = save_to_stream(output_file, is_clusterset, pretty);
-  if (result) {
+  if (saved) {
     auto rename_res =
         mysql_harness::rename_file(tmp_file_name_.c_str(), file_name_.c_str());
 
@@ -264,7 +267,7 @@ bool DynamicState::save(bool is_clusterset, bool pretty) {
     }
   }
 
-  return result;
+  return saved;
 }
 
 bool DynamicState::save_to_stream(std::ostream &output_stream,
