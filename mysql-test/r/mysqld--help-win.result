@@ -378,8 +378,8 @@ The following options may be given as the first argument:
  -T, --exit-info[=#] Used for debugging. Use at your own risk.
  --explain-format[=name] 
  The default format in which the EXPLAIN statement
- displays information. Valid values are TRADITIONAL
- (default), TREE, JSON and TRADITIONAL_STRICT.
+ displays information. Valid values are TRADITIONAL, TREE
+ (default), JSON and TRADITIONAL_STRICT.
  TRADITIONAL_STRICT is only used internally by the mtr
  test suite, and is not meant to be used anywhere else.
  --explain-json-format-version=# 
@@ -1714,7 +1714,7 @@ end-markers-in-json FALSE
 enforce-gtid-consistency ON
 eq-range-index-dive-limit 200
 event-scheduler ON
-explain-format TRADITIONAL
+explain-format TREE
 explain-json-format-version 1
 explicit-defaults-for-timestamp TRUE
 external-locking FALSE

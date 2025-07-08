@@ -3839,7 +3839,7 @@ Sql_cmd *PT_explain::make_cmd(THD *thd) {
         With no format specified:
         - With ANALYZE, convert TRADITIONAL[_STRICT] to TREE unconditionally.
         - With hypergraph, convert TRADITIONAL to TREE. Don't convert
-          TRADITIONAL_STRICT, because it's purpose is to prevent exactly this
+          TRADITIONAL_STRICT, because its purpose is to prevent exactly this
           silent conversion with hypergraph. TRADITIONAL_STRICT will throw an
           error, later.
       */
