@@ -6465,8 +6465,6 @@ void Suma::execSUMA_HANDOVER_CONF(Signal *signal) {
     tmp.getText(buf);
     infoEvent("Suma: handover from node %u gci: %u buckets: %s (%u)", nodeId,
               gci, buf, c_no_of_buckets);
-    g_eventLogger->info("Suma: handover from node %u gci: %u buckets: %s (%u)",
-                        nodeId, gci, buf, c_no_of_buckets);
     ndbassert(!m_active_buckets.overlaps(tmp));
     m_switchover_buckets.bitOR(tmp);
     ndbrequire(c_startup.m_handover_nodes.get(nodeId));
@@ -6488,8 +6486,6 @@ void Suma::execSUMA_HANDOVER_CONF(Signal *signal) {
     tmp.getText(buf);
     infoEvent("Suma: handover to node %u gci: %u buckets: %s (%u)", nodeId, gci,
               buf, c_no_of_buckets);
-    g_eventLogger->info("Suma: handover to node %u gci: %u buckets: %s (%u)",
-                        nodeId, gci, buf, c_no_of_buckets);
     m_active_buckets.bitANDC(tmp);
     m_switchover_buckets.bitOR(tmp);
     c_startup.m_handover_nodes.clear(nodeId);

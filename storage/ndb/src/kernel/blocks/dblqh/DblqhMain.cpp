@@ -10253,9 +10253,9 @@ void Dblqh::update_log_problem(Signal *signal, LogPartRecord *partPtrP,
 
       cstrbuf<MaxProblemSetLen> buff;
       logProblemSet(buff, problems);
-      g_eventLogger->info("LQH %u : Redo log part %u problem started : %s.  (%s)",
-                          instance(), partPtrP->logPartNo,
-                          logProblemName(problem), buff.c_str());
+      g_eventLogger->info(
+          "LQH %u : Redo log part %u problem started : %s.  (%s)", instance(),
+          partPtrP->logPartNo, logProblemName(problem), buff.c_str());
     }
   } else {
     /**
@@ -32886,12 +32886,10 @@ void Dblqh::checkLcpFragWatchdog(Signal *signal) {
       warningEvent("%s %s", buf2, buf);
       c_tup->lcp_frag_watchdog_print(c_lcpFragWatchdog.tableId,
                                      c_lcpFragWatchdog.fragId);
-      g_eventLogger->info("%s %s", buf2, buf);
     } else {
       // LCP has finished checkpointing the tables, thus no need to
       // add completion status and table/frag info.
       warningEvent("%s", buf2);
-      g_eventLogger->info("%s", buf2);
     }
 
     if ((max_no_progress_time > 0) &&
@@ -32899,7 +32897,6 @@ void Dblqh::checkLcpFragWatchdog(Signal *signal) {
       jam();
       /* Too long with no progress... */
       warningEvent("Waited too long with LCP not progressing.");
-      g_eventLogger->info("Waited too long with LCP not progressing.");
 
       /**
        * Dump some LCP and GCP state for debugging...
