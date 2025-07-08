@@ -793,12 +793,8 @@ void Cmvmi::execSTTOR(Signal *signal) {
       refresh_watch_dog(9);
       int res = NdbMem_MemLockAll(1);
       if (res != 0) {
-        char buf[100];
-        BaseString::snprintf(buf, sizeof(buf),
-                             "Failed to memlock pages, error: %d (%s)", errno,
-                             strerror(errno));
-        g_eventLogger->warning("%s", buf);
-        warningEvent("%s", buf);
+        warningEvent("Failed to memlock pages, error: %d (%s)", errno,
+                     strerror(errno));
       } else {
         g_eventLogger->info("Using locked memory");
       }
@@ -1356,7 +1352,6 @@ void Cmvmi::execDUMP_STATE_ORD(Signal *signal) {
                    (num_secs > 0) ? ptr[0].sz : 0,
                    (num_secs > 1) ? ptr[1].sz : 0,
                    (num_secs > 2) ? ptr[2].sz : 0, node_id, getOwnNodeId());
-          g_eventLogger->info("%s", msg);
           infoEvent("%s", msg);
           releaseSections(handle);
         } else if (val == DumpStateOrd::CmvmiSendDummySignal) {

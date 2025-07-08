@@ -763,7 +763,6 @@ void Qmgr::execCONNECT_REP(Signal *signal) {
 
   if (ERROR_INSERTED(931)) {
     jam();
-    g_eventLogger->info("Discarding CONNECT_REP(%d)", connectedNodeId);
     infoEvent("Discarding CONNECT_REP(%d)", connectedNodeId);
     return;
   }
@@ -772,7 +771,6 @@ void Qmgr::execCONNECT_REP(Signal *signal) {
       getNodeInfo(connectedNodeId).getType() == NodeInfo::API) {
     jam();
     CLEAR_ERROR_INSERT_VALUE;
-    g_eventLogger->info("Discarding one API CONNECT_REP(%d)", connectedNodeId);
     infoEvent("Discarding one API CONNECT_REP(%d)", connectedNodeId);
     return;
   }
@@ -6369,8 +6367,6 @@ void Qmgr::stateArbitFind(Signal *signal) {
 
       if (arbitRec.getTimediff() > getArbitTimeout()) {
         jam();
-        g_eventLogger->warning(
-            "Could not find an arbitrator, cluster is not partition-safe");
         warningEvent(
             "Could not find an arbitrator, cluster is not partition-safe");
         arbitRec.setTimestamp();
@@ -6495,13 +6491,6 @@ void Qmgr::execARBIT_PREPREQ(Signal *signal) {
       if (!c_connectedNodes.get(arbitRec.node)) {
         char buf[20];  // needs 16 + 1 for '\0'
         arbitRec.ticket.getText(buf, sizeof(buf));
-        g_eventLogger->warning(
-            "President %u proposed disconnected "
-            "node %u as arbitrator [ticket=%s]. "
-            "Cluster may be partially connected. "
-            "Connected nodes: %s",
-            cpresident, arbitRec.node, buf,
-            BaseString::getPrettyTextShort(c_connectedNodes).c_str());
 
         warningEvent(
             "President %u proposed disconnected node %u "
