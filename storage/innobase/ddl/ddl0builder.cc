@@ -363,10 +363,6 @@ bool Merge_cursor::Compare::operator()(const File_cursor *lhs,
 dberr_t Merge_cursor::add_file(const ddl::file_t &file, size_t buffer_size,
                                const Range &range) noexcept {
   ut_a(file.m_file.is_open());
-  /* Keep the buffer size as much required to avoid the overlapping reads from
-  the subsequent ranges. In this iteration, buffer size would remain same for
-  subsequent reads */
-  buffer_size = std::min(size_t(range.second - range.first), buffer_size);
   auto cursor = ut::new_withkey<File_cursor>(
       ut::make_psi_memory_key(mem_key_ddl), m_builder, file.m_file, buffer_size,
       range, m_stage);
