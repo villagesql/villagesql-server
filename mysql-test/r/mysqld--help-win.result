@@ -1715,7 +1715,7 @@ enforce-gtid-consistency ON
 eq-range-index-dive-limit 200
 event-scheduler ON
 explain-format TREE
-explain-json-format-version 1
+explain-json-format-version 2
 explicit-defaults-for-timestamp TRUE
 external-locking FALSE
 flush FALSE

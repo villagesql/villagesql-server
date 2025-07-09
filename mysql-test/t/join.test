@@ -1238,6 +1238,7 @@ insert into parent values (1,1,1,1);
 insert into eq_child select * from parent;
 
 # Need JSON explain format in order to make the where condition visible.
+SET explain_json_format_version = 1;
 --skip_if_hypergraph  # Depends on the query plan.
 explain format=json select straight_join count(*) from parent
  join eq_child as c1 on c1.a = parent.b and c1.b = parent.b
@@ -1245,6 +1246,7 @@ explain format=json select straight_join count(*) from parent
  join eq_child as c3 on c3.a = parent.b and c3.b = parent.b
  join eq_child as c4 on c4.a = parent.b and c4.b = parent.b
 ;
+SET explain_json_format_version = DEFAULT;
 
 drop table parent, eq_child;
 

@@ -7572,7 +7572,7 @@ static Sys_var_uint Sys_explain_json_format_version(
     "(non-hypergraph) join optimizer. "
     "Valid values are 1 and 2.",
     SESSION_VAR(explain_json_format_version), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(1, 2), DEFAULT(1), BLOCK_SIZE(1));
+    VALID_RANGE(1, 2), DEFAULT(2), BLOCK_SIZE(1));
 
 static Sys_var_bool Sys_tls_certificates_enforced_validation(
     "tls_certificates_enforced_validation",

@@ -3,6 +3,7 @@
 SET NAMES utf8mb3;
 Warnings:
 Warning	1287	'utf8mb3' is deprecated and will be removed in a future release. Please use utf8mb4 instead
+SET explain_json_format_version = 1;
 
 Flag unsupported aggregates as window functions
 

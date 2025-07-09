@@ -8,6 +8,7 @@
 --source include/rpl/set_gtid_mode_off.inc
 
 set end_markers_in_json=on;
+SET explain_json_format_version = 1;
 
 --echo # new "FORMAT" keyword doesn't conflict with the FORMAT() function name:
 
@@ -460,7 +461,6 @@ DROP TABLE t;
 --echo #
 --echo #  WL#15684 System variable to select JSON EXPLAIN format
 --echo #
-SET @saved_json_format_version = @@explain_json_format_version;
 SET @@end_markers_in_json=OFF;
 SET @@explain_json_format_version = 1;
 
@@ -515,13 +515,12 @@ SELECT @@explain_json_format_version;
 DROP PROCEDURE p;
 DROP TABLE t;
 SET @@end_markers_in_json=ON;
-SET @@explain_json_format_version = @saved_json_format_version;
+SET @@explain_json_format_version = DEFAULT;
 
 --echo #
 --echo # Bug#36134568 Add query type to iterator-based EXPLAIN FORMAT=JSON
 --echo #
 
-SET @saved_json_format_version = @@explain_json_format_version;
 SET @@explain_json_format_version = 2;
 
 CREATE TABLE t1 (i1 INT PRIMARY KEY, i2 INT);
@@ -575,13 +574,12 @@ SELECT JSON_EXTRACT(@v1, '$.query_type') = 'delete';
 
 DROP TABLE t1, t2;
 SET @v1=NULL;
-SET @@explain_json_format_version = @saved_json_format_version;
+SET @@explain_json_format_version = DEFAULT;
 
 --echo #
 --echo # Bug#37126176 Add lookup references to iterator-based EXPLAIN FORMAT=JSON for index lookups
 --echo #
 
-SET @saved_json_format_version = @@explain_json_format_version;
 SET @@explain_json_format_version = 2;
 
 SET @v1 = NULL;
@@ -712,16 +710,13 @@ FROM (SELECT JSON_UNQUOTE(JSON_SEARCH(@v1, 'one', 'full_text_search')) AS index_
 SET @v1 = NULL;
 DROP TABLE t;
 
-SET @@explain_json_format_version = @saved_json_format_version;
+SET @@explain_json_format_version = DEFAULT;
 
 --echo #
 --echo # Bug#35239659 Separate query attributes and iterator attributes in iterator-based EXPLAIN JSON
 --echo #
 # Not many tests for this since it is tested every time the full JSONv2 format
 # is printed in a test
-
-SET @saved_json_format_version = @@explain_json_format_version;
-SET @@explain_json_format_version = 2;
 
 CREATE TABLE t (i INT);
 # Simple TREE EXPLAIN to show TREE output is not affected
@@ -733,18 +728,16 @@ SELECT JSON_KEYS(@var);
 DROP TABLE t;
 SET @var = NULL;
 
-SET @@explain_json_format_version = @saved_json_format_version;
-
 --echo #
 --echo # Bug#37838599 EXPLAIN ANALYZE FORMAT=JSON did not handle queries with
 --echo # subqueries correctly when explain_json_format_version=1.
 --echo #
-SET @saved_json_format_version = @@explain_json_format_version;
 SET @@explain_json_format_version = 1;
 
 --error ER_EXPLAIN_ANALYZE_JSON_FORMAT_VERSION_NOT_SUPPORTED
 EXPLAIN ANALYZE FORMAT=JSON SELECT * FROM (SELECT 1) b;
 
-SET @@explain_json_format_version = @saved_json_format_version;
+SET @@explain_json_format_version = DEFAULT;
+
 # Restore the default for gtid_mode which is ON
 --source include/rpl/set_gtid_mode_on.inc

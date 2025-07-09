@@ -1,3 +1,4 @@
+SET explain_json_format_version = 1;
 include/rpl/set_gtid_mode_off.inc
 SET @global_optimizer_switch_saved = @@global.optimizer_switch;
 #---------------- Index merge test 1 -------------------------------------------

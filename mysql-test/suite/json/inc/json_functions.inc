@@ -3671,6 +3671,7 @@ let $dump_table= SELECT *, JSON_STORAGE_SIZE(j1) ss1,
 let $query= UPDATE t SET j1 = JSON_SET(j1, '\$.a', 'x'),
                          j2 = JSON_SET(j2, '\$.a', 'y'),
                          j1 = JSON_SET(j1, '\$.b', 'z');
+SET explain_json_format_version = 1;
 --skip_if_hypergraph  # Depends on the query plan.
 --eval EXPLAIN FORMAT=JSON $query
 SET optimizer_trace="enabled=on";
@@ -4020,6 +4021,7 @@ UPDATE t SET j = JSON_REMOVE(JSON_REMOVE(j, '$[0]', '$[0]', '$.x'),
                              '$.b', '$.y', '$.z');
 --eval $dump_table
 DROP TABLE t;
+SET explain_json_format_version = DEFAULT;
 
 --echo #
 --echo # WL#9692: Add JSON_MERGE_PATCH

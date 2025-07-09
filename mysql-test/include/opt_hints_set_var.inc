@@ -307,7 +307,6 @@ EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE f2 <= 3 AND 3 <= f3;
 --echo # Check statistics with hint
 FLUSH STATUS;
 SELECT /*+ SET_VAR(optimizer_switch='mrr=off') */ * FROM t1 WHERE f2 <= 3 AND 3 <= f3;
---skip_if_hypergraph
 SHOW STATUS LIKE 'handler_read%';
 
 --echo # Should use non-MRR index scan.
@@ -317,7 +316,6 @@ EXPLAIN FORMAT=TREE SELECT /*+ SET_VAR(optimizer_switch='mrr=off') */ * FROM t1 
 set optimizer_switch=default;
 DROP TABLE t1;
 
---replace_regex /hypergraph_optimizer=on/hypergraph_optimizer=VAL/ /hypergraph_optimizer=off/hypergraph_optimizer=VAL/
 CALL test_hint("SET_VAR(optimizer_switch='mrr=off')", "optimizer_switch");
 
 # Testing range_alloc_block_size variable, no functional test.
@@ -461,11 +459,9 @@ INSERT INTO t1(d, id, sex) VALUES (1.0, 1, 'M'),
                                   (11.0, 11, NULL);
 ANALYZE TABLE t1;
 
---skip_if_hypergraph  # Depends on the query plan.
 EXPLAIN FORMAT=JSON SELECT
 id, AVG(id) over w `avg`, SUM(id) OVER w `sum`, COUNT(*) OVER w cnt
 FROM t1 WINDOW w as (ORDER BY id RANGE BETWEEN 1 FOLLOWING AND 2 FOLLOWING);
---skip_if_hypergraph  # Depends on the query plan.
 EXPLAIN FORMAT=JSON SELECT /*+ SET_VAR(windowing_use_high_precision=OFF)*/
 d, AVG(d) over w `avg`, SUM(d) OVER w `sum`, COUNT(*) OVER w cnt
 FROM t1 WINDOW w as (ORDER BY d RANGE BETWEEN 1 FOLLOWING AND 2 FOLLOWING);

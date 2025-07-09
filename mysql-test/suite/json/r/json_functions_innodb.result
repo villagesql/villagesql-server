@@ -9674,6 +9674,7 @@ id	j1	j2	ss1	sf1	ss2	sf2
 1	{"a": "a", "b": "b"}	{"a": "a", "b": "b"}	25	0	25	0
 2	NULL	NULL	NULL	NULL	NULL	NULL
 3	{"a": "aa", "b": "bb"}	{"a": "aa", "b": "bb"}	27	0	27	0
+SET explain_json_format_version = 1;
 EXPLAIN FORMAT=JSON UPDATE t SET j1 = JSON_SET(j1, '$.a', 'x'),
 j2 = JSON_SET(j2, '$.a', 'y'),
 j1 = JSON_SET(j1, '$.b', 'z');
@@ -10835,6 +10836,7 @@ id	j	ss	sf
 3	null	2	0
 4	NULL	NULL	NULL
 DROP TABLE t;
+SET explain_json_format_version = DEFAULT;
 #
 # WL#9692: Add JSON_MERGE_PATCH
 #
