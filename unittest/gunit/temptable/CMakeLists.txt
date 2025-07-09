@@ -36,12 +36,11 @@ ENDFOREACH()
 
 MYSQL_ADD_EXECUTABLE(merge_temptable_tests-t ${ALL_TEMPTABLE_TESTS}
   ENABLE_EXPORTS
-  ADD_TEST merge_temptable_tests-t)
-
-TARGET_LINK_LIBRARIES(merge_temptable_tests-t
-  gunit_large
-  server_unittest_library
-  )
+  DEPENDENCIES GenError
+  ADD_TEST merge_temptable_tests-t
+  EXCLUDE_FROM_GCOV
+  LINK_LIBRARIES gunit_large server_unittest_library perfschema
+)
 
 # Download TBB from https://www.threadingbuildingblocks.org
 #SET(TBB_INCDIR /path/to/tbb43_20150611oss/include)
@@ -49,21 +48,15 @@ TARGET_LINK_LIBRARIES(merge_temptable_tests-t
 #TARGET_LINK_LIBRARIES(merge_temptable_tests-t tbb -L${TBB_LIBDIR} -Wl,-rpath=${TBB_LIBDIR})
 #INCLUDE_DIRECTORIES(${TBB_INCDIR})
 
-TARGET_LINK_LIBRARIES(merge_temptable_tests-t perfschema)
-
-ADD_DEPENDENCIES(merge_temptable_tests-t GenError)
-
 FOREACH(test ${TESTS})
   SET(SRC_FILES ${test}-t.cc)
 
   MYSQL_ADD_EXECUTABLE(${test}-t ${SRC_FILES}
-    ENABLE_EXPORTS SKIP_INSTALL EXCLUDE_FROM_ALL)
-
-  TARGET_LINK_LIBRARIES(${test}-t
-    gunit_large
-    server_unittest_library
-    )
-
-  ADD_DEPENDENCIES(${test}-t GenError)
-
+    ENABLE_EXPORTS
+    SKIP_INSTALL
+    EXCLUDE_FROM_ALL
+    LINK_LIBRARIES gunit_large server_unittest_library
+    DEPENDENCIES GenError
+    ADD_GCOV_TEST ${test}
+  )
 ENDFOREACH()

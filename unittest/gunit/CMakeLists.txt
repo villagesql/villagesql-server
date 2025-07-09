@@ -353,21 +353,27 @@ MYSQL_ADD_EXECUTABLE(merge_small_tests-t ${ALL_SMALL_TESTS}
   ADD_TEST merge_small_tests
   COMPILE_DEFINITIONS ${DISABLE_PSI_DEFINITIONS}
   ENABLE_EXPORTS
+  EXCLUDE_FROM_GCOV
   LINK_LIBRARIES sqlgunitlib gunit_small extra::rapidjson extra::boost
   )
-DOWNGRADE_STRINGOP_WARNINGS(merge_small_tests-t)
+IF(TARGET merge_small_tests-t)
+  DOWNGRADE_STRINGOP_WARNINGS(merge_small_tests-t)
+ENDIF()
 
 LIST(APPEND ALL_LARGE_TESTS ../../storage/example/ha_example.cc)
 
 MYSQL_ADD_EXECUTABLE(merge_large_tests-t ${ALL_LARGE_TESTS}
   ADD_TEST merge_large_tests
   ENABLE_EXPORTS
+  EXCLUDE_FROM_GCOV
   LINK_LIBRARIES gunit_large server_unittest_library
-  )
-IF(MY_COMPILER_IS_GNU)
-  MY_TARGET_LINK_OPTIONS(merge_large_tests-t "-Wno-alloc-size-larger-than")
+)
+IF(TARGET merge_large_tests-t)
+  IF(MY_COMPILER_IS_GNU)
+    TARGET_LINK_OPTIONS(merge_large_tests-t PRIVATE -Wno-alloc-size-larger-than)
+  ENDIF()
+  DOWNGRADE_STRINGOP_WARNINGS(merge_large_tests-t)
 ENDIF()
-DOWNGRADE_STRINGOP_WARNINGS(merge_large_tests-t)
 
 FOREACH(test ${TESTS})
   MYSQL_ADD_EXECUTABLE(${test}-t ${test}-t.cc
@@ -376,7 +382,8 @@ FOREACH(test ${TESTS})
     EXCLUDE_FROM_ALL
     LINK_LIBRARIES sqlgunitlib gunit_small extra::boost
     SKIP_INSTALL
-    )
+    ADD_GCOV_TEST ${test}
+  )
 ENDFOREACH()
 
 # See comments about __builtin_memcmp in the source file.
@@ -397,7 +404,8 @@ FOREACH(test ${SERVER_TESTS})
     EXCLUDE_FROM_ALL
     LINK_LIBRARIES gunit_large server_unittest_library
     SKIP_INSTALL
-    )
+    ADD_GCOV_TEST ${test}
+  )
 ENDFOREACH()
 
 ADD_LIBRARY(rpl_channel_credentials_lib STATIC
