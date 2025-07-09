@@ -252,7 +252,8 @@ TEST_P(StateFileMetadataServersChangedInRuntimeTest,
     cluster_http_ports.push_back(port_pool_.get_next_available());
   }
 
-  const std::string node_host = param.ipv6 ? "[::1]" : "127.0.0.1";
+  const std::string node_host = param.ipv6 ? "::1" : "127.0.0.1";
+  const std::string node_host_pretty = param.ipv6 ? "[::1]" : "127.0.0.1";
   const std::string bind_address = param.ipv6 ? "::" : "127.0.0.1";
 
   SCOPED_TRACE(
@@ -281,21 +282,26 @@ TEST_P(StateFileMetadataServersChangedInRuntimeTest,
       std::this_thread::sleep_for(100ms);
       return;
     }
-    ASSERT_TRUE(MockServerRestClient(cluster_http_ports[i])
+    ASSERT_TRUE(MockServerRestClient(cluster_http_ports[i], node_host)
                     .wait_for_rest_endpoint_ready());
 
     SCOPED_TRACE(
         "// Make our metadata server to return single node as a cluster "
         "member (meaning single metadata server)");
-    set_mock_metadata(cluster_http_ports[i], kGroupId,
-                      classic_ports_to_gr_nodes({cluster_nodes_ports[i]}), i,
-                      {cluster_nodes_ports[i]}, 0, false, node_host);
+    MockGrMetadata()
+        .gr_id(kGroupId)
+        .gr_nodes(classic_ports_to_gr_nodes({cluster_nodes_ports[i]}))
+        .gr_node_host(node_host_pretty)
+        .cluster_nodes({cluster_nodes_ports[i]})
+        .gr_pos(i)
+        .send(cluster_http_ports[i], node_host);
   }
 
   SCOPED_TRACE("// Create a router state file with a single metadata server");
   const std::string state_file = create_state_file(
       temp_test_dir.name(),
-      create_state_file_content(kGroupId, {cluster_nodes_ports[0]}, node_host));
+      create_state_file_content(kGroupId, {cluster_nodes_ports[0]},
+                                node_host_pretty));
 
   SCOPED_TRACE(
       "// Create a configuration file sections with low ttl so that any "
@@ -316,16 +322,19 @@ TEST_P(StateFileMetadataServersChangedInRuntimeTest,
       "single metadata server reported as initially");
 
   check_state_file(state_file, param.cluster_type, kGroupId,
-                   {cluster_nodes_ports[0]}, 0, node_host);
+                   {cluster_nodes_ports[0]}, 0, node_host_pretty);
 
   SCOPED_TRACE(
       "// Now change the response from the metadata server to return 3 gr "
       "nodes (metadata servers)");
   for (unsigned i = 0; i < CLUSTER_NODES; ++i) {
-    set_mock_metadata(cluster_http_ports[i], kGroupId,
-                      classic_ports_to_gr_nodes(cluster_nodes_ports), i,
-                      classic_ports_to_cluster_nodes(cluster_nodes_ports), 0,
-                      false, node_host);
+    MockGrMetadata()
+        .gr_id(kGroupId)
+        .gr_nodes(classic_ports_to_gr_nodes({cluster_nodes_ports}))
+        .gr_node_host(node_host_pretty)
+        .cluster_nodes(classic_ports_to_cluster_nodes(cluster_nodes_ports))
+        .gr_pos(i)
+        .send(cluster_http_ports[i], node_host);
   }
 
   SCOPED_TRACE(
@@ -335,7 +344,7 @@ TEST_P(StateFileMetadataServersChangedInRuntimeTest,
   check_state_file(
       state_file, param.cluster_type, kGroupId,
       {cluster_nodes_ports[0], cluster_nodes_ports[1], cluster_nodes_ports[2]},
-      0, node_host);
+      0, node_host_pretty);
 
   ///////////////////////////////////////////////////
 
@@ -354,16 +363,16 @@ TEST_P(StateFileMetadataServersChangedInRuntimeTest,
   SCOPED_TRACE(
       "// Instrument the second and third metadata servers to return 2 "
       "servers: second and third");
-  set_mock_metadata(cluster_http_ports[1], kGroupId,
-                    classic_ports_to_gr_nodes(
-                        {cluster_nodes_ports[1], cluster_nodes_ports[2]}),
-                    1, {cluster_nodes_ports[1], cluster_nodes_ports[2]}, 0,
-                    false, node_host);
-  set_mock_metadata(cluster_http_ports[2], kGroupId,
-                    classic_ports_to_gr_nodes(
-                        {cluster_nodes_ports[1], cluster_nodes_ports[2]}),
-                    2, {cluster_nodes_ports[1], cluster_nodes_ports[2]}, 0,
-                    false, node_host);
+  for (unsigned i = 1; i <= 2; i++) {
+    MockGrMetadata()
+        .gr_id(kGroupId)
+        .gr_nodes(classic_ports_to_gr_nodes(
+            {cluster_nodes_ports[1], cluster_nodes_ports[2]}))
+        .gr_node_host(node_host_pretty)
+        .cluster_nodes({cluster_nodes_ports[1], cluster_nodes_ports[2]})
+        .gr_pos(i)
+        .send(cluster_http_ports[i], node_host);
+  }
 
   SCOPED_TRACE("// Kill first metada server");
   kill_server(cluster_nodes[0]);
@@ -373,7 +382,7 @@ TEST_P(StateFileMetadataServersChangedInRuntimeTest,
       "servers reported by the second metadata server");
   check_state_file(state_file, param.cluster_type, kGroupId,
                    {cluster_nodes_ports[1], cluster_nodes_ports[2]}, 0,
-                   node_host, 10000ms);
+                   node_host_pretty, 10000ms);
 
   router.kill();
   check_exit_code(router, EXIT_SUCCESS, 5s);
