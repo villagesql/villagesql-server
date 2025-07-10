@@ -10806,6 +10806,9 @@ ER_LH_COL_NAME_MISSING
 ER_LH_COL_NAME_DUPLICATE
   eng "File %s: Duplicate column name in the file header or metadata."
 
+ER_LH_UNSTRUCTURED_OCI_GENAI_FAILURE
+  eng "Error when using OCI GenAI Service: %s"
+
 #
 #  End of 9.x error messages (server-to-client).
 #
