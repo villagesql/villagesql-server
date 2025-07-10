@@ -1394,7 +1394,7 @@ TEST_P(ShareConnectionTinyPoolOneServerTest, overlapping_connections) {
     auto locked_res =
         cli_server.query("SELECT * FROM testing.locked FOR UPDATE");
     ASSERT_NO_ERROR(locked_res);
-    for (const auto &_ : locked_res.value()) {
+    for (const auto &_ [[maybe_unused]] : locked_res.value()) {
       // traverse the resultset to take from the connection.
     }
   }
@@ -1447,7 +1447,7 @@ TEST_P(ShareConnectionTinyPoolOneServerTest, overlapping_connections) {
   {
     auto locked_res = cli1.read_query_result();
     ASSERT_NO_ERROR(locked_res);
-    for (const auto &_ : locked_res.value()) {
+    for (const auto &_ [[maybe_unused]] : locked_res.value()) {
       // traverse the resultset to take from the connection.
     }
   }
@@ -1547,7 +1547,7 @@ TEST_P(ShareConnectionTinyPoolOneServerTest, overlapping_connections) {
     auto locked_res =
         cli_server.query("SELECT * FROM testing.locked FOR UPDATE");
     ASSERT_NO_ERROR(locked_res);
-    for (const auto &_ : locked_res.value()) {
+    for (const auto &_ [[maybe_unused]] : locked_res.value()) {
       // traverse the resultset to take from the connection.
     }
   }
@@ -1772,7 +1772,7 @@ TEST_P(ShareConnectionTinyPoolOneServerTest,
     auto locked_res =
         cli_server.query("SELECT * FROM testing.locked FOR UPDATE");
     ASSERT_NO_ERROR(locked_res);
-    for (const auto &_ : locked_res.value()) {
+    for (const auto &_ [[maybe_unused]] : locked_res.value()) {
       // traverse the resultset to take from the connection.
     }
   }
@@ -1844,7 +1844,7 @@ TEST_P(ShareConnectionTinyPoolOneServerTest,
   {
     auto locked_res = cli1.read_query_result();
     ASSERT_NO_ERROR(locked_res);
-    for (const auto &_ : locked_res.value()) {
+    for (const auto &_ [[maybe_unused]] : locked_res.value()) {
       // traverse the resultset to take from the connection.
     }
   }
@@ -1945,7 +1945,7 @@ TEST_P(ShareConnectionTinyPoolOneServerTest,
     auto locked_res =
         cli_server.query("SELECT * FROM testing.locked FOR UPDATE");
     ASSERT_NO_ERROR(locked_res);
-    for (const auto &_ : locked_res.value()) {
+    for (const auto &_ [[maybe_unused]] : locked_res.value()) {
       // traverse the resultset to take from the connection.
     }
   }
