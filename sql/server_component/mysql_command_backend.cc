@@ -28,6 +28,7 @@
 #include "include/mysql.h"
 #include "include/mysqld_errmsg.h"
 #include "include/sql_common.h"
+#include "my_dbug.h"
 #include "mysql/service_srv_session.h"
 #include "mysql_command_delegates.h"
 #include "sql/current_thd.h"
@@ -317,11 +318,18 @@ bool csi_advanced_command(MYSQL *mysql, enum enum_server_command command,
           ->error_srv->error(srv_ctx_h, &err_num,
                              const_cast<const char **>(ch_ptr));
       strcpy(*err_msg, *ch_ptr);
+      // Forward the errno from the srv-session to the mysql handle
+      mysql->net.last_errno = err_num;
       goto error;
     }
   }
   ret = false;
 error:
+  // Debug hook to simulate a successful command execution even if an error
+  // occurred. Useful for testing how consumers handle error codes without
+  // triggering a failure.
+  DBUG_EXECUTE_IF("mysql_command_services_component_test_errno", return true;);
+
   if (ret) my_error(ER_COMMAND_SERVICE_BACKEND_FAILED, MYF(0), err_msg);
   return ret ? true : false;
 }

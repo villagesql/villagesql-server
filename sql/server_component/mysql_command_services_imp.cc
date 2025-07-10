@@ -1104,9 +1104,18 @@ DEFINE_BOOL_METHOD(mysql_command_services_imp::field_count,
 DEFINE_BOOL_METHOD(mysql_command_services_imp::sql_errno,
                    (MYSQL_H mysql_h, unsigned int *err_no)) {
   try {
-    Mysql_handle *m_handle = reinterpret_cast<Mysql_handle *>(mysql_h);
-    if (m_handle == nullptr) return true;
-    *err_no = mysql_errno(m_handle->mysql);
+    auto *m_handle = reinterpret_cast<Mysql_handle *>(mysql_h);
+    if (m_handle == nullptr || err_no == nullptr) return true;
+
+    auto *mcs_ext = MYSQL_COMMAND_SERVICE_EXTN(m_handle->mysql);
+    if (mcs_ext != nullptr && mcs_ext->consumer_srv_data != nullptr) {
+      auto *dom_ctx = reinterpret_cast<Dom_ctx *>(mcs_ext->consumer_srv_data);
+      *err_no = static_cast<unsigned int>(dom_ctx->m_sql_errno);
+    } else {
+      // If Dom_ctx is null or not populated (i.e. not using Command Services)
+      // fallback to mysql_errno()
+      *err_no = mysql_errno(m_handle->mysql);
+    }
   } catch (...) {
     mysql_components_handle_std_exception(__func__);
     return true;

@@ -354,6 +354,39 @@ err:
   return result;
 }
 
+static long long test_mysql_command_services_error_code_udf(
+    UDF_INIT *, UDF_ARGS *args, unsigned char *is_null, unsigned char *error) {
+  *error = 1;
+  if (args->arg_count < 1 || args->arg_type[0] != STRING_RESULT) return 0;
+
+  std::string query(args->args[0], args->lengths[0]);
+  MYSQL_H mysql_h = nullptr;
+  unsigned int err_no = 0;
+
+  //  Execute the SQL specified in the argument.
+  if (cmd_factory_srv->init(&mysql_h)) {
+    return 0;
+  }
+  if (mysql_h) {
+    if (cmd_factory_srv->connect(mysql_h)) {
+      return 0;
+    }
+  } else {
+    return 0;
+  }
+
+  cmd_query_srv->query(mysql_h, query.data(), query.length());
+  cmd_error_info_srv->sql_errno(mysql_h, &err_no);
+
+  *error = 0;
+  *is_null = 0;
+
+  cmd_factory_srv->close(mysql_h);
+
+  // Return the err_no or 0 in case of error
+  return static_cast<long long>(err_no);
+}
+
 static mysql_service_status_t init() {
   Udf_func_string udf1 = test_mysql_command_services_udf;
   if (udf_srv->udf_register("test_mysql_command_services_udf", STRING_RESULT,
@@ -370,6 +403,17 @@ static mysql_service_status_t init() {
             "Can't register the test_mysql_command_services_apis_udf UDF\n");
     return 1;
   }
+
+  Udf_func_longlong udf3 = test_mysql_command_services_error_code_udf;
+  if (udf_srv->udf_register("test_mysql_command_services_error_code_udf",
+                            INT_RESULT, reinterpret_cast<Udf_func_any>(udf3),
+                            nullptr, nullptr)) {
+    fprintf(
+        stderr,
+        "Can't register the test_mysql_command_services_error_code_udf UDF\n");
+    return 1;
+  }
+
   return 0;
 }
 
@@ -382,6 +426,11 @@ static mysql_service_status_t deinit() {
                               &was_present))
     fprintf(stderr,
             "Can't unregister the test_mysql_command_services_apis_udf UDF\n");
+  if (udf_srv->udf_unregister("test_mysql_command_services_error_code_udf",
+                              &was_present))
+    fprintf(stderr,
+            "Can't unregister the test_mysql_command_services_error_code_udf "
+            "UDF\n");
   return 0; /* success */
 }
 
