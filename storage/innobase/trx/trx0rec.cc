@@ -271,8 +271,7 @@ trx_undo_log_v_idx(
 	     it != vcol->v_indexes->end(); ++it) {
 		dict_v_idx_t	v_index = *it;
 
-		ptr += mach_u64_write_much_compressed(
-			ptr, static_cast<ulint>(v_index.index->id));
+		ptr += mach_u64_write_much_compressed(ptr, v_index.index->id);
 
 		ptr += mach_write_compressed(ptr, v_index.nth_field);
 	}
