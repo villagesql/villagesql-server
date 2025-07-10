@@ -1219,22 +1219,17 @@ IF(CMAKE_C_FLAGS MATCHES "-fsanitize" OR CMAKE_CXX_FLAGS MATCHES "-fsanitize")
   SET(CMAKE_COMPILER_FLAG_WITH_SANITIZE 1)
 ENDIF()
 
-# Older versions of ccache must be disabled: export CCACHE_DISABLE=1
-# See http://www.cmake.org/Wiki/CTest/Coverage
 OPTION(ENABLE_GCOV "Enable gcov (debug, Linux builds only)" OFF)
 IF (ENABLE_GCOV AND NOT WIN32 AND NOT APPLE)
-  STRING_APPEND(CMAKE_C_FLAGS
-  " -fprofile-arcs -ftest-coverage -fprofile-update=prefer-atomic -DHAVE_GCOV")
-  STRING_APPEND(CMAKE_CXX_FLAGS
-  " -fprofile-arcs -ftest-coverage -fprofile-update=prefer-atomic -DHAVE_GCOV")
+  SET(GCOV_COMPILER_OPTIONS
+    "-fprofile-arcs -ftest-coverage -fprofile-update=prefer-atomic")
+  STRING_APPEND(CMAKE_C_FLAGS   " ${GCOV_COMPILER_OPTIONS} -DHAVE_GCOV")
+  STRING_APPEND(CMAKE_CXX_FLAGS " ${GCOV_COMPILER_OPTIONS} -DHAVE_GCOV")
   STRING_APPEND(CMAKE_C_LINK_FLAGS " -Wl,--dynamic-list-data")
   STRING_APPEND(CMAKE_CXX_LINK_FLAGS " -Wl,--dynamic-list-data")
-  STRING_APPEND(CMAKE_EXE_LINKER_FLAGS
-  " -fprofile-arcs -ftest-coverage -fprofile-update=prefer-atomic -lgcov")
-  STRING_APPEND(CMAKE_SHARED_LINKER_FLAGS
-  " -fprofile-arcs -ftest-coverage -fprofile-update=prefer-atomic -lgcov")
-  STRING_APPEND(CMAKE_MODULE_LINKER_FLAGS
-  " -fprofile-arcs -ftest-coverage -fprofile-update=prefer-atomic -lgcov")
+  STRING_APPEND(CMAKE_EXE_LINKER_FLAGS    " ${GCOV_COMPILER_OPTIONS} -lgcov")
+  STRING_APPEND(CMAKE_SHARED_LINKER_FLAGS " ${GCOV_COMPILER_OPTIONS} -lgcov")
+  STRING_APPEND(CMAKE_MODULE_LINKER_FLAGS " ${GCOV_COMPILER_OPTIONS} -lgcov")
 ENDIF()
 
 OPTION(ENABLE_GPROF "Enable gprof (optimized, Linux builds only)" OFF)
