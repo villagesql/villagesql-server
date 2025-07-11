@@ -3730,6 +3730,8 @@ dberr_t Blob_inserter::init() {
 }
 
 dberr_t Blob_handle::extend() {
+  ut_ad(m_first_page_load->is_memory());
+
   /* Allocate a data page. */
   m_data_page_load = m_blob_inserter.alloc_data_page();
   m_data_page.init(m_data_page_load);
