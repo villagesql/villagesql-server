@@ -1381,6 +1381,8 @@ TEST_F(SocketCloseTest, StaticRoundRobinTCPPort) {
   }
 }
 
+#ifndef _WIN32
+
 // TCP port in incoming side, unix-socket to the mock-server.
 TEST_F(SocketCloseTest, StaticRoundRobinTCPPortUnixSocket) {
   SCOPED_TRACE("// launch cluster with one node");
@@ -1442,8 +1444,6 @@ TEST_F(SocketCloseTest, StaticRoundRobinTCPPortUnixSocket) {
     FAIL() << e.what();
   }
 }
-
-#ifndef _WIN32
 
 TEST_F(SocketCloseTest, StaticRoundRobinUnixSocket) {
   SCOPED_TRACE("// launch cluster with one node");
