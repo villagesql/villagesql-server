@@ -53,7 +53,8 @@ class JavaScriptContext : public IContext {
                       ResultType result_type,
                       const GlobalCallbacks &global_callbacks) override;
 
-  bool wait_for_idle() override;
+  bool force_idle() override;
+  bool is_idle() override;
 
   size_t id() override;
 

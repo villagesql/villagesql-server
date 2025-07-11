@@ -47,7 +47,8 @@ class IContext {
                               int timeout, ResultType result_type,
                               const GlobalCallbacks &global_callbacks) = 0;
 
-  virtual bool wait_for_idle() = 0;
+  virtual bool force_idle() = 0;
+  virtual bool is_idle() = 0;
   virtual size_t id() = 0;
 };
 

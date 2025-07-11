@@ -82,10 +82,9 @@ void JavaScript::create_result(const Value &result, ResultState state) {
     }
     dumper.append_value("result", result);
     dumper.end_object();
-
-    m_result.push({state, dumper.str()});
+    push_result({state, dumper.str()});
   } else {
-    m_result.push({state, result.descr(true)});
+    push_result({state, result.descr(true)});
   }
 }
 
@@ -140,13 +139,18 @@ void JavaScript::create_result(const Polyglot_error &error) {
     if (state == ResultState::ResourceExhausted) {
       stop_run_thread();
     }
-    m_result.push({state, dumper.str()});
+    push_result({state, dumper.str()});
   } else {
     if (state == ResultState::ResourceExhausted) {
       stop_run_thread();
     }
-    m_result.push({state, error.format(true)});
+    push_result({state, error.format(true)});
   }
+}
+
+void JavaScript::push_result(Result &&result) {
+  set_processing_state(ProcessingState::HoldingResult,
+                       [this, result]() { m_result.push(std::move(result)); });
 }
 
 bool JavaScript::start(size_t id, const std::shared_ptr<IFile_system> &fs,
@@ -268,7 +272,10 @@ void JavaScript::run() {
   });
 
   while (*m_processing_state != ProcessingState::Finished) {
-    set_processing_state(ProcessingState::Idle);
+    // The processing thread should not do anything until it is back to idle
+    // state, including the consumption of the results produced in the last
+    // processing round.
+    wait_for_idle();
 
     auto entry = m_code.pop();
 
@@ -325,6 +332,9 @@ namespace {
     case ProcessingState::Finished:
       st = "finished";
       break;
+    case ProcessingState::HoldingResult:
+      st = "holding_result";
+      break;
   }
 
   if (!other.empty()) {
@@ -335,9 +345,15 @@ namespace {
 }
 }  // namespace
 
-void JavaScript::set_processing_state(ProcessingState state) {
+void JavaScript::set_processing_state(ProcessingState state,
+                                      const std::function<void()> &callback) {
   {
     std::scoped_lock lock{m_processing_state_mutex};
+
+    if (callback) {
+      callback();
+    }
+
     m_processing_state = state;
 
     // log_state(m_id, state);
@@ -345,29 +361,34 @@ void JavaScript::set_processing_state(ProcessingState state) {
   m_processing_state_condition.notify_one();
 }
 
-bool JavaScript::wait_for_idle() {
+void JavaScript::wait_for_idle() {
+  std::unique_lock lock{m_processing_state_mutex};
+  m_processing_state_condition.wait(
+      lock, [this]() { return *m_processing_state == ProcessingState::Idle; });
+}
+
+bool JavaScript::is_idle() {
+  return *m_processing_state == ProcessingState::Idle;
+}
+
+bool JavaScript::force_idle() {
   std::unique_lock lock{m_processing_state_mutex};
 
-  // log_state(m_id, m_processing_state, "wait start");
-
-  bool idle = false;
   if (m_processing_state_condition.wait_for(
           lock, std::chrono::seconds(5), [this]() {
             return *m_processing_state != ProcessingState::Processing;
           })) {
-    idle = *m_processing_state == ProcessingState::Idle;
-    if (idle) {
+    if (m_processing_state == ProcessingState::HoldingResult) {
       Result to_discard;
       while (m_result.try_pop(to_discard)) {
         log_error("Releasing stalled result... %s",
                   to_discard.data.value_or("-").c_str());
       };
+      set_processing_state(ProcessingState::Idle);
     }
   }
 
-  // log_state(m_id, m_processing_state, "wait end");
-
-  return idle;
+  return is_idle();
 }
 
 Value JavaScript::native_array(poly_value object) {
@@ -532,11 +553,13 @@ std::string JavaScript::execute(const std::string &code, int timeout,
   if (!m_debug_port.empty()) {
     // We don't want timeouts when debugging...
     result = m_result.pop();
+    set_processing_state(ProcessingState::Idle);
   } else {
     m_result.try_pop(result, ms_timeout);
   }
 
   if (result.state.has_value()) {
+    set_processing_state(ProcessingState::Idle);
     switch (*result.state) {
       case ResultState::Ok:
         return *result.data;
