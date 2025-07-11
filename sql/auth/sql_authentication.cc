@@ -1583,7 +1583,8 @@ void optimize_plugin_compare_by_pointer(LEX_CSTRING *plugin_name) {
 }
 
 bool auth_plugin_is_built_in(const char *plugin_name) {
-  LEX_CSTRING plugin = {STRING_WITH_LEN(plugin_name)};
+  assert(plugin_name != nullptr);
+  LEX_CSTRING plugin = {plugin_name, strlen(plugin_name)};
   return g_cached_authentication_plugins->auth_plugin_is_built_in(&plugin);
 }
 
