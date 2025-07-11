@@ -184,10 +184,7 @@ SET(TESTS
   val_int_compare
   )
 
-SET(ALL_SMALL_TESTS)
-FOREACH(test ${TESTS})
-  LIST(APPEND ALL_SMALL_TESTS ${test}-t.cc)
-ENDFOREACH()
+LIST(TRANSFORM TESTS APPEND "-t.cc" OUTPUT_VARIABLE ALL_SMALL_TESTS)
 
 # Add tests (link them with gunit/gmock libraries and the server libraries)
 SET(SERVER_TESTS
@@ -324,10 +321,7 @@ ENDIF()
 # Warnings about missing PGO profile data are not useful for unit tests.
 DISABLE_MISSING_PROFILE_WARNING()
 
-SET(ALL_LARGE_TESTS)
-FOREACH(test ${SERVER_TESTS})
-  LIST(APPEND ALL_LARGE_TESTS ${test}-t.cc)
-ENDFOREACH()
+LIST(TRANSFORM SERVER_TESTS APPEND "-t.cc" OUTPUT_VARIABLE ALL_LARGE_TESTS)
 
 SET(SQL_GUNIT_LIB_SOURCE
   ${CMAKE_SOURCE_DIR}/sql/filesort_utils.cc
