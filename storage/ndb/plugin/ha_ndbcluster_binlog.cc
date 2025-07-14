@@ -5332,7 +5332,7 @@ NdbEventOperation *Ndb_binlog_client::create_event_op_in_NDB(
       if (opt_server_id_bits != 32 || opt_ndb_log_apply_status ||
           opt_ndb_log_orig) {
         // Conditions for enabling filter of replica updates in NDB are not met
-        log_warning(ER_GET_ERRMSG, "Not filtering replica updates in NDB");
+        ndb_log_info("Binlog: Not filtering replica updates in NDB");
       } else {
         ndb_log_info("Binlog: filter replica updates in NDB");
         op->setFilterAnyvalueMySQLNoReplicaUpdates();
