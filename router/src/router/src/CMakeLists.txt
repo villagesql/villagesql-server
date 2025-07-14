@@ -74,6 +74,15 @@ ROUTER_ADD_SHARED_LIBRARY(router_cluster
   router_mysql
   )
 
+IF(WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO)
+  IF(MY_COMPILER_IS_GNU)
+    TARGET_LINK_OPTIONS(router_cluster PRIVATE
+      -Wno-error=stringop-overflow
+      )
+  ENDIF()
+ENDIF()
+
+
 IF(WIN32)
   SET(router_lib_output_name "mysqlrouter_lib")
 ELSE()

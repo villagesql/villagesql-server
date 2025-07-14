@@ -72,6 +72,7 @@ FOREACH(googletest_library
 ENDFOREACH()
 
 # googletest/src/gtest-internal-inl.h: In member function 'OnTestEnd'
-IF(MY_COMPILER_IS_GNU AND FPROFILE_USE)
-  TARGET_LINK_OPTIONS(gtest INTERFACE -Wno-error=stringop-overflow)
+IF(MY_COMPILER_IS_GNU)
+  TARGET_LINK_OPTIONS(gmock INTERFACE -Wno-stringop-overflow)
+  TARGET_LINK_OPTIONS(gtest INTERFACE -Wno-stringop-overflow)
 ENDIF()
