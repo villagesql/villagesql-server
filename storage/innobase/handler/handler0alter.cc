@@ -11124,7 +11124,7 @@ bool ha_innobase::bulk_load_check(THD *) const {
     return false;
   }
 
-  if (dict_table_has_fts_index(table)) {
+  if (dict_table_has_fts_index(table) || table->fts_doc_id_index != nullptr) {
     my_error(ER_FEATURE_UNSUPPORTED, MYF(0), "Full-Text Index",
              "LOAD DATA ALGORITHM = BULK");
     return false;
