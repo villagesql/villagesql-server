@@ -265,7 +265,6 @@ class MysqlServerMockFrontend {
 
     log_debug("Starting");
 
-#if !defined(_WIN32)
     static const char kSignalHandlerServiceName[]{"signal_handler"};
 
     loader_->waitable_services().emplace_back(kSignalHandlerServiceName);
@@ -273,7 +272,7 @@ class MysqlServerMockFrontend {
     loader_->after_all_started(
         [&]() { mysql_harness::on_service_ready(kSignalHandlerServiceName); });
 
-    // after the first plugin finished, stop the log-reopener
+#if !defined(_WIN32)
     loader_->after_first_finished([&]() {
       signal_handler_.remove_sig_handler(SIGTERM);
       signal_handler_.remove_sig_handler(SIGINT);
