@@ -6268,7 +6268,7 @@ sub check_expected_crash_and_restart($$) {
           my $pre_config_state = prepare_secondary_engine_plugin_for_config($application, $tinfo);
           configure_secondary_engine_plugin($application, $tinfo, $pre_config_state);
           # Start secondary engine servers.
-          start_secondary_engine_servers($tinfo, $restart_flag);
+          start_secondary_engine_servers($tinfo, $restart_flag, $application->after('mysqld.'));
         }
 
         return 1;
