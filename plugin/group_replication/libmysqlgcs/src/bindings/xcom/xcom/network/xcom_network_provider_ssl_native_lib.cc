@@ -594,7 +594,7 @@ int Xcom_network_provider_ssl_library::ssl_verify_server_cert(
   X509 *server_cert = nullptr;
   int ret_validation = 1;
 
-#if !(OPENSSL_VERSION_NUMBER >= 0x10002000L || defined(HAVE_WOLFSSL))
+#if !(OPENSSL_VERSION_NUMBER >= 0x10002000L)
   int cn_loc = -1;
   char *cn = NULL;
   ASN1_STRING *cn_asn1 = NULL;
@@ -632,7 +632,7 @@ int Xcom_network_provider_ssl_library::ssl_verify_server_cert(
   /* Use OpenSSL certificate matching functions instead of our own if we
      have OpenSSL. The X509_check_* functions return 1 on success.
   */
-#if OPENSSL_VERSION_NUMBER >= 0x10002000L || defined(HAVE_WOLFSSL)
+#if OPENSSL_VERSION_NUMBER >= 0x10002000L
   if ((X509_check_host(server_cert, server_hostname, strlen(server_hostname), 0,
                        nullptr) != 1) &&
       (X509_check_ip_asc(server_cert, server_hostname, 0) != 1)) {
