@@ -3062,14 +3062,24 @@ my_decimal *Item_sum_hybrid::val_decimal(my_decimal *val) {
   return retval;
 }
 
-bool Item_sum_hybrid::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
+bool Item_sum_hybrid::val_date(Date_val *date, my_time_flags_t flags) {
   assert(fixed);
   if (m_is_window_function) {
     if (wf_common_init()) return true;
     if (m_optimize ? compute() : add()) return true;
   }
   if (null_value) return true;
-  return (null_value = value->get_date(ltime, fuzzydate));
+  return (null_value = value->val_date(date, flags));
+}
+
+bool Item_sum_hybrid::val_datetime(Datetime_val *dt, my_time_flags_t flags) {
+  assert(fixed);
+  if (m_is_window_function) {
+    if (wf_common_init()) return true;
+    if (m_optimize ? compute() : add()) return true;
+  }
+  if (null_value) return true;
+  return (null_value = value->val_datetime(dt, flags));
 }
 
 bool Item_sum_hybrid::val_time(Time_val *time) {
@@ -3221,11 +3231,18 @@ String *Item_sum_bit::val_str(String *str) {
   return str;
 }
 
-bool Item_sum_bit::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
+bool Item_sum_bit::val_date(Date_val *date, my_time_flags_t flags) {
   if (hybrid_type == INT_RESULT)
-    return get_date_from_int(ltime, fuzzydate);
+    return get_date_from_int(date, flags);
   else
-    return get_date_from_string(ltime, fuzzydate);
+    return get_date_from_string(date, flags);
+}
+
+bool Item_sum_bit::val_datetime(Datetime_val *dt, my_time_flags_t flags) {
+  if (hybrid_type == INT_RESULT)
+    return get_datetime_from_int(dt, flags);
+  else
+    return get_datetime_from_string(dt, flags);
 }
 
 bool Item_sum_bit::val_time(Time_val *time) {
@@ -3355,6 +3372,12 @@ void Item_sum_num::reset_field() {
   float8store(result_field->field_ptr(), nr);
 }
 
+/**
+  Reset field before aggregation.
+
+  Note: Even though the initial value might be NULL, a zero (or empty)
+        value may be required for the aggregation algorithm in add().
+*/
 void Item_sum_hybrid::reset_field() {
   assert(is_nullable());
   switch (hybrid_type) {
@@ -3365,6 +3388,7 @@ void Item_sum_hybrid::reset_field() {
           (void)args[0]->val_time(&time);
           if (args[0]->null_value) {
             result_field->set_null();
+            time.set_zero();
           } else {
             result_field->set_notnull();
           }
@@ -3442,10 +3466,6 @@ void Item_sum_hybrid::reset_field() {
           result_field->set_notnull();
         }
       }
-      /*
-        We must store zero in the field as we will use the field value in
-        add()
-      */
       if (arg_dec == nullptr) {  // Null
         value_buff.init();
         arg_dec = &value_buff;
@@ -3901,13 +3921,21 @@ String *Item_aggr_bit_field::val_str(String *str) {
   }
 }
 
-bool Item_aggr_bit_field::get_date(MYSQL_TIME *ltime,
-                                   my_time_flags_t fuzzydate) {
+bool Item_aggr_bit_field::val_date(Date_val *date, my_time_flags_t flags) {
   if (m_result_type == INT_RESULT)
-    return get_date_from_decimal(ltime, fuzzydate);
+    return get_date_from_decimal(date, flags);
   else
-    return get_date_from_string(ltime, fuzzydate);
+    return get_date_from_string(date, flags);
 }
+
+bool Item_aggr_bit_field::val_datetime(Datetime_val *dt,
+                                       my_time_flags_t flags) {
+  if (m_result_type == INT_RESULT)
+    return get_datetime_from_decimal(dt, flags);
+  else
+    return get_datetime_from_string(dt, flags);
+}
+
 bool Item_aggr_bit_field::val_time(Time_val *time) {
   if (m_result_type == INT_RESULT)
     return get_time_from_numeric(time);
@@ -5310,13 +5338,23 @@ double Item_first_last_value::val_real() {
   return retval;
 }
 
-bool Item_first_last_value::get_date(MYSQL_TIME *ltime,
-                                     my_time_flags_t fuzzydate) {
+bool Item_first_last_value::val_date(Date_val *date, my_time_flags_t flags) {
   if (wf_common_init()) return true;
 
   if (compute()) return true;
 
-  bool retval = m_value->get_date(ltime, fuzzydate);
+  bool retval = m_value->val_date(date, flags);
+  null_value = m_value->null_value;
+  return retval;
+}
+
+bool Item_first_last_value::val_datetime(Datetime_val *dt,
+                                         my_time_flags_t flags) {
+  if (wf_common_init()) return true;
+
+  if (compute()) return true;
+
+  bool retval = m_value->val_datetime(dt, flags);
   null_value = m_value->null_value;
   return retval;
 }
@@ -5548,12 +5586,22 @@ String *Item_nth_value::val_str(String *str) {
   return retval;
 }
 
-bool Item_nth_value::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
+bool Item_nth_value::val_date(Date_val *date, my_time_flags_t flags) {
   if (wf_common_init()) return true;
 
   if (compute()) return true;
 
-  bool retval = m_value->get_date(ltime, fuzzydate);
+  bool retval = m_value->val_date(date, flags);
+  null_value = m_value->null_value;
+  return retval;
+}
+
+bool Item_nth_value::val_datetime(Datetime_val *dt, my_time_flags_t flags) {
+  if (wf_common_init()) return true;
+
+  if (compute()) return true;
+
+  bool retval = m_value->val_datetime(dt, flags);
   null_value = m_value->null_value;
   return retval;
 }
@@ -5781,13 +5829,22 @@ String *Item_lead_lag::val_str(String *str) {
   return res;
 }
 
-bool Item_lead_lag::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
+bool Item_lead_lag::val_date(Date_val *date, my_time_flags_t flags) {
   if (wf_common_init()) return true;
 
   if (compute()) return true;
 
-  return m_use_default ? m_default->get_date(ltime, fuzzydate)
-                       : m_value->get_date(ltime, fuzzydate);
+  return m_use_default ? m_default->val_date(date, flags)
+                       : m_value->val_date(date, flags);
+}
+
+bool Item_lead_lag::val_datetime(Datetime_val *dt, my_time_flags_t flags) {
+  if (wf_common_init()) return true;
+
+  if (compute()) return true;
+
+  return m_use_default ? m_default->val_datetime(dt, flags)
+                       : m_value->val_datetime(dt, flags);
 }
 
 bool Item_lead_lag::val_time(Time_val *time) {
@@ -6041,12 +6098,16 @@ my_decimal *Item_sum_json::val_decimal(my_decimal *decimal_value) {
                                    decimal_value);
 }
 
-bool Item_sum_json::get_date(MYSQL_TIME *ltime, my_time_flags_t) {
+bool Item_sum_json::val_date(Date_val *date, my_time_flags_t flags) {
+  return val_datetime(date, flags);
+}
+
+bool Item_sum_json::val_datetime(Datetime_val *dt, my_time_flags_t) {
   if (null_value || m_wrapper->empty()) return true;
 
-  return m_wrapper->coerce_date(JsonCoercionWarnHandler{func_name()},
-                                JsonCoercionDeprecatedDefaultHandler{}, ltime,
-                                DatetimeConversionFlags(current_thd));
+  return m_wrapper->coerce_datetime(JsonCoercionWarnHandler{func_name()},
+                                    JsonCoercionDeprecatedDefaultHandler{}, dt,
+                                    DatetimeConversionFlags(current_thd));
 }
 
 bool Item_sum_json::val_time(Time_val *time) {
@@ -6499,10 +6560,15 @@ inline Item *Item_rollup_sum_switcher::current_arg() const {
   return args[m_current_rollup_level];
 }
 
-bool Item_rollup_sum_switcher::get_date(MYSQL_TIME *ltime,
-                                        my_time_flags_t fuzzydate) {
+bool Item_rollup_sum_switcher::val_date(Date_val *date, my_time_flags_t flags) {
   assert(fixed);
-  return (null_value = current_arg()->get_date(ltime, fuzzydate));
+  return (null_value = current_arg()->val_date(date, flags));
+}
+
+bool Item_rollup_sum_switcher::val_datetime(Datetime_val *dt,
+                                            my_time_flags_t flags) {
+  assert(fixed);
+  return (null_value = current_arg()->val_datetime(dt, flags));
 }
 
 bool Item_rollup_sum_switcher::val_time(Time_val *time) {

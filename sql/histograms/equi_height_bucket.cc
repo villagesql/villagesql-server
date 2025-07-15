@@ -156,9 +156,9 @@ bool Bucket<Time_val>::add_values_json_bucket(const Time_val &lower_value,
 }
 
 template <>
-bool Bucket<MYSQL_TIME>::add_values_json_bucket(const MYSQL_TIME &lower_value,
-                                                const MYSQL_TIME &upper_value,
-                                                Json_array *json_array) {
+bool Bucket<Datetime_val>::add_values_json_bucket(
+    const Datetime_val &lower_value, const Datetime_val &upper_value,
+    Json_array *json_array) {
   assert(lower_value.time_type == upper_value.time_type);
 
   enum_field_types field_type;
@@ -385,11 +385,11 @@ double Bucket<Time_val>::get_distance_from_lower(const Time_val &value) const {
 }
 
 template <>
-double Bucket<MYSQL_TIME>::get_distance_from_lower(
-    const MYSQL_TIME &value) const {
-  MYSQL_TIME lower_modified = get_lower_inclusive();
-  MYSQL_TIME upper_modified = get_upper_inclusive();
-  MYSQL_TIME value_modified = value;
+double Bucket<Datetime_val>::get_distance_from_lower(
+    const Datetime_val &value) const {
+  Datetime_val lower_modified = get_lower_inclusive();
+  Datetime_val upper_modified = get_upper_inclusive();
+  Datetime_val value_modified = value;
 
   if (value.time_type == MYSQL_TIMESTAMP_DATE ||
       get_lower_inclusive().time_type == MYSQL_TIMESTAMP_DATE) {
@@ -493,7 +493,7 @@ template class Bucket<String>;
 template class Bucket<ulonglong>;
 template class Bucket<longlong>;
 template class Bucket<Time_val>;
-template class Bucket<MYSQL_TIME>;
+template class Bucket<Datetime_val>;
 template class Bucket<my_decimal>;
 
 }  // namespace histograms::equi_height

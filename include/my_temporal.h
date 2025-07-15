@@ -335,6 +335,70 @@ class Time_val {
   uint64_t m_value = 0xffffffffffffffff;
 };
 
+class Datetime_val : public MYSQL_TIME {
+ public:
+  Datetime_val() {
+    year = 0;
+    month = 0;
+    day = 0;
+    hour = 0;
+    minute = 0;
+    second = 0;
+    second_part = 0;
+    neg = false;
+    time_type = MYSQL_TIMESTAMP_DATETIME;
+    time_zone_displacement = 0;
+  }
+  Datetime_val(uint32_t year_arg, uint32_t month_arg, uint32_t day_arg,
+               uint32_t hour_arg, uint32_t minute_arg, uint32_t second_arg,
+               uint32_t micro_arg) {
+    year = year_arg;
+    month = month_arg;
+    day = day_arg;
+    hour = hour_arg;
+    minute = minute_arg;
+    second = second_arg;
+    second_part = micro_arg;
+    neg = false;
+    time_type = MYSQL_TIMESTAMP_DATETIME;
+    time_zone_displacement = 0;
+  }
+  Datetime_val(uint32_t year_arg, uint32_t month_arg, uint32_t day_arg,
+               uint32_t hour_arg, uint32_t minute_arg, uint32_t second_arg,
+               uint32_t micro_arg, int32_t time_zone_displacement_arg) {
+    year = year_arg;
+    month = month_arg;
+    day = day_arg;
+    hour = hour_arg;
+    minute = minute_arg;
+    second = second_arg;
+    second_part = micro_arg;
+    neg = false;
+    time_type = MYSQL_TIMESTAMP_DATETIME_TZ;
+    time_zone_displacement = time_zone_displacement_arg;
+  }
+  Datetime_val(uint32_t year_arg, uint32_t month_arg, uint32_t day_arg) {
+    year = year_arg;
+    month = month_arg;
+    day = day_arg;
+    hour = 0;
+    minute = 0;
+    second = 0;
+    second_part = 0;
+    neg = false;
+    time_type = MYSQL_TIMESTAMP_DATE;
+    time_zone_displacement = 0;
+  }
+};
+
+class Date_val : public Datetime_val {
+ public:
+  Date_val() = default;
+
+  Date_val(uint32_t year_arg, uint32_t month_arg, uint32_t day_arg)
+      : Datetime_val(year_arg, month_arg, day_arg) {}
+};
+
 /**
   @} (end of ingroup MY_TEMPORAL)
 */

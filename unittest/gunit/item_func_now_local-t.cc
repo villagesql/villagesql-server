@@ -126,12 +126,12 @@ TEST_F(ItemFuncNowLocalTest, storeInDatetime) {
 
   Item_func_now_local::store_in(&f);
 
-  MYSQL_TIME now_time;
+  Datetime_val now_time;
   thd->variables.time_zone->gmt_sec_to_TIME(
       &now_time, {thd->start_time.tv_sec, thd->start_time.tv_usec});
 
-  MYSQL_TIME stored_time;
-  f.get_date(&stored_time, 0);
+  Datetime_val stored_time;
+  f.val_datetime(&stored_time, 0);
 
   EXPECT_EQ(now_time.year, stored_time.year);
   EXPECT_EQ(now_time.month, stored_time.month);

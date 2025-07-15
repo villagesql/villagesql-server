@@ -117,10 +117,13 @@ class Item_str_func : public Item_func {
   longlong val_int() override { return val_int_from_string(); }
   double val_real() override { return val_real_from_string(); }
   my_decimal *val_decimal(my_decimal *) override;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override {
-    return get_date_from_string(ltime, fuzzydate);
+  bool val_date(Date_val *date, my_time_flags_t flags) override {
+    return get_date_from_string(date, flags);
   }
   bool val_time(Time_val *time) override { return get_time_from_string(time); }
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) override {
+    return get_datetime_from_string(dt, flags);
+  }
   enum Item_result result_type() const override { return STRING_RESULT; }
   void left_right_max_length(THD *thd);
   bool fix_fields(THD *thd, Item **ref) override;

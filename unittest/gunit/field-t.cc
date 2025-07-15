@@ -295,14 +295,11 @@ TEST_F(FieldTest, FieldTimeCompare) {
   const int nFields = 7;
   uchar fieldBufs[nFields][7];
 
-  MysqlTime times[nFields] = {
-      {0, 0, 0, 12, 23, 12, 100000, true, MYSQL_TIMESTAMP_TIME},
-      {0, 0, 0, 0, 0, 0, 10000, true, MYSQL_TIMESTAMP_TIME},
-      {0, 0, 0, 0, 0, 0, 0, false, MYSQL_TIMESTAMP_TIME},
-      {0, 0, 0, 0, 0, 0, 999900, false, MYSQL_TIMESTAMP_TIME},
-      {0, 0, 0, 0, 0, 0, 999990, false, MYSQL_TIMESTAMP_TIME},
-      {0, 0, 0, 11, 59, 59, 999999, false, MYSQL_TIMESTAMP_TIME},
-      {0, 0, 0, 12, 00, 00, 100000, false, MYSQL_TIMESTAMP_TIME}};
+  Time_val times[nFields] = {
+      {true, 12, 23, 12, 100000}, {true, 0, 0, 0, 10000},
+      {false, 0, 0, 0, 0},        {false, 0, 0, 0, 999900},
+      {false, 0, 0, 0, 999990},   {false, 11, 59, 59, 999999},
+      {false, 12, 00, 00, 100000}};
 
   Field *fields[nFields];
   uchar sortStrings[nFields][6];
@@ -312,7 +309,7 @@ TEST_F(FieldTest, FieldTimeCompare) {
     fields[i] = new (thd()->mem_root) Field_time(
         fieldBufs[i] + 1, fieldBufs[i], false, Field::NONE, fieldName, 6);
 
-    Time_val time = Time_val{times[i]};
+    Time_val time = times[i];
     EXPECT_EQ(0, fields[i]->store_time(time, 6));
     fields[i]->make_sort_key(sortStrings[i], fields[i]->pack_length());
   }

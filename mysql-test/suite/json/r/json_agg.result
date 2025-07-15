@@ -1133,8 +1133,8 @@ gid	DATE_ADD(JSON_ARRAYAGG(a), INTERVAL 31 DAY)
 1	NULL
 2	NULL
 Warnings:
-Warning	3156	Invalid JSON value for CAST to DATE/TIME/DATETIME/TIMESTAMP from column json_arrayagg at row 1
-Warning	3156	Invalid JSON value for CAST to DATE/TIME/DATETIME/TIMESTAMP from column json_arrayagg at row 2
+Warning	3156	Invalid JSON value for CAST to DATETIME/TIMESTAMP from column json_arrayagg at row 1
+Warning	3156	Invalid JSON value for CAST to DATETIME/TIMESTAMP from column json_arrayagg at row 2
 SELECT gid, ADDTIME(JSON_ARRAYAGG(a), '02:00:00.999998')
 FROM t2 GROUP BY gid;
 gid	ADDTIME(JSON_ARRAYAGG(a), '02:00:00.999998')

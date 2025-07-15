@@ -36,6 +36,7 @@
 #include "my_byteorder.h"
 #include "my_inttypes.h"
 #include "my_sys.h"
+#include "my_temporal.h"
 #include "my_time.h"
 #include "mysql/strings/m_ctype.h"
 #include "mysql_time.h"
@@ -356,18 +357,18 @@ TEST_F(JsonBinaryTest, EmptyDocument) {
 
 static Time_val create_time() { return Time_val(false, 13, 14, 15, 654321); }
 
-static MYSQL_TIME create_date() {
+static Date_val create_date() {
   const char *dstr = "20140517";
-  MYSQL_TIME d;
+  Date_val d;
   MYSQL_TIME_STATUS status;
   EXPECT_FALSE(str_to_datetime(&my_charset_utf8mb4_bin, dstr, strlen(dstr), &d,
                                0, &status));
   return d;
 }
 
-static MYSQL_TIME create_datetime() {
+static Datetime_val create_datetime() {
   const char *dtstr = "2015-01-15 15:16:17.123456";
-  MYSQL_TIME dt;
+  Datetime_val dt;
   MYSQL_TIME_STATUS status;
   EXPECT_FALSE(str_to_datetime(&my_charset_utf8mb4_bin, dtstr, strlen(dtstr),
                                &dt, 0, &status));

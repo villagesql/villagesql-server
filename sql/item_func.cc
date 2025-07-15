@@ -1860,20 +1860,24 @@ my_decimal *Item_func_numhybrid::val_decimal(my_decimal *decimal_value) {
   return val;
 }
 
-bool Item_func_numhybrid::get_date(MYSQL_TIME *ltime,
-                                   my_time_flags_t fuzzydate) {
+bool Item_func_numhybrid::val_date(Date_val *date, my_time_flags_t flags) {
+  return val_datetime(date, flags);
+}
+
+bool Item_func_numhybrid::val_datetime(Datetime_val *dt,
+                                       my_time_flags_t flags) {
   assert(fixed);
   switch (data_type()) {
     case MYSQL_TYPE_DATE:
     case MYSQL_TYPE_DATETIME:
     case MYSQL_TYPE_TIMESTAMP:
-      return date_op(ltime, fuzzydate);
+      return datetime_op(dt, flags);
     case MYSQL_TYPE_TIME:
-      return get_date_from_time(ltime);
+      return get_datetime_from_time(dt);
     case MYSQL_TYPE_YEAR:
-      return get_date_from_int(ltime, fuzzydate);
+      return get_datetime_from_int(dt, flags);
     default:
-      return Item::get_date_from_non_temporal(ltime, fuzzydate);
+      return Item::get_datetime_from_non_temporal(dt, flags);
   }
 }
 
@@ -2101,9 +2105,12 @@ longlong Item_func::val_int_from_real() {
   }
 }
 
-bool Item_typecast_real::get_date(MYSQL_TIME *ltime,
-                                  my_time_flags_t fuzzydate) {
-  return my_double_to_datetime_with_warn(val_real(), ltime, fuzzydate);
+bool Item_typecast_real::val_date(Date_val *date, my_time_flags_t flags) {
+  return val_datetime(date, flags);
+}
+
+bool Item_typecast_real::val_datetime(Datetime_val *dt, my_time_flags_t flags) {
+  return my_double_to_datetime_with_warn(val_real(), dt, flags);
 }
 
 bool Item_typecast_real::val_time(Time_val *time) {
@@ -4010,13 +4017,13 @@ String *Item_func_min_max::str_op(String *str) {
   return res;
 }
 
-bool Item_func_min_max::date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
+bool Item_func_min_max::datetime_op(Datetime_val *dt, my_time_flags_t flags) {
   assert(fixed);
   longlong result = 0;
   if (cmp_datetimes(&result)) return true;
-  TIME_from_longlong_packed(ltime, data_type(), result);
+  TIME_from_longlong_packed(dt, data_type(), result);
   int warnings;
-  return check_date(*ltime, non_zero_date(*ltime), fuzzydate, &warnings);
+  return check_date(*dt, non_zero_date(*dt), flags, &warnings);
 }
 
 bool Item_func_min_max::time_op(Time_val *time) {
@@ -4126,14 +4133,23 @@ my_decimal *Item_func_min_max::val_decimal(my_decimal *dec) {
   return Item_func_numhybrid::val_decimal(dec);
 }
 
-bool Item_rollup_group_item::get_date(MYSQL_TIME *ltime,
-                                      my_time_flags_t fuzzydate) {
+bool Item_rollup_group_item::val_date(Date_val *date, my_time_flags_t flags) {
   assert(fixed);
   if (rollup_null()) {
     null_value = true;
     return true;
   }
-  return (null_value = args[0]->get_date(ltime, fuzzydate));
+  return (null_value = args[0]->val_date(date, flags));
+}
+
+bool Item_rollup_group_item::val_datetime(Datetime_val *dt,
+                                          my_time_flags_t flags) {
+  assert(fixed);
+  if (rollup_null()) {
+    null_value = true;
+    return true;
+  }
+  return (null_value = args[0]->val_datetime(dt, flags));
 }
 
 bool Item_rollup_group_item::val_time(Time_val *time) {
@@ -8339,9 +8355,14 @@ double Item_func_sp::val_real() {
   return sp_result_field->val_real();
 }
 
-bool Item_func_sp::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
+bool Item_func_sp::val_date(Date_val *date, my_time_flags_t flags) {
   if (execute() || null_value) return true;
-  return sp_result_field->get_date(ltime, fuzzydate);
+  return sp_result_field->val_date(date, flags);
+}
+
+bool Item_func_sp::val_datetime(Datetime_val *dt, my_time_flags_t flags) {
+  if (execute() || null_value) return true;
+  return sp_result_field->val_datetime(dt, flags);
 }
 
 bool Item_func_sp::val_time(Time_val *time) {

@@ -482,8 +482,8 @@ static int runtime_argument_datetime_get(
     int32_t *time_zone_offset, bool *is_null) {
   auto item = get_item(sp_runtime_context, index);
   if (item == nullptr) return MYSQL_FAILURE;
-  auto dt = MYSQL_TIME{};
-  item->get_date(&dt, TIME_FUZZY_DATE);
+  auto dt = Datetime_val{};
+  item->val_datetime(&dt, TIME_FUZZY_DATE);
   *is_null = item->is_null();
   if (*is_null) return MYSQL_SUCCESS;
   *year = dt.year;
@@ -637,8 +637,8 @@ DEFINE_BOOL_METHOD(mysql_stored_program_runtime_argument_date_imp::get,
   if (item == nullptr) return MYSQL_FAILURE;
   *is_null = item->is_null();
   if (*is_null) return MYSQL_SUCCESS;
-  auto date = MYSQL_TIME{};
-  item->get_date(&date, TIME_FUZZY_DATE);
+  auto date = Date_val{};
+  item->val_date(&date, TIME_FUZZY_DATE);
   *year = date.year;
   *month = date.month;
   *day = date.day;
@@ -717,8 +717,10 @@ static int runtime_argument_datetime_set(
                          ts_type,
                          static_cast<int>(time_zone_offset)};
   if (check_datetime_range(time)) return MYSQL_FAILURE;
+  Datetime_val dt;
+  *implicit_cast<MYSQL_TIME *>(&dt) = time;
   auto item =
-      new Item_datetime_literal(&time, decimals, current_thd->time_zone());
+      new Item_datetime_literal(&dt, decimals, current_thd->time_zone());
   return set_variable(sp_runtime_context, item, index);
 }
 
@@ -1136,8 +1138,10 @@ static int return_value_datetime_set(
                          ts_type,
                          time_zone_offset};
   if (check_datetime_range(time)) return MYSQL_FAILURE;
+  Datetime_val dt;
+  *implicit_cast<MYSQL_TIME *>(&dt) = time;
   auto *item =
-      new Item_datetime_literal(&time, decimals, current_thd->time_zone());
+      new Item_datetime_literal(&dt, decimals, current_thd->time_zone());
   return set_return_value(sp_runtime_context, item);
 }
 

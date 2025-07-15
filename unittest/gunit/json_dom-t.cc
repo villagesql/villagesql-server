@@ -327,15 +327,14 @@ TEST_F(JsonDomTest, BasicTest) {
   EXPECT_EQ(std::string("[null, false, true]"), format(a.clone()));
 
   /* DATETIME scalar */
-  MYSQL_TIME dt;
-  std::memset(&dt, 0, sizeof dt);
+  Datetime_val dt;
   MYSQL_TIME_STATUS status;
   EXPECT_FALSE(str_to_datetime(&my_charset_utf8mb4_bin, "19990412", 8, &dt,
                                (my_time_flags_t)0, &status));
   const Json_datetime scalar(dt, MYSQL_TYPE_DATETIME);
   EXPECT_EQ(enum_json_type::J_DATETIME, scalar.json_type());
 
-  const MYSQL_TIME *dt_out = scalar.value();
+  const Datetime_val *dt_out = scalar.value();
 
   EXPECT_FALSE(std::memcmp(&dt, dt_out, sizeof(MYSQL_TIME)));
   EXPECT_EQ(std::string("\"1999-04-12\""), format(scalar));
@@ -931,8 +930,7 @@ TEST_F(JsonDomTest, AttemptBinaryUpdate_AllTypes) {
   my_decimal decimal;
   EXPECT_FALSE(double2my_decimal(0, 3.14, &decimal));
 
-  MYSQL_TIME dt;
-  std::memset(&dt, 0, sizeof(dt));
+  Datetime_val dt;
   MYSQL_TIME_STATUS status;
   EXPECT_FALSE(str_to_datetime(&my_charset_utf8mb4_bin, "20170223", 8, &dt,
                                static_cast<my_time_flags_t>(0), &status));
@@ -1644,7 +1642,7 @@ static void BM_JsonDateArrayToString(size_t num_iterations) {
   initializer.SetUp();
 
   Json_array_ptr array = create_dom_ptr<Json_array>();
-  MysqlTime date(2018, 11, 20, 0, 0, 0, 0, false, MYSQL_TIMESTAMP_DATE);
+  MysqlTime date(2018, 11, 20);
   for (size_t i = 0; i < 1000; ++i) {
     array->append_alias(create_dom_ptr<Json_datetime>(date, MYSQL_TYPE_DATE));
   }

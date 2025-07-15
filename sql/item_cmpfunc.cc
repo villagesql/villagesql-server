@@ -3662,10 +3662,16 @@ bool Item_func_ifnull::val_json(Json_wrapper *result) {
   return false;
 }
 
-bool Item_func_ifnull::date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
+bool Item_func_ifnull::date_op(Date_val *date, my_time_flags_t flags) {
   assert(fixed);
-  if (!args[0]->get_date(ltime, fuzzydate)) return (null_value = false);
-  return (null_value = args[1]->get_date(ltime, fuzzydate));
+  if (!args[0]->val_date(date, flags)) return (null_value = false);
+  return (null_value = args[1]->val_date(date, flags));
+}
+
+bool Item_func_ifnull::datetime_op(Datetime_val *dt, my_time_flags_t flags) {
+  assert(fixed);
+  if (!args[0]->val_datetime(dt, flags)) return (null_value = false);
+  return (null_value = args[1]->val_datetime(dt, flags));
 }
 
 bool Item_func_ifnull::time_op(Time_val *time) {
@@ -3842,10 +3848,18 @@ bool Item_func_if::val_json(Json_wrapper *wr) {
   return ok;
 }
 
-bool Item_func_if::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
+bool Item_func_if::val_date(Date_val *date, my_time_flags_t flags) {
   assert(fixed);
   Item *arg = args[0]->val_bool() ? args[1] : args[2];
-  if (arg->get_date(ltime, fuzzydate)) return error_date();
+  if (arg->val_date(date, flags)) return error_date();
+  null_value = arg->null_value;
+  return false;
+}
+
+bool Item_func_if::val_datetime(Datetime_val *dt, my_time_flags_t flags) {
+  assert(fixed);
+  Item *arg = args[0]->val_bool() ? args[1] : args[2];
+  if (arg->val_datetime(dt, flags)) return error_date();
   null_value = arg->null_value;
   return false;
 }
@@ -4135,16 +4149,30 @@ bool Item_func_case::val_json(Json_wrapper *wr) {
   return false;
 }
 
-bool Item_func_case::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
+bool Item_func_case::val_date(Date_val *date, my_time_flags_t flags) {
   assert(fixed);
   char buff[MAX_FIELD_WIDTH];
   String dummy_str(buff, sizeof(buff), default_charset());
   Item *item = find_item(&dummy_str);
-  if (!item) {
+  if (item == nullptr) {
     null_value = is_nullable();
     return true;
   }
-  if (item->get_date(ltime, fuzzydate)) return error_date();
+  if (item->val_date(date, flags)) return error_date();
+  null_value = item->null_value;
+  return false;
+}
+
+bool Item_func_case::val_datetime(Datetime_val *dt, my_time_flags_t flags) {
+  assert(fixed);
+  char buff[MAX_FIELD_WIDTH];
+  String dummy_str(buff, sizeof(buff), default_charset());
+  Item *item = find_item(&dummy_str);
+  if (item == nullptr) {
+    null_value = is_nullable();
+    return true;
+  }
+  if (item->val_datetime(dt, flags)) return error_date();
   null_value = item->null_value;
   return false;
 }
@@ -4491,10 +4519,10 @@ my_decimal *Item_func_coalesce::decimal_op(my_decimal *decimal_value) {
   return nullptr;
 }
 
-bool Item_func_coalesce::date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) {
+bool Item_func_coalesce::date_op(Date_val *date, my_time_flags_t flags) {
   assert(fixed);
   for (uint i = 0; i < arg_count; i++) {
-    if (!args[i]->get_date(ltime, fuzzydate)) return (null_value = false);
+    if (!args[i]->val_date(date, flags)) return (null_value = false);
   }
   return (null_value = true);
 }
@@ -4503,6 +4531,14 @@ bool Item_func_coalesce::time_op(Time_val *time) {
   assert(fixed);
   for (uint i = 0; i < arg_count; i++) {
     if (!args[i]->val_time(time)) return (null_value = false);
+  }
+  return (null_value = true);
+}
+
+bool Item_func_coalesce::datetime_op(Datetime_val *dt, my_time_flags_t flags) {
+  assert(fixed);
+  for (uint i = 0; i < arg_count; i++) {
+    if (!args[i]->val_datetime(dt, flags)) return (null_value = false);
   }
   return (null_value = true);
 }

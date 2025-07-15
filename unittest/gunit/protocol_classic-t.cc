@@ -57,7 +57,7 @@ static void BM_Protocol_binary_store_date(size_t num_iterations) {
   SetupProtocolForBenchmark(protocol);
   String *const packet = protocol->get_output_packet();
 
-  const MysqlTime date(2020, 2, 29, 0, 0, 0, 0, false, MYSQL_TIMESTAMP_DATE);
+  const MysqlTime date(2020, 2, 29);
 
   StartBenchmarkTiming();
 
@@ -103,8 +103,7 @@ static void BM_Protocol_binary_store_datetime(size_t num_iterations) {
   SetupProtocolForBenchmark(protocol);
   String *const packet = protocol->get_output_packet();
 
-  const MysqlTime datetime(2020, 2, 29, 23, 59, 59, 670000, false,
-                           MYSQL_TIMESTAMP_DATETIME);
+  const MysqlTime datetime(2020, 2, 29, 23, 59, 59, 670000);
 
   StartBenchmarkTiming();
 
@@ -200,7 +199,7 @@ static void BM_Protocol_text_store_date(size_t num_iterations) {
   SetupProtocolForBenchmark(protocol);
   String *const packet = protocol->get_output_packet();
 
-  const MysqlTime date(2020, 2, 29, 0, 0, 0, 0, false, MYSQL_TIMESTAMP_DATE);
+  const MysqlTime date(2020, 2, 29);
 
   StartBenchmarkTiming();
 
@@ -246,8 +245,7 @@ static void BM_Protocol_text_store_datetime(size_t num_iterations) {
   SetupProtocolForBenchmark(protocol);
   String *const packet = protocol->get_output_packet();
 
-  const MysqlTime datetime(2020, 2, 29, 23, 59, 59, 670000, false,
-                           MYSQL_TIMESTAMP_DATETIME);
+  const MysqlTime datetime(2020, 2, 29, 23, 59, 59, 670000);
 
   StartBenchmarkTiming();
 

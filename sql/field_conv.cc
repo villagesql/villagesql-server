@@ -361,15 +361,15 @@ static void do_field_decimal(Copy_field *, const Field *from_field,
 }
 
 inline type_conversion_status copy_time_to_time(const Field *from, Field *to) {
-  MYSQL_TIME mtime;
+  Datetime_val dt;
   if (from->type() == MYSQL_TYPE_TIME) {
     Time_val time;
     (void)from->val_time(&time);
-    mtime = static_cast<MYSQL_TIME>(time);
+    *implicit_cast<MYSQL_TIME *>(&dt) = MYSQL_TIME(time);
   } else {
-    from->get_date(&mtime, TIME_FUZZY_DATE);
+    from->val_datetime(&dt, TIME_FUZZY_DATE);
   }
-  return to->store_time(&mtime);
+  return to->store_time(&dt);
 }
 
 /**
@@ -823,13 +823,13 @@ type_conversion_status field_conv_slow(Field *to, const Field *from) {
         nr = time.to_int_rounded();
       }
     } else {
-      MYSQL_TIME mtime;
-      from->get_date(&mtime, TIME_FUZZY_DATE);
+      Date_val date;
+      (void)from->val_date(&date, TIME_FUZZY_DATE);
       if (current_thd->is_fsp_truncate_mode())
-        nr = TIME_to_ulonglong_datetime(mtime);
+        nr = TIME_to_ulonglong_datetime(date);
       else {
         nr = propagate_datetime_overflow(current_thd, [&](int *w) {
-          return TIME_to_ulonglong_datetime_round(mtime, w);
+          return TIME_to_ulonglong_datetime_round(date, w);
         });
       }
     }
@@ -870,15 +870,15 @@ type_conversion_status field_conv_slow(Field *to, const Field *from) {
       case MYSQL_TYPE_TIMESTAMP:
       case MYSQL_TYPE_DATE:
       case MYSQL_TYPE_NEWDATE:
-        res = from->get_date(&mtime, 0);
+        res = from->val_date((Date_val *)(&mtime), 0);
         break;
       default:  // MYSQL_TYPE_YEAR is handled as an integer above
         assert(false);
     }
     /*
-      Field_json::get_time and get_date set ltime to zero, and we store it in
-      the `to` field, so in case conversion errors are ignored we can read zeros
-      instead of garbage.
+      Field_json::val_time(), val_date() and val_datetime() set the value to
+      zero, which is then stored in the `to` field, so in case conversion errors
+      are ignored we can read zeros instead of garbage.
     */
     const type_conversion_status store_res = to->store_time(&mtime);
     return res ? TYPE_ERR_BAD_VALUE : store_res;
@@ -897,11 +897,12 @@ type_conversion_status field_conv_slow(Field *to, const Field *from) {
       string->double conversion.
     */
     return to->store(result.c_ptr_quick(), result.length(), from->charset());
-  } else if (from->result_type() == REAL_RESULT)
+  } else if (from->result_type() == REAL_RESULT) {
     return to->store(from->val_real());
-  else if (from->result_type() == DECIMAL_RESULT) {
+  } else if (from->result_type() == DECIMAL_RESULT) {
     my_decimal buff;
     return to->store_decimal(from->val_decimal(&buff));
-  } else
+  } else {
     return to->store(from->val_int(), from->is_flag_set(UNSIGNED_FLAG));
+  }
 }

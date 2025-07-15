@@ -42,6 +42,7 @@
 #include "my_double2ulonglong.h"
 #include "my_sqlcommand.h"
 #include "my_sys.h"
+#include "my_temporal.h"
 #include "my_time_t.h"
 #include "myisampack.h"
 #include "mysql/strings/dtoa.h"
@@ -2218,9 +2219,14 @@ my_decimal *Field_num::val_decimal(my_decimal *decimal_value) const {
   return decimal_value;
 }
 
-bool Field_num::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const {
+bool Field_num::val_date(Date_val *date, my_time_flags_t flags) const {
   assert(result_type() == INT_RESULT);
-  return my_longlong_to_datetime_with_warn(val_int(), ltime, fuzzydate);
+  return my_longlong_to_datetime_with_warn(val_int(), date, flags);
+}
+
+bool Field_num::val_datetime(Datetime_val *dt, my_time_flags_t flags) const {
+  assert(result_type() == INT_RESULT);
+  return my_longlong_to_datetime_with_warn(val_int(), dt, flags);
 }
 
 bool Field_num::val_time(Time_val *time) const {
@@ -2277,11 +2283,20 @@ type_conversion_status Field_str::store_decimal(const my_decimal *d) {
   return (err != E_DEC_OK) ? decimal_err_to_type_conv_status(err) : res;
 }
 
-bool Field::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const {
+bool Field::val_date(Date_val *date, my_time_flags_t flags) const {
   char buff[MAX_DATE_STRING_REP_LENGTH];
-  String tmp(buff, sizeof(buff), &my_charset_bin), *res;
-  return !(res = val_str(&tmp)) ||
-         str_to_datetime_with_warn(res, ltime, fuzzydate);
+  String tmp(buff, sizeof(buff), &my_charset_bin);
+  String *res = val_str(&tmp);
+  if (res == nullptr) return true;
+  return str_to_datetime_with_warn(res, date, flags);
+}
+
+bool Field::val_datetime(Datetime_val *dt, my_time_flags_t flags) const {
+  char buff[MAX_DATE_STRING_REP_LENGTH];
+  String tmp(buff, sizeof(buff), &my_charset_bin);
+  String *res = val_str(&tmp);
+  if (res == nullptr) return true;
+  return str_to_datetime_with_warn(res, dt, flags);
 }
 
 bool Field::val_time(Time_val *time) const {
@@ -2292,10 +2307,10 @@ bool Field::val_time(Time_val *time) const {
 }
 
 bool Field::get_timestamp(my_timeval *tm, int *warnings) const {
-  MYSQL_TIME ltime;
+  Datetime_val dt;
   assert(!is_null());
-  return get_date(&ltime, TIME_FUZZY_DATE) ||
-         datetime_to_timeval(&ltime, *current_thd->time_zone(), tm, warnings);
+  return val_datetime(&dt, TIME_FUZZY_DATE) ||
+         datetime_to_timeval(&dt, *current_thd->time_zone(), tm, warnings);
 }
 
 /**
@@ -3202,14 +3217,14 @@ String *Field_new_decimal::val_str(String *val_buffer, String *) const {
   return val_buffer;
 }
 
-bool Field_new_decimal::get_date(MYSQL_TIME *ltime,
-                                 my_time_flags_t fuzzydate) const {
-  my_decimal buf, *decimal_value = val_decimal(&buf);
-  if (!decimal_value) {
-    set_zero_time(ltime, MYSQL_TIMESTAMP_DATETIME);
+bool Field_new_decimal::val_date(Date_val *date, my_time_flags_t flags) const {
+  my_decimal buf;
+  my_decimal *decimal_value = val_decimal(&buf);
+  if (decimal_value == nullptr) {
+    set_zero_time(date, MYSQL_TIMESTAMP_DATETIME);
     return true;
   }
-  return my_decimal_to_datetime_with_warn(decimal_value, ltime, fuzzydate);
+  return my_decimal_to_datetime_with_warn(decimal_value, date, flags);
 }
 
 bool Field_new_decimal::val_time(Time_val *time) const {
@@ -3220,6 +3235,16 @@ bool Field_new_decimal::val_time(Time_val *time) const {
     return true;
   }
   return my_decimal_to_time_with_warn(decimal_value, time);
+}
+
+bool Field_new_decimal::val_datetime(Datetime_val *dt,
+                                     my_time_flags_t flags) const {
+  my_decimal buf;
+  my_decimal *decimal_value = val_decimal(&buf);
+  if (decimal_value == nullptr) {
+    return true;
+  }
+  return my_decimal_to_datetime_with_warn(decimal_value, dt, flags);
 }
 
 int Field_new_decimal::cmp(const uchar *a, const uchar *b) const {
@@ -4619,8 +4644,12 @@ my_decimal *Field_real::val_decimal(my_decimal *decimal_value) const {
   return decimal_value;
 }
 
-bool Field_real::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const {
-  return my_double_to_datetime_with_warn(val_real(), ltime, fuzzydate);
+bool Field_real::val_date(Date_val *date, my_time_flags_t flags) const {
+  return my_double_to_datetime_with_warn(val_real(), date, flags);
+}
+
+bool Field_real::val_datetime(Datetime_val *dt, my_time_flags_t flags) const {
+  return my_double_to_datetime_with_warn(val_real(), dt, flags);
 }
 
 bool Field_real::val_time(Time_val *time) const {
@@ -4934,11 +4963,10 @@ bool Field_temporal_with_date::get_internal_check_zero(
 }
 
 bool Field_temporal_with_date::val_time(Time_val *time) const {
-  MYSQL_TIME mtime;
-  bool status = get_date(&mtime, TIME_FUZZY_DATE);
-  if (status) return true;
-  if (mtime.time_type == MYSQL_TIMESTAMP_DATETIME) {
-    *time = Time_val::strip_date(mtime);
+  Datetime_val dt;
+  if (val_datetime(&dt, TIME_FUZZY_DATE)) return true;
+  if (dt.time_type == MYSQL_TIMESTAMP_DATETIME) {
+    *time = Time_val::strip_date(dt);
   } else {
     time->set_zero();
   }
@@ -5254,10 +5282,15 @@ type_conversion_status Field_timestamp::store_packed(longlong nr) {
   return Field_timestamp::store_time(&ltime, dec);
 }
 
-bool Field_timestamp::get_date(MYSQL_TIME *ltime,
-                               my_time_flags_t fuzzydate) const {
+bool Field_timestamp::val_date(Date_val *date, my_time_flags_t flags) const {
   /* Don't do check_fuzzy_date() as month and year are never 0 for timestamp */
-  return get_internal_check_zero(ltime, fuzzydate);
+  return get_internal_check_zero(date, flags);
+}
+
+bool Field_timestamp::val_datetime(Datetime_val *dt,
+                                   my_time_flags_t flags) const {
+  /* Don't do check_fuzzy_date() as month and year are never 0 for timestamp */
+  return get_internal_check_zero(dt, flags);
 }
 
 void Field_timestamp::sql_type(String &res) const {
@@ -5378,12 +5411,23 @@ String *Field_time::val_str(String *val_buffer, String *) const {
 }
 
 /**
-  For a column for TIME type, get_date() takes the time
-  value of the field, adds current date to it and returns
-  the result as a DATETIME value.
+  For a column of TIME type, val_datetime() takes the time value of the field,
+  adds current date to it and returns the result as a DATETIME value.
 */
 
-bool Field_time::get_date(MYSQL_TIME *ltime, my_time_flags_t) const {
+bool Field_time::val_date(Date_val *date, my_time_flags_t) const {
+  ASSERT_COLUMN_MARKED_FOR_READ;
+  Time_val time;
+  if (val_time(&time)) {
+    assert(false);
+    return true;
+  }
+  MYSQL_TIME mtime = MYSQL_TIME(time);
+  time_to_datetime(current_thd, &mtime, date);
+  return false;
+}
+
+bool Field_time::val_datetime(Datetime_val *dt, my_time_flags_t) const {
   ASSERT_COLUMN_MARKED_FOR_READ;
   assert(!is_null());
   Time_val time;
@@ -5391,7 +5435,7 @@ bool Field_time::get_date(MYSQL_TIME *ltime, my_time_flags_t) const {
     assert(false);
   }
   MYSQL_TIME mtime = MYSQL_TIME(time);
-  time_to_datetime(current_thd, &mtime, ltime);
+  time_to_datetime(current_thd, &mtime, dt);
   return false;
 }
 
@@ -5714,9 +5758,9 @@ type_conversion_status Field_date::store_packed(longlong nr) {
 
 bool Field_date::send_to_protocol(Protocol *protocol) const {
   if (is_null()) return protocol->store_null();
-  MYSQL_TIME ltime;
-  get_date(&ltime, 0);
-  return protocol->store_date(ltime);
+  Date_val date;
+  val_date(&date, 0);
+  return protocol->store_date(date);
 }
 
 longlong Field_date::val_int() const {
@@ -5762,9 +5806,12 @@ String *Field_date::val_str(String *val_buffer, String *) const {
   return val_buffer;
 }
 
-bool Field_date::get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) const {
-  return get_internal_check_zero(ltime, fuzzydate) ||
-         check_fuzzy_date(*ltime, fuzzydate);
+bool Field_date::val_date(Date_val *date, my_time_flags_t flags) const {
+  return get_internal_check_zero(date, flags) || check_fuzzy_date(*date, flags);
+}
+
+bool Field_date::val_datetime(Datetime_val *dt, my_time_flags_t flags) const {
+  return get_internal_check_zero(dt, flags) || check_fuzzy_date(*dt, flags);
 }
 
 int Field_date::cmp(const uchar *a_ptr, const uchar *b_ptr) const {
@@ -5806,10 +5853,13 @@ void Field_datetime::store_timestamp_internal(const my_timeval *tm) {
   store_internal(&mysql_time, &warnings);
 }
 
-bool Field_datetime::get_date(MYSQL_TIME *ltime,
-                              my_time_flags_t fuzzydate) const {
-  return get_internal_check_zero(ltime, fuzzydate) ||
-         check_fuzzy_date(*ltime, fuzzydate);
+bool Field_datetime::val_date(Date_val *date, my_time_flags_t flags) const {
+  return get_internal_check_zero(date, flags) || check_fuzzy_date(*date, flags);
+}
+
+bool Field_datetime::val_datetime(Datetime_val *dt,
+                                  my_time_flags_t flags) const {
+  return get_internal_check_zero(dt, flags) || check_fuzzy_date(*dt, flags);
 }
 
 void Field_datetime::sql_type(String &res) const {
@@ -7957,17 +8007,23 @@ bool Field_json::unpack_diff(const uchar **from) {
   return false;
 }
 
-bool Field_json::get_date(MYSQL_TIME *ltime, my_time_flags_t) const {
+bool Field_json::val_datetime(Datetime_val *dt, my_time_flags_t) const {
   ASSERT_COLUMN_MARKED_FOR_READ;
 
   Json_wrapper wr;
   const bool result =
       val_json(&wr) ||
-      wr.coerce_date(JsonCoercionWarnHandler{field_name},
-                     JsonCoercionDeprecatedDefaultHandler{}, ltime);
+      wr.coerce_datetime(JsonCoercionWarnHandler{field_name},
+                         JsonCoercionDeprecatedDefaultHandler{}, dt);
   if (result)
-    set_zero_time(ltime, MYSQL_TIMESTAMP_DATETIME); /* purecov: inspected */
+    set_zero_time(dt, MYSQL_TIMESTAMP_DATETIME); /* purecov: inspected */
   return result;
+}
+
+bool Field_json::val_date(Date_val *date, my_time_flags_t flags) const {
+  ASSERT_COLUMN_MARKED_FOR_READ;
+
+  return val_datetime(date, flags);
 }
 
 bool Field_json::val_time(Time_val *time) const {

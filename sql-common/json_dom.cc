@@ -778,7 +778,7 @@ static Json_dom *json_binary_to_dom_template(const json_binary::Value &v) {
         case MYSQL_TYPE_DATE:
         case MYSQL_TYPE_DATETIME:
         case MYSQL_TYPE_TIMESTAMP: {
-          MYSQL_TIME t;
+          Datetime_val t;
           Json_datetime::from_packed(v.get_data(), ftyp, &t);
           return new (std::nothrow) Json_datetime(t, ftyp);
         }
@@ -2920,19 +2920,19 @@ my_decimal *Json_wrapper::coerce_decimal(
 
 bool Json_wrapper::coerce_date(
     const JsonCoercionHandler &error_handler,
-    const JsonCoercionDeprecatedHandler &deprecation_checker, MYSQL_TIME *ltime,
-    my_time_flags_t date_flags_arg) const {
+    const JsonCoercionDeprecatedHandler &deprecation_checker, Date_val *date,
+    my_time_flags_t flags) const {
   switch (type()) {
     case enum_json_type::J_DATETIME:
     case enum_json_type::J_DATE:
     case enum_json_type::J_TIMESTAMP:
-      set_zero_time(ltime, MYSQL_TIMESTAMP_DATETIME);
-      get_datetime(ltime);
+      set_zero_time(date, MYSQL_TIMESTAMP_DATETIME);
+      get_datetime(date);
       return false;
     case enum_json_type::J_STRING: {
       MYSQL_TIME_STATUS status;
       // @see Field_datetime::date_flags
-      if (!str_to_datetime(get_data(), get_data_length(), ltime, date_flags_arg,
+      if (!str_to_datetime(get_data(), get_data_length(), date, flags,
                            &status) &&
           !status.warnings) {
         deprecation_checker(status);
@@ -2941,8 +2941,35 @@ bool Json_wrapper::coerce_date(
     }
       [[fallthrough]];
     default:
-      error_handler("DATE/TIME/DATETIME/TIMESTAMP",
-                    ER_INVALID_JSON_VALUE_FOR_CAST);
+      error_handler("DATE", ER_INVALID_JSON_VALUE_FOR_CAST);
+      return true;
+  }
+  return false;
+}
+
+bool Json_wrapper::coerce_datetime(
+    const JsonCoercionHandler &error_handler,
+    const JsonCoercionDeprecatedHandler &deprecation_checker, Datetime_val *dt,
+    my_time_flags_t flags) const {
+  switch (type()) {
+    case enum_json_type::J_DATETIME:
+    case enum_json_type::J_DATE:
+    case enum_json_type::J_TIMESTAMP:
+      set_zero_time(dt, MYSQL_TIMESTAMP_DATETIME);
+      get_datetime(dt);
+      return false;
+    case enum_json_type::J_STRING: {
+      MYSQL_TIME_STATUS status;
+      // @see Field_datetime::date_flags
+      if (!str_to_datetime(get_data(), get_data_length(), dt, flags, &status) &&
+          status.warnings == 0) {
+        deprecation_checker(status);
+        break;
+      }
+    }
+      [[fallthrough]];
+    default:
+      error_handler("DATETIME/TIMESTAMP", ER_INVALID_JSON_VALUE_FOR_CAST);
       return true;
   }
   return false;
@@ -2975,8 +3002,7 @@ bool Json_wrapper::coerce_time(
     }
       [[fallthrough]];
     default:
-      error_handler("DATE/TIME/DATETIME/TIMESTAMP",
-                    ER_INVALID_JSON_VALUE_FOR_CAST);
+      error_handler("TIME", ER_INVALID_JSON_VALUE_FOR_CAST);
       return true;
   }
   return false;

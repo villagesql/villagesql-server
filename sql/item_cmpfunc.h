@@ -1510,8 +1510,9 @@ class Item_func_coalesce : public Item_func_numhybrid {
     @param[in,out] wr   the result value holder
   */
   bool val_json(Json_wrapper *wr) override;
-  bool date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
+  bool date_op(Date_val *date, my_time_flags_t flags) override;
   bool time_op(Time_val *time) override;
+  bool datetime_op(Datetime_val *dt, my_time_flags_t flags) override;
   my_decimal *decimal_op(my_decimal *) override;
   bool resolve_type(THD *thd) override;
   bool resolve_type_inner(THD *thd) override;
@@ -1531,7 +1532,8 @@ class Item_func_ifnull final : public Item_func_coalesce {
   double real_op() override;
   longlong int_op() override;
   String *str_op(String *str) override;
-  bool date_op(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
+  bool date_op(Date_val *date, my_time_flags_t flags) override;
+  bool datetime_op(Datetime_val *dt, my_time_flags_t flags) override;
   bool time_op(Time_val *time) override;
   my_decimal *decimal_op(my_decimal *) override;
   bool val_json(Json_wrapper *result) override;
@@ -1576,8 +1578,9 @@ class Item_func_if final : public Item_func {
   String *val_str(String *str) override;
   my_decimal *val_decimal(my_decimal *) override;
   bool val_json(Json_wrapper *wr) override;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
+  bool val_date(Date_val *date, my_time_flags_t flags) override;
   bool val_time(Time_val *time) override;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) override;
   enum Item_result result_type() const override { return cached_result_type; }
   bool fix_fields(THD *, Item **) override;
   enum_field_types default_data_type() const override {
@@ -2136,8 +2139,9 @@ class Item_func_case final : public Item_func {
   String *val_str(String *) override;
   my_decimal *val_decimal(my_decimal *) override;
   bool val_json(Json_wrapper *wr) override;
-  bool get_date(MYSQL_TIME *ltime, my_time_flags_t fuzzydate) override;
+  bool val_date(Date_val *date, my_time_flags_t flags) override;
   bool val_time(Time_val *time) override;
+  bool val_datetime(Datetime_val *dt, my_time_flags_t flags) override;
   bool fix_fields(THD *thd, Item **ref) override;
   enum_field_types default_data_type() const override {
     return MYSQL_TYPE_VARCHAR;

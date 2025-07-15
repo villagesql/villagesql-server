@@ -929,8 +929,10 @@ static bool analyze_timestamp_field_constant(THD *thd, const Item_field *f,
           }
           i = new (thd->mem_root) Item_date_literal(&ltime);
         } else if (!check_time_zone_convertibility(ltime)) {
+          Datetime_val dt;
+          *implicit_cast<MYSQL_TIME *>(&dt) = ltime;
           i = new (thd->mem_root) Item_datetime_literal(
-              &ltime, actual_decimals(&ltime), thd->time_zone());
+              &dt, actual_decimals(&ltime), thd->time_zone());
         }
         if (i == nullptr) return true;
         thd->change_item_tree(const_val, i);

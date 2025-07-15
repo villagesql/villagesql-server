@@ -68,8 +68,8 @@ bool Histogram_comparator::operator()(const Time_val &lhs,
 }
 
 template <>
-bool Histogram_comparator::operator()(const MYSQL_TIME &lhs,
-                                      const MYSQL_TIME &rhs) const {
+bool Histogram_comparator::operator()(const Datetime_val &lhs,
+                                      const Datetime_val &rhs) const {
   longlong const lhs_packed = TIME_to_longlong_packed(lhs);
   longlong const rhs_packed = TIME_to_longlong_packed(rhs);
   return lhs_packed < rhs_packed;
@@ -169,7 +169,7 @@ template class Value_map<String>;
 template class Value_map<ulonglong>;
 template class Value_map<longlong>;
 template class Value_map<Time_val>;
-template class Value_map<MYSQL_TIME>;
+template class Value_map<Datetime_val>;
 template class Value_map<my_decimal>;
 
 template bool Value_map_base::add_values(const double &, const ha_rows);
@@ -177,7 +177,7 @@ template bool Value_map_base::add_values(const String &, const ha_rows);
 template bool Value_map_base::add_values(const ulonglong &, const ha_rows);
 template bool Value_map_base::add_values(const longlong &, const ha_rows);
 template bool Value_map_base::add_values(const Time_val &, const ha_rows);
-template bool Value_map_base::add_values(const MYSQL_TIME &, const ha_rows);
+template bool Value_map_base::add_values(const Datetime_val &, const ha_rows);
 template bool Value_map_base::add_values(const my_decimal &, const ha_rows);
 
 }  // namespace histograms

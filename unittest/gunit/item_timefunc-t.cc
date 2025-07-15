@@ -439,9 +439,9 @@ void testItemTimeFunctions(Item_time_func *item, Time_val *time, int decimals) {
   String timeStr(20);
   EXPECT_STREQ(s, item->val_str(&timeStr)->c_ptr());
 
-  MYSQL_TIME ldate;
+  Datetime_val ldate;
   //> Second argument of Item_func_time::get_date is not used for anything
-  item->get_date(&ldate, 0);
+  item->val_datetime(&ldate, 0);
   // Todo: Should check that year, month, and day is relative to current date
   EXPECT_EQ(time->hour() % 24, ldate.hour);
   EXPECT_EQ(time->minute(), ldate.minute);

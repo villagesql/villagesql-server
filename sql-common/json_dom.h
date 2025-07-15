@@ -1009,7 +1009,7 @@ class Json_datetime final : public Json_temporal {
     @param[in] ft  the field type: must be one of MYSQL_TYPE_DATE,
                    MYSQL_TYPE_DATETIME or MYSQL_TYPE_TIMESTAMP.
   */
-  Json_datetime(const MYSQL_TIME &t, enum_field_types ft)
+  Json_datetime(const Datetime_val &t, enum_field_types ft)
       : Json_temporal(), m_t(t), m_field_type(ft) {
     assert(ft != MYSQL_TYPE_TIME);
   }
@@ -1022,7 +1022,7 @@ class Json_datetime final : public Json_temporal {
     @returns a pointer to the date/time value. Ownership is _not_ transferred.
     To identify which time time the value represents, use @c field_type.
   */
-  const MYSQL_TIME *value() const { return &m_t; }
+  const Datetime_val *value() const { return &m_t; }
 
   enum_field_types field_type() const override { return m_field_type; }
 
@@ -1055,7 +1055,7 @@ class Json_datetime final : public Json_temporal {
 #endif
 
  private:
-  MYSQL_TIME m_t;                 //!< holds the date/time value
+  Datetime_val m_t;               //!< holds the date/time value
   enum_field_types m_field_type;  //!< identifies which type of date/time
 };
 
@@ -1714,13 +1714,13 @@ class Json_wrapper {
     @param[in]  error_handler function to be called on conversion errors
     @param[in]  deprecation_checker function to be called to check for
                                     deprecated datetime format in ltime
-    @param[in,out] ltime a value buffer
-    @param[in] date_flags_arg Flags to use for string -> date conversion
+    @param[in,out] date a value buffer
+    @param[in] flags Flags to use for string -> date conversion
     @returns json value coerced to date
    */
   bool coerce_date(const JsonCoercionHandler &error_handler,
                    const JsonCoercionDeprecatedHandler &deprecation_checker,
-                   MYSQL_TIME *ltime, my_time_flags_t date_flags_arg = 0) const;
+                   Date_val *date, my_time_flags_t flags = 0) const;
 
   /**
     Extract a time value from the JSON if possible, coercing if need be.
@@ -1728,13 +1728,27 @@ class Json_wrapper {
     @param[in]  error_handler function to be called on conversion errors
     @param[in]  deprecation_checker function to be called to check for
                                     deprecated datetime format in ltime
-    @param[in,out] ltime a value buffer
+    @param[in,out] time a value buffer
 
     @returns json value coerced to time
   */
   bool coerce_time(const JsonCoercionHandler &error_handler,
                    const JsonCoercionDeprecatedHandler &deprecation_checker,
-                   Time_val *ltime) const;
+                   Time_val *time) const;
+
+  /**
+    Extract a datetime from the JSON if possible, coercing if need be.
+
+    @param[in]  error_handler function to be called on conversion errors
+    @param[in]  deprecation_checker function to be called to check for
+                                    deprecated datetime format in ltime
+    @param[in,out] dt a value buffer
+    @param[in] flags Flags to use for string -> date conversion
+    @returns json value coerced to date
+   */
+  bool coerce_datetime(const JsonCoercionHandler &error_handler,
+                       const JsonCoercionDeprecatedHandler &deprecation_checker,
+                       Datetime_val *dt, my_time_flags_t flags = 0) const;
 
   /**
     Make a sort key that can be used by filesort to order JSON values.

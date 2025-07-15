@@ -231,8 +231,8 @@ bool Singleton<Time_val>::add_value_json_bucket(const Time_val &value,
 }
 
 template <>
-bool Singleton<MYSQL_TIME>::add_value_json_bucket(const MYSQL_TIME &value,
-                                                  Json_array *json_bucket) {
+bool Singleton<Datetime_val>::add_value_json_bucket(const Datetime_val &value,
+                                                    Json_array *json_bucket) {
   enum_field_types field_type;
   switch (value.time_type) {
     case MYSQL_TIMESTAMP_DATE:
@@ -445,7 +445,7 @@ template class Singleton<String>;
 template class Singleton<ulonglong>;
 template class Singleton<longlong>;
 template class Singleton<Time_val>;
-template class Singleton<MYSQL_TIME>;
+template class Singleton<Datetime_val>;
 template class Singleton<my_decimal>;
 
 }  // namespace histograms

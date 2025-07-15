@@ -88,11 +88,15 @@ class Parse_tree_item : public Item {
     assert(false);
     return nullptr;
   }
-  bool get_date(MYSQL_TIME *, uint) override {
+  bool val_date(Date_val *, uint) override {
     assert(false);
     return false;
   }
   bool val_time(Time_val *) override {
+    assert(false);
+    return false;
+  }
+  bool val_datetime(Datetime_val *, uint) override {
     assert(false);
     return false;
   }
