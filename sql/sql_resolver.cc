@@ -633,6 +633,24 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
   // Eliminate unused window definitions, redundant sorts etc.
   if (!m_windows.is_empty()) Window::eliminate_unused_objects(&m_windows);
 
+  // Check if all arguments to a GROUPING function are present
+  // in GROUP BY clause.
+  if (is_explicitly_grouped()) {
+    for (Item *item : fields) {
+      if (item->has_grouping_func() &&
+          WalkItem(item, enum_walk::PREFIX, [](Item *inner_item) {
+            if (is_function_of_type(inner_item, Item_func::GROUPING_FUNC) &&
+                down_cast<Item_func_grouping *>(inner_item)
+                    ->check_args_found_in_group_by()) {
+              return true;
+            }
+            return false;
+          })) {
+        return true;
+      }
+    }
+  }
+
   // Replace group by field references inside window functions with references
   // in the presence of ROLLUP.
   if (olap == ROLLUP_TYPE && resolve_rollup_wfs(thd))
@@ -4736,8 +4754,8 @@ bool Query_block::has_wfs() {
   Item_rollup_group_item around it and replaces the reference to it with that
   item.
  */
-static ReplaceResult wrap_grouped_expressions_for_rollup(
-    Query_block *select, Item *item, Item *parent, unsigned argument_idx) {
+static ReplaceResult wrap_grouped_expressions_for_rollup(Query_block *select,
+                                                         Item *item) {
   if (is_rollup_group_wrapper(item->real_item())) {
     // This item must already be a group item, or we wouldn't have
     // wrapped it earlier. No need to do anything more about it,
@@ -4758,11 +4776,6 @@ static ReplaceResult wrap_grouped_expressions_for_rollup(
       group->rollup_item = new_item;
     }
     return {ReplaceResult::REPLACE, new_item};
-  } else if (parent != nullptr && parent->type() == Item::FUNC_ITEM &&
-             down_cast<Item_func *>(parent)->functype() ==
-                 Item_func::GROUPING_FUNC) {
-    my_error(ER_FIELD_IN_GROUPING_NOT_GROUP_BY, MYF(0), (argument_idx + 1));
-    return {ReplaceResult::ERROR, nullptr};
   }
 
   return {ReplaceResult::KEEP_TRAVERSING, nullptr};
@@ -4774,11 +4787,9 @@ static ReplaceResult wrap_grouped_expressions_for_rollup(
    of "child_ref" otherwise.
  */
 static bool WalkAndReplaceInner(
-    THD *thd, Item *parent, unsigned argument_idx,
-    const function<ReplaceResult(Item *item, Item *parent,
-                                 unsigned argument_idx)> &get_new_item,
+    THD *thd, const function<ReplaceResult(Item *item)> &get_new_item,
     Item **child_ref) {
-  ReplaceResult result = get_new_item(*child_ref, parent, argument_idx);
+  ReplaceResult result = get_new_item(*child_ref);
   if (result.action == ReplaceResult::ERROR) {
     return true;
   } else if (result.action == ReplaceResult::DONE) {
@@ -4797,10 +4808,8 @@ static bool WalkAndReplaceInner(
   return WalkAndReplace(thd, *child_ref, get_new_item);
 }
 
-bool WalkAndReplace(
-    THD *thd, Item *item,
-    const function<ReplaceResult(Item *item, Item *parent,
-                                 unsigned argument_idx)> &get_new_item) {
+bool WalkAndReplace(THD *thd, Item *item,
+                    const function<ReplaceResult(Item *item)> &get_new_item) {
   if (item->type() == Item::FUNC_ITEM ||
       (item->type() == Item::SUM_FUNC_ITEM && item->m_is_window_function)) {
     Item **args = down_cast<Item_func *>(item)->arguments();
@@ -4812,8 +4821,7 @@ bool WalkAndReplace(
     }
     const unsigned arg_count = down_cast<Item_func *>(item)->argument_count();
     for (unsigned argument_idx = 0; argument_idx < arg_count; argument_idx++) {
-      if (WalkAndReplaceInner(thd, item, argument_idx, get_new_item,
-                              &args[argument_idx])) {
+      if (WalkAndReplaceInner(thd, get_new_item, &args[argument_idx])) {
         return true;
       }
     }
@@ -4827,7 +4835,7 @@ bool WalkAndReplace(
     Item_row *row_item = down_cast<Item_row *>(item);
     for (unsigned argument_idx = 0; argument_idx < row_item->cols();
          argument_idx++) {
-      if (WalkAndReplaceInner(thd, item, argument_idx, get_new_item,
+      if (WalkAndReplaceInner(thd, get_new_item,
                               row_item->addr(argument_idx))) {
         return true;
       }
@@ -4835,10 +4843,8 @@ bool WalkAndReplace(
   } else if (item->type() == Item::COND_ITEM) {
     Item_cond *cond_item = down_cast<Item_cond *>(item);
     List_iterator<Item> li(*cond_item->argument_list());
-    unsigned argument_idx = 0;
     for (Item *arg = li++; arg != nullptr; arg = li++) {
-      if (WalkAndReplaceInner(thd, item, argument_idx++, get_new_item,
-                              li.ref())) {
+      if (WalkAndReplaceInner(thd, get_new_item, li.ref())) {
         return true;
       }
     }
@@ -4850,7 +4856,7 @@ bool WalkAndReplace(
     if (subquery_type == Item_subselect::IN_SUBQUERY ||
         subquery_type == Item_subselect::ALL_SUBQUERY ||
         subquery_type == Item_subselect::ANY_SUBQUERY) {
-      if (WalkAndReplaceInner(thd, item, /*argument_idx=*/0, get_new_item,
+      if (WalkAndReplaceInner(thd, get_new_item,
                               &down_cast<Item_in_subselect *>(item)->left_expr))
         return true;
     }
@@ -4867,41 +4873,34 @@ bool WalkAndReplace(
            down_cast<Item_subselect *>(item)->query_expr()->query_terms<>()) {
         Query_block *const qb = qt->query_block();
         for (auto &it : qb->fields) {
-          if (WalkAndReplaceInner(thd, item, 0, get_new_item, &it)) return true;
+          if (WalkAndReplaceInner(thd, get_new_item, &it)) return true;
         }
         if (qb->where_cond() != nullptr &&
-            WalkAndReplaceInner(thd, item, 0, get_new_item,
-                                qb->where_cond_ref()))
+            WalkAndReplaceInner(thd, get_new_item, qb->where_cond_ref()))
           return true;
         if (qb->having_cond() != nullptr &&
-            WalkAndReplaceInner(thd, item, 0, get_new_item,
-                                qb->having_cond_ref()))
+            WalkAndReplaceInner(thd, get_new_item, qb->having_cond_ref()))
           return true;
         if (qb->qualify_cond() != nullptr &&
-            WalkAndReplaceInner(thd, item, 0, get_new_item,
-                                qb->qualify_cond_ref()))
+            WalkAndReplaceInner(thd, get_new_item, qb->qualify_cond_ref()))
           return true;
         for (ORDER *o = qb->group_list.first; o != nullptr; o = o->next) {
-          if (WalkAndReplaceInner(thd, item, 0, get_new_item, o->item))
-            return true;
+          if (WalkAndReplaceInner(thd, get_new_item, o->item)) return true;
         }
         for (ORDER *o = qb->order_list.first; o != nullptr; o = o->next) {
-          if (WalkAndReplaceInner(thd, item, 0, get_new_item, o->item))
-            return true;
+          if (WalkAndReplaceInner(thd, get_new_item, o->item)) return true;
         }
         for (auto &win : qb->m_windows) {
           if (win.effective_order_by() != nullptr) {
             for (ORDER *o = win.effective_order_by()->value.first; o != nullptr;
                  o = o->next) {
-              if (WalkAndReplaceInner(thd, item, 0, get_new_item, o->item))
-                return true;
+              if (WalkAndReplaceInner(thd, get_new_item, o->item)) return true;
             }
           }
           if (win.effective_partition_by() != nullptr) {
             for (ORDER *o = win.effective_partition_by()->value.first;
                  o != nullptr; o = o->next) {
-              if (WalkAndReplaceInner(thd, item, 0, get_new_item, o->item))
-                return true;
+              if (WalkAndReplaceInner(thd, get_new_item, o->item)) return true;
             }
           }
         }
@@ -4998,8 +4997,7 @@ static bool refresh_comparators_after_rollup(Item *item) {
   @returns the new item, or nullptr on error
 */
 Item *Query_block::resolve_rollup_item(THD *thd, Item *item) {
-  ReplaceResult result =
-      wrap_grouped_expressions_for_rollup(this, item, nullptr, 0);
+  ReplaceResult result = wrap_grouped_expressions_for_rollup(this, item);
   if (result.action == ReplaceResult::ERROR) {
     return nullptr;
   } else if (result.action == ReplaceResult::DONE) {
@@ -5009,15 +5007,14 @@ Item *Query_block::resolve_rollup_item(THD *thd, Item *item) {
     return result.replacement;
   }
   bool changed = false;
-  bool error = WalkAndReplace(
-      thd, item,
-      [this, &changed](Item *inner_item, Item *parent, unsigned argument_idx) {
-        ReplaceResult inner_result = wrap_grouped_expressions_for_rollup(
-            this, inner_item, parent, argument_idx);
+  if (WalkAndReplace(thd, item, [this, &changed](Item *inner_item) {
+        ReplaceResult inner_result =
+            wrap_grouped_expressions_for_rollup(this, inner_item);
         changed |= (inner_result.action == ReplaceResult::REPLACE);
         return inner_result;
-      });
-  if (error) return nullptr;
+      })) {
+    return nullptr;
+  }
   if (changed) {
     if (refresh_comparators_after_rollup(item)) {
       return nullptr;

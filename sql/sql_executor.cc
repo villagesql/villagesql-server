@@ -4412,8 +4412,8 @@ static bool replace_embedded_rollup_references_with_tmp_fields(
   if (!item->has_grouping_set_dep()) {
     return false;
   }
-  const auto replace_functor = [thd, item, fields](Item *sub_item, Item *,
-                                                   unsigned) -> ReplaceResult {
+  const auto replace_functor = [thd, item,
+                                fields](Item *sub_item) -> ReplaceResult {
     if (!is_rollup_group_wrapper(sub_item)) {
       return {ReplaceResult::KEEP_TRAVERSING, nullptr};
     }
@@ -4558,8 +4558,7 @@ bool replace_contents_of_rollup_wrappers_with_tmp_fields(THD *thd,
                                                          Query_block *select,
                                                          Item *item_arg) {
   return WalkAndReplace(
-      thd, item_arg,
-      [thd, select](Item *item, Item *, unsigned) -> ReplaceResult {
+      thd, item_arg, [thd, select](Item *item) -> ReplaceResult {
         if (!is_rollup_group_wrapper(item)) {
           return {ReplaceResult::KEEP_TRAVERSING, nullptr};
         }

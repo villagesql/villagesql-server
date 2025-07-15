@@ -180,8 +180,8 @@ void ReplaceMaterializedItems(THD *thd, Item *item,
                               bool need_exact_match, bool window_frame_buffer) {
   bool modified = false;
   const auto replace_functor =
-      [thd, &modified, &items_to_copy, need_exact_match, window_frame_buffer](
-          Item *sub_item, Item *, unsigned) -> ReplaceResult {
+      [thd, &modified, &items_to_copy, need_exact_match,
+       window_frame_buffer](Item *sub_item) -> ReplaceResult {
     Item *replacement = FindReplacementItem(sub_item->real_item(),
                                             items_to_copy, need_exact_match);
     if (replacement != nullptr) {
