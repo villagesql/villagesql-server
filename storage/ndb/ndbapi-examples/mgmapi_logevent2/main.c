@@ -29,9 +29,9 @@
 #endif
 #include <mgmapi.h>
 #include <mysql.h>
+#include <ndb_init.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <ndbapi/NdbApi.hpp>
 
 #define MGMERROR(h)                                                    \
   {                                                                    \
