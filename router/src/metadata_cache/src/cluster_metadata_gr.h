@@ -154,7 +154,7 @@ class METADATA_CACHE_EXPORT GRClusterMetadata : public ClusterMetadata {
    *
    * The information is pulled from GR maintained performance_schema tables.
    */
-  void update_cluster_status_from_gr(
+  stdx::expected<void, std::error_code> update_cluster_status_from_gr(
       const bool unreachable_quorum_allowed_traffic,
       metadata_cache::ManagedCluster &cluster);
 

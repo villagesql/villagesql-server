@@ -297,7 +297,8 @@ GRClusterMetadata::GRClusterMetadata(
 }
 
 // throws metadata_cache::metadata_error
-void GRClusterMetadata::update_cluster_status_from_gr(
+stdx::expected<void, std::error_code>
+GRClusterMetadata::update_cluster_status_from_gr(
     const bool unreachable_quorum_allowed_traffic,
     metadata_cache::ManagedCluster &cluster) {
   log_debug("Updating cluster status from GR for '%s'", cluster.name.c_str());
@@ -461,7 +462,11 @@ void GRClusterMetadata::update_cluster_status_from_gr(
           "in cluster '");
       msg += cluster.name + "'";
       log_error("%s", msg.c_str());
+      return stdx::unexpected(make_error_code(
+          metadata_cache::metadata_errc::gr_status_update_fail));
   }
+
+  return {};
 }
 
 static std::optional<uint16_t> parse_server_version(
@@ -819,10 +824,13 @@ GRMetadataBackend::fetch_cluster_topology(
   // unreachable_quorum_allowed_traffic option is configured for the Router)
   const auto unreachable_quorum_allowed_traffic =
       router_options.get_unreachable_quorum_allowed_traffic();
-  metadata_->update_cluster_status_from_gr(
+  const auto update_res = metadata_->update_cluster_status_from_gr(
       unreachable_quorum_allowed_traffic !=
           QuorumConnectionLostAllowTraffic::none,
       cluster);  // throws metadata_cache::metadata_error
+  if (!update_res) {
+    return stdx::unexpected(update_res.error());
+  }
 
   // we are using status reported by the node with no quorum, since the
   // unreachable_quorum_allowed_traffic configured is "read" we demote potential
@@ -1005,6 +1013,15 @@ GRClusterMetadata::fetch_cluster_topology(
       } else {
         if (!result) {
           result = std::move(result_tmp);
+        }
+
+        // if we failed updating the GR status we leave the inner loop (the one
+        // that iterates over cluster nodes) as GR state update already iterated
+        // over GR nodes and failed. For standalone cluster that means return,
+        // for ClusterSet we go for the next Cluster nodes.
+        if (result_tmp.error() ==
+            metadata_cache::metadata_errc::gr_status_update_fail) {
+          break;
         }
       }
     }
