@@ -717,15 +717,18 @@ void MySQLRouter::start() {
   auto &log_reopener = mysql_harness::LogReopenComponent::get_instance();
 
   static const char kLogReopenServiceName[]{"log_reopen"};
-  static const char kSignalHandlerServiceName[]{"signal_handler"};
 
   // report readiness of all services only after the log-reopen handlers is
   // installed ... after all plugins are started.
   loader_->waitable_services().emplace_back(kLogReopenServiceName);
+#endif
+
+  static const char kSignalHandlerServiceName[]{"signal_handler"};
 
   loader_->waitable_services().emplace_back(kSignalHandlerServiceName);
 
   loader_->after_all_started([&]() {
+#if !defined(_WIN32)
     // as the LogReopener depends on the loggers being started, it must be
     // initialized after Loader::start_all() has been called.
     log_reopener.init();
@@ -746,19 +749,21 @@ void MySQLRouter::start() {
         });
 
     mysql_harness::on_service_ready(kLogReopenServiceName);
+#endif
 
     mysql_harness::on_service_ready(kSignalHandlerServiceName);
   });
 
   // after the first plugin finished, stop the log-reopener and signal-handler
   loader_->after_first_finished([&]() {
+#if !defined(_WIN32)
     signal_handler_.remove_sig_handler(SIGTERM);
     signal_handler_.remove_sig_handler(SIGINT);
 
     signal_handler_.remove_sig_handler(SIGHUP);
     log_reopener.reset();
-  });
 #endif
+  });
 
   loader_->start();
 }
