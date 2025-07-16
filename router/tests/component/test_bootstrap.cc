@@ -1555,8 +1555,11 @@ TEST_P(RouterComponentBootstrapTestOld, BootstrapPidfileOpt) {
 
   ASSERT_NO_FATAL_FAILURE(bootstrap_failover(
       config, ClusterType::GR_V2, router_options, EXIT_FAILURE,
-      {"^(Error: Option --pid-file cannot be used together "
-       "with -B/--bootstrap|Error: unknown option '--pid-file')"},
+      {GetParam() ? "^Error: unknown option '--pid-file'"
+                  : "^Error: Option --pid-file cannot be used together with "
+                    "-B/--bootstrap"
+
+      },
       10s));
 }
 
