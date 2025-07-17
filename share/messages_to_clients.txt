@@ -10292,8 +10292,8 @@ ER_LH_PARQUET_TYPE_CANNOT_CONVERT
 ER_LH_PARQUET_CANNOT_LOCATE_SCHEMA
   eng "Cannot locate schema in %s."
 
-ER_LH_INFER_SCHEMA_MISMATCH
-  eng "Found files with mismatched schemas."
+ER_LH_INFER_NUM_COL_MISMATCH
+  eng "Column count mismatch between files: '%s' has %d columns, but '%s' has %d columns."
 
 ER_LH_OOM
   eng "Insufficient memory."
