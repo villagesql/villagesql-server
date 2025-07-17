@@ -32,6 +32,7 @@
 #include <vector>
 
 #include "mrs/database/entry/content_set.h"
+#include "mrs/endpoint/handler/persistent/persistent_data_content_file.h"
 #include "mrs/endpoint/option_endpoint.h"
 #include "mrs/interface/handler_factory.h"
 
@@ -64,6 +65,9 @@ class ContentSetEndpoint : public OptionEndpoint {
                             std::vector<std::string> *out_module_classes);
 
   void disable_handler(std::string_view handler_path);
+  void child_updated(
+      std::shared_ptr<mrs::interface::EndpointBase> content_file_endpoint,
+      std::shared_ptr<handler::PersistentDataContentFile> file_contents);
 
   void update() override;
 
@@ -73,6 +77,7 @@ class ContentSetEndpoint : public OptionEndpoint {
   std::string get_my_url_path_part() const override;
   std::string get_my_url_part() const override;
 
+  std::optional<uint16_t> directory_pos_;
   ContentSetPtr entry_;
 };
 

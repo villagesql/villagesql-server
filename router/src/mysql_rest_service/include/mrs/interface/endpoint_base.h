@@ -80,11 +80,12 @@ class EndpointBase : public std::enable_shared_from_this<EndpointBase> {
   virtual UniversalId get_parent_id() const = 0;
   virtual OptionalIndexNames get_index_files() = 0;
   virtual std::optional<std::string> get_options() const = 0;
+  virtual std::string get_my_url_path_part() const = 0;
 
  protected:
   virtual EnabledType get_this_node_enabled_level() const = 0;
-  virtual std::string get_my_url_path_part() const = 0;
   virtual std::string get_my_url_part() const = 0;
+
   virtual bool does_this_node_require_authentication() const = 0;
 
   /*

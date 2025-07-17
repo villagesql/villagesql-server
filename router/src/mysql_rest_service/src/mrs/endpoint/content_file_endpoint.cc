@@ -77,6 +77,10 @@ void ContentFileEndpoint::set(const ContentFile &entry,
 void ContentFileEndpoint::update() {
   Parent::update();
   observability::EntityCounter<kEntityCounterUpdatesFiles>::increment();
+
+  auto parent = mrs::endpoint::handler::lock_parent(this);
+  assert(parent && "parent must be valid");
+  parent->child_updated(shared_from_this(), persistent_data_);
 }
 
 void ContentFileEndpoint::activate_common() {
@@ -110,9 +114,11 @@ void ContentFileEndpoint::activate_public() {
   // .reset() has to be done as a separate step to avoid overwriting the
   // handlers in the map. As a result for a small window there is no handler
   // (can potentially yield 404).
+  // handle_index is set to false as setting directoryIndex handler is relegated
+  // to the parent
   handler_.reset();
-  handler_ =
-      factory_->create_content_file(shared_from_this(), persistent_data_);
+  handler_ = factory_->create_content_file(shared_from_this(), persistent_data_,
+                                           /*handle_index*/ false);
 
   if (is_index_) {
     // see the comment for a handler_ a few lines above
