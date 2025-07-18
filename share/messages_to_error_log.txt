@@ -4629,7 +4629,7 @@ ER_GRP_RPL_TRANS_NOT_PRESENT_IN_GRP
 ER_GRP_RPL_TRANS_GREATER_THAN_GRP
   eng "It was not possible to assess if the member has more transactions than the group. The member will now exit the group."
 
-ER_GRP_RPL_MEMBER_VERSION_LOWER_THAN_GRP
+OBSOLETE_ER_GRP_RPL_MEMBER_VERSION_LOWER_THAN_GRP
   eng "Member version is lower than some group member, but since option 'group_replication_allow_local_lower_version_join is enabled, member will be allowed to join."
 
 ER_GRP_RPL_LOCAL_GTID_SETS_PROCESS_ERROR

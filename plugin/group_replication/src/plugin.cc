@@ -227,10 +227,6 @@ static void check_deprecated_variables() {
     push_deprecated_warn_no_replacement(thd,
                                         "group_replication_view_change_uuid");
   }
-  if (ov.allow_local_lower_version_join_var) {
-    push_deprecated_warn_no_replacement(
-        thd, "group_replication_allow_local_lower_version_join");
-  }
 }
 
 /*
@@ -2915,11 +2911,6 @@ bool server_engine_initialized() {
 
 void register_server_reset_master() { lv.known_server_reset = true; }
 
-bool get_allow_local_lower_version_join() {
-  DBUG_TRACE;
-  return ov.allow_local_lower_version_join_var;
-}
-
 ulong get_transaction_size_limit() {
   DBUG_TRACE;
   return ov.transaction_size_limit_var;
@@ -3984,23 +3975,6 @@ static int check_enforce_update_everywhere_checks(
   return 0;
 }
 
-static int check_allow_local_lower_version_join(MYSQL_THD thd, SYS_VAR *,
-                                                void *save,
-                                                struct st_mysql_value *value) {
-  DBUG_TRACE;
-  bool allow_local_lower_version_join_val;
-
-  push_deprecated_warn_no_replacement(
-      thd, "group_replication_allow_local_lower_version_join");
-
-  if (!get_bool_value_using_type_lib(value, allow_local_lower_version_join_val))
-    return 1;
-
-  *(bool *)save = allow_local_lower_version_join_val;
-
-  return 0;
-}
-
 static int check_communication_debug_options(MYSQL_THD thd, SYS_VAR *,
                                              void *save,
                                              struct st_mysql_value *value) {
@@ -4748,19 +4722,6 @@ static MYSQL_SYSVAR_ULONG(
     0                           /* block */
 );
 
-// Allow member downgrade
-
-static MYSQL_SYSVAR_BOOL(allow_local_lower_version_join,        /* name */
-                         ov.allow_local_lower_version_join_var, /* var */
-                         PLUGIN_VAR_OPCMDARG |
-                             PLUGIN_VAR_PERSIST_AS_READ_ONLY, /* optional var */
-                         "Allow this server to join the group even if it has a "
-                         "lower plugin version than the group",
-                         check_allow_local_lower_version_join, /* check func. */
-                         nullptr,                              /* update func*/
-                         0                                     /* default */
-);
-
 static MYSQL_SYSVAR_ULONG(
     auto_increment_increment,        /* name */
     ov.auto_increment_increment_var, /* var */
@@ -5415,7 +5376,6 @@ static SYS_VAR *group_replication_system_vars[] = {
     MYSQL_SYSVAR(recovery_compression_algorithms),
     MYSQL_SYSVAR(recovery_zstd_compression_level),
     MYSQL_SYSVAR(components_stop_timeout),
-    MYSQL_SYSVAR(allow_local_lower_version_join),
     MYSQL_SYSVAR(auto_increment_increment),
     MYSQL_SYSVAR(compression_threshold),
     MYSQL_SYSVAR(communication_max_message_size),
