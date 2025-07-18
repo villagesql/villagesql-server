@@ -286,6 +286,13 @@ static std::ostream &operator<<(std::ostream &os, AccessPath::Type type) {
   return os << AccessPathTypeName(type);
 }
 
+// Pretty print a Hyperedge.
+namespace hypergraph {
+static std::ostream &operator<<(std::ostream &os, Hyperedge edge) {
+  return os << '{' << edge.left << "->" << edge.right << '}';
+}
+}  // namespace hypergraph
+
 using MakeHypergraphTest = HypergraphOptimizerTestBase;
 
 TEST_F(MakeHypergraphTest, SingleTable) {
@@ -881,6 +888,35 @@ TEST_F(MakeHypergraphTest, CycleWithNullSafeEqual) {
                                    "(t1.z <=> t3.z)"));
 }
 
+TEST_F(MakeHypergraphTest, PushNonEqualitiesToExistingCycleEdges) {
+  Query_block *query_block = ParseAndResolve(
+      "SELECT 1 FROM t1, t2, t3 "
+      "WHERE t1.x = t2.x AND t1.y = t3.y AND t2.z = t3.z AND t2.w <> t3.w",
+      /*nullable=*/true);
+
+  JoinHypergraph graph(m_thd->mem_root, query_block);
+  TraceGuard trace(m_thd);
+  bool always_false = false;
+  EXPECT_FALSE(MakeJoinHypergraph(m_thd, &graph, &always_false));
+  EXPECT_FALSE(always_false);
+
+  SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
+
+  // Expect all nodes to be connected with simple edges only. There are two
+  // edges between each pair of nodes; one edge in each direction. Previously,
+  // the t2.w <> t3.w predicate would not be pushed to the simple t2-t3 edge,
+  // but would instead be put on a wider {t1,t2}-t3 hyperedge together with the
+  // t1.y = t3.y predicate.
+  using hypergraph::Hyperedge;
+  EXPECT_THAT(graph.graph.edges,
+              UnorderedElementsAre(Hyperedge{TableBitmap(0), TableBitmap(1)},
+                                   Hyperedge{TableBitmap(1), TableBitmap(0)},
+                                   Hyperedge{TableBitmap(0), TableBitmap(2)},
+                                   Hyperedge{TableBitmap(2), TableBitmap(0)},
+                                   Hyperedge{TableBitmap(1), TableBitmap(2)},
+                                   Hyperedge{TableBitmap(2), TableBitmap(1)}));
+}
+
 TEST_F(MakeHypergraphTest, MultipleEqualitiesCauseCycle) {
   Query_block *query_block =
       ParseAndResolve("SELECT 1 FROM t1,t2,t3 WHERE t1.x=t2.x AND t2.x=t3.x",
@@ -1093,7 +1129,7 @@ TEST_F(MakeHypergraphTest, MultiEqualityPredicateNoRedundantJoinCondition2) {
   EXPECT_STREQ("t5", graph.nodes[4].table()->alias);
   EXPECT_STREQ("t6", graph.nodes[5].table()->alias);
 
-  EXPECT_EQ(11, graph.edges.size());
+  EXPECT_EQ(10, graph.edges.size());
 
   // Find the edge {t2,t3,t4}/{t6}
   int edge_idx = -1;
