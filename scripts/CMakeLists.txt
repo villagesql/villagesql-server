@@ -312,7 +312,7 @@ SET(LIBS "")
 MACRO(EXTRACT_LINK_LIBRARIES target var)
   GET_TARGET_PROPERTY(TARGET_LIB_DEPENDS ${target} LINK_LIBRARIES)
   # Uncomment to debug:
-  # MESSAGE(STATUS "xxx ${target} ${TARGET_LIB_DEPENDS}")
+  MESSAGE(STATUS "xxx ${target} ${TARGET_LIB_DEPENDS}")
   # Depending on platform, and whether "system" or "bundled" has been used,
   # this will typically be:
   # ext::zlib  ext::zstd  <ssl>  <crypto>  /usr/lib64/libresolv.so  m
@@ -345,6 +345,10 @@ MACRO(EXTRACT_LINK_LIBRARIES target var)
         # Add -L/usr/local/lib for zstd
         IF(APPLE AND WITH_ZSTD STREQUAL "system" AND ${lib} STREQUAL "zstd")
           SET(${var} "${${var}}-L${dir} " )
+        ENDIF()
+        # Add -L/usr/openssl/3/lib/64 for ssl (and crypto).
+        IF(SOLARIS AND WITH_SSL STREQUAL "system")
+          SET(${var} "${${var}}-L${dir} ")
         ENDIF()
         SET(${var} "${${var}}-l${lib} " )
       ELSE()
