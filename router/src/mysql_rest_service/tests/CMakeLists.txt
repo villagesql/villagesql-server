@@ -78,6 +78,7 @@ ADD_TEST_FILE(test_plugin.cc
     ./test_mrs_route_manager.cc
     ./test_handler_object.cc
     ./test_object_checksum.cc
+    ./test_trace_password_masking.cc
   LIB_DEPENDS mysql_rest_service test-helpers
   )
 
