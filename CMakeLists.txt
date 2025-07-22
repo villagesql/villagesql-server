@@ -690,9 +690,6 @@ ENDIF()
 
 # To add c/c++ code specific for MySQL AI release using #ifdef..#endif
 OPTION(WITH_MYSQL_AI "To Add MySQL AI Release C/C++ Code" OFF)
-IF (WITH_MYSQL_AI)
-  ADD_COMPILE_DEFINITIONS(MYSQL_AI)
-ENDIF()
 
 INCLUDE(CheckTypeSize)
 CHECK_TYPE_SIZE("void *" SIZEOF_VOIDP)
