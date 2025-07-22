@@ -17259,6 +17259,14 @@ void Dbdict::execSUB_START_REQ(Signal *signal) {
   jamEntry();
   D("execSUB_START_REQ");
 
+  if (ERROR_INSERTED(6228)) {
+    jam();
+    /* Simulate upgrade, with shorter signal + junk in 'requestInfo' part */
+    SubStartReq *req = (SubStartReq *)signal->getDataPtr();
+    req->requestInfo = 0xffffffff;
+    signal->setLength(SubStartReq::SignalLengthWithoutRequestInfo);
+  }
+
   Uint32 origSenderRef = signal->senderBlockRef();
 
   if (refToBlock(origSenderRef) != DBDICT && getOwnNodeId() != c_masterNodeId) {
@@ -17352,6 +17360,7 @@ void Dbdict::execSUB_START_REQ(Signal *signal) {
 
     req->senderRef = reference();
     req->senderData = subbPtr.i;
+    req->requestInfo = subbPtr.p->m_requestInfo;
 
 #ifdef EVENT_PH3_DEBUG
     g_eventLogger->info(
@@ -17386,6 +17395,7 @@ void Dbdict::execSUB_START_REQ(Signal *signal) {
 
     req->senderRef = reference();
     req->senderData = subbPtr.i;
+    req->requestInfo = subbPtr.p->m_requestInfo;
 
 #ifdef EVENT_PH3_DEBUG
     g_eventLogger->info(
