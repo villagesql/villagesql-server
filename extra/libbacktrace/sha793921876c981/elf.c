@@ -5757,7 +5757,7 @@ elf_uncompress_lzma_block (const unsigned char *compressed,
 	      return 0;
 	    }
 
-	  chunk_size = compressed[off] << 8;
+	  chunk_size = (size_t)compressed[off] << 8;
 	  chunk_size += compressed[off + 1];
 	  ++chunk_size;
 
@@ -5798,11 +5798,11 @@ elf_uncompress_lzma_block (const unsigned char *compressed,
 	  uncompressed_chunk_start = uncompressed_offset;
 
 	  uncompressed_chunk_size = (control & 0x1f) << 16;
-	  uncompressed_chunk_size += compressed[off] << 8;
+	  uncompressed_chunk_size += (size_t)compressed[off] << 8;
 	  uncompressed_chunk_size += compressed[off + 1];
 	  ++uncompressed_chunk_size;
 
-	  compressed_chunk_size = compressed[off + 2] << 8;
+	  compressed_chunk_size = (size_t)compressed[off + 2] << 8;
 	  compressed_chunk_size += compressed[off + 3];
 	  ++compressed_chunk_size;
 
