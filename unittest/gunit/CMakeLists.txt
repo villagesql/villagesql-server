@@ -380,6 +380,17 @@ FOREACH(test ${TESTS})
   )
 ENDFOREACH()
 
+# Disable by default, since it dumps a stack trace.
+# We don't want ppl to think there was a segfault or something.
+# See also the mtr test main.print_stacktrace
+MYSQL_ADD_EXECUTABLE(mysys_stacktrace-t mysys_stacktrace-t.cc
+  COMPILE_DEFINITIONS ${DISABLE_PSI_DEFINITIONS}
+  ENABLE_EXPORTS
+  EXCLUDE_FROM_ALL
+  LINK_LIBRARIES sqlgunitlib gunit_small extra::boost
+  SKIP_INSTALL
+)
+
 # See comments about __builtin_memcmp in the source file.
 IF(HAVE_NO_BUILTIN_MEMCMP)
   ADD_COMPILE_FLAGS(
