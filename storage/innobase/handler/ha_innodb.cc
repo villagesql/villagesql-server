@@ -66,6 +66,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include <memory>
 
 #include <sql_table.h>
+#include "mysql/components/services/mysql_system_variable.h"  // sysvar_reader
 #include "mysql/components/services/system_variable_source.h"
 
 #ifndef UNIV_HOTBACKUP
@@ -275,6 +276,7 @@ static const size_t MOVED_FILES_PRINT_THRESHOLD = 32;
 SERVICE_TYPE(registry) * reg_svc;
 SERVICE_TYPE(system_variable_source) * sysvar_source_svc;
 SERVICE_TYPE(clone_protocol) * clone_protocol_svc;
+SERVICE_TYPE(mysql_system_variable_reader) * sysvar_reader;
 
 static const uint64_t KB = 1024;
 static const uint64_t MB = KB * 1024;
@@ -311,6 +313,8 @@ static const long AUTOINC_NO_LOCKING = 2;
 static long innobase_open_files;
 static long innobase_autoinc_lock_mode;
 static ulong innobase_commit_concurrency = 0;
+
+ulong srv_log_writer_threads_ulong;
 
 /* Boolean @@innodb_buffer_pool_in_core_file. */
 bool srv_buffer_pool_in_core_file = true;
@@ -377,6 +381,13 @@ static void release_plugin_services() {
     clone_protocol_svc = nullptr;
   }
 
+  if (sysvar_reader != nullptr) {
+    using sysvar_reader_t = SERVICE_TYPE_NO_CONST(mysql_system_variable_reader);
+    reg_svc->release(reinterpret_cast<my_h_service>(
+        const_cast<sysvar_reader_t *>(sysvar_reader)));
+    sysvar_reader = nullptr;
+  }
+
   /* Release registry service */
   mysql_plugin_registry_release(reg_svc);
   reg_svc = nullptr;
@@ -410,6 +421,15 @@ static void acquire_plugin_services() {
   } else {
     clone_protocol_svc =
         reinterpret_cast<SERVICE_TYPE(clone_protocol) *>(service);
+  }
+
+  /* Acquire mysql_system_variable_reader service */
+  if (reg_svc->acquire("mysql_system_variable_reader", &service)) {
+    ib::warn(ER_IB_WRN_FAILED_TO_ACQUIRE_SERVICE,
+             "mysql_system_variable_reader");
+  } else {
+    sysvar_reader =
+        reinterpret_cast<SERVICE_TYPE(mysql_system_variable_reader) *>(service);
   }
 }
 
@@ -4662,6 +4682,8 @@ static void innodb_redo_log_capacity_init() {
 @param [in] new_def  New default value */
 static void innodb_io_capacity_max_update_default(ulong new_def);
 
+inline void update_sysvars_default();
+
 /** Initialize, validate and normalize the InnoDB startup parameters.
 @return failure code
 @retval 0 on success
@@ -4789,6 +4811,8 @@ static int innodb_init_params() {
   ut_a(srv_log_write_ahead_size > 0);
 
   assert(innodb_change_buffering <= IBUF_USE_ALL);
+
+  update_sysvars_default();
 
   /* Update innodb_io_capacity_max based on current io capacity */
   if (!innodb_io_capacity_max_is_set()) {
@@ -22103,7 +22127,11 @@ static void innodb_log_buffer_size_update(THD *, SYS_VAR *, void *,
 @param[in]      save      immediate result from check function */
 static void innodb_log_writer_threads_update(THD *, SYS_VAR *, void *var_ptr,
                                              const void *save) {
-  *static_cast<bool *>(var_ptr) = *static_cast<const bool *>(save);
+  *static_cast<ulong *>(var_ptr) = *static_cast<const ulong *>(save);
+
+  ulong new_val = *static_cast<ulong *>(var_ptr);
+  ut_ad_le(new_val, 1);
+  srv_log_writer_threads = static_cast<bool>(new_val);
 
   /* pause/resume the log writer threads based on innodb_log_writer_threads
   value. */
@@ -22851,14 +22879,76 @@ static MYSQL_SYSVAR_ULONG(log_write_ahead_size, srv_log_write_ahead_size,
                           INNODB_LOG_WRITE_AHEAD_SIZE_MAX,
                           OS_FILE_LOG_BLOCK_SIZE);
 
-/* The `my_num_vcpus() >= 32` was derived from performance testing results
-  and relate to the `Bug #113485 Let innodb_dedicated_server set
-  innodb_log_writer_threads based on server size` feature request. */
-static MYSQL_SYSVAR_BOOL(
-    log_writer_threads, srv_log_writer_threads, PLUGIN_VAR_RQCMDARG,
+/* Default updated in innodb_init_params */
+static MYSQL_SYSVAR_ENUM(
+    log_writer_threads, srv_log_writer_threads_ulong, PLUGIN_VAR_RQCMDARG,
     "Whether the log writer threads should be activated (ON), or write/flush "
     "of the redo log should be done by each thread individually (OFF).",
-    nullptr, innodb_log_writer_threads_update, my_num_vcpus() >= 32);
+    nullptr, innodb_log_writer_threads_update, 0, &bool_typelib);
+
+/**
+  Utility to convert input string to a boolean value
+  @return true iff string is "ON", false iff string is "OFF", nullopt
+  otherwise
+*/
+static inline std::optional<bool> get_bool_from_string(
+    const std::string_view input) {
+  if (input.compare("OFF") == 0) {
+    return false;
+  }
+  if (input.compare("ON") == 0) {
+    return true;
+  }
+  return std::nullopt;
+}
+
+/**
+ Read the value of the system variable and convert it into a bool
+ @param[in]  sysvar_name  Name of the system variable
+ @return Boolean value of the system variable if success, nullopt
+ otherwise
+*/
+static inline std::optional<bool> get_bool_sysvar_value(
+    const std::string_view sysvar_name) {
+  ut_ad(sysvar_reader != nullptr);
+
+  /* Buffer stores value of the sysvar: either "ON" or "OFF" */
+  std::array<char, 4> buf;
+  char *var_begin = buf.data();
+  size_t var_len = buf.size();
+
+  /* Read non-negative non-null value for sysvar_name */
+  if ((sysvar_reader->get(nullptr, "GLOBAL", "mysql_server", sysvar_name.data(),
+                          reinterpret_cast<void **>(&var_begin),
+                          &var_len) != 0) ||
+      var_len == 0) {
+    return std::nullopt;
+  }
+  return get_bool_from_string(std::string_view{var_begin, var_len});
+}
+
+inline void update_sysvars_default() {
+  const auto sysvar_binlog = get_bool_sysvar_value("log_bin");
+  ut_ad(sysvar_binlog.has_value());
+
+  auto num_vcpus = my_num_vcpus();
+  DBUG_EXECUTE_IF("innodb_simulate_vcpus_equals_4", { num_vcpus = 4; });
+  DBUG_EXECUTE_IF("innodb_simulate_vcpus_equals_32", { num_vcpus = 32; });
+
+  if (sysvar_binlog.has_value() && sysvar_binlog.value()) {
+    /* With binlog enabled, enable log_writer_threads if vcpu >= 32 */
+    mysql_sysvar_log_writer_threads.def_val = (num_vcpus >= 32);
+  } else {
+    /* With binlog disabled, enable log_writer_threads if vcpus > 4 */
+    mysql_sysvar_log_writer_threads.def_val = (num_vcpus > 4);
+  }
+
+  if (!innodb_variable_is_set("innodb_log_writer_threads")) {
+    srv_log_writer_threads_ulong = mysql_sysvar_log_writer_threads.def_val;
+  }
+  ut_ad_le(srv_log_writer_threads_ulong, 1);
+  srv_log_writer_threads = static_cast<bool>(srv_log_writer_threads_ulong);
+}
 
 static MYSQL_SYSVAR_UINT(
     log_spin_cpu_abs_lwm, srv_log_spin_cpu_abs_lwm, PLUGIN_VAR_RQCMDARG,
