@@ -810,7 +810,7 @@ EXPLAIN SELECT /*+ QB_NAME(``) */ 1;
 SET NAMES utf8mb3;
 --character_set latin1
 --replace_regex $elide_costs
-EXPLAIN SELECT /*+ QB_NAME(`�``�`) */ 1;
+EXPLAIN SELECT /*+ QB_NAME(`�``�`) */ 1;
 --character_set utf8mb4
 
 CREATE TABLE tableТ (i INT);
@@ -825,7 +825,7 @@ SELECT /*+ BKA(таблица) */ 1 FROM t1;
 SELECT /*+ BKA(test@таблица) */ 1 FROM t1;
 
 --echo # broken multibyte char, should warn:
-SELECT /*+ NO_ICP(`�`) */ 1 FROM t1;
+SELECT /*+ NO_ICP(`�`) */ 1 FROM t1;
 
 DROP TABLE таблица;
 
@@ -1256,7 +1256,9 @@ CREATE TABLE t2 (
     KEY `k1` (`f2`,`f1`)
 );
 INSERT INTO t1 values(NULL, '');
+ANALYZE TABLE t1;
 INSERT INTO t2 VALUES ('486878','WDT'),('486910','WDT');
+ANALYZE TABLE t2;
 --replace_regex $elide_costs
 EXPLAIN FORMAT=TREE SELECT avg(t2.f1) FROM t1, t2 where t2.f2 = 'SIR' GROUP BY t1.f1;
 
