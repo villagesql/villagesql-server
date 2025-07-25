@@ -5092,7 +5092,6 @@ void Backup::nextFragment(Signal *signal, BackupRecordPtr ptr) {
         BlockReference ref = numberToRef(BACKUP, ldm, nodeId);
         sendSignal(ref, GSN_BACKUP_FRAGMENT_REQ, signal,
                    BackupFragmentReq::SignalLength, JBB);
-
       }  // if
     }    // for
   }      // for
@@ -5199,7 +5198,6 @@ void Backup::execBACKUP_FRAGMENT_REF(Signal *signal) {
   const Uint32 ptrI = ref->backupPtr;
   // const Uint32 backupId = ref->backupId;
   const Uint32 nodeId = ref->nodeId;
-
   BackupRecordPtr ptr;
   ndbrequire(c_backupPool.getPtr(ptr, ptrI));
 
@@ -7331,6 +7329,33 @@ void Backup::execBACKUP_FRAGMENT_REQ(Signal *signal) {
   FragmentPtr fragPtr;
   tabPtr.p->fragments.getPtr(fragPtr, fragNo);
 
+  if (!ptr.p->is_lcp() && ERROR_INSERTED(10057)) {
+    jam();
+    if (instance() == 1) {
+      jam();
+      /*
+       * Delay GSN_BACKUP_FRAGMENT_REQ processing on LDM 1.
+       * EI 10058 to force BACKUP_FRAGMENT_REQ processing on other LDMs to
+       * return REF.
+       * BACKUP_FRAGMENT_REQ processing on LDM 1 later completes and sends
+       * CONF, which is likely to arrive after REFs for later fragments.
+       */
+      sendSignalWithDelay(reference(), GSN_BACKUP_FRAGMENT_REQ, signal, 100,
+                          signal->getLength());
+
+      signal->theData[0] = 10058;
+      signal->theData[1] = tableId;
+      sendSignal(BACKUP_REF, GSN_NDB_TAMPER, signal, 2, JBB);
+      return;
+    } else {
+      // Delay just to have time to catch error 10058
+      sendSignalWithDelay(reference(), GSN_BACKUP_FRAGMENT_REQ, signal, 10,
+                          signal->getLength());
+      // CLEAR_ERROR_INSERT_VALUE;
+      return;
+    }
+  }
+
   ndbrequire(fragPtr.p->scanned == 0);
   ndbrequire(fragPtr.p->scanning == 0 ||
              refToNode(ptr.p->masterRef) == getOwnNodeId());
@@ -7366,6 +7391,25 @@ void Backup::execBACKUP_FRAGMENT_REQ(Signal *signal) {
   filePtr.p->fragmentNo = fragPtr.p->fragmentId;
   filePtr.p->m_retry_count = 0;
 
+  if (!ptr.p->is_lcp() && ERROR_INSERTED(10058) &&
+      ERROR_INSERT_EXTRA == tableId) {
+    jam();
+    if (instance() != 1) {
+      /*
+       * Handling of BACKUP_FRAGMENT_REQ processing is delayed on LDM 1.
+       * On other instances return REF, so later CONF from instance 1
+       * is likely to arrive after REFs for other fragments.
+       */
+      jam();
+      backupFragmentRef(signal, filePtr);
+      CLEAR_ERROR_INSERT_VALUE;
+      CLEAR_ERROR_INSERT_EXTRA;
+      return;
+    } else {  // instance #1 is working on the delayed BACKUP_FRAGMENT_REQ
+      CLEAR_ERROR_INSERT_VALUE;
+      CLEAR_ERROR_INSERT_EXTRA;
+    }
+  }
   ndbrequire(filePtr.p->m_flags ==
              (BackupFile::BF_OPEN | BackupFile::BF_FILE_THREAD));
   sendScanFragReq(signal, ptr, filePtr, tabPtr, fragPtr, 0);
