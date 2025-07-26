@@ -10197,7 +10197,7 @@ ER_LH_AWS_AUTH_ERR
   eng "AWS authentication error."
 
 ER_LH_CSV_PARSING_ERR
-  eng "%s:%lu: Parsing error found. %s."
+  eng "%s at byte offset %lu: Parsing error. %s"
 
 ER_LH_COLUMN_MISMATCH_ERR
   eng "%s: Mismatch in the number of columns. Expected %u, found %u."
