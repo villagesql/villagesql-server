@@ -104,6 +104,7 @@
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
 #include "sql/sql_optimizer.h"  // build_bitmap_for_nested_joins
+#include "sql/sql_parse.h"
 #include "sql/sql_select.h"
 #include "sql/sql_test.h"   // print_where
 #include "sql/sql_union.h"  // Query_result_union
@@ -3391,10 +3392,17 @@ bool Query_block::merge_derived(THD *thd, Table_ref *derived_table) {
     const bool merge_heuristic =
         (derived_table->is_view() || allow_merge_derived) &&
         derived_query_expression->merge_heuristic(thd->lex);
-    if (!hint_table_state(
-            thd, derived_table, DERIVED_MERGE_HINT_ENUM,
-            merge_heuristic ? OPTIMIZER_SWITCH_DERIVED_MERGE : 0) &&
-        !derived_table->is_json_duality_view())
+
+    /*
+      Merging a JSON duality view is not allowed when query is modifying
+      the data.
+    */
+    const bool updating_jdv = (derived_table->is_json_duality_view() &&
+                               thd->lex->sql_command != SQLCOM_SELECT);
+
+    if (!updating_jdv &&
+        !hint_table_state(thd, derived_table, DERIVED_MERGE_HINT_ENUM,
+                          merge_heuristic ? OPTIMIZER_SWITCH_DERIVED_MERGE : 0))
       return false;
   }
 

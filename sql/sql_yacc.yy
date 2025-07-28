@@ -10781,11 +10781,17 @@ function_call_keyword:
               definition, global attributes are listed at the beginning for
               JSON_DUALITY_OBJECT(). This distinction is necessary to accommodate
               attributes such as table annotations for a duality view.
+
+              While pushing a condition down to a materialized JSON duality view,
+              expressions involving JSON duality objects will be re-parsed.
+              So, we allow creation of a new duality object even for this case.
             */
             THD *thd = YYTHD;
-            if (!((thd->lex->create_view_type ==
-                   enum_view_type::JSON_DUALITY_VIEW) || 
-                   thd->parsing_json_duality_view)) {
+            LEX *lex = thd->lex;
+            if (!((lex->create_view_type ==
+                   enum_view_type::JSON_DUALITY_VIEW) ||
+                   thd->parsing_json_duality_view ||
+                   lex->reparse_derived_table_condition)) {
               my_error(ER_JDV_INVALID_JSON_DUALITY_OBJECT_USAGE, MYF(0));
               MYSQL_YYABORT;
             }
