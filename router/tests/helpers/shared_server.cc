@@ -27,6 +27,8 @@
 
 #include <gtest/gtest.h>
 
+#include <iomanip>
+
 #define RAPIDJSON_HAS_STDSTRING 1
 
 #include "my_rapidjson_size_t.h"
