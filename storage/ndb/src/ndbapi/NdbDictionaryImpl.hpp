@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -728,7 +728,7 @@ public:
   int dropEvent(const NdbEventImpl &);
   int dropEvent(NdbApiSignal* signal, LinearSectionPtr ptr[3], int noLSP);
 
-  int executeSubscribeEvent(class Ndb & ndb, NdbEventOperationImpl &);
+  int executeSubscribeEvent(class Ndb & ndb, NdbEventOperationImpl &, Uint64 &setup_epoch);
   int stopSubscribeEvent(class Ndb & ndb, NdbEventOperationImpl &,
                          Uint64& stop_gci);
   
@@ -967,7 +967,7 @@ public:
   int dropBlobEvents(const NdbEventImpl &);
   int listEvents(List& list);
 
-  int executeSubscribeEvent(NdbEventOperationImpl &);
+  int executeSubscribeEvent(NdbEventOperationImpl &, Uint64 &setup_epoch);
   int stopSubscribeEvent(NdbEventOperationImpl &, Uint64& stop_gci);
 
   int forceGCPWait(int type);

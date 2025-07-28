@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2024, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1718,6 +1718,21 @@ int runEventConsumer(NDBT_Context* ctx, NDBT_Step* step)
 	  << pOp->getNdbError().message << endl;
     result = NDBT_FAILED;
     goto end;
+  }
+
+  /**
+   * Let's wait for event's start epoch before signalling changes
+   * to start flowing.
+   * Otherwise the event may not capture all of the injected changes
+   */
+  {
+    Ndb *ndb = GETNDB(step);
+    bool ready = false;
+    while (!ctx->isTestStopped() && !ready) {
+      Uint64 latestEpoch;
+      ndb->pollEvents(100, &latestEpoch);
+      ready = (latestEpoch >= pOp->getStartEpoch());
+    }
   }
 
   ctx->setProperty("LastGCI_hi", ~(Uint32)0);

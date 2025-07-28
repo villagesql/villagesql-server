@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -35,7 +35,7 @@ class NdbEventOperationImpl;
  *
  * Brief description on how to work with events:
  *
- * - An event, represented by an NdbDictionary::Event, i created in the 
+ * - An event, represented by an NdbDictionary::Event, is created in the 
  *   Database through
  *   NdbDictionary::Dictionary::createEvent() (note that this can be done 
  *   by any application or thread and not necessarily by the "listener")
@@ -166,6 +166,14 @@ public:
    */
   NdbBlob* getBlobHandle(const char *anAttrName);
   NdbBlob* getPreBlobHandle(const char *anAttrName);
+
+  /**
+     Whether EventOperation should filter out potentially partial
+     data from epochs < the StartEpoch for this operation.
+
+     Automatically implied by mergeEvents.
+  */
+  void setFilterPreStartEpochs(bool flag);
 
   int isOverrun() const;
 
@@ -299,6 +307,15 @@ public:
    */
   bool isErrorEpoch(NdbDictionary::Event::TableEvent *error_type = 0);
 
+  /**
+   * Get first epoch value guaranteed to have all row change
+   * events for this event operation.
+   *
+   * Lower epochs may have a partial set of row change events.
+   *
+   * Only valid for executing EventOperations
+   */
+  Uint64 getStartEpoch() const;
 
 #ifndef DOXYGEN_SHOULD_SKIP_INTERNAL
   /** these are subject to change at any time */

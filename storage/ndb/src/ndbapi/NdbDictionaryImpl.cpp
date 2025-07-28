@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2022, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -5893,15 +5893,17 @@ NdbDictInterface::createEvent(class Ndb & ndb,
 }
 
 int
-NdbDictionaryImpl::executeSubscribeEvent(NdbEventOperationImpl & ev_op)
+NdbDictionaryImpl::executeSubscribeEvent(NdbEventOperationImpl & ev_op,
+                                         Uint64 &setup_epoch)
 {
   // NdbDictInterface m_receiver;
-  return m_receiver.executeSubscribeEvent(m_ndb, ev_op);
+  return m_receiver.executeSubscribeEvent(m_ndb, ev_op, setup_epoch);
 }
 
 int
 NdbDictInterface::executeSubscribeEvent(class Ndb & ndb,
-					NdbEventOperationImpl & ev_op)
+					NdbEventOperationImpl & ev_op,
+                                        Uint64 &setup_epoch)
 {
   DBUG_ENTER("NdbDictInterface::executeSubscribeEvent");
   NdbApiSignal tSignal(m_reference);
@@ -5930,6 +5932,12 @@ NdbDictInterface::executeSubscribeEvent(class Ndb & ndb,
                        WAIT_CREATE_INDX_REQ /*WAIT_CREATE_EVNT_REQ*/,
                        DICT_LONG_WAITFOR_TIMEOUT, 100,
                        errCodes, -1);
+
+  if (ret == 0) {
+    /* Extract received startGCI */
+    const Uint32 *data = (const Uint32 *)m_buffer.get_data();
+    setup_epoch = (Uint64(data[0]) << 32) | data[1];
+  }
 
   DBUG_RETURN(ret);
 }
@@ -6322,6 +6330,20 @@ NdbDictInterface::execSUB_START_CONF(const NdbApiSignal * signal,
 		     subStartConf->subscriptionId,
                      subStartConf->subscriptionKey,
                      subStartConf->subscriberData));
+
+  Uint32 gci_hi = subStartConf->firstGCIhi;
+  Uint32 gci_lo = 0;
+
+  if (sigLen >= SubStartConf::SignalLength) {
+    gci_lo = subStartConf->firstGCIlo;
+  }
+
+  /* Return received startGCI to client via buffer */
+  m_buffer.grow(4 * 2);  // 2 words
+  Uint32 *data = (Uint32 *)m_buffer.get_data();
+  data[0] = gci_hi;
+  data[1] = gci_lo;
+
   /*
    * If this is the first subscription NdbEventBuffer needs to be
    * notified.  NdbEventBuffer will start listen to Suma signals

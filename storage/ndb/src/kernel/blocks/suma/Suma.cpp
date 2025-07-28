@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2024, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -3881,10 +3881,11 @@ Suma::report_sub_start_conf(Signal* signal, Ptr<Subscription> subPtr)
         conf->senderData      = senderData;
         conf->subscriptionId  = subPtr.p->m_subscriptionId;
         conf->subscriptionKey = subPtr.p->m_subscriptionKey;
-        conf->firstGCI        = Uint32(gci >> 32);
+        conf->firstGCIhi      = Uint32(gci >> 32);
         conf->part            = SubscriptionData::TableData;
         conf->bucketCount     = c_no_of_buckets;
         conf->nodegroup       = c_nodeGroup;
+        conf->firstGCIlo      = Uint32(gci);
         sendSignal(senderRef, GSN_SUB_START_CONF, signal,
                    SubStartConf::SignalLength, JBB);
 

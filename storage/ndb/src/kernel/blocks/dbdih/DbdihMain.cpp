@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2024, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1303,6 +1303,13 @@ void Dbdih::execGETGCIREQ(Signal* signal)
     jam();
     gci_hi = Uint32(m_micro_gcp.m_current_gci >> 32);
     gci_lo = Uint32(m_micro_gcp.m_current_gci);
+    break;
+  case 2:
+    jam();
+    /* Latest gci that could be accepting commits anywhere in the cluster */
+    ndbassert(m_micro_gcp.m_new_gci >= m_micro_gcp.m_current_gci);
+    gci_hi = Uint32(m_micro_gcp.m_new_gci >> 32);
+    gci_lo = Uint32(m_micro_gcp.m_new_gci);
     break;
   }
   

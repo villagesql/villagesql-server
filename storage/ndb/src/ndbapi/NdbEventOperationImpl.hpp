@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2024, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -325,6 +325,7 @@ public:
     ,GC_INCONSISTENT  = 0x2  // GCI might be missing event data
     ,GC_CHANGE_CNT    = 0x4  // Change m_total_buckets
     ,GC_OUT_OF_MEMORY = 0x8 // Not enough event buffer memory to buffer data
+    ,GC_CLUSTER_FAILURE = 0x10  // Cluster failure in this epoch
   };
 
   NdbEventBuffer *const m_event_buffer;  //Owner
@@ -513,7 +514,7 @@ public:
   NdbEventOperation::State getState();
 
   int execute();
-  int execute_nolock();
+  int execute_nolock(Uint64 &setup_epoch);
   int stop();
   NdbRecAttr *getValue(const char *colName, char *aValue, int n);
   NdbRecAttr *getValue(const NdbColumnImpl *, char *aValue, int n);
@@ -537,6 +538,9 @@ public:
                           const LinearSectionPtr ptr[3]);
 
   NdbDictionary::Event::TableEvent getEventType2();
+
+  Uint64 getStartEpoch() const;
+  void setStartEpoch(Uint64 startEpoch);
 
   void print();
   void printAll();
@@ -566,6 +570,13 @@ public:
 		   */
   Uint32 m_eventId;
   Uint32 m_oid;
+
+  bool m_filterPreStartEpochs;
+
+  /* Consistent start position
+   * Epochs >= m_start_epoch are consistent
+   */
+  Uint64 m_start_epoch;
 
   /*
     when parsed gci > m_stop_gci it is safe to drop operation

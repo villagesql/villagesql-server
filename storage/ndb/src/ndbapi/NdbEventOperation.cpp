@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -51,6 +51,7 @@ NdbEventOperation::State NdbEventOperation::getState()
 void NdbEventOperation::mergeEvents(bool flag)
 {
   m_impl.m_mergeEvents = flag;
+  m_impl.m_filterPreStartEpochs = flag;
 }
 
 NdbRecAttr *
@@ -175,6 +176,10 @@ NdbEventOperation::isErrorEpoch(NdbDictionary::Event::TableEvent *error_type)
   return m_impl.isErrorEpoch(error_type);
 }
 
+Uint64 NdbEventOperation::getStartEpoch() const {
+  return m_impl.getStartEpoch();
+}
+
 NdbDictionary::Event::TableEvent
 NdbEventOperation::getEventType() const
 {
@@ -253,6 +258,10 @@ void NdbEventOperation::setCustomData(void * data)
 void * NdbEventOperation::getCustomData() const
 {
   return m_impl.m_custom_data;
+}
+
+void NdbEventOperation::setFilterPreStartEpochs(bool flag) {
+  m_impl.m_filterPreStartEpochs = flag;
 }
 
 int NdbEventOperation::getReqNodeId() const
