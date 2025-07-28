@@ -135,8 +135,9 @@ bool printBACKUP_FRAGMENT_REF(FILE *out, const Uint32 *data, Uint32 l,
   }
 
   const auto *sig = (const BackupFragmentRef *)data;
-  fprintf(out, " backupPtr: %d backupId: %d nodeId: %d errorCode: %d\n",
+  fprintf(out, " backupPtr: %u backupId: %u nodeId: %u errorCode: %u\n",
           sig->backupPtr, sig->backupId, sig->nodeId, sig->errorCode);
+  fprintf(out, " tableId: %u fragmentNo: %u\n", sig->tableId, sig->fragmentNo);
   return true;
 }
 

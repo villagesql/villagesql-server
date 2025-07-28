@@ -3861,19 +3861,18 @@ void Backup::checkNodeFail(Signal *signal, BackupRecordPtr ptr, NodeId newCoord,
     for (Uint32 i = 0; (i = mask.find(i + 1)) != NdbNodeBitmask::NotFound;) {
       signal->theData[pos] = i;
       if (gsn == GSN_BACKUP_FRAGMENT_REF) {
+        jam();
         // Handle mt-backup case where all LDMs process BACKUP_FRAGMENT_REQs
         // simultaneously. If any node fails, master sends REFs to self on
-        // behalf of every failed node. Extend handling for BACKUP_FRAGMENT_REQ
-        // so that master sends BACKUP_FRAGMENT_REFs to self from every LDM
-        // on every failed node.
-        Uint32 workers = getNodeInfo(i).m_lqh_workers;
-        if (workers == 0) workers = 1;  // single-threaded backup
-        for (Uint32 j = 0; j < workers; j++) {
-          sendSignal(reference(), gsn, signal, len, JBB);
-        }
+        // behalf of every failed node.
+        BackupFragmentRef *ref = (BackupFragmentRef *)signal->getDataPtrSend();
+        ref->tableId = RNIL;
+        ref->fragmentNo = RNIL;
+        sendSignal(reference(), gsn, signal, len, JBB);
       } else {
         // master sends REQs only to one instance (BackupProxy) on each node
         // send only one reply to self per node on behalf of BackupProxy
+        jam();
         sendSignal(reference(), gsn, signal, len, JBB);
 #ifdef DEBUG_ABORT
         g_eventLogger->info("sending %d to self from %d", gsn, i);
@@ -5198,48 +5197,82 @@ void Backup::execBACKUP_FRAGMENT_REF(Signal *signal) {
   const Uint32 ptrI = ref->backupPtr;
   // const Uint32 backupId = ref->backupId;
   const Uint32 nodeId = ref->nodeId;
+
+  const Uint32 tableId = ref->tableId;
+  const Uint32 fragmentNo = ref->fragmentNo;
   BackupRecordPtr ptr;
   ndbrequire(c_backupPool.getPtr(ptr, ptrI));
 
-  TablePtr tabPtr;
-  ptr.p->tables.first(tabPtr);
-  for (; tabPtr.i != RNIL; ptr.p->tables.next(tabPtr)) {
+  /*
+   * Worker node (nodeId) Failed.
+   * Handling of BACKUP_FRAGMENT_REF sent from master to itself on behalf of
+   * the failed node.
+   * All 'scanning' fragments in failed node set as 'scanned'.
+   */
+  if (signal->senderBlockRef() == reference() && nodeId != getOwnNodeId()) {
     jam();
-    FragmentPtr fragPtr;
-    Array<Fragment> &frags = tabPtr.p->fragments;
-    const Uint32 fragCount = frags.getSize();
+    ndbrequire(ref->tableId == RNIL);
+    ndbrequire(ref->fragmentNo == RNIL);
 
-    for (Uint32 i = 0; i < fragCount; i++) {
+    TablePtr tabPtr;
+    ptr.p->tables.first(tabPtr);
+    for (; tabPtr.i != RNIL; ptr.p->tables.next(tabPtr)) {
       jam();
-      tabPtr.p->fragments.getPtr(fragPtr, i);
-      if (fragPtr.p->scanning != 0 && nodeId == fragPtr.p->node) {
+      FragmentPtr fragPtr;
+      Array<Fragment> &frags = tabPtr.p->fragments;
+      const Uint32 fragCount = frags.getSize();
+      for (Uint32 i = 0; i < fragCount; i++) {
         jam();
-        ndbrequire(fragPtr.p->scanned == 0);
-        fragPtr.p->scanned = 1;
-        fragPtr.p->scanning = 0;
-        goto done;
+        tabPtr.p->fragments.getPtr(fragPtr, i);
+        if (fragPtr.p->scanning != 0 && nodeId == fragPtr.p->node) {
+          jam();
+          ndbrequire(fragPtr.p->scanned == 0);
+          fragPtr.p->scanned = 1;
+          fragPtr.p->scanning = 0;
+          ptr.p->masterData.sendCounter--;
+          ptr.p->setErrorCode(ref->errorCode);
+          if (ptr.p->masterData.sendCounter.done()) {
+            jam();
+            masterAbort(signal, ptr);
+            return;
+          }
+        }
       }
     }
-  }
-  goto err;
-
-done:
-  ptr.p->masterData.sendCounter--;
-  ptr.p->setErrorCode(ref->errorCode);
-
-  if (ptr.p->masterData.sendCounter.done()) {
+  } else {
+    // Normal BACKUP_FRAGMENT_REF from participant
     jam();
-    masterAbort(signal, ptr);
-    return;
-  }  // if
+    TablePtr tabPtr;
+    ndbrequire(findTable(ptr, tabPtr, tableId));
 
-err:
-  AbortBackupOrd *ord = (AbortBackupOrd *)signal->getDataPtrSend();
-  ord->backupId = ptr.p->backupId;
-  ord->backupPtr = ptr.i;
-  ord->requestType = AbortBackupOrd::LogBufferFull;
-  ord->senderData = ptr.i;
-  execABORT_BACKUP_ORD(signal);
+    FragmentPtr fragPtr;
+    tabPtr.p->fragments.getPtr(fragPtr, fragmentNo);
+
+    ndbrequire(fragPtr.p->scanned == 0);
+    ndbrequire(fragPtr.p->scanning == 1);
+    ndbrequire(nodeId == refToNode(signal->senderBlockRef()));
+
+    fragPtr.p->scanned = 1;
+    fragPtr.p->scanning = 0;
+    ptr.p->masterData.sendCounter--;
+    ptr.p->setErrorCode(ref->errorCode);
+
+    if (ptr.p->masterData.sendCounter.done()) {
+      jam();
+      masterAbort(signal, ptr);
+      return;
+    }
+  }
+
+  {
+    jam();
+    AbortBackupOrd *ord = (AbortBackupOrd *)signal->getDataPtrSend();
+    ord->backupId = ptr.p->backupId;
+    ord->backupPtr = ptr.i;
+    ord->requestType = AbortBackupOrd::LogBufferFull;
+    ord->senderData = ptr.i;
+    execABORT_BACKUP_ORD(signal);
+  }
 }
 
 void Backup::execBACKUP_FRAGMENT_COMPLETE_REP(Signal *signal) {
@@ -9291,6 +9324,8 @@ void Backup::backupFragmentRef(Signal *signal, BackupFilePtr filePtr) {
   ref->backupPtr = ptr.i;
   ref->nodeId = getOwnNodeId();
   ref->errorCode = filePtr.p->errorCode;
+  ref->tableId = filePtr.p->tableId;
+  ref->fragmentNo = filePtr.p->fragmentNo;
   sendSignal(ptr.p->masterRef, GSN_BACKUP_FRAGMENT_REF, signal,
              BackupFragmentRef::SignalLength, JBB);
 }
