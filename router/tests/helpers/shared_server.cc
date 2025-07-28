@@ -27,6 +27,8 @@
 
 #include <gtest/gtest.h>
 
+#include <iomanip>
+
 #include "mysql/harness/stdx/expected.h"
 #include "mysql/harness/stdx/expected_ostream.h"
 #include "mysqlrouter/utils.h"  // copy_file
