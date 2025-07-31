@@ -12378,6 +12378,13 @@ bool Sql_cmd_secondary_load_unload::mysql_secondary_load_or_unload(
     my_error(ER_SECONDARY_ENGINE, MYF(0), "No secondary engine defined");
     return true;
   }
+  // SECONDARY_LOAD/SECONDARY_UNLOAD cannot be performed on temporary tables.
+  if (table_list->table->s->tmp_table != NO_TMP_TABLE) {
+    my_error(ER_SECONDARY_ENGINE, MYF(0),
+             "No explicit load/unload possible for temporary tables with "
+             "secondary engine");
+    return true;
+  }
   if (!is_load && secondary_engine_lock_tables_mode(*thd)) {
     if (thd->mdl_context.upgrade_shared_lock(table_list->table->mdl_ticket,
                                              mdl_type,
@@ -12410,14 +12417,6 @@ bool Sql_cmd_secondary_load_unload::mysql_secondary_load_or_unload(
 
     // Mark column as eligible for loading.
     table_list->table->mark_column_used(*field, MARK_COLUMNS_READ);
-  }
-
-  // SECONDARY_LOAD/SECONDARY_UNLOAD cannot be performed on temporary tables.
-  if (table_list->table->s->tmp_table != NO_TMP_TABLE) {
-    my_error(ER_SECONDARY_ENGINE, MYF(0),
-             "No explicit load/unload possible for temporary tables with "
-             "secondary engine");
-    return true;
   }
 
   handlerton *hton = table_list->table->s->db_type();
