@@ -5732,6 +5732,7 @@ void Dblqh::execLQHKEYREQ(Signal* signal)
   TcConnectionrecPtr tcConnectptr;
   tcConnectptr.i = RNIL;
 
+  terrorCode = 0;
   {
     const NodeBitmask& all = globalTransporterRegistry.get_status_overloaded();
     if (unlikely(!all.isclear()))
@@ -11176,6 +11177,7 @@ void Dblqh::abortErrorLab(Signal* signal, TcConnectionrecPtr tcConnectptr)
   TcConnectionrec * const regTcPtr = tcConnectptr.p;
   if (regTcPtr->abortState == TcConnectionrec::ABORT_IDLE) {
     jam();
+    ndbrequire(terrorCode != 0);
     regTcPtr->abortState = TcConnectionrec::ABORT_FROM_LQH;
     regTcPtr->errorCode = terrorCode;
   }//if
@@ -11392,6 +11394,7 @@ void Dblqh::continueAfterLogAbortWriteLab(
     jam();
     TcKeyRef * const tcKeyRef = (TcKeyRef *) signal->getDataPtrSend();
     
+    ndbrequire(regTcPtr->errorCode != 0);
     tcKeyRef->connectPtr = regTcPtr->applOprec;
     tcKeyRef->transId[0] = regTcPtr->transid[0];
     tcKeyRef->transId[1] = regTcPtr->transid[1];
@@ -11406,6 +11409,7 @@ void Dblqh::continueAfterLogAbortWriteLab(
     LqhKeyRef * const lqhKeyRef = (LqhKeyRef *)signal->getDataPtrSend();
 
     jam();
+    ndbrequire(regTcPtr->errorCode != 0);
     lqhKeyRef->userRef = regTcPtr->clientConnectrec;
     lqhKeyRef->connectPtr = regTcPtr->tcOprec;
     lqhKeyRef->errorCode = regTcPtr->errorCode;
