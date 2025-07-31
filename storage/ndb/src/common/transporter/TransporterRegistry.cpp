@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -825,8 +825,7 @@ TransporterRegistry::prepareSendTemplate(
   }
   else if(
     likely((ioStates[nodeId] != HaltOutput) && (ioStates[nodeId] != HaltIO)) || 
-           (signalHeader->theReceiversBlockNumber == QMGR) ||
-           (signalHeader->theReceiversBlockNumber == API_CLUSTERMGR))
+    is_permitted_halt_signal(signalHeader))
   {
     if (likely(sendHandle->isSendEnabled(nodeId)))
     {
@@ -2882,6 +2881,21 @@ calculate_send_buffer_level(Uint64 node_send_buffer_size,
     level = SB_CRITICAL_LEVEL;
     return;
   }
+}
+
+bool TransporterRegistry::is_permitted_halt_signal(
+    const SignalHeader *signalHeader) {
+  /**
+   * LowLevel signals are permitted in HaltInput or HaltOutput
+   * states, and must be directly between QMGR + API_CLUSTERMGR
+   * blocks only
+   */
+  return (  // receiverLowLevel
+      ((signalHeader->theReceiversBlockNumber == QMGR) ||
+       (signalHeader->theReceiversBlockNumber == API_CLUSTERMGR)) &&
+      (  // senderLowLevel
+          ((signalHeader->theSendersBlockRef == QMGR) ||
+           (signalHeader->theSendersBlockRef == API_CLUSTERMGR))));
 }
 
 template class Vector<TransporterRegistry::Transporter_interface>;

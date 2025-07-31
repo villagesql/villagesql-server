@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2021, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -316,9 +316,8 @@ TransporterRegistry::unpack(TransporterReceiveHandle & recvHandle,
     {
       loop_count++;
 
-      Uint32 rBlockNum = signalHeader.theReceiversBlockNumber;
-
-      if(rBlockNum == QMGR){
+      if (TransporterRegistry::is_permitted_halt_signal(&signalHeader))
+      {
 	Uint32 sBlockNum = signalHeader.theSendersBlockRef;
 	sBlockNum = numberToRef(sBlockNum, remoteNodeId);
 	signalHeader.theSendersBlockRef = sBlockNum;
@@ -326,7 +325,9 @@ TransporterRegistry::unpack(TransporterReceiveHandle & recvHandle,
 	doStopReceiving = recvHandle.deliver_signal(&signalHeader, prio, signalData, ptr);
       } else {
 	DEBUG("prepareReceive(...) - Discarding message to block: "
-	      << rBlockNum << " from Node: " << remoteNodeId);
+	      << signalHeader.theReceiversBlockNumber 
+              << " from BlockNumber :" << signalHeader.theSendersBlockRef
+              << " on Node: " << remoteNodeId);
       }//if
     }//while
   }//if
@@ -415,9 +416,8 @@ TransporterRegistry::unpack(TransporterReceiveHandle & recvHandle,
     {
       loop_count++;
 
-      Uint32 rBlockNum = signalHeader.theReceiversBlockNumber;
-
-      if(rBlockNum == 252){
+      if (TransporterRegistry::is_permitted_halt_signal(&signalHeader))
+      {
 	Uint32 sBlockNum = signalHeader.theSendersBlockRef;
 	sBlockNum = numberToRef(sBlockNum, remoteNodeId);
 	signalHeader.theSendersBlockRef = sBlockNum;
@@ -425,7 +425,9 @@ TransporterRegistry::unpack(TransporterReceiveHandle & recvHandle,
 	doStopReceiving = recvHandle.deliver_signal(&signalHeader, prio, signalData, ptr);
       } else {
 	DEBUG("prepareReceive(...) - Discarding message to block: "
-	      << rBlockNum << " from Node: " << remoteNodeId);
+              << signalHeader.theReceiversBlockNumber
+              << " from BlockNumber :" << signalHeader.theSendersBlockRef
+              << " on Node: " << remoteNodeId);
       }//if
     }//while
   }//if
