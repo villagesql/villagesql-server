@@ -269,6 +269,11 @@ struct JoinHypergraph {
   /// the root cause.
   bool has_reordered_left_joins = false;
 
+  // True if estimates for one or more Nodes in the graph have been provided
+  // by the secondary engine (i.e. at least one Node has the field `cardinality`
+  // set).
+  bool has_estimates_from_secondary_engine = false;
+
   /// The set of nodes that are on the inner side of some outer join.
   hypergraph::NodeMap nodes_inner_to_outer_join = 0;
 
