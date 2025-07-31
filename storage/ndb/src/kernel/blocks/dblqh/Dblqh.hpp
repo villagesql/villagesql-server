@@ -1336,7 +1336,7 @@ class Dblqh : public SimulatedBlock {
      */
     Uint64 m_redo_written_bytes;
 
-    int tick(Uint32 now, Uint32 maxlag, Uint32 maxlag_cnt);
+    int tick(Uint32 instance, Uint32 now, Uint32 maxlag, Uint32 maxlag_cnt);
     void send_io(Uint32 bytes);
     void complete_io(Uint32 bytes);
     Uint32 get_lag_cnt() { return m_lag_cnt; }
@@ -1700,6 +1700,11 @@ class Dblqh : public SimulatedBlock {
       P_FILE_CHANGE_PROBLEM = 0x4  // 1220
     };
     Uint32 m_log_problems;
+
+    /**
+     * Log part has logged about buffer full
+     */
+    Uint32 m_logged_buffer_full;
 
     /**
      *       A timer that is set every time a log page is sent to disk.
