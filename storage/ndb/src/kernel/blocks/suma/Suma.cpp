@@ -896,7 +896,7 @@ void Suma::check_wait_handover_timeout(Signal *signal) {
             LogLevel ll;
             ll.setLogLevel(LogLevel::llError, 15);
             g_eventLogger->log(NDB_LE_SubscriptionStatus, signal->theData,
-                               signal->getLength(), getOwnNodeId(), &ll);
+                               signal->getLength(), 0, &ll);
 
             /**
              * Force API_FAILREQ

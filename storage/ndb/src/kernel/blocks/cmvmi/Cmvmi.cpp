@@ -592,7 +592,9 @@ void Cmvmi::execEVENT_REP(Signal *signal) {
   m_saved_event_buffer[saveBuf].save(data, sz);
 
   // Print the event info
-  g_eventLogger->log(eventReport->getEventType(), data, sz, 0, &clogLevel);
+  Uint32 remoteNodeId = (nodeId == getOwnNodeId()) ? 0 : nodeId;
+  g_eventLogger->log(eventReport->getEventType(), data, sz, remoteNodeId,
+                     &clogLevel);
 
   if (num_sections > 0) {
     releaseSections(handle);

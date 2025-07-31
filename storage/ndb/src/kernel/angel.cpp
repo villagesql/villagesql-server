@@ -236,8 +236,7 @@ static void reportShutdown(const ndb_mgm_configuration *config, NodeId nodeid,
   LogLevel ll;
   // llStartUp are log category for NDB_LE_NDBStopXXX event types [sic!]
   ll.setLogLevel(LogLevel::llStartUp, 15);
-  g_eventLogger->log(rep->getEventType(), theData, length, rep->getNodeId(),
-                     &ll);
+  g_eventLogger->log(rep->getEventType(), theData, length, 0, &ll);
 
   // Log event to cluster log
   ndb_mgm_configuration_iterator iter(config, CFG_SECTION_NODE);
