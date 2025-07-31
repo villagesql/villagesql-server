@@ -294,6 +294,18 @@ void Configuration::setupConfiguration() {
   }
 
   /**
+   * Setup g_eventLogger log levels for logevents.
+   */
+
+  for (unsigned j = 0; j < LogLevel::LOGLEVEL_CATEGORIES; j++) {
+    Uint32 level;
+    LogLevel &logLevel = g_eventLogger->m_logLevel;
+    if (!iter.get(CFG_MIN_LOGLEVEL + j, &level)) {
+      logLevel.setLogLevel((LogLevel::EventCategory)j, level);
+    }
+  }
+
+  /**
    * Iff we use the 'default' (non-mt) send buffer implementation, the
    * send buffers are allocated here.
    */
