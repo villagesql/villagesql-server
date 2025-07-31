@@ -145,15 +145,6 @@ Cmvmi::Cmvmi(Block_context &ctx)
   subscriberPool.setSize(5);
   c_syncReqPool.setSize(5);
 
-  const ndb_mgm_configuration_iterator *db =
-      m_ctx.m_config.getOwnConfigIterator();
-  for (unsigned j = 0; j < LogLevel::LOGLEVEL_CATEGORIES; j++) {
-    Uint32 logLevel;
-    if (!ndb_mgm_get_int_parameter(db, CFG_MIN_LOGLEVEL + j, &logLevel)) {
-      clogLevel.setLogLevel((LogLevel::EventCategory)j, logLevel);
-    }
-  }
-
   ndb_mgm_configuration_iterator *iter =
       m_ctx.m_config.getClusterConfigIterator();
   for (ndb_mgm_first(iter); ndb_mgm_valid(iter); ndb_mgm_next(iter)) {
@@ -593,8 +584,7 @@ void Cmvmi::execEVENT_REP(Signal *signal) {
 
   // Print the event info
   Uint32 remoteNodeId = (nodeId == getOwnNodeId()) ? 0 : nodeId;
-  g_eventLogger->log(eventReport->getEventType(), data, sz, remoteNodeId,
-                     &clogLevel);
+  g_eventLogger->log(eventReport->getEventType(), data, sz, remoteNodeId);
 
   if (num_sections > 0) {
     releaseSections(handle);
