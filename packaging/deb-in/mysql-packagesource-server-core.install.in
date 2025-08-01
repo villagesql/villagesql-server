@@ -52,6 +52,9 @@ usr/share/man/man1/mysqld_safe.1
 usr/share/man/man1/perror.1
 usr/share/man/man8/mysqld.8
 # private shared libraries
+usr/lib/mysql/private/libicui18n.so.77.1
+usr/lib/mysql/private/libicustubdata.so.77.1
+usr/lib/mysql/private/libicuuc.so.77.1
 usr/lib/mysql/private/libprotobuf-lite.so.24.4.0
 usr/lib/mysql/private/libprotobuf.so.24.4.0
 usr/lib/mysql/private/libabsl_bad_any_cast_impl.so

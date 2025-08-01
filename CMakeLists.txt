@@ -2189,6 +2189,14 @@ IF(HAVE_ASAN AND MY_COMPILER_IS_CLANG AND WITH_PROTOBUF STREQUAL "bundled")
   ADD_COMPILE_OPTIONS(-mllvm -asan-use-private-alias=1)
 ENDIF()
 
+# Are we using "bundled" ICU? Shared libs currently only used on Linux.
+IF(TARGET icuuc)
+  GET_TARGET_PROPERTY(type icuuc TYPE)
+  IF(type MATCHES "SHARED_LIBRARY")
+    SET(ADD_INSTALL_RPATH_FOR_ICU 1)
+  ENDIF()
+ENDIF()
+
 IF(WITH_PROTOBUF STREQUAL "bundled" OR WITH_FIDO STREQUAL "bundled")
   # Protobuf library is a target, installed to <root>/${INSTALL_PRIV_LIBDIR}
   # INSTALL_RPATH must be set for all binaries linking with libprotobuf.

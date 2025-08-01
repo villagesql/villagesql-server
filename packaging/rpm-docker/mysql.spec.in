@@ -122,7 +122,7 @@ BuildRequires:  zlib-devel
 BuildRoot:      %(mktemp -ud %{_tmppath}/%{name}-%{version}-%{release}-XXXXXX)
 
 # For rpm => 4.9 only: https://fedoraproject.org/wiki/Packaging:AutoProvidesAndRequiresFiltering
-%global _privatelibs libabsl_.*|libprotobuf.*|libfido2.*|libpolyglot.*
+%global _privatelibs libabsl_.*|libicu.*|libprotobuf.*|libfido2.*|libpolyglot.*
 %global _privateperl perl\\((GD|hostnames|lib::mtr|lib::v1|mtr_|My::)
 %global __requires_exclude ^((%{_privatelibs})|(%{_privateperl}))
 %global __provides_exclude_from ^(/usr/share/(mysql|mysql-test)/.*|%{_libdir}/mysql/plugin/.*\\.so|%{_libdir}/mysql/private/.*|%{_libdir}/mysqlrouter/.*)$
@@ -488,6 +488,9 @@ rm -r $(readlink var) var
 %attr(755, root, root) %{_bindir}/mysql_migrate_keyring
 
 %dir %{_libdir}/mysql/private
+%attr(755, root, root) %{_libdir}/mysql/private/libicui18n.so.77.1
+%attr(755, root, root) %{_libdir}/mysql/private/libicustubdata.so.77.1
+%attr(755, root, root) %{_libdir}/mysql/private/libicuuc.so.77.1
 %attr(755, root, root) %{_libdir}/mysql/private/libprotobuf-lite.so.24.4.0
 %attr(755, root, root) %{_libdir}/mysql/private/libprotobuf.so.24.4.0
 %attr(755, root, root) %{_libdir}/mysql/private/libabsl_bad_any_cast_impl.so
