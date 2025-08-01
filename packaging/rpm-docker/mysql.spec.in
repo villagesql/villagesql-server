@@ -365,6 +365,8 @@ for p in \
          component_test_sys_var_service_str.so \
          component_test_session_var_service.so \
          component_test_table_access.so \
+         component_test_telemetry_resource_provider.so \
+         component_test_telemetry_secret_provider.so \
          component_test_udf_aggregate.so \
          component_test_udf_registration.so \
          component_test_udf_services.so \
@@ -721,6 +723,10 @@ rm -r $(readlink var) var
 %dir %attr(750, mysql, mysql) /var/lib/mysql-keyring
 
 %changelog
+* Fri Aug  1 2025 Marc Alff <marc.alff@oracle.com> - 9.5.0-1
+- Added component_test_telemetry_resource_provider
+- Added component_test_telemetry_secret_provider
+
 * Fri Jun 27 2025 Murthy Sidagam <venkata.sidagam@oracle.com> - 9.5.0-1
 - Added component_keyring_kmip.so component
 

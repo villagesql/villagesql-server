@@ -1135,6 +1135,8 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_runtime_error.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_system_variable_set.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_table_access.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_telemetry_resource_provider.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_telemetry_secret_provider.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_deinit.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_deinit_no_deadlock.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_init_fail.so
@@ -1246,6 +1248,8 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_udf_aggregate.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_mysql_system_variable_set.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_table_access.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_telemetry_resource_provider.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_telemetry_secret_provider.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_deinit.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_deinit_no_deadlock.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_init_fail.so
@@ -1411,6 +1415,10 @@ fi
 %endif # with_router
 
 %changelog
+* Fri Aug  1 2025 Marc Alff <marc.alff@oracle.com> - 9.5.0-1
+- Added component_test_telemetry_resource_provider
+- Added component_test_telemetry_secret_provider
+
 * Wed Jun 11 2025 Krzysztof Horszczaruk <krzysztof.horszczaruk@oracle.com> - 9.5.0-1
 - Added component_test_component_init_fail
 
