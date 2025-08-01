@@ -3908,7 +3908,8 @@ void Dblqh::timer_handling(Signal *signal)
   {
     jam();
     ptrCheckGuard(logPartPtr, clogPartFileSize, logPartRecord);
-    int ret = logPartPtr.p->m_io_tracker.tick(10 * cLqhTimeOutCount,
+    int ret = logPartPtr.p->m_io_tracker.tick(instance(),
+                                              10 * cLqhTimeOutCount,
                                               c_max_redo_lag,
                                               c_max_redo_lag_counter);
     if (ret < 0)
@@ -8695,6 +8696,52 @@ Dblqh::logLqhkeyreqLab_problems(Signal * signal,
   abortErrorLab(signal, tcConnectptr);
 }
 
+static const char *logProblemName(Uint32 logProblem) {
+  switch (logProblem) {
+    case Dblqh::LogPartRecord::P_TAIL_PROBLEM:
+      return "Low space";
+    case Dblqh::LogPartRecord::P_REDO_IO_PROBLEM:
+      return "Generation rate exceeds write rate";
+    case Dblqh::LogPartRecord::P_FILE_CHANGE_PROBLEM:
+      return "Next file not open on time";
+    default:
+      assert(false);
+      return "Unknown";
+  }
+}
+
+static const size_t MaxProblemSetLen = 100;
+
+static const char *logProblemSet(char *buff, size_t buffLen,
+                                 Uint32 logProblems) {
+  bool first = true;
+  buff[0] = 0;
+  const char* b = buff;
+  if (logProblems & Dblqh::LogPartRecord::P_TAIL_PROBLEM) {
+    size_t s = BaseString::snprintf(buff, buffLen, "%s",
+        logProblemName(Dblqh::LogPartRecord::P_TAIL_PROBLEM));
+    buffLen -= s;
+    buff += s;
+    first = false;
+  }
+  if (logProblems & Dblqh::LogPartRecord::P_REDO_IO_PROBLEM) {
+    size_t s = BaseString::snprintf(buff, buffLen, "%s%s", (first ? "" : ", "),
+        logProblemName(Dblqh::LogPartRecord::P_REDO_IO_PROBLEM));
+    buffLen -= s;
+    buff += s;
+    first = false;
+  }
+  if (logProblems & Dblqh::LogPartRecord::P_FILE_CHANGE_PROBLEM) {
+    size_t s = BaseString::snprintf(
+        buff, buffLen, "%s%s", (first ? "" : ", "),
+        logProblemName(Dblqh::LogPartRecord::P_FILE_CHANGE_PROBLEM));
+    buffLen -= s;
+    buff += s;
+    first = false;
+  }
+  return b;
+}
+
 void
 Dblqh::update_log_problem(Signal* signal, Ptr<LogPartRecord> partPtr,
                           Uint32 problem, bool value)
@@ -8710,6 +8757,12 @@ Dblqh::update_log_problem(Signal* signal, Ptr<LogPartRecord> partPtr,
     {
       jam();
       problems |= problem;
+
+      char buff[MaxProblemSetLen];
+      logProblemSet(buff, MaxProblemSetLen, problems);
+      g_eventLogger->info("LQH %u : Redo log part %u problem started : %s.  (%s)",
+                          instance(), partPtr.p->logPartNo,
+                          logProblemName(problem), buff);
     }
   }
   else
@@ -8722,6 +8775,12 @@ Dblqh::update_log_problem(Signal* signal, Ptr<LogPartRecord> partPtr,
     {
       jam();
       problems &= ~(Uint32)problem;
+
+      char buff[MaxProblemSetLen];
+      logProblemSet(buff, MaxProblemSetLen, problems);
+      g_eventLogger->info(
+          "LQH %u : Redo log part %u problem cleared : %s.  (%s)", instance(),
+          partPtr.p->logPartNo, logProblemName(problem), buff);
 
       if (partPtr.p->LogLqhKeyReqSent == ZFALSE &&
           (!partPtr.p->m_log_prepare_queue.isEmpty() ||
@@ -22607,6 +22666,15 @@ void Dblqh::releaseLogpage(Signal* signal)
 #endif
 
   cnoOfLogPages++;
+  if (unlikely(m_logged_buffer_full == 1)) {
+    if (cnoOfLogPages > ((2 * clogPageFileSize) / 10)) {
+      jam();
+      /* At least 20% free, log */
+      g_eventLogger->info("LQH %u : Redo buffer not full",
+                          instance());
+      m_logged_buffer_full = 0;
+    }
+  }
   logPagePtr.p->logPageWord[ZNEXT_PAGE] = cfirstfreeLogPage;
   logPagePtr.p->logPageWord[ZPOS_IN_WRITING]= 0;
   logPagePtr.p->logPageWord[ZPOS_IN_FREE_LIST]= 1;
@@ -22648,6 +22716,15 @@ void Dblqh::seizeLogfile(Signal* signal)
 void Dblqh::seizeLogpage(Signal* signal) 
 {
   cnoOfLogPages--;
+  if (cnoOfLogPages < ZMIN_LOG_PAGES_OPERATION)
+  {
+    if (unlikely(m_logged_buffer_full == 0)) {
+      jam();
+      g_eventLogger->info("LQH %u : Redo buffer full",
+                          instance());
+      m_logged_buffer_full = 1;
+    }
+  }
   logPagePtr.i = cfirstfreeLogPage;
   ptrCheckGuard(logPagePtr, clogPageFileSize, logPageRecord);
 /* ------------------------------------------------------------------------- */
@@ -32786,7 +32863,7 @@ Dblqh::IOTracker::init(Uint32 partNo)
 }
 
 int
-Dblqh::IOTracker::tick(Uint32 now, Uint32 maxlag, Uint32 maxlag_cnt)
+Dblqh::IOTracker::tick(Uint32 instance, Uint32 now, Uint32 maxlag, Uint32 maxlag_cnt)
 {
   Uint32 t = m_current_time;
 
@@ -32821,9 +32898,10 @@ Dblqh::IOTracker::tick(Uint32 now, Uint32 maxlag, Uint32 maxlag_cnt)
     Uint32 lag = bps ? m_sum_outstanding_bytes / bps : 30;
     if (false && lag >= 30)
     {
-      g_eventLogger->info("part: %u tick(%u) m_sample_completed_bytes: %ukb "
+      g_eventLogger->info("LQH %u : Redo log part %u tick(%u) m_sample_completed_bytes: %ukb "
                           "m_sample_sent_bytes: %ukb elapsed: %u kbps: %u lag:"
                           " %u",
+                          instance,
                           m_log_part_no,
                           now,
                           Uint32(m_sample_completed_bytes / 1024),
@@ -32853,6 +32931,7 @@ Dblqh::IOTracker::tick(Uint32 now, Uint32 maxlag, Uint32 maxlag_cnt)
        *   increase m_lag_cnt and check if it has reached maxlag_cnt
        */
       Uint32 tmp = m_lag_cnt;
+      // Check precedence in below function - what is it implementing?
       m_lag_cnt += (lag / (maxlag)?maxlag:1);
       if (tmp < maxlag_cnt && m_lag_cnt >= maxlag_cnt)
       {
@@ -32878,13 +32957,15 @@ Dblqh::IOTracker::tick(Uint32 now, Uint32 maxlag, Uint32 maxlag_cnt)
     }
     else if (lag > 0 && m_lag_cnt == 0)
     {
-      g_eventLogger->info("part: %u : time to complete: %u",
-                          m_log_part_no, lag);
+      g_eventLogger->info(
+          "LQH %u : Redo log part %u : Lag - time to complete : %us", instance,
+          m_log_part_no, lag);
     }
     else if (m_lag_cnt < maxlag_cnt && m_lag_cnt == save_lag_cnt)
     {
-      g_eventLogger->info("part: %u : time to complete: %u lag_cnt:"
+      g_eventLogger->info("LQH %u : Redo log part %u : Lag - time to complete : %us lag count :"
                           " %u => %u => retVal: %d",
+                          instance,
                           m_log_part_no,
                           lag,
                           save_lag_cnt,
@@ -32893,9 +32974,10 @@ Dblqh::IOTracker::tick(Uint32 now, Uint32 maxlag, Uint32 maxlag_cnt)
     }
     else
     {
-      g_eventLogger->info("part: %u : sum_outstanding: %ukb avg_written:"
+      g_eventLogger->info("LQH %u : Redo log part %u : Lag - sum_outstanding: %ukb avg_written:"
                           " %ukb avg_elapsed: %ums time to complete:"
-                          " %u lag_cnt: %u => %u retVal: %d",
+                          " %us lag_cnt: %u => %u retVal: %d",
+                          instance,
                           m_log_part_no,
                           Uint32(m_sum_outstanding_bytes / 1024),
                           Uint32(m_curr_written_bytes/1024),

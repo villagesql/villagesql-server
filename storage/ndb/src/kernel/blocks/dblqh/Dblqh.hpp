@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2023, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -1254,7 +1254,7 @@ public:
      */
     Uint64 m_redo_written_bytes;
 
-    int tick(Uint32 now, Uint32 maxlag, Uint32 maxlag_cnt);
+    int tick(Uint32 instance, Uint32 now, Uint32 maxlag, Uint32 maxlag_cnt);
     void send_io(Uint32 bytes);
     void complete_io(Uint32 bytes);
     Uint32 get_lag_cnt()
@@ -3676,6 +3676,7 @@ private:
   Uint32 c_o_direct_sync_flag;
   Uint32 m_use_om_init;
   Uint32 c_error_insert_table_id;
+  Uint32 m_logged_buffer_full;
 
 #ifndef NO_REDO_PAGE_CACHE
   /***********************************************************
