@@ -10219,24 +10219,36 @@ static const char *logProblemName(Uint32 logProblem) {
 
 static constexpr size_t MaxProblemSetLen = 100;
 
-static const char *logProblemSet(cstrbuf<MaxProblemSetLen> &buff,
+static const char *logProblemSet(char *buff, size_t buffLen,
                                  Uint32 logProblems) {
   bool first = true;
+  buff[0] = 0;
+  const char *b = buff;
   if (logProblems & Dblqh::LogPartRecord::P_TAIL_PROBLEM) {
-    buff.append(logProblemName(Dblqh::LogPartRecord::P_TAIL_PROBLEM));
+    size_t s = BaseString::snprintf(
+        buff, buffLen, "%s",
+        logProblemName(Dblqh::LogPartRecord::P_TAIL_PROBLEM));
+    buffLen -= s;
+    buff += s;
     first = false;
   }
   if (logProblems & Dblqh::LogPartRecord::P_REDO_IO_PROBLEM) {
-    buff.appendf("%s%s", (first ? "" : ", "),
-                 logProblemName(Dblqh::LogPartRecord::P_REDO_IO_PROBLEM));
+    size_t s = BaseString::snprintf(
+        buff, buffLen, "%s%s", (first ? "" : ", "),
+        logProblemName(Dblqh::LogPartRecord::P_REDO_IO_PROBLEM));
+    buffLen -= s;
+    buff += s;
     first = false;
   }
   if (logProblems & Dblqh::LogPartRecord::P_FILE_CHANGE_PROBLEM) {
-    buff.appendf("%s%s", (first ? "" : ", "),
-                 logProblemName(Dblqh::LogPartRecord::P_FILE_CHANGE_PROBLEM));
+    size_t s = BaseString::snprintf(
+        buff, buffLen, "%s%s", (first ? "" : ", "),
+        logProblemName(Dblqh::LogPartRecord::P_FILE_CHANGE_PROBLEM));
+    buffLen -= s;
+    buff += s;
     first = false;
   }
-  return buff.c_str();
+  return b;
 }
 
 void Dblqh::update_log_problem(Signal *signal, LogPartRecord *partPtrP,
@@ -10251,11 +10263,11 @@ void Dblqh::update_log_problem(Signal *signal, LogPartRecord *partPtrP,
       jam();
       problems |= problem;
 
-      cstrbuf<MaxProblemSetLen> buff;
-      logProblemSet(buff, problems);
-      g_eventLogger->info("LQH %u : Redo log part %u problem start : %s.  (%s)",
-                          instance(), partPtrP->logPartNo,
-                          logProblemName(problem), buff.c_str());
+      char buff[MaxProblemSetLen];
+      logProblemSet(buff, MaxProblemSetLen, problems);
+      g_eventLogger->info(
+          "LQH %u : Redo log part %u problem started : %s.  (%s)", instance(),
+          partPtrP->logPartNo, logProblemName(problem), buff);
     }
   } else {
     /**
@@ -10266,11 +10278,11 @@ void Dblqh::update_log_problem(Signal *signal, LogPartRecord *partPtrP,
       jam();
       problems &= ~(Uint32)problem;
 
-      cstrbuf<MaxProblemSetLen> buff;
-      logProblemSet(buff, problems);
+      char buff[MaxProblemSetLen];
+      logProblemSet(buff, MaxProblemSetLen, problems);
       g_eventLogger->info(
           "LQH %u : Redo log part %u problem cleared : %s.  (%s)", instance(),
-          partPtrP->logPartNo, logProblemName(problem), buff.c_str());
+          partPtrP->logPartNo, logProblemName(problem), buff);
 
       if (partPtrP->LogLqhKeyReqSent == ZFALSE &&
           (!partPtrP->m_log_prepare_queue.isEmpty() ||
