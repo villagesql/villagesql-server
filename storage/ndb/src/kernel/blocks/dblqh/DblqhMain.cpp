@@ -10253,7 +10253,7 @@ void Dblqh::update_log_problem(Signal *signal, LogPartRecord *partPtrP,
 
       cstrbuf<MaxProblemSetLen> buff;
       logProblemSet(buff, problems);
-      g_eventLogger->info("LQH %u : Redo log part %u problem start : %s.  (%s)",
+      g_eventLogger->info("LQH %u : Redo log part %u problem started : %s.  (%s)",
                           instance(), partPtrP->logPartNo,
                           logProblemName(problem), buff.c_str());
     }
