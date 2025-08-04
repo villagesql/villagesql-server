@@ -143,6 +143,8 @@ usr/lib/mysql/private/libpolyglot.so
 usr/lib/mysql/plugin/component_test_global_priv_registration.so
 usr/lib/mysql/plugin/component_test_page_track_component.so
 usr/bin/mysql_test_jwt_generator
+usr/lib/mysql/plugin/component_test_telemetry_resource_provider.so
+usr/lib/mysql/plugin/component_test_telemetry_secret_provider.so
 ")
 
   SET (DEB_INSTALL_CLIENT_PLUGINS

@@ -1135,8 +1135,10 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_runtime_error.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_system_variable_set.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_table_access.so
+%if 0%{?commercial}
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_telemetry_resource_provider.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_telemetry_secret_provider.so
+%endif # commercial
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_deinit.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_deinit_no_deadlock.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_component_init_fail.so
@@ -1248,8 +1250,10 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_udf_aggregate.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_mysql_system_variable_set.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_table_access.so
+%if 0%{?commercial}
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_telemetry_resource_provider.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_telemetry_secret_provider.so
+%endif # commercial
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_deinit.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_deinit_no_deadlock.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_component_init_fail.so

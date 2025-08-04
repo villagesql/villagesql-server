@@ -197,8 +197,6 @@ usr/lib/mysql/plugin/debug/component_test_udf_aggregate.so
 usr/lib/mysql/plugin/debug/component_test_udf_services.so
 usr/lib/mysql/plugin/debug/component_test_mysql_system_variable_set.so
 usr/lib/mysql/plugin/debug/component_test_table_access.so
-usr/lib/mysql/plugin/debug/component_test_telemetry_resource_provider.so
-usr/lib/mysql/plugin/debug/component_test_telemetry_secret_provider.so
 usr/lib/mysql/plugin/debug/component_test_sensitive_system_variables.so
 usr/lib/mysql/plugin/debug/component_test_status_var_reader.so
 usr/lib/mysql/plugin/debug/component_test_server_telemetry_logs_client.so
@@ -248,6 +246,7 @@ usr/lib/mysql/plugin/debug/component_replication_applier_metrics.so
 usr/lib/mysql/plugin/debug/component_firewall.so
 usr/lib/mysql/plugin/debug/authentication_webauthn.so
 ")
+
   ENDIF()
 
   IF (DEB_AWS_SDK)
@@ -268,9 +267,12 @@ usr/lib/mysql/plugin/debug/component_keyring_aws.so
       MESSAGE(STATUS "Environment variable AWS_VER not set, skip packaging component_keyring_aws.")
     ENDIF()
   ENDIF()
+
   SET (DEB_INSTALL_DEBUG_TEST_PLUGINS "${DEB_INSTALL_DEBUG_TEST_PLUGINS}
 usr/lib/mysql/plugin/debug/component_test_global_priv_registration.so
 usr/lib/mysql/plugin/debug/component_test_page_track_component.so
+usr/lib/mysql/plugin/debug/component_test_telemetry_resource_provider.so
+usr/lib/mysql/plugin/debug/component_test_telemetry_secret_provider.so
 ")
 
 ENDIF()
