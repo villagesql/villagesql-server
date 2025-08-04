@@ -699,3 +699,12 @@ DROP TABLE t1;
 --echo #
 
 SELECT CAST(-0.971042 AS TIME);
+
+--echo #
+--echo # Bug#38159825: Assertion failure in my_double_to_time_with_warn
+--echo #
+
+SELECT CAST('21:07:58' / -1345980785 AS TIME) AS f;
+SELECT CAST('21:07:58' / -1345980785 AS TIME(6)) AS f;
+SELECT CAST(9 / '-1317798799' AS TIME) AS f;
+SELECT CAST(9 / '-1317798799' AS TIME(6)) AS f;

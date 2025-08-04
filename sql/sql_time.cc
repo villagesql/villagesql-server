@@ -398,8 +398,16 @@ static bool lldiv_t_to_time(lldiv_t lld, MYSQL_TIME *ltime, int *warnings) {
     *warnings |= MYSQL_TIME_WARN_OUT_OF_RANGE;
     return true;
   }
-  return time_add_nanoseconds_adjust_frac(ltime, lld.rem % 1000, warnings,
-                                          current_thd->is_fsp_truncate_mode());
+  if (time_add_nanoseconds_adjust_frac(ltime, lld.rem % 1000, warnings,
+                                       current_thd->is_fsp_truncate_mode())) {
+    return true;
+  }
+  // Do not allow negative zero time
+  if (ltime->neg && ltime->hour == 0 && ltime->minute == 0 &&
+      ltime->second == 0 && ltime->second_part == 0) {
+    ltime->neg = false;
+  }
+  return false;
 }
 
 /**

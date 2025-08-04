@@ -3042,3 +3042,22 @@ DROP TABLE t1;
 SELECT CAST(-0.971042 AS TIME);
 CAST(-0.971042 AS TIME)
 -00:00:01
+#
+# Bug#38159825: Assertion failure in my_double_to_time_with_warn
+#
+SELECT CAST('21:07:58' / -1345980785 AS TIME) AS f;
+f
+00:00:00
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: '21:07:58'
+SELECT CAST('21:07:58' / -1345980785 AS TIME(6)) AS f;
+f
+00:00:00.000000
+Warnings:
+Warning	1292	Truncated incorrect DOUBLE value: '21:07:58'
+SELECT CAST(9 / '-1317798799' AS TIME) AS f;
+f
+00:00:00
+SELECT CAST(9 / '-1317798799' AS TIME(6)) AS f;
+f
+00:00:00.000000
