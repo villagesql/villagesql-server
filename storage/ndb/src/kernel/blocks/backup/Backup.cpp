@@ -2692,8 +2692,10 @@ void Backup::execDUMP_STATE_ORD(Signal *signal) {
 
     for (c_backups.first(ptr); ptr.i != RNIL; c_backups.next(ptr)) {
       g_eventLogger->info(
-          "BackupRecord %u:  BackupId: %u  MasterRef: %x  ClientRef: %x", ptr.i,
-          ptr.p->backupId, ptr.p->masterRef, ptr.p->clientRef);
+          "Reference: %u, BackupRecord %u:  BackupId: %u  MasterRef: %x  "
+          "ClientRef: %x",
+          reference(), ptr.i, ptr.p->backupId, ptr.p->masterRef,
+          ptr.p->clientRef);
       g_eventLogger->info(" State: %u", ptr.p->slaveState.getState());
       g_eventLogger->info(" noOfByte: %llu  noOfRecords: %llu",
                           ptr.p->noOfBytes, ptr.p->noOfRecords);
@@ -2704,8 +2706,9 @@ void Backup::execDUMP_STATE_ORD(Signal *signal) {
       for (ptr.p->files.first(filePtr); filePtr.i != RNIL;
            ptr.p->files.next(filePtr)) {
         g_eventLogger->info(
-            " file %u:  type: %u  flags: H'%x  tableId: %u  fragmentId: %u",
-            filePtr.i, filePtr.p->fileType, filePtr.p->m_flags,
+            "Reference: %u  file %u:  type: %u  flags: H'%x  tableId: %u  "
+            "fragmentId: %u",
+            reference(), filePtr.i, filePtr.p->fileType, filePtr.p->m_flags,
             filePtr.p->tableId, filePtr.p->fragmentNo);
       }
       if (ptr.p->slaveState.getState() == SCANNING &&
@@ -3682,7 +3685,9 @@ void Backup::execNODE_FAILREP(Signal *signal) {
   }  // if
 
 #ifdef DEBUG_ABORT
-  g_eventLogger->info("****************** Node fail rep ******************");
+  g_eventLogger->info(
+      "****************** Node fail rep, reference: %u ******************",
+      reference());
 #endif
 
   NodeId newCoordinator = c_masterNodeId;
@@ -3797,8 +3802,9 @@ void Backup::checkNodeFail(Signal *signal, BackupRecordPtr ptr, NodeId newCoord,
     jam();
     CRASH_INSERTION((10001));
 #ifdef DEBUG_ABORT
-    g_eventLogger->info("**** Master: Node failed: Master id = %u",
-                        refToNode(ptr.p->masterRef));
+    g_eventLogger->info(
+        "**** Master: Node failed: reference: %u, Master id = %u", instance(),
+        refToNode(ptr.p->masterRef));
 #endif
 
     Uint32 gsn, len, pos;
@@ -3875,7 +3881,8 @@ void Backup::checkNodeFail(Signal *signal, BackupRecordPtr ptr, NodeId newCoord,
         jam();
         sendSignal(reference(), gsn, signal, len, JBB);
 #ifdef DEBUG_ABORT
-        g_eventLogger->info("sending %d to self from %d", gsn, i);
+        g_eventLogger->info("reference: %u sending %d to self from %d",
+                            instance(), gsn, i);
 #endif
       }
     }
@@ -4130,6 +4137,11 @@ void Backup::execBACKUP_REQ(Signal *signal) {
       // clean up backup state
       ptr.p->m_gsn = 0;
       ptr.p->masterData.gsn = 0;
+#ifdef DEBUG_ABORT
+      g_eventLogger->info(
+          "execBACKUP_REQ: releasing backupRecord, reference: %u, ptrI: %u",
+          reference(), ptr.i);
+#endif
       c_backups.release(ptr);
       return;
     }
@@ -5713,7 +5725,9 @@ void Backup::reportStatus(Signal *signal, BackupRecordPtr ptr,
 void Backup::masterAbort(Signal *signal, BackupRecordPtr ptr) {
   jam();
 #ifdef DEBUG_ABORT
-  g_eventLogger->info("************ masterAbort");
+  g_eventLogger->info(
+      "************ masterAbort, reference: %u, gsn: %u, errorCode: %u",
+      reference(), ptr.p->masterData.gsn, ptr.p->masterData.errorCode);
 #endif
 
   ndbassert(ptr.p->masterRef == reference());
@@ -5956,8 +5970,22 @@ void Backup::execDEFINE_BACKUP_REQ(Signal *signal) {
 #endif
     if (!c_backups.getPool().seizeId(ptr, ptrI)) {
       jam();
+#ifdef DEBUG_ABORT
+      g_eventLogger->info(
+          "DEFINE_BACKUP_REQ, reference: %u -- Fail to seize BackupRecord, "
+          "ptrI: %u",
+          reference(), ptrI);
+      signal->theData[0] = 23;
+      execDUMP_STATE_ORD(signal);
+#endif
       ndbabort();  // If master has succeeded slave should succeed
     }              // if
+#ifdef DEBUG_ABORT
+    g_eventLogger->info(
+        "DEFINE_BACKUP_REQ, reference: %u -- Successfully seize BackupRecord, "
+        "ptrI: %u",
+        reference(), ptrI);
+#endif
     c_backups.addFirst(ptr);
   }  // if
 
@@ -7438,7 +7466,8 @@ void Backup::execBACKUP_FRAGMENT_REQ(Signal *signal) {
       CLEAR_ERROR_INSERT_VALUE;
       CLEAR_ERROR_INSERT_EXTRA;
       return;
-    } else {  // instance #1 is working on the delayed BACKUP_FRAGMENT_REQ
+    } else {  // If reach this path via EI 10058, instance #1 is working on the
+              // delayed BACKUP_FRAGMENT_REQ
       CLEAR_ERROR_INSERT_VALUE;
       CLEAR_ERROR_INSERT_EXTRA;
     }
@@ -9124,7 +9153,6 @@ void Backup::execSCAN_FRAGCONF(Signal *signal) {
 void Backup::fragmentCompleted(Signal *signal, BackupFilePtr filePtr,
                                Uint32 errCode) {
   jam();
-
   if (filePtr.p->errorCode != 0) {
     jam();
     filePtr.p->m_flags &= ~(Uint32)BackupFile::BF_SCAN_THREAD;
@@ -10388,8 +10416,9 @@ void Backup::closeFiles(Signal *sig, BackupRecordPtr ptr) {
     if (filePtr.p->m_flags & BackupFile::BF_FILE_THREAD) {
       jam();
 #ifdef DEBUG_ABORT
-      g_eventLogger->info("Close files fileRunning == 1, filePtr.i=%u",
-                          filePtr.i);
+      g_eventLogger->info(
+          "Close files fileRunning == 1, filePtr.i=%u, reference: %u",
+          filePtr.i, reference());
 #endif
     } else {
       jam();
@@ -10436,8 +10465,9 @@ void Backup::closeFile(Signal *signal, BackupRecordPtr ptr,
   }
 
 #ifdef DEBUG_ABORT
-  g_eventLogger->info("***** a FSCLOSEREQ filePtr.i = %u flags: %x", filePtr.i,
-                      filePtr.p->m_flags);
+  g_eventLogger->info(
+      "***** a FSCLOSEREQ filePtr.i = %u flags: %x, reference: %u", filePtr.i,
+      filePtr.p->m_flags, reference());
 #endif
   sendSignal(NDBFS_REF, GSN_FSCLOSEREQ, signal, FsCloseReq::SignalLength, JBA);
 }
@@ -10513,7 +10543,8 @@ void Backup::execFSCLOSECONF(Signal *signal) {
   ndbrequire(c_backupFilePool.getPtr(filePtr, filePtrI));
 
 #ifdef DEBUG_ABORT
-  g_eventLogger->info("***** FSCLOSECONF filePtrI = %u", filePtrI);
+  g_eventLogger->info("***** FSCLOSECONF filePtrI = %u, reference: %u",
+                      filePtrI, reference());
 #endif
 
   ndbrequire(filePtr.p->m_flags ==
@@ -10653,6 +10684,7 @@ void Backup::closeFilesDone(Signal *signal, BackupRecordPtr ptr) {
  *****************************************************************************/
 void Backup::execABORT_BACKUP_ORD(Signal *signal) {
   jamEntry();
+
   AbortBackupOrd *ord = (AbortBackupOrd *)signal->getDataPtr();
   const Uint32 backupId = ord->backupId;
   const AbortBackupOrd::RequestType requestType =
@@ -10660,8 +10692,9 @@ void Backup::execABORT_BACKUP_ORD(Signal *signal) {
   const Uint32 senderData = ord->senderData;
 
 #ifdef DEBUG_ABORT
-  g_eventLogger->info("******** ABORT_BACKUP_ORD ********* nodeId = %u",
-                      refToNode(signal->getSendersBlockRef()));
+  g_eventLogger->info(
+      "******** ABORT_BACKUP_ORD ********* nodeId = %u, reference: %u",
+      refToNode(signal->getSendersBlockRef()), reference());
   g_eventLogger->info("backupId = %u, requestType = %u, senderData = %u, ",
                       backupId, requestType, senderData);
   dumpUsedResources();
@@ -10679,8 +10712,8 @@ void Backup::execABORT_BACKUP_ORD(Signal *signal) {
       jam();
       // forward to master
 #ifdef DEBUG_ABORT
-      g_eventLogger->info("---- Forward to master nodeId = %u",
-                          getMasterNodeId());
+      g_eventLogger->info("---- Forward to master nodeId = %u, reference: %u",
+                          getMasterNodeId(), instance());
 #endif
       sendSignal(ptr.p->masterRef, GSN_ABORT_BACKUP_ORD, signal,
                  AbortBackupOrd::SignalLength, JBB);
@@ -10693,8 +10726,9 @@ void Backup::execABORT_BACKUP_ORD(Signal *signal) {
     } else {
       jam();
 #ifdef DEBUG_ABORT
-      g_eventLogger->info("Backup: abort request type=%u on id=%u,%u not found",
-                          requestType, backupId, senderData);
+      g_eventLogger->info(
+          "Backup: reference: %u, abort request type=%u on id=%u,%u not found",
+          reference(), requestType, backupId, senderData);
 #endif
       return;
     }
@@ -10705,9 +10739,9 @@ void Backup::execABORT_BACKUP_ORD(Signal *signal) {
 
   bool ok = false;
   switch (requestType) {
-      /**
-       * Requests sent to master
-       */
+    /**
+     * Requests sent to master
+     */
     case AbortBackupOrd::ClientAbort:
       jam();
       [[fallthrough]];
@@ -10726,11 +10760,15 @@ void Backup::execABORT_BACKUP_ORD(Signal *signal) {
       }
       return;
 
-      /**
-       * Requests sent to slave
-       */
+    /**
+     * Requests sent to slave
+     */
     case AbortBackupOrd::AbortScan:
       jam();
+#ifdef DEBUG_ABORT
+      g_eventLogger->info("ABORT_BACKUP_ORD, reference: %u, requestType: %u",
+                          reference(), requestType);
+#endif
       ptr.p->setErrorCode(requestType);
       return;
 
@@ -10879,15 +10917,22 @@ void Backup::cleanupNextTable(Signal *signal, BackupRecordPtr ptr,
   */
   ptr.p->ctlFilePtr = ptr.p->logFilePtr = ptr.p->dataFilePtr[0] = RNIL;
 
-  if (ptr.p->checkError())
+  if (ptr.p->checkError()) {
+    jam();
     removeBackup(signal, ptr);
-  else {
+  } else {
+    jam();
     /*
       report of backup status uses these variables to keep track
       if backup ia running and current state
     */
     ptr.p->m_gsn = 0;
     ptr.p->masterData.gsn = 0;
+#ifdef DEBUG_ABORT
+    g_eventLogger->info(
+        "CleanupNextTable: releasing backupRecord, reference: %u, ptrI: %u",
+        reference(), ptr.i);
+#endif
     c_backups.release(ptr);
   }
 }
@@ -10941,6 +10986,11 @@ void Backup::execFSREMOVECONF(Signal *signal) {
   */
   ptr.p->m_gsn = 0;
   ptr.p->masterData.gsn = 0;
+#ifdef DEBUG_ABORT
+  g_eventLogger->info(
+      "execFSREMOVECONF: releasing backupRecord, reference: %u, ptrI: %u",
+      reference(), ptr.i);
+#endif
   c_backups.release(ptr);
 }
 

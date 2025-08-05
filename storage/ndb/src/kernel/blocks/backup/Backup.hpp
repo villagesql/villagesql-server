@@ -93,7 +93,6 @@ class Backup : public SimulatedBlock {
   void execNODE_FAILREP(Signal *signal);
   void execINCL_NODEREQ(Signal *signal);
   void execCONTINUEB(Signal *signal);
-
   /**
    * Testing
    */
@@ -168,7 +167,7 @@ class Backup : public SimulatedBlock {
   void execFSWRITECONF(Signal *signal);
 
   /**
-   * Master functinallity
+   * Master functionality
    */
   void execBACKUP_REQ(Signal *signal);
   void execABORT_BACKUP_REQ(Signal *signal);
