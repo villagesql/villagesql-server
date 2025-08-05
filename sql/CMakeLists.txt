@@ -1199,11 +1199,6 @@ IF(APPLE)
   ENDIF()
 ENDIF()
 
-IF(WITH_NDBCLUSTER_STORAGE_ENGINE)
-  MY_ADD_COMPILE_DEFINITIONS(mysqld.cc
-    COMPILE_DEFINITIONS WITH_NDBCLUSTER_STORAGE_ENGINE)
-ENDIF()
-
 IF(WITH_LTO OR CMAKE_COMPILER_FLAG_WITH_LTO)
   # We may get errors in boost/geometry/srs/projections/proj/ob_tran.hpp
   # and several other boost files.
