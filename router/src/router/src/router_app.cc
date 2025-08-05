@@ -337,6 +337,8 @@ void MySQLRouter::init(const std::string &program_name,
 #endif
     );  // throws MySQLSession::Error, std::runtime_error,
         // std::out_of_range, std::logic_error, ...?
+
+    bootstrapper_.commit();
     return;
   }
 

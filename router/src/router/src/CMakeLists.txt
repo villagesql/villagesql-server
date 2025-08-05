@@ -45,6 +45,7 @@ ROUTER_ADD_SHARED_LIBRARY(router_utils
   )
 
 ROUTER_ADD_SHARED_LIBRARY(router_mysql
+  common/accounts_cleaner.cc
   common/log_filter.cc
   common/mysql_session.cc
   common/server_compatibility.cc
