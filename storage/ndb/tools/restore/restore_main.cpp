@@ -60,7 +60,7 @@ extern RestoreLogger restoreLogger;
 static Uint32 g_tableCompabilityMask = 0;
 static int ga_nodeId = 0;
 static int ga_nParallelism = 128;
-static int ga_backupId = 0;
+static Uint32 ga_backupId = 0;
 bool ga_dont_ignore_systab_0 = false;
 static bool ga_no_upgrade = false;
 static bool ga_promote_attributes = false;
@@ -285,7 +285,7 @@ static struct my_option my_long_options[] = {
      "Read encryption password for backup file from stdin",
      &opt_backup_password_from_stdin.opt_value, nullptr, 0, GET_BOOL, NO_ARG, 0,
      0, 0, nullptr, 0, &opt_backup_password_from_stdin},
-    {"backupid", 'b', "Backup id", &ga_backupId, nullptr, nullptr, GET_INT,
+    {"backupid", 'b', "Backup id", &ga_backupId, nullptr, nullptr, GET_UINT,
      REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
     {"decrypt", NDB_OPT_NOSHORT, "Decrypt file", &opt_decrypt, nullptr, nullptr,
      GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
@@ -542,15 +542,15 @@ static bool get_one_option(int optid, const struct my_option *opt,
       break;
     case 'n':
       if (ga_nodeId == 0) {
-        err << "Error in --nodeid,-n setting, see --help";
+        err << "Error in --nodeid,-n setting, see --help" << endl;
         exitHandler(NdbToolsProgramExitCode::WRONG_ARGS);
       }
       info.setLevel(254);
       info << "Nodeid = " << ga_nodeId << endl;
       break;
     case 'b':
-      if (ga_backupId == 0) {
-        err << "Error in --backupid,-b setting, see --help";
+      if (ga_backupId == 0 || ga_backupId == ~Uint32(0)) {
+        err << "Error in --backupid,-b setting, see --help" << endl;
         exitHandler(NdbToolsProgramExitCode::WRONG_ARGS);
       }
       info.setLevel(254);
@@ -2543,7 +2543,7 @@ int detect_backup_format() {
       //      BACKUP-1-PART-1-OF-3 : not found, continue
       //      BACKUP-1-PART-1-OF-4 : FOUND, set ga_part_count and break
       BaseString::snprintf(
-          name, sz, "%s%sBACKUP-%d-PART-1-OF-%u%sBACKUP-%u.%d.ctl",
+          name, sz, "%s%sBACKUP-%u-PART-1-OF-%u%sBACKUP-%u.%d.ctl",
           ga_backupPath, DIR_SEPARATOR, ga_backupId, ga_part_count,
           DIR_SEPARATOR, ga_backupId, ga_nodeId);
       if (my_stat(name, &buf, 0)) {
