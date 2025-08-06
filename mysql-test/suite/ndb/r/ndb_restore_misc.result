@@ -725,3 +725,28 @@ select output_line from ndb_restore_output where output_line like '%not specifie
 output_line
 Backup file node ID not specified, please provide --nodeid
 Backup ID not specified, please provide --backupid
+Test backupid ranges
+Test generation backup with max id (2^32 - 2)
+Check ndb_restore can open max id backup
+Test behaviour with start backup + out-of-range backup ids
+Connected to Management Server at: localhost:<MGMD-PORT>
+Invalid command: backup 0
+Backup ID out of range [1 - 4294967294]
+Type HELP for help.
+
+Connected to Management Server at: localhost:<MGMD-PORT>
+Invalid command: backup 4294967295
+Backup ID out of range [1 - 4294967294]
+Type HELP for help.
+
+Connected to Management Server at: localhost:<MGMD-PORT>
+Invalid command: backup 4294967296
+Backup ID out of range [1 - 4294967294]
+Type HELP for help.
+
+Connected to Management Server at: localhost:<MGMD-PORT>
+Invalid command: backup 999999999999
+Backup ID out of range [1 - 4294967294]
+Type HELP for help.
+
+Test behaviour of ndb_restore with out-of-range backup ids

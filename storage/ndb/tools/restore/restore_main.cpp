@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2003, 2024, Oracle and/or its affiliates.
+   Copyright (c) 2003, 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -49,7 +49,7 @@ extern RestoreLogger restoreLogger;
 static Uint32 g_tableCompabilityMask = 0;
 static int ga_nodeId = 0;
 static int ga_nParallelism = 128;
-static int ga_backupId = 0;
+static Uint32 ga_backupId = 0;
 bool ga_dont_ignore_systab_0 = false;
 static bool ga_no_upgrade = false;
 static bool ga_promote_attributes = false;
@@ -258,7 +258,7 @@ static struct my_option my_long_options[] =
     GET_INT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "backupid", 'b', "Backup id",
     (uchar**) &ga_backupId, (uchar**) &ga_backupId, 0,
-    GET_INT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    GET_UINT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "restore_data", 'r', 
     "Restore table data/logs into NDB Cluster using NDBAPI", 
     (uchar**) &_restore_data, (uchar**) &_restore_data,  0,
@@ -704,7 +704,7 @@ get_one_option(int optid, const struct my_option *opt MY_ATTRIBUTE((unused)),
     info << "Nodeid = " << ga_nodeId << endl;
     break;
   case 'b':
-    if (ga_backupId == 0)
+    if (ga_backupId == 0 || ga_backupId == ~Uint32(0))
     {
       err << "Error in --backupid,-b setting, see --help";
       exit(NdbRestoreStatus::WrongArgs);
