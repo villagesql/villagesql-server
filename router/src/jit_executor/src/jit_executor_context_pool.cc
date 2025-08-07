@@ -83,7 +83,7 @@ void ContextPool::release_thread() {
     auto ctx = m_release_queue.pop();
     m_queued_items--;
     if (ctx) {
-      if (ctx->force_idle()) {
+      if (ctx->wait_for_idle()) {
         do_release(ctx);
       } else {
         discard(ctx);

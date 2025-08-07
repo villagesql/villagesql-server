@@ -113,7 +113,7 @@ class JavaScript : public shcore::polyglot::Java_script_interface {
                            const std::string &code_str) const;
 
   bool is_idle();
-  bool force_idle();
+  bool wait_for_idle();
 
   size_t id() { return m_id; }
 
@@ -131,7 +131,6 @@ class JavaScript : public shcore::polyglot::Java_script_interface {
 
   void create_result(const Value &result, ResultState state = ResultState::Ok);
   void create_result(const shcore::polyglot::Polyglot_error &error);
-  void wait_for_idle();
 
   // Every global function exposed to JavaScript requires:
   // - The function implementation
@@ -152,7 +151,6 @@ class JavaScript : public shcore::polyglot::Java_script_interface {
 
   void resolve_promise(poly_value promise);
   shcore::Value get_session(const std::vector<shcore::Value> &args);
-  void push_result(Result &&result);
 
   struct Get_session {
     static const constexpr char *name = "getSession";
@@ -173,8 +171,7 @@ class JavaScript : public shcore::polyglot::Java_script_interface {
     static const constexpr auto callback = &JavaScript::get_content_set_path;
   };
 
-  void set_processing_state(ProcessingState state,
-                            const std::function<void()> &callback = nullptr);
+  void set_processing_state(ProcessingState state);
 
   // To control the statement execution, the execution thread will be in
   // wait state until a statement arrives

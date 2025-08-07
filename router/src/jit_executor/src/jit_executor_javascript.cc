@@ -82,9 +82,10 @@ void JavaScript::create_result(const Value &result, ResultState state) {
     }
     dumper.append_value("result", result);
     dumper.end_object();
-    push_result({state, dumper.str()});
+
+    m_result.push({state, dumper.str()});
   } else {
-    push_result({state, result.descr(true)});
+    m_result.push({state, result.descr(true)});
   }
 }
 
@@ -139,18 +140,13 @@ void JavaScript::create_result(const Polyglot_error &error) {
     if (state == ResultState::ResourceExhausted) {
       stop_run_thread();
     }
-    push_result({state, dumper.str()});
+    m_result.push({state, dumper.str()});
   } else {
     if (state == ResultState::ResourceExhausted) {
       stop_run_thread();
     }
-    push_result({state, error.format(true)});
+    m_result.push({state, error.format(true)});
   }
-}
-
-void JavaScript::push_result(Result &&result) {
-  set_processing_state(ProcessingState::HoldingResult,
-                       [this, result]() { m_result.push(std::move(result)); });
 }
 
 bool JavaScript::start(size_t id, const std::shared_ptr<IFile_system> &fs,
@@ -345,50 +341,54 @@ namespace {
 }
 }  // namespace
 
-void JavaScript::set_processing_state(ProcessingState state,
-                                      const std::function<void()> &callback) {
+void JavaScript::set_processing_state(ProcessingState state) {
   {
     std::scoped_lock lock{m_processing_state_mutex};
-
-    if (callback) {
-      callback();
-    }
 
     m_processing_state = state;
 
     // log_state(m_id, state);
   }
+
   m_processing_state_condition.notify_one();
 }
 
-void JavaScript::wait_for_idle() {
-  std::unique_lock lock{m_processing_state_mutex};
-  m_processing_state_condition.wait(
-      lock, [this]() { return *m_processing_state == ProcessingState::Idle; });
+bool JavaScript::wait_for_idle() {
+  bool idle = false;
+  bool holding_results = false;
+  {
+    std::unique_lock lock{m_processing_state_mutex};
+
+    // log_state(m_id, m_processing_state, "wait start");
+
+    if (m_processing_state_condition.wait_for(
+            lock, std::chrono::seconds(5), [this]() {
+              return *m_processing_state != ProcessingState::Processing;
+            })) {
+      idle = *m_processing_state == ProcessingState::Idle;
+      holding_results = *m_processing_state == ProcessingState::HoldingResult;
+      if (m_processing_state == ProcessingState::HoldingResult) {
+        Result to_discard;
+        while (m_result.try_pop(to_discard)) {
+          log_error("Releasing stalled result... %s",
+                    to_discard.data.value_or("-").c_str());
+        };
+      }
+    }
+  }
+
+  if (holding_results) {
+    idle = true;
+    set_processing_state(ProcessingState::Idle);
+  }
+
+  // log_state(m_id, m_processing_state, "wait end");
+
+  return idle;
 }
 
 bool JavaScript::is_idle() {
   return *m_processing_state == ProcessingState::Idle;
-}
-
-bool JavaScript::force_idle() {
-  std::unique_lock lock{m_processing_state_mutex};
-
-  if (m_processing_state_condition.wait_for(
-          lock, std::chrono::seconds(5), [this]() {
-            return *m_processing_state != ProcessingState::Processing;
-          })) {
-    if (m_processing_state == ProcessingState::HoldingResult) {
-      Result to_discard;
-      while (m_result.try_pop(to_discard)) {
-        log_error("Releasing stalled result... %s",
-                  to_discard.data.value_or("-").c_str());
-      };
-      set_processing_state(ProcessingState::Idle);
-    }
-  }
-
-  return is_idle();
 }
 
 Value JavaScript::native_array(poly_value object) {
@@ -534,6 +534,10 @@ std::string JavaScript::get_parameter_string(
 std::string JavaScript::execute(const std::string &code, int timeout,
                                 ResultType result_type,
                                 const GlobalCallbacks &global_callbacks) {
+  ProcessingState next_state = ProcessingState::Idle;
+  mysql_harness::ScopedCallback set_state(
+      [this, &next_state]() { set_processing_state(next_state); });
+
   clear_is_terminating();
 
   auto ms_timeout = std::chrono::milliseconds{timeout};
@@ -553,13 +557,11 @@ std::string JavaScript::execute(const std::string &code, int timeout,
   if (!m_debug_port.empty()) {
     // We don't want timeouts when debugging...
     result = m_result.pop();
-    set_processing_state(ProcessingState::Idle);
   } else {
     m_result.try_pop(result, ms_timeout);
   }
 
   if (result.state.has_value()) {
-    set_processing_state(ProcessingState::Idle);
     switch (*result.state) {
       case ResultState::Ok:
         return *result.data;
@@ -569,6 +571,10 @@ std::string JavaScript::execute(const std::string &code, int timeout,
         throw MemoryError(*result.data);
     }
   }
+
+  // At this point, the expected result was not consumed and will arrive to the
+  // queue, so we should handle it
+  next_state = ProcessingState::HoldingResult;
 
   // This logic is reached if a Timeout occurred, the time out handling
   // includes:

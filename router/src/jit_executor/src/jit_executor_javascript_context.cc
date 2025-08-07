@@ -59,7 +59,7 @@ std::string JavaScriptContext::execute(
   return m_language->execute(code, timeout, result_type, global_callbacks);
 }
 
-bool JavaScriptContext::force_idle() { return m_language->force_idle(); }
+bool JavaScriptContext::wait_for_idle() { return m_language->wait_for_idle(); }
 bool JavaScriptContext::is_idle() { return m_language->is_idle(); }
 
 size_t JavaScriptContext::id() { return m_language->id(); }
