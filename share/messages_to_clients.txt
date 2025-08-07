@@ -10314,7 +10314,7 @@ ER_LH_INFER_NO_FILES
   eng "No valid files found for processing."
 
 ER_LH_WARN_INFER_USE_DEFAULT_COL_NAMES
-  eng "Used default column names for column index(s) %s as they are %s."
+  eng "Used default column names for column index(es) %s as they are %s."
 
 ER_LH_PARQUET_CANNOT_READ_HEADER
   eng "File %s: Unable to read Parquet header."
@@ -10814,6 +10814,9 @@ ER_LH_UNSTRUCTURED_PARTIAL_FILE_PARSE_ERR
 
 ER_JDV_EXPLICIT_AUTO_INCREMENT_NOT_ALLOWED
   eng "Using 0 to request the next value of an AUTO_INCREMENT column is not allowed in JDVs, column %s.%s, referenced by path '%s', key '%s'."
+
+ER_LH_INFER_COL_NAME_MISMATCH
+  eng "Column '%s' found in file '%s', but not in file '%s' during column name matching."
 
 #
 #  End of 9.x error messages (server-to-client).
