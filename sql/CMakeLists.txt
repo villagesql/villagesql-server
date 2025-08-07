@@ -865,7 +865,18 @@ IF(MY_COMPILER_IS_GNU)
     ADD_COMPILE_FLAGS(
       geometry_rtree.cc
       COMPILE_FLAGS ${HAS_WARN_FLAG}
-      )
+    )
+  ENDIF()
+  # sql/binlog/group_commit/atomic_bgc_ticket.h:43:7:
+  # error: defining 'binlog::AtomicBgcTicket',
+  # which previously failed to be complete in a SFINAE context
+  # [-Werror=sfinae-incomplete=]
+  MY_CHECK_CXX_COMPILER_WARNING("-Wno-sfinae-incomplete" HAS_WARN_FLAG)
+  IF(HAS_WARN_FLAG)
+    ADD_COMPILE_FLAGS(
+      binlog/group_commit/atomic_bgc_ticket.cc
+      COMPILE_FLAGS ${HAS_WARN_FLAG}
+    )
   ENDIF()
 ENDIF()
 
