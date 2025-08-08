@@ -7642,6 +7642,10 @@ bool Item::update_null_value() {
   @param buffer Buffer, in case item needs a large one
 
   @returns false if success, true if error
+
+  If evaluation results in a NULL value, the NULL
+  value indicator is set for the item and return value is false (as for
+  a successful execution).
 */
 
 bool Item::evaluate(THD *thd, String *buffer) {
@@ -7707,10 +7711,7 @@ bool Item::evaluate(THD *thd, String *buffer) {
       break;
     }
   }
-  const bool result = thd->is_error();
-  // Convention: set NULL value indicator on error
-  if (result) null_value = true;
-  return result;
+  return thd->is_error();
 }
 
 /**
