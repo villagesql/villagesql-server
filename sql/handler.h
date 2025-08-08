@@ -2695,9 +2695,7 @@ using notify_create_table_t = void (*)(struct HA_CREATE_INFO *create_info,
  * @param[in]     db_name     view database
  * @param[in]     table_name  view name
  * @param[in]     view_def    view definition query
- * @param[in]     mdl_ticket  the mdl ticket on the view to upgrade shared
- *                            lock to exclusive lock in case of
- *                            re-materialization.
+ *
  * @return :
  *  @retval true The materialized view is found and can be used.
  *  @retval false The materialzied view is not available and cannot be used.
@@ -2705,8 +2703,7 @@ using notify_create_table_t = void (*)(struct HA_CREATE_INFO *create_info,
 using notify_materialized_view_usage_t = bool (*)(THD *thd,
                                                   std::string_view db_name,
                                                   std::string_view table_name,
-                                                  std::string_view view_def,
-                                                  MDL_ticket *mdl_ticket);
+                                                  std::string_view view_def);
 
 /**
   Secondary engine hook called after PRIMARY_TENTATIVELY optimization is

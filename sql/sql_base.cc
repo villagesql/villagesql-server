@@ -6978,8 +6978,7 @@ static bool open_secondary_engine_tables(THD *thd, uint flags) {
           hton->notify_materialized_view_usage != nullptr &&
           hton->notify_materialized_view_usage(
               thd, tr->get_db_name(), tr->get_table_name(),
-              {tr->select_stmt.str, tr->select_stmt.length},
-              tr->mdl_request.ticket);
+              {tr->select_stmt.str, tr->select_stmt.length});
       if (!found_materialized_view) {
         thd->clear_error();
         push_warning_printf(
