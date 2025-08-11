@@ -261,8 +261,10 @@ static char *test_mysql_command_services_apis_udf(UDF_INIT *, UDF_ARGS *args,
   }
 
   /* To get the mysql option value */
-  void *option_val;
-  cmd_options_srv->get(mysql_h, MYSQL_OPT_MAX_ALLOWED_PACKET, &option_val);
+  {
+    void *option_val = nullptr;
+    cmd_options_srv->get(mysql_h, MYSQL_OPT_MAX_ALLOWED_PACKET, &option_val);
+  }
 
   {
     std::string query(
