@@ -1176,6 +1176,29 @@ void ConfigGenerator::prepare_ssl_certificate_files(
   }
 }
 
+namespace {
+
+void ensure_options_supported(
+    const std::map<std::string, std::string> &user_options,
+    const std::map<std::string, std::vector<std::string>> &multivalue_options,
+    bool is_standalone) {
+  if (!is_standalone) return;
+
+  constexpr std::array innodb_cluster_specific_options{
+      "account", "account-create", "account-host"};
+
+  for (const auto &option : innodb_cluster_specific_options) {
+    if (user_options.contains(option) || multivalue_options.contains(option)) {
+      throw std::runtime_error(
+          "Option '--"s + option +
+          "' only allowed when the target is InnoDB Cluster. The "
+          "actual target is standalone server.");
+    }
+  }
+}
+
+}  // namespace
+
 std::string ConfigGenerator::bootstrap_deployment(
     const std::string &program_name, std::ofstream &config_file,
     std::ofstream &state_file, const mysql_harness::Path &config_file_path,
@@ -1188,6 +1211,8 @@ std::string ConfigGenerator::bootstrap_deployment(
   bool force = user_options.find("force") != user_options.end();
 
   const bool standalone_target = is_standalone_target();
+
+  ensure_options_supported(user_options, multivalue_options, standalone_target);
 
   auto cluster_info =
       standalone_target ? ClusterInfo{} : metadata_->fetch_metadata_servers();
