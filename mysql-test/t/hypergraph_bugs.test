@@ -793,12 +793,12 @@ EXPLAIN ANALYZE SELECT 1 FROM t1 WHERE e=FLOOR(RAND(0));
 # Make estimate from second field of index. Since 'b' and 'd' are independent,
 # the estimate will be too low.
 --replace_regex $elide_costs_and_time
-EXPLAIN ANALYZE SELECT 1 FROM t1 WHERE d=0;
+EXPLAIN ANALYZE SELECT /*+ SKIP_SCAN(t1) */ 1 FROM t1 WHERE d=0;
 
 # Make estimate from second field of index. Since 'b' in functionally dependent
 # on 'e', the estimate will be too high.
 --replace_regex $elide_costs_and_time
-EXPLAIN ANALYZE SELECT 1 FROM t1 WHERE e=0;
+EXPLAIN ANALYZE SELECT /*+ SKIP_SCAN(t1) */ 1 FROM t1 WHERE e=0;
 
 # Make estimate from second field of indexes k3 and k4.
 --replace_regex $elide_costs_and_time
@@ -954,7 +954,7 @@ ANALYZE TABLE t1;
 # condition.
 
 --replace_regex $elide_costs_and_rows
-EXPLAIN FORMAT=TREE SELECT b FROM t1 x1
+EXPLAIN FORMAT=TREE SELECT /*+ SKIP_SCAN(x1) */ b FROM t1 x1
   WHERE c < 1 AND c = (SELECT MAX(b) FROM t1 x2);
 
 DROP TABLE t1;

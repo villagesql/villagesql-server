@@ -177,6 +177,18 @@ double EstimateDistinctRows(THD *thd, double child_rows, TermArray terms);
  */
 void EstimateAggregateCost(THD *thd, AccessPath *path,
                            const Query_block *query_block);
+
+/**
+  Estimate costs and result row count for a skip scan operation.
+   @param[in] table              The table which is to be scanned
+   @param[in] key_idx            The location of the index to be scanned
+   @param[in] num_subrange_scans Number of subrange scans to be executed
+   @param[in] records            Number of rows to be scanned
+   @retval                       Calculated cost value
+ */
+double EstimateSkipScanCost(TABLE *table, uint key_idx, uint num_subrange_scans,
+                            ha_rows records);
+
 void EstimateDeleteRowsCost(AccessPath *path);
 void EstimateUpdateRowsCost(AccessPath *path);
 

@@ -1600,6 +1600,15 @@ void EstimateAggregateCost(THD *thd, AccessPath *path,
   path->ordering_state = child->ordering_state;
 }
 
+double EstimateSkipScanCost(TABLE *table, uint key_idx, uint num_subrange_scans,
+                            ha_rows records) {
+  // Multiplier to achieve the same cost/time ratio as for other access paths
+  constexpr double kSkipScanFactor{3.344};
+  return kSkipScanFactor *
+         EstimateIndexRangeScanCost(table, key_idx, RangeScanType::kMultiRange,
+                                    num_subrange_scans, records);
+}
+
 void EstimateDeleteRowsCost(AccessPath *path) {
   const auto &param = path->delete_rows();
   const AccessPath *child = param.child;

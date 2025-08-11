@@ -984,11 +984,11 @@ EXPLAIN
 -> Filter: (t1.e = floor(rand(0)))  (rows=32) (actual rows=8 loops=1)
     -> Covering index scan on t1 using k2  (rows=256) (actual rows=256 loops=1)
 
-EXPLAIN ANALYZE SELECT 1 FROM t1 WHERE d=0;
+EXPLAIN ANALYZE SELECT /*+ SKIP_SCAN(t1) */ 1 FROM t1 WHERE d=0;
 EXPLAIN
 -> Covering index skip scan on t1 using k1 over d = 0  (rows=4) (actual rows=16 loops=1)
 
-EXPLAIN ANALYZE SELECT 1 FROM t1 WHERE e=0;
+EXPLAIN ANALYZE SELECT /*+ SKIP_SCAN(t1) */ 1 FROM t1 WHERE e=0;
 EXPLAIN
 -> Covering index skip scan on t1 using k2 over e = 0  (rows=32) (actual rows=8 loops=1)
 
@@ -1175,7 +1175,7 @@ SELECT n, 1, n FROM qn;
 ANALYZE TABLE t1;
 Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
-EXPLAIN FORMAT=TREE SELECT b FROM t1 x1
+EXPLAIN FORMAT=TREE SELECT /*+ SKIP_SCAN(x1) */ b FROM t1 x1
 WHERE c < 1 AND c = (SELECT MAX(b) FROM t1 x2);
 EXPLAIN
 -> Filter: (x1.c = (select #2))  (...)

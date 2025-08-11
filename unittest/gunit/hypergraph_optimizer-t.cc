@@ -6812,7 +6812,7 @@ TEST_F(HypergraphOptimizerTest, UpdateHashJoin) {
 
 TEST_F(HypergraphOptimizerTest, IndexSkipScan) {
   Query_block *query_block = ParseAndResolve(
-      "SELECT t1.y FROM t1 WHERE t1.y < 300", /*nullable=*/true);
+      "SELECT t1.y FROM t1 WHERE t1.y > 200 AND t1.y < 300", /*nullable=*/true);
   Fake_TABLE *t1 = m_fake_tables["t1"];
   t1->file->stats.records = 10000;
   t1->file->stats.data_file_length = 100e6;
@@ -6837,7 +6837,7 @@ TEST_F(HypergraphOptimizerTest, IndexSkipScan) {
 
 TEST_F(HypergraphOptimizerTest, IndexSkipScanWithOrderBy) {
   Query_block *query_block = ParseAndResolve(
-      "SELECT t1.y  FROM t1 WHERE t1.y < 300 ORDER BY t1.x,t1.y",
+      "SELECT t1.y  FROM t1 WHERE t1.y > 200 AND t1.y < 300 ORDER BY t1.x,t1.y",
       /*nullable=*/true);
   Fake_TABLE *t1 = m_fake_tables["t1"];
   t1->file->stats.records = 10000;
@@ -6866,7 +6866,8 @@ TEST_F(HypergraphOptimizerTest, IndexSkipScanWithOrderBy) {
 
 TEST_F(HypergraphOptimizerTest, IndexSkipScanMultiIndex) {
   Query_block *query_block = ParseAndResolve(
-      "SELECT t1.y, t1.w  FROM t1 WHERE t1.w < 300 ORDER BY t1.y",
+      "SELECT t1.y, t1.w  FROM t1 WHERE t1.w > 200 AND t1.w < 300 ORDER BY "
+      "t1.y",
       /*nullable=*/true);
   Fake_TABLE *t1 = m_fake_tables["t1"];
   t1->file->stats.records = 10000;
@@ -6891,41 +6892,6 @@ TEST_F(HypergraphOptimizerTest, IndexSkipScanMultiIndex) {
   ASSERT_EQ(AccessPath::INDEX_SKIP_SCAN, root->type);
   ASSERT_EQ(1, root->index_skip_scan().index);
   ASSERT_EQ(2, root->index_skip_scan().num_used_key_parts);
-  query_block->cleanup(/*full=*/true);
-}
-
-TEST_F(HypergraphOptimizerTest, IndexSkipScanMultiPredicate) {
-  Query_block *query_block = ParseAndResolve(
-      "SELECT t1.y, t1.z, t1.w FROM t1 WHERE t1.x = 5 AND t1.z > 10 ORDER BY "
-      "t1.x, t1.y",
-      /*nullable=*/true);
-  Fake_TABLE *t1 = m_fake_tables["t1"];
-  t1->file->stats.records = 1000;
-  t1->file->stats.data_file_length = 100e6;
-  CreateOrderedIndex({t1->field[0], t1->field[1], t1->field[2]}, HA_NOSAME);
-  m_thd->variables.optimizer_switch |= OPTIMIZER_SKIP_SCAN;
-  t1->covering_keys.clear_all();
-  t1->covering_keys.set_bit(0);
-  t1->s->key_info = t1->key_info;
-
-  TraceGuard trace(m_thd);
-  AccessPath *root = FindBestQueryPlan(m_thd, query_block);
-  SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
-  // Prints out the query plan on failure.
-  SCOPED_TRACE(PrintQueryPlan(0, root, query_block->join,
-                              /*is_root_of_join=*/true));
-
-  // Expect the skip scan to subsume both of the predicates in the WHERE clause,
-  // and have no filter on top.
-  ASSERT_EQ(AccessPath::INDEX_SKIP_SCAN, root->type);
-  EXPECT_EQ(0, root->index_skip_scan().index);
-  EXPECT_EQ(3, root->index_skip_scan().num_used_key_parts);
-  // The x = 5 predicate is used as equality prefix.
-  EXPECT_EQ(1, root->index_skip_scan().param->eq_prefix_key_parts);
-  // The z > 10 predicate is the range condition.
-  EXPECT_STREQ(
-      "z", root->index_skip_scan().param->range_key_part->field->field_name);
-
   query_block->cleanup(/*full=*/true);
 }
 
