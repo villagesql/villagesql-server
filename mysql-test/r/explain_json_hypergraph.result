@@ -623,7 +623,8 @@ EXPLAIN
         -> Materialize  (rows=2.45)
             -> Window aggregate with buffering: sum(t1.f2) OVER ()   (rows=2.45)
                 -> Stream results  (rows=2.45)
-                    -> Covering index skip scan for deduplication on t1 using f1_2  (rows=2.45)
+                    -> Group (no aggregates)  (rows=2.45)
+                        -> Covering index scan on t1 using f1_2  (rows=12)
 
 EXPLAIN FORMAT=JSON SELECT * FROM
 (SELECT SQL_BIG_RESULT f1, SUM(f2) OVER() FROM t1 GROUP BY f1) as dt
@@ -642,22 +643,29 @@ EXPLAIN
                   {
                     "inputs": [
                       {
-                        "ranges": [],
-                        "covering": true,
-                        "operation": "Covering index skip scan for deduplication on t1 using f1_2",
-                        "index_name": "f1_2",
-                        "table_name": "t1",
-                        "access_type": "index",
-                        "key_columns": [
-                          "f1"
+                        "inputs": [
+                          {
+                            "covering": true,
+                            "operation": "Covering index scan on t1 using f1_2",
+                            "index_name": "f1_2",
+                            "table_name": "t1",
+                            "access_type": "index",
+                            "schema_name": "test",
+                            "used_columns": [
+                              "f1",
+                              "f2"
+                            ],
+                            "estimated_rows": "elided",
+                            "index_access_type": "index_scan",
+                            "estimated_total_cost": "elided",
+                            "estimated_first_row_cost": "elided"
+                          }
                         ],
-                        "schema_name": "test",
-                        "used_columns": [
-                          "f1",
-                          "f2"
-                        ],
+                        "group_by": true,
+                        "functions": [],
+                        "operation": "Group (no aggregates)",
+                        "access_type": "aggregate",
                         "estimated_rows": "elided",
-                        "index_access_type": "group_index_skip_scan",
                         "estimated_total_cost": "elided",
                         "estimated_first_row_cost": "elided"
                       }

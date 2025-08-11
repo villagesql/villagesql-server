@@ -1123,6 +1123,7 @@ FLUSH STATUS;
 --disable_result_log
 --eval $query
 --enable_result_log
+--skip_if_hypergraph  # Different plan.
 SHOW SESSION STATUS LIKE 'Sort_scan%';
 --let $query=SELECT a FROM t1 IGNORE INDEX FOR ORDER BY (PRIMARY,i2) ORDER BY a
 --eval EXPLAIN $query

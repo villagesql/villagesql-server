@@ -6909,6 +6909,9 @@ TEST_F(HypergraphOptimizerTest, GroupIndexSkipScanAgg) {
   t1->covering_keys.set_bit(0);  // covering index on (x,y,z)
   t1->covering_keys.set_bit(1);  // covering index on (x.y)
   t1->s->key_info = t1->key_info;
+  ulong rec_per_key_int[] = {2, 5000};
+  float rec_per_key[] = {2.0f, 5000.0f};
+  t1->key_info[1].set_rec_per_key_array(rec_per_key_int, rec_per_key);
 
   TraceGuard trace(m_thd);
   AccessPath *root = FindBestQueryPlan(m_thd, query_block);
@@ -6934,6 +6937,9 @@ TEST_F(HypergraphOptimizerTest, GroupIndexSkipScanDedup) {
   t1->covering_keys.set_bit(0);  // covering index on (x,y,z)
   t1->covering_keys.set_bit(1);  // covering index on (x.y)
   t1->s->key_info = t1->key_info;
+  ulong rec_per_key_int[] = {2, 5000};
+  float rec_per_key[] = {2.0f, 5000.0f};
+  t1->key_info[1].set_rec_per_key_array(rec_per_key_int, rec_per_key);
 
   TraceGuard trace(m_thd);
   AccessPath *root = FindBestQueryPlan(m_thd, query_block);

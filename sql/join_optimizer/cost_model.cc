@@ -1609,6 +1609,14 @@ double EstimateSkipScanCost(TABLE *table, uint key_idx, uint num_subrange_scans,
                                     num_subrange_scans, records);
 }
 
+double EstimateGroupSkipScanCost(TABLE *table, uint key_idx, uint num_groups,
+                                 bool has_max) {
+  double lookups_per_key = has_max ? 1.8 : 1;
+  return EstimateIndexRangeScanCost(table, key_idx, RangeScanType::kMultiRange,
+                                    lookups_per_key * num_groups,
+                                    lookups_per_key * num_groups);
+}
+
 void EstimateDeleteRowsCost(AccessPath *path) {
   const auto &param = path->delete_rows();
   const AccessPath *child = param.child;

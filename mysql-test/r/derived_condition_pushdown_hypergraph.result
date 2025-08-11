@@ -470,7 +470,8 @@ EXPLAIN
         -> Materialize  (rows=2.45)
             -> Window aggregate with buffering: sum(t1.f2) OVER ()   (rows=2.45)
                 -> Stream results  (rows=2.45)
-                    -> Covering index skip scan for deduplication on t1 using f1_2  (rows=2.45)
+                    -> Group (no aggregates)  (rows=2.45)
+                        -> Covering index scan on t1 using f1_2  (rows=12)
 
 SELECT * FROM (SELECT f1, SUM(f2) OVER() FROM t1 GROUP BY f1) as dt
 WHERE f1 > 2;
@@ -1513,16 +1514,18 @@ SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)
 FROM t2 GROUP BY f1,f2) as dt
 WHERE f1 > 2 and f2 > 30 and (f1+f2) > 40;
 EXPLAIN
--> Table scan on dt  (rows=2)
-    -> Union all materialize  (rows=2)
-        -> Window aggregate with buffering: sum(t1.f2) OVER (PARTITION BY t1.f1,t1.f2 )   (rows=1)
-            -> Stream results  (rows=1)
-                -> Filter: ((t1.f1 > 2) and (t1.f2 > 30) and ((t1.f1 + t1.f2) > 40))  (rows=1)
-                    -> Covering index skip scan for deduplication on t1 using f1_2 over (2 < f1)  (rows=1)
-        -> Window aggregate with buffering: sum(t2.f2) OVER (PARTITION BY t2.f1,t2.f2 )   (rows=1)
-            -> Stream results  (rows=1)
-                -> Filter: ((t2.f1 > 2) and (t2.f2 > 30) and ((t2.f1 + t2.f2) > 40))  (rows=1)
-                    -> Covering index skip scan for deduplication on t2 using f1_2 over (2 < f1)  (rows=1)
+-> Table scan on dt  (rows=2.31)
+    -> Union all materialize  (rows=2.31)
+        -> Window aggregate with buffering: sum(t1.f2) OVER (PARTITION BY t1.f1,t1.f2 )   (rows=1.15)
+            -> Stream results  (rows=1.15)
+                -> Group (no aggregates)  (rows=1.15)
+                    -> Filter: ((t1.f2 > 30) and ((t1.f1 + t1.f2) > 40))  (rows=1.33)
+                        -> Covering index range scan on t1 using f1_2 over (2 < f1)  (rows=4)
+        -> Window aggregate with buffering: sum(t2.f2) OVER (PARTITION BY t2.f1,t2.f2 )   (rows=1.15)
+            -> Stream results  (rows=1.15)
+                -> Group (no aggregates)  (rows=1.15)
+                    -> Filter: ((t2.f2 > 30) and ((t2.f1 + t2.f2) > 40))  (rows=1.33)
+                        -> Covering index range scan on t2 using f1_2 over (2 < f1)  (rows=4)
 
 SELECT *
 FROM (SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)
@@ -1542,16 +1545,18 @@ SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)
 FROM t2 GROUP BY f1,f2) as dt
 WHERE f1 > 2 and f2 > 30 and (f1+f2) > 40;
 EXPLAIN
--> Table scan on dt  (rows=1)
-    -> Intersect all materialize  (rows=1)
-        -> Window aggregate with buffering: sum(t1.f2) OVER (PARTITION BY t1.f1,t1.f2 )   (rows=1)
-            -> Stream results  (rows=1)
-                -> Filter: ((t1.f1 > 2) and (t1.f2 > 30) and ((t1.f1 + t1.f2) > 40))  (rows=1)
-                    -> Covering index skip scan for deduplication on t1 using f1_2 over (2 < f1)  (rows=1)
-        -> Window aggregate with buffering: sum(t2.f2) OVER (PARTITION BY t2.f1,t2.f2 )   (rows=1)
-            -> Stream results  (rows=1)
-                -> Filter: ((t2.f1 > 2) and (t2.f2 > 30) and ((t2.f1 + t2.f2) > 40))  (rows=1)
-                    -> Covering index skip scan for deduplication on t2 using f1_2 over (2 < f1)  (rows=1)
+-> Table scan on dt  (rows=1.15)
+    -> Intersect all materialize  (rows=1.15)
+        -> Window aggregate with buffering: sum(t1.f2) OVER (PARTITION BY t1.f1,t1.f2 )   (rows=1.15)
+            -> Stream results  (rows=1.15)
+                -> Group (no aggregates)  (rows=1.15)
+                    -> Filter: ((t1.f2 > 30) and ((t1.f1 + t1.f2) > 40))  (rows=1.33)
+                        -> Covering index range scan on t1 using f1_2 over (2 < f1)  (rows=4)
+        -> Window aggregate with buffering: sum(t2.f2) OVER (PARTITION BY t2.f1,t2.f2 )   (rows=1.15)
+            -> Stream results  (rows=1.15)
+                -> Group (no aggregates)  (rows=1.15)
+                    -> Filter: ((t2.f2 > 30) and ((t2.f1 + t2.f2) > 40))  (rows=1.33)
+                        -> Covering index range scan on t2 using f1_2 over (2 < f1)  (rows=4)
 
 SELECT *
 FROM (SELECT f1, f2, SUM(f2) OVER(PARTITION BY f1,f2)

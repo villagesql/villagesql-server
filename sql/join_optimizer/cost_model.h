@@ -189,6 +189,17 @@ void EstimateAggregateCost(THD *thd, AccessPath *path,
 double EstimateSkipScanCost(TABLE *table, uint key_idx, uint num_subrange_scans,
                             ha_rows records);
 
+/**
+  Estimate costs for a group skip scan operation.
+   @param[in] table              The table which is to be scanned
+   @param[in] key_idx            The location of the index to be scanned
+   @param[in] num_groups         Number of GROUP BY groups to be scanned
+   @param[in] has_max            True if the query contains MAX(), else false
+   @retval                       Calculated cost value
+ */
+double EstimateGroupSkipScanCost(TABLE *table, uint key_idx, uint num_groups,
+                                 bool has_max);
+
 void EstimateDeleteRowsCost(AccessPath *path);
 void EstimateUpdateRowsCost(AccessPath *path);
 
