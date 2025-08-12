@@ -4218,7 +4218,8 @@ bool find_order_in_list(THD *thd, Ref_item_array ref_item_array,
   Item *order_item = *order->item; /* The item from the GROUP/ORDER clause. */
   Item::Type order_item_type;
   Item **select_item; /* The corresponding item from the SELECT clause. */
-  Field *from_field;  /* The corresponding field from the FROM clause. */
+  Field *from_field =
+      nullptr; /* The corresponding field from the FROM clause. */
   uint counter;
   enum_resolution_type resolution;
 
