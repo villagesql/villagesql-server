@@ -706,6 +706,7 @@ MySQL clients support the protocol:
 #endif
 #include "keycache.h"  // KEY_CACHE
 #include "m_string.h"
+#include "manifest_file_option_parser_helper.h"
 #include "migrate_keyring.h"  // Migrate_keyring
 #include "my_alloc.h"
 #include "my_base.h"
@@ -9053,140 +9054,119 @@ static void calculate_mysql_home_from_my_progname() {
   mysql_home_ptr = mysql_home;
 }
 
-/**
-  Helper class for loading keyring component
-  Keyring component is loaded after minimal chassis initialization.
-  At this time, home dir and plugin dir may not be initialized.
+Manifest_file_option_parser_helper::Manifest_file_option_parser_helper(
+    int argc, char **argv)
+    : datadir_(nullptr),
+      plugindir_(nullptr),
+      save_homedir_{0},
+      save_plugindir_{0},
+      valid_(false) {
+  char *ptr, **res, *datadir = nullptr, *plugindir = nullptr,
+                    *basedir = nullptr;
+  char dir[FN_REFLEN] = {0}, local_datadir_buffer[FN_REFLEN] = {0},
+       local_plugindir_buffer[FN_REFLEN] = {0},
+       local_basedir_buffer[FN_REFLEN] = {0};
+  const char *dirs = nullptr;
 
-  This helper class sets them temporarily by reading configurations
-  and resets them in destructor.
-*/
-class Manifest_file_option_parser_helper final {
- public:
-  Manifest_file_option_parser_helper(int argc, char **argv)
-      : datadir_(nullptr),
-        plugindir_(nullptr),
-        save_homedir_{0},
-        save_plugindir_{0},
-        valid_(false) {
-    char *ptr, **res, *datadir = nullptr, *plugindir = nullptr,
-                      *basedir = nullptr;
-    char dir[FN_REFLEN] = {0}, local_datadir_buffer[FN_REFLEN] = {0},
-         local_plugindir_buffer[FN_REFLEN] = {0},
-         local_basedir_buffer[FN_REFLEN] = {0};
-    const char *dirs = nullptr;
+  my_option datadir_options[] = {
+      {"datadir", 0, "", &datadir, nullptr, nullptr, GET_STR, OPT_ARG, 0, 0, 0,
+       nullptr, 0, nullptr},
+      {"plugin_dir", 0, "", &plugindir, nullptr, nullptr, GET_STR, OPT_ARG, 0,
+       0, 0, nullptr, 0, nullptr},
+      {"basedir", 0, "", &basedir, nullptr, nullptr, GET_STR, OPT_ARG, 0, 0, 0,
+       nullptr, 0, nullptr},
+      {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0, 0,
+       0, nullptr, 0, nullptr}};
 
-    my_option datadir_options[] = {
-        {"datadir", 0, "", &datadir, nullptr, nullptr, GET_STR, OPT_ARG, 0, 0,
-         0, nullptr, 0, nullptr},
-        {"plugin_dir", 0, "", &plugindir, nullptr, nullptr, GET_STR, OPT_ARG, 0,
-         0, 0, nullptr, 0, nullptr},
-        {"basedir", 0, "", &basedir, nullptr, nullptr, GET_STR, OPT_ARG, 0, 0,
-         0, nullptr, 0, nullptr},
-        {nullptr, 0, nullptr, nullptr, nullptr, nullptr, GET_NO_ARG, NO_ARG, 0,
-         0, 0, nullptr, 0, nullptr}};
+  /*
+    create temporary args list and pass it to handle_options.
+    We do this because we don't want to mess with the actual
+    argument list. handle_options() trims the processed parts.
+  */
+  MEM_ROOT alloc{PSI_NOT_INSTRUMENTED, 512};
+  if (!(ptr = (char *)alloc.Alloc(sizeof(alloc) + (argc + 1) * sizeof(char *))))
+    return;
+  memset(ptr, 0, (sizeof(char *) * (argc + 1)));
+  res = (char **)(ptr);
+  memcpy((uchar *)res, (char *)(argv), (argc) * sizeof(char *));
 
-    /*
-      create temporary args list and pass it to handle_options.
-      We do this because we don't want to mess with the actual
-      argument list. handle_options() trims the processed parts.
-    */
-    MEM_ROOT alloc{PSI_NOT_INSTRUMENTED, 512};
-    if (!(ptr =
-              (char *)alloc.Alloc(sizeof(alloc) + (argc + 1) * sizeof(char *))))
-      return;
-    memset(ptr, 0, (sizeof(char *) * (argc + 1)));
-    res = (char **)(ptr);
-    memcpy((uchar *)res, (char *)(argv), (argc) * sizeof(char *));
-
-    my_getopt_skip_unknown = true;
-    if (my_handle_options(&argc, &res, datadir_options, nullptr, nullptr,
-                          true)) {
-      my_getopt_skip_unknown = false;
-      return;
-    }
+  my_getopt_skip_unknown = true;
+  if (my_handle_options(&argc, &res, datadir_options, nullptr, nullptr, true)) {
     my_getopt_skip_unknown = false;
+    return;
+  }
+  my_getopt_skip_unknown = false;
 
-    if (basedir) convert_dirname(local_basedir_buffer, basedir, NullS);
+  if (basedir) convert_dirname(local_basedir_buffer, basedir, NullS);
 
-    if (!datadir) {
-      /* mysql_real_data_home must be initialized at this point */
-      assert(mysql_real_data_home[0]);
-      /*
-        mysql_home_ptr should also be initialized at this point.
-        See calculate_mysql_home_from_my_progname() for details
-      */
-      assert(mysql_home_ptr && mysql_home_ptr[0]);
-      if (basedir)
-        convert_dirname(
-            local_datadir_buffer,
-            (std::string{local_basedir_buffer} + mysql_real_data_home).c_str(),
-            NullS);
-      else
-        convert_dirname(local_datadir_buffer, mysql_real_data_home, NullS);
-      (void)my_load_path(local_datadir_buffer, local_datadir_buffer,
-                         mysql_home_ptr);
-      datadir = local_datadir_buffer;
-    }
-    dirs = datadir;
-    unpack_dirname(dir, dirs);
-    datadir_ = my_strdup(PSI_INSTRUMENT_ME, dir, MYF(0));
-    memset(dir, 0, FN_REFLEN);
-
-    if (plugindir)
-      convert_dirname(local_plugindir_buffer, plugindir, NullS);
-    else if (basedir)
+  if (!datadir) {
+    /* mysql_real_data_home must be initialized at this point */
+    assert(mysql_real_data_home[0]);
+    /*
+      mysql_home_ptr should also be initialized at this point.
+      See calculate_mysql_home_from_my_progname() for details
+    */
+    assert(mysql_home_ptr && mysql_home_ptr[0]);
+    if (basedir)
       convert_dirname(
-          local_plugindir_buffer,
-          (std::string{local_basedir_buffer} + get_relative_path(PLUGINDIR))
-              .c_str(),
+          local_datadir_buffer,
+          (std::string{local_basedir_buffer} + mysql_real_data_home).c_str(),
           NullS);
     else
-      convert_dirname(local_plugindir_buffer, get_relative_path(PLUGINDIR),
-                      NullS);
-    (void)my_load_path(local_plugindir_buffer, local_plugindir_buffer,
-                       mysql_home);
-    plugindir_ = my_strdup(PSI_INSTRUMENT_ME, local_plugindir_buffer, MYF(0));
+      convert_dirname(local_datadir_buffer, mysql_real_data_home, NullS);
+    (void)my_load_path(local_datadir_buffer, local_datadir_buffer,
+                       mysql_home_ptr);
+    datadir = local_datadir_buffer;
+  }
+  dirs = datadir;
+  unpack_dirname(dir, dirs);
+  datadir_ = my_strdup(PSI_INSTRUMENT_ME, dir, MYF(0));
+  memset(dir, 0, FN_REFLEN);
 
+  if (plugindir)
+    convert_dirname(local_plugindir_buffer, plugindir, NullS);
+  else if (basedir)
+    convert_dirname(
+        local_plugindir_buffer,
+        (std::string{local_basedir_buffer} + get_relative_path(PLUGINDIR))
+            .c_str(),
+        NullS);
+  else
+    convert_dirname(local_plugindir_buffer, get_relative_path(PLUGINDIR),
+                    NullS);
+  (void)my_load_path(local_plugindir_buffer, local_plugindir_buffer,
+                     mysql_home);
+  plugindir_ = my_strdup(PSI_INSTRUMENT_ME, local_plugindir_buffer, MYF(0));
+
+  if (datadir_ != nullptr && datadir_[0] != 0) {
     /* Backup mysql_real_data_home */
-    if (mysql_real_data_home[0])
-      memcpy(save_homedir_, mysql_real_data_home, strlen(mysql_real_data_home));
-    if (datadir_ != nullptr)
-      memcpy(mysql_real_data_home, datadir_, strlen(datadir_));
-
+    memcpy(save_homedir_, mysql_real_data_home, mysql_real_data_home_size);
+    /* Copy the string ensuring it is always 0 terminated */
+    strncpy(mysql_real_data_home, datadir_, mysql_real_data_home_size - 1);
+    mysql_real_data_home[mysql_real_data_home_size - 1] = 0;
+  }
+  if (plugindir_ != nullptr && plugindir_[0] != 0) {
     /* Backup opt_plugin_dir */
-    if (opt_plugin_dir[0])
-      memcpy(save_plugindir_, opt_plugin_dir,
-             std::min(static_cast<size_t>(FN_REFLEN), strlen(opt_plugin_dir)));
-    if (plugindir_ != nullptr)
-      memcpy(opt_plugin_dir, plugindir_, strlen(plugindir_));
-
-    valid_ = true;
+    memcpy(save_plugindir_, opt_plugin_dir, opt_plugin_dir_size);
+    /* Copy the string ensuring it is always 0 terminated */
+    strncpy(opt_plugin_dir, plugindir_, opt_plugin_dir_size - 1);
+    opt_plugin_dir[opt_plugin_dir_size - 1] = 0;
   }
 
-  ~Manifest_file_option_parser_helper() {
-    valid_ = false;
-    if (datadir_ != nullptr) {
-      memset(mysql_real_data_home, 0, sizeof(mysql_real_data_home));
-      memcpy(mysql_real_data_home, save_homedir_, strlen(save_homedir_));
-      my_free(datadir_);
-    }
-    if (plugindir_ != nullptr) {
-      memset(opt_plugin_dir, 0, sizeof(opt_plugin_dir));
-      memcpy(opt_plugin_dir, save_plugindir_, strlen(save_plugindir_));
-      my_free(plugindir_);
-    }
+  valid_ = true;
+}
+
+Manifest_file_option_parser_helper ::~Manifest_file_option_parser_helper() {
+  valid_ = false;
+  if (datadir_ != nullptr && datadir_[0] != 0) {
+    memcpy(mysql_real_data_home, save_homedir_, mysql_real_data_home_size);
+    my_free(datadir_);
   }
-
-  bool valid() const { return valid_; }
-
- private:
-  char *datadir_;
-  char *plugindir_;
-  char save_homedir_[FN_REFLEN + 1];
-  char save_plugindir_[FN_REFLEN + 1];
-  bool valid_;
-};
+  if (plugindir_ != nullptr && plugindir_[0] != 0) {
+    memcpy(opt_plugin_dir, save_plugindir_, opt_plugin_dir_size);
+    my_free(plugindir_);
+  }
+}
 
 #ifdef _WIN32
 int win_main(int argc, char **argv)
