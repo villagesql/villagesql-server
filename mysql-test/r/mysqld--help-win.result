@@ -1682,7 +1682,7 @@ binlog-transaction-compression-level-zstd 3
 binlog-transaction-dependency-history-size 10000000
 block-encryption-mode aes-128-ecb
 bulk-insert-buffer-size 8388608
-caching-sha2-password-digest-rounds 5000
+caching-sha2-password-digest-rounds 10000
 caching-sha2-password-private-key-path private_key.pem
 caching-sha2-password-proxy-users FALSE
 caching-sha2-password-public-key-path public_key.pem
