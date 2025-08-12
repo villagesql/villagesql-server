@@ -53,6 +53,8 @@ Currently, it contains the following:
 
 - is_const_ref.h: concept that is true for types that are const ref.
 
+- is_either.h: concept that is true if first argument equals any of the rest.
+
 - is_pointer.h: concepts to identify that a type is a pointer.
 
 - is_same_ignore_const.h: metaprogramming utility to determine if two types are

@@ -31,6 +31,7 @@ INCLUDE_DIRECTORIES(SYSTEM ${GMOCK_INCLUDE_DIRS})
 # Add tests
 SET(TESTS
   all_same
+  is_either
 )
 
 FOREACH(test ${TESTS})

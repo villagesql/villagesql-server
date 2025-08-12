@@ -23,6 +23,7 @@
 SET(TARGET_HEADERS
   is_charlike.h
   is_const_ref.h
+  is_either.h
   is_pointer.h
   is_same_as_all.h
   is_same_ignore_const.h

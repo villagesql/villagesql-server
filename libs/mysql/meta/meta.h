@@ -30,6 +30,9 @@
 // Is_same_as_all<T, U, ...> is true if all the given types are the same type.
 #include "mysql/meta/is_same_as_all.h"
 
+// Is_either<T, U...> is true if T is the same type as any of the U.
+#include "mysql/meta/is_either.h"
+
 // Is_charlike<T> is true if T is char, unsigned char, or std::byte.
 // Is_pointer_to_charlike<T> is true if T is pointer to one of those types.
 // Is_stringlike<T> is true if T has a `data` and a `size` member.
