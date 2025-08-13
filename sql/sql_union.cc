@@ -1388,21 +1388,25 @@ static void cleanup_tmp_tables(Table_ref *list) {
     } else if (tl->is_table_function()) {
       tl->table_function->cleanup();
     }
-    if (tl->table == nullptr) continue;  // Not materialized
     if (tl->is_mv_se_available()) {
       // Materialized view directly in storage engine
       if (tl->derived_result != nullptr &&
           tl->derived_result->table != nullptr) {
-        /* In case of prepared statements, the derived result table can be
-         * populated with a temporary table, before we make a decision on
-         * whether a storage-engine materialized view will be used or not.
-         * Perform a cleanup for that temporary table here. */
+        // - In the regular case, derived_result->table and tl->table both point
+        // to the same table, thus only close via tl->table. But in the case of
+        // a secondary engine materialized view, derived_result->table points to
+        // the generic derived table, whereas tl->table points to the
+        // materialized view table. Close only derived_result->table here,
+        // tl->table will be closed and freed in close_thread_tables().
+        // - Also note that the generic derived_table->table will be populated
+        // mainly in the prepared statement case, where prepare occurs before
+        // open_secondary_engine_tables occurs, which makes the decision to
+        // use secondary engine materialized views.
         close_tmp_table(tl->derived_result->table);
-        free_tmp_table(tl->derived_result->table);
-        tl->derived_result->table = nullptr;
       }
       continue;
     }
+    if (tl->table == nullptr) continue;  // Not materialized
     if ((tl->is_view_or_derived() || tl->is_recursive_reference() ||
          tl->schema_table || tl->is_table_function())) {
       close_tmp_table(tl->table);
@@ -1442,11 +1446,26 @@ static void destroy_tmp_tables(Table_ref *list) {
     if (tl->common_table_expr() != nullptr) {
       tl->common_table_expr()->references.erase_value(tl);
     }
-    if (tl->table == nullptr) continue;  // Not materialized
     if (tl->is_mv_se_available()) {
       // Materialized view directly in storage engine
+      if (tl->derived_result != nullptr &&
+          tl->derived_result->table != nullptr) {
+        // - In the regular case, derived_result->table and tl->table both point
+        // to the same table, thus only close via tl->table. But in the case of
+        // a secondary engine materialized view, derived_result->table points to
+        // the generic derived table, whereas tl->table points to the
+        // materialized view table. Close only derived_result->table here,
+        // tl->table will be closed and freed in close_thread_tables().
+        // - Also note that the generic derived_table->table will be populated
+        // mainly in the prepared statement case, where prepare occurs before
+        // open_secondary_engine_tables occurs, which makes the decision to
+        // use secondary engine materialized views.
+        free_tmp_table(tl->derived_result->table);
+        tl->derived_result->table = nullptr;
+      }
       continue;
     }
+    if (tl->table == nullptr) continue;  // Not materialized
     assert(tl->schema_table == nullptr);
     if (tl->is_view_or_derived() || tl->is_recursive_reference() ||
         tl->schema_table || tl->is_table_function()) {
