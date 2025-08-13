@@ -397,6 +397,7 @@ SET(SQL_SHARED_SOURCES
   histograms/value_map.cc
   hostname_cache.cc
   init.cc
+  lib_glue/gtids.cc
   log_resource.cc
   item.cc
   item_buff.cc
