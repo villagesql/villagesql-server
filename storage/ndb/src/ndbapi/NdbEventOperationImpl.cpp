@@ -1809,12 +1809,14 @@ NdbEventOperationImpl *NdbEventBuffer::getEpochEventOperations(
       event_types = gci_op.event_types;
       cumulative_any_value = gci_op.cumulative_any_value;
       filtered_any_value = gci_op.filtered_any_value;
-      DBUG_PRINT("info", ("gci: %u  op: %p  event_types: 0x%lx"
-                          "cumulative_any_value: 0x%lx "
-                          "reference: '0x%x %s'",
-                          (unsigned)epoch->m_gci.getGCI(), gci_op.op,
-                          (long)event_types, (long)cumulative_any_value,
-                          m_ndb->getReference(), m_ndb->getNdbObjectName()));
+      DBUG_PRINT("info",
+                 ("gci: %u  op: %p  event_types: 0x%lx "
+                  "filtered_any_value: 0x%lx "
+                  "cumulative_any_value: 0x%lx "
+                  "reference: '0x%x %s'",
+                  (unsigned)epoch->m_gci.getGCI(), gci_op.op, (long)event_types,
+                  (long)filtered_any_value, (long)cumulative_any_value,
+                  m_ndb->getReference(), m_ndb->getNdbObjectName()));
       return gci_op.op;
     }
   }
