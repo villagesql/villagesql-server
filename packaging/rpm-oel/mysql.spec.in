@@ -94,7 +94,7 @@
 %{!?with_debuginfo:              %global without_debuginfo 1}
 
 %{?el7:%global __strip /opt/rh/devtoolset-11/root/usr/bin/strip}
-%{?el8:%global __strip /opt/rh/gcc-toolset-13/root/usr/bin/strip}
+%{?el8:%global __strip /opt/rh/gcc-toolset-14/root/usr/bin/strip}
 %{?el9:%global __strip /opt/rh/gcc-toolset-14/root/usr/bin/strip}
 %{?el8:%global __brp_strip_static_archive %{nil}}
 %{?el9:%global __brp_strip_static_archive %{nil}}
@@ -175,12 +175,12 @@ BuildRequires:  gcc-toolset-12-dwz
 BuildRequires:  gcc-toolset-12-gcc-c++
 BuildRequires:  gcc-toolset-12-gcc
 %endif # compatlib
-%{?el8:BuildRequires:  gcc-toolset-13-annobin-annocheck}
-%{?el8:BuildRequires:  gcc-toolset-13-annobin-plugin-gcc}
-%{?el8:BuildRequires:  gcc-toolset-13-binutils}
-%{?el8:BuildRequires:  gcc-toolset-13-dwz}
-%{?el8:BuildRequires:  gcc-toolset-13-gcc-c++}
-%{?el8:BuildRequires:  gcc-toolset-13-gcc}
+%{?el8:BuildRequires:  gcc-toolset-14-annobin-annocheck}
+%{?el8:BuildRequires:  gcc-toolset-14-annobin-plugin-gcc}
+%{?el8:BuildRequires:  gcc-toolset-14-binutils}
+%{?el8:BuildRequires:  gcc-toolset-14-dwz}
+%{?el8:BuildRequires:  gcc-toolset-14-gcc-c++}
+%{?el8:BuildRequires:  gcc-toolset-14-gcc}
 %{?el9:BuildRequires:  gcc-toolset-14-annobin-annocheck}
 %{?el9:BuildRequires:  gcc-toolset-14-annobin-plugin-gcc}
 %{?el9:BuildRequires:  gcc-toolset-14-binutils}

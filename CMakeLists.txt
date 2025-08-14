@@ -317,7 +317,7 @@ IF(CMAKE_HOST_UNIX AND NOT FORCE_UNSUPPORTED_COMPILER
       IF(LINUX_RHEL7)
         SET(ALTERNATIVE_PATHS "/opt/rh/devtoolset-11")
       ELSEIF(LINUX_RHEL8)
-        SET(ALTERNATIVE_PATHS "/opt/rh/gcc-toolset-13")
+        SET(ALTERNATIVE_PATHS "/opt/rh/gcc-toolset-14")
       ELSEIF(LINUX_RHEL9)
         SET(ALTERNATIVE_PATHS "/opt/rh/gcc-toolset-14")
       ELSEIF(LINUX_RHEL10)
@@ -378,9 +378,9 @@ IF(CMAKE_HOST_UNIX AND NOT FORCE_UNSUPPORTED_COMPILER
             "devtoolset-11-gcc devtoolset-11-gcc-c++ devtoolset-11-binutils")
         ELSEIF(LINUX_RHEL8)
           SET(DEV_PACKAGES
-            "gcc-toolset-13-gcc gcc-toolset-13-gcc-c++ gcc-toolset-13-binutils")
-          STRING_APPEND(DEV_PACKAGES " gcc-toolset-13-annobin-annocheck")
-          STRING_APPEND(DEV_PACKAGES " gcc-toolset-13-annobin-plugin-gcc")
+            "gcc-toolset-14-gcc gcc-toolset-14-gcc-c++ gcc-toolset-14-binutils")
+          STRING_APPEND(DEV_PACKAGES " gcc-toolset-14-annobin-annocheck")
+          STRING_APPEND(DEV_PACKAGES " gcc-toolset-14-annobin-plugin-gcc")
         ELSEIF(LINUX_RHEL9)
           SET(DEV_PACKAGES
             "gcc-toolset-14-gcc gcc-toolset-14-gcc-c++ gcc-toolset-14-binutils")
