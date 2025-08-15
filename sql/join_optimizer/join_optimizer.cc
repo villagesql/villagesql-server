@@ -6616,11 +6616,13 @@ AccessPath *CostingReceiver::ProposeAccessPath(
             Trace(m_thd) << " This is a bug.\n";
           }
         }
+#ifndef NDEBUG
         if (!has_known_row_count_inconsistency_bugs &&
-            !IsSecondaryEngineNrowsHookApplicable(path, m_thd, m_graph)) {
+            !IsSecondaryNrowsHookEnabledAndApplicable(path, m_thd, m_graph)) {
           assert(false &&
                  "Inconsistent row counts for different AccessPath objects.");
         }
+#endif
         break;
       }
     }
