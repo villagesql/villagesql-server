@@ -312,7 +312,7 @@ SET(LIBS "")
 MACRO(EXTRACT_LINK_LIBRARIES target var)
   GET_TARGET_PROPERTY(TARGET_LIB_DEPENDS ${target} LINK_LIBRARIES)
   # Uncomment to debug:
-  MESSAGE(STATUS "xxx ${target} ${TARGET_LIB_DEPENDS}")
+  # MESSAGE(STATUS "xxx ${target} ${TARGET_LIB_DEPENDS}")
   # Depending on platform, and whether "system" or "bundled" has been used,
   # this will typically be:
   # ext::zlib  ext::zstd  <ssl>  <crypto>  /usr/lib64/libresolv.so  m
