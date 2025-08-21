@@ -2508,6 +2508,36 @@ f1
 SELECT (SELECT 'a' FROM t1 AS t2 WHERE t2.f1 = CAST(t1.f1 AS SIGNED)) = 'aa' FROM t1 GROUP BY ROLLUP(f1);
 (SELECT 'a' FROM t1 AS t2 WHERE t2.f1 = CAST(t1.f1 AS SIGNED)) = 'aa'
 NULL
-SET sql_mode=@saved_sql_mode;
 SET optimizer_switch=@saved_opt_switch;
+EXPLAIN FORMAT=tree SELECT /*+NO_INDEX(t1) */ f1 FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f2);
+EXPLAIN
+-> Group (no aggregates)  (rows=2)
+    -> Sort: f2  (rows=1)
+        -> Filter: (t1.f1 = 10)  (rows=1)
+            -> Table scan on t1  (rows=1)
+
+SELECT /*+NO_INDEX(t1) */ f1 FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f2);
+f1
+NULL
+DROP TABLE t1;
+CREATE TABLE t1 (f1 INTEGER, f2 INTEGER);
+EXPLAIN FORMAT=tree SELECT f1 FROM t1 GROUP BY ROLLUP(f2);
+EXPLAIN
+-> Group (no aggregates)  (rows=2)
+    -> Sort: f2  (rows=1)
+        -> Table scan on t1  (rows=1)
+
+SELECT f1 FROM t1 GROUP BY ROLLUP(f2);
+f1
+NULL
+EXPLAIN FORMAT=tree SELECT ANY_VALUE(f1) FROM t1 GROUP BY ROLLUP(f2);
+EXPLAIN
+-> Group (no aggregates)  (rows=2)
+    -> Sort: f2  (rows=1)
+        -> Table scan on t1  (rows=1)
+
+SELECT ANY_VALUE(f1) FROM t1 GROUP BY ROLLUP(f2);;
+ANY_VALUE(f1)
+NULL
+SET sql_mode=@saved_sql_mode;
 DROP TABLE t1;

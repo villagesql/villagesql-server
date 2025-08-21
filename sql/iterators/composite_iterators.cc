@@ -267,22 +267,9 @@ int AggregateIterator::DoRead() {
       if (err == -1) {
         m_seen_eof = true;
         m_state = DONE_OUTPUTTING_ROWS;
-        if (m_rollup && m_join->send_group_parts > 0) {
-          // No rows in result set, but we must output one grouping row: we
-          // just want the final totals row, not subtotals rows according
-          // to SQL standard.
-          SetRollupLevel(0);
-          if (m_output_slice != -1) {
-            m_join->set_ref_item_slice(m_output_slice);
-          }
-          return 0;
-        }
-        if (m_join->grouped || m_join->group_optimized_away) {
-          SetRollupLevel(m_join->send_group_parts);
-          return -1;
-        } else {
-          // If there's no GROUP BY, we need to output a row even if there are
-          // no input rows.
+        if (!(m_join->grouped || m_join->group_optimized_away) || m_rollup) {
+          // If there's no GROUP BY or if there is ROLLUP, we need to output
+          // a row even if there are no input rows.
 
           // Calculate aggregate functions for no rows
           for (Item *item : *m_join->get_current_fields()) {
@@ -305,10 +292,17 @@ int AggregateIterator::DoRead() {
           for (Item_sum **item = m_join->sum_funcs; *item != nullptr; ++item) {
             (*item)->clear();
           }
+          // No rows in result set, but we must output one grouping row: we
+          // just want the final totals row, not subtotals rows according
+          // to SQL standard.
+          SetRollupLevel(0);
+
           if (m_output_slice != -1) {
             m_join->set_ref_item_slice(m_output_slice);
           }
           return 0;
+        } else {
+          return -1;
         }
       }
       if (err != 0) return err;
