@@ -2459,3 +2459,28 @@ SUM(UTC_DATE()) OVER()
 20090416
 SET timestamp=default;
 DROP TABLE t1;
+#
+# Bug#38203473: Assertion `is_nullable()' in Item_typecast_signed::val_int
+#               at sql/item_func.cc
+CREATE TABLE t1 (f1 INTEGER, f2 INTEGER, PRIMARY KEY (f1));
+EXPLAIN FORMAT=tree SELECT f1 FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f1);
+EXPLAIN
+-> Zero input rows (no matching row in const table), aggregated into one output row  (cost=0..0 rows=1)
+
+SELECT f1 FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f1);
+f1
+NULL
+EXPLAIN FORMAT=tree SELECT f1, AVG(f2), COUNT(f2) FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f1);
+EXPLAIN
+-> Zero input rows (no matching row in const table), aggregated into one output row  (cost=0..0 rows=1)
+
+SELECT f1, AVG(f2), COUNT(f2) FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f1);
+f1	AVG(f2)	COUNT(f2)
+NULL	NULL	0
+EXPLAIN FORMAT=tree SELECT f1, AVG(f2), COUNT(f2) FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f1) HAVING FALSE;
+EXPLAIN
+-> Zero rows (Impossible HAVING)  (cost=0..0 rows=0)
+
+SELECT f1, AVG(f2), COUNT(f2) FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f1) HAVING FALSE;
+f1	AVG(f2)	COUNT(f2)
+DROP TABLE t1;

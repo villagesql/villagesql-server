@@ -2812,6 +2812,12 @@ class Item_rollup_sum_switcher final : public Item_sum {
     assert(false);
     return true;
   }
+  void no_rows_in_result() override {
+    // Produce a single grouping row with NULLs for all group by
+    // expressions and grand total for aggregates.
+    set_current_rollup_level(0);
+    master()->no_rows_in_result();
+  }
 
   bool reset_and_add_for_rollup(int last_unchanged_group_item_idx);
 

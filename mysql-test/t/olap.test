@@ -1389,3 +1389,21 @@ SET timestamp=UNIX_TIMESTAMP('2009-04-16 12:46:00');
 SELECT SUM(UTC_DATE()) OVER() FROM t1 GROUP BY UTC_DATE() WITH ROLLUP;
 SET timestamp=default;
 DROP TABLE t1;
+
+--echo #
+--echo # Bug#38203473: Assertion `is_nullable()' in Item_typecast_signed::val_int
+--echo #               at sql/item_func.cc
+
+CREATE TABLE t1 (f1 INTEGER, f2 INTEGER, PRIMARY KEY (f1));
+let $query = SELECT f1 FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f1);
+--skip_if_hypergraph
+--eval EXPLAIN FORMAT=tree $query
+--eval $query
+let $query = SELECT f1, AVG(f2), COUNT(f2) FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f1);
+--skip_if_hypergraph
+--eval EXPLAIN FORMAT=tree $query
+--eval $query
+let $query = SELECT f1, AVG(f2), COUNT(f2) FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f1) HAVING FALSE;
+--eval EXPLAIN FORMAT=tree $query
+--eval $query
+DROP TABLE t1;
