@@ -7058,7 +7058,8 @@ server_ssl_verify=DISABLED
 
       <tt>let <b>$var_name</b> = query_get_value(<b>query</b>,
                                                  <b>col_name</b>,
-                                                 <b>row_num</b>)</tt>
+                                                 <b>row_num</b>,
+                                                 [<b>result_set_num</b>])</tt>
 
       Assign a value to a variable. The variable name cannot contain
       whitespace or the “<b>=</b>” character. Except for the one-digit
@@ -7258,7 +7259,8 @@ server_ssl_verify=DISABLED
     </li>
 
     <li>
-      <tt>query_get_value(<b>query</b>, <b>col_name</b>, <b>row_num</b>)</tt>
+      <tt>query_get_value(<b>query</b>, <b>col_name</b>, <b>row_num</b>,
+                          [<b>result_set_num</b>])</tt>
 
       The <b>query_get_value()</b> function can be used only on the
       right hand side of a variable assigment in a <b>let</b>
@@ -7270,8 +7272,11 @@ server_ssl_verify=DISABLED
       execute. The second and third arguments indicate the column name
       and row number that specify which value to extract from the
       result set. The column name is case sensitive. Row numbers begin
-      with 1. The arguments can be given literally or supplied using
-      variables.
+      with 1. An optional fourth argument can be used to specify a result
+      set number when a query can return multiple result-sets and a value
+      from a specific result set needs to be retrieved. When this argument
+      is not used, the first result set is considered by default. The
+      arguments can be given literally or supplied using variables.
 
       Suppose that the test file contains this input:
 
