@@ -65,7 +65,7 @@ class User_password_verification : public ::testing::Test {
   const char *const EXPECTED_NATIVE_HASH =
       "*BF201911C951DCC0264E2C7577977E0A3EF06695";
   const char *const EXPECTED_SHA256_HASH =
-      "$5$1S> j#F2}Vz3yqu`fC8X$2FrYwvcQ8TILb88YW.5nziXuS3iXItGwXtKflgMlEZ/";
+      "$5$1S> j#F2}Vz3yqu`fC8X$HrURSrHutEhr6orwomWpNiRquOS/xy9DzQFj5TuVHn0";
   const char *const WRONG_PASSWD = "ALA_MA_KACA";
   const char *const GOOD_PASSWD = "ALA_MA_KOTA";
 
