@@ -5943,7 +5943,8 @@ bool Item_field::fix_outer_field(THD *thd, Field **base_field,
   to NULL if its qualifying query returns zero rows.
 
   This is true for non-aggregated column references in the SELECT list,
-  if the query block uses aggregation without grouping. For example:
+  if the query block uses aggregation without grouping or when the query
+  has rollup. For example:
 
       SELECT COUNT(*), col FROM t WHERE some_condition
 
@@ -5972,10 +5973,10 @@ bool is_null_on_empty_table(THD *thd, Item_field *i) {
     optimize subquery expressions as their optimization may lead to evaluation
     of the item (e.g. in create_ref_for_key()).
     However there is one exception where QQ's result is not empty even though
-    FROM clause's result is: when QQ is implicitly aggregated. In that case,
-    return_zero_rows() sets all tables' columns to NULL and any expression in
-    QQ's SELECT list is evaluated; to prepare for this, we mark the item 'i'
-    as nullable below.
+    FROM clause's result is: when QQ is implicitly aggregated or when ROLLUP
+    is present in the query. In that case, return_zero_rows() sets all tables'
+    columns to NULL and any expression in QQ's SELECT list is evaluated; to
+    prepare for this, we mark the item 'i' as nullable below.
     - If item is not outer reference, we can reliably know if QQ is
     aggregated by testing QQ->with_sum_func
     - if it's outer reference, QQ->with_sum_func may not yet be set, e.g. if
@@ -6010,13 +6011,15 @@ bool is_null_on_empty_table(THD *thd, Item_field *i) {
 
   if (qsl != nullptr)
     return qsl->resolve_place == Query_block::RESOLVE_SELECT_LIST &&
-           (sl->with_sum_func || qsl->with_sum_func) &&
-           qsl->group_list.elements == 0;
+           (((sl->with_sum_func || qsl->with_sum_func) &&
+             qsl->group_list.elements == 0) ||
+            qsl->olap == ROLLUP_TYPE);
   else
     return (sl->resolve_place == Query_block::RESOLVE_SELECT_LIST ||
             (thd->lex->using_hypergraph_optimizer() && sl->is_ordered())) &&
-           sl->with_sum_func && sl->group_list.elements == 0 &&
-           thd->lex->in_sum_func == nullptr;
+           ((sl->with_sum_func && sl->group_list.elements == 0 &&
+             thd->lex->in_sum_func == nullptr) ||
+            sl->olap == ROLLUP_TYPE);
 }
 
 /**

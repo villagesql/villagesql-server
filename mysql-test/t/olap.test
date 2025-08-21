@@ -1,6 +1,7 @@
 --disable_warnings
 DROP TABLE IF EXISTS t1,t2;
 --enable_warnings
+--source include/elide_costs.inc
 
 SET @sav_dpi= @@div_precision_increment;
 SET div_precision_increment= 5;
@@ -1395,6 +1396,7 @@ DROP TABLE t1;
 --echo #               at sql/item_func.cc
 
 CREATE TABLE t1 (f1 INTEGER, f2 INTEGER, PRIMARY KEY (f1));
+# ROLLUP outputs one row for empty result
 let $query = SELECT f1 FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f1);
 --skip_if_hypergraph
 --eval EXPLAIN FORMAT=tree $query
@@ -1406,4 +1408,27 @@ let $query = SELECT f1, AVG(f2), COUNT(f2) FROM t1 WHERE f1 = 10 GROUP BY ROLLUP
 let $query = SELECT f1, AVG(f2), COUNT(f2) FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f1) HAVING FALSE;
 --eval EXPLAIN FORMAT=tree $query
 --eval $query
+
+SET @saved_sql_mode = @@sql_mode;
+SET @saved_opt_switch = @@optimizer_switch;
+SET sql_mode='';
+SET optimizer_switch="subquery_to_derived=on";
+let $query = SELECT f1 FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f2) ORDER BY CAST(f1 AS SIGNED);
+--replace_regex $elide_costs
+--skip_if_hypergraph
+--eval EXPLAIN FORMAT=tree $query
+--skip_if_hypergraph # Different execution path. Gives wrong result
+--eval $query
+let $query = SELECT f1 FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f2) HAVING f1 IS NOT NULL;
+--replace_regex $elide_costs
+--skip_if_hypergraph
+--eval EXPLAIN FORMAT=tree $query
+--skip_if_hypergraph # Different execution path. Gives wrong result
+--eval $query
+let $query = SELECT (SELECT 'a' FROM t1 AS t2 WHERE t2.f1 = CAST(t1.f1 AS SIGNED)) = 'aa' FROM t1 GROUP BY ROLLUP(f1);
+--skip_if_hypergraph # Different execution path. Gives wrong result
+--eval $query
+SET sql_mode=@saved_sql_mode;
+SET optimizer_switch=@saved_opt_switch;
+
 DROP TABLE t1;

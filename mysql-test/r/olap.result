@@ -2483,4 +2483,31 @@ EXPLAIN
 
 SELECT f1, AVG(f2), COUNT(f2) FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f1) HAVING FALSE;
 f1	AVG(f2)	COUNT(f2)
+SET @saved_sql_mode = @@sql_mode;
+SET @saved_opt_switch = @@optimizer_switch;
+SET sql_mode='';
+SET optimizer_switch="subquery_to_derived=on";
+EXPLAIN FORMAT=tree SELECT f1 FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f2) ORDER BY CAST(f1 AS SIGNED);
+EXPLAIN
+-> Sort: cast(t1.f1 as signed)
+    -> Stream results  (rows=2)
+        -> Group (no aggregates)  (rows=2)
+            -> Constant row from t1  (rows=1)
+
+SELECT f1 FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f2) ORDER BY CAST(f1 AS SIGNED);
+f1
+NULL
+EXPLAIN FORMAT=tree SELECT f1 FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f2) HAVING f1 IS NOT NULL;
+EXPLAIN
+-> Filter: (t1.f1 is not null)  (rows=2)
+    -> Group (no aggregates)  (rows=2)
+        -> Constant row from t1  (rows=1)
+
+SELECT f1 FROM t1 WHERE f1 = 10 GROUP BY ROLLUP(f2) HAVING f1 IS NOT NULL;
+f1
+SELECT (SELECT 'a' FROM t1 AS t2 WHERE t2.f1 = CAST(t1.f1 AS SIGNED)) = 'aa' FROM t1 GROUP BY ROLLUP(f1);
+(SELECT 'a' FROM t1 AS t2 WHERE t2.f1 = CAST(t1.f1 AS SIGNED)) = 'aa'
+NULL
+SET sql_mode=@saved_sql_mode;
+SET optimizer_switch=@saved_opt_switch;
 DROP TABLE t1;
