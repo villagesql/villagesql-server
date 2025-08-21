@@ -503,6 +503,7 @@ Hibernate and JPA.
 %if 0%{?with_meb}
 %package        backup
 Summary:        MySQL Enterprise Backup
+Requires:       %{name}-server = %{version}-%{release}
 Group:          Applications/Databases
 Provides:       meb = %{version}-%{release}
 Provides:       meb%{?_isa} = %{version}-%{release}
