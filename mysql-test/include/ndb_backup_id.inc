@@ -24,7 +24,7 @@ if (!$_exists)
   select * from test.backup_info;
   die Could not read backup id from backup_info table;
 }
-let $the_backup_id = `SELECT b from test.backup_info where a = 520093696`;
+let $the_backup_id = `SELECT b & 0xffffffff from test.backup_info where a = 520093696`;
 
 DROP TABLE test.backup_info;
 

@@ -3,6 +3,8 @@
 ######################################################################
 
 -- source include/have_ndb.inc
+-- source suite/ndb/include/backup_restore_setup.inc
+
 
 # Directory containing the saved backup files
 let $backup_data_dir=$MYSQL_TEST_DIR/suite/ndb/backups;
@@ -725,7 +727,7 @@ DROP TABLE ndb_restore_output;
 --enable_query_log
 
 --echo Test backupid ranges
---echo Test generation backup with max id (2^32 - 2)
+--echo Test generation backup with max explicit id (2^32 - 2)
 --exec $NDB_MGM -e "start backup 4294967294" >> $NDB_TOOLS_OUTPUT
 
 --echo Check ndb_restore can open max id backup
@@ -733,7 +735,26 @@ DROP TABLE ndb_restore_output;
 --exec $NDB_RESTORE -b4294967294 -n 1 -r --print_data $NDB_BACKUPS-4294967294 >> $NDB_TOOLS_OUTPUT
 --exec $NDB_RESTORE -b4294967294 -n 2 -r --print_data $NDB_BACKUPS-4294967294 >> $NDB_TOOLS_OUTPUT
 
+--echo Test behaviour of generating auto-numbered
+--echo next backup of 2^32-1
+--exec $NDB_MGM -e "start backup" >> $NDB_TOOLS_OUTPUT
+
+--echo Check ndb_restore can open max id backup
+--exec $NDB_RESTORE -b4294967295 -n 1 -r --print_meta $NDB_BACKUPS-4294967295 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b4294967295 -n 1 -r --print_data $NDB_BACKUPS-4294967295 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b4294967295 -n 2 -r --print_data $NDB_BACKUPS-4294967295 >> $NDB_TOOLS_OUTPUT
+
+--echo Test behaviour of generating auto-numbered
+--echo next backup of 0
+--exec $NDB_MGM -e "start backup" >> $NDB_TOOLS_OUTPUT
+
+--echo Check ndb_restore can open zero id backup
+--exec $NDB_RESTORE -b0 -n 1 -r --print_meta $NDB_BACKUPS-0 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b0 -n 1 -r --print_data $NDB_BACKUPS-0 >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b0 -n 2 -r --print_data $NDB_BACKUPS-0 >> $NDB_TOOLS_OUTPUT
+
 --echo Test behaviour with start backup + out-of-range backup ids
+--echo MGM client allows 1..4294967294 (not 0 or 4294967295)
 --replace_regex /localhost:[0-9]*/localhost:<MGMD-PORT>/
 --error 255
 --exec $NDB_MGM -e "start backup 0"
@@ -747,12 +768,19 @@ DROP TABLE ndb_restore_output;
 --error 255
 --exec $NDB_MGM -e "start backup 999999999999"
 
---echo Test behaviour of ndb_restore with out-of-range backup ids
---error 2
---exec $NDB_RESTORE -b0 -n 1 -r --print_meta $NDB_BACKUPS-0
---error 2
---exec $NDB_RESTORE -b4294967295 -n 1 -r --print_meta $NDB_BACKUPS-0
+--echo Test behaviour of ndb_restore with various backup ids
+--echo Too large are rejected
 --error 2
 --exec $NDB_RESTORE -b4294967296 -n 1 -r --print_meta $NDB_BACKUPS-0
 --error 2
 --exec $NDB_RESTORE -b999999999999 -n 1 -r --print_meta $NDB_BACKUPS-0
+--echo Negative are rejected
+--error 2
+--exec $NDB_RESTORE -b-1 -n 1 -r --print_meta $NDB_BACKUPS-0
+--error 2
+--exec $NDB_RESTORE -b-2 -n 1 -r --print_meta $NDB_BACKUPS-0
+--echo No id is rejected
+--error 2
+--exec $NDB_RESTORE -n 1 -r --print_meta $NDB_BACKUPS-0
+
+-- source suite/ndb/include/backup_restore_cleanup.inc

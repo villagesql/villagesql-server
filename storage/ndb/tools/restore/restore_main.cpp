@@ -49,6 +49,7 @@ extern RestoreLogger restoreLogger;
 static Uint32 g_tableCompabilityMask = 0;
 static int ga_nodeId = 0;
 static int ga_nParallelism = 128;
+static int64 ga_inputBackupId = -1;
 static Uint32 ga_backupId = 0;
 bool ga_dont_ignore_systab_0 = false;
 static bool ga_no_upgrade = false;
@@ -257,8 +258,8 @@ static struct my_option my_long_options[] =
     (uchar**) &ga_nodeId, (uchar**) &ga_nodeId, 0,
     GET_INT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
   { "backupid", 'b', "Backup id",
-    (uchar**) &ga_backupId, (uchar**) &ga_backupId, 0,
-    GET_UINT, REQUIRED_ARG, 0, 0, 0, 0, 0, 0 },
+    (uchar**) &ga_inputBackupId, (uchar**) &ga_backupId, 0,
+    GET_LL, REQUIRED_ARG, -1, -1, 0, 0, 0, 0 },
   { "restore_data", 'r', 
     "Restore table data/logs into NDB Cluster using NDBAPI", 
     (uchar**) &_restore_data, (uchar**) &_restore_data,  0,
@@ -697,18 +698,19 @@ get_one_option(int optid, const struct my_option *opt MY_ATTRIBUTE((unused)),
   case 'n':
     if (ga_nodeId == 0)
     {
-      err << "Error in --nodeid,-n setting, see --help";
+      err << "Error in --nodeid,-n setting, see --help" << endl;
       exit(NdbRestoreStatus::WrongArgs);
     }
     info.setLevel(254);
     info << "Nodeid = " << ga_nodeId << endl;
     break;
   case 'b':
-    if (ga_backupId == 0 || ga_backupId == ~Uint32(0))
+    if (ga_inputBackupId == -1 || ga_inputBackupId >= (int64(1) << 32))
     {
-      err << "Error in --backupid,-b setting, see --help";
+      err << "Error in --backupid,-b setting, see --help" << endl;
       exit(NdbRestoreStatus::WrongArgs);
     }
+    ga_backupId = Uint32(ga_inputBackupId);
     info.setLevel(254);
     info << "Backup Id = " << ga_backupId << endl;
     break;
@@ -845,7 +847,7 @@ readArguments(int *pargc, char*** pargv)
     err << "Backup file node ID not specified, please provide --nodeid" << endl;
     exit(NdbRestoreStatus::WrongArgs);
   }
-  if (ga_backupId == 0)
+  if (ga_inputBackupId == -1)
   {
     err << "Backup ID not specified, please provide --backupid" << endl;
     exit(NdbRestoreStatus::WrongArgs);
