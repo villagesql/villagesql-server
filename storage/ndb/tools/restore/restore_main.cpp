@@ -62,6 +62,7 @@ extern RestoreLogger restoreLogger;
 static Uint32 g_tableCompabilityMask = 0;
 static int ga_nodeId = 0;
 static int ga_nParallelism = 128;
+static int64 ga_inputBackupId = -1;
 static Uint32 ga_backupId = 0;
 bool ga_dont_ignore_systab_0 = false;
 static bool ga_no_upgrade = false;
@@ -289,8 +290,8 @@ static struct my_option my_long_options[] = {
      "Read encryption password for backup file from stdin",
      &opt_backup_password_from_stdin.opt_value, nullptr, 0, GET_BOOL, NO_ARG, 0,
      0, 0, nullptr, 0, &opt_backup_password_from_stdin},
-    {"backupid", 'b', "Backup id", &ga_backupId, nullptr, nullptr, GET_UINT,
-     REQUIRED_ARG, 0, 0, 0, 0, 0, 0},
+    {"backupid", 'b', "Backup id", &ga_inputBackupId, nullptr, nullptr, GET_LL,
+     REQUIRED_ARG, -1, -1, 0, 0, 0, 0},
     {"decrypt", NDB_OPT_NOSHORT, "Decrypt file", &opt_decrypt, nullptr, nullptr,
      GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
     {"restore_data", 'r',
@@ -553,10 +554,11 @@ static bool get_one_option(int optid, const struct my_option *opt,
       info << "Nodeid = " << ga_nodeId << endl;
       break;
     case 'b':
-      if (ga_backupId == 0 || ga_backupId == ~Uint32(0)) {
+      if (ga_inputBackupId == -1 || (ga_inputBackupId >= (int64(1) << 32))) {
         err << "Error in --backupid,-b setting, see --help" << endl;
         exitHandler(NdbToolsProgramExitCode::WRONG_ARGS);
       }
+      ga_backupId = Uint32(ga_inputBackupId);
       info.setLevel(254);
       info << "Backup Id = " << ga_backupId << endl;
       break;
@@ -690,7 +692,7 @@ bool readArguments(Ndb_opts &opts, char ***pargv) {
     err << "Backup file node ID not specified, please provide --nodeid" << endl;
     exitHandler(NdbToolsProgramExitCode::WRONG_ARGS);
   }
-  if (ga_backupId == 0) {
+  if (ga_inputBackupId == -1) {
     err << "Backup ID not specified, please provide --backupid" << endl;
     exitHandler(NdbToolsProgramExitCode::WRONG_ARGS);
   }
