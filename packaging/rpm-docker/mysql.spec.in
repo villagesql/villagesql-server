@@ -486,6 +486,9 @@ rm -r $(readlink var) var
 %attr(755, root, root) %{_bindir}/mysql_tzinfo_to_sql
 %attr(755, root, root) %{_bindir}/my_print_defaults
 %attr(755, root, root) %{_bindir}/mysql_migrate_keyring
+%if 0%{?commercial}
+%attr(755, root, root) %{_bindir}/mysqldm
+%endif # commercial
 
 %dir %{_libdir}/mysql/private
 %attr(755, root, root) %{_libdir}/mysql/private/libicui18n.so.77.1

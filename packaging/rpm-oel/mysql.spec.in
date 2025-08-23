@@ -1517,6 +1517,9 @@ fi
 %attr(644, root, root) %{_mandir}/man1/mysqlshow.1*
 %attr(644, root, root) %{_mandir}/man1/mysqlslap.1*
 %attr(644, root, root) %{_mandir}/man1/mysql_config_editor.1*
+%if 0%{?commercial}
+%attr(755, root, root) %{_bindir}/mysqldm
+%endif # commercial
 
 
 %if 0%{?cluster}

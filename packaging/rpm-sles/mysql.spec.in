@@ -1124,6 +1124,9 @@ fi
 %attr(755, root, root) %{_bindir}/mysqlslap
 %attr(755, root, root) %{_bindir}/mysql_config_editor
 %attr(755, root, root) %{_bindir}/mysql_migrate_keyring
+%if 0%{?commercial}
+%attr(755, root, root) %{_bindir}/mysqldm
+%endif # commercial
 
 %attr(644, root, root) %{_mandir}/man1/mysql.1*
 %attr(644, root, root) %{_mandir}/man1/mysqladmin.1*

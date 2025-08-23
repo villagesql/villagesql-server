@@ -99,6 +99,11 @@ IF (DEB_PRODUCT STREQUAL "commercial")
   SET (DEB_NOTPRODUCTNAME "${DEB_BASE_PRODUCT}community")
   SET (DEB_LICENSENAME "Commercial")
   SET (DEB_SERVERVERSION "${DEB_BASE_VERSION}+commercial-1")
+# Commercial only client
+  SET (DEB_INSTALL_CLIENT_EXTRA
+"
+usr/bin/mysqldm
+")
   # List of plugins that are only in commercial packages
   # Plugins that are in both community and commercial should NOT be added here
   SET (DEB_INSTALL_SERVER_PLUGINS
