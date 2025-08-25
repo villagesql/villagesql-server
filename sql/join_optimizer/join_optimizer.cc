@@ -302,6 +302,9 @@ using AccessPathArray = Prealloced_array<AccessPath *, 4>;
  */
 class CostingReceiver {
   friend class RefAccessBuilder;
+  /// Descriptive reason for using ZERO_ROW paths.
+  static constexpr const char *kWhereAlwaysFalse{
+      "WHERE condition is always false"};
 
  public:
   CostingReceiver(
@@ -728,6 +731,10 @@ class CostingReceiver {
                                       AccessPath *path,
                                       const char *description_for_trace);
 
+  /// Propose a ZERO_ROW access path (because the WHERE-condition is
+  /// always false).
+  void ProposeZeroRowsAccessPath(int node_idx);
+
   /**
      Make a path that materializes 'table'.
      @param path The table access path for the materialized table.
@@ -1041,6 +1048,10 @@ class RefAccessBuilder final {
     m_ordering_idx = val;
     return *this;
   }
+  RefAccessBuilder &set_eq_ref_only(bool val) {
+    m_eq_ref_only = val;
+    return *this;
+  }
 
   /**
      Propose an AccessPath if we found a suitable match betweeen the key
@@ -1073,6 +1084,9 @@ class RefAccessBuilder final {
 
   /// The output ordering of the AccessPath we propose.
   int m_ordering_idx;
+
+  /// True if we only want EQ_REF paths (no REFs).
+  bool m_eq_ref_only{false};
 
   // Shorthand functions.
   THD *thd() const { return m_receiver->m_thd; }
@@ -1150,8 +1164,8 @@ RefAccessBuilder::KeyMatch RefAccessBuilder::FindKeyMatch() const {
         // Quick reject.
         continue;
       }
-      Item_func_eq *item = down_cast<Item_func_eq *>(
-          graph()->predicates[sp.predicate_index].condition);
+      Item_func *const condition{down_cast<Item_func *>(
+          graph()->predicates[sp.predicate_index].condition)};
       if (sp.field->eq(keyinfo.field)) {
         const table_map other_side_tables = sp.other_side->used_tables();
         const table_map parameter_tables =
@@ -1160,9 +1174,12 @@ RefAccessBuilder::KeyMatch RefAccessBuilder::FindKeyMatch() const {
           result.parameter_tables |= parameter_tables;
           matched_this_keypart = true;
           result.keyparts[keypart_idx].field = sp.field;
-          result.keyparts[keypart_idx].condition = item;
+          result.keyparts[keypart_idx].condition = condition;
           result.keyparts[keypart_idx].val = sp.other_side;
-          result.keyparts[keypart_idx].null_rejecting = true;
+          // The <=> operator does not reject NULLs.
+          result.keyparts[keypart_idx].null_rejecting =
+              condition->functype() == Item_func::EQ_FUNC;
+
           result.keyparts[keypart_idx].used_tables = other_side_tables;
           result.keyparts[keypart_idx].can_evaluate = sp.can_evaluate;
           ++result.matched_keyparts;
@@ -1297,6 +1314,12 @@ AccessPath RefAccessBuilder::MakePath(
     const RefAccessBuilder::KeyMatch &key_match,
     const RefAccessBuilder::Lookup &lookup, double num_output_rows) const {
   KEY *const key{&m_table->key_info[m_key_idx]};
+
+  assert(!Overlaps(actual_key_flags(key), HA_NULL_PART_KEY) ||
+         std::any_of(key->key_part, key->key_part + key->actual_key_parts,
+                     [](const KEY_PART_INFO &key_part) {
+                       return key_part.field->is_nullable();
+                     }));
   // We are guaranteed to get a single row back if all of these hold:
   //
   //  - The index must be unique.
@@ -1446,6 +1469,12 @@ ProposeResult RefAccessBuilder::ProposePath() const {
                                ? kUnknownRowCount
                                : predicate_analysis.value().selectivity *
                                      m_table->file->stats.records)};
+
+  if (m_eq_ref_only && path.type != AccessPath::EQ_REF) {
+    assert(path.type == AccessPath::REF);
+    return ProposeResult::kNoPathFound;
+  }
+
   const double row_count{
       m_force_num_output_rows_after_filter == kUnknownRowCount
           ? kUnknownRowCount
@@ -1546,37 +1575,15 @@ CostingReceiver::FindRangeScansResult CostingReceiver::FindRangeScans(
                                               : FindRangeScansResult::kOk};
   }
 
-  const char *const cause = "WHERE condition is always false";
   if (!IsBitSet(node_idx, m_graph->nodes_inner_to_outer_join |
                               m_graph->nodes_inner_to_antijoin)) {
     // The entire top-level join is going to be empty, so we can abort the
     // planning and return a zero rows plan.
-    m_query_block->join->zero_result_cause = cause;
+    m_query_block->join->zero_result_cause = kWhereAlwaysFalse;
     return {kUnknownRowCount, FindRangeScansResult::kError};
   }
 
-  AccessPath *const table_path = NewTableScanAccessPath(
-      m_thd, table_ref->table, /*count_examined_rows=*/false);
-
-  AccessPath *const zero_path = NewZeroRowsAccessPath(m_thd, table_path, cause);
-
-  // We need to get the set of functional dependencies right,
-  // even though we don't need to actually apply any filters.
-  FunctionalDependencySet new_fd_set;
-  ApplyPredicatesForBaseTable(
-      node_idx,
-      NoAppliedPredicates(m_thd->mem_root, m_graph->predicates.size()),
-      /*materialize_subqueries=*/false, kUnknownRowCount, zero_path,
-      &new_fd_set);
-
-  zero_path->filter_predicates =
-      OverflowBitset::EmptySet(m_thd->mem_root, m_graph->predicates.size());
-
-  zero_path->ordering_state =
-      m_orderings->ApplyFDs(zero_path->ordering_state, new_fd_set);
-
-  ProposeAccessPathWithOrderings(TableBitmap(node_idx), new_fd_set,
-                                 /*obsolete_orderings=*/0, zero_path, "");
+  ProposeZeroRowsAccessPath(node_idx);
 
   if (TraceStarted(m_thd)) {
     TraceAccessPaths(TableBitmap(node_idx));
@@ -1682,6 +1689,32 @@ std::optional<CostingReceiver::ProposeRefsResult> CostingReceiver::ProposeRefs(
     }
   }
   return result;
+}
+
+void CostingReceiver::ProposeZeroRowsAccessPath(int node_idx) {
+  AccessPath *const table_path = NewTableScanAccessPath(
+      m_thd, m_graph->nodes[node_idx].table(), /*count_examined_rows=*/false);
+
+  AccessPath *const zero_path =
+      NewZeroRowsAccessPath(m_thd, table_path, kWhereAlwaysFalse);
+
+  // We need to get the set of functional dependencies right,
+  // even though we don't need to actually apply any filters.
+  FunctionalDependencySet new_fd_set;
+  ApplyPredicatesForBaseTable(
+      node_idx,
+      NoAppliedPredicates(m_thd->mem_root, m_graph->predicates.size()),
+      /*materialize_subqueries=*/false, kUnknownRowCount, zero_path,
+      &new_fd_set);
+
+  zero_path->filter_predicates =
+      OverflowBitset::EmptySet(m_thd->mem_root, m_graph->predicates.size());
+
+  zero_path->ordering_state =
+      m_orderings->ApplyFDs(zero_path->ordering_state, new_fd_set);
+
+  ProposeAccessPathWithOrderings(TableBitmap(node_idx), new_fd_set,
+                                 /*obsolete_orderings=*/0, zero_path, "");
 }
 
 /**
@@ -3622,6 +3655,7 @@ bool CostingReceiver::ProposeAllUniqueIndexLookupsWithConstantKey(int node_idx,
                   .set_key_idx(index_info.key_idx)
                   .set_ordering_idx(
                       m_orderings->RemapOrderingIndex(index_info.forward_order))
+                  .set_eq_ref_only(true)
                   .ProposePath()) {
         case ProposeResult::kError:
           return true;
@@ -8615,7 +8649,7 @@ static AccessPathArray ApplyWindowFunctions(
   Find out if "value" has a type which is compatible with "field" so that it can
   be used for an index lookup if there is an index on "field".
  */
-static bool CompatibleTypesForIndexLookup(Item_func_eq *eq_item, Field *field,
+static bool CompatibleTypesForIndexLookup(Item_eq_base *eq_item, Field *field,
                                           Item *value) {
   if (!comparable_in_index(eq_item, field, Field::itRAW, eq_item->functype(),
                            value)) {
@@ -8647,66 +8681,62 @@ static bool CompatibleTypesForIndexLookup(Item_func_eq *eq_item, Field *field,
      (predicate_index = -1). This will never happen for WHERE conditions,
      only for join conditions.
  */
-static void PossiblyAddSargableCondition(
-    THD *thd, Item *item, const CompanionSet &companion_set, TABLE *force_table,
-    int predicate_index, bool is_join_condition, JoinHypergraph *graph) {
-  if (!is_function_of_type(item, Item_func::EQ_FUNC)) {
-    return;
-  }
-  Item_func_eq *eq_item = down_cast<Item_func_eq *>(item);
-  if (eq_item->get_comparator()->get_child_comparator_count() >= 2) {
-    return;
-  }
-  for (unsigned arg_idx = 0; arg_idx < 2; ++arg_idx) {
-    Item **args = eq_item->arguments();
-    Item *left = args[arg_idx];
-    Item *right = args[1 - arg_idx];
-    if (left->type() != Item::FIELD_ITEM) {
-      continue;
-    }
-    Field *field = down_cast<Item_field *>(left)->field;
+static void PossiblyAddSargableCondition(THD *thd, Item *item,
+                                         const CompanionSet &companion_set,
+                                         const TABLE *force_table,
+                                         int predicate_index,
+                                         bool is_join_condition,
+                                         JoinHypergraph *graph) {
+  // Try to add field=other_side (or field <=> other_side) as a sargable
+  // condition. Return 'true'  if we know that we should not check the mirror
+  // condition (e.g. other_size <=> field), 'false' otherwise.
+  // Note: eq_item==nullptr means that the condition is "field IS NULL".
+  const auto add_condition = [&](Item_eq_base *eq_item, Field *field,
+                                 Item *other_side) {
     TABLE *table = field->table;
     if (force_table != nullptr && force_table != table) {
-      continue;
+      return false;
     }
     if (field->part_of_key.is_clear_all()) {
       // Not part of any key, so not sargable. (It could be part of a prefix
       // key, though, but we include them for now.)
-      continue;
+      return false;
     }
     if (Overlaps(table->file->ha_table_flags(), HA_NO_INDEX_ACCESS)) {
       // Can't use index lookups on this table, so not sargable.
-      continue;
+      return false;
     }
     JoinHypergraph::Node *node = FindNodeWithTable(graph, table);
     if (node == nullptr) {
       // A field in a different query block, so not sargable for us.
-      continue;
+      return false;
     }
 
     // If the equality comes from a multiple equality, we have already verified
     // that the types of the arguments match exactly. For other equalities, we
     // need to check more thoroughly if the types are compatible.
-    if (eq_item->source_multiple_equality != nullptr) {
-      assert(CompatibleTypesForIndexLookup(eq_item, field, right));
-    } else if (!CompatibleTypesForIndexLookup(eq_item, field, right)) {
-      continue;
+    if (eq_item != nullptr) {
+      if (eq_item->source_multiple_equality != nullptr) {
+        assert(CompatibleTypesForIndexLookup(eq_item, field, other_side));
+      } else if (!CompatibleTypesForIndexLookup(eq_item, field, other_side)) {
+        return false;
+      }
     }
 
-    const table_map used_tables_left = table->pos_in_table_list->map();
-    const table_map used_tables_right = right->used_tables();
+    const table_map used_tables_field = table->pos_in_table_list->map();
+    const table_map used_tables_other_side = other_side->used_tables();
 
-    if (Overlaps(used_tables_left, used_tables_right)) {
-      // Not sargable if the tables on the left and right side overlap, such as
-      // t1.x = t1.y + t2.x. Will not be sargable in the opposite direction
-      // either, so "break" instead of "continue".
-      break;
+    if (Overlaps(used_tables_field, used_tables_other_side)) {
+      // Not sargable if the tables on the field and other_side side overlap,
+      // such as t1.x = t1.y + t2.x. Will not be sargable in the opposite
+      // direction either.
+      return true;
     }
 
-    if (Overlaps(used_tables_right, RAND_TABLE_BIT)) {
+    if (Overlaps(used_tables_other_side, RAND_TABLE_BIT)) {
       // Non-deterministic predicates are not sargable. Will not be sargable in
-      // the opposite direction either, so "break" instead of "continue".
-      break;
+      // the opposite direction either.
+      return true;
     }
 
     if (TraceStarted(thd)) {
@@ -8723,8 +8753,9 @@ static void PossiblyAddSargableCondition(
       // (which means in practice that it's a join predicate,
       // not a WHERE predicate), so add it so that we can refer
       // to it in bitmaps.
+      assert(eq_item != nullptr);
       Predicate p;
-      p.condition = eq_item;
+      p.condition = item;
       p.selectivity = EstimateSelectivity(thd, eq_item, companion_set);
       p.used_nodes =
           GetNodeMapFromTableMap(eq_item->used_tables() & ~PSEUDO_TABLE_BITS,
@@ -8738,18 +8769,51 @@ static void PossiblyAddSargableCondition(
       graph->AddSargableJoinPredicate(eq_item, predicate_index);
     }
 
-    // Can we evaluate the right side of the predicate during optimization (in
-    // ref_lookup_subsumes_comparison())? Don't consider items with subqueries
-    // or stored procedures constant, as we don't want to execute them during
-    // optimization.
-    const bool can_evaluate = right->const_for_execution() &&
-                              !right->has_subquery() &&
-                              !right->cost().IsExpensive();
+    // Can we evaluate the other_side side of the predicate during optimization
+    // (in ref_lookup_subsumes_comparison())? Don't consider items with
+    // subqueries or stored procedures constant, as we don't want to execute
+    // them during optimization.
+    const bool can_evaluate = other_side->const_for_execution() &&
+                              !other_side->has_subquery() &&
+                              !other_side->cost().IsExpensive();
 
-    node->AddSargable({predicate_index, field, right, can_evaluate});
-
+    node->AddSargable({predicate_index, field, other_side, can_evaluate});
     // No need to check the opposite order. We have no indexes on constants.
-    if (can_evaluate) break;
+    return can_evaluate || eq_item == nullptr;
+  };
+
+  if (item->type() != Item::FUNC_ITEM) {
+    return;
+  }
+
+  Item_func *const func{down_cast<Item_func *>(item)};
+  Item **args{func->arguments()};
+
+  switch (func->functype()) {
+    case Item_func::EQ_FUNC:
+    case Item_func::EQUAL_FUNC: {
+      Item_eq_base *const eq{down_cast<Item_eq_base *>(func)};
+      if (eq->get_comparator()->get_child_comparator_count() >= 2) {
+        return;
+      }
+      for (int i = 0; i < 2; i++) {
+        if (args[i]->type() == Item::FIELD_ITEM &&
+            add_condition(eq, down_cast<Item_field *>(args[i])->field,
+                          args[1 - i])) {
+          return;
+        }
+      }
+    } break;
+
+    case Item_func::ISNULL_FUNC:
+      if (args[0]->type() == Item::FIELD_ITEM) {
+        add_condition(nullptr, down_cast<Item_field *>(args[0])->field,
+                      new (thd->mem_root) Item_null);
+      }
+      break;
+
+    default:
+      break;
   }
 }
 
@@ -9716,6 +9780,7 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
 }
 
 AccessPath *FindBestQueryPlan(THD *thd, Query_block *query_block) {
+  assert(thd->lex->using_hypergraph_optimizer());
   assert(thd->variables.optimizer_max_subgraph_pairs <
          ulong{std::numeric_limits<int>::max()});
   int next_retry_subgraph_pairs =

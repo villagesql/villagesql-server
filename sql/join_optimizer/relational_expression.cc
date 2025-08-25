@@ -63,7 +63,7 @@ class StringJoiner final {
 
 }  // Anonymous namespace.
 
-void CompanionSet::AddEquijoinCondition(THD *thd, const Item_func_eq &eq) {
+void CompanionSet::AddEquijoinCondition(THD *thd, const Item_eq_base &eq) {
   const auto contains_field = [](const EqualTerm *term, const Field *field) {
     return std::find(term->fields->cbegin(), term->fields->cend(), field) !=
            term->fields->cend();

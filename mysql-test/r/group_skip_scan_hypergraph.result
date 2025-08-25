@@ -4391,7 +4391,7 @@ INSERT INTO t1 VALUES (NULL, 2);
 EXPLAIN FORMAT=TREE SELECT MIN(f2) FROM t1 WHERE f1 IS NULL GROUP BY f1;
 EXPLAIN
 -> Group aggregate: min(t1.f2)  (rows=1)
-    -> Covering index range scan on t1 using f1 over (f1 = NULL)  (rows=2)
+    -> Covering index lookup on t1 using f1 (f1 = NULL)  (rows=2)
 
 SELECT MIN(f2) FROM t1 WHERE f1 IS NULL GROUP BY f1;
 MIN(f2)

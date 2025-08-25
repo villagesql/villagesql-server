@@ -288,6 +288,9 @@ class Fake_TABLE : public TABLE {
       }
       column->set_flag(PART_KEY_FLAG);
       column->part_of_key.set_bit(index_id);
+      if (column->is_nullable()) {
+        key_flags |= HA_NULL_PART_KEY;
+      }
     }
 
     KEY &key = m_keys[index_id];

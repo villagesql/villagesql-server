@@ -3882,16 +3882,17 @@ bool MakeJoinHypergraph(THD *thd, JoinHypergraph *graph,
   ForEachOperator(root, [&](RelationalExpression *expr) {
     if (expr->type == RelationalExpression::TABLE) {
       for (const Item *condition : expr->pushable_conditions()) {
-        if (is_function_of_type(condition, Item_func::EQ_FUNC)) {
+        if (is_function_of_type(condition, Item_func::EQ_FUNC) ||
+            is_function_of_type(condition, Item_func::EQUAL_FUNC)) {
           expr->companion_set->AddEquijoinCondition(
-              thd, down_cast<const Item_func_eq &>(*condition));
+              thd, down_cast<const Item_eq_base &>(*condition));
         }
       }
     } else {
       for (const Item_eq_base *condition : expr->equijoin_conditions) {
-        if (condition->functype() == Item_func::EQ_FUNC) {
-          expr->companion_set->AddEquijoinCondition(
-              thd, down_cast<const Item_func_eq &>(*condition));
+        if (condition->functype() == Item_func::EQ_FUNC ||
+            condition->functype() == Item_func::EQUAL_FUNC) {
+          expr->companion_set->AddEquijoinCondition(thd, *condition);
         }
       }
     }

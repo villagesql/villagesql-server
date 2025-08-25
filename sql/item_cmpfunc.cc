@@ -2806,22 +2806,28 @@ static double GetEqualSelectivity(THD *thd, Item_eq_base *equal,
       return get_histogram_selectivity(
           thd, *field.field, histograms::enum_operator::EQUALS_TO, *equal);
     }
+
+    constexpr double kNotComputed{-2.0};
+    double histogram_selectivity{kNotComputed};
+
     if (equal->arguments()[0]->const_item() ||
         equal->arguments()[1]->const_item()) {
       // We prefer histograms over indexes if we are comparing a field
       // to a constant value, since histograms will give the frequency of
       // that particular value.
-      const double histogram_selectivity = get_histogram_selectivity(
+      histogram_selectivity = get_histogram_selectivity(
           thd, *field.field, histograms::enum_operator::EQUALS_TO, *equal);
       if (histogram_selectivity != kUndefinedSelectivity)
         return histogram_selectivity;
     }
+
+    double index_selectivity{kNotComputed};
+
     if (!field.field->key_start.is_clear_all()) {
       // Index estimates will be less accurate when field is not first
       // part of index, since we do not know if that field is
       // correlated with the preceding fields of the index.
-      const double index_selectivity =
-          IndexSelectivityOfUnknownValue(*field.field);
+      index_selectivity = IndexSelectivityOfUnknownValue(*field.field);
       if (index_selectivity != kUndefinedSelectivity) return index_selectivity;
     }
     // When the field is not compared with a constant, and there is no good
@@ -2833,11 +2839,20 @@ static double GetEqualSelectivity(THD *thd, Item_eq_base *equal,
         secondary_statistics::NumDistinctValues(thd, *field.field);
     if (ndv > 0.0) return 1.0 / std::ceil(ndv);
 
-    const double histogram_selectivity = get_histogram_selectivity(
-        thd, *field.field, histograms::enum_operator::EQUALS_TO, *equal);
-    return histogram_selectivity == kUndefinedSelectivity
-               ? IndexSelectivityOfUnknownValue(*field.field)
-               : histogram_selectivity;
+    if (histogram_selectivity == kNotComputed) {
+      histogram_selectivity = get_histogram_selectivity(
+          thd, *field.field, histograms::enum_operator::EQUALS_TO, *equal);
+    }
+
+    if (histogram_selectivity != kUndefinedSelectivity) {
+      return histogram_selectivity;
+    }
+
+    if (index_selectivity == kNotComputed) {
+      index_selectivity = IndexSelectivityOfUnknownValue(*field.field);
+    }
+
+    return index_selectivity;
   }();
 
   return selectivity == kUndefinedSelectivity
@@ -2861,18 +2876,19 @@ float Item_func_equal::get_filtering_effect(THD *thd,
         return 0.0;
       }
 
-      const Item_func *is_null =
-          new (thd->mem_root) Item_func_isnull(arguments()[(i + 1) % 2]);
+      // "field <=> NULL" and "field IS NULL" should behave the same way.
+      Item *is_null{new (thd->mem_root) Item_func_isnull(arguments()[1 - i])};
 
-      const double histogram_selectivity = get_histogram_selectivity(
-          thd, *fld->field, histograms::enum_operator::IS_NULL, *is_null);
-
-      if (histogram_selectivity >= 0.0) {
-        return histogram_selectivity;
-      } else {
-        return fld->get_cond_filter_default_probability(rows_in_table,
-                                                        COND_FILTER_EQUALITY);
+      if (is_null == nullptr) {
+        return COND_FILTER_ALLPASS;
       }
+
+      if (is_null->fix_fields(thd, &is_null)) {
+        return COND_FILTER_ALLPASS;
+      }
+
+      return is_null->get_filtering_effect(thd, filter_for_table, read_tables,
+                                           fields_to_ignore, rows_in_table);
     }
   }
 
@@ -6512,13 +6528,23 @@ float Item_func_isnull::get_filtering_effect(THD *thd,
       thd, read_tables, filter_for_table, fields_to_ignore);
   if (!fld) return COND_FILTER_ALLPASS;
 
-  const double selectivity = get_histogram_selectivity(
+  const double histogram_selectivity = get_histogram_selectivity(
       thd, *fld->field, histograms::enum_operator::IS_NULL, *this);
 
-  return selectivity == kUndefinedSelectivity
-             ? fld->get_cond_filter_default_probability(rows_in_table,
-                                                        COND_FILTER_EQUALITY)
-             : selectivity;
+  if (histogram_selectivity != kUndefinedSelectivity) {
+    return histogram_selectivity;
+  }
+
+  if (thd->lex->using_hypergraph_optimizer()) {
+    const double index_selectivity{IndexSelectivityOfUnknownValue(*fld->field)};
+
+    if (index_selectivity != kUndefinedSelectivity) {
+      return index_selectivity;
+    }
+  }
+
+  return fld->get_cond_filter_default_probability(rows_in_table,
+                                                  COND_FILTER_EQUALITY);
 }
 
 bool Item_func_isnull::fix_fields(THD *thd, Item **ref) {

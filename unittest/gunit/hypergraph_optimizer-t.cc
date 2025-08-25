@@ -4143,6 +4143,7 @@ TEST_P(HypergraphFullTextTest, FullTextSearch) {
   ASSERT_NE(nullptr, query_block);
 
   TraceGuard trace(m_thd);
+  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   // Prints out the query plan on failure.
@@ -4779,7 +4780,7 @@ TEST_F(HypergraphOptimizerTest, SortAheadDueToUniqueIndex) {
   Query_block *query_block = ParseAndResolve(
       "SELECT t1.x, t2.x FROM t1 JOIN t2 ON t1.x=t2.x "
       "ORDER BY t1.x, t2.x, t2.y LIMIT 10",
-      /*nullable=*/true);
+      /*nullable=*/false);
 
   // Create a unique index on t2.x. This means that t2.y is now
   // redundant, and can (will) be reduced away when creating the homogenized
@@ -4874,7 +4875,7 @@ TEST_F(HypergraphOptimizerTest, NoSortAheadOnNonUniqueIndex) {
 TEST_F(HypergraphOptimizerTest, ElideSortDueToBaseFilters) {
   Query_block *query_block = ParseAndResolve(
       "SELECT t1.x, t1.y FROM t1 WHERE t1.x=3 ORDER BY t1.x, t1.y",
-      /*nullable=*/true);
+      /*nullable=*/false);
 
   m_fake_tables["t1"]->create_index(m_fake_tables["t1"]->field[0], HA_NOSAME);
   m_fake_tables["t1"]->file->stats.records = 100;
@@ -4898,7 +4899,7 @@ TEST_F(HypergraphOptimizerTest, ElideSortDueToDelayedFilters) {
   Query_block *query_block = ParseAndResolve(
       "SELECT t1.x, t1.y FROM t1 LEFT JOIN t2 ON t1.y=t2.y WHERE t2.x IS NULL "
       "ORDER BY t2.x, t2.y ",
-      /*nullable=*/true);
+      /*nullable=*/false);
 
   m_fake_tables["t2"]->create_index(m_fake_tables["t2"]->field[0], HA_NOSAME);
   m_fake_tables["t1"]->file->stats.records = 100;
@@ -7569,6 +7570,7 @@ TEST_P(HypergraphSecondaryEngineRejectionTest, RejectPathType) {
                              param.expect_error ? ER_SECONDARY_ENGINE : 0);
 
   TraceGuard trace(m_thd);
+  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   EXPECT_EQ(param.expect_error, root == nullptr);
@@ -7598,6 +7600,7 @@ TEST_P(HypergraphSecondaryEngineRejectionTest, ErrorOnPathType) {
       m_thd, param.expect_error ? ER_SECONDARY_ENGINE_PLUGIN : 0);
 
   TraceGuard trace(m_thd);
+  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   EXPECT_EQ(param.expect_error, root == nullptr);
@@ -7640,6 +7643,7 @@ TEST_F(HypergraphSecondaryEngineTest, NoRewriteOnFinalization) {
       MakeSecondaryEngineFlags(SecondaryEngineFlag::USE_EXTERNAL_EXECUTOR);
 
   TraceGuard trace(m_thd);
+  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -7690,6 +7694,7 @@ TEST_F(HypergraphSecondaryEngineTest, ExplainWindowForExternalExecutor) {
       MakeSecondaryEngineFlags(SecondaryEngineFlag::USE_EXTERNAL_EXECUTOR);
 
   TraceGuard trace(m_thd);
+  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -7729,6 +7734,7 @@ TEST_F(HypergraphSecondaryEngineTest, NoMaterializationForExternalExecutor) {
       MakeSecondaryEngineFlags(SecondaryEngineFlag::USE_EXTERNAL_EXECUTOR);
 
   TraceGuard trace(m_thd);
+  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -7773,6 +7779,7 @@ TEST_F(HypergraphSecondaryEngineTest, DontCallCostHookForEmptyJoins) {
   };
 
   TraceGuard trace(m_thd);
+  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -7822,6 +7829,7 @@ TEST_F(SecondaryEngineGraphSimplificationTest, Restart) {
       };
 
   TraceGuard trace(m_thd);
+  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -7877,6 +7885,7 @@ TEST_F(SecondaryEngineGraphSimplificationTest, Triggered) {
       };
 
   TraceGuard trace(m_thd);
+  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -7929,6 +7938,7 @@ TEST_F(SecondaryEngineGraphSimplificationTest, RedundantOrderElements) {
   };
 
   TraceGuard trace(m_thd);
+  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -8253,6 +8263,7 @@ TEST(ConflictDetectorTest, CountPlansSmallOperatorSet) {
   Server_initializer initializer;
   initializer.SetUp();
   THD *thd = initializer.thd();
+  thd->lex->set_using_hypergraph_optimizer(true);
   current_thd = thd;
 
   vector<RelationalExpression::Type> join_types{
@@ -8276,6 +8287,7 @@ TEST(ConflictDetectorTest, CountPlansLargeOperatorSet) {
   Server_initializer initializer;
   initializer.SetUp();
   THD *thd = initializer.thd();
+  thd->lex->set_using_hypergraph_optimizer(true);
   current_thd = thd;
 
   vector<RelationalExpression::Type> join_types{
@@ -8453,6 +8465,7 @@ static void BM_FindBestQueryPlanPointSelect(size_t num_iterations) {
       ParseAndResolve("SELECT t1.y FROM t1 WHERE t1.x = 123",
                       /*nullable=*/false, initializer, &fake_tables);
 
+  thd->lex->set_using_hypergraph_optimizer(true);
   // Make t1.x the primary key. Add secondary indexes on t1.y and t1.z, just to
   // give the optimizer some more information to look into.
   Fake_TABLE *t1 = fake_tables["t1"];

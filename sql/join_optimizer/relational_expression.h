@@ -87,8 +87,8 @@ class CompanionSet final {
   CompanionSet(const CompanionSet &) = delete;
   CompanionSet &operator=(const CompanionSet &) = delete;
 
-  /// Add the set of equal fields specified by 'func_eq'.
-  void AddEquijoinCondition(THD *thd, const Item_func_eq &eq);
+  /// Add the set of equal fields specified by 'eq'.
+  void AddEquijoinCondition(THD *thd, const Item_eq_base &eq);
 
   /**
      If 'field' is part of an equijoin predicate in this CompanionSet, return a

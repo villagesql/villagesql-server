@@ -1544,6 +1544,107 @@ ON 1=k;
 
 DROP TABLE t1,t2,t3,t4;
 
+
+--echo #
+--echo # Bug#36955411 Hypergraph optimizer does not use index lookups
+--echo # for <=> predicates
+--echo #
+
+
+CREATE TABLE t1(
+  pk INT NOT NULL PRIMARY KEY,
+  i1 INT,
+  i2 INT,
+  i3 INT,
+  u INT,
+  KEY k1 (i1),
+  KEY k2 (i2, i3),
+  UNIQUE KEY ku(u)
+);
+
+INSERT INTO t1
+WITH RECURSIVE t(n) AS (
+    SELECT 0 AS i UNION ALL
+    SELECT n + 1 FROM t WHERE n + 1 < 50
+)
+SELECT n, n, n, n, n  FROM t;
+
+INSERT INTO t1 VALUES (-1, NULL, NULL, NULL, NULL);
+
+CREATE TABLE t2 (k INT, l INT);
+INSERT INTO t2 VALUES (NULL, NULL), (1, 1);
+
+ANALYZE TABLE t1, t2;
+
+--echo # Impossible WHERE should give ZERO_ROW path.
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE t1.u IN  (1,2,3) AND t1.u IS NULL;
+
+--echo # The following queries should map <=> and IS NULL to REF
+--echo # on the k1 index.
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE i1 IS NULL;
+SELECT pk FROM t1 WHERE i1 IS NULL;
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE i1 <=> 1;
+SELECT pk FROM t1 WHERE i1 <=> 1;
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE i1 <=> NULL;
+SELECT pk FROM t1 WHERE i1 <=> NULL;
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT COUNT(*) FROM t1, t2 WHERE t2.k <=> t1.i1;
+SELECT COUNT(*) FROM t1, t2 WHERE t2.k <=> t1.i1;
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT COUNT(*) FROM t1, t2 WHERE t1.i1 <=> t2.k+t2.l;
+SELECT COUNT(*) FROM t1, t2 WHERE t1.i1 <=> t2.k+t2.l;
+
+--echo # Prefer lookup with or without histogram on 'i'.
+ANALYZE TABLE t1 UPDATE HISTOGRAM ON i;
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE i1 <=> NULL;
+SELECT pk FROM t1 WHERE i1 <=> NULL;
+
+--echo # The following queries should map <=> and ISNULL to EQ_REF access
+--echo # on the ku index.
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE u IS NULL;
+SELECT pk FROM t1 WHERE u IS NULL;
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE u <=> 1;
+SELECT pk FROM t1 WHERE u <=> 1;
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE u <=> NULL;
+SELECT pk FROM t1 WHERE u <=> NULL;
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT COUNT(*) FROM t1, t2 WHERE t2.k <=> t1.u;
+SELECT COUNT(*) FROM t1, t2 WHERE t2.k <=> t1.u;
+
+--replace_regex $elide_costs_and_rows
+EXPLAIN FORMAT=TREE SELECT COUNT(*) FROM t1, t2 WHERE t1.u <=> t2.k+t2.l;
+SELECT COUNT(*) FROM t1, t2 WHERE t1.u <=> t2.k+t2.l;
+
+--echo # Row estimate should utilize the k2 index for both <=> and =.
+
+EXPLAIN FORMAT=JSON INTO @plan1 SELECT * FROM t1, t2
+WHERE t2.k <=> t1.i2 AND t2.l<=>t1.i3;
+
+EXPLAIN FORMAT=JSON INTO @plan2 SELECT * FROM t1, t2
+WHERE t2.k = t1.i2 AND t2.l=t1.i3;
+
+SELECT ABS(JSON_EXTRACT(@plan1, '$.query_plan.estimated_rows') -
+JSON_EXTRACT(@plan2, '$.query_plan.estimated_rows')) < 0.05 AS ok;
+
+DROP TABLE t1,t2;
+
 --echo #
 --echo # Bug#36578613: Hypergraph result difference when querying I_S.TABLES
 --echo #

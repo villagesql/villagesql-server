@@ -1608,9 +1608,8 @@ explain select count(*) from t1 where
 key1a = 2 and key1b is null and  key2a = 2 and key2b is null;
 EXPLAIN
 -> Aggregate: count(0)  (rows=1)
-    -> Intersect rows sorted by row ID  (rows=2.48)
-        -> Index range scan on t1 using i1 over (key1a = 2 AND key1b = NULL)  (rows=113)
-        -> Index range scan on t1 using i2 over (key2a = 2 AND key2b = NULL)  (rows=114)
+    -> Filter: ((t1.key2a = 2) and (t1.key2b is null))  (rows=2.48)
+        -> Index lookup on t1 using i1 (key1a = 2, key1b = NULL)  (rows=2.48)
 
 select count(*) from t1 where
 key1a = 2 and key1b is null and key2a = 2 and key2b is null;
@@ -1620,9 +1619,8 @@ explain select count(*) from t1 where
 key1a = 2 and key1b is null and key3a = 2 and key3b is null;
 EXPLAIN
 -> Aggregate: count(0)  (rows=1)
-    -> Intersect rows sorted by row ID  (rows=2.48)
-        -> Index range scan on t1 using i1 over (key1a = 2 AND key1b = NULL)  (rows=113)
-        -> Index range scan on t1 using i3 over (key3a = 2 AND key3b = NULL)  (rows=114)
+    -> Filter: ((t1.key3a = 2) and (t1.key3b is null))  (rows=2.48)
+        -> Index lookup on t1 using i1 (key1a = 2, key1b = NULL)  (rows=2.48)
 
 select count(*) from t1 where
 key1a = 2 and key1b is null and key3a = 2 and key3b is null;

@@ -1630,10 +1630,10 @@ EXPLAIN
 EXPLAIN FORMAT=TREE SELECT * FROM t1 x1 LEFT JOIN t1 x2
 ON x1.a <=> x2.a AND  x1.a <=> x2.a;
 EXPLAIN
--> Left hash join (x1.a <=> x2.a), (x1.a <=> x2.a)  (rows=20)
+-> Nested loop left join  (rows=20)
     -> Table scan on x1  (rows=20)
-    -> Hash
-        -> Table scan on x2  (rows=20)
+    -> Filter: (x1.a <=> x2.a)  (rows=0.05)
+        -> Single-row index lookup on x2 using PRIMARY (a = x1.a)  (rows=1)
 
 DROP TABLE t1;
 #
@@ -1845,28 +1845,26 @@ Note	1276	Field or reference 'test.t1.x' of SELECT #2 was resolved in SELECT #1
 EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE 1 IN
 (SELECT t2.x+1 FROM t2, t3 WHERE t3.id <=> t1.x+t2.x);
 EXPLAIN
--> Hash semijoin (FirstMatch) (no condition), extra conditions: (t3.id <=> (t1.x + t2.x))  (...)
+-> Nested loop semijoin (FirstMatch)  (...)
     -> Table scan on t1  (...)
-    -> Hash
-        -> Inner hash join (no condition)  (...)
-            -> Table scan on t3  (...)
-            -> Hash
-                -> Filter: (1 = (t2.x + 1))  (...)
-                    -> Table scan on t2  (...)
+    -> Filter: (t3.id <=> (t1.x + t2.x))  (...)
+        -> Nested loop inner join  (...)
+            -> Filter: (1 = (t2.x + 1))  (...)
+                -> Table scan on t2  (...)
+            -> Single-row covering index lookup on t3 using PRIMARY (id = (t1.x + t2.x))  (...)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.x' of SELECT #2 was resolved in SELECT #1
 EXPLAIN FORMAT=TREE SELECT * FROM t1 LEFT JOIN LATERAL
 (SELECT t2.x+1 k FROM t2, t3 WHERE t3.id <=> t1.x+t2.x) d2 ON 1=k;
 EXPLAIN
--> Left hash join (no condition), extra conditions: (t3.id <=> (t1.x + t2.x))  (...)
+-> Nested loop left join  (...)
     -> Table scan on t1  (...)
-    -> Hash
-        -> Inner hash join (no condition)  (...)
+    -> Filter: (t3.id <=> (t1.x + t2.x))  (...)
+        -> Nested loop inner join  (...)
             -> Filter: (1 = (t2.x + 1))  (...)
                 -> Table scan on t2  (...)
-            -> Hash
-                -> Table scan on t3  (...)
+            -> Single-row covering index lookup on t3 using PRIMARY (id = (t1.x + t2.x))  (...)
 
 Warnings:
 Note	1276	Field or reference 'test.t1.x' of SELECT #2 was resolved in SELECT #1
@@ -1900,6 +1898,147 @@ EXPLAIN
 Warnings:
 Note	1276	Field or reference 'test.t1.x' of SELECT #2 was resolved in SELECT #1
 DROP TABLE t1,t2,t3,t4;
+#
+# Bug#36955411 Hypergraph optimizer does not use index lookups
+# for <=> predicates
+#
+CREATE TABLE t1(
+pk INT NOT NULL PRIMARY KEY,
+i1 INT,
+i2 INT,
+i3 INT,
+u INT,
+KEY k1 (i1),
+KEY k2 (i2, i3),
+UNIQUE KEY ku(u)
+);
+INSERT INTO t1
+WITH RECURSIVE t(n) AS (
+SELECT 0 AS i UNION ALL
+SELECT n + 1 FROM t WHERE n + 1 < 50
+)
+SELECT n, n, n, n, n  FROM t;
+INSERT INTO t1 VALUES (-1, NULL, NULL, NULL, NULL);
+CREATE TABLE t2 (k INT, l INT);
+INSERT INTO t2 VALUES (NULL, NULL), (1, 1);
+ANALYZE TABLE t1, t2;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+test.t2	analyze	status	OK
+# Impossible WHERE should give ZERO_ROW path.
+EXPLAIN FORMAT=TREE SELECT * FROM t1 WHERE t1.u IN  (1,2,3) AND t1.u IS NULL;
+EXPLAIN
+-> Zero rows (WHERE condition is always false)  (...)
+
+# The following queries should map <=> and IS NULL to REF
+# on the k1 index.
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE i1 IS NULL;
+EXPLAIN
+-> Covering index lookup on t1 using k1 (i1 = NULL)  (...)
+
+SELECT pk FROM t1 WHERE i1 IS NULL;
+pk
+-1
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE i1 <=> 1;
+EXPLAIN
+-> Covering index lookup on t1 using k1 (i1 = 1)  (...)
+
+SELECT pk FROM t1 WHERE i1 <=> 1;
+pk
+1
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE i1 <=> NULL;
+EXPLAIN
+-> Covering index lookup on t1 using k1 (i1 = NULL)  (...)
+
+SELECT pk FROM t1 WHERE i1 <=> NULL;
+pk
+-1
+EXPLAIN FORMAT=TREE SELECT COUNT(*) FROM t1, t2 WHERE t2.k <=> t1.i1;
+EXPLAIN
+-> Aggregate: count(0)  (...)
+    -> Nested loop inner join  (...)
+        -> Table scan on t2  (...)
+        -> Covering index lookup on t1 using k1 (i1 = t2.k)  (...)
+
+SELECT COUNT(*) FROM t1, t2 WHERE t2.k <=> t1.i1;
+COUNT(*)
+2
+EXPLAIN FORMAT=TREE SELECT COUNT(*) FROM t1, t2 WHERE t1.i1 <=> t2.k+t2.l;
+EXPLAIN
+-> Aggregate: count(0)  (...)
+    -> Nested loop inner join  (...)
+        -> Table scan on t2  (...)
+        -> Filter: (t1.i1 <=> (t2.k + t2.l))  (...)
+            -> Covering index lookup on t1 using k1 (i1 = (t2.k + t2.l))  (...)
+
+SELECT COUNT(*) FROM t1, t2 WHERE t1.i1 <=> t2.k+t2.l;
+COUNT(*)
+2
+# Prefer lookup with or without histogram on 'i'.
+ANALYZE TABLE t1 UPDATE HISTOGRAM ON i;
+Table	Op	Msg_type	Msg_text
+test.t1	histogram	Error	The column 'i' does not exist.
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE i1 <=> NULL;
+EXPLAIN
+-> Covering index lookup on t1 using k1 (i1 = NULL)  (...)
+
+SELECT pk FROM t1 WHERE i1 <=> NULL;
+pk
+-1
+# The following queries should map <=> and ISNULL to EQ_REF access
+# on the ku index.
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE u IS NULL;
+EXPLAIN
+-> Covering index lookup on t1 using ku (u = NULL)  (...)
+
+SELECT pk FROM t1 WHERE u IS NULL;
+pk
+-1
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE u <=> 1;
+EXPLAIN
+-> Covering index lookup on t1 using ku (u = 1)  (...)
+
+SELECT pk FROM t1 WHERE u <=> 1;
+pk
+1
+EXPLAIN FORMAT=TREE SELECT pk FROM t1 WHERE u <=> NULL;
+EXPLAIN
+-> Covering index lookup on t1 using ku (u = NULL)  (...)
+
+SELECT pk FROM t1 WHERE u <=> NULL;
+pk
+-1
+EXPLAIN FORMAT=TREE SELECT COUNT(*) FROM t1, t2 WHERE t2.k <=> t1.u;
+EXPLAIN
+-> Aggregate: count(0)  (...)
+    -> Nested loop inner join  (...)
+        -> Table scan on t2  (...)
+        -> Covering index lookup on t1 using ku (u = t2.k)  (...)
+
+SELECT COUNT(*) FROM t1, t2 WHERE t2.k <=> t1.u;
+COUNT(*)
+2
+EXPLAIN FORMAT=TREE SELECT COUNT(*) FROM t1, t2 WHERE t1.u <=> t2.k+t2.l;
+EXPLAIN
+-> Aggregate: count(0)  (...)
+    -> Nested loop inner join  (...)
+        -> Table scan on t2  (...)
+        -> Filter: (t1.u <=> (t2.k + t2.l))  (...)
+            -> Covering index lookup on t1 using ku (u = (t2.k + t2.l))  (...)
+
+SELECT COUNT(*) FROM t1, t2 WHERE t1.u <=> t2.k+t2.l;
+COUNT(*)
+2
+# Row estimate should utilize the k2 index for both <=> and =.
+EXPLAIN FORMAT=JSON INTO @plan1 SELECT * FROM t1, t2
+WHERE t2.k <=> t1.i2 AND t2.l<=>t1.i3;
+EXPLAIN FORMAT=JSON INTO @plan2 SELECT * FROM t1, t2
+WHERE t2.k = t1.i2 AND t2.l=t1.i3;
+SELECT ABS(JSON_EXTRACT(@plan1, '$.query_plan.estimated_rows') -
+JSON_EXTRACT(@plan2, '$.query_plan.estimated_rows')) < 0.05 AS ok;
+ok
+1
+DROP TABLE t1,t2;
 #
 # Bug#36578613: Hypergraph result difference when querying I_S.TABLES
 #

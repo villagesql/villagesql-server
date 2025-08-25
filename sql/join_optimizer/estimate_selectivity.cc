@@ -398,12 +398,12 @@ double EstimateSelectivity(THD *thd, Item *condition,
     return (condition->val_int() != 0) ? 1.0 : 0.0;
   }
 
-  // For field = field (e.g. t1.x = t2.y), we try to use index
-  // information or histograms to find a better selectivity estimate.
-  // TODO(khatlen): Do the same for field <=> field?
+  // For field = field (e.g. t1.x = t2.y) or field <=> field, we try to use
+  // index information or histograms to find a better selectivity estimate.
   double selectivity_cap = 1.0;
-  if (is_function_of_type(condition, Item_func::EQ_FUNC)) {
-    Item_func_eq *eq = down_cast<Item_func_eq *>(condition);
+  if (is_function_of_type(condition, Item_func::EQ_FUNC) ||
+      is_function_of_type(condition, Item_func::EQUAL_FUNC)) {
+    Item_eq_base *eq = down_cast<Item_eq_base *>(condition);
     if (eq->source_multiple_equality != nullptr &&
         eq->source_multiple_equality->const_arg() == nullptr) {
       // To get consistent selectivities, we want all equalities that come from
