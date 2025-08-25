@@ -31,6 +31,8 @@
 #include <sys/types.h>
 
 #include <algorithm>
+#include <array>
+#include <atomic>
 #include <bit>
 #include <bitset>
 #include <cmath>
@@ -39,6 +41,8 @@
 #include <limits>
 #include <optional>
 #include <ostream>
+#include <ranges>
+#include <span>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -56,7 +60,6 @@
 #include "my_sqlcommand.h"
 #include "my_sys.h"
 #include "my_table_map.h"
-#include "mysql/components/services/bits/psi_bits.h"
 #include "mysql/udf_registration_types.h"
 #include "mysqld_error.h"
 #include "prealloced_array.h"
@@ -72,6 +75,7 @@
 #include "sql/join_optimizer/bit_utils.h"
 #include "sql/join_optimizer/build_interesting_orders.h"
 #include "sql/join_optimizer/compare_access_paths.h"
+#include "sql/join_optimizer/cost_constants.h"
 #include "sql/join_optimizer/cost_model.h"
 #include "sql/join_optimizer/derived_keys.h"
 #include "sql/join_optimizer/estimate_selectivity.h"
@@ -82,6 +86,7 @@
 #include "sql/join_optimizer/interesting_orders.h"
 #include "sql/join_optimizer/interesting_orders_defs.h"
 #include "sql/join_optimizer/make_join_hypergraph.h"
+#include "sql/join_optimizer/materialize_path_parameters.h"
 #include "sql/join_optimizer/node_map.h"
 #include "sql/join_optimizer/optimizer_trace.h"
 #include "sql/join_optimizer/overflow_bitset.h"
@@ -125,11 +130,10 @@
 #include "sql/system_variables.h"
 #include "sql/table.h"
 #include "sql/table_function.h"
+#include "sql/temp_table_param.h"
 #include "sql/uniques.h"
 #include "sql/window.h"
 #include "template_utils.h"
-
-class Temp_table_param;
 
 using hypergraph::Hyperedge;
 using hypergraph::Node;
@@ -8858,12 +8862,15 @@ static void CacheCostInfoForJoinConditions(THD *thd,
                                            const Query_block *query_block,
                                            JoinHypergraph *graph) {
   for (JoinPredicate &edge : graph->edges) {
-    edge.expr->properties_for_equijoin_conditions.init(thd->mem_root);
-    edge.expr->properties_for_join_conditions.init(thd->mem_root);
-    for (Item_eq_base *cond : edge.expr->equijoin_conditions) {
-      CachedPropertiesForPredicate properties;
-      properties.selectivity =
-          EstimateSelectivity(thd, cond, *edge.expr->companion_set);
+    assert(edge.expr->properties_for_equijoin_conditions.size() ==
+           edge.expr->equijoin_conditions.size());
+    assert(edge.expr->properties_for_join_conditions.size() ==
+           edge.expr->join_conditions.size());
+
+    for (CachedPropertiesForPredicate *properties_it =
+             edge.expr->properties_for_equijoin_conditions.begin();
+         Item_eq_base * cond : edge.expr->equijoin_conditions) {
+      CachedPropertiesForPredicate &properties = *properties_it++;
       properties.contained_subqueries.init(thd->mem_root);
       FindContainedSubqueries(
           cond, query_block, [&properties](const ContainedSubquery &subquery) {
@@ -8884,12 +8891,11 @@ static void CacheCostInfoForJoinConditions(THD *thd,
         }
       }
       properties.redundant_against_sargable_predicates = std::move(redundant);
-      edge.expr->properties_for_equijoin_conditions.push_back(
-          std::move(properties));
     }
-    for (Item *cond : edge.expr->join_conditions) {
-      CachedPropertiesForPredicate properties;
-      properties.selectivity = EstimateSelectivity(thd, cond, CompanionSet());
+    for (CachedPropertiesForPredicate *properties_it =
+             edge.expr->properties_for_join_conditions.begin();
+         Item * cond : edge.expr->join_conditions) {
+      CachedPropertiesForPredicate &properties = *properties_it;
       properties.contained_subqueries.init(thd->mem_root);
       properties.redundant_against_sargable_predicates =
           OverflowBitset::EmptySet(thd->mem_root, graph->predicates.size());
@@ -8897,8 +8903,6 @@ static void CacheCostInfoForJoinConditions(THD *thd,
           cond, query_block, [&properties](const ContainedSubquery &subquery) {
             properties.contained_subqueries.push_back(subquery);
           });
-      edge.expr->properties_for_join_conditions.push_back(
-          std::move(properties));
     }
   }
 }

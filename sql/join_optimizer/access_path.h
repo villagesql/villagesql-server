@@ -94,12 +94,12 @@ struct JoinPredicate {
   // or {a, c} → b.
   //
   // Used in the processing of interesting orders.
-  FunctionalDependencySet functional_dependencies;
+  FunctionalDependencySet functional_dependencies{};
 
   // A less compact form of functional_dependencies, used during building
   // (FunctionalDependencySet bitmaps are only available after all functional
   // indexes have been collected and Build() has been called).
-  Mem_root_array<int> functional_dependencies_idx;
+  Mem_root_array<int> functional_dependencies_idx{};
 
   // A semijoin on the following format:
   //

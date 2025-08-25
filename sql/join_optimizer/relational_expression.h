@@ -24,20 +24,27 @@
 #ifndef SQL_JOIN_OPTIMIZER_RELATIONAL_EXPRESSION_H
 #define SQL_JOIN_OPTIMIZER_RELATIONAL_EXPRESSION_H
 
-#include <stdint.h>
+#include <sys/types.h>
+#include <algorithm>
+#include <array>
+#include <cassert>
+#include <string>
 #include <type_traits>
+#include <utility>
 
+#include "my_table_map.h"
+#include "sql/field.h"
 #include "sql/item.h"
 #include "sql/join_optimizer/bit_utils.h"
-#include "sql/join_optimizer/estimate_selectivity.h"
 #include "sql/join_optimizer/node_map.h"
 #include "sql/join_optimizer/overflow_bitset.h"
 #include "sql/join_type.h"
 #include "sql/mem_root_array.h"
 #include "sql/nested_join.h"
 #include "sql/sql_class.h"
+#include "sql/sql_const.h"
+#include "sql/table.h"
 
-struct AccessPath;
 class Item_eq_base;
 class Item_func_eq;
 
@@ -45,8 +52,8 @@ class Item_func_eq;
 // have available in order to avoid computing it anew for each use of that
 // predicate.
 struct CachedPropertiesForPredicate {
-  Mem_root_array<ContainedSubquery> contained_subqueries;
-  double selectivity;
+  Mem_root_array<ContainedSubquery> contained_subqueries{};
+  double selectivity{};
 
   // For equijoins only: A bitmap of which sargable predicates
   // are part of the same multi-equality as this one (except the
@@ -54,7 +61,7 @@ struct CachedPropertiesForPredicate {
   // against it. This is used in AlreadyAppliedThroughSargable()
   // to quickly find out if we already have applied any of them
   // as a join condition.
-  OverflowBitset redundant_against_sargable_predicates;
+  OverflowBitset redundant_against_sargable_predicates{};
 };
 
 // Describes a rule disallowing specific joins; if any tables from

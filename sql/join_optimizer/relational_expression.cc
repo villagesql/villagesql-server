@@ -22,9 +22,14 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 #include "sql/join_optimizer/relational_expression.h"
+
+#include <algorithm>
+#include <cassert>
+#include <sstream>
+
+#include "my_alloc.h"
 #include "sql/item_cmpfunc.h"
-#include "sql/join_optimizer/estimate_selectivity.h"
-#include "sql/sql_array.h"
+#include "template_utils.h"
 
 namespace {
 

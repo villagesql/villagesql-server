@@ -28,16 +28,18 @@
 
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <bit>
+#include <initializer_list>
 #include <iterator>
 #include <numeric>
 #include <ostream>
 #include <span>
 #include <string>
-#include <string_view>
 #include <utility>
 #include <vector>
 
+#include "lex_string.h"
 #include "mem_root_deque.h"
 #include "my_alloc.h"
 #include "my_bitmap.h"
@@ -63,12 +65,15 @@
 #include "sql/join_optimizer/relational_expression.h"
 #include "sql/join_optimizer/subgraph_enumeration.h"
 #include "sql/nested_join.h"
+#include "sql/opt_hints.h"
+#include "sql/query_options.h"
 #include "sql/sql_class.h"
 #include "sql/sql_const.h"
 #include "sql/sql_executor.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
 #include "sql/sql_optimizer.h"
+#include "sql/system_variables.h"
 #include "sql/table.h"
 #include "sql/table_function.h"
 #include "sql_string.h"
@@ -88,6 +93,9 @@ using std::swap;
 using std::vector;
 
 namespace {
+
+/// Indicates that a selectivity has not yet been calculated.
+constexpr double kUnknownSelectivity = -1.0;
 
 bool IsTableFunction(const RelationalExpression *expr) {
   return expr->type == RelationalExpression::TABLE &&
@@ -3045,15 +3053,11 @@ int AddPredicate(THD *thd, Item *condition,
   pred.total_eligibility_set = GetNodeMapFromTableMap(
       total_eligibility_set, graph->table_num_to_node_num);
 
-  // If the query is a join, we may get selectivity information from the
-  // companion set of the tables referenced by the predicate. For single-table
-  // or table-less queries, there is no companion set. Tables not involved in
-  // any equijoins do not have a companion set.
-  pred.selectivity =
-      was_join_condition_for != nullptr
-          ? EstimateSelectivity(thd, condition,
-                                *was_join_condition_for->companion_set)
-          : EstimateSelectivity(thd, condition, CompanionSet());
+  // For join conditions, we estimate the selectivity later, after the full
+  // hypergraph has been constructed.
+  pred.selectivity = was_join_condition_for != nullptr
+                         ? kUnknownSelectivity
+                         : EstimateSelectivity(thd, condition, CompanionSet());
 
   pred.was_join_condition = was_join_condition_for != nullptr;
   pred.possibly_null_complemented_later =
@@ -3189,7 +3193,6 @@ void AddCycleEdges(THD *thd, const Mem_root_array<Item *> &cycle_inducing_edges,
     const NodeMap used_nodes =
         GetNodeMapFromTableMap(used_tables, graph->table_num_to_node_num);
     RelationalExpression *expr = nullptr;
-    JoinPredicate *pred = nullptr;
 
     const NodeMap left = IsolateLowestBit(used_nodes);  // Arbitrary.
     const NodeMap right = used_nodes & ~left;
@@ -3200,8 +3203,7 @@ void AddCycleEdges(THD *thd, const Mem_root_array<Item *> &cycle_inducing_edges,
       if ((edge.left | edge.right) == used_nodes &&
           graph->edges[edge_idx].expr->type ==
               RelationalExpression::INNER_JOIN) {
-        pred = &graph->edges[edge_idx];
-        expr = pred->expr;
+        expr = graph->edges[edge_idx].expr;
         break;
       }
     }
@@ -3219,12 +3221,12 @@ void AddCycleEdges(THD *thd, const Mem_root_array<Item *> &cycle_inducing_edges,
       // estimated_bytes_per_row doesn't make that much sense to begin with; it
       // will depend on the join order. See if we can replace it with a
       // per-table width calculation that we can sum up in the join optimizer.
-      double selectivity = EstimateSelectivity(thd, cond, *expr->companion_set);
       const size_t estimated_bytes_per_row =
           EstimateRowWidthForJoin(*graph, expr);
-      graph->edges.push_back(JoinPredicate{
-          expr, selectivity, estimated_bytes_per_row,
-          /*functional_dependencies=*/0, /*functional_dependencies_idx=*/{}});
+      graph->edges.push_back(
+          {.expr = expr,
+           .selectivity = kUnknownSelectivity,
+           .estimated_bytes_per_row = estimated_bytes_per_row});
     } else {
       // Skip this item if it is a duplicate (this can
       // happen with multiple equalities in particular).
@@ -3247,7 +3249,6 @@ void AddCycleEdges(THD *thd, const Mem_root_array<Item *> &cycle_inducing_edges,
       if (dup) {
         continue;
       }
-      pred->selectivity *= EstimateSelectivity(thd, cond, *expr->companion_set);
     }
     if (cond->type() == Item::FUNC_ITEM &&
         down_cast<Item_func *>(cond)->contains_only_equi_join_condition()) {
@@ -3391,22 +3392,11 @@ void MakeJoinGraphFromRelationalExpression(THD *thd, RelationalExpression *expr,
     Trace(thd) << StringPrintf("Selectivity of join %s:\n",
                                GenerateExpressionLabel(expr).c_str());
   }
-  double selectivity = 1.0;
-  for (Item *item : expr->equijoin_conditions) {
-    selectivity *= EstimateSelectivity(current_thd, item, *expr->companion_set);
-  }
-  for (Item *item : expr->join_conditions) {
-    selectivity *= EstimateSelectivity(current_thd, item, CompanionSet());
-  }
-  if (TraceStarted(thd) &&
-      expr->equijoin_conditions.size() + expr->join_conditions.size() > 1) {
-    Trace(thd) << StringPrintf("  - total: %.g\n", selectivity);
-  }
 
   const size_t estimated_bytes_per_row = EstimateRowWidthForJoin(*graph, expr);
-  graph->edges.push_back(JoinPredicate{
-      expr, selectivity, estimated_bytes_per_row,
-      /*functional_dependencies=*/0, /*functional_dependencies_idx=*/{}});
+  graph->edges.push_back({.expr = expr,
+                          .selectivity = kUnknownSelectivity,
+                          .estimated_bytes_per_row = estimated_bytes_per_row});
 }
 
 NodeMap GetNodeMapFromTableMap(
@@ -3431,7 +3421,7 @@ void AddMultipleEqualityPredicate(THD *thd,
                                   Item_multi_eq *item_equal,
                                   Item_field *left_field, int left_table_idx,
                                   Item_field *right_field, int right_table_idx,
-                                  double selectivity, JoinHypergraph *graph) {
+                                  JoinHypergraph *graph) {
   const int left_node_idx = graph->table_num_to_node_num[left_table_idx];
   const int right_node_idx = graph->table_num_to_node_num[right_table_idx];
 
@@ -3450,7 +3440,6 @@ void AddMultipleEqualityPredicate(THD *thd,
         if (MultipleEqualityAlreadyExistsOnJoin(item_equal, *expr)) {
           return;
         }
-        graph->edges[edge_idx / 2].selectivity *= selectivity;
         break;
       }
     }
@@ -3476,10 +3465,10 @@ void AddMultipleEqualityPredicate(THD *thd,
 
     const size_t estimated_bytes_per_row =
         EstimateRowWidthForJoin(*graph, expr);
-    graph->edges.push_back(JoinPredicate{expr, selectivity,
-                                         estimated_bytes_per_row,
-                                         /*functional_dependencies=*/0,
-                                         /*functional_dependencies_idx=*/{}});
+    graph->edges.push_back(
+        {.expr = expr,
+         .selectivity = kUnknownSelectivity,
+         .estimated_bytes_per_row = estimated_bytes_per_row});
   }
 
   Item_func_eq *eq_item = MakeEqItem(left_field, right_field, item_equal);
@@ -3510,8 +3499,6 @@ void CompleteFullMeshForMultipleEqualities(
       // orders for these tables is a waste of time.
       continue;
     }
-    double selectivity = EstimateSelectivity(
-        thd, item_equal, *companion_collection.Find(used_tables));
 
     for (Item_field &left_field : item_equal->get_fields()) {
       const int left_table_idx = left_field.m_table_ref->tableno();
@@ -3523,9 +3510,66 @@ void CompleteFullMeshForMultipleEqualities(
 
         AddMultipleEqualityPredicate(thd, companion_collection, item_equal,
                                      &left_field, left_table_idx, &right_field,
-                                     right_table_idx, selectivity, graph);
+                                     right_table_idx, graph);
       }
     }
+  }
+}
+
+/**
+  Estimates and caches the selectivity of each equijoin and non-equijoin (other)
+  join condition for all joins in the hypergraph. Also sorts the join predicates
+  associated with each join edge for efficient evaluation.
+
+  This precomputation ensures that selectivity estimation is performed only once
+  per join condition and that all relevant selectivities are available for
+  costing and optimization.
+ */
+void EstimateJoinConditionSelectivities(THD *thd, JoinHypergraph *graph) {
+  for (JoinPredicate &edge : graph->edges) {
+    RelationalExpression &expr = *edge.expr;
+    double join_selectivity = 1.0;
+    expr.properties_for_equijoin_conditions.init(thd->mem_root);
+    expr.properties_for_equijoin_conditions.reserve(
+        expr.equijoin_conditions.size());
+    for (Item_eq_base *cond : expr.equijoin_conditions) {
+      const double selectivity =
+          EstimateSelectivity(thd, cond, *expr.companion_set);
+      join_selectivity *= selectivity;
+      expr.properties_for_equijoin_conditions.push_back(
+          {.selectivity = selectivity});
+    }
+
+    expr.properties_for_join_conditions.init(thd->mem_root);
+    expr.properties_for_join_conditions.reserve(expr.join_conditions.size());
+    for (Item *cond : expr.join_conditions) {
+      const double selectivity = EstimateSelectivity(thd, cond, CompanionSet());
+      join_selectivity *= selectivity;
+      expr.properties_for_join_conditions.push_back(
+          {.selectivity = selectivity});
+    }
+
+    edge.selectivity = join_selectivity;
+
+    // If it's a cycle edge, the predicates also live in graph->predicates.
+    // Assign the same selectivities there.
+    if (expr.join_predicate_first != expr.join_predicate_last) {
+      int pred_idx = expr.join_predicate_first;
+      for (const CachedPropertiesForPredicate &properties :
+           expr.properties_for_equijoin_conditions) {
+        graph->predicates[pred_idx++].selectivity = properties.selectivity;
+      }
+      for (const CachedPropertiesForPredicate &properties :
+           expr.properties_for_join_conditions) {
+        graph->predicates[pred_idx++].selectivity = properties.selectivity;
+      }
+      assert(pred_idx == expr.join_predicate_last);
+    }
+
+    // Now that we have calculated the selectivity estimates, we can sort the
+    // predicates so that the most selective ones are evaluated first.
+    SortPredicates(graph->predicates.begin() + expr.join_predicate_first,
+                   graph->predicates.begin() + expr.join_predicate_last);
   }
 }
 
@@ -3964,21 +4008,6 @@ bool MakeJoinHypergraph(THD *thd, JoinHypergraph *graph,
     PromoteCycleJoinPredicates(thd, root, multiple_equalities, graph);
   }
 
-  if (TraceStarted(thd)) {
-    Trace(thd) << "\nConstructed hypergraph:\n" << PrintDottyHypergraph(*graph);
-
-    if (DEBUGGING_DPHYP) {
-      // DPhyp printouts talk mainly about R1, R2, etc., so if debugging
-      // the algorithm, it is useful to have a link to the table names.
-      Trace(thd) << "Node mappings, for reference:\n";
-      for (size_t i = 0; i < graph->nodes.size(); ++i) {
-        Trace(thd) << StringPrintf("  R%zu = %s\n", i + 1,
-                                   graph->nodes[i].table()->alias);
-      }
-    }
-    Trace(thd) << "\n";
-  }
-
 #ifndef NDEBUG
   {
     // Verify we have no duplicate edges.
@@ -4023,7 +4052,11 @@ bool MakeJoinHypergraph(THD *thd, JoinHypergraph *graph,
     graph->predicates.push_back(std::move(pred));
   }
 
+  graph->num_where_predicates = graph->predicates.size();
+
   SecondaryEngineCardinalityHook(thd, graph);
+
+  EstimateJoinConditionSelectivities(thd, graph);
 
   // Sort the predicates so that filters created from them later automatically
   // evaluate the most selective and least expensive predicates first. Don't
@@ -4034,7 +4067,20 @@ bool MakeJoinHypergraph(THD *thd, JoinHypergraph *graph,
   SortPredicates(graph->predicates.begin() + num_cycle_predicates,
                  graph->predicates.end());
 
-  graph->num_where_predicates = graph->predicates.size();
+  if (TraceStarted(thd)) {
+    Trace(thd) << "\nConstructed hypergraph:\n" << PrintDottyHypergraph(*graph);
+
+    if (DEBUGGING_DPHYP) {
+      // DPhyp printouts talk mainly about R1, R2, etc., so if debugging
+      // the algorithm, it is useful to have a link to the table names.
+      Trace(thd) << "Node mappings, for reference:\n";
+      for (size_t i = 0; i < graph->nodes.size(); ++i) {
+        Trace(thd) << StringPrintf("  R%zu = %s\n", i + 1,
+                                   graph->nodes[i].table()->alias);
+      }
+    }
+    Trace(thd) << "\n";
+  }
 
   return false;
 }

@@ -2773,6 +2773,34 @@ TEST_F(HypergraphOptimizerTest, InnerNestloopShouldBeLeftDeep) {
   // We don't verify the plan in itself.
 }
 
+// Test that EstimateSelectivity() is called only once per predicate.
+TEST_F(HypergraphOptimizerTest, EstimateSelectivityCalledOnce) {
+  Query_block *query_block = ParseAndResolve(
+      "SELECT 1 FROM t1, t2 WHERE t1.x = t2.x", /*nullable=*/false);
+
+  // Add an index on t1.x, to give the optimizer more reasons to look closely on
+  // the predicate and its selectivity.
+  m_fake_tables["t1"]->create_index(m_fake_tables["t1"]->field[0], HA_NOSAME);
+
+  // Assign stats so the planner can work.
+  m_fake_tables["t1"]->file->stats.records = 100;
+  m_fake_tables["t2"]->file->stats.records = 200;
+
+  // Capture the optimizer trace while generating the plan.
+  TraceGuard trace{m_thd};
+  AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
+  SCOPED_TRACE(trace.contents());
+  EXPECT_NE(nullptr, root);
+
+  // The trace should mention selectivity calculation for the join predicate
+  // exactly once. It used to be calculated three times.
+  // TODO(khatlen): It is still estimated redundantly in
+  // PossiblyAddSargableCondition(). Fix it!
+  EXPECT_EQ(my_testing::get_number_of_occurrences(
+                trace.contents().ToString(), "selectivity for (t1.x = t2.x)"),
+            2);
+}
+
 // Verify that we can produce plans on this form for an inner join inside a left
 // outer join:
 //
