@@ -195,9 +195,13 @@ BuildRequires:  binutils
 BuildRequires:  dwz
 BuildRequires:  gcc-c++
 BuildRequires:  gcc
+BuildRequires:  libfido2-devel
+BuildRequires:  libquadmath-devel
+BuildRequires:  libudev-devel
 %endif
 BuildRequires:  bison >= 3.0.4
 BuildRequires:  elfutils
+BuildRequires:  patchelf
 BuildRequires:  perl
 BuildRequires:  perl(Env)
 BuildRequires:  perl(Carp)
@@ -233,8 +237,8 @@ BuildRequires:  libaio-devel
 %if 0%{?commercial}
 BuildRequires:  cyrus-sasl-gssapi
 BuildRequires:  cyrus-sasl-scram
-BuildRequires:  libcurl-devel
 %endif
+BuildRequires:  libcurl-devel
 BuildRequires:  krb5-devel
 BuildRequires:  ncurses-devel
 BuildRequires:  numactl-devel
