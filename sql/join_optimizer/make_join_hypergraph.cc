@@ -1857,8 +1857,9 @@ void PushDownCondition(THD *thd, Item *cond, RelationalExpression *expr,
   to signal that it should be investigated when we consider the table during
   join optimization.
  */
-void PushDownToSargableCondition(Item *cond, RelationalExpression *expr,
-                                 bool is_join_condition_for_expr) {
+void PushDownToSargableCondition(
+    Item *cond, RelationalExpression *expr,
+    const RelationalExpression *join_condition_for) {
   if (expr->type == RelationalExpression::TABLE) {
     // We don't try to make sargable join predicates out of subqueries;
     // it is quite marginal, and our machinery for dealing with materializing
@@ -1868,7 +1869,7 @@ void PushDownToSargableCondition(Item *cond, RelationalExpression *expr,
     }
     if (!IsSubset(cond->used_tables() & ~PSEUDO_TABLE_BITS,
                   expr->tables_in_subtree)) {
-      expr->AddPushable(cond);
+      expr->AddPushable(cond, join_condition_for);
     }
     return;
   }
@@ -1878,6 +1879,8 @@ void PushDownToSargableCondition(Item *cond, RelationalExpression *expr,
 
   const table_map used_tables =
       cond->used_tables() & (expr->tables_in_subtree | RAND_TABLE_BIT);
+
+  const bool is_join_condition_for_expr = join_condition_for == expr;
 
   // See PushDownCondition() for explanation of can_push_into_{left,right}.
   const bool can_push_into_left =
@@ -1891,13 +1894,11 @@ void PushDownToSargableCondition(Item *cond, RelationalExpression *expr,
 
   if (can_push_into_left &&
       !IsSubset(used_tables, expr->right->tables_in_subtree)) {
-    PushDownToSargableCondition(cond, expr->left,
-                                /*is_join_condition_for_expr=*/false);
+    PushDownToSargableCondition(cond, expr->left, join_condition_for);
   }
   if (can_push_into_right &&
       !IsSubset(used_tables, expr->left->tables_in_subtree)) {
-    PushDownToSargableCondition(cond, expr->right,
-                                /*is_join_condition_for_expr=*/false);
+    PushDownToSargableCondition(cond, expr->right, join_condition_for);
   }
 }
 
@@ -2031,8 +2032,7 @@ void PushDownJoinConditionsForSargable(THD *thd, RelationalExpression *expr) {
     // outside the subtree.
     if (const table_map tables = item->used_tables() & ~PSEUDO_TABLE_BITS;
         popcount(tables) >= 2 && IsSubset(tables, expr->tables_in_subtree)) {
-      PushDownToSargableCondition(item, expr,
-                                  /*is_join_condition_for_expr=*/true);
+      PushDownToSargableCondition(item, expr, expr);
     }
   }
   PushDownJoinConditionsForSargable(thd, expr->left);
@@ -3262,8 +3262,8 @@ void AddCycleEdges(THD *thd, const Mem_root_array<Item *> &cycle_inducing_edges,
     assert(IsSimpleEdge(left, right));
     const int left_node_idx = *BitsSetIn(left).begin();
     const int right_node_idx = *BitsSetIn(right).begin();
-    graph->nodes[left_node_idx].AddPushable(cond);
-    graph->nodes[right_node_idx].AddPushable(cond);
+    graph->nodes[left_node_idx].AddPushable(cond, expr);
+    graph->nodes[right_node_idx].AddPushable(cond, expr);
   }
 }
 
@@ -3334,11 +3334,11 @@ void MakeJoinGraphFromRelationalExpression(THD *thd, RelationalExpression *expr,
     TABLE *const table = table_ref->table;
 
     graph->graph.AddNode();
-    graph->nodes.emplace_back(thd->mem_root, table, expr->companion_set);
+    graph->nodes.emplace_back(thd->mem_root, table);
 
     JoinHypergraph::Node &node = graph->nodes.back();
-    for (Item *cond : expr->pushable_conditions()) {
-      node.AddPushable(cond);
+    for (const PushableJoinCondition &pushable : expr->pushable_conditions()) {
+      node.AddPushable(pushable.cond, pushable.from);
     }
 
     // Estimate and cache the number of bytes to read per row for this table, so
@@ -3476,8 +3476,8 @@ void AddMultipleEqualityPredicate(THD *thd,
       eq_item);  // NOTE: We run after MakeHashJoinConditions().
 
   // Make this predicate potentially sargable.
-  graph->nodes[left_node_idx].AddPushable(eq_item);
-  graph->nodes[right_node_idx].AddPushable(eq_item);
+  graph->nodes[left_node_idx].AddPushable(eq_item, expr);
+  graph->nodes[right_node_idx].AddPushable(eq_item, expr);
 }
 
 /**
@@ -3936,11 +3936,12 @@ bool MakeJoinHypergraph(THD *thd, JoinHypergraph *graph,
   // Build sets of equal fields in each CompanionSet.
   ForEachOperator(root, [&](RelationalExpression *expr) {
     if (expr->type == RelationalExpression::TABLE) {
-      for (const Item *condition : expr->pushable_conditions()) {
-        if (is_function_of_type(condition, Item_func::EQ_FUNC) ||
-            is_function_of_type(condition, Item_func::EQUAL_FUNC)) {
+      for (const PushableJoinCondition &pushable :
+           expr->pushable_conditions()) {
+        if (is_function_of_type(pushable.cond, Item_func::EQ_FUNC) ||
+            is_function_of_type(pushable.cond, Item_func::EQUAL_FUNC)) {
           expr->companion_set->AddEquijoinCondition(
-              thd, down_cast<const Item_eq_base &>(*condition));
+              thd, down_cast<const Item_eq_base &>(*pushable.cond));
         }
       }
     } else {

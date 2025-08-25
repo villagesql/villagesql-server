@@ -8661,6 +8661,21 @@ static bool CompatibleTypesForIndexLookup(Item_eq_base *eq_item, Field *field,
   return true;
 }
 
+static const CachedPropertiesForPredicate *GetCachedJoinConditionProperties(
+    const Item *cond, const RelationalExpression &expr) {
+  for (size_t i = 0; i < expr.equijoin_conditions.size(); ++i) {
+    if (expr.equijoin_conditions[i] == cond) {
+      return &expr.properties_for_equijoin_conditions[i];
+    }
+  }
+  for (size_t i = 0; i < expr.join_conditions.size(); ++i) {
+    if (expr.join_conditions[i] == cond) {
+      return &expr.properties_for_join_conditions[i];
+    }
+  }
+  return nullptr;
+}
+
 /**
   Find out whether “item” is a sargable condition; if so, add it to:
 
@@ -8675,12 +8690,9 @@ static bool CompatibleTypesForIndexLookup(Item_eq_base *eq_item, Field *field,
      (predicate_index = -1). This will never happen for WHERE conditions,
      only for join conditions.
  */
-static void PossiblyAddSargableCondition(THD *thd, Item *item,
-                                         const CompanionSet &companion_set,
-                                         const TABLE *force_table,
-                                         int predicate_index,
-                                         bool is_join_condition,
-                                         JoinHypergraph *graph) {
+static void PossiblyAddSargableCondition(
+    THD *thd, Item *item, const TABLE *force_table, int predicate_index,
+    const RelationalExpression *join_condition_for, JoinHypergraph *graph) {
   // Try to add field=other_side (or field <=> other_side) as a sargable
   // condition. Return 'true'  if we know that we should not check the mirror
   // condition (e.g. other_size <=> field), 'false' otherwise.
@@ -8734,7 +8746,7 @@ static void PossiblyAddSargableCondition(THD *thd, Item *item,
     }
 
     if (TraceStarted(thd)) {
-      if (is_join_condition) {
+      if (join_condition_for != nullptr) {
         Trace(thd) << "Found sargable join condition " << ItemToString(item)
                    << " on " << node->table()->alias << "\n";
       } else {
@@ -8748,9 +8760,12 @@ static void PossiblyAddSargableCondition(THD *thd, Item *item,
       // not a WHERE predicate), so add it so that we can refer
       // to it in bitmaps.
       assert(eq_item != nullptr);
+      assert(join_condition_for != nullptr);
       Predicate p;
-      p.condition = item;
-      p.selectivity = EstimateSelectivity(thd, eq_item, companion_set);
+      p.condition = eq_item;
+      p.selectivity =
+          GetCachedJoinConditionProperties(eq_item, *join_condition_for)
+              ->selectivity;
       p.used_nodes =
           GetNodeMapFromTableMap(eq_item->used_tables() & ~PSEUDO_TABLE_BITS,
                                  graph->table_num_to_node_num);
@@ -8827,19 +8842,19 @@ void FindSargablePredicates(THD *thd, JoinHypergraph *graph) {
   for (unsigned i = 0; i < graph->num_where_predicates; ++i) {
     if (has_single_bit(graph->predicates[i].total_eligibility_set)) {
       PossiblyAddSargableCondition(thd, graph->predicates[i].condition,
-                                   CompanionSet(),
                                    /*force_table=*/nullptr, i,
-                                   /*is_join_condition=*/false, graph);
+                                   /*join_condition_for=*/nullptr, graph);
     }
   }
   for (JoinHypergraph::Node &node : graph->nodes) {
-    for (Item *cond : node.pushable_conditions()) {
-      const int predicate_index{graph->FindSargableJoinPredicate(cond)};
+    for (const PushableJoinCondition &pushable : node.pushable_conditions()) {
+      if (!pushable.from->join_conditions_reject_all_rows) {
+        const int predicate_index{
+            graph->FindSargableJoinPredicate(pushable.cond)};
 
-      assert(node.companion_set() != nullptr);
-      PossiblyAddSargableCondition(thd, cond, *node.companion_set(),
-                                   node.table(), predicate_index,
-                                   /*is_join_condition=*/true, graph);
+        PossiblyAddSargableCondition(thd, pushable.cond, node.table(),
+                                     predicate_index, pushable.from, graph);
+      }
     }
   }
 }

@@ -2794,11 +2794,9 @@ TEST_F(HypergraphOptimizerTest, EstimateSelectivityCalledOnce) {
 
   // The trace should mention selectivity calculation for the join predicate
   // exactly once. It used to be calculated three times.
-  // TODO(khatlen): It is still estimated redundantly in
-  // PossiblyAddSargableCondition(). Fix it!
   EXPECT_EQ(my_testing::get_number_of_occurrences(
                 trace.contents().ToString(), "selectivity for (t1.x = t2.x)"),
-            2);
+            1);
 }
 
 // Verify that we can produce plans on this form for an inner join inside a left

@@ -36,6 +36,7 @@
 #include "sql/field.h"
 #include "sql/item.h"
 #include "sql/join_optimizer/bit_utils.h"
+#include "sql/join_optimizer/make_join_hypergraph.h"
 #include "sql/join_optimizer/node_map.h"
 #include "sql/join_optimizer/overflow_bitset.h"
 #include "sql/join_type.h"
@@ -249,25 +250,27 @@ struct RelationalExpression {
     sj_enabled_strategies = tl->nested_join->sj_enabled_strategies;
   }
 
-  const Mem_root_array<Item *> &pushable_conditions() const {
+  const Mem_root_array<PushableJoinCondition> &pushable_conditions() const {
     return m_pushable_conditions;
   }
 
-  /// Add a condition that can be pushed down to the acces path for 'table'.
-  void AddPushable(Item *cond) {
+  /// Add a condition that can be pushed down to the access path for 'table'.
+  void AddPushable(Item *cond, const RelationalExpression *from) {
     assert(type == TABLE);
+    assert(from->type != TABLE);
     assert(table->map() && cond->used_tables() != 0);
     // Don't add duplicates.
-    if (std::none_of(
-            m_pushable_conditions.cbegin(), m_pushable_conditions.cend(),
-            [&](const Item *other) { return ItemsAreEqual(cond, other); })) {
-      m_pushable_conditions.push_back(cond);
+    if (std::ranges::none_of(m_pushable_conditions,
+                             [&](const PushableJoinCondition &other) {
+                               return ItemsAreEqual(cond, other.cond);
+                             })) {
+      m_pushable_conditions.push_back({.cond = cond, .from = from});
     }
   }
 
  private:
-  /// Conditions that can be pushed down to the acces path for 'table'
-  Mem_root_array<Item *> m_pushable_conditions;
+  /// Conditions that can be pushed down to the access path for 'table'
+  Mem_root_array<PushableJoinCondition> m_pushable_conditions;
 };
 
 // Check conflict rules; usually, they will be empty, but the hyperedges are
