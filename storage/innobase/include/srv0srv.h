@@ -295,11 +295,6 @@ extern Srv_cpu_usage srv_cpu_usage;
 
 extern Log_DDL *log_ddl;
 
-#ifdef INNODB_DD_TABLE
-extern bool srv_is_upgrade_mode;
-extern bool srv_downgrade_logs;
-#endif /* INNODB_DD_TABLE */
-
 extern bool srv_downgrade_partition_files;
 
 extern const char *srv_main_thread_op_info;

@@ -189,9 +189,6 @@ constexpr uint32_t DICT_POOL_PER_TABLE_HASH = 512;
 /** Identifies generated InnoDB foreign key names */
 static char dict_ibfk[] = "_ibfk_";
 
-/** Array to store table_ids of INNODB_SYS_* TABLES */
-static table_id_t dict_sys_table_id[SYS_NUM_SYSTEM_TABLES];
-
 /** Tries to find column names for the index and sets the col field of the
 index.
 @param[in]      table   table
@@ -504,6 +501,7 @@ void dict_table_stats_compute_unlock(dict_table_t *table) {
   mutex_exit(table->stats_compute_mutex);
 }
 
+#ifndef UNIV_DEBUG
 /** Try to drop any indexes after an aborted index creation.
  This can also be after a server kill during DROP INDEX. */
 static void dict_table_try_drop_aborted(
@@ -543,29 +541,8 @@ static void dict_table_try_drop_aborted(
   row_mysql_unlock_data_dictionary(trx);
   trx_free_for_background(trx);
 }
+#endif /* !UNIV_DEBUG */
 
-/** When opening a table,
- try to drop any indexes after an aborted index creation.
- Release the dict_sys->mutex. */
-static void dict_table_try_drop_aborted_and_mutex_exit(
-    dict_table_t *table, /*!< in: table (may be NULL) */
-    bool try_drop)       /*!< in: false if should try to
-                         drop indexes whose online creation
-                         was aborted */
-{
-  if (try_drop && table != nullptr && table->drop_aborted &&
-      table->get_ref_count() == 1 && table->first_index()) {
-    /* Attempt to drop the indexes whose online creation
-    was aborted. */
-    table_id_t table_id = table->id;
-
-    dict_sys_mutex_exit();
-
-    dict_table_try_drop_aborted(table, table_id, 1);
-  } else {
-    dict_sys_mutex_exit();
-  }
-}
 #endif /* !UNIV_HOTBACKUP */
 
 /** Decrements the count of open handles to a table.
@@ -1133,76 +1110,6 @@ void dict_move_to_mru(dict_table_t *table) /*!< in: table to move to MRU */
   UT_LIST_ADD_FIRST(dict_sys->table_LRU, table);
 
   ut_ad(dict_lru_validate());
-}
-
-/** Returns a table object and increment its open handle count.
- NOTE! This is a high-level function to be used mainly from outside the
- 'dict' module. Inside this directory dict_table_get_low
- is usually the appropriate function.
- @return table, NULL if does not exist */
-dict_table_t *dict_table_open_on_name(
-    const char *table_name,       /*!< in: table name */
-    bool dict_locked,             /*!< in: true=data dictionary locked */
-    bool try_drop,                /*!< in: true=try to drop any orphan
-                                  indexes after an aborted online
-                                  index creation */
-    dict_err_ignore_t ignore_err) /*!< in: error to be ignored when
-                                  loading a table definition */
-{
-  dict_table_t *table;
-  DBUG_TRACE;
-  DBUG_PRINT("dict_table_open_on_name", ("table: '%s'", table_name));
-
-  if (!dict_locked) {
-    dict_sys_mutex_enter();
-  }
-
-  ut_ad(table_name);
-  ut_ad(dict_sys_mutex_own());
-
-  std::string table_str(table_name);
-  /* Check and convert 5.7 table name. We always keep 8.0 format name in cache
-  during upgrade. */
-  if (dict_name::is_partition(table_name)) {
-    dict_name::rebuild(table_str);
-  }
-  table = dict_table_check_if_in_cache_low(table_str.c_str());
-
-  if (table == nullptr) {
-    table = dict_load_table(table_name, true, ignore_err);
-  }
-
-  ut_ad(!table || table->cached);
-
-  if (table != nullptr) {
-    if (ignore_err == DICT_ERR_IGNORE_NONE && table->is_corrupted()) {
-      /* Make life easy for drop table. */
-      dict_table_prevent_eviction(table);
-
-      if (!dict_locked) {
-        dict_sys_mutex_exit();
-      }
-
-      ib::info(ER_IB_MSG_175) << "Table " << table->name
-                              << " is corrupted. Please drop the table"
-                                 " and recreate it";
-      return nullptr;
-    }
-
-    if (table->can_be_evicted) {
-      dict_move_to_mru(table);
-    }
-
-    table->acquire();
-  }
-
-  ut_ad(dict_lru_validate());
-
-  if (!dict_locked) {
-    dict_table_try_drop_aborted_and_mutex_exit(table, try_drop);
-  }
-
-  return table;
 }
 #endif /* !UNIV_HOTBACKUP */
 
@@ -4078,7 +3985,7 @@ static bool dict_table_apply_dynamic_metadata(
 
     } else {
       /* In some cases, we could only load some indexes
-      of a table but not all(See dict_load_indexes()).
+      of a table but not all (TODO: when is it reachable?).
       So we might not find it here */
       ib::info(ER_IB_MSG_184)
           << "Failed to find the index: " << index_id.m_index_id
@@ -5935,53 +5842,6 @@ void dict_sdi_remove_from_cache(space_id_t space_id, dict_table_t *sdi_table,
       dict_sys_mutex_exit();
     }
   }
-}
-
-/** Change the table_id of SYS_* tables if they have been created after
-an earlier upgrade. This will update the table_id by adding DICT_MAX_DD_TABLES
-TODO - This function is to be removed by WL#16210.
-*/
-void dict_table_change_id_sys_tables() {
-  ut_ad(dict_sys_mutex_own());
-
-  /* On upgrading from 5.6 to 5.7, new system table SYS_VIRTUAL is given table
-   id after the last created user table. So, if last user table was created
-   with table_id as 1027, SYS_VIRTUAL would get id 1028. On upgrade to 8.0,
-   all these tables are shifted by 1024. On 5.7, the SYS_FIELDS has table id
-   4, which gets updated to 1028 on upgrade. This would later assert when we
-   try to open the SYS_VIRTUAL table (having id 1028) for upgrade. Hence, we
-   need to upgrade system tables in reverse order to avoid that.
-   These tables are created on boot. And hence this issue can only be caused by
-   a new table being added at a later stage - the SYS_VIRTUAL table being added
-   on upgrading to 5.7. */
-
-  for (int i = SYS_NUM_SYSTEM_TABLES - 1; i >= 0; i--) {
-    dict_table_t *system_table = dict_table_get_low(SYSTEM_TABLE_NAME[i]);
-
-    ut_a(system_table != nullptr);
-    ut_ad(dict_sys_table_id[i] == system_table->id);
-
-    /* During upgrade, table_id of user tables is also
-    moved by DICT_MAX_DD_TABLES. See dict_load_table_one()*/
-    table_id_t new_table_id = system_table->id + DICT_MAX_DD_TABLES;
-
-    dict_table_change_id_in_cache(system_table, new_table_id);
-
-    dict_sys_table_id[i] = system_table->id;
-
-    dict_table_prevent_eviction(system_table);
-  }
-}
-
-/** @return true if table is InnoDB SYS_* table
-@param[in]      table_id        table id  */
-bool dict_table_is_system(table_id_t table_id) {
-  for (uint32_t i = 0; i < SYS_NUM_SYSTEM_TABLES; i++) {
-    if (table_id == dict_sys_table_id[i]) {
-      return (true);
-    }
-  }
-  return (false);
 }
 
 dberr_t dd_sdi_acquire_exclusive_mdl(THD *thd, space_id_t space_id,
