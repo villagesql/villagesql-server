@@ -5389,6 +5389,18 @@ server_ssl_verify=DISABLED
     </li>
 
     <li>
+      <tt>`--valgrind--ld-preload`=<b>library</b></tt>
+
+      Set environment variable <b>LD_PRELOAD</b> to <b>library</b> prior
+      running the test.
+
+      Valgrind shows many errors in dload-ed libraries (typically plugins and components)
+      because of missing symbols. Use this option to solve this issue.
+
+      This option is valid only with <b>`--valgrind`<\b>.
+    </li>
+
+    <li>
       <tt>`--valgrind-mysqld`</tt>
 
       Run the <b>mysqld</b> server with <b>valgrind</b>.
