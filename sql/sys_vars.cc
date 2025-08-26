@@ -122,11 +122,10 @@
 #include "sql/rpl_info_factory.h"       // Rpl_info_factory
 #include "sql/rpl_info_handler.h"       // INFO_REPOSITORY_TABLE
 #include "sql/rpl_log_encryption.h"
-#include "sql/rpl_mi.h"           // Master_info
-#include "sql/rpl_msr.h"          // channel_map
-#include "sql/rpl_mta_submode.h"  // MTS_PARALLEL_TYPE_DB_NAME
-#include "sql/rpl_replica.h"      // SLAVE_THD_TYPE
-#include "sql/rpl_rli.h"          // Relay_log_info
+#include "sql/rpl_mi.h"                                    // Master_info
+#include "sql/rpl_msr.h"                                   // channel_map
+#include "sql/rpl_replica.h"                               // SLAVE_THD_TYPE
+#include "sql/rpl_rli.h"                                   // Relay_log_info
 #include "sql/server_component/log_builtins_filter_imp.h"  // until we have pluggable variables
 #include "sql/server_component/log_builtins_imp.h"
 #include "sql/session_tracker.h"
@@ -4040,25 +4039,6 @@ static bool check_slave_stopped(sys_var *self, THD *thd, set_var *var) {
   channel_map.unlock();
   return result;
 }
-
-static const char *mts_parallel_type_names[] = {"DATABASE", "LOGICAL_CLOCK",
-                                                nullptr};
-static Sys_var_enum Sys_replica_parallel_type(
-    "replica_parallel_type",
-    "The method used by the replication applier to parallelize "
-    "transactions. DATABASE, indicates that it "
-    "may apply transactions in parallel in case they update different "
-    "databases. LOGICAL_CLOCK, which is the default, indicates that it decides "
-    "whether two "
-    "transactions can be applied in parallel using the logical timestamps "
-    "computed by the source.",
-    PERSIST_AS_READONLY GLOBAL_VAR(mts_parallel_option),
-    CMD_LINE(REQUIRED_ARG, OPT_REPLICA_PARALLEL_TYPE), mts_parallel_type_names,
-    DEFAULT(MTS_PARALLEL_TYPE_LOGICAL_CLOCK), NO_MUTEX_GUARD, NOT_IN_BINLOG,
-    ON_CHECK(check_slave_stopped), ON_UPDATE(nullptr), DEPRECATED_VAR(""));
-
-static Sys_var_deprecated_alias Sys_slave_parallel_type(
-    "slave_parallel_type", Sys_replica_parallel_type);
 
 static PolyLock_mutex PLock_slave_trans_dep_tracker(
     &LOCK_replica_trans_dep_tracker);

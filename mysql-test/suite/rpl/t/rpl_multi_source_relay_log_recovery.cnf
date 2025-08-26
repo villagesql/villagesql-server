@@ -6,9 +6,9 @@
 relay-log-recovery=1
 replica-transaction-retries=0
 sync_source_info=1
+replica_preserve_commit_order=FALSE
 
 [mysqld.3]
-
 
 [ENV]
 SERVER_MYPORT_3=		@mysqld.3.port

@@ -2977,13 +2977,6 @@ static int check_if_server_properly_configured() {
   }
 
   if (startup_pre_reqs.parallel_applier_workers > 0) {
-    if (startup_pre_reqs.parallel_applier_type !=
-        CHANNEL_MTS_PARALLEL_TYPE_LOGICAL_CLOCK) {
-      LogPluginErr(ERROR_LEVEL,
-                   ER_GRP_RPL_INCORRECT_TYPE_SET_FOR_PARALLEL_APPLIER);
-      return 1;
-    }
-
     if (!startup_pre_reqs.parallel_applier_preserve_commit_order) {
       LogPluginErr(WARNING_LEVEL,
                    ER_GRP_RPL_REPLICA_PRESERVE_COMMIT_ORDER_NOT_SET);

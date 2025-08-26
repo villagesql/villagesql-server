@@ -1150,14 +1150,6 @@ The following options may be given as the first argument:
  --replica-net-timeout=# 
  Number of seconds to wait for more data from a
  replication connection before aborting the read.
- --replica-parallel-type=name 
- The method used by the replication applier to parallelize
- transactions. DATABASE, indicates that it may apply
- transactions in parallel in case they update different
- databases. LOGICAL_CLOCK, which is the default, indicates
- that it decides whether two transactions can be applied
- in parallel using the logical timestamps computed by the
- source.
  --replica-parallel-workers=# 
  Number of worker threads applying changes in parallel 
  --replica-pending-jobs-size-max=# 
@@ -1415,9 +1407,6 @@ The following options may be given as the first argument:
  instead.
  --slave-net-timeout=# 
  This option is deprecated. Use replica_net_timeout
- instead.
- --slave-parallel-type=name 
- This option is deprecated. Use replica_parallel_type
  instead.
  --slave-parallel-workers=# 
  This option is deprecated. Use replica_parallel_workers
@@ -1939,7 +1928,6 @@ replica-compressed-protocol FALSE
 replica-exec-mode STRICT
 replica-max-allowed-packet 1073741824
 replica-net-timeout 60
-replica-parallel-type LOGICAL_CLOCK
 replica-parallel-workers 4
 replica-pending-jobs-size-max 134217728
 replica-preserve-commit-order TRUE
@@ -1992,7 +1980,6 @@ slave-compressed-protocol FALSE
 slave-exec-mode STRICT
 slave-max-allowed-packet 1073741824
 slave-net-timeout 60
-slave-parallel-type LOGICAL_CLOCK
 slave-parallel-workers 4
 slave-pending-jobs-size-max 134217728
 slave-preserve-commit-order TRUE

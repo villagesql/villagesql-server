@@ -7250,7 +7250,7 @@ ER_AGGREGATE_ORDER_NON_AGG_QUERY
 ER_REPLICA_WORKER_STOPPED_PREVIOUS_THD_ERROR
   eng "Replica worker has stopped after at least one previous worker encountered an error when replica-preserve-commit-order was enabled. To preserve commit order, the last transaction executed by this thread has not been committed. When restarting the replica after fixing any failed threads, you should fix this worker as well."
 
-ER_DONT_SUPPORT_REPLICA_PRESERVE_COMMIT_ORDER
+OBSOLETE_ER_DONT_SUPPORT_REPLICA_PRESERVE_COMMIT_ORDER
   eng "replica_preserve_commit_order is not supported %s."
 
 ER_SERVER_OFFLINE_MODE
