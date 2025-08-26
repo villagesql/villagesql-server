@@ -13069,15 +13069,16 @@ outfile_file_info_list:
         ;
 
 outfile_file_info_elem:
-          FORMAT_SYM ident
+          FORMAT_SYM ident_or_text
           {
             $$= NEW_PTN File_information();
             $$->filetype_str= $2.str;
           }
-        | COMPRESSION_SYM text_string
+        | COMPRESSION_SYM ident_or_text
           {
             $$= NEW_PTN File_information();
-            $$->compression= $2;
+            $$->compression= NEW_PTN String($2.str, $2.length,
+	                                    YYTHD->charset());
           }
         | HEADER_SYM ON_SYM
           {
