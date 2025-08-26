@@ -10809,6 +10809,9 @@ ER_LH_COL_NAME_DUPLICATE
 ER_LH_UNSTRUCTURED_OCI_GENAI_FAILURE
   eng "Error when using OCI GenAI Service: %s"
 
+ER_LH_UNSTRUCTURED_PARTIAL_FILE_PARSE_ERR
+  eng "File: %.*s – Part of the document was parsed. %s."
+
 #
 #  End of 9.x error messages (server-to-client).
 #
