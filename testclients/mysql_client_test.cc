@@ -1487,6 +1487,82 @@ static void test_prepare() {
   mysql_stmt_close(stmt);
 }
 
+static void test_prepare_text_and_digest_dump() {
+  static const char *pfs_last_statement_query =
+      "SELECT THREAD_ID, EVENT_ID, EVENT_NAME, SQL_TEXT, DIGEST, DIGEST_TEXT, "
+      "MYSQL_ERRNO, MESSAGE_TEXT "
+      "FROM performance_schema.events_statements_history_long "
+      "WHERE THREAD_ID = ps_current_thread_id() ORDER BY EVENT_ID DESC;";
+
+  static const char *pfs_ps_instances_query =
+      "SELECT * from performance_schema.prepared_statements_instances;";
+
+  int rc = mysql_query(mysql, pfs_last_statement_query);
+  myquery(rc);
+
+  MYSQL_RES *result = mysql_use_result(mysql);
+  mytest(result);
+
+  (void)my_process_result_set(result);
+  mysql_free_result(result);
+
+  rc = mysql_query(mysql, pfs_ps_instances_query);
+  myquery(rc);
+
+  result = mysql_use_result(mysql);
+  mytest(result);
+
+  (void)my_process_result_set(result);
+  mysql_free_result(result);
+}
+
+static void test_prepare_text_and_digest() {
+  MYSQL_STMT *stmt;
+  int rc;
+  char query[MAX_TEST_QUERY_LENGTH];
+  myheader("test_prepare_text_and_digest");
+
+  /* prepare, broken text */
+  my_stpcpy(query, "broken statement that will not prepare");
+  stmt = mysql_simple_prepare(mysql, query);
+  mytest_r(stmt);
+
+  test_prepare_text_and_digest_dump();
+
+  /* prepare, valid syntax, but can not be prepared */
+  my_stpcpy(query, "SHOW WARNINGS");
+  stmt = mysql_simple_prepare(mysql, query);
+  mytest_r(stmt);
+
+  test_prepare_text_and_digest_dump();
+
+  /* prepare, valid syntax, query_text to capture */
+  my_stpcpy(query, "SELECT 'I am prepared' as marker;");
+  stmt = mysql_simple_prepare(mysql, query);
+  check_stmt(stmt);
+
+  test_prepare_text_and_digest_dump();
+
+  verify_param_count(stmt, 0);
+  rc = mysql_stmt_execute(stmt);
+
+  check_execute(stmt, rc);
+
+  do {
+    rc = mysql_stmt_fetch(stmt);
+  } while (rc != MYSQL_NO_DATA);
+
+  test_prepare_text_and_digest_dump();
+
+  mysql_stmt_close(stmt);
+
+  test_prepare_text_and_digest_dump();
+
+  /* now fetch the results ..*/
+  rc = mysql_commit(mysql);
+  myquery(rc);
+}
+
 /* Test double comparison */
 
 static void test_double_compare() {
@@ -23899,6 +23975,7 @@ static struct my_tests_st my_tests[] = {
     {"test_bind_result", test_bind_result},
     {"test_prepare_simple", test_prepare_simple},
     {"test_prepare", test_prepare},
+    {"test_prepare_text_and_digest", test_prepare_text_and_digest},
     {"test_null", test_null},
     {"test_debug_example", test_debug_example},
     {"test_update", test_update},
