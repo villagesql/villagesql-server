@@ -13275,6 +13275,15 @@ ER_WARN_THREAD_POOL_DEDICATED_LISTENERS_INCOMPATIBLE_MTL
 ER_CONN_CONTROL_STAT_CONN_EXEMPTED_USERS_UPDATE_FAILED
   eng "Failed to update connection delay user exempt stats"
 
+ER_AUTOPILOT_OLTP_ADVISOR_INFO
+  eng "%s"
+
+ER_AUTOPILOT_OLTP_ADVISOR_WARNING
+  eng "%s"
+
+ER_AUTOPILOT_OLTP_ADVISOR_ERROR
+  eng "%s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
