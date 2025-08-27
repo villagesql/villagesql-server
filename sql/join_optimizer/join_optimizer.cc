@@ -7649,6 +7649,8 @@ void ApplyHavingOrQualifyCondition(THD *thd, Item *having_cond,
                                    AccessPathArray *root_candidates,
                                    CostingReceiver *receiver) {
   assert(having_cond != nullptr);
+  const double selectivity =
+      EstimateSelectivity(thd, having_cond, CompanionSet());
 
   AccessPathArray new_root_candidates(PSI_NOT_INSTRUMENTED);
   for (AccessPath *root_path : *root_candidates) {
@@ -7659,9 +7661,7 @@ void ApplyHavingOrQualifyCondition(THD *thd, Item *having_cond,
     // We don't currently bother with materializing subqueries
     // in HAVING, as they should be rare.
     filter_path.filter().materialize_subqueries = false;
-    filter_path.set_num_output_rows(
-        root_path->num_output_rows() *
-        EstimateSelectivity(thd, having_cond, CompanionSet()));
+    filter_path.set_num_output_rows(root_path->num_output_rows() * selectivity);
     SecondaryEngineNrowsParameters secondary_engine_nrows_params{
         thd, &filter_path, &receiver->hypergraph()};
     ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);

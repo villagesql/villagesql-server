@@ -2799,6 +2799,28 @@ TEST_F(HypergraphOptimizerTest, EstimateSelectivityCalledOnce) {
             1);
 }
 
+TEST_F(HypergraphOptimizerTest, EstimateSelectivityCalledOnceHaving) {
+  Query_block *query_block = ParseAndResolve(
+      "SELECT 1 FROM t GROUP BY t.x HAVING count(t.x) > 1 ORDER BY t.x LIMIT 1",
+      /*nullable=*/true);
+
+  // Assign stats so the planner can work.
+  m_fake_tables["t"]->file->stats.records = 10000;
+
+  // Capture the optimizer trace while generating the plan.
+  TraceGuard trace{m_thd};
+  AccessPath *root = FindBestQueryPlan(m_thd, query_block);
+  SCOPED_TRACE(trace.contents());
+  EXPECT_NE(nullptr, root);
+
+  // The trace should mention selectivity calculation for the having predicate
+  // exactly once. Used to calculate it twice.
+  EXPECT_EQ(
+      my_testing::get_number_of_occurrences(trace.contents().ToString(),
+                                            "selectivity for (count(t.x) > 1)"),
+      1);
+}
+
 // Verify that we can produce plans on this form for an inner join inside a left
 // outer join:
 //
