@@ -10812,6 +10812,9 @@ ER_LH_UNSTRUCTURED_OCI_GENAI_FAILURE
 ER_LH_UNSTRUCTURED_PARTIAL_FILE_PARSE_ERR
   eng "File: %.*s – Part of the document was parsed. %s."
 
+ER_JDV_EXPLICIT_AUTO_INCREMENT_NOT_ALLOWED
+  eng "Using 0 to request the next value of an AUTO_INCREMENT column is not allowed in JDVs, column %s.%s, referenced by path '%s', key '%s'."
+
 #
 #  End of 9.x error messages (server-to-client).
 #
