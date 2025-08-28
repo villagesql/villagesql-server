@@ -5397,7 +5397,7 @@ server_ssl_verify=DISABLED
       Valgrind shows many errors in dload-ed libraries (typically plugins and components)
       because of missing symbols. Use this option to solve this issue.
 
-      This option is valid only with <b>`--valgrind`<\b>.
+      This option is valid only with <b>`--valgrind`</b>.
     </li>
 
     <li>
