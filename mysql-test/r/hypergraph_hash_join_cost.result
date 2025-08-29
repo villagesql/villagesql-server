@@ -41,7 +41,7 @@ EXPLAIN
 EXPLAIN FORMAT=JSON INTO @json SELECT * FROM t1 build STRAIGHT_JOIN t1 probe ON build.i1=probe.i2;
 SELECT root_cost(@json);
 root_cost(@json)
-6619.8893114828315
+6619.889311482828
 SET @@join_buffer_size=256*1024;
 EXPLAIN FORMAT=TREE SELECT * FROM t1 build STRAIGHT_JOIN t1 probe ON build.i1=probe.i2;
 EXPLAIN
@@ -53,7 +53,7 @@ EXPLAIN
 EXPLAIN FORMAT=JSON INTO @json SELECT * FROM t1 build STRAIGHT_JOIN t1 probe ON build.i1=probe.i2;
 SELECT root_cost(@json);
 root_cost(@json)
-7766.659990553904
+7766.659990553901
 # NLJ should be cheaper than hash join.
 EXPLAIN FORMAT=TREE SELECT * FROM t1 x1 LEFT JOIN t1 x2
 ON x1.i1=x2.i2 WHERE x1.i3<150;

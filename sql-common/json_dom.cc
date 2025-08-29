@@ -619,7 +619,8 @@ Json_dom_ptr Json_dom::parse(const char *text, size_t length,
   Rapid_json_handler handler(depth_handler);
   rapidjson::MemoryStream ss(text, length);
   rapidjson::Reader reader;
-  bool success = reader.Parse<rapidjson::kParseDefaultFlags>(ss, handler);
+  const bool success =
+      reader.Parse<rapidjson::kParseFullPrecisionFlag>(ss, handler);
 
   if (success) return handler.get_built_doc();
 

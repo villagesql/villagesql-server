@@ -1735,4 +1735,107 @@ static void BM_JsonWrapperObjectIteratorBinary(size_t num_iterations) {
 }
 BENCHMARK(BM_JsonWrapperObjectIteratorBinary)
 
+/**
+  Microbenchmark that tests Json_dom::parse(text) on an array of 100
+  floating-point numbers, each with 17 significant decimal digits (10 before and
+  7 after the decimal point), to simulate high-precision double scenarios.
+*/
+static void BM_JsonParseHighPrecisionFloatArray(size_t num_iterations) {
+  StopBenchmarkTiming();
+
+  my_testing::Server_initializer initializer;
+  initializer.SetUp();
+
+  // Build JSON array once, outside the timed region.
+  std::string json;
+  json.push_back('[');
+  for (size_t i = 0; i < 100; ++i) {
+    if (i > 0) json += ", ";
+    json += "1234567890.";  // 10 digits before decimal
+    // Always use 7 fractional digits for a total of 17 significant digits.
+    for (size_t j = 0; j < 7; ++j) {
+      int digit = static_cast<int>((i * 7 + j * 3) % 10);
+      json.push_back(static_cast<char>('0' + digit));
+    }
+  }
+  json.push_back(']');
+
+  // One-time parse and sanity check before timing.
+  Json_dom_ptr dom = Json_dom::parse(
+      json.c_str(), json.size(), [](const char *, size_t) {},
+      [] { ASSERT_TRUE(false); });
+  ASSERT_NE(dom, nullptr);
+  EXPECT_EQ(enum_json_type::J_ARRAY, dom->json_type());
+  const Json_array *arr = down_cast<const Json_array *>(dom.get());
+  EXPECT_EQ(100U, arr->size());
+  for (size_t i = 0; i < arr->size(); ++i) {
+    EXPECT_EQ(enum_json_type::J_DOUBLE, (*arr)[i]->json_type());
+  }
+
+  StartBenchmarkTiming();
+
+  for (size_t i = 0; i < num_iterations; ++i) {
+    dom = Json_dom::parse(
+        json.c_str(), json.size(), [](const char *, size_t) {},
+        [] { ASSERT_TRUE(false); });
+  }
+
+  StopBenchmarkTiming();
+
+  initializer.TearDown();
+}
+BENCHMARK(BM_JsonParseHighPrecisionFloatArray)
+
+/**
+  Microbenchmark that tests Json_dom::parse(text) on an array of
+  100 varied low-precision floating-point numbers
+  (3 digits before and 3 digits after the decimal point).
+*/
+static void BM_JsonParseLowPrecisionFloatArray(size_t num_iterations) {
+  StopBenchmarkTiming();
+
+  my_testing::Server_initializer initializer;
+  initializer.SetUp();
+
+  // Build JSON array once, outside the timed region.
+  std::string json;
+  json.push_back('[');
+  for (size_t i = 0; i < 100; ++i) {
+    if (i > 0) json += ", ";
+    // Format: <3 digits>.<3 digits> (e.g., 123.456), 6 digits total
+    unsigned int before_decimal = 100 + ((i * 13) % 900);  // 3 digits: 100..999
+    unsigned int after_decimal = 100 + ((i * 31) % 900);   // 3 digits: 100..999
+
+    json += std::to_string(before_decimal);
+    json += ".";
+    json += std::to_string(after_decimal);
+  }
+  json.push_back(']');
+
+  // One-time parse and sanity check before timing.
+  Json_dom_ptr dom = Json_dom::parse(
+      json.c_str(), json.size(), [](const char *, size_t) {},
+      [] { ASSERT_TRUE(false); });
+  ASSERT_NE(dom, nullptr);
+  EXPECT_EQ(enum_json_type::J_ARRAY, dom->json_type());
+  const Json_array *arr = down_cast<const Json_array *>(dom.get());
+  EXPECT_EQ(100U, arr->size());
+  for (size_t i = 0; i < arr->size(); ++i) {
+    EXPECT_EQ(enum_json_type::J_DOUBLE, (*arr)[i]->json_type());
+  }
+
+  StartBenchmarkTiming();
+
+  for (size_t i = 0; i < num_iterations; ++i) {
+    dom = Json_dom::parse(
+        json.c_str(), json.size(), [](const char *, size_t) {},
+        [] { ASSERT_TRUE(false); });
+  }
+
+  StopBenchmarkTiming();
+
+  initializer.TearDown();
+}
+BENCHMARK(BM_JsonParseLowPrecisionFloatArray)
+
 }  // namespace json_dom_unittest
