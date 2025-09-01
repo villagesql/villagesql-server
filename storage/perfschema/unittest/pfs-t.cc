@@ -2727,7 +2727,7 @@ static void do_all_tests() {
 }
 
 int main(int, char **) {
-  plan(430);
+  plan(428);
 
   MY_INIT("pfs-t");
 
