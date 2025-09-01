@@ -6393,7 +6393,7 @@ static Sys_var_enforce_gtid_consistency Sys_enforce_gtid_consistency(
     PERSIST_AS_READONLY GLOBAL_VAR(_gtid_consistency_mode),
     CMD_LINE(OPT_ARG, OPT_ENFORCE_GTID_CONSISTENCY),
     enforce_gtid_consistency_aliases, 3,
-    DEFAULT(3 /*position of "FALSE" in enforce_gtid_consistency_aliases*/),
+    DEFAULT(1 /*position of "ON" in enforce_gtid_consistency_aliases*/),
     DEFAULT(GTID_CONSISTENCY_MODE_ON), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(check_session_admin_outside_trx_outside_sf_outside_sp));
 const char *fixup_enforce_gtid_consistency_command_line(char *value_arg) {

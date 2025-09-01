@@ -13,7 +13,7 @@
 
 # EXPLAIN output is different with the hypergraph optimizer.
 --source include/not_hypergraph.inc
-
+call mtr.add_suppression("Failed to compress the gtid_executed table.");
 # Optimizer plan are printed as part of the test-case and changing page
 # size will affect the optimizer plan numbers. so enable it only for 16K
 

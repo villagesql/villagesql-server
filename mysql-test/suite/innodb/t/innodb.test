@@ -3,6 +3,9 @@
 
 -- source include/have_innodb_max_16k.inc
 
+# This test doesn't support GTID
+--source include/rpl/set_gtid_mode_off.inc
+
 #######################################################################
 #                                                                     #
 # Please, DO NOT TOUCH this file as well as the innodb.result file.   #
@@ -2669,3 +2672,5 @@ connection default;
 drop table t1;
 drop function f1;
 SET @@global.log_bin_trust_function_creators= @old_log_bin_trust_function_creators;
+# Restore the default for gtid_mode which is ON
+--source include/rpl/set_gtid_mode_on.inc

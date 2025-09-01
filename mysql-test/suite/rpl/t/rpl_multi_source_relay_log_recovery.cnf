@@ -1,5 +1,9 @@
 !include ../my.cnf
 
+[mysqld]
+gtid_mode=off
+enforce-gtid-consistency=off
+
 [mysqld.1]
 
 [mysqld.2]

@@ -4,6 +4,8 @@
 --source include/force_myisam_default.inc
 --source include/have_myisam.inc
 --source include/elide_costs.inc
+# This test doesn't support GTID
+--source include/rpl/set_gtid_mode_off.inc
 
 set end_markers_in_json=on;
 
@@ -744,3 +746,5 @@ SET @@explain_json_format_version = 1;
 EXPLAIN ANALYZE FORMAT=JSON SELECT * FROM (SELECT 1) b;
 
 SET @@explain_json_format_version = @saved_json_format_version;
+# Restore the default for gtid_mode which is ON
+--source include/rpl/set_gtid_mode_on.inc

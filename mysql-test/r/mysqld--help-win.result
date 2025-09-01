@@ -1706,7 +1706,7 @@ disconnect-on-expired-password TRUE
 div-precision-increment 4
 enable-secondary-engine-statistics TRUE
 end-markers-in-json FALSE
-enforce-gtid-consistency FALSE
+enforce-gtid-consistency ON
 eq-range-index-dive-limit 200
 event-scheduler ON
 explain-format TRADITIONAL
@@ -1729,7 +1729,7 @@ global-connection-memory-tracking FALSE
 group-concat-max-len 1024
 group-replication-consistency BEFORE_ON_PRIMARY_FAILOVER
 gtid-executed-compression-period 0
-gtid-mode OFF
+gtid-mode ON
 help TRUE
 histogram-generation-max-mem-size 20000000
 host-cache-size 279

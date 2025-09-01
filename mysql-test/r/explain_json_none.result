@@ -1,3 +1,4 @@
+include/rpl/set_gtid_mode_off.inc
 set end_markers_in_json=on;
 # new "FORMAT" keyword doesn't conflict with the FORMAT() function name:
 SELECT FORMAT(1, 2), FORMAT(1, 2, 3);
@@ -9201,4 +9202,5 @@ SET @@explain_json_format_version = 1;
 EXPLAIN ANALYZE FORMAT=JSON SELECT * FROM (SELECT 1) b;
 ERROR 0A000: EXPLAIN ANALYZE does not support FORMAT=JSON with explain_json_format_version=1.
 SET @@explain_json_format_version = @saved_json_format_version;
+include/rpl/set_gtid_mode_on.inc
 set optimizer_switch=default;

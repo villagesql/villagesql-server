@@ -1,3 +1,4 @@
+include/rpl/set_gtid_mode_off.inc
 select * from (select 2 from DUAL) AS b;
 2
 2
@@ -4824,3 +4825,4 @@ ERROR HY000: Cannot convert string '\xC3\x83\xC2\xA5' from latin1 to latin2
 SELECT * FROM (SELECT _latin1 'Ã¥' AS a) AS dt UNION SELECT c FROM t;
 ERROR HY000: Cannot convert string '\xC3\x83\xC2\xA5' from latin1 to latin2
 DROP TABLE t;
+include/rpl/set_gtid_mode_on.inc

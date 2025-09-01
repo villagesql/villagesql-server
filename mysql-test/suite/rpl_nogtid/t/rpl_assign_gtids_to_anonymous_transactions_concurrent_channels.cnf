@@ -1,4 +1,4 @@
-!include suite/rpl/my.cnf
+!include ../my.cnf
 
 [mysqld.1]
 

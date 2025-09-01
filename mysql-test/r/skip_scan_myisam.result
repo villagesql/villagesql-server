@@ -1,3 +1,4 @@
+include/rpl/set_gtid_mode_off.inc
 CREATE TABLE t (a INT, b INT, c INT, d INT, e INT, PRIMARY KEY(a, b, c, d), KEY(b, d)) ENGINE=myisam;
 # Since ANALYZE TABLE only reads a subset of the data, the statistics for
 # table t depends on the row order. And since the INSERT INTO ... SELECT
@@ -1179,3 +1180,4 @@ EXPLAIN
 
 DROP TABLE t1;
 SET OPTIMIZER_SWITCH = default;
+include/rpl/set_gtid_mode_on.inc
