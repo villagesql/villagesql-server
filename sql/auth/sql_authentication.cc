@@ -4268,6 +4268,9 @@ int acl_authenticate(THD *thd, enum_server_command command) {
         if (opt_always_activate_granted_roles) {
           activate_all_granted_and_mandatory_roles(acl_user, sctx);
         } else {
+          if (opt_activate_mandatory_roles) {
+            activate_all_mandatory_roles(sctx);
+          }
           /* The server policy is to only activate default roles */
           get_default_roles(authid, default_roles);
           List_of_auth_id_refs::iterator it = default_roles.begin();

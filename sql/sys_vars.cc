@@ -6879,6 +6879,13 @@ static Sys_var_bool Sys_always_activate_granted_roles(
     DEFAULT(false), NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr),
     ON_UPDATE(nullptr));
 
+static Sys_var_bool Sys_activate_mandatory_roles(
+    "activate_mandatory_roles",
+    "Automatically set all mandatory roles as active after the user has "
+    "authenticated successfully.",
+    GLOBAL_VAR(opt_activate_mandatory_roles), CMD_LINE(OPT_ARG), DEFAULT(true),
+    NO_MUTEX_GUARD, NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
+
 static PolyLock_mutex plock_sys_password_history(&LOCK_password_history);
 static Sys_var_uint Sys_password_history(
     "password_history",

@@ -1216,6 +1216,7 @@ LEX_STRING opt_init_connect, opt_init_replica;
 LEX_STRING opt_mandatory_roles;
 bool opt_mandatory_roles_cache = false;
 bool opt_always_activate_granted_roles = false;
+bool opt_activate_mandatory_roles = true;
 bool opt_bin_log;
 bool opt_general_log, opt_slow_log, opt_general_log_raw;
 ulonglong log_output_options;
