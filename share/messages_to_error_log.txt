@@ -13272,6 +13272,9 @@ ER_WARN_THREAD_POOL_QUERY_THREADS_MISMATCH_INCOMPATIBLE_ALGO
 ER_WARN_THREAD_POOL_DEDICATED_LISTENERS_INCOMPATIBLE_MTL
   eng "The thread_pool_dedicated_listeners option can only be set to ON if thread_pool_max_transaction_limit > 0. Since this requirement is not met, the server is automatically disabling thread_pool_dedicated_listeners. To use dedicated listeners, please consider enabling thread_pool_max_transactions_limit."
 
+ER_CONN_CONTROL_STAT_CONN_EXEMPTED_USERS_UPDATE_FAILED
+  eng "Failed to update connection delay user exempt stats"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
