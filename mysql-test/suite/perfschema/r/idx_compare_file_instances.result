@@ -1,3 +1,4 @@
+include/rpl/set_gtid_mode_off.inc
 TABLE: "file_instances"
 INDEXES: PK (FILE_NAME), KEY (EVENT_NAME)
 
@@ -158,3 +159,4 @@ DROP USER user1@localhost;
 DROP USER user2@localhost;
 DROP USER user3@localhost;
 UPDATE performance_schema.threads SET INSTRUMENTED = 'YES';
+include/rpl/set_gtid_mode_on.inc

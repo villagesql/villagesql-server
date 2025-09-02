@@ -3,6 +3,9 @@
 #
 --source include/have_debug_sync.inc
 
+# This test will show different output with GTID_MODE=ON
+--source include/rpl/set_gtid_mode_off.inc
+
 let $table = "file_instances";
 let $target_name = wait/io/file/sql/ERRMSG;
 
@@ -33,3 +36,6 @@ let $target_name = wait/io/file/sql/ERRMSG;
 --source ../include/idx_compare_load.inc
 
 --source ../include/idx_compare_cleanup.inc
+
+# Restore the default for gtid_mode which is ON
+--source include/rpl/set_gtid_mode_on.inc
