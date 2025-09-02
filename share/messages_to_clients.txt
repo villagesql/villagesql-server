@@ -10774,7 +10774,7 @@ ER_JDV_CANNOT_BE_USED_WITH
 ER_JDV_DML_INFO
   eng "Rows affected: %ld  Warnings: %ld."
 
-ER_JDV_MISSING_VALUE_FOR_AG_COLUMN
+OBSOLETE_ER_JDV_MISSING_VALUE_FOR_AG_COLUMN
   eng "A value must be provided explicitly for auto-generated column %s.%s, referenced by path '%s', key '%s'"
 
 ER_JDV_INVALID_BINARY_TYPE_HEADER
