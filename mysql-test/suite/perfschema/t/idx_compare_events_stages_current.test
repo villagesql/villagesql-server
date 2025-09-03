@@ -3,9 +3,6 @@
 #
 --source include/have_debug_sync.inc
 
-# This test doesn't support GTID
---source include/rpl/set_gtid_mode_off.inc
-
 ## FIXME DISABLED
 
 let $table = "events_stages_current";
@@ -35,6 +32,3 @@ let $target_event_name = `SELECT @target_event_name`;
 --source ../include/idx_compare_load.inc
 
 --source ../include/idx_compare_cleanup.inc
-
-# Restore the default for gtid_mode which is ON
---source include/rpl/set_gtid_mode_on.inc
