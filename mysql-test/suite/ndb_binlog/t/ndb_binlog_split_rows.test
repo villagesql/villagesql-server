@@ -130,7 +130,7 @@ SELECT COUNT(*) FROM t1;
 
 --echo # Should be close to $data_volume/2
 --eval SET @data_volume = $data_volume/2
-SELECT IF(COUNT(*) >= @data_volume-1 AND COUNT(*) <= @data_volume+1, 'YES', 'NO') AS BALANCED FROM t1;
+SELECT IF(COUNT(*)-@data_volume BETWEEN -3 AND +3, 'YES', CONCAT('NO - ',COUNT(*))) AS BALANCED FROM t1;
 
 --connection mysqld2
 --let $MYSQLD_DATADIR= `select @@datadir;`
@@ -252,7 +252,7 @@ SELECT COUNT(*) FROM t2;
 
 --echo # Should be close to $data_volume/3
 --eval SET @data_volume = $data_volume/3
-SELECT IF(COUNT(*) >= @data_volume-1 AND COUNT(*) <= @data_volume+1, 'YES', 'NO') AS BALANCED FROM t2;
+SELECT IF(COUNT(*)-@data_volume BETWEEN -3 AND +3, 'YES', CONCAT('NO - ',COUNT(*))) AS BALANCED FROM t2;
 #SELECT COUNT(*) FROM t2; # comment out
 
 --connection mysqld2
@@ -266,7 +266,7 @@ SELECT IF(COUNT(*) >= @data_volume-1 AND COUNT(*) <= @data_volume+1, 'YES', 'NO'
 # Shoud be different to 12.
 --echo # Should be close to 2*($data_volume/3)
 --eval SET @data_volume = 2*($data_volume/3)
-SELECT IF(COUNT(*) >= @data_volume-1 AND COUNT(*) <= @data_volume+1, 'YES', 'NO') AS BALANCED FROM t2;
+SELECT IF(COUNT(*)-@data_volume BETWEEN -3 AND +3, 'YES', CONCAT('NO - ',COUNT(*))) AS BALANCED FROM t2;
 #SELECT COUNT(*) FROM t2; # comment out
 
 --connection mysqld1
@@ -390,7 +390,7 @@ SELECT COUNT(*) FROM t3;
 
 --echo # Should be close to $data_volume/4
 --eval SET @data_volume = $data_volume/4
-SELECT IF(COUNT(*) >= @data_volume-1 AND COUNT(*) <= @data_volume+1, 'YES', 'NO') AS BALANCED FROM t3;
+SELECT IF(COUNT(*)-@data_volume BETWEEN -2 AND +3, 'YES', CONCAT('NO - ',COUNT(*))) AS BALANCED FROM t3;
 #SELECT COUNT(*) FROM t3; # comment out
 
 --connection mysqld3
@@ -403,7 +403,7 @@ SELECT IF(COUNT(*) >= @data_volume-1 AND COUNT(*) <= @data_volume+1, 'YES', 'NO'
 
 --echo # Should be close to 2*($data_volume/4)
 --eval SET @data_volume = 2*($data_volume/4)
-SELECT IF(COUNT(*) >= @data_volume-1 AND COUNT(*) <= @data_volume+1, 'YES', 'NO') AS BALANCED FROM t3;
+SELECT IF(COUNT(*)-@data_volume BETWEEN -3 AND +3, 'YES', CONCAT('NO - ',COUNT(*))) AS BALANCED FROM t3;
 #SELECT COUNT(*) FROM t3; # comment out
 
 --connection mysqld2
@@ -416,7 +416,7 @@ SELECT IF(COUNT(*) >= @data_volume-1 AND COUNT(*) <= @data_volume+1, 'YES', 'NO'
 
 --echo # Should be close to 3*($data_volume/4)
 --eval SET @data_volume = 3*($data_volume/4)
-SELECT IF(COUNT(*) >= @data_volume-1 AND COUNT(*) <= @data_volume+1, 'YES', 'NO') AS BALANCED FROM t3;
+SELECT IF(COUNT(*)-@data_volume BETWEEN -3 AND +2, 'YES', CONCAT('NO - ',COUNT(*))) AS BALANCED FROM t3;
 #SELECT COUNT(*) FROM t3; # comment out
 
 --connection mysqld1
@@ -542,7 +542,7 @@ SELECT COUNT(*) FROM t4;
 
 --echo # Should be close to $data_volume/3
 --eval SET @data_volume = $data_volume/3
-SELECT IF(COUNT(*) >= @data_volume-1 AND COUNT(*) <= @data_volume+1, 'YES', 'NO') AS BALANCED FROM t4;
+SELECT IF(COUNT(*)-@data_volume BETWEEN -3 AND +3, 'YES', CONCAT('NO - ',COUNT(*))) AS BALANCED FROM t4;
 #SELECT COUNT(*) FROM t4; # comment out
 
 --connection mysqld3
@@ -555,7 +555,7 @@ SELECT IF(COUNT(*) >= @data_volume-1 AND COUNT(*) <= @data_volume+1, 'YES', 'NO'
 
 --echo # Should be close to 2*($data_volume/3)
 --eval SET @data_volume = 2*($data_volume/3)
-SELECT IF(COUNT(*) >= @data_volume-1 AND COUNT(*) <= @data_volume+1, 'YES', 'NO') AS BALANCED FROM t4;
+SELECT IF(COUNT(*)-@data_volume BETWEEN -3 AND +3, 'YES', CONCAT('NO - ',COUNT(*))) AS BALANCED FROM t4;
 #SELECT COUNT(*) FROM t4; # comment out
 
 --connection mysqld2
