@@ -1,2 +1,1 @@
---innodb-autoinc-lock-mode=0
 --gtid-mode=off --enforce-gtid-consistency=off
