@@ -15356,6 +15356,23 @@ table_wild:
 order_expr:
           expr opt_ordering_direction
           {
+            Item_int *item_int = Item_int::narrow($1);
+            if (item_int != nullptr) {
+              /*
+                The expression is a numeric literal.
+                This literal has already been reduced to TOK_GENERIC_VALUE
+                in the digest computation,
+                but this is incorrect in an ORDER BY expression,
+                because `ORDER BY N` means order by the Nth column in SQL.
+                N is not a literal value, it is a column (numeric) name.
+                UNDO THE REDUCE:
+                  TOK_GENERIC_VALUE := NUM
+                REDUCE:
+                  TOK_BY_NUMERIC_COLUMN := NUM
+              */
+              Lex_input_stream *lip= YYLIP;
+              lip->adjust_digest_by_numeric_column_token(item_int->val_int());
+            }
             $$= NEW_PTN PT_order_expr(@$, $1, $2);
           }
         ;
@@ -15363,6 +15380,23 @@ order_expr:
 grouping_expr:
           expr
           {
+            Item_int *item_int = Item_int::narrow($1);
+            if (item_int != nullptr) {
+              /*
+                The expression is a numeric literal.
+                This literal has already been reduced to TOK_GENERIC_VALUE
+                in the digest computation,
+                but this is incorrect in a GROUP BY expression,
+                because `GROUP BY N` means group by the Nth column in SQL.
+                N is not a literal value, it is a column (numeric) name.
+                UNDO THE REDUCE:
+                  TOK_GENERIC_VALUE := NUM
+                REDUCE:
+                  TOK_BY_NUMERIC_COLUMN := NUM
+              */
+              Lex_input_stream *lip= YYLIP;
+              lip->adjust_digest_by_numeric_column_token(item_int->val_int());
+            }
             $$= NEW_PTN PT_order_expr(@$, $1, ORDER_NOT_RELEVANT);
           }
         ;

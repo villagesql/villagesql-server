@@ -3511,6 +3511,18 @@ longlong Item_field::val_int_endpoint(bool, bool *) {
   return null_value ? LLONG_MIN : res;
 }
 
+Item_int *Item_int::narrow(Item *item) {
+  assert(item != nullptr);
+
+  Item_int *result = nullptr;
+
+  if (item->type() == INT_ITEM) {
+    result = reinterpret_cast<Item_int *>(item);
+  }
+
+  return result;
+}
+
 /**
   Init an item from a string we KNOW points to a valid longlong.
   str_arg does not necessary has to be a \\0 terminated string.

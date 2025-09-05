@@ -5208,6 +5208,8 @@ class Item_int : public Item_num {
   typedef Item_num super;
 
  public:
+  static Item_int *narrow(Item *item);
+
   longlong value;
   Item_int(int32 i, uint length = MY_INT32_NUM_DECIMAL_DIGITS)
       : value((longlong)i) {

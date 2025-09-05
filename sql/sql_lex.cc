@@ -383,6 +383,12 @@ void Lex_input_stream::reduce_digest_token(uint token_left, uint token_right) {
   }
 }
 
+void Lex_input_stream::adjust_digest_by_numeric_column_token(ulonglong value) {
+  if (m_digest != nullptr) {
+    m_digest = digest_adjust_by_numeric_column_token(m_digest, value);
+  }
+}
+
 void LEX::assert_ok_set_current_query_block() {
   // (2) Only owning thread could change m_current_query_block
   // (1) bypass for bootstrap and "new THD"

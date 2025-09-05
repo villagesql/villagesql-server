@@ -3729,6 +3729,8 @@ class Lex_input_stream {
 
   void reduce_digest_token(uint token_left, uint token_right);
 
+  void adjust_digest_by_numeric_column_token(ulonglong value);
+
   /**
     True if this scanner tokenizes a partial query (partition expression,
     generated column expression etc.)
