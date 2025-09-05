@@ -335,13 +335,16 @@ ENDFUNCTION()
 
 # On Unix: add to RPATH of an executable when it is installed.
 # Use 'chrpath' or 'patchelf --print-rpath' to inspect results.
-# For Solaris, use 'elfdump -d'
+# For Solaris, use 'elfdump -d'.
+# Sort list such that items containing $ORIGIN/... comes first
 MACRO(ADD_INSTALL_RPATH TARGET VALUE)
   GET_TARGET_PROPERTY(CURRENT_RPATH_${TARGET} ${TARGET} INSTALL_RPATH)
   IF(NOT CURRENT_RPATH_${TARGET})
     SET(CURRENT_RPATH_${TARGET})
   ENDIF()
   LIST(FIND CURRENT_RPATH_${TARGET} "${VALUE}" found_val)
+  LIST(SORT CURRENT_RPATH_${TARGET})
+  LIST(REMOVE_DUPLICATES CURRENT_RPATH_${TARGET})
   IF(found_val EQUAL -1)
     LIST(APPEND CURRENT_RPATH_${TARGET} ${VALUE})
     SET_TARGET_PROPERTIES(${TARGET}
