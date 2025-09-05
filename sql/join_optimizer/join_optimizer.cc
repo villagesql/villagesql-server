@@ -6494,6 +6494,19 @@ void CostingReceiver::CommitBitsetsToHeap(AccessPath *path) const {
   return all_ok;
 }
 
+bool IsAccessPathRefType(AccessPath *path) {
+  return path->type == AccessPath::REF || path->type == AccessPath::EQ_REF;
+}
+/*
+ * This function returns true when 2 equivalent paths representing a Subgraph
+ * pair should not exchange their statistics from statistics cache, because due
+ * to actual execution characteristics the statistics could indeed be quite
+ * different.
+ */
+bool ArePathsStatsExchangeIneligible(AccessPath *path, AccessPath *other_path) {
+  return IsAccessPathRefType(path) || IsAccessPathRefType(other_path);
+}
+
 /**
   Propose the given access path as an alternative to the existing access paths
   for the same task (assuming any exist at all), and hold a “tournament” to find
@@ -6612,16 +6625,18 @@ AccessPath *CostingReceiver::ProposeAccessPath(
       secondary_engine_nrows_params.access_path = path;
       bool cur_use_sc =
           ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
-      /* we equalise Nrows for other similar paths, but not for REF's cause
-       * lookup and scan can have different Nrows. */
-      if (was_other_used_sc && path->type != AccessPath::REF) {
+      /* we equalise Nrows for other similar paths, but not for access paths
+       * where it might not make sense due to different execution
+       * characteristics. */
+      if (was_other_used_sc &&
+          !ArePathsStatsExchangeIneligible(path, other_path)) {
         path->set_num_output_rows(other_path->num_output_rows());
         if (path->num_output_rows_before_filter < path->num_output_rows()) {
           path->num_output_rows_before_filter = path->num_output_rows();
         }
 
       } else if (!was_other_used_sc && cur_use_sc &&
-                 other_path->type != AccessPath::REF) {
+                 !ArePathsStatsExchangeIneligible(path, other_path)) {
         other_path->set_num_output_rows(path->num_output_rows());
         if (other_path->num_output_rows_before_filter <
             other_path->num_output_rows()) {
