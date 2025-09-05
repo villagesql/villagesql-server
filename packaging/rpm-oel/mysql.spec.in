@@ -196,7 +196,9 @@ BuildRequires:  dwz
 BuildRequires:  gcc-c++
 BuildRequires:  gcc
 BuildRequires:  libfido2-devel
+%ifnarch aarch64
 BuildRequires:  libquadmath-devel
+%endif
 BuildRequires:  libudev-devel
 %endif # el10
 BuildRequires:  bison >= 3.0.4
