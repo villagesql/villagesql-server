@@ -108,6 +108,7 @@ using testing::Return;
 using testing::SizeIs;
 using testing::StartsWith;
 using testing::UnorderedElementsAre;
+using testing::WithParamInterface;
 using namespace std::literals;  // For operator""sv.
 
 static AccessPath *FindBestQueryPlanAndFinalize(THD *thd,
@@ -1705,7 +1706,8 @@ TEST_F(MakeHypergraphTest, PartialPushdownOfNonDeterministicPredicate) {
 //
 // We test with the inequality referring to both tables in turn, to make sure
 // that we're not just getting lucky.
-using MakeHypergraphMultipleEqualParamTest = OptimizerTestWithParam<int>;
+class MakeHypergraphMultipleEqualParamTest : public HypergraphOptimizerTestBase,
+                                             public WithParamInterface<int> {};
 
 TEST_P(MakeHypergraphMultipleEqualParamTest,
        MultipleEqualityOnAntijoinGetsIdeallyResolved) {
@@ -3027,8 +3029,9 @@ static string PrintSargablePredicate(const SargablePredicate &sp,
 
 // Verify that when we add a cycle in the graph due to a multiple equality,
 // that join predicate also becomes sargable.
-using HypergraphOptimizerCyclePredicatesSargableTest =
-    OptimizerTestWithParam<const char *>;
+class HypergraphOptimizerCyclePredicatesSargableTest
+    : public HypergraphOptimizerTestBase,
+      public WithParamInterface<const char *> {};
 
 TEST_P(HypergraphOptimizerCyclePredicatesSargableTest,
        CyclePredicatesSargable) {
@@ -4144,7 +4147,8 @@ std::ostream &operator<<(std::ostream &os, const FullTextParam &param) {
 
 }  // namespace
 
-using HypergraphFullTextTest = OptimizerTestWithParam<FullTextParam>;
+class HypergraphFullTextTest : public HypergraphOptimizerTestBase,
+                               public WithParamInterface<FullTextParam> {};
 
 TEST_P(HypergraphFullTextTest, FullTextSearch) {
   SCOPED_TRACE(GetParam().query);
@@ -4167,7 +4171,6 @@ TEST_P(HypergraphFullTextTest, FullTextSearch) {
   ASSERT_NE(nullptr, query_block);
 
   TraceGuard trace(m_thd);
-  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   // Prints out the query plan on failure.
@@ -7353,7 +7356,6 @@ TEST_F(HypergraphSecondaryEngineTest, SemiJoinWithOuterJoinMultipleEqual) {
   // happens as intended. If not, resolver would think its the old join
   // optimizer and does the transformation anyways which makes testing
   // this use case harder.
-  m_initializer.thd()->lex->set_using_hypergraph_optimizer(true);
   m_initializer.thd()->set_secondary_engine_optimization(
       Secondary_engine_optimization::SECONDARY);
   handlerton *hton = EnableSecondaryEngine(/*aggregation_is_unordered=*/false);
@@ -7420,7 +7422,6 @@ TEST_F(HypergraphSecondaryEngineTest, SemiJoinWithOuterJoin) {
   // happens as intended. If not, resolver would think its the old join
   // optimizer and does the transformation anyways which makes testing
   // this use case harder.
-  m_initializer.thd()->lex->set_using_hypergraph_optimizer(true);
   m_initializer.thd()->set_secondary_engine_optimization(
       Secondary_engine_optimization::SECONDARY);
   handlerton *hton = EnableSecondaryEngine(/*aggregation_is_unordered=*/false);
@@ -7475,8 +7476,9 @@ std::ostream &operator<<(std::ostream &os, const RejectionParam &param) {
 }
 }  // namespace
 
-using HypergraphSecondaryEngineRejectionTest =
-    OptimizerTestWithParam<RejectionParam>;
+class HypergraphSecondaryEngineRejectionTest
+    : public HypergraphOptimizerTestBase,
+      public WithParamInterface<RejectionParam> {};
 
 TEST_P(HypergraphSecondaryEngineRejectionTest, RejectPathType) {
   const RejectionParam &param = GetParam();
@@ -7496,7 +7498,6 @@ TEST_P(HypergraphSecondaryEngineRejectionTest, RejectPathType) {
                              param.expect_error ? ER_SECONDARY_ENGINE : 0);
 
   TraceGuard trace(m_thd);
-  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   EXPECT_EQ(param.expect_error, root == nullptr);
@@ -7526,7 +7527,6 @@ TEST_P(HypergraphSecondaryEngineRejectionTest, ErrorOnPathType) {
       m_thd, param.expect_error ? ER_SECONDARY_ENGINE_PLUGIN : 0);
 
   TraceGuard trace(m_thd);
-  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   EXPECT_EQ(param.expect_error, root == nullptr);
@@ -7569,7 +7569,6 @@ TEST_F(HypergraphSecondaryEngineTest, NoRewriteOnFinalization) {
       MakeSecondaryEngineFlags(SecondaryEngineFlag::USE_EXTERNAL_EXECUTOR);
 
   TraceGuard trace(m_thd);
-  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -7620,7 +7619,6 @@ TEST_F(HypergraphSecondaryEngineTest, ExplainWindowForExternalExecutor) {
       MakeSecondaryEngineFlags(SecondaryEngineFlag::USE_EXTERNAL_EXECUTOR);
 
   TraceGuard trace(m_thd);
-  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -7660,7 +7658,6 @@ TEST_F(HypergraphSecondaryEngineTest, NoMaterializationForExternalExecutor) {
       MakeSecondaryEngineFlags(SecondaryEngineFlag::USE_EXTERNAL_EXECUTOR);
 
   TraceGuard trace(m_thd);
-  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -7705,7 +7702,6 @@ TEST_F(HypergraphSecondaryEngineTest, DontCallCostHookForEmptyJoins) {
   };
 
   TraceGuard trace(m_thd);
-  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -7755,7 +7751,6 @@ TEST_F(SecondaryEngineGraphSimplificationTest, Restart) {
       };
 
   TraceGuard trace(m_thd);
-  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -7811,7 +7806,6 @@ TEST_F(SecondaryEngineGraphSimplificationTest, Triggered) {
       };
 
   TraceGuard trace(m_thd);
-  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -7864,7 +7858,6 @@ TEST_F(SecondaryEngineGraphSimplificationTest, RedundantOrderElements) {
   };
 
   TraceGuard trace(m_thd);
-  m_thd->lex->set_using_hypergraph_optimizer(true);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
   SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   ASSERT_NE(nullptr, root);
@@ -8189,8 +8182,6 @@ TEST(ConflictDetectorTest, CountPlansSmallOperatorSet) {
   Server_initializer initializer;
   initializer.SetUp();
   THD *thd = initializer.thd();
-  thd->lex->set_using_hypergraph_optimizer(true);
-  current_thd = thd;
 
   vector<RelationalExpression::Type> join_types{
       RelationalExpression::INNER_JOIN, RelationalExpression::LEFT_JOIN,
@@ -8213,8 +8204,6 @@ TEST(ConflictDetectorTest, CountPlansLargeOperatorSet) {
   Server_initializer initializer;
   initializer.SetUp();
   THD *thd = initializer.thd();
-  thd->lex->set_using_hypergraph_optimizer(true);
-  current_thd = thd;
 
   vector<RelationalExpression::Type> join_types{
       RelationalExpression::INNER_JOIN, RelationalExpression::LEFT_JOIN,
@@ -8386,12 +8375,12 @@ static void BM_FindBestQueryPlanPointSelect(size_t num_iterations) {
   unordered_map<string, Fake_TABLE *> fake_tables;
 
   THD *const thd = initializer.thd();
+  thd->variables.optimizer_switch |= OPTIMIZER_SWITCH_HYPERGRAPH_OPTIMIZER;
 
   Query_block *const query_block =
       ParseAndResolve("SELECT t1.y FROM t1 WHERE t1.x = 123",
                       /*nullable=*/false, initializer, &fake_tables);
 
-  thd->lex->set_using_hypergraph_optimizer(true);
   // Make t1.x the primary key. Add secondary indexes on t1.y and t1.z, just to
   // give the optimizer some more information to look into.
   Fake_TABLE *t1 = fake_tables["t1"];

@@ -153,11 +153,6 @@ class HypergraphOptimizerTestBase : public OptimizerTestBase {
   }
 };
 
-// Template for parameterized optimizer tests.
-template <class T>
-class OptimizerTestWithParam : public OptimizerTestBase,
-                               public ::testing::WithParamInterface<T> {};
-
 inline Query_block *ParseAndResolve(
     const char *query, bool nullable, const Server_initializer &initializer,
     std::unordered_map<string, Fake_TABLE *> *fake_tables) {
