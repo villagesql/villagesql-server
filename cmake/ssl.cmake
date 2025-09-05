@@ -1,4 +1,4 @@
-# Copyright (c) 2009, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2009, 2025, Oracle and/or its affiliates.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -207,6 +207,19 @@ MACRO (MYSQL_CHECK_SSL)
       ENDIF()
     ENDIF()
 
+    IF(SOLARIS AND WITH_SSL STREQUAL "system")
+      SET(OPENSSL_ROOT_DIR "/usr/openssl/3")
+      FIND_PACKAGE(OpenSSL)
+      FIND_PROGRAM(OPENSSL_EXECUTABLE openssl
+        NO_DEFAULT_PATH
+        PATHS "${OPENSSL_ROOT_DIR}/bin"
+        DOC "path to the openssl executable"
+      )
+      IF(OPENSSL_EXECUTABLE)
+      # COPY_OPENSSL_BINARY(${OPENSSL_EXECUTABLE} "" "" openssl_exe_target)
+      ENDIF()
+    ENDIF(SOLARIS AND WITH_SSL STREQUAL "system")
+
     # First search in WITH_SSL_PATH.
     FIND_PATH(OPENSSL_ROOT_DIR
       NAMES include/openssl/ssl.h
@@ -329,6 +342,9 @@ MACRO (MYSQL_CHECK_SSL)
         SET(SSL_LIBRARIES ${SSL_LIBRARIES} ${LIBDL})
       ENDIF()
       MESSAGE(STATUS "SSL_LIBRARIES = ${SSL_LIBRARIES}")
+      IF(NOT OPENSSL_INCLUDE_DIR STREQUAL "/usr/include")
+        INCLUDE_DIRECTORIES(BEFORE SYSTEM ${OPENSSL_INCLUDE_DIR})
+      ENDIF()
       IF(WIN32 AND WITH_SSL STREQUAL "system" AND NOT FOUND_STATIC_SSL_LIBS)
         MESSAGE(STATUS "Please do\nPATH=\"${WITH_SSL_PATH}bin\":$PATH")
         FILE(TO_NATIVE_PATH "${WITH_SSL_PATH}" WITH_SSL_PATH_XX)

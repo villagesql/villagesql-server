@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2025, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -35,6 +35,14 @@ ENDIF()
 
 SET(REGEX_SOURCES regcomp.c regerror.c regexec.c regfree.c reginit.c)
 ADD_CONVENIENCE_LIBRARY(regex ${REGEX_SOURCES})
+
+MY_CHECK_C_COMPILER_FLAG("-Wold-style-definition" HAVE_OLD_STYLE_DEFINITION)
+IF(HAVE_OLD_STYLE_DEFINITION)
+  ADD_COMPILE_FLAGS(
+    ${REGEX_SOURCES} main.c split.c debug.c
+    COMPILE_FLAGS "-Wno-old-style-definition"
+    )
+ENDIF()
 
 IF(WITH_UNIT_TESTS)
   ADD_EXECUTABLE(re main.c split.c debug.c)

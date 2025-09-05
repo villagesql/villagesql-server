@@ -1,4 +1,4 @@
-# Copyright (c) 2006, 2023, Oracle and/or its affiliates.
+# Copyright (c) 2006, 2025, Oracle and/or its affiliates.
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License, version 2.0,
@@ -343,6 +343,7 @@ MACRO(EXTRACT_LINK_LIBRARIES target var)
   IF(${target}_LIB_DEPENDS)
     LIST(REMOVE_ITEM ${target}_LIB_DEPENDS "")
     LIST(REMOVE_DUPLICATES ${target}_LIB_DEPENDS)
+    # MESSAGE(STATUS "xxx ${target} ${${target}_LIB_DEPENDS}")
     FOREACH(lib ${${target}_LIB_DEPENDS})
       # Filter out -limported_openssl and -limported_crypto
       # Filter out "general", it is not a library, just CMake hint
@@ -355,8 +356,13 @@ MACRO(EXTRACT_LINK_LIBRARIES target var)
           SET(${var} "${${var}} ${lib} ")
         ELSEIF(lib MATCHES "^/")
           # Full path, convert to just filename, strip "lib" prefix and extension
+          GET_FILENAME_COMPONENT(dir "${lib}" DIRECTORY)
           GET_FILENAME_COMPONENT(lib "${lib}" NAME_WE)
           STRING(REGEX REPLACE "^lib" "" lib "${lib}")
+          # Add -L/usr/openssl/3/lib/64 for ssl (and crypto).
+          IF(SOLARIS AND WITH_SSL STREQUAL "system")
+            SET(${var} "${${var}}-L${dir} ")
+          ENDIF()
           SET(${var} "${${var}}-l${lib} " )
         ELSE()
           SET(${var} "${${var}}-l${lib} " )
