@@ -1,4 +1,4 @@
-# Copyright (c) 2018, 2022, Oracle and/or its affiliates. All rights reserved.
+# Copyright (c) 2018, 2025, Oracle and/or its affiliates. All rights reserved.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -28,6 +28,7 @@ mt = 0
 loose-default-authentication-plugin=mysql_native_password
 loose-mysqlx=0
 socket=mysql.sock
+skip-grant-tables
 
 [client]
 protocol=tcp
