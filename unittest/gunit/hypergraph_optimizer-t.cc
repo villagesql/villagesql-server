@@ -1009,7 +1009,7 @@ TEST_F(MakeHypergraphTest, MultiEqualityPredicateAppliedOnce) {
   EXPECT_STREQ("t2", graph.nodes[2].table()->alias);
   EXPECT_STREQ("t4", graph.nodes[3].table()->alias);
 
-  ASSERT_EQ(4, graph.edges.size());
+  ASSERT_EQ(5, graph.edges.size());
 
   // t1/t2: t1.y = t2.x
   EXPECT_EQ(TableBitmap(1), graph.graph.edges[0].left);
@@ -1024,16 +1024,20 @@ TEST_F(MakeHypergraphTest, MultiEqualityPredicateAppliedOnce) {
   EXPECT_FLOAT_EQ(COND_FILTER_EQUALITY * (1.0f - COND_FILTER_EQUALITY),
                   graph.edges[1].selectivity);
 
-  // t3/t2t4: (t4.z <> t3.y) AND (t2.z <> t3.x)
+  // t3/t4: t4.z <> t3.y
   EXPECT_EQ(TableBitmap(0), graph.graph.edges[4].left);
-  EXPECT_EQ(TableBitmap(2) | TableBitmap(3), graph.graph.edges[4].right);
-  EXPECT_FLOAT_EQ((1.0f - COND_FILTER_EQUALITY) * (1.0f - COND_FILTER_EQUALITY),
-                  graph.edges[2].selectivity);
+  EXPECT_EQ(TableBitmap(3), graph.graph.edges[4].right);
+  EXPECT_FLOAT_EQ(1.0f - COND_FILTER_EQUALITY, graph.edges[2].selectivity);
+
+  // t3/t2: t2.z <> t3.x
+  EXPECT_EQ(TableBitmap(0), graph.graph.edges[6].left);
+  EXPECT_EQ(TableBitmap(2), graph.graph.edges[6].right);
+  EXPECT_FLOAT_EQ(1.0f - COND_FILTER_EQUALITY, graph.edges[3].selectivity);
 
   // t2/t4: t2.x = t4.x
-  EXPECT_EQ(TableBitmap(2), graph.graph.edges[6].left);
-  EXPECT_EQ(TableBitmap(3), graph.graph.edges[6].right);
-  EXPECT_FLOAT_EQ(COND_FILTER_EQUALITY, graph.edges[3].selectivity);
+  EXPECT_EQ(TableBitmap(2), graph.graph.edges[8].left);
+  EXPECT_EQ(TableBitmap(3), graph.graph.edges[8].right);
+  EXPECT_FLOAT_EQ(COND_FILTER_EQUALITY, graph.edges[4].selectivity);
 }
 
 TEST_F(MakeHypergraphTest, MultiEqualityPredicateNoRedundantJoinCondition) {
@@ -2618,6 +2622,50 @@ TEST_F(HypergraphOptimizerTest, SargableHyperpredicate) {
   ASSERT_EQ(AccessPath::EQ_REF, index_path->type);
   EXPECT_STREQ("t1", index_path->eq_ref().table->alias);
   EXPECT_EQ("(t2.x + t3.x)", ItemToString(index_path->eq_ref().ref->items[0]));
+}
+
+TEST_F(HypergraphOptimizerTest, SargablePredicateWithExtraNonEquality) {
+  Query_block *query_block = ParseAndResolve(
+      "SELECT 1 FROM t1 JOIN t2 ON t1.x = t2.x "
+      "JOIN t3 ON t2.y = t3.y "
+      "WHERE t1.z <> t3.z",
+      /*nullable=*/true);
+
+  // Unique indexes on t2.x and t3.y.
+  m_fake_tables["t2"]->create_index(m_fake_tables["t2"]->field[0], HA_NOSAME);
+  m_fake_tables["t3"]->create_index(m_fake_tables["t3"]->field[1], HA_NOSAME);
+
+  // Make t1 small, and make t2 and t3 big, so that a nested loop join with
+  // index lookups on t2 and t3 is the best plan.
+  m_fake_tables["t1"]->file->stats.records = 10;
+  m_fake_tables["t2"]->file->stats.records = 2000000;
+  m_fake_tables["t3"]->file->stats.records = 3000000;
+
+  // Build multiple equalities from WHERE/ON clauses.
+  COND_EQUAL *cond_equal = nullptr;
+  EXPECT_FALSE(optimize_cond(m_thd, query_block->where_cond_ref(), &cond_equal,
+                             &query_block->m_table_nest,
+                             &query_block->cond_value));
+
+  TraceGuard trace(m_thd);
+  AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
+  SCOPED_TRACE(trace.contents());
+  SCOPED_TRACE(PrintQueryPlan(0, root, query_block->join, true));
+  ASSERT_NE(nullptr, root);
+
+  // Verify that the chosen plan uses eq_ref access (single-row index lookup) on
+  // both t2 and t3. Previously, t2 was accessed with a table scan, leading to a
+  // much slower plan.
+  vector<string_view> eq_ref_tables;
+  WalkAccessPaths(root, query_block->join, WalkAccessPathPolicy::ENTIRE_TREE,
+                  [&](const AccessPath *path, const JOIN *join) {
+                    EXPECT_EQ(query_block->join, join);
+                    if (path->type == AccessPath::EQ_REF) {
+                      eq_ref_tables.push_back(path->eq_ref().table->alias);
+                    }
+                    return false;
+                  });
+  EXPECT_THAT(eq_ref_tables, UnorderedElementsAre("t2", "t3"));
 }
 
 TEST_F(HypergraphOptimizerTest, AntiJoinGetsSameEstimateWithAndWithoutIndex) {
