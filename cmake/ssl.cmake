@@ -387,14 +387,15 @@ MACRO (MYSQL_CHECK_SSL)
         FATAL_SSL_NOT_FOUND_ERROR(
           "Cannot find applink.c for WITH_SSL=${WITH_SSL}.")
       ENDIF()
+      SET(EXTRA_SSL_HINT ${OPENSSL_ROOT_DIR}/lib/VC/x64/MD)
     ENDIF()
 
     FIND_LIBRARY(OPENSSL_LIBRARY
-                 NAMES ssl libssl ssleay32 ssleay32MD
-                 HINTS ${OPENSSL_ROOT_DIR}/lib ${OPENSSL_ROOT_DIR}/lib64)
+      NAMES ssl libssl ssleay32 ssleay32MD
+      HINTS ${OPENSSL_ROOT_DIR}/lib ${OPENSSL_ROOT_DIR}/lib64 ${EXTRA_SSL_HINT})
     FIND_LIBRARY(CRYPTO_LIBRARY
-                 NAMES crypto libcrypto libeay32
-                 HINTS ${OPENSSL_ROOT_DIR}/lib ${OPENSSL_ROOT_DIR}/lib64)
+      NAMES crypto libcrypto libeay32
+      HINTS ${OPENSSL_ROOT_DIR}/lib ${OPENSSL_ROOT_DIR}/lib64 ${EXTRA_SSL_HINT})
 
     IF(OPENSSL_INCLUDE_DIR)
       FIND_OPENSSL_VERSION()
