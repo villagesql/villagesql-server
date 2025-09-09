@@ -4089,6 +4089,7 @@ class Gtid_log_event : public mysql::binlog::event::Gtid_event,
     Log_event so it should not be modified.
   */
   const Tsid &get_tsid() const { return tsid; }
+#ifdef MYSQL_SERVER
   /**
     Return the SIDNO relative to the global tsid_map for this GTID.
 
@@ -4105,7 +4106,7 @@ class Gtid_log_event : public mysql::binlog::event::Gtid_event,
     @retval negative if adding TSID to global_tsid_map causes an error.
   */
   rpl_sidno get_sidno(bool need_lock);
-
+#endif
   /**
     Return the SIDNO relative to the given Tsid_map for this GTID.
 
@@ -4405,6 +4406,7 @@ class Transaction_context_log_event
    */
   std::list<const char *> *get_read_set() { return &read_set; }
 
+#ifdef MYSQL_SERVER
   /**
     Read snapshot version from encoded buffers.
     Cannot be executed during data read from file (event constructor),
@@ -4412,6 +4414,7 @@ class Transaction_context_log_event
     initialization procedure.
    */
   bool read_snapshot_version();
+#endif
 
   /**
     Return the transaction snapshot timestamp.

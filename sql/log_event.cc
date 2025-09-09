@@ -13486,6 +13486,7 @@ void Gtid_log_event::set_trx_length_by_cache_size(ulonglong cache_size,
   return update_untagged_transaction_length();
 }
 
+#ifdef MYSQL_SERVER
 rpl_sidno Gtid_log_event::get_sidno(bool need_lock) {
   if (spec.gtid.sidno < 0) {
     if (need_lock)
@@ -13498,6 +13499,7 @@ rpl_sidno Gtid_log_event::get_sidno(bool need_lock) {
   }
   return spec.gtid.sidno;
 }
+#endif  // MYSQL_SERVER
 
 Gtid_specification Gtid_log_event::get_gtid_spec() { return spec; }
 
@@ -13810,7 +13812,6 @@ bool Transaction_context_log_event::write_data_set(
 
   return false;
 }
-#endif
 
 bool Transaction_context_log_event::read_snapshot_version() {
   DBUG_TRACE;
@@ -13825,6 +13826,7 @@ bool Transaction_context_log_event::read_snapshot_version() {
                                              encoded_snapshot_version_length) !=
          RETURN_STATUS_OK;
 }
+#endif
 
 size_t Transaction_context_log_event::get_snapshot_version_size() {
   DBUG_TRACE;
