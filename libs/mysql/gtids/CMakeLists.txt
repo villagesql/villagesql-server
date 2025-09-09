@@ -25,6 +25,7 @@ SET(TARGET_HEADERS
   gtid_set.h
   gtids.h
   has_tags.h
+  legacy_glue.h
   sequence_number.h
   strconv/gtid_binary_format.h
   strconv/gtid_binary_format_conv.h
