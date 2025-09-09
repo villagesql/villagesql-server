@@ -36,6 +36,7 @@
 #include "field_types.h"
 #include "lex_string.h"
 #include "my_alloc.h"
+#include "my_config.h"
 #include "my_inttypes.h"
 #include "my_macros.h"
 #include "my_table_map.h"
@@ -550,8 +551,10 @@ TEST_F(ItemTest, ItemRollupSwitcher) {
   EXPECT_EQ(gi3->hash(), gi2->hash());
   EXPECT_NE(gi3->hash(), gi4->hash());
   EXPECT_NE(gi1->hash(), 0);
+#if !defined(WORDS_BIGENDIAN)
   EXPECT_EQ(gi3->hash(), 16249556224246059739ULL);
   EXPECT_EQ(gi4->hash(), 17376352938218015750ULL);
+#endif
 }
 
 TEST_F(ItemTest, ItemEqualEq) {
@@ -624,7 +627,9 @@ TEST_F(ItemTest, ItemHashEq) {
   auto *if5 = new Item_field(&field5);
   if5->table_name = "t2";
   if5->db_name = "db2";
+#if !defined(WORDS_BIGENDIAN)
   EXPECT_EQ(if1->hash(), 15949012521114663756UL);
+#endif
   EXPECT_EQ(if1->hash(), if2->hash());
   EXPECT_EQ(if1->hash(), if2->hash());
   EXPECT_NE(if2->hash(), if3->hash());
