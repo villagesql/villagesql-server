@@ -373,6 +373,7 @@ SHOW STATUS LIKE 'handler_read%';
 
 --echo # Check statistics with hint
 FLUSH STATUS;
+--sorted_result
 SELECT /*+ NO_BNL() */t1.* FROM t1,t2,t3;
 SHOW STATUS LIKE 'handler_read%';
 

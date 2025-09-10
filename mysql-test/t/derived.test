@@ -643,6 +643,7 @@ SHOW STATUS LIKE 'Handler_read%';
 EXPLAIN
   SELECT * FROM t1,v3 AS v31,v3 WHERE t1.f1=v31.f1 and t1.f1=v3.f1;
 FLUSH STATUS;
+--sorted_result
 SELECT * FROM t1,v3 AS v31,v3 WHERE t1.f1=v31.f1 and t1.f1=v3.f1;
 --skip_if_hypergraph  # Depends on the query plan.
 SHOW STATUS LIKE 'Handler_read%';

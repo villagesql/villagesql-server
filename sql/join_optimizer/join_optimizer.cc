@@ -4962,59 +4962,44 @@ bool CostingReceiver::FoundSubgraphPair(NodeMap left, NodeMap right,
       }
 
       assert(BitsetsAreCommitted(left_path));
-      // For inner joins and full outer joins, the order does not matter.
-      //
-      // In lieu of a more precise cost model, always keep the one that hashes
-      // the fewest rows. With the current rudimentary cost model for hash
-      // joins, we always get the lowest total cost by choosing the table with
-      // the lowest row estimate as the build table. When a better cost model is
-      // implemented, which takes into account the size of the rows and not only
-      // the number of rows, it might make sense to propose both join orders.
-      //
-      // If the join is under a LIMIT, having a lower init cost may be just as
-      // important as a having a lower total cost, so in that case we propose
-      // both join orders and let the tournament decide which to keep.
-      //
-      // For secondary engines, we propose only a single join order, as they
-      // decide on their own which table to use as probe and which table to use
-      // as build.
-      //
-      // Finally, if either of the sides are parameterized on something
-      // external, flipping the order will not necessarily be allowed (and would
-      // cause us to not give a hash join for these tables at all).
-      if (is_commutative &&
-          (!IsSubset(left | right, m_nodes_under_limit) ||
-           IsSecondaryEngineOptimization()) &&
-          !Overlaps(left_path->parameter_tables | right_path->parameter_tables,
-                    RAND_TABLE_BIT)) {
-        if (left_path->num_output_rows() < right_path->num_output_rows()) {
-          ProposeHashJoin(right, left, right_path, left_path, edge, new_fd_set,
-                          new_obsolete_orderings,
-                          /*rewrite_semi_to_inner=*/false, &wrote_trace);
-        } else {
-          ProposeHashJoin(left, right, left_path, right_path, edge, new_fd_set,
-                          new_obsolete_orderings,
-                          /*rewrite_semi_to_inner=*/false, &wrote_trace);
+
+      // Propose with left_path as the 'build' (and right_path as 'probe').
+      const auto propose_left_build{[&](bool rewrite) {
+        ProposeHashJoin(right, left, right_path, left_path, edge, new_fd_set,
+                        new_obsolete_orderings, rewrite, &wrote_trace);
+      }};
+
+      // Propose with right_path as the 'build' (and left_path as 'probe').
+      const auto propose_right_build{[&]() {
+        ProposeHashJoin(left, right, left_path, right_path, edge, new_fd_set,
+                        new_obsolete_orderings, /*rewrite_semi_to_inner=*/false,
+                        &wrote_trace);
+      }};
+
+      if (edge->expr->type == RelationalExpression::STRAIGHT_INNER_JOIN) {
+        // STRAIGHT_JOIN requires the table on the left side of the join to
+        // be read first. Since the 'build' table is read first, propose a
+        // hash join with the left-side table as the build table and the
+        // right-side table as the 'probe' table.
+        assert(!is_reorderable);
+        propose_left_build(false);
+      } else if (IsSecondaryEngineOptimization()) {
+        if (can_rewrite_semi_to_inner) {
+          propose_left_build(true);
         }
+        // For secondary engines, we propose only a single join order, as
+        // they decide on their own which table to use as probe and which
+        // table to use as build for inner joins and full outer joins (when
+        // implemented). For left joins, the right side must be proposed as
+        // 'build' to keep track of what is the inner and outer side of the
+        // left outer join.
+        propose_right_build();
       } else {
-        if (edge->expr->type == RelationalExpression::STRAIGHT_INNER_JOIN) {
-          // STRAIGHT_JOIN requires the table on the left side of the join to
-          // be read first. Since the 'build' table is read first, propose a
-          // hash join with the left-side table as the build table and the
-          // right-side table as the 'probe' table.
-          ProposeHashJoin(right, left, right_path, left_path, edge, new_fd_set,
-                          new_obsolete_orderings,
-                          /*rewrite_semi_to_inner=*/false, &wrote_trace);
-        } else {
-          ProposeHashJoin(left, right, left_path, right_path, edge, new_fd_set,
-                          new_obsolete_orderings,
-                          /*rewrite_semi_to_inner=*/false, &wrote_trace);
-        }
+        propose_right_build();
         if (is_reorderable) {
-          ProposeHashJoin(right, left, right_path, left_path, edge, new_fd_set,
-                          new_obsolete_orderings,
-                          /*rewrite_semi_to_inner=*/can_rewrite_semi_to_inner,
-                          &wrote_trace);
+          // For inner joins and full outer joins (when implemented), both
+          // orders are valid and we propose both.
+          propose_left_build(can_rewrite_semi_to_inner);
         }
       }
 

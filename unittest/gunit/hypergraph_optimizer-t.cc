@@ -2682,11 +2682,10 @@ TEST_F(HypergraphOptimizerTest, DelayedMaterializablePredicate) {
 
 TEST_F(HypergraphOptimizerTest, DoNotExpandJoinFiltersMultipleTimes) {
   Query_block *query_block = ParseAndResolve(
-      "SELECT 1 FROM "
-      "  t1 "
-      "  JOIN t2 ON t1.x = t2.x "
-      "  JOIN t3 ON t1.x = t3.x "
-      "  JOIN t4 ON t2.y = t4.x",
+      "SELECT 1 FROM t4"
+      "  LEFT JOIN t3 ON t3.y = t4.x"
+      "  LEFT JOIN t2 ON t2.x = t3.x"
+      "  LEFT JOIN t1 ON t1.x = t2.x",
       /*nullable=*/true);
   m_fake_tables["t1"]->file->stats.records = 1;
   m_fake_tables["t1"]->create_index(m_fake_tables["t1"]->field[0]);
@@ -2708,22 +2707,24 @@ TEST_F(HypergraphOptimizerTest, DoNotExpandJoinFiltersMultipleTimes) {
   hton->secondary_engine_modify_view_ap_cost = [](THD *, const JoinHypergraph &,
                                                   AccessPath *path) {
     if (path->type == AccessPath::NESTED_LOOP_JOIN &&
-        Overlaps(GetUsedTableMap(path->nested_loop_join().inner, false),
-                 0b1000)) {
+        Overlaps(GetUsedTableMap(path->nested_loop_join().inner, false), 1)) {
       return true;
     }
     if (path->type == AccessPath::HASH_JOIN &&
-        GetUsedTableMap(path->hash_join().outer, false) != 0b1000) {
+        GetUsedTableMap(path->hash_join().outer, false) != 1) {
       return true;
     }
     return false;
   };
 
+  TraceGuard trace(m_thd);
   AccessPath *root = FindBestQueryPlanAndFinalize(m_thd, query_block);
+  SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
   // Prints out the query plan on failure.
   SCOPED_TRACE(PrintQueryPlan(0, root, query_block->join,
                               /*is_root_of_join=*/true));
 
+  ASSERT_NE(root, nullptr);
   // Check that we don't have a filter on top of a filter.
   WalkAccessPaths(root, /*join=*/nullptr, WalkAccessPathPolicy::ENTIRE_TREE,
                   [&](const AccessPath *path, const JOIN *) {
