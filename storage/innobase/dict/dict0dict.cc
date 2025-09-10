@@ -2887,7 +2887,10 @@ void dict_index_copy_types(dtuple_t *tuple, const dict_index_t *index,
 
     ifield = index->get_field(i);
     dfield_type = dfield_get_type(dtuple_get_nth_field(tuple, i));
+    ut_ad(!ifield->col->is_virtual() || !index->is_clustered());
     ifield->col->copy_type(dfield_type);
+    /* Field for materialized virtual column is not itself virtual. */
+    dfield_type->prtype &= ~DATA_VIRTUAL;
     if (dict_index_is_spatial(index) &&
         DATA_GEOMETRY_MTYPE(dfield_type->mtype)) {
       dfield_type->prtype |= DATA_GIS_MBR;
@@ -5290,7 +5293,7 @@ upd_t *DDTableBuffer::update_set_metadata(const dtuple_t *entry,
   dfield_copy(&upd_field->new_val, metadata_dfield);
   upd_field_set_field_no(upd_field, METADATA_FIELD_NO, m_index);
 
-  ut_ad(update->validate());
+  ut_d(update->validate());
 
   return (update);
 }
