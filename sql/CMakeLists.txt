@@ -1193,20 +1193,11 @@ IF(UNIX_INSTALL_RPATH_ORIGIN_PRIV_LIBDIR
     MESSAGE(STATUS "LINK_FLAGS for mysqld ${mysqld_link_flags}")
   ENDIF()
 
-  # Insert absolute INSTALL_RPATH before $ORIGIN values.
+  # Insert absolute INSTALL_RPATH.
   # This is done in order to support setuid executables, needed by:
   # https://dev.mysql.com/doc/refman/8.0/en/resource-groups.html
-
-  # Note: for Fedora RPM, this gives ERROR 0008: file '/usr/sbin/mysqld'
-  #       contains the $ORIGIN specifier at the wrong position.
-  IF(NOT LINUX_RHEL10)
-    IF(INSTALL_LAYOUT STREQUAL "DEB" OR INSTALL_LAYOUT STREQUAL "RPM")
-      GET_TARGET_PROPERTY(CURRENT_RPATH_mysqld mysqld INSTALL_RPATH)
-      LIST(INSERT CURRENT_RPATH_mysqld 0
-        "${CMAKE_INSTALL_PREFIX}/${INSTALL_PRIV_LIBDIR}")
-      SET_TARGET_PROPERTIES(mysqld
-        PROPERTIES INSTALL_RPATH "${CURRENT_RPATH_mysqld}")
-    ENDIF()
+  IF(INSTALL_LAYOUT STREQUAL "DEB" OR INSTALL_LAYOUT STREQUAL "RPM")
+    ADD_INSTALL_RPATH(mysqld "${CMAKE_INSTALL_PREFIX}/${INSTALL_PRIV_LIBDIR}")
   ENDIF()
 ENDIF()
 
