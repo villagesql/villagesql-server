@@ -17548,10 +17548,24 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
         ib_table->update_time.load());
   }
 
+  /* Piggyback fetching constant statistics when it has been updated and
+  up-to-date constant statistics where requested. */
+  if (!is_analyze && (flag & HA_STATUS_CONST_WHEN_UPDATED) &&
+      ib_table->stats_updated.exchange(false)) {
+    flag |= HA_STATUS_CONST;
+  }
+
   ulint stat_clustered_index_size{0};
   ulint stat_sum_of_other_index_sizes{0};
 
   if (flag & (HA_STATUS_VARIABLE | HA_STATUS_CONST)) {
+    /* Constant statistics will be copied to the table. So subsequent calls
+    with HA_STATUS_CONST_WHEN_UPDATED do not have to repeat it unless
+    statistics were updated in the meantime. */
+    if (flag & HA_STATUS_CONST) {
+      ib_table->stats_updated.store(false);
+    }
+
     dict_table_stats_lock(ib_table, RW_S_LATCH);
 
     info_low_table_stats(flag, ib_table, n_rows, stat_clustered_index_size,

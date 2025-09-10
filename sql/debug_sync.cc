@@ -1988,7 +1988,7 @@ bool debug_sync_set_action(THD *thd, const char *action_str, size_t len) {
   return rc;
 }
 
-void conditional_sync_point(std::string name, unsigned short timeout) {
+void conditional_sync_point(const std::string &name, unsigned short timeout) {
   if (current_thd == nullptr) return;
   const std::string debug_symbol = "syncpoint_" + name;
   DBUG_EXECUTE_IF(debug_symbol.c_str(), {
@@ -2007,7 +2007,7 @@ void conditional_sync_point(std::string name, unsigned short timeout) {
   });
 }
 
-void conditional_sync_point_for_timestamp(std::string name) {
+void conditional_sync_point_for_timestamp(const std::string &name) {
   if (current_thd == nullptr) return;
   conditional_sync_point(name + "_" +
                          std::to_string(current_thd->start_time.tv_sec));

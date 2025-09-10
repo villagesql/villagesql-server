@@ -6632,6 +6632,39 @@ uint Table_ref::leaf_tables_count() const {
   return count;
 }
 
+#ifndef NDEBUG
+/**
+  Generate string describing number of records per key.
+  @param table Table which has the index
+  @param nr index of key for which string will be generated
+  @return string with the description number of records per key value
+*/
+static std::string str_records_per_key(const TABLE *table, size_t nr) {
+  std::ostringstream ss;
+  ss << table->s->db << "." << table->s->table_name << " " << table->alias
+     << " ";
+  auto keyinfo = table->key_info[nr];
+  if (keyinfo.supports_records_per_key()) {
+    ss << keyinfo.name << "(";
+    std::ostringstream counts;
+    for (uint part = 0; part < keyinfo.actual_key_parts; part++) {
+      if (keyinfo.has_records_per_key(part)) {
+        if (!counts.view().empty()) {
+          ss << ",";
+          counts << ",";
+        }
+        ss << keyinfo.key_part[part].field->field_name;
+
+        rec_per_key_t rec_per_key = keyinfo.records_per_key(part);
+        counts << std::to_string(rec_per_key);
+      }
+    }
+    ss << ") = (" << counts.view() << ")";
+  }
+  return ss.str();
+}
+#endif
+
 /**
   @brief
   Retrieve number of rows in the table
@@ -6679,10 +6712,22 @@ int Table_ref::fetch_number_of_rows(ha_rows fallback_estimate) {
                  // Recursive reference is never a const table
                  fallback_estimate);
   } else {
-    uint flags = HA_STATUS_VARIABLE | HA_STATUS_NO_LOCK;
-    DBUG_EXECUTE_IF("fetch_number_of_rows_info_const",
-                    { flags |= HA_STATUS_CONST; });
+    uint flags =
+        HA_STATUS_VARIABLE | HA_STATUS_NO_LOCK | HA_STATUS_CONST_WHEN_UPDATED;
+    DBUG_EXECUTE_IF("fetch_number_of_rows_info_const", {
+      flags |= HA_STATUS_CONST;
+      flags &= ~HA_STATUS_CONST_WHEN_UPDATED;
+    });
     int error = table->file->info(flags);
+
+    DBUG_EXECUTE_IF("print_records_per_key", {
+      for (uint nr = 0; nr < table->s->keys; nr++) {
+        push_warning_printf(table->in_use, Sql_condition::SL_NOTE,
+                            HA_ERR_GENERIC, "print_records_per_key: %s",
+                            str_records_per_key(table, nr).c_str());
+      }
+    });
+
     DBUG_EXECUTE_IF("bug35208539_raise_error", error = HA_ERR_GENERIC;);
     if (error) {
       return error;

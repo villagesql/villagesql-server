@@ -437,6 +437,9 @@ static void dict_stats_empty_table(dict_table_t *table) /*!< in/out: table */
     dict_stats_empty_index(index);
   }
 
+  /* Just ensure initialized for exceptional cases. */
+  table->stats_updated.store(false);
+
   table->stat_initialized = true;
 
   dict_table_stats_unlock(table, RW_X_LATCH);
@@ -491,6 +494,7 @@ static void dict_stats_assert_initialized(
 static void dict_stats_copy(dict_table_t *dst, /*!< in/out: destination table */
                             const dict_table_t *src) /*!< in: source table */
 {
+  dst->stats_updated.store(src->stats_updated.load());
   dst->stats_last_recalc = src->stats_last_recalc;
   dst->stat_n_rows = src->stat_n_rows;
   dst->stat_clustered_index_size = src->stat_clustered_index_size;
@@ -892,6 +896,8 @@ static void dict_stats_update_transient(
     dict_stats_copy_index(index, *stats_it);
     stats_it++;
   }
+
+  table->stats_updated.store(true);
 
   dict_table_stats_unlock(table, RW_X_LATCH);
 
@@ -2343,6 +2349,8 @@ static dberr_t dict_stats_update_persistent(dict_table_t *table) {
 
   table->stat_modified_counter = 0;
 
+  table->stats_updated.store(true);
+
   table->stat_initialized = true;
 
   dict_stats_assert_initialized(table);
@@ -3163,8 +3171,7 @@ dberr_t dict_stats_update(dict_table_t *table,
   switch (stats_upd_option) {
     dberr_t err;
 
-    case DICT_STATS_RECALC_PERSISTENT:
-
+    case DICT_STATS_RECALC_PERSISTENT: {
       if (srv_read_only_mode) {
         break;
       }
@@ -3190,7 +3197,12 @@ dberr_t dict_stats_update(dict_table_t *table,
         return (err);
       }
 
-      return (dict_stats_save(table, nullptr, trx, silent));
+      dberr_t result = dict_stats_save(table, nullptr, trx, silent);
+
+      CONDITIONAL_SYNC_POINT_TIMEOUT("completed_stats_update", 5);
+
+      return result;
+    }
 
     case DICT_STATS_RECALC_TRANSIENT:
       break;
@@ -3198,6 +3210,13 @@ dberr_t dict_stats_update(dict_table_t *table,
     case DICT_STATS_EMPTY_TABLE:
 
       dict_stats_empty_table(table);
+
+      /* DICT_STATS_EMPTY_TABLE is invoked only when truncating intrinsic
+      tables or creating new tables. Non-intrinsic tables are truncated by
+      recreation and the table definition cache is invalidated with
+      TDC_RT_REMOVE_ALL. In all these cases the server never gets stale stats,
+      so here just sets to a meaningful state. */
+      table->stats_updated.store(true);
 
       /* If table is using persistent stats,
       then save the stats on disk */
@@ -3227,6 +3246,7 @@ dberr_t dict_stats_update(dict_table_t *table,
 
       err = dict_stats_fetch_from_ps(t);
 
+      t->stats_updated.store(true);
       t->stats_last_recalc = table->stats_last_recalc;
       t->stat_modified_counter = 0;
 

@@ -72,6 +72,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "sql/table.h"
 
 #include <algorithm>
+#include <atomic>
 #include <iterator>
 #include <memory> /* std::unique_ptr */
 #include <set>
@@ -2239,6 +2240,10 @@ struct dict_table_t {
   /** true if statistics have been calculated the first time after
   database startup or table creation. */
   unsigned stat_initialized : 1;
+
+  /** true if statistics have been updated in the background and not yet
+  collected by the optimizer */
+  std::atomic<bool> stats_updated = false;
 
   /** Timestamp of last recalc of the stats. */
   std::chrono::steady_clock::time_point stats_last_recalc;
