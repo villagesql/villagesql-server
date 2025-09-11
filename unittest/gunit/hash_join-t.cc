@@ -540,10 +540,11 @@ TEST(HashJoinTest, HashTableCaching) {
   EXPECT_EQ(0, build_iterator.num_rows());
   EXPECT_EQ(0, build_iterator.num_full_reads());
   ASSERT_FALSE(hash_join_iterator.Init());
-  // No reads yet, due to lazy initialization.
-  EXPECT_EQ(0, build_iterator.num_init_calls());
-  EXPECT_EQ(0, build_iterator.num_rows());
-  EXPECT_EQ(0, build_iterator.num_full_reads());
+
+  // The build table is read fully during Init().
+  EXPECT_EQ(1, build_iterator.num_init_calls());
+  EXPECT_EQ(2, build_iterator.num_rows());
+  EXPECT_EQ(1, build_iterator.num_full_reads());
 
   EXPECT_THAT(CollectIntResults(&hash_join_iterator, probe_field),
               ElementsAre(2, 3));
@@ -566,15 +567,14 @@ TEST(HashJoinTest, HashTableCaching) {
 
   hash_table_generation = 1;
   ASSERT_FALSE(hash_join_iterator.Init());
-  // Unchanged due to lazy initialization.
-  EXPECT_EQ(1, build_iterator.num_init_calls());
-  EXPECT_EQ(2, build_iterator.num_rows());
-  EXPECT_EQ(1, build_iterator.num_full_reads());
+  // The change in hash table generation led to the hash table being rebuilt, so
+  // expect one more full read of the build iterator.
+  EXPECT_EQ(2, build_iterator.num_init_calls());
+  EXPECT_EQ(4, build_iterator.num_rows());
+  EXPECT_EQ(2, build_iterator.num_full_reads());
 
   EXPECT_THAT(CollectIntResults(&hash_join_iterator, probe_field),
               ElementsAre(2, 3));
-  // The change in hash table generation led to the hash table being rebuilt, so
-  // expect one more full read of the build iterator.
   EXPECT_EQ(2, build_iterator.num_init_calls());
   EXPECT_EQ(4, build_iterator.num_rows());
   EXPECT_EQ(2, build_iterator.num_full_reads());

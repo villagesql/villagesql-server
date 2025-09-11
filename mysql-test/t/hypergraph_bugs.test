@@ -1988,4 +1988,37 @@ FROM t AS t1
 WHERE t3.pk = t2.pk OR t2.f1 <> t2.f1;
 DROP TABLE t;
 
+--echo #
+--echo # Bug#38418831: Hypergraph: Wrong result when sorting hash join
+--echo #               result reading from temptable
+--echo #
+
+CREATE TABLE t1 (x INT);
+INSERT INTO t1 VALUES (1), (3), (5), (7);
+
+CREATE TABLE t2 (x INT, y LONGTEXT);
+INSERT INTO t2 VALUES
+  (1, REPEAT('This is the first blob.', 4)),
+  (2, REPEAT('This is the second blob.', 4)),
+  (3, REPEAT('This is the third blob.', 4)),
+  (4, REPEAT('This is the fourth blob.', 4)),
+  (5, REPEAT('This is the fifth blob.', 4)),
+  (6, REPEAT('This is the sixth blob.', 4)),
+  (7, REPEAT('This is the seventh blob.', 4)),
+  (8, REPEAT('This is the eighth blob.', 4)),
+  (9, REPEAT('This is the ninth blob.', 4)),
+  (10, REPEAT('This is the tenth blob.', 4));
+
+# The bug is seen when the temporary table is on disk. Reduce
+# tmp_table_size to make it go to disk with a smaller test case.
+SET tmp_table_size = 1024;
+
+# Used to return 1 row instead of 4 rows.
+SELECT /*+ NO_MERGE(t2) */ t1.x, t2.y
+FROM t1 JOIN (SELECT * FROM t2) t2 ON t1.x = t2.x
+ORDER BY t1.x, t2.x;
+
+SET tmp_table_size = DEFAULT;
+DROP TABLE t1, t2;
+
 --source include/disable_hypergraph.inc

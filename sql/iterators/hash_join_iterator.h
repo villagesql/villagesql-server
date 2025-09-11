@@ -322,7 +322,7 @@ class HashJoinIterator final : public RowIterator {
   ///   block the iterator is a part of has been asked to clear hash tables,
   ///   since outer references may have changed value. It is used to know when
   ///   we need to drop our hash table; when the value changes, we need to drop
-  ///   it. If it is nullptr, we _always_ drop it on Reset().
+  ///   it. If it is nullptr, we _always_ drop it in DoInit().
   HashJoinIterator(THD *thd, unique_ptr_destroy_only<RowIterator> build_input,
                    const Prealloced_array<TABLE *, 4> &build_input_tables,
                    double estimated_build_rows,
@@ -356,10 +356,7 @@ class HashJoinIterator final : public RowIterator {
   int ChunkCount() { return m_chunk_files_on_disk.size(); }
 
  private:
-  bool DoInit() override {
-    m_needs_reset = true;
-    return false;
-  }
+  bool DoInit() override;
 
   int DoRead() override;
 
@@ -679,6 +676,10 @@ class HashJoinIterator final : public RowIterator {
   };
   HashJoinType m_hash_join_type{HashJoinType::IN_MEMORY};
 
+  /// If m_probe_row_read is true, the contents of the first row of
+  /// m_probe_input is stored in this member.
+  String m_cached_probe_row;
+
   // The match flag for the last probe row read from chunk file.
   //
   // This is needed if a outer join spills to disk; a probe row can match a row
@@ -696,23 +697,15 @@ class HashJoinIterator final : public RowIterator {
   /// another.
   bool m_probe_row_read{false};
 
-  /// Set by Init() to indicate that the next call to Read() should call Reset()
-  /// to (re)start from the beginning.
-  bool m_needs_reset{false};
-
-  /// Helper function for Reset(). Read the first row from m_probe_input.
+  /// Helper function for DoInit(). Read the first row from m_probe_input.
   /// @returns 'true' if there was an error.
   bool ReadFirstProbeRow();
 
-  /// Helper function for Reset(). Build the hash table and check for empty
+  /// Helper function for DoInit(). Build the hash table and check for empty
   /// query results (empty build input or non-empty build input in case of
   /// degenerate antijoin.)
   /// @returns 'true' in case of error.
   bool InitHashTable();
-
-  /// Reset the internal state and start reading from the beginning of the
-  /// result set.
-  bool Reset();
 };
 
 #endif  // SQL_ITERATORS_HASH_JOIN_ITERATOR_H_
