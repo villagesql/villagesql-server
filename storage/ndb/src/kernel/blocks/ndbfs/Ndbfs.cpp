@@ -1906,17 +1906,13 @@ static bool check_for_expected_errors(GlobalSignalNumber gsn, AsyncFile *file,
           strncmp(endp - 3, "ctl", 3) == 0) {
         return true;
       }
-      // D1/DBDIH/S0.sysfile, D1/NDBCNTR/S0.sysfile
+      // D1/NDBCNTR/S0.sysfile
       if (len >= 19 && strncmp(endp - 10, "S0.sysfile", 10) == 0) {
         return true;
       }
 
       // D1/DBDIH/P0.sysfile, D1/NDBCNTR/P0.sysfile
       if (len >= 19 && strncmp(endp - 10, "P0.sysfile", 10) == 0) {
-        return true;
-      }
-      // D1/DBDIH/S1.FragList
-      if (len >= 20 && strncmp(endp - 8, "FragList", 8) == 0) {
         return true;
       }
     }
