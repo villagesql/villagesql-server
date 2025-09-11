@@ -478,13 +478,13 @@ struct Column_meta {
   bool can_be_stored_externally() const;
 
   /** true if this column is part of secondary index. */
-  bool m_is_part_of_sk;
+  bool m_is_part_of_sk{false};
 
   /** Field type. (@ref enum_field_types) */
   enum_field_types m_type;
 
   /** If column could be NULL. */
-  bool m_is_nullable;
+  bool m_is_nullable{false};
 
   /** true if column belongs to primary index (key or non-key) */
   bool m_is_pk{false};
@@ -493,26 +493,26 @@ struct Column_meta {
   bool m_is_key{false};
 
   /** If the key is descending. */
-  bool m_is_desc_key;
+  bool m_is_desc_key{false};
 
   /** If the key is prefix of the column. */
   bool m_is_prefix_key{false};
 
   /** If it is fixed length type. */
-  bool m_is_fixed_len;
+  bool m_is_fixed_len{false};
 
   /** If it is integer type. */
   Compare m_compare;
 
   /** If it is unsigned integer type. */
-  bool m_is_unsigned;
+  bool m_is_unsigned{false};
 
   /** Check the row header to find out if it is fixed length. For
   character data type the row header indicates fixed length. */
-  bool m_fixed_len_if_set_in_row;
+  bool m_fixed_len_if_set_in_row{false};
 
   /** If character column length can be kept in one byte. */
-  bool m_is_single_byte_len;
+  bool m_is_single_byte_len{false};
 
   /** The length of column data if fixed. */
   uint16_t m_fixed_len;
@@ -767,7 +767,7 @@ struct Row_meta {
   std::string m_name;
 
   /** true if primary key, false if secondary key. */
-  bool is_pk;
+  bool is_pk{false};
 
   /** true if DB_ROW_ID is the pk, false otherwise. */
   bool dbrowid_is_pk{false};
