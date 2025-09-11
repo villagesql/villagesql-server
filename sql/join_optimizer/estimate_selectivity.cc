@@ -317,7 +317,8 @@ double EstimateEqualPredicateSelectivity(THD *thd,
   double selectivity_cap = 1.0;
 
   for (const Field *equal_field : equal_fields) {
-    if (equal_field->table->pos_in_table_list->is_view_or_derived()) {
+    if (equal_field->table->pos_in_table_list == nullptr ||
+        equal_field->table->pos_in_table_list->is_view_or_derived()) {
       // No statistics on derived tables.
       continue;
     }
