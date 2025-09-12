@@ -224,12 +224,12 @@ mysql_state_machine_status cssm_begin_connect(mysql_async_connect *ctx) {
     thd = mysql_session->get_thd();
     mcs_extn->is_thd_associated = false;
     Security_context_handle sc;
+    mcs_extn->session_svc = mysql_session;
     if (mysql_security_context_imp::get(thd, &sc)) return STATE_MACHINE_FAILED;
     if (mysql_security_context_imp::lookup(sc, user, host, nullptr, db))
       return STATE_MACHINE_FAILED;
     mcs_extn->mcs_thd = thd;
     mysql->thd = thd;
-    mcs_extn->session_svc = mysql_session;
   } else {
     mysql->thd = reinterpret_cast<void *>(mcs_extn->mcs_thd);
   }

@@ -89,4 +89,9 @@ SET @@GLOBAL.DEBUG = '+d, mysql_command_services_component_test_errno';
 SELECT test_mysql_command_services_error_code_udf("SELECT * FROM test.no_such_table");
 SET @@GLOBAL.DEBUG = '-d, mysql_command_services_component_test_errno';
 
+--echo # Test : failing connect() when running in an initialized thread; cleanup (cmd_factory->close() + cmd_thread->end()) must not leak the session
+SELECT test_mysql_command_services_explicit_connect_fail_cleanup_udf();
+
+# Error-log must not contain: [ERROR] [MY-010470] [Server] Closed forcefully 1 session left opened by plugin server_service
+
 UNINSTALL COMPONENT "file://component_test_mysql_command_services";
