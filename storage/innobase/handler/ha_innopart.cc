@@ -3493,7 +3493,7 @@ in various fields of the handle object.
 @param[in]      is_analyze      True if called from "::analyze()".
 @return HA_ERR_* error code or 0. */
 int ha_innopart::info_low(uint flag, bool is_analyze) {
-  dict_table_t *ib_table = nullptr;
+  dict_table_t *ib_table;
   uint64_t max_rows = 0;
   uint biggest_partition = 0;
   int error = 0;
@@ -3682,13 +3682,7 @@ int ha_innopart::info_low(uint flag, bool is_analyze) {
     }
   }
 
-  bool proactively_update_const =
-      !is_analyze && (flag & HA_STATUS_CONST_WHEN_UPDATED);
-
-  /* Find which partition is the biggest. It is needed both for constant
-  statistics and for proactive check whether constant statistics where
-  updated. */
-  if ((flag & HA_STATUS_CONST) != 0 || proactively_update_const) {
+  if ((flag & HA_STATUS_CONST) != 0) {
     /* Find max rows and biggest partition. */
     for (uint i = 0; i < m_tot_parts; i++) {
       /* Skip partitions from above. */
@@ -3702,18 +3696,6 @@ int ha_innopart::info_low(uint flag, bool is_analyze) {
       }
     }
     ib_table = m_part_share->get_table_part(biggest_partition);
-  }
-
-  /* Piggyback fetching constant statistics when it has been updated and
-  up-to-date constant statistics where requested. */
-  bool tst_val = true;
-  bool new_val = false;
-  if (proactively_update_const && ib_table &&
-      ib_table->stats_updated.compare_exchange_strong(tst_val, new_val)) {
-    flag |= HA_STATUS_CONST;
-  }
-
-  if ((flag & HA_STATUS_CONST) != 0) {
     /* Verify the number of index in InnoDB and MySQL
     matches up. If m_prebuilt->clust_index_was_generated
     holds, InnoDB defines GEN_CLUST_INDEX internally. */

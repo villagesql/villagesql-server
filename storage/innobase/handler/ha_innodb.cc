@@ -17645,15 +17645,6 @@ int ha_innobase::info_low(uint flag, bool is_analyze) {
     dict_table_stats_lock(ib_table, RW_S_LATCH);
   }
 
-  /* Piggyback fetching constant statistics when it has been updated and
-  up-to-date constant statistics where requested. */
-  bool tst_val = true;
-  bool new_val = false;
-  if (!is_analyze && (flag & HA_STATUS_CONST_WHEN_UPDATED) &&
-      ib_table->stats_updated.compare_exchange_strong(tst_val, new_val)) {
-    flag |= HA_STATUS_CONST;
-  }
-
   ut_a(ib_table->stat_initialized);
 
   const dict_index_t *pk = UT_LIST_GET_FIRST(ib_table->indexes);

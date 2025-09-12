@@ -884,13 +884,6 @@ is the global server default. */
   also when only HA_STATUS_VARIABLE but it won't be used.
 */
 #define HA_STATUS_VARIABLE_EXTRA 128
-/*
-  Get the same statistics as HA_STATUS_CONST, but only if those statistics
-  where updated since open_table_for_share i.e. by the background statistics
-  thread. Do not ask for HA_STATUS_CONST otherwise. This way the optimizer can
-  make sure its statistics are always up-to-date with engine ones.
-*/
-#define HA_STATUS_CONST_WHEN_UPDATED 256
 
 /*
   Errorcodes given by handler functions

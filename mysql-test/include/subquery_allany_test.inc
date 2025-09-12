@@ -70,7 +70,7 @@ INSERT INTO t_null VALUES (NULL), (1), (1), (2);
 
 INSERT INTO t_outer VALUES (1), (1), (2);
 
-ANALYZE TABLE it, ot, itr, otr, t0row, t1row, t2row, t3row, t4row, t_null, t_outer, t_empty;
+ANALYZE TABLE it, ot, t1row, t2row, t3row, t4row, t_null, t_outer;
 
 --echo
 --echo # -------------------------------------------------------------------#

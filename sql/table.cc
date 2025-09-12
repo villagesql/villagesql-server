@@ -6677,45 +6677,7 @@ int Table_ref::fetch_number_of_rows(ha_rows fallback_estimate) {
                  // Recursive reference is never a const table
                  fallback_estimate);
   } else {
-    int error = table->file->info(HA_STATUS_VARIABLE | HA_STATUS_NO_LOCK |
-                                  HA_STATUS_CONST_WHEN_UPDATED);
-
-    DBUG_EXECUTE_IF("print_records_per_key", {
-      for (uint nr = 0; nr < table->s->keys; nr++) {
-        String out;
-        out.append(table->s->db);
-        out.append(".");
-        out.append(table->s->table_name);
-        out.append(" ");
-        out.append(table->alias);
-        out.append(" ");
-        KEY *keyinfo = table->key_info + nr;
-        if (keyinfo->supports_records_per_key()) {
-          out.append(keyinfo->name);
-          out.append("(");
-          for (uint part = 0; part < keyinfo->actual_key_parts; part++) {
-            if (keyinfo->has_records_per_key(part)) {
-              if (part > 0) out.append(",");
-              out.append(keyinfo->key_part[part].field->field_name);
-            }
-          }
-          out.append(") = (");
-          for (uint part = 0; part < keyinfo->actual_key_parts; part++) {
-            if (keyinfo->has_records_per_key(part)) {
-              rec_per_key_t rec_per_key = keyinfo->records_per_key(0);
-              if (part > 0) out.append(",");
-              std::string num_str = std::to_string(rec_per_key);
-              out.append(num_str.c_str());
-            }
-          }
-          out.append(")");
-        }
-        push_warning_printf(table->in_use, Sql_condition::SL_WARNING,
-                            HA_ERR_GENERIC, "print_records_per_key: %s",
-                            out.c_ptr_safe());
-      }
-    });
-
+    int error = table->file->info(HA_STATUS_VARIABLE | HA_STATUS_NO_LOCK);
     DBUG_EXECUTE_IF("bug35208539_raise_error", error = HA_ERR_GENERIC;);
     if (error) {
       return error;
