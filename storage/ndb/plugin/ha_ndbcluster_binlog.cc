@@ -6214,8 +6214,9 @@ int Ndb_binlog_thread::handle_data_event(const NdbEventOperation *pOp,
       read_op = true;
       anyValue = 0;
     } else {
-      log_warning("unknown value for binlog signalling 0x%X, event not logged",
-                  anyValue);
+      log_warning(
+          "unknown value for binlog signalling 0x%X (%u), event not logged",
+          anyValue, anyValue);
       return 0;
     }
   }
