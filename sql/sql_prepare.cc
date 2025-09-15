@@ -526,6 +526,7 @@ static bool set_parameter_value(
           tm.hour = tm.minute = tm.second = 0;
           tm.second_part = 0;
           tm.neg = false;
+          tm.time_type = MYSQL_TIMESTAMP_DATE;
         } else {
           set_zero_time(&tm, MYSQL_TIMESTAMP_DATE);
         }

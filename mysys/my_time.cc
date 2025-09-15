@@ -260,6 +260,10 @@ bool check_datetime_range(const MYSQL_TIME &my_time) {
     In case of MYSQL_TIMESTAMP_TIME hour value can be up to TIME_MAX_HOUR.
     In case of MYSQL_TIMESTAMP_DATETIME it cannot be bigger than 23.
   */
+  assert(my_time.time_type == MYSQL_TIMESTAMP_TIME ||
+         my_time.time_type == MYSQL_TIMESTAMP_DATE ||
+         my_time.time_type == MYSQL_TIMESTAMP_DATETIME ||
+         my_time.time_type == MYSQL_TIMESTAMP_DATETIME_TZ);
   return my_time.year > 9999U || my_time.month > 12U || my_time.day > 31U ||
          my_time.minute > 59U || my_time.second > 59U ||
          my_time.second_part > 999999U ||
