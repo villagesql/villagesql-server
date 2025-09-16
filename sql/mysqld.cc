@@ -9158,12 +9158,16 @@ Manifest_file_option_parser_helper::Manifest_file_option_parser_helper(
 
 Manifest_file_option_parser_helper ::~Manifest_file_option_parser_helper() {
   valid_ = false;
-  if (datadir_ != nullptr && datadir_[0] != 0) {
-    memcpy(mysql_real_data_home, save_homedir_, mysql_real_data_home_size);
+  if (datadir_ != nullptr) {
+    if (datadir_[0] != 0) {
+      memcpy(mysql_real_data_home, save_homedir_, mysql_real_data_home_size);
+    }
     my_free(datadir_);
   }
-  if (plugindir_ != nullptr && plugindir_[0] != 0) {
-    memcpy(opt_plugin_dir, save_plugindir_, opt_plugin_dir_size);
+  if (plugindir_ != nullptr) {
+    if (plugindir_[0] != 0) {
+      memcpy(opt_plugin_dir, save_plugindir_, opt_plugin_dir_size);
+    }
     my_free(plugindir_);
   }
 }
