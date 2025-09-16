@@ -442,30 +442,6 @@ static void dict_stats_empty_table(dict_table_t *table) /*!< in/out: table */
   dict_table_stats_unlock(table, RW_X_LATCH);
 }
 
-/** Check whether index's stats are initialized (assert if they are not). */
-template <typename T>
-static void dict_stats_assert_initialized_index(
-    const T *index [[maybe_unused]]) /*!< in: index */
-{
-  UNIV_MEM_ASSERT_RW_ABORT(
-      index->stat_n_diff_key_vals,
-      index->n_uniq * sizeof(index->stat_n_diff_key_vals[0]));
-
-  UNIV_MEM_ASSERT_RW_ABORT(
-      index->stat_n_sample_sizes,
-      index->n_uniq * sizeof(index->stat_n_sample_sizes[0]));
-
-  UNIV_MEM_ASSERT_RW_ABORT(
-      index->stat_n_non_null_key_vals,
-      index->n_uniq * sizeof(index->stat_n_non_null_key_vals[0]));
-
-  UNIV_MEM_ASSERT_RW_ABORT(&index->stat_index_size,
-                           sizeof(index->stat_index_size));
-
-  UNIV_MEM_ASSERT_RW_ABORT(&index->stat_n_leaf_pages,
-                           sizeof(index->stat_n_leaf_pages));
-}
-
 /** Check whether table's stats are initialized (assert if they are not). */
 static void dict_stats_assert_initialized(
     const dict_table_t *table) /*!< in: table */
@@ -500,7 +476,7 @@ static void dict_stats_assert_initialized(
   for (const dict_index_t *index = table->first_index(); index != nullptr;
        index = index->next()) {
     if (!dict_stats_should_ignore_index(index)) {
-      dict_stats_assert_initialized_index(index);
+      index->assert_stats_initialized();
     }
   }
 }
@@ -726,8 +702,6 @@ static void dict_stats_copy_index(dict_index_t *dst_idx,
   const size_t n_copy_el = dst_idx->n_uniq;
   ut_a_eq(dst_idx->n_uniq, src_idx_stats->n_uniq);
 
-  dict_stats_assert_initialized_index(dst_idx);
-
   memmove(dst_idx->stat_n_diff_key_vals, src_idx_stats->n_diff_key_vals,
           n_copy_el * sizeof(dst_idx->stat_n_diff_key_vals[0]));
 
@@ -746,6 +720,8 @@ static void dict_stats_copy_index(dict_index_t *dst_idx,
   dst_idx->stat_index_size = src_idx_stats->index_size;
 
   dst_idx->stat_n_leaf_pages = src_idx_stats->n_leaf_pages;
+
+  dst_idx->assert_stats_initialized();
 }
 
 /** Calculates new estimates for index statistics. This function is
@@ -1878,7 +1854,6 @@ static bool dict_stats_analyze_index_low(uint64_t &n_sample_pages,
   ulint size;
 
   ut_ad(index_stats);
-  dict_stats_assert_initialized_index(index_stats);
 
   DBUG_TRACE;
 
@@ -1986,6 +1961,8 @@ static bool dict_stats_analyze_index_low(uint64_t &n_sample_pages,
     }
 
     mtr_commit(&mtr);
+
+    index_stats->assert_initialized();
 
     return true;
   }
@@ -2207,6 +2184,10 @@ end:
   }
 
   ut::delete_arr(n_diff_data);
+
+  if (succeeded) {
+    index_stats->assert_initialized();
+  }
 
   return succeeded;
 }

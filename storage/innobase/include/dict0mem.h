@@ -1631,6 +1631,11 @@ struct dict_index_t {
   /** Check if it is a full-text search (FTS) index
   @return true if this is a FTS index, false otherwise. */
   bool is_fts_index() const { return type & DICT_FTS; }
+
+#ifndef UNIV_HOTBACKUP
+  /** Check whether index's stats are initialized (assert if they are not).*/
+  void assert_stats_initialized() const;
+#endif /* !UNIV_HOTBACKUP */
 };
 
 /** The status of online index creation */
@@ -3110,6 +3115,7 @@ inline bool dict_table_autoinc_own(const dict_table_t *table) {
 }
 #endif /* UNIV_DEBUG */
 
+#ifndef UNIV_HOTBACKUP
 /* Data structure storing index statistics. Used as temporary state during
 statistics calculation. The final version of statistics for reading by
 optimizer are stored in dict_index_t.*/
@@ -3127,7 +3133,12 @@ struct dict_index_stats_t {
   unsigned type : DICT_IT_BITS;
 
   unsigned n_uniq : 10;
+
+  /** Check whether index's stats are initialized (assert if they are not). */
+  void assert_initialized() const;
 };
+
+#endif /* !UNIV_HOTBACKUP */
 
 #include "dict0mem.ic"
 

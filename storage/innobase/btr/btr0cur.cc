@@ -146,22 +146,22 @@ uint btr_cur_limit_optimistic_insert_debug = 0;
 can be released by page reorganize, then it is reorganized */
 #define BTR_CUR_PAGE_REORGANIZE_LIMIT (UNIV_PAGE_SIZE / 32)
 
+#ifndef UNIV_HOTBACKUP
 /** Estimated table level stats from sampled value.
 @param value sampled stats
-@param index index being sampled
+@param n_leaf_pages number of leaf pages of the index
 @param sample number of sampled rows
 @param ext_size external stored data size
 @param not_empty table not empty
 @return estimated table wide stats from sampled value */
-constexpr uint64_t BTR_TABLE_STATS_FROM_SAMPLE(uint64_t value,
-                                               dict_index_t *index,
-                                               uint64_t sample, ulint ext_size,
-                                               ulint not_empty) {
-  return (value * index->stat_n_leaf_pages + sample - 1 + ext_size +
-          not_empty) /
+static uint64_t BTR_TABLE_STATS_FROM_SAMPLE(uint64_t value,
+                                            uint64_t n_leaf_pages,
+                                            uint64_t sample, ulint ext_size,
+                                            ulint not_empty) {
+  return (value * n_leaf_pages + sample - 1 + ext_size + not_empty) /
          (sample + ext_size);
 }
-#ifndef UNIV_HOTBACKUP
+
 /** Adds path information to the cursor for the current page, for which
 the binary search has been performed.
 @param[in, out] cursor    Cursor positioned on a page.
@@ -5450,9 +5450,9 @@ bool btr_estimate_number_of_different_key_vals(
 
   /* It makes no sense to test more pages than are contained
   in the index, thus we lower the number if it is too high */
-  if (srv_stats_transient_sample_pages > index->stat_index_size) {
-    if (index->stat_index_size > 0) {
-      n_sample_pages = index->stat_index_size;
+  if (srv_stats_transient_sample_pages > index_stats->index_size) {
+    if (index_stats->index_size > 0) {
+      n_sample_pages = index_stats->index_size;
     } else {
       n_sample_pages = 1;
     }
@@ -5562,15 +5562,18 @@ bool btr_estimate_number_of_different_key_vals(
 
   /* If we saw k borders between different key values on
   n_sample_pages leaf pages, we can estimate how many
-  there will be in index->stat_n_leaf_pages */
+  there will be in index_stats->n_leaf_pages (to be later stored in
+  index->stat_n_leaf_pages) */
 
   /* We must take into account that our sample actually represents
   also the pages used for external storage of fields (those pages are
-  included in index->stat_n_leaf_pages) */
+  included in index_stats->n_leaf_pages (to be later stored in
+  index->stat_n_leaf_pages) */
 
   for (j = 0; j < n_cols; j++) {
     index_stats->n_diff_key_vals[j] = BTR_TABLE_STATS_FROM_SAMPLE(
-        n_diff[j], index, n_sample_pages, total_external_size, not_empty_flag);
+        n_diff[j], index_stats->n_leaf_pages, n_sample_pages,
+        total_external_size, not_empty_flag);
 
     /* If the tree is small, smaller than
     10 * n_sample_pages + total_external_size, then
@@ -5596,9 +5599,9 @@ bool btr_estimate_number_of_different_key_vals(
     and initialized to zero in dict_index_add_to_cache(),
     along with n_diff_key_vals[] array */
     if (n_not_null != nullptr) {
-      index_stats->n_non_null_key_vals[j] =
-          BTR_TABLE_STATS_FROM_SAMPLE(n_not_null[j], index, n_sample_pages,
-                                      total_external_size, not_empty_flag);
+      index_stats->n_non_null_key_vals[j] = BTR_TABLE_STATS_FROM_SAMPLE(
+          n_not_null[j], index_stats->n_leaf_pages, n_sample_pages,
+          total_external_size, not_empty_flag);
     }
   }
 
