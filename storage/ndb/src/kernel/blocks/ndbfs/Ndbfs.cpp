@@ -1945,7 +1945,14 @@ void Ndbfs::log_file_error(GlobalSignalNumber gsn, AsyncFile *file,
   }
   const char *signal_name = getSignalName(gsn);
   /*
-   * Suppress common expected errors.
+   * For file operation errors that are not common and not expected under
+   * normal conditions emit some extra information that may help diagnostics
+   * when block code decide to fail due the file operation error.
+   *
+   * For example under normal conditions it is not expected that:
+   * - node fails
+   * - filesystem fails
+   * - user starts backup with same number as an already existing backup
    *
    * TODO:
    * Add information in request about what failures requester expects
@@ -1959,39 +1966,6 @@ void Ndbfs::log_file_error(GlobalSignalNumber gsn, AsyncFile *file,
         "request error %s %u %s %d",
         signal_name, fsRef->errorCode, fsRef->osErrorCode, file_bp, file_name,
         req_file, req_line, req_func, req_code);
-#if defined(VM_TRACE) || defined(ERROR_INSERT)
-    if (gsn == GSN_FSOPENREF && file != nullptr &&
-        file->theFileName.get_base_path_spec() == FsOpenReq::BP_BACKUP &&
-        fsRef->errorCode == FsRef::fsErrFileExists) {
-      // propagate error to end user
-    } else if (gsn == GSN_FSOPENREF && file_name != nullptr &&
-               (strstr(file_name, "tmp/t1.dat") ||
-                strstr(file_name, "tmp\\t1.dat")) &&
-               fsRef->errorCode == FsRef::fsErrFileExists) {
-      // test ndb.ndb_dd_ddl create undofile, datafile, with already existing
-      // file
-    } else if (gsn == GSN_FSOPENREF && file_name != nullptr &&
-               (strstr(file_name, "tmp/t1.dat") ||
-                strstr(file_name, "tmp\\t1.dat")) &&
-               fsRef->errorCode == FsRef::fsErrFileDoesNotExist) {
-      // test ndb.ndb_dd_ddl create undofile, datafile - fail in windows
-    } else if (gsn == GSN_FSOPENREF && file != nullptr &&
-               strstr(file_name, "FragLog")) {
-      // D11/DBLQH/S2.FragLog
-    } else if (gsn == GSN_FSOPENREF && file != nullptr &&
-               strstr(file_name, ".Data")) {
-      // LCP/0/T10F1.Data does not exist FsRef::fsErrFileDoesNotExist(2815)
-    } else if (gsn == GSN_FSREADREF &&
-               fsRef->errorCode == FsRef::fsErrReadUnderflow &&
-               file != nullptr && strstr(file_name, ".FragList")) {
-      // OM_READWRITE existing: D1/DBDIH/S17.FragList - disk full?
-    } else if (gsn == GSN_FSREADREF && file != nullptr &&
-               strstr(file_name, "S0.sysfile")) {
-      // Invalid/corrupt secretsfile D1/NDBCNTR/S0.sysfile
-    } else {
-      ndbabort();  // Unexpected error?
-    }
-#endif
   }
 }
 #else

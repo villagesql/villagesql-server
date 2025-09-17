@@ -193,28 +193,15 @@ void AsyncFile::openReq(Request *request) {
     } else {
 #if defined(VM_TRACE) || !defined(NDEBUG)
       /*
-       * LCP/0/T13F7.ctl has been seen with zero size, open flags OM_READWRITE |
-       * OM_APPEND Likely a partial read or failed read will be caught by
-       * application level, and file ignored. Are there ever files that can be
-       * empty in ndb_x_fs? Else we could treat zero file as no file, must then
-       * remove I guess to not trick create_if_none?
-       *
-       * D1/NDBCNTR/P0.sysfile: ABORT: open empty not fake created page_size 0
-       * flags 0x00000000  : OM_READONLY?
+       * Existing files should normally not be empty. Log extra debug
+       * information here to give more context if block code fails in case this
+       * open operation or later read operation fails.
        */
-      if (strstr(theFileName.c_str(), "LCP") &&
-          strstr(theFileName.c_str(), ".ctl"))
-        ;  // TODO maybe not safe on all os file system, upper/lowercase?
-      else if (strstr(theFileName.c_str(), "NDBCNTR") &&
-               strstr(theFileName.c_str(), ".sysfile"))
-        ;  // OM_READONLY?
-      else if (strstr(theFileName.c_str(), "DBDIH") &&
-               strstr(theFileName.c_str(), ".FragList")) {
-        ;  // OM_READWRITE existing: D1/DBDIH/S17.FragList - disk full?
-        // Maybe should fail open-request? Or wait for underflow on later read?
-      } else {
-        abort();  // TODO: relax since could be caused by previous disk full?
-      }
+      g_eventLogger->info(
+          "(debug) NDBFS: signal FSOPENREQ - -: file - %s: flags=%0x. Opened "
+          "empty file!",
+          theFileName.c_str(), flags);
+
 #endif
     }
   }
