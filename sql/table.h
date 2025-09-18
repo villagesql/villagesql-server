@@ -2319,6 +2319,12 @@ struct TABLE {
   */
   bool should_binlog_drop_if_temp_flag{false};
 
+  /**
+     The estimated size (in bytes) of a row. This is used when making cost
+     esimates. It is cached here to avoid computing it repeatedly.
+  */
+  mutable int64_t m_read_set_width{-1};
+
  public:
   /**
     Does this table have any columns that can be updated using partial update
@@ -2546,6 +2552,15 @@ struct TABLE {
     @retval Pointer to a histogram if one is found.
   */
   const histograms::Histogram *find_histogram(uint field_index) const;
+
+  int64_t read_set_width() const {
+    if (m_read_set_width == -1) {
+      // See cost_model.h
+      extern int64_t CalculateReadSetWidth(const TABLE *table);
+      m_read_set_width = CalculateReadSetWidth(this);
+    }
+    return m_read_set_width;
+  }
 };
 
 static inline void empty_record(TABLE *table) {

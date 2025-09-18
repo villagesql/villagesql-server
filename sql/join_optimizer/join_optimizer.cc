@@ -5247,7 +5247,7 @@ int64_t GetJoinRowWidth(const AccessPath *path) {
   WalkTablesUnderAccessPath(
       path,
       [&](const TABLE *table) {
-        width += GetReadSetWidth(table);
+        width += table->read_set_width();
         return false;
       },
       /*include_pruned_tables=*/true);

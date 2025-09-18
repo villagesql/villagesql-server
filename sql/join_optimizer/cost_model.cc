@@ -392,7 +392,7 @@ FieldSizeEstimator::FieldSizeEstimator(const TABLE *table) {
   }
 }
 
-int64_t GetReadSetWidth(const TABLE *table) {
+int64_t CalculateReadSetWidth(const TABLE *table) {
   int64_t width{0};
 
   for (const FieldSizeEstimator estimator{table};

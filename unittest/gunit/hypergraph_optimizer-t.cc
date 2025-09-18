@@ -8501,7 +8501,7 @@ static void BM_EstimateFieldSizes(size_t num_iterations) {
     StartBenchmarkTiming();
     for (size_t i = 0; i < num_iterations; ++i) {
       // This uses FieldSizeEstimator.
-      GetReadSetWidth(table);
+      table->read_set_width();
 
       cleanup_items(arena.item_list());
       arena.free_items();
