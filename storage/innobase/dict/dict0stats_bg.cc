@@ -297,7 +297,7 @@ static void dict_stats_process_entry_from_recalc_pool(THD *thd) {
   }
 
   /* Set bg flag. */
-  table->stats_bg_flag = BG_STAT_IN_PROGRESS;
+  table->stats_bg_flag.store(BG_STAT_IN_PROGRESS);
 
   dict_sys_mutex_exit();
 
@@ -327,7 +327,7 @@ static void dict_stats_process_entry_from_recalc_pool(THD *thd) {
   dict_sys_mutex_enter();
 
   /* Set back bg flag */
-  table->stats_bg_flag = BG_STAT_NONE;
+  table->stats_bg_flag.store(BG_STAT_NONE);
 
   dict_sys_mutex_exit();
 

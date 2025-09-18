@@ -17117,7 +17117,7 @@ ha_rows ha_innobase::estimate_rows_upper_bound() {
 
   index = m_prebuilt->table->first_index();
 
-  ulint stat_n_leaf_pages = index->stat_n_leaf_pages;
+  ulint stat_n_leaf_pages = index->stats.n_leaf_pages;
 
   ut_a(stat_n_leaf_pages > 0);
 
@@ -17326,7 +17326,7 @@ rec_per_key_t innodb_rec_per_key(const dict_index_t *index, ulint i,
     return (1.0);
   }
 
-  n_diff = index->stat_n_diff_key_vals[i];
+  n_diff = index->stats.n_diff_key_vals[i];
 
   if (n_diff == 0) {
     rec_per_key = static_cast<rec_per_key_t>(records);
@@ -17334,7 +17334,7 @@ rec_per_key_t innodb_rec_per_key(const dict_index_t *index, ulint i,
     uint64_t n_null;
     uint64_t n_non_null;
 
-    n_non_null = index->stat_n_non_null_key_vals[i];
+    n_non_null = index->stats.n_non_null_key_vals[i];
 
     /* In theory, index->stat_n_non_null_key_vals[i]
     should always be less than the number of records.
@@ -17465,7 +17465,7 @@ static void calculate_index_size_stats(const dict_table_t *ib_table,
 @return a real number in [0.0, 1.0] designating the percentage of cached pages
 */
 inline double index_pct_cached(const dict_index_t *index) {
-  const ulint n_leaf = index->stat_n_leaf_pages;
+  const ulint n_leaf = index->stats.n_leaf_pages;
 
   if (n_leaf == 0) {
     return (0.0);

@@ -2515,20 +2515,21 @@ dberr_t dict_index_add_to_cache_w_vcol(dict_table_t *table, dict_index_t *index,
     ut_ad(field->col->ord_part == 1);
   }
 
-  new_index->stat_n_diff_key_vals = static_cast<uint64_t *>(mem_heap_zalloc(
+  new_index->stats.n_diff_key_vals = static_cast<uint64_t *>(mem_heap_zalloc(
       new_index->heap, dict_index_get_n_unique(new_index) *
-                           sizeof(*new_index->stat_n_diff_key_vals)));
+                           sizeof(*new_index->stats.n_diff_key_vals)));
 
-  new_index->stat_n_sample_sizes = static_cast<uint64_t *>(mem_heap_zalloc(
+  new_index->stats.n_sample_sizes = static_cast<uint64_t *>(mem_heap_zalloc(
       new_index->heap, dict_index_get_n_unique(new_index) *
-                           sizeof(*new_index->stat_n_sample_sizes)));
+                           sizeof(*new_index->stats.n_sample_sizes)));
 
-  new_index->stat_n_non_null_key_vals = static_cast<uint64_t *>(mem_heap_zalloc(
-      new_index->heap, dict_index_get_n_unique(new_index) *
-                           sizeof(*new_index->stat_n_non_null_key_vals)));
+  new_index->stats.n_non_null_key_vals =
+      static_cast<uint64_t *>(mem_heap_zalloc(
+          new_index->heap, dict_index_get_n_unique(new_index) *
+                               sizeof(*new_index->stats.n_non_null_key_vals)));
 
-  new_index->stat_index_size = 1;
-  new_index->stat_n_leaf_pages = 1;
+  new_index->stats.index_size = 1;
+  new_index->stats.n_leaf_pages = 1;
 
   new_index->table = table;
   new_index->table_name = table->name.m_name;

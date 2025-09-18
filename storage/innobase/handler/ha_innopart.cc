@@ -3420,7 +3420,7 @@ ha_rows ha_innopart::estimate_rows_upper_bound() {
     m_prebuilt->table = m_part_share->get_table_part(i);
     index = m_prebuilt->table->first_index();
 
-    stat_n_leaf_pages = index->stat_n_leaf_pages;
+    stat_n_leaf_pages = index->stats.n_leaf_pages;
 
     ut_ad(stat_n_leaf_pages > 0);
 

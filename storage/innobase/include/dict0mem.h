@@ -1021,6 +1021,31 @@ class last_ops_cur_t {
   bool invalid;
 };
 
+/** Data structure storing index statistics for query optimization. */
+struct dict_index_stats_t {
+#ifndef UNIV_HOTBACKUP
+  /** approximate number of different key values for this index, for each
+  n-column prefix where 1 <= n <= dict_get_n_unique(index) (the array is
+  indexed from 0 to n_uniq-1); we periodically calculate new estimates */
+  uint64_t *n_diff_key_vals;
+
+  /** number of pages that were sampled  to calculate each of
+  n_diff_key_vals[], e.g. stat_n_sample_sizes[3] pages were sampled to get
+  the number n_diff_key_vals[3]. */
+  uint64_t *n_sample_sizes;
+
+  /* approximate number of non-null key values for this index, for each column
+  where 1 <= n <= dict_get_n_unique(index) (the array is indexed from 0 to
+  n_uniq-1); This is used when innodb_stats_method is "nulls_ignored". */
+  uint64_t *n_non_null_key_vals;
+
+  /** approximate index size in database pages */
+  ulint index_size;
+#endif /* !UNIV_HOTBACKUP */
+  /** approximate number of leaf pages in the index tree */
+  ulint n_leaf_pages;
+};
+
 /** "GEN_CLUST_INDEX" is the name reserved for InnoDB default
 system clustered index when there is no primary key. */
 const char innobase_index_reserve_name[] = "GEN_CLUST_INDEX";
@@ -1181,30 +1206,12 @@ struct dict_index_t {
   /** the log of modifications during online index creation;
   valid when online_status is ONLINE_INDEX_CREATION */
   row_log_t *online_log;
+#endif /* !UNIV_HOTBACKUP */
 
   /*----------------------*/
   /** Statistics for query optimization */
   /** @{ */
-  /** approximate number of different key values for this index, for each
-  n-column prefix where 1 <= n <= dict_get_n_unique(index) (the array is
-  indexed from 0 to n_uniq-1); we periodically calculate new estimates */
-  uint64_t *stat_n_diff_key_vals;
-
-  /** number of pages that were sampled  to calculate each of
-  stat_n_diff_key_vals[], e.g. stat_n_sample_sizes[3] pages were sampled to get
-  the number stat_n_diff_key_vals[3]. */
-  uint64_t *stat_n_sample_sizes;
-
-  /* approximate number of non-null key values for this index, for each column
-  where 1 <= n <= dict_get_n_unique(index) (the array is indexed from 0 to
-  n_uniq-1); This is used when innodb_stats_method is "nulls_ignored". */
-  uint64_t *stat_n_non_null_key_vals;
-
-  /** approximate index size in database pages */
-  ulint stat_index_size;
-#endif /* !UNIV_HOTBACKUP */
-  /** approximate number of leaf pages in the index tree */
-  ulint stat_n_leaf_pages;
+  dict_index_stats_t stats;
   /** @} */
 
   /** cache the last insert position. Currently limited to auto-generated
@@ -1632,11 +1639,6 @@ struct dict_index_t {
   /** Check if it is a full-text search (FTS) index
   @return true if this is a FTS index, false otherwise. */
   bool is_fts_index() const { return type & DICT_FTS; }
-
-#ifndef UNIV_HOTBACKUP
-  /** Check whether index's stats are initialized (assert if they are not).*/
-  void assert_stats_initialized() const;
-#endif /* !UNIV_HOTBACKUP */
 };
 
 /** The status of online index creation */
@@ -2224,9 +2226,9 @@ struct dict_table_t {
   "dict_table_t::stat_clustered_index_size",
   "dict_table_t::stat_sum_of_other_index_sizes",
   "dict_table_t::stat_modified_counter (*)",
-  "dict_table_t::indexes*::stat_n_diff_key_vals[]",
-  "dict_table_t::indexes*::stat_index_size",
-  "dict_table_t::indexes*::stat_n_leaf_pages".
+  "dict_table_t::indexes*::stats::n_diff_key_vals[]",
+  "dict_table_t::indexes*::stats::index_size",
+  "dict_table_t::indexes*::stats::n_leaf_pages".
   (*) Those are not always protected for
   performance reasons. */
   rw_lock_t *stats_latch;
@@ -2324,8 +2326,8 @@ detect this and will eventually quit sooner. */
 
   /** The state of the background stats thread wrt this table.
   See BG_STAT_NONE, BG_STAT_IN_PROGRESS and BG_STAT_SHOULD_QUIT.
-  Writes are covered by dict_sys->mutex. Dirty reads are possible. */
-  byte stats_bg_flag;
+  Writes are covered by dict_sys->mutex. It is read without mutex. */
+  std::atomic<int8_t> stats_bg_flag;
 
   /** @} */
 #endif /* !UNIV_HOTBACKUP */
@@ -3135,28 +3137,14 @@ inline bool dict_table_autoinc_own(const dict_table_t *table) {
 #endif /* UNIV_DEBUG */
 
 #ifndef UNIV_HOTBACKUP
-/* Data structure storing index statistics. Used as temporary state during
-statistics calculation. The final version of statistics for reading by
-optimizer are stored in dict_index_t.*/
-struct dict_index_stats_t {
-  /*----------------------*/
-  /** Statistics for query optimization */
-  /** @{ */
-  uint64_t *n_diff_key_vals;
-  uint64_t *n_sample_sizes;
-  uint64_t *n_non_null_key_vals;
-  ulint index_size;
-  ulint n_leaf_pages;
-  /** @} */
-
+/** Data structure storing index statistics. Used as
+temporary state during statistics calculation. The final version of statistics
+for reading by optimizer are stored in dict_index_t::stats. */
+struct dict_index_constructed_stats_t {
+  dict_index_stats_t stats;
   unsigned type : DICT_IT_BITS;
-
   unsigned n_uniq : 10;
-
-  /** Check whether index's stats are initialized (assert if they are not). */
-  void assert_initialized() const;
 };
-
 #endif /* !UNIV_HOTBACKUP */
 
 #include "dict0mem.ic"
