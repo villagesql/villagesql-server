@@ -990,7 +990,7 @@ static uchar eof_buff[1] = {(uchar)254}; /* Marker for end of fields */
   the @ref page_protocol_basic_ok_packet packets (such as session
   state tracking), and to avoid repeating the changes in
   the @ref page_protocol_basic_eof_packet packet, the
-  @ref page_protocol_basic_ok_packet is deprecated as of MySQL 5.7.5.
+  @ref page_protocol_basic_eof_packet is deprecated as of MySQL 5.7.5.
 
   @warning
   The @ref page_protocol_basic_eof_packet packet may appear in places where
