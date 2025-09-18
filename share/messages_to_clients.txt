@@ -10465,7 +10465,7 @@ ER_LH_UNSTRUCTURED_NO_DATA_FOUND
   eng "No data was extracted from provided files."
 
 ER_LH_UNSTRUCTURED_FILE_PARSE_ERR
-  eng "File: %.*s Could not be parsed."
+  eng "File: %.*s Could not be parsed. %s"
 
 ER_LH_UNSTRUCTURED_ENCODING_ERR
   eng "Segments %d to %d in file: %.*s Could not be encoded."
