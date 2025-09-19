@@ -13284,6 +13284,9 @@ ER_AUTOPILOT_OLTP_ADVISOR_WARNING
 ER_AUTOPILOT_OLTP_ADVISOR_ERROR
   eng "%s"
 
+ER_WARN_EVENT_TRACKING_BRIDGE_INVALID_EVENT
+  eng "An event of type %s is missing extra data and cannot be processed by the server's component plugin bridge. As a result plugins will not get the notification."
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
