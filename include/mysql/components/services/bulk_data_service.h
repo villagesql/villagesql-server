@@ -260,7 +260,8 @@ struct Column_mysql {
 
 inline std::string Column_mysql::to_string() const {
   std::ostringstream sout;
-  sout << "[Column_mysql: len=" << m_data_len;
+  sout << "[Column_mysql: type=" << m_type << ", len=" << m_data_len
+       << ", m_int_data=" << m_int_data;
   sout << ", val=";
 
   switch (m_type) {

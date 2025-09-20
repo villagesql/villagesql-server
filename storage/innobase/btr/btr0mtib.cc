@@ -1738,6 +1738,22 @@ void Btree_load::add_to_bulk_flusher(Page_extent *page_extent) {
   m_bulk_flusher.add(page_extent, m_fn_wait_begin, m_fn_wait_end);
 }
 
+void Btree_load::add_blobs_to_bulk_flusher() {
+  const size_t n = m_extents_tracked.size();
+  for (size_t i = 0; i < n; ++i) {
+    auto page_extent = m_extents_tracked.front();
+    m_extents_tracked.pop_front();
+    if (page_extent->is_blob()) {
+      m_bulk_flusher.add(page_extent, m_fn_wait_begin, m_fn_wait_end);
+    } else {
+      m_extents_tracked.push_back(page_extent);
+    }
+  }
+  while (m_bulk_flusher.is_work_available()) {
+    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+  }
+}
+
 void Btree_load::add_to_bulk_flusher(bool finish) {
   const size_t n = m_extents_tracked.size();
   for (size_t i = 0; i < n; ++i) {

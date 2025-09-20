@@ -7347,13 +7347,16 @@ class handler {
                           needs to be calculated is a typed array field, it
                           will contain pointer to field's calculated value.
     @param[out]           mv_length Length of the data above
+    @param[in] include_stored_gcols  if true, evaluate both stored and virtual
+                          gcols.  if false, evaluate only virtual gcol.
 
     @retval true in case of error
     @retval false on success
   */
   static bool my_eval_gcolumn_expr(THD *thd, TABLE *table,
                                    const MY_BITMAP *const fields, uchar *record,
-                                   const char **mv_data_ptr, ulong *mv_length);
+                                   const char **mv_data_ptr, ulong *mv_length,
+                                   bool include_stored_gcols);
 
   /* This must be implemented if the handlerton's partition_flags() is set. */
   virtual Partition_handler *get_partition_handler() { return nullptr; }

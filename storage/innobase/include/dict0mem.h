@@ -2108,6 +2108,9 @@ struct dict_table_t {
   reason s_cols is a part of dict_table_t */
   dict_s_col_list *s_cols;
 
+  /** Check if the given column is a stored generated column. */
+  dict_s_col_t *is_stored_gcol(dict_col_t *col) const;
+
   /** Column names packed in a character string
   "name1\0name2\0...nameN\0". Until the string contains n_cols, it will
   be allocated from a temporary heap. The final string will be allocated
@@ -2728,6 +2731,17 @@ detect this and will eventually quit sooner. */
   /** Determine if the table can support instant ADD/DROP COLUMN */
   inline bool support_instant_add_drop() const;
 };
+
+inline dict_s_col_t *dict_table_t::is_stored_gcol(dict_col_t *col) const {
+  if (s_cols != nullptr) {
+    for (auto &stored_gcol : *s_cols) {
+      if (stored_gcol.m_col == col) {
+        return &stored_gcol;
+      }
+    }
+  }
+  return nullptr;
+}
 
 static inline void DICT_TF2_FLAG_SET(dict_table_t *table, uint32_t flag) {
   table->flags2 |= flag;

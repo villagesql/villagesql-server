@@ -111,6 +111,8 @@ bool check_stack_overrun(const THD *thd, long margin, unsigned char *buf) {
   assert(thd == current_thd);
   assert(stack_direction == -1 || stack_direction == 1);
 
+  if (!my_thread_equal(thd->real_id, my_thread_self())) return false;
+
 #if defined(HAVE_ASAN)
   // Stack grows upward, but our address computations do not work with
   // the "fake stack" of ASAN. Just return OK.

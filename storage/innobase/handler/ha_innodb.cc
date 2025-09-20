@@ -23893,6 +23893,165 @@ static const dfield_t *innobase_get_field_from_update_vector(
   return upd_field ? &upd_field->new_val : nullptr;
 }
 
+void build_template_for_field(mysql_row_templ_t *templ,
+                              const dict_table_t *table, const dict_col_t *col,
+                              TABLE *mysql_table, Field *field) {
+  templ->mysql_col_offset =
+      static_cast<ulint>(get_field_offset(mysql_table, field));
+  templ->mysql_col_len = static_cast<ulint>(field->pack_length());
+  templ->clust_rec_field_no = dict_col_get_clust_pos(col, table->first_index());
+  templ->is_virtual = col->is_virtual();
+
+  ut_ad(col->mtype != DATA_SYS);
+
+  if (field->is_nullable()) {
+    templ->mysql_null_byte_offset = field->null_offset();
+
+    templ->mysql_null_bit_mask = (ulint)field->null_bit;
+  } else {
+    templ->mysql_null_bit_mask = 0;
+  }
+
+  templ->type = col->mtype;
+  templ->mysql_type = static_cast<ulint>(field->type());
+  templ->is_multi_val = false;
+  templ->charset = dtype_get_charset_coll(col->prtype);
+  templ->mbminlen = col->get_mbminlen();
+  templ->mbmaxlen = col->get_mbmaxlen();
+  templ->is_unsigned = col->prtype & DATA_UNSIGNED;
+  templ->icp_rec_field_no = 0;
+  templ->rec_field_no = 0;
+
+  if (templ->mysql_type == DATA_MYSQL_TRUE_VARCHAR) {
+    templ->mysql_length_bytes = field->get_length_bytes();
+  } else {
+    templ->mysql_length_bytes = 0;
+  }
+}
+
+dfield_t *innobase_compute_stored_gcol(const dtuple_t *row,
+                                       const dict_s_col_t &stored_gcol,
+                                       const dict_table_t *table,
+                                       mem_heap_t *heap, THD *thd,
+                                       TABLE *mysql_table) {
+  ut_ad(heap != nullptr);
+  ut_ad(thd != nullptr);
+
+  ulong mv_length = 0;
+  const char *mv_data_ptr = nullptr;
+  const size_t rec_len = mysql_table->s->reclength;
+  const page_size_t page_size = dict_table_page_size(table);
+
+  byte *mysql_rec = static_cast<byte *>(mem_heap_alloc(heap, rec_len));
+  byte *buf = static_cast<byte *>(mem_heap_alloc(heap, rec_len));
+
+  /* Bitmap for specifying which virtual columns the server should evaluate */
+  MY_BITMAP column_map;
+  constexpr size_t n_bytes = bitmap_buffer_size(REC_MAX_N_FIELDS);
+  my_bitmap_map col_map_storage[n_bytes / sizeof(my_bitmap_map)];
+  bitmap_init(&column_map, col_map_storage, mysql_table->s->fields);
+
+  for (size_t j = 0; j < mysql_table->s->fields; ++j) {
+    Field *mysql_field = mysql_table->field[j];
+
+    if (mysql_field->is_gcol()) {
+      bitmap_set_bit(&column_map, j);
+      continue;
+    }
+    dict_col_t *base_col = table->get_col_by_name(mysql_field->field_name);
+
+    mysql_row_templ_t templ;
+    build_template_for_field(&templ, table, base_col, mysql_table, mysql_field);
+
+    dfield_t *row_field = dtuple_get_nth_field(row, base_col->ind);
+    const byte *data = static_cast<const byte *>(row_field->data);
+    size_t len = row_field->len;
+
+    if (row_field->ext) {
+      data = lob::btr_copy_externally_stored_field(
+          thd_to_trx(thd), table->first_index(), &len, nullptr, data, page_size,
+          dfield_get_len(row_field), false, heap);
+    }
+
+    if (len == UNIV_SQL_NULL) {
+      mysql_rec[templ.mysql_null_byte_offset] |=
+          (byte)templ.mysql_null_bit_mask;
+
+    } else {
+      /* Copy the column data from dtuple to mysql_rec */
+      row_sel_field_store_in_mysql_format(
+          mysql_rec + templ.mysql_col_offset, &templ, table->first_index(),
+          templ.clust_rec_field_no, (const byte *)data, len, ULINT_UNDEFINED);
+
+      if (templ.mysql_null_bit_mask) {
+        /* It is a nullable column with a non-NULL value */
+        mysql_rec[templ.mysql_null_byte_offset] &=
+            ~(byte)templ.mysql_null_bit_mask;
+      }
+    }
+  }
+
+  const bool eval_stored_gcol = true;
+  bool fail = handler::my_eval_gcolumn_expr(
+      thd, mysql_table, &column_map, (uchar *)mysql_rec,
+      (stored_gcol.m_col->is_multi_value() ? &mv_data_ptr : nullptr),
+      (stored_gcol.m_col->is_multi_value() ? &mv_length : nullptr),
+      eval_stored_gcol);
+
+  if (fail) {
+    ib::warn(ER_IB_MSG_581) << "Compute stored gcol column values failed ";
+    fputs("InnoDB: Cannot compute value for following record ", stderr);
+    dtuple_print(stderr, row);
+    return nullptr;
+  }
+
+  dfield_t *field = dtuple_get_nth_field(row, stored_gcol.m_col->ind);
+  ut_ad(field->type.mtype != DATA_SYS);
+
+  mysql_row_templ_t templ;
+  Field *mysql_field = mysql_table->field[stored_gcol.s_pos];
+  build_template_for_field(&templ, table, stored_gcol.m_col, mysql_table,
+                           mysql_field);
+
+  if (templ.mysql_null_bit_mask &&
+      (mysql_rec[templ.mysql_null_byte_offset] & templ.mysql_null_bit_mask)) {
+    dfield_set_null(field);
+    if (stored_gcol.m_col->is_multi_value()) {
+      field->type.prtype |= DATA_MULTI_VALUE;
+    }
+    return (field);
+  }
+
+  if (stored_gcol.m_col->is_multi_value()) {
+    Field_typed_array *fld;
+    fld = down_cast<Field_typed_array *>(
+        mysql_table->field[stored_gcol.m_col->ind]);
+    json_binary::Value v(json_binary::parse_binary(mv_data_ptr, mv_length));
+    multi_value_data *value = nullptr;
+
+    bool succ = innobase_store_multi_value(v, value, fld, field,
+                                           dict_table_is_comp(table), heap);
+    if (!succ) {
+      ut_error;
+    }
+
+    field->type.prtype |= DATA_MULTI_VALUE;
+  } else {
+    /* Copy column data from mysql_rec to dfield_t */
+    row_mysql_store_col_in_innobase_format(
+        field, buf, true, mysql_rec + templ.mysql_col_offset,
+        templ.mysql_col_len, dict_table_is_comp(table));
+  }
+
+  /* TODO: Handle prefix index here, when needed. */
+
+  if (heap != nullptr && !dfield_is_multi_value(field)) {
+    dfield_dup(field, heap);
+  }
+
+  return (field);
+}
+
 dfield_t *innobase_get_computed_value(
     const dtuple_t *row, const dict_v_col_t *col, const dict_table_t *table,
     mem_heap_t **local_heap, mem_heap_t *heap, THD *thd, TABLE *mysql_table,
@@ -24019,10 +24178,11 @@ dfield_t *innobase_get_computed_value(
                               table->vc_templ->tb_name.c_str());
   }
   if (mysql_table) {
+    const bool eval_stored_gcol = false;
     ret = handler::my_eval_gcolumn_expr(
         thd, mysql_table, &column_map, (uchar *)mysql_rec,
         (col->m_col.is_multi_value() ? &mv_data_ptr : nullptr),
-        (col->m_col.is_multi_value() ? &mv_length : nullptr));
+        (col->m_col.is_multi_value() ? &mv_length : nullptr), eval_stored_gcol);
   } else {
     return nullptr;
   }

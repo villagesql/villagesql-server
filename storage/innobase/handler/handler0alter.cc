@@ -106,6 +106,16 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ha_innopart.h"
 #include "partition_info.h"
 
+#ifdef WLOG
+#undef WLOG
+#endif
+
+#define WLOG(x)                                                           \
+  {                                                                       \
+    std::cout << "[WL17016] thread=" << std::this_thread::get_id() << ":" \
+              << __func__ << ":" << strrchr(__FILE__, '/') + 1 << ":"     \
+              << __LINE__ << ": " << x << std::endl;                      \
+  }
 /** Function to convert the Instant_Type to a comparable int */
 inline uint16_t instant_type_to_int(Instant_Type type) {
   return (static_cast<typename std::underlying_type<Log_Type>::type>(type));
@@ -11173,10 +11183,12 @@ void *ha_innobase::bulk_load_begin(THD *thd, size_t keynr, size_t data_size,
 
   dict_table_t *table = m_prebuilt->table;
   auto trx = m_prebuilt->trx;
+  m_prebuilt->m_thd = thd;
 
   /* Build the template to convert between the two database formats */
   if (m_prebuilt->mysql_template == nullptr ||
       m_prebuilt->template_type != ROW_MYSQL_WHOLE_ROW) {
+    WLOG("BUILDING TEMPLATE");
     build_template(true);
   }
 
@@ -11223,6 +11235,8 @@ int ha_innobase::bulk_load_execute(THD *thd, void *load_ctx, size_t thread_idx,
 
   /* Use with bulk_loader.concurrency = 1 to avoid getting hit concurrently. */
   DEBUG_SYNC(thd, "innodb_bulk_load_exec");
+
+  current_thd = thd;
 
   auto loader = static_cast<ddl_bulk::Loader *>(load_ctx);
 

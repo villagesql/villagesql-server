@@ -1234,7 +1234,7 @@ static int format_set_column(const Column_text &text_col,
 @param[in]   single_byte_char assume single byte char length is enough
 @param[out]  completed       if all rows are processed
 @param[out]  error_details   the error details
-@return error code. */
+@return 0 on success or error code  */
 static int format_row(THD *thd, const TABLE_SHARE *table_share,
                       const Rows_text &text_rows, size_t text_row_index,
                       char *&buffer, size_t &buffer_length,
@@ -1534,6 +1534,7 @@ static int format_row(THD *thd, const TABLE_SHARE *table_share,
     buffer = saved_buffer;
     buffer_length = saved_buffer_length;
   }
+
   return err;
 }
 
@@ -2385,10 +2386,6 @@ bool get_row_metadata_for_pk(THD *thd [[maybe_unused]], const TABLE *table,
   for (size_t index = 0; index < table_share->fields; ++index) {
     auto field = table_share->field[index];
 
-    if (field->is_gcol()) {
-      return false;
-    }
-
     if (field_added[index]) {
       continue;
     }
@@ -2766,6 +2763,12 @@ DEFINE_METHOD(bool, is_table_supported, (THD * thd, const TABLE *table)) {
                "LOAD DATA ALGORITHM = BULK");
       return false;
     }
+
+    if (key.is_functional_index()) {
+      my_error(ER_FEATURE_UNSUPPORTED, MYF(0), "Functional Index",
+               "LOAD DATA ALGORITHM = BULK");
+      return false;
+    }
   }
 
   for (size_t keynr = 0; keynr < share->keys; ++keynr) {
@@ -2793,15 +2796,6 @@ DEFINE_METHOD(bool, is_table_supported, (THD * thd, const TABLE *table)) {
 
   for (size_t index = 0; index < share->fields; ++index) {
     auto field = share->field[index];
-    if (field->is_gcol()) {
-      std::ostringstream err_strm;
-      err_strm << "LOAD DATA ALGORITHM = BULK not supported for tables with "
-                  "generated columns.";
-      LogErr(INFORMATION_LEVEL, ER_BULK_LOADER_INFO, err_strm.str().c_str());
-      my_error(ER_FEATURE_UNSUPPORTED, MYF(0), "GENERATED columns",
-               "LOAD DATA ALGORITHM = BULK");
-      return false;
-    }
 
     switch (field->real_type()) {
       case MYSQL_TYPE_VECTOR:
