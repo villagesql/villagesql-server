@@ -5390,7 +5390,7 @@ void CostingReceiver::ProposeHashJoin(
           .build_rows = right_path->num_output_rows(),
           .build_row_size = static_cast<double>(GetJoinRowWidth(right_path)),
           .key_size = key_width,
-          .probe_rows = left_path->num_output_rows(),
+          .probe_rows = outer->num_output_rows(),
           .probe_row_size = static_cast<double>(GetJoinRowWidth(left_path)),
           .result_rows = num_output_rows}};
 
