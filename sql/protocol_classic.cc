@@ -377,7 +377,7 @@
   @page page_protocol_basic_character_set Character Set
 
   MySQL has a very flexible character set support as documented in
-  [Character Set Support](http://dev.mysql.com/doc/refman/5.7/en/charset.html).
+  [Character Set Support](https://dev.mysql.com/doc/refman/en/charset.html).
   The list of character sets and their IDs can be queried as follows:
 
 <pre>

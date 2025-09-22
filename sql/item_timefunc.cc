@@ -2786,7 +2786,7 @@ bool Item_date_add_interval::resolve_type(THD *thd) {
     - or DATE_ADD(x, interval ? some_query_expression): then '?' may be
     an integer, a decimal, a string in format "days hours:minutes",
     depending on m_interval_type, see
-    https://dev.mysql.com/doc/refman/8.0/en/date-and-time-functions.html#
+    https://dev.mysql.com/doc/refman/en/date-and-time-functions.html#
     function_date-add
   */
   enum_field_types arg1_type;

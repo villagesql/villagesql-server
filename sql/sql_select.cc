@@ -1373,8 +1373,8 @@ bool types_allow_materialization(Item *outer, Item *inner) {
     Materialization uses index lookup which implicitly converts the type of
     res_outer into that of res_inner.
     However, this can be done only if it respects rules in:
-    https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
-    https://dev.mysql.com/doc/refman/8.0/en/date-and-time-type-conversion.html
+    https://dev.mysql.com/doc/refman/en/type-conversion.html
+    https://dev.mysql.com/doc/refman/en/date-and-time-type-conversion.html
     Those rules say that, generally, if types differ, we convert them to
     REAL.
     So, looking up into a number is ok: outer will be converted to

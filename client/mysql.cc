@@ -3573,10 +3573,10 @@ static int com_help(String *buffer [[maybe_unused]],
 
   put_info(
       "\nFor information about MySQL products and services, visit:\n"
-      "   http://www.mysql.com/\n"
+      "   https://www.mysql.com/\n"
       "For developer information, including the MySQL Reference Manual, "
       "visit:\n"
-      "   http://dev.mysql.com/\n"
+      "   https://dev.mysql.com/\n"
       "To buy MySQL Enterprise support, training, or other products, visit:\n"
       "   https://shop.mysql.com/\n",
       INFO_INFO);

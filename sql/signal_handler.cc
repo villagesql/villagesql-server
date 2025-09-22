@@ -363,7 +363,7 @@ static void print_fatal_signal(int sig, siginfo_t *info [[maybe_unused]]) {
   my_safe_printf_stderr(
       "%s",
       "The manual page at "
-      "http://dev.mysql.com/doc/mysql/en/crashing.html contains\n"
+      "https://dev.mysql.com/doc/mysql/en/crashing.html contains\n"
       "information that should help you find out what is causing the crash.\n");
 
 #endif /* HAVE_STACKTRACE */

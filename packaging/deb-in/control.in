@@ -3,7 +3,7 @@ Maintainer: MySQL Release Engineering <mysql-build@oss.oracle.com>
 Section: database
 Priority: optional
 Standards-Version: 3.9.8
-Homepage: http://www.mysql.com/
+Homepage: https://www.mysql.com/
 Build-Depends: debhelper (>= 9.0.0),
  libaio-dev[linux-any],
  libcurl4-openssl-dev,
