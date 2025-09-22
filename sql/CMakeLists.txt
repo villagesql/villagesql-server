@@ -1236,7 +1236,7 @@ IF(UNIX_INSTALL_RPATH_ORIGIN_PRIV_LIBDIR
 
   # Insert absolute INSTALL_RPATH.
   # This is done in order to support setuid executables, needed by:
-  # https://dev.mysql.com/doc/refman/8.0/en/resource-groups.html
+  # https://dev.mysql.com/doc/refman/en/resource-groups.html
   IF(INSTALL_LAYOUT STREQUAL "DEB" OR INSTALL_LAYOUT STREQUAL "RPM")
     ADD_INSTALL_RPATH(mysqld "${CMAKE_INSTALL_PREFIX}/${INSTALL_PRIV_LIBDIR}")
   ENDIF()
@@ -1337,7 +1337,7 @@ ELSE()
 ENDIF()
 
 # bison should be REQUIRED, but we have to support source tarball build.
-# https://dev.mysql.com/doc/refman/8.0/en/source-installation.html
+# https://dev.mysql.com/doc/refman/en/source-installation.html
 OPTION(USE_BISON_RESULTS_FROM_MAKE_DIST
   "Use bison results from source distribution tarball"
   ${USE_BISON_RESULTS_FROM_MAKE_DIST_DEFAULT}

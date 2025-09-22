@@ -74,7 +74,7 @@ Source0:        https://cdn.mysql.com/Downloads/MySQL-@MYSQL_BASE_VERSION@/%{src
 %if 0%{?compatlib}
 Source1:        %{compatsrc}
 %endif
-URL:            http://www.mysql.com/
+URL:            https://www.mysql.com/
 Packager:       MySQL Release Engineering <mysql-build@oss.oracle.com>
 Vendor:         %{mysql_vendor}
 BuildRequires:  bison >= 3.0.4
@@ -154,7 +154,7 @@ licenses from %{mysql_vendor} if you do not wish to be bound by the terms of
 the GPL. See the chapter "Licensing and Support" in the manual for
 further info.
 
-The MySQL web site (http://www.mysql.com/) provides the latest
+The MySQL web site (https://www.mysql.com/) provides the latest
 news and information about the MySQL software. Also please see the
 documentation and the manual for more information.
 
@@ -230,7 +230,7 @@ licenses from %{mysql_vendor} if you do not wish to be bound by the terms of
 the GPL. See the chapter "Licensing and Support" in the manual for
 further info.
 
-The MySQL web site (http://www.mysql.com/) provides the latest news and
+The MySQL web site (https://www.mysql.com/) provides the latest news and
 information about the MySQL software.  Also please see the documentation
 and the manual for more information.
 
@@ -447,7 +447,7 @@ licenses from Oracle and/or its affiliates if you do not wish to be
 bound by the terms of the GPL. See the chapter "Licensing and Support"
 in the manual for further info.
 
-The MySQL web site (http://www.mysql.com/) provides the latest news
+The MySQL web site (https://www.mysql.com/) provides the latest news
 and information about the MySQL software. Also please see the
 documentation and the manual for more information.
 
