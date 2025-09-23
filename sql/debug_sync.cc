@@ -22,7 +22,9 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
 /**
-  == Debug Sync Facility ==
+  @page PAGE_DEBUG_SYNC Debug Sync Facility
+
+  @section DEBUG_SYNC_INTRO Introduction
 
   The Debug Sync Facility allows placement of synchronization points in
   the server code by using the DEBUG_SYNC macro:
@@ -173,7 +175,7 @@
       SET DEBUG_SYNC= 'name TEST';
 
 
-  === Formal Syntax ===
+  @section DEBUG_SYNC_SYNTAX Formal Syntax
 
   The string to "assign" to the DEBUG_SYNC variable can contain:
 
@@ -189,7 +191,7 @@
   separated by '&|' must be present or both of them.
 
 
-  === Activation/Deactivation ===
+  @section DEBUG_SYNC_ACTIVATION Activation/Deactivation
 
   The facility is an optional part of the MySQL server.
   It is enabled in a debug server by default.
@@ -231,7 +233,7 @@
   parsed into a debug sync action and stored apart from the variable value.
 
 
-  === Implementation ===
+  @section DEBUG_SYNC_IMPL Implementation
 
   Pseudo code for a sync point:
 
@@ -247,11 +249,12 @@
   new action, the array is sorted again.
 
 
-  === A typical synchronization pattern ===
+  @section DEBUG_SYNC_PATTERN A typical synchronization pattern
 
   There are quite a few places in MySQL, where we use a synchronization
   pattern like this:
 
+@verbatim
   mysql_mutex_lock(&mutex);
   thd->enter_cond(&condition_variable, &mutex, new_message);
   # if defined(ENABLE_DEBUG_SYNC)
@@ -262,6 +265,7 @@
     mysql_cond_wait(&condition_variable, &mutex);
   mysql_mutex_unlock(&mutex);
   thd->exit_cond(old_message);
+@endverbatim
 
   Here some explanations:
 
@@ -294,6 +298,7 @@
   A bit off-topic: At some places, the loop is taken around the whole
   synchronization pattern:
 
+@verbatim
   while (!thd->killed && !end_of_wait_condition)
   {
     mysql_mutex_lock(&mutex);
@@ -306,6 +311,7 @@
     mysql_mutex_unlock(&mutex);
     thd->exit_cond(old_message);
   }
+@endverbatim
 
   Note that it is important to repeat the test for thd->killed after
   enter_cond(). Otherwise the killing thread may kill this thread after
@@ -321,7 +327,7 @@
   mysql_cond_wait(), the signaling happens at the right place. We
   have a safe synchronization.
 
-  === Co-work with the DBUG facility ===
+  @section DEBUG_SYNC_CO_WORK Co-work with the DBUG facility
 
   When running the MySQL test suite with the --debug command line
   option, the Debug Sync Facility writes trace messages to the DBUG
@@ -337,10 +343,7 @@
   been run through (hit) with or without executing actions. Then add
   "|debug_sync_point:" to the egrep pattern.
 
-  === Further reading ===
-
-  For a discussion of other methods to synchronize threads see
-  http://forge.mysql.com/wiki/MySQL_Internals_Test_Synchronization
+  @section DEBUG_SYNC_FURTHER Further reading
 
   For complete syntax tests, functional tests, and examples see the test
   case debug_sync.test.

@@ -2718,9 +2718,7 @@ server_ssl_verify=DISABLED
   @endverbatim
 
   For a description of the Debug Sync facility and how to use
-  synchronization points,
-  see [MySQL Source Code Documentation: Thread Synchronization]
-  (https://dev.mysql.com/doc/dev/mysql-server/latest/PAGE_THREAD_SYNCHRONIZATION.html).
+  synchronization points, see @ref PAGE_DEBUG_SYNC.
 */
 
 ###############################################################################

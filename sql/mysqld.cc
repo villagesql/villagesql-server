@@ -432,6 +432,7 @@ MySQL clients support the protocol:
 /**
   @page PAGE_DEV_TOOLS Development Tools
 
+  - @subpage PAGE_DEBUG_SYNC
   - @subpage PAGE_LOCK_ORDER
 */
 
