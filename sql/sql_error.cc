@@ -375,11 +375,60 @@ void Diagnostics_area::reset_diagnostics_area() {
   m_status = DA_EMPTY;
 }
 
+#ifndef NDEBUG
+namespace {
+const char *status_text(Diagnostics_area::enum_diagnostics_status status) {
+  switch (status) {
+    case Diagnostics_area::DA_EMPTY:
+      return "empty";
+    case Diagnostics_area::DA_OK:
+      return "ok";
+    case Diagnostics_area::DA_EOF:
+      return "eof";
+    case Diagnostics_area::DA_ERROR:
+      return "error";
+    case Diagnostics_area::DA_DISABLED:
+      return "disabled";
+    default:
+      return "<invalid>";
+  }
+}
+}  // namespace
+#endif
+
+void Diagnostics_area::assert_not_set(
+    Diagnostics_area::enum_diagnostics_status new_status [[maybe_unused]],
+    int new_errno [[maybe_unused]]) {
+#ifndef NDEBUG
+  // We have earlier reported a status, and are now reporting a status again.
+  // This is allowed only if we are reporting an error and
+  // m_can_overwrite_status is set; otherwise it is a bug. The reason for the
+  // bug is likely that we reported an error but missed to propagate the error
+  // status up the call stack, so that either it tries to report ok, or a second
+  // error is detected and reported.
+  //
+  // We handle it by raising an assertion. Before crashing, we write the
+  // previous status, the requested status, the previous message, and the new
+  // message to the error log.
+  if (is_set()) {
+    if (new_status == Diagnostics_area::DA_ERROR && m_can_overwrite_status)
+      return;
+    LogErr(ERROR_LEVEL, ER_INVALID_PREVIOUS_DIAGNOSTICS_AREA_STATUS,
+           status_text(status()), status_text(new_status),
+           m_mysql_errno != 0 ? mysql_errno_to_symbol(m_mysql_errno) : "",
+           new_errno != 0 ? mysql_errno_to_symbol(new_errno) : "");
+    bool invalid_da_status__check_error_log = true;
+    assert(!invalid_da_status__check_error_log);
+  }
+#endif
+}
+
 void Diagnostics_area::set_ok_status(ulonglong affected_rows,
                                      ulonglong last_insert_id,
                                      const char *message_text) {
   DBUG_TRACE;
-  assert(!is_set());
+  assert_not_set(DA_OK);
+
   /*
     In production, refuse to overwrite an error or a custom response
     with an OK packet.
@@ -401,8 +450,8 @@ void Diagnostics_area::set_ok_status(ulonglong affected_rows,
 
 void Diagnostics_area::set_eof_status(THD *thd) {
   DBUG_TRACE;
-  /* Only allowed to report eof if has not yet reported an error */
-  assert(!is_set());
+  assert_not_set(DA_EOF);
+
   /*
     In production, refuse to overwrite an error or a custom response
     with an EOF packet.
@@ -429,12 +478,7 @@ void Diagnostics_area::set_error_status(uint mysql_errno,
                                         const char *message_text,
                                         const char *returned_sqlstate) {
   DBUG_TRACE;
-  /*
-    Only allowed to report error if has not yet reported a success
-    The only exception is when we flush the message to the client,
-    an error can happen during the flush.
-  */
-  assert(!is_set() || m_can_overwrite_status);
+  assert_not_set(DA_ERROR, mysql_errno);
 
   // message must be set properly by the caller.
   assert(message_text);

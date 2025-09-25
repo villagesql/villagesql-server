@@ -550,6 +550,18 @@ class Diagnostics_area {
 
  private:
   /**
+    In debug mode, assert that the status is not set, as required before setting
+    the status; unless the new status is DA_ERROR and m_overwrite_flag is set.
+    In case the assertion is raised, print an error message that includes the
+    previous status, the new status, the previous ER_* symbol (if any), and the
+    new ER_* symbol (if any).
+
+    @param new_status The new status we attempt to set.
+    @param new_message The new mysql_errno we attempt to set, or 0 if not given.
+  */
+  void assert_not_set(enum_diagnostics_status new_status, int new_errno = 0);
+
+  /**
     Add a new SQL-condition to the current list and increment the respective
     counters.
 

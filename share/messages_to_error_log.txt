@@ -13287,6 +13287,9 @@ ER_AUTOPILOT_OLTP_ADVISOR_ERROR
 ER_WARN_EVENT_TRACKING_BRIDGE_INVALID_EVENT
   eng "An event of type %s is missing extra data and cannot be processed by the server's component plugin bridge. As a result plugins will not get the notification."
 
+ER_INVALID_PREVIOUS_DIAGNOSTICS_AREA_STATUS
+  eng "Invalid previous diagnostics area status '%.64s' when attempting to report status '%.64s'. This is a bug and the server will now abort. The previous error (if any) was '%.128s' and the requested error (if any) is '%.128s'."
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
