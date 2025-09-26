@@ -10734,6 +10734,7 @@ void Backup::execABORT_BACKUP_ORD(Signal *signal) {
     }
   }  // if
 
+  const Uint32 previousGsn = ptr.p->m_gsn;
   ptr.p->m_gsn = GSN_ABORT_BACKUP_ORD;
   const bool isCoordinator = (ptr.p->masterRef == reference());
 
@@ -10770,6 +10771,28 @@ void Backup::execABORT_BACKUP_ORD(Signal *signal) {
                           reference(), requestType);
 #endif
       ptr.p->setErrorCode(requestType);
+      if (previousGsn == GSN_BACKUP_FRAGMENT_REQ) {
+        jam();
+        /* Scan in progress, set error
+         * scan will detect and respond to
+         * Master
+         */
+      } else {
+        jam();
+        /* Scan not actually in progress, so need
+         * Master (or Master failure handling) to
+         * perform next step.
+         * Leave gsn as was so that this happens
+         */
+        ndbrequire(previousGsn == GSN_BACKUP_FRAGMENT_REF ||
+                   previousGsn == GSN_BACKUP_FRAGMENT_CONF ||
+                   previousGsn == GSN_ABORT_BACKUP_ORD);
+
+        g_eventLogger->info("Participant was not scanning, leaving gsn as %u",
+                            previousGsn);
+        /* Reset gsn */
+        ptr.p->m_gsn = previousGsn;
+      }
       return;
 
     case AbortBackupOrd::BackupComplete:
