@@ -7794,6 +7794,22 @@ LEX_USER *LEX_USER::alloc(THD *thd, LEX_STRING *user_arg,
   return LEX_USER::init(ret, thd, user_arg, host_arg);
 }
 
+void warn_user_trimmed(THD *thd, LEX_STRING *user_arg, LEX_STRING *host_arg) {
+  const String user(user_arg->str, user_arg->length, system_charset_info);
+  const String host =
+      host_arg ? String(host_arg->str, host_arg->length, system_charset_info)
+               : String("%", 1, system_charset_info);
+  String account(user.length() + host.length() + sizeof("''@''"));
+
+  append_query_string(thd, system_charset_info, &user, &account);
+  account.append('@');
+  append_query_string(thd, system_charset_info, &host, &account);
+  account.append((char)0);
+  push_warning_printf(thd, Sql_condition::SL_WARNING, ER_WARN_ACCOUNT_TRIMMED,
+                      ER_THD(thd, ER_WARN_ACCOUNT_TRIMMED), account.ptr(),
+                      account.ptr());
+}
+
 LEX_USER *LEX_USER::init(LEX_USER *ret, THD *thd [[maybe_unused]],
                          LEX_STRING *user_arg, LEX_STRING *host_arg) {
   ret->init();
@@ -7801,8 +7817,18 @@ LEX_USER *LEX_USER::init(LEX_USER *ret, THD *thd [[maybe_unused]],
     Trim whitespace as the values will go to a CHAR field
     when stored.
   */
+  auto untrimmed_len = user_arg->length;
   trim_whitespace(system_charset_info, user_arg);
-  if (host_arg) trim_whitespace(system_charset_info, host_arg);
+  bool username_trimmed{untrimmed_len > user_arg->length};
+  if (host_arg) {
+    untrimmed_len = host_arg->length;
+    trim_whitespace(system_charset_info, host_arg);
+    if (username_trimmed || untrimmed_len > host_arg->length) {
+      warn_user_trimmed(thd, user_arg, host_arg);
+    }
+  } else if (username_trimmed) {
+    warn_user_trimmed(thd, user_arg, host_arg);
+  }
 
   ret->user.str = user_arg->str;
   ret->user.length = user_arg->length;

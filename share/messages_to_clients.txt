@@ -10827,6 +10827,9 @@ ER_LH_DELTA_METADATA_READ_ERROR
 ER_LH_DELTA_UNSUPPORTED_ERROR
   eng "Feature %s of delta tables is unsupported"
 
+ER_WARN_ACCOUNT_TRIMMED
+  eng "Leading or trailing spaces have been trimmed from user or host, account: %s."
+
 #
 #  End of 9.x error messages (server-to-client).
 #
