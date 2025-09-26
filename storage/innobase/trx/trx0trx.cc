@@ -629,6 +629,7 @@ void trx_free_prepared_or_active_recovered(trx_t *trx) {
   trx->will_lock = 0;
 
   trx_validate_state_before_free(trx);
+  trx_init(trx);
   trx_free(trx);
 }
 
@@ -862,15 +863,8 @@ static trx_t *trx_resurrect_insert(trx_undo_t *undo, trx_rseg_t *rseg,
       ib::info(ER_IB_MSG_1204) << "Transaction " << trx_get_id_for_print(trx)
                                << " was in the XA prepared state.";
 
-      if (srv_force_recovery == 0) {
-        trx->state.store(TRX_STATE_PREPARED, std::memory_order_relaxed);
-        ++trx_sys->n_prepared_trx;
-      } else {
-        ib::info(ER_IB_MSG_1205) << "Since innodb_force_recovery"
-                                    " > 0, we will force a rollback.";
-
-        trx->state.store(TRX_STATE_ACTIVE, std::memory_order_relaxed);
-      }
+      trx->state.store(TRX_STATE_PREPARED, std::memory_order_relaxed);
+      ++trx_sys->n_prepared_trx;
     } else {
       trx->state.store(TRX_STATE_COMMITTED_IN_MEMORY,
                        std::memory_order_relaxed);
