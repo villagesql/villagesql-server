@@ -8154,7 +8154,8 @@ std::pair<size_t, size_t> CountTreesAndPlans(
 
     TryAllPredicates(
         join_ops, fields, join_types, &generated_nulls, /*idx=*/0, [&] {
-          JoinHypergraph graph(thd->mem_root, /*query_block=*/nullptr);
+          JoinHypergraph graph{thd->mem_root,
+                               tables.front()->pos_in_table_list->query_block};
           for (RelationalExpression *op : join_ops) {
             op->conflict_rules.clear();
           }
@@ -8501,7 +8502,7 @@ static void BM_EstimateFieldSizes(size_t num_iterations) {
     StartBenchmarkTiming();
     for (size_t i = 0; i < num_iterations; ++i) {
       // This uses FieldSizeEstimator.
-      table->read_set_width();
+      CalculateReadSetWidth(table);
 
       cleanup_items(arena.item_list());
       arena.free_items();

@@ -3331,8 +3331,15 @@ void MakeJoinGraphFromRelationalExpression(THD *thd, RelationalExpression *expr,
     const Table_ref *const table_ref = expr->table;
     TABLE *const table = table_ref->table;
 
+    // The read set width of the table is costly to calculate, so we cache it in
+    // the node to avoid recalculating it. It is used for estimating hash join
+    // cost only, so we don't bother calculating it in single-table queries.
+    const int64_t read_set_width = graph->query_block()->leaf_table_count > 1
+                                       ? CalculateReadSetWidth(table)
+                                       : 0;
+
     graph->graph.AddNode();
-    graph->nodes.emplace_back(thd->mem_root, table);
+    graph->nodes.emplace_back(thd->mem_root, table, read_set_width);
 
     JoinHypergraph::Node &node = graph->nodes.back();
     for (const PushableJoinCondition &pushable : expr->pushable_conditions()) {

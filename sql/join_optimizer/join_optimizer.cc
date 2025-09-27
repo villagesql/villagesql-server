@@ -5241,17 +5241,11 @@ bool CostingReceiver::AllowHashJoin(NodeMap left, NodeMap right,
   return true;
 }
 
-int64_t GetJoinRowWidth(const AccessPath *path) {
+int64_t GetJoinRowWidth(NodeMap nodes, const JoinHypergraph &graph) {
   int64_t width{0};
-
-  WalkTablesUnderAccessPath(
-      path,
-      [&](const TABLE *table) {
-        width += table->read_set_width();
-        return false;
-      },
-      /*include_pruned_tables=*/true);
-
+  for (int node_idx : BitsSetIn(nodes)) {
+    width += graph.nodes[node_idx].read_set_width();
+  }
   return width;
 }
 
@@ -5386,13 +5380,14 @@ void CostingReceiver::ProposeHashJoin(
 
   const HashJoinCost join_cost{
       m_thd,
-      HashJoinMetrics{
-          .build_rows = right_path->num_output_rows(),
-          .build_row_size = static_cast<double>(GetJoinRowWidth(right_path)),
-          .key_size = key_width,
-          .probe_rows = outer->num_output_rows(),
-          .probe_row_size = static_cast<double>(GetJoinRowWidth(left_path)),
-          .result_rows = num_output_rows}};
+      HashJoinMetrics{.build_rows = right_path->num_output_rows(),
+                      .build_row_size =
+                          static_cast<double>(GetJoinRowWidth(right, *m_graph)),
+                      .key_size = key_width,
+                      .probe_rows = outer->num_output_rows(),
+                      .probe_row_size =
+                          static_cast<double>(GetJoinRowWidth(left, *m_graph)),
+                      .result_rows = num_output_rows}};
 
   // Note: This isn't strictly correct if the non-equijoin conditions
   // have selectivities far from 1.0; the cost should be calculated
