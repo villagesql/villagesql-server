@@ -9098,14 +9098,6 @@ Manifest_file_option_parser_helper::Manifest_file_option_parser_helper(
     convert_dirname(local_mysql_home, basedir, NullS);
     /* Resolve symlinks to allow 'local_mysql_home' to be a relative symlink */
     my_realpath(local_mysql_home, local_mysql_home, MYF(0));
-    /* Ensure that local_mysql_home ends in FN_LIBCHAR:
-       it must be added by convert_dirname(), so only assert that.
-    */
-#ifndef NDEBUG
-    char *pos = strend(local_mysql_home);
-    assert(pos > local_mysql_home);
-    assert(pos[-1] == FN_LIBCHAR);
-#endif
     (void)my_load_path(local_mysql_home, local_mysql_home, "");
     local_mysql_home_ptr = local_mysql_home;
   } else {
