@@ -91,6 +91,7 @@ usr/lib/mysql/plugin/debug/semisync_replica.so
 usr/lib/mysql/plugin/debug/validate_password.so
 usr/lib/mysql/plugin/debug/component_audit_api_message_emit.so
 usr/lib/mysql/plugin/debug/component_keyring_file.so
+usr/lib/mysql/plugin/debug/component_classic_hashing.so
 ")
 
 SET (DEB_INSTALL_DEBUG_TEST_PLUGINS

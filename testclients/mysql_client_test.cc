@@ -21136,7 +21136,7 @@ static void test_wl13510() {
     2. Receive the response from the server which must be same as sent by the
        client.
     3. To verify the veracity of the string:
-       (a) Calculate the MD5 digest of the received the string
+       (a) Calculate the SHA2 digest of the received the string
        (b) Get the digest from the server directly for the similar length string
        (c) Test fails if the digests mismatch
   */
@@ -21209,9 +21209,9 @@ static void test_wl13510() {
     DIE_IF(!select_row[0]);
 
     /* Determine the digest of the string client has received. */
-    query.assign("SELECT MD5('");
+    query.assign("SELECT SHA2('");
     query.append(select_row[0]);
-    query.append("')");
+    query.append("', 256)");
 
     status = mysql_real_query_nonblocking(mysql_local, query.c_str(),
                                           (ulong)query.length());
@@ -21241,7 +21241,7 @@ static void test_wl13510() {
     fprintf(stdout, "\n digest : %s\n", select_row[0]);
 
     /* Get the digest directly from server */
-    query = "SELECT MD5(REPEAT('X'," + std::to_string(packet_size) + "))";
+    query = "SELECT SHA2(REPEAT('X'," + std::to_string(packet_size) + "), 256)";
     myquery(
         mysql_real_query(mysql_local, query.c_str(), (ulong)query.length()));
     digest_result = mysql_store_result(mysql_local);

@@ -7150,12 +7150,12 @@ class Parser_oom_handler : public Internal_error_handler {
     rc= parse_sql(the, &parser_state, ctx);
     if (! rc)
     {
-      unsigned char md5[MD5_HASH_SIZE];
+      unsigned char hash[SHA256_DIGEST_LENGTH];
       char digest_text[1024];
       bool truncated;
       const sql_digest_storage *digest= & thd->m_digest->m_digest_storage;
 
-      compute_digest_md5(digest, & md5[0]);
+      compute_digest_hash(digest, & hash[0]);
       compute_digest_text(digest, & digest_text[0], sizeof(digest_text), &
   truncated);
     }

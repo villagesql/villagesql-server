@@ -655,10 +655,6 @@ do ucase(insert(maketime(9.565398e+307 ,'',
 			 0xdc0823,6756,release_all_locks()));
 
 --error ER_DATA_OUT_OF_RANGE
-do soundex(maketime(cast((2530967061762658367) as decimal),
-   exp(repeat('1',32)),((period_add(579349005,27636))xor (sha(current_user)))));
-
---error ER_DATA_OUT_OF_RANGE
 do st_mlinefromtext(
  maketime(
   now(),

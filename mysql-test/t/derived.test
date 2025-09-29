@@ -2072,7 +2072,7 @@ CREATE TABLE t2 (
 INSERT INTO t2 VALUES (0),(1),(2);
 
 let query=
-SELECT SHA(pk) IN (SELECT * FROM (SELECT '' FROM t2) a) FROM t1;
+SELECT SHA2(pk,256) IN (SELECT * FROM (SELECT '' FROM t2) a) FROM t1;
 
 eval explain $query;
 eval $query;

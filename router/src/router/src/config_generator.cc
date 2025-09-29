@@ -92,7 +92,6 @@
 #include "router_config.h"
 #include "routing_guidelines/routing_guidelines.h"
 #include "scope_guard.h"
-#include "sha1.h"  // compute_sha1_hash() from mysql's include/
 IMPORT_LOG_FUNCTIONS()
 
 #include "mysqlrouter/cluster_aware_session.h"

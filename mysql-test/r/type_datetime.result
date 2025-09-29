@@ -900,9 +900,6 @@ do ucase(insert(maketime(9.565398e+307 ,'',
 st_longfromgeohash(('4358-04-12 03:45:08.727399'))),
 0xdc0823,6756,release_all_locks()));
 ERROR HY000: Incorrect geohash value: '4358-04-12 03:45:08.727399' for function ST_LONGFROMGEOHASH
-do soundex(maketime(cast((2530967061762658367) as decimal),
-exp(repeat('1',32)),((period_add(579349005,27636))xor (sha(current_user)))));
-ERROR 22003: DOUBLE value is out of range in 'exp(repeat('1',32))'
 do st_mlinefromtext(
 maketime(
 now(),
