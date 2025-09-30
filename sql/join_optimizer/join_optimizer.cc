@@ -8925,7 +8925,7 @@ static void CacheCostInfoForJoinConditions(THD *thd,
     for (CachedPropertiesForPredicate *properties_it =
              edge.expr->properties_for_join_conditions.begin();
          Item * cond : edge.expr->join_conditions) {
-      CachedPropertiesForPredicate &properties = *properties_it;
+      CachedPropertiesForPredicate &properties = *properties_it++;
       properties.contained_subqueries.init(thd->mem_root);
       properties.redundant_against_sargable_predicates =
           OverflowBitset::EmptySet(thd->mem_root, graph->predicates.size());
