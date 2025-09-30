@@ -395,17 +395,14 @@ Item_bool_func *Linear_comp_creator::create(const POS &pos, Item *a,
     List<Item> list;
     for (uint i = 0; i < a->cols(); ++i) {
       Item *col_item = create(pos, a->element_index(i), b->element_index(i));
+      if (col_item == nullptr) return nullptr;
+
       current_thd->add_item(col_item);
       list.push_back(col_item);
     }
     return combine(pos, list);
   }
-  Item_bool_func *item = create_scalar_predicate(pos, a, b);
-  if (item == nullptr) {
-    return nullptr;
-  }
-
-  return item;
+  return create_scalar_predicate(pos, a, b);
 }
 
 Item_bool_func *Eq_creator::create_scalar_predicate(const POS &pos, Item *a,
