@@ -9150,7 +9150,7 @@ static void create_file_format_object(
     // DATETIME format
     if (field_term->datetime_format != nullptr) {
       Json_string str_value(field_term->datetime_format->ptr());
-      file_format_obj.add_clone(external_table::kTimestampFormatParam,
+      file_format_obj.add_clone(external_table::kDatetimeFormatParam,
                                 &str_value);
     }
 
