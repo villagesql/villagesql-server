@@ -5684,7 +5684,7 @@ bool Alter_info::add_field(
           break;
         case MYSQL_TYPE_TIMESTAMP2:
         case MYSQL_TYPE_DATETIME2:
-          json_key = external_table::kTimestampFormatParam;
+          json_key = external_table::kDatetimeFormatParam;
           break;
         default:
           my_error(ER_EXTERNAL_FORMAT_NOT_SUPPORTED, MYF(0), field_name->str);
