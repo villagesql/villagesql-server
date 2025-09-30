@@ -9116,6 +9116,13 @@ Manifest_file_option_parser_helper::Manifest_file_option_parser_helper(
   }
   (void)my_load_path(local_datadir_buffer, local_datadir_buffer,
                      local_mysql_home_ptr);
+  /* Ensure that local_mysql_home_ptr ends in FN_LIBCHAR */
+  char *pos = strend(local_mysql_home_ptr);
+  if (pos == local_mysql_home_ptr ||
+      (pos[-1] != FN_LIBCHAR && pos + 1 < local_mysql_home_ptr + FN_REFLEN)) {
+    pos[0] = FN_LIBCHAR;
+    pos[1] = 0;
+  }
 
   /* Compute plugin dir ============== */
   if (plugindir != nullptr && plugindir[0] != 0) {
