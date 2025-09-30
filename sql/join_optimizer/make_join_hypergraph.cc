@@ -3311,8 +3311,6 @@ void PromoteCycleJoinPredicates(
                    root, graph);
     }
     expr->join_predicate_last = graph->predicates.size();
-    SortPredicates(graph->predicates.begin() + expr->join_predicate_first,
-                   graph->predicates.begin() + expr->join_predicate_last);
   }
 }
 
@@ -3555,19 +3553,25 @@ void EstimateJoinConditionSelectivities(THD *thd, JoinHypergraph *graph) {
     // Assign the same selectivities there.
     if (expr.join_predicate_first != expr.join_predicate_last) {
       int pred_idx = expr.join_predicate_first;
-      for (const CachedPropertiesForPredicate &properties :
-           expr.properties_for_equijoin_conditions) {
-        graph->predicates[pred_idx++].selectivity = properties.selectivity;
+      for (size_t i = 0; i < expr.properties_for_equijoin_conditions.size();
+           ++i) {
+        Predicate &predicate = graph->predicates[pred_idx++];
+        assert(predicate.condition == expr.equijoin_conditions[i]);
+        predicate.selectivity =
+            expr.properties_for_equijoin_conditions[i].selectivity;
       }
-      for (const CachedPropertiesForPredicate &properties :
-           expr.properties_for_join_conditions) {
-        graph->predicates[pred_idx++].selectivity = properties.selectivity;
+      for (size_t i = 0; i < expr.properties_for_join_conditions.size(); ++i) {
+        Predicate &predicate = graph->predicates[pred_idx++];
+        assert(predicate.condition == expr.join_conditions[i]);
+        predicate.selectivity =
+            expr.properties_for_join_conditions[i].selectivity;
       }
       assert(pred_idx == expr.join_predicate_last);
     }
 
     // Now that we have calculated the selectivity estimates, we can sort the
-    // predicates so that the most selective ones are evaluated first.
+    // predicates so that the most selective and least expensive ones are
+    // evaluated first.
     SortPredicates(graph->predicates.begin() + expr.join_predicate_first,
                    graph->predicates.begin() + expr.join_predicate_last);
   }

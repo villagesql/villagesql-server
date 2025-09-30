@@ -2468,3 +2468,17 @@ JOIN t AS t3 ON t2.pk = t3.pk
 WHERE t1.col1 <> t3.col1 AND t1.col2 <> t3.col2;
 1
 DROP TABLE t;
+#
+# Bug#38440648: Assertion `false && "Inconsistent row counts for
+#               different AccessPath objects."' failed.
+#
+CREATE TABLE t1 (col_int INT);
+CREATE TABLE t2 (col_int INT, col_varchar10 VARCHAR(10));
+CREATE TABLE t3 (pk INT PRIMARY KEY, col_varchar20 VARCHAR(20));
+SELECT 1 FROM t1, t2, t3
+WHERE t2.col_int = t3.pk AND
+t2.col_varchar10 = t3.col_varchar20 AND
+t1.col_int = t3.pk AND
+t1.col_int >= 8;
+1
+DROP TABLE t1, t2, t3;
