@@ -2110,13 +2110,6 @@ int runBackupFragmentConsistency(NDBT_Context *ctx, NDBT_Step *step) {
   Ndb *pNdb = GETNDB(step);
   NdbDictionary::Dictionary *pDict = pNdb->getDictionary();
   NdbRestarter res(nullptr, &ctx->m_cluster_connection);
-  NdbMgmd mgmd;
-
-  mgmd.use_tls(opt_tls_search_path, opt_mgm_tls);
-  if (!mgmd.connect()) {
-    g_err << "Cannot connect to mgmd server" << endl;
-    return NDBT_FAILED;
-  }
 
   int master = res.getNode(NdbRestarter::NS_MASTER);
   int node = res.getNode(NdbRestarter::NS_NON_MASTER);
