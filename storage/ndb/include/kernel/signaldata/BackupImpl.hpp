@@ -276,13 +276,15 @@ class BackupFragmentRef {
   friend bool printBACKUP_FRAGMENT_REF(FILE *, const Uint32 *, Uint32, Uint16);
 
  public:
-  static constexpr Uint32 SignalLength = 5;
+  static constexpr Uint32 SignalLength = 6;
 
  private:
   Uint32 backupId;
   Uint32 backupPtr;
   Uint32 errorCode;
   Uint32 nodeId;
+  Uint32 tableId;
+  Uint32 fragmentNo;
 };
 
 class BackupFragmentConf {

@@ -2692,8 +2692,10 @@ void Backup::execDUMP_STATE_ORD(Signal *signal) {
 
     for (c_backups.first(ptr); ptr.i != RNIL; c_backups.next(ptr)) {
       g_eventLogger->info(
-          "BackupRecord %u:  BackupId: %u  MasterRef: %x  ClientRef: %x", ptr.i,
-          ptr.p->backupId, ptr.p->masterRef, ptr.p->clientRef);
+          "Reference: %u, BackupRecord %u:  BackupId: %u  MasterRef: %x  "
+          "ClientRef: %x",
+          reference(), ptr.i, ptr.p->backupId, ptr.p->masterRef,
+          ptr.p->clientRef);
       g_eventLogger->info(" State: %u", ptr.p->slaveState.getState());
       g_eventLogger->info(" noOfByte: %llu  noOfRecords: %llu",
                           ptr.p->noOfBytes, ptr.p->noOfRecords);
@@ -2704,8 +2706,9 @@ void Backup::execDUMP_STATE_ORD(Signal *signal) {
       for (ptr.p->files.first(filePtr); filePtr.i != RNIL;
            ptr.p->files.next(filePtr)) {
         g_eventLogger->info(
-            " file %u:  type: %u  flags: H'%x  tableId: %u  fragmentId: %u",
-            filePtr.i, filePtr.p->fileType, filePtr.p->m_flags,
+            "Reference: %u  file %u:  type: %u  flags: H'%x  tableId: %u  "
+            "fragmentId: %u",
+            reference(), filePtr.i, filePtr.p->fileType, filePtr.p->m_flags,
             filePtr.p->tableId, filePtr.p->fragmentNo);
       }
       if (ptr.p->slaveState.getState() == SCANNING &&
@@ -3682,7 +3685,9 @@ void Backup::execNODE_FAILREP(Signal *signal) {
   }  // if
 
 #ifdef DEBUG_ABORT
-  g_eventLogger->info("****************** Node fail rep ******************");
+  g_eventLogger->info(
+      "****************** Node fail rep, reference: %u ******************",
+      reference());
 #endif
 
   NodeId newCoordinator = c_masterNodeId;
@@ -3797,8 +3802,9 @@ void Backup::checkNodeFail(Signal *signal, BackupRecordPtr ptr, NodeId newCoord,
     jam();
     CRASH_INSERTION((10001));
 #ifdef DEBUG_ABORT
-    g_eventLogger->info("**** Master: Node failed: Master id = %u",
-                        refToNode(ptr.p->masterRef));
+    g_eventLogger->info(
+        "**** Master: Node failed: reference: %u, Master id = %u", instance(),
+        refToNode(ptr.p->masterRef));
 #endif
 
     Uint32 gsn, len, pos;
@@ -3861,22 +3867,22 @@ void Backup::checkNodeFail(Signal *signal, BackupRecordPtr ptr, NodeId newCoord,
     for (Uint32 i = 0; (i = mask.find(i + 1)) != NdbNodeBitmask::NotFound;) {
       signal->theData[pos] = i;
       if (gsn == GSN_BACKUP_FRAGMENT_REF) {
+        jam();
         // Handle mt-backup case where all LDMs process BACKUP_FRAGMENT_REQs
         // simultaneously. If any node fails, master sends REFs to self on
-        // behalf of every failed node. Extend handling for BACKUP_FRAGMENT_REQ
-        // so that master sends BACKUP_FRAGMENT_REFs to self from every LDM
-        // on every failed node.
-        Uint32 workers = getNodeInfo(i).m_lqh_workers;
-        if (workers == 0) workers = 1;  // single-threaded backup
-        for (Uint32 j = 0; j < workers; j++) {
-          sendSignal(reference(), gsn, signal, len, JBB);
-        }
+        // behalf of every failed node.
+        BackupFragmentRef *ref = (BackupFragmentRef *)signal->getDataPtrSend();
+        ref->tableId = RNIL;
+        ref->fragmentNo = RNIL;
+        sendSignal(reference(), gsn, signal, len, JBB);
       } else {
         // master sends REQs only to one instance (BackupProxy) on each node
         // send only one reply to self per node on behalf of BackupProxy
+        jam();
         sendSignal(reference(), gsn, signal, len, JBB);
 #ifdef DEBUG_ABORT
-        g_eventLogger->info("sending %d to self from %d", gsn, i);
+        g_eventLogger->info("reference: %u sending %d to self from %d",
+                            instance(), gsn, i);
 #endif
       }
     }
@@ -4131,6 +4137,11 @@ void Backup::execBACKUP_REQ(Signal *signal) {
       // clean up backup state
       ptr.p->m_gsn = 0;
       ptr.p->masterData.gsn = 0;
+#ifdef DEBUG_ABORT
+      g_eventLogger->info(
+          "execBACKUP_REQ: releasing backupRecord, reference: %u, ptrI: %u",
+          reference(), ptr.i);
+#endif
       c_backups.release(ptr);
       return;
     }
@@ -5092,7 +5103,6 @@ void Backup::nextFragment(Signal *signal, BackupRecordPtr ptr) {
         BlockReference ref = numberToRef(BACKUP, ldm, nodeId);
         sendSignal(ref, GSN_BACKUP_FRAGMENT_REQ, signal,
                    BackupFragmentReq::SignalLength, JBB);
-
       }  // if
     }    // for
   }      // for
@@ -5200,48 +5210,81 @@ void Backup::execBACKUP_FRAGMENT_REF(Signal *signal) {
   // const Uint32 backupId = ref->backupId;
   const Uint32 nodeId = ref->nodeId;
 
+  const Uint32 tableId = ref->tableId;
+  const Uint32 fragmentNo = ref->fragmentNo;
   BackupRecordPtr ptr;
   ndbrequire(c_backupPool.getPtr(ptr, ptrI));
 
-  TablePtr tabPtr;
-  ptr.p->tables.first(tabPtr);
-  for (; tabPtr.i != RNIL; ptr.p->tables.next(tabPtr)) {
+  /*
+   * Worker node (nodeId) Failed.
+   * Handling of BACKUP_FRAGMENT_REF sent from master to itself on behalf of
+   * the failed node.
+   * All 'scanning' fragments in failed node set as 'scanned'.
+   */
+  if (signal->senderBlockRef() == reference() && nodeId != getOwnNodeId()) {
     jam();
-    FragmentPtr fragPtr;
-    Array<Fragment> &frags = tabPtr.p->fragments;
-    const Uint32 fragCount = frags.getSize();
+    ndbrequire(ref->tableId == RNIL);
+    ndbrequire(ref->fragmentNo == RNIL);
 
-    for (Uint32 i = 0; i < fragCount; i++) {
+    TablePtr tabPtr;
+    ptr.p->tables.first(tabPtr);
+    for (; tabPtr.i != RNIL; ptr.p->tables.next(tabPtr)) {
       jam();
-      tabPtr.p->fragments.getPtr(fragPtr, i);
-      if (fragPtr.p->scanning != 0 && nodeId == fragPtr.p->node) {
+      FragmentPtr fragPtr;
+      Array<Fragment> &frags = tabPtr.p->fragments;
+      const Uint32 fragCount = frags.getSize();
+      for (Uint32 i = 0; i < fragCount; i++) {
         jam();
-        ndbrequire(fragPtr.p->scanned == 0);
-        fragPtr.p->scanned = 1;
-        fragPtr.p->scanning = 0;
-        goto done;
+        tabPtr.p->fragments.getPtr(fragPtr, i);
+        if (fragPtr.p->scanning != 0 && nodeId == fragPtr.p->node) {
+          jam();
+          ndbrequire(fragPtr.p->scanned == 0);
+          fragPtr.p->scanned = 1;
+          fragPtr.p->scanning = 0;
+          ptr.p->masterData.sendCounter--;
+          ptr.p->setErrorCode(ref->errorCode);
+          if (ptr.p->masterData.sendCounter.done()) {
+            jam();
+            masterAbort(signal, ptr);
+            return;
+          }
+        }
       }
     }
-  }
-  goto err;
-
-done:
-  ptr.p->masterData.sendCounter--;
-  ptr.p->setErrorCode(ref->errorCode);
-
-  if (ptr.p->masterData.sendCounter.done()) {
+  } else {
+    // Normal BACKUP_FRAGMENT_REF from participant
     jam();
-    masterAbort(signal, ptr);
-    return;
-  }  // if
+    TablePtr tabPtr;
+    ndbrequire(findTable(ptr, tabPtr, tableId));
 
-err:
-  AbortBackupOrd *ord = (AbortBackupOrd *)signal->getDataPtrSend();
-  ord->backupId = ptr.p->backupId;
-  ord->backupPtr = ptr.i;
-  ord->requestType = AbortBackupOrd::LogBufferFull;
-  ord->senderData = ptr.i;
-  execABORT_BACKUP_ORD(signal);
+    FragmentPtr fragPtr;
+    tabPtr.p->fragments.getPtr(fragPtr, fragmentNo);
+
+    ndbrequire(fragPtr.p->scanned == 0);
+    ndbrequire(fragPtr.p->scanning == 1);
+    ndbrequire(nodeId == refToNode(signal->senderBlockRef()));
+
+    fragPtr.p->scanned = 1;
+    fragPtr.p->scanning = 0;
+    ptr.p->masterData.sendCounter--;
+    ptr.p->setErrorCode(ref->errorCode);
+
+    if (ptr.p->masterData.sendCounter.done()) {
+      jam();
+      masterAbort(signal, ptr);
+      return;
+    }
+  }
+
+  {
+    jam();
+    AbortBackupOrd *ord = (AbortBackupOrd *)signal->getDataPtrSend();
+    ord->backupId = ptr.p->backupId;
+    ord->backupPtr = ptr.i;
+    ord->requestType = AbortBackupOrd::LogBufferFull;
+    ord->senderData = ptr.i;
+    execABORT_BACKUP_ORD(signal);
+  }
 }
 
 void Backup::execBACKUP_FRAGMENT_COMPLETE_REP(Signal *signal) {
@@ -5682,7 +5725,9 @@ void Backup::reportStatus(Signal *signal, BackupRecordPtr ptr,
 void Backup::masterAbort(Signal *signal, BackupRecordPtr ptr) {
   jam();
 #ifdef DEBUG_ABORT
-  g_eventLogger->info("************ masterAbort");
+  g_eventLogger->info(
+      "************ masterAbort, reference: %u, gsn: %u, errorCode: %u",
+      reference(), ptr.p->masterData.gsn, ptr.p->masterData.errorCode);
 #endif
 
   ndbassert(ptr.p->masterRef == reference());
@@ -5925,8 +5970,22 @@ void Backup::execDEFINE_BACKUP_REQ(Signal *signal) {
 #endif
     if (!c_backups.getPool().seizeId(ptr, ptrI)) {
       jam();
+#ifdef DEBUG_ABORT
+      g_eventLogger->info(
+          "DEFINE_BACKUP_REQ, reference: %u -- Fail to seize BackupRecord, "
+          "ptrI: %u",
+          reference(), ptrI);
+      signal->theData[0] = 23;
+      execDUMP_STATE_ORD(signal);
+#endif
       ndbabort();  // If master has succeeded slave should succeed
     }              // if
+#ifdef DEBUG_ABORT
+    g_eventLogger->info(
+        "DEFINE_BACKUP_REQ, reference: %u -- Successfully seize BackupRecord, "
+        "ptrI: %u",
+        reference(), ptrI);
+#endif
     c_backups.addFirst(ptr);
   }  // if
 
@@ -7331,6 +7390,33 @@ void Backup::execBACKUP_FRAGMENT_REQ(Signal *signal) {
   FragmentPtr fragPtr;
   tabPtr.p->fragments.getPtr(fragPtr, fragNo);
 
+  if (!ptr.p->is_lcp() && ERROR_INSERTED(10057)) {
+    jam();
+    if (instance() == 1) {
+      jam();
+      /*
+       * Delay GSN_BACKUP_FRAGMENT_REQ processing on LDM 1.
+       * EI 10058 to force BACKUP_FRAGMENT_REQ processing on other LDMs to
+       * return REF.
+       * BACKUP_FRAGMENT_REQ processing on LDM 1 later completes and sends
+       * CONF, which is likely to arrive after REFs for later fragments.
+       */
+      sendSignalWithDelay(reference(), GSN_BACKUP_FRAGMENT_REQ, signal, 100,
+                          signal->getLength());
+
+      signal->theData[0] = 10058;
+      signal->theData[1] = tableId;
+      sendSignal(BACKUP_REF, GSN_NDB_TAMPER, signal, 2, JBB);
+      return;
+    } else {
+      // Delay just to have time to catch error 10058
+      sendSignalWithDelay(reference(), GSN_BACKUP_FRAGMENT_REQ, signal, 10,
+                          signal->getLength());
+      // CLEAR_ERROR_INSERT_VALUE;
+      return;
+    }
+  }
+
   ndbrequire(fragPtr.p->scanned == 0);
   ndbrequire(fragPtr.p->scanning == 0 ||
              refToNode(ptr.p->masterRef) == getOwnNodeId());
@@ -7366,6 +7452,26 @@ void Backup::execBACKUP_FRAGMENT_REQ(Signal *signal) {
   filePtr.p->fragmentNo = fragPtr.p->fragmentId;
   filePtr.p->m_retry_count = 0;
 
+  if (!ptr.p->is_lcp() && ERROR_INSERTED(10058) &&
+      ERROR_INSERT_EXTRA == tableId) {
+    jam();
+    if (instance() != 1) {
+      /*
+       * Handling of BACKUP_FRAGMENT_REQ processing is delayed on LDM 1.
+       * On other instances return REF, so later CONF from instance 1
+       * is likely to arrive after REFs for other fragments.
+       */
+      jam();
+      backupFragmentRef(signal, filePtr);
+      CLEAR_ERROR_INSERT_VALUE;
+      CLEAR_ERROR_INSERT_EXTRA;
+      return;
+    } else {  // If reach this path via EI 10058, instance #1 is working on the
+              // delayed BACKUP_FRAGMENT_REQ
+      CLEAR_ERROR_INSERT_VALUE;
+      CLEAR_ERROR_INSERT_EXTRA;
+    }
+  }
   ndbrequire(filePtr.p->m_flags ==
              (BackupFile::BF_OPEN | BackupFile::BF_FILE_THREAD));
   sendScanFragReq(signal, ptr, filePtr, tabPtr, fragPtr, 0);
@@ -9047,7 +9153,6 @@ void Backup::execSCAN_FRAGCONF(Signal *signal) {
 void Backup::fragmentCompleted(Signal *signal, BackupFilePtr filePtr,
                                Uint32 errCode) {
   jam();
-
   if (filePtr.p->errorCode != 0) {
     jam();
     filePtr.p->m_flags &= ~(Uint32)BackupFile::BF_SCAN_THREAD;
@@ -9247,6 +9352,8 @@ void Backup::backupFragmentRef(Signal *signal, BackupFilePtr filePtr) {
   ref->backupPtr = ptr.i;
   ref->nodeId = getOwnNodeId();
   ref->errorCode = filePtr.p->errorCode;
+  ref->tableId = filePtr.p->tableId;
+  ref->fragmentNo = filePtr.p->fragmentNo;
   sendSignal(ptr.p->masterRef, GSN_BACKUP_FRAGMENT_REF, signal,
              BackupFragmentRef::SignalLength, JBB);
 }
@@ -10309,8 +10416,9 @@ void Backup::closeFiles(Signal *sig, BackupRecordPtr ptr) {
     if (filePtr.p->m_flags & BackupFile::BF_FILE_THREAD) {
       jam();
 #ifdef DEBUG_ABORT
-      g_eventLogger->info("Close files fileRunning == 1, filePtr.i=%u",
-                          filePtr.i);
+      g_eventLogger->info(
+          "Close files fileRunning == 1, filePtr.i=%u, reference: %u",
+          filePtr.i, reference());
 #endif
     } else {
       jam();
@@ -10357,8 +10465,9 @@ void Backup::closeFile(Signal *signal, BackupRecordPtr ptr,
   }
 
 #ifdef DEBUG_ABORT
-  g_eventLogger->info("***** a FSCLOSEREQ filePtr.i = %u flags: %x", filePtr.i,
-                      filePtr.p->m_flags);
+  g_eventLogger->info(
+      "***** a FSCLOSEREQ filePtr.i = %u flags: %x, reference: %u", filePtr.i,
+      filePtr.p->m_flags, reference());
 #endif
   sendSignal(NDBFS_REF, GSN_FSCLOSEREQ, signal, FsCloseReq::SignalLength, JBA);
 }
@@ -10434,7 +10543,8 @@ void Backup::execFSCLOSECONF(Signal *signal) {
   ndbrequire(c_backupFilePool.getPtr(filePtr, filePtrI));
 
 #ifdef DEBUG_ABORT
-  g_eventLogger->info("***** FSCLOSECONF filePtrI = %u", filePtrI);
+  g_eventLogger->info("***** FSCLOSECONF filePtrI = %u, reference: %u",
+                      filePtrI, reference());
 #endif
 
   ndbrequire(filePtr.p->m_flags ==
@@ -10574,6 +10684,7 @@ void Backup::closeFilesDone(Signal *signal, BackupRecordPtr ptr) {
  *****************************************************************************/
 void Backup::execABORT_BACKUP_ORD(Signal *signal) {
   jamEntry();
+
   AbortBackupOrd *ord = (AbortBackupOrd *)signal->getDataPtr();
   const Uint32 backupId = ord->backupId;
   const AbortBackupOrd::RequestType requestType =
@@ -10581,8 +10692,9 @@ void Backup::execABORT_BACKUP_ORD(Signal *signal) {
   const Uint32 senderData = ord->senderData;
 
 #ifdef DEBUG_ABORT
-  g_eventLogger->info("******** ABORT_BACKUP_ORD ********* nodeId = %u",
-                      refToNode(signal->getSendersBlockRef()));
+  g_eventLogger->info(
+      "******** ABORT_BACKUP_ORD ********* nodeId = %u, reference: %u",
+      refToNode(signal->getSendersBlockRef()), reference());
   g_eventLogger->info("backupId = %u, requestType = %u, senderData = %u, ",
                       backupId, requestType, senderData);
   dumpUsedResources();
@@ -10600,8 +10712,8 @@ void Backup::execABORT_BACKUP_ORD(Signal *signal) {
       jam();
       // forward to master
 #ifdef DEBUG_ABORT
-      g_eventLogger->info("---- Forward to master nodeId = %u",
-                          getMasterNodeId());
+      g_eventLogger->info("---- Forward to master nodeId = %u, reference: %u",
+                          getMasterNodeId(), instance());
 #endif
       sendSignal(ptr.p->masterRef, GSN_ABORT_BACKUP_ORD, signal,
                  AbortBackupOrd::SignalLength, JBB);
@@ -10614,21 +10726,23 @@ void Backup::execABORT_BACKUP_ORD(Signal *signal) {
     } else {
       jam();
 #ifdef DEBUG_ABORT
-      g_eventLogger->info("Backup: abort request type=%u on id=%u,%u not found",
-                          requestType, backupId, senderData);
+      g_eventLogger->info(
+          "Backup: reference: %u, abort request type=%u on id=%u,%u not found",
+          reference(), requestType, backupId, senderData);
 #endif
       return;
     }
   }  // if
 
+  const Uint32 previousGsn = ptr.p->m_gsn;
   ptr.p->m_gsn = GSN_ABORT_BACKUP_ORD;
   const bool isCoordinator = (ptr.p->masterRef == reference());
 
   bool ok = false;
   switch (requestType) {
-      /**
-       * Requests sent to master
-       */
+    /**
+     * Requests sent to master
+     */
     case AbortBackupOrd::ClientAbort:
       jam();
       [[fallthrough]];
@@ -10647,12 +10761,38 @@ void Backup::execABORT_BACKUP_ORD(Signal *signal) {
       }
       return;
 
-      /**
-       * Requests sent to slave
-       */
+    /**
+     * Requests sent to slave
+     */
     case AbortBackupOrd::AbortScan:
       jam();
+#ifdef DEBUG_ABORT
+      g_eventLogger->info("ABORT_BACKUP_ORD, reference: %u, requestType: %u",
+                          reference(), requestType);
+#endif
       ptr.p->setErrorCode(requestType);
+      if (previousGsn == GSN_BACKUP_FRAGMENT_REQ) {
+        jam();
+        /* Scan in progress, set error
+         * scan will detect and respond to
+         * Master
+         */
+      } else {
+        jam();
+        /* Scan not actually in progress, so need
+         * Master (or Master failure handling) to
+         * perform next step.
+         * Leave gsn as was so that this happens
+         */
+        ndbrequire(previousGsn == GSN_BACKUP_FRAGMENT_REF ||
+                   previousGsn == GSN_BACKUP_FRAGMENT_CONF ||
+                   previousGsn == GSN_ABORT_BACKUP_ORD);
+
+        g_eventLogger->info("Participant was not scanning, leaving gsn as %u",
+                            previousGsn);
+        /* Reset gsn */
+        ptr.p->m_gsn = previousGsn;
+      }
       return;
 
     case AbortBackupOrd::BackupComplete:
@@ -10800,15 +10940,22 @@ void Backup::cleanupNextTable(Signal *signal, BackupRecordPtr ptr,
   */
   ptr.p->ctlFilePtr = ptr.p->logFilePtr = ptr.p->dataFilePtr[0] = RNIL;
 
-  if (ptr.p->checkError())
+  if (ptr.p->checkError()) {
+    jam();
     removeBackup(signal, ptr);
-  else {
+  } else {
+    jam();
     /*
       report of backup status uses these variables to keep track
       if backup ia running and current state
     */
     ptr.p->m_gsn = 0;
     ptr.p->masterData.gsn = 0;
+#ifdef DEBUG_ABORT
+    g_eventLogger->info(
+        "CleanupNextTable: releasing backupRecord, reference: %u, ptrI: %u",
+        reference(), ptr.i);
+#endif
     c_backups.release(ptr);
   }
 }
@@ -10862,6 +11009,11 @@ void Backup::execFSREMOVECONF(Signal *signal) {
   */
   ptr.p->m_gsn = 0;
   ptr.p->masterData.gsn = 0;
+#ifdef DEBUG_ABORT
+  g_eventLogger->info(
+      "execFSREMOVECONF: releasing backupRecord, reference: %u, ptrI: %u",
+      reference(), ptr.i);
+#endif
   c_backups.release(ptr);
 }
 
