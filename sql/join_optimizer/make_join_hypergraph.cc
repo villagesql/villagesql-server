@@ -3386,11 +3386,6 @@ void MakeJoinGraphFromRelationalExpression(THD *thd, RelationalExpression *expr,
                         });
   }
 
-  if (TraceStarted(thd)) {
-    Trace(thd) << StringPrintf("Selectivity of join %s:\n",
-                               GenerateExpressionLabel(expr).c_str());
-  }
-
   const size_t estimated_bytes_per_row = EstimateRowWidthForJoin(*graph, expr);
   graph->edges.push_back({.expr = expr,
                           .selectivity = kUnknownSelectivity,
@@ -3526,6 +3521,10 @@ void CompleteFullMeshForMultipleEqualities(
 void EstimateJoinConditionSelectivities(THD *thd, JoinHypergraph *graph) {
   for (JoinPredicate &edge : graph->edges) {
     RelationalExpression &expr = *edge.expr;
+    if (TraceStarted(thd)) {
+      Trace(thd) << StringPrintf("Selectivity of join %s:\n",
+                                 GenerateExpressionLabel(&expr).c_str());
+    }
     double join_selectivity = 1.0;
     expr.properties_for_equijoin_conditions.init(thd->mem_root);
     expr.properties_for_equijoin_conditions.reserve(
