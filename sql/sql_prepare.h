@@ -245,7 +245,7 @@ class Prepared_statement final {
   ~Prepared_statement();
 
   /** Performance schema instrumentation for execute / deallocate. */
-  void psi_instrumentation(THD *thd, uint digest_prefix_token);
+  void psi_instrumentation(THD *thd, uint digest_prefix_token, bool copy);
 
   void set_display_query_string(const char *display_query_string,
                                 size_t display_query_string_length);

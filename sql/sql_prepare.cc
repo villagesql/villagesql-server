@@ -1871,7 +1871,7 @@ void mysqld_stmt_execute(THD *thd, Prepared_statement *stmt, bool has_new_types,
   thd->m_digest = &thd->m_digest_state;
   thd->m_digest->reset(thd->m_token_array, max_digest_length);
 
-  stmt->psi_instrumentation(thd, EXECUTE_SYM);
+  stmt->psi_instrumentation(thd, EXECUTE_SYM, false);
 
   thd->m_digest = nullptr;
 
@@ -1941,7 +1941,7 @@ void mysql_sql_stmt_execute(THD *thd) {
     return;
   }
 
-  stmt->psi_instrumentation(thd, EXECUTE_SYM);
+  stmt->psi_instrumentation(thd, EXECUTE_SYM, false);
 
   if (stmt->m_param_count != lex->prepared_stmt_params.elements) {
     my_error(ER_WRONG_ARGUMENTS, MYF(0), "EXECUTE");
@@ -2044,7 +2044,7 @@ void mysqld_stmt_close(THD *thd, Prepared_statement *stmt) {
   thd->m_digest = &thd->m_digest_state;
   thd->m_digest->reset(thd->m_token_array, max_digest_length);
 
-  stmt->psi_instrumentation(thd, DEALLOCATE_SYM);
+  stmt->psi_instrumentation(thd, DEALLOCATE_SYM, true);
 
   MYSQL_DESTROY_PS(stmt->m_prepared_stmt);
   stmt->deallocate(thd);
@@ -2076,7 +2076,7 @@ void mysql_sql_stmt_close(THD *thd) {
     return;
   }
 
-  stmt->psi_instrumentation(thd, DEALLOCATE_SYM);
+  stmt->psi_instrumentation(thd, DEALLOCATE_SYM, true);
 
   if (stmt->is_in_use()) {
     my_error(ER_PS_NO_RECURSION, MYF(0));
@@ -3811,8 +3811,8 @@ bool Prepared_statement::execute(THD *thd, String *expanded_query,
   return false;
 }
 
-void Prepared_statement::psi_instrumentation(THD *thd,
-                                             uint digest_prefix_token) {
+void Prepared_statement::psi_instrumentation(THD *thd, uint digest_prefix_token,
+                                             bool copy) {
   PSI_statement_locker *statement_locker = thd->m_statement_psi;
 
   if (statement_locker == nullptr) {
@@ -3826,6 +3826,17 @@ void Prepared_statement::psi_instrumentation(THD *thd,
   const char *display_query_string = nullptr;
   size_t display_query_length = 0;
   get_display_query_string(&display_query_string, &display_query_length);
+  if (copy && (display_query_length > 0)) {
+    /*
+     * The prepared statement is about to be destroyed,
+     * because this is a DEALLOCATE PREPARE / CLOSE.
+     * Copy the display query text to the THD mem_root for this statement.
+     */
+    const char *display_query_string_copy;
+    display_query_string_copy = static_cast<const char *>(
+        thd->memdup(display_query_string, display_query_length));
+    display_query_string = display_query_string_copy;
+  }
   MYSQL_SET_STATEMENT_TEXT(statement_locker, display_query_string,
                            display_query_length);
 
