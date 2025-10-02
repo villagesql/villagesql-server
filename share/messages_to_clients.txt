@@ -10838,6 +10838,12 @@ ER_LH_GENCOL_ERROR
 ER_TEMPORAL_FUNCTION_OVERFLOW 22008
   eng "%s value is out of range in '%s'"
 
+ER_LH_INFER_COLUMN_MAX_ERR
+  eng "More than %u column(s) found in total."
+
+ER_LH_EXTRA_COLUMNS_IN_FILE
+  eng "%s: %u column(s) in file are not present in the table."
+
 #
 #  End of 9.x error messages (server-to-client).
 #
