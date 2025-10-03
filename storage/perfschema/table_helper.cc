@@ -2203,7 +2203,7 @@ bool PFS_key_group_name::match(PFS_thread *pfs) {
 }
 
 bool PFS_key_variable_name::match(const System_variable *pfs) {
-  return do_match(false, pfs->m_name, pfs->m_name_length);
+  return do_match(false, pfs->m_name_str, pfs->m_name_length);
 }
 
 bool PFS_key_variable_name::match(const Status_variable *pfs) {
