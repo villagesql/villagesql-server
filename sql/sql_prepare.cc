@@ -2700,16 +2700,30 @@ bool Prepared_statement::prepare(THD *thd, const char *query_str,
        * - "DEALLOCATE SELECT * FROM t1 WHERE col = ?"
        * using a prefix token.
        */
-      MYSQL_SET_STATEMENT_TEXT(parent_locker, display_query_string,
-                               display_query_length);
 
-      if ((parent_digest != nullptr) && (digest_storage != nullptr)) {
+      if (display_query_length > 0) {
+        /*
+         * The prepared statement may still be destroyed,
+         * in case of PREPARE that fails.
+         * Copy the display query text to the THD mem_root for this statement.
+         */
+        const char *display_query_string_copy;
+        display_query_string_copy = static_cast<const char *>(
+            thd->memdup(display_query_string, display_query_length));
+        MYSQL_SET_STATEMENT_TEXT(parent_locker, display_query_string_copy,
+                                 display_query_length);
+      }
+
+      const sql_digest_storage *source_digest_storage = get_digest();
+
+      if ((parent_digest != nullptr) && (source_digest_storage != nullptr)) {
         PSI_digest_locker *digest_locker = MYSQL_DIGEST_START(parent_locker);
         if (digest_locker != nullptr) {
           sql_digest_storage *parent_digest_storage =
               &parent_digest->m_digest_storage;
 
-          parent_digest_storage->prefix_and_copy(PREPARE_SYM, digest_storage);
+          parent_digest_storage->prefix_and_copy(PREPARE_SYM,
+                                                 source_digest_storage);
           MYSQL_DIGEST_END(digest_locker, parent_digest_storage);
         }
       }
