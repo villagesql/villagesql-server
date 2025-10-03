@@ -542,6 +542,7 @@ enum enum_commands {
   Q_OUTPUT, /* redirect output to a file */
   Q_RESET_CONNECTION,
   Q_QUERY_ATTRIBUTES,
+  Q_SELECT_DB,
   Q_UNKNOWN, /* Unknown command.   */
   Q_COMMENT, /* Comments, ignored. */
   Q_COMMENT_WITH_COMMAND,
@@ -576,7 +577,7 @@ const char *command_names[] = {
     "list_files", "list_files_write_file", "list_files_append_file",
     "send_shutdown", "shutdown_server", "result_format", "move_file",
     "remove_files_wildcard", "copy_files_wildcard", "send_eval", "output",
-    "reset_connection", "query_attributes",
+    "reset_connection", "query_attributes", "select_db",
 
     nullptr};
 
@@ -4932,6 +4933,39 @@ static void do_change_user(struct st_command *command) {
 
   dynstr_free(&ds_user);
   dynstr_free(&ds_passwd);
+  dynstr_free(&ds_db);
+}
+
+/*
+  SYNOPSIS
+  do_select_db
+  command       called command
+
+  DESCRIPTION
+  select_db [<db>]
+  <db> - default database
+
+  Changes the database for the current connection by using the MySQL client
+  command mysql_select_db.
+
+*/
+
+static void do_select_db(struct st_command *command) {
+  MYSQL *mysql = &cur_con->mysql;
+  static DYNAMIC_STRING ds_db;
+  const struct command_arg select_db_args[] = {
+      {"database", ARG_STRING, false, &ds_db, "Database to select"},
+  };
+  check_command_args(command, command->first_argument, select_db_args,
+                     sizeof(select_db_args) / sizeof(struct command_arg), ',');
+
+  if (mysql_select_db(mysql, ds_db.str)) {
+    handle_error(curr_command, mysql_errno(mysql), mysql_error(mysql),
+                 mysql_sqlstate(mysql), &ds_res);
+    mysql->reconnect = true;
+    mysql_reconnect(&cur_con->mysql);
+  }
+
   dynstr_free(&ds_db);
 }
 
@@ -10485,6 +10519,11 @@ int main(int argc, char **argv) {
                              1, ' ');
           strmake(output_file, ds_to_file.str, FN_REFLEN);
           dynstr_free(&ds_to_file);
+          break;
+        }
+
+        case Q_SELECT_DB: {
+          do_select_db(command);
           break;
         }
 

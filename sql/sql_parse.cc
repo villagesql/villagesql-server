@@ -1979,6 +1979,9 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
         Nested acquiring of LOCK_thd_data is fine (see below).
       */
       const Security_context save_security_ctx(*(thd->security_context()));
+      /* clean up the security context so that authenticate checkout new acl
+       * maps */
+      thd->security_context()->logout();
 
       MUTEX_LOCK(grd_secctx, &thd->LOCK_thd_security_ctx);
 
@@ -1989,6 +1992,7 @@ bool dispatch_command(THD *thd, const COM_DATA *com_data,
         *thd->security_context() = save_security_ctx;
         thd->set_user_connect(save_user_connect);
         thd->reset_db(save_db);
+        thd->security_context()->checkout_access_maps();
 
         my_error(ER_ACCESS_DENIED_CHANGE_USER_ERROR, MYF(0),
                  thd->security_context()->user().str,
