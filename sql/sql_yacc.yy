@@ -10677,6 +10677,7 @@ simple_expr:
         | CAST_SYM '(' expr AT_SYM LOCAL_SYM AS cast_type opt_array_cast ')'
           {
             my_error(ER_NOT_SUPPORTED_YET, MYF(0), "AT LOCAL");
+            MYSQL_YYABORT;
           }
         | CAST_SYM '(' expr AT_SYM TIME_SYM ZONE_SYM opt_interval
           TEXT_STRING_literal AS DATETIME_SYM type_datetime_precision ')'
