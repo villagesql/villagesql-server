@@ -18207,7 +18207,7 @@ bool opt_ndb_log_bin;
 static MYSQL_SYSVAR_BOOL(
     log_bin,         /* name */
     opt_ndb_log_bin, /* var */
-    PLUGIN_VAR_OPCMDARG,
+    PLUGIN_VAR_READONLY | PLUGIN_VAR_OPCMDARG,
     "Log NDB tables in the binary log. Option only has meaning if "
     "the binary log has been turned on for the server.",
     nullptr, /* check func. */
