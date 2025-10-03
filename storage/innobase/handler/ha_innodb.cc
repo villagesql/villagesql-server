@@ -15284,12 +15284,6 @@ int ha_innobase::get_extra_columns_and_keys(const HA_CREATE_INFO *,
   return 0;
 }
 
-/** Set Engine specific data to dd::Table object for upgrade.
-@param[in,out]  thd             thread handle
-@param[in]      db_name         database name
-@param[in]      table_name      table name
-@param[in,out]  dd_table        data dictionary cache object
-@return 0 on success, non-zero on failure */
 bool ha_innobase::upgrade_table(THD * /*thd*/, const char * /*db_name*/,
                                 const char * /*table_name*/,
                                 dd::Table * /*dd_table*/) {
