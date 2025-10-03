@@ -192,3 +192,10 @@ ADDTIME(FROM_UNIXTIME(2985951232, "%y-%r-%i-%b-%x"), DATE('0000-00-00'))
 NULL
 Warnings:
 Warning	1292	Incorrect datetime value: '64-05:53:52 PM-53-Aug-2064'
+#
+# Bug#38487675: Assertion failed: is_valid() && iv.year == 0 &&
+#               iv.month == 0 && iv.day == 0
+#
+SELECT INTERVAL '{"a":[1,2,3,4,5]}' DAY_MICROSECOND + TIME'11:22:33';
+INTERVAL '{"a":[1,2,3,4,5]}' DAY_MICROSECOND + TIME'11:22:33'
+2025-10-04 13:25:37.500000

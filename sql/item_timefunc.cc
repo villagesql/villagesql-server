@@ -2837,7 +2837,8 @@ bool Item_date_add_interval::resolve_type(THD *thd) {
     if ((m_interval_type >= INTERVAL_HOUR &&
          m_interval_type <= INTERVAL_MICROSECOND) ||
         (m_interval_type >= INTERVAL_HOUR_MINUTE &&
-         m_interval_type <= INTERVAL_SECOND_MICROSECOND)) {
+         m_interval_type <= INTERVAL_SECOND_MICROSECOND &&
+         m_interval_type != INTERVAL_DAY_MICROSECOND)) {
       uint8 dec = max<uint8>(args[0]->time_precision(), interval_dec);
       set_data_type_time(dec);
     } else {
