@@ -3313,7 +3313,9 @@ err:
     outparam->histograms = nullptr;
   }
   if (!error_reported) open_table_error(thd, share, error, my_errno());
-  ::destroy_at(outparam->file);
+  if (outparam->file != nullptr) {
+    ::destroy_at(outparam->file);
+  }
   if (outparam->part_info) free_items(outparam->part_info->item_list);
   if (outparam->vfield) {
     for (Field **vfield = outparam->vfield; *vfield; vfield++)
