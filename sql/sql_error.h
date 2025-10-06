@@ -557,7 +557,7 @@ class Diagnostics_area {
     new ER_* symbol (if any).
 
     @param new_status The new status we attempt to set.
-    @param new_message The new mysql_errno we attempt to set, or 0 if not given.
+    @param new_errno The new mysql_errno we attempt to set, or 0 if not given.
   */
   void assert_not_set(enum_diagnostics_status new_status, int new_errno = 0);
 
