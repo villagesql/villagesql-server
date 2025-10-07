@@ -51,6 +51,14 @@ SET SESSION sql_log_bin= 1;
 
 
 --echo #
+--echo # 3. Insert some data
+--echo #
+CREATE TABLE t1 (c1 INT NOT NULL PRIMARY KEY, hash CHAR(64)) ENGINE=InnoDB;
+
+INSERT INTO t1 VALUES (1, 'test');
+INSERT INTO t1 VALUES (2, SHA2(8,224));
+
+--echo #
 --echo # 4. Configure joining member (M2) to use SSL and Fips mode options on recovery.
 --echo #    Start GR on M2. Check the data is there.
 --echo #
