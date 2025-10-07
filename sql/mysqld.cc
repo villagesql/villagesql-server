@@ -14609,12 +14609,32 @@ static void init_server_psi_keys(void) {
 bool do_create_native_table_for_pfs(THD *thd, const Plugin_table *t) {
   const char *schema_name = t->get_schema_name();
   const char *table_name = t->get_name();
-  MDL_request table_request;
-  MDL_REQUEST_INIT(&table_request, MDL_key::TABLE, schema_name, table_name,
-                   MDL_EXCLUSIVE, MDL_TRANSACTION);
 
-  if (thd->mdl_context.acquire_lock(&table_request,
-                                    thd->variables.lock_wait_timeout)) {
+  MDL_request_list mdl_requests;
+  MDL_request schema_request;
+  MDL_request mdl_request;
+  MDL_request backup_lock_request;
+  MDL_request grl_request;
+
+  // If we cannot acquire protection against GRL, err out early.
+  if (thd->global_read_lock.can_acquire_protection()) return true;
+
+  MDL_REQUEST_INIT(&schema_request, MDL_key::SCHEMA, schema_name, "",
+                   MDL_INTENTION_EXCLUSIVE, MDL_TRANSACTION);
+  MDL_REQUEST_INIT(&mdl_request, MDL_key::TABLE, schema_name, table_name,
+                   MDL_EXCLUSIVE, MDL_TRANSACTION);
+  MDL_REQUEST_INIT(&backup_lock_request, MDL_key::BACKUP_LOCK, "", "",
+                   MDL_INTENTION_EXCLUSIVE, MDL_TRANSACTION);
+  MDL_REQUEST_INIT(&grl_request, MDL_key::GLOBAL, "", "",
+                   MDL_INTENTION_EXCLUSIVE, MDL_TRANSACTION);
+
+  mdl_requests.push_front(&schema_request);
+  mdl_requests.push_front(&mdl_request);
+  mdl_requests.push_front(&backup_lock_request);
+  mdl_requests.push_front(&grl_request);
+
+  if (thd->mdl_context.acquire_locks(&mdl_requests,
+                                     thd->variables.lock_wait_timeout)) {
     /* Error, failed to get MDL lock. */
     return true;
   }
