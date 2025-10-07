@@ -10830,6 +10830,9 @@ ER_LH_DELTA_UNSUPPORTED_ERROR
 ER_WARN_ACCOUNT_TRIMMED
   eng "Leading or trailing spaces have been trimmed from user or host, account: %s."
 
+ER_LH_WARN_DATETIME_MULTIPLE_PARAM_USE
+  eng "Both 'datetime_format' and 'timestamp_format' are specified%s. Only 'datetime_format' will be considered."
+
 #
 #  End of 9.x error messages (server-to-client).
 #
