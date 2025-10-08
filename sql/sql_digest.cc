@@ -1045,7 +1045,8 @@ void sql_digest_storage::prefix_and_copy(uint prefix_token,
   if (byte_count_copy > 0) {
     m_byte_count += byte_count_copy;
     m_charset_number = from->m_charset_number;
-    memcpy(m_token_array + SIZE_OF_A_TOKEN, from->m_token_array, m_byte_count);
+    memcpy(m_token_array + SIZE_OF_A_TOKEN, from->m_token_array,
+           byte_count_copy);
     compute_digest_hash(this, m_hash);
   }
 }
