@@ -10443,6 +10443,8 @@ void tdc_remove_table(THD *thd, enum_tdc_remove_table_type remove_type,
   else
     table_cache_manager.assert_owner_all_and_tdc();
 
+  DEBUG_SYNC_C("rm_table_tdc_locked");
+
   assert(remove_type == TDC_RT_REMOVE_UNUSED ||
          remove_type == TDC_RT_MARK_FOR_REOPEN ||
          thd->mdl_context.owns_equal_or_stronger_lock(

@@ -21909,6 +21909,7 @@ is a no-op. This function is registered as a callback with MySQL.
 @param[in]  save      immediate result from check function */
 static void purge_run_now_set(THD *, SYS_VAR *, void *, const void *save) {
   if (*(bool *)save && trx_purge_state() != PURGE_STATE_DISABLED) {
+    clone_sys->get_gtid_persistor().wait_flush(false, false, nullptr);
     trx_purge_run();
   }
 }
