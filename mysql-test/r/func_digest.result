@@ -1349,6 +1349,9 @@ SELECT digest_text, IF( @the_digest = digest, 'YES', 'NO' )
 AS digest_is_correct
 FROM performance_schema.events_statements_history
 WHERE sql_text = convert( "SELECT 1" USING utf8mb3 )
+AND NOT (digest_text LIKE "PREPARE %")
+AND NOT (digest_text LIKE "EXECUTE %")
+AND NOT (digest_text LIKE "DEALLOCATE %")
 UNION
 SELECT statement_digest_text( "SELECT 1" ), 'YES'
 FROM (SELECT 1) a1 JOIN (SELECT @ps_protocol) a2;
@@ -1362,6 +1365,9 @@ SELECT digest_text, IF( @the_digest = digest, 'YES', 'NO' )
 AS digest_is_correct
 FROM performance_schema.events_statements_history
 WHERE sql_text = convert( "SELECT a + b, a - b FROM t1, t2, t3 WHERE a = c" USING utf8mb3 )
+AND NOT (digest_text LIKE "PREPARE %")
+AND NOT (digest_text LIKE "EXECUTE %")
+AND NOT (digest_text LIKE "DEALLOCATE %")
 UNION
 SELECT statement_digest_text( "SELECT a + b, a - b FROM t1, t2, t3 WHERE a = c" ), 'YES'
 FROM (SELECT 1) a1 JOIN (SELECT @ps_protocol) a2;
@@ -1379,6 +1385,9 @@ SELECT digest_text, IF( @the_digest = digest, 'YES', 'NO' )
 AS digest_is_correct
 FROM performance_schema.events_statements_history
 WHERE sql_text = convert( "SELECT NULL IS NULL" USING utf8mb3 )
+AND NOT (digest_text LIKE "PREPARE %")
+AND NOT (digest_text LIKE "EXECUTE %")
+AND NOT (digest_text LIKE "DEALLOCATE %")
 UNION
 SELECT statement_digest_text( "SELECT NULL IS NULL" ), 'YES'
 FROM (SELECT 1) a1 JOIN (SELECT @ps_protocol) a2;
@@ -1393,6 +1402,9 @@ SELECT digest_text, IF( @the_digest = digest, 'YES', 'NO' )
 AS digest_is_correct
 FROM performance_schema.events_statements_history
 WHERE sql_text = convert( "SELECT 2" USING utf8mb3 )
+AND NOT (digest_text LIKE "PREPARE %")
+AND NOT (digest_text LIKE "EXECUTE %")
+AND NOT (digest_text LIKE "DEALLOCATE %")
 UNION
 SELECT statement_digest_text( "SELECT 2" ), 'YES'
 FROM (SELECT 1) a1 JOIN (SELECT @ps_protocol) a2;
@@ -1414,6 +1426,9 @@ SELECT digest_text, IF( @the_digest = digest, 'YES', 'NO' )
 AS digest_is_correct
 FROM performance_schema.events_statements_history
 WHERE sql_text = convert( "SELECT statement_digest( 'SELECT something FROM DUAL WHERE something' ) IS NULL" USING utf8mb3 )
+AND NOT (digest_text LIKE "PREPARE %")
+AND NOT (digest_text LIKE "EXECUTE %")
+AND NOT (digest_text LIKE "DEALLOCATE %")
 UNION
 SELECT statement_digest_text( "SELECT statement_digest( 'SELECT something FROM DUAL WHERE something' ) IS NULL" ), 'YES'
 FROM (SELECT 1) a1 JOIN (SELECT @ps_protocol) a2;
@@ -1524,6 +1539,9 @@ SELECT digest_text, IF( @the_digest = digest_text, 'YES', 'NO' )
 AS digest_is_correct
 FROM performance_schema.events_statements_history
 WHERE sql_text = convert( "SELECT 1" USING utf8mb3 )
+AND NOT (digest_text LIKE "PREPARE %")
+AND NOT (digest_text LIKE "EXECUTE %")
+AND NOT (digest_text LIKE "DEALLOCATE %")
 UNION
 SELECT statement_digest_text( "SELECT 1" ), 'YES'
 FROM (SELECT 1) a1 JOIN (SELECT @ps_protocol) a2;
@@ -1537,6 +1555,9 @@ SELECT digest_text, IF( @the_digest = digest_text, 'YES', 'NO' )
 AS digest_is_correct
 FROM performance_schema.events_statements_history
 WHERE sql_text = convert( "SELECT a + b, a - b FROM t1, t2, t3 WHERE a = c" USING utf8mb3 )
+AND NOT (digest_text LIKE "PREPARE %")
+AND NOT (digest_text LIKE "EXECUTE %")
+AND NOT (digest_text LIKE "DEALLOCATE %")
 UNION
 SELECT statement_digest_text( "SELECT a + b, a - b FROM t1, t2, t3 WHERE a = c" ), 'YES'
 FROM (SELECT 1) a1 JOIN (SELECT @ps_protocol) a2;
@@ -1551,6 +1572,9 @@ SELECT digest_text, IF( @the_digest = digest_text, 'YES', 'NO' )
 AS digest_is_correct
 FROM performance_schema.events_statements_history
 WHERE sql_text = convert( "SELECT 2" USING utf8mb3 )
+AND NOT (digest_text LIKE "PREPARE %")
+AND NOT (digest_text LIKE "EXECUTE %")
+AND NOT (digest_text LIKE "DEALLOCATE %")
 UNION
 SELECT statement_digest_text( "SELECT 2" ), 'YES'
 FROM (SELECT 1) a1 JOIN (SELECT @ps_protocol) a2;
@@ -1617,6 +1641,9 @@ SELECT digest_text, IF( @the_digest = digest_text, 'YES', 'NO' )
 AS digest_is_correct
 FROM performance_schema.events_statements_history
 WHERE sql_text = convert( "CREATE TABLE åäö( a int )" USING utf8mb3 )
+AND NOT (digest_text LIKE "PREPARE %")
+AND NOT (digest_text LIKE "EXECUTE %")
+AND NOT (digest_text LIKE "DEALLOCATE %")
 UNION
 SELECT statement_digest_text( "CREATE TABLE åäö( a int )" ), 'YES'
 FROM (SELECT 1) a1 JOIN (SELECT @ps_protocol) a2;
@@ -1627,6 +1654,9 @@ SELECT digest_text, IF( @the_digest = digest_text, 'YES', 'NO' )
 AS digest_is_correct
 FROM performance_schema.events_statements_history
 WHERE sql_text = convert( "CREATE TABLE 日本語( a int )" USING utf8mb3 )
+AND NOT (digest_text LIKE "PREPARE %")
+AND NOT (digest_text LIKE "EXECUTE %")
+AND NOT (digest_text LIKE "DEALLOCATE %")
 UNION
 SELECT statement_digest_text( "CREATE TABLE 日本語( a int )" ), 'YES'
 FROM (SELECT 1) a1 JOIN (SELECT @ps_protocol) a2;
@@ -1637,6 +1667,9 @@ SELECT digest_text, IF( @the_digest = digest_text, 'YES', 'NO' )
 AS digest_is_correct
 FROM performance_schema.events_statements_history
 WHERE sql_text = convert( "CREATE TABLE  𩸽( a int )" USING utf8mb3 )
+AND NOT (digest_text LIKE "PREPARE %")
+AND NOT (digest_text LIKE "EXECUTE %")
+AND NOT (digest_text LIKE "DEALLOCATE %")
 UNION
 SELECT statement_digest_text( "CREATE TABLE  𩸽( a int )" ), 'YES'
 FROM (SELECT 1) a1 JOIN (SELECT @ps_protocol) a2;
