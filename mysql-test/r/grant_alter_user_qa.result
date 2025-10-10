@@ -1691,7 +1691,7 @@ SHOW CREATE USER user2;
 CREATE USER for user2@%
 CREATE USER `user2`@`%` IDENTIFIED WITH 'caching_sha2_password' AS '<non-deterministic-password-hash>' REQUIRE NONE PASSWORD EXPIRE DEFAULT ACCOUNT UNLOCK PASSWORD HISTORY DEFAULT PASSWORD REUSE INTERVAL DEFAULT PASSWORD REQUIRE CURRENT DEFAULT
 SHOW CREATE USER invalid_user;
-ERROR HY000: Operation SHOW CREATE USER failed for 'invalid_user'@'%'
+ERROR HY000: Operation SHOW CREATE USER failed for 'invalid_user'@'%' (User account does not exist)
 # case3 with all global privileges except SELECT
 GRANT ALL ON *.* TO user1@localhost;
 REVOKE SELECT ON *.* FROM user1@localhost;
