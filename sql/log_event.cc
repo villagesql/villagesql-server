@@ -4912,8 +4912,16 @@ end:
   // The condition that OPTION_BEGIN is clear is needed so that we do not
   // generate empty GTID transactions while in the middle of processing a
   // transaction.
+  //
+  // The condition !is_already_logged_transaction is needed so that we do not
+  // generate empty GTID transactions in the middle of auto-skipped
+  // transactions, in cases where the previous two conditions do not hold. One
+  // example of such a scenario is a GTID-skipped XA transaction, because the
+  // `XA START` statement (contrary to `BEGIN` in a non-XA transaction) will not
+  // execute and hence not open a new transaction.
   if (!thd->is_slave_error &&
-      (thd->variables.option_bits & OPTION_BEGIN) == 0) {
+      (thd->variables.option_bits & OPTION_BEGIN) == 0 &&
+      !is_already_logged_transaction(thd)) {
     mysql_bin_log.gtid_end_transaction(thd);
   }
 
