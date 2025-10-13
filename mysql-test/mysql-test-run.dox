@@ -6101,6 +6101,10 @@ server_ssl_verify=DISABLED
               <tt>TCP</tt>: Use the TCP/IP connection protocol.
             </li>
 
+            <li>
+              <tt>INTERACTIVE</tt>: Pass CLIENT_INTERACTIVE to mysql_real_connect()
+            </li>
+
           </ul>
 
           Passing <b>PIPE</b> or <b>SHM</b> on non-Windows systems

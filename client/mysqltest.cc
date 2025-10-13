@@ -6673,12 +6673,13 @@ static void safe_connect(MYSQL *mysql, const char *name, const char *host,
 /// @param db      Database name
 /// @param port    Port number
 /// @param sock    Socket value
+/// @param is_interactive  Pass CLIENT_INTERACTIVE to mysql_real_connect()
 ///
 /// @retval 1 if connection succeeds, 0 otherwise
 static int connect_n_handle_errors(struct st_command *command, MYSQL *con,
                                    const char *host, const char *user,
                                    const char *pass, const char *db, int port,
-                                   const char *sock) {
+                                   const char *sock, bool is_interactive) {
   DYNAMIC_STRING *ds;
   int failed_attempts = 0;
 
@@ -6715,9 +6716,9 @@ static int connect_n_handle_errors(struct st_command *command, MYSQL *con,
   mysql_options4(con, MYSQL_OPT_CONNECT_ATTR_ADD, "program_name", "mysqltest");
   mysql_options(con, MYSQL_OPT_CAN_HANDLE_EXPIRED_PASSWORDS,
                 &can_handle_expired_passwords);
-  while (!mysql_real_connect_wrapper(con, host, user, pass, db, port,
-                                     sock ? sock : nullptr,
-                                     CLIENT_MULTI_STATEMENTS)) {
+  while (!mysql_real_connect_wrapper(
+      con, host, user, pass, db, port, sock ? sock : nullptr,
+      CLIENT_MULTI_STATEMENTS | (is_interactive ? CLIENT_INTERACTIVE : 0))) {
     /*
       If we have used up all our connections check whether this
       is expected (by --error). If so, handle the error right away.
@@ -6822,6 +6823,7 @@ static void do_connect(struct st_command *command) {
   const uint save_opt_ssl_mode = opt_ssl_mode;
   bool con_socket = false, con_tcp = false;
   unsigned int factor = 0;
+  bool is_interactive = false;
 
   static DYNAMIC_STRING ds_connection_name;
   static DYNAMIC_STRING ds_host;
@@ -6960,6 +6962,8 @@ static void do_connect(struct st_command *command) {
       con_socket = true;
     else if (!std::strcmp(cur_con_option, "TCP"))
       con_tcp = true;
+    else if (!std::strcmp(cur_con_option, "INTERACTIVE"))
+      is_interactive = true;
     else
       die("Illegal option to connect: %s", cur_con_option);
 
@@ -7100,7 +7104,7 @@ static void do_connect(struct st_command *command) {
 
   if (connect_n_handle_errors(command, &con_slot->mysql, ds_host.str,
                               ds_user.str, ds_password1.str, ds_database.str,
-                              con_port, ds_sock.str)) {
+                              con_port, ds_sock.str, is_interactive)) {
     DBUG_PRINT("info", ("Inserting connection %s in connection pool",
                         ds_connection_name.str));
     my_free(con_slot->name);
