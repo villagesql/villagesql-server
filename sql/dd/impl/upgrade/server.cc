@@ -748,11 +748,13 @@ class Sql_fun_error_handler : public Internal_error_handler {
       : m_error_count(error_count) {}
 
  public:
-  bool handle_condition(THD *, uint, const char *,
+  bool handle_condition(THD *, uint sql_errno, const char *,
                         Sql_condition::enum_severity_level *sl,
-                        const char *) override {
+                        const char *msg) override {
     if (*sl == Sql_condition::SL_ERROR) {
       (*m_error_count)++;
+      LogErr(WARNING_LEVEL, ER_CHECK_TABLE_FUNCTIONS_DOWNGRADED, sql_errno,
+             msg);
       return true;
     }
     return false;
@@ -817,10 +819,10 @@ static bool check_table_funs(THD *thd, std::unique_ptr<Schema> &schema,
         LogErr(WARNING_LEVEL, ER_CHECK_TABLE_FUNCTIONS, schema->name().c_str(),
                table->name().c_str());
 
-        // On higher log levels, create a detailed description of the table.
+        // Create a detailed description of the table.
         dd::String_type debug_info;
         dd::uses_functions(table.get(), schema->name().c_str(), &debug_info);
-        LogErr(INFORMATION_LEVEL, ER_CHECK_TABLE_FUNCTIONS_DETAIL,
+        LogErr(WARNING_LEVEL, ER_CHECK_TABLE_FUNCTIONS_DETAIL,
                debug_info.c_str());
 
         // increase global error count

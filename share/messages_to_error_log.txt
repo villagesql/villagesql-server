@@ -13290,6 +13290,9 @@ ER_WARN_EVENT_TRACKING_BRIDGE_INVALID_EVENT
 ER_INVALID_PREVIOUS_DIAGNOSTICS_AREA_STATUS
   eng "Invalid previous diagnostics area status '%.64s' when attempting to report status '%.64s'. This is a bug and the server will now abort. The previous error (if any) was '%.128s' and the requested error (if any) is '%.128s'."
 
+ER_CHECK_TABLE_FUNCTIONS_DOWNGRADED
+  eng "Error MY-%06d occurred while checking table-definitions: %s"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
