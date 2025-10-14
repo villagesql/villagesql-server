@@ -618,6 +618,8 @@ void replace_strings_append(REPLACE *rep, DYNAMIC_STRING *ds, const char *from,
     MY_ATTRIBUTE((format(printf, 1, 2)));
 [[noreturn]] void abort_not_supported_test(const char *fmt, ...)
     MY_ATTRIBUTE((format(printf, 1, 2)));
+[[noreturn]] void abort_partially_supported_test(const char *fmt, ...)
+    MY_ATTRIBUTE((format(printf, 1, 2)));
 void verbose_msg(const char *fmt, ...) MY_ATTRIBUTE((format(printf, 1, 2)));
 void log_msg(const char *fmt, ...) MY_ATTRIBUTE((format(printf, 1, 2)));
 void flush_ds_res();
@@ -1578,7 +1580,14 @@ static void cleanup_and_exit(int exit_code) {
   free_used_memory();
   my_end(my_end_arg);
 
-  enum test_exit_code { PASS, FAIL, SKIPPED = 62, NOSKIP_PASS, NOSKIP_FAIL };
+  enum test_exit_code {
+    PASS,
+    FAIL,
+    SKIPPED = 62,
+    NOSKIP_PASS,
+    NOSKIP_FAIL,
+    OPT_PASS = 66
+  };
   if (skip_ignored) {
     exit_code = (exit_code == PASS) ? NOSKIP_PASS : NOSKIP_FAIL;
   }
@@ -1599,6 +1608,9 @@ static void cleanup_and_exit(int exit_code) {
         break;
       case NOSKIP_FAIL:
         printf("noskip-failed\n");
+        break;
+      case OPT_PASS:
+        printf("opt-passed\n");
         break;
       default:
         printf("unknown exit code: %d\n", exit_code);
@@ -1712,6 +1724,29 @@ void abort_not_supported_test(const char *fmt, ...) {
   va_end(args);
 
   cleanup_and_exit(62);
+}
+
+void abort_partially_supported_test(const char *fmt, ...) {
+  va_list args;
+  DBUG_TRACE;
+
+  /* Print include filestack */
+  fprintf(stderr, "The test '%s' is not supported by this installation\n",
+          file_stack->file_name);
+  fprintf(stderr, "Detected in ");
+  print_file_stack();
+
+  /* Print error message */
+  va_start(args, fmt);
+  if (fmt) {
+    fprintf(stderr, "reason: ");
+    vfprintf(stderr, fmt, args);
+    fprintf(stderr, "\n");
+    fflush(stderr);
+  }
+  va_end(args);
+
+  cleanup_and_exit(66);
 }
 
 void verbose_msg(const char *fmt, ...) {
@@ -2276,7 +2311,7 @@ static void check_result() {
       const bool ignored_diff =
           show_diff(nullptr, result_file_name, reject_file);
       if (ignored_diff) {
-        abort_not_supported_test(
+        abort_partially_supported_test(
             "Hypergraph optimizer did not support all queries.");
       }
       die("%s", mess);
