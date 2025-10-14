@@ -4108,12 +4108,14 @@ bool Query_block::remove_redundant_subquery_clauses(THD *thd) {
 
   /*
     Remove GROUP BY if there are no aggregate functions, no HAVING clause,
-    no non-primitive grouping and no windowing functions.
+    no non-primitive grouping, no windowing functions and no GROUPING function.
   */
 
-  if ((possible_changes & REMOVE_GROUP) && group_list.elements &&
-      !agg_func_used() && !having_cond() && olap == UNSPECIFIED_OLAP_TYPE &&
-      m_windows.elements == 0) {
+  if ((possible_changes & REMOVE_GROUP) && is_grouped() && !agg_func_used() &&
+      having_cond() == nullptr && olap == UNSPECIFIED_OLAP_TYPE &&
+      m_windows.elements == 0 &&
+      !std::any_of(fields.begin(), fields.end(),
+                   [](Item *item) { return item->has_grouping_func(); })) {
     changelog |= REMOVE_GROUP;
     for (ORDER *g = group_list.first; g != nullptr; g = g->next) {
       if (g->is_item_original()) {
