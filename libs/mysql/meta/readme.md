@@ -63,6 +63,25 @@ Currently, it contains the following:
 - is_specialization.h: utility to determine if a template is a specialization
   of another.
 
+- not_decayed.h: concept used to protect a constructor taking forwarding
+  reference arguments from being used as copy constructor.
+
+  This is intended to be used in constructors taking (variadic) forwarding
+  references, like:
+
+  template <class... Args_t>
+    requires Not_decayed<Type, Args...>
+  Type::Type(Args_t &&...);
+
+  When a `Type` object is *copied*, and this constructor would *not* have the
+  constraint, this constructor could be a better match than the copy constructor
+  `Type::Type(const Type &)`, according to the compiler's overload resolution
+  rules. The reason is that the copy constructor requires a const argument,
+  whereas the forwarding constructor accepts non-const arguments; thus if you
+  copy a non-const object the forwarding constructor is preferred. The
+  constraint prevents that this constructor is invoked with a single argument of
+  type `Type`, `Type &`, `const Type &`, or `Type &&`.
+
 - optional_is_same.h: concept taking one or two arguments; true if the second is
   omitted or void, or if the two types are the same.
 
