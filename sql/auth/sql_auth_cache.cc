@@ -4117,3 +4117,22 @@ bool is_partial_revoke_exists(THD *thd) {
 }
 
 bool is_acl_inited() { return acl_cache_initialized; }
+
+size_t acl_users_size() {
+  assert(assert_acl_cache_read_lock(current_thd));
+
+  size_t size = (acl_users != nullptr) ? acl_users->size() : 0;
+
+  return size;
+}
+
+void acl_users_accept(ACL_USER_visitor *visitor) {
+  assert(assert_acl_cache_read_lock(current_thd));
+
+  if (acl_users != nullptr) {
+    for (ACL_USER *acl_user = acl_users->begin(); acl_user != acl_users->end();
+         ++acl_user) {
+      visitor->visit(acl_user);
+    }
+  }
+}

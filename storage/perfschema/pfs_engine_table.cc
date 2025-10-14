@@ -149,6 +149,7 @@
 #include "storage/perfschema/table_status_by_user.h"
 #include "storage/perfschema/table_sync_instances.h"
 #include "storage/perfschema/table_table_handles.h"
+#include "storage/perfschema/table_temporary_account_locks.h"
 #include "storage/perfschema/table_threads.h"
 #include "storage/perfschema/table_tiws_by_index_usage.h"
 #include "storage/perfschema/table_tiws_by_table.h"
@@ -574,6 +575,7 @@ static PFS_engine_table_share *all_shares[] = {
     &table_mems_by_thread_by_event_name::m_share,
     &table_mems_by_user_by_event_name::m_share,
     &table_table_handles::m_share,
+    &table_temporary_account_locks::m_share,
     &table_metadata_locks::m_share,
     &table_data_locks::m_share,
     &table_data_lock_waits::m_share,

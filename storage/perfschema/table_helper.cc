@@ -339,6 +339,22 @@ void set_field_date(Field *f, const char *value, uint len) {
   f2->store(value, len, system_charset_info);
 }
 
+void set_field_date_by_daynr(Field *f, ulong daynr) {
+  assert(f->real_type() == MYSQL_TYPE_NEWDATE);
+  auto *f2 = down_cast<Field_date *>(f);
+
+  MYSQL_TIME date;
+  get_date_from_daynr(daynr, &date.year, &date.month, &date.day);
+  date.hour = 0;
+  date.minute = 0;
+  date.second = 0;
+  date.second_part = 0;
+  date.neg = false;
+  date.time_type = MYSQL_TIMESTAMP_DATE;
+  date.time_zone_displacement = 0;
+  f2->store_time(&date, 0);
+}
+
 char *get_field_date(Field *f, char *val, uint *len) {
   assert(f->real_type() == MYSQL_TYPE_NEWDATE);
   String temp;
@@ -2115,6 +2131,11 @@ bool PFS_key_user::match(const PFS_setup_actor *pfs) {
                   pfs->m_key.m_user_name.length());
 }
 
+bool PFS_key_user::match(const PFS_user_name *pfs) {
+  const bool record_null = (pfs->length() == 0);
+  return do_match(record_null, pfs->ptr(), pfs->length());
+}
+
 bool PFS_key_host::match(const PFS_thread *pfs) {
   const bool record_null = (pfs->m_host_name.length() == 0);
   return do_match(record_null, pfs->m_host_name.ptr(),
@@ -2137,6 +2158,11 @@ bool PFS_key_host::match(const PFS_setup_actor *pfs) {
   const bool record_null = (pfs->m_key.m_host_name.length() == 0);
   return do_match(record_null, pfs->m_key.m_host_name.ptr(),
                   pfs->m_key.m_host_name.length());
+}
+
+bool PFS_key_host::match(const PFS_host_name *pfs) {
+  const bool record_null = (pfs->length() == 0);
+  return do_match(record_null, pfs->ptr(), pfs->length());
 }
 
 bool PFS_key_host::match(const char *hostname, size_t hostname_length) {

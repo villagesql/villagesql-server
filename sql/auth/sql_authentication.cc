@@ -3965,7 +3965,7 @@ static void check_and_update_password_lock_state(MPVIO_EXT &mpvio, THD *thd,
              mpvio.acl_user->user ? mpvio.acl_user->user : "",
              mpvio.auth_info.host_or_ip ? mpvio.auth_info.host_or_ip : "",
              str_blocked_for_days, str_days_remaining, failed_logins);
-      res = CR_ERROR;
+      res = CR_AUTH_TEMPORARY_ACCOUNT_LOCKED_ERROR;
     } else
       acl_cache_lock.unlock();
   }
@@ -4172,6 +4172,12 @@ int acl_authenticate(THD *thd, enum_server_command command) {
         case CR_AUTH_USER_CREDENTIALS:
           errors.m_authentication = 1;
           break;
+        case CR_AUTH_ACCOUNT_LOCKED_ERROR:
+          errors.m_account_locked = 1;
+          break;
+        case CR_AUTH_TEMPORARY_ACCOUNT_LOCKED_ERROR:
+          errors.m_temporary_account_locked = 1;
+          break;
         case CR_ERROR:
         default:
           /* Unknown of unspecified auth plugin error. */
@@ -4312,6 +4318,9 @@ int acl_authenticate(THD *thd, enum_server_command command) {
         Check whether the account has been locked.
       */
       if (unlikely(mpvio.acl_user->account_locked)) {
+        Host_errors errors;
+        errors.m_account_locked = 1;
+        inc_host_errors(mpvio.ip, &errors);
         locked_account_connection_count++;
 
         my_error(ER_ACCOUNT_HAS_BEEN_LOCKED, MYF(0), mpvio.acl_user->user,
