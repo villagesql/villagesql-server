@@ -702,7 +702,6 @@ class User_table_schema_factory {
   virtual ~User_table_schema_factory() = default;
 };
 
-extern bool mysql_user_table_is_in_short_password_format;
 extern bool disconnect_on_expired_password;
 extern const char *any_db;  // Special symbol for check_access
 /** controls the extra checks on plugin availability for mysql.user records */

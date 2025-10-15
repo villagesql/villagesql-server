@@ -1536,9 +1536,6 @@ class Item_func_coalesce : public Item_func_numhybrid {
 };
 
 class Item_func_ifnull final : public Item_func_coalesce {
- protected:
-  bool field_type_defined;
-
  public:
   Item_func_ifnull(const POS &pos, Item *a, Item *b)
       : Item_func_coalesce(pos, a, b) {}

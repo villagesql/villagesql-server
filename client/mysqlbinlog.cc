@@ -713,7 +713,6 @@ Buff_ev *buff_ev{nullptr};
 
 // needed by net_serv.c
 ulong bytes_sent = 0L, bytes_received = 0L;
-ulong mysqld_net_retry_count = 10L;
 ulong open_files_limit;
 ulong opt_binlog_rows_event_max_size;
 uint test_flags = 0;

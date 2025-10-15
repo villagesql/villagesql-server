@@ -284,8 +284,6 @@ struct TABLE_LOCK_INFO {
   enum thr_lock_type type;
 };
 
-typedef Prealloced_array<TABLE_LOCK_INFO, 20> Saved_locks_array;
-
 static inline int dl_compare(const TABLE_LOCK_INFO *a,
                              const TABLE_LOCK_INFO *b) {
   if (a->thread_id > b->thread_id) return 1;
@@ -294,13 +292,6 @@ static inline int dl_compare(const TABLE_LOCK_INFO *a,
   if (a->waiting) return -1;
   return 1;
 }
-
-class DL_commpare {
- public:
-  bool operator()(const TABLE_LOCK_INFO &a, const TABLE_LOCK_INFO &b) {
-    return dl_compare(&a, &b) < 0;
-  }
-};
 
 #ifndef NDEBUG
 #ifdef EXTRA_DEBUG_DUMP_TABLE_LISTS

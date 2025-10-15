@@ -136,7 +136,6 @@ Prealloced_array<ACL_USER, ACL_PREALLOC_SIZE> *acl_users = nullptr;
 Prealloced_array<ACL_PROXY_USER, ACL_PREALLOC_SIZE> *acl_proxy_users = nullptr;
 Prealloced_array<ACL_DB, ACL_PREALLOC_SIZE> *acl_dbs = nullptr;
 Prealloced_array<ACL_HOST_AND_IP, ACL_PREALLOC_SIZE> *acl_wild_hosts = nullptr;
-Db_access_map acl_db_map;
 Default_roles *g_default_roles = nullptr;
 std::vector<Role_id> *g_mandatory_roles = nullptr;
 
@@ -2464,12 +2463,6 @@ void acl_insert_proxy_user(ACL_PROXY_USER *new_value) {
                        *new_value, ACL_compare());
   acl_proxy_users->insert(upper_bound, *new_value);
 }
-
-struct Free_grant_table {
-  void operator()(GRANT_TABLE *grant_table) const {
-    grant_table->~GRANT_TABLE();
-  }
-};
 
 /* Free grant array if possible */
 

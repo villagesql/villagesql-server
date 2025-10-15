@@ -5496,11 +5496,6 @@ bool do_fill_information_schema_table(THD *thd, Table_ref *table_list,
   return res;
 }
 
-struct run_hton_fill_schema_table_args {
-  Table_ref *tables;
-  Item *cond;
-};
-
 ST_FIELD_INFO engines_fields_info[] = {
     {"ENGINE", 64, MYSQL_TYPE_STRING, 0, 0, "Engine", 0},
     {"SUPPORT", 8, MYSQL_TYPE_STRING, 0, 0, "Support", 0},

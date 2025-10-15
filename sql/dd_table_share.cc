@@ -2072,7 +2072,6 @@ static bool fill_partitioning_from_dd(THD *thd, TABLE_SHARE *share,
   //
 
   partition_element *curr_part_elem;
-  List_iterator<partition_element> part_elem_it;
 
   /* Partitions are sorted first on level and then on number. */
 

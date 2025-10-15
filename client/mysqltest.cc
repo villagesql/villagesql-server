@@ -11765,26 +11765,6 @@ void replace_dynstr_append_uint(DYNAMIC_STRING *ds, uint val) {
   replace_dynstr_append_mem(ds, buff, end - buff);
 }
 
-/*
-  Build a list of pointer to each line in ds_input, sort
-  the list and use the sorted list to append the strings
-  sorted to the output ds
-
-  SYNOPSIS
-  dynstr_append_sorted
-  ds - string where the sorted output will be appended
-  ds_input - string to be sorted
-  start_sort_column - column to start sorting from (0 for sorting
-    the entire line); a stable sort will be used
-*/
-
-class Comp_lines {
- public:
-  bool operator()(const char *a, const char *b) {
-    return std::strcmp(a, b) < 0;
-  }
-};
-
 static size_t length_of_n_first_columns(const std::string &str,
                                         int start_sort_column) {
   std::stringstream columns(str);
@@ -11800,6 +11780,18 @@ static size_t length_of_n_first_columns(const std::string &str,
   return size_of_columns;
 }
 
+/*
+  Build a list of pointer to each line in ds_input, sort
+  the list and use the sorted list to append the strings
+  sorted to the output ds
+
+  SYNOPSIS
+  dynstr_append_sorted
+  ds - string where the sorted output will be appended
+  ds_input - string to be sorted
+  start_sort_column - column to start sorting from (0 for sorting
+    the entire line); a stable sort will be used
+*/
 void dynstr_append_sorted(DYNAMIC_STRING *ds, DYNAMIC_STRING *ds_input,
                           int start_sort_column) {
   char *start = ds_input->str;
