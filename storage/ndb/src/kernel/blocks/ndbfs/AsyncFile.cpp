@@ -581,17 +581,22 @@ void AsyncFile::closeReq(Request *request) {
 #endif
   if (m_xfile.is_open()) {
     int r = m_xfile.close(abort);
-    if (r != 0) {
-      NDBFS_SET_REQUEST_ERROR(request,
-                              FsRef::fsErrUnknown);  // TODO better error
+    if (r == -1) {
+      NDBFS_SET_REQUEST_ERROR(request, get_last_os_error());
+      if (request->error.code == 0) {
+        NDBFS_SET_REQUEST_ERROR(request, FsRef::fsErrUnknown);
+      }
     }
   }
   if (m_file.is_open()) {
     if (!abort) m_file.sync();
     r = m_file.close();
   }
-  if (-1 == r) {
+  if (r == -1) {
     NDBFS_SET_REQUEST_ERROR(request, get_last_os_error());
+    if (request->error.code == 0) {
+      NDBFS_SET_REQUEST_ERROR(request, FsRef::fsErrUnknown);
+    }
   }
 }
 
