@@ -5933,27 +5933,31 @@ longlong Item_func_benchmark::val_int() {
     case REAL_RESULT:
       for (ulonglong loop = 0; loop < loop_count && !thd->killed; loop++) {
         (void)args[1]->val_real();
+        if (thd->is_error()) return error_int();
       }
       break;
     case INT_RESULT:
       for (ulonglong loop = 0; loop < loop_count && !thd->killed; loop++) {
         (void)args[1]->val_int();
+        if (thd->is_error()) return error_int();
       }
       break;
     case STRING_RESULT:
       for (ulonglong loop = 0; loop < loop_count && !thd->killed; loop++) {
         (void)args[1]->val_str(&tmp);
+        if (thd->is_error()) return error_int();
       }
       break;
     case DECIMAL_RESULT:
       for (ulonglong loop = 0; loop < loop_count && !thd->killed; loop++) {
         (void)args[1]->val_decimal(&tmp_decimal);
+        if (thd->is_error()) return error_int();
       }
       break;
     case ROW_RESULT:
     default:
       // This case should never be chosen
-      assert(0);
+      assert(false);
       return 0;
   }
   return 0;
