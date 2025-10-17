@@ -2784,14 +2784,16 @@ static bool find_matches(const Json_wrapper &wrapper, String *path,
       const char *data = wrapper.get_data();
       const uint len = static_cast<uint>(wrapper.get_data_length());
       source_string->set_str_with_copy(data, len, &my_charset_utf8mb4_bin);
-      if (like_node->val_int()) {
+      const bool result = like_node->val_int() != 0;
+      if (current_thd->is_error()) return true;
+      if (result) {
         // Got a match with the LIKE node. Save the path of the JSON string.
         std::pair<String_set::iterator, bool> res =
             duplicates->insert_unique(std::string(path->ptr(), path->length()));
 
         if (res.second) {
           Json_string *jstr = new (std::nothrow) Json_string(*res.first);
-          if (!jstr || matches->push_back(jstr))
+          if (jstr == nullptr || matches->push_back(jstr))
             return true; /* purecov: inspected */
         }
       }
