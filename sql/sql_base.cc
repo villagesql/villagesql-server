@@ -650,7 +650,6 @@ static bool read_histograms(THD *thd, TABLE_SHARE *share,
   auto table_histograms_guard =
       create_scope_guard([table_histograms]() { table_histograms->destroy(); });
 
-  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   MDL_request_list mdl_requests;
   for (const auto column : table_def->columns()) {
     if (column->is_se_hidden()) continue;
@@ -673,6 +672,9 @@ static bool read_histograms(THD *thd, TABLE_SHARE *share,
     thd->mdl_context.release_locks(&histogram_mdl_releaser);
   });
 
+  // Define this AFTER the scope guard releasing locks so that locks are held
+  // until the Auto_releaser has run.
+  const dd::cache::Dictionary_client::Auto_releaser releaser(thd->dd_client());
   for (const auto column : table_def->columns()) {
     if (column->is_se_hidden()) continue;
 
