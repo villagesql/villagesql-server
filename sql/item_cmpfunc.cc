@@ -1201,17 +1201,18 @@ bool Arg_comparator::can_compare_as_dates(const Item *left, const Item *right) {
 }
 
 /**
-  Retrieves correct TIME value from the given item.
+  Evaluates the given item as a TIME value.
 
-  @param [in,out] item_arg    item to retrieve TIME value from
+  @param [in,out] item_arg    item to evaluate.
   @param [out] is_null        true <=> the item_arg is null
-
+                              NOTE: May be true even if item is not nullable,
+                              e.g strings are converted and cause NULL value.
+                              However, this value is never checked and may be
+                              removed.
   @returns obtained value
 
-  Retrieves the correct TIME value from given item for comparison by the
-  compare_datetime() function.
-  If item's result can be compared as longlong then its int value is used
-  and a value returned by get_time function is used otherwise.
+  Evaluates the given item as a TIME value and converts this to an integer
+  value which can be used for comparison.
 */
 
 static longlong get_time_internal(THD *, Item ***item_arg, Item **,
@@ -1233,6 +1234,7 @@ static longlong get_time_internal(THD *, Item ***item_arg, Item **,
     str = item->val_str(&buf);
     *is_null = item->null_value;
   }
+  // Note: This return value matches no non-NULL TIME values.
   if (*is_null) return ~(ulonglong)0;
 
   /*
@@ -1241,7 +1243,6 @@ static longlong get_time_internal(THD *, Item ***item_arg, Item **,
   if (str != nullptr) {
     Time_val time;
     if (str_to_time_with_warn(str, &time)) {
-      item->null_value = true;
       *is_null = true;
       return ~(ulonglong)0;
     }
