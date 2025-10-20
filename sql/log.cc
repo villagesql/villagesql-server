@@ -1837,11 +1837,11 @@ bool Error_log_throttle::flush() {
 
 static bool slow_log_write(THD *thd, /* purecov: inspected */
                            const char *query, size_t query_length,
-                           bool aggregate, ulonglong time_usec,
-                           ulonglong lock_usec) {
+                           bool aggregate, ulonglong lock_usec,
+                           ulonglong time_usec) {
   return opt_slow_log &&
          query_logger.slow_log_write(thd, query, query_length, aggregate,
-                                     time_usec, lock_usec);
+                                     lock_usec, time_usec);
 }
 
 Slow_log_throttle log_throttle_qni(&opt_log_throttle_queries_not_using_indexes,
