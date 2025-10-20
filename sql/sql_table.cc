@@ -149,6 +149,7 @@
 #include "sql/mdl.h"
 #include "sql/mem_root_array.h"
 #include "sql/mysqld.h"  // lower_case_table_names
+#include "sql/mysqld_cs.h"
 #include "sql/parse_tree_nodes.h"
 #include "sql/partition_element.h"
 #include "sql/partition_info.h"                  // partition_info
@@ -2710,10 +2711,18 @@ static bool validate_secondary_engine_option(THD *thd,
   }
 
   // Secondary engine of a table must be set to NULL before it can be redefined.
+  // However, do not panic if same secondary engine is being set again
   if (create_info.secondary_engine.str != nullptr) {
-    my_error(ER_SECONDARY_ENGINE, MYF(0),
-             "Table already has a secondary engine defined");
-    return true;
+    if (my_strcasecmp(system_charset_info, table.s->secondary_engine.str,
+                      create_info.secondary_engine.str) == 0) {
+      push_warning_printf(
+          thd, Sql_condition::SL_WARNING, ER_SECONDARY_ENGINE_PLUGIN,
+          "Table already has the same secondary engine defined.");
+    } else {
+      my_error(ER_SECONDARY_ENGINE, MYF(0),
+               "Table already has a secondary engine defined");
+      return true;
+    }
   }
 
   // Check if this statement sets the primary engine. In this case we have to
