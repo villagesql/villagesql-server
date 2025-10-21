@@ -284,15 +284,6 @@ struct TABLE_LOCK_INFO {
   enum thr_lock_type type;
 };
 
-static inline int dl_compare(const TABLE_LOCK_INFO *a,
-                             const TABLE_LOCK_INFO *b) {
-  if (a->thread_id > b->thread_id) return 1;
-  if (a->thread_id < b->thread_id) return -1;
-  if (a->waiting == b->waiting) return 0;
-  if (a->waiting) return -1;
-  return 1;
-}
-
 #ifndef NDEBUG
 #ifdef EXTRA_DEBUG_DUMP_TABLE_LISTS
 
