@@ -1656,8 +1656,12 @@ bool set_and_validate_user_attributes(
     and error if it is.
   */
   if (Str->alter_status.update_password_expired_fields &&
-      !Str->alter_status.use_default_password_lifetime &&
-      Str->alter_status.expire_after_days != 0 &&
+      (
+          // CREATE USER .. PASSWORD EXPIRE
+          Str->alter_status.update_password_expired_column ||
+          // CREATE USER PASSWORD EXPIRE INTERVAL
+          (!Str->alter_status.use_default_password_lifetime &&
+           Str->alter_status.expire_after_days != 0)) &&
       !auth_plugin_supports_expiration(
           Str->first_factor_auth_info.plugin.str)) {
     my_error(ER_PASSWORD_EXPIRATION_NOT_SUPPORTED_BY_AUTH_METHOD, MYF(0),
@@ -3541,17 +3545,6 @@ bool mysql_alter_user(THD *thd, List<LEX_USER> &list, bool if_exists) {
               &tables[ACL_TABLES::TABLE_PASSWORD_HISTORY], &history_check_done,
               "ALTER USER", generated_passwords, &mfa)) {
         result = 1;
-        continue;
-      }
-      /*
-        Check if the user's authentication method supports expiration only
-        if PASSWORD EXPIRE attribute is specified
-      */
-      if (user_from->alter_status.update_password_expired_column &&
-          !auth_plugin_supports_expiration(
-              user_from->first_factor_auth_info.plugin.str)) {
-        result = 1;
-        log_user(thd, &wrong_users, user_from, wrong_users.length() > 0);
         continue;
       }
 
