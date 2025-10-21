@@ -26,7 +26,9 @@
 #include "Backup.hpp"
 
 #include <ndb_version.h>
+#include <algorithm>  // find
 #include <cstring>
+#include <iterator>  // begin, end
 
 #include <NdbTCP.h>
 #include <Bitmask.hpp>
@@ -10501,7 +10503,9 @@ void Backup::execFSCLOSEREF(Signal *signal) {
       file_type_str = "prepare data";
     else if (ptr.p->deleteFilePtr == filePtrI)
       file_type_str = "delete file";
-    else if (ptr.p->dataFilePtr[0] == filePtrI)
+    else if (std::find(std::begin(ptr.p->dataFilePtr),
+                       std::end(ptr.p->dataFilePtr),
+                       filePtrI) != std::end(ptr.p->dataFilePtr))
       file_type_str = "data";
     else if (ptr.p->ctlFilePtr == filePtrI)
       file_type_str = "ctl";
@@ -10597,14 +10601,9 @@ void Backup::execFSCLOSECONF(Signal *signal) {
       jam();
       lcp_close_ctl_file_for_rewrite_done(signal, ptr, filePtr);
       return;
-    } else if ((ptr.p->dataFilePtr[0] == filePtrI) ||
-               (ptr.p->dataFilePtr[1] == filePtrI) ||
-               (ptr.p->dataFilePtr[2] == filePtrI) ||
-               (ptr.p->dataFilePtr[3] == filePtrI) ||
-               (ptr.p->dataFilePtr[4] == filePtrI) ||
-               (ptr.p->dataFilePtr[5] == filePtrI) ||
-               (ptr.p->dataFilePtr[6] == filePtrI) ||
-               (ptr.p->dataFilePtr[7] == filePtrI)) {
+    } else if (std::find(std::begin(ptr.p->dataFilePtr),
+                         std::end(ptr.p->dataFilePtr),
+                         filePtrI) != std::end(ptr.p->dataFilePtr)) {
       jam();
       ndbrequire(filePtr.p->m_flags == 0);
       ndbrequire(ptr.p->m_num_lcp_data_files_open > 0);
