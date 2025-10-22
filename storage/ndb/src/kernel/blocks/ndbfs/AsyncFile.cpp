@@ -572,7 +572,6 @@ void AsyncFile::closeReq(Request *request) {
                       FsOpenReq::OM_APPEND)) {
     if (!abort) syncReq(request);
   }
-  int r = 0;
 #ifndef NDEBUG
   if (!m_file.is_open()) {
     DEBUG(g_eventLogger->info("close on already closed file"));
@@ -589,13 +588,14 @@ void AsyncFile::closeReq(Request *request) {
     }
   }
   if (m_file.is_open()) {
-    if (!abort) m_file.sync();
-    r = m_file.close();
-  }
-  if (r == -1) {
-    NDBFS_SET_REQUEST_ERROR(request, get_last_os_error());
-    if (request->error.code == 0) {
-      NDBFS_SET_REQUEST_ERROR(request, FsRef::fsErrUnknown);
+    int sync_ret = 0;
+    if (!abort) sync_ret = m_file.sync();
+    int r = m_file.close();
+    if (r == -1 || sync_ret == -1) {
+      NDBFS_SET_REQUEST_ERROR(request, get_last_os_error());
+      if (request->error.code == 0) {
+        NDBFS_SET_REQUEST_ERROR(request, FsRef::fsErrUnknown);
+      }
     }
   }
 }
@@ -936,7 +936,8 @@ void AsyncFile::syncReq(Request *request) {
 bool AsyncFile::check_odirect_request(const char *buf, size_t sz,
                                       ndb_off_t offset) {
   if (m_open_flags & FsOpenReq::OM_DIRECT) {
-    if ((sz % NDB_O_DIRECT_WRITE_ALIGNMENT) ||
+    if (/*(sz % NDB_O_DIRECT_WRITE_ALIGNMENT) ||  // Do not check size on last
+           block, but have no info about that */
         (((UintPtr)buf) % NDB_O_DIRECT_WRITE_ALIGNMENT) ||
         (offset % NDB_O_DIRECT_WRITE_ALIGNMENT)) {
       g_eventLogger->info(
