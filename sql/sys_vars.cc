@@ -1190,6 +1190,12 @@ static Sys_var_bool Sys_use_separate_thread_for_admin(
     READ_ONLY NON_PERSIST GLOBAL_VAR(listen_admin_interface_in_separate_thread),
     CMD_LINE(OPT_ARG), DEFAULT(false));
 
+static Sys_var_bool Sys_container_aware(
+    "container_aware",
+    "Determines if server adheres to container's resource limits",
+    READ_ONLY NON_PERSIST GLOBAL_VAR(container_aware), CMD_LINE(OPT_ARG),
+    DEFAULT(false));
+
 static Sys_var_ulonglong Sys_server_memory(
     "server_memory",
     "Memory (in bytes) used by the MySQL Server when auto-tuning the default "
@@ -5151,18 +5157,18 @@ static Sys_var_enum Sys_internal_tmp_mem_storage_engine(
     DEFAULT(TMP_TABLE_TEMPTABLE), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(check_session_admin_no_super));
 
-/* Default is updated to min(3% of physical memory, 4 GB) */
+/* Default value set here is changed in init_common_variables() due to
+dependency on --container_aware startup option */
 static Sys_var_ulonglong Sys_temptable_max_ram(
     "temptable_max_ram",
     "Maximum amount of memory (in bytes) the TempTable storage engine is "
     "allowed to allocate from the main memory (RAM) before starting to "
     "store data on disk.",
     GLOBAL_VAR(temptable_max_ram), CMD_LINE(REQUIRED_ARG),
-    VALID_RANGE(2 << 20 /* 2 MiB */, ULLONG_MAX),
-    DEFAULT(std::clamp(ulonglong{3 * (my_physical_memory() / 100)},
-                       1ULL << 30 /* 1 GiB */, 1ULL << 32 /* 4 GiB */)),
+    VALID_RANGE(2 << 20 /* 2 MiB */, ULLONG_MAX), DEFAULT(1 << 30 /* 1 GiB */),
     BLOCK_SIZE(1));
 
+/* Default is updated to min(3% of physical memory, 4 GB) */
 void update_temptable_max_ram_default() {
   mysql_mutex_lock(&LOCK_global_system_variables);
 

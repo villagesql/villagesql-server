@@ -1202,6 +1202,7 @@ char *my_bind_addr_str;
 char *my_admin_bind_addr_str;
 uint mysqld_admin_port;
 bool listen_admin_interface_in_separate_thread;
+bool container_aware = false;
 ulonglong server_memory;
 static const char *default_collation_name;
 const char *default_storage_engine;
@@ -2826,6 +2827,7 @@ static void clean_up(bool print_message) {
   plugin_shutdown();
   // needs to be done after plugin shutdown, since plugins can still
   // hold references to the service
+  deinit_container_aware();
   binlog::services::iterator::FileStorage::unregister_service();
   gtid_server_cleanup();  // after plugin_shutdown
   delete_optimizer_cost_module();
@@ -6608,6 +6610,26 @@ static inline void print_available_resources() {
   }
 }
 
+/**
+  Initialize the module based on the value of --container_aware. The module
+  fetches the system resources available like number of logical CPUs and total
+  physical memory.
+  @return false on success, true on error
+*/
+static inline bool setup_container_awareness() {
+  if (!init_container_aware(container_aware)) {
+#ifdef _WIN32
+    LogErr(ERROR_LEVEL, ER_SERVER_ERROR_NO_CONTAINER_SUPPORT_IN_WIN);
+#else
+    LogErr(ERROR_LEVEL, ER_SERVER_ERROR_NOT_IN_CONTAINER);
+#endif
+    return true;
+  } else if (!container_aware && has_container_resource_limits()) {
+    LogErr(WARNING_LEVEL, ER_SERVER_WARN_CONTAINER_IGNORED);
+  }
+  return false;
+}
+
 int init_common_variables() {
 #if defined(HAVE_BUILD_ID_SUPPORT)
   my_find_build_id(server_build_id);
@@ -6756,6 +6778,10 @@ int init_common_variables() {
 #endif
 
   if (get_options(&remaining_argc, &remaining_argv)) return 1;
+
+  if (setup_container_awareness()) {
+    return 1;
+  }
 
   /* Adjust memory to be used based on "server_memory" iff explicitly provided
    */
@@ -9544,15 +9570,6 @@ int mysqld_main(int argc, char **argv)
   }
   my_getopt_use_args_separator = false;
 
-  // Initialize the resource group subsystem.
-  auto res_grp_mgr = resourcegroups::Resource_group_mgr::instance();
-  if (!is_help_or_validate_option() && !opt_initialize) {
-    if (res_grp_mgr->init()) {
-      LogErr(ERROR_LEVEL, ER_RESOURCE_GROUP_SUBSYSTEM_INIT_FAILED);
-      unireg_abort(MYSQLD_ABORT_EXIT);
-    }
-  }
-
 #ifdef HAVE_PSI_THREAD_INTERFACE
   /* Instrument the main thread */
   PSI_thread *psi = PSI_THREAD_CALL(new_thread)(key_thread_main, 0, nullptr, 0);
@@ -9593,6 +9610,15 @@ int mysqld_main(int argc, char **argv)
     setup_error_log();
     setup_diagnostic_log();
     unireg_abort(MYSQLD_ABORT_EXIT);  // Will do exit
+  }
+
+  // Initialize the resource group subsystem.
+  auto res_grp_mgr = resourcegroups::Resource_group_mgr::instance();
+  if (!is_help_or_validate_option() && !opt_initialize) {
+    if (res_grp_mgr->init()) {
+      LogErr(ERROR_LEVEL, ER_RESOURCE_GROUP_SUBSYSTEM_INIT_FAILED);
+      unireg_abort(MYSQLD_ABORT_EXIT);
+    }
   }
 
   keyring_lockable_init();

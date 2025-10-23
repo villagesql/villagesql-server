@@ -1117,14 +1117,14 @@ static MYSQL_THDVAR_STR(tmpdir, PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_MEMALLOC,
                         "Directory for temporary non-tablespace files.",
                         innodb_tmpdir_validate, nullptr, nullptr);
 
-static MYSQL_THDVAR_ULONG(
-    parallel_read_threads, PLUGIN_VAR_RQCMDARG,
-    "Number of threads to do parallel read.", nullptr, nullptr,
-    std::clamp(ulong{my_num_vcpus() / 8}, 4UL,
-               ulong{Parallel_reader::MAX_THREADS}), /* Default. */
-    1,                                               /* Minimum. */
-    Parallel_reader::MAX_THREADS,                    /* Maximum. */
-    0);
+/* Default value is updated later in innodb_init_params due to the dependency on
+--container_aware startup option */
+static MYSQL_THDVAR_ULONG(parallel_read_threads, PLUGIN_VAR_RQCMDARG,
+                          "Number of threads to do parallel read.", nullptr,
+                          nullptr, 4,                   /* Default. */
+                          1,                            /* Minimum. */
+                          Parallel_reader::MAX_THREADS, /* Maximum. */
+                          0);
 
 static MYSQL_THDVAR_ULONG(ddl_buffer_size, PLUGIN_VAR_RQCMDARG,
                           "Maximum size of memory to use (in bytes) for DDL.",
@@ -4552,10 +4552,6 @@ static inline bool innodb_page_cleaners_is_set() {
   return innodb_variable_is_set("innodb_page_cleaners");
 }
 
-static inline bool innodb_io_capacity_max_is_set() {
-  return innodb_variable_is_set("innodb_io_capacity_max");
-}
-
 #ifndef _WIN32
 static inline bool innodb_flush_method_is_set() {
   return innodb_variable_is_set("innodb_flush_method");
@@ -4681,10 +4677,12 @@ static void innodb_redo_log_capacity_init() {
   ut_a(srv_redo_log_capacity_used % MB == 0);
 }
 
-/** Update the mysql_sysvar_io_capacity_max's default value
-@param [in] new_def  New default value */
-static void innodb_io_capacity_max_update_default(ulong new_def);
-
+/**
+  Auto tune the defaults of the InnoDB system variables based on the system
+  resources like number of logical CPUs and physical memory. This is done during
+  InnoDB initialization as the APIs used to fetch the system resources are
+  dependent on the sysvar --container_aware
+*/
 inline void update_sysvars_default();
 
 /** Initialize, validate and normalize the InnoDB startup parameters.
@@ -4816,13 +4814,6 @@ static int innodb_init_params() {
   assert(innodb_change_buffering <= IBUF_USE_ALL);
 
   update_sysvars_default();
-
-  /* Update innodb_io_capacity_max based on current io capacity */
-  if (!innodb_io_capacity_max_is_set()) {
-    srv_max_io_capacity = std::clamp(ulong{2 * srv_io_capacity}, 100UL,
-                                     ulong{SRV_MAX_IO_CAPACITY_LIMIT});
-    innodb_io_capacity_max_update_default(srv_max_io_capacity);
-  }
 
   /* Check that interdependent parameters have sane values. */
   if (srv_max_buf_pool_modified_pct < srv_max_dirty_pages_pct_lwm) {
@@ -6432,8 +6423,8 @@ static bool innobase_write_ddl_create_schema(handlerton *hton,
  @return 0 or error number */
 static int innobase_close_connection(
     handlerton *hton, /*!< in: innobase handlerton */
-    THD *thd)         /*!< in: handle to the MySQL thread of the user
-                      whose resources should be free'd */
+    THD *thd)         /*!< in: handle to the MySQL thread of the
+                      user whose resources should be free'd */
 {
   DBUG_TRACE;
   assert(hton == innodb_hton_ptr);
@@ -16980,10 +16971,10 @@ int ha_innobase::records(ha_rows *num_rows) /*!< out: number of rows */
 
 ha_rows ha_innobase::records_in_range(
     uint keynr,         /*!< in: index number */
-    key_range *min_key, /*!< in: start key value of the
-                        range, may also be 0 */
-    key_range *max_key) /*!< in: range end key val, may
-                        also be 0 */
+    key_range *min_key, /*!< in: start key value of
+                        the range, may also be 0 */
+    key_range *max_key) /*!< in: range end key val,
+                        may also be 0 */
 {
   KEY *key;
   dict_index_t *index;
@@ -22147,11 +22138,12 @@ static void innodb_log_buffer_size_update(THD *, SYS_VAR *, void *,
 @param[in]      save      immediate result from check function */
 static void innodb_log_writer_threads_update(THD *, SYS_VAR *, void *var_ptr,
                                              const void *save) {
-  *static_cast<ulong *>(var_ptr) = *static_cast<const ulong *>(save);
+  ulong &current_value = *static_cast<ulong *>(var_ptr);
+  const ulong &new_value = *static_cast<const ulong *>(save);
+  ut_ad_le(new_value, 1);
 
-  ulong new_val = *static_cast<ulong *>(var_ptr);
-  ut_ad_le(new_val, 1);
-  srv_log_writer_threads = static_cast<bool>(new_val);
+  current_value = new_value;
+  srv_log_writer_threads = static_cast<bool>(new_value);
 
   /* pause/resume the log writer threads based on innodb_log_writer_threads
   value. */
@@ -22291,10 +22283,6 @@ static MYSQL_SYSVAR_ULONG(io_capacity_max, srv_max_io_capacity,
                           SRV_MAX_IO_CAPACITY_DUMMY_DEFAULT, 100,
                           SRV_MAX_IO_CAPACITY_LIMIT, 0);
 
-static void innodb_io_capacity_max_update_default(ulong new_def) {
-  mysql_sysvar_io_capacity_max.def_val = new_def;
-}
-
 #ifdef UNIV_DEBUG
 static MYSQL_SYSVAR_BOOL(background_drop_list_empty,
                          innodb_background_drop_list_empty, PLUGIN_VAR_OPCMDARG,
@@ -22354,15 +22342,16 @@ static MYSQL_SYSVAR_ULONG(
     1,                     /* Minimum value */
     5000, 0);              /* Maximum value */
 
-/* Many purge threads may waste CPU - set default to 1 on small shapes */
+/* Default value is updated later in innodb_init_params due to the dependency on
+--container_aware startup option */
 static MYSQL_SYSVAR_ULONG(
     purge_threads, srv_n_purge_threads,
     PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
     "Purge threads can be from 1 to 32. Default is 1 if number of available "
     "CPUs is 16 or less, 4 otherwise.",
-    nullptr, nullptr, (my_num_vcpus() <= 16 ? 1UL : 4UL), /* Default setting */
-    1,                                                    /* Minimum value */
-    MAX_PURGE_THREADS, 0);                                /* Maximum value */
+    nullptr, nullptr, 4,   /* Default setting */
+    1,                     /* Minimum value */
+    MAX_PURGE_THREADS, 0); /* Maximum value */
 
 static MYSQL_SYSVAR_ULONG(sync_array_size, srv_sync_array_size,
                           PLUGIN_VAR_OPCMDARG | PLUGIN_VAR_READONLY,
@@ -22832,11 +22821,12 @@ static MYSQL_SYSVAR_BOOL(optimize_fulltext_only, innodb_optimize_fulltext_only,
                          "Only optimize the Fulltext index of the table",
                          nullptr, nullptr, false);
 
+/* Default value is updated later in innodb_init_params due to the dependency on
+--container_aware startup option */
 static MYSQL_SYSVAR_ULONG(read_io_threads, srv_n_read_io_threads,
                           PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
                           "Number of background read I/O threads in InnoDB.",
-                          nullptr, nullptr,
-                          std::clamp(my_num_vcpus() / 2, 4U, 64U), 1, 64, 0);
+                          nullptr, nullptr, 4, 1, 64, 0);
 
 static MYSQL_SYSVAR_ULONG(write_io_threads, srv_n_write_io_threads,
                           PLUGIN_VAR_RQCMDARG | PLUGIN_VAR_READONLY,
@@ -22899,7 +22889,8 @@ static MYSQL_SYSVAR_ULONG(log_write_ahead_size, srv_log_write_ahead_size,
                           INNODB_LOG_WRITE_AHEAD_SIZE_MAX,
                           OS_FILE_LOG_BLOCK_SIZE);
 
-/* Default updated in innodb_init_params */
+/* Default value is updated later in innodb_init_params due to the dependency on
+--container_aware startup option */
 static MYSQL_SYSVAR_ENUM(
     log_writer_threads, srv_log_writer_threads_ulong, PLUGIN_VAR_RQCMDARG,
     "Whether the log writer threads should be activated (ON), or write/flush "
@@ -22955,6 +22946,8 @@ inline void update_sysvars_default() {
   DBUG_EXECUTE_IF("innodb_simulate_vcpus_equals_4", { num_vcpus = 4; });
   DBUG_EXECUTE_IF("innodb_simulate_vcpus_equals_32", { num_vcpus = 32; });
 
+  mysql_mutex_lock(&LOCK_global_system_variables);
+
   if (sysvar_binlog.has_value() && sysvar_binlog.value()) {
     /* With binlog enabled, enable log_writer_threads if vcpu >= 32 */
     mysql_sysvar_log_writer_threads.def_val = (num_vcpus >= 32);
@@ -22968,6 +22961,29 @@ inline void update_sysvars_default() {
   }
   ut_ad_le(srv_log_writer_threads_ulong, 1);
   srv_log_writer_threads = static_cast<bool>(srv_log_writer_threads_ulong);
+
+  mysql_sysvar_parallel_read_threads.def_val = std::clamp(
+      ulong{num_vcpus / 8}, 4UL, ulong{Parallel_reader::MAX_THREADS});
+
+  /* Many purge threads may waste CPU - set default to 1 on small shapes */
+  mysql_sysvar_purge_threads.def_val = (num_vcpus <= 16 ? 1UL : 4UL);
+  if (!innodb_variable_is_set("innodb_purge_threads")) {
+    srv_n_purge_threads = mysql_sysvar_purge_threads.def_val;
+  }
+
+  mysql_sysvar_read_io_threads.def_val = std::clamp(num_vcpus / 2, 4U, 64U);
+  if (!innodb_variable_is_set("innodb_read_io_threads")) {
+    srv_n_read_io_threads = mysql_sysvar_read_io_threads.def_val;
+  }
+
+  mysql_sysvar_io_capacity_max.def_val = std::clamp(
+      ulong{2 * srv_io_capacity}, 100UL, ulong{SRV_MAX_IO_CAPACITY_LIMIT});
+  /* Update innodb_io_capacity_max based on current io capacity */
+  if (!innodb_variable_is_set("innodb_io_capacity_max")) {
+    srv_max_io_capacity = mysql_sysvar_io_capacity_max.def_val;
+  }
+
+  mysql_mutex_unlock(&LOCK_global_system_variables);
 }
 
 static MYSQL_SYSVAR_UINT(

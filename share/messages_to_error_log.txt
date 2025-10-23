@@ -13293,6 +13293,15 @@ ER_INVALID_PREVIOUS_DIAGNOSTICS_AREA_STATUS
 ER_CHECK_TABLE_FUNCTIONS_DOWNGRADED
   eng "Error MY-%06d occurred while checking table-definitions: %s"
 
+ER_SERVER_ERROR_NO_CONTAINER_SUPPORT_IN_WIN
+   eng "Server does not support containers on Windows"
+
+ER_SERVER_ERROR_NOT_IN_CONTAINER
+   eng "Server is not running in a container but --container_aware is turned ON"
+
+ER_SERVER_WARN_CONTAINER_IGNORED
+   eng "Server ignores the discovered container restrictions as --container_aware is OFF"
+
 ################################################################################
 # Error numbers 50000 to 51999 are reserved. Please do not use them for
 # other error messages.
