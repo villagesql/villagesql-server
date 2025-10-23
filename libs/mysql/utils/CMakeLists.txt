@@ -28,6 +28,7 @@ SET(TARGET_HEADERS
   deprecate_header.h
   enumeration_utils.h
   error.h
+  forward_like.h
   return_status.h
   tuple_find.h
 )
