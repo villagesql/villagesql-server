@@ -53,3 +53,43 @@ SELECT variable_value FROM performance_schema.global_status WHERE variable_name 
 [connection source]
 DROP TABLE t1;
 include/rpl/deinit.inc
+#####################################################################
+# With binlog slices, data events are split among the subscribers
+# according to the slice id they have subscribed to. Only data
+# that is for the subscriber to write to binlog can be received by
+# said subscriber.
+#####################################################################
+CREATE TABLE mysql.ndb_replication(
+db VARBINARY(63),
+table_name VARBINARY(63),
+server_id INT UNSIGNED,
+binlog_type INT UNSIGNED,
+conflict_fn VARBINARY(128),
+binlog_row_slice_count INT UNSIGNED,
+binlog_row_slice_id INT UNSIGNED,
+PRIMARY KEY USING HASH(db, table_name, server_id)
+) ENGINE = NDB;
+INSERT INTO mysql.ndb_replication VALUES ("test", "t1", 1, 3, NULL, 2, 0);
+INSERT INTO mysql.ndb_replication VALUES ("test", "t1", 2, 3, NULL, 2, 1);
+SELECT * FROM mysql.ndb_replication ORDER BY server_id;
+db	table_name	server_id	binlog_type	conflict_fn	binlog_row_slice_count	binlog_row_slice_id
+test	t1	1	3	NULL	2	0
+test	t1	2	3	NULL	2	1
+CREATE TABLE t1 (a INT PRIMARY KEY, data VARBINARY(2048)) ENGINE = NDB;
+# Save Server.1 start counter
+SELECT variable_value FROM performance_schema.global_status WHERE variable_name = 'Ndb_api_event_bytes_count_injector' INTO @start_event_bytes;
+# Save Server.2 start counter
+SELECT variable_value FROM performance_schema.global_status WHERE variable_name = 'Ndb_api_event_bytes_count_injector' INTO @start_event_bytes;
+# Insert data and verify
+SELECT COUNT(a) FROM t1;
+COUNT(a)
+1000
+# Save Server.1 end counter
+SELECT variable_value FROM performance_schema.global_status WHERE variable_name = 'Ndb_api_event_bytes_count_injector' INTO @end_event_bytes;
+# Save Server.2 end counter
+SELECT variable_value FROM performance_schema.global_status WHERE variable_name = 'Ndb_api_event_bytes_count_injector' INTO @end_event_bytes;
+# Build up some data to assert byte distribution 
+# Server 2 event data was balanced out
+# Server 1 event data was balanced out
+DROP TABLE t1;
+DROP TABLE mysql.ndb_replication;
