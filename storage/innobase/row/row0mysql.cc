@@ -1862,8 +1862,6 @@ static void init_fts_doc_id_for_ref(
 {
   dict_foreign_t *foreign;
 
-  table->fk_max_recusive_level = 0;
-
   (*depth)++;
 
   /* Limit on tables involved in cascading delete/update */

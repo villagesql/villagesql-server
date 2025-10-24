@@ -2179,11 +2179,6 @@ struct dict_table_t {
   bool in_dirty_dict_tables_list;
 #endif /* UNIV_DEBUG */
 
-  /** Maximum recursive level we support when loading tables chained
-  together with FK constraints. If exceeds this level, we will stop
-  loading child table into memory along with its parent table. */
-  unsigned fk_max_recusive_level : 8;
-
   /** Count of how many foreign key check operations are currently being
   performed on the table. We cannot drop the table while there are
   foreign key checks running on it. */
