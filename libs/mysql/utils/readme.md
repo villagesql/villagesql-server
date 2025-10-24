@@ -43,6 +43,8 @@ This is a header-only library, containing various utility functions, such as:
   that is safe with respect to C++ aliasing rules.
 - concat.h: vararg function to concatenate many values to a string
 - deprecate_header.h: macro deprecating a header
+- is_same_object.h: predicate to determine if two references of possibly
+  unrelated types refer to the same object.
 - enumeration_utils.h: to_underlying (backported from C++23), to_enumeration
 - error.h: definition of Error - base class for (C++) error handling
 - forward_like.h: forward_like (backported from C++23)

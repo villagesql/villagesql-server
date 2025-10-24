@@ -29,6 +29,7 @@ SET(TARGET_HEADERS
   enumeration_utils.h
   error.h
   forward_like.h
+  is_same_object.h
   return_status.h
   tuple_find.h
 )
