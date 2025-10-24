@@ -1665,10 +1665,6 @@ void EstimateStreamCost(THD *thd, AccessPath *path) {
   path->set_init_once_cost(0.0);  // Never recoverable across query blocks.
   path->num_output_rows_before_filter = path->num_output_rows();
   path->set_cost_before_filter(path->cost());
-  // Streaming paths are usually added after all filters have been applied, so
-  // we don't expect any delayed predicates. If there are any, we need to copy
-  // them into path.
-  assert(IsEmpty(child.delayed_predicates));
 }
 
 void EstimateLimitOffsetCost(AccessPath *path) {

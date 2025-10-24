@@ -6909,6 +6909,19 @@ bool CheckSupportedQuery(THD *thd) {
   return false;
 }
 
+// Check if an access path has any remaining delayed predicates.
+[[maybe_unused]] bool HasDelayedPredicates(const AccessPath &path,
+                                           const JoinHypergraph &graph) {
+  // Only the num_where_predicates first bits of delayed_predicates represent
+  // delayed predicates. The higher bits represent subsumed sargable predicates.
+  // So there is a delayed predicate only if the lowest set bit in
+  // delayed_predicates is less than num_where_predicates.
+  for (size_t node_idx : BitsSetIn(path.delayed_predicates)) {
+    return node_idx < graph.num_where_predicates;
+  }
+  return false;
+}
+
 /**
   Set up an access path for streaming or materializing through a temporary
   table. If none is needed (because earlier iterators already materialize
@@ -6928,6 +6941,11 @@ AccessPath *CreateMaterializationOrStreamingPath(THD *thd,
   if (!IteratorsAreNeeded(thd, path) || IsMaterializationPath(path)) {
     return path;
   }
+
+  // Streaming and materialization paths are usually added after all filters
+  // have been applied, so we don't expect any delayed predicates. If there are
+  // any, we need to copy them into the returned path.
+  assert(!HasDelayedPredicates(*path, graph));
 
   // See if later sorts will need row IDs from us or not.
   if (!need_rowid) {
@@ -9440,15 +9458,11 @@ static AccessPath *FindBestQueryPlanInner(THD *thd, Query_block *query_block,
     }
   }
 
-  // All the delayed predicates should have been applied by now. (Only the
-  // num_where_predicates first bits of delayed_predicates actually represent
-  // delayed predicates, so we only check those).
-  assert(all_of(root_candidates.begin(), root_candidates.end(),
-                [&graph](const AccessPath *root_path) {
-                  return IsEmpty(root_path->delayed_predicates) ||
-                         *BitsSetIn(root_path->delayed_predicates).begin() >=
-                             graph.num_where_predicates;
-                }));
+  // All the delayed predicates should have been applied by now.
+  assert(std::ranges::none_of(root_candidates,
+                              [&graph](const AccessPath *root_path) {
+                                return HasDelayedPredicates(*root_path, graph);
+                              }));
 
   // Now we have one or more access paths representing joining all the tables
   // together. (There may be multiple ones because they can be better at

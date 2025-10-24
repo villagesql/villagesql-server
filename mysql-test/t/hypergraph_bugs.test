@@ -2066,4 +2066,17 @@ WHERE t2.col_int = t3.pk AND
 
 DROP TABLE t1, t2, t3;
 
+--echo #
+--echo # Bug#38557567: Assertion `IsEmpty(child.delayed_predicates)'
+--echo #               failed|join_optimizer/cost_model.cc
+--echo #
+
+CREATE TABLE t(i INT PRIMARY KEY);
+
+SELECT LAG (i) OVER () FROM t AS t1
+WHERE i IN (SELECT i FROM t AS t2)
+GROUP BY i;
+
+DROP TABLE t;
+
 --source include/disable_hypergraph.inc

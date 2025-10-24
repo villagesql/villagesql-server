@@ -465,6 +465,11 @@ struct AccessPath {
   ///
   /// See also nested_loop_join().equijoin_predicates, which is for filters
   /// being applied _before_ nested-loop joins, but is otherwise the same idea.
+  ///
+  /// Note that the higher bits of this bitset, those starting at the position
+  /// given by JoinHypergraph::num_where_predicates, do not represent filter
+  /// predicates, but rather applied sargable join predicates. @see
+  /// #applied_sargable_join_predicates() for more details.
   OverflowBitset filter_predicates{0};
 
   /// Bitmap of sargable join predicates that have already been applied
@@ -493,6 +498,11 @@ struct AccessPath {
   /// other tables, or because because we could not push them down into
   /// the nullable side of outer joins). Used during planning only
   /// (see filter_predicates).
+  ///
+  /// Note that the higher bits of this bitset, those starting at the position
+  /// given by JoinHypergraph::num_where_predicates, do not represent delayed
+  /// predicates, but rather subsumed sargable join predicates. @see
+  /// #subsumed_sargable_join_predicates() for more details.
   OverflowBitset delayed_predicates{0};
 
   /// Similar to applied_sargable_join_predicates, bitmap of sargable
