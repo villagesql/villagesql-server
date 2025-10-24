@@ -1383,7 +1383,10 @@ void Ndbfs::report(Request *request, Signal *signal) {
         log_file_error(GSN_FSCLOSEREF, nullptr, request, fsRef);
         sendSignal(ref, GSN_FSCLOSEREF, signal, FsRef::SignalLength, JBB);
 
-        g_eventLogger->warning("Error closing file: %s %u/%u",
+        g_eventLogger->warning("%s %s %u/%u",
+                               (request->action == Request::close
+                                    ? "Error closing file:"
+                                    : "Error closing and removing file:"),
                                request->file->theFileName.c_str(),
                                fsRef->errorCode, fsRef->osErrorCode);
         g_eventLogger->warning("Dumping files");
