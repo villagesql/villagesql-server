@@ -1576,7 +1576,7 @@ static void RecalculateTablePathCost(THD *thd, AccessPath *path,
       path->set_init_cost(child.init_cost());
 
       const FilterCost filterCost =
-          EstimateFilterCost(current_thd, path->num_output_rows(),
+          EstimateFilterCost(thd, path->num_output_rows(),
                              path->filter().condition, &outer_query_block);
 
       path->set_cost(child.cost() +
@@ -1602,11 +1602,11 @@ static void RecalculateTablePathCost(THD *thd, AccessPath *path,
       break;
 
     case AccessPath::STREAM:
-      EstimateStreamCost(current_thd, path);
+      EstimateStreamCost(thd, path);
       break;
 
     case AccessPath::MATERIALIZE:
-      EstimateMaterializeCost(current_thd, path);
+      EstimateMaterializeCost(thd, path);
       break;
 
     case AccessPath::WINDOW:
@@ -1625,10 +1625,10 @@ AccessPath *MoveCompositeIteratorsFromTablePath(
   AccessPath *bottom_of_table_path = nullptr;
   // For EXPLAIN, we recalculate the cost to reflect the new order of
   // AccessPath objects.
-  const bool explain = current_thd->lex->is_explain();
+  const bool explain = thd->lex->is_explain();
   Prealloced_array<AccessPath *, 4> ancestor_paths{PSI_NOT_INSTRUMENTED};
 
-  const auto scan_functor = [&bottom_of_table_path, &ancestor_paths, path,
+  const auto scan_functor = [&bottom_of_table_path, &ancestor_paths, thd, path,
                              explain](AccessPath *sub_path, const JOIN *) {
     switch (sub_path->type) {
       case AccessPath::TABLE_SCAN:
@@ -1643,7 +1643,7 @@ AccessPath *MoveCompositeIteratorsFromTablePath(
         // We found our real bottom.
         path->materialize().table_path = sub_path;
         if (explain) {
-          EstimateMaterializeCost(current_thd, path);
+          EstimateMaterializeCost(thd, path);
         }
         return true;
       case AccessPath::SAMPLE_SCAN: /* LCOV_EXCL_LINE */
@@ -1665,7 +1665,7 @@ AccessPath *MoveCompositeIteratorsFromTablePath(
       return bottom_of_table_path;
     }
     if (explain) {
-      EstimateMaterializeCost(current_thd, path);
+      EstimateMaterializeCost(thd, path);
     }
 
     // This isn't strictly accurate, but helps propagate information

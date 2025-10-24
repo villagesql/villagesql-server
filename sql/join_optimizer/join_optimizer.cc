@@ -7481,6 +7481,7 @@ AccessPath CreateStreamingAggregationPath(THD *thd, const JoinHypergraph &graph,
   aggregate_path.aggregate().child = child_path;
   aggregate_path.aggregate().olap = olap;
   aggregate_path.set_num_output_rows(row_estimate);
+  aggregate_path.ordering_state = child_path->ordering_state;
   secondary_engine_nrows_params.access_path = &aggregate_path;
   ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);
   aggregate_path.has_group_skip_scan = child_path->has_group_skip_scan;

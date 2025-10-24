@@ -1658,22 +1658,9 @@ inline AccessPath *NewZeroRowsAggregatedAccessPath(THD *thd,
   return path;
 }
 
-inline AccessPath *NewStreamingAccessPath(THD *thd, AccessPath *child,
-                                          JOIN *join,
-                                          Temp_table_param *temp_table_param,
-                                          TABLE *table, int ref_slice) {
-  AccessPath *path = new (thd->mem_root) AccessPath;
-  path->type = AccessPath::STREAM;
-  path->stream().child = child;
-  path->stream().join = join;
-  path->stream().temp_table_param = temp_table_param;
-  path->stream().table = table;
-  path->stream().ref_slice = ref_slice;
-  // Will be set later if we get a weedout access path as parent.
-  path->stream().provide_rowid = false;
-  path->has_group_skip_scan = child->has_group_skip_scan;
-  return path;
-}
+AccessPath *NewStreamingAccessPath(THD *thd, AccessPath *child, JOIN *join,
+                                   Temp_table_param *temp_table_param,
+                                   TABLE *table, int ref_slice);
 
 inline Mem_root_array<MaterializePathParameters::Operand>
 SingleMaterializeQueryBlock(THD *thd, AccessPath *path, int select_number,
