@@ -10819,7 +10819,7 @@ ER_LH_INFER_COL_NAME_MISMATCH
   eng "Column '%s' found in file '%s', but not in file '%s' during column name matching."
 
 ER_LH_DELTA_SCHEMA_MISMATCH
-  eng "Detected schema mismatch for delta table: %s"
+  eng "Detected schema mismatch for delta table '%s'.'%s'. %s"
 
 ER_LH_DELTA_METADATA_READ_ERROR
   eng "Error while reading metadata for delta table: %s"
