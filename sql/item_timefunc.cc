@@ -2192,7 +2192,10 @@ bool Item_func_from_days::val_datetime(Datetime_val *dt,
                                        my_time_flags_t flags) {
   const longlong value = args[0]->val_int();
   if ((null_value = args[0]->null_value)) return true;
-  get_date_from_daynr(value, &dt->year, &dt->month, &dt->day);
+
+  uint32_t year, month, day;
+  get_date_from_daynr(value, &year, &month, &day);
+  *dt = Datetime_val(year, month, day);
 
   if (check_datetime_range(*dt)) {
     // Value is out of range, cannot use our printing functions to output it.
@@ -2207,7 +2210,6 @@ bool Item_func_from_days::val_datetime(Datetime_val *dt,
                     (dt->year == 0 || dt->month == 0 || dt->day == 0)))
     return true;
 
-  dt->time_type = MYSQL_TIMESTAMP_DATE;
   return false;
 }
 
@@ -3303,10 +3305,9 @@ bool Item_func_makedate::val_datetime(Datetime_val *dt, my_time_flags_t) {
   /* Day number from year 0 to 9999-12-31 */
   if (days >= 0 && days <= MAX_DAY_NUMBER) {
     null_value = false;
-    get_date_from_daynr(days, &dt->year, &dt->month, &dt->day);
-    dt->neg = false;
-    dt->hour = dt->minute = dt->second = dt->second_part = 0;
-    dt->time_type = MYSQL_TIMESTAMP_DATE;
+    uint32_t yearno, month, day;
+    get_date_from_daynr(days, &yearno, &month, &day);
+    *dt = Datetime_val(yearno, month, day);
     return false;
   }
 
