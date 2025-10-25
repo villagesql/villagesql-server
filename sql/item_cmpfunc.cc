@@ -2729,7 +2729,11 @@ longlong Item_func_equal::val_int() {
   assert(fixed);
   // Perform regular equality check first:
   const int value = cmp.compare();
-  if (current_thd->is_error()) return 0;
+  if (current_thd->is_error()) {
+    // Make sure null_value isn't set
+    null_value = false;
+    return 0;
+  }
   // If comparison is not NULL, we have a result:
   if (!null_value) return value == 0 ? 1 : 0;
   null_value = false;
