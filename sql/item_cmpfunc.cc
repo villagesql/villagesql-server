@@ -2080,12 +2080,6 @@ int Arg_comparator::compare_time() {
     AND
       col_time_key = MAKEDATE(43, -2852);
   */
-  // Items may have been substituted with NULL values
-  assert((*left)->data_type() == MYSQL_TYPE_TIME ||
-         (*left)->data_type() == MYSQL_TYPE_NULL);
-  assert((*right)->data_type() == MYSQL_TYPE_TIME ||
-         (*right)->data_type() == MYSQL_TYPE_NULL);
-
   Time_val time1, time2;
   if ((*left)->val_time(&time1)) {
     if (set_null) owner->null_value = true;
