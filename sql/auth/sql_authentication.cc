@@ -1236,7 +1236,11 @@ Cached_authentication_plugins::Cached_authentication_plugins() {
     if (cached_plugins_names[i].str[0]) {
       cached_plugins[i] = my_plugin_lock_by_name(
           nullptr, cached_plugins_names[i], MYSQL_AUTHENTICATION_PLUGIN);
+      /* It's OK to not find mysql_native */
       if (!cached_plugins[i]) m_valid = false;
+      if (cached_plugins[i] &&
+          plugin_load_option(cached_plugins[i]) != PLUGIN_OFF)
+        enabled_plugins.push_back((cached_plugins_enum)i);
     } else
       cached_plugins[i] = nullptr;
   }
@@ -2246,7 +2250,11 @@ ACL_USER *decoy_user(const LEX_CSTRING &username, const LEX_CSTRING &hostname,
     } else {
       const int DECIMAL_SHIFT = 1000;
       const int random_number = static_cast<int>(my_rnd(rand) * DECIMAL_SHIFT);
-      uint plugin_num = (uint)(random_number % ((uint)PLUGIN_LAST));
+      uint plugin_inx =
+          (uint)(random_number %
+                 g_cached_authentication_plugins->enabled_plugins.size());
+      uint plugin_num =
+          (uint)g_cached_authentication_plugins->enabled_plugins[plugin_inx];
       user->plugin =
           Cached_authentication_plugins::cached_plugins_names[plugin_num];
       unknown_accounts->clear_if_greater(MAX_UNKNOWN_ACCOUNTS);
