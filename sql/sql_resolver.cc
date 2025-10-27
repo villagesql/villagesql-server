@@ -4459,12 +4459,18 @@ bool setup_order(THD *thd, Ref_item_array ref_item_array, Table_ref *tables,
 
   for (uint number = 1; order; order = order->next, number++) {
     Item *order_item = *order->item;
-    if (order_item->fixed && !order_item->const_item()) {
-      // If a non constant expression in order by is already
-      // resolved, it must have been merged from a derived table.
+    if (order_item->fixed && (!order_item->const_item() ||
+                              (order_item->type() == Item::REF_ITEM &&
+                               down_cast<Item_ref *>(order_item)->ref_type() ==
+                                   Item_ref::VIEW_REF))) {
+      // If an expression in order by is already resolved, it
+      // must have been merged from a derived table.
       // So, we do not need to re-resolve in this query block. Add
       // a hidden item if not present in the visible fields list.
       // Update with the correct ref item.
+      // const expressions are exceptions. However, if a const
+      // expression is a view reference it must be from merged derived
+      // table as well. So we do not re-resolve.
       uint counter = fields->size();
       for (uint i = 0; i < fields->size(); i++) {
         if (order_item->real_item()->eq(ref_item_array[i]->real_item())) {
