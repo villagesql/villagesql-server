@@ -317,11 +317,7 @@ bool Key_column_info::is_generated_column() const {
         }
 
         auto column_tags = DVT_NOUPDATE;
-        auto table_tags = node->table_tags();
-        if (table_tags && !is_pk_column) {
-          // In the initial version, column level tags are not supported and
-          // also for writable duality view UPDATE must be specified for table.
-          // Hence, setting DVT_UPDATE here.
+        if (!is_pk_column && node->allows_update()) {
           column_tags = DVT_UPDATE;
         }
         key_column_info.set_column_tags(column_tags);

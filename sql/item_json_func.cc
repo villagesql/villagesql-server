@@ -2650,30 +2650,24 @@ void Item_func_json_duality_object::print(const THD *thd, String *str,
   str->append('(');
 
   if (table_tags() != 0) {
-    bool first_tag = true;
     str->append(" WITH (");
-    if (table_tags() & jdv::DVT_INSERT) {
-      first_tag = false;
-      str->append("INSERT");
-    }
 
-    if (table_tags() & jdv::DVT_UPDATE) {
-      if (first_tag) {
-        first_tag = false;
-      } else {
-        str->append(",");
+    bool first = true;
+    auto add_if_set = [&](int flag, const char *name) {
+      if (table_tags() & flag) {
+        if (!first) str->append(",");
+        str->append(name);
+        first = false;
       }
-      str->append("UPDATE");
-    }
+    };
 
-    if (table_tags() & jdv::DVT_DELETE) {
-      if (first_tag) {
-        first_tag = false;
-      } else {
-        str->append(",");
-      }
-      str->append("DELETE");
-    }
+    add_if_set(jdv::DVT_INSERT, "INSERT");
+    add_if_set(jdv::DVT_UPDATE, "UPDATE");
+    add_if_set(jdv::DVT_DELETE, "DELETE");
+    add_if_set(jdv::DVT_NOINSERT, "NO INSERT");
+    add_if_set(jdv::DVT_NOUPDATE, "NO UPDATE");
+    add_if_set(jdv::DVT_NODELETE, "NO DELETE");
+
     str->append(") ");
   }
 

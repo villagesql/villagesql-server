@@ -10902,20 +10902,33 @@ opt_jdv_table_tags:
 jdv_table_tag:
           INSERT_SYM           { $$ = jdv::DVT_INSERT; }
         | UPDATE_SYM           { $$ = jdv::DVT_UPDATE; }
-        | DELETE_SYM           { $$ = jdv::DVT_DELETE; }
-        ;
+        | DELETE_SYM           { $$ = jdv::DVT_DELETE; }      
+        | NO_SYM INSERT_SYM    { $$ = jdv::DVT_NOINSERT; }
+        | NO_SYM UPDATE_SYM    { $$ = jdv::DVT_NOUPDATE; }
+        | NO_SYM DELETE_SYM    { $$ = jdv::DVT_NODELETE; }
+        ;   
 
 jdv_table_tags:
         jdv_table_tag { $$= $1; }
-      | jdv_table_tags ',' jdv_table_tag
-        {
-          if ($$ & $3) {
-            my_error(ER_JDV_INVALID_DEFINITION_WRONG_ANNOTATIONS, MYF(0));
-            MYSQL_YYABORT;
+        | jdv_table_tags ',' jdv_table_tag
+          {
+            // Reject conflicting or duplicate tags
+            if (($$ & $3) ||
+            (
+              ($3 == jdv::DVT_INSERT && $$ & jdv::DVT_NOINSERT) ||
+              ($3 == jdv::DVT_NOINSERT && $$ & jdv::DVT_INSERT) ||
+              ($3 == jdv::DVT_UPDATE && $$ & jdv::DVT_NOUPDATE) ||
+              ($3 == jdv::DVT_NOUPDATE && $$ & jdv::DVT_UPDATE) ||
+              ($3 == jdv::DVT_DELETE && $$ & jdv::DVT_NODELETE) ||
+              ($3 == jdv::DVT_NODELETE && $$ & jdv::DVT_DELETE)
+            )) 
+            {
+                my_error(ER_JDV_INVALID_DEFINITION_WRONG_ANNOTATIONS, MYF(0));
+                MYSQL_YYABORT;
+            }
+            $$ |= $3;
           }
-          $$ |= $3;
-        }
-      ;
+        ;
 
 jdv_name_value_list:
         jdv_name_value

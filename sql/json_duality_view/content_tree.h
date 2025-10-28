@@ -35,7 +35,9 @@ enum Duality_view_tags : int {
   DVT_INSERT = 1,
   DVT_UPDATE = 2,
   DVT_DELETE = 4,
-  DVT_NOUPDATE = 8
+  DVT_NOINSERT = 8,
+  DVT_NOUPDATE = 16,
+  DVT_NODELETE = 32
 };
 
 constexpr std::size_t VOID_COLUMN_INDEX =
@@ -227,20 +229,20 @@ class Content_tree_node {
   // Table tags.
   /////////////////////////////////////////////////////////////////////////////
   void set_table_tags(Duality_view_tags table_tags) {
+    assert(!((table_tags & DVT_INSERT && table_tags & DVT_NOINSERT) ||
+             (table_tags & DVT_UPDATE && table_tags & DVT_NOUPDATE) ||
+             (table_tags & DVT_DELETE && table_tags & DVT_NODELETE)));
     m_table_tags = table_tags;
   }
   Duality_view_tags table_tags() const { return m_table_tags; }
-  bool allows_insert() const {
-    return static_cast<bool>(table_tags() & DVT_INSERT);
-  }
-  bool allows_update() const {
-    return static_cast<bool>(table_tags() & DVT_UPDATE);
-  }
-  bool allows_delete() const {
-    return static_cast<bool>(table_tags() & DVT_DELETE);
-  }
+  bool allows_insert() const { return (table_tags() & DVT_INSERT) != 0; }
+
+  bool allows_update() const { return (table_tags() & DVT_UPDATE) != 0; }
+
+  bool allows_delete() const { return (table_tags() & DVT_DELETE) != 0; }
+
   bool read_only() const {
-    return (!(table_tags() & (DVT_INSERT | DVT_UPDATE | DVT_DELETE)));
+    return !allows_insert() && !allows_update() && !allows_delete();
   }
 
   /////////////////////////////////////////////////////////////////////////////

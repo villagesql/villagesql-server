@@ -77,15 +77,16 @@ void get_json_duality_views(Document *doc, jdv::Content_tree_node *root) {
 
   visit_tree(root, [&allow](const jdv::Content_tree_node *node) -> bool {
     // Allow actions based on table tags.
-    allow.ins = (node->table_tags() & jdv::DVT_INSERT) != 0;
-    allow.upd = (node->table_tags() & jdv::DVT_UPDATE) != 0;
-    allow.del = (node->table_tags() & jdv::DVT_DELETE) != 0;
+    allow.ins |= (node->table_tags() & jdv::DVT_INSERT) != 0;
+    allow.upd |= (node->table_tags() & jdv::DVT_UPDATE) != 0;
+    allow.del |= (node->table_tags() & jdv::DVT_DELETE) != 0;
 
     /*
       The view is considered updatable if there is some
       column that is updatable.
     */
     if (!allow.upd) {
+      // Otherwise check if there is some column that is updatable
       for (auto &kc : node->key_column_map()) {
         if (node->key_column_info_list().at(kc.second).allows_update()) {
           allow.upd = true;
