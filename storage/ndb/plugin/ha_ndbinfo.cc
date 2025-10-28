@@ -248,39 +248,41 @@ bool ha_ndbinfo::get_error_message(int error, String *buf) {
   return false;
 }
 
-static void generate_sql(const NdbInfo::Table *ndb_tab, BaseString &sql) {
-  sql.appfmt("'CREATE TABLE `%s`.`%s%s` (", opt_ndbinfo_dbname,
-             opt_ndbinfo_table_prefix, ndb_tab->getName());
+static void generate_sql(const NdbInfo::Table *ndb_tab, std::string &sql) {
+  sql += "'CREATE TABLE `" + std::string(opt_ndbinfo_dbname) + "`.`" +
+         std::string(opt_ndbinfo_table_prefix) + ndb_tab->getName() + "` (";
 
   const char *separator = "";
   for (unsigned i = 0; i < ndb_tab->columns(); i++) {
     const NdbInfo::Column *col = ndb_tab->getColumn(i);
 
-    sql.appfmt("%s", separator);
+    sql += separator;
     separator = ", ";
 
-    sql.appfmt("`%s` ", col->m_name.c_str());
+    sql += "`";
+    sql += col->m_name.c_str();
+    sql += "` ";
 
     switch (col->m_type) {
       case NdbInfo::Column::Number:
-        sql.appfmt("INT UNSIGNED");
+        sql += "INT UNSIGNED";
         break;
       case NdbInfo::Column::Number64:
-        sql.appfmt("BIGINT UNSIGNED");
+        sql += "BIGINT UNSIGNED";
         break;
       case NdbInfo::Column::String:
-        sql.appfmt("VARCHAR(512)");
+        sql += "VARCHAR(512)";
         break;
       case NdbInfo::Column::Blob:
-        sql.appfmt("LONGBLOB");
+        sql += "LONGBLOB";
         break;
       default:
-        sql.appfmt("UNKNOWN");
+        sql += "UNKNOWN";
         assert(false);
         break;
     }
   }
-  sql.appfmt(") ENGINE=NDBINFO'");
+  sql += ") ENGINE=NDBINFO'";
 }
 
 /*
@@ -294,7 +296,6 @@ static void warn_incompatible(const NdbInfo::Table *ndb_tab, bool fatal,
 
 static void warn_incompatible(const NdbInfo::Table *ndb_tab, bool fatal,
                               const char *format, ...) {
-  BaseString msg;
   DBUG_TRACE;
   DBUG_PRINT("enter", ("table_name: %s, fatal: %d", ndb_tab->getName(), fatal));
   assert(format != nullptr);
@@ -305,10 +306,9 @@ static void warn_incompatible(const NdbInfo::Table *ndb_tab, bool fatal,
   vsnprintf(explanation, sizeof(explanation), format, args);
   va_end(args);
 
-  msg.assfmt(
-      "Table '%s%s' is defined differently in NDB, %s. The "
-      "SQL to regenerate is: ",
-      opt_ndbinfo_table_prefix, ndb_tab->getName(), explanation);
+  std::string msg = "Table '" + std::string(opt_ndbinfo_table_prefix) +
+                    ndb_tab->getName() + "' is defined differently in NDB, " +
+                    explanation + ". The SQL to regenerate is: ";
   generate_sql(ndb_tab, msg);
 
   const Sql_condition::enum_severity_level level =

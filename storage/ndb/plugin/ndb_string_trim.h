@@ -1,5 +1,5 @@
 /*
-   Copyright (c) 2008, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2025, Oracle and/or its affiliates.
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -23,23 +23,33 @@
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA
 */
 
-#ifndef NDB_TAP_HPP
-#define NDB_TAP_HPP
+#ifndef STORAGE_NDB_PLUGIN_NDB_STRING_TRIM_H_
+#define STORAGE_NDB_PLUGIN_NDB_STRING_TRIM_H_
 
-#include "unittest/mytap/tap.h"
-#include "util/require.h"
+#include <string_view>
 
-#define OK(b) require(b)
+namespace ndbcluster {
 
-#define TAPTEST(name)                     \
-  static int name##_test();               \
-  int main(int argc, const char **argv) { \
-    (void)argc;                           \
-    (void)argv; /* unused args */         \
-    plan(1);                              \
-    ok(name##_test(), #name);             \
-    return exit_status();                 \
-  }                                       \
-  int name##_test()
+/**
+ * @brief Trim whitespace from both ends of a string_view.
+ *
+ * Removes leading and trailing characters found in `whitespace` from the given
+ * string_view. The returned view refers to the original input.
+ *
+ * @param sv Input string view.
+ * @param whitespace Characters considered whitespace (default: " \\t").
+ * @return A subview of sv with whitespace removed from both ends.
+ */
+inline constexpr std::string_view trim(
+    std::string_view sv, std::string_view whitespace = " \t") noexcept {
+  const auto start = sv.find_first_not_of(whitespace);
+  if (start == std::string_view::npos) {
+    return {};
+  }
+  const auto end = sv.find_last_not_of(whitespace);
+  return sv.substr(start, end - start + 1);
+}
 
-#endif
+}  // namespace ndbcluster
+
+#endif  // STORAGE_NDB_PLUGIN_NDB_STRING_TRIM_H_
