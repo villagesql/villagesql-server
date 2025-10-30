@@ -106,16 +106,6 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "ha_innopart.h"
 #include "partition_info.h"
 
-#ifdef WLOG
-#undef WLOG
-#endif
-
-#define WLOG(x)                                                           \
-  {                                                                       \
-    std::cout << "[WL17016] thread=" << std::this_thread::get_id() << ":" \
-              << __func__ << ":" << strrchr(__FILE__, '/') + 1 << ":"     \
-              << __LINE__ << ": " << x << std::endl;                      \
-  }
 /** Function to convert the Instant_Type to a comparable int */
 inline uint16_t instant_type_to_int(Instant_Type type) {
   return (static_cast<typename std::underlying_type<Log_Type>::type>(type));
@@ -11185,7 +11175,6 @@ void *ha_innobase::bulk_load_begin(THD *thd, size_t keynr, size_t data_size,
   /* Build the template to convert between the two database formats */
   if (m_prebuilt->mysql_template == nullptr ||
       m_prebuilt->template_type != ROW_MYSQL_WHOLE_ROW) {
-    WLOG("BUILDING TEMPLATE");
     build_template(true);
   }
 
