@@ -447,7 +447,12 @@ class CostingReceiver {
     due to the use of a union.
    */
   struct AccessPathSet {
-    AccessPathArray paths;
+    AccessPathSet(FunctionalDependencySet functional_dependencies,
+                  OrderingSet obsolete_orderings_arg)
+        : active_functional_dependencies{functional_dependencies},
+          obsolete_orderings{obsolete_orderings_arg} {}
+
+    AccessPathArray paths{PSI_NOT_INSTRUMENTED};
     FunctionalDependencySet active_functional_dependencies{0};
 
     // Once-interesting orderings that we don't care about anymore,
@@ -6777,9 +6782,8 @@ void CostingReceiver::ProposeAccessPathWithOrderings(
   AccessPathSet *path_set;
   // Insert an empty array if none exists.
   {
-    const auto [it, inserted] = m_access_paths.emplace(
-        nodes, AccessPathSet{AccessPathArray{PSI_NOT_INSTRUMENTED}, fd_set,
-                             obsolete_orderings});
+    const auto [it, inserted] =
+        m_access_paths.try_emplace(nodes, fd_set, obsolete_orderings);
     path_set = &it->second;
     if (!inserted) {
       assert(fd_set == path_set->active_functional_dependencies);
