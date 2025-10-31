@@ -5512,11 +5512,15 @@ void CostingReceiver::ApplyDelayedPredicatesAfterJoin(
       right_path->delayed_predicates);
   delayed_predicates.ClearBits(join_predicate_first, join_predicate_last);
 
+  // The selectivity of the delayed predicates that get applied now.
+  double filter_selectivity = 1.0;
+
   // Predicates that were delayed, but that we need to check now.
   // (We don't need to allocate a MutableOverflowBitset for this.)
   const NodeMap ready_tables = left | right;
   for (int pred_idx : BitsSetInBoth(left_path->delayed_predicates,
                                     right_path->delayed_predicates)) {
+    assert(std::cmp_less(pred_idx, m_graph->num_where_predicates));
     if (pred_idx >= join_predicate_first && pred_idx < join_predicate_last) {
       continue;
     }
@@ -5538,8 +5542,7 @@ void CostingReceiver::ApplyDelayedPredicatesAfterJoin(
                                 cost.cost_if_not_materialized);
           }
           if (!already_applied_as_sargable) {
-            join_path->set_num_output_rows(join_path->num_output_rows() *
-                                           pred.selectivity);
+            filter_selectivity *= pred.selectivity;
             filter_predicates.SetBit(pred_idx);
           }
         }
@@ -5563,9 +5566,8 @@ void CostingReceiver::ApplyDelayedPredicatesAfterJoin(
         // sargable (predicates like the one we are considering right now),
         // in order to force them into being representative for their multiple
         // equality.
-        if (pred.selectivity > 1e-6) {
-          SetNumOutputRowsAfterFilter(
-              join_path, join_path->num_output_rows() / pred.selectivity);
+        if (pred.selectivity != 0) {
+          filter_selectivity /= pred.selectivity;
         }
       }
       *new_fd_set |= pred.functional_dependencies;
@@ -5575,6 +5577,8 @@ void CostingReceiver::ApplyDelayedPredicatesAfterJoin(
   }
   join_path->filter_predicates = std::move(filter_predicates);
   join_path->delayed_predicates = std::move(delayed_predicates);
+  SetNumOutputRowsAfterFilter(
+      join_path, join_path->num_output_rows() * filter_selectivity);
   SecondaryEngineNrowsParameters secondary_engine_nrows_params{m_thd, join_path,
                                                                m_graph};
   ApplySecondaryEngineNrowsHook(secondary_engine_nrows_params);

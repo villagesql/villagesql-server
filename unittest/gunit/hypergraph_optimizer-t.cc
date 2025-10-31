@@ -2668,6 +2668,51 @@ TEST_F(HypergraphOptimizerTest, SargablePredicateWithExtraNonEquality) {
   EXPECT_THAT(eq_ref_tables, UnorderedElementsAre("t2", "t3"));
 }
 
+// Test case for bug#38131344, which was an assert failure because of
+// inconsistent cardinality estimates.
+TEST_F(HypergraphOptimizerTest, SargablePredicatesInBigTables) {
+  Query_block *query_block = ParseAndResolve(
+      "SELECT 1 FROM t1, t2, t3, t4 "
+      "WHERE t1.x = t2.x AND t2.x = t3.x AND t3.x = t4.x",
+      /*nullable=*/false);
+
+  // The problem was seen with sargable join predicates with selectivity less
+  // than 1e-6. We use UNIQUE NOT NULL constraints in tables with more than one
+  // million rows to achieve that.
+  constexpr ha_rows kRowCount = 100'000'000;
+  for (const char *table_name : {"t1", "t2", "t3", "t4"}) {
+    Fake_TABLE *table = m_fake_tables[table_name];
+    table->create_index(table->field[0], HA_NOSAME);
+    table->file->stats.records = kRowCount;
+  }
+
+  // Build multiple equalities from the WHERE condition.
+  COND_EQUAL *cond_equal = nullptr;
+  EXPECT_FALSE(optimize_cond(m_thd, query_block->where_cond_ref(), &cond_equal,
+                             &query_block->m_table_nest,
+                             &query_block->cond_value));
+
+  // The problem was seen when graph simplification forced certain join orders,
+  // so make sure graph simplification is invoked.
+  m_thd->variables.optimizer_max_subgraph_pairs = 1;
+
+  // Run FindBestQueryPlan. This should succeed without errors. It used to
+  // trigger assert failures due to inconsistent cardinality estimates.
+  TraceGuard trace(m_thd);
+  AccessPath *root = FindBestQueryPlan(m_thd, query_block);
+  SCOPED_TRACE(trace.contents());  // Prints out the trace on failure.
+
+  // Verify that a plan was found.
+  ASSERT_NE(nullptr, root);
+  // Prints out the query plan on failure.
+  SCOPED_TRACE(PrintQueryPlan(0, root, query_block->join,
+                              /*is_root_of_join=*/true));
+
+  // We don't care about the exact plan being chosen, but we check that the
+  // estimated join cardinality is as expected.
+  EXPECT_EQ(kRowCount, root->num_output_rows());
+}
+
 TEST_F(HypergraphOptimizerTest, AntiJoinGetsSameEstimateWithAndWithoutIndex) {
   double ref_output_rows = 0.0;
   for (bool has_index : {false, true}) {
