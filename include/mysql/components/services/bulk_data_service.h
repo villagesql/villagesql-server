@@ -525,7 +525,7 @@ struct Column_meta {
   uint16_t m_index;
 
   /** Position of column in table. Refer to Field::field_index() */
-  uint16_t m_field_index;
+  uint16_t m_field_index{UINT16_MAX};
 
   /** Byte index in NULL bitmap. */
   uint16_t m_null_byte;
