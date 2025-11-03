@@ -163,6 +163,8 @@ AccessPath *CreateMaterializationPath(
     MaterializePathParameters::DedupType dedup_reason =
         MaterializePathParameters::NO_DEDUP);
 
+NodeMap FindReachableTablesFrom(NodeMap tables, const JoinHypergraph &graph);
+
 /**
   A pair of bitsets representing the predicates applied by an index access, and
   which of the predicates are applied fully. The bits map to the predicate with
@@ -447,10 +449,12 @@ class CostingReceiver {
     due to the use of a union.
    */
   struct AccessPathSet {
-    AccessPathSet(FunctionalDependencySet functional_dependencies,
+    AccessPathSet(const JoinHypergraph &graph, NodeMap nodes,
+                  FunctionalDependencySet functional_dependencies,
                   OrderingSet obsolete_orderings_arg)
         : active_functional_dependencies{functional_dependencies},
-          obsolete_orderings{obsolete_orderings_arg} {}
+          obsolete_orderings{obsolete_orderings_arg},
+          reachable_nodes{FindReachableTablesFrom(nodes, graph)} {}
 
     AccessPathArray paths{PSI_NOT_INSTRUMENTED};
     FunctionalDependencySet active_functional_dependencies{0};
@@ -467,6 +471,10 @@ class CostingReceiver {
     // and never merged with the relevant-at-end orderings), this
     // should not happen.
     OrderingSet obsolete_orderings{0};
+
+    // The set of tables that can be joined directly with this subplan,
+    // with no intermediate join being performed first.
+    NodeMap reachable_nodes{0};
 
     // True if the join of the tables in this set has been found to be always
     // empty (typically because of an impossible WHERE clause).
@@ -4486,9 +4494,6 @@ bool LateralDependenciesAreSatisfied(int node_idx, NodeMap tables,
   to check conflict rules, and our handling of hyperedges with more than one
   table on the other side may also be a bit too strict (this may need
   adjustments when we get FULL OUTER JOIN).
-
-  If this calculation turns out to be slow, we could probably cache it in
-  AccessPathSet, or even try to build it incrementally.
  */
 NodeMap FindReachableTablesFrom(NodeMap tables, const JoinHypergraph &graph) {
   const Mem_root_array<Node> &nodes = graph.graph.nodes;
@@ -4925,8 +4930,8 @@ bool CostingReceiver::FoundSubgraphPair(NodeMap left, NodeMap right,
 
   bool wrote_trace = false;
 
-  const NodeMap left_reachable = FindReachableTablesFrom(left, *m_graph);
-  const NodeMap right_reachable = FindReachableTablesFrom(right, *m_graph);
+  const NodeMap left_reachable = left_it->second.reachable_nodes;
+  const NodeMap right_reachable = right_it->second.reachable_nodes;
   for (AccessPath *right_path : right_it->second.paths) {
     assert(BitsetsAreCommitted(right_path));
     if (edge->expr->join_conditions_reject_all_rows &&
@@ -6782,8 +6787,8 @@ void CostingReceiver::ProposeAccessPathWithOrderings(
   AccessPathSet *path_set;
   // Insert an empty array if none exists.
   {
-    const auto [it, inserted] =
-        m_access_paths.try_emplace(nodes, fd_set, obsolete_orderings);
+    const auto [it, inserted] = m_access_paths.try_emplace(
+        nodes, *m_graph, nodes, fd_set, obsolete_orderings);
     path_set = &it->second;
     if (!inserted) {
       assert(fd_set == path_set->active_functional_dependencies);
