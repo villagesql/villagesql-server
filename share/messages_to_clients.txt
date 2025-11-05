@@ -10835,6 +10835,9 @@ ER_LH_WARN_DATETIME_MULTIPLE_PARAM_USE
 ER_LH_GENCOL_ERROR
   eng "File %.*s: Error encountered during generated column evaluation"
 
+ER_TEMPORAL_FUNCTION_OVERFLOW 22008
+  eng "%s value is out of range in '%s'"
+
 #
 #  End of 9.x error messages (server-to-client).
 #

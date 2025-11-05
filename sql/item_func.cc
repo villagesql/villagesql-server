@@ -747,6 +747,21 @@ void Item_func::update_used_tables() {
   }
 }
 
+void Item_func::raise_temporal_overflow(const char *type_name) {
+  THD *thd = current_thd;
+  char buf[256];
+  String str(buf, sizeof(buf), system_charset_info);
+  str.length(0);
+  print(thd, &str, QT_NO_DATA_EXPANSION);
+  str.append('\0');
+  push_warning_printf(
+      thd, Sql_condition::SL_WARNING, ER_TEMPORAL_FUNCTION_OVERFLOW,
+      ER_THD(thd, ER_TEMPORAL_FUNCTION_OVERFLOW), type_name, str.ptr());
+  if (!thd->is_error()) {
+    null_value = true;
+  }
+}
+
 void Item_func::print(const THD *thd, String *str,
                       enum_query_type query_type) const {
   str->append(func_name());
