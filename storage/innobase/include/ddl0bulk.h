@@ -112,6 +112,15 @@ class Loader {
     /** Get the last subtree created by this thread. */
     Btree_multi::Btree_load *get_subtree() { return m_list_subtrees.back(); }
 
+    Btree_multi::Btree_load *get_subtree(Blob_context ctx) const {
+      auto iter = std::find_if(m_list_subtrees.begin(), m_list_subtrees.end(),
+                               [ctx](const auto &subtree) {
+                                 return subtree->verify_blob_context(ctx);
+                               });
+      ut_ad(iter != m_list_subtrees.end());
+      return *iter;
+    }
+
     /** Flush queue size used by the Bulk_flusher */
     size_t m_queue_size;
 

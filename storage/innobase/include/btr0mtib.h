@@ -853,6 +853,10 @@ class Blob_inserter {
   @return the current transaction id. */
   trx_id_t get_trx_id() const;
 
+  bool verify_blob_context(Blob_context ctx) const {
+    return ctx == m_blob_handle.get();
+  }
+
  private:
   Page_load *alloc_page_from_extent(Page_extent *&m_page_extent);
 
@@ -1213,6 +1217,10 @@ class Btree_load : private ut::Non_copyable {
   void disable_check_order() { m_check_order = false; }
 
   Bulk_extent_allocator &get_extent_allocator() { return m_allocator; }
+
+  bool verify_blob_context(Blob_context ctx) const {
+    return m_blob_inserter.verify_blob_context(ctx);
+  }
 
  private:
   /** Page allocation type. We allocate in extents by default. */

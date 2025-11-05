@@ -182,7 +182,9 @@ dberr_t Loader::close_blob(size_t thread_index, Blob_context blob_ctx,
                            lob::ref_t &ref) {
   ut_ad(thread_index < m_ctxs.size());
   auto &ctx = m_ctxs[thread_index];
-  auto sub_tree = ctx.get_subtree();
+  auto sub_tree = ctx.get_subtree(blob_ctx);
+
+  ut_ad(sub_tree->verify_blob_context(blob_ctx));
 
   return ctx.close_blob(sub_tree, blob_ctx, ref);
 }
