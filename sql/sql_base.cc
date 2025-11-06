@@ -7488,11 +7488,16 @@ TABLE *open_table_uncached(THD *thd, const char *path, const char *db,
   /* Create the cache_key for temporary tables */
   key_length = create_table_def_key_tmp(thd, db, table_name, cache_key);
 
-  if (!(tmp_table = (TABLE *)my_malloc(
-            key_memory_TABLE,
-            sizeof(*tmp_table) + sizeof(*share) + strlen(path) + 1 + key_length,
-            MYF(MY_WME))))
+  const size_t alloc_length =
+      sizeof(*tmp_table) + sizeof(*share) + strlen(path) + 1 + key_length;
+  tmp_table = static_cast<TABLE *>(
+      my_malloc(key_memory_TABLE, alloc_length, MYF(MY_WME)));
+  if (tmp_table == nullptr) {
     return nullptr; /* purecov: inspected */
+  }
+
+  // Fill with garbage in debug to easier detect reading uninitialized memory.
+  TRASH(tmp_table, alloc_length);
 
 #ifndef NDEBUG
   // In order to let purge thread callback call open_table_uncached()
@@ -7522,10 +7527,19 @@ TABLE *open_table_uncached(THD *thd, const char *path, const char *db,
   init_tmp_table_share(thd, share, saved_cache_key, key_length,
                        strend(saved_cache_key) + 1, tmp_path, nullptr);
 
-  if (open_table_def(thd, share, table_def)) {
+  bool error = open_table_def(thd, share, table_def);
+  DBUG_EXECUTE_IF(
+      "bug38625494", if (!error) {
+        error = true;
+        my_error(ER_UNKNOWN_ERROR, MYF(0));
+      });
+  if (error) {
     /* No need to lock share->mutex as this is not needed for tmp tables */
     free_table_share(share);
-    ::destroy_at(tmp_table);
+    // Note: Do not call the TABLE destructor here; tmp_table has not been
+    // constructed yet. It is raw memory allocated with my_malloc and the
+    // TABLE object is constructed later by open_table_from_share() on success.
+    // Free the allocation directly.
     my_free(tmp_table);
     return nullptr;
   }
