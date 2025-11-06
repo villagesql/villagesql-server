@@ -47,6 +47,9 @@ Currently, it contains the following:
 
 - is_const_ref.h: concept that is true for types that are const ref.
 
+- is_specialization.h: utility to determine if a template is a specialization
+  of another.
+
 ## Concepts, type predicates, and metafunctions
 
 We use the following terminology.

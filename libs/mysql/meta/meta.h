@@ -30,4 +30,9 @@
 // Is_const_ref<T> is true if T has const and reference qualifiers.
 #include "mysql/meta/is_const_ref.h"
 
+// Is_specialization<T, U> is true if class T is a specialization of class
+// template U, where U takes type template arguments. Is_nontype_specialization
+// is the same, but works when U takes non-type template arguments.
+#include "mysql/meta/is_specialization.h"
+
 #endif  // ifndef MYSQL_META_META_H

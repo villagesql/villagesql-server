@@ -25,7 +25,6 @@ SET(TARGET_HEADERS
   deprecate_header.h
   enumeration_utils.h
   error.h
-  is_specialization.h
   return_status.h
 )
 

@@ -39,6 +39,4 @@ This is a header-only library, containing various utility functions, such as:
 - deprecate_header.h: macro deprecating a header
 - enumeration_utils.h: to_underlying (backported from C++23), to_enumeration
 - error.h: definition of Error - base class for (C++) error handling
-- is_specialization.h: utility to determine if a template is a specialization
-  of another.
 - return_status.h: enum { ok, error }
