@@ -12533,6 +12533,10 @@ bool Sql_cmd_secondary_load_unload::mysql_secondary_load_or_unload(
   std::chrono::steady_clock::time_point se_operation_end;
   // Initiate loading into or unloading from secondary engine.
   if (is_load) {
+    assert(m_alter_info->validation_only
+               ? m_alter_info->validate_num_rows > 0
+               : m_alter_info->validate_num_rows == 0);
+
     DEBUG_SYNC(thd, "before_secondary_engine_load_table");
     if (DBUG_EVALUATE_IF("sim_secload_fail", true, false)) {
       my_error(ER_SECONDARY_ENGINE, MYF(0),

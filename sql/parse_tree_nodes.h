@@ -5041,14 +5041,17 @@ class PT_alter_table_secondary_load final
   using super = PT_alter_table_standalone_action;
 
   const List<String> *opt_use_partition = nullptr;
+  Item_num *m_validation_rows;
   const Alter_info::enum_with_validation m_guided;
 
  public:
   explicit PT_alter_table_secondary_load(
-      const POS &pos, Alter_info::enum_with_validation guided,
+      const POS &pos, Item_num *validation_only_rows,
+      Alter_info::enum_with_validation guided,
       const List<String> *opt_use_partition = nullptr)
       : super(pos, Alter_info::ALTER_SECONDARY_LOAD),
         opt_use_partition{opt_use_partition},
+        m_validation_rows(validation_only_rows),
         m_guided(guided) {}
 
   Sql_cmd *make_cmd(Table_ddl_parse_context *pc) override {
@@ -5056,6 +5059,13 @@ class PT_alter_table_secondary_load final
       pc->alter_info->partition_names = *opt_use_partition;
 
     pc->alter_info->guided_load = m_guided;
+    if (m_validation_rows != nullptr) {
+      pc->alter_info->validation_only = true;
+      pc->alter_info->validate_num_rows = m_validation_rows->val_int();
+    } else {
+      pc->alter_info->validation_only = false;
+      pc->alter_info->validate_num_rows = 0;
+    }
 
     return new (pc->mem_root) Sql_cmd_secondary_load_unload(pc->alter_info);
   }

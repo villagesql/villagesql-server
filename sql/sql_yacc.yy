@@ -1486,6 +1486,7 @@ CHARSET_INFO *warn_on_deprecated_user_defined_collation(
 
 %token<lexer.keyword> GUIDED_SYM      1237     /* MYSQL */
 %token<lexer.keyword> SETS_SYM        1238   /* SQL-1999-N */
+%token<lexer.keyword> VALIDATE_SYM    1239     /* MYSQL */
 
 /*
   NOTE! When adding new non-standard keywords, make sure they are added to the
@@ -1694,6 +1695,8 @@ CHARSET_INFO *warn_on_deprecated_user_defined_collation(
 
 %type <item_num> NUM_literal
         int64_literal
+        opt_validation_only
+        opt_validation_row_limit
 
 %type <item_list>
         when_list
@@ -8974,9 +8977,9 @@ standalone_alter_commands:
           {
             $$= NEW_PTN PT_alter_table_import_partition_tablespace(@$, $3);
           }
-        | SECONDARY_LOAD_SYM opt_use_partition opt_guided
+        | SECONDARY_LOAD_SYM opt_use_partition opt_validation_only opt_guided
           {
-            $$= NEW_PTN PT_alter_table_secondary_load(@$, $3, $2);
+            $$= NEW_PTN PT_alter_table_secondary_load(@$, $3, $4, $2);
           }
         | SECONDARY_UNLOAD_SYM opt_use_partition
           {
@@ -9003,6 +9006,29 @@ with_validation:
 all_or_alt_part_name_list:
           ALL                   { $$= nullptr; }
         | ident_string_list
+        ;
+
+opt_validation_only:
+          %empty { $$ = nullptr; }
+        | VALIDATE_SYM opt_validation_row_limit ONLY_SYM
+          {
+            $$ = $2;
+          }
+        ;
+
+opt_validation_row_limit:
+          %empty
+          {
+            $$ = NEW_PTN Item_uint(ULLONG_MAX);
+          }
+        | int64_literal ROWS_SYM
+          {
+            $$ = $1;
+          }
+        | ALL ROWS_SYM
+          {
+            $$ = NEW_PTN Item_uint(ULLONG_MAX);
+          }
         ;
 
 opt_guided:
@@ -16297,6 +16323,7 @@ ident_keywords_unambiguous:
         | URL_SYM
         | USER
         | USE_FRM
+        | VALIDATE_SYM
         | VALIDATION_SYM
         | VALUE_SYM
         | VARIABLES
