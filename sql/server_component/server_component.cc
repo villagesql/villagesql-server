@@ -359,6 +359,7 @@ BEGIN_SERVICE_IMPLEMENTATION(mysql_server, bulk_data_load)
 Bulk_data_load::begin, Bulk_data_load::load, Bulk_data_load::open_blob,
     Bulk_data_load::write_blob, Bulk_data_load::close_blob, Bulk_data_load::end,
     Bulk_data_load::is_table_supported, Bulk_data_load::get_se_memory_size,
+    Bulk_data_load::copy_existing_data, Bulk_data_load::set_source_table_data,
     END_SERVICE_IMPLEMENTATION();
 
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_thd_security_context)

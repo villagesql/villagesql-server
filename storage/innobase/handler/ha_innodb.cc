@@ -43,6 +43,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 
 /** @file ha_innodb.cc */
 
+#include <exception>
 #ifndef UNIV_HOTBACKUP
 #include "my_config.h"
 #endif /* !UNIV_HOTBACKUP */

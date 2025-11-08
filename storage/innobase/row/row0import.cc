@@ -3025,12 +3025,12 @@ static void row_import_discard_changes(
     ulint len;
     const byte *field;
     mem_heap_t *heap = nullptr;
-    ulint offsets_[1 + REC_OFFS_HEADER_SIZE];
+    ulint offsets_array[1 + REC_OFFS_HEADER_SIZE];
     ulint *offsets;
 
-    rec_offs_init(offsets_);
+    rec_offs_init(offsets_array);
 
-    offsets = rec_get_offsets(rec, index, offsets_, ULINT_UNDEFINED,
+    offsets = rec_get_offsets(rec, index, offsets_array, ULINT_UNDEFINED,
                               UT_LOCATION_HERE, &heap);
 
     field = rec_get_nth_field(index, rec, offsets,
