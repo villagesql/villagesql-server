@@ -367,14 +367,6 @@ static inline std::string print_dfield_hex(const dfield_t *field) {
   return out.str();
 }
 
-static inline std::string print_varchar_field(dfield_t *field) {
-  if (field->data == nullptr || dfield_is_null(field) != 0) {
-    return "NULL";
-  }
-  std::string output{static_cast<const char *>(field->data), field->len};
-  return output;
-}
-
 void Loader::Thread_data::read_input_entry(const Rows_mysql &rows,
                                            size_t &row_index,
                                            const row_prebuilt_t *prebuilt,
