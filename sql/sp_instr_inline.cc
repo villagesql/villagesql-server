@@ -726,9 +726,7 @@ class sp_inline_instr_freturn : public sp_inline_instr {
 
     enum_field_types return_type = m_return_field_def->sql_type;
     if (ret->data_type() != m_return_field_def->sql_type) {
-      if ((ret->const_item() ||
-           (ret->const_for_execution() && thd->lex->is_exec_started())) &&
-          ret->type() != Item::FUNC_ITEM) {
+      if (ret->basic_const_item() && ret->type() != Item::FUNC_ITEM) {
         /* Convert return charset to the one required by the return field. This
          * is done only for simple constants. */
 
