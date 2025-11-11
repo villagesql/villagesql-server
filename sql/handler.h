@@ -5267,7 +5267,7 @@ class handler {
 
   /** Sets the source table data (table name and key range boundaries) for all
   loaders.
-  @param[in,out]  ctx                SE load context
+  @param[in,out]  load_ctx                SE load context
   @param[in]      source_table_data  vector containing the source table data
   @return true if successful, false otherwise. */
   virtual bool bulk_load_set_source_table_data(
@@ -5282,7 +5282,8 @@ class handler {
   @param[out] min Minimum ROW_ID in table
   @param[out] max Maximum ROW_ID in table
   @return true if successful, false otherwise. */
-  virtual bool bulk_load_get_row_id_range(size_t &, size_t &) const {
+  virtual bool bulk_load_get_row_id_range(size_t &min [[maybe_unused]],
+                                          size_t &max [[maybe_unused]]) const {
     return false;
   }
 
