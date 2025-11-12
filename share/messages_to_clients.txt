@@ -10844,6 +10844,9 @@ ER_LH_INFER_COLUMN_MAX_ERR
 ER_LH_EXTRA_COLUMNS_IN_FILE
   eng "%s: %u column(s) in file are not present in the table."
 
+ER_LH_PARQUET_COMPLEX_CONVERSION
+  eng "Column %d in %s: Cannot load column. %s."
+
 #
 #  End of 9.x error messages (server-to-client).
 #
