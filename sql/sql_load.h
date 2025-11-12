@@ -163,7 +163,9 @@ class Sql_cmd_load_table final : public Sql_cmd {
                                      Table_ref *new_table_ref);
 
   bool bulk_driver_service(THD *thd, const TABLE *sql_table,
-                           const TABLE *duplicate_table, size_t &affected_rows);
+                           const TABLE *duplicate_table,
+                           const Bulk_load_file_info &info, Bulk_source src,
+                           size_t &affected_rows);
 
   bool read_fixed_length(THD *thd, COPY_INFO &info, Table_ref *table_list,
                          READ_INFO &read_info, ulong skip_lines);

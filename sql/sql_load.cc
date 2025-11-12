@@ -465,6 +465,63 @@ bool Sql_cmd_load_table::execute_bulk(THD *thd) {
   if (validate_table_for_bulk_load(thd, table_ref, table_def, &hton)) {
     return true;
   }
+
+  Bulk_source src = Bulk_source::LOCAL;
+
+  switch (m_bulk_source) {
+    case LOAD_SOURCE_URL:
+      src = Bulk_source::OCI;
+      break;
+
+    case LOAD_SOURCE_S3:
+      src = Bulk_source::S3;
+      break;
+
+    case LOAD_SOURCE_FILE:
+      src = Bulk_source::LOCAL;
+      break;
+  }
+
+  std::string file_name_arg(m_exchange.file_name);
+
+  Bulk_load_file_info info(src, file_name_arg, m_file_count);
+
+  {
+    std::string error;
+    if (!info.parse(error)) {
+      my_error(ER_BULK_PARSER_ERROR, MYF(0), error.c_str());
+      return false;
+    }
+  }
+
+  if (src == Bulk_source::LOCAL) {
+    char name[FN_REFLEN];
+
+    Table_ref *const table_list = thd->lex->query_tables;
+    const char *db = table_list->db;
+    const char *tdb = thd->db().str ? thd->db().str : db;
+
+    if (!dirname_length(info.m_file_prefix.c_str())) {
+      strxnmov(name, FN_REFLEN - 1, mysql_real_data_home, tdb, NullS);
+      (void)fn_format(name, info.m_file_prefix.c_str(), name, "",
+                      MY_RELATIVE_PATH | MY_UNPACK_FILENAME);
+    } else {
+      (void)fn_format(
+          name, info.m_file_prefix.c_str(), mysql_real_data_home, "",
+          MY_RELATIVE_PATH | MY_UNPACK_FILENAME | MY_RETURN_REAL_PATH);
+    }
+
+    if (!is_secure_file_path(name)) {
+      /* Read only allowed from within dir specified by secure_file_priv */
+      my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--secure-file-priv");
+      return false;
+    }
+    /* Replace relative path. */
+    if (!test_if_hard_path(info.m_file_prefix.c_str())) {
+      info.m_file_prefix.assign(name);
+    }
+  }
+
   Table_ref new_table_ref{};
   Table_ref *new_table_ref_ptr = &new_table_ref;
 
@@ -479,7 +536,7 @@ bool Sql_cmd_load_table::execute_bulk(THD *thd) {
   // Actions needed to cleanup before leaving scope.
   auto cleanup_guard = create_scope_guard([&]() {
     THD_STAGE_INFO(thd, stage_end);
-    if (m_non_empty_table && success) {
+    if (m_non_empty_table && success && !info.m_is_dryrun) {
       auto final_temp_name =
           table_ref->table->file->bulk_load_generate_temporary_table_name();
       Table_ref final_table_ref{};
@@ -524,7 +581,7 @@ bool Sql_cmd_load_table::execute_bulk(THD *thd) {
     }
     tdc_remove_table(thd, TDC_RT_REMOVE_ALL, table_ref->db,
                      table_ref->table_name, false);
-    if (m_non_empty_table) {
+    if (m_non_empty_table && !info.m_is_dryrun) {
       tdc_remove_table(thd, TDC_RT_REMOVE_ALL, new_table_ref.db,
                        new_table_ref.table_name, false);
     }
@@ -555,7 +612,7 @@ bool Sql_cmd_load_table::execute_bulk(THD *thd) {
   tdc_remove_table(thd, TDC_RT_REMOVE_ALL, table_ref->db, table_ref->table_name,
                    false);
   table_ref->table = nullptr;
-  if (m_non_empty_table) {
+  if (m_non_empty_table && !info.m_is_dryrun) {
     tdc_remove_table(thd, TDC_RT_REMOVE_ALL, new_table_ref.db,
                      new_table_ref.table_name, false);
     new_table_ref.table = nullptr;
@@ -592,7 +649,7 @@ bool Sql_cmd_load_table::execute_bulk(THD *thd) {
     return true;
   }
 
-  if (m_non_empty_table) {
+  if (m_non_empty_table && !info.m_is_dryrun) {
     new_table_opened = !open_tables(thd, &new_table_ref_ptr, &counter,
                                     MYSQL_OPEN_HAS_MDL_LOCK);
     if (!new_table_opened) {
@@ -604,21 +661,24 @@ bool Sql_cmd_load_table::execute_bulk(THD *thd) {
   }
 
   size_t affected_rows = 0;
-  if (!m_non_empty_table &&
-      !bulk_driver_service(thd, table_ref->table, nullptr, affected_rows)) {
+  if (!m_non_empty_table && !bulk_driver_service(thd, table_ref->table, nullptr,
+                                                 info, src, affected_rows)) {
     my_error(ER_INTERNAL_ERROR, MYF(0),
              "BULK LOAD: bulk_driver_service failed");
     success = false;
     return true;
   }
 
-  if (m_non_empty_table &&
-      !bulk_driver_service(thd, table_ref->table, new_table_ref_ptr->table,
-                           affected_rows)) {
-    my_error(ER_INTERNAL_ERROR, MYF(0),
-             "BULK LOAD: bulk_driver_service failed");
-    success = false;
-    return true;
+  if (m_non_empty_table) {
+    auto *duplicate_table =
+        info.m_is_dryrun ? nullptr : new_table_ref_ptr->table;
+    if (!bulk_driver_service(thd, table_ref->table, duplicate_table, info, src,
+                             affected_rows)) {
+      my_error(ER_INTERNAL_ERROR, MYF(0),
+               "BULK LOAD: bulk_driver_service failed");
+      success = false;
+      return true;
+    }
   }
 
   success = true;
@@ -635,23 +695,9 @@ bool Sql_cmd_load_table::execute_bulk(THD *thd) {
 
 bool Sql_cmd_load_table::bulk_driver_service(THD *thd, const TABLE *sql_table,
                                              const TABLE *duplicate_table,
+                                             const Bulk_load_file_info &info,
+                                             Bulk_source src,
                                              size_t &affected_rows) {
-  Bulk_source src = Bulk_source::LOCAL;
-
-  switch (m_bulk_source) {
-    case LOAD_SOURCE_URL:
-      src = Bulk_source::OCI;
-      break;
-
-    case LOAD_SOURCE_S3:
-      src = Bulk_source::S3;
-      break;
-
-    case LOAD_SOURCE_FILE:
-      src = Bulk_source::LOCAL;
-      break;
-  }
-
   std::string lowercase(m_compression_algorithm_string.str,
                         m_compression_algorithm_string.length);
 
@@ -671,46 +717,6 @@ bool Sql_cmd_load_table::bulk_driver_service(THD *thd, const TABLE *sql_table,
     my_error(ER_WRONG_USAGE, MYF(0), "LOAD DATA with BULK Algorithm",
              ss.str().c_str());
     return false;
-  }
-
-  std::string file_name_arg(m_exchange.file_name);
-
-  Bulk_load_file_info info(src, file_name_arg, m_file_count);
-
-  {
-    std::string error;
-    if (!info.parse(error)) {
-      my_error(ER_BULK_PARSER_ERROR, MYF(0), error.c_str());
-      return false;
-    }
-  }
-
-  if (src == Bulk_source::LOCAL) {
-    char name[FN_REFLEN];
-
-    Table_ref *const table_list = thd->lex->query_tables;
-    const char *db = table_list->db;
-    const char *tdb = thd->db().str ? thd->db().str : db;
-
-    if (!dirname_length(info.m_file_prefix.c_str())) {
-      strxnmov(name, FN_REFLEN - 1, mysql_real_data_home, tdb, NullS);
-      (void)fn_format(name, info.m_file_prefix.c_str(), name, "",
-                      MY_RELATIVE_PATH | MY_UNPACK_FILENAME);
-    } else {
-      (void)fn_format(
-          name, info.m_file_prefix.c_str(), mysql_real_data_home, "",
-          MY_RELATIVE_PATH | MY_UNPACK_FILENAME | MY_RETURN_REAL_PATH);
-    }
-
-    if (!is_secure_file_path(name)) {
-      /* Read only allowed from within dir specified by secure_file_priv */
-      my_error(ER_OPTION_PREVENTS_STATEMENT, MYF(0), "--secure-file-priv");
-      return false;
-    }
-    /* Replace relative path. */
-    if (!test_if_hard_path(info.m_file_prefix.c_str())) {
-      info.m_file_prefix.assign(name);
-    }
   }
 
   my_h_service svc = nullptr;
