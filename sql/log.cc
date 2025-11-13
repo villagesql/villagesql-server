@@ -112,6 +112,7 @@
 #endif
 
 #include "sql/server_component/log_builtins_imp.h"
+#include "sql/server_component/mysql_timestamp_imp.h"
 
 #include <mysql/psi/mysql_telemetry_logs_client.h>
 extern PSI_logger_key key_slow_query_logger;
@@ -653,8 +654,8 @@ bool File_query_log::write_general(ulonglong event_utime,
 
   /* Note that my_b_write() assumes it knows the length for this */
   char local_time_buff[iso8601_size];
-  int time_buff_len = make_iso8601_timestamp(local_time_buff, event_utime,
-                                             iso8601_sysvar_logtimestamps);
+  int time_buff_len = Mysql_timestamp_imp::make_iso8601_timestamp(
+      local_time_buff, event_utime, iso8601_sysvar_logtimestamps);
 
   if (my_b_write(&log_file, pointer_cast<uchar *>(local_time_buff),
                  time_buff_len))
@@ -707,8 +708,8 @@ bool File_query_log::write_slow(THD *thd, ulonglong current_utime,
   if (!(specialflag & SPECIAL_SHORT_LOG_FORMAT)) {
     char my_timestamp[iso8601_size];
 
-    make_iso8601_timestamp(my_timestamp, current_utime,
-                           iso8601_sysvar_logtimestamps);
+    Mysql_timestamp_imp::make_iso8601_timestamp(my_timestamp, current_utime,
+                                                iso8601_sysvar_logtimestamps);
 
     buff_len = snprintf(buff, sizeof buff, "# Time: %s\n", my_timestamp);
 
@@ -743,13 +744,14 @@ bool File_query_log::write_slow(THD *thd, ulonglong current_utime,
     char end_time_buff[iso8601_size];
 
     if (query_start_utime) {
-      make_iso8601_timestamp(start_time_buff, query_start_utime,
-                             iso8601_sysvar_logtimestamps);
-      make_iso8601_timestamp(end_time_buff, query_start_utime + query_utime,
-                             iso8601_sysvar_logtimestamps);
+      Mysql_timestamp_imp::make_iso8601_timestamp(
+          start_time_buff, query_start_utime, iso8601_sysvar_logtimestamps);
+      Mysql_timestamp_imp::make_iso8601_timestamp(
+          end_time_buff, query_start_utime + query_utime,
+          iso8601_sysvar_logtimestamps);
     } else {
       start_time_buff[0] = '\0'; /* purecov: inspected */
-      make_iso8601_timestamp(
+      Mysql_timestamp_imp::make_iso8601_timestamp(
           end_time_buff, current_utime,
           iso8601_sysvar_logtimestamps); /* purecov: inspected */
     }
@@ -1313,13 +1315,14 @@ static bool telemetry_logger_log_slow(THD *thd, ulonglong current_utime,
     char end_time_buff[iso8601_size];
 
     if (query_start_utime) {
-      make_iso8601_timestamp(start_time_buff, query_start_utime,
-                             iso8601_sysvar_logtimestamps);
-      make_iso8601_timestamp(end_time_buff, query_start_utime + query_utime,
-                             iso8601_sysvar_logtimestamps);
+      Mysql_timestamp_imp::make_iso8601_timestamp(
+          start_time_buff, query_start_utime, iso8601_sysvar_logtimestamps);
+      Mysql_timestamp_imp::make_iso8601_timestamp(
+          end_time_buff, query_start_utime + query_utime,
+          iso8601_sysvar_logtimestamps);
     } else {
       start_time_buff[0] = '\0'; /* purecov: inspected */
-      make_iso8601_timestamp(
+      Mysql_timestamp_imp::make_iso8601_timestamp(
           end_time_buff, current_utime,
           iso8601_sysvar_logtimestamps); /* purecov: inspected */
     }

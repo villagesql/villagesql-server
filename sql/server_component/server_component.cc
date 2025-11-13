@@ -49,6 +49,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "mysql/components/services/mysql_statement_service.h"
 #include "mysql/components/services/mysql_status_variable_reader.h"
 #include "mysql/components/services/mysql_system_variable.h"
+#include "mysql/components/services/mysql_timestamp.h"
 #include "mysql/components/services/table_access_service.h"
 
 // pfs services
@@ -101,6 +102,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "mysql_system_variable_update_imp.h"
 #include "mysql_thd_attributes_imp.h"
 #include "mysql_thd_store_imp.h"
+#include "mysql_timestamp_imp.h"
 #include "mysql_transaction_delegate_control_imp.h"
 #include "mysqld_error.h"
 #include "persistent_dynamic_loader_imp.h"
@@ -413,6 +415,10 @@ Page_track_implementation::start, Page_track_implementation::stop,
 
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_runtime_error)
 mysql_server_runtime_error_imp::emit END_SERVICE_IMPLEMENTATION();
+
+BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_timestamp)
+Mysql_timestamp_imp::make_iso8601_timestamp_now,
+    Mysql_timestamp_imp::make_iso8601_timestamp END_SERVICE_IMPLEMENTATION();
 
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_current_thread_reader)
 mysql_component_mysql_current_thread_reader_imp::get
@@ -976,6 +982,7 @@ PROVIDES_SERVICE(mysql_server_path_filter, dynamic_loader_scheme_file),
     PROVIDES_SERVICE(mysql_server, mysql_audit_api_message),
     PROVIDES_SERVICE(mysql_server, mysql_page_track),
     PROVIDES_SERVICE(mysql_server, mysql_runtime_error),
+    PROVIDES_SERVICE(mysql_server, mysql_timestamp),
     PROVIDES_SERVICE(mysql_server, mysql_current_thread_reader),
     PROVIDES_SERVICE(mysql_server, mysql_keyring_iterator),
     PROVIDES_SERVICE(mysql_server, mysql_admin_session),

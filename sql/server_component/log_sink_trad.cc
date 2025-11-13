@@ -25,6 +25,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "log_sink_perfschema.h"  // log_sink_pfs_event
 #include "my_systime.h"           // my_micro_time()
 #include "sql/log.h"  // log_write_errstream(), log_prio_from_label()
+#include "sql/server_component/mysql_timestamp_imp.h"
 
 extern int log_item_inconsistent(log_item *li);
 
@@ -302,8 +303,8 @@ int log_sink_trad(void *instance [[maybe_unused]], log_line *ll) {
 
       char buff_local_time[iso8601_size];
       if (!(out_types & LOG_ITEM_LOG_TIMESTAMP)) {
-        make_iso8601_timestamp(buff_local_time, my_micro_time(),
-                               iso8601_sysvar_logtimestamps);
+        Mysql_timestamp_imp::make_iso8601_timestamp(
+            buff_local_time, my_micro_time(), iso8601_sysvar_logtimestamps);
         iso_timestamp = buff_local_time;
         iso_len = strlen(buff_local_time);
       }

@@ -38,6 +38,7 @@
 #ifndef LOG_H
 #define LOG_H
 
+#include <mysql/components/common/iso8601_tzmode.h>
 #include <mysql/components/services/log_shared.h>
 #include <stdarg.h>
 #include <stddef.h>
@@ -1441,31 +1442,6 @@ int log_line_submit(log_line *ll);
 */
 void log_line_set_flag(log_line *ll, log_line_flags_mask mask,
                        log_line_flags_mask value);
-
-/**
-  Whether to generate a UTC timestamp, or one following system-time.
-  These values are not arbitrary; they must correspond to the range
-  and meaning of opt_log_timestamps.
-*/
-enum enum_iso8601_tzmode {
-  iso8601_sysvar_logtimestamps = -1, /**< use value of opt_log_timestamps */
-  iso8601_utc = 0,                   /**< create UTC timestamp */
-  iso8601_system_time = 1            /**< use system time */
-};
-
-/**
-  Make and return an ISO 8601 / RFC 3339 compliant timestamp.
-  Accepts the log_timestamps global variable in its third parameter.
-
-  @param buf       A buffer of at least iso8601_size bytes to store
-                   the timestamp in. The timestamp will be \0 terminated.
-  @param utime     Microseconds since the epoch
-  @param mode      if 0, use UTC; if 1, use local time
-
-  @retval          length of timestamp (excluding \0)
-*/
-int make_iso8601_timestamp(char *buf, ulonglong utime,
-                           enum enum_iso8601_tzmode mode);
 
 /**
   Parse a ISO8601 timestamp and return the number of microseconds

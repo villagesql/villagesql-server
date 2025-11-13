@@ -50,6 +50,7 @@ SET(MYSQL_SERVER_COMPONENT_SOURCES
   mysql_mutex_service.cc
   mysql_psi_system_service.cc
   mysql_runtime_error.cc
+  mysql_timestamp_imp.cc
   mysql_rwlock_service.cc
   mysql_server_runnable_imp.cc
   mysql_string_service.cc
