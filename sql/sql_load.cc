@@ -595,7 +595,9 @@ bool Sql_cmd_load_table::execute_bulk(THD *thd) {
 
   if (!table_ref->table->file->is_table_empty()) {
     m_non_empty_table = true;
+  }
 
+  if (m_non_empty_table && !info.m_is_dryrun) {
     if (duplicate_table_for_bulk_load(thd, temp_name, schema_name,
                                       &new_table_ref)) {
       my_error(ER_INTERNAL_ERROR, MYF(0), "BULK LOAD: Duplicate table failed");
