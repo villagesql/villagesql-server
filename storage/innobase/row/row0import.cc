@@ -3068,15 +3068,7 @@ static void row_import_discard_changes(
   } else if (row_id > 0) {
     /* Update the system row id if the imported index row id is
     greater than the max system row id. */
-
-    dict_sys_mutex_enter();
-
-    if (row_id >= dict_sys->row_id) {
-      dict_sys->row_id = row_id + 1;
-      dict_hdr_flush_row_id();
-    }
-
-    dict_sys_mutex_exit();
+    dict_sys_set_min_next_row_id(row_id + 1);
   }
 
   return (DB_SUCCESS);

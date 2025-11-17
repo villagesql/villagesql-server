@@ -152,14 +152,14 @@ void dict_hdr_get_new_id(table_id_t *table_id, space_index_t *index_id,
 
 /** Writes the current value of the row id counter to the dictionary header file
  page. */
-void dict_hdr_flush_row_id(void) {
+void dict_sys_t::dict_hdr_flush_row_id() {
   dict_hdr_t *dict_hdr;
   row_id_t id;
   mtr_t mtr;
 
   ut_ad(dict_sys_mutex_own());
 
-  id = dict_sys->row_id;
+  id = dict_sys->row_id.load();
 
   mtr_start(&mtr);
 
@@ -206,7 +206,7 @@ static bool dict_hdr_create(mtr_t *mtr) /*!< in: mtr */
 /** Initializes the data dictionary memory structures when the database is
  started. This function is also called when the data dictionary is created.
  @return DB_SUCCESS or error code. */
-dberr_t dict_boot(void) {
+dberr_t dict_boot() {
   dict_hdr_t *dict_hdr;
   mtr_t mtr;
   dberr_t err = DB_SUCCESS;
@@ -229,10 +229,10 @@ dberr_t dict_boot(void) {
   ..._MARGIN, it will immediately be updated to the disk-based
   header. */
 
-  dict_sys->row_id =
+  dict_sys->row_id.store(
       DICT_HDR_ROW_ID_WRITE_MARGIN +
       ut_uint64_align_up(mach_read_from_8(dict_hdr + DICT_HDR_ROW_ID),
-                         DICT_HDR_ROW_ID_WRITE_MARGIN);
+                         DICT_HDR_ROW_ID_WRITE_MARGIN));
 
   mtr_commit(&mtr);
 
@@ -255,7 +255,7 @@ dberr_t dict_boot(void) {
 
 /** Creates and initializes the data dictionary at the server bootstrap.
  @return DB_SUCCESS or error code. */
-dberr_t dict_create(void) {
+dberr_t dict_create() {
   mtr_t mtr;
 
   mtr_start(&mtr);

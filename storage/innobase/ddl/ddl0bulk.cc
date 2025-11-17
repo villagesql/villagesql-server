@@ -748,14 +748,7 @@ dberr_t Loader::end(bool is_error) {
 }
 
 void Loader::set_sys_max_rowid(uint64_t max_rowid) {
-  dict_sys_mutex_enter();
-
-  if (max_rowid >= dict_sys->row_id) {
-    dict_sys->row_id = max_rowid + 1;
-    dict_hdr_flush_row_id();
-  }
-
-  dict_sys_mutex_exit();
+  dict_sys_set_min_next_row_id(max_rowid + 1);
 }
 
 void fill_system_columns(dtuple_t *entry, const row_prebuilt_t *prebuilt,
