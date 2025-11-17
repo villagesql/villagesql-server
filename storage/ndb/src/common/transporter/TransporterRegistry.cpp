@@ -2102,6 +2102,7 @@ bool TransporterRegistry::start_disconnecting(TrpId trp_id, int errnum,
                                               bool send_source) {
   DEBUG_FPRINTF((stderr, "(%u)REG:start_disconnecting(trp:%u, %d)\n",
                  localNodeId, trp_id, errnum));
+  const char *previous_state_note = "";
   switch (performStates[trp_id]) {
     case DISCONNECTED: {
       return true;
@@ -2111,8 +2112,9 @@ bool TransporterRegistry::start_disconnecting(TrpId trp_id, int errnum,
     }
     case CONNECTING:
       /**
-       * This is a correct transition if a failure happen while connecting.
+       * This is a correct transition if a failure happens while connecting.
        */
+      previous_state_note = "(was connecting)";
       break;
     case DISCONNECTING: {
       return true;
@@ -2123,23 +2125,23 @@ bool TransporterRegistry::start_disconnecting(TrpId trp_id, int errnum,
     if (m_disconnect_enomem_error[trp_id] < 10) {
       NdbSleep_MilliSleep(40);
       g_eventLogger->info(
-          "Socket error %d on transporter %u to node %u"
-          " in state: %u",
-          errnum, trp_id, allTransporters[trp_id]->getRemoteNodeId(),
-          performStates[trp_id]);
+          "Node %u socket error %d on transporter to node %u (id %u) %s",
+          localNodeId, errnum, allTransporters[trp_id]->getRemoteNodeId(),
+          trp_id, previous_state_note);
       return false;
     }
   }
   if (errnum == 0) {
-    g_eventLogger->info("Transporter %u to node %u disconnected in state: %u",
-                        trp_id, allTransporters[trp_id]->getRemoteNodeId(),
-                        performStates[trp_id]);
+    g_eventLogger->info(
+        "Node %u transporter to node %u (id %u) disconnected %s", localNodeId,
+        allTransporters[trp_id]->getRemoteNodeId(), trp_id,
+        previous_state_note);
   } else {
     g_eventLogger->info(
-        "Transporter %u to node %u disconnected in %s"
-        " with errnum: %d in state: %u",
-        trp_id, allTransporters[trp_id]->getRemoteNodeId(),
-        send_source ? "send" : "recv", errnum, performStates[trp_id]);
+        "Node %u transporter to node %u (id %u) disconnected in %s"
+        " with errnum: %d %s",
+        localNodeId, allTransporters[trp_id]->getRemoteNodeId(), trp_id,
+        send_source ? "send" : "recv", errnum, previous_state_note);
   }
   DBUG_ENTER("TransporterRegistry::start_disconnecting");
   DBUG_PRINT("info", ("performStates[trp:%u]=DISCONNECTING", trp_id));
