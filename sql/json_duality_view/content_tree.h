@@ -127,8 +127,8 @@ class Content_tree_node {
   /// descendents.
   std::string_view m_name;
 
-  /// Temporary id created for I_S.
-  uint m_tmp_table_id{0};
+  /// Node id. Displayed in I_S.
+  uint m_id{0};
 
   /// Object query expression.
   const Query_expression *m_query_expression{nullptr};
@@ -186,10 +186,10 @@ class Content_tree_node {
   const std::string_view &name() const { return m_name; }
 
   /////////////////////////////////////////////////////////////////////////////
-  // Table id.
+  // Node id (Table_id in I_S)
   /////////////////////////////////////////////////////////////////////////////
-  void set_tmp_table_id(uint id) { m_tmp_table_id = id; }
-  uint tmp_table_id() const { return m_tmp_table_id; }
+  void set_id(uint id) { m_id = id; }
+  uint id() const { return m_id; }
 
   /////////////////////////////////////////////////////////////////////////////
   // Query expression.

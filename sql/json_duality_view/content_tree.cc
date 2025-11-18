@@ -209,6 +209,8 @@ bool Key_column_info::is_generated_column() const {
   return false;
 }
 
+static thread_local uint next_id = 0;
+
 [[nodiscard]] static bool prepare_content_tree_node(THD *thd,
                                                     Content_tree_node *node) {
   // Increment usage counter, this will also count failures.
@@ -358,6 +360,8 @@ bool Key_column_info::is_generated_column() const {
   }
 
   // Prepare each child node.
+  node->set_id(next_id);
+  ++next_id;
   for (auto *child_node : *node->children()) {
     if (prepare_content_tree_node(thd, child_node)) return true;
   }
@@ -372,6 +376,7 @@ Content_tree_node *prepare_content_tree(THD *thd, LEX *view_lex) {
   root->set_name("Root Node");
   root->set_query_expression(view_lex->unit);
 
+  next_id = 0;
   if (prepare_content_tree_node(thd, root)) {
     destroy_content_tree(root);
     my_error(ER_JDV_INVALID_DEFINITION_CONTEXT_PREPARE_FAILED, MYF(0));
