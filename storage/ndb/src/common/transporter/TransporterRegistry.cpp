@@ -248,17 +248,16 @@ bool TransporterReceiveData::epoll_add(Transporter *t [[maybe_unused]]) {
        * epoll!!
        */
       g_eventLogger->info(
-          "Failed to %s epollfd: %u fd: %d "
-          " transporter id:%u -> node %u to epoll-set,"
-          " errno: %u %s",
-          add ? "ADD" : "DEL", m_epoll_fd, ndb_socket_get_native(sock_fd),
-          trp_id, node_id, error, strerror(error));
+          "Node %u transporter to node %u (id %u): failed to %s epollfd %u fd "
+          "%d, "
+          "errno: %u %s",
+          t->getLocalNodeId(), node_id, trp_id, add ? "ADD" : "DEL", m_epoll_fd,
+          ndb_socket_get_native(sock_fd), error, strerror(error));
       abort();
     }
     g_eventLogger->info(
-        "We lacked memory to add the socket for "
-        "transporter id:%u -> node id %u",
-        trp_id, node_id);
+        "Node %u transporter to node %u (id %u): lacked memory to add socket",
+        t->getLocalNodeId(), node_id, trp_id);
     return false;
   }
 
@@ -3244,8 +3243,8 @@ NdbSocket TransporterRegistry::connect_ndb_mgmd(NdbMgmHandle *h) {
   DBUG_PRINT("info", ("Converting handle to transporter"));
   NdbSocket socket = ndb_mgm_convert_to_transporter(h);
   if (!socket.is_valid()) {
-    g_eventLogger->error("Failed to convert to transporter (%s: %d)", __FILE__,
-                         __LINE__);
+    g_eventLogger->error("Node %u failed to convert to transporter (%s: %d)",
+                         localNodeId, __FILE__, __LINE__);
     ndb_mgm_destroy_handle(h);
   }
   DBUG_RETURN(socket);
