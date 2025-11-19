@@ -42,7 +42,7 @@ namespace mysql::sets::detail {
 ///
 /// @return true if a trivial case applied and was executed, false otherwise.
 template <Binary_operation operation, class Target_t, class Source_t>
-bool handle_inplace_op_trival_cases(Target_t &target, Source_t &&source) {
+bool handle_inplace_op_trivial_cases(Target_t &target, Source_t &&source) {
   if (mysql::utils::is_same_object(source, target)) {
     if constexpr (operation == Binary_operation::op_subtraction) target.clear();
     // self-union and self-intersection are no-ops.

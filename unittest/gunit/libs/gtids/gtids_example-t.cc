@@ -455,7 +455,7 @@ TEST(LibsGtidsExample, GtidSetRemove) {
   ASSERT_EQ(ret, utils::Return_status::ok);
   ASSERT_EQ(gtid_set1, make<gtids::Gtid_set>("A:1-49:51-100"));
 
-  // Insertion is like subtraction; if the element is not there, the operation
+  // Removal is like subtraction; if the element is not there, the operation
   // succeeds without altering the set.
   ret = gtid_set1.remove(make<gtids::Gtid>("A:50"));
   ASSERT_EQ(ret, utils::Return_status::ok);
@@ -502,7 +502,7 @@ TEST(LibsGtidsExample, GtidSetInplaceIntersection) {
   // inplace_intersect also accepts rvalue references. When the two operands
   // have compatible types and their allocators compare as equal, this invokes
   // move semantics, so the operation steals elements and does not allocate.
-  // After this point, we cannot use gtid_set2.
+  // After this point, we cannot use gtid_set5.
   auto gtid_set4 = make<gtids::Gtid_set>("A:1-100,B:1-150");
   auto gtid_set5 = make<gtids::Gtid_set>("B:50-200:tag:1-300");
   ret = gtid_set4.inplace_intersect(std::move(gtid_set5));
@@ -527,7 +527,7 @@ TEST(LibsGtidsExample, GtidSetInplaceSubtraction) {
   // inplace_subtract also accepts rvalue references. When the two operands have
   // compatible types and their allocators compare as equal, this invokes move
   // semantics, so the operation steals elements and does not allocate. After
-  // this point, we cannot use gtid_set2.
+  // this point, we cannot use gtid_set5.
   auto gtid_set4 = make<gtids::Gtid_set>("A:1-100,B:1-150");
   auto gtid_set5 = make<gtids::Gtid_set>("B:50-200:tag:1-300");
   ret = gtid_set4.inplace_subtract(std::move(gtid_set5));
@@ -579,7 +579,8 @@ TEST(LibsGtidsExample, GtidSetIteration) {
   for (auto &&[tsid, interval_set] : gtid_set1) {
     // The following loop is ok, just one element per interval for this TSID.
     //
-    // Intervals are always views, so we copy by value.
+    // These intervals are temporary objects created when dereferencing the
+    // iterator, so we make `interval` a non-reference.
     for (auto interval : interval_set) {
       // Loops like the following can be dubious, as intervals can be huge. Be
       // careful and use this only if your use case provides gives a bound on
@@ -602,41 +603,42 @@ TEST(LibsGtidsExample, GtidSetSearching) {
   auto tsid_b = make<gtids::Tsid>("B");
   auto tsid_c = make<gtids::Tsid>("C");
 
-  // find iterators using begin() and end()
+  // Find iterators using begin() and end().
   auto it_begin = gtid_set1.begin();
   auto it_end = gtid_set1.end();
   ASSERT_EQ(std::ranges::distance(it_begin, it_end), 2);
   ASSERT_EQ(it_begin->first, tsid_a);
 
-  // find (Tsid, Gtid_interval_set) pairs using front() and back().
+  // Find (Tsid, Gtid_interval_set) pairs using front() and back().
   ASSERT_EQ(*it_begin, gtid_set1.front());
   ASSERT_EQ(gtid_set1.front().first, tsid_a);
   ASSERT_EQ(*std::prev(it_end), gtid_set1.back());
   ASSERT_EQ(gtid_set1.back().first, tsid_b);
 
-  // lookup Gtid_interval_sets using operator[]. This is only allowed if the
+  // Lookup Gtid_interval_sets using operator[]. This is only allowed if the
   // given tsid exists in the set; otherwise it is undefined behavior.
   gtids::Gtid_interval_set &ivset_a = gtid_set1[tsid_a];
   ASSERT_EQ(&ivset_a, &gtid_set1.front().second);
 
-  // lookup using find (and find the element).
+  // Lookup using find (and find the element).
   auto it_b = gtid_set1.find(tsid_b);
   ASSERT_NE(it_b, gtid_set1.end());
 
-  // lookup using find (and don't find the element).
+  // Lookup using find (and don't find the element).
   auto it_c = gtid_set1.find(tsid_c);
   ASSERT_EQ(it_c, gtid_set1.end());
 
-  // get the boundary set from the interval set
+  // Get the boundary set from the interval set.
   auto &boundary_set = ivset_a.boundaries();
 
-  // compute upper and lower bounds in a boundary set. The upper bound is an
+  // Compute upper and lower bounds in a boundary set. The upper bound is an
   // iterator to the next boundary whose value is strictly greater than the
   // given value. The lower bound is an iterator to the next boundary whose
-  // value is greater or equal to the given value. Iterators in boundary sets
-  // have the member function `is_endpoint` which indicates if the pointed-to
-  // boundary is the start or exclusive end of an interval. End boundaries are
-  // always exclusive (hence, you see 31 rather than 30 in the following code).
+  // value is greater than or equal to the given value. Iterators in boundary
+  // sets have the member function `is_endpoint` which indicates if the
+  // pointed-to boundary is the start or exclusive end of an interval. End
+  // boundaries are always exclusive (hence, you see 31 rather than 30 in the
+  // following code).
   auto ub1 = boundary_set.upper_bound(25);
   ASSERT_EQ(*ub1, 31);
   ASSERT_TRUE(ub1.is_endpoint());

@@ -43,7 +43,7 @@
 #include "mysql/sets/boundary_set_meta.h"               // Is_boundary_storage
 #include "mysql/sets/boundary_set_subtraction_view.h"  // Subtraction_view
 #include "mysql/sets/boundary_set_union_view.h"        // Union_view
-#include "mysql/sets/set_container_helpers.h"  // handle_inplace_op_trival_cases
+#include "mysql/sets/set_container_helpers.h"  // handle_inplace_op_trivial_cases
 
 /// @addtogroup GroupLibsMysqlSets
 /// @{

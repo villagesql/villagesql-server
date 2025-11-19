@@ -35,7 +35,7 @@
 #include "mysql/sets/nested_set_category.h"    // Nested_set_category_tag
 #include "mysql/sets/nested_set_interface.h"   // Nested_set_interface
 #include "mysql/sets/nested_set_meta.h"        // Is_nested_set_over_traits
-#include "mysql/sets/set_container_helpers.h"  // handle_inplace_op_trival_cases
+#include "mysql/sets/set_container_helpers.h"  // handle_inplace_op_trivial_cases
 #include "mysql/utils/forward_like.h"          // forward_like
 #include "mysql/utils/return_status.h"         // void_to_ok
 
@@ -256,18 +256,26 @@ class Nested_container
   /// This will iterate over the input set and repeatedly invoke
   /// inplace_union(cursor, key, mapped).
   ///
+  /// If other_set is an rvalue reference, and its allocator compares equal with
+  /// this Nested_container's allocator, and the set types satisfy
+  /// Can_donate_set_elements, this steals elements from other and does not
+  /// allocate elements in the Nested_set. The same applies on all levels of
+  /// nested containers, i.e., the mapped sets may steal if their allocators
+  /// compare equal and their types satisfy Can_donate_set_elements; and so on
+  /// on all nesting levels. If stealing is possible on all levels, this cannot
+  /// fail.
+  ///
   /// @param other_set Arguments passed to the `inplace_union` member function
   /// of the mapped container.
   ///
-  /// @return If move semantics can be used, then this cannot fail and returns
-  /// void. Otherwise, returns Return_status::ok on success, or
-  /// Return_status::error if an out-of-memory condition occurred, either when
-  /// inserting into the storage for this object, or when invoking
-  /// `inplace_union` for the mapped container. This may leave the container as
-  /// a superset of the previous set and a subset of the union.
+  /// @return Return_status::ok on success, or Return_status::error if an
+  /// out-of-memory condition occurred, either when inserting into the storage
+  /// for this object, or when invoking `inplace_union` for the mapped
+  /// container. This may leave the container as a superset of the previous set
+  /// and a subset of the union.
   template <Is_nested_set_over_traits_unqualified<Set_traits_t> Other_set_t>
   [[nodiscard]] auto inplace_union(Other_set_t &&other_set) noexcept {
-    if (detail::handle_inplace_op_trival_cases<Binary_operation::op_union>(
+    if (detail::handle_inplace_op_trivial_cases<Binary_operation::op_union>(
             *this, std::forward<Other_set_t>(other_set)))
       return return_ok;
     constexpr bool types_allow_donation =
@@ -392,24 +400,24 @@ class Nested_container
   /// other set, where the key part of the two pairs are equal. In each step, it
   /// invokes `inplace_subtract` on the mapped container, passing the mapped
   /// other set as parameter. The number of iterations over value pairs is
-  /// bounded by min(this->size, other.size()).
+  /// bounded by min(this->size, other_set.size()).
   ///
-  /// If the other container is an rvalue reference and the types support it,
-  /// and the set types support stealing elements from other_set to this,
-  /// elements of mapped sets are stolen when needed. In this case this function
-  /// never allocates memory.
+  /// If other_set is an rvalue reference, any time this function makes a
+  /// recursive call to inplace_subtract on the mapped sets, it will pass an
+  /// rvalue reference to a mapped set in other_set. This possibly enables
+  /// stealing, if allowed by the types and allocators of those sets. If
+  /// stealing is possible on all nesting levels, this cannot fail.
   ///
   /// @param other_set Set to subtract
   ///
-  /// @return If move semantics can be used, then this cannot fail and returns
-  /// void. Otherwise, returns Return_status::ok on success, or
-  /// Return_status::error if an out-of-memory condition occurred. This can
-  /// happen if the `inplace_subtract` member of the mapped set fails. This may
-  /// leave the container as a subset of the previous set and a superset of the
+  /// @return Return_status::ok on success, or Return_status::error if an
+  /// out-of-memory condition occurred. This can happen if the
+  /// `inplace_subtract` member of the mapped set fails. This may leave the
+  /// container as a subset of the previous set and a superset of the
   /// difference.
   template <Is_nested_set_over_traits_unqualified<Set_traits_t> Other_set_t>
   [[nodiscard]] auto inplace_subtract(Other_set_t &&other_set) noexcept {
-    if (detail::handle_inplace_op_trival_cases<
+    if (detail::handle_inplace_op_trivial_cases<
             Binary_operation::op_subtraction>(
             *this, std::forward<Other_set_t>(other_set)))
       return return_ok;
@@ -508,22 +516,22 @@ class Nested_container
 
   /// Inplace-intersect this set with the given set.
   ///
-  /// If the other container is an rvalue reference and the types support it,
-  /// and the set types support stealing elements from other_set to this,
-  /// elements of mapped sets are stolen when needed. In this case this function
-  /// never allocates memory.
+  /// If other_set is an rvalue reference, any time this function makes a
+  /// recursive call to inplace_intersect on the mapped sets, it will pass an
+  /// rvalue reference to a mapped set in other_set. This possibly enables
+  /// stealing, if allowed by the types and allocators of those sets. If
+  /// stealing is possible on all nesting levels, this cannot fail.
   ///
   /// @param other_set Set to intersect with.
   ///
-  /// @return If move semantics can be used, then this cannot fail and returns
-  /// void. Otherwise, returns Return_status::ok on success, or
-  /// Return_status::error if an out-of-memory condition occurred. This can
-  /// happen if the `inplace_intersect` member of the mapped set fails. This may
-  /// leave the container as a subset of the previous set and a superset of the
+  /// @return Return_status::ok on success, or Return_status::error if an
+  /// out-of-memory condition occurred. This can happen if the
+  /// `inplace_intersect` member of the mapped set fails. This may leave the
+  /// container as a subset of the previous set and a superset of the
   /// intersection.
   template <Is_nested_set_over_traits_unqualified<Set_traits_t> Other_set_t>
   [[nodiscard]] auto inplace_intersect(Other_set_t &&other_set) noexcept {
-    if (detail::handle_inplace_op_trival_cases<
+    if (detail::handle_inplace_op_trivial_cases<
             Binary_operation::op_intersection>(
             *this, std::forward<Other_set_t>(other_set)))
       return return_ok;

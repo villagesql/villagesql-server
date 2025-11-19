@@ -205,13 +205,13 @@ To convert `object` to a new `std::string` object, using text format, use:
 ```
   // Get a std::string using the throwing interface.
   try {
-    std::string str = throwing::encode_text(object);
+    std::string str = mysql::strconv::throwing::encode_text(object);
   } catch (std::bad_alloc &) { /* handle the exception */ }
 ```
 or
 ```
   // Get a std::optional<std::string> using the non-throwing interface.
-  std::optional<std::string> opt_str = encode_text(object);
+  std::optional<std::string> opt_str = mysql::strconv::encode_text(object);
   if (!opt_str.has_value()) { /* handle the oom error */ }
   std::string str = opt_str.value();
 ```
@@ -225,13 +225,13 @@ parameter:
 ```
   // Get a std::string using the throwing interface.
   try {
-    std::string str = throwing::encode(Binary_format{}, object);
+    std::string str = mysql::strconv::throwing::encode(Binary_format{}, object);
   } catch (std::bad_alloc &) { /* handle the exception */ }
 ```
 or
 ```
   // Get a std::optional<std::string> using the non-throwing interface.
-  auto opt_str = encode(Hex_format{}, object);
+  auto opt_str = mysql::strconv::encode(Hex_format{}, object);
   if (!opt_str.has_value()) { /* handle the oom error */ }
   std::string str = opt_str.value();
 ```
@@ -245,7 +245,7 @@ an example:
 ```
   char buf[100];
   size_t size = 99; // reserve 1 char for the null-termination byte
-  encode_text(out_str_fixed_z(buf, size), obj);
+  mysql::strconv::encode_text(mysql::strconv::out_str_fixed_z(buf, size), obj);
 ```
 
 In the code above, `out_str_fixed_z` returns an output string wrapper: an object
@@ -280,17 +280,19 @@ how it can be used:
 ```
   Object parse_object(std::string text) {
     Object obj;
-    Parse_status status = decode(Text_format{}, text, obj);
-    if (!status.is_ok()) {
-      std::cout << encode_text(status); // produce error message
-      exit();
+    auto result =
+        mysql::strconv::decode(mysql::strconv::Text_format{}, text, obj);
+    if (!result.is_ok()) {
+      std::cout << mysql::strconv::encode_text(result); // produce error message
+      std::terminate();
     }
     return obj;
   }
 ```
 
-Note the return type, `Parse_status`: this can be queried for the success status
-(`status.is_ok()`) and for an error message (`encode_text(status)`).
+The returned `result` object is of type `Parser`. This can be queried for the
+success status (`result.is_ok()`) and for an error message
+(`encode_text(result)`).
 
 ## Simpler form for text format
 
@@ -304,12 +306,12 @@ Since `std::string_view` has implicit conversions from raw pointers, just use:
 
 ```
   // char *buf, size_t size
-  decode(fmt, {buf, size}, obj);
+  auto result = mysql::strconv::decode(fmt, {buf, size}, obj);
 ```
 or
 ```
   // char *buf, char *end
-  decode(fmt, {buf, end}, obj);
+  auto result = mysql::strconv::decode(fmt, {buf, end}, obj);
 ```
 
 ### Other formats than Text
@@ -354,7 +356,9 @@ Repeat objects are constructed using factory functions such as
 Here is an example:
 
 ```
-  std::string = throwing::decode(Text_format{} | Repeat::optional(), obj);
+  auto result = mysql::strconv::decode(
+      mysql::strconv::Text_format{} | mysql::strconv::Repeat::optional(),
+      str, obj);
 ```
 
 ## Authors: implementing `encode` for custom types and formats
@@ -367,7 +371,7 @@ Authors need to implement this:
   namespace mysql::strconv {
   void encode_impl(
       const /*Format*/ &format,
-      Is_string_target auto &target,
+      mysql::strconv::Is_string_target auto &target,
       const /*Object*/ &object) {
     // write object to target in format
   }
@@ -422,7 +426,7 @@ versus writing the string, e.g. when the string length is faster to compute, use
 the following pattern:
 
 ```
-  template <Is_string_target Target_t>
+  template <mysql::strconv::Is_string_target Target_t>
   void encode_impl(
       const /*Format*/ &format,
       Target_t &target,
@@ -453,10 +457,12 @@ position accordingly.
 (Detail: It is discouraged to implement this as two functions:
 ```
   // Do not do this!
-  // void encode_impl(const /*Format*/ &format, String_counter &target,
-  //                     const /*Object*/ &object);
-  // void encode_impl(const /*Format*/ &format, String_writer &target,
-  //                     const /*Object*/ &object);
+  // void encode_impl(const /*Format*/ &format,
+  //                  mysql::strconv::String_counter &target,
+  //                  const /*Object*/ &object);
+  // void encode_impl(const /*Format*/ &format,
+  //                  mysql::strconv::String_writer &target,
+  //                  const /*Object*/ &object);
 ```
 The reason is that this prevents implementing `encode_impl` for types that
 derive from `Object` with a single single function taking an `Is_string_target
@@ -475,7 +481,7 @@ Authors need to implement this:
   namespace mysql::strconv {
   void decode_impl(
       const /*Format*/ &format,
-      Parser &parser,
+      mysql::strconv::Parser &parser,
       /*Object*/ &object) {
     // read into object from parser using format; report any errors through parser
   }
@@ -537,10 +543,11 @@ the parsing completed; on error, the position is restored.
 
 Example:
 ```
-  auto checker = Checker([&] {
+  auto checker = mysql::strconv::Checker([&] {
     if (!obj.is_valid()) parser.set_parse_error("Invalid object");
   });
-  if (parser.read(format | Repeat::optional() | checker, obj)) return;
+  if (parser.read(format | mysql::strconv::Repeat::optional() | checker, obj))
+    return;
 ```
 
 `read` and `skip` are declared as `[[nodiscard]]` (except `skip` when it takes a
@@ -550,7 +557,7 @@ the caller (by leaving the status object unchanged and returning), as in the
 following example:
 
 ```
-  if (parser.read(format, obj) != Return_status::ok) return;
+  if (parser.read(format, obj) != mysql::utils::Return_status::ok) return;
 ```
 
 ### Reporting errors
@@ -602,8 +609,8 @@ prototype:
 ```
   void decode_impl(
       const /*Format*/ &format,
-      Parser &parser,
-      Is_string_target auto &target);
+      mysql::strconv::Parser &parser,
+      mysql::strconv::Is_string_target auto &target);
 ```
 
 Write to the target just like you would in a `encode_impl` function, i.e.,
@@ -738,8 +745,10 @@ replaces `Text_format` by `My_text_format`.
 The default format is declared by overloading `get_default_format`, as follows:
 
 ```
+namespace mysql::strconv {
 template <class My_type>
 auto get_default_format(const Text_format &) { return My_text_format{}; }
+}
 ```
 
 ### Format resolution algorithm
