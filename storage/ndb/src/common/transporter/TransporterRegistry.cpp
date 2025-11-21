@@ -218,7 +218,6 @@ bool TransporterReceiveData::epoll_add(Transporter *t [[maybe_unused]]) {
 
 #if defined(HAVE_EPOLL_CREATE)
   if (m_epoll_fd != -1) {
-    bool add = true;
     struct epoll_event event_poll;
     memset(&event_poll, 0, sizeof(event_poll));
     ndb_socket_t sock_fd = t->getSocket();
@@ -233,25 +232,17 @@ bool TransporterReceiveData::epoll_add(Transporter *t [[maybe_unused]]) {
         epoll_ctl(m_epoll_fd, op, ndb_socket_get_native(sock_fd), &event_poll);
     if (likely(!ret_val)) goto ok;
     error = errno;
-    if (error == ENOENT && !add) {
-      /*
-       * Could be that socket was closed premature to this call.
-       * Not a problem that this occurs.
-       */
-      goto ok;
-    }
     const int node_id = t->getRemoteNodeId();
-    if (!add || (add && (error != ENOMEM))) {
+    if (error != ENOMEM) {
       /*
        * Serious problems, we are either using wrong parameters,
        * have permission problems or the socket doesn't support
        * epoll!!
        */
       g_eventLogger->info(
-          "Node %u transporter to node %u (id %u): failed to %s epollfd %u fd "
-          "%d, "
-          "errno: %u %s",
-          t->getLocalNodeId(), node_id, trp_id, add ? "ADD" : "DEL", m_epoll_fd,
+          "Node %u transporter to node %u (id %u): failed to ADD epollfd %u fd "
+          "%d, errno: %u %s",
+          t->getLocalNodeId(), node_id, trp_id, m_epoll_fd,
           ndb_socket_get_native(sock_fd), error, strerror(error));
       abort();
     }
