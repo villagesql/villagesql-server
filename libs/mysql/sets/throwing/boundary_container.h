@@ -441,7 +441,7 @@ class Boundary_container : public mysql::sets::Basic_boundary_container_wrapper<
   template <Binary_operation operation,
             Is_boundary_set_over_traits_unqualified<Set_traits_t> Source_t>
   void inplace_op(Source_t &&source) {
-    if (mysql::sets::detail::handle_inplace_op_trival_cases<operation>(
+    if (mysql::sets::detail::handle_inplace_op_trivial_cases<operation>(
             *this, std::forward<Source_t>(source)))
       return;
 
