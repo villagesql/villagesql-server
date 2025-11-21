@@ -61,6 +61,28 @@
   } while (0)
 #endif
 
+namespace {
+/**
+ * @brief Return human-readable transporter type name.
+ *
+ * Maps TransporterType enum to a short string used in logs and diagnostics.
+ *
+ * @param t transporter type.
+ * @return transporter type name.
+ */
+static inline const char *transporter_type_name(TransporterType t) {
+  const int v = static_cast<int>(t);
+  switch (v) {
+    case tt_TCP_TRANSPORTER:
+      return "TCP";
+    case tt_SHM_TRANSPORTER:
+      return "SHM";
+    default:
+      return "UNKNOWN";
+  }
+}
+}  // namespace
+
 Transporter::Transporter(TransporterRegistry &t_reg, TrpId transporter_index,
                          TransporterType _type, const char *lHostName,
                          const char *rHostName, int s_port,
@@ -454,8 +476,12 @@ bool Transporter::connect_client(NdbSocket &&socket) {
   if (remote_transporter_type != -1 && remote_transporter_type != m_type) {
     g_eventLogger->error(
         "Node %u connection to node %d uses different transporter "
-        "type: %d, expected type: %d",
-        localNodeId, nodeId, remote_transporter_type, m_type);
+        "type: %s (%d), expected type: %s (%d)",
+        localNodeId, nodeId,
+        transporter_type_name(
+            static_cast<TransporterType>(remote_transporter_type)),
+        remote_transporter_type, transporter_type_name(m_type),
+        static_cast<int>(m_type));
     socket.close();
     DBUG_RETURN(false);
   }
