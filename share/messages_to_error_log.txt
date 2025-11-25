@@ -12811,6 +12811,9 @@ ER_RPL_MTA_ALLOW_COMMIT_OUT_OF_ORDER
 ER_TEMPTABLE_ENGINE_ERROR
   eng "Temptable: %s"
 
+ER_AUTH_INITIAL_PLUGIN_OVERRIDE
+  eng "Plugin '%s' from authentication policy cannot be used for initial handshake, using '%s' default instead"
+
 # DO NOT add server-to-client messages here;
 # they go in messages_to_clients.txt
 # in the same directory as this file.

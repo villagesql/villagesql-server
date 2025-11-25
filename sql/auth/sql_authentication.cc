@@ -34,6 +34,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#include <atomic>
 #include <string> /* std::string */
 #include <utility>
 #include <vector> /* std::vector */
@@ -1165,6 +1166,7 @@ const LEX_CSTRING Cached_authentication_plugins::cached_plugins_names[(
                          {STRING_WITH_LEN("sha256_password")}};
 
 LEX_CSTRING default_auth_plugin_name{STRING_WITH_LEN("caching_sha2_password")};
+std::atomic<char *> initial_auth_plugin_name{nullptr};
 
 /**
   Use known pointers for cached plugins to improve comparison time
@@ -3969,7 +3971,18 @@ int acl_authenticate(THD *thd, enum_server_command command) {
   int res = CR_OK;
   int ret = 1;
   MPVIO_EXT mpvio;
-  LEX_CSTRING auth_plugin_name = default_auth_plugin_name;
+  LEX_CSTRING auth_plugin_name =
+      initial_auth_plugin_name
+          ? LEX_CSTRING{STRING_WITH_LEN(initial_auth_plugin_name)}
+          : default_auth_plugin_name;
+
+  DBUG_EXECUTE_IF("acl_expect_native_initial_auth_plugin", {
+    assert(0 == strcmp(auth_plugin_name.str, "mysql_native_password"));
+  });
+  DBUG_EXECUTE_IF("acl_expect_sha2_initial_auth_plugin", {
+    assert(0 == strcmp(auth_plugin_name.str, "caching_sha2_password"));
+  });
+
   Thd_charset_adapter charset_adapter(thd);
 
   DBUG_TRACE;
