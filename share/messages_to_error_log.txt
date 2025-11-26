@@ -12853,6 +12853,9 @@ ER_RPL_MTA_ALLOW_COMMIT_OUT_OF_ORDER
 ER_TEMPTABLE_ENGINE_ERROR
   eng "Temptable: %s"
 
+ER_AUDIT_LOG_INVALID_ROTATE_ON_TIME_VALUE
+   eng "Invalid audit_log_rotate_on_time interval specified: %lu. Valid values are 0 (off) or greater than or equal to %d. Adjusting to %d"
+
 # DO NOT add server-to-client messages here;
 # they go in messages_to_clients.txt
 # in the same directory as this file.
