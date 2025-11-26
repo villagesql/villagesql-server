@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, 2025, Oracle and/or its affiliates.
+/* Copyright (c) 2017, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -21,32 +21,19 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#ifndef DBUG_EXECUTE_IF_GUARD
-#define DBUG_EXECUTE_IF_GUARD
+#ifndef MYSQL_SERVER_JSON_ENCODE_SERVICE_H
+#define MYSQL_SERVER_JSON_ENCODE_SERVICE_H
 
-#include "mysql/components/services/mysql_debug_keyword_service.h"
+#include <mysql/components/service_implementation.h>
+#include <mysql/components/services/mysql_json_encode.h>
 
-#if !defined(NDEBUG)
+class mysql_json_encode_imp {
+ public:
+  static DEFINE_METHOD(const unsigned char *, encode,
+                       (const unsigned char *src, const unsigned char *src_end,
+                        const unsigned char *src_data_end, unsigned char *dst,
+                        unsigned char *dst_end, const CHARSET_INFO_h charset,
+                        unsigned char **dst_out));
+};
 
-/**
-  Debug macro for conditional code execution.
-
-  @note Using this macro requires declaring extern mysql_debug_keyword_service
-        service reference:
-        extern REQUIRES_SERVICE_PLACEHOLDER(mysql_debug_keyword_service);
-*/
-#define DBUG_EXECUTE_IF(keyword, a1)                     \
-  do {                                                   \
-    if (SERVICE_PLACEHOLDER(mysql_debug_keyword_service) \
-            ->lookup_debug_keyword(keyword)) {           \
-      a1                                                 \
-    }                                                    \
-  } while (0)
-
-#else
-
-#define DBUG_EXECUTE_IF(keyword, a1)
-
-#endif
-
-#endif  // DBUG_EXECUTE_IF_GUARD
+#endif /* MYSQL_SERVER_JSON_ENCODE_SERVICE_H */

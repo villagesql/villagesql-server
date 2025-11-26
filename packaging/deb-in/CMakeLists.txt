@@ -109,6 +109,7 @@ usr/bin/mysqldm
   SET (DEB_INSTALL_SERVER_PLUGINS
 "
 usr/lib/mysql/plugin/audit_log.so
+usr/lib/mysql/plugin/component_audit_log.so
 usr/lib/mysql/plugin/authentication_kerberos.so
 usr/lib/mysql/plugin/authentication_openid_connect.so
 usr/lib/mysql/plugin/authentication_ldap_sasl.so

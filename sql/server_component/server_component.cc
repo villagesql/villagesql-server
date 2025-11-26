@@ -37,13 +37,17 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "mysql/components/services/mysql_command_consumer.h"
 #include "mysql/components/services/mysql_command_services.h"
 #include "mysql/components/services/mysql_cond_service.h"
+#include "mysql/components/services/mysql_json_encode.h"
 #include "mysql/components/services/mysql_library.h"
 #include "mysql/components/services/mysql_library_ext.h"
 #include "mysql/components/services/mysql_mutex_service.h"
+#include "mysql/components/services/mysql_my_thread.h"
 #include "mysql/components/services/mysql_psi_system_service.h"
 #include "mysql/components/services/mysql_query_attributes.h"
 #include "mysql/components/services/mysql_runtime_error_service.h"
+#include "mysql/components/services/mysql_runtime_warning.h"
 #include "mysql/components/services/mysql_rwlock_service.h"
+#include "mysql/components/services/mysql_server_attributes.h"
 #include "mysql/components/services/mysql_signal_handler.h"
 #include "mysql/components/services/mysql_simple_error_log.h"
 #include "mysql/components/services/mysql_statement_service.h"
@@ -84,11 +88,17 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 #include "mysql_command_services_imp.h"
 #include "mysql_connection_attributes_iterator_imp.h"
 #include "mysql_current_thread_reader_imp.h"
+#include "mysql_file_imp.h"
 #include "mysql_global_variable_attributes_service_imp.h"
+#include "mysql_json_encode_imp.h"
 #include "mysql_library_imp.h"
+#include "mysql_lock_free_hash_imp.h"
+#include "mysql_my_thread_imp.h"
 #include "mysql_ongoing_transaction_query_imp.h"
 #include "mysql_page_track_imp.h"
 #include "mysql_runtime_error_imp.h"
+#include "mysql_runtime_warning_imp.h"
+#include "mysql_server_attributes_imp.h"
 #include "mysql_server_event_tracking_bridge_imp.h"
 #include "mysql_server_keyring_lockable_imp.h"
 #include "mysql_server_runnable_imp.h"
@@ -164,6 +174,9 @@ dynamic_privilege_services_impl::has_global_grant END_SERVICE_IMPLEMENTATION();
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_charset)
 mysql_string_imp::get_charset_utf8mb4, mysql_string_imp::get_charset_by_name,
     END_SERVICE_IMPLEMENTATION();
+
+BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_json_encode)
+mysql_json_encode_imp::encode, END_SERVICE_IMPLEMENTATION();
 
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_string_factory)
 mysql_string_imp::create,
@@ -415,6 +428,10 @@ Page_track_implementation::start, Page_track_implementation::stop,
 
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_runtime_error)
 mysql_server_runtime_error_imp::emit END_SERVICE_IMPLEMENTATION();
+
+BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_runtime_warning)
+mysql_server_runtime_warning_imp::emit,
+    mysql_server_runtime_warning_imp::emit_v END_SERVICE_IMPLEMENTATION();
 
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_timestamp)
 Mysql_timestamp_imp::make_iso8601_timestamp_now,
@@ -912,6 +929,33 @@ mysql_library_imp::exists, mysql_library_imp::init, mysql_library_imp::get_body,
 BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_library_ext)
 mysql_library_ext_imp::get_body END_SERVICE_IMPLEMENTATION();
 
+BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_my_thread)
+mysql_my_thread_imp::attach, mysql_my_thread_imp::detach,
+    mysql_my_thread_imp::is_attached END_SERVICE_IMPLEMENTATION();
+
+BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_file)
+mysql_component_mysql_file_imp::open, mysql_component_mysql_file_imp::create,
+    mysql_component_mysql_file_imp::close,
+    mysql_component_mysql_file_imp::write, mysql_component_mysql_file_imp::read,
+    mysql_component_mysql_file_imp::flush, mysql_component_mysql_file_imp::seek,
+    mysql_component_mysql_file_imp::tell END_SERVICE_IMPLEMENTATION();
+
+BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_server_attributes)
+mysql_server_attributes_imp::get END_SERVICE_IMPLEMENTATION();
+
+BEGIN_SERVICE_IMPLEMENTATION(mysql_server, mysql_lock_free_hash)
+mysql_component_mysql_lock_free_hash_imp::init,
+    mysql_component_mysql_lock_free_hash_imp::destroy,
+    mysql_component_mysql_lock_free_hash_imp::get_pins,
+    mysql_component_mysql_lock_free_hash_imp::search,
+    mysql_component_mysql_lock_free_hash_imp::remove,
+    mysql_component_mysql_lock_free_hash_imp::random_match,
+    mysql_component_mysql_lock_free_hash_imp::search_unpin,
+    mysql_component_mysql_lock_free_hash_imp::put_pins,
+    mysql_component_mysql_lock_free_hash_imp::insert,
+    mysql_component_mysql_lock_free_hash_imp::overhead
+    END_SERVICE_IMPLEMENTATION();
+
 BEGIN_COMPONENT_PROVIDES(mysql_server)
 PROVIDES_SERVICE(mysql_server_path_filter, dynamic_loader_scheme_file),
     PROVIDES_SERVICE(mysql_server, persistent_dynamic_loader),
@@ -982,6 +1026,7 @@ PROVIDES_SERVICE(mysql_server_path_filter, dynamic_loader_scheme_file),
     PROVIDES_SERVICE(mysql_server, mysql_audit_api_message),
     PROVIDES_SERVICE(mysql_server, mysql_page_track),
     PROVIDES_SERVICE(mysql_server, mysql_runtime_error),
+    PROVIDES_SERVICE(mysql_server, mysql_runtime_warning),
     PROVIDES_SERVICE(mysql_server, mysql_timestamp),
     PROVIDES_SERVICE(mysql_server, mysql_current_thread_reader),
     PROVIDES_SERVICE(mysql_server, mysql_keyring_iterator),
@@ -1174,7 +1219,13 @@ PROVIDES_SERVICE(mysql_server_path_filter, dynamic_loader_scheme_file),
     PROVIDES_SERVICE(mysql_server, table_access_binlog),
     PROVIDES_SERVICE(mysql_server, replication_applier_metrics),
     PROVIDES_SERVICE(mysql_server, mysql_library),
-    PROVIDES_SERVICE(mysql_server, mysql_library_ext), END_COMPONENT_PROVIDES();
+    PROVIDES_SERVICE(mysql_server, mysql_library_ext),
+    PROVIDES_SERVICE(mysql_server, mysql_json_encode),
+    PROVIDES_SERVICE(mysql_server, mysql_my_thread),
+    PROVIDES_SERVICE(mysql_server, mysql_file),
+    PROVIDES_SERVICE(mysql_server, mysql_server_attributes),
+    PROVIDES_SERVICE(mysql_server, mysql_lock_free_hash),
+    END_COMPONENT_PROVIDES();
 
 static BEGIN_COMPONENT_REQUIRES(mysql_server) END_COMPONENT_REQUIRES();
 

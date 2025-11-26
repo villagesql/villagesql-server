@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, 2025, Oracle and/or its affiliates.
+/* Copyright (c) 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -21,32 +21,16 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#ifndef DBUG_EXECUTE_IF_GUARD
-#define DBUG_EXECUTE_IF_GUARD
+#include "mysql_my_thread_imp.h"
+#include <mysql/psi/mysql_thread.h>
 
-#include "mysql/components/services/mysql_debug_keyword_service.h"
+DEFINE_BOOL_METHOD(mysql_my_thread_imp::attach, ()) { return my_thread_init(); }
 
-#if !defined(NDEBUG)
+DEFINE_BOOL_METHOD(mysql_my_thread_imp::detach, ()) {
+  my_thread_end();
+  return false;
+}
 
-/**
-  Debug macro for conditional code execution.
-
-  @note Using this macro requires declaring extern mysql_debug_keyword_service
-        service reference:
-        extern REQUIRES_SERVICE_PLACEHOLDER(mysql_debug_keyword_service);
-*/
-#define DBUG_EXECUTE_IF(keyword, a1)                     \
-  do {                                                   \
-    if (SERVICE_PLACEHOLDER(mysql_debug_keyword_service) \
-            ->lookup_debug_keyword(keyword)) {           \
-      a1                                                 \
-    }                                                    \
-  } while (0)
-
-#else
-
-#define DBUG_EXECUTE_IF(keyword, a1)
-
-#endif
-
-#endif  // DBUG_EXECUTE_IF_GUARD
+DEFINE_BOOL_METHOD(mysql_my_thread_imp::is_attached, ()) {
+  return my_thread_is_inited();
+}

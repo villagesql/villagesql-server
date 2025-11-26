@@ -69,6 +69,7 @@ This file contains the implementation of error and warnings related
 #include "mysql/strings/m_ctype.h"
 #include "mysql_time.h"
 #include "mysqld_error.h"
+#include "mysys_err.h"
 #include "sql-common/my_decimal.h"
 #include "sql/derror.h"  // ER_THD
 #include "sql/item.h"
@@ -744,6 +745,34 @@ void push_warning_printf(THD *thd, Sql_condition::enum_severity_level severity,
   va_start(args, format);
   vsnprintf(warning, sizeof(warning), format, args);
   va_end(args);
+  push_warning(thd, severity, code, warning);
+}
+
+/**
+  Push the warning to error list if there is still room in the list
+
+  @param thd      Thread handle
+  @param severity Severity of warning (note, warning)
+  @param code     Error number
+  @param format   Error message printf format, or nullptr to go by the error
+                  code.
+  @param args     Variadic argument list.
+*/
+void push_warning_vprintf(THD *thd, Sql_condition::enum_severity_level severity,
+                          uint code, const char *format, va_list args) {
+  char warning[MYSQL_ERRMSG_SIZE];
+  DBUG_TRACE;
+  DBUG_PRINT("enter", ("warning: %u", code));
+
+  assert(code != 0);
+  if (format == nullptr) {
+    if (code >= EE_ERROR_FIRST && code < EE_ERROR_LAST)
+      format = get_global_errmsg(code);
+    else
+      format = ER_THD_NONCONST(thd, code);
+  }
+
+  vsnprintf(warning, sizeof(warning), format, args);
   push_warning(thd, severity, code, warning);
 }
 

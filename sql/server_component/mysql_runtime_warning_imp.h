@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, 2025, Oracle and/or its affiliates.
+/* Copyright (c) 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -21,32 +21,30 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#ifndef DBUG_EXECUTE_IF_GUARD
-#define DBUG_EXECUTE_IF_GUARD
+#ifndef MYSQL_RUNTIME_WARNING_IMP_H
+#define MYSQL_RUNTIME_WARNING_IMP_H
 
-#include "mysql/components/services/mysql_debug_keyword_service.h"
-
-#if !defined(NDEBUG)
+#include <mysql/components/service_implementation.h>
+#include <mysql/components/services/mysql_runtime_warning.h>
 
 /**
-  Debug macro for conditional code execution.
-
-  @note Using this macro requires declaring extern mysql_debug_keyword_service
-        service reference:
-        extern REQUIRES_SERVICE_PLACEHOLDER(mysql_debug_keyword_service);
+  Implementation of the warning reporting to the connecting client.
 */
-#define DBUG_EXECUTE_IF(keyword, a1)                     \
-  do {                                                   \
-    if (SERVICE_PLACEHOLDER(mysql_debug_keyword_service) \
-            ->lookup_debug_keyword(keyword)) {           \
-      a1                                                 \
-    }                                                    \
-  } while (0)
+class mysql_server_runtime_warning_imp {
+ public:
+  /**
+    Wrapper around push_warning_vprintf function.
 
-#else
+    @see push_warning_vprintf
+  */
+  static DEFINE_METHOD(void, emit, (MYSQL_THD thd, int id, ...));
 
-#define DBUG_EXECUTE_IF(keyword, a1)
+  /**
+    Wrapper around push_warning_vprintf function.
 
-#endif
+    @see push_warning_vprintf
+  */
+  static DEFINE_METHOD(void, emit_v, (MYSQL_THD thd, int id, va_list args));
+};
 
-#endif  // DBUG_EXECUTE_IF_GUARD
+#endif /* MYSQL_RUNTIME_WARNING_IMP_H */

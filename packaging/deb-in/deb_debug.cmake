@@ -209,6 +209,7 @@ usr/lib/mysql/plugin/debug/component_test_event_tracking_consumer_a.so
 usr/lib/mysql/plugin/debug/component_test_event_tracking_producer_a.so
 usr/lib/mysql/plugin/debug/component_test_event_tracking_consumer.so
 usr/lib/mysql/plugin/debug/component_test_event_tracking_producer_b.so
+usr/lib/mysql/plugin/debug/component_test_mysql_file_service.so
 ")
 
 IF (DEB_PRODUCT STREQUAL "commercial")
@@ -216,6 +217,7 @@ IF (DEB_PRODUCT STREQUAL "commercial")
   IF (DEFINED DEB_WITH_DEBUG)
     SET (DEB_INSTALL_DEBUG_SERVER_PLUGINS "${DEB_INSTALL_DEBUG_SERVER_PLUGINS}
 usr/lib/mysql/plugin/debug/audit_log.so
+usr/lib/mysql/plugin/debug/component_audit_log.so
 usr/lib/mysql/plugin/debug/authentication_pam.so
 usr/lib/mysql/plugin/debug/authentication_ldap_sasl.so
 usr/lib/mysql/plugin/debug/authentication_kerberos.so

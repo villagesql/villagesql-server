@@ -741,6 +741,13 @@ void push_warning_printf(THD *thd, Sql_condition::enum_severity_level severity,
                          uint code, const char *format, ...)
     MY_ATTRIBUTE((format(printf, 4, 5)));
 
+/*
+  @see push_warning_printf
+*/
+void push_warning_vprintf(THD *thd, Sql_condition::enum_severity_level severity,
+                          uint code, const char *format, va_list args)
+    MY_ATTRIBUTE((format(printf, 4, 0)));
+
 /**
   Generates a warning that a feature is deprecated.
 

@@ -1232,6 +1232,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_event_tracking_consumer_a.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_event_tracking_consumer_b.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/component_test_event_tracking_consumer_c.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/component_test_mysql_file_service.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/auth.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/auth_test_plugin.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/authentication_ldap_sasl_client.so
@@ -1345,6 +1346,7 @@ fi
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_event_tracking_consumer_a.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_event_tracking_consumer_b.so
 %attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_event_tracking_consumer_c.so
+%attr(755, root, root) %{_libdir}/mysql/plugin/debug/component_test_mysql_file_service.so
 
 %if 0%{?cluster}
 %files management-server
@@ -1432,6 +1434,9 @@ fi
 %endif # with_router
 
 %changelog
+* Thu Oct 14 2025 Marek Szymczak <marek.szymczak@oracle.com> - 9.6.0-1
+- Added component_test_mysql_file_service
+
 * Fri Aug  1 2025 Marc Alff <marc.alff@oracle.com> - 9.5.0-1
 - Added component_test_telemetry_resource_provider
 - Added component_test_telemetry_secret_provider

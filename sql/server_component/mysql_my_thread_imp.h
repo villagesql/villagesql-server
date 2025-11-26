@@ -1,4 +1,4 @@
-/* Copyright (c) 2023, 2025, Oracle and/or its affiliates.
+/* Copyright (c) 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -21,32 +21,37 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
-#ifndef DBUG_EXECUTE_IF_GUARD
-#define DBUG_EXECUTE_IF_GUARD
+#ifndef MYSQL_MY_THREAD_IMP_H
+#define MYSQL_MY_THREAD_IMP_H
 
-#include "mysql/components/services/mysql_debug_keyword_service.h"
-
-#if !defined(NDEBUG)
+#include <mysql/components/service_implementation.h>
+#include <mysql/components/services/mysql_my_thread.h>
 
 /**
-  Debug macro for conditional code execution.
-
-  @note Using this macro requires declaring extern mysql_debug_keyword_service
-        service reference:
-        extern REQUIRES_SERVICE_PLACEHOLDER(mysql_debug_keyword_service);
+  Implementation of the "mysql_my_thread" component service using the server's
+  thread memory allocation specific implementation.
 */
-#define DBUG_EXECUTE_IF(keyword, a1)                     \
-  do {                                                   \
-    if (SERVICE_PLACEHOLDER(mysql_debug_keyword_service) \
-            ->lookup_debug_keyword(keyword)) {           \
-      a1                                                 \
-    }                                                    \
-  } while (0)
+class mysql_my_thread_imp {
+ public:
+  /**
+    Wrapper around my_thread_init function.
 
-#else
+        @see my_thread_init
+  */
+  static DEFINE_BOOL_METHOD(attach, ());
 
-#define DBUG_EXECUTE_IF(keyword, a1)
+  /**
+    Wrapper around my_thread_end function.
 
-#endif
+        @see my_thread_end
+  */
+  static DEFINE_BOOL_METHOD(detach, ());
 
-#endif  // DBUG_EXECUTE_IF_GUARD
+  /**
+    Wrapper around my_thread_is_inited function.
+
+        @see my_thread_is_inited
+  */
+  static DEFINE_BOOL_METHOD(is_attached, ());
+};
+#endif /* MYSQL_MY_THREAD_IMP_H */
