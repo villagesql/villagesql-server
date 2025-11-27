@@ -1283,12 +1283,13 @@ bool Log_to_file_event_handler::log_general(
 /**
    Methods responsible for logging over OpenTelemetry OTLP protocol.
 */
-static bool telemetry_logger_log_slow(THD *thd, ulonglong current_utime,
-                                      ulonglong query_start_utime,
-                                      ulonglong query_utime,
-                                      ulonglong lock_utime, bool is_command,
-                                      const char *sql_text, size_t sql_text_len,
-                                      PSI_LogRecord &rec) {
+static bool telemetry_logger_log_slow(
+    THD *thd [[maybe_unused]], ulonglong current_utime [[maybe_unused]],
+    ulonglong query_start_utime [[maybe_unused]],
+    ulonglong query_utime [[maybe_unused]],
+    ulonglong lock_utime [[maybe_unused]], bool is_command [[maybe_unused]],
+    const char *sql_text [[maybe_unused]], size_t sql_text_len [[maybe_unused]],
+    PSI_LogRecord &rec [[maybe_unused]]) {
 #ifdef HAVE_PSI_SERVER_TELEMETRY_LOGS_INTERFACE
   // slow query log entries do not have level or message fields,
   // map them to "warning" and empty message
