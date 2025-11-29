@@ -186,6 +186,7 @@ static const char *opt_include_databases = NULL;
 static const char *opt_rewrite_database = NULL;
 static const char *opt_one_remap_col_arg = NULL;
 static bool opt_restore_privilege_tables = false;
+bool opt_skip_fk_checks = false;
 
 /**
  * ExtraTableInfo
@@ -463,6 +464,9 @@ static struct my_option my_long_options[] = {
      "conversions.",
      &opt_one_remap_col_arg, nullptr, nullptr, GET_STR, REQUIRED_ARG, 0, 0, 0,
      0, 0, 0},
+    {"skip-fk-checks", NDB_OPT_NOSHORT,
+     "Skip checking foreign key integrity when rebuilding foreign keys",
+     &opt_skip_fk_checks, nullptr, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
     NdbStdOpt::end_of_options};
 
 static bool parse_remap_option(const BaseString option, BaseString &db_name,
@@ -2623,6 +2627,7 @@ int main(int argc, char **argv) {
   if (ga_allow_pk_changes) g_options.append(" --allow-pk-changes");
   if (ga_ignore_extended_pk_updates)
     g_options.append(" --ignore-extended-pk-updates");
+  if (opt_skip_fk_checks) g_options.append(" --skip-fk-checks");
 
   // determine backup format: simple or multi-part, and count parts
   int result = detect_backup_format();

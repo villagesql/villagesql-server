@@ -64,6 +64,8 @@ extern bool ga_skip_broken_objects;
 
 extern Properties g_rewrite_databases;
 
+extern bool opt_skip_fk_checks;
+
 bool BackupRestore::m_preserve_trailing_spaces = false;
 
 // ----------------------------------------------------------------------
@@ -3283,9 +3285,14 @@ bool BackupRestore::endOfTablesFK() {
     fk.setOnDeleteAction(fkinfo.getOnDeleteAction());
 
     restoreLogger.log_info("Creating foreign key: %s", fkname);
+    int flags = 0;
+    if (opt_skip_fk_checks) {
+      restoreLogger.log_info("Skipping foreign key checks");
+      flags = NdbDictionary::Dictionary::CreateFK_NoVerify;
+    }
     if (!ndbapi_dict_operation_retry(
-            [fk](NdbDictionary::Dictionary *dict) {
-              return dict->createForeignKey(fk);
+            [fk, flags](NdbDictionary::Dictionary *dict) {
+              return dict->createForeignKey(fk, nullptr, flags);
             },
             dict)) {
       restoreLogger.log_error(
