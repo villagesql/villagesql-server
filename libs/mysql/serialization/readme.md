@@ -155,7 +155,7 @@ field_data can be one of:
 - message_format - nested message
 - varlen_integer_format - format used to encode signed/unsigned integers using
   1-9 bytes, depending on the integer value. Format is described in detail
-  in the [Variable-length integers](#varint).
+  in the [Variable-length integers](#variable-length-integers) section.
 
 ```
 {
@@ -196,7 +196,7 @@ String format consists of:
 - string_length - the number of 1 byte elements in the string
 - string characters, 1 byte unsigned integers
 
-#### Variable-length integers {#varint}
+#### <a id="variable-length-integers"></a> Variable-length integers
 
 Variable-length integers are encoded using 1-9 bytes, depending on the
 value of a particular field. Bytes are always stored using in LE byte order.
