@@ -10919,6 +10919,9 @@ ER_AUDIT_LOG_COMPONENT_FILTER_FAILED_TO_DELETE_FROM_TABLE
 ER_AUDIT_LOG_JSON_FILTER_DOES_NOT_EXIST_USER
   eng "A filter cannot be assigned to user '%s'. The filter '%s' does not exist."
 
+ER_LH_CUSTOM_DATA_PLACEMENT_OVERRIDES
+  eng "Custom data placement set for '%s.%s' table overrides %s data placement."
+
 #
 #  End of 9.x error messages (server-to-client).
 #
