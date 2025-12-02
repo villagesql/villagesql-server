@@ -12165,6 +12165,8 @@ static void test_datetime_ranges() {
   rc = mysql_real_query(mysql, stmt_text, (ulong)strlen(stmt_text));
   myquery(rc);
 
+  mysql_stmt_close(stmt);
+
   /*
     Again we reuse what we can from previous part of test.
   */
