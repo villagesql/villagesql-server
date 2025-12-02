@@ -6945,9 +6945,8 @@ static void do_connect(struct st_command *command) {
     while (*end && !my_isspace(charset_info, *end)) end++;
 
     const size_t con_option_len = end - con_options;
-    char cur_con_option[10] = {};
-    strmake(cur_con_option, con_options, con_option_len);
-
+    std::string cur_option_str{con_options, con_option_len};
+    const char *cur_con_option = cur_option_str.c_str();
     if (!std::strcmp(cur_con_option, "SSL"))
       con_ssl = true;
     else if (!std::strcmp(cur_con_option, "COMPRESS"))
