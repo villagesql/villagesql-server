@@ -52,13 +52,13 @@ namespace mysql::gtids::detail {
 /// @tparam char_ranges_tp An even number of char constants, each pair defining
 /// the beginning and end of a range of characters included in the table. Both
 /// beginning and end are *inclusive*.
-template <auto transform_tp, unsigned char... char_ranges_tp>
-  requires std::invocable<decltype(transform_tp), unsigned char> &&
-           (sizeof...(char_ranges_tp) % 2 == 0)
+template <std::invocable<unsigned char> Transform_tp,
+          unsigned char... char_ranges_tp>
+  requires(sizeof...(char_ranges_tp) % 2 == 0)
 class Char_table {
  public:
-  static constexpr auto transform = transform_tp;
-  using Element_t = std::invoke_result_t<decltype(transform), unsigned char>;
+  using Transform_t = Transform_tp;
+  using Element_t = std::invoke_result_t<Transform_t, unsigned char>;
   using Table_t = std::array<Element_t, 256>;
 
   /// Return reference to the table.
@@ -80,7 +80,8 @@ class Char_table {
          it += 2) {
       auto first = *it;
       auto last = *std::next(it);
-      for (unsigned char ch = first; ch <= last; ++ch) tbl[ch] = transform(ch);
+      for (unsigned char ch = first; ch <= last; ++ch)
+        tbl[ch] = Transform_t{}(ch);
     }
     return tbl;
   }
@@ -100,17 +101,15 @@ class Tag_base {
 
  private:
   /// Lambda function that converts a character to lower case.
-  static constexpr auto tolower_lambda = [](unsigned char ch) {
-    return std::tolower(ch);
-  };
+  using Tolower_t = decltype([](unsigned char ch) { return std::tolower(ch); });
 
   /// Table of characters allowed as the first letter in a tag.
-  using First_char_table =
-      Char_table<tolower_lambda, 'a', 'z', 'A', 'Z', '_', '_'>;
+  using First_char_table_t =
+      Char_table<Tolower_t, 'a', 'z', 'A', 'Z', '_', '_'>;
 
   /// Table of characters allowed in tags at other positions than first.
-  using Nonfirst_char_table =
-      Char_table<tolower_lambda, '0', '9', 'a', 'z', 'A', 'Z', '_', '_'>;
+  using Nonfirst_char_table_t =
+      Char_table<Tolower_t, '0', '9', 'a', 'z', 'A', 'Z', '_', '_'>;
 
  public:
   /// Return the character converted to lowercase, if it is allowed as the first
@@ -118,7 +117,7 @@ class Tag_base {
   [[nodiscard]] static int get_normalized_first_char(int ch) {
     assert(ch >= 0);
     assert(ch < 256);
-    return First_char_table::table()[ch];
+    return First_char_table_t::table()[ch];
   }
 
   /// Return true if the given character is allowed as the first character in a
@@ -132,7 +131,7 @@ class Tag_base {
   [[nodiscard]] static int get_normalized_nonfirst_char(int ch) {
     assert(ch >= 0);
     assert(ch < 256);
-    return Nonfirst_char_table::table()[ch];
+    return Nonfirst_char_table_t::table()[ch];
   }
 
   /// Return true if the given character is allowed in a tag, at other positions

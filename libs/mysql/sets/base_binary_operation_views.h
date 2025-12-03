@@ -71,14 +71,22 @@ class Subtraction_view;
 
 /// For a Binary_operation and two operand sets, gives the corresponding
 /// Union_view, Intersection_view, or Subtraction_view class.
+//
+// The casts to int are workarounds for what appears to be a bug in MSVC 19.29
+// (VS16.11). It gives the error "error C2677: binary '==': no global operator
+// found which takes type 'mysql::sets::Binary_operation' (or there is no
+// acceptable conversion)".
+//
+// @todo Remove the casts when we drop support for the buggy compiler version.
 template <Binary_operation binary_operation, class Source1_t, class Source2_t>
 using Binary_operation_view_type = std::conditional_t<
-    binary_operation == Binary_operation::op_union,
+    (int)binary_operation == (int)Binary_operation::op_union,
     Union_view<Source1_t, Source2_t>,
     std::conditional_t<
-        binary_operation == Binary_operation::op_intersection,
+        (int)binary_operation == (int)Binary_operation::op_intersection,
         Intersection_view<Source1_t, Source2_t>,
-        std::conditional_t<binary_operation == Binary_operation::op_subtraction,
+        std::conditional_t<(int)binary_operation ==
+                               (int)Binary_operation::op_subtraction,
                            Subtraction_view<Source1_t, Source2_t>,
                            /*impossible*/ void>>>;
 

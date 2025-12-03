@@ -50,12 +50,20 @@ namespace mysql::sets::detail {
 /// @tparam Source2_t The second source.
 ///
 /// @tparam operation_t The binary operation.
+//
+// The casts to int are workarounds for what appears to be a bug in MSVC 19.29
+// (VS16.11). It gives the error "error C2677: binary '==': no global operator
+// found which takes type 'mysql::sets::Binary_operation' (or there is no
+// acceptable conversion)".
+//
+// @todo Remove the casts when we drop support for the buggy compiler version.
 template <Is_nested_set Source1_t, Is_nested_set Source2_t,
           Binary_operation operation_t>
 using Nested_binary_operation_iterator_type = std::conditional_t<
-    operation_t == Binary_operation::op_union,
+    (int)operation_t == (int)Binary_operation::op_union,
     Nested_set_union_iterator<Source1_t, Source2_t>,
-    std::conditional_t<operation_t == Binary_operation::op_intersection,
+    std::conditional_t<(int)operation_t ==
+                           (int)Binary_operation::op_intersection,
                        Nested_set_intersection_iterator<Source1_t, Source2_t>,
                        Nested_set_subtraction_iterator<Source1_t, Source2_t>>>;
 
