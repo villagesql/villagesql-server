@@ -1,6 +1,6 @@
 /*****************************************************************************
 
-Copyright (c) 1996, 2024, Oracle and/or its affiliates.
+Copyright (c) 1996, 2025, Oracle and/or its affiliates.
 
 This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License, version 2.0,
@@ -2988,6 +2988,9 @@ row_ins_sec_index_entry_low(
 					  index, false);
 			rtr_info_update_btr(&cursor, &rtr_info);
 			mtr_start(&mtr);
+			if (dict_table_is_temporary(index->table)) {
+				mtr.set_log_mode(MTR_LOG_NO_REDO);
+			}
 			mtr.set_named_space(index->space);
 			search_mode &= ~BTR_MODIFY_LEAF;
 			search_mode |= BTR_MODIFY_TREE;
