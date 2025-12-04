@@ -46,7 +46,7 @@ namespace mysql::gtids::detail {
 
 /// Helper class to hold lookup tables indexed by ascii characters.
 ///
-/// @tparam transform_tp Function that transforms letters. It should accept a
+/// @tparam Transform_tp Function that transforms letters. It should accept a
 /// char argument and return the type of values stored in the table.
 ///
 /// @tparam char_ranges_tp An even number of char constants, each pair defining
