@@ -1383,7 +1383,10 @@ void Ndbfs::report(Request *request, Signal *signal) {
         log_file_error(GSN_FSCLOSEREF, nullptr, request, fsRef);
         sendSignal(ref, GSN_FSCLOSEREF, signal, FsRef::SignalLength, JBB);
 
-        g_eventLogger->warning("Error closing file: %s %u/%u",
+        g_eventLogger->warning("%s %s %u/%u",
+                               (request->action == Request::close
+                                    ? "Error closing file:"
+                                    : "Error closing and removing file:"),
                                request->file->theFileName.c_str(),
                                fsRef->errorCode, fsRef->osErrorCode);
         g_eventLogger->warning("Dumping files");
@@ -1919,9 +1922,30 @@ static bool check_for_expected_errors(GlobalSignalNumber gsn, AsyncFile *file,
   }
   return false;
 }
+#endif
 
 void Ndbfs::log_file_error(GlobalSignalNumber gsn, AsyncFile *file,
                            Request *request, FsRef *fsRef) {
+  if (file == nullptr && request != nullptr) file = request->file;
+  const char *signal_name = getSignalName(gsn);
+  ndbd_exit_classification_enum cl [[maybe_unused]];
+  const char *msg = ndbd_exit_message(fsRef->errorCode, &cl);
+
+  // Warn about fileystem errors
+  if (file != nullptr) switch (fsRef->errorCode) {
+      case FsRef::fsErrPermissionDenied:
+      case FsRef::fsErrTemporaryNotAccessible:
+      case FsRef::fsErrNoSpaceLeftOnDevice:
+      case FsRef::fsErrEnvironmentError:
+      case FsRef::fsErrNoMoreResources:
+        warningEvent(
+            "Filesystem problem: %s. Check %s. (error: %u, os error: %u, "
+            "signal %s)",
+            msg, file->theFileName.c_str(), fsRef->errorCode,
+            fsRef->osErrorCode, signal_name);
+    }
+
+#if defined(VM_TRACE) || defined(ERROR_INSERT) || !defined(NDEBUG)
   const char *req_file = nullptr;
   const char *req_func = nullptr;
   int req_line = 0;
@@ -1931,7 +1955,6 @@ void Ndbfs::log_file_error(GlobalSignalNumber gsn, AsyncFile *file,
     req_func = request->error.func;
     req_line = request->error.line;
     req_code = request->error.code;
-    if (file == nullptr) file = request->file;
   }
   const char *file_name = nullptr;
   unsigned file_bp = FsOpenReq::BP_MAX;
@@ -1939,7 +1962,7 @@ void Ndbfs::log_file_error(GlobalSignalNumber gsn, AsyncFile *file,
     file_bp = file->theFileName.get_base_path_spec();
     file_name = file->theFileName.get_base_name();
   }
-  const char *signal_name = getSignalName(gsn);
+
   /*
    * For file operation errors that are not common and not expected under
    * normal conditions emit some extra information that may help diagnostics
@@ -1959,15 +1982,12 @@ void Ndbfs::log_file_error(GlobalSignalNumber gsn, AsyncFile *file,
   if (!expected_error) {
     g_eventLogger->info(
         "(debug) NDBFS: signal %s %d %d: file %u %s: "
-        "request error %s %u %s %d",
+        "request error %s %u %s %d msg %s",
         signal_name, fsRef->errorCode, fsRef->osErrorCode, file_bp, file_name,
-        req_file, req_line, req_func, req_code);
+        req_file, req_line, req_func, req_code, msg);
   }
-}
-#else
-void Ndbfs::log_file_error(GlobalSignalNumber gsn, AsyncFile *file,
-                           Request *request, FsRef *fsRef) {}
 #endif
+}
 
 BLOCK_FUNCTIONS(Ndbfs)
 
