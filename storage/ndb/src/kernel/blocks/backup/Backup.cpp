@@ -26,7 +26,9 @@
 #include "Backup.hpp"
 
 #include <ndb_version.h>
+#include <algorithm>  // find
 #include <cstring>
+#include <iterator>  // begin, end
 
 #include <NdbTCP.h>
 #include <Bitmask.hpp>
@@ -2752,7 +2754,7 @@ void Backup::execDUMP_STATE_ORD(Signal *signal) {
 
       ndbrequire(c_backupFilePool.getSize() ==
                  (c_backupFilePool.getNoOfFree() +
-                  (4 + 2 * BackupFormat::NDB_MAX_FILES_PER_LCP)));
+                  (5 + BackupFormat::NDB_MAX_FILES_PER_LCP)));
 
       Uint32 file_pages = 0;
       BackupFilePtr lcp_file;
@@ -2768,11 +2770,9 @@ void Backup::execDUMP_STATE_ORD(Signal *signal) {
       for (Uint32 i = 0; i < BackupFormat::NDB_MAX_FILES_PER_LCP; i++) {
         ndbrequire(c_backupFilePool.getPtr(lcp_file, lcp.p->dataFilePtr[i]));
         file_pages += lcp_file.p->pages.getSize();
-
-        ndbrequire(
-            c_backupFilePool.getPtr(lcp_file, lcp.p->prepareDataFilePtr[i]));
-        file_pages += lcp_file.p->pages.getSize();
       }
+      ndbrequire(c_backupFilePool.getPtr(lcp_file, lcp.p->prepareDataFilePtr));
+      file_pages += lcp_file.p->pages.getSize();
 
       ndbrequire(c_backupFilePool.getPtr(lcp_file, lcp.p->ctlFilePtr));
       file_pages += lcp_file.p->pages.getSize();
@@ -5848,7 +5848,7 @@ void Backup::defineBackupRef(Signal *signal, BackupRecordPtr ptr,
      * the error code here.
      */
     BackupFilePtr filePtr;
-    ptr.p->files.getPtr(filePtr, ptr.p->prepareDataFilePtr[0]);
+    ptr.p->files.getPtr(filePtr, ptr.p->prepareDataFilePtr);
     if (filePtr.p->m_flags & BackupFile::BF_OPEN &&
         !(filePtr.p->m_flags & BackupFile::BF_CLOSING)) {
       jam();
@@ -6062,7 +6062,7 @@ void Backup::execDEFINE_BACKUP_REQ(Signal *signal) {
   /**
    * Allocate files
    */
-  BackupFilePtr files[4 + (2 * BackupFormat::NDB_MAX_FILES_PER_LCP)];
+  BackupFilePtr files[5 + BackupFormat::NDB_MAX_FILES_PER_LCP];
   Uint32 noOfPages[] = {
       NO_OF_PAGES_META_FILE,
       2,  // 32k
@@ -6090,8 +6090,8 @@ void Backup::execDEFINE_BACKUP_REQ(Signal *signal) {
   ptr.p->ctlFilePtr = ptr.p->logFilePtr = RNIL;
   for (Uint32 i = 0; i < BackupFormat::NDB_MAX_FILES_PER_LCP; i++) {
     ptr.p->dataFilePtr[i] = RNIL;
-    ptr.p->prepareDataFilePtr[i] = RNIL;
   }
+  ptr.p->prepareDataFilePtr = RNIL;
 
   if (ptr.p->is_lcp()) {
     /**
@@ -6111,8 +6111,7 @@ void Backup::execDEFINE_BACKUP_REQ(Signal *signal) {
 
     noOfPages[2] =
         (c_defaults.m_lcp_buffer_size + sizeof(Page32) - 1) / sizeof(Page32);
-    for (Uint32 i = 0; i < (4 + (2 * BackupFormat::NDB_MAX_FILES_PER_LCP));
-         i++) {
+    for (Uint32 i = 0; i < (5 + BackupFormat::NDB_MAX_FILES_PER_LCP); i++) {
       Uint32 minWriteLcp;
       Uint32 maxWriteLcp;
       Uint32 maxInsertLcp;
@@ -6160,31 +6159,30 @@ void Backup::execDEFINE_BACKUP_REQ(Signal *signal) {
           files[i].p->fileType = BackupFormat::DATA_FILE;
           break;
         }
+        case 4: {
+          jam();
+          minWriteLcp = minWrite[2];
+          maxWriteLcp = maxWrite[2];
+          maxInsertLcp = maxInsert[2];
+          noOfPagesLcp = noOfPages[2];
+          jam();
+          ptr.p->prepareDataFilePtr = files[i].i;
+          jam();
+          files[i].p->fileType = BackupFormat::DATA_FILE;
+          jam();
+          break;
+        }
         default: {
-          if (i < 4 + BackupFormat::NDB_MAX_FILES_PER_LCP) {
-            jam();
-            minWriteLcp = minWrite[2];
-            maxWriteLcp = maxWrite[2];
-            maxInsertLcp = maxInsert[2];
-            noOfPagesLcp = noOfPages[2];
-            jam();
-            ptr.p->prepareDataFilePtr[i - 4] = files[i].i;
-            jam();
-            files[i].p->fileType = BackupFormat::DATA_FILE;
-            jam();
-          } else {
-            jam();
-            minWriteLcp = minWrite[2];
-            maxWriteLcp = maxWrite[2];
-            maxInsertLcp = maxInsert[2];
-            noOfPagesLcp = noOfPages[2];
-            jam();
-            ptr.p->dataFilePtr[i - (4 + BackupFormat::NDB_MAX_FILES_PER_LCP)] =
-                files[i].i;
-            jam();
-            files[i].p->fileType = BackupFormat::DATA_FILE;
-            jam();
-          }
+          jam();
+          minWriteLcp = minWrite[2];
+          maxWriteLcp = maxWrite[2];
+          maxInsertLcp = maxInsert[2];
+          noOfPagesLcp = noOfPages[2];
+          jam();
+          ptr.p->dataFilePtr[i - 5] = files[i].i;
+          jam();
+          files[i].p->fileType = BackupFormat::DATA_FILE;
+          jam();
           break;
         }
       }
@@ -6811,7 +6809,7 @@ void Backup::execGET_TABINFOREF(Signal *signal) {
   ndbrequire(c_backupFilePool.getPtr(filePtr, senderData));
   ndbrequire(c_backupPool.getPtr(ptr, filePtr.p->backupPtr));
 
-  ndbrequire(filePtr.i == ptr.p->prepareDataFilePtr[0] || !ptr.p->is_lcp());
+  ndbrequire(filePtr.i == ptr.p->prepareDataFilePtr || !ptr.p->is_lcp());
   defineBackupRef(signal, ptr, ref->errorCode);
 }
 
@@ -6843,7 +6841,7 @@ void Backup::execGET_TABINFO_CONF(Signal *signal) {
   TablePtr tabPtr;
   if (ptr.p->is_lcp()) {
     jam();
-    ndbrequire(filePtr.i == ptr.p->prepareDataFilePtr[0])
+    ndbrequire(filePtr.i == ptr.p->prepareDataFilePtr)
         ptr.p->prepare_table.first(tabPtr);
     ndbrequire(tabPtr.p->tableId == tableId);
   } else {
@@ -6957,7 +6955,7 @@ void Backup::execGET_TABINFO_CONF(Signal *signal) {
     return;
   } else {
     jam();
-    ndbrequire(filePtr.i == ptr.p->prepareDataFilePtr[0]);
+    ndbrequire(filePtr.i == ptr.p->prepareDataFilePtr);
     lcp_open_data_file_done(signal, ptr);
     return;
   }
@@ -10501,11 +10499,13 @@ void Backup::execFSCLOSEREF(Signal *signal) {
     if (ptr.p->prepareCtlFilePtr[0] == filePtrI ||
         ptr.p->prepareCtlFilePtr[1] == filePtrI)
       file_type_str = "prepare ctl";
-    else if (ptr.p->prepareDataFilePtr[0] == filePtrI)
+    else if (ptr.p->prepareDataFilePtr == filePtrI)
       file_type_str = "prepare data";
     else if (ptr.p->deleteFilePtr == filePtrI)
       file_type_str = "delete file";
-    else if (ptr.p->dataFilePtr[0] == filePtrI)
+    else if (std::find(std::begin(ptr.p->dataFilePtr),
+                       std::end(ptr.p->dataFilePtr),
+                       filePtrI) != std::end(ptr.p->dataFilePtr))
       file_type_str = "data";
     else if (ptr.p->ctlFilePtr == filePtrI)
       file_type_str = "ctl";
@@ -10571,7 +10571,7 @@ void Backup::execFSCLOSECONF(Signal *signal) {
   ndbrequire(c_backupPool.getPtr(ptr, filePtr.p->backupPtr));
 
   if (ptr.p->is_lcp()) {
-    if (ptr.p->prepareDataFilePtr[0] == filePtrI) {
+    if (ptr.p->prepareDataFilePtr == filePtrI) {
       /* Close of prepare data file, error condition */
       jam();
       ndbrequire(ptr.p->prepareState == PREPARE_ABORTING);
@@ -10601,14 +10601,9 @@ void Backup::execFSCLOSECONF(Signal *signal) {
       jam();
       lcp_close_ctl_file_for_rewrite_done(signal, ptr, filePtr);
       return;
-    } else if ((ptr.p->dataFilePtr[0] == filePtrI) ||
-               (ptr.p->dataFilePtr[1] == filePtrI) ||
-               (ptr.p->dataFilePtr[2] == filePtrI) ||
-               (ptr.p->dataFilePtr[3] == filePtrI) ||
-               (ptr.p->dataFilePtr[4] == filePtrI) ||
-               (ptr.p->dataFilePtr[5] == filePtrI) ||
-               (ptr.p->dataFilePtr[6] == filePtrI) ||
-               (ptr.p->dataFilePtr[7] == filePtrI)) {
+    } else if (std::find(std::begin(ptr.p->dataFilePtr),
+                         std::end(ptr.p->dataFilePtr),
+                         filePtrI) != std::end(ptr.p->dataFilePtr)) {
       jam();
       ndbrequire(filePtr.p->m_flags == 0);
       ndbrequire(ptr.p->m_num_lcp_data_files_open > 0);
@@ -13402,7 +13397,7 @@ void Backup::lcp_open_data_file(Signal *signal, BackupRecordPtr ptr) {
   ndbrequire(ptr.p->prepare_table.first(tabPtr));
   tabPtr.p->fragments.getPtr(fragPtr, 0);
 
-  ndbrequire(c_backupFilePool.getPtr(filePtr, ptr.p->prepareDataFilePtr[0]));
+  ndbrequire(c_backupFilePool.getPtr(filePtr, ptr.p->prepareDataFilePtr));
   dataFileNumber = ptr.p->prepareFirstDataFileNumber;
   ndbrequire(ptr.p->prepareState == PREPARE_READ_CTL_FILES);
   ptr.p->prepareState = PREPARE_OPEN_DATA_FILE;
@@ -13516,7 +13511,7 @@ void Backup::lcp_open_data_file_done(Signal *signal, BackupRecordPtr ptr) {
   tabPtr.p->fragments.getPtr(fragPtr, 0);
 
   BackupFilePtr filePtr;
-  ndbrequire(c_backupFilePool.getPtr(filePtr, ptr.p->prepareDataFilePtr[0]));
+  ndbrequire(c_backupFilePool.getPtr(filePtr, ptr.p->prepareDataFilePtr));
   ndbrequire(filePtr.p->m_flags ==
              (BackupFile::BF_OPEN | BackupFile::BF_LCP_META));
   filePtr.p->m_flags &= ~(Uint32)BackupFile::BF_LCP_META;
@@ -14366,8 +14361,8 @@ void Backup::lcp_swap_tables(BackupRecordPtr ptr, TablePtr &tabPtr,
 
 void Backup::lcp_swap_data_file(BackupRecordPtr ptr) {
   Uint32 newPrepareDataFilePtr = ptr.p->dataFilePtr[0];
-  ptr.p->dataFilePtr[0] = ptr.p->prepareDataFilePtr[0];
-  ptr.p->prepareDataFilePtr[0] = newPrepareDataFilePtr;
+  ptr.p->dataFilePtr[0] = ptr.p->prepareDataFilePtr;
+  ptr.p->prepareDataFilePtr = newPrepareDataFilePtr;
 }
 
 void Backup::lcp_swap_ctl_file(BackupRecordPtr ptr) {
@@ -15841,7 +15836,7 @@ void Backup::openFilesReplyLCP(Signal *signal, BackupRecordPtr ptr,
   TablePtr tabPtr;
   bool prepare_phase;
   Uint32 index = 0;
-  if (filePtr.i == ptr.p->prepareDataFilePtr[0]) {
+  if (filePtr.i == ptr.p->prepareDataFilePtr) {
     jam();
     filePtr.p->m_flags |= BackupFile::BF_LCP_META;
     ndbrequire(ptr.p->prepareState == PREPARE_OPEN_DATA_FILE);
@@ -15936,7 +15931,7 @@ void Backup::execEND_LCPREQ(Signal *signal) {
   ndbrequire(filePtr.p->m_flags == 0);
   ptr.p->files.getPtr(filePtr, ptr.p->prepareCtlFilePtr[1]);
   ndbrequire(filePtr.p->m_flags == 0);
-  ptr.p->files.getPtr(filePtr, ptr.p->prepareDataFilePtr[0]);
+  ptr.p->files.getPtr(filePtr, ptr.p->prepareDataFilePtr);
   ndbrequire(filePtr.p->m_flags == 0);
   ptr.p->files.getPtr(filePtr, ptr.p->ctlFilePtr);
   ndbrequire(filePtr.p->m_flags == 0);
