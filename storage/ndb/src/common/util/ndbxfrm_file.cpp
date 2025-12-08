@@ -1308,6 +1308,48 @@ int ndbxfrm_file::write_forward(ndbxfrm_input_iterator *in) {
   return 0;
 }
 
+/**
+ * Loopcount limit
+ *
+ * Read path variants
+ *  Raw:
+ *    File -> (Read) -> Consumer buffer
+ *
+ *  Compressed :
+ *    File    -> (Read)       -> Buffer1
+ *    Buffer1 -> (Decompress) -> Consumer buffer
+ *
+ *  Encrypted :
+ *    File    -> (Read)       -> Buffer1
+ *    Buffer1 -> (Decrypt)    -> Buffer2
+ *    Buffer2 -> (Copy)       -> Consumer buffer
+ *
+ *  Encrypted + Compressed
+ *    File    -> (Read)       -> Buffer1
+ *    Buffer1 -> (Decrypt)    -> Buffer2
+ *    Buffer2 -> (Decompress) -> Consumer buffer
+ *
+ * Worst case compression ratio c = 1/2, one unit of raw data compressed
+ * into two units / two units of compressed data decompresses into 1 unit
+ * of decompressed data
+ * (overpessimistic, RFC1951 indicates worst case 5 bytes extra per 32KiB).
+ * Both buffers have size B.
+ *
+ * When reading each iteration can produce up to Bc bytes, so the max
+ * number of iterations is :
+ *
+ *   ceil(Consumer buffer size / Bc)
+ */
+static constexpr size_t WORST_COMPRESSION_FACTOR =
+    2; /* Compression of uncompressible data expands by 2x */
+static constexpr size_t UNIT_BYTES =
+    ndbxfrm_buffer::size() / WORST_COMPRESSION_FACTOR;
+
+static size_t calcReadLoopcountLimit(size_t requestBytes) {
+  /* Add offset of 1 for zero byte read case */
+  return 1 + ((requestBytes + UNIT_BYTES - 1) / UNIT_BYTES);
+}
+
 int ndbxfrm_file::read_forward(ndbxfrm_output_iterator *out) {
   if (m_file_op == OP_WRITE_FORW) {
     clear_last_os_error();
@@ -1363,7 +1405,7 @@ int ndbxfrm_file::read_forward(ndbxfrm_output_iterator *out) {
     }
   }
   bool progress;
-  int G = 20;  // loop guard
+  int G = calcReadLoopcountLimit(out->size());
   do {
     require(--G);
     progress = false;
@@ -1511,7 +1553,7 @@ int ndbxfrm_file::read_backward(ndbxfrm_output_reverse_iterator *out) {
     }
   }
   bool progress;
-  int G = 20;  // loop guard
+  int G = calcReadLoopcountLimit(out->size());
   do {
     progress = false;
     require(--G);

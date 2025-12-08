@@ -386,20 +386,24 @@ class StopBackupConf {
   friend class Backup;
 
   /**
-   * Reciver(s)
+   * Receiver(s)
    */
   friend class BackupMaster;
+  friend class BackupProxy;
 
   friend bool printSTOP_BACKUP_CONF(FILE *, const Uint32 *, Uint32, Uint16);
 
  public:
-  static constexpr Uint32 SignalLength = 4;
+  static constexpr Uint32 SignalLength_LowOnly_9_6_0 = 4;
+  static constexpr Uint32 SignalLength = 6;
 
  private:
   Uint32 backupId;
   Uint32 backupPtr;
-  Uint32 noOfLogBytes;
-  Uint32 noOfLogRecords;
+  Uint32 noOfLogBytesLow;
+  Uint32 noOfLogRecordsLow;
+  Uint32 noOfLogBytesHigh;
+  Uint32 noOfLogRecordsHigh;
 };
 
 class BackupStatusReq {
