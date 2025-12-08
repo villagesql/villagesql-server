@@ -4199,6 +4199,7 @@ retry:
     return;
   }
 
+  cb->n_bytes = 0;
   cb->connection = m_ndb->startTransaction();
   NdbTransaction *trans = cb->connection;
   if (trans == NULL) {
