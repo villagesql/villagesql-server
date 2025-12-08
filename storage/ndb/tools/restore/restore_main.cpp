@@ -104,6 +104,10 @@ Properties g_rewrite_databases;
 NdbRecordPrintFormat g_ndbrecord_print_format;
 unsigned int opt_no_binlog;
 static bool opt_timestamp_printouts;
+/* Limit per thread max transactions to 1024 until fix of
+ * Bug#38558743 NdbAPI limited to 1024 transactions/Ndb object
+ */
+static constexpr int MaxTransactionsPerThread = 1024;
 
 Ndb_cluster_connection *g_cluster_connection = NULL;
 
@@ -330,10 +334,9 @@ static struct my_option my_long_options[] = {
      "Skip table structure check during restore of data", &ga_skip_table_check,
      nullptr, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
     {"parallelism", 'p',
-     "No of parallel transactions during restore of data."
-     "(parallelism can be 1 to 1024)",
-     &ga_nParallelism, nullptr, nullptr, GET_INT, REQUIRED_ARG, 128, 1, 1024, 0,
-     1, 0},
+     "Max no of parallel transactions during restore of data", &ga_nParallelism,
+     nullptr, nullptr, GET_INT, REQUIRED_ARG, 128, 1,
+     (MaxTransactionsPerThread * g_max_parts), 0, 1, 0},
     {"print", NDB_OPT_NOSHORT, "Print metadata, data and log to stdout",
      &_print, nullptr, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
     {"print_data", NDB_OPT_NOSHORT, "Print data to stdout", &_print_data,
@@ -2658,6 +2661,15 @@ int main(int argc, char **argv) {
   if (_print || _print_meta || _print_data || _print_log || _print_sql_log ||
       ga_backup_format == BF_SINGLE) {
     g_restoring_in_parallel = false;
+    // Bound row parallelism between (1,MaxTransactionsPerThread)
+    if (ga_nParallelism > MaxTransactionsPerThread) {
+      info << "Requested parallelism " << ga_nParallelism << " limited to "
+           << MaxTransactionsPerThread << "." << endl;
+      ga_nParallelism = MaxTransactionsPerThread;
+    }
+    ga_nParallelism = std::max(ga_nParallelism, 1);
+    info << "Parallelism for single restore instance is " << ga_nParallelism
+         << endl;
     for (int i = 1; i <= ga_part_count; i++) {
       /*
        * do_restore uses its parameter 'partId' to select the backup part.
@@ -2714,10 +2726,19 @@ int main(int argc, char **argv) {
      * Divide data INSERT parallelism across parts, ensuring
      * each part has at least 1
      */
+    const int MaxProcessParallelism = ga_part_count * MaxTransactionsPerThread;
+    if (ga_nParallelism > MaxProcessParallelism) {
+      info << "Requested parallelism " << ga_nParallelism << " limited to "
+           << MaxProcessParallelism << "." << endl;
+      info << "Parameter upperbound is " << ga_part_count << " parts * "
+           << MaxTransactionsPerThread << " max parallelism per part" << endl;
+      ga_nParallelism = MaxProcessParallelism;
+    }
     ga_nParallelism /= ga_part_count;
-    if (ga_nParallelism == 0) ga_nParallelism = 1;
+    // Ensure at least 1 per thread
+    ga_nParallelism = std::max(ga_nParallelism, 1);
 
-    debug << "Part parallelism is " << ga_nParallelism << endl;
+    info << "Part parallelism is " << ga_nParallelism << endl;
 
     for (int part_id = 1; part_id <= ga_part_count; part_id++) {
       NDB_THREAD_PRIO prio = NDB_THREAD_PRIO_MEAN;

@@ -717,6 +717,37 @@ SET GLOBAL ndb_metadata_check = @old_ndb_metadata_check_server2;
 --connection server1
 SET GLOBAL ndb_metadata_check = @old_ndb_metadata_check_server1;
 
+--echo Coverage of increased --parallelism setting
+create table t1 (a int primary key, b int) engine=ndb;
+
+--echo Insert enough rows to get some volume of data
+--echo per backup PART
+--disable_query_log
+--disable_result_log
+--let $rows=40000
+while ($rows)
+{
+  --eval insert into t1 values ($rows, $rows);
+  --dec $rows
+}
+--enable_query_log
+--enable_result_log
+
+select count(1), sum(a) from t1;
+
+--source include/ndb_backup.inc
+
+truncate t1;
+
+--exec $NDB_RESTORE -b $the_backup_id -n 1 --restore-data --parallelism=1000000 $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+--exec $NDB_RESTORE -b $the_backup_id -n 2 --restore-data --parallelism=1000000 $NDB_BACKUPS-$the_backup_id >> $NDB_TOOLS_OUTPUT
+
+select count(1), sum(a) from t1;
+
+--echo Cleanup
+drop table t1;
+
+
 --echo Test backupid ranges
 --echo Test generation backup with max explicit id (2^32 - 2)
 --exec $NDB_MGM -e "start backup 4294967294" >> $NDB_TOOLS_OUTPUT

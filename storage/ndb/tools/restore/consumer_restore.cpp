@@ -806,7 +806,7 @@ bool BackupRestore::init(Uint32 tableChangesMask) {
   m_ndb = new Ndb(m_cluster_connection);
   if (m_ndb == NULL) return false;
 
-  m_ndb->init(1024);
+  m_ndb->init(m_parallelism);
   if (m_ndb->waitUntilReady(30) != 0) {
     restoreLogger.log_error("Could not connect to NDB");
     return false;
