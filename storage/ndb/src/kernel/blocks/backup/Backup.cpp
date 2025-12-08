@@ -3465,6 +3465,8 @@ void Backup::execBACKUP_COMPLETE_REP(Signal *signal) {
   jamEntry();
   BackupCompleteRep *rep = (BackupCompleteRep *)signal->getDataPtr();
 
+  ndbrequire(signal->getLength() >= BackupCompleteRep::SignalLength);
+
   const NDB_TICKS now = NdbTick_getCurrentTicks();
   const Uint64 elapsed = NdbTick_Elapsed(startTime, now).milliSec();
 
@@ -3472,6 +3474,10 @@ void Backup::execBACKUP_COMPLETE_REP(Signal *signal) {
   const Uint64 bytes = rep->noOfBytesLow + (((Uint64)rep->noOfBytesHigh) << 32);
   const Uint64 records =
       rep->noOfRecordsLow + (((Uint64)rep->noOfRecordsHigh) << 32);
+  const Uint64 logBytes =
+      rep->noOfLogBytesLow + (((Uint64)rep->noOfLogBytesHigh) >> 32);
+  const Uint64 logRecords =
+      rep->noOfLogRecordsLow + (((Uint64)rep->noOfLogRecordsHigh) >> 32);
 
   Number rps = xps(records, elapsed);
   Number bps = xps(bytes, elapsed);
@@ -3493,11 +3499,11 @@ void Backup::execBACKUP_COMPLETE_REP(Signal *signal) {
   g_eventLogger->info(" Data [ %s rows %s bytes %llu ms ] => %s row/s & %s b/s",
                       records_str, bytes_str, elapsed, rps_str, bps_str);
 
-  bps = xps(rep->noOfLogBytes, elapsed);
-  rps = xps(rep->noOfLogRecords, elapsed);
+  bps = xps(logBytes, elapsed);
+  rps = xps(logRecords, elapsed);
 
-  printNumber(records_str, sizeof(records_str), Number(rep->noOfLogRecords));
-  printNumber(bytes_str, sizeof(bytes_str), Number(rep->noOfLogBytes));
+  printNumber(records_str, sizeof(records_str), Number(logRecords));
+  printNumber(bytes_str, sizeof(bytes_str), Number(logBytes));
   printNumber(rps_str, sizeof(rps_str), rps);
   printNumber(bps_str, sizeof(bps_str), bps);
 
@@ -5571,6 +5577,7 @@ void Backup::execSTOP_BACKUP_CONF(Signal *signal) {
   jamEntry();
 
   StopBackupConf *conf = (StopBackupConf *)signal->getDataPtr();
+  ndbrequire(signal->getLength() >= StopBackupConf::SignalLength);
   const Uint32 ptrI = conf->backupPtr;
   // const Uint32 backupId = conf->backupId;
   const Uint32 nodeId = refToNode(signal->senderBlockRef());
@@ -5578,8 +5585,10 @@ void Backup::execSTOP_BACKUP_CONF(Signal *signal) {
   BackupRecordPtr ptr;
   ndbrequire(c_backupPool.getPtr(ptr, ptrI));
 
-  ptr.p->noOfLogBytes += conf->noOfLogBytes;
-  ptr.p->noOfLogRecords += conf->noOfLogRecords;
+  ptr.p->noOfLogBytes +=
+      (conf->noOfLogBytesLow + (Uint64(conf->noOfLogBytesHigh) << 32));
+  ptr.p->noOfLogRecords +=
+      (conf->noOfLogRecordsLow + (Uint64(conf->noOfLogRecordsHigh) << 32));
 
   stopBackupReply(signal, ptr, nodeId);
 }
@@ -5622,8 +5631,11 @@ void Backup::stopBackupReply(Signal *signal, BackupRecordPtr ptr,
       rep->noOfRecordsLow = (Uint32)(ptr.p->noOfRecords & 0xFFFFFFFF);
       rep->noOfBytesHigh = (Uint32)(ptr.p->noOfBytes >> 32);
       rep->noOfRecordsHigh = (Uint32)(ptr.p->noOfRecords >> 32);
-      rep->noOfLogBytes = Uint32(ptr.p->noOfLogBytes);  // TODO 64-bit log-bytes
-      rep->noOfLogRecords = Uint32(ptr.p->noOfLogRecords);  // TODO ^^
+      rep->noOfLogBytesLow = Uint32(ptr.p->noOfLogBytes & 0xFFFFFFFF);
+      rep->noOfLogBytesHigh = Uint32(ptr.p->noOfLogBytes >> 32);
+      rep->noOfLogRecordsLow = Uint32(ptr.p->noOfLogRecords);
+      rep->noOfLogRecordsHigh = Uint32(ptr.p->noOfLogRecords >> 32);
+
       sendSignal(ptr.p->clientRef, GSN_BACKUP_COMPLETE_REP, signal,
                  BackupCompleteRep::SignalLength, JBB);
     }
@@ -9318,6 +9330,13 @@ void Backup::fragmentCompleted(Signal *signal, BackupFilePtr filePtr,
     lcp_start_complete_processing(signal, ptr);
   } else {
     jam();
+
+    if (ERROR_INSERTED(10060)) {
+      jam();
+      /* 5 billion+1 records + bytes per fragment */
+      op.noOfRecords = op.noOfBytes = 5L * 1000 * 1000 * 1000 + 1;
+    }
+
     BackupFragmentConf *conf = (BackupFragmentConf *)signal->getDataPtrSend();
     conf->backupId = ptr.p->backupId;
     conf->backupPtr = ptr.i;
@@ -10653,11 +10672,20 @@ void Backup::closeFilesDone(Signal *signal, BackupRecordPtr ptr) {
   BackupFilePtr filePtr;
   if (ptr.p->logFilePtr != RNIL) {
     ptr.p->files.getPtr(filePtr, ptr.p->logFilePtr);
-    conf->noOfLogBytes = Uint32(filePtr.p->operation.noOfBytes);      // TODO
-    conf->noOfLogRecords = Uint32(filePtr.p->operation.noOfRecords);  // TODO
+
+    if (ERROR_INSERTED(10060)) {
+      jam();
+      /* 7 billion + 1 records / LDM, each 1 byte long! */
+      filePtr.p->operation.noOfBytes = filePtr.p->operation.noOfRecords =
+          7L * 1000 * 1000 * 1000 + 1;
+    }
+    conf->noOfLogBytesLow = Uint32(filePtr.p->operation.noOfBytes);
+    conf->noOfLogBytesHigh = Uint32(filePtr.p->operation.noOfBytes >> 32);
+    conf->noOfLogRecordsLow = Uint32(filePtr.p->operation.noOfRecords);
+    conf->noOfLogRecordsHigh = Uint32(filePtr.p->operation.noOfRecords >> 32);
   } else {
-    conf->noOfLogBytes = 0;
-    conf->noOfLogRecords = 0;
+    conf->noOfLogBytesLow = conf->noOfLogBytesHigh = 0;
+    conf->noOfLogRecordsLow = conf->noOfLogRecordsHigh = 0;
   }
 
   sendSignal(ptr.p->senderRef, GSN_STOP_BACKUP_CONF, signal,

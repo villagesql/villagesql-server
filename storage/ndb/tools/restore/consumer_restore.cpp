@@ -1733,8 +1733,8 @@ bool BackupRestore::report_data(unsigned backup_id, unsigned node_id) {
     data[0] = NDB_LE_RestoreData;
     data[1] = backup_id;
     data[2] = node_id;
-    data[3] = m_dataCount & 0xFFFFFFFF;
-    data[4] = 0;
+    data[3] = (Uint32)(m_dataCount & 0xFFFFFFFF);
+    data[4] = (Uint32)((m_dataCount >> 32) & 0xFFFFFFFF);
     data[5] = (Uint32)(m_dataBytes & 0xFFFFFFFF);
     data[6] = (Uint32)((m_dataBytes >> 32) & 0xFFFFFFFF);
     Ndb_internal::send_event_report(false /* has lock */, m_ndb, data, 7);
@@ -1748,8 +1748,8 @@ bool BackupRestore::report_log(unsigned backup_id, unsigned node_id) {
     data[0] = NDB_LE_RestoreLog;
     data[1] = backup_id;
     data[2] = node_id;
-    data[3] = m_logCount & 0xFFFFFFFF;
-    data[4] = 0;
+    data[3] = (Uint32)(m_logCount & 0xFFFFFFFF);
+    data[4] = (Uint32)((m_logCount >> 32) & 0xFFFFFFFF);
     data[5] = (Uint32)(m_logBytes & 0xFFFFFFFF);
     data[6] = (Uint32)((m_logBytes >> 32) & 0xFFFFFFFF);
     Ndb_internal::send_event_report(false /* has lock */, m_ndb, data, 7);
@@ -4485,8 +4485,8 @@ bool BackupRestore::endOfLogEntrys() {
 
   info.setLevel(254);
   restoreLogger.log_info(
-      "Restored %u tuples and "
-      "%u log entries",
+      "Restored %llu tuples and "
+      "%llu log entries",
       m_dataCount, m_logCount);
   return true;
 }
