@@ -65,6 +65,7 @@ extern bool ga_skip_broken_objects;
 extern Properties g_rewrite_databases;
 
 extern bool opt_skip_fk_checks;
+extern int ga_hint;
 
 bool BackupRestore::m_preserve_trailing_spaces = false;
 
@@ -3511,9 +3512,9 @@ void BackupRestore::tuple_a(restore_callback_t *cb) {
   Uint32 n_bytes;
   while (cb->retries < MAX_RETRIES) {
     /**
-     * start transactions
+     * start transaction, with hint if supplied
      */
-    cb->connection = m_ndb->startTransaction();
+    cb->connection = m_ndb->startTransaction(ga_hint, 0);
     if (cb->connection == NULL) {
       if (errorHandler(cb)) {
         m_ndb->sendPollNdb(3000, 1);
@@ -4207,7 +4208,8 @@ retry:
   }
 
   cb->n_bytes = 0;
-  cb->connection = m_ndb->startTransaction();
+  /* Start transaction with hint if supplied */
+  cb->connection = m_ndb->startTransaction(ga_hint, 0);
   NdbTransaction *trans = cb->connection;
   if (trans == NULL) {
     if (errorHandler(cb))  // temp error, retry

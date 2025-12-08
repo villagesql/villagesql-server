@@ -160,6 +160,7 @@ bool ga_skip_unknown_objects = false;
 bool ga_skip_broken_objects = false;
 bool ga_allow_pk_changes = false;
 bool ga_ignore_extended_pk_updates = false;
+int ga_hint = 0;
 BaseString g_options("ndb_restore");
 static int ga_num_slices = 1;
 static int ga_slice_id = 0;
@@ -479,6 +480,9 @@ static struct my_option my_long_options[] = {
      "Set size in bytes of buffer for reading from Backup files",
      &opt_read_size, nullptr, nullptr, GET_UINT, REQUIRED_ARG,
      DEFAULT_READ_SIZE, MIN_READ_SIZE, MAX_READ_SIZE, nullptr, 0, nullptr},
+    {"hint", NDB_OPT_NOSHORT,
+     "Hint all transactions to node id of backup being restored", &ga_hint,
+     nullptr, nullptr, GET_BOOL, OPT_ARG, 0, 0, 0, 0, 0, 0},
     NdbStdOpt::end_of_options};
 
 static bool parse_remap_option(const BaseString option, BaseString &db_name,
@@ -2662,6 +2666,32 @@ int main(int argc, char **argv) {
   } else {
     if (ga_num_slices > 1) {
       printf("ndb_restore slice %d/%d\n", ga_slice_id, ga_num_slices);
+    }
+  }
+
+  if (ga_hint) {
+    /**
+     * User set hint option
+     *
+     * Check that node id from backup is data node + live
+     * on this cluster.
+     */
+    ga_hint = 0;
+    g_cluster_connection->wait_until_ready(30, 30);
+    Ndb_cluster_connection_node_iter node_iter;
+    g_cluster_connection->init_get_next_node(node_iter);
+    int live_node = 0;
+    while ((live_node = (int)g_cluster_connection->get_next_alive_node(
+                node_iter)) != 0) {
+      if (live_node == ga_nodeId) {
+        ga_hint = ga_nodeId;
+        break;
+      }
+    }
+    if (ga_hint) {
+      info << "Hinting transactions to node id " << ga_nodeId << endl;
+    } else {
+      info << "Unable to hint transactions to node id " << ga_nodeId << endl;
     }
   }
 
