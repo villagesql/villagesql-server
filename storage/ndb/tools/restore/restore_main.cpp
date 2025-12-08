@@ -83,6 +83,11 @@ static const char *ga_backupPath = default_backupPath;
 
 static bool opt_decrypt = false;
 
+static Uint32 opt_read_size = 0;
+constexpr Uint32 MIN_READ_SIZE = 128 * 1024;
+constexpr Uint32 MAX_READ_SIZE = 32 * 1024 * 1024;
+constexpr Uint32 DEFAULT_READ_SIZE = BackupFile::DEFAULT_BUFFER_SIZE;
+
 // g_backup_password global, directly accessed in Restore.cpp.
 ndb_password_state g_backup_password_state("backup", nullptr);
 static ndb_password_option opt_backup_password(g_backup_password_state);
@@ -470,6 +475,10 @@ static struct my_option my_long_options[] = {
     {"skip-fk-checks", NDB_OPT_NOSHORT,
      "Skip checking foreign key integrity when rebuilding foreign keys",
      &opt_skip_fk_checks, nullptr, nullptr, GET_BOOL, NO_ARG, 0, 0, 0, 0, 0, 0},
+    {"read-size", NDB_OPT_NOSHORT,
+     "Set size in bytes of buffer for reading from Backup files",
+     &opt_read_size, nullptr, nullptr, GET_UINT, REQUIRED_ARG,
+     DEFAULT_READ_SIZE, MIN_READ_SIZE, MAX_READ_SIZE, nullptr, 0, nullptr},
     NdbStdOpt::end_of_options};
 
 static bool parse_remap_option(const BaseString option, BaseString &db_name,
@@ -2169,7 +2178,7 @@ int do_restore(RestoreThreadData *thrdata) {
       }
 
       RestoreDataIterator dataIter(metaData, &free_data_callback,
-                                   (void *)thrdata);
+                                   (void *)thrdata, opt_read_size);
 
       if (!dataIter.validateBackupFile()) {
         restoreLogger.log_error(
