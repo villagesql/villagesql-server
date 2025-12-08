@@ -152,8 +152,8 @@ bool printBACKUP_FRAGMENT_CONF(FILE *out, const Uint32 *data, Uint32 l,
   fprintf(out, " backupPtr: %u backupId: %u\n", sig->backupPtr, sig->backupId);
   fprintf(out, " tableId: %u fragmentNo: %u records: %llu bytes: %llu\n",
           sig->tableId, sig->fragmentNo,
-          sig->noOfRecordsLow + (((Uint64)sig->noOfRecordsHigh) << 32),
-          sig->noOfBytesLow + (((Uint64)sig->noOfBytesHigh) << 32));
+          (Uint64(sig->noOfRecordsHigh) << 32) + sig->noOfRecordsLow,
+          (Uint64(sig->noOfBytesHigh) << 32) + sig->noOfBytesLow);
   return true;
 }
 
@@ -193,8 +193,9 @@ bool printSTOP_BACKUP_CONF(FILE *out, const Uint32 *data, Uint32 l,
 
   const auto *sig = (const StopBackupConf *)data;
   fprintf(out, " backupPtr: %u backupId: %u\n", sig->backupPtr, sig->backupId);
-  fprintf(out, " noOfLogBytes: %u noOfLogRecords: %u\n", sig->noOfLogBytes,
-          sig->noOfLogRecords);
+  fprintf(out, " noOfLogBytes: %llu noOfLogRecords: %llu\n",
+          (Uint64(sig->noOfLogBytesHigh) << 32) + sig->noOfLogBytesLow,
+          (Uint64(sig->noOfLogRecordsHigh) << 32) + sig->noOfLogRecordsLow);
   return true;
 }
 
