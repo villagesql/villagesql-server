@@ -1292,8 +1292,9 @@ void handle_error_and_die(const char *subject, const char *interpolated_query,
     message << "\nExpected error(s): " << expected_errors;
   }
   if (actual_errno != 0) {
-    message << "\nReturned error: " << actual_errno << " (" << actual_sqlstate
-            << "): " << actual_message;
+    message << "\nReturned error: " << get_errname_from_code(actual_errno)
+            << "(" << actual_errno << ") "
+            << "(" << actual_sqlstate << "): " << actual_message;
   }
   die("%s", message.str().c_str());
 }
