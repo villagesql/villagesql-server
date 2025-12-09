@@ -1342,8 +1342,8 @@ static constexpr size_t UNIT_BYTES =
     ndbxfrm_buffer::size() / WORST_COMPRESSION_FACTOR;
 
 static size_t calcReadLoopcountLimit(size_t requestBytes) {
-  /* Add offset of 1 for zero byte read case */
-  return 1 + ((requestBytes + UNIT_BYTES - 1) / UNIT_BYTES);
+  /* Add offset of 2 for zero byte read case */
+  return 2 + ((requestBytes + UNIT_BYTES - 1) / UNIT_BYTES);
 }
 
 int ndbxfrm_file::read_forward(ndbxfrm_output_iterator *out) {
