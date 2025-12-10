@@ -1,5 +1,7 @@
 --source include/have_debug.inc
 
+CALL mtr.add_suppression("from authentication policy cannot be used for initial handshake");
+
 --echo # 1. Test server picks correct initial auth plugin (given in policy)
 
 # Connection will crash the server via debug assert unless

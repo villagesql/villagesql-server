@@ -1,3 +1,4 @@
+CALL mtr.add_suppression("from authentication policy cannot be used for initial handshake");
 # 1. Test server picks correct initial auth plugin (given in policy)
 SET GLOBAL DEBUG="+d,acl_expect_native_initial_auth_plugin";
 SET GLOBAL DEBUG="-d,acl_expect_native_initial_auth_plugin";
