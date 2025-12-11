@@ -20860,11 +20860,10 @@ in status code only if no other resize is in progress */
 
     if (innodb_buffer_pool_size_validate(thd, requested_buffer_pool_size,
                                          aligned_buffer_pool_size)) {
-      os_event_set(srv_buf_resize_event);
-
       ib::info(ER_IB_MSG_573)
           << export_vars.innodb_buffer_pool_resize_status
           << " (new size: " << aligned_buffer_pool_size << " bytes)";
+      os_event_set(srv_buf_resize_event);
 
       *static_cast<longlong *>(var_ptr) = aligned_buffer_pool_size;
     } else {
