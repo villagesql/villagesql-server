@@ -419,6 +419,7 @@ void Loader::Thread_data::insert_from_input_and_move_to_next(
   }
 
   m_err = sub_tree->insert(m_input_entry, 0);
+  mem_heap_empty(gcol_heap);
   if (m_err != DB_SUCCESS) {
     m_error_entry = m_input_entry;
     return;
@@ -493,7 +494,6 @@ dberr_t Loader::Thread_data::load(const row_prebuilt_t *prebuilt,
     if (m_err != DB_SUCCESS) {
       break;
     }
-    mem_heap_empty(gcol_heap);
   }
 
   Btree_multi::Btree_load::Wait_callbacks cbk_set(sub_tree, wait_cbk.m_fn_begin,
