@@ -1211,6 +1211,7 @@ ulonglong temptable_max_ram;
 ulonglong temptable_max_mmap;
 static char compiled_default_collation_name[] = MYSQL_DEFAULT_COLLATION_NAME;
 static bool binlog_format_used = false;
+bool innodb_native_foreign_keys;
 
 LEX_STRING opt_init_connect, opt_init_replica;
 
@@ -13158,6 +13159,10 @@ bool mysqld_get_one_option(int optid,
     case OPT_CHARACTER_SET_CLIENT_HANDSHAKE:
       push_deprecated_warn_no_replacement(nullptr,
                                           "--character-set-client-handshake");
+      break;
+    case OPT_INNODB_FOREIGN_KEYS:
+      push_deprecated_warn_no_replacement(nullptr,
+                                          "--innodb_native_foreign_keys");
       break;
   }
   return false;

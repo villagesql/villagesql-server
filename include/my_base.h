@@ -421,7 +421,11 @@ enum ha_extra_function {
   */
   HA_EXTRA_ENABLE_UNIQUE_RECORD_FILTER,
   /* Disable and free unique record filter. */
-  HA_EXTRA_DISABLE_UNIQUE_RECORD_FILTER
+  HA_EXTRA_DISABLE_UNIQUE_RECORD_FILTER,
+  /* Enable locking read. Used for foreign key check */
+  HA_EXTRA_ENABLE_LOCKING_RECORD,
+  /* Reset locking read. */
+  HA_EXTRA_RESET_LOCKING_RECORD
 };
 
 /* Compatible option, to be deleted in 6.0 */

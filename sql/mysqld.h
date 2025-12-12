@@ -382,6 +382,7 @@ extern char *opt_protocol_compression_algorithms;
 /** The size of the host_cache. */
 extern uint host_cache_size;
 extern ulong log_error_verbosity;
+extern bool innodb_native_foreign_keys;
 
 extern bool persisted_globals_load;
 extern bool opt_keyring_operations;

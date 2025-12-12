@@ -234,6 +234,11 @@ void Writeset_trx_dependency_tracker::get_dependency(THD *thd,
 #ifndef NDEBUG
   /* The writeset of an empty transaction must be empty. */
   if (is_empty_transaction_in_binlog_cache(thd)) assert(writeset->size() == 0);
+
+  DBUG_EXECUTE_IF("PKE_assert_single_primary_key_generated_update_fk_sql",
+                  assert(writeset->size() == 8););
+  DBUG_EXECUTE_IF("PKE_assert_single_primary_key_generated_delete_fk_sql",
+                  assert(writeset->size() == 5););
 #endif
 
   /*

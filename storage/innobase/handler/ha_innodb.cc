@@ -5441,11 +5441,12 @@ static int innodb_init(void *p) {
   innobase_hton->lock_hton_log = innobase_lock_hton_log;
   innobase_hton->unlock_hton_log = innobase_unlock_hton_log;
   innobase_hton->collect_hton_log_info = innobase_collect_hton_log_info;
-  innobase_hton->flags =
-      HTON_SUPPORTS_EXTENDED_KEYS | HTON_SUPPORTS_FOREIGN_KEYS |
-      HTON_SUPPORTS_ATOMIC_DDL | HTON_CAN_RECREATE |
-      HTON_SUPPORTS_SECONDARY_ENGINE | HTON_SUPPORTS_TABLE_ENCRYPTION |
-      HTON_SUPPORTS_GENERATED_INVISIBLE_PK | HTON_SUPPORTS_BULK_LOAD;
+  innobase_hton->flags = HTON_SUPPORTS_EXTENDED_KEYS |
+                         HTON_SUPPORTS_FOREIGN_KEYS | HTON_SUPPORTS_ATOMIC_DDL |
+                         HTON_CAN_RECREATE | HTON_SUPPORTS_SECONDARY_ENGINE |
+                         HTON_SUPPORTS_TABLE_ENCRYPTION |
+                         HTON_SUPPORTS_GENERATED_INVISIBLE_PK |
+                         HTON_SUPPORTS_BULK_LOAD | HTON_SUPPORTS_SQL_FK;
   // TODO(WL9440): to be enabled when distance scan is implemented in innodb.
   //| HTON_SUPPORTS_DISTANCE_SCAN;
 
@@ -18710,6 +18711,13 @@ int ha_innobase::extra(enum ha_extra_function operation)
       break;
     case HA_EXTRA_NO_AUTOINC_LOCKING:
       m_prebuilt->no_autoinc_locking = true;
+      break;
+    case HA_EXTRA_ENABLE_LOCKING_RECORD:
+      m_stored_select_lock_type = m_prebuilt->select_lock_type;
+      m_prebuilt->select_lock_type = LOCK_S;
+      break;
+    case HA_EXTRA_RESET_LOCKING_RECORD:
+      m_prebuilt->select_lock_type = m_stored_select_lock_type;
       break;
     default: /* Do nothing */
         ;

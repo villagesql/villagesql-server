@@ -7647,6 +7647,14 @@ Sys_var_bool Sys_restrict_fk_on_non_standard_key(
     NON_PERSIST SESSION_VAR(restrict_fk_on_non_standard_key), CMD_LINE(OPT_ARG),
     DEFAULT(true), NO_MUTEX_GUARD, NOT_IN_BINLOG,
     ON_CHECK(restrict_fk_on_non_standard_key_check), ON_UPDATE(nullptr));
+
+Sys_var_bool Sys_innodb_native_foreign_keys(
+    "innodb_native_foreign_keys",
+    "Use InnoDB foreign key checks and cascade operations instead of "
+    "SQL level foreign key checks or cascade operations",
+    PERSIST_AS_READONLY READ_ONLY GLOBAL_VAR(innodb_native_foreign_keys),
+    CMD_LINE(OPT_ARG, OPT_INNODB_FOREIGN_KEYS), DEFAULT(false), NO_MUTEX_GUARD,
+    NOT_IN_BINLOG, ON_CHECK(nullptr), ON_UPDATE(nullptr));
 }  // namespace
 
 #ifndef NDEBUG

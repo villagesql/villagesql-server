@@ -171,6 +171,7 @@
 #include "sql/sql_db.h"          // get_default_db_collation
 #include "sql/sql_error.h"
 #include "sql/sql_executor.h"  // unique_ptr_destroy_only<RowIterator>
+#include "sql/sql_foreign_key_constraint.h"
 #include "sql/sql_gipk.h"
 #include "sql/sql_handler.h"
 #include "sql/sql_lex.h"
@@ -1548,7 +1549,7 @@ void Foreign_key_parents_invalidator::invalidate(THD *thd) {
     } else {
       assert(parent_it.second.second ==
              enum_invalidation_type::INVALIDATE_AND_MARK_FOR_REOPEN);
-      tdc_remove_table(thd, TDC_RT_MARK_FOR_REOPEN,
+      tdc_remove_table(thd, TDC_RT_MARK_FOR_REOPEN_AND_INVALIDATE_SHARE,
                        parent_it.first.first.c_str(),
                        parent_it.first.second.c_str(), false);
     }
@@ -19637,6 +19638,12 @@ static int copy_data_between_tables(
 
     error = invoke_table_check_constraints(thd, to);
     if (error) break;
+
+    if (use_sql_fk_checks_for_table(thd, to) &&
+        check_all_parent_fk_ref(thd, to, enum_fk_dml_type::FK_INSERT)) {
+      error = 1;
+      break;
+    }
 
     error = to->file->ha_write_row(to->record[0]);
     to->autoinc_field_has_explicit_non_null_value = false;

@@ -3251,6 +3251,10 @@ inline bool hton_is_secondary_engine(const handlerton *hton) {
   return hton != nullptr && (hton->flags & HTON_IS_SECONDARY_ENGINE) != 0U;
 }
 
+/* Disable foreign keys in storage engine and handle it in SQL Layer. */
+inline constexpr const decltype(handlerton::flags) HTON_SUPPORTS_SQL_FK{1
+                                                                        << 25};
+
 /* Whether the secondary engine handlerton supports DDLs */
 inline bool secondary_engine_supports_ddl(const handlerton *hton) {
   assert(hton->flags & HTON_IS_SECONDARY_ENGINE);

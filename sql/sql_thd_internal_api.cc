@@ -384,3 +384,8 @@ bool thd_is_dd_update_stmt(const THD *thd) {
 }
 
 my_thread_id thd_thread_id(const THD *thd) { return (thd->thread_id()); }
+
+bool thd_is_sql_fk_checks_enabled() {
+  if (current_thd == nullptr) return true;
+  return (is_sql_fk_checks_enabled(current_thd));
+}

@@ -906,6 +906,10 @@ THD::THD(bool enable_plugins)
   if (events_cache_ == nullptr || !events_cache_->valid()) {
     /*ToDo: Raise warning */
   }
+
+  // Initialize based on the global system startup variable
+  if (!innodb_native_foreign_keys)
+    variables.option_bits |= OPTION_USE_SQL_FOREIGN_KEY_HANDLING;
 }
 
 void THD::store_cached_properties(cached_properties prop_mask) {
@@ -3864,4 +3868,9 @@ const Cost_model_server *THD::cost_model() const {
   } else {
     return &m_cost_model;
   }
+}
+
+bool use_sql_fk_checks_for_table(THD *thd, TABLE *table) {
+  return ((table->s->db_type()->flags & HTON_SUPPORTS_SQL_FK) &&
+          is_sql_fk_checks_enabled(thd));
 }

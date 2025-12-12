@@ -124,11 +124,13 @@ bool mysql_discard_or_import_tablespace(THD *thd, Table_ref *table_list);
   data-dictionary cache entries and performing such invalidation.
 */
 class Foreign_key_parents_invalidator {
- private:
+ public:
   enum enum_invalidation_type {
     INVALIDATE_AND_CLOSE_TABLE,
     INVALIDATE_AND_MARK_FOR_REOPEN
   };
+
+ private:
   typedef std::map<std::pair<dd::String_type, dd::String_type>,
                    std::pair<handlerton *, enum_invalidation_type>>
       Parent_map;

@@ -90,6 +90,7 @@
 #include "sql/sql_data_change.h"
 #include "sql/sql_error.h"
 #include "sql/sql_exchange.h"
+#include "sql/sql_foreign_key_constraint.h"
 #include "sql/sql_insert.h"  // check_that_all_fields_are_given_values,
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"
@@ -430,9 +431,9 @@ bool Sql_cmd_load_table::execute_bulk(THD *thd) {
 
   Table_ref *table_ref = thd->lex->query_tables;
 
+  uint counter;
   // Acquire MDL lock on table, BACKUP_LOCK and GLOBAL lock objects.
-  if (lock_table_names(thd, table_ref, nullptr,
-                       thd->variables.lock_wait_timeout, 0)) {
+  if (open_tables(thd, &table_ref, &counter, 0)) {
     return true;
   }
 
@@ -453,11 +454,6 @@ bool Sql_cmd_load_table::execute_bulk(THD *thd) {
 
   if (table_def == nullptr) {
     my_error(ER_NO_SUCH_TABLE, MYF(0), table_ref->db, table_ref->table_name);
-    return true;
-  }
-
-  uint counter;
-  if (open_tables(thd, &table_ref, &counter, MYSQL_OPEN_HAS_MDL_LOCK)) {
     return true;
   }
 
@@ -1515,6 +1511,15 @@ bool Sql_cmd_load_table::read_fixed_length(THD *thd, COPY_INFO &info,
       goto continue_loop;
     }
 
+    if (use_sql_fk_checks_for_table(thd, table)) {
+      if (check_all_parent_fk_ref(thd, table, enum_fk_dml_type::FK_INSERT)) {
+        if (thd->is_error()) return true;
+        // continue when IGNORE clause is used.
+        read_info.next_line();
+        goto continue_loop;
+      }
+    }
+
     err = write_record(thd, table, &info, nullptr);
     if (err) return true;
 
@@ -1756,6 +1761,15 @@ bool Sql_cmd_load_table::read_sep_field(THD *thd, COPY_INFO &info,
       goto continue_loop;
     }
 
+    if (use_sql_fk_checks_for_table(thd, table)) {
+      if (check_all_parent_fk_ref(thd, table, enum_fk_dml_type::FK_INSERT)) {
+        if (thd->is_error()) return true;
+        // continue when IGNORE clause is used.
+        read_info.next_line();
+        goto continue_loop;
+      }
+    }
+
     err = write_record(thd, table, &info, nullptr);
     if (err) return true;
     /*
@@ -1935,6 +1949,14 @@ bool Sql_cmd_load_table::read_xml_field(THD *thd, COPY_INFO &info,
       if (thd->is_error()) return true;
       // continue when IGNORE clause is used.
       goto continue_loop;
+    }
+
+    if (use_sql_fk_checks_for_table(thd, table)) {
+      if (check_all_parent_fk_ref(thd, table, enum_fk_dml_type::FK_INSERT)) {
+        if (thd->is_error()) return true;
+        // continue when IGNORE clause is used.
+        goto continue_loop;
+      }
     }
 
     if (write_record(thd, table, &info, nullptr)) return true;

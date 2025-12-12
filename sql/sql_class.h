@@ -4946,6 +4946,13 @@ class THD : public MDL_context_owner,
     defined behaviour when they aren't.
   */
   size_t m_opened_temptable_count{};
+
+ private:
+  bool m_sql_foreign_keys{1};
+
+ public:
+  bool get_sql_foreign_keys() const;
+  void set_sql_foreign_keys(bool flag) { m_sql_foreign_keys = flag; }
 };
 
 /**
@@ -5041,4 +5048,29 @@ inline bool is_rpl_source_older(const THD *thd, uint version) {
           thd->variables.original_server_version < version);
 }
 
+/**
+ * @brief Check if foreign handling at SQL is enabled.
+ *
+ * @param thd        Thread Handle.
+ *
+ * @return true      If enabled.
+ * @return false     Otherwise.
+ */
+inline bool is_sql_fk_checks_enabled(THD *thd) {
+  DBUG_EXECUTE_IF("force_innodb_fk", return false;);
+  DBUG_EXECUTE_IF("force_sql_fk", return true;);
+  assert(thd != nullptr);
+  return thd->variables.option_bits & OPTION_USE_SQL_FOREIGN_KEY_HANDLING;
+}
+
+/**
+ * @brief Check if SQL foreign key handling can be used for a table.
+ *
+ * @param thd              Thread Handle.
+ * @param table            TABLE instance of a table.
+ *
+ * @return true            if SQL FK checks supported for SE.
+ * @return false           Otherwise.
+ */
+bool use_sql_fk_checks_for_table(THD *thd, TABLE *table);
 #endif /* SQL_CLASS_INCLUDED */

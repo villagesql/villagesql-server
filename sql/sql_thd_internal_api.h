@@ -291,4 +291,11 @@ bool thd_is_bootstrap_thread(THD *thd);
 bool thd_is_dd_update_stmt(const THD *thd);
 
 my_thread_id thd_thread_id(const THD *thd);
+
+/**
+  Check if SQL Layer FK handling is enabled.
+
+  @retval true use SQL Layer FK handling, false otherwise.
+*/
+bool thd_is_sql_fk_checks_enabled();
 #endif  // SQL_THD_INTERNAL_API_INCLUDED

@@ -158,6 +158,7 @@
 #include "sql/sql_digest_stream.h"
 #include "sql/sql_error.h"
 #include "sql/sql_exchange.h"  // sql_exchange
+#include "sql/sql_foreign_key_constraint.h"
 #include "sql/sql_gipk.h"
 #include "sql/sql_lex.h"
 #include "sql/sql_list.h"        // I_List
@@ -7645,6 +7646,7 @@ Rows_log_event::Rows_log_event(THD *thd_arg, TABLE *tbl_arg,
     set_flags(NO_FOREIGN_KEY_CHECKS_F);
   if (thd_arg->variables.option_bits & OPTION_RELAXED_UNIQUE_CHECKS)
     set_flags(RELAXED_UNIQUE_CHECKS_F);
+  if (is_sql_fk_checks_enabled(thd_arg)) set_flags(USE_SQL_FOREIGN_KEY_F);
 #ifndef NDEBUG
   uchar extra_data[255];
   DBUG_EXECUTE_IF("extra_row_ndb_info_set_618",
@@ -9499,10 +9501,21 @@ int Rows_log_event::do_apply_event(Relay_log_info const *rli) {
       Make sure to set/clear them before executing the main body of
       the event.
     */
-    if (get_flags(NO_FOREIGN_KEY_CHECKS_F))
+    if (get_flags(NO_FOREIGN_KEY_CHECKS_F)) {
+      DBUG_PRINT("fk", ("Rows log event. FOREIGN_KEY_CHECK = OFF"));
       thd->variables.option_bits |= OPTION_NO_FOREIGN_KEY_CHECKS;
-    else
+    } else {
+      DBUG_PRINT("fk", ("Rows log event. FOREIGN_KEY_CHECK = ON"));
       thd->variables.option_bits &= ~OPTION_NO_FOREIGN_KEY_CHECKS;
+    }
+
+    if (get_flags(USE_SQL_FOREIGN_KEY_F)) {
+      DBUG_PRINT("fk", ("Rows log event. SQL FK Handling = ON"));
+      thd->variables.option_bits |= OPTION_USE_SQL_FOREIGN_KEY_HANDLING;
+    } else {
+      DBUG_PRINT("fk", ("Rows_log event. SQL FK Handling = OFF"));
+      thd->variables.option_bits &= ~OPTION_USE_SQL_FOREIGN_KEY_HANDLING;
+    }
 
     if (get_flags(RELAXED_UNIQUE_CHECKS_F))
       thd->variables.option_bits |= OPTION_RELAXED_UNIQUE_CHECKS;
@@ -12061,6 +12074,31 @@ int Write_rows_log_event::write_row(const Relay_log_info *const rli,
   if (invoke_table_check_constraints(thd, table))
     return ER_CHECK_CONSTRAINT_VIOLATED;
 
+  /*
+    OPTION_NO_FOREIGN_KEY_CHECKS is a table flag, value may be different per
+    table, thence needs to be evaluated per individual row operation.
+  */
+  if (get_flags(NO_FOREIGN_KEY_CHECKS_F)) {
+    DBUG_PRINT("fk", ("Insert log event. FOREIGN_KEY_CHECKS = OFF"));
+    thd->variables.option_bits |= OPTION_NO_FOREIGN_KEY_CHECKS;
+  } else {
+    DBUG_PRINT("fk", ("Insert log event. FOREIGN_KEY_CHECKS = ON"));
+    thd->variables.option_bits &= ~OPTION_NO_FOREIGN_KEY_CHECKS;
+  }
+
+  /*
+    OPTION_USE_SQL_FOREIGN_KEY_HANDLING is a transaction flag, which value will
+    be the same on all row events of a transaction, thence it is sufficient to
+    read it once on Rows_log_event::do_apply_event().
+  */
+  if (use_sql_fk_checks_for_table(thd, m_table)) {
+    DBUG_PRINT("fk", ("SQL FK - Insert log event on table %s", m_table->alias));
+    if (check_all_parent_fk_ref(thd, m_table, enum_fk_dml_type::FK_INSERT))
+      return HA_ERR_NO_REFERENCED_ROW;
+  } else {
+    DBUG_PRINT("fk", ("SE FK - Insert log event on table %s", m_table->alias));
+  }
+
   if (m_curr_row == m_rows_buf) {
     /* this is the first row to be inserted, we estimate the rows with
        the size of the first row and use that value to initialize
@@ -12245,8 +12283,19 @@ int Write_rows_log_event::write_row(const Relay_log_info *const rli,
 
       goto error;
     } else {
-      DBUG_PRINT("info",
-                 ("Deleting offending row and trying to write new one again"));
+      if (use_sql_fk_checks_for_table(thd, table)) {
+        DBUG_PRINT("fk", ("SQL FK - Deleting offending row and trying to write"
+                          " new one on table %s",
+                          table->alias));
+        if (check_all_child_fk_ref(thd, table,
+                                   enum_fk_dml_type::FK_DELETE_REPLACE))
+          return HA_ERR_ROW_IS_REFERENCED;
+      } else {
+        DBUG_PRINT("fk", ("SE FK - Deleting offending row and trying to write"
+                          " new one on table %s",
+                          table->alias));
+      }
+
       if ((error = table->file->ha_delete_row(table->record[1]))) {
         DBUG_PRINT("info", ("ha_delete_row() returns error %d", error));
         table->file->print_error(error, MYF(0));
@@ -12372,6 +12421,27 @@ int Delete_rows_log_event::do_after_row_operations(const Relay_log_info *const,
 int Delete_rows_log_event::do_exec_row(const Relay_log_info *const) {
   int error;
   assert(m_table != nullptr);
+
+  /*
+    OPTION_NO_FOREIGN_KEY_CHECKS is a table flag, value may be different per
+    table, thence needs to be evaluated per individual row operation.
+  */
+  if (get_flags(NO_FOREIGN_KEY_CHECKS_F)) {
+    DBUG_PRINT("fk", ("Delete log event. FOREIGN_KEY_CHECKS = OFF"));
+    thd->variables.option_bits |= OPTION_NO_FOREIGN_KEY_CHECKS;
+  } else {
+    DBUG_PRINT("fk", ("Delete log event. FOREIGN_KEY_CHECKS = ON"));
+    thd->variables.option_bits &= ~OPTION_NO_FOREIGN_KEY_CHECKS;
+  }
+
+  if (use_sql_fk_checks_for_table(thd, m_table)) {
+    DBUG_PRINT("fk", ("SQL FK - Delete log event on table %s", m_table->alias));
+    if (check_all_child_fk_ref(thd, m_table, enum_fk_dml_type::FK_DELETE))
+      return HA_ERR_ROW_IS_REFERENCED;
+  } else {
+    DBUG_PRINT("fk", ("SE FK - Delete log event on table %s", m_table->alias));
+  }
+
   /* m_table->record[0] contains the BI */
   m_table->mark_columns_per_binlog_row_image(thd);
   error = m_table->file->ha_delete_row(m_table->record[0]);
@@ -12532,6 +12602,29 @@ int Update_rows_log_event::do_exec_row(const Relay_log_info *const rli) {
   // Invoke check constraints on the unpacked row.
   if (invoke_table_check_constraints(thd, m_table))
     return ER_CHECK_CONSTRAINT_VIOLATED;
+
+  /*
+    OPTION_NO_FOREIGN_KEY_CHECKS is a table flag, value may be different per
+    table, thence needs to be evaluated per individual row operation.
+  */
+  if (get_flags(NO_FOREIGN_KEY_CHECKS_F)) {
+    DBUG_PRINT("fk", ("Update log event. FOREIGN_KEY_CHECKS = OFF"));
+    thd->variables.option_bits |= OPTION_NO_FOREIGN_KEY_CHECKS;
+  } else {
+    DBUG_PRINT("fk", ("Update log event. FOREIGN_KEY_CHECKS = ON"));
+    thd->variables.option_bits &= ~OPTION_NO_FOREIGN_KEY_CHECKS;
+  }
+
+  if (use_sql_fk_checks_for_table(thd, m_table)) {
+    DBUG_PRINT("fk", ("SQL FK - Update log event on table %s", m_table->alias));
+    if (check_all_parent_fk_ref(thd, m_table, enum_fk_dml_type::FK_UPDATE))
+      return HA_ERR_NO_REFERENCED_ROW;
+
+    if (check_all_child_fk_ref(thd, m_table, enum_fk_dml_type::FK_UPDATE))
+      return HA_ERR_ROW_IS_REFERENCED;
+  } else {
+    DBUG_PRINT("fk", ("SE FK - Update log event on table %s", m_table->alias));
+  }
 
   /*
     Now we have the right row to update.  The old row (the one we're
