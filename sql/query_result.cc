@@ -1,4 +1,5 @@
 /* Copyright (c) 2015, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -372,7 +373,12 @@ bool Query_result_export::send_data(THD *thd,
     bool enclosed =
         (exchange->field.enclosed->length() &&
          (!exchange->field.opt_enclosed || result_type == STRING_RESULT));
-    res = item->val_str(&tmp);
+    // VillageSQL: For custom types, use val_custom_str() to get formatted text
+    if (item->has_type_context()) {
+      res = item->val_custom_str(&tmp);
+    } else {
+      res = item->val_str(&tmp);
+    }
     if (res && !my_charset_same(write_cs, res->charset()) &&
         !my_charset_same(write_cs, &my_charset_bin)) {
       const char *well_formed_error_pos;

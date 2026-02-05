@@ -1,7 +1,15 @@
 # Test SELECT ... INTO with COMPLEX type
 # Grammar: SELECT ... INTO ...
 
---source include/villagesql/not_implemented_complex_type.inc
+# First test DOUBLE to see how builtin types handle OUTFILE/INFILE
+CREATE TABLE t_double (id INT, val DOUBLE);
+INSERT INTO t_double VALUES (1, 7.0), (2, 9.0);
+SELECT * FROM t_double INTO OUTFILE 'test_double.txt';
+--cat_file $MYSQLTEST_VARDIR/mysqld.1/data/test/test_double.txt
+CREATE TABLE t_double2 (id INT, val DOUBLE);
+LOAD DATA INFILE 'test_double.txt' INTO TABLE t_double2;
+SELECT * FROM t_double2;
+DROP TABLE t_double, t_double2;
 
 --source include/villagesql/install_complex_extension.inc
 
@@ -12,12 +20,65 @@ INSERT INTO t1 VALUES ('(1.0,2.0)');
 SELECT val INTO @var FROM t1;
 SELECT @var;
 
-# TODO(villagesql): Add more comprehensive SELECT INTO tests including:
-# - SELECT INTO OUTFILE with COMPLEX types (serialization format)
-# - SELECT INTO DUMPFILE with COMPLEX types
-# - Multiple variables with SELECT INTO
-# - SELECT INTO with expressions involving COMPLEX types
+# Verify TypeContext is maintained - this should show formatted output
+# If TypeContext was lost, we'd see binary data like '\x00\x00...'
+SELECT @var = '(1.00,2.00)' AS context_preserved;
 
 DROP TABLE t1;
+
+# Multiple variables with SELECT INTO
+CREATE TABLE t2 (id INT, val1 COMPLEX, val2 COMPLEX);
+INSERT INTO t2 VALUES (1, '(1.0,2.0)', '(3.0,4.0)');
+
+SELECT val1, val2 INTO @var1, @var2 FROM t2 WHERE id = 1;
+SELECT @var1, @var2;
+SELECT @var1 = '(1.00,2.00)' AND @var2 = '(3.00,4.00)' AS both_preserved;
+
+# SELECT INTO with expression (VDF function call)
+SELECT vsql_complex.complex_add(@var1, @var2) INTO @var3;
+SELECT @var3;
+SELECT @var3 = '(4.00,6.00)' AS expression_preserved;
+
+DROP TABLE t2;
+
+# Clear variables
+SET @var1 = NULL;
+SET @var2 = NULL;
+SET @var3 = NULL;
+
+# SELECT INTO OUTFILE - test serialization format
+CREATE TABLE t3 (id INT, val COMPLEX);
+INSERT INTO t3 VALUES (1, '(7.0,8.0)'), (2, '(9.0,10.0)');
+
+# Write to file (goes to datadir by default)
+SELECT * FROM t3 INTO OUTFILE 'select_into_complex.txt';
+--cat_file $MYSQLTEST_VARDIR/mysqld.1/data/test/select_into_complex.txt
+
+# Load data back - currently fails with "Incorrect COMPLEX value"
+CREATE TABLE t4 (id INT, val COMPLEX);
+LOAD DATA INFILE 'select_into_complex.txt' INTO TABLE t4;
+SELECT * FROM t4;
+SELECT val = '(7.00,8.00)' FROM t4 WHERE id = 1;
+SELECT val = '(9.00,10.00)' FROM t4 WHERE id = 2;
+
+DROP TABLE t3, t4;
+
+# Test SELECT INTO OUTFILE with expression (VDF function - tests non-FIELD_ITEM with TypeContext)
+CREATE TABLE t5 (id INT, val COMPLEX);
+INSERT INTO t5 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+
+SELECT id, vsql_complex.complex_add(val, '(10.0,20.0)') AS result INTO OUTFILE 'select_into_complex_expr.txt' FROM t5;
+--cat_file $MYSQLTEST_VARDIR/mysqld.1/data/test/select_into_complex_expr.txt
+
+CREATE TABLE t6 (id INT, result COMPLEX);
+LOAD DATA INFILE 'select_into_complex_expr.txt' INTO TABLE t6;
+SELECT * FROM t6;
+
+DROP TABLE t5, t6;
+
+# TODO(villagesql): Add DUMPFILE test once we determine expected binary format
+
+# Clear user variable to allow extension uninstallation
+SET @var = NULL;
 
 --source include/villagesql/uninstall_complex_extension.inc

@@ -1,0 +1,73 @@
+CREATE TABLE t_double (id INT, val DOUBLE);
+INSERT INTO t_double VALUES (1, 7.0), (2, 9.0);
+SELECT * FROM t_double INTO OUTFILE 'test_double.txt';
+1	7
+2	9
+CREATE TABLE t_double2 (id INT, val DOUBLE);
+LOAD DATA INFILE 'test_double.txt' INTO TABLE t_double2;
+SELECT * FROM t_double2;
+id	val
+1	7
+2	9
+DROP TABLE t_double, t_double2;
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)');
+SELECT val INTO @var FROM t1;
+SELECT @var;
+@var
+(1,2)
+SELECT @var = '(1.00,2.00)' AS context_preserved;
+context_preserved
+1
+DROP TABLE t1;
+CREATE TABLE t2 (id INT, val1 COMPLEX, val2 COMPLEX);
+INSERT INTO t2 VALUES (1, '(1.0,2.0)', '(3.0,4.0)');
+SELECT val1, val2 INTO @var1, @var2 FROM t2 WHERE id = 1;
+SELECT @var1, @var2;
+@var1	@var2
+(1,2)	(3,4)
+SELECT @var1 = '(1.00,2.00)' AND @var2 = '(3.00,4.00)' AS both_preserved;
+both_preserved
+1
+SELECT vsql_complex.complex_add(@var1, @var2) INTO @var3;
+SELECT @var3;
+@var3
+(4,6)
+SELECT @var3 = '(4.00,6.00)' AS expression_preserved;
+expression_preserved
+1
+DROP TABLE t2;
+SET @var1 = NULL;
+SET @var2 = NULL;
+SET @var3 = NULL;
+CREATE TABLE t3 (id INT, val COMPLEX);
+INSERT INTO t3 VALUES (1, '(7.0,8.0)'), (2, '(9.0,10.0)');
+SELECT * FROM t3 INTO OUTFILE 'select_into_complex.txt';
+1	(7,8)
+2	(9,10)
+CREATE TABLE t4 (id INT, val COMPLEX);
+LOAD DATA INFILE 'select_into_complex.txt' INTO TABLE t4;
+SELECT * FROM t4;
+id	val
+1	(7,8)
+2	(9,10)
+SELECT val = '(7.00,8.00)' FROM t4 WHERE id = 1;
+val = '(7.00,8.00)'
+1
+SELECT val = '(9.00,10.00)' FROM t4 WHERE id = 2;
+val = '(9.00,10.00)'
+1
+DROP TABLE t3, t4;
+CREATE TABLE t5 (id INT, val COMPLEX);
+INSERT INTO t5 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
+SELECT id, vsql_complex.complex_add(val, '(10.0,20.0)') AS result INTO OUTFILE 'select_into_complex_expr.txt' FROM t5;
+1	(11,22)
+2	(13,24)
+CREATE TABLE t6 (id INT, result COMPLEX);
+LOAD DATA INFILE 'select_into_complex_expr.txt' INTO TABLE t6;
+SELECT * FROM t6;
+id	result
+1	(11,22)
+2	(13,24)
+DROP TABLE t5, t6;
+SET @var = NULL;

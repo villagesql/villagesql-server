@@ -283,6 +283,30 @@ String *Item::val_str_ascii(String *str) {
   return str;
 }
 
+// VillageSQL: Get formatted string for custom types by decoding binary data
+String *Item::val_custom_str(String *str) {
+  // Get binary data from val_str()
+  String *binary_data = val_str(str);
+  if (!binary_data || null_value) return binary_data;
+
+  // Decode using TypeContext's to_string function
+  bool is_valid = true;
+  if (villagesql::DecodeString(
+          *get_type_context(), pointer_cast<const uchar *>(binary_data->ptr()),
+          binary_data->length(), *current_thd->mem_root, str, is_valid)) {
+    if (!is_valid) {
+      // Invalid custom type data - set null and return nullptr
+      null_value = true;
+      return nullptr;
+    }
+    // OOM or other error (my_error already called)
+    null_value = true;
+    return nullptr;
+  }
+
+  return str;
+}
+
 String *Item::val_string_from_real(String *str) {
   const double nr = val_real();
   if (null_value) return nullptr; /* purecov: inspected */
