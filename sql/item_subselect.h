@@ -2,6 +2,7 @@
 #define ITEM_SUBSELECT_INCLUDED
 
 /* Copyright (c) 2002, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -293,6 +294,9 @@ class Item_singlerow_subselect : public Item_subselect {
   bool val_bool() override;
   enum Item_result result_type() const override;
   bool resolve_type(THD *) override;
+
+  // VillageSQL: Forward TypeContext from the cached value
+  VILLAGESQL_FORWARD_TYPE_CONTEXT(m_value)
 
   /*
     Mark the subquery as having no rows.

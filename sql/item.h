@@ -77,6 +77,7 @@
 #include "sql_string.h"
 #include "string_with_len.h"
 #include "template_utils.h"
+#include "villagesql/include/item_helpers.h"
 
 class Item;
 class Item_field;
@@ -3745,11 +3746,11 @@ class Item : public Parse_tree_node {
   const villagesql::TypeContext *custom_type{nullptr};
 
  public:
-  const villagesql::TypeContext *get_type_context() const {
+  virtual const villagesql::TypeContext *get_type_context() const {
     return custom_type;
   }
   void set_type_context(const villagesql::TypeContext *tc) { custom_type = tc; }
-  bool has_type_context() const { return nullptr != custom_type; }
+  virtual bool has_type_context() const { return nullptr != custom_type; }
 };
 
 /**
@@ -6098,6 +6099,10 @@ class Item_ref : public Item_ident {
     assert(m_ref_item != nullptr);
     if (result_type() == ROW_RESULT) ref_item()->bring_value();
   }
+
+  // VillageSQL: Forward TypeContext from the referenced item
+  VILLAGESQL_FORWARD_TYPE_CONTEXT(ref_item())
+
   bool get_time(MYSQL_TIME *ltime) override {
     assert(fixed);
     const bool result = ref_item()->get_time(ltime);
@@ -6922,6 +6927,9 @@ class Item_cache : public Item_basic_constant {
     collation.set(item->collation);
     unsigned_flag = item->unsigned_flag;
     add_accum_properties(item);
+    // VillageSQL: Copy custom type context for proper formatting of custom
+    // types
+    set_type_context(item->get_type_context());
     if (item->type() == FIELD_ITEM) {
       cached_field = down_cast<Item_field *>(item);
       if (cached_field->table_ref != nullptr)

@@ -1,8 +1,6 @@
 # Test Row Subqueries with COMPLEX type
 # Grammar: SELECT ... WHERE (col1, col2) = (SELECT col1, col2 ...)
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 
 CREATE TABLE t1 (id INT, val COMPLEX);
@@ -27,8 +25,15 @@ INSERT INTO t2 VALUES
   (4, '(-1.0,-2.0)'),
   (1, '(-0,0)');
 
-# Row equality with subquery
+# Row equality with subquery - LIMIT 1 gets first row (11, '(0.0,0.0)'), no match in t1
 SELECT * FROM t1 WHERE (id, val) = (SELECT id, val FROM t2 LIMIT 1);
+
+# Without LIMIT 1, subquery returns multiple rows - should error
+--error ER_SUBQUERY_NO_1_ROW
+SELECT * FROM t1 WHERE (id, val) = (SELECT id, val FROM t2 ORDER BY id);
+
+# With WHERE to get a specific row that matches
+SELECT * FROM t1 WHERE (id, val) = (SELECT id, val FROM t2 WHERE id = 4 LIMIT 1);
 
 # Note: shows "ERROR 3219 (HY000): Cannot compare values of custom and non-custom types in ="
 SELECT * FROM t1 WHERE (val) = (SELECT val FROM t2 ORDER BY id LIMIT 1);

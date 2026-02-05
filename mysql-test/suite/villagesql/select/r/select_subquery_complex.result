@@ -1,0 +1,9 @@
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)');
+SELECT (SELECT val FROM t1) as sub_val;
+sub_val
+(1,2)
+SELECT dt.val FROM (SELECT val FROM t1) AS dt;
+val
+(1,2)
+DROP TABLE t1;

@@ -1,8 +1,6 @@
 # Test Subquery as Scalar Comparison Operand with COMPLEX type
 # Grammar: SELECT ... WHERE expr <op> (SELECT ...)
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 
 CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX);

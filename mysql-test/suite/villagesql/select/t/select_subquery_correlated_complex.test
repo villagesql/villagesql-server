@@ -1,8 +1,6 @@
 # Test Correlated Subqueries with COMPLEX type
 # Grammar: SELECT ... WHERE col = (SELECT ... WHERE outer.col = inner.col)
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 
 CREATE TABLE t1 (id INT, val COMPLEX);
