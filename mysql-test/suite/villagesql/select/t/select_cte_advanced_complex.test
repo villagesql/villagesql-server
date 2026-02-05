@@ -1,8 +1,6 @@
 # Test Advanced CTE (WITH) scenarios with COMPLEX type
 # Grammar: WITH RECURSIVE, Multiple CTEs, Column Lists
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 
 CREATE TABLE t1 (val COMPLEX);
@@ -24,7 +22,7 @@ SELECT my_val FROM cte;
 # (e.g., incrementing real/imaginary parts). For now, we just carry the
 # value forward to test basic recursive CTE functionality.
 WITH RECURSIVE cte (n, val) AS (
-  SELECT 1, CAST('(1.0,2.0)' AS COMPLEX)
+  SELECT 1, vsql_complex.complex_from_string('(1.0,2.0)')
   UNION ALL
   SELECT n + 1, val FROM cte WHERE n < 3
 )
@@ -40,7 +38,7 @@ SELECT * FROM (
 WITH cte AS (
   SELECT val FROM t1
   UNION
-  SELECT CAST('(5.0,6.0)' AS COMPLEX)
+  SELECT vsql_complex.complex_from_string('(5.0,6.0)')
 )
 SELECT * FROM cte;
 

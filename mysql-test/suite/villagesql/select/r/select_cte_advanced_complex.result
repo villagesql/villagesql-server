@@ -1,0 +1,42 @@
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)'), ('(3.0,4.0)');
+WITH
+cte1 AS (SELECT val FROM t1 WHERE val = '(1.0,2.0)'),
+cte2 AS (SELECT val FROM t1 WHERE val = '(3.0,4.0)')
+SELECT * FROM cte1 UNION ALL SELECT * FROM cte2;
+val
+(1,2)
+(3,4)
+WITH cte (my_val) AS (SELECT val FROM t1)
+SELECT my_val FROM cte;
+my_val
+(1,2)
+(3,4)
+WITH RECURSIVE cte (n, val) AS (
+SELECT 1, vsql_complex.complex_from_string('(1.0,2.0)')
+UNION ALL
+SELECT n + 1, val FROM cte WHERE n < 3
+)
+SELECT * FROM cte;
+n	val
+1	(1,2)
+2	(1,2)
+3	(1,2)
+SELECT * FROM (
+WITH cte AS (SELECT val FROM t1)
+SELECT * FROM cte
+) AS dt;
+val
+(1,2)
+(3,4)
+WITH cte AS (
+SELECT val FROM t1
+UNION
+SELECT vsql_complex.complex_from_string('(5.0,6.0)')
+)
+SELECT * FROM cte;
+val
+(1,2)
+(3,4)
+(5,6)
+DROP TABLE t1;
