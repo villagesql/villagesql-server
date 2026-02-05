@@ -33,6 +33,12 @@ SELECT test_vdf_ext.simple_int_func() AS result;
 SELECT test_vdf_ext.simple_string_func() AS result;
 SELECT test_vdf_ext.simple_test('hello') AS result;
 
+--echo # Verify VDF returning STRING has UTF8 charset (not BINARY)
+--echo # This catches a bug where resolve_type() ran before m_vdf was set,
+--echo # causing string-returning VDFs to incorrectly use binary charset.
+SELECT CHARSET(test_vdf_ext.simple_string_func()) AS string_charset;
+SELECT COLLATION(test_vdf_ext.simple_string_func()) AS string_collation;
+
 --echo # Try calling non-existent VDF on installed extension (should fail - falls through to stored function lookup)
 --error ER_SP_DOES_NOT_EXIST
 SELECT test_vdf_ext.nonexistent_func() AS result;

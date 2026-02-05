@@ -18,6 +18,15 @@ Hello from UDF
 SELECT test_vdf_ext.simple_test('hello') AS result;
 result
 5
+# Verify VDF returning STRING has UTF8 charset (not BINARY)
+# This catches a bug where resolve_type() ran before m_vdf was set,
+# causing string-returning VDFs to incorrectly use binary charset.
+SELECT CHARSET(test_vdf_ext.simple_string_func()) AS string_charset;
+string_charset
+utf8mb4
+SELECT COLLATION(test_vdf_ext.simple_string_func()) AS string_collation;
+string_collation
+utf8mb4_bin
 # Try calling non-existent VDF on installed extension (should fail - falls through to stored function lookup)
 SELECT test_vdf_ext.nonexistent_func() AS result;
 ERROR 42000: FUNCTION test_vdf_ext.nonexistent_func does not exist

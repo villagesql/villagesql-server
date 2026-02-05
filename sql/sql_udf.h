@@ -154,6 +154,9 @@ class udf_handler {
 
   bool is_vdf() const { return m_vdf != nullptr; }
 
+  // Check if this VDF returns a text string (VEF_TYPE_STRING) as opposed to
+  // binary data (VEF_TYPE_CUSTOM). Uses vdf_func_desc which is available before
+  // m_vdf is instantiated.
   bool is_vdf_returns_string() const;
 
   const char *name() const { return u_d ? u_d->name.str : "?"; }

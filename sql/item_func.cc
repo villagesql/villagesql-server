@@ -4508,7 +4508,12 @@ udf_handler::udf_handler(udf_func *udf_arg)
       m_return_value_extension(&my_charset_bin, result_type()) {}
 
 bool udf_handler::is_vdf_returns_string() const {
-  return m_vdf != nullptr && m_vdf->returns_string();
+  // Use vdf_func_desc directly instead of m_vdf because this is called from
+  // resolve_type() before m_vdf is instantiated.
+  return u_d != nullptr &&
+         u_d->calling_convention == UdfCallingConvention::VDF &&
+         u_d->vdf_func_desc != nullptr &&
+         u_d->vdf_func_desc->signature->return_type.id == VEF_TYPE_STRING;
 }
 
 void udf_handler::cleanup() {
