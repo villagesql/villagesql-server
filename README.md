@@ -69,52 +69,58 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
    cd villagesql-server
    ```
 
-2. **Create a build directory:**
+2. **Create a build directory (outside the repository):**
    ```bash
-   mkdir build
-   cd build
+   mkdir -p ~/build/villagesql
+   cd ~/build/villagesql
    ```
 
 3. **Configure with CMake:**
    ```bash
    # Standard build
-   cmake .. -DWITH_SSL=system
+   cmake ~/villagesql-server -DWITH_SSL=system
 
    # Or for a debug build (recommended for development)
-   cmake .. -DWITH_DEBUG=1 -DWITH_SSL=system
+   cmake ~/villagesql-server -DWITH_DEBUG=1 -DWITH_SSL=system
    ```
-   *Note: On macOS with Homebrew OpenSSL, use `-DWITH_SSL=/opt/homebrew/opt/openssl@3`.*
 
 4. **Build:**
    ```bash
-   make -j $(getconf _NPROCESSORS_ONLN)
+   make -j $(($(getconf _NPROCESSORS_ONLN) - 2))
    ```
 
 5. **Initialize and Start the Server:**
    ```bash
    # Create the data directory
-   mkdir -p data
+   mkdir -p ~/mysql-data
 
    # Initialize the data directory (insecure mode for development)
-   bin/mysqld --initialize-insecure --datadir=./data --basedir=.
+   bin/mysqld --initialize-insecure --datadir=~/mysql-data/data --basedir=~/build/villagesql
 
-   # Start the server
-   bin/mysqld --gdb --datadir=./data --basedir=. &
+   # Start the server (runs in foreground, use Ctrl-C to stop)
+   bin/mysqld --gdb --datadir=~/mysql-data/data --basedir=~/build/villagesql
 
-   # Connect using the client (in a new terminal)
-   bin/mysql -u root
+   # In a new terminal, connect using the client
+   ~/build/villagesql/bin/mysql -u root
+
+   # Verify the installation
+   ~/build/villagesql/bin/mysql -u root -e "SELECT VERSION()"
    ```
 
    *Note: `--initialize-insecure` creates a root user with no password for development. The `--gdb` flag installs a signal handler that allows you to Ctrl-C to quit the server. For production, use `--initialize` instead (generates a temporary password) and refer to [MySQL 8.4 initialization documentation](https://dev.mysql.com/doc/refman/8.4/en/data-directory-initialization.html) for secure setup.*
 
    **Setting up users and permissions:**
    ```sql
-   # Create a new user
-   CREATE USER 'myuser'@'%' IDENTIFIED BY 'password';
+   -- Create a new user
+   CREATE USER myuser IDENTIFIED BY 'password';
 
-   # Grant permissions
-   GRANT ALL PRIVILEGES ON *.* TO 'myuser'@'%';
-   FLUSH PRIVILEGES;
+   -- Grant permissions
+   GRANT ALL PRIVILEGES ON *.* TO myuser;
+   ```
+
+   **Verify the new user:**
+   ```bash
+   ~/build/villagesql/bin/mysql -u myuser -p -e "SELECT USER()"
    ```
 
 ### Running Tests
@@ -122,6 +128,9 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 Verify your build with the test suite:
 
 ```bash
+# From your build directory (~/build/villagesql)
+cd ~/build/villagesql
+
 # Run all VillageSQL tests including sub-suites
 mysql-test/mysql-test-run.pl --do-suite=villagesql --parallel=auto
 
@@ -132,7 +141,7 @@ mysql-test/mysql-test-run.pl villagesql.my_test_name
 mysql-test/mysql-test-run.pl --record villagesql.my_test_name
 
 # Run VillageSQL unit tests
-make -j $(getconf _NPROCESSORS_ONLN) villagesql-unit-tests && ctest -L villagesql
+make -j $(($(getconf _NPROCESSORS_ONLN) - 2)) villagesql-unit-tests && ctest -L villagesql
 ```
 
 ## Quick Start: Using Extensions
@@ -154,16 +163,30 @@ INSTALL EXTENSION vsql_complex;
 SELECT extension_name, extension_version
 FROM INFORMATION_SCHEMA.EXTENSIONS;
 
+-- Create a database and use it
+CREATE DATABASE demo;
+USE demo;
+
 -- Use a custom type provided by an extension
 CREATE TABLE signals (
   id INT PRIMARY KEY,
   reading COMPLEX -- Example type from vsql_complex
 );
 
--- Query using a custom function
-SELECT reading, complex_abs(reading) FROM signals;
+-- Insert sample data
+INSERT INTO signals VALUES (1, '(3,4)'), (2, '(5,12)'), (3, '(-1,2)');
 
--- Uninstall an extension
+-- Query using custom functions (note: functions require extension prefix)
+SELECT
+  id,
+  reading,
+  vsql_complex.complex_abs(reading) AS magnitude,
+  vsql_complex.complex_real(reading) AS real_part,
+  vsql_complex.complex_imag(reading) AS imag_part
+FROM signals;
+
+-- Clean up: Drop table first, then uninstall extension
+DROP TABLE signals;
 UNINSTALL EXTENSION vsql_complex;
 ```
 
@@ -202,11 +225,11 @@ Priority items are listed below. The full roadmap can be found at [villagesql.co
 ```bash
 # macOS with Homebrew
 brew install openssl@3
-cmake .. -DWITH_SSL=/opt/homebrew/opt/openssl@3
+cmake ~/villagesql-server -DWITH_SSL=/opt/homebrew/opt/openssl@3
 
 # Linux (Ubuntu/Debian)
 sudo apt-get install libssl-dev
-cmake .. -DWITH_SSL=/usr
+cmake ~/villagesql-server -DWITH_SSL=system
 ```
 
 **Bison version too old:**
@@ -222,9 +245,15 @@ sudo apt-get install bison
 ### Runtime Issues
 
 **Can't connect to server:**
-- Check that `mysqld` is running: `ps aux | grep mysqld`
+- Check that `mysqld` is running: `pgrep -a mysqld` or `ps aux | grep mysqld`
 - Verify socket path matches between server and client
-- Check error log: `tail -f ./data/*.err`
+- Check error log in your data directory (e.g., `~/mysql-data/data/*.err`)
+
+**Port already in use:**
+If you see "Bind on TCP/IP port: Address already in use", either stop the existing MySQL instance or specify a different port:
+```bash
+bin/mysqld --gdb --datadir=~/mysql-data/data --basedir=~/build/villagesql --port=3307
+```
 
 For more help, visit our [Discord community](https://discord.gg/KSr6whd3Fr) or [file an issue](https://github.com/villagesql/villagesql-server/issues).
 
