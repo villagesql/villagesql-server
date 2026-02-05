@@ -181,6 +181,7 @@ VillageSQL provides a C++ SDK for building high-performance extensions.
 - **Source-only Build:** No official Docker images or binary packages are available yet.
 - **No Custom Indexes:** Custom data types cannot be indexed in this version (coming soon).
 - **Alpha Stability:** Expect breaking changes and potential bugs as we progress towards Beta.
+- **No Windows Support:** We don’t support compiling to .dll to Windows yet.
 
 ## Roadmap
 
