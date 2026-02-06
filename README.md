@@ -146,12 +146,18 @@ make -j $(($(getconf _NPROCESSORS_ONLN) - 2)) villagesql-unit-tests && ctest -L 
 
 ## Quick Start: Using Extensions
 
-VillageSQL Server ships with five built-in extensions:
+When building from source, VillageSQL Server includes two built-in extensions:
 - **`vsql_complex`**: Complex number data type and arithmetic
-- **`vsql_uuid`**: UUID generation, validation, and comparison
-- **`vsql_ai`**: AI prompting via SQL functions
-- **`vsql_crypto`**: Cryptographic functions (hashing, encryption, random data)
-- **`vsql_network_address`**: IPv4, IPv6, and MAC address types
+- **`vsql_simple`**: A minimal "Hello World" demonstration of custom types and functions
+
+> [!NOTE]
+> Additional extensions are available in separate repositories:
+> - [**`vsql_uuid`**](https://github.com/villagesql/vsql-uuid): UUID generation and validation
+> - [**`vsql_ai`**](https://github.com/villagesql/vsql-ai): AI prompting via SQL functions
+> - [**`vsql_crypto`**](https://github.com/villagesql/vsql-crypto): Cryptographic functions
+> - [**`vsql_network_address`**](https://github.com/villagesql/vsql-network-address): IPv4, IPv6, and MAC address types
+>
+> These can be built from their repositories and installed by copying the `.veb` files to your VEF directory.
 
 Once the server is running, you can manage extensions using new SQL commands:
 
