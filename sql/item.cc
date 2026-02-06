@@ -7686,21 +7686,15 @@ bool Item::send(Protocol *protocol, String *buffer) {
     case MYSQL_TYPE_BIT:
     case MYSQL_TYPE_NEWDECIMAL:
     case MYSQL_TYPE_JSON: {
-      const String *res = val_str(buffer);
+      // VillageSQL: Use val_custom_str() for custom types to get formatted text
+      const String *res;
+      if (has_type_context()) {
+        res = val_custom_str(buffer);
+      } else {
+        res = val_str(buffer);
+      }
       assert(null_value == (res == nullptr));
       if (res != nullptr) {
-        // Custom types need to be decoded from binary to string format
-        if (has_type_context()) {
-          String decoded;
-          bool is_valid = true;
-          if (villagesql::DecodeString(
-                  *get_type_context(), pointer_cast<const uchar *>(res->ptr()),
-                  res->length(), *current_thd->mem_root, &decoded, is_valid)) {
-            return protocol->store_null();
-          }
-          return protocol->store_string(decoded.ptr(), decoded.length(),
-                                        &my_charset_utf8mb4_bin);
-        }
         return protocol->store_string(res->ptr(), res->length(),
                                       res->charset());
       }
