@@ -915,7 +915,11 @@ bool load_vef_extension(const std::string &so_path,
   registration.registration = nullptr;
   registration.unregister_func = nullptr;
 
-  void *handle = dlopen(so_path.c_str(), RTLD_NOW);
+  // RTLD_LOCAL ensures each extension's symbols are isolated. Without it,
+  // macOS defaults to RTLD_GLOBAL, allowing the dynamic linker to coalesce
+  // weak symbols (e.g. C++ template instantiations) across extensions, causing
+  // one extension to call another's function implementations.
+  void *handle = dlopen(so_path.c_str(), RTLD_NOW | RTLD_LOCAL);
   if (handle == nullptr) {
     const char *errmsg;
     int error_number = dlopen_errno;

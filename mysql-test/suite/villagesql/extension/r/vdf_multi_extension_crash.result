@@ -1,0 +1,25 @@
+# Test: VDF crash when two extensions share func_desc pointers
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+Creating extension test_vdf_ext using SDK...
+Created test_vdf_ext.veb
+Creating extension test_vdf_alt using SDK...
+Created test_vdf_alt.veb
+# Install both extensions
+INSTALL EXTENSION test_vdf_ext;
+INSTALL EXTENSION test_vdf_alt;
+# Qualified calls work with both extensions loaded
+SELECT test_vdf_ext.simple_int_func() AS result;
+result
+42
+SELECT test_vdf_alt.simple_int_func() AS result;
+result
+99
+# Uninstall second extension only
+UNINSTALL EXTENSION test_vdf_alt;
+# Qualified call to first extension should still work
+SELECT test_vdf_ext.simple_int_func() AS result;
+result
+42
+# Cleanup
+UNINSTALL EXTENSION test_vdf_ext;

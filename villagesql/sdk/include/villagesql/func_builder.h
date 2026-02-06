@@ -258,8 +258,15 @@ struct StaticFuncDesc {
 // Materializes the ABI descriptor structures at registration time.
 // Uses template parameters to ensure each function gets unique static storage.
 // FuncData is the StaticFuncDesc type, Index ensures uniqueness per function.
+//
+// Hidden visibility prevents the dynamic linker from coalescing identical
+// template instantiations across different extension .so files. Without this,
+// two extensions with functions of the same signature and index would share
+// the same static desc/signature objects, causing use-after-free when one
+// extension is unloaded.
 template <typename FuncData, size_t Index>
-vef_func_desc_t *materialize_func_desc(const FuncData &func_data) {
+__attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
+    const FuncData &func_data) {
   static vef_signature_t signature;
   static vef_func_desc_t desc;
 
