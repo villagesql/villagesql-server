@@ -234,6 +234,17 @@ int CustomMemCompare(const Item *item, const uchar *data1, size_t len1,
 // name, and version Returns true if compatible, false if incompatible
 bool AreTypesCompatible(const TypeContext &tc1, const TypeContext &tc2);
 
+// Validate and cast custom type comparisons for two Items.
+// REQUIRES: At least one of left or right has a custom type context.
+// Consolidates all custom type comparison logic in one place:
+// 1. Both have custom types -> check compatibility, error if incompatible
+// 2. One has custom type, other is string/null -> cast to custom type
+// 3. One has custom type, other is anything else -> error
+// May modify items (inject type context and encode string literals).
+// Returns false on success, true on error (and reports the error).
+bool ValidateAndCastCustomTypeComparison(Item *left, Item *right,
+                                         const char *operation_name);
+
 // Get custom type context if Items have compatible custom types
 // Returns TypeContext* if one or both Items have compatible custom types
 // Returns nullptr if no custom types or if custom types are incompatible

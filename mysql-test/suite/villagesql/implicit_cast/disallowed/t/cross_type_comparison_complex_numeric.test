@@ -8,10 +8,36 @@ CREATE TABLE t_numeric (id INT, val DECIMAL(10,2));
 INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
 INSERT INTO t_numeric VALUES (1, 10.50);
 
+# Test comparing COMPLEX with DECIMAL column
 --error ER_VILLAGESQL_GENERIC_ERROR
 SELECT * FROM t_complex c, t_numeric n WHERE c.val = n.val;
 
 DROP TABLE t_complex;
 DROP TABLE t_numeric;
+
+# Test comparing COMPLEX with various numeric types in single table
+CREATE TABLE t_mixed (id INT, complex_col COMPLEX, decimal_col DECIMAL(10,2), int_col INT);
+INSERT INTO t_mixed VALUES (1, '(1.0,2.0)', 1.5, 5);
+
+# COMPLEX vs DECIMAL column
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t_mixed WHERE complex_col = decimal_col;
+
+# COMPLEX vs INT column
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t_mixed WHERE complex_col = int_col;
+
+# COMPLEX vs INT literal
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t_mixed WHERE complex_col = 5;
+
+# COMPLEX vs DECIMAL literal
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t_mixed WHERE complex_col = 1.5;
+
+# COMPLEX vs string literal should work (implicit cast)
+SELECT * FROM t_mixed WHERE complex_col = '(1.0,2.0)';
+
+DROP TABLE t_mixed;
 
 --source include/villagesql/uninstall_complex_extension.inc

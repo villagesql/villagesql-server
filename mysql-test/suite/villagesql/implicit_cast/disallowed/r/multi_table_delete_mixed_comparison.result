@@ -1,0 +1,8 @@
+CREATE TABLE t_complex (id INT, val COMPLEX);
+CREATE TABLE t_string (id INT, val VARCHAR(100));
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+INSERT INTO t_string VALUES (1, 'hello');
+DELETE c FROM t_complex c, t_string s WHERE c.val = s.val;
+ERROR HY000: Cannot compare values of custom and non-custom types in =
+DROP TABLE t_complex;
+DROP TABLE t_string;

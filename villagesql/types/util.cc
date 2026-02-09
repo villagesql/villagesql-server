@@ -397,6 +397,41 @@ bool AreTypesCompatible(const TypeContext &tc1, const TypeContext &tc2) {
          tc1.extension_version() == tc2.extension_version();
 }
 
+bool ValidateAndCastCustomTypeComparison(Item *left, Item *right,
+                                         const char *operation_name) {
+  const TypeContext *lhs_tc = left->get_type_context();
+  const TypeContext *rhs_tc = right->get_type_context();
+
+  assert(lhs_tc != nullptr || rhs_tc != nullptr);
+
+  // Case 1: Both sides have custom types
+  if (lhs_tc != nullptr && rhs_tc != nullptr) {
+    // Check compatibility
+    if (!AreTypesCompatible(*lhs_tc, *rhs_tc)) {
+      villagesql_error(
+          "Cannot compare values of incompatible types '%s' and '%s'", MYF(0),
+          lhs_tc->type_name().c_str(), rhs_tc->type_name().c_str());
+      return true;  // error
+    }
+    return false;  // Both compatible, success
+  }
+
+  // Case 2: One side is custom, the other is not
+  const TypeContext *tc = (lhs_tc != nullptr) ? lhs_tc : rhs_tc;
+  Item *non_custom_arg = (lhs_tc != nullptr) ? right : left;
+
+  // Can we cast it (string/null literals)?
+  if (CanImplicitlyCastToCustom(non_custom_arg)) {
+    // Cast string/null literal to custom type
+    return InjectAndEncodeCustomType(non_custom_arg, *tc);
+  }
+
+  // Can't cast - error (incompatible types)
+  villagesql_error("Cannot compare values of custom and non-custom types in %s",
+                   MYF(0), operation_name);
+  return true;  // error
+}
+
 const TypeContext *GetCompatibleCustomType(const Item &item1,
                                            const Item &item2) {
   bool has_custom1 = item1.has_type_context();

@@ -87,6 +87,6 @@ PREPARE stmt16 FROM 'SELECT name FROM t1 GROUP BY name HAVING MAX(val) = ?';
 ERROR HY000: Incorrect usage of max and COMPLEX
 # Test 17: CASE with custom column
 PREPARE stmt17 FROM 'SELECT CASE WHEN val = ? THEN 1 ELSE 0 END FROM t1';
-ERROR HY000: Custom types are not yet supported in prepared statements
+ERROR HY000: Cannot compare values of custom and non-custom types in =
 DROP TABLE t1;
 DROP TABLE t2;
