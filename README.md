@@ -34,6 +34,8 @@ VEF enables custom data types and functions while maintaining MySQL 8.4 compatib
 - **Custom Functions:** Implement high-performance logic within the database.
 - **Drop-in Replacement:** Compatible with existing MySQL 8.4 applications and tools.
 
+📚 **Full Documentation**: Visit [villagesql.com/docs](https://villagesql.com/docs) for comprehensive guides on building extensions, architecture details, and more.
+
 ## Installation (Building from Source)
 
 During the alpha phase, VillageSQL must be built from source. Docker and pre-built binary installations are coming soon. VillageSQL follows the same build requirements as standard MySQL 8.4.
@@ -67,7 +69,7 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/villagesql/villagesql-server.git
+   git clone --depth 1 https://github.com/villagesql/villagesql-server.git
    cd villagesql-server
    ```
 
@@ -115,7 +117,7 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
    **Linux:**
    ```bash
    # Create the data directory
-   mkdir -p $HOME/mysql-data
+   mkdir -p $HOME/mysql-data/data
 
    # Initialize the data directory (insecure mode for development)
    bin/mysqld --initialize-insecure --datadir=$HOME/mysql-data/data --basedir=$HOME/build/villagesql
@@ -144,7 +146,7 @@ brew install cmake openssl@3 pkgconf bison libtirpc rpcsvc-proto
    **macOS:**
    ```bash
    # Create the data directory
-   mkdir -p ~/mysql-data
+   mkdir -p ~/mysql-data/data
 
    # Initialize the data directory (insecure mode for development)
    bin/mysqld --initialize-insecure --datadir=~/mysql-data/data --basedir=~/build/villagesql
@@ -288,16 +290,19 @@ VillageSQL provides a C++ SDK for building high-performance extensions.
 - **Source-only Build:** No official Docker images or binary packages are available yet.
 - **No Custom Indexes:** Custom data types cannot be indexed in this version (coming soon).
 - **Alpha Stability:** Expect breaking changes and potential bugs as we progress towards Beta.
-- **No Windows Support:** We don’t support compiling to .dll to Windows yet.
+- **No Windows Support:** We don't support compiling to .dll to Windows yet. ([#16](https://github.com/villagesql/villagesql-server/issues/16))
 
 ## Roadmap
 
 Priority items are listed below. The full roadmap can be found at [villagesql.com/roadmap](https://villagesql.com/roadmap).
 
-- [ ] **Custom Indexes:** Support for indexing custom data types.
-- [ ] **ALTER/UPGRADE Extension:** Lifecycle management for installed extensions.
-- [ ] **Docker & Shell Installer:** Official images and simplified installation.
-- [ ] **Aggregate Functions:** Support for aggregations with custom types.
+- [ ] **Custom Indexes:** Support for indexing custom data types. ([#10](https://github.com/villagesql/villagesql-server/issues/10))
+- [ ] **Variable Length Custom Types:** Support for custom types with variable storage size. ([#13](https://github.com/villagesql/villagesql-server/issues/13))
+- [ ] **ALTER/UPGRADE Extension:** Lifecycle management for installed extensions. ([#11](https://github.com/villagesql/villagesql-server/issues/11), [#12](https://github.com/villagesql/villagesql-server/issues/12))
+- [ ] **Aggregate Functions:** Support for aggregations with custom types. ([#14](https://github.com/villagesql/villagesql-server/issues/14))
+- [ ] **Docker & Shell Installer:** Official images and simplified installation. ([#15](https://github.com/villagesql/villagesql-server/issues/15), [#18](https://github.com/villagesql/villagesql-server/issues/18))
+- [ ] **Startup Install Flag:** Automatic extension installation on server startup. ([#17](https://github.com/villagesql/villagesql-server/issues/17))
+- [ ] **Windows Support:** Native Windows compilation and .dll support. ([#16](https://github.com/villagesql/villagesql-server/issues/16))
 - [ ] **Analytical Capabilities:** Embedded analytical engines (e.g., DuckDB integration).
 - [ ] **Fully-Managed Cloud Service:** VillageSQL as a managed database offering.
 
