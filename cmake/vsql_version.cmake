@@ -65,7 +65,19 @@ MACRO(GET_VSQL_VERSION)
 
   # Set EXTRA_VERSION for mysql_version.cmake to use
   # This becomes the suffix in the MySQL version string (e.g., 8.4.6-villagesql0.1.0-dev)
-  SET(EXTRA_VERSION "-villagesql${VSQL_VERSION_STRING}")
+  # Add the git hash if we have one
+  execute_process(
+    COMMAND git log -n1 --pretty=format:%h
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    OUTPUT_VARIABLE GIT_HASH
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    ERROR_QUIET
+  )
+  IF (GIT_HASH)
+    SET(EXTRA_VERSION "-villagesql-${VSQL_VERSION_STRING}-${GIT_HASH}")
+  ELSE()
+    SET(EXTRA_VERSION "-villagesql-${VSQL_VERSION_STRING}")
+  ENDIF()
 ENDMACRO()
 
 # Get VillageSQL version
