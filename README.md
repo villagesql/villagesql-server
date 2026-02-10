@@ -262,13 +262,13 @@ CREATE TABLE signals (
 -- Insert sample data
 INSERT INTO signals VALUES (1, '(3,4)'), (2, '(5,12)'), (3, '(-1,2)');
 
--- Query using custom functions (note: functions require extension prefix)
+-- Query using custom functions
 SELECT
   id,
   reading,
-  vsql_complex.complex_abs(reading) AS magnitude,
-  vsql_complex.complex_real(reading) AS real_part,
-  vsql_complex.complex_imag(reading) AS imag_part
+  complex_abs(reading) AS magnitude,
+  complex_real(reading) AS real_part,
+  complex_imag(reading) AS imag_part
 FROM signals;
 
 -- Clean up: Drop table first, then uninstall extension
