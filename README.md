@@ -289,6 +289,7 @@ VillageSQL provides a C++ SDK for building high-performance extensions.
 
 - **Source-only Build:** No official Docker images or binary packages are available yet.
 - **No Custom Indexes:** Custom data types cannot be indexed in this version (coming soon).
+- **Limited Aggregate Support:** COUNT(DISTINCT), MIN, and MAX work with custom types. We are investigating other aggregate functions (SUM, AVG, etc.) for inclusion in a future release.
 - **Alpha Stability:** Expect breaking changes and potential bugs as we progress towards Beta.
 - **No Windows Support:** We don't support compiling to .dll to Windows yet. ([#16](https://github.com/villagesql/villagesql-server/issues/16))
 
@@ -299,7 +300,7 @@ Priority items are listed below. The full roadmap can be found at [villagesql.co
 - [ ] **Custom Indexes:** Support for indexing custom data types. ([#10](https://github.com/villagesql/villagesql-server/issues/10))
 - [ ] **Variable Length Custom Types:** Support for custom types with variable storage size. ([#13](https://github.com/villagesql/villagesql-server/issues/13))
 - [ ] **ALTER/UPGRADE Extension:** Lifecycle management for installed extensions. ([#11](https://github.com/villagesql/villagesql-server/issues/11), [#12](https://github.com/villagesql/villagesql-server/issues/12))
-- [ ] **Aggregate Functions:** Support for aggregations with custom types. ([#14](https://github.com/villagesql/villagesql-server/issues/14))
+- [ ] **Full Aggregate Function Support:** Investigating support for additional aggregate functions (SUM, AVG, etc.) with custom types. Partial support (COUNT(DISTINCT), MIN, MAX) available in 0.0.2. ([#14](https://github.com/villagesql/villagesql-server/issues/14))
 - [ ] **Docker & Shell Installer:** Official images and simplified installation. ([#15](https://github.com/villagesql/villagesql-server/issues/15), [#18](https://github.com/villagesql/villagesql-server/issues/18))
 - [ ] **Startup Install Flag:** Automatic extension installation on server startup. ([#17](https://github.com/villagesql/villagesql-server/issues/17))
 - [ ] **Windows Support:** Native Windows compilation and .dll support. ([#16](https://github.com/villagesql/villagesql-server/issues/16))
