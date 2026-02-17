@@ -2206,6 +2206,13 @@ class Item_udf_func : public Item_func {
   void print(const THD *thd, String *str,
              enum_query_type query_type) const override;
 
+  const CHARSET_INFO *charset_for_protocol() override {
+    // For custom types, use utf8mb4_bin to tell client to display as text
+    // (not binary/hex). This matches Field::charset_for_protocol() behavior.
+    if (has_type_context()) return &my_charset_utf8mb4_bin;
+    return Item_func::charset_for_protocol();
+  }
+
   bool check_function_as_value_generator(uchar *checker_args) override {
     Check_function_as_value_generator_parameters *func_arg =
         pointer_cast<Check_function_as_value_generator_parameters *>(

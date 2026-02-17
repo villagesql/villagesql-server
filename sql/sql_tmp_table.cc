@@ -292,6 +292,12 @@ static Field *create_tmp_field_from_item(Item *item, TABLE *table) {
 
   new_field->init(table);
 
+  // VillageSQL: Copy type_context for custom types so charset_for_protocol()
+  // works correctly in derived tables
+  if (item->has_type_context()) {
+    new_field->set_type_context(item->get_type_context());
+  }
+
   if (item->type() == Item::NULL_ITEM)
     new_field->is_created_from_null_item = true;
   return new_field;

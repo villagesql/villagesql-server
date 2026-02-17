@@ -1,0 +1,45 @@
+# Test that VDF functions returning custom types use correct charset_for_protocol()
+# This validates that Item_udf_func::charset_for_protocol() returns utf8mb4_bin
+# for custom types (not binary), so mysql client displays them as text rather
+# than hex bytes when --binary-as-hex is enabled.
+#
+# Before fix: VDF custom type results would display as 0x... (hex)
+# After fix: VDF custom type results display as human-readable text
+
+--source include/villagesql/install_complex_extension.inc
+
+# Create table for comparison tests
+CREATE TABLE t1 (id INT, c COMPLEX);
+INSERT INTO t1 VALUES (1, '(1,2)');
+INSERT INTO t1 VALUES (2, '(3,4)');
+
+--echo #
+--echo # Test 1: Basic VDF returning custom type
+--echo # Should display as (1,2), not 0x28312C3229
+--echo #
+--exec $MYSQL --binary-as-hex test -e "SELECT vsql_complex.complex_from_string('(1,2)') AS result"
+
+--echo #
+--echo # Test 2: VDF with arithmetic operations
+--echo #
+--exec $MYSQL --binary-as-hex test -e "SELECT vsql_complex.complex_add(vsql_complex.complex_from_string('(1,2)'), vsql_complex.complex_from_string('(3,4)')) AS result"
+
+--echo #
+--echo # Test 3: Compare field vs VDF (both should display identically)
+--echo #
+--exec $MYSQL --binary-as-hex test -e "SELECT c AS from_field, vsql_complex.complex_from_string('(1,2)') AS from_vdf FROM t1 WHERE id = 1"
+
+--echo #
+--echo # Test 4: VDF in subquery
+--echo #
+--exec $MYSQL --binary-as-hex test -e "SELECT * FROM (SELECT vsql_complex.complex_from_string('(5,6)') AS result) t"
+
+--echo #
+--echo # Test 5: Multiple VDF results in same query
+--echo #
+--exec $MYSQL --binary-as-hex test -e "SELECT vsql_complex.complex_from_string('(1,2)') AS a, vsql_complex.complex_from_string('(3,4)') AS b"
+
+# Cleanup
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

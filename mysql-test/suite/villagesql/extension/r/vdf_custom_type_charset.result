@@ -1,0 +1,30 @@
+CREATE TABLE t1 (id INT, c COMPLEX);
+INSERT INTO t1 VALUES (1, '(1,2)');
+INSERT INTO t1 VALUES (2, '(3,4)');
+#
+# Test 1: Basic VDF returning custom type
+# Should display as (1,2), not 0x28312C3229
+#
+result
+(1,2)
+#
+# Test 2: VDF with arithmetic operations
+#
+result
+(4,6)
+#
+# Test 3: Compare field vs VDF (both should display identically)
+#
+from_field	from_vdf
+(1,2)	(1,2)
+#
+# Test 4: VDF in subquery
+#
+result
+(5,6)
+#
+# Test 5: Multiple VDF results in same query
+#
+a	b
+(1,2)	(3,4)
+DROP TABLE t1;
