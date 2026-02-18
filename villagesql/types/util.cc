@@ -413,6 +413,48 @@ bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item) {
   return false;  // success
 }
 
+bool MaybeValidateAndCastCustomTypeComparison(Item &left, Item &right,
+                                              const char *operation_name) {
+  const TypeContext *lhs_tc = left.get_type_context();
+  const TypeContext *rhs_tc = right.get_type_context();
+
+  // If neither has a custom type, no validation needed
+  if (lhs_tc == nullptr && rhs_tc == nullptr) {
+    return false;
+  }
+
+  // Case 1: Both sides have custom types
+  if (lhs_tc != nullptr && rhs_tc != nullptr) {
+    if (!AreTypesCompatible(*lhs_tc, *rhs_tc)) {
+      villagesql_error("Cannot compare types %s and %s in %s", MYF(0),
+                       lhs_tc->qualified_name().c_str(),
+                       rhs_tc->qualified_name().c_str(), operation_name);
+      return true;
+    }
+    return false;
+  }
+
+  // Case 2: One side is custom, the other is not
+  const TypeContext *tc = (lhs_tc != nullptr) ? lhs_tc : rhs_tc;
+  Item *non_custom_arg = (lhs_tc != nullptr) ? &right : &left;
+
+  // Try to cast string/null literals to custom type
+  if (TryImplicitCastToCustom(non_custom_arg, *tc)) {
+    return true;  // Error during cast
+  }
+
+  // If still not custom after trying to cast, it's incompatible
+  if (!non_custom_arg->has_type_context()) {
+    villagesql_error(
+        "Unable to implicitly cast a non-custom type during compare with a "
+        "custom type in %s",
+        MYF(0), operation_name);
+    return true;
+  }
+
+  return false;
+}
+
 const TypeContext *GetCompatibleCustomType(const Item &item1,
                                            const Item &item2) {
   bool has_custom1 = item1.has_type_context();

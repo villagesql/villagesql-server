@@ -2,24 +2,24 @@ CREATE TABLE t1 (id INT, val1 COMPLEX);
 CREATE TABLE t2 (id INT, val2 COMPLEX2);
 INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
 SELECT * FROM t1, t2 WHERE t1.val1 = t2.val2;
-ERROR HY000: Cannot compare values of incompatible types 'COMPLEX' and 'COMPLEX2'
+ERROR HY000: Cannot compare types vsql_complex.COMPLEX and vsql_complex.COMPLEX2 in =
 SELECT * FROM t1, t2 WHERE t1.val1 <> t2.val2;
-ERROR HY000: Cannot compare values of incompatible types 'COMPLEX' and 'COMPLEX2'
+ERROR HY000: Cannot compare types vsql_complex.COMPLEX and vsql_complex.COMPLEX2 in <>
 SELECT * FROM t1, t2 WHERE t1.val1 < t2.val2;
-ERROR HY000: Cannot compare values of incompatible types 'COMPLEX' and 'COMPLEX2'
+ERROR HY000: Cannot compare types vsql_complex.COMPLEX and vsql_complex.COMPLEX2 in <
 SELECT * FROM t1, t2 WHERE t1.val1 > t2.val2;
-ERROR HY000: Cannot compare values of incompatible types 'COMPLEX' and 'COMPLEX2'
+ERROR HY000: Cannot compare types vsql_complex.COMPLEX and vsql_complex.COMPLEX2 in >
 SELECT * FROM t1, t2 WHERE t1.val1 <= t2.val2;
-ERROR HY000: Cannot compare values of incompatible types 'COMPLEX' and 'COMPLEX2'
+ERROR HY000: Cannot compare types vsql_complex.COMPLEX and vsql_complex.COMPLEX2 in <=
 SELECT * FROM t1, t2 WHERE t1.val1 >= t2.val2;
-ERROR HY000: Cannot compare values of incompatible types 'COMPLEX' and 'COMPLEX2'
+ERROR HY000: Cannot compare types vsql_complex.COMPLEX and vsql_complex.COMPLEX2 in >=
 SELECT * FROM t1, t2 WHERE t1.val1 <=> t2.val2;
-ERROR HY000: Cannot compare values of incompatible types 'COMPLEX' and 'COMPLEX2'
+ERROR HY000: Cannot compare types vsql_complex.COMPLEX and vsql_complex.COMPLEX2 in <=>
 CREATE TABLE t3 (id INT, val1 COMPLEX, val2 COMPLEX2);
 SELECT * FROM t3 WHERE val1 = val2;
-ERROR HY000: Cannot compare values of incompatible types 'COMPLEX' and 'COMPLEX2'
+ERROR HY000: Cannot compare types vsql_complex.COMPLEX and vsql_complex.COMPLEX2 in =
 SELECT * FROM t1 JOIN t2 ON t1.val1 = t2.val2;
-ERROR HY000: Cannot compare values of incompatible types 'COMPLEX' and 'COMPLEX2'
+ERROR HY000: Cannot compare types vsql_complex.COMPLEX and vsql_complex.COMPLEX2 in =
 SELECT * FROM t1 t1a, t1 t1b WHERE t1a.val1 = t1b.val1;
 id	val1	id	val1
 1	(1,2)	1	(1,2)
@@ -31,7 +31,7 @@ CREATE TABLE t1 (id INT, val1 COMPLEX);
 CREATE TABLE t2 (id INT, val2 COMPLEX2 INVISIBLE);
 INSERT INTO t1 VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
 SELECT * FROM t1, t2 WHERE t1.val1 = t2.val2;
-ERROR HY000: Cannot compare values of incompatible types 'COMPLEX' and 'COMPLEX2'
+ERROR HY000: Cannot compare types vsql_complex.COMPLEX and vsql_complex.COMPLEX2 in =
 DROP TABLE t1;
 DROP TABLE t2;
 CREATE TABLE t1 (id INT, val1 COMPLEX);

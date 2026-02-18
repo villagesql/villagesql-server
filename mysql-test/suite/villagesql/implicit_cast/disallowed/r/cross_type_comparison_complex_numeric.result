@@ -3,6 +3,17 @@ CREATE TABLE t_numeric (id INT, val DECIMAL(10,2));
 INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
 INSERT INTO t_numeric VALUES (1, 10.50);
 SELECT * FROM t_complex c, t_numeric n WHERE c.val = n.val;
-ERROR HY000: Cannot compare values of custom and non-custom types in =
+ERROR HY000: Unable to implicitly cast a non-custom type during compare with a custom type in =
 DROP TABLE t_complex;
 DROP TABLE t_numeric;
+CREATE TABLE t_mixed (id INT, complex_col COMPLEX, decimal_col DECIMAL(10,2), int_col INT);
+INSERT INTO t_mixed VALUES (1, '(1.0,2.0)', 1.5, 5);
+SELECT * FROM t_mixed WHERE complex_col = decimal_col;
+ERROR HY000: Unable to implicitly cast a non-custom type during compare with a custom type in =
+SELECT * FROM t_mixed WHERE complex_col = int_col;
+ERROR HY000: Unable to implicitly cast a non-custom type during compare with a custom type in =
+SELECT * FROM t_mixed WHERE complex_col = 5;
+ERROR HY000: Unable to implicitly cast a non-custom type during compare with a custom type in =
+SELECT * FROM t_mixed WHERE complex_col = 1.5;
+ERROR HY000: Unable to implicitly cast a non-custom type during compare with a custom type in =
+DROP TABLE t_mixed;

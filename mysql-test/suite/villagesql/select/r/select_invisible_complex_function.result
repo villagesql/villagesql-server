@@ -1,12 +1,12 @@
 CREATE TABLE t1 (id INT, val1 COMPLEX INVISIBLE, val2 COMPLEX2);
 INSERT INTO t1 (id, val1) VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
 SELECT id, (val1 = val2) AS are_equal FROM t1;
-ERROR HY000: Cannot compare values of incompatible types 'COMPLEX' and 'COMPLEX2'
+ERROR HY000: Cannot compare types vsql_complex.COMPLEX and vsql_complex.COMPLEX2 in =
 DROP TABLE t1;
 CREATE TABLE t2 (id INT, val1 COMPLEX INVISIBLE, val2 COMPLEX2 INVISIBLE);
 INSERT INTO t2 (id, val1) VALUES (1, '(1.0,2.0)'), (2, '(3.0,4.0)');
 SELECT id, (val1 = val2) AS are_equal FROM t2;
-ERROR HY000: Cannot compare values of incompatible types 'COMPLEX' and 'COMPLEX2'
+ERROR HY000: Cannot compare types vsql_complex.COMPLEX and vsql_complex.COMPLEX2 in =
 DROP TABLE t2;
 CREATE TABLE t3 (val1 COMPLEX INVISIBLE, val2 COMPLEX INVISIBLE);
 ERROR HY000: A table must have at least one visible column.

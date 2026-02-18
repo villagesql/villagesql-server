@@ -239,6 +239,19 @@ bool AreTypesCompatible(const TypeContext &tc1, const TypeContext &tc2);
 // needed). Returns false on success, true on error (and reports the error).
 bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item);
 
+// Validate and cast custom type comparisons for comparison operators (=, <, >,
+// etc). If neither item has a custom type, returns false immediately (no
+// validation needed). Otherwise:
+// 1. Both have custom types -> check compatibility, error if incompatible
+// 2. One has custom type, other can be implicitly cast -> cast to custom type
+// 3. One has custom type, other cannot be cast -> error
+// Whether an item can be implicitly cast is determined by
+// CanImplicitlyCastToCustom. May modify items (inject type context and encode
+// string literals). Returns false on success, true on error (and reports the
+// error).
+bool MaybeValidateAndCastCustomTypeComparison(Item &left, Item &right,
+                                              const char *operation_name);
+
 // Get custom type context if Items have compatible custom types
 // Returns TypeContext* if one or both Items have compatible custom types
 // Returns nullptr if no custom types or if custom types are incompatible

@@ -1,5 +1,5 @@
 CREATE TABLE t_complex (id INT, val COMPLEX);
 INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
 SELECT COUNT(*) FROM t_complex GROUP BY val || 'test';
-ERROR HY000: Cannot compare values of custom and non-custom types in <>
+ERROR HY000: Unable to implicitly cast a non-custom type during compare with a custom type in <>
 DROP TABLE t_complex;

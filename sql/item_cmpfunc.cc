@@ -807,26 +807,9 @@ bool Item_func_comparison::fix_fields(THD *thd, Item **ref) {
   // First, fix the fields using parent's implementation
   if (Item_bool_func2::fix_fields(thd, ref)) return true;
 
-  // Check if either side is a custom type
-  Item *lhs = args[0];
-  Item *rhs = args[1];
-  const villagesql::TypeContext *lhs_tc = lhs->get_type_context();
-  const villagesql::TypeContext *rhs_tc = rhs->get_type_context();
-
-  // If neither side is custom, nothing to do
-  if (lhs_tc == nullptr && rhs_tc == nullptr) return false;
-
-  // If both sides are custom, leave compatibility checking for later
-  if (lhs_tc != nullptr && rhs_tc != nullptr) {
-    return false;
-  }
-
-  // One side is custom, the other is not. Inject type into the other Item, if
-  // appropriate.
-  const villagesql::TypeContext *tc = (lhs_tc != nullptr) ? lhs_tc : rhs_tc;
-  Item *non_custom_arg = (lhs_tc != nullptr) ? args[1] : args[0];
-
-  return villagesql::TryImplicitCastToCustom(non_custom_arg, *tc);
+  // VillageSQL: Validate and cast custom type comparisons if needed
+  return villagesql::MaybeValidateAndCastCustomTypeComparison(
+      *args[0], *args[1], func_name());
 }
 
 bool Item_func_like::resolve_type(THD *thd) {
