@@ -1,0 +1,31 @@
+# Test GROUP_CONCAT() on COMPLEX custom type
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE complex_test (
+  id INT PRIMARY KEY,
+  value vsql_complex.COMPLEX
+);
+
+INSERT INTO complex_test VALUES
+  (1, '(3.0, 4.0)'),
+  (2, '(1.0, 2.0)'),
+  (3, '(5.0, 1.0)'),
+  (4, '(2.0, 3.0)'),
+  (5, '(1.0, 2.0)');
+
+--echo # Basic GROUP_CONCAT (no ORDER BY, no GROUP BY)
+SELECT GROUP_CONCAT(value) FROM complex_test;
+
+--echo # GROUP_CONCAT with constant (tests const_item branch)
+SELECT GROUP_CONCAT('(1.0, 2.0)');
+
+--echo # GROUP_CONCAT with DISTINCT (tests field path with uniqueness)
+SELECT GROUP_CONCAT(DISTINCT value) FROM complex_test;
+
+--echo # GROUP_CONCAT with const-folded function call (tests const_item with custom type)
+SELECT GROUP_CONCAT(complex_from_string('(6.0, 7.0)'));
+
+DROP TABLE complex_test;
+
+--source include/villagesql/uninstall_complex_extension.inc

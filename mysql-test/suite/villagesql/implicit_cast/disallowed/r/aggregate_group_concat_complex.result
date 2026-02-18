@@ -1,8 +1,0 @@
-CREATE TABLE t_complex (id INT, val COMPLEX);
-INSERT INTO t_complex VALUES
-(1, '(1.0,2.0)'),
-(2, '(3.0,4.0)'),
-(3, '(5.0,6.0)');
-SELECT GROUP_CONCAT(val) FROM t_complex;
-ERROR HY000: Incorrect usage of group_concat and COMPLEX
-DROP TABLE t_complex;

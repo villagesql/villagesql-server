@@ -287,7 +287,7 @@ String *Item::val_str_ascii(String *str) {
 String *Item::val_custom_str(String *str) {
   // Get binary data from val_str()
   String *binary_data = val_str(str);
-  if (!binary_data || null_value) return binary_data;
+  if (!has_type_context() || null_value) return binary_data;
 
   // Decode using TypeContext's to_string function
   bool is_valid = true;

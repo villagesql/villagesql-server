@@ -863,11 +863,13 @@ bool CheckCustomTypeUsage(Item *item, THD *thd) {
     // Check if any arg is custom type
     for (uint i = 0; i < sum_func->arg_count; i++) {
       if (sum_func->get_arg(i)->has_type_context()) {
-        // Some aggregates work automatically via the type's compare function
+        // Some aggregates work automatically via the type's compare/decode
+        // functions
         switch (sum_func->sum_func()) {
           case Item_sum::MIN_FUNC:
           case Item_sum::MAX_FUNC:
           case Item_sum::COUNT_DISTINCT_FUNC:
+          case Item_sum::GROUP_CONCAT_FUNC:
             continue;  // Allow these aggregates on custom types
           default:
             // Block all other aggregate functions on custom types

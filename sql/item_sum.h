@@ -616,6 +616,8 @@ class Item_sum : public Item_func {
   }
   virtual void make_unique() { force_copy_fields = true; }
   virtual Field *create_tmp_field(bool group, TABLE *table);
+  // VillageSQL: Override to propagate TypeContext from aggregated argument
+  Field *make_string_field(TABLE *table) const override;
 
   /// argument used by walk method collect_grouped_aggregates ("cga")
   struct Collect_grouped_aggregate_info {

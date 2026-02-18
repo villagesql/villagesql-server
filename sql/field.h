@@ -1029,6 +1029,13 @@ class Field {
   // types always decode binary data to a new string (never returning existing
   // string data), so the two-buffer optimization doesn't apply.
   String *val_custom_str(String *buf) const;
+  String *val_custom_str(String *str, uchar *new_ptr) {
+    uchar *old_ptr = ptr;
+    ptr = new_ptr;
+    String *result = val_custom_str(str);
+    ptr = old_ptr;
+    return result;
+  }
   String *val_int_as_str(String *val_buffer, bool unsigned_flag) const;
   /*
    str_needs_quotes() returns true if the value returned by val_str() needs

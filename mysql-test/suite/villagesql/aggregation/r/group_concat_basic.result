@@ -1,0 +1,27 @@
+CREATE TABLE complex_test (
+id INT PRIMARY KEY,
+value vsql_complex.COMPLEX
+);
+INSERT INTO complex_test VALUES
+(1, '(3.0, 4.0)'),
+(2, '(1.0, 2.0)'),
+(3, '(5.0, 1.0)'),
+(4, '(2.0, 3.0)'),
+(5, '(1.0, 2.0)');
+# Basic GROUP_CONCAT (no ORDER BY, no GROUP BY)
+SELECT GROUP_CONCAT(value) FROM complex_test;
+GROUP_CONCAT(value)
+(3,4),(1,2),(5,1),(2,3),(1,2)
+# GROUP_CONCAT with constant (tests const_item branch)
+SELECT GROUP_CONCAT('(1.0, 2.0)');
+GROUP_CONCAT('(1.0, 2.0)')
+(1.0, 2.0)
+# GROUP_CONCAT with DISTINCT (tests field path with uniqueness)
+SELECT GROUP_CONCAT(DISTINCT value) FROM complex_test;
+GROUP_CONCAT(DISTINCT value)
+(1,2),(2,3),(3,4),(5,1)
+# GROUP_CONCAT with const-folded function call (tests const_item with custom type)
+SELECT GROUP_CONCAT(complex_from_string('(6.0, 7.0)'));
+GROUP_CONCAT(complex_from_string('(6.0, 7.0)'))
+(6,7)
+DROP TABLE complex_test;

@@ -721,6 +721,16 @@ Field *Item_sum::create_tmp_field(bool, TABLE *table) {
   return field;
 }
 
+Field *Item_sum::make_string_field(TABLE *table) const {
+  Field *field = Item::make_string_field(table);
+  // VillageSQL: Propagate TypeContext from aggregated argument to result field.
+  // This allows GROUP_CONCAT to decode custom type values when building output.
+  if (field && arg_count > 0 && args[0]->has_type_context()) {
+    field->set_type_context(args[0]->get_type_context());
+  }
+  return field;
+}
+
 bool Item_sum::collect_grouped_aggregates(uchar *arg) {
   auto *info = pointer_cast<Collect_grouped_aggregate_info *>(arg);
 
@@ -4170,17 +4180,20 @@ int dump_leaf_key(void *key_arg, element_count count [[maybe_unused]],
       We also can't use table->field array to access the fields
       because it contains both order and arg list fields.
      */
-    if ((*arg)->const_item())
-      res = (*arg)->val_str(&tmp);
-    else {
+    // VillageSQL: Use val_custom_str throughout to decode custom types.
+    // Const items can have custom types (e.g., const-folded function calls).
+    if ((*arg)->const_item()) {
+      res = (*arg)->val_custom_str(&tmp);
+    } else {
       Field *field = (*arg)->get_tmp_table_field();
       if (field) {
         const uint offset =
             (field->offset(field->table->record[0]) - table->s->null_bytes);
         assert(offset < table->s->reclength);
-        res = field->val_str(&tmp, key + offset);
-      } else
-        res = (*arg)->val_str(&tmp);
+        res = field->val_custom_str(&tmp, key + offset);
+      } else {
+        res = (*arg)->val_custom_str(&tmp);
+      }
     }
     if (res) result->append(*res);
   }
