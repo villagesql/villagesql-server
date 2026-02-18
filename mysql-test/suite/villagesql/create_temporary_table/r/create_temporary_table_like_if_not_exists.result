@@ -3,13 +3,13 @@ id INT PRIMARY KEY,
 `signal` COMPLEX
 );
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	source_table	signal	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	source_table	signal	vsql_complex	0.0.1	COMPLEX	{}
 INSERT INTO source_table VALUES (1, '(9.0,10.0)');
 CREATE TEMPORARY TABLE IF NOT EXISTS temp_safe LIKE source_table;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	source_table	signal	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	source_table	signal	vsql_complex	0.0.1	COMPLEX	{}
 SHOW COLUMNS FROM temp_safe;
 Field	Type	Null	Key	Default	Extra
 id	int	NO	PRI	NULL	NULL
@@ -22,17 +22,17 @@ CREATE TEMPORARY TABLE IF NOT EXISTS temp_safe LIKE source_table;
 Warnings:
 Note	1050	Table 'temp_safe' already exists
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	source_table	signal	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	source_table	signal	vsql_complex	0.0.1	COMPLEX	{}
 DROP TABLE temp_safe;
 SELECT * FROM temp_safe;
 ERROR 42S02: Table 'test.temp_safe' doesn't exist
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	source_table	signal	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	source_table	signal	vsql_complex	0.0.1	COMPLEX	{}
 DROP TABLE source_table;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	Query	#	#	use `test`; CREATE TABLE `source_table` (

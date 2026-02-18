@@ -5,8 +5,8 @@
 CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX) ENGINE=InnoDB;
 # Verify column uses custom type
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	t1	val	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	val	vsql_complex	0.0.1	COMPLEX	{}
 # Connection con1: ALTER TABLE MODIFY COLUMN (custom->custom) paused AFTER acquiring extension lock
 SET DEBUG_SYNC= 'metadata_after_extension_lock SIGNAL lock_acquired WAIT_FOR continue_alter';
 ALTER TABLE t1 MODIFY COLUMN val COMPLEX NOT NULL;
@@ -36,8 +36,8 @@ t1	CREATE TABLE `t1` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	t1	val	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	val	vsql_complex	0.0.1	COMPLEX	{}
 # Connection con2: Reaping UNINSTALL (should fail - column still uses custom type)
 ERROR HY000: Cannot drop extension `vsql_complex` as 1 column(s) depend on it, e.g. test.t1.val has type COMPLEX
 # Connection con1: DROP TABLE to remove dependency

@@ -187,7 +187,7 @@ test/t@0020@0021@0040@0023@0024@0025@005e@0026@002a@0028@0029_@002b@002d@003d@00
 test/t_utf8_1	s_Cöŀumň	161	5	Dynamic	0	General
 test/t_utf8_2	s_cöĿǖmň	161	5	Dynamic	0	General
 test/t_utf8_3	s_வணக்கம்	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Directory listing of MYSQLD_DATADIR/
@@ -397,7 +397,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_single	test/t_single	33	5	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
@@ -529,7 +529,7 @@ mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_def_in_def	s_def	161	5	Dynamic	0	General
 test/t_dyn_in_def	s_def	161	5	Dynamic	0	General
 test/t_red_in_def	s_def	128	5	Redundant	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Directory of MYSQLD_DATADIR/
@@ -561,7 +561,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/test@002ft_def_in_def	s_def	161	5	Dynamic	0	General
 test/t_def_in_def	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
@@ -745,7 +745,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/test@002ft_def_in_def	s_def	161	5	Dynamic	0	General
 test/t_def_in_def	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t_def_in_def;
@@ -791,7 +791,7 @@ mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_com_in_system	innodb_system	129	5	Compact	0	System
 test/t_dyn_in_system	innodb_system	161	5	Dynamic	0	System
 test/t_red_in_system	innodb_system	128	5	Redundant	0	System
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 CHECK TABLE t_red_in_system;
@@ -851,7 +851,7 @@ test/t_com_as_file_per_table	test/t_com_as_file_per_table	1	5	Compact	0	Single
 test/t_def_as_remote	test/t_def_as_remote	97	5	Dynamic	0	Single
 test/t_dyn_as_file_per_table	test/t_dyn_as_file_per_table	33	5	Dynamic	0	Single
 test/t_red_as_file_per_table	test/t_red_as_file_per_table	0	5	Redundant	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Directory listing of MYSQLD_DATADIR/
@@ -925,7 +925,7 @@ test/t_com_was_file_per_table	s_multiple	129	5	Compact	0	General
 test/t_def_was_remote	s_multiple	161	5	Dynamic	0	General
 test/t_dyn_was_file_per_table	s_multiple	161	5	Dynamic	0	General
 test/t_red_was_file_per_table	s_multiple	128	5	Redundant	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Directory listing of MYSQLD_DATADIR/
@@ -983,7 +983,7 @@ test/t_com_to_file_per_table	test/t_com_to_file_per_table	1	5	Compact	0	Single
 test/t_def_to_file_per_table	test/t_def_to_file_per_table	33	5	Dynamic	0	Single
 test/t_dyn_to_file_per_table	test/t_dyn_to_file_per_table	33	5	Dynamic	0	Single
 test/t_red_to_file_per_table	test/t_red_to_file_per_table	0	5	Redundant	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Directory listing of MYSQLD_DATADIR/
@@ -1146,7 +1146,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_in_def	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t_in_def ROW_FORMAT=redundant;
@@ -1306,7 +1306,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 INSERT INTO t VALUES(200, "after RENAME TABLE t_in_def TO t");
@@ -1365,7 +1365,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_nomad	s_alt1	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t_nomad TABLESPACE s_alt2;
@@ -1386,7 +1386,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_nomad	s_alt2	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t_nomad TABLESPACE s_def, DROP COLUMN bb;
@@ -1405,7 +1405,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_nomad	s_def	161	4	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
@@ -1458,7 +1458,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_system	innodb_system	33	5	Dynamic	0	System
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t_system TABLESPACE s_def;
@@ -1477,7 +1477,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_system	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t_system TABLESPACE=`innodb_system`;
@@ -1496,7 +1496,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_system	innodb_system	161	5	Dynamic	0	System
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 #
@@ -1581,7 +1581,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_still_system	innodb_system	161	5	Dynamic	0	System
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t_still_system;
@@ -1665,7 +1665,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_single	test/t_single	33	5	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t_single TABLESPACE s_def;
@@ -1684,7 +1684,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_single	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t_single;
@@ -1718,7 +1718,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_innodb	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t_innodb RENAME TO t_myisam, ENGINE=MyISAM;
@@ -1753,7 +1753,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_innodb	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t_innodb;
@@ -1779,7 +1779,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_dyn_in_s_def	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t_dyn_in_s_def ENGINE=MyISAM;
@@ -1798,7 +1798,7 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t_dyn_in_s_def ENGINE=InnoDB;
@@ -1818,7 +1818,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_dyn_in_s_def	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t_dyn_in_s_def ENGINE=Memory;
@@ -1837,7 +1837,7 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t_dyn_in_s_def ENGINE=InnoDB;
@@ -1864,7 +1864,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_dyn_in_s_def	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 CHECK TABLE t_dyn_in_s_def;
@@ -1893,7 +1893,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_nomad	s_short_life	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t_nomad ENGINE=MyISAM;
@@ -1912,7 +1912,7 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLESPACE s_short_life;
@@ -1935,7 +1935,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_nomad	s_shorter_life	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE t_nomad;
@@ -1980,7 +1980,7 @@ test/t_system	innodb_system	33	5	Dynamic	0	System
 test1/t_general	s_def	161	5	Dynamic	0	General
 test1/t_single	test1/t_single	33	5	Dynamic	0	Single
 test1/t_system	innodb_system	33	5	Dynamic	0	System
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
@@ -2019,7 +2019,7 @@ mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_general	s_def	161	5	Dynamic	0	General
 test/t_single	test/t_single	33	5	Dynamic	0	Single
 test/t_system	innodb_system	33	5	Dynamic	0	System
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
@@ -2067,7 +2067,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	s1	161	4	Dynamic	0	General
 test/t2	innodb_system	33	4	Dynamic	0	System
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 SELECT * FROM t1;
@@ -2100,7 +2100,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	innodb_system	33	4	Dynamic	0	System
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 CALL p1();
@@ -2111,7 +2111,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	s1	161	4	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP PROCEDURE p1;

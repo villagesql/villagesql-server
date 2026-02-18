@@ -4,13 +4,13 @@ value COMPLEX,
 name VARCHAR(50)
 );
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	old_table	value	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	old_table	value	vsql_complex	0.0.1	COMPLEX	{}
 INSERT INTO old_table VALUES (1, '(1.0,2.0)', 'test');
 ALTER TABLE old_table RENAME TO new_table;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	new_table	value	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	new_table	value	vsql_complex	0.0.1	COMPLEX	{}
 SHOW CREATE TABLE new_table;
 Table	Create Table
 new_table	CREATE TABLE `new_table` (
@@ -24,7 +24,7 @@ id	value	name
 1	(1,2)	test
 DROP TABLE new_table;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	Query	#	#	use `test`; CREATE TABLE `old_table` (

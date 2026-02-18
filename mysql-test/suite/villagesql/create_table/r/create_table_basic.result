@@ -21,12 +21,12 @@ id	value
 2	(3.5,-1.2)
 INSERT INTO t2 VALUES (1, '(1.0,2.0)');
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	t1	value	vsql_complex	0.0.1	COMPLEX
-test	t2	value	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	value	vsql_complex	0.0.1	COMPLEX	{}
+test	t2	value	vsql_complex	0.0.1	COMPLEX	{}
 DROP TABLE t1, t2;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	Query	#	#	use `test`; CREATE TABLE `t1` (

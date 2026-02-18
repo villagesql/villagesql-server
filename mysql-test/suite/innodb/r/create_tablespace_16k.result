@@ -453,7 +453,7 @@ test/t_zip8k_in_8k	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_in_8k_as	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_in_8k_from_1k	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_in_8k_like	s_8k	169	5	Compressed	8192	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Directory of MYSQLD_DATADIR/
@@ -535,7 +535,7 @@ test/t_zip8k_in_8k	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_in_8k_as	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_in_8k_from_1k	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_in_8k_like	s_8k	169	5	Compressed	8192	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Directory of MYSQLD_DATADIR/
@@ -681,7 +681,7 @@ test/t_zip4k_as_file_per_table	test/t_zip4k_as_file_per_table	39	5	Compressed	40
 test/t_zip4k_as_remote	test/t_zip4k_as_remote	103	5	Compressed	4096	Single
 test/t_zip8k_as_file_per_table	test/t_zip8k_as_file_per_table	41	5	Compressed	8192	Single
 test/t_zip8k_as_remote	test/t_zip8k_as_remote	105	5	Compressed	8192	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # MYSQLD_DATADIR/
@@ -1012,7 +1012,7 @@ test/t_zip4k_in_s_4k	s_4k	167	5	Compressed	4096	General
 test/t_zip4k_remote_in_s_4k	s_4k	167	5	Compressed	4096	General
 test/t_zip8k_in_s_8k	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_remote_in_s_8k	s_8k	169	5	Compressed	8192	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # MYSQLD_DATADIR/
@@ -1209,7 +1209,7 @@ test/t_zip4k_remote_in_s_4k	s_4k	167	5	Compressed	4096	General
 test/t_zip4k_to_file_per_table	test/t_zip4k_to_file_per_table	39	5	Compressed	4096	Single
 test/t_zip8k_remote_in_s_8k	s_8k	169	5	Compressed	8192	General
 test/t_zip8k_to_file_per_table	test/t_zip8k_to_file_per_table	41	5	Compressed	8192	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 CHECK TABLE `t_zip1k_to_file_per_table`;
@@ -1294,7 +1294,7 @@ test/t_zip1k_to_file_per_table	test/t_zip1k_to_file_per_table	35	5	Compressed	10
 test/t_zip2k_to_file_per_table	test/t_zip2k_to_file_per_table	37	5	Compressed	2048	Single
 test/t_zip4k_to_file_per_table	test/t_zip4k_to_file_per_table	39	5	Compressed	4096	Single
 test/t_zip8k_to_file_per_table	test/t_zip8k_to_file_per_table	41	5	Compressed	8192	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 DROP TABLE `t_zip1k_to_file_per_table`;

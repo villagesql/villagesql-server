@@ -18,6 +18,7 @@
 # List of all VillageSQL unit tests
 SET(VILLAGESQL_UNIT_TESTS
   semver-t
+  type_context-t
   type_descriptor-t
   victionary_client-t
 )
@@ -56,6 +57,7 @@ ENDMACRO()
 
 # Add all VillageSQL unit tests
 ADD_VILLAGESQL_TEST(semver-t)
+ADD_VILLAGESQL_TEST(type_context-t)
 ADD_VILLAGESQL_TEST(type_descriptor-t)
 ADD_VILLAGESQL_TEST(victionary_client-t)
 

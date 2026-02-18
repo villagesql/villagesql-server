@@ -17,14 +17,21 @@
 #include "villagesql/schema/upgrade.h"
 
 #include "sql/sql_class.h"
+#include "villagesql/include/error.h"
+#include "villagesql/schema/systable/helpers.h"
 
 namespace villagesql {
 namespace upgrade {
 
-bool upgrade_villagesql_from_1_to_2(THD * /*thd*/) {
-  // No schema changes needed for this version
-  // This is a placeholder for future version-specific migrations
-  return false;
+bool upgrade_villagesql_from_0_0_1_to_0_0_3(THD *thd) {
+  // Add type_parameters column to custom_columns table
+  LogVSQL(INFORMATION_LEVEL,
+          "Upgrading custom_columns: adding type_parameters column");
+  return ignore_error_and_execute(
+      thd,
+      "ALTER TABLE villagesql.custom_columns "
+      "ADD COLUMN type_parameters JSON NOT NULL "
+      "COMMENT 'Type instantiation parameters as JSON'");
 }
 
 }  // namespace upgrade

@@ -44,7 +44,8 @@ bool TableTraits<ColumnEntry>::read_from_table(TABLE &table,
   // type_name (field 5)
   read_string_field(field[5], entry.type_name);
 
-  // TODO(villagesql-beta): Read type parameter fields when they are added
+  // type_parameters (field 6)
+  read_string_field(field[6], entry.type_parameters);
 
   return false;  // Success
 }
@@ -78,7 +79,9 @@ bool TableTraits<ColumnEntry>::write_to_table(TABLE &table,
   field[5]->store(entry.type_name.c_str(), entry.type_name.length(),
                   &my_charset_utf8mb4_bin);
 
-  // TODO(villagesql-beta): Write type parameter fields when they are added
+  // type_parameters (field 6)
+  field[6]->store(entry.type_parameters.c_str(), entry.type_parameters.length(),
+                  &my_charset_utf8mb4_bin);
 
   // Write the row - use ha_write_row for INSERT
   int error = table.file->ha_write_row(table.record[0]);
@@ -161,6 +164,8 @@ bool TableTraits<ColumnEntry>::update_in_table(TABLE &table,
   field[4]->store(entry.extension_version.c_str(),
                   entry.extension_version.length(), &my_charset_utf8mb4_bin);
   field[5]->store(entry.type_name.c_str(), entry.type_name.length(),
+                  &my_charset_utf8mb4_bin);
+  field[6]->store(entry.type_parameters.c_str(), entry.type_parameters.length(),
                   &my_charset_utf8mb4_bin);
 
   // Update the row

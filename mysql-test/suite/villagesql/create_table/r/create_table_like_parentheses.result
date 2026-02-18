@@ -4,14 +4,14 @@ complex_col COMPLEX,
 description TEXT
 );
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	source_table	complex_col	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	source_table	complex_col	vsql_complex	0.0.1	COMPLEX	{}
 INSERT INTO source_table VALUES (1, '(7.0,8.0)', 'source data');
 CREATE TABLE t1 (LIKE source_table);
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	source_table	complex_col	vsql_complex	0.0.1	COMPLEX
-test	t1	complex_col	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	source_table	complex_col	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	complex_col	vsql_complex	0.0.1	COMPLEX	{}
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -28,11 +28,11 @@ id	complex_col	description
 2	(11,12)	more data
 DROP TABLE t1;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	source_table	complex_col	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	source_table	complex_col	vsql_complex	0.0.1	COMPLEX	{}
 DROP TABLE source_table;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	Query	#	#	use `test`; CREATE TABLE `source_table` (

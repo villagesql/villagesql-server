@@ -12,9 +12,9 @@ complex_metadata COMPLEX,
 FOREIGN KEY (user_id) REFERENCES users(id)
 );
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-complex_relationships_db	orders	complex_metadata	vsql_complex	0.0.1	COMPLEX
-complex_relationships_db	users	profile_data	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+complex_relationships_db	orders	complex_metadata	vsql_complex	0.0.1	COMPLEX	{}
+complex_relationships_db	users	profile_data	vsql_complex	0.0.1	COMPLEX	{}
 INSERT INTO users VALUES (1, 'John', '(1.0,1.0)');
 INSERT INTO orders VALUES (1, 1, '(2.0,3.0)');
 SHOW CREATE TABLE orders;
@@ -32,7 +32,7 @@ DROP DATABASE complex_relationships_db;
 SHOW DATABASES LIKE 'complex_relationships_db';
 Database (complex_relationships_db)
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	Query	#	#	CREATE DATABASE complex_relationships_db

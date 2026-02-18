@@ -5,8 +5,8 @@
 CREATE TABLE t1 (id INT PRIMARY KEY, val COMPLEX) ENGINE=InnoDB;
 # Verify table and column exist
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	t1	val	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	val	vsql_complex	0.0.1	COMPLEX	{}
 # Connection con1: Skip refcount to test pure MDL and dependency protection
 SET SESSION debug = '+d,skip_victionary_refcount';
 # Connection con1: Set up two debug sync points for DROP TABLE
@@ -42,7 +42,7 @@ SET SESSION debug = '-d,skip_victionary_refcount';
 SHOW CREATE TABLE t1;
 ERROR 42S02: Table 'test.t1' doesn't exist
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 # Connection con2: Now UNINSTALL should succeed (table dropped)
 UNINSTALL EXTENSION vsql_complex;
 SET DEBUG_SYNC= 'RESET';

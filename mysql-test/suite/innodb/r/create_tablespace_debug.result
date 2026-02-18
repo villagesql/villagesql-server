@@ -46,7 +46,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	s1	161	4	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 ALTER TABLE t2 TABLESPACE=s1;
@@ -58,7 +58,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	s1	161	4	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # MYSQLD_DATADIR/
@@ -110,7 +110,7 @@ test/t1	s1	161	4	Dynamic	0	General
 test/t2	s1	161	4	Dynamic	0	General
 test/t3	innodb_system	161	4	Dynamic	0	System
 test/t4	test/t4	33	4	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Kill and restart
@@ -124,7 +124,7 @@ test/t1	s1	161	4	Dynamic	0	General
 test/t2	s1	161	4	Dynamic	0	General
 test/t3	innodb_system	161	4	Dynamic	0	System
 test/t4	test/t4	33	4	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 select * from t1;
@@ -178,7 +178,7 @@ test/tr1	s1	161	4	Dynamic	0	General
 test/tr2	s1	161	4	Dynamic	0	General
 test/tr3	innodb_system	161	4	Dynamic	0	System
 test/tr4	test/tr4	33	4	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Kill and restart
@@ -192,7 +192,7 @@ test/tr1	s1	161	4	Dynamic	0	General
 test/tr2	s1	161	4	Dynamic	0	General
 test/tr3	innodb_system	161	4	Dynamic	0	System
 test/tr4	test/tr4	33	4	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 select * from tr1;

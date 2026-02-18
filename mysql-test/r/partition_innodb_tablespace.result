@@ -41,7 +41,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1#p#p0	test/t1#p#p0	97	5	Dynamic	0	Single
 test/t1#p#p1	test/t1#p#p1	97	5	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
@@ -98,7 +98,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1#p#p0	test/t1#p#p0	97	5	Dynamic	0	Single
 test/t1#p#p1	test/t1#p#p1	97	5	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
@@ -144,7 +144,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t11#p#p0	test/t11#p#p0	97	5	Dynamic	0	Single
 test/t11#p#p1	test/t11#p#p1	97	5	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
@@ -199,7 +199,7 @@ mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	D
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1#p#p0	test/t1#p#p0	97	5	Dynamic	0	Single
 test/t1#p#p1	test/t1#p#p1	97	5	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
@@ -288,7 +288,7 @@ test/t1#p#p1#sp#s2	test/t1#p#p1#sp#s2	97	5	Dynamic	0	Single
 test/t1#p#p1#sp#s3	test/t1#p#p1#sp#s3	97	5	Dynamic	0	Single
 test/t1#p#p2#sp#s4	test/t1#p#p2#sp#s4	97	5	Dynamic	0	Single
 test/t1#p#p2#sp#s5	test/t1#p#p2#sp#s5	97	5	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
@@ -387,7 +387,7 @@ test/t1#p#p1#sp#s2	test/t1#p#p1#sp#s2	97	5	Dynamic	0	Single
 test/t1#p#p1#sp#s3	test/t1#p#p1#sp#s3	97	5	Dynamic	0	Single
 test/t1#p#p2#sp#s4	test/t1#p#p2#sp#s4	97	5	Dynamic	0	Single
 test/t1#p#p2#sp#s5	test/t1#p#p2#sp#s5	97	5	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===
@@ -551,7 +551,7 @@ mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1#p#p0	test/t1#p#p0	97	4	Dynamic	0	Single
 test/t_file_per_table_off	innodb_system	161	5	Dynamic	0	System
 test/t_file_per_table_on	test/t_file_per_table_on	33	5	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===

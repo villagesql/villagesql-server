@@ -105,15 +105,15 @@ struct ColumnEntry {
   std::string extension_name;
   std::string extension_version;
   std::string type_name;
-
-  // TODO(villagesql-beta): Add type parameters as structured fields when needed
+  std::string type_parameters = "{}";  // JSON-serialized TypeParameters
 
   // Full constructor with all fields
   ColumnEntry(ColumnKey key, std::string ext_name, std::string ext_version,
-              std::string t_name)
+              std::string t_name, std::string type_params = "{}")
       : extension_name(std::move(ext_name)),
         extension_version(std::move(ext_version)),
         type_name(std::move(t_name)),
+        type_parameters(std::move(type_params)),
         key_(std::move(key)) {}
 
   // Construct with key only, other fields can be set separately (useful for

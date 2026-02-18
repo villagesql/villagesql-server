@@ -18,15 +18,15 @@ Tables_in_test_complex_db
 t1
 t2
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test_complex_db	t1	value	vsql_complex	0.0.1	COMPLEX
-test_complex_db	t2	data	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test_complex_db	t1	value	vsql_complex	0.0.1	COMPLEX	{}
+test_complex_db	t2	data	vsql_complex	0.0.1	COMPLEX	{}
 USE test;
 DROP DATABASE test_complex_db;
 SHOW DATABASES LIKE 'test_complex_db';
 Database (test_complex_db)
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	Query	#	#	CREATE DATABASE test_complex_db

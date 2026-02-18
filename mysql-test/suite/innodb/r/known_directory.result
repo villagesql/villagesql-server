@@ -354,7 +354,7 @@ test/tp4#p#p1#sp#s1	test/tp4#p#p1#sp#s1	97	5	Dynamic	0	Single
 test/tp4#p#p1#sp#s2	test/tp4#p#p1#sp#s2	97	5	Dynamic	0	Single
 test/tp4#p#p2#sp#s3	test/tp4#p#p2#sp#s3	97	5	Dynamic	0	Single
 test/tp4#p#p2#sp#s4	test/tp4#p#p2#sp#s4	97	5	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 === information_schema.innodb_tablespaces and innodb_datafiles ===

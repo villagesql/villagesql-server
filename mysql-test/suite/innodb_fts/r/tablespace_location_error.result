@@ -9,7 +9,7 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -23,7 +23,7 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -35,7 +35,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	test/t1	33	5	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -51,7 +51,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	test/t1	33	5	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -67,7 +67,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	test/t1	33	5	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -105,7 +105,7 @@ test/fts_aux_config	test/fts_aux_config	33	5	Dynamic	0	Single
 test/fts_aux_deleted	test/fts_aux_deleted	33	4	Dynamic	0	Single
 test/fts_aux_deleted_cache	test/fts_aux_deleted_cache	33	4	Dynamic	0	Single
 test/t1	test/t1	33	7	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -143,7 +143,7 @@ test/fts_aux_config	test/fts_aux_config	33	5	Dynamic	0	Single
 test/fts_aux_deleted	test/fts_aux_deleted	33	4	Dynamic	0	Single
 test/fts_aux_deleted_cache	test/fts_aux_deleted_cache	33	4	Dynamic	0	Single
 test/t1	test/t1	33	7	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -181,7 +181,7 @@ test/fts_aux_config	test/fts_aux_config	33	5	Dynamic	0	Single
 test/fts_aux_deleted	test/fts_aux_deleted	33	4	Dynamic	0	Single
 test/fts_aux_deleted_cache	test/fts_aux_deleted_cache	33	4	Dynamic	0	Single
 test/t1	test/t1	33	7	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -218,7 +218,7 @@ test/fts_aux_config	test/fts_aux_config	33	5	Dynamic	0	Single
 test/fts_aux_deleted	test/fts_aux_deleted	33	4	Dynamic	0	Single
 test/fts_aux_deleted_cache	test/fts_aux_deleted_cache	33	4	Dynamic	0	Single
 test/t1	test/t1	33	7	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -256,7 +256,7 @@ test/fts_aux_config	test/fts_aux_config	33	5	Dynamic	0	Single
 test/fts_aux_deleted	test/fts_aux_deleted	33	4	Dynamic	0	Single
 test/fts_aux_deleted_cache	test/fts_aux_deleted_cache	33	4	Dynamic	0	Single
 test/t1	test/t1	33	7	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -305,7 +305,7 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -319,7 +319,7 @@ mtr/asserted_test_suppressions	mtr/asserted_test_suppressions	33	4	Dynamic	0	Sin
 mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -331,7 +331,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -346,7 +346,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -361,7 +361,7 @@ mtr/global_suppressions	mtr/global_suppressions	33	4	Dynamic	0	Single
 mtr/test_ignored_global_suppressions	mtr/test_ignored_global_suppressions	33	4	Dynamic	0	Single
 mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t1	s_def	161	5	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -398,7 +398,7 @@ test/fts_aux_config	s_def	161	5	Dynamic	0	General
 test/fts_aux_deleted	s_def	161	4	Dynamic	0	General
 test/fts_aux_deleted_cache	s_def	161	4	Dynamic	0	General
 test/t1	s_def	161	7	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -424,7 +424,7 @@ test/fts_aux_config	s_def	161	5	Dynamic	0	General
 test/fts_aux_deleted	s_def	161	4	Dynamic	0	General
 test/fts_aux_deleted_cache	s_def	161	4	Dynamic	0	General
 test/t1	s_def	161	7	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -450,7 +450,7 @@ test/fts_aux_config	s_def	161	5	Dynamic	0	General
 test/fts_aux_deleted	s_def	161	4	Dynamic	0	General
 test/fts_aux_deleted_cache	s_def	161	4	Dynamic	0	General
 test/t1	s_def	161	7	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -475,7 +475,7 @@ test/fts_aux_config	s_def	161	5	Dynamic	0	General
 test/fts_aux_deleted	s_def	161	4	Dynamic	0	General
 test/fts_aux_deleted_cache	s_def	161	4	Dynamic	0	General
 test/t1	s_def	161	7	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test
@@ -501,7 +501,7 @@ test/fts_aux_config	s_def	161	5	Dynamic	0	General
 test/fts_aux_deleted	s_def	161	4	Dynamic	0	General
 test/fts_aux_deleted_cache	s_def	161	4	Dynamic	0	General
 test/t1	s_def	161	7	Dynamic	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # list files in datadir/test

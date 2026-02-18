@@ -7,19 +7,19 @@ complex_field COMPLEX
 );
 INSERT INTO complex_table VALUES (1, 'test', '(5.0,6.0)');
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test_complex_db2	complex_table	complex_field	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test_complex_db2	complex_table	complex_field	vsql_complex	0.0.1	COMPLEX	{}
 USE test;
 DROP DATABASE IF EXISTS test_complex_db2;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 DROP DATABASE IF EXISTS test_complex_db2;
 Warnings:
 Note	1008	Can't drop database 'test_complex_db2'; database doesn't exist
 SHOW DATABASES LIKE 'test_complex_db2';
 Database (test_complex_db2)
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	Query	#	#	CREATE DATABASE test_complex_db2

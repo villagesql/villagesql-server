@@ -8,18 +8,18 @@ json_data JSON,
 is_active BOOLEAN DEFAULT TRUE
 );
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	mixed_table	complex_data	vsql_complex	0.0.1	COMPLEX
-test	mixed_table	val	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	mixed_table	complex_data	vsql_complex	0.0.1	COMPLEX	{}
+test	mixed_table	val	vsql_complex	0.0.1	COMPLEX	{}
 CREATE TABLE second_table (
 id INT PRIMARY KEY,
 complex_data COMPLEX
 );
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	mixed_table	complex_data	vsql_complex	0.0.1	COMPLEX
-test	mixed_table	val	vsql_complex	0.0.1	COMPLEX
-test	second_table	complex_data	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	mixed_table	complex_data	vsql_complex	0.0.1	COMPLEX	{}
+test	mixed_table	val	vsql_complex	0.0.1	COMPLEX	{}
+test	second_table	complex_data	vsql_complex	0.0.1	COMPLEX	{}
 INSERT INTO mixed_table (id, val, name, score, complex_data, json_data) VALUES
 (1, '(0,1)', 'Test Record 1', 95.50, '(1.0,2.0)', '{"type": "test"}'),
 (2, '(1,1)', 'Test Record 2', 87.25, '(3.5,-1.2)', '{"type": "sample"}');
@@ -41,13 +41,13 @@ id	val	name	score	complex_data
 2	(1,1)	Test Record 2	87.25	(3.5,-1.2)
 DROP TABLE mixed_table;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	second_table	complex_data	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	second_table	complex_data	vsql_complex	0.0.1	COMPLEX	{}
 SHOW TABLES LIKE 'mixed_table';
 Tables_in_test (mixed_table)
 DROP TABLE second_table;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	Query	#	#	use `test`; CREATE TABLE `mixed_table` (

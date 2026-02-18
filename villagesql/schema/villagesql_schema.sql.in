@@ -41,6 +41,7 @@ CREATE TABLE IF NOT EXISTS villagesql.custom_columns (
   extension_name VARCHAR(64) NOT NULL COMMENT 'Extension name implementing the custom type for this column',
   extension_version VARCHAR(64) NOT NULL COMMENT 'Version of the extension',
   type_name VARCHAR(64) NOT NULL COMMENT 'Custom type from extension',
+  type_parameters JSON NOT NULL COMMENT 'Type instantiation parameters as JSON',
   PRIMARY KEY (db_name, table_name, column_name),
   INDEX idx_extension (extension_name, extension_version, type_name)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci

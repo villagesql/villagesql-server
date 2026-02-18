@@ -3,7 +3,7 @@ id INT PRIMARY KEY,
 temp_value COMPLEX
 );
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 SHOW COLUMNS FROM t1;
 Field	Type	Null	Key	Default	Extra
 id	int	NO	PRI	NULL	NULL
@@ -11,12 +11,12 @@ temp_value	vsql_complex.COMPLEX	YES		NULL	NULL
 INSERT INTO t1 VALUES (1, '(2.5,3.0)');
 INSERT INTO t1 VALUES (2, '(0.0,1.0)');
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 SELECT * FROM t1;
 id	temp_value
 1	(2.5,3)
 2	(0,1)
 DROP TABLE t1;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 include/rpl/deprecated/show_binlog_events.inc

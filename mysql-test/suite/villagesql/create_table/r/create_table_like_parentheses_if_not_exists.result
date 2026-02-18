@@ -4,14 +4,14 @@ measurement COMPLEX,
 f FLOAT
 );
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	source_table	measurement	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	source_table	measurement	vsql_complex	0.0.1	COMPLEX	{}
 INSERT INTO source_table VALUES (1, '(13.0,14.0)', 18.62);
 CREATE TABLE IF NOT EXISTS t1 (LIKE source_table);
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	source_table	measurement	vsql_complex	0.0.1	COMPLEX
-test	t1	measurement	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	source_table	measurement	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	measurement	vsql_complex	0.0.1	COMPLEX	{}
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
@@ -28,16 +28,16 @@ CREATE TABLE IF NOT EXISTS t1 (LIKE source_table);
 Warnings:
 Note	1050	Table 't1' already exists
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	source_table	measurement	vsql_complex	0.0.1	COMPLEX
-test	t1	measurement	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	source_table	measurement	vsql_complex	0.0.1	COMPLEX	{}
+test	t1	measurement	vsql_complex	0.0.1	COMPLEX	{}
 DROP TABLE t1;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	source_table	measurement	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	source_table	measurement	vsql_complex	0.0.1	COMPLEX	{}
 DROP TABLE source_table;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	Query	#	#	use `test`; CREATE TABLE `source_table` (

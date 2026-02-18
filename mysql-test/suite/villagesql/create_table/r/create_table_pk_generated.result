@@ -29,15 +29,15 @@ my_row_id	num	value
 1	2	(1,2)
 2	3	(3.5,-1.2)
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-test	t1	value	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	value	vsql_complex	0.0.1	COMPLEX	{}
 SET sql_generate_invisible_primary_key=OFF;
 SELECT @@sql_generate_invisible_primary_key;
 @@sql_generate_invisible_primary_key
 0
 DROP TABLE t1;
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	Query	#	#	use `test`; CREATE TABLE `t1` (

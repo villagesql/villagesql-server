@@ -17,6 +17,7 @@
 #ifndef VILLAGESQL_SCHEMA_DESCRIPTOR_TYPE_CONTEXT_H_
 #define VILLAGESQL_SCHEMA_DESCRIPTOR_TYPE_CONTEXT_H_
 
+#include <cassert>
 #include <map>
 #include <memory>
 #include <string>
@@ -61,6 +62,16 @@ class TypeParameters {
   TypeParameters &operator=(TypeParameters &&) = default;
 
   ~TypeParameters() = default;
+
+  // ===== Serialization =====
+
+  // Serialize to JSON object string. Returns "{}" if no parameters.
+  // e.g., {"dimension":"1536","metric":"cosine"}
+  std::string to_json() const;
+
+  // Deserialize from JSON object string. Returns empty TypeParameters for
+  // empty string, "{}", or invalid JSON.
+  static TypeParameters from_json(const std::string &json);
 
   // ===== Accessors =====
 

@@ -16,9 +16,9 @@ complex_col COMPLEX,
 float_col FLOAT DEFAULT 1.1
 );
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
-mixed_db	mixed_columns	complex_col	vsql_complex	0.0.1	COMPLEX
-mixed_db	regular_complex	complex_col	vsql_complex	0.0.1	COMPLEX
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+mixed_db	mixed_columns	complex_col	vsql_complex	0.0.1	COMPLEX	{}
+mixed_db	regular_complex	complex_col	vsql_complex	0.0.1	COMPLEX	{}
 INSERT INTO regular_complex VALUES (1, '(1.0,1.0)');
 INSERT INTO temp_complex VALUES (1, '(2.0,2.0)');
 INSERT INTO mixed_columns (id, text_col, json_col, complex_col) VALUES
@@ -33,7 +33,7 @@ DROP DATABASE mixed_db;
 SHOW DATABASES LIKE 'mixed_db';
 Database (mixed_db)
 SELECT * FROM villagesql.custom_columns;
-db_name	table_name	column_name	extension_name	extension_version	type_name
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
 include/rpl/deprecated/show_binlog_events.inc
 Log_name	Pos	Event_type	Server_id	End_log_pos	Info
 #	#	Query	#	#	CREATE DATABASE mixed_db

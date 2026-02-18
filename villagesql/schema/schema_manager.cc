@@ -195,8 +195,11 @@ static const TABLE_FIELD_TYPE columns_fields[] = {
      {nullptr, 0}},
     {{STRING_WITH_LEN("type_name")},
      {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("type_parameters")},
+     {STRING_WITH_LEN("json")},
      {nullptr, 0}}};
-static const TABLE_FIELD_DEF columns_def = {6, columns_fields};
+static const TABLE_FIELD_DEF columns_def = {7, columns_fields};
 
 // Define expected structure for extensions table
 static const TABLE_FIELD_TYPE extensions_fields[] = {
@@ -281,13 +284,16 @@ static bool validate_villagesql_tables(THD *thd) {
 
 // Run version-specific VillageSQL upgrades, which are in
 // villagesql/schema/upgrade.h.
-bool run_villagesql_version_upgrades(THD * /*thd*/, Semver /*from_version*/) {
-  // Example: upgrade from 1 to 2
-  // if get_version() < villagesql::GetBuildVersion() {
-  //   if (upgrade_villagesql_from_1_to_2(thd)) return true;
-  //   if (write_villagesql_version(...)) return true;
-  //  }
+bool run_villagesql_version_upgrades(THD *thd, Semver from_version) {
+  // Upgrade from 0.0.1 to 0.0.3: add type_parameters column to custom_columns
+  if (from_version < Semver::from_components(0, 0, 3)) {
+    if (upgrade::upgrade_villagesql_from_0_0_1_to_0_0_3(thd)) return true;
+  }
   // Future versions would be added here
+
+  // Write the current build version so the stored version matches the binary
+  if (SchemaManagerStatus::write_villagesql_version(thd, GetBuildVersion()))
+    return true;
   return false;
 }
 
@@ -729,7 +735,6 @@ bool SchemaManagerStatus::read_villagesql_version(THD *thd, Semver *version) {
   return false;  // Success
 }
 
-/*
 bool SchemaManagerStatus::write_villagesql_version(THD *thd,
                                                    const Semver &version) {
   // Insert or update version in villagesql.properties table
@@ -754,6 +759,5 @@ bool SchemaManagerStatus::write_villagesql_version(THD *thd,
   set_version(version);
   return false;
 }
-*/
 
 }  // namespace villagesql

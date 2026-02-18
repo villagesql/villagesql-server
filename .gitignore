@@ -32,7 +32,7 @@ scalability_jobs_*
 .project
 .settings/
 
-AGENTS.local.md
+*.local.md
 .DS_Store
 
 # macOS AppleDouble files

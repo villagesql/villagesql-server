@@ -20,6 +20,7 @@ SET(VILLAGESQL_SCHEMA_SOURCES
   victionary_client.cc
   descriptor/extension_descriptor.cc
   descriptor/func_descriptor.cc
+  descriptor/type_context.cc
   descriptor/type_descriptor.cc
   systable/custom_columns.cc
   systable/extensions.cc

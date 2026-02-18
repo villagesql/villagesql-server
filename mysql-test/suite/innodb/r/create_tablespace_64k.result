@@ -175,7 +175,7 @@ mtr/test_suppressions	mtr/test_suppressions	33	4	Dynamic	0	Single
 test/t_com_in_64k	s_64k	129	5	Compact	0	General
 test/t_dyn_in_64k	s_64k	161	5	Dynamic	0	General
 test/t_red_in_64k	s_64k	128	5	Redundant	0	General
-villagesql/custom_columns	villagesql/custom_columns	33	9	Dynamic	0	Single
+villagesql/custom_columns	villagesql/custom_columns	33	10	Dynamic	0	Single
 villagesql/extensions	villagesql/extensions	33	6	Dynamic	0	Single
 villagesql/properties	villagesql/properties	33	6	Dynamic	0	Single
 # Directory of MYSQLD_DATADIR/
