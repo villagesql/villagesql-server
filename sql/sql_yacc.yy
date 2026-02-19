@@ -7129,6 +7129,16 @@ type:
             // Qualified custom type: extension_name.type_name
             $$= villagesql::PT_custom_type::create(YYMEM_ROOT, @$, Lex->thd, $1, $3, $4);
           }
+        | IDENT_sys '(' TEXT_STRING_literal ')'
+          {
+            // Custom type with string parameters: TYPE('key=value,...')
+            $$= villagesql::PT_custom_type::create(YYMEM_ROOT, @$, Lex->thd, {}, $1, nullptr, $3.str, $3.length);
+          }
+        | IDENT_sys '.' IDENT_sys '(' TEXT_STRING_literal ')'
+          {
+            // Qualified custom type with string parameters
+            $$= villagesql::PT_custom_type::create(YYMEM_ROOT, @$, Lex->thd, $1, $3, nullptr, $5.str, $5.length);
+          }
         ;
 
 spatial_type:

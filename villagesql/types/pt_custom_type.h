@@ -109,12 +109,43 @@ class PT_custom_type : public PT_type {
   // Factory for custom type names. For qualified names
   // (extension_name.type_name), pass extension_name; for unqualified names,
   // pass empty LEX_STRING {} for extension_name.
+  // Resolve params via resolve_params callback and re-resolve TypeContext.
+  // Shared by both TYPE(N) and TYPE('key=value,...') paths.
+  static bool resolve_params_and_context(const POS &pos, THD *thd,
+                                         const TypeDescriptor *descriptor,
+                                         const LEX_STRING &extension_name,
+                                         const LEX_STRING &type_name,
+                                         vef_type_param_t *param_array,
+                                         size_t param_count,
+                                         const TypeContext *&type_context) {
+    char error_msg[VEF_MAX_ERROR_LEN] = {0};
+    vef_type_resolved_params_t resolved = {};
+    if (descriptor->resolve_params()(param_array, param_count, &resolved,
+                                     error_msg)) {
+      thd->syntax_error_at(pos, "%s", error_msg);
+      return true;
+    }
+
+    TypeParameters::ParamMap param_map;
+    for (size_t i = 0; i < param_count; i++) {
+      param_map[param_array[i].key] = param_array[i].value;
+    }
+    TypeParameters params(std::move(param_map));
+
+    type_context = nullptr;
+    if (ResolveTypeToContext(extension_name, type_name, params, *thd->mem_root,
+                             type_context)) {
+      return true;
+    }
+    return false;
+  }
+
+  // Factory for TYPE(N) and unparameterized syntax.
   static PT_custom_type *create(MEM_ROOT *pt_mem_root, const POS &pos, THD *thd,
                                 const LEX_STRING &extension_name,
                                 const LEX_STRING &type_name,
                                 const char *length) {
     const TypeContext *type_context = nullptr;
-    // TODO(villagesql-beta): pass real TypeParameters for parameterized types
     TypeParameters empty_params;
     if (ResolveTypeToContext(extension_name, type_name, empty_params,
                              *thd->mem_root, type_context)) {
@@ -155,27 +186,9 @@ class PT_custom_type : public PT_type {
           return nullptr;
         }
 
-        // Validate parameters via resolve_params
-        // (resolve_params is required when int_to_params is set, enforced at
-        // registration time)
-        vef_type_resolved_params_t resolved = {};
-        if (descriptor->resolve_params()(param_array, param_count, &resolved,
-                                         error_msg)) {
-          thd->syntax_error_at(pos, "%s", error_msg);
-          return nullptr;
-        }
-
-        // Build TypeParameters from the key-value pairs
-        TypeParameters::ParamMap param_map;
-        for (size_t i = 0; i < param_count; i++) {
-          param_map[param_array[i].key] = param_array[i].value;
-        }
-        TypeParameters params(std::move(param_map));
-
-        // Re-resolve type with parameters to get a parameterized TypeContext
-        type_context = nullptr;
-        if (ResolveTypeToContext(extension_name, type_name, params,
-                                 *thd->mem_root, type_context)) {
+        if (resolve_params_and_context(pos, thd, descriptor, extension_name,
+                                       type_name, param_array, param_count,
+                                       type_context)) {
           return nullptr;
         }
 
@@ -194,6 +207,107 @@ class PT_custom_type : public PT_type {
 
     PT_custom_type *ret = new (pt_mem_root)
         PT_custom_type(pos, thd, type_name, length, type_context);
+    return ret;
+  }
+
+  // Factory for TYPE('key=value,...') string parameter syntax.
+  static PT_custom_type *create(MEM_ROOT *pt_mem_root, const POS &pos, THD *thd,
+                                const LEX_STRING &extension_name,
+                                const LEX_STRING &type_name, const char *length,
+                                const char *params_str, size_t params_str_len) {
+    // If no string params provided, fall through to the normal path
+    if (params_str == nullptr) {
+      return create(pt_mem_root, pos, thd, extension_name, type_name, length);
+    }
+
+    const TypeContext *type_context = nullptr;
+    TypeParameters empty_params;
+    if (ResolveTypeToContext(extension_name, type_name, empty_params,
+                             *thd->mem_root, type_context)) {
+      return nullptr;
+    }
+
+    if (type_context == nullptr) {
+      return new (pt_mem_root)
+          PT_custom_type(pos, thd, type_name, nullptr, nullptr);
+    }
+
+    auto *descriptor = type_context->descriptor();
+    if (descriptor->resolve_params() == nullptr) {
+      std::string qname = type_context->qualified_name();
+      thd->syntax_error_at(pos, "Type '%s' does not accept parameters",
+                           qname.c_str());
+      return nullptr;
+    }
+
+    // Parse 'key1=val1,key2=val2,...' into vef_type_param_t array
+    std::string input(params_str, params_str_len);
+    vef_type_param_t param_array[VEF_MAX_TYPE_PARAMS];
+    // Storage for parsed key/value strings (must outlive param_array usage)
+    std::string keys[VEF_MAX_TYPE_PARAMS];
+    std::string values[VEF_MAX_TYPE_PARAMS];
+    size_t param_count = 0;
+
+    if (input.empty()) {
+      std::string qname = type_context->qualified_name();
+      thd->syntax_error_at(pos, "Empty parameter string for type '%s'",
+                           qname.c_str());
+      return nullptr;
+    }
+
+    size_t start = 0;
+    while (start < input.size()) {
+      size_t comma = input.find(',', start);
+      if (comma == std::string::npos) comma = input.size();
+
+      std::string pair = input.substr(start, comma - start);
+      size_t eq = pair.find('=');
+      if (eq == std::string::npos) {
+        thd->syntax_error_at(
+            pos, "Invalid parameter '%s': expected 'key=value' format",
+            pair.c_str());
+        return nullptr;
+      }
+
+      // Trim whitespace from key and value
+      size_t key_start = pair.find_first_not_of(' ');
+      size_t key_end = pair.find_last_not_of(' ', eq - 1);
+      size_t val_start = pair.find_first_not_of(' ', eq + 1);
+      size_t val_end = pair.find_last_not_of(' ');
+
+      if (key_start == std::string::npos || key_start > key_end) {
+        thd->syntax_error_at(pos, "Empty key in parameter string for type '%s'",
+                             type_context->qualified_name().c_str());
+        return nullptr;
+      }
+
+      if (param_count >= VEF_MAX_TYPE_PARAMS) {
+        thd->syntax_error_at(pos, "Too many parameters for type '%s' (max %d)",
+                             type_context->qualified_name().c_str(),
+                             VEF_MAX_TYPE_PARAMS);
+        return nullptr;
+      }
+
+      keys[param_count] = pair.substr(key_start, key_end - key_start + 1);
+      values[param_count] =
+          (val_start != std::string::npos && val_start <= val_end)
+              ? pair.substr(val_start, val_end - val_start + 1)
+              : "";
+      param_array[param_count] = {keys[param_count].c_str(),
+                                  values[param_count].c_str()};
+      param_count++;
+
+      start = comma + 1;
+    }
+
+    if (resolve_params_and_context(pos, thd, descriptor, extension_name,
+                                   type_name, param_array, param_count,
+                                   type_context)) {
+      return nullptr;
+    }
+
+    PT_custom_type *ret = new (pt_mem_root)
+        PT_custom_type(pos, thd, type_name, nullptr, type_context);
     return ret;
   }
 

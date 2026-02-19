@@ -93,6 +93,28 @@ SELECT id, v FROM t ORDER BY id;
 
 ########################################################################
 #
+# Test: String parameter syntax - TYPE('key=value')
+#
+########################################################################
+
+CREATE TABLE t_str (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v TVECTOR('dimension=3')
+);
+
+INSERT INTO t_str (v) VALUES ('[7,8,9]');
+INSERT INTO t_str (v) VALUES ('[10,11,12]');
+
+SELECT id, v FROM t_str ORDER BY id;
+
+# Verify dimension mismatch still caught
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t_str (v) VALUES ('[1,2]');
+
+DROP TABLE t_str;
+
+########################################################################
+#
 # Clean up
 #
 ########################################################################

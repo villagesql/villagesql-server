@@ -84,5 +84,18 @@ id	v
 4	[-1.5,2.5,-3.5]
 5	[10,20,30]
 6	[40,50,60]
+CREATE TABLE t_str (
+id INT AUTO_INCREMENT PRIMARY KEY,
+v TVECTOR('dimension=3')
+);
+INSERT INTO t_str (v) VALUES ('[7,8,9]');
+INSERT INTO t_str (v) VALUES ('[10,11,12]');
+SELECT id, v FROM t_str ORDER BY id;
+id	v
+1	[7,8,9]
+2	[10,11,12]
+INSERT INTO t_str (v) VALUES ('[1,2]');
+ERROR HY000: Incorrect TVECTOR value: '[1,2]' for column 'v' at row 1
+DROP TABLE t_str;
 DROP TABLE t, t_nulls;
 UNINSTALL EXTENSION vsql_tvector;
