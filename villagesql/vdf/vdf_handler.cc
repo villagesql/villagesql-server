@@ -231,7 +231,7 @@ bool vdf_handler::invoke_numeric(T *out_value, bool *null_value) {
   result.error_msg = m_error_msg;
 
   // Call the VDF function
-  m_udf->vdf_func_desc->vdf();
+  m_udf->vdf_func_desc->vdf(&m_context, &m_vdf_args, &result);
 
   // Handle result
   switch (result.type) {
