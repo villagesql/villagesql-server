@@ -1,4 +1,4 @@
-name: Nightly Tag Build and Test
+name: Post Nightly Tag Build and Test
 
 on:
   push:
