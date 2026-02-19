@@ -1,0 +1,65 @@
+name: Valgrind Tests
+
+# Manual workflow for running tests with Valgrind memory checking
+# Trigger via:
+#   - Actions tab -> Run workflow
+#   - gh workflow run "Valgrind Tests"
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag, or SHA to test'
+        required: false
+        default: ''
+      test-suite:
+        description: 'Test suite to run (e.g., villagesql/select, villagesql, innodb)'
+        required: false
+        default: 'villagesql/select'
+      valgrind-options:
+        description: 'Additional valgrind options (e.g., --leak-check=full)'
+        required: false
+        default: ''
+
+jobs:
+  valgrind-test:
+    name: Build and Run Valgrind Tests
+    runs-on: self-hosted
+    permissions:
+      contents: read
+
+    env:
+      SOURCE_DIR: ${{ github.workspace }}/source
+      BUILD_DIR: ${{ github.workspace }}/build
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        ref: ${{ inputs.ref || github.ref }}
+        fetch-depth: 50
+        path: source
+
+    - name: Setup VillageSQL build environment
+      uses: ./source/.github/actions/setup-villagesql-build
+      with:
+        cache-key-prefix: valgrind
+
+    - name: Build VillageSQL with Valgrind support
+      working-directory: ./source
+      run: ./scripts/build-ci.sh
+      env:
+        PARALLEL_JOBS: 16
+        BUILD_TYPE: debug
+        CMAKE_EXTRA_FLAGS: -DWITH_VALGRIND=1
+
+    - name: Show ccache statistics
+      run: ccache -s
+
+    - name: Run Valgrind tests
+      uses: ./source/.github/actions/run-tests
+      with:
+        run-unit-tests: false
+        test-suite: ${{ inputs.test-suite }}
+        mysql-test-extra-flags: --valgrind ${{ inputs.valgrind-options }}
+        artifact-name: valgrind-logs-${{ github.run_number }}

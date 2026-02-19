@@ -1,0 +1,115 @@
+# Copyright (c) 2026 VillageSQL Contributors
+#
+# This program is free software; you can redistribute it and/or
+# modify it under the terms of the GNU General Public License
+# as published by the Free Software Foundation; either version 2
+# of the License, or (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, see <https://www.gnu.org/licenses/>.
+
+name: 'Run VillageSQL Tests'
+description: 'Run VillageSQL tests with configurable options and upload artifacts on failure'
+
+inputs:
+  run-unit-tests:
+    description: 'Run VillageSQL unit tests (true/false)'
+    required: false
+    default: 'true'
+  run-integration-tests:
+    description: 'Run VillageSQL integration tests (true/false)'
+    required: false
+    default: 'true'
+  run-big-tests:
+    description: 'Include big tests (true/false)'
+    required: false
+    default: 'false'
+  run-all-suites:
+    description: 'Run all test suites (true/false)'
+    required: false
+    default: 'false'
+  test-suite:
+    description: 'Test suite(s) to run'
+    required: false
+    default: 'village'
+  skip-suite:
+    description: 'Test suite(s) to skip'
+    required: false
+    default: ''
+  mysql-test-extra-flags:
+    description: 'Additional flags to pass to mysql-test-run.pl'
+    required: false
+    default: ''
+  artifact-name:
+    description: 'Name for the failure artifacts (if tests fail)'
+    required: false
+    default: 'test-logs'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Run tests
+      shell: bash
+      working-directory: ${{ env.SOURCE_DIR }}
+      run: |
+        # Build command with flags
+        CMD="./scripts/test-ci.sh"
+
+        # Unit tests flag
+        if [ "${{ inputs.run-unit-tests }}" = "false" ]; then
+          CMD="$CMD --no-unit-tests"
+        fi
+
+        # Integration tests flag
+        if [ "${{ inputs.run-integration-tests }}" = "false" ]; then
+          CMD="$CMD --no-integration-tests"
+        fi
+
+        # Big tests flag
+        if [ "${{ inputs.run-big-tests }}" = "true" ]; then
+          CMD="$CMD --big-tests"
+        fi
+
+        # All suites flag
+        if [ "${{ inputs.run-all-suites }}" = "true" ]; then
+          CMD="$CMD --all-suites"
+        fi
+
+        # Suite selection
+        if [ -n "${{ inputs.test-suite }}" ] && [ "${{ inputs.test-suite }}" != "village" ]; then
+          CMD="$CMD --suite=${{ inputs.test-suite }}"
+        fi
+
+        # Skip suite
+        if [ -n "${{ inputs.skip-suite }}" ]; then
+          CMD="$CMD --skip-suite=${{ inputs.skip-suite }}"
+        fi
+
+        # Extra flags
+        if [ -n "${{ inputs.mysql-test-extra-flags }}" ]; then
+          CMD="$CMD --mysql-test-extra-flags=\"${{ inputs.mysql-test-extra-flags }}\""
+        fi
+
+        echo "Running: $CMD"
+        eval $CMD
+
+    - name: Upload test results and logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.artifact-name }}
+        path: |
+          ${{ env.BUILD_DIR }}/mysql-test-report.xml
+          ${{ env.BUILD_DIR }}/mysql-test/var/log/
+          ${{ env.BUILD_DIR }}/mysql-test/var/ctest.log
+          ${{ env.BUILD_DIR }}/Testing/Temporary/LastTest.log
+          ${{ env.BUILD_DIR }}/CMakeCache.txt
+          ${{ env.BUILD_DIR }}/CMakeFiles/CMakeError.log
+          ${{ env.BUILD_DIR }}/CMakeFiles/CMakeOutput.log
+        if-no-files-found: warn
+        retention-days: 7

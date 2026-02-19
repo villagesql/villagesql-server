@@ -1,0 +1,28 @@
+name: 'Setup VillageSQL Build Environment'
+description: 'Install dependencies and setup ccache for VillageSQL builds'
+
+inputs:
+  cache-key-prefix:
+    description: 'Prefix for ccache key (e.g., "build", "nightly")'
+    required: true
+    default: 'build'
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install dependencies
+      working-directory: ./source
+      shell: bash
+      run: |
+        sudo scripts/setup_linux_build_env.sh
+
+    - name: Setup ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ${{ runner.os }}-${{ inputs.cache-key-prefix }}-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-${{ inputs.cache-key-prefix }}
+          ${{ runner.os }}-build
+        max-size: 2G
+        verbose: 2
+        append-timestamp: false

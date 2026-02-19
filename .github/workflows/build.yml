@@ -1,0 +1,46 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-test:
+    name: Build and Test VillageSQL
+    runs-on: self-hosted
+    permissions:
+      actions: write  # Required to read/write caches
+      contents: read
+
+    env:
+      SOURCE_DIR: ${{ github.workspace }}/source
+      BUILD_DIR: ${{ github.workspace }}/build
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        # Get enough history for submodules and dependencies
+        fetch-depth: 50
+        path: source
+
+    - name: Setup VillageSQL build environment
+      uses: ./source/.github/actions/setup-villagesql-build
+      with:
+        cache-key-prefix: build
+
+    - name: Build VillageSQL
+      working-directory: ./source
+      run: ./scripts/build-ci.sh
+      env:
+        PARALLEL_JOBS: 16
+
+    - name: Show ccache statistics
+      run: ccache -s
+
+    - name: Run tests
+      uses: ./source/.github/actions/run-tests
+      with:
+        artifact-name: test-logs

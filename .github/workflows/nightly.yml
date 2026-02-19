@@ -1,0 +1,68 @@
+name: Nightly Build and Test
+
+on:
+  schedule:
+    - cron: '0 5 * * *'  # Runs daily at midnight NYC time (5 AM UTC)
+  workflow_dispatch:  # Allows manual triggering
+
+jobs:
+  test-and-tag:
+    name: Nightly Build and Test
+    runs-on: self-hosted
+    permissions:
+      contents: write  # Required to push tags
+      actions: write   # Required to read/write caches
+
+    env:
+      SOURCE_DIR: ${{ github.workspace }}/source
+      BUILD_DIR: ${{ github.workspace }}/build
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 1
+        fetch-tags: true
+        path: source
+
+    - name: Setup VillageSQL build environment
+      uses: ./source/.github/actions/setup-villagesql-build
+      with:
+        cache-key-prefix: nightly
+
+    - name: Build VillageSQL
+      working-directory: ./source
+      run: ./scripts/build-ci.sh
+      env:
+        PARALLEL_JOBS: 16
+
+    - name: Show ccache statistics
+      run: ccache -s
+
+    - name: Run tests
+      uses: ./source/.github/actions/run-tests
+      with:
+        artifact-name: nightly-test-logs-${{ github.run_number }}
+
+    - name: Run big tests
+      uses: ./source/.github/actions/run-tests
+      with:
+        run-unit-tests: false
+        run-big-tests: true
+        artifact-name: nightly-big-test-logs-${{ github.run_number }}
+
+    - name: Create nightly tags
+      if: success()
+      working-directory: ./source
+      run: |
+        git config user.name "villagesql-nightly[bot]"
+        git config user.email "villagesql-nightly[bot]@users.noreply.github.com"
+
+        # Create dated tag
+        DATE_TAG="nightly.$(date +'%Y-%m-%d')"
+        git tag -a "$DATE_TAG" -m "Nightly build $(date +'%Y-%m-%d %H:%M:%S UTC')"
+        git push origin "$DATE_TAG"
+
+        # Update/create nightly.latest tag (force update if exists)
+        git tag -fa "nightly.latest" -m "Latest nightly build $(date +'%Y-%m-%d %H:%M:%S UTC')"
+        git push origin "nightly.latest" --force
