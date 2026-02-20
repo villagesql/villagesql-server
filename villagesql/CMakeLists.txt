@@ -24,12 +24,9 @@ IF(NOT WITHOUT_SERVER)
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-simple-build
     CMAKE_GENERATOR ${CMAKE_GENERATOR}
     CMAKE_ARGS
-      "-DMYSQL_INCLUDE_FLAGS=-I${CMAKE_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/include"
-      "-DMYSQL_CXXFLAGS=-I${CMAKE_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/include"
-      "-DMYSQL_LIBS=-L${CMAKE_BINARY_DIR}/library_output_directory -lmysqlclient"
-      "-DVEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-      -DVSQL_BUILD_DIR=${CMAKE_BINARY_DIR}
-      "-DVSQL_SDK_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/sdk/include"
+      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
+      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/sdk/include"
+      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
     BUILD_ALWAYS ON
     INSTALL_COMMAND ""
   )
@@ -52,18 +49,14 @@ IF(NOT WITHOUT_SERVER)
     COMPONENT ExampleVebs
   )
 
-  # TODO(villagesql-beta): convert these to the SDK.
   ExternalProject_Add(vsql_complex_extension
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/examples/vsql-complex
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-complex-build
     CMAKE_GENERATOR ${CMAKE_GENERATOR}
     CMAKE_ARGS
-      "-DMYSQL_INCLUDE_FLAGS=-I${CMAKE_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/include"
-      "-DMYSQL_CXXFLAGS=-I${CMAKE_SOURCE_DIR}/include -I${CMAKE_BINARY_DIR}/include"
-      "-DMYSQL_LIBS=-L${CMAKE_BINARY_DIR}/library_output_directory -lmysqlclient"
-      "-DVEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-      -DVSQL_BUILD_DIR=${CMAKE_BINARY_DIR}
-      "-DVSQL_SDK_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/sdk/include"
+      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
+      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/sdk/include"
+      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
     BUILD_ALWAYS ON
     INSTALL_COMMAND ""
   )

@@ -78,11 +78,13 @@ get_filename_component(_vef_prefix "${_vef_prefix}" PATH)              # .../  (
 # default is the stable ABI headers (include/).
 option(VSQL_USE_DEV_ABI "Build against the unstable dev ABI instead of the stable ABI" OFF)
 
-if(VSQL_USE_DEV_ABI)
-  set(VillageSQLExtensionFramework_INCLUDE_DIR "${_vef_prefix}/include-dev")
-  message(STATUS "VillageSQL: Using DEV (unstable) ABI headers")
-else()
-  set(VillageSQLExtensionFramework_INCLUDE_DIR "${_vef_prefix}/include")
+if(NOT DEFINED VillageSQLExtensionFramework_INCLUDE_DIR)
+  if(VSQL_USE_DEV_ABI)
+    set(VillageSQLExtensionFramework_INCLUDE_DIR "${_vef_prefix}/include-dev")
+    message(STATUS "VillageSQL: Using DEV (unstable) ABI headers")
+  else()
+    set(VillageSQLExtensionFramework_INCLUDE_DIR "${_vef_prefix}/include")
+  endif()
 endif()
 
 unset(_vef_prefix)
