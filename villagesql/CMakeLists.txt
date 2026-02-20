@@ -94,7 +94,7 @@ ENDIF()
 # find_package(VillageSQLExtensionFramework) works automatically when
 # CMAKE_PREFIX_PATH points to the extracted SDK directory.
 
-set(SDK_VERSION "0.0.1-dev")
+set(SDK_VERSION "${VSQL_VERSION_STRING}")
 set(SDK_NAME "villagesql-extension-sdk-${SDK_VERSION}")
 set(SDK_STAGING_DIR "${CMAKE_BINARY_DIR}/${SDK_NAME}")
 

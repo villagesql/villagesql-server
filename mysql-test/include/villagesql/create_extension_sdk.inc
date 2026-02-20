@@ -36,9 +36,12 @@ if (!$extension_version)
 }
 
 # Get paths
+# TODO(villagesql-beta): Replace @@villagesql_schema_version with a dedicated
+# @@villagesql_version variable that returns the compiled-in server version
+# rather than reading from the schema (which returns "" if not initialized).
 --let $build_dir = `SELECT @@basedir`
 --let $veb_dir = `SELECT @@veb_dir`
---let $sdk_version = 0.0.1-dev
+--let $sdk_version = `SELECT @@villagesql_schema_version`
 --let $sdk_dir = $build_dir/villagesql-extension-sdk-$sdk_version
 --let $ext_build_dir = $MYSQLTEST_VARDIR/tmp/ext_build_$extension_name
 

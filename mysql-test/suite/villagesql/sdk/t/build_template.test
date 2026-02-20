@@ -12,41 +12,18 @@
 --echo # SDK Build Template Test
 
 # Get paths - use @@basedir which points to the build directory where mysqld runs
+# TODO(villagesql-beta): Replace @@villagesql_schema_version with @@villagesql_version
 --let $veb_dir = `SELECT @@veb_dir`
 --let $build_dir = `SELECT @@basedir`
+--let $sdk_version = `SELECT @@villagesql_schema_version`
 --let $test_dir = $MYSQLTEST_VARDIR/tmp/sdk_test
---let $sdk_version = 0.0.1-dev
 --let $sdk_dir_name = villagesql-extension-sdk-$sdk_version
 --let $sdk_tarball = $build_dir/$sdk_dir_name.tar.gz
 --let $sdk_dir = $test_dir/$sdk_dir_name
 
-# Write the path for perl to check (must be before perl block)
-# Use printf instead of echo -n for portability
---exec mkdir -p $MYSQLTEST_VARDIR/tmp
---exec printf '%s' "$sdk_tarball" > $MYSQLTEST_VARDIR/tmp/sdk_path_check.txt
-
 # Check if SDK tarball exists
---perl
-use strict;
-
-my $vardir = $ENV{'MYSQLTEST_VARDIR'};
-
-# Read the sdk_tarball path from a file
-open(my $fh, '<', "$vardir/tmp/sdk_path_check.txt") or die "Cannot read path: $!";
-my $sdk_tarball = <$fh>;
-chomp($sdk_tarball);
-close($fh);
-
-# Clean up double slashes in path
-$sdk_tarball =~ s{//+}{/}g;
-
-if (! -f $sdk_tarball) {
-    print "SDK tarball not found. Run 'make sdk' first.\n";
-    print "Looked for: $sdk_tarball\n";
-    exit(1);
-}
-print "Found SDK tarball\n";
-EOF
+--exec test -f "$sdk_tarball" || (echo "SDK tarball not found. Run 'make sdk' first." && echo "Looked for: $sdk_tarball" && exit 1)
+--echo Found SDK tarball
 
 --echo # Setup test directory
 --exec rm -rf $test_dir
@@ -102,6 +79,5 @@ WHERE extension_name = 'my_extension';
 --echo # Cleanup
 --exec rm -rf $test_dir
 --exec rm -f $veb_dir/my_extension.veb
---exec rm -f $MYSQLTEST_VARDIR/tmp/sdk_path_check.txt
 
 --source include/villagesql/binlog_check_end.inc
