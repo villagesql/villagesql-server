@@ -1,8 +1,0 @@
-CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
-CREATE TABLE t_string (id INT, val VARCHAR(100));
-INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
-INSERT INTO t_string VALUES (1, 'string_value');
-UPDATE t_complex c, t_string s SET c.val = s.val WHERE c.id = s.id;
-ERROR HY000: Incorrect COMPLEX value: 'string_value' for column 'val' at row 1
-DROP TABLE t_complex;
-DROP TABLE t_string;

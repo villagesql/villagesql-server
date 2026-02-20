@@ -1,10 +1,9 @@
 # Test REPLACE with invalid COMPLEX value
 
---source include/villagesql/not_implemented_complex_type.inc
 --source include/villagesql/install_complex_extension.inc
 
 CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
-
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 REPLACE INTO t_complex VALUES (1, 'not_complex');
 
 DROP TABLE t_complex;

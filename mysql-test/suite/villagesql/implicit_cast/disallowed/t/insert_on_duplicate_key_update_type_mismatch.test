@@ -1,11 +1,11 @@
 # Test INSERT ON DUPLICATE KEY UPDATE with type mismatch
 
---source include/villagesql/not_implemented_complex_type.inc
 --source include/villagesql/install_complex_extension.inc
 
 CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
 
 INSERT INTO t_complex VALUES (1, '(5.0,6.0)');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 INSERT INTO t_complex VALUES (1, '(5.0,6.0)') ON DUPLICATE KEY UPDATE val = 'invalid';
 
 DROP TABLE t_complex;

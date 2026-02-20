@@ -1,6 +1,5 @@
 # Test multi-table UPDATE with type conversion
 
---source include/villagesql/not_implemented_complex_type.inc
 --source include/villagesql/install_complex_extension.inc
 
 CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
@@ -8,7 +7,7 @@ CREATE TABLE temp_mixed (id INT, val VARCHAR(100));
 
 INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
 INSERT INTO temp_mixed VALUES (1, 'string_value');
-
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
 UPDATE t_complex c, temp_mixed t SET c.val = t.val WHERE c.id = t.id;
 
 DROP TABLE t_complex;

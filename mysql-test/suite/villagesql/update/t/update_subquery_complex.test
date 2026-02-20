@@ -1,0 +1,19 @@
+# Test UPDATE ... SET col = (subquery) with COMPLEX type
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+
+# Subquery returning a valid COMPLEX string - should succeed
+UPDATE t_complex SET val = (SELECT '(7.0,7.0)') WHERE id = 1;
+SELECT val FROM t_complex WHERE id = 1;
+
+# Subquery returning an invalid string - fails at encoding time
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+UPDATE t_complex SET val = (SELECT 'string_result') WHERE id = 1;
+
+DROP TABLE t_complex;
+
+--source include/villagesql/uninstall_complex_extension.inc

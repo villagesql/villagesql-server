@@ -1,0 +1,5 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+INSERT INTO t_complex VALUES (1, '(5.0,6.0)');
+INSERT INTO t_complex VALUES (1, '(5.0,6.0)') ON DUPLICATE KEY UPDATE val = 'invalid';
+ERROR HY000: Incorrect COMPLEX value: 'invalid' for column 'val' at row 1
+DROP TABLE t_complex;

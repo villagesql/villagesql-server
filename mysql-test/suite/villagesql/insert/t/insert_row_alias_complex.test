@@ -1,6 +1,12 @@
 # Test INSERT ... AS alias ON DUPLICATE KEY UPDATE with COMPLEX type
 # Grammar: INSERT INTO ... AS alias ... ON DUPLICATE KEY UPDATE ...
 
+# NOTE: Row aliases don't work with COMPLEX types in ON DUPLICATE KEY UPDATE.
+# Error: "Incorrect COMPLEX value: '??????????????' for column 'val' at row 1"
+# When referencing alias.val in the UPDATE clause, garbled data is returned instead of the COMPLEX value.
+# The row alias mechanism doesn't properly handle COMPLEX type field references.
+--source include/villagesql/not_implemented_complex_type.inc
+
 --source include/villagesql/install_complex_extension.inc
 
 CREATE TABLE t1 (

@@ -1,0 +1,7 @@
+CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+CREATE TABLE t_complex_nullable (id INT, val COMPLEX NULL);
+INSERT INTO t_complex VALUES (2, '(2.0,3.0)');
+INSERT INTO t_complex_nullable SELECT id + 10, UPPER(val) FROM t_complex;
+ERROR HY000: Incorrect usage of upper and COMPLEX
+DROP TABLE t_complex;
+DROP TABLE t_complex_nullable;
