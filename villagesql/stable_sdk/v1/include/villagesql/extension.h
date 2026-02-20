@@ -112,7 +112,7 @@
 // ending with .build():
 //
 //   make_type("mytype")
-//     .persisted_length(8)           // Bytes when stored
+//     .persisted_length(8)           // Fixed storage size in bytes
 //     .max_decode_buffer_length(64)  // Max bytes for string representation
 //     .encode(&mytype_encode)        // String -> binary
 //     .decode(&mytype_decode)        // Binary -> string

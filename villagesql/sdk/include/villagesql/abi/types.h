@@ -538,7 +538,9 @@ typedef struct {
   // Encoded using UTF-8
   const char *name;
 
-  // Size of the binary representation when stored
+  // Expected size for fixed-length binary storage. While the encode
+  // function may return a smaller length (e.g., 0 to indicate error),
+  // this defines the standard persisted footprint for the type.
   int64_t persisted_length;
 
   // Maximum size of the string representation (for decode output buffer)
