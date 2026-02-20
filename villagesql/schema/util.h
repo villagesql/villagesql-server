@@ -24,18 +24,30 @@ struct TABLE;
 
 namespace villagesql {
 
+// Case-insensitive comparison for system table/schema identifiers, using
+// the system charset. This is how MySQL compares system object names.
+inline bool system_name_eq(const char *a, const char *b) {
+  return my_strcasecmp(system_charset_info, a, b) == 0;
+}
+
 // Check if a database name is the 'villagesql' schema. db_name must not be
 // nullptr.
 inline bool is_villagesql_schema(const char *db_name) {
-  return (my_strcasecmp(system_charset_info,
-                        SchemaManager::VILLAGESQL_SCHEMA_NAME, db_name) == 0);
+  return system_name_eq(SchemaManager::VILLAGESQL_SCHEMA_NAME, db_name);
 }
 
 // Like the above but also considered true if this is in a mysql system schema.
 inline bool is_system_schema(const char *db_name) {
-  return (my_strcasecmp(system_charset_info, "mysql", db_name) == 0 ||
-          my_strcasecmp(system_charset_info, "sys", db_name) == 0 ||
+  return (system_name_eq("mysql", db_name) || system_name_eq("sys", db_name) ||
           is_villagesql_schema(db_name));
+}
+
+// Check if a schema and table name match a VillageSQL system table.
+inline bool is_villagesql_system_table(const char *schema_name,
+                                       const char *table_name,
+                                       const char *expected_table_name) {
+  return is_villagesql_schema(schema_name) &&
+         system_name_eq(table_name, expected_table_name);
 }
 
 // Check if a TABLE is in the 'villagesql' schema.

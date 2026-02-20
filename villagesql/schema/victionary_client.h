@@ -48,6 +48,7 @@
 #include "villagesql/schema/systable/custom_columns.h"
 #include "villagesql/schema/systable/extensions.h"
 #include "villagesql/schema/systable/properties.h"
+#include "villagesql/schema/util.h"
 
 // Forward declaration for friend class
 namespace villagesql_unittest {
@@ -844,8 +845,8 @@ inline TABLE *find_open_table(THD *thd, const char *schema_name,
 
   for (TABLE *table = thd->open_tables; table; table = table->next) {
     Table_ref *table_list = table->pos_in_table_list;
-    if (table_list && strcmp(table_list->db, schema_name) == 0 &&
-        strcmp(table_list->table_name, table_name) == 0) {
+    if (table_list && system_name_eq(table_list->db, schema_name) &&
+        system_name_eq(table_list->table_name, table_name)) {
       return table;
     }
   }

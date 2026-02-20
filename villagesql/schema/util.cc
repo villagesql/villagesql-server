@@ -19,9 +19,6 @@
 
 namespace villagesql {
 
-// TODO(villagesql-beta): Consolidate to one set of functions for checking
-// villagesql schema name with proper charset. Also check all of the sites
-// that use the constants from SchemaManager to make sure they use this.
 bool is_villagesql_system_table(const TABLE *table) {
   if (!table || !table->s) return false;
   return is_villagesql_schema(table->s->db.str);

@@ -74,8 +74,7 @@ bool Metadata_modifier::add_columns(THD *thd [[maybe_unused]],
   const char *table_name = db_table.second;
 
   // Skip special databases
-  if (strcmp(db_name, "mysql") == 0 || strcmp(db_name, "sys") == 0 ||
-      strcmp(db_name, SchemaManager::VILLAGESQL_SCHEMA_NAME) == 0) {
+  if (is_system_schema(db_name)) {
     return false;
   }
 
@@ -131,8 +130,7 @@ bool Metadata_modifier::remove_columns(THD *thd [[maybe_unused]],
   const char *table_name = db_table.second;
 
   // Skip special databases
-  if (strcmp(db_name, "mysql") == 0 || strcmp(db_name, "sys") == 0 ||
-      strcmp(db_name, SchemaManager::VILLAGESQL_SCHEMA_NAME) == 0) {
+  if (is_system_schema(db_name)) {
     return false;
   }
 
@@ -229,8 +227,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
   const char *table_name = db_table.second;
 
   // Skip special databases
-  if (strcmp(db_name, "mysql") == 0 || strcmp(db_name, "sys") == 0 ||
-      strcmp(db_name, SchemaManager::VILLAGESQL_SCHEMA_NAME) == 0) {
+  if (is_system_schema(db_name)) {
     return false;
   }
 
@@ -721,10 +718,8 @@ bool Metadata_modifier::store(THD *thd) {
     // just need to find it in query_tables and lock it.
     Table_ref *columns_table = nullptr;
     for (Table_ref *tl = thd->lex->query_tables; tl; tl = tl->next_global) {
-      // TODO(villagesql-beta): table names should be using system charset
-      // comparison
-      if (villagesql::is_villagesql_schema(tl->db) &&
-          strcmp(tl->table_name, SchemaManager::COLUMNS_TABLE_NAME) == 0) {
+      if (villagesql::is_villagesql_system_table(
+              tl->db, tl->table_name, SchemaManager::COLUMNS_TABLE_NAME)) {
         columns_table = tl;
         break;
       }
