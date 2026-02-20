@@ -29,6 +29,7 @@ IF(NOT WITHOUT_SERVER)
       "-DMYSQL_LIBS=-L${CMAKE_BINARY_DIR}/library_output_directory -lmysqlclient"
       "-DVEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
       -DVSQL_BUILD_DIR=${CMAKE_BINARY_DIR}
+      "-DVSQL_SDK_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/sdk/include"
     BUILD_ALWAYS ON
     INSTALL_COMMAND ""
   )
@@ -51,6 +52,7 @@ IF(NOT WITHOUT_SERVER)
     COMPONENT ExampleVebs
   )
 
+  # TODO(villagesql-beta): convert these to the SDK.
   ExternalProject_Add(vsql_complex_extension
     SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/examples/vsql-complex
     BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-complex-build
@@ -61,6 +63,7 @@ IF(NOT WITHOUT_SERVER)
       "-DMYSQL_LIBS=-L${CMAKE_BINARY_DIR}/library_output_directory -lmysqlclient"
       "-DVEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
       -DVSQL_BUILD_DIR=${CMAKE_BINARY_DIR}
+      "-DVSQL_SDK_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/sdk/include"
     BUILD_ALWAYS ON
     INSTALL_COMMAND ""
   )
@@ -119,6 +122,7 @@ add_custom_target(sdk ALL
   COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/bin"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/lib/cmake/VillageSQLExtensionFramework"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/include/villagesql/abi"
+  COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/include-dev/villagesql/abi"
   COMMAND ${CMAKE_COMMAND} -E make_directory "${SDK_STAGING_DIR}/template/src"
 
   # Copy villagesql_config script and make executable
@@ -133,7 +137,7 @@ add_custom_target(sdk ALL
     "${CMAKE_SOURCE_DIR}/cmake/FindVillageSQL.cmake"
     "${SDK_STAGING_DIR}/lib/cmake/VillageSQLExtensionFramework/"
 
-  # Copy SDK headers
+  # Copy stable SDK headers
   COMMAND ${CMAKE_COMMAND} -E copy
     "${STABLE_SDK_DIR}/include/villagesql/extension.h"
     "${STABLE_SDK_DIR}/include/villagesql/extension_builder.h"
@@ -143,6 +147,17 @@ add_custom_target(sdk ALL
   COMMAND ${CMAKE_COMMAND} -E copy
     "${STABLE_SDK_DIR}/include/villagesql/abi/types.h"
     "${SDK_STAGING_DIR}/include/villagesql/abi/"
+
+  # Copy dev (unstable) SDK headers
+  COMMAND ${CMAKE_COMMAND} -E copy
+    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/extension.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/extension_builder.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/func_builder.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/type_builder.h"
+    "${SDK_STAGING_DIR}/include-dev/villagesql/"
+  COMMAND ${CMAKE_COMMAND} -E copy
+    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/abi/types.h"
+    "${SDK_STAGING_DIR}/include-dev/villagesql/abi/"
 
   # Copy template project
   COMMAND ${CMAKE_COMMAND} -E copy
@@ -166,6 +181,9 @@ add_custom_target(sdk ALL
 # add a corresponding install() rule here.
 install(DIRECTORY "${SDK_STAGING_DIR}/include/villagesql"
   DESTINATION "${INSTALL_INCLUDEDIR}"
+)
+install(DIRECTORY "${SDK_STAGING_DIR}/include-dev/villagesql"
+  DESTINATION "${INSTALL_INCLUDEDIR}-dev"
 )
 install(DIRECTORY "${SDK_STAGING_DIR}/lib/cmake/VillageSQLExtensionFramework"
   DESTINATION "${INSTALL_LIBDIR}/cmake"

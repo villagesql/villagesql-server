@@ -161,8 +161,8 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${MYSQL_CXXFLAGS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIC")
 
-# VillageSQL SDK - standalone headers with no MySQL dependencies
-include_directories("${CMAKE_CURRENT_SOURCE_DIR}/../../sdk/include")
+# VillageSQL SDK headers - set by parent build via VSQL_SDK_INCLUDE_DIR
+include_directories("${VSQL_SDK_INCLUDE_DIR}")
 
 add_library(complex SHARED
     src/complex.cc

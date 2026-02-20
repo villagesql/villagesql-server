@@ -68,7 +68,7 @@ if (!$extension_version)
 
 # Run cmake
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR $build_dir BUILD_DIR
---exec cd $ext_build_dir/build && cmake -DVillageSQL_SDK_DIR=$sdk_dir -DCMAKE_MODULE_PATH=$sdk_dir/lib/cmake/VillageSQLExtensionFramework .. > cmake_output.txt 2>&1 || (cat cmake_output.txt && exit 1)
+--exec cd $ext_build_dir/build && cmake -DVillageSQL_SDK_DIR=$sdk_dir -DCMAKE_MODULE_PATH=$sdk_dir/lib/cmake/VillageSQLExtensionFramework -DVSQL_USE_DEV_ABI=ON .. > cmake_output.txt 2>&1 || (cat cmake_output.txt && exit 1)
 
 # Run make
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
