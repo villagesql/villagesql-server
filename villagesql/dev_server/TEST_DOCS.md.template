@@ -21,9 +21,10 @@ cd mysql-test
                     --veb-source-dir=/path/to/your/extension/build \
                     --parallel=auto
 
-# Run a specific test
-./mysql-test-run.pl --suite=/path/to/your/extension/tests/my_test.test \
-                    --veb-source-dir=/path/to/your/extension/build
+# Run a specific test (test name as positional argument)
+./mysql-test-run.pl --suite=/path/to/your/extension/tests \
+                    --veb-source-dir=/path/to/your/extension/build \
+                    my_test
 
 # Record test results (for creating .result files)
 ./mysql-test-run.pl --suite=/path/to/your/extension/tests \
