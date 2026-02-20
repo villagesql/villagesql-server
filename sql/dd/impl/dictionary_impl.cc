@@ -77,6 +77,7 @@
 #include "sql/transaction.h"                    // trans_commit()
 #include "storage/perfschema/pfs_dd_version.h"  // PFS_DD_VERSION
 #include "villagesql/schema/schema_manager.h"
+#include "villagesql/schema/util.h"
 
 extern Cost_constant_cache *cost_constant_cache;  // defined in
                                                   // opt_costconstantcache.cc
@@ -331,8 +332,7 @@ bool Dictionary_impl::is_dd_table_access_allowed(bool is_dd_internal_thread,
                                                  size_t schema_length,
                                                  const char *table_name) const {
   // Lockdown access to villagesql.* tables.
-  if (strcmp(schema_name, villagesql::SchemaManager::VILLAGESQL_SCHEMA_NAME) ==
-      0) {
+  if (villagesql::is_villagesql_schema(schema_name)) {
     // Allow access for internal threads or if running a debug build and the
     // appropriate session variable is set.
     return is_dd_internal_thread ||

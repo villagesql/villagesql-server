@@ -45,8 +45,8 @@
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
-#include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/systable/custom_columns.h"
+#include "villagesql/schema/util.h"
 #include "villagesql/schema/victionary_client.h"
 
 namespace villagesql {
@@ -70,7 +70,7 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
   std::string db_name = std::string(share.db.str, share.db.length);
 
   // Skip special databases
-  if (db_name == "mysql" || db_name == SchemaManager::VILLAGESQL_SCHEMA_NAME) {
+  if (::villagesql::is_system_schema(db_name.c_str())) {
     return false;
   }
 

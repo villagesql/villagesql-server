@@ -132,7 +132,7 @@
 #include "strxnmov.h"
 #include "template_utils.h"  // down_cast
 #include "thr_mutex.h"
-#include "villagesql/schema/schema_manager.h"
+#include "villagesql/schema/util.h"
 
 /* INFORMATION_SCHEMA name */
 LEX_CSTRING INFORMATION_SCHEMA_NAME = {STRING_WITH_LEN("information_schema")};
@@ -360,9 +360,7 @@ TABLE_CATEGORY get_table_category(const LEX_CSTRING &db,
   }
 
   // Check for VillageSQL system tables
-  if (my_strcasecmp(system_charset_info,
-                    villagesql::SchemaManager::VILLAGESQL_SCHEMA_NAME,
-                    db.str) == 0) {
+  if (villagesql::is_villagesql_schema(db.str)) {
     return TABLE_CATEGORY_VILLAGESQL_SYSTEM;
   }
 

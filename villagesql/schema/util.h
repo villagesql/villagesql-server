@@ -26,9 +26,16 @@ namespace villagesql {
 
 // Check if a database name is the 'villagesql' schema. db_name must not be
 // nullptr.
-inline bool is_villagesql_system_table(const char *db_name) {
+inline bool is_villagesql_schema(const char *db_name) {
   return (my_strcasecmp(system_charset_info,
                         SchemaManager::VILLAGESQL_SCHEMA_NAME, db_name) == 0);
+}
+
+// Like the above but also considered true if this is in a mysql system schema.
+inline bool is_system_schema(const char *db_name) {
+  return (my_strcasecmp(system_charset_info, "mysql", db_name) == 0 ||
+          my_strcasecmp(system_charset_info, "sys", db_name) == 0 ||
+          is_villagesql_schema(db_name));
 }
 
 // Check if a TABLE is in the 'villagesql' schema.

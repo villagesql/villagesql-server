@@ -24,7 +24,7 @@ namespace villagesql {
 // that use the constants from SchemaManager to make sure they use this.
 bool is_villagesql_system_table(const TABLE *table) {
   if (!table || !table->s) return false;
-  return is_villagesql_system_table(table->s->db.str);
+  return is_villagesql_schema(table->s->db.str);
 }
 
 }  // namespace villagesql

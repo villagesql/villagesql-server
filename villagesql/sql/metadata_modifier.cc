@@ -34,6 +34,7 @@
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/systable/extensions.h"
+#include "villagesql/schema/util.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/sql/custom_vdf.h"
 #include "villagesql/sql/func_lookup.h"
@@ -720,7 +721,9 @@ bool Metadata_modifier::store(THD *thd) {
     // just need to find it in query_tables and lock it.
     Table_ref *columns_table = nullptr;
     for (Table_ref *tl = thd->lex->query_tables; tl; tl = tl->next_global) {
-      if (strcmp(tl->db, SchemaManager::VILLAGESQL_SCHEMA_NAME) == 0 &&
+      // TODO(villagesql-beta): table names should be using system charset
+      // comparison
+      if (villagesql::is_villagesql_schema(tl->db) &&
           strcmp(tl->table_name, SchemaManager::COLUMNS_TABLE_NAME) == 0) {
         columns_table = tl;
         break;

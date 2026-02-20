@@ -189,7 +189,7 @@ constexpr const char *YOUR_TABLE_NAME = "your_table";
 - **Wrong initializer order** - Must match member declaration order
 - **Missing update_key()** - Must call in read_from_table() after deserializing fields
 - **Using public key fields** - Keep key components private with accessors to prevent stale keys
-- **Hardcoded table names** - Use `SchemaManager::VILLAGESQL_SCHEMA_NAME` and `SchemaManager::YOUR_TABLE_NAME` instead of string literals in Table_ref and error messages
+- **Hardcoded table names** - Use `SchemaManager::VILLAGESQL_SCHEMA_NAME` and `SchemaManager::YOUR_TABLE_NAME` instead of string literals in Table_ref and error messages. To check for system tables, use villagesql::is_system_schema() or villagesql::is_villagesql_schema().
 
 ## Usage in Code
 
