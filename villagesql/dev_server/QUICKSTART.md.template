@@ -56,7 +56,7 @@ INSTALL EXTENSION vsql_complex;
 
 ```sql
 -- List installed extensions
-SELECT * FROM villagesql.installed_extensions;
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 
 -- Use your custom type in a table
 CREATE TABLE test_table (
