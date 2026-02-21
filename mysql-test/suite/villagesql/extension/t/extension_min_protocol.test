@@ -1,0 +1,42 @@
+# Test that extensions can require a minimum VEF protocol version and fail
+# registration when the server offers a lower version.
+#
+# This test is debug-only: it relies on @vef_debug_protocol_override to
+# control the protocol version offered by the server.
+
+--source include/have_debug.inc
+
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+call mtr.add_suppression("registration failed: requires VEF protocol");
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--let $extension_name = min_protocol_test
+--let $extension_version = 7.7.7-devtest
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/min_protocol_extension.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--echo # Attempt to install with protocol 1 (too low, extension requires protocol 2)
+SET @vef_debug_protocol_override = 1;
+--replace_regex /from '.*min_protocol_test\.so'/from 'SO_PATH'/
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION min_protocol_test;
+
+--echo # Verify extension was NOT installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Install with default protocol (protocol 2, meets the requirement)
+SET @vef_debug_protocol_override = NULL;
+INSTALL EXTENSION min_protocol_test;
+
+--echo # Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+UNINSTALL EXTENSION min_protocol_test;
+
+--echo # Verify extension was removed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;

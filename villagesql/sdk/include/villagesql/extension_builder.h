@@ -26,6 +26,7 @@
 //
 
 #include <cstddef>
+#include <cstdio>
 #include <string_view>
 #include <tuple>
 #include <utility>
@@ -52,20 +53,30 @@ struct ExtensionBuilder {
   std::string_view version_;
   FuncTuple funcs_;
   TypeTuple types_;
+  vef_protocol_t min_protocol_;
 
   // Add a function (returns new builder with function appended)
   template <typename F>
   constexpr auto func(F f) const {
     auto new_funcs = std::tuple_cat(funcs_, std::make_tuple(f));
-    return ExtensionBuilder<decltype(new_funcs), TypeTuple>{name_, version_,
-                                                            new_funcs, types_};
+    return ExtensionBuilder<decltype(new_funcs), TypeTuple>{
+        name_, version_, new_funcs, types_, min_protocol_};
   }
 
   // Add a type (returns new builder with type appended)
   constexpr auto type(const vef_type_desc_t &t) const {
     auto new_types = std::tuple_cat(types_, std::make_tuple(t));
-    return ExtensionBuilder<FuncTuple, decltype(new_types)>{name_, version_,
-                                                            funcs_, new_types};
+    return ExtensionBuilder<FuncTuple, decltype(new_types)>{
+        name_, version_, funcs_, new_types, min_protocol_};
+  }
+
+  // This is here only for testing, please don't depend on it.
+  // Require a minimum VEF protocol version from the server.
+  // If the server offers a lower protocol, registration will fail with an
+  // error message explaining the version requirement.
+  constexpr auto test_only_require_protocol(vef_protocol_t p) const {
+    return ExtensionBuilder<FuncTuple, TypeTuple>{name_, version_, funcs_,
+                                                  types_, p};
   }
 
   // Accessors
@@ -73,6 +84,7 @@ struct ExtensionBuilder {
   constexpr std::string_view version() const { return version_; }
   constexpr size_t func_count() const { return std::tuple_size_v<FuncTuple>; }
   constexpr size_t type_count() const { return std::tuple_size_v<TypeTuple>; }
+  constexpr vef_protocol_t min_protocol() const { return min_protocol_; }
 
   template <size_t I>
   constexpr const auto &func_at() const {
@@ -87,7 +99,8 @@ struct ExtensionBuilder {
 
 // Entry point to create an extension builder
 constexpr auto make_extension(std::string_view name, std::string_view version) {
-  return ExtensionBuilder<std::tuple<>, std::tuple<>>{name, version, {}, {}};
+  return ExtensionBuilder<std::tuple<>, std::tuple<>>{
+      name, version, {}, {}, VEF_PROTOCOL_1};
 }
 
 }  // namespace extension_builder
@@ -122,11 +135,22 @@ constexpr auto make_extension(std::string_view name, std::string_view version) {
   }                                                                            \
                                                                                \
   extern "C" vef_registration_t *vef_register(vef_register_arg_t *arg) {       \
-    (void)arg;                                                                 \
     if (_vef_initialized) return &_vef_registration;                           \
                                                                                \
     using namespace villagesql::extension_builder;                             \
     static constexpr auto _ext = (ext);                                        \
+                                                                               \
+    if (arg->protocol < _ext.min_protocol()) {                                 \
+      static char _vef_error_buf[128];                                         \
+      snprintf(_vef_error_buf, sizeof(_vef_error_buf),                         \
+               "requires VEF protocol %u, server offered %u",                  \
+               static_cast<unsigned>(_ext.min_protocol()),                     \
+               static_cast<unsigned>(arg->protocol));                          \
+      _vef_registration.protocol = arg->protocol;                              \
+      _vef_registration.error_msg = _vef_error_buf;                            \
+      return &_vef_registration;                                               \
+    }                                                                          \
+                                                                               \
     constexpr size_t func_count = _ext.func_count();                           \
     constexpr size_t type_count = _ext.type_count();                           \
                                                                                \

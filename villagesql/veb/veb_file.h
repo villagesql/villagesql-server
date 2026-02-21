@@ -118,7 +118,8 @@ bool register_funcs_from_extension(THD &thd, const std::string &extension_name,
 // On error, an error message is logged via villagesql_error().
 bool load_vef_extension(const std::string &so_path,
                         const std::string &expected_name,
-                        ExtensionRegistration &registration);
+                        ExtensionRegistration &registration,
+                        vef_protocol_t max_protocol);
 
 // Unload a VEF extension .so file
 //

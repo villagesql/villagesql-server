@@ -36,6 +36,9 @@
 #include "sql/sql_backup_lock.h"
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"
+#ifndef NDEBUG
+#include "sql/item_func.h"
+#endif
 #include "sql/sql_executor.h"
 #include "sql/sql_plugin.h"
 #include "sql/sql_udf.h"
@@ -179,8 +182,20 @@ bool Sql_cmd_install_extension::execute(THD *thd) {
   }
 
   villagesql::veb::ExtensionRegistration registration;
-  if (villagesql::veb::load_vef_extension(so_path, extension_name,
-                                          registration)) {
+  vef_protocol_t server_protocol = VEF_PROTOCOL_2;
+#ifndef NDEBUG
+  {
+    auto it = thd->user_vars.find("vef_debug_protocol_override");
+    if (it != thd->user_vars.end()) {
+      bool null_value = false;
+      const longlong val = it->second->val_int(&null_value);
+      if (!null_value && val > 0)
+        server_protocol = static_cast<vef_protocol_t>(val);
+    }
+  }
+#endif
+  if (villagesql::veb::load_vef_extension(so_path, extension_name, registration,
+                                          server_protocol)) {
     villagesql_error("Failed to load VEF extension '%s' from '%s'", MYF(0),
                      extension_name.c_str(), so_path.c_str());
     return end_transaction(thd, true);

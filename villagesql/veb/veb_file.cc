@@ -621,7 +621,8 @@ bool load_installed_extensions(THD *thd) {
       }
 
       ExtensionRegistration registration;
-      if (load_vef_extension(so_path, extension_name, registration)) {
+      if (load_vef_extension(so_path, extension_name, registration,
+                             VEF_PROTOCOL_2)) {
         LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s' from '%s'",
                 extension_name.c_str(), so_path.c_str());
         return true;
@@ -929,7 +930,8 @@ static bool validate_vef_registration(const vef_registration_t *reg,
 
 bool load_vef_extension(const std::string &so_path,
                         const std::string &expected_name,
-                        ExtensionRegistration &registration) {
+                        ExtensionRegistration &registration,
+                        vef_protocol_t max_protocol) {
   LogVSQL(INFORMATION_LEVEL, "Loading VEF extension from: %s", so_path.c_str());
 
   registration.so_path.clear();
@@ -966,7 +968,7 @@ bool load_vef_extension(const std::string &so_path,
   }
 
   vef_register_arg_t register_arg = {
-      VEF_PROTOCOL_2,
+      max_protocol,
       {MYSQL_VERSION_MAJOR, MYSQL_VERSION_MINOR, MYSQL_VERSION_PATCH, nullptr},
       {VSQL_MAJOR_VERSION, VSQL_MINOR_VERSION, VSQL_PATCH_VERSION, nullptr}};
 
@@ -979,7 +981,7 @@ bool load_vef_extension(const std::string &so_path,
   }
 
   const vef_protocol_t negotiated_protocol =
-      std::min(VEF_PROTOCOL_2, reg->protocol);
+      std::min(max_protocol, reg->protocol);
 
   if (reg->error_msg != nullptr) {
     LogVSQL(ERROR_LEVEL, "Extension '%s' registration failed: %s",

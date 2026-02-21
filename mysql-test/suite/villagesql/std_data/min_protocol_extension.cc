@@ -1,0 +1,25 @@
+/* Copyright (c) 2026 VillageSQL Contributors
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses/>.
+ */
+
+// Test extension that requires VEF_PROTOCOL_2.
+// Used to verify that extensions can reject servers offering a lower protocol.
+
+#include <villagesql/extension.h>
+
+using namespace villagesql::extension_builder;
+
+VEF_GENERATE_ENTRY_POINTS(make_extension(VEF_EXTENSION_NAME, "7.7.7-devtest")
+                              .test_only_require_protocol(VEF_PROTOCOL_2))
