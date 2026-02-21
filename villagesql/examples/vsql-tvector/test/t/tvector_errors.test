@@ -1,0 +1,37 @@
+# Install vsql-tvector extension
+INSTALL EXTENSION vsql_tvector;
+
+########################################################################
+#
+# Test: TVECTOR without length specification
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v TVECTOR);
+
+########################################################################
+#
+# Test: TVECTOR(0) - dimension must be positive
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v TVECTOR(0));
+
+########################################################################
+#
+# Test: TVECTOR(-1) - negative dimension
+#
+########################################################################
+
+--error ER_PARSE_ERROR
+CREATE TABLE t_err (v TVECTOR(-1));
+
+########################################################################
+#
+# Clean up
+#
+########################################################################
+
+UNINSTALL EXTENSION vsql_tvector;

@@ -50,7 +50,9 @@ class TypeBuilder {
         encode_(nullptr),
         decode_(nullptr),
         compare_(nullptr),
-        hash_(nullptr) {}
+        hash_(nullptr),
+        int_to_params_(nullptr),
+        resolve_params_(nullptr) {}
 
   constexpr TypeBuilder persisted_length(int64_t len) const {
     TypeBuilder copy = *this;
@@ -88,11 +90,34 @@ class TypeBuilder {
     return copy;
   }
 
-  // Build the final vef_type_desc_t. Protocol is set automatically.
+  constexpr TypeBuilder int_to_params(vef_type_int_to_params_func_t f) const {
+    TypeBuilder copy = *this;
+    copy.int_to_params_ = f;
+    return copy;
+  }
+
+  constexpr TypeBuilder resolve_params(vef_type_resolve_params_func_t f) const {
+    TypeBuilder copy = *this;
+    copy.resolve_params_ = f;
+    return copy;
+  }
+
+  // Build the final vef_type_desc_t. Protocol is set automatically:
+  // VEF_PROTOCOL_2 if int_to_params or resolve_params is set, otherwise
+  // VEF_PROTOCOL_1. ExtensionBuilder::type() propagates this up to the
+  // extension's min_protocol, so the registration fails if the server offers
+  // a lower protocol.
   constexpr vef_type_desc_t build() const {
+    const vef_protocol_t protocol =
+        (int_to_params_ != nullptr || resolve_params_ != nullptr)
+            ? VEF_PROTOCOL_2
+            : VEF_PROTOCOL_1;
     return vef_type_desc_t{
-        VEF_PROTOCOL_1, name_,   persisted_length_, max_decode_buffer_length_,
-        encode_,        decode_, compare_,          hash_,
+        protocol,          name_,
+        persisted_length_, max_decode_buffer_length_,
+        encode_,           decode_,
+        compare_,          hash_,
+        int_to_params_,    resolve_params_,
     };
   }
 
@@ -104,6 +129,8 @@ class TypeBuilder {
   vef_decode_func_t decode_;
   vef_compare_func_t compare_;
   vef_hash_func_t hash_;
+  vef_type_int_to_params_func_t int_to_params_;
+  vef_type_resolve_params_func_t resolve_params_;
 };
 
 // Entry point: make_type("name")

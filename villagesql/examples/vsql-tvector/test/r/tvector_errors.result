@@ -1,0 +1,8 @@
+INSTALL EXTENSION vsql_tvector;
+CREATE TABLE t_err (v TVECTOR);
+ERROR 42000: Type 'vsql_tvector.TVECTOR' requires a length specification near 'TVECTOR)' at line 1
+CREATE TABLE t_err (v TVECTOR(0));
+ERROR 42000: Invalid length '0' for type 'vsql_tvector.TVECTOR' near 'TVECTOR(0))' at line 1
+CREATE TABLE t_err (v TVECTOR(-1));
+ERROR 42000: You have an error in your SQL syntax; check the manual that corresponds to your MySQL server version for the right syntax to use near '-1))' at line 1
+UNINSTALL EXTENSION vsql_tvector;

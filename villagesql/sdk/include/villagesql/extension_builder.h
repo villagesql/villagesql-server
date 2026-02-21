@@ -63,11 +63,15 @@ struct ExtensionBuilder {
         name_, version_, new_funcs, types_, min_protocol_};
   }
 
-  // Add a type (returns new builder with type appended)
+  // Add a type (returns new builder with type appended).
+  // If the type requires a higher protocol than min_protocol_, min_protocol_
+  // is raised automatically.
   constexpr auto type(const vef_type_desc_t &t) const {
     auto new_types = std::tuple_cat(types_, std::make_tuple(t));
+    const vef_protocol_t new_min =
+        t.protocol > min_protocol_ ? t.protocol : min_protocol_;
     return ExtensionBuilder<FuncTuple, decltype(new_types)>{
-        name_, version_, funcs_, new_types, min_protocol_};
+        name_, version_, funcs_, new_types, new_min};
   }
 
   // This is here only for testing, please don't depend on it.
