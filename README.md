@@ -283,6 +283,8 @@ VillageSQL provides a C++ SDK for building high-performance extensions.
 - **Example Code:**
   - `villagesql/examples/vsql-complex`: Reference implementation with arithmetic, custom hash handlers, and platform-independent serialization.
   - `villagesql/examples/vsql-simple`: A minimal "Hello World" implementation of a custom type and functions.
+- **Templates:**
+  - [`villagesql/vsql-extension-template`](https://github.com/villagesql/vsql-extension-template)
 - **Header API:** Detailed extension API definitions can be found in `villagesql/include/villagesql/extension.h`.
 
 ## Known Limitations
