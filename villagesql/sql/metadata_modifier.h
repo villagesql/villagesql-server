@@ -30,6 +30,7 @@ class Create_field;
 class Croutine_hash_entry;
 struct HA_CREATE_INFO;
 struct handlerton;
+struct TABLE;
 class Table_ref;
 class THD;
 template <typename T>
@@ -159,7 +160,7 @@ class Metadata_modifier {
   // Modify column entries based on alter_info.
   // Returns false on success, true on error.
   bool alter_columns(THD *thd, Table_name db_table,
-                     const Alter_info *alter_info);
+                     const Alter_info *alter_info, TABLE *table);
 
   // Lock extensions, validate custom columns and mark modifications to
   // victionary.
