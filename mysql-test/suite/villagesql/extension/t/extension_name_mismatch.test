@@ -24,7 +24,6 @@ call mtr.add_suppression("failed registration validation");
 --source include/villagesql/create_extension_sdk.inc
 
 --echo # Attempt to install extension with mismatched name (should fail)
---replace_regex /from '.*name_mismatch_test.so'/from 'SO_PATH'/
 --error ER_VILLAGESQL_GENERIC_ERROR
 INSTALL EXTENSION name_mismatch_test;
 

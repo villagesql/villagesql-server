@@ -115,11 +115,13 @@ bool register_funcs_from_extension(THD &thd, const std::string &extension_name,
 //
 // Returns false on success, true on error.
 // On success, all fields in registration are populated.
-// On error, an error message is logged via villagesql_error().
+// On error, a message is written to error_out so that it can be logged, and/or
+// returned to the client.
 bool load_vef_extension(const std::string &so_path,
-                        const std::string &expected_name,
+                        std::string_view expected_name,
                         ExtensionRegistration &registration,
-                        vef_protocol_t max_protocol);
+                        vef_protocol_t max_protocol,
+                        std::string &error_message);
 
 // Unload a VEF extension .so file
 //

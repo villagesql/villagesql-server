@@ -621,10 +621,11 @@ bool load_installed_extensions(THD *thd) {
       }
 
       ExtensionRegistration registration;
+      std::string load_error;
       if (load_vef_extension(so_path, extension_name, registration,
-                             VEF_PROTOCOL_2)) {
-        LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s' from '%s'",
-                extension_name.c_str(), so_path.c_str());
+                             VEF_PROTOCOL_2, load_error)) {
+        LogVSQL(ERROR_LEVEL, "Failed to load VEF extension '%s': %s",
+                extension_name.c_str(), load_error.c_str());
         return true;
       }
 
@@ -894,18 +895,23 @@ bool register_funcs_from_extension(THD &thd, const std::string &extension_name,
   return false;
 }
 
+static std::string format_dlerror() {
+  const char *errmsg;
+  int error_number = dlopen_errno;
+  DLERROR_GENERATE(errmsg, error_number);
+  char buf[256];
+  snprintf(buf, sizeof(buf), "error %d (%s)", error_number,
+           errmsg && errmsg[0] ? errmsg : "unknown");
+  return buf;
+}
+
 template <typename T>
-static T lookup_symbol(void *handle, const char *so_path,
-                       const char *symbol_name) {
+static T lookup_symbol(void *handle, const char *symbol_name,
+                       std::string &error_message) {
   void *sym = dlsym(handle, symbol_name);
   if (sym == nullptr) {
-    const char *errmsg;
-    int error_number = dlopen_errno;
-    DLERROR_GENERATE(errmsg, error_number);
-    LogVSQL(ERROR_LEVEL,
-            "Extension '%s' does not export %s function: error %d (%s)",
-            so_path, symbol_name, error_number,
-            errmsg && errmsg[0] ? errmsg : "symbol not found");
+    error_message =
+        std::string(symbol_name) + " not found: " + format_dlerror();
     return nullptr;
   }
   return reinterpret_cast<T>(sym);
@@ -916,22 +922,22 @@ static T lookup_symbol(void *handle, const char *so_path,
 // object (e.g. func/type descriptors, protocol version, null pointers).
 // Returns false on success, true on error.
 static bool validate_vef_registration(const vef_registration_t *reg,
-                                      const std::string &expected_name) {
-  if (reg->extension_name == nullptr ||
-      std::string(reg->extension_name) != expected_name) {
-    LogVSQL(ERROR_LEVEL,
-            "Extension name mismatch: expected '%s' but .so registers '%s'",
-            expected_name.c_str(),
-            reg->extension_name ? reg->extension_name : "(null)");
+                                      const std::string_view expected_name,
+                                      std::string &error_msg) {
+  if (reg->extension_name == nullptr || expected_name != reg->extension_name) {
+    error_msg = std::string("extension name mismatch: expected '") +
+                std::string(expected_name) + "' but .so registered '" +
+                (reg->extension_name ? reg->extension_name : "(null)") + "'";
     return true;
   }
   return false;
 }
 
 bool load_vef_extension(const std::string &so_path,
-                        const std::string &expected_name,
+                        const std::string_view expected_name,
                         ExtensionRegistration &registration,
-                        vef_protocol_t max_protocol) {
+                        vef_protocol_t max_protocol,
+                        std::string &error_message) {
   LogVSQL(INFORMATION_LEVEL, "Loading VEF extension from: %s", so_path.c_str());
 
   registration.so_path.clear();
@@ -945,23 +951,19 @@ bool load_vef_extension(const std::string &so_path,
   // one extension to call another's function implementations.
   void *handle = dlopen(so_path.c_str(), RTLD_NOW | RTLD_LOCAL);
   if (handle == nullptr) {
-    const char *errmsg;
-    int error_number = dlopen_errno;
-    DLERROR_GENERATE(errmsg, error_number);
-    LogVSQL(INFORMATION_LEVEL, "Failed to load extension '%s': error %d (%s)",
-            so_path.c_str(), error_number, errmsg);
+    error_message = "failed to load so: " + format_dlerror();
     return true;
   }
 
   auto vef_register = lookup_symbol<vef_register_func_t>(
-      handle, so_path.c_str(), VEF_REGISTER_FUNC_NAME);
+      handle, VEF_REGISTER_FUNC_NAME, error_message);
   if (vef_register == nullptr) {
     dlclose(handle);
     return true;
   }
 
   auto vef_unregister = lookup_symbol<vef_unregister_func_t>(
-      handle, so_path.c_str(), VEF_UNREGISTER_FUNC_NAME);
+      handle, VEF_UNREGISTER_FUNC_NAME, error_message);
   if (vef_unregister == nullptr) {
     dlclose(handle);
     return true;
@@ -974,8 +976,7 @@ bool load_vef_extension(const std::string &so_path,
 
   vef_registration_t *reg = vef_register(&register_arg);
   if (reg == nullptr) {
-    LogVSQL(INFORMATION_LEVEL, "vef_register returned NULL for extension '%s'",
-            so_path.c_str());
+    error_message = "vef_register returned NULL";
     dlclose(handle);
     return true;
   }
@@ -984,17 +985,15 @@ bool load_vef_extension(const std::string &so_path,
       std::min(max_protocol, reg->protocol);
 
   if (reg->error_msg != nullptr) {
-    LogVSQL(ERROR_LEVEL, "Extension '%s' registration failed: %s",
-            so_path.c_str(), reg->error_msg);
+    error_message =
+        std::string("vef_register returned an error: ") + reg->error_msg;
     vef_unregister_arg_t unregister_arg = {negotiated_protocol};
     vef_unregister(&unregister_arg, reg);
     dlclose(handle);
     return true;
   }
 
-  if (validate_vef_registration(reg, expected_name)) {
-    LogVSQL(ERROR_LEVEL, "Extension '%s' failed registration validation",
-            so_path.c_str());
+  if (validate_vef_registration(reg, expected_name, error_message)) {
     vef_unregister_arg_t unregister_arg = {negotiated_protocol};
     vef_unregister(&unregister_arg, reg);
     dlclose(handle);

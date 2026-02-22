@@ -9,8 +9,6 @@
 --let $veb_dir = $MYSQLTEST_VARDIR/veb
 --exec mkdir -p $veb_dir
 
-call mtr.add_suppression("registration failed: requires VEF protocol");
-
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
 --let $restart_parameters = restart: --veb-dir=$veb_dir
 --source include/restart_mysqld.inc
@@ -20,9 +18,9 @@ call mtr.add_suppression("registration failed: requires VEF protocol");
 --let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/min_protocol_extension.cc
 --source include/villagesql/create_extension_sdk.inc
 
+call mtr.add_suppression("vef_register returned an error: requires VEF protocol");
 --echo # Attempt to install with protocol 1 (too low, extension requires protocol 2)
 SET @vef_debug_protocol_override = 1;
---replace_regex /from '.*min_protocol_test\.so'/from 'SO_PATH'/
 --error ER_VILLAGESQL_GENERIC_ERROR
 INSTALL EXTENSION min_protocol_test;
 
