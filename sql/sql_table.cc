@@ -17957,6 +17957,10 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                               alter_ctx.tmp_name, true, true, *table_def);
     }
     if (!new_table) goto err_new_table_cleanup;
+
+    villagesql::AnnotateCustomColumnsInTmpTable(new_table,
+                                                alter_info->create_list);
+
     /*
       Note: In case of MERGE table, we do not attach children. We do not
       copy data for MERGE tables. Only the children have data.

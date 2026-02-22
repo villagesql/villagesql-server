@@ -56,4 +56,5 @@ Table	Non_unique	Key_name	Seq_in_index	Column_name	Collation	Cardinality	Sub_par
 t_idx2	1	idx_val2	1	val	A	2	NULL	NULL	YES	BTREE			YES	NULL
 SELECT * FROM t_idx2 WHERE val = '(3,4)';
 id	val
+1	(3,4)
 DROP TABLE t_idx2;
