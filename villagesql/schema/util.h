@@ -36,9 +36,13 @@ inline bool is_villagesql_schema(const char *db_name) {
   return system_name_eq(SchemaManager::VILLAGESQL_SCHEMA_NAME, db_name);
 }
 
+inline bool is_mysql_schema(const char *db_name) {
+  return system_name_eq("mysql", db_name);
+}
+
 // Like the above but also considered true if this is in a mysql system schema.
 inline bool is_system_schema(const char *db_name) {
-  return (system_name_eq("mysql", db_name) || system_name_eq("sys", db_name) ||
+  return (is_mysql_schema(db_name) || system_name_eq("sys", db_name) ||
           is_villagesql_schema(db_name));
 }
 

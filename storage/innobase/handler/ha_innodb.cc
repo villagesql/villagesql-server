@@ -4016,8 +4016,9 @@ static void innobase_dict_cache_reset_tables_and_tablespaces() {
 
     /* TODO: Remove follow if we have better way to identify
     DD "system table" */
-    if (villagesql::is_system_schema(db_str.c_str()) || table->is_dd_table ||
-        table->is_corrupted()) {
+    if (villagesql::is_mysql_schema(db_str.c_str()) || table->is_dd_table ||
+        table->is_corrupted() ||
+        villagesql::is_villagesql_schema(db_str.c_str())) {
       continue;
     }
 
