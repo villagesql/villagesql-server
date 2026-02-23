@@ -83,6 +83,8 @@ fi
 
 # Get platform info
 PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')"
+# Use "macos" to match MySQL's naming convention (uname returns "darwin" on macOS)
+[[ "$PLATFORM" == "darwin" ]] && PLATFORM="macos"
 ARCH="$(uname -m)"
 
 PACKAGE_NAME="villagesql-dev-server-${VSQL_VERSION}-${PLATFORM}-${ARCH}"
