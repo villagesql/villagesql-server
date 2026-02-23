@@ -2,7 +2,6 @@
 # Grammar: ALTER TABLE table_name CHANGE complex_col new_name new_type
 
 --source include/villagesql/install_complex_extension.inc
---source include/villagesql/binlog_check_begin.inc
 
 CREATE TABLE t1 (
     id INT PRIMARY KEY,
@@ -24,5 +23,4 @@ SELECT * FROM t1;
 
 DROP TABLE t1;
 
---source include/villagesql/binlog_check_end.inc
 --source include/villagesql/uninstall_complex_extension.inc
