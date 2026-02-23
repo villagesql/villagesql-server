@@ -20,16 +20,16 @@ brew install openssl
 
 ```bash
 # 1. Initialize the database
-./init-db.sh
+./villagesql init
 
 # 2. Start the server
-./start-server.sh
+./villagesql start
 
 # 3. Connect to the server
-./connect.sh
+./villagesql connect
 
 # 4. Stop the server (when done)
-./stop-server.sh
+./villagesql stop
 ```
 
 ## Installing Extensions
@@ -77,20 +77,40 @@ UNINSTALL EXTENSION your_extension_name;
 - `lib/` - Shared libraries and plugins
   - `lib/veb/` - VillageSQL extension bundles (includes example .veb files)
 - `share/` - SQL files, character sets, error messages
-- `data/` - Database files (created by init-db.sh)
+- `data/` - Database files (created by `./villagesql init`)
 - `mysql-test/` - Test framework for extension testing
 - `support-files/` - Additional support files
 
 ## Configuration
 
-The helper scripts use these defaults:
+The helper script uses these defaults:
 
-- **Data directory:** `./data`
-- **Socket:** `./mysql.sock`
-- **Port:** 3307 (configurable via $MYSQL_PORT)
+- **Instance directory:** `instances/default/` (within the package directory)
+- **Data directory:** `<instance-dir>/data`
+- **Socket:** `<instance-dir>/mysql.sock`
+- **Port:** 3307 (configurable via `$MYSQL_PORT`)
 - **Bind address:** `127.0.0.1` (localhost only)
-- **Error log:** `./data/error.log`
+- **Error log:** `<instance-dir>/data/error.log`
 - **Root user:** `root` (no password)
+
+## Multiple Instances
+
+Use `--dir` to point each instance at its own directory, so their data,
+socket, and PID files don't conflict:
+
+```bash
+# Instance A on port 3307
+./villagesql --dir ./instance-a init
+./villagesql --dir ./instance-a start
+
+# Instance B on port 3308
+MYSQL_PORT=3308 ./villagesql --dir ./instance-b init
+MYSQL_PORT=3308 ./villagesql --dir ./instance-b start
+
+# Connect to each independently
+./villagesql --dir ./instance-a connect
+./villagesql --dir ./instance-b connect
+```
 
 ## Manual Server Control
 
@@ -151,7 +171,7 @@ tail -50 ./data/error.log
 ```
 
 Common issues:
-- Port 3307 already in use: Set `MYSQL_PORT=3308` before running start-server.sh
+- Port 3307 already in use: Set `MYSQL_PORT=3308` before running `./villagesql start`
 - Stale socket file: Remove `mysql.sock` manually
 - Permissions: Ensure files are readable/executable
 

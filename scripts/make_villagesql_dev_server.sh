@@ -136,9 +136,9 @@ log_info "Building with $NCORES parallel jobs..."
 make -j${NCORES} || die "Build failed"
 log_info "Build complete"
 
-# Verify mysqld was built
-if [[ ! -x "$BUILD_DIR/bin/mysqld" ]]; then
-    die "mysqld not found in $BUILD_DIR/bin/ after build"
+# Verify mysqld was built (CMake places it in runtime_output_directory before install)
+if [[ ! -x "$BUILD_DIR/runtime_output_directory/mysqld" ]]; then
+    die "mysqld not found in $BUILD_DIR/runtime_output_directory/ after build"
 fi
 
 # Create staging directory
@@ -226,20 +226,15 @@ fi
 # Step 5: Add convenience scripts
 log_step "Step 5: Adding convenience scripts..."
 
-# Copy scripts from source directory
+# Copy script from source directory
 TEMPLATE_DIR="$SOURCE_DIR/villagesql/dev_server"
 
-cp "$TEMPLATE_DIR/init-db.sh" . && chmod +x init-db.sh
-cp "$TEMPLATE_DIR/start-server.sh" . && chmod +x start-server.sh
-cp "$TEMPLATE_DIR/connect.sh" . && chmod +x connect.sh
-cp "$TEMPLATE_DIR/stop-server.sh" . && chmod +x stop-server.sh
+cp "$TEMPLATE_DIR/villagesql.sh" villagesql && chmod +x villagesql
 
-# Verify all scripts were copied
-for script in init-db.sh start-server.sh connect.sh stop-server.sh; do
-    if [[ ! -f "$script" ]]; then
-        die "Failed to copy $script from $TEMPLATE_DIR"
-    fi
-done
+# Verify script was copied
+if [[ ! -f "villagesql" ]]; then
+    die "Failed to copy villagesql from $TEMPLATE_DIR"
+fi
 
 log_info "Convenience scripts added"
 
@@ -302,7 +297,7 @@ echo "To use:"
 echo "  1. Extract: tar xzf $TARBALL_NAME"
 echo "  2. cd $PACKAGE_NAME"
 echo "  3. Read: cat QUICKSTART.md"
-echo "  4. Initialize: ./init-db.sh"
-echo "  5. Start: ./start-server.sh"
-echo "  6. Connect: ./connect.sh"
+echo "  4. Initialize: ./villagesql init"
+echo "  5. Start: ./villagesql start"
+echo "  6. Connect: ./villagesql connect"
 echo ""
