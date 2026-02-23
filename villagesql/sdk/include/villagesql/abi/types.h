@@ -155,7 +155,8 @@
 typedef enum : unsigned int {
   VEF_PROTOCOL_0,  // Not used
   VEF_PROTOCOL_1,  // Stable as of v0.0.1, likely to be deprecated.
-  VEF_PROTOCOL_2,  // Under development, not stable.
+  VEF_PROTOCOL_2,  // Under development, not stable. Adds:
+                   // + Add deterministic VDF attribute.
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -172,6 +173,8 @@ typedef struct {
   unsigned int major;
   unsigned int minor;
   unsigned int patch;
+
+  // Owned by whoever owns this struct.
   unsigned char *extra;
 } vef_version_t;
 
@@ -452,6 +455,11 @@ typedef struct {
 
   // Minimum buffer size requested for string results (0 = use default)
   size_t buffer_size;
+
+  // protocol >= VEF_PROTOCOL_2
+  // If true, the function always returns the same result for the same inputs
+  // and has no side effects. The optimizer may use this to cache results.
+  bool deterministic;
 } vef_func_desc_t;
 
 // =============================================================================

@@ -102,7 +102,8 @@ struct FuncWithMetadata {
         return_type{},
         param_types{},
         num_params(0),
-        buffer_size(0) {}
+        buffer_size(0),
+        deterministic(false) {}
 
   ExtFunc f;
   vef_prerun_func_t prerun;
@@ -111,6 +112,7 @@ struct FuncWithMetadata {
   std::array<vef_type_t, kMaxParams> param_types;
   size_t num_params;
   size_t buffer_size;
+  bool deterministic;
 };
 
 // =============================================================================
@@ -241,6 +243,7 @@ struct StaticFuncDesc {
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
   size_t buffer_size_;
+  bool deterministic_;
 
   constexpr StaticFuncDesc(const char *name, const FuncWithMetadata &meta)
       : name_(name),
@@ -249,7 +252,8 @@ struct StaticFuncDesc {
         vdf_(meta.f),
         prerun_(meta.prerun),
         postrun_(meta.postrun),
-        buffer_size_(meta.buffer_size) {
+        buffer_size_(meta.buffer_size),
+        deterministic_(meta.deterministic) {
     for (size_t i = 0; i < NumParams && i < meta.num_params; ++i) {
       params_[i] = meta.param_types[i];
     }
@@ -264,6 +268,7 @@ struct StaticFuncDesc {
   constexpr vef_prerun_func_t prerun() const { return prerun_; }
   constexpr vef_postrun_func_t postrun() const { return postrun_; }
   constexpr size_t buffer_size() const { return buffer_size_; }
+  constexpr bool deterministic() const { return deterministic_; }
 };
 
 // Materializes the ABI descriptor structures at registration time.
@@ -285,13 +290,14 @@ __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
   signature.params = func_data.num_params() > 0 ? func_data.params() : nullptr;
   signature.return_type = func_data.return_type();
 
-  desc.protocol = VEF_PROTOCOL_1;
+  desc.protocol = VEF_PROTOCOL_2;
   desc.name = func_data.name();
   desc.signature = &signature;
   desc.vdf = func_data.vdf();
   desc.prerun = func_data.prerun();
   desc.postrun = func_data.postrun();
   desc.buffer_size = func_data.buffer_size();
+  desc.deterministic = func_data.deterministic();
 
   return &desc;
 }
@@ -318,7 +324,8 @@ struct FuncBuilder {
         param_types_{},
         buffer_size_(0),
         prerun_(nullptr),
-        postrun_(nullptr) {}
+        postrun_(nullptr),
+        deterministic_(false) {}
 
   const char *name_;
   const char *return_type_;
@@ -326,6 +333,7 @@ struct FuncBuilder {
   size_t buffer_size_;
   vef_prerun_func_t prerun_;
   vef_postrun_func_t postrun_;
+  bool deterministic_;
 
   constexpr FuncBuilder<Func, NumParams> returns(const char *t) const {
     FuncBuilder<Func, NumParams> copy = *this;
@@ -340,6 +348,7 @@ struct FuncBuilder {
     next.buffer_size_ = buffer_size_;
     next.prerun_ = prerun_;
     next.postrun_ = postrun_;
+    next.deterministic_ = deterministic_;
     for (size_t i = 0; i < NumParams; ++i) {
       next.param_types_[i] = param_types_[i];
     }
@@ -350,6 +359,12 @@ struct FuncBuilder {
   constexpr FuncBuilder<Func, NumParams> buffer_size(size_t s) const {
     FuncBuilder<Func, NumParams> copy = *this;
     copy.buffer_size_ = s;
+    return copy;
+  }
+
+  constexpr FuncBuilder<Func, NumParams> deterministic(bool d = true) const {
+    FuncBuilder<Func, NumParams> copy = *this;
+    copy.deterministic_ = d;
     return copy;
   }
 
@@ -379,6 +394,7 @@ struct FuncBuilder {
     meta.return_type = to_vef_type(return_type_);
     meta.num_params = NumParams;
     meta.buffer_size = buffer_size_;
+    meta.deterministic = deterministic_;
     for (size_t i = 0; i < NumParams; ++i) {
       meta.param_types[i] = to_vef_type(param_types_[i]);
     }

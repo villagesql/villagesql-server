@@ -158,6 +158,14 @@ class udf_handler {
     return u_d != nullptr && u_d->vdf_func_desc != nullptr;
   }
 
+  // Returns true if this VDF was declared deterministic by the extension
+  // author.
+  bool is_vdf_deterministic() const {
+    if (!is_vdf()) return false;
+    return u_d->vdf_func_desc->protocol >= VEF_PROTOCOL_2 &&
+           u_d->vdf_func_desc->deterministic;
+  }
+
   // Check if this VDF returns a text string (VEF_TYPE_STRING) as opposed to
   // binary data (VEF_TYPE_CUSTOM). Uses vdf_func_desc which is available before
   // m_vdf is instantiated.
