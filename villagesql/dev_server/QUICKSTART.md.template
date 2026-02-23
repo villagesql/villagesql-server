@@ -25,36 +25,48 @@ brew install openssl
 # 2. Start the server
 ./villagesql start
 
-# 3. Connect to the server
+# 3. Check the server is running
+./villagesql status
+
+# 4. Connect to the server
 ./villagesql connect
 
-# 4. Stop the server (when done)
+# 5. Stop the server (when done)
 ./villagesql stop
 ```
 
-## Installing Extensions
+To set a root password, pass `--password` to `init` — you will be prompted interactively:
 
-VillageSQL extensions are installed by name. The server searches for `.veb` files in configured directories (default: `lib/veb/`).
-
-```sql
--- Install an extension by name (looks for extension_name.veb)
-INSTALL EXTENSION extension_name;
+```bash
+./villagesql init --password
+./villagesql start
 ```
 
-### Example Extensions Included
+The password is stored in `instances/default/my.cnf` (mode 600) and picked up automatically by `connect` and `stop`.
 
-This package includes two example extensions you can try immediately:
+## Managing Extensions
 
-```sql
-INSTALL EXTENSION vsql_simple;
-INSTALL EXTENSION vsql_complex;
+Extension management has two steps: copy the `.veb` file into the instance, then install it in the running server via SQL.
+
+### Adding and removing .veb files
+
+```bash
+# Copy a .veb file into this instance's extension directory
+./villagesql veb add /path/to/my_extension.veb
+
+# List .veb files available to this instance
+./villagesql veb ls
+
+# Remove a .veb file from this instance
+./villagesql veb rm my_extension
 ```
 
-**Tip:** Place your `.veb` files in `lib/veb/` to make them discoverable by the server.
-
-### Verifying Installation
+### Installing extensions in the running server
 
 ```sql
+-- Install an extension (must be in the instance's veb directory)
+INSTALL EXTENSION my_extension;
+
 -- List installed extensions
 SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
 
@@ -63,13 +75,21 @@ CREATE TABLE test_table (
     id INT PRIMARY KEY,
     custom_col YOUR_CUSTOM_TYPE
 );
+
+-- Uninstall an extension
+UNINSTALL EXTENSION my_extension;
 ```
 
-### Uninstalling
+### Example Extensions Included
+
+This package includes two example extensions seeded into new instances automatically:
 
 ```sql
-UNINSTALL EXTENSION your_extension_name;
+INSTALL EXTENSION vsql_simple;
+INSTALL EXTENSION vsql_complex;
 ```
+
+**Tip:** `.veb` files placed in `lib/veb/` are automatically copied into new instances when you run `./villagesql init`.
 
 ## Directory Structure
 
@@ -91,7 +111,7 @@ The helper script uses these defaults:
 - **Port:** 3307 (configurable via `$MYSQL_PORT`)
 - **Bind address:** `127.0.0.1` (localhost only)
 - **Error log:** `<instance-dir>/data/error.log`
-- **Root user:** `root` (no password)
+- **Root user:** `root` (no password by default; set one with `init --password`)
 
 ## Multiple Instances
 
@@ -104,12 +124,22 @@ socket, and PID files don't conflict:
 ./villagesql --dir ./instance-a start
 
 # Instance B on port 3308
-MYSQL_PORT=3308 ./villagesql --dir ./instance-b init
+./villagesql --dir ./instance-b init
 MYSQL_PORT=3308 ./villagesql --dir ./instance-b start
 
 # Connect to each independently
 ./villagesql --dir ./instance-a connect
 ./villagesql --dir ./instance-b connect
+```
+
+Use `--here` as a shorthand to create an instance in the current directory
+(equivalent to `--dir $(pwd)/.vsql_here`):
+
+```bash
+cd /path/to/my-project
+./villagesql --here init
+./villagesql --here start
+./villagesql --here connect
 ```
 
 ## Manual Server Control
@@ -167,12 +197,14 @@ UNINSTALL EXTENSION extension_name;
 
 Check the error log:
 ```bash
-tail -50 ./data/error.log
+tail -50 instances/default/data/error.log
+# Or for a custom instance directory:
+tail -50 <instance-dir>/data/error.log
 ```
 
 Common issues:
 - Port 3307 already in use: Set `MYSQL_PORT=3308` before running `./villagesql start`
-- Stale socket file: Remove `mysql.sock` manually
+- Stale socket file: Remove `instances/default/mysql.sock` manually (or `<instance-dir>/mysql.sock`)
 - Permissions: Ensure files are readable/executable
 
 ### Can't Connect

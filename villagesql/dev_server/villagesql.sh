@@ -36,6 +36,29 @@ done
 cmd_init() {
     set -e
 
+    # Parse init-specific flags
+    local password=""
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --password)
+                read -r -s -p "Password for root: " password
+                echo
+                local confirm
+                read -r -s -p "Confirm password: " confirm
+                echo
+                if [[ "$password" != "$confirm" ]]; then
+                    echo "Error: Passwords do not match"
+                    exit 1
+                fi
+                shift
+                ;;
+            *)
+                echo "Error: Unknown init option: $1"
+                exit 1
+                ;;
+        esac
+    done
+
     # Create the instance directory if it doesn't exist yet
     mkdir -p "$DIR"
 
@@ -66,6 +89,16 @@ cmd_init() {
         --basedir="$BASEDIR" \
         --datadir="$datadir" \
         --log-error-verbosity=3
+
+    if [[ -n "$password" ]]; then
+        # Write SQL to set the root password; applied by cmd_start on first boot.
+        # Use a subshell with umask 077 so the file is created 600 from the start.
+        local escaped="${password//\'/\'\'}"
+        (umask 077; printf "ALTER USER 'root'@'localhost' IDENTIFIED BY '%s';\n" "$escaped" > "$DIR/init_password.sql")
+
+        # Write per-instance client config so connect/stop pick up credentials automatically.
+        (umask 077; printf '[client]\nuser=root\npassword=%s\n' "$password" > "$DIR/my.cnf")
+    fi
 
     echo ""
     echo "✓ Database initialized successfully!"
@@ -117,6 +150,11 @@ cmd_start() {
     echo "  Log: $logfile"
     echo ""
 
+    local init_file_args=()
+    if [[ -f "$DIR/init_password.sql" ]]; then
+        init_file_args=("--init-file=$DIR/init_password.sql")
+    fi
+
     "$BASEDIR/bin/mysqld" \
         --no-defaults \
         --basedir="$BASEDIR" \
@@ -127,13 +165,15 @@ cmd_start() {
         --bind-address=127.0.0.1 \
         --pid-file="$pidfile" \
         --log-error="$logfile" \
-        --log-error-verbosity=3 &
+        --log-error-verbosity=3 \
+        "${init_file_args[@]}" &
 
     local server_pid=$!
     echo "Server starting (PID: $server_pid)..."
 
     for i in {1..30}; do
         if "$BASEDIR/bin/mysqladmin" --socket="$socket" ping >/dev/null 2>&1; then
+            rm -f "$DIR/init_password.sql"
             echo ""
             echo "✓ Server is ready!"
             echo ""
@@ -167,7 +207,10 @@ cmd_connect() {
         exit 1
     fi
 
-    exec "$BASEDIR/bin/mysql" --socket="$socket" -u root "$@"
+    local auth_args=(-u root)
+    [[ -f "$DIR/my.cnf" ]] && auth_args=("--defaults-file=$DIR/my.cnf")
+
+    exec "$BASEDIR/bin/mysql" "${auth_args[@]}" --socket="$socket" "$@"
 }
 
 cmd_status() {
@@ -228,8 +271,11 @@ cmd_stop() {
         exit 1
     fi
 
+    local auth_args=(-u root)
+    [[ -f "$DIR/my.cnf" ]] && auth_args=("--defaults-file=$DIR/my.cnf")
+
     echo "Stopping VillageSQL server (PID: $pid)..."
-    "$BASEDIR/bin/mysqladmin" --socket="$socket" -u root shutdown 2>/dev/null || true
+    "$BASEDIR/bin/mysqladmin" "${auth_args[@]}" --socket="$socket" shutdown 2>/dev/null || true
 
     for i in {1..30}; do
         if ! kill -0 "$pid" 2>/dev/null; then
@@ -336,7 +382,7 @@ cmd_help() {
     echo "Usage: villagesql [--dir <path>] <command> [args]"
     echo ""
     echo "Commands:"
-    echo "  init        Initialize the database (run once before first use)"
+    echo "  init [--password]  Initialize the database (run once before first use)"
     echo "  start       Start the VillageSQL server"
     echo "  connect     Connect to the running server (extra args passed to mysql)"
     echo "  stop        Stop the VillageSQL server"
@@ -357,6 +403,7 @@ cmd_help() {
     echo ""
     echo "Examples:"
     echo "  ./villagesql init && ./villagesql start"
+    echo "  ./villagesql init --password && ./villagesql start"
     echo "  ./villagesql --dir /tmp/test-instance init"
     echo "  ./villagesql --dir /tmp/test-instance start"
     echo "  MYSQL_PORT=3308 ./villagesql --dir ./second start"
@@ -371,7 +418,7 @@ case "$DIR_FLAG" in
 esac
 
 case "$1" in
-    init)    cmd_init ;;
+    init)    shift; cmd_init "$@" ;;
     start)   cmd_start ;;
     connect) shift; cmd_connect "$@" ;;
     stop)    cmd_stop ;;

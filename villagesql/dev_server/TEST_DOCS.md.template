@@ -10,26 +10,24 @@ This package includes the mysql-test framework (`mysql-test/`) for extension aut
 When developing an extension, specify your test suite directory and VEB location:
 
 ```bash
-cd mysql-test
-
 # Run all tests in your extension's test suite
-./mysql-test-run.pl --suite=/path/to/your/extension/tests \
-                    --veb-source-dir=/path/to/your/extension/build
+./villagesql mysql-test --suite=/path/to/your/extension/tests \
+                        --veb-source-dir=/path/to/your/extension/build
 
 # Run with parallel execution
-./mysql-test-run.pl --suite=/path/to/your/extension/tests \
-                    --veb-source-dir=/path/to/your/extension/build \
-                    --parallel=auto
+./villagesql mysql-test --suite=/path/to/your/extension/tests \
+                        --veb-source-dir=/path/to/your/extension/build \
+                        --parallel=auto
 
-# Run a specific test (test name as positional argument)
-./mysql-test-run.pl --suite=/path/to/your/extension/tests \
-                    --veb-source-dir=/path/to/your/extension/build \
-                    my_test
+ # Run a specific test
+./villagesql mysql-test --suite=/path/to/your/extension/tests/my_test.test \
+                        --veb-source-dir=/path/to/your/extension/build
+                        my_test
 
 # Record test results (for creating .result files)
-./mysql-test-run.pl --suite=/path/to/your/extension/tests \
-                    --veb-source-dir=/path/to/your/extension/build \
-                    --record
+./villagesql mysql-test --suite=/path/to/your/extension/tests \
+                        --veb-source-dir=/path/to/your/extension/build \
+                        --record
 ```
 
 **Options:**
@@ -41,13 +39,13 @@ cd mysql-test
 ### Test Organization
 
 Create your extension tests in:
-- `mysql-test/suite/my_extension/` - Your test suite
-- `mysql-test/suite/my_extension/t/` - Test files (.test)
-- `mysql-test/suite/my_extension/r/` - Expected results (.result)
+- `tests/` - Your test suite
+- `tests/t/` - Test files (.test)
+- `tests/r/` - Expected results (.result)
 
 Example test file structure:
 ```
-mysql-test/suite/my_extension/
+tests/
 ├── t/
 │   ├── basic.test
 │   └── advanced.test
