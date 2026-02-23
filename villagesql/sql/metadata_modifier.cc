@@ -330,14 +330,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
         }
       } else if (was_custom_type && is_custom_type) {
         // Custom → custom: types must be compatible.
-        Field *old_field = nullptr;
-        for (Field **fp = table->field; *fp; fp++) {
-          if (my_strcasecmp(system_charset_info, (*fp)->field_name,
-                            field.change) == 0) {
-            old_field = *fp;
-            break;
-          }
-        }
+        Field *old_field = find_field_in_table_sef(table, field.change);
         assert(old_field);
         if (!AreTypesCompatible(*old_field->get_type_context(),
                                 *field.custom_type_context)) {
