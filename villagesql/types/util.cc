@@ -634,6 +634,36 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
   return false;
 }
 
+void CopyFromCustomField(const Field *from_field, Field *to_field) {
+  assert(from_field->has_type_context());
+
+  if (to_field->has_type_context()) {
+    // Custom → custom: binary copy.
+    // Incompatible type conversions are rejected at ALTER TABLE preparation
+    // time, so by here the types are always compatible.
+    const size_t data_len = from_field->data_length();
+    const uint32 to_length_bytes =
+        down_cast<const Field_varstring *>(to_field)->get_length_bytes();
+    if (to_length_bytes == 1) {
+      to_field->field_ptr()[0] = static_cast<uchar>(data_len);
+    } else {
+      int2store(to_field->field_ptr(), static_cast<uint16>(data_len));
+    }
+    assert(data_len <= to_field->field_length);
+    memcpy(to_field->field_ptr() + to_length_bytes, from_field->data_ptr(),
+           data_len);
+    return;
+  }
+
+  // Custom → non-custom string: decode to string representation.
+  // Non-string destination is blocked at preparation time.
+  assert(to_field->result_type() == STRING_RESULT);
+  char buff[MAX_FIELD_WIDTH];
+  String res(buff, sizeof(buff), from_field->charset());
+  from_field->val_external_str(&res);
+  to_field->store(res.ptr(), res.length(), res.charset());
+}
+
 type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
                                                     Field *to_field) {
   assert(!from_field->has_type_context());

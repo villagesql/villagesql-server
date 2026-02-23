@@ -1,0 +1,37 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+value COMPLEX
+);
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+test	t1	value	vsql_complex	0.0.1	COMPLEX	{}
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, '(3.5,-1.2)');
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `value` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+id	value
+1	(1,2)
+2	(3.5,-1.2)
+ALTER TABLE t1 MODIFY COLUMN value VARCHAR(100);
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `value` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+id	value
+1	(1,2)
+2	(3.5,-1.2)
+DROP TABLE t1;
+SELECT * FROM villagesql.custom_columns;
+db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters

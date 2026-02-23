@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -57,6 +58,7 @@
 #include "sql/table.h"
 #include "sql_string.h"
 #include "template_utils.h"  // down_cast
+#include "villagesql/types/util.h"
 
 /**
   Check if geometry type sub is a subtype of super.
@@ -322,6 +324,12 @@ static void do_field_string(Copy_field *, const Field *from_field,
   to_field->store(res.ptr(), res.length(), res.charset());
 }
 
+// VillageSQL: Copy from a custom type field to another field.
+static void do_field_from_custom(Copy_field *, const Field *from_field,
+                                 Field *to_field) {
+  villagesql::CopyFromCustomField(from_field, to_field);
+}
+
 static void do_field_enum(Copy_field *copy, const Field *from_field,
                           Field *to_field) {
   if (from_field->val_int() == 0) {
@@ -561,6 +569,9 @@ void Copy_field::set(Field *to, Field *from) {
 Copy_field::Copy_func *Copy_field::get_copy_func() {
   THD *thd = current_thd;
   if (m_to_field->is_array() && m_from_field->is_array()) return do_copy_blob;
+
+  // VillageSQL: Route to the appropriate custom type copy function.
+  if (m_from_field->has_type_context()) return do_field_from_custom;
 
   const bool compatible_db_low_byte_first =
       (m_to_field->table->s->db_low_byte_first ==

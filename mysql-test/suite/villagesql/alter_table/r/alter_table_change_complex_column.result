@@ -1,0 +1,30 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+complex_val COMPLEX
+);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+INSERT INTO t1 VALUES (2, '(3.5,-1.2)');
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `complex_val` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+id	complex_val
+1	(1,2)
+2	(3.5,-1.2)
+ALTER TABLE t1 CHANGE complex_val string_val VARCHAR(100);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `string_val` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1;
+id	string_val
+1	(1,2)
+2	(3.5,-1.2)
+DROP TABLE t1;
