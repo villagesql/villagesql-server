@@ -159,8 +159,8 @@ class Metadata_modifier {
 
   // Modify column entries based on alter_info.
   // Returns false on success, true on error.
-  bool alter_columns(THD *thd, Table_name db_table,
-                     const Alter_info *alter_info, TABLE *table);
+  bool alter_columns(THD *thd, Table_ref *table_ref,
+                     const Alter_info *alter_info);
 
   // Lock extensions, validate custom columns and mark modifications to
   // victionary.

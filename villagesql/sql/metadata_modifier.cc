@@ -215,13 +215,14 @@ bool Metadata_modifier::rename_columns_table(THD *thd [[maybe_unused]],
 }
 
 bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
-                                      Table_name db_table,
-                                      const Alter_info *alter_info,
-                                      TABLE *table) {
+                                      Table_ref *table_ref,
+                                      const Alter_info *alter_info) {
   if (!alter_info) {
     return false;  // No alter info, nothing to do
   }
 
+  TABLE *table = table_ref->table;
+  Table_name db_table = {table_ref->db, table_ref->table_name};
   if (should_assert_if_null(db_table.first) ||
       should_assert_if_null(db_table.second)) {
     villagesql_error(error_uninitialized_name, MYF(0));
@@ -687,10 +688,8 @@ bool Metadata_modifier::process_alter(THD *thd, Table_ref *table_list,
   }
 
   Metadata_modifier custom_columns;
-  Table_name db_table = {table_list->db, table_list->table_name};
 
-  if (custom_columns.alter_columns(thd, db_table, alter_info,
-                                   table_list->table)) {
+  if (custom_columns.alter_columns(thd, table_list, alter_info)) {
     return true;
   }
 
