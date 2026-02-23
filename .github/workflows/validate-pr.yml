@@ -43,6 +43,11 @@ jobs:
         # Checkout PR head so villint diffs against the actual PR changes
         git checkout "$head_sha"
 
+    - name: Validate PR title
+      env:
+        PR_TITLE: ${{ github.event.pull_request.title }}
+      run: ./scripts/validate-pr-title.sh "$PR_TITLE"
+
     - name: Install clang-format
       run: |
         sudo apt-get update
