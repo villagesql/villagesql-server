@@ -22,6 +22,7 @@
 #include "sql/thd_raii.h"
 #include "sql/transaction.h"
 #include "villagesql/include/error.h"
+#include "villagesql/include/version.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/veb/veb_file.h"
@@ -53,6 +54,32 @@ const uchar *Sys_var_villagesql_version::global_value_ptr(THD *thd,
 static Sys_var_villagesql_version Sys_villagesql_schema_version(
     "villagesql_schema_version",
     "VillageSQL schema version number. \"\" indicates not initialized.");
+
+class Sys_var_villagesql_server_version : public Sys_var_charptr_func {
+ public:
+  Sys_var_villagesql_server_version(const char *name_arg,
+                                    const char *comment_arg);
+  const uchar *global_value_ptr(THD *thd, std::string_view) override;
+};
+
+Sys_var_villagesql_server_version::Sys_var_villagesql_server_version(
+    const char *name_arg, const char *comment_arg)
+    : Sys_var_charptr_func(name_arg, comment_arg, GLOBAL) {}
+
+const uchar *Sys_var_villagesql_server_version::global_value_ptr(
+    THD *thd, std::string_view) {
+  std::string ver = villagesql::GetBuildVersion().to_string();
+  size_t buf_size = ver.size() + 1;
+  char *buf = (char *)thd->alloc(buf_size);
+  if (should_assert_if_null(buf))
+    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), buf_size);
+  else
+    std::copy(ver.data(), ver.data() + ver.length() + 1, buf);
+  return (uchar *)buf;
+}
+
+static Sys_var_villagesql_server_version Sys_villagesql_server_version(
+    "villagesql_server_version", "VillageSQL server version.");
 
 bool bootstrap_for_init_file(THD *thd) {
   if (SchemaManager::bootstrap(thd)) {

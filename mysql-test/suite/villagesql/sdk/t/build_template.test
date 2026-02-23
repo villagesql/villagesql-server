@@ -12,10 +12,9 @@
 --echo # SDK Build Template Test
 
 # Get paths - use @@basedir which points to the build directory where mysqld runs
-# TODO(villagesql-beta): Replace @@villagesql_schema_version with @@villagesql_version
 --let $veb_dir = `SELECT @@veb_dir`
 --let $build_dir = `SELECT @@basedir`
---let $sdk_version = `SELECT @@villagesql_schema_version`
+--let $sdk_version = `SELECT @@villagesql_server_version`
 --let $test_dir = $MYSQLTEST_VARDIR/tmp/sdk_test
 --let $sdk_dir_name = villagesql-extension-sdk-$sdk_version
 --let $sdk_tarball = $build_dir/$sdk_dir_name.tar.gz
