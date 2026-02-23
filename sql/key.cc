@@ -350,7 +350,6 @@ void field_unpack(String *to, Field *field, uint max_length, bool prefix_key) {
                                 char_length)) < tmp.length())
         tmp.length(charpos);
     }
-  finish_append:
     if (max_length < field->pack_length())
       tmp.length(min(tmp.length(), static_cast<size_t>(max_length)));
     const ErrConvString err(&tmp);
