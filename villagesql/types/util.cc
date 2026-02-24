@@ -624,7 +624,11 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
         thd->get_stmt_da()->current_row_for_condition());
     return false;
   }
+  CopyCustomToCustomField(from, to);
+  return false;
+}
 
+void CopyCustomToCustomField(const Field *from, Field *to) {
   // Both fields have the same custom type. Copy binary data directly.
   // Handle potential length_bytes differences (VARCHAR(255) vs VARCHAR(65535)).
   // Note: from->data_length() decodes the length and from->data_ptr() returns
@@ -648,11 +652,11 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
   assert(data_len <= to->field_length);
   // Copy the binary data
   memcpy(to_ptr + to_length_bytes, from_data, data_len);
-  return false;
 }
 
 void CopyCustomToStringField(const Field *from, Field *to) {
   assert(from->has_type_context());
+  assert(to->result_type() == STRING_RESULT);
   // Custom → non-custom string: decode to string representation.
   // NULL is handled outside this function
   // TODO(villagesql-performance): evaluate something more performant
