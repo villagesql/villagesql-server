@@ -326,10 +326,16 @@ class PT_custom_type : public PT_type {
 
   const CHARSET_INFO *get_charset() const override { return &my_charset_bin; }
 
-  // TODO(villagesql-beta): figure out the correct implementation for these.
+  // Custom types delegate storage to their implementation_type, so these
+  // type-specific attributes don't apply:
+
+  // Decimal precision is only meaningful for DECIMAL/FLOAT/DOUBLE/temporal.
   const char *get_dec() const override { return nullptr; }
+  // Geometry subtype is only meaningful for MYSQL_TYPE_GEOMETRY.
   uint get_uint_geom_type() const override { return 0; }
+  // Interval lists are only meaningful for ENUM/SET.
   List<String> *get_interval_list() const override { return nullptr; }
+  // SERIAL is a special alias for BIGINT UNSIGNED AUTO_INCREMENT UNIQUE.
   bool is_serial_type() const override { return false; }
 };
 
