@@ -1,0 +1,71 @@
+/* Copyright (c) 2026 VillageSQL Contributors
+ *
+ * This program is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU General Public License
+ * as published by the Free Software Foundation; either version 2
+ * of the License, or (at your option) any later version.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program; if not, see <https://www.gnu.org/licenses/>.
+ */
+
+// ABI v2 Compile-time Layout Checks
+//
+// Verifies the binary layout of protocol-2 fields in the main SDK headers.
+// A failure here means the server has broken ABI compatibility with extensions
+// compiled against VEF_PROTOCOL_2 headers.
+//
+// Sizes and offsets were derived from the 64-bit LP64 layout (Linux/macOS
+// x86-64 and ARM64) where:
+//   pointer/size_t = 8 bytes (align 8), int/unsigned int = 4 bytes (align 4),
+//   bool = 1 byte, double = 8 bytes, long long = 8 bytes,
+//   enum : int / enum : unsigned int = 4 bytes (align 4).
+
+#include <gtest/gtest.h>
+
+#include <cstddef>
+
+#include "villagesql/sdk/include/villagesql/abi/types.h"
+
+// ---------------------------------------------------------------------------
+// vef_type_desc_t (protocol >= VEF_PROTOCOL_2 fields)
+//
+// Full layout including v1 and v2 fields:
+//   vef_protocol_t protocol;                        // +0
+//   [4 bytes padding]
+//   const char *name;                               // +8
+//   int64_t persisted_length;                       // +16
+//   int64_t max_decode_buffer_length;               // +24
+//   vef_encode_func_t encode_func;                  // +32  (protocol >= 1)
+//   vef_decode_func_t decode_func;                  // +40  (protocol >= 1)
+//   vef_compare_func_t compare_func;                // +48  (protocol >= 1)
+//   vef_hash_func_t hash_func;                      // +56  (protocol >= 1)
+//   vef_type_int_to_params_func_t int_to_params;    // +64  (protocol >= 2)
+//   vef_type_resolve_params_func_t resolve_params;  // +72  (protocol >= 2)
+//   const char *encode_vdf_name;                    // +80  (protocol >= 2)
+//   const char *decode_vdf_name;                    // +88  (protocol >= 2)
+//   const char *compare_vdf_name;                   // +96  (protocol >= 2)
+//   const char *hash_vdf_name;                      // +104 (protocol >= 2)
+// ---------------------------------------------------------------------------
+static_assert(sizeof(vef_type_desc_t) == 112,
+              "ABI v2 break: vef_type_desc_t size changed");
+static_assert(offsetof(vef_type_desc_t, int_to_params) == 64,
+              "ABI v2 break: vef_type_desc_t::int_to_params offset changed");
+static_assert(offsetof(vef_type_desc_t, resolve_params) == 72,
+              "ABI v2 break: vef_type_desc_t::resolve_params offset changed");
+static_assert(offsetof(vef_type_desc_t, encode_vdf_name) == 80,
+              "ABI v2 break: vef_type_desc_t::encode_vdf_name offset changed");
+static_assert(offsetof(vef_type_desc_t, decode_vdf_name) == 88,
+              "ABI v2 break: vef_type_desc_t::decode_vdf_name offset changed");
+static_assert(offsetof(vef_type_desc_t, compare_vdf_name) == 96,
+              "ABI v2 break: vef_type_desc_t::compare_vdf_name offset changed");
+static_assert(offsetof(vef_type_desc_t, hash_vdf_name) == 104,
+              "ABI v2 break: vef_type_desc_t::hash_vdf_name offset changed");
+
+// Placeholder test so the binary links and runs.
+TEST(AbiV2Check, StaticAssertsPass) {}

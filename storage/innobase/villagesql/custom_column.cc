@@ -25,6 +25,7 @@
 #include "storage/innobase/include/dict0mem.h"
 #include "storage/innobase/include/ha_prototypes.h"
 #include "villagesql/include/error.h"
+#include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/types/util.h"
 
@@ -48,12 +49,16 @@ Custom_column::Info Custom_column::get_from_position(const dict_index_t *index,
   return get_from_field(index->get_field(position));
 }
 
+int Custom_column::compare(const unsigned char *data1, size_t len1,
+                           const unsigned char *data2, size_t len2) const {
+  return compare_op_.invoke(data1, len1, data2, len2);
+}
+
 void Custom_column::load(dict_table_t *table, dict_col_t *col,
                          const Field *sql_field, const dd::Column *) {
   ut_ad(!col->custom_column);
-  auto *custom_compare = villagesql::GetCompareFunc(*sql_field);
 
-  if (!custom_compare) return;
+  if (!sql_field->has_type_context()) return;
 
   void *mem = static_cast<Custom_column *>(
       mem_heap_zalloc(table->heap, sizeof(Custom_column)));
@@ -61,7 +66,8 @@ void Custom_column::load(dict_table_t *table, dict_col_t *col,
   static_assert(std::is_trivially_destructible<Custom_column>::value,
                 "Custom_column must be trivially destructible");
 
-  col->custom_column = new (mem) Custom_column(custom_compare);
+  col->custom_column = new (mem)
+      Custom_column(sql_field->get_type_context()->descriptor()->compare_op());
 }
 
 void Custom_column::load_all(dict_table_t *table) {

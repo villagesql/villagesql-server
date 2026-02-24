@@ -159,7 +159,8 @@ class TypeContextTest : public ::testing::Test {
 TEST_F(TypeContextTest, FixedLengthTypeUsesDescriptorValues) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("COMPLEX", "test_ext", "1.0.0"), 1, 16, 256,
-      dummy_encode, dummy_decode, dummy_compare);
+      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
+      villagesql::CompareOp(dummy_compare));
   villagesql::TypeContextKey key("COMPLEX", "test_ext", "1.0.0");
   villagesql::TypeContext ctx(key, &desc);
 
@@ -170,7 +171,8 @@ TEST_F(TypeContextTest, FixedLengthTypeUsesDescriptorValues) {
 TEST_F(TypeContextTest, ParameterizedTypeUsesResolvedValues) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), 1, -1, 0,
-      dummy_encode, dummy_decode, dummy_compare, nullptr, nullptr,
+      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
+      villagesql::CompareOp(dummy_compare), std::nullopt, nullptr,
       resolve_params_ok);
   villagesql::TypeParameters params({{"dimension", "1536"}});
   villagesql::TypeContextKey key(
@@ -185,7 +187,8 @@ TEST_F(TypeContextTest, ParameterizedTypeUsesResolvedValues) {
 TEST_F(TypeContextTest, ResolveParamsFailureFallsBackToDescriptor) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), 1, -1, 0,
-      dummy_encode, dummy_decode, dummy_compare, nullptr, nullptr,
+      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
+      villagesql::CompareOp(dummy_compare), std::nullopt, nullptr,
       resolve_params_fail);
   villagesql::TypeParameters params({{"dimension", "1536"}});
   villagesql::TypeContextKey key(
@@ -200,7 +203,8 @@ TEST_F(TypeContextTest, ResolveParamsFailureFallsBackToDescriptor) {
 TEST_F(TypeContextTest, EmptyParamsSkipsResolveCallback) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), 1, -1, 0,
-      dummy_encode, dummy_decode, dummy_compare, nullptr, nullptr,
+      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
+      villagesql::CompareOp(dummy_compare), std::nullopt, nullptr,
       resolve_params_fail);
   // No parameters — should use descriptor values directly, not call
   // resolve_params (which would fail)

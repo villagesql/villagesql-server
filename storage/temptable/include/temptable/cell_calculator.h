@@ -197,10 +197,11 @@ inline size_t Cell_calculator::hash(const Cell &cell) const {
   }
 
   // Custom types: check for custom hash function.
-  // If hash_func is provided, use it. If nullptr, binary hash is safe
+  // If provided, use it. If absent, binary hash is safe
   // (encode canonicalizes equivalent values like -0.0 → +0.0).
-  if (auto hash_fn = villagesql::GetHashFunc(*m_mysql_field)) {
-    return hash_fn(data, data_length);
+  if (auto hash =
+          villagesql::TryComputeHash(*m_mysql_field, data, data_length)) {
+    return *hash;
   }
 
   /*

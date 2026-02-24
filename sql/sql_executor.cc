@@ -3981,9 +3981,12 @@ static bool cmp_field_value(Field *field, ptrdiff_t diff) {
   }
 
   // Use custom comparison function for custom types
-  if (auto cmp_func = villagesql::GetCompareFunc(*field)) {
-    return cmp_func(field->data_ptr(), value1_length, field->data_ptr() + diff,
-                    value2_length) != 0;
+  if (field->has_type_context()) {
+    if (auto result = villagesql::TryCompareCustomType(
+            *field->get_type_context(), field->data_ptr(), value1_length,
+            field->data_ptr() + diff, value2_length)) {
+      return *result != 0;
+    }
   }
 
   // Trailing space can't be skipped and length is different
@@ -4060,7 +4063,8 @@ ulonglong calc_field_hash(const Field *field, ulonglong *hash_val) {
     const Field_json *json_field = down_cast<const Field_json *>(field);
 
     crc = json_field->make_hash_key(*hash_val);
-  } else if (auto hash_fn = villagesql::GetHashFunc(*field)) {
+  } else if (auto hash = villagesql::TryComputeHash(*field, field->data_ptr(),
+                                                    field->data_length())) {
     // Custom type with custom hash function - use it.
     // The hash function may return a constant (for comparison-based dedup)
     // or canonicalize on the fly before hashing.
@@ -4068,7 +4072,7 @@ ulonglong calc_field_hash(const Field *field, ulonglong *hash_val) {
     // cause us to fall to the else case and use the raw binary, which
     // would not work for some custom types that have multiple binary
     // representations for equivalent values (such as -0 and 0).
-    my_hash_combine(crc, hash_fn(field->data_ptr(), field->data_length()));
+    my_hash_combine(crc, *hash);
   } else if (field->key_type() == HA_KEYTYPE_TEXT ||
              field->key_type() == HA_KEYTYPE_VARTEXT1 ||
              field->key_type() == HA_KEYTYPE_VARTEXT2) {

@@ -1657,7 +1657,8 @@ TEST_F(VictionaryClientTest, TypeDescriptorOperations) {
       1,    // implementation_type
       16,   // persisted_length
       256,  // max_decode_buffer_length
-      test_encode, test_decode, test_compare);
+      villagesql::EncodeOp(test_encode), villagesql::DecodeOp(test_decode),
+      villagesql::CompareOp(test_compare));
 
   {
     auto guard = client_->get_write_lock();
@@ -1697,9 +1698,6 @@ TEST_F(VictionaryClientTest, TypeDescriptorOperations) {
     EXPECT_EQ(committed->implementation_type(), 1);
     EXPECT_EQ(committed->persisted_length(), 16);
     EXPECT_EQ(committed->max_decode_buffer_length(), 256);
-    EXPECT_EQ(committed->encode(), test_encode);
-    EXPECT_EQ(committed->decode(), test_decode);
-    EXPECT_EQ(committed->compare(), test_compare);
   }
 }
 
@@ -1709,7 +1707,8 @@ TEST_F(VictionaryClientTest, TypeDescriptorRollback) {
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("ROLLBACK_TYPE", "ext", "1.0"), 0, 8, 64,
-      test_encode, test_decode, test_compare);
+      villagesql::EncodeOp(test_encode), villagesql::DecodeOp(test_decode),
+      villagesql::CompareOp(test_compare));
 
   {
     auto guard = client_->get_write_lock();
@@ -1788,7 +1787,8 @@ TEST_F(VictionaryClientTest, AcquireKeepsEntryAlive) {
 
   // Create and commit a TypeDescriptor entry
   TypeDescriptorKey key("REFCOUNT_TYPE", "ext", "1.0");
-  TypeDescriptor entry(key, 0, 42, 0, nullptr, nullptr, nullptr, nullptr);
+  TypeDescriptor entry(key, 0, 42, 0, EncodeOp(test_encode),
+                       DecodeOp(test_decode), CompareOp(test_compare));
 
   {
     auto guard = client_->get_write_lock();
@@ -1912,9 +1912,7 @@ TEST_F(VictionaryClientTest, AcquireOrCreateNew) {
   THD *fake_thd = reinterpret_cast<THD *>(0xA0C1);
 
   // Create a TypeDescriptor for the type
-  TypeDescriptor type_desc(
-      TypeDescriptorKey("AOTEST_TYPE", "test_ext", "1.0.0"), 0, 16, 0, nullptr,
-      nullptr, nullptr, nullptr);
+  TypeDescriptor type_desc(TypeDescriptorKey("AOTEST_TYPE", "test_ext", "1.0.0"));
 
   {
     auto guard = client_->get_write_lock();
@@ -1962,9 +1960,7 @@ TEST_F(VictionaryClientTest, AcquireOrCreateExisting) {
   THD *fake_thd = reinterpret_cast<THD *>(0xA0C2);
 
   // Create a TypeDescriptor for the type
-  TypeDescriptor type_desc(
-      TypeDescriptorKey("AOTEST_TYPE2", "test_ext", "1.0.0"), 0, 32, 0, nullptr,
-      nullptr, nullptr, nullptr);
+  TypeDescriptor type_desc(TypeDescriptorKey("AOTEST_TYPE2", "test_ext", "1.0.0"));
 
   {
     auto guard = client_->get_write_lock();
@@ -2053,8 +2049,7 @@ TEST_F(VictionaryClientTest, AcquireOrCreateWithParameters) {
   THD *fake_thd = reinterpret_cast<THD *>(0xA0C3);
 
   // Create a TypeDescriptor for the type
-  TypeDescriptor type_desc(TypeDescriptorKey("VECTOR", "vector_ext", "2.0.0"),
-                           0, 64, 0, nullptr, nullptr, nullptr, nullptr);
+  TypeDescriptor type_desc(TypeDescriptorKey("VECTOR", "vector_ext", "2.0.0"));
 
   {
     auto guard = client_->get_write_lock();

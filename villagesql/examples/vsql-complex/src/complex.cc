@@ -216,6 +216,22 @@ size_t hash_complex2(const unsigned char *data, size_t len) {
   return fnv1a_hash(canonical, kComplexSize);
 }
 
+// Compare VDF: complex_compare(a, b) -> INT
+void complex_compare_impl(vef_context_t *ctx, vef_invalue_t *in_l,
+                          vef_invalue_t *in_r, vef_vdf_result_t *out) {
+  out->int_value = cmp_complex(in_l->bin_value, in_l->bin_len, in_r->bin_value,
+                               in_r->bin_len);
+  out->type = VEF_RESULT_VALUE;
+}
+
+// Hash VDF: complex2_hash(c) -> INT
+void complex2_hash_impl(vef_context_t *ctx, vef_invalue_t *in,
+                        vef_vdf_result_t *out) {
+  out->int_value =
+      static_cast<long long>(hash_complex2(in->bin_value, in->bin_len));
+  out->type = VEF_RESULT_VALUE;
+}
+
 std::optional<Complex> TryLoadFromInValue(const vef_invalue_t *v) {
   if (v->bin_len != kComplexSize) {
     return std::nullopt;
@@ -448,21 +464,21 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(make_type(COMPLEX)
                   .persisted_length(kComplexSize)
                   .max_decode_buffer_length(64)
-                  .encode(&encode_complex)
-                  .decode(&decode_complex)
-                  .compare(&cmp_complex)
+                  .encode("complex_from_string")
+                  .decode("complex_to_string")
+                  .compare("complex_compare")
                   .build())
         // COMPLEX2 type without canonicalization (preserves -0.0)
         // Requires custom hash that canonicalizes -0 to +0 before hashing
         .type(make_type(COMPLEX2)
                   .persisted_length(kComplexSize)
                   .max_decode_buffer_length(64)
-                  .encode(&encode_complex2)
-                  .decode(&decode_complex)
-                  .compare(&cmp_complex)
-                  .hash(&hash_complex2)
+                  .encode("complex2_from_string")
+                  .decode("complex2_to_string")
+                  .compare("complex2_compare")
+                  .hash("complex2_hash")
                   .build())
-        // Type conversion functions
+        // Type conversion functions (also serve as encode/decode VDFs)
         .func(make_func("complex_from_string")
                   .from_string<&encode_complex>(COMPLEX))
         .func(
@@ -471,6 +487,24 @@ VEF_GENERATE_ENTRY_POINTS(
                   .from_string<&encode_complex2>(COMPLEX2))
         .func(make_func("complex2_to_string")
                   .to_string<&decode_complex>(COMPLEX2))
+        // Compare and hash VDFs
+        .func(make_func<&complex_compare_impl>("complex_compare")
+                  .returns(INT)
+                  .param(COMPLEX)
+                  .param(COMPLEX)
+                  .deterministic()
+                  .build())
+        .func(make_func<&complex_compare_impl>("complex2_compare")
+                  .returns(INT)
+                  .param(COMPLEX2)
+                  .param(COMPLEX2)
+                  .deterministic()
+                  .build())
+        .func(make_func<&complex2_hash_impl>("complex2_hash")
+                  .returns(INT)
+                  .param(COMPLEX2)
+                  .deterministic()
+                  .build())
         // Arithmetic functions
         .func(make_func<&complex_add_impl>("complex_add")
                   .returns(COMPLEX)

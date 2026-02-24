@@ -14,6 +14,7 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 SET(VILLAGESQL_TYPES_SOURCES
+  type_op.cc
   util.cc
 )
 

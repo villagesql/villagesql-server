@@ -18,6 +18,7 @@
 #define VILLAGESQL_TYPES_UTIL_H_
 
 #include <stddef.h>
+#include <optional>
 
 #include "lex_string.h"
 #include "my_inttypes.h"
@@ -117,45 +118,16 @@ extern bool DecodeString(const TypeContext &tc, const uchar *encoded_data,
 // Appends "extension_name.type_name" to the given String.
 extern void AppendFullyQualifiedName(const TypeContext &tc, String *out);
 
-// Type alias for custom type comparison function pointer
-// Returns < 0 when data1 < data2, > 0 when data2 < data1, and 0 when equal
-// Comparison is always in ascending order; DESC is handled by callers
-// Only min(len1, len2) should be compared. Length can be used as tie-breaker
-using compare_func = int (*)(const uchar *data1, size_t len1,
-                             const uchar *data2, size_t len2);
+// Compute hash for a custom type value. Returns nullopt if no custom hash is
+// registered for this type (binary hash is safe in that case).
+extern std::optional<size_t> TryComputeHash(const TypeContext &tc,
+                                            const uchar *data, size_t len);
 
-// Get the comparison function for a custom type from its TypeContext.
-inline compare_func GetCompareFunc(const TypeContext &tc) {
-  assert(tc.descriptor());
-  return tc.descriptor()->compare();
-}
-
-// Same as above, but for Item or Field.
 template <typename T>
-inline compare_func GetCompareFunc(const T &obj) {
-  if (obj.has_type_context()) {
-    return GetCompareFunc(*obj.get_type_context());
-  }
-  return nullptr;
-}
-
-// Hash function type for custom types
-using hash_func = size_t (*)(const uchar *data, size_t len);
-
-// Get the hash function for a custom type from its TypeContext.
-// Returns nullptr if no custom hash (meaning binary hash is safe).
-inline hash_func GetHashFunc(const TypeContext &tc) {
-  assert(tc.descriptor());
-  return tc.descriptor()->hash();
-}
-
-// Same as above, but for Item or Field.
-template <typename T>
-inline hash_func GetHashFunc(const T &obj) {
-  if (obj.has_type_context()) {
-    return GetHashFunc(*obj.get_type_context());
-  }
-  return nullptr;
+inline std::optional<size_t> TryComputeHash(const T &obj, const uchar *data,
+                                            size_t len) {
+  if (!obj.has_type_context()) return std::nullopt;
+  return TryComputeHash(*obj.get_type_context(), data, len);
 }
 
 // Inject custom type context into a string Item and encode it for comparison
@@ -172,12 +144,8 @@ inline std::optional<int> TryCompareCustomType(const TypeContext &tc,
                                                const uchar *data1, size_t len1,
                                                const uchar *data2,
                                                size_t len2) {
-  auto cmp_func = GetCompareFunc(tc);
-  if (cmp_func == nullptr) {
-    return std::nullopt;
-  }
-
-  return cmp_func(data1, len1, data2, len2);
+  assert(tc.descriptor());
+  return tc.descriptor()->compare_op().invoke(data1, len1, data2, len2);
 }
 
 template <typename T>

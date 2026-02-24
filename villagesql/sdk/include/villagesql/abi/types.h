@@ -157,6 +157,8 @@ typedef enum : unsigned int {
   VEF_PROTOCOL_1,  // Stable as of v0.0.1, likely to be deprecated.
   VEF_PROTOCOL_2,  // Under development, not stable. Adds:
                    // + Add deterministic VDF attribute.
+                   // + Add encode/decode/compare/hash VDF name fields to
+                   //   vef_type_desc_t.
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -572,6 +574,21 @@ typedef struct {
   // Required if int_to_params is set.
   // NULL means the type does not accept parameters.
   vef_type_resolve_params_func_t resolve_params;
+
+  // OPTIONAL: Names of VDFs (from this extension's funcs[]) to use as
+  // encode/decode/compare/hash implementations. When set, the named VDF is
+  // used instead of the corresponding _func pointer above; exactly one of the
+  // two must be set for required operations (encode, decode, compare). The
+  // named VDF must have the matching signature:
+  //   encode_vdf_name: (STRING) -> CUSTOM(this type)
+  //   decode_vdf_name: (CUSTOM(this type)) -> STRING
+  //   compare_vdf_name: (CUSTOM(this type), CUSTOM(this type)) -> INT
+  //   hash_vdf_name: (CUSTOM(this type)) -> INT
+  // The named VDFs are also registered as callable SQL functions.
+  const char *encode_vdf_name;
+  const char *decode_vdf_name;
+  const char *compare_vdf_name;
+  const char *hash_vdf_name;  // OPTIONAL (like hash_func)
 } vef_type_desc_t;
 
 typedef struct {

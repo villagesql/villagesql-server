@@ -224,13 +224,34 @@ int tvector_compare(const unsigned char *data1, size_t len1,
   return 0;
 }
 
-VEF_GENERATE_ENTRY_POINTS(make_extension("vsql_tvector", "0.0.1")
-                              .type(make_type("TVECTOR")
-                                        .persisted_length(-1)
-                                        .max_decode_buffer_length(16)
-                                        .encode(&tvector_encode)
-                                        .decode(&tvector_decode)
-                                        .compare(&tvector_compare)
-                                        .int_to_params(&tvector_int_to_params)
-                                        .resolve_params(&tvector_resolve_params)
-                                        .build()))
+// Compare VDF: tvector_compare(a, b) -> INT
+void tvector_compare_impl(vef_context_t *ctx, vef_invalue_t *in_l,
+                          vef_invalue_t *in_r, vef_vdf_result_t *out) {
+  out->int_value = tvector_compare(in_l->bin_value, in_l->bin_len,
+                                   in_r->bin_value, in_r->bin_len);
+  out->type = VEF_RESULT_VALUE;
+}
+
+constexpr const char *TVECTOR = "TVECTOR";
+
+VEF_GENERATE_ENTRY_POINTS(
+    make_extension("vsql_tvector", "0.0.1")
+        .type(make_type(TVECTOR)
+                  .persisted_length(-1)
+                  .max_decode_buffer_length(16)
+                  .encode("tvector_from_string")
+                  .decode("tvector_to_string")
+                  .compare("tvector_compare")
+                  .int_to_params(&tvector_int_to_params)
+                  .resolve_params(&tvector_resolve_params)
+                  .build())
+        .func(make_func("tvector_from_string")
+                  .from_string<&tvector_encode>(TVECTOR))
+        .func(
+            make_func("tvector_to_string").to_string<&tvector_decode>(TVECTOR))
+        .func(make_func<&tvector_compare_impl>("tvector_compare")
+                  .returns(INT)
+                  .param(TVECTOR)
+                  .param(TVECTOR)
+                  .deterministic()
+                  .build()))

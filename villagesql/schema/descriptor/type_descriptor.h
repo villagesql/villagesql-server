@@ -23,11 +23,13 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <string>
 #include <utility>
 
 #include "villagesql/schema/systable/helpers.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
+#include "villagesql/types/type_op.h"
 
 namespace villagesql {
 
@@ -99,36 +101,12 @@ struct TypeDescriptorKey {
 
 // TypeDescriptor: Immutable in-memory descriptor for a custom type.
 // Built programmatically from extension registration, not from table rows.
-// Holds direct function pointers for type operations.
+// Holds type operation wrappers (EncodeOp, DecodeOp, CompareOp, HashOp) that
+// dispatch to either a simple function pointer or a VDF.
 class TypeDescriptor {
  public:
   using key_type = TypeDescriptorKey;
   using key_prefix_type = TypeDescriptorKeyPrefix;
-
-  // Function pointer types for type operations
-  // These match the signatures in CustomFunctionContainer for compatibility.
-
-  // Encodes a string representation to binary storage format.
-  // Returns false on success, true on error.
-  // TODO(villagesql-ga): consolidate all of these typedefs so that they are in
-  // one location.
-  using EncodeFn = bool (*)(unsigned char *buffer, size_t buffer_size,
-                            const char *from, size_t from_len, size_t *length);
-
-  // Decodes binary storage format to string representation.
-  // Returns false on success, true on error.
-  using DecodeFn = bool (*)(const unsigned char *buffer, size_t buffer_size,
-                            char *to, size_t to_buffer_size, size_t *to_length);
-
-  // Compares two binary values. Returns <0, 0, or >0 like strcmp.
-  // Comparison is always ascending; DESC is handled by callers.
-  using CompareFn = int (*)(const unsigned char *data1, size_t len1,
-                            const unsigned char *data2, size_t len2);
-
-  // Optional hash function for deduplication/joins.
-  // If nullptr, standard binary hash is used (requires encode to canonicalize
-  // equivalent values like -0.0 to +0.0).
-  using HashFn = size_t (*)(const unsigned char *data, size_t len);
 
   // Optional: Convert TYPE(N) integer to parameter key-value pairs.
   // If nullptr, TYPE(N) syntax is not supported for this type.
@@ -138,20 +116,20 @@ class TypeDescriptor {
   // If nullptr, the type does not accept parameters.
   using ResolveParamsFn = vef_type_resolve_params_func_t;
 
-  // Default constructor - creates an empty/invalid descriptor
-  // Required for use with SystemTableMap's PendingOperation
+  // Default constructor - creates an empty/invalid descriptor.
+  // Required for use with SystemTableMap's PendingOperation.
   TypeDescriptor() = default;
 
   // Construct with key only, other fields can be set separately (useful for
-  // testing)
+  // testing).
   explicit TypeDescriptor(TypeDescriptorKey key) : key_(std::move(key)) {}
 
-  // Full constructor with all fields (hash, int_to_params, resolve_params
-  // may be nullptr)
+  // Full constructor. hash, int_to_params, and resolve_params are optional.
   TypeDescriptor(TypeDescriptorKey key, unsigned char impl_type,
                  int64_t persisted_len, int64_t max_unpersisted_len,
-                 EncodeFn encode, DecodeFn decode, CompareFn compare,
-                 HashFn hash = nullptr, IntToParamsFn int_to_params = nullptr,
+                 EncodeOp encode, DecodeOp decode, CompareOp compare,
+                 std::optional<HashOp> hash = std::nullopt,
+                 IntToParamsFn int_to_params = nullptr,
                  ResolveParamsFn resolve_params = nullptr);
 
   // Disable copy (descriptors should not be copied)
@@ -186,11 +164,23 @@ class TypeDescriptor {
   int64_t persisted_length() const { return persisted_length_; }
   int64_t max_decode_buffer_length() const { return max_decode_buffer_length_; }
 
-  // Function pointer accessors
-  EncodeFn encode() const { return encode_; }
-  DecodeFn decode() const { return decode_; }
-  CompareFn compare() const { return compare_; }
-  HashFn hash() const { return hash_; }  // May be nullptr
+  // Type operation accessors.
+  // encode_op, decode_op, compare_op assert that the op is set (required ops).
+  // hash_op returns std::nullopt if no custom hash is registered.
+  const EncodeOp &encode_op() const {
+    assert(encode_op_.has_value());
+    return *encode_op_;
+  }
+  const DecodeOp &decode_op() const {
+    assert(decode_op_.has_value());
+    return *decode_op_;
+  }
+  const CompareOp &compare_op() const {
+    assert(compare_op_.has_value());
+    return *compare_op_;
+  }
+  const std::optional<HashOp> &hash_op() const { return hash_op_; }
+
   IntToParamsFn int_to_params() const { return int_to_params_; }
   ResolveParamsFn resolve_params() const { return resolve_params_; }
 
@@ -202,11 +192,12 @@ class TypeDescriptor {
   int64_t persisted_length_{0};
   int64_t max_decode_buffer_length_{0};
 
-  // Function pointers (nullptr for default-constructed descriptor)
-  EncodeFn encode_{nullptr};
-  DecodeFn decode_{nullptr};
-  CompareFn compare_{nullptr};
-  HashFn hash_{nullptr};
+  // Type operations (encode/decode/compare required; hash optional)
+  std::optional<EncodeOp> encode_op_;
+  std::optional<DecodeOp> decode_op_;
+  std::optional<CompareOp> compare_op_;
+  std::optional<HashOp> hash_op_;
+
   IntToParamsFn int_to_params_{nullptr};
   ResolveParamsFn resolve_params_{nullptr};
 };

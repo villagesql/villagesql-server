@@ -18,7 +18,7 @@
 #define STORAGE_INNOBASE_VILLAGESQL_CUSTOM_COLUMN_H_
 
 #include <utility>
-#include "villagesql/sdk/include/villagesql/abi/types.h"
+#include "villagesql/types/type_op.h"
 
 // Forward declarations
 struct dict_table_t;
@@ -38,11 +38,14 @@ namespace innodb {
 
 class Custom_column {
  public:
-  using Compare = vef_compare_func_t;
   using Info = std::pair<Custom_column *, bool>;
 
-  Custom_column(Compare compare_fn) : compare_fn_(compare_fn) {}
-  inline Compare compare() const { return compare_fn_; }
+  explicit Custom_column(CompareOp compare_op)
+      : compare_op_(std::move(compare_op)) {}
+
+  // Compare two values using the registered compare implementation.
+  int compare(const unsigned char *data1, size_t len1,
+              const unsigned char *data2, size_t len2) const;
 
   // Get custom column descriptor and ascending flag from index position.
   static Info get_from_position(const dict_index_t *index, size_t position);
@@ -71,8 +74,7 @@ class Custom_column {
   static void load_all(dict_table_t *table);
 
  private:
-  // Custom column type comparison function defined by the extension.
-  Compare compare_fn_{nullptr};
+  CompareOp compare_op_;
 };
 }  // namespace innodb
 }  // namespace villagesql

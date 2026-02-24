@@ -239,29 +239,8 @@ bool HandleCustomColumnsForTableRename(THD &thd, const char *old_db,
 
 String *EncodeString(const TypeContext &tc, const String &from,
                      MEM_ROOT &mem_root, bool &is_valid) {
-  assert(tc.descriptor()->encode());
-  is_valid = true;
-
-  const auto length = tc.persisted_length();
-  assert(length > 0);
-  char *buffer = new (&mem_root) char[length];
-  if (should_assert_if_null(buffer)) {
-    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), length);
-    return nullptr;
-  }
-
-  size_t actual_length = 0;
-  if (tc.descriptor()->encode()(pointer_cast<uchar *>(buffer), length,
-                                from.ptr(), from.length(), &actual_length)) {
-    is_valid = false;
-    return nullptr;
-  }
-  auto *ret = new (&mem_root) String(buffer, actual_length, &my_charset_bin);
-  if (should_assert_if_null(ret)) {
-    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(String));
-    return nullptr;
-  }
-  return ret;
+  return tc.descriptor()->encode_op().invoke(from, tc.persisted_length(),
+                                             mem_root, is_valid);
 }
 
 String *EncodeStringForField(const TypeContext &tc, const String &from,
@@ -291,26 +270,9 @@ String *EncodeStringForField(const TypeContext &tc, const String &from,
 bool DecodeString(const TypeContext &tc, const uchar *encoded_data,
                   size_t encoded_length, MEM_ROOT &mem_root,
                   String *output_buffer, bool &is_valid) {
-  assert(tc.descriptor()->decode());
-  assert(output_buffer);
-  is_valid = true;
-
-  const auto max_length = tc.max_decode_buffer_length();
-  char *buffer = new (&mem_root) char[max_length];
-  if (should_assert_if_null(buffer)) {
-    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), max_length);
-    return true;
-  }
-
-  size_t decoded_length = 0;
-  if (tc.descriptor()->decode()(encoded_data, encoded_length, buffer,
-                                max_length, &decoded_length)) {
-    is_valid = false;
-    return true;
-  }
-
-  output_buffer->set(buffer, decoded_length, &my_charset_utf8mb4_bin);
-  return false;
+  return tc.descriptor()->decode_op().invoke(encoded_data, encoded_length,
+                                             tc.max_decode_buffer_length(),
+                                             mem_root, output_buffer, is_valid);
 }
 
 void AppendFullyQualifiedName(const TypeContext &tc, String *out) {
@@ -366,12 +328,10 @@ int CustomMemCompare(const Item *item, const uchar *data1, size_t len1,
   // Use custom comparison for custom types
   if (item != nullptr && item->has_type_context()) {
     auto *tc = item->get_type_context();
-    auto cmp_func = GetCompareFunc(*tc);
-    if (cmp_func != nullptr) {
-      res = cmp_func(data1, len1, data2, len2);
+    if (auto result = TryCompareCustomType(*tc, data1, len1, data2, len2)) {
       // Handle reverse sort direction in this path only since the comparison
       // function assumes ASC but memcmp relies on bits being flipped for DESC.
-      if (reverse) res = -res;
+      res = reverse ? -*result : *result;
     } else {
       res = memcmp(data1, data2, min_len);
     }
@@ -380,6 +340,14 @@ int CustomMemCompare(const Item *item, const uchar *data1, size_t len1,
   }
 
   return res;
+}
+
+std::optional<size_t> TryComputeHash(const TypeContext &tc, const uchar *data,
+                                     size_t len) {
+  assert(tc.descriptor());
+  const auto &hash_op = tc.descriptor()->hash_op();
+  if (!hash_op.has_value()) return std::nullopt;
+  return hash_op->invoke(data, len);
 }
 
 bool AreTypesCompatible(const TypeContext &tc1, const TypeContext &tc2) {

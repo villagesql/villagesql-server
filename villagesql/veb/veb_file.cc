@@ -740,6 +740,90 @@ void cleanup_orphaned_expansion_directories(
   }
 }
 
+// Look up a VDF by name in the extension's funcs[] array.
+// Returns nullptr if not found.
+static const vef_func_desc_t *find_vdf_by_name(const vef_registration_t &reg,
+                                               const char *name) {
+  for (unsigned int i = 0; i < reg.func_count; i++) {
+    const vef_func_desc_t *fd = reg.funcs[i];
+    if (fd != nullptr && fd->name != nullptr && strcmp(fd->name, name) == 0) {
+      return fd;
+    }
+  }
+  return nullptr;
+}
+
+// Validate that a VDF's signature matches the expected pattern for a type
+// operation. Returns false on success, true on error.
+static bool validate_type_vdf_signature(
+    const vef_func_desc_t *fd, const char *op_name, const char *type_name,
+    unsigned int expected_param_count, const vef_type_id expected_param_ids[],
+    const char *expected_custom_params[], vef_type_id expected_return_id,
+    const char *expected_custom_return, const std::string &extension_name) {
+  if (fd->signature == nullptr) {
+    LogVSQL(ERROR_LEVEL,
+            "VDF '%s' in extension '%s' used as %s for type '%s' has no "
+            "signature",
+            fd->name, extension_name.c_str(), op_name, type_name);
+    return true;
+  }
+
+  if (fd->prerun != nullptr || fd->postrun != nullptr) {
+    LogVSQL(ERROR_LEVEL,
+            "VDF '%s' used as %s for type '%s' must not have prerun/postrun "
+            "hooks",
+            fd->name, op_name, type_name);
+    return true;
+  }
+
+  const vef_signature_t *sig = fd->signature;
+
+  if (sig->param_count != expected_param_count) {
+    LogVSQL(ERROR_LEVEL,
+            "VDF '%s' used as %s for type '%s' must have %u parameter(s), "
+            "has %u",
+            fd->name, op_name, type_name, expected_param_count,
+            sig->param_count);
+    return true;
+  }
+
+  for (unsigned int i = 0; i < expected_param_count; i++) {
+    if (sig->params[i].id != expected_param_ids[i]) {
+      LogVSQL(ERROR_LEVEL,
+              "VDF '%s' used as %s for type '%s': parameter %u has wrong type",
+              fd->name, op_name, type_name, i);
+      return true;
+    }
+    if (expected_custom_params[i] != nullptr &&
+        (sig->params[i].custom_type == nullptr ||
+         strcmp(sig->params[i].custom_type, expected_custom_params[i]) != 0)) {
+      LogVSQL(ERROR_LEVEL,
+              "VDF '%s' used as %s for type '%s': parameter %u must be "
+              "CUSTOM('%s')",
+              fd->name, op_name, type_name, i, expected_custom_params[i]);
+      return true;
+    }
+  }
+
+  if (sig->return_type.id != expected_return_id) {
+    LogVSQL(ERROR_LEVEL,
+            "VDF '%s' used as %s for type '%s' has wrong return type", fd->name,
+            op_name, type_name);
+    return true;
+  }
+
+  if (expected_custom_return != nullptr &&
+      (sig->return_type.custom_type == nullptr ||
+       strcmp(sig->return_type.custom_type, expected_custom_return) != 0)) {
+    LogVSQL(ERROR_LEVEL,
+            "VDF '%s' used as %s for type '%s' must return CUSTOM('%s')",
+            fd->name, op_name, type_name, expected_custom_return);
+    return true;
+  }
+
+  return false;
+}
+
 bool register_types_from_extension(THD &thd, const std::string &extension_name,
                                    const std::string &extension_version,
                                    const ExtensionRegistration &ext_reg) {
@@ -788,11 +872,151 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
       return true;
     }
 
+    // Resolve VDF name fields (protocol >= VEF_PROTOCOL_2).
+    const vef_func_desc_t *encode_vdf = nullptr;
+    const vef_func_desc_t *decode_vdf = nullptr;
+    const vef_func_desc_t *compare_vdf = nullptr;
+    const vef_func_desc_t *hash_vdf = nullptr;
+
+    if (td->protocol >= VEF_PROTOCOL_2 &&
+        ext_reg.negotiated_protocol >= VEF_PROTOCOL_2) {
+      const vef_type_id custom_id[] = {VEF_TYPE_CUSTOM};
+      const char *custom_name[] = {td->name};
+      const vef_type_id two_custom_ids[] = {VEF_TYPE_CUSTOM, VEF_TYPE_CUSTOM};
+      const char *two_custom_names[] = {td->name, td->name};
+      const vef_type_id string_id[] = {VEF_TYPE_STRING};
+      const char *no_custom[] = {nullptr};
+
+      if (td->encode_func != nullptr && td->encode_vdf_name != nullptr) {
+        LogVSQL(ERROR_LEVEL,
+                "Type '%s' in extension '%s' sets both encode_func and "
+                "encode_vdf_name",
+                type_name.c_str(), extension_name.c_str());
+        return true;
+      }
+      if (td->encode_vdf_name != nullptr) {
+        encode_vdf = find_vdf_by_name(reg, td->encode_vdf_name);
+        if (encode_vdf == nullptr) {
+          LogVSQL(ERROR_LEVEL,
+                  "Type '%s' in extension '%s': encode_vdf_name '%s' not found",
+                  type_name.c_str(), extension_name.c_str(),
+                  td->encode_vdf_name);
+          return true;
+        }
+        if (validate_type_vdf_signature(encode_vdf, "encode", td->name, 1,
+                                        string_id, no_custom, VEF_TYPE_CUSTOM,
+                                        td->name, extension_name)) {
+          return true;
+        }
+      }
+
+      if (td->decode_func != nullptr && td->decode_vdf_name != nullptr) {
+        LogVSQL(ERROR_LEVEL,
+                "Type '%s' in extension '%s' sets both decode_func and "
+                "decode_vdf_name",
+                type_name.c_str(), extension_name.c_str());
+        return true;
+      }
+      if (td->decode_vdf_name != nullptr) {
+        decode_vdf = find_vdf_by_name(reg, td->decode_vdf_name);
+        if (decode_vdf == nullptr) {
+          LogVSQL(ERROR_LEVEL,
+                  "Type '%s' in extension '%s': decode_vdf_name '%s' not found",
+                  type_name.c_str(), extension_name.c_str(),
+                  td->decode_vdf_name);
+          return true;
+        }
+        if (validate_type_vdf_signature(decode_vdf, "decode", td->name, 1,
+                                        custom_id, custom_name, VEF_TYPE_STRING,
+                                        nullptr, extension_name)) {
+          return true;
+        }
+      }
+
+      if (td->compare_func != nullptr && td->compare_vdf_name != nullptr) {
+        LogVSQL(ERROR_LEVEL,
+                "Type '%s' in extension '%s' sets both compare_func and "
+                "compare_vdf_name",
+                type_name.c_str(), extension_name.c_str());
+        return true;
+      }
+      if (td->compare_vdf_name != nullptr) {
+        compare_vdf = find_vdf_by_name(reg, td->compare_vdf_name);
+        if (compare_vdf == nullptr) {
+          LogVSQL(ERROR_LEVEL,
+                  "Type '%s' in extension '%s': compare_vdf_name '%s' not "
+                  "found",
+                  type_name.c_str(), extension_name.c_str(),
+                  td->compare_vdf_name);
+          return true;
+        }
+        if (validate_type_vdf_signature(
+                compare_vdf, "compare", td->name, 2, two_custom_ids,
+                two_custom_names, VEF_TYPE_INT, nullptr, extension_name)) {
+          return true;
+        }
+      }
+
+      if (td->hash_func != nullptr && td->hash_vdf_name != nullptr) {
+        LogVSQL(ERROR_LEVEL,
+                "Type '%s' in extension '%s' sets both hash_func and "
+                "hash_vdf_name",
+                type_name.c_str(), extension_name.c_str());
+        return true;
+      }
+      if (td->hash_vdf_name != nullptr) {
+        hash_vdf = find_vdf_by_name(reg, td->hash_vdf_name);
+        if (hash_vdf == nullptr) {
+          LogVSQL(ERROR_LEVEL,
+                  "Type '%s' in extension '%s': hash_vdf_name '%s' not found",
+                  type_name.c_str(), extension_name.c_str(), td->hash_vdf_name);
+          return true;
+        }
+        if (validate_type_vdf_signature(hash_vdf, "hash", td->name, 1,
+                                        custom_id, custom_name, VEF_TYPE_INT,
+                                        nullptr, extension_name)) {
+          return true;
+        }
+      }
+    }
+
+    // Validate that each required operation has exactly one implementation.
+    if (encode_vdf == nullptr && td->encode_func == nullptr) {
+      LogVSQL(ERROR_LEVEL,
+              "Type '%s' in extension '%s' has no encode implementation",
+              type_name.c_str(), extension_name.c_str());
+      return true;
+    }
+    if (decode_vdf == nullptr && td->decode_func == nullptr) {
+      LogVSQL(ERROR_LEVEL,
+              "Type '%s' in extension '%s' has no decode implementation",
+              type_name.c_str(), extension_name.c_str());
+      return true;
+    }
+    if (compare_vdf == nullptr && td->compare_func == nullptr) {
+      LogVSQL(ERROR_LEVEL,
+              "Type '%s' in extension '%s' has no compare implementation",
+              type_name.c_str(), extension_name.c_str());
+      return true;
+    }
+
+    EncodeOp encode_op =
+        encode_vdf ? EncodeOp(encode_vdf) : EncodeOp(td->encode_func);
+    DecodeOp decode_op =
+        decode_vdf ? DecodeOp(decode_vdf) : DecodeOp(td->decode_func);
+    CompareOp compare_op =
+        compare_vdf ? CompareOp(compare_vdf) : CompareOp(td->compare_func);
+    std::optional<HashOp> hash_op;
+    if (hash_vdf != nullptr)
+      hash_op.emplace(hash_vdf);
+    else if (td->hash_func != nullptr)
+      hash_op.emplace(td->hash_func);
+
     TypeDescriptor descriptor(
         TypeDescriptorKey(type_name, extension_name, extension_version),
         MYSQL_TYPE_VARCHAR, td->persisted_length, td->max_decode_buffer_length,
-        td->encode_func, td->decode_func, td->compare_func, td->hash_func,
-        td->int_to_params, td->resolve_params);
+        std::move(encode_op), std::move(decode_op), std::move(compare_op),
+        std::move(hash_op), td->int_to_params, td->resolve_params);
 
     const TypeDescriptor *existing =
         victionary.type_descriptors().get_committed(descriptor.key());

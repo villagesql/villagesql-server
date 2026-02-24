@@ -83,7 +83,8 @@ TEST_F(TypeDescriptorTest, Construction) {
       1,    // implementation_type
       16,   // persisted_length
       256,  // max_decode_buffer_length
-      dummy_encode, dummy_decode, dummy_compare, dummy_hash);
+      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
+      villagesql::CompareOp(dummy_compare), villagesql::HashOp(dummy_hash));
 
   // Check identity fields
   EXPECT_EQ(desc.type_name(), "MYTYPE");
@@ -98,23 +99,20 @@ TEST_F(TypeDescriptorTest, Construction) {
   EXPECT_EQ(desc.persisted_length(), 16);
   EXPECT_EQ(desc.max_decode_buffer_length(), 256);
 
-  // Check function pointers
-  EXPECT_EQ(desc.encode(), dummy_encode);
-  EXPECT_EQ(desc.decode(), dummy_decode);
-  EXPECT_EQ(desc.compare(), dummy_compare);
-  EXPECT_EQ(desc.hash(), dummy_hash);
+  // Verify ops are set and dispatch to wrapped functions
+  EXPECT_EQ(desc.compare_op().invoke(nullptr, 0, nullptr, 0), 0);
+  EXPECT_EQ(desc.hash_op()->invoke(nullptr, 0), 42u);
 }
 
 // Test TypeDescriptor with nullptr hash (optional)
 TEST_F(TypeDescriptorTest, ConstructionWithNullHash) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("NOHASH", "ext", "1.0"), 0, 8, 64,
-      dummy_encode, dummy_decode, dummy_compare, nullptr);
+      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
+      villagesql::CompareOp(dummy_compare));
 
-  EXPECT_EQ(desc.hash(), nullptr);
-  EXPECT_NE(desc.encode(), nullptr);
-  EXPECT_NE(desc.decode(), nullptr);
-  EXPECT_NE(desc.compare(), nullptr);
+  EXPECT_FALSE(desc.hash_op().has_value());
+  EXPECT_EQ(desc.compare_op().invoke(nullptr, 0, nullptr, 0), 0);
   EXPECT_EQ(desc.int_to_params(), nullptr);
   EXPECT_EQ(desc.resolve_params(), nullptr);
 }
@@ -124,7 +122,8 @@ TEST_F(TypeDescriptorTest, ConstructionWithNullHash) {
 TEST_F(TypeDescriptorTest, KeyTypeCompatibility) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("TEST", "ext", "1.0"), 0, 8, 64,
-      dummy_encode, dummy_decode, dummy_compare);
+      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
+      villagesql::CompareOp(dummy_compare));
 
   // Verify key_type is TypeDescriptorKey
   static_assert(std::is_same_v<villagesql::TypeDescriptor::key_type,
@@ -171,7 +170,8 @@ TEST_F(TypeDescriptorTest, ConstructionWithParamFunctions) {
       1,   // implementation_type
       -1,  // persisted_length (variable-length)
       0,   // max_decode_buffer_length (determined by params)
-      dummy_encode, dummy_decode, dummy_compare, dummy_hash,
+      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
+      villagesql::CompareOp(dummy_compare), villagesql::HashOp(dummy_hash),
       dummy_int_to_params, dummy_resolve_params);
 
   EXPECT_EQ(desc.persisted_length(), -1);

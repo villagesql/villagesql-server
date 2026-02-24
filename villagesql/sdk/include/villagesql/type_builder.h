@@ -40,6 +40,9 @@ namespace type_builder {
 //     .hash(&my_hash)   // optional
 //     .build()
 //
+// TODO(villagesql-beta): add type safe registration methods for the type
+// operations.
+// TODO(villagesql-beta): allow unnamed VDFs for type operations.
 
 class TypeBuilder {
  public:
@@ -52,7 +55,11 @@ class TypeBuilder {
         compare_(nullptr),
         hash_(nullptr),
         int_to_params_(nullptr),
-        resolve_params_(nullptr) {}
+        resolve_params_(nullptr),
+        encode_vdf_name_(nullptr),
+        decode_vdf_name_(nullptr),
+        compare_vdf_name_(nullptr),
+        hash_vdf_name_(nullptr) {}
 
   constexpr TypeBuilder persisted_length(int64_t len) const {
     TypeBuilder copy = *this;
@@ -72,9 +79,21 @@ class TypeBuilder {
     return copy;
   }
 
+  constexpr TypeBuilder encode(const char *vdf_name) const {
+    TypeBuilder copy = *this;
+    copy.encode_vdf_name_ = vdf_name;
+    return copy;
+  }
+
   constexpr TypeBuilder decode(vef_decode_func_t f) const {
     TypeBuilder copy = *this;
     copy.decode_ = f;
+    return copy;
+  }
+
+  constexpr TypeBuilder decode(const char *vdf_name) const {
+    TypeBuilder copy = *this;
+    copy.decode_vdf_name_ = vdf_name;
     return copy;
   }
 
@@ -84,9 +103,21 @@ class TypeBuilder {
     return copy;
   }
 
+  constexpr TypeBuilder compare(const char *vdf_name) const {
+    TypeBuilder copy = *this;
+    copy.compare_vdf_name_ = vdf_name;
+    return copy;
+  }
+
   constexpr TypeBuilder hash(vef_hash_func_t f) const {
     TypeBuilder copy = *this;
     copy.hash_ = f;
+    return copy;
+  }
+
+  constexpr TypeBuilder hash(const char *vdf_name) const {
+    TypeBuilder copy = *this;
+    copy.hash_vdf_name_ = vdf_name;
     return copy;
   }
 
@@ -103,21 +134,24 @@ class TypeBuilder {
   }
 
   // Build the final vef_type_desc_t. Protocol is set automatically:
-  // VEF_PROTOCOL_2 if int_to_params or resolve_params is set, otherwise
-  // VEF_PROTOCOL_1. ExtensionBuilder::type() propagates this up to the
-  // extension's min_protocol, so the registration fails if the server offers
-  // a lower protocol.
+  // VEF_PROTOCOL_2 if any protocol-2 field is set, otherwise VEF_PROTOCOL_1.
+  // ExtensionBuilder::type() propagates this up to the extension's
+  // min_protocol, so the registration fails if the server offers a lower
+  // protocol.
   constexpr vef_type_desc_t build() const {
-    const vef_protocol_t protocol =
-        (int_to_params_ != nullptr || resolve_params_ != nullptr)
-            ? VEF_PROTOCOL_2
-            : VEF_PROTOCOL_1;
+    const bool needs_v2 =
+        int_to_params_ != nullptr || resolve_params_ != nullptr ||
+        encode_vdf_name_ != nullptr || decode_vdf_name_ != nullptr ||
+        compare_vdf_name_ != nullptr || hash_vdf_name_ != nullptr;
+    const vef_protocol_t protocol = needs_v2 ? VEF_PROTOCOL_2 : VEF_PROTOCOL_1;
     return vef_type_desc_t{
         protocol,          name_,
         persisted_length_, max_decode_buffer_length_,
         encode_,           decode_,
         compare_,          hash_,
         int_to_params_,    resolve_params_,
+        encode_vdf_name_,  decode_vdf_name_,
+        compare_vdf_name_, hash_vdf_name_,
     };
   }
 
@@ -131,6 +165,10 @@ class TypeBuilder {
   vef_hash_func_t hash_;
   vef_type_int_to_params_func_t int_to_params_;
   vef_type_resolve_params_func_t resolve_params_;
+  const char *encode_vdf_name_;
+  const char *decode_vdf_name_;
+  const char *compare_vdf_name_;
+  const char *hash_vdf_name_;
 };
 
 // Entry point: make_type("name")

@@ -416,7 +416,7 @@ inline int cmp_data(ulint mtype, ulint prtype, bool is_asc, const byte *data1,
   }
 
   if (custom_column) {
-    int ret = custom_column->compare()(data1, len1, data2, len2);
+    int ret = custom_column->compare(data1, len1, data2, len2);
     return (is_asc ? ret : -ret);
   }
 
