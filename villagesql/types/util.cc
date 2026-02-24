@@ -589,6 +589,7 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
 
   // If target doesn't have a custom type, this is an incompatible conversion.
   if (!to->has_type_context()) {
+    // TODO(villagesql-performance): evaluate something more performant
     StringBuffer<MAX_FIELD_WIDTH> result(from->charset());
     result.length(0U);
     from->val_external_str(&result);
@@ -638,6 +639,7 @@ void CopyCustomToStringField(const Field *from, Field *to) {
   assert(from->has_type_context());
   // Custom → non-custom string: decode to string representation.
   // NULL is handled outside this function
+  // TODO(villagesql-performance): evaluate something more performant
   StringBuffer<MAX_FIELD_WIDTH> res(from->charset());
   res.length(0U);
   from->val_external_str(&res);
