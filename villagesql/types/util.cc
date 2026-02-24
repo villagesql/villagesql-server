@@ -589,8 +589,8 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
 
   // If target doesn't have a custom type, this is an incompatible conversion.
   if (!to->has_type_context()) {
-    char buff[MAX_FIELD_WIDTH];
-    String result(buff, sizeof(buff), from->charset());
+    StringBuffer<MAX_FIELD_WIDTH> result(from->charset());
+    result.length(0U);
     from->val_external_str(&result);
 
     THD *thd = current_thd;
@@ -638,8 +638,8 @@ void CopyCustomToStringField(const Field *from, Field *to) {
   assert(from->has_type_context());
   // Custom → non-custom string: decode to string representation.
   // NULL is handled outside this function
-  char buff[MAX_FIELD_WIDTH];
-  String res(buff, sizeof(buff), from->charset());
+  StringBuffer<MAX_FIELD_WIDTH> res(from->charset());
+  res.length(0U);
   from->val_external_str(&res);
   to->store(res.ptr(), res.length(), res.charset());
 }
