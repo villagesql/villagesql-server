@@ -2,6 +2,7 @@
 # nullable COMPLEX -> NOT NULL COMPLEX with NULL data: should error.
 
 --source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
 
 CREATE TABLE t1 (
     id INT PRIMARY KEY,
@@ -11,13 +12,20 @@ CREATE TABLE t1 (
 INSERT INTO t1 VALUES (1, '(1.0,2.0)');
 INSERT INTO t1 VALUES (2, NULL);
 
-SELECT * FROM t1;
+SELECT * FROM t1 ORDER BY id;
 
 --error ER_INVALID_USE_OF_NULL
 ALTER TABLE t1 MODIFY COLUMN value COMPLEX NOT NULL;
 
-SELECT * FROM t1;
+SELECT * FROM t1 ORDER BY id;
+
+UPDATE t1 SET value='(-2.0,-3.0)' WHERE id=2;
+
+ALTER TABLE t1 MODIFY COLUMN value COMPLEX NOT NULL;
+
+SELECT * FROM t1 ORDER BY id;
 
 DROP TABLE t1;
 
+--source include/villagesql/binlog_check_end.inc
 --source include/villagesql/uninstall_complex_extension.inc
