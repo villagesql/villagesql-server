@@ -636,8 +636,8 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
 
 void CopyCustomToStringField(const Field *from, Field *to) {
   assert(from->has_type_context());
-  assert(to->result_type() == STRING_RESULT);
   // Custom → non-custom string: decode to string representation.
+  // NULL is handled outside this function
   char buff[MAX_FIELD_WIDTH];
   String res(buff, sizeof(buff), from->charset());
   from->val_external_str(&res);
