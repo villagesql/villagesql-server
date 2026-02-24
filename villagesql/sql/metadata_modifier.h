@@ -157,7 +157,8 @@ class Metadata_modifier {
   // Returns false on success, true on error.
   bool rename_columns_table(THD *thd, Table_name old_name, Table_name new_name);
 
-  // Modify column entries based on alter_info.
+  // Modify column entries based on alter_info. table_ref is the table being
+  // altered.
   // Returns false on success, true on error.
   bool alter_columns(THD *thd, Table_ref *table_ref,
                      const Alter_info *alter_info);
