@@ -50,7 +50,8 @@
 #include "sql/current_thd.h"
 #include "sql/field.h"
 #include "sql/item_timefunc.h"  // Item_func_now_local
-#include "sql/sql_class.h"      // THD
+#include "sql/log.h"
+#include "sql/sql_class.h"  // THD
 #include "sql/sql_const.h"
 #include "sql/sql_error.h"
 #include "sql/sql_time.h"
@@ -58,7 +59,6 @@
 #include "sql/table.h"
 #include "sql_string.h"
 #include "template_utils.h"  // down_cast
-#include "sql/log.h"
 #include "villagesql/types/util.h"
 
 /**
