@@ -607,11 +607,7 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
   if (from->get_type_context() != to->get_type_context()) {
     return true;
   }
-  CopyCustomToCustomField(from, to);
-  return false;
-}
 
-void CopyCustomToCustomField(const Field *from, Field *to) {
   // Both fields have the same custom type. Copy binary data directly.
   // Handle potential length_bytes differences (VARCHAR(255) vs VARCHAR(65535)).
   // Note: from->data_length() decodes the length and from->data_ptr() returns
@@ -635,6 +631,7 @@ void CopyCustomToCustomField(const Field *from, Field *to) {
   assert(data_len <= to->field_length);
   // Copy the binary data
   memcpy(to_ptr + to_length_bytes, from_data, data_len);
+  return false;
 }
 
 void CopyCustomToStringField(const Field *from, Field *to) {

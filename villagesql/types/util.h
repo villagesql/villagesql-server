@@ -287,9 +287,6 @@ extern bool ValidateAndReportCustomFieldStore(const Item *item,
 // If to does not have a custom type, generates an error with readable format.
 extern bool TryCopyCustomTypeField(const Field *from, Field *to);
 
-// Binary copy from a custom type field to custom type field.
-extern void CopyCustomToCustomField(const Field *from, Field *to);
-
 // Copy from a custom type field to string type field.
 extern void CopyCustomToStringField(const Field *from, Field *to);
 
