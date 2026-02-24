@@ -17,16 +17,17 @@ id	complex_val
 1	(1,2)
 2	(3.5,-1.2)
 3	NULL
-ALTER TABLE t1 CHANGE complex_val string_val VARCHAR(100);
+ALTER TABLE t1 CHANGE complex_val string_val VARCHAR(100) NOT NULL;
+ERROR 01000: Data truncated for column 'string_val' at row 3
 SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TABLE `t1` (
   `id` int NOT NULL,
-  `string_val` varchar(100) DEFAULT NULL,
+  `complex_val` vsql_complex.COMPLEX DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT * FROM t1;
-id	string_val
+id	complex_val
 1	(1,2)
 2	(3.5,-1.2)
 3	NULL

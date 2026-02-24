@@ -287,14 +287,11 @@ extern bool ValidateAndReportCustomFieldStore(const Item *item,
 // If to does not have a custom type, generates an error with readable format.
 extern bool TryCopyCustomTypeField(const Field *from, Field *to);
 
-// Copy from a custom type field to another field during ALTER TABLE.
-// Handles:
-// - custom → same underlying type (binary copy; covers temp table copies)
-// - custom → string non-custom: decode to string representation
-// Non-string destination and incompatible custom types are blocked at ALTER
-// TABLE preparation time before this is called.
-// REQUIRES: from_field has a custom type context.
-extern void CopyFromCustomField(const Field *from_field, Field *to_field);
+// Binary copy from a custom type field to custom type field.
+extern void CopyCustomToCustomField(const Field *from, Field *to);
+
+// Copy from a custom type field to string type field.
+extern void CopyCustomToStringField(const Field *from, Field *to);
 
 // Encode a string field value and store it in a custom type field.
 // This enables CTEs and subqueries with string values to work with custom

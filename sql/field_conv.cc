@@ -58,6 +58,7 @@
 #include "sql/table.h"
 #include "sql_string.h"
 #include "template_utils.h"  // down_cast
+#include "sql/log.h"
 #include "villagesql/types/util.h"
 
 /**
@@ -324,10 +325,16 @@ static void do_field_string(Copy_field *, const Field *from_field,
   to_field->store(res.ptr(), res.length(), res.charset());
 }
 
-// VillageSQL: Copy from a custom type field to another field.
-static void do_field_from_custom(Copy_field *, const Field *from_field,
+// VillageSQL: Copy from a custom type field to custom type field.
+static void do_field_custom_to_custom(Copy_field *, const Field *from_field,
                                  Field *to_field) {
-  villagesql::CopyFromCustomField(from_field, to_field);
+  villagesql::CopyCustomToCustomField(from_field, to_field);
+}
+
+// VillageSQL: Copy from a custom type field to string field.
+static void do_field_custom_to_string(Copy_field *, const Field *from_field,
+                                 Field *to_field) {
+  villagesql::CopyCustomToStringField(from_field, to_field);
 }
 
 static void do_field_enum(Copy_field *copy, const Field *from_field,
@@ -571,7 +578,13 @@ Copy_field::Copy_func *Copy_field::get_copy_func() {
   if (m_to_field->is_array() && m_from_field->is_array()) return do_copy_blob;
 
   // VillageSQL: Route to the appropriate custom type copy function.
-  if (m_from_field->has_type_context()) return do_field_from_custom;
+  if (m_from_field->has_type_context()) {
+    if (m_to_field->has_type_context()) {
+      return do_field_custom_to_custom;
+    } else {
+      return do_field_custom_to_string;
+    }
+  }
 
   const bool compatible_db_low_byte_first =
       (m_to_field->table->s->db_low_byte_first ==
