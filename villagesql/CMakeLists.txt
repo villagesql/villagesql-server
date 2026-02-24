@@ -130,7 +130,7 @@ set(STABLE_SDK_DIR "${CMAKE_CURRENT_SOURCE_DIR}/stable_sdk/v1")
 # Generate villagesql_config script with version substituted
 configure_file(
   "${STABLE_SDK_DIR}/bin/villagesql_config.in"
-  "${CMAKE_BINARY_DIR}/bin/villagesql_config"
+  "${CMAKE_BINARY_DIR}/sdk/villagesql_config"
   @ONLY
 )
 
@@ -149,7 +149,7 @@ add_custom_target(sdk ALL
 
   # Copy villagesql_config script and make executable
   COMMAND ${CMAKE_COMMAND} -E copy
-    "${CMAKE_BINARY_DIR}/bin/villagesql_config"
+    "${CMAKE_BINARY_DIR}/sdk/villagesql_config"
     "${SDK_STAGING_DIR}/bin/"
   COMMAND chmod +x "${SDK_STAGING_DIR}/bin/villagesql_config"
 
