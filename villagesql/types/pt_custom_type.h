@@ -109,6 +109,7 @@ class PT_custom_type : public PT_type {
   // Factory for custom type names. For qualified names
   // (extension_name.type_name), pass extension_name; for unqualified names,
   // pass empty LEX_STRING {} for extension_name.
+
   // Resolve params via resolve_params callback and re-resolve TypeContext.
   // Shared by both TYPE(N) and TYPE('key=value,...') paths.
   static bool resolve_params_and_context(const POS &pos, THD *thd,
