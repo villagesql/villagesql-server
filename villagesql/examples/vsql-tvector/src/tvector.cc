@@ -101,29 +101,35 @@ bool tvector_resolve_params(const vef_type_param_t *params, size_t param_count,
   return false;
 }
 
+void ReturnError(const char *err_msg, vef_vdf_result_t *result) {
+  result->type = VEF_RESULT_ERROR;
+  snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "%s", err_msg);
+}
+
 // Encode: "[f1,f2,...,fN]" -> N * 4 bytes binary.
-// Dimension is inferred from buffer_size / 4.
-bool tvector_encode(unsigned char *buffer, size_t buffer_size, const char *from,
-                    size_t from_len, size_t *length) {
-  if (buffer == nullptr || buffer_size == 0) {
-    *length = 0;
-    return true;
+// STRING -> TVECTOR
+// Dimension is inferred from out->max_bin_len / 4.
+void tvector_from_string(vef_context_t *ctx, vef_invalue_t *in,
+                         vef_vdf_result_t *out) {
+  if (in->is_null) {
+    out->type = VEF_RESULT_NULL;
+    return;
+  }
+  if (out->max_bin_len == 0) {
+    ReturnError("response buffer too small", out);
+    return;
   }
 
-  size_t dimension = buffer_size / 4;
-  if (dimension == 0) {
-    *length = 0;
-    return true;
-  }
+  size_t dimension = out->max_bin_len / 4;
 
-  std::string input(from, from_len);
+  std::string input(in->str_value, in->str_len);
   const char *p = input.c_str();
 
   // Skip leading whitespace
   while (*p == ' ') p++;
   if (*p != '[') {
-    *length = SIZE_MAX;
-    return true;
+    ReturnError("expected '[' at start of vector", out);
+    return;
   }
   p++;
 
@@ -134,19 +140,17 @@ bool tvector_encode(unsigned char *buffer, size_t buffer_size, const char *from,
     if (*p == ']') break;
 
     if (count >= dimension) {
-      snprintf(reinterpret_cast<char *>(buffer), buffer_size,
-               "too many elements");
-      *length = SIZE_MAX;
-      return true;
+      ReturnError("too many elements", out);
+      return;
     }
 
     char *endptr = nullptr;
     float val = strtof(p, &endptr);
     if (endptr == p) {
-      *length = SIZE_MAX;
-      return true;
+      ReturnError("failed to parse float", out);
+      return;
     }
-    store_float(buffer + count * 4, val);
+    store_float(out->bin_buf + count * 4, val);
     count++;
     p = endptr;
 
@@ -156,79 +160,98 @@ bool tvector_encode(unsigned char *buffer, size_t buffer_size, const char *from,
   }
 
   if (*p != ']') {
-    *length = SIZE_MAX;
-    return true;
+    ReturnError("expected ']' at end of vector", out);
+    return;
   }
 
   if (count != dimension) {
-    *length = SIZE_MAX;
-    return true;
+    ReturnError("wrong number of elements", out);
+    return;
   }
 
-  *length = dimension * 4;
-  return false;
+  out->actual_len = dimension * 4;
+  out->type = VEF_RESULT_VALUE;
 }
 
 // Decode: N * 4 bytes binary -> "[f1,f2,...,fN]" string.
-bool tvector_decode(const unsigned char *buffer, size_t buffer_size, char *to,
-                    size_t to_buffer_size, size_t *to_length) {
-  if (buffer == nullptr || to == nullptr || to_length == nullptr) {
-    return true;
+// TVECTOR -> STRING
+void tvector_to_string(vef_context_t *ctx, vef_invalue_t *in,
+                       vef_vdf_result_t *out) {
+  if (in->is_null) {
+    out->type = VEF_RESULT_NULL;
+    return;
   }
 
-  size_t dimension = buffer_size / 4;
-  if (dimension == 0 || buffer_size % 4 != 0) {
-    return true;
+  size_t dimension = in->bin_len / 4;
+  if (dimension == 0 || in->bin_len % 4 != 0) {
+    ReturnError("argument malformed", out);
+    return;
   }
 
   size_t pos = 0;
-  if (pos >= to_buffer_size) return true;
-  to[pos++] = '[';
+  if (pos >= out->max_str_len) {
+    ReturnError("output buffer too small", out);
+    return;
+  }
+  out->str_buf[pos++] = '[';
 
   for (size_t i = 0; i < dimension; i++) {
     if (i > 0) {
-      if (pos >= to_buffer_size) return true;
-      to[pos++] = ',';
+      if (pos >= out->max_str_len) {
+        ReturnError("output buffer too small", out);
+        return;
+      }
+      out->str_buf[pos++] = ',';
     }
-    float val = load_float(buffer + i * 4);
-    int written = snprintf(to + pos, to_buffer_size - pos, "%g", val);
-    if (written < 0 || pos + static_cast<size_t>(written) >= to_buffer_size) {
-      return true;
+    float val = load_float(in->bin_value + i * 4);
+    int written =
+        snprintf(out->str_buf + pos, out->max_str_len - pos, "%g", val);
+    if (written < 0 || pos + static_cast<size_t>(written) >= out->max_str_len) {
+      ReturnError("output buffer too small", out);
+      return;
     }
     pos += static_cast<size_t>(written);
   }
 
-  if (pos >= to_buffer_size) return true;
-  to[pos++] = ']';
+  if (pos >= out->max_str_len) {
+    ReturnError("output buffer too small", out);
+    return;
+  }
+  out->str_buf[pos++] = ']';
 
-  *to_length = pos;
-  return false;
+  out->actual_len = pos;
+  out->type = VEF_RESULT_VALUE;
 }
 
-// Compare: lexicographic element-by-element comparison.
-int tvector_compare(const unsigned char *data1, size_t len1,
-                    const unsigned char *data2, size_t len2) {
-  size_t dim1 = len1 / 4;
-  size_t dim2 = len2 / 4;
+// Compare VDF for ORDER BY, indexes: (TVECTOR, TVECTOR) -> INT
+// Lexicographic element-by-element comparison.
+void tvector_compare(vef_context_t *ctx, vef_invalue_t *in_l,
+                     vef_invalue_t *in_r, vef_vdf_result_t *out) {
+  size_t dim1 = in_l->bin_len / 4;
+  size_t dim2 = in_r->bin_len / 4;
   size_t min_dim = dim1 < dim2 ? dim1 : dim2;
 
   for (size_t i = 0; i < min_dim; i++) {
-    float v1 = load_float(data1 + i * 4);
-    float v2 = load_float(data2 + i * 4);
-    if (v1 < v2) return -1;
-    if (v1 > v2) return 1;
+    float v1 = load_float(in_l->bin_value + i * 4);
+    float v2 = load_float(in_r->bin_value + i * 4);
+    if (v1 < v2) {
+      out->int_value = -1;
+      out->type = VEF_RESULT_VALUE;
+      return;
+    }
+    if (v1 > v2) {
+      out->int_value = 1;
+      out->type = VEF_RESULT_VALUE;
+      return;
+    }
   }
 
-  if (dim1 < dim2) return -1;
-  if (dim1 > dim2) return 1;
-  return 0;
-}
-
-// Compare VDF: tvector_compare(a, b) -> INT
-void tvector_compare_impl(vef_context_t *ctx, vef_invalue_t *in_l,
-                          vef_invalue_t *in_r, vef_vdf_result_t *out) {
-  out->int_value = tvector_compare(in_l->bin_value, in_l->bin_len,
-                                   in_r->bin_value, in_r->bin_len);
+  if (dim1 < dim2)
+    out->int_value = -1;
+  else if (dim1 > dim2)
+    out->int_value = 1;
+  else
+    out->int_value = 0;
   out->type = VEF_RESULT_VALUE;
 }
 
@@ -245,11 +268,17 @@ VEF_GENERATE_ENTRY_POINTS(
                   .int_to_params(&tvector_int_to_params)
                   .resolve_params(&tvector_resolve_params)
                   .build())
-        .func(make_func("tvector_from_string")
-                  .from_string<&tvector_encode>(TVECTOR))
-        .func(
-            make_func("tvector_to_string").to_string<&tvector_decode>(TVECTOR))
-        .func(make_func<&tvector_compare_impl>("tvector_compare")
+        .func(make_func<&tvector_from_string>("tvector_from_string")
+                  .returns(TVECTOR)
+                  .param(STRING)
+                  .deterministic()
+                  .build())
+        .func(make_func<&tvector_to_string>("tvector_to_string")
+                  .returns(STRING)
+                  .param(TVECTOR)
+                  .deterministic()
+                  .build())
+        .func(make_func<&tvector_compare>("tvector_compare")
                   .returns(INT)
                   .param(TVECTOR)
                   .param(TVECTOR)

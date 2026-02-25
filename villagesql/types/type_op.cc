@@ -41,13 +41,13 @@ String *EncodeOp::invoke(const String &from, int64_t buffer_hint,
       return nullptr;
     }
 
-    vef_invalue_t input;
-    input.type = VEF_TYPE_STRING;
-    input.is_null = false;
-    input.str_len = from.length();
-    input.str_value = from.ptr();
+    vef_invalue_t input[1];
+    input[0].type = VEF_TYPE_STRING;
+    input[0].is_null = false;
+    input[0].str_len = from.length();
+    input[0].str_value = from.ptr();
 
-    vef_vdf_args_t vdf_args = {nullptr, 1, &input};
+    vef_vdf_args_t vdf_args = {nullptr, 1, input};
 
     char error_msg[VEF_MAX_ERROR_LEN] = {};
     uchar *alt_bin_buf = nullptr;
@@ -126,13 +126,13 @@ bool DecodeOp::invoke(const unsigned char *data, size_t len,
       return true;
     }
 
-    vef_invalue_t input;
-    input.type = VEF_TYPE_CUSTOM;
-    input.is_null = false;
-    input.bin_len = len;
-    input.bin_value = data;
+    vef_invalue_t input[1];
+    input[0].type = VEF_TYPE_CUSTOM;
+    input[0].is_null = false;
+    input[0].bin_len = len;
+    input[0].bin_value = data;
 
-    vef_vdf_args_t vdf_args = {nullptr, 1, &input};
+    vef_vdf_args_t vdf_args = {nullptr, 1, input};
 
     char error_msg[VEF_MAX_ERROR_LEN] = {};
     char *alt_str_buf = nullptr;
@@ -235,13 +235,13 @@ size_t HashOp::invoke(const unsigned char *data, size_t len) const {
   assert(fd->prerun == nullptr && fd->postrun == nullptr);
   vef_context_t ctx = {VEF_PROTOCOL_2};
 
-  vef_invalue_t input;
-  input.type = VEF_TYPE_CUSTOM;
-  input.is_null = false;
-  input.bin_len = len;
-  input.bin_value = data;
+  vef_invalue_t input[1];
+  input[0].type = VEF_TYPE_CUSTOM;
+  input[0].is_null = false;
+  input[0].bin_len = len;
+  input[0].bin_value = data;
 
-  vef_vdf_args_t vdf_args = {nullptr, 1, &input};
+  vef_vdf_args_t vdf_args = {nullptr, 1, input};
 
   char error_msg[VEF_MAX_ERROR_LEN] = {};
   vef_vdf_result_t vdf_result = {};

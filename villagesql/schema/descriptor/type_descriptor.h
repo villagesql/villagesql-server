@@ -116,12 +116,12 @@ class TypeDescriptor {
   // If nullptr, the type does not accept parameters.
   using ResolveParamsFn = vef_type_resolve_params_func_t;
 
-  // Default constructor - creates an empty/invalid descriptor.
-  // Required for use with SystemTableMap's PendingOperation.
+  // Default constructor - creates an empty/invalid descriptor
+  // Required for use with SystemTableMap's PendingOperation
   TypeDescriptor() = default;
 
   // Construct with key only, other fields can be set separately (useful for
-  // testing).
+  // testing)
   explicit TypeDescriptor(TypeDescriptorKey key) : key_(std::move(key)) {}
 
   // Full constructor. hash, int_to_params, and resolve_params are optional.

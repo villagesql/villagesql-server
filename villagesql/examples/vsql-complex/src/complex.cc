@@ -93,14 +93,6 @@ Complex load_complex(const unsigned char *buf) {
   return Complex{load_double(buf), load_double(buf + 8)};
 }
 
-// Helper to mark invalid input
-bool MarkInvalid(size_t *length) {
-  if (length != nullptr) {
-    *length = SIZE_MAX;
-  }
-  return true;
-}
-
 // Simple FNV-1a hash
 size_t fnv1a_hash(const unsigned char *data, size_t len) {
   size_t hash = 2166136261u;
@@ -109,134 +101,6 @@ size_t fnv1a_hash(const unsigned char *data, size_t len) {
     hash *= 16777619u;
   }
   return hash;
-}
-
-// COMPLEX encode: "(real,imag)" -> 16 bytes (with canonicalization of -0.0)
-// Returns false on success, true on error. Set *length = SIZE_MAX for NULL.
-bool encode_complex(unsigned char *buffer, size_t buffer_size, const char *from,
-                    size_t from_len, size_t *length) {
-  // Format in "from" is expected to be "(<double>,<double>)".
-  if (buffer_size < kComplexSize || buffer == nullptr) {
-    *length = 0;  // No data written on error
-    return true;
-  }
-
-  Complex cx;
-  // from isn't null-terminated, so create a copy
-  std::string from_str(from, from_len);
-  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) {
-    return MarkInvalid(length);
-  }
-
-  cx.canonicalize();
-  store_complex(buffer, cx);
-  *length = kComplexSize;
-  return false;
-}
-
-// COMPLEX2 encode: "(real,imag)" -> 16 bytes (without canonicalization)
-bool encode_complex2(unsigned char *buffer, size_t buffer_size,
-                     const char *from, size_t from_len, size_t *length) {
-  // COMPLEX2: encode WITHOUT canonicalization - preserves -0.0 in binary form.
-  // Used to test custom hash function path (hash canonicalizes on the fly).
-  if (buffer_size < kComplexSize || buffer == nullptr) {
-    *length = 0;
-    return true;
-  }
-
-  Complex cx;
-  std::string from_str(from, from_len);
-  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) {
-    return MarkInvalid(length);
-  }
-
-  // No canonicalization - -0.0 is preserved in binary representation.
-  // The custom hash function will canonicalize on the fly.
-  store_complex(buffer, cx);
-  *length = kComplexSize;
-  return false;
-}
-
-// Decode: 16 bytes -> "(real,imag)" string
-// Returns false on success, true on error.
-bool decode_complex(const unsigned char *buffer, size_t buffer_size, char *to,
-                    size_t to_buffer_size, size_t *to_length) {
-  if (buffer == nullptr || to == nullptr || to_length == nullptr) {
-    return true;
-  }
-  if (buffer_size < kComplexSize) {
-    return true;
-  }
-
-  Complex cx = load_complex(buffer);
-  int written = snprintf(to, to_buffer_size, "(%g,%g)", cx.re, cx.im);
-  if (written < 0 || static_cast<size_t>(written) >= to_buffer_size) {
-    return true;
-  }
-  *to_length = written;
-  return false;
-}
-
-// Comparison function for ORDER BY, indexes
-int cmp_complex(const unsigned char *data1, size_t len1,
-                const unsigned char *data2, size_t len2) {
-  if (len1 < kComplexSize || len2 < kComplexSize) {
-    assert(len1 != 0);
-    return 0;  // Invalid lengths, treat as equal
-  }
-
-  Complex c1 = load_complex(data1);
-  Complex c2 = load_complex(data2);
-
-  // Compare real parts first
-  if (c1.re < c2.re) return -1;
-  if (c1.re > c2.re) return 1;
-
-  // Real parts equal, compare imaginary parts
-  if (c1.im < c2.im) return -1;
-  if (c1.im > c2.im) return 1;
-
-  return 0;  // Both parts equal
-}
-
-// COMPLEX2 hash: canonicalizes -0 to +0 before hashing so that -0.0 and +0.0
-// hash to the same bucket. This allows COMPLEX2 to preserve -0 in storage
-// while still working correctly with hash joins and EXCEPT operations.
-size_t hash_complex2(const unsigned char *data, size_t len) {
-  if (len < kComplexSize) {
-    return fnv1a_hash(data, len);
-  }
-
-  Complex cx = load_complex(data);
-  cx.canonicalize();
-
-  // Hash the canonicalized values
-  unsigned char canonical[kComplexSize];
-  store_complex(canonical, cx);
-  return fnv1a_hash(canonical, kComplexSize);
-}
-
-// Compare VDF: complex_compare(a, b) -> INT
-void complex_compare_impl(vef_context_t *ctx, vef_invalue_t *in_l,
-                          vef_invalue_t *in_r, vef_vdf_result_t *out) {
-  out->int_value = cmp_complex(in_l->bin_value, in_l->bin_len, in_r->bin_value,
-                               in_r->bin_len);
-  out->type = VEF_RESULT_VALUE;
-}
-
-// Hash VDF: complex2_hash(c) -> INT
-void complex2_hash_impl(vef_context_t *ctx, vef_invalue_t *in,
-                        vef_vdf_result_t *out) {
-  out->int_value =
-      static_cast<long long>(hash_complex2(in->bin_value, in->bin_len));
-  out->type = VEF_RESULT_VALUE;
-}
-
-std::optional<Complex> TryLoadFromInValue(const vef_invalue_t *v) {
-  if (v->bin_len != kComplexSize) {
-    return std::nullopt;
-  }
-  return load_complex(v->bin_value);
 }
 
 void ReturnError(std::string_view err_msg, vef_vdf_result_t *result) {
@@ -252,6 +116,139 @@ void ReturnComplex(const Complex &cx, vef_vdf_result_t *result) {
   result->type = VEF_RESULT_VALUE;
   store_complex(result->bin_buf, cx);
   result->actual_len = kComplexSize;
+}
+
+// COMPLEX encode: "(real,imag)" -> 16 bytes (with canonicalization of -0.0)
+// STRING -> COMPLEX
+void complex_from_string(vef_context_t *ctx, vef_invalue_t *in,
+                         vef_vdf_result_t *out) {
+  if (in->is_null) {
+    out->type = VEF_RESULT_NULL;
+    return;
+  }
+  if (out->max_bin_len < kComplexSize) {
+    ReturnError("response buffer too small", out);
+    return;
+  }
+  // Format in "in" is expected to be "(<double>,<double>)".
+  // in->str_value isn't null-terminated, so create a copy
+  Complex cx;
+  std::string from_str(in->str_value, in->str_len);
+  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) {
+    ReturnError("failed to parse string '" + from_str + "'", out);
+    return;
+  }
+  cx.canonicalize();
+  store_complex(out->bin_buf, cx);
+  out->actual_len = kComplexSize;
+  out->type = VEF_RESULT_VALUE;
+}
+
+// COMPLEX2 encode: "(real,imag)" -> 16 bytes (without canonicalization,
+// preserves -0.0 in binary form)
+// STRING -> COMPLEX2
+void complex2_from_string(vef_context_t *ctx, vef_invalue_t *in,
+                          vef_vdf_result_t *out) {
+  if (in->is_null) {
+    out->type = VEF_RESULT_NULL;
+    return;
+  }
+  if (out->max_bin_len < kComplexSize) {
+    ReturnError("response buffer too small", out);
+    return;
+  }
+  Complex cx;
+  std::string from_str(in->str_value, in->str_len);
+  if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) {
+    ReturnError("failed to parse string '" + from_str + "'", out);
+    return;
+  }
+  // No canonicalization - -0.0 is preserved in binary representation.
+  // The custom hash function will canonicalize on the fly.
+  store_complex(out->bin_buf, cx);
+  out->actual_len = kComplexSize;
+  out->type = VEF_RESULT_VALUE;
+}
+
+// Decode: 16 bytes -> "(real,imag)" string
+// COMPLEX -> STRING
+void complex_to_string(vef_context_t *ctx, vef_invalue_t *in,
+                       vef_vdf_result_t *out) {
+  if (in->is_null) {
+    out->type = VEF_RESULT_NULL;
+    return;
+  }
+  if (in->bin_len < kComplexSize) {
+    ReturnError("argument malformed", out);
+    return;
+  }
+  Complex cx = load_complex(in->bin_value);
+  int written =
+      snprintf(out->str_buf, out->max_str_len, "(%g,%g)", cx.re, cx.im);
+  if (written < 0 || static_cast<size_t>(written) >= out->max_str_len) {
+    ReturnError("output buffer too small", out);
+    return;
+  }
+  out->actual_len = written;
+  out->type = VEF_RESULT_VALUE;
+}
+
+// Compare VDF for ORDER BY, indexes: (COMPLEX, COMPLEX) -> INT
+void complex_compare(vef_context_t *ctx, vef_invalue_t *in_l,
+                     vef_invalue_t *in_r, vef_vdf_result_t *out) {
+  if (in_l->bin_len < kComplexSize || in_r->bin_len < kComplexSize) {
+    out->int_value = 0;  // Invalid lengths, treat as equal
+    out->type = VEF_RESULT_VALUE;
+    return;
+  }
+
+  Complex c1 = load_complex(in_l->bin_value);
+  Complex c2 = load_complex(in_r->bin_value);
+
+  // Compare real parts first
+  if (c1.re < c2.re)
+    out->int_value = -1;
+  else if (c1.re > c2.re)
+    out->int_value = 1;
+  // Real parts equal, compare imaginary parts
+  else if (c1.im < c2.im)
+    out->int_value = -1;
+  else if (c1.im > c2.im)
+    out->int_value = 1;
+  else
+    out->int_value = 0;  // Both parts equal
+
+  out->type = VEF_RESULT_VALUE;
+}
+
+// Hash VDF: COMPLEX2 -> INT
+// Canonicalizes -0 to +0 before hashing so that -0.0 and +0.0 hash to the
+// same bucket. This allows COMPLEX2 to preserve -0 in storage while still
+// working correctly with hash joins and EXCEPT operations.
+void complex2_hash(vef_context_t *ctx, vef_invalue_t *in,
+                   vef_vdf_result_t *out) {
+  if (in->bin_len < kComplexSize) {
+    out->int_value =
+        static_cast<long long>(fnv1a_hash(in->bin_value, in->bin_len));
+    out->type = VEF_RESULT_VALUE;
+    return;
+  }
+
+  Complex cx = load_complex(in->bin_value);
+  cx.canonicalize();
+
+  // Hash the canonicalized values
+  unsigned char canonical[kComplexSize];
+  store_complex(canonical, cx);
+  out->int_value = static_cast<long long>(fnv1a_hash(canonical, kComplexSize));
+  out->type = VEF_RESULT_VALUE;
+}
+
+std::optional<Complex> TryLoadFromInValue(const vef_invalue_t *v) {
+  if (v->bin_len != kComplexSize) {
+    return std::nullopt;
+  }
+  return load_complex(v->bin_value);
 }
 
 // Arithmetic: complex_add(a, b) -> COMPLEX
@@ -479,28 +476,40 @@ VEF_GENERATE_ENTRY_POINTS(
                   .hash("complex2_hash")
                   .build())
         // Type conversion functions (also serve as encode/decode VDFs)
-        .func(make_func("complex_from_string")
-                  .from_string<&encode_complex>(COMPLEX))
-        .func(
-            make_func("complex_to_string").to_string<&decode_complex>(COMPLEX))
-        .func(make_func("complex2_from_string")
-                  .from_string<&encode_complex2>(COMPLEX2))
-        .func(make_func("complex2_to_string")
-                  .to_string<&decode_complex>(COMPLEX2))
+        .func(make_func<&complex_from_string>("complex_from_string")
+                  .returns(COMPLEX)
+                  .param(STRING)
+                  .deterministic()
+                  .build())
+        .func(make_func<&complex_to_string>("complex_to_string")
+                  .returns(STRING)
+                  .param(COMPLEX)
+                  .deterministic()
+                  .build())
+        .func(make_func<&complex2_from_string>("complex2_from_string")
+                  .returns(COMPLEX2)
+                  .param(STRING)
+                  .deterministic()
+                  .build())
+        .func(make_func<&complex_to_string>("complex2_to_string")
+                  .returns(STRING)
+                  .param(COMPLEX2)
+                  .deterministic()
+                  .build())
         // Compare and hash VDFs
-        .func(make_func<&complex_compare_impl>("complex_compare")
+        .func(make_func<&complex_compare>("complex_compare")
                   .returns(INT)
                   .param(COMPLEX)
                   .param(COMPLEX)
                   .deterministic()
                   .build())
-        .func(make_func<&complex_compare_impl>("complex2_compare")
+        .func(make_func<&complex_compare>("complex2_compare")
                   .returns(INT)
                   .param(COMPLEX2)
                   .param(COMPLEX2)
                   .deterministic()
                   .build())
-        .func(make_func<&complex2_hash_impl>("complex2_hash")
+        .func(make_func<&complex2_hash>("complex2_hash")
                   .returns(INT)
                   .param(COMPLEX2)
                   .deterministic()

@@ -42,7 +42,7 @@ namespace type_builder {
 //
 // TODO(villagesql-beta): add type safe registration methods for the type
 // operations.
-// TODO(villagesql-beta): allow unnamed VDFs for type operations.
+// TODO(villagesql-beta): allow VDFs that aren't directly callable from SQL.
 
 class TypeBuilder {
  public:

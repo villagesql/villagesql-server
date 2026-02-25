@@ -980,26 +980,6 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
       }
     }
 
-    // Validate that each required operation has exactly one implementation.
-    if (encode_vdf == nullptr && td->encode_func == nullptr) {
-      LogVSQL(ERROR_LEVEL,
-              "Type '%s' in extension '%s' has no encode implementation",
-              type_name.c_str(), extension_name.c_str());
-      return true;
-    }
-    if (decode_vdf == nullptr && td->decode_func == nullptr) {
-      LogVSQL(ERROR_LEVEL,
-              "Type '%s' in extension '%s' has no decode implementation",
-              type_name.c_str(), extension_name.c_str());
-      return true;
-    }
-    if (compare_vdf == nullptr && td->compare_func == nullptr) {
-      LogVSQL(ERROR_LEVEL,
-              "Type '%s' in extension '%s' has no compare implementation",
-              type_name.c_str(), extension_name.c_str());
-      return true;
-    }
-
     EncodeOp encode_op =
         encode_vdf ? EncodeOp(encode_vdf) : EncodeOp(td->encode_func);
     DecodeOp decode_op =
