@@ -367,11 +367,9 @@ int CustomMemCompare(const Item *item, const uchar *data1, size_t len1,
 }
 
 bool AreTypesCompatible(const TypeContext &tc1, const TypeContext &tc2) {
-  // Types are compatible if they have identical type name, extension, and
-  // version
-  return tc1.type_name() == tc2.type_name() &&
-         tc1.extension_name() == tc2.extension_name() &&
-         tc1.extension_version() == tc2.extension_version();
+  // Types are compatible if they have the same key (type name, extension,
+  // version, and parameters). This ensures e.g. TVECTOR(3) != TVECTOR(4).
+  return tc1.key() == tc2.key();
 }
 
 bool MaybeValidateUnionTypeCompatibility(Item *accumulator, Item *item) {
@@ -536,15 +534,15 @@ bool ValidateAndReportCustomFieldStore(const Item *item, const Field *field) {
   assert(field->has_type_context());
 
   // Check if the item can be stored in the custom field
-  bool can_store = CanStoreInCustomField(item, field);
-  if (can_store) {
+  if (CanStoreInCustomField(item, field)) {
     return false;  // Success
   }
 
   // Validation failed - generate appropriate error message
+  // Use val_external_str() to get a human-readable value: for custom type items
+  // this decodes the binary representation; for others it behaves like val_str.
   String str_value;
-  // Need to cast away const to call val_str (which is not const)
-  String *item_str = const_cast<Item *>(item)->val_str(&str_value);
+  String *item_str = const_cast<Item *>(item)->val_external_str(&str_value);
   const char *value_str = item_str ? item_str->c_ptr_safe() : "<null>";
   const THD *thd = current_thd;
   const Diagnostics_area *da = thd->get_stmt_da();
@@ -573,6 +571,12 @@ bool ValidateAndReportCustomFieldStore(const Item *item, const Field *field) {
         "explicit conversion for column '%s' at row %ld",
         MYF(0), field->get_type_context()->type_name().c_str(),
         field->field_name, da->current_row_for_condition());
+  } else if (item->has_type_context()) {
+    villagesql_error(
+        "Cannot implicitly cast from %s to %s for column '%s' at row %ld",
+        MYF(0), item->get_type_context()->qualified_name().c_str(),
+        field->get_type_context()->qualified_name().c_str(), field->field_name,
+        da->current_row_for_condition());
   } else {
     // Generic error for other cases (invalid format, etc.)
     villagesql_error("Incorrect %s value: '%s' for column '%s' at row %ld",
@@ -587,9 +591,10 @@ bool ValidateAndReportCustomFieldStore(const Item *item, const Field *field) {
 bool TryCopyCustomTypeField(const Field *from, Field *to) {
   assert(from->has_type_context());
 
-  // If target doesn't have a custom type, this is an incompatible conversion.
-  if (!to->has_type_context()) {
-    // TODO(villagesql-performance): evaluate something more performant
+  // If target doesn't have a custom type, or custom types do not match,
+  // this is an incompatible conversion.
+  if (!to->has_type_context() ||
+      !AreTypesCompatible(*from->get_type_context(), *to->get_type_context())) {
     StringBuffer<MAX_FIELD_WIDTH> result(from->charset());
     result.length(0U);
     from->val_external_str(&result);
@@ -601,12 +606,7 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
         MYF(0), from->get_type_context()->type_name().c_str(),
         result.c_ptr_safe(), to->field_name,
         thd->get_stmt_da()->current_row_for_condition());
-    return false;  // Error generated, don't fall through
-  }
-
-  // Check if they're the same custom type
-  if (from->get_type_context() != to->get_type_context()) {
-    return true;
+    return false;
   }
 
   // Both fields have the same custom type. Copy binary data directly.
