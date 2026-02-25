@@ -1,0 +1,18 @@
+CREATE TABLE t1 (id INT, val COMPLEX);
+INSERT INTO t1 VALUES (1,'(1.0,2.0)'),(2,'(3.0,4.0)'),(3,'(5.0,6.0)'),(4,'(1.0,2.0)');
+PREPARE stmt FROM 'SELECT id FROM t1 WHERE val = ? ORDER BY id';
+SET @p = '(1.0,2.0)';
+EXECUTE stmt USING @p;
+id
+1
+4
+SET @p = '(3.0,4.0)';
+EXECUTE stmt USING @p;
+id
+2
+SET @p = '(5.0,6.0)';
+EXECUTE stmt USING @p;
+id
+3
+DEALLOCATE PREPARE stmt;
+DROP TABLE t1;

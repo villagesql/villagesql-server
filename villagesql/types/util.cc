@@ -49,6 +49,7 @@
 #include "villagesql/schema/systable/custom_columns.h"
 #include "villagesql/schema/util.h"
 #include "villagesql/schema/victionary_client.h"
+#include "villagesql/types/type_encoder.h"
 
 namespace villagesql {
 
@@ -237,31 +238,79 @@ bool HandleCustomColumnsForTableRename(THD &thd, const char *old_db,
   return false;
 }
 
-String *EncodeString(const TypeContext &tc, const String &from,
-                     MEM_ROOT &mem_root, bool &is_valid) {
-  return tc.descriptor()->encode_op().invoke(from, tc.persisted_length(),
-                                             mem_root, is_valid);
-}
-
-String *EncodeStringForField(const TypeContext &tc, const String &from,
-                             MEM_ROOT &mem_root, const char *field_name,
-                             bool &is_valid) {
-  String *encoded = EncodeString(tc, from, mem_root, is_valid);
-  if (encoded == nullptr) {
-    if (is_valid) {
-      // OOM - my_error already called by EncodeString
+// Lazily allocate a TypeEncoder for field from TABLE::mem_root. The encoder
+// is reused for all subsequent encodes on the same Field within the TABLE's
+// lifetime.
+static TypeEncoder *GetTypeEncoderFor(Field *field) {
+  TypeEncoder *encoder = field->get_type_encoder();
+  if (encoder == nullptr) {
+    encoder = new (&field->table->mem_root)
+        TypeEncoder(field->get_type_context(), field->table->mem_root);
+    if (encoder == nullptr) {
+      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeEncoder));
       return nullptr;
     }
+    if (!encoder->Init()) return nullptr;
+    field->set_type_encoder(encoder);
+  }
+  return encoder;
+}
+
+// Lazily allocate an TypeEncoder for an Item from thd->mem_root. The encoder
+// is reused for all subsequent encodes on the same Item within a query.
+// Item::cleanup() nulls type_encoder_ between executions (e.g. PS re-exec),
+// so the next call after cleanup will allocate a fresh encoder on the new
+// thd->mem_root.
+static TypeEncoder *GetTypeEncoderFor(Item *item) {
+  TypeEncoder *encoder = item->get_type_encoder();
+  if (encoder == nullptr) {
+    encoder = new (current_thd->mem_root)
+        TypeEncoder(item->get_type_context(), *current_thd->mem_root);
+    if (encoder == nullptr) {
+      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeEncoder));
+      return nullptr;
+    }
+    if (!encoder->Init()) return nullptr;
+    item->set_type_encoder(encoder);
+  }
+  return encoder;
+}
+
+// Encode from for item's custom type. Returns the encoded String* on success.
+// On failure returns nullptr; is_valid=true means OOM (my_error already
+// called), is_valid=false means invalid value for the type.
+static String *EncodeForItem(Item *item, const String &from, bool &is_valid) {
+  TypeEncoder *encoder = GetTypeEncoderFor(item);
+  if (encoder == nullptr) {
+    is_valid = true;  // OOM, my_error already called
+    return nullptr;
+  }
+  return encoder->encode(from, is_valid);
+}
+
+String *EncodeStringForField(Field *field, const String &from, bool &is_valid) {
+  assert(field->has_type_context());
+
+  TypeEncoder *encoder = GetTypeEncoderFor(field);
+  if (encoder == nullptr) {
+    is_valid = true;  // OOM, my_error already called
+    return nullptr;
+  }
+  String *encoded = encoder->encode(from, is_valid);
+  if (encoded == nullptr) {
+    if (is_valid) return nullptr;  // OOM, my_error already called
     // Encoding failed - invalid value for custom type
     // Always push a warning (consistent with MySQL built-in types)
     // Caller decides whether to also promote to error
+    const TypeContext *tc = field->get_type_context();
     THD *thd = current_thd;
     const ErrConvString errmsg(from.ptr(), from.length(), from.charset());
     const Diagnostics_area *da = thd->get_stmt_da();
-    push_warning_printf(
-        thd, Sql_condition::SL_WARNING, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
-        ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD), tc.type_name().c_str(),
-        errmsg.ptr(), field_name, da->current_row_for_condition());
+    push_warning_printf(thd, Sql_condition::SL_WARNING,
+                        ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
+                        ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD),
+                        tc->type_name().c_str(), errmsg.ptr(),
+                        field->field_name, da->current_row_for_condition());
     return nullptr;
   }
   return encoded;
@@ -304,8 +353,7 @@ bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {
   }
 
   bool is_valid = true;
-  String *encoded =
-      EncodeString(tc, *str_val, *current_thd->mem_root, is_valid);
+  String *encoded = EncodeForItem(item, *str_val, is_valid);
   if (encoded == nullptr) {
     if (!is_valid) {
       const ErrConvString errmsg(str_val->ptr(), str_val->length(),
@@ -661,9 +709,7 @@ type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
   }
 
   bool is_oom = false;
-  String *encoded = EncodeStringForField(*to_field->get_type_context(), *str,
-                                         *current_thd->mem_root,
-                                         to_field->field_name, is_oom);
+  String *encoded = EncodeStringForField(to_field, *str, is_oom);
   if (encoded == nullptr) {
     return is_oom ? TYPE_ERR_OOM : TYPE_ERR_BAD_VALUE;
   }
@@ -673,31 +719,31 @@ type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
 }
 
 type_conversion_status EncodeAndStoreStringToCustomField(
-    const TypeContext &tc, const String &str_value, Field *field) {
+    const String &str_value, Field *field) {
   bool is_valid = true;
-  String *encoded = EncodeStringForField(tc, str_value, *current_thd->mem_root,
-                                         field->field_name, is_valid);
+  String *encoded = EncodeStringForField(field, str_value, is_valid);
   if (encoded == nullptr) {
     return is_valid ? TYPE_ERR_OOM : TYPE_WARN_OUT_OF_RANGE;
   }
   return field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
 }
 
-String *EncodeStringForCustomParam(const TypeContext &tc,
-                                   const String &str_value,
-                                   const char *item_name, bool &null_value) {
+String *EncodeStringForCustomParam(Item *item, const String &str_value,
+                                   bool &null_value) {
   bool is_valid = true;
-  String *encoded =
-      EncodeString(tc, str_value, *current_thd->mem_root, is_valid);
+  String *encoded = EncodeForItem(item, str_value, is_valid);
   if (encoded == nullptr) {
     if (!is_valid) {
       // Invalid value for custom type
+      const TypeContext *tc = item->get_type_context();
       const ErrConvString errmsg(str_value.ptr(), str_value.length(),
                                  str_value.charset());
       villagesql_error("Incorrect %s value: '%s' for parameter '%s'", MYF(0),
-                       tc.qualified_name().c_str(), errmsg.ptr(), item_name);
+                       tc->qualified_name().c_str(), errmsg.ptr(),
+                       item->item_name.ptr());
     }
-    // else OOM - my_error already called by EncodeString
+
+    // else OOM - my_error already called
     null_value = true;
     return nullptr;
   }

@@ -1482,9 +1482,8 @@ bool Sql_cmd_load_table::read_sep_field(THD *thd, COPY_INFO &info,
         if (field->has_type_context()) {
           String input_str((char *)pos, length, read_info.read_charset);
           bool is_valid = false;
-          String *encoded = villagesql::EncodeStringForField(
-              *field->get_type_context(), input_str, *thd->mem_root,
-              field->field_name, is_valid);
+          String *encoded =
+              villagesql::EncodeStringForField(field, input_str, is_valid);
           if (encoded == nullptr) {
             if (is_valid) return true;  // OOM case
             // Encoding failed - in strict mode, fail; otherwise skip row
@@ -1733,9 +1732,8 @@ bool Sql_cmd_load_table::read_xml_field(THD *thd, COPY_INFO &info,
         if (field->has_type_context()) {
           String input_str(tag->value.ptr(), tag->value.length(), cs);
           bool is_valid = false;
-          String *encoded = villagesql::EncodeStringForField(
-              *field->get_type_context(), input_str, *thd->mem_root,
-              field->field_name, is_valid);
+          String *encoded =
+              villagesql::EncodeStringForField(field, input_str, is_valid);
           if (encoded == nullptr) {
             if (is_valid) return true;  // OOM case
             // Encoding failed - in strict mode, fail; otherwise skip row

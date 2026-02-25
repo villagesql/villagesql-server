@@ -79,6 +79,10 @@
 #include "template_utils.h"
 #include "villagesql/include/item_helpers.h"
 
+namespace villagesql {
+class TypeEncoder;
+}  // namespace villagesql
+
 class Item;
 class Item_field;
 class Item_func;
@@ -1277,7 +1281,10 @@ class Item : public Parse_tree_node {
     Prepare for new execution by clearing cached values.
     Do not remove values allocated during preparation, destructor handles this.
   */
-  virtual void cleanup() { marker = MARKER_NONE; }
+  virtual void cleanup() {
+    marker = MARKER_NONE;
+    type_encoder_ = nullptr;
+  }
   /**
     Called when an item has been removed, can be used to notify external
     objects about the removal, e.g subquery predicates that are part of
@@ -3748,6 +3755,7 @@ class Item : public Parse_tree_node {
 
  protected:
   const villagesql::TypeContext *custom_type{nullptr};
+  villagesql::TypeEncoder *type_encoder_{nullptr};
 
  public:
   virtual const villagesql::TypeContext *get_type_context() const {
@@ -3755,6 +3763,10 @@ class Item : public Parse_tree_node {
   }
   void set_type_context(const villagesql::TypeContext *tc) { custom_type = tc; }
   virtual bool has_type_context() const { return nullptr != custom_type; }
+  villagesql::TypeEncoder *get_type_encoder() const { return type_encoder_; }
+  void set_type_encoder(villagesql::TypeEncoder *encoder) {
+    type_encoder_ = encoder;
+  }
 };
 
 /**

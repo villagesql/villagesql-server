@@ -88,23 +88,11 @@ extern bool HandleCustomColumnsForTableRename(THD &thd, const char *old_db,
                                               const char *new_db,
                                               const char *new_table);
 
-// Using "tc" as the type, encode "from" according to the type's internal
-// representation. Allocations are performed on the given mem_root,
-// using the internal size for buffering.
-// On error, return nullptr. If is_valid is false, then there was a problem with
-// encoding, otherwise we hit a memory problem and my_error was called.
-extern String *EncodeString(const TypeContext &tc, const String &from,
-                            MEM_ROOT &mem_root, bool &is_valid);
-
 // Encodes a string for storage in a custom type field, with error reporting.
-// This is a higher-level wrapper around EncodeString that handles error
-// reporting for LOAD DATA and INSERT/UPDATE operations. See EncodeString
-// above. Additionally, "field_name" is the name of the field (used for
-// error messages). Same return values as EncodeString, except that if there is
-// a failure and it isn't an OOM, a warning will be pushed for the invalid
-// value.
-extern String *EncodeStringForField(const TypeContext &tc, const String &from,
-                                    MEM_ROOT &mem_root, const char *field_name,
+// The TypeContext and field name are taken from the field itself. On error,
+// returns nullptr; if is_valid is false the value was invalid (warning
+// pushed), otherwise OOM.
+extern String *EncodeStringForField(Field *field, const String &from,
                                     bool &is_valid);
 
 // Decodes binary data into a String representation using the type's decode
@@ -272,14 +260,13 @@ extern type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,
 // Encode and store a string value into a custom type field.
 // Returns appropriate type_conversion_status for the result.
 extern type_conversion_status EncodeAndStoreStringToCustomField(
-    const TypeContext &tc, const String &str_value, Field *field);
+    const String &str_value, Field *field);
 
-// Encode a string value for a custom type, reporting errors appropriately.
-// Returns encoded String* on success, nullptr on error (with error reported).
-// Sets null_value to true on error.
-extern String *EncodeStringForCustomParam(const TypeContext &tc,
-                                          const String &str_value,
-                                          const char *item_name,
+// Encode a string value for a custom type item (e.g. Item_param), reporting
+// errors appropriately. The TypeContext and item name are taken from the item
+// itself. Returns encoded String* on success, nullptr on error (with error
+// reported). Sets null_value to true on error.
+extern String *EncodeStringForCustomParam(Item *item, const String &str_value,
                                           bool &null_value);
 
 // Check if a function is allowed to operate on custom types for the given type

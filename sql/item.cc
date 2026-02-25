@@ -4331,8 +4331,7 @@ type_conversion_status Item_param::save_in_field_inner(Field *field,
       return TYPE_OK;
     case MYSQL_TYPE_VARCHAR: {
       if (field->has_type_context()) {
-        return villagesql::EncodeAndStoreStringToCustomField(
-            *field->get_type_context(), str_value, field);
+        return villagesql::EncodeAndStoreStringToCustomField(str_value, field);
       }
       return field->store(str_value.ptr(), str_value.length(),
                           str_value.charset());
@@ -4492,8 +4491,8 @@ String *Item_param::val_str(String *str) {
   switch (data_type_actual()) {
     case MYSQL_TYPE_VARCHAR: {
       if (has_type_context()) {
-        return villagesql::EncodeStringForCustomParam(
-            *get_type_context(), str_value_ptr, item_name.ptr(), null_value);
+        return villagesql::EncodeStringForCustomParam(this, str_value_ptr,
+                                                      null_value);
       }
       return &str_value_ptr;
     }
@@ -7062,9 +7061,8 @@ type_conversion_status Item::save_in_field_inner(Field *field,
     // For custom types, encode the string value before storing
     if (!has_type_context() && field->has_type_context()) {
       bool is_valid = false;
-      String *encoded = villagesql::EncodeStringForField(
-          *field->get_type_context(), *result, *current_thd->mem_root,
-          field->field_name, is_valid);
+      String *encoded =
+          villagesql::EncodeStringForField(field, *result, is_valid);
       if (encoded == nullptr) {
         str_value.set_quick(nullptr, 0, cs);
         return is_valid ? TYPE_ERR_OOM : TYPE_ERR_BAD_VALUE;
@@ -7113,8 +7111,8 @@ type_conversion_status Item_string::save_in_field_inner(Field *field, bool) {
 
     // Encode str_value into a new representation, based on the type.
     bool is_oom = false;
-    String *encoded = villagesql::EncodeStringForField(
-        *tc, str_value, *current_thd->mem_root, field->field_name, is_oom);
+    String *encoded =
+        villagesql::EncodeStringForField(field, str_value, is_oom);
     if (encoded == nullptr) {
       return is_oom ? TYPE_ERR_OOM : TYPE_ERR_BAD_VALUE;
     }

@@ -1,0 +1,31 @@
+# Test that EncodeContext on Item_param is correctly reset between PS
+# re-executions. Item_param persists across executions on the PS mem_root,
+# while thd->mem_root (where the EncodeContext is allocated) is cleared between
+# executions. Item::cleanup() nulls encode_context_ at execution end so the
+# next execution lazily re-allocates on the fresh thd->mem_root. Without this
+# reset, re-execution would use a dangling pointer and produce wrong results.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT, val COMPLEX);
+INSERT INTO t1 VALUES (1,'(1.0,2.0)'),(2,'(3.0,4.0)'),(3,'(5.0,6.0)'),(4,'(1.0,2.0)');
+
+# Execute the same prepared statement three times with different parameter
+# values. Each execution must encode the new string correctly using a fresh
+# EncodeContext, not a stale pointer from a prior execution.
+PREPARE stmt FROM 'SELECT id FROM t1 WHERE val = ? ORDER BY id';
+
+SET @p = '(1.0,2.0)';
+EXECUTE stmt USING @p;
+
+SET @p = '(3.0,4.0)';
+EXECUTE stmt USING @p;
+
+SET @p = '(5.0,6.0)';
+EXECUTE stmt USING @p;
+
+DEALLOCATE PREPARE stmt;
+
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

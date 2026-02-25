@@ -44,12 +44,8 @@ class EncodeOp {
     assert(vdf != nullptr);
   }
 
-  // Encodes 'from' into binary representation.
-  // buffer_hint provides the initial allocation size (from persisted_length()).
-  // Returns nullptr on OOM (my_error already called) or on encoding error.
-  // Sets is_valid=false on encoding error, true otherwise.
-  String *invoke(const String &from, int64_t buffer_hint, MEM_ROOT &mem_root,
-                 bool &is_valid) const;
+  vef_encode_func_t fn() const { return fn_; }
+  const vef_func_desc_t *vdf() const { return vdf_; }
 
  private:
   vef_encode_func_t fn_{nullptr};
