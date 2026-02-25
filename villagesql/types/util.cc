@@ -328,13 +328,8 @@ int CustomMemCompare(const Item *item, const uchar *data1, size_t len1,
   // Use custom comparison for custom types
   if (item != nullptr && item->has_type_context()) {
     auto *tc = item->get_type_context();
-    if (auto result = TryCompareCustomType(*tc, data1, len1, data2, len2)) {
-      // Handle reverse sort direction in this path only since the comparison
-      // function assumes ASC but memcmp relies on bits being flipped for DESC.
-      res = reverse ? -*result : *result;
-    } else {
-      res = memcmp(data1, data2, min_len);
-    }
+    auto result = CompareCustomType(*tc, data1, len1, data2, len2);
+    res = reverse ? -result : result;
   } else {
     res = memcmp(data1, data2, min_len);
   }

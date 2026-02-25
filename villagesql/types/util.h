@@ -140,10 +140,8 @@ extern bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc);
 // Template version that works with both Item and Field types
 // Both Item and Field have has_type_context() and get_type_context() methods
 // Overload for TypeContext with binary data
-inline std::optional<int> TryCompareCustomType(const TypeContext &tc,
-                                               const uchar *data1, size_t len1,
-                                               const uchar *data2,
-                                               size_t len2) {
+inline int CompareCustomType(const TypeContext &tc, const uchar *data1,
+                             size_t len1, const uchar *data2, size_t len2) {
   assert(tc.descriptor());
   return tc.descriptor()->compare_op().invoke(data1, len1, data2, len2);
 }
@@ -156,8 +154,7 @@ std::optional<int> TryCompareCustomType(const T *obj, const uchar *data1,
     return std::nullopt;
   }
 
-  return TryCompareCustomType(*obj->get_type_context(), data1, len1, data2,
-                              len2);
+  return CompareCustomType(*obj->get_type_context(), data1, len1, data2, len2);
 }
 
 // Template overload for comparing two String objects with custom type context
@@ -168,7 +165,7 @@ std::optional<int> TryCompareCustomType(const T *obj, const String &str1,
     return std::nullopt;
   }
 
-  return TryCompareCustomType(
+  return CompareCustomType(
       *obj->get_type_context(), pointer_cast<const uchar *>(str1.ptr()),
       str1.length(), pointer_cast<const uchar *>(str2.ptr()), str2.length());
 }
@@ -181,7 +178,7 @@ inline std::optional<int> TryCompareCustomType(const TypeContext *tc,
     return std::nullopt;
   }
 
-  return TryCompareCustomType(
+  return CompareCustomType(
       *tc, pointer_cast<const uchar *>(str1.ptr()), str1.length(),
       pointer_cast<const uchar *>(str2.ptr()), str2.length());
 }

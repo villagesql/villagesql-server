@@ -3982,11 +3982,10 @@ static bool cmp_field_value(Field *field, ptrdiff_t diff) {
 
   // Use custom comparison function for custom types
   if (field->has_type_context()) {
-    if (auto result = villagesql::TryCompareCustomType(
-            *field->get_type_context(), field->data_ptr(), value1_length,
-            field->data_ptr() + diff, value2_length)) {
-      return *result != 0;
-    }
+    const auto result = villagesql::CompareCustomType(
+        *field->get_type_context(), field->data_ptr(), value1_length,
+        field->data_ptr() + diff, value2_length);
+    return result != 0;
   }
 
   // Trailing space can't be skipped and length is different
