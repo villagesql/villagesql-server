@@ -226,7 +226,23 @@ class TypeContext {
     return descriptor_->extension_version();
   }
   const std::string &type_name() const { return descriptor_->type_name(); }
-  std::string qualified_name() const { return descriptor_->qualified_name(); }
+  // Returns "extension_name.type_name" or "extension_name.type_name(v1,v2,...)"
+  // when parameters are present (e.g. "vsql_tvector.TVECTOR(3)").
+  // Values are listed in sorted key order, comma-separated.
+  std::string qualified_name() const {
+    if (key_.parameters().empty()) {
+      return descriptor_->qualified_name();
+    }
+    std::string result = descriptor_->qualified_name() + "(";
+    const char *delim = "";
+    for (const auto &entry : key_.parameters().params()) {
+      result += delim;
+      result += entry.second;
+      delim = ",";
+    }
+    result += ")";
+    return result;
+  }
 
   // Storage characteristics for this type instantiation.
   // For fixed-length types, these are copied from the TypeDescriptor.
