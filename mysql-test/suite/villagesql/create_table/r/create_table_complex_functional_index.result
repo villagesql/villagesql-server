@@ -1,0 +1,54 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+sig COMPLEX,
+INDEX idx_magnitude ((COMPLEX_ABS(sig)))
+);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `sig` vsql_complex.COMPLEX DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_magnitude` ((vsql_complex.complex_abs(`sig`)))
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, EXPRESSION
+FROM INFORMATION_SCHEMA.STATISTICS
+WHERE TABLE_NAME = 't1' AND INDEX_NAME = 'idx_magnitude';
+TABLE_NAME	INDEX_NAME	COLUMN_NAME	EXPRESSION
+t1	idx_magnitude	NULL	vsql_complex.complex_abs(`sig`)
+INSERT INTO t1 (id, sig)
+SELECT
+row_number() OVER () as id,
+COMPLEX_FROM_STRING(CONCAT('(', (RAND() * 20 - 10), ',', (RAND() * 20 - 10), ')'))
+FROM
+(SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10) d1,
+(SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10) d2,
+(SELECT 1 UNION SELECT 2 UNION SELECT 3 UNION SELECT 4 UNION SELECT 5 UNION SELECT 6 UNION SELECT 7 UNION SELECT 8 UNION SELECT 9 UNION SELECT 10) d3;
+SELECT COUNT(*) FROM t1;
+COUNT(*)
+1000
+INSERT INTO t1 VALUES(100001, '(0,30)');
+INSERT INTO t1 VALUES(100002, '(-35,1)');
+INSERT INTO t1 VALUES(100003, '(-20,-1)');
+ANALYZE TABLE t1;
+Table	Op	Msg_type	Msg_text
+test.t1	analyze	status	OK
+EXPLAIN SELECT id FROM t1 WHERE COMPLEX_ABS(sig) = CAST(30.0 AS DOUBLE);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	ref	idx_magnitude	idx_magnitude	9	const	1	100.00	NULL
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id` from `test`.`t1` where (vsql_complex.complex_abs(`sig`) = cast(30.0 as double))
+EXPLAIN SELECT id FROM t1 WHERE vsql_complex.COMPLEX_ABS(sig) > CAST(20.0 AS DOUBLE);
+id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
+1	SIMPLE	t1	NULL	range	idx_magnitude	idx_magnitude	9	NULL	3	100.00	Using where
+Warnings:
+Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id` from `test`.`t1` where (vsql_complex.complex_abs(`sig`) > <cache>(cast(20.0 as double)))
+SELECT id FROM t1 WHERE COMPLEX_ABS(sig) = CAST(30.0 AS DOUBLE);
+id
+100001
+SELECT id FROM t1 WHERE vsql_complex.COMPLEX_ABS(sig) > CAST(20.0 AS DOUBLE) ORDER BY id;
+id
+100001
+100002
+100003
+DROP TABLE t1;

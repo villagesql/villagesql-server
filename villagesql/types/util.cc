@@ -1086,7 +1086,16 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
       continue;
     }
 
-    // Case 3: Argument is not a custom type and not a constant string
+    // Case 3: Argument is a column reference (Item_field) without type context
+    // yet. This happens during functional index creation: the table is being
+    // created, so the field's custom type context hasn't been injected yet.
+    // Allow it through; at execution time the field will carry its type context
+    // and marshal_args() will pass the binary data correctly.
+    if (args[i]->type() == Item::FIELD_ITEM) {
+      continue;
+    }
+
+    // Case 4: Argument is not a custom type and not a constant string
     villagesql_error(
         "Cannot initialize function '%s': argument %u must be a custom type "
         "or string constant",
