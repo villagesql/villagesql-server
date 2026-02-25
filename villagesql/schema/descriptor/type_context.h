@@ -228,21 +228,7 @@ class TypeContext {
   const std::string &type_name() const { return descriptor_->type_name(); }
   // Returns "extension_name.type_name" or "extension_name.type_name(v1,v2,...)"
   // when parameters are present (e.g. "vsql_tvector.TVECTOR(3)").
-  // Values are listed in sorted key order, comma-separated.
-  std::string qualified_name() const {
-    if (key_.parameters().empty()) {
-      return descriptor_->qualified_name();
-    }
-    std::string result = descriptor_->qualified_name() + "(";
-    const char *delim = "";
-    for (const auto &entry : key_.parameters().params()) {
-      result += delim;
-      result += entry.second;
-      delim = ",";
-    }
-    result += ")";
-    return result;
-  }
+  const std::string &qualified_name() const { return qualified_name_; }
 
   // Storage characteristics for this type instantiation.
   // For fixed-length types, these are copied from the TypeDescriptor.
@@ -262,7 +248,8 @@ class TypeContext {
   // Key for this TypeContext (used by ExtensionObjectMap)
   TypeContextKey key_;
 
-  // Cached storage characteristics (computed eagerly in constructor)
+  // Cached values (computed eagerly in resolve_cached_values())
+  std::string qualified_name_;
   int64_t persisted_length_{0};
   int64_t max_decode_buffer_length_{0};
 };

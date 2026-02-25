@@ -29,6 +29,19 @@
 namespace villagesql {
 
 void TypeContext::resolve_cached_values() {
+  // Build qualified_name_ once: "ext.type" or "ext.type(v1,v2,...)"
+  qualified_name_ = descriptor_->qualified_base_name();
+  if (!key_.parameters().empty()) {
+    qualified_name_ += "(";
+    const char *delim = "";
+    for (const auto &[k, v] : key_.parameters().params()) {
+      qualified_name_ += delim;
+      qualified_name_ += v;
+      delim = ",";
+    }
+    qualified_name_ += ")";
+  }
+
   if (!key_.parameters().empty() && descriptor_->resolve_params() != nullptr) {
     // Variable-length type with parameters: resolve via callback
     const auto &param_map = key_.parameters().params();
@@ -49,7 +62,7 @@ void TypeContext::resolve_cached_values() {
       LogVSQL(WARNING_LEVEL,
               "resolve_params failed for type '%s' (params: %s): %s. "
               "Falling back to descriptor defaults.",
-              descriptor_->qualified_name().c_str(),
+              descriptor_->qualified_base_name().c_str(),
               key_.parameters().str().c_str(), error_msg);
       persisted_length_ = descriptor_->persisted_length();
       max_decode_buffer_length_ = descriptor_->max_decode_buffer_length();

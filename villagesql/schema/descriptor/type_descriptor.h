@@ -174,8 +174,10 @@ class TypeDescriptor {
     return key_.extension_version();
   }
 
-  // Returns the fully qualified type name: "extension_name.type_name"
-  std::string qualified_name() const {
+  // Returns the qualified base name: "extension_name.type_name"
+  // Does not include parameters. Use TypeContext::qualified_name() for the
+  // full name including parameters (e.g. "vsql_tvector.TVECTOR(3)").
+  std::string qualified_base_name() const {
     return extension_name() + "." + type_name();
   }
 
