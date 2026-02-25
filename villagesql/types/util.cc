@@ -16,6 +16,7 @@
 
 #include "villagesql/types/util.h"
 
+#include <cinttypes>
 #include <optional>
 
 #include "lex_string.h"
@@ -126,6 +127,21 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
   }
 
   field->set_type_context(tc);
+
+  // Verify that the Field's storage length matches the TypeContext's
+  // persisted_length. A mismatch here would mean InnoDB allocated a different
+  // amount of storage than the type expects, which leads to silent data
+  // corruption.
+  if (should_assert_if_false(static_cast<int64_t>(field->field_length) ==
+                             tc->persisted_length())) {
+    LogVSQL(ERROR_LEVEL,
+            "field_length (%u) != persisted_length (%" PRId64
+            ") for column %s in table %s.%s (type %s)",
+            field->field_length, tc->persisted_length(), column_name.c_str(),
+            db_name.c_str(), table_name.c_str(), tc->qualified_name().c_str());
+    return true;
+  }
+
   return false;
 }
 
@@ -963,6 +979,8 @@ void AnnotateCustomColumnsInTmpTable(TABLE *table,
       const TypeContext *tc = vclient.type_contexts().acquire(
           cdef->custom_type_context->key(), table->s->mem_root);
       table->field[i]->set_type_context(tc);
+      assert(static_cast<int64_t>(table->field[i]->field_length) ==
+             tc->persisted_length());
     }
   }
 }

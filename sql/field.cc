@@ -9619,6 +9619,8 @@ Field *make_field(const Create_field &create_field, TABLE_SHARE *share,
       create_field.m_srid, create_field.is_array);
   if (f && create_field.custom_type_context) {
     f->set_type_context(create_field.custom_type_context);
+    assert(static_cast<int64_t>(f->field_length) ==
+           create_field.custom_type_context->persisted_length());
   }
   return f;
 }
