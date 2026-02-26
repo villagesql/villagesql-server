@@ -300,7 +300,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
           ColumnEntry new_entry(
               ColumnKey(db_name, table_name, alter->m_new_name),
               old_entry_ptr->extension_name, old_entry_ptr->extension_version,
-              old_entry_ptr->type_name);
+              old_entry_ptr->type_name, old_entry_ptr->type_parameters);
 
           to_rename_.emplace_back(new_entry, old_entry_ptr->key());
         }
@@ -361,7 +361,8 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
         to_add_.emplace_back(ColumnKey(db_name, table_name, field.field_name),
                              field.custom_type_context->extension_name(),
                              field.custom_type_context->extension_version(),
-                             field.custom_type_context->type_name());
+                             field.custom_type_context->type_name(),
+                             field.custom_type_context->parameters().to_json());
       } else if (was_custom_type && is_custom_type) {
         // Changing FROM custom TO custom - use delete-then-insert pattern
         // Note: Apply removals before additions
@@ -371,14 +372,16 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
         to_add_.emplace_back(ColumnKey(db_name, table_name, field.field_name),
                              field.custom_type_context->extension_name(),
                              field.custom_type_context->extension_version(),
-                             field.custom_type_context->type_name());
+                             field.custom_type_context->type_name(),
+                             field.custom_type_context->parameters().to_json());
       }
     } else if (is_custom_type) {
       // This is ADD COLUMN with custom type - insert entry
       to_add_.emplace_back(ColumnKey(db_name, table_name, field.field_name),
                            field.custom_type_context->extension_name(),
                            field.custom_type_context->extension_version(),
-                           field.custom_type_context->type_name());
+                           field.custom_type_context->type_name(),
+                           field.custom_type_context->parameters().to_json());
     }
   }
   return false;

@@ -287,11 +287,13 @@ extern bool ValidateAndReportCustomFieldStore(const Item *item,
 // If to does not have a custom type, generates an error with readable format.
 extern bool TryCopyCustomTypeField(const Field *from, Field *to);
 
-// Binary copy from a custom type field to custom type field.
-extern void CopyCustomToCustomField(const Field *from, Field *to);
+// Function pointer type for field copy operations (matches
+// Copy_field::Copy_func).
+using FieldCopyFunc = void(Copy_field *, const Field *, Field *);
 
-// Copy from a custom type field to string type field.
-extern void CopyCustomToStringField(const Field *from, Field *to);
+// Returns the appropriate copy function for copying from a custom type field.
+// from must have a custom type context.
+extern FieldCopyFunc *GetCopyFunc(const Field *from, const Field *to);
 
 // Encode a string field value and store it in a custom type field.
 // This enables CTEs and subqueries with string values to work with custom

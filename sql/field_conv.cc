@@ -324,17 +324,6 @@ static void do_field_string(Copy_field *, const Field *from_field,
   to_field->store(res.ptr(), res.length(), res.charset());
 }
 
-// VillageSQL: Copy from a custom type field to custom type field.
-static void do_field_custom_to_custom(Copy_field *, const Field *from_field,
-                                      Field *to_field) {
-  villagesql::CopyCustomToCustomField(from_field, to_field);
-}
-
-// VillageSQL: Copy from a custom type field to string field.
-static void do_field_custom_to_string(Copy_field *, const Field *from_field,
-                                      Field *to_field) {
-  villagesql::CopyCustomToStringField(from_field, to_field);
-}
 
 static void do_field_enum(Copy_field *copy, const Field *from_field,
                           Field *to_field) {
@@ -578,11 +567,7 @@ Copy_field::Copy_func *Copy_field::get_copy_func() {
 
   // VillageSQL: Route to the appropriate custom type copy function.
   if (m_from_field->has_type_context()) {
-    if (m_to_field->has_type_context()) {
-      return do_field_custom_to_custom;
-    } else {
-      return do_field_custom_to_string;
-    }
+    return villagesql::GetCopyFunc(m_from_field, m_to_field);
   }
 
   const bool compatible_db_low_byte_first =

@@ -604,6 +604,63 @@ bool ValidateAndReportCustomFieldStore(const Item *item, const Field *field) {
   return true;  // Error
 }
 
+void CopyCustomToCustomField(const Field *from, Field *to) {
+  // Both fields have the same custom type. Copy binary data directly.
+  // Handle potential length_bytes differences (VARCHAR(255) vs VARCHAR(65535)).
+  // Note: from->data_length() decodes the length and from->data_ptr() returns
+  // a pointer to the data (skipping the length prefix). But to->field_ptr()
+  // returns the start of the field including the length prefix area, so we must
+  // manually encode the length prefix.
+  // TODO(villagesql-blob): needs update for blob implementation.
+  assert(from->get_type_context()->descriptor()->implementation_type() ==
+         MYSQL_TYPE_VARCHAR);
+  assert(to->get_type_context()->descriptor()->implementation_type() ==
+         MYSQL_TYPE_VARCHAR);
+  const size_t data_len = from->data_length();
+  const uint32 to_length_bytes =
+      down_cast<const Field_varstring *>(to)->get_length_bytes();
+  const uchar *from_data = from->data_ptr();
+  uchar *to_ptr = to->field_ptr();
+
+  // Write length prefix (1 or 2 bytes) to destination
+  if (to_length_bytes == 1) {
+    to_ptr[0] = static_cast<uchar>(data_len);
+  } else {
+    int2store(to_ptr, static_cast<uint16>(data_len));
+  }
+
+  // Ensure data fits in destination field
+  assert(data_len <= to->field_length);
+  // Copy the binary data
+  memcpy(to_ptr + to_length_bytes, from_data, data_len);
+}
+
+static void do_field_custom_to_custom(Copy_field *, const Field *from,
+                                      Field *to) {
+  CopyCustomToCustomField(from, to);
+}
+
+static void do_field_custom_to_string(Copy_field *, const Field *from,
+                                      Field *to) {
+  assert(from->has_type_context());
+  // Custom → non-custom string: decode to string representation.
+  // NULL is handled outside this function
+  // TODO(villagesql-performance): evaluate something more performant
+  StringBuffer<MAX_FIELD_WIDTH> res(from->charset());
+  res.length(0U);
+  from->val_external_str(&res);
+  to->store(res.ptr(), res.length(), res.charset());
+}
+
+FieldCopyFunc *GetCopyFunc(const Field *from, const Field *to) {
+  assert(from->has_type_context());
+  if (to->has_type_context()) {
+    // TODO(villagesql-performance): split to targeted copy functions
+    return do_field_custom_to_custom;
+  }
+  return do_field_custom_to_string;
+}
+
 bool TryCopyCustomTypeField(const Field *from, Field *to) {
   assert(from->has_type_context());
 
@@ -626,43 +683,6 @@ bool TryCopyCustomTypeField(const Field *from, Field *to) {
   }
   CopyCustomToCustomField(from, to);
   return false;
-}
-
-void CopyCustomToCustomField(const Field *from, Field *to) {
-  // Both fields have the same custom type. Copy binary data directly.
-  // Handle potential length_bytes differences (VARCHAR(255) vs VARCHAR(65535)).
-  // Note: from->data_length() decodes the length and from->data_ptr() returns
-  // a pointer to the data (skipping the length prefix). But to->field_ptr()
-  // returns the start of the field including the length prefix area, so we must
-  // manually encode the length prefix.
-  const size_t data_len = from->data_length();
-  const uint32 to_length_bytes =
-      down_cast<const Field_varstring *>(to)->get_length_bytes();
-  const uchar *from_data = from->data_ptr();
-  uchar *to_ptr = to->field_ptr();
-
-  // Write length prefix (1 or 2 bytes) to destination
-  if (to_length_bytes == 1) {
-    to_ptr[0] = static_cast<uchar>(data_len);
-  } else {
-    int2store(to_ptr, static_cast<uint16>(data_len));
-  }
-
-  // Ensure data fits in destination field
-  assert(data_len <= to->field_length);
-  // Copy the binary data
-  memcpy(to_ptr + to_length_bytes, from_data, data_len);
-}
-
-void CopyCustomToStringField(const Field *from, Field *to) {
-  assert(from->has_type_context());
-  // Custom → non-custom string: decode to string representation.
-  // NULL is handled outside this function
-  // TODO(villagesql-performance): evaluate something more performant
-  StringBuffer<MAX_FIELD_WIDTH> res(from->charset());
-  res.length(0U);
-  from->val_external_str(&res);
-  to->store(res.ptr(), res.length(), res.charset());
 }
 
 type_conversion_status TryEncodeStringFieldToCustom(Field *from_field,

@@ -1,0 +1,61 @@
+INSTALL EXTENSION vsql_tvector;
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+vec3 TVECTOR(3)
+);
+INSERT INTO t1 VALUES (1, '[1.0,2.0,3.0]');
+INSERT INTO t1 VALUES (2, '[4.5,5.5,6.5]');
+INSERT INTO t1 VALUES (3, NULL);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `vec3` vsql_tvector.TVECTOR DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1 ORDER BY id;
+id	vec3
+1	[1,2,3]
+2	[4.5,5.5,6.5]
+3	NULL
+ALTER TABLE t1 CHANGE vec3 vec4 TVECTOR(4);
+ERROR HY000: Cannot convert between incompatible custom types 'vsql_tvector.TVECTOR(3)' and 'vsql_tvector.TVECTOR(4)'
+ALTER TABLE t1 CHANGE vec3 vec3_2 TVECTOR(3);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `vec3_2` vsql_tvector.TVECTOR DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1 ORDER BY id;
+id	vec3_2
+1	[1,2,3]
+2	[4.5,5.5,6.5]
+3	NULL
+ALTER TABLE t1 CHANGE vec3_2 vec3_str VARCHAR(100);
+SHOW CREATE TABLE t1;
+Table	Create Table
+t1	CREATE TABLE `t1` (
+  `id` int NOT NULL,
+  `vec3_str` varchar(100) DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+SELECT * FROM t1 ORDER BY id;
+id	vec3_str
+1	[1,2,3]
+2	[4.5,5.5,6.5]
+3	NULL
+DROP TABLE t1;
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+vec2 TVECTOR(2),
+vec3 TVECTOR(3)
+);
+INSERT INTO t2 VALUES (1, '[-1.0,2.5]', '[1.0,2.0,3.0]');
+INSERT INTO t2 VALUES (2, '[4.0,-5.0]', '[4.5,5.5,6.5]');
+INSERT INTO t2 VALUES (3, NULL, NULL);
+SELECT * FROM t2 WHERE vec2 = vec3;
+ERROR HY000: Cannot compare types vsql_tvector.TVECTOR(2) and vsql_tvector.TVECTOR(3) in =
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_tvector;

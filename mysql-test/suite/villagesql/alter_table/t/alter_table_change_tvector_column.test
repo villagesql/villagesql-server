@@ -1,0 +1,49 @@
+# Test ALTER TABLE CHANGE on existing TVECTOR column
+# Tests copy between TVECTOR(N) columns with same and different prefix sizes,
+# and conversion to string.
+
+INSTALL EXTENSION vsql_tvector;
+
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    vec3 TVECTOR(3)
+);
+
+INSERT INTO t1 VALUES (1, '[1.0,2.0,3.0]');
+INSERT INTO t1 VALUES (2, '[4.5,5.5,6.5]');
+INSERT INTO t1 VALUES (3, NULL);
+
+SHOW CREATE TABLE t1;
+SELECT * FROM t1 ORDER BY id;
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t1 CHANGE vec3 vec4 TVECTOR(4);
+
+ALTER TABLE t1 CHANGE vec3 vec3_2 TVECTOR(3);
+
+SHOW CREATE TABLE t1;
+SELECT * FROM t1 ORDER BY id;
+
+ALTER TABLE t1 CHANGE vec3_2 vec3_str VARCHAR(100);
+
+SHOW CREATE TABLE t1;
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    vec2 TVECTOR(2),
+    vec3 TVECTOR(3)
+);
+
+INSERT INTO t2 VALUES (1, '[-1.0,2.5]', '[1.0,2.0,3.0]');
+INSERT INTO t2 VALUES (2, '[4.0,-5.0]', '[4.5,5.5,6.5]');
+INSERT INTO t2 VALUES (3, NULL, NULL);
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT * FROM t2 WHERE vec2 = vec3;
+
+DROP TABLE t2;
+
+UNINSTALL EXTENSION vsql_tvector;

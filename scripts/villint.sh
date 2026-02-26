@@ -163,6 +163,7 @@ ALLOWED_TODO_TAGS=(
   "villagesql-performance"
   "villagesql-rebase"
   "villagesql-windows"
+  "villagesql-blob"
 )
 
 INVALID_TODO_TAGS_FOUND=0
