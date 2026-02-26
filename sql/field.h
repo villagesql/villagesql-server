@@ -64,6 +64,7 @@
 #include "villagesql/schema/descriptor/type_context.h"
 
 namespace villagesql {
+class TypeDecoder;
 class TypeEncoder;
 }  // namespace villagesql
 
@@ -1032,6 +1033,7 @@ class Field {
   // Unlike val_str(), val_external_str() takes only one buffer because custom
   // types always decode binary data to a new string (never returning existing
   // string data), so the two-buffer optimization doesn't apply.
+  // TODO(villagesql-beta): Return buf with zero length in case of error.
   String *val_external_str(String *buf) const;
   String *val_external_str(String *str, uchar *new_ptr) {
     uchar *old_ptr = ptr;
@@ -1892,6 +1894,8 @@ class Field {
   // TODO(villagesql): Collapse these into one object (here and in Item)
   const villagesql::TypeContext *custom_type{nullptr};
   villagesql::TypeEncoder *type_encoder_{nullptr};
+  // mutable: lazily initialized by the const val_external_str() path.
+  mutable villagesql::TypeDecoder *type_decoder_{nullptr};
 
  public:
   const villagesql::TypeContext *get_type_context() const {
@@ -1903,6 +1907,11 @@ class Field {
   villagesql::TypeEncoder *get_type_encoder() const { return type_encoder_; }
   void set_type_encoder(villagesql::TypeEncoder *encoder) {
     type_encoder_ = encoder;
+  }
+
+  villagesql::TypeDecoder *get_type_decoder() const { return type_decoder_; }
+  void set_type_decoder(villagesql::TypeDecoder *decoder) const {
+    type_decoder_ = decoder;
   }
 };
 

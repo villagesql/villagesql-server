@@ -33,9 +33,6 @@
 
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
-class String;
-struct MEM_ROOT;
-
 namespace villagesql {
 
 // Storage characteristics resolved from type parameters.
@@ -67,13 +64,8 @@ class DecodeOp {
     assert(vdf != nullptr);
   }
 
-  // Decodes binary data into string representation in output_buffer.
-  // buffer_hint provides the initial allocation size (from
-  // max_decode_buffer_length()). Returns false on success, true on error. Sets
-  // is_valid=false on invalid data; on OOM sets is_valid=true and calls
-  // my_error.
-  bool invoke(const unsigned char *data, size_t len, int64_t buffer_hint,
-              MEM_ROOT &mem_root, String *output_buffer, bool &is_valid) const;
+  vef_decode_func_t fn() const { return fn_; }
+  const vef_func_desc_t *vdf() const { return vdf_; }
 
  private:
   vef_decode_func_t fn_{nullptr};

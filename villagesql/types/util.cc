@@ -49,6 +49,7 @@
 #include "villagesql/schema/systable/custom_columns.h"
 #include "villagesql/schema/util.h"
 #include "villagesql/schema/victionary_client.h"
+#include "villagesql/types/type_decoder.h"
 #include "villagesql/types/type_encoder.h"
 
 namespace villagesql {
@@ -327,12 +328,92 @@ String *EncodeStringForField(Field *field, const String &from, bool &is_valid) {
   return encoded;
 }
 
-bool DecodeString(const TypeContext &tc, const uchar *encoded_data,
-                  size_t encoded_length, MEM_ROOT &mem_root,
-                  String *output_buffer, bool &is_valid) {
-  return tc.descriptor()->decode_op().invoke(encoded_data, encoded_length,
-                                             tc.max_decode_buffer_length(),
-                                             mem_root, output_buffer, is_valid);
+// Lazily allocate a TypeDecoder for field, reused for all subsequent decodes
+// within the table's lifetime.
+//
+// For regular tables (NO_TMP_TABLE), TABLE::mem_root has the same lifetime as
+// the Field clone that caches the decoder pointer, so both are freed together
+// when the TABLE is evicted from the table open cache.
+//
+// For any kind of tmp table use TABLE_SHARE::mem_root, this is where the
+// Fields are allocated for most uses of tmp tables. The one exception is
+// INTERNAL_TMP_TABLE where the initial Table object's fields are allocated
+// from the THD::mem_root, but for these tables the share is destroyed at the
+// end of the statement, so the lifetime is correct.
+static TypeDecoder *GetTypeDecoderFor(const Field *field) {
+  TypeDecoder *decoder = field->get_type_decoder();
+  if (decoder == nullptr) {
+    MEM_ROOT &mem_root = (field->table->s->tmp_table == NO_TMP_TABLE)
+                             ? field->table->mem_root
+                             : field->table->s->mem_root;
+    decoder = new (&mem_root) TypeDecoder(*field->get_type_context(), mem_root);
+    if (decoder == nullptr) {
+      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeDecoder));
+      return nullptr;
+    }
+    if (decoder->Init()) return nullptr;
+    field->set_type_decoder(decoder);
+  }
+  return decoder;
+}
+
+// Lazily allocate a TypeDecoder for an Item from thd->mem_root. The context
+// is reused for all subsequent decodes on the same Item within a query.
+// Item::cleanup() nulls type_decoder_ between executions (e.g. PS re-exec),
+// so the next call after cleanup will allocate a fresh context on the new
+// thd->mem_root.
+static TypeDecoder *GetTypeDecoderFor(Item *item) {
+  TypeDecoder *decoder = item->get_type_decoder();
+  if (decoder == nullptr) {
+    decoder = new (current_thd->mem_root)
+        TypeDecoder(*item->get_type_context(), *current_thd->mem_root);
+    if (decoder == nullptr) {
+      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeDecoder));
+      return nullptr;
+    }
+    if (decoder->Init()) return nullptr;
+    item->set_type_decoder(decoder);
+  }
+  return decoder;
+}
+
+bool DecodeStringUncached(const TypeContext &tc, const String &from,
+                          String *out, bool &is_valid) {
+  TypeDecoder decoder(tc, *current_thd->mem_root);
+  if (decoder.Init()) {
+    is_valid = true;  // OOM, my_error already called
+    return true;
+  }
+  return decoder.decode(pointer_cast<const uchar *>(from.ptr()), from.length(),
+                        out, is_valid);
+}
+
+bool DecodeStringForField(const Field *field, String *out, bool &is_valid) {
+  if (should_assert_if_false(field->has_type_context())) {
+    return true;
+  }
+  TypeDecoder *decoder = GetTypeDecoderFor(field);
+  if (decoder == nullptr) {
+    is_valid = true;  // OOM, my_error already called
+    return true;
+  }
+  return decoder->decode(field->data_ptr(), field->data_length(), out,
+                         is_valid);
+}
+
+bool DecodeStringForItem(Item *item, const String &from, String *out,
+                         bool &is_valid) {
+  if (should_assert_if_false(item->has_type_context())) {
+    return true;
+  }
+  TypeDecoder *decoder = GetTypeDecoderFor(item);
+  if (decoder == nullptr) {
+    is_valid = true;  // OOM, my_error already called
+    return true;
+  }
+  // Extract ptr/len before decode() writes to out: from and *out may alias.
+  return decoder->decode(pointer_cast<const uchar *>(from.ptr()), from.length(),
+                         out, is_valid);
 }
 
 void AppendFullyQualifiedName(const TypeContext &tc, String *out) {
@@ -669,10 +750,10 @@ static void do_field_custom_to_string(Copy_field *, const Field *from,
   // Custom → non-custom string: decode to string representation.
   // NULL is handled outside this function
   // TODO(villagesql-performance): evaluate something more performant
-  StringBuffer<MAX_FIELD_WIDTH> res(from->charset());
-  res.length(0U);
-  from->val_external_str(&res);
-  to->store(res.ptr(), res.length(), res.charset());
+  String buf;
+  if (const String *res = from->val_external_str(&buf)) {
+    to->store(res->ptr(), res->length(), res->charset());
+  }
 }
 
 FieldCopyFunc *GetCopyFunc(const Field *from, const Field *to) {

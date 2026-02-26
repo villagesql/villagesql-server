@@ -10622,28 +10622,26 @@ const char *get_field_name_or_expression(THD *thd, const Field *field) {
 String *Field::val_external_str(String *buf) const {
   if (!has_type_context()) return val_str(buf);
 
-  // Get the encoded data directly from the field
-  const uchar *encoded_data = data_ptr();
-  size_t encoded_length = data_length();
-
   bool is_valid = true;
-  if (villagesql::DecodeString(*get_type_context(), encoded_data,
-                               encoded_length, *current_thd->mem_root, buf,
-                               is_valid) &&
-      !is_valid) {
-    THD *thd = current_thd;
-    if (!thd->lex->is_ignore() && thd->is_strict_mode()) {
-      const ErrConvString errmsg(pointer_cast<const char *>(encoded_data),
-                                 encoded_length, &my_charset_bin);
-      const Diagnostics_area *da = thd->get_stmt_da();
-      push_warning_printf(thd, Sql_condition::SL_WARNING,
-                          ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
-                          ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD),
-                          get_type_context()->type_name().c_str(), errmsg.ptr(),
-                          this->field_name, da->current_row_for_condition());
+  if (villagesql::DecodeStringForField(this, buf, is_valid)) {
+    if (!is_valid) {
+      THD *thd = current_thd;
+      if (!thd->lex->is_ignore() && thd->is_strict_mode()) {
+        const uchar *encoded_data = data_ptr();
+        size_t encoded_length = data_length();
+        const ErrConvString errmsg(pointer_cast<const char *>(encoded_data),
+                                   encoded_length, &my_charset_bin);
+        const Diagnostics_area *da = thd->get_stmt_da();
+        push_warning_printf(
+            thd, Sql_condition::SL_WARNING, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
+            ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD),
+            get_type_context()->type_name().c_str(), errmsg.ptr(),
+            this->field_name, da->current_row_for_condition());
+      }
+    } else {
+      // OOMs will just return nullptr, but have called my_error.
+      return nullptr;
     }
-    // OOMs will just return nullptr, but have called my_error.
-    return nullptr;
   }
 
   // Success: the decoded string is in buf.

@@ -358,8 +358,11 @@ static void prepare_default_value_string(uchar *buf, TABLE *table,
         // For BINARY(0) and VARBINARY type with empty string as default value.
         f->val_str(&type);
     } else {
-      // VillageSQL: val_external_str handles both custom and regular types
-      f->val_external_str(&type);
+      // VillageSQL: val_external_str handles both custom and regular types.
+      // Copy if val_str returned a different pointer than the buffer we passed.
+      if (const String *res = f->val_external_str(&type);
+          res != nullptr && res != &type)
+        type.copy(*res);
     }
 
     if (type.length()) {

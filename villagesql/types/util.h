@@ -95,13 +95,24 @@ extern bool HandleCustomColumnsForTableRename(THD &thd, const char *old_db,
 extern String *EncodeStringForField(Field *field, const String &from,
                                     bool &is_valid);
 
-// Decodes binary data into a String representation using the type's decode
-// function. Allocates buffer on the given mem_root. Returns false on
-// success, true on error. On error, is_valid indicates if the data was invalid
-// (false) or if an OOM occurred (true, with my_error already called).
-extern bool DecodeString(const TypeContext &tc, const uchar *encoded_data,
-                         size_t encoded_length, MEM_ROOT &mem_root,
-                         String *output_buffer, bool &is_valid);
+// Decode [data, data+len) for the given TypeContext without caching any state.
+// Use this for one-shot decodes outside the row-reading hot path (e.g. query
+// printing). Returns false on success. On failure returns true; is_valid false
+// means invalid data, true means OOM (my_error already called).
+extern bool DecodeStringUncached(const TypeContext &tc, const String &from,
+                                 String *out, bool &is_valid);
+
+// Decode the field's current value into out. Returns false on success. On
+// failure returns true; is_valid false means invalid data (warning pushed),
+// true means OOM (my_error already called).
+extern bool DecodeStringForField(const Field *field, String *out,
+                                 bool &is_valid);
+
+// Decode binary data from [data, data+len) into out for a custom type item.
+// Returns false on success. On failure returns true; is_valid false means
+// invalid data, true means OOM (my_error already called).
+extern bool DecodeStringForItem(Item *item, const String &from, String *out,
+                                bool &is_valid);
 
 // Appends "extension_name.type_name" to the given String.
 extern void AppendFullyQualifiedName(const TypeContext &tc, String *out);

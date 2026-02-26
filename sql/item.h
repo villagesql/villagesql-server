@@ -80,6 +80,7 @@
 #include "villagesql/include/item_helpers.h"
 
 namespace villagesql {
+class TypeDecoder;
 class TypeEncoder;
 }  // namespace villagesql
 
@@ -1284,6 +1285,7 @@ class Item : public Parse_tree_node {
   virtual void cleanup() {
     marker = MARKER_NONE;
     type_encoder_ = nullptr;
+    type_decoder_ = nullptr;
   }
   /**
     Called when an item has been removed, can be used to notify external
@@ -3754,6 +3756,7 @@ class Item : public Parse_tree_node {
  protected:
   const villagesql::TypeContext *custom_type{nullptr};
   villagesql::TypeEncoder *type_encoder_{nullptr};
+  villagesql::TypeDecoder *type_decoder_{nullptr};
 
  public:
   virtual const villagesql::TypeContext *get_type_context() const {
@@ -3764,6 +3767,10 @@ class Item : public Parse_tree_node {
   villagesql::TypeEncoder *get_type_encoder() const { return type_encoder_; }
   void set_type_encoder(villagesql::TypeEncoder *encoder) {
     type_encoder_ = encoder;
+  }
+  villagesql::TypeDecoder *get_type_decoder() const { return type_decoder_; }
+  void set_type_decoder(villagesql::TypeDecoder *decoder) {
+    type_decoder_ = decoder;
   }
 };
 

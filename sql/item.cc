@@ -292,9 +292,7 @@ String *Item::val_external_str(String *str) {
 
   // Decode using TypeContext's to_string function
   bool is_valid = true;
-  if (villagesql::DecodeString(
-          *get_type_context(), pointer_cast<const uchar *>(binary_data->ptr()),
-          binary_data->length(), *current_thd->mem_root, str, is_valid)) {
+  if (villagesql::DecodeStringForItem(this, *binary_data, str, is_valid)) {
     if (!is_valid) {
       // Invalid custom type data - set null and return nullptr
       null_value = true;
@@ -3629,9 +3627,10 @@ void Item_string::print(const THD *, String *str,
     str->append('\'');
     String decoded;
     bool is_valid;
-    if (!villagesql::DecodeString(
-            *get_type_context(), (const uchar *)str_value.ptr(),
-            str_value.length(), *current_thd->mem_root, &decoded, is_valid)) {
+    if (!villagesql::DecodeStringUncached(*get_type_context(), str_value,
+                                          &decoded, is_valid) &&
+        is_valid) {
+      // TODO(villagesql-beta): Should we print a placeholder in case of error?
       str->append(decoded);
     }
     str->append('\'');
