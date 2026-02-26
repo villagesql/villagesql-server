@@ -30,6 +30,10 @@ namespace villagesql {
 
 void TypeContext::resolve_cached_values() {
   // Build qualified_name_ once: "ext.type" or "ext.type(v1,v2,...)"
+  // TODO(villagesql): This needs to be updated to support both TYPE(N) and
+  // TYPE('k1=v1,k2=v2,...') syntax, and to preserve parameter order as defined
+  // by the extension (currently alphabetical due to std::map). This will be
+  // revisited when SHOW CREATE TABLE support is added.
   qualified_name_ = descriptor_->qualified_base_name();
   if (!key_.parameters().empty()) {
     qualified_name_ += "(";
