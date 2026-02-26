@@ -49,6 +49,12 @@ std::string normalize_extension_name(const std::string &name);
 // Type names: Always case-insensitive (like SQL type names)
 std::string normalize_type_name(const std::string &name);
 
+// Build a qualified base name string "extension_name.type_name".
+inline std::string make_qualified_base_name(const std::string &extension_name,
+                                            const std::string &type_name) {
+  return extension_name + "." + type_name;
+}
+
 // Helper functions for reading a value from a Field.
 void read_string_field(Field *f, std::string &out);
 void read_unsigned_field(Field *f, unsigned int &out);

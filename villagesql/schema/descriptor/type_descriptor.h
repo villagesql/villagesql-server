@@ -178,7 +178,7 @@ class TypeDescriptor {
   // Does not include parameters. Use TypeContext::qualified_name() for the
   // full name including parameters (e.g. "vsql_tvector.TVECTOR(3)").
   std::string qualified_base_name() const {
-    return extension_name() + "." + type_name();
+    return make_qualified_base_name(extension_name(), type_name());
   }
 
   // Type implementation details

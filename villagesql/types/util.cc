@@ -1035,9 +1035,9 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     // expected_type.custom_type is always non-null for VEF_TYPE_CUSTOM params
     // (enforced by the SDK).
     assert(expected_type.custom_type != nullptr);
-    const std::string expected_qbn =
-        std::string(extension_name.str, extension_name.length) + "." +
-        expected_type.custom_type;
+    const std::string expected_qbn = make_qualified_base_name(
+        std::string(extension_name.str, extension_name.length),
+        expected_type.custom_type);
 
     // Case 1: Argument already has custom type - validate compatibility.
     auto *tc = args[i]->get_type_context();
