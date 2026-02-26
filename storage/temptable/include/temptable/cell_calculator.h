@@ -291,6 +291,14 @@ inline int Cell_calculator::compare(const Cell &lhs, const Cell &rhs) const {
   /* Note: Using if-s instead of switch due to bug mentioned in hash(). */
 
   if (m_mode == Mode::BINARY) {
+    // VillageSQL: cell data is raw (no length prefix), so call
+    // TryCompareCustomType directly instead of key_cmp which expects a
+    // 2-byte length-prefixed key image.
+    auto result = villagesql::TryCompareCustomType(
+        m_mysql_field, lhs_data, lhs_data_length, rhs_data, rhs_data_length);
+    if (result.has_value()) {
+      return result.value();
+    }
     return const_cast<Field *>(m_mysql_field)->key_cmp(lhs_data, rhs_data);
   } else if (m_mode == Mode::CHARSET) {
     lhs_length = lhs_data_length;

@@ -28,6 +28,7 @@
 
 #include <villagesql/extension.h>
 
+#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
@@ -180,6 +181,7 @@ bool decode_complex(const unsigned char *buffer, size_t buffer_size, char *to,
 int cmp_complex(const unsigned char *data1, size_t len1,
                 const unsigned char *data2, size_t len2) {
   if (len1 < kComplexSize || len2 < kComplexSize) {
+    assert(len1 != 0);
     return 0;  // Invalid lengths, treat as equal
   }
 
