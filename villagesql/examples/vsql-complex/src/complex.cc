@@ -103,6 +103,13 @@ size_t fnv1a_hash(const unsigned char *data, size_t len) {
   return hash;
 }
 
+std::optional<Complex> TryLoadFromInValue(const vef_invalue_t *v) {
+  if (v->bin_len != kComplexSize) {
+    return std::nullopt;
+  }
+  return load_complex(v->bin_value);
+}
+
 void ReturnError(std::string_view err_msg, vef_vdf_result_t *result) {
   result->type = VEF_RESULT_ERROR;
   if (err_msg.size() >= VEF_MAX_ERROR_LEN) {
@@ -178,13 +185,15 @@ void complex_to_string(vef_context_t *ctx, vef_invalue_t *in,
     out->type = VEF_RESULT_NULL;
     return;
   }
-  if (in->bin_len < kComplexSize) {
+
+  const auto cx = TryLoadFromInValue(in);
+  if (!cx.has_value()) {
     ReturnError("argument malformed", out);
     return;
   }
-  Complex cx = load_complex(in->bin_value);
+
   int written =
-      snprintf(out->str_buf, out->max_str_len, "(%g,%g)", cx.re, cx.im);
+      snprintf(out->str_buf, out->max_str_len, "(%g,%g)", cx->re, cx->im);
   if (written < 0 || static_cast<size_t>(written) >= out->max_str_len) {
     ReturnError("output buffer too small", out);
     return;
@@ -196,24 +205,27 @@ void complex_to_string(vef_context_t *ctx, vef_invalue_t *in,
 // Compare VDF for ORDER BY, indexes: (COMPLEX, COMPLEX) -> INT
 void complex_compare(vef_context_t *ctx, vef_invalue_t *in_l,
                      vef_invalue_t *in_r, vef_vdf_result_t *out) {
-  if (in_l->bin_len < kComplexSize || in_r->bin_len < kComplexSize) {
-    out->int_value = 0;  // Invalid lengths, treat as equal
-    out->type = VEF_RESULT_VALUE;
+  const auto lhs = TryLoadFromInValue(in_l);
+  if (!lhs.has_value()) {
+    ReturnError("left argument malformed", out);
     return;
   }
 
-  Complex c1 = load_complex(in_l->bin_value);
-  Complex c2 = load_complex(in_r->bin_value);
+  const auto rhs = TryLoadFromInValue(in_r);
+  if (!rhs.has_value()) {
+    ReturnError("right argument malformed", out);
+    return;
+  }
 
   // Compare real parts first
-  if (c1.re < c2.re)
+  if (lhs->re < rhs->re)
     out->int_value = -1;
-  else if (c1.re > c2.re)
+  else if (lhs->re > rhs->re)
     out->int_value = 1;
   // Real parts equal, compare imaginary parts
-  else if (c1.im < c2.im)
+  else if (lhs->im < rhs->im)
     out->int_value = -1;
-  else if (c1.im > c2.im)
+  else if (lhs->im > rhs->im)
     out->int_value = 1;
   else
     out->int_value = 0;  // Both parts equal
@@ -227,28 +239,18 @@ void complex_compare(vef_context_t *ctx, vef_invalue_t *in_l,
 // working correctly with hash joins and EXCEPT operations.
 void complex2_hash(vef_context_t *ctx, vef_invalue_t *in,
                    vef_vdf_result_t *out) {
-  if (in->bin_len < kComplexSize) {
-    out->int_value =
-        static_cast<long long>(fnv1a_hash(in->bin_value, in->bin_len));
-    out->type = VEF_RESULT_VALUE;
+  auto cx = TryLoadFromInValue(in);
+  if (!cx.has_value()) {
+    ReturnError("argument malformed", out);
     return;
   }
-
-  Complex cx = load_complex(in->bin_value);
-  cx.canonicalize();
+  cx->canonicalize();
 
   // Hash the canonicalized values
   unsigned char canonical[kComplexSize];
-  store_complex(canonical, cx);
+  store_complex(canonical, *cx);
   out->int_value = static_cast<long long>(fnv1a_hash(canonical, kComplexSize));
   out->type = VEF_RESULT_VALUE;
-}
-
-std::optional<Complex> TryLoadFromInValue(const vef_invalue_t *v) {
-  if (v->bin_len != kComplexSize) {
-    return std::nullopt;
-  }
-  return load_complex(v->bin_value);
 }
 
 // Arithmetic: complex_add(a, b) -> COMPLEX

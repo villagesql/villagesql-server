@@ -101,9 +101,13 @@ bool tvector_resolve_params(const vef_type_param_t *params, size_t param_count,
   return false;
 }
 
-void ReturnError(const char *err_msg, vef_vdf_result_t *result) {
+void ReturnError(std::string_view err_msg, vef_vdf_result_t *result) {
   result->type = VEF_RESULT_ERROR;
-  snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "%s", err_msg);
+  if (err_msg.size() >= VEF_MAX_ERROR_LEN) {
+    err_msg = err_msg.substr(0, VEF_MAX_ERROR_LEN - 1);
+  }
+  err_msg.copy(result->error_msg, err_msg.size());
+  result->error_msg[err_msg.size()] = 0;
 }
 
 // Encode: "[f1,f2,...,fN]" -> N * 4 bytes binary.
