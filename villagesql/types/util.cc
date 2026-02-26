@@ -1029,18 +1029,25 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
       continue;
     }
 
-    auto *tc = args[i]->get_type_context();
+    // Build the expected qualified base name ("extension.TYPE") once for use
+    // in Cases 1 and 3. This ensures a TYPE from extension A is not accepted
+    // by a VDF from extension B that also declares the same TYPE.
+    // expected_type.custom_type is always non-null for VEF_TYPE_CUSTOM params
+    // (enforced by the SDK).
+    assert(expected_type.custom_type != nullptr);
+    const std::string expected_qbn =
+        std::string(extension_name.str, extension_name.length) + "." +
+        expected_type.custom_type;
 
-    // Case 1: Argument already has custom type - validate compatibility
+    // Case 1: Argument already has custom type - validate compatibility.
+    auto *tc = args[i]->get_type_context();
     if (tc != nullptr) {
-      const char *expected_type_name = expected_type.custom_type;
-      if (expected_type_name != nullptr &&
-          tc->type_name() != expected_type_name) {
+      if (tc->qualified_base_name() != expected_qbn) {
         villagesql_error(
             "Cannot initialize function '%s': argument %u type mismatch "
             "(expected %s, got %s)",
-            MYF(0), func_name, i + 1, expected_type_name,
-            tc->type_name().c_str());
+            MYF(0), func_name, i + 1, expected_qbn.c_str(),
+            tc->qualified_base_name().c_str());
         return true;
       }
       continue;
@@ -1049,19 +1056,10 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
     // Case 2: Argument is a constant string - try implicit conversion
     if (args[i]->type() == Item::STRING_ITEM &&
         args[i]->const_for_execution()) {
-      const char *custom_type_name = expected_type.custom_type;
-      if (custom_type_name == nullptr) {
-        villagesql_error(
-            "Cannot initialize function '%s': invalid function signature for "
-            "argument %u",
-            MYF(0), func_name, i + 1);
-        return true;
-      }
-
       // Resolve the custom type by extension and type name
       LEX_STRING lex_type_name;
-      lex_type_name.str = const_cast<char *>(custom_type_name);
-      lex_type_name.length = strlen(custom_type_name);
+      lex_type_name.str = const_cast<char *>(expected_type.custom_type);
+      lex_type_name.length = strlen(expected_type.custom_type);
 
       const TypeContext *type_ctx = nullptr;
       // TODO(villagesql-beta): pass real TypeParameters for parameterized types
@@ -1075,7 +1073,7 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
         villagesql_error(
             "Cannot initialize function '%s': custom type '%s' not found for "
             "argument %u",
-            MYF(0), func_name, custom_type_name, i + 1);
+            MYF(0), func_name, expected_type.custom_type, i + 1);
         return true;
       }
 
@@ -1088,11 +1086,38 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
 
     // Case 3: Argument is a column reference (Item_field) without type context
     // yet. This happens during functional index creation: the table is being
-    // created, so the field's custom type context hasn't been injected yet.
-    // Allow it through; at execution time the field will carry its type context
-    // and marshal_args() will pass the binary data correctly.
+    // created, so MaybeInjectCustomType hasn't run yet. The field's underlying
+    // Create_field_wrapper (set by replace_field_processor) lets us check
+    // whether the column will actually be a custom type.
+    // We match on qualified_base_name() (extension.type, no parameters),
+    // consistent with Case 1, because VDF signatures cannot express type
+    // parameterization - a VDF declared with param("TVECTOR") must accept any
+    // TVECTOR(N) column.
     if (args[i]->type() == Item::FIELD_ITEM) {
-      continue;
+      auto *item_field = down_cast<Item_field *>(args[i]);
+      if (item_field->field != nullptr &&
+          item_field->field->is_wrapper_field()) {
+        auto *wrapper =
+            down_cast<const Create_field_wrapper *>(item_field->field);
+        const Create_field *cf = wrapper->get_create_field();
+        if (cf->custom_type_context != nullptr) {
+          if (cf->custom_type_context->qualified_base_name() != expected_qbn) {
+            villagesql_error(
+                "Cannot initialize function '%s': argument %u type mismatch "
+                "(expected %s, got %s)",
+                MYF(0), func_name, i + 1, expected_qbn.c_str(),
+                cf->custom_type_context->qualified_base_name().c_str());
+            return true;
+          }
+          continue;
+        }
+      }
+      // Column has no custom type context - reject it
+      villagesql_error(
+          "Cannot initialize function '%s': argument %u must be a custom type "
+          "or string constant",
+          MYF(0), func_name, i + 1);
+      return true;
     }
 
     // Case 4: Argument is not a custom type and not a constant string

@@ -1,0 +1,24 @@
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+sig COMPLEX2,
+INDEX idx_real ((COMPLEX_REAL(sig)))
+);
+ERROR HY000: Cannot initialize function 'complex_real': argument 1 type mismatch (expected vsql_complex.COMPLEX, got vsql_complex.COMPLEX2)
+SHOW CREATE TABLE t1;
+ERROR 42S02: Table 'test.t1' doesn't exist
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+sig VARCHAR(100),
+INDEX idx_real ((COMPLEX_REAL(sig)))
+);
+ERROR HY000: Cannot initialize function 'complex_real': argument 1 must be a custom type or string constant
+SHOW CREATE TABLE t2;
+ERROR 42S02: Table 'test.t2' doesn't exist
+CREATE TABLE t3 (
+id INT PRIMARY KEY,
+sig INT,
+INDEX idx_real ((COMPLEX_REAL(sig)))
+);
+ERROR HY000: Cannot initialize function 'complex_real': argument 1 must be a custom type or string constant
+SHOW CREATE TABLE t3;
+ERROR 42S02: Table 'test.t3' doesn't exist

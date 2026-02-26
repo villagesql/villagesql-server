@@ -29,6 +29,9 @@
 namespace villagesql {
 
 void TypeContext::resolve_cached_values() {
+  // Build qualified_base_name_ once: "ext.type" (no parameters)
+  qualified_base_name_ = descriptor_->qualified_base_name();
+
   // Build qualified_name_ once: "ext.type" or "ext.type(v1,v2,...)"
   // TODO(villagesql): This needs to be updated to support both TYPE(N) and
   // TYPE('k1=v1,k2=v2,...') syntax, and to preserve parameter order as defined

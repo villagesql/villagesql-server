@@ -1968,6 +1968,9 @@ class Create_field_wrapper final : public Field {
     return new (mem_root) Create_field_wrapper(*this);
   }
   bool is_wrapper_field() const final { return true; }
+  // VillageSQL: used to check custom_type_context during functional index
+  // validation before the table exists.
+  const Create_field *get_create_field() const { return m_field; }
   /* purecov: end */
 };
 

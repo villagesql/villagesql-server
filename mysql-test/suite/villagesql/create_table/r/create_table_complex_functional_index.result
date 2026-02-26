@@ -35,12 +35,12 @@ Table	Op	Msg_type	Msg_text
 test.t1	analyze	status	OK
 EXPLAIN SELECT id FROM t1 WHERE COMPLEX_ABS(sig) = CAST(30.0 AS DOUBLE);
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	NULL	ref	idx_magnitude	idx_magnitude	9	const	1	100.00	NULL
+1	SIMPLE	t1	NULL	ref	idx_magnitude	idx_magnitude	9	#	#	#	NULL
 Warnings:
 Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id` from `test`.`t1` where (vsql_complex.complex_abs(`sig`) = cast(30.0 as double))
 EXPLAIN SELECT id FROM t1 WHERE vsql_complex.COMPLEX_ABS(sig) > CAST(20.0 AS DOUBLE);
 id	select_type	table	partitions	type	possible_keys	key	key_len	ref	rows	filtered	Extra
-1	SIMPLE	t1	NULL	range	idx_magnitude	idx_magnitude	9	NULL	3	100.00	Using where
+1	SIMPLE	t1	NULL	range	idx_magnitude	idx_magnitude	9	#	#	#	Using where
 Warnings:
 Note	1003	/* select#1 */ select `test`.`t1`.`id` AS `id` from `test`.`t1` where (vsql_complex.complex_abs(`sig`) > <cache>(cast(20.0 as double)))
 SELECT id FROM t1 WHERE COMPLEX_ABS(sig) = CAST(30.0 AS DOUBLE);

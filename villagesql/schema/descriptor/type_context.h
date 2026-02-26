@@ -229,6 +229,10 @@ class TypeContext {
   // Returns "extension_name.type_name" or "extension_name.type_name(v1,v2,...)"
   // when parameters are present (e.g. "vsql_tvector.TVECTOR(3)").
   const std::string &qualified_name() const { return qualified_name_; }
+  // Returns "extension_name.type_name" without parameters
+  const std::string &qualified_base_name() const {
+    return qualified_base_name_;
+  }
 
   // Storage characteristics for this type instantiation.
   // For fixed-length types, these are copied from the TypeDescriptor.
@@ -250,6 +254,7 @@ class TypeContext {
 
   // Cached values (computed eagerly in resolve_cached_values())
   std::string qualified_name_;
+  std::string qualified_base_name_;
   int64_t persisted_length_{0};
   int64_t max_decode_buffer_length_{0};
 };

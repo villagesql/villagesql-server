@@ -25,7 +25,7 @@ conjugate_imag
 -2.71828
 -4
 SELECT vsql_complex.complex_real(complex2_col) AS real_part FROM t1 ORDER BY complex2_col;
-ERROR HY000: Cannot initialize function 'complex_real': argument 1 type mismatch (expected COMPLEX, got COMPLEX2)
+ERROR HY000: Cannot initialize function 'complex_real': argument 1 type mismatch (expected vsql_complex.COMPLEX, got vsql_complex.COMPLEX2)
 SELECT vsql_complex.complex_real(str_col) AS real_part FROM t1 ORDER BY str_col;
 ERROR HY000: Cannot initialize function 'complex_real': argument 1 must be a custom type or string constant
 SELECT vsql_complex.complex_real(int_col) AS real_part FROM t1 ORDER BY int_col;

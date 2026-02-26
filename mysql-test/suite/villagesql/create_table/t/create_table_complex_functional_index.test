@@ -37,7 +37,10 @@ ANALYZE TABLE t1;
 # Test index usage with WHERE clauses on functions
 # Triggering usage of functional indexes is hard, the cast to double is needed
 # for the optimizer to match and use the index
+# rows and filtered are optimizer estimates that vary by platform/run
+--replace_column 9 # 10 # 11 #
 EXPLAIN SELECT id FROM t1 WHERE COMPLEX_ABS(sig) = CAST(30.0 AS DOUBLE);
+--replace_column 9 # 10 # 11 #
 EXPLAIN SELECT id FROM t1 WHERE vsql_complex.COMPLEX_ABS(sig) > CAST(20.0 AS DOUBLE);
 
 SELECT id FROM t1 WHERE COMPLEX_ABS(sig) = CAST(30.0 AS DOUBLE);
