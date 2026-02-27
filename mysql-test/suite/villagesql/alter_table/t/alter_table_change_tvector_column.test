@@ -3,6 +3,7 @@
 # and conversion to string.
 
 INSTALL EXTENSION vsql_tvector;
+--source include/villagesql/binlog_check_begin.inc
 
 CREATE TABLE t1 (
     id INT PRIMARY KEY,
@@ -46,4 +47,5 @@ SELECT * FROM t2 WHERE vec2 = vec3;
 
 DROP TABLE t2;
 
+--source include/villagesql/binlog_check_end.inc
 UNINSTALL EXTENSION vsql_tvector;

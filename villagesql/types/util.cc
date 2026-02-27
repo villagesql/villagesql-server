@@ -630,6 +630,7 @@ void CopyCustomToCustomField(const Field *from, Field *to) {
   }
 
   // Ensure data fits in destination field
+  // TODO(villagesql-beta): review this for variable length types
   assert(data_len <= to->field_length);
   // Copy the binary data
   memcpy(to_ptr + to_length_bytes, from_data, data_len);
