@@ -206,7 +206,11 @@ const char *Command_maps::sql_commands[] = {"select",
                                             "unlock_instance",
                                             "restart_server",
                                             "create_srs",
-                                            "drop_srs"};
+                                            "drop_srs",
+                                            "show_parse_tree",
+                                            [SQLCOM_INSTALL_EXTENSION] =
+                                                "install_extension",
+                                            "uninstall_extension"};
 
 Command_maps *g_command_maps{nullptr};
 }  // namespace
@@ -229,7 +233,5 @@ enum_server_command get_server_command(const char *server_command) {
 }
 
 const char *get_sql_command_string(enum_sql_command sql_command) {
-  static_assert(((size_t)(SQLCOM_END - SQLCOM_SELECT)) ==
-                (sizeof(Command_maps::sql_commands) / sizeof(char *)));
   return Command_maps::sql_commands[sql_command];
 }

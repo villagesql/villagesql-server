@@ -205,8 +205,14 @@ enum enum_sql_command {
   SQLCOM_CREATE_SRS,
   SQLCOM_DROP_SRS,
   SQLCOM_SHOW_PARSE_TREE,
-  SQLCOM_INSTALL_EXTENSION,
+
+  // VillageSQL extension commands. Numbering is permanent — audit plugins
+  // persist these values. Do not renumber. Do not reuse slots.
+  SQLCOM_VSQL_FIRST = 1024,
+  SQLCOM_INSTALL_EXTENSION = SQLCOM_VSQL_FIRST,
   SQLCOM_UNINSTALL_EXTENSION,
+  // Add future VillageSQL commands here.
+
   /* This should be the last !!! */
   SQLCOM_END
 };

@@ -922,7 +922,7 @@ static Sys_var_ulong Sys_pfs_max_statement_classes(
     "performance_schema_max_statement_classes",
     "Maximum number of statement instruments.",
     READ_ONLY GLOBAL_VAR(pfs_param.m_statement_class_sizing),
-    CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, 256),
+    CMD_LINE(REQUIRED_ARG), VALID_RANGE(0, 2048),
     DEFAULT((ulong)SQLCOM_END + (ulong)COM_END + 5 +
             SP_PSI_STATEMENT_INFO_COUNT + CLONE_PSI_STATEMENT_COUNT),
     BLOCK_SIZE(1), PFS_TRAILING_PROPERTIES);

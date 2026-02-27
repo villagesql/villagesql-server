@@ -24,11 +24,6 @@
 #
 # Rules for checking that the abi/api has not changed.
 #
-# TODO(villagesql-beta): When adding new SQL commands to enum_sql_command,
-# update include/mysql/plugin_audit.h.pp to include the new commands before SQLCOM_END.
-# This is required for to prevent ABI check failures.
-# But will conflict with new commands added in upstream MySQL. Figure out what to do here.
-#
 # The following steps are followed in the do_abi_check rule below
 #
 # 1) Generate preprocessor output for the files that need to
