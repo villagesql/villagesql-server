@@ -48,6 +48,39 @@ FROM INFORMATION_SCHEMA.TABLES
 WHERE TABLE_SCHEMA='information_schema' AND TABLE_NAME='columns';
 SET debug = '-d,fetch_system_view_definition';
 
+--echo # Dump DD tables for villagesql schema
+--output $MYSQL_TMP_DIR/fresh_dd_tables.sql
+SELECT t.name, t.type, t.engine, t.row_format, t.collation_id,
+       t.comment, t.hidden, t.options, t.mysql_version_id
+FROM mysql.tables t
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+ORDER BY t.name;
+
+--output $MYSQL_TMP_DIR/fresh_dd_columns.sql
+SELECT t.name AS table_name, c.name AS col_name, c.ordinal_position,
+       c.type, c.is_nullable, c.is_zerofill, c.is_unsigned,
+       c.char_length, c.numeric_precision, c.numeric_scale,
+       c.datetime_precision, c.collation_id, c.has_no_default,
+       c.default_value_utf8, c.default_option, c.update_option,
+       c.is_auto_increment, c.is_virtual, c.generation_expression_utf8,
+       c.comment, c.hidden, c.options, c.column_key, c.column_type_utf8
+FROM mysql.columns c
+JOIN mysql.tables t ON c.table_id = t.id
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+ORDER BY t.name, c.ordinal_position;
+
+--output $MYSQL_TMP_DIR/fresh_dd_indexes.sql
+SELECT t.name AS table_name, idx.name AS idx_name, idx.type,
+       idx.algorithm, idx.is_visible, idx.is_generated, idx.hidden,
+       idx.ordinal_position, idx.comment, idx.options, idx.engine
+FROM mysql.indexes idx
+JOIN mysql.tables t ON idx.table_id = t.id
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+ORDER BY t.name, idx.ordinal_position;
+
 --echo # Cleanup test database
 DROP DATABASE fresh_test;
 
@@ -93,6 +126,39 @@ FROM INFORMATION_SCHEMA.TABLES
 WHERE TABLE_SCHEMA='information_schema' AND TABLE_NAME='columns';
 SET debug = '-d,fetch_system_view_definition';
 
+--echo # Dump DD tables for villagesql schema
+--output $MYSQL_TMP_DIR/from_vanilla_dd_tables.sql
+SELECT t.name, t.type, t.engine, t.row_format, t.collation_id,
+       t.comment, t.hidden, t.options, t.mysql_version_id
+FROM mysql.tables t
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+ORDER BY t.name;
+
+--output $MYSQL_TMP_DIR/from_vanilla_dd_columns.sql
+SELECT t.name AS table_name, c.name AS col_name, c.ordinal_position,
+       c.type, c.is_nullable, c.is_zerofill, c.is_unsigned,
+       c.char_length, c.numeric_precision, c.numeric_scale,
+       c.datetime_precision, c.collation_id, c.has_no_default,
+       c.default_value_utf8, c.default_option, c.update_option,
+       c.is_auto_increment, c.is_virtual, c.generation_expression_utf8,
+       c.comment, c.hidden, c.options, c.column_key, c.column_type_utf8
+FROM mysql.columns c
+JOIN mysql.tables t ON c.table_id = t.id
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+ORDER BY t.name, c.ordinal_position;
+
+--output $MYSQL_TMP_DIR/from_vanilla_dd_indexes.sql
+SELECT t.name AS table_name, idx.name AS idx_name, idx.type,
+       idx.algorithm, idx.is_visible, idx.is_generated, idx.hidden,
+       idx.ordinal_position, idx.comment, idx.options, idx.engine
+FROM mysql.indexes idx
+JOIN mysql.tables t ON idx.table_id = t.id
+JOIN mysql.schemata s ON t.schema_id = s.id
+WHERE s.name = 'villagesql'
+ORDER BY t.name, idx.ordinal_position;
+
 --echo # Shutdown and cleanup
 --source include/shutdown_mysqld.inc
 --remove_file $MYSQL_TMP_DIR/mysql_8.4.6_lctn$lctn.zip
@@ -109,7 +175,9 @@ SET debug = '-d,fetch_system_view_definition';
 --diff_files $MYSQL_TMP_DIR/fresh_custom_columns.sql $MYSQL_TMP_DIR/from_vanilla_custom_columns.sql
 --diff_files $MYSQL_TMP_DIR/fresh_is_extensions.sql $MYSQL_TMP_DIR/from_vanilla_is_extensions.sql
 --diff_files $MYSQL_TMP_DIR/fresh_is_columns.sql $MYSQL_TMP_DIR/from_vanilla_is_columns.sql
-# TODO(villagesql-beta): figure out a way to test the entire schema
+--diff_files $MYSQL_TMP_DIR/fresh_dd_tables.sql $MYSQL_TMP_DIR/from_vanilla_dd_tables.sql
+--diff_files $MYSQL_TMP_DIR/fresh_dd_columns.sql $MYSQL_TMP_DIR/from_vanilla_dd_columns.sql
+--diff_files $MYSQL_TMP_DIR/fresh_dd_indexes.sql $MYSQL_TMP_DIR/from_vanilla_dd_indexes.sql
 
 --echo # Cleanup
 --remove_file $MYSQL_TMP_DIR/fresh_dump.sql
@@ -120,6 +188,12 @@ SET debug = '-d,fetch_system_view_definition';
 --remove_file $MYSQL_TMP_DIR/from_vanilla_is_extensions.sql
 --remove_file $MYSQL_TMP_DIR/fresh_is_columns.sql
 --remove_file $MYSQL_TMP_DIR/from_vanilla_is_columns.sql
+--remove_file $MYSQL_TMP_DIR/fresh_dd_tables.sql
+--remove_file $MYSQL_TMP_DIR/from_vanilla_dd_tables.sql
+--remove_file $MYSQL_TMP_DIR/fresh_dd_columns.sql
+--remove_file $MYSQL_TMP_DIR/from_vanilla_dd_columns.sql
+--remove_file $MYSQL_TMP_DIR/fresh_dd_indexes.sql
+--remove_file $MYSQL_TMP_DIR/from_vanilla_dd_indexes.sql
 --remove_file $MYSQLD_LOG_FROM_VANILLA
 
 --echo # Test passed - both upgrade paths result in equivalent state!
