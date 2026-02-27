@@ -1,19 +1,16 @@
 # Test CREATE TABLE with generated columns using COMPLEX functions
 # Tests comprehensive COMPLEX function support in generated columns
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 --source include/villagesql/binlog_check_begin.inc
 
 CREATE TABLE t1 (
     id INT PRIMARY KEY,
     impedance COMPLEX,
-    real_part DOUBLE GENERATED ALWAYS AS (REAL(impedance)) VIRTUAL,
-    imag_part DOUBLE GENERATED ALWAYS AS (IMAG(impedance)) VIRTUAL,
-    magnitude DOUBLE GENERATED ALWAYS AS (ABS(impedance)) STORED,
-    phase_angle DOUBLE GENERATED ALWAYS AS (ARG(impedance)) STORED,
-    conjugate COMPLEX GENERATED ALWAYS AS (CONJ(impedance)) VIRTUAL
+    real_part DOUBLE GENERATED ALWAYS AS (COMPLEX_REAL(impedance)) VIRTUAL,
+    imag_part DOUBLE GENERATED ALWAYS AS (COMPLEX_IMAG(impedance)) VIRTUAL,
+    magnitude DOUBLE GENERATED ALWAYS AS (COMPLEX_ABS(impedance)) STORED,
+    conjugate COMPLEX GENERATED ALWAYS AS (COMPLEX_CONJUGATE(impedance)) VIRTUAL
 );
 
 SHOW CREATE TABLE t1;
@@ -21,10 +18,10 @@ SHOW CREATE TABLE t1;
 INSERT INTO t1 (id, impedance) VALUES (1, '(3.0,4.0)');
 INSERT INTO t1 (id, impedance) VALUES (2, '(1.0,1.0)');
 
-SELECT * FROM t1;
+SELECT * FROM t1 ORDER BY impedance;
 
 # Test computed values
-SELECT id, magnitude, phase_angle FROM t1;
+SELECT id, magnitude, imag_part FROM t1 ORDER BY imag_part;
 
 DROP TABLE t1;
 
