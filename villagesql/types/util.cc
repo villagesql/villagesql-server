@@ -1112,12 +1112,7 @@ bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
           continue;
         }
       }
-      // Column has no custom type context - reject it
-      villagesql_error(
-          "Cannot initialize function '%s': argument %u must be a custom type "
-          "or string constant",
-          MYF(0), func_name, i + 1);
-      return true;
+      // Column has no custom type context - fall through
     }
 
     // Case 4: Argument is not a custom type and not a constant string

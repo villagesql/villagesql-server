@@ -2,6 +2,7 @@
 # Tests indexing computed COMPLEX values
 
 --source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
 
 CREATE TABLE t1 (
     id INT PRIMARY KEY,
@@ -14,7 +15,7 @@ SELECT TABLE_NAME, INDEX_NAME, COLUMN_NAME, EXPRESSION
 FROM INFORMATION_SCHEMA.STATISTICS
 WHERE TABLE_NAME = 't1' AND INDEX_NAME = 'idx_magnitude';
 
-# Create a 1000 row dataset to trigger index usage. Max for complex abs less than 20
+# Create a 1000 row dataset to trigger index usage, where we make sure the complex_abs is less than 20
 INSERT INTO t1 (id, sig)
 SELECT
     row_number() OVER () as id,
@@ -48,4 +49,5 @@ SELECT id FROM t1 WHERE vsql_complex.COMPLEX_ABS(sig) > CAST(20.0 AS DOUBLE) ORD
 
 DROP TABLE t1;
 
+--source include/villagesql/binlog_check_end.inc
 --source include/villagesql/uninstall_complex_extension.inc
