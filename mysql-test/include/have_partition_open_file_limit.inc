@@ -6,9 +6,12 @@ if (`select convert(@@version_compile_os using latin1) NOT IN ("Win32","Win64","
         let $f_l=`SELECT c1 FROM t_o_f_l`;
         --remove_file $MYSQL_TMP_DIR/osfileslimit.txt
         DROP TABLE t_o_f_l;
-        if ($f_l < $mysql_needed_max_files)
+        if ($f_l != unlimited)
         {
-          skip Need open_files_limit >= 24576 for myisam or 8192 for innodb (see ulimit -n) ;
+          if ($f_l < $mysql_needed_max_files)
+          {
+            skip Need open_files_limit >= 24576 for myisam or 8192 for innodb (see ulimit -n) ;
+          }
         }
 }
 --enable_query_log
