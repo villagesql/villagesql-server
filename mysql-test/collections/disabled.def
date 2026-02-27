@@ -125,3 +125,25 @@ group_replication.gr_xa_commit_failure_before_gtid_externalization @windows : BU
 group_replication.gr_xa_commit_one_phase_failure_before_gtid_externalization @windows : BUG#34155238 Disabled until bug is fixed
 group_replication.gr_xa_prepare_failure_before_gtid_externalization @windows : BUG#34155238 Disabled until bug is fixed
 group_replication.gr_xa_rollback_failure_before_gtid_externalization @windows : BUG#34155238 Disabled until bug is fixed
+
+# engines/rr_trx suite: This is a stress test suite designed to run via
+# run_stress_tx_rr.pl, not as standalone MTR tests. The init test creates
+# shared schema that rr_* tests depend on, but normal MTR restarts the
+# server between tests. Also broken upstream in Oracle MySQL 8.4.8
+# (ROWS became a reserved keyword in stored procedure parameters).
+engines/rr_trx.init_innodb : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_c_count_not_zero : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_c_stats : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_i_40-44 : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_id_3 : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_id_900 : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_insert_select_2 : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_iud_rollback-multi-50 : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_replace_7-8 : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_s_select-uncommitted : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_sc_select-limit-nolimit_4 : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_sc_select-same_2 : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_sc_sum_total : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_u_10-19 : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_u_10-19_nolimit : BUG#0 Stress-only suite, not standalone MTR tests
+engines/rr_trx.rr_u_4 : BUG#0 Stress-only suite, not standalone MTR tests

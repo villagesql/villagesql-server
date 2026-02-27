@@ -81,24 +81,24 @@ CREATE TABLE t1 (
 # Check that the table was really created with the intended storage engine.
 SHOW CREATE TABLE t1;
 
-## Procedure for inserting the value 1000 into integer fieds, "rows" times.
+## Procedure for inserting the value 1000 into integer fieds, "num_rows" times.
 
 --delimiter //
 
-eval CREATE PROCEDURE insertRows(rows INT)
+eval CREATE PROCEDURE insertRows(num_rows INT)
 BEGIN
   SET @n = 1;
   REPEAT
-    INSERT INTO t1 (`id`, `int1`, `int1_key`, `int1_unique`, 
+    INSERT INTO t1 (`id`, `int1`, `int1_key`, `int1_unique`,
                     `int2`, `int2_key`, `int2_unique`,
-                    `for_update`, `connection_id`, `thread_id`, 
-                    `is_uncommitted`, `is_consistent`) 
+                    `for_update`, `connection_id`, `thread_id`,
+                    `is_uncommitted`, `is_consistent`)
        VALUES (0, 1000, 1000, @n,
                -1000, -1000, -@n,
-               0, CONNECTION_ID(), 0, 
+               0, CONNECTION_ID(), 0,
                0, 1);
     SET @n = @n + 1;
-  UNTIL @n > rows
+  UNTIL @n > num_rows
   END REPEAT;
 END;
 //
