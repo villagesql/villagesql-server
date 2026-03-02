@@ -48,7 +48,37 @@
 //         .build()))
 //
 //
-// DEFINING FUNCTIONS
+// TYPED WRAPPERS
+// --------------
+//
+// Instead of writing against the raw ABI types (vef_invalue_t*,
+// vef_vdf_result_t*), you can use the typed wrappers from func_types.h:
+//
+//   Input:   IntArg, RealArg, StringArg, BinaryArg
+//   Output:  IntResult, RealResult, StringResult, BinaryResult
+//
+// The registration syntax is identical; the framework detects the parameter
+// types and adapts automatically.
+//
+//   void add_impl(IntArg a, IntArg b, IntResult out) {
+//     if (a.is_null() || b.is_null()) { out.set_null(); return; }
+//     out.set(a.value() + b.value());
+//   }
+//
+//   make_func<&add_impl>("add").returns(INT).param(INT).param(INT).build()
+//
+// For binary (custom) types, write directly into the caller-provided buffer
+// to avoid copies:
+//
+//   void rot13_impl(BinaryArg in, BinaryResult out) {
+//     if (in.is_null()) { out.set_null(); return; }
+//     auto src = in.value();        // Span<const unsigned char>
+//     auto dst = out.buffer();      // Span<unsigned char>
+//     for (size_t i = 0; i < src.size(); i++) { dst[i] = transform(src[i]); }
+//     out.set_length(src.size());
+//   }
+//
+// DEFINING FUNCTIONS (deprecated, will be removed)
 // ------------------
 //
 // Functions are defined using make_func<&impl>("name") and chained builder
@@ -66,6 +96,7 @@
 //   - STRING - Variable-length string
 //   - REAL   - Double-precision float
 //   - Custom types by name (see below)
+//
 //
 // CUSTOM TYPES
 // ------------

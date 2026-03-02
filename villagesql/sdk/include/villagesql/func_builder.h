@@ -53,10 +53,14 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <optional>
 #include <string_view>
+#include <tuple>
+#include <type_traits>
 #include <utility>
 
 #include <villagesql/abi/types.h>
+#include <villagesql/func_types.h>
 
 namespace villagesql {
 namespace func_builder {
@@ -131,14 +135,39 @@ using RawToStringFunc = bool (*)(const unsigned char *buffer,
                                  size_t buffer_size, char *to, size_t to_size,
                                  size_t *to_length);
 
+// Extracts the parameter types of a function pointer as a std::tuple.
+// Used by Wrapper to deduce whether each argument is a raw ABI type or a
+// typed wrapper (IntArg, BinaryResult, etc.) and adapt accordingly.
+template <typename F>
+struct FuncParamTypes;
+
+template <typename R, typename... Args>
+struct FuncParamTypes<R (*)(Args...)> {
+  using type = std::tuple<Args...>;
+};
+
+// True for types recognized as the VDF execution context. Used by Wrapper to
+// detect the deprecated ABI-style context parameter and handle it during the
+// transition period.
+//
+template <typename T>
+struct is_context_param : std::false_type {};
+
+template <>
+struct is_context_param<vef_context_t *> : std::true_type {};
+
 // =============================================================================
 // Wrapper Template
 // =============================================================================
 
 // Wrapper generates a function with the vef_vdf_func_t signature that unpacks
-// vef_vdf_args_t into individual vef_invalue_t* parameters.
+// vef_vdf_args_t and adapts each argument and result to the declared parameter
+// type of Func.
 //
-// User function signature:
+// Preferred C++ style (no context parameter):
+//   void func(IntArg arg0, ..., IntResult result)
+//
+// Deprecated ABI style (context as first parameter, to be removed):
 //   void func(vef_context_t* ctx, vef_invalue_t* arg0, ...,
 //             vef_vdf_result_t* result)
 //
@@ -154,7 +183,41 @@ struct Wrapper {
   static void invoke_impl(vef_context_t *ctx, vef_vdf_args_t *args,
                           vef_vdf_result_t *result,
                           std::index_sequence<Is...>) {
-    Func(ctx, &args->values[Is]..., result);
+    using Params = typename FuncParamTypes<decltype(Func)>::type;
+    constexpr bool kHasCtx =
+        is_context_param<std::tuple_element_t<0, Params>>::value;
+    if constexpr (kHasCtx) {
+      // Deprecated style: passes ABI C types as arguments to function.
+      // TODO(villagesql): Remove once all callers have migrated off
+      // vef_context_t*.
+      Func(ctx,
+           make_arg<std::tuple_element_t<1 + Is, Params>>(&args->values[Is])...,
+           make_result<std::tuple_element_t<1 + NumParams, Params>>(result));
+    } else {
+      Func(make_arg<std::tuple_element_t<Is, Params>>(&args->values[Is])...,
+           make_result<std::tuple_element_t<NumParams, Params>>(result));
+    }
+  }
+
+  // Converts vef_invalue_t* to T. If T is vef_invalue_t* the pointer passes
+  // through; otherwise T is constructed from the pointer (e.g. IntArg(v)).
+  template <typename T>
+  static T make_arg(vef_invalue_t *v) {
+    if constexpr (std::is_same_v<T, vef_invalue_t *>) {
+      return v;
+    } else {
+      return T(v);
+    }
+  }
+
+  // Converts vef_vdf_result_t* to T. Same pass-through / construct logic.
+  template <typename T>
+  static T make_result(vef_vdf_result_t *r) {
+    if constexpr (std::is_same_v<T, vef_vdf_result_t *>) {
+      return r;
+    } else {
+      return T(r);
+    }
   }
 };
 
