@@ -241,16 +241,18 @@ bool HandleCustomColumnsForTableRename(THD &thd, const char *old_db,
 // Lazily allocate a TypeEncoder for field, reused for all subsequent encodes
 // within the table's lifetime.
 //
-// For any kind of tmp table, close_tmp_table() asserts TABLE::mem_root is
-// empty, so we use TABLE_SHARE::mem_root instead. This covers UNION result
-// tables and any other internal tmp table that may hold custom type fields
-// (e.g. when a string literal is unioned with a COMPLEX column and must be
-// encoded into the result tmp table's field).
-// free_tmp_table() frees the share's mem_root, cleaning up the encoder.
-//
 // For regular tables (NO_TMP_TABLE), TABLE::mem_root has the same lifetime as
 // the Field clone that caches the encoder pointer, so both are freed together
 // when the TABLE is evicted from the table open cache.
+//
+// For any kind of tmp table we use TABLE_SHARE::mem_root. TABLE::mem_root is
+// asserted empty by close_tmp_table() so it cannot be used. thd->mem_root
+// (the statement arena) is also wrong: the first TABLE's Fields happen to live
+// there for INTERNAL_TMP_TABLE, but additional TABLE instances sharing the
+// same TABLE_SHARE (opened via open_table_from_share()) have their cloned
+// Fields in share->mem_root, which outlives the statement. TABLE_SHARE::mem_root
+// therefore covers all cases and is freed by free_tmp_table() when the table
+// is torn down.
 static TypeEncoder *GetTypeEncoderFor(Field *field) {
   TypeEncoder *encoder = field->get_type_encoder();
   if (encoder == nullptr) {
@@ -262,7 +264,7 @@ static TypeEncoder *GetTypeEncoderFor(Field *field) {
       my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeEncoder));
       return nullptr;
     }
-    if (!encoder->Init()) return nullptr;
+    if (encoder->Init()) return nullptr;
     field->set_type_encoder(encoder);
   }
   return encoder;
@@ -282,7 +284,7 @@ static TypeEncoder *GetTypeEncoderFor(Item *item) {
       my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeEncoder));
       return nullptr;
     }
-    if (!encoder->Init()) return nullptr;
+    if (encoder->Init()) return nullptr;
     item->set_type_encoder(encoder);
   }
   return encoder;

@@ -34,8 +34,10 @@ namespace villagesql {
 // It pre-allocates a scratch buffer (persisted_length bytes) and a String
 // wrapper once, eliminating per-row allocations during INSERT/UPDATE.
 //
-// For Fields the buffer is owned by TABLE::mem_root and freed when the TABLE
-// is evicted. For Items it is owned by thd->mem_root and freed at query end;
+// For regular-table Fields the buffer is owned by TABLE::mem_root and freed
+// when the TABLE is evicted. For tmp-table Fields it is owned by
+// TABLE_SHARE::mem_root and freed when free_tmp_table() tears down the table.
+// For Items it is owned by thd->mem_root and freed at query end;
 // Item::cleanup() nulls the pointer between PS re-executions so the next
 // execution lazily re-allocates on the fresh thd->mem_root.
 //
@@ -49,7 +51,7 @@ class TypeEncoder {
   TypeEncoder(const TypeContext *tc, MEM_ROOT &mem_root);
 
   // Allocate the encode buffer from mem_root_. Must be called once before
-  // encode(). On OOM calls my_error and returns false.
+  // encode(). On OOM calls my_error and returns true.
   bool Init();
 
   // Disable copy and move: TypeEncoder is tied to its allocated buffer and

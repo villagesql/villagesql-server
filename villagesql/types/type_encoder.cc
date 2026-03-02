@@ -56,14 +56,14 @@ TypeEncoder::TypeEncoder(const TypeContext *tc, MEM_ROOT &mem_root)
 
 bool TypeEncoder::Init() {
   buffer_ = new (mem_root_) char[buffer_size_];
-  if (!buffer_) {
+  if (should_assert_if_null(buffer_)) {
     my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), buffer_size_);
-    return false;
+    return true;
   }
   if (vdf_ != nullptr) {
     vdf_result_.bin_buf = pointer_cast<uchar *>(buffer_);
   }
-  return true;
+  return false;
 }
 
 String *TypeEncoder::encode(const String &from, bool &is_valid) {
