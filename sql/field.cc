@@ -10491,6 +10491,9 @@ Create_field_wrapper::Create_field_wrapper(const Create_field *fld)
   if (fld->is_unsigned) {
     set_flag(UNSIGNED_FLAG);
   }
+  if (fld->custom_type_context != nullptr) {
+    set_type_context(fld->custom_type_context);
+  }
 }
 
 Item_result Create_field_wrapper::result_type() const {
