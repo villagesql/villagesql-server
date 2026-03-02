@@ -238,14 +238,26 @@ bool HandleCustomColumnsForTableRename(THD &thd, const char *old_db,
   return false;
 }
 
-// Lazily allocate a TypeEncoder for field from TABLE::mem_root. The encoder
-// is reused for all subsequent encodes on the same Field within the TABLE's
-// lifetime.
+// Lazily allocate a TypeEncoder for field, reused for all subsequent encodes
+// within the table's lifetime.
+//
+// For any kind of tmp table, close_tmp_table() asserts TABLE::mem_root is
+// empty, so we use TABLE_SHARE::mem_root instead. This covers UNION result
+// tables and any other internal tmp table that may hold custom type fields
+// (e.g. when a string literal is unioned with a COMPLEX column and must be
+// encoded into the result tmp table's field).
+// free_tmp_table() frees the share's mem_root, cleaning up the encoder.
+//
+// For regular tables (NO_TMP_TABLE), TABLE::mem_root has the same lifetime as
+// the Field clone that caches the encoder pointer, so both are freed together
+// when the TABLE is evicted from the table open cache.
 static TypeEncoder *GetTypeEncoderFor(Field *field) {
   TypeEncoder *encoder = field->get_type_encoder();
   if (encoder == nullptr) {
-    encoder = new (&field->table->mem_root)
-        TypeEncoder(field->get_type_context(), field->table->mem_root);
+    MEM_ROOT &mem_root = (field->table->s->tmp_table == NO_TMP_TABLE)
+                             ? field->table->mem_root
+                             : field->table->s->mem_root;
+    encoder = new (&mem_root) TypeEncoder(field->get_type_context(), mem_root);
     if (encoder == nullptr) {
       my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeEncoder));
       return nullptr;

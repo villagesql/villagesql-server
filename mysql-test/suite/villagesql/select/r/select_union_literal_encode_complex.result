@@ -1,0 +1,9 @@
+CREATE TABLE t1 (val vsql_complex.COMPLEX);
+INSERT INTO t1 VALUES ('(1.0, 2.0)'), ('(3.0, 4.0)');
+# String literal unioned with COMPLEX column: encoder runs on tmp table field
+SELECT '(5.0, 6.0)' AS val UNION SELECT val FROM t1 ORDER BY val;
+val
+(1,2)
+(3,4)
+(5,6)
+DROP TABLE t1;
