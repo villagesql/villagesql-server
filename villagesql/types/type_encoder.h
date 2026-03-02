@@ -18,10 +18,12 @@
 #define VILLAGESQL_TYPES_TYPE_ENCODER_H_
 
 #include <cstddef>
+#include <optional>
 
 #include "sql_string.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
+#include "villagesql/types/special_vdf_call.h"
 
 struct MEM_ROOT;
 
@@ -81,17 +83,9 @@ class TypeEncoder {
   // fn_ path: function pointer (non-null when not using a VDF)
   vef_encode_func_t fn_{nullptr};
 
-  // VDF path: pre-filled call structures. Constant fields are set once in the
-  // constructor; only input_[0].str_len, input_[0].str_value,
-  // vdf_result_.type, vdf_result_.actual_len, and alt_bin_buf_ are updated
-  // per encode() call.
-  const vef_func_desc_t *vdf_{nullptr};
-  vef_context_t ctx_{};
-  vef_invalue_t input_[1]{};
-  vef_vdf_args_t vdf_args_{};
-  vef_vdf_result_t vdf_result_{};
-  char error_msg_[VEF_MAX_ERROR_LEN]{};
-  unsigned char *alt_bin_buf_{nullptr};
+  // VDF path: SpecialVdfCall owns ctx/inputs/vdf_args, error_msg, and alt_buf.
+  // The output buffer (buffer_) is passed per encode() call.
+  std::optional<SpecialVdfCall<BinaryResult, StringArg>> vdf_call_{};
 };
 
 }  // namespace villagesql

@@ -38,17 +38,7 @@ TypeDecoder::TypeDecoder(const TypeContext &tc, MEM_ROOT &mem_root)
 
   const DecodeOp &op = tc.descriptor()->decode_op();
   if (op.vdf() != nullptr) {
-    vdf_ = op.vdf();
-    assert(vdf_->prerun == nullptr && vdf_->postrun == nullptr);
-    ctx_.protocol = VEF_PROTOCOL_2;
-    input_[0].type = VEF_TYPE_CUSTOM;
-    input_[0].is_null = false;
-    vdf_args_.user_data = nullptr;
-    vdf_args_.value_count = 1;
-    vdf_args_.values = input_;
-    vdf_result_.error_msg = error_msg_;
-    vdf_result_.max_str_len = buffer_size_;
-    vdf_result_.alt_str_buf = &alt_str_buf_;
+    vdf_call_.emplace(op.vdf());
   } else {
     fn_ = op.fn();
   }
@@ -60,9 +50,6 @@ bool TypeDecoder::Init() {
     my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), buffer_size_);
     return true;
   }
-  if (vdf_ != nullptr) {
-    vdf_result_.str_buf = buffer_;
-  }
   return false;
 }
 
@@ -70,31 +57,24 @@ bool TypeDecoder::decode(const uchar *data, size_t len, String *out,
                          bool &is_valid) {
   is_valid = true;
 
-  if (vdf_ != nullptr) {
-    input_[0].bin_len = len;
-    input_[0].bin_value = data;
-    vdf_result_.type = VEF_RESULT_VALUE;
-    vdf_result_.actual_len = 0;
-    alt_str_buf_ = nullptr;
-
-    vdf_->vdf(&ctx_, &vdf_args_, &vdf_result_);
-
-    if (vdf_result_.type != VEF_RESULT_VALUE) {
+  if (vdf_call_.has_value()) {
+    auto r = vdf_call_->invoke(BinarySlice{data, len}, buffer_, buffer_size_);
+    if (!r) {
       // TODO(villagesql-beta): log errors.
       is_valid = false;
       return true;
     }
 
-    if (alt_str_buf_ != nullptr) {
+    if (vdf_call_->alt_str_buf() != nullptr) {
       // TODO(villagesql-beta): support caller supplied buffers.
       return true;
     }
-    const size_t actual_len = vdf_result_.actual_len;
-    if (actual_len > buffer_size_) {
+
+    if (*r > buffer_size_) {
       return true;
     }
 
-    out->set(buffer_, actual_len, &my_charset_utf8mb4_bin);
+    out->set(buffer_, *r, &my_charset_utf8mb4_bin);
   } else {
     // TODO(villagesql-beta): remove raw func pointer
     assert(fn_ != nullptr);

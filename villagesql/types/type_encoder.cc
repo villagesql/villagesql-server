@@ -38,17 +38,7 @@ TypeEncoder::TypeEncoder(const TypeContext *tc, MEM_ROOT &mem_root)
 
   const EncodeOp &op = tc->descriptor()->encode_op();
   if (op.vdf() != nullptr) {
-    vdf_ = op.vdf();
-    assert(vdf_->prerun == nullptr && vdf_->postrun == nullptr);
-    ctx_.protocol = VEF_PROTOCOL_2;
-    input_[0].type = VEF_TYPE_STRING;
-    input_[0].is_null = false;
-    vdf_args_.user_data = nullptr;
-    vdf_args_.value_count = 1;
-    vdf_args_.values = input_;
-    vdf_result_.error_msg = error_msg_;
-    vdf_result_.max_bin_len = buffer_size_;
-    vdf_result_.alt_bin_buf = &alt_bin_buf_;
+    vdf_call_.emplace(op.vdf());
   } else {
     fn_ = op.fn();
   }
@@ -60,45 +50,36 @@ bool TypeEncoder::Init() {
     my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), buffer_size_);
     return true;
   }
-  if (vdf_ != nullptr) {
-    vdf_result_.bin_buf = pointer_cast<uchar *>(buffer_);
-  }
   return false;
 }
 
 String *TypeEncoder::encode(const String &from, bool &is_valid) {
   is_valid = true;
 
-  if (vdf_ != nullptr) {
-    input_[0].str_len = from.length();
-    input_[0].str_value = from.ptr();
-    vdf_result_.type = VEF_RESULT_VALUE;
-    vdf_result_.actual_len = 0;
-    alt_bin_buf_ = nullptr;
-
-    vdf_->vdf(&ctx_, &vdf_args_, &vdf_result_);
-
-    if (vdf_result_.type != VEF_RESULT_VALUE) {
+  if (vdf_call_.has_value()) {
+    auto r =
+        vdf_call_->invoke(from, pointer_cast<uchar *>(buffer_), buffer_size_);
+    if (!r) {
       // TODO(villagesql-beta): log warnings for errors
       is_valid = false;
       return nullptr;
     }
 
-    if (alt_bin_buf_ != nullptr) {
-      // TODO(villagesql-beta): support the extension returning alternate buffers
+    if (vdf_call_->alt_bin_buf() != nullptr) {
+      // TODO(villagesql-beta): support the extension returning alternate
+      // buffers
       is_valid = false;
       return nullptr;
     }
 
     // TODO(villagesql-beta): report an error or warning when the VDF overruns
     // the buffer rather than silently returning invalid
-    const size_t actual_len = vdf_result_.actual_len;
-    if (actual_len > buffer_size_) {
+    if (*r > buffer_size_) {
       is_valid = false;
       return nullptr;
     }
 
-    result_.set(buffer_, actual_len, &my_charset_bin);
+    result_.set(buffer_, *r, &my_charset_bin);
   } else {
     // TODO(villagesql-beta): Remove suport for these raw functions
     assert(fn_ != nullptr);
