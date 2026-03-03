@@ -79,39 +79,28 @@ String *TypeEncoder::encode(const String &from, bool &is_valid) {
     vdf_->vdf(&ctx_, &vdf_args_, &vdf_result_);
 
     if (vdf_result_.type != VEF_RESULT_VALUE) {
-      // TODO(villagesql-beta): handle errors
+      // TODO(villagesql-beta): log warnings for errors
       is_valid = false;
       return nullptr;
     }
 
-    const size_t actual_len = vdf_result_.actual_len;
-
     if (alt_bin_buf_ != nullptr) {
-      // VDF used its own buffer (output exceeded buffer_size_). Grow
-      // overflow_buf_ if needed and reuse it across rows.
-      if (actual_len > overflow_buf_size_) {
-        auto *new_buf = new (mem_root_) uchar[actual_len];
-        if (should_assert_if_null(new_buf)) {
-          my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), actual_len);
-          return nullptr;
-        }
-        overflow_buf_ = new_buf;
-        overflow_buf_size_ = actual_len;
-      }
-      if (actual_len > 0) memcpy(overflow_buf_, alt_bin_buf_, actual_len);
-      overflow_result_.set(pointer_cast<const char *>(overflow_buf_),
-                           actual_len, &my_charset_bin);
-      return &overflow_result_;
+      // TODO(villagesql-beta): support the extension returning alternate buffers
+      is_valid = false;
+      return nullptr;
     }
 
     // TODO(villagesql-beta): report an error or warning when the VDF overruns
-    // the buffer rather than silently returning invalid.
-    if (should_assert_if_false(actual_len <= buffer_size_)) {
+    // the buffer rather than silently returning invalid
+    const size_t actual_len = vdf_result_.actual_len;
+    if (actual_len > buffer_size_) {
       is_valid = false;
       return nullptr;
     }
+
     result_.set(buffer_, actual_len, &my_charset_bin);
   } else {
+    // TODO(villagesql-beta): Remove suport for these raw functions
     assert(fn_ != nullptr);
     size_t actual_length = 0;
     if (fn_(pointer_cast<uchar *>(buffer_), buffer_size_, from.ptr(),
@@ -119,8 +108,6 @@ String *TypeEncoder::encode(const String &from, bool &is_valid) {
       is_valid = false;
       return nullptr;
     }
-    // TODO(villagesql-beta): report an error or warning when the fn_ overruns
-    // the buffer rather than silently returning invalid.
     if (should_assert_if_false(actual_length <= buffer_size_)) {
       is_valid = false;
       return nullptr;

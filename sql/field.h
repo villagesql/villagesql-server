@@ -1889,6 +1889,7 @@ class Field {
   const uchar *unpack_int64(uchar *to, const uchar *from) const;
 
  private:
+  // TODO(villagesql): Collapse these into one object (here and in Field)
   const villagesql::TypeContext *custom_type{nullptr};
   villagesql::TypeEncoder *type_encoder_{nullptr};
 

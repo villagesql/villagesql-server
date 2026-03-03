@@ -245,14 +245,11 @@ bool HandleCustomColumnsForTableRename(THD &thd, const char *old_db,
 // the Field clone that caches the encoder pointer, so both are freed together
 // when the TABLE is evicted from the table open cache.
 //
-// For any kind of tmp table we use TABLE_SHARE::mem_root. TABLE::mem_root is
-// asserted empty by close_tmp_table() so it cannot be used. thd->mem_root
-// (the statement arena) is also wrong: the first TABLE's Fields happen to live
-// there for INTERNAL_TMP_TABLE, but additional TABLE instances sharing the
-// same TABLE_SHARE (opened via open_table_from_share()) have their cloned
-// Fields in share->mem_root, which outlives the statement. TABLE_SHARE::mem_root
-// therefore covers all cases and is freed by free_tmp_table() when the table
-// is torn down.
+// For any kind of tmp table use TABLE_SHARE::mem_root, this is where the
+// Fields are allocated for most uses of tmp tables. The one exception is
+// INTERNAL_TMP_TABLE where the initial Table object's fields are allocated
+// from the THD::mem_root, but for these tables the share is destroyed at the
+// end of the statement, so the lifetime is correct.
 static TypeEncoder *GetTypeEncoderFor(Field *field) {
   TypeEncoder *encoder = field->get_type_encoder();
   if (encoder == nullptr) {
