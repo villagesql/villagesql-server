@@ -1,5 +1,6 @@
 /*
    Copyright (c) 2002, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -100,6 +101,7 @@
 #include "strxmov.h"
 #include "template_utils.h"  // pointer_cast
 #include "thr_lock.h"
+#include "villagesql/types/util.h"
 
 /**
   @page stored_programs Stored Programs
@@ -3008,6 +3010,9 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
   }
 
   proc_runtime_ctx->sp = this;
+
+  // VillageSQL: inject custom type contexts for SP params after sp is set.
+  if (proc_runtime_ctx->maybe_inject_custom_sp_params()) err_status = true;
 
   if (params > 0) {
     auto it_args = args->begin();

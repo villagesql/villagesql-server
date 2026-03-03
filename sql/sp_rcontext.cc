@@ -1,4 +1,5 @@
 /* Copyright (c) 2002, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -44,6 +45,7 @@
 #include "sql/sql_list.h"
 #include "sql/sql_tmp_table.h"  // create_tmp_table_from_fields
 #include "template_utils.h"     // delete_container_pointers
+#include "villagesql/types/util.h"
 
 class Query_expression;
 
@@ -128,6 +130,18 @@ bool sp_rcontext::init_var_table(THD *thd) {
   m_var_table->alias = "";
 
   return false;
+}
+
+// VillageSQL: injects custom type contexts into SP variable fields.
+bool sp_rcontext::maybe_inject_custom_sp_params() {
+  // VillageSQL: sp must be set before calling this.
+  assert(sp != nullptr);
+
+  if (!m_var_table) return false;
+
+  return villagesql::InjectCustomSpParams(
+      sp->m_db.str, sp->m_name.str, m_root_parsing_ctx, m_var_table->field,
+      m_var_items, m_custom_type_refs);
 }
 
 bool sp_rcontext::init_var_items(THD *thd) {

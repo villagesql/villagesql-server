@@ -9345,13 +9345,6 @@ bool setup_fields(THD *thd, Access_bitmask want_privilege, bool allow_sum_func,
   thd->mark_used_columns = save_mark_used_columns;
   DBUG_PRINT("info", ("thd->mark_used_columns: %d", thd->mark_used_columns));
 
-  // VillageSQL: Check if custom type fields were found during field binding
-  if (thd->lex->found_custom_type_in_context) {
-    if (villagesql::ValidateCustomTypeContext(thd)) {
-      return true;  // Error reported by validation function
-    }
-  }
-
   assert(!thd->is_error());
   return false;
 }

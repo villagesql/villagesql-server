@@ -17,7 +17,9 @@
 #include "villagesql/types/util.h"
 
 #include <cinttypes>
+#include <memory>
 #include <optional>
+#include <vector>
 
 #include "lex_string.h"
 #include "my_alloc.h"
@@ -37,6 +39,8 @@
 #include "sql/item_sum.h"
 #include "sql/key.h"
 #include "sql/parse_tree_column_attrs.h"
+#include "sql/sp_pcontext.h"
+#include "sql/sql_array.h"
 #include "sql/sql_class.h"
 #include "sql/sql_list.h"
 #include "sql/sql_udf.h"
@@ -48,6 +52,7 @@
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/systable/custom_columns.h"
+#include "villagesql/schema/systable/helpers.h"
 #include "villagesql/schema/tmp_metadata.h"
 #include "villagesql/schema/util.h"
 #include "villagesql/schema/victionary_client.h"
@@ -832,7 +837,8 @@ static void do_field_custom_to_string(Copy_field *, const Field *from,
   to->store(buf.ptr(), buf.length(), buf.charset());
 }
 
-FieldCopyFunc *GetCopyFunc(const Field *from, const Field *to) {
+FieldCopyFunc *GetCopyFunc(const Field *from [[maybe_unused]],
+                           const Field *to) {
   assert(from->has_type_context());
   if (to->has_type_context()) {
     // TODO(villagesql-performance): split to targeted copy functions
@@ -1247,23 +1253,6 @@ void ClearAlterCustomFields(THD *thd) {
   thd->villagesql_alter_custom_fields.clear();
 }
 
-bool ValidateCustomTypeContext(THD *thd) {
-  // TODO(villagesql-beta): Remove these restrictions once custom types are
-  // fully supported in these contexts.
-
-  // Check for stored procedures/functions
-  // Tested by:
-  // mysql-test/suite/villagesql/stored_procedure/t/stored_procedure_call_complex.test
-  if (thd->sp_runtime_ctx != nullptr) {
-    villagesql_error(
-        "Custom types are not yet supported in stored procedures/functions",
-        MYF(0));
-    return true;
-  }
-
-  return false;  // Context is supported
-}
-
 bool ValidateAndConvertVDFArguments(THD *thd, const char *func_name,
                                     const LEX_STRING &extension_name,
                                     uint arg_count, Item **args,
@@ -1388,6 +1377,110 @@ std::shared_ptr<const TypeContext> AcquireTypeContextClientManaged(
   auto &vclient = VictionaryClient::instance();
   auto guard = vclient.get_read_lock();
   return vclient.type_contexts().acquire_client_managed(source_tc->key());
+}
+
+bool InjectCustomSpParams(
+    const char *db_name, const char *sp_name, const sp_pcontext *pctx,
+    Field **fields, Bounds_checked_array<Item *> var_items,
+    std::vector<std::shared_ptr<const TypeContext>> &type_refs) {
+  if (!db_name || !sp_name) {
+    return false;
+  }
+
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) {
+    return false;
+  }
+
+  // Acquire write lock since get_or_create_client_managed may insert entries.
+  auto guard = vclient.get_write_lock();
+
+  auto sp_params = vclient.GetCustomSpParamsForSP(std::string(db_name),
+                                                  std::string(sp_name));
+
+  if (sp_params.empty()) {
+    return false;
+  }
+
+  // Iterate over all SP variable definitions (params + DECLARE vars from all
+  // contexts) and inject TypeContext into matching fields.
+  List<Create_field> field_def_lst;
+  pctx->retrieve_field_definitions(&field_def_lst);
+
+  List_iterator_fast<Create_field> it(field_def_lst);
+  Create_field *cdef;
+  uint field_idx = 0;
+  while ((cdef = it++)) {
+    if (!cdef->field_name) {
+      field_idx++;
+      continue;
+    }
+
+    const SpParamEntry *param_entry = nullptr;
+    for (const SpParamEntry *entry : sp_params) {
+      if (my_strcasecmp(system_charset_info, cdef->field_name,
+                        entry->param_name().c_str()) == 0) {
+        param_entry = entry;
+        break;
+      }
+    }
+
+    if (param_entry == nullptr) {
+      field_idx++;
+      continue;
+    }
+
+    TypeDescriptorKey type_descriptor_key(param_entry->type_name,
+                                          param_entry->extension_name,
+                                          param_entry->extension_version);
+    const TypeDescriptor *type_descriptor =
+        vclient.type_descriptors().get_committed(type_descriptor_key);
+    if (should_assert_if_null(type_descriptor)) {
+      LogVSQL(ERROR_LEVEL,
+              "Failed to find type %s in extension %s, version %s for SP "
+              "variable %s in %s.%s",
+              param_entry->type_name.c_str(),
+              param_entry->extension_name.c_str(),
+              param_entry->extension_version.c_str(),
+              param_entry->param_name().c_str(), db_name, sp_name);
+      return true;
+    }
+
+    TypeParameters parameters =
+        TypeParameters::from_json(param_entry->type_parameters);
+    TypeContextKey type_context_key(type_descriptor_key, parameters);
+
+    // Use get_or_create_client_managed so the caller (sp_rcontext) holds a
+    // shared_ptr. The TypeContext refcount is decremented when sp_rcontext is
+    // destroyed (via m_custom_type_refs), not when some mem_root is cleared.
+    std::shared_ptr<const TypeContext> tc_ref =
+        vclient.type_contexts().get_or_create_client_managed(type_context_key,
+                                                             type_descriptor);
+    if (!tc_ref) {
+      my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeContext));
+      return true;
+    }
+
+    if (fields[field_idx]) {
+      fields[field_idx]->set_type_context(tc_ref.get());
+    }
+
+    // Sync TypeContext into the Item_field wrapper so SP body statements
+    // (e.g. INSERT INTO t VALUES (in_param)) see the correct custom type.
+    // The Item_field delegates has_type_context() to its field pointer, but
+    // set_type_context() on the Item base caches it for non-field items
+    // (Item_sp_variable) that call get_type_context() on this_item().
+    if (var_items.array() && var_items[field_idx]) {
+      var_items[field_idx]->set_type_context(tc_ref.get());
+    }
+
+    // Transfer ownership to caller — released when sp_rcontext is destroyed.
+    type_refs.push_back(std::move(tc_ref));
+
+    field_idx++;
+  }
+
+  return false;
 }
 
 }  // namespace villagesql

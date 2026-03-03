@@ -3914,6 +3914,15 @@ class Item_sp_variable : public Item {
     return false;
   }
 
+  // VillageSQL: Delegate custom type context checks to the underlying item
+  // so that SP local variables with injected TypeContexts are recognized.
+  const villagesql::TypeContext *get_type_context() const override {
+    return this_item()->get_type_context();
+  }
+  bool has_type_context() const override {
+    return this_item()->has_type_context();
+  }
+
  protected:
   inline type_conversion_status save_in_field_inner(
       Field *field, bool no_conversions) override;

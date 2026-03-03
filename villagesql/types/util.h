@@ -18,11 +18,14 @@
 #define VILLAGESQL_TYPES_UTIL_H_
 
 #include <stddef.h>
+#include <memory>
 #include <optional>
+#include <vector>
 
 #include "lex_string.h"
 #include "my_inttypes.h"
 #include "sql/field.h"
+#include "sql/sql_array.h"
 #include "sql_string.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
@@ -33,6 +36,7 @@ class Item;
 class Item_func;
 struct MEM_ROOT;
 struct ORDER;
+class sp_pcontext;
 template <typename T>
 class SQL_I_List;
 class THD;
@@ -53,6 +57,20 @@ namespace villagesql {
 // given mem_root. Checks uncommitted column metadata for the THD first before
 // falling back to committed data.
 extern bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field);
+
+// Injects custom TypeContexts into SP variable fields for a stored procedure
+// by looking up villagesql.custom_sp_params. Restores custom type information
+// that was lost when MySQL normalized SP variable types (e.g. COMPLEX ->
+// varbinary(16)) in the data dictionary. Also syncs the TypeContext into the
+// Item wrappers so SP body statements see the correct type.
+// pctx provides the variable definitions; fields is the TABLE field array;
+// var_items is the Item wrapper array. type_refs receives a shared_ptr for each
+// injected TypeContext and must remain alive as long as the fields reference
+// it. Returns false on success, true on error.
+extern bool InjectCustomSpParams(
+    const char *db_name, const char *sp_name, const sp_pcontext *pctx,
+    Field **fields, Bounds_checked_array<Item *> var_items,
+    std::vector<std::shared_ptr<const TypeContext>> &type_refs);
 
 // Fills *result with a TypeContext based on the type_name given. If
 // extension_name is non-empty, filters results to match that extension
@@ -337,12 +355,6 @@ extern bool TryImplicitCastToCustom(Item *item, const TypeContext &tc);
 // Returns false on success, true on error (with my_error already called)
 extern bool CheckCustomTypeUsage(Item *item, THD *thd);
 
-
-// Validate custom type access in the current execution context.
-// Checks if custom types are being used in unsupported contexts.
-// Call this after field binding if custom types were found.
-// Returns false on success, true if error was reported.
-extern bool ValidateCustomTypeContext(THD *thd);
 
 // Validate VDF arguments against function signature and convert string
 // constants to custom types where appropriate. Returns false on success, true

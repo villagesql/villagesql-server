@@ -1,0 +1,23 @@
+CREATE TABLE t1 (val COMPLEX);
+CREATE PROCEDURE p1()
+BEGIN
+DECLARE v COMPLEX;
+DECLARE caught INT DEFAULT 0;
+DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET caught = 1;
+# Valid assignment - should succeed.
+SET v = '(1.0,2.0)';
+INSERT INTO t1 VALUES (v);
+# Invalid assignment - handler should catch the error.
+SET v = 'not_a_complex_value';
+INSERT INTO t1 VALUES (v);
+SELECT caught;
+END//
+CALL p1();
+caught
+1
+SELECT * FROM t1;
+val
+(1,2)
+NULL
+DROP PROCEDURE p1;
+DROP TABLE t1;

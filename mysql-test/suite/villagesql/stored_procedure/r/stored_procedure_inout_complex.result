@@ -1,0 +1,22 @@
+CREATE PROCEDURE p1(INOUT val COMPLEX)
+BEGIN
+# Simple pass-through logic for now, assuming string representation
+# Ideally this would do math if operations were supported
+SET val = '(9.0,9.0)';
+END//
+SET @my_val = '(1.0,2.0)';
+CALL p1(@my_val);
+SELECT @my_val;
+@my_val
+(9,9)
+SET @my_val = NULL;
+DROP PROCEDURE p1;
+include/rpl/deprecated/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+#	#	Query	#	#	use `test`; CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`(INOUT val COMPLEX)
+BEGIN
+# Simple pass-through logic for now, assuming string representation
+# Ideally this would do math if operations were supported
+SET val = '(9.0,9.0)';
+END
+#	#	Query	#	#	use `test`; DROP PROCEDURE p1

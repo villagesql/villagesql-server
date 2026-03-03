@@ -1,4 +1,5 @@
 /* Copyright (c) 2002, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -180,6 +181,12 @@ class sp_rcontext {
   }
 
   Field *get_return_field() const { return m_return_value_fld; }
+
+  // VillageSQL: Injects custom type contexts into SP variable fields by looking
+  // up villagesql.custom_sp_params. No-op if there are no SP variables.
+  // Must be called after sp = this is set in sp_head.cc so that sp->m_db and
+  // sp->m_name are available. Returns false on success, true on error.
+  bool maybe_inject_custom_sp_params();
 
   bool set_return_value(THD *thd, bool standalone, Item **return_value_item);
 
@@ -390,6 +397,12 @@ class sp_rcontext {
 
   /// Array of CASE expression holders.
   Bounds_checked_array<Item_cache *> m_case_expr_holders;
+
+  // VillageSQL: Client-managed references to TypeContext objects for SP params.
+  // Held for the lifetime of this sp_rcontext so that the TypeContext refcount
+  // does not drop to zero while SP variables referencing it are alive.
+  std::vector<std::shared_ptr<const villagesql::TypeContext>>
+      m_custom_type_refs;
 };
 
 ///////////////////////////////////////////////////////////////////////////
