@@ -58,13 +58,17 @@ jobs:
           core.setOutput('should_run', 'true');
           console.log(`PR #${pr.number}: testing SHA ${pr.head.sha}`);
 
-          // Add reaction to show we received the command
-          await github.rest.reactions.createForIssueComment({
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            comment_id: context.payload.comment.id,
-            content: 'rocket'
-          });
+          // Add reaction to show we received the command (best-effort)
+          try {
+            await github.rest.reactions.createForIssueComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: context.payload.comment.id,
+              content: 'rocket'
+            });
+          } catch (e) {
+            console.log(`Could not add reaction: ${e.message}`);
+          }
 
   # Run the full test suite
   run-tests:
