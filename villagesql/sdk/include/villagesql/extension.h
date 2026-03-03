@@ -51,8 +51,9 @@
 // TYPED WRAPPERS
 // --------------
 //
-// Instead of writing against the raw ABI types (vef_invalue_t*,
-// vef_vdf_result_t*), you can use the typed wrappers from func_types.h:
+// Typed wrappers from func_types.h provide a type-safe interface for writing
+// extension functions. Each parameter and return type has a corresponding
+// wrapper class with methods for null checking and value access:
 //
 //   Input:   IntArg, RealArg, StringArg, BinaryArg
 //   Output:  IntResult, RealResult, StringResult, BinaryResult
@@ -65,15 +66,15 @@
 //     out.set(a.value() + b.value());
 //   }
 //
-//   make_func<&add_impl>("add").returns(INT).param(INT).param(INT).build()
+//   make_func<&add_impl>("add").returns(INT).param(INT).param(INT).build();
 //
 // For binary (custom) types, write directly into the caller-provided buffer
 // to avoid copies:
 //
 //   void rot13_impl(BinaryArg in, BinaryResult out) {
 //     if (in.is_null()) { out.set_null(); return; }
-//     auto src = in.value();        // Span<const unsigned char>
-//     auto dst = out.buffer();      // Span<unsigned char>
+//     auto src = in.value();        // villagesql::Span<const unsigned char>
+//     auto dst = out.buffer();      // villagesql::Span<unsigned char>
 //     for (size_t i = 0; i < src.size(); i++) { dst[i] = transform(src[i]); }
 //     out.set_length(src.size());
 //   }
@@ -88,15 +89,14 @@
 //     .returns(INT)       // Return type
 //     .param(INT)         // First parameter
 //     .param(STRING)      // Second parameter
-//     .buffer_size(256)        // Optional: output buffer size
-//     .build()                 // Finalize the function definition
+//     .buffer_size(256)   // Optional: output buffer size
+//     .build()            // Finalize the function definition
 //
 // Available types (all passed as strings):
 //   - INT    - 64-bit integer
 //   - STRING - Variable-length string
 //   - REAL   - Double-precision float
 //   - Custom types by name (see below)
-//
 //
 // CUSTOM TYPES
 // ------------

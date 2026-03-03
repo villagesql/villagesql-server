@@ -39,13 +39,10 @@
 // Example - binary transform (ROT13 on a fixed-size BYTEARRAY):
 //   void rot13(vef_context_t*, BinaryArg in, BinaryResult out) {
 //     if (in.is_null()) { out.set_null(); return; }
-//     auto src = in.value();          // Span<const unsigned char>
-//     auto dst = out.buffer();        // Span<unsigned char>
+//     auto src = in.value();          // villagesql::Span<const unsigned char>
+//     auto dst = out.buffer();        // villagesql::Span<unsigned char>
 //     for (size_t i = 0; i < src.size(); i++) {
-//       unsigned char c = src[i];
-//       if (c >= 'A' && c <= 'Z') c = 'A' + (c - 'A' + 13) % 26;
-//       else if (c >= 'a' && c <= 'z') c = 'a' + (c - 'a' + 13) % 26;
-//       dst[i] = c;
+//       dst[i] = transform(src[i]);
 //     }
 //     out.set_length(src.size());
 //   }
