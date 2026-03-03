@@ -131,6 +131,15 @@ std::vector<const ColumnEntry *> VictionaryClient::GetCustomColumnsForTable(
   return m_columns.get_prefix_committed(ColumnKeyPrefix(db_name, table_name));
 }
 
+std::vector<const SpParamEntry *> VictionaryClient::GetCustomSpParamsForSP(
+    const std::string &db_name, const std::string &sp_name) const {
+  if (!m_initialized.load()) {
+    return {};
+  }
+
+  return m_sp_params.get_prefix_committed(SpParamKeyPrefix(db_name, sp_name));
+}
+
 void VictionaryClient::commit_all_tables(THD *thd) {
   if (!m_initialized.load() || !thd) return;
 
@@ -138,6 +147,7 @@ void VictionaryClient::commit_all_tables(THD *thd) {
 
   m_properties.commit(thd);
   m_columns.commit(thd);
+  m_sp_params.commit(thd);
   m_extensions.commit(thd);
   m_type_descriptors.commit(thd);
   m_extension_descriptors.commit(thd);
@@ -152,6 +162,7 @@ void VictionaryClient::rollback_all_tables(THD *thd) {
 
   m_properties.rollback(thd);
   m_columns.rollback(thd);
+  m_sp_params.rollback(thd);
   m_extensions.rollback(thd);
   m_type_descriptors.rollback(thd);
   m_extension_descriptors.rollback(thd);
@@ -194,6 +205,11 @@ bool VictionaryClient::write_all_uncommitted_entries(THD *thd) {
           SchemaManager::COLUMNS_TABLE_NAME)) {
     error = true;
   }
+  if (m_sp_params.write_uncommitted_to_table(
+          thd, SchemaManager::VILLAGESQL_SCHEMA_NAME,
+          SchemaManager::SP_PARAMS_TABLE_NAME)) {
+    error = true;
+  }
   if (m_extensions.write_uncommitted_to_table(
           thd, SchemaManager::VILLAGESQL_SCHEMA_NAME,
           SchemaManager::EXTENSIONS_TABLE_NAME)) {
@@ -233,6 +249,10 @@ bool VictionaryClient::reload_all_tables(THD *thd) {
                                   SchemaManager::COLUMNS_TABLE_NAME)) {
     error = true;
   }
+  if (m_sp_params.reload_from_table(thd, SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                                    SchemaManager::SP_PARAMS_TABLE_NAME)) {
+    error = true;
+  }
 
   return error;
 }
@@ -246,6 +266,7 @@ void VictionaryClient::clear_all_tables() {
 
   m_properties.clear();
   m_columns.clear();
+  m_sp_params.clear();
   m_extensions.clear();
   m_type_descriptors.clear();
   m_extension_descriptors.clear();

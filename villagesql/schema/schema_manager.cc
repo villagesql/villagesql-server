@@ -63,6 +63,7 @@ namespace villagesql {
 const char *SchemaManager::VILLAGESQL_SCHEMA_NAME = "villagesql";
 const char *SchemaManager::PROPERTIES_TABLE_NAME = "properties";
 const char *SchemaManager::COLUMNS_TABLE_NAME = "custom_columns";
+const char *SchemaManager::SP_PARAMS_TABLE_NAME = "custom_sp_params";
 const char *SchemaManager::EXTENSIONS_TABLE_NAME = "extensions";
 
 // Define expected structures for all VillageSQL system tables
@@ -201,6 +202,31 @@ static const TABLE_FIELD_TYPE columns_fields[] = {
      {nullptr, 0}}};
 static const TABLE_FIELD_DEF columns_def = {7, columns_fields};
 
+// Define expected structure for custom_sp_params table
+static const TABLE_FIELD_TYPE sp_params_fields[] = {
+    {{STRING_WITH_LEN("db_name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("sp_name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("param_name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("extension_name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("extension_version")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("type_name")},
+     {STRING_WITH_LEN("varchar(64)")},
+     {nullptr, 0}},
+    {{STRING_WITH_LEN("type_parameters")},
+     {STRING_WITH_LEN("json")},
+     {nullptr, 0}}};
+static const TABLE_FIELD_DEF sp_params_def = {7, sp_params_fields};
+
 // Define expected structure for extensions table
 static const TABLE_FIELD_TYPE extensions_fields[] = {
     {{STRING_WITH_LEN("extension_name")},
@@ -218,6 +244,7 @@ static const TABLE_FIELD_DEF extensions_def = {3, extensions_fields};
 static const VillageSQL_table tables_to_check[] = {
     {SchemaManager::PROPERTIES_TABLE_NAME, &properties_def},
     {SchemaManager::COLUMNS_TABLE_NAME, &columns_def},
+    {SchemaManager::SP_PARAMS_TABLE_NAME, &sp_params_def},
     {SchemaManager::EXTENSIONS_TABLE_NAME, &extensions_def}};
 
 /**

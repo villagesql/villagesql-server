@@ -1,0 +1,16 @@
+CREATE FUNCTION f1() RETURNS COMPLEX DETERMINISTIC
+BEGIN
+RETURN '(5.0,5.0)';
+END//
+SELECT f1();
+f1()
+(5,5)
+DROP FUNCTION f1;
+include/rpl/deprecated/show_binlog_events.inc
+Log_name	Pos	Event_type	Server_id	End_log_pos	Info
+#	#	Query	#	#	use `test`; CREATE DEFINER=`root`@`localhost` FUNCTION `f1`() RETURNS vsql_complex.COMPLEX
+    DETERMINISTIC
+BEGIN
+RETURN '(5.0,5.0)';
+END
+#	#	Query	#	#	use `test`; DROP FUNCTION f1

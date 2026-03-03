@@ -18,11 +18,15 @@
 #define VILLAGESQL_TYPES_UTIL_H_
 
 #include <stddef.h>
+#include <memory>
 #include <optional>
+#include <vector>
 
 #include "lex_string.h"
 #include "my_inttypes.h"
+#include "sql/dd/string_type.h"
 #include "sql/field.h"
+#include "sql/sql_array.h"
 #include "sql_string.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
@@ -31,8 +35,13 @@ class Create_field;
 class Field;
 class Item;
 class Item_func;
+enum class enum_sp_type;
 struct MEM_ROOT;
 struct ORDER;
+class sp_pcontext;
+namespace dd {
+class Parameter;
+}  // namespace dd
 template <typename T>
 class SQL_I_List;
 class THD;
@@ -47,12 +56,42 @@ class String;
 
 namespace villagesql {
 
+// Returns true if name is a fully qualified custom type name (e.g.
+// "vsql_complex.COMPLEX"), i.e. contains a dot.
+extern bool IsQualifiedName(const dd::String_type &name);
+
+// Returns the fully qualified custom type name (e.g. "vsql_complex.COMPLEX")
+// for a field with a custom_type_context. Must only be called when
+// field.custom_type_context is non-null.
+extern dd::String_type CustomTypeNameForField(const Create_field &field);
+
 // Check if Field should be marked as a custom type by checking the
 // VictionaryClient. If the Field is supposed to be a custom type, then fill the
 // internal TypeContext appropriately to refer to the type information and the
 // given mem_root. Checks uncommitted column metadata for the THD first before
 // falling back to committed data.
 extern bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field);
+
+// Injects custom TypeContexts into SP variable fields for a stored procedure
+// by looking up villagesql.custom_sp_params. Restores custom type information
+// that was lost when MySQL normalized SP variable types (e.g. COMPLEX ->
+// varbinary(16)) in the data dictionary. Also syncs the TypeContext into the
+// Item wrappers so SP body statements see the correct type.
+// pctx provides the variable definitions; fields is the TABLE field array;
+// var_items is the Item wrapper array. type_refs receives a shared_ptr for each
+// injected TypeContext and must remain alive as long as the fields reference
+// it. Returns false on success, true on error.
+extern bool InjectCustomSpParams(
+    const char *db_name, const char *sp_name, const sp_pcontext *pctx,
+    Field **fields, Bounds_checked_array<Item *> var_items,
+    std::vector<std::shared_ptr<const TypeContext>> &type_refs);
+
+// Builds a parameter string with fully qualified custom type names for all
+// parameters in root_ctx. Returns true and fills *out if any parameter has a
+// custom type, returns false and leaves *out unchanged otherwise.
+extern bool BuildQualifiedParamsString(THD *thd, enum_sp_type sp_type,
+                                       const sp_pcontext *root_ctx,
+                                       String *out);
 
 // Fills *result with a TypeContext based on the type_name given. If
 // extension_name is non-empty, filters results to match that extension
@@ -313,12 +352,6 @@ extern bool WalkQueryBlockForCustomTypeValidation(
     THD *thd, const mem_root_deque<Item *> &fields,
     const SQL_I_List<ORDER> &group_list, const SQL_I_List<ORDER> &order_list,
     Item *where_condition, Item *having_condition);
-
-// Validate custom type access in the current execution context.
-// Checks if custom types are being used in unsupported contexts.
-// Call this after field binding if custom types were found.
-// Returns false on success, true if error was reported.
-extern bool ValidateCustomTypeContext(THD *thd);
 
 // Validate VDF arguments against function signature and convert string
 // constants to custom types where appropriate. Returns false on success, true

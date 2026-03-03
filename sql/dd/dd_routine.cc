@@ -1,4 +1,5 @@
 /* Copyright (c) 2016, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -62,6 +63,8 @@
 #include "sql_string.h"
 #include "typelib.h"
 
+#include "villagesql/types/util.h"
+
 struct CHARSET_INFO;
 
 namespace dd {
@@ -77,6 +80,15 @@ namespace dd {
   @param[in]  sp         Stored routine object.
   @param[out] sf         dd::Function object.
 */
+
+// VillageSQL: returns the fully qualified custom type name if the field has a
+// custom type context, otherwise falls back to the standard sql type string.
+static dd::String_type get_param_type_utf8(TABLE *table,
+                                           const Create_field &field) {
+  if (field.custom_type_context != nullptr)
+    return villagesql::CustomTypeNameForField(field);
+  return get_sql_type_by_create_field(table, field);
+}
 
 static void fill_dd_function_return_type(THD *thd, sp_head *sp, Function *sf) {
   DBUG_TRACE;
@@ -96,8 +108,7 @@ static void fill_dd_function_return_type(THD *thd, sp_head *sp, Function *sf) {
   table.s->db_low_byte_first = true;
 
   // Reset result data type in utf8
-  sf->set_result_data_type_utf8(
-      get_sql_type_by_create_field(&table, *return_field));
+  sf->set_result_data_type_utf8(get_param_type_utf8(&table, *return_field));
 
   // Set result is_zerofill flag.
   sf->set_result_zerofill(return_field->is_zerofill);
@@ -163,7 +174,7 @@ static void fill_parameter_info_from_field(THD *thd, Create_field *field,
   table.s->db_low_byte_first = true;
 
   // Reset data type in utf8
-  param->set_data_type_utf8(get_sql_type_by_create_field(&table, *field));
+  param->set_data_type_utf8(get_param_type_utf8(&table, *field));
 
   // Set is_zerofill flag.
   param->set_zerofill(field->is_zerofill);

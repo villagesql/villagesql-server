@@ -1,0 +1,32 @@
+# Test DECLARE CONTINUE HANDLER with invalid COMPLEX assignment
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (val COMPLEX);
+
+delimiter //;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE v COMPLEX;
+  DECLARE caught INT DEFAULT 0;
+  DECLARE CONTINUE HANDLER FOR SQLEXCEPTION SET caught = 1;
+
+  # Valid assignment - should succeed.
+  SET v = '(1.0,2.0)';
+  INSERT INTO t1 VALUES (v);
+
+  # Invalid assignment - handler should catch the error.
+  SET v = 'not_a_complex_value';
+  INSERT INTO t1 VALUES (v);
+
+  SELECT caught;
+END//
+delimiter ;//
+
+CALL p1();
+SELECT * FROM t1;
+
+DROP PROCEDURE p1;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

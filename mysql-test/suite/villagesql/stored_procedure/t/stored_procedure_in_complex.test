@@ -1,9 +1,8 @@
 # Test Stored Procedure with IN parameter of COMPLEX type
 # Grammar: CREATE PROCEDURE ... (IN name COMPLEX) ...
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
 
 CREATE TABLE t1 (val COMPLEX);
 
@@ -21,4 +20,5 @@ SELECT * FROM t1;
 DROP PROCEDURE p1;
 DROP TABLE t1;
 
+--source include/villagesql/binlog_check_end.inc
 --source include/villagesql/uninstall_complex_extension.inc

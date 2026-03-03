@@ -1,4 +1,5 @@
 /* Copyright (c) 2002, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -26,6 +27,7 @@
 
 #include <stddef.h>
 #include <sys/types.h>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -59,6 +61,9 @@ class THD;
 class sp_head;
 struct CHARSET_INFO;
 struct MY_BITMAP;
+namespace villagesql {
+class TypeContext;
+}  // namespace villagesql
 
 /**
   @defgroup Stored_Routines Stored Routines
@@ -440,6 +445,12 @@ class sp_head {
   */
   Create_field m_return_field_def;
 
+  // VillageSQL: client-managed reference to the custom TypeContext for the
+  // function return type. Keeps the TypeContext alive for the lifetime of this
+  // sp_head so that create_result_field() can safely set it on the result
+  // field.
+  std::shared_ptr<const villagesql::TypeContext> m_return_type_context_ref;
+
   /// Attributes used during the parsing stage only.
   sp_parser_data m_parser_data;
 
@@ -737,6 +748,10 @@ class sp_head {
                              const char *field_name, TABLE *table) const;
 
   void returns_type(THD *thd, String *result) const;
+
+  // VillageSQL: if any parameter has a custom type, overwrite m_params with
+  // the fully qualified version so it is used in binlog and SHOW CREATE.
+  void maybe_update_params_with_qualified_names(THD *thd);
 
   void set_info(longlong created, longlong modified, st_sp_chistics *chistics,
                 sql_mode_t sql_mode);

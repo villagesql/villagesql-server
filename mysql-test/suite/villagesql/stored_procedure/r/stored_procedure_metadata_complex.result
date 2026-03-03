@@ -1,0 +1,42 @@
+CREATE PROCEDURE p1(IN input_val COMPLEX, OUT output_val COMPLEX)
+BEGIN
+SET output_val = input_val;
+END//
+SHOW CREATE PROCEDURE p1;
+Procedure	sql_mode	Create Procedure	character_set_client	collation_connection	Database Collation
+p1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` PROCEDURE `p1`(IN `input_val` vsql_complex.COMPLEX, OUT `output_val` vsql_complex.COMPLEX)
+BEGIN
+SET output_val = input_val;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SELECT PARAMETER_NAME, PARAMETER_MODE, DTD_IDENTIFIER
+FROM information_schema.parameters
+WHERE SPECIFIC_NAME = 'p1'
+  ORDER BY ORDINAL_POSITION;
+PARAMETER_NAME	PARAMETER_MODE	DTD_IDENTIFIER
+input_val	IN	vsql_complex.COMPLEX
+output_val	OUT	vsql_complex.COMPLEX
+DROP PROCEDURE p1;
+CREATE FUNCTION f1(input_val COMPLEX) RETURNS COMPLEX DETERMINISTIC
+BEGIN
+RETURN input_val;
+END//
+SHOW CREATE FUNCTION f1;
+Function	sql_mode	Create Function	character_set_client	collation_connection	Database Collation
+f1	ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION	CREATE DEFINER=`root`@`localhost` FUNCTION `f1`(`input_val` vsql_complex.COMPLEX) RETURNS vsql_complex.COMPLEX
+    DETERMINISTIC
+BEGIN
+RETURN input_val;
+END	utf8mb4	utf8mb4_0900_ai_ci	utf8mb4_0900_ai_ci
+SELECT DTD_IDENTIFIER
+FROM information_schema.routines
+WHERE ROUTINE_NAME = 'f1';
+DTD_IDENTIFIER
+vsql_complex.COMPLEX
+SELECT PARAMETER_NAME, PARAMETER_MODE, DTD_IDENTIFIER
+FROM information_schema.parameters
+WHERE SPECIFIC_NAME = 'f1'
+  ORDER BY ORDINAL_POSITION;
+PARAMETER_NAME	PARAMETER_MODE	DTD_IDENTIFIER
+NULL	NULL	vsql_complex.COMPLEX
+input_val	IN	vsql_complex.COMPLEX
+DROP FUNCTION f1;

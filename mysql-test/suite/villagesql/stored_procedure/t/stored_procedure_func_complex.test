@@ -1,9 +1,8 @@
 # Test Stored Function returning COMPLEX type
 # Grammar: CREATE FUNCTION ... RETURNS COMPLEX ...
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
 
 delimiter //;
 CREATE FUNCTION f1() RETURNS COMPLEX DETERMINISTIC
@@ -16,4 +15,5 @@ SELECT f1();
 
 DROP FUNCTION f1;
 
+--source include/villagesql/binlog_check_end.inc
 --source include/villagesql/uninstall_complex_extension.inc

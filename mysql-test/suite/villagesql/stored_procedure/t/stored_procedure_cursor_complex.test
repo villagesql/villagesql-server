@@ -1,0 +1,37 @@
+# Test cursor FETCH into a COMPLEX variable in a Stored Procedure
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (val COMPLEX);
+INSERT INTO t1 VALUES ('(1.0,2.0)');
+INSERT INTO t1 VALUES ('(3.0,4.0)');
+
+CREATE TABLE t2 (val COMPLEX);
+
+delimiter //;
+CREATE PROCEDURE p1()
+BEGIN
+  DECLARE v COMPLEX;
+  DECLARE done INT DEFAULT 0;
+  DECLARE cur CURSOR FOR SELECT val FROM t1;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = 1;
+
+  OPEN cur;
+  fetch_loop: LOOP
+    FETCH cur INTO v;
+    IF done THEN
+      LEAVE fetch_loop;
+    END IF;
+    INSERT INTO t2 VALUES (v);
+  END LOOP;
+  CLOSE cur;
+END//
+delimiter ;//
+
+CALL p1();
+SELECT * FROM t2;
+
+DROP PROCEDURE p1;
+DROP TABLE t1, t2;
+
+--source include/villagesql/uninstall_complex_extension.inc

@@ -3895,6 +3895,10 @@ sp_fdparam:
             }
             spvar->field_def.field_name= spvar->name.str;
             spvar->field_def.is_nullable= true;
+            // VillageSQL: propagate custom type context.
+            if ($2->is_custom_type()) {
+              spvar->field_def.custom_type_context= $2->get_type_context();
+            }
           }
         ;
 
@@ -3927,17 +3931,6 @@ sp_pdparam:
 
             CONTEXTUALIZE($3);
 
-            // TODO(villagesql-beta): Support custom type parameters
-            // Reject custom type parameters
-            if ($3->is_custom_type())
-            {
-              villagesql_error(
-                  "Custom types are not yet supported in stored "
-                  "procedures/functions",
-                  MYF(0));
-              MYSQL_YYABORT;
-            }
-
             enum_field_types field_type= $3->type;
             const CHARSET_INFO *cs= $3->get_charset();
             if (merge_sp_var_charset_and_collation(cs, $4, &cs))
@@ -3968,6 +3961,11 @@ sp_pdparam:
             }
             spvar->field_def.field_name= spvar->name.str;
             spvar->field_def.is_nullable= true;
+            // VillageSQL: propagate custom type context so the SP variable
+            // field gets set_type_context() called via make_field().
+            if ($3->is_custom_type()) {
+              spvar->field_def.custom_type_context= $3->get_type_context();
+            }
           }
         ;
 
@@ -4035,17 +4033,6 @@ sp_decl:
 
             CONTEXTUALIZE($3);
 
-            // TODO(villagesql-beta): Support custom type DECLARE variables
-            // Reject custom type DECLARE variables
-            if ($3->is_custom_type())
-            {
-              villagesql_error(
-                  "Custom types are not yet supported in stored "
-                  "procedures/functions",
-                  MYF(0));
-              MYSQL_YYABORT;
-            }
-
             enum enum_field_types var_type= $3->type;
             const CHARSET_INFO *cs= $3->get_charset();
             if (merge_sp_var_charset_and_collation(cs, $4, &cs))
@@ -4108,6 +4095,11 @@ sp_decl:
 
               spvar->field_def.field_name= spvar->name.str;
               spvar->field_def.is_nullable= true;
+              // VillageSQL: propagate custom type context so the SP variable
+              // field gets set_type_context() called via make_field().
+              if ($3->is_custom_type()) {
+                spvar->field_def.custom_type_context= $3->get_type_context();
+              }
 
               /* The last instruction is responsible for freeing LEX. */
 
@@ -17856,17 +17848,6 @@ sf_tail:
 
             CONTEXTUALIZE($10);
 
-            // TODO(villagesql-beta): Support custom type function return values
-            // Reject custom type function return values
-            if ($10->is_custom_type())
-            {
-              villagesql_error(
-                  "Custom types are not yet supported in stored "
-                  "procedures/functions",
-                  MYF(0));
-              MYSQL_YYABORT;
-            }
-
             enum_field_types field_type= $10->type;
             const CHARSET_INFO *cs= $10->get_charset();
             if (merge_sp_var_charset_and_collation(cs, $11, &cs))
@@ -17899,6 +17880,18 @@ sf_tail:
             if (prepare_sp_create_field(YYTHD,
                                         &sp->m_return_field_def))
               MYSQL_YYABORT;
+
+            // VillageSQL: store custom return type context on the return field
+            // def (for dd_routine.cc during CREATE FUNCTION) and acquire a
+            // client-managed ref (keeps TypeContext alive beyond parse
+            // mem_root for create_result_field() and returns_type()).
+            if ($10->is_custom_type()) {
+              sp->m_return_field_def.custom_type_context=
+                  $10->get_type_context();
+              sp->m_return_type_context_ref=
+                  villagesql::AcquireTypeContextClientManaged(
+                      $10->get_type_context());
+            }
 
             memset(&lex->sp_chistics, 0, sizeof(st_sp_chistics));
 

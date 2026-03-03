@@ -1,5 +1,6 @@
 /*
    Copyright (c) 2002, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -100,6 +101,7 @@
 #include "strxmov.h"
 #include "template_utils.h"  // pointer_cast
 #include "thr_lock.h"
+#include "villagesql/types/util.h"
 
 /**
   @page stored_programs Stored Programs
@@ -1796,6 +1798,9 @@ void sp_head::set_body_end(THD *thd) {
     }
   }
 
+  // VillageSQL: modify any parameter with custom type
+  maybe_update_params_with_qualified_names(thd);
+
   /* Remember end pointer for further dumping of whole statement. */
 
   thd->lex->stmt_definition_end = end_ptr;
@@ -1826,6 +1831,18 @@ void sp_head::set_body_end(THD *thd) {
                         body.length, &my_charset_utf8mb4_general_ci);
   }
   m_body_utf8 = to_lex_cstring(body_utf8);
+}
+
+// VillageSQL: if any parameter has a custom type, overwrite m_params with
+// the fully qualified version so it is used in binlog and SHOW CREATE.
+void sp_head::maybe_update_params_with_qualified_names(THD *thd) {
+  String qualified(64);
+  qualified.set_charset(system_charset_info);
+  if (villagesql::BuildQualifiedParamsString(
+          thd, m_type, get_root_parsing_context(), &qualified)) {
+    m_params.length = qualified.length();
+    m_params.str = thd->strmake(qualified.ptr(), qualified.length());
+  }
 }
 
 bool sp_head::setup_trigger_fields(THD *thd, Table_trigger_field_support *tfs,
@@ -1970,6 +1987,12 @@ Field *sp_head::create_result_field(THD *thd, size_t field_max_length,
   field->stored_in_db = m_return_field_def.stored_in_db;
   field->init(table);
 
+  // VillageSQL: propagate custom type context so the result field decodes
+  // correctly when the function return value is read (e.g. SELECT f1()).
+  if (m_return_type_context_ref) {
+    field->set_type_context(m_return_type_context_ref.get());
+  }
+
   assert(field->pack_length() == m_return_field_def.pack_length());
 
   return field;
@@ -1988,6 +2011,15 @@ void sp_head::returns_type(THD *thd, String *result) const {
                             m_return_field_def.max_display_width_in_bytes(),
                             nullptr, nullptr, 0);
   field->init(&table);
+
+  // VillageSQL: if the return type is a custom type, emit the qualified name
+  // instead of the underlying storage type.
+  if (m_return_type_context_ref) {
+    villagesql::AppendFullyQualifiedName(*m_return_type_context_ref, result);
+    ::destroy_at(field);
+    return;
+  }
+
   field->sql_type(*result);
 
   if (field->has_charset()) {
@@ -2787,6 +2819,13 @@ bool sp_head::execute_function(THD *thd, Item **argp, uint argcount,
 
   func_runtime_ctx->sp = this;
 
+  // VillageSQL: inject custom type contexts for SP params after sp is set.
+  if (func_runtime_ctx->maybe_inject_custom_sp_params(thd)) {
+    thd->swap_query_arena(backup_arena, &call_arena);
+    err_status = true;
+    goto err_with_cleanup;
+  }
+
   /*
     We have to switch temporarily back to callers arena/memroot.
     Function arguments belong to the caller and so the may reference
@@ -3008,6 +3047,9 @@ bool sp_head::execute_procedure(THD *thd, mem_root_deque<Item *> *args) {
   }
 
   proc_runtime_ctx->sp = this;
+
+  // VillageSQL: inject custom type contexts for SP params after sp is set.
+  if (proc_runtime_ctx->maybe_inject_custom_sp_params(thd)) err_status = true;
 
   if (params > 0) {
     auto it_args = args->begin();

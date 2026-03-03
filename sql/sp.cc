@@ -1,5 +1,6 @@
 /*
    Copyright (c) 2002, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -100,6 +101,8 @@
 #include "sql_string.h"
 #include "string_with_len.h"
 #include "template_utils.h"
+#include "villagesql/sql/metadata_modifier.h"
+#include "villagesql/types/util.h"
 
 class sp_rcontext;
 
@@ -861,6 +864,9 @@ bool sp_create_routine(THD *thd, sp_head *sp, const LEX_USER *definer,
   if (dd::create_routine(thd, *schema, sp, definer))
     goto err_report_with_rollback;
 
+  // VillageSQL: persist custom type metadata for any custom-typed SP variables.
+  if (villagesql::PersistCustomSpParams(thd, sp)) goto err_report_with_rollback;
+
   // Update referencing views metadata.
   {
     const sp_name spname({sp->m_db.str, sp->m_db.length}, sp->m_name, false);
@@ -965,6 +971,9 @@ enum_sp_return_code sp_drop_routine(THD *thd, enum_sp_type type,
 
   // Drop routine.
   if (thd->dd_client()->drop(routine)) goto err_with_rollback;
+
+  // VillageSQL: delete custom type metadata for any custom-typed SP variables.
+  if (villagesql::DeleteCustomSpParams(thd, name)) goto err_with_rollback;
 
   // Update referencing views metadata.
   if (mdl_type == MDL_key::FUNCTION &&

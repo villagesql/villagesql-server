@@ -1,9 +1,8 @@
 # Test Stored Procedure with OUT parameter of COMPLEX type
 # Grammar: CREATE PROCEDURE ... (OUT name COMPLEX) ...
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
 
 delimiter //;
 CREATE PROCEDURE p1(OUT output_val COMPLEX)
@@ -17,4 +16,8 @@ SELECT @res;
 
 DROP PROCEDURE p1;
 
+# Clear the user variable so the TypeContext ref is released before UNINSTALL.
+SET @res = NULL;
+
+--source include/villagesql/binlog_check_end.inc
 --source include/villagesql/uninstall_complex_extension.inc
