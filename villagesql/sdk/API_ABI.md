@@ -1,0 +1,175 @@
+# API vs ABI in the VillageSQL Extension Framework
+
+This document explains the distinction between the API (Application Programming
+Interface) and ABI (Application Binary Interface) in VEF, describes the intended
+forward-looking design for each, and notes where the current implementation does
+not yet match that ideal.
+
+## The Core Distinction
+
+**API** is a _source-level_ contract. It defines what an extension author writes
+in C++ to implement an extension: which headers to include, which types to use,
+which patterns to follow. The goal of this layer is to provide an idiomatic C++
+API for extension authors to write against. If the API changes incompatibly, the
+extension author must update their source code and recompile.
+
+**ABI** is a _binary-level_ contract. It defines what a compiled extension `.so`
+must provide and can expect from the server at runtime: which C-linkage symbols
+to export, the exact memory layout of C structs, calling conventions. If the ABI
+is stable, an extension compiled against an old SDK continues to load and run on
+a new server _without recompilation_.
+
+In VEF, a compiled extension (`.so` inside a `.veb`) interacts with the server
+entirely through the ABI. The C++ SDK is a convenience layer that _generates_
+the correct ABI-compliant binary artifacts from idiomatic C++ code.
+
+## The VEF API
+
+The API is everything in `extension.h`, `extension_builder.h`, `func_builder.h`,
+`type_builder.h`, and `func_types.h`. It provides:
+
+- **Fluent builder pattern**: `make_extension()`, `.function()`, `.type()`
+- **Typed argument and result wrappers**: `IntArg`, `RealArg`, `StringArg`,
+  `BinaryArg`, `IntResult`, `RealResult`, `StringResult`, `BinaryResult`
+- **Automatic protocol awareness**: `VEF_GENERATE_ENTRY_POINTS` sets the max
+  protocol the extension will negotiate
+- **Lifecycle hooks**: `.prerun()`, `.postrun()` for per-query setup/teardown
+
+The API translates idiomatic C++ into the correct ABI calls. The key mechanism
+is the `Wrapper` template in `func_builder.h`, which converts typed C++
+arguments to raw `vef_invalue_t*` accesses at compile time — extension authors
+never touch `vef_invalue_t` directly.
+
+### API Stability and SDK Versioning
+
+The `stable_sdk/v1/` directory contains a frozen snapshot of the SDK headers for
+protocol 1. Extensions compiled against stable v1 headers produce valid
+protocol-1 binaries that load on any current server.
+
+The development SDK headers (`sdk/` directory) are the API for protocol 2
+features. When a new stable protocol version is finalized, a corresponding
+frozen SDK snapshot should be added to `stable_sdk/`.
+
+## The VEF ABI
+
+The VEF ABI is defined entirely in `abi/types.h` and consists of:
+
+**Entry point symbols** — Two `extern "C"` functions every extension must
+export:
+
+```c
+vef_registration_t *vef_register(vef_register_arg_t *arg);
+void vef_unregister(vef_unregister_arg_t *arg, vef_registration_t *registration);
+```
+
+**C struct layouts** — The exact field order, types, and sizes of:
+
+- `vef_register_arg_t` / `vef_registration_t`
+- `vef_func_desc_t` / `vef_type_desc_t`
+- `vef_cdf_args_t` / `vef_invalue_t` / `vef_vdf_result_t`
+- `vef_signature_t` and related types
+
+**Function pointer signatures** — The calling convention and argument types for:
+
+- `vef_vdf_func_t` — the per-row function
+- `vef_prerun_func_t` / `vef_postrun_func_t`
+- `vef_encode_func_t`, `vef_decode_func_t`, `vef_compare_func_t`,
+  `vef_hash_func_t`
+
+**Protocol negotiation** — The `vef_protocol_t` enum values exchanged at load
+time.
+
+Any change to these — adding a field to a struct, changing a function pointer
+signature, adding an enum value used in negotiation — is an ABI change and
+requires a new protocol version.
+
+### Protocol Versioning
+
+The ABI uses an explicit protocol versioning mechanism to evolve safely. During
+`vef_register`, the server and extension each report their maximum supported
+protocol; the minimum is used for the session:
+
+```
+negotiated_protocol = min(server_max_protocol, extension_max_protocol)
+```
+
+The `protocol` field is always the **first member** of any versioned descriptor
+struct. When reading fields beyond the protocol-1 baseline, code checks
+`descriptor->protocol >= VEF_PROTOCOL_2` before accessing those fields.
+
+New protocol versions are strict supersets: a protocol-2 struct contains all
+protocol-1 fields at the same offsets, followed by new fields. This allows a
+server running protocol 2 to safely load an extension that only understands
+protocol 1.
+
+**Structs nested inline** (not accessed through a pointer) cannot carry their
+own `protocol` field. Adding fields to such structs requires a new protocol
+version on their containing struct.
+
+## How the API and ABI Evolve Together
+
+Adding new functionality often requires modifying both the ABI and the API. I.e.
+the functionality needs to talk to the server via the ABI, while exposing the
+functionality to the extension author.
+
+But the API and ABI can also change independently:
+
+The API can be extended with types and functionality that makes it easier for
+extension developers, as long as extensions written against the previous version
+will continue to compile and work, without any source changes in the extension.
+
+Changing the ABI should be done to improve the interactions with the server and
+changes need not be visible to the API users. But it is imperative that an
+extension can support old versions of the ABI for working with older servers,
+and equivalently newer server should continue to support the ABI from older
+extensions. If either fails to work it is a breaking change.
+
+## TODOs
+
+### 0. Identify warts in the v1 ABI, and plan to address
+
+There are at least three known issues in the existing structs, there may be
+more.
+
+1. Raw function pointers should be removed:
+
+- `vef_encode_func_t`
+- `vef_decode_func_t`
+- `vef_compare_func_t`
+- `vef_hash_func_t`
+
+2. VDF Args cannot be resized. `vef_vdf_args_t.values` is an array of type
+   `vef_invalue_t` meaning adding fields will cause ABI layout compatibility
+   issues.
+
+4. Unnecessary indirection. VDFs can return buffers that they have allocated via
+   `alt_*_buf` which is a char**. That points to an address that the extension
+   can override. This could instead be a char*, and the extension could
+   overwrite the field instead.
+
+### 1. Provide idiomatic C++ builders/signatures
+
+Currently a large number of the builders take only functions with signatures
+based on the C ABI:
+
+- `encode()`
+- `decode()`
+- `compare()`
+- `hash()`
+- `prerun()`
+- `postrun()`
+
+### 2. Remove old ABI style calls.
+
+The original calling convention exposed `vef_*_t*` argument types to VDF
+functions. This ABI-era pattern leaked into the API surface and is still
+supported by `func_builder.h`. Using it couples extension code directly to ABI
+types.
+
+When we are ready we will declare old versions of the protocol as no longer
+supported.
+
+### 3. Controls to prevent ABI breakages
+
+Add presubmit checks to let engineers find if they have broken ABI
+compatibility.
