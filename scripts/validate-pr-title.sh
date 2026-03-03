@@ -20,8 +20,8 @@ if [ ${#title} -gt 41 ]; then
 fi
 
 last_char="${title: -1}"
-if ! [[ "$last_char" =~ [a-zA-Z0-9\)] ]]; then
-  errors+=("PR title ends with '$last_char' (must end with alphanumeric or closing paren)")
+if [[ "$last_char" =~ [.,\;:!] ]]; then
+  errors+=("PR title ends with '$last_char' (must not end with punctuation: . , ; : !)")
 fi
 
 if [ ${#errors[@]} -gt 0 ]; then
