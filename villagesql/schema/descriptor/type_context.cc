@@ -16,14 +16,12 @@
 
 #include "villagesql/schema/descriptor/type_context.h"
 
+#include <algorithm>
+#include <utility>
 #include <vector>
 
-#include "my_rapidjson_size_t.h"
-
-#include <rapidjson/document.h>
-#include <rapidjson/stringbuffer.h>
-#include <rapidjson/writer.h>
-
+#include "mysql/strings/m_ctype.h"
+#include "sql/strfunc.h"
 #include "villagesql/include/error.h"
 
 namespace villagesql {
@@ -32,35 +30,23 @@ void TypeContext::resolve_cached_values() {
   // Build qualified_base_name_ once: "ext.type" (no parameters)
   qualified_base_name_ = descriptor_->qualified_base_name();
 
-  // Build qualified_name_ once: "ext.type" or "ext.type(v1,v2,...)"
-  // TODO(villagesql): This needs to be updated to support both TYPE(N) and
-  // TYPE('k1=v1,k2=v2,...') syntax, and to preserve parameter order as defined
-  // by the extension (currently alphabetical due to std::map). This will be
-  // revisited when SHOW CREATE TABLE support is added.
+  // Build qualified_name_ once: "ext.type" or "ext.type('k1=v1,k2=v2,...')"
+  // TODO(villagesql-beta): add special case for TYPE(N) when only a single
+  // integer parameter is present (i.e. int_to_params was used).
   qualified_name_ = descriptor_->qualified_base_name();
   if (!key_.parameters().empty()) {
-    qualified_name_ += "(";
-    const char *delim = "";
-    for (const auto &[k, v] : key_.parameters().params()) {
-      qualified_name_ += delim;
-      qualified_name_ += v;
-      delim = ",";
-    }
-    qualified_name_ += ")";
+    qualified_name_ += "('";
+    qualified_name_ += key_.parameters().str();
+    qualified_name_ += "')";
   }
 
-  if (!key_.parameters().empty() && descriptor_->resolve_params() != nullptr) {
+  if (!key_.parameters().empty() &&
+      descriptor_->resolve_params_op().has_value()) {
     // Variable-length type with parameters: resolve via callback
-    const auto &param_map = key_.parameters().params();
-    std::vector<vef_type_param_t> params;
-    params.reserve(param_map.size());
-    for (const auto &[k, v] : param_map) {
-      params.push_back({k.c_str(), v.c_str()});
-    }
-    vef_type_resolved_params_t resolved = {};
+    ResolvedTypeParams resolved = {};
     char error_msg[VEF_MAX_ERROR_LEN] = {0};
-    if (descriptor_->resolve_params()(params.data(), params.size(), &resolved,
-                                      error_msg)) {
+    if (descriptor_->resolve_params_op()->invoke(key_.parameters().str(),
+                                                 &resolved, error_msg)) {
       // resolve_params failed — fall back to descriptor's base values.
       // This can happen if parameters stored on disk no longer validate
       // (e.g., extension upgraded). The type will be unusable until the
@@ -84,41 +70,132 @@ void TypeContext::resolve_cached_values() {
   }
 }
 
-std::string TypeParameters::to_json() const {
-  if (params_.empty()) return std::string("{}");
+TypeParameters TypeParameters::from_raw(const std::string &raw) {
+  if (raw.empty()) return TypeParameters();
 
-  rapidjson::StringBuffer buffer;
-  rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+  // Parse "k=v,k=v,..." into pairs, sort by lowercased key, lowercase values,
+  // re-serialize. Use the same charset for both lowercasing and sort order.
+  // TODO(villagesql-beta): refactor parsing to use std::string_view.
+  const CHARSET_INFO *cs = &my_charset_utf8mb4_0900_ai_ci;
+  std::vector<std::pair<std::string, std::string>> pairs;
+  size_t start = 0;
+  while (start < raw.size()) {
+    size_t comma = raw.find(',', start);
+    if (comma == std::string::npos) comma = raw.size();
+    size_t eq = raw.find('=', start);
+    if (eq == std::string::npos || eq >= comma) {
+      start = comma + 1;
+      continue;
+    }
+    std::string key = raw.substr(start, eq - start);
+    std::string value = raw.substr(eq + 1, comma - eq - 1);
 
-  writer.StartObject();
-  for (const auto &[key, value] : params_) {
-    writer.Key(key.c_str(), static_cast<rapidjson::SizeType>(key.length()));
-    writer.String(value.c_str(),
-                  static_cast<rapidjson::SizeType>(value.length()));
+    // Trim whitespace
+    auto trim = [](std::string &s) {
+      size_t b = s.find_first_not_of(' ');
+      size_t e = s.find_last_not_of(' ');
+      s = (b == std::string::npos) ? "" : s.substr(b, e - b + 1);
+    };
+    trim(key);
+    trim(value);
+
+    // Lowercase
+    key = casedn(cs, std::move(key));
+    value = casedn(cs, std::move(value));
+
+    pairs.emplace_back(std::move(key), std::move(value));
+    start = comma + 1;
   }
-  writer.EndObject();
 
-  return std::string(buffer.GetString(), buffer.GetLength());
+  // Sort by key using the same charset collation used for lowercasing.
+  std::sort(pairs.begin(), pairs.end(), [cs](const auto &a, const auto &b) {
+    return my_strnncoll(cs, pointer_cast<const uint8_t *>(a.first.data()),
+                        a.first.size(),
+                        pointer_cast<const uint8_t *>(b.first.data()),
+                        b.first.size()) < 0;
+  });
+
+  // Re-serialize
+  std::string canonical;
+  for (size_t i = 0; i < pairs.size(); i++) {
+    if (i > 0) canonical += ',';
+    canonical += pairs[i].first;
+    canonical += '=';
+    canonical += pairs[i].second;
+  }
+
+  return TypeParameters(std::move(canonical));
+}
+
+std::string TypeParameters::to_json() const {
+  if (str_.empty()) return std::string("{}");
+
+  // Convert "k1=v1,k2=v2" → {"k1":"v1","k2":"v2"}
+  std::string json = "{";
+  size_t start = 0;
+  bool first = true;
+  while (start < str_.size()) {
+    size_t comma = str_.find(',', start);
+    if (comma == std::string::npos) comma = str_.size();
+    size_t eq = str_.find('=', start);
+    if (eq != std::string::npos && eq < comma) {
+      if (!first) json += ',';
+      json += '"';
+      json += str_.substr(start, eq - start);
+      json += "\":\"";
+      json += str_.substr(eq + 1, comma - eq - 1);
+      json += '"';
+      first = false;
+    }
+    start = comma + 1;
+  }
+  json += '}';
+  return json;
 }
 
 TypeParameters TypeParameters::from_json(const std::string &json) {
   if (json.empty() || json == "{}") return TypeParameters();
 
-  rapidjson::Document doc;
-  doc.Parse(json.c_str());
+  // Parse {"k1":"v1","k2":"v2"} → "k1=v1,k2=v2"
+  // Simple parser: skip '{', find "key":"value" pairs, skip '}'
+  std::string canonical;
+  size_t pos = json.find('{');
+  if (pos == std::string::npos) return TypeParameters();
+  pos++;
 
-  if (doc.HasParseError() || !doc.IsObject()) return TypeParameters();
+  bool first = true;
+  while (pos < json.size()) {
+    // Skip whitespace and commas
+    while (pos < json.size() && (json[pos] == ' ' || json[pos] == ',')) pos++;
+    if (pos >= json.size() || json[pos] == '}') break;
 
-  ParamMap params;
-  for (auto it = doc.MemberBegin(); it != doc.MemberEnd(); ++it) {
-    if (it->name.IsString() && it->value.IsString()) {
-      params.emplace(
-          std::string(it->name.GetString(), it->name.GetStringLength()),
-          std::string(it->value.GetString(), it->value.GetStringLength()));
-    }
+    // Expect "key"
+    if (json[pos] != '"') break;
+    pos++;
+    size_t key_end = json.find('"', pos);
+    if (key_end == std::string::npos) break;
+    std::string key = json.substr(pos, key_end - pos);
+    pos = key_end + 1;
+
+    // Skip ':'
+    while (pos < json.size() && (json[pos] == ' ' || json[pos] == ':')) pos++;
+
+    // Expect "value"
+    if (pos >= json.size() || json[pos] != '"') break;
+    pos++;
+    size_t val_end = json.find('"', pos);
+    if (val_end == std::string::npos) break;
+    std::string value = json.substr(pos, val_end - pos);
+    pos = val_end + 1;
+
+    if (!first) canonical += ',';
+    canonical += key;
+    canonical += '=';
+    canonical += value;
+    first = false;
   }
 
-  return TypeParameters(std::move(params));
+  return TypeParameters(std::move(canonical));
 }
 
 }  // namespace villagesql

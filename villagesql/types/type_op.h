@@ -29,6 +29,7 @@
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <string>
 
 #include "villagesql/sdk/include/villagesql/abi/types.h"
 
@@ -36,6 +37,13 @@ class String;
 struct MEM_ROOT;
 
 namespace villagesql {
+
+// Storage characteristics resolved from type parameters.
+// Defined identically in func_builder.h for extension authors.
+struct ResolvedTypeParams {
+  int64_t persisted_length;
+  int64_t max_decode_buffer_length;
+};
 
 class EncodeOp {
  public:
@@ -100,6 +108,37 @@ class HashOp {
 
  private:
   vef_hash_func_t fn_{nullptr};
+  const vef_func_desc_t *vdf_{nullptr};
+};
+
+class IntToParamsOp {
+ public:
+  explicit IntToParamsOp(const vef_func_desc_t *vdf) : vdf_(vdf) {
+    assert(vdf != nullptr);
+  }
+
+  // Converts TYPE(N) integer to a canonical parameter string.
+  // On success, writes "key1=value1,key2=value2,..." to *result.
+  // Returns false on success, true on error (writes to error_msg).
+  bool invoke(int64_t value, std::string *result, char *error_msg) const;
+
+ private:
+  const vef_func_desc_t *vdf_{nullptr};
+};
+
+class ResolveParamsOp {
+ public:
+  explicit ResolveParamsOp(const vef_func_desc_t *vdf) : vdf_(vdf) {
+    assert(vdf != nullptr);
+  }
+
+  // Validates parameters and computes storage characteristics.
+  // Takes a canonical "key=value,..." string.
+  // Returns false on success, true on error (writes to error_msg).
+  bool invoke(const std::string &params_str, ResolvedTypeParams *result,
+              char *error_msg) const;
+
+ private:
   const vef_func_desc_t *vdf_{nullptr};
 };
 

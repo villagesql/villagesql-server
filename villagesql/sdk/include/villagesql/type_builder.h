@@ -54,12 +54,12 @@ class TypeBuilder {
         decode_(nullptr),
         compare_(nullptr),
         hash_(nullptr),
-        int_to_params_(nullptr),
-        resolve_params_(nullptr),
         encode_vdf_name_(nullptr),
         decode_vdf_name_(nullptr),
         compare_vdf_name_(nullptr),
-        hash_vdf_name_(nullptr) {}
+        hash_vdf_name_(nullptr),
+        int_to_params_vdf_name_(nullptr),
+        resolve_params_vdf_name_(nullptr) {}
 
   constexpr TypeBuilder persisted_length(int64_t len) const {
     TypeBuilder copy = *this;
@@ -121,15 +121,15 @@ class TypeBuilder {
     return copy;
   }
 
-  constexpr TypeBuilder int_to_params(vef_type_int_to_params_func_t f) const {
+  constexpr TypeBuilder int_to_params(const char *vdf_name) const {
     TypeBuilder copy = *this;
-    copy.int_to_params_ = f;
+    copy.int_to_params_vdf_name_ = vdf_name;
     return copy;
   }
 
-  constexpr TypeBuilder resolve_params(vef_type_resolve_params_func_t f) const {
+  constexpr TypeBuilder resolve_params(const char *vdf_name) const {
     TypeBuilder copy = *this;
-    copy.resolve_params_ = f;
+    copy.resolve_params_vdf_name_ = vdf_name;
     return copy;
   }
 
@@ -140,18 +140,26 @@ class TypeBuilder {
   // protocol.
   constexpr vef_type_desc_t build() const {
     const bool needs_v2 =
-        int_to_params_ != nullptr || resolve_params_ != nullptr ||
         encode_vdf_name_ != nullptr || decode_vdf_name_ != nullptr ||
-        compare_vdf_name_ != nullptr || hash_vdf_name_ != nullptr;
+        compare_vdf_name_ != nullptr || hash_vdf_name_ != nullptr ||
+        int_to_params_vdf_name_ != nullptr ||
+        resolve_params_vdf_name_ != nullptr;
     const vef_protocol_t protocol = needs_v2 ? VEF_PROTOCOL_2 : VEF_PROTOCOL_1;
     return vef_type_desc_t{
-        protocol,          name_,
-        persisted_length_, max_decode_buffer_length_,
-        encode_,           decode_,
-        compare_,          hash_,
-        int_to_params_,    resolve_params_,
-        encode_vdf_name_,  decode_vdf_name_,
-        compare_vdf_name_, hash_vdf_name_,
+        protocol,
+        name_,
+        persisted_length_,
+        max_decode_buffer_length_,
+        encode_,
+        decode_,
+        compare_,
+        hash_,
+        encode_vdf_name_,
+        decode_vdf_name_,
+        compare_vdf_name_,
+        hash_vdf_name_,
+        int_to_params_vdf_name_,
+        resolve_params_vdf_name_,
     };
   }
 
@@ -163,12 +171,12 @@ class TypeBuilder {
   vef_decode_func_t decode_;
   vef_compare_func_t compare_;
   vef_hash_func_t hash_;
-  vef_type_int_to_params_func_t int_to_params_;
-  vef_type_resolve_params_func_t resolve_params_;
   const char *encode_vdf_name_;
   const char *decode_vdf_name_;
   const char *compare_vdf_name_;
   const char *hash_vdf_name_;
+  const char *int_to_params_vdf_name_;
+  const char *resolve_params_vdf_name_;
 };
 
 // Entry point: make_type("name")

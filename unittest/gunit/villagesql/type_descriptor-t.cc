@@ -17,6 +17,9 @@
 #include <gtest/gtest.h>
 
 #include <cinttypes>
+#include <cstring>
+#include <map>
+#include <string>
 
 #include "unittest/gunit/test_utils.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
@@ -113,8 +116,8 @@ TEST_F(TypeDescriptorTest, ConstructionWithNullHash) {
 
   EXPECT_FALSE(desc.hash_op().has_value());
   EXPECT_EQ(desc.compare_op().invoke(nullptr, 0, nullptr, 0), 0);
-  EXPECT_EQ(desc.int_to_params(), nullptr);
-  EXPECT_EQ(desc.resolve_params(), nullptr);
+  EXPECT_FALSE(desc.int_to_params_op().has_value());
+  EXPECT_FALSE(desc.resolve_params_op().has_value());
 }
 
 // Test that TypeDescriptor can be used with SystemTableMap (compile check)
@@ -134,37 +137,108 @@ TEST_F(TypeDescriptorTest, KeyTypeCompatibility) {
   const villagesql::TypeDescriptorKey &key = desc.key();
   EXPECT_EQ(key.str(), "test.ext.1.0");
 
-  // Verify optional params default to nullptr
-  EXPECT_EQ(desc.int_to_params(), nullptr);
-  EXPECT_EQ(desc.resolve_params(), nullptr);
+  // Verify optional params default to nullopt
+  EXPECT_FALSE(desc.int_to_params_op().has_value());
+  EXPECT_FALSE(desc.resolve_params_op().has_value());
 }
 
-// Dummy parameter functions for testing
-static bool dummy_int_to_params(int64_t value, vef_type_param_t *params,
-                                size_t *param_count, char *error_msg) {
+// Dummy parameter functions for testing using std::map API
+static bool dummy_int_to_params(int64_t value,
+                                std::map<std::string, std::string> &params,
+                                char *error_msg) {
   if (value <= 0) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN, "value must be positive");
     return true;
   }
-  // Return key-value pairs. Keys/values are string literals (static lifetime).
-  static char dim_buf[32];
-  snprintf(dim_buf, sizeof(dim_buf), "%" PRId64, value);
-  params[0] = {"dimension", dim_buf};
-  *param_count = 1;
+  params["dimension"] = std::to_string(value);
   return false;
 }
 
-static bool dummy_resolve_params(const vef_type_param_t * /*params*/,
-                                 size_t /*param_count*/,
-                                 vef_type_resolved_params_t *result,
-                                 char * /*error_msg*/) {
+static bool dummy_resolve_params(
+    const std::map<std::string, std::string> & /*params*/,
+    villagesql::ResolvedTypeParams *result, char * /*error_msg*/) {
   result->persisted_length = 6144;
   result->max_decode_buffer_length = 32768;
   return false;
 }
 
+// VDF wrapper for dummy_int_to_params: (INT) -> STRING "key=value,..."
+static void dummy_int_to_params_vdf(vef_context_t * /*ctx*/,
+                                    vef_vdf_args_t *args,
+                                    vef_vdf_result_t *result) {
+  std::map<std::string, std::string> params;
+  if (dummy_int_to_params(args->values[0].int_value, params,
+                          result->error_msg)) {
+    result->type = VEF_RESULT_ERROR;
+    return;
+  }
+  size_t pos = 0;
+  for (const auto &[key, value] : params) {
+    if (pos > 0) result->str_buf[pos++] = ',';
+    memcpy(result->str_buf + pos, key.c_str(), key.size());
+    pos += key.size();
+    result->str_buf[pos++] = '=';
+    memcpy(result->str_buf + pos, value.c_str(), value.size());
+    pos += value.size();
+  }
+  result->type = VEF_RESULT_VALUE;
+  result->actual_len = pos;
+}
+
+// VDF wrapper for dummy_resolve_params: (STRING) -> STRING "N,N"
+static void dummy_resolve_params_vdf(vef_context_t * /*ctx*/,
+                                     vef_vdf_args_t *args,
+                                     vef_vdf_result_t *result) {
+  std::string input(args->values[0].str_value, args->values[0].str_len);
+  std::map<std::string, std::string> params;
+  size_t start = 0;
+  while (start < input.size()) {
+    size_t comma = input.find(',', start);
+    if (comma == std::string::npos) comma = input.size();
+    size_t eq = input.find('=', start);
+    if (eq != std::string::npos && eq < comma) {
+      params[input.substr(start, eq - start)] =
+          input.substr(eq + 1, comma - eq - 1);
+    }
+    start = comma + 1;
+  }
+  villagesql::ResolvedTypeParams resolved = {};
+  if (dummy_resolve_params(params, &resolved, result->error_msg)) {
+    result->type = VEF_RESULT_ERROR;
+    return;
+  }
+  int written =
+      snprintf(result->str_buf, result->max_str_len, "%" PRId64 ",%" PRId64,
+               resolved.persisted_length, resolved.max_decode_buffer_length);
+  result->type = VEF_RESULT_VALUE;
+  result->actual_len = static_cast<size_t>(written);
+}
+
 // Test TypeDescriptor construction with non-null param functions
 TEST_F(TypeDescriptorTest, ConstructionWithParamFunctions) {
+  // Build mock VDF descriptors for int_to_params and resolve_params.
+  static vef_type_t itp_param = {VEF_TYPE_INT, nullptr};
+  static vef_signature_t itp_sig = {1, &itp_param, {VEF_TYPE_STRING, nullptr}};
+  static vef_func_desc_t itp_fd = {VEF_PROTOCOL_2,
+                                   "dummy_int_to_params",
+                                   &itp_sig,
+                                   &dummy_int_to_params_vdf,
+                                   nullptr,
+                                   nullptr,
+                                   VEF_MAX_TYPE_PARAMS_STRING_LEN,
+                                   false};
+
+  static vef_type_t rp_param = {VEF_TYPE_STRING, nullptr};
+  static vef_signature_t rp_sig = {1, &rp_param, {VEF_TYPE_STRING, nullptr}};
+  static vef_func_desc_t rp_fd = {VEF_PROTOCOL_2,
+                                  "dummy_resolve_params",
+                                  &rp_sig,
+                                  &dummy_resolve_params_vdf,
+                                  nullptr,
+                                  nullptr,
+                                  VEF_MAX_TYPE_PARAMS_STRING_LEN,
+                                  false};
+
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"),
       1,   // implementation_type
@@ -172,25 +246,22 @@ TEST_F(TypeDescriptorTest, ConstructionWithParamFunctions) {
       0,   // max_decode_buffer_length (determined by params)
       villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
       villagesql::CompareOp(dummy_compare), villagesql::HashOp(dummy_hash),
-      dummy_int_to_params, dummy_resolve_params);
+      villagesql::IntToParamsOp(&itp_fd), villagesql::ResolveParamsOp(&rp_fd));
 
   EXPECT_EQ(desc.persisted_length(), -1);
-  EXPECT_EQ(desc.int_to_params(), dummy_int_to_params);
-  EXPECT_EQ(desc.resolve_params(), dummy_resolve_params);
+  EXPECT_TRUE(desc.int_to_params_op().has_value());
+  EXPECT_TRUE(desc.resolve_params_op().has_value());
 
-  // Verify int_to_params callback produces key-value pairs
-  vef_type_param_t params[VEF_MAX_TYPE_PARAMS];
-  size_t param_count = 0;
+  // Verify int_to_params callback produces canonical string
+  std::string params_str;
   char error_msg[VEF_MAX_ERROR_LEN] = {0};
-  EXPECT_FALSE(desc.int_to_params()(1536, params, &param_count, error_msg));
-  EXPECT_EQ(param_count, 1u);
-  EXPECT_STREQ(params[0].key, "dimension");
-  EXPECT_STREQ(params[0].value, "1536");
+  EXPECT_FALSE(desc.int_to_params_op()->invoke(1536, &params_str, error_msg));
+  EXPECT_EQ(params_str, "dimension=1536");
 
   // Verify resolve_params callback computes storage sizes
-  vef_type_resolved_params_t resolved = {};
+  villagesql::ResolvedTypeParams resolved = {};
   EXPECT_FALSE(
-      desc.resolve_params()(params, param_count, &resolved, error_msg));
+      desc.resolve_params_op()->invoke(params_str, &resolved, error_msg));
   EXPECT_EQ(resolved.persisted_length, 6144);
   EXPECT_EQ(resolved.max_decode_buffer_length, 32768);
 }

@@ -16,6 +16,10 @@
 
 #include "villagesql/types/type_op.h"
 
+#include <cstdlib>
+#include <cstring>
+#include <string>
+
 #include "my_alloc.h"
 #include "my_base.h"
 #include "mysqld_error.h"
@@ -175,6 +179,112 @@ size_t HashOp::invoke(const unsigned char *data, size_t len) const {
   }
 
   return static_cast<size_t>(vdf_result.int_value);
+}
+
+bool IntToParamsOp::invoke(int64_t value, std::string *result,
+                           char *error_msg) const {
+  assert(vdf_ != nullptr);
+  const vef_func_desc_t *fd = vdf_;
+  assert(fd->prerun == nullptr && fd->postrun == nullptr);
+  vef_context_t ctx = {VEF_PROTOCOL_2};
+
+  vef_invalue_t input[1];
+  input[0].type = VEF_TYPE_INT;
+  input[0].is_null = false;
+  input[0].int_value = value;
+
+  vef_vdf_args_t vdf_args = {nullptr, 1, input};
+
+  char str_buffer[VEF_MAX_TYPE_PARAMS_STRING_LEN];
+  char *alt_str_buf = nullptr;
+  vef_vdf_result_t vdf_result = {};
+  vdf_result.type = VEF_RESULT_VALUE;
+  vdf_result.error_msg = error_msg;
+  vdf_result.str_buf = str_buffer;
+  vdf_result.max_str_len = sizeof(str_buffer);
+  vdf_result.actual_len = 0;
+  vdf_result.alt_str_buf = &alt_str_buf;
+
+  fd->vdf(&ctx, &vdf_args, &vdf_result);
+
+  if (vdf_result.type == VEF_RESULT_ERROR) {
+    return true;
+  }
+  if (vdf_result.type != VEF_RESULT_VALUE) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "int_to_params VDF returned unexpected result type");
+    return true;
+  }
+
+  const char *result_data = (alt_str_buf != nullptr) ? alt_str_buf : str_buffer;
+  *result = std::string(result_data, vdf_result.actual_len);
+  return false;
+}
+
+bool ResolveParamsOp::invoke(const std::string &params_str,
+                             ResolvedTypeParams *result,
+                             char *error_msg) const {
+  assert(vdf_ != nullptr);
+  const vef_func_desc_t *fd = vdf_;
+  assert(fd->prerun == nullptr && fd->postrun == nullptr);
+  vef_context_t ctx = {VEF_PROTOCOL_2};
+
+  vef_invalue_t input[1];
+  input[0].type = VEF_TYPE_STRING;
+  input[0].is_null = false;
+  input[0].str_len = params_str.size();
+  input[0].str_value = params_str.c_str();
+
+  vef_vdf_args_t vdf_args = {nullptr, 1, input};
+
+  char str_buffer[VEF_MAX_TYPE_PARAMS_STRING_LEN];
+  char *alt_str_buf = nullptr;
+  vef_vdf_result_t vdf_result = {};
+  vdf_result.type = VEF_RESULT_VALUE;
+  vdf_result.error_msg = error_msg;
+  vdf_result.str_buf = str_buffer;
+  vdf_result.max_str_len = sizeof(str_buffer);
+  vdf_result.actual_len = 0;
+  vdf_result.alt_str_buf = &alt_str_buf;
+
+  fd->vdf(&ctx, &vdf_args, &vdf_result);
+
+  if (vdf_result.type == VEF_RESULT_ERROR) {
+    return true;
+  }
+  if (vdf_result.type != VEF_RESULT_VALUE) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "resolve_params VDF returned unexpected result type");
+    return true;
+  }
+
+  const char *result_data = (alt_str_buf != nullptr) ? alt_str_buf : str_buffer;
+  std::string output(result_data, vdf_result.actual_len);
+
+  // Parse "persisted_length,max_decode_buffer_length"
+  size_t comma = output.find(',');
+  if (comma == std::string::npos) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "resolve_params VDF returned invalid format: expected "
+             "'persisted_length,max_decode_buffer_length'");
+    return true;
+  }
+  char *endptr = nullptr;
+  result->persisted_length = strtoll(output.c_str(), &endptr, 10);
+  if (endptr != output.c_str() + comma) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "resolve_params VDF returned invalid persisted_length");
+    return true;
+  }
+  result->max_decode_buffer_length =
+      strtoll(output.c_str() + comma + 1, &endptr, 10);
+  if (*endptr != '\0') {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "resolve_params VDF returned invalid max_decode_buffer_length");
+    return true;
+  }
+
+  return false;
 }
 
 }  // namespace villagesql

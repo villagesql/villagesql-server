@@ -206,7 +206,7 @@ bool Metadata_modifier::rename_columns_table(THD *thd [[maybe_unused]],
 
     ColumnEntry new_entry(ColumnKey(new_db, new_table, old_col->column_name()),
                           old_col->extension_name, old_col->extension_version,
-                          old_col->type_name);
+                          old_col->type_name, old_col->type_parameters);
 
     to_rename_.emplace_back(new_entry, old_col->key());
   }

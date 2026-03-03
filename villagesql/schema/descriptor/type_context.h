@@ -17,8 +17,9 @@
 #ifndef VILLAGESQL_SCHEMA_DESCRIPTOR_TYPE_CONTEXT_H_
 #define VILLAGESQL_SCHEMA_DESCRIPTOR_TYPE_CONTEXT_H_
 
+#include <algorithm>
 #include <cassert>
-#include <map>
+#include <cctype>
 #include <memory>
 #include <string>
 
@@ -30,92 +31,47 @@ namespace villagesql {
 
 struct ColumnEntry;
 
-// TypeParameters holds the concrete instantiation parameters for a custom type.
-// This represents the difference between an abstract type (e.g., "VECTOR")
-// and a concrete type (e.g., "VECTOR(1536)").
+// TypeParameters holds the concrete instantiation parameters for a custom type
+// as a canonical "key1=value1,key2=value2,..." string. The server treats this
+// as an opaque string; only the extension's resolve_params callback interprets
+// the key/value pairs.
 //
-// Parameters are stored as string key-value pairs. The string representation
-// is used for map keys and must be deterministic (sorted by key).
+// Canonical form: keys sorted alphabetically, all lowercased.
+// Equality is just string comparison.
+//
 // Examples:
-//   - COMPLEX with no parameters: empty
-//   - VECTOR(1536): {"dimension": "1536"}
-//   - VECTOR(1536, cosine): {"dimension": "1536", "metric": "cosine"}
+//   - COMPLEX with no parameters: empty string
+//   - VECTOR(1536): "dimension=1536"
+//   - VECTOR(1536, cosine): "dimension=1536,metric=cosine"
 class TypeParameters {
  public:
-  using ParamMap = std::map<std::string, std::string>;
-
-  // Default constructor creates empty parameters
   TypeParameters() = default;
+  explicit TypeParameters(std::string canonical) : str_(std::move(canonical)) {}
 
-  // Construct from a map of parameters
-  explicit TypeParameters(const ParamMap &params) : params_(params) {
-    build_normalized_key();
-  }
+  // Normalize a raw "k=v,k=v,..." string: split pairs, sort by lowercased
+  // key, lowercase values, re-serialize. Used by TYPE('k=v,...') SQL parser
+  // path.
+  static TypeParameters from_raw(const std::string &raw);
 
-  explicit TypeParameters(ParamMap &&params) : params_(std::move(params)) {
-    build_normalized_key();
-  }
+  bool empty() const { return str_.empty(); }
+  const std::string &str() const { return str_; }
 
-  // Copy and move constructors
-  TypeParameters(const TypeParameters &) = default;
-  TypeParameters &operator=(const TypeParameters &) = default;
-  TypeParameters(TypeParameters &&) = default;
-  TypeParameters &operator=(TypeParameters &&) = default;
-
-  ~TypeParameters() = default;
-
-  // ===== Serialization =====
-
-  // Serialize to JSON object string. Returns "{}" if no parameters.
-  // e.g., {"dimension":"1536","metric":"cosine"}
+  // JSON serialization for storage in the villagesql.custom_columns table
+  // (which has a JSON column for type_parameters).
+  // to_json(): "" → "{}", "k=v" → {"k":"v"}, "a=1,b=2" → {"a":"1","b":"2"}
   std::string to_json() const;
-
-  // Deserialize from JSON object string. Returns empty TypeParameters for
-  // empty string, "{}", or invalid JSON.
+  // from_json(): inverse of to_json()
   static TypeParameters from_json(const std::string &json);
 
-  // ===== Accessors =====
-
-  bool empty() const { return params_.empty(); }
-
-  // Returns a normalized string representation of the parameters for use
-  // as part of a map key. Empty string if no parameters.
-  // Format: "key1=value1;key2=value2;..." (sorted by key)
-  const std::string &str() const { return normalized_key_; }
-
-  // Access the underlying parameter map
-  const ParamMap &params() const { return params_; }
-
-  // Get a specific parameter value, or empty string if not present
-  std::string get(const std::string &key) const {
-    auto it = params_.find(key);
-    return it != params_.end() ? it->second : std::string();
-  }
-
-  // ===== Comparison operators =====
-  // Comparison is based on the normalized string representation.
-
   bool operator==(const TypeParameters &other) const {
-    return normalized_key_ == other.normalized_key_;
+    return str_ == other.str_;
   }
-
   bool operator<(const TypeParameters &other) const {
-    return normalized_key_ < other.normalized_key_;
+    return str_ < other.str_;
   }
 
  private:
-  void build_normalized_key() {
-    normalized_key_.clear();
-    for (const auto &[key, value] : params_) {
-      if (!normalized_key_.empty()) {
-        normalized_key_ += ';';
-      }
-      normalized_key_ += key + '=' + value;
-    }
-  }
-
-  ParamMap params_;
-  std::string normalized_key_;
+  std::string str_;
 };
 
 // Key for TypeContext entries in the VictionaryClient map.

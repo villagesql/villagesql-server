@@ -18,6 +18,8 @@
 
 #include <cinttypes>
 #include <cstring>
+#include <map>
+#include <string>
 
 #include "unittest/gunit/test_utils.h"
 #include "villagesql/schema/descriptor/type_context.h"
@@ -40,30 +42,62 @@ static int dummy_compare(const unsigned char *, size_t, const unsigned char *,
   return 0;
 }
 
-// resolve_params that succeeds and returns computed sizes
-static bool resolve_params_ok(const vef_type_param_t *params,
-                              size_t param_count,
-                              vef_type_resolved_params_t *result,
-                              char * /*error_msg*/) {
-  // Compute persisted_length from "dimension" param: dimension * 4 bytes
-  for (size_t i = 0; i < param_count; i++) {
-    if (strcmp(params[i].key, "dimension") == 0) {
-      int64_t dim = strtoll(params[i].value, nullptr, 10);
-      result->persisted_length = dim * 4;
-      result->max_decode_buffer_length = dim * 32;
-      return false;
+// resolve_params that succeeds and returns computed sizes.
+// Parses "dimension" from the canonical string, computes sizes.
+static void resolve_params_ok_vdf(vef_context_t * /*ctx*/, vef_vdf_args_t *args,
+                                  vef_vdf_result_t *result) {
+  std::string input(args->values[0].str_value, args->values[0].str_len);
+  // Parse "dimension=N" from canonical string
+  int64_t dim = 0;
+  size_t start = 0;
+  while (start < input.size()) {
+    size_t comma = input.find(',', start);
+    if (comma == std::string::npos) comma = input.size();
+    size_t eq = input.find('=', start);
+    if (eq != std::string::npos && eq < comma) {
+      std::string key = input.substr(start, eq - start);
+      std::string value = input.substr(eq + 1, comma - eq - 1);
+      if (key == "dimension") {
+        dim = strtoll(value.c_str(), nullptr, 10);
+      }
     }
+    start = comma + 1;
   }
-  return true;
+  if (dim <= 0) {
+    result->type = VEF_RESULT_ERROR;
+    snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "invalid dimension");
+    return;
+  }
+  int64_t persisted = dim * 4;
+  int64_t decode_buf = dim * 32;
+  int written = snprintf(result->str_buf, result->max_str_len,
+                         "%" PRId64 ",%" PRId64, persisted, decode_buf);
+  result->type = VEF_RESULT_VALUE;
+  result->actual_len = static_cast<size_t>(written);
 }
 
 // resolve_params that always fails
-static bool resolve_params_fail(const vef_type_param_t * /*params*/,
-                                size_t /*param_count*/,
-                                vef_type_resolved_params_t * /*result*/,
-                                char *error_msg) {
-  snprintf(error_msg, VEF_MAX_ERROR_LEN, "unsupported parameter combination");
-  return true;
+static void resolve_params_fail_vdf(vef_context_t * /*ctx*/,
+                                    vef_vdf_args_t * /*args*/,
+                                    vef_vdf_result_t *result) {
+  result->type = VEF_RESULT_ERROR;
+  snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
+           "unsupported parameter combination");
+}
+
+// Build a mock vef_func_desc_t for a resolve_params VDF wrapper.
+static vef_func_desc_t make_resolve_params_fd(const char *name,
+                                              vef_vdf_func_t vdf) {
+  static vef_type_t rp_param = {VEF_TYPE_STRING, nullptr};
+  static vef_signature_t rp_sig = {1, &rp_param, {VEF_TYPE_STRING, nullptr}};
+  return {VEF_PROTOCOL_2,
+          name,
+          &rp_sig,
+          vdf,
+          nullptr,
+          nullptr,
+          VEF_MAX_TYPE_PARAMS_STRING_LEN,
+          false};
 }
 
 class TypeParametersTest : public ::testing::Test {
@@ -74,78 +108,68 @@ class TypeParametersTest : public ::testing::Test {
   }
 };
 
-TEST_F(TypeParametersTest, ToJsonEmpty) {
+TEST_F(TypeParametersTest, EmptyByDefault) {
   villagesql::TypeParameters params;
-  EXPECT_EQ(params.to_json(), "{}");
-}
-
-TEST_F(TypeParametersTest, FromJsonEmptyObject) {
-  villagesql::TypeParameters params =
-      villagesql::TypeParameters::from_json("{}");
   EXPECT_TRUE(params.empty());
+  EXPECT_EQ(params.str(), "");
 }
 
-TEST_F(TypeParametersTest, ToJsonSingleParam) {
-  villagesql::TypeParameters params({{"dimension", "1536"}});
-  std::string json = params.to_json();
-  EXPECT_EQ(json, R"({"dimension":"1536"})");
-}
-
-TEST_F(TypeParametersTest, ToJsonMultipleParams) {
-  villagesql::TypeParameters params(
-      {{"dimension", "1536"}, {"metric", "cosine"}});
-  std::string json = params.to_json();
-  // std::map is sorted by key, so "dimension" comes before "metric"
-  EXPECT_EQ(json, R"({"dimension":"1536","metric":"cosine"})");
-}
-
-TEST_F(TypeParametersTest, FromJsonEmpty) {
-  villagesql::TypeParameters params = villagesql::TypeParameters::from_json("");
-  EXPECT_TRUE(params.empty());
-}
-
-TEST_F(TypeParametersTest, FromJsonValid) {
-  villagesql::TypeParameters params =
-      villagesql::TypeParameters::from_json(R"({"dimension":"1536"})");
+TEST_F(TypeParametersTest, ConstructFromCanonicalString) {
+  villagesql::TypeParameters params("dimension=1536");
   EXPECT_FALSE(params.empty());
-  EXPECT_EQ(params.get("dimension"), "1536");
+  EXPECT_EQ(params.str(), "dimension=1536");
 }
 
-TEST_F(TypeParametersTest, FromJsonMultiple) {
-  villagesql::TypeParameters params = villagesql::TypeParameters::from_json(
-      R"({"dimension":"1536","metric":"cosine"})");
+TEST_F(TypeParametersTest, ConstructFromCanonicalMultiple) {
+  villagesql::TypeParameters params("dimension=1536,metric=cosine");
   EXPECT_FALSE(params.empty());
-  EXPECT_EQ(params.get("dimension"), "1536");
-  EXPECT_EQ(params.get("metric"), "cosine");
+  EXPECT_EQ(params.str(), "dimension=1536,metric=cosine");
 }
 
-TEST_F(TypeParametersTest, FromJsonInvalid) {
-  villagesql::TypeParameters params =
-      villagesql::TypeParameters::from_json("not json");
+TEST_F(TypeParametersTest, FromRawEmpty) {
+  villagesql::TypeParameters params = villagesql::TypeParameters::from_raw("");
   EXPECT_TRUE(params.empty());
 }
 
-TEST_F(TypeParametersTest, RoundTrip) {
-  villagesql::TypeParameters original(
-      {{"dimension", "1536"}, {"metric", "cosine"}});
-  std::string json = original.to_json();
-  villagesql::TypeParameters restored =
-      villagesql::TypeParameters::from_json(json);
-
-  EXPECT_EQ(original, restored);
-  EXPECT_EQ(original.str(), restored.str());
-  EXPECT_EQ(original.get("dimension"), restored.get("dimension"));
-  EXPECT_EQ(original.get("metric"), restored.get("metric"));
+TEST_F(TypeParametersTest, FromRawSingle) {
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("dimension=1536");
+  EXPECT_FALSE(params.empty());
+  EXPECT_EQ(params.str(), "dimension=1536");
 }
 
-TEST_F(TypeParametersTest, RoundTripSingleParam) {
-  villagesql::TypeParameters original({{"dimension", "3"}});
-  std::string json = original.to_json();
-  villagesql::TypeParameters restored =
-      villagesql::TypeParameters::from_json(json);
+TEST_F(TypeParametersTest, FromRawMultipleSorted) {
+  // Keys get sorted alphabetically
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("metric=cosine,dimension=1536");
+  EXPECT_EQ(params.str(), "dimension=1536,metric=cosine");
+}
 
-  EXPECT_EQ(original, restored);
-  EXPECT_EQ(original.get("dimension"), "3");
+TEST_F(TypeParametersTest, FromRawLowercases) {
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw("Dimension=1536");
+  EXPECT_EQ(params.str(), "dimension=1536");
+}
+
+TEST_F(TypeParametersTest, FromRawTrimsWhitespace) {
+  villagesql::TypeParameters params =
+      villagesql::TypeParameters::from_raw(" dimension = 1536 ");
+  EXPECT_EQ(params.str(), "dimension=1536");
+}
+
+TEST_F(TypeParametersTest, Equality) {
+  villagesql::TypeParameters a("dimension=1536");
+  villagesql::TypeParameters b("dimension=1536");
+  villagesql::TypeParameters c("dimension=3");
+  EXPECT_EQ(a, b);
+  EXPECT_FALSE(a == c);
+}
+
+TEST_F(TypeParametersTest, Ordering) {
+  villagesql::TypeParameters a("dimension=1536");
+  villagesql::TypeParameters b("dimension=3");
+  // "dimension=1536" < "dimension=3" (string comparison)
+  EXPECT_TRUE(a < b);
 }
 
 class TypeContextTest : public ::testing::Test {
@@ -169,12 +193,15 @@ TEST_F(TypeContextTest, FixedLengthTypeUsesDescriptorValues) {
 }
 
 TEST_F(TypeContextTest, ParameterizedTypeUsesResolvedValues) {
+  static auto rp_ok_fd =
+      make_resolve_params_fd("rp_ok", &resolve_params_ok_vdf);
+
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), 1, -1, 0,
       villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
-      villagesql::CompareOp(dummy_compare), std::nullopt, nullptr,
-      resolve_params_ok);
-  villagesql::TypeParameters params({{"dimension", "1536"}});
+      villagesql::CompareOp(dummy_compare), std::nullopt, std::nullopt,
+      villagesql::ResolveParamsOp(&rp_ok_fd));
+  villagesql::TypeParameters params("dimension=1536");
   villagesql::TypeContextKey key(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), params);
   villagesql::TypeContext ctx(key, &desc);
@@ -185,12 +212,15 @@ TEST_F(TypeContextTest, ParameterizedTypeUsesResolvedValues) {
 }
 
 TEST_F(TypeContextTest, ResolveParamsFailureFallsBackToDescriptor) {
+  static auto rp_fail_fd =
+      make_resolve_params_fd("rp_fail", &resolve_params_fail_vdf);
+
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), 1, -1, 0,
       villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
-      villagesql::CompareOp(dummy_compare), std::nullopt, nullptr,
-      resolve_params_fail);
-  villagesql::TypeParameters params({{"dimension", "1536"}});
+      villagesql::CompareOp(dummy_compare), std::nullopt, std::nullopt,
+      villagesql::ResolveParamsOp(&rp_fail_fd));
+  villagesql::TypeParameters params("dimension=1536");
   villagesql::TypeContextKey key(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), params);
   villagesql::TypeContext ctx(key, &desc);
@@ -201,11 +231,14 @@ TEST_F(TypeContextTest, ResolveParamsFailureFallsBackToDescriptor) {
 }
 
 TEST_F(TypeContextTest, EmptyParamsSkipsResolveCallback) {
+  static auto rp_fail_fd2 =
+      make_resolve_params_fd("rp_fail2", &resolve_params_fail_vdf);
+
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), 1, -1, 0,
       villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
-      villagesql::CompareOp(dummy_compare), std::nullopt, nullptr,
-      resolve_params_fail);
+      villagesql::CompareOp(dummy_compare), std::nullopt, std::nullopt,
+      villagesql::ResolveParamsOp(&rp_fail_fd2));
   // No parameters — should use descriptor values directly, not call
   // resolve_params (which would fail)
   villagesql::TypeContextKey key("VVECTOR", "test_ext", "1.0.0");

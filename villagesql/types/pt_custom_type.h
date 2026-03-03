@@ -112,26 +112,22 @@ class PT_custom_type : public PT_type {
 
   // Resolve params via resolve_params callback and re-resolve TypeContext.
   // Shared by both TYPE(N) and TYPE('key=value,...') paths.
+  // params_str must be in canonical form ("key=value,key=value,...").
   static bool resolve_params_and_context(const POS &pos, THD *thd,
                                          const TypeDescriptor *descriptor,
                                          const LEX_STRING &extension_name,
                                          const LEX_STRING &type_name,
-                                         vef_type_param_t *param_array,
-                                         size_t param_count,
+                                         const std::string &params_str,
                                          const TypeContext *&type_context) {
     char error_msg[VEF_MAX_ERROR_LEN] = {0};
-    vef_type_resolved_params_t resolved = {};
-    if (descriptor->resolve_params()(param_array, param_count, &resolved,
-                                     error_msg)) {
+    ResolvedTypeParams resolved = {};
+    if (descriptor->resolve_params_op()->invoke(params_str, &resolved,
+                                                error_msg)) {
       thd->syntax_error_at(pos, "%s", error_msg);
       return true;
     }
 
-    TypeParameters::ParamMap param_map;
-    for (size_t i = 0; i < param_count; i++) {
-      param_map[param_array[i].key] = param_array[i].value;
-    }
-    TypeParameters params(std::move(param_map));
+    TypeParameters params(params_str);
 
     type_context = nullptr;
     if (ResolveTypeToContext(extension_name, type_name, params, *thd->mem_root,
@@ -159,7 +155,7 @@ class PT_custom_type : public PT_type {
       auto *descriptor = type_context->descriptor();
       if (length != nullptr) {
         // TYPE(N) syntax used - convert N to parameters via callbacks
-        if (descriptor->int_to_params() == nullptr) {
+        if (!descriptor->int_to_params_op().has_value()) {
           std::string qname = type_context->qualified_name();
           thd->syntax_error_at(
               pos, "Type '%s' does not accept a length specification",
@@ -177,18 +173,26 @@ class PT_custom_type : public PT_type {
           return nullptr;
         }
 
-        // Call int_to_params to convert integer to key-value pairs
-        vef_type_param_t param_array[VEF_MAX_TYPE_PARAMS];
-        size_t param_count = 0;
+        // Call int_to_params to convert integer to canonical parameter string
+        std::string params_str;
         char error_msg[VEF_MAX_ERROR_LEN] = {0};
-        if (descriptor->int_to_params()(int_value, param_array, &param_count,
-                                        error_msg)) {
+        if (descriptor->int_to_params_op()->invoke(int_value, &params_str,
+                                                   error_msg)) {
           thd->syntax_error_at(pos, "%s", error_msg);
           return nullptr;
         }
 
+        // Normalize to canonical form (lowercase, sorted) just like the
+        // TYPE('k=v,...') path does via from_raw.
+        TypeParameters canonical = TypeParameters::from_raw(params_str);
+        if (canonical.empty()) {
+          thd->syntax_error_at(pos, "Invalid parameter string for type '%s'",
+                               type_context->qualified_name().c_str());
+          return nullptr;
+        }
+
         if (resolve_params_and_context(pos, thd, descriptor, extension_name,
-                                       type_name, param_array, param_count,
+                                       type_name, canonical.str(),
                                        type_context)) {
           return nullptr;
         }
@@ -197,7 +201,7 @@ class PT_custom_type : public PT_type {
         length = nullptr;
       } else {
         // No length provided for variable-length type
-        if (descriptor->int_to_params() != nullptr) {
+        if (descriptor->int_to_params_op().has_value()) {
           std::string qname = type_context->qualified_name();
           thd->syntax_error_at(pos, "Type '%s' requires a length specification",
                                qname.c_str());
@@ -234,21 +238,15 @@ class PT_custom_type : public PT_type {
     }
 
     auto *descriptor = type_context->descriptor();
-    if (descriptor->resolve_params() == nullptr) {
+    if (!descriptor->resolve_params_op().has_value()) {
       std::string qname = type_context->qualified_name();
       thd->syntax_error_at(pos, "Type '%s' does not accept parameters",
                            qname.c_str());
       return nullptr;
     }
 
-    // Parse 'key1=val1,key2=val2,...' into vef_type_param_t array
+    // Normalize the raw parameter string to canonical form
     std::string input(params_str, params_str_len);
-    vef_type_param_t param_array[VEF_MAX_TYPE_PARAMS];
-    // Storage for parsed key/value strings (must outlive param_array usage)
-    std::string keys[VEF_MAX_TYPE_PARAMS];
-    std::string values[VEF_MAX_TYPE_PARAMS];
-    size_t param_count = 0;
-
     if (input.empty()) {
       std::string qname = type_context->qualified_name();
       thd->syntax_error_at(pos, "Empty parameter string for type '%s'",
@@ -256,54 +254,15 @@ class PT_custom_type : public PT_type {
       return nullptr;
     }
 
-    size_t start = 0;
-    while (start < input.size()) {
-      size_t comma = input.find(',', start);
-      if (comma == std::string::npos) comma = input.size();
-
-      std::string pair = input.substr(start, comma - start);
-      size_t eq = pair.find('=');
-      if (eq == std::string::npos) {
-        thd->syntax_error_at(
-            pos, "Invalid parameter '%s': expected 'key=value' format",
-            pair.c_str());
-        return nullptr;
-      }
-
-      // Trim whitespace from key and value
-      size_t key_start = pair.find_first_not_of(' ');
-      size_t key_end = pair.find_last_not_of(' ', eq - 1);
-      size_t val_start = pair.find_first_not_of(' ', eq + 1);
-      size_t val_end = pair.find_last_not_of(' ');
-
-      if (key_start == std::string::npos || key_start > key_end) {
-        thd->syntax_error_at(pos, "Empty key in parameter string for type '%s'",
-                             type_context->qualified_name().c_str());
-        return nullptr;
-      }
-
-      if (param_count >= VEF_MAX_TYPE_PARAMS) {
-        thd->syntax_error_at(pos, "Too many parameters for type '%s' (max %d)",
-                             type_context->qualified_name().c_str(),
-                             VEF_MAX_TYPE_PARAMS);
-        return nullptr;
-      }
-
-      keys[param_count] = pair.substr(key_start, key_end - key_start + 1);
-      values[param_count] =
-          (val_start != std::string::npos && val_start <= val_end)
-              ? pair.substr(val_start, val_end - val_start + 1)
-              : "";
-      param_array[param_count] = {keys[param_count].c_str(),
-                                  values[param_count].c_str()};
-      param_count++;
-
-      start = comma + 1;
+    TypeParameters canonical = TypeParameters::from_raw(input);
+    if (canonical.empty()) {
+      thd->syntax_error_at(pos, "Invalid parameter string for type '%s'",
+                           type_context->qualified_name().c_str());
+      return nullptr;
     }
 
     if (resolve_params_and_context(pos, thd, descriptor, extension_name,
-                                   type_name, param_array, param_count,
-                                   type_context)) {
+                                   type_name, canonical.str(), type_context)) {
       return nullptr;
     }
 

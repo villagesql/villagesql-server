@@ -2061,8 +2061,8 @@ TEST_F(VictionaryClientTest, AcquireOrCreateWithParameters) {
   MEM_ROOT mem_root(PSI_NOT_INSTRUMENTED, 1024);
 
   // Create different TypeContextKeys with different parameters
-  TypeParameters params1({{"dimension", "1536"}});
-  TypeParameters params2({{"dimension", "3"}});
+  TypeParameters params1("dimension=1536");
+  TypeParameters params2("dimension=3");
 
   TypeContextKey ctx_key1("VECTOR", "vector_ext", "2.0.0", params1);
   TypeContextKey ctx_key2("VECTOR", "vector_ext", "2.0.0", params2);
@@ -2088,8 +2088,8 @@ TEST_F(VictionaryClientTest, AcquireOrCreateWithParameters) {
     EXPECT_NE(ctx1, ctx2);
 
     // Verify parameters are preserved
-    EXPECT_EQ(ctx1->parameters().get("dimension"), "1536");
-    EXPECT_EQ(ctx2->parameters().get("dimension"), "3");
+    EXPECT_EQ(ctx1->parameters().str(), "dimension=1536");
+    EXPECT_EQ(ctx2->parameters().str(), "dimension=3");
 
     // Both should be in the map
     EXPECT_NE(client_->type_contexts().get_committed(ctx_key1), nullptr);

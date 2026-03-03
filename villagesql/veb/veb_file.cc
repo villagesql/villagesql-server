@@ -864,19 +864,13 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
     LogVSQL(INFORMATION_LEVEL, "Registering type '%s' from extension '%s'",
             type_name.c_str(), extension_name.c_str());
 
-    if (td->int_to_params != nullptr && td->resolve_params == nullptr) {
-      LogVSQL(ERROR_LEVEL,
-              "Type '%s' in extension '%s' has int_to_params but no "
-              "resolve_params",
-              type_name.c_str(), extension_name.c_str());
-      return true;
-    }
-
     // Resolve VDF name fields (protocol >= VEF_PROTOCOL_2).
     const vef_func_desc_t *encode_vdf = nullptr;
     const vef_func_desc_t *decode_vdf = nullptr;
     const vef_func_desc_t *compare_vdf = nullptr;
     const vef_func_desc_t *hash_vdf = nullptr;
+    const vef_func_desc_t *int_to_params_vdf = nullptr;
+    const vef_func_desc_t *resolve_params_vdf = nullptr;
 
     if (td->protocol >= VEF_PROTOCOL_2 &&
         ext_reg.negotiated_protocol >= VEF_PROTOCOL_2) {
@@ -978,6 +972,50 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
           return true;
         }
       }
+
+      if (td->int_to_params_vdf_name != nullptr) {
+        int_to_params_vdf = find_vdf_by_name(reg, td->int_to_params_vdf_name);
+        if (int_to_params_vdf == nullptr) {
+          LogVSQL(ERROR_LEVEL,
+                  "Type '%s' in extension '%s': int_to_params_vdf_name "
+                  "'%s' not found",
+                  type_name.c_str(), extension_name.c_str(),
+                  td->int_to_params_vdf_name);
+          return true;
+        }
+        const vef_type_id int_id[] = {VEF_TYPE_INT};
+        if (validate_type_vdf_signature(
+                int_to_params_vdf, "int_to_params", td->name, 1, int_id,
+                no_custom, VEF_TYPE_STRING, nullptr, extension_name)) {
+          return true;
+        }
+      }
+
+      if (td->resolve_params_vdf_name != nullptr) {
+        resolve_params_vdf = find_vdf_by_name(reg, td->resolve_params_vdf_name);
+        if (resolve_params_vdf == nullptr) {
+          LogVSQL(ERROR_LEVEL,
+                  "Type '%s' in extension '%s': resolve_params_vdf_name "
+                  "'%s' not found",
+                  type_name.c_str(), extension_name.c_str(),
+                  td->resolve_params_vdf_name);
+          return true;
+        }
+        if (validate_type_vdf_signature(
+                resolve_params_vdf, "resolve_params", td->name, 1, string_id,
+                no_custom, VEF_TYPE_STRING, nullptr, extension_name)) {
+          return true;
+        }
+      }
+    }
+
+    // Validate that int_to_params requires resolve_params.
+    if (int_to_params_vdf != nullptr && resolve_params_vdf == nullptr) {
+      LogVSQL(ERROR_LEVEL,
+              "Type '%s' in extension '%s' has int_to_params but no "
+              "resolve_params",
+              type_name.c_str(), extension_name.c_str());
+      return true;
     }
 
     EncodeOp encode_op =
@@ -992,11 +1030,20 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
     else if (td->hash_func != nullptr)
       hash_op.emplace(td->hash_func);
 
+    std::optional<IntToParamsOp> int_to_params_op;
+    if (int_to_params_vdf != nullptr)
+      int_to_params_op.emplace(int_to_params_vdf);
+
+    std::optional<ResolveParamsOp> resolve_params_op;
+    if (resolve_params_vdf != nullptr)
+      resolve_params_op.emplace(resolve_params_vdf);
+
     TypeDescriptor descriptor(
         TypeDescriptorKey(type_name, extension_name, extension_version),
         MYSQL_TYPE_VARCHAR, td->persisted_length, td->max_decode_buffer_length,
         std::move(encode_op), std::move(decode_op), std::move(compare_op),
-        std::move(hash_op), td->int_to_params, td->resolve_params);
+        std::move(hash_op), std::move(int_to_params_op),
+        std::move(resolve_params_op));
 
     const TypeDescriptor *existing =
         victionary.type_descriptors().get_committed(descriptor.key());

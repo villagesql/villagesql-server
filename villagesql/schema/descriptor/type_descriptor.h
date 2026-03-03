@@ -108,14 +108,6 @@ class TypeDescriptor {
   using key_type = TypeDescriptorKey;
   using key_prefix_type = TypeDescriptorKeyPrefix;
 
-  // Optional: Convert TYPE(N) integer to parameter key-value pairs.
-  // If nullptr, TYPE(N) syntax is not supported for this type.
-  using IntToParamsFn = vef_type_int_to_params_func_t;
-
-  // Optional: Validate parameters and compute storage characteristics.
-  // If nullptr, the type does not accept parameters.
-  using ResolveParamsFn = vef_type_resolve_params_func_t;
-
   // Default constructor - creates an empty/invalid descriptor
   // Required for use with SystemTableMap's PendingOperation
   TypeDescriptor() = default;
@@ -129,8 +121,8 @@ class TypeDescriptor {
                  int64_t persisted_len, int64_t max_unpersisted_len,
                  EncodeOp encode, DecodeOp decode, CompareOp compare,
                  std::optional<HashOp> hash = std::nullopt,
-                 IntToParamsFn int_to_params = nullptr,
-                 ResolveParamsFn resolve_params = nullptr);
+                 std::optional<IntToParamsOp> int_to_params = std::nullopt,
+                 std::optional<ResolveParamsOp> resolve_params = std::nullopt);
 
   // Disable copy (descriptors should not be copied)
   TypeDescriptor(const TypeDescriptor &) = delete;
@@ -181,8 +173,12 @@ class TypeDescriptor {
   }
   const std::optional<HashOp> &hash_op() const { return hash_op_; }
 
-  IntToParamsFn int_to_params() const { return int_to_params_; }
-  ResolveParamsFn resolve_params() const { return resolve_params_; }
+  const std::optional<IntToParamsOp> &int_to_params_op() const {
+    return int_to_params_op_;
+  }
+  const std::optional<ResolveParamsOp> &resolve_params_op() const {
+    return resolve_params_op_;
+  }
 
  private:
   TypeDescriptorKey key_;
@@ -198,8 +194,8 @@ class TypeDescriptor {
   std::optional<CompareOp> compare_op_;
   std::optional<HashOp> hash_op_;
 
-  IntToParamsFn int_to_params_{nullptr};
-  ResolveParamsFn resolve_params_{nullptr};
+  std::optional<IntToParamsOp> int_to_params_op_;
+  std::optional<ResolveParamsOp> resolve_params_op_;
 };
 
 // TableTraits specialization for TypeDescriptor.

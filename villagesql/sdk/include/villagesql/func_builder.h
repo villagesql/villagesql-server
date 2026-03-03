@@ -49,11 +49,15 @@
 //     .to_string<&decode_func>(BYTEARRAY)
 //
 
+#include <algorithm>
 #include <array>
+#include <cinttypes>
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
-#include <optional>
+#include <cstring>
+#include <map>
+#include <string>
 #include <string_view>
 #include <tuple>
 #include <type_traits>
@@ -63,6 +67,13 @@
 #include <villagesql/func_types.h>
 
 namespace villagesql {
+
+// Storage characteristics resolved from type parameters.
+struct ResolvedTypeParams {
+  int64_t persisted_length;
+  int64_t max_decode_buffer_length;
+};
+
 namespace func_builder {
 
 template <size_t NumParams>
@@ -291,6 +302,156 @@ struct ToStringWrapper {
 };
 
 // =============================================================================
+// Extension Author Function Signatures (for parameterized types)
+// =============================================================================
+//
+// Extension authors write against these clean C++ signatures using std::map.
+// The SDK wrapper templates handle serialization to/from the canonical
+// "key=value,key=value,..." wire format.
+
+// Convert TYPE(N) integer to parameter key-value pairs.
+// Populates params map (e.g., params["dimension"] = "1536").
+// Returns false on success, true on error (writes to error_msg).
+// TODO(villagesql-beta): revisit this convention for the client (something like
+// Rust's Result).
+using IntToTypeParamsFunc = bool (*)(int64_t value,
+                                     std::map<std::string, std::string> &params,
+                                     char *error_msg);
+
+// Validate type parameters and compute storage characteristics.
+// Reads from params map, populates *result with storage sizes.
+// Returns false on success, true on error (writes to error_msg).
+using ResolveTypeParamsFunc =
+    bool (*)(const std::map<std::string, std::string> &params,
+             villagesql::ResolvedTypeParams *result, char *error_msg);
+
+// =============================================================================
+// IntToParamsWrapper / ResolveParamsWrapper
+// =============================================================================
+
+// IntToParamsWrapper: wraps an IntToTypeParamsFunc into a VDF.
+// VDF signature: (INT) -> STRING, returning "key1=value1,key2=value2,...".
+// The map is serialized with keys in sorted order (via std::map iteration).
+// The server normalizes casing and sort order via TypeParameters::from_raw(),
+// which re-parses the string.
+// TODO(villagesql-performance): The map→string→parse→string round-trip could
+// be avoided by changing IntToParamsOp to return a map directly instead of
+// going through the VDF string ABI. Not expected to matter since this only
+// runs during DDL.
+template <IntToTypeParamsFunc Func>
+struct IntToParamsWrapper {
+  static void invoke(vef_context_t * /*ctx*/, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    vef_invalue_t *arg = &args->values[0];
+
+    if (arg->is_null) {
+      result->type = VEF_RESULT_NULL;
+      return;
+    }
+
+    std::map<std::string, std::string> params;
+    if (Func(arg->int_value, params, result->error_msg)) {
+      result->type = VEF_RESULT_ERROR;
+      return;
+    }
+
+    // Validate and serialize map to "key1=value1,key2=value2,..." string.
+    // std::map iterates in sorted key order. The server normalizes
+    // casing and sort order via TypeParameters::from_raw().
+    // TODO(villagesql-beta): decide on a broader character set policy for
+    // keys and values (e.g., restrict to ASCII alphanumeric + underscore).
+    std::string serialized;
+    for (const auto &[key, value] : params) {
+      if (key.empty() || key.find_first_of(",=") != std::string::npos) {
+        result->type = VEF_RESULT_ERROR;
+        snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
+                 "int_to_params: key '%s' is empty or contains ',' or '='",
+                 key.c_str());
+        return;
+      }
+      if (value.find_first_of(",=") != std::string::npos) {
+        result->type = VEF_RESULT_ERROR;
+        snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
+                 "int_to_params: value '%s' contains ',' or '='",
+                 value.c_str());
+        return;
+      }
+      if (!serialized.empty()) serialized += ',';
+      serialized += key;
+      serialized += '=';
+      serialized += value;
+    }
+
+    if (serialized.size() > result->max_str_len) {
+      result->type = VEF_RESULT_ERROR;
+      snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
+               "int_to_params result too large for buffer");
+      return;
+    }
+
+    memcpy(result->str_buf, serialized.data(), serialized.size());
+    result->type = VEF_RESULT_VALUE;
+    result->actual_len = serialized.size();
+  }
+};
+
+// ResolveParamsWrapper: wraps a ResolveTypeParamsFunc into a VDF.
+// VDF signature: (STRING) -> STRING.
+// Input: "key1=value1,key2=value2,...".
+// Output: "persisted_length,max_decode_buffer_length".
+template <ResolveTypeParamsFunc Func>
+struct ResolveParamsWrapper {
+  static void invoke(vef_context_t * /*ctx*/, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    vef_invalue_t *arg = &args->values[0];
+
+    if (arg->is_null) {
+      result->type = VEF_RESULT_NULL;
+      return;
+    }
+
+    // Parse "key1=value1,key2=value2,..." into std::map.
+    std::string_view input(arg->str_value, arg->str_len);
+    std::map<std::string, std::string> params;
+    size_t start = 0;
+    while (start < input.size()) {
+      size_t comma = input.find(',', start);
+      if (comma == std::string_view::npos) comma = input.size();
+      size_t eq = input.find('=', start);
+      if (eq == std::string_view::npos || eq >= comma) {
+        result->type = VEF_RESULT_ERROR;
+        snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
+                 "resolve_params: invalid input format");
+        return;
+      }
+      params.emplace(input.substr(start, eq - start),
+                     input.substr(eq + 1, comma - eq - 1));
+      start = comma + 1;
+    }
+
+    villagesql::ResolvedTypeParams resolved = {};
+    if (Func(params, &resolved, result->error_msg)) {
+      result->type = VEF_RESULT_ERROR;
+      return;
+    }
+
+    // Serialize to "persisted_length,max_decode_buffer_length".
+    int written =
+        snprintf(result->str_buf, result->max_str_len, "%" PRId64 ",%" PRId64,
+                 resolved.persisted_length, resolved.max_decode_buffer_length);
+    if (written < 0 || static_cast<size_t>(written) >= result->max_str_len) {
+      result->type = VEF_RESULT_ERROR;
+      snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
+               "resolve_params result too large for buffer");
+      return;
+    }
+
+    result->type = VEF_RESULT_VALUE;
+    result->actual_len = static_cast<size_t>(written);
+  }
+};
+
+// =============================================================================
 // StaticFuncDesc
 // =============================================================================
 
@@ -511,6 +672,32 @@ constexpr FuncBuilderNoImpl<0> make_func(const char *name) {
   FuncBuilderNoImpl<0> builder;
   builder.name_ = name;
   return builder;
+}
+
+// Entry point for int_to_params functions:
+//   make_int_to_params<&my_func>("my_func")
+template <IntToTypeParamsFunc Func>
+constexpr StaticFuncDesc<1> make_int_to_params(const char *name) {
+  FuncWithMetadata meta{};
+  meta.f = &IntToParamsWrapper<Func>::invoke;
+  meta.return_type = to_vef_type(STRING);
+  meta.param_types[0] = to_vef_type(INT);
+  meta.num_params = 1;
+  meta.buffer_size = VEF_MAX_TYPE_PARAMS_STRING_LEN;
+  return StaticFuncDesc<1>(name, meta);
+}
+
+// Entry point for resolve_params functions:
+//   make_resolve_params<&my_func>("my_func")
+template <ResolveTypeParamsFunc Func>
+constexpr StaticFuncDesc<1> make_resolve_params(const char *name) {
+  FuncWithMetadata meta{};
+  meta.f = &ResolveParamsWrapper<Func>::invoke;
+  meta.return_type = to_vef_type(STRING);
+  meta.param_types[0] = to_vef_type(STRING);
+  meta.num_params = 1;
+  meta.buffer_size = VEF_MAX_TYPE_PARAMS_STRING_LEN;
+  return StaticFuncDesc<1>(name, meta);
 }
 
 // =============================================================================

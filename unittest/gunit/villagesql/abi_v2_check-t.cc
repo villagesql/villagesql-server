@@ -45,27 +45,29 @@
 //   vef_decode_func_t decode_func;                  // +40  (protocol >= 1)
 //   vef_compare_func_t compare_func;                // +48  (protocol >= 1)
 //   vef_hash_func_t hash_func;                      // +56  (protocol >= 1)
-//   vef_type_int_to_params_func_t int_to_params;    // +64  (protocol >= 2)
-//   vef_type_resolve_params_func_t resolve_params;  // +72  (protocol >= 2)
-//   const char *encode_vdf_name;                    // +80  (protocol >= 2)
-//   const char *decode_vdf_name;                    // +88  (protocol >= 2)
-//   const char *compare_vdf_name;                   // +96  (protocol >= 2)
-//   const char *hash_vdf_name;                      // +104 (protocol >= 2)
+//   const char *encode_vdf_name;                    // +64  (protocol >= 2)
+//   const char *decode_vdf_name;                    // +72  (protocol >= 2)
+//   const char *compare_vdf_name;                   // +80  (protocol >= 2)
+//   const char *hash_vdf_name;                      // +88  (protocol >= 2)
+//   const char *int_to_params_vdf_name;             // +96  (protocol >= 2)
+//   const char *resolve_params_vdf_name;            // +104 (protocol >= 2)
 // ---------------------------------------------------------------------------
 static_assert(sizeof(vef_type_desc_t) == 112,
               "ABI v2 break: vef_type_desc_t size changed");
-static_assert(offsetof(vef_type_desc_t, int_to_params) == 64,
-              "ABI v2 break: vef_type_desc_t::int_to_params offset changed");
-static_assert(offsetof(vef_type_desc_t, resolve_params) == 72,
-              "ABI v2 break: vef_type_desc_t::resolve_params offset changed");
-static_assert(offsetof(vef_type_desc_t, encode_vdf_name) == 80,
+static_assert(offsetof(vef_type_desc_t, encode_vdf_name) == 64,
               "ABI v2 break: vef_type_desc_t::encode_vdf_name offset changed");
-static_assert(offsetof(vef_type_desc_t, decode_vdf_name) == 88,
+static_assert(offsetof(vef_type_desc_t, decode_vdf_name) == 72,
               "ABI v2 break: vef_type_desc_t::decode_vdf_name offset changed");
-static_assert(offsetof(vef_type_desc_t, compare_vdf_name) == 96,
+static_assert(offsetof(vef_type_desc_t, compare_vdf_name) == 80,
               "ABI v2 break: vef_type_desc_t::compare_vdf_name offset changed");
-static_assert(offsetof(vef_type_desc_t, hash_vdf_name) == 104,
+static_assert(offsetof(vef_type_desc_t, hash_vdf_name) == 88,
               "ABI v2 break: vef_type_desc_t::hash_vdf_name offset changed");
+static_assert(
+    offsetof(vef_type_desc_t, int_to_params_vdf_name) == 96,
+    "ABI v2 break: vef_type_desc_t::int_to_params_vdf_name offset changed");
+static_assert(
+    offsetof(vef_type_desc_t, resolve_params_vdf_name) == 104,
+    "ABI v2 break: vef_type_desc_t::resolve_params_vdf_name offset changed");
 
 // Placeholder test so the binary links and runs.
 TEST(AbiV2Check, StaticAssertsPass) {}

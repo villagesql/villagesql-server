@@ -34,6 +34,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
+#include <map>
 #include <string>
 
 using villagesql::BinaryArg;
@@ -64,38 +65,36 @@ float load_float(const unsigned char *buf) {
 }
 
 // Convert TYPE(N) integer to parameter key-value pairs.
-// Produces {key:"dimension", value:"<N>"}.
-bool tvector_int_to_params(int64_t value, vef_type_param_t *params,
-                           size_t *param_count, char *error_msg) {
+// Populates params map with {"dimension": "<N>"}.
+bool tvector_int_to_params(int64_t value,
+                           std::map<std::string, std::string> &params,
+                           char *error_msg) {
   if (value <= 0) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
              "TVECTOR dimension must be a positive integer, got %" PRId64,
              value);
     return true;
   }
-  static char dim_buf[32];
-  snprintf(dim_buf, sizeof(dim_buf), "%" PRId64, value);
-  params[0] = {"dimension", dim_buf};
-  *param_count = 1;
+  params["dimension"] = std::to_string(value);
   return false;
 }
 
 // Validate type parameters and compute storage characteristics.
-bool tvector_resolve_params(const vef_type_param_t *params, size_t param_count,
-                            vef_type_resolved_params_t *result,
+bool tvector_resolve_params(const std::map<std::string, std::string> &params,
+                            villagesql::ResolvedTypeParams *result,
                             char *error_msg) {
-  int64_t dimension = 0;
-  for (size_t i = 0; i < param_count; i++) {
-    if (strcmp(params[i].key, "dimension") == 0) {
-      char *endptr = nullptr;
-      dimension = strtoll(params[i].value, &endptr, 10);
-      if (endptr == params[i].value || *endptr != '\0') {
-        snprintf(error_msg, VEF_MAX_ERROR_LEN,
-                 "TVECTOR: invalid dimension value '%s'", params[i].value);
-        return true;
-      }
-      break;
-    }
+  auto it = params.find("dimension");
+  if (it == params.end()) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "TVECTOR: dimension must be a positive integer");
+    return true;
+  }
+  char *endptr = nullptr;
+  int64_t dimension = strtoll(it->second.c_str(), &endptr, 10);
+  if (endptr == it->second.c_str() || *endptr != '\0') {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "TVECTOR: invalid dimension value '%s'", it->second.c_str());
+    return true;
   }
   if (dimension <= 0) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
@@ -264,8 +263,8 @@ VEF_GENERATE_ENTRY_POINTS(
                   .encode("tvector_from_string")
                   .decode("tvector_to_string")
                   .compare("tvector_compare")
-                  .int_to_params(&tvector_int_to_params)
-                  .resolve_params(&tvector_resolve_params)
+                  .int_to_params("tvector_int_to_params")
+                  .resolve_params("tvector_resolve_params")
                   .build())
         .func(make_func<&tvector_from_string>("tvector_from_string")
                   .returns(TVECTOR)
@@ -282,4 +281,8 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(TVECTOR)
                   .param(TVECTOR)
                   .deterministic()
-                  .build()))
+                  .build())
+        .func(
+            make_int_to_params<&tvector_int_to_params>("tvector_int_to_params"))
+        .func(make_resolve_params<&tvector_resolve_params>(
+            "tvector_resolve_params")))
