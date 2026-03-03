@@ -59,13 +59,13 @@ CREATE PROCEDURE insertRows(num_rows INT)
 BEGIN
 SET @n = 1;
 REPEAT
-INSERT INTO t1 (`id`, `int1`, `int1_key`, `int1_unique`,
+INSERT INTO t1 (`id`, `int1`, `int1_key`, `int1_unique`, 
 `int2`, `int2_key`, `int2_unique`,
-`for_update`, `connection_id`, `thread_id`,
-`is_uncommitted`, `is_consistent`)
+`for_update`, `connection_id`, `thread_id`, 
+`is_uncommitted`, `is_consistent`) 
 VALUES (0, 1000, 1000, @n,
 -1000, -1000, -@n,
-0, CONNECTION_ID(), 0,
+0, CONNECTION_ID(), 0, 
 0, 1);
 SET @n = @n + 1;
 UNTIL @n > num_rows
