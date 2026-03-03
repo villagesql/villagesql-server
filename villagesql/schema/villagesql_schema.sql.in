@@ -48,6 +48,20 @@ CREATE TABLE IF NOT EXISTS villagesql.custom_columns (
 ROW_FORMAT=DYNAMIC
 COMMENT='VillageSQL columns that use custom types';
 
+CREATE TABLE IF NOT EXISTS villagesql.custom_sp_params (
+  db_name VARCHAR(64) NOT NULL COMMENT 'Database name',
+  sp_name VARCHAR(64) NOT NULL COMMENT 'Stored procedure or function name',
+  param_name VARCHAR(64) NOT NULL COMMENT 'Parameter name',
+  extension_name VARCHAR(64) NOT NULL COMMENT 'Extension name implementing the custom type for this parameter',
+  extension_version VARCHAR(64) NOT NULL COMMENT 'Version of the extension',
+  type_name VARCHAR(64) NOT NULL COMMENT 'Custom type from extension',
+  type_parameters JSON NOT NULL COMMENT 'Type instantiation parameters as JSON',
+  PRIMARY KEY (db_name, sp_name, param_name),
+  INDEX idx_extension (extension_name, extension_version, type_name)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
+ROW_FORMAT=DYNAMIC
+COMMENT='VillageSQL stored procedure/function parameters that use custom types';
+
 -- Store VillageSQL system properties (version, configuration, etc.)
 -- NOTE: THIS MUST BE THE FINAL TABLE IN THIS FILE!
 -- Reason: we detect a partial install by seeing the schema exists but

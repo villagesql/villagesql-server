@@ -37,6 +37,8 @@ template <typename T>
 class List;
 template <typename T>
 class SQL_I_List;
+class sp_head;
+class sp_name;
 
 namespace villagesql {
 
@@ -243,6 +245,17 @@ bool Metadata_modifier::process_drop(THD *thd, bool drop_temporary,
 
   return false;
 }
+
+// Persist custom type metadata for all custom-typed variables (params and
+// DECLARE locals) in a stored procedure/function to
+// villagesql.custom_sp_params. Called after the routine is created in the data
+// dictionary. Returns false on success, true on error.
+extern bool PersistCustomSpParams(THD *thd, sp_head *sp);
+
+// Delete custom type metadata for all variables of a stored procedure/function
+// from villagesql.custom_sp_params. Called before the routine is dropped.
+// Returns false on success, true on error.
+extern bool DeleteCustomSpParams(THD *thd, const sp_name *name);
 
 }  // namespace villagesql
 

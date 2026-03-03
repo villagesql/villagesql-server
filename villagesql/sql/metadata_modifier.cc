@@ -24,6 +24,8 @@
 #include "sql/field_common_properties.h"
 #include "sql/handler.h"
 #include "sql/mdl.h"
+#include "sql/sp_head.h"
+#include "sql/sp_pcontext.h"
 #include "sql/sql_alter.h"
 #include "sql/sql_base.h"
 #include "sql/sql_class.h"
@@ -35,6 +37,7 @@
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/schema_manager.h"
+#include "villagesql/schema/systable/custom_sp_params.h"
 #include "villagesql/schema/systable/extensions.h"
 #include "villagesql/schema/util.h"
 #include "villagesql/schema/victionary_client.h"
@@ -870,6 +873,78 @@ bool Metadata_modifier::process_calls(
     return true;
   }
   return false;
+}
+
+bool PersistCustomSpParams(THD *thd, sp_head *sp) {
+  sp_pcontext *root_ctx = sp->get_root_parsing_context();
+  if (!root_ctx) return false;
+
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return false;
+
+  List<Create_field> field_def_lst;
+  root_ctx->retrieve_field_definitions(&field_def_lst);
+
+  bool any_custom = false;
+  {
+    auto guard = vclient.get_write_lock();
+
+    // Persist custom-typed params and DECLARE vars.
+    List_iterator_fast<Create_field> it(field_def_lst);
+    Create_field *cdef;
+    while ((cdef = it++)) {
+      const TypeContext *tc = cdef->custom_type_context;
+      if (!tc) continue;
+      SpParamEntry entry(
+          SpParamKey(sp->m_db.str, sp->m_name.str, cdef->field_name),
+          tc->extension_name(), tc->extension_version(), tc->type_name(),
+          tc->parameters().to_json());
+      if (vclient.sp_params().MarkForInsertion(*thd, std::move(entry)))
+        return true;
+      any_custom = true;
+    }
+
+    // TODO(villagesql): persist function return type (m_return_type_context_ref
+    // is added in a follow-up patch with function return type support).
+  }
+  if (!any_custom) return false;
+
+  Table_ref sp_params_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                            SchemaManager::SP_PARAMS_TABLE_NAME, TL_WRITE,
+                            MDL_SHARED_WRITE);
+  if (open_and_lock_tables(thd, &sp_params_table, MYSQL_LOCK_IGNORE_TIMEOUT))
+    return true;
+  return vclient.write_all_uncommitted_entries(thd);
+}
+
+bool DeleteCustomSpParams(THD *thd, const sp_name *name) {
+  auto &vclient = VictionaryClient::instance();
+  if (!vclient.is_initialized()) return false;
+
+  SpParamKeyPrefix prefix(name->m_db.str, name->m_name.str);
+  std::vector<SpParamKey> keys_to_delete;
+  {
+    auto guard = vclient.get_read_lock();
+    auto entries = vclient.sp_params().get_prefix_committed(prefix);
+    for (const SpParamEntry *entry : entries) {
+      if (entry) keys_to_delete.push_back(entry->key());
+    }
+  }
+  if (keys_to_delete.empty()) return false;
+
+  {
+    auto guard = vclient.get_write_lock();
+    for (const SpParamKey &key : keys_to_delete) {
+      if (vclient.sp_params().MarkForDeletion(*thd, key)) return true;
+    }
+  }
+
+  Table_ref sp_params_table(SchemaManager::VILLAGESQL_SCHEMA_NAME,
+                            SchemaManager::SP_PARAMS_TABLE_NAME, TL_WRITE,
+                            MDL_SHARED_WRITE);
+  if (open_and_lock_tables(thd, &sp_params_table, MYSQL_LOCK_IGNORE_TIMEOUT))
+    return true;
+  return vclient.write_all_uncommitted_entries(thd);
 }
 
 }  // namespace villagesql

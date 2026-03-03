@@ -46,6 +46,7 @@
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/systable/custom_columns.h"
+#include "villagesql/schema/systable/custom_sp_params.h"
 #include "villagesql/schema/systable/extensions.h"
 #include "villagesql/schema/systable/properties.h"
 #include "villagesql/schema/util.h"
@@ -307,6 +308,32 @@ class SystemTableMap {
     }
 
     return it->second.get();
+  }
+
+  // Get or create an entry and return a client-managed shared_ptr to it.
+  // Creates the entry if it does not exist. Does not register any mem_root
+  // cleanup — the caller is responsible for releasing the shared_ptr.
+  //
+  // REQUIRES: Caller must hold write lock (needed to potentially insert).
+  // Returns: shared_ptr to the entry, or empty shared_ptr on error.
+  template <typename... Args>
+  std::shared_ptr<const EntryType> get_or_create_client_managed(
+      const typename EntryType::key_type &key, Args &&...create_args) {
+    assert_write_lock_held();
+
+    const std::string key_str = key.str();
+    auto it = m_committed.find(key_str);
+
+    if (it == m_committed.end()) {
+      auto new_entry = TableTraits<EntryType>::create(
+          key, std::forward<Args>(create_args)...);
+      if (!new_entry) {
+        return std::shared_ptr<const EntryType>();
+      }
+      it = m_committed.emplace(key_str, std::move(new_entry)).first;
+    }
+
+    return it->second;
   }
 
   bool has_uncommitted(THD *thd) const {
@@ -643,6 +670,7 @@ class VictionaryClient {
 
   SystemTableMap<PropertyEntry> &properties() { return m_properties; }
   SystemTableMap<ColumnEntry> &columns() { return m_columns; }
+  SystemTableMap<SpParamEntry> &sp_params() { return m_sp_params; }
   SystemTableMap<ExtensionEntry> &extensions() { return m_extensions; }
   ExtensionObjectMap<TypeDescriptor> &type_descriptors() {
     return m_type_descriptors;
@@ -657,6 +685,7 @@ class VictionaryClient {
     return m_properties;
   }
   const SystemTableMap<ColumnEntry> &columns() const { return m_columns; }
+  const SystemTableMap<SpParamEntry> &sp_params() const { return m_sp_params; }
   const SystemTableMap<ExtensionEntry> &extensions() const {
     return m_extensions;
   }
@@ -678,6 +707,12 @@ class VictionaryClient {
   // Returns vector of pointers to ColumnEntry (valid while lock is held)
   std::vector<const ColumnEntry *> GetCustomColumnsForTable(
       const std::string &db_name, const std::string &table_name) const;
+
+  // Get all custom SP params for a stored procedure/function
+  // Caller must hold at least read lock
+  // Returns vector of pointers to SpParamEntry (valid while lock is held)
+  std::vector<const SpParamEntry *> GetCustomSpParamsForSP(
+      const std::string &db_name, const std::string &sp_name) const;
 
   // ===== Transaction lifecycle - operates on ALL tables =====
 
@@ -755,6 +790,7 @@ class VictionaryClient {
   VictionaryClient()
       : m_properties(&m_lock),  // Pass lock pointer to map
         m_columns(&m_lock),
+        m_sp_params(&m_lock),
         m_extensions(&m_lock),
         m_type_descriptors(&m_lock),
         m_extension_descriptors(&m_lock),
@@ -810,6 +846,7 @@ class VictionaryClient {
   // Hard-coded map instances - one per system table
   SystemTableMap<PropertyEntry> m_properties;
   SystemTableMap<ColumnEntry> m_columns;
+  SystemTableMap<SpParamEntry> m_sp_params;
   SystemTableMap<ExtensionEntry> m_extensions;
 
   // In-memory descriptor maps (MEMORY_ONLY - no backing table)

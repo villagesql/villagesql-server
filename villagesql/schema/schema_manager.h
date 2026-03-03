@@ -35,6 +35,7 @@ class SchemaManager {
   static const char *VILLAGESQL_SCHEMA_NAME;
   static const char *PROPERTIES_TABLE_NAME;
   static const char *COLUMNS_TABLE_NAME;
+  static const char *SP_PARAMS_TABLE_NAME;
   static const char *EXTENSIONS_TABLE_NAME;
 
   // Maximum length of a name (extension name, type name, etc.) as stored in
