@@ -36,6 +36,11 @@ class Command_maps final {
                              static_cast<enum_server_command>(i))
                              .c_str()] = static_cast<enum_server_command>(i);
     }
+    // GCC does not support mixing designated and non-designated initializers,
+    // so VSQL commands (which start at SQLCOM_VSQL_FIRST = 1024) are
+    // initialized here instead of in the static array initializer.
+    sql_commands[SQLCOM_INSTALL_EXTENSION] = "install_extension";
+    sql_commands[SQLCOM_UNINSTALL_EXTENSION] = "uninstall_extension";
   }
 
   enum_server_command get_server_command(const char *server_command) {
@@ -208,10 +213,7 @@ const char *Command_maps::sql_commands[] = {"select",
                                             "restart_server",
                                             "create_srs",
                                             "drop_srs",
-                                            "show_parse_tree",
-                                            [SQLCOM_INSTALL_EXTENSION] =
-                                                "install_extension",
-                                            "uninstall_extension"};
+                                            "show_parse_tree"};
 
 Command_maps *g_command_maps{nullptr};
 }  // namespace
