@@ -116,7 +116,8 @@ class TypeDescriptor {
   // testing)
   explicit TypeDescriptor(TypeDescriptorKey key) : key_(std::move(key)) {}
 
-  // Full constructor. hash, int_to_params, and resolve_params are optional.
+  // Full constructor. hash, int_to_params, resolve_params, and
+  // intrinsic_default are optional.
   TypeDescriptor(TypeDescriptorKey key, unsigned char impl_type,
                  int64_t persisted_len, int64_t max_unpersisted_len,
                  EncodeOp encode, DecodeOp decode, CompareOp compare,
@@ -180,6 +181,17 @@ class TypeDescriptor {
     return resolve_params_op_;
   }
 
+  // Returns the intrinsic default op, or nullopt if not set.
+  const std::optional<IntrinsicDefaultOp> &intrinsic_default_op() const {
+    return intrinsic_default_op_;
+  }
+
+  // Set the intrinsic default op after construction (used during
+  // type registration).
+  void set_intrinsic_default_op(IntrinsicDefaultOp op) {
+    intrinsic_default_op_ = std::move(op);
+  }
+
  private:
   TypeDescriptorKey key_;
 
@@ -196,6 +208,8 @@ class TypeDescriptor {
 
   std::optional<IntToParamsOp> int_to_params_op_;
   std::optional<ResolveParamsOp> resolve_params_op_;
+
+  std::optional<IntrinsicDefaultOp> intrinsic_default_op_;
 };
 
 // TableTraits specialization for TypeDescriptor.

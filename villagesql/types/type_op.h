@@ -142,6 +142,22 @@ class ResolveParamsOp {
   const vef_func_desc_t *vdf_{nullptr};
 };
 
+class IntrinsicDefaultOp {
+ public:
+  explicit IntrinsicDefaultOp(const vef_func_desc_t *vdf) : vdf_(vdf) {
+    assert(vdf != nullptr);
+  }
+
+  // Produces the binary encoding of the type's intrinsic default value.
+  // buffer_size is the resolved persisted_length (bytes to write).
+  // Returns false on success, true on error (writes to error_msg).
+  bool invoke(int64_t buffer_size, unsigned char *buffer, size_t *length,
+              char *error_msg) const;
+
+ private:
+  const vef_func_desc_t *vdf_{nullptr};
+};
+
 }  // namespace villagesql
 
 #endif  // VILLAGESQL_TYPES_TYPE_OP_H_

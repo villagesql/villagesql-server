@@ -514,6 +514,17 @@ typedef size_t (*vef_hash_func_t)(const unsigned char *data, size_t len);
 // by int_to_params and resolve_params VDFs.
 #define VEF_MAX_TYPE_PARAMS_STRING_LEN 1024
 
+// Extension author signature for intrinsic_default VDFs.
+// Called when a NOT NULL custom column is set to NULL with IGNORE (e.g.
+// INSERT IGNORE or UPDATE IGNORE). Writes the encoded default value into
+// 'buffer' (of 'buffer_size' bytes) and sets '*length' to bytes written.
+// 'buffer_size' encodes the resolved persisted_length, allowing variable-size
+// types (e.g. TVECTOR(N)) to produce the correct number of bytes.
+// Returns: false on success, true on error (write message to error_msg).
+using vef_intrinsic_default_func_t = bool (*)(int64_t buffer_size,
+                                              unsigned char *buffer,
+                                              size_t *length, char *error_msg);
+
 typedef struct {
   // protocol >= VEF_PROTOCOL_1
   vef_protocol_t protocol;
@@ -564,6 +575,15 @@ typedef struct {
   //   resolve_params_vdf_name: (STRING) -> STRING
   const char *int_to_params_vdf_name;
   const char *resolve_params_vdf_name;
+
+  // OPTIONAL: Name of a VDF (from this extension's funcs[]) that produces the
+  // intrinsic default binary value for this type. The named VDF must have
+  // signature (INT) -> STRING, where the INT argument is the resolved
+  // persisted_length in bytes (allowing variable-size types to produce the
+  // correct number of bytes). NULL means the type has no intrinsic default.
+  // TODO(villagesql-beta): check intrinsic default behavior for ALTER TABLE
+  // (NULL -> NOT NULL column conversion) and other corner cases.
+  const char *intrinsic_default_vdf_name;
 } vef_type_desc_t;
 
 typedef struct {

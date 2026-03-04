@@ -1,0 +1,66 @@
+# Test DEFAULT keyword behavior and generated columns with COMPLEX type
+# in relation to intrinsic default support.
+
+--source include/villagesql/install_complex_extension.inc
+
+# NOT NULL COMPLEX without an explicit DEFAULT clause:
+# - INSERT ... DEFAULT should error (no SQL-level default defined)
+# - INSERT IGNORE with NULL should succeed via intrinsic default (0,0)
+CREATE TABLE t_no_sql_default (
+    id INT PRIMARY KEY,
+    val COMPLEX NOT NULL
+);
+
+--error ER_NO_DEFAULT_FOR_FIELD
+INSERT INTO t_no_sql_default VALUES (1, DEFAULT);
+
+# Implicit default via IGNORE still works even though no SQL DEFAULT is defined
+INSERT IGNORE INTO t_no_sql_default VALUES (2, NULL);
+SELECT * FROM t_no_sql_default ORDER BY id;
+DROP TABLE t_no_sql_default;
+
+# NOT NULL COMPLEX with an explicit DEFAULT clause:
+# - INSERT ... DEFAULT uses the explicit default
+# - INSERT IGNORE with NULL also uses the explicit default
+CREATE TABLE t_with_sql_default (
+    id INT PRIMARY KEY,
+    val COMPLEX NOT NULL DEFAULT '(1.0,2.0)'
+);
+
+INSERT INTO t_with_sql_default VALUES (1, DEFAULT);
+INSERT IGNORE INTO t_with_sql_default VALUES (2, NULL);
+SELECT * FROM t_with_sql_default ORDER BY id;
+DROP TABLE t_with_sql_default;
+
+# Virtual generated column based on a nullable COMPLEX column.
+# When the source column is NULL, the generated expression is NULL.
+# Since the generated column itself is nullable, this is fine.
+CREATE TABLE t_generated_virtual (
+    id INT PRIMARY KEY,
+    src COMPLEX,
+    gen COMPLEX GENERATED ALWAYS AS (src) VIRTUAL
+);
+
+INSERT INTO t_generated_virtual (id, src) VALUES (1, '(3.0,4.0)');
+INSERT INTO t_generated_virtual (id, src) VALUES (2, NULL);
+SELECT * FROM t_generated_virtual ORDER BY id;
+DROP TABLE t_generated_virtual;
+
+# Stored generated column based on a nullable COMPLEX column.
+CREATE TABLE t_generated_stored (
+    id INT PRIMARY KEY,
+    src COMPLEX,
+    gen COMPLEX GENERATED ALWAYS AS (src) STORED
+);
+
+INSERT INTO t_generated_stored (id, src) VALUES (1, '(5.0,6.0)');
+INSERT INTO t_generated_stored (id, src) VALUES (2, NULL);
+SELECT * FROM t_generated_stored ORDER BY id;
+
+# UPDATE IGNORE on src: gen follows src to NULL (gen is nullable)
+UPDATE IGNORE t_generated_stored SET src = NULL WHERE id = 1;
+SELECT * FROM t_generated_stored ORDER BY id;
+
+DROP TABLE t_generated_stored;
+
+--source include/villagesql/uninstall_complex_extension.inc

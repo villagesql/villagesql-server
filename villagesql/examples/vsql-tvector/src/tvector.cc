@@ -253,6 +253,19 @@ void tvector_compare(BinaryArg in_l, BinaryArg in_r, IntResult out) {
     out.set(0);
 }
 
+// Implicit default for TVECTOR(N): writes N zero floats into the buffer.
+// buffer_size encodes the resolved persisted_length (N * 4 bytes).
+bool tvector_default(int64_t buffer_size, unsigned char *buffer, size_t *length,
+                     char * /*error_msg*/) {
+  if (buffer_size <= 0 || buffer_size % 4 != 0) {
+    *length = 0;
+    return true;
+  }
+  memset(buffer, 0, static_cast<size_t>(buffer_size));
+  *length = static_cast<size_t>(buffer_size);
+  return false;
+}
+
 constexpr const char *TVECTOR = "TVECTOR";
 
 VEF_GENERATE_ENTRY_POINTS(
@@ -265,6 +278,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .compare("tvector_compare")
                   .int_to_params("tvector_int_to_params")
                   .resolve_params("tvector_resolve_params")
+                  .intrinsic_default("tvector_intrinsic_default")
                   .build())
         .func(make_func<&tvector_from_string>("tvector_from_string")
                   .returns(TVECTOR)
@@ -285,4 +299,6 @@ VEF_GENERATE_ENTRY_POINTS(
         .func(
             make_int_to_params<&tvector_int_to_params>("tvector_int_to_params"))
         .func(make_resolve_params<&tvector_resolve_params>(
-            "tvector_resolve_params")))
+            "tvector_resolve_params"))
+        .func(make_intrinsic_default<&tvector_default>(
+            "tvector_intrinsic_default")))

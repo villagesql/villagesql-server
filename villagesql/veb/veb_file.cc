@@ -871,6 +871,7 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
     const vef_func_desc_t *hash_vdf = nullptr;
     const vef_func_desc_t *int_to_params_vdf = nullptr;
     const vef_func_desc_t *resolve_params_vdf = nullptr;
+    const vef_func_desc_t *intrinsic_default_vdf = nullptr;
 
     if (td->protocol >= VEF_PROTOCOL_2 &&
         ext_reg.negotiated_protocol >= VEF_PROTOCOL_2) {
@@ -1007,6 +1008,26 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
           return true;
         }
       }
+
+      if (td->intrinsic_default_vdf_name != nullptr) {
+        intrinsic_default_vdf =
+            find_vdf_by_name(reg, td->intrinsic_default_vdf_name);
+        if (intrinsic_default_vdf == nullptr) {
+          LogVSQL(ERROR_LEVEL,
+                  "Type '%s' in extension '%s': intrinsic_default_vdf_name "
+                  "'%s' not found",
+                  type_name.c_str(), extension_name.c_str(),
+                  td->intrinsic_default_vdf_name);
+          return true;
+        }
+        const vef_type_id int_id[] = {VEF_TYPE_INT};
+        if (validate_type_vdf_signature(intrinsic_default_vdf,
+                                        "intrinsic_default", td->name, 1,
+                                        int_id, no_custom, VEF_TYPE_STRING,
+                                        nullptr, extension_name)) {
+          return true;
+        }
+      }
     }
 
     // Validate that int_to_params requires resolve_params.
@@ -1044,6 +1065,10 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
         std::move(encode_op), std::move(decode_op), std::move(compare_op),
         std::move(hash_op), std::move(int_to_params_op),
         std::move(resolve_params_op));
+
+    if (intrinsic_default_vdf != nullptr)
+      descriptor.set_intrinsic_default_op(
+          IntrinsicDefaultOp(intrinsic_default_vdf));
 
     const TypeDescriptor *existing =
         victionary.type_descriptors().get_committed(descriptor.key());

@@ -219,6 +219,10 @@ type_conversion_status set_field_to_null_with_conversions(Field *field,
       field->set_warning(Sql_condition::SL_WARNING, ER_BAD_NULL_ERROR, 1);
       [[fallthrough]];
     case CHECK_FIELD_IGNORE:
+      // VillageSQL: For custom types, store the intrinsic default.
+      if (field->has_type_context()) {
+        return villagesql::StoreCustomFieldIntrinsicDefault(field);
+      }
       if (field->type() == MYSQL_TYPE_BLOB) {
         /*
           BLOB/TEXT fields only store a pointer to their actual contents

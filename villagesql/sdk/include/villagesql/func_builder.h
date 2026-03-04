@@ -301,6 +301,29 @@ struct ToStringWrapper {
   }
 };
 
+// IntrinsicDefaultWrapper: wraps a vef_intrinsic_default_func_t into a VDF.
+// VDF signature: (INT) -> STRING (binary), where INT is the resolved
+// persisted_length (buffer_size). Returns the encoded default value as binary.
+template <vef_intrinsic_default_func_t Func>
+struct IntrinsicDefaultWrapper {
+  static void invoke(vef_context_t * /*ctx*/, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    vef_invalue_t *arg = &args->values[0];
+    if (arg->is_null) {
+      result->type = VEF_RESULT_NULL;
+      return;
+    }
+    size_t length = 0;
+    if (Func(arg->int_value, result->bin_buf, &length, result->error_msg)) {
+      result->type = VEF_RESULT_ERROR;
+      return;
+    }
+    result->actual_len = length;
+    result->type = VEF_RESULT_VALUE;
+  }
+};
+
+
 // =============================================================================
 // Extension Author Function Signatures (for parameterized types)
 // =============================================================================
@@ -697,6 +720,19 @@ constexpr StaticFuncDesc<1> make_resolve_params(const char *name) {
   meta.param_types[0] = to_vef_type(STRING);
   meta.num_params = 1;
   meta.buffer_size = VEF_MAX_TYPE_PARAMS_STRING_LEN;
+  return StaticFuncDesc<1>(name, meta);
+}
+
+// Entry point for intrinsic_default functions:
+//   make_intrinsic_default<&my_func>("my_func")
+template <vef_intrinsic_default_func_t Func>
+constexpr StaticFuncDesc<1> make_intrinsic_default(const char *name) {
+  FuncWithMetadata meta{};
+  meta.f = &IntrinsicDefaultWrapper<Func>::invoke;
+  meta.return_type = to_vef_type(STRING);
+  meta.param_types[0] = to_vef_type(INT);
+  meta.num_params = 1;
+  meta.buffer_size = 0;  // server provides bin_buf sized to persisted_length
   return StaticFuncDesc<1>(name, meta);
 }
 

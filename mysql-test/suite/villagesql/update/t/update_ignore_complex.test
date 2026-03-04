@@ -1,10 +1,27 @@
-# Test UPDATE IGNORE ... with COMPLEX type
-# Grammar: UPDATE IGNORE ...
-
-# NOTE: Disabled due to broken UPDATE IGNORE behavior - incorrectly allows NULL in NOT NULL columns
---source include/villagesql/not_implemented_complex_type.inc
+# Test UPDATE IGNORE with COMPLEX type
+#
+# This test verifies that when UPDATE IGNORE tries to set a NOT NULL COMPLEX
+# column to NULL, it stores the implicit default value (0,0) instead of an
+# invalid empty value. This behavior matches MySQL's handling of built-in types.
 
 --source include/villagesql/install_complex_extension.inc
+
+# Test implicit default behavior: UPDATE IGNORE with NULL on NOT NULL columns
+# Compare DOUBLE vs COMPLEX side-by-side to verify consistent behavior
+CREATE TABLE t_implicit_default (
+    id INT PRIMARY KEY,
+    val_double DOUBLE NOT NULL,
+    val_complex COMPLEX NOT NULL
+);
+
+INSERT INTO t_implicit_default VALUES (1, 3.14, '(1.0,2.0)');
+
+# Both should store their implicit defaults: 0 for DOUBLE, (0,0) for COMPLEX
+UPDATE IGNORE t_implicit_default SET val_double = NULL, val_complex = NULL WHERE id = 1;
+SELECT * FROM t_implicit_default;
+DROP TABLE t_implicit_default;
+
+# Now test UPDATE IGNORE with COMPLEX columns in more detail
 
 CREATE TABLE t1 (
     id INT PRIMARY KEY,
@@ -27,33 +44,26 @@ UPDATE t1 SET val = NULL WHERE id = 1;
 # Verify no change occurred
 SELECT * FROM t1 ORDER BY id;
 
-# Now try with IGNORE - should silently skip the NULL update
+# Now try UPDATE IGNORE - should store implicit default (0,0) like DOUBLE stores 0
 UPDATE IGNORE t1 SET val = NULL WHERE id = 1;
 
-# Verify the value was NOT updated (error was ignored)
+# Verify the value was updated to implicit default (0,0)
+SELECT * FROM t1 ORDER BY id;
+
+# Test that nullable column can still be set to NULL
+UPDATE IGNORE t1 SET name = NULL WHERE id = 1;
 SELECT * FROM t1 ORDER BY id;
 
 # Try to update multiple rows to NULL with IGNORE
-UPDATE IGNORE t1 SET val = NULL WHERE id IN (2, 3);
+UPDATE IGNORE t1 SET val = NULL WHERE id IN (3, 4);
 
-# Verify none were updated
-SELECT * FROM t1 ORDER BY id;
-
-# Test UPDATE IGNORE with valid updates (no errors to suppress)
-UPDATE IGNORE t1 SET val = '(100.0,100.0)' WHERE id IN (4, 5);
-
-SELECT * FROM t1 ORDER BY id;
-
-# Test UPDATE IGNORE with mixed valid and invalid updates
-UPDATE IGNORE t1 SET val = NULL, name = 'updated' WHERE id = 6;
-
-# Verify name was NOT updated (entire update was skipped due to NULL constraint)
+# Verify they were updated to implicit default
 SELECT * FROM t1 ORDER BY id;
 
 # Test UPDATE IGNORE attempting to set all rows to NULL
 UPDATE IGNORE t1 SET val = NULL;
 
-# Verify no rows were updated to NULL
+# Verify all rows were updated to implicit default
 SELECT * FROM t1 ORDER BY id;
 
 DROP TABLE t1;

@@ -1455,6 +1455,17 @@ bool Sql_cmd_load_table::read_sep_field(THD *thd, COPY_INFO &info,
           if (!field->is_nullable() && field->type() == FIELD_TYPE_TIMESTAMP) {
             // Specific of TIMESTAMP NOT NULL: set to CURRENT_TIMESTAMP.
             Item_func_now_local::store_in(field);
+          } else if (!field->is_nullable() && field->has_type_context() &&
+                     thd->lex->is_ignore()) {
+            // VillageSQL: In IGNORE mode, store the intrinsic default for NOT
+            // NULL custom fields instead of marking as NULL. This mirrors the
+            // behavior of INSERT IGNORE / UPDATE IGNORE for custom types.
+            if (villagesql::StoreCustomFieldIntrinsicDefault(field) != TYPE_OK)
+              return true;  // StoreCustomFieldIntrinsicDefault already set the
+                            // error.
+            field->set_warning(Sql_condition::SL_WARNING,
+                               ER_WARN_NULL_TO_NOTNULL, 1);
+            // Don't call set_null() — field now holds the intrinsic default.
           } else {
             /*
               Set field to NULL. Later we will clear temporary nullability flag
@@ -1498,7 +1509,7 @@ bool Sql_cmd_load_table::read_sep_field(THD *thd, COPY_INFO &info,
             // IGNORE mode: skip this row (similar to constraint violation)
             // EncodeStringForField already pushed a warning
             // TODO(villagesql-beta): MySQL's built-in types convert bad values
-            // to implicit defaults (0, '', etc.) rather than skipping. For
+            // to intrinsic defaults (0, '', etc.) rather than skipping. For
             // custom types, we skip because there's no well-defined default.
             // If we add support for intrinsic defaults for custom types, we
             // should use that here instead of skipping.
@@ -1748,7 +1759,7 @@ bool Sql_cmd_load_table::read_xml_field(THD *thd, COPY_INFO &info,
             // IGNORE mode: skip this row (similar to constraint violation)
             // EncodeStringForField already pushed a warning
             // TODO(villagesql-beta): MySQL's built-in types convert bad values
-            // to implicit defaults (0, '', etc.) rather than skipping. For
+            // to intrinsic defaults (0, '', etc.) rather than skipping. For
             // custom types, we skip because there's no well-defined default.
             // If we add support for intrinsic defaults for custom types, we
             // should use that here instead of skipping.

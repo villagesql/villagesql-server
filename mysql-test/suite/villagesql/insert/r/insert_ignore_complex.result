@@ -1,3 +1,22 @@
+CREATE TABLE t_implicit_default (
+id INT PRIMARY KEY,
+val_double DOUBLE NOT NULL,
+val_complex COMPLEX NOT NULL
+);
+INSERT IGNORE INTO t_implicit_default VALUES (1, NULL, NULL);
+Warnings:
+Warning	1048	Column 'val_double' cannot be null
+Warning	1048	Column 'val_complex' cannot be null
+SELECT * FROM t_implicit_default;
+id	val_double	val_complex
+1	0	(0,0)
+DROP TABLE t_implicit_default;
+CREATE TABLE t_empty (id INT, val_double DOUBLE, val_complex COMPLEX);
+INSERT INTO t_empty VALUES (1, '', '(1,2)');
+ERROR 01000: Data truncated for column 'val_double' at row 1
+INSERT INTO t_empty VALUES (2, 3.14, '');
+ERROR HY000: Incorrect COMPLEX value: '' for column 'val_complex' at row 1
+DROP TABLE t_empty;
 CREATE TABLE t1 (
 id INT PRIMARY KEY,
 val COMPLEX

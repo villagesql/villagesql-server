@@ -761,6 +761,30 @@ String *EncodeStringForCustomParam(Item *item, const String &str_value,
   return encoded;
 }
 
+type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field) {
+  assert(field->has_type_context());
+  assert(!field->is_nullable());
+
+  const TypeContext &tc = *field->get_type_context();
+
+  // Use the cached intrinsic default buffer from TypeContext.
+  // nullptr means the type did not register an intrinsic_default VDF.
+  const unsigned char *cached_buffer = tc.intrinsic_default_buffer();
+  if (cached_buffer == nullptr) {
+    villagesql_error(
+        "Column '%s' has no intrinsic default for type '%s'; "
+        "define intrinsic_default_vdf_name in the type registration",
+        MYF(0), field->field_name, tc.type_name().c_str());
+    return TYPE_ERR_BAD_VALUE;
+  }
+  const size_t cached_size = tc.intrinsic_default_size();
+  assert(cached_size == static_cast<size_t>(tc.persisted_length()));
+
+  field->set_notnull();
+  return field->store(reinterpret_cast<const char *>(cached_buffer),
+                      cached_size, &my_charset_bin);
+}
+
 bool CanImplicitlyCastToCustom(const Item *item) {
   if (item->has_type_context()) return false;
 

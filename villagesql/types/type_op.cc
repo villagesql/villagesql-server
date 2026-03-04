@@ -287,4 +287,40 @@ bool ResolveParamsOp::invoke(const std::string &params_str,
   return false;
 }
 
+bool IntrinsicDefaultOp::invoke(int64_t buffer_size, unsigned char *buffer,
+                                size_t *length, char *error_msg) const {
+  assert(vdf_ != nullptr);
+  const vef_func_desc_t *fd = vdf_;
+  assert(fd->prerun == nullptr && fd->postrun == nullptr);
+  vef_context_t ctx = {VEF_PROTOCOL_2};
+
+  vef_invalue_t input[1];
+  input[0].type = VEF_TYPE_INT;
+  input[0].is_null = false;
+  input[0].int_value = buffer_size;
+
+  vef_vdf_args_t vdf_args = {nullptr, 1, input};
+
+  vef_vdf_result_t vdf_result = {};
+  vdf_result.type = VEF_RESULT_VALUE;
+  vdf_result.error_msg = error_msg;
+  vdf_result.bin_buf = buffer;
+  vdf_result.max_bin_len = static_cast<size_t>(buffer_size);
+  vdf_result.actual_len = 0;
+
+  fd->vdf(&ctx, &vdf_args, &vdf_result);
+
+  if (vdf_result.type == VEF_RESULT_ERROR) {
+    return true;
+  }
+  if (vdf_result.type != VEF_RESULT_VALUE) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "intrinsic_default VDF returned unexpected result type");
+    return true;
+  }
+
+  *length = vdf_result.actual_len;
+  return false;
+}
+
 }  // namespace villagesql

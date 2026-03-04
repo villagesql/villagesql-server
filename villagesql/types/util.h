@@ -269,6 +269,12 @@ extern type_conversion_status EncodeAndStoreStringToCustomField(
 extern String *EncodeStringForCustomParam(Item *item, const String &str_value,
                                           bool &null_value);
 
+// Store intrinsic default value for a NOT NULL custom field receiving NULL via
+// INSERT/UPDATE IGNORE or LOAD DATA IGNORE.
+// Returns TYPE_OK on success. On failure (no intrinsic default registered),
+// sets a user-visible error and returns TYPE_ERR_BAD_VALUE.
+extern type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field);
+
 // Check if a function is allowed to operate on custom types for the given type
 // context
 // Returns true if function is allowed, false if it should be blocked

@@ -50,7 +50,7 @@ struct Complex {
   }
 };
 
-constexpr size_t kComplexSize = sizeof(double) * 2;  // 16 bytes
+constexpr int64_t kComplexSize = sizeof(double) * 2;  // 16 bytes
 
 // Platform-independent functions for storing/loading doubles as bytes.
 // Uses little-endian format for cross-platform compatibility.
@@ -123,6 +123,20 @@ void ReturnComplex(const Complex &cx, vef_vdf_result_t *result) {
   result->type = VEF_RESULT_VALUE;
   store_complex(result->bin_buf, cx);
   result->actual_len = kComplexSize;
+}
+
+// Implicit default for COMPLEX: writes (0,0) into the buffer.
+// Called when INSERT IGNORE / UPDATE IGNORE assigns NULL to a NOT NULL column.
+bool complex_default(int64_t buffer_size, unsigned char *buffer, size_t *length,
+                     char * /*error_msg*/) {
+  if (buffer_size < kComplexSize) {
+    *length = 0;
+    return true;
+  }
+  Complex cx{0.0, 0.0};
+  store_complex(buffer, cx);
+  *length = kComplexSize;
+  return false;
 }
 
 // COMPLEX encode: "(real,imag)" -> 16 bytes (with canonicalization of -0.0)
@@ -466,6 +480,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .encode("complex_from_string")
                   .decode("complex_to_string")
                   .compare("complex_compare")
+                  .intrinsic_default("complex_intrinsic_default")
                   .build())
         // COMPLEX2 type without canonicalization (preserves -0.0)
         // Requires custom hash that canonicalizes -0 to +0 before hashing
@@ -561,4 +576,5 @@ VEF_GENERATE_ENTRY_POINTS(
                   .returns(COMPLEX)
                   .param(COMPLEX)
                   .deterministic()
-                  .build()))
+                  .build())
+        .func(make_intrinsic_default<&complex_default>("complex_intrinsic_default")))

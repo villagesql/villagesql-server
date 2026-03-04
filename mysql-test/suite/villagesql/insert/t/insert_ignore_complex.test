@@ -3,6 +3,28 @@
 
 --source include/villagesql/install_complex_extension.inc
 
+# Test implicit default behavior: INSERT IGNORE with NULL on NOT NULL columns
+# Compare DOUBLE vs COMPLEX side-by-side to verify consistent behavior
+CREATE TABLE t_implicit_default (
+    id INT PRIMARY KEY,
+    val_double DOUBLE NOT NULL,
+    val_complex COMPLEX NOT NULL
+);
+
+# Both should store their implicit defaults: 0 for DOUBLE, (0,0) for COMPLEX
+INSERT IGNORE INTO t_implicit_default VALUES (1, NULL, NULL);
+SELECT * FROM t_implicit_default;
+DROP TABLE t_implicit_default;
+
+# Test that both DOUBLE and COMPLEX reject empty strings consistently
+CREATE TABLE t_empty (id INT, val_double DOUBLE, val_complex COMPLEX);
+--error 1265
+INSERT INTO t_empty VALUES (1, '', '(1,2)');
+--error 1366
+INSERT INTO t_empty VALUES (2, 3.14, '');
+DROP TABLE t_empty;
+
+# Now test INSERT IGNORE with nullable COMPLEX columns
 CREATE TABLE t1 (
     id INT PRIMARY KEY,
     val COMPLEX

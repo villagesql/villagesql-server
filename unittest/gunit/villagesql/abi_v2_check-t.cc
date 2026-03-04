@@ -51,8 +51,9 @@
 //   const char *hash_vdf_name;                      // +88  (protocol >= 2)
 //   const char *int_to_params_vdf_name;             // +96  (protocol >= 2)
 //   const char *resolve_params_vdf_name;            // +104 (protocol >= 2)
+//   const char *intrinsic_default_vdf_name;         // +112 (protocol >= 2)
 // ---------------------------------------------------------------------------
-static_assert(sizeof(vef_type_desc_t) == 112,
+static_assert(sizeof(vef_type_desc_t) == 120,
               "ABI v2 break: vef_type_desc_t size changed");
 static_assert(offsetof(vef_type_desc_t, encode_vdf_name) == 64,
               "ABI v2 break: vef_type_desc_t::encode_vdf_name offset changed");
@@ -68,6 +69,9 @@ static_assert(
 static_assert(
     offsetof(vef_type_desc_t, resolve_params_vdf_name) == 104,
     "ABI v2 break: vef_type_desc_t::resolve_params_vdf_name offset changed");
+static_assert(
+    offsetof(vef_type_desc_t, intrinsic_default_vdf_name) == 112,
+    "ABI v2 break: vef_type_desc_t::intrinsic_default_vdf_name offset changed");
 
 // Placeholder test so the binary links and runs.
 TEST(AbiV2Check, StaticAssertsPass) {}

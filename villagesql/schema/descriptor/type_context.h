@@ -22,6 +22,7 @@
 #include <cctype>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "villagesql/schema/descriptor/type_descriptor.h"
 
@@ -154,6 +155,27 @@ class TypeContext {
     assert(descriptor);
     assert(descriptor->key() == key.descriptor_key());
     resolve_cached_values();
+
+    // Pre-encode the intrinsic default value using the type's
+    // intrinsic_default_fn, if registered. This avoids repeated allocations and
+    // encoding every time we need to store an intrinsic default in a NOT NULL
+    // custom field.
+    if (persisted_length_ > 0 &&
+        descriptor_->intrinsic_default_op().has_value()) {
+      const size_t storage_size = static_cast<size_t>(persisted_length_);
+      std::vector<unsigned char> buffer(storage_size);
+
+      char error_msg[VEF_MAX_ERROR_LEN] = {};
+      size_t encoded_length = 0;
+      bool encode_failed = descriptor_->intrinsic_default_op()->invoke(
+          persisted_length_, buffer.data(), &encoded_length, error_msg);
+
+      if (!encode_failed && encoded_length == storage_size) {
+        intrinsic_default_buffer_ = std::move(buffer);
+        intrinsic_default_size_ = encoded_length;
+      }
+      // If encoding failed, leave intrinsic_default_buffer_ empty.
+    }
   }
 
   TypeContext() = delete;
@@ -197,6 +219,16 @@ class TypeContext {
   int64_t persisted_length() const { return persisted_length_; }
   int64_t max_decode_buffer_length() const { return max_decode_buffer_length_; }
 
+  // Get cached intrinsic default buffer. Returns nullptr if encoding failed
+  // during construction.
+  const unsigned char *intrinsic_default_buffer() const {
+    return intrinsic_default_buffer_.empty() ? nullptr
+                                            : intrinsic_default_buffer_.data();
+  }
+
+  // Get the size of the intrinsic default buffer.
+  size_t intrinsic_default_size() const { return intrinsic_default_size_; }
+
  private:
   void resolve_cached_values();
 
@@ -213,6 +245,11 @@ class TypeContext {
   std::string qualified_base_name_;
   int64_t persisted_length_{0};
   int64_t max_decode_buffer_length_{0};
+
+  // Cached intrinsic default value, pre-encoded during construction.
+  // Empty if the type has no intrinsic_default_fn or encoding failed.
+  std::vector<unsigned char> intrinsic_default_buffer_;
+  size_t intrinsic_default_size_{0};
 };
 
 // Forward declaration of TableTraits (specialized per entry type)
