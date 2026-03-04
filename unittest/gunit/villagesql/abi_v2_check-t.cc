@@ -52,7 +52,7 @@
 //   const char *int_to_params_vdf_name;             // +96  (protocol >= 2)
 //   const char *resolve_params_vdf_name;            // +104 (protocol >= 2)
 //   const char *intrinsic_default_vdf_name;         // +112 (protocol >= 2)
-//   vef_type_storage_intf_t storage_intf;           // +120 (protocol >= 2)
+//   vef_type_storage_intf_t *storage_intf;          // +120 (protocol >= 2)
 // ---------------------------------------------------------------------------
 static_assert(sizeof(vef_type_desc_t) == 128,
               "ABI v2 break: vef_type_desc_t size changed");
