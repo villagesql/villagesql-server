@@ -50,7 +50,7 @@ void add_to_status(System_status_var *to_var, System_status_var *from_var) {
 
   to_var->com_other += from_var->com_other;
 
-  for (c = 0; c < SQLCOM_END; c++)
+  for (c = 0; c < (int)SQLCOM_COMPACT_COUNT; c++)
     to_var->com_stat[(uint)c] += from_var->com_stat[(uint)c];
 }
 
@@ -80,7 +80,7 @@ void add_diff_to_status(System_status_var *to_var, System_status_var *from_var,
 
   to_var->com_other += from_var->com_other - dec_var->com_other;
 
-  for (c = 0; c < SQLCOM_END; c++)
+  for (c = 0; c < (int)SQLCOM_COMPACT_COUNT; c++)
     to_var->com_stat[(uint)c] +=
         from_var->com_stat[(uint)c] - dec_var->com_stat[(uint)c];
 }

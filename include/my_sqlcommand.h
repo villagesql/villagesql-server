@@ -205,6 +205,9 @@ enum enum_sql_command {
   SQLCOM_CREATE_SRS,
   SQLCOM_DROP_SRS,
   SQLCOM_SHOW_PARSE_TREE,
+  // Count of contiguous MySQL-native commands. Must stay at the end of the
+  // MySQL command block, before SQLCOM_VSQL_FIRST.
+  SQLCOM_MYSQL_COUNT,
 
   // VillageSQL extension commands. Numbering is permanent — audit plugins
   // persist these values. Do not renumber. Do not reuse slots.
@@ -216,5 +219,28 @@ enum enum_sql_command {
   /* This should be the last !!! */
   SQLCOM_END
 };
+
+#ifdef __cplusplus
+// Compact indexing for com_stat arrays. MySQL commands (0..SQLCOM_MYSQL_COUNT-1)
+// keep their enum value as the index. VSQL commands (1024+) are packed
+// immediately after, starting at SQLCOM_MYSQL_COUNT.
+inline constexpr unsigned int sqlcom_compact_index(unsigned int cmd) {
+  return (cmd < (unsigned int)SQLCOM_MYSQL_COUNT)
+             ? cmd
+             : (unsigned int)SQLCOM_MYSQL_COUNT +
+                   (cmd - (unsigned int)SQLCOM_VSQL_FIRST);
+}
+
+inline constexpr unsigned int sqlcom_from_compact_index(unsigned int idx) {
+  return (idx < (unsigned int)SQLCOM_MYSQL_COUNT)
+             ? idx
+             : (unsigned int)SQLCOM_VSQL_FIRST +
+                   (idx - (unsigned int)SQLCOM_MYSQL_COUNT);
+}
+
+inline constexpr unsigned int SQLCOM_COMPACT_COUNT =
+    (unsigned int)SQLCOM_MYSQL_COUNT +
+    ((unsigned int)SQLCOM_END - (unsigned int)SQLCOM_VSQL_FIRST);
+#endif
 
 #endif /* _mysql_sql_command_h */

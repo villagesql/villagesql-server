@@ -10,19 +10,25 @@ Adding a new SQL command requires changes across multiple files to register the 
 
 ### 1. Add Command to Enum (include/my_sqlcommand.h)
 
-Add your command to the `enum_sql_command` enum. Place it near the end, before `SQLCOM_END`:
+Add your command to the `enum_sql_command` enum. VillageSQL commands go in the VSQL block (starting at 1024), before `SQLCOM_END`:
 
 ```cpp
 // include/my_sqlcommand.h
 enum enum_sql_command {
-  // ... existing commands ...
+  // ... MySQL commands (0-207, contiguous) ...
   SQLCOM_SHOW_PARSE_TREE,
+  SQLCOM_MYSQL_COUNT,  // Sentinel — must stay at end of MySQL commands
+
+  // VillageSQL commands start at 1024 to avoid conflicts with upstream MySQL
+  SQLCOM_VSQL_FIRST = 1024,
+  SQLCOM_INSTALL_EXTENSION = SQLCOM_VSQL_FIRST,
+  SQLCOM_UNINSTALL_EXTENSION,
   SQLCOM_YOUR_NEW_COMMAND,     // Add here
   SQLCOM_END                    // Must be last
 };
 ```
 
-**Important**: The enum order matters for the com_status_vars and com_metrics arrays.
+**Important**: VillageSQL commands use `sqlcom_compact_index()` for `com_stat` array access (see step 7).
 
 ### 2. Add Keyword Token (sql/lex.h)
 
@@ -99,21 +105,41 @@ Search for: `case SQLCOM_INSTALL_PLUGIN:` in `mysql_execute_command()`
 Add entries to **TWO** arrays for command tracking:
 
 **Array 1: com_status_vars**
-Search for: `{"install_plugin",` in `com_status_vars`
+Search for: `{"install_extension",` in `com_status_vars`
 
 **Array 2: com_metrics**
-Search for: `{"install_plugin",` in `com_metrics`
+Search for: `{"install_extension",` in `com_metrics`
 
 **Important**: Keep alphabetical ordering within each command type group (INSTALL*, UNINSTALL*, CREATE*, etc.)
+
+**Important for VillageSQL commands**: The `com_stat` arrays use compact indexing to avoid a gap. Use `sqlcom_compact_index()` in `offsetof` expressions:
+```cpp
+// com_status_vars entry:
+{"your_new_command",
+ (char *)offsetof(System_status_var,
+                  com_stat[sqlcom_compact_index((uint)SQLCOM_YOUR_NEW_COMMAND)]),
+ SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
+
+// com_metrics entry:
+{"your_new_command", "", COM_COMMON_DESCRIPTION,
+ MetricOTELType::ASYNC_COUNTER, MetricNumType::METRIC_INTEGER, 0, 0,
+ get_metric_aggregated_integer,
+ (void *)offsetof(aggregated_stats_buffer,
+                  com_stat[sqlcom_compact_index((uint)SQLCOM_YOUR_NEW_COMMAND)])},
+```
+MySQL-native commands don't need `sqlcom_compact_index()` — their compact index equals their enum value.
 
 ### 8. Update ABI Check File (include/mysql/plugin_audit.h.pp)
 
 Add your new commands to the enum_sql_command in the preprocessed header for audit logging:
 
-Search for: `SQLCOM_END` in `include/mysql/plugin_audit.h.pp` and add your commands before it:
+Search for: `SQLCOM_END` in `include/mysql/plugin_audit.h.pp` and add your commands in the VSQL block:
 
 ```cpp
-  SQLCOM_SHOW_PARSE_TREE,
+  SQLCOM_MYSQL_COUNT,
+  SQLCOM_VSQL_FIRST = 1024,
+  SQLCOM_INSTALL_EXTENSION = SQLCOM_VSQL_FIRST,
+  SQLCOM_UNINSTALL_EXTENSION,
   SQLCOM_YOUR_NEW_COMMAND,      // Add here
   SQLCOM_END
 ```

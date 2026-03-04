@@ -35,7 +35,7 @@ void aggregated_stats_buffer::flush() {
   com_stmt_reset = 0ULL;
   com_stmt_reprepare = 0ULL;
   com_stmt_send_long_data = 0ULL;
-  for (std::size_t i = 0; i < (std::size_t)SQLCOM_END; i++) com_stat[i] = 0ULL;
+  for (std::size_t i = 0; i < SQLCOM_COMPACT_COUNT; i++) com_stat[i] = 0ULL;
   table_open_cache_hits = 0ULL;
   table_open_cache_misses = 0ULL;
   table_open_cache_overflows = 0ULL;
@@ -89,7 +89,7 @@ void aggregated_stats_buffer::add_from(aggregated_stats_buffer &shard) {
   com_stmt_reset += shard.com_stmt_reset;
   com_stmt_reprepare += shard.com_stmt_reprepare;
   com_stmt_send_long_data += shard.com_stmt_send_long_data;
-  for (std::size_t i = 0; i < (std::size_t)SQLCOM_END; i++)
+  for (std::size_t i = 0; i < SQLCOM_COMPACT_COUNT; i++)
     com_stat[i] += shard.com_stat[i];
   table_open_cache_hits += shard.table_open_cache_hits;
   table_open_cache_misses += shard.table_open_cache_misses;

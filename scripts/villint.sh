@@ -681,6 +681,42 @@ if [ -n "$VILLAGESQL_TEST_FILES" ]; then
   done
 fi
 
+# --- Check for raw VSQL enum indexing into com_stat arrays ---
+# com_stat arrays use compact indexing. VSQL commands (>= SQLCOM_VSQL_FIRST)
+# must be wrapped in sqlcom_compact_index(). Auto-derives VSQL command names
+# from the enum header so the check stays current as new commands are added.
+COMPACT_INDEX_ERRORS=0
+
+# Extract VSQL command names from the enum (between SQLCOM_VSQL_FIRST and SQLCOM_END)
+VSQL_COMMANDS=$(sed -n '/SQLCOM_VSQL_FIRST/,/SQLCOM_END/p' include/my_sqlcommand.h | \
+  grep -oE 'SQLCOM_[A-Z_]+' | \
+  grep -v 'SQLCOM_VSQL_FIRST\|SQLCOM_END\|SQLCOM_MYSQL_COUNT\|SQLCOM_COMPACT_COUNT' | \
+  sort -u)
+
+if [ -n "$VSQL_COMMANDS" ]; then
+  for file in $C_FILES; do
+    if is_ignored "$file"; then
+      continue
+    fi
+    # Skip the header that defines the enum itself
+    case "$file" in
+      include/my_sqlcommand.h|include/mysql/plugin_audit.h.pp) continue ;;
+    esac
+    for vsql_cmd in $VSQL_COMMANDS; do
+      # Find lines with com_stat[...VSQL_CMD...] but NOT sqlcom_compact_index
+      while IFS=: read -r line_num line_content; do
+        if [ -n "$line_num" ] && [ -n "$line_content" ]; then
+          if ! echo "$line_content" | grep -q 'sqlcom_compact_index'; then
+            echo "  ERROR: $file:$line_num uses $vsql_cmd in com_stat without sqlcom_compact_index()"
+            echo "    $line_content"
+            COMPACT_INDEX_ERRORS=$((COMPACT_INDEX_ERRORS + 1))
+          fi
+        fi
+      done < <(grep -n "com_stat\[.*${vsql_cmd}" "$file" 2>/dev/null || true)
+    done
+  done
+fi
+
 echo "Linting complete."
 
 # Exit with error if laptop strings were found
@@ -696,5 +732,13 @@ if [ $INVALID_TODO_TAGS_FOUND -gt 0 ]; then
   echo "ERROR: Found $INVALID_TODO_TAGS_FOUND invalid TODO tag(s)."
   echo "Allowed tags: ${ALLOWED_TODO_TAGS[*]}"
   echo "To allow a new tag, edit ALLOWED_TODO_TAGS in: scripts/villint.sh"
+  exit 1
+fi
+
+if [ $COMPACT_INDEX_ERRORS -gt 0 ]; then
+  echo ""
+  echo "ERROR: Found $COMPACT_INDEX_ERRORS com_stat access(es) using VSQL enum values without sqlcom_compact_index()."
+  echo "VSQL commands (>= SQLCOM_VSQL_FIRST) must use sqlcom_compact_index() when indexing com_stat arrays."
+  echo "Example: com_stat[sqlcom_compact_index((uint)SQLCOM_INSTALL_EXTENSION)]"
   exit 1
 fi

@@ -53,7 +53,7 @@ struct aggregated_stats_buffer {
   std::atomic_uint64_t com_stmt_reset;
   std::atomic_uint64_t com_stmt_reprepare;
   std::atomic_uint64_t com_stmt_send_long_data;
-  std::atomic_uint64_t com_stat[(unsigned int)SQLCOM_END];
+  std::atomic_uint64_t com_stat[SQLCOM_COMPACT_COUNT];
 
   std::atomic_uint64_t table_open_cache_hits;
   std::atomic_uint64_t table_open_cache_misses;

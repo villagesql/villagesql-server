@@ -4316,8 +4316,9 @@ SHOW_VAR com_status_vars[] = {
                       com_stat[(uint)SQLCOM_INSTALL_COMPONENT]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"install_extension",
-     (char *)offsetof(System_status_var,
-                      com_stat[(uint)SQLCOM_INSTALL_EXTENSION]),
+     (char *)offsetof(
+         System_status_var,
+         com_stat[sqlcom_compact_index((uint)SQLCOM_INSTALL_EXTENSION)]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"install_plugin",
      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_INSTALL_PLUGIN]),
@@ -4596,8 +4597,9 @@ SHOW_VAR com_status_vars[] = {
                       com_stat[(uint)SQLCOM_UNINSTALL_COMPONENT]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"uninstall_extension",
-     (char *)offsetof(System_status_var,
-                      com_stat[(uint)SQLCOM_UNINSTALL_EXTENSION]),
+     (char *)offsetof(
+         System_status_var,
+         com_stat[sqlcom_compact_index((uint)SQLCOM_UNINSTALL_EXTENSION)]),
      SHOW_LONG_STATUS, SHOW_SCOPE_ALL},
     {"uninstall_plugin",
      (char *)offsetof(System_status_var,
@@ -4641,7 +4643,7 @@ LEX_CSTRING sql_statement_names[(uint)SQLCOM_END + 1];
 static void init_sql_statement_names() {
   char *first_com = (char *)offsetof(System_status_var, com_stat[0]);
   char *last_com =
-      (char *)offsetof(System_status_var, com_stat[(uint)SQLCOM_END]);
+      (char *)offsetof(System_status_var, com_stat[SQLCOM_COMPACT_COUNT]);
   const int record_size = (char *)offsetof(System_status_var, com_stat[1]) -
                           (char *)offsetof(System_status_var, com_stat[0]);
   char *ptr;
@@ -4655,7 +4657,8 @@ static void init_sql_statement_names() {
   while (var->name != nullptr) {
     ptr = var->value;
     if ((first_com <= ptr) && (ptr <= last_com)) {
-      com_index = ((int)(ptr - first_com)) / record_size;
+      uint compact_index = ((int)(ptr - first_com)) / record_size;
+      com_index = sqlcom_from_compact_index(compact_index);
       assert(com_index < (uint)SQLCOM_END);
       sql_statement_names[com_index].str = var->name;
       /* TODO: Change SHOW_VAR::name to a LEX_STRING, to avoid strlen() */
@@ -5447,8 +5450,9 @@ static PSI_metric_info_v1 com_metrics[] = {
     {"install_extension", "", COM_COMMON_DESCRIPTION,
      MetricOTELType::ASYNC_COUNTER, MetricNumType::METRIC_INTEGER, 0, 0,
      get_metric_aggregated_integer,
-     (void *)offsetof(aggregated_stats_buffer,
-                      com_stat[(uint)SQLCOM_INSTALL_EXTENSION])},
+     (void *)offsetof(
+         aggregated_stats_buffer,
+         com_stat[sqlcom_compact_index((uint)SQLCOM_INSTALL_EXTENSION)])},
     {"install_plugin", "", COM_COMMON_DESCRIPTION,
      MetricOTELType::ASYNC_COUNTER, MetricNumType::METRIC_INTEGER, 0, 0,
      get_metric_aggregated_integer,
@@ -5812,8 +5816,9 @@ static PSI_metric_info_v1 com_metrics[] = {
     {"uninstall_extension", "", COM_COMMON_DESCRIPTION,
      MetricOTELType::ASYNC_COUNTER, MetricNumType::METRIC_INTEGER, 0, 0,
      get_metric_aggregated_integer,
-     (void *)offsetof(aggregated_stats_buffer,
-                      com_stat[(uint)SQLCOM_UNINSTALL_EXTENSION])},
+     (void *)offsetof(
+         aggregated_stats_buffer,
+         com_stat[sqlcom_compact_index((uint)SQLCOM_UNINSTALL_EXTENSION)])},
     {"uninstall_plugin", "", COM_COMMON_DESCRIPTION,
      MetricOTELType::ASYNC_COUNTER, MetricNumType::METRIC_INTEGER, 0, 0,
      get_metric_aggregated_integer,
@@ -6589,7 +6594,7 @@ int init_common_variables() {
     of SQLCOM_ constants.
   */
   static_assert(sizeof(com_status_vars) / sizeof(com_status_vars[0]) - 1 ==
-                    SQLCOM_END + 7,
+                    SQLCOM_COMPACT_COUNT + 7,
                 "");
 #endif
 
@@ -14008,10 +14013,16 @@ static void init_server_psi_keys(void) {
   count = (int)SQLCOM_CLONE;
   mysql_statement_register(category, sql_statement_info, count);
 
-  /* Exclude SQLCOM_CLONE as it mutates and is registered as abstract. */
-  count = (int)SQLCOM_END - (int)SQLCOM_CLONE;
+  /* Register [SQLCOM_CLONE+1 .. SQLCOM_MYSQL_COUNT-1] as "statement/sql/..." */
+  count = (int)SQLCOM_MYSQL_COUNT - (int)SQLCOM_CLONE - 1;
   mysql_statement_register(category, &sql_statement_info[(int)SQLCOM_CLONE + 1],
                            count);
+
+  /* Register VSQL commands + SQLCOM_END "error" entry as "statement/sql/..." */
+  count = (int)SQLCOM_END - (int)SQLCOM_VSQL_FIRST + 1;
+  mysql_statement_register(category,
+                           &sql_statement_info[(int)SQLCOM_VSQL_FIRST], count);
+
   category = "abstract";
   mysql_statement_register(category, &sql_statement_info[(int)SQLCOM_CLONE], 1);
 

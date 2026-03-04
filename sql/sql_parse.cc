@@ -3196,9 +3196,9 @@ int mysql_execute_command(THD *thd, bool first_level) {
     }
   } /* endif unlikely slave */
 
-  thd->status_var.com_stat[lex->sql_command]++;
+  thd->status_var.com_stat[sqlcom_compact_index(lex->sql_command)]++;
   global_aggregated_stats.get_shard(thd->thread_id())
-      .com_stat[lex->sql_command]++;
+      .com_stat[sqlcom_compact_index(lex->sql_command)]++;
 
   Opt_trace_start ots(thd, all_tables, lex->sql_command, &lex->var_list,
                       thd->query().str, thd->query().length, nullptr,
