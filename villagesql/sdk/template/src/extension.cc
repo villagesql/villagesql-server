@@ -20,18 +20,15 @@
 // See the extension.h header for full documentation.
 
 #include <villagesql/extension.h>
+using namespace villagesql;
 
 // Example function: adds two integers
-// INT parameters are passed natively in the int_value field.
-void add_impl(vef_context_t *ctx, vef_invalue_t *a, vef_invalue_t *b,
-              vef_vdf_result_t *result) {
-  if (a->is_null || b->is_null) {
-    result->type = VEF_RESULT_NULL;
+void add_impl(IntArg a, IntArg b, IntResult out) {
+  if (a.is_null() || b.is_null()) {
+    out.set_null();
     return;
   }
-
-  result->int_value = a->int_value + b->int_value;
-  result->type = VEF_RESULT_VALUE;
+  out.set(a.value() + b.value());
 }
 
 // Register the extension

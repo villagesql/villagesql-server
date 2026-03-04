@@ -31,13 +31,13 @@
 //   StringResult / BinaryResult: write into buffer(), then call set_length().
 //
 // Example - integer add:
-//   void add(vef_context_t*, IntArg a, IntArg b, IntResult out) {
+//   void add(IntArg a, IntArg b, IntResult out) {
 //     if (a.is_null() || b.is_null()) { out.set_null(); return; }
 //     out.set(a.value() + b.value());
 //   }
 //
 // Example - binary transform (ROT13 on a fixed-size BYTEARRAY):
-//   void rot13(vef_context_t*, BinaryArg in, BinaryResult out) {
+//   void rot13(BinaryArg in, BinaryResult out) {
 //     if (in.is_null()) { out.set_null(); return; }
 //     auto src = in.value();          // villagesql::Span<const unsigned char>
 //     auto dst = out.buffer();        // villagesql::Span<unsigned char>

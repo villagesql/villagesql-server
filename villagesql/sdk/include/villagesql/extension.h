@@ -29,13 +29,12 @@
 // Create a .cc file for your extension:
 //
 //   #include <villagesql/extension.h>
+//   using namespace villagesql;
 //
 //   // Implement your function
-//   void add_impl(vef_context_t* ctx,
-//                 vef_invalue_t* a, vef_invalue_t* b,
-//                 vef_vdf_result_t* result) {
-//     result->int_value = a->int_value + b->int_value;
-//     result->type = VEF_RESULT_VALUE;
+//   void add_impl(IntArg a, IntArg b, IntResult out) {
+//     if (a.is_null() || b.is_null()) { out.set_null(); return; }
+//     out.set(a.value() + b.value());
 //   }
 //
 //   // Register the extension with inline function definitions
@@ -79,7 +78,7 @@
 //     out.set_length(src.size());
 //   }
 //
-// DEFINING FUNCTIONS (deprecated, will be removed)
+// DEFINING FUNCTIONS
 // ------------------
 //
 // Functions are defined using make_func<&impl>("name") and chained builder
@@ -173,6 +172,7 @@
 //
 //   #include <villagesql/extension.h>
 //   #include <cstring>
+//   using namespace villagesql;
 //
 //   static const size_t kBytearrayLen = 8;
 //   constexpr const char* BYTEARRAY = "bytearray";
@@ -206,17 +206,17 @@
 //   }
 //
 //   // ROT13: apply ROT13 cipher to ASCII letters in a bytearray
-//   void rot13_impl(vef_context_t* ctx,
-//                   vef_invalue_t* input, vef_vdf_result_t* result) {
-//     if (input->is_null) { result->type = VEF_RESULT_NULL; return; }
+//   void rot13_impl(BinaryArg input, BinaryResult out) {
+//     if (input.is_null()) { out.set_null(); return; }
+//     auto src = input.value();   // villagesql::Span<const unsigned char>
+//     auto dst = out.buffer();    // villagesql::Span<unsigned char>
 //     for (size_t i = 0; i < kBytearrayLen; i++) {
-//       unsigned char c = input->bin_value[i];
+//       unsigned char c = src[i];
 //       if (c >= 'A' && c <= 'Z') c = 'A' + ((c - 'A' + 13) % 26);
 //       else if (c >= 'a' && c <= 'z') c = 'a' + ((c - 'a' + 13) % 26);
-//       result->bin_buf[i] = c;
+//       dst[i] = c;
 //     }
-//     result->type = VEF_RESULT_VALUE;
-//     result->actual_len = kBytearrayLen;
+//     out.set_length(kBytearrayLen);
 //   }
 //
 //   // Register everything inline
