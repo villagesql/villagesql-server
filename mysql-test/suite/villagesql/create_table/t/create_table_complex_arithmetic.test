@@ -1,8 +1,6 @@
 # Test CREATE TABLE with COMPLEX arithmetic in generated columns
 # Tests COMPLEX arithmetic operations and functions
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 --source include/villagesql/binlog_check_begin.inc
 
@@ -11,20 +9,27 @@ CREATE TABLE t1 (
     input_a COMPLEX,
     input_b COMPLEX,
     sum_result COMPLEX GENERATED ALWAYS AS (COMPLEX_ADD(input_a, input_b)) VIRTUAL,
-    product_result COMPLEX GENERATED ALWAYS AS (COMPLEX_MUL(input_a, input_b)) VIRTUAL,
-    difference COMPLEX GENERATED ALWAYS AS (COMPLEX_SUB(input_a, input_b)) STORED,
-    quotient COMPLEX GENERATED ALWAYS AS (COMPLEX_DIV(input_a, input_b)) STORED
+    product_result COMPLEX GENERATED ALWAYS AS (COMPLEX_MULTIPLY(input_a, input_b)) VIRTUAL,
+    difference COMPLEX GENERATED ALWAYS AS (COMPLEX_SUBTRACT(input_a, input_b)) STORED,
+    quotient COMPLEX GENERATED ALWAYS AS (COMPLEX_DIVIDE(input_a, input_b)) STORED
 );
 
 SHOW CREATE TABLE t1;
 
 INSERT INTO t1 (id, input_a, input_b) VALUES (1, '(2.0,3.0)', '(1.0,1.0)');
 INSERT INTO t1 (id, input_a, input_b) VALUES (2, '(4.0,0.0)', '(2.0,0.0)');
+INSERT INTO t1 (id, input_a, input_b) VALUES (3, '(0.0,0.0)', '(2.0,1.0)');
+INSERT INTO t1 (id, input_a, input_b) VALUES (4, '(-1.0,0.0)', '(2.0,-1.0)');
 
-SELECT * FROM t1;
+SELECT * FROM t1 ORDER BY id;
+
+UPDATE t1
+SET input_a = '(-3.0,1.0)',
+    input_b = '(0.0,1.0)'
+WHERE id = 1;
 
 # Test arithmetic results
-SELECT id, input_a, input_b, sum_result, product_result FROM t1;
+SELECT id, input_a, input_b, sum_result, product_result FROM t1 ORDER BY id;
 
 DROP TABLE t1;
 
