@@ -1,5 +1,15 @@
-CREATE TABLE t_complex (id INT, val COMPLEX);
-INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+CREATE TABLE t_complex (id INT, val COMPLEX, str VARCHAR(100));
+CREATE TABLE t_dest (str VARCHAR(100));
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)', '');
 SELECT CONCAT('The complex number is ', val) FROM t_complex WHERE id = 1;
 ERROR HY000: Incorrect usage of concat and COMPLEX
+UPDATE t_complex SET str=CONCAT('The complex number is ', val) WHERE id = 1;
+ERROR HY000: Incorrect usage of concat and COMPLEX
+INSERT INTO t_dest SELECT CONCAT('The complex number is ', val) FROM t_complex WHERE id = 1;
+ERROR HY000: Incorrect usage of concat and COMPLEX
+UPDATE t_complex t1, t_complex t2 SET t1.str=CONCAT('x', t2.val) WHERE t1.id = t2.id;
+ERROR HY000: Incorrect usage of concat and COMPLEX
+REPLACE INTO t_dest SELECT CONCAT('The complex number is ', val) FROM t_complex WHERE id = 1;
+ERROR HY000: Incorrect usage of concat and COMPLEX
 DROP TABLE t_complex;
+DROP TABLE t_dest;

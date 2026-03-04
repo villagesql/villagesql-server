@@ -2780,8 +2780,6 @@ class Item : public Parse_tree_node {
   /// A processor to handle the select lex visitor framework.
   virtual bool visitor_processor(uchar *arg);
 
-  /// A processor to check custom type usage in expressions
-  virtual bool check_custom_type_usage_processor(uchar *arg);
 
   /**
     Item::walk function. Set bit in table->cond_set for all fields of

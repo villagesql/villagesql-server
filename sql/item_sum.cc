@@ -97,6 +97,7 @@
 #include "sql/uniques.h"           // Unique
 #include "sql/window.h"
 #include "string_with_len.h"
+#include "villagesql/types/util.h"
 
 using std::max;
 using std::min;
@@ -1471,6 +1472,9 @@ bool Item_sum_num::fix_fields(THD *thd, Item **ref) {
 
   if (resolve_type(thd)) return true;
 
+  // VillageSQL: validate custom type usage at resolution time
+  if (villagesql::CheckCustomTypeUsage(this, thd)) return true;
+
   if (check_sum_func(thd, ref)) return true;
 
   fixed = true;
@@ -1493,6 +1497,9 @@ bool Item_sum_bit::fix_fields(THD *thd, Item **ref) {
   }
 
   if (resolve_type(thd)) return true;
+
+  // VillageSQL: validate custom type usage at resolution time
+  if (villagesql::CheckCustomTypeUsage(this, thd)) return true;
 
   assert(!thd->is_error());
 
@@ -1803,6 +1810,9 @@ bool Item_sum_hybrid::fix_fields(THD *thd, Item **ref) {
   result_field = nullptr;
   null_value = true;
   if (resolve_type(thd)) return true;
+
+  // VillageSQL: validate custom type usage at resolution time
+  if (villagesql::CheckCustomTypeUsage(this, thd)) return true;
 
   set_data_type_from_item(item->real_item());
 
@@ -5864,6 +5874,9 @@ bool Item_sum_json::fix_fields(THD *thd, Item **ref) {
 
   if (resolve_type(thd)) return true;
 
+  // VillageSQL: validate custom type usage at resolution time
+  if (villagesql::CheckCustomTypeUsage(this, thd)) return true;
+
   if (check_sum_func(thd, ref)) return true;
 
   set_nullable(true);
@@ -6560,6 +6573,9 @@ bool Item_sum_collect::fix_fields(THD *thd, Item **ref) {
     return true;
 
   if (resolve_type(thd)) return true;
+
+  // VillageSQL: validate custom type usage at resolution time
+  if (villagesql::CheckCustomTypeUsage(this, thd)) return true;
 
   if (check_sum_func(thd, ref)) return true;
 

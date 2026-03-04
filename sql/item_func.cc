@@ -433,6 +433,8 @@ bool Item_func::fix_fields(THD *thd, Item **) {
 
   if (resolve_type(thd) || thd->is_error())  // Some impls still not error-safe
     return true;
+  // VillageSQL: validate custom type usage at resolution time
+  if (villagesql::CheckCustomTypeUsage(this, thd)) return true;
   fixed = true;
   return false;
 }
@@ -4573,6 +4575,8 @@ bool Item_udf_func::fix_fields(THD *thd, Item **) {
   if (thd->is_error()) return true;
   used_tables_cache = udf.used_tables_cache;
   m_non_deterministic = is_non_deterministic();
+  // VillageSQL: validate custom type usage at resolution time
+  if (villagesql::CheckCustomTypeUsage(this, thd)) return true;
   fixed = true;
   return false;
 }

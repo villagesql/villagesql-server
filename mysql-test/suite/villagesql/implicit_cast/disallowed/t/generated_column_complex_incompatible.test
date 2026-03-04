@@ -1,14 +1,12 @@
 # Test generated column with COMPLEX and incompatible expression
 
---source include/villagesql/not_implemented_complex_type.inc
 --source include/villagesql/install_complex_extension.inc
 
+--error ER_WRONG_USAGE
 CREATE TABLE test_generated (
   id INT,
   val COMPLEX,
   computed_col VARCHAR(100) GENERATED ALWAYS AS (CONCAT('Value: ', val))
 );
-
-DROP TABLE test_generated;
 
 --source include/villagesql/uninstall_complex_extension.inc

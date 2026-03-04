@@ -1,0 +1,6 @@
+CREATE TABLE test_generated (
+id INT,
+val COMPLEX,
+computed_col VARCHAR(100) GENERATED ALWAYS AS (CONCAT('Value: ', val))
+);
+ERROR HY000: Incorrect usage of concat and COMPLEX

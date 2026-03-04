@@ -786,22 +786,23 @@ bool TryImplicitCastToCustom(Item *item, const TypeContext &tc) {
 }
 
 static bool AllArgsCompatible(Item_func *func) {
-  // All args need to be custom, and they need to be compatible.
-  if (!func->get_arg(func->arg_count - 1)->has_type_context()) {
-    villagesql_error(ER_INCOMPARABLE_TYPES, MYF(0), func->func_name());
-    return false;
-  }
-  for (int i = func->arg_count - 1; i >= 1; --i) {
-    auto *tc0 = func->get_arg(i - 1)->get_type_context();
-    auto *tc1 = func->get_arg(i)->get_type_context();
-    if (!tc0) {
-      villagesql_error(ER_INCOMPARABLE_TYPES, MYF(0), func->func_name());
-      return false;
+  // Only check that all custom-typed args are mutually compatible. Non-custom
+  // args (string literals, integers, etc.) are left for the comparison
+  // function's own fix_fields to cast or reject with the proper error message.
+  const TypeContext *any_tc = nullptr;
+  for (uint i = 0; i < func->arg_count; i++) {
+    if (func->get_arg(i)->has_type_context()) {
+      any_tc = func->get_arg(i)->get_type_context();
+      break;
     }
-    // Look for an incompatibility in types (since we know both are custom).
-    if (!AreTypesCompatible(*tc0, *tc1)) {
-      villagesql_error(ER_INCOMPATIBLE_TYPES, MYF(0), tc0->type_name().c_str(),
-                       tc1->type_name().c_str());
+  }
+  for (uint i = 1; any_tc && i < func->arg_count; i++) {
+    auto *tc = func->get_arg(i)->get_type_context();
+    if (!tc) continue;  // not yet custom-typed, skip
+    if (!AreTypesCompatible(*any_tc, *tc)) {
+      villagesql_error("Cannot compare types %s and %s in %s", MYF(0),
+                       any_tc->qualified_name().c_str(),
+                       tc->qualified_name().c_str(), func->func_name());
       return false;
     }
   }
@@ -897,9 +898,12 @@ bool IsFuncAllowedWithCustom(THD *thd [[maybe_unused]], Item_func *func,
                tc.type_name().c_str());
       return false;
     }
-    // Allow explicit CAST
+    // Allow pass-through functions that don't interpret the custom value
     case Item_func::ISNULL_FUNC:
     case Item_func::ISNOTNULL_FUNC:
+    case Item_func::ISNOTNULLTEST_FUNC:  // internal, used in ALL/ANY subqueries
+    case Item_func::SUSERVAR_FUNC:       // SET @var := custom_value
+    case Item_func::GUSERVAR_FUNC:       // GET @var
       return true;
     default:
       // Block everything else for now
@@ -958,58 +962,6 @@ bool CheckCustomTypeUsage(Item *item, THD *thd) {
   return false;  // Continue walking
 }
 
-bool WalkQueryBlockForCustomTypeValidation(THD *thd,
-                                           const mem_root_deque<Item *> &fields,
-                                           const SQL_I_List<ORDER> &group_list,
-                                           const SQL_I_List<ORDER> &order_list,
-                                           Item *where_condition,
-                                           Item *having_condition) {
-  // Validate custom type usage in SELECT fields
-  // Note: VisibleFields() iterates over visible result columns (output of
-  // SELECT), not table columns. INVISIBLE table columns are still validated
-  // when they appear in result column expressions because the walker
-  // recursively descends the expression tree.
-  for (Item *item : VisibleFields(fields)) {
-    if (item->walk(&Item::check_custom_type_usage_processor, enum_walk::POSTFIX,
-                   (uchar *)thd)) {
-      return true;
-    }
-  }
-
-  // Check WHERE clause
-  if (where_condition &&
-      where_condition->walk(&Item::check_custom_type_usage_processor,
-                            enum_walk::POSTFIX, (uchar *)thd)) {
-    return true;
-  }
-
-  // Check GROUP BY clause
-  for (ORDER *order = group_list.first; order; order = order->next) {
-    if ((*order->item)
-            ->walk(&Item::check_custom_type_usage_processor, enum_walk::POSTFIX,
-                   (uchar *)thd)) {
-      return true;
-    }
-  }
-
-  // Check ORDER BY clause
-  for (ORDER *order = order_list.first; order; order = order->next) {
-    if ((*order->item)
-            ->walk(&Item::check_custom_type_usage_processor, enum_walk::POSTFIX,
-                   (uchar *)thd)) {
-      return true;
-    }
-  }
-
-  // Check HAVING clause
-  if (having_condition &&
-      having_condition->walk(&Item::check_custom_type_usage_processor,
-                             enum_walk::POSTFIX, (uchar *)thd)) {
-    return true;
-  }
-
-  return false;
-}
 
 void AnnotateCustomColumnsInTmpTable(TABLE *table,
                                      List<Create_field> &create_fields) {

@@ -292,14 +292,6 @@ extern bool TryImplicitCastToCustom(Item *item, const TypeContext &tc);
 // Returns false on success, true on error (with my_error already called)
 extern bool CheckCustomTypeUsage(Item *item, THD *thd);
 
-// Walk query block items and call custom type usage processor on each Item
-// Validates custom type usage in SELECT fields, WHERE, GROUP BY, ORDER BY, and
-// HAVING clauses
-// Returns false on success, true on error
-extern bool WalkQueryBlockForCustomTypeValidation(
-    THD *thd, const mem_root_deque<Item *> &fields,
-    const SQL_I_List<ORDER> &group_list, const SQL_I_List<ORDER> &order_list,
-    Item *where_condition, Item *having_condition);
 
 // Validate custom type access in the current execution context.
 // Checks if custom types are being used in unsupported contexts.

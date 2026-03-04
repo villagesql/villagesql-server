@@ -114,7 +114,6 @@
 #include "sql/window.h"
 #include "template_utils.h"
 #include "thr_lock.h"  // TL_READ
-#include "villagesql/types/util.h"
 
 using std::find;
 using std::function;
@@ -660,12 +659,6 @@ bool Query_block::prepare(THD *thd, mem_root_deque<Item *> *insert_field_list) {
       });
       if (is_updated) item->update_used_tables();
     }
-  }
-
-  // VillageSQL: validate custom type usage in expressions
-  if (villagesql::WalkQueryBlockForCustomTypeValidation(
-          thd, fields, group_list, order_list, where_cond(), having_cond())) {
-    return true;
   }
 
   assert(!thd->is_error());

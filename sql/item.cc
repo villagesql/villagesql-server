@@ -912,10 +912,6 @@ bool Item::visitor_processor(uchar *arg) {
   return visitor->visit(this);
 }
 
-bool Item::check_custom_type_usage_processor(uchar *arg) {
-  THD *thd = pointer_cast<THD *>(arg);
-  return villagesql::CheckCustomTypeUsage(this, thd);
-}
 
 /**
   rename item (used for views, cleanup() return original name).

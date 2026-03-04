@@ -1,5 +1,5 @@
 # Test comparison expression on INVISIBLE COMPLEX columns in SELECT list
-# This should trigger WalkQueryBlockForCustomTypeValidation
+# Custom type validation fires during Item_func::fix_fields
 
 --source include/villagesql/install_complex_extension.inc
 

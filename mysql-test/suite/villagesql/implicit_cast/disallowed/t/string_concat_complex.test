@@ -2,13 +2,27 @@
 
 --source include/villagesql/install_complex_extension.inc
 
-CREATE TABLE t_complex (id INT, val COMPLEX);
+CREATE TABLE t_complex (id INT, val COMPLEX, str VARCHAR(100));
+CREATE TABLE t_dest (str VARCHAR(100));
 
-INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)', '');
 
 --error ER_WRONG_USAGE
 SELECT CONCAT('The complex number is ', val) FROM t_complex WHERE id = 1;
 
+--error ER_WRONG_USAGE
+UPDATE t_complex SET str=CONCAT('The complex number is ', val) WHERE id = 1;
+
+--error ER_WRONG_USAGE
+INSERT INTO t_dest SELECT CONCAT('The complex number is ', val) FROM t_complex WHERE id = 1;
+
+--error ER_WRONG_USAGE
+UPDATE t_complex t1, t_complex t2 SET t1.str=CONCAT('x', t2.val) WHERE t1.id = t2.id;
+
+--error ER_WRONG_USAGE
+REPLACE INTO t_dest SELECT CONCAT('The complex number is ', val) FROM t_complex WHERE id = 1;
+
 DROP TABLE t_complex;
+DROP TABLE t_dest;
 
 --source include/villagesql/uninstall_complex_extension.inc
