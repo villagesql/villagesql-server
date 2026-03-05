@@ -70,6 +70,24 @@ void TypeContext::resolve_cached_values() {
   }
 }
 
+void TypeParameters::build_entries() {
+  entries_.clear();
+  c_entries_.clear();
+  if (str_.empty()) return;
+
+  size_t start = 0;
+  while (start < str_.size()) {
+    size_t comma = str_.find(',', start);
+    if (comma == std::string::npos) comma = str_.size();
+    entries_.push_back(str_.substr(start, comma - start));
+    start = comma + 1;
+  }
+  c_entries_.reserve(entries_.size());
+  for (const auto &e : entries_) {
+    c_entries_.push_back(e.c_str());
+  }
+}
+
 TypeParameters TypeParameters::from_raw(const std::string &raw) {
   if (raw.empty()) return TypeParameters();
 

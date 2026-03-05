@@ -166,6 +166,7 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
   if (signature != nullptr && signature->return_type.id == VEF_TYPE_CUSTOM) {
     villagesql::SetVDFReturnTypeContext(thd, m_udf->extension_name, signature,
                                         func);
+    m_return_type_context = func->get_type_context();
   }
 
   m_active = true;
@@ -222,6 +223,18 @@ static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
       case VEF_TYPE_CUSTOM:
       default: {
         String *arg_str = arg_item->val_str(&buffers[i]);
+
+        // Only set the type parameters in protocol 2 or greater.
+        if constexpr (!std::is_same_v<InvalueType, vef_invalue_v1_t>) {
+          const auto *tc = arg_item->get_type_context();
+          if (tc != nullptr) {
+            const auto &params = tc->parameters();
+            invalues[i].type_params = {params.entry_count(),
+                                       params.entry_data()};
+          } else {
+            invalues[i].type_params = {0, nullptr};
+          }
+        }
         if (arg_item->null_value || arg_str == nullptr) {
           invalues[i].is_null = true;
           invalues[i].bin_value = nullptr;
@@ -339,6 +352,12 @@ String *vdf_handler::val_str(String *str, String *save_str,
     result.bin_buf = reinterpret_cast<unsigned char *>(m_result_buffer);
     result.max_bin_len = m_result_buffer_size;
     result.alt_bin_buf = nullptr;
+    if (m_return_type_context != nullptr) {
+      const auto &params = m_return_type_context->parameters();
+      result.type_params = {params.entry_count(), params.entry_data()};
+    } else {
+      result.type_params = {0, nullptr};
+    }
   } else {
     result.str_buf = m_result_buffer;
     result.max_str_len = m_result_buffer_size;

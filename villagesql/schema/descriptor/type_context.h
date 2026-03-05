@@ -47,7 +47,9 @@ struct ColumnEntry;
 class TypeParameters {
  public:
   TypeParameters() = default;
-  explicit TypeParameters(std::string canonical) : str_(std::move(canonical)) {}
+  explicit TypeParameters(std::string canonical) : str_(std::move(canonical)) {
+    build_entries();
+  }
 
   // Normalize a raw "k=v,k=v,..." string: split pairs, sort by lowercased
   // key, lowercase values, re-serialize. Used by TYPE('k=v,...') SQL parser
@@ -56,6 +58,14 @@ class TypeParameters {
 
   bool empty() const { return str_.empty(); }
   const std::string &str() const { return str_; }
+
+  // ABI accessors: sorted "key=value" entries for vef_type_params_t.
+  unsigned int entry_count() const {
+    return static_cast<unsigned int>(entries_.size());
+  }
+  const char *const *entry_data() const {
+    return c_entries_.empty() ? nullptr : c_entries_.data();
+  }
 
   // JSON serialization for storage in the villagesql.custom_columns table
   // (which has a JSON column for type_parameters).
@@ -72,7 +82,16 @@ class TypeParameters {
   }
 
  private:
+  void build_entries();
+
+  // The canonical string representation of the key/value pairs
   std::string str_;
+
+  // Pre-parsed key/values: k0, v0, k1, v1, ...
+  // We need the string version to own the memory and keep a vector of the
+  // underlying const char* so that we can pass it through the ABI.
+  std::vector<std::string> entries_;
+  std::vector<const char *> c_entries_;
 };
 
 // Key for TypeContext entries in the VictionaryClient map.
