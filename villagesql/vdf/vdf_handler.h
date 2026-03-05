@@ -62,7 +62,9 @@ class vdf_handler {
 
   vef_context_t m_context{};
   vef_vdf_args_t m_vdf_args{};
+  vef_invalue_v1_t *m_invalues_v1{nullptr};
   vef_invalue_t *m_invalues{nullptr};
+  vef_invalue_t **m_invalues_ptrs{nullptr};
   char *m_result_buffer{nullptr};
   size_t m_result_buffer_size{0};
   char *m_error_msg{nullptr};

@@ -73,20 +73,26 @@ struct BinarySlice {
 //   fill() — called per invoke() to update the per-call data fields
 struct IntArg {
   using cpp_t = int64_t;
-  static void init(vef_invalue_t &v) {
+  template <typename T>
+  static void init(T &v) {
     v.type = VEF_TYPE_INT;
     v.is_null = false;
   }
-  static void fill(vef_invalue_t &v, int64_t val) { v.int_value = val; }
+  template <typename T>
+  static void fill(T &v, int64_t val) {
+    v.int_value = val;
+  }
 };
 
 struct StringArg {
   using cpp_t = StringSlice;
-  static void init(vef_invalue_t &v) {
+  template <typename T>
+  static void init(T &v) {
     v.type = VEF_TYPE_STRING;
     v.is_null = false;
   }
-  static void fill(vef_invalue_t &v, StringSlice s) {
+  template <typename T>
+  static void fill(T &v, StringSlice s) {
     v.str_len = s.len;
     v.str_value = s.data;
   }
@@ -94,11 +100,13 @@ struct StringArg {
 
 struct CustomArg {
   using cpp_t = BinarySlice;
-  static void init(vef_invalue_t &v) {
+  template <typename T>
+  static void init(T &v) {
     v.type = VEF_TYPE_CUSTOM;
     v.is_null = false;
   }
-  static void fill(vef_invalue_t &v, BinarySlice b) {
+  template <typename T>
+  static void fill(T &v, BinarySlice b) {
     v.bin_len = b.len;
     v.bin_value = b.data;
   }
@@ -123,17 +131,22 @@ class SpecialVdfCall {
     assert(fd != nullptr);
     assert(fd->prerun == nullptr && fd->postrun == nullptr);
     ctx_.protocol = fd->protocol;
-    init_types();
     vdf_args_.user_data = nullptr;
     vdf_args_.value_count = static_cast<unsigned int>(kN);
-    vdf_args_.values = inputs_;
+    if (fd->protocol >= VEF_PROTOCOL_2) {
+      for (size_t i = 0; i < kN; i++) input_ptrs_[i] = &inputs_[i];
+      init_inputs(inputs_);
+      vdf_args_.values = input_ptrs_;
+    } else {
+      init_inputs(inputs_v1_);
+      vdf_args_.values_v1 = inputs_v1_;
+    }
   }
 
-  // Not copyable: vdf_args_.values points into inputs_.
+  // Not copyable or movable: vdf_args_ points into
+  // inputs_/inputs_v1_/input_ptrs_.
   SpecialVdfCall(const SpecialVdfCall &) = delete;
   SpecialVdfCall &operator=(const SpecialVdfCall &) = delete;
-
-  // Not movable: vdf_args_.values points into inputs_.
   SpecialVdfCall(SpecialVdfCall &&) = delete;
   SpecialVdfCall &operator=(SpecialVdfCall &&) = delete;
 
@@ -152,8 +165,7 @@ class SpecialVdfCall {
   template <typename RT = ResultTag,
             std::enable_if_t<std::is_same_v<RT, IntResult>, int> = 0>
   std::optional<int64_t> invoke(typename ArgTags::cpp_t... args) {
-    unsigned int i = 0;
-    ((ArgTags::fill(inputs_[i++], args)), ...);
+    fill_inputs(args...);
     vef_vdf_result_t result = {};
     result.error_msg = error_msg_;
     result.type = VEF_RESULT_VALUE;
@@ -175,8 +187,7 @@ class SpecialVdfCall {
             std::enable_if_t<std::is_same_v<RT, StringResult>, int> = 0>
   std::optional<size_t> invoke(typename ArgTags::cpp_t... args, char *out_buf,
                                size_t max_len) {
-    unsigned int i = 0;
-    ((ArgTags::fill(inputs_[i++], args)), ...);
+    fill_inputs(args...);
     alt_str_buf_ = nullptr;
     vef_vdf_result_t result = {};
     result.error_msg = error_msg_;
@@ -202,8 +213,7 @@ class SpecialVdfCall {
             std::enable_if_t<std::is_same_v<RT, BinaryResult>, int> = 0>
   std::optional<size_t> invoke(typename ArgTags::cpp_t... args,
                                unsigned char *out_buf, size_t max_len) {
-    unsigned int i = 0;
-    ((ArgTags::fill(inputs_[i++], args)), ...);
+    fill_inputs(args...);
     alt_bin_buf_ = nullptr;
     vef_vdf_result_t result = {};
     result.error_msg = error_msg_;
@@ -222,14 +232,27 @@ class SpecialVdfCall {
   }
 
  private:
-  void init_types() {
+  template <typename InvalueType>
+  void init_inputs(InvalueType *inputs) {
     unsigned int i = 0;
-    ((ArgTags::init(inputs_[i++])), ...);
+    ((ArgTags::init(inputs[i++])), ...);
+  }
+
+  void fill_inputs(typename ArgTags::cpp_t... args) {
+    if (ctx_.protocol >= VEF_PROTOCOL_2) {
+      unsigned int i = 0;
+      ((ArgTags::fill(inputs_[i++], args)), ...);
+    } else {
+      unsigned int i = 0;
+      ((ArgTags::fill(inputs_v1_[i++], args)), ...);
+    }
   }
 
   const vef_func_desc_t *fd_;
   vef_context_t ctx_{};
   vef_invalue_t inputs_[kN]{};
+  vef_invalue_v1_t inputs_v1_[kN]{};
+  vef_invalue_t *input_ptrs_[kN]{};
   vef_vdf_args_t vdf_args_{};
   char error_msg_[VEF_MAX_ERROR_LEN]{};
   char *alt_str_buf_{nullptr};

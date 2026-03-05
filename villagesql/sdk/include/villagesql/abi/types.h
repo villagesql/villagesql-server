@@ -164,6 +164,9 @@ typedef enum : unsigned int {
                    // + Add int_to_params and resolve_params VDF name fields to
                    //   vef_type_desc_t.
                    // + Add storage interface to vef_type_desc_t.
+                   // + Replace vef_vdf_args_t.values_v1 flat array with
+                   //   vef_vdf_args_t.values pointer array (allows
+                   //   vef_invalue_t to grow in future protocol versions).
 } vef_protocol_t;
 
 // Max length of error messages in caller-provided buffers.
@@ -217,6 +220,27 @@ typedef enum : int {
   // TODO(villagesql-ga): Do we want to support DECIMAL?
 } vef_type_id;
 
+// Snapshot of vef_invalue_t as of VEF_PROTOCOL_1. Used as the element type of
+// vef_vdf_args_t.values_v1 to preserve the correct stride when a v2 extension
+// is called by a v1 server. Do NOT add fields here.
+typedef struct {
+  vef_type_id type;
+  bool is_null;
+
+  union {
+    struct {
+      size_t str_len;
+      const char *str_value;
+    };
+    struct {
+      size_t bin_len;
+      const unsigned char *bin_value;
+    };
+    double real_value;
+    long long int_value;
+  };
+} vef_invalue_v1_t;
+
 // Input value for VDF function arguments.
 // The `type` field indicates which union member to read.
 // Check `is_null` first - if true, the value is SQL NULL.
@@ -243,6 +267,9 @@ typedef struct {
     // For TYPE_INT
     long long int_value;
   };
+
+  // protocol >= VEF_PROTOCOL_2
+  int dummy;
 } vef_invalue_t;
 
 typedef enum : int {
@@ -346,8 +373,17 @@ typedef struct {
   // Number of input values
   unsigned int value_count;
 
-  // Input values array
-  vef_invalue_t *values;
+  // Check ctx->protocol to determine which union member to read.
+  union {
+    // protocol == VEF_PROTOCOL_1: flat array of value_count vef_invalue_v1_t.
+    vef_invalue_v1_t *values_v1;
+
+    // protocol >= VEF_PROTOCOL_2: array of value_count pointers to
+    // vef_invalue_t. Using a pointer array decouples extensions from
+    // vef_invalue_t's binary layout, allowing the struct to grow in future
+    // protocol versions.
+    vef_invalue_t **values;
+  };
 } vef_vdf_args_t;
 
 typedef struct {

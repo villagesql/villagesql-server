@@ -167,6 +167,24 @@ struct is_context_param : std::false_type {};
 template <>
 struct is_context_param<vef_context_t *> : std::true_type {};
 
+// Promotes a vef_invalue_v1_t to vef_invalue_t, zero-initializing any fields
+// added in VEF_PROTOCOL_2 and later.
+inline vef_invalue_t promote_v1(const vef_invalue_v1_t &v) {
+  vef_invalue_t out{};
+  memcpy(&out, &v, sizeof(vef_invalue_v1_t));
+  return out;
+}
+
+// Returns the i-th input value as a vef_invalue_t, handling both protocol
+// versions. Extensions built against the v2 SDK may be loaded by v1 servers
+// (protocol negotiated down), so callers must use this rather than reading
+// args->values or args->values_v1 directly.
+inline vef_invalue_t get_invalue(vef_context_t *ctx, vef_vdf_args_t *args,
+                                 unsigned int i) {
+  if (ctx->protocol >= VEF_PROTOCOL_2) return *args->values[i];
+  return promote_v1(args->values_v1[i]);
+}
+
 // =============================================================================
 // Wrapper Template
 // =============================================================================
@@ -197,15 +215,16 @@ struct Wrapper {
     using Params = typename FuncParamTypes<decltype(Func)>::type;
     constexpr bool kHasCtx =
         is_context_param<std::tuple_element_t<0, Params>>::value;
+    std::array<vef_invalue_t, NumParams> vals{
+        get_invalue(ctx, args, static_cast<unsigned int>(Is))...};
     if constexpr (kHasCtx) {
       // Deprecated style: passes ABI C types as arguments to function.
       // TODO(villagesql): Remove once all callers have migrated off
       // vef_context_t*.
-      Func(ctx,
-           make_arg<std::tuple_element_t<1 + Is, Params>>(&args->values[Is])...,
+      Func(ctx, make_arg<std::tuple_element_t<1 + Is, Params>>(&vals[Is])...,
            make_result<std::tuple_element_t<1 + NumParams, Params>>(result));
     } else {
-      Func(make_arg<std::tuple_element_t<Is, Params>>(&args->values[Is])...,
+      Func(make_arg<std::tuple_element_t<Is, Params>>(&vals[Is])...,
            make_result<std::tuple_element_t<NumParams, Params>>(result));
     }
   }
@@ -240,21 +259,21 @@ template <RawFromStringFunc Func>
 struct FromStringWrapper {
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
-    vef_invalue_t *arg = &args->values[0];
+    vef_invalue_t arg = get_invalue(ctx, args, 0);
 
-    if (arg->is_null) {
+    if (arg.is_null) {
       result->type = VEF_RESULT_NULL;
       return;
     }
 
     size_t length;
-    bool failed = Func(result->bin_buf, result->max_bin_len, arg->str_value,
-                       arg->str_len, &length);
+    bool failed = Func(result->bin_buf, result->max_bin_len, arg.str_value,
+                       arg.str_len, &length);
 
     if (failed) {
       result->type = VEF_RESULT_ERROR;
       constexpr size_t kMaxInputDisplay = 64;
-      size_t display_len = arg->str_len;
+      size_t display_len = arg.str_len;
       const char *ellipsis = "";
       if (display_len > kMaxInputDisplay) {
         display_len = kMaxInputDisplay;
@@ -262,7 +281,7 @@ struct FromStringWrapper {
       }
       snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
                "failed to parse string '%.*s%s'", static_cast<int>(display_len),
-               arg->str_value, ellipsis);
+               arg.str_value, ellipsis);
       return;
     }
 
@@ -280,15 +299,15 @@ template <RawToStringFunc Func>
 struct ToStringWrapper {
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
-    vef_invalue_t *arg = &args->values[0];
+    vef_invalue_t arg = get_invalue(ctx, args, 0);
 
-    if (arg->is_null) {
+    if (arg.is_null) {
       result->type = VEF_RESULT_NULL;
       return;
     }
 
     size_t to_length;
-    bool failed = Func(arg->bin_value, arg->bin_len, result->str_buf,
+    bool failed = Func(arg.bin_value, arg.bin_len, result->str_buf,
                        result->max_str_len, &to_length);
 
     if (failed) {
@@ -306,15 +325,15 @@ struct ToStringWrapper {
 // persisted_length (buffer_size). Returns the encoded default value as binary.
 template <vef_intrinsic_default_func_t Func>
 struct IntrinsicDefaultWrapper {
-  static void invoke(vef_context_t * /*ctx*/, vef_vdf_args_t *args,
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
-    vef_invalue_t *arg = &args->values[0];
-    if (arg->is_null) {
+    vef_invalue_t arg = get_invalue(ctx, args, 0);
+    if (arg.is_null) {
       result->type = VEF_RESULT_NULL;
       return;
     }
     size_t length = 0;
-    if (Func(arg->int_value, result->bin_buf, &length, result->error_msg)) {
+    if (Func(arg.int_value, result->bin_buf, &length, result->error_msg)) {
       result->type = VEF_RESULT_ERROR;
       return;
     }
@@ -322,7 +341,6 @@ struct IntrinsicDefaultWrapper {
     result->type = VEF_RESULT_VALUE;
   }
 };
-
 
 // =============================================================================
 // Extension Author Function Signatures (for parameterized types)
@@ -363,17 +381,17 @@ using ResolveTypeParamsFunc =
 // runs during DDL.
 template <IntToTypeParamsFunc Func>
 struct IntToParamsWrapper {
-  static void invoke(vef_context_t * /*ctx*/, vef_vdf_args_t *args,
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
-    vef_invalue_t *arg = &args->values[0];
+    vef_invalue_t arg = get_invalue(ctx, args, 0);
 
-    if (arg->is_null) {
+    if (arg.is_null) {
       result->type = VEF_RESULT_NULL;
       return;
     }
 
     std::map<std::string, std::string> params;
-    if (Func(arg->int_value, params, result->error_msg)) {
+    if (Func(arg.int_value, params, result->error_msg)) {
       result->type = VEF_RESULT_ERROR;
       return;
     }
@@ -424,17 +442,17 @@ struct IntToParamsWrapper {
 // Output: "persisted_length,max_decode_buffer_length".
 template <ResolveTypeParamsFunc Func>
 struct ResolveParamsWrapper {
-  static void invoke(vef_context_t * /*ctx*/, vef_vdf_args_t *args,
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
-    vef_invalue_t *arg = &args->values[0];
+    vef_invalue_t arg = get_invalue(ctx, args, 0);
 
-    if (arg->is_null) {
+    if (arg.is_null) {
       result->type = VEF_RESULT_NULL;
       return;
     }
 
     // Parse "key1=value1,key2=value2,..." into std::map.
-    std::string_view input(arg->str_value, arg->str_len);
+    std::string_view input(arg.str_value, arg.str_len);
     std::map<std::string, std::string> params;
     size_t start = 0;
     while (start < input.size()) {

@@ -48,9 +48,21 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
 
   // Allocate invalues array for argument marshaling
   if (arg_count > 0) {
-    m_invalues = pointer_cast<vef_invalue_t *>(
-        (*THR_MALLOC)->Alloc(sizeof(vef_invalue_t) * arg_count));
-    if (!m_invalues) return true;
+    if (m_udf->vdf_protocol >= VEF_PROTOCOL_2) {
+      m_invalues = pointer_cast<vef_invalue_t *>(
+          (*THR_MALLOC)->Alloc(sizeof(vef_invalue_t) * arg_count));
+      if (!m_invalues) return true;
+      m_invalues_ptrs = pointer_cast<vef_invalue_t **>(
+          (*THR_MALLOC)->Alloc(sizeof(vef_invalue_t *) * arg_count));
+      if (!m_invalues_ptrs) return true;
+      for (uint i = 0; i < arg_count; i++) {
+        m_invalues_ptrs[i] = &m_invalues[i];
+      }
+    } else {
+      m_invalues_v1 = pointer_cast<vef_invalue_v1_t *>(
+          (*THR_MALLOC)->Alloc(sizeof(vef_invalue_v1_t) * arg_count));
+      if (!m_invalues_v1) return true;
+    }
   }
 
   // Allocate error message buffer (always needed)
@@ -73,7 +85,11 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
   m_context.protocol = m_udf->vdf_protocol;
   m_vdf_args.user_data = nullptr;
   m_vdf_args.value_count = static_cast<int>(arg_count);
-  m_vdf_args.values = m_invalues;
+  if (m_udf->vdf_protocol >= VEF_PROTOCOL_2) {
+    m_vdf_args.values = m_invalues_ptrs;
+  } else {
+    m_vdf_args.values_v1 = m_invalues_v1;
+  }
 
   // Validate and convert VDF arguments (custom type handling)
   const vef_signature_t *signature = m_udf->vdf_func_desc->signature;
@@ -167,56 +183,69 @@ void vdf_handler::cleanup() {
   m_active = false;
 }
 
-void vdf_handler::marshal_args() {
-  const vef_signature_t *sig = m_udf->vdf_func_desc->signature;
-  for (unsigned int i = 0; i < m_vdf_args.value_count; i++) {
-    Item *arg_item = m_args[i];
+template <typename InvalueType>
+static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
+                               Item **args, String *buffers,
+                               InvalueType *invalues) {
+  for (unsigned int i = 0; i < value_count; i++) {
+    Item *arg_item = args[i];
     vef_type_id param_type =
         (i < sig->param_count) ? sig->params[i].id : VEF_TYPE_STRING;
-    m_invalues[i].type = param_type;
+    invalues[i].type = param_type;
 
     switch (param_type) {
       case VEF_TYPE_INT: {
         longlong val = arg_item->val_int();
-        m_invalues[i].is_null = arg_item->null_value;
-        m_invalues[i].int_value = val;
+        invalues[i].is_null = arg_item->null_value;
+        invalues[i].int_value = val;
         break;
       }
       case VEF_TYPE_REAL: {
         double val = arg_item->val_real();
-        m_invalues[i].is_null = arg_item->null_value;
-        m_invalues[i].real_value = val;
+        invalues[i].is_null = arg_item->null_value;
+        invalues[i].real_value = val;
         break;
       }
       case VEF_TYPE_STRING: {
-        String *arg_str = arg_item->val_str(&m_buffers[i]);
+        String *arg_str = arg_item->val_str(&buffers[i]);
         if (arg_item->null_value || arg_str == nullptr) {
-          m_invalues[i].is_null = true;
-          m_invalues[i].str_value = nullptr;
-          m_invalues[i].str_len = 0;
+          invalues[i].is_null = true;
+          invalues[i].str_value = nullptr;
+          invalues[i].str_len = 0;
         } else {
-          m_invalues[i].is_null = false;
-          m_invalues[i].str_value = arg_str->ptr();
-          m_invalues[i].str_len = arg_str->length();
+          invalues[i].is_null = false;
+          invalues[i].str_value = arg_str->ptr();
+          invalues[i].str_len = arg_str->length();
         }
         break;
       }
       case VEF_TYPE_CUSTOM:
       default: {
-        String *arg_str = arg_item->val_str(&m_buffers[i]);
+        String *arg_str = arg_item->val_str(&buffers[i]);
         if (arg_item->null_value || arg_str == nullptr) {
-          m_invalues[i].is_null = true;
-          m_invalues[i].bin_value = nullptr;
-          m_invalues[i].bin_len = 0;
+          invalues[i].is_null = true;
+          invalues[i].bin_value = nullptr;
+          invalues[i].bin_len = 0;
         } else {
-          m_invalues[i].is_null = false;
-          m_invalues[i].bin_value =
+          invalues[i].is_null = false;
+          invalues[i].bin_value =
               reinterpret_cast<const unsigned char *>(arg_str->ptr());
-          m_invalues[i].bin_len = arg_str->length();
+          invalues[i].bin_len = arg_str->length();
         }
         break;
       }
     }
+  }
+}
+
+void vdf_handler::marshal_args() {
+  const vef_signature_t *sig = m_udf->vdf_func_desc->signature;
+  if (m_udf->vdf_protocol >= VEF_PROTOCOL_2) {
+    marshal_args_typed(sig, m_vdf_args.value_count, m_args, m_buffers,
+                       m_invalues);
+  } else {
+    marshal_args_typed(sig, m_vdf_args.value_count, m_args, m_buffers,
+                       m_invalues_v1);
   }
 }
 
