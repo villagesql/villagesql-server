@@ -25,7 +25,8 @@
 #define AGGREGATED_STATS_BUFFER_H
 
 #include <atomic>
-#include "include/my_sqlcommand.h"  // SQLCOM_END
+#include "include/my_sqlcommand.h"
+#include "sql/sqlcom_compact_index.h"
 
 /**
    Similar to System_status_var, implements atomic counters for status variables

@@ -31,6 +31,7 @@
 #include "my_base.h"  // ha_rows
 #include "my_inttypes.h"
 #include "my_sqlcommand.h"
+#include "sql/sqlcom_compact_index.h"
 #include "my_thread_local.h"  // my_thread_id
 #include "mysql/strings/m_ctype.h"
 #include "sql/rpl_gtid.h"        // Gitd_specification

@@ -10,12 +10,12 @@ Adding a new SQL command requires changes across multiple files to register the 
 
 ### 1. Add Command to Enum (include/my_sqlcommand.h)
 
-Add your command to the `enum_sql_command` enum. VillageSQL commands go in the VSQL block (starting at 1024), before `SQLCOM_END`:
+Add your command to the `enum_sql_command` enum. VillageSQL commands go in the VSQL block (starting at SQLCOM_VSQL_FIRST), before `SQLCOM_END`:
 
 ```cpp
 // include/my_sqlcommand.h
 enum enum_sql_command {
-  // ... MySQL commands (0-207, contiguous) ...
+  // ... MySQL commands (0-200+ (circa 2026), contiguous) ...
   SQLCOM_SHOW_PARSE_TREE,
   SQLCOM_MYSQL_COUNT,  // Sentinel — must stay at end of MySQL commands
 

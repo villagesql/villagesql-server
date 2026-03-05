@@ -22,6 +22,7 @@
    along with this program; if not, write to the Free Software
    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301  USA */
 
+#include <cassert>
 #include <unordered_map>
 
 #include "sql/command_mapping.h"
@@ -36,11 +37,18 @@ class Command_maps final {
                              static_cast<enum_server_command>(i))
                              .c_str()] = static_cast<enum_server_command>(i);
     }
-    // GCC does not support mixing designated and non-designated initializers,
-    // so VSQL commands (which start at SQLCOM_VSQL_FIRST = 1024) are
-    // initialized here instead of in the static array initializer.
+    // C++ does not allow mixing positional and designated initializers, so
+    // VSQL commands (which start at SQLCOM_VSQL_FIRST) cannot be included
+    // in the static array initializer below.
     sql_commands[SQLCOM_INSTALL_EXTENSION] = "install_extension";
     sql_commands[SQLCOM_UNINSTALL_EXTENSION] = "uninstall_extension";
+
+    // Verify every MySQL and VSQL command has a name string.
+    for (unsigned int i = 0; i < (unsigned int)SQLCOM_MYSQL_COUNT; i++)
+      assert(sql_commands[i] != nullptr);
+    for (unsigned int i = (unsigned int)SQLCOM_VSQL_FIRST;
+         i < (unsigned int)SQLCOM_END; i++)
+      assert(sql_commands[i] != nullptr);
   }
 
   enum_server_command get_server_command(const char *server_command) {
@@ -236,5 +244,7 @@ enum_server_command get_server_command(const char *server_command) {
 }
 
 const char *get_sql_command_string(enum_sql_command sql_command) {
+  static_assert(((size_t)(SQLCOM_END - SQLCOM_SELECT)) ==
+                (sizeof(Command_maps::sql_commands) / sizeof(char *)));
   return Command_maps::sql_commands[sql_command];
 }

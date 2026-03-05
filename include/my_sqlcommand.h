@@ -220,27 +220,4 @@ enum enum_sql_command {
   SQLCOM_END
 };
 
-#ifdef __cplusplus
-// Compact indexing for com_stat arrays. MySQL commands (0..SQLCOM_MYSQL_COUNT-1)
-// keep their enum value as the index. VSQL commands (1024+) are packed
-// immediately after, starting at SQLCOM_MYSQL_COUNT.
-inline constexpr unsigned int sqlcom_compact_index(unsigned int cmd) {
-  return (cmd < (unsigned int)SQLCOM_MYSQL_COUNT)
-             ? cmd
-             : (unsigned int)SQLCOM_MYSQL_COUNT +
-                   (cmd - (unsigned int)SQLCOM_VSQL_FIRST);
-}
-
-inline constexpr unsigned int sqlcom_from_compact_index(unsigned int idx) {
-  return (idx < (unsigned int)SQLCOM_MYSQL_COUNT)
-             ? idx
-             : (unsigned int)SQLCOM_VSQL_FIRST +
-                   (idx - (unsigned int)SQLCOM_MYSQL_COUNT);
-}
-
-inline constexpr unsigned int SQLCOM_COMPACT_COUNT =
-    (unsigned int)SQLCOM_MYSQL_COUNT +
-    ((unsigned int)SQLCOM_END - (unsigned int)SQLCOM_VSQL_FIRST);
-#endif
-
 #endif /* _mysql_sql_command_h */
