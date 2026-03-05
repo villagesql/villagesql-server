@@ -241,6 +241,16 @@ typedef struct {
   };
 } vef_invalue_v1_t;
 
+// Type parameters for a concrete type instantiation (e.g., dimension=1536).
+// Keys are sorted alphabetically; values are in the same order so that
+// keys[i] pairs with values[i]. count == 0 for non-parameterized or
+// non-custom types.
+typedef struct {
+  unsigned int count;
+  const char *const *keys;
+  const char *const *values;
+} vef_type_params_t;
+
 // Input value for VDF function arguments.
 // The `type` field indicates which union member to read.
 // Check `is_null` first - if true, the value is SQL NULL.
@@ -259,6 +269,9 @@ typedef struct {
     struct {
       size_t bin_len;
       const unsigned char *bin_value;
+
+      // protocol >= VEF_PROTOCOL_2
+      vef_type_params_t type_params;
     };
 
     // For TYPE_REAL
@@ -267,9 +280,6 @@ typedef struct {
     // For TYPE_INT
     long long int_value;
   };
-
-  // protocol >= VEF_PROTOCOL_2
-  int dummy;
 } vef_invalue_t;
 
 typedef enum : int {
@@ -337,6 +347,9 @@ typedef struct {
       // Callee can return a different pointer than bin_buf. Same semantics
       // as alt_str_buf above.
       unsigned char **alt_bin_buf;
+
+      // protocol >= VEF_PROTOCOL_2
+      vef_type_params_t type_params;
     };
 
     // For REAL return type

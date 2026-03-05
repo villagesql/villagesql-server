@@ -172,6 +172,33 @@ TEST_F(TypeParametersTest, Ordering) {
   EXPECT_TRUE(a < b);
 }
 
+TEST_F(TypeParametersTest, EmptyEntries) {
+  villagesql::TypeParameters params;
+  EXPECT_EQ(params.param_count(), 0u);
+  EXPECT_EQ(params.key_data(), nullptr);
+  EXPECT_EQ(params.value_data(), nullptr);
+}
+
+TEST_F(TypeParametersTest, SingleEntry) {
+  villagesql::TypeParameters params("dimension=1536");
+  EXPECT_EQ(params.param_count(), 1u);
+  ASSERT_NE(params.key_data(), nullptr);
+  ASSERT_NE(params.value_data(), nullptr);
+  EXPECT_STREQ(params.key_data()[0], "dimension");
+  EXPECT_STREQ(params.value_data()[0], "1536");
+}
+
+TEST_F(TypeParametersTest, MultipleEntries) {
+  villagesql::TypeParameters params("dimension=1536,metric=cosine");
+  EXPECT_EQ(params.param_count(), 2u);
+  ASSERT_NE(params.key_data(), nullptr);
+  ASSERT_NE(params.value_data(), nullptr);
+  EXPECT_STREQ(params.key_data()[0], "dimension");
+  EXPECT_STREQ(params.value_data()[0], "1536");
+  EXPECT_STREQ(params.key_data()[1], "metric");
+  EXPECT_STREQ(params.value_data()[1], "cosine");
+}
+
 class TypeContextTest : public ::testing::Test {
  protected:
   void SetUp() override {

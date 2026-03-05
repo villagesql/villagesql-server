@@ -47,7 +47,9 @@ struct ColumnEntry;
 class TypeParameters {
  public:
   TypeParameters() = default;
-  explicit TypeParameters(std::string canonical) : str_(std::move(canonical)) {}
+  explicit TypeParameters(std::string canonical) : str_(std::move(canonical)) {
+    build_entries();
+  }
 
   // Normalize a raw "k=v,k=v,..." string: split pairs, sort by lowercased
   // key, lowercase values, re-serialize. Used by TYPE('k=v,...') SQL parser
@@ -56,6 +58,19 @@ class TypeParameters {
 
   bool empty() const { return str_.empty(); }
   const std::string &str() const { return str_; }
+
+  // ABI accessors: parallel key/value arrays for vef_type_params_t.
+  // keys and values are in the same order (keys[i] pairs with values[i]),
+  // sorted alphabetically by key.
+  unsigned int param_count() const {
+    return static_cast<unsigned int>(keys_.size());
+  }
+  const char *const *key_data() const {
+    return c_keys_.empty() ? nullptr : c_keys_.data();
+  }
+  const char *const *value_data() const {
+    return c_values_.empty() ? nullptr : c_values_.data();
+  }
 
   // JSON serialization for storage in the villagesql.custom_columns table
   // (which has a JSON column for type_parameters).
@@ -72,7 +87,17 @@ class TypeParameters {
   }
 
  private:
+  void build_entries();
+
+  // The canonical string representation of the key/value pairs
   std::string str_;
+
+  // Pre-parsed parallel key/value arrays (sorted by key).
+  // We own the strings and keep const char* vectors for the ABI.
+  std::vector<std::string> keys_;
+  std::vector<std::string> values_;
+  std::vector<const char *> c_keys_;
+  std::vector<const char *> c_values_;
 };
 
 // Key for TypeContext entries in the VictionaryClient map.

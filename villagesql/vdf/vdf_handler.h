@@ -29,6 +29,7 @@ struct CHARSET_INFO;
 struct udf_func;
 
 namespace villagesql {
+class TypeContext;
 namespace vdf {
 
 // Handler for VDF (VillageSQL Defined Function) calling convention.
@@ -70,6 +71,7 @@ class vdf_handler {
   char *m_error_msg{nullptr};
   bool m_active{false};
   uchar m_error{0};
+  const villagesql::TypeContext *m_return_type_context{nullptr};
 
   // Marshal arguments into m_invalues array based on declared parameter types
   void marshal_args();

@@ -70,6 +70,40 @@ void TypeContext::resolve_cached_values() {
   }
 }
 
+void TypeParameters::build_entries() {
+  keys_.clear();
+  values_.clear();
+  c_keys_.clear();
+  c_values_.clear();
+  if (str_.empty()) return;
+
+  // Parse "key=value" pairs separated by commas. Keys are already sorted
+  // alphabetically in canonical form.
+  size_t start = 0;
+  while (start < str_.size()) {
+    size_t comma = str_.find(',', start);
+    if (comma == std::string::npos) comma = str_.size();
+    std::string pair = str_.substr(start, comma - start);
+    size_t eq = pair.find('=');
+    if (eq != std::string::npos) {
+      keys_.push_back(pair.substr(0, eq));
+      values_.push_back(pair.substr(eq + 1));
+    } else {
+      keys_.push_back(std::move(pair));
+      values_.push_back(std::string());
+    }
+    start = comma + 1;
+  }
+  c_keys_.reserve(keys_.size());
+  for (const auto &k : keys_) {
+    c_keys_.push_back(k.c_str());
+  }
+  c_values_.reserve(values_.size());
+  for (const auto &v : values_) {
+    c_values_.push_back(v.c_str());
+  }
+}
+
 TypeParameters TypeParameters::from_raw(const std::string &raw) {
   if (raw.empty()) return TypeParameters();
 

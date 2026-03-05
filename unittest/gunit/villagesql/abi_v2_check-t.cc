@@ -76,5 +76,49 @@ static_assert(
 static_assert(offsetof(vef_type_desc_t, storage_intf) == 120,
               "ABI v2 break: vef_type_desc_t::storage_intf offset changed");
 
+// ---------------------------------------------------------------------------
+// vef_type_params_t (protocol >= VEF_PROTOCOL_2)
+//   unsigned int count;            // +0
+//   [4 bytes padding]
+//   const char *const *keys;      // +8
+//   const char *const *values;    // +16
+// ---------------------------------------------------------------------------
+static_assert(sizeof(vef_type_params_t) == 24,
+              "ABI v2 break: vef_type_params_t size changed");
+static_assert(offsetof(vef_type_params_t, count) == 0,
+              "ABI v2 break: vef_type_params_t::count offset changed");
+static_assert(offsetof(vef_type_params_t, keys) == 8,
+              "ABI v2 break: vef_type_params_t::keys offset changed");
+static_assert(offsetof(vef_type_params_t, values) == 16,
+              "ABI v2 break: vef_type_params_t::values offset changed");
+
+// ---------------------------------------------------------------------------
+// vef_invalue_t (protocol >= VEF_PROTOCOL_2 adds type_params in CUSTOM)
+//   vef_type_id type;              // +0  (enum : int, 4 bytes)
+//   bool is_null;                  // +4
+//   [3 bytes padding]
+//   union { ... };                 // +8  (40 bytes: CUSTOM has bin_len +
+//                                  //      bin_value + type_params)
+// ---------------------------------------------------------------------------
+static_assert(sizeof(vef_invalue_t) == 48,
+              "ABI v2 break: vef_invalue_t size changed");
+static_assert(offsetof(vef_invalue_t, type_params) == 24,
+              "ABI v2 break: vef_invalue_t::type_params offset changed");
+
+// ---------------------------------------------------------------------------
+// vef_vdf_result_t (protocol >= VEF_PROTOCOL_2 adds type_params in CUSTOM)
+//   vef_return_value_type_t type;             // +0
+//   [4 bytes padding]
+//   size_t actual_len;                        // +8
+//   char *error_msg;                          // +16
+//   union { ... };                            // +24  (48 bytes: CUSTOM has
+//                                             //   bin_buf + max_bin_len +
+//                                             //   alt_bin_buf + type_params)
+// ---------------------------------------------------------------------------
+static_assert(sizeof(vef_vdf_result_t) == 72,
+              "ABI v2 break: vef_vdf_result_t size changed");
+static_assert(offsetof(vef_vdf_result_t, type_params) == 48,
+              "ABI v2 break: vef_vdf_result_t::type_params offset changed");
+
 // Placeholder test so the binary links and runs.
 TEST(AbiV2Check, StaticAssertsPass) {}
