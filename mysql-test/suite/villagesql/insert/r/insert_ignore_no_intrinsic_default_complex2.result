@@ -1,0 +1,9 @@
+CREATE TABLE t (
+id INT PRIMARY KEY,
+val COMPLEX2 NOT NULL
+);
+INSERT IGNORE INTO t VALUES (1, NULL);
+ERROR HY000: Column 'val' has no intrinsic default for type 'COMPLEX2'; define intrinsic_default_vdf_name in the type registration
+SELECT * FROM t;
+id	val
+DROP TABLE t;

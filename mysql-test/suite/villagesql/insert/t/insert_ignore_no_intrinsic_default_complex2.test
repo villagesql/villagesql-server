@@ -1,0 +1,16 @@
+# Test INSERT IGNORE / UPDATE IGNORE with NULL on a NOT NULL COMPLEX2 column.
+# COMPLEX2 has no intrinsic default registered, so this is a hard error.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t (
+    id INT PRIMARY KEY,
+    val COMPLEX2 NOT NULL
+);
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT IGNORE INTO t VALUES (1, NULL);
+SELECT * FROM t;
+DROP TABLE t;
+
+--source include/villagesql/uninstall_complex_extension.inc

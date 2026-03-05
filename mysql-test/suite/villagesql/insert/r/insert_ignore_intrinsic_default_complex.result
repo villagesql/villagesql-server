@@ -1,0 +1,69 @@
+CREATE TABLE t_multi (
+id INT PRIMARY KEY,
+val INT NOT NULL,
+val_double DOUBLE NOT NULL,
+val_complex COMPLEX NOT NULL
+);
+INSERT IGNORE INTO t_multi VALUES
+(1, NULL,  NULL,  NULL),
+(2, 42,    3.14,  '(1.0,2.0)'),
+(3, NULL,  1.0,   '(3.0,4.0)'),
+(4, 7,     NULL,  '(5.0,6.0)'),
+(5, 8,     2.0,   NULL);
+Warnings:
+Warning	1048	Column 'val' cannot be null
+Warning	1048	Column 'val_double' cannot be null
+Warning	1048	Column 'val_complex' cannot be null
+SELECT * FROM t_multi ORDER BY id;
+id	val	val_double	val_complex
+1	0	0	(0,0)
+2	42	3.14	(1,2)
+3	0	1	(3,4)
+4	7	0	(5,6)
+5	8	2	(0,0)
+DROP TABLE t_multi;
+CREATE TABLE t_multi_complex (
+id INT PRIMARY KEY,
+a COMPLEX NOT NULL,
+b COMPLEX NOT NULL,
+c COMPLEX NOT NULL
+);
+INSERT IGNORE INTO t_multi_complex VALUES (1, NULL, NULL, NULL);
+Warnings:
+Warning	1048	Column 'a' cannot be null
+Warning	1048	Column 'b' cannot be null
+Warning	1048	Column 'c' cannot be null
+INSERT IGNORE INTO t_multi_complex VALUES (2, '(1.0,2.0)', NULL, '(3.0,4.0)');
+Warnings:
+Warning	1048	Column 'b' cannot be null
+INSERT IGNORE INTO t_multi_complex VALUES (3, '(5.0,6.0)', '(7.0,8.0)', '(9.0,10.0)');
+SELECT * FROM t_multi_complex ORDER BY id;
+id	a	b	c
+1	(0,0)	(0,0)	(0,0)
+2	(1,2)	(0,0)	(3,4)
+3	(5,6)	(7,8)	(9,10)
+DROP TABLE t_multi_complex;
+CREATE TABLE t_odku (
+id INT PRIMARY KEY,
+val COMPLEX NOT NULL
+);
+INSERT INTO t_odku VALUES (1, '(1.0,2.0)');
+INSERT INTO t_odku VALUES (1, '(9.0,9.0)') ON DUPLICATE KEY UPDATE val = NULL;
+ERROR 23000: Column 'val' cannot be null
+SELECT * FROM t_odku ORDER BY id;
+id	val
+1	(1,2)
+INSERT IGNORE INTO t_odku VALUES (1, '(9.0,9.0)') ON DUPLICATE KEY UPDATE val = NULL;
+Warnings:
+Warning	1048	Column 'val' cannot be null
+SELECT * FROM t_odku ORDER BY id;
+id	val
+1	(0,0)
+INSERT IGNORE INTO t_odku VALUES (2, NULL) ON DUPLICATE KEY UPDATE val = '(99.0,99.0)';
+Warnings:
+Warning	1048	Column 'val' cannot be null
+SELECT * FROM t_odku ORDER BY id;
+id	val
+1	(0,0)
+2	(0,0)
+DROP TABLE t_odku;

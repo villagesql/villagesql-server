@@ -1,0 +1,77 @@
+# Test LOAD DATA INFILE with NULL values hitting NOT NULL COMPLEX columns.
+# The \N sentinel in a data file maps to NULL. With IGNORE, this stores the
+# intrinsic default (0,0) for NOT NULL COMPLEX columns (consistent with how
+# INSERT IGNORE / UPDATE IGNORE handle NULL on NOT NULL custom columns).
+# Without IGNORE, LOAD DATA emits error 1263 (ER_WARN_NULL_TO_NOTNULL).
+
+--source include/villagesql/install_complex_extension.inc
+
+# Basic case: \N in a NOT NULL COMPLEX column gets intrinsic default (0,0).
+# Side-by-side with DOUBLE NOT NULL to verify consistent behavior.
+CREATE TABLE t1 (
+    id INT PRIMARY KEY,
+    val_double DOUBLE NOT NULL,
+    val_complex COMPLEX NOT NULL
+);
+
+--write_file $MYSQLTEST_VARDIR/tmp/intrinsic_default_basic.dat
+1	\N	\N
+2	3.14	(1.0,2.0)
+3	\N	(3.0,4.0)
+4	2.71	\N
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/intrinsic_default_basic.dat' IGNORE INTO TABLE t1
+
+# Row 1: both get intrinsic defaults (0, (0,0))
+# Row 2: normal values
+# Row 3: val_double -> 0.0, val_complex unchanged
+# Row 4: val_complex -> (0,0), val_double unchanged
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/intrinsic_default_basic.dat
+
+# Multiple NOT NULL COMPLEX columns, some NULLed.
+CREATE TABLE t2 (
+    id INT PRIMARY KEY,
+    a COMPLEX NOT NULL,
+    b COMPLEX NOT NULL
+);
+
+--write_file $MYSQLTEST_VARDIR/tmp/intrinsic_default_multi.dat
+1	\N	\N
+2	(1.0,2.0)	\N
+3	\N	(3.0,4.0)
+4	(5.0,6.0)	(7.0,8.0)
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/intrinsic_default_multi.dat' IGNORE INTO TABLE t2
+
+SELECT * FROM t2 ORDER BY id;
+
+DROP TABLE t2;
+--remove_file $MYSQLTEST_VARDIR/tmp/intrinsic_default_multi.dat
+
+# LOAD DATA without IGNORE on a NOT NULL COMPLEX column with \N should error
+# with 1263 (ER_WARN_NULL_TO_NOTNULL), not 1048 (ER_BAD_NULL_ERROR), because
+# LOAD DATA uses check_constraints() rather than set_field_to_null_with_conversions().
+CREATE TABLE t3 (
+    id INT PRIMARY KEY,
+    val COMPLEX NOT NULL
+);
+
+--write_file $MYSQLTEST_VARDIR/tmp/intrinsic_default_noignore.dat
+1	\N
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error 1263
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/intrinsic_default_noignore.dat' INTO TABLE t3
+
+DROP TABLE t3;
+--remove_file $MYSQLTEST_VARDIR/tmp/intrinsic_default_noignore.dat
+
+--source include/villagesql/uninstall_complex_extension.inc
