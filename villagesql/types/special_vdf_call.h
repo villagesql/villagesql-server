@@ -24,7 +24,7 @@
 // Non-overlapping: invoke() is non-const and modifies shared input state.
 // Multiple concurrent invoke() calls on the same object are not safe.
 //
-// Example (IntResult):
+// Example (IntResult, two args):
 //   SpecialVdfCall<IntResult, CustomArg, CustomArg> call(vdf_);
 //   call.init();
 //   auto r = call.invoke(BinarySlice{data1, len1}, BinarySlice{data2, len2});
@@ -39,6 +39,7 @@
 #ifndef VILLAGESQL_TYPES_SPECIAL_VDF_CALL_H_
 #define VILLAGESQL_TYPES_SPECIAL_VDF_CALL_H_
 
+#include <array>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
@@ -149,7 +150,6 @@ template <typename ResultTag, typename... ArgTags>
 class SpecialVdfCall {
  public:
   static constexpr size_t kN = sizeof...(ArgTags);
-  static_assert(kN > 0, "SpecialVdfCall requires at least one argument");
 
   explicit SpecialVdfCall(const vef_func_desc_t *fd) : fd_(fd) {
     assert(fd != nullptr);
@@ -159,9 +159,9 @@ class SpecialVdfCall {
     vdf_args_.value_count = static_cast<unsigned int>(kN);
     if (fd->protocol >= VEF_PROTOCOL_2) {
       for (size_t i = 0; i < kN; i++) input_ptrs_[i] = &inputs_[i];
-      vdf_args_.values = input_ptrs_;
+      vdf_args_.values = input_ptrs_.data();
     } else {
-      vdf_args_.values_v1 = inputs_v1_;
+      vdf_args_.values_v1 = inputs_v1_.data();
     }
   }
 
@@ -283,9 +283,9 @@ class SpecialVdfCall {
 
   const vef_func_desc_t *fd_;
   vef_context_t ctx_{};
-  vef_invalue_t inputs_[kN]{};
-  vef_invalue_v1_t inputs_v1_[kN]{};
-  vef_invalue_t *input_ptrs_[kN]{};
+  std::array<vef_invalue_t, kN> inputs_{};
+  std::array<vef_invalue_v1_t, kN> inputs_v1_{};
+  std::array<vef_invalue_t *, kN> input_ptrs_{};
   vef_vdf_args_t vdf_args_{};
   char error_msg_[VEF_MAX_ERROR_LEN]{};
   char *alt_str_buf_{nullptr};
