@@ -266,7 +266,8 @@ SET(INNOBASE_SOURCES
   ut/ut0ut.cc
   ut/ut0vec.cc
   ut/ut0wqueue.cc
-  villagesql/custom_column.cc)
+  villagesql/custom_column.cc
+  villagesql/storage_abi.cc)
 
 # https://gcc.gnu.org/bugzilla/show_bug.cgi?id=98753
 IF(MY_COMPILER_IS_GNU AND CMAKE_CXX_COMPILER_VERSION VERSION_GREATER_EQUAL 11)

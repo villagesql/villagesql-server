@@ -164,6 +164,7 @@ ALLOWED_TODO_TAGS=(
   "villagesql-rebase"
   "villagesql-windows"
   "villagesql-blob"
+  "villagesql-indexing"
 )
 
 INVALID_TODO_TAGS_FOUND=0

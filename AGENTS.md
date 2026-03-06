@@ -205,6 +205,7 @@ When adding VillageSQL features:
     - `TODO(villagesql-rebase):` - Check during MySQL version rebases
     - `TODO(villagesql-crash):` - Known crash
     - `TODO(villagesql-windows):` - Known problems with supporting Windows
+    - `TODO(villagesql-indexing):` - Related to indexing work
 - Avoid `/* */` style comments except for copyright headers
 - Do NOT use section separator comments (e.g., `// ===== Serialization =====`) - they're hard to maintain and add little value
 - Do NOT add explanatory comments on #include lines (e.g., `#include "my_sys.h" // my_ok, my_printf_error`) - they're hard to maintain
