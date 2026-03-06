@@ -167,7 +167,7 @@ static void dummy_int_to_params_vdf(vef_context_t * /*ctx*/,
                                     vef_vdf_args_t *args,
                                     vef_vdf_result_t *result) {
   std::map<std::string, std::string> params;
-  if (dummy_int_to_params(args->values[0].int_value, params,
+  if (dummy_int_to_params(args->values[0]->int_value, params,
                           result->error_msg)) {
     result->type = VEF_RESULT_ERROR;
     return;
@@ -189,7 +189,7 @@ static void dummy_int_to_params_vdf(vef_context_t * /*ctx*/,
 static void dummy_resolve_params_vdf(vef_context_t * /*ctx*/,
                                      vef_vdf_args_t *args,
                                      vef_vdf_result_t *result) {
-  std::string input(args->values[0].str_value, args->values[0].str_len);
+  std::string input(args->values[0]->str_value, args->values[0]->str_len);
   std::map<std::string, std::string> params;
   size_t start = 0;
   while (start < input.size()) {

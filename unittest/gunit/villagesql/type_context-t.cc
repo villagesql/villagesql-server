@@ -46,7 +46,7 @@ static int dummy_compare(const unsigned char *, size_t, const unsigned char *,
 // Parses "dimension" from the canonical string, computes sizes.
 static void resolve_params_ok_vdf(vef_context_t * /*ctx*/, vef_vdf_args_t *args,
                                   vef_vdf_result_t *result) {
-  std::string input(args->values[0].str_value, args->values[0].str_len);
+  std::string input(args->values[0]->str_value, args->values[0]->str_len);
   // Parse "dimension=N" from canonical string
   int64_t dim = 0;
   size_t start = 0;
