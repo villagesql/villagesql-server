@@ -37,6 +37,7 @@ int CompareOp::invoke(const unsigned char *data1, size_t len1,
   }
 
   SpecialVdfCall<IntResult, CustomArg, CustomArg> call(vdf_);
+  call.init();
   auto result = call.invoke(BinarySlice{data1, len1}, BinarySlice{data2, len2});
   if (!result) {
     LogVSQL(ERROR_LEVEL, "compare VDF '%s' returned error: %s", call.name(),
@@ -52,6 +53,7 @@ size_t HashOp::invoke(const unsigned char *data, size_t len) const {
   }
 
   SpecialVdfCall<IntResult, CustomArg> call(vdf_);
+  call.init();
   auto result = call.invoke(BinarySlice{data, len});
   if (!result) {
     LogVSQL(ERROR_LEVEL, "hash VDF '%s' returned error: %s", call.name(),
@@ -65,6 +67,7 @@ bool IntToParamsOp::invoke(int64_t value, std::string *result,
                            char *error_msg) const {
   char str_buffer[VEF_MAX_TYPE_PARAMS_STRING_LEN];
   SpecialVdfCall<StringResult, IntArg> call(vdf_);
+  call.init();
   auto r = call.invoke(value, str_buffer, sizeof(str_buffer));
   if (!r) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN, "%s", call.error_msg());
@@ -82,6 +85,7 @@ bool ResolveParamsOp::invoke(const std::string &params_str,
                              char *error_msg) const {
   char str_buffer[VEF_MAX_TYPE_PARAMS_STRING_LEN];
   SpecialVdfCall<StringResult, StringArg> call(vdf_);
+  call.init();
   auto r = call.invoke(StringSlice{params_str.c_str(), params_str.size()},
                        str_buffer, sizeof(str_buffer));
   if (!r) {
@@ -122,6 +126,7 @@ bool ResolveParamsOp::invoke(const std::string &params_str,
 bool IntrinsicDefaultOp::invoke(int64_t buffer_size, unsigned char *buffer,
                                 size_t *length, char *error_msg) const {
   SpecialVdfCall<BinaryResult, IntArg> call(vdf_);
+  call.init();
   auto r = call.invoke(buffer_size, buffer, static_cast<size_t>(buffer_size));
   if (!r) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN, "%s", call.error_msg());

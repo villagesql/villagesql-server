@@ -16,20 +16,23 @@
 
 // SpecialVdfCall<ResultTag, ArgTags...> wraps a VDF function descriptor for
 // repeated calls where the argument and result types are known at compile time.
-// The constructor validates the descriptor, stores the call context, and
-// pre-initializes the type/is_null fields of each input slot once. invoke()
-// updates only the per-call data fields and dispatches to the VDF.
+// The constructor sets up the call context and argument arrays. init() must be
+// called once after construction to initialize the type/is_null fields of each
+// input slot. invoke() updates only the per-call data fields and dispatches to
+// the VDF.
 //
 // Non-overlapping: invoke() is non-const and modifies shared input state.
 // Multiple concurrent invoke() calls on the same object are not safe.
 //
 // Example (IntResult):
 //   SpecialVdfCall<IntResult, CustomArg, CustomArg> call(vdf_);
+//   call.init();
 //   auto r = call.invoke(BinarySlice{data1, len1}, BinarySlice{data2, len2});
 //   if (!r) LogVSQL(ERROR_LEVEL, "%s: %s", call.name(), call.error_msg());
 //
 // Example (BinaryResult, data in out param to reduce data copy):
 //   SpecialVdfCall<BinaryResult, IntArg> call(vdf_);
+//   call.init();
 //   auto r = call.invoke(buffer_size, out_buf, max_len);
 //   if (!r) snprintf(error_msg, VEF_MAX_ERROR_LEN, "%s", call.error_msg());
 
@@ -67,14 +70,28 @@ struct BinarySlice {
         len(s.length()) {}
 };
 
+struct TypeParameterSlice {
+  unsigned int count;
+  const char *const *keys;
+  const char *const *values;
+  TypeParameterSlice() : count(0), keys(nullptr), values(nullptr) {}
+  TypeParameterSlice(unsigned int c, const char *const *k, const char *const *v)
+      : count(c), keys(k), values(v) {}
+};
+
+// Placeholder for arg tags that need no init-time data.
+struct NoInitData {};
+
 // Arg type tags for SpecialVdfCall. Each tag defines:
 //   cpp_t  — the C++ type passed to invoke() for this argument
-//   init() — called once in SpecialVdfCall's constructor to set type/is_null
+//   init_t — the type passed to init() for one-time setup of this argument
+//   init() — called once by SpecialVdfCall::init() to set type/is_null
 //   fill() — called per invoke() to update the per-call data fields
 struct IntArg {
   using cpp_t = int64_t;
+  using init_t = NoInitData;
   template <typename T>
-  static void init(T &v) {
+  static void init(T &v, NoInitData) {
     v.type = VEF_TYPE_INT;
     v.is_null = false;
   }
@@ -86,8 +103,9 @@ struct IntArg {
 
 struct StringArg {
   using cpp_t = StringSlice;
+  using init_t = NoInitData;
   template <typename T>
-  static void init(T &v) {
+  static void init(T &v, NoInitData) {
     v.type = VEF_TYPE_STRING;
     v.is_null = false;
   }
@@ -100,10 +118,16 @@ struct StringArg {
 
 struct CustomArg {
   using cpp_t = BinarySlice;
+  using init_t = TypeParameterSlice;
   template <typename T>
-  static void init(T &v) {
+  static void init(T &v, TypeParameterSlice tp) {
     v.type = VEF_TYPE_CUSTOM;
     v.is_null = false;
+    if constexpr (std::is_same_v<T, vef_invalue_t>) {
+      v.type_params.count = tp.count;
+      v.type_params.keys = tp.keys;
+      v.type_params.values = tp.values;
+    }
   }
   template <typename T>
   static void fill(T &v, BinarySlice b) {
@@ -135,11 +159,26 @@ class SpecialVdfCall {
     vdf_args_.value_count = static_cast<unsigned int>(kN);
     if (fd->protocol >= VEF_PROTOCOL_2) {
       for (size_t i = 0; i < kN; i++) input_ptrs_[i] = &inputs_[i];
-      init_inputs(inputs_);
       vdf_args_.values = input_ptrs_;
     } else {
-      init_inputs(inputs_v1_);
       vdf_args_.values_v1 = inputs_v1_;
+    }
+  }
+
+  // Initialize the type/is_null fields of each input slot. Must be called
+  // once after construction and before the first invoke().
+  // The no-arg overload default-constructs each arg's init_t (e.g. empty
+  // TypeParameterSlice for CustomArg). The explicit overload accepts one
+  // init_t value per arg tag.
+  void init() { init(typename ArgTags::init_t{}...); }
+
+  void init(typename ArgTags::init_t... init_args) {
+    if (ctx_.protocol >= VEF_PROTOCOL_2) {
+      unsigned int i = 0;
+      ((ArgTags::init(inputs_[i++], init_args)), ...);
+    } else {
+      unsigned int i = 0;
+      ((ArgTags::init(inputs_v1_[i++], init_args)), ...);
     }
   }
 
@@ -232,12 +271,6 @@ class SpecialVdfCall {
   }
 
  private:
-  template <typename InvalueType>
-  void init_inputs(InvalueType *inputs) {
-    unsigned int i = 0;
-    ((ArgTags::init(inputs[i++])), ...);
-  }
-
   void fill_inputs(typename ArgTags::cpp_t... args) {
     if (ctx_.protocol >= VEF_PROTOCOL_2) {
       unsigned int i = 0;
