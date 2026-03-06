@@ -1,9 +1,9 @@
 # VillageSQL Extension Framework SDK
 
-The VillageSQL Extension Framework (VEF) allows developers to write extensions
-that add custom functions and types to VillageSQL. Extensions are compiled as
-shared libraries (`.so`) and packaged as `.veb` files that the server loads at
-runtime.
+The VillageSQL Extension Framework (VEF) allows developers to extend
+VillageSQL, including adding custom functions and types in a future-proof way.
+Extensions are compiled as shared libraries (`.so`) and packaged as `.veb`
+files that the server loads at runtime.
 
 See `include/villagesql/extension.h` for the full C++ API and examples.
 
@@ -37,7 +37,7 @@ server.
 
 | Version          | Status         | Notes                                                                      |
 | ---------------- | -------------- | -------------------------------------------------------------------------- |
-| `VEF_PROTOCOL_1` | Stable         | Base protocol. Likely to be deprecated in a future release.                |
+| `VEF_PROTOCOL_1` | Stable         | Base protocol. Planned to be deprecated before beta.                       |
 | `VEF_PROTOCOL_2` | In development | Adds `deterministic` flag, VDF-based type operations, parameterized types. |
 
 ### Changing the ABI/API

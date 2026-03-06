@@ -1,4 +1,4 @@
-# API vs ABI in the VillageSQL Extension Framework
+# API vs ABI in the VillageSQL Extension Framework (VEF)
 
 This document explains the distinction between the API (Application Programming
 Interface) and ABI (Application Binary Interface) in VEF, describes the intended
@@ -11,13 +11,14 @@ not yet match that ideal.
 in C++ to implement an extension: which headers to include, which types to use,
 which patterns to follow. The goal of this layer is to provide an idiomatic C++
 API for extension authors to write against. If the API changes incompatibly, the
-extension author must update their source code and recompile.
+extension author must rewrite parts of their code to match the new interface
+before it can be built again.
 
 **ABI** is a _binary-level_ contract. It defines what a compiled extension `.so`
 must provide and can expect from the server at runtime: which C-linkage symbols
 to export, the exact memory layout of C structs, calling conventions. If the ABI
-is stable, an extension compiled against an old SDK continues to load and run on
-a new server _without recompilation_.
+is stable, a pre-existing binary (build with an older version of the SDK) will
+still work on a newer server without any changes or new build required.
 
 In VEF, a compiled extension (`.so` inside a `.veb`) interacts with the server
 entirely through the ABI. The C++ SDK is a convenience layer that _generates_
@@ -25,8 +26,9 @@ the correct ABI-compliant binary artifacts from idiomatic C++ code.
 
 ## The VEF API
 
-The API is everything in `extension.h`, `extension_builder.h`, `func_builder.h`,
-`type_builder.h`, and `func_types.h`. It provides:
+The API is the interface that the extension developer writs code against. It is
+files in `villagesql/sdk/include/villagesql/*.h` NOT including the subdirectory
+`abi/`.  It provides:
 
 - **Fluent builder pattern**: `make_extension()`, `.function()`, `.type()`
 - **Typed argument and result wrappers**: `IntArg`, `RealArg`, `StringArg`,
@@ -51,6 +53,9 @@ features. When a new stable protocol version is finalized, a corresponding
 frozen SDK snapshot should be added to `stable_sdk/`.
 
 ## The VEF ABI
+
+The ABI is the binary interface of the extension, the extension author does not
+need to worry about the details of it.
 
 The VEF ABI is defined entirely in `abi/types.h` and consists of:
 
@@ -116,7 +121,8 @@ But the API and ABI can also change independently:
 
 The API can be extended with types and functionality that makes it easier for
 extension developers, as long as extensions written against the previous version
-will continue to compile and work, without any source changes in the extension.
+of the API will continue to compile and work, without any source changes in the
+extension.
 
 Changing the ABI should be done to improve the interactions with the server and
 changes need not be visible to the API users. But it is imperative that an
@@ -128,7 +134,7 @@ extensions. If either fails to work it is a breaking change.
 
 ### 0. Identify warts in the v1 ABI, and plan to address
 
-There are at least three known issues in the existing structs, there may be
+There are at least three known issues in the existing ABI, there may be
 more.
 
 1. Raw function pointers should be removed:
@@ -142,7 +148,7 @@ more.
    `vef_invalue_t` meaning adding fields will cause ABI layout compatibility
    issues.
 
-4. Unnecessary indirection. VDFs can return buffers that they have allocated via
+3. Unnecessary indirection. VDFs can return buffers that they have allocated via
    `alt_*_buf` which is a char**. That points to an address that the extension
    can override. This could instead be a char*, and the extension could
    overwrite the field instead.
@@ -166,10 +172,21 @@ functions. This ABI-era pattern leaked into the API surface and is still
 supported by `func_builder.h`. Using it couples extension code directly to ABI
 types.
 
-When we are ready we will declare old versions of the protocol as no longer
-supported.
 
-### 3. Controls to prevent ABI breakages
+### 3. Drop support for protocol v1
 
-Add presubmit checks to let engineers find if they have broken ABI
-compatibility.
+There is very little usage of v1, and we expect the ABI and API to continue to
+evolve before Beta. Because of this we expect the cost of supporting v1 will
+outweigh the benefit of maintaining it. Sufficient notice will be given to
+extension authors.
+
+
+### 4. Controls to prevent ABI breakages
+
+Add presubmit checks to warn engineers if they have broken ABI compatibility.
+
+
+### 5. Compatibility testing with extensions in other repos
+
+As part of the release process we should test server binaries with existing
+extensions that are outside of the development repo.
