@@ -9,11 +9,11 @@
 #
 # Test coverage:
 #   1. Normal INSERT/SELECT round-trip with "OK" values.
-#   2. "DECODE_FAIL" rows: SELECT returns NULL with a warning.
+#   2. "DECODE_FAIL" rows: SELECT returns empty string with a warning.
 #   3. Mixing healthy and decode-failing rows in the same query.
 #   4. "ENCODE_FAIL": INSERT is rejected with an error.
 #   5. UPDATE overwriting a DECODE_FAIL row with a good value: row becomes readable.
-#   6. UPDATE overwriting a good row with DECODE_FAIL: value is stored, decodes as NULL.
+#   6. UPDATE overwriting a good row with DECODE_FAIL: value is stored, decodes as empty string.
 
 INSTALL EXTENSION vsql_test_only;
 
@@ -37,11 +37,11 @@ SELECT id, val FROM t1 ORDER BY id;
 --echo # Insert a value that will fail on decode
 INSERT INTO t1 VALUES (4, 'DECODE_FAIL');
 
---echo # SELECT the decode-failing row alone: returns NULL with a warning
+--echo # SELECT the decode-failing row alone: returns empty string with a warning
 SELECT id, val FROM t1 WHERE id = 4;
 SHOW WARNINGS;
 
---echo # SELECT all rows: healthy rows decode fine, DECODE_FAIL row returns NULL
+--echo # SELECT all rows: healthy rows decode fine, DECODE_FAIL row returns empty string
 SELECT id, val FROM t1 ORDER BY id;
 SHOW WARNINGS;
 
@@ -54,7 +54,7 @@ SELECT id, val FROM t1 ORDER BY id;
 --echo # UPDATE: overwrite a good row with a DECODE_FAIL value
 UPDATE t1 SET val = 'DECODE_FAIL' WHERE id = 1;
 
---echo # The updated row now decodes as NULL with a warning
+--echo # The updated row now decodes as empty string with a warning
 SELECT id, val FROM t1 ORDER BY id;
 SHOW WARNINGS;
 

@@ -10653,12 +10653,12 @@ String *Field::val_external_str(String *buf) const {
             this->field_name, da->current_row_for_condition());
       }
     } else {
-      // OOMs will just return nullptr, but have called my_error.
+      // OOMs have already called my_error
     }
-    return nullptr;
+    // MySQL errors return empty strings
+    buf->length(0);
   }
 
-  // Success: the decoded string is in buf.
   return buf;
 }
 
@@ -10666,6 +10666,6 @@ bool Field_varstring::send_to_protocol(Protocol *protocol) const {
   if (is_null()) return protocol->store_null();
   char buff[MAX_FIELD_WIDTH];
   String tmp(buff, sizeof(buff), charset());
-  String *res = val_external_str(&tmp);
-  return res ? protocol->store(res) : protocol->store_null();
+  val_external_str(&tmp);
+  return protocol->store(&tmp);
 }

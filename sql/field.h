@@ -1033,7 +1033,6 @@ class Field {
   // Unlike val_str(), val_external_str() takes only one buffer because custom
   // types always decode binary data to a new string (never returning existing
   // string data), so the two-buffer optimization doesn't apply.
-  // TODO(villagesql-beta): Return buf with zero length in case of error.
   String *val_external_str(String *buf) const;
   String *val_external_str(String *str, uchar *new_ptr) {
     uchar *old_ptr = ptr;

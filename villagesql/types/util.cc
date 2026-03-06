@@ -759,9 +759,8 @@ static void do_field_custom_to_string(Copy_field *, const Field *from,
   // NULL is handled outside this function
   // TODO(villagesql-performance): evaluate something more performant
   String buf;
-  if (const String *res = from->val_external_str(&buf)) {
-    to->store(res->ptr(), res->length(), res->charset());
-  }
+  from->val_external_str(&buf);
+  to->store(buf.ptr(), buf.length(), buf.charset());
 }
 
 FieldCopyFunc *GetCopyFunc(const Field *from, const Field *to) {

@@ -324,10 +324,8 @@ void field_unpack(String *to, Field *field, uint max_length, bool prefix_key) {
     }
     const CHARSET_INFO *cs = field->charset();
     // VillageSQL: val_external_str handles both custom and regular types.
-    // For custom types the return value is a different pointer, so copy it.
-    if (const String *res = field->val_external_str(&tmp);
-        res != nullptr && res != &tmp)
-      tmp.copy(*res);
+    field->val_external_str(&tmp);
+
     /*
       For BINARY(N) strip trailing zeroes to make
       the error message nice-looking

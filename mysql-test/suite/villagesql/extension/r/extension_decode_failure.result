@@ -20,22 +20,22 @@ id	val
 3	OK abc
 # Insert a value that will fail on decode
 INSERT INTO t1 VALUES (4, 'DECODE_FAIL');
-# SELECT the decode-failing row alone: returns NULL with a warning
+# SELECT the decode-failing row alone: returns empty string with a warning
 SELECT id, val FROM t1 WHERE id = 4;
 id	val
-4	NULL
+4	
 Warnings:
 Warning	1366	Incorrect FAULT_BLOB value: 'DECODE_FAIL\x00\x00\x00\x00\x00' for column 'val' at row 1
 SHOW WARNINGS;
 Level	Code	Message
 Warning	1366	Incorrect FAULT_BLOB value: 'DECODE_FAIL\x00\x00\x00\x00\x00' for column 'val' at row 1
-# SELECT all rows: healthy rows decode fine, DECODE_FAIL row returns NULL
+# SELECT all rows: healthy rows decode fine, DECODE_FAIL row returns empty string
 SELECT id, val FROM t1 ORDER BY id;
 id	val
 1	OK hello
 2	OK world
 3	OK abc
-4	NULL
+4	
 Warnings:
 Warning	1366	Incorrect FAULT_BLOB value: 'DECODE_FAIL\x00\x00\x00\x00\x00' for column 'val' at row 4
 SHOW WARNINGS;
@@ -52,10 +52,10 @@ id	val
 4	OK fixed
 # UPDATE: overwrite a good row with a DECODE_FAIL value
 UPDATE t1 SET val = 'DECODE_FAIL' WHERE id = 1;
-# The updated row now decodes as NULL with a warning
+# The updated row now decodes as empty string with a warning
 SELECT id, val FROM t1 ORDER BY id;
 id	val
-1	NULL
+1	
 2	OK world
 3	OK abc
 4	OK fixed
