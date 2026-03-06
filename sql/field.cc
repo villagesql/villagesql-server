@@ -6600,6 +6600,18 @@ int Field_varstring::do_save_field_metadata(uchar *metadata_ptr) const {
   return 2;
 }
 
+type_conversion_status Field_varstring::reset() {
+  // VillageSQL: For NOT NULL custom type fields, reset() to the intrinsic
+  // default so the field always holds a valid encoded value. For all other
+  // fields fall through to the base implementation (zero out bytes).
+  if (has_type_context() && !is_nullable()) {
+    if (get_type_context()->intrinsic_default_buffer() != nullptr) {
+      return villagesql::StoreCustomFieldIntrinsicDefault(this);
+    }
+  }
+  return Field::reset();
+}
+
 type_conversion_status Field_varstring::store(const char *from, size_t length,
                                               const CHARSET_INFO *cs) {
   ASSERT_COLUMN_MARKED_FOR_WRITE;

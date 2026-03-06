@@ -1,6 +1,6 @@
 CREATE TABLE t1 (
 id INT PRIMARY KEY,
-val COMPLEX DEFAULT '(0.0,0.0)',
+val COMPLEX DEFAULT '(100.0,100.0)',
 val_null COMPLEX
 );
 INSERT INTO t1 (id) VALUES (1);
@@ -17,7 +17,7 @@ INSERT INTO t1 (id, val_null) VALUES (11, '(11.0,12.0)');
 INSERT INTO t1 (id, val_null) VALUES (12, '(-13.0,14.0)');
 SELECT * FROM t1 ORDER BY id;
 id	val	val_null
-1	NULL	NULL
+1	(100,100)	NULL
 2	(1,2)	NULL
 3	(0,0)	NULL
 4	(-3.5,1.2)	NULL
@@ -27,12 +27,8 @@ id	val	val_null
 8	(-7.5,-8.5)	NULL
 9	(0,0)	NULL
 10	(9,10)	NULL
-11	NULL	(11,12)
-12	NULL	(-13,14)
-Warnings:
-Warning	1366	Incorrect COMPLEX value: '(0.0,0.0)' for column 'val' at row 1
-Warning	1366	Incorrect COMPLEX value: '(0.0,0.0)' for column 'val' at row 11
-Warning	1366	Incorrect COMPLEX value: '(0.0,0.0)' for column 'val' at row 12
+11	(100,100)	(11,12)
+12	(100,100)	(-13,14)
 DROP TABLE t1;
 CREATE TABLE t2 (
 id INT PRIMARY KEY,
@@ -48,6 +44,9 @@ INSERT INTO t2 (id, val_optional) VALUES (99, '(99.0,99.0)');
 ERROR HY000: Field 'val' doesn't have a default value
 INSERT INTO t2 (id, val, val_optional) VALUES (98, NULL, '(98.0,98.0)');
 ERROR 23000: Column 'val' cannot be null
+INSERT IGNORE INTO t2 (id, val_optional) VALUES (97, '(97.0,97.0)');
+Warnings:
+Warning	1364	Field 'val' doesn't have a default value
 SELECT * FROM t2 ORDER BY id;
 id	val	val_optional
 1	(1,2)	NULL
@@ -55,4 +54,5 @@ id	val	val_optional
 3	(5,-6)	(7,8)
 4	(-9,-10)	(0,0)
 5	(11,12)	NULL
+97	(0,0)	(97,97)
 DROP TABLE t2;

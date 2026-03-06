@@ -1,20 +1,14 @@
 # Test INSERT INTO ... (partial columns) with COMPLEX type
 # Grammar: INSERT [INTO] tbl_name (col_name) VALUES (value)
 
-# NOTE: Fully review this entire file when re-enabling - DEFAULT values for COMPLEX
-# columns don't work correctly (produce warnings and NULL instead of default value)
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 
 CREATE TABLE t1 (
     id INT PRIMARY KEY,
-    val COMPLEX DEFAULT '(0.0,0.0)',
+    val COMPLEX DEFAULT '(100.0,100.0)',
     val_null COMPLEX
 );
 
-# NOTE: DEFAULT values for COMPLEX don't work - they produce warnings and become NULL
-# Implicit default for 'val' (will be NULL with warning) and implicit NULL for 'val_null'
 INSERT INTO t1 (id) VALUES (1);
 
 # Explicit values for 'val' with negative values and zero variants, implicit NULL for 'val_null'
@@ -59,6 +53,9 @@ INSERT INTO t2 (id, val_optional) VALUES (99, '(99.0,99.0)');
 # This should also fail - explicitly setting NOT NULL column to NULL
 --error ER_BAD_NULL_ERROR
 INSERT INTO t2 (id, val, val_optional) VALUES (98, NULL, '(98.0,98.0)');
+
+# INSERT IGNORE will use intrinsic default
+INSERT IGNORE INTO t2 (id, val_optional) VALUES (97, '(97.0,97.0)');
 
 # Verify only the successful insert is present
 SELECT * FROM t2 ORDER BY id;

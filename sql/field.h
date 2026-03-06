@@ -3641,6 +3641,7 @@ class Field_varstring : public Field_longstr {
   bool is_text_key_type() const final { return binary() ? false : true; }
   uint32 get_length_bytes() const override { return length_bytes; }
   bool send_to_protocol(Protocol *protocol) const override;
+  type_conversion_status reset() final;
 
  private:
   /* Store number of bytes used to store length (1 or 2) */
