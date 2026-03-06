@@ -27,29 +27,35 @@ DROP TABLE t_with_sql_default;
 CREATE TABLE t_generated_virtual (
 id INT PRIMARY KEY,
 src COMPLEX,
-gen COMPLEX GENERATED ALWAYS AS (src) VIRTUAL
+gen COMPLEX GENERATED ALWAYS AS (src) VIRTUAL NOT NULL
 );
 INSERT INTO t_generated_virtual (id, src) VALUES (1, '(3.0,4.0)');
-INSERT INTO t_generated_virtual (id, src) VALUES (2, NULL);
+INSERT IGNORE INTO t_generated_virtual (id, src) VALUES (2, NULL);
+Warnings:
+Warning	1048	Column 'gen' cannot be null
 SELECT * FROM t_generated_virtual ORDER BY id;
 id	src	gen
 1	(3,4)	(3,4)
-2	NULL	NULL
+2	NULL	(0,0)
 DROP TABLE t_generated_virtual;
 CREATE TABLE t_generated_stored (
 id INT PRIMARY KEY,
 src COMPLEX,
-gen COMPLEX GENERATED ALWAYS AS (src) STORED
+gen COMPLEX GENERATED ALWAYS AS (src) STORED NOT NULL
 );
 INSERT INTO t_generated_stored (id, src) VALUES (1, '(5.0,6.0)');
-INSERT INTO t_generated_stored (id, src) VALUES (2, NULL);
+INSERT IGNORE INTO t_generated_stored (id, src) VALUES (2, NULL);
+Warnings:
+Warning	1048	Column 'gen' cannot be null
 SELECT * FROM t_generated_stored ORDER BY id;
 id	src	gen
 1	(5,6)	(5,6)
-2	NULL	NULL
+2	NULL	(0,0)
 UPDATE IGNORE t_generated_stored SET src = NULL WHERE id = 1;
+Warnings:
+Warning	1048	Column 'gen' cannot be null
 SELECT * FROM t_generated_stored ORDER BY id;
 id	src	gen
-1	NULL	NULL
-2	NULL	NULL
+1	NULL	(0,0)
+2	NULL	(0,0)
 DROP TABLE t_generated_stored;
