@@ -853,8 +853,7 @@ type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field) {
   const unsigned char *cached_buffer = tc.intrinsic_default_buffer();
   if (cached_buffer == nullptr) {
     villagesql_error(
-        "Column '%s' has no intrinsic default for type '%s'; "
-        "define intrinsic_default_vdf_name in the type registration",
+        "Column '%s' has no intrinsic default for type '%s'",
         MYF(0), field->field_name, tc.type_name().c_str());
     return TYPE_ERR_BAD_VALUE;
   }
