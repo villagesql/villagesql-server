@@ -126,29 +126,47 @@
 // you find that you need to use prerun or postrun functions, please come talk
 // to us so we can understand your use case.
 //
-// For type conversion functions (from_string / to_string):
-//
-//   make_func("mytype_from_string")
-//     .from_string<&encode_func>("mytype")   // STRING -> mytype
-//
-//   make_func("mytype_to_string")
-//     .to_string<&decode_func>("mytype")     // mytype -> STRING
-//
-//
 // DEFINING TYPES
 // --------------
 //
 // Custom types are defined using make_type("name") and chained builder methods,
-// ending with .build():
+// ending with .build(). The type operations (encode, decode, compare, hash) are
+// implemented as VDFs registered separately using make_type_encode,
+// make_type_decode, make_type_compare, and make_type_hash, then referenced
+// by name in the type descriptor:
 //
 //   make_type("mytype")
-//     .persisted_length(8)           // Fixed storage size in bytes
-//     .max_decode_buffer_length(64)  // Max bytes for string representation
-//     .encode(&mytype_encode)        // String -> binary
-//     .decode(&mytype_decode)        // Binary -> string
-//     .compare(&mytype_compare)      // For ORDER BY, indexes
-//     .hash(&mytype_hash)            // Optional: for hash joins
+//     .persisted_length(8)              // Fixed storage size in bytes
+//     .max_decode_buffer_length(64)     // Max bytes for string representation
+//     .encode("mytype_encode")          // Name of the encode VDF
+//     .decode("mytype_decode")          // Name of the decode VDF
+//     .compare("mytype_compare")        // Name of the compare VDF
+//     .hash("mytype_hash")              // Optional: name of the hash VDF
 //     .build()
+//
+// The VDFs are created using the ergonomic make_type_* entry points:
+//
+//   make_type_encode<&my_encode>("mytype_encode", MYTYPE)
+//   make_type_decode<&my_decode>("mytype_decode", MYTYPE)
+//   make_type_compare<&my_compare>("mytype_compare", MYTYPE)
+//   make_type_hash<&my_hash>("mytype_hash", MYTYPE)  // optional
+//
+// Extension authors write against these ergonomic C++ signatures:
+//
+//   // Encode: string -> binary. false=success, true=error.
+//   // Set *length = SIZE_MAX to produce SQL NULL.
+//   bool my_encode(std::string_view from, Span<unsigned char> buf,
+//                  size_t *length);
+//
+//   // Decode: binary -> string. false=success, true=error.
+//   bool my_decode(Span<const unsigned char> data, Span<char> out,
+//                  size_t *out_len);
+//
+//   // Compare: returns <0, 0, or >0.
+//   int my_compare(Span<const unsigned char> a, Span<const unsigned char> b);
+//
+//   // Hash: returns hash code.
+//   size_t my_hash(Span<const unsigned char> data);
 //
 //
 // REGISTERING THE EXTENSION
@@ -158,10 +176,17 @@
 //
 //   VEF_GENERATE_ENTRY_POINTS(
 //     make_extension("my_ext", "1.0.0")
-//       .func(make_func<&func1_impl>("func1").returns(INT).build())
-//       .func(make_func<&func2_impl>("func2").returns(STRING).build())
-//       .type(make_type("mytype").persisted_length(8)
-//         .encode(&enc).decode(&dec).compare(&cmp).build()))
+//       .type(make_type(MYTYPE)
+//         .persisted_length(8)
+//         .max_decode_buffer_length(64)
+//         .encode("mytype_encode")
+//         .decode("mytype_decode")
+//         .compare("mytype_compare")
+//         .build())
+//       .func(make_type_encode<&my_encode>("mytype_encode", MYTYPE))
+//       .func(make_type_decode<&my_decode>("mytype_decode", MYTYPE))
+//       .func(make_type_compare<&my_compare>("mytype_compare", MYTYPE))
+//       .func(make_func<&func1_impl>("func1").returns(INT).build()))
 //
 // This generates the extern "C" vef_register() and vef_unregister() functions
 // that mysqld calls to load the extension.
@@ -180,35 +205,35 @@
 //   // BYTEARRAY type: fixed 8-byte value stored as raw bytes
 //
 //   // Encode: string -> binary (copy up to 8 bytes, zero-pad)
-//   bool bytearray_encode(unsigned char* buf, size_t buf_size,
-//                         const char* from, size_t from_len, size_t* length) {
-//     if (buf_size < kBytearrayLen) return true;  // error
-//     memset(buf, 0, kBytearrayLen);
-//     size_t copy_len = from_len < kBytearrayLen ? from_len : kBytearrayLen;
-//     if (from && copy_len > 0) memcpy(buf, from, copy_len);
+//   bool bytearray_encode(std::string_view from, Span<unsigned char> buf,
+//                         size_t* length) {
+//     if (buf.size() < kBytearrayLen) return true;  // error
+//     memset(buf.data(), 0, kBytearrayLen);
+//     size_t n = from.size() < kBytearrayLen ? from.size() : kBytearrayLen;
+//     if (n > 0) memcpy(buf.data(), from.data(), n);
 //     *length = kBytearrayLen;
 //     return false;  // success
 //   }
 //
 //   // Decode: binary -> string (copy 8 bytes)
-//   bool bytearray_decode(const unsigned char* buf, size_t buf_size,
-//                         char* to, size_t to_size, size_t* to_length) {
-//     if (to_size < kBytearrayLen) return true;  // error
-//     memcpy(to, buf, kBytearrayLen);
-//     *to_length = kBytearrayLen;
+//   bool bytearray_decode(Span<const unsigned char> data, Span<char> out,
+//                         size_t* out_len) {
+//     if (out.size() < kBytearrayLen) return true;  // error
+//     memcpy(out.data(), data.data(), kBytearrayLen);
+//     *out_len = kBytearrayLen;
 //     return false;  // success
 //   }
 //
 //   // Compare: lexicographic byte comparison
-//   int bytearray_compare(const unsigned char* a, size_t a_len,
-//                         const unsigned char* b, size_t b_len) {
-//     return memcmp(a, b, kBytearrayLen);
+//   int bytearray_compare(Span<const unsigned char> a,
+//                         Span<const unsigned char> b) {
+//     return memcmp(a.data(), b.data(), kBytearrayLen);
 //   }
 //
 //   // ROT13: apply ROT13 cipher to ASCII letters in a bytearray
-//   void rot13_impl(BinaryArg input, BinaryResult out) {
-//     if (input.is_null()) { out.set_null(); return; }
-//     auto src = input.value();   // villagesql::Span<const unsigned char>
+//   void rot13_impl(BinaryArg in, BinaryResult out) {
+//     if (in.is_null()) { out.set_null(); return; }
+//     auto src = in.value();      // villagesql::Span<const unsigned char>
 //     auto dst = out.buffer();    // villagesql::Span<unsigned char>
 //     for (size_t i = 0; i < kBytearrayLen; i++) {
 //       unsigned char c = src[i];
@@ -219,17 +244,22 @@
 //     out.set_length(kBytearrayLen);
 //   }
 //
-//   // Register everything inline
+//   // Register everything
 //   VEF_GENERATE_ENTRY_POINTS(
 //     make_extension("bytearray_ext", "1.0.0")
 //       .type(make_type(BYTEARRAY)
 //         .persisted_length(kBytearrayLen)
 //         .max_decode_buffer_length(kBytearrayLen)
-//         .encode(&bytearray_encode)
-//         .decode(&bytearray_decode)
-//         .compare(&bytearray_compare)
+//         .encode("bytearray_encode")
+//         .decode("bytearray_decode")
+//         .compare("bytearray_compare")
 //         .build())
-//       .func(make_func<&rot13_impl>("rot13")
+//       .func(make_type_encode<&bytearray_encode>("bytearray_encode",
+//       BYTEARRAY))
+//       .func(make_type_decode<&bytearray_decode>("bytearray_decode",
+//       BYTEARRAY))
+//       .func(make_type_compare<&bytearray_compare>("bytearray_compare",
+//       BYTEARRAY)) .func(make_func<&rot13_impl>("rot13")
 //         .returns(BYTEARRAY)
 //         .param(BYTEARRAY)
 //         .build()))

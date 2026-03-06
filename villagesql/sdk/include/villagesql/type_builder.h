@@ -34,14 +34,12 @@ namespace type_builder {
 //   make_type("mytype")
 //     .persisted_length(8)
 //     .max_decode_buffer_length(64)
-//     .encode(&my_encode)
-//     .decode(&my_decode)
-//     .compare(&my_compare)
-//     .hash(&my_hash)   // optional
+//     .encode("mytype_encode")
+//     .decode("mytype_decode")
+//     .compare("mytype_compare")
+//     .hash("mytype_hash")   // optional
 //     .build()
 //
-// TODO(villagesql-beta): add type safe registration methods for the type
-// operations.
 // TODO(villagesql-beta): allow VDFs that aren't directly callable from SQL.
 
 class TypeBuilder {

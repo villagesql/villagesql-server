@@ -320,6 +320,35 @@ struct ToStringWrapper {
   }
 };
 
+// =============================================================================
+// Extension Author Function Signatures (for type operations)
+// =============================================================================
+//
+// Extension authors write against these clean C++ signatures using
+// std::string_view and Span<T> instead of raw pointer/length pairs.
+// Use with make_type_encode, make_type_decode, make_type_compare,
+// make_type_hash to produce VDFs with the correct SQL signature:
+//   TypeEncodeFunc  -> VDF: (STRING) -> CUSTOM(type)
+//   TypeDecodeFunc  -> VDF: (CUSTOM(type)) -> STRING
+//   TypeCompareFunc -> VDF: (CUSTOM(type), CUSTOM(type)) -> INT
+//   TypeHashFunc    -> VDF: (CUSTOM(type)) -> INT
+
+// Encode: string -> binary. Returns false on success, true on error.
+// Set *length = SIZE_MAX to produce SQL NULL.
+using TypeEncodeFunc = bool (*)(std::string_view from, Span<unsigned char> buf,
+                                size_t *length);
+
+// Decode: binary -> string. Returns false on success, true on error.
+using TypeDecodeFunc = bool (*)(Span<const unsigned char> data, Span<char> out,
+                                size_t *out_len);
+
+// Compare: two binary values. Returns <0, 0, or >0.
+using TypeCompareFunc = int (*)(Span<const unsigned char> a,
+                                Span<const unsigned char> b);
+
+// Hash: binary value -> hash code.
+using TypeHashFunc = size_t (*)(Span<const unsigned char> data);
+
 // IntrinsicDefaultWrapper: wraps a vef_intrinsic_default_func_t into a VDF.
 // VDF signature: (INT) -> STRING (binary), where INT is the resolved
 // persisted_length (buffer_size). Returns the encoded default value as binary.
@@ -338,6 +367,102 @@ struct IntrinsicDefaultWrapper {
       return;
     }
     result->actual_len = length;
+    result->type = VEF_RESULT_VALUE;
+  }
+};
+
+// TypeEncodeVdfWrapper: wraps a TypeEncodeFunc into a VDF.
+// VDF signature: (STRING) -> CUSTOM(type).
+template <TypeEncodeFunc Func>
+struct TypeEncodeVdfWrapper {
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    vef_invalue_t arg = get_invalue(ctx, args, 0);
+    if (arg.is_null) {
+      result->type = VEF_RESULT_NULL;
+      return;
+    }
+    size_t length;
+    bool failed = Func({arg.str_value, arg.str_len},
+                       {result->bin_buf, result->max_bin_len}, &length);
+    if (failed) {
+      result->type = VEF_RESULT_ERROR;
+      constexpr size_t kMaxInputDisplay = 64;
+      size_t display_len = arg.str_len;
+      const char *ellipsis = "";
+      if (display_len > kMaxInputDisplay) {
+        display_len = kMaxInputDisplay;
+        ellipsis = "...";
+      }
+      snprintf(result->error_msg, VEF_MAX_ERROR_LEN,
+               "failed to encode '%.*s%s'", static_cast<int>(display_len),
+               arg.str_value, ellipsis);
+      return;
+    }
+    if (length == SIZE_MAX) {
+      result->type = VEF_RESULT_NULL;
+      return;
+    }
+    result->type = VEF_RESULT_VALUE;
+    result->actual_len = length;
+  }
+};
+
+// TypeDecodeVdfWrapper: wraps a TypeDecodeFunc into a VDF.
+// VDF signature: (CUSTOM(type)) -> STRING.
+template <TypeDecodeFunc Func>
+struct TypeDecodeVdfWrapper {
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    vef_invalue_t arg = get_invalue(ctx, args, 0);
+    if (arg.is_null) {
+      result->type = VEF_RESULT_NULL;
+      return;
+    }
+    size_t out_len;
+    bool failed = Func({arg.bin_value, arg.bin_len},
+                       {result->str_buf, result->max_str_len}, &out_len);
+    if (failed) {
+      result->type = VEF_RESULT_ERROR;
+      snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "failed to decode value");
+      return;
+    }
+    result->type = VEF_RESULT_VALUE;
+    result->actual_len = out_len;
+  }
+};
+
+// TypeCompareVdfWrapper: wraps a TypeCompareFunc into a VDF.
+// VDF signature: (CUSTOM(type), CUSTOM(type)) -> INT.
+template <TypeCompareFunc Func>
+struct TypeCompareVdfWrapper {
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    vef_invalue_t a = get_invalue(ctx, args, 0);
+    vef_invalue_t b = get_invalue(ctx, args, 1);
+    if (a.is_null || b.is_null) {
+      result->type = VEF_RESULT_NULL;
+      return;
+    }
+    result->int_value =
+        Func({a.bin_value, a.bin_len}, {b.bin_value, b.bin_len});
+    result->type = VEF_RESULT_VALUE;
+  }
+};
+
+// TypeHashVdfWrapper: wraps a TypeHashFunc into a VDF.
+// VDF signature: (CUSTOM(type)) -> INT.
+template <TypeHashFunc Func>
+struct TypeHashVdfWrapper {
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    vef_invalue_t arg = get_invalue(ctx, args, 0);
+    if (arg.is_null) {
+      result->type = VEF_RESULT_NULL;
+      return;
+    }
+    result->int_value =
+        static_cast<long long>(Func({arg.bin_value, arg.bin_len}));
     result->type = VEF_RESULT_VALUE;
   }
 };
@@ -751,6 +876,67 @@ constexpr StaticFuncDesc<1> make_intrinsic_default(const char *name) {
   meta.param_types[0] = to_vef_type(INT);
   meta.num_params = 1;
   meta.buffer_size = 0;  // server provides bin_buf sized to persisted_length
+  return StaticFuncDesc<1>(name, meta);
+}
+
+// Entry point for encode VDFs: (STRING) -> CUSTOM(type_name).
+//   make_type_encode<&my_func>("func_name", TYPE)
+// Register with .func() and reference in type via .encode("func_name").
+template <TypeEncodeFunc Func>
+constexpr StaticFuncDesc<1> make_type_encode(const char *name,
+                                             const char *type_name) {
+  FuncWithMetadata meta{};
+  meta.f = &TypeEncodeVdfWrapper<Func>::invoke;
+  meta.return_type = to_vef_type(type_name);
+  meta.param_types[0] = to_vef_type(STRING);
+  meta.num_params = 1;
+  meta.buffer_size = 0;  // server provides bin_buf sized to persisted_length
+  return StaticFuncDesc<1>(name, meta);
+}
+
+// Entry point for decode VDFs: (CUSTOM(type_name)) -> STRING.
+//   make_type_decode<&my_func>("func_name", TYPE)
+// Register with .func() and reference in type via .decode("func_name").
+template <TypeDecodeFunc Func>
+constexpr StaticFuncDesc<1> make_type_decode(const char *name,
+                                             const char *type_name) {
+  FuncWithMetadata meta{};
+  meta.f = &TypeDecodeVdfWrapper<Func>::invoke;
+  meta.return_type = to_vef_type(STRING);
+  meta.param_types[0] = to_vef_type(type_name);
+  meta.num_params = 1;
+  meta.buffer_size = 0;
+  return StaticFuncDesc<1>(name, meta);
+}
+
+// Entry point for compare VDFs: (CUSTOM(type_name), CUSTOM(type_name)) -> INT.
+//   make_type_compare<&my_func>("func_name", TYPE)
+// Register with .func() and reference in type via .compare("func_name").
+template <TypeCompareFunc Func>
+constexpr StaticFuncDesc<2> make_type_compare(const char *name,
+                                              const char *type_name) {
+  FuncWithMetadata meta{};
+  meta.f = &TypeCompareVdfWrapper<Func>::invoke;
+  meta.return_type = to_vef_type(INT);
+  meta.param_types[0] = to_vef_type(type_name);
+  meta.param_types[1] = to_vef_type(type_name);
+  meta.num_params = 2;
+  meta.buffer_size = 0;
+  return StaticFuncDesc<2>(name, meta);
+}
+
+// Entry point for hash VDFs: (CUSTOM(type_name)) -> INT.
+//   make_type_hash<&my_func>("func_name", TYPE)
+// Register with .func() and reference in type via .hash("func_name").
+template <TypeHashFunc Func>
+constexpr StaticFuncDesc<1> make_type_hash(const char *name,
+                                           const char *type_name) {
+  FuncWithMetadata meta{};
+  meta.f = &TypeHashVdfWrapper<Func>::invoke;
+  meta.return_type = to_vef_type(INT);
+  meta.param_types[0] = to_vef_type(type_name);
+  meta.num_params = 1;
+  meta.buffer_size = 0;
   return StaticFuncDesc<1>(name, meta);
 }
 
