@@ -4,7 +4,7 @@ val COMPLEX2 NOT NULL
 );
 INSERT INTO t VALUES (1, '(3.0,4.0)');
 UPDATE IGNORE t SET val = NULL WHERE id = 1;
-ERROR HY000: Column 'val' has no intrinsic default for type 'COMPLEX2'; define intrinsic_default_vdf_name in the type registration
+ERROR HY000: Column 'val' has no intrinsic default for type 'COMPLEX2'
 SELECT * FROM t;
 id	val
 1	(3,4)
