@@ -852,9 +852,8 @@ type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field) {
   // nullptr means the type did not register an intrinsic_default VDF.
   const unsigned char *cached_buffer = tc.intrinsic_default_buffer();
   if (cached_buffer == nullptr) {
-    villagesql_error(
-        "Column '%s' has no intrinsic default for type '%s'",
-        MYF(0), field->field_name, tc.type_name().c_str());
+    villagesql_error("Column '%s' has no intrinsic default for type '%s'",
+                     MYF(0), field->field_name, tc.type_name().c_str());
     return TYPE_ERR_BAD_VALUE;
   }
   const size_t cached_size = tc.intrinsic_default_size();
