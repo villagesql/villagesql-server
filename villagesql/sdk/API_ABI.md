@@ -17,7 +17,7 @@ before it can be built again.
 **ABI** is a _binary-level_ contract. It defines what a compiled extension `.so`
 must provide and can expect from the server at runtime: which C-linkage symbols
 to export, the exact memory layout of C structs, calling conventions. If the ABI
-is stable, a pre-existing binary (build with an older version of the SDK) will
+is stable, a pre-existing binary (built with an older version of the SDK) will
 still work on a newer server without any changes or new build required.
 
 In VEF, a compiled extension (`.so` inside a `.veb`) interacts with the server
@@ -26,9 +26,9 @@ the correct ABI-compliant binary artifacts from idiomatic C++ code.
 
 ## The VEF API
 
-The API is the interface that the extension developer writs code against. It is
+The API is the interface that the extension developer writes code against. It is
 files in `villagesql/sdk/include/villagesql/*.h` NOT including the subdirectory
-`abi/`.  It provides:
+`abi/`. It provides:
 
 - **Fluent builder pattern**: `make_extension()`, `.function()`, `.type()`
 - **Typed argument and result wrappers**: `IntArg`, `RealArg`, `StringArg`,
@@ -54,7 +54,7 @@ frozen SDK snapshot should be added to `stable_sdk/`.
 
 ## The VEF ABI
 
-The ABI is the binary interface of the extension, the extension author does not
+The ABI is the binary interface of the extension; the extension author does not
 need to worry about the details of it.
 
 The VEF ABI is defined entirely in `abi/types.h` and consists of:
@@ -113,13 +113,13 @@ version on their containing struct.
 
 ## How the API and ABI Evolve Together
 
-Adding new functionality often requires modifying both the ABI and the API. I.e.
-the functionality needs to talk to the server via the ABI, while exposing the
-functionality to the extension author.
+Adding new functionality often requires modifying both the ABI and the API — that
+is, the functionality needs to talk to the server via the ABI, while exposing
+the functionality to the extension author.
 
 But the API and ABI can also change independently:
 
-The API can be extended with types and functionality that makes it easier for
+The API can be extended with types and functionality that make it easier for
 extension developers, as long as extensions written against the previous version
 of the API will continue to compile and work, without any source changes in the
 extension.
@@ -127,14 +127,14 @@ extension.
 Changing the ABI should be done to improve the interactions with the server and
 changes need not be visible to the API users. But it is imperative that an
 extension can support old versions of the ABI for working with older servers,
-and equivalently newer server should continue to support the ABI from older
+and equivalently, newer servers should continue to support the ABI from older
 extensions. If either fails to work it is a breaking change.
 
 ## TODOs
 
-### 0. Identify warts in the v1 ABI, and plan to address
+### 0. Identify warts in the v1 ABI, and plan to address them
 
-There are at least three known issues in the existing ABI, there may be
+There are at least three known issues in the existing ABI; there may be
 more.
 
 1. Raw function pointers should be removed:
@@ -165,7 +165,7 @@ based on the C ABI:
 - `prerun()`
 - `postrun()`
 
-### 2. Remove old ABI style calls.
+### 2. Remove old ABI style calls
 
 The original calling convention exposed `vef_*_t*` argument types to VDF
 functions. This ABI-era pattern leaked into the API surface and is still

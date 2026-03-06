@@ -7,17 +7,19 @@ files that the server loads at runtime.
 
 See `include/villagesql/extension.h` for the full C++ API and examples.
 
-This SDK contains
+This SDK contains:
 
 - Two Protocol Versions:
-  - Stable (`/include`) - The most recent stable API. Extensions built against
-    this API can be expected to work on any currently supported server version.
-    It is copied from `villagesql/stable_sdk/vN`.
-  - Unstable (`include-dev`) - The in-development version of the API.
-    TODO(villagesql): Add documentation on how to develop against unstable. The
-    stable version is used by default. It is copied from `villagesql/sdk/include`.
-- CMakeFiles - Used to build extension libraries and package veb files.
-- A template project that can be the starting point for VillageSQL Extension.
+  - Stable (`/include` in the SDK bundle) - The most recent stable API.
+    Extensions built against this API can be expected to work on any currently
+    supported server version. It is copied from `villagesql/stable_sdk/v{N}`.
+  - Unstable (`/include-dev` in the SDK bundle) - The in-development version of
+    the API. The stable version is used by default for out of tree extensions.
+    It is copied from `villagesql/sdk/include`.
+    TODO(villagesql): Add documentation on how to develop extensions against
+    unstable.
+- CMake files - Used to build extension libraries and package veb files.
+- A template project that can be the starting point for a VillageSQL Extension.
 
 ## Protocol Versions
 
@@ -47,7 +49,7 @@ See [API_ABI.md](API_ABI.md) for more details on the API and ABI.
 
 ### Stabilizing a Protocol
 
-When the functionality in the new Protocol is ready to be used by the public,
+When the functionality in the new protocol is ready to be used by the public,
 then it should be stabilized, and a new protocol should be started.
 
 1. Copy the now "stabilized" `villagesql/sdk/` to the appropriate subdirectory
