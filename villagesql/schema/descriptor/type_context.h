@@ -62,9 +62,7 @@ class TypeParameters {
   // ABI accessors: parallel key/value arrays for vef_type_params_t.
   // keys and values are in the same order (keys[i] pairs with values[i]),
   // sorted alphabetically by key.
-  unsigned int param_count() const {
-    return static_cast<unsigned int>(keys_.size());
-  }
+  unsigned int count() const { return static_cast<unsigned int>(keys_.size()); }
   const char *const *key_data() const {
     return c_keys_.empty() ? nullptr : c_keys_.data();
   }

@@ -174,14 +174,14 @@ TEST_F(TypeParametersTest, Ordering) {
 
 TEST_F(TypeParametersTest, EmptyEntries) {
   villagesql::TypeParameters params;
-  EXPECT_EQ(params.param_count(), 0u);
+  EXPECT_EQ(params.count(), 0u);
   EXPECT_EQ(params.key_data(), nullptr);
   EXPECT_EQ(params.value_data(), nullptr);
 }
 
 TEST_F(TypeParametersTest, SingleEntry) {
   villagesql::TypeParameters params("dimension=1536");
-  EXPECT_EQ(params.param_count(), 1u);
+  EXPECT_EQ(params.count(), 1u);
   ASSERT_NE(params.key_data(), nullptr);
   ASSERT_NE(params.value_data(), nullptr);
   EXPECT_STREQ(params.key_data()[0], "dimension");
@@ -190,7 +190,7 @@ TEST_F(TypeParametersTest, SingleEntry) {
 
 TEST_F(TypeParametersTest, MultipleEntries) {
   villagesql::TypeParameters params("dimension=1536,metric=cosine");
-  EXPECT_EQ(params.param_count(), 2u);
+  EXPECT_EQ(params.count(), 2u);
   ASSERT_NE(params.key_data(), nullptr);
   ASSERT_NE(params.value_data(), nullptr);
   EXPECT_STREQ(params.key_data()[0], "dimension");

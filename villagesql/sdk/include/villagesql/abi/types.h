@@ -271,6 +271,7 @@ typedef struct {
       const unsigned char *bin_value;
 
       // protocol >= VEF_PROTOCOL_2
+      // Read-only: the extension must not overwrite these parameters.
       vef_type_params_t type_params;
     };
 
@@ -349,6 +350,7 @@ typedef struct {
       unsigned char **alt_bin_buf;
 
       // protocol >= VEF_PROTOCOL_2
+      // Read-only: the extension must not overwrite these parameters.
       vef_type_params_t type_params;
     };
 

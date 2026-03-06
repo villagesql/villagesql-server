@@ -229,7 +229,7 @@ static void marshal_args_typed(const vef_signature_t *sig, uint value_count,
           const auto *tc = arg_item->get_type_context();
           if (tc != nullptr) {
             const auto &params = tc->parameters();
-            invalues[i].type_params = {params.param_count(), params.key_data(),
+            invalues[i].type_params = {params.count(), params.key_data(),
                                        params.value_data()};
           } else {
             invalues[i].type_params = {0, nullptr, nullptr};
@@ -354,7 +354,7 @@ String *vdf_handler::val_str(String *str, String *save_str,
     result.alt_bin_buf = nullptr;
     if (m_return_type_context != nullptr) {
       const auto &params = m_return_type_context->parameters();
-      result.type_params = {params.param_count(), params.key_data(),
+      result.type_params = {params.count(), params.key_data(),
                             params.value_data()};
     } else {
       result.type_params = {0, nullptr, nullptr};
