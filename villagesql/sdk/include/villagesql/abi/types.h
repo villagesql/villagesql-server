@@ -572,12 +572,13 @@ typedef size_t (*vef_hash_func_t)(const unsigned char *data, size_t len);
 // Called when a NOT NULL custom column is set to NULL with IGNORE (e.g.
 // INSERT IGNORE or UPDATE IGNORE). Writes the encoded default value into
 // 'buffer' (of 'buffer_size' bytes) and sets '*length' to bytes written.
-// 'buffer_size' encodes the resolved persisted_length, allowing variable-size
-// types (e.g. TVECTOR(N)) to produce the correct number of bytes.
+// 'type_params' provides the resolved type parameters (e.g. dimension=6 for
+// TVECTOR(6)), allowing variable-size types to compute the correct output.
+// Fixed-size types can ignore type_params.
 // Returns: false on success, true on error (write message to error_msg).
-using vef_intrinsic_default_func_t = bool (*)(int64_t buffer_size,
-                                              unsigned char *buffer,
-                                              size_t *length, char *error_msg);
+using vef_intrinsic_default_func_t =
+    bool (*)(const vef_type_params_t *type_params, unsigned char *buffer,
+             size_t buffer_size, size_t *length, char *error_msg);
 
 typedef struct {
   // protocol >= VEF_PROTOCOL_1

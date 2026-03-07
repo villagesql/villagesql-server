@@ -30,10 +30,10 @@
 //   auto r = call.invoke(BinarySlice{data1, len1}, BinarySlice{data2, len2});
 //   if (!r) LogVSQL(ERROR_LEVEL, "%s: %s", call.name(), call.error_msg());
 //
-// Example (BinaryResult, data in out param to reduce data copy):
-//   SpecialVdfCall<BinaryResult, IntArg> call(vdf_);
-//   call.init();
-//   auto r = call.invoke(buffer_size, out_buf, max_len);
+// Example (CustomResult with type parameters):
+//   SpecialVdfCall<CustomResult> call(vdf_);
+//   call.init(TypeParameterSlice{count, keys, values});
+//   auto r = call.invoke(out_buf, max_len);
 //   if (!r) snprintf(error_msg, VEF_MAX_ERROR_LEN, "%s", call.error_msg());
 
 #ifndef VILLAGESQL_TYPES_SPECIAL_VDF_CALL_H_
@@ -137,14 +137,21 @@ struct CustomArg {
   }
 };
 
-// Result type tags for SpecialVdfCall. The tag determines which invoke()
-// overload is available:
+// Result type tags for SpecialVdfCall. Each tag defines:
+//   init_t — the type passed to init() for one-time setup of the result
+// The tag also determines which invoke() overload is available:
 //   IntResult    → invoke(args...)                    → std::optional<int64_t>
 //   StringResult → invoke(args..., char *, size_t)   → std::optional<size_t>
-//   BinaryResult → invoke(args..., uchar *, size_t)  → std::optional<size_t>
-struct IntResult {};
-struct StringResult {};
-struct BinaryResult {};
+//   CustomResult → invoke(args..., uchar *, size_t)  → std::optional<size_t>
+struct IntResult {
+  using init_t = NoInitData;
+};
+struct StringResult {
+  using init_t = NoInitData;
+};
+struct CustomResult {
+  using init_t = TypeParameterSlice;
+};
 
 template <typename ResultTag, typename... ArgTags>
 class SpecialVdfCall {
@@ -165,21 +172,20 @@ class SpecialVdfCall {
     }
   }
 
-  // Initialize the type/is_null fields of each input slot. Must be called
-  // once after construction and before the first invoke().
-  // The no-arg overload default-constructs each arg's init_t (e.g. empty
-  // TypeParameterSlice for CustomArg). The explicit overload accepts one
-  // init_t value per arg tag.
-  void init() { init(typename ArgTags::init_t{}...); }
+  // Initialize the result and input slots. Must be called once after
+  // construction and before the first invoke().
+  // The no-arg overload default-constructs each tag's init_t (e.g. empty
+  // TypeParameterSlice for CustomArg/CustomResult). The explicit overload
+  // accepts a result init_t followed by one init_t value per arg tag.
+  void init() {
+    result_init_ = typename ResultTag::init_t{};
+    init_arg_slots(typename ArgTags::init_t{}...);
+  }
 
-  void init(typename ArgTags::init_t... init_args) {
-    if (ctx_.protocol >= VEF_PROTOCOL_2) {
-      unsigned int i = 0;
-      ((ArgTags::init(inputs_[i++], init_args)), ...);
-    } else {
-      unsigned int i = 0;
-      ((ArgTags::init(inputs_v1_[i++], init_args)), ...);
-    }
+  void init(typename ResultTag::init_t result_init,
+            typename ArgTags::init_t... init_args) {
+    result_init_ = result_init;
+    init_arg_slots(init_args...);
   }
 
   // Not copyable or movable: vdf_args_ points into
@@ -195,7 +201,7 @@ class SpecialVdfCall {
   // Alternate output buffer set by the VDF in the last StringResult invoke(),
   // or nullptr if the VDF used the caller-provided buffer.
   const char *alt_str_buf() const { return alt_str_buf_; }
-  // Alternate output buffer set by the VDF in the last BinaryResult invoke(),
+  // Alternate output buffer set by the VDF in the last CustomResult invoke(),
   // or nullptr if the VDF used the caller-provided buffer.
   const unsigned char *alt_bin_buf() const { return alt_bin_buf_; }
 
@@ -244,12 +250,12 @@ class SpecialVdfCall {
     return result.actual_len;
   }
 
-  // For BinaryResult: fills inputs, calls the VDF writing into out_buf.
+  // For CustomResult: fills inputs, calls the VDF writing into out_buf.
   // Returns the actual output length on success, nullopt on error.
   // Error message available via error_msg(). If the VDF returned an alternate
   // buffer, alt_bin_buf() is non-null and holds the output instead.
   template <typename RT = ResultTag,
-            std::enable_if_t<std::is_same_v<RT, BinaryResult>, int> = 0>
+            std::enable_if_t<std::is_same_v<RT, CustomResult>, int> = 0>
   std::optional<size_t> invoke(typename ArgTags::cpp_t... args,
                                unsigned char *out_buf, size_t max_len) {
     fill_inputs(args...);
@@ -260,6 +266,8 @@ class SpecialVdfCall {
     result.bin_buf = out_buf;
     result.max_bin_len = max_len;
     result.alt_bin_buf = &alt_bin_buf_;
+    result.type_params = {result_init_.count, result_init_.keys,
+                          result_init_.values};
     fd_->vdf(&ctx_, &vdf_args_, &result);
     if (result.type != VEF_RESULT_VALUE) {
       if (error_msg_[0] == '\0')
@@ -271,6 +279,16 @@ class SpecialVdfCall {
   }
 
  private:
+  void init_arg_slots(typename ArgTags::init_t... init_args) {
+    if (ctx_.protocol >= VEF_PROTOCOL_2) {
+      unsigned int i = 0;
+      ((ArgTags::init(inputs_[i++], init_args)), ...);
+    } else {
+      unsigned int i = 0;
+      ((ArgTags::init(inputs_v1_[i++], init_args)), ...);
+    }
+  }
+
   void fill_inputs(typename ArgTags::cpp_t... args) {
     if (ctx_.protocol >= VEF_PROTOCOL_2) {
       unsigned int i = 0;
@@ -287,6 +305,7 @@ class SpecialVdfCall {
   std::array<vef_invalue_v1_t, kN> inputs_v1_{};
   std::array<vef_invalue_t *, kN> input_ptrs_{};
   vef_vdf_args_t vdf_args_{};
+  typename ResultTag::init_t result_init_{};
   char error_msg_[VEF_MAX_ERROR_LEN]{};
   char *alt_str_buf_{nullptr};
   unsigned char *alt_bin_buf_{nullptr};

@@ -123,11 +123,13 @@ bool ResolveParamsOp::invoke(const std::string &params_str,
   return false;
 }
 
-bool IntrinsicDefaultOp::invoke(int64_t buffer_size, unsigned char *buffer,
+bool IntrinsicDefaultOp::invoke(const vef_type_params_t &type_params,
+                                unsigned char *buffer, size_t buffer_size,
                                 size_t *length, char *error_msg) const {
-  SpecialVdfCall<BinaryResult, IntArg> call(vdf_);
-  call.init();
-  auto r = call.invoke(buffer_size, buffer, static_cast<size_t>(buffer_size));
+  SpecialVdfCall<CustomResult> call(vdf_);
+  call.init(TypeParameterSlice(type_params.count, type_params.keys,
+                               type_params.values));
+  auto r = call.invoke(buffer, buffer_size);
   if (!r) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN, "%s", call.error_msg());
     return true;

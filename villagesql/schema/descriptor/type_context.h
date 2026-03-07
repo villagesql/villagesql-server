@@ -188,10 +188,14 @@ class TypeContext {
       const size_t storage_size = static_cast<size_t>(persisted_length_);
       std::vector<unsigned char> buffer(storage_size);
 
+      const auto &params = parameters();
+      vef_type_params_t tp = {params.count(), params.key_data(),
+                              params.value_data()};
+
       char error_msg[VEF_MAX_ERROR_LEN] = {};
       size_t encoded_length = 0;
       bool encode_failed = descriptor_->intrinsic_default_op()->invoke(
-          persisted_length_, buffer.data(), &encoded_length, error_msg);
+          tp, buffer.data(), storage_size, &encoded_length, error_msg);
 
       if (!encode_failed && encoded_length == storage_size) {
         intrinsic_default_buffer_ = std::move(buffer);

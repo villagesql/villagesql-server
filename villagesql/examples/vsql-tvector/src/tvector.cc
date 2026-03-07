@@ -254,15 +254,40 @@ void tvector_compare(BinaryArg in_l, BinaryArg in_r, IntResult out) {
 }
 
 // Implicit default for TVECTOR(N): writes N zero floats into the buffer.
-// buffer_size encodes the resolved persisted_length (N * 4 bytes).
-bool tvector_default(int64_t buffer_size, unsigned char *buffer, size_t *length,
-                     char * /*error_msg*/) {
-  if (buffer_size <= 0 || buffer_size % 4 != 0) {
-    *length = 0;
+// Reads the "dimension" type parameter to determine the number of elements.
+bool tvector_default(const vef_type_params_t *type_params,
+                     unsigned char *buffer, size_t buffer_size, size_t *length,
+                     char *error_msg) {
+  // TODO(villagesql-beta): we probably need a better way to do this. Certainly
+  // we know the index of each element, but we should consider a few changes.
+  // First, keeping a stable set of params, considering backwards compatibility.
+  // Second, perhaps we should figure out a way (such as a union) to keep the
+  // converted value strings around so we don't need to parse them each time.
+  // Not a big deal here (one call per TypeContext), but could be for other
+  // special VDFs.
+  // TODO(villagesql-beta): despite looking at dimension here and validating it,
+  // we could skip this part if we rely on the length of the buffer to be the
+  // memory we zero out.
+  int64_t dimension = 0;
+  for (unsigned int i = 0; i < type_params->count; i++) {
+    if (strcmp(type_params->keys[i], "dimension") == 0) {
+      dimension = strtoll(type_params->values[i], nullptr, 10);
+      break;
+    }
+  }
+  if (dimension <= 0) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "TVECTOR intrinsic_default: invalid dimension");
     return true;
   }
-  memset(buffer, 0, static_cast<size_t>(buffer_size));
-  *length = static_cast<size_t>(buffer_size);
+  size_t byte_size = static_cast<size_t>(dimension) * 4;
+  if (byte_size > buffer_size) {
+    snprintf(error_msg, VEF_MAX_ERROR_LEN,
+             "TVECTOR intrinsic_default: buffer too small");
+    return true;
+  }
+  memset(buffer, 0, byte_size);
+  *length = byte_size;
   return false;
 }
 
@@ -301,4 +326,4 @@ VEF_GENERATE_ENTRY_POINTS(
         .func(make_resolve_params<&tvector_resolve_params>(
             "tvector_resolve_params"))
         .func(make_intrinsic_default<&tvector_default>(
-            "tvector_intrinsic_default")))
+            "tvector_intrinsic_default", TVECTOR)))

@@ -85,7 +85,7 @@ class TypeEncoder {
 
   // VDF path: SpecialVdfCall owns ctx/inputs/vdf_args, error_msg, and alt_buf.
   // The output buffer (buffer_) is passed per encode() call.
-  std::optional<SpecialVdfCall<BinaryResult, StringArg>> vdf_call_{};
+  std::optional<SpecialVdfCall<CustomResult, StringArg>> vdf_call_{};
 };
 
 }  // namespace villagesql

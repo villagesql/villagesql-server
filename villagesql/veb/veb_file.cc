@@ -1020,11 +1020,9 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
                   td->intrinsic_default_vdf_name);
           return true;
         }
-        const vef_type_id int_id[] = {VEF_TYPE_INT};
-        if (validate_type_vdf_signature(intrinsic_default_vdf,
-                                        "intrinsic_default", td->name, 1,
-                                        int_id, no_custom, VEF_TYPE_STRING,
-                                        nullptr, extension_name)) {
+        if (validate_type_vdf_signature(
+                intrinsic_default_vdf, "intrinsic_default", td->name, 0,
+                nullptr, nullptr, VEF_TYPE_CUSTOM, td->name, extension_name)) {
           return true;
         }
       }

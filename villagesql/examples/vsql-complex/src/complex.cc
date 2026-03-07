@@ -127,7 +127,8 @@ void ReturnComplex(const Complex &cx, vef_vdf_result_t *result) {
 
 // Implicit default for COMPLEX: writes (0,0) into the buffer.
 // Called when INSERT IGNORE / UPDATE IGNORE assigns NULL to a NOT NULL column.
-bool complex_default(int64_t buffer_size, unsigned char *buffer, size_t *length,
+bool complex_default(const vef_type_params_t * /*type_params*/,
+                     unsigned char *buffer, size_t buffer_size, size_t *length,
                      char * /*error_msg*/) {
   if (buffer_size < kComplexSize) {
     *length = 0;
@@ -577,4 +578,5 @@ VEF_GENERATE_ENTRY_POINTS(
                   .param(COMPLEX)
                   .deterministic()
                   .build())
-        .func(make_intrinsic_default<&complex_default>("complex_intrinsic_default")))
+        .func(make_intrinsic_default<&complex_default>(
+            "complex_intrinsic_default", COMPLEX)))

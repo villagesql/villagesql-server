@@ -141,10 +141,11 @@ class IntrinsicDefaultOp {
   }
 
   // Produces the binary encoding of the type's intrinsic default value.
-  // buffer_size is the resolved persisted_length (bytes to write).
+  // type_params provides resolved type parameters so variable-size types can
+  // compute the correct output. buffer_size is the allocated buffer size.
   // Returns false on success, true on error (writes to error_msg).
-  bool invoke(int64_t buffer_size, unsigned char *buffer, size_t *length,
-              char *error_msg) const;
+  bool invoke(const vef_type_params_t &type_params, unsigned char *buffer,
+              size_t buffer_size, size_t *length, char *error_msg) const;
 
  private:
   const vef_func_desc_t *vdf_{nullptr};

@@ -350,19 +350,16 @@ using TypeCompareFunc = int (*)(Span<const unsigned char> a,
 using TypeHashFunc = size_t (*)(Span<const unsigned char> data);
 
 // IntrinsicDefaultWrapper: wraps a vef_intrinsic_default_func_t into a VDF.
-// VDF signature: (INT) -> STRING (binary), where INT is the resolved
-// persisted_length (buffer_size). Returns the encoded default value as binary.
+// VDF signature: () -> STRING (binary). The type parameters are available via
+// result->type_params, allowing variable-size types to compute the correct
+// output. Returns the encoded default value as binary.
 template <vef_intrinsic_default_func_t Func>
 struct IntrinsicDefaultWrapper {
-  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
+  static void invoke(vef_context_t * /*ctx*/, vef_vdf_args_t * /*args*/,
                      vef_vdf_result_t *result) {
-    vef_invalue_t arg = get_invalue(ctx, args, 0);
-    if (arg.is_null) {
-      result->type = VEF_RESULT_NULL;
-      return;
-    }
     size_t length = 0;
-    if (Func(arg.int_value, result->bin_buf, &length, result->error_msg)) {
+    if (Func(&result->type_params, result->bin_buf, result->max_bin_len,
+             &length, result->error_msg)) {
       result->type = VEF_RESULT_ERROR;
       return;
     }
@@ -867,16 +864,16 @@ constexpr StaticFuncDesc<1> make_resolve_params(const char *name) {
 }
 
 // Entry point for intrinsic_default functions:
-//   make_intrinsic_default<&my_func>("my_func")
+//   make_intrinsic_default<&my_func>("my_func", "MY_TYPE")
 template <vef_intrinsic_default_func_t Func>
-constexpr StaticFuncDesc<1> make_intrinsic_default(const char *name) {
+constexpr StaticFuncDesc<0> make_intrinsic_default(const char *name,
+                                                   const char *type_name) {
   FuncWithMetadata meta{};
   meta.f = &IntrinsicDefaultWrapper<Func>::invoke;
-  meta.return_type = to_vef_type(STRING);
-  meta.param_types[0] = to_vef_type(INT);
-  meta.num_params = 1;
+  meta.return_type = to_vef_type(type_name);
+  meta.num_params = 0;
   meta.buffer_size = 0;  // server provides bin_buf sized to persisted_length
-  return StaticFuncDesc<1>(name, meta);
+  return StaticFuncDesc<0>(name, meta);
 }
 
 // Entry point for encode VDFs: (STRING) -> CUSTOM(type_name).
