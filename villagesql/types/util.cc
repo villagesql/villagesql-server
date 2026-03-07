@@ -379,42 +379,67 @@ static TypeDecoder *GetTypeDecoderFor(Item *item) {
 }
 
 bool DecodeStringUncached(const TypeContext &tc, const String &from,
-                          String *out, bool &is_valid) {
+                          String *out) {
   TypeDecoder decoder(tc, *current_thd->mem_root);
-  if (decoder.Init()) {
-    is_valid = true;  // OOM, my_error already called
-    return true;
-  }
+  if (decoder.Init()) return true;
   return decoder.decode(pointer_cast<const uchar *>(from.ptr()), from.length(),
-                        out, is_valid);
+                        out) != DecodeResult::kSuccess;
 }
 
-bool DecodeStringForField(const Field *field, String *out, bool &is_valid) {
+// Logs a decode failure and reports an error (or warning in IGNORE mode) to
+// the client. result must be kInvalidData or kExtensionError.
+static void ReportDecodeError(DecodeResult result, const char *column_name,
+                              const char *type_name, const uchar *data,
+                              size_t len, const char *decoder_error_msg) {
+  const ErrConvString value_prefix(pointer_cast<const char *>(data), len,
+                                   &my_charset_bin);
+  ha_rows row = current_thd->get_stmt_da()->current_row_for_condition();
+  const char *label = (result == DecodeResult::kInvalidData)
+                          ? "Invalid value in column"
+                          : "Extension error decoding column";
+  LogVSQL(WARNING_LEVEL, "%s '%s' of type '%s' at row %llu (value: %s): %s",
+          label, column_name, type_name, static_cast<unsigned long long>(row),
+          value_prefix.ptr(), decoder_error_msg);
+  villagesql_error(
+      "%s '%s' of type '%s' at row %llu: check server log for details", MYF(0),
+      label, column_name, type_name, static_cast<unsigned long long>(row));
+}
+
+bool DecodeStringForField(const Field *field, String *out) {
   if (should_assert_if_false(field->has_type_context())) {
     return true;
   }
   TypeDecoder *decoder = GetTypeDecoderFor(field);
   if (decoder == nullptr) {
-    is_valid = true;  // OOM, my_error already called
-    return true;
+    return true;  // OOM, my_error already called
   }
-  return decoder->decode(field->data_ptr(), field->data_length(), out,
-                         is_valid);
+  DecodeResult result =
+      decoder->decode(field->data_ptr(), field->data_length(), out);
+  if (result == DecodeResult::kSuccess) return false;
+  ReportDecodeError(result, field->field_name,
+                    field->get_type_context()->qualified_name().c_str(),
+                    field->data_ptr(), field->data_length(),
+                    decoder->last_error_msg());
+  return true;
 }
 
-bool DecodeStringForItem(Item *item, const String &from, String *out,
-                         bool &is_valid) {
+bool DecodeStringForItem(Item *item, const String &from, String *out) {
   if (should_assert_if_false(item->has_type_context())) {
     return true;
   }
   TypeDecoder *decoder = GetTypeDecoderFor(item);
   if (decoder == nullptr) {
-    is_valid = true;  // OOM, my_error already called
-    return true;
+    return true;  // OOM, my_error already called
   }
   // Extract ptr/len before decode() writes to out: from and *out may alias.
-  return decoder->decode(pointer_cast<const uchar *>(from.ptr()), from.length(),
-                         out, is_valid);
+  const uchar *data = pointer_cast<const uchar *>(from.ptr());
+  size_t len = from.length();
+  DecodeResult result = decoder->decode(data, len, out);
+  if (result == DecodeResult::kSuccess) return false;
+  ReportDecodeError(result, item->full_name(),
+                    item->get_type_context()->qualified_name().c_str(), data,
+                    len, decoder->last_error_msg());
+  return true;
 }
 
 void AppendFullyQualifiedName(const TypeContext &tc, String *out) {

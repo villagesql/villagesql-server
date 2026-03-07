@@ -9,13 +9,16 @@
 #
 # Test coverage:
 #   1. Normal INSERT/SELECT round-trip with "OK" values.
-#   2. "DECODE_FAIL" rows: SELECT returns empty string with a warning.
-#   3. Mixing healthy and decode-failing rows in the same query.
+#   2. "DECODE_FAIL" rows: SELECT returns an error and logs the failure.
+#   3. Mixing healthy and decode-failing rows in the same query: error on the bad row.
 #   4. "ENCODE_FAIL": INSERT is rejected with an error.
 #   5. UPDATE overwriting a DECODE_FAIL row with a good value: row becomes readable.
-#   6. UPDATE overwriting a good row with DECODE_FAIL: value is stored, decodes as empty string.
+#   6. UPDATE overwriting a good row with DECODE_FAIL: value is stored, SELECT returns error.
 
 INSTALL EXTENSION vsql_test_only;
+
+call mtr.add_suppression("VillageSQL.*Invalid value in column.*FAULT_BLOB");
+call mtr.add_suppression("VillageSQL.*Extension error decoding column.*FAULT_BLOB");
 
 --echo # Verify extension is installed
 SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
@@ -37,13 +40,22 @@ SELECT id, val FROM t1 ORDER BY id;
 --echo # Insert a value that will fail on decode
 INSERT INTO t1 VALUES (4, 'DECODE_FAIL');
 
---echo # SELECT the decode-failing row alone: returns empty string with a warning
-SELECT id, val FROM t1 WHERE id = 4;
-SHOW WARNINGS;
+# Record log file position before first decode failure.
+--source include/villagesql/decode_failure_log_init.inc
 
---echo # SELECT all rows: healthy rows decode fine, DECODE_FAIL row returns empty string
+--echo # SELECT the decode-failing row alone: returns an error
+--error ER_VILLAGESQL_GENERIC_ERROR
+SELECT id, val FROM t1 WHERE id = 4;
+
+--echo # Verify the failure was logged
+--source include/villagesql/decode_failure_log_print.inc
+
+--echo # SELECT all rows: healthy rows decode fine, DECODE_FAIL row causes an error
+--error ER_VILLAGESQL_GENERIC_ERROR
 SELECT id, val FROM t1 ORDER BY id;
-SHOW WARNINGS;
+
+--echo # Verify the failure was logged
+--source include/villagesql/decode_failure_log_print.inc
 
 --echo # UPDATE: overwrite the DECODE_FAIL row with a good value
 UPDATE t1 SET val = 'OK fixed' WHERE id = 4;
@@ -54,12 +66,16 @@ SELECT id, val FROM t1 ORDER BY id;
 --echo # UPDATE: overwrite a good row with a DECODE_FAIL value
 UPDATE t1 SET val = 'DECODE_FAIL' WHERE id = 1;
 
---echo # The updated row now decodes as empty string with a warning
+--echo # The updated row now causes an error on SELECT
+--error ER_VILLAGESQL_GENERIC_ERROR
 SELECT id, val FROM t1 ORDER BY id;
-SHOW WARNINGS;
+
+--echo # Verify the failure was logged
+--source include/villagesql/decode_failure_log_print.inc
 
 --echo # Clean up
 DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/decode_fail_log_pos.txt
 
 --echo # ENCODE_FAIL: INSERT is rejected with an error, nothing is stored
 CREATE TABLE t2 (

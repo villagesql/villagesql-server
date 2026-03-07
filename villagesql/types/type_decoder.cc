@@ -54,25 +54,23 @@ bool TypeDecoder::Init() {
   return false;
 }
 
-bool TypeDecoder::decode(const uchar *data, size_t len, String *out,
-                         bool &is_valid) {
-  is_valid = true;
-
+DecodeResult TypeDecoder::decode(const uchar *data, size_t len, String *out) {
   if (vdf_call_.has_value()) {
     auto r = vdf_call_->invoke(BinarySlice{data, len}, buffer_, buffer_size_);
     if (!r) {
-      // TODO(villagesql-beta): log errors.
-      is_valid = false;
-      return true;
+      last_error_msg_ = vdf_call_->error_msg();
+      return DecodeResult::kInvalidData;
     }
 
     if (vdf_call_->alt_str_buf() != nullptr) {
       // TODO(villagesql-beta): support caller supplied buffers.
-      return true;
+      last_error_msg_ = "VDF provided unsupported alternate output buffer";
+      return DecodeResult::kExtensionError;
     }
 
     if (*r > buffer_size_) {
-      return true;
+      last_error_msg_ = "decoded length exceeds buffer";
+      return DecodeResult::kExtensionError;
     }
 
     out->set(buffer_, *r, &my_charset_utf8mb4_bin);
@@ -81,18 +79,19 @@ bool TypeDecoder::decode(const uchar *data, size_t len, String *out,
     assert(fn_ != nullptr);
     size_t decoded_length = 0;
     if (fn_(data, len, buffer_, buffer_size_, &decoded_length)) {
-      is_valid = false;
-      return true;
+      last_error_msg_ = "decode function reported invalid data";
+      return DecodeResult::kInvalidData;
     }
-    // the buffer rather than silently returning invalid.
+
     if (should_assert_if_false(decoded_length <= buffer_size_)) {
-      return true;
+      last_error_msg_ = "decoded length exceeds buffer";
+      return DecodeResult::kExtensionError;
     }
 
     out->set(buffer_, decoded_length, &my_charset_utf8mb4_bin);
   }
 
-  return false;
+  return DecodeResult::kSuccess;
 }
 
 }  // namespace villagesql

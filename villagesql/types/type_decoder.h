@@ -30,6 +30,12 @@ struct MEM_ROOT;
 
 namespace villagesql {
 
+enum class DecodeResult {
+  kSuccess,
+  kInvalidData,    // the stored bytes are not a valid encoding for this type
+  kExtensionError  // the extension misbehaved (e.g. returned oversized output)
+};
+
 // TypeDecoder holds per-Field (or per-Item) decoding state, lazily allocated
 // from the owning object's mem_root on first decode and reused for all
 // subsequent decodes within the same lifetime.
@@ -63,10 +69,16 @@ class TypeDecoder {
   TypeDecoder &operator=(TypeDecoder &&) = delete;
 
   // Decode binary data in [data, data+len) into the pre-allocated buffer_ and
-  // set out to point at the result. Returns true on success, false on error
-  // (is_valid is false for invalid data, true for OOM with my_error already
-  // called). out is valid until the next decode() call.
-  bool decode(const uchar *data, size_t len, String *out, bool &is_valid);
+  // set out to point at the result. Returns kSuccess on success, kInvalidData
+  // if the value is not a valid encoding for this type, or kExtensionError if
+  // the extension misbehaved. out is valid until the next decode() call.
+  // On any non-kSuccess result, last_error_msg() is populated.
+  DecodeResult decode(const uchar *data, size_t len, String *out);
+
+  // Human-readable description of the most recent decode() failure.
+  // Valid only after decode() returns non-kSuccess; undefined otherwise.
+  // Lifetime: valid until the next call to decode().
+  const char *last_error_msg() const { return last_error_msg_; }
 
  private:
   MEM_ROOT *mem_root_{nullptr};  // owning mem_root used for buffers
@@ -79,6 +91,10 @@ class TypeDecoder {
   // VDF path: SpecialVdfCall owns ctx/inputs/vdf_args, error_msg, and alt_buf.
   // The output buffer (buffer_) is passed per decode() call.
   std::optional<SpecialVdfCall<StringResult, CustomArg>> vdf_call_{};
+
+  // Points to a string literal or vdf_call_->error_msg() after a failed
+  // decode(). Undefined when decode() returns kSuccess.
+  const char *last_error_msg_{nullptr};
 };
 
 }  // namespace villagesql

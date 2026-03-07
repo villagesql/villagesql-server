@@ -10636,26 +10636,9 @@ const char *get_field_name_or_expression(THD *thd, const Field *field) {
 String *Field::val_external_str(String *buf) const {
   if (!has_type_context()) return val_str(buf);
 
-  bool is_valid = true;
-  if (villagesql::DecodeStringForField(this, buf, is_valid)) {
-    if (!is_valid) {
-      THD *thd = current_thd;
-      if (!thd->lex->is_ignore() && thd->is_strict_mode()) {
-        const uchar *encoded_data = data_ptr();
-        size_t encoded_length = data_length();
-        const ErrConvString errmsg(pointer_cast<const char *>(encoded_data),
-                                   encoded_length, &my_charset_bin);
-        const Diagnostics_area *da = thd->get_stmt_da();
-        push_warning_printf(
-            thd, Sql_condition::SL_WARNING, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD,
-            ER_THD(thd, ER_TRUNCATED_WRONG_VALUE_FOR_FIELD),
-            get_type_context()->type_name().c_str(), errmsg.ptr(),
-            this->field_name, da->current_row_for_condition());
-      }
-    } else {
-      // OOMs have already called my_error
-    }
-    // MySQL errors return empty strings
+  if (villagesql::DecodeStringForField(this, buf)) {
+    // Return empty string to satisfy the String* contract; the actual error
+    // propagates via the THD diagnostics area.
     buf->length(0);
   }
 
