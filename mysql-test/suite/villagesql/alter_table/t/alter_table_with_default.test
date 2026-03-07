@@ -1,0 +1,21 @@
+# Test ALTER TABLE with COMPLEX default
+
+# Currently default value is not propagated correctly during alter
+# CURRENT_TEST: villagesql/alter_table.alter_table_with_default
+# mysqltest: At line 7: Query 'ALTER TABLE t_complex_default ADD COLUMN string_col VARCHAR(100) DEFAULT 'default_string'' failed.
+# ERROR 1067 (42000): Invalid default value for 'complex_val'
+# Warnings from just before the error:
+# Error 1366 Incorrect COMPLEX value: '\x00\x00\x00\x00\x00\x00Y@\x00\x00\x00\x00\x00\x00Y@' for column 'complex_val' at row 1
+
+--source include/villagesql/not_implemented_complex_type.inc
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex_default (id INT, complex_val COMPLEX DEFAULT '(100.0,100.0)');
+
+ALTER TABLE t_complex_default ADD COLUMN string_col VARCHAR(100) DEFAULT 'default_string';
+INSERT INTO t_complex_default (id) VALUES (1);
+SELECT * FROM t_complex_default;
+
+DROP TABLE t_complex_default;
+
+--source include/villagesql/uninstall_complex_extension.inc
