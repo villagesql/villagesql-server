@@ -321,13 +321,13 @@ struct ToStringWrapper {
 };
 
 // =============================================================================
-// Extension Author Function Signatures (for type operations)
+// C++ Type Operation Builders
 // =============================================================================
 //
-// Extension authors write against these clean C++ signatures using
-// std::string_view and Span<T> instead of raw pointer/length pairs.
-// Use with make_type_encode, make_type_decode, make_type_compare,
-// make_type_hash to produce VDFs with the correct SQL signature:
+// Extension authors must implement functions with the following signatures
+// to enable a new type to be used in VillageSQL, and use the builders
+// make_type_encode, make_type_decode, make_type_compare, and make_type_hash to
+// and register the names with the type builder.
 //   TypeEncodeFunc  -> VDF: (STRING) -> CUSTOM(type)
 //   TypeDecodeFunc  -> VDF: (CUSTOM(type)) -> STRING
 //   TypeCompareFunc -> VDF: (CUSTOM(type), CUSTOM(type)) -> INT

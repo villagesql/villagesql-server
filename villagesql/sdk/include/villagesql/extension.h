@@ -254,12 +254,13 @@
 //         .decode("bytearray_decode")
 //         .compare("bytearray_compare")
 //         .build())
-//       .func(make_type_encode<&bytearray_encode>("bytearray_encode",
-//       BYTEARRAY))
-//       .func(make_type_decode<&bytearray_decode>("bytearray_decode",
-//       BYTEARRAY))
-//       .func(make_type_compare<&bytearray_compare>("bytearray_compare",
-//       BYTEARRAY)) .func(make_func<&rot13_impl>("rot13")
+//       .func(make_type_encode<&bytearray_encode>(
+//           "bytearray_encode", BYTEARRAY))
+//       .func(make_type_decode<&bytearray_decode>(
+//           "bytearray_decode", BYTEARRAY))
+//       .func(make_type_compare<&bytearray_compare>(
+//           "bytearray_compare", BYTEARRAY))
+//       .func(make_func<&rot13_impl>("rot13")
 //         .returns(BYTEARRAY)
 //         .param(BYTEARRAY)
 //         .build()))
