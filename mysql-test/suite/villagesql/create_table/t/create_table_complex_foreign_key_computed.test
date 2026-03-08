@@ -1,16 +1,13 @@
 # Test CREATE TABLE with FOREIGN KEY on computed COMPLEX values
 # Tests foreign key relationships using COMPLEX type derived values
 
-# Parent table with computed values from COMPLEX
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 --source include/villagesql/binlog_check_begin.inc
 
 CREATE TABLE measurements (
     measurement_id INT PRIMARY KEY,
     raw_signal COMPLEX,
-    magnitude_key DOUBLE GENERATED ALWAYS AS (ABS(raw_signal)) STORED
+    magnitude_key DOUBLE GENERATED ALWAYS AS (COMPLEX_ABS(raw_signal)) STORED
 );
 
 # Reference table for magnitude ranges
