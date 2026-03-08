@@ -1,8 +1,6 @@
 # Test CREATE TABLE with multiple CHECK constraints on different COMPLEX columns
 # Tests CHECK constraints across multiple COMPLEX columns with various functions
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 --source include/villagesql/binlog_check_begin.inc
 
@@ -10,10 +8,10 @@ CREATE TABLE t1 (
     id INT PRIMARY KEY,
     input_signal COMPLEX,
     output_signal COMPLEX,
-    CHECK (ABS(input_signal) <= 100.0),
-    CHECK (ABS(output_signal) <= 200.0),
-    CHECK (REAL(input_signal) >= 0.0),
-    CHECK (IMAG(output_signal) BETWEEN -50.0 AND 50.0)
+    CHECK (COMPLEX_ABS(input_signal) <= 100.0),
+    CHECK (COMPLEX_ABS(output_signal) <= 200.0),
+    CHECK (COMPLEX_REAL(input_signal) >= 0.0),
+    CHECK (COMPLEX_IMAG(output_signal) BETWEEN -50.0 AND 50.0)
 );
 
 SHOW CREATE TABLE t1;
