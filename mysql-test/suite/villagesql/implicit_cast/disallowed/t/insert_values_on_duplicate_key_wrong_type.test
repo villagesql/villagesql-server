@@ -1,12 +1,18 @@
 # Test INSERT with VALUES() in ON DUPLICATE KEY with wrong type
 
---source include/villagesql/not_implemented_complex_type.inc
 --source include/villagesql/install_complex_extension.inc
 
-CREATE TABLE t_complex (id INT PRIMARY KEY, val COMPLEX NOT NULL);
+CREATE TABLE t_complex (
+    id INT PRIMARY KEY,
+    complex_val COMPLEX NOT NULL,
+    string_val VARCHAR(100) NOT NULL
+);
 
-INSERT INTO t_complex VALUES (1, '(1.0,1.0)');
-INSERT INTO t_complex VALUES (1, '(1.0,1.0)') ON DUPLICATE KEY UPDATE val = VALUES(id);
+INSERT INTO t_complex VALUES (1, '(1.0,1.0)', '(2.0,2.0)');
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_complex VALUES (1, '(1.0,1.0)', '(2.0,2.0)') ON DUPLICATE KEY UPDATE complex_val = VALUES(id);
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSERT INTO t_complex VALUES (1, '(1.0,1.0)', '(2.0,2.0)') ON DUPLICATE KEY UPDATE complex_val = VALUES(string_val);
 
 DROP TABLE t_complex;
 
