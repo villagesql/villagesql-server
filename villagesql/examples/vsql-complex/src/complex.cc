@@ -34,7 +34,6 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstring>
-#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -128,8 +127,7 @@ void ReturnComplex(const Complex &cx, vef_vdf_result_t *result) {
 
 // Implicit default for COMPLEX: writes (0,0) into the buffer.
 // Called when INSERT IGNORE / UPDATE IGNORE assigns NULL to a NOT NULL column.
-bool complex_default(const std::map<std::string, std::string> & /*params*/,
-                     villagesql::Span<unsigned char> buffer, size_t *length,
+bool complex_default(villagesql::Span<unsigned char> buffer, size_t *length,
                      char * /*error_msg*/) {
   if (buffer.size() < kComplexSize) {
     *length = 0;
