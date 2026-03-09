@@ -1,11 +1,21 @@
 # Test ALTER TABLE ALTER COLUMN DROP DEFAULT on COMPLEX column
 # Grammar: ALTER TABLE table_name ALTER COLUMN col_name DROP DEFAULT
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 --source include/villagesql/binlog_check_begin.inc
 
+# With native type
+CREATE TABLE t_native (
+    id INT PRIMARY KEY,
+    value VARCHAR(100) DEFAULT 'empty'
+);
+ALTER TABLE t_native ALTER COLUMN value DROP DEFAULT;
+SHOW CREATE TABLE t_native;
+--error ER_NO_DEFAULT_FOR_FIELD
+INSERT INTO t_native (id) VALUES (2);
+DROP TABLE t_native;
+
+# With custom type
 CREATE TABLE t1 (
     id INT PRIMARY KEY,
     value COMPLEX DEFAULT '(1.0,1.0)'
@@ -20,11 +30,13 @@ ALTER TABLE t1 ALTER COLUMN value DROP DEFAULT;
 
 SHOW CREATE TABLE t1;
 
-# New rows should now require explicit value or get NULL
+# This follows MySQL standard behavior
+--error ER_NO_DEFAULT_FOR_FIELD
 INSERT INTO t1 (id) VALUES (2);
+INSERT INTO t1 VALUES (2, NULL);
 INSERT INTO t1 VALUES (3, '(2.0,3.0)');
 
-SELECT * FROM t1;
+SELECT * FROM t1 ORDER BY id;
 
 DROP TABLE t1;
 
