@@ -568,18 +568,6 @@ typedef size_t (*vef_hash_func_t)(const unsigned char *data, size_t len);
 // by int_to_params and resolve_params VDFs.
 #define VEF_MAX_TYPE_PARAMS_STRING_LEN 1024
 
-// Extension author signature for intrinsic_default VDFs.
-// Called when a NOT NULL custom column is set to NULL with IGNORE (e.g.
-// INSERT IGNORE or UPDATE IGNORE). Writes the encoded default value into
-// 'buffer' (of 'buffer_size' bytes) and sets '*length' to bytes written.
-// 'type_params' provides the resolved type parameters (e.g. dimension=6 for
-// TVECTOR(6)), allowing variable-size types to compute the correct output.
-// Fixed-size types can ignore type_params.
-// Returns: false on success, true on error (write message to error_msg).
-using vef_intrinsic_default_func_t =
-    bool (*)(const vef_type_params_t *type_params, unsigned char *buffer,
-             size_t buffer_size, size_t *length, char *error_msg);
-
 typedef struct {
   // protocol >= VEF_PROTOCOL_1
   vef_protocol_t protocol;

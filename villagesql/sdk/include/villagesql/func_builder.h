@@ -349,17 +349,35 @@ using TypeCompareFunc = int (*)(Span<const unsigned char> a,
 // Hash: binary value -> hash code.
 using TypeHashFunc = size_t (*)(Span<const unsigned char> data);
 
-// IntrinsicDefaultWrapper: wraps a vef_intrinsic_default_func_t into a VDF.
-// VDF signature: () -> STRING (binary). The type parameters are available via
-// result->type_params, allowing variable-size types to compute the correct
-// output. Returns the encoded default value as binary.
-template <vef_intrinsic_default_func_t Func>
+// Extension author signature for intrinsic_default.
+// Called when a NOT NULL custom column is set to NULL with IGNORE (e.g.
+// INSERT IGNORE or UPDATE IGNORE). Writes the encoded default value into
+// 'buffer' and sets '*length' to bytes written.
+// 'params' provides the resolved type parameters (e.g. {"dimension":"6"} for
+// TVECTOR(6)). Fixed-size types can ignore params.
+// Returns false on success, true on error (writes to error_msg).
+using IntrinsicDefaultFunc = bool (*)(
+    const std::map<std::string, std::string> &params,
+    villagesql::Span<unsigned char> buffer, size_t *length, char *error_msg);
+
+// IntrinsicDefaultWrapper: wraps an IntrinsicDefaultFunc into a VDF.
+// VDF signature: () -> CUSTOM. The type parameters are parsed from the
+// result->type_params C struct into a std::map for the author function.
+template <IntrinsicDefaultFunc Func>
 struct IntrinsicDefaultWrapper {
   static void invoke(vef_context_t * /*ctx*/, vef_vdf_args_t * /*args*/,
                      vef_vdf_result_t *result) {
+    // Parse vef_type_params_t into std::map.
+    std::map<std::string, std::string> params;
+    for (unsigned int i = 0; i < result->type_params.count; i++) {
+      params.emplace(result->type_params.keys[i],
+                     result->type_params.values[i]);
+    }
+
     size_t length = 0;
-    if (Func(&result->type_params, result->bin_buf, result->max_bin_len,
-             &length, result->error_msg)) {
+    villagesql::Span<unsigned char> buffer(result->bin_buf,
+                                           result->max_bin_len);
+    if (Func(params, buffer, &length, result->error_msg)) {
       result->type = VEF_RESULT_ERROR;
       return;
     }
@@ -865,7 +883,7 @@ constexpr StaticFuncDesc<1> make_resolve_params(const char *name) {
 
 // Entry point for intrinsic_default functions:
 //   make_intrinsic_default<&my_func>("my_func", "MY_TYPE")
-template <vef_intrinsic_default_func_t Func>
+template <IntrinsicDefaultFunc Func>
 constexpr StaticFuncDesc<0> make_intrinsic_default(const char *name,
                                                    const char *type_name) {
   FuncWithMetadata meta{};
