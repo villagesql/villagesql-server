@@ -49,8 +49,8 @@ See [API_ABI.md](API_ABI.md) for more details on the API and ABI.
 
 ### Stabilizing a Protocol
 
-When the functionality in the new protocol is ready to be used by the public,
-then it should be stabilized, and a new protocol should be started.
+When the functionality in the new protocol is ready, then it should be
+stabilized, and a new protocol should be started.
 
 1. Copy the now "stabilized" `villagesql/sdk/` to the appropriate subdirectory
    of `villagesql/stable_sdk/v{N}` where N is the existing protocol.
