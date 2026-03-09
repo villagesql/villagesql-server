@@ -158,6 +158,11 @@ Create_field::Create_field(Field *old_field, Field *orig_field)
         String *res = orig_field->val_str(&tmp);
         char *pos = sql_strmake(res->ptr(), res->length());
         constant_default = new Item_string(pos, res->length(), charset);
+        // VillageSQL: for custom type fields the default value is already
+        // binary-encoded. Tag the Item_string with the type context so
+        // Item_string::save_in_field_inner knows not to re-encode it.
+        if (orig_field->has_type_context())
+          constant_default->set_type_context(orig_field->get_type_context());
       }
       orig_field->move_field_offset(-diff);  // Back to record[0]
     }
