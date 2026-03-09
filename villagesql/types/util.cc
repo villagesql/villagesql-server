@@ -48,6 +48,7 @@
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/systable/custom_columns.h"
 #include "villagesql/schema/util.h"
+#include "villagesql/schema/schema_manager.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/types/type_decoder.h"
 #include "villagesql/types/type_encoder.h"
@@ -692,7 +693,7 @@ bool ValidateAndReportCustomFieldStore(const Item *item, const Field *field) {
         field->field_name, da->current_row_for_condition());
   } else if (item->has_type_context() ||
              item->type() == Item::INSERT_VALUE_ITEM) {
-    StringBuffer<64> src_type_str;
+    StringBuffer<SchemaManager::kMaxQualifiedTypeNameLen> src_type_str;
     if (item->has_type_context()) {
       src_type_str.append(item->get_type_context()->qualified_name().c_str());
     } else {

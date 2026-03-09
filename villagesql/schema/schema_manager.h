@@ -37,6 +37,12 @@ class SchemaManager {
   static const char *COLUMNS_TABLE_NAME;
   static const char *EXTENSIONS_TABLE_NAME;
 
+  // Maximum length of a name (extension name, type name, etc.) as stored in
+  // the schema (matches the VARCHAR(64) columns in the system tables).
+  static constexpr size_t kMaxNameLen = 64;
+  // Maximum length of a qualified type name "extension_name.type_name".
+  static constexpr size_t kMaxQualifiedTypeNameLen = (kMaxNameLen * 2) + 1;
+
   /**
    * Before init is called, set the internal bootstrap version for the
    * villagesql system tables so that upgrade necessity is evaluated
