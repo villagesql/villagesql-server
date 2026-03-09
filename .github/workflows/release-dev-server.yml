@@ -59,7 +59,7 @@ jobs:
 
       - name: Install dependencies (macOS)
         if: matrix.os == 'macos'
-        run: brew install openssl cmake
+        run: brew install bison cmake openssl
 
       - name: Setup ccache
         uses: hendrikmuhs/ccache-action@v1.2
