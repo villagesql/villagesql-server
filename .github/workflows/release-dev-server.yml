@@ -18,6 +18,10 @@ on:
       tag:
         description: 'Existing tag to build a release for (e.g. 0.0.3)'
         required: true
+      draft:
+        description: 'Create as a draft release (useful for testing)'
+        type: boolean
+        default: false
 
 jobs:
   build-package:
@@ -157,6 +161,12 @@ jobs:
           ```
           EOF
 
+          DRAFT_FLAG=""
+          if [ "${{ inputs.draft }}" = "true" ]; then
+            DRAFT_FLAG="--draft"
+          fi
+
           gh release create "${{ steps.tag.outputs.tag }}" packages/*.tar.gz \
             --title "VillageSQL Dev Server ${{ steps.tag.outputs.tag }}" \
-            --notes-file notes.md
+            --notes-file notes.md \
+            $DRAFT_FLAG
