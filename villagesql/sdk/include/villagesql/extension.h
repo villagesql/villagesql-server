@@ -267,5 +267,6 @@
 //
 
 #include <villagesql/extension_builder.h>
+#include <villagesql/storage_api.h>
 
 #endif  // VILLAGESQL_SDK_EXTENSION_H
