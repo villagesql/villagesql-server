@@ -1,8 +1,6 @@
 # Test ALTER TABLE MODIFY COLUMN COMPLEX with attributes (NULL, NOT NULL, DEFAULT)
 # Grammar: ALTER TABLE table_name MODIFY COLUMN col_name COMPLEX [NULL|NOT NULL] [DEFAULT value]
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 --source include/villagesql/binlog_check_begin.inc
 
@@ -15,18 +13,30 @@ INSERT INTO t1 VALUES (1, '(1.0,2.0)');
 INSERT INTO t1 VALUES (2, NULL);
 
 SHOW CREATE TABLE t1;
-SELECT * FROM t1;
+SELECT * FROM t1 ORDER BY id;
+
+# Modify blocked as there is a NULL value
+--error ER_INVALID_USE_OF_NULL
+ALTER TABLE t1 MODIFY COLUMN value COMPLEX NOT NULL DEFAULT '(-2.0,-3.0)';
+
+# Remove NOT NULL violation
+DELETE FROM t1 WHERE id=2;
 
 # Modify to NOT NULL with DEFAULT
-ALTER TABLE t1 MODIFY COLUMN value COMPLEX NOT NULL DEFAULT '(0.0,0.0)';
+ALTER TABLE t1 MODIFY COLUMN value COMPLEX NOT NULL DEFAULT '(-2.0,-3.0)';
 
 SHOW CREATE TABLE t1;
-SELECT * FROM t1;
 
-# Add another row to test default
-INSERT INTO t1 (id) VALUES (3);
+# Add another row to test NULL violation
+--error ER_BAD_NULL_ERROR
+INSERT INTO t1 VALUES (3, NULL);
 
-SELECT * FROM t1;
+SELECT * FROM t1 ORDER BY id;
+
+# Add another row to test new default
+INSERT IGNORE INTO t1 (id) VALUES (4);
+
+SELECT * FROM t1 ORDER BY id;
 
 DROP TABLE t1;
 
