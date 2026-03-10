@@ -43,7 +43,7 @@ jobs:
     - name: Setup VillageSQL build environment
       uses: ./source/.github/actions/setup-villagesql-build
       with:
-        cache-key-prefix: valgrind
+        setup-ccache: 'false'
 
     - name: Build VillageSQL with Valgrind support
       working-directory: ./source
@@ -52,9 +52,6 @@ jobs:
         PARALLEL_JOBS: 16
         BUILD_TYPE: debug
         CMAKE_EXTRA_FLAGS: -DWITH_VALGRIND=1
-
-    - name: Show ccache statistics
-      run: ccache -s
 
     - name: Run Valgrind tests
       uses: ./source/.github/actions/run-tests

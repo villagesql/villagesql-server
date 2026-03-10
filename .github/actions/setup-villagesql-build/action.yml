@@ -4,8 +4,12 @@ description: 'Install dependencies and setup ccache for VillageSQL builds'
 inputs:
   cache-key-prefix:
     description: 'Prefix for ccache key (e.g., "build", "nightly")'
-    required: true
+    required: false
     default: 'build'
+  setup-ccache:
+    description: 'Whether to use GitHub Actions cache for ccache'
+    required: false
+    default: 'true'
 
 runs:
   using: "composite"
@@ -17,12 +21,12 @@ runs:
         sudo scripts/setup_linux_build_env.sh
 
     - name: Setup ccache
-      uses: hendrikmuhs/ccache-action@v1.2
+      if: inputs.setup-ccache == 'true'
+      uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639  # v1.2
       with:
         key: ${{ runner.os }}-${{ inputs.cache-key-prefix }}-${{ github.sha }}
         restore-keys: |
           ${{ runner.os }}-${{ inputs.cache-key-prefix }}
-          ${{ runner.os }}-build
-        max-size: 2G
+        max-size: 4G
         verbose: 2
         append-timestamp: false

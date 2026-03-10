@@ -15,11 +15,6 @@ on:
         required: false
         type: string
         default: 'debug'
-      cache-key-prefix:
-        description: 'Prefix for cache keys'
-        required: false
-        type: string
-        default: 'full-test'
       artifact-prefix:
         description: 'Prefix for artifact names'
         required: false
@@ -53,7 +48,7 @@ jobs:
     - name: Setup VillageSQL build environment
       uses: ./source/.github/actions/setup-villagesql-build
       with:
-        cache-key-prefix: ${{ inputs.cache-key-prefix }}
+        setup-ccache: 'false'
 
     - name: Build VillageSQL
       working-directory: ./source
@@ -61,9 +56,6 @@ jobs:
       env:
         PARALLEL_JOBS: 16
         BUILD_TYPE: ${{ inputs.build-type }}
-
-    - name: Show ccache statistics
-      run: ccache -s
 
     - name: Run tests
       uses: ./source/.github/actions/run-tests

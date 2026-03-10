@@ -37,6 +37,5 @@ jobs:
     with:
       ref: ${{ needs.get-tag.outputs.tag }}
       build-type: release
-      cache-key-prefix: nightly-release
       artifact-prefix: nightly-tag-${{ needs.get-tag.outputs.tag }}
       run-all-suites-conditional: true

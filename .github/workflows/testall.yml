@@ -79,6 +79,5 @@ jobs:
     with:
       ref: ${{ needs.check-trigger.outputs.ref }}
       build-type: debug
-      cache-key-prefix: testall
       artifact-prefix: testall
       run-all-suites-conditional: false
