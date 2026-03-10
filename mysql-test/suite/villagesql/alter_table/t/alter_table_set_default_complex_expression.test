@@ -1,8 +1,6 @@
 # Test ALTER TABLE ALTER COLUMN SET DEFAULT with COMPLEX expression
 # Grammar: ALTER TABLE table_name ALTER COLUMN col_name SET DEFAULT (complex_expression)
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 --source include/villagesql/binlog_check_begin.inc
 
