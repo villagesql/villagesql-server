@@ -1,0 +1,21 @@
+# Test CREATE TABLE AS SELECT with mixed types
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t_complex (id INT, val COMPLEX);
+CREATE TABLE t_string (id INT, val VARCHAR(100));
+
+INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
+INSERT INTO t_string VALUES (1, 'hello');
+
+CREATE TABLE test_mixed AS SELECT c.val as complex_val, s.val as string_val FROM t_complex c, t_string s WHERE c.id = s.id;
+
+SHOW CREATE TABLE test_mixed;
+
+SELECT * FROM test_mixed;
+
+DROP TABLE t_complex;
+DROP TABLE t_string;
+DROP TABLE test_mixed;
+
+--source include/villagesql/uninstall_complex_extension.inc
