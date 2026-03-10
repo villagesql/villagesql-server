@@ -41,14 +41,18 @@ cmd_init() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
             --password)
-                read -r -s -p "Password for root: " password
-                echo
-                local confirm
-                read -r -s -p "Confirm password: " confirm
-                echo
-                if [[ "$password" != "$confirm" ]]; then
-                    echo "Error: Passwords do not match"
-                    exit 1
+                if [ ! -t 0 ]; then
+                    read -r password
+                else
+                    read -r -s -p "Password for root: " password
+                    echo
+                    local confirm
+                    read -r -s -p "Confirm password: " confirm
+                    echo
+                    if [[ "$password" != "$confirm" ]]; then
+                        echo "Error: Passwords do not match"
+                        exit 1
+                    fi
                 fi
                 shift
                 ;;

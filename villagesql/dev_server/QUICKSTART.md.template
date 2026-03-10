@@ -35,10 +35,17 @@ brew install openssl
 ./villagesql stop
 ```
 
-To set a root password, pass `--password` to `init` — you will be prompted interactively:
+To set a root password, pass `--password` to `init`. When run interactively you will be prompted to enter and confirm the password:
 
 ```bash
 ./villagesql init --password
+./villagesql start
+```
+
+When stdin is not a terminal (e.g. in scripts or CI), the password is read from stdin without a confirmation prompt:
+
+```bash
+echo "mysecretpassword" | ./villagesql init --password
 ./villagesql start
 ```
 
