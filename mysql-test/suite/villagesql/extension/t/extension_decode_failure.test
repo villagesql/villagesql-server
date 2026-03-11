@@ -1,0 +1,67 @@
+# Test encode and decode failure behavior for custom types.
+#
+# Uses the vsql_test_only extension's FAULT_BLOB type, whose behavior is
+# controlled by a sentinel prefix in the input string:
+#
+#   "OK <payload>"  - encodes and decodes successfully
+#   "DECODE_FAIL"   - encodes successfully but decode fails on read
+#   "ENCODE_FAIL"   - encode fails immediately, value is never stored
+#
+# Test coverage:
+#   1. Normal INSERT/SELECT round-trip with "OK" values.
+#   2. "DECODE_FAIL" rows: SELECT returns NULL with a warning.
+#   3. Mixing healthy and decode-failing rows in the same query.
+#   4. "ENCODE_FAIL": INSERT is rejected with an error.
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+
+--echo # Create a table with a FAULT_BLOB column
+CREATE TABLE t1 (
+  id INT PRIMARY KEY,
+  val vsql_test_only.FAULT_BLOB
+);
+
+--echo # Insert healthy values
+INSERT INTO t1 VALUES (1, 'OK hello');
+INSERT INTO t1 VALUES (2, 'OK world');
+INSERT INTO t1 VALUES (3, 'OK abc');
+
+--echo # Normal SELECT round-trip: decode succeeds, values are readable
+SELECT id, val FROM t1 ORDER BY id;
+
+--echo # Insert a value that will fail on decode
+INSERT INTO t1 VALUES (4, 'DECODE_FAIL');
+
+--echo # SELECT the decode-failing row alone: returns NULL with a warning
+SELECT id, val FROM t1 WHERE id = 4;
+SHOW WARNINGS;
+
+--echo # SELECT all rows: healthy rows decode fine, DECODE_FAIL row returns NULL
+SELECT id, val FROM t1 ORDER BY id;
+SHOW WARNINGS;
+
+--echo # Clean up
+DROP TABLE t1;
+
+--echo # ENCODE_FAIL: INSERT is rejected with an error, nothing is stored
+CREATE TABLE t2 (
+  id INT PRIMARY KEY,
+  val vsql_test_only.FAULT_BLOB
+);
+
+INSERT INTO t2 VALUES (1, 'OK good');
+--error ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+INSERT INTO t2 VALUES (2, 'ENCODE_FAIL');
+
+--echo # Only the successful row was stored
+SELECT id, val FROM t2 ORDER BY id;
+
+DROP TABLE t2;
+
+UNINSTALL EXTENSION vsql_test_only;
+
+--echo # Verify extension was removed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;

@@ -1,0 +1,62 @@
+INSTALL EXTENSION vsql_test_only;
+# Verify extension is installed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
+vsql_test_only	0.0.1
+# Create a table with a FAULT_BLOB column
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+val vsql_test_only.FAULT_BLOB
+);
+# Insert healthy values
+INSERT INTO t1 VALUES (1, 'OK hello');
+INSERT INTO t1 VALUES (2, 'OK world');
+INSERT INTO t1 VALUES (3, 'OK abc');
+# Normal SELECT round-trip: decode succeeds, values are readable
+SELECT id, val FROM t1 ORDER BY id;
+id	val
+1	OK hello
+2	OK world
+3	OK abc
+# Insert a value that will fail on decode
+INSERT INTO t1 VALUES (4, 'DECODE_FAIL');
+# SELECT the decode-failing row alone: returns NULL with a warning
+SELECT id, val FROM t1 WHERE id = 4;
+id	val
+4	NULL
+Warnings:
+Warning	1366	Incorrect FAULT_BLOB value: 'DECODE_FAIL\x00\x00\x00\x00\x00' for column 'val' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect FAULT_BLOB value: 'DECODE_FAIL\x00\x00\x00\x00\x00' for column 'val' at row 1
+# SELECT all rows: healthy rows decode fine, DECODE_FAIL row returns NULL
+SELECT id, val FROM t1 ORDER BY id;
+id	val
+1	OK hello
+2	OK world
+3	OK abc
+4	NULL
+Warnings:
+Warning	1366	Incorrect FAULT_BLOB value: 'DECODE_FAIL\x00\x00\x00\x00\x00' for column 'val' at row 4
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect FAULT_BLOB value: 'DECODE_FAIL\x00\x00\x00\x00\x00' for column 'val' at row 4
+# Clean up
+DROP TABLE t1;
+# ENCODE_FAIL: INSERT is rejected with an error, nothing is stored
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+val vsql_test_only.FAULT_BLOB
+);
+INSERT INTO t2 VALUES (1, 'OK good');
+INSERT INTO t2 VALUES (2, 'ENCODE_FAIL');
+ERROR HY000: Incorrect FAULT_BLOB value: 'ENCODE_FAIL' for column 'val' at row 1
+# Only the successful row was stored
+SELECT id, val FROM t2 ORDER BY id;
+id	val
+1	OK good
+DROP TABLE t2;
+UNINSTALL EXTENSION vsql_test_only;
+# Verify extension was removed
+SELECT extension_name, extension_version FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION

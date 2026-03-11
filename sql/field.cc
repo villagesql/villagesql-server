@@ -10654,8 +10654,8 @@ String *Field::val_external_str(String *buf) const {
       }
     } else {
       // OOMs will just return nullptr, but have called my_error.
-      return nullptr;
     }
+    return nullptr;
   }
 
   // Success: the decoded string is in buf.

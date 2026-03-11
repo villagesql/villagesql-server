@@ -107,6 +107,30 @@ IF(NOT WITHOUT_SERVER)
   install(FILES ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-tvector-build/vsql_tvector.veb
     DESTINATION ${INSTALL_VEBDIR}
   )
+
+  ExternalProject_Add(vsql_test_only_extension
+    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/test-extensions/vsql-test-only
+    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-test-only-build
+    CMAKE_GENERATOR ${CMAKE_GENERATOR}
+    CMAKE_ARGS
+      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
+      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/sdk/include"
+      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
+    BUILD_ALWAYS ON
+    INSTALL_COMMAND ""
+  )
+
+  add_custom_target(copy_vsql_test_only_veb
+    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
+    COMMAND ${CMAKE_COMMAND} -E copy
+      ${CMAKE_CURRENT_BINARY_DIR}/test-extensions/vsql-test-only-build/vsql_test_only.veb
+      ${CMAKE_BINARY_DIR}/veb_output_directory/
+    DEPENDS vsql_test_only_extension
+    COMMENT "Copying vsql_test_only.veb to veb_output_directory"
+  )
+
+  add_custom_target(test_only_veb ALL)
+  add_dependencies(test_only_veb copy_vsql_test_only_veb)
 ENDIF()
 
 # =============================================================================
