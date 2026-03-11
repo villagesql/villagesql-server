@@ -12,6 +12,8 @@
 #   2. "DECODE_FAIL" rows: SELECT returns NULL with a warning.
 #   3. Mixing healthy and decode-failing rows in the same query.
 #   4. "ENCODE_FAIL": INSERT is rejected with an error.
+#   5. UPDATE overwriting a DECODE_FAIL row with a good value: row becomes readable.
+#   6. UPDATE overwriting a good row with DECODE_FAIL: value is stored, decodes as NULL.
 
 INSTALL EXTENSION vsql_test_only;
 
@@ -40,6 +42,19 @@ SELECT id, val FROM t1 WHERE id = 4;
 SHOW WARNINGS;
 
 --echo # SELECT all rows: healthy rows decode fine, DECODE_FAIL row returns NULL
+SELECT id, val FROM t1 ORDER BY id;
+SHOW WARNINGS;
+
+--echo # UPDATE: overwrite the DECODE_FAIL row with a good value
+UPDATE t1 SET val = 'OK fixed' WHERE id = 4;
+
+--echo # The previously-failing row should now decode successfully
+SELECT id, val FROM t1 ORDER BY id;
+
+--echo # UPDATE: overwrite a good row with a DECODE_FAIL value
+UPDATE t1 SET val = 'DECODE_FAIL' WHERE id = 1;
+
+--echo # The updated row now decodes as NULL with a warning
 SELECT id, val FROM t1 ORDER BY id;
 SHOW WARNINGS;
 

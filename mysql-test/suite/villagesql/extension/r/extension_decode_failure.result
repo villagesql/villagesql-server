@@ -41,6 +41,29 @@ Warning	1366	Incorrect FAULT_BLOB value: 'DECODE_FAIL\x00\x00\x00\x00\x00' for c
 SHOW WARNINGS;
 Level	Code	Message
 Warning	1366	Incorrect FAULT_BLOB value: 'DECODE_FAIL\x00\x00\x00\x00\x00' for column 'val' at row 4
+# UPDATE: overwrite the DECODE_FAIL row with a good value
+UPDATE t1 SET val = 'OK fixed' WHERE id = 4;
+# The previously-failing row should now decode successfully
+SELECT id, val FROM t1 ORDER BY id;
+id	val
+1	OK hello
+2	OK world
+3	OK abc
+4	OK fixed
+# UPDATE: overwrite a good row with a DECODE_FAIL value
+UPDATE t1 SET val = 'DECODE_FAIL' WHERE id = 1;
+# The updated row now decodes as NULL with a warning
+SELECT id, val FROM t1 ORDER BY id;
+id	val
+1	NULL
+2	OK world
+3	OK abc
+4	OK fixed
+Warnings:
+Warning	1366	Incorrect FAULT_BLOB value: 'DECODE_FAIL\x00\x00\x00\x00\x00' for column 'val' at row 1
+SHOW WARNINGS;
+Level	Code	Message
+Warning	1366	Incorrect FAULT_BLOB value: 'DECODE_FAIL\x00\x00\x00\x00\x00' for column 'val' at row 1
 # Clean up
 DROP TABLE t1;
 # ENCODE_FAIL: INSERT is rejected with an error, nothing is stored
