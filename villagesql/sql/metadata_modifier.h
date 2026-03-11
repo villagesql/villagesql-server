@@ -102,8 +102,9 @@ class Metadata_modifier {
 
   // Process custom columns for ALTER TABLE operations.
   // Returns false on success, true on error.
-  static bool process_alter(THD *thd, Table_ref *table_list,
-                            Alter_info *alter_info);
+  static bool process_alter(THD *thd, const HA_CREATE_INFO *create_info,
+                            Table_ref *table_list,
+                            const Alter_info *alter_info);
 
   // Process custom columns for RENAME TABLE operations.
   // table_list contains pairs of tables (old, new, old, new, ...).
@@ -196,6 +197,7 @@ class Metadata_modifier {
 
   std::vector<ColumnEntry> to_add_;
   std::vector<ColumnEntry> to_remove_;
+  size_t existing_custom_count_ = 0;
   // Pair of (new_entry, old_key) where old_key is the key of the old entry
   std::vector<std::pair<ColumnEntry, ColumnKey>> to_rename_;
   // Custom functions to be called

@@ -272,6 +272,7 @@ bool Metadata_modifier::alter_columns(THD *thd [[maybe_unused]],
   for (const ColumnEntry *col : custom_columns) {
     custom_column_names.insert(col->column_name());
   }
+  existing_custom_count_ = custom_column_names.size();
 
   // 1. Handle DROP COLUMN - delete from custom_columns if custom type
   for (const Alter_drop *drop : alter_info->drop_list) {
@@ -682,8 +683,10 @@ bool Metadata_modifier::process_create(THD *thd,
   return false;
 }
 
-bool Metadata_modifier::process_alter(THD *thd, Table_ref *table_list,
-                                      Alter_info *alter_info) {
+bool Metadata_modifier::process_alter(THD *thd,
+                                      const HA_CREATE_INFO *create_info,
+                                      Table_ref *table_list,
+                                      const Alter_info *alter_info) {
   // TODO(villagesql-beta): Extension MDL for temp table.
   if (!table_list || !table_list->table ||
       table_list->table->s->tmp_table != NO_TMP_TABLE) {
@@ -696,12 +699,30 @@ bool Metadata_modifier::process_alter(THD *thd, Table_ref *table_list,
     return true;
   }
 
-  // Check storage engine if custom columns are being added.
-  if (custom_columns.has_entries()) {
-    const handlerton *current_engine = table_list->table->s->db_type();
-    if (ensure_engine_is_innodb(current_engine, "alter table")) {
-      return true;
-    }
+  // Reject any ALTER that combines custom column changes with an engine change.
+  // Non-atomic DDL (when either engine is non-InnoDB) causes an internal commit
+  // that clears uncommitted victionary entries before they can be written.
+  // The user must perform the engine change and custom column changes
+  // separately.
+  // TODO(villagesql): Support combining engine change with custom column
+  // add/drop in a single ALTER TABLE statement.
+  const bool current_has_custom = custom_columns.existing_custom_count_ > 0;
+  const bool adding_custom = !custom_columns.to_add_.empty();
+  const bool removing_custom = !custom_columns.to_remove_.empty();
+  const handlerton *current_engine = table_list->table->s->db_type();
+  const handlerton *target_engine = create_info->db_type;
+  const bool engine_changing =
+      (target_engine->db_type != current_engine->db_type);
+  if (engine_changing && (removing_custom || adding_custom)) {
+    villagesql_error(
+        "Cannot combine storage engine change with custom type columns.",
+        MYF(0));
+    return true;
+  }
+  // The target engine must be InnoDB when custom columns are involved.
+  if ((current_has_custom || adding_custom) &&
+      ensure_engine_is_innodb(target_engine, "alter table")) {
+    return true;
   }
 
   if (custom_columns.lock_and_apply(thd)) {

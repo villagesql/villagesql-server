@@ -1,0 +1,32 @@
+# Test that adding a custom column while simultaneously changing the engine
+# is rejected. The engine change and custom column addition must be done
+# in separate statements.
+
+--source include/villagesql/install_complex_extension.inc
+--source include/villagesql/binlog_check_begin.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, name VARCHAR(50)) ENGINE=MyISAM;
+
+INSERT INTO t1 VALUES (1, 'hello');
+INSERT INTO t1 VALUES (2, 'world');
+SELECT * FROM t1;
+
+# Cannot combine engine change with adding a custom column.
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t1 ADD COLUMN value COMPLEX, ENGINE=InnoDB;
+
+# Correct approach: change engine first, then add the custom column.
+ALTER TABLE t1 ENGINE=InnoDB;
+ALTER TABLE t1 ADD COLUMN value COMPLEX;
+
+SELECT * FROM t1;
+
+INSERT INTO t1 VALUES (3, 'HELLO', '(-1.0,2.0)');
+INSERT INTO t1 VALUES (4, 'WORLD', '(1.0,-2.0)');
+SELECT * FROM t1;
+
+SHOW CREATE TABLE t1;
+DROP TABLE t1;
+
+--source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc

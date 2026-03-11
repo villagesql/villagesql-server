@@ -1,0 +1,25 @@
+# Test that ALTER TABLE to a non-InnoDB engine is rejected when the table
+# has custom columns. The correct workflow is to drop custom columns first,
+# then change the engine.
+
+--source include/villagesql/install_complex_extension.inc
+
+CREATE TABLE t1 (id INT PRIMARY KEY, name VARCHAR(50), value COMPLEX) ENGINE=InnoDB;
+
+# Combining DROP COLUMN and ENGINE change in one statement is rejected.
+--error ER_VILLAGESQL_GENERIC_ERROR
+ALTER TABLE t1 DROP COLUMN value, ENGINE=MyISAM;
+
+# Step 1: Drop the custom column while still on InnoDB.
+ALTER TABLE t1 DROP COLUMN value;
+
+# Step 2: Now change engine - no custom columns remain, this must succeed.
+ALTER TABLE t1 ENGINE=MyISAM;
+
+DROP TABLE t1;
+
+# This must succeed - no stale row should remain in custom_columns for t1.value.
+CREATE TABLE t1 (id INT PRIMARY KEY, value COMPLEX) ENGINE=InnoDB;
+DROP TABLE t1;
+
+--source include/villagesql/uninstall_complex_extension.inc

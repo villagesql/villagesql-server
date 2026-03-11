@@ -2,8 +2,6 @@
 # Grammar: ALTER TABLE table_name ENGINE=engine_name
 # COMPLEX types only work with InnoDB - changing to MyISAM should fail
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 --source include/villagesql/binlog_check_begin.inc
 
@@ -20,7 +18,7 @@ SHOW CREATE TABLE t1;
 SELECT * FROM t1;
 
 # Attempt to change engine to MyISAM - should fail
---error ER_UNSUPPORTED_EXTENSION
+--error ER_VILLAGESQL_GENERIC_ERROR
 ALTER TABLE t1 ENGINE=MyISAM;
 
 SHOW CREATE TABLE t1;
@@ -28,8 +26,7 @@ SHOW CREATE TABLE t1;
 # Table should remain InnoDB with data intact
 SELECT * FROM t1;
 
-# Changing to another InnoDB-compatible engine should work (if supported)
-# This should succeed since we're staying with InnoDB
+# Rebuilding the table with ENGINE=InnoDB (no engine change) must succeed.
 ALTER TABLE t1 ENGINE=InnoDB;
 
 SHOW CREATE TABLE t1;

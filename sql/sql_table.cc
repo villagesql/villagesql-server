@@ -17079,7 +17079,7 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
   }
 
   // VillageSQL: Track custom columns and acquire necessary MDL locks.
-  if (villagesql::Metadata_modifier::process_alter(thd, table_list,
+  if (villagesql::Metadata_modifier::process_alter(thd, create_info, table_list,
                                                    alter_info)) {
     return true;
   }
