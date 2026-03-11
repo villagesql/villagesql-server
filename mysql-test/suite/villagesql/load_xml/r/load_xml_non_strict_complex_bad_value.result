@@ -1,0 +1,23 @@
+SET @saved_sql_mode = @@sql_mode;
+SET sql_mode = '';
+CREATE TABLE t1 (id INT, val COMPLEX);
+LOAD XML INFILE 'MYSQLTEST_VARDIR/tmp/non_strict_complex.xml' INTO TABLE t1 ROWS IDENTIFIED BY '<row>';
+Warnings:
+Warning	1366	Incorrect COMPLEX value: 'not_a_complex_value' for column 'val' at row 2
+SELECT * FROM t1 ORDER BY id;
+id	val
+1	(1,2)
+2	NULL
+3	(3,4)
+DROP TABLE t1;
+CREATE TABLE t2 (id INT, val INT);
+LOAD XML INFILE 'MYSQLTEST_VARDIR/tmp/non_strict_int.xml' INTO TABLE t2 ROWS IDENTIFIED BY '<row>';
+Warnings:
+Warning	1366	Incorrect integer value: 'not_an_int' for column 'val' at row 2
+SELECT * FROM t2 ORDER BY id;
+id	val
+1	10
+2	0
+3	30
+DROP TABLE t2;
+SET sql_mode = @saved_sql_mode;

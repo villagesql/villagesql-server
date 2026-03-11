@@ -1,0 +1,54 @@
+# Test LOAD DATA INFILE with COMPLEX type in non-strict mode (no IGNORE).
+# In non-strict mode, bad values store the intrinsic default, matching MySQL
+# built-in behavior (0, '', etc.). The side-by-side INT comparison shows they
+# now behave consistently.
+
+--source include/villagesql/install_complex_extension.inc
+
+SET @saved_sql_mode = @@sql_mode;
+SET sql_mode = '';
+
+# --- Custom type column: bad value in non-strict mode stores intrinsic default ---
+
+CREATE TABLE t1 (id INT, val COMPLEX);
+
+--write_file $MYSQLTEST_VARDIR/tmp/non_strict_complex.dat
+1	(1.0,2.0)
+2	not_a_complex_value
+3	(3.0,4.0)
+EOF
+
+# Row 2 has an invalid COMPLEX value; in non-strict mode NULL is stored (nullable column).
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/non_strict_complex.dat' INTO TABLE t1
+
+# All three rows inserted; row 2 gets NULL.
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/non_strict_complex.dat
+
+# --- Built-in type column: bad value in non-strict mode stores default ---
+# Side-by-side comparison to confirm consistent behavior.
+
+CREATE TABLE t2 (id INT, val INT);
+
+--write_file $MYSQLTEST_VARDIR/tmp/non_strict_int.dat
+1	10
+2	not_an_int
+3	30
+EOF
+
+# Row 2 has an invalid INT value. In non-strict mode, MySQL stores 0 (default).
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/non_strict_int.dat' INTO TABLE t2
+
+# All three rows are inserted; row 2 gets val=0 (intrinsic default).
+SELECT * FROM t2 ORDER BY id;
+
+DROP TABLE t2;
+--remove_file $MYSQLTEST_VARDIR/tmp/non_strict_int.dat
+
+SET sql_mode = @saved_sql_mode;
+
+--source include/villagesql/uninstall_complex_extension.inc

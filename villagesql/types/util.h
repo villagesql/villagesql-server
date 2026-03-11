@@ -286,6 +286,11 @@ extern String *EncodeStringForCustomParam(Item *item, const String &str_value,
 // sets a user-visible error and returns TYPE_ERR_BAD_VALUE.
 extern type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field);
 
+// Encode and store a string value into a custom type field during LOAD DATA /
+// LOAD XML, applying strict/non-strict/IGNORE semantics. Returns true on error.
+extern bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
+                                          const String &input_str);
+
 // Check if a function is allowed to operate on custom types for the given type
 // context
 // Returns true if function is allowed, false if it should be blocked

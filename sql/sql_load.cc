@@ -1492,31 +1492,8 @@ bool Sql_cmd_load_table::read_sep_field(THD *thd, COPY_INFO &info,
         // For custom types, encode the input string before storing
         if (field->has_type_context()) {
           String input_str((char *)pos, length, read_info.read_charset);
-          bool is_valid = false;
-          String *encoded =
-              villagesql::EncodeStringForField(field, input_str, is_valid);
-          if (encoded == nullptr) {
-            if (is_valid) return true;  // OOM case
-            // Encoding failed - in strict mode, fail; otherwise skip row
-            if (!thd->lex->is_ignore() && thd->is_strict_mode()) {
-              // EncodeStringForField already pushed a warning; promote to error
-              my_error(ER_TRUNCATED_WRONG_VALUE_FOR_FIELD, MYF(0),
-                       field->get_type_context()->type_name().c_str(),
-                       input_str.c_ptr_safe(), field->field_name,
-                       thd->get_stmt_da()->current_row_for_condition());
-              return true;
-            }
-            // IGNORE mode: skip this row (similar to constraint violation)
-            // EncodeStringForField already pushed a warning
-            // TODO(villagesql-beta): MySQL's built-in types convert bad values
-            // to intrinsic defaults (0, '', etc.) rather than skipping. For
-            // custom types, we skip because there's no well-defined default.
-            // If we add support for intrinsic defaults for custom types, we
-            // should use that here instead of skipping.
-            read_info.next_line();
-            goto continue_loop;
-          }
-          field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
+          if (villagesql::LoadEncodeAndStoreCustomField(thd, field, input_str))
+            return true;
         } else {
           field->store((char *)pos, length, read_info.read_charset);
         }
@@ -1742,30 +1719,8 @@ bool Sql_cmd_load_table::read_xml_field(THD *thd, COPY_INFO &info,
         // For custom types, encode the input string before storing
         if (field->has_type_context()) {
           String input_str(tag->value.ptr(), tag->value.length(), cs);
-          bool is_valid = false;
-          String *encoded =
-              villagesql::EncodeStringForField(field, input_str, is_valid);
-          if (encoded == nullptr) {
-            if (is_valid) return true;  // OOM case
-            // Encoding failed - in strict mode, fail; otherwise skip row
-            if (!thd->lex->is_ignore() && thd->is_strict_mode()) {
-              // EncodeStringForField already pushed a warning; promote to error
-              my_error(ER_TRUNCATED_WRONG_VALUE_FOR_FIELD, MYF(0),
-                       field->get_type_context()->type_name().c_str(),
-                       input_str.c_ptr_safe(), field->field_name,
-                       thd->get_stmt_da()->current_row_for_condition());
-              return true;
-            }
-            // IGNORE mode: skip this row (similar to constraint violation)
-            // EncodeStringForField already pushed a warning
-            // TODO(villagesql-beta): MySQL's built-in types convert bad values
-            // to intrinsic defaults (0, '', etc.) rather than skipping. For
-            // custom types, we skip because there's no well-defined default.
-            // If we add support for intrinsic defaults for custom types, we
-            // should use that here instead of skipping.
-            goto continue_loop;
-          }
-          field->store(encoded->ptr(), encoded->length(), &my_charset_bin);
+          if (villagesql::LoadEncodeAndStoreCustomField(thd, field, input_str))
+            return true;
         } else {
           field->store(tag->value.ptr(), tag->value.length(), cs);
         }

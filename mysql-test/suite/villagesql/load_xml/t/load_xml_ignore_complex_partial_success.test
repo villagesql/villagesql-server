@@ -1,6 +1,6 @@
 # Test LOAD XML IGNORE with COMPLEX type - partial success
 # Grammar: LOAD XML ... IGNORE ...
-# Tests that: duplicate key skips row, bad value skips row, good row succeeds
+# Tests that: duplicate key skips row, bad value stores intrinsic default, good row succeeds
 
 --source include/villagesql/install_complex_extension.inc
 
@@ -27,7 +27,7 @@ SELECT * FROM t1 ORDER BY id;
 EOF
 
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
-# Row id 1 is a duplicate and row id 3 is a bad value. Row id 5 is fine.
+# Row id 1 is a duplicate (skipped). Row id 3 is a bad value (NULL stored). Row id 5 is fine.
 --eval LOAD XML INFILE '$MYSQLTEST_VARDIR/tmp/complex_ignore.xml' IGNORE INTO TABLE t1 ROWS IDENTIFIED BY '<row>'
 
 SELECT * FROM t1 ORDER BY id;

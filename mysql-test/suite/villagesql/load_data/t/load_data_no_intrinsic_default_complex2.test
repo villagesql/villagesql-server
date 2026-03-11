@@ -1,0 +1,50 @@
+# Test LOAD DATA INFILE with COMPLEX2 type - bad value with no intrinsic default.
+# COMPLEX2 has no intrinsic default registered, so a bad value on a NOT NULL
+# column is a hard error regardless of IGNORE or strict mode.
+
+--source include/villagesql/install_complex_extension.inc
+
+# --- NOT NULL column, non-strict mode: bad value errors because no intrinsic default ---
+
+SET @saved_sql_mode = @@sql_mode;
+SET sql_mode = '';
+
+CREATE TABLE t1 (id INT, val COMPLEX2 NOT NULL);
+
+--write_file $MYSQLTEST_VARDIR/tmp/complex2_bad.dat
+1	(1.0,2.0)
+2	not_a_complex2_value
+3	(3.0,4.0)
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_VILLAGESQL_GENERIC_ERROR
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/complex2_bad.dat' INTO TABLE t1
+
+SELECT * FROM t1 ORDER BY id;
+
+DROP TABLE t1;
+--remove_file $MYSQLTEST_VARDIR/tmp/complex2_bad.dat
+
+SET sql_mode = @saved_sql_mode;
+
+# --- NOT NULL column, IGNORE mode: bad value still errors because no intrinsic default ---
+
+CREATE TABLE t2 (id INT, val COMPLEX2 NOT NULL);
+
+--write_file $MYSQLTEST_VARDIR/tmp/complex2_bad_ignore.dat
+1	(1.0,2.0)
+2	not_a_complex2_value
+3	(3.0,4.0)
+EOF
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--error ER_VILLAGESQL_GENERIC_ERROR
+--eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/complex2_bad_ignore.dat' IGNORE INTO TABLE t2
+
+SELECT * FROM t2 ORDER BY id;
+
+DROP TABLE t2;
+--remove_file $MYSQLTEST_VARDIR/tmp/complex2_bad_ignore.dat
+
+--source include/villagesql/uninstall_complex_extension.inc

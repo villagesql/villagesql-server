@@ -12,5 +12,6 @@ SELECT * FROM t1 ORDER BY id;
 id	val
 1	(1,2)
 2	(0,0)
+3	NULL
 5	(-1,-1)
 DROP TABLE t1;
