@@ -9,10 +9,13 @@ CREATE TABLE t_native (
     id INT PRIMARY KEY,
     value VARCHAR(100) DEFAULT 'empty'
 );
+INSERT INTO t_native (id) VALUES (1);
 ALTER TABLE t_native ALTER COLUMN value DROP DEFAULT;
 SHOW CREATE TABLE t_native;
 --error ER_NO_DEFAULT_FOR_FIELD
 INSERT INTO t_native (id) VALUES (2);
+INSERT IGNORE INTO t_native (id) VALUES (3);
+SELECT * FROM t_native ORDER BY id;
 DROP TABLE t_native;
 
 # With custom type
@@ -35,6 +38,7 @@ SHOW CREATE TABLE t1;
 INSERT INTO t1 (id) VALUES (2);
 INSERT INTO t1 VALUES (2, NULL);
 INSERT INTO t1 VALUES (3, '(2.0,3.0)');
+INSERT IGNORE INTO t1 (id) VALUES (4);
 
 SELECT * FROM t1 ORDER BY id;
 
