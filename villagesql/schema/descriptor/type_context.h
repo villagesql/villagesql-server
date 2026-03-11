@@ -51,6 +51,35 @@ class TypeParameters {
     build_entries();
   }
 
+  TypeParameters(const TypeParameters &other)
+      : str_(other.str_), keys_(other.keys_), values_(other.values_) {
+    rebuild_c_ptrs();
+  }
+  TypeParameters &operator=(const TypeParameters &other) {
+    if (this != &other) {
+      str_ = other.str_;
+      keys_ = other.keys_;
+      values_ = other.values_;
+      rebuild_c_ptrs();
+    }
+    return *this;
+  }
+  TypeParameters(TypeParameters &&other) noexcept
+      : str_(std::move(other.str_)),
+        keys_(std::move(other.keys_)),
+        values_(std::move(other.values_)) {
+    rebuild_c_ptrs();
+  }
+  TypeParameters &operator=(TypeParameters &&other) noexcept {
+    if (this != &other) {
+      str_ = std::move(other.str_);
+      keys_ = std::move(other.keys_);
+      values_ = std::move(other.values_);
+      rebuild_c_ptrs();
+    }
+    return *this;
+  }
+
   // Normalize a raw "k=v,k=v,..." string: split pairs, sort by lowercased
   // key, lowercase values, re-serialize. Used by TYPE('k=v,...') SQL parser
   // path.
@@ -86,6 +115,14 @@ class TypeParameters {
 
  private:
   void build_entries();
+  void rebuild_c_ptrs() {
+    c_keys_.clear();
+    c_values_.clear();
+    c_keys_.reserve(keys_.size());
+    for (const auto &k : keys_) c_keys_.push_back(k.c_str());
+    c_values_.reserve(values_.size());
+    for (const auto &v : values_) c_values_.push_back(v.c_str());
+  }
 
   // The canonical string representation of the key/value pairs
   std::string str_;

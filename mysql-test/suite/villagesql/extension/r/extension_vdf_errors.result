@@ -3,10 +3,10 @@ SELECT COMPLEX_FROM_STRING('not_a_complex_number') AS result;
 result
 NULL
 Warnings:
-Warning	3200	VDF error in function 'complex_from_string': failed to parse string 'not_a_complex_number'
+Warning	3200	VDF error in function 'complex_from_string': failed to encode 'not_a_complex_number'
 SHOW WARNINGS;
 Level	Code	Message
-Warning	3200	VDF error in function 'complex_from_string': failed to parse string 'not_a_complex_number'
+Warning	3200	VDF error in function 'complex_from_string': failed to encode 'not_a_complex_number'
 # Test COMPLEX_FROM_STRING with malformed string from table column
 CREATE TABLE t_strings (id INT, str_val VARCHAR(100));
 INSERT INTO t_strings VALUES (1, 'not_a_complex_number');
@@ -14,10 +14,10 @@ SELECT id, COMPLEX_FROM_STRING(str_val) AS result FROM t_strings;
 id	result
 1	NULL
 Warnings:
-Warning	3200	VDF error in function 'complex_from_string': failed to parse string 'not_a_complex_number'
+Warning	3200	VDF error in function 'complex_from_string': failed to encode 'not_a_complex_number'
 SHOW WARNINGS;
 Level	Code	Message
-Warning	3200	VDF error in function 'complex_from_string': failed to parse string 'not_a_complex_number'
+Warning	3200	VDF error in function 'complex_from_string': failed to encode 'not_a_complex_number'
 DROP TABLE t_strings;
 # Test COMPLEX_DIVIDE division by zero returns NULL
 SELECT vsql_complex.COMPLEX_DIVIDE('(1.0,2.0)', '(0.0,0.0)') AS result;

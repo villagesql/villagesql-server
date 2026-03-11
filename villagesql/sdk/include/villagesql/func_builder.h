@@ -333,10 +333,22 @@ struct ToStringWrapper {
 //   TypeCompareFunc -> VDF: (CUSTOM(type), CUSTOM(type)) -> INT
 //   TypeHashFunc    -> VDF: (CUSTOM(type)) -> INT
 
-// Encode: string -> binary. Returns false on success, true on error.
-// Set *length = SIZE_MAX to produce SQL NULL.
+// Extension author signatures for encode.
+// Fixed-size types use the simple form:
+//   bool my_encode(std::string_view from, Span<unsigned char> buf,
+//                  size_t *length)
+//
+// Variable-size types that need type parameters use:
+//   bool my_encode(const std::map<std::string, std::string> &params,
+//                  std::string_view from, Span<unsigned char> buf,
+//                  size_t *length)
+//
+// Returns false on success, true on error. Set *length = SIZE_MAX for NULL.
 using TypeEncodeFunc = bool (*)(std::string_view from, Span<unsigned char> buf,
                                 size_t *length);
+using TypeEncodeWithParamsFunc = bool (*)(
+    const std::map<std::string, std::string> &params, std::string_view from,
+    villagesql::Span<unsigned char> buf, size_t *length);
 
 // Decode: binary -> string. Returns false on success, true on error.
 using TypeDecodeFunc = bool (*)(Span<const unsigned char> data, Span<char> out,
@@ -404,10 +416,16 @@ struct IntrinsicDefaultWrapper {
   }
 };
 
-// TypeEncodeVdfWrapper: wraps a TypeEncodeFunc into a VDF.
+// TypeEncodeVdfWrapper: wraps either TypeEncodeFunc or
+// TypeEncodeWithParamsFunc into a VDF. Uses if-constexpr to detect whether
+// the author function accepts type parameters.
 // VDF signature: (STRING) -> CUSTOM(type).
-template <TypeEncodeFunc Func>
+template <auto Func>
 struct TypeEncodeVdfWrapper {
+  static constexpr bool kWithParams = std::is_invocable_v<
+      decltype(Func), const std::map<std::string, std::string> &,
+      std::string_view, villagesql::Span<unsigned char>, size_t *>;
+
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
     vef_invalue_t arg = get_invalue(ctx, args, 0);
@@ -416,8 +434,19 @@ struct TypeEncodeVdfWrapper {
       return;
     }
     size_t length;
-    bool failed = Func({arg.str_value, arg.str_len},
-                       {result->bin_buf, result->max_bin_len}, &length);
+    bool failed;
+    if constexpr (kWithParams) {
+      std::map<std::string, std::string> params;
+      for (unsigned int i = 0; i < result->type_params.count; i++) {
+        params.emplace(result->type_params.keys[i],
+                       result->type_params.values[i]);
+      }
+      failed = Func(params, {arg.str_value, arg.str_len},
+                    {result->bin_buf, result->max_bin_len}, &length);
+    } else {
+      failed = Func({arg.str_value, arg.str_len},
+                    {result->bin_buf, result->max_bin_len}, &length);
+    }
     if (failed) {
       result->type = VEF_RESULT_ERROR;
       constexpr size_t kMaxInputDisplay = 64;
@@ -915,7 +944,8 @@ constexpr StaticFuncDesc<0> make_intrinsic_default(const char *name,
 // Entry point for encode VDFs: (STRING) -> CUSTOM(type_name).
 //   make_type_encode<&my_func>("func_name", TYPE)
 // Register with .func() and reference in type via .encode("func_name").
-template <TypeEncodeFunc Func>
+// Accepts either TypeEncodeFunc or TypeEncodeWithParamsFunc.
+template <auto Func>
 constexpr StaticFuncDesc<1> make_type_encode(const char *name,
                                              const char *type_name) {
   FuncWithMetadata meta{};

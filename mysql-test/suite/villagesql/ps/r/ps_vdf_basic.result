@@ -102,10 +102,10 @@ EXECUTE stmt9 USING @bad_str;
 vsql_complex.complex_from_string(?)
 NULL
 Warnings:
-Warning	3200	VDF error in function 'complex_from_string': failed to parse string 'not_a_complex_number'
+Warning	3200	VDF error in function 'complex_from_string': failed to encode 'not_a_complex_number'
 SHOW WARNINGS;
 Level	Code	Message
-Warning	3200	VDF error in function 'complex_from_string': failed to parse string 'not_a_complex_number'
+Warning	3200	VDF error in function 'complex_from_string': failed to encode 'not_a_complex_number'
 DEALLOCATE PREPARE stmt9;
 #
 # Cleanup

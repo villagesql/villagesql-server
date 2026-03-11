@@ -36,11 +36,10 @@
 #include <cstring>
 #include <map>
 #include <string>
+#include <string_view>
 
 using villagesql::BinaryArg;
-using villagesql::BinaryResult;
 using villagesql::IntResult;
-using villagesql::StringArg;
 using villagesql::StringResult;
 
 // Little-endian float32 store/load helpers.
@@ -108,31 +107,25 @@ bool tvector_resolve_params(const std::map<std::string, std::string> &params,
 
 // Encode: "[f1,f2,...,fN]" -> N * 4 bytes binary.
 // STRING -> TVECTOR
-// Dimension is inferred from out.buffer().size() / 4.
-void tvector_from_string(StringArg in, BinaryResult out) {
-  if (in.is_null()) {
-    out.set_null();
-    return;
-  }
+// Dimension is read from type parameters.
+bool tvector_from_string(const std::map<std::string, std::string> &params,
+                         std::string_view from,
+                         villagesql::Span<unsigned char> buf, size_t *length) {
+  auto it = params.find("dimension");
+  if (it == params.end()) return true;
+  int64_t dimension = strtoll(it->second.c_str(), nullptr, 10);
+  if (dimension <= 0) return true;
 
-  auto dst = out.buffer();
-  if (dst.size() == 0) {
-    out.error("response buffer too small");
-    return;
-  }
-
-  size_t dimension = dst.size() / 4;
+  size_t byte_size = static_cast<size_t>(dimension) * 4;
+  if (buf.size() < byte_size) return true;
 
   // strtof requires a null-terminated string.
-  std::string input(in.value());
+  std::string input(from);
   const char *p = input.c_str();
 
   // Skip leading whitespace
   while (*p == ' ') p++;
-  if (*p != '[') {
-    out.error("expected '[' at start of vector");
-    return;
-  }
+  if (*p != '[') return true;
   p++;
 
   size_t count = 0;
@@ -141,18 +134,12 @@ void tvector_from_string(StringArg in, BinaryResult out) {
     while (*p == ' ') p++;
     if (*p == ']') break;
 
-    if (count >= dimension) {
-      out.error("too many elements");
-      return;
-    }
+    if (count >= static_cast<size_t>(dimension)) return true;
 
     char *endptr = nullptr;
     float val = strtof(p, &endptr);
-    if (endptr == p) {
-      out.error("failed to parse float");
-      return;
-    }
-    store_float(dst.data() + count * 4, val);
+    if (endptr == p) return true;
+    store_float(buf.data() + count * 4, val);
     count++;
     p = endptr;
 
@@ -161,17 +148,11 @@ void tvector_from_string(StringArg in, BinaryResult out) {
     if (*p == ',') p++;
   }
 
-  if (*p != ']') {
-    out.error("expected ']' at end of vector");
-    return;
-  }
+  if (*p != ']') return true;
+  if (count != static_cast<size_t>(dimension)) return true;
 
-  if (count != dimension) {
-    out.error("wrong number of elements");
-    return;
-  }
-
-  out.set_length(dimension * 4);
+  *length = byte_size;
+  return false;
 }
 
 // Decode: N * 4 bytes binary -> "[f1,f2,...,fN]" string.
@@ -298,11 +279,8 @@ VEF_GENERATE_ENTRY_POINTS(
                   .resolve_params("tvector_resolve_params")
                   .intrinsic_default("tvector_intrinsic_default")
                   .build())
-        .func(make_func<&tvector_from_string>("tvector_from_string")
-                  .returns(TVECTOR)
-                  .param(STRING)
-                  .deterministic()
-                  .build())
+        .func(make_type_encode<&tvector_from_string>("tvector_from_string",
+                                                     TVECTOR))
         .func(make_func<&tvector_to_string>("tvector_to_string")
                   .returns(STRING)
                   .param(TVECTOR)

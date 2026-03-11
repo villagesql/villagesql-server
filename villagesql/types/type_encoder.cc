@@ -39,7 +39,10 @@ TypeEncoder::TypeEncoder(const TypeContext *tc, MEM_ROOT &mem_root)
   const EncodeOp &op = tc->descriptor()->encode_op();
   if (op.vdf() != nullptr) {
     vdf_call_.emplace(op.vdf());
-    vdf_call_->init();
+    const auto &params = tc->parameters();
+    vdf_call_->init(TypeParameterSlice(params.count(), params.key_data(),
+                                       params.value_data()),
+                    NoInitData{});
   } else {
     fn_ = op.fn();
   }

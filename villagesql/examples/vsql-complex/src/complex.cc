@@ -141,54 +141,36 @@ bool complex_default(villagesql::Span<unsigned char> buffer, size_t *length,
 
 // COMPLEX encode: "(real,imag)" -> 16 bytes (with canonicalization of -0.0)
 // STRING -> COMPLEX
-void complex_from_string(vef_context_t *ctx, vef_invalue_t *in,
-                         vef_vdf_result_t *out) {
-  if (in->is_null) {
-    out->type = VEF_RESULT_NULL;
-    return;
-  }
-  if (out->max_bin_len < kComplexSize) {
-    ReturnError("response buffer too small", out);
-    return;
-  }
-  // Format in "in" is expected to be "(<double>,<double>)".
-  // in->str_value isn't null-terminated, so create a copy
+bool complex_from_string(std::string_view from,
+                         villagesql::Span<unsigned char> buf, size_t *length) {
+  if (buf.size() < kComplexSize) return true;
   Complex cx;
-  std::string from_str(in->str_value, in->str_len);
+  std::string from_str(from);
   if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) {
-    ReturnError("failed to parse string '" + from_str + "'", out);
-    return;
+    return true;
   }
   cx.canonicalize();
-  store_complex(out->bin_buf, cx);
-  out->actual_len = kComplexSize;
-  out->type = VEF_RESULT_VALUE;
+  store_complex(buf.data(), cx);
+  *length = kComplexSize;
+  return false;
 }
 
 // COMPLEX2 encode: "(real,imag)" -> 16 bytes (without canonicalization,
 // preserves -0.0 in binary form)
 // STRING -> COMPLEX2
-void complex2_from_string(vef_context_t *ctx, vef_invalue_t *in,
-                          vef_vdf_result_t *out) {
-  if (in->is_null) {
-    out->type = VEF_RESULT_NULL;
-    return;
-  }
-  if (out->max_bin_len < kComplexSize) {
-    ReturnError("response buffer too small", out);
-    return;
-  }
+bool complex2_from_string(std::string_view from,
+                          villagesql::Span<unsigned char> buf, size_t *length) {
+  if (buf.size() < kComplexSize) return true;
   Complex cx;
-  std::string from_str(in->str_value, in->str_len);
+  std::string from_str(from);
   if (sscanf(from_str.c_str(), " ( %lg , %lg )", &cx.re, &cx.im) != 2) {
-    ReturnError("failed to parse string '" + from_str + "'", out);
-    return;
+    return true;
   }
   // No canonicalization - -0.0 is preserved in binary representation.
   // The custom hash function will canonicalize on the fly.
-  store_complex(out->bin_buf, cx);
-  out->actual_len = kComplexSize;
-  out->type = VEF_RESULT_VALUE;
+  store_complex(buf.data(), cx);
+  *length = kComplexSize;
+  return false;
 }
 
 // Decode: 16 bytes -> "(real,imag)" string
@@ -493,21 +475,15 @@ VEF_GENERATE_ENTRY_POINTS(
                   .hash("complex2_hash")
                   .build())
         // Type conversion functions (also serve as encode/decode VDFs)
-        .func(make_func<&complex_from_string>("complex_from_string")
-                  .returns(COMPLEX)
-                  .param(STRING)
-                  .deterministic()
-                  .build())
+        .func(make_type_encode<&complex_from_string>("complex_from_string",
+                                                     COMPLEX))
         .func(make_func<&complex_to_string>("complex_to_string")
                   .returns(STRING)
                   .param(COMPLEX)
                   .deterministic()
                   .build())
-        .func(make_func<&complex2_from_string>("complex2_from_string")
-                  .returns(COMPLEX2)
-                  .param(STRING)
-                  .deterministic()
-                  .build())
+        .func(make_type_encode<&complex2_from_string>("complex2_from_string",
+                                                      COMPLEX2))
         .func(make_func<&complex_to_string>("complex2_to_string")
                   .returns(STRING)
                   .param(COMPLEX2)
