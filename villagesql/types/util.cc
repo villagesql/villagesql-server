@@ -852,8 +852,6 @@ String *EncodeStringForCustomParam(Item *item, const String &str_value,
 
 type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field) {
   assert(field->has_type_context());
-  assert(!field->is_nullable());
-
   const TypeContext &tc = *field->get_type_context();
 
   // Use the cached intrinsic default buffer from TypeContext.
@@ -889,14 +887,18 @@ bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
              thd->get_stmt_da()->current_row_for_condition());
     return true;
   }
-  // EncodeStringForField already pushed a warning. For nullable fields, store
-  // NULL. For NOT NULL fields, store the intrinsic default, mirroring MySQL
-  // built-in behavior of storing 0, '', etc. for bad values in IGNORE or
-  // non-strict mode.
+  // EncodeStringForField already pushed a warning. Store the intrinsic default
+  // if the type has one, mirroring MySQL built-in behavior of storing 0, '',
+  // etc. for bad values in IGNORE or non-strict mode. For nullable fields with
+  // no intrinsic default, fall back to storing NULL.
+  if (field->get_type_context()->intrinsic_default_buffer() != nullptr) {
+    return StoreCustomFieldIntrinsicDefault(field) != TYPE_OK;
+  }
   if (field->is_nullable()) {
     field->set_null();
     return false;
   }
+  // NOT NULL with no intrinsic default: error.
   return StoreCustomFieldIntrinsicDefault(field) != TYPE_OK;
 }
 

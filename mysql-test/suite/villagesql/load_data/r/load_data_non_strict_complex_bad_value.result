@@ -7,7 +7,7 @@ Warning	1366	Incorrect COMPLEX value: 'not_a_complex_value' for column 'val' at 
 SELECT * FROM t1 ORDER BY id;
 id	val
 1	(1,2)
-2	NULL
+2	(0,0)
 3	(3,4)
 DROP TABLE t1;
 CREATE TABLE t2 (id INT, val INT);

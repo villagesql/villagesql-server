@@ -1,0 +1,52 @@
+# Test LOAD DATA INFILE with bad COMPLEX values across all mode combinations.
+# Mirrors load_data_double_bad_value_modes.test for custom type comparison.
+# The result file should be structurally identical to load_data_double_bad_value_modes.result
+# except for Error/Warning lines which are type-specific.
+
+--source include/villagesql/install_complex_extension.inc
+
+--write_file $MYSQLTEST_VARDIR/tmp/bad_value.dat
+1	(1.0,2.0)
+2	not_a_complex
+3	\N
+4	(3.0,4.0)
+EOF
+
+--write_file $MYSQLTEST_VARDIR/tmp/null_value.dat
+1	(1.0,2.0)
+2	\N
+3	(3.0,4.0)
+EOF
+
+let $bad_value_file = $MYSQLTEST_VARDIR/tmp/bad_value.dat;
+let $null_value_file = $MYSQLTEST_VARDIR/tmp/null_value.dat;
+
+# --- nullable ---
+let $col_def = COMPLEX;
+let $type_default = (0,0);
+let $bad_value_strict_error = 1366; # ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+let $null_notnull_strict_error = 0;
+--source suite/villagesql/load_data/t/load_data_bad_value_modes.inc
+
+# --- NOT NULL ---
+let $col_def = COMPLEX NOT NULL;
+let $type_default = (0,0);
+let $bad_value_strict_error = 1366; # ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+let $null_notnull_strict_error = 1263; # ER_WARN_NULL_TO_NOTNULL
+--source suite/villagesql/load_data/t/load_data_bad_value_modes.inc
+
+# --- with DEFAULT ---
+# Note: VillageSQL (like MySQL for builtins) currently ignores the user-defined
+# DEFAULT for bad values and stores the intrinsic default (0,0) instead.
+# TODO(villagesql-beta): fix to use user-defined DEFAULT.
+let $col_def = COMPLEX DEFAULT '(100,100)';
+let $type_default = (100,100);
+let $bad_value_strict_error = 1366; # ER_TRUNCATED_WRONG_VALUE_FOR_FIELD
+let $null_notnull_strict_error = 0;
+--source suite/villagesql/load_data/t/load_data_bad_value_modes.inc
+
+SET sql_mode = DEFAULT;
+--remove_file $MYSQLTEST_VARDIR/tmp/bad_value.dat
+--remove_file $MYSQLTEST_VARDIR/tmp/null_value.dat
+
+--source include/villagesql/uninstall_complex_extension.inc

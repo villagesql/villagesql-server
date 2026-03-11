@@ -1,0 +1,284 @@
+SET sql_mode = 'STRICT_TRANS_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bad_value.dat' INTO TABLE t;
+ERROR HY000: Incorrect COMPLEX value: 'not_a_complex' for column 'val' at row 2
+SELECT COUNT(*) FROM t;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+0
+DROP TABLE t;
+SET sql_mode = 'STRICT_TRANS_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/null_value.dat' INTO TABLE t;
+SELECT COUNT(*) FROM t;
+COUNT(*)
+3
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+1
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+2
+DROP TABLE t;
+SET sql_mode = 'STRICT_TRANS_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bad_value.dat' IGNORE INTO TABLE t;
+Warnings:
+Warning	1366	Incorrect COMPLEX value: 'not_a_complex' for column 'val' at row 2
+SELECT COUNT(*) FROM t;
+COUNT(*)
+4
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+1
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+1
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+2
+DROP TABLE t;
+SET sql_mode = '';
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bad_value.dat' INTO TABLE t;
+Warnings:
+Warning	1366	Incorrect COMPLEX value: 'not_a_complex' for column 'val' at row 2
+SELECT COUNT(*) FROM t;
+COUNT(*)
+4
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+1
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+1
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+2
+DROP TABLE t;
+SET sql_mode = '';
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bad_value.dat' IGNORE INTO TABLE t;
+Warnings:
+Warning	1366	Incorrect COMPLEX value: 'not_a_complex' for column 'val' at row 2
+SELECT COUNT(*) FROM t;
+COUNT(*)
+4
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+1
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+1
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+2
+DROP TABLE t;
+SET sql_mode = 'STRICT_TRANS_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bad_value.dat' INTO TABLE t;
+ERROR HY000: Incorrect COMPLEX value: 'not_a_complex' for column 'val' at row 2
+SELECT COUNT(*) FROM t;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+0
+DROP TABLE t;
+SET sql_mode = 'STRICT_TRANS_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/null_value.dat' INTO TABLE t;
+ERROR 22004: Column set to default value; NULL supplied to NOT NULL column 'val' at row 2
+SELECT COUNT(*) FROM t;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+0
+DROP TABLE t;
+SET sql_mode = 'STRICT_TRANS_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bad_value.dat' IGNORE INTO TABLE t;
+Warnings:
+Warning	1366	Incorrect COMPLEX value: 'not_a_complex' for column 'val' at row 2
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'val' at row 3
+SELECT COUNT(*) FROM t;
+COUNT(*)
+4
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+2
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+2
+DROP TABLE t;
+SET sql_mode = '';
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bad_value.dat' INTO TABLE t;
+Warnings:
+Warning	1366	Incorrect COMPLEX value: 'not_a_complex' for column 'val' at row 2
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'val' at row 3
+SELECT COUNT(*) FROM t;
+COUNT(*)
+4
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+2
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+2
+DROP TABLE t;
+SET sql_mode = '';
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bad_value.dat' IGNORE INTO TABLE t;
+Warnings:
+Warning	1366	Incorrect COMPLEX value: 'not_a_complex' for column 'val' at row 2
+Warning	1263	Column set to default value; NULL supplied to NOT NULL column 'val' at row 3
+SELECT COUNT(*) FROM t;
+COUNT(*)
+4
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+2
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+2
+DROP TABLE t;
+SET sql_mode = 'STRICT_TRANS_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bad_value.dat' INTO TABLE t;
+ERROR HY000: Incorrect COMPLEX value: 'not_a_complex' for column 'val' at row 2
+SELECT COUNT(*) FROM t;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+0
+DROP TABLE t;
+SET sql_mode = 'STRICT_TRANS_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/null_value.dat' INTO TABLE t;
+SELECT COUNT(*) FROM t;
+COUNT(*)
+3
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+1
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+2
+DROP TABLE t;
+SET sql_mode = 'STRICT_TRANS_TABLES';
+Warnings:
+Warning	3135	'NO_ZERO_DATE', 'NO_ZERO_IN_DATE' and 'ERROR_FOR_DIVISION_BY_ZERO' sql modes should be used with strict mode. They will be merged with strict mode in a future release.
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bad_value.dat' IGNORE INTO TABLE t;
+Warnings:
+Warning	1366	Incorrect COMPLEX value: 'not_a_complex' for column 'val' at row 2
+SELECT COUNT(*) FROM t;
+COUNT(*)
+4
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+1
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+3
+DROP TABLE t;
+SET sql_mode = '';
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bad_value.dat' INTO TABLE t;
+Warnings:
+Warning	1366	Incorrect COMPLEX value: 'not_a_complex' for column 'val' at row 2
+SELECT COUNT(*) FROM t;
+COUNT(*)
+4
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+1
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+3
+DROP TABLE t;
+SET sql_mode = '';
+CREATE TABLE t (id INT, val <col_def>);
+LOAD DATA INFILE 'MYSQLTEST_VARDIR/tmp/bad_value.dat' IGNORE INTO TABLE t;
+Warnings:
+Warning	1366	Incorrect COMPLEX value: 'not_a_complex' for column 'val' at row 2
+SELECT COUNT(*) FROM t;
+COUNT(*)
+4
+SELECT COUNT(*) FROM t WHERE val = '<type_default>';
+COUNT(*)
+0
+SELECT COUNT(*) FROM t WHERE val IS NULL;
+COUNT(*)
+1
+SELECT COUNT(*) FROM t WHERE val != '<type_default>' AND val IS NOT NULL;
+COUNT(*)
+3
+DROP TABLE t;
+SET sql_mode = DEFAULT;

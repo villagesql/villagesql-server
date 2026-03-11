@@ -15,7 +15,7 @@ SELECT * FROM t1 ORDER BY id;
 EOF
 
 --replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
-# Row id 1 is a duplicate (skipped). Row id 3 is a bad value (NULL stored). Row id 5 is fine.
+# Row id 1 is a duplicate (skipped). Row id 3 is a bad value (intrinsic default stored). Row id 5 is fine.
 --eval LOAD DATA INFILE '$MYSQLTEST_VARDIR/tmp/complex_ignore.dat' IGNORE INTO TABLE t1 FIELDS TERMINATED BY '|'
 
 SELECT * FROM t1 ORDER BY id;
