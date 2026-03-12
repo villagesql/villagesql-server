@@ -3,7 +3,6 @@ name: Feature Request
 about: Suggest an idea for feature for this project
 title: "[Feature Request]: "
 labels: ["feature request"]
-assignees: 'villagesql-adam'
 assignees: 
   - villagesql-adam
 type: feature
