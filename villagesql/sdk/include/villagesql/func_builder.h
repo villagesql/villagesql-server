@@ -350,9 +350,22 @@ using TypeEncodeWithParamsFunc = bool (*)(
     const std::map<std::string, std::string> &params, std::string_view from,
     villagesql::Span<unsigned char> buf, size_t *length);
 
-// Decode: binary -> string. Returns false on success, true on error.
+// Extension author signatures for decode.
+// Fixed-size types use the simple form:
+//   bool my_decode(Span<const unsigned char> data, Span<char> out,
+//                  size_t *out_len)
+//
+// Variable-size types that need type parameters use:
+//   bool my_decode(const std::map<std::string, std::string> &params,
+//                  Span<const unsigned char> data, Span<char> out,
+//                  size_t *out_len)
+//
+// Returns false on success, true on error.
 using TypeDecodeFunc = bool (*)(Span<const unsigned char> data, Span<char> out,
                                 size_t *out_len);
+using TypeDecodeWithParamsFunc =
+    bool (*)(const std::map<std::string, std::string> &params,
+             Span<const unsigned char> data, Span<char> out, size_t *out_len);
 
 // Compare: two binary values. Returns <0, 0, or >0.
 using TypeCompareFunc = int (*)(Span<const unsigned char> a,
@@ -470,10 +483,16 @@ struct TypeEncodeVdfWrapper {
   }
 };
 
-// TypeDecodeVdfWrapper: wraps a TypeDecodeFunc into a VDF.
+// TypeDecodeVdfWrapper: wraps either TypeDecodeFunc or
+// TypeDecodeWithParamsFunc into a VDF. Uses if-constexpr to detect whether
+// the author function accepts type parameters.
 // VDF signature: (CUSTOM(type)) -> STRING.
-template <TypeDecodeFunc Func>
+template <auto Func>
 struct TypeDecodeVdfWrapper {
+  static constexpr bool kWithParams = std::is_invocable_v<
+      decltype(Func), const std::map<std::string, std::string> &,
+      villagesql::Span<const unsigned char>, villagesql::Span<char>, size_t *>;
+
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
     vef_invalue_t arg = get_invalue(ctx, args, 0);
@@ -482,8 +501,18 @@ struct TypeDecodeVdfWrapper {
       return;
     }
     size_t out_len;
-    bool failed = Func({arg.bin_value, arg.bin_len},
-                       {result->str_buf, result->max_str_len}, &out_len);
+    bool failed;
+    if constexpr (kWithParams) {
+      std::map<std::string, std::string> params;
+      for (unsigned int i = 0; i < arg.type_params.count; i++) {
+        params.emplace(arg.type_params.keys[i], arg.type_params.values[i]);
+      }
+      failed = Func(params, {arg.bin_value, arg.bin_len},
+                    {result->str_buf, result->max_str_len}, &out_len);
+    } else {
+      failed = Func({arg.bin_value, arg.bin_len},
+                    {result->str_buf, result->max_str_len}, &out_len);
+    }
     if (failed) {
       result->type = VEF_RESULT_ERROR;
       snprintf(result->error_msg, VEF_MAX_ERROR_LEN, "failed to decode value");
@@ -960,7 +989,8 @@ constexpr StaticFuncDesc<1> make_type_encode(const char *name,
 // Entry point for decode VDFs: (CUSTOM(type_name)) -> STRING.
 //   make_type_decode<&my_func>("func_name", TYPE)
 // Register with .func() and reference in type via .decode("func_name").
-template <TypeDecodeFunc Func>
+// Accepts either TypeDecodeFunc or TypeDecodeWithParamsFunc.
+template <auto Func>
 constexpr StaticFuncDesc<1> make_type_decode(const char *name,
                                              const char *type_name) {
   FuncWithMetadata meta{};

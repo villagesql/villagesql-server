@@ -40,7 +40,6 @@
 
 using villagesql::BinaryArg;
 using villagesql::IntResult;
-using villagesql::StringResult;
 
 // Little-endian float32 store/load helpers.
 
@@ -157,51 +156,37 @@ bool tvector_from_string(const std::map<std::string, std::string> &params,
 
 // Decode: N * 4 bytes binary -> "[f1,f2,...,fN]" string.
 // TVECTOR -> STRING
-void tvector_to_string(BinaryArg in, StringResult out) {
-  if (in.is_null()) {
-    out.set_null();
-    return;
-  }
+// Dimension is read from type parameters.
+bool tvector_to_string(const std::map<std::string, std::string> &params,
+                       villagesql::Span<const unsigned char> data,
+                       villagesql::Span<char> out, size_t *out_len) {
+  auto it = params.find("dimension");
+  if (it == params.end()) return true;
+  int64_t dimension = strtoll(it->second.c_str(), nullptr, 10);
+  if (dimension <= 0) return true;
+  if (data.size() != static_cast<size_t>(dimension) * 4) return true;
 
-  auto src = in.value();
-  size_t dimension = src.size() / 4;
-  if (dimension == 0 || src.size() % 4 != 0) {
-    out.error("argument malformed");
-    return;
-  }
-
-  auto dst = out.buffer();
   size_t pos = 0;
-  if (pos >= dst.size()) {
-    out.error("output buffer too small");
-    return;
-  }
-  dst[pos++] = '[';
+  if (pos >= out.size()) return true;
+  out[pos++] = '[';
 
-  for (size_t i = 0; i < dimension; i++) {
+  for (size_t i = 0; i < static_cast<size_t>(dimension); i++) {
     if (i > 0) {
-      if (pos >= dst.size()) {
-        out.error("output buffer too small");
-        return;
-      }
-      dst[pos++] = ',';
+      if (pos >= out.size()) return true;
+      out[pos++] = ',';
     }
-    float val = load_float(src.data() + i * 4);
-    int written = snprintf(dst.data() + pos, dst.size() - pos, "%g", val);
-    if (written < 0 || pos + static_cast<size_t>(written) >= dst.size()) {
-      out.error("output buffer too small");
-      return;
-    }
+    float val = load_float(data.data() + i * 4);
+    int written = snprintf(out.data() + pos, out.size() - pos, "%g", val);
+    if (written < 0 || pos + static_cast<size_t>(written) >= out.size())
+      return true;
     pos += static_cast<size_t>(written);
   }
 
-  if (pos >= dst.size()) {
-    out.error("output buffer too small");
-    return;
-  }
-  dst[pos++] = ']';
+  if (pos >= out.size()) return true;
+  out[pos++] = ']';
 
-  out.set_length(pos);
+  *out_len = pos;
+  return false;
 }
 
 // Compare VDF for ORDER BY, indexes: (TVECTOR, TVECTOR) -> INT
@@ -281,11 +266,8 @@ VEF_GENERATE_ENTRY_POINTS(
                   .build())
         .func(make_type_encode<&tvector_from_string>("tvector_from_string",
                                                      TVECTOR))
-        .func(make_func<&tvector_to_string>("tvector_to_string")
-                  .returns(STRING)
-                  .param(TVECTOR)
-                  .deterministic()
-                  .build())
+        .func(make_type_decode<&tvector_to_string>("tvector_to_string",
+                                                   TVECTOR))
         .func(make_func<&tvector_compare>("tvector_compare")
                   .returns(INT)
                   .param(TVECTOR)

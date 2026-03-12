@@ -175,27 +175,14 @@ bool complex2_from_string(std::string_view from,
 
 // Decode: 16 bytes -> "(real,imag)" string
 // COMPLEX -> STRING
-void complex_to_string(vef_context_t *ctx, vef_invalue_t *in,
-                       vef_vdf_result_t *out) {
-  if (in->is_null) {
-    out->type = VEF_RESULT_NULL;
-    return;
-  }
-
-  const auto cx = TryLoadFromInValue(in);
-  if (!cx.has_value()) {
-    ReturnError("argument malformed", out);
-    return;
-  }
-
-  int written =
-      snprintf(out->str_buf, out->max_str_len, "(%g,%g)", cx->re, cx->im);
-  if (written < 0 || static_cast<size_t>(written) >= out->max_str_len) {
-    ReturnError("output buffer too small", out);
-    return;
-  }
-  out->actual_len = written;
-  out->type = VEF_RESULT_VALUE;
+bool complex_to_string(villagesql::Span<const unsigned char> data,
+                       villagesql::Span<char> out, size_t *out_len) {
+  if (data.size() != kComplexSize) return true;
+  Complex cx = load_complex(data.data());
+  int written = snprintf(out.data(), out.size(), "(%g,%g)", cx.re, cx.im);
+  if (written < 0 || static_cast<size_t>(written) >= out.size()) return true;
+  *out_len = static_cast<size_t>(written);
+  return false;
 }
 
 // Compare VDF for ORDER BY, indexes: (COMPLEX, COMPLEX) -> INT
@@ -477,18 +464,12 @@ VEF_GENERATE_ENTRY_POINTS(
         // Type conversion functions (also serve as encode/decode VDFs)
         .func(make_type_encode<&complex_from_string>("complex_from_string",
                                                      COMPLEX))
-        .func(make_func<&complex_to_string>("complex_to_string")
-                  .returns(STRING)
-                  .param(COMPLEX)
-                  .deterministic()
-                  .build())
+        .func(make_type_decode<&complex_to_string>("complex_to_string",
+                                                   COMPLEX))
         .func(make_type_encode<&complex2_from_string>("complex2_from_string",
                                                       COMPLEX2))
-        .func(make_func<&complex_to_string>("complex2_to_string")
-                  .returns(STRING)
-                  .param(COMPLEX2)
-                  .deterministic()
-                  .build())
+        .func(make_type_decode<&complex_to_string>("complex2_to_string",
+                                                   COMPLEX2))
         // Compare and hash VDFs
         .func(make_func<&complex_compare>("complex_compare")
                   .returns(INT)
