@@ -1,10 +1,11 @@
 ---
 name: Bug report
 about: Create a report to help us improve
-title: ''
-labels: ''
-assignees: dbentley-vsql
-
+title: "[Bug]: "
+labels: ["bug"]
+assignees: 
+  - villagesql-adam
+type: bug
 ---
 
 **Describe the bug**
