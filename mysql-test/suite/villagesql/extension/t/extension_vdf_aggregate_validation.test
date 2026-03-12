@@ -1,0 +1,43 @@
+# Test aggregate VDF registration validation
+# Verifies that extensions with mismatched clear/add callbacks are rejected.
+
+--echo # Test Aggregate VDF Registration Validation
+
+# Setup VEB directory for testing
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+call mtr.add_suppression("Failed to load VEF extension");
+call mtr.add_suppression("Aggregate VDF.*must provide both clear and add");
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--echo #
+--echo # Test: add set but clear missing (should fail)
+--echo #
+--let $extension_name = agg_add_only
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/aggregate_vdf_add_only.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION agg_add_only;
+
+--echo # Verify extension was NOT installed
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'agg_add_only';
+
+--echo #
+--echo # Test: clear set but add missing (should fail)
+--echo #
+--let $extension_name = agg_clear_only
+--let $extension_version = 1.0.0
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/aggregate_vdf_clear_only.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION agg_clear_only;
+
+--echo # Verify extension was NOT installed
+SELECT COUNT(*) FROM INFORMATION_SCHEMA.EXTENSIONS WHERE EXTENSION_NAME = 'agg_clear_only';

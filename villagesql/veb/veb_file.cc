@@ -1243,6 +1243,20 @@ bool register_funcs_from_extension(THD &thd, const std::string &extension_name,
 
     std::string func_name(func_desc->name);
 
+    // clear/add fields were added in PROTOCOL_2; older extensions don't
+    // initialize them so we must not read them.
+    if (ext_reg.negotiated_protocol >= VEF_PROTOCOL_2) {
+      bool has_clear = (func_desc->clear != nullptr);
+      bool has_add = (func_desc->add != nullptr);
+      if (has_clear != has_add) {
+        LogVSQL(ERROR_LEVEL,
+                "Aggregate VDF '%s' in extension '%s' must provide both clear "
+                "and add callbacks, or neither",
+                func_name.c_str(), extension_name.c_str());
+        return true;
+      }
+    }
+
     LogVSQL(INFORMATION_LEVEL, "Registering VDF '%s' from extension '%s'",
             func_desc->name, extension_name.c_str());
 

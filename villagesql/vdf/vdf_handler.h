@@ -49,6 +49,10 @@ class vdf_handler {
   // cleanup: Call postrun and reset state
   void cleanup();
 
+  // Aggregate methods - called by udf_handler for aggregate VDFs
+  void clear();
+  void add(bool *null_value);
+
   // Value accessors - called by udf_handler when is_vdf() is true
   double val_real(bool *null_value);
   longlong val_int(bool *null_value);

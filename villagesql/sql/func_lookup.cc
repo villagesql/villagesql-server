@@ -154,7 +154,9 @@ udf_func *make_udf_func_from_vdf(const FuncDescriptor *desc,
 
   // Set VDF-specific fields
   udf->returns = desc->return_type();
-  udf->type = UDFTYPE_FUNCTION;
+  udf->type = (desc->protocol() >= VEF_PROTOCOL_2 && func_desc->clear)
+                  ? UDFTYPE_AGGREGATE
+                  : UDFTYPE_FUNCTION;
   udf->usage_count = 1;
   udf->calling_convention = UdfCallingConvention::VDF;
   udf->vdf_func_desc = func_desc;

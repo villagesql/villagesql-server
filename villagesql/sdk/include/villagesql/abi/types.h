@@ -178,7 +178,6 @@ typedef enum : unsigned int {
 // Open issues:
 //   A) How do we handle encodings and collations?
 //   B) Resizing the buffer can probably be done in a smarter way.
-//   C) Support Aggregate functions.
 typedef struct {
   unsigned int major;
   unsigned int minor;
@@ -501,6 +500,23 @@ typedef void (*vef_postrun_func_t)(vef_context_t *ctx, vef_postrun_args_t *args,
                                    vef_postrun_result_t *result);
 
 // =============================================================================
+// Aggregate Function Callbacks
+// =============================================================================
+
+// Reset aggregate state for a new group.
+// Called once at the start of each group. The extension should reset any
+// accumulator state stored in args->user_data.
+typedef void (*vef_vdf_clear_func_t)(vef_context_t *ctx, vef_vdf_args_t *args);
+
+// Accumulate one row into the aggregate.
+// Called once per row within a group. The extension reads values from args
+// and updates its accumulator in args->user_data. If an error occurs during
+// accumulation, write the message to result->error_msg and set
+// result->type = VEF_RESULT_ERROR.
+typedef void (*vef_vdf_add_func_t)(vef_context_t *ctx, vef_vdf_args_t *args,
+                                   vef_vdf_result_t *result);
+
+// =============================================================================
 // Function and Type Descriptors
 // =============================================================================
 
@@ -527,6 +543,13 @@ typedef struct {
   // If true, the function always returns the same result for the same inputs
   // and has no side effects. The optimizer may use this to cache results.
   bool deterministic;
+
+  // OPTIONAL: Set both to non-NULL to make this function an aggregate.
+  // When set, the main `vdf` callback becomes the "result" function, called
+  // once per group after all rows have been accumulated.
+  // It is an error to set exactly one of these; both must be present or absent.
+  vef_vdf_clear_func_t clear;
+  vef_vdf_add_func_t add;
 } vef_func_desc_t;
 
 // =============================================================================

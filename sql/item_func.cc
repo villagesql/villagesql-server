@@ -4995,6 +4995,10 @@ my_decimal *udf_handler::val_decimal(bool *null_value, my_decimal *dec_buf) {
 
 void udf_handler::clear() {
   assert(is_initialized());
+  if (m_vdf) {
+    m_vdf->clear();
+    return;
+  }
   is_null = 0;
   Udf_func_clear func = u_d->func_clear;
   func(&initid, &is_null, &error);
@@ -5002,6 +5006,10 @@ void udf_handler::clear() {
 
 void udf_handler::add(bool *null_value) {
   assert(is_initialized());
+  if (m_vdf) {
+    m_vdf->add(null_value);
+    return;
+  }
   if (get_arguments()) {
     *null_value = true;
     return;

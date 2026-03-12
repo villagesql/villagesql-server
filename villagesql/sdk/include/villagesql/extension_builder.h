@@ -263,6 +263,28 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
 }  // namespace detail
 }  // namespace villagesql
 
+
+// VEF_GENERATE_REGISTRATION
+//
+// Creates a _vef_do_register() helper that performs extension registration.
+// Use this when you need to customize vef_register behavior (e.g., to patch
+// descriptors after registration for testing). Otherwise use
+// VEF_GENERATE_ENTRY_POINTS which generates the full extern "C" entry points.
+
+#define VEF_GENERATE_REGISTRATION(ext)                                       \
+  namespace {                                                                \
+  vef_registration_t _vef_reg;                                               \
+  bool _vef_reg_initialized = false;                                         \
+  }                                                                          \
+                                                                             \
+  static vef_registration_t *_vef_do_register(vef_register_arg_t *arg) {     \
+    using namespace villagesql::extension_builder;                           \
+    static constexpr auto kExt = (ext);                                      \
+    return villagesql::detail::vef_register_impl<                            \
+        decltype(kExt), kExt.func_count(), kExt.type_count()>(               \
+        _vef_reg, _vef_reg_initialized, arg, kExt);                          \
+  }
+
 // VEF_GENERATE_ENTRY_POINTS
 //
 // Generates the extern "C" vef_register and vef_unregister functions.
