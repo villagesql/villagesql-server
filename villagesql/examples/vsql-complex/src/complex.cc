@@ -201,24 +201,18 @@ int complex_compare(villagesql::Span<const unsigned char> a,
   return 0;
 }
 
-// Hash VDF: COMPLEX2 -> INT
+// Hash: COMPLEX2 -> size_t
 // Canonicalizes -0 to +0 before hashing so that -0.0 and +0.0 hash to the
 // same bucket. This allows COMPLEX2 to preserve -0 in storage while still
 // working correctly with hash joins and EXCEPT operations.
-void complex2_hash(vef_context_t *ctx, vef_invalue_t *in,
-                   vef_vdf_result_t *out) {
-  auto cx = TryLoadFromInValue(in);
-  if (!cx.has_value()) {
-    ReturnError("argument malformed", out);
-    return;
-  }
-  cx->canonicalize();
+size_t complex2_hash(villagesql::Span<const unsigned char> data) {
+  if (data.size() != kComplexSize) return 0;
+  Complex cx = load_complex(data.data());
+  cx.canonicalize();
 
-  // Hash the canonicalized values
   unsigned char canonical[kComplexSize];
-  store_complex(canonical, *cx);
-  out->int_value = static_cast<long long>(fnv1a_hash(canonical, kComplexSize));
-  out->type = VEF_RESULT_VALUE;
+  store_complex(canonical, cx);
+  return fnv1a_hash(canonical, kComplexSize);
 }
 
 // Arithmetic: complex_add(a, b) -> COMPLEX
@@ -458,11 +452,7 @@ VEF_GENERATE_ENTRY_POINTS(
         // Compare and hash VDFs
         .func(make_type_compare<&complex_compare>("complex_compare", COMPLEX))
         .func(make_type_compare<&complex_compare>("complex2_compare", COMPLEX2))
-        .func(make_func<&complex2_hash>("complex2_hash")
-                  .returns(INT)
-                  .param(COMPLEX2)
-                  .deterministic()
-                  .build())
+        .func(make_type_hash<&complex2_hash>("complex2_hash", COMPLEX2))
         // Arithmetic functions
         .func(make_func<&complex_add_impl>("complex_add")
                   .returns(COMPLEX)

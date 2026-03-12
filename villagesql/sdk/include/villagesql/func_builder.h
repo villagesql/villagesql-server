@@ -382,8 +382,19 @@ using TypeCompareWithParamsFunc =
     int (*)(const std::map<std::string, std::string> &params,
             Span<const unsigned char> a, Span<const unsigned char> b);
 
-// Hash: binary value -> hash code.
+// Extension author signatures for hash.
+// Fixed-size types use the simple form:
+//   size_t my_hash(Span<const unsigned char> data)
+//
+// Variable-size types that need type parameters use:
+//   size_t my_hash(const std::map<std::string, std::string> &params,
+//                  Span<const unsigned char> data)
+//
+// Returns a hash code.
 using TypeHashFunc = size_t (*)(Span<const unsigned char> data);
+using TypeHashWithParamsFunc =
+    size_t (*)(const std::map<std::string, std::string> &params,
+               Span<const unsigned char> data);
 
 // Extension author signatures for intrinsic_default.
 // Called when a NOT NULL custom column is set to NULL with IGNORE (e.g.
@@ -569,10 +580,17 @@ struct TypeCompareVdfWrapper {
   }
 };
 
-// TypeHashVdfWrapper: wraps a TypeHashFunc into a VDF.
+// TypeHashVdfWrapper: wraps either TypeHashFunc or TypeHashWithParamsFunc
+// into a VDF. Uses if-constexpr to detect whether the author function
+// accepts type parameters.
 // VDF signature: (CUSTOM(type)) -> INT.
-template <TypeHashFunc Func>
+template <auto Func>
 struct TypeHashVdfWrapper {
+  static constexpr bool kWithParams =
+      std::is_invocable_v<decltype(Func),
+                          const std::map<std::string, std::string> &,
+                          villagesql::Span<const unsigned char>>;
+
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
     vef_invalue_t arg = get_invalue(ctx, args, 0);
@@ -580,8 +598,17 @@ struct TypeHashVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    result->int_value =
-        static_cast<long long>(Func({arg.bin_value, arg.bin_len}));
+    if constexpr (kWithParams) {
+      std::map<std::string, std::string> params;
+      for (unsigned int i = 0; i < arg.type_params.count; i++) {
+        params.emplace(arg.type_params.keys[i], arg.type_params.values[i]);
+      }
+      result->int_value =
+          static_cast<long long>(Func(params, {arg.bin_value, arg.bin_len}));
+    } else {
+      result->int_value =
+          static_cast<long long>(Func({arg.bin_value, arg.bin_len}));
+    }
     result->type = VEF_RESULT_VALUE;
   }
 };
@@ -1045,7 +1072,8 @@ constexpr StaticFuncDesc<2> make_type_compare(const char *name,
 // Entry point for hash VDFs: (CUSTOM(type_name)) -> INT.
 //   make_type_hash<&my_func>("func_name", TYPE)
 // Register with .func() and reference in type via .hash("func_name").
-template <TypeHashFunc Func>
+// Accepts either TypeHashFunc or TypeHashWithParamsFunc.
+template <auto Func>
 constexpr StaticFuncDesc<1> make_type_hash(const char *name,
                                            const char *type_name) {
   FuncWithMetadata meta{};
