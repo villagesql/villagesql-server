@@ -6,7 +6,7 @@ labels: ["feature request"]
 assignees: 'villagesql-adam'
 assignees: 
   - villagesql-adam
-type: feature_request
+type: feature
 
 ---
 
