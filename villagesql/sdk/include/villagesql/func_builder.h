@@ -367,9 +367,20 @@ using TypeDecodeWithParamsFunc =
     bool (*)(const std::map<std::string, std::string> &params,
              Span<const unsigned char> data, Span<char> out, size_t *out_len);
 
-// Compare: two binary values. Returns <0, 0, or >0.
+// Extension author signatures for compare.
+// Fixed-size types use the simple form:
+//   int my_compare(Span<const unsigned char> a, Span<const unsigned char> b)
+//
+// Variable-size types that need type parameters use:
+//   int my_compare(const std::map<std::string, std::string> &params,
+//                  Span<const unsigned char> a, Span<const unsigned char> b)
+//
+// Returns <0, 0, or >0.
 using TypeCompareFunc = int (*)(Span<const unsigned char> a,
                                 Span<const unsigned char> b);
+using TypeCompareWithParamsFunc =
+    int (*)(const std::map<std::string, std::string> &params,
+            Span<const unsigned char> a, Span<const unsigned char> b);
 
 // Hash: binary value -> hash code.
 using TypeHashFunc = size_t (*)(Span<const unsigned char> data);
@@ -523,10 +534,18 @@ struct TypeDecodeVdfWrapper {
   }
 };
 
-// TypeCompareVdfWrapper: wraps a TypeCompareFunc into a VDF.
+// TypeCompareVdfWrapper: wraps either TypeCompareFunc or
+// TypeCompareWithParamsFunc into a VDF. Uses if-constexpr to detect whether
+// the author function accepts type parameters.
 // VDF signature: (CUSTOM(type), CUSTOM(type)) -> INT.
-template <TypeCompareFunc Func>
+template <auto Func>
 struct TypeCompareVdfWrapper {
+  static constexpr bool kWithParams =
+      std::is_invocable_v<decltype(Func),
+                          const std::map<std::string, std::string> &,
+                          villagesql::Span<const unsigned char>,
+                          villagesql::Span<const unsigned char>>;
+
   static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
                      vef_vdf_result_t *result) {
     vef_invalue_t a = get_invalue(ctx, args, 0);
@@ -535,8 +554,17 @@ struct TypeCompareVdfWrapper {
       result->type = VEF_RESULT_NULL;
       return;
     }
-    result->int_value =
-        Func({a.bin_value, a.bin_len}, {b.bin_value, b.bin_len});
+    if constexpr (kWithParams) {
+      std::map<std::string, std::string> params;
+      for (unsigned int i = 0; i < a.type_params.count; i++) {
+        params.emplace(a.type_params.keys[i], a.type_params.values[i]);
+      }
+      result->int_value =
+          Func(params, {a.bin_value, a.bin_len}, {b.bin_value, b.bin_len});
+    } else {
+      result->int_value =
+          Func({a.bin_value, a.bin_len}, {b.bin_value, b.bin_len});
+    }
     result->type = VEF_RESULT_VALUE;
   }
 };
@@ -1000,7 +1028,8 @@ constexpr StaticFuncDesc<1> make_type_decode(const char *name,
 // Entry point for compare VDFs: (CUSTOM(type_name), CUSTOM(type_name)) -> INT.
 //   make_type_compare<&my_func>("func_name", TYPE)
 // Register with .func() and reference in type via .compare("func_name").
-template <TypeCompareFunc Func>
+// Accepts either TypeCompareFunc or TypeCompareWithParamsFunc.
+template <auto Func>
 constexpr StaticFuncDesc<2> make_type_compare(const char *name,
                                               const char *type_name) {
   FuncWithMetadata meta{};

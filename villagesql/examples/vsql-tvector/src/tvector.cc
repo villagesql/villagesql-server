@@ -38,9 +38,6 @@
 #include <string>
 #include <string_view>
 
-using villagesql::BinaryArg;
-using villagesql::IntResult;
-
 // Little-endian float32 store/load helpers.
 
 void store_float(unsigned char *buf, float val) {
@@ -189,34 +186,33 @@ bool tvector_to_string(const std::map<std::string, std::string> &params,
   return false;
 }
 
-// Compare VDF for ORDER BY, indexes: (TVECTOR, TVECTOR) -> INT
+// Compare: (TVECTOR, TVECTOR) -> INT for ORDER BY, indexes.
 // Lexicographic element-by-element comparison.
-void tvector_compare(BinaryArg in_l, BinaryArg in_r, IntResult out) {
-  auto l = in_l.value();
-  auto r = in_r.value();
-  size_t dim1 = l.size() / 4;
-  size_t dim2 = r.size() / 4;
-  size_t min_dim = dim1 < dim2 ? dim1 : dim2;
+// Dimension is read from type parameters.
+// TODO(villagesql-beta): this state of passing in params and doing a map lookup
+// per call is not going to be the end state. We are doing this first for
+// correctness. Then we will optimize this so that extension authors don't need
+// to do string to int conversions and map lookups. Consider this way of doing
+// things relatively short-lived.
+int tvector_compare(const std::map<std::string, std::string> &params,
+                    villagesql::Span<const unsigned char> a,
+                    villagesql::Span<const unsigned char> b) {
+  auto it = params.find("dimension");
+  if (it == params.end()) return 0;
+  int64_t dimension = strtoll(it->second.c_str(), nullptr, 10);
+  if (dimension <= 0) return 0;
 
-  for (size_t i = 0; i < min_dim; i++) {
-    float v1 = load_float(l.data() + i * 4);
-    float v2 = load_float(r.data() + i * 4);
-    if (v1 < v2) {
-      out.set(-1);
-      return;
-    }
-    if (v1 > v2) {
-      out.set(1);
-      return;
-    }
+  size_t byte_size = static_cast<size_t>(dimension) * 4;
+  if (a.size() != byte_size || b.size() != byte_size) return 0;
+
+  for (size_t i = 0; i < static_cast<size_t>(dimension); i++) {
+    float v1 = load_float(a.data() + i * 4);
+    float v2 = load_float(b.data() + i * 4);
+    if (v1 < v2) return -1;
+    if (v1 > v2) return 1;
   }
 
-  if (dim1 < dim2)
-    out.set(-1);
-  else if (dim1 > dim2)
-    out.set(1);
-  else
-    out.set(0);
+  return 0;
 }
 
 // Implicit default for TVECTOR(N): writes N zero floats into the buffer.
@@ -268,12 +264,7 @@ VEF_GENERATE_ENTRY_POINTS(
                                                      TVECTOR))
         .func(make_type_decode<&tvector_to_string>("tvector_to_string",
                                                    TVECTOR))
-        .func(make_func<&tvector_compare>("tvector_compare")
-                  .returns(INT)
-                  .param(TVECTOR)
-                  .param(TVECTOR)
-                  .deterministic()
-                  .build())
+        .func(make_type_compare<&tvector_compare>("tvector_compare", TVECTOR))
         .func(
             make_int_to_params<&tvector_int_to_params>("tvector_int_to_params"))
         .func(make_resolve_params<&tvector_resolve_params>(

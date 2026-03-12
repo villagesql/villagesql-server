@@ -37,12 +37,10 @@ int CompareOp::invoke(const unsigned char *data1, size_t len1,
     return fn_(data1, len1, data2, len2);
   }
 
+  TypeParameterSlice tp(params_.count(), params_.key_data(),
+                        params_.value_data());
   SpecialVdfCall<IntResult, CustomArg, CustomArg> call(vdf_);
-  call.init(NoInitData{},
-            TypeParameterSlice(params_.count(), params_.key_data(),
-                               params_.value_data()),
-            TypeParameterSlice(params_.count(), params_.key_data(),
-                               params_.value_data()));
+  call.init(NoInitData{}, tp, tp);
   auto result = call.invoke(BinarySlice{data1, len1}, BinarySlice{data2, len2});
   if (!result) {
     LogVSQL(ERROR_LEVEL, "compare VDF '%s' returned error: %s", call.name(),

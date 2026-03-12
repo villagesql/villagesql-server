@@ -26,6 +26,7 @@
 #include "storage/innobase/include/ha_prototypes.h"
 #include "storage/innobase/include/mem0mem.h"
 #include "villagesql/include/error.h"
+#include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/types/util.h"
 

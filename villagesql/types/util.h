@@ -139,7 +139,6 @@ extern bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc);
 // Overload for TypeContext with binary data
 inline int CompareCustomType(const TypeContext &tc, const uchar *data1,
                              size_t len1, const uchar *data2, size_t len2) {
-  assert(tc.descriptor());
   return tc.compare_op().invoke(data1, len1, data2, len2);
 }
 

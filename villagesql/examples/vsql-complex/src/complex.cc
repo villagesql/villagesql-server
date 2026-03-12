@@ -185,35 +185,20 @@ bool complex_to_string(villagesql::Span<const unsigned char> data,
   return false;
 }
 
-// Compare VDF for ORDER BY, indexes: (COMPLEX, COMPLEX) -> INT
-void complex_compare(vef_context_t *ctx, vef_invalue_t *in_l,
-                     vef_invalue_t *in_r, vef_vdf_result_t *out) {
-  const auto lhs = TryLoadFromInValue(in_l);
-  if (!lhs.has_value()) {
-    ReturnError("left argument malformed", out);
-    return;
-  }
-
-  const auto rhs = TryLoadFromInValue(in_r);
-  if (!rhs.has_value()) {
-    ReturnError("right argument malformed", out);
-    return;
-  }
+// Compare: (COMPLEX, COMPLEX) -> INT for ORDER BY, indexes
+int complex_compare(villagesql::Span<const unsigned char> a,
+                    villagesql::Span<const unsigned char> b) {
+  if (a.size() != kComplexSize || b.size() != kComplexSize) return 0;
+  Complex lhs = load_complex(a.data());
+  Complex rhs = load_complex(b.data());
 
   // Compare real parts first
-  if (lhs->re < rhs->re)
-    out->int_value = -1;
-  else if (lhs->re > rhs->re)
-    out->int_value = 1;
+  if (lhs.re < rhs.re) return -1;
+  if (lhs.re > rhs.re) return 1;
   // Real parts equal, compare imaginary parts
-  else if (lhs->im < rhs->im)
-    out->int_value = -1;
-  else if (lhs->im > rhs->im)
-    out->int_value = 1;
-  else
-    out->int_value = 0;  // Both parts equal
-
-  out->type = VEF_RESULT_VALUE;
+  if (lhs.im < rhs.im) return -1;
+  if (lhs.im > rhs.im) return 1;
+  return 0;
 }
 
 // Hash VDF: COMPLEX2 -> INT
@@ -471,18 +456,8 @@ VEF_GENERATE_ENTRY_POINTS(
         .func(make_type_decode<&complex_to_string>("complex2_to_string",
                                                    COMPLEX2))
         // Compare and hash VDFs
-        .func(make_func<&complex_compare>("complex_compare")
-                  .returns(INT)
-                  .param(COMPLEX)
-                  .param(COMPLEX)
-                  .deterministic()
-                  .build())
-        .func(make_func<&complex_compare>("complex2_compare")
-                  .returns(INT)
-                  .param(COMPLEX2)
-                  .param(COMPLEX2)
-                  .deterministic()
-                  .build())
+        .func(make_type_compare<&complex_compare>("complex_compare", COMPLEX))
+        .func(make_type_compare<&complex_compare>("complex2_compare", COMPLEX2))
         .func(make_func<&complex2_hash>("complex2_hash")
                   .returns(INT)
                   .param(COMPLEX2)
