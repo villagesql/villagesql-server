@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1994, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -129,6 +130,17 @@ static inline mem_heap_t *mem_heap_create(ulint size, ut::Location loc,
 /** Frees the space occupied by a memory heap.
 @param[in]      heap    Heap to be freed */
 static inline void mem_heap_free(mem_heap_t *heap);
+
+/** Register a cleanup callback to be called when this heap is freed or emptied.
+Callbacks are called in reverse order of registration (LIFO), before the
+memory is freed. The callback node is allocated on the heap itself.
+@param[in]      heap    memory heap
+@param[in]      fn      function to call, must not be nullptr
+@param[in]      arg     argument to pass to fn, may be nullptr
+@return false on success, true if allocation failed (only possible for
+MEM_HEAP_BTR_SEARCH type heaps) */
+static inline bool mem_heap_register_cleanup(mem_heap_t *heap,
+                                             void (*fn)(void *), void *arg);
 
 /** Allocates and zero-fills n bytes of memory from a memory heap.
 @param[in]      heap    memory heap
@@ -298,6 +310,14 @@ void mem_heap_validate(const mem_heap_t *heap);
 
 struct buf_block_t;
 
+// Cleanup callback node, allocated on the heap itself.
+// Forms a singly-linked list of callbacks to run before memory is freed.
+struct mem_heap_cleanup_t {
+  void (*fn)(void *);        // Function to call.
+  void *arg;                 // Argument to pass to fn.
+  mem_heap_cleanup_t *next;  // Next callback in the list.
+};
+
 /** The info structure stored at the beginning of a heap block */
 struct mem_block_info_t {
   /** Magic number for debugging. */
@@ -336,6 +356,10 @@ struct mem_block_info_t {
   /* if this block has been allocated from the buffer pool, this contains the
   buf_block_t handle; otherwise, this is NULL */
   buf_block_t *buf_block;
+
+  // Head of cleanup callback list (only used in heap root block).
+  // Callbacks are called in LIFO order when the heap is freed or emptied.
+  mem_heap_cleanup_t *cleanup_callbacks;
 };
 /* We use the UT_LIST_BASE_NODE_T_EXTERN instead of simpler UT_LIST_BASE_NODE_T
 because DevStudio12.6 initializes the pointer-to-member offset to 0 otherwise.*/

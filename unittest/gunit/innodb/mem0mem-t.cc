@@ -1,4 +1,5 @@
 /* Copyright (c) 2013, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -25,6 +26,7 @@
 
 #include <gtest/gtest.h>
 #include <stddef.h>
+#include <vector>
 
 #include "sql/handler.h"
 #include "storage/innobase/include/mem0mem.h"
@@ -130,6 +132,95 @@ TEST_F(mem0mem, memheapreplace) {
   EXPECT_TRUE(mem_heap_is_top(heap, p5, p5_size));
 
   mem_heap_free(heap);
+}
+
+// Test that cleanup callbacks run on mem_heap_free.
+TEST_F(mem0mem, cleanupCallbacksRunOnFree) {
+  mem_heap_t *heap = mem_heap_create(512, UT_LOCATION_HERE);
+
+  int counter = 0;
+  auto increment = [](void *arg) { (*static_cast<int *>(arg))++; };
+
+  EXPECT_FALSE(mem_heap_register_cleanup(heap, increment, &counter));
+  EXPECT_FALSE(mem_heap_register_cleanup(heap, increment, &counter));
+  EXPECT_FALSE(mem_heap_register_cleanup(heap, increment, &counter));
+
+  EXPECT_EQ(counter, 0);
+  mem_heap_free(heap);
+  EXPECT_EQ(counter, 3);
+}
+
+// Test that cleanup callbacks run in LIFO order.
+TEST_F(mem0mem, cleanupCallbacksLIFOOrder) {
+  mem_heap_t *heap = mem_heap_create(512, UT_LOCATION_HERE);
+
+  std::vector<int> order;
+  struct Ctx {
+    std::vector<int> *vec;
+    int id;
+  };
+
+  auto record = [](void *arg) {
+    auto *ctx = static_cast<Ctx *>(arg);
+    ctx->vec->push_back(ctx->id);
+  };
+
+  // Allocate contexts on the heap so they live until free.
+  auto *c1 = static_cast<Ctx *>(mem_heap_alloc(heap, sizeof(Ctx)));
+  auto *c2 = static_cast<Ctx *>(mem_heap_alloc(heap, sizeof(Ctx)));
+  auto *c3 = static_cast<Ctx *>(mem_heap_alloc(heap, sizeof(Ctx)));
+  c1->vec = &order;
+  c1->id = 1;
+  c2->vec = &order;
+  c2->id = 2;
+  c3->vec = &order;
+  c3->id = 3;
+
+  mem_heap_register_cleanup(heap, record, c1);
+  mem_heap_register_cleanup(heap, record, c2);
+  mem_heap_register_cleanup(heap, record, c3);
+
+  mem_heap_free(heap);
+  ASSERT_EQ(order.size(), 3u);
+  EXPECT_EQ(order[0], 3);
+  EXPECT_EQ(order[1], 2);
+  EXPECT_EQ(order[2], 1);
+}
+
+// Test that cleanup callbacks run on mem_heap_empty.
+TEST_F(mem0mem, cleanupCallbacksRunOnEmpty) {
+  mem_heap_t *heap = mem_heap_create(512, UT_LOCATION_HERE);
+
+  int counter = 0;
+  auto increment = [](void *arg) { (*static_cast<int *>(arg))++; };
+
+  mem_heap_register_cleanup(heap, increment, &counter);
+  mem_heap_register_cleanup(heap, increment, &counter);
+
+  EXPECT_EQ(counter, 0);
+  mem_heap_empty(heap);
+  EXPECT_EQ(counter, 2);
+
+  // After empty, callbacks should not fire again on free.
+  mem_heap_free(heap);
+  EXPECT_EQ(counter, 2);
+}
+
+// Test that new callbacks can be registered after empty.
+TEST_F(mem0mem, cleanupCallbacksReregisterAfterEmpty) {
+  mem_heap_t *heap = mem_heap_create(512, UT_LOCATION_HERE);
+
+  int counter = 0;
+  auto increment = [](void *arg) { (*static_cast<int *>(arg))++; };
+
+  mem_heap_register_cleanup(heap, increment, &counter);
+  mem_heap_empty(heap);
+  EXPECT_EQ(counter, 1);
+
+  // Register new callbacks after empty.
+  mem_heap_register_cleanup(heap, increment, &counter);
+  mem_heap_free(heap);
+  EXPECT_EQ(counter, 2);
 }
 
 }  // namespace innodb_mem0mem_unittest

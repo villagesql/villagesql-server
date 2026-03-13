@@ -63,6 +63,29 @@ void mem_heap_free_block_free(mem_heap_t *heap); /*!< in: heap */
  MEM_HEAP_BTR_SEARCH type heaps) */
 mem_block_t *mem_heap_add_block(mem_heap_t *heap, ulint n);
 
+/** Run all registered cleanup callbacks in LIFO order and reset the list.
+@param[in,out]  heap    memory heap */
+static inline void mem_heap_run_cleanup(mem_heap_t *heap) {
+  for (mem_heap_cleanup_t *cb = heap->cleanup_callbacks; cb != nullptr;
+       cb = cb->next) {
+    cb->fn(cb->arg);
+  }
+  heap->cleanup_callbacks = nullptr;
+}
+
+static inline bool mem_heap_register_cleanup(mem_heap_t *heap,
+                                             void (*fn)(void *), void *arg) {
+  ut_ad(fn != nullptr);
+  auto *cb = static_cast<mem_heap_cleanup_t *>(
+      mem_heap_alloc(heap, sizeof(mem_heap_cleanup_t)));
+  if (cb == nullptr) return true;
+  cb->fn = fn;
+  cb->arg = arg;
+  cb->next = heap->cleanup_callbacks;
+  heap->cleanup_callbacks = cb;
+  return false;
+}
+
 static inline void mem_block_set_len(mem_block_t *block, ulint len) {
   ut_ad(len > 0);
 
@@ -276,6 +299,9 @@ static inline void mem_heap_free_heap_top(mem_heap_t *heap, byte *old_top) {
 The first memory block of the heap is not freed.
 @param[in]      heap    heap to empty */
 static inline void mem_heap_empty(mem_heap_t *heap) {
+  // Run cleanup callbacks in LIFO order while memory is still valid.
+  mem_heap_run_cleanup(heap);
+
   mem_heap_free_heap_top(heap, (byte *)heap + mem_block_get_start(heap));
 #ifndef UNIV_HOTBACKUP
 #ifndef UNIV_LIBRARY
@@ -451,6 +477,9 @@ static inline void mem_heap_free(mem_heap_t *heap) {
   mem_block_t *prev_block;
 
   ut_d(mem_block_validate(heap));
+
+  // Run cleanup callbacks in LIFO order while memory is still valid.
+  mem_heap_run_cleanup(heap);
 
   block = UT_LIST_GET_LAST(heap->base);
 
