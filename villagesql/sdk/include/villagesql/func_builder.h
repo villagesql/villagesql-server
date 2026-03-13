@@ -787,10 +787,9 @@ struct FuncBuilder {
   vef_postrun_func_t postrun_;
   bool deterministic_;
 
-  constexpr FuncBuilder<Func, NumParams> returns(const char *t) const {
-    FuncBuilder<Func, NumParams> copy = *this;
-    copy.return_type_ = t;
-    return copy;
+  constexpr FuncBuilder<Func, NumParams> &returns(const char *t) {
+    return_type_ = t;
+    return *this;
   }
 
   constexpr FuncBuilder<Func, NumParams + 1> param(const char *t) const {
@@ -808,30 +807,26 @@ struct FuncBuilder {
     return next;
   }
 
-  constexpr FuncBuilder<Func, NumParams> buffer_size(size_t s) const {
-    FuncBuilder<Func, NumParams> copy = *this;
-    copy.buffer_size_ = s;
-    return copy;
+  constexpr FuncBuilder<Func, NumParams> &buffer_size(size_t s) {
+    buffer_size_ = s;
+    return *this;
   }
 
-  constexpr FuncBuilder<Func, NumParams> deterministic(bool d = true) const {
-    FuncBuilder<Func, NumParams> copy = *this;
-    copy.deterministic_ = d;
-    return copy;
+  constexpr FuncBuilder<Func, NumParams> &deterministic(bool d = true) {
+    deterministic_ = d;
+    return *this;
   }
 
   template <vef_prerun_func_t Hook>
-  constexpr FuncBuilder<Func, NumParams> prerun() const {
-    FuncBuilder<Func, NumParams> copy = *this;
-    copy.prerun_ = Hook;
-    return copy;
+  constexpr FuncBuilder<Func, NumParams> &prerun() {
+    prerun_ = Hook;
+    return *this;
   }
 
   template <vef_postrun_func_t Hook>
-  constexpr FuncBuilder<Func, NumParams> postrun() const {
-    FuncBuilder<Func, NumParams> copy = *this;
-    copy.postrun_ = Hook;
-    return copy;
+  constexpr FuncBuilder<Func, NumParams> &postrun() {
+    postrun_ = Hook;
+    return *this;
   }
 
   // Finalize the function definition and produce the StaticFuncDesc

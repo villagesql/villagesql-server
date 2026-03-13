@@ -60,82 +60,69 @@ class TypeBuilder {
         resolve_params_vdf_name_(nullptr),
         intrinsic_default_vdf_name_(nullptr) {}
 
-  constexpr TypeBuilder persisted_length(int64_t len) const {
-    TypeBuilder copy = *this;
-    copy.persisted_length_ = len;
-    return copy;
+  constexpr TypeBuilder &persisted_length(int64_t len) {
+    persisted_length_ = len;
+    return *this;
   }
 
-  constexpr TypeBuilder max_decode_buffer_length(int64_t len) const {
-    TypeBuilder copy = *this;
-    copy.max_decode_buffer_length_ = len;
-    return copy;
+  constexpr TypeBuilder &max_decode_buffer_length(int64_t len) {
+    max_decode_buffer_length_ = len;
+    return *this;
   }
 
-  constexpr TypeBuilder encode(vef_encode_func_t f) const {
-    TypeBuilder copy = *this;
-    copy.encode_ = f;
-    return copy;
+  constexpr TypeBuilder &encode(vef_encode_func_t f) {
+    encode_ = f;
+    return *this;
   }
 
-  constexpr TypeBuilder encode(const char *vdf_name) const {
-    TypeBuilder copy = *this;
-    copy.encode_vdf_name_ = vdf_name;
-    return copy;
+  constexpr TypeBuilder &encode(const char *vdf_name) {
+    encode_vdf_name_ = vdf_name;
+    return *this;
   }
 
-  constexpr TypeBuilder decode(vef_decode_func_t f) const {
-    TypeBuilder copy = *this;
-    copy.decode_ = f;
-    return copy;
+  constexpr TypeBuilder &decode(vef_decode_func_t f) {
+    decode_ = f;
+    return *this;
   }
 
-  constexpr TypeBuilder decode(const char *vdf_name) const {
-    TypeBuilder copy = *this;
-    copy.decode_vdf_name_ = vdf_name;
-    return copy;
+  constexpr TypeBuilder &decode(const char *vdf_name) {
+    decode_vdf_name_ = vdf_name;
+    return *this;
   }
 
-  constexpr TypeBuilder compare(vef_compare_func_t f) const {
-    TypeBuilder copy = *this;
-    copy.compare_ = f;
-    return copy;
+  constexpr TypeBuilder &compare(vef_compare_func_t f) {
+    compare_ = f;
+    return *this;
   }
 
-  constexpr TypeBuilder compare(const char *vdf_name) const {
-    TypeBuilder copy = *this;
-    copy.compare_vdf_name_ = vdf_name;
-    return copy;
+  constexpr TypeBuilder &compare(const char *vdf_name) {
+    compare_vdf_name_ = vdf_name;
+    return *this;
   }
 
-  constexpr TypeBuilder hash(vef_hash_func_t f) const {
-    TypeBuilder copy = *this;
-    copy.hash_ = f;
-    return copy;
+  constexpr TypeBuilder &hash(vef_hash_func_t f) {
+    hash_ = f;
+    return *this;
   }
 
-  constexpr TypeBuilder hash(const char *vdf_name) const {
-    TypeBuilder copy = *this;
-    copy.hash_vdf_name_ = vdf_name;
-    return copy;
+  constexpr TypeBuilder &hash(const char *vdf_name) {
+    hash_vdf_name_ = vdf_name;
+    return *this;
   }
 
-  constexpr TypeBuilder intrinsic_default(const char *vdf_name) const {
-    TypeBuilder copy = *this;
-    copy.intrinsic_default_vdf_name_ = vdf_name;
-    return copy;
+  constexpr TypeBuilder &intrinsic_default(const char *vdf_name) {
+    intrinsic_default_vdf_name_ = vdf_name;
+    return *this;
   }
 
-  constexpr TypeBuilder int_to_params(const char *vdf_name) const {
-    TypeBuilder copy = *this;
-    copy.int_to_params_vdf_name_ = vdf_name;
-    return copy;
+  constexpr TypeBuilder &int_to_params(const char *vdf_name) {
+    int_to_params_vdf_name_ = vdf_name;
+    return *this;
   }
 
-  constexpr TypeBuilder resolve_params(const char *vdf_name) const {
-    TypeBuilder copy = *this;
-    copy.resolve_params_vdf_name_ = vdf_name;
-    return copy;
+  constexpr TypeBuilder &resolve_params(const char *vdf_name) {
+    resolve_params_vdf_name_ = vdf_name;
+    return *this;
   }
 
   // Build the final vef_type_desc_t. Protocol is set automatically:
