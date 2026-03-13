@@ -199,9 +199,10 @@ class SystemTableMap {
 
   // ===== Entry acquisition with reference counting =====
 
-  // Acquire an entry with reference counting tied to a MEM_ROOT's lifecycle.
-  // Returns a pointer that remains valid until cleanup_scope is cleared.
-  // This allows safe use of the pointer beyond the VictionaryClient lock scope.
+  // Acquire an entry with reference counting tied to a cleanup scope's
+  // lifecycle. CleanupScope can be MEM_ROOT (sql layer) or mem_heap_t
+  // (InnoDB). Returns a pointer that remains valid until cleanup_scope is
+  // cleared/freed.
   //
   // The returned pointer is kept alive by incrementing the entry's reference
   // count (via shared_ptr copy). When cleanup_scope is cleared, a cleanup
@@ -209,13 +210,15 @@ class SystemTableMap {
   //
   // REQUIRES: Caller must hold at least read lock.
   // Returns: Pointer to the entry, or nullptr if not found or on error.
+  template <typename CleanupScope>
   const EntryType *acquire(const typename EntryType::key_type &key,
-                           MEM_ROOT &cleanup_scope) {
+                           CleanupScope &cleanup_scope) {
     return acquire(key.str(), cleanup_scope);
   }
 
+  template <typename CleanupScope>
   const EntryType *acquire(const std::string &key_str,
-                           MEM_ROOT &cleanup_scope) {
+                           CleanupScope &cleanup_scope) {
     assert_read_or_write_lock_held();
 
     auto it = m_committed.find(key_str);
@@ -231,7 +234,7 @@ class SystemTableMap {
     auto *ref_holder = new std::shared_ptr<EntryType>(it->second);
 
     // Register cleanup callback to delete the copy (decrements refcount)
-    if (cleanup_scope.register_cleanup(&release_shared_ptr_ref, ref_holder)) {
+    if (register_cleanup(cleanup_scope, &release_shared_ptr_ref, ref_holder)) {
       // Failed to register cleanup - delete the holder to avoid leak
       delete ref_holder;
       return nullptr;
@@ -281,9 +284,9 @@ class SystemTableMap {
   //
   // REQUIRES: Caller must hold write lock (needed to potentially insert).
   // Returns: Pointer to the entry, or nullptr on error.
-  template <typename... Args>
+  template <typename CleanupScope, typename... Args>
   const EntryType *acquire_or_create(const typename EntryType::key_type &key,
-                                     MEM_ROOT &cleanup_scope,
+                                     CleanupScope &cleanup_scope,
                                      Args &&...create_args) {
     assert_write_lock_held();
 
@@ -308,7 +311,7 @@ class SystemTableMap {
 
     // Acquire the entry (existing or newly created)
     auto *ref_holder = new std::shared_ptr<EntryType>(it->second);
-    if (cleanup_scope.register_cleanup(&release_shared_ptr_ref, ref_holder)) {
+    if (register_cleanup(cleanup_scope, &release_shared_ptr_ref, ref_holder)) {
       delete ref_holder;
       return nullptr;
     }
@@ -602,8 +605,9 @@ class SystemTableMap {
   mysql_rwlock_t *m_parent_lock;
 
   // Cleanup callback for releasing shared_ptr references.
-  // Called by MEM_ROOT when it is cleared; deletes the heap-allocated
-  // shared_ptr copy, which decrements the reference count.
+  // Called when the cleanup scope (MEM_ROOT or mem_heap_t) is cleared/freed;
+  // deletes the heap-allocated shared_ptr copy, which decrements the
+  // reference count.
   static void release_shared_ptr_ref(void *arg) {
     delete static_cast<std::shared_ptr<EntryType> *>(arg);
   }

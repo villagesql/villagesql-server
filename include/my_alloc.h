@@ -458,6 +458,13 @@ struct MEM_ROOT {
   CleanupCallback *m_cleanup_callbacks = nullptr;
 };
 
+// Free function overload for generic cleanup registration.
+// Enables template code to call register_cleanup(scope, fn, arg) uniformly
+// across MEM_ROOT and mem_heap_t.
+inline bool register_cleanup(MEM_ROOT &scope, void (*fn)(void *), void *arg) {
+  return scope.register_cleanup(fn, arg);
+}
+
 /**
  * Allocate an object of the given type. Use like this:
  *

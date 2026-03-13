@@ -86,6 +86,14 @@ static inline bool mem_heap_register_cleanup(mem_heap_t *heap,
   return false;
 }
 
+// Free function overload for generic cleanup registration.
+// Enables template code to call register_cleanup(scope, fn, arg) uniformly
+// across MEM_ROOT and mem_heap_t.
+static inline bool register_cleanup(mem_heap_t &scope, void (*fn)(void *),
+                                    void *arg) {
+  return mem_heap_register_cleanup(&scope, fn, arg);
+}
+
 static inline void mem_block_set_len(mem_block_t *block, ulint len) {
   ut_ad(len > 0);
 
