@@ -1,7 +1,6 @@
 /*****************************************************************************
 
 Copyright (c) 1994, 2025, Oracle and/or its affiliates.
-Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -316,7 +315,6 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n,
 
   block->buf_block = buf_block;
   block->free_block_ptr = nullptr;
-  block->cleanup_callbacks = nullptr;
 
 #else  /* !UNIV_LIBRARY && !UNIV_HOTBACKUP */
   len = MEM_BLOCK_HEADER_SIZE + MEM_SPACE_NEEDED(n);
@@ -324,7 +322,6 @@ mem_block_t *mem_heap_create_block(mem_heap_t *heap, ulint n,
       ut::malloc_withkey(UT_NEW_THIS_FILE_PSI_KEY, len));
   ut_a(block);
   block->free_block_ptr = nullptr;
-  block->cleanup_callbacks = nullptr;
 #endif /* !UNIV_LIBRARY && !UNIV_HOTBACKUP */
 
   ut_d(ut_strlcpy_rev(block->file_name, file_name, sizeof(block->file_name)));
