@@ -78,22 +78,19 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
     return false;
   }
 
+  std::string table_name(share.table_name.str, share.table_name.length);
+  std::string column_name(field->field_name);
+  ColumnKey col_key(db_name, table_name, column_name);
+
   auto &vclient = VictionaryClient::instance();
   if (!vclient.is_initialized()) {
     // Too early to perform a lookup. We must be starting up.
     return false;
   }
 
-  std::string table_name(share.table_name.str, share.table_name.length);
-  std::string column_name(field->field_name);
-
-  // Create ColumnEntry to get normalized key
-  ColumnEntry lookup_entry(ColumnKey(db_name, table_name, column_name));
-  auto key = lookup_entry.key();
-
   auto guard = vclient.get_write_lock();
   const auto &columns = vclient.columns();
-  const ColumnEntry *column_entry = columns.get(thd, key.str());
+  const ColumnEntry *column_entry = columns.get(thd, col_key.str());
   if (!column_entry) return false;
 
   // This is a custom type - cross-reference with TypeDescriptor.
@@ -1126,7 +1123,6 @@ bool CheckCustomTypeUsage(Item *item, THD *thd) {
 
   return false;  // Continue walking
 }
-
 
 void AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
                                      List<Create_field> &create_fields) {
