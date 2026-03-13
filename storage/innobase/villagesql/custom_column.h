@@ -17,6 +17,7 @@
 #ifndef STORAGE_INNOBASE_VILLAGESQL_CUSTOM_COLUMN_H_
 #define STORAGE_INNOBASE_VILLAGESQL_CUSTOM_COLUMN_H_
 
+#include <memory>
 #include <utility>
 #include "villagesql/types/type_op.h"
 
@@ -34,14 +35,19 @@ class Column;
 }  // namespace dd
 
 namespace villagesql {
+
+class TypeContext;
+
 namespace innodb {
 
 class Custom_column {
  public:
   using Info = std::pair<Custom_column *, bool>;
 
-  explicit Custom_column(CompareOp compare_op)
-      : compare_op_(std::move(compare_op)) {}
+  Custom_column(CompareOp compare_op,
+                std::shared_ptr<const TypeContext> type_context)
+      : compare_op_(std::move(compare_op)),
+        type_context_(std::move(type_context)) {}
 
   // Compare two values using the registered compare implementation.
   int compare(const unsigned char *data1, size_t len1,
@@ -53,9 +59,17 @@ class Custom_column {
   // Get custom column descriptor and ascending flag from index field.
   static Info get_from_field(const dict_field_t *field);
 
+  // Get the TypeContext for this custom column.
+  const TypeContext *type_context() const { return type_context_.get(); }
+
   // Load innodb column's(dict_col_t) custom column descriptor.
   static void load(dict_table_t *table, dict_col_t *col, const Field *sql_field,
                    const dd::Column *dd_col);
+
+  // Free all custom column descriptors for a table.
+  // Must be called before the table's heap is freed (from
+  // dict_mem_table_free).
+  static void free_all(dict_table_t *table);
 
   // load_all() is called during crash recovery when InnoDB
   // resurrects tables from the data dictionary cache. Specifically:
@@ -75,6 +89,7 @@ class Custom_column {
 
  private:
   CompareOp compare_op_;
+  std::shared_ptr<const TypeContext> type_context_;
 };
 }  // namespace innodb
 }  // namespace villagesql

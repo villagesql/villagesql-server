@@ -145,6 +145,12 @@ void dict_mem_table_free(dict_table_t *table) /*!< in: table */
   }
 #endif /* !UNIV_HOTBACKUP */
 
+#ifndef UNIV_HOTBACKUP
+#ifndef UNIV_LIBRARY
+  villagesql::innodb::Custom_column::free_all(table);
+#endif /* !UNIV_LIBRARY */
+#endif /* !UNIV_HOTBACKUP */
+
   mem_heap_free(table->heap);
 }
 

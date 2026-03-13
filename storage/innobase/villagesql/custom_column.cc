@@ -24,6 +24,7 @@
 #include "storage/innobase/include/dict0dict.h"
 #include "storage/innobase/include/dict0mem.h"
 #include "storage/innobase/include/ha_prototypes.h"
+#include "storage/innobase/include/mem0mem.h"
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/victionary_client.h"
@@ -60,14 +61,22 @@ void Custom_column::load(dict_table_t *table, dict_col_t *col,
 
   if (!sql_field->has_type_context()) return;
 
-  void *mem = static_cast<Custom_column *>(
-      mem_heap_zalloc(table->heap, sizeof(Custom_column)));
+  auto tc = AcquireTypeContextClientManaged(sql_field->get_type_context());
+  if (!tc) return;
 
-  static_assert(std::is_trivially_destructible<Custom_column>::value,
-                "Custom_column must be trivially destructible");
+  void *mem = mem_heap_alloc(table->heap, sizeof(Custom_column));
+  auto op = tc->descriptor()->compare_op();
+  col->custom_column = new (mem) Custom_column(op, std::move(tc));
+}
 
-  col->custom_column = new (mem)
-      Custom_column(sql_field->get_type_context()->descriptor()->compare_op());
+void Custom_column::free_all(dict_table_t *table) {
+  for (ulint i = 0; i < table->n_def; i++) {
+    dict_col_t *col = &table->cols[i];
+    if (col->custom_column) {
+      col->custom_column->~Custom_column();
+      col->custom_column = nullptr;
+    }
+  }
 }
 
 void Custom_column::load_all(dict_table_t *table) {

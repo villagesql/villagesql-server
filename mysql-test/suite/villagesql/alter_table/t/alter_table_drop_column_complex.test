@@ -24,6 +24,13 @@ SELECT * FROM t1;
 
 eval ALTER TABLE t1 DROP COLUMN value, ALGORITHM = $algo;
 
+# We break from the other tests that uninstall as the last
+# step, because once we drop the column, we don't need the
+# extension, and this allows us to check that the reference
+# to the extension (via the TypeContext) is not being held
+# by the Custom_column (via the dict_table_t).
+--source include/villagesql/uninstall_complex_extension.inc
+
 --source include/villagesql/query_custom_columns.inc
 
 SHOW CREATE TABLE t1;
@@ -34,4 +41,3 @@ DROP TABLE t1;
 --source include/villagesql/query_custom_columns.inc
 
 --source include/villagesql/binlog_check_end.inc
---source include/villagesql/uninstall_complex_extension.inc
