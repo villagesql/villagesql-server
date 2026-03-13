@@ -42,6 +42,33 @@ namespace type_builder {
 //
 // TODO(villagesql-beta): allow VDFs that aren't directly callable from SQL.
 
+// Wrapper around the ABI type descriptor that owns the storage interface
+// structure and ensures vef_desc.storage_intf points to the local copy
+// after copy/move operations.
+struct TypeDescriptor {
+  vef_type_desc_t vef_desc{};
+  vef_type_storage_intf_t storage_intf{};
+
+  constexpr TypeDescriptor() = default;
+
+  constexpr TypeDescriptor(const TypeDescriptor &o)
+      : vef_desc(o.vef_desc), storage_intf(o.storage_intf) {
+    if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
+  }
+
+  constexpr TypeDescriptor(TypeDescriptor &&o)
+      : vef_desc(o.vef_desc), storage_intf(o.storage_intf) {
+    if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
+  }
+
+  constexpr TypeDescriptor &operator=(const TypeDescriptor &o) {
+    vef_desc = o.vef_desc;
+    storage_intf = o.storage_intf;
+    if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
+    return *this;
+  }
+};
+
 class TypeBuilder {
  public:
   constexpr explicit TypeBuilder(const char *name)
@@ -58,7 +85,8 @@ class TypeBuilder {
         hash_vdf_name_(nullptr),
         int_to_params_vdf_name_(nullptr),
         resolve_params_vdf_name_(nullptr),
-        intrinsic_default_vdf_name_(nullptr) {}
+        intrinsic_default_vdf_name_(nullptr),
+        storage_intf_{} {}
 
   constexpr TypeBuilder &persisted_length(int64_t len) {
     persisted_length_ = len;
@@ -125,20 +153,29 @@ class TypeBuilder {
     return *this;
   }
 
+  constexpr TypeBuilder column_storage(
+      const vef_type_storage_intf_t &intf) const {
+    TypeBuilder copy = *this;
+    copy.storage_intf_ = intf;
+    return copy;
+  }
+
   // Build the final vef_type_desc_t. Protocol is set automatically:
   // VEF_PROTOCOL_2 if any protocol-2 field is set, otherwise VEF_PROTOCOL_1.
   // ExtensionBuilder::type() propagates this up to the extension's
   // min_protocol, so the registration fails if the server offers a lower
   // protocol.
-  constexpr vef_type_desc_t build() const {
+  constexpr TypeDescriptor build() const {
     const bool needs_v2 =
         encode_vdf_name_ != nullptr || decode_vdf_name_ != nullptr ||
         compare_vdf_name_ != nullptr || hash_vdf_name_ != nullptr ||
         int_to_params_vdf_name_ != nullptr ||
         resolve_params_vdf_name_ != nullptr ||
-        intrinsic_default_vdf_name_ != nullptr;
+        intrinsic_default_vdf_name_ != nullptr || storage_intf_.version != 0;
     const vef_protocol_t protocol = needs_v2 ? VEF_PROTOCOL_2 : VEF_PROTOCOL_1;
-    return vef_type_desc_t{
+    TypeDescriptor desc{};
+    desc.storage_intf = storage_intf_;
+    desc.vef_desc = vef_type_desc_t{
         protocol,
         name_,
         persisted_length_,
@@ -154,7 +191,9 @@ class TypeBuilder {
         int_to_params_vdf_name_,
         resolve_params_vdf_name_,
         intrinsic_default_vdf_name_,
+        storage_intf_.version != 0 ? &desc.storage_intf : nullptr,
     };
+    return desc;
   }
 
  private:
@@ -172,6 +211,7 @@ class TypeBuilder {
   const char *int_to_params_vdf_name_;
   const char *resolve_params_vdf_name_;
   const char *intrinsic_default_vdf_name_;
+  vef_type_storage_intf_t storage_intf_;
 };
 
 // Entry point: make_type("name")

@@ -32,12 +32,14 @@
 #include <utility>
 
 #include <villagesql/func_builder.h>
+#include <villagesql/storage_builder.h>
 #include <villagesql/type_builder.h>
 
 namespace villagesql {
 namespace extension_builder {
 
 using namespace func_builder;
+using namespace storage_builder;
 using namespace type_builder;
 
 // =============================================================================
@@ -66,8 +68,9 @@ struct ExtensionBuilder {
   // Add a type (returns new builder with type appended).
   // If the type requires a higher protocol than min_protocol_, min_protocol_
   // is raised automatically.
-  constexpr auto type(const vef_type_desc_t &t) const {
-    auto new_types = std::tuple_cat(types_, std::make_tuple(t));
+  constexpr auto type(const TypeDescriptor &type) const {
+    auto new_types = std::tuple_cat(types_, std::make_tuple(type));
+    const auto &t = type.vef_desc;
     const vef_protocol_t new_min =
         t.protocol > min_protocol_ ? t.protocol : min_protocol_;
     return ExtensionBuilder<FuncTuple, decltype(new_types)>{
@@ -134,7 +137,8 @@ constexpr auto make_extension(std::string_view name, std::string_view version) {
   template <typename Ext, size_t... Is>                                        \
   static void _vef_fill_type_ptrs_impl(vef_type_desc_t **arr, const Ext &e,    \
                                        std::index_sequence<Is...>) {           \
-    ((arr[Is] = const_cast<vef_type_desc_t *>(&e.template type_at<Is>())),     \
+    ((arr[Is] =                                                                \
+          const_cast<vef_type_desc_t *>(&e.template type_at<Is>().vef_desc)),  \
      ...);                                                                     \
   }                                                                            \
                                                                                \
