@@ -17966,10 +17966,11 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     }
     if (!new_table) goto err_new_table_cleanup;
 
-    // VillageSQL: Annotate custom type fields on the copy-ALTER rebuild table.
-    // Fields were prepared into thd->villagesql_alter_custom_fields by
-    // PrepareAlterCustomFields in create_table_impl.
-    villagesql::AnnotateAlterTableCustomColumns(thd, new_table);
+    // VillageSQL: The altered temporary table has been renamed to its final
+    // name. Re-annotate so the session tracks its custom columns under the
+    // new name, keeping the extension reference alive.
+    villagesql::AnnotateCustomColumnsInTmpTable(thd, new_table,
+                                                alter_info->create_list);
 
     /*
       Note: In case of MERGE table, we do not attach children. We do not
