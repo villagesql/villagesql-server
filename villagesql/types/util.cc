@@ -1128,7 +1128,7 @@ bool CheckCustomTypeUsage(Item *item, THD *thd) {
 }
 
 
-void AnnotateCustomColumnsInTmpTable(TABLE *table,
+void AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
                                      List<Create_field> &create_fields) {
   List_iterator_fast<Create_field> it(create_fields);
   Create_field *cdef;

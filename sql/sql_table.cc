@@ -1035,7 +1035,7 @@ static bool rea_create_tmp_table(
     return true;
   }
 
-  villagesql::AnnotateCustomColumnsInTmpTable(table, create_fields);
+  villagesql::AnnotateCustomColumnsInTmpTable(thd, table, create_fields);
 
   // Transfer ownership of dd::Table object to TABLE_SHARE.
   table->s->tmp_table_def = tmp_table_ptr.release();
@@ -17958,7 +17958,7 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     }
     if (!new_table) goto err_new_table_cleanup;
 
-    villagesql::AnnotateCustomColumnsInTmpTable(new_table,
+    villagesql::AnnotateCustomColumnsInTmpTable(thd, new_table,
                                                 alter_info->create_list);
 
     /*

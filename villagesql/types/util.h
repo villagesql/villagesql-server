@@ -70,7 +70,7 @@ extern bool ResolveTypeToContext(const LEX_STRING &extension_name,
 // a temporary TABLE. Allocates new TypeContext objects on the TABLE_SHARE's
 // mem_root since temp tables persist for the session while thd->mem_root is
 // statement-scoped.
-extern void AnnotateCustomColumnsInTmpTable(TABLE *table,
+extern void AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
                                             List<Create_field> &create_fields);
 
 // Check if any column in a create_list has a custom type.
