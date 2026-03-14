@@ -9189,6 +9189,12 @@ static bool create_table_impl(
 
   if (prepare_error) return true;
 
+  // VillageSQL: Pre-populate session metadata so MaybeInjectCustomType can
+  // inject type contexts during open_table_from_share.
+  if (internal_tmp_table) {
+    villagesql::PrepareAlterCustomFields(thd, alter_info->create_list);
+  }
+
   THD_STAGE_INFO(thd, stage_creating_table);
 
   {
@@ -17083,6 +17089,8 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                                                    alter_info)) {
     return true;
   }
+  // VillageSQL: The guard ensures the vector is cleared on all exit paths.
+  villagesql::AlterCustomFieldsGuard alter_custom_fields_guard{thd};
 
   /*
    If this is an ALTER TABLE and no explicit row type specified reuse
@@ -17958,8 +17966,10 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     }
     if (!new_table) goto err_new_table_cleanup;
 
-    villagesql::AnnotateCustomColumnsInTmpTable(thd, new_table,
-                                                alter_info->create_list);
+    // VillageSQL: Annotate custom type fields on the copy-ALTER rebuild table.
+    // Fields were prepared into thd->villagesql_alter_custom_fields by
+    // PrepareAlterCustomFields in create_table_impl.
+    villagesql::AnnotateAlterTableCustomColumns(thd, new_table);
 
     /*
       Note: In case of MERGE table, we do not attach children. We do not

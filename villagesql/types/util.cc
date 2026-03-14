@@ -55,6 +55,12 @@
 
 namespace villagesql {
 
+// Returns true if table_name is an ALTER TABLE #sql-xxx rebuild table.
+static bool is_tmp_prefix(const char *table_name) {
+  return table_name != nullptr &&
+         strncmp(table_name, tmp_file_prefix, tmp_file_prefix_length) == 0;
+}
+
 static const char *ER_INCOMPARABLE_TYPES =
     "Cannot compare values of custom and non-custom types in %s";
 static const char *ER_INCOMPATIBLE_TYPES =
@@ -68,6 +74,18 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
   if (should_assert_if_null(field)) {
     LogVSQL(ERROR_LEVEL, "field is null in MaybeInjectCustomType");
     return true;
+  }
+
+  // For ALTER TABLE #sql-xxx rebuild tables, inject from the session map
+  // instead of the victionary.
+  if (is_tmp_prefix(share.table_name.str)) {
+    if (!thd->villagesql_alter_custom_fields.empty()) {
+      auto it = thd->villagesql_alter_custom_fields.find(field->field_name);
+      if (it != thd->villagesql_alter_custom_fields.end()) {
+        field->set_type_context(it->second);
+      }
+    }
+    return false;
   }
 
   // Extract identifiers directly
@@ -1140,6 +1158,33 @@ void AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
              tc->persisted_length());
     }
   }
+}
+
+void AnnotateAlterTableCustomColumns(THD *thd, TABLE *table) {
+  assert(is_tmp_prefix(table->s->table_name.str));
+  if (!thd || !table) return;
+  if (thd->villagesql_alter_custom_fields.empty()) return;
+  for (uint i = 0; i < table->s->fields; i++) {
+    Field *field = table->field[i];
+    auto it = thd->villagesql_alter_custom_fields.find(field->field_name);
+    if (it == thd->villagesql_alter_custom_fields.end()) continue;
+    field->set_type_context(it->second);
+    assert(static_cast<int64_t>(field->field_length) ==
+           it->second->persisted_length());
+  }
+}
+
+void PrepareAlterCustomFields(THD *thd, const List<Create_field> &create_list) {
+  thd->villagesql_alter_custom_fields.clear();
+  for (const Create_field &cdef : create_list) {
+    if (cdef.custom_type_context != nullptr)
+      thd->villagesql_alter_custom_fields.emplace(cdef.field_name,
+                                                  cdef.custom_type_context);
+  }
+}
+
+void ClearAlterCustomFields(THD *thd) {
+  thd->villagesql_alter_custom_fields.clear();
 }
 
 bool ValidateCustomTypeContext(THD *thd) {

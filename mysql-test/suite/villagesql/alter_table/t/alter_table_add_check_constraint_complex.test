@@ -1,8 +1,6 @@
 # Test ALTER TABLE ADD CHECK constraint on COMPLEX column
 # Grammar: ALTER TABLE table_name ADD CONSTRAINT name CHECK (complex_expression)
 
---source include/villagesql/not_implemented_complex_type.inc
-
 --source include/villagesql/install_complex_extension.inc
 --source include/villagesql/binlog_check_begin.inc
 
@@ -18,7 +16,7 @@ INSERT INTO t1 VALUES (2, 'test2', '(3.5,-1.2)');
 SHOW CREATE TABLE t1;
 
 # Add check constraint using COMPLEX functions
-ALTER TABLE t1 ADD CONSTRAINT chk_complex_range CHECK (REAL(value) >= 0 AND IMAG(value) >= -5);
+ALTER TABLE t1 ADD CONSTRAINT chk_complex_range CHECK (COMPLEX_REAL(value) >= 0 AND COMPLEX_IMAG(value) >= -5);
 
 SHOW CREATE TABLE t1;
 
@@ -29,7 +27,7 @@ INSERT INTO t1 VALUES (3, 'test3', '(2.5,1.0)');
 --error ER_CHECK_CONSTRAINT_VIOLATED
 INSERT INTO t1 VALUES (4, 'test4', '(-1.0,2.0)');
 
-SELECT * FROM t1;
+SELECT * FROM t1 ORDER BY id;
 
 DROP TABLE t1;
 

@@ -1,4 +1,5 @@
 /* Copyright (c) 2000, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -154,6 +155,10 @@ class Dictionary_client;
 
 class DD_kill_immunizer;
 }  // namespace dd
+
+namespace villagesql {
+class TypeContext;
+}  // namespace villagesql
 
 class Internal_error_handler;
 class Modification_plan;
@@ -991,6 +996,14 @@ class THD : public MDL_context_owner,
     After use, restore previous value as current value.
   */
   Access_bitmask want_privilege;
+
+  // VillageSQL: Map from column name to TypeContext for the current ALTER TABLE
+  // #sql-xxx rebuild table. Populated by PrepareAlterCustomFields in
+  // create_table_impl (internal_tmp_table branch) so MaybeInjectCustomType can
+  // inject type contexts during open_table_from_share. Cleared by
+  // AlterCustomFieldsGuard in mysql_alter_table on all exit paths.
+  std::unordered_map<std::string, const villagesql::TypeContext *>
+      villagesql_alter_custom_fields;
 
  private:
   /**
