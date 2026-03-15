@@ -2445,6 +2445,9 @@ void close_temporary_table(THD *thd, TABLE *table, bool free_share,
              ("closing table: '%s'.'%s' %p  alias: '%s'", table->s->db.str,
               table->s->table_name.str, table, table->alias));
 
+  // VillageSQL: Remove references held by table to custom columns.
+  villagesql::RemoveTmpTableMetadata(thd, table);
+
   if (table->prev) {
     table->prev->next = table->next;
     if (table->prev->next) table->next->prev = table->prev;

@@ -46,9 +46,10 @@
 #include "villagesql/include/error.h"
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/descriptor/type_descriptor.h"
-#include "villagesql/schema/systable/custom_columns.h"
-#include "villagesql/schema/util.h"
 #include "villagesql/schema/schema_manager.h"
+#include "villagesql/schema/systable/custom_columns.h"
+#include "villagesql/schema/tmp_metadata.h"
+#include "villagesql/schema/util.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/types/type_decoder.h"
 #include "villagesql/types/type_encoder.h"
@@ -99,6 +100,19 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
   std::string table_name(share.table_name.str, share.table_name.length);
   std::string column_name(field->field_name);
   ColumnKey col_key(db_name, table_name, column_name);
+
+  // User-created temporary tables are never in the victionary. If session
+  // metadata has an entry for this column, inject it and return.
+  if (share.tmp_table != NO_TMP_TABLE &&
+      thd->villagesql_tmp_metadata != nullptr) {
+    const TmpMetadata::Entry *tmp_entry =
+        thd->villagesql_tmp_metadata->get_entry(col_key.str());
+    if (tmp_entry != nullptr) {
+      field->set_type_context(tmp_entry->type_context);
+      return false;
+    }
+    // Fall through to victionary lookup.
+  }
 
   auto &vclient = VictionaryClient::instance();
   if (!vclient.is_initialized()) {
@@ -1140,22 +1154,61 @@ bool CheckCustomTypeUsage(Item *item, THD *thd) {
   return false;  // Continue walking
 }
 
-void AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
-                                     List<Create_field> &create_fields) {
+void TmpMetadata::insert_for_thd(THD *thd, const ColumnKey &key,
+                                 const TypeContextKey &source_key,
+                                 Field *field) {
+  auto &vclient = VictionaryClient::instance();
+  auto guard = vclient.get_read_lock();
+  auto tc_owner = vclient.type_contexts().acquire_client_managed(source_key);
+  if (tc_owner == nullptr) return;
+  if (field != nullptr) {
+    const TypeContext *tc = tc_owner.get();
+    field->set_type_context(tc);
+    assert(static_cast<int64_t>(field->field_length) == tc->persisted_length());
+  }
+  if (!thd) return;
+  if (!thd->villagesql_tmp_metadata) {
+    thd->villagesql_tmp_metadata = std::make_unique<TmpMetadata>();
+  }
+  thd->villagesql_tmp_metadata->insert_entry(key, std::move(tc_owner));
+}
+
+void PrepareTmpTableCustomColumns(THD *thd, const char *db,
+                                  const char *table_name,
+                                  List<Create_field> &create_fields) {
+  assert(!is_tmp_prefix(table_name));
   List_iterator_fast<Create_field> it(create_fields);
   Create_field *cdef;
-  auto &vclient = VictionaryClient::instance();
-  for (uint i = 0; i < table->s->fields && (cdef = it++); i++) {
-    if (cdef->custom_type_context != nullptr) {
-      // Acquire our own reference to this TypeContext.
-      auto guard = vclient.get_read_lock();
-      const TypeContext *tc = vclient.type_contexts().acquire(
-          cdef->custom_type_context->key(), table->s->mem_root);
-      table->field[i]->set_type_context(tc);
-      assert(static_cast<int64_t>(table->field[i]->field_length) ==
-             tc->persisted_length());
-    }
+  while ((cdef = it++) != nullptr) {
+    if (cdef->custom_type_context == nullptr) continue;
+    ColumnKey key(db, table_name, cdef->field_name);
+    TmpMetadata::insert_for_thd(thd, key, cdef->custom_type_context->key());
   }
+}
+
+void AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
+                                     List<Create_field> &create_fields) {
+  assert(!is_tmp_prefix(table->s->table_name.str));
+  List_iterator_fast<Create_field> it(create_fields);
+  Create_field *cdef;
+  for (uint i = 0; i < table->s->fields && (cdef = it++); i++) {
+    if (cdef->custom_type_context == nullptr) continue;
+    ColumnKey key(table->s->db.str, table->s->table_name.str,
+                  table->field[i]->field_name);
+    TmpMetadata::insert_for_thd(thd, key, cdef->custom_type_context->key(),
+                                table->field[i]);
+  }
+}
+
+void RemoveTmpTableMetadata(THD *thd, const std::string &db,
+                            const std::string &table_name) {
+  if (!thd || thd->villagesql_tmp_metadata == nullptr) return;
+  thd->villagesql_tmp_metadata->delete_table(db, table_name);
+}
+
+void RemoveTmpTableMetadata(THD *thd, TABLE *table) {
+  if (!table) return;
+  RemoveTmpTableMetadata(thd, table->s->db.str, table->s->table_name.str);
 }
 
 void AnnotateAlterTableCustomColumns(THD *thd, TABLE *table) {

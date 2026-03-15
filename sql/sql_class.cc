@@ -1,5 +1,6 @@
 /*
    Copyright (c) 2000, 2025, Oracle and/or its affiliates.
+   Copyright (c) 2026 VillageSQL Contributors
 
    This program is free software; you can redistribute it and/or modify
    it under the terms of the GNU General Public License, version 2.0,
@@ -118,6 +119,8 @@
 #include "string_with_len.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
+// VillageSQL: Needed for destructor.
+#include "villagesql/schema/tmp_metadata.h"
 
 class Parse_tree_root;
 

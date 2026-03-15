@@ -9192,7 +9192,12 @@ static bool create_table_impl(
   // VillageSQL: Pre-populate session metadata so MaybeInjectCustomType can
   // inject type contexts during open_table_from_share.
   if (internal_tmp_table) {
+    // ALTER TABLE rebuild table (#sql-xxx).
     villagesql::PrepareAlterCustomFields(thd, alter_info->create_list);
+  } else if (create_info->options & HA_LEX_CREATE_TMP_TABLE) {
+    // User facing temporary table.
+    villagesql::PrepareTmpTableCustomColumns(thd, db, table_name,
+                                             alter_info->create_list);
   }
 
   THD_STAGE_INFO(thd, stage_creating_table);
@@ -18046,6 +18051,11 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     if (rename_temporary_table(thd, new_table, alter_ctx.new_db,
                                alter_ctx.new_name))
       goto err_new_table_cleanup;
+    // VillageSQL: Copy-alter success path for temporary tables. new_table is
+    // renamed rather than closed; re-register under the final name in
+    // TmpMetadata to keep the extension refcount elevated.
+    villagesql::AnnotateCustomColumnsInTmpTable(thd, new_table,
+                                                alter_info->create_list);
     /*
       We don't replicate alter table statement on temporary tables
       in RBR mode.

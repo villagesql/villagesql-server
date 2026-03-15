@@ -657,7 +657,7 @@ bool Metadata_modifier::process_create(THD *thd,
                                        const HA_CREATE_INFO *create_info,
                                        const Alter_info *alter_info,
                                        const char *db, const char *table_name) {
-  // TODO(villagesql-beta): Extension MDL for temp table.
+  // Tmp tables are handled separately.
   if (!create_info || !alter_info ||
       (create_info->options & HA_LEX_CREATE_TMP_TABLE)) {
     return false;
@@ -687,7 +687,7 @@ bool Metadata_modifier::process_alter(THD *thd,
                                       const HA_CREATE_INFO *create_info,
                                       Table_ref *table_list,
                                       const Alter_info *alter_info) {
-  // TODO(villagesql-beta): Extension MDL for temp table.
+  // Tmp tables are handles separately.
   if (!table_list || !table_list->table ||
       table_list->table->s->tmp_table != NO_TMP_TABLE) {
     return false;

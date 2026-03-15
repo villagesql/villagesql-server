@@ -157,6 +157,7 @@ class DD_kill_immunizer;
 }  // namespace dd
 
 namespace villagesql {
+class TmpMetadata;
 class TypeContext;
 }  // namespace villagesql
 
@@ -997,6 +998,10 @@ class THD : public MDL_context_owner,
   */
   Access_bitmask want_privilege;
 
+  // VillageSQL: Session-local storage for user-created temporary table custom
+  // column metadata. Holds type context references that keep extension
+  // refcounts elevated, blocking uninstall while temp tables exist.
+  std::unique_ptr<villagesql::TmpMetadata> villagesql_tmp_metadata;
   // VillageSQL: Map from column name to TypeContext for the current ALTER TABLE
   // #sql-xxx rebuild table. Populated by PrepareAlterCustomFields in
   // create_table_impl (internal_tmp_table branch) so MaybeInjectCustomType can
