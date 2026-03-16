@@ -1,7 +1,0 @@
-{
-  "name": "vsql_svector",
-  "version": "0.0.1",
-  "description": "Vector type with columnar storage for VillageSQL",
-  "author": "VillageSQL Community",
-  "license": "GPL-2.0"
-}

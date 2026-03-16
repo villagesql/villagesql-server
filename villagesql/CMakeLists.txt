@@ -134,36 +134,6 @@ IF(NOT WITHOUT_SERVER)
 
   add_custom_target(test_only_veb ALL)
   add_dependencies(test_only_veb copy_vsql_test_only_veb)
-
-  ExternalProject_Add(vsql_svector_extension
-    SOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/examples/vsql-svector
-    BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-svector-build
-    CMAKE_GENERATOR ${CMAKE_GENERATOR}
-    CMAKE_ARGS
-      "-DCMAKE_PREFIX_PATH=${CMAKE_SOURCE_DIR}"
-      "-DVillageSQLExtensionFramework_INCLUDE_DIR=${CMAKE_CURRENT_SOURCE_DIR}/sdk/include"
-      "-DVillageSQL_VEB_INSTALL_DIR=${CMAKE_BINARY_DIR}/lib/veb"
-      "-DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}"
-    BUILD_ALWAYS ON
-    INSTALL_COMMAND ""
-  )
-
-  add_custom_target(copy_vsql_svector_veb
-    COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_BINARY_DIR}/veb_output_directory
-    COMMAND ${CMAKE_COMMAND} -E copy
-      ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-svector-build/vsql_svector.veb
-      ${CMAKE_BINARY_DIR}/veb_output_directory/
-    DEPENDS vsql_svector_extension
-    COMMENT "Copying vsql_vector.veb to veb_output_directory"
-  )
-
-  add_custom_target(svector_veb ALL)
-  add_dependencies(svector_veb copy_vsql_svector_veb)
-
-  # Install VEB to lib/veb directory
-  install(FILES ${CMAKE_CURRENT_BINARY_DIR}/examples/vsql-svector-build/vsql_svector.veb
-    DESTINATION ${INSTALL_VEBDIR}
-  )
 ENDIF()
 
 # =============================================================================
