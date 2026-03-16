@@ -155,9 +155,6 @@ class AlignedBuffer {
   // Check if buffer has been initialized
   bool is_initialized() const noexcept { return ptr_ != nullptr; }
 
-  // Allows if (buffer) { ... } checks
-  explicit operator bool() const noexcept { return is_initialized(); }
-
   // Get allocated size (0 if not initialized)
   size_t size() const noexcept { return size_; }
 

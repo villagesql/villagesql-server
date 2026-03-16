@@ -390,7 +390,7 @@ void svector_norm(BinaryArg vec, RealResult out) {
   native::Length native_len = native::length(count);
   native::AlignedBuffer<VECTOR_STACK_BUFFER_SIZE> buffer(native_len.length,
                                                          native_len.alignment);
-  if (!buffer) {
+  if (!buffer.is_initialized()) {
     out.error("buffer allocation failed");
     return;
   }
@@ -419,7 +419,7 @@ void svector_dims(BinaryArg vec, IntResult out) {
   native::Length native_len = native::length(count);
   native::AlignedBuffer<VECTOR_STACK_BUFFER_SIZE> buffer(native_len.length,
                                                          native_len.alignment);
-  if (!buffer) {
+  if (!buffer.is_initialized()) {
     out.error("buffer allocation failed");
     return;
   }
@@ -461,7 +461,7 @@ static void svector_distance_impl(BinaryArg vec1, BinaryArg vec2,
       native_len1.length, native_len1.alignment);
   native::AlignedBuffer<VECTOR_STACK_BUFFER_SIZE> buffer2(
       native_len2.length, native_len2.alignment);
-  if (!buffer1 || !buffer2) {
+  if (!buffer1.is_initialized() || !buffer2.is_initialized()) {
     out.error("buffer allocation failed");
     return;
   }
