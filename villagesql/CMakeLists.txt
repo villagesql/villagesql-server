@@ -206,6 +206,7 @@ add_custom_target(sdk ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/storage_api.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/storage_builder.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/type_builder.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/type_params_cache.h"
     "${SDK_STAGING_DIR}/include-dev/villagesql/"
   COMMAND ${CMAKE_COMMAND} -E copy
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/abi/storage.h"

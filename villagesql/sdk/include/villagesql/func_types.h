@@ -23,12 +23,13 @@
 // directly. The func_builder framework automatically converts to/from the
 // underlying ABI types based on the function's declared parameter types.
 //
-// Input args: IntArg, RealArg, StringArg, BinaryArg
-//   Each provides is_null() and value() appropriate for its SQL type.
+// Input args:   IntArg, RealArg, StringArg
+//               CustomArg            - custom type, binary data only
+//               CustomArgWith<P>     - custom type + cached parsed params
 //
-// Result types: IntResult, RealResult, StringResult, BinaryResult
-//   IntResult / RealResult: call set(value), set_null(), or error(msg).
-//   StringResult / BinaryResult: write into buffer(), then call set_length().
+// Result types: IntResult, RealResult, StringResult
+//               CustomResult         - custom type, binary data only
+//               CustomResultWith<P>  - custom type + cached parsed params
 //
 // Example - integer add:
 //   void add(IntArg a, IntArg b, IntResult out) {
@@ -36,8 +37,8 @@
 //     out.set(a.value() + b.value());
 //   }
 //
-// Example - binary transform (ROT13 on a fixed-size BYTEARRAY):
-//   void rot13(BinaryArg in, BinaryResult out) {
+// Example - binary transform with no params (ROT13 on a fixed-size BYTEARRAY):
+//   void rot13(CustomArg in, CustomResult out) {
 //     if (in.is_null()) { out.set_null(); return; }
 //     auto src = in.value();          // villagesql::Span<const unsigned char>
 //     auto dst = out.buffer();        // villagesql::Span<unsigned char>
@@ -46,12 +47,26 @@
 //     }
 //     out.set_length(src.size());
 //   }
+//
+// Example - VDF with parameterized type (TVECTOR(N)):
+//   void tvector_dot(CustomArgWith<TVectorParams> a,
+//                    CustomArgWith<TVectorParams> b,
+//                    RealResult out) {
+//     int64_t dim = a.params().dimension;  // TVectorParams::parse called once
+//     double sum = 0;
+//     for (int64_t i = 0; i < dim; i++) {
+//       sum += load_float(a.value().data() + i*4) *
+//              load_float(b.value().data() + i*4);
+//     }
+//     out.set(sum);
+//   }
 
 #include <cstddef>
 #include <cstring>
 #include <string_view>
 
 #include <villagesql/abi/types.h>
+#include <villagesql/type_params_cache.h>
 
 // In C++20, Span<T> is std::span<T>. In C++17, it is a minimal compatible
 // implementation. User code written against villagesql::Span<T> works in
@@ -132,12 +147,40 @@ class StringArg {
   const vef_invalue_t *v_;
 };
 
-class BinaryArg {
+// CustomArg: input wrapper for non-parameterized custom type arguments.
+// For parameterized types (e.g., TVECTOR(N)), use CustomArgWith<P> instead.
+class CustomArg {
  public:
-  explicit BinaryArg(const vef_invalue_t *v) : v_(v) {}
+  explicit CustomArg(const vef_invalue_t *v) : v_(v) {}
   bool is_null() const { return v_->is_null; }
   Span<const unsigned char> value() const {
     return {v_->bin_value, v_->bin_len};
+  }
+
+ private:
+  const vef_invalue_t *v_;
+};
+
+// CustomArgWith<P>: input wrapper for parameterized custom type arguments.
+// Use instead of CustomArg when the VDF needs to access the type parameters
+// (e.g., the dimension of a TVECTOR(N) column). Requires the parse function
+// to be registered via .params<P, &parse_fn>() in the type builder.
+//
+// The parse result is memoized per unique canonical params string, so parsing
+// runs at most once per type instantiation.
+//
+// NOTE: Do not call params() when is_null() is true. The server does not
+// populate type_params for null values.
+template <typename P>
+class CustomArgWith {
+ public:
+  explicit CustomArgWith(const vef_invalue_t *v) : v_(v) {}
+  bool is_null() const { return v_->is_null; }
+  Span<const unsigned char> value() const {
+    return {v_->bin_value, v_->bin_len};
+  }
+  const P &params() const {
+    return type_params_cache_for<P>().get(v_->type_params);
   }
 
  private:
@@ -214,11 +257,11 @@ class StringResult {
   vef_vdf_result_t *r_;
 };
 
-// Write into buffer(), then call set_length() with the number of bytes written.
-// buffer().size() is the maximum usable capacity.
-class BinaryResult {
+// CustomResult: result wrapper for non-parameterized custom type outputs.
+// For parameterized types (e.g., TVECTOR(N)), use CustomResultWith<P> instead.
+class CustomResult {
  public:
-  explicit BinaryResult(vef_vdf_result_t *r) : r_(r) {}
+  explicit CustomResult(vef_vdf_result_t *r) : r_(r) {}
 
   Span<unsigned char> buffer() { return {r_->bin_buf, r_->max_bin_len}; }
   void set_length(size_t len) {
@@ -232,6 +275,38 @@ class BinaryResult {
         msg.size() < VEF_MAX_ERROR_LEN - 1 ? msg.size() : VEF_MAX_ERROR_LEN - 1;
     memcpy(r_->error_msg, msg.data(), n);
     r_->error_msg[n] = '\0';
+  }
+
+ private:
+  vef_vdf_result_t *r_;
+};
+
+// CustomResultWith<P>: result wrapper for parameterized custom type outputs.
+// Use instead of CustomResult when the VDF needs to access the type parameters
+// (e.g., the dimension of a TVECTOR(N) column). Requires the parse function
+// to be registered via .params<P, &parse_fn>() in the type builder.
+//
+// Use params() to read the type parameters of the output column.
+template <typename P>
+class CustomResultWith {
+ public:
+  explicit CustomResultWith(vef_vdf_result_t *r) : r_(r) {}
+
+  Span<unsigned char> buffer() { return {r_->bin_buf, r_->max_bin_len}; }
+  void set_length(size_t len) {
+    r_->actual_len = len;
+    r_->type = VEF_RESULT_VALUE;
+  }
+  void set_null() { r_->type = VEF_RESULT_NULL; }
+  void error(std::string_view msg) {
+    r_->type = VEF_RESULT_ERROR;
+    size_t n =
+        msg.size() < VEF_MAX_ERROR_LEN - 1 ? msg.size() : VEF_MAX_ERROR_LEN - 1;
+    memcpy(r_->error_msg, msg.data(), n);
+    r_->error_msg[n] = '\0';
+  }
+  const P &params() const {
+    return type_params_cache_for<P>().get(r_->type_params);
   }
 
  private:

@@ -54,8 +54,10 @@
 // extension functions. Each parameter and return type has a corresponding
 // wrapper class with methods for null checking and value access:
 //
-//   Input:   IntArg, RealArg, StringArg, BinaryArg
-//   Output:  IntResult, RealResult, StringResult, BinaryResult
+//   Input:   IntArg, RealArg, StringArg
+//            CustomArg, CustomArgWith<P>
+//   Output:  IntResult, RealResult, StringResult
+//            CustomResult, CustomResultWith<P>
 //
 // The registration syntax is identical; the framework detects the parameter
 // types and adapts automatically.
@@ -70,7 +72,7 @@
 // For binary (custom) types, write directly into the caller-provided buffer
 // to avoid copies:
 //
-//   void rot13_impl(BinaryArg in, BinaryResult out) {
+//   void rot13_impl(CustomArg in, CustomResult out) {
 //     if (in.is_null()) { out.set_null(); return; }
 //     auto src = in.value();        // villagesql::Span<const unsigned char>
 //     auto dst = out.buffer();      // villagesql::Span<unsigned char>
@@ -169,6 +171,41 @@
 //   size_t my_hash(Span<const unsigned char> data);
 //
 //
+// PARAMETERIZED TYPES
+// -------------------
+//
+// If the type has SQL-level parameters (e.g., TVECTOR(1536)), define a params
+// struct and a parse function, then use the struct as the first argument of
+// the type operation functions. The SDK detects the const P& signature and
+// wires up a memoized parse cache automatically.
+//
+// The parse function can be a static method on the struct (shown below) or
+// any free function with the signature:
+//   P parse_fn(const std::map<std::string, std::string>& params)
+//
+//   struct MyParams {
+//     int64_t dimension;
+//     static MyParams parse(const std::map<std::string, std::string>& p) {
+//       return {.dimension = stoll(p.at("dimension"))};
+//     }
+//   };
+//
+//   bool my_encode(const MyParams& p, std::string_view from,
+//                  Span<unsigned char> buf, size_t* length) { ... }
+//
+//   make_type("MYTYPE")
+//     .persisted_length(...)
+//     .encode("my_encode")
+//     .params<MyParams, &MyParams::parse>()  // required; binds parse function
+//     .build()
+//
+//   make_type_encode<&my_encode>("my_encode", MYTYPE)
+//
+// Both registrations are required: make_type_encode detects const P& and
+// routes through the cache; .params<>() binds the parse function at startup.
+// Omitting .params<>() while using const P& signatures will crash at runtime.
+//
+//
 // REGISTERING THE EXTENSION
 // -------------------------
 //
@@ -231,7 +268,7 @@
 //   }
 //
 //   // ROT13: apply ROT13 cipher to ASCII letters in a bytearray
-//   void rot13_impl(BinaryArg in, BinaryResult out) {
+//   void rot13_impl(CustomArg in, CustomResult out) {
 //     if (in.is_null()) { out.set_null(); return; }
 //     auto src = in.value();      // villagesql::Span<const unsigned char>
 //     auto dst = out.buffer();    // villagesql::Span<unsigned char>

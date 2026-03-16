@@ -42,6 +42,24 @@
 #include <string>
 #include <string_view>
 
+// Parsed representation of TVECTOR type parameters.
+// The static parse() method is used automatically by make_type_encode,
+// make_type_decode, and make_intrinsic_default when the operation function
+// takes const TVectorParams& as its first parameter.
+struct TVectorParams {
+  int64_t dimension;
+  size_t bytes_per_elem;  // 4 for float, 8 for double
+
+  static TVectorParams parse(const std::map<std::string, std::string> &params) {
+    auto dim_it = params.find("dimension");
+    int64_t dim = strtoll(dim_it->second.c_str(), nullptr, 10);
+    size_t bytes = 4;
+    auto type_it = params.find("type");
+    if (type_it != params.end() && type_it->second == "double") bytes = 8;
+    return TVectorParams{.dimension = dim, .bytes_per_elem = bytes};
+  }
+};
+
 // Little-endian store/load helpers.
 
 void store_float(unsigned char *buf, float val) {
@@ -159,55 +177,48 @@ bool tvector_resolve_params(const std::map<std::string, std::string> &params,
 // Encode: "[v1,v2,...,vN]" -> N * bpe bytes binary.
 // STRING -> TVECTOR
 // Dimension and element type are read from type parameters.
-bool tvector_from_string(const std::map<std::string, std::string> &params,
-                         std::string_view from,
+bool tvector_from_string(const TVectorParams &p, std::string_view from,
                          villagesql::Span<unsigned char> buf, size_t *length) {
-  auto it = params.find("dimension");
-  if (it == params.end()) return true;
-  int64_t dimension = strtoll(it->second.c_str(), nullptr, 10);
-  if (dimension <= 0) return true;
-
-  size_t bpe = bytes_per_element(params);
-  size_t byte_size = static_cast<size_t>(dimension) * bpe;
+  size_t byte_size = static_cast<size_t>(p.dimension) * p.bytes_per_elem;
   if (buf.size() < byte_size) return true;
 
   // strtof/strtod require a null-terminated string.
   std::string input(from);
-  const char *p = input.c_str();
+  const char *s = input.c_str();
 
   // Skip leading whitespace
-  while (*p == ' ') p++;
-  if (*p != '[') return true;
-  p++;
+  while (*s == ' ') s++;
+  if (*s != '[') return true;
+  s++;
 
   size_t count = 0;
-  while (*p != '\0') {
+  while (*s != '\0') {
     // Skip whitespace
-    while (*p == ' ') p++;
-    if (*p == ']') break;
+    while (*s == ' ') s++;
+    if (*s == ']') break;
 
-    if (count >= static_cast<size_t>(dimension)) return true;
+    if (count >= static_cast<size_t>(p.dimension)) return true;
 
     char *endptr = nullptr;
-    if (bpe == 8) {
-      double val = strtod(p, &endptr);
-      if (endptr == p) return true;
-      store_double(buf.data() + count * bpe, val);
+    if (p.bytes_per_elem == 8) {
+      double val = strtod(s, &endptr);
+      if (endptr == s) return true;
+      store_double(buf.data() + count * p.bytes_per_elem, val);
     } else {
-      float val = strtof(p, &endptr);
-      if (endptr == p) return true;
-      store_float(buf.data() + count * bpe, val);
+      float val = strtof(s, &endptr);
+      if (endptr == s) return true;
+      store_float(buf.data() + count * p.bytes_per_elem, val);
     }
     count++;
-    p = endptr;
+    s = endptr;
 
     // Skip whitespace and comma
-    while (*p == ' ') p++;
-    if (*p == ',') p++;
+    while (*s == ' ') s++;
+    if (*s == ',') s++;
   }
 
-  if (*p != ']') return true;
-  if (count != static_cast<size_t>(dimension)) return true;
+  if (*s != ']') return true;
+  if (count != static_cast<size_t>(p.dimension)) return true;
 
   *length = byte_size;
   return false;
@@ -216,21 +227,17 @@ bool tvector_from_string(const std::map<std::string, std::string> &params,
 // Decode: N * bpe bytes binary -> "[v1,v2,...,vN]" string.
 // TVECTOR -> STRING
 // Dimension and element type are read from type parameters.
-bool tvector_to_string(const std::map<std::string, std::string> &params,
+bool tvector_to_string(const TVectorParams &p,
                        villagesql::Span<const unsigned char> data,
                        villagesql::Span<char> out, size_t *out_len) {
-  auto it = params.find("dimension");
-  if (it == params.end()) return true;
-  int64_t dimension = strtoll(it->second.c_str(), nullptr, 10);
-  if (dimension <= 0) return true;
-  size_t bpe = bytes_per_element(params);
-  if (data.size() != static_cast<size_t>(dimension) * bpe) return true;
+  const size_t bpe = p.bytes_per_elem;
+  if (data.size() != static_cast<size_t>(p.dimension) * bpe) return true;
 
   size_t pos = 0;
   if (pos >= out.size()) return true;
   out[pos++] = '[';
 
-  for (size_t i = 0; i < static_cast<size_t>(dimension); i++) {
+  for (size_t i = 0; i < static_cast<size_t>(p.dimension); i++) {
     if (i > 0) {
       if (pos >= out.size()) return true;
       out[pos++] = ',';
@@ -257,66 +264,31 @@ bool tvector_to_string(const std::map<std::string, std::string> &params,
 
 // Compare: (TVECTOR, TVECTOR) -> INT for ORDER BY, indexes.
 // Lexicographic element-by-element comparison.
-// Dimension and element type are read from type parameters.
-// TODO(villagesql-beta): this state of passing in params and doing a map lookup
-// per call is not going to be the end state. We are doing this first for
-// correctness. Then we will optimize this so that extension authors don't need
-// to do string to int conversions and map lookups. Consider this way of doing
-// things relatively short-lived.
-// TODO(villagesql-beta): we can also consider having templated versions of
-// these functions instead of using branches, then selecting the version to use
-// with one branch.
-int tvector_compare(const std::map<std::string, std::string> &params,
+int tvector_compare(const TVectorParams &p,
                     villagesql::Span<const unsigned char> a,
                     villagesql::Span<const unsigned char> b) {
-  auto it = params.find("dimension");
-  if (it == params.end()) return 0;
-  int64_t dimension = strtoll(it->second.c_str(), nullptr, 10);
-  if (dimension <= 0) return 0;
-
-  size_t bpe = bytes_per_element(params);
-  size_t byte_size = static_cast<size_t>(dimension) * bpe;
-  if (a.size() != byte_size || b.size() != byte_size) return 0;
-
-  for (size_t i = 0; i < static_cast<size_t>(dimension); i++) {
-    if (bpe == 8) {
-      double v1 = load_double(a.data() + i * bpe);
-      double v2 = load_double(b.data() + i * bpe);
+  for (int64_t i = 0; i < p.dimension; i++) {
+    if (p.bytes_per_elem == 8) {
+      double v1 = load_double(a.data() + i * p.bytes_per_elem);
+      double v2 = load_double(b.data() + i * p.bytes_per_elem);
       if (v1 < v2) return -1;
       if (v1 > v2) return 1;
     } else {
-      float v1 = load_float(a.data() + i * bpe);
-      float v2 = load_float(b.data() + i * bpe);
+      float v1 = load_float(a.data() + i * p.bytes_per_elem);
+      float v2 = load_float(b.data() + i * p.bytes_per_elem);
       if (v1 < v2) return -1;
       if (v1 > v2) return 1;
     }
   }
-
   return 0;
 }
 
 // Implicit default for TVECTOR: writes N zero elements into the buffer.
 // Reads the "dimension" and "type" parameters to determine the byte size.
-bool tvector_default(const std::map<std::string, std::string> &params,
+bool tvector_default(const TVectorParams &p,
                      villagesql::Span<unsigned char> buffer, size_t *length,
                      char *error_msg) {
-  // TODO(villagesql-beta): despite looking at dimension here and validating it,
-  // we could skip this part if we rely on the length of the buffer to be the
-  // memory we zero out.
-  auto it = params.find("dimension");
-  if (it == params.end()) {
-    snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "TVECTOR intrinsic_default: missing dimension");
-    return true;
-  }
-  int64_t dimension = strtoll(it->second.c_str(), nullptr, 10);
-  if (dimension <= 0) {
-    snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "TVECTOR intrinsic_default: invalid dimension");
-    return true;
-  }
-  size_t bpe = bytes_per_element(params);
-  size_t byte_size = static_cast<size_t>(dimension) * bpe;
+  size_t byte_size = static_cast<size_t>(p.dimension) * p.bytes_per_elem;
   if (byte_size > buffer.size()) {
     snprintf(error_msg, VEF_MAX_ERROR_LEN,
              "TVECTOR intrinsic_default: buffer too small");
@@ -334,6 +306,7 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(make_type(TVECTOR)
                   .persisted_length(-1)
                   .max_decode_buffer_length(16)
+                  .params<TVectorParams, &TVectorParams::parse>()
                   .encode("tvector_from_string")
                   .decode("tvector_to_string")
                   .compare("tvector_compare")

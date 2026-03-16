@@ -20,9 +20,15 @@
 // For full documentation and examples, see extension.h.
 
 #include <villagesql/abi/types.h>
+#include <villagesql/type_params_cache.h>
 
 namespace villagesql {
 namespace type_builder {
+
+template <typename P, auto ParseFunc>
+void bind_params_cache() {
+  villagesql::type_params_cache_for<P>().bind(ParseFunc);
+}
 
 // =============================================================================
 // TypeBuilder
@@ -48,22 +54,28 @@ namespace type_builder {
 struct TypeDescriptor {
   vef_type_desc_t vef_desc{};
   vef_type_storage_intf_t storage_intf{};
+  void (*params_init_fn)() = nullptr;
 
   constexpr TypeDescriptor() = default;
 
   constexpr TypeDescriptor(const TypeDescriptor &o)
-      : vef_desc(o.vef_desc), storage_intf(o.storage_intf) {
+      : vef_desc(o.vef_desc),
+        storage_intf(o.storage_intf),
+        params_init_fn(o.params_init_fn) {
     if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
   }
 
   constexpr TypeDescriptor(TypeDescriptor &&o)
-      : vef_desc(o.vef_desc), storage_intf(o.storage_intf) {
+      : vef_desc(o.vef_desc),
+        storage_intf(o.storage_intf),
+        params_init_fn(o.params_init_fn) {
     if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
   }
 
   constexpr TypeDescriptor &operator=(const TypeDescriptor &o) {
     vef_desc = o.vef_desc;
     storage_intf = o.storage_intf;
+    params_init_fn = o.params_init_fn;
     if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
     return *this;
   }
@@ -86,7 +98,8 @@ class TypeBuilder {
         int_to_params_vdf_name_(nullptr),
         resolve_params_vdf_name_(nullptr),
         intrinsic_default_vdf_name_(nullptr),
-        storage_intf_{} {}
+        storage_intf_{},
+        params_init_fn_(nullptr) {}
 
   constexpr TypeBuilder &persisted_length(int64_t len) {
     persisted_length_ = len;
@@ -158,6 +171,16 @@ class TypeBuilder {
     return *this;
   }
 
+  // Registers the params type P and its parse function with the
+  // TypeParamsCache. Called once during vef_register() before any VDF
+  // invocations. After this, VDF wrappers and CustomArgWith<P> can call
+  // type_params_cache_for<P>().get(raw) without passing the parse function.
+  template <typename P, auto ParseFunc>
+  constexpr TypeBuilder &params() {
+    params_init_fn_ = &bind_params_cache<P, ParseFunc>;
+    return *this;
+  }
+
   // Build the final vef_type_desc_t. Protocol is set automatically:
   // VEF_PROTOCOL_2 if any protocol-2 field is set, otherwise VEF_PROTOCOL_1.
   // ExtensionBuilder::type() propagates this up to the extension's
@@ -191,6 +214,7 @@ class TypeBuilder {
         intrinsic_default_vdf_name_,
         storage_intf_.version != 0 ? &desc.storage_intf : nullptr,
     };
+    desc.params_init_fn = params_init_fn_;
     return desc;
   }
 
@@ -210,6 +234,7 @@ class TypeBuilder {
   const char *resolve_params_vdf_name_;
   const char *intrinsic_default_vdf_name_;
   vef_type_storage_intf_t storage_intf_;
+  void (*params_init_fn_)();
 };
 
 // Entry point: make_type("name")

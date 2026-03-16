@@ -142,6 +142,15 @@ constexpr auto make_extension(std::string_view name, std::string_view version) {
      ...);                                                                     \
   }                                                                            \
                                                                                \
+  template <typename Ext, size_t... Is>                                        \
+  static void _vef_init_type_params_impl(const Ext &e,                         \
+                                         std::index_sequence<Is...>) {         \
+    ((e.template type_at<Is>().params_init_fn                                  \
+          ? e.template type_at<Is>().params_init_fn()                          \
+          : void()),                                                           \
+     ...);                                                                     \
+  }                                                                            \
+                                                                               \
   extern "C" vef_registration_t *vef_register(vef_register_arg_t *arg) {       \
     if (_vef_initialized) return &_vef_registration;                           \
                                                                                \
@@ -172,6 +181,8 @@ constexpr auto make_extension(std::string_view name, std::string_view version) {
     if constexpr (type_count > 0) {                                            \
       _vef_fill_type_ptrs_impl(type_ptrs, _ext,                                \
                                std::make_index_sequence<type_count>{});        \
+      _vef_init_type_params_impl(_ext,                                         \
+                                 std::make_index_sequence<type_count>{});      \
     }                                                                          \
                                                                                \
     _vef_registration.protocol = VEF_PROTOCOL_2;                               \
