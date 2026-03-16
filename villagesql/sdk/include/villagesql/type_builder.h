@@ -153,11 +153,9 @@ class TypeBuilder {
     return *this;
   }
 
-  constexpr TypeBuilder column_storage(
-      const vef_type_storage_intf_t &intf) const {
-    TypeBuilder copy = *this;
-    copy.storage_intf_ = intf;
-    return copy;
+  constexpr TypeBuilder &column_storage(const vef_type_storage_intf_t &intf) {
+    storage_intf_ = intf;
+    return *this;
   }
 
   // Build the final vef_type_desc_t. Protocol is set automatically:

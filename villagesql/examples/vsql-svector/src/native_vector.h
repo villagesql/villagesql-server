@@ -74,27 +74,15 @@ static V_FUNC_ALWAYS_INLINE void float4store(unsigned char *buffer,
                                              float value) {
   uint32_t bits;
   memcpy(&bits, &value, sizeof bits);
-
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-  memcpy(buffer, &bits, 4);
-#else
   buffer[0] = (unsigned char)(bits);
   buffer[1] = (unsigned char)(bits >> 8);
   buffer[2] = (unsigned char)(bits >> 16);
   buffer[3] = (unsigned char)(bits >> 24);
-#endif
 }
 
 static V_FUNC_ALWAYS_INLINE float float4get(const unsigned char *buffer) {
-  uint32_t bits;
-
-#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
-  memcpy(&bits, buffer, sizeof bits);
-#else
-  bits = ((uint32_t)buffer[0]) | ((uint32_t)buffer[1] << 8) |
-         ((uint32_t)buffer[2] << 16) | ((uint32_t)buffer[3] << 24);
-#endif
-
+  uint32_t bits = ((uint32_t)buffer[0]) | ((uint32_t)buffer[1] << 8) |
+                  ((uint32_t)buffer[2] << 16) | ((uint32_t)buffer[3] << 24);
   float value;
   memcpy(&value, &bits, sizeof value);
   return value;

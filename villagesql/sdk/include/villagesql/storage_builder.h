@@ -51,47 +51,39 @@ class StorageBuilder {
  public:
   constexpr StorageBuilder() : intf_{} {}
 
-  constexpr StorageBuilder create(vef_type_storage_create_func_t f) const {
-    StorageBuilder copy = *this;
-    copy.intf_.create = f;
-    return copy;
+  constexpr StorageBuilder &create(vef_type_storage_create_func_t f) {
+    intf_.create = f;
+    return *this;
   }
 
-  constexpr StorageBuilder drop(vef_type_storage_drop_func_t f) const {
-    StorageBuilder copy = *this;
-    copy.intf_.drop = f;
-    return copy;
+  constexpr StorageBuilder &drop(vef_type_storage_drop_func_t f) {
+    intf_.drop = f;
+    return *this;
   }
 
-  constexpr StorageBuilder load(vef_type_storage_load_func_t f) const {
-    StorageBuilder copy = *this;
-    copy.intf_.load = f;
-    return copy;
+  constexpr StorageBuilder &load(vef_type_storage_load_func_t f) {
+    intf_.load = f;
+    return *this;
   }
 
-  constexpr StorageBuilder insert(vef_type_storage_insert_func_t f) const {
-    StorageBuilder copy = *this;
-    copy.intf_.insert = f;
-    return copy;
+  constexpr StorageBuilder &insert(vef_type_storage_insert_func_t f) {
+    intf_.insert = f;
+    return *this;
   }
 
-  constexpr StorageBuilder select(vef_type_storage_select_func_t f) const {
-    StorageBuilder copy = *this;
-    copy.intf_.select = f;
-    return copy;
+  constexpr StorageBuilder &select(vef_type_storage_select_func_t f) {
+    intf_.select = f;
+    return *this;
   }
 
-  constexpr StorageBuilder mark_delete(
-      vef_type_storage_mark_delete_func_t f) const {
-    StorageBuilder copy = *this;
-    copy.intf_.mark_delete = f;
-    return copy;
+  constexpr StorageBuilder &mark_delete(vef_type_storage_mark_delete_func_t f) {
+    intf_.mark_delete = f;
+    return *this;
   }
 
-  constexpr StorageBuilder purge(vef_type_storage_purge_func_t f) const {
-    StorageBuilder copy = *this;
-    copy.intf_.purge = f;
-    return copy;
+  constexpr StorageBuilder &purge(vef_type_storage_purge_func_t f) {
+    intf_.purge = f;
+    return *this;
   }
 
   constexpr vef_type_storage_intf_t build() const {
