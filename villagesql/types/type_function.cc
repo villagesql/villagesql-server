@@ -85,9 +85,8 @@ bool ResolveParamsFunction::invoke(const std::string &params_str,
 }
 
 bool IntrinsicDefaultFunction::invoke(const vef_type_params_t &type_params,
-                                      unsigned char *buffer,
-                                      size_t buffer_size, size_t *length,
-                                      char *error_msg) const {
+                                      unsigned char *buffer, size_t buffer_size,
+                                      size_t *length, char *error_msg) const {
   SpecialVdfCall<CustomResult> call(vdf_);
   call.init(TypeParameterSlice(type_params.count, type_params.keys,
                                type_params.values));

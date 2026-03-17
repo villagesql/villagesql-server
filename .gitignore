@@ -31,8 +31,6 @@ scalability_jobs_*
 .cproject
 .project
 .settings/
-.caliper/
-.claude/settings.json
 
 *.local.md
 .DS_Store

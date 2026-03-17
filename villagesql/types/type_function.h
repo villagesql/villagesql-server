@@ -97,9 +97,7 @@ class CompareFunction {
 
 class HashFunction {
  public:
-  explicit HashFunction(vef_hash_func_t fn) : fn_(fn) {
-    assert(fn != nullptr);
-  }
+  explicit HashFunction(vef_hash_func_t fn) : fn_(fn) { assert(fn != nullptr); }
   explicit HashFunction(const vef_func_desc_t *vdf) : vdf_(vdf) {
     assert(vdf != nullptr);
   }
