@@ -17090,7 +17090,7 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     return true;
   }
   // VillageSQL: The guard ensures the vector is cleared on all exit paths.
-  villagesql::AlterCustomFieldsGuard alter_custom_fields_guard{thd};
+  villagesql::AlterCustomFieldsGuard alter_custom_fields_guard(thd);
 
   /*
    If this is an ALTER TABLE and no explicit row type specified reuse
