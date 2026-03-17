@@ -41,11 +41,11 @@ void TypeContext::resolve_cached_values() {
   }
 
   if (!key_.parameters().empty() &&
-      descriptor_->resolve_params_op().has_value()) {
+      descriptor_->resolve_params_fn().has_value()) {
     // Variable-length type with parameters: resolve via callback
     ResolvedTypeParams resolved = {};
     char error_msg[VEF_MAX_ERROR_LEN] = {0};
-    if (descriptor_->resolve_params_op()->invoke(key_.parameters().str(),
+    if (descriptor_->resolve_params_fn()->invoke(key_.parameters().str(),
                                                  &resolved, error_msg)) {
       // resolve_params failed — fall back to descriptor's base values.
       // This can happen if parameters stored on disk no longer validate

@@ -210,8 +210,9 @@ class TypeContextTest : public ::testing::Test {
 TEST_F(TypeContextTest, FixedLengthTypeUsesDescriptorValues) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("COMPLEX", "test_ext", "1.0.0"), 1, 16, 256,
-      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
-      villagesql::CompareOp(dummy_compare));
+      villagesql::EncodeFunction(dummy_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare));
   villagesql::TypeContextKey key("COMPLEX", "test_ext", "1.0.0");
   villagesql::TypeContext ctx(key, &desc);
 
@@ -225,9 +226,10 @@ TEST_F(TypeContextTest, ParameterizedTypeUsesResolvedValues) {
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), 1, -1, 0,
-      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
-      villagesql::CompareOp(dummy_compare), std::nullopt, std::nullopt,
-      villagesql::ResolveParamsOp(&rp_ok_fd));
+      villagesql::EncodeFunction(dummy_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
+      villagesql::ResolveParamsFunction(&rp_ok_fd));
   villagesql::TypeParameters params("dimension=1536");
   villagesql::TypeContextKey key(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), params);
@@ -244,9 +246,10 @@ TEST_F(TypeContextTest, ResolveParamsFailureFallsBackToDescriptor) {
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), 1, -1, 0,
-      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
-      villagesql::CompareOp(dummy_compare), std::nullopt, std::nullopt,
-      villagesql::ResolveParamsOp(&rp_fail_fd));
+      villagesql::EncodeFunction(dummy_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
+      villagesql::ResolveParamsFunction(&rp_fail_fd));
   villagesql::TypeParameters params("dimension=1536");
   villagesql::TypeContextKey key(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), params);
@@ -263,9 +266,10 @@ TEST_F(TypeContextTest, EmptyParamsSkipsResolveCallback) {
 
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("VVECTOR", "test_ext", "1.0.0"), 1, -1, 0,
-      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
-      villagesql::CompareOp(dummy_compare), std::nullopt, std::nullopt,
-      villagesql::ResolveParamsOp(&rp_fail_fd2));
+      villagesql::EncodeFunction(dummy_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare), std::nullopt, std::nullopt,
+      villagesql::ResolveParamsFunction(&rp_fail_fd2));
   // No parameters — should use descriptor values directly, not call
   // resolve_params (which would fail)
   villagesql::TypeContextKey key("VVECTOR", "test_ext", "1.0.0");

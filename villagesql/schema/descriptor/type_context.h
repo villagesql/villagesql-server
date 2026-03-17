@@ -25,6 +25,7 @@
 #include <vector>
 
 #include "villagesql/schema/descriptor/type_descriptor.h"
+#include "villagesql/types/type_op.h"
 
 struct MEM_ROOT;
 
@@ -214,6 +215,18 @@ class TypeContext {
       : descriptor_(descriptor), key_(key) {
     assert(descriptor);
     assert(descriptor->key() == key.descriptor_key());
+
+    // Build bound Ops from the descriptor's TypeFunctions + our parameters.
+    // Functions may be absent for key-only descriptors (used in tests).
+    if (descriptor_->has_encode_fn())
+      encode_op_.emplace(descriptor_->encode_fn(), key_.parameters());
+    if (descriptor_->has_decode_fn())
+      decode_op_.emplace(descriptor_->decode_fn(), key_.parameters());
+    if (descriptor_->has_compare_fn())
+      compare_op_.emplace(descriptor_->compare_fn(), key_.parameters());
+    if (descriptor_->hash_fn().has_value())
+      hash_op_.emplace(*descriptor_->hash_fn(), key_.parameters());
+
     resolve_cached_values();
 
     // Pre-encode the intrinsic default value using the type's
@@ -221,7 +234,7 @@ class TypeContext {
     // encoding every time we need to store an intrinsic default in a NOT NULL
     // custom field.
     if (persisted_length_ > 0 &&
-        descriptor_->intrinsic_default_op().has_value()) {
+        descriptor_->intrinsic_default_fn().has_value()) {
       const size_t storage_size = static_cast<size_t>(persisted_length_);
       std::vector<unsigned char> buffer(storage_size);
 
@@ -231,7 +244,7 @@ class TypeContext {
 
       char error_msg[VEF_MAX_ERROR_LEN] = {};
       size_t encoded_length = 0;
-      bool encode_failed = descriptor_->intrinsic_default_op()->invoke(
+      bool encode_failed = descriptor_->intrinsic_default_fn()->invoke(
           tp, buffer.data(), storage_size, &encoded_length, error_msg);
 
       if (!encode_failed && encoded_length == storage_size) {
@@ -248,9 +261,11 @@ class TypeContext {
   TypeContext(const TypeContext &) = delete;
   TypeContext &operator=(const TypeContext &) = delete;
 
-  // Allow move
+  // Allow move construction (needed for SystemTableMap storage).
+  // Move assignment is deleted because Op members hold references to our
+  // TypeParameters (which lives inside key_).
   TypeContext(TypeContext &&) = default;
-  TypeContext &operator=(TypeContext &&) = default;
+  TypeContext &operator=(TypeContext &&) = delete;
 
   ~TypeContext() = default;
 
@@ -283,6 +298,23 @@ class TypeContext {
   int64_t persisted_length() const { return persisted_length_; }
   int64_t max_decode_buffer_length() const { return max_decode_buffer_length_; }
 
+  // Bound type operations. These combine the TypeFunction from the descriptor
+  // with this context's TypeParameters.
+  // encode_op, decode_op, compare_op assert that the op is set (required ops).
+  const EncodeOp &encode_op() const {
+    assert(encode_op_.has_value());
+    return *encode_op_;
+  }
+  const DecodeOp &decode_op() const {
+    assert(decode_op_.has_value());
+    return *decode_op_;
+  }
+  const CompareOp &compare_op() const {
+    assert(compare_op_.has_value());
+    return *compare_op_;
+  }
+  const std::optional<HashOp> &hash_op() const { return hash_op_; }
+
   // Get cached intrinsic default buffer. Returns nullptr if encoding failed
   // during construction.
   const unsigned char *intrinsic_default_buffer() const {
@@ -309,6 +341,14 @@ class TypeContext {
   std::string qualified_base_name_;
   int64_t persisted_length_{0};
   int64_t max_decode_buffer_length_{0};
+
+  // Bound type operations (constructed from TypeFunctions + TypeParameters).
+  // Optional because key-only TypeDescriptors (used in tests) may lack
+  // functions.
+  std::optional<EncodeOp> encode_op_;
+  std::optional<DecodeOp> decode_op_;
+  std::optional<CompareOp> compare_op_;
+  std::optional<HashOp> hash_op_;
 
   // Cached intrinsic default value, pre-encoded during construction.
   // Empty if the type has no intrinsic_default_fn or encoding failed.

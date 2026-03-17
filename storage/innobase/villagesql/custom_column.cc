@@ -26,7 +26,6 @@
 #include "storage/innobase/include/ha_prototypes.h"
 #include "storage/innobase/include/mem0mem.h"
 #include "villagesql/include/error.h"
-#include "villagesql/schema/descriptor/type_descriptor.h"
 #include "villagesql/schema/victionary_client.h"
 #include "villagesql/types/util.h"
 
@@ -52,7 +51,7 @@ Custom_column::Info Custom_column::get_from_position(const dict_index_t *index,
 
 int Custom_column::compare(const unsigned char *data1, size_t len1,
                            const unsigned char *data2, size_t len2) const {
-  return compare_op_.invoke(data1, len1, data2, len2);
+  return type_context_->compare_op().invoke(data1, len1, data2, len2);
 }
 
 void Custom_column::load(dict_table_t *table, dict_col_t *col,
@@ -65,8 +64,7 @@ void Custom_column::load(dict_table_t *table, dict_col_t *col,
   if (!tc) return;
 
   void *mem = mem_heap_alloc(table->heap, sizeof(Custom_column));
-  auto op = tc->descriptor()->compare_op();
-  col->custom_column = new (mem) Custom_column(op, std::move(tc));
+  col->custom_column = new (mem) Custom_column(std::move(tc));
 }
 
 void Custom_column::free_all(dict_table_t *table) {

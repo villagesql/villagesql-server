@@ -26,8 +26,6 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "villagesql/include/error.h"
-#include "villagesql/schema/descriptor/type_descriptor.h"
-#include "villagesql/types/type_op.h"
 
 namespace villagesql {
 
@@ -36,10 +34,10 @@ TypeDecoder::TypeDecoder(const TypeContext &tc, MEM_ROOT &mem_root)
       buffer_size_(static_cast<size_t>(tc.max_decode_buffer_length())) {
   assert(buffer_size_ > 0);
 
-  const DecodeOp &op = tc.descriptor()->decode_op();
+  const DecodeOp &op = tc.decode_op();
   if (op.vdf() != nullptr) {
     vdf_call_.emplace(op.vdf());
-    const auto &params = tc.parameters();
+    const auto &params = op.parameters();
     vdf_call_->init(NoInitData{},
                     TypeParameterSlice(params.count(), params.key_data(),
                                        params.value_data()));

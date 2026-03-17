@@ -121,7 +121,7 @@ class PT_custom_type : public PT_type {
                                          const TypeContext *&type_context) {
     char error_msg[VEF_MAX_ERROR_LEN] = {0};
     ResolvedTypeParams resolved = {};
-    if (descriptor->resolve_params_op()->invoke(params_str, &resolved,
+    if (descriptor->resolve_params_fn()->invoke(params_str, &resolved,
                                                 error_msg)) {
       thd->syntax_error_at(pos, "%s", error_msg);
       return true;
@@ -155,7 +155,7 @@ class PT_custom_type : public PT_type {
       auto *descriptor = type_context->descriptor();
       if (length != nullptr) {
         // TYPE(N) syntax used - convert N to parameters via callbacks
-        if (!descriptor->int_to_params_op().has_value()) {
+        if (!descriptor->int_to_params_fn().has_value()) {
           std::string qname = type_context->qualified_name();
           thd->syntax_error_at(
               pos, "Type '%s' does not accept a length specification",
@@ -176,7 +176,7 @@ class PT_custom_type : public PT_type {
         // Call int_to_params to convert integer to canonical parameter string
         std::string params_str;
         char error_msg[VEF_MAX_ERROR_LEN] = {0};
-        if (descriptor->int_to_params_op()->invoke(int_value, &params_str,
+        if (descriptor->int_to_params_fn()->invoke(int_value, &params_str,
                                                    error_msg)) {
           thd->syntax_error_at(pos, "%s", error_msg);
           return nullptr;
@@ -201,7 +201,7 @@ class PT_custom_type : public PT_type {
         length = nullptr;
       } else {
         // No length provided for variable-length type
-        if (descriptor->int_to_params_op().has_value()) {
+        if (descriptor->int_to_params_fn().has_value()) {
           std::string qname = type_context->qualified_name();
           thd->syntax_error_at(pos, "Type '%s' requires a length specification",
                                qname.c_str());
@@ -238,7 +238,7 @@ class PT_custom_type : public PT_type {
     }
 
     auto *descriptor = type_context->descriptor();
-    if (!descriptor->resolve_params_op().has_value()) {
+    if (!descriptor->resolve_params_fn().has_value()) {
       std::string qname = type_context->qualified_name();
       thd->syntax_error_at(pos, "Type '%s' does not accept parameters",
                            qname.c_str());

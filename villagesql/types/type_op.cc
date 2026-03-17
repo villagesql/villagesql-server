@@ -16,19 +16,20 @@
 
 #include "villagesql/types/type_op.h"
 
-#include <cstdlib>
-#include <cstring>
-#include <string>
-
-#include "my_alloc.h"
-#include "my_base.h"
-#include "mysqld_error.h"
-#include "sql_string.h"
-#include "template_utils.h"
 #include "villagesql/include/error.h"
+#include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/types/special_vdf_call.h"
 
 namespace villagesql {
+
+EncodeOp::EncodeOp(const EncodeFunction &func, const TypeParameters &params)
+    : fn_(func.fn()), vdf_(func.vdf()), params_(params) {}
+
+DecodeOp::DecodeOp(const DecodeFunction &func, const TypeParameters &params)
+    : fn_(func.fn()), vdf_(func.vdf()), params_(params) {}
+
+CompareOp::CompareOp(const CompareFunction &func, const TypeParameters &params)
+    : fn_(func.fn()), vdf_(func.vdf()), params_(params) {}
 
 int CompareOp::invoke(const unsigned char *data1, size_t len1,
                       const unsigned char *data2, size_t len2) const {
@@ -37,7 +38,11 @@ int CompareOp::invoke(const unsigned char *data1, size_t len1,
   }
 
   SpecialVdfCall<IntResult, CustomArg, CustomArg> call(vdf_);
-  call.init();
+  call.init(NoInitData{},
+            TypeParameterSlice(params_.count(), params_.key_data(),
+                               params_.value_data()),
+            TypeParameterSlice(params_.count(), params_.key_data(),
+                               params_.value_data()));
   auto result = call.invoke(BinarySlice{data1, len1}, BinarySlice{data2, len2});
   if (!result) {
     LogVSQL(ERROR_LEVEL, "compare VDF '%s' returned error: %s", call.name(),
@@ -47,13 +52,18 @@ int CompareOp::invoke(const unsigned char *data1, size_t len1,
   return static_cast<int>(*result);
 }
 
+HashOp::HashOp(const HashFunction &func, const TypeParameters &params)
+    : fn_(func.fn()), vdf_(func.vdf()), params_(params) {}
+
 size_t HashOp::invoke(const unsigned char *data, size_t len) const {
   if (fn_ != nullptr) {
     return fn_(data, len);
   }
 
   SpecialVdfCall<IntResult, CustomArg> call(vdf_);
-  call.init();
+  call.init(NoInitData{},
+            TypeParameterSlice(params_.count(), params_.key_data(),
+                               params_.value_data()));
   auto result = call.invoke(BinarySlice{data, len});
   if (!result) {
     LogVSQL(ERROR_LEVEL, "hash VDF '%s' returned error: %s", call.name(),
@@ -61,82 +71,6 @@ size_t HashOp::invoke(const unsigned char *data, size_t len) const {
     return 0;
   }
   return static_cast<size_t>(*result);
-}
-
-bool IntToParamsOp::invoke(int64_t value, std::string *result,
-                           char *error_msg) const {
-  char str_buffer[VEF_MAX_TYPE_PARAMS_STRING_LEN];
-  SpecialVdfCall<StringResult, IntArg> call(vdf_);
-  call.init();
-  auto r = call.invoke(value, str_buffer, sizeof(str_buffer));
-  if (!r) {
-    snprintf(error_msg, VEF_MAX_ERROR_LEN, "%s", call.error_msg());
-    return true;
-  }
-
-  const char *result_data =
-      call.alt_str_buf() != nullptr ? call.alt_str_buf() : str_buffer;
-  *result = std::string(result_data, *r);
-  return false;
-}
-
-bool ResolveParamsOp::invoke(const std::string &params_str,
-                             ResolvedTypeParams *result,
-                             char *error_msg) const {
-  char str_buffer[VEF_MAX_TYPE_PARAMS_STRING_LEN];
-  SpecialVdfCall<StringResult, StringArg> call(vdf_);
-  call.init();
-  auto r = call.invoke(StringSlice{params_str.c_str(), params_str.size()},
-                       str_buffer, sizeof(str_buffer));
-  if (!r) {
-    snprintf(error_msg, VEF_MAX_ERROR_LEN, "%s", call.error_msg());
-    return true;
-  }
-
-  const char *result_data =
-      call.alt_str_buf() != nullptr ? call.alt_str_buf() : str_buffer;
-  std::string output(result_data, *r);
-
-  // Parse "persisted_length,max_decode_buffer_length"
-  size_t comma = output.find(',');
-  if (comma == std::string::npos) {
-    snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "resolve_params VDF returned invalid format: expected "
-             "'persisted_length,max_decode_buffer_length'");
-    return true;
-  }
-  char *endptr = nullptr;
-  result->persisted_length = strtoll(output.c_str(), &endptr, 10);
-  if (endptr != output.c_str() + comma) {
-    snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "resolve_params VDF returned invalid persisted_length");
-    return true;
-  }
-  result->max_decode_buffer_length =
-      strtoll(output.c_str() + comma + 1, &endptr, 10);
-  if (*endptr != '\0') {
-    snprintf(error_msg, VEF_MAX_ERROR_LEN,
-             "resolve_params VDF returned invalid max_decode_buffer_length");
-    return true;
-  }
-
-  return false;
-}
-
-bool IntrinsicDefaultOp::invoke(const vef_type_params_t &type_params,
-                                unsigned char *buffer, size_t buffer_size,
-                                size_t *length, char *error_msg) const {
-  SpecialVdfCall<CustomResult> call(vdf_);
-  call.init(TypeParameterSlice(type_params.count, type_params.keys,
-                               type_params.values));
-  auto r = call.invoke(buffer, buffer_size);
-  if (!r) {
-    snprintf(error_msg, VEF_MAX_ERROR_LEN, "%s", call.error_msg());
-    return true;
-  }
-
-  *length = *r;
-  return false;
 }
 
 }  // namespace villagesql

@@ -1037,36 +1037,37 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
       return true;
     }
 
-    EncodeOp encode_op =
-        encode_vdf ? EncodeOp(encode_vdf) : EncodeOp(td->encode_func);
-    DecodeOp decode_op =
-        decode_vdf ? DecodeOp(decode_vdf) : DecodeOp(td->decode_func);
-    CompareOp compare_op =
-        compare_vdf ? CompareOp(compare_vdf) : CompareOp(td->compare_func);
-    std::optional<HashOp> hash_op;
+    EncodeFunction encode_fn = encode_vdf ? EncodeFunction(encode_vdf)
+                                          : EncodeFunction(td->encode_func);
+    DecodeFunction decode_fn = decode_vdf ? DecodeFunction(decode_vdf)
+                                          : DecodeFunction(td->decode_func);
+    CompareFunction compare_fn = compare_vdf
+                                     ? CompareFunction(compare_vdf)
+                                     : CompareFunction(td->compare_func);
+    std::optional<HashFunction> hash_fn;
     if (hash_vdf != nullptr)
-      hash_op.emplace(hash_vdf);
+      hash_fn.emplace(hash_vdf);
     else if (td->hash_func != nullptr)
-      hash_op.emplace(td->hash_func);
+      hash_fn.emplace(td->hash_func);
 
-    std::optional<IntToParamsOp> int_to_params_op;
+    std::optional<IntToParamsFunction> int_to_params_fn;
     if (int_to_params_vdf != nullptr)
-      int_to_params_op.emplace(int_to_params_vdf);
+      int_to_params_fn.emplace(int_to_params_vdf);
 
-    std::optional<ResolveParamsOp> resolve_params_op;
+    std::optional<ResolveParamsFunction> resolve_params_fn;
     if (resolve_params_vdf != nullptr)
-      resolve_params_op.emplace(resolve_params_vdf);
+      resolve_params_fn.emplace(resolve_params_vdf);
 
     TypeDescriptor descriptor(
         TypeDescriptorKey(type_name, extension_name, extension_version),
         MYSQL_TYPE_VARCHAR, td->persisted_length, td->max_decode_buffer_length,
-        std::move(encode_op), std::move(decode_op), std::move(compare_op),
-        std::move(hash_op), std::move(int_to_params_op),
-        std::move(resolve_params_op));
+        std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
+        std::move(hash_fn), std::move(int_to_params_fn),
+        std::move(resolve_params_fn));
 
     if (intrinsic_default_vdf != nullptr)
-      descriptor.set_intrinsic_default_op(
-          IntrinsicDefaultOp(intrinsic_default_vdf));
+      descriptor.set_intrinsic_default_fn(
+          IntrinsicDefaultFunction(intrinsic_default_vdf));
 
     const TypeDescriptor *existing =
         victionary.type_descriptors().get_committed(descriptor.key());

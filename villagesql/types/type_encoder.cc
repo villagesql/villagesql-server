@@ -25,8 +25,6 @@
 #include "sql_string.h"
 #include "template_utils.h"
 #include "villagesql/include/error.h"
-#include "villagesql/schema/descriptor/type_descriptor.h"
-#include "villagesql/types/type_op.h"
 
 namespace villagesql {
 
@@ -36,10 +34,10 @@ TypeEncoder::TypeEncoder(const TypeContext *tc, MEM_ROOT &mem_root)
   assert(tc != nullptr);
   assert(buffer_size_ > 0);
 
-  const EncodeOp &op = tc->descriptor()->encode_op();
+  const EncodeOp &op = tc->encode_op();
   if (op.vdf() != nullptr) {
     vdf_call_.emplace(op.vdf());
-    const auto &params = tc->parameters();
+    const auto &params = op.parameters();
     vdf_call_->init(TypeParameterSlice(params.count(), params.key_data(),
                                        params.value_data()),
                     NoInitData{});

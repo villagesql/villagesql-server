@@ -29,7 +29,7 @@
 
 #include "villagesql/schema/systable/helpers.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
-#include "villagesql/types/type_op.h"
+#include "villagesql/types/type_function.h"
 
 namespace villagesql {
 
@@ -101,8 +101,9 @@ struct TypeDescriptorKey {
 
 // TypeDescriptor: Immutable in-memory descriptor for a custom type.
 // Built programmatically from extension registration, not from table rows.
-// Holds type operation wrappers (EncodeOp, DecodeOp, CompareOp, HashOp) that
-// dispatch to either a simple function pointer or a VDF.
+// Holds TypeFunction instances (EncodeFunction, DecodeFunction, etc.) that
+// store the raw callable (function pointer or VDF descriptor). These serve as
+// templates for building bound Ops in TypeContext.
 class TypeDescriptor {
  public:
   using key_type = TypeDescriptorKey;
@@ -118,12 +119,12 @@ class TypeDescriptor {
 
   // Full constructor. hash, int_to_params, resolve_params, and
   // intrinsic_default are optional.
-  TypeDescriptor(TypeDescriptorKey key, unsigned char impl_type,
-                 int64_t persisted_len, int64_t max_unpersisted_len,
-                 EncodeOp encode, DecodeOp decode, CompareOp compare,
-                 std::optional<HashOp> hash = std::nullopt,
-                 std::optional<IntToParamsOp> int_to_params = std::nullopt,
-                 std::optional<ResolveParamsOp> resolve_params = std::nullopt);
+  TypeDescriptor(
+      TypeDescriptorKey key, unsigned char impl_type, int64_t persisted_len,
+      int64_t max_unpersisted_len, EncodeFunction encode, DecodeFunction decode,
+      CompareFunction compare, std::optional<HashFunction> hash = std::nullopt,
+      std::optional<IntToParamsFunction> int_to_params = std::nullopt,
+      std::optional<ResolveParamsFunction> resolve_params = std::nullopt);
 
   // Disable copy (descriptors should not be copied)
   TypeDescriptor(const TypeDescriptor &) = delete;
@@ -157,39 +158,42 @@ class TypeDescriptor {
   int64_t persisted_length() const { return persisted_length_; }
   int64_t max_decode_buffer_length() const { return max_decode_buffer_length_; }
 
-  // Type operation accessors.
-  // encode_op, decode_op, compare_op assert that the op is set (required ops).
-  // hash_op returns std::nullopt if no custom hash is registered.
-  const EncodeOp &encode_op() const {
-    assert(encode_op_.has_value());
-    return *encode_op_;
+  // TypeFunction accessors.
+  // encode_fn, decode_fn, compare_fn assert that the function is set
+  // (required). hash_fn returns std::nullopt if no custom hash is registered.
+  bool has_encode_fn() const { return encode_fn_.has_value(); }
+  bool has_decode_fn() const { return decode_fn_.has_value(); }
+  bool has_compare_fn() const { return compare_fn_.has_value(); }
+  const EncodeFunction &encode_fn() const {
+    assert(encode_fn_.has_value());
+    return *encode_fn_;
   }
-  const DecodeOp &decode_op() const {
-    assert(decode_op_.has_value());
-    return *decode_op_;
+  const DecodeFunction &decode_fn() const {
+    assert(decode_fn_.has_value());
+    return *decode_fn_;
   }
-  const CompareOp &compare_op() const {
-    assert(compare_op_.has_value());
-    return *compare_op_;
+  const CompareFunction &compare_fn() const {
+    assert(compare_fn_.has_value());
+    return *compare_fn_;
   }
-  const std::optional<HashOp> &hash_op() const { return hash_op_; }
+  const std::optional<HashFunction> &hash_fn() const { return hash_fn_; }
 
-  const std::optional<IntToParamsOp> &int_to_params_op() const {
-    return int_to_params_op_;
+  const std::optional<IntToParamsFunction> &int_to_params_fn() const {
+    return int_to_params_fn_;
   }
-  const std::optional<ResolveParamsOp> &resolve_params_op() const {
-    return resolve_params_op_;
-  }
-
-  // Returns the intrinsic default op, or nullopt if not set.
-  const std::optional<IntrinsicDefaultOp> &intrinsic_default_op() const {
-    return intrinsic_default_op_;
+  const std::optional<ResolveParamsFunction> &resolve_params_fn() const {
+    return resolve_params_fn_;
   }
 
-  // Set the intrinsic default op after construction (used during
+  // Returns the intrinsic default function, or nullopt if not set.
+  const std::optional<IntrinsicDefaultFunction> &intrinsic_default_fn() const {
+    return intrinsic_default_fn_;
+  }
+
+  // Set the intrinsic default function after construction (used during
   // type registration).
-  void set_intrinsic_default_op(IntrinsicDefaultOp op) {
-    intrinsic_default_op_ = std::move(op);
+  void set_intrinsic_default_fn(IntrinsicDefaultFunction fn) {
+    intrinsic_default_fn_ = std::move(fn);
   }
 
  private:
@@ -200,16 +204,16 @@ class TypeDescriptor {
   int64_t persisted_length_{0};
   int64_t max_decode_buffer_length_{0};
 
-  // Type operations (encode/decode/compare required; hash optional)
-  std::optional<EncodeOp> encode_op_;
-  std::optional<DecodeOp> decode_op_;
-  std::optional<CompareOp> compare_op_;
-  std::optional<HashOp> hash_op_;
+  // Type functions (encode/decode/compare required; hash optional)
+  std::optional<EncodeFunction> encode_fn_;
+  std::optional<DecodeFunction> decode_fn_;
+  std::optional<CompareFunction> compare_fn_;
+  std::optional<HashFunction> hash_fn_;
 
-  std::optional<IntToParamsOp> int_to_params_op_;
-  std::optional<ResolveParamsOp> resolve_params_op_;
+  std::optional<IntToParamsFunction> int_to_params_fn_;
+  std::optional<ResolveParamsFunction> resolve_params_fn_;
 
-  std::optional<IntrinsicDefaultOp> intrinsic_default_op_;
+  std::optional<IntrinsicDefaultFunction> intrinsic_default_fn_;
 };
 
 // TableTraits specialization for TypeDescriptor.

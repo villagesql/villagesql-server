@@ -86,8 +86,10 @@ TEST_F(TypeDescriptorTest, Construction) {
       1,    // implementation_type
       16,   // persisted_length
       256,  // max_decode_buffer_length
-      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
-      villagesql::CompareOp(dummy_compare), villagesql::HashOp(dummy_hash));
+      villagesql::EncodeFunction(dummy_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare),
+      villagesql::HashFunction(dummy_hash));
 
   // Check identity fields
   EXPECT_EQ(desc.type_name(), "MYTYPE");
@@ -102,22 +104,23 @@ TEST_F(TypeDescriptorTest, Construction) {
   EXPECT_EQ(desc.persisted_length(), 16);
   EXPECT_EQ(desc.max_decode_buffer_length(), 256);
 
-  // Verify ops are set and dispatch to wrapped functions
-  EXPECT_EQ(desc.compare_op().invoke(nullptr, 0, nullptr, 0), 0);
-  EXPECT_EQ(desc.hash_op()->invoke(nullptr, 0), 42u);
+  // Verify functions store the correct function pointers
+  EXPECT_EQ(desc.compare_fn().fn(), &dummy_compare);
+  EXPECT_EQ(desc.hash_fn()->fn(), &dummy_hash);
 }
 
 // Test TypeDescriptor with nullptr hash (optional)
 TEST_F(TypeDescriptorTest, ConstructionWithNullHash) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("NOHASH", "ext", "1.0"), 0, 8, 64,
-      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
-      villagesql::CompareOp(dummy_compare));
+      villagesql::EncodeFunction(dummy_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare));
 
-  EXPECT_FALSE(desc.hash_op().has_value());
-  EXPECT_EQ(desc.compare_op().invoke(nullptr, 0, nullptr, 0), 0);
-  EXPECT_FALSE(desc.int_to_params_op().has_value());
-  EXPECT_FALSE(desc.resolve_params_op().has_value());
+  EXPECT_FALSE(desc.hash_fn().has_value());
+  EXPECT_EQ(desc.compare_fn().fn(), &dummy_compare);
+  EXPECT_FALSE(desc.int_to_params_fn().has_value());
+  EXPECT_FALSE(desc.resolve_params_fn().has_value());
 }
 
 // Test that TypeDescriptor can be used with SystemTableMap (compile check)
@@ -125,8 +128,9 @@ TEST_F(TypeDescriptorTest, ConstructionWithNullHash) {
 TEST_F(TypeDescriptorTest, KeyTypeCompatibility) {
   villagesql::TypeDescriptor desc(
       villagesql::TypeDescriptorKey("TEST", "ext", "1.0"), 0, 8, 64,
-      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
-      villagesql::CompareOp(dummy_compare));
+      villagesql::EncodeFunction(dummy_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare));
 
   // Verify key_type is TypeDescriptorKey
   static_assert(std::is_same_v<villagesql::TypeDescriptor::key_type,
@@ -138,8 +142,8 @@ TEST_F(TypeDescriptorTest, KeyTypeCompatibility) {
   EXPECT_EQ(key.str(), "test.ext.1.0");
 
   // Verify optional params default to nullopt
-  EXPECT_FALSE(desc.int_to_params_op().has_value());
-  EXPECT_FALSE(desc.resolve_params_op().has_value());
+  EXPECT_FALSE(desc.int_to_params_fn().has_value());
+  EXPECT_FALSE(desc.resolve_params_fn().has_value());
 }
 
 // Dummy parameter functions for testing using std::map API
@@ -244,24 +248,27 @@ TEST_F(TypeDescriptorTest, ConstructionWithParamFunctions) {
       1,   // implementation_type
       -1,  // persisted_length (variable-length)
       0,   // max_decode_buffer_length (determined by params)
-      villagesql::EncodeOp(dummy_encode), villagesql::DecodeOp(dummy_decode),
-      villagesql::CompareOp(dummy_compare), villagesql::HashOp(dummy_hash),
-      villagesql::IntToParamsOp(&itp_fd), villagesql::ResolveParamsOp(&rp_fd));
+      villagesql::EncodeFunction(dummy_encode),
+      villagesql::DecodeFunction(dummy_decode),
+      villagesql::CompareFunction(dummy_compare),
+      villagesql::HashFunction(dummy_hash),
+      villagesql::IntToParamsFunction(&itp_fd),
+      villagesql::ResolveParamsFunction(&rp_fd));
 
   EXPECT_EQ(desc.persisted_length(), -1);
-  EXPECT_TRUE(desc.int_to_params_op().has_value());
-  EXPECT_TRUE(desc.resolve_params_op().has_value());
+  EXPECT_TRUE(desc.int_to_params_fn().has_value());
+  EXPECT_TRUE(desc.resolve_params_fn().has_value());
 
   // Verify int_to_params callback produces canonical string
   std::string params_str;
   char error_msg[VEF_MAX_ERROR_LEN] = {0};
-  EXPECT_FALSE(desc.int_to_params_op()->invoke(1536, &params_str, error_msg));
+  EXPECT_FALSE(desc.int_to_params_fn()->invoke(1536, &params_str, error_msg));
   EXPECT_EQ(params_str, "dimension=1536");
 
   // Verify resolve_params callback computes storage sizes
   villagesql::ResolvedTypeParams resolved = {};
   EXPECT_FALSE(
-      desc.resolve_params_op()->invoke(params_str, &resolved, error_msg));
+      desc.resolve_params_fn()->invoke(params_str, &resolved, error_msg));
   EXPECT_EQ(resolved.persisted_length, 6144);
   EXPECT_EQ(resolved.max_decode_buffer_length, 32768);
 }

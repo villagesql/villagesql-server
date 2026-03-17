@@ -16,6 +16,7 @@
 SET(VILLAGESQL_TYPES_SOURCES
   type_decoder.cc
   type_encoder.cc
+  type_function.cc
   type_op.cc
   util.cc
 )

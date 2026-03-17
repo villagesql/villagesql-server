@@ -19,7 +19,6 @@
 
 #include <memory>
 #include <utility>
-#include "villagesql/types/type_op.h"
 
 // Forward declarations
 struct dict_table_t;
@@ -44,10 +43,8 @@ class Custom_column {
  public:
   using Info = std::pair<Custom_column *, bool>;
 
-  Custom_column(CompareOp compare_op,
-                std::shared_ptr<const TypeContext> type_context)
-      : compare_op_(std::move(compare_op)),
-        type_context_(std::move(type_context)) {}
+  explicit Custom_column(std::shared_ptr<const TypeContext> type_context)
+      : type_context_(std::move(type_context)) {}
 
   // Compare two values using the registered compare implementation.
   int compare(const unsigned char *data1, size_t len1,
@@ -88,7 +85,6 @@ class Custom_column {
   static void load_all(dict_table_t *table);
 
  private:
-  CompareOp compare_op_;
   std::shared_ptr<const TypeContext> type_context_;
 };
 }  // namespace innodb

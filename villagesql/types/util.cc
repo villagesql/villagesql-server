@@ -506,7 +506,7 @@ int CustomMemCompare(const Item *item, const uchar *data1, size_t len1,
 std::optional<size_t> TryComputeHash(const TypeContext &tc, const uchar *data,
                                      size_t len) {
   assert(tc.descriptor());
-  const auto &hash_op = tc.descriptor()->hash_op();
+  const auto &hash_op = tc.hash_op();
   if (!hash_op.has_value()) return std::nullopt;
   return hash_op->invoke(data, len);
 }

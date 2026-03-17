@@ -30,22 +30,21 @@ TypeDescriptorKey::TypeDescriptorKey(std::string type_name,
                       normalize_extension_name(extension_name_) + "." +
                       normalize_extension_name(extension_version_)) {}
 
-TypeDescriptor::TypeDescriptor(TypeDescriptorKey key, unsigned char impl_type,
-                               int64_t persisted_len,
-                               int64_t max_unpersisted_len, EncodeOp encode,
-                               DecodeOp decode, CompareOp compare,
-                               std::optional<HashOp> hash,
-                               std::optional<IntToParamsOp> int_to_params,
-                               std::optional<ResolveParamsOp> resolve_params)
+TypeDescriptor::TypeDescriptor(
+    TypeDescriptorKey key, unsigned char impl_type, int64_t persisted_len,
+    int64_t max_unpersisted_len, EncodeFunction encode, DecodeFunction decode,
+    CompareFunction compare, std::optional<HashFunction> hash,
+    std::optional<IntToParamsFunction> int_to_params,
+    std::optional<ResolveParamsFunction> resolve_params)
     : key_(std::move(key)),
       implementation_type_(impl_type),
       persisted_length_(persisted_len),
       max_decode_buffer_length_(max_unpersisted_len),
-      encode_op_(std::move(encode)),
-      decode_op_(std::move(decode)),
-      compare_op_(std::move(compare)),
-      hash_op_(std::move(hash)),
-      int_to_params_op_(std::move(int_to_params)),
-      resolve_params_op_(std::move(resolve_params)) {}
+      encode_fn_(std::move(encode)),
+      decode_fn_(std::move(decode)),
+      compare_fn_(std::move(compare)),
+      hash_fn_(std::move(hash)),
+      int_to_params_fn_(std::move(int_to_params)),
+      resolve_params_fn_(std::move(resolve_params)) {}
 
 }  // namespace villagesql

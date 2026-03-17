@@ -592,8 +592,8 @@ using ResolveTypeParamsFunc =
 // The server normalizes casing and sort order via TypeParameters::from_raw(),
 // which re-parses the string.
 // TODO(villagesql-performance): The map→string→parse→string round-trip could
-// be avoided by changing IntToParamsOp to return a map directly instead of
-// going through the VDF string ABI. Not expected to matter since this only
+// be avoided by changing IntToParamsFunction to return a map directly instead
+// of going through the VDF string ABI. Not expected to matter since this only
 // runs during DDL.
 template <IntToTypeParamsFunc Func>
 struct IntToParamsWrapper {
