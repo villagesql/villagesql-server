@@ -30,7 +30,7 @@
 static_assert(VEF_STORAGE_SE_INTF_VERSION == 1,
               "This C++ wrapper supports ABI v1 only");
 
-namespace storage::innodb {
+namespace villagesql::storage {
 
 // Error codes returned by storage ABI functions.
 enum class Error {
@@ -89,7 +89,8 @@ inline std::string_view last_error() { return detail::tl_error_msg; }
 // writes under its scope, then call ::commit() to persist the redo log and
 // release all page latches acquired under this mtr. MtrCtx objects are not
 // copyable or movable; allocate them on the stack for each operation.
-struct MtrCtx {
+class MtrCtx {
+ public:
   using Ref = vef_storage_mtr_ref_t;
 
   [[nodiscard]] Ref start();
@@ -119,11 +120,14 @@ struct MtrCtx {
 // A Space::Ref is supplied by VEF when it calls the extension's storage
 // interface methods (e.g. column storage operations). The Space object
 // itself is opaque; only its Ref type is used directly.
-struct Space {
+class Space {
+ public:
   using Ref = vef_storage_space_ref_t;
+
+  Space() = delete;
 };
 
-struct Page;
+class Page;
 
 // Storage allocation unit within a tablespace. A segment acquires individual
 // pages and groups of pages (extents) from the tablespace as it grows; these
@@ -131,7 +135,8 @@ struct Page;
 // created once via ::create(), which returns a root page number that must be
 // persisted in column metadata. Segment headers live at the start of the root
 // page and are accessed via ::get_header() to allocate new pages.
-struct Segment {
+class Segment {
+ public:
   // Opaque segment header reference. Obtained from ::get_header() and passed
   // to Page::load_new(); do not dereference or perform arithmetic on it.
   using Ref = void *;
@@ -172,6 +177,8 @@ struct Segment {
   // @return Error::SUCCESS on success, other Error code on failure
   [[nodiscard]] static Error drop(Space::Ref space, TrxRef trx_ref,
                                   PageRef root_page_ref);
+
+  Segment() = delete;
 };
 
 // Smallest unit of storage within a tablespace, accessed as an in-memory
@@ -184,7 +191,8 @@ struct Segment {
 // not be used after the MtrCtx it was loaded with has been committed. However,
 // a Page object may be reused by loading it again via ::load() or
 // ::load_new() with the same MtrCtx or a new one.
-struct Page {
+class Page {
+ public:
   Page() = default;
 
   // Offset within a page.
@@ -330,7 +338,7 @@ struct Page {
   Page &operator=(Page &&) = delete;
 
  private:
-  friend struct Segment;
+  friend class Segment;
 
   // Mutable access for internal use by Segment::get_header() only.
   unsigned char *get_data();
@@ -724,5 +732,5 @@ inline uint64_t Page::read_integer_8(Offset o) const {
   return read_integer<uint64_t>(o);
 }
 
-}  // namespace storage::innodb
+}  // namespace villagesql::storage
 #endif  // VILLAGESQL_SDK_STORAGE_API_H_

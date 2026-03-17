@@ -203,6 +203,7 @@ add_custom_target(sdk ALL
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/extension_builder.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/func_builder.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/func_types.h"
+    "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/storage_api.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/storage_builder.h"
     "${CMAKE_CURRENT_SOURCE_DIR}/sdk/include/villagesql/type_builder.h"
     "${SDK_STAGING_DIR}/include-dev/villagesql/"
