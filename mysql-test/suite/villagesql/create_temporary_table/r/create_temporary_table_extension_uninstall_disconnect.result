@@ -1,0 +1,4 @@
+CREATE TEMPORARY TABLE t1 (id INT, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(1.0,2.0)');
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': type 'COMPLEX' is currently in use

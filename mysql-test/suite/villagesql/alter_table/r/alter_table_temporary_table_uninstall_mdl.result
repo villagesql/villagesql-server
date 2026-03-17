@@ -1,0 +1,8 @@
+CREATE TEMPORARY TABLE t1 (id INT PRIMARY KEY, name VARCHAR(50));
+ALTER TABLE t1 ADD COLUMN value COMPLEX;
+# UNINSTALL should fail - t1 holds a reference via the custom column
+UNINSTALL EXTENSION vsql_complex;
+ERROR HY000: Cannot uninstall extension 'vsql_complex': type 'COMPLEX' is currently in use
+ALTER TABLE t1 DROP COLUMN value;
+# UNINSTALL should now succeed - custom column dropped
+DROP TABLE t1;
