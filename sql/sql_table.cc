@@ -17095,11 +17095,7 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     return true;
   }
   // VillageSQL: The guard ensures the vector is cleared on all exit paths.
-<<<<<<< HEAD
   villagesql::AlterCustomFieldsGuard alter_custom_fields_guard(thd);
-=======
-  villagesql::AlterCustomFieldsGuard alter_custom_fields_guard{thd};
->>>>>>> c7e54611c70 (alter table tmp table handling)
 
   /*
    If this is an ALTER TABLE and no explicit row type specified reuse
@@ -17974,12 +17970,6 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
                               alter_ctx.tmp_name, true, true, *table_def);
     }
     if (!new_table) goto err_new_table_cleanup;
-
-    // VillageSQL: The altered temporary table has been renamed to its final
-    // name. Re-annotate so the session tracks its custom columns under the
-    // new name, keeping the extension reference alive.
-    villagesql::AnnotateCustomColumnsInTmpTable(thd, new_table,
-                                                alter_info->create_list);
 
     /*
       Note: In case of MERGE table, we do not attach children. We do not
