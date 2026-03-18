@@ -14,11 +14,11 @@
 # along with this program; if not, see <https://www.gnu.org/licenses/>.
 
 # Multi-stage Dockerfile for VillageSQL Server
-# Build context should be the repository root:
-#   docker build -f docker/server/Dockerfile .
+# Build from the repository root:
+#   docker build -f docker/server/Dockerfile -t villagesql/server:latest .
 
 # ---------------------------------------------------------------------------
-# Stage 1: Build VillageSQL from source
+# Stage 1: Build VillageSQL from source and bundled extensions
 # ---------------------------------------------------------------------------
 FROM ubuntu:24.04 AS builder
 
@@ -28,8 +28,9 @@ ENV DEBIAN_FRONTEND=noninteractive
 COPY scripts/setup_linux_build_env.sh /tmp/
 RUN /tmp/setup_linux_build_env.sh && rm -rf /var/lib/apt/lists/*
 
-# Copy source tree
-COPY . /source
+# Copy source tree (excluding docker/ so script changes don't invalidate the
+# expensive server build cache)
+COPY --exclude=docker . /source
 
 # Build and install
 RUN mkdir /build && cd /build && \
@@ -44,6 +45,16 @@ RUN mkdir /build && cd /build && \
         -DMYSQLX_UNIX_ADDR=/var/run/mysqld/mysqlx.sock \
     && make -j"$(nproc)" \
     && make install DESTDIR=/install
+
+# Build bundled extensions and install .veb files to /install/usr/lib/veb
+ARG VSQL_DEV_ABI=ON
+COPY docker/server/build-bundled-extension.sh /usr/local/bin/
+RUN mkdir -p /install/usr/lib/veb
+RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extension.sh vsql-complex
+RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extension.sh vsql-uuid
+RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extension.sh vsql-network-address
+RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extension.sh vsql-ai
+RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extension.sh vsql-crypto
 
 # ---------------------------------------------------------------------------
 # Stage 2: Runtime image
