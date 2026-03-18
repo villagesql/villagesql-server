@@ -872,6 +872,7 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
     const vef_func_desc_t *int_to_params_vdf = nullptr;
     const vef_func_desc_t *resolve_params_vdf = nullptr;
     const vef_func_desc_t *intrinsic_default_vdf = nullptr;
+    const vef_type_storage_intf_t *storage_intf = nullptr;
 
     if (td->protocol >= VEF_PROTOCOL_2 &&
         ext_reg.negotiated_protocol >= VEF_PROTOCOL_2) {
@@ -1026,6 +1027,28 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
           return true;
         }
       }
+
+      if (td->storage_intf != nullptr) {
+        if (td->storage_intf->version > VEF_STORAGE_TYPE_INTF_VERSION) {
+          LogVSQL(ERROR_LEVEL,
+                  "Type '%s' in extension '%s': column storage interface"
+                  " version %u unsupported. Please upgrade server.",
+                  type_name.c_str(), extension_name.c_str(),
+                  td->storage_intf->version);
+          return true;
+        }
+        if (!td->storage_intf->create || !td->storage_intf->drop ||
+            !td->storage_intf->load || !td->storage_intf->insert ||
+            !td->storage_intf->select || !td->storage_intf->mark_delete ||
+            !td->storage_intf->purge) {
+          LogVSQL(ERROR_LEVEL,
+                  "Type '%s' in extension '%s': Not all column storage"
+                  " interface are registered.",
+                  type_name.c_str(), extension_name.c_str());
+          return true;
+        }
+        storage_intf = td->storage_intf;
+      }
     }
 
     // Validate that int_to_params requires resolve_params.
@@ -1063,7 +1086,7 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
         MYSQL_TYPE_VARCHAR, td->persisted_length, td->max_decode_buffer_length,
         std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
         std::move(hash_fn), std::move(int_to_params_fn),
-        std::move(resolve_params_fn));
+        std::move(resolve_params_fn), storage_intf);
 
     if (intrinsic_default_vdf != nullptr)
       descriptor.set_intrinsic_default_fn(
