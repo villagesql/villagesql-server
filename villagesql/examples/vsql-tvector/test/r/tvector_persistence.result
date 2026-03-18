@@ -21,7 +21,7 @@ SHOW CREATE TABLE t_persist;
 Table	Create Table
 t_persist	CREATE TABLE `t_persist` (
   `id` int NOT NULL AUTO_INCREMENT,
-  `v` vsql_tvector.TVECTOR DEFAULT NULL,
+  `v` vsql_tvector.TVECTOR(3) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 DROP TABLE t_persist;

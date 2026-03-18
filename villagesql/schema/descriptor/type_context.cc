@@ -17,6 +17,8 @@
 #include "villagesql/schema/descriptor/type_context.h"
 
 #include <algorithm>
+#include <cerrno>
+#include <cstdlib>
 #include <utility>
 #include <vector>
 
@@ -30,14 +32,40 @@ void TypeContext::resolve_cached_values() {
   // Build qualified_base_name_ once: "ext.type" (no parameters)
   qualified_base_name_ = descriptor_->qualified_base_name();
 
-  // Build qualified_name_ once: "ext.type" or "ext.type('k1=v1,k2=v2,...')"
-  // TODO(villagesql-beta): add special case for TYPE(N) when only a single
-  // integer parameter is present (i.e. int_to_params was used).
+  // Build qualified_name_: "ext.type", "ext.type(N)", or
+  // "ext.type('k1=v1,k2=v2,...')".
+  // When int_to_params is available, try each integer-valued parameter to see
+  // if int_to_params(N) reproduces our exact params. If so, use the shorter
+  // TYPE(N) form. Otherwise fall back to TYPE('k=v,...').
   qualified_name_ = descriptor_->qualified_base_name();
   if (!key_.parameters().empty()) {
-    qualified_name_ += "('";
-    qualified_name_ += key_.parameters().str();
-    qualified_name_ += "')";
+    bool used_shorthand = false;
+    if (descriptor_->int_to_params_fn().has_value()) {
+      for (unsigned int i = 0; i < key_.parameters().count(); i++) {
+        const char *val = key_.parameters().value_data()[i];
+        char *end = nullptr;
+        errno = 0;
+        int64_t n = strtoll(val, &end, 10);
+        if (errno != 0 || end == val || *end != '\0') continue;
+        std::string result;
+        char err[VEF_MAX_ERROR_LEN] = {0};
+        if (!descriptor_->int_to_params_fn()->invoke(n, &result, err)) {
+          TypeParameters candidate = TypeParameters::from_raw(result);
+          if (candidate == key_.parameters()) {
+            qualified_name_ += "(";
+            qualified_name_ += std::to_string(n);
+            qualified_name_ += ")";
+            used_shorthand = true;
+            break;
+          }
+        }
+      }
+    }
+    if (!used_shorthand) {
+      qualified_name_ += "('";
+      qualified_name_ += key_.parameters().str();
+      qualified_name_ += "')";
+    }
   }
 
   if (!key_.parameters().empty() &&
@@ -229,7 +257,8 @@ TypeParameters TypeParameters::from_json(const std::string &json) {
     first = false;
   }
 
-  return TypeParameters(std::move(canonical));
+  // Canonicalize so key order and casing match what from_raw() produces.
+  return from_raw(canonical);
 }
 
 }  // namespace villagesql

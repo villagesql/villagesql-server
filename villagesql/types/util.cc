@@ -443,9 +443,8 @@ bool DecodeStringForItem(Item *item, const String &from, String *out) {
 }
 
 void AppendFullyQualifiedName(const TypeContext &tc, String *out) {
-  out->append(tc.extension_name().c_str(), tc.extension_name().length());
-  out->append('.');
-  out->append(tc.type_name().c_str(), tc.type_name().length());
+  const std::string &name = tc.qualified_name();
+  out->append(name.c_str(), name.length());
 }
 
 bool InjectAndEncodeCustomType(Item *item, const TypeContext &tc) {

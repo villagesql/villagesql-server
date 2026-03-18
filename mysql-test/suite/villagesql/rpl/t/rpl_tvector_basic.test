@@ -3,8 +3,6 @@
 # source to replica for INSERT, UPDATE, DELETE, and ALTER TABLE operations
 # Uses default binlog format (ROW)
 
---source include/villagesql/not_implemented.inc
-
 --source include/rpl/init_source_replica.inc
 
 # Install TVECTOR extension on both source and replica

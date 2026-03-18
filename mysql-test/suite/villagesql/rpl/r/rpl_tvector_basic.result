@@ -1,0 +1,99 @@
+include/rpl/init_source_replica.inc
+Warnings:
+Note	####	Sending passwords in plain text without SSL/TLS is extremely insecure.
+Note	####	Storing MySQL user name or password information in the connection metadata repository is not secure and is therefore not recommended. Please consider using the USER and PASSWORD connection options for START REPLICA; see the 'START REPLICA Syntax' in the MySQL Manual for more information.
+[connection master]
+[connection server_1]
+[connection server_2]
+CREATE TABLE t1 (
+id INT PRIMARY KEY,
+vec TVECTOR(3)
+);
+INSERT INTO t1 VALUES (1, '[1.0,2.0,3.0]'), (2, '[4.5,5.5,6.5]'), (3, '[-1.0,0.0,1.0]');
+SELECT * FROM t1 ORDER BY id;
+id	vec
+1	[1,2,3]
+2	[4.5,5.5,6.5]
+3	[-1,0,1]
+include/rpl/sync_to_replica.inc
+SELECT * FROM t1 ORDER BY id;
+id	vec
+1	[1,2,3]
+2	[4.5,5.5,6.5]
+3	[-1,0,1]
+include/diff_tables.inc [master:t1, slave:t1]
+UPDATE t1 SET vec = '[7.0,8.0,9.0]' WHERE id = 1;
+UPDATE t1 SET vec = '[0.0,0.0,0.0]' WHERE id = 3;
+SELECT * FROM t1 ORDER BY id;
+id	vec
+1	[7,8,9]
+2	[4.5,5.5,6.5]
+3	[0,0,0]
+include/rpl/sync_to_replica.inc
+SELECT * FROM t1 ORDER BY id;
+id	vec
+1	[7,8,9]
+2	[4.5,5.5,6.5]
+3	[0,0,0]
+include/diff_tables.inc [master:t1, slave:t1]
+DELETE FROM t1 WHERE id = 2;
+SELECT * FROM t1 ORDER BY id;
+id	vec
+1	[7,8,9]
+3	[0,0,0]
+include/rpl/sync_to_replica.inc
+SELECT * FROM t1 ORDER BY id;
+id	vec
+1	[7,8,9]
+3	[0,0,0]
+include/diff_tables.inc [master:t1, slave:t1]
+INSERT INTO t1 VALUES (4, NULL);
+SELECT * FROM t1 ORDER BY id;
+id	vec
+1	[7,8,9]
+3	[0,0,0]
+4	NULL
+include/rpl/sync_to_replica.inc
+SELECT * FROM t1 ORDER BY id;
+id	vec
+1	[7,8,9]
+3	[0,0,0]
+4	NULL
+include/diff_tables.inc [master:t1, slave:t1]
+CREATE TABLE t2 (
+id INT PRIMARY KEY,
+v1 TVECTOR(3),
+v2 TVECTOR(2)
+);
+INSERT INTO t2 VALUES
+(1, '[1.0,2.0,3.0]', '[10.0,20.0]'),
+(2, '[4.0,5.0,6.0]', '[30.0,40.0]');
+SELECT * FROM t2 ORDER BY id;
+id	v1	v2
+1	[1,2,3]	[10,20]
+2	[4,5,6]	[30,40]
+include/rpl/sync_to_replica.inc
+SELECT * FROM t2 ORDER BY id;
+id	v1	v2
+1	[1,2,3]	[10,20]
+2	[4,5,6]	[30,40]
+include/diff_tables.inc [master:t2, slave:t2]
+ALTER TABLE t2 ADD COLUMN v3 TVECTOR(4);
+INSERT INTO t2 VALUES (3, '[7.0,8.0,9.0]', '[50.0,60.0]', '[100.0,200.0,300.0,400.0]');
+SELECT * FROM t2 ORDER BY id;
+id	v1	v2	v3
+1	[1,2,3]	[10,20]	NULL
+2	[4,5,6]	[30,40]	NULL
+3	[7,8,9]	[50,60]	[100,200,300,400]
+include/rpl/sync_to_replica.inc
+SELECT * FROM t2 ORDER BY id;
+id	v1	v2	v3
+1	[1,2,3]	[10,20]	NULL
+2	[4,5,6]	[30,40]	NULL
+3	[7,8,9]	[50,60]	[100,200,300,400]
+include/diff_tables.inc [master:t2, slave:t2]
+DROP TABLE t1, t2;
+include/rpl/sync_to_replica.inc
+[connection server_1]
+[connection server_2]
+include/rpl/deinit.inc
