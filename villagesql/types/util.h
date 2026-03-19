@@ -70,7 +70,8 @@ extern bool ResolveTypeToContext(const LEX_STRING &extension_name,
 // MaybeInjectCustomType can inject type contexts during open_table_from_share
 // (which calls unpack_value_generator before AnnotateCustomColumnsInTmpTable
 // runs). Must be called before open_table_uncached for temporary tables.
-extern void PrepareTmpTableCustomColumns(THD *thd, const char *db,
+// Returns true on error (e.g. extension uninstalled concurrently).
+extern bool PrepareTmpTableCustomColumns(THD *thd, const char *db,
                                          const char *table_name,
                                          List<Create_field> &create_fields);
 
@@ -78,7 +79,8 @@ extern void PrepareTmpTableCustomColumns(THD *thd, const char *db,
 // a temporary TABLE, and update session metadata with shared_ptr-owned entries
 // so subsequent opens of the same table can find the type context. Replaces
 // PrepareTmpTableCustomColumns entries (net-zero refcount change).
-extern void AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
+// Returns true on error (e.g. extension uninstalled concurrently).
+extern bool AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
                                             List<Create_field> &create_fields);
 
 // Remove session metadata entries for a user-created temporary table,

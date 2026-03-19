@@ -67,6 +67,22 @@ static const char *ER_INCOMPARABLE_TYPES =
 static const char *ER_INCOMPATIBLE_TYPES =
     "Cannot compare values of incompatible types '%s' and '%s'";
 
+// Verify that the Field's storage length matches the TypeContext's
+// persisted_length.
+static bool CheckFieldLengthMatchesType(const Field *field,
+                                        const TypeContext *tc) {
+  if (should_assert_if_false(static_cast<int64_t>(field->field_length) ==
+                             tc->persisted_length())) {
+    LogVSQL(ERROR_LEVEL,
+            "field_length (%u) != persisted_length (%" PRId64
+            ") for column %s (type %s)",
+            field->field_length, tc->persisted_length(), field->field_name,
+            tc->qualified_name().c_str());
+    return true;
+  }
+  return false;
+}
+
 bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
   if (should_assert_if_null(thd)) {
     LogVSQL(ERROR_LEVEL, "thd is null in MaybeInjectCustomType");
@@ -159,22 +175,7 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
   }
 
   field->set_type_context(tc);
-
-  // Verify that the Field's storage length matches the TypeContext's
-  // persisted_length. A mismatch here would mean InnoDB allocated a different
-  // amount of storage than the type expects, which leads to silent data
-  // corruption.
-  if (should_assert_if_false(static_cast<int64_t>(field->field_length) ==
-                             tc->persisted_length())) {
-    LogVSQL(ERROR_LEVEL,
-            "field_length (%u) != persisted_length (%" PRId64
-            ") for column %s in table %s.%s (type %s)",
-            field->field_length, tc->persisted_length(), column_name.c_str(),
-            db_name.c_str(), table_name.c_str(), tc->qualified_name().c_str());
-    return true;
-  }
-
-  return false;
+  return CheckFieldLengthMatchesType(field, tc);
 }
 
 bool ResolveTypeToContext(const LEX_STRING &extension_name,
@@ -1154,26 +1155,36 @@ bool CheckCustomTypeUsage(Item *item, THD *thd) {
   return false;  // Continue walking
 }
 
-static void insert_tmp_metadata_for_thd(THD *thd, const ColumnKey &key,
+// Returns true on error (acquire failed, meaning the extension was uninstalled
+// concurrently). Reports the error before returning.
+static bool insert_tmp_metadata_for_thd(THD *thd, const ColumnKey &key,
                                         const TypeContextKey &source_key,
                                         Field *field = nullptr) {
   auto &vclient = VictionaryClient::instance();
   auto guard = vclient.get_read_lock();
   auto tc_owner = vclient.type_contexts().acquire_client_managed(source_key);
-  if (tc_owner == nullptr) return;
+  if (tc_owner == nullptr) {
+    villagesql_error(
+        "Custom type '%s.%s' is no longer available; the extension may have "
+        "been uninstalled",
+        MYF(0), source_key.descriptor_key().extension_name().c_str(),
+        source_key.descriptor_key().type_name().c_str());
+    return true;
+  }
   if (field != nullptr) {
     const TypeContext *tc = tc_owner.get();
     field->set_type_context(tc);
-    assert(static_cast<int64_t>(field->field_length) == tc->persisted_length());
+    if (CheckFieldLengthMatchesType(field, tc)) return true;
   }
-  if (!thd) return;
+  if (!thd) return false;
   if (!thd->villagesql_tmp_metadata) {
     thd->villagesql_tmp_metadata = std::make_unique<TmpMetadata>();
   }
   thd->villagesql_tmp_metadata->insert(key, std::move(tc_owner));
+  return false;
 }
 
-void PrepareTmpTableCustomColumns(THD *thd, const char *db,
+bool PrepareTmpTableCustomColumns(THD *thd, const char *db,
                                   const char *table_name,
                                   List<Create_field> &create_fields) {
   assert(!is_tmp_prefix(table_name));
@@ -1182,11 +1193,13 @@ void PrepareTmpTableCustomColumns(THD *thd, const char *db,
   while ((cdef = it++) != nullptr) {
     if (cdef->custom_type_context == nullptr) continue;
     ColumnKey key(db, table_name, cdef->field_name);
-    insert_tmp_metadata_for_thd(thd, key, cdef->custom_type_context->key());
+    if (insert_tmp_metadata_for_thd(thd, key, cdef->custom_type_context->key()))
+      return true;
   }
+  return false;
 }
 
-void AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
+bool AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
                                      List<Create_field> &create_fields) {
   assert(!is_tmp_prefix(table->s->table_name.str));
   List_iterator_fast<Create_field> it(create_fields);
@@ -1195,9 +1208,11 @@ void AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
     if (cdef->custom_type_context == nullptr) continue;
     ColumnKey key(table->s->db.str, table->s->table_name.str,
                   table->field[i]->field_name);
-    insert_tmp_metadata_for_thd(thd, key, cdef->custom_type_context->key(),
-                                table->field[i]);
+    if (insert_tmp_metadata_for_thd(thd, key, cdef->custom_type_context->key(),
+                                    table->field[i]))
+      return true;
   }
+  return false;
 }
 
 void RemoveTmpTableMetadata(THD *thd, const std::string &db,

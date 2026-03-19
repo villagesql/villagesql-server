@@ -1035,7 +1035,11 @@ static bool rea_create_tmp_table(
     return true;
   }
 
-  villagesql::AnnotateCustomColumnsInTmpTable(thd, table, create_fields);
+  if (villagesql::AnnotateCustomColumnsInTmpTable(thd, table, create_fields)) {
+    (void)rm_temporary_table(thd, create_info->db_type, path,
+                             tmp_table_ptr.get());
+    return true;
+  }
 
   // Transfer ownership of dd::Table object to TABLE_SHARE.
   table->s->tmp_table_def = tmp_table_ptr.release();
@@ -9196,8 +9200,9 @@ static bool create_table_impl(
     villagesql::PrepareAlterCustomFields(thd, alter_info->create_list);
   } else if (create_info->options & HA_LEX_CREATE_TMP_TABLE) {
     // User facing temporary table.
-    villagesql::PrepareTmpTableCustomColumns(thd, db, table_name,
-                                             alter_info->create_list);
+    if (villagesql::PrepareTmpTableCustomColumns(thd, db, table_name,
+                                                 alter_info->create_list))
+      return true;
   }
 
   THD_STAGE_INFO(thd, stage_creating_table);
@@ -18044,8 +18049,9 @@ bool mysql_alter_table(THD *thd, const char *new_db, const char *new_name,
     // VillageSQL: Copy-alter success path for temporary tables. new_table is
     // renamed rather than closed; re-register under the final name in
     // TmpMetadata to keep the extension refcount elevated.
-    villagesql::AnnotateCustomColumnsInTmpTable(thd, new_table,
-                                                alter_info->create_list);
+    if (villagesql::AnnotateCustomColumnsInTmpTable(thd, new_table,
+                                                    alter_info->create_list))
+      goto err_new_table_cleanup;
     /*
       We don't replicate alter table statement on temporary tables
       in RBR mode.
