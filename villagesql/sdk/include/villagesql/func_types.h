@@ -278,8 +278,6 @@ class StringResult {
   vef_vdf_result_t *r_;
 };
 
-<<<<<<< conflict 1 of 1
-+++++++ pzmunusl a5d2c54b "Add tvector_dot_product() to test VDF" (rebase destination)
 // CustomResult: result wrapper for non-parameterized custom type outputs.
 // For parameterized types (e.g., TVECTOR(N)), use CustomResultWith<P> instead.
 class CustomResult {
