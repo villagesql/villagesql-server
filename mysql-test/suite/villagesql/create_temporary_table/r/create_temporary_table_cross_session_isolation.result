@@ -9,7 +9,7 @@ SHOW CREATE TABLE t1;
 Table	Create Table
 t1	CREATE TEMPORARY TABLE `t1` (
   `id` int NOT NULL,
-  `val` vsql_tvector.TVECTOR DEFAULT NULL,
+  `val` vsql_tvector.TVECTOR(2) DEFAULT NULL,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 SELECT id, val FROM t1;
