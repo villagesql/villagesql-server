@@ -24,9 +24,6 @@
 #include "villagesql/schema/descriptor/type_context.h"
 #include "villagesql/schema/systable/custom_columns.h"
 
-class Field;
-class THD;
-
 namespace villagesql {
 
 /**
@@ -68,13 +65,6 @@ class TmpMetadata {
   }
 
   bool empty() const { return m_columns.empty(); }
-
-  // Acquire a TypeContext from the victionary and insert it into thd's
-  // TmpMetadata. If field is non-null, also calls set_type_context on it
-  // and validates the field length.
-  static void insert_for_thd(THD *thd, const ColumnKey &key,
-                              const TypeContextKey &source_key,
-                              Field *field = nullptr);
 
  private:
   // Map from normalized ColumnKey string to owned TypeContext reference.

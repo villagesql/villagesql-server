@@ -105,13 +105,13 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
   // metadata has an entry for this column, inject it and return.
   if (share.tmp_table != NO_TMP_TABLE &&
       thd->villagesql_tmp_metadata != nullptr) {
-    const TypeContext *tc =
-        thd->villagesql_tmp_metadata->get(col_key.str());
+    const TypeContext *tc = thd->villagesql_tmp_metadata->get(col_key.str());
     if (tc != nullptr) {
       field->set_type_context(tc);
       return false;
     }
-    // Fall through to victionary lookup.
+    // Fall through to victionary for type injection and field length
+    // validation.
   }
 
   auto &vclient = VictionaryClient::instance();
@@ -1154,9 +1154,9 @@ bool CheckCustomTypeUsage(Item *item, THD *thd) {
   return false;  // Continue walking
 }
 
-void TmpMetadata::insert_for_thd(THD *thd, const ColumnKey &key,
-                                 const TypeContextKey &source_key,
-                                 Field *field) {
+static void insert_tmp_metadata_for_thd(THD *thd, const ColumnKey &key,
+                                        const TypeContextKey &source_key,
+                                        Field *field = nullptr) {
   auto &vclient = VictionaryClient::instance();
   auto guard = vclient.get_read_lock();
   auto tc_owner = vclient.type_contexts().acquire_client_managed(source_key);
@@ -1182,7 +1182,7 @@ void PrepareTmpTableCustomColumns(THD *thd, const char *db,
   while ((cdef = it++) != nullptr) {
     if (cdef->custom_type_context == nullptr) continue;
     ColumnKey key(db, table_name, cdef->field_name);
-    TmpMetadata::insert_for_thd(thd, key, cdef->custom_type_context->key());
+    insert_tmp_metadata_for_thd(thd, key, cdef->custom_type_context->key());
   }
 }
 
@@ -1195,7 +1195,7 @@ void AnnotateCustomColumnsInTmpTable(THD *thd, TABLE *table,
     if (cdef->custom_type_context == nullptr) continue;
     ColumnKey key(table->s->db.str, table->s->table_name.str,
                   table->field[i]->field_name);
-    TmpMetadata::insert_for_thd(thd, key, cdef->custom_type_context->key(),
+    insert_tmp_metadata_for_thd(thd, key, cdef->custom_type_context->key(),
                                 table->field[i]);
   }
 }
