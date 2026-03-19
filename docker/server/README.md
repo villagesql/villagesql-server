@@ -70,6 +70,17 @@ INSTALL EXTENSION vsql_ai;
 INSTALL EXTENSION vsql_crypto;
 ```
 
+## Testing
+
+Smoke test an image to verify the server starts and all extensions install correctly:
+
+```bash
+docker/server/test-image.sh villagesql/server:latest
+```
+
+This starts a container, installs each extension, runs a basic CRUD test with the
+COMPLEX type, and cleans up.
+
 ## Building Additional Extensions
 
 The image includes a build toolchain (cmake, g++, libssl-dev) and the VillageSQL
