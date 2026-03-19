@@ -110,6 +110,15 @@ std::optional<Complex> TryLoadFromInValue(const vef_invalue_t *v) {
   return load_complex(v->bin_value);
 }
 
+void ReturnWarning(std::string_view err_msg, vef_vdf_result_t *result) {
+  result->type = VEF_RESULT_WARNING;
+  if (err_msg.size() >= VEF_MAX_ERROR_LEN) {
+    err_msg = err_msg.substr(0, VEF_MAX_ERROR_LEN - 1);
+  }
+  err_msg.copy(result->error_msg, err_msg.size());
+  result->error_msg[err_msg.size()] = 0;
+}
+
 void ReturnError(std::string_view err_msg, vef_vdf_result_t *result) {
   result->type = VEF_RESULT_ERROR;
   if (err_msg.size() >= VEF_MAX_ERROR_LEN) {
@@ -330,7 +339,7 @@ void complex_divide_impl(vef_context_t *ctx, vef_invalue_t *in_l,
   // Check for division by zero
   double denominator = rhs->re * rhs->re + rhs->im * rhs->im;
   if (denominator == 0.0) {
-    ReturnError("division by 0", out);
+    ReturnWarning("division by 0", out);
     return;
   }
 

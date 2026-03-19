@@ -144,7 +144,8 @@ bool vdf_handler::fix_fields(THD *thd [[maybe_unused]],
 
     m_udf->vdf_func_desc->prerun(&m_context, &prerun_args, &prerun_result);
 
-    if (prerun_result.type == VEF_RESULT_ERROR) {
+    if (prerun_result.type == VEF_RESULT_WARNING ||
+        prerun_result.type == VEF_RESULT_ERROR) {
       my_error(ER_CANT_INITIALIZE_UDF, MYF(0), m_udf->name.str,
                error_msg[0] ? error_msg : "prerun failed");
       return true;
@@ -288,11 +289,18 @@ bool vdf_handler::invoke_numeric(T *out_value, bool *null_value) {
     case VEF_RESULT_NULL:
       *null_value = true;
       return false;
-    case VEF_RESULT_ERROR:
+    case VEF_RESULT_WARNING:
       push_warning_printf(
           current_thd, Sql_condition::SL_WARNING, ER_UDF_ERROR,
           "VDF error in function '%s': %s", m_udf->name.str,
           m_error_msg[0] != '\0' ? m_error_msg : "unknown error");
+      m_error = 1;
+      *null_value = true;
+      return false;
+    case VEF_RESULT_ERROR:
+      my_printf_error(ER_UDF_ERROR, "VDF error in function '%s': %s", MYF(0),
+                      m_udf->name.str,
+                      m_error_msg[0] != '\0' ? m_error_msg : "unknown error");
       m_error = 1;
       *null_value = true;
       return false;
@@ -382,11 +390,17 @@ String *vdf_handler::val_str(String *str, String *save_str,
     }
     case VEF_RESULT_NULL:
       return nullptr;
-    case VEF_RESULT_ERROR:
+    case VEF_RESULT_WARNING:
       push_warning_printf(
           current_thd, Sql_condition::SL_WARNING, ER_UDF_ERROR,
           "VDF error in function '%s': %s", func_name,
           m_error_msg[0] != '\0' ? m_error_msg : "unknown error");
+      m_error = 1;
+      return nullptr;
+    case VEF_RESULT_ERROR:
+      my_printf_error(ER_UDF_ERROR, "VDF error in function '%s': %s", MYF(0),
+                      func_name,
+                      m_error_msg[0] != '\0' ? m_error_msg : "unknown error");
       m_error = 1;
       return nullptr;
   }

@@ -1,0 +1,34 @@
+# Test VDF VEF_RESULT_WARNING vs VEF_RESULT_ERROR behaviour.
+#
+# VEF_RESULT_WARNING: NULL is returned for the row, a warning is added, and
+#                     statement execution continues.
+# VEF_RESULT_ERROR:   the statement is aborted immediately with an error.
+
+INSTALL EXTENSION vsql_test_only;
+
+--echo # Warning: NULL returned, execution continues, warning visible
+SELECT vsql_test_only.test_result_kind('WARN row level issue') AS result;
+SHOW WARNINGS;
+
+--echo # Success: normal return value
+SELECT vsql_test_only.test_result_kind('anything') AS result;
+
+--echo # Error: statement aborted
+--error 3200
+SELECT vsql_test_only.test_result_kind('ERROR statement level error') AS result;
+
+--echo # Multi-row: warnings skip individual rows, execution continues
+CREATE TABLE t (id INT, input VARCHAR(100));
+INSERT INTO t VALUES (1, 'anything'), (2, 'WARN row two bad'), (3, 'anything');
+SELECT id, vsql_test_only.test_result_kind(input) AS result FROM t ORDER BY id;
+SHOW WARNINGS;
+DROP TABLE t;
+
+--echo # Multi-row: error aborts the whole statement
+CREATE TABLE t (id INT, input VARCHAR(100));
+INSERT INTO t VALUES (1, 'anything'), (2, 'ERROR row two fatal'), (3, 'anything');
+--error 3200
+SELECT id, vsql_test_only.test_result_kind(input) AS result FROM t ORDER BY id;
+DROP TABLE t;
+
+UNINSTALL EXTENSION vsql_test_only;

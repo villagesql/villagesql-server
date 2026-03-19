@@ -200,6 +200,13 @@ class IntResult {
     r_->type = VEF_RESULT_VALUE;
   }
   void set_null() { r_->type = VEF_RESULT_NULL; }
+  void warning(std::string_view msg) {
+    r_->type = VEF_RESULT_WARNING;
+    size_t n =
+        msg.size() < VEF_MAX_ERROR_LEN - 1 ? msg.size() : VEF_MAX_ERROR_LEN - 1;
+    memcpy(r_->error_msg, msg.data(), n);
+    r_->error_msg[n] = '\0';
+  }
   void error(std::string_view msg) {
     r_->type = VEF_RESULT_ERROR;
     size_t n =
@@ -221,6 +228,13 @@ class RealResult {
     r_->type = VEF_RESULT_VALUE;
   }
   void set_null() { r_->type = VEF_RESULT_NULL; }
+  void warning(std::string_view msg) {
+    r_->type = VEF_RESULT_WARNING;
+    size_t n =
+        msg.size() < VEF_MAX_ERROR_LEN - 1 ? msg.size() : VEF_MAX_ERROR_LEN - 1;
+    memcpy(r_->error_msg, msg.data(), n);
+    r_->error_msg[n] = '\0';
+  }
   void error(std::string_view msg) {
     r_->type = VEF_RESULT_ERROR;
     size_t n =
@@ -245,6 +259,13 @@ class StringResult {
     r_->type = VEF_RESULT_VALUE;
   }
   void set_null() { r_->type = VEF_RESULT_NULL; }
+  void warning(std::string_view msg) {
+    r_->type = VEF_RESULT_WARNING;
+    size_t n =
+        msg.size() < VEF_MAX_ERROR_LEN - 1 ? msg.size() : VEF_MAX_ERROR_LEN - 1;
+    memcpy(r_->error_msg, msg.data(), n);
+    r_->error_msg[n] = '\0';
+  }
   void error(std::string_view msg) {
     r_->type = VEF_RESULT_ERROR;
     size_t n =
@@ -257,6 +278,8 @@ class StringResult {
   vef_vdf_result_t *r_;
 };
 
+<<<<<<< conflict 1 of 1
++++++++ pzmunusl a5d2c54b "Add tvector_dot_product() to test VDF" (rebase destination)
 // CustomResult: result wrapper for non-parameterized custom type outputs.
 // For parameterized types (e.g., TVECTOR(N)), use CustomResultWith<P> instead.
 class CustomResult {
@@ -269,6 +292,13 @@ class CustomResult {
     r_->type = VEF_RESULT_VALUE;
   }
   void set_null() { r_->type = VEF_RESULT_NULL; }
+  void warning(std::string_view msg) {
+    r_->type = VEF_RESULT_WARNING;
+    size_t n =
+        msg.size() < VEF_MAX_ERROR_LEN - 1 ? msg.size() : VEF_MAX_ERROR_LEN - 1;
+    memcpy(r_->error_msg, msg.data(), n);
+    r_->error_msg[n] = '\0';
+  }
   void error(std::string_view msg) {
     r_->type = VEF_RESULT_ERROR;
     size_t n =
@@ -298,6 +328,13 @@ class CustomResultWith {
     r_->type = VEF_RESULT_VALUE;
   }
   void set_null() { r_->type = VEF_RESULT_NULL; }
+  void warning(std::string_view msg) {
+    r_->type = VEF_RESULT_WARNING;
+    size_t n =
+        msg.size() < VEF_MAX_ERROR_LEN - 1 ? msg.size() : VEF_MAX_ERROR_LEN - 1;
+    memcpy(r_->error_msg, msg.data(), n);
+    r_->error_msg[n] = '\0';
+  }
   void error(std::string_view msg) {
     r_->type = VEF_RESULT_ERROR;
     size_t n =

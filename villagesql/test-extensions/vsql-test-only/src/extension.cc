@@ -129,6 +129,40 @@ int fault_blob_compare(villagesql::Span<const unsigned char> a,
   return 0;
 }
 
+// test_result_kind: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR.
+//
+// Input string controls the outcome:
+//
+//   "WARN <msg>"   Returns VEF_RESULT_WARNING with <msg>: NULL is returned for
+//                  this row, a warning is added, and execution continues.
+//
+//   "ERROR <msg>"  Returns VEF_RESULT_ERROR with <msg>: the statement is
+//                  aborted immediately.
+//
+//   anything else  Returns 42 (success).
+//
+static void test_result_kind(villagesql::StringArg input,
+                             villagesql::IntResult out) {
+  if (input.is_null()) {
+    out.set_null();
+    return;
+  }
+  auto sv = input.value();
+  constexpr std::string_view kWarnPrefix = "WARN ";
+  constexpr std::string_view kErrorPrefix = "ERROR ";
+  if (sv.size() > kWarnPrefix.size() &&
+      sv.substr(0, kWarnPrefix.size()) == kWarnPrefix) {
+    out.warning(sv.substr(kWarnPrefix.size()));
+    return;
+  }
+  if (sv.size() > kErrorPrefix.size() &&
+      sv.substr(0, kErrorPrefix.size()) == kErrorPrefix) {
+    out.error(sv.substr(kErrorPrefix.size()));
+    return;
+  }
+  out.set(42);
+}
+
 constexpr const char *FAULT_BLOB = "FAULT_BLOB";
 
 VEF_GENERATE_ENTRY_POINTS(
@@ -150,4 +184,10 @@ VEF_GENERATE_ENTRY_POINTS(
         .func(make_type_decode<&fault_blob_decode>("fault_blob_decode",
                                                    FAULT_BLOB))
         .func(make_type_compare<&fault_blob_compare>("fault_blob_compare",
-                                                     FAULT_BLOB)))
+                                                     FAULT_BLOB))
+
+        // Test VDF: exercises VEF_RESULT_WARNING vs VEF_RESULT_ERROR
+        .func(make_func<&test_result_kind>("test_result_kind")
+                  .returns(INT)
+                  .param(STRING)
+                  .build()))

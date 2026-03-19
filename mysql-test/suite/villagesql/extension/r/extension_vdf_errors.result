@@ -19,7 +19,7 @@ SHOW WARNINGS;
 Level	Code	Message
 Warning	3200	VDF error in function 'complex_from_string': failed to encode 'not_a_complex_number'
 DROP TABLE t_strings;
-# Test COMPLEX_DIVIDE division by zero returns NULL
+# Test COMPLEX_DIVIDE division by zero returns NULL with warning
 SELECT vsql_complex.COMPLEX_DIVIDE('(1.0,2.0)', '(0.0,0.0)') AS result;
 result
 NULL

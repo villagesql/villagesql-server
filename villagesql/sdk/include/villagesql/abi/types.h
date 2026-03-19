@@ -292,8 +292,15 @@ typedef enum : int {
   // The result value is NULL
   VEF_RESULT_NULL = 1,
 
-  // The result is an error, message should be written to error_msg
-  VEF_RESULT_ERROR = 2,
+  // The result is a row-level issue: execution continues, NULL is returned for
+  // this row, and a warning is added to the statement's warning list.
+  // Use for bad input data that should not abort the query.
+  VEF_RESULT_WARNING = 2,
+
+  // The result is a fatal error: statement execution is aborted immediately.
+  // Use for corrupt stored data, programming errors, or other conditions that
+  // make it unsafe to continue.
+  VEF_RESULT_ERROR = 3,
 } vef_return_value_type_t;
 
 // Result from a VDF call

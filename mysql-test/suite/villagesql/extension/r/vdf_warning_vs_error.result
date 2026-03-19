@@ -1,0 +1,38 @@
+INSTALL EXTENSION vsql_test_only;
+# Warning: NULL returned, execution continues, warning visible
+SELECT vsql_test_only.test_result_kind('WARN row level issue') AS result;
+result
+NULL
+Warnings:
+Warning	3200	VDF error in function 'test_result_kind': row level issue
+SHOW WARNINGS;
+Level	Code	Message
+Warning	3200	VDF error in function 'test_result_kind': row level issue
+# Success: normal return value
+SELECT vsql_test_only.test_result_kind('anything') AS result;
+result
+42
+# Error: statement aborted
+SELECT vsql_test_only.test_result_kind('ERROR statement level error') AS result;
+ERROR HY000: VDF error in function 'test_result_kind': statement level error
+# Multi-row: warnings skip individual rows, execution continues
+CREATE TABLE t (id INT, input VARCHAR(100));
+INSERT INTO t VALUES (1, 'anything'), (2, 'WARN row two bad'), (3, 'anything');
+SELECT id, vsql_test_only.test_result_kind(input) AS result FROM t ORDER BY id;
+id	result
+1	42
+2	NULL
+3	42
+Warnings:
+Warning	3200	VDF error in function 'test_result_kind': row two bad
+SHOW WARNINGS;
+Level	Code	Message
+Warning	3200	VDF error in function 'test_result_kind': row two bad
+DROP TABLE t;
+# Multi-row: error aborts the whole statement
+CREATE TABLE t (id INT, input VARCHAR(100));
+INSERT INTO t VALUES (1, 'anything'), (2, 'ERROR row two fatal'), (3, 'anything');
+SELECT id, vsql_test_only.test_result_kind(input) AS result FROM t ORDER BY id;
+ERROR HY000: VDF error in function 'test_result_kind': row two fatal
+DROP TABLE t;
+UNINSTALL EXTENSION vsql_test_only;

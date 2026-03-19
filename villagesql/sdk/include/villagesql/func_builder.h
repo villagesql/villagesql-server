@@ -277,7 +277,7 @@ struct FromStringWrapper {
                        arg.str_len, &length);
 
     if (failed) {
-      result->type = VEF_RESULT_ERROR;
+      result->type = VEF_RESULT_WARNING;
       constexpr size_t kMaxInputDisplay = 64;
       size_t display_len = arg.str_len;
       const char *ellipsis = "";
@@ -419,7 +419,7 @@ struct TypeEncodeVdfWrapper {
     bool failed = Func({arg.str_value, arg.str_len},
                        {result->bin_buf, result->max_bin_len}, &length);
     if (failed) {
-      result->type = VEF_RESULT_ERROR;
+      result->type = VEF_RESULT_WARNING;
       constexpr size_t kMaxInputDisplay = 64;
       size_t display_len = arg.str_len;
       const char *ellipsis = "";

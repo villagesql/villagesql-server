@@ -14,7 +14,7 @@ SELECT id, COMPLEX_FROM_STRING(str_val) AS result FROM t_strings;
 SHOW WARNINGS;
 DROP TABLE t_strings;
 
---echo # Test COMPLEX_DIVIDE division by zero returns NULL
+--echo # Test COMPLEX_DIVIDE division by zero returns NULL with warning
 SELECT vsql_complex.COMPLEX_DIVIDE('(1.0,2.0)', '(0.0,0.0)') AS result;
 SELECT vsql_complex.COMPLEX_DIVIDE('(3.0,4.0)', '(0,0)') AS result;
 
