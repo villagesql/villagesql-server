@@ -119,7 +119,8 @@
 #include "string_with_len.h"
 #include "template_utils.h"
 #include "thr_mutex.h"
-// VillageSQL: Needed for destructor.
+// VillageSQL: Complete type needed for THD destructor to destroy
+// unique_ptr<TmpMetadata> member villagesql_tmp_metadata.
 #include "villagesql/schema/tmp_metadata.h"
 
 class Parse_tree_root;
