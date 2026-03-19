@@ -28,8 +28,8 @@
 #include <utility>
 
 #include "villagesql/schema/systable/helpers.h"
-#include "villagesql/sdk/include/villagesql/abi/storage.h"
 #include "villagesql/sdk/include/villagesql/abi/types.h"
+#include "villagesql/types/storage.h"
 #include "villagesql/types/type_function.h"
 
 namespace villagesql {
@@ -126,7 +126,7 @@ class TypeDescriptor {
       CompareFunction compare, std::optional<HashFunction> hash = std::nullopt,
       std::optional<IntToParamsFunction> int_to_params = std::nullopt,
       std::optional<ResolveParamsFunction> resolve_params = std::nullopt,
-      const vef_type_storage_intf_t *storage_intf = nullptr);
+      std::optional<StorageInterface> storage_intf = std::nullopt);
 
   // Disable copy (descriptors should not be copied)
   TypeDescriptor(const TypeDescriptor &) = delete;
@@ -198,9 +198,11 @@ class TypeDescriptor {
     intrinsic_default_fn_ = std::move(fn);
   }
 
-  // Returns the storage interface for this type, or nullptr if the type does
+  // Returns the storage interface for this type, or nullopt if the type does
   // not manage its own column storage.
-  const vef_type_storage_intf_t *storage_intf() const { return storage_intf_; }
+  const std::optional<StorageInterface> &storage_intf() const {
+    return storage_intf_;
+  }
 
  private:
   TypeDescriptorKey key_;
@@ -222,10 +224,8 @@ class TypeDescriptor {
   std::optional<IntrinsicDefaultFunction> intrinsic_default_fn_;
 
   // Storage interface provided by the extension for managing column storage.
-  // Null if the type uses default InnoDB column storage.
-  // Lifetime: owned by the extension DSO, which remains loaded for the
-  // duration of this TypeDescriptor's lifetime.
-  const vef_type_storage_intf_t *storage_intf_{nullptr};
+  // Empty if the type uses default InnoDB column storage.
+  std::optional<StorageInterface> storage_intf_;
 };
 
 // TableTraits specialization for TypeDescriptor.

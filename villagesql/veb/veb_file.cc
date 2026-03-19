@@ -1029,14 +1029,6 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
       }
 
       if (td->storage_intf != nullptr) {
-        if (td->storage_intf->version > VEF_STORAGE_TYPE_INTF_VERSION) {
-          LogVSQL(ERROR_LEVEL,
-                  "Type '%s' in extension '%s': column storage interface"
-                  " version %u unsupported. Please upgrade server.",
-                  type_name.c_str(), extension_name.c_str(),
-                  td->storage_intf->version);
-          return true;
-        }
         if (!td->storage_intf->create || !td->storage_intf->drop ||
             !td->storage_intf->load || !td->storage_intf->insert ||
             !td->storage_intf->select || !td->storage_intf->mark_delete ||
@@ -1081,12 +1073,15 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
     if (resolve_params_vdf != nullptr)
       resolve_params_fn.emplace(resolve_params_vdf);
 
+    std::optional<StorageInterface> storage_intf_fns;
+    if (storage_intf != nullptr) storage_intf_fns.emplace(*storage_intf);
+
     TypeDescriptor descriptor(
         TypeDescriptorKey(type_name, extension_name, extension_version),
         MYSQL_TYPE_VARCHAR, td->persisted_length, td->max_decode_buffer_length,
         std::move(encode_fn), std::move(decode_fn), std::move(compare_fn),
         std::move(hash_fn), std::move(int_to_params_fn),
-        std::move(resolve_params_fn), storage_intf);
+        std::move(resolve_params_fn), std::move(storage_intf_fns));
 
     if (intrinsic_default_vdf != nullptr)
       descriptor.set_intrinsic_default_fn(

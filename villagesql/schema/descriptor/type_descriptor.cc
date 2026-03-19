@@ -36,7 +36,7 @@ TypeDescriptor::TypeDescriptor(
     CompareFunction compare, std::optional<HashFunction> hash,
     std::optional<IntToParamsFunction> int_to_params,
     std::optional<ResolveParamsFunction> resolve_params,
-    const vef_type_storage_intf_t *storage_intf)
+    std::optional<StorageInterface> storage_intf)
     : key_(std::move(key)),
       implementation_type_(impl_type),
       persisted_length_(persisted_len),
@@ -47,6 +47,6 @@ TypeDescriptor::TypeDescriptor(
       hash_fn_(std::move(hash)),
       int_to_params_fn_(std::move(int_to_params)),
       resolve_params_fn_(std::move(resolve_params)),
-      storage_intf_(storage_intf) {}
+      storage_intf_(std::move(storage_intf)) {}
 
 }  // namespace villagesql
