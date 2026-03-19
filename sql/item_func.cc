@@ -4717,6 +4717,8 @@ bool udf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
     // runtime nullability. Without this, the optimizer folds `vdf(...) IS NULL`
     // to 0 for constant non-nullable arguments.
     func->set_nullable(true);
+    // TODO(villagesql-performance): allow the extension author to express
+    // nullability.
     void *mem = (*THR_MALLOC)->Alloc(sizeof(villagesql::vdf::vdf_handler));
     if (!mem) return true;
     m_vdf = ::new (mem) villagesql::vdf::vdf_handler(u_d);
