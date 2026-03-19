@@ -78,6 +78,10 @@ static bool CheckFieldLengthMatchesType(const Field *field,
             ") for column %s (type %s)",
             field->field_length, tc->persisted_length(), field->field_name,
             tc->qualified_name().c_str());
+    villagesql_error(
+        "Internal error: field length mismatch for column %s (type %s); "
+        "check server log for details",
+        MYF(0), field->field_name, tc->qualified_name().c_str());
     return true;
   }
   return false;
@@ -124,7 +128,7 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
     const TypeContext *tc = thd->villagesql_tmp_metadata->get(col_key.str());
     if (tc != nullptr) {
       field->set_type_context(tc);
-      return false;
+      return CheckFieldLengthMatchesType(field, tc);
     }
     // Fall through to victionary for type injection and field length
     // validation.

@@ -44,6 +44,7 @@ class TmpMetadata {
   }
 
   // Get the TypeContext for a temporary column. Returns nullptr if not found.
+  // The returned pointer is valid as long as the entry remains in the map.
   const TypeContext *get(const std::string &key_str) const {
     auto it = m_columns.find(key_str);
     if (it == m_columns.end()) return nullptr;
