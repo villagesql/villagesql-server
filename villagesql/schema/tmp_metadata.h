@@ -36,29 +36,21 @@ namespace villagesql {
 */
 class TmpMetadata {
  public:
-  struct Entry {
-    const TypeContext *type_context;
-    // Owns the shared_ptr refcount that keeps the extension uninstall blocked.
-    std::shared_ptr<const TypeContext> type_context_owner;
-  };
-
   TmpMetadata() = default;
 
-  // Insert or update metadata for a temporary column. Takes ownership of the
-  // TypeContext via shared_ptr.
-  void insert_entry(const ColumnKey &key,
-                    std::shared_ptr<const TypeContext> tc_owner) {
-    const TypeContext *tc = tc_owner.get();
-    m_columns[key.str()] = {tc, std::move(tc_owner)};
+  // Insert or update the TypeContext for a temporary column. The shared_ptr
+  // keeps the extension refcount elevated, blocking uninstall while the
+  // temporary table exists.
+  void insert(const ColumnKey &key,
+              std::shared_ptr<const TypeContext> tc_owner) {
+    m_columns[key.str()] = std::move(tc_owner);
   }
 
-  // Get entry for a temporary column. Returns nullptr if not found.
-  const Entry *get_entry(const std::string &key_str) const {
+  // Get the TypeContext for a temporary column. Returns nullptr if not found.
+  const TypeContext *get(const std::string &key_str) const {
     auto it = m_columns.find(key_str);
-    if (it == m_columns.end()) {
-      return nullptr;
-    }
-    return &it->second;
+    if (it == m_columns.end()) return nullptr;
+    return it->second.get();
   }
 
   // Delete all metadata for a specific temporary table.
@@ -78,15 +70,15 @@ class TmpMetadata {
   bool empty() const { return m_columns.empty(); }
 
   // Acquire a TypeContext from the victionary and insert it into thd's
-  // TmpMetadata, allocating it if needed. If field is non-null, also calls
-  // set_type_context on it and asserts the field length matches.
+  // TmpMetadata. If field is non-null, also calls set_type_context on it
+  // and validates the field length.
   static void insert_for_thd(THD *thd, const ColumnKey &key,
-                             const TypeContextKey &source_key,
-                             Field *field = nullptr);
+                              const TypeContextKey &source_key,
+                              Field *field = nullptr);
 
  private:
-  // Map from normalized ColumnKey string to local entry
-  std::map<std::string, Entry> m_columns;
+  // Map from normalized ColumnKey string to owned TypeContext reference.
+  std::map<std::string, std::shared_ptr<const TypeContext>> m_columns;
 };
 
 }  // namespace villagesql

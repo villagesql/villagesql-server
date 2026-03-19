@@ -105,10 +105,10 @@ bool MaybeInjectCustomType(THD *thd, TABLE_SHARE &share, Field *field) {
   // metadata has an entry for this column, inject it and return.
   if (share.tmp_table != NO_TMP_TABLE &&
       thd->villagesql_tmp_metadata != nullptr) {
-    const TmpMetadata::Entry *tmp_entry =
-        thd->villagesql_tmp_metadata->get_entry(col_key.str());
-    if (tmp_entry != nullptr) {
-      field->set_type_context(tmp_entry->type_context);
+    const TypeContext *tc =
+        thd->villagesql_tmp_metadata->get(col_key.str());
+    if (tc != nullptr) {
+      field->set_type_context(tc);
       return false;
     }
     // Fall through to victionary lookup.
@@ -1170,7 +1170,7 @@ void TmpMetadata::insert_for_thd(THD *thd, const ColumnKey &key,
   if (!thd->villagesql_tmp_metadata) {
     thd->villagesql_tmp_metadata = std::make_unique<TmpMetadata>();
   }
-  thd->villagesql_tmp_metadata->insert_entry(key, std::move(tc_owner));
+  thd->villagesql_tmp_metadata->insert(key, std::move(tc_owner));
 }
 
 void PrepareTmpTableCustomColumns(THD *thd, const char *db,
