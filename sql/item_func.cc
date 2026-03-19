@@ -4713,6 +4713,14 @@ bool udf_handler::fix_fields(THD *thd, Item_result_field *func, uint arg_count,
 
   // VDF: create handler and initialize
   if (u_d->calling_convention == UdfCallingConvention::VDF) {
+    // VDFs can return VEF_RESULT_NULL for runtime errors (invalid input,
+    // unsupported algorithm names, allocation failures, etc.) regardless
+    // of argument nullability. The VEF SDK has no equivalent of
+    // initid.maybe_null for extensions to declare this themselves, so
+    // always mark VDFs as nullable here. Without this, the optimizer
+    // folds `vdf(...) IS NULL` to 0 when all arguments are non-nullable
+    // constants.
+    func->set_nullable(true);
     void *mem = (*THR_MALLOC)->Alloc(sizeof(villagesql::vdf::vdf_handler));
     if (!mem) return true;
     m_vdf = ::new (mem) villagesql::vdf::vdf_handler(u_d);
