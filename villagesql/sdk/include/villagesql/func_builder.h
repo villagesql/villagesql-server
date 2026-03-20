@@ -119,7 +119,8 @@ struct FuncWithMetadata {
         param_types{},
         num_params(0),
         buffer_size(0),
-        deterministic(false) {}
+        deterministic(false),
+        check_params_cache_bound(nullptr) {}
 
   ExtFunc f;
   vef_prerun_func_t prerun;
@@ -129,6 +130,10 @@ struct FuncWithMetadata {
   size_t num_params;
   size_t buffer_size;
   bool deterministic;
+  // Non-null for VDFs that use a parameterized type cache. Points to a
+  // function that returns true if the cache has been bound. Set by the cache
+  // wrapper selection in make_type_encode/decode/compare/intrinsic_default.
+  bool (*check_params_cache_bound)();
 };
 
 // =============================================================================
@@ -796,6 +801,7 @@ struct StaticFuncDesc {
   vef_postrun_func_t postrun_;
   size_t buffer_size_;
   bool deterministic_;
+  bool (*check_params_cache_bound_)();
 
   constexpr StaticFuncDesc(const char *name, const FuncWithMetadata &meta)
       : name_(name),
@@ -805,7 +811,8 @@ struct StaticFuncDesc {
         prerun_(meta.prerun),
         postrun_(meta.postrun),
         buffer_size_(meta.buffer_size),
-        deterministic_(meta.deterministic) {
+        deterministic_(meta.deterministic),
+        check_params_cache_bound_(meta.check_params_cache_bound) {
     for (size_t i = 0; i < NumParams && i < meta.num_params; ++i) {
       params_[i] = meta.param_types[i];
     }
@@ -821,6 +828,9 @@ struct StaticFuncDesc {
   constexpr vef_postrun_func_t postrun() const { return postrun_; }
   constexpr size_t buffer_size() const { return buffer_size_; }
   constexpr bool deterministic() const { return deterministic_; }
+  constexpr auto check_params_cache_bound() const -> bool (*)() {
+    return check_params_cache_bound_;
+  }
 };
 
 // Materializes the ABI descriptor structures at registration time.
@@ -1036,6 +1046,8 @@ constexpr StaticFuncDesc<0> make_intrinsic_default(const char *name,
     meta.f = &IntrinsicDefaultWrapper<Func>::invoke;
   } else {
     meta.f = &IntrinsicDefaultWithCacheWrapper<Func>::invoke;
+    meta.check_params_cache_bound = &is_params_cache_bound<
+        typename IntrinsicDefaultWithCacheWrapper<Func>::P>;
   }
   meta.return_type = to_vef_type(type_name);
   meta.num_params = 0;
@@ -1056,6 +1068,8 @@ constexpr StaticFuncDesc<1> make_type_encode(const char *name,
     meta.f = &TypeEncodeVdfWrapper<Func>::invoke;
   } else {
     meta.f = &TypeEncodeWithCacheVdfWrapper<Func>::invoke;
+    meta.check_params_cache_bound =
+        &is_params_cache_bound<typename TypeEncodeWithCacheVdfWrapper<Func>::P>;
   }
   meta.return_type = to_vef_type(type_name);
   meta.param_types[0] = to_vef_type(STRING);
@@ -1077,6 +1091,8 @@ constexpr StaticFuncDesc<1> make_type_decode(const char *name,
     meta.f = &TypeDecodeVdfWrapper<Func>::invoke;
   } else {
     meta.f = &TypeDecodeWithCacheVdfWrapper<Func>::invoke;
+    meta.check_params_cache_bound =
+        &is_params_cache_bound<typename TypeDecodeWithCacheVdfWrapper<Func>::P>;
   }
   meta.return_type = to_vef_type(STRING);
   meta.param_types[0] = to_vef_type(type_name);
@@ -1099,6 +1115,8 @@ constexpr StaticFuncDesc<2> make_type_compare(const char *name,
     meta.f = &TypeCompareVdfWrapper<Func>::invoke;
   } else {
     meta.f = &TypeCompareWithCacheVdfWrapper<Func>::invoke;
+    meta.check_params_cache_bound = &is_params_cache_bound<
+        typename TypeCompareWithCacheVdfWrapper<Func>::P>;
   }
   meta.return_type = to_vef_type(INT);
   meta.param_types[0] = to_vef_type(type_name);

@@ -52,6 +52,9 @@ class TypeParamsCache {
   // during extension initialization (vef_register), before any VDF calls.
   void bind(ParseFn fn) { parse_fn_ = fn; }
 
+  // Returns true if the parse function has been bound via bind().
+  bool is_bound() const { return parse_fn_ != nullptr; }
+
   // Returns a reference to the cached T using the bound parse function.
   // bind() must have been called before this overload is used.
   const T &get(const vef_type_params_t &raw) {
@@ -172,6 +175,14 @@ __attribute__((visibility("hidden"))) inline TypeParamsCache<T> &
 type_params_cache_for() {
   static TypeParamsCache<T> instance;
   return instance;
+}
+
+// Returns true if the TypeParamsCache<T> for this extension has had its parse
+// function bound. Used at registration time to detect missing .params<>()
+// calls before any VDF is invoked.
+template <typename T>
+__attribute__((visibility("hidden"))) inline bool is_params_cache_bound() {
+  return type_params_cache_for<T>().is_bound();
 }
 
 }  // namespace villagesql
