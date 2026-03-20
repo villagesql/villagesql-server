@@ -1,67 +1,23 @@
-# Test that IS NULL on a VDF result is evaluated at runtime.
-#
-# Regression test for the optimizer fold bug: when a VDF is called with
-# constant non-nullable arguments, IS NULL was incorrectly folded to 0 by
-# the optimizer without evaluating the function. The fix calls
-# set_nullable(true) in the VDF initialization block so IS NULL is always
-# evaluated at runtime.
+# Regression test for VDF IS NULL optimizer fold (#161).
+# When a VDF is called with constant non-nullable arguments, IS NULL was
+# incorrectly folded to 0. Verified using COMPLEX_FROM_STRING, which returns
+# NULL for invalid input at runtime.
 
---echo # Test VDF IS NULL optimizer fold fix
+--source include/villagesql/install_complex_extension.inc
 
-# Setup VEB directory
---let $veb_dir = $MYSQLTEST_VARDIR/veb
---exec mkdir -p $veb_dir
+# Constant non-nullable arg, VDF returns NULL at runtime -- must be 1
+SELECT COMPLEX_FROM_STRING('not_a_complex_number') IS NULL AS result;
 
-# Restart server with --veb-dir option
-call mtr.add_suppression("Orphaned expansion directory found but not removed");
---replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
---let $restart_parameters = restart: --veb-dir=$veb_dir
---source include/restart_mysqld.inc
---source include/villagesql/binlog_check_begin.inc
+# Constant non-nullable args, VDF returns a value -- must be 0
+SELECT COMPLEX_ADD('(1.0,2.0)', '(3.0,4.0)') IS NULL AS result;
 
---echo # Create test extension with echo_or_null(str) VDF
---let $extension_name = vdf_null_return
---let $extension_version = 0.0.1
---let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/simple_vdf_null_return.cc
---source include/villagesql/create_extension_sdk.inc
+# NULL arg propagates to NULL result -- must be 1
+SELECT COMPLEX_FROM_STRING(NULL) IS NULL AS result;
 
---echo # Install extension
-INSTALL EXTENSION vdf_null_return;
-
---echo #
---echo # Regression cases: constant non-nullable argument, VDF returns NULL at
---echo # runtime. Before the fix, the optimizer folded IS NULL to 0 without
---echo # evaluating the function.
---echo #
-
---echo # VDF returns NULL for 'invalid' -- IS NULL must be 1
-SELECT vdf_null_return.echo_or_null('invalid') IS NULL AS result;
-
---echo # VDF returns a value for 'hello' -- IS NULL must be 0
-SELECT vdf_null_return.echo_or_null('hello') IS NULL AS result;
-
---echo #
---echo # Null propagation: NULL argument -> NULL result. Was correct before
---echo # the fix; verify it remains correct.
---echo #
-
---echo # NULL argument propagates to NULL result
-SELECT vdf_null_return.echo_or_null(NULL) IS NULL AS result;
-
---echo #
---echo # Column path: optimizer cannot fold, always evaluated at runtime.
---echo # Was correct before the fix; verify constant and column paths agree.
---echo #
-
+# Column path: optimizer cannot fold -- must agree with constant results above
 CREATE TABLE t (val VARCHAR(50));
-INSERT INTO t VALUES ('invalid'), ('hello'), (NULL);
-
-SELECT val, vdf_null_return.echo_or_null(val) IS NULL AS is_null
-FROM t ORDER BY val;
-
+INSERT INTO t VALUES ('not_a_complex_number'), ('(1.0,2.0)'), (NULL);
+SELECT val, COMPLEX_FROM_STRING(val) IS NULL AS is_null FROM t ORDER BY val;
 DROP TABLE t;
 
---echo # Uninstall extension
-UNINSTALL EXTENSION vdf_null_return;
-
---source include/villagesql/binlog_check_end.inc
+--source include/villagesql/uninstall_complex_extension.inc
