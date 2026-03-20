@@ -1,0 +1,67 @@
+# Test that IS NULL on a VDF result is evaluated at runtime.
+#
+# Regression test for the optimizer fold bug: when a VDF is called with
+# constant non-nullable arguments, IS NULL was incorrectly folded to 0 by
+# the optimizer without evaluating the function. The fix calls
+# set_nullable(true) in the VDF initialization block so IS NULL is always
+# evaluated at runtime.
+
+--echo # Test VDF IS NULL optimizer fold fix
+
+# Setup VEB directory
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+# Restart server with --veb-dir option
+call mtr.add_suppression("Orphaned expansion directory found but not removed");
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+--source include/villagesql/binlog_check_begin.inc
+
+--echo # Create test extension with echo_or_null(str) VDF
+--let $extension_name = vdf_null_return
+--let $extension_version = 0.0.1
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/simple_vdf_null_return.cc
+--source include/villagesql/create_extension_sdk.inc
+
+--echo # Install extension
+INSTALL EXTENSION vdf_null_return;
+
+--echo #
+--echo # Regression cases: constant non-nullable argument, VDF returns NULL at
+--echo # runtime. Before the fix, the optimizer folded IS NULL to 0 without
+--echo # evaluating the function.
+--echo #
+
+--echo # VDF returns NULL for 'invalid' -- IS NULL must be 1
+SELECT vdf_null_return.echo_or_null('invalid') IS NULL AS result;
+
+--echo # VDF returns a value for 'hello' -- IS NULL must be 0
+SELECT vdf_null_return.echo_or_null('hello') IS NULL AS result;
+
+--echo #
+--echo # Null propagation: NULL argument -> NULL result. Was correct before
+--echo # the fix; verify it remains correct.
+--echo #
+
+--echo # NULL argument propagates to NULL result
+SELECT vdf_null_return.echo_or_null(NULL) IS NULL AS result;
+
+--echo #
+--echo # Column path: optimizer cannot fold, always evaluated at runtime.
+--echo # Was correct before the fix; verify constant and column paths agree.
+--echo #
+
+CREATE TABLE t (val VARCHAR(50));
+INSERT INTO t VALUES ('invalid'), ('hello'), (NULL);
+
+SELECT val, vdf_null_return.echo_or_null(val) IS NULL AS is_null
+FROM t ORDER BY val;
+
+DROP TABLE t;
+
+--echo # Uninstall extension
+UNINSTALL EXTENSION vdf_null_return;
+
+--source include/villagesql/binlog_check_end.inc
