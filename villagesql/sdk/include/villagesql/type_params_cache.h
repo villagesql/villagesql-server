@@ -50,6 +50,7 @@ class TypeParamsCache {
 
   // Binds the parse function used by the no-arg get() overload. Called once
   // during extension initialization (vef_register), before any VDF calls.
+  // Not safe to call after registration.
   void bind(ParseFn fn) { parse_fn_ = fn; }
 
   // Returns true if the parse function has been bound via bind().

@@ -500,6 +500,29 @@ struct TypeHashVdfWrapper {
   }
 };
 
+// TypeHashWithCacheVdfWrapper: wraps size_t Func(const P&,
+// Span<const unsigned char>). VDF signature: (CUSTOM(type)) -> INT.
+// P is deduced from Func's first parameter. The TypeParamsCache for P must
+// have been bound via .params<P, &parse_fn>() in the type builder.
+template <auto Func>
+struct TypeHashWithCacheVdfWrapper {
+  using P = std::remove_cv_t<std::remove_reference_t<
+      std::tuple_element_t<0, typename FuncParamTypes<decltype(Func)>::type>>>;
+
+  static void invoke(vef_context_t *ctx, vef_vdf_args_t *args,
+                     vef_vdf_result_t *result) {
+    vef_invalue_t arg = get_invalue(ctx, args, 0);
+    if (arg.is_null) {
+      result->type = VEF_RESULT_NULL;
+      return;
+    }
+    const P &p = type_params_cache_for<P>().get(arg.type_params);
+    result->int_value =
+        static_cast<long long>(Func(p, {arg.bin_value, arg.bin_len}));
+    result->type = VEF_RESULT_VALUE;
+  }
+};
+
 // Cache-aware type operation wrappers for parameterized types.
 //
 // Used when a type operation function takes const P& as its first parameter.
@@ -867,6 +890,83 @@ __attribute__((visibility("hidden"))) vef_func_desc_t *materialize_func_desc(
 }
 
 // =============================================================================
+// params_type_of / first_params_type_in / count_different_params_types
+// =============================================================================
+
+// Extracts the params type P if T is CustomArgWith<P> or CustomResultWith<P>.
+// Yields void for all other types.
+template <typename T>
+struct params_type_of {
+  using type = void;
+};
+template <typename P>
+struct params_type_of<CustomArgWith<P>> {
+  using type = P;
+};
+template <typename P>
+struct params_type_of<CustomResultWith<P>> {
+  using type = P;
+};
+
+// Appends T to Tuple<Existing...> only if T is not already present.
+// Uses a fold expression over Existing to check membership.
+template <typename T, typename AccumTuple>
+struct append_if_absent;
+template <typename T, typename... Existing>
+struct append_if_absent<T, std::tuple<Existing...>> {
+  using type =
+      std::conditional_t<(std::is_same_v<T, Existing> || ...),
+                         std::tuple<Existing...>, std::tuple<Existing..., T>>;
+};
+
+// Collects the distinct non-void params types from InputTuple into a
+// std::tuple<P1, P2, ...>, preserving order of first appearance.
+// N is passed explicitly to avoid ill-formed partial specialization on
+// std::tuple_size_v<InputTuple>.
+template <typename InputTuple, size_t I, size_t N, typename AccumTuple>
+struct unique_params_types_impl {
+  using P =
+      typename params_type_of<std::tuple_element_t<I, InputTuple>>::type;
+  using NextAccum =
+      std::conditional_t<std::is_void_v<P>, AccumTuple,
+                         typename append_if_absent<P, AccumTuple>::type>;
+  using type =
+      typename unique_params_types_impl<InputTuple, I + 1, N, NextAccum>::type;
+};
+template <typename InputTuple, size_t N, typename AccumTuple>
+struct unique_params_types_impl<InputTuple, N, N, AccumTuple> {
+  using type = AccumTuple;
+};
+
+// Public entry point: unique_params_types<Tuple>::type is a std::tuple of the
+// distinct P types used by CustomArgWith<P> or CustomResultWith<P> in Tuple.
+template <typename Tuple>
+struct unique_params_types {
+  using type = typename unique_params_types_impl<
+      Tuple, 0, std::tuple_size_v<Tuple>, std::tuple<>>::type;
+};
+
+// Checks that all TypeParamsCaches for Ps... have been bound. Used as the
+// check_params_cache_bound function pointer for VDFs that use parameterized
+// custom types via CustomArgWith<P> or CustomResultWith<P>.
+template <typename... Ps>
+struct params_cache_checker {
+  static bool check() { return (is_params_cache_bound<Ps>() && ...); }
+};
+// Specialization for the no-params case (vacuously true, never stored).
+template <>
+struct params_cache_checker<> {
+  static bool check() { return true; }
+};
+
+// Unpacks a std::tuple<Ps...> into params_cache_checker<Ps...>.
+template <typename Tuple>
+struct apply_params_cache_checker;
+template <typename... Ps>
+struct apply_params_cache_checker<std::tuple<Ps...>>
+    : params_cache_checker<Ps...> {};
+
+// =============================================================================
 // FuncBuilder
 // =============================================================================
 
@@ -946,6 +1046,9 @@ struct FuncBuilder {
     static_assert(NumParams <= kMaxParams,
                   "Too many parameters (max is kMaxParams)");
 
+    using AllParams = typename FuncParamTypes<decltype(Func)>::type;
+    using UniquePTuple = typename unique_params_types<AllParams>::type;
+
     FuncWithMetadata meta{};
     meta.f = &Wrapper<Func, NumParams>::invoke;
     meta.prerun = prerun_;
@@ -956,6 +1059,10 @@ struct FuncBuilder {
     meta.deterministic = deterministic_;
     for (size_t i = 0; i < NumParams; ++i) {
       meta.param_types[i] = to_vef_type(param_types_[i]);
+    }
+    if constexpr (std::tuple_size_v<UniquePTuple> > 0) {
+      meta.check_params_cache_bound =
+          &apply_params_cache_checker<UniquePTuple>::check;
     }
 
     return StaticFuncDesc<NumParams>(name_, meta);
@@ -1131,12 +1238,20 @@ constexpr StaticFuncDesc<2> make_type_compare(const char *name,
 // Entry point for hash VDFs: (CUSTOM(type_name)) -> INT.
 //   make_type_hash<&my_func>("func_name", TYPE)
 // Register with .func() and reference in type via .hash("func_name").
-// Accepts TypeHashFunc.
+// Accepts TypeHashFunc or a function whose first parameter is const P&,
+// in which case the SDK routes through the params cache (parse function must
+// be bound via .params<P, &parse_fn>() in the type builder).
 template <auto Func>
 constexpr StaticFuncDesc<1> make_type_hash(const char *name,
                                            const char *type_name) {
   FuncWithMetadata meta{};
-  meta.f = &TypeHashVdfWrapper<Func>::invoke;
+  if constexpr (std::is_same_v<decltype(Func), TypeHashFunc>) {
+    meta.f = &TypeHashVdfWrapper<Func>::invoke;
+  } else {
+    meta.f = &TypeHashWithCacheVdfWrapper<Func>::invoke;
+    meta.check_params_cache_bound =
+        &is_params_cache_bound<typename TypeHashWithCacheVdfWrapper<Func>::P>;
+  }
   meta.return_type = to_vef_type(INT);
   meta.param_types[0] = to_vef_type(type_name);
   meta.num_params = 1;
