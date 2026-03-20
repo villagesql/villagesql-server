@@ -112,11 +112,42 @@ constexpr auto make_extension(std::string_view name, std::string_view version) {
 
 }  // namespace extension_builder
 
-namespace details {
+namespace detail {
+
+// Implementation helpers used by VEF_GENERATE_ENTRY_POINTS. Not part of the
+// public API.
+
+// Fills arr[I] with the materialized vef_func_desc_t* for each function.
+template <typename Ext, size_t... Is>
+void vef_fill_func_ptrs(vef_func_desc_t **arr, const Ext &e,
+                        std::index_sequence<Is...>) {
+  using villagesql::func_builder::materialize_func_desc;
+  ((arr[Is] = materialize_func_desc<decltype(e.template func_at<Is>()), Is>(
+        e.template func_at<Is>())),
+   ...);
+}
+
+// Fills arr[I] with the vef_type_desc_t* for each type.
+template <typename Ext, size_t... Is>
+void vef_fill_type_ptrs(vef_type_desc_t **arr, const Ext &e,
+                        std::index_sequence<Is...>) {
+  ((arr[Is] =
+        const_cast<vef_type_desc_t *>(&e.template type_at<Is>().vef_desc)),
+   ...);
+}
+
+// Calls params_init_fn() for each type that has one.
+template <typename Ext, size_t... Is>
+void vef_init_type_params(const Ext &e, std::index_sequence<Is...>) {
+  ((e.template type_at<Is>().params_init_fn
+        ? e.template type_at<Is>().params_init_fn()
+        : void()),
+   ...);
+}
 
 // Returns the name of the first VDF that requires a bound params cache but
 // whose cache was not bound (i.e., .params<P, &parse_fn>() was omitted from
-// the type builder). Must be called after _vef_init_type_params().
+// the type builder). Must be called after vef_init_type_params().
 template <typename Ext, size_t... Is>
 const char *vef_check_params_cache(const Ext &e, std::index_sequence<Is...>) {
   const char *unbound = nullptr;
@@ -129,116 +160,98 @@ const char *vef_check_params_cache(const Ext &e, std::index_sequence<Is...>) {
   return unbound;
 }
 
-}  // namespace details
+// The SDK version reported in every registration.
+// TODO(villagesql-beta): read the version from the build environment.
+constexpr vef_version_t kSdkVersion = {1, 0, 0, nullptr};
+
+// Core registration logic called by VEF_GENERATE_ENTRY_POINTS.
+// FuncCount and TypeCount are explicit template parameters so that array
+// sizes are compile-time constants without relying on VLAs.
+template <typename Ext, size_t FuncCount, size_t TypeCount>
+vef_registration_t *vef_register_impl(vef_registration_t &reg,
+                                      bool &initialized,
+                                      vef_register_arg_t *arg, const Ext &ext) {
+  if (initialized) return &reg;
+
+  if (arg->protocol < ext.min_protocol()) {
+    static char error_buf[128];
+    snprintf(error_buf, sizeof(error_buf),
+             "requires VEF protocol %u, server offered %u",
+             static_cast<unsigned>(ext.min_protocol()),
+             static_cast<unsigned>(arg->protocol));
+    reg.protocol = arg->protocol;
+    reg.error_msg = error_buf;
+    return &reg;
+  }
+
+  static vef_func_desc_t *func_ptrs[FuncCount > 0 ? FuncCount : 1];
+  static vef_type_desc_t *type_ptrs[TypeCount > 0 ? TypeCount : 1];
+
+  if constexpr (FuncCount > 0) {
+    vef_fill_func_ptrs(func_ptrs, ext, std::make_index_sequence<FuncCount>{});
+  }
+  if constexpr (TypeCount > 0) {
+    vef_fill_type_ptrs(type_ptrs, ext, std::make_index_sequence<TypeCount>{});
+    vef_init_type_params(ext, std::make_index_sequence<TypeCount>{});
+  }
+
+  if constexpr (FuncCount > 0) {
+    const char *unbound_vdf =
+        vef_check_params_cache(ext, std::make_index_sequence<FuncCount>{});
+    if (unbound_vdf) {
+      static char error_buf[256];
+      snprintf(error_buf, sizeof(error_buf),
+               "VDF '%s' uses a parameterized type cache but no "
+               ".params<P, &parse_fn>() was registered for that params type; "
+               "add .params<P, &parse_fn>() to the type builder",
+               unbound_vdf);
+      reg.protocol = arg->protocol;
+      reg.error_msg = error_buf;
+      return &reg;
+    }
+  }
+
+  reg.protocol = VEF_PROTOCOL_2;
+  reg.error_msg = nullptr;
+  reg.extension_name = ext.name().data();
+  reg.extension_version = ext.version().data();
+  reg.sdk_version = kSdkVersion;
+  reg.func_count = FuncCount;
+  reg.funcs = FuncCount > 0 ? func_ptrs : nullptr;
+  reg.type_count = TypeCount;
+  reg.types = TypeCount > 0 ? type_ptrs : nullptr;
+
+  initialized = true;
+  return &reg;
+}
+
+}  // namespace detail
 }  // namespace villagesql
 
-// =============================================================================
 // VEF_GENERATE_ENTRY_POINTS
-// =============================================================================
 //
 // Generates the extern "C" vef_register and vef_unregister functions.
 // Must be called in a .cc file, not a header (defines functions/variables).
-//
+// Delegates registration logic to villagesql::detail::vef_register_impl.
 
-#define VEF_GENERATE_ENTRY_POINTS(ext)                                         \
-  static vef_registration_t _vef_registration;                                 \
-  static bool _vef_initialized = false;                                        \
-                                                                               \
-  template <typename Ext, size_t... Is>                                        \
-  static void _vef_fill_func_ptrs_impl(vef_func_desc_t **arr, const Ext &e,    \
-                                       std::index_sequence<Is...>) {           \
-    using villagesql::func_builder::materialize_func_desc;                     \
-    ((arr[Is] = materialize_func_desc<decltype(e.template func_at<Is>()), Is>( \
-          e.template func_at<Is>())),                                          \
-     ...);                                                                     \
-  }                                                                            \
-                                                                               \
-  template <typename Ext, size_t... Is>                                        \
-  static void _vef_fill_type_ptrs_impl(vef_type_desc_t **arr, const Ext &e,    \
-                                       std::index_sequence<Is...>) {           \
-    ((arr[Is] =                                                                \
-          const_cast<vef_type_desc_t *>(&e.template type_at<Is>().vef_desc)),  \
-     ...);                                                                     \
-  }                                                                            \
-                                                                               \
-  /* Initialize type params caches */                                          \
-  template <typename Ext, size_t... Is>                                        \
-  static void _vef_init_type_params_impl(const Ext &e,                         \
-                                         std::index_sequence<Is...>) {         \
-    ((e.template type_at<Is>().params_init_fn                                  \
-          ? e.template type_at<Is>().params_init_fn()                          \
-          : void()),                                                           \
-     ...);                                                                     \
-  }                                                                            \
-                                                                               \
-  extern "C" vef_registration_t *vef_register(vef_register_arg_t *arg) {       \
-    if (_vef_initialized) return &_vef_registration;                           \
-                                                                               \
-    using namespace villagesql::extension_builder;                             \
-    static constexpr auto _ext = (ext);                                        \
-                                                                               \
-    if (arg->protocol < _ext.min_protocol()) {                                 \
-      static char _vef_error_buf[128];                                         \
-      snprintf(_vef_error_buf, sizeof(_vef_error_buf),                         \
-               "requires VEF protocol %u, server offered %u",                  \
-               static_cast<unsigned>(_ext.min_protocol()),                     \
-               static_cast<unsigned>(arg->protocol));                          \
-      _vef_registration.protocol = arg->protocol;                              \
-      _vef_registration.error_msg = _vef_error_buf;                            \
-      return &_vef_registration;                                               \
-    }                                                                          \
-                                                                               \
-    constexpr size_t func_count = _ext.func_count();                           \
-    constexpr size_t type_count = _ext.type_count();                           \
-                                                                               \
-    static vef_func_desc_t *func_ptrs[func_count > 0 ? func_count : 1];        \
-    static vef_type_desc_t *type_ptrs[type_count > 0 ? type_count : 1];        \
-                                                                               \
-    if constexpr (func_count > 0) {                                            \
-      _vef_fill_func_ptrs_impl(func_ptrs, _ext,                                \
-                               std::make_index_sequence<func_count>{});        \
-    }                                                                          \
-    if constexpr (type_count > 0) {                                            \
-      _vef_fill_type_ptrs_impl(type_ptrs, _ext,                                \
-                               std::make_index_sequence<type_count>{});        \
-      _vef_init_type_params_impl(_ext,                                         \
-                                 std::make_index_sequence<type_count>{});      \
-    }                                                                          \
-                                                                               \
-    /* TODO(villagesql-beta): make this a compile time error */                \
-    if constexpr (func_count > 0) {                                            \
-      const char *unbound_vdf = villagesql::details::vef_check_params_cache(   \
-          ext, std::make_index_sequence<func_count>{});                        \
-      if (unbound_vdf) {                                                       \
-        static char error_buf[256];                                            \
-        snprintf(error_buf, sizeof(error_buf),                                 \
-                 "VDF '%s' uses a parameterized type cache but no "            \
-                 ".params<P, &parse_fn>() was registered for that params "     \
-                 "type; add .params<P, &parse_fn>() to the type builder",      \
-                 unbound_vdf);                                                 \
-        _vef_registration.protocol = arg->protocol;                            \
-        _vef_registration.error_msg = error_buf;                               \
-        return &_vef_registration;                                             \
-      }                                                                        \
-    }                                                                          \
-    _vef_registration.protocol = VEF_PROTOCOL_2;                               \
-    _vef_registration.error_msg = nullptr;                                     \
-    _vef_registration.extension_name = _ext.name().data();                     \
-    _vef_registration.extension_version = _ext.version().data();               \
-    _vef_registration.sdk_version = {1, 0, 0, nullptr};                        \
-    _vef_registration.func_count = func_count;                                 \
-    _vef_registration.funcs = func_count > 0 ? func_ptrs : nullptr;            \
-    _vef_registration.type_count = type_count;                                 \
-    _vef_registration.types = type_count > 0 ? type_ptrs : nullptr;            \
-                                                                               \
-    _vef_initialized = true;                                                   \
-    return &_vef_registration;                                                 \
-  }                                                                            \
-                                                                               \
-  extern "C" void vef_unregister(vef_unregister_arg_t *arg,                    \
-                                 vef_registration_t *reg) {                    \
-    (void)arg;                                                                 \
-    (void)reg;                                                                 \
+#define VEF_GENERATE_ENTRY_POINTS(ext)                                   \
+  namespace {                                                            \
+  vef_registration_t vef_reg_;                                           \
+  bool vef_reg_initialized_ = false;                                     \
+  }                                                                      \
+                                                                         \
+  extern "C" vef_registration_t *vef_register(vef_register_arg_t *arg) { \
+    using namespace villagesql::extension_builder;                       \
+    static constexpr auto kExt = (ext);                                  \
+    return villagesql::detail::vef_register_impl<                        \
+        decltype(kExt), kExt.func_count(), kExt.type_count()>(           \
+        vef_reg_, vef_reg_initialized_, arg, kExt);                      \
+  }                                                                      \
+                                                                         \
+  extern "C" void vef_unregister(vef_unregister_arg_t *arg,              \
+                                 vef_registration_t *reg) {              \
+    (void)arg;                                                           \
+    (void)reg;                                                           \
   }
 
 #endif  // VILLAGESQL_SDK_EXTENSION_BUILDER_H
