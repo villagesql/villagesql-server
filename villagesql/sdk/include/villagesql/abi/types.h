@@ -272,6 +272,8 @@ typedef struct {
 
       // protocol >= VEF_PROTOCOL_2
       // Read-only: the extension must not overwrite these parameters.
+      // TODO(villagesql-beta): Optimize this to pass a token so that the
+      // extension can cache these values in a language-specific way.
       vef_type_params_t type_params;
     };
 
