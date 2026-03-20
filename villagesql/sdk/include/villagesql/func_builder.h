@@ -654,6 +654,8 @@ using IntToTypeParamsFunc = bool (*)(int64_t value,
 // Validate type parameters and compute storage characteristics.
 // Reads from params map, populates *result with storage sizes.
 // Returns false on success, true on error (writes to error_msg).
+// TODO(villagesql-beta): generate C++ object for parameterized types as part of
+// resolve_params call.
 using ResolveTypeParamsFunc =
     bool (*)(const std::map<std::string, std::string> &params,
              villagesql::ResolvedTypeParams *result, char *error_msg);

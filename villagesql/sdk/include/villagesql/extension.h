@@ -177,7 +177,9 @@
 // If the type has SQL-level parameters (e.g., TVECTOR(1536)), define a params
 // struct and a parse function, then use the struct as the first argument of
 // the type operation functions. The SDK detects the const P& signature and
-// wires up a memoized parse cache automatically.
+// wires up a memoized parse cache automatically. Note the parse function is
+// called based on the canonicalized output of the `resolve_params` function,
+// all parameter error checking should be done there.
 //
 // The parse function can be a static method on the struct (shown below) or
 // any free function with the signature:
