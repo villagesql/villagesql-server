@@ -32,6 +32,7 @@
 #include <utility>
 
 #include <villagesql/func_builder.h>
+#include <villagesql/sdk_version.h>
 #include <villagesql/storage_builder.h>
 #include <villagesql/type_builder.h>
 
@@ -159,10 +160,6 @@ const char *vef_check_params_cache(const Ext &e, std::index_sequence<Is...>) {
   (check_one(e.template func_at<Is>()), ...);
   return unbound;
 }
-
-// The SDK version reported in every registration.
-// TODO(villagesql-beta): read the version from the build environment.
-constexpr vef_version_t kSdkVersion = {1, 0, 0, nullptr};
 
 // Core registration logic called by VEF_GENERATE_ENTRY_POINTS.
 // FuncCount and TypeCount are explicit template parameters so that array
