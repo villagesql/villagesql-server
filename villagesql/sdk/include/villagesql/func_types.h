@@ -169,8 +169,8 @@ class CustomArg {
 // The parse result is memoized per unique canonical params string, so parsing
 // runs at most once per type instantiation.
 //
-// NOTE: Do not call params() when is_null() is true. The server does not
-// populate type_params for null values.
+// NOTE: Do not call params() when is_null() is true.
+// TODO(villagesql-beta): remove this restriction.
 template <typename P>
 class CustomArgWith {
  public:

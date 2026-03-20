@@ -33,13 +33,16 @@
 namespace villagesql {
 
 // Memoizes parsed type parameters to avoid re-parsing strings on every VDF
-// call. The cache is wired up automatically when using make_type_encode (and
-// the other make_type_* entry points) with a const P& first parameter.
-// Requires the parse function to be registered via .params<P, &parse_fn>()
-// in the type builder. See PARAMETERIZED TYPES in extension.h for full usage.
+// call. There is one cache instance per Type Parameter C++ type. The cache is
+// wired up automatically when using make_type_encode (and the other
+// make_type_* entry points) with a const P& first parameter.  Requires the
+// parse function to be registered via .params<P, &parse_fn>() in the type
+// builder. See PARAMETERIZED TYPES in extension.h for full usage.
 //
-// Thread-safe: concurrent readers do not block each other. Entries are never
-// evicted since type parameters are immutable per type instantiation.
+// Thread-safe: concurrent readers do not block each other. Entries are only
+// evicted when the extension is uninstalled because type parameters are
+// immutable per type instantiation. Also the ABI does not currently have
+// a mechanism to know when a type is no longer used.
 template <typename T>
 class TypeParamsCache {
  public:
@@ -156,13 +159,14 @@ class TypeParamsCache {
   }
 };
 
-// Returns the single shared TypeParamsCache<T> instance for the calling DSO.
+// Returns the single shared TypeParamsCache<T> for this .so extension
+// instance.
 //
-// Marking this hidden ensures each extension DSO gets its own instance (same
-// as the visibility("hidden") on static methods in wrappers). Using a single
-// free function template means all callers within a DSO — CustomArgWith<T>,
-// CustomResultWith<T>, and the cache-aware VDF wrappers — share one cache
-// rather than each holding their own.
+// Marking this hidden ensures each extension shared object (or DLL) gets its
+// own instance (same as the visibility("hidden") on static methods in
+// wrappers). Using a single free function template means all callers within a
+// DSO — CustomArgWith<T>, CustomResultWith<T>, and the cache-aware VDF
+// wrappers — share one cache rather than each holding their own.
 template <typename T>
 __attribute__((visibility("hidden"))) inline TypeParamsCache<T> &
 type_params_cache_for() {

@@ -179,6 +179,7 @@ bool tvector_resolve_params(const std::map<std::string, std::string> &params,
 // Dimension and element type are read from type parameters.
 bool tvector_from_string(const TVectorParams &p, std::string_view from,
                          villagesql::Span<unsigned char> buf, size_t *length) {
+  // Computed values could be cached in the TVectorParams
   size_t byte_size = static_cast<size_t>(p.dimension) * p.bytes_per_elem;
   if (buf.size() < byte_size) return true;
 
@@ -264,6 +265,9 @@ bool tvector_to_string(const TVectorParams &p,
 
 // Compare: (TVECTOR, TVECTOR) -> INT for ORDER BY, indexes.
 // Lexicographic element-by-element comparison.
+// TODO(villagesql-performance): we can also consider having templated versions
+// of these functions instead of using branches, then selecting the version to
+// use with one branch.
 int tvector_compare(const TVectorParams &p,
                     villagesql::Span<const unsigned char> a,
                     villagesql::Span<const unsigned char> b) {

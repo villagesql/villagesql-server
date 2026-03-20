@@ -142,6 +142,7 @@ constexpr auto make_extension(std::string_view name, std::string_view version) {
      ...);                                                                     \
   }                                                                            \
                                                                                \
+  /* Initialize type params caches */                                          \
   template <typename Ext, size_t... Is>                                        \
   static void _vef_init_type_params_impl(const Ext &e,                         \
                                          std::index_sequence<Is...>) {         \
