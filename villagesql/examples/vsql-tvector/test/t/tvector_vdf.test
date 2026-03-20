@@ -1,0 +1,94 @@
+# Install vsql-tvector extension
+INSTALL EXTENSION vsql_tvector;
+
+########################################################################
+#
+# Test: tvector_dot_product with float vectors
+#
+########################################################################
+
+CREATE TABLE t (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v TVECTOR(3)
+);
+
+INSERT INTO t (v) VALUES ('[1,2,3]');
+INSERT INTO t (v) VALUES ('[4,5,6]');
+INSERT INTO t (v) VALUES ('[0,0,0]');
+INSERT INTO t (v) VALUES ('[-1,-2,-3]');
+
+# [1,2,3] . [1,2,3] = 1+4+9 = 14
+SELECT vsql_tvector.tvector_dot_product(
+    (SELECT v FROM t WHERE id=1),
+    (SELECT v FROM t WHERE id=1)) AS dot_self;
+
+# [1,2,3] . [4,5,6] = 4+10+18 = 32
+SELECT vsql_tvector.tvector_dot_product(
+    (SELECT v FROM t WHERE id=1),
+    (SELECT v FROM t WHERE id=2)) AS dot_12;
+
+# [1,2,3] . [0,0,0] = 0
+SELECT vsql_tvector.tvector_dot_product(
+    (SELECT v FROM t WHERE id=1),
+    (SELECT v FROM t WHERE id=3)) AS dot_zero;
+
+# [1,2,3] . [-1,-2,-3] = -1-4-9 = -14
+SELECT vsql_tvector.tvector_dot_product(
+    (SELECT v FROM t WHERE id=1),
+    (SELECT v FROM t WHERE id=4)) AS dot_neg;
+
+########################################################################
+#
+# Test: tvector_dot_product with double vectors
+#
+########################################################################
+
+CREATE TABLE t_double (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v TVECTOR('dimension=3,type=double')
+);
+
+INSERT INTO t_double (v) VALUES ('[1.5,2.5,3.5]');
+INSERT INTO t_double (v) VALUES ('[2.0,4.0,6.0]');
+
+# [1.5,2.5,3.5] . [2.0,4.0,6.0] = 3.0+10.0+21.0 = 34.0
+SELECT vsql_tvector.tvector_dot_product(
+    (SELECT v FROM t_double WHERE id=1),
+    (SELECT v FROM t_double WHERE id=2)) AS dot_double;
+
+########################################################################
+#
+# Test: NULL handling
+#
+########################################################################
+
+CREATE TABLE t_nulls (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    v TVECTOR(3) DEFAULT NULL
+);
+
+INSERT INTO t_nulls (v) VALUES ('[1,2,3]');
+INSERT INTO t_nulls (v) VALUES (NULL);
+
+# NULL input -> NULL result
+SELECT vsql_tvector.tvector_dot_product(
+    (SELECT v FROM t_nulls WHERE id=1),
+    (SELECT v FROM t_nulls WHERE id=2)) AS dot_null_right;
+
+SELECT vsql_tvector.tvector_dot_product(
+    (SELECT v FROM t_nulls WHERE id=2),
+    (SELECT v FROM t_nulls WHERE id=1)) AS dot_null_left;
+
+SELECT vsql_tvector.tvector_dot_product(
+    (SELECT v FROM t_nulls WHERE id=2),
+    (SELECT v FROM t_nulls WHERE id=2)) AS dot_null_both;
+
+########################################################################
+#
+# Clean up
+#
+########################################################################
+
+DROP TABLE t, t_double, t_nulls;
+
+UNINSTALL EXTENSION vsql_tvector;

@@ -303,6 +303,36 @@ bool tvector_default(const TVectorParams &p,
   return false;
 }
 
+// Dot product: (TVECTOR, TVECTOR) -> REAL
+// Returns the sum of element-wise products of two vectors of the same type.
+void tvector_dot_product(villagesql::CustomArgWith<TVectorParams> a,
+                         villagesql::CustomArgWith<TVectorParams> b,
+                         villagesql::RealResult out) {
+  if (a.is_null() || b.is_null()) {
+    out.set_null();
+    return;
+  }
+  const TVectorParams &pa = a.params();
+  const TVectorParams &pb = b.params();
+  if (pa.dimension != pb.dimension || pa.bytes_per_elem != pb.bytes_per_elem) {
+    out.error(
+        "tvector_dot_product: vectors must have the same dimension and type");
+    return;
+  }
+  const unsigned char *da = a.value().data();
+  const unsigned char *db = b.value().data();
+  double sum = 0.0;
+  for (int64_t i = 0; i < pa.dimension; i++) {
+    if (pa.bytes_per_elem == 8) {
+      sum += load_double(da + i * 8) * load_double(db + i * 8);
+    } else {
+      sum += static_cast<double>(load_float(da + i * 4)) *
+             static_cast<double>(load_float(db + i * 4));
+    }
+  }
+  out.set(sum);
+}
+
 constexpr const char *TVECTOR = "TVECTOR";
 
 VEF_GENERATE_ENTRY_POINTS(
@@ -328,4 +358,10 @@ VEF_GENERATE_ENTRY_POINTS(
         .func(make_resolve_params<&tvector_resolve_params>(
             "tvector_resolve_params"))
         .func(make_intrinsic_default<&tvector_default>(
-            "tvector_intrinsic_default", TVECTOR)))
+            "tvector_intrinsic_default", TVECTOR))
+        .func(make_func<&tvector_dot_product>("tvector_dot_product")
+                  .returns(REAL)
+                  .param(TVECTOR)
+                  .param(TVECTOR)
+                  .deterministic()
+                  .build()))
