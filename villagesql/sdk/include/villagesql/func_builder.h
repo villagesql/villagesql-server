@@ -119,8 +119,7 @@ struct FuncWithMetadata {
         param_types{},
         num_params(0),
         buffer_size(0),
-        deterministic(false),
-        check_params_cache_bound(nullptr) {}
+        deterministic(false) {}
 
   ExtFunc f;
   vef_prerun_func_t prerun;
@@ -130,10 +129,6 @@ struct FuncWithMetadata {
   size_t num_params;
   size_t buffer_size;
   bool deterministic;
-  // Non-null for VDFs that use a parameterized type cache. Points to a
-  // function that returns true if the cache has been bound. Set by the cache
-  // wrapper selection in make_type_encode/decode/compare/intrinsic_default.
-  bool (*check_params_cache_bound)();
 };
 
 // =============================================================================
@@ -333,7 +328,7 @@ struct ToStringWrapper {
 // Extension authors must implement functions with the following signatures
 // to enable a new type to be used in VillageSQL, and use the builders
 // make_type_encode, make_type_decode, make_type_compare, and make_type_hash to
-// and register the names with the type builder.
+// register the names with the type builder.
 //   TypeEncodeFunc  -> VDF: (STRING) -> CUSTOM(type)
 //   TypeDecodeFunc  -> VDF: (CUSTOM(type)) -> STRING
 //   TypeCompareFunc -> VDF: (CUSTOM(type), CUSTOM(type)) -> INT
@@ -826,7 +821,6 @@ struct StaticFuncDesc {
   vef_postrun_func_t postrun_;
   size_t buffer_size_;
   bool deterministic_;
-  bool (*check_params_cache_bound_)();
 
   constexpr StaticFuncDesc(const char *name, const FuncWithMetadata &meta)
       : name_(name),
@@ -836,8 +830,7 @@ struct StaticFuncDesc {
         prerun_(meta.prerun),
         postrun_(meta.postrun),
         buffer_size_(meta.buffer_size),
-        deterministic_(meta.deterministic),
-        check_params_cache_bound_(meta.check_params_cache_bound) {
+        deterministic_(meta.deterministic) {
     for (size_t i = 0; i < NumParams && i < meta.num_params; ++i) {
       params_[i] = meta.param_types[i];
     }
@@ -853,9 +846,21 @@ struct StaticFuncDesc {
   constexpr vef_postrun_func_t postrun() const { return postrun_; }
   constexpr size_t buffer_size() const { return buffer_size_; }
   constexpr bool deterministic() const { return deterministic_; }
-  constexpr auto check_params_cache_bound() const -> bool (*)() {
-    return check_params_cache_bound_;
-  }
+};
+
+// TypedFuncDesc carries the function pointer Func as a template parameter so
+// that ExtensionBuilder::func() can run compile-time validation even when the
+// descriptor was pre-built and stored in a variable before registration.
+// Inherits all data and accessors from StaticFuncDesc<N>.
+//
+// ParamsType is void for regular VDFs. For parameterized type operation VDFs
+// (make_type_encode/decode/compare/hash/intrinsic_default with a const P& first
+// parameter), ParamsType is set to P so ExtensionBuilder can verify that P was
+// registered via .params<P, &fn>() on the type builder.
+template <auto Func, size_t N, typename ParamsType = void>
+struct TypedFuncDesc : StaticFuncDesc<N> {
+  using params_type = ParamsType;
+  using StaticFuncDesc<N>::StaticFuncDesc;
 };
 
 // Materializes the ABI descriptor structures at registration time.
@@ -907,64 +912,6 @@ template <typename P>
 struct params_type_of<CustomResultWith<P>> {
   using type = P;
 };
-
-// Appends T to Tuple<Existing...> only if T is not already present.
-// Uses a fold expression over Existing to check membership.
-template <typename T, typename AccumTuple>
-struct append_if_absent;
-template <typename T, typename... Existing>
-struct append_if_absent<T, std::tuple<Existing...>> {
-  using type =
-      std::conditional_t<(std::is_same_v<T, Existing> || ...),
-                         std::tuple<Existing...>, std::tuple<Existing..., T>>;
-};
-
-// Collects the distinct non-void params types from InputTuple into a
-// std::tuple<P1, P2, ...>, preserving order of first appearance.
-// N is passed explicitly to avoid ill-formed partial specialization on
-// std::tuple_size_v<InputTuple>.
-template <typename InputTuple, size_t I, size_t N, typename AccumTuple>
-struct unique_params_types_impl {
-  using P =
-      typename params_type_of<std::tuple_element_t<I, InputTuple>>::type;
-  using NextAccum =
-      std::conditional_t<std::is_void_v<P>, AccumTuple,
-                         typename append_if_absent<P, AccumTuple>::type>;
-  using type =
-      typename unique_params_types_impl<InputTuple, I + 1, N, NextAccum>::type;
-};
-template <typename InputTuple, size_t N, typename AccumTuple>
-struct unique_params_types_impl<InputTuple, N, N, AccumTuple> {
-  using type = AccumTuple;
-};
-
-// Public entry point: unique_params_types<Tuple>::type is a std::tuple of the
-// distinct P types used by CustomArgWith<P> or CustomResultWith<P> in Tuple.
-template <typename Tuple>
-struct unique_params_types {
-  using type = typename unique_params_types_impl<
-      Tuple, 0, std::tuple_size_v<Tuple>, std::tuple<>>::type;
-};
-
-// Checks that all TypeParamsCaches for Ps... have been bound. Used as the
-// check_params_cache_bound function pointer for VDFs that use parameterized
-// custom types via CustomArgWith<P> or CustomResultWith<P>.
-template <typename... Ps>
-struct params_cache_checker {
-  static bool check() { return (is_params_cache_bound<Ps>() && ...); }
-};
-// Specialization for the no-params case (vacuously true, never stored).
-template <>
-struct params_cache_checker<> {
-  static bool check() { return true; }
-};
-
-// Unpacks a std::tuple<Ps...> into params_cache_checker<Ps...>.
-template <typename Tuple>
-struct apply_params_cache_checker;
-template <typename... Ps>
-struct apply_params_cache_checker<std::tuple<Ps...>>
-    : params_cache_checker<Ps...> {};
 
 // =============================================================================
 // FuncBuilder
@@ -1041,13 +988,13 @@ struct FuncBuilder {
     return *this;
   }
 
-  // Finalize the function definition and produce the StaticFuncDesc
-  constexpr StaticFuncDesc<NumParams> build() const {
+  // Finalize the function definition and produce a TypedFuncDesc, which
+  // preserves Func as a template parameter so that ExtensionBuilder::func()
+  // can run compile-time validation even when the result is stored in a
+  // variable before registration.
+  constexpr TypedFuncDesc<Func, NumParams> build() const {
     static_assert(NumParams <= kMaxParams,
                   "Too many parameters (max is kMaxParams)");
-
-    using AllParams = typename FuncParamTypes<decltype(Func)>::type;
-    using UniquePTuple = typename unique_params_types<AllParams>::type;
 
     FuncWithMetadata meta{};
     meta.f = &Wrapper<Func, NumParams>::invoke;
@@ -1060,12 +1007,8 @@ struct FuncBuilder {
     for (size_t i = 0; i < NumParams; ++i) {
       meta.param_types[i] = to_vef_type(param_types_[i]);
     }
-    if constexpr (std::tuple_size_v<UniquePTuple> > 0) {
-      meta.check_params_cache_bound =
-          &apply_params_cache_checker<UniquePTuple>::check;
-    }
 
-    return StaticFuncDesc<NumParams>(name_, meta);
+    return TypedFuncDesc<Func, NumParams>(name_, meta);
   }
 };
 
@@ -1148,20 +1091,19 @@ constexpr StaticFuncDesc<1> make_resolve_params(const char *name) {
 // (parse function must be bound via .params<P, &parse_fn>() in the type
 // builder).
 template <auto Func>
-constexpr StaticFuncDesc<0> make_intrinsic_default(const char *name,
-                                                   const char *type_name) {
+constexpr auto make_intrinsic_default(const char *name, const char *type_name) {
   FuncWithMetadata meta{};
-  if constexpr (std::is_same_v<decltype(Func), IntrinsicDefaultFunc>) {
-    meta.f = &IntrinsicDefaultWrapper<Func>::invoke;
-  } else {
-    meta.f = &IntrinsicDefaultWithCacheWrapper<Func>::invoke;
-    meta.check_params_cache_bound = &is_params_cache_bound<
-        typename IntrinsicDefaultWithCacheWrapper<Func>::P>;
-  }
   meta.return_type = to_vef_type(type_name);
   meta.num_params = 0;
   meta.buffer_size = 0;  // server provides bin_buf sized to persisted_length
-  return StaticFuncDesc<0>(name, meta);
+  if constexpr (std::is_same_v<decltype(Func), IntrinsicDefaultFunc>) {
+    meta.f = &IntrinsicDefaultWrapper<Func>::invoke;
+    return TypedFuncDesc<Func, 0, void>(name, meta);
+  } else {
+    meta.f = &IntrinsicDefaultWithCacheWrapper<Func>::invoke;
+    using P = typename IntrinsicDefaultWithCacheWrapper<Func>::P;
+    return TypedFuncDesc<Func, 0, P>(name, meta);
+  }
 }
 
 // Entry point for encode VDFs: (STRING) -> CUSTOM(type_name).
@@ -1170,21 +1112,20 @@ constexpr StaticFuncDesc<0> make_intrinsic_default(const char *name,
 // in which case the SDK routes through the params cache (parse function must
 // be bound via .params<P, &parse_fn>() in the type builder).
 template <auto Func>
-constexpr StaticFuncDesc<1> make_type_encode(const char *name,
-                                             const char *type_name) {
+constexpr auto make_type_encode(const char *name, const char *type_name) {
   FuncWithMetadata meta{};
-  if constexpr (std::is_same_v<decltype(Func), TypeEncodeFunc>) {
-    meta.f = &TypeEncodeVdfWrapper<Func>::invoke;
-  } else {
-    meta.f = &TypeEncodeWithCacheVdfWrapper<Func>::invoke;
-    meta.check_params_cache_bound =
-        &is_params_cache_bound<typename TypeEncodeWithCacheVdfWrapper<Func>::P>;
-  }
   meta.return_type = to_vef_type(type_name);
   meta.param_types[0] = to_vef_type(STRING);
   meta.num_params = 1;
   meta.buffer_size = 0;  // server provides bin_buf sized to persisted_length
-  return StaticFuncDesc<1>(name, meta);
+  if constexpr (std::is_same_v<decltype(Func), TypeEncodeFunc>) {
+    meta.f = &TypeEncodeVdfWrapper<Func>::invoke;
+    return TypedFuncDesc<Func, 1, void>(name, meta);
+  } else {
+    meta.f = &TypeEncodeWithCacheVdfWrapper<Func>::invoke;
+    using P = typename TypeEncodeWithCacheVdfWrapper<Func>::P;
+    return TypedFuncDesc<Func, 1, P>(name, meta);
+  }
 }
 
 // Entry point for decode VDFs: (CUSTOM(type_name)) -> STRING.
@@ -1193,21 +1134,20 @@ constexpr StaticFuncDesc<1> make_type_encode(const char *name,
 // in which case the SDK routes through the params cache (parse function must
 // be bound via .params<P, &parse_fn>() in the type builder).
 template <auto Func>
-constexpr StaticFuncDesc<1> make_type_decode(const char *name,
-                                             const char *type_name) {
+constexpr auto make_type_decode(const char *name, const char *type_name) {
   FuncWithMetadata meta{};
-  if constexpr (std::is_same_v<decltype(Func), TypeDecodeFunc>) {
-    meta.f = &TypeDecodeVdfWrapper<Func>::invoke;
-  } else {
-    meta.f = &TypeDecodeWithCacheVdfWrapper<Func>::invoke;
-    meta.check_params_cache_bound =
-        &is_params_cache_bound<typename TypeDecodeWithCacheVdfWrapper<Func>::P>;
-  }
   meta.return_type = to_vef_type(STRING);
   meta.param_types[0] = to_vef_type(type_name);
   meta.num_params = 1;
   meta.buffer_size = 0;
-  return StaticFuncDesc<1>(name, meta);
+  if constexpr (std::is_same_v<decltype(Func), TypeDecodeFunc>) {
+    meta.f = &TypeDecodeVdfWrapper<Func>::invoke;
+    return TypedFuncDesc<Func, 1, void>(name, meta);
+  } else {
+    meta.f = &TypeDecodeWithCacheVdfWrapper<Func>::invoke;
+    using P = typename TypeDecodeWithCacheVdfWrapper<Func>::P;
+    return TypedFuncDesc<Func, 1, P>(name, meta);
+  }
 }
 
 // Entry point for compare VDFs: (CUSTOM(type_name), CUSTOM(type_name)) -> INT.
@@ -1217,22 +1157,21 @@ constexpr StaticFuncDesc<1> make_type_decode(const char *name,
 // in which case the SDK routes through the params cache (parse function must
 // be bound via .params<P, &parse_fn>() in the type builder).
 template <auto Func>
-constexpr StaticFuncDesc<2> make_type_compare(const char *name,
-                                              const char *type_name) {
+constexpr auto make_type_compare(const char *name, const char *type_name) {
   FuncWithMetadata meta{};
-  if constexpr (std::is_same_v<decltype(Func), TypeCompareFunc>) {
-    meta.f = &TypeCompareVdfWrapper<Func>::invoke;
-  } else {
-    meta.f = &TypeCompareWithCacheVdfWrapper<Func>::invoke;
-    meta.check_params_cache_bound = &is_params_cache_bound<
-        typename TypeCompareWithCacheVdfWrapper<Func>::P>;
-  }
   meta.return_type = to_vef_type(INT);
   meta.param_types[0] = to_vef_type(type_name);
   meta.param_types[1] = to_vef_type(type_name);
   meta.num_params = 2;
   meta.buffer_size = 0;
-  return StaticFuncDesc<2>(name, meta);
+  if constexpr (std::is_same_v<decltype(Func), TypeCompareFunc>) {
+    meta.f = &TypeCompareVdfWrapper<Func>::invoke;
+    return TypedFuncDesc<Func, 2, void>(name, meta);
+  } else {
+    meta.f = &TypeCompareWithCacheVdfWrapper<Func>::invoke;
+    using P = typename TypeCompareWithCacheVdfWrapper<Func>::P;
+    return TypedFuncDesc<Func, 2, P>(name, meta);
+  }
 }
 
 // Entry point for hash VDFs: (CUSTOM(type_name)) -> INT.
@@ -1242,21 +1181,20 @@ constexpr StaticFuncDesc<2> make_type_compare(const char *name,
 // in which case the SDK routes through the params cache (parse function must
 // be bound via .params<P, &parse_fn>() in the type builder).
 template <auto Func>
-constexpr StaticFuncDesc<1> make_type_hash(const char *name,
-                                           const char *type_name) {
+constexpr auto make_type_hash(const char *name, const char *type_name) {
   FuncWithMetadata meta{};
-  if constexpr (std::is_same_v<decltype(Func), TypeHashFunc>) {
-    meta.f = &TypeHashVdfWrapper<Func>::invoke;
-  } else {
-    meta.f = &TypeHashWithCacheVdfWrapper<Func>::invoke;
-    meta.check_params_cache_bound =
-        &is_params_cache_bound<typename TypeHashWithCacheVdfWrapper<Func>::P>;
-  }
   meta.return_type = to_vef_type(INT);
   meta.param_types[0] = to_vef_type(type_name);
   meta.num_params = 1;
   meta.buffer_size = 0;
-  return StaticFuncDesc<1>(name, meta);
+  if constexpr (std::is_same_v<decltype(Func), TypeHashFunc>) {
+    meta.f = &TypeHashVdfWrapper<Func>::invoke;
+    return TypedFuncDesc<Func, 1, void>(name, meta);
+  } else {
+    meta.f = &TypeHashWithCacheVdfWrapper<Func>::invoke;
+    using P = typename TypeHashWithCacheVdfWrapper<Func>::P;
+    return TypedFuncDesc<Func, 1, P>(name, meta);
+  }
 }
 
 // =============================================================================

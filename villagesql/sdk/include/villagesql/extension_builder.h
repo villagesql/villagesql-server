@@ -37,6 +37,52 @@
 #include <villagesql/type_builder.h>
 
 namespace villagesql {
+
+namespace detail {
+
+// Compile-time validation helpers. Defined before ExtensionBuilder so that
+// detail::validate_custom_params is visible when ExtensionBuilder::func() is
+// parsed (qualified names are resolved at template definition time by Clang).
+
+// Extracts params_type from the TypeTuple element at compile-time index I.
+template <size_t I, typename TypeTuple>
+using params_type_at = typename std::tuple_element_t<I, TypeTuple>::params_type;
+
+// Returns true if P appears as the params_type of any element in TypeTuple.
+// P = void is never considered registered.
+template <typename P, typename TypeTuple, size_t I = 0>
+constexpr bool is_params_type_registered() {
+  if constexpr (I >= std::tuple_size_v<TypeTuple>) {
+    return false;
+  } else if constexpr (std::is_same_v<params_type_at<I, TypeTuple>, P>) {
+    return true;
+  } else {
+    return is_params_type_registered<P, TypeTuple, I + 1>();
+  }
+}
+
+// For each parameter of Func that is CustomArgWith<P> or CustomResultWith<P>,
+// asserts at compile time that P is registered as a params_type in TypeTuple
+// via .params<P, &fn>() on the corresponding type builder.
+template <auto Func, typename TypeTuple, size_t I = 0>
+constexpr void validate_custom_params() {
+  using ParamTuple =
+      typename func_builder::FuncParamTypes<decltype(Func)>::type;
+  if constexpr (I < std::tuple_size_v<ParamTuple>) {
+    using T = std::tuple_element_t<I, ParamTuple>;
+    using P = typename func_builder::params_type_of<T>::type;
+    if constexpr (!std::is_void_v<P>) {
+      static_assert(is_params_type_registered<P, TypeTuple>(),
+                    "VDF parameter uses CustomArgWith<P> or "
+                    "CustomResultWith<P> but P is not registered via "
+                    ".params<P, &fn>() on any type builder");
+    }
+    validate_custom_params<Func, TypeTuple, I + 1>();
+  }
+}
+
+}  // namespace detail
+
 namespace extension_builder {
 
 using namespace func_builder;
@@ -58,7 +104,8 @@ struct ExtensionBuilder {
   TypeTuple types_;
   vef_protocol_t min_protocol_;
 
-  // Add a function (returns new builder with function appended)
+  // Add a function from a StaticFuncDesc. This is the terminal overload that
+  // all other func() overloads delegate to after validation.
   template <typename F>
   constexpr auto func(F f) const {
     auto new_funcs = std::tuple_cat(funcs_, std::make_tuple(f));
@@ -66,10 +113,40 @@ struct ExtensionBuilder {
         name_, version_, new_funcs, types_, min_protocol_};
   }
 
+  // Add a function from a TypedFuncDesc (the result of FuncBuilder::build() or
+  // make_type_encode/decode/compare/hash/intrinsic_default).
+  // Validates at compile time that:
+  //   - every CustomArgWith<P> / CustomResultWith<P> parameter has P registered
+  //     in this builder's TypeTuple via .params<P, &fn>(); and
+  //   - for parameterized type operation VDFs (ParamsType != void), ParamsType
+  //     is likewise registered.
+  // Works whether the descriptor is inline or pre-built.
+  template <auto Func, size_t N, typename ParamsType>
+  constexpr auto func(const TypedFuncDesc<Func, N, ParamsType> &desc) const {
+    detail::validate_custom_params<Func, TypeTuple>();
+    if constexpr (!std::is_void_v<ParamsType>) {
+      static_assert(
+          detail::is_params_type_registered<ParamsType, TypeTuple>(),
+          "type operation VDF uses a parameterized cache but its params "
+          "type P is not registered via .params<P, &fn>() on any type builder");
+    }
+    return func(static_cast<const StaticFuncDesc<N> &>(desc));
+  }
+
+  // Convenience overload: accepts a FuncBuilder directly (without calling
+  // .build() at the call site) by delegating to the TypedFuncDesc overload.
+  template <auto Func, size_t N>
+  constexpr auto func(const FuncBuilder<Func, N> &builder) const {
+    return func(builder.build());
+  }
+
   // Add a type (returns new builder with type appended).
-  // If the type requires a higher protocol than min_protocol_, min_protocol_
-  // is raised automatically.
-  constexpr auto type(const TypeDescriptor &type) const {
+  // Accepts TypeDescriptorWithParams<P> so the params type P is preserved in
+  // the TypeTuple, enabling compile-time validation in later steps. If the type
+  // requires a higher protocol than min_protocol_, min_protocol_ is raised
+  // automatically.
+  template <typename P>
+  constexpr auto type(const TypeDescriptorWithParams<P> &type) const {
     auto new_types = std::tuple_cat(types_, std::make_tuple(type));
     const auto &t = type.vef_desc;
     const vef_protocol_t new_min =
@@ -146,21 +223,6 @@ void vef_init_type_params(const Ext &e, std::index_sequence<Is...>) {
    ...);
 }
 
-// Returns the name of the first VDF that requires a bound params cache but
-// whose cache was not bound (i.e., .params<P, &parse_fn>() was omitted from
-// the type builder). Must be called after vef_init_type_params().
-template <typename Ext, size_t... Is>
-const char *vef_check_params_cache(const Ext &e, std::index_sequence<Is...>) {
-  const char *unbound = nullptr;
-  auto check_one = [&unbound](const auto &func) {
-    if (unbound) return;
-    auto check_fn = func.check_params_cache_bound();
-    if (check_fn && !check_fn()) unbound = func.name();
-  };
-  (check_one(e.template func_at<Is>()), ...);
-  return unbound;
-}
-
 // Core registration logic called by VEF_GENERATE_ENTRY_POINTS.
 // FuncCount and TypeCount are explicit template parameters so that array
 // sizes are compile-time constants without relying on VLAs.
@@ -190,22 +252,6 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
   if constexpr (TypeCount > 0) {
     vef_fill_type_ptrs(type_ptrs, ext, std::make_index_sequence<TypeCount>{});
     vef_init_type_params(ext, std::make_index_sequence<TypeCount>{});
-  }
-
-  if constexpr (FuncCount > 0) {
-    const char *unbound_vdf =
-        vef_check_params_cache(ext, std::make_index_sequence<FuncCount>{});
-    if (unbound_vdf) {
-      static char error_buf[256];
-      snprintf(error_buf, sizeof(error_buf),
-               "VDF '%s' uses a parameterized type cache but no "
-               ".params<P, &parse_fn>() was registered for that params type; "
-               "add .params<P, &parse_fn>() to the type builder",
-               unbound_vdf);
-      reg.protocol = arg->protocol;
-      reg.error_msg = error_buf;
-      return &reg;
-    }
   }
 
   reg.protocol = VEF_PROTOCOL_2;

@@ -1,26 +1,41 @@
-# Test that INSTALL EXTENSION fails when a parameterized VDF is registered
-# without a corresponding .params<P, &parse_fn>() call in the type builder.
-# vef_register detects the unbound params cache and returns an error rather
-# than letting the server crash on the first VDF invocation.
+# Test that compilation fails when a parameterized VDF is registered without
+# .params<P, &parse_fn>() in the type builder. Cases cover both regular VDFs
+# (CustomArgWith<P>) and each type operation (encode, decode, compare, hash).
+# This is a compile-time static_assert rather than a runtime error.
 
---let $veb_dir = $MYSQLTEST_VARDIR/veb
---exec mkdir -p $veb_dir
+--let $std_data = $MYSQL_TEST_DIR/suite/villagesql/std_data
 
-call mtr.add_suppression("Orphaned expansion directory found but not removed");
-call mtr.add_suppression("vef_register returned an error");
---replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
---let $restart_parameters = restart: --veb-dir=$veb_dir
---source include/restart_mysqld.inc
+--let $extension_name    = missing_params_vdf
+--let $extension_source  = $std_data/missing_params_vdf.cc
+--let $expect_fail_pattern = VDF parameter uses CustomArgWith
+--echo # vdf: expect compile failure for missing .params<>()
+--source include/villagesql/compile_extension_expect_fail.inc
+--echo # vdf: static_assert triggered as expected
 
---let $extension_name = missing_params_fn
---let $extension_version = 1.0.0
---let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/missing_params_fn.cc
---source include/villagesql/create_extension_sdk.inc
+--let $extension_name    = missing_params_encode
+--let $extension_source  = $std_data/missing_params_encode.cc
+--let $expect_fail_pattern = type operation VDF uses a parameterized cache
+--echo # encode: expect compile failure for missing .params<>()
+--source include/villagesql/compile_extension_expect_fail.inc
+--echo # encode: static_assert triggered as expected
 
---echo # Attempt to install extension with parameterized VDF but no parse function
---echo # (should fail: vef_register detects unbound params cache)
---error ER_VILLAGESQL_GENERIC_ERROR
-INSTALL EXTENSION missing_params_fn;
+--let $extension_name    = missing_params_decode
+--let $extension_source  = $std_data/missing_params_decode.cc
+--let $expect_fail_pattern = type operation VDF uses a parameterized cache
+--echo # decode: expect compile failure for missing .params<>()
+--source include/villagesql/compile_extension_expect_fail.inc
+--echo # decode: static_assert triggered as expected
 
---echo # Verify extension was NOT installed
-SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+--let $extension_name    = missing_params_compare
+--let $extension_source  = $std_data/missing_params_compare.cc
+--let $expect_fail_pattern = type operation VDF uses a parameterized cache
+--echo # compare: expect compile failure for missing .params<>()
+--source include/villagesql/compile_extension_expect_fail.inc
+--echo # compare: static_assert triggered as expected
+
+--let $extension_name    = missing_params_hash
+--let $extension_source  = $std_data/missing_params_hash.cc
+--let $expect_fail_pattern = type operation VDF uses a parameterized cache
+--echo # hash: expect compile failure for missing .params<>()
+--source include/villagesql/compile_extension_expect_fail.inc
+--echo # hash: static_assert triggered as expected

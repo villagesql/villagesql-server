@@ -13,8 +13,8 @@
 // You should have received a copy of the GNU General Public License
 // along with this program; if not, see <https://www.gnu.org/licenses/>.
 
-// Test extension: parameterized encode VDF registered without .params<>().
-// vef_register should fail immediately rather than crashing on first VDF call.
+// Compile-fail test: parameterized encode VDF without .params<>().
+// The SDK static_assert fires at the make_type_encode .func() call.
 
 #include <villagesql/extension.h>
 
@@ -26,15 +26,11 @@
 
 struct FakeParams {
   int value;
-
   static FakeParams parse(const std::map<std::string, std::string> &) {
     return FakeParams{0};
   }
 };
 
-// Parameterized encode: takes const FakeParams& as first argument, so the SDK
-// will route through the params cache. .params<FakeParams,
-// &FakeParams::parse>() is intentionally omitted from the type builder below.
 bool faketype_encode(const FakeParams &, std::string_view from,
                      villagesql::Span<unsigned char> buf, size_t *length) {
   size_t n = from.size() < buf.size() ? from.size() : buf.size();
@@ -59,23 +55,18 @@ int faketype_compare(villagesql::Span<const unsigned char> a,
   return static_cast<int>(a.size()) - static_cast<int>(b.size());
 }
 
-using namespace villagesql::extension_builder;
-using namespace villagesql::func_builder;
-using namespace villagesql::type_builder;
-
 constexpr const char *FAKETYPE = "FAKETYPE";
 
-// .params<FakeParams, &FakeParams::parse>() is deliberately omitted so that
-// the params cache is never bound. vef_register should detect this and fail.
 VEF_GENERATE_ENTRY_POINTS(
     make_extension(VEF_EXTENSION_NAME, "0.0.1-devtest")
-        .type(make_type(FAKETYPE)
-                  .persisted_length(64)
-                  .max_decode_buffer_length(64)
-                  .encode("faketype_encode")
-                  .decode("faketype_decode")
-                  .compare("faketype_compare")
-                  .build())
+        .type(
+            make_type(FAKETYPE)
+                .persisted_length(64)
+                .max_decode_buffer_length(64)
+                .encode("faketype_encode")
+                .decode("faketype_decode")
+                .compare("faketype_compare")
+                .build())  // .params<FakeParams, &FakeParams::parse>() omitted
         .func(make_type_encode<&faketype_encode>("faketype_encode", FAKETYPE))
         .func(make_type_decode<&faketype_decode>("faketype_decode", FAKETYPE))
         .func(make_type_compare<&faketype_compare>("faketype_compare",

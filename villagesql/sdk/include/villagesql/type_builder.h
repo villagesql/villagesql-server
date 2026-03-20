@@ -51,6 +51,10 @@ void bind_params_cache() {
 // Wrapper around the ABI type descriptor that owns the storage interface
 // structure and ensures vef_desc.storage_intf points to the local copy
 // after copy/move operations.
+//
+// TypeDescriptorWithParams<P> is the parameterized form used when a type
+// registers a params type via .params<P, &fn>(). Code that doesn't care about
+// the params type can hold or accept the base TypeDescriptor.
 struct TypeDescriptor {
   vef_type_desc_t vef_desc{};
   vef_type_storage_intf_t storage_intf{};
@@ -81,164 +85,184 @@ struct TypeDescriptor {
   }
 };
 
+// TypeDescriptor parameterized on its params type. P = void means no params.
+// Inherits from TypeDescriptor so all existing code accepting TypeDescriptor
+// continues to work without changes.
+template <typename P = void>
+struct TypeDescriptorWithParams : TypeDescriptor {
+  using params_type = P;
+};
+
+// Non-template storage for TypeBuilder fields. Extracting these into a plain
+// struct lets TypeBuilder<P>'s cross-specialization copy constructor delegate
+// to the compiler-generated copy instead of listing every field by hand.
+struct TypeBuilderData {
+  const char *name_;
+  int64_t persisted_length_ = 0;
+  int64_t max_decode_buffer_length_ = 0;
+  vef_encode_func_t encode_ = nullptr;
+  vef_decode_func_t decode_ = nullptr;
+  vef_compare_func_t compare_ = nullptr;
+  vef_hash_func_t hash_ = nullptr;
+  const char *encode_vdf_name_ = nullptr;
+  const char *decode_vdf_name_ = nullptr;
+  const char *compare_vdf_name_ = nullptr;
+  const char *hash_vdf_name_ = nullptr;
+  const char *int_to_params_vdf_name_ = nullptr;
+  const char *resolve_params_vdf_name_ = nullptr;
+  const char *intrinsic_default_vdf_name_ = nullptr;
+  vef_type_storage_intf_t storage_intf_ = {};
+  void (*params_init_fn_)() = nullptr;
+
+  constexpr explicit TypeBuilderData(const char *name) : name_(name) {}
+};
+
+template <typename P = void>
 class TypeBuilder {
+  // Allows TypeBuilder<Q>::params<P2>() to copy data_ into TypeBuilder<P2>.
+  template <typename Q>
+  friend class TypeBuilder;
+
  public:
-  constexpr explicit TypeBuilder(const char *name)
-      : name_(name),
-        persisted_length_(0),
-        max_decode_buffer_length_(0),
-        encode_(nullptr),
-        decode_(nullptr),
-        compare_(nullptr),
-        hash_(nullptr),
-        encode_vdf_name_(nullptr),
-        decode_vdf_name_(nullptr),
-        compare_vdf_name_(nullptr),
-        hash_vdf_name_(nullptr),
-        int_to_params_vdf_name_(nullptr),
-        resolve_params_vdf_name_(nullptr),
-        intrinsic_default_vdf_name_(nullptr),
-        storage_intf_{},
-        params_init_fn_(nullptr) {}
+  constexpr explicit TypeBuilder(const char *name) : data_(name) {}
 
   constexpr TypeBuilder &persisted_length(int64_t len) {
-    persisted_length_ = len;
+    data_.persisted_length_ = len;
     return *this;
   }
 
   constexpr TypeBuilder &max_decode_buffer_length(int64_t len) {
-    max_decode_buffer_length_ = len;
+    data_.max_decode_buffer_length_ = len;
     return *this;
   }
 
   constexpr TypeBuilder &encode(vef_encode_func_t f) {
-    encode_ = f;
+    data_.encode_ = f;
     return *this;
   }
 
   constexpr TypeBuilder &encode(const char *vdf_name) {
-    encode_vdf_name_ = vdf_name;
+    data_.encode_vdf_name_ = vdf_name;
     return *this;
   }
 
   constexpr TypeBuilder &decode(vef_decode_func_t f) {
-    decode_ = f;
+    data_.decode_ = f;
     return *this;
   }
 
   constexpr TypeBuilder &decode(const char *vdf_name) {
-    decode_vdf_name_ = vdf_name;
+    data_.decode_vdf_name_ = vdf_name;
     return *this;
   }
 
   constexpr TypeBuilder &compare(vef_compare_func_t f) {
-    compare_ = f;
+    data_.compare_ = f;
     return *this;
   }
 
   constexpr TypeBuilder &compare(const char *vdf_name) {
-    compare_vdf_name_ = vdf_name;
+    data_.compare_vdf_name_ = vdf_name;
     return *this;
   }
 
   constexpr TypeBuilder &hash(vef_hash_func_t f) {
-    hash_ = f;
+    data_.hash_ = f;
     return *this;
   }
 
   constexpr TypeBuilder &hash(const char *vdf_name) {
-    hash_vdf_name_ = vdf_name;
+    data_.hash_vdf_name_ = vdf_name;
     return *this;
   }
 
   constexpr TypeBuilder &intrinsic_default(const char *vdf_name) {
-    intrinsic_default_vdf_name_ = vdf_name;
+    data_.intrinsic_default_vdf_name_ = vdf_name;
     return *this;
   }
 
   constexpr TypeBuilder &int_to_params(const char *vdf_name) {
-    int_to_params_vdf_name_ = vdf_name;
+    data_.int_to_params_vdf_name_ = vdf_name;
     return *this;
   }
 
   constexpr TypeBuilder &resolve_params(const char *vdf_name) {
-    resolve_params_vdf_name_ = vdf_name;
+    data_.resolve_params_vdf_name_ = vdf_name;
     return *this;
   }
 
   constexpr TypeBuilder &column_storage(const vef_type_storage_intf_t &intf) {
-    storage_intf_ = intf;
+    data_.storage_intf_ = intf;
     return *this;
   }
 
-  // Registers the params type P and its parse function with the
-  // TypeParamsCache. Called once during vef_register() before any VDF
-  // invocations. After this, VDF wrappers and CustomArgWith<P> can call
-  // type_params_cache_for<P>().get(raw) without passing the parse function.
-  template <typename P, auto ParseFunc>
-  constexpr TypeBuilder &params() {
-    params_init_fn_ = &bind_params_cache<P, ParseFunc>;
-    return *this;
+  // Registers the params type P2 and its parse function. Returns a new
+  // TypeBuilder<P2> with all fields copied, so the params type is reflected
+  // in the return type of build(). Called once during vef_register() before
+  // any VDF invocations.
+  template <typename P2, auto ParseFunc>
+  constexpr TypeBuilder<P2> params() const {
+    TypeBuilder<P2> b(*this);
+    b.data_.params_init_fn_ = &bind_params_cache<P2, ParseFunc>;
+    return b;
   }
 
-  // Build the final vef_type_desc_t. Protocol is set automatically:
+  // Build the final TypeDescriptorWithParams<P>. Protocol is set automatically:
   // VEF_PROTOCOL_2 if any protocol-2 field is set, otherwise VEF_PROTOCOL_1.
   // ExtensionBuilder::type() propagates this up to the extension's
   // min_protocol, so the registration fails if the server offers a lower
   // protocol.
-  constexpr TypeDescriptor build() const {
-    const bool needs_v2 =
-        encode_vdf_name_ != nullptr || decode_vdf_name_ != nullptr ||
-        compare_vdf_name_ != nullptr || hash_vdf_name_ != nullptr ||
-        int_to_params_vdf_name_ != nullptr ||
-        resolve_params_vdf_name_ != nullptr ||
-        intrinsic_default_vdf_name_ != nullptr || storage_intf_.version != 0;
+  constexpr TypeDescriptorWithParams<P> build() const {
+    const bool needs_v2 = data_.encode_vdf_name_ != nullptr ||
+                          data_.decode_vdf_name_ != nullptr ||
+                          data_.compare_vdf_name_ != nullptr ||
+                          data_.hash_vdf_name_ != nullptr ||
+                          data_.int_to_params_vdf_name_ != nullptr ||
+                          data_.resolve_params_vdf_name_ != nullptr ||
+                          data_.intrinsic_default_vdf_name_ != nullptr ||
+                          data_.storage_intf_.version != 0;
     const vef_protocol_t protocol = needs_v2 ? VEF_PROTOCOL_2 : VEF_PROTOCOL_1;
-    TypeDescriptor desc{};
-    desc.storage_intf = storage_intf_;
+    TypeDescriptorWithParams<P> desc{};
+    desc.storage_intf = data_.storage_intf_;
     desc.vef_desc = vef_type_desc_t{
         protocol,
-        name_,
-        persisted_length_,
-        max_decode_buffer_length_,
-        encode_,
-        decode_,
-        compare_,
-        hash_,
-        encode_vdf_name_,
-        decode_vdf_name_,
-        compare_vdf_name_,
-        hash_vdf_name_,
-        int_to_params_vdf_name_,
-        resolve_params_vdf_name_,
-        intrinsic_default_vdf_name_,
-        storage_intf_.version != 0 ? &desc.storage_intf : nullptr,
+        data_.name_,
+        data_.persisted_length_,
+        data_.max_decode_buffer_length_,
+        data_.encode_,
+        data_.decode_,
+        data_.compare_,
+        data_.hash_,
+        data_.encode_vdf_name_,
+        data_.decode_vdf_name_,
+        data_.compare_vdf_name_,
+        data_.hash_vdf_name_,
+        data_.int_to_params_vdf_name_,
+        data_.resolve_params_vdf_name_,
+        data_.intrinsic_default_vdf_name_,
+        data_.storage_intf_.version != 0 ? &desc.storage_intf : nullptr,
     };
-    desc.params_init_fn = params_init_fn_;
+    desc.params_init_fn = data_.params_init_fn_;
     return desc;
   }
 
  private:
-  const char *name_;
-  int64_t persisted_length_;
-  int64_t max_decode_buffer_length_;
-  vef_encode_func_t encode_;
-  vef_decode_func_t decode_;
-  vef_compare_func_t compare_;
-  vef_hash_func_t hash_;
-  const char *encode_vdf_name_;
-  const char *decode_vdf_name_;
-  const char *compare_vdf_name_;
-  const char *hash_vdf_name_;
-  const char *int_to_params_vdf_name_;
-  const char *resolve_params_vdf_name_;
-  const char *intrinsic_default_vdf_name_;
-  vef_type_storage_intf_t storage_intf_;
-  void (*params_init_fn_)();
+  // Converting copy constructor used only by params<P2, ParseFunc>() to
+  // produce a TypeBuilder<P2> from a TypeBuilder<void>. Restricted to
+  // Q = void so that calling .params<>() twice is a compile error.
+  template <typename Q>
+  constexpr explicit TypeBuilder(const TypeBuilder<Q> &o) : data_(o.data_) {
+    static_assert(std::is_void_v<Q>,
+                  ".params<P, &fn>() may only be called once on a TypeBuilder");
+  }
+
+  TypeBuilderData data_;
 };
 
-// Entry point: make_type("name")
-constexpr TypeBuilder make_type(const char *name) { return TypeBuilder(name); }
+// Entry point: make_type("name") returns TypeBuilder<void>.
+constexpr TypeBuilder<> make_type(const char *name) {
+  return TypeBuilder<>(name);
+}
 
 }  // namespace type_builder
 }  // namespace villagesql
