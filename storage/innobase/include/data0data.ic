@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1994, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -76,12 +77,16 @@ static inline void *dfield_get_data(const dfield_t *field) /*!< in: field */
 
 /** Gets length of field data.
  @return length of data; UNIV_SQL_NULL if SQL null data */
-static inline uint32_t dfield_get_len(const dfield_t *field) /*!< in: field */
+static inline uint32_t dfield_get_len(const dfield_t *field,  /*!< in: field */
+                                      bool ref_length)
 {
   ut_ad(field);
   ut_ad((field->len == UNIV_SQL_NULL) || (field->data != &data_error));
 
-  return (field->len);
+  // Check if caller asked for extended reference length. For NULL value, we
+  // should always return UNIV_SQL_NULL.
+  return (field->is_extended() && ref_length && field->len != UNIV_SQL_NULL) ?
+          field->extended_ref_size() : field->len;
 }
 
 /** Sets length in a field. */

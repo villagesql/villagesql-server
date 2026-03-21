@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -599,6 +600,11 @@ struct upd_t {
 
   /** Capacity of the fields array */
   size_t n_capacity;
+
+  // Set to true, if we are updating any column in extended storage. The
+  // structure is allocated with mem_heap_t and is memset to zero,
+  // initializing the value to false by default.
+  bool update_extended;
 
   /** Append an update field to the end of array. If fields array is full, more
   space is allocated on the heap.

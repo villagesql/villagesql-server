@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -78,6 +79,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef UNIV_HOTBACKUP
 #include "current_thd.h"
 #include "dict0dd.h"
+#include "villagesql/custom_column.h"
 #endif /* !UNIV_HOTBACKUP */
 
 #ifndef UNIV_HOTBACKUP
@@ -1925,8 +1927,8 @@ void row_upd_store_row(upd_node_t *node, THD *thd, TABLE *mysql_table) {
     node->ext = nullptr;
   }
 
-  node->row = row_build(ROW_COPY_DATA, clust_index, rec, offsets, nullptr,
-                        nullptr, nullptr, ext, node->heap);
+  node->row = row_build(ROW_COPY_DATA_EXTENDED, clust_index, rec, offsets,
+                        nullptr, nullptr, nullptr, ext, node->heap);
 
   if (node->table->n_v_cols) {
     row_upd_store_v_row(node, node->is_delete ? nullptr : node->update, thd,
@@ -2655,6 +2657,14 @@ static inline bool row_upd_clust_rec_by_insert_inherit(
 
   mtr_commit(mtr);
 
+  // Delete mark columns in extended column store.
+  using villagesql::innodb::Custom_column;
+  err = Custom_column::mark_delete(index->table, trx->id, nullptr, node->row,
+                                   true);
+  if (err != DB_SUCCESS) {
+    return err;
+  }
+
   err = row_ins_clust_index_entry(index, entry, thr, false);
   node->state = UPD_NODE_INSERT_CLUSTERED;
 
@@ -2923,6 +2933,12 @@ void upd_t::append(const upd_field_t &field) {
 
   mtr->commit();
 
+  if (err == DB_SUCCESS) {
+    using villagesql::innodb::Custom_column;
+    err = Custom_column::update(index->table, trx_id, pcur, node->update,
+                                offsets, offsets_heap);
+  }
+
 func_exit:
   if (heap) {
     mem_heap_free(heap);
@@ -2978,6 +2994,7 @@ func_exit:
   err = btr_cur_del_mark_set_clust_rec(flags, btr_cur_get_block(btr_cur),
                                        btr_cur_get_rec(btr_cur), index, offsets,
                                        thr, node->row, mtr);
+
   if (err == DB_SUCCESS && referenced) {
     /* NOTE that the following call loses the position of pcur ! */
 
@@ -2987,6 +3004,13 @@ func_exit:
 
   mtr_commit(mtr);
 
+  if (err == DB_SUCCESS) {
+    // Delete mark columns in extended column store.
+    trx_t *trx = thr_get_trx(thr);
+    using villagesql::innodb::Custom_column;
+    err = Custom_column::mark_delete(index->table, trx->id, nullptr, node->row,
+                                     true);
+  }
   return (err);
 }
 

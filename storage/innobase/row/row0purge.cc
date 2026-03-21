@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1997, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -64,6 +65,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0rseg.h"
 #include "trx0trx.h"
 #include "trx0undo.h"
+#include "villagesql/custom_column.h"
 
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there
@@ -187,6 +189,17 @@ static bool row_purge_reposition_pcur(
   }
 
   ut_ad(rec_get_deleted_flag(rec, rec_offs_comp(offsets)));
+
+  if (index->table->has_extended_storage) {
+    mtr_commit(&mtr);
+    using villagesql::innodb::Custom_column;
+    dberr_t err = Custom_column::purge_at_pcur(index->table, &node->pcur);
+    if (err != DB_SUCCESS) {
+      return false;
+    }
+    mtr_start(&mtr);
+    ut_a(node->pcur.restore_position(mode, &mtr, UT_LOCATION_HERE));
+  }
 
   if (mode == BTR_MODIFY_LEAF) {
     success = btr_cur_optimistic_delete(node->pcur.get_btr_cur(), 0, &mtr);
@@ -859,12 +872,7 @@ static bool row_purge_parse_undo_rec(purge_node_t *node,
 
   ptr = trx_undo_rec_get_pars(undo_rec, &type, &node->cmpl_info, updated_extern,
                               &undo_no, &table_id, type_cmpl);
-
   node->rec_type = type;
-
-  if (type == TRX_UNDO_UPD_DEL_REC && !*updated_extern) {
-    return (false);
-  }
 
   ptr = trx_undo_update_rec_get_sys_cols(ptr, &trx_id, &roll_ptr, &info_bits);
   node->table = nullptr;
@@ -1045,9 +1053,14 @@ try_again:
     return (false);
   }
 
-  if (type == TRX_UNDO_UPD_EXIST_REC &&
-      (node->cmpl_info & UPD_NODE_NO_ORD_CHANGE) && !*updated_extern) {
-    /* Purge requires no changes to indexes: we may return */
+  // Check if we can skip parsing based on type information.
+  bool skip_purge = (type == TRX_UNDO_UPD_DEL_REC) ||
+                    // Purge requires no changes to indexes.
+                    (type == TRX_UNDO_UPD_EXIST_REC &&
+                     node->cmpl_info & UPD_NODE_NO_ORD_CHANGE);
+
+  // Skip only if no LOB data or extended column storage.
+  if (skip_purge && !*updated_extern && !node->table->has_extended_storage) {
     goto close_exit;
   }
 
@@ -1107,6 +1120,26 @@ try_again:
       row_purge_upd_exist_or_extern_func(IF_DEBUG(thr, ) node, undo_rec);
       MONITOR_INC(MONITOR_N_UPD_EXIST_EXTERN);
       break;
+  }
+
+  if (node->rec_type == TRX_UNDO_UPD_EXIST_REC ||
+      node->rec_type == TRX_UNDO_UPD_DEL_REC) {
+    // If we have updated an existing record (TRX_UNDO_UPD_EXIST_REC), then we
+    // need our own (node->modifier_trx_id) transaction ID because we have
+    // delete marked the extended record. However, if we have reused an existing
+    // delete marked record, we need the ID of that transaction which is found
+    // in the undo log (node->trx_id).
+    trx_id_t purge_trx_id = (node->rec_type == TRX_UNDO_UPD_EXIST_REC)
+                                ? node->modifier_trx_id
+                                : node->trx_id;
+    // Remove old version, if updated extended columns.
+    using villagesql::innodb::Custom_column;
+    dberr_t error =
+        Custom_column::purge_updated(node->table, purge_trx_id, node->update);
+    ut_ad(error == DB_SUCCESS);
+    // We don't assert purge failure in extended storage. Error is already
+    // logged.
+    std::ignore = error;
   }
 
   if (node->update != nullptr) {

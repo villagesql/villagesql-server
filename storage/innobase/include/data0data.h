@@ -44,6 +44,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0types.h"
 #include "ut0bitset.h"
 
+#include "villagesql/custom_column.h"
+
 #include <ostream>
 
 /** Storage for overflow data in a big record, that is, a clustered
@@ -71,9 +73,11 @@ struct upd_t;
 static inline void dfield_set_type(dfield_t *field, const dtype_t *type);
 
 /** Gets length of field data.
- @return length of data; UNIV_SQL_NULL if SQL null data */
-[[nodiscard]] static inline uint32_t dfield_get_len(
-    const dfield_t *field); /*!< in: field */
+@param[in]  field       SQL data field
+@param[in]  ref_length  if reference length is needed for extended column
+@return length of data; UNIV_SQL_NULL if SQL null data */
+[[nodiscard]] static inline uint32_t dfield_get_len(const dfield_t *field,
+                                                    bool ref_length = true);
 
 /** Sets length in a field.
 @param[in]      field   field
@@ -647,7 +651,11 @@ struct dfield_t {
   uint32_t lob_version() const;
 
   dfield_t()
-      : data(nullptr), ext(0), spatial_status(0), len(0), type({0, 0, 0, 0}) {}
+      : data(nullptr),
+        ext(0),
+        spatial_status(0),
+        len(0),
+        type({0, 0, 0, 0, 0}) {}
 
   /** Print the dfield_t object into the given output stream.
   @param[in]    out     the output stream.
@@ -663,6 +671,55 @@ struct dfield_t {
   @param[in,out]        heap    memory heap to keep value when necessary */
   void adjust_v_data_mysql(const dict_v_col_t *vcol, bool comp,
                            const byte *field, ulint len, mem_heap_t *heap);
+
+  /** Check whether the column data is stored in extended storage.
+  @return true if the field uses extended storage. */
+  bool is_extended() const { return (type.extended_storage != 0); }
+
+  /** Disable extended storage for field. */
+  void disable_extended() { type.extended_storage = 0; }
+
+  /** Get the size in bytes of the extended reference of the field.
+  @return size of reference in bytes. */
+  static constexpr size_t extended_ref_size() {
+    return sizeof(villagesql::innodb::Custom_column::Ref);
+  }
+
+  /** Get a pointer to the extended data of the field.
+  @param[out]  size  length of the extended data in bytes.
+  @return pointer to the start of extended data, or nullptr if not using
+  extended storage. */
+  const byte *get_extended_data(size_t &size) const {
+    ut_ad(len > extended_ref_size());
+
+    if (!is_extended() || len <= extended_ref_size()) {
+      size = 0;
+      return nullptr;
+    }
+    size = len - extended_ref_size();
+    return (static_cast<const byte *>(data) + extended_ref_size());
+  }
+
+  /** @return The reference that points to extended data. */
+  villagesql::innodb::Custom_column::Ref get_extended_ref() const {
+    static_assert(extended_ref_size() == sizeof(uint64_t));
+    ut_ad(is_extended());
+    ut_ad(len >= extended_ref_size());
+
+    if (!is_extended() || len < extended_ref_size()) {
+      return 0;
+    }
+    return mach_read_from_8(static_cast<const byte *>(data));
+  }
+
+  void set_extended_ref(villagesql::innodb::Custom_column::Ref ref) {
+    if (!is_extended()) {
+      ut_ad(false);
+      return;
+    }
+    ut_ad(len > extended_ref_size());
+    mach_write_to_8(data, ref);
+  }
 };
 
 /** Compare a multi-value clustered index field with a secondary index

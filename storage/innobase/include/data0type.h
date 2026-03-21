@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -520,6 +521,11 @@ struct dtype_t {
                             DATA_MBMINMAXLEN(mbminlen,mbmaxlen);
                             mbminlen=DATA_MBMINLEN(mbminmaxlen);
                             mbmaxlen=DATA_MBMINLEN(mbminmaxlen) */
+
+  /** We need to explicitly initialize the variable to zero wherever dtype_t
+  is used. This check must also be repeated each time we merge with a new
+  MySQL version. */
+  unsigned extended_storage : 1;  // Column data is in extended storage
 
   bool is_virtual() const { return ((prtype & DATA_VIRTUAL) == DATA_VIRTUAL); }
 

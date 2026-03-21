@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1997, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -51,6 +52,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0roll.h"
 #include "trx0trx.h"
 #include "trx0undo.h"
+#include "villagesql/custom_column.h"
 
 /*************************************************************************
 IMPORTANT NOTE: Any operation that generates redo MUST check that there
@@ -76,7 +78,14 @@ introduced where a call to log_free_check() is bypassed. */
   bool online;
 
   ut_ad(index->is_clustered());
+
   ut_ad(node->trx.in_rollback);
+
+  using villagesql::innodb::Custom_column;
+  err = Custom_column::rollback_inserted(index->table, node->row, &node->pcur);
+  if (err != DB_SUCCESS) {
+    return err;
+  }
 
   mtr_start(&mtr);
 

@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -264,6 +265,10 @@ void dtype_print(const dtype_t *type) {
     if (prtype & DATA_NOT_NULL) {
       fputs(" DATA_NOT_NULL", stderr);
     }
+  }
+
+  if (type->extended_storage) {
+    fputs(" Extended Storage", stderr);
   }
 
   fprintf(stderr, " len %lu", (ulong)len);

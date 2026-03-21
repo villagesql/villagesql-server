@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2000, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -84,6 +85,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "current_thd.h"
 #include "my_dbug.h"
 #include "my_io.h"
+
+#include "villagesql/custom_column.h"
 
 static const char *MODIFICATIONS_NOT_ALLOWED_MSG_FORCE_RECOVERY =
     "innodb_force_recovery is on. We do not allow database modifications"
@@ -675,6 +678,7 @@ handle_new_error:
         break;
       }
       [[fallthrough]];
+    case DB_ERROR:
     case DB_DUPLICATE_KEY:
     case DB_FOREIGN_DUPLICATE_KEY:
     case DB_TOO_BIG_RECORD:
@@ -4023,8 +4027,11 @@ dberr_t row_drop_table_for_mysql(const char *name, trx_t *trx, bool nonatomic,
       dict_drop_temporary_table_index(index, page);
     }
   }
+  err = villagesql::innodb::Custom_column::drop(table, trx->id);
 
-  err = DB_SUCCESS;
+  if (err != DB_SUCCESS) {
+    goto funct_exit;
+  }
 
   space_id_t space_id;
   bool is_temp;

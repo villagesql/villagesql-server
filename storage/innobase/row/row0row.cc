@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -55,6 +56,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 #include "ut0mem.h"
+#include "villagesql/custom_column.h"
 
 dtuple_t *row_build_index_entry_low(const dtuple_t *row, const row_ext_t *ext,
                                     const dict_index_t *index, mem_heap_t *heap,
@@ -391,6 +393,7 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
 
   if (type != ROW_COPY_POINTERS) {
     /* Take a copy of rec to heap */
+    ut_a(type == ROW_COPY_DATA || type == ROW_COPY_DATA_EXTENDED);
     buf = static_cast<byte *>(mem_heap_alloc(heap, rec_offs_size(offsets)));
 
     copy = rec_copy(buf, rec, offsets);
@@ -476,6 +479,16 @@ static inline dtuple_t *row_build_low(ulint type, const dict_index_t *index,
     const byte *field;
 
     field = rec_get_nth_field_instant(copy, offsets, i, index, &len);
+
+    if (type == ROW_COPY_DATA_EXTENDED) {
+      using villagesql::innodb::Custom_column;
+      auto err =
+          Custom_column::allocate_fetch(col_table, col, field, len, heap);
+      if (err != DB_SUCCESS) {
+        ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+            << "InnoDB: Custom column allocate and fetch failed";
+      }
+    }
 
     dfield_set_data(dfield, field, len);
 

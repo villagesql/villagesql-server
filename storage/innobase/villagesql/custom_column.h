@@ -20,12 +20,20 @@
 #include <memory>
 #include <utility>
 
+#include "db0err.h"
+#include "mem0mem.h"
+#include "trx0types.h"
+#include "villagesql/sdk/include/villagesql/abi/storage.h"
+#include "villagesql/types/storage.h"
+
 // Forward declarations
+struct btr_pcur_t;
 struct dict_table_t;
 struct dict_col_t;
-
 struct dict_index_t;
 struct dict_field_t;
+struct dtuple_t;
+struct upd_t;
 
 class Field;
 
@@ -39,12 +47,43 @@ class TypeContext;
 
 namespace innodb {
 
+// Arena allocator context and callback provided to extensions during
+// storage create and load operations.
+struct Arena {
+  using Type = vef_storage_arena_t;
+  using Func = vef_storage_arena_func_t;
+
+  static constexpr uint32_t MIN_ALIGNMENT = VEF_STORAGE_MIN_ALLOCATOR_ALIGNMENT;
+};
+
 class Custom_column {
  public:
+  using Ref = vef_storage_col_ref_t;
+  using Data = vef_storage_col_data_t;
+  using TrxRef = vef_storage_trx_ref_t;
+  using StorageRef = vef_storage_ref_t;
+  using StorageCtx = vef_storage_ctx_t;
+  using StorageIntf = villagesql::StorageInterface;
   using Info = std::pair<Custom_column *, bool>;
+
+  static constexpr Ref EMPTY_REF = VEF_STORAGE_EMPTY_COLUMN_REF;
+  static constexpr uint32_t ERROR_MSG_SIZE = 512;
 
   explicit Custom_column(std::shared_ptr<const TypeContext> type_context)
       : type_context_(std::move(type_context)) {}
+
+  // Returns the storage interface function table, or nullopt if the column
+  // storage is not managed by an extension.
+  const std::optional<StorageIntf> &storage_interface() const;
+
+  // Returns the storage context, or nullptr if not yet initialized.
+  StorageCtx *storage_ctx() const { return storage_ctx_; }
+
+  // Sets the storage context.
+  void set_storage_ctx(StorageCtx *ctx) { storage_ctx_ = ctx; }
+
+  // Returns true if the column storage is managed by an extension.
+  bool stored_by_extension() const { return storage_interface().has_value(); }
 
   // Compare two values using the registered compare implementation.
   int compare(const unsigned char *data1, size_t len1,
@@ -84,9 +123,133 @@ class Custom_column {
   //    resurrected tables are fully initialized before normal use.
   static void load_all(dict_table_t *table);
 
+  // Creates the extended column storage for a table.
+  // @param table The table for which to create storage.
+  // @param trx_id The transaction ID creating the storage.
+  // @return DB_SUCCESS or an error code.
+  static dberr_t create(const dict_table_t *table, trx_id_t trx_id);
+
+  // Drops the extended column storage for a table.
+  // @param table The table from which to drop storage.
+  // @param trx_id The transaction ID dropping the storage.
+  // @return DB_SUCCESS or an error code.
+  static dberr_t drop(const dict_table_t *table, trx_id_t trx_id);
+
+  // Persists the extended column storage reference to the data dictionary.
+  // Typically called during DDL operations to persist storage information for
+  // columns stored by extensions.
+  // @param col The column whose storage reference to save.
+  // @param dd_col The data dictionary column object to update.
+  static void save_ref(dict_col_t *col, dd::Column *dd_col);
+
+  // Inserts extended column data for a newly inserted row.
+  // @param table The table being inserted into.
+  // @param trx_id The transaction ID of the insert.
+  // @param index_entry The clustered index entry of the new row.
+  // @param offsets Offsets for the index entry.
+  // @param heap Memory heap.
+  // @return DB_SUCCESS or an error code.
+  static dberr_t insert(dict_table_t *table, trx_id_t trx_id,
+                        const dtuple_t *index_entry, ulint *offsets,
+                        mem_heap_t **heap);
+
+  // Updates extended column data for an updated row.
+  // Marks the old data as deleted and inserts the new data.
+  // @param table The table being updated.
+  // @param trx_id The transaction ID of the update.
+  // @param pcur Cursor pointing to the clustered index record.
+  // @param upd The update vector.
+  // @param offsets Offsets for the record.
+  // @param heap Memory heap.
+  // @return DB_SUCCESS or an error code.
+  static dberr_t update(const dict_table_t *table, trx_id_t trx_id,
+                        btr_pcur_t *pcur, upd_t *upd, ulint *offsets,
+                        mem_heap_t **heap);
+
+  // Marks or unmarks extended column data as deleted.
+  // Used during delete operations (mark) and rollbacks (unmark).
+  // @param table The table.
+  // @param trx_id The transaction ID.
+  // @param upd The update vector (if only some columns are affected), or
+  // nullptr.
+  // @param row_entry The row entry containing the extended column references.
+  // @param del_mark True to mark as deleted, false to unmark.
+  // @return DB_SUCCESS or an error code.
+  static dberr_t mark_delete(const dict_table_t *table, trx_id_t trx_id,
+                             const upd_t *upd, const dtuple_t *row_entry,
+                             bool del_mark);
+
+  // Purges extended columns for a record specified by a cursor.
+  // Used during purge when a full row_entry is not readily available.
+  // @param table The table.
+  // @param pcur Cursor pointing to the record.
+  // @return DB_SUCCESS or an error code.
+  static dberr_t purge_at_pcur(const dict_table_t *table, btr_pcur_t *pcur);
+
+  // Rolls back inserted extended columns for a given row.
+  // Used when rolling back an entire row insertion.
+  // @param table The table.
+  // @param row_entry The row being rolled back.
+  // @param pcur Cursor pointing to the record.
+  // @return DB_SUCCESS or an error code.
+  static dberr_t rollback_inserted(const dict_table_t *table,
+                                   const dtuple_t *row_entry, btr_pcur_t *pcur);
+
+  // Rolls back updated extended columns for a given row.
+  // Only the columns present in the upd_t struct are affected.
+  // @param table The table.
+  // @param type undo record type e.g. TRX_UNDO_UPD_EXIST_REC
+  // @param upd The update vector containing the fields to roll back.
+  // @param undo_trx_id transaction ID of the record after rollback
+  // @param undo_row row after rollback
+  // @param cur_row updated row before rollback.
+  // @param pcur Cursor pointing to the record.
+  // @return DB_SUCCESS or an error code.
+  static dberr_t rollback_updated(const dict_table_t *table, ulint type,
+                                  const upd_t *upd, trx_id_t undo_trx_id,
+                                  const dtuple_t *undo_row,
+                                  const dtuple_t *cur_row, btr_pcur_t *pcur);
+
+  // Purges the old versions of updated extended columns.
+  // Called by the purge system to physically remove data no longer visible to
+  // any active transaction.
+  // @param table The table.
+  // @param trx_id The transaction ID that created the new version.
+  // @param upd The update vector containing the old data references.
+  // @return DB_SUCCESS or an error code.
+  static dberr_t purge_updated(const dict_table_t *table, trx_id_t trx_id,
+                               const upd_t *upd);
+
+  // Fetches the data for a single extended column.
+  // @param table The table.
+  // @param col The column definition.
+  // @param dest Destination buffer to store the fetched data.
+  // @param dest_len Length of the destination buffer.
+  // @param src Source buffer containing the extended column reference.
+  // @param src_len Length of the source buffer.
+  // @return DB_SUCCESS or an error code.
+  static dberr_t fetch(const dict_table_t *table, const dict_col_t *col,
+                       byte *dest, ulint dest_len, const byte *src,
+                       ulint src_len);
+
+  // Allocates memory and fetches the data for a single extended column.
+  // @param table The table.
+  // @param col The column definition.
+  // @param[in,out] data On input, a pointer to the reference; on output, a
+  // pointer to the fetched data.
+  // @param[in,out] data_len On input, the length of the reference; on output,
+  // the length of the fetched data.
+  // @param heap Memory heap to allocate from.
+  // @return DB_SUCCESS or an error code.
+  static dberr_t allocate_fetch(const dict_table_t *table,
+                                const dict_col_t *col, const byte *&data,
+                                ulint &data_len, mem_heap_t *heap);
+
  private:
   std::shared_ptr<const TypeContext> type_context_;
+  StorageCtx *storage_ctx_ = nullptr;
 };
+
 }  // namespace innodb
 }  // namespace villagesql
 

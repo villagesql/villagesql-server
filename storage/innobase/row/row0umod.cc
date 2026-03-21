@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1997, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -51,6 +52,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0roll.h"
 #include "trx0trx.h"
 #include "trx0undo.h"
+#include "villagesql/custom_column.h"
 
 #include "current_thd.h"
 #include "debug_sync.h"
@@ -182,11 +184,13 @@ introduced where a call to log_free_check() is bypassed. */
   btr_cur_t *btr_cur;
   dberr_t err;
   ulint trx_id_offset;
+  bool checked_custom = false;
 
   ut_ad(node->rec_type == TRX_UNDO_UPD_DEL_REC);
 
   /* Find out if the record has been purged already
   or if we can remove it. */
+check_if_purged:
 
   if (!node->pcur.restore_position(mode, mtr, UT_LOCATION_HERE) ||
       row_vers_must_preserve_del_marked(node->new_trx_id, node->table->name,
@@ -229,6 +233,27 @@ introduced where a call to log_free_check() is bypassed. */
   than the rolling-back one. */
   ut_ad(rec_get_deleted_flag(btr_cur_get_rec(btr_cur),
                              dict_table_is_comp(node->table)));
+
+  // We could have refactored the code to separate out the check for purge in
+  // a different function. That would have eliminated the need for reverse
+  // movement using goto. However, it would make it future merge with MySQL
+  // harder.
+  if (!checked_custom) {
+    node->pcur.commit_specify_mtr(mtr);
+    // Remove extended column data, if any.
+    using villagesql::innodb::Custom_column;
+    err = Custom_column::rollback_inserted(node->table, node->undo_row,
+                                           &node->pcur);
+    mtr_start(mtr);
+    if (err != DB_SUCCESS) return err;
+
+    // Ensure one time execution.
+    checked_custom = true;
+
+    // We have committed and restarted the mtr and hence need to re-acquire the
+    // latches and check again if the record is purged.
+    goto check_if_purged;
+  }
 
   if (mode == BTR_MODIFY_LEAF) {
     err = btr_cur_optimistic_delete(btr_cur, 0, mtr) ? DB_SUCCESS : DB_FAIL;
@@ -273,6 +298,12 @@ introduced where a call to log_free_check() is bypassed. */
   log_free_check();
   pcur = &node->pcur;
   index = pcur->get_btr_cur()->index;
+
+  using villagesql::innodb::Custom_column;
+  err = Custom_column::rollback_updated(node->table, node->rec_type,
+                                        node->update, node->new_trx_id,
+                                        node->undo_row, node->row, &node->pcur);
+  if (err != DB_SUCCESS) return err;
 
   mtr_start(&mtr);
 
@@ -1299,6 +1330,8 @@ dberr_t row_undo_mod(undo_node_t *node, /*!< in: row undo node */
 
   node->index = node->table->first_index();
   ut_ad(node->index->is_clustered());
+  const auto *const clust_index = node->index;
+
   /* Skip the clustered index (the first index) */
   node->index = node->index->next();
 
@@ -1314,6 +1347,13 @@ dberr_t row_undo_mod(undo_node_t *node, /*!< in: row undo node */
       break;
     case TRX_UNDO_UPD_DEL_REC:
       err = row_undo_mod_upd_del_sec(node, thr);
+      if (err == DB_SUCCESS && node->table->has_extended_storage) {
+        // Construct undo row for purging extended data of the old record.
+        ut_ad(!node->undo_row);
+        node->undo_row = dtuple_copy(node->row, node->heap);
+        row_upd_replace(node->undo_row, &node->undo_ext, clust_index,
+                        node->update, node->heap);
+      }
       break;
     default:
       ut_error;

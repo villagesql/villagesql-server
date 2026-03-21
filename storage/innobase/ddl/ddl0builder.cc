@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2020, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -782,6 +783,7 @@ void Builder::fts_add_doc_id(dfield_t *dst, const dict_field_t *src,
   dst->type.mtype = src->col->mtype;
   dst->type.prtype = src->col->prtype;
   dst->type.mbminmaxlen = DATA_MBMINMAXLEN(0, 0);
+  dst->type.extended_storage = 0;
 }
 
 dberr_t Builder::get_virtual_column(Copy_ctx &ctx, const dict_field_t *ifield,

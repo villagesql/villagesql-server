@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -1307,7 +1308,12 @@ static ulint trx_undo_page_report_modify(
     if (trx_undo_left(undo_page, ptr) < 5) {
       return 0;
     }
-
+    // We delete mark old value when an extended column is updated.
+    if (update->update_extended) {
+      undo_ptr->update_undo->del_marks = true;
+      // Allow purging of update undo log in trx_purge_get_next_rec().
+      *type_cmpl_ptr |= TRX_UNDO_UPD_EXTERN;
+    }
     ulint n_updated = upd_get_n_fields(update);
 
     /* If this is an online update while an inplace alter table
@@ -1835,13 +1841,17 @@ const byte *trx_undo_update_rec_get_update(
 
       upd_field_set_v_field_no(upd_field, field_no, index);
     } else {
+      const dict_col_t *col = nullptr;
       if (index->has_row_versions()) {
         auto log_pos = index->fields_array[field_no];
         upd_field_set_field_no(upd_field, log_pos, index);
         IF_DEBUG(upd_field->field_phy_pos = field_no;)
+        col = index->get_col(log_pos);
       } else {
         upd_field_set_field_no(upd_field, field_no, index);
+        col = index->get_col(field_no);
       }
+      col->copy_type(dfield_get_type(&upd_field->new_val));
     }
 
     if (vcol != nullptr && vcol->m_col.is_multi_value()) {

@@ -5428,9 +5428,12 @@ static PSI_meter_info_v1 inno_meter[] = {
 @param[in,out]  p       InnoDB handlerton
 @return error code
 @retval 0 on success */
+void vef_storage_api_wrapper_init();
+
 static int innodb_init(void *p) {
   DBUG_TRACE;
 
+  vef_storage_api_wrapper_init();
   acquire_plugin_services();
 
   handlerton *innobase_hton = (handlerton *)p;
@@ -9612,6 +9615,10 @@ static dberr_t calc_row_difference(
   /* We use upd_buff to convert changed fields */
   buf = (byte *)upd_buff;
 
+  // Reset the extended storage flag. It would be set, in the loop, if we are
+  // updating any column with extended storage.
+  uvect->update_extended = false;
+
   for (i = 0; i < n_fields; i++) {
     dfield.reset();
 
@@ -9821,6 +9828,28 @@ static dberr_t calc_row_difference(
       } else {
         col->copy_type(dfield_get_type(&ufield->new_val));
         dfield_set_null(&ufield->new_val);
+      }
+
+      col->copy_type(dfield_get_type(&ufield->old_val));
+
+      // For extended storage, set the old column value.
+      if (col->stored_by_extn()) {
+        // Note that an extended column is updated.
+        uvect->update_extended = true;
+
+        // The input buffer is set to nullptr. This is safe because the buffer
+        // is only accessed for DATA_INT.
+        auto *dtype = dfield_get_type(&ufield->old_val);
+        ut_a(dtype->mtype != DATA_INT);
+
+        if (o_len != UNIV_SQL_NULL) {
+          std::ignore = row_mysql_store_col_in_innobase_format(
+              &ufield->old_val, nullptr, true, old_mysql_row_col, col_pack_len,
+              comp);
+
+        } else {
+          dfield_set_null(&ufield->old_val);
+        }
       }
 
       ufield->exp = nullptr;

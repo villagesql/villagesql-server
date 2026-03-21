@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -291,6 +292,7 @@ enum row_search_result {
 
 constexpr uint32_t ROW_COPY_DATA = 1;
 constexpr uint32_t ROW_COPY_POINTERS = 2;
+constexpr uint32_t ROW_COPY_DATA_EXTENDED = 3;
 
 /* The allowed latching order of index records is the following:
 (1) a secondary index record ->

@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1994, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -399,6 +400,7 @@ static size_t get_nullable_fields_for_rec(const dict_index_t *index,
 
     /* All NULLable fields must be included in the n_null count. */
     ut_ad((col->prtype & DATA_NOT_NULL) || n_null--);
+    ut_ad(col->stored_by_extn() == type->extended_storage);
 
     if (dfield_is_null(&fields[i])) {
       /* No length is stored for NULL fields. */

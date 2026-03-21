@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -59,6 +60,8 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "usr0sess.h"
 #include "ut0vec.h"
 
+#include "villagesql/custom_column.h"
+
 dberr_t dict_build_table_def(dict_table_t *table,
                              const HA_CREATE_INFO *create_info, trx_t *trx) {
   std::string db_name;
@@ -85,7 +88,10 @@ dberr_t dict_build_table_def(dict_table_t *table,
 
   dberr_t err = dict_build_tablespace_for_table(table, create_info, trx);
 
-  return (err);
+  if (err != DB_SUCCESS) {
+    return err;
+  }
+  return villagesql::innodb::Custom_column::create(table, trx->id);
 }
 
 /** Builds a tablespace to store various objects.

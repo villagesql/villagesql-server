@@ -123,10 +123,7 @@ extern "C" int vef_storage_segment_create(
     }
     return VEF_STORAGE_ERROR_INVALID_ARGUMENT;
   }
-
   *root_page_num_p = VEF_STORAGE_PAGE_NUM_INVALID;
-  (void)trx_ref;  // TODO(villagesql-indexing): DDL logging
-
   uint8_t num_allocated = 0;
 
   // Create first segment
@@ -141,7 +138,8 @@ extern "C" int vef_storage_segment_create(
   buf_block_t *block = fseg_create(space_ref, 0, seg_offset, &mtr);
 
   if (block == nullptr) {
-    ib::warn() << "VillageSQL: Innodb: First Segment allocation failed.";
+    ib::warn(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "InnoDB: First Segment allocation failed.";
     mtr.commit();
     if (error_msg != nullptr && error_msg_len > 0) {
       snprintf(error_msg, error_msg_len, "First segment allocation failed");
@@ -175,9 +173,9 @@ extern "C" int vef_storage_segment_create(
     block = fseg_create(space_ref, root_page_num, seg_offset, &mtr);
 
     if (block == nullptr) {
-      ib::warn() << "VillageSQL: Innodb: Segment allocation failed after"
-                 << " allocating " << num_allocated << " of " << num_segments
-                 << " segments.";
+      ib::warn(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "InnoDB: Segment allocation failed after allocating "
+          << num_allocated << " of " << num_segments << " segments.";
       mtr.commit();
       if (error_msg != nullptr && error_msg_len > 0) {
         snprintf(error_msg, error_msg_len,
@@ -246,9 +244,7 @@ extern "C" int vef_storage_segment_drop(vef_storage_space_ref_t space_ref,
                                         vef_storage_page_num_t root_page_num,
                                         char *error_msg,
                                         uint32_t error_msg_len) {
-  // TODO(villagesql-indexing): DDL log to defer drop
   (void)trx_ref;
-
   log_free_check();
 
   mtr_t mtr;
@@ -261,8 +257,9 @@ extern "C" int vef_storage_segment_drop(vef_storage_space_ref_t space_ref,
       buf_page_get(page_id, page_size, RW_X_LATCH, UT_LOCATION_HERE, &mtr);
 
   if (block == nullptr) {
-    ib::warn() << "VillageSQL: Innodb: Segment drop failed while loading"
-               << " root page with page ID: " << page_id;
+    ib::warn(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "InnoDB: Segment drop failed while loading root page with page ID: "
+        << page_id;
     mtr.commit();
     if (error_msg != nullptr && error_msg_len > 0) {
       snprintf(error_msg, error_msg_len,
@@ -291,9 +288,9 @@ extern "C" int vef_storage_segment_drop(vef_storage_space_ref_t space_ref,
 
     if (err != 0) {
       auto num_dropped = num_total - (num_segments + 1);
-      ib::warn() << "VillageSQL: Innodb: Segment drop failed after"
-                 << " dropping " << num_dropped << " of "
-                 << static_cast<uint32_t>(num_total) << " segments.";
+      ib::warn(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "InnoDB: Segment drop failed after dropping " << num_dropped
+          << " of " << static_cast<uint32_t>(num_total) << " segments.";
       mtr.commit();
       if (error_msg != nullptr && error_msg_len > 0) {
         snprintf(error_msg, error_msg_len,
@@ -341,8 +338,8 @@ extern "C" int vef_storage_page_load(
       buf_page_get(page_id, page_size, innodb_latch, UT_LOCATION_HERE, mtr);
 
   if (buf_block == nullptr) {
-    ib::warn() << "VillageSQL: Innodb: Failed to load page for page ID: "
-               << page_id;
+    ib::warn(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "InnoDB: Failed to load page for page ID: " << page_id;
     if (error_msg != nullptr && error_msg_len > 0) {
       snprintf(error_msg, error_msg_len, "Failed to load page %u in space %u",
                page_num, space_ref);
@@ -377,7 +374,8 @@ extern "C" int vef_storage_page_allocate_and_load(
   buf_block_t *buf_block =
       fseg_alloc_free_page(segment_header, 0, FSP_NO_DIR, mtr);
   if (buf_block == nullptr) {
-    ib::warn() << "VillageSQL: Innodb: Failed to allocate page.";
+    ib::warn(ER_VILLAGESQL_GENERIC_MESSAGE)
+        << "InnoDB: Failed to allocate page.";
     if (error_msg != nullptr && error_msg_len > 0) {
       snprintf(error_msg, error_msg_len, "Failed to allocate page");
     }
@@ -480,8 +478,8 @@ extern "C" void vef_storage_page_write_integer(
       mlog_write_ull(loc, val, mtr);
       break;
     default:
-      ib::warn() << "VillageSQL: Innodb: Invalid integer type to write: "
-                 << val;
+      ib::warn(ER_VILLAGESQL_GENERIC_MESSAGE)
+          << "InnoDB: Invalid integer type to write: " << val;
   }
 }
 
@@ -501,3 +499,23 @@ extern "C" void vef_storage_page_write_string(vef_storage_block_ref_t block,
   unsigned char *loc = page_data + offset;
   mlog_write_string(loc, str, len, mtr);
 }
+
+// Force the linker to retain this translation unit so all vef_storage_*
+// symbols remain visible in mysqld for extensions loaded at runtime.
+using fn_ptr = void (*)();
+
+static fn_ptr vef_storage_symbols[] = {
+    (fn_ptr)&vef_storage_mtr_start,
+    (fn_ptr)&vef_storage_mtr_commit,
+    (fn_ptr)&vef_storage_segment_create,
+    (fn_ptr)&vef_storage_segment_drop,
+    (fn_ptr)&vef_storage_page_load,
+    (fn_ptr)&vef_storage_page_allocate_and_load,
+    (fn_ptr)&vef_storage_page_latch,
+    (fn_ptr)&vef_storage_page_release,
+    (fn_ptr)&vef_storage_page_get_size,
+    (fn_ptr)&vef_storage_page_write_integer,
+    (fn_ptr)&vef_storage_page_write_string,
+};
+
+void vef_storage_api_wrapper_init() { (void)vef_storage_symbols; }

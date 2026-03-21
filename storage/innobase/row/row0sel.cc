@@ -73,6 +73,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0trx.h"
 #include "trx0undo.h"
 #include "ut0new.h"
+#include "villagesql/custom_column.h"
 
 #include "my_dbug.h"
 
@@ -2503,13 +2504,13 @@ mysql_col_len, mbminlen, mbmaxlen
                                 range comparison. */
 void row_sel_field_store_in_mysql_format_func(
     byte *dest, const mysql_row_templ_t *templ, const dict_index_t *index,
-    IF_DEBUG(ulint field_no, ) const byte *data,
-    ulint len IF_DEBUG(, ulint sec_field)) {
+    ulint field_no, const byte *data, ulint len IF_DEBUG(, ulint sec_field)) {
   byte *ptr;
-#ifdef UNIV_DEBUG
   const dict_field_t *field =
       templ->is_virtual ? nullptr : index->get_field(field_no);
+  dict_col_t *column = (field == nullptr) ? nullptr : field->col;
 
+#ifdef UNIV_DEBUG
   bool clust_templ_for_sec = (sec_field != ULINT_UNDEFINED);
 #endif /* UNIV_DEBUG */
 
@@ -2562,11 +2563,33 @@ void row_sel_field_store_in_mysql_format_func(
         length of the data to the first byte or the first
         two bytes of dest. */
 
-        dest =
-            row_mysql_store_true_var_len(dest, len, templ->mysql_length_bytes);
+        // For extended storage, len holds the reference length.
+        ulint data_length =
+            (column && column->stored_by_extn()) ? column->len : len;
+
+        dest = row_mysql_store_true_var_len(dest, data_length,
+                                            templ->mysql_length_bytes);
+        ut_a(mysql_col_len >= templ->mysql_length_bytes);
+        ulint dest_len = mysql_col_len - templ->mysql_length_bytes;
+
         /* Copy the actual data. Leave the rest of the
         buffer uninitialized. */
+        ut_a(dest_len >= len);
         memcpy(dest, data, len);
+
+        if (column && column->stored_by_extn()) {
+          dest += len;
+          dest_len -= len;
+          // We have copied the reference stored in the table. Now, fetch
+          // and append actual column data from extended storage.
+          using villagesql::innodb::Custom_column;
+          dberr_t err = Custom_column::fetch(index->table, column, dest,
+                                             dest_len, data, len);
+          if (err != DB_SUCCESS) {
+            ib::error(ER_VILLAGESQL_GENERIC_MESSAGE)
+                << "InnoDB: Custom column fetch failed";
+          }
+        }
         break;
       }
 

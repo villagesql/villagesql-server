@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 1996, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -61,6 +62,7 @@ this program; if not, write to the Free Software Foundation, Inc.,
 #include "trx0rec.h"
 #include "trx0undo.h"
 #include "usr0sess.h"
+#include "villagesql/custom_column.h"
 
 #include <debug_sync.h>
 #include "my_dbug.h"
@@ -2560,7 +2562,8 @@ dberr_t row_ins_clust_index_entry_low(uint32_t flags, ulint mode,
                                               &offsets_heap, entry_heap, entry,
                                               thr, &mtr);
 
-    if (err == DB_SUCCESS && dict_index_is_online_ddl(index)) {
+    if (err == DB_SUCCESS && dict_index_is_online_ddl(index) &&
+        !index->table->has_extended_storage) {
       row_log_table_insert(btr_cur_get_rec(cursor), entry, index, offsets);
     }
 
@@ -2595,9 +2598,19 @@ dberr_t row_ins_clust_index_entry_low(uint32_t flags, ulint mode,
       }
     }
 
-    if (big_rec != nullptr) {
+    if (err != DB_SUCCESS) {
       mtr.commit();
+      goto func_exit;
+    }
 
+    if (big_rec == nullptr && !index->table->has_extended_storage &&
+        dict_index_is_online_ddl(index)) {
+      row_log_table_insert(insert_rec, entry, index, offsets);
+    }
+
+    mtr.commit();
+
+    if (big_rec != nullptr) {
       /* Online table rebuild could read (and
       ignore) the incomplete record at this point.
       If online rebuild is in progress, the
@@ -2609,13 +2622,16 @@ dberr_t row_ins_clust_index_entry_low(uint32_t flags, ulint mode,
                                         offsets, &offsets_heap, index,
                                         thr_get_trx(thr)->mysql_thd);
       dtuple_convert_back_big_rec(entry, big_rec);
-    } else {
-      if (err == DB_SUCCESS && dict_index_is_online_ddl(index)) {
-        row_log_table_insert(insert_rec, entry, index, offsets);
-      }
-
-      mtr.commit();
     }
+  }
+
+  if (err == DB_SUCCESS) {
+    trx_t *trx = thr ? thr_get_trx(thr) : nullptr;
+    ut_a(index->is_clustered());
+
+    using villagesql::innodb::Custom_column;
+    err = Custom_column::insert(index->table, trx ? trx->id : 0, entry, offsets,
+                                &offsets_heap);
   }
 
 func_exit:
@@ -3426,7 +3442,10 @@ dberr_t row_ins_index_entry_set_vals(const dict_index_t *index, dtuple_t *entry,
       row_field = dtuple_get_nth_field(row, ind_field->col->ind);
     }
 
-    len = dfield_get_len(row_field);
+    // Pass ref_length=false to use total length for extended storage columns
+    // while setting data length for index entries. We would need to access
+    // the data to insert into the extended storage.
+    len = dfield_get_len(row_field, false);
 
     /* Check column prefix indexes */
     if (ind_field != nullptr && ind_field->prefix_len > 0 &&

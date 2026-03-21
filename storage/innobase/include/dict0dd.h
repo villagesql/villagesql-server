@@ -1,6 +1,7 @@
 /*****************************************************************************
 
 Copyright (c) 2015, 2025, Oracle and/or its affiliates.
+Copyright (c) 2026 VillageSQL Contributors
 
 This program is free software; you can redistribute it and/or modify it under
 the terms of the GNU General Public License, version 2.0, as published by the
@@ -138,6 +139,8 @@ enum dd_column_keys {
   DD_INSTANT_VERSION_DROPPED,
   /** Column physical position on row when it was created */
   DD_INSTANT_PHYSICAL_POS,
+  /** Exteneded storage reference, if stored in column storage */
+  DD_EXTENDED_STORAGE_REF,
   /** Sentinel */
   DD_COLUMN__LAST
 };
@@ -239,7 +242,7 @@ const char *const dd_table_key_strings[DD_TABLE__LAST] = {
 /** InnoDB private key strings for dd::Column, @see dd_column_keys */
 const char *const dd_column_key_strings[DD_COLUMN__LAST] = {
     "default", "default_null", "version_added", "version_dropped",
-    "physical_pos"};
+    "physical_pos", "village_store"};
 
 /** InnoDB private key strings for dd::Partition. @see dd_partition_keys */
 const char *const dd_partition_key_strings[DD_PARTITION__LAST] = {

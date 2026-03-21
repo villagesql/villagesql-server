@@ -2653,13 +2653,17 @@ void dd_write_table(dd::Object_id dd_space_id, Table *dd_table,
       dd_column->se_private_data().set(dd_index_key_strings[DD_TABLE_ID],
                                        table->id);
 
+      dict_col_t *col = table->get_col_by_name(dd_column->name().c_str());
+
+      // Write storage reference, if stored in extended column storage.
+      villagesql::innodb::Custom_column::save_ref(col, dd_column);
+
       /* Write physical post only for tables having row versions */
       if (!has_row_versions || dd_column->is_virtual()) {
         continue;
       }
 
       /* Write physical pos for non-virtual columns */
-      dict_col_t *col = table->get_col_by_name(dd_column->name().c_str());
       if (col == nullptr) {
         /* It's possible during TRUNCATE of table with INSTANT DROP column. */
         ut_a(dd_table_has_instant_cols(dd_table->table()));

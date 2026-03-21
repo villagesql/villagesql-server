@@ -556,6 +556,10 @@ struct dict_col_t {
   uint8_t version_dropped{UINT8_UNDEFINED};
 
  public:
+  bool stored_by_extn() const {
+    return custom_column ? custom_column->stored_by_extension() : false;
+  }
+
   /* If column prefix is there on row. */
   bool has_prefix_phy_pos() const { return (phy_pos & 0x8000); }
 
@@ -676,6 +680,7 @@ struct dict_col_t {
     type->prtype = prtype;
     type->len = len;
     type->mbminmaxlen = mbminmaxlen;
+    type->extended_storage = stored_by_extn();
   }
 
   /** Gets the minimum number of bytes per character.
@@ -2095,6 +2100,9 @@ struct dict_table_t {
   /** true if some indexes should be dropped after ONLINE_INDEX_ABORTED
   or ONLINE_INDEX_ABORTED_DROPPED. */
   unsigned drop_aborted : 1;
+
+  /** Table has columns with extended storage. */
+  bool has_extended_storage : 1;
 
   /** Array of column descriptions. */
   dict_col_t *cols;
