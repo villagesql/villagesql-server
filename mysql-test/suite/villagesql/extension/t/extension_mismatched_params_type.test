@@ -1,0 +1,24 @@
+# Test that vef_register rejects an extension whose VDF uses a params type
+# registered for a different custom type (FAKETYPE_A), but the VDF itself
+# operates on a different type (FAKETYPE_B).
+
+--let $veb_dir = $MYSQLTEST_VARDIR/veb
+--exec mkdir -p $veb_dir
+
+--replace_result $MYSQLTEST_VARDIR MYSQLTEST_VARDIR
+--let $restart_parameters = restart: --veb-dir=$veb_dir
+--source include/restart_mysqld.inc
+
+--let $extension_name = mismatched_params_type
+--let $extension_version = 0.0.1-devtest
+--let $extension_source = $MYSQL_TEST_DIR/suite/villagesql/std_data/mismatched_params_type.cc
+--source include/villagesql/create_extension_sdk.inc
+
+call mtr.add_suppression("vef_register returned an error: VDF");
+--echo # Attempt to install: expect failure because faketype_b_hash uses
+--echo # params registered for FAKETYPE_A but operates on FAKETYPE_B
+--error ER_VILLAGESQL_GENERIC_ERROR
+INSTALL EXTENSION mismatched_params_type;
+
+--echo # Verify extension was NOT installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;

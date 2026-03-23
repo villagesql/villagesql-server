@@ -104,8 +104,8 @@ struct ExtensionBuilder {
   TypeTuple types_;
   vef_protocol_t min_protocol_;
 
-  // Add a function from a StaticFuncDesc. This is the terminal overload that
-  // all other func() overloads delegate to after validation.
+  // Add a function from a StaticFuncDesc. This is the terminal overload for
+  // plain (non-parameterized) descriptors.
   template <typename F>
   constexpr auto func(F f) const {
     auto new_funcs = std::tuple_cat(funcs_, std::make_tuple(f));
@@ -121,6 +121,9 @@ struct ExtensionBuilder {
   //   - for parameterized type operation VDFs (ParamsType != void), ParamsType
   //     is likewise registered.
   // Works whether the descriptor is inline or pre-built.
+  // Stores the TypedFuncDesc directly (not sliced to StaticFuncDesc) so that
+  // params_type is preserved for the runtime cross-reference check in
+  // vef_register_impl.
   template <auto Func, size_t N, typename ParamsType>
   constexpr auto func(const TypedFuncDesc<Func, N, ParamsType> &desc) const {
     detail::validate_custom_params<Func, TypeTuple>();
@@ -130,7 +133,9 @@ struct ExtensionBuilder {
           "type operation VDF uses a parameterized cache but its params "
           "type P is not registered via .params<P, &fn>() on any type builder");
     }
-    return func(static_cast<const StaticFuncDesc<N> &>(desc));
+    auto new_funcs = std::tuple_cat(funcs_, std::make_tuple(desc));
+    return ExtensionBuilder<decltype(new_funcs), TypeTuple>{
+        name_, version_, new_funcs, types_, min_protocol_};
   }
 
   // Convenience overload: accepts a FuncBuilder directly (without calling
@@ -195,6 +200,82 @@ namespace detail {
 // Implementation helpers used by VEF_GENERATE_ENTRY_POINTS. Not part of the
 // public API.
 
+// Detects whether T has a params_type member (i.e. is a TypedFuncDesc rather
+// than a plain StaticFuncDesc).
+template <typename T, typename = void>
+struct has_params_type : std::false_type {};
+template <typename T>
+struct has_params_type<T, std::void_t<typename T::params_type>>
+    : std::true_type {};
+
+// Returns the vef_type_desc name of the first type in ext whose params_type
+// equals P, or nullptr if none. Uses lambdas in a fold to allow if constexpr.
+template <typename P, typename Ext, size_t... TypeIs>
+const char *vef_find_type_name_for_params(const Ext &e,
+                                           std::index_sequence<TypeIs...>) {
+  const char *result = nullptr;
+  (([&]() {
+     using TD = std::remove_const_t<
+         std::remove_reference_t<decltype(e.template type_at<TypeIs>())>>;
+     if constexpr (std::is_same_v<typename TD::params_type, P>) {
+       result = e.template type_at<TypeIs>().vef_desc.name;
+     }
+   }()),
+   ...);
+  return result;
+}
+
+// Returns true if VDF at index FuncI has a custom-type param or return type
+// whose name matches the type registered for its ParamsType. On mismatch,
+// writes an error message to error_buf and returns false.
+template <size_t FuncI, size_t TypeCount, typename Ext>
+bool vef_check_func_params_type_ref(const Ext &e, char *error_buf,
+                                     size_t error_buf_size) {
+  const auto &func = e.template func_at<FuncI>();
+  using FuncType =
+      std::remove_const_t<std::remove_reference_t<decltype(func)>>;
+  if constexpr (!has_params_type<FuncType>::value) {
+    return true;
+  } else {
+    using P = typename FuncType::params_type;
+    if constexpr (std::is_void_v<P>) return true;
+
+    const char *type_name = vef_find_type_name_for_params<P>(
+        e, std::make_index_sequence<TypeCount>{});
+    // nullptr means P is not registered — already caught by static_assert
+    if (type_name == nullptr) return true;
+
+    const vef_type_t rt = func.return_type();
+    if (rt.id == VEF_TYPE_CUSTOM &&
+        std::string_view(rt.custom_type) == type_name)
+      return true;
+    for (size_t i = 0; i < func.num_params(); ++i) {
+      const vef_type_t pt = func.params()[i];
+      if (pt.id == VEF_TYPE_CUSTOM &&
+          std::string_view(pt.custom_type) == type_name)
+        return true;
+    }
+
+    snprintf(error_buf, error_buf_size,
+             "VDF '%s' uses params type registered for '%s' "
+             "but does not operate on that type",
+             func.name(), type_name);
+    return false;
+  }
+}
+
+// Validates that every VDF whose ParamsType is non-void operates on the
+// type registered for that ParamsType. Returns false and writes to error_buf
+// on the first mismatch.
+template <size_t TypeCount, typename Ext, size_t... FuncIs>
+bool vef_validate_params_type_refs(const Ext &e, char *error_buf,
+                                    size_t error_buf_size,
+                                    std::index_sequence<FuncIs...>) {
+  return (vef_check_func_params_type_ref<FuncIs, TypeCount>(e, error_buf,
+                                                             error_buf_size) &&
+          ...);
+}
+
 // Fills arr[I] with the materialized vef_func_desc_t* for each function.
 template <typename Ext, size_t... Is>
 void vef_fill_func_ptrs(vef_func_desc_t **arr, const Ext &e,
@@ -240,6 +321,15 @@ vef_registration_t *vef_register_impl(vef_registration_t &reg,
              static_cast<unsigned>(arg->protocol));
     reg.protocol = arg->protocol;
     reg.error_msg = error_buf;
+    return &reg;
+  }
+
+  static char xref_error_buf[256];
+  if (!vef_validate_params_type_refs<TypeCount>(
+          ext, xref_error_buf, sizeof(xref_error_buf),
+          std::make_index_sequence<FuncCount>{})) {
+    reg.protocol = arg->protocol;
+    reg.error_msg = xref_error_buf;
     return &reg;
   }
 

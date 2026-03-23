@@ -1,0 +1,11 @@
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+Creating extension mismatched_params_type using SDK...
+Created mismatched_params_type.veb
+call mtr.add_suppression("vef_register returned an error: VDF");
+# Attempt to install: expect failure because faketype_b_hash uses
+# params registered for FAKETYPE_A but operates on FAKETYPE_B
+INSTALL EXTENSION mismatched_params_type;
+ERROR HY000: Failed to load VEF extension 'mismatched_params_type': vef_register returned an error: VDF 'faketype_b_hash' uses params type registered for 'FAKETYPE_A' but does not operate on that type
+# Verify extension was NOT installed
+SELECT * FROM INFORMATION_SCHEMA.EXTENSIONS;
+EXTENSION_NAME	EXTENSION_VERSION
