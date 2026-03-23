@@ -29,11 +29,20 @@
 
 namespace villagesql {
 
-inline Semver GetBuildVersion() { return Semver::from_components(
+inline Semver GetBuildVersion() {
+  // When VSQL_PRE_RELEASE_VERSION is "" (release builds via -DVSQL_PRE_RELEASE_VERSION=""),
+  // passing {""} to from_components creates an invalid Semver because "" fails
+  // is_valid_identifier. This made @@villagesql_server_version return empty,
+  // breaking extension tests that use it to locate the SDK directory.
+  std::vector<std::string> prerelease;
+  if (std::string_view(VSQL_PRE_RELEASE_VERSION).size() > 0) {
+    prerelease.push_back(VSQL_PRE_RELEASE_VERSION);
+  }
+  return Semver::from_components(
     VSQL_MAJOR_VERSION,
     VSQL_MINOR_VERSION,
     VSQL_PATCH_VERSION,
-    std::vector<std::string>{ VSQL_PRE_RELEASE_VERSION });
+    prerelease);
 }
 
 }  // namespace villagesql
