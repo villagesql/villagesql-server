@@ -1,6 +1,9 @@
 #
 # mysqld --help
 #
+# TODO(villagesql-windows): The result file likely needs updating for
+# performance-schema-max-statement-classes (SQLCOM_VSQL_FIRST = 1024
+# inflates the default).
 --source include/windows.inc
 
 --source include/mysqld--help.inc

@@ -1,9 +1,11 @@
 --source include/big_test.inc
---source include/not_windows.inc
 
 # The test sets innodb_open_files=1000000 and expects a warning that it exceeds
 # open_files_limit. On systems with high ulimits (e.g. macOS), open_files_limit
 # ends up >= 1000000 so the warning never fires. Skip in that case.
+# This is likely an upstream MySQL issue (not VillageSQL-specific) since the
+# hardcoded value comes from upstream. Check during rebase if upstream has fixed it.
+# TODO(villagesql-rebase): Remove this workaround if upstream fixes it.
 --disable_query_log
 --exec ulimit -n > $MYSQL_TMP_DIR/osfileslimit.txt
 CREATE TABLE t_ofl (c1 varchar(20));
