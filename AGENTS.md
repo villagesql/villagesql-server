@@ -14,6 +14,7 @@ This is VillageSQL Server, a fork of MySQL 8.4.6 LTS that adds VillageSQL Extens
 - [Adding SQL Commands](Docs/ADDING_SQL_COMMANDS.md) - Complete checklist for adding new SQL commands to the parser
 - [Adding System Tables](villagesql/schema/ADDING_SYSTEM_TABLES.md) - Guide for adding new VillageSQL system tables to victionary
 - [Error Handling](Docs/ERROR_HANDLING.md) - strategies for handling errors in VillageSQL and the boundary with MySQL
+- [CI Build Cache](.github/CI_BUILD_CACHE.md) - How CI build caching works, known issues, and diagnostics
 
 ## Key Development Commands
 

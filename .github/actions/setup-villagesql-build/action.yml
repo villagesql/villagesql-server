@@ -27,6 +27,6 @@ runs:
         key: ${{ runner.os }}-${{ inputs.cache-key-prefix }}-${{ github.sha }}
         restore-keys: |
           ${{ runner.os }}-${{ inputs.cache-key-prefix }}
-        max-size: 4G
+        max-size: 5G
         verbose: 2
         append-timestamp: false

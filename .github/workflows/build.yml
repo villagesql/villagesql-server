@@ -37,6 +37,9 @@ jobs:
       env:
         PARALLEL_JOBS: 16
 
+    - name: Evict stale ccache entries
+      run: ccache --evict-older-than 3600s
+
     - name: Show ccache statistics
       run: ccache -s
 
