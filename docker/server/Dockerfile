@@ -33,6 +33,8 @@ RUN /tmp/setup_linux_build_env.sh && rm -rf /var/lib/apt/lists/*
 COPY --exclude=docker . /source
 
 # Build and install
+# VSQL_PRE_RELEASE_VERSION defaults to "dev"; set to "" for release builds
+ARG VSQL_PRE_RELEASE_VERSION=dev
 RUN mkdir /build && cd /build && \
     cmake /source \
         -DCMAKE_INSTALL_PREFIX=/usr \
@@ -43,6 +45,7 @@ RUN mkdir /build && cd /build && \
         -DWITH_NUMA=OFF \
         -DMYSQL_UNIX_ADDR=/var/run/mysqld/mysqld.sock \
         -DMYSQLX_UNIX_ADDR=/var/run/mysqld/mysqlx.sock \
+        -DVSQL_PRE_RELEASE_VERSION="$VSQL_PRE_RELEASE_VERSION" \
     && make -j"$(nproc)" \
     && make install DESTDIR=/install
 
