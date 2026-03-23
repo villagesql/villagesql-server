@@ -1,4 +1,25 @@
 --source include/big_test.inc
+--source include/not_windows.inc
+
+# The test sets innodb_open_files=1000000 and expects a warning that it exceeds
+# open_files_limit. On systems with high ulimits (e.g. macOS), open_files_limit
+# ends up >= 1000000 so the warning never fires. Skip in that case.
+--disable_query_log
+--exec ulimit -n > $MYSQL_TMP_DIR/osfileslimit.txt
+CREATE TABLE t_ofl (c1 varchar(20));
+eval LOAD DATA INFILE '$MYSQL_TMP_DIR/osfileslimit.txt' INTO TABLE t_ofl;
+let $f_l=`SELECT c1 FROM t_ofl`;
+--remove_file $MYSQL_TMP_DIR/osfileslimit.txt
+DROP TABLE t_ofl;
+--enable_query_log
+if ($f_l == unlimited)
+{
+  skip ulimit is unlimited, cannot test innodb_open_files warning;
+}
+if ($f_l >= 1000000)
+{
+  skip ulimit ($f_l) is too high to test innodb_open_files warning;
+}
 
 CALL mtr.add_suppression("innodb_open_files should not be greater than the open_files_limit.");
 

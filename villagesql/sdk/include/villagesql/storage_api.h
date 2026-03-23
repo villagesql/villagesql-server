@@ -15,6 +15,10 @@
  */
 
 // Interface to InnoDB for extensions
+//
+// TODO(villagesql-beta): Column storage is not ready for external use. The ABI
+// and API are under active development and will change without notice. Do not
+// use this in production extensions.
 
 #ifndef VILLAGESQL_SDK_STORAGE_API_H_
 #define VILLAGESQL_SDK_STORAGE_API_H_

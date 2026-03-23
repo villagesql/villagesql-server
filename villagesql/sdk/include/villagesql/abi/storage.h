@@ -14,6 +14,9 @@
  * along with this program; if not, see <https://www.gnu.org/licenses/>.
  */
 
+// TODO(villagesql-beta): Column storage ABI is not ready for external use.
+// See storage_api.h for details.
+
 #ifndef VILLAGESQL_ABI_STORAGE_H_
 #define VILLAGESQL_ABI_STORAGE_H_
 

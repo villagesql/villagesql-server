@@ -16,6 +16,9 @@
 #ifndef VILLAGESQL_SDK_STORAGE_BUILDER_H
 #define VILLAGESQL_SDK_STORAGE_BUILDER_H
 
+// TODO(villagesql-beta): Column storage is not ready for external use.
+// See storage_api.h for details.
+//
 // This file provides StorageBuilder for defining the column storage interface.
 // For full documentation and examples, see extension.h.
 
