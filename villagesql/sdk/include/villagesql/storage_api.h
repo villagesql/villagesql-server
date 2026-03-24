@@ -736,5 +736,28 @@ inline uint64_t Page::read_integer_8(Offset o) const {
   return read_integer<uint64_t>(o);
 }
 
+// Type aliases for the Custom Type Storage Interface. These appear in
+// vef_type_storage_intf_t function signatures and are used by extensions
+// to implement column storage.
+
+struct Column {
+  // Column-level references and data buffers.
+  using Ref = vef_storage_col_ref_t;
+  using Data = vef_storage_col_data_t;
+  using StorageRef = vef_storage_ref_t;
+  using StorageCtx = vef_storage_ctx_t;
+
+  static constexpr Ref EMPTY_REF = VEF_STORAGE_EMPTY_COLUMN_REF;
+};
+
+struct Arena {
+  // Arena allocator context and callback provided to extensions
+  // during storage creation and load operations.
+  using Type = vef_storage_arena_t;
+  using Func = vef_storage_arena_func_t;
+
+  static constexpr uint32_t MIN_ALIGNMENT = VEF_STORAGE_MIN_ALLOCATOR_ALIGNMENT;
+};
+
 }  // namespace villagesql::storage
 #endif  // VILLAGESQL_SDK_STORAGE_API_H_

@@ -69,7 +69,7 @@ struct ExtensionBuilder {
   // Add a type (returns new builder with type appended).
   // If the type requires a higher protocol than min_protocol_, min_protocol_
   // is raised automatically.
-  constexpr auto type(const TypeDescriptor &type) const {
+  constexpr auto type(const TypeWrapper &type) const {
     auto new_types = std::tuple_cat(types_, std::make_tuple(type));
     const auto &t = type.vef_desc;
     const vef_protocol_t new_min =
