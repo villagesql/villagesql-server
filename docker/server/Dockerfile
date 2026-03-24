@@ -53,7 +53,9 @@ RUN mkdir /build && cd /build && \
 ARG VSQL_DEV_ABI=ON
 COPY docker/server/build-bundled-extension.sh /usr/local/bin/
 RUN mkdir -p /install/usr/lib/veb
-RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extension.sh vsql-complex
+# In-tree extensions track the dev API, always use dev ABI
+RUN VSQL_DEV_ABI=ON build-bundled-extension.sh vsql-complex
+# Out-of-tree extensions use the configured ABI (stable for release builds)
 RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extension.sh vsql-uuid
 RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extension.sh vsql-network-address
 RUN VSQL_DEV_ABI=$VSQL_DEV_ABI build-bundled-extension.sh vsql-ai
