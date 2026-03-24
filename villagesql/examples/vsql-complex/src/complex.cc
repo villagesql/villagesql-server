@@ -434,9 +434,9 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(make_type(COMPLEX)
                   .persisted_length(kComplexSize)
                   .max_decode_buffer_length(64)
-                  .encode("complex_from_string")
-                  .decode("complex_to_string")
-                  .compare("complex_compare")
+                  .encode("COMPLEX::from_string")
+                  .decode("COMPLEX::to_string")
+                  .compare("COMPLEX::compare")
                   .intrinsic_default("complex_intrinsic_default")
                   .build())
         // COMPLEX2 type without canonicalization (preserves -0.0)
@@ -444,25 +444,26 @@ VEF_GENERATE_ENTRY_POINTS(
         .type(make_type(COMPLEX2)
                   .persisted_length(kComplexSize)
                   .max_decode_buffer_length(64)
-                  .encode("complex2_from_string")
-                  .decode("complex2_to_string")
-                  .compare("complex2_compare")
-                  .hash("complex2_hash")
+                  .encode("COMPLEX2::from_string")
+                  .decode("COMPLEX2::to_string")
+                  .compare("COMPLEX2::compare")
+                  .hash("COMPLEX2::hash")
                   .intrinsic_default("complex2_intrinsic_default")
                   .build())
         // Type conversion functions (also serve as encode/decode VDFs)
-        .func(make_type_encode<&complex_from_string>("complex_from_string",
+        .func(make_type_encode<&complex_from_string>("COMPLEX::from_string",
                                                      COMPLEX))
-        .func(make_type_decode<&complex_to_string>("complex_to_string",
+        .func(make_type_decode<&complex_to_string>("COMPLEX::to_string",
                                                    COMPLEX))
-        .func(make_type_encode<&complex2_from_string>("complex2_from_string",
+        .func(make_type_encode<&complex2_from_string>("COMPLEX2::from_string",
                                                       COMPLEX2))
-        .func(make_type_decode<&complex_to_string>("complex2_to_string",
+        .func(make_type_decode<&complex_to_string>("COMPLEX2::to_string",
                                                    COMPLEX2))
         // Compare and hash VDFs
-        .func(make_type_compare<&complex_compare>("complex_compare", COMPLEX))
-        .func(make_type_compare<&complex_compare>("complex2_compare", COMPLEX2))
-        .func(make_type_hash<&complex2_hash>("complex2_hash", COMPLEX2))
+        .func(make_type_compare<&complex_compare>("COMPLEX::compare", COMPLEX))
+        .func(make_type_compare<&complex_compare>("COMPLEX2::compare",
+                                                  COMPLEX2))
+        .func(make_type_hash<&complex2_hash>("COMPLEX2::hash", COMPLEX2))
         // Arithmetic functions
         .func(make_func<&complex_add_impl>("complex_add")
                   .returns(COMPLEX)

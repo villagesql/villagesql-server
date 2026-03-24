@@ -33,7 +33,7 @@ id	val
 3	(13,14)
 5	(15,16)
 REPLACE INTO t_target (id, val)
-SELECT id, VSQL_COMPLEX.COMPLEX_FROM_STRING(CONCAT('(', r, ',', i, ')')) FROM t_source;
+SELECT id, VSQL_COMPLEX.COMPLEX::from_string(CONCAT('(', r, ',', i, ')')) FROM t_source;
 SELECT * FROM t_target ORDER BY id;
 id	val
 1	(1,2)

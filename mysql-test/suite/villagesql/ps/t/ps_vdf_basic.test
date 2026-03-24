@@ -48,10 +48,10 @@ EXECUTE stmt3 USING @id;
 DEALLOCATE PREPARE stmt3;
 
 --echo #
---echo # Test 4: VDF returning COMPLEX from string (complex_from_string)
+--echo # Test 4: VDF returning COMPLEX from string (COMPLEX::from_string)
 --echo #
 
-PREPARE stmt4 FROM 'SELECT id, complex_from_string(str_val) FROM t2 WHERE id = ?';
+PREPARE stmt4 FROM 'SELECT id, COMPLEX::from_string(str_val) FROM t2 WHERE id = ?';
 SET @id = 1;
 EXECUTE stmt4 USING @id;
 DEALLOCATE PREPARE stmt4;
@@ -60,7 +60,7 @@ DEALLOCATE PREPARE stmt4;
 --echo # Test 5: VDF with string parameter
 --echo #
 
-PREPARE stmt5 FROM 'SELECT vsql_complex.complex_from_string(?) AS result';
+PREPARE stmt5 FROM 'SELECT vsql_complex.COMPLEX::from_string(?) AS result';
 SET @str = '(20.0,21.0)';
 EXECUTE stmt5 USING @str;
 DEALLOCATE PREPARE stmt5;
@@ -98,10 +98,10 @@ EXECUTE stmt8 USING @id;
 DEALLOCATE PREPARE stmt8;
 
 --echo #
---echo # Test 9: Error case - Invalid string format for complex_from_string
+--echo # Test 9: Error case - Invalid string format for COMPLEX::from_string
 --echo #
 
-PREPARE stmt9 FROM 'SELECT vsql_complex.complex_from_string(?)';
+PREPARE stmt9 FROM 'SELECT vsql_complex.COMPLEX::from_string(?)';
 SET @bad_str = 'not_a_complex_number';
 EXECUTE stmt9 USING @bad_str;
 SHOW WARNINGS;

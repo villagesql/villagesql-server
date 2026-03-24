@@ -1,23 +1,23 @@
 # Regression test for VDF IS NULL optimizer fold (#161).
 # When a VDF is called with constant non-nullable arguments, IS NULL was
-# incorrectly folded to 0. Verified using COMPLEX_FROM_STRING, which returns
+# incorrectly folded to 0. Verified using COMPLEX::from_string, which returns
 # NULL for invalid input at runtime.
 
 --source include/villagesql/install_complex_extension.inc
 
 # Constant non-nullable arg, VDF returns NULL at runtime -- must be 1
-SELECT COMPLEX_FROM_STRING('not_a_complex_number') IS NULL AS result;
+SELECT COMPLEX::from_string('not_a_complex_number') IS NULL AS result;
 
 # Constant non-nullable args, VDF returns a value -- must be 0
 SELECT COMPLEX_ADD('(1.0,2.0)', '(3.0,4.0)') IS NULL AS result;
 
 # NULL arg propagates to NULL result -- must be 1
-SELECT COMPLEX_FROM_STRING(NULL) IS NULL AS result;
+SELECT COMPLEX::from_string(NULL) IS NULL AS result;
 
 # Column path: optimizer cannot fold -- must agree with constant results above
 CREATE TABLE t (val VARCHAR(50));
 INSERT INTO t VALUES ('not_a_complex_number'), ('(1.0,2.0)'), (NULL);
-SELECT val, COMPLEX_FROM_STRING(val) IS NULL AS is_null FROM t ORDER BY val;
+SELECT val, COMPLEX::from_string(val) IS NULL AS is_null FROM t ORDER BY val;
 DROP TABLE t;
 
 --source include/villagesql/uninstall_complex_extension.inc

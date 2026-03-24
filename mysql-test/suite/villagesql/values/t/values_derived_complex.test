@@ -4,28 +4,28 @@
 --source include/villagesql/install_complex_extension.inc
 
 # AS derived_table(val) specifies derived table alias with column name 'val'
-SELECT * FROM (VALUES ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(1.0,2.0)')), ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(3.0,4.0)'))) AS derived_table(val);
+SELECT * FROM (VALUES ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')), ROW(VSQL_COMPLEX.COMPLEX::from_string('(3.0,4.0)'))) AS derived_table(val);
 
 # Filter on the derived COMPLEX column
-SELECT * FROM (VALUES ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(1.0,2.0)')), ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(3.0,4.0)'))) AS derived_table(val) WHERE val = '(1.0,2.0)';
+SELECT * FROM (VALUES ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')), ROW(VSQL_COMPLEX.COMPLEX::from_string('(3.0,4.0)'))) AS derived_table(val) WHERE val = '(1.0,2.0)';
 
 # Test zero variants interleaved with non-zero values using UNION for deduplication
 # This verifies (0,0), (-0,0), (0,-0), (-0,-0) are treated as equal
 SELECT * FROM (
   VALUES
-    ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(1.0,2.0)')),
-    ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(0,0)')),
-    ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(-0,0)')),
-    ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(3.0,4.0)')),
-    ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(0,-0)')),
-    ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(-0,-0)')),
-    ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(5.0,6.0)'))
+    ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')),
+    ROW(VSQL_COMPLEX.COMPLEX::from_string('(0,0)')),
+    ROW(VSQL_COMPLEX.COMPLEX::from_string('(-0,0)')),
+    ROW(VSQL_COMPLEX.COMPLEX::from_string('(3.0,4.0)')),
+    ROW(VSQL_COMPLEX.COMPLEX::from_string('(0,-0)')),
+    ROW(VSQL_COMPLEX.COMPLEX::from_string('(-0,-0)')),
+    ROW(VSQL_COMPLEX.COMPLEX::from_string('(5.0,6.0)'))
 ) AS derived_table(val)
 UNION
 SELECT * FROM (
   VALUES
-    ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(0,0)')),
-    ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(1.0,2.0)'))
+    ROW(VSQL_COMPLEX.COMPLEX::from_string('(0,0)')),
+    ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)'))
 ) AS derived_table2(val);
 
 --source include/villagesql/uninstall_complex_extension.inc

@@ -3,14 +3,14 @@
 
 --source include/villagesql/install_complex_extension.inc
 
---echo # Test COMPLEX_FROM_STRING with invalid input returns NULL with warning
-SELECT COMPLEX_FROM_STRING('not_a_complex_number') AS result;
+--echo # Test COMPLEX::from_string with invalid input returns NULL with warning
+SELECT COMPLEX::from_string('not_a_complex_number') AS result;
 SHOW WARNINGS;
 
---echo # Test COMPLEX_FROM_STRING with malformed string from table column
+--echo # Test COMPLEX::from_string with malformed string from table column
 CREATE TABLE t_strings (id INT, str_val VARCHAR(100));
 INSERT INTO t_strings VALUES (1, 'not_a_complex_number');
-SELECT id, COMPLEX_FROM_STRING(str_val) AS result FROM t_strings;
+SELECT id, COMPLEX::from_string(str_val) AS result FROM t_strings;
 SHOW WARNINGS;
 DROP TABLE t_strings;
 

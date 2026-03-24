@@ -29,7 +29,7 @@ INSTALL EXTENSION complex3_ext;
 --echo # Create table with COMPLEX3 column
 CREATE TABLE test_complex3 (id INT, val COMPLEX3);
 
---echo # Insert data - this should call the COMPLEX_FROM_STRING function via VEF lookup
+--echo # Insert data - this should call the COMPLEX::from_string function via VEF lookup
 INSERT INTO test_complex3 VALUES (1, '(1.0,2.0)');
 
 --echo # Verify data was stored and can be read back

@@ -24,7 +24,7 @@ SELECT val FROM t_complex UNION ALL SELECT val FROM t_numeric;
 ERROR HY000: Cannot use UNION with mixed custom and non-custom types
 SELECT val FROM t_complex UNION SELECT val FROM t_complex_same UNION SELECT val FROM t_numeric;
 ERROR HY000: Cannot use UNION with mixed custom and non-custom types
-SELECT val FROM t_complex UNION SELECT vsql_complex.complex_from_string(val) FROM t_string ORDER BY val;
+SELECT val FROM t_complex UNION SELECT vsql_complex.COMPLEX::from_string(val) FROM t_string ORDER BY val;
 val
 (1,2)
 (3,4)

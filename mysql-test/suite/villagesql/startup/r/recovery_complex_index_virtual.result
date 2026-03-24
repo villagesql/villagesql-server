@@ -19,7 +19,7 @@ INSERT INTO test_complex_index_recovery(id, name, complex_val) VALUES
 (1, 'Initial 1', '(1,1)'),
 (2, 'Initial 2', '(2,2)'),
 (3, 'Initial 3', '(3,3)');
-SELECT id, name, virtual_before, vsql_complex.complex_to_string(complex_val) AS complex_val, virtual_after
+SELECT id, name, virtual_before, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val, virtual_after
 FROM test_complex_index_recovery
 ORDER BY id;
 id	name	virtual_before	complex_val	virtual_after
@@ -41,7 +41,7 @@ name = 'Uncommitted Update'
 WHERE id = 2;
 DELETE FROM test_complex_index_recovery WHERE id = 3;
 # Transaction started but not committed - data should be visible in current session
-SELECT id, name, virtual_before, vsql_complex.complex_to_string(complex_val) AS complex_val, virtual_after
+SELECT id, name, virtual_before, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val, virtual_after
 FROM test_complex_index_recovery
 ORDER BY id;
 id	name	virtual_before	complex_val	virtual_after
@@ -50,7 +50,7 @@ id	name	virtual_before	complex_val	virtual_after
 4	Uncommitted Insert 1	virtual_Uncommitted Insert 1	(4,4)	40
 5	Uncommitted Insert 2	virtual_Uncommitted Insert 2	(5,5)	50
 # Query using index to find specific value
-SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
 FROM test_complex_index_recovery FORCE INDEX (idx_complex)
 WHERE complex_val = '(4,4)';
 id	name	complex_val
@@ -83,7 +83,7 @@ Table	Op	Msg_type	Msg_text
 test.test_complex_index_recovery	check	status	OK
 # After crash recovery - only committed data should remain
 # Uncommitted INSERT, UPDATE, DELETE should be rolled back
-SELECT id, name, virtual_before, vsql_complex.complex_to_string(complex_val) AS complex_val, virtual_after
+SELECT id, name, virtual_before, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val, virtual_after
 FROM test_complex_index_recovery
 ORDER BY id;
 id	name	virtual_before	complex_val	virtual_after
@@ -91,7 +91,7 @@ id	name	virtual_before	complex_val	virtual_after
 2	Initial 2	virtual_Initial 2	(2,2)	20
 3	Initial 3	virtual_Initial 3	(3,3)	30
 # Test index functionality after recovery - query by indexed column
-SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
 FROM test_complex_index_recovery
 WHERE complex_val = '(2,2)';
 id	name	complex_val
@@ -101,13 +101,13 @@ SELECT COUNT(*) AS total_rows FROM test_complex_index_recovery;
 total_rows
 3
 # Verify row 2 was not updated (should still have (2,2))
-SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
 FROM test_complex_index_recovery
 WHERE id = 2;
 id	name	complex_val
 2	Initial 2	(2,2)
 # Verify row 3 was not deleted
-SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
 FROM test_complex_index_recovery
 WHERE id = 3;
 id	name	complex_val

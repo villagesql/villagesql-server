@@ -1,5 +1,5 @@
-SET @a = vsql_complex.complex_from_string('(1.0,2.0)');
-SET @b = vsql_complex.complex_from_string('(3.0,4.0)');
+SET @a = vsql_complex.COMPLEX::from_string('(1.0,2.0)');
+SET @b = vsql_complex.COMPLEX::from_string('(3.0,4.0)');
 SELECT @a, @b;
 @a	@b
 (1,2)	(3,4)
@@ -22,7 +22,7 @@ real_part
 -5
 SET @nested = vsql_complex.complex_add(
 vsql_complex.complex_multiply(@a, @b),
-vsql_complex.complex_from_string('(1.0,1.0)')
+vsql_complex.COMPLEX::from_string('(1.0,1.0)')
 );
 SELECT @nested;
 @nested

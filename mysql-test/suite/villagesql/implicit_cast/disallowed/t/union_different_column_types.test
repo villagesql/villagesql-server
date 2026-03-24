@@ -38,7 +38,7 @@ SELECT val FROM t_complex UNION ALL SELECT val FROM t_numeric;
 SELECT val FROM t_complex UNION SELECT val FROM t_complex_same UNION SELECT val FROM t_numeric;
 
 # UNION with VDF function converting string to COMPLEX (same type as column)
-SELECT val FROM t_complex UNION SELECT vsql_complex.complex_from_string(val) FROM t_string ORDER BY val;
+SELECT val FROM t_complex UNION SELECT vsql_complex.COMPLEX::from_string(val) FROM t_string ORDER BY val;
 
 DROP TABLE t_complex;
 DROP TABLE t_numeric;

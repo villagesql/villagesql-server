@@ -12,7 +12,7 @@ EXTENSION_NAME	EXTENSION_VERSION
 complex3_ext	1.0.0
 # Create table with COMPLEX3 column
 CREATE TABLE test_complex3 (id INT, val COMPLEX3);
-# Insert data - this should call the COMPLEX_FROM_STRING function via VEF lookup
+# Insert data - this should call the COMPLEX::from_string function via VEF lookup
 INSERT INTO test_complex3 VALUES (1, '(1.0,2.0)');
 # Verify data was stored and can be read back
 SELECT id, val FROM test_complex3;

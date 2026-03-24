@@ -174,6 +174,7 @@ Note: YYTHD is passed as an argument to yyparse(), and subsequently to yylex().
 #include "violite.h"
 #include "sql/tablesample.h"
 #include "villagesql/types/pt_custom_type.h"
+#include "villagesql/sql/util.h"
 
 /* this is to get the bison compilation windows warnings out */
 #ifdef _MSC_VER
@@ -1458,6 +1459,7 @@ void warn_on_deprecated_user_defined_collation(
 %token<lexer.keyword> TABLESAMPLE_SYM            1214  /* SQL-2016-R */
 // TODO(villagesql-rebase): Check if token number needs updating during MySQL rebase
 %token<lexer.keyword> EXTENSION_SYM              1215  /* VILLAGESQL */
+%token                DOUBLE_COLON               1216  /* VILLAGESQL OPERATOR */
 
 /*
   NOTE! When adding new non-standard keywords, make sure they are added to the
@@ -10953,6 +10955,18 @@ function_call_generic:
         | ident '.' ident '(' opt_expr_list ')'
           {
             $$= NEW_PTN PTI_function_call_generic_2d(@$, $1, $3, $5);
+          }
+        | ident '.' ident DOUBLE_COLON ident '(' opt_expr_list ')'
+          {
+            $$= NEW_PTN PTI_function_call_generic_2d(@$, $1,
+                  villagesql::make_type_method_lex_string($3, $5, YYMEM_ROOT),
+                  $7);
+          }
+        | ident DOUBLE_COLON ident '(' opt_udf_expr_list ')'
+          {
+            $$= NEW_PTN PTI_function_call_generic_ident_sys(@$,
+                  villagesql::make_type_method_lex_string($1, $3, YYMEM_ROOT),
+                  $5);
           }
         ;
 

@@ -1,7 +1,7 @@
 CREATE TABLE t1 (id INT, c1 COMPLEX, c2 COMPLEX);
 INSERT INTO t1 VALUES (1, '(1.0,2.0)', '(3.0,4.0)');
 INSERT INTO t1 VALUES (2, '(5.0,6.0)', '(7.0,8.0)');
-SELECT vsql_complex.complex_from_string('(3.14159,2.71828)') AS result;
+SELECT vsql_complex.COMPLEX::from_string('(3.14159,2.71828)') AS result;
 result
 (3.14159,2.71828)
 SELECT vsql_complex.complex_add(c1, c2) AS sum FROM t1 ORDER BY id;

@@ -36,13 +36,13 @@ INSERT INTO test_complex_index_recovery(id, name, complex_val) VALUES
 # Verify initial data
 if ($virtual)
 {
-  SELECT id, name, virtual_before, vsql_complex.complex_to_string(complex_val) AS complex_val, virtual_after
+  SELECT id, name, virtual_before, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val, virtual_after
   FROM test_complex_index_recovery
   ORDER BY id;
 }
 if (!$virtual)
 {
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery
   ORDER BY id;
 }
@@ -51,22 +51,22 @@ if ($partition)
 {
   --echo # Show data distribution across partitions
   SELECT 'Partition p0' AS partition_name;
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery PARTITION (p0)
   ORDER BY id;
 
   SELECT 'Partition p1' AS partition_name;
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery PARTITION (p1)
   ORDER BY id;
 
   SELECT 'Partition p2' AS partition_name;
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery PARTITION (p2)
   ORDER BY id;
 
   SELECT 'Partition p3' AS partition_name;
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery PARTITION (p3)
   ORDER BY id;
 }
@@ -95,13 +95,13 @@ DELETE FROM test_complex_index_recovery WHERE id = 3;
 --echo # Transaction started but not committed - data should be visible in current session
 if ($virtual)
 {
-  SELECT id, name, virtual_before, vsql_complex.complex_to_string(complex_val) AS complex_val, virtual_after
+  SELECT id, name, virtual_before, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val, virtual_after
   FROM test_complex_index_recovery
   ORDER BY id;
 }
 if (!$virtual)
 {
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery
   ORDER BY id;
 }
@@ -110,28 +110,28 @@ if ($partition)
 {
   --echo # Show uncommitted data distribution across partitions
   SELECT 'Partition p0' AS partition_name;
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery PARTITION (p0)
   ORDER BY id;
 
   SELECT 'Partition p1' AS partition_name;
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery PARTITION (p1)
   ORDER BY id;
 
   SELECT 'Partition p2' AS partition_name;
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery PARTITION (p2)
   ORDER BY id;
 
   SELECT 'Partition p3' AS partition_name;
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery PARTITION (p3)
   ORDER BY id;
 }
 
 --echo # Query using index to find specific value
-SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
 FROM test_complex_index_recovery FORCE INDEX (idx_complex)
 WHERE complex_val = '(4,4)';
 
@@ -157,13 +157,13 @@ CHECK TABLE test_complex_index_recovery;
 --echo # Uncommitted INSERT, UPDATE, DELETE should be rolled back
 if ($virtual)
 {
-  SELECT id, name, virtual_before, vsql_complex.complex_to_string(complex_val) AS complex_val, virtual_after
+  SELECT id, name, virtual_before, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val, virtual_after
   FROM test_complex_index_recovery
   ORDER BY id;
 }
 if (!$virtual)
 {
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery
   ORDER BY id;
 }
@@ -172,28 +172,28 @@ if ($partition)
 {
   --echo # Show data distribution across partitions after recovery
   SELECT 'Partition p0' AS partition_name;
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery PARTITION (p0)
   ORDER BY id;
 
   SELECT 'Partition p1' AS partition_name;
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery PARTITION (p1)
   ORDER BY id;
 
   SELECT 'Partition p2' AS partition_name;
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery PARTITION (p2)
   ORDER BY id;
 
   SELECT 'Partition p3' AS partition_name;
-  SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+  SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
   FROM test_complex_index_recovery PARTITION (p3)
   ORDER BY id;
 }
 
 --echo # Test index functionality after recovery - query by indexed column
-SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
 FROM test_complex_index_recovery
 WHERE complex_val = '(2,2)';
 
@@ -201,12 +201,12 @@ WHERE complex_val = '(2,2)';
 SELECT COUNT(*) AS total_rows FROM test_complex_index_recovery;
 
 --echo # Verify row 2 was not updated (should still have (2,2))
-SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
 FROM test_complex_index_recovery
 WHERE id = 2;
 
 --echo # Verify row 3 was not deleted
-SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
 FROM test_complex_index_recovery
 WHERE id = 3;
 

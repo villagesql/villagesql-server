@@ -2026,7 +2026,11 @@ static int lex_one_token(Lexer_yystype *yylval, THD *thd) {
         } else
           state = MY_LEX_CHAR;  // Return '*'
         break;
-      case MY_LEX_SET_VAR:  // Check if ':='
+      case MY_LEX_SET_VAR:  // Check if ':=' or '::'
+        if (lip->yyPeek() == ':') {
+          lip->yySkip();
+          return (DOUBLE_COLON);
+        }
         if (lip->yyPeek() != '=') {
           state = MY_LEX_CHAR;  // Return ':'
           break;

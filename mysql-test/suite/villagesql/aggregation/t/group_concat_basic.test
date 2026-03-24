@@ -24,7 +24,7 @@ SELECT GROUP_CONCAT('(1.0, 2.0)');
 SELECT GROUP_CONCAT(DISTINCT value) FROM complex_test;
 
 --echo # GROUP_CONCAT with const-folded function call (tests const_item with custom type)
-SELECT GROUP_CONCAT(complex_from_string('(6.0, 7.0)'));
+SELECT GROUP_CONCAT(COMPLEX::from_string('(6.0, 7.0)'));
 
 DROP TABLE complex_test;
 

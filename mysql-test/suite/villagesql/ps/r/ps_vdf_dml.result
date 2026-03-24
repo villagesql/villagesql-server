@@ -11,7 +11,7 @@ INSERT INTO t3 VALUES (1, '(1.0,-2.0)'), (2, '(3.0,-4.0)');
 #
 # Test 1: VDF with INSERT
 #
-PREPARE stmt1 FROM 'INSERT INTO t1 VALUES (?, vsql_complex.complex_from_string(?))';
+PREPARE stmt1 FROM 'INSERT INTO t1 VALUES (?, vsql_complex.COMPLEX::from_string(?))';
 SET @id = 10;
 SET @str = '(30.0,31.0)';
 EXECUTE stmt1 USING @id, @str;

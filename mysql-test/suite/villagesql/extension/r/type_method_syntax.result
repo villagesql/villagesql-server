@@ -1,0 +1,65 @@
+# Test 1: Qualified encode — vsql_complex.COMPLEX::from_string(value)
+SELECT vsql_complex.COMPLEX::from_string('(3,4)') AS result;
+result
+(3,4)
+# Test 2: Unqualified encode — COMPLEX::from_string(value)
+SELECT COMPLEX::from_string('(1,2)') AS result;
+result
+(1,2)
+# Test 3: Qualified decode — vsql_complex.COMPLEX::to_string(val)
+CREATE TABLE t1 (id INT, val COMPLEX);
+INSERT INTO t1 VALUES (1, '(5,6)');
+SELECT vsql_complex.COMPLEX::to_string(val) AS result FROM t1;
+result
+(5,6)
+# Test 4: Unqualified decode — COMPLEX::to_string(val)
+SELECT COMPLEX::to_string(val) AS result FROM t1;
+result
+(5,6)
+DROP TABLE t1;
+# Test 5: View round-trip — CREATE VIEW using COMPLEX::from_string, then SHOW CREATE VIEW
+CREATE VIEW v_encode AS SELECT COMPLEX::from_string('(7,8)') AS encoded;
+SHOW CREATE VIEW v_encode;
+View	Create View	character_set_client	collation_connection
+v_encode	CREATE ALGORITHM=UNDEFINED DEFINER=`root`@`localhost` SQL SECURITY DEFINER VIEW `v_encode` AS select vsql_complex.COMPLEX::from_string('(7,8)') AS `encoded`	utf8mb4	utf8mb4_0900_ai_ci
+# Verify the stored view re-executes correctly (proves :: round-trips through grammar)
+SELECT * FROM v_encode;
+encoded
+(7,8)
+DROP VIEW v_encode;
+# Test 6: Error — unknown method name
+SELECT COMPLEX::nonexistent('(1,2)') AS result;
+ERROR HY000: Unknown method 'nonexistent' for type 'COMPLEX'. Valid methods: from_string, to_string, compare, hash
+# Test 7: Error — unknown type name
+SELECT NOSUCHTYPE::encode('(1,2)') AS result;
+ERROR HY000: Unknown custom type 'NOSUCHTYPE'
+# Test 8: COMPLEX::compare — qualified and unqualified forms
+SELECT vsql_complex.COMPLEX::compare('(1,2)', '(3,4)') AS result;
+result
+-1
+SELECT COMPLEX::compare('(3,4)', '(1,2)') AS result;
+result
+1
+SELECT COMPLEX::compare('(1,2)', '(1,2)') AS result;
+result
+0
+# Test 9: :: decode with FROM clause — verifies column-arg form works
+CREATE TABLE t2 (id INT, val COMPLEX);
+INSERT INTO t2 VALUES (1, '(10,20)');
+INSERT INTO t2 VALUES (2, '(30,40)');
+SELECT vsql_complex.COMPLEX::to_string(val) AS decoded FROM t2 ORDER BY id;
+decoded
+(10,20)
+(30,40)
+SELECT COMPLEX::to_string(val) AS decoded FROM t2 ORDER BY id;
+decoded
+(10,20)
+(30,40)
+DROP TABLE t2;
+# Test 10: Error — :: syntax on type without :: VDF registration
+Creating extension simple_type_funcs using SDK...
+Created simple_type_funcs.veb
+INSTALL EXTENSION simple_type_funcs;
+SELECT SIMPLETYPE::from_string('hello') AS result;
+ERROR HY000: Type 'SIMPLETYPE' method 'from_string' does not support '::' syntax (not registered with a '::' name)
+UNINSTALL EXTENSION simple_type_funcs;

@@ -13,7 +13,7 @@ t1	CREATE TABLE `t1` (
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci
 ALTER TABLE t1 ADD COLUMN new_complex_value COMPLEX;
-UPDATE t1 SET new_complex_value = VSQL_COMPLEX.COMPLEX_FROM_STRING(old_value);
+UPDATE t1 SET new_complex_value = VSQL_COMPLEX.COMPLEX::from_string(old_value);
 ALTER TABLE t1 DROP COLUMN old_value;
 SELECT * FROM villagesql.custom_columns;
 db_name	table_name	column_name	extension_name	extension_version	type_name	type_parameters

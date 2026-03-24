@@ -40,7 +40,7 @@ SELECT * FROM t_target ORDER BY id;
 
 # REPLACE with explicit conversion of string expression
 REPLACE INTO t_target (id, val)
-SELECT id, VSQL_COMPLEX.COMPLEX_FROM_STRING(CONCAT('(', r, ',', i, ')')) FROM t_source;
+SELECT id, VSQL_COMPLEX.COMPLEX::from_string(CONCAT('(', r, ',', i, ')')) FROM t_source;
 
 SELECT * FROM t_target ORDER BY id;
 

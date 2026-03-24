@@ -1,21 +1,21 @@
-SELECT COMPLEX_FROM_STRING('not_a_complex_number') IS NULL AS result;
+SELECT COMPLEX::from_string('not_a_complex_number') IS NULL AS result;
 result
 1
 Warnings:
-Warning	3200	VDF error in function 'complex_from_string': failed to encode 'not_a_complex_number'
+Warning	3200	VDF error in function 'COMPLEX::from_string': failed to encode 'not_a_complex_number'
 SELECT COMPLEX_ADD('(1.0,2.0)', '(3.0,4.0)') IS NULL AS result;
 result
 0
-SELECT COMPLEX_FROM_STRING(NULL) IS NULL AS result;
+SELECT COMPLEX::from_string(NULL) IS NULL AS result;
 result
 1
 CREATE TABLE t (val VARCHAR(50));
 INSERT INTO t VALUES ('not_a_complex_number'), ('(1.0,2.0)'), (NULL);
-SELECT val, COMPLEX_FROM_STRING(val) IS NULL AS is_null FROM t ORDER BY val;
+SELECT val, COMPLEX::from_string(val) IS NULL AS is_null FROM t ORDER BY val;
 val	is_null
 NULL	1
 (1.0,2.0)	0
 not_a_complex_number	1
 Warnings:
-Warning	3200	VDF error in function 'complex_from_string': failed to encode 'not_a_complex_number'
+Warning	3200	VDF error in function 'COMPLEX::from_string': failed to encode 'not_a_complex_number'
 DROP TABLE t;

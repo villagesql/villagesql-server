@@ -42,7 +42,7 @@ id INT PRIMARY KEY,
 val COMPLEX
 );
 INSERT INTO t_target (id, val)
-SELECT id, VSQL_COMPLEX.COMPLEX_FROM_STRING(CONCAT('(', real_part, ',', imag_part, ')')) FROM t_source;
+SELECT id, VSQL_COMPLEX.COMPLEX::from_string(CONCAT('(', real_part, ',', imag_part, ')')) FROM t_source;
 SELECT * FROM t_target ORDER BY id;
 id	val
 1	(15,20)
@@ -142,9 +142,9 @@ val_c COMPLEX
 );
 INSERT INTO t_target_multi (id, val_a, val_b, val_c)
 SELECT id,
-VSQL_COMPLEX.COMPLEX_FROM_STRING(CONCAT('(', real_a, ',', imag_a, ')')),
-VSQL_COMPLEX.COMPLEX_FROM_STRING(CONCAT('(', real_b, ',', imag_b, ')')),
-VSQL_COMPLEX.COMPLEX_FROM_STRING(CONCAT('(', real_c, ',', imag_c, ')'))
+VSQL_COMPLEX.COMPLEX::from_string(CONCAT('(', real_a, ',', imag_a, ')')),
+VSQL_COMPLEX.COMPLEX::from_string(CONCAT('(', real_b, ',', imag_b, ')')),
+VSQL_COMPLEX.COMPLEX::from_string(CONCAT('(', real_c, ',', imag_c, ')'))
 FROM t_source_multi;
 SELECT * FROM t_target_multi ORDER BY id;
 id	val_a	val_b	val_c

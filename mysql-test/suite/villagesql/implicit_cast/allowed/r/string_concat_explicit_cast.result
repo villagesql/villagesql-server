@@ -1,6 +1,6 @@
 CREATE TABLE t_complex (id INT, val COMPLEX);
 INSERT INTO t_complex VALUES (1, '(1.0,2.0)');
-SELECT CONCAT('The complex number is ', vsql_complex.complex_to_string(val)) FROM t_complex WHERE id = 1;
-CONCAT('The complex number is ', vsql_complex.complex_to_string(val))
+SELECT CONCAT('The complex number is ', vsql_complex.COMPLEX::to_string(val)) FROM t_complex WHERE id = 1;
+CONCAT('The complex number is ', vsql_complex.COMPLEX::to_string(val))
 The complex number is (1,2)
 DROP TABLE t_complex;

@@ -21,6 +21,7 @@
 
 #include "include/my_inttypes.h"
 #include "lex_string.h"
+#include "my_alloc.h"
 
 class Table_ref;
 
@@ -35,6 +36,12 @@ std::string make_udf_key(const LEX_STRING &extension_name,
 // If extension is nullptr or empty, returns just the function name.
 std::string make_udf_key(const char *extension, size_t ext_len,
                          const char *function, size_t func_len);
+
+// Allocates "type_name::method_name" on mem_root and returns it as a
+// LEX_STRING.
+LEX_STRING make_type_method_lex_string(const LEX_STRING &type_name,
+                                       const LEX_STRING &method_name,
+                                       MEM_ROOT *mem_root);
 
 }  // namespace villagesql
 

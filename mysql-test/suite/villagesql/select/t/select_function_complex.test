@@ -19,10 +19,10 @@ SELECT vsql_complex.complex_real(complex_col) AS real_part FROM t1 ORDER BY comp
 SELECT vsql_complex.complex_real('(7.0,8.0)') AS real_part;
 
 # Test 3: Nested function call with string constant
-SELECT vsql_complex.complex_real(vsql_complex.complex_from_string('(9.0,10.0)')) AS real_part;
+SELECT vsql_complex.complex_real(vsql_complex.COMPLEX::from_string('(9.0,10.0)')) AS real_part;
 
-# Test 4: String column converted through complex_from_string
-SELECT vsql_complex.complex_real(vsql_complex.complex_from_string(str_col)) AS real_part FROM t1 ORDER BY str_col;
+# Test 4: String column converted through COMPLEX::from_string
+SELECT vsql_complex.complex_real(vsql_complex.COMPLEX::from_string(str_col)) AS real_part FROM t1 ORDER BY str_col;
 
 # Test 4b: VDF taking COMPLEX returned by another VDF (tests type_context propagation)
 SELECT vsql_complex.complex_imag(vsql_complex.complex_conjugate(complex_col)) AS conjugate_imag FROM t1 ORDER BY complex_col;

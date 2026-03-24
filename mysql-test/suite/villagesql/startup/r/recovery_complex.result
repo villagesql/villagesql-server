@@ -10,7 +10,7 @@ INSERT INTO test_complex_recovery VALUES
 (1, 'Initial 1', '(1,1)'),
 (2, 'Initial 2', '(2,2)'),
 (3, 'Initial 3', '(3,3)');
-SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
 FROM test_complex_recovery
 ORDER BY id;
 id	name	complex_val
@@ -28,7 +28,7 @@ name = 'Uncommitted Update'
 WHERE id = 2;
 DELETE FROM test_complex_recovery WHERE id = 3;
 # Transaction started but not committed - data should be visible in current session
-SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
 FROM test_complex_recovery
 ORDER BY id;
 id	name	complex_val
@@ -56,7 +56,7 @@ Table	Op	Msg_type	Msg_text
 test.test_complex_recovery	check	status	OK
 # After crash recovery - only committed data should remain
 # Uncommitted INSERT, UPDATE, DELETE should be rolled back
-SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
 FROM test_complex_recovery
 ORDER BY id;
 id	name	complex_val
@@ -68,13 +68,13 @@ SELECT COUNT(*) AS total_rows FROM test_complex_recovery;
 total_rows
 3
 # Verify row 2 was not updated (should still have (2,2))
-SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
 FROM test_complex_recovery
 WHERE id = 2;
 id	name	complex_val
 2	Initial 2	(2,2)
 # Verify row 3 was not deleted
-SELECT id, name, vsql_complex.complex_to_string(complex_val) AS complex_val
+SELECT id, name, vsql_complex.COMPLEX::to_string(complex_val) AS complex_val
 FROM test_complex_recovery
 WHERE id = 3;
 id	name	complex_val

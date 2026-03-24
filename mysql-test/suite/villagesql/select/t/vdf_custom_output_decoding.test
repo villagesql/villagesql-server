@@ -10,7 +10,7 @@ INSERT INTO t1 VALUES (1, '(1.0,2.0)', '(3.0,4.0)');
 INSERT INTO t1 VALUES (2, '(5.0,6.0)', '(7.0,8.0)');
 
 # Test 1: Basic VDF returning custom type
-SELECT vsql_complex.complex_from_string('(3.14159,2.71828)') AS result;
+SELECT vsql_complex.COMPLEX::from_string('(3.14159,2.71828)') AS result;
 
 # Test 2: VDF with COMPLEX arithmetic
 SELECT vsql_complex.complex_add(c1, c2) AS sum FROM t1 ORDER BY id;

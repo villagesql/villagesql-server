@@ -38,7 +38,7 @@ DEALLOCATE PREPARE stmt2;
 CREATE TABLE t3 (id INT PRIMARY KEY, str_val VARCHAR(50));
 INSERT INTO t3 VALUES (1, '(30.0,31.0)'), (2, '(32.0,33.0)');
 
-PREPARE stmt3 FROM 'INSERT INTO t1 SELECT id + 100, vsql_complex.complex_from_string(str_val) FROM t3 WHERE id = ?';
+PREPARE stmt3 FROM 'INSERT INTO t1 SELECT id + 100, vsql_complex.COMPLEX::from_string(str_val) FROM t3 WHERE id = ?';
 SET @src_id = 1;
 EXECUTE stmt3 USING @src_id;
 SELECT * FROM t1 WHERE id = 101;

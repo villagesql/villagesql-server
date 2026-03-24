@@ -4,30 +4,30 @@
 --source include/villagesql/install_complex_extension.inc
 
 # UNION should deduplicate rows
-VALUES ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(1.0,2.0)')) UNION VALUES ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(3.0,4.0)'));
+VALUES ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')) UNION VALUES ROW(VSQL_COMPLEX.COMPLEX::from_string('(3.0,4.0)'));
 
 # UNION ALL should preserve duplicates - test with duplicates including zero variants
 VALUES
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(1.0,2.0)')),
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(0,0)')),
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(3.0,4.0)'))
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(0,0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(3.0,4.0)'))
 UNION ALL
 VALUES
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(1.0,2.0)')),
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(-0,0)')),
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(0,-0)')),
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(-0,-0)'));
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(-0,0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(0,-0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(-0,-0)'));
 
 # UNION with zero variants interleaved - should deduplicate all zero forms to one
 VALUES
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(1.0,2.0)')),
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(0,0)')),
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(3.0,4.0)'))
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(0,0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(3.0,4.0)'))
 UNION
 VALUES
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(-0,0)')),
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(1.0,2.0)')),
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(0,-0)')),
-  ROW(VSQL_COMPLEX.COMPLEX_FROM_STRING('(-0,-0)'));
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(-0,0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(1.0,2.0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(0,-0)')),
+  ROW(VSQL_COMPLEX.COMPLEX::from_string('(-0,-0)'));
 
 --source include/villagesql/uninstall_complex_extension.inc

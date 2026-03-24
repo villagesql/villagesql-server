@@ -9,7 +9,7 @@ SELECT * FROM t1 ORDER BY id;
 id	val
 1	(1,2)
 2	(3,4)
-UPDATE t1 SET val = VSQL_COMPLEX.COMPLEX_FROM_STRING(CONCAT('(', '5.0', ',', '6.0', ')')) WHERE id = 1;
+UPDATE t1 SET val = VSQL_COMPLEX.COMPLEX::from_string(CONCAT('(', '5.0', ',', '6.0', ')')) WHERE id = 1;
 SELECT * FROM t1 ORDER BY id;
 id	val
 1	(5,6)

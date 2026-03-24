@@ -13,7 +13,7 @@ my_val
 (1,2)
 (3,4)
 WITH RECURSIVE cte (n, val) AS (
-SELECT 1, vsql_complex.complex_from_string('(1.0,2.0)')
+SELECT 1, vsql_complex.COMPLEX::from_string('(1.0,2.0)')
 UNION ALL
 SELECT n + 1, val FROM cte WHERE n < 3
 )
@@ -32,7 +32,7 @@ val
 WITH cte AS (
 SELECT val FROM t1
 UNION
-SELECT vsql_complex.complex_from_string('(5.0,6.0)')
+SELECT vsql_complex.COMPLEX::from_string('(5.0,6.0)')
 )
 SELECT * FROM cte;
 val

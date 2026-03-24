@@ -13,10 +13,10 @@ real_part
 SELECT vsql_complex.complex_real('(7.0,8.0)') AS real_part;
 real_part
 7
-SELECT vsql_complex.complex_real(vsql_complex.complex_from_string('(9.0,10.0)')) AS real_part;
+SELECT vsql_complex.complex_real(vsql_complex.COMPLEX::from_string('(9.0,10.0)')) AS real_part;
 real_part
 9
-SELECT vsql_complex.complex_real(vsql_complex.complex_from_string(str_col)) AS real_part FROM t1 ORDER BY str_col;
+SELECT vsql_complex.complex_real(vsql_complex.COMPLEX::from_string(str_col)) AS real_part FROM t1 ORDER BY str_col;
 real_part
 3.14159
 5

@@ -21,6 +21,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <string_view>
 #include <system_error>
 
 #include "my_config.h"
@@ -753,6 +754,64 @@ static const vef_func_desc_t *find_vdf_by_name(const vef_registration_t &reg,
   return nullptr;
 }
 
+// Validate a type method VDF name that uses the "::" convention.
+// If the name contains "::", checks:
+//   - prefix (before "::") matches type_name (case-insensitive)
+//   - suffix (after "::") is one of: from_string, to_string, compare, hash
+// Returns false on success, true on validation error.
+// Names without "::" are always accepted (backward compatibility).
+static bool validate_type_method_vdf_name(const char *vdf_name,
+                                          const char *type_name,
+                                          const char *field_name,
+                                          const std::string &extension_name) {
+  std::string_view name(vdf_name);
+  size_t sep = name.find("::");
+  if (sep == std::string_view::npos) {
+    // No "::" — plain name, allowed for backward compatibility.
+    return false;
+  }
+
+  std::string_view prefix = name.substr(0, sep);
+  std::string_view suffix = name.substr(sep + 2);
+
+  // Case-insensitive prefix == type_name check.
+  std::string_view tname(type_name);
+  if (prefix.size() != tname.size()) {
+    LogVSQL(ERROR_LEVEL,
+            "Type '%s' in extension '%s': %s '%s' uses '::' but prefix '%.*s' "
+            "does not match type name (case-insensitive)",
+            type_name, extension_name.c_str(), field_name, vdf_name,
+            static_cast<int>(prefix.size()), prefix.data());
+    return true;
+  }
+  for (size_t i = 0; i < prefix.size(); i++) {
+    if (std::tolower(static_cast<unsigned char>(prefix[i])) !=
+        std::tolower(static_cast<unsigned char>(tname[i]))) {
+      LogVSQL(ERROR_LEVEL,
+              "Type '%s' in extension '%s': %s '%s' uses '::' but prefix "
+              "'%.*s' does not match type name (case-insensitive)",
+              type_name, extension_name.c_str(), field_name, vdf_name,
+              static_cast<int>(prefix.size()), prefix.data());
+      return true;
+    }
+  }
+
+  // Suffix must be one of the valid type method names.
+  if (suffix != "from_string" && suffix != "to_string" && suffix != "compare" &&
+      suffix != "hash") {
+    LogVSQL(
+        ERROR_LEVEL,
+        "Type '%s' in extension '%s': %s '%s' uses '::' but suffix "
+        "'%.*s' is not a valid type method (must be from_string, to_string, "
+        "compare, or hash)",
+        type_name, extension_name.c_str(), field_name, vdf_name,
+        static_cast<int>(suffix.size()), suffix.data());
+    return true;
+  }
+
+  return false;
+}
+
 // Validate that a VDF's signature matches the expected pattern for a type
 // operation. Returns false on success, true on error.
 static bool validate_type_vdf_signature(
@@ -891,6 +950,10 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
         return true;
       }
       if (td->encode_vdf_name != nullptr) {
+        if (validate_type_method_vdf_name(td->encode_vdf_name, td->name,
+                                          "encode_vdf_name", extension_name)) {
+          return true;
+        }
         encode_vdf = find_vdf_by_name(reg, td->encode_vdf_name);
         if (encode_vdf == nullptr) {
           LogVSQL(ERROR_LEVEL,
@@ -914,6 +977,10 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
         return true;
       }
       if (td->decode_vdf_name != nullptr) {
+        if (validate_type_method_vdf_name(td->decode_vdf_name, td->name,
+                                          "decode_vdf_name", extension_name)) {
+          return true;
+        }
         decode_vdf = find_vdf_by_name(reg, td->decode_vdf_name);
         if (decode_vdf == nullptr) {
           LogVSQL(ERROR_LEVEL,
@@ -937,6 +1004,10 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
         return true;
       }
       if (td->compare_vdf_name != nullptr) {
+        if (validate_type_method_vdf_name(td->compare_vdf_name, td->name,
+                                          "compare_vdf_name", extension_name)) {
+          return true;
+        }
         compare_vdf = find_vdf_by_name(reg, td->compare_vdf_name);
         if (compare_vdf == nullptr) {
           LogVSQL(ERROR_LEVEL,
@@ -961,6 +1032,10 @@ bool register_types_from_extension(THD &thd, const std::string &extension_name,
         return true;
       }
       if (td->hash_vdf_name != nullptr) {
+        if (validate_type_method_vdf_name(td->hash_vdf_name, td->name,
+                                          "hash_vdf_name", extension_name)) {
+          return true;
+        }
         hash_vdf = find_vdf_by_name(reg, td->hash_vdf_name);
         if (hash_vdf == nullptr) {
           LogVSQL(ERROR_LEVEL,

@@ -3,9 +3,9 @@
 
 --source include/villagesql/install_complex_extension.inc
 
-# Test 1: SET @var = complex_from_string(...) creates COMPLEX type
-SET @a = vsql_complex.complex_from_string('(1.0,2.0)');
-SET @b = vsql_complex.complex_from_string('(3.0,4.0)');
+# Test 1: SET @var = COMPLEX::from_string(...) creates COMPLEX type
+SET @a = vsql_complex.COMPLEX::from_string('(1.0,2.0)');
+SET @b = vsql_complex.COMPLEX::from_string('(3.0,4.0)');
 SELECT @a, @b;
 
 # Test 2: SET @var = complex_add(...) retains COMPLEX type
@@ -25,7 +25,7 @@ SELECT vsql_complex.complex_real(@result) as real_part;
 # Test 5: Nested complex function calls in SET
 SET @nested = vsql_complex.complex_add(
   vsql_complex.complex_multiply(@a, @b),
-  vsql_complex.complex_from_string('(1.0,1.0)')
+  vsql_complex.COMPLEX::from_string('(1.0,1.0)')
 );
 SELECT @nested;
 

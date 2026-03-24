@@ -1,5 +1,5 @@
 # Test ALTER TABLE CHANGE COLUMN with COMPLEX type
-# Uses ADD COLUMN + COMPLEX_FROM_STRING + DROP COLUMN to convert varchar to custom type
+# Uses ADD COLUMN + COMPLEX::from_string + DROP COLUMN to convert varchar to custom type
 
 --source include/villagesql/install_complex_extension.inc
 --source include/villagesql/binlog_check_begin.inc
@@ -16,7 +16,7 @@ INSERT INTO t1 VALUES (1, '(0.0,0.0)');
 SHOW CREATE TABLE t1;
 
 ALTER TABLE t1 ADD COLUMN new_complex_value COMPLEX;
-UPDATE t1 SET new_complex_value = VSQL_COMPLEX.COMPLEX_FROM_STRING(old_value);
+UPDATE t1 SET new_complex_value = VSQL_COMPLEX.COMPLEX::from_string(old_value);
 ALTER TABLE t1 DROP COLUMN old_value;
 
 --source include/villagesql/query_custom_columns.inc
