@@ -25,7 +25,9 @@
 
 #include "mysql/strings/m_ctype.h"
 #include "sql/strfunc.h"
+#include "template_utils.h"
 #include "villagesql/include/error.h"
+#include "villagesql/types/special_vdf_call.h"
 
 namespace villagesql {
 
@@ -47,31 +49,78 @@ TypeContext::TypeContext(const TypeContextKey &key,
     hash_op_.emplace(*descriptor_->hash_fn(), key_.parameters());
 
   resolve_cached_values();
+}
 
-  // Pre-encode the intrinsic default value using the type's
-  // intrinsic_default_fn, if registered. This avoids repeated allocations and
-  // encoding every time we need to store an intrinsic default in a NOT NULL
-  // custom field.
-  if (persisted_length_ > 0 &&
-      descriptor_->intrinsic_default_fn().has_value()) {
-    const size_t storage_size = static_cast<size_t>(persisted_length_);
-    std::vector<unsigned char> buffer(storage_size);
+bool TypeContext::init_intrinsic_default() {
+  // Pre-encode the intrinsic default value. Returns false (success) when a
+  // default is stored. Returns true (failure) when no source produces a valid
+  // default. Variable-length types with no resolved size skip this entirely.
+  //
+  // Sources tried in order:
+  // 1. intrinsic_default_fn: user-supplied function producing binary directly.
+  // 2. (patch2) intrinsic_default_str: encode a user-supplied string.
+  // 3. encode(""): encode the empty string.
+  if (persisted_length_ <= 0) return false;
 
+  const size_t storage_size = static_cast<size_t>(persisted_length_);
+  std::vector<unsigned char> buffer(storage_size);
+  size_t encoded_length = 0;
+
+  // Source 1: intrinsic_default_fn.
+  if (descriptor_->intrinsic_default_fn().has_value()) {
     const auto &params = parameters();
     vef_type_params_t tp = {params.count(), params.key_data(),
                             params.value_data()};
-
     char error_msg[VEF_MAX_ERROR_LEN] = {};
-    size_t encoded_length = 0;
-    bool encode_failed = descriptor_->intrinsic_default_fn()->invoke(
+    bool failed = descriptor_->intrinsic_default_fn()->invoke(
         tp, buffer.data(), storage_size, &encoded_length, error_msg);
-
-    if (!encode_failed && encoded_length == storage_size) {
+    if (!failed && encoded_length == storage_size) {
       intrinsic_default_buffer_ = std::move(buffer);
       intrinsic_default_size_ = encoded_length;
+      return false;
     }
-    // If encoding failed, leave intrinsic_default_buffer_ empty.
+    LogVSQL(ERROR_LEVEL,
+            "intrinsic_default for type '%s' failed to encode: %s",
+            qualified_name_.c_str(), error_msg);
+    return true;
   }
+
+  // Source 3: encode("").
+  if (!encode_op_.has_value()) {
+    LogVSQL(ERROR_LEVEL,
+            "intrinsic_default for type '%s': no encode function available",
+            qualified_name_.c_str());
+    return true;
+  }
+
+  const EncodeOp &op = encode_op_.value();
+  if (op.vdf() != nullptr) {
+    SpecialVdfCall<CustomResult, StringArg> vdf_call(op.vdf());
+    const auto &params = op.parameters();
+    vdf_call.init(TypeParameterSlice(params.count(), params.key_data(),
+                                     params.value_data()),
+                  NoInitData{});
+    auto r = vdf_call.invoke(StringSlice("", 0),
+                             pointer_cast<uchar *>(buffer.data()), storage_size);
+    if (r && *r == storage_size) {
+      intrinsic_default_buffer_ = std::move(buffer);
+      intrinsic_default_size_ = *r;
+      return false;
+    }
+  } else if (op.fn() != nullptr) {
+    bool fn_failed =
+        op.fn()(buffer.data(), storage_size, "", 0, &encoded_length);
+    if (!fn_failed && encoded_length == storage_size) {
+      intrinsic_default_buffer_ = std::move(buffer);
+      intrinsic_default_size_ = encoded_length;
+      return false;
+    }
+  }
+
+  LogVSQL(ERROR_LEVEL,
+          "intrinsic_default for type '%s' failed to encode from empty string",
+          qualified_name_.c_str());
+  return true;
 }
 
 void TypeContext::resolve_cached_values() {

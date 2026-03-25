@@ -222,8 +222,15 @@ bool ResolveTypeToContext(const LEX_STRING &extension_name,
 
   result = vclient.type_contexts().acquire_or_create(type_context_key, mem_root,
                                                      type_descriptor);
-  if (should_assert_if_null(result)) {
-    my_error(ER_OUTOFMEMORY, MYF(ME_FATALERROR), sizeof(TypeContext));
+  if (result == nullptr) {
+    // nullptr means OOM (SQL error already set) or init() failure (only logged
+    // to error log). Set the SQL error if not already set.
+    if (!current_thd->is_error()) {
+      villagesql_error(
+          "Type '%s' has an intrinsic default that failed to encode; "
+          "check the error log for details",
+          MYF(0), type_descriptor->qualified_base_name().c_str());
+    }
     return true;
   }
 
@@ -909,15 +916,7 @@ String *EncodeStringForCustomParam(Item *item, const String &str_value,
 type_conversion_status StoreCustomFieldIntrinsicDefault(Field *field) {
   assert(field->has_type_context());
   const TypeContext &tc = *field->get_type_context();
-
-  // Use the cached intrinsic default buffer from TypeContext.
-  // nullptr means the type did not register an intrinsic_default VDF.
   const unsigned char *cached_buffer = tc.intrinsic_default_buffer();
-  if (cached_buffer == nullptr) {
-    villagesql_error("Column '%s' has no intrinsic default for type '%s'",
-                     MYF(0), field->field_name, tc.type_name().c_str());
-    return TYPE_ERR_BAD_VALUE;
-  }
   const size_t cached_size = tc.intrinsic_default_size();
   assert(cached_size == static_cast<size_t>(tc.persisted_length()));
 
@@ -943,18 +942,9 @@ bool LoadEncodeAndStoreCustomField(THD *thd, Field *field,
              thd->get_stmt_da()->current_row_for_condition());
     return true;
   }
-  // EncodeStringForField already pushed a warning. Store the intrinsic default
-  // if the type has one, mirroring MySQL built-in behavior of storing 0, '',
-  // etc. for bad values in IGNORE or non-strict mode. For nullable fields with
-  // no intrinsic default, fall back to storing NULL.
-  if (field->get_type_context()->intrinsic_default_buffer() != nullptr) {
-    return StoreCustomFieldIntrinsicDefault(field) != TYPE_OK;
-  }
-  if (field->is_nullable()) {
-    field->set_null();
-    return false;
-  }
-  // NOT NULL with no intrinsic default: error.
+  // EncodeStringForField already pushed a warning. Store the intrinsic default,
+  // mirroring MySQL built-in behavior of storing 0, '', etc. for bad values in
+  // IGNORE or non-strict mode.
   return StoreCustomFieldIntrinsicDefault(field) != TYPE_OK;
 }
 

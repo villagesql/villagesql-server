@@ -1,0 +1,8 @@
+# restart: --veb-dir=MYSQLTEST_VARDIR/veb
+Creating extension no_default_type using SDK...
+Created no_default_type.veb
+INSTALL EXTENSION no_default_type;
+call mtr.add_suppression("VillageSQL.*intrinsic_default for type.*failed to encode");
+CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_TYPE NOT NULL);
+ERROR HY000: Type 'no_default_type.NO_DEFAULT_TYPE' has an intrinsic default that failed to encode; check the error log for details
+UNINSTALL EXTENSION no_default_type;

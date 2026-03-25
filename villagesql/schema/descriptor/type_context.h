@@ -279,11 +279,18 @@ class TypeContext {
     return descriptor_->storage_intf();
   }
 
-  // Get cached intrinsic default buffer. Returns nullptr if encoding failed
-  // during construction.
+  // Pre-encode the intrinsic default value. Must be called once after
+  // construction (called by TableTraits<TypeContext>::create()). Returns true
+  // on failure. Sources tried in order: (1) intrinsic_default_fn, (2)
+  // encode(""). Skipped for variable-length types where persisted_length_ <= 0
+  // (no storage size known yet — these types are not used bare without params).
+  bool init_intrinsic_default();
+
+  // Get cached intrinsic default buffer. Always valid — init() guarantees
+  // this is populated, and TableTraits::create() returns nullptr on failure.
   const unsigned char *intrinsic_default_buffer() const {
-    return intrinsic_default_buffer_.empty() ? nullptr
-                                            : intrinsic_default_buffer_.data();
+    assert(!intrinsic_default_buffer_.empty());
+    return intrinsic_default_buffer_.data();
   }
 
   // Get the size of the intrinsic default buffer.
@@ -337,7 +344,9 @@ struct TableTraits<TypeContext> {
   static std::shared_ptr<TypeContext> create(const TypeContextKey &key,
                                              const TypeDescriptor *descriptor) {
     if (!descriptor) return std::shared_ptr<TypeContext>();
-    return std::make_shared<TypeContext>(key, descriptor);
+    auto tc = std::make_shared<TypeContext>(key, descriptor);
+    if (tc->init_intrinsic_default()) return std::shared_ptr<TypeContext>();
+    return tc;
   }
 };
 

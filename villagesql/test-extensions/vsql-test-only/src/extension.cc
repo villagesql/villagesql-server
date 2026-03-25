@@ -87,6 +87,13 @@ bool fault_blob_encode(std::string_view from,
     return false;  // success
   }
 
+  // Empty string encodes as all-zeros (used as intrinsic default).
+  if (from.empty()) {
+    memset(buf.data(), 0, buf.size());
+    *length = kFaultBlobSize;
+    return false;
+  }
+
   // Unrecognised prefix - crash loudly so tests cannot silently pass bad input.
   assert(false &&
          "fault_blob_encode: unrecognised prefix (expected 'OK ', "
