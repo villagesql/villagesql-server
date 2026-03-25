@@ -51,28 +51,28 @@ void bind_params_cache() {
 // Wrapper around the ABI type descriptor that owns the storage interface
 // structure and ensures vef_desc.storage_intf points to the local copy
 // after copy/move operations.
-struct TypeWrapper {
+struct TypeDescriptor {
   vef_type_desc_t vef_desc{};
   vef_type_storage_intf_t storage_intf{};
   void (*params_init_fn)() = nullptr;
 
-  constexpr TypeWrapper() = default;
+  constexpr TypeDescriptor() = default;
 
-  constexpr TypeWrapper(const TypeWrapper &o)
+  constexpr TypeDescriptor(const TypeDescriptor &o)
       : vef_desc(o.vef_desc),
         storage_intf(o.storage_intf),
         params_init_fn(o.params_init_fn) {
     if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
   }
 
-  constexpr TypeWrapper(TypeWrapper &&o)
+  constexpr TypeDescriptor(TypeDescriptor &&o)
       : vef_desc(o.vef_desc),
         storage_intf(o.storage_intf),
         params_init_fn(o.params_init_fn) {
     if (storage_intf.version != 0) vef_desc.storage_intf = &storage_intf;
   }
 
-  constexpr TypeWrapper &operator=(const TypeWrapper &o) {
+  constexpr TypeDescriptor &operator=(const TypeDescriptor &o) {
     vef_desc = o.vef_desc;
     storage_intf = o.storage_intf;
     params_init_fn = o.params_init_fn;
@@ -186,7 +186,7 @@ class TypeBuilder {
   // ExtensionBuilder::type() propagates this up to the extension's
   // min_protocol, so the registration fails if the server offers a lower
   // protocol.
-  constexpr TypeWrapper build() const {
+  constexpr TypeDescriptor build() const {
     const bool needs_v2 =
         encode_vdf_name_ != nullptr || decode_vdf_name_ != nullptr ||
         compare_vdf_name_ != nullptr || hash_vdf_name_ != nullptr ||
@@ -194,7 +194,7 @@ class TypeBuilder {
         resolve_params_vdf_name_ != nullptr ||
         intrinsic_default_vdf_name_ != nullptr || storage_intf_.version != 0;
     const vef_protocol_t protocol = needs_v2 ? VEF_PROTOCOL_2 : VEF_PROTOCOL_1;
-    TypeWrapper desc{};
+    TypeDescriptor desc{};
     desc.storage_intf = storage_intf_;
     desc.vef_desc = vef_type_desc_t{
         protocol,
