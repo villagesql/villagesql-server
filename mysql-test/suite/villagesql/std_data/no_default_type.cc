@@ -49,6 +49,11 @@ bool no_default_decode(const unsigned char *buffer, size_t buffer_size,
   return false;
 }
 
+int no_default_compare(const unsigned char *, size_t, const unsigned char *,
+                       size_t) {
+  return 0;
+}
+
 using namespace villagesql::extension_builder;
 using namespace villagesql::type_builder;
 
@@ -59,4 +64,5 @@ VEF_GENERATE_ENTRY_POINTS(
                   .max_decode_buffer_length(16)
                   .encode(&no_default_encode)
                   .decode(&no_default_decode)
+                  .compare(&no_default_compare)
                   .build()))
