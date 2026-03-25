@@ -214,6 +214,13 @@ class TypeContext {
  public:
   using key_type = TypeContextKey;
 
+  // Construct a TypeContext by using:
+  // - the TypeContextKey, which has a TypeDescriptorKey and TypeParameters
+  // - the TypeDescriptor from the victionary, which must have been obtained
+  //   under the victionary lock and not via acquire.
+  // Note: this must be constructed under the victionary lock
+  TypeContext(const TypeContextKey &key, const TypeDescriptor *descriptor);
+
   TypeContext() = delete;
 
   // Disable copy
@@ -292,18 +299,11 @@ class TypeContext {
   size_t intrinsic_default_size() const { return intrinsic_default_size_; }
 
  private:
-  friend struct TableTraits<TypeContext>;
-  friend class villagesql_unittest::TypeContextTest;
-
-  // Construct a TypeContext. Use TableTraits<TypeContext>::create() instead.
-  // The TypeDescriptor must have been obtained under the victionary lock.
-  TypeContext(const TypeContextKey &key, const TypeDescriptor *descriptor);
-
-  // Pre-encode the intrinsic default value. Called once by
-  // TableTraits<TypeContext>::create() after construction. Returns true on
-  // failure. Sources tried in order: (1) intrinsic_default_fn, (2)
-  // encode(""). Skipped for variable-length types where persisted_length_ <= 0
-  // (no storage size known yet — these types are not used bare without params).
+  // Pre-encode the intrinsic default value. Called once by the constructor.
+  // Returns true on failure. Sources tried in order: (1) intrinsic_default_fn,
+  // (2) intrinsic_default_str, (3) encode(""). Skipped for variable-length
+  // types where persisted_length_ <= 0 (no storage size known yet — these
+  // types require parameters before use).
   bool init_intrinsic_default();
 
   void resolve_cached_values();
@@ -334,6 +334,7 @@ class TypeContext {
   // Empty if the type has no intrinsic_default_fn or encoding failed.
   std::vector<unsigned char> intrinsic_default_buffer_;
   size_t intrinsic_default_size_{0};
+  bool intrinsic_default_failed_{false};
 };
 
 // TableTraits specialization for TypeContext
@@ -349,10 +350,8 @@ struct TableTraits<TypeContext> {
   static std::shared_ptr<TypeContext> create(const TypeContextKey &key,
                                              const TypeDescriptor *descriptor) {
     if (!descriptor) return std::shared_ptr<TypeContext>();
-    // Use new rather than make_shared: the constructor is private, and
-    // make_shared constructs via the allocator which bypasses friend access.
-    std::shared_ptr<TypeContext> tc(new TypeContext(key, descriptor));
-    if (tc->init_intrinsic_default()) return std::shared_ptr<TypeContext>();
+    auto tc = std::make_shared<TypeContext>(key, descriptor);
+    if (tc->intrinsic_default_failed_) return std::shared_ptr<TypeContext>();
     return tc;
   }
 };

@@ -49,6 +49,8 @@ TypeContext::TypeContext(const TypeContextKey &key,
     hash_op_.emplace(*descriptor_->hash_fn(), key_.parameters());
 
   resolve_cached_values();
+
+  intrinsic_default_failed_ = init_intrinsic_default();
 }
 
 bool TypeContext::init_intrinsic_default() {
@@ -58,8 +60,7 @@ bool TypeContext::init_intrinsic_default() {
   //
   // Sources tried in order:
   // 1. intrinsic_default_fn: user-supplied VDF producing binary directly.
-  // 2. intrinsic_default_str: encode a user-supplied string literal.
-  //    TODO(villagesql-beta): implement source 2 (next patch).
+  // 2. intrinsic_default_str: encode the extension-supplied string literal.
   // 3. encode(""): encode the empty string.
   //
   // Variable-length types with no resolved parameters have persisted_length_ <=
@@ -90,7 +91,13 @@ bool TypeContext::init_intrinsic_default() {
     return true;
   }
 
-  // Source 3: encode(""). (Source 2 will be added in the next patch.)
+  // Sources 2 and 3: encode a string. Source 2 uses the extension-supplied
+  // literal; Source 3 falls back to the empty string.
+  const std::string &input_str =
+      descriptor_->intrinsic_default_str().has_value()
+          ? *descriptor_->intrinsic_default_str()
+          : std::string();
+
   if (!encode_op_.has_value()) {
     LogVSQL(ERROR_LEVEL,
             "intrinsic_default for type '%s': no encode function available",
@@ -107,16 +114,17 @@ bool TypeContext::init_intrinsic_default() {
     vdf_call.init(TypeParameterSlice(params.count(), params.key_data(),
                                      params.value_data()),
                   NoInitData{});
-    auto r = vdf_call.invoke(
-        StringSlice("", 0), pointer_cast<uchar *>(buffer.data()), storage_size);
+    auto r =
+        vdf_call.invoke(StringSlice(input_str.c_str(), input_str.size()),
+                        pointer_cast<uchar *>(buffer.data()), storage_size);
     if (r && *r == storage_size) {
       intrinsic_default_buffer_ = std::move(buffer);
       intrinsic_default_size_ = *r;
       return false;
     }
   } else if (op.fn() != nullptr) {
-    bool fn_failed =
-        op.fn()(buffer.data(), storage_size, "", 0, &encoded_length);
+    bool fn_failed = op.fn()(buffer.data(), storage_size, input_str.c_str(),
+                             input_str.size(), &encoded_length);
     if (!fn_failed && encoded_length == storage_size) {
       intrinsic_default_buffer_ = std::move(buffer);
       intrinsic_default_size_ = encoded_length;
@@ -125,7 +133,7 @@ bool TypeContext::init_intrinsic_default() {
   }
 
   LogVSQL(ERROR_LEVEL,
-          "intrinsic_default for type '%s' failed to encode from empty string",
+          "intrinsic_default for type '%s' failed to encode from string",
           qualified_name_.c_str());
   return true;
 }
