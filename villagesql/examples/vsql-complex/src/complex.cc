@@ -448,6 +448,7 @@ VEF_GENERATE_ENTRY_POINTS(
                   .decode("complex2_to_string")
                   .compare("complex2_compare")
                   .hash("complex2_hash")
+                  .intrinsic_default("complex2_intrinsic_default")
                   .build())
         // Type conversion functions (also serve as encode/decode VDFs)
         .func(make_type_encode<&complex_from_string>("complex_from_string",
@@ -509,4 +510,6 @@ VEF_GENERATE_ENTRY_POINTS(
                   .deterministic()
                   .build())
         .func(make_intrinsic_default<&complex_default>(
-            "complex_intrinsic_default", COMPLEX)))
+            "complex_intrinsic_default", COMPLEX))
+        .func(make_intrinsic_default<&complex_default>(
+            "complex2_intrinsic_default", COMPLEX2)))
