@@ -15,7 +15,7 @@
 
 INSTALL EXTENSION no_default_type;
 
-call mtr.add_suppression("VillageSQL.*intrinsic_default for type.*failed");
+call mtr.add_suppression("VillageSQL.*intrinsic_default for type.*failed to encode");
 
 --error ER_VILLAGESQL_GENERIC_ERROR
 CREATE TABLE t (id INT PRIMARY KEY, val NO_DEFAULT_TYPE NOT NULL);
