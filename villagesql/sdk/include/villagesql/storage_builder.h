@@ -25,6 +25,7 @@
 #include <type_traits>
 
 #include <villagesql/abi/storage.h>
+#include <villagesql/storage_api.h>
 
 namespace villagesql {
 namespace storage_builder {
@@ -58,6 +59,8 @@ namespace storage_builder {
 
 namespace detail {
 
+using StorageCtx = villagesql::storage::Column::StorageCtx;
+
 template <auto F>
 struct CreateWrapper {
   static bool invoke(vef_storage_space_ref_t space_ref,
@@ -66,8 +69,10 @@ struct CreateWrapper {
                      vef_storage_arena_func_t arena_alloc,
                      vef_storage_ctx_t **storage, char *error_msg,
                      uint32_t error_msg_len) {
-    return F(space_ref, trx_ref, col_len, arena_ctx, arena_alloc, storage,
-             error_msg, error_msg_len);
+    villagesql::storage::Arena arena(arena_ctx, arena_alloc);
+    return F(space_ref, trx_ref, col_len, arena,
+             reinterpret_cast<StorageCtx **>(storage), error_msg,
+             error_msg_len);
   }
 };
 
@@ -75,7 +80,8 @@ template <auto F>
 struct DropWrapper {
   static bool invoke(vef_storage_ctx_t *storage, vef_storage_trx_ref_t trx_ref,
                      char *error_msg, uint32_t error_msg_len) {
-    return F(storage, trx_ref, error_msg, error_msg_len);
+    return F(reinterpret_cast<StorageCtx *>(storage), trx_ref, error_msg,
+             error_msg_len);
   }
 };
 
@@ -86,8 +92,9 @@ struct LoadWrapper {
                      vef_storage_arena_func_t arena_alloc,
                      vef_storage_ctx_t **storage, char *error_msg,
                      uint32_t error_msg_len) {
-    return F(storage_ref, arena_ctx, arena_alloc, storage, error_msg,
-             error_msg_len);
+    villagesql::storage::Arena arena(arena_ctx, arena_alloc);
+    return F(storage_ref, arena, reinterpret_cast<StorageCtx **>(storage),
+             error_msg, error_msg_len);
   }
 };
 
@@ -99,8 +106,8 @@ struct InsertWrapper {
                      vef_storage_col_data_t rowid_prefix,
                      vef_storage_col_ref_t *col_ref, char *error_msg,
                      uint32_t error_msg_len) {
-    return F(storage, mctx, trx_ref, col_data, rowid_prefix, col_ref, error_msg,
-             error_msg_len);
+    return F(reinterpret_cast<StorageCtx *>(storage), mctx, trx_ref, col_data,
+             rowid_prefix, col_ref, error_msg, error_msg_len);
   }
 };
 
@@ -112,8 +119,8 @@ struct SelectWrapper {
                      vef_storage_col_data_t *rowid_prefix,
                      vef_storage_trx_ref_t *trx_ref, bool *delete_marked,
                      char *error_msg, uint32_t error_msg_len) {
-    return F(storage, mctx, col_ref, col_data, rowid_prefix, trx_ref,
-             delete_marked, error_msg, error_msg_len);
+    return F(reinterpret_cast<StorageCtx *>(storage), mctx, col_ref, col_data,
+             rowid_prefix, trx_ref, delete_marked, error_msg, error_msg_len);
   }
 };
 
@@ -123,8 +130,8 @@ struct MarkDeleteWrapper {
                      vef_storage_trx_ref_t trx_ref,
                      vef_storage_col_ref_t col_ref, bool delete_mark,
                      char *error_msg, uint32_t error_msg_len) {
-    return F(storage, mctx, trx_ref, col_ref, delete_mark, error_msg,
-             error_msg_len);
+    return F(reinterpret_cast<StorageCtx *>(storage), mctx, trx_ref, col_ref,
+             delete_mark, error_msg, error_msg_len);
   }
 };
 
@@ -134,7 +141,8 @@ struct PurgeWrapper {
                      vef_storage_trx_ref_t trx_ref,
                      vef_storage_col_ref_t col_ref, char *error_msg,
                      uint32_t error_msg_len) {
-    return F(storage, mctx, trx_ref, col_ref, error_msg, error_msg_len);
+    return F(reinterpret_cast<StorageCtx *>(storage), mctx, trx_ref, col_ref,
+             error_msg, error_msg_len);
   }
 };
 

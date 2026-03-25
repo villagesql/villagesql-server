@@ -30,6 +30,8 @@
 #include <cstdio>
 #include <new>
 #include <string_view>
+#include <type_traits>
+#include <utility>
 
 static_assert(VEF_STORAGE_SE_INTF_VERSION == 1,
               "This C++ wrapper supports ABI v1 only");
@@ -736,28 +738,130 @@ inline uint64_t Page::read_integer_8(Offset o) const {
   return read_integer<uint64_t>(o);
 }
 
-// Type aliases for the Custom Type Storage Interface. These appear in
-// vef_type_storage_intf_t function signatures and are used by extensions
-// to implement column storage.
+// General-purpose allocator backed by the InnoDB extension memory arena.
+// All allocations are freed at once when InnoDB reclaims the arena
+// (e.g., when a column is dropped). Callers must NOT free individual
+// allocations manually. The arena is copyable and storable — extension code
+// can safely use it across the column's lifetime.
+class Arena {
+ public:
+  Arena() = default;
+  Arena(vef_storage_arena_t *handle, vef_storage_arena_func_t func)
+      : m_handle(handle), m_func(func) {}
 
+  // Allocate memory for T, construct it with args, and return a pointer.
+  // Handles alignment: if alignof(T) exceeds the arena's minimum guarantee,
+  // over-allocates and adjusts the pointer. Returns nullptr on failure.
+  template <typename T, typename... Args>
+  T *construct(Args &&...args) {
+    void *mem = allocate_aligned(sizeof(T), alignof(T));
+    if (mem == nullptr) return nullptr;
+    return new (mem) T(std::forward<Args>(args)...);
+  }
+
+  // Call T's destructor in place. Does not free memory — the arena reclaims
+  // all memory as a whole. Must be called before the arena is freed.
+  template <typename T>
+  static void destruct(T *ptr) {
+    if (ptr != nullptr) ptr->~T();
+  }
+
+ private:
+  vef_storage_arena_t *m_handle = nullptr;
+  vef_storage_arena_func_t m_func = nullptr;
+
+  void *allocate_aligned(uint32_t size, uint32_t align) {
+    if (align <= VEF_STORAGE_MIN_ALLOCATOR_ALIGNMENT) {
+      return m_func(m_handle, size);
+    }
+    // Over-allocate to guarantee alignment: worst-case waste is (align-1)
+    // bytes.
+    void *raw = m_func(m_handle, size + align - 1);
+    if (raw == nullptr) return nullptr;
+    uintptr_t addr = reinterpret_cast<uintptr_t>(raw);
+    return reinterpret_cast<void *>((addr + align - 1) &
+                                    ~(uintptr_t{align - 1}));
+  }
+};
+
+// Type aliases and types for the Custom Type Storage Interface. These appear
+// in vef_type_storage_intf_t function signatures and are used by extensions
+// to implement column storage.
 struct Column {
   // Column-level references and data buffers.
   using Ref = vef_storage_col_ref_t;
   using Data = vef_storage_col_data_t;
   using StorageRef = vef_storage_ref_t;
-  using StorageCtx = vef_storage_ctx_t;
 
   static constexpr Ref EMPTY_REF = VEF_STORAGE_EMPTY_COLUMN_REF;
-};
 
-struct Arena {
-  // Arena allocator context and callback provided to extensions
-  // during storage creation and load operations.
-  using Type = vef_storage_arena_t;
-  using Func = vef_storage_arena_func_t;
+  // StorageCtx holds the persistent storage reference and an extension-defined
+  // user context, both allocated from an Arena. Memory is freed by InnoDB when
+  // the column is dropped; the extension must not free it manually.
+  //
+  // Typical usage:
+  //   // On create/load (arena provided by InnoDB):
+  //   Column::StorageCtx *ctx = Column::StorageCtx::create<MyCtx>(arena);
+  //   *storage = ctx;
+  //   ctx->set_ref(ref);
+  //   // On DML:
+  //   MyCtx *my = storage->get_user_context<MyCtx>();
+  //   // On drop:
+  //   Column::StorageCtx::drop<MyCtx>(storage);
+  class StorageCtx {
+   public:
+    // Allocate a StorageCtx and a user context of type T from arena.
+    // Returns nullptr on allocation failure.
+    template <typename T>
+    static StorageCtx *create(Arena arena) {
+      StorageCtx *ctx = arena.construct<StorageCtx>();
+      if (ctx == nullptr) return nullptr;
+      T *user = arena.construct<T>();
+      if (user == nullptr) return nullptr;
+      ctx->m_arena = arena;
+      ctx->m_user_context = user;
+      return ctx;
+    }
 
-  static constexpr uint32_t MIN_ALIGNMENT = VEF_STORAGE_MIN_ALLOCATOR_ALIGNMENT;
+    // Destruct the user context of type T. Does not free memory.
+    // Call before the arena is reclaimed (i.e. on column drop).
+    template <typename T>
+    static void drop(StorageCtx *ctx) {
+      if (ctx == nullptr) return;
+      Arena::destruct(ctx->get_user_context<T>());
+    }
+
+    // Return the attached user context cast to T *.
+    template <typename T>
+    T *get_user_context() const {
+      return static_cast<T *>(m_user_context);
+    }
+
+    // Return the arena used to allocate this context. Valid until column drop.
+    Arena get_arena() const { return m_arena; }
+
+    void set_ref(StorageRef ref) { m_ctx.ref = ref; }
+    StorageRef get_ref() const { return m_ctx.ref; }
+
+   private:
+    vef_storage_ctx_t m_ctx{};
+    Arena m_arena{};
+    void *m_user_context = nullptr;
+
+    // Verify ABI layout: m_ctx must be at offset 0 so that StorageCtx * and
+    // vef_storage_ctx_t * are interconvertible via reinterpret_cast in the
+    // storage builder wrappers. Placed here to access the private member.
+    static void verify_layout() {
+      static_assert(offsetof(StorageCtx, m_ctx) == 0,
+                    "Column::StorageCtx must begin with m_ctx for ABI cast");
+    }
+  };
 };
+static_assert(std::is_standard_layout<Column::StorageCtx>::value,
+              "Column::StorageCtx must be standard layout for ABI cast");
+static_assert(std::is_trivially_destructible<Column::StorageCtx>::value,
+              "Column::StorageCtx destructor is never called: arena memory is "
+              "reclaimed as a whole by InnoDB");
 
 }  // namespace villagesql::storage
 #endif  // VILLAGESQL_SDK_STORAGE_API_H_
